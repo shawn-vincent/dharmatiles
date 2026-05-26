@@ -1,0 +1,24 @@
+{
+    "fileFormatVersion": "1",
+    "parameterSets": {
+        "floor tile": {
+            "corner_round": "true",
+            "corner_size": "3",
+            "floor_detail_x0": "1",
+            "floor_detail_x1": "34",
+            "floor_detail_y0": "1",
+            "floor_detail_y1": "34",
+            "logo_S": "1.8",
+            "logo_stroke": "0.79999999999999993",
+            "socket_corner_fn": "16",
+            "socket_mid_size": "26",
+            "tile_bulk_height": "8",
+            "tile_detail_height": "1.5",
+            "tile_size": "35",
+            "wall_height": "1",
+            "wall_thickness": "6",
+            "wall_x0": "0",
+            "wall_y0": "0"
+        }
+    }
+}
