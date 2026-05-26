@@ -13,8 +13,10 @@ wall_height    = 33.0;  // height from slab base — top is fixed regardless of 
 wall_thickness =  7.0;  // wall depth in mm
 
 /* [Floor] */
-floor_preset = 9.5; // [0:Custom, 3:Water (3mm), 6:Ground (6mm), 9.5:Manmade (9.5mm)]
-floor_custom = 9.5; // custom height in mm — only used when preset is Custom
+floor_preset   = 9.5; // [0:Custom, 3:Water (3mm), 6:Ground (6mm), 9.5:Manmade (9.5mm)]
+floor_custom   = 9.5; // custom height in mm — only used when preset is Custom
+floor_texture  = true;
+texture_depth  = 1.0; // how deep the texture is embossed in mm
 
 /* [Socket] */
 peg_height = 11.4; // [11.4:Normal, 5.7:Short]
@@ -127,9 +129,21 @@ module socket_base() {
     square_frustum(peg_size, tile_size, peg_top_z, peg_flare_height);
 }
 
+texture_file = "../textures/grass-foliage.png";
+
 module floor_tile() {
-    translate([0, 0, base_z])
-        cube([total_w, total_d, floor_height], center=false);
+    if (floor_texture) {
+        difference() {
+            translate([0, 0, base_z])
+                cube([total_w, total_d, floor_height], center=false);
+            translate([0, 0, base_z + floor_height - texture_depth])
+                scale([total_w / 100, total_d / 100, texture_depth / 255])
+                    surface(file=texture_file, invert=true);
+        }
+    } else {
+        translate([0, 0, base_z])
+            cube([total_w, total_d, floor_height], center=false);
+    }
 }
 
 // --- Model ---
