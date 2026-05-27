@@ -4,6 +4,7 @@ Generate 9 grass floor tile STLs with random texture subsets and rotations.
 Output: stl/grass-1.stl through stl/grass-9.stl
 """
 
+import math
 import os
 import random
 import subprocess
@@ -25,6 +26,19 @@ FADE_FLOOR     = 0.40
 BLUR_RADIUS    = 0.75
 OUTPUT_SIZE    = 128
 TEXTURE_DEPTH  = 4
+
+
+def safe_crop_region(S, rotation_deg):
+    """Return (offset_x, offset_y, safe_w, safe_h) of the axis-aligned region
+    inside a rotation-expanded square image that contains no black fill corners."""
+    theta = math.radians(rotation_deg % 90)
+    if theta < 1e-9:
+        return 0, 0, S, S
+    cos_t, sin_t = math.cos(theta), math.sin(theta)
+    bb   = S * (cos_t + sin_t)   # bounding box side after expand
+    safe = S / (cos_t + sin_t)   # inscribed axis-aligned square side
+    off  = (bb - safe) / 2
+    return int(off), int(off), int(safe), int(safe)
 
 
 def process_texture(output_path, rotation, crop_x, crop_y):
@@ -81,16 +95,17 @@ def main():
     src = Image.open(SOURCE_IMG)
     sw, sh = src.size
 
+    assert sw == sh, "Source image must be square for arbitrary rotation"
     jobs = []
     for i in range(1, 10):
-        rotation = random.choice([0, 90, 180, 270])
-        rw = sh if rotation in (90, 270) else sw
-        rh = sw if rotation in (90, 270) else sh
-        cw, ch = int(rw * CROP_FRACTION), int(rh * CROP_FRACTION)
-        crop_x = random.randint(0, rw - cw)
-        crop_y = random.randint(0, rh - ch)
+        rotation = random.uniform(0, 360)
+        off_x, off_y, safe_w, safe_h = safe_crop_region(sw, rotation)
+        cw = int(safe_w * CROP_FRACTION)
+        ch = int(safe_h * CROP_FRACTION)
+        crop_x = off_x + random.randint(0, safe_w - cw)
+        crop_y = off_y + random.randint(0, safe_h - ch)
         jobs.append((i, rotation, crop_x, crop_y))
-        print(f"  grass-{i}: rot={rotation} crop=({crop_x},{crop_y})")
+        print(f"  grass-{i}: rot={rotation:.1f}° crop=({crop_x},{crop_y})")
 
     print(f"\nRendering {len(jobs)} tiles in parallel...")
     with ProcessPoolExecutor() as executor:
