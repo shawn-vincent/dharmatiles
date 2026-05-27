@@ -18,7 +18,7 @@ Script: `scripts/generate-grass-heightmap.py`
 
 ---
 
-## Three-Layer Architecture
+## Four-Layer Architecture
 
 ### Layer 1 — Ground (base)
 - Low-frequency simplex noise
@@ -26,21 +26,32 @@ Script: `scripts/generate-grass-heightmap.py`
 - Low height fraction (~25%) so blades read clearly above it
 - Composited additively under the foreground layer
 
-### Layer 2 — Leaves (mid)
-- Scattered lobed ellipses representing broad weed/clover leaves
-- Ellipse aspect ratio ~2.5:1 (elongated)
-- Edge shape: sinusoidal lobe modulation `r(θ) = r_base * (1 + amp * sin(n*θ))`
-- Height falloff: `(1 - r_norm)^0.7` — bright center, fades to zero at edge
-- Lower height than blades so they read as underneath
-- Composited with blades via `np.maximum` (no additive brightening at overlaps)
+### Layer 2 — Edge (bottom foreground)
+- Fills the perimeter strip (~38px at SIZE=512) with short inward-pointing blades and small weed leaves
+- Perimeter walk: clockwise — top L→R, right T→B, bottom R→L, left B→T
+- ~26px spacing between elements so they are non-overlapping at the base
+- Blade direction: exactly inward ± gauss(0, 0.35 rad) variation
+- Blade length: 28–65px (shorter than interior blades); base width 9px
+- ~22% of slots become small leaves (r 11–24px) instead of blades
+- Tip-outside-canvas check discards blades near corners whose angular variation would push the tip off-canvas (natural sparse corners)
+- Composited via `np.maximum`
 
-### Layer 3 — Blades (top)
+### Layer 3 — Blades (mid)
 - Clumps of individual grass blades radiating from clump centers
 - Each blade is a quadratic bezier curve with:
   - **Lateral curve**: control point offset perpendicular to blade direction (natural droop/lean)
   - **Tapered width**: `w(t) = base_w * (1 - t)^0.7` — wider at base, tapers to tip
   - **Ridge cross-section**: `cos(π/2 * dist/w)` across width — bright central spine, darker edges
   - **Sinusoidal height along length**: `sin(π * t^0.55) * (1 + amp * sin(freq * 2π * t + phase))` — blade rises from base, undulates, droops at tip
+- Interior containment check (all bezier points must be within `[bw, S-bw]`) still applies
+- Composited via `np.maximum`
+
+### Layer 4 — Leaves (topmost)
+- Scattered lobed ellipses representing broad weed/clover leaves
+- Ellipse aspect ratio ~2.5:1 (elongated)
+- Edge shape: sinusoidal lobe modulation `r(θ) = r_base * (1 + amp * sin(n*θ))`
+- Height falloff: `(1 - r_norm)^0.7` — bright center, fades to zero at edge
+- On top of blades so they read as overlying the grass
 - Composited via `np.maximum`
 
 ---
@@ -48,12 +59,12 @@ Script: `scripts/generate-grass-heightmap.py`
 ## Compositing
 
 ```
-foreground = max(leaves, blades)   # no additive brightening at overlaps
-composite  = ground + foreground   # ground shows through gaps
+foreground = max(edge, blades, leaves)   # no additive brightening at overlaps
+composite  = ground + foreground         # ground shows through gaps
 normalize to [0, 255]
 ```
 
-Using `max()` for leaves/blades prevents stacked elements from creating unnaturally bright hotspots.
+Using `max()` for all foreground layers prevents stacked elements from creating unnaturally bright hotspots.
 
 ---
 
@@ -102,11 +113,16 @@ All shapes must be entirely within the canvas — no partial shapes at edges.
 | `LEAF_COUNT` | 90 | jittered grid |
 | `LEAF_R_MIN/MAX` | 22–55px | |
 | `GROUND_HEIGHT` | 0.25 | fraction of range |
+| `EDGE_STRIP_W` | 38px | depth of perimeter fill zone |
+| `EDGE_SPACING` | 26px | spacing between edge elements (non-overlapping at base) |
+| `EDGE_BLADE_LEN_MIN/MAX` | 28–65px | shorter than interior blades |
+| `EDGE_BLADE_BASE_W` | 9px | narrower than interior blades |
+| `EDGE_LEAF_PROB` | 0.22 | fraction of edge slots that become leaves |
 
 ---
 
 ## Open Issues
 
-1. **Dark border** — edge clumps lose most blades to the containment check. Needs a fill strategy.
+1. ~~**Dark border**~~ — resolved by the Edge fill layer (Layer 2).
 2. **Density balance** — center tends to be brighter than edges due to blade overlap. May need per-region density control.
 3. **Seed reproducibility** — each seed gives a unique but consistent result. The 9-variant pipeline uses random seeds per tile.

@@ -1,83 +1,59 @@
 #!/usr/bin/env python3
 """
-Generate 9 grass floor tile STLs with random texture subsets and rotations.
+Generate 9 grass floor tile STLs, each from a freshly-generated procedural heightmap.
 Output: stl/grass-1.stl through stl/grass-9.stl
+
+Each tile gets its own unique seed so all 9 look distinct.  No rotation, no
+random cropping, no edge fading — the procedural generator fills the tile
+edge-to-edge naturally.
 """
 
-import math
+import argparse
+import importlib.util
 import os
-import random
 import subprocess
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
-import numpy as np
 from PIL import Image, ImageFilter
 
-OPENSCAD    = "/Applications/OpenSCAD.app/Contents/MacOS/openscad"
-PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OPENSCAD     = "/Applications/OpenSCAD.app/Contents/MacOS/openscad"
+PROJECT_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEXTURES_DIR = os.path.join(PROJECT_DIR, "textures")
 STL_DIR      = os.path.join(PROJECT_DIR, "stl")
 SCAD_FILE    = os.path.join(PROJECT_DIR, "scad", "dungeonblocks-blank.scad")
-SOURCE_IMG   = os.path.join(TEXTURES_DIR, "grass-foliage.png")
 
-CROP_FRACTION  = 0.5
-FADE_FRACTION  = 0.20
-FADE_FLOOR     = 0.40
-BLUR_RADIUS    = 0.75
-OUTPUT_SIZE    = 128
+HEIGHTMAP_SIZE = 512   # procedural generator resolution
+OUTPUT_SIZE    = 128   # OpenSCAD texture resolution (higher → heavier mesh)
+BLUR_RADIUS    = 0.75  # light smoothing to soften pixel-step mesh edges
 TEXTURE_DEPTH  = 4
 
 
-def safe_crop_region(S, rotation_deg):
-    """Return (offset_x, offset_y, safe_w, safe_h) of the axis-aligned region
-    inside a rotation-expanded square image that contains no black fill corners."""
-    theta = math.radians(rotation_deg % 90)
-    if theta < 1e-9:
-        return 0, 0, S, S
-    cos_t, sin_t = math.cos(theta), math.sin(theta)
-    bb   = S * (cos_t + sin_t)   # bounding box side after expand
-    safe = S / (cos_t + sin_t)   # inscribed axis-aligned square side
-    off  = (bb - safe) / 2
-    return int(off), int(off), int(safe), int(safe)
+def load_generator():
+    """Import generate() from generate-grass-heightmap.py (hyphenated name)."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(here, "generate-grass-heightmap.py")
+    spec = importlib.util.spec_from_file_location("generate_grass_heightmap", path)
+    mod  = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.generate
 
 
-def process_texture(output_path, rotation, crop_x, crop_y):
-    src = Image.open(SOURCE_IMG)
-    S = src.size[0]  # square source
-    img = src.convert("L")
-    if rotation:
-        img = img.rotate(rotation, expand=True)
+def render_one(i, seed, scale=1.0):
+    generate = load_generator()
 
-    _, _, safe_w, safe_h = safe_crop_region(S, rotation)
-    cw, ch = int(safe_w * CROP_FRACTION), int(safe_h * CROP_FRACTION)
-    img = img.crop((crop_x, crop_y, crop_x + cw, crop_y + ch))
+    tex_path = os.path.join(TEXTURES_DIR, f"grass-{i}.png")
+    stl_path = os.path.join(STL_DIR,      f"grass-{i}.stl")
+
+    # Fresh procedural heightmap for this tile
+    img_arr = generate(HEIGHTMAP_SIZE, seed, detail_scale=scale)
+    img = Image.fromarray(img_arr)
+
+    # Resize to OpenSCAD resolution with bicubic smoothing
     img = img.resize((OUTPUT_SIZE, OUTPUT_SIZE), Image.BICUBIC)
     if BLUR_RADIUS > 0:
         img = img.filter(ImageFilter.GaussianBlur(radius=BLUR_RADIUS))
+    img.save(tex_path)
 
-    arr = np.array(img, dtype=float)
-    h, w = arr.shape
-
-    def edge_ramp(n, fade_n):
-        mask = np.ones(n)
-        for i in range(fade_n):
-            t = i / fade_n
-            v = FADE_FLOOR + (1.0 - FADE_FLOOR) * np.sin(np.pi / 2 * t)
-            mask[i] = v
-            mask[n - 1 - i] = v
-        return mask
-
-    fade_px = max(1, int(min(w, h) * FADE_FRACTION))
-    arr *= np.outer(edge_ramp(h, fade_px), edge_ramp(w, fade_px))
-    arr -= arr.min()
-
-    Image.fromarray(arr.astype(np.uint8)).save(output_path)
-
-
-def render_one(i, rotation, crop_x, crop_y):
-    tex_path = os.path.join(TEXTURES_DIR, f"grass-{i}.png")
-    stl_path = os.path.join(STL_DIR, f"grass-{i}.stl")
-    process_texture(tex_path, rotation, crop_x, crop_y)
     result = subprocess.run([
         OPENSCAD, "--render", "-o", stl_path,
         "-D", f"texture_depth={TEXTURE_DEPTH}",
@@ -92,32 +68,29 @@ def render_one(i, rotation, crop_x, crop_y):
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Generate 9 grass floor tile STLs from procedural heightmaps")
+    parser.add_argument("--base-seed", type=int, default=1,
+                        help="Tile N uses seed base_seed+N-1 (default: 1)")
+    parser.add_argument("--scale", type=float, default=1.0,
+                        help="Blade detail scale passed to heightmap generator (default: 1.0)")
+    args = parser.parse_args()
+
     os.makedirs(STL_DIR, exist_ok=True)
 
-    src = Image.open(SOURCE_IMG)
-    sw, sh = src.size
+    jobs = [(i, args.base_seed + i - 1) for i in range(1, 10)]
+    for i, seed in jobs:
+        print(f"  grass-{i}: seed={seed}, scale={args.scale}")
 
-    assert sw == sh, "Source image must be square for arbitrary rotation"
-    jobs = []
-    for i in range(1, 10):
-        rotation = random.uniform(0, 360)
-        off_x, off_y, safe_w, safe_h = safe_crop_region(sw, rotation)
-        cw = int(safe_w * CROP_FRACTION)
-        ch = int(safe_h * CROP_FRACTION)
-        crop_x = off_x + random.randint(0, safe_w - cw)
-        crop_y = off_y + random.randint(0, safe_h - ch)
-        jobs.append((i, rotation, crop_x, crop_y))
-        print(f"  grass-{i}: rot={rotation:.1f}° crop=({crop_x},{crop_y})")
-
-    print(f"\nRendering {len(jobs)} tiles in parallel...")
+    print(f"\nGenerating heightmaps and rendering {len(jobs)} tiles in parallel...")
     with ProcessPoolExecutor() as executor:
-        futures = {executor.submit(render_one, *job): job[0] for job in jobs}
+        futures = {executor.submit(render_one, i, seed, args.scale): i for i, seed in jobs}
         for future in as_completed(futures):
             i, ok, info = future.result()
             if ok:
                 print(f"  [{i}/9] done → {info}")
             else:
-                print(f"  [{i}/9] ERROR: {info}")
+                print(f"  [{i}/9] ERROR: {info[:200]}")
                 sys.exit(1)
 
 
