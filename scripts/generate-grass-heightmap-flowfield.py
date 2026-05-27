@@ -64,9 +64,13 @@ LAYER_RANGE        = 0.50   # per-streamline layer-offset range (depth separatio
 # Larger k = narrower/sharper spike.
 BLADE_RIDGE_K      = 3.0
 
-# Shadow grooves removed — per-bezier-point ring approach left speckled
-# noise dots rather than clean lines.  The Gaussian ridge provides natural
-# separation between adjacent blades without explicit shadow geometry.
+# ── Blade edge shadow ─────────────────────────────────────────────────────────
+# Applied as a single post-process pass after all blades are drawn, not
+# per-bezier-point (which caused speckled noise).  Wherever the canvas has
+# a steep downward gradient, the low side is pushed lower — this darkens the
+# ground just beside each blade edge without touching the blade itself.
+SHADOW_GRADIENT_RADIUS = 3     # pixel radius of gradient kernel
+SHADOW_DEPTH           = 0.20  # how much to deepen the shadow side
 
 # ── Blade height profile ───────────────────────────────────────────────────────
 GRASS_BOTTOM       = 0.10   # blade base height (soil level)
@@ -351,6 +355,29 @@ def draw_blade(canvas, cx_pts, cy_pts, base_width, h_func, layer_offset=0.0):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Post-process: edge shadow pass
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def apply_edge_shadows(canvas):
+    """
+    Single clean shadow pass run after all blades are drawn.
+
+    For every pixel, sample the maximum height within SHADOW_GRADIENT_RADIUS.
+    Wherever the local maximum is significantly higher than the pixel itself
+    (i.e. the pixel is on the low side of a blade edge), push it lower by
+    SHADOW_DEPTH scaled by how steep the drop-off is.
+
+    This creates a narrow dark line beside every blade edge without touching
+    the blade body itself, and with no per-point noise.
+    """
+    from scipy.ndimage import maximum_filter
+    local_max = maximum_filter(canvas, size=SHADOW_GRADIENT_RADIUS * 2 + 1)
+    drop      = local_max - canvas                    # how far below the local peak
+    shadow    = np.clip(drop * SHADOW_DEPTH, 0.0, SHADOW_DEPTH)
+    return np.maximum(0.0, canvas - shadow)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Dirt / rock layer  (unchanged from tuft generator)
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -483,6 +510,9 @@ def generate(size, seed, detail_scale=1.0, dirt_only=False):
     rng.shuffle(all_blades)
     for bx_pts, by_pts, layer_offset in all_blades:
         draw_blade(canvas, bx_pts, by_pts, bw, blade_h, layer_offset)
+
+    # ── Edge shadow pass ──────────────────────────────────────────────────────
+    canvas = apply_edge_shadows(canvas)
 
     lo, hi = canvas.min(), canvas.max()
     return ((canvas - lo) / (hi - lo + 1e-9) * 255).astype(np.uint8)
