@@ -42,12 +42,14 @@ def safe_crop_region(S, rotation_deg):
 
 
 def process_texture(output_path, rotation, crop_x, crop_y):
-    img = Image.open(SOURCE_IMG).convert("L")
+    src = Image.open(SOURCE_IMG)
+    S = src.size[0]  # square source
+    img = src.convert("L")
     if rotation:
         img = img.rotate(rotation, expand=True)
 
-    iw, ih = img.size
-    cw, ch = int(iw * CROP_FRACTION), int(ih * CROP_FRACTION)
+    _, _, safe_w, safe_h = safe_crop_region(S, rotation)
+    cw, ch = int(safe_w * CROP_FRACTION), int(safe_h * CROP_FRACTION)
     img = img.crop((crop_x, crop_y, crop_x + cw, crop_y + ch))
     img = img.resize((OUTPUT_SIZE, OUTPUT_SIZE), Image.BICUBIC)
     if BLUR_RADIUS > 0:
