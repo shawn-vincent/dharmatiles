@@ -37,15 +37,10 @@ from PIL import Image
 
 SIZE = 512
 
-CLUMP_COUNT      = 30
-BLADES_PER_CLUMP = 22
-CLUMP_RADIUS     = 56
+TUFT_COUNT       = 50     # tuft base points, distributed via jittered grid
 BLADE_BASE_W     = 12.0
-BLADE_LENGTH_MIN = 80
-BLADE_LENGTH_MAX = 170
-
-# Scatter fill: extra individual blades dropped randomly to cover gaps
-SCATTER_COUNT    = 100
+BLADE_LENGTH_MIN = 120
+BLADE_LENGTH_MAX = 255
 
 # Dirt rock distribution (power-law: r = r_min * (r_max/r_min)^(u^ROCK_POWER))
 ROCK_ATTEMPTS    = 120    # total random draws; most yield tiny pebbles
@@ -53,7 +48,7 @@ ROCK_POWER       = 3.5    # higher = stronger small-rock dominance
 
 # Height values (all relative; final image is normalized to 0–255)
 DIRT_MAX         = 0.32   # dirt layer ceiling
-GRASS_BOTTOM     = 0.0    # blade base height — 0 = black, emerges from ground level
+GRASS_BOTTOM     = 0.10   # blade base height — 0 = black, emerges from ground level
 
 # Interior blade height profile — shared monotone function h(t):
 #   h(t) = GRASS_BOTTOM + t·LAYER_STACK_H + BLADE_ARC_HEIGHT·t·(1−t)
@@ -61,6 +56,12 @@ GRASS_BOTTOM     = 0.0    # blade base height — 0 = black, emerges from ground
 # is strictly increasing: base (t=0) is always lowest, tip (t=1) is always highest.
 LAYER_STACK_H    = 0.75   # total height range from base to tip
 BLADE_ARC_HEIGHT = 0.20   # small mid-blade bonus (quadratic bump, not a hump back down)
+
+# Tuft: multiple blades from a single base point (clump + scatter blades only)
+# Only applied when the primary blade fits without rotation (edge blades get 1).
+TUFT_SPREAD      = 0.40   # std-dev in radians of per-sibling direction jitter (~23°)
+TUFT_MIN         = 6
+TUFT_WEIGHTS     = (0.45, 0.35, 0.20)  # P(6), P(7), P(8 blades)
 
 # Rim shadow cast just outside each blade
 RIM_DARKEN       = 0.05
@@ -262,13 +263,14 @@ def generate_dirt(size, rng):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def blade_fits(bx_pts, by_pts, bw, S):
-    """True if the blade body (centerline ± bw) stays within [0, S).
+    """True if the blade centerline stays within [0, S).
 
-    Margin is bw so the full blade width is contained — a centerline at x=0
-    would clip the left half of the blade body.
+    No margin: tips taper to zero width so they need no clearance, and bases
+    are placed by jittered grid (not forced to the edge) so body clipping is rare.
+    draw_blade clamps all pixel writes to [0, S) for any residual overflow.
     """
-    return (bx_pts.min() >= bw and bx_pts.max() <= S - 1 - bw and
-            by_pts.min() >= bw and by_pts.max() <= S - 1 - bw)
+    return (bx_pts.min() >= 0 and bx_pts.max() <= S - 1 and
+            by_pts.min() >= 0 and by_pts.max() <= S - 1)
 
 
 def rotate_to_fit(bx_pts, by_pts, bw, S, rng, n_angles=360):
@@ -294,10 +296,10 @@ def rotate_to_fit(bx_pts, by_pts, bw, S, rng, n_angles=360):
     rx = dx * cos_t - dy * sin_t   # (n_angles, n_pts)
     ry = dx * sin_t + dy * cos_t
 
-    valid = ((p0x + rx.min(axis=1) >= bw) &
-             (p0x + rx.max(axis=1) <= S - 1 - bw) &
-             (p0y + ry.min(axis=1) >= bw) &
-             (p0y + ry.max(axis=1) <= S - 1 - bw))
+    valid = ((p0x + rx.min(axis=1) >= 0) &
+             (p0x + rx.max(axis=1) <= S - 1) &
+             (p0y + ry.min(axis=1) >= 0) &
+             (p0y + ry.max(axis=1) <= S - 1))
 
     valid_idx = np.where(valid)[0]
     if len(valid_idx) == 0:
@@ -336,6 +338,56 @@ def maybe_reverse(bx_pts, by_pts, bw, S):
     return bx_pts, by_pts
 
 
+def tuft_count(rng):
+    """Return TUFT_MIN–(TUFT_MIN+len(TUFT_WEIGHTS)-1) blades per base."""
+    r = rng.random()
+    cumulative = 0.0
+    for i, w in enumerate(TUFT_WEIGHTS):
+        cumulative += w
+        if r < cumulative:
+            return TUFT_MIN + i
+    return TUFT_MIN + len(TUFT_WEIGHTS) - 1
+
+
+def make_blade_bezier(p0x, p0y, blade_dir, length, rng):
+    """Build a quadratic bezier for one blade from its base, direction, and length."""
+    ctrl_fwd = length * rng.uniform(0.30, 0.60)
+    ctrl_lat = length * rng.gauss(0, 0.08)
+    perp     = blade_dir + math.pi / 2
+    p1x = p0x + ctrl_fwd * math.cos(blade_dir) + ctrl_lat * math.cos(perp)
+    p1y = p0y + ctrl_fwd * math.sin(blade_dir) + ctrl_lat * math.sin(perp)
+    p2x = p0x + length * math.cos(blade_dir)
+    p2y = p0y + length * math.sin(blade_dir)
+    return quadratic_bezier((p0x, p0y), (p1x, p1y), (p2x, p2y))
+
+
+def blades_from_base(p0x, p0y, blade_dir, length, bw, S, rng):
+    """Generate 1–3 blades from a single base point.
+
+    If the primary blade fits without rotation: generate a tuft (1–3 blades
+    in nearly the same direction, TUFT_SPREAD jitter between siblings).
+    If the primary blade needs rotation to fit (edge case): generate exactly
+    one rotated blade — no tuft, since the rotated direction is arbitrary.
+    Sibling blades that fail the fit check are silently skipped.
+    """
+    bx_pts, by_pts = make_blade_bezier(p0x, p0y, blade_dir, length, rng)
+
+    if not blade_fits(bx_pts, by_pts, bw, S):
+        # Edge blade — rotate to fit, no tuft
+        result = rotate_to_fit(bx_pts, by_pts, bw, S, rng)
+        return [maybe_reverse(*result, bw, S)] if result is not None else []
+
+    # Primary fits — all blades share p0x,p0y as base; no reversal.
+    blades = [(bx_pts, by_pts)]
+    for _ in range(tuft_count(rng) - 1):
+        sib_dir = blade_dir + rng.gauss(0, TUFT_SPREAD)
+        sib_len = length * rng.uniform(0.85, 1.15)
+        sbx, sby = make_blade_bezier(p0x, p0y, sib_dir, sib_len, rng)
+        if blade_fits(sbx, sby, bw, S):
+            blades.append((sbx, sby))
+    return blades
+
+
 def generate(size, seed, detail_scale=1.0, dirt_only=False):
     rng = random.Random(seed)
     S = size
@@ -344,9 +396,8 @@ def generate(size, seed, detail_scale=1.0, dirt_only=False):
 
     bw = BLADE_BASE_W * sp
 
-    # Counts scale inversely with area: 2× bigger features → ¼ as many to hold density constant.
-    clump_count   = max(1, int(round(CLUMP_COUNT   / detail_scale ** 2)))
-    scatter_count = max(1, int(round(SCATTER_COUNT / detail_scale ** 2)))
+    # Tuft count scales inversely with area so density stays constant at any scale.
+    tuft_count_n = max(1, int(round(TUFT_COUNT / detail_scale ** 2)))
 
     # Dirt base — fills every gap between grass blades
     canvas = generate_dirt(S, rng)
@@ -359,53 +410,15 @@ def generate(size, seed, detail_scale=1.0, dirt_only=False):
     # Shared height function — strictly increasing in t
     blade_h = make_blade_h()
 
-    # Interior blades — collect all geometries, shuffle (for rim-shadow variety),
-    #    then draw using the shared blade_h.  No per-blade layer_base needed:
-    #    the monotone h_func guarantees correct depth ordering via np.maximum.
-    clump_centers = jittered_grid(clump_count, 0, S, rng)
+    # Tuft bases — jittered grid for even surface coverage, no clumping.
+    # Each base spawns 3–5 blades in roughly the same direction.
+    tuft_bases = jittered_grid(tuft_count_n, 0, S, rng)
     all_blades = []
 
-    for (bx, by) in clump_centers:
-        for _ in range(BLADES_PER_CLUMP):
-            spread_r  = abs(rng.gauss(0, CLUMP_RADIUS * sp))
-            base_ang  = rng.uniform(0, 2 * math.pi)
-            p0x = bx + spread_r * math.cos(base_ang)
-            p0y = by + spread_r * math.sin(base_ang)
-
-            blade_dir = math.atan2(p0y - by, p0x - bx) + rng.gauss(0, 0.7)
-            length    = rng.uniform(BLADE_LENGTH_MIN, BLADE_LENGTH_MAX) * sp
-
-            ctrl_fwd = length * rng.uniform(0.30, 0.60)
-            ctrl_lat = length * rng.gauss(0, 0.08)
-            perp     = blade_dir + math.pi / 2
-            p1x = p0x + ctrl_fwd * math.cos(blade_dir) + ctrl_lat * math.cos(perp)
-            p1y = p0y + ctrl_fwd * math.sin(blade_dir) + ctrl_lat * math.sin(perp)
-            p2x = p0x + length * math.cos(blade_dir)
-            p2y = p0y + length * math.sin(blade_dir)
-
-            bx_pts, by_pts = quadratic_bezier((p0x, p0y), (p1x, p1y), (p2x, p2y))
-
-            result = rotate_to_fit(bx_pts, by_pts, bw, S, rng)
-            if result is not None:
-                all_blades.append(maybe_reverse(*result, bw, S))
-
-    # Scatter fill — random individual blades across the whole tile including edges
-    for _ in range(scatter_count):
-        p0x = rng.uniform(0, S)
-        p0y = rng.uniform(0, S)
+    for (p0x, p0y) in tuft_bases:
         blade_dir = rng.uniform(0, 2 * math.pi)
-        length    = rng.uniform(BLADE_LENGTH_MIN * 0.7, BLADE_LENGTH_MAX * 0.85) * sp
-        ctrl_fwd  = length * rng.uniform(0.30, 0.60)
-        ctrl_lat  = length * rng.gauss(0, 0.08)
-        perp      = blade_dir + math.pi / 2
-        p1x = p0x + ctrl_fwd * math.cos(blade_dir) + ctrl_lat * math.cos(perp)
-        p1y = p0y + ctrl_fwd * math.sin(blade_dir) + ctrl_lat * math.sin(perp)
-        p2x = p0x + length * math.cos(blade_dir)
-        p2y = p0y + length * math.sin(blade_dir)
-        bx_pts, by_pts = quadratic_bezier((p0x, p0y), (p1x, p1y), (p2x, p2y))
-        result = rotate_to_fit(bx_pts, by_pts, bw, S, rng)
-        if result is not None:
-            all_blades.append(result)
+        length    = rng.uniform(BLADE_LENGTH_MIN, BLADE_LENGTH_MAX) * sp
+        all_blades.extend(blades_from_base(p0x, p0y, blade_dir, length, bw, S, rng))
 
     # Shuffle for rim-shadow draw order variety (no effect on blade heights)
     rng.shuffle(all_blades)
