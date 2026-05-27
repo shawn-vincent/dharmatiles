@@ -64,7 +64,7 @@ LAYER_RANGE        = 0.50   # per-streamline layer-offset range (depth separatio
 # Much more pronounced than a raised cosine — the spine reads clearly in
 # a 3D print even at 2mm texture depth.
 # Larger k = narrower/sharper spike.
-BLADE_RIDGE_K      = 5.0
+BLADE_RIDGE_K      = 10.0
 
 # ── Blade height profile ───────────────────────────────────────────────────────
 GRASS_BOTTOM       = 0.10   # blade base height (soil level)
