@@ -61,10 +61,16 @@ LAYER_RANGE        = 0.50   # per-streamline layer-offset range (depth separatio
 # ── Blade cross-section ridge ─────────────────────────────────────────────────
 # Sharp Gaussian spine: height = h_along * exp(-k*(dist/w)^2).
 # Peaks at the centreline, drops to ~1% at the blade edge (dist=w).
-# Much more pronounced than a raised cosine — the spine reads clearly in
-# a 3D print even at 2mm texture depth.
 # Larger k = narrower/sharper spike.
 BLADE_RIDGE_K      = 10.0
+
+# ── Blade shadow groove ────────────────────────────────────────────────────────
+# A narrow trench is carved just outside each blade edge before the blade
+# fill is drawn.  This physically separates adjacent blades in the 3D print.
+# Drawing shadow BEFORE fill means any later blade's body overwrites shadow
+# that lands inside it — grooves survive only in the inter-blade gaps.
+BLADE_SHADOW_W     = 1.9   # shadow outer radius as multiple of blade half-width
+BLADE_SHADOW_DEPTH = 0.15  # height subtracted in shadow zone (pre-normalisation)
 
 # ── Blade height profile ───────────────────────────────────────────────────────
 GRASS_BOTTOM       = 0.10   # blade base height (soil level)
@@ -319,7 +325,12 @@ def make_blade_from_flow(base_x, base_y, flow_dx, flow_dy, length, bw, S, rng):
 
 
 def draw_blade(canvas, cx_pts, cy_pts, base_width, h_func, layer_offset=0.0):
-    """Draw one blade via max-compositing (identical semantics to v2 generator)."""
+    """Draw one blade: shadow groove first, then Gaussian ridge fill.
+
+    Shadow is carved with np.minimum before the fill so any later blade's
+    body (np.maximum) overwrites shadow that falls inside it.  Grooves
+    survive only in the inter-blade gaps, physically separating neighbours.
+    """
     H, W = canvas.shape
     n    = len(cx_pts)
     for i, (cx, cy) in enumerate(zip(cx_pts, cy_pts)):
@@ -332,7 +343,8 @@ def draw_blade(canvas, cx_pts, cy_pts, base_width, h_func, layer_offset=0.0):
 
         h_along = h_func(t) + layer_offset * t
 
-        wi      = int(w) + 2
+        # Bounding box must cover shadow rim, not just blade body
+        wi      = int(w * BLADE_SHADOW_W) + 2
         x0, x1  = max(0, int(cx) - wi), min(W, int(cx) + wi + 1)
         y0, y1  = max(0, int(cy) - wi), min(H, int(cy) + wi + 1)
         if x0 >= x1 or y0 >= y1:
@@ -341,10 +353,22 @@ def draw_blade(canvas, cx_pts, cy_pts, base_width, h_func, layer_offset=0.0):
         gx, gy = np.meshgrid(np.arange(x0, x1), np.arange(y0, y1))
         dist   = np.sqrt((gx - cx)**2 + (gy - cy)**2)
 
-        # Sharp Gaussian ridge: peaks at the centreline (dist=0 → full h_along),
-        # drops to ~1% at the blade edge (dist=w).  The Gaussian spike is far
-        # more pronounced than a broad cosine — each blade reads as a distinct
-        # raised spine in a 3D print.
+        # ── Shadow groove ────────────────────────────────────────────────────
+        # Carve a trench just outside the blade edge.  Drawn before fill so
+        # later blade bodies overwrite any shadow that lands inside them.
+        if BLADE_SHADOW_DEPTH > 0 and w > 0:
+            rim_outer  = w * BLADE_SHADOW_W
+            rim_zone   = (dist > w) & (dist < rim_outer)
+            rim_fade   = np.clip(
+                1.0 - (dist - w) / (rim_outer - w + 1e-6), 0.0, 1.0)
+            shadow_sub = BLADE_SHADOW_DEPTH * rim_fade * ramp  # zero at blade base
+            canvas[y0:y1, x0:x1] = np.where(
+                rim_zone,
+                np.maximum(0.0, canvas[y0:y1, x0:x1] - shadow_sub),
+                canvas[y0:y1, x0:x1])
+
+        # ── Gaussian ridge fill ──────────────────────────────────────────────
+        # Sharp spike at centreline, ~1% at blade edge.
         cross  = np.exp(-BLADE_RIDGE_K * (dist / w) ** 2)
         fill_h = h_along * cross
         fill   = np.where(dist <= w, fill_h, 0.0)

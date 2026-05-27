@@ -24,7 +24,7 @@ SCAD_FILE    = os.path.join(PROJECT_DIR, "scad", "dungeonblocks-blank.scad")
 
 HEIGHTMAP_SIZE = 512   # procedural generator resolution
 OUTPUT_SIZE    = 128   # OpenSCAD texture resolution (higher → heavier mesh)
-BLUR_RADIUS    = 0.0   # disabled — blurring rounds blade spines; keep edges crisp
+BLUR_RADIUS    = 0.3   # light smoothing to soften stair-step mesh edges without rounding spines
 TEXTURE_DEPTH  = 2
 
 
