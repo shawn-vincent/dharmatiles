@@ -28,18 +28,26 @@ BLUR_RADIUS    = 0.75  # light smoothing to soften pixel-step mesh edges
 TEXTURE_DEPTH  = 2
 
 
-def load_generator():
-    """Import generate() from generate-grass-heightmap.py (hyphenated name)."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    path = os.path.join(here, "generate-grass-heightmap.py")
-    spec = importlib.util.spec_from_file_location("generate_grass_heightmap", path)
-    mod  = importlib.util.module_from_spec(spec)
+GENERATOR_FILES = {
+    "tuft":      "generate-grass-heightmap.py",
+    "flowfield": "generate-grass-heightmap-flowfield.py",
+}
+
+
+def load_generator(name="tuft"):
+    """Import generate() from the named heightmap generator script."""
+    here     = os.path.dirname(os.path.abspath(__file__))
+    filename = GENERATOR_FILES[name]
+    path     = os.path.join(here, filename)
+    mod_name = filename.replace("-", "_").replace(".py", "")
+    spec     = importlib.util.spec_from_file_location(mod_name, path)
+    mod      = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod.generate
 
 
-def render_one(i, seed, scale=1.0):
-    generate = load_generator()
+def render_one(i, seed, scale=1.0, generator="tuft"):
+    generate = load_generator(generator)
 
     tex_path = os.path.join(TEXTURES_DIR, f"grass-{i}.png")
     stl_path = os.path.join(STL_DIR,      f"grass-{i}.stl")
@@ -74,17 +82,20 @@ def main():
                         help="Tile N uses seed base_seed+N-1 (default: 1)")
     parser.add_argument("--scale", type=float, default=1.0,
                         help="Blade detail scale passed to heightmap generator (default: 1.0)")
+    parser.add_argument("--generator", choices=list(GENERATOR_FILES), default="tuft",
+                        help="Heightmap generator: tuft (default) or flowfield")
     args = parser.parse_args()
 
     os.makedirs(STL_DIR, exist_ok=True)
 
     jobs = [(i, args.base_seed + i - 1) for i in range(1, 10)]
     for i, seed in jobs:
-        print(f"  grass-{i}: seed={seed}, scale={args.scale}")
+        print(f"  grass-{i}: seed={seed}, scale={args.scale}, generator={args.generator}")
 
     print(f"\nGenerating heightmaps and rendering {len(jobs)} tiles in parallel...")
     with ProcessPoolExecutor() as executor:
-        futures = {executor.submit(render_one, i, seed, args.scale): i for i, seed in jobs}
+        futures = {executor.submit(render_one, i, seed, args.scale, args.generator): i
+                   for i, seed in jobs}
         for future in as_completed(futures):
             i, ok, info = future.result()
             if ok:
