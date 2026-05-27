@@ -13,7 +13,7 @@ Script: `scripts/generate-grass-heightmap.py`
 - DungeonBlocks tile footprint: 35×35mm
 - Heightmap maps directly to the tile surface via `resize([total_w, total_d, texture_depth])` in OpenSCAD
 - Output pixel count should be ≤256×256 to avoid OpenSCAD mesh performance issues
-- `texture_depth` controls the physical emboss depth in mm (default 4mm for grass)
+- `texture_depth` controls the physical emboss depth in mm (default 2mm for grass)
 - Floor preset "Ground" (6mm) and peg height "Short" used for grass tiles
 
 ---
