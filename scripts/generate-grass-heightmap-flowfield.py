@@ -42,7 +42,7 @@ CURL_STRENGTH      = 0.55   # 0 = pure base field, 1 = dominated by curl noise
 CURL_COARSE        = 14     # coarse-grid resolution for the curl noise scalar field
 
 # ── Streamline tracing ─────────────────────────────────────────────────────────
-N_PRIMARY_SEEDS    = 65     # number of primary streamline seeds (jittered grid)
+N_PRIMARY_SEEDS    = 40     # number of primary streamline seeds (jittered grid)
 STEP_SIZE          = 5      # pixels per Euler integration step
 MAX_STEPS          = 160    # max steps per streamline before stopping
 BRANCH_PROB        = 0.022  # per-step probability of spawning a branch
@@ -50,20 +50,21 @@ BRANCH_MAX_ANGLE   = 0.45   # max branch angular offset from parent (radians)
 BRANCH_MAX_DEPTH   = 2      # max nesting depth for branches
 
 # ── Blade placement ────────────────────────────────────────────────────────────
-BLADE_SPACING      = 9      # streamline steps between consecutive blade placements
-BLADE_LENGTH_MIN   = 0.16   # blade length as fraction of S  (≈ 82px at S=512)
-BLADE_LENGTH_MAX   = 0.36   # blade length as fraction of S  (≈ 184px at S=512)
-BLADE_BASE_W       = 16.0   # base width in pixels at S=512 (wider to compensate for ridge taper)
+BLADE_SPACING      = 15     # streamline steps between consecutive blade placements
+BLADE_LENGTH_MIN   = 0.24   # blade length as fraction of S  (≈ 123px / ~8mm at S=512)
+BLADE_LENGTH_MAX   = 0.50   # blade length as fraction of S  (≈ 256px / ~17mm at S=512)
+BLADE_BASE_W       = 20.0   # base width in pixels at S=512
 BLADE_ANGLE_JITTER = 0.12   # per-blade direction noise, std-dev (radians)
 BLADE_CURVE_MAX    = 0.28   # max lateral Bezier offset as fraction of blade length
 LAYER_RANGE        = 0.50   # per-streamline layer-offset range (depth separation)
 
 # ── Blade cross-section ridge ─────────────────────────────────────────────────
-# Each blade is a raised-cosine spine rather than a flat plateau:
-# height peaks at the centreline and falls to zero at the blade edge.
-# This makes individual blades readable as distinct ridges in a 3D print.
-# 0.0 = flat top (original behaviour), 1.0 = full cosine ridge.
-BLADE_RIDGE        = 1.0
+# Sharp Gaussian spine: height = h_along * exp(-k*(dist/w)^2).
+# Peaks at the centreline, drops to ~1% at the blade edge (dist=w).
+# Much more pronounced than a raised cosine — the spine reads clearly in
+# a 3D print even at 2mm texture depth.
+# Larger k = narrower/sharper spike.
+BLADE_RIDGE_K      = 5.0
 
 # ── Blade height profile ───────────────────────────────────────────────────────
 GRASS_BOTTOM       = 0.10   # blade base height (soil level)
@@ -340,12 +341,12 @@ def draw_blade(canvas, cx_pts, cy_pts, base_width, h_func, layer_offset=0.0):
         gx, gy = np.meshgrid(np.arange(x0, x1), np.arange(y0, y1))
         dist   = np.sqrt((gx - cx)**2 + (gy - cy)**2)
 
-        # Cross-section ridge: raised cosine peaks at the blade centreline (dist=0)
-        # and smoothly falls to zero at the blade edge (dist=w).  Each blade becomes
-        # a rounded spine so individual blades read as distinct ridges in a 3D print
-        # rather than merging into a flat plateau.
-        cross  = 0.5 * (1.0 + np.cos(math.pi * np.clip(dist / w, 0.0, 1.0)))
-        fill_h = h_along * ((1.0 - BLADE_RIDGE) + BLADE_RIDGE * cross)
+        # Sharp Gaussian ridge: peaks at the centreline (dist=0 → full h_along),
+        # drops to ~1% at the blade edge (dist=w).  The Gaussian spike is far
+        # more pronounced than a broad cosine — each blade reads as a distinct
+        # raised spine in a 3D print.
+        cross  = np.exp(-BLADE_RIDGE_K * (dist / w) ** 2)
+        fill_h = h_along * cross
         fill   = np.where(dist <= w, fill_h, 0.0)
         canvas[y0:y1, x0:x1] = np.maximum(canvas[y0:y1, x0:x1], fill)
 
