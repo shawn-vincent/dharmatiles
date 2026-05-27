@@ -63,8 +63,17 @@ TUFT_SPREAD      = 0.40   # std-dev in radians of per-sibling direction jitter (
 TUFT_MIN         = 6
 TUFT_WEIGHTS     = (0.45, 0.35, 0.20)  # P(6), P(7), P(8 blades)
 
-# Rim shadow cast just outside each blade
-RIM_DARKEN       = 0.05
+# Per-tuft layer offset: each tuft gets a random offset in [0, TUFT_LAYER_RANGE]
+# applied as offset*t so it's zero at the base and increases toward the tip.
+# This gives tufts distinct "layers" so crossing blades look opaque, not transparent,
+# while preserving the invariant that all bases stay at ground level.
+TUFT_LAYER_RANGE = 0.50
+
+# Rim shadow disabled — subtraction-based shadows corrupt height compositing:
+# a later blade's rim shadow permanently darkens earlier blade bodies, making
+# bases appear to float on top of other blades. Per-tuft layer offsets provide
+# depth separation instead.
+RIM_DARKEN       = 0.0
 RIM_WIDTH_FACTOR = 1.8
 
 # ── Height functions ──────────────────────────────────────────────────────────
@@ -109,7 +118,7 @@ def quadratic_bezier(p0, p1, p2, n=80):
     return x, y
 
 
-def draw_blade(canvas, cx_pts, cy_pts, base_width, h_func, rim_darken=0.0):
+def draw_blade(canvas, cx_pts, cy_pts, base_width, h_func, rim_darken=0.0, layer_offset=0.0):
     """Draw one blade using a shared height function h_func(t) → height.
 
     h_func must be monotonically increasing in t so that np.maximum compositing
@@ -130,9 +139,10 @@ def draw_blade(canvas, cx_pts, cy_pts, base_width, h_func, rim_darken=0.0):
         if w < 0.25:
             continue
 
-        # Height from shared monotone function — base of this blade is lower than
-        # ANY other blade's body; tip is higher than ANY other blade's body.
-        h_along = h_func(t)
+        # Height: shared monotone function + per-tuft offset scaled by t.
+        # offset*t is zero at the base and grows toward the tip, so all bases
+        # stay at ground level while tufts get distinct visual layers.
+        h_along = h_func(t) + layer_offset * t
 
         rim_w = w * RIM_WIDTH_FACTOR
         wi = int(rim_w) + 2
@@ -144,13 +154,17 @@ def draw_blade(canvas, cx_pts, cy_pts, base_width, h_func, rim_darken=0.0):
         gx, gy = np.meshgrid(np.arange(x0, x1), np.arange(y0, y1))
         dist = np.sqrt((gx - cx)**2 + (gy - cy)**2)
 
-        # Shadow rim: darken pixels just outside the blade edge (not inside)
-        if rim_darken > 0:
+        # Shadow rim: darken pixels just outside the blade edge (not inside).
+        # Scaled by ramp so the shadow is zero at the base (where ramp=0) and
+        # full-strength at the wide body — prevents rim shadows from multiple
+        # blades compounding into a dark blob at a shared tuft base.
+        rim_darken_here = rim_darken * ramp
+        if rim_darken_here > 0:
             rim_zone = (dist > w) & (dist < rim_w)
             rim_fade = np.clip(1.0 - (dist - w) / max(rim_w - w, 1e-6), 0.0, 1.0)
             canvas[y0:y1, x0:x1] = np.where(
                 rim_zone,
-                np.maximum(0.0, canvas[y0:y1, x0:x1] - rim_darken * rim_fade),
+                np.maximum(0.0, canvas[y0:y1, x0:x1] - rim_darken_here * rim_fade),
                 canvas[y0:y1, x0:x1]
             )
 
@@ -413,18 +427,20 @@ def generate(size, seed, detail_scale=1.0, dirt_only=False):
     # Tuft bases — jittered grid for even surface coverage, no clumping.
     # Each base spawns 3–5 blades in roughly the same direction.
     tuft_bases = jittered_grid(tuft_count_n, 0, S, rng)
-    all_blades = []
+    all_blades = []  # list of (bx_pts, by_pts, layer_offset)
 
     for (p0x, p0y) in tuft_bases:
-        blade_dir = rng.uniform(0, 2 * math.pi)
-        length    = rng.uniform(BLADE_LENGTH_MIN, BLADE_LENGTH_MAX) * sp
-        all_blades.extend(blades_from_base(p0x, p0y, blade_dir, length, bw, S, rng))
+        blade_dir    = rng.uniform(0, 2 * math.pi)
+        length       = rng.uniform(BLADE_LENGTH_MIN, BLADE_LENGTH_MAX) * sp
+        layer_offset = rng.uniform(0, TUFT_LAYER_RANGE)
+        for blade in blades_from_base(p0x, p0y, blade_dir, length, bw, S, rng):
+            all_blades.append((*blade, layer_offset))
 
     # Shuffle for rim-shadow draw order variety (no effect on blade heights)
     rng.shuffle(all_blades)
 
-    for bx_pts, by_pts in all_blades:
-        draw_blade(canvas, bx_pts, by_pts, bw, blade_h, RIM_DARKEN)
+    for bx_pts, by_pts, layer_offset in all_blades:
+        draw_blade(canvas, bx_pts, by_pts, bw, blade_h, RIM_DARKEN, layer_offset)
 
     lo, hi = canvas.min(), canvas.max()
     composite = (canvas - lo) / (hi - lo + 1e-9)
