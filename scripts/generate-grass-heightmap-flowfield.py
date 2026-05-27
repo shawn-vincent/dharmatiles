@@ -69,8 +69,10 @@ BLADE_RIDGE_K      = 10.0
 # fill is drawn.  This physically separates adjacent blades in the 3D print.
 # Drawing shadow BEFORE fill means any later blade's body overwrites shadow
 # that lands inside it — grooves survive only in the inter-blade gaps.
-BLADE_SHADOW_W     = 1.9   # shadow outer radius as multiple of blade half-width
-BLADE_SHADOW_DEPTH = 0.15  # height subtracted in shadow zone (pre-normalisation)
+# Width is in PIXELS (constant, not a fraction of blade width) so the groove
+# stays narrow regardless of how wide the blade is.
+BLADE_SHADOW_PX    = 3     # groove width in pixels
+BLADE_SHADOW_DEPTH = 0.12  # height subtracted in shadow zone (pre-normalisation)
 
 # ── Blade height profile ───────────────────────────────────────────────────────
 GRASS_BOTTOM       = 0.10   # blade base height (soil level)
@@ -343,8 +345,8 @@ def draw_blade(canvas, cx_pts, cy_pts, base_width, h_func, layer_offset=0.0):
 
         h_along = h_func(t) + layer_offset * t
 
-        # Bounding box must cover shadow rim, not just blade body
-        wi      = int(w * BLADE_SHADOW_W) + 2
+        # Bounding box covers blade body + narrow shadow rim
+        wi      = int(w + BLADE_SHADOW_PX) + 2
         x0, x1  = max(0, int(cx) - wi), min(W, int(cx) + wi + 1)
         y0, y1  = max(0, int(cy) - wi), min(H, int(cy) + wi + 1)
         if x0 >= x1 or y0 >= y1:
@@ -354,13 +356,13 @@ def draw_blade(canvas, cx_pts, cy_pts, base_width, h_func, layer_offset=0.0):
         dist   = np.sqrt((gx - cx)**2 + (gy - cy)**2)
 
         # ── Shadow groove ────────────────────────────────────────────────────
-        # Carve a trench just outside the blade edge.  Drawn before fill so
-        # later blade bodies overwrite any shadow that lands inside them.
+        # Narrow fixed-pixel trench just outside the blade edge.
+        # Drawn before fill so later blade bodies overwrite any shadow that
+        # lands inside them — groove only survives in the inter-blade gap.
         if BLADE_SHADOW_DEPTH > 0 and w > 0:
-            rim_outer  = w * BLADE_SHADOW_W
+            rim_outer  = w + BLADE_SHADOW_PX
             rim_zone   = (dist > w) & (dist < rim_outer)
-            rim_fade   = np.clip(
-                1.0 - (dist - w) / (rim_outer - w + 1e-6), 0.0, 1.0)
+            rim_fade   = np.clip(1.0 - (dist - w) / (BLADE_SHADOW_PX + 1e-6), 0.0, 1.0)
             shadow_sub = BLADE_SHADOW_DEPTH * rim_fade * ramp  # zero at blade base
             canvas[y0:y1, x0:x1] = np.where(
                 rim_zone,
