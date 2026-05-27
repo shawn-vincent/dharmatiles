@@ -53,10 +53,17 @@ BRANCH_MAX_DEPTH   = 2      # max nesting depth for branches
 BLADE_SPACING      = 9      # streamline steps between consecutive blade placements
 BLADE_LENGTH_MIN   = 0.16   # blade length as fraction of S  (≈ 82px at S=512)
 BLADE_LENGTH_MAX   = 0.36   # blade length as fraction of S  (≈ 184px at S=512)
-BLADE_BASE_W       = 12.0   # base width in pixels at S=512
+BLADE_BASE_W       = 16.0   # base width in pixels at S=512 (wider to compensate for ridge taper)
 BLADE_ANGLE_JITTER = 0.12   # per-blade direction noise, std-dev (radians)
 BLADE_CURVE_MAX    = 0.28   # max lateral Bezier offset as fraction of blade length
 LAYER_RANGE        = 0.50   # per-streamline layer-offset range (depth separation)
+
+# ── Blade cross-section ridge ─────────────────────────────────────────────────
+# Each blade is a raised-cosine spine rather than a flat plateau:
+# height peaks at the centreline and falls to zero at the blade edge.
+# This makes individual blades readable as distinct ridges in a 3D print.
+# 0.0 = flat top (original behaviour), 1.0 = full cosine ridge.
+BLADE_RIDGE        = 1.0
 
 # ── Blade height profile ───────────────────────────────────────────────────────
 GRASS_BOTTOM       = 0.10   # blade base height (soil level)
@@ -332,7 +339,14 @@ def draw_blade(canvas, cx_pts, cy_pts, base_width, h_func, layer_offset=0.0):
 
         gx, gy = np.meshgrid(np.arange(x0, x1), np.arange(y0, y1))
         dist   = np.sqrt((gx - cx)**2 + (gy - cy)**2)
-        fill   = np.where(dist <= w, h_along, 0.0)
+
+        # Cross-section ridge: raised cosine peaks at the blade centreline (dist=0)
+        # and smoothly falls to zero at the blade edge (dist=w).  Each blade becomes
+        # a rounded spine so individual blades read as distinct ridges in a 3D print
+        # rather than merging into a flat plateau.
+        cross  = 0.5 * (1.0 + np.cos(math.pi * np.clip(dist / w, 0.0, 1.0)))
+        fill_h = h_along * ((1.0 - BLADE_RIDGE) + BLADE_RIDGE * cross)
+        fill   = np.where(dist <= w, fill_h, 0.0)
         canvas[y0:y1, x0:x1] = np.maximum(canvas[y0:y1, x0:x1], fill)
 
 
