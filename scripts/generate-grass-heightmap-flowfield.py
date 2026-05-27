@@ -53,7 +53,7 @@ BRANCH_MAX_DEPTH   = 2      # max nesting depth for branches
 BLADE_SPACING      = 15     # streamline steps between consecutive blade placements
 BLADE_LENGTH_MIN   = 0.24   # blade length as fraction of S  (≈ 123px / ~8mm at S=512)
 BLADE_LENGTH_MAX   = 0.50   # blade length as fraction of S  (≈ 256px / ~17mm at S=512)
-BLADE_BASE_W       = 20.0   # base width in pixels at S=512
+BLADE_BASE_W       = 10.0   # base width in pixels at S=512
 BLADE_ANGLE_JITTER = 0.12   # per-blade direction noise, std-dev (radians)
 BLADE_CURVE_MAX    = 0.28   # max lateral Bezier offset as fraction of blade length
 LAYER_RANGE        = 0.50   # per-streamline layer-offset range (depth separation)
@@ -71,8 +71,8 @@ BLADE_RIDGE_K      = 10.0
 # that lands inside it — grooves survive only in the inter-blade gaps.
 # Width is in PIXELS (constant, not a fraction of blade width) so the groove
 # stays narrow regardless of how wide the blade is.
-BLADE_SHADOW_PX    = 3     # groove width in pixels
-BLADE_SHADOW_DEPTH = 0.12  # height subtracted in shadow zone (pre-normalisation)
+BLADE_SHADOW_PX    = 1     # groove width in pixels (hairline crack at blade edge)
+BLADE_SHADOW_DEPTH = 0.06  # height subtracted in shadow zone (pre-normalisation)
 
 # ── Blade height profile ───────────────────────────────────────────────────────
 GRASS_BOTTOM       = 0.10   # blade base height (soil level)
