@@ -53,7 +53,7 @@ BRANCH_MAX_DEPTH   = 2      # max nesting depth for branches
 BLADE_SPACING      = 15     # streamline steps between consecutive blade placements
 BLADE_LENGTH_MIN   = 0.24   # blade length as fraction of S  (≈ 123px / ~8mm at S=512)
 BLADE_LENGTH_MAX   = 0.50   # blade length as fraction of S  (≈ 256px / ~17mm at S=512)
-BLADE_BASE_W       = 72.0   # base width in pixels at S=512
+BLADE_BASE_W       = 36.0   # base width in pixels at S=512
 BLADE_ANGLE_JITTER = 0.12   # per-blade direction noise, std-dev (radians)
 BLADE_CURVE_MAX    = 0.28   # max lateral Bezier offset as fraction of blade length
 LAYER_RANGE        = 0.50   # per-streamline layer-offset range (depth separation)
@@ -64,15 +64,9 @@ LAYER_RANGE        = 0.50   # per-streamline layer-offset range (depth separatio
 # Larger k = narrower/sharper spike.
 BLADE_RIDGE_K      = 3.0
 
-# ── Blade shadow groove ────────────────────────────────────────────────────────
-# A narrow trench is carved just outside each blade edge before the blade
-# fill is drawn.  This physically separates adjacent blades in the 3D print.
-# Drawing shadow BEFORE fill means any later blade's body overwrites shadow
-# that lands inside it — grooves survive only in the inter-blade gaps.
-# Width is in PIXELS (constant, not a fraction of blade width) so the groove
-# stays narrow regardless of how wide the blade is.
-BLADE_SHADOW_PX    = 1     # groove width in pixels (hairline crack at blade edge)
-BLADE_SHADOW_DEPTH = 0.06  # height subtracted in shadow zone (pre-normalisation)
+# Shadow grooves removed — per-bezier-point ring approach left speckled
+# noise dots rather than clean lines.  The Gaussian ridge provides natural
+# separation between adjacent blades without explicit shadow geometry.
 
 # ── Blade height profile ───────────────────────────────────────────────────────
 GRASS_BOTTOM       = 0.10   # blade base height (soil level)
@@ -327,12 +321,7 @@ def make_blade_from_flow(base_x, base_y, flow_dx, flow_dy, length, bw, S, rng):
 
 
 def draw_blade(canvas, cx_pts, cy_pts, base_width, h_func, layer_offset=0.0):
-    """Draw one blade: shadow groove first, then Gaussian ridge fill.
-
-    Shadow is carved with np.minimum before the fill so any later blade's
-    body (np.maximum) overwrites shadow that falls inside it.  Grooves
-    survive only in the inter-blade gaps, physically separating neighbours.
-    """
+    """Draw one blade via Gaussian ridge max-compositing."""
     H, W = canvas.shape
     n    = len(cx_pts)
     for i, (cx, cy) in enumerate(zip(cx_pts, cy_pts)):
@@ -345,8 +334,7 @@ def draw_blade(canvas, cx_pts, cy_pts, base_width, h_func, layer_offset=0.0):
 
         h_along = h_func(t) + layer_offset * t
 
-        # Bounding box covers blade body + narrow shadow rim
-        wi      = int(w + BLADE_SHADOW_PX) + 2
+        wi      = int(w) + 2
         x0, x1  = max(0, int(cx) - wi), min(W, int(cx) + wi + 1)
         y0, y1  = max(0, int(cy) - wi), min(H, int(cy) + wi + 1)
         if x0 >= x1 or y0 >= y1:
@@ -355,22 +343,7 @@ def draw_blade(canvas, cx_pts, cy_pts, base_width, h_func, layer_offset=0.0):
         gx, gy = np.meshgrid(np.arange(x0, x1), np.arange(y0, y1))
         dist   = np.sqrt((gx - cx)**2 + (gy - cy)**2)
 
-        # ── Shadow groove ────────────────────────────────────────────────────
-        # Narrow fixed-pixel trench just outside the blade edge.
-        # Drawn before fill so later blade bodies overwrite any shadow that
-        # lands inside them — groove only survives in the inter-blade gap.
-        if BLADE_SHADOW_DEPTH > 0 and w > 0:
-            rim_outer  = w + BLADE_SHADOW_PX
-            rim_zone   = (dist > w) & (dist < rim_outer)
-            rim_fade   = np.clip(1.0 - (dist - w) / (BLADE_SHADOW_PX + 1e-6), 0.0, 1.0)
-            shadow_sub = BLADE_SHADOW_DEPTH * rim_fade * ramp  # zero at blade base
-            canvas[y0:y1, x0:x1] = np.where(
-                rim_zone,
-                np.maximum(0.0, canvas[y0:y1, x0:x1] - shadow_sub),
-                canvas[y0:y1, x0:x1])
-
-        # ── Gaussian ridge fill ──────────────────────────────────────────────
-        # Sharp spike at centreline, ~1% at blade edge.
+        # Gaussian ridge: peaks at centreline, tapers smoothly to blade edge
         cross  = np.exp(-BLADE_RIDGE_K * (dist / w) ** 2)
         fill_h = h_along * cross
         fill   = np.where(dist <= w, fill_h, 0.0)
