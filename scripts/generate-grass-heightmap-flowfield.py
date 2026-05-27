@@ -69,8 +69,9 @@ BLADE_RIDGE_K      = 3.0
 # per-bezier-point (which caused speckled noise).  Wherever the canvas has
 # a steep downward gradient, the low side is pushed lower — this darkens the
 # ground just beside each blade edge without touching the blade itself.
-SHADOW_GRADIENT_RADIUS = 3     # pixel radius of gradient kernel
-SHADOW_DEPTH           = 0.20  # how much to deepen the shadow side
+SHADOW_GRADIENT_RADIUS = 3     # pixel radius of gradient kernel (controls groove width)
+SHADOW_DEPTH           = 0.40  # how much to deepen the shadow groove
+SHADOW_BLADE_THRESH    = 0.35  # pixels above this height are blade body — not shadowed
 
 # ── Blade height profile ───────────────────────────────────────────────────────
 GRASS_BOTTOM       = 0.10   # blade base height (soil level)
@@ -371,9 +372,12 @@ def apply_edge_shadows(canvas):
     the blade body itself, and with no per-point noise.
     """
     from scipy.ndimage import maximum_filter
-    local_max = maximum_filter(canvas, size=SHADOW_GRADIENT_RADIUS * 2 + 1)
-    drop      = local_max - canvas                    # how far below the local peak
-    shadow    = np.clip(drop * SHADOW_DEPTH, 0.0, SHADOW_DEPTH)
+    local_max  = maximum_filter(canvas, size=SHADOW_GRADIENT_RADIUS * 2 + 1)
+    drop       = local_max - canvas          # how far below the nearby peak
+    # Only deepen pixels at ground level — blade-body pixels are excluded
+    # so the groove is cut between blades, not into them.
+    ground     = canvas < SHADOW_BLADE_THRESH
+    shadow     = np.clip(drop * SHADOW_DEPTH, 0.0, SHADOW_DEPTH) * ground
     return np.maximum(0.0, canvas - shadow)
 
 
