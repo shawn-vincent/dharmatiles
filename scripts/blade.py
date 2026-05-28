@@ -23,7 +23,8 @@ def render_blade(canvas_w=CANVAS_W, canvas_h=CANVAS_H,
                  width=20, length=200, cap_ratio=0.6, tip_length=40, power=0.5,
                  base_fade_length=0.50, tip_fade_length=0.25, tip_fade_height=0.50,
                  curve=0.0, curve_start=0.15, direction=0.0,
-                 base_x=None, base_y=None, return_layers=False):
+                 base_x=None, base_y=None, return_layers=False,
+                 pointed_base=False):
     """
     Spine layout (arc-length s from base):
       [0,  b]          : semi-ellipse cap  (grows 0 → width/2)
@@ -147,14 +148,24 @@ def render_blade(canvas_w=CANVAS_W, canvas_h=CANVAS_H,
         s      = np.where(in_arc, s_arc, s_str)
 
     # ── Radius profile r(s) ───────────────────────────────────────────────────
-    s_cap = np.clip(s, 0.0, b)
-    r_cap = a * np.sqrt(np.maximum(0.0, 1.0 - ((b - s_cap) / b) ** 2))
-
     t_tip = np.clip((s - s_body_end) / tip_length, 0.0, 1.0)
     r_tip = a * np.cos(t_tip * np.pi / 2)
 
-    r_s = np.where(s < b, r_cap,
-          np.where(s < s_body_end, a, r_tip))
+    if pointed_base:
+        # Cosine taper over 2× tip_length pixels — double the tip so the base
+        # reads as a long, sharp point emerging between blades.
+        # b is still used for total_length / curve geometry etc.
+        b_base = min(float(tip_length) * 3.0, float(s_body_end) - 2.0)
+        s_cap_p = np.clip(s, 0.0, b_base)
+        r_cap = a * np.cos((1.0 - s_cap_p / b_base) * np.pi / 2)
+        r_s = np.where(s < b_base, r_cap,
+              np.where(s < s_body_end, a, r_tip))
+    else:
+        # Semi-ellipse cap — blunt rounded base (default).
+        s_cap = np.clip(s, 0.0, b)
+        r_cap = a * np.sqrt(np.maximum(0.0, 1.0 - ((b - s_cap) / b) ** 2))
+        r_s = np.where(s < b, r_cap,
+              np.where(s < s_body_end, a, r_tip))
 
     # ── Alpha (anti-aliased edge) & shading ───────────────────────────────────
     abs_d = np.abs(d_perp)
@@ -167,8 +178,10 @@ def render_blade(canvas_w=CANVAS_W, canvas_h=CANVAS_H,
     t_base    = np.clip(s / base_fade_px, 0.0, 1.0)
     base_fade = 3*t_base**2 - 2*t_base**3
 
-    t_tip_f  = np.clip((total_length - s) / tip_fade_px, 0.0, 1.0)
-    tip_fade = tip_fade_height + (1.0 - tip_fade_height) * (3*t_tip_f**2 - 2*t_tip_f**3)
+    # No brightness fade at the tip either — edge shading from `shade` alone.
+    # (tip_fade_height used to floor brightness at 0.5, making tips darker than
+    # pointed bases which have base_fade=1.0; remove for consistency.)
+    tip_fade = 1.0
 
     brightness = shade * base_fade * tip_fade   # [0,1], alpha-separate
 
