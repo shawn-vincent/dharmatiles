@@ -16,7 +16,7 @@ wall_thickness =  7.0;  // wall depth in mm
 floor_preset   = 9.5; // [0:Custom, 3:Water (3mm), 6:Ground (6mm), 9.5:Manmade (9.5mm)]
 floor_custom   = 9.5; // custom height in mm — only used when preset is Custom
 floor_texture  = true;
-texture_depth  = 4.0; // how deep the texture is embossed in mm
+texture_depth  = 1.5; // how deep the texture is embossed in mm
 texture_zoom   = 1.0; // 1 = full image, 2 = use 1/4 of image at 2x scale
 
 /* [Socket] */
@@ -130,7 +130,7 @@ module socket_base() {
     square_frustum(peg_size, tile_size, peg_top_z, peg_flare_height);
 }
 
-texture_file = "../textures/grass-foliage-256-faded.png";
+texture_file = "../textures/grass-scene-faded.png";
 
 module floor_tile() {
     translate([0, 0, base_z]) {

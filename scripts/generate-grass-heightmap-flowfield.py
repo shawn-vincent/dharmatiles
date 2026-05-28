@@ -37,7 +37,7 @@ from PIL import Image
 DEFAULT_SIZE       = 512
 
 # ── Flow field ─────────────────────────────────────────────────────────────────
-FIELD_TYPES        = ['linear', 'swirl', 'radial', 'inward', 'corner', 'dipole']
+FIELD_TYPES        = ['linear', 'corner']
 CURL_STRENGTH      = 0.55   # 0 = pure base field, 1 = dominated by curl noise
 CURL_COARSE        = 14     # coarse-grid resolution for the curl noise scalar field
 
@@ -53,35 +53,29 @@ BRANCH_MAX_DEPTH   = 2      # max nesting depth for branches
 BLADE_SPACING      = 15     # streamline steps between consecutive blade placements
 BLADE_LENGTH_MIN   = 0.24   # blade length as fraction of S  (≈ 123px / ~8mm at S=512)
 BLADE_LENGTH_MAX   = 0.50   # blade length as fraction of S  (≈ 256px / ~17mm at S=512)
-BLADE_BASE_W       = 36.0   # base width in pixels at S=512
+BLADE_BASE_W       = 18.0   # base width in pixels at S=512
 BLADE_ANGLE_JITTER = 0.12   # per-blade direction noise, std-dev (radians)
 BLADE_CURVE_MAX    = 0.28   # max lateral Bezier offset as fraction of blade length
 LAYER_RANGE        = 0.50   # per-streamline layer-offset range (depth separation)
 
-# ── Blade cross-section ridge ─────────────────────────────────────────────────
-# Sharp Gaussian spine: height = h_along * exp(-k*(dist/w)^2).
-# Peaks at the centreline, drops to ~1% at the blade edge (dist=w).
-# Larger k = narrower/sharper spike.
-BLADE_RIDGE_K      = 3.0
-
-# ── Blade edge shadow ─────────────────────────────────────────────────────────
-# Applied as a single post-process pass after all blades are drawn, not
-# per-bezier-point (which caused speckled noise).  Wherever the canvas has
-# a steep downward gradient, the low side is pushed lower — this darkens the
-# ground just beside each blade edge without touching the blade itself.
-SHADOW_GRADIENT_RADIUS = 3     # pixel radius of gradient kernel (controls groove width)
-SHADOW_DEPTH           = 0.40  # how much to deepen the shadow groove
-SHADOW_BLADE_THRESH    = 0.35  # pixels above this height are blade body — not shadowed
+# ── Blade side groove ─────────────────────────────────────────────────────────
+# Drawn inline per stamp inside draw_blade.  A narrow dark groove is cut along
+# the two long side edges of each blade; suppressed at the base (t < GROOVE_BASE_SKIP)
+# and only applied to ground pixels so it never cuts into an overlapping blade.
+GROOVE_WIDTH       = 2      # radius in pixels of the dark line drawn at each blade edge
+GROOVE_DEPTH       = 0.0    # canvas value the groove blends toward (0 = black)
+GROOVE_MAX_OPACITY = 0.50   # max blend fraction at the tip (1.0 = fully black, 0.5 = 50%)
+GROOVE_BASE_SKIP   = 0.10   # fraction of blade length at base where groove is skipped
 
 # ── Blade height profile ───────────────────────────────────────────────────────
 GRASS_BOTTOM       = 0.10   # blade base height (soil level)
 LAYER_STACK_H      = 0.75   # total height range base→tip
 BLADE_ARC_HEIGHT   = 0.20   # small mid-blade height bonus
 
-# ── Dirt layer (unchanged from tuft generator) ────────────────────────────────
-DIRT_MAX           = 0.32
-ROCK_ATTEMPTS      = 120
-ROCK_POWER         = 3.5
+# ── Dirt layer ────────────────────────────────────────────────────────────────
+DIRT_MAX           = 0.70   # higher pebbles = lighter ground between blades
+ROCK_ATTEMPTS      = 180    # was 120  — more rock features scattered across the tile
+ROCK_POWER         = 2.0    # was 3.5  — lower = more large rocks, coarser surface
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -326,7 +320,14 @@ def make_blade_from_flow(base_x, base_y, flow_dx, flow_dy, length, bw, S, rng):
 
 
 def draw_blade(canvas, cx_pts, cy_pts, base_width, h_func, layer_offset=0.0):
-    """Draw one blade via Gaussian ridge max-compositing."""
+    """
+    Draw one blade: flat-topped body + side grooves, per stamp.
+
+    Body (dist <= w) is max-composited — later blades naturally sit on top.
+    Groove (ring just outside w) is written dark on ground pixels at the same
+    stamp; a subsequent blade's body stamp will overwrite it via max-composite
+    if that blade covers the groove position, which is the correct behaviour.
+    """
     H, W = canvas.shape
     n    = len(cx_pts)
     for i, (cx, cy) in enumerate(zip(cx_pts, cy_pts)):
@@ -337,22 +338,47 @@ def draw_blade(canvas, cx_pts, cy_pts, base_width, h_func, layer_offset=0.0):
         if w < 0.25:
             continue
 
-        h_along = h_func(t) + layer_offset * t
+        h_along   = h_func(t) + layer_offset * t
+        do_groove = (t >= GROOVE_BASE_SKIP)
 
-        wi      = int(w) + 2
-        x0, x1  = max(0, int(cx) - wi), min(W, int(cx) + wi + 1)
-        y0, y1  = max(0, int(cy) - wi), min(H, int(cy) + wi + 1)
+        wi  = int(w + (GROOVE_WIDTH if do_groove else 0)) + 2
+        x0, x1 = max(0, int(cx) - wi), min(W, int(cx) + wi + 1)
+        y0, y1 = max(0, int(cy) - wi), min(H, int(cy) + wi + 1)
         if x0 >= x1 or y0 >= y1:
             continue
 
         gx, gy = np.meshgrid(np.arange(x0, x1), np.arange(y0, y1))
-        dist   = np.sqrt((gx - cx)**2 + (gy - cy)**2)
+        dist   = np.sqrt((gx - cx) ** 2 + (gy - cy) ** 2)
 
-        # Gaussian ridge: peaks at centreline, tapers smoothly to blade edge
-        cross  = np.exp(-BLADE_RIDGE_K * (dist / w) ** 2)
-        fill_h = h_along * cross
-        fill   = np.where(dist <= w, fill_h, 0.0)
-        canvas[y0:y1, x0:x1] = np.maximum(canvas[y0:y1, x0:x1], fill)
+        # ── Body: transparent at base, opaque at tip ──────────────────────────
+        inside  = dist <= w
+        blended = canvas[y0:y1, x0:x1] * (1.0 - t) + h_along * t
+        canvas[y0:y1, x0:x1] = np.where(inside, blended, canvas[y0:y1, x0:x1])
+
+        # ── Side groove lines ─────────────────────────────────────────────────
+        if do_groove:
+            if i < n - 1:
+                dtx, dty = cx_pts[i + 1] - cx, cy_pts[i + 1] - cy
+            else:
+                dtx, dty = cx - cx_pts[i - 1], cy - cy_pts[i - 1]
+            tlen = math.sqrt(dtx ** 2 + dty ** 2) + 1e-9
+            dtx /= tlen;  dty /= tlen
+            px, py = -dty, dtx          # perpendicular — points to left edge
+
+            # Draw a dark dot at the left and right edge points
+            for sign in (-1.0, +1.0):
+                ex = cx + sign * px * w
+                ey = cy + sign * py * w
+                r  = GROOVE_WIDTH
+                gx2, gy2 = np.meshgrid(
+                    np.arange(max(0, int(ex) - r - 1), min(W, int(ex) + r + 2)),
+                    np.arange(max(0, int(ey) - r - 1), min(H, int(ey) + r + 2)),
+                )
+                mask = (gx2 - ex) ** 2 + (gy2 - ey) ** 2 <= r ** 2
+                alpha = t * GROOVE_MAX_OPACITY
+                canvas[gy2[mask], gx2[mask]] = (
+                    canvas[gy2[mask], gx2[mask]] * (1.0 - alpha) + GROOVE_DEPTH * alpha
+                )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -435,14 +461,14 @@ def _draw_irregular_bump(canvas, cx, cy, r_base, h, rng, smoothness=0.0):
 def generate_dirt(size, rng):
     sf     = size / 512
     canvas = np.zeros((size, size), dtype=float)
-    cell   = 4.0 * sf
+    cell   = 5.0 * sf
     gcols  = int(math.ceil(size / cell)) + 2
     grows  = int(math.ceil(size / cell)) + 2
     for row in range(-1, grows):
         for col in range(-1, gcols):
             cx = (col + rng.uniform(0.05, 0.95)) * cell
             cy = (row + rng.uniform(0.05, 0.95)) * cell
-            r  = rng.uniform(2.2, 4.5) * sf
+            r  = rng.uniform(2.5, 5.5) * sf
             h  = rng.uniform(0.30, 0.90) * DIRT_MAX
             _draw_bump(canvas, cx, cy, r, h)
     r_min = 4.5  * sf
@@ -511,12 +537,10 @@ def generate(size, seed, detail_scale=1.0, dirt_only=False):
 
     print(f"  blades: {len(all_blades)}")
 
-    rng.shuffle(all_blades)
+    # Back-to-front: lower layer_offset drawn first, higher on top
+    all_blades.sort(key=lambda b: b[2])
     for bx_pts, by_pts, layer_offset in all_blades:
         draw_blade(canvas, bx_pts, by_pts, bw, blade_h, layer_offset)
-
-    # ── Edge shadow pass ──────────────────────────────────────────────────────
-    canvas = apply_edge_shadows(canvas)
 
     lo, hi = canvas.min(), canvas.max()
     return ((canvas - lo) / (hi - lo + 1e-9) * 255).astype(np.uint8)
