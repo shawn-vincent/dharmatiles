@@ -38,7 +38,7 @@ TERRAIN_AMP     = 0.8           # mm — sinusoidal bump amplitude
 TERRAIN_FREQ    = 1.5           # cycles across tile
 
 # Blade population
-N_BLADES        = 50            # tall blades
+N_BLADES        = 5             # tall blades
 N_FILL          = 0             # short filler blades
 SEED            = 42
 CURL_MAX        = 0.6           # max lateral curl magnitude (±)
@@ -456,11 +456,12 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
         keels_arr.append(np.array([x, y, keel_z]))
         creases_arr.append(crease)          # absolute mm; clamped in add_ring at shallow ends
 
-    # ── Base inset: sink ring-0 into the terrain along the terrain normal ────────
-    # This makes the base disk lie in (approximately) the terrain tangent plane
-    # and eliminates edge gaps caused by terrain curvature.
-    tn = terrain_normal_at(bx, by)
-    path_xyz[0] = path_xyz[0] - BASE_INSET * tn
+    # Ring 0: spine sits AT terrain surface (arch[0]=0), keel sits BASE_INSET
+    # below terrain.  Cross-section thickness = BASE_INSET at the base — visible,
+    # tangent to the terrain plane (ring is horizontal, initial tangent is vertical),
+    # and "slightly inside" because the keel half is embedded.
+    # Do NOT sink the spine: that collapses spine→keel, making ring 0 degenerate
+    # (zero thickness) which causes an abrupt opening to ring 1 — the sharp spike.
 
     mesh = _build_tube_mesh(path_xyz, widths_arr, keels_arr, creases_arr)
     return mesh, path_xyz, widths_arr
