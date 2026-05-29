@@ -331,9 +331,15 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     # Pass 2 — minimum obstacle height (above terrain) at each spine point.
     #   The arch must exceed obstacle[k] at every interior k.
     #   Endpoints are pinned (base flush, tip at tip_lift) and not constrained here.
+    #   The first T_BASE fraction of the path is ignored: the blade is still
+    #   emerging from the terrain there and minor base-overlap is acceptable
+    #   (and invisible below the surface).
+    T_BASE = 0.20    # ignore obstacles in first 20% of blade path
     obstacle = np.zeros(n_path)
     for k in range(1, n_path - 1):
         t     = k * dt
+        if t < T_BASE:
+            continue   # blade still exiting terrain — don't force a leap here
         sin_t = np.sin(t * np.pi)
         # Raise spine so this blade's crease (V2) clears the previous blade's
         # top edges (V1/V3 recorded in support_z at spine height).
