@@ -38,9 +38,10 @@ TERRAIN_AMP     = 0.8           # mm — sinusoidal bump amplitude
 TERRAIN_FREQ    = 1.5           # cycles across tile
 
 # Blade population
-N_BLADES        = 1
-N_FILL          = 0
+N_BLADES        = 120           # tall blades
+N_FILL          = 60            # short filler blades
 SEED            = 42
+CURL_MAX        = 0.6           # max lateral curl magnitude (±)
 
 # Blade geometry (mm)
 TALL_W_MIN, TALL_W_MAX   = 0.9, 1.9    # cylinder diameter at base
@@ -125,17 +126,21 @@ def place_blades(n, w_min, w_max, l_min, l_max, tl_min, tl_max):
     cw, ch = TILE_W / cols, TILE_H / rows
     cells = [(c, r) for c in range(cols) for r in range(rows)]
     rng.shuffle(cells)
+    edge = w_max / 2 + 0.2          # keep bases at least one radius from tile edge
     out = []
     for c, r in cells:
         if len(out) >= n:
             break
+        bx = float(np.clip((c + rng.uniform(0.1, 0.9)) * cw, edge, TILE_W - edge))
+        by = float(np.clip((r + rng.uniform(0.1, 0.9)) * ch, edge, TILE_H - edge))
         out.append(dict(
-            base_x    = (c + rng.uniform(0.1, 0.9)) * cw,
-            base_y    = (r + rng.uniform(0.1, 0.9)) * ch,
+            base_x    = bx,
+            base_y    = by,
             width     = rng.uniform(w_min,  w_max),
             length    = rng.uniform(l_min,  l_max),
             tip_len   = rng.uniform(tl_min, tl_max),
             direction = rng.uniform(0, 2 * np.pi),
+            curl      = rng.uniform(-CURL_MAX, CURL_MAX),
         ))
     return out
 
@@ -319,8 +324,8 @@ def make_grass_blade(support_z, base_pos, azimuth, length, radius, tip_length,
     # Pass 1 — XY positions, terrain height, and support height at every point.
     xs_path, ys_path, tz_path, sz_path = [], [], [], []
     for k in range(n_path):
-        x = float(np.clip(bx + xrot[k], 0.01, TILE_W - 0.01))
-        y = float(np.clip(by + yrot[k], 0.01, TILE_H - 0.01))
+        x = float(np.clip(bx + xrot[k], radius, TILE_W - radius))
+        y = float(np.clip(by + yrot[k], radius, TILE_H - radius))
         xs_path.append(x)
         ys_path.append(y)
         tz_path.append(sample_grid(terrain_z, x, y))
@@ -470,34 +475,20 @@ def make_heightmap_solid(z_grid, tile_w, tile_h, base_h, subsample=4):
 print("Building blade meshes...")
 parts = []
 
-# Three comparison blades: same position/direction/size, curl = -1, 0, +1
-DEMO_AZIMUTH = np.pi / 2   # fall direction: east
-DEMO_LENGTH  = 14.0        # mm body arc
-DEMO_TIP     = 4.0         # mm tip taper
-DEMO_RADIUS  = 0.7         # mm
-DEMO_Y       = 17.5        # mm — centred on tile
-
-demo_blades = [
-    dict(base_x= 7.0, base_y=DEMO_Y, curl=-1.0, azimuth=DEMO_AZIMUTH),  # min curve
-    dict(base_x=17.5, base_y=DEMO_Y, curl= 0.0, azimuth=DEMO_AZIMUTH),  # straight
-    dict(base_x=28.0, base_y=DEMO_Y, curl=+1.0, azimuth=DEMO_AZIMUTH),  # max curve
-    # 4th blade: perpendicular, base offset so midpoint crosses the straight blade's midpoint
-    dict(base_x=23.0, base_y=12.0,   curl= 0.0, azimuth=0.0),
-]
-
-for bl in demo_blades:
+for i, bl in enumerate(blades):
     mesh, spine, hw = make_grass_blade(
         support_z  = support_z,
         base_pos   = (bl['base_x'], bl['base_y'], 0),
-        azimuth    = bl['azimuth'],
-        length     = DEMO_LENGTH,
-        radius     = DEMO_RADIUS,
-        tip_length = DEMO_TIP,
+        azimuth    = bl['direction'],
+        length     = bl['length'],
+        radius     = bl['width'] / 2,
+        tip_length = bl['tip_len'],
         curl       = bl['curl'],
     )
     parts.append(mesh)
     rasterise_into_support(support_z, spine, hw)
-    print(f"  curl={bl['curl']:+.1f} blade done")
+    if (i + 1) % 20 == 0 or (i + 1) == len(blades):
+        print(f"  {i+1}/{len(blades)} blades done")
 
 print("Building terrain solid...")
 terrain_mesh = make_heightmap_solid(terrain_z, TILE_W, TILE_H, BASE_H, subsample=4)
