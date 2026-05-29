@@ -57,7 +57,7 @@ BLADE_CURL      = 1.0             # lateral curl (0=straight, ±1=±180 deg swee
 N_PATH          = 50              # spine sample points (more = smoother curve)
 CREASE_DEPTH    = 0.5             # mm — concave dip at centre of top face (0 = flat)
 TIP_LIFT_FRAC   = 0.25            # tip raised by this fraction of blade width (0 = flush)
-BASE_SLOPE_WIDTHS = 0.025         # normalized-t base dz/dt, in blade widths
+BASE_SLOPE_WIDTHS = 0.25          # normalized-t base dz/dt, in blade widths
 
 # Terrain-following
 CLEARANCE       = 0.04          # mm — gap above support surface
@@ -334,10 +334,10 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     # so the spine itself must be higher by the crease depth plus clearance.
     #
     # The base is pinned to terrain: if a prior blade crosses the root, the new
-    # blade grows out from under it.  The first 10% is allowed to emerge through
+    # blade grows out from under it.  The first 25% is allowed to emerge through
     # the terrain/support so those near-base samples do not force a huge cubic.
     min_spine_z = np.array(sz_path, dtype=float) + crease + CLEARANCE
-    T_CONSTRAINT_START = 0.10
+    T_CONSTRAINT_START = 0.25
     for k in range(n_path):
         if k / (n_path - 1) < T_CONSTRAINT_START:
             min_spine_z[k] = -np.inf
