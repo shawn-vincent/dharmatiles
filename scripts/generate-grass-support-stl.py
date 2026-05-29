@@ -34,7 +34,7 @@ BASE_H          =  3.0          # mm — solid slab below terrain
 GRID_RES        = 256           # support-field resolution (cells per side)
 
 # Terrain
-TERRAIN_AMP     = 0.8           # mm — sinusoidal bump amplitude
+TERRAIN_AMP     = 1.0           # mm — sinusoidal bump amplitude
 TERRAIN_FREQ    = 1.5           # cycles across tile
 
 # Blade population
