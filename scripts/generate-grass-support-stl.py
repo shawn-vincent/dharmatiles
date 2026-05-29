@@ -348,37 +348,78 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     # Normalized t derivative.  dz/ds ~= 1 at the base makes the blade grow up
     # from the terrain before it bends over.
     base_slope = total_l
-    # Pass 3 — single cubic Bezier height curve.
+    # Pass 3 — three-part smooth support-clearing height curve.
     #
-    # P0 is the fixed base height.  P1 encodes the fixed base slope.  P3 is the
-    # fixed tip height.  P2 is the only free scalar, so raising it gives the
-    # lowest single smooth curve whose crease clears every sampled support point.
-    p0 = base_z
-    p1 = base_z + base_slope / 3.0
-    p3 = tip_z
-    p2 = max(p1, p3) + width * arc_fraction
+    # This is a single C1 cubic Hermite spline with three equal spans.  The base
+    # height and slope are fixed constraints, the tip height is fixed, and the
+    # two interior knot heights are solved as a tiny linear envelope problem.
+    # That gives the curve local freedom to clear obstacles without one global
+    # Bezier handle pulling the whole blade high.
+    h_span = 1.0 / 3.0
 
+    def hermite(y0, m0, y1, m1, u):
+        h00 = 2*u**3 - 3*u**2 + 1
+        h10 = u**3 - 2*u**2 + u
+        h01 = -2*u**3 + 3*u**2
+        h11 = u**3 - u**2
+        return h00*y0 + h10*h_span*m0 + h01*y1 + h11*h_span*m1
+
+    def eval_spline(z1, z2):
+        z0, z3 = base_z, tip_z
+        m0 = base_slope
+        m1 = (z2 - z0) / (2.0 * h_span)
+        m2 = (z3 - z1) / (2.0 * h_span)
+        m3 = (z3 - z2) / h_span
+
+        out = np.zeros(n_path)
+        for kk in range(n_path):
+            t = kk / (n_path - 1)
+            if t <= h_span:
+                u = t / h_span
+                out[kk] = hermite(z0, m0, z1, m1, u)
+            elif t <= 2.0 * h_span:
+                u = (t - h_span) / h_span
+                out[kk] = hermite(z1, m1, z2, m2, u)
+            else:
+                u = (t - 2.0 * h_span) / h_span
+                out[kk] = hermite(z2, m2, z3, m3, u)
+        return out
+
+    const_z = eval_spline(0.0, 0.0)
+    z1_basis = eval_spline(1.0, 0.0) - const_z
+    z2_basis = eval_spline(0.0, 1.0) - const_z
+
+    lower_knot = min(base_z, tip_z)
+    constraints = [
+        (1.0, 0.0, lower_knot),
+        (0.0, 1.0, lower_knot),
+    ]
     for k in range(1, n_path - 1):
         need = min_spine_z[k]
-        if not np.isfinite(need):
-            continue
-        t = k / (n_path - 1)
-        omt = 1.0 - t
-        basis = 3.0 * omt * t**2
-        fixed = omt**3 * p0 + 3.0 * omt**2 * t * p1 + t**3 * p3
-        if basis > 1e-9:
-            p2 = max(p2, (need - fixed) / basis)
+        if np.isfinite(need):
+            constraints.append((z1_basis[k], z2_basis[k], need - const_z[k]))
 
-    spine_z = np.zeros(n_path)
-    for k in range(n_path):
-        t = k / (n_path - 1)
-        omt = 1.0 - t
-        spine_z[k] = (
-            omt**3 * p0 +
-            3.0 * omt**2 * t * p1 +
-            3.0 * omt * t**2 * p2 +
-            t**3 * p3
-        )
+    candidates = []
+    for i, (a1, b1, c1) in enumerate(constraints):
+        for a2, b2, c2 in constraints[i + 1:]:
+            det = a1 * b2 - a2 * b1
+            if abs(det) < 1e-9:
+                continue
+            z1 = (c1 * b2 - c2 * b1) / det
+            z2 = (a1 * c2 - a2 * c1) / det
+            candidates.append((z1, z2))
+
+    best_score = (np.inf, np.inf)
+    best_z1 = best_z2 = lower_knot
+    for z1, z2 in candidates:
+        if all(a * z1 + b * z2 >= c - 1e-7 for a, b, c in constraints):
+            spline = eval_spline(z1, z2)
+            score = (float(np.max(spline)), float(np.sum(spline)))
+            if score < best_score:
+                best_score = score
+                best_z1, best_z2 = z1, z2
+
+    spine_z = eval_spline(best_z1, best_z2)
     spine_z[0] = base_z
     spine_z[-1] = tip_z
     constrained = np.isfinite(min_spine_z)
