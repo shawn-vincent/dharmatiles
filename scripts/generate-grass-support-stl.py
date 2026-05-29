@@ -27,7 +27,6 @@ Blade geometry
 import numpy as np
 import trimesh
 import pathlib
-import itertools
 
 # ── Config ────────────────────────────────────────────────────────────────────
 TILE_W = TILE_H = 35.0          # mm
@@ -371,14 +370,14 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     # the XY path has nearly zero horizontal speed at the root; the magnitude
     # should be local to the blade thickness, not proportional to blade length.
     base_slope = width * BASE_SLOPE_WIDTHS
-    # Pass 3 — four-part smooth support-clearing height curve.
+    # Pass 3 — three-part smooth support-clearing height curve.
     #
-    # This is a single C1 cubic Hermite spline with four equal spans.  The base
+    # This is a single C1 cubic Hermite spline with three equal spans.  The base
     # height and slope are fixed constraints, the tip height is fixed, and the
-    # three interior knot heights are solved as a tiny linear envelope problem.
+    # two interior knot heights are solved as a tiny linear envelope problem.
     # That gives the curve local freedom to clear obstacles without one global
     # Bezier handle pulling the whole blade high.
-    h_span = 1.0 / 4.0
+    h_span = 1.0 / 3.0
 
     def hermite(y0, m0, y1, m1, u):
         h00 = 2*u**3 - 3*u**2 + 1
@@ -387,13 +386,12 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
         h11 = u**3 - u**2
         return h00*y0 + h10*h_span*m0 + h01*y1 + h11*h_span*m1
 
-    def eval_spline(z1, z2, z3):
-        z0, z4 = base_z, tip_z
+    def eval_spline(z1, z2):
+        z0, z3 = base_z, tip_z
         m0 = base_slope
         m1 = (z2 - z0) / (2.0 * h_span)
         m2 = (z3 - z1) / (2.0 * h_span)
-        m3 = (z4 - z2) / (2.0 * h_span)
-        m4 = (z4 - z3) / h_span
+        m3 = (z3 - z2) / h_span
 
         out = np.zeros(n_path)
         for kk in range(n_path):
@@ -404,56 +402,46 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
             elif t <= 2.0 * h_span:
                 u = (t - h_span) / h_span
                 out[kk] = hermite(z1, m1, z2, m2, u)
-            elif t <= 3.0 * h_span:
+            else:
                 u = (t - 2.0 * h_span) / h_span
                 out[kk] = hermite(z2, m2, z3, m3, u)
-            else:
-                u = (t - 3.0 * h_span) / h_span
-                out[kk] = hermite(z3, m3, z4, m4, u)
         return out
 
-    const_z = eval_spline(0.0, 0.0, 0.0)
-    z1_basis = eval_spline(1.0, 0.0, 0.0) - const_z
-    z2_basis = eval_spline(0.0, 1.0, 0.0) - const_z
-    z3_basis = eval_spline(0.0, 0.0, 1.0) - const_z
+    const_z = eval_spline(0.0, 0.0)
+    z1_basis = eval_spline(1.0, 0.0) - const_z
+    z2_basis = eval_spline(0.0, 1.0) - const_z
 
     lower_knot = min(base_z, tip_z)
     constraints = [
-        (1.0, 0.0, 0.0, lower_knot),
-        (0.0, 1.0, 0.0, lower_knot),
-        (0.0, 0.0, 1.0, lower_knot),
+        (1.0, 0.0, lower_knot),
+        (0.0, 1.0, lower_knot),
     ]
     for k in range(1, n_path - 1):
         need = min_spine_z[k]
         if np.isfinite(need):
-            constraints.append((z1_basis[k], z2_basis[k], z3_basis[k], need - const_z[k]))
+            constraints.append((z1_basis[k], z2_basis[k], need - const_z[k]))
 
     candidates = []
-    for active in itertools.combinations(constraints, 3):
-        A = np.array([[row[0], row[1], row[2]] for row in active], dtype=float)
-        b = np.array([row[3] for row in active], dtype=float)
-        try:
-            z1, z2, z3 = np.linalg.solve(A, b)
-        except np.linalg.LinAlgError:
-            continue
-        candidates.append((z1, z2, z3))
+    for i, (a1, b1, c1) in enumerate(constraints):
+        for a2, b2, c2 in constraints[i + 1:]:
+            det = a1 * b2 - a2 * b1
+            if abs(det) < 1e-9:
+                continue
+            z1 = (c1 * b2 - c2 * b1) / det
+            z2 = (a1 * c2 - a2 * c1) / det
+            candidates.append((z1, z2))
 
     best_score = (np.inf, np.inf)
-    best_z1 = best_z2 = best_z3 = lower_knot
-    for z1, z2, z3 in candidates:
-        feasible = True
-        for a, b, c, d in constraints:
-            if a * z1 + b * z2 + c * z3 < d - 1e-7:
-                feasible = False
-                break
-        if feasible:
-            spline = eval_spline(z1, z2, z3)
+    best_z1 = best_z2 = lower_knot
+    for z1, z2 in candidates:
+        if all(a * z1 + b * z2 >= c - 1e-7 for a, b, c in constraints):
+            spline = eval_spline(z1, z2)
             score = (float(np.max(spline)), float(np.sum(spline)))
             if score < best_score:
                 best_score = score
-                best_z1, best_z2, best_z3 = z1, z2, z3
+                best_z1, best_z2 = z1, z2
 
-    spine_z = eval_spline(best_z1, best_z2, best_z3)
+    spine_z = eval_spline(best_z1, best_z2)
     spine_z[0] = base_z
     spine_z[-1] = tip_z
     constrained = np.isfinite(min_spine_z)
