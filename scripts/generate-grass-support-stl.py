@@ -315,64 +315,69 @@ def make_grass_blade(support_z, base_pos, azimuth, length, radius, tip_length,
     else:
         xrot, yrot = xr, yr
 
-    # ── Z + taper: smooth arc that clears support gracefully ─────────────────
-    # Pass 1 — build XY positions and sample support heights along the path.
-    xs_path, ys_path, sz_path = [], [], []
+    # ── Z profile: one smooth arch from base → peak obstacle → tip ───────────────
+    # Pass 1 — XY positions, terrain height, and support height at every point.
+    xs_path, ys_path, tz_path, sz_path = [], [], [], []
     for k in range(n_path):
         x = float(np.clip(bx + xrot[k], 0.01, TILE_W - 0.01))
         y = float(np.clip(by + yrot[k], 0.01, TILE_H - 0.01))
         xs_path.append(x)
         ys_path.append(y)
-        sz_path.append(sample_grid(support_z, x, y))
+        tz_path.append(sample_grid(terrain_z, x, y))
+        sz_path.append(sample_grid(support_z,  x, y))
 
-    # Bases and tips always anchor to terrain, not to the top of previous blades.
-    # Only the arc interior needs to clear support_z.
-    z_base = sample_grid(terrain_z, xs_path[0],  ys_path[0])
-    z_tip  = sample_grid(terrain_z, xs_path[-1], ys_path[-1])
+    # Pass 2 — required EXTRA height above terrain at each point.
+    #   • Must clear the top surface of any existing blade at that XY.
+    #   • Z-extent of this blade's own cross-section = hw × sin(lean), which is
+    #     zero when the blade is vertical (base) and rises as it leans horizontal.
+    #   • Tiny CLEARANCE gap, fading to zero at ends so base/tip are flush.
+    #   • Minimum aesthetic arc (arc_fraction × diameter) so the blade lifts off.
+    extra = np.zeros(n_path)
+    for k in range(n_path):
+        t       = k * dt
+        sin_t   = np.sin(t * np.pi)
+        s_k     = t * total_l
+        t_tip_k = float(np.clip((s_k - length) / (tip_length + 1e-9), 0.0, 1.0))
+        hw_k    = radius * np.cos(t_tip_k * np.pi / 2.0)
+        lean_t  = lean_angle * (1.0 - np.cos(t * np.pi / 2.0))
+        hw_z    = hw_k * np.sin(lean_t)
+        support_extra = max(0.0, sz_path[k] - tz_path[k]) + CLEARANCE * sin_t
+        min_arc_extra = arc_h * sin_t
+        extra[k] = max(support_extra, min_arc_extra)
+    extra[0] = extra[-1] = 0.0   # endpoints flush with terrain
 
-    # Pass 2 — compute the minimum arc_h so the smooth sin bow clears every
-    # support point.  The blade z at parameter t is:
-    #   z_floor(t) + arc_h × sin(t·π) + CLEARANCE
-    # where z_floor = lerp(z_base, z_tip, t).
-    # Requiring z ≥ support_z(t) + CLEARANCE:
-    #   arc_h ≥ (support_z(t) − z_floor(t)) / sin(t·π)
-    # Skip points very close to the ends (sin → 0) — they sit on the
-    # support surface by definition.
-    effective_arc_h = arc_h   # aesthetic minimum (half-diameter by default)
-    for k in range(1, n_path - 1):
-        t     = k * dt
-        sin_t = np.sin(t * np.pi)
-        if sin_t > 0.15:
-            z_floor  = z_base + (z_tip - z_base) * t
-            # Half-width of this blade at t (accounting for taper).
-            s_k     = t * total_l
-            t_tip_k = float(np.clip((s_k - length) / (tip_length + 1e-9), 0.0, 1.0))
-            hw_k    = radius * np.cos(t_tip_k * np.pi / 2.0)
-            # support_z stores the top surface of existing blades (spine_z + hw).
-            # The Z extent of this blade's own cross-section below its spine centre
-            # is hw_k × sin(lean_t): zero when the blade is vertical (lean=0 at base),
-            # growing only as it leans horizontal.  This keeps the correction from
-            # blowing up near t=0 where sin_t is small.
-            lean_t  = lean_angle * (1.0 - np.cos(t * np.pi / 2.0))
-            hw_z    = hw_k * np.sin(lean_t)
-            needed  = (sz_path[k] + hw_z - z_floor) / sin_t
-            if needed > effective_arc_h:
-                effective_arc_h = needed
+    # Pass 3 — single piecewise-cosine arch anchored at the highest point.
+    #   Rising half  (0 → k_peak): cosine ramp from 0 up to extra[k_peak].
+    #   Falling half (k_peak → n-1): cosine ramp from extra[k_peak] back to 0.
+    #   This gives ONE smooth, minimum-height arch that goes from ground, up over
+    #   the highest obstacle, and back to ground — with zero slope at both ends
+    #   and at the peak.  If extra is everywhere zero, arch is flat (on terrain).
+    k_peak = int(np.argmax(extra))
+    h_peak = float(extra[k_peak])
 
+    arch = np.zeros(n_path)
+    if h_peak > 0.0 and 0 < k_peak < n_path - 1:
+        for k in range(k_peak + 1):
+            frac    = k / k_peak
+            arch[k] = h_peak * (1.0 - np.cos(frac * np.pi)) / 2.0
+        for k in range(k_peak, n_path):
+            frac    = (k - k_peak) / (n_path - 1 - k_peak)
+            arch[k] = h_peak * (1.0 + np.cos(frac * np.pi)) / 2.0
+
+    # Floor-clamp: if a secondary obstacle pokes above the arch, lift locally.
+    np.maximum(arch, extra, out=arch)
+    arch[0] = arch[-1] = 0.0    # restore flush endpoints
+
+    # Pass 4 — build spine + taper.
     path_xyz    = []
     half_widths = []
 
     for k in range(n_path):
-        t = k * dt
         x = xs_path[k]
         y = ys_path[k]
-        z_floor = z_base + (z_tip - z_base) * t
-        sin_t   = np.sin(t * np.pi)
-        # Apply CLEARANCE only when the arc is actually lifting off the surface;
-        # at t=0 and t=1 the blade is flush with the terrain.
-        z = z_floor + effective_arc_h * sin_t + CLEARANCE * sin_t
+        z = tz_path[k] + float(arch[k])
 
-        s     = t * total_l
+        s     = k * dt * total_l
         t_tip = float(np.clip((s - length) / (tip_length + 1e-9), 0.0, 1.0))
         hw    = radius * np.cos(t_tip * np.pi / 2.0)
 
