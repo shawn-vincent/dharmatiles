@@ -344,68 +344,37 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     # Normalized t derivative.  dz/ds ~= 1 at the base makes the blade grow up
     # from the terrain before it bends over.
     base_slope = total_l
-    min_peak_z = max(base_z, tip_z) + width * arc_fraction
-
-    # Pass 3 — smooth support-clearing height curve.
+    # Pass 3 — single cubic Bezier height curve.
     #
-    # One compound curve is split only at the high point:
-    #   base -> peak: cubic Hermite, fixed base height/slope and zero peak slope
-    #   peak -> tip:  quadratic fall, zero peak slope and free tip slope
-    #
-    # There is intentionally no short "rise" segment near the base.  The fixed
-    # base tangent bends continuously into the same curve that clears obstacles.
-    def h00(u): return 2*u**3 - 3*u**2 + 1
-    def h01(u): return -2*u**3 + 3*u**2
-    def h10(u): return u**3 - 2*u**2 + u
+    # P0 is the fixed base height.  P1 encodes the fixed base slope.  P3 is the
+    # fixed tip height.  P2 is the only free scalar, so raising it gives the
+    # lowest single smooth curve whose crease clears every sampled support point.
+    p0 = base_z
+    p1 = base_z + base_slope / 3.0
+    p3 = tip_z
+    p2 = max(p1, p3) + width * arc_fraction
 
-    best_peak = np.inf
-    best_t_peak = 0.5
-    for k_peak in range(1, n_path - 1):
-        t_peak = k_peak / (n_path - 1)
-        peak = min_peak_z
-        for k in range(1, n_path - 1):
-            need = min_spine_z[k]
-            if not np.isfinite(need):
-                continue
-            t_k = k / (n_path - 1)
-            if t_k <= t_peak:
-                # z = base_z*h00(v) + peak*h01(v) + t_peak*base_slope*h10(v)
-                v     = t_k / t_peak
-                basis = h01(v)
-                fixed = base_z * h00(v) + (t_peak * base_slope) * h10(v)
-                if basis > 1e-9:
-                    peak = max(peak, (need - fixed) / basis)
-            else:
-                # z = peak*(1 - w^2) + tip_z*w^2.  Slope at the tip is free.
-                dw = 1.0 - t_peak
-                if dw < 1e-9:
-                    continue
-                w     = (t_k - t_peak) / dw
-                basis = 1.0 - w**2
-                fixed = tip_z * w**2
-                if basis > 1e-9:
-                    peak = max(peak, (need - fixed) / basis)
-        if peak < best_peak:
-            best_peak = peak
-            best_t_peak = t_peak
-
-    peak_z = best_peak
-    t_peak = best_t_peak
+    for k in range(1, n_path - 1):
+        need = min_spine_z[k]
+        if not np.isfinite(need):
+            continue
+        t = k / (n_path - 1)
+        omt = 1.0 - t
+        basis = 3.0 * omt * t**2
+        fixed = omt**3 * p0 + 3.0 * omt**2 * t * p1 + t**3 * p3
+        if basis > 1e-9:
+            p2 = max(p2, (need - fixed) / basis)
 
     spine_z = np.zeros(n_path)
     for k in range(n_path):
-        t_k = k / (n_path - 1)
-        if t_k <= t_peak:
-            v = t_k / t_peak if t_peak > 1e-9 else 1.0
-            spine_z[k] = (
-                base_z * h00(v) +
-                peak_z * h01(v) +
-                (t_peak * base_slope) * h10(v)
-            )
-        else:
-            dw = 1.0 - t_peak
-            w = (t_k - t_peak) / dw if dw > 1e-9 else 1.0
-            spine_z[k] = peak_z * (1.0 - w**2) + tip_z * w**2
+        t = k / (n_path - 1)
+        omt = 1.0 - t
+        spine_z[k] = (
+            omt**3 * p0 +
+            3.0 * omt**2 * t * p1 +
+            3.0 * omt * t**2 * p2 +
+            t**3 * p3
+        )
     spine_z[0] = base_z
     spine_z[-1] = tip_z
     min_margin = float(np.min(spine_z[1:] - min_spine_z[1:]))

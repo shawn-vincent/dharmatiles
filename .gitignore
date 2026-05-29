@@ -2,4 +2,6 @@
 *.3mf
 *.scad~
 *~
+__pycache__/
+*.py[cod]
 textures/
