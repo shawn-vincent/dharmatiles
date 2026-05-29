@@ -366,6 +366,15 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     # For each candidate join point we analytically solve for the minimum H
     # that clears every obstacle, then keep the join with the smallest H.
     tip_lift = width * tip_lift_frac
+
+    # Minimum Hermite basis amplitude before we enforce a clearance constraint.
+    # h01(u) → 0 near the blade base (u→0) and h00(v) → 0 near the tip (v→1);
+    # dividing by a near-zero basis gives astronomically large H requirements.
+    # A threshold of 0.15 limits amplification to ≤ 6.7×, keeping H within
+    # reason.  The skipped near-base/near-tip regions are at or below the
+    # terrain surface anyway, so minor overlap there is invisible.
+    BASIS_MIN = 0.15
+
     best_H      = np.inf
     best_t_join = 0.5
     for k_join in range(1, n_path - 1):
@@ -381,13 +390,13 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
                 u     = t_k / t_j
                 h01_u = -2*u**3 + 3*u**2
                 h10_u =    u**3 - 2*u**2 + u
-                if h01_u > 1e-9:
+                if h01_u >= BASIS_MIN:   # skip near-base where curve barely lifts
                     H_j = max(H_j, (obs - m0 * h10_u) / h01_u)
             else:
                 v     = (t_k - t_j) / (1.0 - t_j)
                 h00_v =  2*v**3 - 3*v**2 + 1
                 h01_v = -2*v**3 + 3*v**2
-                if h00_v > 1e-9:
+                if h00_v >= BASIS_MIN:   # skip near-tip where curve barely lifts
                     H_j = max(H_j, (obs - tip_lift * h01_v) / h00_v)
         if H_j < best_H:
             best_H      = H_j
