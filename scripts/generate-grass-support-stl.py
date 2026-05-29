@@ -36,6 +36,7 @@ GRID_RES        = 256           # support-field resolution (cells per side)
 # Terrain
 TERRAIN_AMP     = 0.8           # mm — sinusoidal bump amplitude
 TERRAIN_FREQ    = 1.5           # cycles across tile
+TERRAIN_EDGE_FADE = 2.0         # mm — fade terrain perturbation to flat edges
 
 # Blade population
 N_BLADES        = 5             # tall blades
@@ -120,6 +121,10 @@ terrain_z = (TERRAIN_AMP *
              np.sin(2 * np.pi * TERRAIN_FREQ * x_grid / TILE_W) *
              np.cos(2 * np.pi * TERRAIN_FREQ * y_grid / TILE_H)).astype(float)
 terrain_z -= terrain_z.min()   # shift so lowest point = 0
+edge_dist = np.minimum.reduce([x_grid, y_grid, TILE_W - x_grid, TILE_H - y_grid])
+edge_t = np.clip(edge_dist / TERRAIN_EDGE_FADE, 0.0, 1.0)
+edge_fade = edge_t * edge_t * (3.0 - 2.0 * edge_t)
+terrain_z *= edge_fade
 
 support_z = terrain_z.copy()
 
@@ -246,6 +251,16 @@ def _build_tube_mesh(spine_3d, widths, keels, creases):
 
 
 # ── Parameterised grass blade ─────────────────────────────────────────────────
+
+def blade_footprint_inside_tile(spine_3d, widths):
+    """Conservative XY footprint check: spine plus half width must stay inside."""
+    for pt, W in zip(spine_3d, widths):
+        margin = W / 2.0
+        if pt[0] - margin < 0.0 or pt[0] + margin > TILE_W:
+            return False
+        if pt[1] - margin < 0.0 or pt[1] + margin > TILE_H:
+            return False
+    return True
 
 def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
                      lean_angle=LEAN_ANGLE, arc_fraction=ARC_FRACTION,
@@ -532,22 +547,40 @@ def make_heightmap_solid(z_grid, tile_w, tile_h, base_h, subsample=4):
 # ── Main loop ─────────────────────────────────────────────────────────────────
 print("Building blade meshes...")
 parts = []
+built_blades = 0
+skipped_blades = 0
+MAX_BOUNDARY_RETRIES = 32
 
 for i, bl in enumerate(blades):
-    mesh, spine, blade_widths = make_grass_blade(
-        support_z  = support_z,
-        base_pos   = (bl['base_x'], bl['base_y'], 0),
-        azimuth    = bl['direction'],
-        length     = bl['length'],
-        width      = bl['width'],
-        tip_length = bl['tip_len'],
-        curl       = bl['curl'],
-    )
+    accepted = None
+    for attempt in range(MAX_BOUNDARY_RETRIES + 1):
+        direction = bl['direction'] if attempt == 0 else rng.uniform(0, 2 * np.pi)
+        curl = bl['curl'] if attempt == 0 else rng.uniform(-CURL_MAX, CURL_MAX)
+        mesh, spine, blade_widths = make_grass_blade(
+            support_z  = support_z,
+            base_pos   = (bl['base_x'], bl['base_y'], 0),
+            azimuth    = direction,
+            length     = bl['length'],
+            width      = bl['width'],
+            tip_length = bl['tip_len'],
+            curl       = curl,
+        )
+        if blade_footprint_inside_tile(spine, blade_widths):
+            accepted = (mesh, spine, blade_widths)
+            break
+    if accepted is None:
+        skipped_blades += 1
+        continue
+    mesh, spine, blade_widths = accepted
     parts.append(mesh)
+    built_blades += 1
     # footprint radius = half the flat-face width
     rasterise_into_support(support_z, spine, [W / 2 for W in blade_widths])
     if (i + 1) % 20 == 0 or (i + 1) == len(blades):
         print(f"  {i+1}/{len(blades)} blades done")
+if skipped_blades:
+    print(f"  skipped {skipped_blades} blade(s) that would cross tile bounds")
+print(f"  built {built_blades}/{len(blades)} blades")
 
 print("Building terrain solid...")
 terrain_mesh = make_heightmap_solid(terrain_z, TILE_W, TILE_H, BASE_H, subsample=4)
