@@ -59,6 +59,7 @@ N_PATH          = 50              # spine sample points (more = smoother curve)
 CREASE_DEPTH    = 0.5             # mm — concave dip at centre of top face (0 = flat)
 TIP_LIFT_FRAC   = 0.25            # tip raised by this fraction of blade width (0 = flush)
 BASE_SLOPE_WIDTHS = 0.25          # normalized-t base dz/dt, in blade widths
+MAX_HEIGHT_ABOVE_TERRAIN = 4.0    # mm — sanity limit for support-clearing curve
 
 # Terrain-following
 CLEARANCE       = 0.04          # mm — gap above support surface
@@ -450,6 +451,26 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
         raise RuntimeError(
             f"blade support clearance failed at base=({bx:.2f}, {by:.2f}); "
             f"margin={min_margin:.6f} mm"
+        )
+    constrained_idx = np.flatnonzero(constrained)
+    tight_i = int(constrained_idx[np.argmin(spine_z[constrained] - min_spine_z[constrained])])
+    terrain_delta = spine_z - np.array(tz_path, dtype=float)
+    max_delta_i = int(np.argmax(terrain_delta))
+    max_delta = float(terrain_delta[max_delta_i])
+    if max_delta > MAX_HEIGHT_ABOVE_TERRAIN:
+        raise RuntimeError(
+            "grass blade rose too high above terrain: "
+            f"base=({bx:.2f}, {by:.2f}), "
+            f"t={max_delta_i / (n_path - 1):.3f}, "
+            f"height_above_terrain={max_delta:.3f} mm, "
+            f"spine_z={spine_z[max_delta_i]:.3f} mm, "
+            f"terrain_z={tz_path[max_delta_i]:.3f} mm, "
+            f"support_z={sz_path[max_delta_i]:.3f} mm, "
+            f"tight_constraint_t={tight_i / (n_path - 1):.3f}, "
+            f"tight_constraint_required_z={min_spine_z[tight_i]:.3f} mm, "
+            f"tight_constraint_support_z={sz_path[tight_i]:.3f} mm, "
+            f"knots=({best_z1:.3f}, {best_z2:.3f}), "
+            f"tip_z={tip_z:.3f} mm"
         )
 
     # Pass 4 — build spine + taper.
