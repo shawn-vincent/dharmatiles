@@ -346,82 +346,89 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
         support_extra = max(0.0, sz_path[k] - tz_path[k] + crease) + CLEARANCE * sin_t
         obstacle[k] = support_extra
 
-    # Pass 3 — two-segment cubic Hermite arch, minimising peak height H.
+    # Pass 3 — three-segment cubic Hermite arch.
     #
-    # The arch is parameterised by t ∈ [0, 1] (fraction of n_path − 1).
-    # A join point splits it into two Hermite segments:
+    # Seg 1 "eruption"  (0 ≤ t ≤ t_erupt, fixed):
+    #   Steep rise from 0 → H_erupt; initial slope m0_erupt forces the blade
+    #   to shoot out of the terrain immediately so the base is never visible.
+    #   arch(u) = H_erupt·h01(u) + m0_erupt·h10(u),  u = t / t_erupt
     #
-    #   Seg 1 (0 ≤ t ≤ t_join):
-    #     y0 = 0, y1 = H, tangent at 0 = m0, tangent at 1 = 0.
-    #     arch(u) = H·h01(u) + m0·h10(u)     u = t / t_join
+    # Seg 2 "rise"      (t_erupt ≤ t ≤ t_join, optimised):
+    #   Smooth rise from H_erupt → H_peak, zero slope at both ends.
+    #   arch(v) = H_erupt·h00(v) + H_peak·h01(v),  v = (t−t_erupt)/(t_join−t_erupt)
     #
-    #   Seg 2 (t_join ≤ t ≤ 1):
-    #     y0 = H, y1 = tip_lift, tangent at 0 = 0, tangent at 1 = 0.
-    #     arch(v) = H·h00(v) + tip_lift·h01(v)   v = (t − t_join) / (1 − t_join)
+    # Seg 3 "fall"      (t_join ≤ t ≤ 1, optimised):
+    #   Smooth fall from H_peak → tip_lift, zero slope at both ends.
+    #   arch(w) = H_peak·h00(w) + tip_lift·h01(w),  w = (t−t_join)/(1−t_join)
     #
-    # C1 at the join: both segments have zero slope there (m1 of seg1 = m0 of seg2 = 0).
+    # C1 everywhere: zero slope at all three segment boundaries.
+    # Sweep t_join over [t_erupt, 1) and solve analytically for the minimum
+    # H_peak that clears all obstacles; keep the join with the smallest H_peak.
     #
-    # m0 = t_join * total_l  sets the initial tangent so the blade shoots orthogonal
-    # to the terrain at the base (darch/ds ≈ 1 mm/mm at s = 0).
-    #
-    # Hermite basis functions on [0, 1]:
-    #   h00(u) =  2u³ − 3u² + 1    (value at u=0)
-    #   h01(u) = −2u³ + 3u²        (value at u=1)
-    #   h10(u) =   u³ − 2u² + u    (slope at u=0)
-    #
-    # For each candidate join point we analytically solve for the minimum H
-    # that clears every obstacle, then keep the join with the smallest H.
-    tip_lift = width * tip_lift_frac
-
-    # Minimum Hermite basis amplitude before we enforce a clearance constraint.
-    # h01(u) → 0 near the blade base (u→0) and h00(v) → 0 near the tip (v→1);
-    # dividing by a near-zero basis gives astronomically large H requirements.
-    # A threshold of 0.15 limits amplification to ≤ 6.7×, keeping H within
-    # reason.  The skipped near-base/near-tip regions are at or below the
-    # terrain surface anyway, so minor overlap there is invisible.
-    BASIS_MIN = 0.15
+    # Hermite basis: h00 = 2u³−3u²+1  h01 = −2u³+3u²  h10 = u³−2u²+u
+    tip_lift   = width * tip_lift_frac
+    T_ERUPT    = 0.15                      # first 15% = eruption segment
+    k_erupt    = max(1, int(round(T_ERUPT * (n_path - 1))))
+    t_erupt    = k_erupt / (n_path - 1)
+    H_erupt    = width * 0.5              # height at eruption end (hides base stub)
+    m0_erupt   = t_erupt * total_l        # initial slope → darch/ds ≈ 1 at s=0
+    BASIS_MIN  = 0.15                     # min basis amplitude to apply a constraint
 
     best_H      = np.inf
-    best_t_join = 0.5
-    for k_join in range(1, n_path - 1):
+    best_t_join = (t_erupt + 1.0) / 2.0
+    for k_join in range(k_erupt + 1, n_path - 1):
         t_j = k_join / (n_path - 1)
-        m0  = 0.0                # no forced eruption angle — arch rises naturally
-        H_j = arc_h              # minimum aesthetic arc (arc_fraction × width)
+        H_j = max(arc_h, H_erupt)     # peak must be at least the eruption height
         for k in range(1, n_path - 1):
             obs = obstacle[k]
             if obs <= 0.0:
                 continue
             t_k = k / (n_path - 1)
-            if t_k <= t_j:
-                u     = t_k / t_j
-                h01_u = -2*u**3 + 3*u**2
-                h10_u =    u**3 - 2*u**2 + u
-                if h01_u >= BASIS_MIN:   # skip near-base where curve barely lifts
-                    H_j = max(H_j, (obs - m0 * h10_u) / h01_u)
-            else:
-                v     = (t_k - t_j) / (1.0 - t_j)
+            if t_k < t_erupt:
+                continue               # inside eruption zone — seg 1 handles it
+            elif t_k <= t_j:
+                # Seg 2 constraint: H_peak·h01(v) ≥ obs − H_erupt·h00(v)
+                dv = t_j - t_erupt
+                if dv < 1e-9: continue
+                v     = (t_k - t_erupt) / dv
                 h00_v =  2*v**3 - 3*v**2 + 1
                 h01_v = -2*v**3 + 3*v**2
-                if h00_v >= BASIS_MIN:   # skip near-tip where curve barely lifts
-                    H_j = max(H_j, (obs - tip_lift * h01_v) / h00_v)
+                if h01_v >= BASIS_MIN:
+                    H_j = max(H_j, (obs - H_erupt * h00_v) / h01_v)
+            else:
+                # Seg 3 constraint: H_peak·h00(w) ≥ obs − tip_lift·h01(w)
+                dw = 1.0 - t_j
+                if dw < 1e-9: continue
+                w     = (t_k - t_j) / dw
+                h00_w =  2*w**3 - 3*w**2 + 1
+                h01_w = -2*w**3 + 3*w**2
+                if h00_w >= BASIS_MIN:
+                    H_j = max(H_j, (obs - tip_lift * h01_w) / h00_w)
         if H_j < best_H:
             best_H      = H_j
             best_t_join = t_j
 
-    H_join = best_H
+    H_peak = best_H
     t_join = best_t_join
-    m0     = 0.0
 
     arch = np.zeros(n_path)
     for k in range(n_path):
         t_k = k / (n_path - 1)
-        if t_k <= t_join:
-            u       = t_k / t_join if t_join > 1e-9 else 0.0
-            arch[k] = H_join * (-2*u**3 + 3*u**2) + m0 * (u**3 - 2*u**2 + u)
+        if t_k <= t_erupt:
+            u       = t_k / t_erupt if t_erupt > 1e-9 else 0.0
+            arch[k] = (H_erupt   * (-2*u**3 + 3*u**2) +
+                       m0_erupt  * ( u**3 - 2*u**2 + u))
+        elif t_k <= t_join:
+            dv      = t_join - t_erupt
+            v       = (t_k - t_erupt) / dv if dv > 1e-9 else 0.0
+            arch[k] = (H_erupt * ( 2*v**3 - 3*v**2 + 1) +
+                       H_peak  * (-2*v**3 + 3*v**2))
         else:
-            v       = (t_k - t_join) / (1.0 - t_join) if t_join < 1.0 - 1e-9 else 1.0
-            arch[k] = H_join * (2*v**3 - 3*v**2 + 1) + tip_lift * (-2*v**3 + 3*v**2)
-    arch[0]  = 0.0       # base stays flush with terrain
+            dw      = 1.0 - t_join
+            w       = (t_k - t_join) / dw if dw > 1e-9 else 1.0
+            arch[k] = (H_peak   * ( 2*w**3 - 3*w**2 + 1) +
+                       tip_lift * (-2*w**3 + 3*w**2))
+    arch[0]  = 0.0       # base flush with terrain
     arch[-1] = tip_lift  # tip hovers tip_lift_frac × width above terrain
 
     # Pass 4 — build spine + taper.
