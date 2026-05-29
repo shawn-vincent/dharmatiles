@@ -8,8 +8,8 @@ Algorithm
   order (back→front).  Each blade's footprint is rasterised back into
   support_z after it is built, so the next blade rests on top.
 
-Blade geometry  (two independent curves)
-────────────────────────────────────────
+Blade geometry
+──────────────
   XY plane — chord-preserving 2D arc, exactly like blade.py:
     `azimuth` sets the fall direction (base→tip chord in XY).
     `curl` (±1) bends the XY path left/right while keeping that chord fixed.
@@ -17,11 +17,11 @@ Blade geometry  (two independent curves)
     horizontal speed a zero start, so the blade grows straight up at the
     base before spreading out.
 
-  Z — completely independent sin bow on top of terrain:
-    z(t) = terrain_at_xy(t)  +  arc_h × sin(t·π)  +  CLEARANCE
-    t=0 → base flush on ground, t=0.5 → peak, t=1 → tip back on ground.
-    Terrain is sampled at every spine XY point, so the tip always lands
-    at the correct ground height.
+  Z — absolute support-clearing curve:
+    The base is pinned to the terrain with an upward starting slope.  The tip
+    is pinned above the current support field at its XY position.  Between
+    those endpoints a three-part smooth curve is solved as low as possible
+    while keeping the bottom of the top-face crease above support_z.
 """
 
 import numpy as np
@@ -52,7 +52,7 @@ FILL_L_MIN,  FILL_L_MAX  = 2.0, 4.5
 FILL_TL_MIN, FILL_TL_MAX = 0.8, 1.8
 
 LEAN_ANGLE      = np.radians(80)  # max lean at tip (nearly horizontal)
-ARC_FRACTION    = 0.5             # bow height = ARC_FRACTION × blade width
+ARC_FRACTION    = 0.0             # extra interior bow above the lowest clearing curve
 BLADE_CURL      = 1.0             # lateral curl (0=straight, ±1=±180 deg sweep)
 N_PATH          = 50              # spine sample points (more = smoother curve)
 CREASE_DEPTH    = 0.5             # mm — concave dip at centre of top face (0 = flat)
@@ -252,8 +252,8 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     Build a terrain-following floppy grass blade.
     Returns (mesh, spine_3d, half_widths).
 
-    Two independent curves
-    ──────────────────────
+    Two coupled curves
+    ──────────────────
     XY (plan view):
       Variable lean — lean(t) = lean_angle * (1 - cos(t*pi/2)) — starts at
       zero so the blade's initial 3D tangent is vertical (base disk flat on
@@ -262,9 +262,10 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
       `azimuth` direction, so curl never shifts the fall direction.
 
     Z (height):
-      z(t) = terrain_at_xy(t) + arc_h * sin(t*pi) + CLEARANCE
-      Completely independent of XY.  Terrain is sampled at each spine XY
-      point, so the tip always lands at the correct ground height.
+      The base spine height is pinned to terrain and starts with a fixed
+      upward slope.  The tip height is pinned above support_z at the final
+      XY coordinate.  The interior is a three-part C1 curve solved to be the
+      lowest profile whose crease clears support_z along the blade.
 
     Parameters
     ----------
@@ -272,16 +273,15 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     base_pos     : (bx, by, ...)  world XY of blade base (Z is recomputed)
     azimuth      : fall direction, radians from +Y  (0=north, pi/2=east)
     length       : body arc length (mm)
-    radius       : base cross-section radius (mm)
+    width        : base flat-face width (mm)
     tip_length   : cosine-taper tip arc length (mm)
     lean_angle   : max lean at tip in radians (default 80 deg)
-    arc_fraction : bow height = arc_fraction * diameter (default 0.5)
+    arc_fraction : optional extra interior bow above the lowest clearing curve
     curl         : -1..+1, lateral sweep of XY path; chord-preserving
                    (base->tip azimuth is preserved regardless of curl)
     """
     bx, by  = float(base_pos[0]), float(base_pos[1])
     total_l = length + tip_length
-    arc_h   = width * arc_fraction          # minimum bow height above obstacles
     dt      = 1.0 / (n_path - 1)
     CURL_MAX = np.pi                  # |curl|=1 gives ±180 deg lateral sweep
 
@@ -316,7 +316,7 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     else:
         xrot, yrot = xr, yr
 
-    # ── Z profile: one smooth arch from base → peak obstacle → tip ───────────────
+    # ── Z profile: lowest smooth curve that clears current support ────────────
     # Pass 1 — XY positions, terrain height, and support height at every point.
     xs_path, ys_path, tz_path, sz_path = [], [], [], []
     for k in range(n_path):
@@ -328,113 +328,124 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
         tz_path.append(sample_grid(terrain_z, x, y))
         sz_path.append(sample_grid(support_z,  x, y))
 
-    # Pass 2 — minimum obstacle height (above terrain) at each spine point.
-    #   The arch must exceed obstacle[k] at every interior k.
-    #   Endpoints are pinned (base flush, tip at tip_lift) and not constrained here.
-    #   The first T_BASE fraction of the path is ignored: the blade is still
-    #   emerging from the terrain there and minor base-overlap is acceptable
-    #   (and invisible below the surface).
-    T_BASE = 0.20    # ignore obstacles in first 20% of blade path
-    obstacle = np.zeros(n_path)
+    # Pass 2 — minimum absolute spine height at each sample.  support_z stores
+    # the previous blade's top edges.  This blade's crease is below its spine,
+    # so the spine itself must be higher by the crease depth plus clearance.
+    #
+    # The base is pinned to terrain: if a prior blade crosses the root, the new
+    # blade grows out from under it.  Every later sample is constrained.
+    min_spine_z = np.array(sz_path, dtype=float) + crease + CLEARANCE
+    min_spine_z[0] = -np.inf
+
+    base_z = float(tz_path[0])
+    tip_z  = max(float(sz_path[-1] + crease + CLEARANCE),
+                 float(tz_path[-1] + width * tip_lift_frac))
+
+    # Normalized t derivative.  dz/ds ~= 1 at the base makes the blade grow up
+    # from the terrain before it bends over.
+    base_slope = total_l
+    min_peak_z = max(base_z, tip_z) + width * arc_fraction
+
+    # Pass 3 — three-segment C1 height curve.
+    #
+    # Segment 1: local base tangent, fixed base position and slope, zero slope
+    # at t1.  Keep this short: the base slope is a boundary condition, not a
+    # visible launch ramp.
+    #
+    # Segment 2: smooth rise/settle from z1 to peak, zero slopes at both ends.
+    #
+    # Segment 3: smooth departure from the peak to the fixed tip with free tip
+    # slope.  The free end slope is deliberate: the tip is only height-pinned.
+    T1 = 0.04
+    k1 = max(1, int(round(T1 * (n_path - 1))))
+    t1 = k1 / (n_path - 1)
+
+    def h00(u): return 2*u**3 - 3*u**2 + 1
+    def h01(u): return -2*u**3 + 3*u**2
+    def h10(u): return u**3 - 2*u**2 + u
+
+    def seg1_height(t, z1):
+        u = t / t1 if t1 > 1e-9 else 1.0
+        return base_z * h00(u) + z1 * h01(u) + (t1 * base_slope) * h10(u)
+
+    z1 = base_z
     for k in range(1, n_path - 1):
-        t     = k * dt
-        if t < T_BASE:
-            continue   # blade still exiting terrain — don't force a leap here
-        sin_t = np.sin(t * np.pi)
-        # Raise spine so this blade's crease (V2) clears the previous blade's
-        # top edges (V1/V3 recorded in support_z at spine height).
-        support_extra = max(0.0, sz_path[k] - tz_path[k] + crease) + CLEARANCE * sin_t
-        obstacle[k] = support_extra
+        if k > k1:
+            break
+        t_k = k / (n_path - 1)
+        need = min_spine_z[k]
+        if not np.isfinite(need):
+            continue
+        u = t_k / t1 if t1 > 1e-9 else 1.0
+        basis = h01(u)
+        fixed = base_z * h00(u) + (t1 * base_slope) * h10(u)
+        if basis > 1e-9:
+            z1 = max(z1, (need - fixed) / basis)
 
-    # Pass 3 — three-segment cubic Hermite arch.
-    #
-    # Seg 1 "eruption"  (0 ≤ t ≤ t_erupt, fixed):
-    #   Steep rise from 0 → H_erupt; initial slope m0_erupt forces the blade
-    #   to shoot out of the terrain immediately so the base is never visible.
-    #   arch(u) = H_erupt·h01(u) + m0_erupt·h10(u),  u = t / t_erupt
-    #
-    # Seg 2 "rise"      (t_erupt ≤ t ≤ t_join, optimised):
-    #   Smooth rise from H_erupt → H_peak, zero slope at both ends.
-    #   arch(v) = H_erupt·h00(v) + H_peak·h01(v),  v = (t−t_erupt)/(t_join−t_erupt)
-    #
-    # Seg 3 "fall"      (t_join ≤ t ≤ 1, optimised):
-    #   Smooth fall from H_peak → tip_lift, zero slope at both ends.
-    #   arch(w) = H_peak·h00(w) + tip_lift·h01(w),  w = (t−t_join)/(1−t_join)
-    #
-    # C1 everywhere: zero slope at all three segment boundaries.
-    # Sweep t_join over [t_erupt, 1) and solve analytically for the minimum
-    # H_peak that clears all obstacles; keep the join with the smallest H_peak.
-    #
-    # Hermite basis: h00 = 2u³−3u²+1  h01 = −2u³+3u²  h10 = u³−2u²+u
-    tip_lift   = width * tip_lift_frac
-    T_ERUPT    = 0.15                      # first 15% = eruption segment
-    k_erupt    = max(1, int(round(T_ERUPT * (n_path - 1))))
-    t_erupt    = k_erupt / (n_path - 1)
-    H_erupt    = width * 0.5              # height at eruption end (hides base stub)
-    m0_erupt   = 0.0                      # zero slope → smooth S-curve, no kink at base
-    BASIS_MIN  = 0.15                     # min basis amplitude to apply a constraint
-
-    best_H      = np.inf
-    best_t_join = (t_erupt + 1.0) / 2.0
-    for k_join in range(k_erupt + 1, n_path - 1):
+    best_peak = np.inf
+    best_t2 = (t1 + 1.0) / 2.0
+    for k_join in range(k1 + 1, n_path - 1):
         t_j = k_join / (n_path - 1)
-        H_j = max(arc_h, H_erupt)     # peak must be at least the eruption height
+        peak = max(z1, min_peak_z)
         for k in range(1, n_path - 1):
-            obs = obstacle[k]
-            if obs <= 0.0:
+            need = min_spine_z[k]
+            if not np.isfinite(need):
                 continue
             t_k = k / (n_path - 1)
-            if t_k < t_erupt:
-                continue               # inside eruption zone — seg 1 handles it
+            if t_k <= t1:
+                peak = max(peak, seg1_height(t_k, z1))
             elif t_k <= t_j:
-                # Seg 2 constraint: H_peak·h01(v) ≥ obs − H_erupt·h00(v)
-                dv = t_j - t_erupt
-                if dv < 1e-9: continue
-                v     = (t_k - t_erupt) / dv
-                h00_v =  2*v**3 - 3*v**2 + 1
-                h01_v = -2*v**3 + 3*v**2
-                if h01_v >= BASIS_MIN:
-                    H_j = max(H_j, (obs - H_erupt * h00_v) / h01_v)
+                # z = z1*h00(v) + peak*h01(v)
+                dv = t_j - t1
+                if dv < 1e-9:
+                    continue
+                v     = (t_k - t1) / dv
+                basis = h01(v)
+                fixed = z1 * h00(v)
+                if basis > 1e-9:
+                    peak = max(peak, (need - fixed) / basis)
             else:
-                # Seg 3 constraint: H_peak·h00(w) ≥ obs − tip_lift·h01(w)
+                # z = peak*(1 - w^2) + tip_z*w^2.  Slope at the tip is free.
                 dw = 1.0 - t_j
-                if dw < 1e-9: continue
+                if dw < 1e-9:
+                    continue
                 w     = (t_k - t_j) / dw
-                h00_w =  2*w**3 - 3*w**2 + 1
-                h01_w = -2*w**3 + 3*w**2
-                if h00_w >= BASIS_MIN:
-                    H_j = max(H_j, (obs - tip_lift * h01_w) / h00_w)
-        if H_j < best_H:
-            best_H      = H_j
-            best_t_join = t_j
+                basis = 1.0 - w**2
+                fixed = tip_z * w**2
+                if basis > 1e-9:
+                    peak = max(peak, (need - fixed) / basis)
+        if peak < best_peak:
+            best_peak = peak
+            best_t2 = t_j
 
-    H_peak = best_H
-    t_join = best_t_join
+    peak_z = best_peak
+    t2 = best_t2
 
-    arch = np.zeros(n_path)
+    spine_z = np.zeros(n_path)
     for k in range(n_path):
         t_k = k / (n_path - 1)
-        if t_k <= t_erupt:
-            u       = t_k / t_erupt if t_erupt > 1e-9 else 0.0
-            arch[k] = (H_erupt   * (-2*u**3 + 3*u**2) +
-                       m0_erupt  * ( u**3 - 2*u**2 + u))
-        elif t_k <= t_join:
-            dv      = t_join - t_erupt
-            v       = (t_k - t_erupt) / dv if dv > 1e-9 else 0.0
-            arch[k] = (H_erupt * ( 2*v**3 - 3*v**2 + 1) +
-                       H_peak  * (-2*v**3 + 3*v**2))
+        if t_k <= t1:
+            spine_z[k] = seg1_height(t_k, z1)
+        elif t_k <= t2:
+            dv = t2 - t1
+            v = (t_k - t1) / dv if dv > 1e-9 else 1.0
+            spine_z[k] = z1 * h00(v) + peak_z * h01(v)
         else:
-            dw      = 1.0 - t_join
-            w       = (t_k - t_join) / dw if dw > 1e-9 else 1.0
-            arch[k] = (H_peak   * ( 2*w**3 - 3*w**2 + 1) +
-                       tip_lift * (-2*w**3 + 3*w**2))
-    arch[0]  = 0.0       # base flush with terrain
-    arch[-1] = tip_lift  # tip hovers tip_lift_frac × width above terrain
+            dw = 1.0 - t2
+            w = (t_k - t2) / dw if dw > 1e-9 else 1.0
+            spine_z[k] = peak_z * (1.0 - w**2) + tip_z * w**2
+    spine_z[0] = base_z
+    spine_z[-1] = tip_z
+    min_margin = float(np.min(spine_z[1:] - min_spine_z[1:]))
+    if min_margin < -1e-6:
+        raise RuntimeError(
+            f"blade support clearance failed at base=({bx:.2f}, {by:.2f}); "
+            f"margin={min_margin:.6f} mm"
+        )
 
     # Pass 4 — build spine + taper.
     # Keel (V0) is pinned to the BASE terrain at each XY point, sunk in by
-    # BASE_INSET.  Depth is implicit: spine_z − keel_z = arch[k] + BASE_INSET,
-    # which is zero at base/tip and maximum at the arch peak.
+    # BASE_INSET.  Depth is implicit: spine_z − keel_z.
     path_xyz    = []
     widths_arr  = []
     keels_arr   = []
@@ -443,7 +454,7 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     for k in range(n_path):
         x = xs_path[k]
         y = ys_path[k]
-        z = tz_path[k] + float(arch[k])
+        z = float(spine_z[k])
 
         s     = k * dt * total_l
         t_tip = float(np.clip((s - length) / (tip_length + 1e-9), 0.0, 1.0))
