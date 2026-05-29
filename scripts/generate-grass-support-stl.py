@@ -51,7 +51,7 @@ FILL_W_MIN,  FILL_W_MAX  = 0.7, 1.4
 FILL_L_MIN,  FILL_L_MAX  = 2.0, 4.5
 FILL_TL_MIN, FILL_TL_MAX = 0.8, 1.8
 
-BASE_LEAN_ANGLE = np.radians(12)  # initial forward lean at base
+BASE_LEAN_ANGLE = np.radians(8)   # initial forward lean at base
 LEAN_ANGLE      = np.radians(80)  # max lean at tip (nearly horizontal)
 ARC_FRACTION    = 0.0             # extra interior bow above the lowest clearing curve
 BLADE_CURL      = 1.0             # lateral curl (0=straight, ±1=±180 deg sweep)
@@ -63,6 +63,7 @@ BASE_SLOPE_WIDTHS = 0.25          # normalized-t base dz/dt, in blade widths
 # Terrain-following
 CLEARANCE       = 0.04          # mm — gap above support surface
 BASE_INSET      = 0.6           # mm — spine base sunk into terrain; also keel inset
+BASE_SINK       = 0.25          # mm — keep first cap fully embedded below terrain
 
 OUTPUT = pathlib.Path("stl/grass-support-field.stl")
 
@@ -345,7 +346,7 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
         if k / (n_path - 1) < T_CONSTRAINT_START:
             min_spine_z[k] = -np.inf
 
-    base_z = float(tz_path[0])
+    base_z = float(tz_path[0] - BASE_SINK)
     tip_z  = max(float(sz_path[-1] + crease + CLEARANCE),
                  float(tz_path[-1] + width * tip_lift_frac))
 
@@ -452,19 +453,17 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
         t_tip = float(np.clip((s - length) / (tip_length + 1e-9), 0.0, 1.0))
         taper = np.cos(t_tip * np.pi / 2.0)
 
-        keel_z = tz_path[k] - BASE_INSET   # base terrain − inset (independent of arch)
+        keel_z = tz_path[k] - BASE_INSET
+        if k == 0:
+            keel_z -= BASE_SINK
 
         path_xyz.append(np.array([x, y, z]))
         widths_arr.append(width * taper)
         keels_arr.append(np.array([x, y, keel_z]))
         creases_arr.append(crease)          # absolute mm; clamped in add_ring at shallow ends
 
-    # Ring 0: spine sits AT terrain surface (arch[0]=0), keel sits BASE_INSET
-    # below terrain.  Cross-section thickness = BASE_INSET at the base — visible,
-    # tangent to the terrain plane (ring is horizontal, initial tangent is vertical),
-    # and "slightly inside" because the keel half is embedded.
-    # Do NOT sink the spine: that collapses spine→keel, making ring 0 degenerate
-    # (zero thickness) which causes an abrupt opening to ring 1 — the sharp spike.
+    # Ring 0 is fully below terrain; support constraints are ignored near the
+    # root, so the blade can emerge smoothly without the first cap peeking out.
 
     mesh = _build_tube_mesh(path_xyz, widths_arr, keels_arr, creases_arr)
     return mesh, path_xyz, widths_arr
