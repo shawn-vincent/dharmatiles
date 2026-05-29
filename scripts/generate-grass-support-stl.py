@@ -385,7 +385,7 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     best_t_join = 0.5
     for k_join in range(1, n_path - 1):
         t_j = k_join / (n_path - 1)
-        m0  = t_j * total_l      # initial slope: 1 mm arch / 1 mm arc at base
+        m0  = 0.0                # no forced eruption angle — arch rises naturally
         H_j = arc_h              # minimum aesthetic arc (arc_fraction × width)
         for k in range(1, n_path - 1):
             obs = obstacle[k]
@@ -410,7 +410,7 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
 
     H_join = best_H
     t_join = best_t_join
-    m0     = t_join * total_l
+    m0     = 0.0
 
     arch = np.zeros(n_path)
     for k in range(n_path):
