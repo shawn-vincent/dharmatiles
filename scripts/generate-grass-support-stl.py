@@ -57,6 +57,7 @@ BLADE_CURL      = 1.0             # lateral curl (0=straight, ±1=±180 deg swee
 N_PATH          = 50              # spine sample points (more = smoother curve)
 CREASE_DEPTH    = 0.5             # mm — concave dip at centre of top face (0 = flat)
 TIP_LIFT_FRAC   = 0.25            # tip raised by this fraction of blade width (0 = flush)
+BASE_SLOPE_WIDTHS = 1.0           # normalized-t base dz/dt, in blade widths
 
 # Terrain-following
 CLEARANCE       = 0.04          # mm — gap above support surface
@@ -345,9 +346,10 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     tip_z  = max(float(sz_path[-1] + crease + CLEARANCE),
                  float(tz_path[-1] + width * tip_lift_frac))
 
-    # Normalized t derivative.  dz/ds ~= 1 at the base makes the blade grow up
-    # from the terrain before it bends over.
-    base_slope = total_l
+    # Normalized-t derivative.  The base tangent direction is upward because
+    # the XY path has nearly zero horizontal speed at the root; the magnitude
+    # should be local to the blade thickness, not proportional to blade length.
+    base_slope = width * BASE_SLOPE_WIDTHS
     # Pass 3 — three-part smooth support-clearing height curve.
     #
     # This is a single C1 cubic Hermite spline with three equal spans.  The base
