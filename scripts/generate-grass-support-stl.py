@@ -38,30 +38,29 @@ TERRAIN_AMP     = 0.8           # mm — sinusoidal bump amplitude
 TERRAIN_FREQ    = 1.5           # cycles across tile
 
 # Blade population
-N_BLADES        = 5             # tall blades
+N_BLADES        = 50            # tall blades
 N_FILL          = 0             # short filler blades
 SEED            = 42
 CURL_MAX        = 0.6           # max lateral curl magnitude (±)
 
 # Blade geometry (mm)
 TALL_W_MIN,  TALL_W_MAX  = 1.5, 2.5    # flat face width at base
-TALL_T_MIN,  TALL_T_MAX  = 0.4, 0.65   # thickness (keel depth) at base
 TALL_L_MIN,  TALL_L_MAX  = 10.0, 18.0  # body arc length
 TALL_TL_MIN, TALL_TL_MAX = 3.0, 6.0   # tip taper arc length
 FILL_W_MIN,  FILL_W_MAX  = 0.7, 1.4
-FILL_T_MIN,  FILL_T_MAX  = 0.2, 0.4
 FILL_L_MIN,  FILL_L_MAX  = 2.0, 4.5
 FILL_TL_MIN, FILL_TL_MAX = 0.8, 1.8
 
 LEAN_ANGLE      = np.radians(80)  # max lean at tip (nearly horizontal)
-ARC_FRACTION    = 0.5             # bow height = ARC_FRACTION × blade thickness
+ARC_FRACTION    = 0.5             # bow height = ARC_FRACTION × blade width
 BLADE_CURL      = 1.0             # lateral curl (0=straight, ±1=±180 deg sweep)
 N_PATH          = 50              # spine sample points (more = smoother curve)
 CREASE_DEPTH    = 0.5             # mm — concave dip at centre of top face (0 = flat)
+TIP_LIFT_FRAC   = 0.25            # tip raised by this fraction of blade width (0 = flush)
 
 # Terrain-following
 CLEARANCE       = 0.04          # mm — gap above support surface
-BASE_INSET      = 0.6           # mm — how far to sink the base ring into the terrain
+BASE_INSET      = 0.6           # mm — spine base sunk into terrain; also keel inset
 
 OUTPUT = pathlib.Path("stl/grass-support-field.stl")
 
@@ -82,7 +81,11 @@ def sample_grid(grid, x_mm, y_mm):
             grid[j1, i1] *    fi  *    fj)
 
 def rasterise_into_support(support_z, path_xyz, half_widths):
-    """Paint the blade's top surface into support_z."""
+    """Paint the blade's V1/V3 height (spine z) into support_z.
+    V1 and V3 are the top-face edges, both at the spine centre height.
+    The crease (V2) is below them, so the next blade only needs to clear
+    this height by its own crease depth — handled in make_grass_blade Pass 2.
+    """
     for pt, hw in zip(path_xyz, half_widths):
         x, y, z = float(pt[0]), float(pt[1]), float(pt[2])
         r_cells = max(1, int(hw / GX) + 2)
@@ -93,7 +96,7 @@ def rasterise_into_support(support_z, path_xyz, half_widths):
                 ii = int(np.clip(ic + di, 0, GRID_RES - 1))
                 jj = int(np.clip(jc + dj, 0, GRID_RES - 1))
                 if (di * GX) ** 2 + (dj * GY) ** 2 <= hw ** 2:
-                    support_z[jj, ii] = max(support_z[jj, ii], z + hw)  # store top surface, not spine centre
+                    support_z[jj, ii] = max(support_z[jj, ii], z)  # V1/V3 are at spine height
 
 def terrain_normal_at(x_mm, y_mm):
     """Outward (upward) unit normal of terrain_z at (x_mm, y_mm) via central differences."""
@@ -120,7 +123,7 @@ support_z = terrain_z.copy()
 # ── Blade placement ───────────────────────────────────────────────────────────
 rng = np.random.default_rng(SEED)
 
-def place_blades(n, w_min, w_max, t_min, t_max, l_min, l_max, tl_min, tl_max):
+def place_blades(n, w_min, w_max, l_min, l_max, tl_min, tl_max):
     if n == 0:
         return []
     cols = int(np.ceil(np.sqrt(n)))
@@ -139,7 +142,6 @@ def place_blades(n, w_min, w_max, t_min, t_max, l_min, l_max, tl_min, tl_max):
             base_x    = bx,
             base_y    = by,
             width     = rng.uniform(w_min,  w_max),
-            thickness = rng.uniform(t_min,  t_max),
             length    = rng.uniform(l_min,  l_max),
             tip_len   = rng.uniform(tl_min, tl_max),
             direction = rng.uniform(0, 2 * np.pi),
@@ -147,9 +149,9 @@ def place_blades(n, w_min, w_max, t_min, t_max, l_min, l_max, tl_min, tl_max):
         ))
     return out
 
-tall  = place_blades(N_BLADES, TALL_W_MIN, TALL_W_MAX, TALL_T_MIN, TALL_T_MAX,
+tall  = place_blades(N_BLADES, TALL_W_MIN, TALL_W_MAX,
                      TALL_L_MIN, TALL_L_MAX, TALL_TL_MIN, TALL_TL_MAX)
-fills = place_blades(N_FILL,   FILL_W_MIN, FILL_W_MAX, FILL_T_MIN, FILL_T_MAX,
+fills = place_blades(N_FILL,   FILL_W_MIN, FILL_W_MAX,
                      FILL_L_MIN, FILL_L_MAX, FILL_TL_MIN, FILL_TL_MAX)
 blades = tall + fills
 blades.sort(key=lambda b: -b['base_y'])
@@ -157,78 +159,61 @@ print(f"Placed {len(blades)} blades")
 
 # ── Low-level tube mesh ────────────────────────────────────────────────────────
 
-def _build_tube_mesh(spine_3d, widths, thicknesses, creases, initial_right=None):
+def _build_tube_mesh(spine_3d, widths, keels, creases):
     """
     Watertight 4-vertex prism tube following spine_3d.
 
-    Cross-section at each ring (parallel-transported frame):
-      • V0 — keel:         centre + (2T/3)         * right
-      • V1 — top-right:    centre + (-T/3)          * right + (W/2) * up_loc
-      • V2 — crease ridge: centre + (-T/3 + crease) * right
-      • V3 — top-left:     centre + (-T/3)          * right - (W/2) * up_loc
+    Cross-section at each ring — world-locked, zero twist:
+      • V0 — keel:         keels[i]  — world position on/below terrain surface
+      • V1 — top-right:    spine[i] + (W/2) * up_loc
+      • V2 — crease ridge: spine[i] + C_eff * normalize(keel − spine)
+                           C_eff = min(creases[i], dist(keel,spine) * 0.4)
+      • V3 — top-left:     spine[i] − (W/2) * up_loc
 
-    V1→V2→V3 forms the concave top surface: two faces that meet at V2,
-    which is pulled toward the keel by `crease` mm, giving the natural
-    midrib dip of a real grass blade.  crease=0 collapses V2 onto the
-    flat line V1-V3 (degenerate but harmless).
-
-    `right` is seeded from `initial_right` (the lean/azimuth direction)
-    and parallel-transported along the spine so the keel naturally faces
-    downward when the blade flops horizontal.
+    up_loc = normalize(cross(Ẑ, tang_xy)) — always horizontal, always
+    perpendicular to the blade's XY travel direction.  No parallel
+    transport; no accumulated twist from curl or lean.  The flat top face
+    (V1-V2-V3) stays aligned with the XY plane the whole length of the blade.
     """
     n     = 4
-    path  = np.array(spine_3d,    dtype=float)
-    W_arr = np.array(widths,      dtype=float)
-    T_arr = np.array(thicknesses, dtype=float)
-    C_arr = np.array(creases,     dtype=float)
+    path  = np.array(spine_3d, dtype=float)
+    W_arr = np.array(widths,   dtype=float)
+    K_arr = np.array(keels,    dtype=float)
+    C_arr = np.array(creases,  dtype=float)
     n_pts = len(path)
 
-    world_up = np.array([0.0, 0.0, 1.0])
     verts, faces = [], []
 
     def add_pt(p):
         idx = len(verts); verts.append(p.tolist()); return idx
 
-    def add_ring(centre, W, T, C, right, up_loc):
-        idx = len(verts)
-        verts.append((centre + (2*T/3)       * right                  ).tolist())  # V0 keel
-        verts.append((centre + (-T/3)        * right + (W/2) * up_loc ).tolist())  # V1 top-right
-        verts.append((centre + (-T/3 + C)    * right                  ).tolist())  # V2 crease
-        verts.append((centre + (-T/3)        * right - (W/2) * up_loc ).tolist())  # V3 top-left
+    def add_ring(spine_pt, W, keel_pt, C, up_loc):
+        idx       = len(verts)
+        keel_vec  = keel_pt - spine_pt
+        keel_dist = np.linalg.norm(keel_vec) + 1e-9
+        C_eff     = min(C, keel_dist * 0.4)
+        crease_pt = spine_pt + C_eff * (keel_vec / keel_dist)
+        verts.append(keel_pt.tolist())                           # V0: keel (terrain)
+        verts.append((spine_pt + (W/2) * up_loc).tolist())      # V1: top-right
+        verts.append(crease_pt.tolist())                         # V2: crease ridge
+        verts.append((spine_pt - (W/2) * up_loc).tolist())      # V3: top-left
         return idx
 
     rings = []
-    prev_right = None
     for i in range(n_pts):
         tang = path[i+1] - path[i] if i < n_pts-1 else path[i] - path[i-1]
         tang = tang / (np.linalg.norm(tang) + 1e-9)
 
-        if prev_right is None:
-            right = np.array(initial_right, dtype=float) if initial_right is not None \
-                    else np.cross(world_up, tang)
-            if np.linalg.norm(right) < 0.01:
-                right = np.array([1.0, 0.0, 0.0])
-            right -= np.dot(right, tang) * tang
-            r_norm = np.linalg.norm(right)
-            if r_norm < 1e-6:
-                right = np.array([0.0, 1.0, 0.0])
-                right -= np.dot(right, tang) * tang
-                r_norm = np.linalg.norm(right) + 1e-9
-            right = right / r_norm
+        # World-locked up_loc: cross(Ẑ, tang_xy) = (-tang_y, tang_x, 0).
+        # Always horizontal, always ⊥ to the blade's XY travel direction.
+        # Never accumulates twist regardless of curl or lean.
+        tang_xy_norm = np.sqrt(tang[0]**2 + tang[1]**2)
+        if tang_xy_norm > 1e-6:
+            up_loc = np.array([-tang[1], tang[0], 0.0]) / tang_xy_norm
         else:
-            right = prev_right - np.dot(prev_right, tang) * tang
-            r_norm = np.linalg.norm(right)
-            if r_norm < 1e-6:
-                right = np.array([1.0, 0.0, 0.0])
-                right -= np.dot(right, tang) * tang
-                r_norm = np.linalg.norm(right) + 1e-9
-            right = right / r_norm
+            up_loc = np.array([1.0, 0.0, 0.0])   # vertical spine: any horizontal works
 
-        up_loc = np.cross(tang, right)
-        up_loc = up_loc / (np.linalg.norm(up_loc) + 1e-9)
-
-        prev_right = right
-        rings.append(add_ring(path[i], W_arr[i], T_arr[i], C_arr[i], right, up_loc))
+        rings.append(add_ring(path[i], W_arr[i], K_arr[i], C_arr[i], up_loc))
 
     v_base = add_pt(path[0])
     v_tip  = add_pt(path[-1])
@@ -259,9 +244,10 @@ def _build_tube_mesh(spine_3d, widths, thicknesses, creases, initial_right=None)
 
 # ── Parameterised grass blade ─────────────────────────────────────────────────
 
-def make_grass_blade(support_z, base_pos, azimuth, length, width, thickness, tip_length,
+def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
                      lean_angle=LEAN_ANGLE, arc_fraction=ARC_FRACTION,
-                     curl=0.0, crease=CREASE_DEPTH, n_path=N_PATH):
+                     curl=0.0, crease=CREASE_DEPTH,
+                     tip_lift_frac=TIP_LIFT_FRAC, n_path=N_PATH):
     """
     Build a terrain-following floppy grass blade.
     Returns (mesh, spine_3d, half_widths).
@@ -295,7 +281,7 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, thickness, tip
     """
     bx, by  = float(base_pos[0]), float(base_pos[1])
     total_l = length + tip_length
-    arc_h   = thickness * arc_fraction * 2  # minimum bow height above obstacles
+    arc_h   = width * arc_fraction          # minimum bow height above obstacles
     dt      = 1.0 / (n_path - 1)
     CURL_MAX = np.pi                  # |curl|=1 gives ±180 deg lateral sweep
 
@@ -342,54 +328,95 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, thickness, tip
         tz_path.append(sample_grid(terrain_z, x, y))
         sz_path.append(sample_grid(support_z,  x, y))
 
-    # Pass 2 — required EXTRA height above terrain at each point.
-    #   • Must clear the top surface of any existing blade at that XY.
-    #   • Z-extent of this blade's own cross-section = hw × sin(lean), which is
-    #     zero when the blade is vertical (base) and rises as it leans horizontal.
-    #   • Tiny CLEARANCE gap, fading to zero at ends so base/tip are flush.
-    #   • Minimum aesthetic arc (arc_fraction × diameter) so the blade lifts off.
-    extra = np.zeros(n_path)
-    for k in range(n_path):
-        t       = k * dt
-        sin_t   = np.sin(t * np.pi)
-        s_k     = t * total_l
-        t_tip_k = float(np.clip((s_k - length) / (tip_length + 1e-9), 0.0, 1.0))
-        taper_k = np.cos(t_tip_k * np.pi / 2.0)
-        T_k     = thickness * taper_k          # tapered keel depth at this point
-        lean_t  = lean_angle * (1.0 - np.cos(t * np.pi / 2.0))
-        hw_z    = T_k * np.sin(lean_t)         # Z-extent of cross-section due to lean
-        support_extra = max(0.0, sz_path[k] - tz_path[k]) + CLEARANCE * sin_t
-        min_arc_extra = arc_h * sin_t
-        extra[k] = max(support_extra, min_arc_extra)
-    extra[0] = extra[-1] = 0.0   # endpoints flush with terrain
+    # Pass 2 — minimum obstacle height (above terrain) at each spine point.
+    #   The arch must exceed obstacle[k] at every interior k.
+    #   Endpoints are pinned (base flush, tip at tip_lift) and not constrained here.
+    obstacle = np.zeros(n_path)
+    for k in range(1, n_path - 1):
+        t     = k * dt
+        sin_t = np.sin(t * np.pi)
+        # Raise spine so this blade's crease (V2) clears the previous blade's
+        # top edges (V1/V3 recorded in support_z at spine height).
+        support_extra = max(0.0, sz_path[k] - tz_path[k] + crease) + CLEARANCE * sin_t
+        obstacle[k] = support_extra
 
-    # Pass 3 — single piecewise-cosine arch anchored at the highest point.
-    #   Rising half  (0 → k_peak): cosine ramp from 0 up to extra[k_peak].
-    #   Falling half (k_peak → n-1): cosine ramp from extra[k_peak] back to 0.
-    #   This gives ONE smooth, minimum-height arch that goes from ground, up over
-    #   the highest obstacle, and back to ground — with zero slope at both ends
-    #   and at the peak.  If extra is everywhere zero, arch is flat (on terrain).
-    k_peak = int(np.argmax(extra))
-    h_peak = float(extra[k_peak])
+    # Pass 3 — two-segment cubic Hermite arch, minimising peak height H.
+    #
+    # The arch is parameterised by t ∈ [0, 1] (fraction of n_path − 1).
+    # A join point splits it into two Hermite segments:
+    #
+    #   Seg 1 (0 ≤ t ≤ t_join):
+    #     y0 = 0, y1 = H, tangent at 0 = m0, tangent at 1 = 0.
+    #     arch(u) = H·h01(u) + m0·h10(u)     u = t / t_join
+    #
+    #   Seg 2 (t_join ≤ t ≤ 1):
+    #     y0 = H, y1 = tip_lift, tangent at 0 = 0, tangent at 1 = 0.
+    #     arch(v) = H·h00(v) + tip_lift·h01(v)   v = (t − t_join) / (1 − t_join)
+    #
+    # C1 at the join: both segments have zero slope there (m1 of seg1 = m0 of seg2 = 0).
+    #
+    # m0 = t_join * total_l  sets the initial tangent so the blade shoots orthogonal
+    # to the terrain at the base (darch/ds ≈ 1 mm/mm at s = 0).
+    #
+    # Hermite basis functions on [0, 1]:
+    #   h00(u) =  2u³ − 3u² + 1    (value at u=0)
+    #   h01(u) = −2u³ + 3u²        (value at u=1)
+    #   h10(u) =   u³ − 2u² + u    (slope at u=0)
+    #
+    # For each candidate join point we analytically solve for the minimum H
+    # that clears every obstacle, then keep the join with the smallest H.
+    tip_lift = width * tip_lift_frac
+    best_H      = np.inf
+    best_t_join = 0.5
+    for k_join in range(1, n_path - 1):
+        t_j = k_join / (n_path - 1)
+        m0  = t_j * total_l      # initial slope: 1 mm arch / 1 mm arc at base
+        H_j = arc_h              # minimum aesthetic arc (arc_fraction × width)
+        for k in range(1, n_path - 1):
+            obs = obstacle[k]
+            if obs <= 0.0:
+                continue
+            t_k = k / (n_path - 1)
+            if t_k <= t_j:
+                u     = t_k / t_j
+                h01_u = -2*u**3 + 3*u**2
+                h10_u =    u**3 - 2*u**2 + u
+                if h01_u > 1e-9:
+                    H_j = max(H_j, (obs - m0 * h10_u) / h01_u)
+            else:
+                v     = (t_k - t_j) / (1.0 - t_j)
+                h00_v =  2*v**3 - 3*v**2 + 1
+                h01_v = -2*v**3 + 3*v**2
+                if h00_v > 1e-9:
+                    H_j = max(H_j, (obs - tip_lift * h01_v) / h00_v)
+        if H_j < best_H:
+            best_H      = H_j
+            best_t_join = t_j
+
+    H_join = best_H
+    t_join = best_t_join
+    m0     = t_join * total_l
 
     arch = np.zeros(n_path)
-    if h_peak > 0.0 and 0 < k_peak < n_path - 1:
-        for k in range(k_peak + 1):
-            frac    = k / k_peak
-            arch[k] = h_peak * (1.0 - np.cos(frac * np.pi)) / 2.0
-        for k in range(k_peak, n_path):
-            frac    = (k - k_peak) / (n_path - 1 - k_peak)
-            arch[k] = h_peak * (1.0 + np.cos(frac * np.pi)) / 2.0
-
-    # Floor-clamp: if a secondary obstacle pokes above the arch, lift locally.
-    np.maximum(arch, extra, out=arch)
-    arch[0] = arch[-1] = 0.0    # restore flush endpoints
+    for k in range(n_path):
+        t_k = k / (n_path - 1)
+        if t_k <= t_join:
+            u       = t_k / t_join if t_join > 1e-9 else 0.0
+            arch[k] = H_join * (-2*u**3 + 3*u**2) + m0 * (u**3 - 2*u**2 + u)
+        else:
+            v       = (t_k - t_join) / (1.0 - t_join) if t_join < 1.0 - 1e-9 else 1.0
+            arch[k] = H_join * (2*v**3 - 3*v**2 + 1) + tip_lift * (-2*v**3 + 3*v**2)
+    arch[0]  = 0.0       # base stays flush with terrain
+    arch[-1] = tip_lift  # tip hovers tip_lift_frac × width above terrain
 
     # Pass 4 — build spine + taper.
-    path_xyz        = []
-    widths_arr      = []
-    thicknesses_arr = []
-    creases_arr     = []
+    # Keel (V0) is pinned to the BASE terrain at each XY point, sunk in by
+    # BASE_INSET.  Depth is implicit: spine_z − keel_z = arch[k] + BASE_INSET,
+    # which is zero at base/tip and maximum at the arch peak.
+    path_xyz    = []
+    widths_arr  = []
+    keels_arr   = []
+    creases_arr = []
 
     for k in range(n_path):
         x = xs_path[k]
@@ -400,10 +427,12 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, thickness, tip
         t_tip = float(np.clip((s - length) / (tip_length + 1e-9), 0.0, 1.0))
         taper = np.cos(t_tip * np.pi / 2.0)
 
+        keel_z = tz_path[k] - BASE_INSET   # base terrain − inset (independent of arch)
+
         path_xyz.append(np.array([x, y, z]))
-        widths_arr.append(width     * taper)
-        thicknesses_arr.append(thickness * taper)
-        creases_arr.append(crease   * taper)
+        widths_arr.append(width * taper)
+        keels_arr.append(np.array([x, y, keel_z]))
+        creases_arr.append(crease)          # absolute mm; clamped in add_ring at shallow ends
 
     # ── Base inset: sink ring-0 into the terrain along the terrain normal ────────
     # This makes the base disk lie in (approximately) the terrain tangent plane
@@ -411,19 +440,7 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, thickness, tip
     tn = terrain_normal_at(bx, by)
     path_xyz[0] = path_xyz[0] - BASE_INSET * tn
 
-    # Seed the parallel-transport frame with a vector in the terrain tangent plane
-    # (azimuth direction projected onto that plane).  The spine tangent at ring 0
-    # now points roughly along tn (because path[0] is below terrain, path[1] is
-    # just above), so the projected right vector stays in the tangent plane.
-    az_vec  = np.array([np.sin(azimuth), np.cos(azimuth), 0.0])
-    right_0 = az_vec - np.dot(az_vec, tn) * tn
-    right_0_norm = np.linalg.norm(right_0)
-    if right_0_norm < 1e-6:          # azimuth exactly along terrain normal (edge case)
-        right_0 = np.array([1.0, 0.0, 0.0])
-        right_0 -= np.dot(right_0, tn) * tn
-    right_0 /= np.linalg.norm(right_0) + 1e-9
-
-    mesh = _build_tube_mesh(path_xyz, widths_arr, thicknesses_arr, creases_arr, initial_right=right_0)
+    mesh = _build_tube_mesh(path_xyz, widths_arr, keels_arr, creases_arr)
     return mesh, path_xyz, widths_arr
 
 
@@ -498,7 +515,6 @@ for i, bl in enumerate(blades):
         azimuth    = bl['direction'],
         length     = bl['length'],
         width      = bl['width'],
-        thickness  = bl['thickness'],
         tip_length = bl['tip_len'],
         curl       = bl['curl'],
     )
