@@ -54,10 +54,10 @@ FILL_L_MIN,  FILL_L_MAX  = 2.0, 4.5
 FILL_TL_MIN, FILL_TL_MAX = 0.8, 1.8
 
 LEAN_ANGLE      = np.radians(80)  # max lean at tip (nearly horizontal)
-ARC_FRACTION    = 0.5             # bow height = ARC_FRACTION × blade diameter
+ARC_FRACTION    = 0.5             # bow height = ARC_FRACTION × blade thickness
 BLADE_CURL      = 1.0             # lateral curl (0=straight, ±1=±180 deg sweep)
 N_PATH          = 50              # spine sample points (more = smoother curve)
-N_SIDES         = 3               # polygon sides per cross-section ring (3 = triangular prism)
+CREASE_DEPTH    = 0.5             # mm — concave dip at centre of top face (0 = flat)
 
 # Terrain-following
 CLEARANCE       = 0.04          # mm — gap above support surface
@@ -157,26 +157,30 @@ print(f"Placed {len(blades)} blades")
 
 # ── Low-level tube mesh ────────────────────────────────────────────────────────
 
-def _build_tube_mesh(spine_3d, widths, thicknesses, initial_right=None):
+def _build_tube_mesh(spine_3d, widths, thicknesses, creases, initial_right=None):
     """
-    Watertight triangular-prism tube following spine_3d.
+    Watertight 4-vertex prism tube following spine_3d.
 
-    Cross-section at each ring (n=3 vertices, parallel-transported frame):
-      • Vertex 0  — keel:      centre + (2T/3) * right
-      • Vertex 1  — top-right: centre + (-T/3) * right + (W/2) * up_loc
-      • Vertex 2  — top-left:  centre + (-T/3) * right - (W/2) * up_loc
-    where W = widths[i] (flat-face width) and T = thicknesses[i] (keel depth).
+    Cross-section at each ring (parallel-transported frame):
+      • V0 — keel:         centre + (2T/3)         * right
+      • V1 — top-right:    centre + (-T/3)          * right + (W/2) * up_loc
+      • V2 — crease ridge: centre + (-T/3 + crease) * right
+      • V3 — top-left:     centre + (-T/3)          * right - (W/2) * up_loc
 
-    `right` is seeded from `initial_right` (the blade's lean/azimuth direction)
-    and parallel-transported along the spine.  By the time the blade flops
-    horizontal, parallel transport has rotated `right` to point downward (−Z),
-    so the keel is on the underside and the flat face is on top — automatically,
-    with no extra rotation needed.
+    V1→V2→V3 forms the concave top surface: two faces that meet at V2,
+    which is pulled toward the keel by `crease` mm, giving the natural
+    midrib dip of a real grass blade.  crease=0 collapses V2 onto the
+    flat line V1-V3 (degenerate but harmless).
+
+    `right` is seeded from `initial_right` (the lean/azimuth direction)
+    and parallel-transported along the spine so the keel naturally faces
+    downward when the blade flops horizontal.
     """
-    n     = 3
-    path  = np.array(spine_3d,  dtype=float)
-    W_arr = np.array(widths,     dtype=float)
+    n     = 4
+    path  = np.array(spine_3d,    dtype=float)
+    W_arr = np.array(widths,      dtype=float)
     T_arr = np.array(thicknesses, dtype=float)
+    C_arr = np.array(creases,     dtype=float)
     n_pts = len(path)
 
     world_up = np.array([0.0, 0.0, 1.0])
@@ -185,11 +189,12 @@ def _build_tube_mesh(spine_3d, widths, thicknesses, initial_right=None):
     def add_pt(p):
         idx = len(verts); verts.append(p.tolist()); return idx
 
-    def add_ring(centre, W, T, right, up_loc):
+    def add_ring(centre, W, T, C, right, up_loc):
         idx = len(verts)
-        verts.append((centre + (2*T/3) * right                    ).tolist())  # keel
-        verts.append((centre + (-T/3)  * right + (W/2) * up_loc  ).tolist())  # top-right
-        verts.append((centre + (-T/3)  * right - (W/2) * up_loc  ).tolist())  # top-left
+        verts.append((centre + (2*T/3)       * right                  ).tolist())  # V0 keel
+        verts.append((centre + (-T/3)        * right + (W/2) * up_loc ).tolist())  # V1 top-right
+        verts.append((centre + (-T/3 + C)    * right                  ).tolist())  # V2 crease
+        verts.append((centre + (-T/3)        * right - (W/2) * up_loc ).tolist())  # V3 top-left
         return idx
 
     rings = []
@@ -223,7 +228,7 @@ def _build_tube_mesh(spine_3d, widths, thicknesses, initial_right=None):
         up_loc = up_loc / (np.linalg.norm(up_loc) + 1e-9)
 
         prev_right = right
-        rings.append(add_ring(path[i], W_arr[i], T_arr[i], right, up_loc))
+        rings.append(add_ring(path[i], W_arr[i], T_arr[i], C_arr[i], right, up_loc))
 
     v_base = add_pt(path[0])
     v_tip  = add_pt(path[-1])
@@ -256,7 +261,7 @@ def _build_tube_mesh(spine_3d, widths, thicknesses, initial_right=None):
 
 def make_grass_blade(support_z, base_pos, azimuth, length, width, thickness, tip_length,
                      lean_angle=LEAN_ANGLE, arc_fraction=ARC_FRACTION,
-                     curl=0.0, n_path=N_PATH):
+                     curl=0.0, crease=CREASE_DEPTH, n_path=N_PATH):
     """
     Build a terrain-following floppy grass blade.
     Returns (mesh, spine_3d, half_widths).
@@ -381,9 +386,10 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, thickness, tip
     arch[0] = arch[-1] = 0.0    # restore flush endpoints
 
     # Pass 4 — build spine + taper.
-    path_xyz      = []
-    widths_arr    = []
+    path_xyz        = []
+    widths_arr      = []
     thicknesses_arr = []
+    creases_arr     = []
 
     for k in range(n_path):
         x = xs_path[k]
@@ -397,6 +403,7 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, thickness, tip
         path_xyz.append(np.array([x, y, z]))
         widths_arr.append(width     * taper)
         thicknesses_arr.append(thickness * taper)
+        creases_arr.append(crease   * taper)
 
     # ── Base inset: sink ring-0 into the terrain along the terrain normal ────────
     # This makes the base disk lie in (approximately) the terrain tangent plane
@@ -416,7 +423,7 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, thickness, tip
         right_0 -= np.dot(right_0, tn) * tn
     right_0 /= np.linalg.norm(right_0) + 1e-9
 
-    mesh = _build_tube_mesh(path_xyz, widths_arr, thicknesses_arr, initial_right=right_0)
+    mesh = _build_tube_mesh(path_xyz, widths_arr, thicknesses_arr, creases_arr, initial_right=right_0)
     return mesh, path_xyz, widths_arr
 
 
