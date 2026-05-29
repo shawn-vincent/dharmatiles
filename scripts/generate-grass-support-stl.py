@@ -36,6 +36,7 @@ GRID_RES        = 256           # support-field resolution (cells per side)
 # Terrain
 TERRAIN_AMP     = 0.8           # mm — sinusoidal bump amplitude
 TERRAIN_FREQ    = 1.5           # cycles across tile
+TERRAIN_EDGE_FLAT = 1.0         # mm — rectangular flat rim at side-wall height
 
 # Blade population
 N_BLADES        = 5             # tall blades
@@ -119,12 +120,10 @@ y_grid = iy * GY
 terrain_z = (TERRAIN_AMP *
              np.sin(2 * np.pi * TERRAIN_FREQ * x_grid / TILE_W) *
              np.cos(2 * np.pi * TERRAIN_FREQ * y_grid / TILE_H)).astype(float)
-# Keep the tile perimeter at the side-wall top height.  Interior terrain can
-# rise above or dip below that level, but edge samples remain rectangular.
-terrain_z[0, :] = 0.0
-terrain_z[-1, :] = 0.0
-terrain_z[:, 0] = 0.0
-terrain_z[:, -1] = 0.0
+# Keep a rectangular rim at the side-wall top height.  Terrain variation starts
+# inside that rim, so no undulation reaches the vertical tile faces.
+edge_dist = np.minimum.reduce([x_grid, y_grid, TILE_W - x_grid, TILE_H - y_grid])
+terrain_z[edge_dist <= TERRAIN_EDGE_FLAT] = 0.0
 
 support_z = terrain_z.copy()
 
