@@ -119,9 +119,8 @@ y_grid = iy * GY
 terrain_z = (TERRAIN_AMP *
              np.sin(2 * np.pi * TERRAIN_FREQ * x_grid / TILE_W) *
              np.cos(2 * np.pi * TERRAIN_FREQ * y_grid / TILE_H)).astype(float)
-terrain_z -= terrain_z.min()   # shift so lowest point = 0
-# Keep the tile perimeter rectangular, but let terrain variation begin at the
-# first interior samples rather than fading in from an inset border.
+# Keep the tile perimeter at the side-wall top height.  Interior terrain can
+# rise above or dip below that level, but edge samples remain rectangular.
 terrain_z[0, :] = 0.0
 terrain_z[-1, :] = 0.0
 terrain_z[:, 0] = 0.0
