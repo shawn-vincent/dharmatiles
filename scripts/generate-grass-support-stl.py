@@ -51,6 +51,7 @@ FILL_W_MIN,  FILL_W_MAX  = 0.7, 1.4
 FILL_L_MIN,  FILL_L_MAX  = 2.0, 4.5
 FILL_TL_MIN, FILL_TL_MAX = 0.8, 1.8
 
+BASE_LEAN_ANGLE = np.radians(12)  # initial forward lean at base
 LEAN_ANGLE      = np.radians(80)  # max lean at tip (nearly horizontal)
 ARC_FRACTION    = 0.0             # extra interior bow above the lowest clearing curve
 BLADE_CURL      = 1.0             # lateral curl (0=straight, ±1=±180 deg sweep)
@@ -287,8 +288,8 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     CURL_MAX = np.pi                  # |curl|=1 gives ±180 deg lateral sweep
 
     # ── XY path: variable lean + chord-preserving curl ───────────────────────
-    # lean(t) = lean_angle * (1 - cos(t*pi/2))
-    #   t=0 -> lean=0  => zero horizontal speed => initial tangent is +Z
+    # lean(t) = base_lean + (lean_angle - base_lean) * (1 - cos(t*pi/2))
+    #   t=0 -> lean=base_lean => initial tangent leans toward blade direction
     #   t=1 -> lean=lean_angle (~80 deg) => mostly horizontal
     #
     # curl rotates the lean direction by curl*CURL_MAX*t as t increases,
@@ -298,7 +299,9 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     xr, yr = [0.0], [0.0]
     for k in range(1, n_path):
         t_mid    = (k - 0.5) * dt
-        lean_now = lean_angle * (1.0 - np.cos(t_mid * np.pi / 2.0))
+        lean_now = BASE_LEAN_ANGLE + (
+            lean_angle - BASE_LEAN_ANGLE
+        ) * (1.0 - np.cos(t_mid * np.pi / 2.0))
         ds       = total_l * dt
         az_now   = azimuth + curl * CURL_MAX * t_mid
         xr.append(xr[-1] + np.sin(az_now) * np.sin(lean_now) * ds)
