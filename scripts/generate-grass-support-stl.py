@@ -68,15 +68,15 @@ BASE_SINK       = 0.25          # mm — keep first cap fully embedded below ter
 OUTPUT = pathlib.Path("stl/grass-support-field.stl")
 
 # ── Grid helpers ──────────────────────────────────────────────────────────────
-GX = TILE_W / GRID_RES          # mm per cell
-GY = TILE_H / GRID_RES
+GX = TILE_W / (GRID_RES - 1)    # mm between height/support samples
+GY = TILE_H / (GRID_RES - 1)
 
 def sample_grid(grid, x_mm, y_mm):
     """Bilinear sample of a (GRID_RES × GRID_RES) array at (x_mm, y_mm)."""
-    i = np.clip(x_mm / GX, 0, GRID_RES - 1.001)
-    j = np.clip(y_mm / GY, 0, GRID_RES - 1.001)
+    i = np.clip(x_mm / GX, 0, GRID_RES - 1)
+    j = np.clip(y_mm / GY, 0, GRID_RES - 1)
     i0, j0 = int(i), int(j)
-    i1, j1 = i0 + 1, j0 + 1
+    i1, j1 = min(i0 + 1, GRID_RES - 1), min(j0 + 1, GRID_RES - 1)
     fi, fj  = i - i0, j - j0
     return (grid[j0, i0] * (1-fi) * (1-fj) +
             grid[j0, i1] *    fi  * (1-fj) +
