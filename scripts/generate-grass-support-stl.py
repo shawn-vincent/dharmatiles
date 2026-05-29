@@ -36,7 +36,6 @@ GRID_RES        = 256           # support-field resolution (cells per side)
 # Terrain
 TERRAIN_AMP     = 0.8           # mm — sinusoidal bump amplitude
 TERRAIN_FREQ    = 1.5           # cycles across tile
-TERRAIN_EDGE_FADE = 2.0         # mm — fade terrain perturbation to flat edges
 
 # Blade population
 N_BLADES        = 5             # tall blades
@@ -121,10 +120,12 @@ terrain_z = (TERRAIN_AMP *
              np.sin(2 * np.pi * TERRAIN_FREQ * x_grid / TILE_W) *
              np.cos(2 * np.pi * TERRAIN_FREQ * y_grid / TILE_H)).astype(float)
 terrain_z -= terrain_z.min()   # shift so lowest point = 0
-edge_dist = np.minimum.reduce([x_grid, y_grid, TILE_W - x_grid, TILE_H - y_grid])
-edge_t = np.clip(edge_dist / TERRAIN_EDGE_FADE, 0.0, 1.0)
-edge_fade = edge_t * edge_t * (3.0 - 2.0 * edge_t)
-terrain_z *= edge_fade
+# Keep the tile perimeter rectangular, but let terrain variation begin at the
+# first interior samples rather than fading in from an inset border.
+terrain_z[0, :] = 0.0
+terrain_z[-1, :] = 0.0
+terrain_z[:, 0] = 0.0
+terrain_z[:, -1] = 0.0
 
 support_z = terrain_z.copy()
 
