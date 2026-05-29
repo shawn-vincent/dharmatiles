@@ -38,8 +38,8 @@ TERRAIN_AMP     = 0.8           # mm — sinusoidal bump amplitude
 TERRAIN_FREQ    = 1.5           # cycles across tile
 
 # Blade population
-N_BLADES        = 120           # tall blades
-N_FILL          = 60            # short filler blades
+N_BLADES        = 5             # tall blades
+N_FILL          = 0             # short filler blades
 SEED            = 42
 CURL_MAX        = 0.6           # max lateral curl magnitude (±)
 
@@ -324,10 +324,11 @@ def make_grass_blade(support_z, base_pos, azimuth, length, radius, tip_length,
     # Pass 1 — XY positions, terrain height, and support height at every point.
     xs_path, ys_path, tz_path, sz_path = [], [], [], []
     for k in range(n_path):
-        x = float(np.clip(bx + xrot[k], radius, TILE_W - radius))
-        y = float(np.clip(by + yrot[k], radius, TILE_H - radius))
+        x = float(bx + xrot[k])
+        y = float(by + yrot[k])
         xs_path.append(x)
         ys_path.append(y)
+        # sample_grid clips internally, so out-of-tile positions return edge values
         tz_path.append(sample_grid(terrain_z, x, y))
         sz_path.append(sample_grid(support_z,  x, y))
 

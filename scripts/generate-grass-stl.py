@@ -29,8 +29,8 @@ import pathlib, sys, subprocess
 CANVAS_W = CANVAS_H = 700          # must match generate-grass-scene.py
 TILE_W   = TILE_H   = 35.0         # mm — DungeonBlocks 1×1 tile
 BASE_H   =  3.0                    # mm — base slab height
-N_BLADES =  62
-N_FILL   = 150
+N_BLADES =   5
+N_FILL   =   0
 SEED     =  42
 CAP_RATIO = 0.6
 N_SECTIONS = 14                    # polygon sides around each blade cylinder
@@ -44,6 +44,8 @@ rng = np.random.default_rng(SEED)
 
 def place_blades(n, w_min, w_max, l_min, l_max, tl_min, tl_max):
     """Jittered-grid blade placement; returns list of dicts with px coords."""
+    if n == 0:
+        return []
     grid_cols = int(np.ceil(np.sqrt(n)))
     grid_rows = int(np.ceil(n / grid_cols))
     cell_w = CANVAS_W / grid_cols
