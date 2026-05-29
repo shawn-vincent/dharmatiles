@@ -333,9 +333,13 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     # so the spine itself must be higher by the crease depth plus clearance.
     #
     # The base is pinned to terrain: if a prior blade crosses the root, the new
-    # blade grows out from under it.  Every later sample is constrained.
+    # blade grows out from under it.  The first 10% is allowed to emerge through
+    # the terrain/support so those near-base samples do not force a huge cubic.
     min_spine_z = np.array(sz_path, dtype=float) + crease + CLEARANCE
-    min_spine_z[0] = -np.inf
+    T_CONSTRAINT_START = 0.10
+    for k in range(n_path):
+        if k / (n_path - 1) < T_CONSTRAINT_START:
+            min_spine_z[k] = -np.inf
 
     base_z = float(tz_path[0])
     tip_z  = max(float(sz_path[-1] + crease + CLEARANCE),
@@ -377,7 +381,8 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
         )
     spine_z[0] = base_z
     spine_z[-1] = tip_z
-    min_margin = float(np.min(spine_z[1:] - min_spine_z[1:]))
+    constrained = np.isfinite(min_spine_z)
+    min_margin = float(np.min(spine_z[constrained] - min_spine_z[constrained]))
     if min_margin < -1e-6:
         raise RuntimeError(
             f"blade support clearance failed at base=({bx:.2f}, {by:.2f}); "
