@@ -38,7 +38,7 @@ TERRAIN_AMP     = 1.0           # mm — sinusoidal bump amplitude
 TERRAIN_FREQ    = 1.5           # cycles across tile
 
 # Blade population
-N_BLADES        = 5             # tall blades
+N_BLADES        = 50            # tall blades
 N_FILL          = 0             # short filler blades
 SEED            = 42
 CURL_MAX        = 0.6           # max lateral curl magnitude (±)
