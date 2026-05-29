@@ -346,93 +346,65 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     base_slope = total_l
     min_peak_z = max(base_z, tip_z) + width * arc_fraction
 
-    # Pass 3 — three-segment C1 height curve.
+    # Pass 3 — smooth support-clearing height curve.
     #
-    # Segment 1: local base tangent, fixed base position and slope, zero slope
-    # at t1.  Keep this short: the base slope is a boundary condition, not a
-    # visible launch ramp.
+    # One compound curve is split only at the high point:
+    #   base -> peak: cubic Hermite, fixed base height/slope and zero peak slope
+    #   peak -> tip:  quadratic fall, zero peak slope and free tip slope
     #
-    # Segment 2: smooth rise/settle from z1 to peak, zero slopes at both ends.
-    #
-    # Segment 3: smooth departure from the peak to the fixed tip with free tip
-    # slope.  The free end slope is deliberate: the tip is only height-pinned.
-    T1 = 0.04
-    k1 = max(1, int(round(T1 * (n_path - 1))))
-    t1 = k1 / (n_path - 1)
-
+    # There is intentionally no short "rise" segment near the base.  The fixed
+    # base tangent bends continuously into the same curve that clears obstacles.
     def h00(u): return 2*u**3 - 3*u**2 + 1
     def h01(u): return -2*u**3 + 3*u**2
     def h10(u): return u**3 - 2*u**2 + u
 
-    def seg1_height(t, z1):
-        u = t / t1 if t1 > 1e-9 else 1.0
-        return base_z * h00(u) + z1 * h01(u) + (t1 * base_slope) * h10(u)
-
-    z1 = base_z
-    for k in range(1, n_path - 1):
-        if k > k1:
-            break
-        t_k = k / (n_path - 1)
-        need = min_spine_z[k]
-        if not np.isfinite(need):
-            continue
-        u = t_k / t1 if t1 > 1e-9 else 1.0
-        basis = h01(u)
-        fixed = base_z * h00(u) + (t1 * base_slope) * h10(u)
-        if basis > 1e-9:
-            z1 = max(z1, (need - fixed) / basis)
-
     best_peak = np.inf
-    best_t2 = (t1 + 1.0) / 2.0
-    for k_join in range(k1 + 1, n_path - 1):
-        t_j = k_join / (n_path - 1)
-        peak = max(z1, min_peak_z)
+    best_t_peak = 0.5
+    for k_peak in range(1, n_path - 1):
+        t_peak = k_peak / (n_path - 1)
+        peak = min_peak_z
         for k in range(1, n_path - 1):
             need = min_spine_z[k]
             if not np.isfinite(need):
                 continue
             t_k = k / (n_path - 1)
-            if t_k <= t1:
-                peak = max(peak, seg1_height(t_k, z1))
-            elif t_k <= t_j:
-                # z = z1*h00(v) + peak*h01(v)
-                dv = t_j - t1
-                if dv < 1e-9:
-                    continue
-                v     = (t_k - t1) / dv
+            if t_k <= t_peak:
+                # z = base_z*h00(v) + peak*h01(v) + t_peak*base_slope*h10(v)
+                v     = t_k / t_peak
                 basis = h01(v)
-                fixed = z1 * h00(v)
+                fixed = base_z * h00(v) + (t_peak * base_slope) * h10(v)
                 if basis > 1e-9:
                     peak = max(peak, (need - fixed) / basis)
             else:
                 # z = peak*(1 - w^2) + tip_z*w^2.  Slope at the tip is free.
-                dw = 1.0 - t_j
+                dw = 1.0 - t_peak
                 if dw < 1e-9:
                     continue
-                w     = (t_k - t_j) / dw
+                w     = (t_k - t_peak) / dw
                 basis = 1.0 - w**2
                 fixed = tip_z * w**2
                 if basis > 1e-9:
                     peak = max(peak, (need - fixed) / basis)
         if peak < best_peak:
             best_peak = peak
-            best_t2 = t_j
+            best_t_peak = t_peak
 
     peak_z = best_peak
-    t2 = best_t2
+    t_peak = best_t_peak
 
     spine_z = np.zeros(n_path)
     for k in range(n_path):
         t_k = k / (n_path - 1)
-        if t_k <= t1:
-            spine_z[k] = seg1_height(t_k, z1)
-        elif t_k <= t2:
-            dv = t2 - t1
-            v = (t_k - t1) / dv if dv > 1e-9 else 1.0
-            spine_z[k] = z1 * h00(v) + peak_z * h01(v)
+        if t_k <= t_peak:
+            v = t_k / t_peak if t_peak > 1e-9 else 1.0
+            spine_z[k] = (
+                base_z * h00(v) +
+                peak_z * h01(v) +
+                (t_peak * base_slope) * h10(v)
+            )
         else:
-            dw = 1.0 - t2
-            w = (t_k - t2) / dw if dw > 1e-9 else 1.0
+            dw = 1.0 - t_peak
+            w = (t_k - t_peak) / dw if dw > 1e-9 else 1.0
             spine_z[k] = peak_z * (1.0 - w**2) + tip_z * w**2
     spine_z[0] = base_z
     spine_z[-1] = tip_z
