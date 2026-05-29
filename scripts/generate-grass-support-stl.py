@@ -57,7 +57,7 @@ BLADE_CURL      = 1.0             # lateral curl (0=straight, ±1=±180 deg swee
 N_PATH          = 50              # spine sample points (more = smoother curve)
 CREASE_DEPTH    = 0.5             # mm — concave dip at centre of top face (0 = flat)
 TIP_LIFT_FRAC   = 0.25            # tip raised by this fraction of blade width (0 = flush)
-BASE_SLOPE_WIDTHS = 1.0           # normalized-t base dz/dt, in blade widths
+BASE_SLOPE_WIDTHS = 0.25          # normalized-t base dz/dt, in blade widths
 
 # Terrain-following
 CLEARANCE       = 0.04          # mm — gap above support surface
