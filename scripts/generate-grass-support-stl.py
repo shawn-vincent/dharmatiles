@@ -39,33 +39,42 @@ TERRAIN_AMP     = 1.0           # mm — sinusoidal bump amplitude
 TERRAIN_FREQ    = 1.5           # cycles across tile
 
 # Blade population
-N_BLADES        = 20            # tall blades
+N_BLADES        = 400           # tall blades
 N_FILL          = 0             # short filler blades
 SEED            = 42
 CURL_MAX        = 0.6           # max lateral curl magnitude (±)
 
 # Blade geometry (mm)
-TALL_W_MIN,  TALL_W_MAX  = 1.5, 2.5    # flat face width at base
-TALL_L_MIN,  TALL_L_MAX  = 10.0, 18.0  # body arc length
-TALL_TL_MIN, TALL_TL_MAX = 3.0, 6.0   # tip taper arc length
-FILL_W_MIN,  FILL_W_MAX  = 0.7, 1.4
-FILL_L_MIN,  FILL_L_MAX  = 2.0, 4.5
-FILL_TL_MIN, FILL_TL_MAX = 0.8, 1.8
+TALL_W_MIN,  TALL_W_MAX  = 0.5, 1.5    # flat face width at base
+TALL_L_MIN,  TALL_L_MAX  = 4.0, 14.4  # body arc length
+TALL_TL_MIN, TALL_TL_MAX = 1.2, 4.8   # tip taper arc length
+FILL_W_MIN,  FILL_W_MAX  = 0.3, 0.5
+FILL_L_MIN,  FILL_L_MAX  = 4.0, 7.2
+FILL_TL_MIN, FILL_TL_MAX = 1.2, 2.4
 
 BASE_LEAN_ANGLE = np.radians(8)   # initial forward lean at base
 LEAN_ANGLE      = np.radians(80)  # max lean at tip (nearly horizontal)
 ARC_FRACTION    = 0.0             # extra interior bow above the lowest clearing curve
 BLADE_CURL      = 1.0             # lateral curl (0=straight, ±1=±180 deg sweep)
 N_PATH          = 50              # spine sample points (more = smoother curve)
-CREASE_DEPTH    = 0.5             # mm — concave dip at centre of top face (0 = flat)
+CREASE_DEPTH    = 0.1            # mm — concave dip at centre of top face (0 = flat)
 TIP_LIFT_FRAC   = 0.25            # tip raised by this fraction of blade width (0 = flush)
 BASE_SLOPE_WIDTHS = 0.25          # normalized-t base dz/dt, in blade widths
-MAX_HEIGHT_ABOVE_TERRAIN = 4.0    # mm — sanity limit for support-clearing curve
 
 # Terrain-following
 CLEARANCE       = 0.04          # mm — gap above support surface
 BASE_INSET      = 0.6           # mm — spine base sunk into terrain; also keel inset
 BASE_SINK       = 0.25          # mm — keep first cap fully embedded below terrain
+
+# Gravel / stones  (placed before grass; does NOT update support_z)
+N_GRAVEL         = 6000         # number of stones
+GRAVEL_R_MIN     = 0.048        # mm — minimum horizontal semi-axis
+GRAVEL_R_MAX     = 0.42         # mm — maximum horizontal semi-axis
+GRAVEL_FLAT_MIN  = 0.40         # stone height = this fraction × mean radius (flattest)
+GRAVEL_FLAT_MAX  = 1.30         # stone height = this fraction × mean radius (roundest)
+GRAVEL_AZ_SEGS   = 7            # azimuth facets per stone
+GRAVEL_EL_SEGS   = 3            # elevation rings per stone (above base)
+GRAVEL_SINK      = 0.01         # mm — base sunk below terrain so stones look embedded
 
 OUTPUT = pathlib.Path("stl/grass-support-field.stl")
 
@@ -112,6 +121,102 @@ def terrain_normal_at(x_mm, y_mm):
             sample_grid(terrain_z, x_mm, y_mm - eps)) / (2 * eps)
     n = np.array([-dzdx, -dzdy, 1.0])
     return n / np.linalg.norm(n)
+
+# ── Gravel / stones ───────────────────────────────────────────────────────────
+
+def make_stone(cx, cy, rx, ry, height, angle):
+    """
+    Watertight half-ellipsoid stone sitting on the terrain at (cx, cy).
+
+    cx, cy  — centre XY (mm)
+    rx, ry  — horizontal semi-axes before rotation (mm)
+    height  — vertical semi-axis above terrain (mm)
+    angle   — rotation around Z (radians)
+
+    The base disk is sunk GRAVEL_SINK mm below terrain so the stone looks
+    embedded rather than floating.  support_z is never touched.
+    """
+    tz   = sample_grid(terrain_z, cx, cy)
+    base_z = tz - GRAVEL_SINK
+    ca, sa = np.cos(angle), np.sin(angle)
+
+    verts = []
+
+    # Apex
+    apex = 0
+    verts.append([cx, cy, base_z + height])
+
+    # Rings: ei=1 (just below apex) … ei=n_el (base ring at base_z)
+    for ei in range(1, GRAVEL_EL_SEGS + 1):
+        u      = ei / GRAVEL_EL_SEGS          # 0 → apex, 1 → base
+        r_frac = np.sin(u * np.pi / 2)
+        z_off  = height * np.cos(u * np.pi / 2)
+        zv     = base_z + z_off
+        for ai in range(GRAVEL_AZ_SEGS):
+            theta = 2 * np.pi * ai / GRAVEL_AZ_SEGS
+            lx = rx * r_frac * np.cos(theta)
+            ly = ry * r_frac * np.sin(theta)
+            wx = cx + ca * lx - sa * ly
+            wy = cy + sa * lx + ca * ly
+            verts.append([wx, wy, zv])
+
+    # Bottom centre cap vertex
+    bot = len(verts)
+    verts.append([cx, cy, base_z])
+
+    faces = []
+
+    # Apex → first ring
+    for ai in range(GRAVEL_AZ_SEGS):
+        a = 1 + ai
+        b = 1 + (ai + 1) % GRAVEL_AZ_SEGS
+        faces.append([apex, a, b])
+
+    # Side strips between rings
+    for ei in range(1, GRAVEL_EL_SEGS):
+        row_a = 1 + (ei - 1) * GRAVEL_AZ_SEGS
+        row_b = 1 +  ei      * GRAVEL_AZ_SEGS
+        for ai in range(GRAVEL_AZ_SEGS):
+            a0 = row_a + ai;            a1 = row_a + (ai + 1) % GRAVEL_AZ_SEGS
+            b0 = row_b + ai;            b1 = row_b + (ai + 1) % GRAVEL_AZ_SEGS
+            faces.append([a0, b0, a1])
+            faces.append([a1, b0, b1])
+
+    # Base ring → bottom centre (cap faces outward downward)
+    last_ring = 1 + (GRAVEL_EL_SEGS - 1) * GRAVEL_AZ_SEGS
+    for ai in range(GRAVEL_AZ_SEGS):
+        a = last_ring + ai
+        b = last_ring + (ai + 1) % GRAVEL_AZ_SEGS
+        faces.append([a, bot, b])
+
+    mesh = trimesh.Trimesh(
+        vertices = np.array(verts, dtype=float),
+        faces    = np.array(faces,  dtype=int),
+        process  = False,
+    )
+    mesh.fix_normals()
+    return mesh
+
+
+def add_gravel(gravel_rng):
+    """
+    Place N_GRAVEL random stones across the whole tile surface.
+    Does NOT modify support_z — grass blades ignore stones entirely.
+    Returns a list of trimesh.Trimesh objects to concatenate into the scene.
+    """
+    meshes = []
+    for _ in range(N_GRAVEL):
+        rx     = float(gravel_rng.uniform(GRAVEL_R_MIN, GRAVEL_R_MAX))
+        ry     = float(gravel_rng.uniform(GRAVEL_R_MIN, GRAVEL_R_MAX))
+        h_frac = float(gravel_rng.uniform(GRAVEL_FLAT_MIN, GRAVEL_FLAT_MAX))
+        height = 0.5 * (rx + ry) * h_frac
+        angle  = float(gravel_rng.uniform(0, np.pi))   # half-turn symmetry is enough
+        # Keep stone footprint fully inside the tile
+        margin = max(rx, ry)
+        cx = float(gravel_rng.uniform(margin, TILE_W - margin))
+        cy = float(gravel_rng.uniform(margin, TILE_H - margin))
+        meshes.append(make_stone(cx, cy, rx, ry, height, angle))
+    return meshes
 
 # ── Terrain ───────────────────────────────────────────────────────────────────
 print("Building terrain...")
@@ -355,19 +460,25 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     # the previous blade's top edges.  This blade's crease is below its spine,
     # so the spine itself must be higher by the crease depth plus clearance.
     #
-    # The base is pinned to terrain: if a prior blade crosses the root, the new
-    # blade grows out from under it.  The first 25% is allowed to emerge through
-    # the terrain/support so those near-base samples do not force a huge cubic.
+    # The base and tip are excluded from interior constraints:
+    #   • first T_CONSTRAINT_START: blade is still emerging from the terrain
+    #   • last  T_CONSTRAINT_END:   tip is tapered to near-zero — tiny overlaps
+    #                               are invisible and let the tip land naturally.
     min_spine_z = np.array(sz_path, dtype=float) + crease + CLEARANCE
     T_CONSTRAINT_START = 0.25
+    T_CONSTRAINT_END   = 0.95
     for k in range(n_path):
-        if k / (n_path - 1) < T_CONSTRAINT_START:
+        t_k = k / (n_path - 1)
+        if t_k < T_CONSTRAINT_START or t_k > T_CONSTRAINT_END:
             min_spine_z[k] = -np.inf
 
+    # Global ceiling: the curve must never exceed the highest support it actually
+    # needs to clear.  No blade should arch higher than max(support) + crease room.
+    global_max_z = float(np.max(sz_path)) + crease + CLEARANCE
+
     base_z = float(tz_path[0] - BASE_SINK)
-    required_tip_z = max(float(sz_path[-1] + crease + CLEARANCE),
-                         float(tz_path[-1] + width * tip_lift_frac))
-    tip_z = min(required_tip_z, float(tz_path[-1] + MAX_HEIGHT_ABOVE_TERRAIN))
+    tip_z  = max(float(sz_path[-1] + crease + CLEARANCE),
+                 float(tz_path[-1] + width * tip_lift_frac))
 
     # Normalized-t derivative.  The base tangent direction is upward because
     # the XY path has nearly zero horizontal speed at the root; the magnitude
@@ -438,9 +549,10 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     constraints.append({'type': 'ineq', 'fun': lambda x: x[0] - lower_knot})
     constraints.append({'type': 'ineq', 'fun': lambda x: x[1] - lower_knot})
 
+    # Upper bound: no point on the curve may exceed the highest support it needs
+    # to clear.  This replaces the old terrain-relative MAX_HEIGHT_ABOVE_TERRAIN cap.
     for k in range(n_path):
-        max_z = terrain_arr[k] + MAX_HEIGHT_ABOVE_TERRAIN
-        max_c = max_z - const_z[k]
+        max_c = global_max_z - const_z[k]
         constraints.append({
             'type': 'ineq',
             'fun': (
@@ -458,35 +570,12 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     )
     if not result.success:
         raise RuntimeError(
-            f"bounded grass z-curve solve failed at base=({bx:.2f}, {by:.2f}): "
-            f"{result.message}"
+            f"z-curve solve failed at base=({bx:.2f}, {by:.2f}): {result.message}"
         )
 
-    best_z1, best_z2 = map(float, result.x)
     spine_z = eval_from_x(result.x)
     spine_z[0] = base_z
     spine_z[-1] = tip_z
-    constrained = np.isfinite(min_spine_z)
-    constrained_idx = np.flatnonzero(constrained)
-    tight_i = int(constrained_idx[np.argmin(spine_z[constrained] - min_spine_z[constrained])])
-    terrain_delta = spine_z - np.array(tz_path, dtype=float)
-    max_delta_i = int(np.argmax(terrain_delta))
-    max_delta = float(terrain_delta[max_delta_i])
-    if max_delta > MAX_HEIGHT_ABOVE_TERRAIN:
-        raise RuntimeError(
-            "grass blade rose too high above terrain: "
-            f"base=({bx:.2f}, {by:.2f}), "
-            f"t={max_delta_i / (n_path - 1):.3f}, "
-            f"height_above_terrain={max_delta:.3f} mm, "
-            f"spine_z={spine_z[max_delta_i]:.3f} mm, "
-            f"terrain_z={tz_path[max_delta_i]:.3f} mm, "
-            f"support_z={sz_path[max_delta_i]:.3f} mm, "
-            f"tight_constraint_t={tight_i / (n_path - 1):.3f}, "
-            f"tight_constraint_required_z={min_spine_z[tight_i]:.3f} mm, "
-            f"tight_constraint_support_z={sz_path[tight_i]:.3f} mm, "
-            f"knots=({best_z1:.3f}, {best_z2:.3f}), "
-            f"tip_z={tip_z:.3f} mm"
-        )
 
     # Pass 4 — build spine + taper.
     # Keel (V0) is pinned to the BASE terrain at each XY point, sunk in by
@@ -582,8 +671,12 @@ def make_heightmap_solid(z_grid, tile_w, tile_h, base_h, subsample=4):
     return mesh
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
+print("Building gravel/stones...")
+gravel_rng = np.random.default_rng(SEED + 7919)   # independent stream; prime offset
+parts = list(add_gravel(gravel_rng))
+print(f"  {len(parts)} stones placed")
+
 print("Building blade meshes...")
-parts = []
 built_blades = 0
 skipped_blades = 0
 MAX_BOUNDARY_RETRIES = 32
@@ -593,15 +686,18 @@ for i, bl in enumerate(blades):
     for attempt in range(MAX_BOUNDARY_RETRIES + 1):
         direction = bl['direction'] if attempt == 0 else rng.uniform(0, 2 * np.pi)
         curl = bl['curl'] if attempt == 0 else rng.uniform(-CURL_MAX, CURL_MAX)
-        mesh, spine, blade_widths = make_grass_blade(
-            support_z  = support_z,
-            base_pos   = (bl['base_x'], bl['base_y'], 0),
-            azimuth    = direction,
-            length     = bl['length'],
-            width      = bl['width'],
-            tip_length = bl['tip_len'],
-            curl       = curl,
-        )
+        try:
+            mesh, spine, blade_widths = make_grass_blade(
+                support_z  = support_z,
+                base_pos   = (bl['base_x'], bl['base_y'], 0),
+                azimuth    = direction,
+                length     = bl['length'],
+                width      = bl['width'],
+                tip_length = bl['tip_len'],
+                curl       = curl,
+            )
+        except RuntimeError:
+            continue
         if blade_footprint_inside_tile(spine, blade_widths):
             accepted = (mesh, spine, blade_widths)
             break
