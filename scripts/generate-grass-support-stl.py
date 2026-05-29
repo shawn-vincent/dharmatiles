@@ -371,7 +371,7 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     k_erupt    = max(1, int(round(T_ERUPT * (n_path - 1))))
     t_erupt    = k_erupt / (n_path - 1)
     H_erupt    = width * 0.5              # height at eruption end (hides base stub)
-    m0_erupt   = t_erupt * total_l        # initial slope → darch/ds ≈ 1 at s=0
+    m0_erupt   = 0.0                      # zero slope → smooth S-curve, no kink at base
     BASIS_MIN  = 0.15                     # min basis amplitude to apply a constraint
 
     best_H      = np.inf
