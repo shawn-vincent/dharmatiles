@@ -27,6 +27,7 @@ Blade geometry
 import numpy as np
 import trimesh
 import pathlib
+from scipy.optimize import minimize
 
 # ── Config ────────────────────────────────────────────────────────────────────
 TILE_W = TILE_H = 35.0          # mm
@@ -364,8 +365,9 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
             min_spine_z[k] = -np.inf
 
     base_z = float(tz_path[0] - BASE_SINK)
-    tip_z  = max(float(sz_path[-1] + crease + CLEARANCE),
-                 float(tz_path[-1] + width * tip_lift_frac))
+    required_tip_z = max(float(sz_path[-1] + crease + CLEARANCE),
+                         float(tz_path[-1] + width * tip_lift_frac))
+    tip_z = min(required_tip_z, float(tz_path[-1] + MAX_HEIGHT_ABOVE_TERRAIN))
 
     # Normalized-t derivative.  The base tangent direction is upward because
     # the XY path has nearly zero horizontal speed at the root; the magnitude
@@ -412,46 +414,59 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     z1_basis = eval_spline(1.0, 0.0) - const_z
     z2_basis = eval_spline(0.0, 1.0) - const_z
 
+    terrain_arr = np.array(tz_path, dtype=float)
+    support_floor = np.array(min_spine_z, dtype=float)
+    support_floor[~np.isfinite(support_floor)] = -np.inf
+
+    def eval_from_x(x):
+        return const_z + x[0] * z1_basis + x[1] * z2_basis
+
+    def curve_objective(x):
+        z = eval_from_x(x)
+        height = z - terrain_arr
+        curvature = np.diff(z, n=2)
+        support_violation = np.maximum(support_floor - z, 0.0)
+        support_violation[~np.isfinite(support_violation)] = 0.0
+        return float(
+            np.mean(height * height) +
+            0.35 * np.mean(curvature * curvature) +
+            250.0 * np.mean(support_violation * support_violation)
+        )
+
+    constraints = []
     lower_knot = min(base_z, tip_z)
-    constraints = [
-        (1.0, 0.0, lower_knot),
-        (0.0, 1.0, lower_knot),
-    ]
-    for k in range(1, n_path - 1):
-        need = min_spine_z[k]
-        if np.isfinite(need):
-            constraints.append((z1_basis[k], z2_basis[k], need - const_z[k]))
+    constraints.append({'type': 'ineq', 'fun': lambda x: x[0] - lower_knot})
+    constraints.append({'type': 'ineq', 'fun': lambda x: x[1] - lower_knot})
 
-    candidates = []
-    for i, (a1, b1, c1) in enumerate(constraints):
-        for a2, b2, c2 in constraints[i + 1:]:
-            det = a1 * b2 - a2 * b1
-            if abs(det) < 1e-9:
-                continue
-            z1 = (c1 * b2 - c2 * b1) / det
-            z2 = (a1 * c2 - a2 * c1) / det
-            candidates.append((z1, z2))
+    for k in range(n_path):
+        max_z = terrain_arr[k] + MAX_HEIGHT_ABOVE_TERRAIN
+        max_c = max_z - const_z[k]
+        constraints.append({
+            'type': 'ineq',
+            'fun': (
+                lambda x, a=z1_basis[k], b=z2_basis[k], c=max_c:
+                c - a * x[0] - b * x[1]
+            ),
+        })
 
-    best_score = (np.inf, np.inf)
-    best_z1 = best_z2 = lower_knot
-    for z1, z2 in candidates:
-        if all(a * z1 + b * z2 >= c - 1e-7 for a, b, c in constraints):
-            spline = eval_spline(z1, z2)
-            score = (float(np.max(spline)), float(np.sum(spline)))
-            if score < best_score:
-                best_score = score
-                best_z1, best_z2 = z1, z2
+    result = minimize(
+        curve_objective,
+        np.array([max(base_z, tip_z), max(base_z, tip_z)], dtype=float),
+        method='SLSQP',
+        constraints=constraints,
+        options={'ftol': 1e-9, 'maxiter': 200, 'disp': False},
+    )
+    if not result.success:
+        raise RuntimeError(
+            f"bounded grass z-curve solve failed at base=({bx:.2f}, {by:.2f}): "
+            f"{result.message}"
+        )
 
-    spine_z = eval_spline(best_z1, best_z2)
+    best_z1, best_z2 = map(float, result.x)
+    spine_z = eval_from_x(result.x)
     spine_z[0] = base_z
     spine_z[-1] = tip_z
     constrained = np.isfinite(min_spine_z)
-    min_margin = float(np.min(spine_z[constrained] - min_spine_z[constrained]))
-    if min_margin < -1e-6:
-        raise RuntimeError(
-            f"blade support clearance failed at base=({bx:.2f}, {by:.2f}); "
-            f"margin={min_margin:.6f} mm"
-        )
     constrained_idx = np.flatnonzero(constrained)
     tight_i = int(constrained_idx[np.argmin(spine_z[constrained] - min_spine_z[constrained])])
     terrain_delta = spine_z - np.array(tz_path, dtype=float)
