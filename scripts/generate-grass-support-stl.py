@@ -45,7 +45,7 @@ SEED            = 42
 CURL_MAX        = 0.6           # max lateral curl magnitude (±)
 
 # Blade geometry (mm)
-TALL_W_MIN,  TALL_W_MAX  = 0.5, 1.5    # flat face width at base
+TALL_W_MIN,  TALL_W_MAX  = 0.6, 1.5    # flat face width at base
 TALL_L_MIN,  TALL_L_MAX  = 4.0, 14.4  # body arc length
 TALL_TL_MIN, TALL_TL_MAX = 1.2, 4.8   # tip taper arc length
 FILL_W_MIN,  FILL_W_MAX  = 0.3, 0.5
@@ -57,7 +57,7 @@ LEAN_ANGLE      = np.radians(80)  # max lean at tip (nearly horizontal)
 ARC_FRACTION    = 0.0             # extra interior bow above the lowest clearing curve
 BLADE_CURL      = 1.0             # lateral curl (0=straight, ±1=±180 deg sweep)
 N_PATH          = 50              # spine sample points (more = smoother curve)
-CREASE_DEPTH    = 0.1            # mm — concave dip at centre of top face (0 = flat)
+CREASE_DEPTH    = 0.0            # mm — concave dip at centre of top face (0 = flat)
 TIP_LIFT_FRAC   = 0.25            # tip raised by this fraction of blade width (0 = flush)
 BASE_SLOPE_WIDTHS = 0.25          # normalized-t base dz/dt, in blade widths
 
