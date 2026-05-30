@@ -62,7 +62,7 @@ TIP_LIFT_FRAC   = 0.25            # tip raised by this fraction of blade width (
 BASE_SLOPE_WIDTHS = 0.25          # normalized-t base dz/dt, in blade widths
 
 # Terrain-following
-CLEARANCE           = 0.04      # mm — gap above support surface (previous blade tops)
+CLEARANCE           = 0.5       # mm — gap above support surface (previous blade tops)
 MIN_BLADE_ELEVATION = 0.5       # mm — minimum spine height above terrain; gives blades
                                  #       definition even when lying nearly flat
 BASE_INSET      = 0.6           # mm — spine base sunk into terrain; also keel inset
