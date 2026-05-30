@@ -46,7 +46,7 @@ SEED            = 42
 CURL_MAX        = 0.6           # max lateral curl magnitude (±)
 
 # Blade geometry (mm)
-TALL_W_MIN,  TALL_W_MAX  = 1, 1.5    # flat face width at base
+TALL_W_MIN,  TALL_W_MAX  = 1.5, 2    # flat face width at base
 TALL_L_MIN,  TALL_L_MAX  = 4.0, 14.4  # body arc length
 TALL_TL_MIN, TALL_TL_MAX = 1.2, 4.8   # tip taper arc length
 FILL_W_MIN,  FILL_W_MAX  = 0.3, 0.5
@@ -60,7 +60,7 @@ BLADE_CURL      = 1.0             # lateral curl (0=straight, ±1=±180 deg swee
 N_PATH          = 50              # spine sample points (more = smoother curve)
 CREASE_DEPTH    = 0.0             # mm — concave dip at centre of top face (0 = flat)
 TIP_LIFT_FRAC   = 0.25            # tip raised by this fraction of blade width (0 = flush)
-TIP_ELEVATION   = 1.0             # mm — minimum tip height above its support surface;
+TIP_ELEVATION   = 0             # mm — minimum tip height above its support surface;
                                    #       gives the tip a jaunty upward curl
 BASE_SLOPE_WIDTHS = 0.25          # normalized-t base dz/dt, in blade widths
 
@@ -71,7 +71,7 @@ BASE_SLOPE_WIDTHS = 0.25          # normalized-t base dz/dt, in blade widths
 #            'drain'  — blades converge toward a sink point
 #            'dipole' — S-curve field between two opposing poles
 #            'curl'   — pure divergence-free noise, most organic/natural
-FLOW_TYPE       = 'swirl'
+FLOW_TYPE       = 'linear'
 FLOW_CURL_NOISE = 0.30          # organic perturbation: 0 = pure base field, 1 = all noise
 DIR_SPREAD      = np.radians(15) # per-blade Gaussian angle jitter around flow direction
 CURL_FROM_CURV  = 0.80          # how much blade curl follows streamline curvature
@@ -83,6 +83,9 @@ MIN_BLADE_ELEVATION = 0.5       # mm — minimum spine height above terrain; giv
                                  #       definition even when lying nearly flat
 BASE_INSET      = 0.6           # mm — spine base sunk into terrain; also keel inset
 BASE_SINK       = 0.25          # mm — keep first cap fully embedded below terrain
+KEEL_DEPTH_FRAC = 0.5           # keel is at most this × local blade width below spine;
+                                 #   base ring still anchors fully in terrain; body rings
+                                 #   self-limit so tall blades keep a proportional cross-section
 
 # Gravel / stones  (placed before grass; updates support_z so grass sits on top)
 N_GRAVEL         = 6000         # number of stones
@@ -783,16 +786,21 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     spine_z[-1] = tip_z
 
     # Pass 4 — build spine + taper arrays (vectorised)
-    k_arr   = np.arange(n_path)
-    s_arr   = k_arr * dt * total_l
-    t_tip   = np.clip((s_arr - length) / (tip_length + 1e-9), 0.0, 1.0)
-    taper   = np.cos(t_tip * np.pi / 2.0)
+    k_arr      = np.arange(n_path)
+    s_arr      = k_arr * dt * total_l
+    t_tip      = np.clip((s_arr - length) / (tip_length + 1e-9), 0.0, 1.0)
+    taper      = np.cos(t_tip * np.pi / 2.0)
+    widths_arr = width * taper                                   # (n_path,)
+
     keel_z  = tz_arr - BASE_INSET
     keel_z[0] -= BASE_SINK
+    # Clamp keel depth: no deeper than KEEL_DEPTH_FRAC × local width below spine.
+    # The base ring (k=0) anchors fully in terrain; body rings self-limit so the
+    # cross-section stays proportional when the blade arches high.
+    keel_z = np.maximum(keel_z, spine_z - widths_arr * KEEL_DEPTH_FRAC)
 
-    path_xyz   = np.stack([xs_arr, ys_arr, spine_z], axis=1)   # (n_path, 3)
-    widths_arr = width * taper                                   # (n_path,)
-    keels_arr  = np.stack([xs_arr, ys_arr, keel_z], axis=1)    # (n_path, 3)
+    path_xyz  = np.stack([xs_arr, ys_arr, spine_z], axis=1)   # (n_path, 3)
+    keels_arr = np.stack([xs_arr, ys_arr, keel_z],  axis=1)   # (n_path, 3)
 
     mesh = _build_tube_mesh(path_xyz, widths_arr, keels_arr, crease)
     return mesh, path_xyz, widths_arr
