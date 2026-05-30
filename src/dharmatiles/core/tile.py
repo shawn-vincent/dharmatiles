@@ -63,7 +63,11 @@ class TileConfig:
     fill_tl_max: float = 2.4
 
     # Blade cross-section
-    grass_thickness: float         = 0.5   # mm — triangular hull depth below spine
+    # blade_cross_section: 'triangle' — flat ribbon with apex below (printable, fast)
+    #                      'circle'   — cylindrical tube (reed / rush look)
+    blade_cross_section: str       = 'triangle'
+    blade_circle_segs: int         = 8     # segments for 'circle' cross-section (≥3)
+    grass_thickness: float         = 0.5   # mm — 'triangle' apex depth below spine
     grass_sub_hull_fraction: float = 0.5   # fraction down triangle sides where sub-hull starts
 
     # Blade lean profile

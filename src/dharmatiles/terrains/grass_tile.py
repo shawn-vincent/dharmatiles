@@ -118,6 +118,13 @@ def _build_parser() -> argparse.ArgumentParser:
                    choices=["linear", "swirl", "radial", "drain", "dipole", "curl"],
                    dest="flow_type")
     p.add_argument("--flow-curl-noise", type=float, default=0.30, dest="flow_curl_noise")
+    p.add_argument("--cross-section", type=str, default="triangle",
+                   choices=["triangle", "circle"],
+                   dest="blade_cross_section",
+                   help="Blade cross-section shape")
+    p.add_argument("--circle-segs", type=int, default=8,
+                   dest="blade_circle_segs",
+                   help="Segments for 'circle' cross-section")
     p.add_argument("--no-strict", action="store_true",
                    help="Disable strict intersection checking (faster)")
     p.add_argument("--quiet", "-q", action="store_true",
@@ -129,12 +136,14 @@ def main(argv=None):
     args = _build_parser().parse_args(argv)
 
     cfg = TileConfig(
-        seed            = args.seed,
-        n_blades        = args.n_blades,
-        n_gravel        = args.n_gravel,
-        flow_type       = args.flow_type,
-        flow_curl_noise = args.flow_curl_noise,
-        strict_mode     = not args.no_strict,
+        seed                 = args.seed,
+        n_blades             = args.n_blades,
+        n_gravel             = args.n_gravel,
+        flow_type            = args.flow_type,
+        flow_curl_noise      = args.flow_curl_noise,
+        blade_cross_section  = args.blade_cross_section,
+        blade_circle_segs    = args.blade_circle_segs,
+        strict_mode          = not args.no_strict,
     )
     build_grass_tile(cfg, output_path=args.output, verbose=not args.quiet)
 

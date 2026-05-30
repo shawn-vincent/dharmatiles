@@ -347,8 +347,13 @@ def make_grass_blade(
 
     path_xyz = np.stack([xs_arr, ys_arr, spine_z], axis=1)   # (n_path, 3)
 
-    blade_mesh    = build_tube_mesh(path_xyz, widths_arr, cfg.grass_thickness)
-    sub_hull_mesh = _build_sub_hull_mesh(cfg, path_xyz, widths_arr, support_z)
+    blade_mesh = build_tube_mesh(path_xyz, widths_arr, cfg.grass_thickness,
+                                 cross_section=cfg.blade_cross_section,
+                                 n_segs=cfg.blade_circle_segs)
+    # Sub-hull only applies to the triangle cross-section: the circle tube already
+    # has a closed bottom face and needs no separate support bridge.
+    sub_hull_mesh = (_build_sub_hull_mesh(cfg, path_xyz, widths_arr, support_z)
+                     if cfg.blade_cross_section == 'triangle' else None)
 
     return blade_mesh, sub_hull_mesh, path_xyz, widths_arr
 
@@ -453,7 +458,8 @@ class GrassLayer:
 
             blade_mesh, sub_hull, spine, widths, up_locs = accepted
             parts.append(blade_mesh)
-            parts.append(sub_hull)
+            if sub_hull is not None:
+                parts.append(sub_hull)
             built_blades += 1
 
             hw = widths / 2.0

@@ -58,37 +58,61 @@ def blade_frame(path: np.ndarray):
 # ── Blade tube mesh ───────────────────────────────────────────────────────────
 
 def build_tube_mesh(spine_3d: np.ndarray, widths: np.ndarray,
-                    thickness: float) -> trimesh.Trimesh:
-    """Watertight triangular-prism tube following *spine_3d*.
+                    thickness: float,
+                    cross_section: str = 'triangle',
+                    n_segs: int = 8) -> trimesh.Trimesh:
+    """Watertight tube mesh following *spine_3d*.
 
-    Cross-section (3 verts / ring):
-      V0 — lower hull apex  (spine + thickness * down_loc)
-      V1 — right top edge   (spine + half_w * up_loc)
-      V2 — left  top edge   (spine − half_w * up_loc)
+    cross_section='triangle' (default)
+        3 verts / ring:
+          V0 — lower hull apex  (spine + thickness * down_loc)
+          V1 — right top edge   (spine + half_w * up_loc)
+          V2 — left  top edge   (spine − half_w * up_loc)
+        The top face (V1–V2 strip) sits on the support curve; the apex hangs
+        *thickness* mm below it.
 
-    The top face (V1–V2 strip) lies on the support curve; the apex hangs
-    *thickness* mm below it, giving the blade a triangular cross-section
-    visible from the front / back.
+    cross_section='circle'
+        n_segs verts / ring, uniformly distributed around the spine.
+        Radius = half_width at each ring.  Vertex 0 is at the *up_loc* side
+        (top), vertex n_segs//4 is at the *down_loc* side (bottom).
+        The spine point is the tube centre, not the top surface.
     """
     path  = np.asarray(spine_3d, dtype=float)   # (n_pts, 3)
     W_arr = np.asarray(widths,   dtype=float)    # (n_pts,)
     n_pts = len(path)
-    n     = 3                                    # verts per ring
 
+    _, up_locs, down_locs = blade_frame(path)
+    half_W = W_arr / 2.0                         # (n_pts,)
+
+    if cross_section == 'triangle':
+        n = 3
+        ring_v = np.stack([
+            path + thickness * down_locs,          # V0: lower apex
+            path + half_W[:, None] * up_locs,      # V1: right edge
+            path - half_W[:, None] * up_locs,      # V2: left  edge
+        ], axis=1)                                 # (n_pts, 3, 3)
+
+    elif cross_section == 'circle':
+        n = max(3, int(n_segs))
+        thetas = 2 * np.pi * np.arange(n) / n    # (n,) — vertex 0 at up_loc ("top")
+        cos_t  = np.cos(thetas)                   # (n,)
+        sin_t  = np.sin(thetas)                   # (n,)
+        # ring_v[p, i] = spine[p] + R[p] * (cos_t[i]*up[p] + sin_t[i]*down[p])
+        # Broadcasting: (n_pts,1,3) + (n_pts,1,1)*(1,n,1)*(n_pts,1,3)
+        ring_v = (path[:, None, :] +
+                  half_W[:, None, None] *
+                  (cos_t[None, :, None] * up_locs[:, None, :] +
+                   sin_t[None, :, None] * down_locs[:, None, :]))  # (n_pts, n, 3)
+
+    else:
+        raise ValueError(f"Unknown cross_section {cross_section!r}; use 'triangle' or 'circle'")
+
+    # Pre-allocate vertex and face buffers now that n is known
     nv = n * n_pts + 2
     nf = n + (n_pts - 1) * n * 2 + n
     verts = np.empty((nv, 3), dtype=float)
     faces = np.empty((nf, 3), dtype=np.int32)
     vi = fi = 0
-
-    _, up_locs, down_locs = blade_frame(path)
-    half_W = (W_arr / 2.0)[:, None]
-
-    ring_v = np.stack([
-        path + thickness * down_locs,   # V0: lower apex
-        path + half_W * up_locs,        # V1: right edge
-        path - half_W * up_locs,        # V2: left  edge
-    ], axis=1)                          # (n_pts, 3, 3)
 
     for i in range(n_pts):
         verts[vi:vi + n] = ring_v[i];  vi += n
