@@ -19,17 +19,16 @@ Blade geometry
     horizontal speed a zero start, so the blade grows straight up at the
     base before spreading out.
 
-  Z — least-concave-majorant support-clearing curve:
-    The spine starts at ground.  For each blade, both top-edge support paths
-    are sampled as absolute obstacle heights, and the upper concave envelope
-    selects contact points.  The final spine is that envelope directly, capped
-    at 6 mm above the blade base terrain.
+  Z — absolute support-clearing curve:
+    The spine directly follows the floor profile:
+      max(current support + clearance, bare terrain + minimum elevation).
+    A repeated Gaussian smooth/re-floor pass gives the blade stiffness while
+    guaranteeing the spine never drops below the floor after smoothing.
 """
 
 import numpy as np
 import trimesh
 import pathlib
-from scipy.interpolate import PchipInterpolator
 
 # ── Config ────────────────────────────────────────────────────────────────────
 TILE_W = TILE_H = 35.0          # mm
@@ -54,8 +53,6 @@ TALL_TL_MIN, TALL_TL_MAX = 1.2, 4.8   # tip taper arc length
 FILL_W_MIN,  FILL_W_MAX  = 0.3, 0.5
 FILL_L_MIN,  FILL_L_MAX  = 4.0, 7.2
 FILL_TL_MIN, FILL_TL_MAX = 1.2, 2.4
-GRASS_THICKNESS = 0.5          # mm — inverted triangular hull depth
-GRASS_SUB_HULL_FRACTION = 0.5  # start support hull halfway down triangle sides
 
 BASE_LEAN_ANGLE = np.radians(8)   # initial forward lean at base
 LEAN_ANGLE      = np.radians(80)  # max lean at tip (nearly horizontal)
@@ -74,10 +71,12 @@ DIR_SPREAD      = np.radians(15) # per-blade Gaussian angle jitter around flow d
 CURL_FROM_CURV  = 0.80          # how much blade curl follows streamline curvature
                                   #   0 = random curl as before, 1 = purely curvature-driven
 
-# Terrain-following / knot fit
-CLEARANCE           = 0.10       # mm — gap above support surface (previous blade tops)
-BASE_SINK           = 0.05       # mm — base point is buried slightly under local terrain
-BASE_OBSTACLE_IGNORE_T = 0.20    # ignore support obstacles over the first 20% of blade length
+# Terrain-following
+CLEARANCE           = 0.25       # mm — gap above support surface (previous blade tops)
+MIN_BLADE_ELEVATION = 0.5        # mm — minimum spine height above terrain; gives blades
+                                 #       definition even when lying nearly flat
+FLOOR_SMOOTH_SIGMA  = 3.0        # path samples — Gaussian blade stiffness
+FLOOR_SMOOTH_PASSES = 5          # smooth/re-floor iterations
 COLLISION_REPAIR_PASSES = 8      # per-blade strict-hit repair attempts
 MAX_STACK_HEIGHT    = 6.0        # mm — hard cap: never force a blade above this height
                                  #       above local terrain.  Previous blades that
@@ -519,41 +518,18 @@ print(f"Placed {len(blades)} blades  (flow sort: fx={_mfx:.2f} fy={_mfy:.2f})")
 
 # ── Low-level tube mesh ────────────────────────────────────────────────────────
 
-def _blade_frame(path):
-    """Return tangent, width-axis, and down-axis vectors for each path ring."""
-    path = np.asarray(path, dtype=float)
-    tangs = np.empty_like(path)
-    tangs[:-1] = path[1:] - path[:-1]
-    tangs[-1]  = path[-1] - path[-2]
-    t_norms    = np.linalg.norm(tangs, axis=1, keepdims=True) + 1e-9
-    tangs     /= t_norms
-
-    txy_norm = np.sqrt(tangs[:, 0]**2 + tangs[:, 1]**2)
-    has_xy   = txy_norm > 1e-6
-    up_locs  = np.zeros_like(path)
-    up_locs[has_xy, 0] = -tangs[has_xy, 1] / txy_norm[has_xy]
-    up_locs[has_xy, 1] =  tangs[has_xy, 0] / txy_norm[has_xy]
-    up_locs[~has_xy]   = [1.0, 0.0, 0.0]
-
-    down_locs = np.cross(up_locs, tangs)
-    down_norms = np.linalg.norm(down_locs, axis=1, keepdims=True) + 1e-9
-    down_locs /= down_norms
-    flip = down_locs[:, 2] > 0.0
-    down_locs[flip] *= -1.0
-    return tangs, up_locs, down_locs
-
-def _build_tube_mesh(spine_3d, widths, thickness=GRASS_THICKNESS):
+def _build_tube_mesh(spine_3d, widths):
     """
-    Watertight triangular-prism tube following spine_3d.
+    Watertight triangular-prism tube following spine_3d — keel-free.
 
     Triangular cross-section (3 verts/ring):
-      V0 — lower hull apex,  V1 — right edge,  V2 — left edge
+      V0 — spine (ridge, no keel),  V1 — top-right,  V2 — top-left
 
-    The width edge remains on the support curve.  The apex is offset by
-    thickness along the local down vector perpendicular to the 3-D curve tangent.
+    up_loc = normalize(cross(Ẑ, tang_xy)) — world-locked, zero twist.
     """
     path  = np.asarray(spine_3d, dtype=float)   # (n_pts, 3)
     W_arr = np.asarray(widths,   dtype=float)    # (n_pts,)
+    K_arr = path                                 # keel = spine (no downward extension)
     n_pts = len(path)
     n     = 3                                    # verts per ring (triangular cross-section)
 
@@ -564,13 +540,25 @@ def _build_tube_mesh(spine_3d, widths, thickness=GRASS_THICKNESS):
     faces = np.empty((nf, 3), dtype=np.int32)
     vi = 0;  fi = 0
 
-    _, up_locs, down_locs = _blade_frame(path)
+    # ── Compute tangents and up_loc for all rings at once ────────────────────
+    tangs = np.empty_like(path)
+    tangs[:-1] = path[1:] - path[:-1]
+    tangs[-1]  = path[-1] - path[-2]
+    t_norms    = np.linalg.norm(tangs, axis=1, keepdims=True) + 1e-9
+    tangs     /= t_norms
+
+    txy_norm = np.sqrt(tangs[:, 0]**2 + tangs[:, 1]**2)  # (n_pts,)
+    has_xy   = txy_norm > 1e-6
+    up_locs  = np.zeros((n_pts, 3), dtype=float)
+    up_locs[has_xy, 0] = -tangs[has_xy, 1] / txy_norm[has_xy]
+    up_locs[has_xy, 1] =  tangs[has_xy, 0] / txy_norm[has_xy]
+    up_locs[~has_xy]   = [1.0, 0.0, 0.0]
 
     # ── Fill ring vertices ────────────────────────────────────────────────────
     half_W = (W_arr / 2.0)[:, None]          # (n_pts, 1)
-    # V0: lower apex,  V1/V2: width edge on the support curve.
+    # V0: keel,  V1: spine + half_W*up,  V2: spine - half_W*up
     ring_v = np.stack([
-        path + thickness * down_locs,
+        K_arr,
         path + half_W * up_locs,
         path - half_W * up_locs,
     ], axis=1)                             # (n_pts, 3, 3)
@@ -612,103 +600,6 @@ def _build_tube_mesh(spine_3d, widths, thickness=GRASS_THICKNESS):
     return mesh
 
 
-def _drop_to_support(point, down_vec, support_z):
-    """Move point along down_vec until it intersects the current support field."""
-    start = np.asarray(point, dtype=float)
-    down = np.asarray(down_vec, dtype=float)
-    if down[2] >= -1e-6:
-        down = np.array([0.0, 0.0, -1.0])
-
-    def clearance_at(dist):
-        p = start + dist * down
-        return p[2] - sample_grid(support_z, p[0], p[1])
-
-    if clearance_at(0.0) <= 0.0:
-        return start
-
-    hi = 0.25
-    while hi < BASE_H + MAX_STACK_HEIGHT + GRASS_THICKNESS + 2.0 and clearance_at(hi) > 0.0:
-        hi *= 2.0
-    if clearance_at(hi) > 0.0:
-        return start + hi * down
-
-    lo = 0.0
-    for _ in range(16):
-        mid = 0.5 * (lo + hi)
-        if clearance_at(mid) > 0.0:
-            lo = mid
-        else:
-            hi = mid
-    return start + hi * down
-
-
-def _build_sub_hull_mesh(spine_3d, widths, support_z,
-                         thickness=GRASS_THICKNESS,
-                         side_fraction=GRASS_SUB_HULL_FRACTION):
-    """
-    Separate printable support hull under the blade.
-
-    Each cross-section starts halfway down the two triangle sides, then drops a
-    third point in the same triangle plane until it touches the nearest support.
-    """
-    path = np.asarray(spine_3d, dtype=float)
-    W_arr = np.asarray(widths, dtype=float)
-    n_pts = len(path)
-    n = 3
-    _, up_locs, down_locs = _blade_frame(path)
-    half_W = (W_arr / 2.0)[:, None]
-
-    apex = path + thickness * down_locs
-    right = path + half_W * up_locs
-    left = path - half_W * up_locs
-    side_r = right + side_fraction * (apex - right)
-    side_l = left + side_fraction * (apex - left)
-    centers = 0.5 * (side_r + side_l)
-
-    lower = np.empty_like(path)
-    for idx in range(n_pts):
-        lower[idx] = _drop_to_support(centers[idx], down_locs[idx], support_z)
-
-    ring_v = np.stack([lower, side_r, side_l], axis=1)
-    nv = n * n_pts + 2
-    nf = n + (n_pts - 1) * n * 2 + n
-    verts = np.empty((nv, 3), dtype=float)
-    faces = np.empty((nf, 3), dtype=np.int32)
-    vi = 0
-    fi = 0
-
-    for idx in range(n_pts):
-        verts[vi:vi+n] = ring_v[idx]
-        vi += n
-
-    v_base = vi; verts[vi] = np.mean(ring_v[0], axis=0); vi += 1
-    v_tip = vi; verts[vi] = np.mean(ring_v[-1], axis=0); vi += 1
-
-    r0 = 0
-    for idx in range(n):
-        faces[fi] = [v_base, r0 + (idx + 1) % n, r0 + idx]; fi += 1
-
-    for k in range(n_pts - 1):
-        ra = k * n
-        rb = (k + 1) * n
-        for idx in range(n):
-            i1 = (idx + 1) % n
-            faces[fi] = [ra + idx, rb + idx, ra + i1]; fi += 1
-            faces[fi] = [ra + i1, rb + idx, rb + i1]; fi += 1
-
-    rl = (n_pts - 1) * n
-    for idx in range(n):
-        faces[fi] = [rl + idx, rl + (idx + 1) % n, v_tip]; fi += 1
-
-    mesh = trimesh.Trimesh(
-        vertices=verts[:vi],
-        faces=faces[:fi].astype(int),
-        process=False,
-    )
-    mesh.fix_normals()
-    return mesh
-
-
 # ── Parameterised grass blade ─────────────────────────────────────────────────
 
 def blade_footprint_inside_tile(spine_3d, widths):
@@ -721,54 +612,16 @@ def blade_footprint_inside_tile(spine_3d, widths):
         return False
     return True
 
-def _upper_concave_envelope(t_arr, height_arr):
-    """Least concave majorant through ordered obstacle points."""
-    points = [(float(t_arr[0]), float(height_arr[0]), 0)]
-    points.extend(
-        (float(t_arr[i]), float(height_arr[i]), i)
-        for i in range(1, len(t_arr) - 1)
-        if np.isfinite(height_arr[i])
-    )
-    if np.isfinite(height_arr[-1]):
-        points.append((float(t_arr[-1]), float(height_arr[-1]), len(t_arr) - 1))
-
-    def slope(a, b):
-        return (b[1] - a[1]) / (b[0] - a[0])
-
-    stack = []
-    for point in points:
-        stack.append(point)
-        while len(stack) >= 3:
-            a, b, c = stack[-3], stack[-2], stack[-1]
-            if slope(b, c) > slope(a, b):
-                stack.pop(-2)
-            else:
-                break
-    return stack
-
-
-def _smooth_contact_curve(t_arr, contacts):
-    """Shape-preserving C1 cubic through the shrink-wrap contact points."""
-    ctrl_t = np.array([p[0] for p in contacts], dtype=float)
-    ctrl_z = np.array([p[1] for p in contacts], dtype=float)
-    if len(ctrl_t) <= 2:
-        return np.interp(t_arr, ctrl_t, ctrl_z)
-    return PchipInterpolator(ctrl_t, ctrl_z)(t_arr)
-
-
-def _fit_sample_envelope_spine(t_arr, floor_z, terrain_z_path):
-    """Return absolute upper-concave-envelope spine z, or None if capped out."""
-    base_z = float(floor_z[0])
-    ceiling_z = base_z + MAX_STACK_HEIGHT
-    obstacle_z = np.asarray(floor_z, dtype=float).copy()
-    if np.any(obstacle_z > ceiling_z + 1e-6):
-        return None
-
-    contacts = _upper_concave_envelope(t_arr, obstacle_z)
-    spine_z = _smooth_contact_curve(t_arr, contacts)
-    if np.any(spine_z < obstacle_z - 1e-6) or np.any(spine_z > ceiling_z + 1e-6):
-        return None
-    return spine_z
+def _gaussian_smooth_1d(values, sigma):
+    """Gaussian smoothing along the blade path with reflected ends."""
+    if sigma <= 0.0:
+        return np.asarray(values, dtype=float).copy()
+    radius = max(1, int(np.ceil(3.0 * sigma)))
+    x = np.arange(-radius, radius + 1, dtype=float)
+    kernel = np.exp(-0.5 * (x / sigma) ** 2)
+    kernel /= np.sum(kernel)
+    padded = np.pad(np.asarray(values, dtype=float), radius, mode='reflect')
+    return np.convolve(padded, kernel, mode='valid')
 
 def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
                      lean_angle=LEAN_ANGLE, curl=0.0, n_path=N_PATH,
@@ -824,37 +677,36 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     v2_xs  = xs_arr - hw_arr * up_pre[:, 0]   # left  top-edge XY
     v2_ys  = ys_arr - hw_arr * up_pre[:, 1]
 
-    # Sample support at both top-edge positions, then take the max: this is the
-    # highest previously placed surface under either edge at each ring.
+    # Sample support at spine (for keel reference) and at both top-edge positions,
+    # then take the max: this is the highest previously-placed surface anywhere
+    # under the new blade's top edge at each ring.
+    sz_spine = sample_grid(support_z, xs_arr, ys_arr)
     sz_v1    = sample_grid(support_z, v1_xs,  v1_ys)
     sz_v2    = sample_grid(support_z, v2_xs,  v2_ys)
-    edge_support = np.maximum(sz_v1, sz_v2)
+    sz_floor = np.maximum(sz_spine, np.maximum(sz_v1, sz_v2))
+    # Hard cap: ignore previously-placed geometry above MAX_STACK_HEIGHT above
+    # local terrain.  That geometry got there through cascade; we'd rather accept
+    # a potential intersection at those heights than push the pile any higher.
+    sz_floor = np.minimum(sz_floor, tz_arr + MAX_STACK_HEIGHT)
 
-    # Base is one buried contact point. Support obstacles are ignored over the
-    # first BASE_OBSTACLE_IGNORE_T of the blade; after that they drive the curve.
-    t_arr = np.linspace(0.0, 1.0, n_path)
-    support_floor = edge_support + CLEARANCE
-    support_floor[t_arr < BASE_OBSTACLE_IGNORE_T] = -np.inf
-    floor_z = support_floor.copy()
-    floor_z[t_arr < BASE_OBSTACLE_IGNORE_T] = -np.inf
-    floor_z[0] = float(tz_arr[0] - BASE_SINK)
+    # Pass 2 — direct floor-following spine.
+    #   floor = max(previous geometry + clearance, bare terrain + blade elevation)
+    #   then Gaussian smooth for blade stiffness and re-apply the floor.
+    support_floor = sz_floor + CLEARANCE
+    terrain_floor = tz_arr + MIN_BLADE_ELEVATION
+    floor_z       = np.maximum(support_floor, terrain_floor)
     if extra_floor_z is not None:
         floor_z = np.maximum(floor_z, np.asarray(extra_floor_z, dtype=float))
-        floor_z[0] = float(tz_arr[0] - BASE_SINK)
 
-    spine_z = _fit_sample_envelope_spine(
-        t_arr,
-        floor_z,
-        tz_arr,
-    )
-    if spine_z is None:
-        raise RuntimeError("knot curve fit failed")
+    spine_z = floor_z.copy()
+    for _ in range(FLOOR_SMOOTH_PASSES):
+        spine_z = _gaussian_smooth_1d(spine_z, FLOOR_SMOOTH_SIGMA)
+        spine_z = np.maximum(spine_z, floor_z)
 
     path_xyz = np.stack([xs_arr, ys_arr, spine_z], axis=1)   # (n_path, 3)
 
     mesh = _build_tube_mesh(path_xyz, widths_arr)
-    sub_hull_mesh = _build_sub_hull_mesh(path_xyz, widths_arr, support_z)
-    return mesh, sub_hull_mesh, path_xyz, widths_arr
+    return mesh, path_xyz, widths_arr
 
 
 # ── Terrain mesh ──────────────────────────────────────────────────────────────
@@ -1099,113 +951,115 @@ def add_collision_repairs(repair_floor, spine, strict_hits):
 
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
+print("Building gravel/stones...")
+gravel_rng = np.random.default_rng(SEED + 7919)
+parts = list(add_gravel(gravel_rng, support_z))
+print(f"  {N_GRAVEL} stones placed (support_z updated)")
 
-def build_scene(output_path):
-    print("\n=== Building sample-envelope grass ===")
-    local_support_z = terrain_z.copy()
+print("Building blade meshes...")
+built_blades   = 0
+skipped_blades = 0
+MAX_BOUNDARY_RETRIES = 32
+placed_blade_data = []   # (blade_idx, spine, hw, up_locs) — used by STRICT_MODE
 
-    print("Building gravel/stones...")
-    gravel_rng = np.random.default_rng(SEED + 7919)
-    parts = list(add_gravel(gravel_rng, local_support_z))
-    print(f"  {N_GRAVEL} stones placed (support_z updated)")
-
-    print("Building blade meshes...")
-    built_blades   = 0
-    skipped_blades = 0
-    MAX_BOUNDARY_RETRIES = 32
-    placed_blade_data = []   # (blade_idx, spine, hw, up_locs) — used by STRICT_MODE
-    retry_rng = np.random.default_rng(SEED + 424242)
-
-    for i, bl in enumerate(blades):
-        accepted = None
-        for attempt in range(MAX_BOUNDARY_RETRIES + 1):
-            direction = bl['direction'] if attempt == 0 else retry_rng.uniform(0, 2 * np.pi)
-            curl = bl['curl'] if attempt == 0 else retry_rng.uniform(-CURL_MAX, CURL_MAX)
-            repair_floor = None
-            for _repair_attempt in range(COLLISION_REPAIR_PASSES + 1):
-                try:
-                    mesh, sub_hull_mesh, spine, blade_widths = make_grass_blade(
-                        support_z     = local_support_z,
-                        base_pos      = (bl['base_x'], bl['base_y'], 0),
-                        azimuth       = direction,
-                        length        = bl['length'],
-                        width         = bl['width'],
-                        tip_length    = bl['tip_len'],
-                        curl          = curl,
-                        extra_floor_z = repair_floor,
-                    )
-                except RuntimeError:
-                    break
-                if not blade_footprint_inside_tile(spine, blade_widths):
-                    break
-
-                hw = blade_widths / 2.0
-                up_locs_blade = _compute_up_locs(spine)
-                strict_hits = (collect_strict_hits(spine, hw, up_locs_blade, placed_blade_data)
-                               if STRICT_MODE else [])
-                if not strict_hits:
-                    accepted = (mesh, sub_hull_mesh, spine, blade_widths, up_locs_blade)
-                    break
-
-                if repair_floor is None:
-                    repair_floor = np.full(len(spine), -np.inf, dtype=float)
-                add_collision_repairs(repair_floor, spine, strict_hits)
-
-            if accepted is not None:
+for i, bl in enumerate(blades):
+    accepted = None
+    for attempt in range(MAX_BOUNDARY_RETRIES + 1):
+        direction = bl['direction'] if attempt == 0 else rng.uniform(0, 2 * np.pi)
+        curl = bl['curl'] if attempt == 0 else rng.uniform(-CURL_MAX, CURL_MAX)
+        repair_floor = None
+        for _repair_attempt in range(COLLISION_REPAIR_PASSES + 1):
+            try:
+                mesh, spine, blade_widths = make_grass_blade(
+                    support_z     = support_z,
+                    base_pos      = (bl['base_x'], bl['base_y'], 0),
+                    azimuth       = direction,
+                    length        = bl['length'],
+                    width         = bl['width'],
+                    tip_length    = bl['tip_len'],
+                    curl          = curl,
+                    extra_floor_z = repair_floor,
+                )
+            except RuntimeError:
                 break
-        if accepted is None:
-            skipped_blades += 1
-            continue
-        mesh, sub_hull_mesh, spine, blade_widths, up_locs_blade = accepted
-        parts.append(mesh)
-        parts.append(sub_hull_mesh)
-        built_blades += 1
+            if not blade_footprint_inside_tile(spine, blade_widths):
+                break
 
-        hw = blade_widths / 2.0
+            hw = blade_widths / 2.0
+            up_locs_blade = _compute_up_locs(spine)
+            strict_hits = (collect_strict_hits(spine, hw, up_locs_blade, placed_blade_data)
+                           if STRICT_MODE else [])
+            if not strict_hits:
+                accepted = (mesh, spine, blade_widths, up_locs_blade)
+                break
 
-        if STRICT_MODE:
-            strict_check(i, bl, spine, hw, up_locs_blade, placed_blade_data)
-            placed_blade_data.append((i, spine, hw, up_locs_blade))
+            if repair_floor is None:
+                repair_floor = np.full(len(spine), -np.inf, dtype=float)
+            add_collision_repairs(repair_floor, spine, strict_hits)
 
-        rasterise_into_support(local_support_z, spine, hw)
-        if (i + 1) % 20 == 0 or (i + 1) == len(blades):
-            print(f"  {i+1}/{len(blades)} blades done")
+        if accepted is not None:
+            break
+    if accepted is None:
+        skipped_blades += 1
+        continue
+    mesh, spine, blade_widths, up_locs_blade = accepted
+    parts.append(mesh)
+    built_blades += 1
 
-    if skipped_blades:
-        print(f"  skipped {skipped_blades} blade(s) that could not fit without intersections")
-    print(f"  built {built_blades}/{len(blades)} blades")
+    hw = blade_widths / 2.0
 
-    print("\nBlade height audit (spine z above local terrain):")
-    rises = []
-    for blade_idx, spine, hw, up_locs in placed_blade_data:
-        bl = blades[blade_idx]
-        base_tz = float(sample_grid(terrain_z, bl['base_x'], bl['base_y']))
-        max_z   = float(np.max(spine[:, 2]))
-        rises.append(max_z - base_tz)
+    # Always-on: warn about blades whose spine rises unreasonably high above local
+    # terrain — these are fragile overhangs that will fail on the printer.
+    _base_tz  = float(sample_grid(terrain_z, bl['base_x'], bl['base_y']))
+    _max_sz   = float(np.max(spine[:, 2]))
+    _rise     = _max_sz - _base_tz
+    if _rise > TALL_L_MAX + 5.0:          # max arc length + 5 mm tolerance
+        print(f"  TALL blade {i} (base {bl['base_x']:.1f},{bl['base_y']:.1f}): "
+              f"max z={_max_sz:.1f}mm  (+{_rise:.1f}mm above base terrain)")
 
-    rises = np.array(rises)
-    if len(rises):
-        print(f"  n={len(rises)}  min={rises.min():.1f}mm  p25={np.percentile(rises,25):.1f}mm  "
-              f"median={np.median(rises):.1f}mm  p75={np.percentile(rises,75):.1f}mm  "
-              f"p90={np.percentile(rises,90):.1f}mm  p99={np.percentile(rises,99):.1f}mm  "
-              f"max={rises.max():.1f}mm")
-        over6 = int(np.sum(rises > MAX_STACK_HEIGHT + 1e-6))
-        print(f"  blades rising > {MAX_STACK_HEIGHT:.0f}mm: {over6}")
-    else:
-        print("  no blades built")
+    if STRICT_MODE:
+        strict_check(i, bl, spine, hw, up_locs_blade, placed_blade_data)
+        placed_blade_data.append((i, spine, hw, up_locs_blade))
 
-    print("Building terrain solid...")
-    terrain_mesh = make_heightmap_solid(terrain_z, TILE_W, TILE_H, BASE_H, subsample=4)
-    parts.insert(0, terrain_mesh)
+    rasterise_into_support(support_z, spine, hw)
+    if (i + 1) % 20 == 0 or (i + 1) == len(blades):
+        print(f"  {i+1}/{len(blades)} blades done")
 
-    print("Concatenating...")
-    scene = trimesh.util.concatenate(parts)
-    print(f"  vertices: {len(scene.vertices):,}   faces: {len(scene.faces):,}")
-    print(f"  watertight: {scene.is_watertight}")
+if skipped_blades:
+    print(f"  skipped {skipped_blades} blade(s) that would cross tile bounds")
+print(f"  built {built_blades}/{len(blades)} blades")
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    scene.export(str(output_path))
-    print(f"Saved {output_path}")
+# ── Height audit ──────────────────────────────────────────────────────────────
+# placed_blade_data holds (blade_idx, spine, hw, up_locs) for every accepted blade
+# (populated by STRICT_MODE block above — STRICT_MODE must be True for this to work).
+print("\nBlade height audit (spine z above local terrain):")
+rises = []
+for blade_idx, spine, hw, up_locs in placed_blade_data:
+    bl = blades[blade_idx]
+    base_tz = float(sample_grid(terrain_z, bl['base_x'], bl['base_y']))
+    max_z   = float(np.max(spine[:, 2]))
+    rise    = max_z - base_tz
+    rises.append(rise)
 
+rises = np.array(rises)
+print(f"  n={len(rises)}  min={rises.min():.1f}mm  p25={np.percentile(rises,25):.1f}mm  "
+      f"median={np.median(rises):.1f}mm  p75={np.percentile(rises,75):.1f}mm  "
+      f"p90={np.percentile(rises,90):.1f}mm  p99={np.percentile(rises,99):.1f}mm  "
+      f"max={rises.max():.1f}mm")
+over6  = np.sum(rises > 6.0)
+over10 = np.sum(rises > 10.0)
+over20 = np.sum(rises > 20.0)
+print(f"  blades rising > 6mm: {over6}  > 10mm: {over10}  > 20mm: {over20}")
 
-build_scene(OUTPUT)
+print("Building terrain solid...")
+terrain_mesh = make_heightmap_solid(terrain_z, TILE_W, TILE_H, BASE_H, subsample=4)
+parts.insert(0, terrain_mesh)
+
+print("Concatenating...")
+scene = trimesh.util.concatenate(parts)
+print(f"  vertices: {len(scene.vertices):,}   faces: {len(scene.faces):,}")
+print(f"  watertight: {scene.is_watertight}")
+
+OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+scene.export(str(OUTPUT))
+print(f"Saved {OUTPUT}")
