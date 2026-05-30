@@ -45,7 +45,7 @@ SEED            = 42
 CURL_MAX        = 0.6           # max lateral curl magnitude (±)
 
 # Blade geometry (mm)
-TALL_W_MIN,  TALL_W_MAX  = 0.6, 1.5    # flat face width at base
+TALL_W_MIN,  TALL_W_MAX  = 1, 1.5    # flat face width at base
 TALL_L_MIN,  TALL_L_MAX  = 4.0, 14.4  # body arc length
 TALL_TL_MIN, TALL_TL_MAX = 1.2, 4.8   # tip taper arc length
 FILL_W_MIN,  FILL_W_MAX  = 0.3, 0.5
@@ -66,7 +66,7 @@ CLEARANCE       = 0.04          # mm — gap above support surface
 BASE_INSET      = 0.6           # mm — spine base sunk into terrain; also keel inset
 BASE_SINK       = 0.25          # mm — keep first cap fully embedded below terrain
 
-# Gravel / stones  (placed before grass; does NOT update support_z)
+# Gravel / stones  (placed before grass; updates support_z so grass sits on top)
 N_GRAVEL         = 6000         # number of stones
 GRAVEL_R_MIN     = 0.048        # mm — minimum horizontal semi-axis
 GRAVEL_R_MAX     = 0.42         # mm — maximum horizontal semi-axis
@@ -135,11 +135,13 @@ def terrain_normal_at(x_mm, y_mm):
 
 # ── Gravel / stones — batch-vectorised ────────────────────────────────────────
 
-def add_gravel(gravel_rng):
+def add_gravel(gravel_rng, support_z):
     """
     Place N_GRAVEL random stones across the whole tile surface.
     All geometry is built with numpy broadcasting; returns a single
     trimesh.Trimesh instead of 6 000 small ones.
+    Also rasterises each stone's smooth ellipsoid surface into support_z so
+    that grass blades are forced to sit on top of the stones.
     """
     N  = N_GRAVEL
     AZ = GRAVEL_AZ_SEGS
@@ -252,6 +254,50 @@ def add_gravel(gravel_rng):
         process  = False,
     )
     mesh.fix_normals()
+
+    # ── Rasterise stone tops into support_z ──────────────────────────────────
+    # For each stone, paint the smooth half-ellipsoid surface height into
+    # support_z so the grass blade solver sees raised ground under each stone.
+    # Formula: at world point (wx, wy), inverse-rotate to local (lx, ly), then
+    #   d² = (lx/rx)² + (ly/ry)²
+    #   z_top = base_z + height * sqrt(1 − d²)   when d² ≤ 1
+    for s in range(N):
+        _cx, _cy = cx[s], cy[s]
+        _rx, _ry = rx_arr[s], ry_arr[s]
+        _h       = height[s]
+        _ca, _sa = ca[s], sa[s]
+        _bz      = base_z[s]
+        r_max    = max(_rx, _ry)
+
+        # Grid cell bounding box
+        i_lo = max(0,          int((_cx - r_max) / GX))
+        i_hi = min(GRID_RES-1, int((_cx + r_max) / GX) + 1)
+        j_lo = max(0,          int((_cy - r_max) / GY))
+        j_hi = min(GRID_RES-1, int((_cy + r_max) / GY) + 1)
+        if i_lo > i_hi or j_lo > j_hi:
+            continue
+
+        # World XY of every cell in the bounding box
+        ii_g = np.arange(i_lo, i_hi + 1)   # (ni,)
+        jj_g = np.arange(j_lo, j_hi + 1)   # (nj,)
+        II, JJ = np.meshgrid(ii_g, jj_g)   # (nj, ni)
+        wx_g = II * GX - _cx
+        wy_g = JJ * GY - _cy
+
+        # Inverse-rotate into local stone axes
+        lx_g =  _ca * wx_g + _sa * wy_g
+        ly_g = -_sa * wx_g + _ca * wy_g
+
+        d2 = (lx_g / _rx) ** 2 + (ly_g / _ry) ** 2
+        inside = d2 <= 1.0
+        if not np.any(inside):
+            continue
+
+        z_top = np.where(inside, _bz + _h * np.sqrt(np.maximum(0.0, 1.0 - d2)),
+                         -np.inf)
+        sl = support_z[j_lo:j_hi+1, i_lo:i_hi+1]
+        np.maximum(sl, z_top, out=sl)
+
     return [mesh]
 
 
@@ -666,8 +712,8 @@ def make_heightmap_solid(z_grid, tile_w, tile_h, base_h, subsample=4):
 # ── Main loop ─────────────────────────────────────────────────────────────────
 print("Building gravel/stones...")
 gravel_rng = np.random.default_rng(SEED + 7919)
-parts = list(add_gravel(gravel_rng))
-print(f"  {N_GRAVEL} stones placed (1 batch mesh)")
+parts = list(add_gravel(gravel_rng, support_z))
+print(f"  {N_GRAVEL} stones placed (support_z updated)")
 
 print("Building blade meshes...")
 built_blades   = 0
