@@ -31,7 +31,8 @@ from scipy.optimize import minimize
 
 # ── Config ────────────────────────────────────────────────────────────────────
 TILE_W = TILE_H = 35.0          # mm
-BASE_H          =  3.0          # mm — solid slab below terrain
+BASE_H          =  6.0          # mm — solid slab below terrain (GROUND)
+                                 #       other tile types: 3.0 (WATER), 9.5 (MANMADE)
 GRID_RES        = 256           # support-field resolution (cells per side)
 
 # Terrain
