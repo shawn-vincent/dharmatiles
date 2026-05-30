@@ -62,7 +62,9 @@ TIP_LIFT_FRAC   = 0.25            # tip raised by this fraction of blade width (
 BASE_SLOPE_WIDTHS = 0.25          # normalized-t base dz/dt, in blade widths
 
 # Terrain-following
-CLEARANCE       = 0.04          # mm — gap above support surface
+CLEARANCE           = 0.04      # mm — gap above support surface (previous blade tops)
+MIN_BLADE_ELEVATION = 0.5       # mm — minimum spine height above terrain; gives blades
+                                 #       definition even when lying nearly flat
 BASE_INSET      = 0.6           # mm — spine base sunk into terrain; also keel inset
 BASE_SINK       = 0.25          # mm — keep first cap fully embedded below terrain
 
@@ -508,11 +510,18 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     tz_arr = sample_grid(terrain_z, xs_arr, ys_arr)   # (n_path,)
     sz_arr = sample_grid(support_z,  xs_arr, ys_arr)  # (n_path,)
 
-    # Pass 2 — minimum spine height constraints
-    min_spine_z = sz_arr + crease + CLEARANCE
+    # Pass 2 — minimum spine height constraints.
+    # Two floors, take the higher:
+    #   • support floor  — must clear the previous blade's top edges
+    #   • elevation floor — must be at least MIN_BLADE_ELEVATION above the
+    #                        bare terrain so flat-lying blades stay visible
+    support_floor_raw  = sz_arr + crease + CLEARANCE
+    elevation_floor    = tz_arr + MIN_BLADE_ELEVATION
+    min_spine_z        = np.maximum(support_floor_raw, elevation_floor)
+
     T_CONSTRAINT_START = 0.25
     T_CONSTRAINT_END   = 0.95
-    t_arr = np.linspace(0.0, 1.0, n_path)
+    t_arr    = np.linspace(0.0, 1.0, n_path)
     mask_off = (t_arr < T_CONSTRAINT_START) | (t_arr > T_CONSTRAINT_END)
     min_spine_z[mask_off] = -np.inf
 
