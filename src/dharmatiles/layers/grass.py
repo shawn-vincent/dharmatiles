@@ -178,11 +178,20 @@ def _drop_to_support(point, down_vec, support_z: np.ndarray,
 def _build_sub_hull_mesh(cfg: TileConfig, spine_3d: np.ndarray,
                           widths: np.ndarray,
                           support_z: np.ndarray) -> trimesh.Trimesh:
-    """Separate printable support hull that bridges under each blade.
+    """Separate printable support hull that bridges under each blade to the terrain.
 
-    Each ring cross-section starts halfway down the two triangle sides
-    (governed by *grass_sub_hull_fraction*), then drops a third point along
-    the local down direction until it touches the current support surface.
+    Builds a triangular-prism strut running the length of the blade spine.
+    Two side vertices attach to the blade's underside; a third vertex is
+    dropped along the local down direction until it touches the support surface.
+
+    triangle cross-section
+        side_r / side_l sit halfway down the two triangle sides (fraction
+        *grass_sub_hull_fraction* from each top edge toward the apex).
+
+    circle cross-section
+        side_r / side_l sit at ± (frac × 90°) from the top of the circle,
+        placing them on the lower half of the circle at an equivalent depth.
+        The same drop-to-terrain logic applies.
     """
     path  = np.asarray(spine_3d, dtype=float)
     W_arr = np.asarray(widths, dtype=float)
@@ -191,13 +200,25 @@ def _build_sub_hull_mesh(cfg: TileConfig, spine_3d: np.ndarray,
 
     _, up_locs, down_locs = blade_frame(path)
     half_W = (W_arr / 2.0)[:, None]
+    frac   = cfg.grass_sub_hull_fraction
 
-    apex  = path + cfg.grass_thickness * down_locs
-    right = path + half_W * up_locs
-    left  = path - half_W * up_locs
-    frac  = cfg.grass_sub_hull_fraction
-    side_r = right + frac * (apex - right)
-    side_l = left  + frac * (apex - left)
+    if cfg.blade_cross_section == 'triangle':
+        apex   = path + cfg.grass_thickness * down_locs
+        right  = path + half_W * up_locs
+        left   = path - half_W * up_locs
+        side_r = right + frac * (apex - right)
+        side_l = left  + frac * (apex - left)
+
+    else:  # 'circle' — attach at ±angle from top, on the lower half of the circle
+        # theta = frac × π/2:  0 = top (up_loc), π/2 = down_loc side
+        # At frac=0.5 this gives 45° — midway into the lower hemisphere.
+        theta_r = frac * np.pi / 2        # right attachment angle
+        theta_l = np.pi - theta_r         # left  attachment angle (symmetric)
+        side_r  = (path +
+                   half_W * (np.cos(theta_r) * up_locs + np.sin(theta_r) * down_locs))
+        side_l  = (path +
+                   half_W * (np.cos(theta_l) * up_locs + np.sin(theta_l) * down_locs))
+
     centers = 0.5 * (side_r + side_l)
 
     lower = np.empty_like(path)
@@ -347,13 +368,10 @@ def make_grass_blade(
 
     path_xyz = np.stack([xs_arr, ys_arr, spine_z], axis=1)   # (n_path, 3)
 
-    blade_mesh = build_tube_mesh(path_xyz, widths_arr, cfg.grass_thickness,
-                                 cross_section=cfg.blade_cross_section,
-                                 n_segs=cfg.blade_circle_segs)
-    # Sub-hull only applies to the triangle cross-section: the circle tube already
-    # has a closed bottom face and needs no separate support bridge.
-    sub_hull_mesh = (_build_sub_hull_mesh(cfg, path_xyz, widths_arr, support_z)
-                     if cfg.blade_cross_section == 'triangle' else None)
+    blade_mesh    = build_tube_mesh(path_xyz, widths_arr, cfg.grass_thickness,
+                                    cross_section=cfg.blade_cross_section,
+                                    n_segs=cfg.blade_circle_segs)
+    sub_hull_mesh = _build_sub_hull_mesh(cfg, path_xyz, widths_arr, support_z)
 
     return blade_mesh, sub_hull_mesh, path_xyz, widths_arr
 
@@ -458,8 +476,7 @@ class GrassLayer:
 
             blade_mesh, sub_hull, spine, widths, up_locs = accepted
             parts.append(blade_mesh)
-            if sub_hull is not None:
-                parts.append(sub_hull)
+            parts.append(sub_hull)
             built_blades += 1
 
             hw = widths / 2.0
