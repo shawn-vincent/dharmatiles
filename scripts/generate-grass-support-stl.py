@@ -59,6 +59,8 @@ BLADE_CURL      = 1.0             # lateral curl (0=straight, ±1=±180 deg swee
 N_PATH          = 50              # spine sample points (more = smoother curve)
 CREASE_DEPTH    = 0.0             # mm — concave dip at centre of top face (0 = flat)
 TIP_LIFT_FRAC   = 0.25            # tip raised by this fraction of blade width (0 = flush)
+TIP_ELEVATION   = 1.0             # mm — minimum tip height above its support surface;
+                                   #       gives the tip a jaunty upward curl
 BASE_SLOPE_WIDTHS = 0.25          # normalized-t base dz/dt, in blade widths
 
 # Terrain-following
@@ -527,7 +529,8 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
 
     global_max_z = float(np.max(sz_arr)) + crease + CLEARANCE
     base_z = float(tz_arr[0] - BASE_SINK)
-    tip_z  = max(float(sz_arr[-1] + crease + CLEARANCE),
+    tip_z  = max(float(sz_arr[-1] + TIP_ELEVATION),        # jaunty curl above support
+                 float(sz_arr[-1] + crease + CLEARANCE),  # always clears previous blade
                  float(tz_arr[-1] + width * tip_lift_frac))
     base_slope = width * BASE_SLOPE_WIDTHS
 
