@@ -1,0 +1,2 @@
+[console_scripts]
+generate-grass-stl = dharmatiles.terrains.grass_tile:main
