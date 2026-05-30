@@ -78,11 +78,11 @@ CURL_FROM_CURV  = 0.80          # how much blade curl follows streamline curvatu
                                   #   0 = random curl as before, 1 = purely curvature-driven
 
 # Terrain-following
-CLEARANCE           = 0.5       # mm — gap above support surface (previous blade tops)
+CLEARANCE           = 0.25       # mm — gap above support surface (previous blade tops)
 MIN_BLADE_ELEVATION = 0.5       # mm — minimum spine height above terrain; gives blades
                                  #       definition even when lying nearly flat
-BASE_INSET      = 0.6           # mm — spine base sunk into terrain; also keel inset
-BASE_SINK       = 0.25          # mm — keep first cap fully embedded below terrain
+BASE_INSET      = 0.6           # mm — keel inset below local support surface
+BASE_SINK       = 0.25          # mm — extra spine base sink below local support surface
 KEEL_DEPTH_FRAC = 0.5           # keel is at most this × local blade width below spine;
                                  #   base ring still anchors fully in terrain; body rings
                                  #   self-limit so tall blades keep a proportional cross-section
@@ -142,7 +142,7 @@ def rasterise_into_support(support_z, path_xyz, half_widths):
 
         ii = (ic + DI[mask])
         jj = (jc + DJ[mask])
-        np.maximum(support_z[jj, ii], z, out=support_z[jj, ii])
+        support_z[jj, ii] = np.maximum(support_z[jj, ii], z)  # fancy index → must assign back
 
 def terrain_normal_at(x_mm, y_mm):
     """Outward (upward) unit normal of terrain_z at (x_mm, y_mm) via central differences."""
@@ -495,8 +495,12 @@ tall  = place_blades(N_BLADES, TALL_W_MIN, TALL_W_MAX,
 fills = place_blades(N_FILL,   FILL_W_MIN, FILL_W_MAX,
                      FILL_L_MIN, FILL_L_MAX, FILL_TL_MIN, FILL_TL_MAX)
 blades = tall + fills
-blades.sort(key=lambda b: -b['base_y'])
-print(f"Placed {len(blades)} blades")
+# Sort downstream-first: start placing at the exit edge of the tile, work back upstream.
+# Upstream blades lean over already-placed downstream blades and are forced to arch over them.
+_mfx = float(np.mean(np.sin(flow_angle_field)))
+_mfy = float(np.mean(np.cos(flow_angle_field)))
+blades.sort(key=lambda b: -(_mfx * b['base_x'] + _mfy * b['base_y']))
+print(f"Placed {len(blades)} blades  (flow sort: fx={_mfx:.2f} fy={_mfy:.2f})")
 
 # ── Low-level tube mesh ────────────────────────────────────────────────────────
 
@@ -658,7 +662,7 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     #   • elevation floor — must be at least MIN_BLADE_ELEVATION above the
     #                        bare terrain so flat-lying blades stay visible
     support_floor_raw  = sz_arr + crease + CLEARANCE
-    elevation_floor    = tz_arr + MIN_BLADE_ELEVATION
+    elevation_floor    = tz_arr + MIN_BLADE_ELEVATION   # floor relative to terrain so blades stay visible
     min_spine_z        = np.maximum(support_floor_raw, elevation_floor)
 
     T_CONSTRAINT_START = 0.25
@@ -668,10 +672,11 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     min_spine_z[mask_off] = -np.inf
 
     global_max_z = float(np.max(sz_arr)) + crease + CLEARANCE
-    base_z = float(tz_arr[0] - BASE_SINK)
+    base_z = float(tz_arr[0] - BASE_SINK)    # base always emerges from terrain
     tip_z  = max(float(sz_arr[-1] + TIP_ELEVATION),        # jaunty curl above support
                  float(sz_arr[-1] + crease + CLEARANCE),  # always clears previous blade
-                 float(tz_arr[-1] + width * tip_lift_frac))
+                 float(sz_arr[-1] + width * tip_lift_frac),
+                 base_z)                                   # never descend from base to tip
     base_slope = width * BASE_SLOPE_WIDTHS
 
     # Pass 3 — three-part C1 cubic Hermite spline, vectorised eval
@@ -710,7 +715,7 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     z1_basis = eval_spline_vec(1.0, 0.0) - const_z
     z2_basis = eval_spline_vec(0.0, 1.0) - const_z
 
-    terrain_arr   = tz_arr.astype(float)
+    terrain_arr   = tz_arr.astype(float)   # optimizer hugs terrain; support floor lifts blade over obstacles
     support_floor = min_spine_z.copy()
     support_floor[~np.isfinite(support_floor)] = -np.inf
 
@@ -792,12 +797,17 @@ def make_grass_blade(support_z, base_pos, azimuth, length, width, tip_length,
     taper      = np.cos(t_tip * np.pi / 2.0)
     widths_arr = width * taper                                   # (n_path,)
 
-    keel_z  = tz_arr - BASE_INSET
+    # Keel insets BASE_INSET into whatever is directly below:
+    #   • Where the spine is above the support surface (blade floating over a previous blade),
+    #     the keel insets into that support surface (previous blade's top).
+    #   • Where the spine is at or below the support (blade embedded in terrain at the base),
+    #     the keel insets into bare terrain.
+    keel_ref = np.where(spine_z > sz_arr, sz_arr, tz_arr)
+    keel_z   = keel_ref - BASE_INSET
     keel_z[0] -= BASE_SINK
-    # Clamp keel depth: no deeper than KEEL_DEPTH_FRAC × local width below spine.
-    # The base ring (k=0) anchors fully in terrain; body rings self-limit so the
-    # cross-section stays proportional when the blade arches high.
+    # Clamp: keel no deeper than KEEL_DEPTH_FRAC × width below spine, and never above spine.
     keel_z = np.maximum(keel_z, spine_z - widths_arr * KEEL_DEPTH_FRAC)
+    keel_z = np.minimum(keel_z, spine_z)   # safety: keel can never be above the spine
 
     path_xyz  = np.stack([xs_arr, ys_arr, spine_z], axis=1)   # (n_path, 3)
     keels_arr = np.stack([xs_arr, ys_arr, keel_z],  axis=1)   # (n_path, 3)
@@ -904,8 +914,6 @@ for i, bl in enumerate(blades):
     parts.append(mesh)
     built_blades += 1
     rasterise_into_support(support_z, spine, blade_widths / 2.0)
-    if (i + 1) % 20 == 0 or (i + 1) == len(blades):
-        print(f"  {i+1}/{len(blades)} blades done")
 
 if skipped_blades:
     print(f"  skipped {skipped_blades} blade(s) that would cross tile bounds")
