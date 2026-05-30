@@ -64,6 +64,19 @@ TIP_ELEVATION   = 1.0             # mm — minimum tip height above its support 
                                    #       gives the tip a jaunty upward curl
 BASE_SLOPE_WIDTHS = 0.25          # normalized-t base dz/dt, in blade widths
 
+# Flow field — controls blade fall direction
+# FLOW_TYPE: 'swirl'  — blades orbit a central point (CW or CCW, randomly chosen)
+#            'linear' — all blades swept in one direction (like wind)
+#            'radial' — blades fan outward from a source point
+#            'drain'  — blades converge toward a sink point
+#            'dipole' — S-curve field between two opposing poles
+#            'curl'   — pure divergence-free noise, most organic/natural
+FLOW_TYPE       = 'swirl'
+FLOW_CURL_NOISE = 0.30          # organic perturbation: 0 = pure base field, 1 = all noise
+DIR_SPREAD      = np.radians(15) # per-blade Gaussian angle jitter around flow direction
+CURL_FROM_CURV  = 0.80          # how much blade curl follows streamline curvature
+                                  #   0 = random curl as before, 1 = purely curvature-driven
+
 # Terrain-following
 CLEARANCE           = 0.5       # mm — gap above support surface (previous blade tops)
 MIN_BLADE_ELEVATION = 0.5       # mm — minimum spine height above terrain; gives blades
@@ -322,6 +335,114 @@ terrain_z = (TERRAIN_AMP * edge_envelope * undulation).astype(float)
 
 support_z = terrain_z.copy()
 
+# ── Flow field ────────────────────────────────────────────────────────────────
+
+def build_flow_field():
+    """
+    Build a flow angle field and signed curvature field on the terrain grid.
+
+    The field is a unit-vector field over the tile, expressed as a bearing
+    angle (atan2(fx, fy), 0 = +Y / north, π/2 = +X / east).  It drives:
+      • blade azimuth  — fall direction in XY (sampled + small jitter)
+      • blade curl     — how much the blade sweeps left/right (signed curvature)
+
+    Construction:
+      1. Analytic base field (swirl / linear / radial / drain / dipole / curl).
+      2. Blend with divergence-free curl noise for organic variation.
+      3. Derive angle field θ = atan2(fx, fy).
+      4. Derive signed curvature κ = ∇θ · f̂, normalised to [-1, 1].
+    """
+    frng = np.random.default_rng(SEED ^ 0x464C4F57)   # independent stream
+
+    # Normalised XY coords  [-0.5, 0.5] × [-0.5, 0.5]
+    xn = (x_grid / TILE_W - 0.5).astype(float)
+    yn = (y_grid / TILE_H - 0.5).astype(float)
+
+    # ── 1. Base field ─────────────────────────────────────────────────────────
+    if FLOW_TYPE == 'swirl':
+        cx_n = frng.uniform(-0.15, 0.15)
+        cy_n = frng.uniform(-0.15, 0.15)
+        sign = frng.choice([-1.0, 1.0])   # CW or CCW, random each seed
+        dx = xn - cx_n;  dy = yn - cy_n
+        r  = np.sqrt(dx**2 + dy**2) + 1e-9
+        bfx =  sign * dy / r             # tangent to radius circle
+        bfy = -sign * dx / r
+
+    elif FLOW_TYPE == 'linear':
+        angle = frng.uniform(0, 2 * np.pi)
+        bfx = np.full_like(xn, np.sin(angle))
+        bfy = np.full_like(xn, np.cos(angle))
+
+    elif FLOW_TYPE == 'radial':
+        cx_n = frng.uniform(-0.15, 0.15)
+        cy_n = frng.uniform(-0.15, 0.15)
+        dx = xn - cx_n;  dy = yn - cy_n
+        r  = np.sqrt(dx**2 + dy**2) + 1e-9
+        bfx = dx / r;  bfy = dy / r
+
+    elif FLOW_TYPE == 'drain':
+        cx_n = frng.uniform(-0.15, 0.15)
+        cy_n = frng.uniform(-0.15, 0.15)
+        dx = xn - cx_n;  dy = yn - cy_n
+        r  = np.sqrt(dx**2 + dy**2) + 1e-9
+        bfx = -dx / r;  bfy = -dy / r
+
+    elif FLOW_TYPE == 'dipole':
+        sep  = frng.uniform(0.15, 0.25)
+        ang  = frng.uniform(0, 2 * np.pi)
+        cx1, cy1 =  np.cos(ang) * sep,  np.sin(ang) * sep
+        cx2, cy2 = -cx1, -cy1
+        r1sq = (xn - cx1)**2 + (yn - cy1)**2 + 1e-4
+        r2sq = (xn - cx2)**2 + (yn - cy2)**2 + 1e-4
+        bfx = (xn - cx1) / r1sq - (xn - cx2) / r2sq
+        bfy = (yn - cy1) / r1sq - (yn - cy2) / r2sq
+
+    else:  # 'curl' — pure curl noise; weak +Y bias just to orient it
+        bfx = np.zeros_like(xn)
+        bfy = np.ones_like(xn)
+
+    mag = np.sqrt(bfx**2 + bfy**2) + 1e-9
+    bfx, bfy = bfx / mag, bfy / mag
+
+    # ── 2. Curl noise: divergence-free perturbation ───────────────────────────
+    # Scalar stream-function P = sum of low-frequency sinusoids.
+    # curl(P) = (∂P/∂y, −∂P/∂x) is always divergence-free.
+    P = np.zeros_like(xn)
+    for _ in range(4):
+        fx_ = frng.uniform(1.5, 4.0)
+        fy_ = frng.uniform(1.5, 4.0)
+        phx = frng.uniform(0, 2 * np.pi)
+        phy = frng.uniform(0, 2 * np.pi)
+        amp = frng.uniform(0.3, 1.0)
+        P  += amp * np.sin(fx_ * 2*np.pi * xn + phx) * np.cos(fy_ * 2*np.pi * yn + phy)
+
+    dPdy, dPdx = np.gradient(P, GY, GX)     # ∂P/∂y along axis-0, ∂P/∂x along axis-1
+    cnx, cny = dPdy, -dPdx                  # divergence-free 2D curl
+    cmag = np.sqrt(cnx**2 + cny**2) + 1e-9
+    cnx /= cmag;  cny /= cmag
+
+    s  = FLOW_CURL_NOISE
+    fx = (1 - s) * bfx + s * cnx
+    fy = (1 - s) * bfy + s * cny
+    mag = np.sqrt(fx**2 + fy**2) + 1e-9
+    fx /= mag;  fy /= mag
+
+    # ── 3. Angle field: bearing from +Y ──────────────────────────────────────
+    angle_field = np.arctan2(fx, fy)   # 0 = +Y (north), π/2 = +X (east)
+
+    # ── 4. Signed curvature: κ = ∇θ · f̂ ─────────────────────────────────────
+    # Positive = streamline bends CW (increasing azimuth), negative = CCW.
+    dθdy, dθdx = np.gradient(angle_field, GY, GX)
+    kappa = dθdx * fx + dθdy * fy
+    scale = np.percentile(np.abs(kappa), 95) + 1e-9
+    curv_field = np.clip(kappa / scale, -1.0, 1.0)
+
+    return angle_field.astype(float), curv_field.astype(float)
+
+print("Building flow field...")
+flow_angle_field, flow_curv_field = build_flow_field()
+print(f"  type: {FLOW_TYPE}")
+
 # ── Blade placement ───────────────────────────────────────────────────────────
 rng = np.random.default_rng(SEED)
 
@@ -340,14 +461,29 @@ def place_blades(n, w_min, w_max, l_min, l_max, tl_min, tl_max):
             break
         bx = float(np.clip((c + rng.uniform(0.1, 0.9)) * cw, edge, TILE_W - edge))
         by = float(np.clip((r + rng.uniform(0.1, 0.9)) * ch, edge, TILE_H - edge))
+        # Direction: flow angle at base + small Gaussian jitter
+        base_angle = float(sample_grid(flow_angle_field, bx, by))
+        direction  = base_angle + float(rng.normal(0, DIR_SPREAD))
+
+        # Curl: sign and rough magnitude from local streamline curvature.
+        # kappa ∈ [-1,1]: +1 = tight CW bend, -1 = tight CCW bend, 0 = straight.
+        kappa     = float(sample_grid(flow_curv_field, bx, by))
+        rand_curl = float(rng.uniform(-CURL_MAX, CURL_MAX))
+        curv_curl = float(np.sign(kappa) * (kappa**2) * CURL_MAX *
+                          rng.uniform(0.4, 1.0))  # quadratic: near-zero kappa → near-zero curl
+        curl = float(np.clip(
+            CURL_FROM_CURV * curv_curl + (1 - CURL_FROM_CURV) * rand_curl,
+            -CURL_MAX, CURL_MAX,
+        ))
+
         out.append(dict(
             base_x    = bx,
             base_y    = by,
             width     = rng.uniform(w_min,  w_max),
             length    = rng.uniform(l_min,  l_max),
             tip_len   = rng.uniform(tl_min, tl_max),
-            direction = rng.uniform(0, 2 * np.pi),
-            curl      = rng.uniform(-CURL_MAX, CURL_MAX),
+            direction = direction,
+            curl      = curl,
         ))
     return out
 
