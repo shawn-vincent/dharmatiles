@@ -84,9 +84,19 @@ def build_flow_field(cfg: TileConfig, x_grid: np.ndarray, y_grid: np.ndarray):
         bfy = (yn - cy1) / r1sq - (yn - cy2) / r2sq
 
     elif ft == 'random-zones':
-        n_zones = 4
+        n_zones = 5
         centers = frng.uniform(-0.42, 0.42, size=(n_zones, 2))
-        angles  = frng.uniform(0, 2 * np.pi, size=n_zones)
+        edge_dirs = []
+        for cx_n, cy_n in centers:
+            edge_options = (
+                (cx_n + 0.5, -np.pi / 2),     # left edge: -X
+                (0.5 - cx_n, np.pi / 2),      # right edge: +X
+                (cy_n + 0.5, np.pi),          # bottom edge: -Y
+                (0.5 - cy_n, 0.0),            # top edge: +Y
+            )
+            _dist, edge_angle = min(edge_options, key=lambda item: item[0])
+            edge_dirs.append(edge_angle + frng.uniform(-np.pi / 8, np.pi / 8))
+        angles = np.asarray(edge_dirs, dtype=float)
 
         warp = np.zeros_like(xn)
         for _ in range(5):
