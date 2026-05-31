@@ -115,6 +115,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--n-blades", type=int,   default=50, dest="n_blades",
                    help="Number of tuft seeds (each expands to tuft-min..tuft-max blades)")
     p.add_argument("--n-gravel", type=int,   default=6000, dest="n_gravel")
+    p.add_argument("--curl-max", type=float, default=0.6, dest="curl_max",
+                   help="Maximum per-blade curl magnitude")
     p.add_argument("--flow-type", type=str,  default="linear",
                    choices=["linear", "swirl", "radial", "drain", "dipole", "curl"],
                    dest="flow_type")
@@ -191,6 +193,7 @@ def main(argv=None):
         seed                  = args.seed,
         n_blades              = args.n_blades,
         n_gravel              = args.n_gravel,
+        curl_max              = args.curl_max,
         flow_type             = args.flow_type,
         flow_curl_noise       = args.flow_curl_noise,
         blade_cross_section   = args.blade_cross_section,
