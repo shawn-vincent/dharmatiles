@@ -139,6 +139,32 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="Maximum blades per grass tuft")
     p.add_argument("--tuft-spread", type=float, default=60.0, dest="tuft_spread_deg",
                    help="Total angular fan width of a grass tuft in degrees (default 60)")
+    # Grass blade geometry
+    p.add_argument("--tall-w-min",  type=float, default=1.5,  dest="tall_w_min",
+                   help="Minimum grass blade diameter/width")
+    p.add_argument("--tall-w-max",  type=float, default=2.0,  dest="tall_w_max",
+                   help="Maximum grass blade diameter/width")
+    p.add_argument("--tall-l-min",  type=float, default=4.0,  dest="tall_l_min",
+                   help="Minimum grass blade body length")
+    p.add_argument("--tall-l-max",  type=float, default=14.4, dest="tall_l_max",
+                   help="Maximum grass blade body length")
+    p.add_argument("--tall-tl-min", type=float, default=1.2,  dest="tall_tl_min",
+                   help="Minimum grass blade tip length")
+    p.add_argument("--tall-tl-max", type=float, default=4.8,  dest="tall_tl_max",
+                   help="Maximum grass blade tip length")
+    # Fill blade geometry
+    p.add_argument("--fill-w-min",  type=float, default=0.3, dest="fill_w_min",
+                   help="Minimum fill grass blade diameter/width")
+    p.add_argument("--fill-w-max",  type=float, default=0.5, dest="fill_w_max",
+                   help="Maximum fill grass blade diameter/width")
+    p.add_argument("--fill-l-min",  type=float, default=4.0, dest="fill_l_min",
+                   help="Minimum fill grass blade body length")
+    p.add_argument("--fill-l-max",  type=float, default=7.2, dest="fill_l_max",
+                   help="Maximum fill grass blade body length")
+    p.add_argument("--fill-tl-min", type=float, default=1.2, dest="fill_tl_min",
+                   help="Minimum fill grass blade tip length")
+    p.add_argument("--fill-tl-max", type=float, default=2.4, dest="fill_tl_max",
+                   help="Maximum fill grass blade tip length")
     # Vegetation mix
     p.add_argument("--grass-ratio", type=int, default=5, dest="grass_ratio",
                    help="Grass seeds per ratio unit (default 5)")
@@ -174,6 +200,18 @@ def main(argv=None):
         tuft_min              = args.tuft_min,
         tuft_max              = args.tuft_max,
         tuft_spread           = np.radians(args.tuft_spread_deg),
+        tall_w_min            = args.tall_w_min,
+        tall_w_max            = args.tall_w_max,
+        tall_l_min            = args.tall_l_min,
+        tall_l_max            = args.tall_l_max,
+        tall_tl_min           = args.tall_tl_min,
+        tall_tl_max           = args.tall_tl_max,
+        fill_w_min            = args.fill_w_min,
+        fill_w_max            = args.fill_w_max,
+        fill_l_min            = args.fill_l_min,
+        fill_l_max            = args.fill_l_max,
+        fill_tl_min           = args.fill_tl_min,
+        fill_tl_max           = args.fill_tl_max,
         grass_ratio           = args.grass_ratio,
         leaf_ratio            = args.leaf_ratio,
         leaf_w_min            = args.leaf_w_min,

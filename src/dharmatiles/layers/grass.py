@@ -239,6 +239,10 @@ def _build_sub_hull_mesh(cfg: TileConfig, spine_3d: np.ndarray,
         lower[idx] = _drop_to_support(centers[idx], down_locs[idx], support_z, cfg)
 
     ring_v = np.stack([lower, side_r, side_l], axis=1)   # (n_pts, 3, 3)
+    # Downward projection can include an XY component, especially for highly
+    # leaned circular blades. Keep the printable support hull inside the tile.
+    ring_v[:, :, 0] = np.clip(ring_v[:, :, 0], 0.0, cfg.tile_w)
+    ring_v[:, :, 1] = np.clip(ring_v[:, :, 1], 0.0, cfg.tile_h)
 
     nv = n * n_pts + 2
     nf = n + (n_pts - 1) * n * 2 + n
