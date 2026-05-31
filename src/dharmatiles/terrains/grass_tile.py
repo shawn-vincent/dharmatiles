@@ -117,6 +117,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--n-gravel", type=int,   default=6000, dest="n_gravel")
     p.add_argument("--curl-max", type=float, default=0.6, dest="curl_max",
                    help="Maximum per-blade curl magnitude")
+    p.add_argument("--curl-min-fraction", type=float, default=0.0,
+                   dest="curl_min_fraction",
+                   help="Minimum curl magnitude as a fraction of curl-max")
     p.add_argument("--density-candidate-factor", type=float, default=4.0,
                    dest="density_candidate_factor",
                    help="Candidate-grid multiplier used for weighted blade placement")
@@ -207,6 +210,7 @@ def main(argv=None):
         n_blades              = args.n_blades,
         n_gravel              = args.n_gravel,
         curl_max              = args.curl_max,
+        curl_min_fraction     = args.curl_min_fraction,
         density_candidate_factor = args.density_candidate_factor,
         divergence_density_gain  = args.divergence_density_gain,
         edge_density_margin      = args.edge_density_margin,

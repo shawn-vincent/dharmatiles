@@ -110,6 +110,11 @@ def place_blades(cfg: TileConfig, rng: np.random.Generator,
             cfg.curl_from_curv * curv_curl + (1 - cfg.curl_from_curv) * rand_curl,
             -cfg.curl_max, cfg.curl_max,
         ))
+        min_curl = cfg.curl_min_fraction * cfg.curl_max
+        if 0.0 < abs(curl) < min_curl:
+            curl = float(np.sign(curl) * min_curl)
+        elif curl == 0.0 and min_curl > 0.0:
+            curl = float(rng.choice([-min_curl, min_curl]))
 
         out.append(dict(
             base_x    = bx,
@@ -183,17 +188,13 @@ def _fit_envelope_spine(cfg: TileConfig, t_arr, floor_z,
 
 # ── Sub-hull (printable support under each blade) ─────────────────────────────
 
-def _drop_to_support(point, down_vec, support_z: np.ndarray,
+def _drop_to_support(point, support_z: np.ndarray,
                      cfg: TileConfig) -> np.ndarray:
-    """Bisect along *down_vec* from *point* until hitting support_z."""
+    """Drop vertically from *point* until hitting support_z at the same XY."""
     start = np.asarray(point, dtype=float)
-    down  = np.asarray(down_vec, dtype=float)
-    if down[2] >= -1e-6:
-        down = np.array([0.0, 0.0, -1.0])
 
     def clearance(dist):
-        p = start + dist * down
-        return p[2] - sample_grid(support_z, cfg, p[0], p[1])
+        return start[2] - dist - sample_grid(support_z, cfg, start[0], start[1])
 
     if clearance(0.0) <= 0.0:
         return start
@@ -203,7 +204,7 @@ def _drop_to_support(point, down_vec, support_z: np.ndarray,
     while hi < search_limit and clearance(hi) > 0.0:
         hi *= 2.0
     if clearance(hi) > 0.0:
-        return start + hi * down
+        return np.array([start[0], start[1], start[2] - hi], dtype=float)
 
     lo = 0.0
     for _ in range(16):
@@ -212,7 +213,7 @@ def _drop_to_support(point, down_vec, support_z: np.ndarray,
             lo = mid
         else:
             hi = mid
-    return start + hi * down
+    return np.array([start[0], start[1], start[2] - hi], dtype=float)
 
 
 def _build_sub_hull_mesh(cfg: TileConfig, spine_3d: np.ndarray,
@@ -223,7 +224,7 @@ def _build_sub_hull_mesh(cfg: TileConfig, spine_3d: np.ndarray,
 
     Builds a triangular-prism strut running the length of the blade spine.
     Two side vertices attach to the blade's underside; a third vertex is
-    dropped along the local down direction until it touches the support surface.
+    dropped vertically until it touches the support surface.
 
     triangle cross-section
         side_r / side_l sit halfway down the two triangle sides (fraction
@@ -276,11 +277,9 @@ def _build_sub_hull_mesh(cfg: TileConfig, spine_3d: np.ndarray,
 
     lower = np.empty_like(path)
     for idx in range(n_pts):
-        lower[idx] = _drop_to_support(centers[idx], down_locs[idx], support_z, cfg)
+        lower[idx] = _drop_to_support(centers[idx], support_z, cfg)
 
     ring_v = np.stack([lower, side_r, side_l], axis=1)   # (n_pts, 3, 3)
-    # Downward projection can include an XY component, especially for highly
-    # leaned circular blades. Keep the printable support hull inside the tile.
     ring_v[:, :, 0] = np.clip(ring_v[:, :, 0], 0.0, cfg.tile_w)
     ring_v[:, :, 1] = np.clip(ring_v[:, :, 1], 0.0, cfg.tile_h)
 
