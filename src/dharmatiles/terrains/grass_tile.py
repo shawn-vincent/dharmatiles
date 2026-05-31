@@ -117,6 +117,18 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--n-gravel", type=int,   default=6000, dest="n_gravel")
     p.add_argument("--curl-max", type=float, default=0.6, dest="curl_max",
                    help="Maximum per-blade curl magnitude")
+    p.add_argument("--density-candidate-factor", type=float, default=4.0,
+                   dest="density_candidate_factor",
+                   help="Candidate-grid multiplier used for weighted blade placement")
+    p.add_argument("--divergence-density-gain", type=float, default=1.5,
+                   dest="divergence_density_gain",
+                   help="Extra placement weight in positive-divergence flow areas")
+    p.add_argument("--edge-density-margin", type=float, default=5.0,
+                   dest="edge_density_margin",
+                   help="Distance from tile edge over which placement density fades")
+    p.add_argument("--edge-density-min", type=float, default=0.25,
+                   dest="edge_density_min",
+                   help="Placement density multiplier at the tile edge")
     p.add_argument("--flow-type", type=str,  default="linear",
                    choices=["linear", "swirl", "radial", "drain", "dipole",
                             "random-zones", "curl"],
@@ -195,6 +207,10 @@ def main(argv=None):
         n_blades              = args.n_blades,
         n_gravel              = args.n_gravel,
         curl_max              = args.curl_max,
+        density_candidate_factor = args.density_candidate_factor,
+        divergence_density_gain  = args.divergence_density_gain,
+        edge_density_margin      = args.edge_density_margin,
+        edge_density_min         = args.edge_density_min,
         flow_type             = args.flow_type,
         flow_curl_noise       = args.flow_curl_noise,
         blade_cross_section   = args.blade_cross_section,

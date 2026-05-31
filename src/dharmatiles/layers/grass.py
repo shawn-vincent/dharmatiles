@@ -33,6 +33,35 @@ from ..core.collision import (collect_strict_hits, log_strict_hits,
 
 # ── Blade placement ───────────────────────────────────────────────────────────
 
+def _placement_density_field(cfg: TileConfig,
+                             flow_angle_field: np.ndarray) -> np.ndarray:
+    """Return placement weights: higher at divergent flow, lower near edges."""
+    fx = np.sin(flow_angle_field)
+    fy = np.cos(flow_angle_field)
+    _dfx_dy, dfx_dx = np.gradient(fx, cfg.gy, cfg.gx)
+    dfy_dy, _dfy_dx = np.gradient(fy, cfg.gy, cfg.gx)
+    positive_div = np.maximum(dfx_dx + dfy_dy, 0.0)
+
+    scale = np.percentile(positive_div, 95)
+    if scale > 1e-9:
+        div_weight = (
+            1.0 +
+            cfg.divergence_density_gain * np.clip(positive_div / scale, 0.0, 1.0)
+        )
+    else:
+        div_weight = np.ones_like(flow_angle_field)
+
+    iy, ix = np.mgrid[0:cfg.grid_res, 0:cfg.grid_res]
+    x = ix * cfg.gx
+    y = iy * cfg.gy
+    edge_dist = np.minimum.reduce([x, y, cfg.tile_w - x, cfg.tile_h - y])
+    t = np.clip(edge_dist / max(cfg.edge_density_margin, 1e-9), 0.0, 1.0)
+    smooth_t = t * t * (3.0 - 2.0 * t)
+    edge_weight = cfg.edge_density_min + (1.0 - cfg.edge_density_min) * smooth_t
+
+    return div_weight * edge_weight
+
+
 def place_blades(cfg: TileConfig, rng: np.random.Generator,
                  flow_angle_field: np.ndarray,
                  flow_curv_field: np.ndarray,
@@ -44,18 +73,29 @@ def place_blades(cfg: TileConfig, rng: np.random.Generator,
     if n == 0:
         return []
 
-    cols = int(np.ceil(np.sqrt(n)))
-    rows = int(np.ceil(n / cols))
+    n_candidates = max(n, int(np.ceil(n * cfg.density_candidate_factor)))
+    cols = int(np.ceil(np.sqrt(n_candidates)))
+    rows = int(np.ceil(n_candidates / cols))
     cw   = cfg.tile_w / cols
     ch   = cfg.tile_h / rows
     cells = [(c, r) for c in range(cols) for r in range(rows)]
-    rng.shuffle(cells)
     edge = w_max / 2 + 0.2
+    density_field = _placement_density_field(cfg, flow_angle_field)
+
+    weights = []
+    for c, r in cells:
+        x = (c + 0.5) * cw
+        y = (r + 0.5) * ch
+        weights.append(float(sample_grid(density_field, cfg, x, y)))
+    weights = np.maximum(np.asarray(weights, dtype=float), 1e-9)
+    weights /= np.sum(weights)
+    chosen = rng.choice(len(cells), size=min(n, len(cells)), replace=False, p=weights)
 
     out = []
-    for c, r in cells:
+    for cell_idx in chosen:
         if len(out) >= n:
             break
+        c, r = cells[int(cell_idx)]
         bx = float(np.clip((c + rng.uniform(0.1, 0.9)) * cw, edge, cfg.tile_w - edge))
         by = float(np.clip((r + rng.uniform(0.1, 0.9)) * ch, edge, cfg.tile_h - edge))
 

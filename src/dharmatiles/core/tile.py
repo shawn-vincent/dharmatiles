@@ -45,6 +45,10 @@ class TileConfig:
     n_fill: int    = 0
     seed: int      = 42
     curl_max: float = 0.6
+    density_candidate_factor: float = 4.0
+    divergence_density_gain: float = 1.5
+    edge_density_margin: float = 5.0
+    edge_density_min: float = 0.25
 
     # Tuft (multi-blade cluster) parameters
     # Each placed seed expands to randint(tuft_min, tuft_max) blades.
