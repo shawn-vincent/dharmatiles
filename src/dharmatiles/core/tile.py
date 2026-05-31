@@ -41,10 +41,18 @@ class TileConfig:
     terrain_freq: float = 1.5   # cycles across tile
 
     # ── Blade population ───────────────────────────────────────────────────────
-    n_blades: int  = 200
+    n_blades: int  = 50
     n_fill: int    = 0
     seed: int      = 42
     curl_max: float = 0.6
+
+    # Tuft (multi-blade cluster) parameters
+    # Each placed seed expands to randint(tuft_min, tuft_max) blades.
+    # Their directions fan out symmetrically ±tuft_spread/2 around the main
+    # flow direction; the whole fan is rotated if any tip would exit the tile.
+    tuft_min: int          = 1
+    tuft_max: int          = 3
+    tuft_spread: float     = np.radians(60)   # total angular fan width
 
     # Tall blade geometry (mm)
     tall_w_min: float  = 1.5
@@ -65,14 +73,42 @@ class TileConfig:
     # Blade cross-section
     # blade_cross_section: 'triangle' — flat ribbon with apex below (printable, fast)
     #                      'circle'   — cylindrical tube (reed / rush look)
+    #                      'diamond'  — 4-vertex rhombus: ridge top, keel bottom
     blade_cross_section: str       = 'triangle'
+    # leaf_cross_section: independent cross-section for leaf blades (default 'triangle')
+    leaf_cross_section: str        = 'triangle'
     blade_circle_segs: int         = 8     # segments for 'circle' cross-section (≥3)
     grass_thickness: float         = 0.5   # mm — 'triangle' apex depth below spine
+    # diamond equator position: 0 = top (infinitely sharp), 1 = bottom apex (flat top).
+    # 0.75 → widest point ¾ of the way down → sharp upper ridge, shallow lower keel.
+    blade_diamond_equator: float   = 0.75
     grass_sub_hull_fraction: float = 0.5   # fraction down triangle sides where sub-hull starts
 
-    # Blade lean profile
+    # ── Vegetation mix ─────────────────────────────────────────────────────────
+    # Whole-number ratio of grass tuft seeds to leaf seeds, e.g. 5:1.
+    grass_ratio: int = 5
+    leaf_ratio:  int = 1
+
+    # Leaf (broadleaf) geometry (mm)
+    # Width profile: sinusoidal rise from 0 at the base to max width at
+    # leaf_peak_t, then cosine fall back to 0 at the tip — gives ovate outline.
+    leaf_w_min:  float = 3.5    # min max-width of leaf
+    leaf_w_max:  float = 5.5    # max max-width of leaf
+    leaf_l_min:  float = 12.0   # min blade length
+    leaf_l_max:  float = 22.0   # max blade length
+    leaf_peak_t: float = 0.35   # where width is maximum (0 = base, 1 = tip)
+
+    # Leaf lean profile (leaves stay more upright than grass)
+    leaf_lean_angle: float = np.radians(55)
+
+    # Leaf tuft: leaves are single blades (one per seed)
+    leaf_tuft_min:    int   = 1
+    leaf_tuft_max:    int   = 1
+    leaf_tuft_spread: float = 0.0    # N/A for single-blade tufts
+
+    # ── Blade lean profile ─────────────────────────────────────────────────────
     base_lean_angle: float = np.radians(8)    # lean at base (blade erupts near-vertically)
-    lean_angle: float      = np.radians(80)   # max lean at tip (nearly horizontal)
+    lean_angle: float      = np.radians(80)   # grass max lean at tip (nearly horizontal)
     n_path: int            = 50               # spine sample count (more = smoother)
 
     # ── Flow field ─────────────────────────────────────────────────────────────

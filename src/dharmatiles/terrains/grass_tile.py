@@ -18,7 +18,7 @@ from ..core.tile import TileConfig, TileScene, make_xy_grids
 from ..core.flow import build_flow_field
 from ..core.mesh import make_heightmap_solid
 from ..layers.gravel import GravelLayer
-from ..layers.grass import GrassLayer
+from ..layers.grass import VegetationLayer
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -73,9 +73,9 @@ def build_grass_tile(cfg: TileConfig,
     # ── Grass layer ────────────────────────────────────────────────────────────
     if cfg.n_blades + cfg.n_fill > 0:
         if verbose:
-            print("Building grass blades...")
-        grass = GrassLayer(cfg)
-        parts.extend(grass.build(scene, flow_angle, flow_curv, verbose=verbose))
+            print("Building vegetation...")
+        veg = VegetationLayer(cfg)
+        parts.extend(veg.build(scene, flow_angle, flow_curv, verbose=verbose))
 
     # ── Terrain solid (prepended so it renders first / sorts cleanly) ──────────
     if verbose:
@@ -112,19 +112,45 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--output", "-o", type=pathlib.Path, default=pathlib.Path("stl/grass.stl"),
                    help="Output STL path")
     p.add_argument("--seed",     type=int,   default=42)
-    p.add_argument("--n-blades", type=int,   default=200, dest="n_blades")
+    p.add_argument("--n-blades", type=int,   default=50, dest="n_blades",
+                   help="Number of tuft seeds (each expands to tuft-min..tuft-max blades)")
     p.add_argument("--n-gravel", type=int,   default=6000, dest="n_gravel")
     p.add_argument("--flow-type", type=str,  default="linear",
                    choices=["linear", "swirl", "radial", "drain", "dipole", "curl"],
                    dest="flow_type")
     p.add_argument("--flow-curl-noise", type=float, default=0.30, dest="flow_curl_noise")
     p.add_argument("--cross-section", type=str, default="triangle",
-                   choices=["triangle", "circle"],
+                   choices=["triangle", "circle", "diamond"],
                    dest="blade_cross_section",
-                   help="Blade cross-section shape")
+                   help="Grass blade cross-section shape")
+    p.add_argument("--leaf-cross-section", type=str, default="triangle",
+                   choices=["triangle", "circle", "diamond"],
+                   dest="leaf_cross_section",
+                   help="Leaf cross-section shape (default: triangle)")
     p.add_argument("--circle-segs", type=int, default=8,
                    dest="blade_circle_segs",
                    help="Segments for 'circle' cross-section")
+    p.add_argument("--diamond-equator", type=float, default=0.75,
+                   dest="blade_diamond_equator",
+                   help="Diamond equator depth (0=top/sharp .. 1=bottom/flat-top); default 0.75")
+    p.add_argument("--tuft-min", type=int, default=1, dest="tuft_min",
+                   help="Minimum blades per grass tuft")
+    p.add_argument("--tuft-max", type=int, default=3, dest="tuft_max",
+                   help="Maximum blades per grass tuft")
+    p.add_argument("--tuft-spread", type=float, default=60.0, dest="tuft_spread_deg",
+                   help="Total angular fan width of a grass tuft in degrees (default 60)")
+    # Vegetation mix
+    p.add_argument("--grass-ratio", type=int, default=5, dest="grass_ratio",
+                   help="Grass seeds per ratio unit (default 5)")
+    p.add_argument("--leaf-ratio", type=int, default=1, dest="leaf_ratio",
+                   help="Leaf seeds per ratio unit (default 1); 0 = grass only")
+    # Leaf geometry
+    p.add_argument("--leaf-w-min",  type=float, default=3.5, dest="leaf_w_min")
+    p.add_argument("--leaf-w-max",  type=float, default=5.5, dest="leaf_w_max")
+    p.add_argument("--leaf-l-min",  type=float, default=12.0, dest="leaf_l_min")
+    p.add_argument("--leaf-l-max",  type=float, default=22.0, dest="leaf_l_max")
+    p.add_argument("--leaf-peak-t", type=float, default=0.35, dest="leaf_peak_t",
+                   help="Normalized position of max leaf width (0=base, 1=tip; default 0.35)")
     p.add_argument("--no-strict", action="store_true",
                    help="Disable strict intersection checking (faster)")
     p.add_argument("--quiet", "-q", action="store_true",
@@ -136,14 +162,26 @@ def main(argv=None):
     args = _build_parser().parse_args(argv)
 
     cfg = TileConfig(
-        seed                 = args.seed,
-        n_blades             = args.n_blades,
-        n_gravel             = args.n_gravel,
-        flow_type            = args.flow_type,
-        flow_curl_noise      = args.flow_curl_noise,
-        blade_cross_section  = args.blade_cross_section,
-        blade_circle_segs    = args.blade_circle_segs,
-        strict_mode          = not args.no_strict,
+        seed                  = args.seed,
+        n_blades              = args.n_blades,
+        n_gravel              = args.n_gravel,
+        flow_type             = args.flow_type,
+        flow_curl_noise       = args.flow_curl_noise,
+        blade_cross_section   = args.blade_cross_section,
+        leaf_cross_section    = args.leaf_cross_section,
+        blade_circle_segs     = args.blade_circle_segs,
+        blade_diamond_equator = args.blade_diamond_equator,
+        tuft_min              = args.tuft_min,
+        tuft_max              = args.tuft_max,
+        tuft_spread           = np.radians(args.tuft_spread_deg),
+        grass_ratio           = args.grass_ratio,
+        leaf_ratio            = args.leaf_ratio,
+        leaf_w_min            = args.leaf_w_min,
+        leaf_w_max            = args.leaf_w_max,
+        leaf_l_min            = args.leaf_l_min,
+        leaf_l_max            = args.leaf_l_max,
+        leaf_peak_t           = args.leaf_peak_t,
+        strict_mode           = not args.no_strict,
     )
     build_grass_tile(cfg, output_path=args.output, verbose=not args.quiet)
 

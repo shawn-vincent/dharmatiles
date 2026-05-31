@@ -177,7 +177,8 @@ def _drop_to_support(point, down_vec, support_z: np.ndarray,
 
 def _build_sub_hull_mesh(cfg: TileConfig, spine_3d: np.ndarray,
                           widths: np.ndarray,
-                          support_z: np.ndarray) -> trimesh.Trimesh:
+                          support_z: np.ndarray,
+                          cross_section: str = 'triangle') -> trimesh.Trimesh:
     """Separate printable support hull that bridges under each blade to the terrain.
 
     Builds a triangular-prism strut running the length of the blade spine.
@@ -192,6 +193,11 @@ def _build_sub_hull_mesh(cfg: TileConfig, spine_3d: np.ndarray,
         side_r / side_l sit at ± (frac × 90°) from the top of the circle,
         placing them on the lower half of the circle at an equivalent depth.
         The same drop-to-terrain logic applies.
+
+    diamond cross-section
+        side_r / side_l sit at the equator vertices (widest points), which
+        are at ± half_width laterally and half_thickness below the spine.
+        grass_sub_hull_fraction is not used (natural attachment point).
     """
     path  = np.asarray(spine_3d, dtype=float)
     W_arr = np.asarray(widths, dtype=float)
@@ -202,12 +208,19 @@ def _build_sub_hull_mesh(cfg: TileConfig, spine_3d: np.ndarray,
     half_W = (W_arr / 2.0)[:, None]
     frac   = cfg.grass_sub_hull_fraction
 
-    if cfg.blade_cross_section == 'triangle':
+    if cross_section == 'triangle':
         apex   = path + cfg.grass_thickness * down_locs
         right  = path + half_W * up_locs
         left   = path - half_W * up_locs
         side_r = right + frac * (apex - right)
         side_l = left  + frac * (apex - left)
+
+    elif cross_section == 'diamond':
+        # Attach at the equator vertices (V1 / V3) of the diamond ring —
+        # the widest points, at diamond_equator × thickness below the spine.
+        eq_d   = cfg.blade_diamond_equator * cfg.grass_thickness
+        side_r = path + half_W * up_locs   + eq_d * down_locs
+        side_l = path - half_W * up_locs   + eq_d * down_locs
 
     else:  # 'circle' — attach at ±angle from top, on the lower half of the circle
         # theta = frac × π/2:  0 = top (up_loc), π/2 = down_loc side
@@ -260,6 +273,52 @@ def _build_sub_hull_mesh(cfg: TileConfig, spine_3d: np.ndarray,
     return mesh
 
 
+# ── Edge-rotation helper for tuft placement ──────────────────────────────────
+
+def _find_edge_rotation(bx: float, by: float,
+                        directions: np.ndarray,
+                        reach: float,
+                        cfg: TileConfig,
+                        margin: float) -> float:
+    """Return the minimum-magnitude rotation (radians) that keeps the estimated
+    tip of every blade in *directions* inside the tile.
+
+    Uses a ±2.5° scan up to ±180°.  Returns 0.0 if already inside, or if no
+    rotation in the scan range fixes the violation (the actual footprint check
+    will filter those blades out later).
+
+    Parameters
+    ----------
+    bx, by     : blade base world position (mm).
+    directions : tuft blade azimuths (radians, before rotation).
+    reach      : estimated horizontal reach of each blade (mm).
+    cfg        : TileConfig for tile dimensions.
+    margin     : minimum distance from each tile edge (mm).
+    """
+    lo_x, hi_x = margin, cfg.tile_w - margin
+    lo_y, hi_y = margin, cfg.tile_h - margin
+
+    def all_inside(rot: float) -> bool:
+        for d in directions:
+            tx = bx + reach * np.sin(d + rot)
+            ty = by + reach * np.cos(d + rot)
+            if not (lo_x <= tx <= hi_x and lo_y <= ty <= hi_y):
+                return False
+        return True
+
+    if all_inside(0.0):
+        return 0.0
+
+    # Scan increasing magnitude, trying both CW (+) and CCW (−) directions.
+    for step in np.linspace(np.pi / 72, np.pi, 72):    # 2.5° → 180° in 2.5° steps
+        if all_inside(step):
+            return float(step)
+        if all_inside(-step):
+            return float(-step)
+
+    return 0.0   # can't fix; footprint checks will drop individual blades
+
+
 # ── Tile footprint check ──────────────────────────────────────────────────────
 
 def blade_footprint_inside_tile(cfg: TileConfig, spine_3d, widths) -> bool:
@@ -275,7 +334,7 @@ def blade_footprint_inside_tile(cfg: TileConfig, spine_3d, widths) -> bool:
 
 # ── Blade builder ─────────────────────────────────────────────────────────────
 
-def make_grass_blade(
+def make_vegetation_blade(
     cfg: TileConfig,
     support_z: np.ndarray,
     terrain_z: np.ndarray,
@@ -286,8 +345,15 @@ def make_grass_blade(
     tip_length: float,
     curl: float = 0.0,
     extra_floor_z: Optional[np.ndarray] = None,
+    vegetation_type: str = 'grass',
 ) -> Tuple[trimesh.Trimesh, trimesh.Trimesh, np.ndarray, np.ndarray]:
-    """Build one terrain-following grass blade.
+    """Build one terrain-following vegetation blade (grass or leaf).
+
+    Parameters
+    ----------
+    vegetation_type : 'grass' — constant-width ribbon with cosine tip taper.
+                      'leaf'  — ovate broadleaf: rises 0→max at leaf_peak_t,
+                                falls max→0 at tip; uses cfg.leaf_lean_angle.
 
     Returns
     -------
@@ -295,19 +361,21 @@ def make_grass_blade(
 
     Raises
     ------
-    RuntimeError if the LCM envelope fit fails (blade cannot fit without
-    exceeding MAX_STACK_HEIGHT).
+    RuntimeError if the LCM envelope fit fails.
     """
     bx, by  = float(base_pos[0]), float(base_pos[1])
     total_l = length + tip_length
     dt      = 1.0 / (cfg.n_path - 1)
     _CURL_SWEEP = np.pi    # |curl|=1 → ±180° lateral sweep
 
+    # ── Lean angle: grass uses cfg.lean_angle, leaf uses cfg.leaf_lean_angle ──
+    tip_lean = cfg.lean_angle if vegetation_type == 'grass' else cfg.leaf_lean_angle
+
     # ── XY path: chord-preserving 2D arc ─────────────────────────────────────
     k_arr  = np.arange(1, cfg.n_path)
     t_mid  = (k_arr - 0.5) * dt
     lean_v = (cfg.base_lean_angle +
-              (cfg.lean_angle - cfg.base_lean_angle) * (1.0 - np.cos(t_mid * np.pi / 2.0)))
+              (tip_lean - cfg.base_lean_angle) * (1.0 - np.cos(t_mid * np.pi / 2.0)))
     az_v   = azimuth + curl * _CURL_SWEEP * t_mid
     ds     = total_l * dt
     dxr    = np.sin(az_v) * np.sin(lean_v) * ds
@@ -326,36 +394,67 @@ def make_grass_blade(
     else:
         xrot, yrot = xr, yr
 
-    # ── XY world positions & taper widths ─────────────────────────────────────
+    # ── XY world positions & width profile ────────────────────────────────────
     xs_arr = bx + xrot                                          # (n_path,)
     ys_arr = by + yrot
     tz_arr = sample_grid(terrain_z, cfg, xs_arr, ys_arr)       # terrain z along spine
 
-    k_arr      = np.arange(cfg.n_path)
-    s_arr      = k_arr * dt * total_l
-    t_tip_arr  = np.clip((s_arr - length) / (tip_length + 1e-9), 0.0, 1.0)
-    widths_arr = width * np.cos(t_tip_arr * np.pi / 2.0)       # cosine taper
-    hw_arr     = widths_arr / 2.0
+    k_arr = np.arange(cfg.n_path)
+    s_arr = k_arr * dt * total_l
 
-    # Lateral top-edge positions (needed to sample support under both edges)
+    if vegetation_type == 'grass':
+        # Constant width along body, cosine taper in the tip section.
+        t_tip_arr  = np.clip((s_arr - length) / (tip_length + 1e-9), 0.0, 1.0)
+        widths_arr = width * np.cos(t_tip_arr * np.pi / 2.0)
+    else:
+        # Ovate broadleaf: two quarter-cosine phases joined at leaf_peak_t.
+        #   Phase 1 (0 → peak_t):   sin rises  0 → max_width
+        #   Phase 2 (peak_t → 1.0): cos falls  max_width → 0
+        # Both halves are C¹ at the junction (derivative = 0 from each side).
+        t_norm = s_arr / (total_l + 1e-9)           # 0 → 1 along blade
+        peak_t = cfg.leaf_peak_t
+        widths_arr = width * np.where(
+            t_norm <= peak_t,
+            np.sin(0.5 * np.pi * t_norm / (peak_t + 1e-9)),
+            np.cos(0.5 * np.pi * (t_norm - peak_t) / (1.0 - peak_t + 1e-9)),
+        )
+
+    hw_arr = widths_arr / 2.0
+
+    # ── Support sampling ──────────────────────────────────────────────────────
+    # Sample at 5 positions across the blade width: -1, -½, 0, +½, +1 of half-
+    # width.  Grass (≤2 mm wide) doesn't need this, but broad leaves (≤5.5 mm)
+    # can have obstacles between the spine and the edge that 2-point sampling
+    # would miss — e.g. a grass blade sitting 1 mm from the leaf spine would
+    # not be visible at ±2.75 mm.  Taking the max across all 5 samples ensures
+    # the Z-floor envelope sees the tallest obstacle anywhere under the blade.
     up_pre = compute_up_locs(
         np.stack([xs_arr, ys_arr, np.zeros(cfg.n_path)], axis=1)
     )
-    v1_xs = xs_arr + hw_arr * up_pre[:, 0]
-    v1_ys = ys_arr + hw_arr * up_pre[:, 1]
-    v2_xs = xs_arr - hw_arr * up_pre[:, 0]
-    v2_ys = ys_arr - hw_arr * up_pre[:, 1]
-
-    # Support heights under each top edge; take the max
-    sz_v1        = sample_grid(support_z, cfg, v1_xs, v1_ys)
-    sz_v2        = sample_grid(support_z, cfg, v2_xs, v2_ys)
-    edge_support = np.maximum(sz_v1, sz_v2)
+    _lat_fracs = (-1.0, -0.5, 0.0, 0.5, 1.0)
+    edge_support = np.full(cfg.n_path, -np.inf, dtype=float)
+    for frac in _lat_fracs:
+        xs = xs_arr + frac * hw_arr * up_pre[:, 0]
+        ys = ys_arr + frac * hw_arr * up_pre[:, 1]
+        np.maximum(edge_support, sample_grid(support_z, cfg, xs, ys),
+                   out=edge_support)
 
     # ── Z floor construction ───────────────────────────────────────────────────
-    t_arr       = np.linspace(0.0, 1.0, cfg.n_path)
-    floor_z     = edge_support + cfg.clearance
-    floor_z[t_arr < cfg.base_obstacle_ignore_t] = -np.inf   # eruption zone
-    floor_z[0]  = float(tz_arr[0]) - cfg.base_sink          # base pinned to terrain
+    t_arr   = np.linspace(0.0, 1.0, cfg.n_path)
+    floor_z = edge_support + cfg.clearance
+
+    # Eruption-zone override: near the base where the blade punches out of the
+    # terrain, relax the floor so nearby blades don't block it.
+    # Grass uses a fixed t-fraction (blades erupt steeply and are narrow).
+    # Leaves use a width-based threshold: only ignore where the leaf is still
+    # truly narrow (< 0.4 mm), i.e. the first ~3% of blade length.  Beyond
+    # that, the wide leaf body must properly clear whatever is below it.
+    if vegetation_type == 'grass':
+        floor_z[t_arr < cfg.base_obstacle_ignore_t] = -np.inf
+    else:
+        floor_z[widths_arr < 0.4] = -np.inf   # only the near-zero base
+
+    floor_z[0] = float(tz_arr[0]) - cfg.base_sink   # base always pinned to terrain
 
     if extra_floor_z is not None:
         floor_z = np.maximum(floor_z, np.asarray(extra_floor_z, dtype=float))
@@ -368,17 +467,21 @@ def make_grass_blade(
 
     path_xyz = np.stack([xs_arr, ys_arr, spine_z], axis=1)   # (n_path, 3)
 
+    xsec = (cfg.leaf_cross_section if vegetation_type == 'leaf'
+            else cfg.blade_cross_section)
     blade_mesh    = build_tube_mesh(path_xyz, widths_arr, cfg.grass_thickness,
-                                    cross_section=cfg.blade_cross_section,
-                                    n_segs=cfg.blade_circle_segs)
-    sub_hull_mesh = _build_sub_hull_mesh(cfg, path_xyz, widths_arr, support_z)
+                                    cross_section=xsec,
+                                    n_segs=cfg.blade_circle_segs,
+                                    diamond_equator=cfg.blade_diamond_equator)
+    sub_hull_mesh = _build_sub_hull_mesh(cfg, path_xyz, widths_arr, support_z,
+                                         cross_section=xsec)
 
     return blade_mesh, sub_hull_mesh, path_xyz, widths_arr
 
 
-# ── GrassLayer ────────────────────────────────────────────────────────────────
+# ── VegetationLayer ───────────────────────────────────────────────────────────
 
-class GrassLayer:
+class VegetationLayer:
     """Place and build all grass blades on the scene."""
 
     def __init__(self, cfg: TileConfig) -> None:
@@ -388,64 +491,114 @@ class GrassLayer:
               flow_angle_field: np.ndarray,
               flow_curv_field: np.ndarray,
               verbose: bool = True) -> List[trimesh.Trimesh]:
-        """Place blades, build meshes, update *scene.support_z*.
+        """Place mixed grass/leaf tuft seeds and build all vegetation meshes.
+
+        Seed counts are split by ``grass_ratio : leaf_ratio``.  Grass seeds
+        expand to ``randint(tuft_min, tuft_max)`` blades fanned over
+        ``±tuft_spread/2``; leaf seeds expand to
+        ``randint(leaf_tuft_min, leaf_tuft_max)`` blades (default 1).
+        The whole fan is rotated if any tip would exit the tile.
 
         Returns the list of blade + sub-hull meshes.
         """
-        cfg = self.cfg
-        rng = np.random.default_rng(cfg.seed)
+        cfg      = self.cfg
+        rng      = np.random.default_rng(cfg.seed)
+        tuft_rng = np.random.default_rng(cfg.seed ^ 0x54554654)  # independent
 
-        # ── Blade seeds ────────────────────────────────────────────────────────
-        tall  = place_blades(cfg, rng, flow_angle_field, flow_curv_field,
-                             cfg.n_blades,
-                             cfg.tall_w_min,  cfg.tall_w_max,
-                             cfg.tall_l_min,  cfg.tall_l_max,
-                             cfg.tall_tl_min, cfg.tall_tl_max)
-        fills = place_blades(cfg, rng, flow_angle_field, flow_curv_field,
-                             cfg.n_fill,
-                             cfg.fill_w_min,  cfg.fill_w_max,
-                             cfg.fill_l_min,  cfg.fill_l_max,
-                             cfg.fill_tl_min, cfg.fill_tl_max)
-        blades = tall + fills
+        # ── Split n_blades into grass vs leaf seeds by ratio ───────────────────
+        ratio_sum = max(cfg.grass_ratio + cfg.leaf_ratio, 1)
+        n_grass   = round(cfg.n_blades * cfg.grass_ratio / ratio_sum)
+        n_leaf    = cfg.n_blades - n_grass
 
-        # Downstream-first sort: exit-edge blades placed first so upstream
-        # blades arch over them naturally.
+        grass_tall = place_blades(cfg, rng, flow_angle_field, flow_curv_field,
+                                  n_grass,
+                                  cfg.tall_w_min,  cfg.tall_w_max,
+                                  cfg.tall_l_min,  cfg.tall_l_max,
+                                  cfg.tall_tl_min, cfg.tall_tl_max)
+        grass_fill = place_blades(cfg, rng, flow_angle_field, flow_curv_field,
+                                  cfg.n_fill,
+                                  cfg.fill_w_min,  cfg.fill_w_max,
+                                  cfg.fill_l_min,  cfg.fill_l_max,
+                                  cfg.fill_tl_min, cfg.fill_tl_max)
+        leaf_seeds = place_blades(cfg, rng, flow_angle_field, flow_curv_field,
+                                  n_leaf,
+                                  cfg.leaf_w_min,  cfg.leaf_w_max,
+                                  cfg.leaf_l_min,  cfg.leaf_l_max,
+                                  0.0, 0.0)   # tip_len=0: ovate profile spans full length
+
+        for s in grass_tall: s['veg_type'] = 'grass'
+        for s in grass_fill: s['veg_type'] = 'grass'
+        for s in leaf_seeds: s['veg_type'] = 'leaf'
+
+        seeds = grass_tall + grass_fill + leaf_seeds
+
+        # Downstream-first sort
         mfx = float(np.mean(np.sin(flow_angle_field)))
         mfy = float(np.mean(np.cos(flow_angle_field)))
-        blades.sort(key=lambda b: -(mfx * b['base_x'] + mfy * b['base_y']))
+        seeds.sort(key=lambda b: -(mfx * b['base_x'] + mfy * b['base_y']))
 
+        n_seeds = len(seeds)
         if verbose:
-            print(f"Placed {len(blades)} blades  (flow sort: fx={mfx:.2f} fy={mfy:.2f})")
+            spread_deg = np.degrees(cfg.tuft_spread) / 2.0
+            print(f"Placed {n_seeds} seeds  "
+                  f"({n_grass} grass [{cfg.tuft_min}–{cfg.tuft_max} blades, "
+                  f"±{spread_deg:.0f}°], "
+                  f"{n_leaf} leaf [{cfg.leaf_tuft_min}–{cfg.leaf_tuft_max} blades], "
+                  f"ratio {cfg.grass_ratio}:{cfg.leaf_ratio})")
 
         # ── Build loop ─────────────────────────────────────────────────────────
         parts: List[trimesh.Trimesh] = []
         built_blades   = 0
-        skipped_blades = 0
-        MAX_RETRIES    = 32
+        built_tufts    = 0
+        skipped_tufts  = 0
         placed_data: list = []   # (blade_idx, spine, hw, up_locs) for strict check
-        retry_rng = np.random.default_rng(cfg.seed + 424242)
+        blade_global_idx  = 0
 
-        for i, bl in enumerate(blades):
-            accepted = None
+        for i, seed in enumerate(seeds):
+            bx, by   = seed['base_x'], seed['base_y']
+            veg_type = seed['veg_type']
 
-            for attempt in range(MAX_RETRIES + 1):
-                direction = bl['direction'] if attempt == 0 else retry_rng.uniform(0, 2 * np.pi)
-                curl      = bl['curl']      if attempt == 0 else retry_rng.uniform(-cfg.curl_max, cfg.curl_max)
+            # ── Fan angles: type-specific tuft size and spread ─────────────────
+            if veg_type == 'grass':
+                n_in_tuft = int(tuft_rng.integers(cfg.tuft_min, cfg.tuft_max + 1))
+                half_fan  = cfg.tuft_spread / 2.0
+            else:  # 'leaf'
+                n_in_tuft = int(tuft_rng.integers(cfg.leaf_tuft_min,
+                                                   cfg.leaf_tuft_max + 1))
+                half_fan  = cfg.leaf_tuft_spread / 2.0
+
+            offsets    = (np.linspace(-half_fan, half_fan, n_in_tuft)
+                          if n_in_tuft > 1 else np.array([0.0]))
+            curls      = tuft_rng.uniform(-cfg.curl_max, cfg.curl_max, n_in_tuft)
+            directions = seed['direction'] + offsets
+
+            # ── Rotate whole fan away from any violated edge ───────────────────
+            reach  = (seed['length'] + seed['tip_len']) * 0.65
+            margin = seed['width'] / 2.0 + 0.5
+            rot    = _find_edge_rotation(bx, by, directions, reach, cfg, margin)
+            directions = directions + rot
+
+            # ── Build each blade in the tuft (commit immediately) ─────────────
+            tuft_blade_count = 0
+
+            for direction, curl in zip(directions, curls):
                 repair_floor = None
+                accepted     = None
 
                 for _rep in range(cfg.collision_repair_passes + 1):
                     try:
-                        blade_mesh, sub_hull, spine, widths = make_grass_blade(
-                            cfg          = cfg,
-                            support_z    = scene.support_z,
-                            terrain_z    = scene.terrain_z,
-                            base_pos     = (bl['base_x'], bl['base_y']),
-                            azimuth      = direction,
-                            length       = bl['length'],
-                            width        = bl['width'],
-                            tip_length   = bl['tip_len'],
-                            curl         = curl,
-                            extra_floor_z = repair_floor,
+                        blade_mesh, sub_hull, spine, widths = make_vegetation_blade(
+                            cfg             = cfg,
+                            support_z       = scene.support_z,
+                            terrain_z       = scene.terrain_z,
+                            base_pos        = (bx, by),
+                            azimuth         = float(direction),
+                            length          = seed['length'],
+                            width           = seed['width'],
+                            tip_length      = seed['tip_len'],
+                            curl            = float(curl),
+                            extra_floor_z   = repair_floor,
+                            vegetation_type = veg_type,
                         )
                     except RuntimeError:
                         break
@@ -453,11 +606,11 @@ class GrassLayer:
                     if not blade_footprint_inside_tile(cfg, spine, widths):
                         break
 
-                    hw       = widths / 2.0
-                    up_locs  = compute_up_locs(spine)
-                    hits     = (collect_strict_hits(spine, hw, up_locs, placed_data,
-                                                    cfg.strict_base_t)
-                                if cfg.strict_mode else [])
+                    hw      = widths / 2.0
+                    up_locs = compute_up_locs(spine)
+                    hits    = (collect_strict_hits(spine, hw, up_locs, placed_data,
+                                                   cfg.strict_base_t)
+                               if cfg.strict_mode else [])
 
                     if not hits:
                         accepted = (blade_mesh, sub_hull, spine, widths, up_locs)
@@ -467,47 +620,51 @@ class GrassLayer:
                         repair_floor = np.full(len(spine), -np.inf, dtype=float)
                     add_collision_repairs(repair_floor, spine, hits, cfg.clearance)
 
-                if accepted is not None:
-                    break
+                if accepted is None:
+                    continue   # this fan member didn't fit; try next
 
-            if accepted is None:
-                skipped_blades += 1
-                continue
+                blade_mesh, sub_hull, spine, widths, up_locs = accepted
+                parts.append(blade_mesh)
+                parts.append(sub_hull)
+                built_blades    += 1
+                tuft_blade_count += 1
 
-            blade_mesh, sub_hull, spine, widths, up_locs = accepted
-            parts.append(blade_mesh)
-            parts.append(sub_hull)
-            built_blades += 1
+                hw = widths / 2.0
+                if cfg.strict_mode:
+                    log_strict_hits(blade_global_idx, bx, by, spine,
+                                    collect_strict_hits(spine, hw, up_locs,
+                                                        placed_data, cfg.strict_base_t))
+                    placed_data.append((blade_global_idx, spine, hw, up_locs))
 
-            hw = widths / 2.0
-            if cfg.strict_mode:
-                log_strict_hits(i, bl['base_x'], bl['base_y'], spine,
-                                collect_strict_hits(spine, hw, up_locs, placed_data,
-                                                    cfg.strict_base_t))
-                placed_data.append((i, spine, hw, up_locs))
+                rasterise_into_support(scene.support_z, cfg, spine, hw)
+                blade_global_idx += 1
 
-            rasterise_into_support(scene.support_z, cfg, spine, hw)
+            # ── Tuft accounting ────────────────────────────────────────────────
+            if tuft_blade_count > 0:
+                built_tufts += 1
+            else:
+                skipped_tufts += 1
 
-            if verbose and ((i + 1) % 20 == 0 or (i + 1) == len(blades)):
-                print(f"  {i + 1}/{len(blades)} blades done")
+            if verbose and ((i + 1) % 10 == 0 or (i + 1) == n_seeds):
+                print(f"  {i + 1}/{n_seeds} tufts  ({built_blades} blades built)")
 
         if verbose:
-            if skipped_blades:
-                print(f"  skipped {skipped_blades} blade(s) that could not fit")
-            print(f"  built {built_blades}/{len(blades)} blades")
-            _print_height_audit(blades, placed_data, scene.terrain_z, cfg)
+            if skipped_tufts:
+                print(f"  skipped {skipped_tufts} tuft(s) that could not fit")
+            print(f"  built {built_blades} blades in {built_tufts}/{n_seeds} tufts")
+            _print_height_audit(placed_data, scene.terrain_z, cfg)
 
         return parts
 
 
-def _print_height_audit(blades: list, placed_data: list,
+def _print_height_audit(placed_data: list,
                          terrain_z: np.ndarray, cfg: TileConfig) -> None:
-    """Print a percentile summary of blade rise heights."""
+    """Print a percentile summary of blade rise heights above local terrain."""
     from ..core.grid import sample_grid as sg
     rises = []
-    for blade_idx, spine, hw, up_locs in placed_data:
-        bl      = blades[blade_idx]
-        base_tz = float(sg(terrain_z, cfg, bl['base_x'], bl['base_y']))
+    for _blade_idx, spine, hw, up_locs in placed_data:
+        # spine[0] is the blade base — use its XY to sample local terrain height.
+        base_tz = float(sg(terrain_z, cfg, float(spine[0, 0]), float(spine[0, 1])))
         rises.append(float(np.max(spine[:, 2])) - base_tz)
 
     if not rises:

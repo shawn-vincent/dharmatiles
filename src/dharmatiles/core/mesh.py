@@ -60,7 +60,8 @@ def blade_frame(path: np.ndarray):
 def build_tube_mesh(spine_3d: np.ndarray, widths: np.ndarray,
                     thickness: float,
                     cross_section: str = 'triangle',
-                    n_segs: int = 8) -> trimesh.Trimesh:
+                    n_segs: int = 8,
+                    diamond_equator: float = 0.75) -> trimesh.Trimesh:
     """Watertight tube mesh following *spine_3d*.
 
     cross_section='triangle' (default)
@@ -76,6 +77,13 @@ def build_tube_mesh(spine_3d: np.ndarray, widths: np.ndarray,
         Radius = half_width at each ring.  Vertex 0 is at the *up_loc* side
         (top), vertex n_segs//4 is at the *down_loc* side (bottom).
         The spine point is the tube centre, not the top surface.
+
+    cross_section='diamond'
+        4 verts / ring forming a rhombus.  V0 is the top apex (spine), V2 is
+        the bottom keel apex (*thickness* below).  V1/V3 are the equator
+        (widest points) at *diamond_equator* × *thickness* below the spine.
+        Larger equator values push the equator toward the bottom, sharpening
+        the upper ridge.  Default 0.75 gives a sharp-topped blade.
     """
     path  = np.asarray(spine_3d, dtype=float)   # (n_pts, 3)
     W_arr = np.asarray(widths,   dtype=float)    # (n_pts,)
@@ -104,8 +112,32 @@ def build_tube_mesh(spine_3d: np.ndarray, widths: np.ndarray,
                   (cos_t[None, :, None] * up_locs[:, None, :] +
                    sin_t[None, :, None] * down_locs[:, None, :]))  # (n_pts, n, 3)
 
+    elif cross_section == 'diamond':
+        # 4-vertex rhombus / diamond cross-section.
+        # Spine sits at the top apex; the blade widens at the equator then tapers
+        # back to a bottom keel apex, giving a ridge-backed, keel-bottomed blade.
+        #
+        #   V0 (top apex)      — spine
+        #   V1 (right equator) — spine + half_w * up  + equator_d * down
+        #   V2 (bottom apex)   — spine + thickness * down
+        #   V3 (left equator)  — spine − half_w * up  + equator_d * down
+        #
+        # equator_d = diamond_equator × thickness.  Larger values push the
+        # widest point toward the bottom, sharpening the upper ridge.
+        n        = 4
+        eq_d     = diamond_equator * thickness
+        ring_v   = np.stack([
+            path,                                                               # V0
+            path + half_W[:, None] * up_locs   + eq_d * down_locs,            # V1
+            path + thickness * down_locs,                                       # V2
+            path - half_W[:, None] * up_locs   + eq_d * down_locs,            # V3
+        ], axis=1)                                                              # (n_pts, 4, 3)
+
     else:
-        raise ValueError(f"Unknown cross_section {cross_section!r}; use 'triangle' or 'circle'")
+        raise ValueError(
+            f"Unknown cross_section {cross_section!r}; "
+            "use 'triangle', 'circle', or 'diamond'"
+        )
 
     # Pre-allocate vertex and face buffers now that n is known
     nv = n * n_pts + 2
