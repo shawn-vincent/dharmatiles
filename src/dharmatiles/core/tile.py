@@ -41,31 +41,31 @@ class TileConfig:
     terrain_freq: float = 1.5   # cycles across tile
 
     # ── Blade population ───────────────────────────────────────────────────────
-    n_blades: int  = 50
+    n_blades: int  = 327
     n_fill: int    = 0
-    seed: int      = 42
-    curl_max: float = 0.6
-    curl_min_fraction: float = 0.0
+    seed: int      = 377
+    curl_max: float = 1.0
+    curl_min_fraction: float = 0.55
     density_candidate_factor: float = 4.0
-    divergence_density_gain: float = 1.5
-    edge_density_margin: float = 5.0
-    edge_density_min: float = 0.25
+    divergence_density_gain: float = 2.0
+    edge_density_margin: float = 6.0
+    edge_density_min: float = 0.15
 
     # Tuft (multi-blade cluster) parameters
     # Each placed seed expands to randint(tuft_min, tuft_max) blades.
     # Their directions fan out symmetrically ±tuft_spread/2 around the main
     # flow direction; the whole fan is rotated if any tip would exit the tile.
     tuft_min: int          = 1
-    tuft_max: int          = 3
-    tuft_spread: float     = np.radians(60)   # total angular fan width
+    tuft_max: int          = 1
+    tuft_spread: float     = np.radians(20)   # total angular fan width
 
     # Tall blade geometry (mm)
-    tall_w_min: float  = 1.5
-    tall_w_max: float  = 2.0
-    tall_l_min: float  = 4.0
-    tall_l_max: float  = 14.4
-    tall_tl_min: float = 1.2
-    tall_tl_max: float = 4.8
+    tall_w_min: float  = 0.8015625
+    tall_w_max: float  = 1.06875
+    tall_l_min: float  = 7.425
+    tall_l_max: float  = 13.275
+    tall_tl_min: float = 2.3625
+    tall_tl_max: float = 4.3875
 
     # Fill blade geometry (mm)
     fill_w_min: float  = 0.3
@@ -79,10 +79,10 @@ class TileConfig:
     # blade_cross_section: 'triangle' — flat ribbon with apex below (printable, fast)
     #                      'circle'   — cylindrical tube (reed / rush look)
     #                      'diamond'  — 4-vertex rhombus: ridge top, keel bottom
-    blade_cross_section: str       = 'triangle'
+    blade_cross_section: str       = 'circle'
     # leaf_cross_section: independent cross-section for leaf blades (default 'triangle')
     leaf_cross_section: str        = 'triangle'
-    blade_circle_segs: int         = 8     # segments for 'circle' cross-section (≥3)
+    blade_circle_segs: int         = 12    # segments for 'circle' cross-section (≥3)
     grass_thickness: float         = 0.5   # mm — 'triangle' apex depth below spine
     # diamond equator position: 0 = top (infinitely sharp), 1 = bottom apex (flat top).
     # 0.75 → widest point ¾ of the way down → sharp upper ridge, shallow lower keel.
@@ -91,8 +91,8 @@ class TileConfig:
 
     # ── Vegetation mix ─────────────────────────────────────────────────────────
     # Whole-number ratio of grass tuft seeds to leaf seeds, e.g. 5:1.
-    grass_ratio: int = 5
-    leaf_ratio:  int = 1
+    grass_ratio: int = 1
+    leaf_ratio:  int = 0
 
     # Leaf (broadleaf) geometry (mm)
     # Width profile: sinusoidal rise from 0 at the base to max width at
@@ -117,9 +117,9 @@ class TileConfig:
     n_path: int            = 50               # spine sample count (more = smoother)
 
     # ── Flow field ─────────────────────────────────────────────────────────────
-    # flow_type: 'linear' | 'swirl' | 'radial' | 'drain' | 'dipole' | 'curl'
-    flow_type: str        = 'linear'
-    flow_curl_noise: float = 0.30           # 0 = pure base field, 1 = all curl noise
+    # flow_type: 'linear' | 'swirl' | 'radial' | 'drain' | 'dipole' | 'random-zones' | 'curl'
+    flow_type: str        = 'random-zones'
+    flow_curl_noise: float = 0.0            # 0 = pure base field, 1 = all curl noise
     dir_spread: float     = np.radians(15)  # per-blade Gaussian jitter around flow
     curl_from_curv: float = 0.80            # 0 = random curl, 1 = curvature-driven
 

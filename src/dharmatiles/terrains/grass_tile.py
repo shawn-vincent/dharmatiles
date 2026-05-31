@@ -111,33 +111,33 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--output", "-o", type=pathlib.Path, default=pathlib.Path("stl/grass.stl"),
                    help="Output STL path")
-    p.add_argument("--seed",     type=int,   default=42)
-    p.add_argument("--n-blades", type=int,   default=50, dest="n_blades",
+    p.add_argument("--seed",     type=int,   default=377)
+    p.add_argument("--n-blades", type=int,   default=327, dest="n_blades",
                    help="Number of tuft seeds (each expands to tuft-min..tuft-max blades)")
     p.add_argument("--n-gravel", type=int,   default=6000, dest="n_gravel")
-    p.add_argument("--curl-max", type=float, default=0.6, dest="curl_max",
+    p.add_argument("--curl-max", type=float, default=1.0, dest="curl_max",
                    help="Maximum per-blade curl magnitude")
-    p.add_argument("--curl-min-fraction", type=float, default=0.0,
+    p.add_argument("--curl-min-fraction", type=float, default=0.55,
                    dest="curl_min_fraction",
                    help="Minimum curl magnitude as a fraction of curl-max")
     p.add_argument("--density-candidate-factor", type=float, default=4.0,
                    dest="density_candidate_factor",
                    help="Candidate-grid multiplier used for weighted blade placement")
-    p.add_argument("--divergence-density-gain", type=float, default=1.5,
+    p.add_argument("--divergence-density-gain", type=float, default=2.0,
                    dest="divergence_density_gain",
                    help="Extra placement weight in positive-divergence flow areas")
-    p.add_argument("--edge-density-margin", type=float, default=5.0,
+    p.add_argument("--edge-density-margin", type=float, default=6.0,
                    dest="edge_density_margin",
                    help="Distance from tile edge over which placement density fades")
-    p.add_argument("--edge-density-min", type=float, default=0.25,
+    p.add_argument("--edge-density-min", type=float, default=0.15,
                    dest="edge_density_min",
                    help="Placement density multiplier at the tile edge")
-    p.add_argument("--flow-type", type=str,  default="linear",
+    p.add_argument("--flow-type", type=str,  default="random-zones",
                    choices=["linear", "swirl", "radial", "drain", "dipole",
                             "random-zones", "curl"],
                    dest="flow_type")
-    p.add_argument("--flow-curl-noise", type=float, default=0.30, dest="flow_curl_noise")
-    p.add_argument("--cross-section", type=str, default="triangle",
+    p.add_argument("--flow-curl-noise", type=float, default=0.0, dest="flow_curl_noise")
+    p.add_argument("--cross-section", type=str, default="circle",
                    choices=["triangle", "circle", "diamond"],
                    dest="blade_cross_section",
                    help="Grass blade cross-section shape")
@@ -145,7 +145,7 @@ def _build_parser() -> argparse.ArgumentParser:
                    choices=["triangle", "circle", "diamond"],
                    dest="leaf_cross_section",
                    help="Leaf cross-section shape (default: triangle)")
-    p.add_argument("--circle-segs", type=int, default=8,
+    p.add_argument("--circle-segs", type=int, default=12,
                    dest="blade_circle_segs",
                    help="Segments for 'circle' cross-section")
     p.add_argument("--diamond-equator", type=float, default=0.75,
@@ -153,22 +153,22 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="Diamond equator depth (0=top/sharp .. 1=bottom/flat-top); default 0.75")
     p.add_argument("--tuft-min", type=int, default=1, dest="tuft_min",
                    help="Minimum blades per grass tuft")
-    p.add_argument("--tuft-max", type=int, default=3, dest="tuft_max",
+    p.add_argument("--tuft-max", type=int, default=1, dest="tuft_max",
                    help="Maximum blades per grass tuft")
-    p.add_argument("--tuft-spread", type=float, default=60.0, dest="tuft_spread_deg",
+    p.add_argument("--tuft-spread", type=float, default=20.0, dest="tuft_spread_deg",
                    help="Total angular fan width of a grass tuft in degrees (default 60)")
     # Grass blade geometry
-    p.add_argument("--tall-w-min",  type=float, default=1.5,  dest="tall_w_min",
+    p.add_argument("--tall-w-min",  type=float, default=0.8015625, dest="tall_w_min",
                    help="Minimum grass blade diameter/width")
-    p.add_argument("--tall-w-max",  type=float, default=2.0,  dest="tall_w_max",
+    p.add_argument("--tall-w-max",  type=float, default=1.06875, dest="tall_w_max",
                    help="Maximum grass blade diameter/width")
-    p.add_argument("--tall-l-min",  type=float, default=4.0,  dest="tall_l_min",
+    p.add_argument("--tall-l-min",  type=float, default=7.425, dest="tall_l_min",
                    help="Minimum grass blade body length")
-    p.add_argument("--tall-l-max",  type=float, default=14.4, dest="tall_l_max",
+    p.add_argument("--tall-l-max",  type=float, default=13.275, dest="tall_l_max",
                    help="Maximum grass blade body length")
-    p.add_argument("--tall-tl-min", type=float, default=1.2,  dest="tall_tl_min",
+    p.add_argument("--tall-tl-min", type=float, default=2.3625, dest="tall_tl_min",
                    help="Minimum grass blade tip length")
-    p.add_argument("--tall-tl-max", type=float, default=4.8,  dest="tall_tl_max",
+    p.add_argument("--tall-tl-max", type=float, default=4.3875, dest="tall_tl_max",
                    help="Maximum grass blade tip length")
     # Fill blade geometry
     p.add_argument("--fill-w-min",  type=float, default=0.3, dest="fill_w_min",
@@ -184,9 +184,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--fill-tl-max", type=float, default=2.4, dest="fill_tl_max",
                    help="Maximum fill grass blade tip length")
     # Vegetation mix
-    p.add_argument("--grass-ratio", type=int, default=5, dest="grass_ratio",
+    p.add_argument("--grass-ratio", type=int, default=1, dest="grass_ratio",
                    help="Grass seeds per ratio unit (default 5)")
-    p.add_argument("--leaf-ratio", type=int, default=1, dest="leaf_ratio",
+    p.add_argument("--leaf-ratio", type=int, default=0, dest="leaf_ratio",
                    help="Leaf seeds per ratio unit (default 1); 0 = grass only")
     # Leaf geometry
     p.add_argument("--leaf-w-min",  type=float, default=3.5, dest="leaf_w_min")

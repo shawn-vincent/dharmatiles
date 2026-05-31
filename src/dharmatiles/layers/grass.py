@@ -613,6 +613,12 @@ class VegetationLayer:
             offsets    = (np.linspace(-half_fan, half_fan, n_in_tuft)
                           if n_in_tuft > 1 else np.array([0.0]))
             curls      = tuft_rng.uniform(-cfg.curl_max, cfg.curl_max, n_in_tuft)
+            min_curl   = cfg.curl_min_fraction * cfg.curl_max
+            if min_curl > 0.0:
+                small = np.abs(curls) < min_curl
+                signs = np.sign(curls)
+                signs[signs == 0.0] = tuft_rng.choice([-1.0, 1.0], int(np.sum(signs == 0.0)))
+                curls[small] = signs[small] * min_curl
             directions = seed['direction'] + offsets
 
             # ── Rotate whole fan away from any violated edge ───────────────────
