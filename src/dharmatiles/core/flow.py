@@ -6,7 +6,8 @@ as a bearing angle (atan2(fx, fy), 0 = +Y / north, π/2 = +X / east).
 
 Construction
 ────────────
-  1. Analytic base field — one of: swirl / linear / radial / drain / dipole / curl.
+  1. Analytic base field — one of: swirl / linear / radial / drain / dipole /
+     random-zones / curl.
   2. Blend with divergence-free curl noise for organic variation.
   3. Derive angle field θ = atan2(fx, fy).
   4. Derive signed curvature κ = ∇θ · f̂, normalised to [−1, 1].
@@ -81,6 +82,30 @@ def build_flow_field(cfg: TileConfig, x_grid: np.ndarray, y_grid: np.ndarray):
         r2sq = (xn - cx2)**2 + (yn - cy2)**2 + 1e-4
         bfx = (xn - cx1) / r1sq - (xn - cx2) / r2sq
         bfy = (yn - cy1) / r1sq - (yn - cy2) / r2sq
+
+    elif ft == 'random-zones':
+        n_zones = 4
+        centers = frng.uniform(-0.42, 0.42, size=(n_zones, 2))
+        angles  = frng.uniform(0, 2 * np.pi, size=n_zones)
+
+        warp = np.zeros_like(xn)
+        for _ in range(5):
+            fx_ = frng.uniform(1.0, 3.0)
+            fy_ = frng.uniform(1.0, 3.0)
+            phx = frng.uniform(0, 2 * np.pi)
+            phy = frng.uniform(0, 2 * np.pi)
+            amp = frng.uniform(0.03, 0.08)
+            warp += amp * np.sin(fx_ * 2 * np.pi * xn + phx) * np.sin(fy_ * 2 * np.pi * yn + phy)
+
+        scores = []
+        for cx_n, cy_n in centers:
+            dx = xn - cx_n
+            dy = yn - cy_n
+            scores.append(dx * dx + dy * dy + warp * frng.uniform(-1.0, 1.0))
+        zone_idx = np.argmin(np.stack(scores, axis=0), axis=0)
+
+        bfx = np.sin(angles)[zone_idx]
+        bfy = np.cos(angles)[zone_idx]
 
     else:  # 'curl' — pure curl noise; weak +Y bias for orientation
         bfx = np.zeros_like(xn)

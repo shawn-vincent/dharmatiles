@@ -118,7 +118,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--curl-max", type=float, default=0.6, dest="curl_max",
                    help="Maximum per-blade curl magnitude")
     p.add_argument("--flow-type", type=str,  default="linear",
-                   choices=["linear", "swirl", "radial", "drain", "dipole", "curl"],
+                   choices=["linear", "swirl", "radial", "drain", "dipole",
+                            "random-zones", "curl"],
                    dest="flow_type")
     p.add_argument("--flow-curl-noise", type=float, default=0.30, dest="flow_curl_noise")
     p.add_argument("--cross-section", type=str, default="triangle",
