@@ -478,6 +478,13 @@ class GrownGrassLayer:
             t_tip  = np.clip((s_arr - body_l) / (tip_l + 1e-9), 0.0, 1.0)
             widths = seed.width * np.cos(t_tip * np.pi / 2.0)
 
+            # Per-point sink correction: growth used a fixed seed.width/2 sink,
+            # but the desired sink is widths[i]/2 at each point — so the tip
+            # (width→0) is raised back up, keeping the blade top visible throughout.
+            # Underground anchor (index 0) has widths[0] ≈ seed.width → correction ≈ 0.
+            path_arr = path_arr.copy()
+            path_arr[:, 2] += (seed.width / 2.0 - widths / 2.0)
+
             upturn_idx = int(np.clip(
                 np.searchsorted(s_arr, body_l), 1, n_smooth - 2))
             path_arr = _apply_tip_upturn(path_arr, upturn_idx)
