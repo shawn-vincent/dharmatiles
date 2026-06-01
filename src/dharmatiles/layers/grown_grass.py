@@ -77,7 +77,12 @@ def _smooth_path(path_arr: np.ndarray, n_out: int, sigma: float) -> np.ndarray:
     return np.stack(cols, axis=1)
 
 
-# ── Bridge-support cones ──────────────────────────────────────────────────────
+# ── Bridge-support posts ──────────────────────────────────────────────────────
+
+# sin(45°): tangent |Z| below this → blade is shallower than 45° from horizontal
+# → needs a support post.  At or above this → blade is more vertical than
+# horizontal → self-supporting, no post generated.
+_HORIZ_THRESHOLD = float(np.sin(np.radians(45)))
 
 def _make_support_post(cfg: TileConfig,
                        cx: float, cy: float,
@@ -112,9 +117,12 @@ def _blade_tip_cone(cfg: TileConfig,
     Returns None if the blade is already sitting on terrain at that point
     (no floating region to support).
     """
-    _, _, down_locs = blade_frame(path_arr)
+    tangs, _, down_locs = blade_frame(path_arr)
     cx  = float(path_arr[taper_idx, 0])
     cy_ = float(path_arr[taper_idx, 1])
+    # Skip blades that are more vertical than horizontal at this point
+    if abs(tangs[taper_idx, 2]) >= _HORIZ_THRESHOLD:
+        return None
     z_ground    = float(sample_grid(terrain_z, cfg, cx, cy_))
     z_underside = float(path_arr[taper_idx, 2]
                         + cfg.grass_thickness * down_locs[taper_idx, 2])
@@ -143,7 +151,7 @@ def _blade_support_cones(cfg: TileConfig,
        max_bridge_mm interval, placed at the midpoints of each sub-interval.
     """
     n_pts    = len(path_arr)
-    _, up_locs, down_locs = blade_frame(path_arr)
+    tangs, up_locs, down_locs = blade_frame(path_arr)
 
     # Blade underside: spine shifted by grass_thickness in the down direction
     underside_z = path_arr[:, 2] + cfg.grass_thickness * down_locs[:, 2]
@@ -191,7 +199,8 @@ def _blade_support_cones(cfg: TileConfig,
                 cy_      = float(path_arr[ci, 1])
                 z_ground = float(sample_grid(terrain_z, cfg, cx, cy_))
 
-                if underside_z[ci] > z_ground + cfg.clearance:
+                if (underside_z[ci] > z_ground + cfg.clearance
+                        and abs(tangs[ci, 2]) < _HORIZ_THRESHOLD):
                     cones.append(_make_support_post(
                         cfg, cx, cy_, z_ground, float(path_arr[ci, 2]),
                         blade_width=float(widths[ci]),
