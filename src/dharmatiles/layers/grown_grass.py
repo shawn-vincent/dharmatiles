@@ -86,22 +86,69 @@ _HORIZ_THRESHOLD = float(np.sin(np.radians(45 * 0.9)))
 
 def _make_support_post(cfg: TileConfig,
                        cx: float, cy: float,
-                       z_bottom: float, z_top: float,
-                       blade_width: float) -> trimesh.Trimesh:
-    """Vertical blade-tip shaped support: full width at base, cosine-tapered to
-    a point at the top, tip buried at the supported blade's spine centre.
+                       z_top: float,
+                       blade_width: float,
+                       terrain_z: np.ndarray,
+                       rng: np.random.Generator) -> trimesh.Trimesh:
+    """Curved grass-blade tip rising from the terrain to the supported blade's
+    spine centre.
 
-    Matches the exact width profile of a grass blade tip so it reads as a
-    short upright blade growing from the terrain into the one above it.
+    Path is a cubic Hermite spline with these constraints:
+      - Tip (top): exactly at (cx, cy, z_top) with a *vertical* tangent, so the
+        support blade pierces the centre of the one above it straight-on.
+      - Base (bottom): random offset from directly below, clamped to the tile,
+        grounded on the terrain heightmap.
+      - Random curl: a perpendicular component on the base tangent bows the
+        curve left or right like a natural blade.
+
+    Width profile: cosine taper from full blade width at the base to zero at
+    the tip — identical to a grass blade tip.
     """
-    n_pts = 10
-    path  = np.column_stack([
-        np.full(n_pts, cx),
-        np.full(n_pts, cy),
-        np.linspace(z_bottom, z_top, n_pts),
-    ])
-    t      = np.linspace(0.0, 1.0, n_pts)
-    widths = blade_width * np.cos(t * np.pi / 2.0)   # full → 0, same as blade tip
+    n_pts = 20
+
+    # ── Random base position ──────────────────────────────────────────────────
+    angle  = rng.uniform(0.0, 2.0 * np.pi)
+    offset = rng.uniform(0.3, 2.0)                      # mm offset on terrain
+
+    bx = float(np.clip(cx + offset * np.cos(angle), 0.0, cfg.tile_w))
+    by = float(np.clip(cy + offset * np.sin(angle), 0.0, cfg.tile_h))
+    z_base = float(sample_grid(terrain_z, cfg, bx, by))
+
+    p0 = np.array([bx, by, z_base], dtype=float)
+    p1 = np.array([cx, cy, z_top],  dtype=float)
+
+    chord = float(np.linalg.norm(p1 - p0)) or 1e-6
+
+    # ── Tangent at tip: straight up, magnitude = chord ────────────────────────
+    m1 = np.array([0.0, 0.0, chord])
+
+    # ── Tangent at base: toward tip + random curl perpendicular to it ─────────
+    to_tip      = p1 - p0
+    to_tip_norm = to_tip / (np.linalg.norm(to_tip) + 1e-9)
+
+    # Perpendicular in the XY plane for curl
+    h_len = float(np.hypot(to_tip[0], to_tip[1]))
+    if h_len > 1e-6:
+        perp = np.array([-to_tip[1] / h_len, to_tip[0] / h_len, 0.0])
+    else:
+        perp = np.array([1.0, 0.0, 0.0])
+
+    curl = rng.uniform(-1.0, 1.0)
+    m0   = chord * (to_tip_norm + perp * curl * 0.5)
+    m0[2] = max(float(m0[2]), chord * 0.25)   # always grows upward from terrain
+
+    # ── Cubic Hermite ─────────────────────────────────────────────────────────
+    t   = np.linspace(0.0, 1.0, n_pts)
+    h00 =  2*t**3 - 3*t**2 + 1
+    h10 =    t**3 - 2*t**2 + t
+    h01 = -2*t**3 + 3*t**2
+    h11 =    t**3 - t**2
+
+    path = (h00[:, None] * p0 + h10[:, None] * m0 +
+            h01[:, None] * p1 + h11[:, None] * m1)
+
+    # ── Width: cosine taper, full at base → 0 at tip ─────────────────────────
+    widths = blade_width * np.cos(t * np.pi / 2.0)
 
     return build_tube_mesh(path, widths, cfg.grass_thickness,
                            cross_section=cfg.blade_cross_section,
@@ -113,8 +160,9 @@ def _blade_tip_cone(cfg: TileConfig,
                      path_arr: np.ndarray,
                      widths: np.ndarray,
                      terrain_z: np.ndarray,
-                     taper_idx: int) -> trimesh.Trimesh | None:
-    """One cone at the taper-start index — anchors the tip before it goes thin.
+                     taper_idx: int,
+                     rng: np.random.Generator) -> trimesh.Trimesh | None:
+    """One post at the taper-start index — anchors the tip before it goes thin.
 
     Returns None if the blade is already sitting on terrain at that point
     (no floating region to support).
@@ -122,7 +170,6 @@ def _blade_tip_cone(cfg: TileConfig,
     tangs, _, down_locs = blade_frame(path_arr)
     cx  = float(path_arr[taper_idx, 0])
     cy_ = float(path_arr[taper_idx, 1])
-    # Skip blades that are more vertical than horizontal at this point
     if abs(tangs[taper_idx, 2]) >= _HORIZ_THRESHOLD:
         return None
     z_ground    = float(sample_grid(terrain_z, cfg, cx, cy_))
@@ -131,15 +178,16 @@ def _blade_tip_cone(cfg: TileConfig,
     z_spine     = float(path_arr[taper_idx, 2])
     if z_underside <= z_ground + cfg.clearance:
         return None
-    return _make_support_post(cfg, cx, cy_, z_ground, z_spine,
-                               blade_width=float(widths[taper_idx]))
+    return _make_support_post(cfg, cx, cy_, z_spine,
+                               float(widths[taper_idx]), terrain_z, rng)
 
 
 def _blade_support_cones(cfg: TileConfig,
                           path_arr: np.ndarray,
                           widths: np.ndarray,
                           terrain_z: np.ndarray,
-                          max_bridge_mm: float) -> List[trimesh.Trimesh]:
+                          max_bridge_mm: float,
+                          rng: np.random.Generator) -> List[trimesh.Trimesh]:
     """Return support cones only where the blade spans more than *max_bridge_mm*
     above the terrain without a contact point.
 
@@ -204,8 +252,8 @@ def _blade_support_cones(cfg: TileConfig,
                 if (underside_z[ci] > z_ground + cfg.clearance
                         and abs(tangs[ci, 2]) < _HORIZ_THRESHOLD):
                     cones.append(_make_support_post(
-                        cfg, cx, cy_, z_ground, float(path_arr[ci, 2]),
-                        blade_width=float(widths[ci]),
+                        cfg, cx, cy_, float(path_arr[ci, 2]),
+                        float(widths[ci]), terrain_z, rng,
                     ))
 
         i = j
@@ -448,15 +496,15 @@ class GrownGrassLayer:
             # Span-based support cones — only where the blade spans too far
             # above the terrain without a contact point below it.
             cones = _blade_support_cones(cfg, path_arr, widths,
-                                          scene.terrain_z, self.max_bridge_mm)
+                                          scene.terrain_z, self.max_bridge_mm, rng)
             parts.extend(cones)
 
-            # Tip cone — one cone at the taper transition to anchor the tip
+            # Tip cone — one post at the taper transition to anchor the tip
             # region before the blade width starts reducing toward zero.
             taper_idx = int(np.searchsorted(s_arr, body_l))
             taper_idx = int(np.clip(taper_idx, 0, len(path_arr) - 1))
             tip_cone = _blade_tip_cone(cfg, path_arr, widths,
-                                        scene.terrain_z, taper_idx)
+                                        scene.terrain_z, taper_idx, rng)
             if tip_cone is not None:
                 parts.append(tip_cone)
 
