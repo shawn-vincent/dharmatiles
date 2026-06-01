@@ -115,9 +115,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--n-blades", type=int,   default=327, dest="n_blades",
                    help="Number of tuft seeds (each expands to tuft-min..tuft-max blades)")
     p.add_argument("--n-gravel", type=int,   default=6000, dest="n_gravel")
-    p.add_argument("--curl-max", type=float, default=1.0, dest="curl_max",
+    p.add_argument("--curl-max", type=float, default=0.3, dest="curl_max",
                    help="Maximum per-blade curl magnitude")
-    p.add_argument("--curl-min-fraction", type=float, default=0.55,
+    p.add_argument("--curl-min-fraction", type=float, default=0.0,
                    dest="curl_min_fraction",
                    help="Minimum curl magnitude as a fraction of curl-max")
     p.add_argument("--density-candidate-factor", type=float, default=4.0,

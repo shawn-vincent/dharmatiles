@@ -44,8 +44,8 @@ class TileConfig:
     n_blades: int  = 327
     n_fill: int    = 0
     seed: int      = 377
-    curl_max: float = 1.0
-    curl_min_fraction: float = 0.55
+    curl_max: float = 0.3
+    curl_min_fraction: float = 0.0
     density_candidate_factor: float = 4.0
     divergence_density_gain: float = 2.0
     edge_density_margin: float = 6.0
@@ -120,7 +120,7 @@ class TileConfig:
     # flow_type: 'linear' | 'swirl' | 'radial' | 'drain' | 'dipole' | 'random-zones' | 'curl'
     flow_type: str        = 'random-zones'
     flow_curl_noise: float = 0.0            # 0 = pure base field, 1 = all curl noise
-    dir_spread: float     = np.radians(15)  # per-blade Gaussian jitter around flow
+    dir_spread: float     = np.radians(5)   # per-blade Gaussian jitter around flow
     curl_from_curv: float = 0.80            # 0 = random curl, 1 = curvature-driven
 
     # ── Terrain-following / knot-envelope z-solver ─────────────────────────────

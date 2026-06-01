@@ -84,19 +84,16 @@ def build_flow_field(cfg: TileConfig, x_grid: np.ndarray, y_grid: np.ndarray):
         bfy = (yn - cy1) / r1sq - (yn - cy2) / r2sq
 
     elif ft == 'random-zones':
-        n_zones = 5
+        n_zones = 7
         centers = frng.uniform(-0.42, 0.42, size=(n_zones, 2))
-        edge_dirs = []
-        for cx_n, cy_n in centers:
-            edge_options = (
-                (cx_n + 0.5, -np.pi / 2),     # left edge: -X
-                (0.5 - cx_n, np.pi / 2),      # right edge: +X
-                (cy_n + 0.5, np.pi),          # bottom edge: -Y
-                (0.5 - cy_n, 0.0),            # top edge: +Y
-            )
-            _dist, edge_angle = min(edge_options, key=lambda item: item[0])
-            edge_dirs.append(edge_angle + frng.uniform(-np.pi / 8, np.pi / 8))
-        angles = np.asarray(edge_dirs, dtype=float)
+        # Stratified: divide the circle into n_zones equal sectors, pick one
+        # random angle per sector, then shuffle so adjacent zone centers don't
+        # get adjacent directions.  Guarantees all 5 zones point in clearly
+        # different directions regardless of seed.
+        sector  = 2 * np.pi / n_zones
+        angles  = frng.permutation(
+            frng.uniform(0, 1, n_zones) * sector + np.arange(n_zones) * sector
+        )
 
         warp = np.zeros_like(xn)
         for _ in range(5):
@@ -104,7 +101,7 @@ def build_flow_field(cfg: TileConfig, x_grid: np.ndarray, y_grid: np.ndarray):
             fy_ = frng.uniform(1.0, 3.0)
             phx = frng.uniform(0, 2 * np.pi)
             phy = frng.uniform(0, 2 * np.pi)
-            amp = frng.uniform(0.03, 0.08)
+            amp = frng.uniform(0.2, 0.5)
             warp += amp * np.sin(fx_ * 2 * np.pi * xn + phx) * np.sin(fy_ * 2 * np.pi * yn + phy)
 
         scores = []
