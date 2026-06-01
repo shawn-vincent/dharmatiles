@@ -79,10 +79,10 @@ def _smooth_path(path_arr: np.ndarray, n_out: int, sigma: float) -> np.ndarray:
 
 # ── Bridge-support posts ──────────────────────────────────────────────────────
 
-# sin(45°): tangent |Z| below this → blade is shallower than 45° from horizontal
-# → needs a support post.  At or above this → blade is more vertical than
-# horizontal → self-supporting, no post generated.
-_HORIZ_THRESHOLD = float(np.sin(np.radians(45)))
+# Tangent |Z| below this → blade is shallow enough to need a support post.
+# Threshold angle = 45° × 0.9 = 40.5° from horizontal: only blades within
+# ~40° of horizontal get posts; steeper blades are self-supporting.
+_HORIZ_THRESHOLD = float(np.sin(np.radians(45 * 0.9)))
 
 def _make_support_post(cfg: TileConfig,
                        cx: float, cy: float,
