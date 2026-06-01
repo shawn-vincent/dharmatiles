@@ -88,23 +88,25 @@ def _make_support_post(cfg: TileConfig,
                        cx: float, cy: float,
                        z_bottom: float, z_top: float,
                        blade_width: float) -> trimesh.Trimesh:
-    """Vertical cylinder from terrain up to the blade underside.
+    """Vertical blade-tip shaped support: full width at base, cosine-tapered to
+    a point at the top, tip buried at the supported blade's spine centre.
 
-    Diameter = 75% of the blade width, constant along the full height,
-    centred on the blade spine.
+    Matches the exact width profile of a grass blade tip so it reads as a
+    short upright blade growing from the terrain into the one above it.
     """
-    n_pts  = 10
-    diam   = blade_width * 0.75
-    path   = np.column_stack([
+    n_pts = 10
+    path  = np.column_stack([
         np.full(n_pts, cx),
         np.full(n_pts, cy),
         np.linspace(z_bottom, z_top, n_pts),
     ])
-    widths = np.full(n_pts, diam)
+    t      = np.linspace(0.0, 1.0, n_pts)
+    widths = blade_width * np.cos(t * np.pi / 2.0)   # full → 0, same as blade tip
 
     return build_tube_mesh(path, widths, cfg.grass_thickness,
-                           cross_section='circle',
-                           n_segs=cfg.blade_circle_segs)
+                           cross_section=cfg.blade_cross_section,
+                           n_segs=cfg.blade_circle_segs,
+                           diamond_equator=cfg.blade_diamond_equator)
 
 
 def _blade_tip_cone(cfg: TileConfig,
