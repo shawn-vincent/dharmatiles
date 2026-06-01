@@ -77,6 +77,72 @@ def _smooth_path(path_arr: np.ndarray, n_out: int, sigma: float) -> np.ndarray:
     return np.stack(cols, axis=1)
 
 
+# ── Tip upturn ───────────────────────────────────────────────────────────────
+
+def _apply_tip_upturn(path_arr: np.ndarray, taper_idx: int) -> np.ndarray:
+    """If the blade tip points downward, curl the taper section upward so the
+    tip ends slightly above horizontal.
+
+    Replaces ``path_arr[taper_idx:]`` with a cubic Hermite arc that:
+
+    * Matches position **and** tangent at *taper_idx* — perfectly smooth join
+      with the body.
+    * Ends with the same XY direction as the body tangent at that point, but
+      with a small positive Z slope (~6° above horizontal).
+
+    The tip XY position is allowed to shift naturally with the new curve.
+    Blades whose tips already point upward are returned unchanged.
+    """
+    n = len(path_arr)
+    if taper_idx < 1 or taper_idx >= n - 2:
+        return path_arr
+
+    # Current tip tangent
+    tip_raw = path_arr[-1] - path_arr[-2]
+    tip_len = float(np.linalg.norm(tip_raw))
+    if tip_len < 1e-9 or tip_raw[2] / tip_len >= 0.0:
+        return path_arr   # already pointing up — nothing to do
+
+    # Tangent at the taper join (forward difference)
+    t0 = path_arr[taper_idx + 1] - path_arr[taper_idx]
+    t0_len = float(np.linalg.norm(t0))
+    if t0_len < 1e-9:
+        return path_arr
+    t0 = t0 / t0_len
+
+    # Target tip tangent: same XY direction, slightly above horizontal
+    t1 = np.array([t0[0], t0[1], 0.1], dtype=float)
+    t1 /= np.linalg.norm(t1)
+
+    # Arc length of the original taper section (used to scale the new arc)
+    L = float(np.sum(np.linalg.norm(np.diff(path_arr[taper_idx:], axis=0), axis=1)))
+    if L < 1e-6:
+        return path_arr
+
+    # New tip position: advance from join along the average of t0 and t1
+    p0   = path_arr[taper_idx].astype(float)
+    avg  = (t0 + t1) / 2.0
+    avg /= np.linalg.norm(avg)
+    p1   = p0 + avg * L
+
+    # Cubic Hermite — tangent magnitudes scaled to arc length for natural curvature
+    n_taper = n - taper_idx
+    tv  = np.linspace(0.0, 1.0, n_taper)
+    m0  = t0 * L
+    m1  = t1 * L
+    h00 =  2*tv**3 - 3*tv**2 + 1
+    h10 =    tv**3 - 2*tv**2 + tv
+    h01 = -2*tv**3 + 3*tv**2
+    h11 =    tv**3 - tv**2
+
+    new_taper = (h00[:, None] * p0 + h10[:, None] * m0 +
+                 h01[:, None] * p1 + h11[:, None] * m1)
+
+    out = path_arr.copy()
+    out[taper_idx:] = new_taper
+    return out
+
+
 # ── Bridge-support posts ──────────────────────────────────────────────────────
 
 # Tangent |Z| below this → blade is shallow enough to need a support post.
@@ -487,6 +553,11 @@ class GrownGrassLayer:
             s_arr  = np.linspace(0.0, total_l, n_smooth)
             t_tip  = np.clip((s_arr - body_l) / (tip_l + 1e-9), 0.0, 1.0)
             widths = blade['width'] * np.cos(t_tip * np.pi / 2.0)
+
+            # Curl the taper section upward if the tip points below horizontal
+            upturn_idx = int(np.clip(
+                np.searchsorted(s_arr, body_l), 1, n_smooth - 2))
+            path_arr = _apply_tip_upturn(path_arr, upturn_idx)
 
             mesh = build_tube_mesh(path_arr, widths, cfg.grass_thickness,
                                    cross_section=cfg.blade_cross_section,
