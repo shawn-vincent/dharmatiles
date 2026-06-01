@@ -103,6 +103,28 @@ def _make_support_cone(cfg: TileConfig,
                            n_segs=cfg.blade_circle_segs)
 
 
+def _blade_tip_cone(cfg: TileConfig,
+                     path_arr: np.ndarray,
+                     widths: np.ndarray,
+                     terrain_z: np.ndarray,
+                     taper_idx: int) -> trimesh.Trimesh | None:
+    """One cone at the taper-start index — anchors the tip before it goes thin.
+
+    Returns None if the blade is already sitting on terrain at that point
+    (no floating region to support).
+    """
+    _, _, down_locs = blade_frame(path_arr)
+    cx  = float(path_arr[taper_idx, 0])
+    cy_ = float(path_arr[taper_idx, 1])
+    z_ground = float(sample_grid(terrain_z, cfg, cx, cy_))
+    z_blade  = float(path_arr[taper_idx, 2]
+                     + cfg.grass_thickness * down_locs[taper_idx, 2])
+    if z_blade <= z_ground + cfg.clearance:
+        return None
+    return _make_support_cone(cfg, cx, cy_, z_ground, z_blade,
+                               tip_width=float(widths[taper_idx]))
+
+
 def _blade_support_cones(cfg: TileConfig,
                           path_arr: np.ndarray,
                           widths: np.ndarray,
@@ -413,11 +435,20 @@ class GrownGrassLayer:
                                    diamond_equator=cfg.blade_diamond_equator)
             parts.append(mesh)
 
-            # Selective support cones — only where the blade spans too far
+            # Span-based support cones — only where the blade spans too far
             # above the terrain without a contact point below it.
             cones = _blade_support_cones(cfg, path_arr, widths,
                                           scene.terrain_z, self.max_bridge_mm)
             parts.extend(cones)
+
+            # Tip cone — one cone at the taper transition to anchor the tip
+            # region before the blade width starts reducing toward zero.
+            taper_idx = int(np.searchsorted(s_arr, body_l))
+            taper_idx = int(np.clip(taper_idx, 0, len(path_arr) - 1))
+            tip_cone = _blade_tip_cone(cfg, path_arr, widths,
+                                        scene.terrain_z, taper_idx)
+            if tip_cone is not None:
+                parts.append(tip_cone)
 
             rasterise_into_support(scene.support_z, cfg, path_arr, widths / 2.0)
 
