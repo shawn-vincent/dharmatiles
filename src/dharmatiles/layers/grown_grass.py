@@ -179,7 +179,12 @@ def _make_support_post(cfg: TileConfig,
     hw = blade_width / 2.0   # half-width: keep the full base diameter on the tile
     bx = float(np.clip(cx + offset * np.cos(angle), hw, cfg.tile_w - hw))
     by = float(np.clip(cy + offset * np.sin(angle), hw, cfg.tile_h - hw))
-    z_base = float(sample_grid(terrain_z, cfg, bx, by))
+
+    # Sink the base below the terrain surface so the entire base cross-section
+    # is buried.  blade_width covers the disc radius in any ring orientation;
+    # adding grass_thickness covers the profile depth too.
+    sink   = blade_width / 2.0 + cfg.grass_thickness
+    z_base = float(sample_grid(terrain_z, cfg, bx, by)) - sink
 
     p0 = np.array([bx, by, z_base], dtype=float)
     p1 = np.array([cx, cy, z_top],  dtype=float)
