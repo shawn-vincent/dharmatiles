@@ -47,9 +47,12 @@ def build_grown_grass_tile(cfg: SceneConfig,
 
     parts: list = []
 
-    if cfg.gravel.n_gravel > 0:
+    tile_area = cfg.surface.tile_cols * cfg.surface.tile_rows
+    n_stones  = cfg.gravel.gravel_per_tile * tile_area
+    if n_stones > 0:
         if verbose:
-            print(f"Building gravel  ({cfg.gravel.n_gravel} stones)...")
+            print(f"Building gravel  ({n_stones} stones = "
+                  f"{cfg.gravel.gravel_per_tile}/tile × {tile_area} tiles)...")
         gravel = GravelLayer(cfg.surface, cfg.gravel)
         parts.extend(gravel.build(scene))
 
@@ -101,7 +104,8 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="Number of 35 mm tile units in Y")
     p.add_argument("--base-h",     type=float, default=6.0, dest="base_h",
                    help="Slab depth below terrain surface (mm)")
-    p.add_argument("--n-gravel",   type=int,   default=6000, dest="n_gravel")
+    p.add_argument("--gravel-per-tile", type=int, default=6000, dest="gravel_per_tile",
+                   help="Stones per 35mm tile unit (scaled by tile count)")
     p.add_argument("--flow-type",  type=str,   default="random-zones",
                    choices=["linear", "swirl", "radial", "drain", "dipole",
                             "random-zones", "curl"],
@@ -111,7 +115,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--cross-section", type=str, default="circle",
                    choices=["triangle", "circle", "diamond"],
                    dest="cross_section")
-    p.add_argument("--n-groups",   type=int,   default=41, dest="n_groups")
+    p.add_argument("--groups-per-tile", type=int, default=41, dest="groups_per_tile",
+                   help="Grass groups per 35mm tile unit (scaled by tile count)")
     p.add_argument("--group-min",  type=int,   default=10, dest="group_min")
     p.add_argument("--group-max",  type=int,   default=15, dest="group_max")
     p.add_argument("--group-spread", type=float, default=2.5, dest="group_spread_mm")
@@ -148,14 +153,14 @@ def main(argv=None):
             curl_max         = args.curl_max,
             smooth_sigma     = args.smooth_sigma,
             root_depth       = args.root_depth,
-            n_groups         = args.n_groups,
+            groups_per_tile  = args.groups_per_tile,
             group_min        = args.group_min,
             group_max        = args.group_max,
             group_spread_mm  = args.group_spread_mm,
             max_bridge_mm    = args.max_bridge_mm,
         ),
         gravel=GravelConfig(
-            n_gravel = args.n_gravel,
+            gravel_per_tile = args.gravel_per_tile,
         ),
     )
 

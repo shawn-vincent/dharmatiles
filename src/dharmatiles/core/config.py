@@ -141,7 +141,9 @@ class GrassConfig:
     root_depth:      float = 2.0    # mm — underground anchor depth
 
     # ── Group placement ───────────────────────────────────────────────────────
-    n_groups:        int   = 41
+    # groups_per_tile is a density — the layer multiplies by tile_cols × tile_rows
+    # to get the actual group count for the surface.
+    groups_per_tile: int   = 41
     group_min:       int   = 10
     group_max:       int   = 15
     group_spread_mm: float = 2.5
@@ -173,8 +175,12 @@ class SolverConfig:
 
 @dataclass
 class GravelConfig:
-    """Random stone geometry parameters."""
-    n_gravel:      int   = 6000
+    """Random stone geometry parameters.
+
+    ``gravel_per_tile`` is a density — GravelLayer multiplies by
+    tile_cols × tile_rows to get the actual stone count for the surface.
+    """
+    gravel_per_tile: int   = 6000
     r_min:         float = 0.048   # mm — minimum horizontal semi-axis
     r_max:         float = 0.42    # mm — maximum horizontal semi-axis
     flat_min:      float = 0.40    # height = this × mean_radius (flattest)

@@ -26,8 +26,10 @@ class GravelLayer:
 
     def build(self, scene: TileScene) -> List[trimesh.Trimesh]:
         """Add stone geometry to *scene.support_z* and return mesh list."""
+        tile_area = self.surface.tile_cols * self.surface.tile_rows
+        n_stones  = self.gravel.gravel_per_tile * tile_area
         rng  = np.random.default_rng(self.surface.seed + 7919)
-        mesh = _build_gravel_mesh(self.surface, self.gravel,
+        mesh = _build_gravel_mesh(self.surface, self.gravel, n_stones,
                                   scene.terrain_z, scene.support_z, rng)
         return [mesh]
 
@@ -35,10 +37,11 @@ class GravelLayer:
 # ── Internal implementation ───────────────────────────────────────────────────
 
 def _build_gravel_mesh(surface: SurfaceConfig, gravel: GravelConfig,
+                       n_stones: int,
                        terrain_z: np.ndarray, support_z: np.ndarray,
                        rng: np.random.Generator) -> trimesh.Trimesh:
-    """Place N stones; return a single merged Trimesh."""
-    N  = gravel.n_gravel
+    """Place *n_stones* stones; return a single merged Trimesh."""
+    N  = n_stones
     AZ = gravel.az_segs
     EL = gravel.el_segs
 

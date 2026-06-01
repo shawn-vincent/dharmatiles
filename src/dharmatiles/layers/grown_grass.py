@@ -311,7 +311,8 @@ class GrownGrassLayer:
         self.grass   = cfg.grass
         self.solver  = cfg.solver
         # Layer-level group params may be overridden after construction
-        self.n_groups        = cfg.grass.n_groups
+        tile_area            = cfg.surface.tile_cols * cfg.surface.tile_rows
+        self.n_groups        = cfg.grass.groups_per_tile * tile_area
         self.group_min       = cfg.grass.group_min
         self.group_max       = cfg.grass.group_max
         self.group_spread_mm = cfg.grass.group_spread_mm
