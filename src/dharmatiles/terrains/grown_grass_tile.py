@@ -91,42 +91,53 @@ def build_grown_grass_tile(cfg: SceneConfig,
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def _build_parser() -> argparse.ArgumentParser:
+    # Pull defaults from the config dataclasses — single source of truth.
+    _S = SurfaceConfig()
+    _F = FlowConfig()
+    _G = GrassConfig()
+    _V = GravelConfig()
+
     p = argparse.ArgumentParser(
         description="Generate a grown-grass terrain tile STL.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument("--output", "-o", type=pathlib.Path,
                    default=pathlib.Path("stl/grass.stl"))
-    p.add_argument("--seed",       type=int,   default=377)
-    p.add_argument("--tile-cols",  type=int,   default=1, dest="tile_cols",
+    p.add_argument("--seed",       type=int,   default=_S.seed)
+    p.add_argument("--tile-cols",  type=int,   default=_S.tile_cols, dest="tile_cols",
                    help="Number of 35 mm tile units in X")
-    p.add_argument("--tile-rows",  type=int,   default=1, dest="tile_rows",
+    p.add_argument("--tile-rows",  type=int,   default=_S.tile_rows, dest="tile_rows",
                    help="Number of 35 mm tile units in Y")
-    p.add_argument("--base-h",     type=float, default=6.0, dest="base_h",
+    p.add_argument("--base-h",     type=float, default=_S.base_h, dest="base_h",
                    help="Slab depth below terrain surface (mm)")
-    p.add_argument("--gravel-per-tile", type=int, default=6000, dest="gravel_per_tile",
+    p.add_argument("--gravel-per-tile", type=int, default=_V.gravel_per_tile,
+                   dest="gravel_per_tile",
                    help="Stones per 35mm tile unit (scaled by tile count)")
-    p.add_argument("--flow-type",  type=str,   default="random-zones",
+    p.add_argument("--flow-type",  type=str,   default=_F.flow_type,
                    choices=["linear", "swirl", "radial", "drain", "dipole",
                             "random-zones", "curl"],
                    dest="flow_type")
-    p.add_argument("--flow-curl-noise", type=float, default=0.0,
+    p.add_argument("--flow-curl-noise", type=float, default=_F.flow_curl_noise,
                    dest="flow_curl_noise")
-    p.add_argument("--cross-section", type=str, default="circle",
+    p.add_argument("--cross-section", type=str, default=_G.cross_section,
                    choices=["triangle", "circle", "diamond"],
                    dest="cross_section")
-    p.add_argument("--groups-per-tile", type=int, default=41, dest="groups_per_tile",
+    p.add_argument("--groups-per-tile", type=int, default=_G.groups_per_tile,
+                   dest="groups_per_tile",
                    help="Grass groups per 35mm tile unit (scaled by tile count)")
-    p.add_argument("--group-min",  type=int,   default=10, dest="group_min")
-    p.add_argument("--group-max",  type=int,   default=15, dest="group_max")
-    p.add_argument("--group-spread", type=float, default=2.5, dest="group_spread_mm")
-    p.add_argument("--max-segs",   type=int,   default=12, dest="max_segs")
-    p.add_argument("--seg-len",    type=float, default=0.8, dest="seg_len")
-    p.add_argument("--rise-cap",   type=float, default=0.8, dest="rise_cap")
-    p.add_argument("--curl-max",   type=float, default=0.8, dest="curl_max")
-    p.add_argument("--smooth-sigma", type=float, default=2.0, dest="smooth_sigma")
-    p.add_argument("--root-depth", type=float, default=2.0, dest="root_depth")
-    p.add_argument("--max-bridge", type=float, default=10.0, dest="max_bridge_mm")
+    p.add_argument("--group-min",  type=int,   default=_G.group_min,  dest="group_min")
+    p.add_argument("--group-max",  type=int,   default=_G.group_max,  dest="group_max")
+    p.add_argument("--group-spread", type=float, default=_G.group_spread_mm,
+                   dest="group_spread_mm")
+    p.add_argument("--max-segs",   type=int,   default=_G.max_segs,   dest="max_segs")
+    p.add_argument("--seg-len",    type=float, default=_G.seg_len,    dest="seg_len")
+    p.add_argument("--rise-cap",   type=float, default=_G.rise_cap,   dest="rise_cap")
+    p.add_argument("--curl-max",   type=float, default=_G.curl_max,   dest="curl_max")
+    p.add_argument("--smooth-sigma", type=float, default=_G.smooth_sigma,
+                   dest="smooth_sigma")
+    p.add_argument("--root-depth", type=float, default=_G.root_depth, dest="root_depth")
+    p.add_argument("--max-bridge", type=float, default=_G.max_bridge_mm,
+                   dest="max_bridge_mm")
     p.add_argument("--quiet", "-q", action="store_true")
     return p
 

@@ -143,10 +143,13 @@ class GrassConfig:
     # ── Group placement ───────────────────────────────────────────────────────
     # groups_per_tile is a density — the layer multiplies by tile_cols × tile_rows
     # to get the actual group count for the surface.
-    groups_per_tile: int   = 41
-    group_min:       int   = 10
-    group_max:       int   = 15
-    group_spread_mm: float = 2.5
+    # More groups with fewer blades each → uniform coverage; fewer groups with
+    # more blades each → visible clumping.  At 120 groups the jittered-grid
+    # spacing is ~3 mm, small enough that directional flow sweeps fill the gaps.
+    groups_per_tile: int   = 120
+    group_min:       int   = 3
+    group_max:       int   = 5
+    group_spread_mm: float = 1.5
     group_dir_jitter:float = 0.14   # per-blade direction jitter within group (rad σ)
 
     # ── Spine sink ────────────────────────────────────────────────────────────
