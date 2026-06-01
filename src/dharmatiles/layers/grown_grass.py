@@ -110,8 +110,9 @@ def _make_support_post(cfg: TileConfig,
     angle  = rng.uniform(0.0, 2.0 * np.pi)
     offset = rng.uniform(0.3, 2.0)                      # mm offset on terrain
 
-    bx = float(np.clip(cx + offset * np.cos(angle), 0.0, cfg.tile_w))
-    by = float(np.clip(cy + offset * np.sin(angle), 0.0, cfg.tile_h))
+    hw = blade_width / 2.0   # half-width: keep the full base diameter on the tile
+    bx = float(np.clip(cx + offset * np.cos(angle), hw, cfg.tile_w - hw))
+    by = float(np.clip(cy + offset * np.sin(angle), hw, cfg.tile_h - hw))
     z_base = float(sample_grid(terrain_z, cfg, bx, by))
 
     p0 = np.array([bx, by, z_base], dtype=float)
@@ -501,7 +502,7 @@ class GrownGrassLayer:
 
             # Tip cone — one post at the taper transition to anchor the tip
             # region before the blade width starts reducing toward zero.
-            taper_idx = int(np.searchsorted(s_arr, body_l))
+            taper_idx = int(np.searchsorted(s_arr, body_l + 0.05 * total_l))
             taper_idx = int(np.clip(taper_idx, 0, len(path_arr) - 1))
             tip_cone = _blade_tip_cone(cfg, path_arr, widths,
                                         scene.terrain_z, taper_idx, rng)
