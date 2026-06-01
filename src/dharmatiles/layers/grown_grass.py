@@ -79,27 +79,26 @@ def _smooth_path(path_arr: np.ndarray, n_out: int, sigma: float) -> np.ndarray:
 
 # ── Bridge-support cones ──────────────────────────────────────────────────────
 
-def _make_support_cone(cfg: TileConfig,
+def _make_support_post(cfg: TileConfig,
                        cx: float, cy: float,
                        z_bottom: float, z_top: float,
-                       tip_width: float) -> trimesh.Trimesh:
-    """Tapered vertical cone from terrain up to the blade underside.
+                       blade_width: float) -> trimesh.Trimesh:
+    """Vertical cylinder from terrain up to the blade underside.
 
-    Looks like a short grass blade standing upright — wide at the base,
-    tapering to a point at the contact with the blade above.
+    Diameter = 75% of the blade width, constant along the full height,
+    centred on the blade spine.
     """
-    n_pts = 10
-    path = np.column_stack([
+    n_pts  = 10
+    diam   = blade_width * 0.75
+    path   = np.column_stack([
         np.full(n_pts, cx),
         np.full(n_pts, cy),
         np.linspace(z_bottom, z_top, n_pts),
     ])
-    t = np.linspace(0.0, 1.0, n_pts)
-    # Cosine taper: full width at root, zero at tip — mirrors blade tip profile
-    widths = tip_width * np.cos(t * np.pi / 2.0)
+    widths = np.full(n_pts, diam)
 
     return build_tube_mesh(path, widths, cfg.grass_thickness,
-                           cross_section='triangle',
+                           cross_section='circle',
                            n_segs=cfg.blade_circle_segs)
 
 
@@ -121,8 +120,8 @@ def _blade_tip_cone(cfg: TileConfig,
                      + cfg.grass_thickness * down_locs[taper_idx, 2])
     if z_blade <= z_ground + cfg.clearance:
         return None
-    return _make_support_cone(cfg, cx, cy_, z_ground, z_blade,
-                               tip_width=float(widths[taper_idx]))
+    return _make_support_post(cfg, cx, cy_, z_ground, z_blade,
+                               blade_width=float(widths[taper_idx]))
 
 
 def _blade_support_cones(cfg: TileConfig,
@@ -193,9 +192,9 @@ def _blade_support_cones(cfg: TileConfig,
                 z_blade  = float(underside_z[ci])
 
                 if z_blade > z_ground + cfg.clearance:
-                    cones.append(_make_support_cone(
+                    cones.append(_make_support_post(
                         cfg, cx, cy_, z_ground, z_blade,
-                        tip_width=float(widths[ci]),
+                        blade_width=float(widths[ci]),
                     ))
 
         i = j
