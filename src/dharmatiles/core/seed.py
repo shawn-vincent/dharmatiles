@@ -52,11 +52,12 @@ class GrassSeed:
     base_obstacle_ignore_t: float   # ignore obstacles over first t of blade
 
     # ── Growth ────────────────────────────────────────────────────────────────
-    seg_len:      float   # mm per growth segment
-    max_segs:     int     # maximum segments to grow
-    rise_cap:     float   # mm: max tolerated rise per step
-    smooth_sigma: float   # Gaussian smoothing width (segments)
-    root_depth:   float   # mm below terrain for underground anchor
+    seg_len:             float   # mm per growth segment
+    max_segs:            int     # maximum segments to grow
+    rise_cap:            float   # mm: max tolerated rise per step
+    smooth_sigma:        float   # Gaussian smoothing width (segments)
+    root_depth:          float   # mm below terrain for underground anchor
+    spine_sink_fraction: float   # fraction of width to sink spine below support
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -100,9 +101,10 @@ def make_seed(base_x: float, base_y: float,
         base_sink               = solver.base_sink,
         base_obstacle_ignore_t  = solver.base_obstacle_ignore_t,
         # growth
-        seg_len      = grass.seg_len,
-        max_segs     = grass.max_segs,
-        rise_cap     = grass.rise_cap,
-        smooth_sigma = grass.smooth_sigma,
-        root_depth   = grass.root_depth,
+        seg_len              = grass.seg_len,
+        max_segs             = grass.max_segs,
+        rise_cap             = grass.rise_cap,
+        smooth_sigma         = grass.smooth_sigma,
+        root_depth           = grass.root_depth,
+        spine_sink_fraction  = grass.spine_sink_fraction,
     )

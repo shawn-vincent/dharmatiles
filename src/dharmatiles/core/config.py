@@ -149,6 +149,13 @@ class GrassConfig:
     group_spread_mm: float = 2.5
     group_dir_jitter:float = 0.14   # per-blade direction jitter within group (rad σ)
 
+    # ── Spine sink ────────────────────────────────────────────────────────────
+    # Fraction of blade width to sink the spine below the support surface.
+    # 0.0 = spine sits on top of support (old behaviour)
+    # 0.5 = blade centre at support level; bottom half intersects support
+    # 1.0 = top edge of blade flush with support surface
+    spine_sink_fraction: float = 0.5
+
     # ── Support posts ─────────────────────────────────────────────────────────
     max_bridge_mm:   float = 10.0   # max unsupported span before a post is added
 

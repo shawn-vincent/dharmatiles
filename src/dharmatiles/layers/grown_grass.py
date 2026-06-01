@@ -372,9 +372,10 @@ class GrownGrassLayer:
                        'width': gc['width']}
                 )
 
-                tz = float(sample_grid(scene.terrain_z, surface, bx, by))
-                sz = float(sample_grid(occ_z,           surface, bx, by))
-                z0 = max(tz, sz) + solver.clearance
+                tz   = float(sample_grid(scene.terrain_z, surface, bx, by))
+                sz   = float(sample_grid(occ_z,           surface, bx, by))
+                sink = seed.width * seed.spine_sink_fraction
+                z0   = max(tz, sz) + solver.clearance - sink
 
                 live.append({
                     'seed':    seed,
@@ -383,8 +384,9 @@ class GrownGrassLayer:
                     'alive':   True,
                     'base_tz': tz,
                 })
+                # Stamp the actual blade top so stacking works correctly
                 _stamp(occ_z, surface, bx, by,
-                       z0 + grass.thickness, seed.width / 2.0)
+                       z0 + seed.width / 2.0, seed.width / 2.0)
 
         if verbose:
             print(f"  Planted {len(live)} blades in {len(group_centers)} groups")
@@ -424,7 +426,8 @@ class GrownGrassLayer:
 
                     tz_t = float(sample_grid(scene.terrain_z, surface, tx, ty))
                     sz_t = float(sample_grid(occ_z,           surface, tx, ty))
-                    nz   = max(tz_t, sz_t) + seed.clearance
+                    sink = seed.width * seed.spine_sink_fraction
+                    nz   = max(tz_t, sz_t) + seed.clearance - sink
 
                     if nz - cz <= seed.rise_cap:
                         accepted = (tx, ty, nz, d)
@@ -438,7 +441,8 @@ class GrownGrassLayer:
                 entry['path'].append((tx, ty, nz))
                 entry['dir'] = nd
                 grown += 1
-                _stamp(occ_z, surface, tx, ty, nz + grass.thickness, hw)
+                # Stamp the actual blade top for occupancy
+                _stamp(occ_z, surface, tx, ty, nz + seed.width / 2.0, hw)
 
             if verbose:
                 alive = sum(1 for b in live if b['alive'])
