@@ -26,7 +26,8 @@ from scipy.interpolate import PchipInterpolator
 
 from ..core.tile import TileConfig, TileScene
 from ..core.grid import sample_grid, rasterise_into_support
-from ..core.mesh import compute_up_locs, build_tube_mesh, blade_frame
+from ..core.mesh import compute_up_locs, build_tube_mesh, blade_frame, \
+                        drop_to_support, build_sub_hull_mesh
 from ..core.collision import (collect_strict_hits, log_strict_hits,
                                add_collision_repairs)
 
@@ -184,136 +185,6 @@ def _fit_envelope_spine(cfg: TileConfig, t_arr, floor_z,
     if np.any(spine_z < floor_z - 1e-6) or np.any(spine_z > ceiling_z + 1e-6):
         return None
     return spine_z
-
-
-# ── Sub-hull (printable support under each blade) ─────────────────────────────
-
-def _drop_to_support(point, support_z: np.ndarray,
-                     cfg: TileConfig) -> np.ndarray:
-    """Drop vertically from *point* until hitting support_z at the same XY."""
-    start = np.asarray(point, dtype=float)
-
-    def clearance(dist):
-        return start[2] - dist - sample_grid(support_z, cfg, start[0], start[1])
-
-    if clearance(0.0) <= 0.0:
-        return start
-
-    hi = 0.25
-    search_limit = cfg.base_h + cfg.max_stack_height + cfg.grass_thickness + 2.0
-    while hi < search_limit and clearance(hi) > 0.0:
-        hi *= 2.0
-    if clearance(hi) > 0.0:
-        return np.array([start[0], start[1], start[2] - hi], dtype=float)
-
-    lo = 0.0
-    for _ in range(16):
-        mid = 0.5 * (lo + hi)
-        if clearance(mid) > 0.0:
-            lo = mid
-        else:
-            hi = mid
-    return np.array([start[0], start[1], start[2] - hi], dtype=float)
-
-
-def _build_sub_hull_mesh(cfg: TileConfig, spine_3d: np.ndarray,
-                          widths: np.ndarray,
-                          support_z: np.ndarray,
-                          cross_section: str = 'triangle') -> trimesh.Trimesh:
-    """Separate printable support hull that bridges under each blade to the terrain.
-
-    Builds a triangular-prism strut running the length of the blade spine.
-    Two side vertices attach to the blade's underside; a third vertex is
-    dropped vertically until it touches the support surface.
-
-    triangle cross-section
-        side_r / side_l sit halfway down the two triangle sides (fraction
-        *grass_sub_hull_fraction* from each top edge toward the apex).
-
-    circle cross-section
-        side_r / side_l sit at ± (frac × 90°) from the top of the circle,
-        placing them on the lower half of the circle at an equivalent depth.
-        The same drop-to-terrain logic applies.
-
-    diamond cross-section
-        side_r / side_l sit at the equator vertices (widest points), which
-        are at ± half_width laterally and half_thickness below the spine.
-        grass_sub_hull_fraction is not used (natural attachment point).
-    """
-    path  = np.asarray(spine_3d, dtype=float)
-    W_arr = np.asarray(widths, dtype=float)
-    n_pts = len(path)
-    n     = 3
-
-    _, up_locs, down_locs = blade_frame(path)
-    half_W = (W_arr / 2.0)[:, None]
-    frac   = cfg.grass_sub_hull_fraction
-
-    if cross_section == 'triangle':
-        apex   = path + cfg.grass_thickness * down_locs
-        right  = path + half_W * up_locs
-        left   = path - half_W * up_locs
-        side_r = right + frac * (apex - right)
-        side_l = left  + frac * (apex - left)
-
-    elif cross_section == 'diamond':
-        # Attach at the equator vertices (V1 / V3) of the diamond ring —
-        # the widest points, at diamond_equator × thickness below the spine.
-        eq_d   = cfg.blade_diamond_equator * cfg.grass_thickness
-        side_r = path + half_W * up_locs   + eq_d * down_locs
-        side_l = path - half_W * up_locs   + eq_d * down_locs
-
-    else:  # 'circle' — attach at ±angle from top, on the lower half of the circle
-        # theta = frac × π/2:  0 = top (up_loc), π/2 = down_loc side
-        # At frac=0.5 this gives 45° — midway into the lower hemisphere.
-        theta_r = frac * np.pi / 2        # right attachment angle
-        theta_l = np.pi - theta_r         # left  attachment angle (symmetric)
-        side_r  = (path +
-                   half_W * (np.cos(theta_r) * up_locs + np.sin(theta_r) * down_locs))
-        side_l  = (path +
-                   half_W * (np.cos(theta_l) * up_locs + np.sin(theta_l) * down_locs))
-
-    centers = 0.5 * (side_r + side_l)
-
-    lower = np.empty_like(path)
-    for idx in range(n_pts):
-        lower[idx] = _drop_to_support(centers[idx], support_z, cfg)
-
-    ring_v = np.stack([lower, side_r, side_l], axis=1)   # (n_pts, 3, 3)
-    ring_v[:, :, 0] = np.clip(ring_v[:, :, 0], 0.0, cfg.tile_w)
-    ring_v[:, :, 1] = np.clip(ring_v[:, :, 1], 0.0, cfg.tile_h)
-
-    nv = n * n_pts + 2
-    nf = n + (n_pts - 1) * n * 2 + n
-    verts = np.empty((nv, 3), dtype=float)
-    faces = np.empty((nf, 3), dtype=np.int32)
-    vi = fi = 0
-
-    for idx in range(n_pts):
-        verts[vi:vi + n] = ring_v[idx];  vi += n
-
-    v_base = vi;  verts[vi] = np.mean(ring_v[0],  axis=0);  vi += 1
-    v_tip  = vi;  verts[vi] = np.mean(ring_v[-1], axis=0);  vi += 1
-
-    for idx in range(n):
-        faces[fi] = [v_base, (idx + 1) % n, idx];  fi += 1
-
-    for k in range(n_pts - 1):
-        ra = k * n;  rb = (k + 1) * n
-        for idx in range(n):
-            i1 = (idx + 1) % n
-            faces[fi] = [ra + idx, rb + idx, ra + i1];  fi += 1
-            faces[fi] = [ra + i1, rb + idx, rb + i1];   fi += 1
-
-    rl = (n_pts - 1) * n
-    for idx in range(n):
-        faces[fi] = [rl + idx, rl + (idx + 1) % n, v_tip];  fi += 1
-
-    mesh = trimesh.Trimesh(vertices=verts[:vi],
-                           faces=faces[:fi].astype(int),
-                           process=False)
-    mesh.fix_normals()
-    return mesh
 
 
 # ── Edge-rotation helper for tuft placement ──────────────────────────────────
@@ -516,7 +387,7 @@ def make_vegetation_blade(
                                     cross_section=xsec,
                                     n_segs=cfg.blade_circle_segs,
                                     diamond_equator=cfg.blade_diamond_equator)
-    sub_hull_mesh = _build_sub_hull_mesh(cfg, path_xyz, widths_arr, support_z,
+    sub_hull_mesh = build_sub_hull_mesh(cfg, path_xyz, widths_arr, support_z,
                                          cross_section=xsec)
 
     return blade_mesh, sub_hull_mesh, path_xyz, widths_arr

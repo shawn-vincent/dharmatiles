@@ -32,7 +32,7 @@ from scipy.ndimage import gaussian_filter1d
 
 from ..core.tile import TileConfig, TileScene
 from ..core.grid import sample_grid, rasterise_into_support
-from ..core.mesh import build_tube_mesh
+from ..core.mesh import build_tube_mesh, blade_frame
 from .grass import place_blades          # reuse zone-weighted seed placement
 
 
@@ -75,6 +75,110 @@ def _smooth_path(path_arr: np.ndarray, n_out: int, sigma: float) -> np.ndarray:
 
     cols = [PchipInterpolator(t_knots, smoothed[:, i])(t_out) for i in range(3)]
     return np.stack(cols, axis=1)
+
+
+# ── Bridge-support cones ──────────────────────────────────────────────────────
+
+def _make_support_cone(cfg: TileConfig,
+                       cx: float, cy: float,
+                       z_bottom: float, z_top: float,
+                       tip_width: float) -> trimesh.Trimesh:
+    """Tapered vertical cone from terrain up to the blade underside.
+
+    Looks like a short grass blade standing upright — wide at the base,
+    tapering to a point at the contact with the blade above.
+    """
+    n_pts = 10
+    path = np.column_stack([
+        np.full(n_pts, cx),
+        np.full(n_pts, cy),
+        np.linspace(z_bottom, z_top, n_pts),
+    ])
+    t = np.linspace(0.0, 1.0, n_pts)
+    # Cosine taper: full width at root, zero at tip — mirrors blade tip profile
+    widths = tip_width * np.cos(t * np.pi / 2.0)
+
+    return build_tube_mesh(path, widths, cfg.grass_thickness,
+                           cross_section='triangle',
+                           n_segs=cfg.blade_circle_segs)
+
+
+def _blade_support_cones(cfg: TileConfig,
+                          path_arr: np.ndarray,
+                          widths: np.ndarray,
+                          terrain_z: np.ndarray,
+                          max_bridge_mm: float) -> List[trimesh.Trimesh]:
+    """Return support cones only where the blade spans more than *max_bridge_mm*
+    above the terrain without a contact point.
+
+    Algorithm
+    ---------
+    1. For every point along the smoothed spine, compute the gap between the
+       blade underside and the terrain directly below.
+    2. Walk the arc-length parameterisation to find contiguous "airborne" spans
+       (gap > clearance).
+    3. Any airborne span longer than *max_bridge_mm* gets one cone per
+       max_bridge_mm interval, placed at the midpoints of each sub-interval.
+    """
+    n_pts    = len(path_arr)
+    _, up_locs, down_locs = blade_frame(path_arr)
+
+    # Blade underside: spine shifted by grass_thickness in the down direction
+    underside_z = path_arr[:, 2] + cfg.grass_thickness * down_locs[:, 2]
+
+    # Terrain Z directly below each spine point
+    ground_z = np.array([
+        sample_grid(terrain_z, cfg, float(path_arr[i, 0]), float(path_arr[i, 1]))
+        for i in range(n_pts)
+    ])
+
+    gap = underside_z - ground_z
+
+    # Arc-length parameterisation
+    seg_lens = np.linalg.norm(np.diff(path_arr, axis=0), axis=1)
+    arc_s    = np.concatenate([[0.0], np.cumsum(seg_lens)])
+
+    # Airborne = blade is more than clearance above terrain
+    airborne = gap > cfg.clearance + 0.05
+
+    cones: List[trimesh.Trimesh] = []
+    i = 0
+    while i < n_pts:
+        if not airborne[i]:
+            i += 1
+            continue
+
+        # Find end of this airborne span
+        j = i + 1
+        while j < n_pts and airborne[j]:
+            j += 1
+
+        span_start_s = arc_s[i]
+        span_end_s   = arc_s[min(j, n_pts - 1)]
+        span_len     = span_end_s - span_start_s
+
+        if span_len > max_bridge_mm:
+            n_cones = int(span_len / max_bridge_mm)   # one per full interval
+            for k in range(1, n_cones + 1):
+                # Place each cone at the centre of its sub-interval
+                target_s = span_start_s + (k - 0.5) * (span_len / n_cones)
+                ci = int(np.searchsorted(arc_s, target_s))
+                ci = int(np.clip(ci, 0, n_pts - 1))
+
+                cx       = float(path_arr[ci, 0])
+                cy_      = float(path_arr[ci, 1])
+                z_ground = float(sample_grid(terrain_z, cfg, cx, cy_))
+                z_blade  = float(underside_z[ci])
+
+                if z_blade > z_ground + cfg.clearance:
+                    cones.append(_make_support_cone(
+                        cfg, cx, cy_, z_ground, z_blade,
+                        tip_width=float(widths[ci]),
+                    ))
+
+        i = j
+
+    return cones
 
 
 # ── Jittered-grid group placement ────────────────────────────────────────────
@@ -144,6 +248,7 @@ class GrownGrassLayer:
     group_max:         int   = 15     # max blades per group
     group_spread_mm:   float = 2.5    # radius (mm) to scatter blade bases around group centre
     group_dir_jitter:  float = 0.14   # per-blade direction jitter within group (radians σ)
+    max_bridge_mm:     float = 10.0   # max unsupported span before a support cone is added
 
     def __init__(self, cfg: TileConfig) -> None:
         self.cfg = cfg
@@ -307,6 +412,13 @@ class GrownGrassLayer:
                                    n_segs=cfg.blade_circle_segs,
                                    diamond_equator=cfg.blade_diamond_equator)
             parts.append(mesh)
+
+            # Selective support cones — only where the blade spans too far
+            # above the terrain without a contact point below it.
+            cones = _blade_support_cones(cfg, path_arr, widths,
+                                          scene.terrain_z, self.max_bridge_mm)
+            parts.extend(cones)
+
             rasterise_into_support(scene.support_z, cfg, path_arr, widths / 2.0)
 
         if verbose:

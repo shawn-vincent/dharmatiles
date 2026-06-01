@@ -130,6 +130,9 @@ def _build_parser() -> argparse.ArgumentParser:
                    dest="smooth_sigma", help="Gaussian smoothing width (segments)")
     p.add_argument("--root-depth",     type=float, default=g.root_depth,
                    dest="root_depth",  help="Underground anchor depth (mm)")
+    p.add_argument("--max-bridge",     type=float, default=g.max_bridge_mm,
+                   dest="max_bridge_mm",
+                   help="Max unsupported span (mm) before a support cone is added (default: %(default)s)")
 
     p.add_argument("--quiet", "-q", action="store_true")
     return p
@@ -156,6 +159,7 @@ def main(argv=None):
         curl_min_fraction = args.curl_min_fraction,
         smooth_sigma      = args.smooth_sigma,
         root_depth        = args.root_depth,
+        max_bridge_mm     = args.max_bridge_mm,
     )
     build_grown_grass_tile(cfg, output_path=args.output,
                            grown_kwargs=grown_kwargs, verbose=not args.quiet)
