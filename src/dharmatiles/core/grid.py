@@ -5,22 +5,28 @@ from __future__ import annotations
 
 import numpy as np
 
-from .tile import TileConfig
+from .config import SurfaceConfig
 
 
-def sample_grid(grid: np.ndarray, cfg: TileConfig, x_mm, y_mm):
+def sample_grid(grid: np.ndarray, surface: SurfaceConfig, x_mm, y_mm):
     """Bilinear sample of *grid* at world coordinates — accepts scalars or arrays.
 
     Parameters
     ----------
-    grid : (GRID_RES, GRID_RES) float array  — indexed [row=j, col=i]
-    x_mm, y_mm : scalar or array — world X / Y positions in mm
+    grid    : (grid_h, grid_w) float array  — indexed [row=j, col=i]
+    surface : SurfaceConfig — provides cell dimensions and grid shape.
+    x_mm, y_mm : scalar or array — world X / Y positions in mm.
     """
+    grid_w = surface.grid_w
+    grid_h = surface.grid_h
+    cw     = surface.cell_w
+    ch     = surface.cell_h
+
     scalar = np.ndim(x_mm) == 0
-    i  = np.clip(np.asarray(x_mm, dtype=float) / cfg.gx, 0, cfg.grid_res - 1)
-    j  = np.clip(np.asarray(y_mm, dtype=float) / cfg.gy, 0, cfg.grid_res - 1)
-    i0 = np.floor(i).astype(int);  i1 = np.minimum(i0 + 1, cfg.grid_res - 1)
-    j0 = np.floor(j).astype(int);  j1 = np.minimum(j0 + 1, cfg.grid_res - 1)
+    i  = np.clip(np.asarray(x_mm, dtype=float) / cw, 0, grid_w - 1)
+    j  = np.clip(np.asarray(y_mm, dtype=float) / ch, 0, grid_h - 1)
+    i0 = np.floor(i).astype(int);  i1 = np.minimum(i0 + 1, grid_w - 1)
+    j0 = np.floor(j).astype(int);  j1 = np.minimum(j0 + 1, grid_h - 1)
     fi = i - i0;  fj = j - j0
     result = (grid[j0, i0] * (1 - fi) * (1 - fj) +
               grid[j0, i1] *      fi  * (1 - fj) +
@@ -29,7 +35,7 @@ def sample_grid(grid: np.ndarray, cfg: TileConfig, x_mm, y_mm):
     return float(result) if scalar else result
 
 
-def rasterise_into_support(support_z: np.ndarray, cfg: TileConfig,
+def rasterise_into_support(support_z: np.ndarray, surface: SurfaceConfig,
                             path_xyz, half_widths) -> None:
     """Paint the blade's top surface into *support_z* (in-place max).
 
@@ -42,11 +48,16 @@ def rasterise_into_support(support_z: np.ndarray, cfg: TileConfig,
     is intentional — fancy indexing produces a *copy*, so we must assign back
     explicitly.  Do NOT replace with ``np.maximum(..., out=support_z[jj, ii])``.
     """
-    path = np.asarray(path_xyz)   # (n_pts, 3)
-    hws  = np.asarray(half_widths)  # (n_pts,)
+    path = np.asarray(path_xyz)    # (n_pts, 3)
+    hws  = np.asarray(half_widths) # (n_pts,)
+
+    grid_w = surface.grid_w
+    grid_h = surface.grid_h
+    cw     = surface.cell_w
+    ch     = surface.cell_h
 
     samples: list = []
-    half_cell = 0.5 * min(cfg.gx, cfg.gy)
+    half_cell = 0.5 * min(cw, ch)
 
     for idx in range(len(path) - 1):
         p0, p1   = path[idx], path[idx + 1]
@@ -64,17 +75,17 @@ def rasterise_into_support(support_z: np.ndarray, cfg: TileConfig,
                     float(path[-1, 2]), float(hws[-1])))
 
     for x, y, z, hw in samples:
-        r_cells = max(1, int(hw / cfg.gx) + 2)
-        ic = int(np.clip(x / cfg.gx, 0, cfg.grid_res - 1))
-        jc = int(np.clip(y / cfg.gy, 0, cfg.grid_res - 1))
+        r_cells = max(1, int(hw / cw) + 2)
+        ic = int(np.clip(x / cw, 0, grid_w - 1))
+        jc = int(np.clip(y / ch, 0, grid_h - 1))
 
-        lo_i = max(0, ic - r_cells);  hi_i = min(cfg.grid_res - 1, ic + r_cells)
-        lo_j = max(0, jc - r_cells);  hi_j = min(cfg.grid_res - 1, jc + r_cells)
+        lo_i = max(0, ic - r_cells);  hi_i = min(grid_w - 1, ic + r_cells)
+        lo_j = max(0, jc - r_cells);  hi_j = min(grid_h - 1, jc + r_cells)
 
         di = np.arange(lo_i - ic, hi_i - ic + 1)
         dj = np.arange(lo_j - jc, hi_j - jc + 1)
         DI, DJ = np.meshgrid(di, dj, indexing='ij')
-        mask = (DI * cfg.gx) ** 2 + (DJ * cfg.gy) ** 2 <= hw * hw
+        mask = (DI * cw) ** 2 + (DJ * ch) ** 2 <= hw * hw
 
         ii = ic + DI[mask]
         jj = jc + DJ[mask]

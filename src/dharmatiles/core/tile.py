@@ -1,6 +1,19 @@
 """
-TileConfig  — all parameters for one terrain tile (immutable after creation).
-TileScene   — mutable state accumulated while building a tile.
+TileScene — mutable state accumulated while building a terrain scene.
+
+The scene holds:
+  terrain_z  — float heightmap derived from the TerrainGrid (read-only after init)
+  support_z  — mutable occupancy surface raised by each layer as it places geometry
+  parts      — mesh list accumulated during build (cleared at export)
+
+Configuration lives entirely in SceneConfig sub-configs; TileScene does not
+hold configuration itself.
+
+Compatibility shim
+------------------
+``TileConfig`` is provided as a thin alias for ``SceneConfig`` so existing
+call sites continue to work during the transition.  New code should use
+``SceneConfig`` directly.
 """
 from __future__ import annotations
 
@@ -10,190 +23,108 @@ from typing import List
 import numpy as np
 import trimesh
 
-
-# ── Tile type presets ─────────────────────────────────────────────────────────
-
-class TileType:
-    """Named base-height presets matching the game's physical tile system."""
-    GROUND   = 6.0   # mm
-    WATER    = 3.0
-    MANMADE  = 9.5
+from .config import SceneConfig, SurfaceConfig, GrassConfig, SolverConfig
+from .terrain import (TerrainGrid, TerrainType,
+                      terrain_grid_to_heightmap)
 
 
-# ── Config ────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Grid coordinate helpers
+# ─────────────────────────────────────────────────────────────────────────────
 
-@dataclass
-class TileConfig:
-    """All tunable parameters for a single terrain tile.
-
-    Immutable by convention — create a new instance rather than mutating.
-    Derived grid spacings (``gx``, ``gy``) are computed properties.
-    """
-
-    # ── Tile geometry ──────────────────────────────────────────────────────────
-    tile_w: float = 35.0       # mm — tile width  (X axis)
-    tile_h: float = 35.0       # mm — tile height (Y axis)
-    base_h: float = TileType.GROUND  # mm — solid slab depth below terrain surface
-    grid_res: int = 256        # support-field resolution (cells per side)
-
-    # ── Terrain ────────────────────────────────────────────────────────────────
-    terrain_amp: float  = 1.0   # mm — sinusoidal bump amplitude
-    terrain_freq: float = 1.5   # cycles across tile
-
-    # ── Blade population ───────────────────────────────────────────────────────
-    n_blades: int  = 327
-    n_fill: int    = 0
-    seed: int      = 377
-    curl_max: float = 0.3
-    curl_min_fraction: float = 0.0
-    density_candidate_factor: float = 4.0
-    divergence_density_gain: float = 2.0
-    edge_density_margin: float = 6.0
-    edge_density_min: float = 0.15
-
-    # Tuft (multi-blade cluster) parameters
-    # Each placed seed expands to randint(tuft_min, tuft_max) blades.
-    # Their directions fan out symmetrically ±tuft_spread/2 around the main
-    # flow direction; the whole fan is rotated if any tip would exit the tile.
-    tuft_min: int          = 1
-    tuft_max: int          = 1
-    tuft_spread: float     = np.radians(20)   # total angular fan width
-
-    # Tall blade geometry (mm)
-    tall_w_min: float  = 0.8015625
-    tall_w_max: float  = 1.06875
-    tall_l_min: float  = 7.425
-    tall_l_max: float  = 13.275
-    tall_tl_min: float = 2.3625
-    tall_tl_max: float = 4.3875
-
-    # Fill blade geometry (mm)
-    fill_w_min: float  = 0.3
-    fill_w_max: float  = 0.5
-    fill_l_min: float  = 4.0
-    fill_l_max: float  = 7.2
-    fill_tl_min: float = 1.2
-    fill_tl_max: float = 2.4
-
-    # Blade cross-section
-    # blade_cross_section: 'triangle' — flat ribbon with apex below (printable, fast)
-    #                      'circle'   — cylindrical tube (reed / rush look)
-    #                      'diamond'  — 4-vertex rhombus: ridge top, keel bottom
-    blade_cross_section: str       = 'circle'
-    # leaf_cross_section: independent cross-section for leaf blades (default 'triangle')
-    leaf_cross_section: str        = 'triangle'
-    blade_circle_segs: int         = 12    # segments for 'circle' cross-section (≥3)
-    grass_thickness: float         = 0.5   # mm — 'triangle' apex depth below spine
-    # diamond equator position: 0 = top (infinitely sharp), 1 = bottom apex (flat top).
-    # 0.75 → widest point ¾ of the way down → sharp upper ridge, shallow lower keel.
-    blade_diamond_equator: float   = 0.75
-    grass_sub_hull_fraction: float = 0.5   # fraction down triangle sides where sub-hull starts
-
-    # ── Vegetation mix ─────────────────────────────────────────────────────────
-    # Whole-number ratio of grass tuft seeds to leaf seeds, e.g. 5:1.
-    grass_ratio: int = 1
-    leaf_ratio:  int = 0
-
-    # Leaf (broadleaf) geometry (mm)
-    # Width profile: sinusoidal rise from 0 at the base to max width at
-    # leaf_peak_t, then cosine fall back to 0 at the tip — gives ovate outline.
-    leaf_w_min:  float = 3.5    # min max-width of leaf
-    leaf_w_max:  float = 5.5    # max max-width of leaf
-    leaf_l_min:  float = 12.0   # min blade length
-    leaf_l_max:  float = 22.0   # max blade length
-    leaf_peak_t: float = 0.35   # where width is maximum (0 = base, 1 = tip)
-
-    # Leaf lean profile (leaves stay more upright than grass)
-    leaf_lean_angle: float = np.radians(55)
-
-    # Leaf tuft: leaves are single blades (one per seed)
-    leaf_tuft_min:    int   = 1
-    leaf_tuft_max:    int   = 1
-    leaf_tuft_spread: float = 0.0    # N/A for single-blade tufts
-
-    # ── Blade lean profile ─────────────────────────────────────────────────────
-    base_lean_angle: float = np.radians(8)    # lean at base (blade erupts near-vertically)
-    lean_angle: float      = np.radians(80)   # grass max lean at tip (nearly horizontal)
-    n_path: int            = 50               # spine sample count (more = smoother)
-
-    # ── Flow field ─────────────────────────────────────────────────────────────
-    # flow_type: 'linear' | 'swirl' | 'radial' | 'drain' | 'dipole' | 'random-zones' | 'curl'
-    flow_type: str        = 'random-zones'
-    flow_curl_noise: float = 0.0            # 0 = pure base field, 1 = all curl noise
-    dir_spread: float     = np.radians(5)   # per-blade Gaussian jitter around flow
-    curl_from_curv: float = 0.80            # 0 = random curl, 1 = curvature-driven
-
-    # ── Terrain-following / knot-envelope z-solver ─────────────────────────────
-    clearance: float               = 0.10   # mm — gap above previous blade tops
-    base_sink: float               = 0.05   # mm — base buried below local terrain
-    base_obstacle_ignore_t: float  = 0.20   # ignore obstacles over first 20% of blade
-    collision_repair_passes: int   = 8      # max per-blade repair attempts
-    max_stack_height: float        = 6.0    # mm — hard pile-height cap above terrain
-
-    # ── Strict intersection checking ───────────────────────────────────────────
-    strict_mode: bool    = True
-    strict_base_t: float = 0.25   # ignore hits at t ≤ this (blade erupting from terrain)
-
-    # ── Gravel / stones ────────────────────────────────────────────────────────
-    n_gravel: int            = 6000
-    gravel_r_min: float      = 0.048   # mm — minimum horizontal semi-axis
-    gravel_r_max: float      = 0.42    # mm — maximum horizontal semi-axis
-    gravel_flat_min: float   = 0.40    # height = this × mean_radius (flattest)
-    gravel_flat_max: float   = 1.30    # height = this × mean_radius (roundest)
-    gravel_az_segs: int      = 7       # azimuth facets per stone
-    gravel_el_segs: int      = 3       # elevation rings per stone
-    gravel_sink: float       = 0.01    # mm — base sunk below terrain (looks embedded)
-
-    # ── Derived grid spacing ───────────────────────────────────────────────────
-    @property
-    def gx(self) -> float:
-        """mm per grid cell in X."""
-        return self.tile_w / (self.grid_res - 1)
-
-    @property
-    def gy(self) -> float:
-        """mm per grid cell in Y."""
-        return self.tile_h / (self.grid_res - 1)
+def make_xy_grids(surface: SurfaceConfig):
+    """Return (x_grid, y_grid) world-coordinate arrays (grid_h × grid_w)."""
+    iy, ix = np.mgrid[0:surface.grid_h, 0:surface.grid_w]
+    return (ix * surface.cell_w).astype(float), (iy * surface.cell_h).astype(float)
 
 
-# ── Grid helpers ──────────────────────────────────────────────────────────────
-
-def make_xy_grids(cfg: TileConfig):
-    """Return (x_grid, y_grid) world-coordinate arrays (GRID_RES × GRID_RES)."""
-    iy, ix = np.mgrid[0:cfg.grid_res, 0:cfg.grid_res]
-    return (ix * cfg.gx).astype(float), (iy * cfg.gy).astype(float)
-
-
-def make_terrain(cfg: TileConfig) -> np.ndarray:
-    """Build the sinusoidal terrain heightmap (GRID_RES × GRID_RES)."""
-    x_grid, y_grid = make_xy_grids(cfg)
-    u_grid = x_grid / cfg.tile_w
-    v_grid = y_grid / cfg.tile_h
-    edge_envelope = np.sin(np.pi * u_grid) * np.sin(np.pi * v_grid)
-    undulation = (
-        np.sin(2 * np.pi * cfg.terrain_freq * u_grid) *
-        np.cos(2 * np.pi * cfg.terrain_freq * v_grid)
-    )
-    return (cfg.terrain_amp * edge_envelope * undulation).astype(float)
-
-
-# ── Scene ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Scene
+# ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class TileScene:
-    """Mutable state accumulated while building a tile.
+    """Mutable state accumulated while building a terrain scene.
+
+    Build with :meth:`from_config` (uses a sinusoidal stand-in terrain) or
+    :meth:`from_terrain_grid` (uses a semantic TerrainGrid).
 
     ``terrain_z`` is fixed at construction.
     ``support_z`` grows as layers rasterise their geometry onto it.
-    ``parts``     is the list of Trimesh objects to combine at export.
+    ``parts`` is the list of Trimesh objects to combine at export.
     """
-    config: TileConfig
-    terrain_z: np.ndarray                      # (GRID_RES, GRID_RES) — read-only
-    support_z: np.ndarray                      # (GRID_RES, GRID_RES) — mutable
-    parts: List[trimesh.Trimesh] = field(default_factory=list)
+    config:    SceneConfig
+    terrain_z: np.ndarray                       # (grid_h, grid_w) — read-only
+    support_z: np.ndarray                       # (grid_h, grid_w) — mutable
+    parts:     List[trimesh.Trimesh] = field(default_factory=list)
+
+    # ── Constructors ──────────────────────────────────────────────────────────
 
     @classmethod
-    def from_config(cls, cfg: TileConfig) -> "TileScene":
-        """Initialise a fresh scene: terrain generated, support_z = terrain_z."""
-        terrain_z = make_terrain(cfg)
-        return cls(config=cfg, terrain_z=terrain_z, support_z=terrain_z.copy())
+    def from_config(cls, cfg: SceneConfig) -> "TileScene":
+        """Initialise with a sinusoidal stand-in terrain heightmap.
+
+        Preserves the old behaviour for scripts that have not yet been
+        migrated to TerrainGrid.
+        """
+        terrain_z = _make_sinusoidal_terrain(cfg.surface)
+        return cls(config=cfg, terrain_z=terrain_z,
+                   support_z=terrain_z.copy())
+
+    @classmethod
+    def from_terrain_grid(cls, cfg: SceneConfig,
+                          grid: TerrainGrid) -> "TileScene":
+        """Initialise from a semantic TerrainGrid.
+
+        Uses :func:`terrain_grid_to_heightmap` to derive the float heightmap.
+        """
+        terrain_z = terrain_grid_to_heightmap(grid)
+        return cls(config=cfg, terrain_z=terrain_z,
+                   support_z=terrain_z.copy())
+
+    # ── Convenience properties ────────────────────────────────────────────────
+
+    @property
+    def surface(self) -> SurfaceConfig:
+        return self.config.surface
+
+    @property
+    def grass(self) -> GrassConfig:
+        return self.config.grass
+
+    @property
+    def solver(self) -> SolverConfig:
+        return self.config.solver
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sinusoidal stand-in terrain
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _make_sinusoidal_terrain(surface: SurfaceConfig,
+                              amp: float = 1.0,
+                              freq: float = 1.5) -> np.ndarray:
+    """Build a sinusoidal test heightmap (grid_h × grid_w).
+
+    Stand-in until the semantic TerrainGrid is wired to all entry points.
+    Not part of the target architecture.
+    """
+    x_grid, y_grid = make_xy_grids(surface)
+    u = x_grid / surface.tile_w
+    v = y_grid / surface.tile_h
+    envelope = np.sin(np.pi * u) * np.sin(np.pi * v)
+    wave = (np.sin(2 * np.pi * freq * u) *
+            np.cos(2 * np.pi * freq * v))
+    return (amp * envelope * wave).astype(float)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Compatibility shim — remove after full migration
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _make_compat_scene(tile_config) -> TileScene:
+    """Build a TileScene from a legacy TileConfig-shaped object.
+
+    Used by the compatibility layer in TileConfig.__new__.
+    """
+    raise NotImplementedError("Use SceneConfig + TileScene directly.")

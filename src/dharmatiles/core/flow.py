@@ -1,8 +1,8 @@
 """
-Flow vector field: drives blade lean direction and lateral curl across the tile.
+Flow vector field: drives blade lean direction and lateral curl across the surface.
 
-The field is a unit-vector field over the GRID_RES × GRID_RES tile, expressed
-as a bearing angle (atan2(fx, fy), 0 = +Y / north, π/2 = +X / east).
+The field is a unit-vector field over the grid, expressed as a bearing angle
+(atan2(fx, fy), 0 = +Y / north, π/2 = +X / east).
 
 Construction
 ────────────
@@ -18,37 +18,38 @@ from __future__ import annotations
 
 import numpy as np
 
-from .tile import TileConfig
+from .config import SurfaceConfig, FlowConfig
 
 
-def build_flow_field(cfg: TileConfig, x_grid: np.ndarray, y_grid: np.ndarray):
-    """Build (angle_field, curv_field) on the tile's GRID_RES × GRID_RES grid.
+def build_flow_field(surface: SurfaceConfig, flow: FlowConfig,
+                     x_grid: np.ndarray, y_grid: np.ndarray):
+    """Build (angle_field, curv_field) on the surface grid.
 
     Parameters
     ----------
-    cfg     : TileConfig — uses ``seed``, ``flow_type``, ``flow_curl_noise``,
-              ``gx``, ``gy``.
-    x_grid  : (GRID_RES, GRID_RES) — world X coords in mm (from make_xy_grids).
-    y_grid  : (GRID_RES, GRID_RES) — world Y coords in mm.
+    surface : SurfaceConfig — tile dimensions and grid shape.
+    flow    : FlowConfig — flow type and curl noise settings.
+    x_grid  : (grid_h, grid_w) — world X coords in mm.
+    y_grid  : (grid_h, grid_w) — world Y coords in mm.
 
     Returns
     -------
-    angle_field : (GRID_RES, GRID_RES) float — bearing angle in radians.
-    curv_field  : (GRID_RES, GRID_RES) float in [−1, 1] — signed curvature.
+    angle_field : (grid_h, grid_w) float — bearing angle in radians.
+    curv_field  : (grid_h, grid_w) float in [−1, 1] — signed curvature.
     """
-    frng = np.random.default_rng(cfg.seed ^ 0x464C4F57)   # independent from blade rng
+    frng = np.random.default_rng(surface.seed ^ 0x464C4F57)   # independent from blade rng
 
     # Normalised tile coords in [−0.5, 0.5]²
-    xn = (x_grid / cfg.tile_w - 0.5).astype(float)
-    yn = (y_grid / cfg.tile_h - 0.5).astype(float)
+    xn = (x_grid / surface.tile_w - 0.5).astype(float)
+    yn = (y_grid / surface.tile_h - 0.5).astype(float)
 
     # ── 1. Base field ──────────────────────────────────────────────────────────
-    ft = cfg.flow_type
+    ft = flow.flow_type
 
     if ft == 'swirl':
         cx_n = frng.uniform(-0.15, 0.15)
         cy_n = frng.uniform(-0.15, 0.15)
-        sign = frng.choice([-1.0, 1.0])   # CW or CCW, per-seed
+        sign = frng.choice([-1.0, 1.0])
         dx = xn - cx_n;  dy = yn - cy_n
         r  = np.sqrt(dx**2 + dy**2) + 1e-9
         bfx =  sign * dy / r
@@ -86,10 +87,6 @@ def build_flow_field(cfg: TileConfig, x_grid: np.ndarray, y_grid: np.ndarray):
     elif ft == 'random-zones':
         n_zones = 7
         centers = frng.uniform(-0.42, 0.42, size=(n_zones, 2))
-        # Stratified: divide the circle into n_zones equal sectors, pick one
-        # random angle per sector, then shuffle so adjacent zone centers don't
-        # get adjacent directions.  Guarantees all 5 zones point in clearly
-        # different directions regardless of seed.
         sector  = 2 * np.pi / n_zones
         angles  = frng.permutation(
             frng.uniform(0, 1, n_zones) * sector + np.arange(n_zones) * sector
@@ -122,8 +119,6 @@ def build_flow_field(cfg: TileConfig, x_grid: np.ndarray, y_grid: np.ndarray):
     bfx, bfy = bfx / mag, bfy / mag
 
     # ── 2. Curl noise: divergence-free perturbation ────────────────────────────
-    # Stream-function P = Σ sinusoids.  curl(P) = (∂P/∂y, −∂P/∂x) is always
-    # divergence-free by construction.
     P = np.zeros_like(xn)
     for _ in range(4):
         fx_ = frng.uniform(1.5, 4.0)
@@ -133,23 +128,22 @@ def build_flow_field(cfg: TileConfig, x_grid: np.ndarray, y_grid: np.ndarray):
         amp = frng.uniform(0.3, 1.0)
         P  += amp * np.sin(fx_ * 2 * np.pi * xn + phx) * np.cos(fy_ * 2 * np.pi * yn + phy)
 
-    dPdy, dPdx = np.gradient(P, cfg.gy, cfg.gx)   # ∂P/∂y axis-0, ∂P/∂x axis-1
+    dPdy, dPdx = np.gradient(P, surface.cell_h, surface.cell_w)
     cnx, cny = dPdy, -dPdx
     cmag = np.sqrt(cnx**2 + cny**2) + 1e-9
     cnx /= cmag;  cny /= cmag
 
-    s  = cfg.flow_curl_noise
+    s  = flow.flow_curl_noise
     fx = (1 - s) * bfx + s * cnx
     fy = (1 - s) * bfy + s * cny
     mag = np.sqrt(fx**2 + fy**2) + 1e-9
     fx /= mag;  fy /= mag
 
     # ── 3. Angle field ─────────────────────────────────────────────────────────
-    angle_field = np.arctan2(fx, fy)   # 0 = +Y (north), π/2 = +X (east)
+    angle_field = np.arctan2(fx, fy)
 
     # ── 4. Signed curvature κ = ∇θ · f̂ ───────────────────────────────────────
-    # Positive = streamline bends CW (increasing azimuth), negative = CCW.
-    dθdy, dθdx = np.gradient(angle_field, cfg.gy, cfg.gx)
+    dθdy, dθdx = np.gradient(angle_field, surface.cell_h, surface.cell_w)
     kappa = dθdx * fx + dθdy * fy
     scale = np.percentile(np.abs(kappa), 95) + 1e-9
     curv_field = np.clip(kappa / scale, -1.0, 1.0)
