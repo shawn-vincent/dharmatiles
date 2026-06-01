@@ -115,12 +115,13 @@ def _blade_tip_cone(cfg: TileConfig,
     _, _, down_locs = blade_frame(path_arr)
     cx  = float(path_arr[taper_idx, 0])
     cy_ = float(path_arr[taper_idx, 1])
-    z_ground = float(sample_grid(terrain_z, cfg, cx, cy_))
-    z_blade  = float(path_arr[taper_idx, 2]
-                     + cfg.grass_thickness * down_locs[taper_idx, 2])
-    if z_blade <= z_ground + cfg.clearance:
+    z_ground    = float(sample_grid(terrain_z, cfg, cx, cy_))
+    z_underside = float(path_arr[taper_idx, 2]
+                        + cfg.grass_thickness * down_locs[taper_idx, 2])
+    z_spine     = float(path_arr[taper_idx, 2])
+    if z_underside <= z_ground + cfg.clearance:
         return None
-    return _make_support_post(cfg, cx, cy_, z_ground, z_blade,
+    return _make_support_post(cfg, cx, cy_, z_ground, z_spine,
                                blade_width=float(widths[taper_idx]))
 
 
@@ -189,11 +190,10 @@ def _blade_support_cones(cfg: TileConfig,
                 cx       = float(path_arr[ci, 0])
                 cy_      = float(path_arr[ci, 1])
                 z_ground = float(sample_grid(terrain_z, cfg, cx, cy_))
-                z_blade  = float(underside_z[ci])
 
-                if z_blade > z_ground + cfg.clearance:
+                if underside_z[ci] > z_ground + cfg.clearance:
                     cones.append(_make_support_post(
-                        cfg, cx, cy_, z_ground, z_blade,
+                        cfg, cx, cy_, z_ground, float(path_arr[ci, 2]),
                         blade_width=float(widths[ci]),
                     ))
 
