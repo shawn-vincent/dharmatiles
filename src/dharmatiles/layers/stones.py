@@ -26,8 +26,8 @@ class StonesLayer:
 
     def build(self, scene: TileScene) -> List[trimesh.Trimesh]:
         """Add stone geometry to *scene.support_z* and return mesh list."""
-        tile_area = self.surface.tile_cols * self.surface.tile_rows
-        n_stones  = self.stones.stones_per_tile * tile_area
+        n_squares = self.surface.cols * self.surface.rows
+        n_stones  = self.stones.stones_per_square * n_squares
         rng  = np.random.default_rng(self.surface.seed + 7919)
         mesh = _build_stones_mesh(self.surface, self.stones, n_stones,
                                   scene.terrain_z, scene.support_z,

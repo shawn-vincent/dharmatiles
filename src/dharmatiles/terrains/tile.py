@@ -11,8 +11,8 @@ Usage
 ─────
     python -m dharmatiles.terrains.tile
     python -m dharmatiles.terrains.tile --seed 42
-    python -m dharmatiles.terrains.tile --tile-cols 3 --tile-rows 3
-    python -m dharmatiles.terrains.tile --no-base --groups-per-tile 0
+    python -m dharmatiles.terrains.tile --cols 3 --rows 3
+    python -m dharmatiles.terrains.tile --no-base --groups-per-square 0
 """
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ def build_tile(cfg: SceneConfig,
     """Build a grass tile and export it to *output_path*."""
     if verbose:
         print(f"=== Building tile "
-              f"({cfg.surface.tile_cols}×{cfg.surface.tile_rows} tiles, "
+              f"({cfg.surface.cols}×{cfg.surface.rows} squares, "
               f"grid {cfg.surface.grid_w}×{cfg.surface.grid_h}) ===")
 
     scene = TileScene.from_config(cfg)
@@ -58,12 +58,12 @@ def build_tile(cfg: SceneConfig,
         print("Building soil texture...")
     SoilLayer(cfg.surface, cfg.soil).build(scene)
 
-    tile_area = cfg.surface.tile_cols * cfg.surface.tile_rows
-    n_stones  = cfg.stones.stones_per_tile * tile_area
+    n_squares = cfg.surface.cols * cfg.surface.rows
+    n_stones  = cfg.stones.stones_per_square * n_squares
     if n_stones > 0:
         if verbose:
             print(f"Building stones  ({n_stones} stones = "
-                  f"{cfg.stones.stones_per_tile}/tile × {tile_area} tiles)...")
+                  f"{cfg.stones.stones_per_square}/square × {n_squares} squares)...")
         stones = StonesLayer(cfg.surface, cfg.stones)
         parts.extend(stones.build(scene))
 
@@ -84,7 +84,7 @@ def build_tile(cfg: SceneConfig,
 
     if cfg.base.style == 'dungeonblock':
         peg_h = select_peg_height(scene.terrain_z, cfg.base)
-        n_pegs = cfg.surface.tile_cols * cfg.surface.tile_rows
+        n_pegs = cfg.surface.cols * cfg.surface.rows
         if verbose:
             print(f"Building dungeonblock base  "
                   f"(peg_height={peg_h:.1f} mm, {n_pegs} peg{'s' if n_pegs != 1 else ''})...")
@@ -125,15 +125,15 @@ def _build_parser() -> argparse.ArgumentParser:
                    default=pathlib.Path("stl/tile.stl"),
                    help="Output STL path (default: stl/tile.stl)")
     p.add_argument("--seed",       type=int,   default=_S.seed)
-    p.add_argument("--tile-cols",  type=int,   default=_S.tile_cols, dest="tile_cols",
-                   help="Number of 35 mm tile units in X")
-    p.add_argument("--tile-rows",  type=int,   default=_S.tile_rows, dest="tile_rows",
-                   help="Number of 35 mm tile units in Y")
+    p.add_argument("--cols",  type=int,   default=_S.cols, dest="cols",
+                   help="Number of 35 mm squares in X")
+    p.add_argument("--rows",  type=int,   default=_S.rows, dest="rows",
+                   help="Number of 35 mm squares in Y")
     p.add_argument("--base-h",     type=float, default=_S.base_h, dest="base_h",
                    help="Slab depth below terrain surface (mm)")
-    p.add_argument("--stones-per-tile", type=int, default=_V.stones_per_tile,
-                   dest="stones_per_tile",
-                   help="Stones per 35mm tile unit (scaled by tile count)")
+    p.add_argument("--stones-per-square", type=int, default=_V.stones_per_square,
+                   dest="stones_per_square",
+                   help="Stones per 35mm square (scaled by square count)")
     p.add_argument("--r-max", type=float, default=_V.r_max, dest="r_max",
                    help="Maximum stone radius (mm)")
     p.add_argument("--size-power", type=float, default=_V.size_power, dest="size_power",
@@ -147,9 +147,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--cross-section", type=str, default=_G.cross_section,
                    choices=["triangle", "circle", "diamond"],
                    dest="cross_section")
-    p.add_argument("--groups-per-tile", type=int, default=_G.groups_per_tile,
-                   dest="groups_per_tile",
-                   help="Grass groups per 35mm tile unit (scaled by tile count)")
+    p.add_argument("--groups-per-square", type=int, default=_G.groups_per_square,
+                   dest="groups_per_square",
+                   help="Grass groups per 35mm square (scaled by square count)")
     p.add_argument("--group-min",  type=int,   default=_G.group_min,  dest="group_min")
     p.add_argument("--group-max",  type=int,   default=_G.group_max,  dest="group_max")
     p.add_argument("--group-spread", type=float, default=_G.group_spread_mm,
@@ -183,8 +183,8 @@ def main(argv=None):
 
     cfg = SceneConfig(
         surface=SurfaceConfig(
-            tile_cols    = args.tile_cols,
-            tile_rows    = args.tile_rows,
+            cols         = args.cols,
+            rows         = args.rows,
             base_h       = args.base_h,
             seed         = args.seed,
             flat_terrain = not args.rolling_terrain,
@@ -201,7 +201,7 @@ def main(argv=None):
             curl_max         = args.curl_max,
             smooth_sigma     = args.smooth_sigma,
             root_depth       = args.root_depth,
-            groups_per_tile  = args.groups_per_tile,
+            groups_per_square  = args.groups_per_square,
             group_min        = args.group_min,
             group_max        = args.group_max,
             group_spread_mm  = args.group_spread_mm,
@@ -209,7 +209,7 @@ def main(argv=None):
         ),
         soil=SoilConfig(),
         stones=StonesConfig(
-            stones_per_tile = args.stones_per_tile,
+            stones_per_square = args.stones_per_square,
             r_max           = args.r_max,
             size_power      = args.size_power,
         ),

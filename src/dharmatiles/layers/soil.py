@@ -1,7 +1,7 @@
 """
 SoilLayer: two-tier random super-Gaussian blob clumps baked into terrain_z.
 
-The bump field is computed at (detail_mult × cells_per_tile) resolution so
+The bump field is computed at (detail_mult × cells_per_square) resolution so
 individual soil mounds have fine-grained geometry, while the rest of the
 terrain (flat ground, stones, grass) continues to use the coarse grid.
 
@@ -44,14 +44,14 @@ class SoilLayer:
         mult = self.soil.detail_mult
         gh, gw = scene.terrain_z.shape
         cell_mm_h = self.surface.cell_w / mult   # finer cell size at hires
-        tile_area = self.surface.tile_cols * self.surface.tile_rows
+        n_squares = self.surface.cols * self.surface.rows
 
         hires_bump = _compute_bump_field(
             soil=self.soil,
             seed=self.surface.seed,
             gh=gh * mult, gw=gw * mult,
             cell_mm=cell_mm_h,
-            tile_area=tile_area,
+            n_squares=n_squares,
         )
 
         # Downsample to coarse grid for stone/grass placement
@@ -65,7 +65,7 @@ class SoilLayer:
 
 def _compute_bump_field(soil: SoilConfig, seed: int,
                         gh: int, gw: int, cell_mm: float,
-                        tile_area: int) -> np.ndarray:
+                        n_squares: int) -> np.ndarray:
     """Compute the full soil bump array at (gh × gw) resolution."""
     rng  = np.random.default_rng(seed ^ 0xC01D_50_11)
     bump = np.zeros((gh, gw), dtype=float)
@@ -88,11 +88,11 @@ def _compute_bump_field(soil: SoilConfig, seed: int,
 
     # ── Tier definitions ──────────────────────────────────────────────────────
     tiers = [
-        (soil.n_blobs * tile_area,
+        (soil.n_blobs * n_squares,
          soil.blob_sigma_min_mm, soil.blob_sigma_max_mm,
          soil.blob_h_min,        soil.blob_h_max,
          True),    # primary: elliptical + warp + texture
-        (soil.n_small * tile_area,
+        (soil.n_small * n_squares,
          soil.small_sigma_min_mm, soil.small_sigma_max_mm,
          soil.small_h_min,        soil.small_h_max,
          False),   # fine grain: circular, no extra perturbation

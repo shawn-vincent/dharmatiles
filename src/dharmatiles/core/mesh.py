@@ -433,7 +433,7 @@ def _prismatoid_mesh(rings: list) -> trimesh.Trimesh:
 def make_dungeonblock_base(surface: SurfaceConfig,
                             peg_height: float,
                             base_cfg: BaseConfig) -> trimesh.Trimesh:
-    """Dungeonblock socket-base mesh: one peg per tile unit.
+    """Dungeonblock socket-base mesh: one peg per square.
 
     The mesh top sits at z = 0 (bottom of the terrain slab).
     The peg tip reaches z = −(peg_height + flare_height).
@@ -448,31 +448,31 @@ def make_dungeonblock_base(surface: SurfaceConfig,
     all four sections (flare, column body, bevel entry, caps) are represented
     exactly — no convex-hull approximation that can collapse interior rings.
     """
-    tile_sz   = surface.tile_w / surface.tile_cols  # 35.0 mm
+    square_sz = surface.tile_w / surface.cols  # 35.0 mm
     col       = base_cfg.col_size                   # 26.0 mm
     bevel     = base_cfg.col_bevel                  # 1.5 mm
     flare_h   = base_cfg.flare_height               # 5.2 mm
     bevel_col = col - 2.0 * bevel                   # 23.0 mm
 
-    col_inset   = (tile_sz - col) / 2.0             # 4.5 mm
-    bevel_inset = (tile_sz - bevel_col) / 2.0       # 6.0 mm
+    col_inset   = (square_sz - col) / 2.0             # 4.5 mm
+    bevel_inset = (square_sz - bevel_col) / 2.0       # 6.0 mm
 
-    z0 = 0.0                                        # flare top = terrain bottom
-    z1 = -flare_h                                   # column top / flare bottom
-    z2 = -(peg_height - bevel + flare_h)            # bevel top / column bottom
-    z3 = -(peg_height + flare_h)                    # peg bottom
+    z0 = 0.0                                          # flare top = terrain bottom
+    z1 = -flare_h                                     # column top / flare bottom
+    z2 = -(peg_height - bevel + flare_h)              # bevel top / column bottom
+    z3 = -(peg_height + flare_h)                      # peg bottom
 
     parts: list = []
-    for ci in range(surface.tile_cols):
-        for ri in range(surface.tile_rows):
-            tx = ci * tile_sz
-            ty = ri * tile_sz
+    for ci in range(surface.cols):
+        for ri in range(surface.rows):
+            tx = ci * square_sz
+            ty = ri * square_sz
 
             rings = [
-                _square_ring(tx, ty, 0.0,        tile_sz, z0),  # full tile at top
-                _square_ring(tx, ty, col_inset,   tile_sz, z1),  # column top
-                _square_ring(tx, ty, col_inset,   tile_sz, z2),  # column bottom
-                _square_ring(tx, ty, bevel_inset, tile_sz, z3),  # chamfered tip
+                _square_ring(tx, ty, 0.0,        square_sz, z0),  # full square at top
+                _square_ring(tx, ty, col_inset,   square_sz, z1),  # column top
+                _square_ring(tx, ty, col_inset,   square_sz, z2),  # column bottom
+                _square_ring(tx, ty, bevel_inset, square_sz, z3),  # chamfered tip
             ]
             parts.append(_prismatoid_mesh(rings))
 

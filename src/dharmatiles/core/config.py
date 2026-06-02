@@ -17,23 +17,23 @@ import numpy as np
 # Surface / grid
 # ─────────────────────────────────────────────────────────────────────────────
 
-CELL_SIZE_MM: float = 35.0 / 128.0   # ≈ 0.273 mm — legacy constant (128 cells/tile)
+CELL_SIZE_MM: float = 35.0 / 128.0   # ≈ 0.273 mm — legacy constant (128 cells/square)
 
 
 @dataclass
 class SurfaceConfig:
     """Physical surface dimensions.
 
-    ``grid_w`` and ``grid_h`` are derived from ``tile_cols``/``tile_rows`` and
-    ``cells_per_tile``; do not set them directly.
+    ``grid_w`` and ``grid_h`` are derived from ``cols``/``rows`` and
+    ``cells_per_square``; do not set them directly.
 
     Parameters
     ----------
-    tile_cols, tile_rows : int
-        Number of 35 mm tile units along X and Y.  A 1×1 surface is one
-        standard DungeonBlocks tile.  A 2×2 surface is four tiles.
-    cells_per_tile : int
-        Heightmap resolution along each axis per tile unit.  Higher values
+    cols, rows : int
+        Number of 35 mm squares along X and Y.  A 1×1 tile is one
+        standard DungeonBlocks square.  A 3×3 tile is nine squares.
+    cells_per_square : int
+        Heightmap resolution along each axis per square.  Higher values
         give finer mesh geometry.  Must be a power of two; default 256
         (≈ 0.137 mm/cell).  Use 128 for legacy behaviour (≈ 0.273 mm/cell).
     base_h : float
@@ -42,9 +42,9 @@ class SurfaceConfig:
         Master seed; layers derive their own seeds by XOR-ing with a
         per-layer constant.
     """
-    tile_cols:      int   = 1
-    tile_rows:      int   = 1
-    cells_per_tile: int   = 256  # heightmap resolution per 35 mm tile unit
+    cols:             int   = 1
+    rows:             int   = 1
+    cells_per_square: int   = 256  # heightmap resolution per 35 mm square
     base_h:         float = 0.0  # mm — extra slab below z=0
     seed:           int   = 377
     flat_terrain:   bool  = True   # False → sinusoidal stand-in terrain (legacy)
@@ -52,33 +52,33 @@ class SurfaceConfig:
     # ── Derived dimensions ────────────────────────────────────────────────────
     @property
     def tile_w(self) -> float:
-        """Total surface width in mm."""
-        return self.tile_cols * 35.0
+        """Total tile width in mm."""
+        return self.cols * 35.0
 
     @property
     def tile_h(self) -> float:
-        """Total surface height in mm."""
-        return self.tile_rows * 35.0
+        """Total tile height in mm."""
+        return self.rows * 35.0
 
     @property
     def grid_w(self) -> int:
-        """Grid columns (cells_per_tile × tile_cols)."""
-        return self.tile_cols * self.cells_per_tile
+        """Grid columns (cells_per_square × cols)."""
+        return self.cols * self.cells_per_square
 
     @property
     def grid_h(self) -> int:
-        """Grid rows (cells_per_tile × tile_rows)."""
-        return self.tile_rows * self.cells_per_tile
+        """Grid rows (cells_per_square × rows)."""
+        return self.rows * self.cells_per_square
 
     @property
     def cell_w(self) -> float:
         """mm per grid cell in X."""
-        return 35.0 / self.cells_per_tile
+        return 35.0 / self.cells_per_square
 
     @property
     def cell_h(self) -> float:
         """mm per grid cell in Y."""
-        return 35.0 / self.cells_per_tile
+        return 35.0 / self.cells_per_square
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -147,12 +147,12 @@ class GrassConfig:
     root_depth:      float = 2.0    # mm — underground anchor depth
 
     # ── Group placement ───────────────────────────────────────────────────────
-    # groups_per_tile is a density — the layer multiplies by tile_cols × tile_rows
+    # groups_per_square is a density — the layer multiplies by cols × rows
     # to get the actual group count for the surface.
     # More groups with fewer blades each → uniform coverage; fewer groups with
     # more blades each → visible clumping.  At 120 groups the jittered-grid
     # spacing is ~3 mm, small enough that directional flow sweeps fill the gaps.
-    groups_per_tile: int   = 120
+    groups_per_square: int   = 120
     group_min:       int   = 3
     group_max:       int   = 5
     group_spread_mm: float = 1.5
@@ -201,12 +201,12 @@ class SoilConfig:
     "smooth but small-radius" edge seen on real soil clods.
 
     All sigma values are in mm; converted to grid cells at runtime so blob
-    physical size is independent of cells_per_tile resolution.
+    physical size is independent of cells_per_square resolution.
     """
     # ── Primary clumps ────────────────────────────────────────────────────────
     # Elliptical blobs with random aspect ratio and orientation give organic,
     # rain-eroded shapes rather than perfect circles.
-    n_blobs:            int   = 277   # primary clumps per tile unit (35 × 35 mm)
+    n_blobs:            int   = 277   # primary clumps per square (35 × 35 mm)
     blob_sigma_min_mm:  float = 0.22  # mm — smallest primary σ (major axis)
     blob_sigma_max_mm:  float = 1.026 # mm — largest  primary σ (major axis)
     blob_sigma_mode_mm: float = 0.434 # mm — triangular distribution peak (None-like: set < min for uniform)
@@ -221,7 +221,7 @@ class SoilConfig:
     blob_h_size_bias:   float = 0.85  # 0=independent, 1=large blobs always at scale_max
 
     # ── Small-bump / surface-grain tier ──────────────────────────────────────
-    n_small:            int   = 0     # small bumps per tile unit
+    n_small:            int   = 0     # small bumps per square
     small_sigma_min_mm: float = 0.20  # mm (≥ 1.5 cells at 256/tile — resolvable)
     small_sigma_max_mm: float = 0.40  # mm
     small_h_min:        float = 0.004  # mm
@@ -246,7 +246,7 @@ class SoilConfig:
     blob_cluster_count:  int   = 30   # number of cluster centres (0 = no clustering)
     blob_cluster_spread_mm: float = 6.0  # Gaussian spread around each cluster centre (mm)
 
-    # detail_mult: soil bump field is computed at (cells_per_tile × detail_mult)
+    # detail_mult: soil bump field is computed at (cells_per_square × detail_mult)
     # resolution so bumps have fine geometry without raising the whole terrain grid.
     # build() returns the hires array; caller uses it for meshing.
     detail_mult:      int   = 2      # 2 → 512 cells/tile for soil mesh (0.068 mm/cell)
@@ -262,8 +262,8 @@ class SoilConfig:
 class StonesConfig:
     """Random stone geometry parameters.
 
-    ``stones_per_tile`` is a density — StonesLayer multiplies by
-    tile_cols × tile_rows to get the actual stone count for the surface.
+    ``stones_per_square`` is a density — StonesLayer multiplies by
+    cols × rows to get the actual stone count for the tile.
 
     Size distribution
     -----------------
@@ -272,7 +272,7 @@ class StonesConfig:
     higher values skew strongly toward small rocks while still allowing the
     occasional large one up to r_max.
     """
-    stones_per_tile: int   = 15
+    stones_per_square: int   = 15
     r_min:         float = 1.82   # mm — minimum horizontal semi-axis
     r_max:         float = 2.40   # mm — maximum horizontal semi-axis
     size_power:    float = 2.5    # distribution skew: >1 = more small rocks
