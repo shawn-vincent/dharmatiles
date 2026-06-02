@@ -242,7 +242,9 @@ class SoilConfig:
     surface_texture_scale_mm:   float = 0.27  # mm — spatial scale of texture features
     surface_texture2_amp:       float = 0.03  # mm — amplitude of finer noise layer
     surface_texture2_scale_mm:  float = 0.12  # mm — spatial scale of finer texture
-    blob_jitter:      float = 0.95   # placement jitter: 0=perfect grid, 1=fully random
+    blob_jitter:      float = 1.0    # placement jitter: 0=perfect grid, 1=fully random
+    blob_cluster_count:  int   = 30   # number of cluster centres (0 = no clustering)
+    blob_cluster_spread_mm: float = 6.0  # Gaussian spread around each cluster centre (mm)
 
     # detail_mult: soil bump field is computed at (cells_per_tile × detail_mult)
     # resolution so bumps have fine geometry without raising the whole terrain grid.

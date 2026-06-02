@@ -99,7 +99,15 @@ def _compute_bump_field(soil: SoilConfig, seed: int,
     ]
 
     for (n, sig_min, sig_max, h_min, h_max, perturb) in tiers:
-        if perturb and soil.blob_jitter < 1.0:
+        if perturb and soil.blob_cluster_count > 0:
+            # Cluster process: place blobs around random cluster centres
+            spread_cells = soil.blob_cluster_spread_mm / cell_mm
+            centres_x = rng.uniform(0.0, gw, soil.blob_cluster_count)
+            centres_y = rng.uniform(0.0, gh, soil.blob_cluster_count)
+            which     = rng.integers(0, soil.blob_cluster_count, n)
+            cx = np.clip(centres_x[which] + rng.normal(0, spread_cells, n), 0, gw - 1)
+            cy = np.clip(centres_y[which] + rng.normal(0, spread_cells, n), 0, gh - 1)
+        elif perturb and soil.blob_jitter < 1.0:
             # Jittered grid: divide surface into n cells, one blob per cell
             n_cols = max(1, int(round(np.sqrt(n * gw / gh))))
             n_rows = max(1, int(round(n / n_cols)))
