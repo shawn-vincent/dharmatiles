@@ -34,6 +34,7 @@ from ..core.region import build_region_mask, build_grass_mask
 from ..layers.soil import SoilLayer
 from ..layers.stones import StonesLayer
 from ..layers.grass import GrassLayer
+from ..layers.water import WaterLayer
 
 
 # ── VisCAM / SolidView colour constants ───────────────────────────────────────
@@ -42,6 +43,7 @@ COLOUR_SOIL  = (101,  67,  33, 255)   # earthy brown   — terrain surface
 COLOUR_STONE = (120, 120, 120, 255)   # mid-grey        — rocks
 COLOUR_GRASS = ( 50, 120,  30, 255)   # natural green   — blades & supports
 COLOUR_BASE  = ( 70,  45,  20, 255)   # dark brown      — dungeonblock underside
+COLOUR_WATER = ( 30, 100, 200, 255)   # water blue      — flat water surface
 
 
 def _paint(mesh_or_list, rgba: tuple) -> None:
@@ -60,11 +62,17 @@ def _build_mesh(cfg: SceneConfig,
                 flow_angle: np.ndarray,
                 flow_curv: np.ndarray,
                 grass_cfgs: list[GrassConfig] | None = None,
-                verbose: bool = True) -> trimesh.Trimesh:
+                verbose: bool = True,
+                water_mask: np.ndarray | None = None,
+                water_height: float | None = None) -> trimesh.Trimesh:
     """Run all layers on *scene* and return the concatenated mesh.
 
     *grass_cfgs* is a list of GrassConfig objects — one per seed-packet
     layer in the spec.  Defaults to ``[cfg.grass]`` (single packet).
+
+    *water_mask* / *water_height* — when provided, the soil layer's bumps
+    are zeroed out in the water region (keeping the pool floor flat), and a
+    blue placeholder water-surface mesh is inserted above the terrain solid.
     """
     if grass_cfgs is None:
         grass_cfgs = [cfg.grass]
@@ -75,6 +83,11 @@ def _build_mesh(cfg: SceneConfig,
     if verbose:
         print("Building soil texture...")
     SoilLayer(cfg.surface, cfg.soil).build(scene)
+
+    # Soil bumps must not deform the water surface — restore flat water level.
+    if water_mask is not None and water_height is not None:
+        scene.terrain_z[water_mask] = water_height
+        scene.support_z[water_mask] = water_height
 
     # ── Stones ────────────────────────────────────────────────────────────────
     n_squares = cfg.surface.cols * cfg.surface.rows
@@ -101,6 +114,14 @@ def _build_mesh(cfg: SceneConfig,
                                   verbose=(verbose and i == 0))
         _paint(grass_parts, COLOUR_GRASS)
         parts.extend(grass_parts)
+
+    # ── Water surface (blue placeholder) ─────────────────────────────────────
+    if water_mask is not None and water_height is not None:
+        if verbose:
+            print("Building water surface...")
+        water_parts = WaterLayer(cfg.surface, water_height).build(water_mask)
+        _paint(water_parts, COLOUR_WATER)
+        parts.extend(water_parts)
 
     # ── Terrain solid ─────────────────────────────────────────────────────────
     if verbose:
@@ -176,17 +197,38 @@ def build_tile_from_spec(spec: TileSpec,
         if bnd_ids:
             print(f"  Boundaries: {bnd_ids}")
 
-    scene = TileScene.from_config(cfg)
-
-    # Build region + grass masks
+    # ── Region mask ───────────────────────────────────────────────────────────
+    region_mask: np.ndarray | None = None
     if spec.regions or spec.boundaries:
-        region_mask       = build_region_mask(spec)
-        scene.grass_mask  = build_grass_mask(region_mask, spec)
+        region_mask = build_region_mask(spec)
+
+    # ── Height-aware terrain ──────────────────────────────────────────────────
+    # Build terrain_z from region heights *before* creating the scene so the
+    # slope between different-height regions is present from the start.
+    terrain_z = _build_spec_terrain(spec, cfg.surface, region_mask)
+
+    scene = TileScene(
+        config     = cfg,
+        terrain_z  = terrain_z,
+        support_z  = terrain_z.copy(),
+        stone_mask = np.zeros((cfg.surface.grid_h, cfg.surface.grid_w), dtype=bool),
+    )
+
+    if region_mask is not None:
+        scene.grass_mask = build_grass_mask(region_mask, spec)
         if verbose and scene.grass_mask is not None:
             n_grass = int(scene.grass_mask.sum())
             n_total = scene.grass_mask.size
             print(f"  Grass coverage: {n_grass}/{n_total} cells "
                   f"({100 * n_grass / n_total:.0f}%)")
+
+    # ── Water region ──────────────────────────────────────────────────────────
+    water_mask, water_height = _collect_water_info(spec, region_mask)
+    if verbose and water_mask is not None:
+        n_water = int(water_mask.sum())
+        n_total = water_mask.size
+        print(f"  Water coverage: {n_water}/{n_total} cells "
+              f"({100 * n_water / n_total:.0f}%)")
 
     if verbose:
         print(f"Building flow field  ({cfg.flow.flow_type})...")
@@ -195,12 +237,104 @@ def build_tile_from_spec(spec: TileSpec,
 
     grass_cfgs = _collect_grass_configs(spec)
     combined   = _build_mesh(cfg, scene, flow_angle, flow_curv,
-                             grass_cfgs=grass_cfgs, verbose=verbose)
+                             grass_cfgs=grass_cfgs, verbose=verbose,
+                             water_mask=water_mask, water_height=water_height)
 
     export_coloured_stl(combined, output_path)
     if verbose:
         print(f"Saved → {output_path}  (VisCAM colours embedded)")
     return combined
+
+
+# ── Spec → terrain helpers ────────────────────────────────────────────────────
+
+def _build_spec_terrain(spec: TileSpec, surface: SurfaceConfig,
+                         region_mask: np.ndarray | None) -> np.ndarray:
+    """Derive a terrain heightmap from the region heights declared in *spec*.
+
+    Each region occupies a flat area at its ``effective_height_mm``.  Where
+    adjacent regions differ in height the boundary produces a smooth slope
+    whose width equals the first boundary's ``width_mm`` (default 5 mm).
+
+    Algorithm
+    ---------
+    1. Assign each region cell its exact height.
+    2. At boundary cells, compute an inverse-distance-weighted (IDW) blend
+       of the neighbouring region heights.
+    3. Blend from the IDW height (at the boundary) to the exact height (at
+       ``half_blend`` cells into each region) using a smoothstep, creating
+       the slope.
+
+    Note: the slope is a vertical (z) ramp; features on the slope (soil
+    blobs, stones) are placed at the correct z but their orientation is still
+    world-horizontal.  Full slope-normal orientation for placed geometry is a
+    future enhancement.
+    """
+    from scipy.ndimage import distance_transform_edt
+
+    gh, gw = surface.grid_h, surface.grid_w
+    default_h = 5.0
+
+    if not spec.regions or region_mask is None:
+        return np.full((gh, gw), default_h, dtype=float)
+
+    heights   = [r.effective_height_mm for r in spec.regions]
+    n_regions = len(heights)
+
+    # Fast path: all regions at the same height
+    if len(set(heights)) <= 1:
+        return np.full((gh, gw), heights[0] if heights else default_h, dtype=float)
+
+    # Transition half-width in cells (total blend zone = 2 × half_blend)
+    blend_mm   = max(
+        (b.width_mm for b in spec.boundaries if b.width_mm > 0),
+        default=5.0,
+    )
+    half_blend = max(2.0, blend_mm / (2.0 * surface.cell_w))
+
+    # Step 1: exact heights at region cells
+    z_exact = np.full((gh, gw), default_h, dtype=float)
+    for idx, h in enumerate(heights):
+        z_exact[region_mask == idx] = h
+
+    # Step 2: IDW-blended height for boundary / unassigned cells
+    z_idw = np.zeros((gh, gw), dtype=float)
+    w_sum  = np.zeros((gh, gw), dtype=float)
+    for idx, h in enumerate(heights):
+        dist = distance_transform_edt(region_mask != idx)
+        w    = 1.0 / (dist + 0.5)
+        z_idw += h * w
+        w_sum += w
+    z_idw /= np.maximum(w_sum, 1e-12)
+
+    # Step 3: smoothstep blend in the transition zone
+    # dist_from_bnd = 0 at boundary cells, increases inward into each region
+    dist_from_bnd = distance_transform_edt(region_mask >= 0)
+    t_raw = np.minimum(dist_from_bnd / half_blend, 1.0)
+    t_s   = t_raw * t_raw * (3.0 - 2.0 * t_raw)   # smoothstep: 0 at bnd → 1 at half_blend
+
+    return (z_idw * (1.0 - t_s) + z_exact * t_s).astype(float)
+
+
+def _collect_water_info(spec: TileSpec,
+                         region_mask: np.ndarray | None,
+                         ) -> tuple[np.ndarray | None, float | None]:
+    """Return (water_mask, water_height) or (None, None) if no water regions."""
+    if region_mask is None:
+        return None, None
+
+    water_indices = [
+        i for i, r in enumerate(spec.regions)
+        if any(layer.type == 'water' for layer in r.layers)
+    ]
+    if not water_indices:
+        return None, None
+
+    water_height = spec.regions[water_indices[0]].effective_height_mm
+    water_mask   = np.zeros(region_mask.shape, dtype=bool)
+    for idx in water_indices:
+        water_mask |= (region_mask == idx)
+    return water_mask, water_height
 
 
 # ── Spec → config helpers ─────────────────────────────────────────────────────
