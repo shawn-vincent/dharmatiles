@@ -103,8 +103,12 @@ class TileScene:
 
 def _make_sinusoidal_terrain(surface: SurfaceConfig,
                               amp: float = 1.0,
-                              freq: float = 1.5) -> np.ndarray:
+                              freq: float = 1.5,
+                              z_center: float = 5.0) -> np.ndarray:
     """Build a sinusoidal test heightmap (grid_h × grid_w).
+
+    Heights are centred at *z_center* (default 5 mm = GROUND height) so they
+    stay positive with ``base_h = 0``.
 
     Stand-in until the semantic TerrainGrid is wired to all entry points.
     Not part of the target architecture.
@@ -115,7 +119,7 @@ def _make_sinusoidal_terrain(surface: SurfaceConfig,
     envelope = np.sin(np.pi * u) * np.sin(np.pi * v)
     wave = (np.sin(2 * np.pi * freq * u) *
             np.cos(2 * np.pi * freq * v))
-    return (amp * envelope * wave).astype(float)
+    return (z_center + amp * envelope * wave).astype(float)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

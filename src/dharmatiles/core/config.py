@@ -40,7 +40,8 @@ class SurfaceConfig:
     """
     tile_cols: int   = 1
     tile_rows: int   = 1
-    base_h:    float = 6.0      # mm — slab depth (TileType.GROUND equivalent)
+    base_h:    float = 0.0      # mm — extra slab below z=0 (terrain heights are
+                                 #      total floor thicknesses; 0 = no extra slab)
     seed:      int   = 377
 
     # ── Derived dimensions ────────────────────────────────────────────────────
@@ -201,6 +202,36 @@ class GravelConfig:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Base (underside peg / socket)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@dataclass
+class BaseConfig:
+    """Tile base (underside socket-peg) parameters.
+
+    Only ``'dungeonblock'`` style is currently supported.
+    Set ``style = 'none'`` to skip base generation entirely.
+
+    The socket geometry matches the DungeonBlocks open standard:
+    a chamfered column that flares out to the full tile footprint.
+
+    peg_height : float | None
+        Override column height in mm.  ``None`` → auto-select:
+        tall (11.4 mm) when the max terrain height exceeds
+        *auto_threshold_mm*, short (5.7 mm) otherwise.
+    """
+    style:             str         = 'dungeonblock'
+    peg_height:        float|None  = None   # mm — None = auto
+    short_peg_height:  float       = 5.7    # mm — short base column
+    tall_peg_height:   float       = 11.4   # mm — tall  base column
+    auto_threshold_mm: float       = 15.0   # max terrain > this → tall
+    # DungeonBlocks geometry constants (keep for DB-compatible output)
+    flare_height:      float       = 5.2    # mm — always 5.2 for DB tiles
+    col_size:          float       = 26.0   # mm — column cross-section
+    col_bevel:         float       = 1.5    # mm — chamfer at peg entry
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Scene bundle
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -216,3 +247,4 @@ class SceneConfig:
     grass:   GrassConfig   = field(default_factory=GrassConfig)
     solver:  SolverConfig  = field(default_factory=SolverConfig)
     gravel:  GravelConfig  = field(default_factory=GravelConfig)
+    base:    BaseConfig    = field(default_factory=BaseConfig)

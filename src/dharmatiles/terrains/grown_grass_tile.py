@@ -18,10 +18,12 @@ import pathlib
 import numpy as np
 import trimesh
 
-from ..core.config import SceneConfig, SurfaceConfig, FlowConfig, GrassConfig, GravelConfig
+from ..core.config import (SceneConfig, SurfaceConfig, FlowConfig,
+                           GrassConfig, GravelConfig, BaseConfig)
 from ..core.tile import TileScene, make_xy_grids
 from ..core.flow import build_flow_field
-from ..core.mesh import make_heightmap_solid
+from ..core.mesh import (make_heightmap_solid, make_dungeonblock_base,
+                         select_peg_height)
 from ..layers.gravel import GravelLayer
 from ..layers.grown_grass import GrownGrassLayer
 
@@ -72,6 +74,15 @@ def build_grown_grass_tile(cfg: SceneConfig,
     )
     parts.insert(0, terrain_mesh)
 
+    if cfg.base.style == 'dungeonblock':
+        peg_h = select_peg_height(scene.terrain_z, cfg.base)
+        n_pegs = cfg.surface.tile_cols * cfg.surface.tile_rows
+        if verbose:
+            print(f"Building dungeonblock base  "
+                  f"(peg_height={peg_h:.1f} mm, {n_pegs} peg{'s' if n_pegs != 1 else ''})...")
+        base_mesh = make_dungeonblock_base(cfg.surface, peg_h, cfg.base)
+        parts.insert(0, base_mesh)
+
     if verbose:
         print("Concatenating...")
     combined = trimesh.util.concatenate(parts)
@@ -96,6 +107,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _F = FlowConfig()
     _G = GrassConfig()
     _V = GravelConfig()
+    _B = BaseConfig()
 
     p = argparse.ArgumentParser(
         description="Generate a grown-grass terrain tile STL.",
@@ -139,6 +151,15 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-bridge", type=float, default=_G.max_bridge_mm,
                    dest="max_bridge_mm")
     p.add_argument("--quiet", "-q", action="store_true")
+
+    # ── Base ──────────────────────────────────────────────────────────────────
+    p.add_argument("--no-base", action="store_true", dest="no_base",
+                   help="Omit the underside socket-peg base")
+    p.add_argument("--peg-height", type=float, default=None, dest="peg_height",
+                   help=("Override peg column height in mm (default: auto — "
+                         f"{_B.short_peg_height} mm if max terrain ≤ "
+                         f"{_B.auto_threshold_mm} mm, else "
+                         f"{_B.tall_peg_height} mm)"))
     return p
 
 
@@ -172,6 +193,10 @@ def main(argv=None):
         ),
         gravel=GravelConfig(
             gravel_per_tile = args.gravel_per_tile,
+        ),
+        base=BaseConfig(
+            style      = 'none' if args.no_base else 'dungeonblock',
+            peg_height = args.peg_height,
         ),
     )
 

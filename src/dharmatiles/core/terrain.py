@@ -40,17 +40,18 @@ class TerrainType(Enum):
     EMBEDDED_STL     = auto()   # future: object placed from external STL
 
 
-# Reference surface heights in mm (above the terrain datum = 0).
-# These are defaults; per-cell height can override them.
+# Reference surface heights in mm above the tile base (z=0 = bottom of terrain slab).
+# These represent total floor-slab thickness for flat features, and total height
+# above the slab bottom for walls.  Per-cell height can override them.
 _DEFAULT_HEIGHT: dict[TerrainType, float] = {
-    TerrainType.WATER:             -1.0,
-    TerrainType.GROUND:             0.0,
-    TerrainType.GRASS:              0.0,
-    TerrainType.CONSTRUCTED_FLOOR:  0.0,
-    TerrainType.WALL:               8.0,
-    TerrainType.HIGH_WALL:         16.0,
-    TerrainType.HIGHEST_WALL:      24.0,
-    TerrainType.EMBEDDED_STL:       0.0,
+    TerrainType.WATER:              3.0,   # shallow pool floor
+    TerrainType.GROUND:             5.0,   # natural earth floor
+    TerrainType.GRASS:              5.0,   # same level as GROUND
+    TerrainType.CONSTRUCTED_FLOOR: 10.0,   # raised manmade floor
+    TerrainType.WALL:              33.0,   # full-height wall
+    TerrainType.HIGH_WALL:         33.0,   # (alias — separate height TBD)
+    TerrainType.HIGHEST_WALL:      33.0,   # (alias — separate height TBD)
+    TerrainType.EMBEDDED_STL:       5.0,   # same level as GROUND
 }
 
 # Transition style between adjacent cell pairs (unordered).

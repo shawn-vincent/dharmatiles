@@ -7,7 +7,7 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
-from .config import SurfaceConfig, GrassConfig, SolverConfig
+from .config import SurfaceConfig, GrassConfig, SolverConfig, BaseConfig
 from .grid import sample_grid
 
 
@@ -350,3 +350,132 @@ def make_heightmap_solid(z_grid: np.ndarray, tile_w: float, tile_h: float,
                            process=False)
     mesh.fix_normals()
     return mesh
+
+
+# ── DungeonBlocks socket base ─────────────────────────────────────────────────
+
+def select_peg_height(terrain_z: np.ndarray,
+                      base_cfg: BaseConfig) -> float:
+    """Return peg column height (mm) for *terrain_z*.
+
+    Uses ``base_cfg.peg_height`` when set; otherwise auto-selects
+    ``tall_peg_height`` when the max terrain height exceeds
+    ``auto_threshold_mm``, else ``short_peg_height``.
+    """
+    if base_cfg.peg_height is not None:
+        return base_cfg.peg_height
+    max_h = float(terrain_z.max())
+    return (base_cfg.tall_peg_height
+            if max_h > base_cfg.auto_threshold_mm
+            else base_cfg.short_peg_height)
+
+
+def _square_ring(tx: float, ty: float,
+                  inset: float, tile_sz: float, z: float) -> np.ndarray:
+    """Four CCW corner vertices of a square ring at the given z level.
+
+    Vertices are ordered counterclockwise when viewed from above (+Z):
+      0: front-left   (tx+inset,       ty+inset,       z)
+      1: front-right  (tx+tile_sz−inset, ty+inset,     z)
+      2: back-right   (tx+tile_sz−inset, ty+tile_sz−inset, z)
+      3: back-left    (tx+inset,       ty+tile_sz−inset, z)
+    """
+    i = inset
+    s = tile_sz
+    return np.array([
+        [tx + i,     ty + i,     z],
+        [tx + s - i, ty + i,     z],
+        [tx + s - i, ty + s - i, z],
+        [tx + i,     ty + s - i, z],
+    ], dtype=float)
+
+
+def _prismatoid_mesh(rings: list) -> trimesh.Trimesh:
+    """Closed watertight mesh from a list of 4-vertex rectangular rings.
+
+    Rings must be ordered from top (z = 0) to bottom (most negative z).
+    Each ring is a (4, 3) float array with CCW vertex order from above.
+
+    Face winding is determined analytically and verified by fix_normals():
+      - Top cap     : CCW from above  → outward normal = +Z
+      - Bottom cap  : CW  from above  → outward normal = −Z
+      - Side strips : CCW from outside → outward normals point away from centre
+    """
+    n = len(rings)
+    verts = np.vstack(rings)    # (4*n, 3)
+    faces: list = []
+
+    # Top cap (ring 0) — CCW from above
+    faces += [[0, 1, 2], [0, 2, 3]]
+
+    # Bottom cap (last ring) — CW from above (= CCW from below)
+    b = 4 * (n - 1)
+    faces += [[b, b + 2, b + 1], [b, b + 3, b + 2]]
+
+    # Side strips between adjacent rings
+    for i in range(n - 1):
+        a = 4 * i        # base index of upper ring
+        c = 4 * (i + 1)  # base index of lower ring
+        for j in range(4):
+            j1 = (j + 1) % 4
+            # Each quad a+j, a+j1, c+j1, c+j split into two CCW triangles
+            # (CCW when viewed from the outside of the frustum).
+            faces += [[a + j, c + j,  c + j1],
+                      [a + j, c + j1, a + j1]]
+
+    mesh = trimesh.Trimesh(vertices=verts,
+                           faces=np.array(faces, dtype=np.int32),
+                           process=False)
+    mesh.fix_normals()
+    return mesh
+
+
+def make_dungeonblock_base(surface: SurfaceConfig,
+                            peg_height: float,
+                            base_cfg: BaseConfig) -> trimesh.Trimesh:
+    """Dungeonblock socket-base mesh: one peg per tile unit.
+
+    The mesh top sits at z = 0 (bottom of the terrain slab).
+    The peg tip reaches z = −(peg_height + flare_height).
+
+    Geometry (ported from ``floor-wall-tile.scad``):
+      Ring 0 — z = 0           : full tile footprint (top of flare)
+      Ring 1 — z = −flare_h    : column footprint (flare bottom / column top)
+      Ring 2 — z = −(peg_h−bevel+flare_h) : column bottom / bevel top
+      Ring 3 — z = −(peg_h+flare_h)       : chamfered peg tip
+
+    Each peg is built as an explicit closed polyhedron (prismatoid) so that
+    all four sections (flare, column body, bevel entry, caps) are represented
+    exactly — no convex-hull approximation that can collapse interior rings.
+    """
+    tile_sz   = surface.tile_w / surface.tile_cols  # 35.0 mm
+    col       = base_cfg.col_size                   # 26.0 mm
+    bevel     = base_cfg.col_bevel                  # 1.5 mm
+    flare_h   = base_cfg.flare_height               # 5.2 mm
+    bevel_col = col - 2.0 * bevel                   # 23.0 mm
+
+    col_inset   = (tile_sz - col) / 2.0             # 4.5 mm
+    bevel_inset = (tile_sz - bevel_col) / 2.0       # 6.0 mm
+
+    z0 = 0.0                                        # flare top = terrain bottom
+    z1 = -flare_h                                   # column top / flare bottom
+    z2 = -(peg_height - bevel + flare_h)            # bevel top / column bottom
+    z3 = -(peg_height + flare_h)                    # peg bottom
+
+    parts: list = []
+    for ci in range(surface.tile_cols):
+        for ri in range(surface.tile_rows):
+            tx = ci * tile_sz
+            ty = ri * tile_sz
+
+            rings = [
+                _square_ring(tx, ty, 0.0,        tile_sz, z0),  # full tile at top
+                _square_ring(tx, ty, col_inset,   tile_sz, z1),  # column top
+                _square_ring(tx, ty, col_inset,   tile_sz, z2),  # column bottom
+                _square_ring(tx, ty, bevel_inset, tile_sz, z3),  # chamfered tip
+            ]
+            parts.append(_prismatoid_mesh(rings))
+
+    if not parts:
+        return trimesh.Trimesh()
+    return trimesh.util.concatenate(parts)
