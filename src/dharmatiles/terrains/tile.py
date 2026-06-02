@@ -27,10 +27,31 @@ from ..core.config import (SceneConfig, SurfaceConfig, FlowConfig,
 from ..core.tile import TileScene, make_xy_grids
 from ..core.flow import build_flow_field
 from ..core.mesh import (make_heightmap_solid, make_dungeonblock_base,
-                         select_peg_height)
+                         select_peg_height, export_coloured_stl)
 from ..layers.soil import SoilLayer
 from ..layers.stones import StonesLayer
 from ..layers.grass import GrassLayer
+
+
+# ── VisCAM / SolidView color hack ────────────────────────────────────────────
+# Binary STL encodes per-face color in the 2-byte attribute field:
+#   bit 15 = 1 (color valid), bits 14-10 = R5, bits 9-5 = G5, bits 4-0 = B5
+# trimesh writes this automatically when face_colors are set on the mesh.
+
+COLOUR_SOIL  = (101,  67,  33, 255)   # earthy brown   — terrain surface
+COLOUR_STONE = (120, 120, 120, 255)   # mid-grey        — rocks
+COLOUR_GRASS = ( 50, 120,  30, 255)   # natural green   — blades & supports
+COLOUR_BASE  = ( 70,  45,  20, 255)   # dark brown      — dungeonblock underside
+
+
+def _paint(mesh_or_list, rgba: tuple) -> None:
+    """Set a uniform face colour on a Trimesh or list of Trimeshes (in-place)."""
+    import numpy as np
+    colour = np.array(rgba, dtype=np.uint8)
+    items  = [mesh_or_list] if isinstance(mesh_or_list, trimesh.Trimesh) else mesh_or_list
+    for m in items:
+        if m is not None and len(m.faces):
+            m.visual.face_colors = colour
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -65,12 +86,16 @@ def build_tile(cfg: SceneConfig,
             print(f"Building stones  ({n_stones} stones = "
                   f"{cfg.stones.stones_per_square}/square × {n_squares} squares)...")
         stones = StonesLayer(cfg.surface, cfg.stones)
-        parts.extend(stones.build(scene))
+        stone_parts = stones.build(scene)
+        _paint(stone_parts, COLOUR_STONE)
+        parts.extend(stone_parts)
 
     if verbose:
         print("Growing grass...")
     grown = GrassLayer(cfg)
-    parts.extend(grown.build(scene, flow_angle, flow_curv, verbose=verbose))
+    grass_parts = grown.build(scene, flow_angle, flow_curv, verbose=verbose)
+    _paint(grass_parts, COLOUR_GRASS)
+    parts.extend(grass_parts)
 
     if verbose:
         print("Building terrain solid...")
@@ -80,6 +105,7 @@ def build_tile(cfg: SceneConfig,
         cfg.surface.tile_h,
         cfg.surface.base_h,
     )
+    _paint(terrain_mesh, COLOUR_SOIL)
     parts.insert(0, terrain_mesh)
 
     if cfg.base.style == 'dungeonblock':
@@ -89,6 +115,7 @@ def build_tile(cfg: SceneConfig,
             print(f"Building dungeonblock base  "
                   f"(peg_height={peg_h:.1f} mm, {n_pegs} peg{'s' if n_pegs != 1 else ''})...")
         base_mesh = make_dungeonblock_base(cfg.surface, peg_h, cfg.base)
+        _paint(base_mesh, COLOUR_BASE)
         parts.insert(0, base_mesh)
 
     if verbose:
@@ -99,10 +126,9 @@ def build_tile(cfg: SceneConfig,
               f"faces: {len(combined.faces):,}   "
               f"watertight: {combined.is_watertight}")
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    combined.export(str(output_path))
+    export_coloured_stl(combined, output_path)
     if verbose:
-        print(f"Saved → {output_path}")
+        print(f"Saved → {output_path}  (VisCAM colours embedded)")
 
     return combined
 

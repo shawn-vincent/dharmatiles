@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-generate-grass-stl = "dharmatiles.terrains.grass_tile:main"
+generate-tile-stl = "dharmatiles.terrains.tile:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,14 +1,70 @@
 """
 Low-level mesh primitives: frame computation, blade tube, terrain solid,
-and DungeonBlocks base.
+DungeonBlocks base, and coloured STL export.
 """
 from __future__ import annotations
+
+import pathlib
+import struct
 
 import numpy as np
 import trimesh
 
 from .config import SurfaceConfig, BaseConfig
 from .grid import sample_grid
+
+
+# ── Coloured STL export ───────────────────────────────────────────────────────
+
+def export_coloured_stl(mesh: trimesh.Trimesh, path: pathlib.Path) -> None:
+    """Write *mesh* as a binary STL with VisCAM/SolidView per-face colours.
+
+    Each triangle's 2-byte attribute field encodes RGB in 5-5-5 format::
+
+        bit 15      = 1  (marks colour as valid)
+        bits 14-10  = R  (0-31)
+        bits  9-5   = G  (0-31)
+        bits  4-0   = B  (0-31)
+
+    Viewers that support the hack (PrusaSlicer, MeshLab, Windows 3D Builder …)
+    will render each face in its assigned colour.  Viewers that ignore it see a
+    normal single-colour STL.
+    """
+    faces   = mesh.faces                     # (N, 3) int
+    verts   = mesh.vertices                  # (M, 3) float64
+    normals = mesh.face_normals              # (N, 3) float64
+    colours = mesh.visual.face_colors        # (N, 4) uint8  (RGBA)
+    n       = len(faces)
+
+    # Encode 8-bit channels to 5-bit and pack into uint16
+    r5   = (colours[:, 0].astype(np.uint16) * 31 // 255)
+    g5   = (colours[:, 1].astype(np.uint16) * 31 // 255)
+    b5   = (colours[:, 2].astype(np.uint16) * 31 // 255)
+    attr = (np.uint16(0x8000) | (r5 << 10) | (g5 << 5) | b5)
+
+    # Pack into a numpy structured array — one record per triangle (50 bytes)
+    dtype = np.dtype([
+        ('normal', '<f4', (3,)),
+        ('v0',     '<f4', (3,)),
+        ('v1',     '<f4', (3,)),
+        ('v2',     '<f4', (3,)),
+        ('attr',   '<u2'),
+    ])
+    tri_verts = verts[faces]                 # (N, 3, 3)
+    data              = np.empty(n, dtype=dtype)
+    data['normal']    = normals.astype('<f4')
+    data['v0']        = tri_verts[:, 0].astype('<f4')
+    data['v1']        = tri_verts[:, 1].astype('<f4')
+    data['v2']        = tri_verts[:, 2].astype('<f4')
+    data['attr']      = attr
+
+    header = b'VisCAM coloured STL' + b'\x00' * 61   # must be exactly 80 bytes
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'wb') as fh:
+        fh.write(header)
+        fh.write(struct.pack('<I', n))
+        fh.write(data.tobytes())
 
 
 # ── Frame computation ─────────────────────────────────────────────────────────
