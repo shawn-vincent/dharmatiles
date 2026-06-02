@@ -279,18 +279,17 @@ class StonesConfig:
 class WaterRippleConfig:
     """Concentric ripple displacement on the water surface.
 
-    Ripples radiate inward from the water boundary (shoreline and stone
-    contacts).  Amplitude decays exponentially with distance from the source.
-    A secondary harmonic adds natural-looking interference.  An edge-fade
-    ramps the displacement to zero within *edge_fade_mm* of every tile edge
-    so the perimeter stays flat for printing.
+    Ripples radiate inward from the water's region boundaries (shoreline and
+    stone contacts) only — tile edges are never treated as sources.  Amplitude
+    decays exponentially with distance so ripples naturally die out in open
+    water long before reaching the tile perimeter.  A secondary harmonic adds
+    natural-looking interference.
 
     Parameters
     ----------
     amplitude_mm        Peak crest height (mm).
     wavelength_mm       Crest-to-crest spacing (mm).
     decay_mm            Exponential e-fold decay distance (mm).
-    edge_fade_mm        Fade-to-zero margin at tile edges (mm).
     secondary_amplitude Relative amplitude of the 2nd harmonic.
     secondary_wavelength Wavelength multiplier for the 2nd harmonic (× primary).
     secondary_phase     Phase offset of the 2nd harmonic (radians).
@@ -298,7 +297,6 @@ class WaterRippleConfig:
     amplitude_mm:         float = 0.12
     wavelength_mm:        float = 1.8
     decay_mm:             float = 6.0
-    edge_fade_mm:         float = 4.0
     secondary_amplitude:  float = 0.35
     secondary_wavelength: float = 0.7    # shorter → tighter secondary rings
     secondary_phase:      float = 0.8    # offset so crests don't perfectly align

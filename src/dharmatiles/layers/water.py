@@ -145,10 +145,11 @@ def _build_ripple_displacement(
     gh, gw = water_mask.shape
 
     # ── Ripple sources ────────────────────────────────────────────────────────
-    # Primary source: inner ring of water_mask — water cells adjacent to
-    # non-water (including tile-edge cells, handled by binary_erosion's
-    # default border_value=0).
-    water_eroded = binary_erosion(water_mask)
+    # Primary source: water cells adjacent to land WITHIN the tile.
+    # border_value=1 tells binary_erosion to treat cells outside the array as
+    # water, so tile-edge water cells are eroded away and do NOT become sources.
+    # Only cells neighbouring actual land (region boundaries) survive.
+    water_eroded = binary_erosion(water_mask, border_value=1)
     inner_ring   = water_mask & ~water_eroded
 
     # Secondary source: stones that touch water add contact-point ripples.
@@ -157,8 +158,8 @@ def _build_ripple_displacement(
         all_sources |= (stone_mask & water_mask)
 
     # ── Distance from sources (mm) ────────────────────────────────────────────
-    # distance_transform_edt(~all_sources): for each cell, distance in cells
-    # to the nearest True cell in all_sources.  Source cells → 0.
+    # distance_transform_edt(~all_sources): distance to nearest source cell.
+    # Source cells → 0; open water → positive.
     dist_cells = distance_transform_edt(~all_sources)
     cell_mm    = 0.5 * (surface.cell_w + surface.cell_h)
     dist_mm    = dist_cells * cell_mm
@@ -177,21 +178,6 @@ def _build_ripple_displacement(
                  np.cos(k2 * dist_mm + cfg.secondary_phase))
 
     z_disp = primary + secondary
-    z_disp[~water_mask] = 0.0
-
-    # ── Edge fade: smoothstep to zero within edge_fade_mm of tile boundary ────
-    rows = np.arange(gh, dtype=float)[:, None]
-    cols = np.arange(gw, dtype=float)[None, :]
-    x_mm = cols * surface.cell_w
-    y_mm = rows * surface.cell_h
-    edge_dist = np.minimum(
-        np.minimum(x_mm,                  surface.tile_w - x_mm),
-        np.minimum(y_mm,                  surface.tile_h - y_mm),
-    )
-    t    = np.clip(edge_dist / cfg.edge_fade_mm, 0.0, 1.0)
-    fade = t * t * (3.0 - 2.0 * t)   # smoothstep: 0 at edge, 1 beyond margin
-
-    z_disp *= fade
     z_disp[~water_mask] = 0.0
 
     return z_disp
