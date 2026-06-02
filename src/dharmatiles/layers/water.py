@@ -1,101 +1,197 @@
 """
-WaterLayer: flat water-surface placeholder.
+WaterLayer: flat water surface with optional concentric ripple displacement.
 
-Generates a flat coloured mesh at the water-region height.  The mesh tiles
-the water region using a subsampled quad grid so the vertex count stays
-manageable.
+Ripple model
+------------
+Ripples radiate inward from the water boundary — where land (shoreline,
+stones) meets open water.  For each water cell we compute the Euclidean
+distance to the nearest boundary contact point (via scipy EDT), then
+apply a damped cosine:
 
-TODO (future water rendering):
-  - Animated ripple / wave displacement
-  - Subsurface caustic texture
-  - Reflective-looking normal map
-  - Depth-shaded colour gradient (shallow → deep)
+    z(d) = A · exp(−d / decay) · cos(2π·d / λ)
+         + A·a₂ · exp(−d / (0.6·decay)) · cos(2π·d / λ₂ + φ₂)
 
-Slope assumption (shoreline)
-----------------------------
-The slope strip between the grass meadow and the water pool is currently bare
-soil.  No features (stones, grass, soil blobs) are placed there, so the
-world-horizontal placement assumption does not produce visible artefacts at
-the ≈22° slope used in the grass-and-water tile.
+The secondary term uses a shorter wavelength and a phase offset so its
+crests do not align with the primary ring, creating a subtle interference
+texture that breaks the too-perfect concentric pattern.
 
-If features are ever placed on the slope they must be oriented to the surface
-normal, not to world-Z.  The shared entry point for this is
-``TileScene.terrain_normal(x, y)`` (to be implemented in core/tile.py);
-see also the per-layer Slope assumption sections in soil.py, stones.py, and
-grass.py.
+Edge clamping
+-------------
+The displacement is multiplied by a per-cell smoothstep fade that reaches
+zero at the tile boundary, keeping every tile edge exactly flat for clean
+interlocking and printability.
+
+Mesh
+----
+A shared-vertex grid (grid_h+1) × (grid_w+1) is built for the entire tile.
+Displacement is bilinear-interpolated from cell-centre values to vertex
+corners.  Only cells inside *water_mask* emit faces, so non-water parts of
+the vertex buffer are allocated but unused (harmless for export).
 """
 from __future__ import annotations
 
 import numpy as np
 import trimesh
 
-from ..core.config import SurfaceConfig
+from ..core.config import SurfaceConfig, WaterRippleConfig
 
 
 WATER_RENDER_LIFT_MM = 0.0
 
 
 class WaterLayer:
-    """Build a flat water-surface mesh coloured blue.
-
-    The mesh is a stub placeholder.  It sits at *height_mm* and replaces the
-    omitted terrain top quads in water cells, so previewers see only explicit
-    blue water faces there.  It covers all grid cells where *water_mask* is
-    True, tiled in SUBSAMPLE×SUBSAMPLE blocks.
+    """Build a water-surface mesh coloured blue, optionally with ripples.
 
     Parameters
     ----------
-    surface    : SurfaceConfig — tile dimensions and grid resolution.
-    height_mm  : float — semantic z level of the water surface in mm.
+    surface        : SurfaceConfig — tile dimensions and grid resolution.
+    height_mm      : float — water-surface z level (mm).
+    render_lift_mm : float — extra z added on top of height_mm for rendering.
+    ripple_cfg     : WaterRippleConfig | None — ripple parameters, or None
+                     for a perfectly flat surface.
     """
 
-    SUBSAMPLE: int = 1   # match terrain top quads so water replaces them exactly
-
     def __init__(self, surface: SurfaceConfig, height_mm: float,
-                 render_lift_mm: float = WATER_RENDER_LIFT_MM) -> None:
+                 render_lift_mm: float = WATER_RENDER_LIFT_MM,
+                 ripple_cfg: WaterRippleConfig | None = None) -> None:
         self.surface        = surface
         self.height_mm      = height_mm
         self.render_lift_mm = render_lift_mm
+        self.ripple_cfg     = ripple_cfg
 
-    def build(self, water_mask: np.ndarray) -> list[trimesh.Trimesh]:
-        """Return a flat mesh covering *water_mask* cells at *height_mm*.
+    # ── Public API ────────────────────────────────────────────────────────────
+
+    def build(self, water_mask: np.ndarray,
+              stone_mask:  np.ndarray | None = None,
+              grass_mask:  np.ndarray | None = None) -> list[trimesh.Trimesh]:
+        """Return a water-surface mesh covering *water_mask* cells.
+
+        Parameters
+        ----------
+        water_mask : bool (grid_h, grid_w) — True for water cells.
+        stone_mask : optional bool — stone footprint cells; those that
+                     overlap water become additional ripple sources.
+        grass_mask : reserved for future grass-contact ripples (unused).
 
         Returns an empty list if the mask has no True cells.
         """
         surface = self.surface
         h       = self.height_mm + self.render_lift_mm
-        S       = self.SUBSAMPLE
+        gh, gw  = water_mask.shape
 
-        gh, gw = water_mask.shape
-        verts: list[list[float]] = []
-        faces: list[list[int]]   = []
-
-        r = 0
-        while r + S <= gh:
-            c = 0
-            while c + S <= gw:
-                # Include this block only if all four corners are water
-                if (water_mask[r,         c        ] and
-                        water_mask[r + S - 1, c        ] and
-                        water_mask[r,         c + S - 1] and
-                        water_mask[r + S - 1, c + S - 1]):
-                    x0, y0 = c * surface.cell_w,         r * surface.cell_h
-                    x1, y1 = (c + S) * surface.cell_w,   (r + S) * surface.cell_h
-                    i0 = len(verts)
-                    verts += [[x0, y0, h], [x1, y0, h],
-                              [x1, y1, h], [x0, y1, h]]
-                    faces += [[i0, i0 + 1, i0 + 2],
-                              [i0, i0 + 2, i0 + 3]]
-                c += S
-            r += S
-
-        if not verts:
+        if not np.any(water_mask):
             return []
 
-        mesh = trimesh.Trimesh(
-            vertices = np.array(verts, dtype=float),
-            faces    = np.array(faces, dtype=np.int32),
-            process  = False,
-        )
+        # ── Ripple displacement (cell-centre grid) ────────────────────────────
+        if self.ripple_cfg is not None:
+            z_disp = _build_ripple_displacement(
+                surface, water_mask, stone_mask, self.ripple_cfg,
+            )
+        else:
+            z_disp = np.zeros((gh, gw), dtype=float)
+
+        # ── Bilinear interpolation: cell centres → vertex corners ─────────────
+        # Each vertex (vr, vc) is at the corner shared by the four surrounding
+        # cells.  We pad the displacement array (edge mode) so boundary
+        # vertices reflect the nearest valid cell.
+        pad    = np.pad(z_disp, 1, mode='edge')       # (gh+2, gw+2)
+        vz_disp = 0.25 * (
+            pad[ :-1,  :-1] +    # cell above-left  of vertex
+            pad[ :-1, 1:  ] +    # cell above-right
+            pad[1:  ,  :-1] +    # cell below-left
+            pad[1:  , 1:  ]      # cell below-right
+        )                                              # (gh+1, gw+1)
+
+        # ── Vertex positions ──────────────────────────────────────────────────
+        x_v, y_v = np.meshgrid(
+            np.arange(gw + 1, dtype=float) * surface.cell_w,
+            np.arange(gh + 1, dtype=float) * surface.cell_h,
+        )                                                    # both (gh+1, gw+1)
+        z_v = h + vz_disp
+
+        verts = np.stack(
+            [x_v.ravel(), y_v.ravel(), z_v.ravel()], axis=1
+        )                                                   # (N_verts, 3)
+
+        # ── Faces: one quad (2 triangles) per water cell ──────────────────────
+        water_r, water_c = np.where(water_mask)
+        nf = len(water_r)
+
+        v00 = water_r       * (gw + 1) + water_c        # top-left  vertex
+        v01 = water_r       * (gw + 1) + water_c + 1    # top-right
+        v10 = (water_r + 1) * (gw + 1) + water_c        # bot-left
+        v11 = (water_r + 1) * (gw + 1) + water_c + 1   # bot-right
+
+        faces = np.empty((2 * nf, 3), dtype=np.int32)
+        faces[:nf, 0] = v00;  faces[:nf, 1] = v01;  faces[:nf, 2] = v11
+        faces[nf:, 0] = v00;  faces[nf:, 1] = v11;  faces[nf:, 2] = v10
+
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
         mesh.fix_normals()
         return [mesh]
+
+
+# ── Ripple displacement ───────────────────────────────────────────────────────
+
+def _build_ripple_displacement(
+    surface:    SurfaceConfig,
+    water_mask: np.ndarray,
+    stone_mask: np.ndarray | None,
+    cfg:        WaterRippleConfig,
+) -> np.ndarray:
+    """Return (gh, gw) displacement array (mm); zero outside water_mask."""
+    from scipy.ndimage import binary_erosion, distance_transform_edt
+
+    gh, gw = water_mask.shape
+
+    # ── Ripple sources ────────────────────────────────────────────────────────
+    # Primary source: inner ring of water_mask — water cells adjacent to
+    # non-water (including tile-edge cells, handled by binary_erosion's
+    # default border_value=0).
+    water_eroded = binary_erosion(water_mask)
+    inner_ring   = water_mask & ~water_eroded
+
+    # Secondary source: stones that touch water add contact-point ripples.
+    all_sources = inner_ring.copy()
+    if stone_mask is not None:
+        all_sources |= (stone_mask & water_mask)
+
+    # ── Distance from sources (mm) ────────────────────────────────────────────
+    # distance_transform_edt(~all_sources): for each cell, distance in cells
+    # to the nearest True cell in all_sources.  Source cells → 0.
+    dist_cells = distance_transform_edt(~all_sources)
+    cell_mm    = 0.5 * (surface.cell_w + surface.cell_h)
+    dist_mm    = dist_cells * cell_mm
+    dist_mm[~water_mask] = 0.0
+
+    # ── Damped cosine ripple ──────────────────────────────────────────────────
+    k1 = 2.0 * np.pi / cfg.wavelength_mm
+    k2 = 2.0 * np.pi / (cfg.wavelength_mm * cfg.secondary_wavelength)
+
+    primary   = (cfg.amplitude_mm *
+                 np.exp(-dist_mm / cfg.decay_mm) *
+                 np.cos(k1 * dist_mm))
+
+    secondary = (cfg.amplitude_mm * cfg.secondary_amplitude *
+                 np.exp(-dist_mm / (cfg.decay_mm * 0.6)) *
+                 np.cos(k2 * dist_mm + cfg.secondary_phase))
+
+    z_disp = primary + secondary
+    z_disp[~water_mask] = 0.0
+
+    # ── Edge fade: smoothstep to zero within edge_fade_mm of tile boundary ────
+    rows = np.arange(gh, dtype=float)[:, None]
+    cols = np.arange(gw, dtype=float)[None, :]
+    x_mm = cols * surface.cell_w
+    y_mm = rows * surface.cell_h
+    edge_dist = np.minimum(
+        np.minimum(x_mm,                  surface.tile_w - x_mm),
+        np.minimum(y_mm,                  surface.tile_h - y_mm),
+    )
+    t    = np.clip(edge_dist / cfg.edge_fade_mm, 0.0, 1.0)
+    fade = t * t * (3.0 - 2.0 * t)   # smoothstep: 0 at edge, 1 beyond margin
+
+    z_disp *= fade
+    z_disp[~water_mask] = 0.0
+
+    return z_disp

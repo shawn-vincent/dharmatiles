@@ -24,7 +24,8 @@ import numpy as np
 import trimesh
 
 from ..core.config import (SceneConfig, SurfaceConfig, FlowConfig, SolverConfig,
-                           GrassConfig, SoilConfig, StonesConfig, BaseConfig)
+                           GrassConfig, SoilConfig, StonesConfig, BaseConfig,
+                           WaterRippleConfig)
 from ..core.tile import TileScene, make_xy_grids
 from ..core.flow import build_flow_field
 from ..core.mesh import (make_heightmap_solid, make_dungeonblock_base,
@@ -130,11 +131,17 @@ def _build_mesh(cfg: SceneConfig,
         _paint(grass_parts, COLOUR_GRASS)
         parts.extend(grass_parts)
 
-    # ── Water surface (blue placeholder) ─────────────────────────────────────
+    # ── Water surface (with ripples) ──────────────────────────────────────────
     if water_mask is not None and water_height is not None:
         if verbose:
-            print("Building water surface...")
-        water_parts = WaterLayer(cfg.surface, water_height).build(water_mask)
+            print("Building water surface (ripples)...")
+        water_layer = WaterLayer(cfg.surface, water_height,
+                                 ripple_cfg=WaterRippleConfig())
+        water_parts = water_layer.build(
+            water_mask,
+            stone_mask=scene.stone_mask,
+            grass_mask=scene.grass_mask,
+        )
         _paint(water_parts, COLOUR_WATER)
         parts.extend(water_parts)
 
