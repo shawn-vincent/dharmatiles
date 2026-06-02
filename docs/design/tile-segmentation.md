@@ -17,6 +17,37 @@ than geometrically sharp.
 
 ---
 
+## Height model
+
+`height_mm` is the **slab thickness** — the distance from the tile's flat
+bottom face to the region's surface.  All regions share the same flat bottom
+(so the DungeonBlocks peg base fits), and their surfaces sit at different
+heights above it.
+
+**Defaults by layer type** (used when `height_mm` is not specified on the region):
+
+| Type | Default height | Surface relative to ground |
+|---|---|---|
+| `grass` / `soil` | 5.0 mm | reference level |
+| `water` | 3.0 mm | 2 mm below ground |
+| `floor` | 10.0 mm | 5 mm above ground |
+
+Set `height_mm` on the region to override, e.g.:
+
+```yaml
+regions:
+  deep_pool:
+    contains: [0.75, 0.5]
+    height_mm: 1.5    # 3.5 mm below ground — noticeably deeper than default
+    layers:
+      - type: water
+```
+
+When two adjacent regions have different heights, the boundary's slope
+interpolates between them across the boundary strip's `width_mm`.
+
+---
+
 ## Core model
 
 A tile contains two kinds of things: **regions** and **boundaries**.
@@ -81,29 +112,28 @@ Anchor points: `{ edge = "top|bottom|left|right", t = 0..1 }` where
 `t` is the fractional position along that edge from the tile's
 bottom-left origin corner.
 
-**The boundary is itself a region.**  When a transition between two
-adjacent regions needs physical geometry (a slope, a masonry seam, a
-river channel), give the boundary a width and a layer type:
+**The boundary is itself a region.**  `width_mm` on the boundary gives it
+physical extent.  A `layer` spec defines what terrain type fills that strip.
+The slope between adjacent region heights is interpolated automatically
+across the strip width.
 
-```toml
-[[boundary]]
-id   = "shoreline"
-from = { edge = "top",    t = 0.55 }
-to   = { edge = "bottom", t = 0.45 }
-path = "organic"
-amplitude_mm  = 4.0
-wavelength_mm = 12.0
-
-[[boundary.layer]]
-type     = "soil"      # bare soil ramp — no seeds
-width_mm = 4.0         # total width of the transition strip
-# height transition (slope) is automatic: interpolates between the
-# elevations of the two adjacent regions across this width
+```yaml
+boundaries:
+  shoreline:
+    from: {edge: top,    t: 0.55}
+    to:   {edge: bottom, t: 0.45}
+    path: organic
+    amplitude_mm: 4.0
+    wavelength_mm: 12.0
+    width_mm: 4.0        # ← width is on the boundary, not the layer
+    layer:
+      type: soil          # bare ramp, no seeds; height interpolated automatically
 ```
 
-A boundary with no `[[boundary.layer]]` is a zero-width dividing line
-— appropriate when no physical transition is needed (e.g., grass/soil,
-where you simply stop planting seeds).
+**`width_mm` defaults to 0** (zero-width dividing line).  Assigning a
+`layer` to a zero-width boundary is an error — you cannot put content into
+a strip with no extent.  A zero-width boundary between ground and water
+produces a sharp cutoff (valid, just no slope).
 
 **Boundary layer possibilities**
 

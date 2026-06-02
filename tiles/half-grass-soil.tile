@@ -1,0 +1,30 @@
+# half-grass-soil.tile
+#
+# Left half: grass.  Right half: bare soil.
+# Zero-width boundary (no layer) — same elevation on both sides,
+# so no slope is needed.  The organic path alone makes the edge
+# read as a real meadow margin.
+
+surface:
+  seed: 42
+
+regions:
+  meadow:
+    contains: [0.25, 0.5]
+    # height_mm: 5.0  ← grass default; no need to write it
+    layers:
+      - type: grass
+        groups_per_square: 240
+
+  dirt:
+    contains: [0.75, 0.5]
+    # no layers → bare soil at default height (5 mm)
+
+boundaries:
+  margin:
+    from: {edge: top,    t: 0.48}
+    to:   {edge: bottom, t: 0.52}
+    path: organic
+    amplitude_mm: 3.0
+    wavelength_mm: 10.0
+    # width_mm defaults to 0 → zero-width dividing line, no layer

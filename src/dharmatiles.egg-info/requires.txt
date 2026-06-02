@@ -1,3 +1,4 @@
 numpy
 trimesh
 scipy
+pyyaml

@@ -1,0 +1,189 @@
+"""
+Region mask generation: boundary rasterisation + flood fill.
+
+The region mask is a (grid_h, grid_w) int32 array:
+  -2  = unassigned (no region flood-fill reached this cell)
+  -1  = boundary line (impassable to flood fill)
+   N  = region index N (0-based, matching spec.regions order)
+
+``build_grass_mask`` derives a bool mask from the region mask: True where
+grass seeds should be planted.
+"""
+from __future__ import annotations
+
+from collections import deque
+
+import numpy as np
+
+from .config import SurfaceConfig
+from .spec import TileSpec, BoundarySpec
+
+
+# Sentinel values in the region mask
+_UNASSIGNED = -2
+_BOUNDARY   = -1
+
+
+# ── Anchor → mm ──────────────────────────────────────────────────────────────
+
+def _anchor_to_mm(edge: str, t: float,
+                  tile_w: float, tile_h: float) -> tuple[float, float]:
+    """Convert a perimeter anchor (edge, t) to (x_mm, y_mm)."""
+    if edge == 'bottom': return (t * tile_w, 0.0)
+    if edge == 'top':    return (t * tile_w, tile_h)
+    if edge == 'left':   return (0.0, t * tile_h)
+    if edge == 'right':  return (tile_w, t * tile_h)
+    raise ValueError(f"Unknown edge {edge!r}; must be top/bottom/left/right")
+
+
+# ── Boundary path generation ─────────────────────────────────────────────────
+
+def boundary_path_mm(spec: BoundarySpec, surface: SurfaceConfig,
+                     n_samples: int = 4000) -> np.ndarray:
+    """Return (n_samples, 2) float array of (x, y) path points in mm.
+
+    The path starts at ``spec.from_anchor`` and ends at ``spec.to_anchor``.
+    For 'organic' paths the noise tapers to zero at both ends so the curve
+    hits the anchor points exactly.
+    """
+    xa, ya = _anchor_to_mm(*spec.from_anchor, surface.tile_w, surface.tile_h)
+    xb, yb = _anchor_to_mm(*spec.to_anchor,   surface.tile_w, surface.tile_h)
+
+    t  = np.linspace(0.0, 1.0, n_samples)
+    dx = xb - xa
+    dy = yb - ya
+
+    if spec.path == 'straight':
+        return np.column_stack([xa + t * dx, ya + t * dy])
+
+    # ── Organic: sinusoidal perpendicular noise tapered at both ends ──────────
+    length = float(np.hypot(dx, dy))
+    if length < 1e-6:
+        return np.column_stack([np.full(n_samples, xa),
+                                np.full(n_samples, ya)])
+
+    # Perpendicular unit vector (rotate 90° CCW)
+    px, py = -dy / length, dx / length
+
+    arc    = t * length
+    taper  = np.sin(np.pi * t)   # 0→1→0 : path is pinned at both anchors
+
+    rng    = np.random.default_rng(surface.seed ^ spec.seed_offset ^ 0xB04DA7)
+    phase  = float(rng.uniform(0.0, 2.0 * np.pi))
+
+    offset = (spec.amplitude_mm
+              * np.sin(2.0 * np.pi * arc / spec.wavelength_mm + phase)
+              * taper)
+
+    return np.column_stack([xa + t * dx + offset * px,
+                            ya + t * dy + offset * py])
+
+
+# ── Rasterisation ─────────────────────────────────────────────────────────────
+
+def _rasterise(path_mm: np.ndarray, surface: SurfaceConfig,
+               mask: np.ndarray) -> None:
+    """Mark cells along path_mm as _BOUNDARY (in-place).
+
+    Uses Bresenham-style segment stepping between consecutive sample pairs
+    so there are no gaps even for coarser grids.
+    """
+    cols = np.clip((path_mm[:, 0] / surface.cell_w).astype(int),
+                   0, surface.grid_w - 1)
+    rows = np.clip((path_mm[:, 1] / surface.cell_h).astype(int),
+                   0, surface.grid_h - 1)
+
+    # Walk consecutive segments and fill any skipped cells
+    for i in range(len(cols) - 1):
+        c0, r0 = int(cols[i]),     int(rows[i])
+        c1, r1 = int(cols[i + 1]), int(rows[i + 1])
+        _bresenham(mask, r0, c0, r1, c1)
+
+
+def _bresenham(mask: np.ndarray, r0: int, c0: int, r1: int, c1: int) -> None:
+    """Mark all cells on the Bresenham line from (r0,c0) to (r1,c1)."""
+    gh, gw = mask.shape
+    dr = abs(r1 - r0);  sr = 1 if r1 > r0 else -1
+    dc = abs(c1 - c0);  sc = 1 if c1 > c0 else -1
+    err = dr - dc
+    r, c = r0, c0
+    while True:
+        if 0 <= r < gh and 0 <= c < gw:
+            mask[r, c] = _BOUNDARY
+        if r == r1 and c == c1:
+            break
+        e2 = 2 * err
+        if e2 > -dc:  err -= dc;  r += sr
+        if e2 <  dr:  err += dr;  c += sc
+
+
+# ── Flood fill ────────────────────────────────────────────────────────────────
+
+def _flood_fill(mask: np.ndarray, row: int, col: int, value: int) -> bool:
+    """BFS flood fill: paint connected _UNASSIGNED cells with *value*.
+
+    Returns True if at least one cell was filled, False if the seed
+    cell was already occupied (boundary or another region).
+    """
+    gh, gw = mask.shape
+    if mask[row, col] != _UNASSIGNED:
+        return False
+    q = deque([(row, col)])
+    mask[row, col] = value
+    while q:
+        r, c = q.popleft()
+        for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            nr, nc = r + dr, c + dc
+            if 0 <= nr < gh and 0 <= nc < gw and mask[nr, nc] == _UNASSIGNED:
+                mask[nr, nc] = value
+                q.append((nr, nc))
+    return True
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def build_region_mask(spec: TileSpec) -> np.ndarray:
+    """Return (grid_h, grid_w) int32 array: region index per cell.
+
+    Values:
+      _UNASSIGNED (-2)  — no region claimed this cell
+      _BOUNDARY   (-1)  — lies on a boundary curve
+      N ≥ 0             — belongs to spec.regions[N]
+    """
+    surface = spec.surface
+    mask = np.full((surface.grid_h, surface.grid_w), _UNASSIGNED, dtype=np.int32)
+
+    # Rasterise all boundary curves
+    for bnd in spec.boundaries:
+        path = boundary_path_mm(bnd, surface)
+        _rasterise(path, surface, mask)
+
+    # Flood-fill each named region from its contains point
+    for idx, region in enumerate(spec.regions):
+        cx_n, cy_n = region.contains
+        col = int(np.clip(cx_n * surface.grid_w, 0, surface.grid_w - 1))
+        row = int(np.clip(cy_n * surface.grid_h, 0, surface.grid_h - 1))
+        ok = _flood_fill(mask, row, col, idx)
+        if not ok:
+            import warnings
+            warnings.warn(
+                f"Region '{region.id}': contains point ({cx_n:.2f}, {cy_n:.2f}) "
+                f"landed on a boundary or another region — check your spec.",
+                stacklevel=2,
+            )
+
+    return mask
+
+
+def build_grass_mask(region_mask: np.ndarray, spec: TileSpec) -> np.ndarray | None:
+    """Return bool mask (True = plant grass here), or None if no grass regions."""
+    grass_indices = {
+        i for i, r in enumerate(spec.regions)
+        if any(l.type == 'grass' for l in r.layers)
+    }
+    if not grass_indices:
+        return None
+    result = np.zeros(region_mask.shape, dtype=bool)
+    for idx in grass_indices:
+        result |= (region_mask == idx)
+    return result

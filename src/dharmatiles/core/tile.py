@@ -51,6 +51,7 @@ class TileScene:
     terrain_z: np.ndarray                       # (grid_h, grid_w) — read-only
     support_z: np.ndarray                       # (grid_h, grid_w) — mutable
     stone_mask: np.ndarray | None = None        # (grid_h, grid_w) bool — True under a stone
+    grass_mask: np.ndarray | None = None        # (grid_h, grid_w) bool — True where grass may grow
     parts:     List[trimesh.Trimesh] = field(default_factory=list)
 
     # ── Constructors ──────────────────────────────────────────────────────────

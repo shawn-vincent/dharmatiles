@@ -1,52 +1,42 @@
 # coast-left.tile
 #
 # Grass on the left half, water on the right.
-# A 4 mm soil slope runs along the shoreline —
-# no seeds on the slope, but grass blades can lean onto it.
+# The boundary has a 4 mm soil ramp that bridges the 2 mm elevation
+# difference (grass at 5 mm, water at 3 mm).
+#
+# NOTE: water rendering requires Phase 2.  This spec is valid and will
+# load without errors, but the water region will render as bare soil
+# at the wrong elevation until WaterLayer is implemented.
 
-[surface]
-cols = 1
-rows = 1
-seed = 7
+surface:
+  seed: 7
 
-# ── Regions ────────────────────────────────────────────────────────────────────
+regions:
+  meadow:
+    contains: [0.25, 0.5]
+    # height_mm: 5.0  ← grass default
+    layers:
+      - type: grass
+        groups_per_square: 240
+      - type: grass         # sparse tall blades scattered through the meadow
+        groups_per_square: 30
+        max_segs: 18
+        width_min: 1.3
+        width_max: 1.7
 
-[[region]]
-id       = "meadow"
-contains = [0.25, 0.5]
+  lake:
+    contains: [0.75, 0.5]
+    # height_mm: 3.0  ← water default (2 mm below ground)
+    layers:
+      - type: water
 
-[[region.layer]]
-type              = "grass"
-groups_per_square = 240
-
-[[region.layer]]          # sparse tall blades scattered through the meadow
-type              = "grass"
-groups_per_square = 30
-max_segs          = 18
-width_min         = 1.3
-width_max         = 1.7
-
-
-[[region]]
-id       = "lake"
-contains = [0.75, 0.5]
-
-[[region.layer]]
-type     = "water"
-depth_mm = 2.0
-
-
-# ── Boundary ───────────────────────────────────────────────────────────────────
-
-[[boundary]]
-id   = "shoreline"
-from = { edge = "top",    t = 0.55 }   # slightly off-centre — less mechanical
-to   = { edge = "bottom", t = 0.45 }
-path = "organic"
-amplitude_mm  = 4.0
-wavelength_mm = 12.0
-
-[[boundary.layer]]
-type     = "soil"    # bare ramp, no seeds
-width_mm = 4.0       # 2 mm each side of the path; height interpolates
-                     # from soil elevation down to water depth
+boundaries:
+  shoreline:
+    from: {edge: top,    t: 0.55}
+    to:   {edge: bottom, t: 0.45}
+    path: organic
+    amplitude_mm: 4.0
+    wavelength_mm: 12.0
+    width_mm: 4.0           # strip width; slope interpolates 5 mm → 3 mm
+    layer:
+      type: soil             # bare ramp, no seeds

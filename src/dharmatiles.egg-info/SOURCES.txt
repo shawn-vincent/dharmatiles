@@ -11,7 +11,9 @@ src/dharmatiles/core/config.py
 src/dharmatiles/core/flow.py
 src/dharmatiles/core/grid.py
 src/dharmatiles/core/mesh.py
+src/dharmatiles/core/region.py
 src/dharmatiles/core/seed.py
+src/dharmatiles/core/spec.py
 src/dharmatiles/core/terrain.py
 src/dharmatiles/core/tile.py
 src/dharmatiles/layers/__init__.py

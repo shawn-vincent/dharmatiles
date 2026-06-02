@@ -355,12 +355,13 @@ class GrassLayer:
                 by   = float(np.clip(gc['base_y'] + dist * np.sin(ang),
                                      edge, surface.tile_h - edge))
 
-                # Don't plant seeds under stones — they can't grow out
-                if scene.stone_mask is not None:
-                    ix = int(np.clip(int(bx / surface.cell_w), 0, surface.grid_w - 1))
-                    iy = int(np.clip(int(by / surface.cell_h), 0, surface.grid_h - 1))
-                    if scene.stone_mask[iy, ix]:
-                        continue
+                # Reject seeds under stones or outside the grass region
+                ix = int(np.clip(int(bx / surface.cell_w), 0, surface.grid_w - 1))
+                iy = int(np.clip(int(by / surface.cell_h), 0, surface.grid_h - 1))
+                if scene.stone_mask is not None and scene.stone_mask[iy, ix]:
+                    continue
+                if scene.grass_mask is not None and not scene.grass_mask[iy, ix]:
+                    continue
 
                 blade_dir  = group_dir + float(rng.normal(0.0, self.group_dir_jitter))
                 blade_curl = float(np.clip(
