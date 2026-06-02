@@ -202,6 +202,7 @@ class GravelConfig:
     r_min:         float = 0.05    # mm — minimum horizontal semi-axis
     r_max:         float = 1.5     # mm — maximum horizontal semi-axis
     size_power:    float = 6.0     # distribution skew: >1 = mostly small rocks
+    aspect_min:    float = 0.65   # min ry/rx ratio — prevents razor-thin slivers
     flat_min:      float = 0.40    # height = this × mean_radius (flattest)
     flat_max:      float = 1.50    # height = this × mean_radius (roundest)
     az_segs:       int   = 7       # azimuth facets per stone

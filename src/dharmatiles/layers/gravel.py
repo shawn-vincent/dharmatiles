@@ -47,9 +47,10 @@ def _build_gravel_mesh(surface: SurfaceConfig, gravel: GravelConfig,
 
     # Power-law size draw: U^power skews toward r_min; power=1 = uniform
     u_x    = rng.uniform(0.0, 1.0, N) ** gravel.size_power
-    u_y    = rng.uniform(0.0, 1.0, N) ** gravel.size_power
     rx_arr = gravel.r_min + (gravel.r_max - gravel.r_min) * u_x
-    ry_arr = gravel.r_min + (gravel.r_max - gravel.r_min) * u_y
+    # Second axis: aspect ratio bounded to [aspect_min, 1.0] so rocks stay roundish
+    aspect = rng.uniform(gravel.aspect_min, 1.0, N)
+    ry_arr = rx_arr * aspect
     h_frac  = rng.uniform(gravel.flat_min, gravel.flat_max, N)
     height  = 0.5 * (rx_arr + ry_arr) * h_frac
     angle   = rng.uniform(0, np.pi, N)
