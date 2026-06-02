@@ -331,6 +331,8 @@ class GrownGrassLayer:
         rng     = np.random.default_rng(surface.seed ^ 0x47524F57)   # 'GROW'
 
         # ── Plant seeds in groups ──────────────────────────────────────────────
+        if self.n_groups == 0:
+            return []
         edge = grass.width_max / 2.0 + 0.5
         group_centers = _jittered_group_centers(
             self.n_groups, surface, grass, flow_angle_field, rng, edge,
