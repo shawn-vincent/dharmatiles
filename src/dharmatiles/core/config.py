@@ -38,11 +38,12 @@ class SurfaceConfig:
         Master seed; layers derive their own seeds by XOR-ing with a
         per-layer constant.
     """
-    tile_cols: int   = 1
-    tile_rows: int   = 1
-    base_h:    float = 0.0      # mm — extra slab below z=0 (terrain heights are
+    tile_cols:    int   = 1
+    tile_rows:    int   = 1
+    base_h:       float = 0.0   # mm — extra slab below z=0 (terrain heights are
                                  #      total floor thicknesses; 0 = no extra slab)
-    seed:      int   = 377
+    seed:         int   = 377
+    flat_terrain: bool  = False  # True → constant z=5 mm, no sinusoidal variation
 
     # ── Derived dimensions ────────────────────────────────────────────────────
     @property
@@ -181,14 +182,39 @@ class SolverConfig:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Gravel
+# Soil
 # ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
-class GravelConfig:
+class SoilConfig:
+    """Multi-scale bumpy soil texture applied to terrain_z.
+
+    Three octaves of smoothed noise are summed, each independently scaled.
+    Cell size is CELL_SIZE_MM ≈ 0.273 mm; sigma values are in grid cells.
+
+    Octave layout (defaults give ~5mm large mounds, ~2mm medium bumps, ~0.8mm ripples):
+        large  — broad rolling mounds across the tile
+        medium — mid-scale clumps between the mounds
+        small  — fine surface ripple
+    """
+    large_sigma:  float = 12.0   # grid cells  (~3.3 mm → broad rolls ~6–8 mm across)
+    large_amp:    float = 0.3    # mm — broad low rolls, kept subtle
+    medium_sigma: float = 5.0    # grid cells  (~1.4 mm → main lumps ~3–4 mm across)
+    medium_amp:   float = 0.9    # mm
+    small_sigma:  float = 2.0    # grid cells  (~0.5 mm → gentle fine texture)
+    small_amp:    float = 0.7    # mm
+    edge_fade_mm: float = 0.8    # mm — cosine fade to zero at tile edges
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stones
+# ─────────────────────────────────────────────────────────────────────────────
+
+@dataclass
+class StonesConfig:
     """Random stone geometry parameters.
 
-    ``gravel_per_tile`` is a density — GravelLayer multiplies by
+    ``stones_per_tile`` is a density — StonesLayer multiplies by
     tile_cols × tile_rows to get the actual stone count for the surface.
 
     Size distribution
@@ -198,20 +224,20 @@ class GravelConfig:
     higher values skew strongly toward small rocks while still allowing the
     occasional large one up to r_max.
     """
-    gravel_per_tile: int   = 6000
-    r_min:         float = 0.05    # mm — minimum horizontal semi-axis
-    r_max:         float = 1.5     # mm — maximum horizontal semi-axis
-    size_power:    float = 12.0    # distribution skew: >1 = mostly small rocks
+    stones_per_tile: int   = 80
+    r_min:         float = 0.6    # mm — minimum horizontal semi-axis
+    r_max:         float = 2.5    # mm — maximum horizontal semi-axis
+    size_power:    float = 3.0    # distribution skew: >1 = more small rocks
     aspect_min:    float = 0.65   # min ry/rx ratio — prevents razor-thin slivers
-    flat_min:      float = 0.40    # height = this × mean_radius (flattest)
-    flat_max:      float = 1.50    # height = this × mean_radius (roundest)
-    n_cuts:        int   = 5       # random plane cuts per stone (0 = smooth dome)
-    cut_min:       float = 0.30    # min cut distance as fraction of mean radius
-    cut_max:       float = 0.75    # max cut distance as fraction of mean radius
-    roughness:     float = 0.06    # small residual per-vertex noise (breaks flat faces slightly)
-    az_segs:       int   = 10      # azimuth facets per stone
-    el_segs:       int   = 5       # elevation rings per stone
-    sink:          float = 0.01    # mm — base sunk below terrain
+    flat_min:      float = 0.40   # height = this × mean_radius (flattest)
+    flat_max:      float = 1.50   # height = this × mean_radius (roundest)
+    n_cuts:        int   = 3      # random plane cuts per stone (0 = smooth dome)
+    cut_min:       float = 0.55   # min cut distance as fraction of mean radius
+    cut_max:       float = 0.90   # max cut distance as fraction of mean radius
+    roughness:     float = 0.06   # small residual per-vertex noise (breaks flat faces slightly)
+    az_segs:       int   = 10     # azimuth facets per stone
+    el_segs:       int   = 5      # elevation rings per stone
+    sink:          float = 0.10   # mm — base sunk below terrain
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -259,5 +285,6 @@ class SceneConfig:
     flow:    FlowConfig    = field(default_factory=FlowConfig)
     grass:   GrassConfig   = field(default_factory=GrassConfig)
     solver:  SolverConfig  = field(default_factory=SolverConfig)
-    gravel:  GravelConfig  = field(default_factory=GravelConfig)
+    soil:    SoilConfig    = field(default_factory=SoilConfig)
+    stones:  StonesConfig  = field(default_factory=StonesConfig)
     base:    BaseConfig    = field(default_factory=BaseConfig)

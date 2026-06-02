@@ -67,7 +67,11 @@ class TileScene:
         Preserves the old behaviour for scripts that have not yet been
         migrated to TerrainGrid.
         """
-        terrain_z = _make_sinusoidal_terrain(cfg.surface)
+        if cfg.surface.flat_terrain:
+            terrain_z = np.full((cfg.surface.grid_h, cfg.surface.grid_w),
+                                5.0, dtype=float)
+        else:
+            terrain_z = _make_sinusoidal_terrain(cfg.surface)
         return cls(config=cfg, terrain_z=terrain_z,
                    support_z=terrain_z.copy())
 

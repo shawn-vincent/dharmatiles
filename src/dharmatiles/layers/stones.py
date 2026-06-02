@@ -1,5 +1,5 @@
 """
-GravelLayer: batch-vectorised half-ellipsoid stones placed on terrain.
+StonesLayer: batch-vectorised half-ellipsoid stones placed on terrain.
 
 All stone geometry is built with NumPy broadcasting in a single pass.
 Stone tops are rasterised into the scene's support_z so that subsequent
@@ -12,46 +12,46 @@ from typing import List
 import numpy as np
 import trimesh
 
-from ..core.config import SurfaceConfig, GravelConfig
+from ..core.config import SurfaceConfig, StonesConfig
 from ..core.tile import TileScene
 from ..core.grid import sample_grid
 
 
-class GravelLayer:
+class StonesLayer:
     """Place random stones across the tile surface and update support_z."""
 
-    def __init__(self, surface: SurfaceConfig, gravel: GravelConfig) -> None:
+    def __init__(self, surface: SurfaceConfig, stones: StonesConfig) -> None:
         self.surface = surface
-        self.gravel  = gravel
+        self.stones  = stones
 
     def build(self, scene: TileScene) -> List[trimesh.Trimesh]:
         """Add stone geometry to *scene.support_z* and return mesh list."""
         tile_area = self.surface.tile_cols * self.surface.tile_rows
-        n_stones  = self.gravel.gravel_per_tile * tile_area
+        n_stones  = self.stones.stones_per_tile * tile_area
         rng  = np.random.default_rng(self.surface.seed + 7919)
-        mesh = _build_gravel_mesh(self.surface, self.gravel, n_stones,
+        mesh = _build_stones_mesh(self.surface, self.stones, n_stones,
                                   scene.terrain_z, scene.support_z, rng)
         return [mesh]
 
 
 # ── Internal implementation ───────────────────────────────────────────────────
 
-def _build_gravel_mesh(surface: SurfaceConfig, gravel: GravelConfig,
+def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
                        n_stones: int,
                        terrain_z: np.ndarray, support_z: np.ndarray,
                        rng: np.random.Generator) -> trimesh.Trimesh:
     """Place *n_stones* stones; return a single merged Trimesh."""
     N  = n_stones
-    AZ = gravel.az_segs
-    EL = gravel.el_segs
+    AZ = stones.az_segs
+    EL = stones.el_segs
 
     # Power-law size draw: U^power skews toward r_min; power=1 = uniform
-    u_x    = rng.uniform(0.0, 1.0, N) ** gravel.size_power
-    rx_arr = gravel.r_min + (gravel.r_max - gravel.r_min) * u_x
+    u_x    = rng.uniform(0.0, 1.0, N) ** stones.size_power
+    rx_arr = stones.r_min + (stones.r_max - stones.r_min) * u_x
     # Second axis: aspect ratio bounded to [aspect_min, 1.0] so rocks stay roundish
-    aspect = rng.uniform(gravel.aspect_min, 1.0, N)
+    aspect = rng.uniform(stones.aspect_min, 1.0, N)
     ry_arr = rx_arr * aspect
-    h_frac  = rng.uniform(gravel.flat_min, gravel.flat_max, N)
+    h_frac  = rng.uniform(stones.flat_min, stones.flat_max, N)
     height  = 0.5 * (rx_arr + ry_arr) * h_frac
     angle   = rng.uniform(0, np.pi, N)
     margin  = np.maximum(rx_arr, ry_arr)
@@ -63,7 +63,7 @@ def _build_gravel_mesh(surface: SurfaceConfig, gravel: GravelConfig,
 
     ca, sa = np.cos(angle), np.sin(angle)
     tz     = sample_grid(terrain_z, surface, cx, cy)
-    base_z = tz - gravel.sink
+    base_z = tz - stones.sink
 
     # ── Vertex buffer ──────────────────────────────────────────────────────────
     vps = 1 + EL * AZ + 1    # verts per stone
@@ -98,7 +98,7 @@ def _build_gravel_mesh(surface: SurfaceConfig, gravel: GravelConfig,
     # For each cut, project vertices past a random half-plane back onto it.
     # Normals are biased horizontal so cuts create side-face chunks, not
     # slices off the top.
-    n_cuts = gravel.n_cuts
+    n_cuts = stones.n_cuts
     if n_cuts > 0:
         # Local coords relative to stone base-centre (so centre = 0,0,0)
         lx_v = wx - cx[:, None, None]   # (N, EL, AZ)
@@ -110,7 +110,7 @@ def _build_gravel_mesh(surface: SurfaceConfig, gravel: GravelConfig,
         raw[:, :, 2] = np.abs(raw[:, :, 2]) * 0.3      # mostly horizontal cuts
         norms = raw / (np.linalg.norm(raw, axis=-1, keepdims=True) + 1e-8)
 
-        cut_d = (rng.uniform(gravel.cut_min, gravel.cut_max, (N, n_cuts))
+        cut_d = (rng.uniform(stones.cut_min, stones.cut_max, (N, n_cuts))
                  * mean_r[:, None])                     # (N, n_cuts) in mm
 
         for k in range(n_cuts):
@@ -126,8 +126,8 @@ def _build_gravel_mesh(surface: SurfaceConfig, gravel: GravelConfig,
         wz = base_z[:, None, None]   + pts[..., 2]
 
     # ── Residual roughness: tiny per-vertex noise to break perfect flat faces ─
-    if gravel.roughness > 0.0:
-        scale = (gravel.roughness * mean_r)[:, None, None]
+    if stones.roughness > 0.0:
+        scale = (stones.roughness * mean_r)[:, None, None]
         wx += scale * rng.uniform(-1.0, 1.0, wx.shape)
         wy += scale * rng.uniform(-1.0, 1.0, wy.shape)
         wz += scale * 0.4 * rng.uniform(-1.0, 1.0, wz.shape)

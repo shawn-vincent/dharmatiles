@@ -19,12 +19,13 @@ import numpy as np
 import trimesh
 
 from ..core.config import (SceneConfig, SurfaceConfig, FlowConfig,
-                           GrassConfig, GravelConfig, BaseConfig)
+                           GrassConfig, SoilConfig, StonesConfig, BaseConfig)
 from ..core.tile import TileScene, make_xy_grids
 from ..core.flow import build_flow_field
 from ..core.mesh import (make_heightmap_solid, make_dungeonblock_base,
                          select_peg_height)
-from ..layers.gravel import GravelLayer
+from ..layers.soil import SoilLayer
+from ..layers.stones import StonesLayer
 from ..layers.grown_grass import GrownGrassLayer
 
 
@@ -49,14 +50,18 @@ def build_grown_grass_tile(cfg: SceneConfig,
 
     parts: list = []
 
+    if verbose:
+        print("Building soil texture...")
+    SoilLayer(cfg.surface, cfg.soil).build(scene)
+
     tile_area = cfg.surface.tile_cols * cfg.surface.tile_rows
-    n_stones  = cfg.gravel.gravel_per_tile * tile_area
+    n_stones  = cfg.stones.stones_per_tile * tile_area
     if n_stones > 0:
         if verbose:
-            print(f"Building gravel  ({n_stones} stones = "
-                  f"{cfg.gravel.gravel_per_tile}/tile × {tile_area} tiles)...")
-        gravel = GravelLayer(cfg.surface, cfg.gravel)
-        parts.extend(gravel.build(scene))
+            print(f"Building stones  ({n_stones} stones = "
+                  f"{cfg.stones.stones_per_tile}/tile × {tile_area} tiles)...")
+        stones = StonesLayer(cfg.surface, cfg.stones)
+        parts.extend(stones.build(scene))
 
     if verbose:
         print("Growing grass...")
@@ -70,7 +75,6 @@ def build_grown_grass_tile(cfg: SceneConfig,
         cfg.surface.tile_w,
         cfg.surface.tile_h,
         cfg.surface.base_h,
-        subsample=4,
     )
     parts.insert(0, terrain_mesh)
 
@@ -106,7 +110,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _S = SurfaceConfig()
     _F = FlowConfig()
     _G = GrassConfig()
-    _V = GravelConfig()
+    _V = StonesConfig()
     _B = BaseConfig()
 
     p = argparse.ArgumentParser(
@@ -122,8 +126,8 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="Number of 35 mm tile units in Y")
     p.add_argument("--base-h",     type=float, default=_S.base_h, dest="base_h",
                    help="Slab depth below terrain surface (mm)")
-    p.add_argument("--gravel-per-tile", type=int, default=_V.gravel_per_tile,
-                   dest="gravel_per_tile",
+    p.add_argument("--stones-per-tile", type=int, default=_V.stones_per_tile,
+                   dest="stones_per_tile",
                    help="Stones per 35mm tile unit (scaled by tile count)")
     p.add_argument("--r-max", type=float, default=_V.r_max, dest="r_max",
                    help="Maximum stone radius (mm)")
@@ -195,8 +199,9 @@ def main(argv=None):
             group_spread_mm  = args.group_spread_mm,
             max_bridge_mm    = args.max_bridge_mm,
         ),
-        gravel=GravelConfig(
-            gravel_per_tile = args.gravel_per_tile,
+        soil=SoilConfig(),
+        stones=StonesConfig(
+            stones_per_tile = args.stones_per_tile,
             r_max           = args.r_max,
             size_power      = args.size_power,
         ),

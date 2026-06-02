@@ -1,5 +1,5 @@
 from .config  import (SceneConfig, SurfaceConfig, FlowConfig,
-                       GrassConfig, SolverConfig, GravelConfig,
+                       GrassConfig, SolverConfig, SoilConfig, StonesConfig,
                        CELL_SIZE_MM)
 from .terrain import (TerrainType, TerrainCell, TerrainGrid,
                        terrain_grid_to_heightmap, terrain_grid_to_type_array,

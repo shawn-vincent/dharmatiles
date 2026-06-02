@@ -277,7 +277,7 @@ def build_sub_hull_mesh(surface: SurfaceConfig,
 # ── Terrain solid ─────────────────────────────────────────────────────────────
 
 def make_heightmap_solid(z_grid: np.ndarray, tile_w: float, tile_h: float,
-                         base_h: float, subsample: int = 4) -> trimesh.Trimesh:
+                         base_h: float, subsample: int = 1) -> trimesh.Trimesh:
     """Watertight solid: top = *z_grid* surface, bottom = flat at −*base_h*.
 
     Parameters
@@ -285,7 +285,7 @@ def make_heightmap_solid(z_grid: np.ndarray, tile_w: float, tile_h: float,
     z_grid   : (grid_h, grid_w) terrain heights in mm.
     tile_w/h : tile dimensions in mm.
     base_h   : depth of the solid slab below terrain in mm (positive value).
-    subsample: take every Nth grid sample for the mesh (reduces triangle count).
+    subsample: take every Nth grid sample for the mesh (1 = full resolution).
     """
     nrows, ncols = z_grid.shape
     sr = list(range(0, ncols, subsample))
