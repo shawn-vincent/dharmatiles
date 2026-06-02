@@ -30,7 +30,7 @@ import trimesh
 from typing import List
 
 from scipy.interpolate import PchipInterpolator
-from scipy.ndimage import gaussian_filter1d
+from scipy.ndimage import gaussian_filter1d, binary_erosion
 
 from ..core.config import SceneConfig, SurfaceConfig, GrassConfig, SolverConfig
 from ..core.tile import TileScene
@@ -244,6 +244,76 @@ def _blade_support_cones(surface: SurfaceConfig, grass: GrassConfig,
     return cones
 
 
+# ── Grass region edge fill ───────────────────────────────────────────────────
+
+def _fill_boundary_seeds(live: list, occ_z: np.ndarray,
+                         scene: TileScene,
+                         surface: SurfaceConfig, grass: GrassConfig,
+                         solver: SolverConfig,
+                         flow_angle_field: np.ndarray,
+                         rng: np.random.Generator) -> int:
+    """Plant individual seeds along the inner edge of the grass region.
+
+    The inner edge is the one-cell-thick ring of grass cells that are
+    adjacent to at least one non-grass cell.  Seeds are spaced roughly one
+    average blade-width apart so bare spots at the region boundary get filled
+    without overcrowding.
+
+    Returns the number of seeds planted.
+    """
+    grass_mask = scene.grass_mask
+    if grass_mask is None:
+        return 0
+
+    # Inner edge: grass cells that disappear after a 4-connected erosion
+    eroded = binary_erosion(grass_mask, structure=np.array([[0,1,0],[1,1,1],[0,1,0]]))
+    edge_mask = grass_mask & ~eroded
+
+    edge_rows, edge_cols = np.where(edge_mask)
+    if len(edge_rows) == 0:
+        return 0
+
+    # Subsample: one seed per average-blade-width along the edge
+    avg_blade_w = (grass.width_min + grass.width_max) / 2.0
+    cell_size   = (surface.cell_w + surface.cell_h) / 2.0
+    step        = max(1, round(avg_blade_w / cell_size))
+
+    # Shuffle so fill-seeds don't all point the same direction
+    order = rng.permutation(len(edge_rows))
+
+    n_planted = 0
+    for i in order[::step]:
+        r  = int(edge_rows[i])
+        c  = int(edge_cols[i])
+        bx = (c + 0.5) * surface.cell_w
+        by = (r + 0.5) * surface.cell_h
+
+        if scene.stone_mask is not None and scene.stone_mask[r, c]:
+            continue
+
+        blade_curl = float(rng.uniform(-grass.curl_max, grass.curl_max))
+        seed       = make_seed(blade_curl, grass, solver, rng)
+        blade_dir  = float(sample_grid(flow_angle_field, surface, bx, by))
+        blade_dir += float(rng.normal(0.0, grass.group_dir_jitter))
+
+        tz   = float(sample_grid(scene.terrain_z, surface, bx, by))
+        sz   = float(sample_grid(occ_z,           surface, bx, by))
+        sink = seed.width * seed.spine_sink_fraction
+        z0   = max(tz, sz) + solver.clearance - sink
+
+        live.append({
+            'seed':    seed,
+            'path':    [(bx, by, z0)],
+            'dir':     blade_dir,
+            'alive':   True,
+            'base_tz': tz,
+        })
+        _stamp(occ_z, surface, bx, by, z0 + seed.width / 2.0, seed.width / 2.0)
+        n_planted += 1
+
+    return n_planted
+
+
 # ── Jittered-grid group placement ─────────────────────────────────────────────
 
 def _jittered_group_centers(n: int, surface: SurfaceConfig, grass: GrassConfig,
@@ -394,6 +464,12 @@ class GrassLayer:
 
         if verbose:
             print(f"  Planted {len(live)} blades in {len(group_centers)} groups")
+
+        # ── Edge fill ──────────────────────────────────────────────────────────
+        n_fill = _fill_boundary_seeds(live, occ_z, scene, surface, grass,
+                                      solver, flow_angle_field, rng)
+        if verbose and n_fill > 0:
+            print(f"  Edge fill: {n_fill} extra blades along region boundary")
 
         # Precompute turn offsets: [+15°, −15°, +30°, −30°, +45°, −45°]
         turn_offsets: list = []
