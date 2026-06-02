@@ -92,14 +92,45 @@ def _build_gravel_mesh(surface: SurfaceConfig, gravel: GravelConfig,
     wz = (base_z[:, None, None] +
           height[:, None, None] * z_off[None, :, None] * np.ones((1, 1, AZ)))
 
-    # Roughness: displace each ring vertex randomly to break the dome shape.
-    # Scale by mean radius so large rocks get proportionally larger bumps.
+    mean_r = 0.5 * (rx_arr + ry_arr)                       # (N,) per-stone scale
+
+    # ── Plane cuts: slice random chunks off each stone ────────────────────────
+    # For each cut, project vertices past a random half-plane back onto it.
+    # Normals are biased horizontal so cuts create side-face chunks, not
+    # slices off the top.
+    n_cuts = gravel.n_cuts
+    if n_cuts > 0:
+        # Local coords relative to stone base-centre (so centre = 0,0,0)
+        lx_v = wx - cx[:, None, None]   # (N, EL, AZ)
+        ly_v = wy - cy[:, None, None]
+        lz_v = wz - base_z[:, None, None]
+        pts  = np.stack([lx_v, ly_v, lz_v], axis=-1)   # (N, EL, AZ, 3)
+
+        raw = rng.standard_normal((N, n_cuts, 3))
+        raw[:, :, 2] = np.abs(raw[:, :, 2]) * 0.3      # mostly horizontal cuts
+        norms = raw / (np.linalg.norm(raw, axis=-1, keepdims=True) + 1e-8)
+
+        cut_d = (rng.uniform(gravel.cut_min, gravel.cut_max, (N, n_cuts))
+                 * mean_r[:, None])                     # (N, n_cuts) in mm
+
+        for k in range(n_cuts):
+            n_k  = norms[:, k, :][:, None, None, :]    # (N,1,1,3)
+            d_k  = cut_d[:, k][:, None, None]          # (N,1,1)
+            dot  = (pts * n_k).sum(axis=-1)             # (N, EL, AZ)
+            exc  = np.maximum(0.0, dot - d_k)          # only vertices past plane
+            pts -= exc[:, :, :, None] * n_k
+
+        pts[..., 2] = np.maximum(pts[..., 2], 0.0)     # don't cut below base
+        wx = cx[:, None, None]       + pts[..., 0]
+        wy = cy[:, None, None]       + pts[..., 1]
+        wz = base_z[:, None, None]   + pts[..., 2]
+
+    # ── Residual roughness: tiny per-vertex noise to break perfect flat faces ─
     if gravel.roughness > 0.0:
-        mean_r = (0.5 * (rx_arr + ry_arr))[:, None, None]  # (N,1,1)
-        scale  = gravel.roughness * mean_r
+        scale = (gravel.roughness * mean_r)[:, None, None]
         wx += scale * rng.uniform(-1.0, 1.0, wx.shape)
         wy += scale * rng.uniform(-1.0, 1.0, wy.shape)
-        wz += scale * 0.4 * rng.uniform(-1.0, 1.0, wz.shape)  # less vertical
+        wz += scale * 0.4 * rng.uniform(-1.0, 1.0, wz.shape)
 
     ring_base = (np.arange(N) * vps + 1)[:, None, None]
     ei_off    = (np.arange(EL) * AZ)[None, :, None]

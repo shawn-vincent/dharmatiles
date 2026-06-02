@@ -205,9 +205,12 @@ class GravelConfig:
     aspect_min:    float = 0.65   # min ry/rx ratio — prevents razor-thin slivers
     flat_min:      float = 0.40    # height = this × mean_radius (flattest)
     flat_max:      float = 1.50    # height = this × mean_radius (roundest)
-    roughness:     float = 0.20    # random vertex displacement as fraction of radius
-    az_segs:       int   = 9       # azimuth facets per stone
-    el_segs:       int   = 4       # elevation rings per stone
+    n_cuts:        int   = 5       # random plane cuts per stone (0 = smooth dome)
+    cut_min:       float = 0.30    # min cut distance as fraction of mean radius
+    cut_max:       float = 0.75    # max cut distance as fraction of mean radius
+    roughness:     float = 0.06    # small residual per-vertex noise (breaks flat faces slightly)
+    az_segs:       int   = 10      # azimuth facets per stone
+    el_segs:       int   = 5       # elevation rings per stone
     sink:          float = 0.01    # mm — base sunk below terrain
 
 
