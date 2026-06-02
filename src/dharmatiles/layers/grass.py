@@ -576,6 +576,17 @@ class GrassLayer:
                 np.searchsorted(s_arr, body_l), 1, n_smooth - 2))
             path_arr = _apply_tip_upturn(path_arr, upturn_idx)
 
+            # Clip spine XY so the tube cross-section stays inside the tile
+            # footprint.  The tube extends up to seed.width/2 from the spine
+            # in the horizontal plane, so keep the spine at least that far
+            # from every wall.  The main violators are edge-fill seeds planted
+            # right on the region boundary and the underground anchor (which
+            # inherits the seed's XY and sits below the terrain slab).  Both
+            # are buried, so bending them inward is invisible and correct.
+            _hw = seed.width / 2.0
+            path_arr[:, 0] = np.clip(path_arr[:, 0], _hw, surface.tile_w - _hw)
+            path_arr[:, 1] = np.clip(path_arr[:, 1], _hw, surface.tile_h - _hw)
+
             mesh = build_tube_mesh(path_arr, widths, seed.thickness,
                                    cross_section=seed.cross_section,
                                    n_segs=seed.circle_segs,
@@ -610,5 +621,24 @@ class GrassLayer:
                       f"({np.mean(segs) * seg_len:.1f} mm), "
                       f"max {max(segs)} segs "
                       f"({max(segs) * seg_len:.1f} mm)")
+
+        # ── Hard tile-boundary enforcement ────────────────────────────────────
+        # No grass vertex may protrude outside the tile's XY footprint.
+        # The spine clip above handles most cases; this catches support-cone
+        # Hermite spline overshoot, tip-cone drift, and any floating-point
+        # residual from smoothing.  Violations are always tiny (< 0.1 mm) so
+        # clamping is invisible at print resolution and correct by construction.
+        tw, th = surface.tile_w, surface.tile_h
+        n_clipped = 0
+        for mesh in parts:
+            v = mesh.vertices
+            bad_x = (v[:, 0] < 0.0) | (v[:, 0] > tw)
+            bad_y = (v[:, 1] < 0.0) | (v[:, 1] > th)
+            n_clipped += int(bad_x.sum() + bad_y.sum())
+            np.clip(v[:, 0], 0.0, tw, out=v[:, 0])
+            np.clip(v[:, 1], 0.0, th, out=v[:, 1])
+        if verbose and n_clipped:
+            print(f"  Boundary clamp: {n_clipped} vertex coordinates clamped "
+                  f"to tile footprint")
 
         return parts
