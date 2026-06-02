@@ -139,7 +139,7 @@ class GrassConfig:
     curl_max:          float = 0.8
     curl_min_fraction: float = 0.65   # every blade curves at least this fraction of max
 
-    # ── Growth (GrownGrassLayer) ──────────────────────────────────────────────
+    # ── Growth (GrassLayer) ───────────────────────────────────────────────────
     seg_len:         float = 0.8    # mm per growth segment
     max_segs:        int   = 12     # max growth segments
     rise_cap:        float = 0.8    # mm: max tolerated rise per step

@@ -1,5 +1,5 @@
 """
-Grown-grass tile: soil + stones + grass blades on a DungeonBlocks base.
+Grass tile generator: soil + stones + grass blades on a DungeonBlocks base.
 
 Default command (no arguments) produces the canonical 1×1 tile:
   • flat 35×35 mm terrain base with organic soil bump texture
@@ -9,10 +9,10 @@ Default command (no arguments) produces the canonical 1×1 tile:
 
 Usage
 ─────
-    python -m dharmatiles.terrains.grown_grass_tile
-    python -m dharmatiles.terrains.grown_grass_tile --seed 42
-    python -m dharmatiles.terrains.grown_grass_tile --tile-cols 3 --tile-rows 3
-    python -m dharmatiles.terrains.grown_grass_tile --no-base --groups-per-tile 0
+    python -m dharmatiles.terrains.tile
+    python -m dharmatiles.terrains.tile --seed 42
+    python -m dharmatiles.terrains.tile --tile-cols 3 --tile-rows 3
+    python -m dharmatiles.terrains.tile --no-base --groups-per-tile 0
 """
 from __future__ import annotations
 
@@ -30,17 +30,17 @@ from ..core.mesh import (make_heightmap_solid, make_dungeonblock_base,
                          select_peg_height)
 from ..layers.soil import SoilLayer
 from ..layers.stones import StonesLayer
-from ..layers.grown_grass import GrownGrassLayer
+from ..layers.grass import GrassLayer
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def build_grown_grass_tile(cfg: SceneConfig,
-                            output_path: pathlib.Path,
-                            verbose: bool = True) -> trimesh.Trimesh:
-    """Build a grown-grass tile and export it to *output_path*."""
+def build_tile(cfg: SceneConfig,
+               output_path: pathlib.Path,
+               verbose: bool = True) -> trimesh.Trimesh:
+    """Build a grass tile and export it to *output_path*."""
     if verbose:
-        print(f"=== Building grown-grass tile "
+        print(f"=== Building tile "
               f"({cfg.surface.tile_cols}×{cfg.surface.tile_rows} tiles, "
               f"grid {cfg.surface.grid_w}×{cfg.surface.grid_h}) ===")
 
@@ -69,7 +69,7 @@ def build_grown_grass_tile(cfg: SceneConfig,
 
     if verbose:
         print("Growing grass...")
-    grown = GrownGrassLayer(cfg)
+    grown = GrassLayer(cfg)
     parts.extend(grown.build(scene, flow_angle, flow_curv, verbose=verbose))
 
     if verbose:
@@ -118,7 +118,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _B = BaseConfig()
 
     p = argparse.ArgumentParser(
-        description="Generate a grown-grass terrain tile STL.",
+        description="Generate a grass terrain tile STL.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument("--output", "-o", type=pathlib.Path,
@@ -219,8 +219,8 @@ def main(argv=None):
         ),
     )
 
-    build_grown_grass_tile(cfg, output_path=args.output,
-                           verbose=not args.quiet)
+    build_tile(cfg, output_path=args.output,
+               verbose=not args.quiet)
 
 
 if __name__ == "__main__":

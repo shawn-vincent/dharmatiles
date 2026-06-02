@@ -1,5 +1,5 @@
 """
-GrownGrassLayer: grass that grows segment-by-segment from planted seeds.
+GrassLayer: grass that grows segment-by-segment from planted seeds.
 
 Instead of placing a complete blade all at once, each blade starts from a seed
 point and advances one segment per growth round according to these rules:
@@ -288,9 +288,9 @@ def _stamp(occ_z: np.ndarray, surface: SurfaceConfig,
                out=occ_z[iy0:iy1 + 1, ix0:ix1 + 1])
 
 
-# ── GrownGrassLayer ───────────────────────────────────────────────────────────
+# ── GrassLayer ───────────────────────────────────────────────────────────
 
-class GrownGrassLayer:
+class GrassLayer:
     """Grow grass blades horizontally, segment-by-segment.
 
     Reads from ``SceneConfig`` only at construction (to extract sub-configs).

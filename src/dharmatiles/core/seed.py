@@ -20,7 +20,7 @@ from .config import GrassConfig, SolverConfig
 class GrassSeed:
     """All information needed to grow one grass blade.
 
-    Created by :func:`make_seeds`; consumed by GrownGrassLayer.
+    Created by :func:`make_seeds`; consumed by GrassLayer.
     Never mutated after creation.
     """
     # ── Position and orientation ──────────────────────────────────────────────
