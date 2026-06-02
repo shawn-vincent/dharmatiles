@@ -56,6 +56,7 @@ class TileScene:
     config:    SceneConfig
     terrain_z: np.ndarray                       # (grid_h, grid_w) — read-only
     support_z: np.ndarray                       # (grid_h, grid_w) — mutable
+    stone_mask: np.ndarray | None = None        # (grid_h, grid_w) bool — True under a stone
     parts:     List[trimesh.Trimesh] = field(default_factory=list)
 
     # ── Constructors ──────────────────────────────────────────────────────────
@@ -72,8 +73,9 @@ class TileScene:
                                 5.0, dtype=float)
         else:
             terrain_z = _make_sinusoidal_terrain(cfg.surface)
+        stone_mask = np.zeros((cfg.surface.grid_h, cfg.surface.grid_w), dtype=bool)
         return cls(config=cfg, terrain_z=terrain_z,
-                   support_z=terrain_z.copy())
+                   support_z=terrain_z.copy(), stone_mask=stone_mask)
 
     @classmethod
     def from_terrain_grid(cls, cfg: SceneConfig,
@@ -83,8 +85,9 @@ class TileScene:
         Uses :func:`terrain_grid_to_heightmap` to derive the float heightmap.
         """
         terrain_z = terrain_grid_to_heightmap(grid)
+        stone_mask = np.zeros((cfg.surface.grid_h, cfg.surface.grid_w), dtype=bool)
         return cls(config=cfg, terrain_z=terrain_z,
-                   support_z=terrain_z.copy())
+                   support_z=terrain_z.copy(), stone_mask=stone_mask)
 
     # ── Convenience properties ────────────────────────────────────────────────
 

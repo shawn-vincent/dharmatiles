@@ -360,6 +360,13 @@ class GrownGrassLayer:
                 by   = float(np.clip(gc['base_y'] + dist * np.sin(ang),
                                      edge, surface.tile_h - edge))
 
+                # Don't plant seeds under stones — they can't grow out
+                if scene.stone_mask is not None:
+                    ix = int(np.clip(int(bx / surface.cell_w), 0, surface.grid_w - 1))
+                    iy = int(np.clip(int(by / surface.cell_h), 0, surface.grid_h - 1))
+                    if scene.stone_mask[iy, ix]:
+                        continue
+
                 blade_dir  = group_dir + float(rng.normal(0.0, self.group_dir_jitter))
                 blade_curl = float(np.clip(
                     group_curl + rng.normal(0.0, grass.curl_max * 0.08),

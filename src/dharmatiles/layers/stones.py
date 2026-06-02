@@ -30,7 +30,8 @@ class StonesLayer:
         n_stones  = self.stones.stones_per_tile * tile_area
         rng  = np.random.default_rng(self.surface.seed + 7919)
         mesh = _build_stones_mesh(self.surface, self.stones, n_stones,
-                                  scene.terrain_z, scene.support_z, rng)
+                                  scene.terrain_z, scene.support_z,
+                                  scene.stone_mask, rng)
         return [mesh]
 
 
@@ -39,6 +40,7 @@ class StonesLayer:
 def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
                        n_stones: int,
                        terrain_z: np.ndarray, support_z: np.ndarray,
+                       stone_mask: np.ndarray | None,
                        rng: np.random.Generator) -> trimesh.Trimesh:
     """Place *n_stones* stones; return a single merged Trimesh."""
     N  = n_stones
@@ -221,5 +223,8 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
         z_top = np.where(inside, _bz + _h * np.sqrt(np.maximum(0.0, 1.0 - d2)), -np.inf)
         sl = support_z[j_lo:j_hi + 1, i_lo:i_hi + 1]
         np.maximum(sl, z_top, out=sl)
+
+        if stone_mask is not None:
+            stone_mask[j_lo:j_hi + 1, i_lo:i_hi + 1] |= inside
 
     return mesh
