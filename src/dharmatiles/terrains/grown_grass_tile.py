@@ -1,14 +1,18 @@
 """
-Grown-grass tile: terrain + gravel + grown-grass blades, exported as a single STL.
+Grown-grass tile: soil + stones + grass blades on a DungeonBlocks base.
 
-Blades are grown segment-by-segment from zone-placed seeds.
-See layers/grown_grass.py for the growth algorithm.
+Default command (no arguments) produces the canonical 1×1 tile:
+  • flat 35×35 mm terrain base with organic soil bump texture
+  • 15 random stones placed on the surface (grass steers around them)
+  • 120 groups of grass blades grown segment-by-segment
+  • DungeonBlocks-compatible socket-peg base
 
 Usage
 ─────
     python -m dharmatiles.terrains.grown_grass_tile
-    python -m dharmatiles.terrains.grown_grass_tile --output stl/grown.stl --seed 42
-    python -m dharmatiles.terrains.grown_grass_tile --tile-cols 2 --tile-rows 2
+    python -m dharmatiles.terrains.grown_grass_tile --seed 42
+    python -m dharmatiles.terrains.grown_grass_tile --tile-cols 3 --tile-rows 3
+    python -m dharmatiles.terrains.grown_grass_tile --no-base --groups-per-tile 0
 """
 from __future__ import annotations
 
@@ -118,7 +122,8 @@ def _build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument("--output", "-o", type=pathlib.Path,
-                   default=pathlib.Path("stl/grass.stl"))
+                   default=pathlib.Path("stl/tile.stl"),
+                   help="Output STL path (default: stl/tile.stl)")
     p.add_argument("--seed",       type=int,   default=_S.seed)
     p.add_argument("--tile-cols",  type=int,   default=_S.tile_cols, dest="tile_cols",
                    help="Number of 35 mm tile units in X")
