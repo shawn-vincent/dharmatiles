@@ -319,6 +319,7 @@ class WaterRippleConfig:
     n_grass_sources: int   = 3
     grass_amplitude: float = 0.4
     phase_spread:    float = 0.0   # 0 = fully coherent → clean circle crests
+    extend_mm:       float = 1.5   # how far past the boundary water can escape
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -105,6 +105,37 @@ def _build_mesh(cfg: SceneConfig,
         scene.terrain_z[water_mask] = water_height
         scene.support_z[water_mask] = water_height
 
+    # ── Ripple overflow: expand water boundary where crest escapes ────────────
+    # Computed here (before terrain solid) so omit_top_mask and terrain_z can
+    # be updated before the solid is built.
+    ripple_cfg       = WaterRippleConfig()
+    overflow_mask    = None
+    z_disp_pre       = None
+    effective_water  = water_mask   # may be expanded below
+
+    if water_mask is not None and water_height is not None:
+        from scipy.ndimage import binary_dilation
+        from ..layers.water import _build_ripple_displacement as _compute_disp
+
+        extend_cells  = max(1, int(ripple_cfg.extend_mm / cfg.surface.cell_w))
+        extended_mask = binary_dilation(water_mask, iterations=extend_cells)
+
+        z_disp_pre = _compute_disp(
+            cfg.surface, water_mask,
+            scene.stone_mask, scene.grass_mask,
+            ripple_cfg,
+            compute_mask=extended_mask,
+        )
+
+        # Overflow: border cells where ripple crest is positive
+        overflow_mask = extended_mask & ~water_mask & (z_disp_pre > 0)
+
+        if np.any(overflow_mask):
+            # Flatten overflow cells to water level so the water mesh caps them
+            scene.terrain_z[overflow_mask] = water_height
+            scene.support_z[overflow_mask] = water_height
+            effective_water = water_mask | overflow_mask
+
     # ── Stones ────────────────────────────────────────────────────────────────
     n_squares = cfg.surface.cols * cfg.surface.rows
     n_stones  = cfg.stones.stones_per_square * n_squares
@@ -131,26 +162,31 @@ def _build_mesh(cfg: SceneConfig,
         _paint(grass_parts, COLOUR_GRASS)
         parts.extend(grass_parts)
 
-    # ── Water surface (with ripples) ──────────────────────────────────────────
+    # ── Water surface (with ripples, possibly overflowing boundary) ──────────
     if water_mask is not None and water_height is not None:
+        n_overflow = int(np.sum(overflow_mask)) if overflow_mask is not None else 0
         if verbose:
-            print("Building water surface (ripples)...")
-        water_layer = WaterLayer(cfg.surface, water_height,
-                                 ripple_cfg=WaterRippleConfig())
+            print(f"Building water surface (ripples, +{n_overflow} overflow cells)...")
+        water_layer = WaterLayer(cfg.surface, water_height, ripple_cfg=ripple_cfg)
         water_parts = water_layer.build(
             water_mask,
-            stone_mask=scene.stone_mask,
-            grass_mask=scene.grass_mask,
+            stone_mask    = scene.stone_mask,
+            grass_mask    = scene.grass_mask,
+            effective_mask = effective_water,
+            z_disp_pre    = z_disp_pre,
         )
         _paint(water_parts, COLOUR_WATER)
         parts.extend(water_parts)
 
     # ── Terrain solid ─────────────────────────────────────────────────────────
+    # omit_top_mask covers only overflow cells (not the full water zone) so that
+    # the pool floor retains terrain faces — revealed when ripple troughs dip the
+    # water surface below the render_lift threshold.
     if verbose:
         print("Building terrain solid...")
     terrain_mesh = make_heightmap_solid(
         scene.terrain_z, cfg.surface.tile_w, cfg.surface.tile_h, cfg.surface.base_h,
-        omit_top_mask=water_mask,
+        omit_top_mask=overflow_mask,   # None if no overflow → all terrain faces kept
     )
     _clear_paint(terrain_mesh)
     _paint_terrain_top(terrain_mesh, COLOUR_SOIL)

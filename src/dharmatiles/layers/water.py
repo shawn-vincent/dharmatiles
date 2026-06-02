@@ -37,17 +37,23 @@ import trimesh
 from ..core.config import SurfaceConfig, WaterRippleConfig
 
 
-WATER_RENDER_LIFT_MM = 0.0
+WATER_RENDER_LIFT_MM = 0.10   # lift water mesh above terrain floor to avoid z-fight
 
 
 class WaterLayer:
     """Build a water-surface mesh, optionally with point-source ripples.
 
+    The mesh sits *render_lift_mm* above the terrain floor so that the
+    terrain top faces (pool floor, boundary) are never occluded when the
+    water surface is calm.  When a ripple trough drops the surface below
+    the lift offset, the terrain face shows through — revealing the pool
+    floor or shore as land.
+
     Parameters
     ----------
     surface        : SurfaceConfig
     height_mm      : float — water-surface z level (mm).
-    render_lift_mm : float — extra z lift for rendering.
+    render_lift_mm : float — gap between terrain floor and calm water (mm).
     ripple_cfg     : WaterRippleConfig | None — ripple parameters; None = flat.
     """
 
@@ -60,27 +66,35 @@ class WaterLayer:
         self.ripple_cfg     = ripple_cfg
 
     def build(self, water_mask: np.ndarray,
-              stone_mask:  np.ndarray | None = None,
-              grass_mask:  np.ndarray | None = None) -> list[trimesh.Trimesh]:
-        """Return a water-surface mesh covering *water_mask* cells.
+              stone_mask:    np.ndarray | None = None,
+              grass_mask:    np.ndarray | None = None,
+              effective_mask: np.ndarray | None = None,
+              z_disp_pre:    np.ndarray | None = None) -> list[trimesh.Trimesh]:
+        """Return a water-surface mesh.
 
         Parameters
         ----------
-        water_mask : bool (grid_h, grid_w)
-        stone_mask : optional bool — stone footprints; overlap with water
-                     becomes a stone-contact ripple source.
-        grass_mask : optional bool — grass region; cells nearest to water
-                     become grass-tip ripple sources.
+        water_mask     : bool (grid_h, grid_w) — core water region.
+        stone_mask     : optional bool — stone-contact ripple sources.
+        grass_mask     : optional bool — grass-tip ripple sources.
+        effective_mask : optional bool — actual cells to emit faces for.
+                         Defaults to *water_mask*.  Pass the expanded mask
+                         (water + overflow) from the caller.
+        z_disp_pre     : optional pre-computed (gh, gw) displacement array.
+                         When provided, skips the internal ripple computation.
         """
         surface = self.surface
         h       = self.height_mm + self.render_lift_mm
         gh, gw  = water_mask.shape
 
-        if not np.any(water_mask):
+        face_mask = effective_mask if effective_mask is not None else water_mask
+        if not np.any(face_mask):
             return []
 
         # ── Ripple displacement (cell-centre grid) ────────────────────────────
-        if self.ripple_cfg is not None:
+        if z_disp_pre is not None:
+            z_disp = z_disp_pre
+        elif self.ripple_cfg is not None:
             z_disp = _build_ripple_displacement(
                 surface, water_mask, stone_mask, grass_mask, self.ripple_cfg,
             )
@@ -102,8 +116,8 @@ class WaterLayer:
         z_v   = h + vz_disp
         verts = np.stack([x_v.ravel(), y_v.ravel(), z_v.ravel()], axis=1)
 
-        # ── Faces: two triangles per water cell ───────────────────────────────
-        water_r, water_c = np.where(water_mask)
+        # ── Faces: two triangles per cell in face_mask ───────────────────────
+        water_r, water_c = np.where(face_mask)
         nf  = len(water_r)
         v00 = water_r       * (gw + 1) + water_c
         v01 = water_r       * (gw + 1) + water_c + 1
@@ -122,22 +136,25 @@ class WaterLayer:
 # ── Ripple displacement ───────────────────────────────────────────────────────
 
 def _build_ripple_displacement(
-    surface:    SurfaceConfig,
-    water_mask: np.ndarray,
-    stone_mask: np.ndarray | None,
-    grass_mask: np.ndarray | None,
-    cfg:        WaterRippleConfig,
+    surface:      SurfaceConfig,
+    water_mask:   np.ndarray,
+    stone_mask:   np.ndarray | None,
+    grass_mask:   np.ndarray | None,
+    cfg:          WaterRippleConfig,
+    compute_mask: np.ndarray | None = None,
 ) -> np.ndarray:
     """Return (gh, gw) cell-centre displacement array (mm).
 
-    Uses discrete point sources along the water boundary, producing
-    interference patterns that are independent of fine shoreline detail.
+    Sources are always derived from *water_mask*'s inner ring.
+    Displacement is evaluated for every cell in *compute_mask* (defaults to
+    *water_mask*), allowing the caller to extend evaluation into a border zone.
     """
     from scipy.ndimage import binary_erosion, distance_transform_edt, label
 
-    gh, gw   = water_mask.shape
-    rng      = np.random.default_rng(surface.seed ^ 0xC0A574)
-    cell_mm  = 0.5 * (surface.cell_w + surface.cell_h)
+    gh, gw      = water_mask.shape
+    eval_mask   = compute_mask if compute_mask is not None else water_mask
+    rng         = np.random.default_rng(surface.seed ^ 0xC0A574)
+    cell_mm     = 0.5 * (surface.cell_w + surface.cell_h)
 
     # ── Shore boundary ────────────────────────────────────────────────────────
     # border_value=1 → outside tile treated as water → only cells adjacent to
@@ -192,11 +209,11 @@ def _build_ripple_displacement(
             d_eff  = np.maximum(0.0, dist - cfg.start_offset_mm)
             phase  = rng.normal(0.0, cfg.phase_spread)
             wave   = amplitude * np.exp(-d_eff / cfg.decay_mm) * np.cos(k * d_eff + phase)
-            z_disp[water_mask] += wave[water_mask]
+            z_disp[eval_mask] += wave[eval_mask]
 
     _add_sources(shore_pts,  cfg.amplitude_mm)
     _add_sources(grass_pts,  cfg.amplitude_mm * cfg.grass_amplitude)
     _add_sources(stone_pts,  cfg.amplitude_mm * 0.6)
 
-    z_disp[~water_mask] = 0.0
+    z_disp[~eval_mask] = 0.0
     return z_disp
