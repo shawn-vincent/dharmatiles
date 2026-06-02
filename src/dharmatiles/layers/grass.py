@@ -35,7 +35,7 @@ from scipy.ndimage import gaussian_filter1d
 from ..core.config import SceneConfig, SurfaceConfig, GrassConfig, SolverConfig
 from ..core.tile import TileScene
 from ..core.grid import sample_grid, rasterise_into_support
-from ..core.mesh import build_tube_mesh, blade_frame, build_sub_hull_mesh
+from ..core.mesh import build_tube_mesh, blade_frame
 from ..core.seed import GrassSeed, make_seed
 
 
@@ -297,14 +297,9 @@ class GrassLayer:
     Growth uses only the planted ``GrassSeed`` objects — no live config reads.
     """
 
-    # Layer-level overrides (not per-seed — they govern the group structure)
-    n_groups:          int   = 41
-    group_min:         int   = 10
-    group_max:         int   = 15
-    group_spread_mm:   float = 2.5
-    group_dir_jitter:  float = 0.14
-    turn_step_deg:     float = 15.0
-    n_turn_tries:      int   = 6
+    # Growth steering constants (not in GrassConfig — layer-level algorithm knobs)
+    turn_step_deg: float = 15.0
+    n_turn_tries:  int   = 6
 
     def __init__(self, cfg: SceneConfig) -> None:
         self.surface = cfg.surface
@@ -373,8 +368,7 @@ class GrassLayer:
                     -grass.curl_max, grass.curl_max,
                 ))
 
-                seed = make_seed(bx, by, blade_dir, blade_curl,
-                                 grass, solver, rng)
+                seed = make_seed(blade_curl, grass, solver, rng)
                 # Override width from group width for cluster coherence
                 seed = GrassSeed(
                     **{**seed.__dict__,

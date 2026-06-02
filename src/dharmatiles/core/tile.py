@@ -2,18 +2,12 @@
 TileScene — mutable state accumulated while building a terrain scene.
 
 The scene holds:
-  terrain_z  — float heightmap derived from the TerrainGrid (read-only after init)
+  terrain_z  — float heightmap (read-only after init)
   support_z  — mutable occupancy surface raised by each layer as it places geometry
-  parts      — mesh list accumulated during build (cleared at export)
+  stone_mask — bool grid marking stone footprints (grass steers around these)
 
 Configuration lives entirely in SceneConfig sub-configs; TileScene does not
 hold configuration itself.
-
-Compatibility shim
-------------------
-``TileConfig`` is provided as a thin alias for ``SceneConfig`` so existing
-call sites continue to work during the transition.  New code should use
-``SceneConfig`` directly.
 """
 from __future__ import annotations
 
@@ -128,14 +122,3 @@ def _make_sinusoidal_terrain(surface: SurfaceConfig,
             np.cos(2 * np.pi * freq * v))
     return (z_center + amp * envelope * wave).astype(float)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Compatibility shim — remove after full migration
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _make_compat_scene(tile_config) -> TileScene:
-    """Build a TileScene from a legacy TileConfig-shaped object.
-
-    Used by the compatibility layer in TileConfig.__new__.
-    """
-    raise NotImplementedError("Use SceneConfig + TileScene directly.")

@@ -20,40 +20,27 @@ from .config import GrassConfig, SolverConfig
 class GrassSeed:
     """All information needed to grow one grass blade.
 
-    Created by :func:`make_seeds`; consumed by GrassLayer.
+    Created by :func:`make_seed`; consumed by GrassLayer.
     Never mutated after creation.
     """
-    # ── Position and orientation ──────────────────────────────────────────────
-    base_x:    float   # world X of base (mm)
-    base_y:    float   # world Y of base (mm)
-    direction: float   # initial growth azimuth (radians; 0 = +Y)
+    # ── Blade geometry ────────────────────────────────────────────────────────
     curl:      float   # lateral curvature magnitude × sign
-
-    # ── Blade geometry (all mm) ───────────────────────────────────────────────
-    width:    float    # blade half-width × 2
-    length:   float    # body arc-length
-    tip_len:  float    # tip taper arc-length
+    width:     float   # blade width (mm)
 
     # ── Cross-section ─────────────────────────────────────────────────────────
-    cross_section:     str    # 'triangle' | 'circle' | 'diamond'
-    circle_segs:       int    # segments for 'circle' (ignored for others)
-    thickness:         float  # mm — apex depth for 'triangle' / 'diamond'
-    diamond_equator:   float  # equator fraction for 'diamond'
-    sub_hull_fraction: float  # sub-hull attachment point fraction
+    cross_section:   str    # 'triangle' | 'circle' | 'diamond'
+    circle_segs:     int    # segments for 'circle' (ignored for others)
+    thickness:       float  # mm — apex depth for 'triangle' / 'diamond'
+    diamond_equator: float  # equator fraction for 'diamond'
 
-    # ── Lean profile ──────────────────────────────────────────────────────────
-    base_lean_angle: float   # radians — near-vertical at base
-    lean_angle:      float   # radians — lean at tip
-    n_path:          int     # spine sample count
+    # ── Spine ─────────────────────────────────────────────────────────────────
+    n_path:      int    # spine sample count
 
     # ── Solver ────────────────────────────────────────────────────────────────
-    clearance:              float   # mm — gap above support surface
-    base_sink:              float   # mm — base buried below terrain
-    base_obstacle_ignore_t: float   # ignore obstacles over first t of blade
+    clearance:   float  # mm — gap above support surface
 
     # ── Growth ────────────────────────────────────────────────────────────────
     seg_len:             float   # mm per growth segment
-    max_segs:            int     # maximum segments to grow
     rise_cap:            float   # mm: max tolerated rise per step
     smooth_sigma:        float   # Gaussian smoothing width (segments)
     root_depth:          float   # mm below terrain for underground anchor
@@ -64,47 +51,28 @@ class GrassSeed:
 # Factory
 # ─────────────────────────────────────────────────────────────────────────────
 
-def make_seed(base_x: float, base_y: float,
-              direction: float, curl: float,
+def make_seed(curl: float,
               grass: GrassConfig, solver: SolverConfig,
               rng: np.random.Generator) -> GrassSeed:
     """Sample blade geometry from *grass* and return a fully-specified seed.
 
-    ``direction`` and ``curl`` are already resolved by the caller (from the
-    flow field + per-blade jitter).  All other variable geometry is sampled
-    from the config ranges here.
+    ``curl`` is already resolved by the caller (from the flow field +
+    per-blade jitter).  All other variable geometry is sampled here.
     """
-    width   = float(rng.uniform(grass.width_min,   grass.width_max))
-    length  = float(rng.uniform(grass.length_min,  grass.length_max))
-    tip_len = float(rng.uniform(grass.tip_len_min, grass.tip_len_max))
+    width = float(rng.uniform(grass.width_min, grass.width_max))
 
     return GrassSeed(
-        base_x    = base_x,
-        base_y    = base_y,
-        direction = direction,
-        curl      = curl,
-        width     = width,
-        length    = length,
-        tip_len   = tip_len,
-        # cross-section — copied from config
-        cross_section     = grass.cross_section,
-        circle_segs       = grass.circle_segs,
-        thickness         = grass.thickness,
-        diamond_equator   = grass.diamond_equator,
-        sub_hull_fraction = grass.sub_hull_fraction,
-        # lean profile
-        base_lean_angle = grass.base_lean_angle,
-        lean_angle      = grass.lean_angle,
-        n_path          = grass.n_path,
-        # solver
-        clearance               = solver.clearance,
-        base_sink               = solver.base_sink,
-        base_obstacle_ignore_t  = solver.base_obstacle_ignore_t,
-        # growth
-        seg_len              = grass.seg_len,
-        max_segs             = grass.max_segs,
-        rise_cap             = grass.rise_cap,
-        smooth_sigma         = grass.smooth_sigma,
-        root_depth           = grass.root_depth,
-        spine_sink_fraction  = grass.spine_sink_fraction,
+        curl             = curl,
+        width            = width,
+        cross_section    = grass.cross_section,
+        circle_segs      = grass.circle_segs,
+        thickness        = grass.thickness,
+        diamond_equator  = grass.diamond_equator,
+        n_path           = grass.n_path,
+        clearance        = solver.clearance,
+        seg_len          = grass.seg_len,
+        rise_cap         = grass.rise_cap,
+        smooth_sigma     = grass.smooth_sigma,
+        root_depth       = grass.root_depth,
+        spine_sink_fraction = grass.spine_sink_fraction,
     )

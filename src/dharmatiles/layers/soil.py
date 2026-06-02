@@ -1,22 +1,13 @@
 """
 SoilLayer: two-tier random super-Gaussian blob clumps baked into terrain_z.
 
-The bump field is computed at (detail_mult × cells_per_square) resolution so
-individual soil mounds have fine-grained geometry, while the rest of the
-terrain (flat ground, stones, grass) continues to use the coarse grid.
-
-build() returns the hires bump array.  Callers that want a high-resolution
-terrain mesh should:
-
-    base_z  = scene.terrain_z.copy()          # before build()
-    hires_b = soil_layer.build(scene)          # also updates terrain_z coarse
-    from scipy.ndimage import zoom
-    hires_z = zoom(base_z, mult, order=1) + hires_b
-    terrain_mesh = make_heightmap_solid(hires_z, tile_w, tile_h, 0.0)
-
-The layer modifies scene.terrain_z in-place (coarse) and returns hires bump.
+The bump field is computed at 2× the coarse grid resolution so individual
+soil mounds have sub-cell detail; the result is then downsampled back to
+the coarse grid and added to scene.terrain_z in-place.
 """
 from __future__ import annotations
+
+_OVERSAMPLE = 2   # internal upscale factor for soil blob detail
 
 import numpy as np
 from scipy.ndimage import gaussian_filter, zoom
@@ -26,39 +17,28 @@ from ..core.tile import TileScene
 
 
 class SoilLayer:
-    """Scatter random super-Gaussian soil clumps; produce hires bump field."""
+    """Scatter random super-Gaussian soil clumps into scene.terrain_z."""
 
     def __init__(self, surface: SurfaceConfig, soil: SoilConfig) -> None:
         self.surface = surface
         self.soil    = soil
 
-    def build(self, scene: TileScene) -> np.ndarray:
-        """Compute hires soil bump, update scene.terrain_z (coarse), return hires.
-
-        Returns
-        -------
-        hires_bump : np.ndarray shape (gh*mult, gw*mult)
-            Soil displacement at detail_mult resolution.  Add to an upsampled
-            copy of the pre-soil terrain_z to get the hires terrain for meshing.
-        """
-        mult = self.soil.detail_mult
-        gh, gw = scene.terrain_z.shape
-        cell_mm_h = self.surface.cell_w / mult   # finer cell size at hires
+    def build(self, scene: TileScene) -> None:
+        """Compute soil bump at 2× resolution, downsample, add to terrain_z."""
+        gh, gw    = scene.terrain_z.shape
+        cell_mm   = self.surface.cell_w / _OVERSAMPLE
         n_squares = self.surface.cols * self.surface.rows
 
         hires_bump = _compute_bump_field(
             soil=self.soil,
             seed=self.surface.seed,
-            gh=gh * mult, gw=gw * mult,
-            cell_mm=cell_mm_h,
+            gh=gh * _OVERSAMPLE, gw=gw * _OVERSAMPLE,
+            cell_mm=cell_mm,
             n_squares=n_squares,
         )
 
-        # Downsample to coarse grid for stone/grass placement
-        coarse = zoom(hires_bump, 1.0 / mult, order=1) if mult > 1 else hires_bump
+        coarse = zoom(hires_bump, 1.0 / _OVERSAMPLE, order=1)
         scene.terrain_z += coarse
-
-        return hires_bump
 
 
 # ── Internal implementation ───────────────────────────────────────────────────

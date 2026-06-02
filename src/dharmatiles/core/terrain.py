@@ -139,8 +139,8 @@ class TerrainGrid:
         """Fill a rectangular region with one terrain type."""
         h = height if height is not None else default_height(terrain_type)
         for row in self._cells[rows]:
+            col_start = cols.start if cols.start is not None else 0
             for j, _ in enumerate(row[cols]):
-                col_start = cols.start or 0
                 row[col_start + j] = TerrainCell(terrain_type, h)
 
     # ── World-coordinate helpers ──────────────────────────────────────────────

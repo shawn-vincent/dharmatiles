@@ -1,36 +1,17 @@
 """
 Low-level mesh primitives: frame computation, blade tube, terrain solid,
-and printable support hulls.
+and DungeonBlocks base.
 """
 from __future__ import annotations
 
 import numpy as np
 import trimesh
 
-from .config import SurfaceConfig, GrassConfig, SolverConfig, BaseConfig
+from .config import SurfaceConfig, BaseConfig
 from .grid import sample_grid
 
 
 # ── Frame computation ─────────────────────────────────────────────────────────
-
-def compute_up_locs(path_xyz: np.ndarray) -> np.ndarray:
-    """World-horizontal perpendicular-to-spine unit vectors.
-
-    Returns (n_pts, 3) array; Z component is always 0.
-    Matches the horizontal basis used in :func:`build_tube_mesh`.
-    """
-    path = np.asarray(path_xyz, dtype=float)
-    tangs = np.empty_like(path)
-    tangs[:-1] = path[1:] - path[:-1]
-    tangs[-1]  = path[-1] - path[-2]
-    txy_norm   = np.sqrt(tangs[:, 0]**2 + tangs[:, 1]**2) + 1e-9
-    has_xy     = txy_norm > 1e-6
-    up         = np.zeros_like(path)
-    up[has_xy, 0] = -tangs[has_xy, 1] / txy_norm[has_xy]
-    up[has_xy, 1] =  tangs[has_xy, 0] / txy_norm[has_xy]
-    up[~has_xy]   = [1.0, 0.0, 0.0]
-    return up
-
 
 def blade_frame(path: np.ndarray):
     """Return (tangents, up_locs, down_locs) unit-vector arrays for each ring.
@@ -153,119 +134,6 @@ def build_tube_mesh(spine_3d: np.ndarray, widths: np.ndarray,
     rl = (n_pts - 1) * n
     for i in range(n):
         faces[fi] = [rl + i, rl + (i + 1) % n, v_tip];  fi += 1
-
-    mesh = trimesh.Trimesh(vertices=verts[:vi],
-                           faces=faces[:fi].astype(int),
-                           process=False)
-    mesh.fix_normals()
-    return mesh
-
-
-# ── Printable support hull ────────────────────────────────────────────────────
-
-def drop_to_support(point, support_z: np.ndarray,
-                    surface: SurfaceConfig,
-                    search_limit: float = 30.0) -> np.ndarray:
-    """Drop vertically from *point* until hitting support_z at the same XY."""
-    start = np.asarray(point, dtype=float)
-
-    def gap(dist):
-        return start[2] - dist - sample_grid(support_z, surface, start[0], start[1])
-
-    if gap(0.0) <= 0.0:
-        return start
-
-    hi = 0.25
-    while hi < search_limit and gap(hi) > 0.0:
-        hi *= 2.0
-    if gap(hi) > 0.0:
-        return np.array([start[0], start[1], start[2] - hi], dtype=float)
-
-    lo = 0.0
-    for _ in range(16):
-        mid = 0.5 * (lo + hi)
-        if gap(mid) > 0.0:
-            lo = mid
-        else:
-            hi = mid
-    return np.array([start[0], start[1], start[2] - hi], dtype=float)
-
-
-def build_sub_hull_mesh(surface: SurfaceConfig,
-                        grass: GrassConfig,
-                        spine_3d: np.ndarray,
-                        widths: np.ndarray,
-                        support_z: np.ndarray,
-                        cross_section: str = 'triangle') -> trimesh.Trimesh:
-    """Triangular-prism support hull that bridges under a blade to the terrain.
-
-    Two side vertices attach to the blade's underside; a third is dropped
-    vertically until it touches the support surface.
-    """
-    path  = np.asarray(spine_3d, dtype=float)
-    W_arr = np.asarray(widths, dtype=float)
-    n_pts = len(path)
-    n     = 3
-
-    _, up_locs, down_locs = blade_frame(path)
-    half_W = (W_arr / 2.0)[:, None]
-    frac   = grass.sub_hull_fraction
-    thickness = grass.thickness
-    diamond_equator = grass.diamond_equator
-
-    if cross_section == 'triangle':
-        apex   = path + thickness * down_locs
-        right  = path + half_W * up_locs
-        left   = path - half_W * up_locs
-        side_r = right + frac * (apex - right)
-        side_l = left  + frac * (apex - left)
-
-    elif cross_section == 'diamond':
-        eq_d   = diamond_equator * thickness
-        side_r = path + half_W * up_locs + eq_d * down_locs
-        side_l = path - half_W * up_locs + eq_d * down_locs
-
-    else:  # 'circle'
-        theta_r = frac * np.pi / 2
-        theta_l = np.pi - theta_r
-        side_r  = path + half_W * (np.cos(theta_r) * up_locs + np.sin(theta_r) * down_locs)
-        side_l  = path + half_W * (np.cos(theta_l) * up_locs + np.sin(theta_l) * down_locs)
-
-    centers = 0.5 * (side_r + side_l)
-
-    lower = np.empty_like(path)
-    for idx in range(n_pts):
-        lower[idx] = drop_to_support(centers[idx], support_z, surface)
-
-    ring_v = np.stack([lower, side_r, side_l], axis=1)
-    ring_v[:, :, 0] = np.clip(ring_v[:, :, 0], 0.0, surface.tile_w)
-    ring_v[:, :, 1] = np.clip(ring_v[:, :, 1], 0.0, surface.tile_h)
-
-    nv = n * n_pts + 2
-    nf = n + (n_pts - 1) * n * 2 + n
-    verts = np.empty((nv, 3), dtype=float)
-    faces = np.empty((nf, 3), dtype=np.int32)
-    vi = fi = 0
-
-    for idx in range(n_pts):
-        verts[vi:vi + n] = ring_v[idx];  vi += n
-
-    v_base = vi;  verts[vi] = np.mean(ring_v[0],  axis=0);  vi += 1
-    v_tip  = vi;  verts[vi] = np.mean(ring_v[-1], axis=0);  vi += 1
-
-    for idx in range(n):
-        faces[fi] = [v_base, (idx + 1) % n, idx];  fi += 1
-
-    for k in range(n_pts - 1):
-        ra = k * n;  rb = (k + 1) * n
-        for idx in range(n):
-            i1 = (idx + 1) % n
-            faces[fi] = [ra + idx, rb + idx, ra + i1];  fi += 1
-            faces[fi] = [ra + i1, rb + idx, rb + i1];   fi += 1
-
-    rl = (n_pts - 1) * n
-    for idx in range(n):
-        faces[fi] = [rl + idx, rl + (idx + 1) % n, v_tip];  fi += 1
 
     mesh = trimesh.Trimesh(vertices=verts[:vi],
                            faces=faces[:fi].astype(int),

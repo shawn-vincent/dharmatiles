@@ -17,8 +17,6 @@ import numpy as np
 # Surface / grid
 # ─────────────────────────────────────────────────────────────────────────────
 
-CELL_SIZE_MM: float = 35.0 / 128.0   # ≈ 0.273 mm — legacy constant (128 cells/square)
-
 
 @dataclass
 class SurfaceConfig:
@@ -120,19 +118,12 @@ class GrassConfig:
     circle_segs:       int   = 12      # segments for 'circle' cross-section (≥3)
     thickness:         float = 0.5     # mm — 'triangle' apex depth below spine
     diamond_equator:   float = 0.75    # equator position for 'diamond'
-    sub_hull_fraction: float = 0.5     # fraction down triangle sides where sub-hull starts
 
-    # ── Blade geometry ranges (mm) ────────────────────────────────────────────
+    # ── Blade width range (mm) ────────────────────────────────────────────────
     width_min:    float = 0.8015625
     width_max:    float = 1.06875
-    length_min:   float = 7.425
-    length_max:   float = 13.275
-    tip_len_min:  float = 2.3625
-    tip_len_max:  float = 4.3875
 
-    # ── Lean profile ──────────────────────────────────────────────────────────
-    base_lean_angle: float = float(np.radians(8))    # near-vertical at base
-    lean_angle:      float = float(np.radians(80))   # nearly horizontal at tip
+    # ── Spine ─────────────────────────────────────────────────────────────────
     n_path:          int   = 50                       # spine sample count
 
     # ── Curl ─────────────────────────────────────────────────────────────────
@@ -175,14 +166,9 @@ class GrassConfig:
 
 @dataclass
 class SolverConfig:
-    """Parameters for the Z-path solver and collision repair."""
+    """Parameters for the Z-path solver."""
     clearance:              float = 0.10   # mm — gap above previous blade tops
-    base_sink:              float = 0.05   # mm — base buried below local terrain
-    base_obstacle_ignore_t: float = 0.20   # ignore obstacles over first 20% of blade
-    collision_repair_passes:int   = 8      # max per-blade repair attempts
     max_stack_height:       float = 6.0    # mm — hard pile-height cap above terrain
-    strict_mode:            bool  = True
-    strict_base_t:          float = 0.25   # ignore hits at t ≤ this
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -246,10 +232,7 @@ class SoilConfig:
     blob_cluster_count:  int   = 30   # number of cluster centres (0 = no clustering)
     blob_cluster_spread_mm: float = 6.0  # Gaussian spread around each cluster centre (mm)
 
-    # detail_mult: soil bump field is computed at (cells_per_square × detail_mult)
-    # resolution so bumps have fine geometry without raising the whole terrain grid.
-    # build() returns the hires array; caller uses it for meshing.
-    detail_mult:      int   = 2      # 2 → 512 cells/tile for soil mesh (0.068 mm/cell)
+
 
     edge_fade_mm: float = 0.8   # mm — cosine fade to zero at tile edges
 
