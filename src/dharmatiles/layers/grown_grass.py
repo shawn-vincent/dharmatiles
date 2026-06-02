@@ -433,6 +433,13 @@ class GrownGrassLayer:
                             hw < ty < surface.tile_h - hw):
                         continue
 
+                    # Treat stone footprint as a hard wall — steer around it
+                    if scene.stone_mask is not None:
+                        s_ix = int(np.clip(int(tx / surface.cell_w), 0, surface.grid_w - 1))
+                        s_iy = int(np.clip(int(ty / surface.cell_h), 0, surface.grid_h - 1))
+                        if scene.stone_mask[s_iy, s_ix]:
+                            continue
+
                     tz_t = float(sample_grid(scene.terrain_z, surface, tx, ty))
                     sz_t = float(sample_grid(occ_z,           surface, tx, ty))
                     sink = seed.width * seed.spine_sink_fraction
