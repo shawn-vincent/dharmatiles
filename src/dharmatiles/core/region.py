@@ -56,7 +56,7 @@ def boundary_path_mm(spec: BoundarySpec, surface: SurfaceConfig,
     if spec.path == 'straight':
         return np.column_stack([xa + t * dx, ya + t * dy])
 
-    # ── Organic: sinusoidal perpendicular noise tapered at both ends ──────────
+    # ── Organic: smooth stochastic perpendicular offsets ─────────────────────
     length = float(np.hypot(dx, dy))
     if length < 1e-6:
         return np.column_stack([np.full(n_samples, xa),
@@ -65,15 +65,26 @@ def boundary_path_mm(spec: BoundarySpec, surface: SurfaceConfig,
     # Perpendicular unit vector (rotate 90° CCW)
     px, py = -dy / length, dx / length
 
-    arc    = t * length
-    taper  = np.sin(np.pi * t)   # 0→1→0 : path is pinned at both anchors
-
     rng    = np.random.default_rng(surface.seed ^ spec.seed_offset ^ 0xB04DA7)
-    phase  = float(rng.uniform(0.0, 2.0 * np.pi))
+    corr_mm = max(spec.wavelength_mm, surface.cell_w)
+    n_knots = max(5, int(np.ceil(length / corr_mm)) + 3)
+    knot_t  = np.linspace(0.0, 1.0, n_knots)
 
-    offset = (spec.amplitude_mm
-              * np.sin(2.0 * np.pi * arc / spec.wavelength_mm + phase)
-              * taper)
+    # Random low-frequency control offsets, pinned at both ends.  This avoids
+    # periodic shoreline bumps while keeping the curve deterministic per seed.
+    knot_offsets = rng.normal(0.0, 0.55 * spec.amplitude_mm, n_knots)
+    knot_offsets[0] = 0.0
+    knot_offsets[-1] = 0.0
+
+    from scipy.interpolate import CubicSpline
+
+    offset = CubicSpline(knot_t, knot_offsets, bc_type='natural')(t)
+    taper  = np.sin(np.pi * t) ** 0.75   # pinned at anchors, relaxed in middle
+    offset = offset * taper
+
+    max_abs = float(np.max(np.abs(offset)))
+    if max_abs > 1e-9 and spec.amplitude_mm > 0.0:
+        offset *= spec.amplitude_mm / max_abs
 
     return np.column_stack([xa + t * dx + offset * px,
                             ya + t * dy + offset * py])

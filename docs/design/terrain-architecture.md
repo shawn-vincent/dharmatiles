@@ -253,10 +253,11 @@ They must not be assumed when building present systems.
 - Includes embedded STL objects and rocks
 - Planned behaviors: occupy space, protrude from terrain, influence nearby
   systems
-- Current rocks/stones are a global scatter layer, not an explicit per-region
-  `rocks` layer. In spec mode the scatter is constrained to natural ground
-  regions whose layer stack includes `grass` or `soil`; water regions and
-  boundary strips are excluded.
+- Current rocks/stones are opt-in in `.tile` specs. A region must include an
+  explicit `rock`, `rocks`, `stone`, or `stones` layer for stone scatter to run
+  there. Boundary strips can also declare those layer types. The placement
+  region constrains rock centres only; rock geometry may extend across region
+  edges, but not off the tile.
 
 ### 9.4 Gravel
 

@@ -29,7 +29,13 @@ boundaries:
     from: {edge: left,  t: 0.48}
     to:   {edge: right, t: 0.52}
     path: organic
-    amplitude_mm: 3.0
+    amplitude_mm: 5.0
     wavelength_mm: 12.0
-    width_mm: 5.0               # dirt transition strip width
-    layer: {type: soil}
+    width_mm: 2.5               # dirt transition strip width
+    layers:
+      - type: soil
+      - type: rocks
+        stones_per_square: 45
+        r_min: 0.8
+        r_max: 1.8
+        size_power: 1.35

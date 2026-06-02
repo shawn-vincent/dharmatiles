@@ -76,7 +76,8 @@ class BoundaryLayerSpec:
     The strip *width* is a property of the BoundarySpec, not this layer.
     This class only describes what terrain type lives inside the strip.
     """
-    type: str = 'soil'    # terrain type: "soil" | "water" | "wall" | …
+    type:   str = 'soil'                       # "soil" | "water" | "rocks" | …
+    params: dict = field(default_factory=dict) # forwarded to layer config
 
 
 @dataclass
@@ -94,13 +95,13 @@ class BoundarySpec:
     to_anchor:   tuple[str, float]   # (edge, t)
     path:        str   = 'organic'   # "organic" | "straight"
     amplitude_mm:  float = 3.0
-    wavelength_mm: float = 10.0
+    wavelength_mm: float = 10.0      # organic smoothness/correlation length
     seed_offset:   int   = 0
     width_mm:      float = 0.0       # strip width in mm; 0 = zero-width (no layer)
-    layer: BoundaryLayerSpec | None = None   # content of the strip; requires width_mm > 0
+    layers: list[BoundaryLayerSpec] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        if self.layer is not None and self.width_mm <= 0.0:
+        if self.layers and self.width_mm <= 0.0:
             raise ValueError(
                 f"Boundary '{self.id}': a layer requires width_mm > 0. "
                 f"Set width_mm on the boundary, not inside the layer."
@@ -171,7 +172,7 @@ def _parse(data: dict) -> TileSpec:
     boundaries: list[BoundarySpec] = []
     for bid, bdata in data.get('boundaries', {}).items():
         width_mm  = float(bdata.get('width_mm', 0.0))
-        bnd_layer = None
+        bnd_layers: list[BoundaryLayerSpec] = []
         if 'layer' in bdata:
             ld = bdata['layer']
             if 'width_mm' in ld:
@@ -179,7 +180,18 @@ def _parse(data: dict) -> TileSpec:
                     f"Boundary '{bid}': put width_mm on the boundary, "
                     f"not inside its layer."
                 )
-            bnd_layer = BoundaryLayerSpec(type=str(ld.get('type', 'soil')))
+            params = dict(ld)
+            layer_type = str(params.pop('type', 'soil'))
+            bnd_layers.append(BoundaryLayerSpec(type=layer_type, params=params))
+        for raw_layer in bdata.get('layers', []):
+            ld = dict(raw_layer)
+            if 'width_mm' in ld:
+                raise ValueError(
+                    f"Boundary '{bid}': put width_mm on the boundary, "
+                    f"not inside its layers."
+                )
+            layer_type = str(ld.pop('type'))
+            bnd_layers.append(BoundaryLayerSpec(type=layer_type, params=ld))
         boundaries.append(BoundarySpec(
             id            = bid,
             from_anchor   = (bdata['from']['edge'], float(bdata['from']['t'])),
@@ -189,7 +201,7 @@ def _parse(data: dict) -> TileSpec:
             wavelength_mm = float(bdata.get('wavelength_mm', 10.0)),
             seed_offset   = int(bdata.get('seed_offset', 0)),
             width_mm      = width_mm,
-            layer         = bnd_layer,
+            layers        = bnd_layers,
         ))
 
     return TileSpec(surface=surface, regions=regions, boundaries=boundaries)

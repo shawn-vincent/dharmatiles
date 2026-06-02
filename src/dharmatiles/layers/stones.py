@@ -42,8 +42,6 @@ class StonesLayer:
         """Add stone geometry to *scene.support_z* and return mesh list."""
         n_squares = self.surface.cols * self.surface.rows
         n_stones  = self.stones.stones_per_square * n_squares
-        if scene.stone_placement_mask is not None:
-            n_stones = int(round(n_stones * float(scene.stone_placement_mask.mean())))
         rng  = np.random.default_rng(self.surface.seed + 7919)
         mesh = _build_stones_mesh(self.surface, self.stones, n_stones,
                                   scene.terrain_z, scene.support_z,
@@ -85,39 +83,16 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
     cy = margin + rng.uniform(0, 1, N) * span_y
 
     if placement_mask is not None:
-        from scipy.ndimage import distance_transform_edt
-
+        # The mask constrains only the stone centre.  The stone footprint may
+        # cross region boundaries, but clipping by margin keeps it on the tile.
         allowed = np.argwhere(placement_mask)
         if len(allowed) == 0:
             return trimesh.Trimesh(process=False)
-        clearance_mm = distance_transform_edt(placement_mask) * min(
-            surface.cell_w, surface.cell_h
-        )
-        keep: list[int] = []
-        cx_kept: list[float] = []
-        cy_kept: list[float] = []
-        for s in range(N):
-            eligible = np.argwhere(placement_mask & (clearance_mm >= margin[s]))
-            if len(eligible) == 0:
-                continue
-            row, col = eligible[int(rng.integers(0, len(eligible)))]
-            keep.append(s)
-            cy_kept.append((row + rng.uniform(0.0, 1.0)) * surface.cell_h)
-            cx_kept.append((col + rng.uniform(0.0, 1.0)) * surface.cell_w)
-
-        if not keep:
-            return trimesh.Trimesh(process=False)
-
-        keep_idx = np.array(keep, dtype=np.int32)
-        rx_arr = rx_arr[keep_idx]
-        ry_arr = ry_arr[keep_idx]
-        h_frac = h_frac[keep_idx]
-        height = height[keep_idx]
-        angle  = angle[keep_idx]
-        margin = margin[keep_idx]
-        cx = np.clip(np.array(cx_kept, dtype=float), margin, surface.tile_w - margin)
-        cy = np.clip(np.array(cy_kept, dtype=float), margin, surface.tile_h - margin)
-        N = len(keep_idx)
+        chosen = allowed[rng.integers(0, len(allowed), N)]
+        cy = (chosen[:, 0] + rng.uniform(0.0, 1.0, N)) * surface.cell_h
+        cx = (chosen[:, 1] + rng.uniform(0.0, 1.0, N)) * surface.cell_w
+        cx = np.clip(cx, margin, surface.tile_w - margin)
+        cy = np.clip(cy, margin, surface.tile_h - margin)
 
     ca, sa = np.cos(angle), np.sin(angle)
     tz     = sample_grid(terrain_z, surface, cx, cy)

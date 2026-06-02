@@ -107,8 +107,6 @@ def _build_mesh(cfg: SceneConfig,
     # ── Stones ────────────────────────────────────────────────────────────────
     n_squares = cfg.surface.cols * cfg.surface.rows
     n_stones  = cfg.stones.stones_per_square * n_squares
-    if scene.stone_placement_mask is not None:
-        n_stones = int(round(n_stones * float(scene.stone_placement_mask.mean())))
     if n_stones > 0:
         if verbose:
             print(f"Building stones  ({n_stones} stones = "
@@ -204,6 +202,7 @@ def build_tile_from_spec(spec: TileSpec,
                          verbose: bool = True) -> trimesh.Trimesh:
     """Build a tile from a YAML/Python TileSpec and export it to *output_path*."""
     cfg = _scene_config_from_spec(spec)
+    cfg.stones = _collect_stones_config(spec)
 
     if verbose:
         region_ids = [r.id for r in spec.regions]
@@ -349,22 +348,28 @@ def _collect_water_info(spec: TileSpec,
 
 def _build_stone_placement_mask(region_mask: np.ndarray,
                                 spec: TileSpec) -> np.ndarray | None:
-    """Return True where global stones may be placed for a spec tile.
+    """Return True where explicitly requested stone centres may be placed.
 
-    Stones are currently a global scatter layer, not an explicit per-region
-    layer. In spec mode, constrain them to natural ground regions: regions
-    whose layer stack includes grass or soil. Water regions and boundary
-    strips are excluded.
+    In spec mode, stones are opt-in. A region must include a ``rock``,
+    ``rocks``, ``stone``, or ``stones`` layer for stone scatter to run there.
+    A boundary strip may also include one of those layer types, which enables
+    stone centres in boundary cells. Stone geometry may extend past the edge
+    of the placement region; only the tile edge clips placement.
     """
+    stone_layer_types = {'rock', 'rocks', 'stone', 'stones'}
     stone_region_indices = {
         i for i, r in enumerate(spec.regions)
-        if any(layer.type in {'grass', 'soil'} for layer in r.layers)
+        if any(layer.type in stone_layer_types for layer in r.layers)
     }
-    if not stone_region_indices:
-        return np.zeros(region_mask.shape, dtype=bool)
     result = np.zeros(region_mask.shape, dtype=bool)
     for idx in stone_region_indices:
         result |= (region_mask == idx)
+    if any(
+        layer.type in stone_layer_types
+        for boundary in spec.boundaries
+        for layer in boundary.layers
+    ):
+        result |= (region_mask < 0)
     return result
 
 
@@ -394,6 +399,27 @@ def _collect_grass_configs(spec: TileSpec) -> list[GrassConfig]:
                 d.update(layer.params)
                 cfgs.append(GrassConfig(**d))
     return cfgs or [defaults]
+
+
+def _collect_stones_config(spec: TileSpec) -> StonesConfig:
+    """Return StonesConfig from explicit rock/stone layers, or disabled."""
+    defaults = StonesConfig()
+    stone_layer_types = {'rock', 'rocks', 'stone', 'stones'}
+    cfg = vars(defaults).copy()
+    found = False
+    for region in spec.regions:
+        for layer in region.layers:
+            if layer.type in stone_layer_types:
+                cfg.update(layer.params)
+                found = True
+    for boundary in spec.boundaries:
+        for layer in boundary.layers:
+            if layer.type in stone_layer_types:
+                cfg.update(layer.params)
+                found = True
+    if not found:
+        cfg['stones_per_square'] = 0
+    return StonesConfig(**cfg)
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
