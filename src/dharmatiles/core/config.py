@@ -205,8 +205,9 @@ class GravelConfig:
     aspect_min:    float = 0.65   # min ry/rx ratio — prevents razor-thin slivers
     flat_min:      float = 0.40    # height = this × mean_radius (flattest)
     flat_max:      float = 1.50    # height = this × mean_radius (roundest)
-    az_segs:       int   = 7       # azimuth facets per stone
-    el_segs:       int   = 3       # elevation rings per stone
+    roughness:     float = 0.45    # random vertex displacement as fraction of radius
+    az_segs:       int   = 9       # azimuth facets per stone
+    el_segs:       int   = 4       # elevation rings per stone
     sink:          float = 0.01    # mm — base sunk below terrain
 
 

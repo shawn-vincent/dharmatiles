@@ -92,6 +92,15 @@ def _build_gravel_mesh(surface: SurfaceConfig, gravel: GravelConfig,
     wz = (base_z[:, None, None] +
           height[:, None, None] * z_off[None, :, None] * np.ones((1, 1, AZ)))
 
+    # Roughness: displace each ring vertex randomly to break the dome shape.
+    # Scale by mean radius so large rocks get proportionally larger bumps.
+    if gravel.roughness > 0.0:
+        mean_r = (0.5 * (rx_arr + ry_arr))[:, None, None]  # (N,1,1)
+        scale  = gravel.roughness * mean_r
+        wx += scale * rng.uniform(-1.0, 1.0, wx.shape)
+        wy += scale * rng.uniform(-1.0, 1.0, wy.shape)
+        wz += scale * 0.4 * rng.uniform(-1.0, 1.0, wz.shape)  # less vertical
+
     ring_base = (np.arange(N) * vps + 1)[:, None, None]
     ei_off    = (np.arange(EL) * AZ)[None, :, None]
     ai_off    = np.arange(AZ)[None, None, :]
