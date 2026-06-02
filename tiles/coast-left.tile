@@ -1,0 +1,52 @@
+# coast-left.tile
+#
+# Grass on the left half, water on the right.
+# A 4 mm soil slope runs along the shoreline —
+# no seeds on the slope, but grass blades can lean onto it.
+
+[surface]
+cols = 1
+rows = 1
+seed = 7
+
+# ── Regions ────────────────────────────────────────────────────────────────────
+
+[[region]]
+id       = "meadow"
+contains = [0.25, 0.5]
+
+[[region.layer]]
+type              = "grass"
+groups_per_square = 240
+
+[[region.layer]]          # sparse tall blades scattered through the meadow
+type              = "grass"
+groups_per_square = 30
+max_segs          = 18
+width_min         = 1.3
+width_max         = 1.7
+
+
+[[region]]
+id       = "lake"
+contains = [0.75, 0.5]
+
+[[region.layer]]
+type     = "water"
+depth_mm = 2.0
+
+
+# ── Boundary ───────────────────────────────────────────────────────────────────
+
+[[boundary]]
+id   = "shoreline"
+from = { edge = "top",    t = 0.55 }   # slightly off-centre — less mechanical
+to   = { edge = "bottom", t = 0.45 }
+path = "organic"
+amplitude_mm  = 4.0
+wavelength_mm = 12.0
+
+[[boundary.layer]]
+type     = "soil"    # bare ramp, no seeds
+width_mm = 4.0       # 2 mm each side of the path; height interpolates
+                     # from soil elevation down to water depth

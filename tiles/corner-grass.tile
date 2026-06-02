@@ -1,0 +1,38 @@
+# corner-grass.tile
+#
+# A patch of grass in the bottom-left corner; the rest is bare soil.
+# Works as a transition tile where a meadow ends at a path corner.
+
+[surface]
+cols = 1
+rows = 1
+seed = 99
+
+# ── Regions ────────────────────────────────────────────────────────────────────
+
+[[region]]
+id       = "patch"
+contains = [0.15, 0.15]   # bottom-left corner
+
+[[region.layer]]
+type              = "grass"
+groups_per_square = 240
+
+
+[[region]]
+id       = "floor"
+contains = [0.75, 0.75]
+# no [[region.layer]] → bare soil
+
+
+# ── Boundary ───────────────────────────────────────────────────────────────────
+
+[[boundary]]
+id   = "corner-cut"
+from = { edge = "left",   t = 0.5 }
+to   = { edge = "bottom", t = 0.5 }
+path = "organic"
+amplitude_mm  = 2.5
+wavelength_mm = 8.0
+# no [[boundary.layer]] — both regions are at the same elevation,
+# so no slope needed; the organic path alone makes the edge look real
