@@ -277,29 +277,48 @@ class StonesConfig:
 
 @dataclass
 class WaterRippleConfig:
-    """Concentric ripple displacement on the water surface.
+    """Water surface ripple displacement driven by discrete point sources.
 
-    Ripples radiate inward from the water's region boundaries (shoreline and
-    stone contacts) only — tile edges are never treated as sources.  Amplitude
-    decays exponentially with distance so ripples naturally die out in open
-    water long before reaching the tile perimeter.  A secondary harmonic adds
-    natural-looking interference.
+    Rather than a distance-transform from the full shoreline (which makes
+    wavefronts that exactly mirror the shore shape), N point sources are
+    sampled along the boundary.  Superimposed circular waves create natural
+    interference patterns whose wavefronts are independent of fine shoreline
+    detail.
+
+    Sources
+    -------
+    Shore sources   : evenly spaced along the water-side of the shoreline.
+    Grass sources   : shore cells nearest the grass region — represent blade
+                      tips dipping into the water.
+    Stone sources   : centroid of each stone footprint that overlaps water.
+
+    Displacement per source
+    -----------------------
+        z(d) = amplitude · exp(−max(0, d−start) / decay) · cos(k · max(0, d−start) + φ)
+
+    where d is distance from source, start is the calm-zone offset (ripples
+    build up rather than starting at full strength right at the source), and
+    φ is a small per-source phase jitter.
 
     Parameters
     ----------
-    amplitude_mm        Peak crest height (mm).
-    wavelength_mm       Crest-to-crest spacing (mm).
-    decay_mm            Exponential e-fold decay distance (mm).
-    secondary_amplitude Relative amplitude of the 2nd harmonic.
-    secondary_wavelength Wavelength multiplier for the 2nd harmonic (× primary).
-    secondary_phase     Phase offset of the 2nd harmonic (radians).
+    amplitude_mm     Peak crest per source (mm).
+    wavelength_mm    Crest-to-crest spacing (mm).
+    decay_mm         Exponential e-fold decay distance (mm).
+    start_offset_mm  Distance before first crest builds; creates calm zone.
+    n_shore_sources  Point sources sampled evenly along the shoreline.
+    n_grass_sources  Point sources for grass-tip interference.
+    grass_amplitude  Grass source amplitude as fraction of shore amplitude.
+    phase_spread     Per-source phase jitter std dev (radians).
     """
-    amplitude_mm:         float = 0.12
-    wavelength_mm:        float = 1.8
-    decay_mm:             float = 6.0
-    secondary_amplitude:  float = 0.35
-    secondary_wavelength: float = 0.7    # shorter → tighter secondary rings
-    secondary_phase:      float = 0.8    # offset so crests don't perfectly align
+    amplitude_mm:    float = 0.16
+    wavelength_mm:   float = 3.5
+    decay_mm:        float = 8.0
+    start_offset_mm: float = 2.5
+    n_shore_sources: int   = 14
+    n_grass_sources: int   = 8
+    grass_amplitude: float = 0.4
+    phase_spread:    float = 0.5
 
 
 # ─────────────────────────────────────────────────────────────────────────────

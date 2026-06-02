@@ -1,32 +1,33 @@
 """
-WaterLayer: flat water surface with optional concentric ripple displacement.
+WaterLayer: water surface with point-source ripple interference.
 
 Ripple model
 ------------
-Ripples radiate inward from the water boundary — where land (shoreline,
-stones) meets open water.  For each water cell we compute the Euclidean
-distance to the nearest boundary contact point (via scipy EDT), then
-apply a damped cosine:
+Rather than computing an EDT from the full shoreline (which makes wavefronts
+that exactly mirror the shore shape), N discrete point sources are sampled
+along the boundary.  Each source emits a damped circular wave:
 
-    z(d) = A · exp(−d / decay) · cos(2π·d / λ)
-         + A·a₂ · exp(−d / (0.6·decay)) · cos(2π·d / λ₂ + φ₂)
+    z_i(d) = A · exp(−max(0, d−s) / decay) · cos(k · max(0, d−s) + φ_i)
 
-The secondary term uses a shorter wavelength and a phase offset so its
-crests do not align with the primary ring, creating a subtle interference
-texture that breaks the too-perfect concentric pattern.
+where d is distance from source i, s is a calm-zone start offset (ripples
+build up rather than beginning right at the waterline), and φ_i is a small
+per-source phase jitter.  Superimposing these waves creates interference
+patterns whose wavefronts are not tied to fine shoreline detail.
 
-Edge clamping
--------------
-The displacement is multiplied by a per-cell smoothstep fade that reaches
-zero at the tile boundary, keeping every tile edge exactly flat for clean
-interlocking and printability.
+Source types
+------------
+Shore     Evenly spaced along the inner ring of the water boundary (water
+          cells adjacent to land within the tile, not tile edges).
+Grass     Inner-ring cells nearest the grass region — represent blade tips
+          that overhang or dip into the water.
+Stones    Centroid of each stone footprint that overlaps the water mask.
 
 Mesh
 ----
-A shared-vertex grid (grid_h+1) × (grid_w+1) is built for the entire tile.
-Displacement is bilinear-interpolated from cell-centre values to vertex
-corners.  Only cells inside *water_mask* emit faces, so non-water parts of
-the vertex buffer are allocated but unused (harmless for export).
+A shared-vertex grid (grid_h+1) × (grid_w+1) is built.  Cell-centre
+displacement is bilinear-interpolated to vertex corners.  A Gaussian blur
+is applied to the displacement field before interpolation to ensure smooth
+surface transitions.  Only water cells emit faces.
 """
 from __future__ import annotations
 
@@ -40,15 +41,14 @@ WATER_RENDER_LIFT_MM = 0.0
 
 
 class WaterLayer:
-    """Build a water-surface mesh coloured blue, optionally with ripples.
+    """Build a water-surface mesh, optionally with point-source ripples.
 
     Parameters
     ----------
-    surface        : SurfaceConfig — tile dimensions and grid resolution.
+    surface        : SurfaceConfig
     height_mm      : float — water-surface z level (mm).
-    render_lift_mm : float — extra z added on top of height_mm for rendering.
-    ripple_cfg     : WaterRippleConfig | None — ripple parameters, or None
-                     for a perfectly flat surface.
+    render_lift_mm : float — extra z lift for rendering.
+    ripple_cfg     : WaterRippleConfig | None — ripple parameters; None = flat.
     """
 
     def __init__(self, surface: SurfaceConfig, height_mm: float,
@@ -59,8 +59,6 @@ class WaterLayer:
         self.render_lift_mm = render_lift_mm
         self.ripple_cfg     = ripple_cfg
 
-    # ── Public API ────────────────────────────────────────────────────────────
-
     def build(self, water_mask: np.ndarray,
               stone_mask:  np.ndarray | None = None,
               grass_mask:  np.ndarray | None = None) -> list[trimesh.Trimesh]:
@@ -68,12 +66,11 @@ class WaterLayer:
 
         Parameters
         ----------
-        water_mask : bool (grid_h, grid_w) — True for water cells.
-        stone_mask : optional bool — stone footprint cells; those that
-                     overlap water become additional ripple sources.
-        grass_mask : reserved for future grass-contact ripples (unused).
-
-        Returns an empty list if the mask has no True cells.
+        water_mask : bool (grid_h, grid_w)
+        stone_mask : optional bool — stone footprints; overlap with water
+                     becomes a stone-contact ripple source.
+        grass_mask : optional bool — grass region; cells nearest to water
+                     become grass-tip ripple sources.
         """
         surface = self.surface
         h       = self.height_mm + self.render_lift_mm
@@ -85,42 +82,33 @@ class WaterLayer:
         # ── Ripple displacement (cell-centre grid) ────────────────────────────
         if self.ripple_cfg is not None:
             z_disp = _build_ripple_displacement(
-                surface, water_mask, stone_mask, self.ripple_cfg,
+                surface, water_mask, stone_mask, grass_mask, self.ripple_cfg,
             )
         else:
             z_disp = np.zeros((gh, gw), dtype=float)
 
         # ── Bilinear interpolation: cell centres → vertex corners ─────────────
-        # Each vertex (vr, vc) is at the corner shared by the four surrounding
-        # cells.  We pad the displacement array (edge mode) so boundary
-        # vertices reflect the nearest valid cell.
-        pad    = np.pad(z_disp, 1, mode='edge')       # (gh+2, gw+2)
+        pad     = np.pad(z_disp, 1, mode='edge')          # (gh+2, gw+2)
         vz_disp = 0.25 * (
-            pad[ :-1,  :-1] +    # cell above-left  of vertex
-            pad[ :-1, 1:  ] +    # cell above-right
-            pad[1:  ,  :-1] +    # cell below-left
-            pad[1:  , 1:  ]      # cell below-right
-        )                                              # (gh+1, gw+1)
+            pad[ :-1,  :-1] + pad[ :-1, 1:  ] +
+            pad[1:  ,  :-1] + pad[1:  , 1:  ]
+        )                                                  # (gh+1, gw+1)
 
         # ── Vertex positions ──────────────────────────────────────────────────
         x_v, y_v = np.meshgrid(
             np.arange(gw + 1, dtype=float) * surface.cell_w,
             np.arange(gh + 1, dtype=float) * surface.cell_h,
-        )                                                    # both (gh+1, gw+1)
-        z_v = h + vz_disp
+        )
+        z_v   = h + vz_disp
+        verts = np.stack([x_v.ravel(), y_v.ravel(), z_v.ravel()], axis=1)
 
-        verts = np.stack(
-            [x_v.ravel(), y_v.ravel(), z_v.ravel()], axis=1
-        )                                                   # (N_verts, 3)
-
-        # ── Faces: one quad (2 triangles) per water cell ──────────────────────
+        # ── Faces: two triangles per water cell ───────────────────────────────
         water_r, water_c = np.where(water_mask)
-        nf = len(water_r)
-
-        v00 = water_r       * (gw + 1) + water_c        # top-left  vertex
-        v01 = water_r       * (gw + 1) + water_c + 1    # top-right
-        v10 = (water_r + 1) * (gw + 1) + water_c        # bot-left
-        v11 = (water_r + 1) * (gw + 1) + water_c + 1   # bot-right
+        nf  = len(water_r)
+        v00 = water_r       * (gw + 1) + water_c
+        v01 = water_r       * (gw + 1) + water_c + 1
+        v10 = (water_r + 1) * (gw + 1) + water_c
+        v11 = (water_r + 1) * (gw + 1) + water_c + 1
 
         faces = np.empty((2 * nf, 3), dtype=np.int32)
         faces[:nf, 0] = v00;  faces[:nf, 1] = v01;  faces[:nf, 2] = v11
@@ -137,47 +125,87 @@ def _build_ripple_displacement(
     surface:    SurfaceConfig,
     water_mask: np.ndarray,
     stone_mask: np.ndarray | None,
+    grass_mask: np.ndarray | None,
     cfg:        WaterRippleConfig,
 ) -> np.ndarray:
-    """Return (gh, gw) displacement array (mm); zero outside water_mask."""
-    from scipy.ndimage import binary_erosion, distance_transform_edt
+    """Return (gh, gw) cell-centre displacement array (mm).
 
-    gh, gw = water_mask.shape
+    Uses discrete point sources along the water boundary, producing
+    interference patterns that are independent of fine shoreline detail.
+    """
+    from scipy.ndimage import (binary_erosion, distance_transform_edt,
+                                label, gaussian_filter)
 
-    # ── Ripple sources ────────────────────────────────────────────────────────
-    # Primary source: water cells adjacent to land WITHIN the tile.
-    # border_value=1 tells binary_erosion to treat cells outside the array as
-    # water, so tile-edge water cells are eroded away and do NOT become sources.
-    # Only cells neighbouring actual land (region boundaries) survive.
+    gh, gw   = water_mask.shape
+    rng      = np.random.default_rng(surface.seed ^ 0xC0A574)
+    cell_mm  = 0.5 * (surface.cell_w + surface.cell_h)
+
+    # ── Shore boundary ────────────────────────────────────────────────────────
+    # border_value=1 → outside tile treated as water → only cells adjacent to
+    # actual land within the tile become inner-ring cells.
     water_eroded = binary_erosion(water_mask, border_value=1)
     inner_ring   = water_mask & ~water_eroded
 
-    # Secondary source: stones that touch water add contact-point ripples.
-    all_sources = inner_ring.copy()
+    # ── Sample shore sources (evenly spaced, not random) ─────────────────────
+    shore_cells  = np.argwhere(inner_ring)
+    n_shore      = min(cfg.n_shore_sources, len(shore_cells))
+    idx          = np.linspace(0, len(shore_cells) - 1, n_shore).astype(int)
+    shore_pts    = shore_cells[idx]
+
+    # ── Grass-tip sources ─────────────────────────────────────────────────────
+    # Inner-ring cells whose nearest grass cell is within ~6 mm (covers the
+    # boundary-strip width plus a small margin regardless of spec settings).
+    grass_pts = np.empty((0, 2), dtype=int)
+    if grass_mask is not None and grass_mask.any():
+        dist_to_grass_mm = distance_transform_edt(~grass_mask) * cell_mm
+        grass_ring       = inner_ring & (dist_to_grass_mm < 6.0)
+        gcells           = np.argwhere(grass_ring)
+        if len(gcells) > 0:
+            n_g      = min(cfg.n_grass_sources, len(gcells))
+            idx_g    = np.linspace(0, len(gcells) - 1, n_g).astype(int)
+            grass_pts = gcells[idx_g]
+
+    # ── Stone sources (one per stone that overlaps water) ─────────────────────
+    stone_pts = np.empty((0, 2), dtype=int)
     if stone_mask is not None:
-        all_sources |= (stone_mask & water_mask)
+        stone_in_water = stone_mask & water_mask
+        if stone_in_water.any():
+            labeled, n_comp = label(stone_in_water)
+            centers = []
+            for i in range(1, n_comp + 1):
+                rr, cc = np.where(labeled == i)
+                centers.append([int(rr.mean()), int(cc.mean())])
+            stone_pts = np.array(centers, dtype=int)
 
-    # ── Distance from sources (mm) ────────────────────────────────────────────
-    # distance_transform_edt(~all_sources): distance to nearest source cell.
-    # Source cells → 0; open water → positive.
-    dist_cells = distance_transform_edt(~all_sources)
-    cell_mm    = 0.5 * (surface.cell_w + surface.cell_h)
-    dist_mm    = dist_cells * cell_mm
-    dist_mm[~water_mask] = 0.0
+    # ── Coordinate grids (mm) ─────────────────────────────────────────────────
+    rows_mm = np.arange(gh, dtype=float)[:, None] * surface.cell_h
+    cols_mm = np.arange(gw, dtype=float)[None, :] * surface.cell_w
 
-    # ── Damped cosine ripple ──────────────────────────────────────────────────
-    k1 = 2.0 * np.pi / cfg.wavelength_mm
-    k2 = 2.0 * np.pi / (cfg.wavelength_mm * cfg.secondary_wavelength)
+    # ── Accumulate circular waves ─────────────────────────────────────────────
+    z_disp = np.zeros((gh, gw), dtype=float)
+    k      = 2.0 * np.pi / cfg.wavelength_mm
 
-    primary   = (cfg.amplitude_mm *
-                 np.exp(-dist_mm / cfg.decay_mm) *
-                 np.cos(k1 * dist_mm))
+    def _add_sources(pts, amplitude):
+        for (sr, sc) in pts:
+            sr_mm  = sr * surface.cell_h
+            sc_mm  = sc * surface.cell_w
+            dist   = np.sqrt((rows_mm - sr_mm) ** 2 + (cols_mm - sc_mm) ** 2)
+            d_eff  = np.maximum(0.0, dist - cfg.start_offset_mm)
+            phase  = rng.normal(0.0, cfg.phase_spread)
+            wave   = amplitude * np.exp(-d_eff / cfg.decay_mm) * np.cos(k * d_eff + phase)
+            z_disp[water_mask] += wave[water_mask]
 
-    secondary = (cfg.amplitude_mm * cfg.secondary_amplitude *
-                 np.exp(-dist_mm / (cfg.decay_mm * 0.6)) *
-                 np.cos(k2 * dist_mm + cfg.secondary_phase))
+    _add_sources(shore_pts,  cfg.amplitude_mm)
+    _add_sources(grass_pts,  cfg.amplitude_mm * cfg.grass_amplitude)
+    _add_sources(stone_pts,  cfg.amplitude_mm * 0.6)
 
-    z_disp = primary + secondary
+    z_disp[~water_mask] = 0.0
+
+    # ── Smooth: removes per-cell noise, softens crest transitions ─────────────
+    # sigma in cells; 1.5 cells ≈ 0.2 mm — enough to round the crest edges
+    # without blurring out the wave structure.
+    smooth_sigma = max(1.0, cfg.wavelength_mm / (surface.cell_w * 8.0))
+    z_disp = gaussian_filter(z_disp, sigma=smooth_sigma)
     z_disp[~water_mask] = 0.0
 
     return z_disp
