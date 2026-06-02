@@ -125,6 +125,10 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--gravel-per-tile", type=int, default=_V.gravel_per_tile,
                    dest="gravel_per_tile",
                    help="Stones per 35mm tile unit (scaled by tile count)")
+    p.add_argument("--r-max", type=float, default=_V.r_max, dest="r_max",
+                   help="Maximum stone radius (mm)")
+    p.add_argument("--size-power", type=float, default=_V.size_power, dest="size_power",
+                   help="Size distribution skew: 1=uniform, >1=mostly small")
     p.add_argument("--flow-type",  type=str,   default=_F.flow_type,
                    choices=["linear", "swirl", "radial", "drain", "dipole",
                             "random-zones", "curl"],
@@ -193,6 +197,8 @@ def main(argv=None):
         ),
         gravel=GravelConfig(
             gravel_per_tile = args.gravel_per_tile,
+            r_max           = args.r_max,
+            size_power      = args.size_power,
         ),
         base=BaseConfig(
             style      = 'none' if args.no_base else 'dungeonblock',

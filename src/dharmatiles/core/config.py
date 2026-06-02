@@ -190,12 +190,20 @@ class GravelConfig:
 
     ``gravel_per_tile`` is a density — GravelLayer multiplies by
     tile_cols × tile_rows to get the actual stone count for the surface.
+
+    Size distribution
+    -----------------
+    Radius is sampled as  r = r_min + (r_max − r_min) × U^size_power
+    where U ~ Uniform(0, 1).  size_power = 1 gives a flat uniform spread;
+    higher values skew strongly toward small rocks while still allowing the
+    occasional large one up to r_max.
     """
     gravel_per_tile: int   = 6000
-    r_min:         float = 0.048   # mm — minimum horizontal semi-axis
-    r_max:         float = 0.42    # mm — maximum horizontal semi-axis
+    r_min:         float = 0.05    # mm — minimum horizontal semi-axis
+    r_max:         float = 3.0     # mm — maximum horizontal semi-axis
+    size_power:    float = 3.0     # distribution skew: >1 = mostly small rocks
     flat_min:      float = 0.40    # height = this × mean_radius (flattest)
-    flat_max:      float = 1.30    # height = this × mean_radius (roundest)
+    flat_max:      float = 1.50    # height = this × mean_radius (roundest)
     az_segs:       int   = 7       # azimuth facets per stone
     el_segs:       int   = 3       # elevation rings per stone
     sink:          float = 0.01    # mm — base sunk below terrain

@@ -45,8 +45,11 @@ def _build_gravel_mesh(surface: SurfaceConfig, gravel: GravelConfig,
     AZ = gravel.az_segs
     EL = gravel.el_segs
 
-    rx_arr  = rng.uniform(gravel.r_min, gravel.r_max, N)
-    ry_arr  = rng.uniform(gravel.r_min, gravel.r_max, N)
+    # Power-law size draw: U^power skews toward r_min; power=1 = uniform
+    u_x    = rng.uniform(0.0, 1.0, N) ** gravel.size_power
+    u_y    = rng.uniform(0.0, 1.0, N) ** gravel.size_power
+    rx_arr = gravel.r_min + (gravel.r_max - gravel.r_min) * u_x
+    ry_arr = gravel.r_min + (gravel.r_max - gravel.r_min) * u_y
     h_frac  = rng.uniform(gravel.flat_min, gravel.flat_max, N)
     height  = 0.5 * (rx_arr + ry_arr) * h_frac
     angle   = rng.uniform(0, np.pi, N)
