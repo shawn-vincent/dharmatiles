@@ -133,8 +133,7 @@ def _build_ripple_displacement(
     Uses discrete point sources along the water boundary, producing
     interference patterns that are independent of fine shoreline detail.
     """
-    from scipy.ndimage import (binary_erosion, distance_transform_edt,
-                                label, gaussian_filter)
+    from scipy.ndimage import binary_erosion, distance_transform_edt, label
 
     gh, gw   = water_mask.shape
     rng      = np.random.default_rng(surface.seed ^ 0xC0A574)
@@ -200,12 +199,4 @@ def _build_ripple_displacement(
     _add_sources(stone_pts,  cfg.amplitude_mm * 0.6)
 
     z_disp[~water_mask] = 0.0
-
-    # ── Smooth: removes per-cell noise, softens crest transitions ─────────────
-    # sigma in cells; 1.5 cells ≈ 0.2 mm — enough to round the crest edges
-    # without blurring out the wave structure.
-    smooth_sigma = max(1.0, cfg.wavelength_mm / (surface.cell_w * 8.0))
-    z_disp = gaussian_filter(z_disp, sigma=smooth_sigma)
-    z_disp[~water_mask] = 0.0
-
     return z_disp

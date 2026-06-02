@@ -311,14 +311,14 @@ class WaterRippleConfig:
     grass_amplitude  Grass source amplitude as fraction of shore amplitude.
     phase_spread     Per-source phase jitter std dev (radians).
     """
-    amplitude_mm:    float = 0.16
-    wavelength_mm:   float = 3.5
-    decay_mm:        float = 8.0
-    start_offset_mm: float = 2.5
-    n_shore_sources: int   = 14
-    n_grass_sources: int   = 8
+    amplitude_mm:    float = 0.14
+    wavelength_mm:   float = 1.8
+    decay_mm:        float = 5.0
+    start_offset_mm: float = 0.0
+    n_shore_sources: int   = 4
+    n_grass_sources: int   = 3
     grass_amplitude: float = 0.4
-    phase_spread:    float = 0.5
+    phase_spread:    float = 0.0   # 0 = fully coherent → clean circle crests
 
 
 # ─────────────────────────────────────────────────────────────────────────────
