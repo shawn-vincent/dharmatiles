@@ -143,7 +143,7 @@ class GrassConfig:
     # More groups with fewer blades each → uniform coverage; fewer groups with
     # more blades each → visible clumping.  At 120 groups the jittered-grid
     # spacing is ~3 mm, small enough that directional flow sweeps fill the gaps.
-    groups_per_square: int   = 120
+    groups_per_square: int   = 240
     group_min:       int   = 3
     group_max:       int   = 5
     group_spread_mm: float = 1.5
