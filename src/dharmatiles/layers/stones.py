@@ -125,6 +125,20 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
         wy = cy[:, None, None]       + pts[..., 1]
         wz = base_z[:, None, None]   + pts[..., 2]
 
+        # Apply same cuts to the apex vertex so it can't spike above a cut top
+        apex_pts = np.zeros((N, 3))
+        apex_pts[:, 2] = height                          # local (0, 0, h)
+        for k in range(n_cuts):
+            n_k = norms[:, k, :]                         # (N, 3)
+            d_k = cut_d[:, k]                            # (N,)
+            dot = (apex_pts * n_k).sum(axis=-1)          # (N,)
+            exc = np.maximum(0.0, dot - d_k)
+            apex_pts -= exc[:, None] * n_k
+        apex_pts[:, 2] = np.maximum(apex_pts[:, 2], 0.0)
+        all_verts[apex_idx, 0] = cx + apex_pts[:, 0]
+        all_verts[apex_idx, 1] = cy + apex_pts[:, 1]
+        all_verts[apex_idx, 2] = base_z + apex_pts[:, 2]
+
     # ── Residual roughness: tiny per-vertex noise to break perfect flat faces ─
     if stones.roughness > 0.0:
         scale = (stones.roughness * mean_r)[:, None, None]

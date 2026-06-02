@@ -158,6 +158,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--root-depth", type=float, default=_G.root_depth, dest="root_depth")
     p.add_argument("--max-bridge", type=float, default=_G.max_bridge_mm,
                    dest="max_bridge_mm")
+    p.add_argument("--rolling-terrain", action="store_true", dest="rolling_terrain",
+                   help="Enable sinusoidal stand-in terrain undulation (legacy)")
     p.add_argument("--quiet", "-q", action="store_true")
 
     # ── Base ──────────────────────────────────────────────────────────────────
@@ -176,10 +178,11 @@ def main(argv=None):
 
     cfg = SceneConfig(
         surface=SurfaceConfig(
-            tile_cols = args.tile_cols,
-            tile_rows = args.tile_rows,
-            base_h    = args.base_h,
-            seed      = args.seed,
+            tile_cols    = args.tile_cols,
+            tile_rows    = args.tile_rows,
+            base_h       = args.base_h,
+            seed         = args.seed,
+            flat_terrain = not args.rolling_terrain,
         ),
         flow=FlowConfig(
             flow_type       = args.flow_type,

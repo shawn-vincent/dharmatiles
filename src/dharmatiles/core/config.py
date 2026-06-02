@@ -17,33 +17,37 @@ import numpy as np
 # Surface / grid
 # ─────────────────────────────────────────────────────────────────────────────
 
-CELL_SIZE_MM: float = 35.0 / 128.0   # ≈ 0.273 mm — fixed physical constant
+CELL_SIZE_MM: float = 35.0 / 128.0   # ≈ 0.273 mm — legacy constant (128 cells/tile)
 
 
 @dataclass
 class SurfaceConfig:
     """Physical surface dimensions.
 
-    The grid is always 128 cells per tile unit in each axis.
-    ``grid_w`` and ``grid_h`` are derived; do not set them directly.
+    ``grid_w`` and ``grid_h`` are derived from ``tile_cols``/``tile_rows`` and
+    ``cells_per_tile``; do not set them directly.
 
     Parameters
     ----------
     tile_cols, tile_rows : int
         Number of 35 mm tile units along X and Y.  A 1×1 surface is one
         standard DungeonBlocks tile.  A 2×2 surface is four tiles.
+    cells_per_tile : int
+        Heightmap resolution along each axis per tile unit.  Higher values
+        give finer mesh geometry.  Must be a power of two; default 256
+        (≈ 0.137 mm/cell).  Use 128 for legacy behaviour (≈ 0.273 mm/cell).
     base_h : float
         Depth of the solid slab below the terrain surface (mm).
     seed : int
         Master seed; layers derive their own seeds by XOR-ing with a
         per-layer constant.
     """
-    tile_cols:    int   = 1
-    tile_rows:    int   = 1
-    base_h:       float = 0.0   # mm — extra slab below z=0 (terrain heights are
-                                 #      total floor thicknesses; 0 = no extra slab)
-    seed:         int   = 377
-    flat_terrain: bool  = False  # True → constant z=5 mm, no sinusoidal variation
+    tile_cols:      int   = 1
+    tile_rows:      int   = 1
+    cells_per_tile: int   = 256  # heightmap resolution per 35 mm tile unit
+    base_h:         float = 0.0  # mm — extra slab below z=0
+    seed:           int   = 377
+    flat_terrain:   bool  = True   # False → sinusoidal stand-in terrain (legacy)
 
     # ── Derived dimensions ────────────────────────────────────────────────────
     @property
@@ -58,23 +62,23 @@ class SurfaceConfig:
 
     @property
     def grid_w(self) -> int:
-        """Grid columns (128 × tile_cols)."""
-        return self.tile_cols * 128
+        """Grid columns (cells_per_tile × tile_cols)."""
+        return self.tile_cols * self.cells_per_tile
 
     @property
     def grid_h(self) -> int:
-        """Grid rows (128 × tile_rows)."""
-        return self.tile_rows * 128
+        """Grid rows (cells_per_tile × tile_rows)."""
+        return self.tile_rows * self.cells_per_tile
 
     @property
     def cell_w(self) -> float:
-        """mm per grid cell in X — always CELL_SIZE_MM."""
-        return CELL_SIZE_MM
+        """mm per grid cell in X."""
+        return 35.0 / self.cells_per_tile
 
     @property
     def cell_h(self) -> float:
-        """mm per grid cell in Y — always CELL_SIZE_MM."""
-        return CELL_SIZE_MM
+        """mm per grid cell in Y."""
+        return 35.0 / self.cells_per_tile
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -187,23 +191,65 @@ class SolverConfig:
 
 @dataclass
 class SoilConfig:
-    """Multi-scale bumpy soil texture applied to terrain_z.
+    """Soil texture: two tiers of random super-Gaussian blobs summed into terrain_z.
 
-    Three octaves of smoothed noise are summed, each independently scaled.
-    Cell size is CELL_SIZE_MM ≈ 0.273 mm; sigma values are in grid cells.
+    Primary tier: large, well-spaced clumps — the main soil mounds.
+    Small tier: dense fine-scale bumps adding surface grain on and between mounds.
 
-    Octave layout (defaults give ~5mm large mounds, ~2mm medium bumps, ~0.8mm ripples):
-        large  — broad rolling mounds across the tile
-        medium — mid-scale clumps between the mounds
-        small  — fine surface ripple
+    Each blob uses a super-Gaussian profile exp(-d^P / (2σ^P)).  P=2 is a
+    standard Gaussian; P=4 gives a flatter top and steeper sides — the
+    "smooth but small-radius" edge seen on real soil clods.
+
+    All sigma values are in mm; converted to grid cells at runtime so blob
+    physical size is independent of cells_per_tile resolution.
     """
-    large_sigma:  float = 12.0   # grid cells  (~3.3 mm → broad rolls ~6–8 mm across)
-    large_amp:    float = 0.3    # mm — broad low rolls, kept subtle
-    medium_sigma: float = 5.0    # grid cells  (~1.4 mm → main lumps ~3–4 mm across)
-    medium_amp:   float = 0.9    # mm
-    small_sigma:  float = 2.0    # grid cells  (~0.5 mm → gentle fine texture)
-    small_amp:    float = 0.7    # mm
-    edge_fade_mm: float = 0.8    # mm — cosine fade to zero at tile edges
+    # ── Primary clumps ────────────────────────────────────────────────────────
+    # Elliptical blobs with random aspect ratio and orientation give organic,
+    # rain-eroded shapes rather than perfect circles.
+    n_blobs:            int   = 277   # primary clumps per tile unit (35 × 35 mm)
+    blob_sigma_min_mm:  float = 0.22  # mm — smallest primary σ (major axis)
+    blob_sigma_max_mm:  float = 1.026 # mm — largest  primary σ (major axis)
+    blob_sigma_mode_mm: float = 0.434 # mm — triangular distribution peak (None-like: set < min for uniform)
+    blob_aspect_min:    float = 0.78  # min minor/major axis ratio (elongated)
+    blob_aspect_max:    float = 1.00  # max ratio (circular)
+    blob_power:         float = 3.5   # super-Gaussian exponent (2=Gaussian, higher=sharper base)
+    blob_cutoff:        float = 2.6   # clip at this × sigma
+    blob_h_min:         float = 0.25  # mm — floor for secondary tier
+    blob_h_max:         float = 0.30  # mm — ceiling for secondary tier
+    blob_h_scale_min:   float = 0.14  # primary tier: height = this × sigma_mm (min)
+    blob_h_scale_max:   float = 1.12  # primary tier: height = this × sigma_mm (max)
+    blob_h_size_bias:   float = 0.85  # 0=independent, 1=large blobs always at scale_max
+
+    # ── Small-bump / surface-grain tier ──────────────────────────────────────
+    n_small:            int   = 0     # small bumps per tile unit
+    small_sigma_min_mm: float = 0.20  # mm (≥ 1.5 cells at 256/tile — resolvable)
+    small_sigma_max_mm: float = 0.40  # mm
+    small_h_min:        float = 0.004  # mm
+    small_h_max:        float = 0.010  # mm
+
+    # ── Per-blob organic perturbation ─────────────────────────────────────────
+    # blob_warp_str_mm: displaces blob coordinates before computing distance,
+    #   making each blob edge irregular/organic rather than a perfect ellipse.
+    # blob_texture_amp: multiplies blob height by (1 + noise), adding surface
+    #   grain visible within each clump without raising global grid resolution.
+    blob_warp_str_mm:          float = 0.0   # mm displacement — disabled (distorts small blobs)
+    blob_texture_amp:          float = 0.0   # surface modulation — disabled
+    blob_shape_noise_amp:      float = 0.06  # radial irregularity amplitude (0=perfect ellipse)
+    blob_shape_noise_harmonics:int   = 4     # number of angular harmonics (2,3,4...)
+
+    # ── Overall surface texture ───────────────────────────────────────────────
+    surface_texture_amp:        float = 0.06  # mm — amplitude of base noise layer
+    surface_texture_scale_mm:   float = 0.27  # mm — spatial scale of texture features
+    surface_texture2_amp:       float = 0.03  # mm — amplitude of finer noise layer
+    surface_texture2_scale_mm:  float = 0.12  # mm — spatial scale of finer texture
+    blob_jitter:      float = 0.95   # placement jitter: 0=perfect grid, 1=fully random
+
+    # detail_mult: soil bump field is computed at (cells_per_tile × detail_mult)
+    # resolution so bumps have fine geometry without raising the whole terrain grid.
+    # build() returns the hires array; caller uses it for meshing.
+    detail_mult:      int   = 2      # 2 → 512 cells/tile for soil mesh (0.068 mm/cell)
+
+    edge_fade_mm: float = 0.8   # mm — cosine fade to zero at tile edges
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -224,19 +270,19 @@ class StonesConfig:
     higher values skew strongly toward small rocks while still allowing the
     occasional large one up to r_max.
     """
-    stones_per_tile: int   = 80
-    r_min:         float = 0.6    # mm — minimum horizontal semi-axis
-    r_max:         float = 2.5    # mm — maximum horizontal semi-axis
-    size_power:    float = 3.0    # distribution skew: >1 = more small rocks
+    stones_per_tile: int   = 15
+    r_min:         float = 1.82   # mm — minimum horizontal semi-axis
+    r_max:         float = 2.40   # mm — maximum horizontal semi-axis
+    size_power:    float = 2.5    # distribution skew: >1 = more small rocks
     aspect_min:    float = 0.65   # min ry/rx ratio — prevents razor-thin slivers
-    flat_min:      float = 0.40   # height = this × mean_radius (flattest)
-    flat_max:      float = 1.50   # height = this × mean_radius (roundest)
-    n_cuts:        int   = 3      # random plane cuts per stone (0 = smooth dome)
-    cut_min:       float = 0.55   # min cut distance as fraction of mean radius
-    cut_max:       float = 0.90   # max cut distance as fraction of mean radius
-    roughness:     float = 0.06   # small residual per-vertex noise (breaks flat faces slightly)
-    az_segs:       int   = 10     # azimuth facets per stone
-    el_segs:       int   = 5      # elevation rings per stone
+    flat_min:      float = 0.32   # height = this × mean_radius (flattest)
+    flat_max:      float = 1.20   # height = this × mean_radius (roundest)
+    n_cuts:        int   = 4      # random plane cuts per stone
+    cut_min:       float = 0.40   # min cut distance as fraction of mean radius
+    cut_max:       float = 0.75   # max cut distance as fraction of mean radius
+    roughness:     float = 0.06   # small residual per-vertex noise
+    az_segs:       int   = 12     # azimuth facets per stone
+    el_segs:       int   = 6      # elevation rings per stone
     sink:          float = 0.10   # mm — base sunk below terrain
 
 
