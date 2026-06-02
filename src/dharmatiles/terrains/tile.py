@@ -42,7 +42,6 @@ from ..layers.water import WaterLayer
 COLOUR_SOIL  = (101,  67,  33, 255)   # earthy brown   — terrain surface
 COLOUR_STONE = (120, 120, 120, 255)   # mid-grey        — rocks
 COLOUR_GRASS = ( 50, 120,  30, 255)   # natural green   — blades & supports
-COLOUR_BASE  = ( 70,  45,  20, 255)   # dark brown      — dungeonblock underside
 COLOUR_WATER = ( 30, 100, 200, 255)   # water blue      — flat water surface
 
 
@@ -53,6 +52,21 @@ def _paint(mesh_or_list, rgba: tuple) -> None:
     for m in items:
         if m is not None and len(m.faces):
             m.visual.face_colors = colour
+
+
+def _clear_paint(mesh: trimesh.Trimesh) -> None:
+    """Leave every face without an explicit VisCAM/SolidView colour."""
+    mesh.visual.face_colors = np.zeros((len(mesh.faces), 4), dtype=np.uint8)
+
+
+def _paint_terrain_top(mesh: trimesh.Trimesh, rgba: tuple) -> None:
+    """Colour only top terrain faces; sides and bottom remain unspecified."""
+    n_top = int(mesh.metadata.get('top_face_count', 0))
+    if n_top <= 0:
+        return
+    colours = mesh.visual.face_colors.copy()
+    colours[:n_top] = np.array(rgba, dtype=np.uint8)
+    mesh.visual.face_colors = colours
 
 
 # ── Shared layer pipeline ─────────────────────────────────────────────────────
@@ -84,7 +98,8 @@ def _build_mesh(cfg: SceneConfig,
         print("Building soil texture...")
     SoilLayer(cfg.surface, cfg.soil).build(scene)
 
-    # Soil bumps must not deform the water surface — restore flat water level.
+    # Soil bumps must not deform the water surface. Boundary strips are
+    # separate cells, so water_mask should contain only the flat pool region.
     if water_mask is not None and water_height is not None:
         scene.terrain_z[water_mask] = water_height
         scene.support_z[water_mask] = water_height
@@ -92,6 +107,8 @@ def _build_mesh(cfg: SceneConfig,
     # ── Stones ────────────────────────────────────────────────────────────────
     n_squares = cfg.surface.cols * cfg.surface.rows
     n_stones  = cfg.stones.stones_per_square * n_squares
+    if scene.stone_placement_mask is not None:
+        n_stones = int(round(n_stones * float(scene.stone_placement_mask.mean())))
     if n_stones > 0:
         if verbose:
             print(f"Building stones  ({n_stones} stones = "
@@ -128,8 +145,10 @@ def _build_mesh(cfg: SceneConfig,
         print("Building terrain solid...")
     terrain_mesh = make_heightmap_solid(
         scene.terrain_z, cfg.surface.tile_w, cfg.surface.tile_h, cfg.surface.base_h,
+        omit_top_mask=water_mask,
     )
-    _paint(terrain_mesh, COLOUR_SOIL)
+    _clear_paint(terrain_mesh)
+    _paint_terrain_top(terrain_mesh, COLOUR_SOIL)
     parts.insert(0, terrain_mesh)
 
     # ── DungeonBlocks base ────────────────────────────────────────────────────
@@ -141,7 +160,7 @@ def _build_mesh(cfg: SceneConfig,
                   f"(peg_height={peg_h:.1f} mm, "
                   f"{n_pegs} peg{'s' if n_pegs != 1 else ''})...")
         base_mesh = make_dungeonblock_base(cfg.surface, peg_h, cfg.base)
-        _paint(base_mesh, COLOUR_BASE)
+        _clear_paint(base_mesh)
         parts.insert(0, base_mesh)
 
     if verbose:
@@ -216,6 +235,7 @@ def build_tile_from_spec(spec: TileSpec,
 
     if region_mask is not None:
         scene.grass_mask = build_grass_mask(region_mask, spec)
+        scene.stone_placement_mask = _build_stone_placement_mask(region_mask, spec)
         if verbose and scene.grass_mask is not None:
             n_grass = int(scene.grass_mask.sum())
             n_total = scene.grass_mask.size
@@ -252,18 +272,18 @@ def _build_spec_terrain(spec: TileSpec, surface: SurfaceConfig,
                          region_mask: np.ndarray | None) -> np.ndarray:
     """Derive a terrain heightmap from the region heights declared in *spec*.
 
-    Each region occupies a flat area at its ``effective_height_mm``.  Where
-    adjacent regions differ in height the boundary produces a smooth slope
-    whose width equals the first boundary's ``width_mm`` (default 5 mm).
+    Each region occupies a flat area at its ``effective_height_mm``.  Boundary
+    strips occupy their own cells; where adjacent regions differ in height the
+    strip receives a blended slope.
 
     Algorithm
     ---------
     1. Assign each region cell its exact height.
     2. At boundary cells, compute an inverse-distance-weighted (IDW) blend
        of the neighbouring region heights.
-    3. Blend from the IDW height (at the boundary) to the exact height (at
-       ``half_blend`` cells into each region) using a smoothstep, creating
-       the slope.
+    3. Region cells keep their exact region height. Boundary cells use the
+       IDW height, so the slope belongs to the boundary strip rather than
+       overlapping the neighbouring regions.
 
     Note: the slope is a vertical (z) ramp; features on the slope (soil
     blobs, stones) are placed at the correct z but their orientation is still
@@ -285,13 +305,6 @@ def _build_spec_terrain(spec: TileSpec, surface: SurfaceConfig,
     if len(set(heights)) <= 1:
         return np.full((gh, gw), heights[0] if heights else default_h, dtype=float)
 
-    # Transition half-width in cells (total blend zone = 2 × half_blend)
-    blend_mm   = max(
-        (b.width_mm for b in spec.boundaries if b.width_mm > 0),
-        default=5.0,
-    )
-    half_blend = max(2.0, blend_mm / (2.0 * surface.cell_w))
-
     # Step 1: exact heights at region cells
     z_exact = np.full((gh, gw), default_h, dtype=float)
     for idx, h in enumerate(heights):
@@ -307,13 +320,10 @@ def _build_spec_terrain(spec: TileSpec, surface: SurfaceConfig,
         w_sum += w
     z_idw /= np.maximum(w_sum, 1e-12)
 
-    # Step 3: smoothstep blend in the transition zone
-    # dist_from_bnd = 0 at boundary cells, increases inward into each region
-    dist_from_bnd = distance_transform_edt(region_mask >= 0)
-    t_raw = np.minimum(dist_from_bnd / half_blend, 1.0)
-    t_s   = t_raw * t_raw * (3.0 - 2.0 * t_raw)   # smoothstep: 0 at bnd → 1 at half_blend
-
-    return (z_idw * (1.0 - t_s) + z_exact * t_s).astype(float)
+    # Step 3: boundary strip gets the blended height; regions stay flat.
+    z = z_exact.copy()
+    z[region_mask < 0] = z_idw[region_mask < 0]
+    return z.astype(float)
 
 
 def _collect_water_info(spec: TileSpec,
@@ -335,6 +345,27 @@ def _collect_water_info(spec: TileSpec,
     for idx in water_indices:
         water_mask |= (region_mask == idx)
     return water_mask, water_height
+
+
+def _build_stone_placement_mask(region_mask: np.ndarray,
+                                spec: TileSpec) -> np.ndarray | None:
+    """Return True where global stones may be placed for a spec tile.
+
+    Stones are currently a global scatter layer, not an explicit per-region
+    layer. In spec mode, constrain them to natural ground regions: regions
+    whose layer stack includes grass or soil. Water regions and boundary
+    strips are excluded.
+    """
+    stone_region_indices = {
+        i for i, r in enumerate(spec.regions)
+        if any(layer.type in {'grass', 'soil'} for layer in r.layers)
+    }
+    if not stone_region_indices:
+        return np.zeros(region_mask.shape, dtype=bool)
+    result = np.zeros(region_mask.shape, dtype=bool)
+    for idx in stone_region_indices:
+        result |= (region_mask == idx)
+    return result
 
 
 # ── Spec → config helpers ─────────────────────────────────────────────────────

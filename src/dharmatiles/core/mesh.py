@@ -19,13 +19,16 @@ from .grid import sample_grid
 def export_coloured_stl(mesh: trimesh.Trimesh, path: pathlib.Path) -> None:
     """Write *mesh* as a binary STL with VisCAM/SolidView per-face colours.
 
-    Each triangle's 2-byte attribute field encodes RGB in 5-5-5 format::
+    Each explicitly coloured triangle's 2-byte attribute field encodes RGB in
+    5-5-5 format::
 
         bit 15      = 1  (marks colour as valid)
         bits 14-10  = R  (0-31)
         bits  9-5   = G  (0-31)
         bits  4-0   = B  (0-31)
 
+    Faces with alpha = 0 are exported with attribute 0, leaving their colour
+    unspecified for viewers that honour the VisCAM/SolidView colour bit.
     Viewers that support the hack (PrusaSlicer, MeshLab, Windows 3D Builder …)
     will render each face in its assigned colour.  Viewers that ignore it see a
     normal single-colour STL.
@@ -40,7 +43,12 @@ def export_coloured_stl(mesh: trimesh.Trimesh, path: pathlib.Path) -> None:
     r5   = (colours[:, 0].astype(np.uint16) * 31 // 255)
     g5   = (colours[:, 1].astype(np.uint16) * 31 // 255)
     b5   = (colours[:, 2].astype(np.uint16) * 31 // 255)
-    attr = (np.uint16(0x8000) | (r5 << 10) | (g5 << 5) | b5)
+    valid = colours[:, 3] > 0
+    attr = np.where(
+        valid,
+        np.uint16(0x8000) | (r5 << 10) | (g5 << 5) | b5,
+        np.uint16(0),
+    )
 
     # Pack into a numpy structured array — one record per triangle (50 bytes)
     dtype = np.dtype([
@@ -201,7 +209,9 @@ def build_tube_mesh(spine_3d: np.ndarray, widths: np.ndarray,
 # ── Terrain solid ─────────────────────────────────────────────────────────────
 
 def make_heightmap_solid(z_grid: np.ndarray, tile_w: float, tile_h: float,
-                         base_h: float, subsample: int = 1) -> trimesh.Trimesh:
+                         base_h: float, subsample: int = 1,
+                         omit_top_mask: np.ndarray | None = None,
+                         ) -> trimesh.Trimesh:
     """Watertight solid: top = *z_grid* surface, bottom = flat at −*base_h*.
 
     Parameters
@@ -210,6 +220,9 @@ def make_heightmap_solid(z_grid: np.ndarray, tile_w: float, tile_h: float,
     tile_w/h : tile dimensions in mm.
     base_h   : depth of the solid slab below terrain in mm (positive value).
     subsample: take every Nth grid sample for the mesh (1 = full resolution).
+    omit_top_mask: optional bool grid. Top quads whose four sampled corners are
+        True are omitted so another explicit layer, such as water, can cap that
+        region instead of duplicating coplanar terrain faces.
     """
     nrows, ncols = z_grid.shape
     sr = list(range(0, ncols, subsample))
@@ -243,12 +256,21 @@ def make_heightmap_solid(z_grid: np.ndarray, tile_w: float, tile_h: float,
     def top(ii, jj): return top_idx[(ii, jj)]
     def bot(ii, jj): return bot_off + jj * ns_c + ii
 
+    top_face_cells: list[tuple[int, int]] = []
+
     # Top quads (CCW from above)
     for jj in range(ns_r - 1):
         for ii in range(ns_c - 1):
+            if omit_top_mask is not None:
+                j0, j1 = sc[jj], sc[jj + 1]
+                i0, i1 = sr[ii], sr[ii + 1]
+                if (omit_top_mask[j0, i0] and omit_top_mask[j0, i1] and
+                        omit_top_mask[j1, i0] and omit_top_mask[j1, i1]):
+                    continue
             a, b = top(ii, jj), top(ii + 1, jj)
             c, d = top(ii, jj + 1), top(ii + 1, jj + 1)
             faces += [[a, b, d], [a, d, c]]
+            top_face_cells += [(jj, ii), (jj, ii)]
 
     # Bottom quads (CW from above = CCW from below)
     for jj in range(ns_r - 1):
@@ -272,6 +294,8 @@ def make_heightmap_solid(z_grid: np.ndarray, tile_w: float, tile_h: float,
     mesh = trimesh.Trimesh(vertices=np.array(verts, dtype=float),
                            faces=np.array(faces, dtype=int),
                            process=False)
+    mesh.metadata['top_face_count'] = len(top_face_cells)
+    mesh.metadata['top_face_cells'] = np.array(top_face_cells, dtype=np.int32)
     mesh.fix_normals()
     return mesh
 

@@ -10,9 +10,19 @@ TODO (future water rendering):
   - Subsurface caustic texture
   - Reflective-looking normal map
   - Depth-shaded colour gradient (shallow → deep)
-  - Features placed on the slope leading to water must be oriented normal
-    to the slope surface, not to the world-horizontal plane — this affects
-    soil blobs, stone placement, and any future water-edge vegetation.
+
+Slope assumption (shoreline)
+----------------------------
+The slope strip between the grass meadow and the water pool is currently bare
+soil.  No features (stones, grass, soil blobs) are placed there, so the
+world-horizontal placement assumption does not produce visible artefacts at
+the ≈22° slope used in the grass-and-water tile.
+
+If features are ever placed on the slope they must be oriented to the surface
+normal, not to world-Z.  The shared entry point for this is
+``TileScene.terrain_normal(x, y)`` (to be implemented in core/tile.py);
+see also the per-layer Slope assumption sections in soil.py, stones.py, and
+grass.py.
 """
 from __future__ import annotations
 
@@ -22,24 +32,30 @@ import trimesh
 from ..core.config import SurfaceConfig
 
 
+WATER_RENDER_LIFT_MM = 0.0
+
+
 class WaterLayer:
     """Build a flat water-surface mesh coloured blue.
 
-    The mesh is a stub placeholder.  It sits at *height_mm* (the water
-    region's terrain height) and covers all grid cells where *water_mask*
-    is True, tiled in SUBSAMPLE×SUBSAMPLE blocks.
+    The mesh is a stub placeholder.  It sits at *height_mm* and replaces the
+    omitted terrain top quads in water cells, so previewers see only explicit
+    blue water faces there.  It covers all grid cells where *water_mask* is
+    True, tiled in SUBSAMPLE×SUBSAMPLE blocks.
 
     Parameters
     ----------
     surface    : SurfaceConfig — tile dimensions and grid resolution.
-    height_mm  : float — z level of the water surface in mm.
+    height_mm  : float — semantic z level of the water surface in mm.
     """
 
-    SUBSAMPLE: int = 4   # merge this many grid cells per quad edge
+    SUBSAMPLE: int = 1   # match terrain top quads so water replaces them exactly
 
-    def __init__(self, surface: SurfaceConfig, height_mm: float) -> None:
-        self.surface   = surface
-        self.height_mm = height_mm
+    def __init__(self, surface: SurfaceConfig, height_mm: float,
+                 render_lift_mm: float = WATER_RENDER_LIFT_MM) -> None:
+        self.surface        = surface
+        self.height_mm      = height_mm
+        self.render_lift_mm = render_lift_mm
 
     def build(self, water_mask: np.ndarray) -> list[trimesh.Trimesh]:
         """Return a flat mesh covering *water_mask* cells at *height_mm*.
@@ -47,7 +63,7 @@ class WaterLayer:
         Returns an empty list if the mask has no True cells.
         """
         surface = self.surface
-        h       = self.height_mm
+        h       = self.height_mm + self.render_lift_mm
         S       = self.SUBSAMPLE
 
         gh, gw = water_mask.shape

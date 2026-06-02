@@ -51,6 +51,7 @@ class TileScene:
     terrain_z: np.ndarray                       # (grid_h, grid_w) — read-only
     support_z: np.ndarray                       # (grid_h, grid_w) — mutable
     stone_mask: np.ndarray | None = None        # (grid_h, grid_w) bool — True under a stone
+    stone_placement_mask: np.ndarray | None = None  # bool — True where stones may be seeded
     grass_mask: np.ndarray | None = None        # (grid_h, grid_w) bool — True where grass may grow
     parts:     List[trimesh.Trimesh] = field(default_factory=list)
 
@@ -98,6 +99,38 @@ class TileScene:
     def solver(self) -> SolverConfig:
         return self.config.solver
 
+    # ── Slope-normal helpers (future) ─────────────────────────────────────────
+    #
+    # ASSUMPTION (current): all geometry layers (soil, stones, grass) treat the
+    # terrain surface as locally horizontal.  Heights and orientations are given
+    # in world coordinates: +Z is "up", offsets are added along world-Z, and
+    # objects are placed upright regardless of the local slope angle.
+    #
+    # This is correct for the flat grass zone and the flat water pool.  The
+    # only slope in the grass-and-water tile (≈22° over a 5 mm strip) is bare
+    # soil with no placed features, so the visual error is negligible there.
+    #
+    # When slope-aware placement is needed the entry point is:
+    #
+    #   def terrain_normal(self, x_mm: float, y_mm: float) -> np.ndarray:
+    #       """Unit surface normal at world position (x_mm, y_mm).
+    #
+    #       Derived from the central-difference gradient of terrain_z:
+    #           n = normalize([-dz/dx, -dz/dy, 1])
+    #       where dz/dx and dz/dy are in mm/mm (dimensionless slope).
+    #       Returns world-Z unit vector [0, 0, 1] when terrain_z is flat.
+    #       """
+    #       cw = self.config.surface.cell_w
+    #       ch = self.config.surface.cell_h
+    #       # ... bilinear sample of gradient ...
+    #
+    # Callers that need updating when this is implemented:
+    #   - StonesLayer._build_stones_mesh  → rotate stone local-Z to terrain_normal
+    #   - GrassLayer (blade origin)       → sink along normal, not world-Z
+    #   - GrassLayer (rise_cap check)     → compare Δ along normal, not abs Δz
+    #   - _make_support_post              → measure z_top clearance along normal
+    #   - SoilLayer._accumulate_blob      → displace bump along normal
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Sinusoidal stand-in terrain
@@ -122,4 +155,3 @@ def _make_sinusoidal_terrain(surface: SurfaceConfig,
     wave = (np.sin(2 * np.pi * freq * u) *
             np.cos(2 * np.pi * freq * v))
     return (z_center + amp * envelope * wave).astype(float)
-

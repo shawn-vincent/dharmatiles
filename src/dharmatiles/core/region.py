@@ -100,6 +100,25 @@ def _rasterise(path_mm: np.ndarray, surface: SurfaceConfig,
         _bresenham(mask, r0, c0, r1, c1)
 
 
+def _rasterise_boundary(bnd: BoundarySpec, surface: SurfaceConfig,
+                        mask: np.ndarray) -> None:
+    """Mark a boundary centreline or finite-width strip as _BOUNDARY."""
+    path = boundary_path_mm(bnd, surface)
+    if bnd.width_mm <= 0.0:
+        _rasterise(path, surface, mask)
+        return
+
+    line_mask = np.zeros_like(mask, dtype=bool)
+    _rasterise(path, surface, line_mask)
+
+    from scipy.ndimage import distance_transform_edt
+
+    dist_cells = distance_transform_edt(~line_mask)
+    # Boundary width is physical strip width, centred on the path.
+    half_width_cells = max(0.5, bnd.width_mm / (2.0 * surface.cell_w))
+    mask[dist_cells <= half_width_cells] = _BOUNDARY
+
+
 def _bresenham(mask: np.ndarray, r0: int, c0: int, r1: int, c1: int) -> None:
     """Mark all cells on the Bresenham line from (r0,c0) to (r1,c1)."""
     gh, gw = mask.shape
@@ -153,10 +172,9 @@ def build_region_mask(spec: TileSpec) -> np.ndarray:
     surface = spec.surface
     mask = np.full((surface.grid_h, surface.grid_w), _UNASSIGNED, dtype=np.int32)
 
-    # Rasterise all boundary curves
+    # Rasterise all boundary curves/strips.
     for bnd in spec.boundaries:
-        path = boundary_path_mm(bnd, surface)
-        _rasterise(path, surface, mask)
+        _rasterise_boundary(bnd, surface, mask)
 
     # Flood-fill each named region from its contains point
     for idx, region in enumerate(spec.regions):

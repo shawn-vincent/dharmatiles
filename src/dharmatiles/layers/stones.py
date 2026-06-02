@@ -4,6 +4,20 @@ StonesLayer: batch-vectorised half-ellipsoid stones placed on terrain.
 All stone geometry is built with NumPy broadcasting in a single pass.
 Stone tops are rasterised into the scene's support_z so that subsequent
 layers (grass blades) are forced to sit above the stones.
+
+Slope assumption
+----------------
+Stones are placed upright: local +Z aligns with world +Z regardless of the
+terrain slope at the stone's position.  On a flat or gently rolling tile this
+is unnoticeable.  On a significant slope (> ~15°) a stone's base would
+visually slice into the hillside on the uphill side and float on the downhill
+side.
+
+To fix: sample ``TileScene.terrain_normal(cx, cy)`` at each stone centre and
+build a rotation matrix that maps local +Z → terrain normal, then rotate the
+entire stone vertex buffer before writing to ``all_verts``.  The support_z
+rasterisation loop would also need to account for the tilted footprint.
+See ``TileScene.terrain_normal`` (to be implemented) for the helper.
 """
 from __future__ import annotations
 
@@ -28,10 +42,14 @@ class StonesLayer:
         """Add stone geometry to *scene.support_z* and return mesh list."""
         n_squares = self.surface.cols * self.surface.rows
         n_stones  = self.stones.stones_per_square * n_squares
+        if scene.stone_placement_mask is not None:
+            n_stones = int(round(n_stones * float(scene.stone_placement_mask.mean())))
         rng  = np.random.default_rng(self.surface.seed + 7919)
         mesh = _build_stones_mesh(self.surface, self.stones, n_stones,
                                   scene.terrain_z, scene.support_z,
-                                  scene.stone_mask, rng)
+                                  scene.stone_mask,
+                                  scene.stone_placement_mask,
+                                  rng)
         return [mesh]
 
 
@@ -41,11 +59,14 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
                        n_stones: int,
                        terrain_z: np.ndarray, support_z: np.ndarray,
                        stone_mask: np.ndarray | None,
+                       placement_mask: np.ndarray | None,
                        rng: np.random.Generator) -> trimesh.Trimesh:
     """Place *n_stones* stones; return a single merged Trimesh."""
     N  = n_stones
     AZ = stones.az_segs
     EL = stones.el_segs
+    if N <= 0:
+        return trimesh.Trimesh(process=False)
 
     # Power-law size draw: U^power skews toward r_min; power=1 = uniform
     u_x    = rng.uniform(0.0, 1.0, N) ** stones.size_power
@@ -62,6 +83,41 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
     span_y = np.maximum(surface.tile_h - 2 * margin, 0.0)
     cx = margin + rng.uniform(0, 1, N) * span_x
     cy = margin + rng.uniform(0, 1, N) * span_y
+
+    if placement_mask is not None:
+        from scipy.ndimage import distance_transform_edt
+
+        allowed = np.argwhere(placement_mask)
+        if len(allowed) == 0:
+            return trimesh.Trimesh(process=False)
+        clearance_mm = distance_transform_edt(placement_mask) * min(
+            surface.cell_w, surface.cell_h
+        )
+        keep: list[int] = []
+        cx_kept: list[float] = []
+        cy_kept: list[float] = []
+        for s in range(N):
+            eligible = np.argwhere(placement_mask & (clearance_mm >= margin[s]))
+            if len(eligible) == 0:
+                continue
+            row, col = eligible[int(rng.integers(0, len(eligible)))]
+            keep.append(s)
+            cy_kept.append((row + rng.uniform(0.0, 1.0)) * surface.cell_h)
+            cx_kept.append((col + rng.uniform(0.0, 1.0)) * surface.cell_w)
+
+        if not keep:
+            return trimesh.Trimesh(process=False)
+
+        keep_idx = np.array(keep, dtype=np.int32)
+        rx_arr = rx_arr[keep_idx]
+        ry_arr = ry_arr[keep_idx]
+        h_frac = h_frac[keep_idx]
+        height = height[keep_idx]
+        angle  = angle[keep_idx]
+        margin = margin[keep_idx]
+        cx = np.clip(np.array(cx_kept, dtype=float), margin, surface.tile_w - margin)
+        cy = np.clip(np.array(cy_kept, dtype=float), margin, surface.tile_h - margin)
+        N = len(keep_idx)
 
     ca, sa = np.cos(angle), np.sin(angle)
     tz     = sample_grid(terrain_z, surface, cx, cy)

@@ -109,6 +109,18 @@ Transitions between adjacent cells determine vertical shape.
 
 No other soft transitions are defined at this stage.
 
+### 4.3 Slope-Normal Placement
+
+The base terrain heightmap stores true world-Z heights, so soft transitions
+are already geometrically sloped. Detail systems currently treat local terrain
+as world-horizontal unless documented otherwise.
+
+Future systems that place oriented features on a slope must use a terrain
+normal derived from the heightmap gradient. See
+`docs/design/slope-normal-requirements.md` for the current contract and the
+list of layer changes required before grass, stones, vegetation, support
+cones, or normal-displaced soil detail are placed in transition zones.
+
 ---
 
 ## 5. XY Boundary Shape (Planar Domain)
@@ -229,14 +241,22 @@ They must not be assumed when building present systems.
 
 - Planned: procedural ripples, randomness-based variation, disturbance around
   objects
-- No implementation details included
+- Current placeholder: a water layer is an explicit blue cap over water cells.
+  Terrain top quads inside the water mask are omitted so the water cap replaces
+  them instead of duplicating coplanar ground faces.
+- Current limitation: a water region has one height value, used as both the
+  terrain depression height and the water surface height. A visible dip,
+  basin, or depth under water requires separate bed and surface heights.
 
 ### 9.3 Object / STL Placement
 
 - Includes embedded STL objects and rocks
 - Planned behaviors: occupy space, protrude from terrain, influence nearby
   systems
-- No current integration
+- Current rocks/stones are a global scatter layer, not an explicit per-region
+  `rocks` layer. In spec mode the scatter is constrained to natural ground
+  regions whose layer stack includes `grass` or `soil`; water regions and
+  boundary strips are excluded.
 
 ### 9.4 Gravel
 

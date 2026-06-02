@@ -22,6 +22,28 @@ already see earlier blades.  Processing order is shuffled each round.
 Each blade is grown from a :class:`~dharmatiles.core.seed.GrassSeed` which
 carries every parameter the growth algorithm needs.  The layer does not read
 from ``SceneConfig`` during growth.
+
+Slope assumptions
+-----------------
+Two places in this layer assume the terrain is locally horizontal:
+
+1. **Blade root sinking** — the seed's root is sunk a fixed distance below
+   ``terrain_z`` along world -Z (``z_base = terrain_z - root_depth``).  On a
+   slope the sink should instead be along the terrain-surface normal so the
+   base does not poke out of the hillside.  Correction: subtract
+   ``root_depth * terrain_normal(x, y)`` from the base position.
+
+2. **rise_cap check** — the bridge/blocking test compares the absolute Δz
+   between consecutive blade segments against ``rise_cap``.  On a slope the
+   natural terrain already contributes a Δz per step (≈ seg_len × tan θ), so
+   the effective cap is artificially tightened uphill and loosened downhill.
+   Correction: compare Δ along the terrain-normal direction, not raw Δz.
+
+For the grass-and-water tile these do not bite: grass only grows in the flat
+5 mm zone; the slope strip is masked off via ``grass_mask``.
+
+When slope-zone grass is needed, see ``TileScene.terrain_normal`` (to be
+implemented) for the per-cell normal helper.
 """
 from __future__ import annotations
 
@@ -123,7 +145,15 @@ def _make_support_post(surface: SurfaceConfig, grass: GrassConfig,
                        blade_width: float,
                        terrain_z: np.ndarray,
                        rng: np.random.Generator) -> trimesh.Trimesh:
-    """Curved grass-blade tip rising from the terrain to the supported blade."""
+    """Curved grass-blade tip rising from the terrain to the supported blade.
+
+    Slope assumption: the "down" direction used to find bridging segments is
+    world -Z, not terrain-normal -Z.  On a slope this means the check treats a
+    blade running along the hillside as always bridging (since absolute Δz is
+    zero while Δ-along-normal could be large).  Correcting this requires
+    threading the terrain normal into the bridge detection and height clearance
+    logic.  See ``TileScene.terrain_normal`` (to be implemented).
+    """
     n_pts = 20
 
     angle  = rng.uniform(0.0, 2.0 * np.pi)

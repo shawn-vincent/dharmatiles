@@ -4,6 +4,18 @@ SoilLayer: two-tier random super-Gaussian blob clumps baked into terrain_z.
 The bump field is computed at 2× the coarse grid resolution so individual
 soil mounds have sub-cell detail; the result is then downsampled back to
 the coarse grid and added to scene.terrain_z in-place.
+
+Slope assumption
+----------------
+Blob heights are added as a vertical (world-Z) offset: ``terrain_z += bump``.
+On a slope, the bump is therefore measured perpendicular to the world
+horizontal, not perpendicular to the slope surface.  At the transition slope
+used in the grass-and-water tile (≈22°, bumps < 0.5 mm) this is visually
+indistinguishable from true surface-normal displacement.
+
+If high-angle slopes (> 30°) need realistic surface detail, the displacement
+should be projected along the terrain normal rather than added to z directly.
+See ``TileScene.terrain_normal`` (to be implemented) for the helper.
 """
 from __future__ import annotations
 
