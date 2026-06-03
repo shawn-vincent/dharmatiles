@@ -31,6 +31,9 @@ from ..core.tile import TileScene
 from ..core.grid import sample_grid
 
 
+_UNSET = object()  # sentinel: "fall back to scene.stone_placement_mask"
+
+
 class StonesLayer:
     """Place random stones across the tile surface and update support_z."""
 
@@ -38,15 +41,29 @@ class StonesLayer:
         self.surface = surface
         self.stones  = stones
 
-    def build(self, scene: TileScene) -> List[trimesh.Trimesh]:
-        """Add stone geometry to *scene.support_z* and return mesh list."""
+    def build(self, scene: TileScene, *,
+              placement_mask=_UNSET,
+              layer_idx: int = 0) -> List[trimesh.Trimesh]:
+        """Add stone geometry to *scene.support_z* and return mesh list.
+
+        Parameters
+        ----------
+        placement_mask
+            Restrict stone centres to True cells in this bool array.
+            When omitted, falls back to ``scene.stone_placement_mask``.
+        layer_idx
+            Index among multiple stone-layer passes for the same tile.
+            Offsets the RNG seed so each pass produces independent placement.
+        """
+        if placement_mask is _UNSET:
+            placement_mask = scene.stone_placement_mask
         n_squares = self.surface.cols * self.surface.rows
         n_stones  = self.stones.stones_per_square * n_squares
-        rng  = np.random.default_rng(self.surface.seed + 7919)
+        rng  = np.random.default_rng(self.surface.seed + 7919 + layer_idx * 65537)
         mesh = _build_stones_mesh(self.surface, self.stones, n_stones,
                                   scene.terrain_z, scene.support_z,
                                   scene.stone_mask,
-                                  scene.stone_placement_mask,
+                                  placement_mask,
                                   rng)
         return [mesh]
 

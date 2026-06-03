@@ -9,7 +9,8 @@ Default command (no arguments) produces the canonical 1×1 tile:
 
 Usage
 ─────
-    generate-tile-stl                          # default all-grass tile
+    generate-tile-stl                          # writes stl/tile-dungeonblocks.stl
+                                               # and stl/tile-openlock.stl
     generate-tile-stl --seed 42
     generate-tile-stl --cols 3 --rows 3
     generate-tile-stl --spec tiles/half-grass-soil.tile
@@ -28,10 +29,10 @@ from ..core.config import (SceneConfig, SurfaceConfig, FlowConfig, SolverConfig,
                            WaterRippleConfig)
 from ..core.tile import TileScene, make_xy_grids
 from ..core.flow import build_flow_field
-from ..core.mesh import (make_heightmap_solid, make_dungeonblock_base,
-                         select_peg_height, export_coloured_stl)
-from ..core.spec import TileSpec, LayerSpec, load_spec
+from ..core.mesh import make_heightmap_solid, export_coloured_stl
+from ..core.spec import TileSpec, load_spec
 from ..core.region import build_region_mask, build_grass_mask
+from ..bases import dungeonblocks, openlock
 from ..layers.soil import SoilLayer
 from ..layers.stones import StonesLayer
 from ..layers.grass import GrassLayer
@@ -77,6 +78,7 @@ def _build_mesh(cfg: SceneConfig,
                 flow_angle: np.ndarray,
                 flow_curv: np.ndarray,
                 grass_cfgs: list[GrassConfig] | None = None,
+                stone_layers: list[tuple[StonesConfig, np.ndarray | None]] | None = None,
                 verbose: bool = True,
                 water_mask: np.ndarray | None = None,
                 water_height: float | None = None) -> trimesh.Trimesh:
@@ -85,12 +87,19 @@ def _build_mesh(cfg: SceneConfig,
     *grass_cfgs* is a list of GrassConfig objects — one per seed-packet
     layer in the spec.  Defaults to ``[cfg.grass]`` (single packet).
 
+    *stone_layers* is a list of ``(StonesConfig, placement_mask)`` pairs —
+    one per stone-layer zone.  Each pair is one independent stone-placement
+    pass with its own size distribution and placement region.  Defaults to
+    ``[(cfg.stones, None)]`` (single pass, whole-tile placement).
+
     *water_mask* / *water_height* — when provided, the soil layer's bumps
     are zeroed out in the water region (keeping the pool floor flat), and a
     blue placeholder water-surface mesh is inserted above the terrain solid.
     """
     if grass_cfgs is None:
         grass_cfgs = [cfg.grass]
+    if stone_layers is None:
+        stone_layers = [(cfg.stones, None)]
 
     parts: list[trimesh.Trimesh] = []
 
@@ -119,16 +128,18 @@ def _build_mesh(cfg: SceneConfig,
     # No ripple/overflow computation — water surface is not rendered.
     overflow_mask = None
 
-    # ── Stones ────────────────────────────────────────────────────────────────
+    # ── Stones (one independent pass per stone-layer zone) ────────────────────
     n_squares = cfg.surface.cols * cfg.surface.rows
-    n_stones  = cfg.stones.stones_per_square * n_squares
-    if n_stones > 0:
-        if verbose:
-            print(f"Building stones  ({n_stones} stones = "
-                  f"{cfg.stones.stones_per_square}/sq × {n_squares} sq)...")
-        stone_parts = StonesLayer(cfg.surface, cfg.stones).build(scene)
-        _paint(stone_parts, COLOUR_STONE)
-        parts.extend(stone_parts)
+    for layer_idx, (stone_cfg, stone_pmask) in enumerate(stone_layers):
+        n_stones = stone_cfg.stones_per_square * n_squares
+        if n_stones > 0:
+            if verbose:
+                print(f"Building stones  ({n_stones} stones = "
+                      f"{stone_cfg.stones_per_square}/sq × {n_squares} sq)...")
+            stone_parts = StonesLayer(cfg.surface, stone_cfg).build(
+                scene, placement_mask=stone_pmask, layer_idx=layer_idx)
+            _paint(stone_parts, COLOUR_STONE)
+            parts.extend(stone_parts)
 
     # ── Grass (one pass per seed-packet config) ───────────────────────────────
     if verbose:
@@ -163,18 +174,6 @@ def _build_mesh(cfg: SceneConfig,
     _paint_terrain_top(terrain_mesh, COLOUR_SOIL)
     parts.insert(0, terrain_mesh)
 
-    # ── DungeonBlocks base ────────────────────────────────────────────────────
-    if cfg.base.style == 'dungeonblock':
-        peg_h  = select_peg_height(scene.terrain_z, cfg.base)
-        n_pegs = cfg.surface.cols * cfg.surface.rows
-        if verbose:
-            print(f"Building dungeonblock base  "
-                  f"(peg_height={peg_h:.1f} mm, "
-                  f"{n_pegs} peg{'s' if n_pegs != 1 else ''})...")
-        base_mesh = make_dungeonblock_base(cfg.surface, peg_h, cfg.base)
-        _clear_paint(base_mesh)
-        parts.insert(0, base_mesh)
-
     if verbose:
         print("Concatenating...")
     combined = trimesh.util.concatenate(parts)
@@ -187,10 +186,49 @@ def _build_mesh(cfg: SceneConfig,
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def _system_output_path(output_path: pathlib.Path, suffix: str) -> pathlib.Path:
+    """Return ``path/to/name-SUFFIX.stl`` for a requested output path."""
+    output_path = pathlib.Path(output_path)
+    return output_path.with_name(f"{output_path.stem}-{suffix}{output_path.suffix}")
+
+
+def _export_system_stls(tile_mesh: trimesh.Trimesh,
+                        cfg: SceneConfig,
+                        terrain_z: np.ndarray,
+                        output_path: pathlib.Path,
+                        verbose: bool = True) -> dict[str, trimesh.Trimesh]:
+    """Export one STL per base system from a shared base-less tile mesh."""
+    if cfg.base.style == 'none':
+        export_coloured_stl(tile_mesh, output_path)
+        if verbose:
+            print(f"Saved -> {output_path}  (no base, VisCAM colours embedded)")
+        return {'none': tile_mesh}
+
+    outputs = {
+        dungeonblocks.SYSTEM_SUFFIX: _system_output_path(
+            output_path, dungeonblocks.SYSTEM_SUFFIX),
+        openlock.SYSTEM_SUFFIX: _system_output_path(
+            output_path, openlock.SYSTEM_SUFFIX),
+    }
+
+    result: dict[str, trimesh.Trimesh] = {}
+    for system, path in outputs.items():
+        if verbose:
+            print(f"Building {system} base and exporting...")
+        if system == dungeonblocks.SYSTEM_SUFFIX:
+            result[system] = dungeonblocks.export(
+                tile_mesh, cfg.surface, cfg.base, terrain_z, path)
+        elif system == openlock.SYSTEM_SUFFIX:
+            result[system] = openlock.export(
+                tile_mesh, cfg.surface, cfg.base, terrain_z, path)
+        if verbose:
+            print(f"Saved -> {path}  (VisCAM colours embedded)")
+    return result
+
 def build_tile(cfg: SceneConfig,
                output_path: pathlib.Path,
                verbose: bool = True) -> trimesh.Trimesh:
-    """Build a tile from a SceneConfig and export it to *output_path*."""
+    """Build a tile from a SceneConfig and export system-specific STLs."""
     if verbose:
         print(f"=== Building tile "
               f"({cfg.surface.cols}×{cfg.surface.rows} squares, "
@@ -203,20 +241,17 @@ def build_tile(cfg: SceneConfig,
     x_grid, y_grid = make_xy_grids(cfg.surface)
     flow_angle, flow_curv = build_flow_field(cfg.surface, cfg.flow, x_grid, y_grid)
 
-    combined = _build_mesh(cfg, scene, flow_angle, flow_curv, verbose=verbose)
-
-    export_coloured_stl(combined, output_path)
-    if verbose:
-        print(f"Saved → {output_path}  (VisCAM colours embedded)")
-    return combined
+    tile_mesh = _build_mesh(cfg, scene, flow_angle, flow_curv, verbose=verbose)
+    exports = _export_system_stls(tile_mesh, cfg, scene.terrain_z,
+                                  output_path, verbose=verbose)
+    return exports.get(dungeonblocks.SYSTEM_SUFFIX, tile_mesh)
 
 
 def build_tile_from_spec(spec: TileSpec,
                          output_path: pathlib.Path,
                          verbose: bool = True) -> trimesh.Trimesh:
-    """Build a tile from a YAML/Python TileSpec and export it to *output_path*."""
+    """Build a tile from a YAML/Python TileSpec and export system-specific STLs."""
     cfg = _scene_config_from_spec(spec)
-    cfg.stones = _collect_stones_config(spec)
 
     if verbose:
         region_ids = [r.id for r in spec.regions]
@@ -259,7 +294,6 @@ def build_tile_from_spec(spec: TileSpec,
 
     if region_mask is not None:
         scene.grass_mask = build_grass_mask(region_mask, spec)
-        scene.stone_placement_mask = _build_stone_placement_mask(region_mask, spec)
         if verbose and scene.grass_mask is not None:
             n_grass = int(scene.grass_mask.sum())
             n_total = scene.grass_mask.size
@@ -276,15 +310,16 @@ def build_tile_from_spec(spec: TileSpec,
     x_grid, y_grid = make_xy_grids(cfg.surface)
     flow_angle, flow_curv = build_flow_field(cfg.surface, cfg.flow, x_grid, y_grid)
 
-    grass_cfgs = _collect_grass_configs(spec)
-    combined   = _build_mesh(cfg, scene, flow_angle, flow_curv,
-                             grass_cfgs=grass_cfgs, verbose=verbose,
-                             water_mask=water_mask, water_height=water_height)
+    grass_cfgs   = _collect_grass_configs(spec)
+    stone_layers = _collect_stones_layers(spec, region_mask)
+    tile_mesh    = _build_mesh(cfg, scene, flow_angle, flow_curv,
+                               grass_cfgs=grass_cfgs, stone_layers=stone_layers,
+                               verbose=verbose,
+                               water_mask=water_mask, water_height=water_height)
 
-    export_coloured_stl(combined, output_path)
-    if verbose:
-        print(f"Saved → {output_path}  (VisCAM colours embedded)")
-    return combined
+    exports = _export_system_stls(tile_mesh, cfg, scene.terrain_z,
+                                  output_path, verbose=verbose)
+    return exports.get(dungeonblocks.SYSTEM_SUFFIX, tile_mesh)
 
 
 # ── Spec → terrain helpers ────────────────────────────────────────────────────
@@ -432,33 +467,6 @@ def _collect_water_info(spec: TileSpec,
     return water_mask, water_height
 
 
-def _build_stone_placement_mask(region_mask: np.ndarray,
-                                spec: TileSpec) -> np.ndarray | None:
-    """Return True where explicitly requested stone centres may be placed.
-
-    In spec mode, stones are opt-in. A region must include a ``rock``,
-    ``rocks``, ``stone``, or ``stones`` layer for stone scatter to run there.
-    A boundary strip may also include one of those layer types, which enables
-    stone centres in boundary cells. Stone geometry may extend past the edge
-    of the placement region; only the tile edge clips placement.
-    """
-    stone_layer_types = {'rock', 'rocks', 'stone', 'stones'}
-    stone_region_indices = {
-        i for i, r in enumerate(spec.regions)
-        if any(layer.type in stone_layer_types for layer in r.layers)
-    }
-    result = np.zeros(region_mask.shape, dtype=bool)
-    for idx in stone_region_indices:
-        result |= (region_mask == idx)
-    if any(
-        layer.type in stone_layer_types
-        for boundary in spec.boundaries
-        for layer in boundary.layers
-    ):
-        result |= (region_mask < 0)
-    return result
-
-
 # ── Spec → config helpers ─────────────────────────────────────────────────────
 
 def _scene_config_from_spec(spec: TileSpec) -> SceneConfig:
@@ -487,25 +495,41 @@ def _collect_grass_configs(spec: TileSpec) -> list[GrassConfig]:
     return cfgs or [defaults]
 
 
-def _collect_stones_config(spec: TileSpec) -> StonesConfig:
-    """Return StonesConfig from explicit rock/stone layers, or disabled."""
-    defaults = StonesConfig()
+def _collect_stones_layers(
+    spec: TileSpec,
+    region_mask: np.ndarray | None,
+) -> list[tuple[StonesConfig, np.ndarray | None]]:
+    """Return one ``(StonesConfig, placement_mask)`` pair per stone layer.
+
+    Each region or boundary that declares a ``rock``/``rocks``/``stone``/
+    ``stones`` layer gets its own independent stone-placement pass.  The
+    placement mask restricts stone centres to cells belonging to that zone;
+    ``None`` means whole-tile placement.
+
+    Keeping layers independent means a pool region and a shoreline boundary
+    can use entirely different size distributions without merging.
+    """
     stone_layer_types = {'rock', 'rocks', 'stone', 'stones'}
-    cfg = vars(defaults).copy()
-    found = False
-    for region in spec.regions:
+    result: list[tuple[StonesConfig, np.ndarray | None]] = []
+
+    for idx, region in enumerate(spec.regions):
         for layer in region.layers:
             if layer.type in stone_layer_types:
+                cfg = vars(StonesConfig()).copy()
                 cfg.update(layer.params)
-                found = True
+                mask = (region_mask == idx) if region_mask is not None else None
+                result.append((StonesConfig(**cfg), mask))
+
     for boundary in spec.boundaries:
         for layer in boundary.layers:
             if layer.type in stone_layer_types:
+                cfg = vars(StonesConfig()).copy()
                 cfg.update(layer.params)
-                found = True
-    if not found:
-        cfg['stones_per_square'] = 0
-    return StonesConfig(**cfg)
+                # boundary cells: region_mask == -1
+                mask = (region_mask < 0) if region_mask is not None else None
+                result.append((StonesConfig(**cfg), mask))
+
+    return result
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -526,7 +550,7 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="YAML (or .tile.py) tile spec; overrides all other flags")
     p.add_argument("--output", "-o", type=pathlib.Path,
                    default=pathlib.Path("stl/tile.stl"),
-                   help="Output STL path")
+                   help="Base output path; system suffixes are inserted before .stl")
     p.add_argument("--seed",       type=int,   default=_S.seed)
     p.add_argument("--cols",       type=int,   default=_S.cols,
                    help="Number of 35 mm squares in X")

@@ -23,6 +23,14 @@ regions:
     height_mm: 3.0
     layers:
       - type: water
+      - type: rocks
+        stones_per_square: 2    # → 2 large boulders in the pool (0–3 visible)
+        r_min: 3.0              # mm — minimum horizontal semi-axis
+        r_max: 5.0              # mm — maximum horizontal semi-axis
+        flat_min: 1.0           # height = flat × mean_r → min ≈ 3 mm body
+        flat_max: 1.4           # max ≈ 7 mm body; tops reach ~4–5 mm from base
+        size_power: 1.0         # uniform draw — all rocks are large
+        n_cuts: 3               # fewer cuts → rounder, boulder-like silhouette
 
 boundaries:
   shoreline:
