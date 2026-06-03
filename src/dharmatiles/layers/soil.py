@@ -3,23 +3,32 @@ SoilLayer: two-tier random super-Gaussian blob clumps baked into terrain_z.
 
 The bump field is computed at 2× the coarse grid resolution so individual
 soil mounds have sub-cell detail; the result is then downsampled back to
-the coarse grid and added to scene.terrain_z in-place.
+the coarse grid and draped onto the terrain surface.
 
-Slope projection
-----------------
-Blob heights are scaled by the surface-normal z-component
-``n_z = 1 / sqrt(gx² + gy² + 1)`` before being added to terrain_z.
-This projects every bump (large blobs and fine texture noise alike)
-perpendicular to the local slope rather than straight up along world-Z,
-preventing the tall spiky artefacts that appear when a vertical offset is
-applied to steep terrain.
+Surface draping
+---------------
+A plain vertical offset (terrain_z += bump) produces asymmetric blobs on
+slopes: the uphill face is very steep (slope + bump gradient reinforce)
+and the downhill face is shallow (they oppose).  The fix is to treat the
+bump as a texture defined in *surface arc-length space* and resample it at
+the arc-length-equivalent position for each world cell.
+
+On a slope with local gradient gx = dz/dx, moving one world-XY unit in X
+covers sqrt(gx²+1) units of surface arc.  Cumulating those stretches gives
+an arc-length coordinate map.  Sampling the flat bump field at those
+coordinates compresses bump footprints in world XY to compensate for the
+slope stretch, making every bump appear symmetric when viewed along the
+surface normal.
+
+Height is then scaled by nz = 1/sqrt(gx²+gy²+1) to convert the
+surface-normal displacement into a world-Z increment.
 """
 from __future__ import annotations
 
 _OVERSAMPLE = 2   # internal upscale factor for soil blob detail
 
 import numpy as np
-from scipy.ndimage import gaussian_filter, zoom
+from scipy.ndimage import gaussian_filter, map_coordinates, zoom
 
 from ..core.config import SurfaceConfig, SoilConfig
 from ..core.tile import TileScene
@@ -33,15 +42,13 @@ class SoilLayer:
         self.soil    = soil
 
     def build(self, scene: TileScene) -> None:
-        """Compute soil bump at 2× resolution, downsample, add to terrain_z.
+        """Compute soil bump at 2× resolution, downsample, drape onto surface.
 
-        The bump is projected onto the local surface normal so that blobs rise
-        perpendicular to the slope rather than straight up along world-Z.  On
-        flat terrain the scaling is 1.0; on steep slopes it tapers toward 0 so
-        bumps never spike unnaturally out of a tilted surface.
-
-        Projection factor:  n_z = 1 / sqrt(gx² + gy² + 1)
-        where gx = dz/dx and gy = dz/dy are the terrain gradients (mm/mm).
+        The bump field is treated as a texture defined in surface arc-length
+        space.  Each world cell is mapped to its arc-length-equivalent position
+        in the flat bump field so that bump footprints compress on steep slopes
+        and remain symmetric in the surface-normal view.  Height is then scaled
+        by nz = cos(slope_angle) to give the correct world-Z increment.
         """
         gh, gw    = scene.terrain_z.shape
         cell_mm   = self.surface.cell_w / _OVERSAMPLE
@@ -54,19 +61,33 @@ class SoilLayer:
             cell_mm=cell_mm,
             n_squares=n_squares,
         )
-
         coarse = zoom(hires_bump, 1.0 / _OVERSAMPLE, order=1)
 
-        # ── Project bump along surface normal ─────────────────────────────────
-        # Compute terrain gradient from the pre-bump heightmap so the normal
-        # reflects the clean slope shape, not the bumpy surface itself.
-        # np.gradient returns [dz/drow, dz/dcol] = [dz/dy, dz/dx].
+        # ── Arc-length reparameterisation ─────────────────────────────────────
+        # Gradient of the pre-bump terrain (clean slope shape).
         gz_y, gz_x = np.gradient(scene.terrain_z,
                                   self.surface.cell_h,
                                   self.surface.cell_w)
         nz = 1.0 / np.sqrt(gz_x ** 2 + gz_y ** 2 + 1.0)
 
-        scene.terrain_z += coarse * nz
+        # stretch_x[r,c] = surface arc per world cell in X at (r,c).
+        # Cumulating gives arc_cols: the flat-space column that has the same
+        # cumulative arc length as world column c.  On flat ground this is just
+        # the identity (stretch=1 everywhere, arc_cols[r,c]=c).
+        stretch_x = np.sqrt(gz_x ** 2 + 1.0)
+        stretch_y = np.sqrt(gz_y ** 2 + 1.0)
+
+        arc_cols = np.zeros((gh, gw), dtype=float)
+        arc_rows = np.zeros((gh, gw), dtype=float)
+        arc_cols[:, 1:] = np.cumsum(stretch_x[:, :-1], axis=1)
+        arc_rows[1:, :] = np.cumsum(stretch_y[:-1, :], axis=0)
+
+        # Resample: each world cell pulls from its arc-equivalent flat position.
+        # mode='reflect' tiles seamlessly when arc coords exceed the field size.
+        projected = map_coordinates(coarse, [arc_rows, arc_cols],
+                                    mode='reflect', order=1)
+
+        scene.terrain_z += projected * nz
 
 
 # ── Internal implementation ───────────────────────────────────────────────────
