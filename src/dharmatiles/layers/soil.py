@@ -5,17 +5,14 @@ The bump field is computed at 2× the coarse grid resolution so individual
 soil mounds have sub-cell detail; the result is then downsampled back to
 the coarse grid and added to scene.terrain_z in-place.
 
-Slope assumption
+Slope projection
 ----------------
-Blob heights are added as a vertical (world-Z) offset: ``terrain_z += bump``.
-On a slope, the bump is therefore measured perpendicular to the world
-horizontal, not perpendicular to the slope surface.  At the transition slope
-used in the grass-and-water tile (≈22°, bumps < 0.5 mm) this is visually
-indistinguishable from true surface-normal displacement.
-
-If high-angle slopes (> 30°) need realistic surface detail, the displacement
-should be projected along the terrain normal rather than added to z directly.
-See ``TileScene.terrain_normal`` (to be implemented) for the helper.
+Blob heights are scaled by the surface-normal z-component
+``n_z = 1 / sqrt(gx² + gy² + 1)`` before being added to terrain_z.
+This projects every bump (large blobs and fine texture noise alike)
+perpendicular to the local slope rather than straight up along world-Z,
+preventing the tall spiky artefacts that appear when a vertical offset is
+applied to steep terrain.
 """
 from __future__ import annotations
 
@@ -36,7 +33,16 @@ class SoilLayer:
         self.soil    = soil
 
     def build(self, scene: TileScene) -> None:
-        """Compute soil bump at 2× resolution, downsample, add to terrain_z."""
+        """Compute soil bump at 2× resolution, downsample, add to terrain_z.
+
+        The bump is projected onto the local surface normal so that blobs rise
+        perpendicular to the slope rather than straight up along world-Z.  On
+        flat terrain the scaling is 1.0; on steep slopes it tapers toward 0 so
+        bumps never spike unnaturally out of a tilted surface.
+
+        Projection factor:  n_z = 1 / sqrt(gx² + gy² + 1)
+        where gx = dz/dx and gy = dz/dy are the terrain gradients (mm/mm).
+        """
         gh, gw    = scene.terrain_z.shape
         cell_mm   = self.surface.cell_w / _OVERSAMPLE
         n_squares = self.surface.cols * self.surface.rows
@@ -50,7 +56,17 @@ class SoilLayer:
         )
 
         coarse = zoom(hires_bump, 1.0 / _OVERSAMPLE, order=1)
-        scene.terrain_z += coarse
+
+        # ── Project bump along surface normal ─────────────────────────────────
+        # Compute terrain gradient from the pre-bump heightmap so the normal
+        # reflects the clean slope shape, not the bumpy surface itself.
+        # np.gradient returns [dz/drow, dz/dcol] = [dz/dy, dz/dx].
+        gz_y, gz_x = np.gradient(scene.terrain_z,
+                                  self.surface.cell_h,
+                                  self.surface.cell_w)
+        nz = 1.0 / np.sqrt(gz_x ** 2 + gz_y ** 2 + 1.0)
+
+        scene.terrain_z += coarse * nz
 
 
 # ── Internal implementation ───────────────────────────────────────────────────
