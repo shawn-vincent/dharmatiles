@@ -391,11 +391,20 @@ def _extend_bank_slope_into_pool(terrain_z: np.ndarray,
     dist_from_shore = distance_transform_edt(~inner_ring) * cell_mm   # mm
     dist_from_shore[~water_mask] = 0.0
 
-    # ── Apply sloped floor ────────────────────────────────────────────────────
+    # ── Apply smoothstepped slope ─────────────────────────────────────────────
     # Bed floors at 0.2 mm above the tile base (a thin but solid slab).
+    # Rather than a linear ramp (which has sharp corners at top and bottom),
+    # we normalise dist → t ∈ [0, 1] over the full slope span and apply a
+    # smoothstep curve  t_s = 3t² − 2t³  whose derivative is 0 at both ends.
+    # This eases gently out of the bank at the top and eases smoothly into the
+    # flat bed at the bottom, removing both hard corners.
     terrain_z_min = 0.2
-    sloped = np.maximum(terrain_z_min,
-                        water_height - slope_rate * dist_from_shore)
+    slope_dist    = (water_height - terrain_z_min) / max(slope_rate, 1e-6)
+
+    t   = np.clip(dist_from_shore / slope_dist, 0.0, 1.0)   # 0 = shore, 1 = bed
+    t_s = t * t * (3.0 - 2.0 * t)                            # smoothstep
+
+    sloped = water_height - (water_height - terrain_z_min) * t_s
 
     out = terrain_z.copy()
     out[water_mask] = sloped[water_mask]
