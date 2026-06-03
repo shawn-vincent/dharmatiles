@@ -95,50 +95,29 @@ def _build_mesh(cfg: SceneConfig,
     parts: list[trimesh.Trimesh] = []
 
     # ── Soil ──────────────────────────────────────────────────────────────────
+    # For dry riverbeds, snapshot which water cells are at the flat floor
+    # *before* soil runs so we can strip texture from them afterward.
+    # Slope cells (above the floor) keep their texture; the flat bed stays bare.
+    DRY_BED_HEIGHT_MM = 0.2
+    flat_bed_mask: np.ndarray | None = None
+    if water_mask is not None:
+        flat_bed_mask = water_mask & (scene.terrain_z <= DRY_BED_HEIGHT_MM + 0.01)
+
     if verbose:
         print("Building soil texture...")
     SoilLayer(cfg.surface, cfg.soil).build(scene)
 
-    # Clip pool floor just below the calm water surface so soil-texture bumps
-    # on the bed never protrude above the water line.  The bed itself is already
-    # sloped by _extend_bank_slope_into_pool; we preserve that shape.
-    # support_z is kept flat at water_height so grass/stones don't seed into pool.
-    if water_mask is not None and water_height is not None:
-        from ..layers.water import WATER_RENDER_LIFT_MM
-        floor_ceil = water_height - WATER_RENDER_LIFT_MM * 0.5   # 0.05 mm below surface
-        scene.terrain_z[water_mask] = np.minimum(scene.terrain_z[water_mask], floor_ceil)
-        scene.support_z[water_mask] = water_height
+    # Restore flat bed to exactly 0.2 mm — no soil texture on the channel floor.
+    if flat_bed_mask is not None and np.any(flat_bed_mask):
+        scene.terrain_z[flat_bed_mask] = DRY_BED_HEIGHT_MM
 
-    # ── Ripple overflow: expand water boundary where crest escapes ────────────
-    # Computed here (before terrain solid) so omit_top_mask and terrain_z can
-    # be updated before the solid is built.
-    ripple_cfg       = WaterRippleConfig()
-    overflow_mask    = None
-    z_disp_pre       = None
-    effective_water  = water_mask   # may be expanded below
+    # Dry riverbed: set support_z to the bed floor level so grass/stones don't
+    # seed into the channel.  No water clipping or ripple computation needed.
+    if water_mask is not None:
+        scene.support_z[water_mask] = DRY_BED_HEIGHT_MM
 
-    if water_mask is not None and water_height is not None:
-        from scipy.ndimage import binary_dilation
-        from ..layers.water import _build_ripple_displacement as _compute_disp
-
-        extend_cells  = max(1, int(ripple_cfg.extend_mm / cfg.surface.cell_w))
-        extended_mask = binary_dilation(water_mask, iterations=extend_cells)
-
-        z_disp_pre = _compute_disp(
-            cfg.surface, water_mask,
-            scene.stone_mask, scene.grass_mask,
-            ripple_cfg,
-            compute_mask=extended_mask,
-        )
-
-        # Overflow: border cells where ripple crest is positive
-        overflow_mask = extended_mask & ~water_mask & (z_disp_pre > 0)
-
-        if np.any(overflow_mask):
-            # Flatten overflow cells to water level so the water mesh caps them
-            scene.terrain_z[overflow_mask] = water_height
-            scene.support_z[overflow_mask] = water_height
-            effective_water = water_mask | overflow_mask
+    # No ripple/overflow computation — water surface is not rendered.
+    overflow_mask = None
 
     # ── Stones ────────────────────────────────────────────────────────────────
     n_squares = cfg.surface.cols * cfg.surface.rows
@@ -166,21 +145,9 @@ def _build_mesh(cfg: SceneConfig,
         _paint(grass_parts, COLOUR_GRASS)
         parts.extend(grass_parts)
 
-    # ── Water surface (with ripples, possibly overflowing boundary) ──────────
-    if water_mask is not None and water_height is not None:
-        n_overflow = int(np.sum(overflow_mask)) if overflow_mask is not None else 0
-        if verbose:
-            print(f"Building water surface (ripples, +{n_overflow} overflow cells)...")
-        water_layer = WaterLayer(cfg.surface, water_height, ripple_cfg=ripple_cfg)
-        water_parts = water_layer.build(
-            water_mask,
-            stone_mask    = scene.stone_mask,
-            grass_mask    = scene.grass_mask,
-            effective_mask = effective_water,
-            z_disp_pre    = z_disp_pre,
-        )
-        _paint(water_parts, COLOUR_WATER)
-        parts.extend(water_parts)
+    # ── Water surface — not rendered (dry riverbed mode) ─────────────────────
+    # Water surface mesh is intentionally omitted.  The sloped bed is left bare
+    # so a separate water layer can be added on top later.
 
     # ── Terrain solid ─────────────────────────────────────────────────────────
     # omit_top_mask covers only overflow cells (not the full water zone) so that
@@ -400,13 +367,14 @@ def _extend_bank_slope_into_pool(terrain_z: np.ndarray,
     cell_mm = 0.5 * (surface.cell_w + surface.cell_h)
 
     # ── Measure bank slope from terrain just outside the water boundary ───────
-    # dist_to_water: for each non-water cell, the distance in cells to the
-    # nearest water cell (True in water_mask).
-    dist_to_water = distance_transform_edt(water_mask)   # True → 0; non-water → +
-    band = (dist_to_water >= 1) & (dist_to_water <= 5) & ~water_mask
+    # scipy's distance_transform_edt gives, for each TRUE cell, the distance to
+    # the nearest FALSE cell (and 0 for FALSE cells).  To get the distance from
+    # non-water cells to the nearest water cell we therefore invert the mask.
+    dist_land_to_water = distance_transform_edt(~water_mask)   # True=land → dist to water
+    band = ~water_mask & (dist_land_to_water >= 1) & (dist_land_to_water <= 5)
     if band.any():
         band_z_mean    = float(terrain_z[band].mean())
-        band_dist_mean = float(dist_to_water[band].mean()) * cell_mm   # mm
+        band_dist_mean = float(dist_land_to_water[band].mean()) * cell_mm   # mm
         slope_rate     = (band_z_mean - water_height) / max(band_dist_mean, 1e-6)
         slope_rate     = float(np.clip(slope_rate, 0.1, 8.0))
     else:
@@ -417,12 +385,15 @@ def _extend_bank_slope_into_pool(terrain_z: np.ndarray,
     water_eroded = binary_erosion(water_mask, border_value=1)
     inner_ring   = water_mask & ~water_eroded
 
-    # distance_transform_edt(inner_ring): each cell → dist to nearest True pixel
-    dist_from_shore = distance_transform_edt(inner_ring) * cell_mm   # mm
+    # For each water cell, distance to the nearest shore cell.
+    # EDT gives 0 for False cells and distance to nearest False for True cells,
+    # so invert inner_ring: shore cells become False, all others become True.
+    dist_from_shore = distance_transform_edt(~inner_ring) * cell_mm   # mm
     dist_from_shore[~water_mask] = 0.0
 
     # ── Apply sloped floor ────────────────────────────────────────────────────
-    terrain_z_min = max(0.5, -surface.base_h + 0.5)
+    # Bed floors at 0.2 mm above the tile base (a thin but solid slab).
+    terrain_z_min = 0.2
     sloped = np.maximum(terrain_z_min,
                         water_height - slope_rate * dist_from_shore)
 
