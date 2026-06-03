@@ -99,10 +99,14 @@ def _build_mesh(cfg: SceneConfig,
         print("Building soil texture...")
     SoilLayer(cfg.surface, cfg.soil).build(scene)
 
-    # Soil bumps must not deform the water surface. Boundary strips are
-    # separate cells, so water_mask should contain only the flat pool region.
+    # Clip pool floor just below the calm water surface so soil-texture bumps
+    # on the bed never protrude above the water line.  The bed itself is already
+    # sloped by _extend_bank_slope_into_pool; we preserve that shape.
+    # support_z is kept flat at water_height so grass/stones don't seed into pool.
     if water_mask is not None and water_height is not None:
-        scene.terrain_z[water_mask] = water_height
+        from ..layers.water import WATER_RENDER_LIFT_MM
+        floor_ceil = water_height - WATER_RENDER_LIFT_MM * 0.5   # 0.05 mm below surface
+        scene.terrain_z[water_mask] = np.minimum(scene.terrain_z[water_mask], floor_ceil)
         scene.support_z[water_mask] = water_height
 
     # ── Ripple overflow: expand water boundary where crest escapes ────────────
@@ -268,6 +272,17 @@ def build_tile_from_spec(spec: TileSpec,
     # slope between different-height regions is present from the start.
     terrain_z = _build_spec_terrain(spec, cfg.surface, region_mask)
 
+    # ── Water region (early, before scene creation) ───────────────────────────
+    water_mask, water_height = _collect_water_info(spec, region_mask)
+
+    # ── Extend bank slope into pool ───────────────────────────────────────────
+    # The bank slope visible on the shore is extrapolated downward into the pool
+    # zone so the bed is a continuous slope (rather than a flat floor) and the
+    # soil texture applied by SoilLayer runs across the whole bed.
+    if water_mask is not None and water_height is not None:
+        terrain_z = _extend_bank_slope_into_pool(
+            terrain_z, water_mask, water_height, cfg.surface)
+
     scene = TileScene(
         config     = cfg,
         terrain_z  = terrain_z,
@@ -283,9 +298,6 @@ def build_tile_from_spec(spec: TileSpec,
             n_total = scene.grass_mask.size
             print(f"  Grass coverage: {n_grass}/{n_total} cells "
                   f"({100 * n_grass / n_total:.0f}%)")
-
-    # ── Water region ──────────────────────────────────────────────────────────
-    water_mask, water_height = _collect_water_info(spec, region_mask)
     if verbose and water_mask is not None:
         n_water = int(water_mask.sum())
         n_total = water_mask.size
@@ -366,6 +378,57 @@ def _build_spec_terrain(spec: TileSpec, surface: SurfaceConfig,
     z = z_exact.copy()
     z[region_mask < 0] = z_idw[region_mask < 0]
     return z.astype(float)
+
+
+def _extend_bank_slope_into_pool(terrain_z: np.ndarray,
+                                  water_mask: np.ndarray,
+                                  water_height: float,
+                                  surface: SurfaceConfig) -> np.ndarray:
+    """Extrapolate the bank slope downward into the pool zone.
+
+    The slope gradient is measured from the actual terrain_z values in the
+    boundary strip just outside the water_mask, then continued inward so the
+    pool bed is a natural extension of the bank rather than a flat floor.
+
+    The bed is clamped at ``terrain_z_min`` (0.5 mm above the tile base) so
+    the solid slab never becomes paper-thin.
+
+    Returns a copy of *terrain_z* with pool cells updated.
+    """
+    from scipy.ndimage import binary_erosion, distance_transform_edt
+
+    cell_mm = 0.5 * (surface.cell_w + surface.cell_h)
+
+    # ── Measure bank slope from terrain just outside the water boundary ───────
+    # dist_to_water: for each non-water cell, the distance in cells to the
+    # nearest water cell (True in water_mask).
+    dist_to_water = distance_transform_edt(water_mask)   # True → 0; non-water → +
+    band = (dist_to_water >= 1) & (dist_to_water <= 5) & ~water_mask
+    if band.any():
+        band_z_mean    = float(terrain_z[band].mean())
+        band_dist_mean = float(dist_to_water[band].mean()) * cell_mm   # mm
+        slope_rate     = (band_z_mean - water_height) / max(band_dist_mean, 1e-6)
+        slope_rate     = float(np.clip(slope_rate, 0.1, 8.0))
+    else:
+        slope_rate = 0.8   # fallback: 0.8 mm drop per mm into pool
+
+    # ── Distance from shore inner ring into pool (mm) ─────────────────────────
+    # inner_ring: water cells adjacent to non-water (i.e., where bank meets pool)
+    water_eroded = binary_erosion(water_mask, border_value=1)
+    inner_ring   = water_mask & ~water_eroded
+
+    # distance_transform_edt(inner_ring): each cell → dist to nearest True pixel
+    dist_from_shore = distance_transform_edt(inner_ring) * cell_mm   # mm
+    dist_from_shore[~water_mask] = 0.0
+
+    # ── Apply sloped floor ────────────────────────────────────────────────────
+    terrain_z_min = max(0.5, -surface.base_h + 0.5)
+    sloped = np.maximum(terrain_z_min,
+                        water_height - slope_rate * dist_from_shore)
+
+    out = terrain_z.copy()
+    out[water_mask] = sloped[water_mask]
+    return out
 
 
 def _collect_water_info(spec: TileSpec,
