@@ -176,15 +176,20 @@ def build_tube_mesh(spine_3d: np.ndarray, widths: np.ndarray,
         ], axis=1)
 
     elif cross_section == 'leaf':
-        n      = 6
-        arch_h = leaf_arch * thickness          # rise above spine (= -down direction)
+        n = 6
+        # Keel depth and arch rise both scale with current half-width so all
+        # six vertices converge to a point as the tip narrows to zero width.
+        hw_max   = half_W.max() + 1e-9
+        # Per-ring offsets along down_locs (positive = deeper into keel)
+        keel_off = (thickness       / hw_max) * half_W[:, None] * down_locs  # (n_pts,3)
+        arch_off = (leaf_arch * thickness / hw_max) * half_W[:, None] * down_locs
         ring_v = np.stack([
-            path + thickness * down_locs,                                       # V0 keel
-            path + half_W[:, None] * up_locs,                                   # V1 right edge
-            path + 0.5 * half_W[:, None] * up_locs - arch_h * down_locs,       # V2 upper-right
-            path                                    - arch_h * down_locs,       # V3 arch top
-            path - 0.5 * half_W[:, None] * up_locs - arch_h * down_locs,       # V4 upper-left
-            path - half_W[:, None] * up_locs,                                   # V5 left edge
+            path + keel_off,                                                  # V0 keel
+            path + half_W[:, None] * up_locs,                                 # V1 right edge
+            path + 0.5 * half_W[:, None] * up_locs - arch_off,               # V2 upper-right
+            path                                    - arch_off,               # V3 arch top
+            path - 0.5 * half_W[:, None] * up_locs - arch_off,               # V4 upper-left
+            path - half_W[:, None] * up_locs,                                 # V5 left edge
         ], axis=1)
 
     else:
