@@ -148,7 +148,7 @@ def _parse(data: dict) -> TileSpec:
     surface = SurfaceConfig(
         cols            = s.get('cols', 1),
         rows            = s.get('rows', 1),
-        cells_per_square= s.get('cells_per_square', 64),
+        cells_per_square= s.get('cells_per_square', 128),
         base_h          = s.get('base_h', 0.0),
         seed            = s.get('seed', 377),
         flat_terrain    = s.get('flat_terrain', True),
