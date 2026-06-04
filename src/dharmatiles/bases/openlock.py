@@ -15,7 +15,7 @@ import numpy as np
 import trimesh
 
 from ..core.config import BaseConfig, SurfaceConfig
-from ..core.mesh import export_coloured_stl
+from ..core.mesh import export_coloured_stl, make_logo_emboss
 
 
 SYSTEM_SUFFIX = "openlock"
@@ -322,7 +322,17 @@ def _explicit_base(surface: SurfaceConfig) -> trimesh.Trimesh:
                            process=False)
     mesh.merge_vertices()
     mesh.fix_normals()
-    return mesh
+
+    # Logo emboss centred on the bottom cap; capped at 22 mm so larger tiles
+    # don't produce an oversized imprint.
+    logo_side = min(22.0, min(width, height) * 0.75)
+    emboss = make_logo_emboss(
+        x0=width  / 2.0 - logo_side / 2.0,
+        y0=height / 2.0 - logo_side / 2.0,
+        w=logo_side, h=logo_side,
+        z_base=-WALL_HEIGHT,
+    )
+    return trimesh.util.concatenate([mesh, emboss])
 
 
 def make_base(surface: SurfaceConfig) -> trimesh.Trimesh:

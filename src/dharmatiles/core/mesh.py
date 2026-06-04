@@ -1,5 +1,5 @@
 """Low-level mesh primitives: frame computation, blade tube, terrain solid,
-and coloured STL export.
+logo emboss, and coloured STL export.
 """
 from __future__ import annotations
 
@@ -8,6 +8,107 @@ import struct
 
 import numpy as np
 import trimesh
+
+# ── Logo asset path ───────────────────────────────────────────────────────────
+_ASSETS_DIR = pathlib.Path(__file__).parent.parent / 'assets'
+_LOGO_PNG   = _ASSETS_DIR / 'dharmatiles-logo.png'
+
+
+# ── Logo emboss ───────────────────────────────────────────────────────────────
+
+def _logo_mask(size_px: int = 64) -> np.ndarray:
+    """Load the pre-rendered logo PNG and return a (size_px × size_px) bool mask.
+
+    True = logo pixel (dark), False = background (light).
+    Row 0 of the returned array is the TOP of the logo image.
+    """
+    from PIL import Image as _Image   # PIL is a trimesh transitive dep — always present
+    img = _Image.open(_LOGO_PNG).convert('L')
+    img = img.resize((size_px, size_px), _Image.LANCZOS)
+    return np.array(img) < 128
+
+
+def make_logo_emboss(x0: float, y0: float,
+                     w: float, h: float,
+                     z_base: float,
+                     depth_mm: float = 0.4,
+                     px: int = 64) -> trimesh.Trimesh:
+    """Raised logo mesh suitable for concatenation with a base mesh.
+
+    The logo is rasterised from the pre-rendered PNG at *px* × *px* resolution
+    and centred in the [x0 .. x0+w] × [y0 .. y0+h] rectangle.  Raised columns
+    protrude *depth_mm* outward from *z_base* (i.e. to *z_base − depth_mm*,
+    extending further from the tile interior).
+
+    The existing flat cap at *z_base* is left intact; this mesh adds only the
+    protruding column solids (bottom + side walls + top cap per connected cell
+    group).  Co-planar top faces with the base cap are harmless to slicers.
+
+    Parameters
+    ----------
+    x0, y0    : bottom-left corner of the emboss rectangle in tile mm.
+    w, h      : width and height of the rectangle in mm.
+    z_base    : z of the flat base cap (e.g. -WALL_HEIGHT for OpenLOCK).
+    depth_mm  : protrusion depth beyond z_base (positive → more negative z).
+    px        : raster resolution (px × px cells over the w × h area).
+    """
+    mask = _logo_mask(px)          # (px, px) bool; row 0 = top of image = +Y side
+    H, W = mask.shape
+    cw = w / W
+    ch = h / H
+    z_bot = z_base - depth_mm
+
+    verts: list[list[float]] = []
+    faces: list[list[int]] = []
+
+    def add_quad(a, b, c, d) -> None:
+        i = len(verts)
+        verts.extend([a, b, c, d])
+        faces.extend([[i, i + 1, i + 2], [i, i + 2, i + 3]])
+
+    for jj in range(H):
+        for ii in range(W):
+            if not mask[jj, ii]:
+                continue
+
+            # PNG row 0 = top of logo = tile +Y: flip row index vertically.
+            xl = x0 + ii * cw;              xr = x0 + (ii + 1) * cw
+            yb = y0 + (H - 1 - jj) * ch;   yt = y0 + (H - jj) * ch
+
+            # Outer (bottom) face at z_bot, normal −Z
+            add_quad([xl, yb, z_bot], [xr, yb, z_bot],
+                     [xr, yt, z_bot], [xl, yt, z_bot])
+            # Inner (top) face at z_base, normal +Z
+            add_quad([xl, yt, z_base], [xr, yt, z_base],
+                     [xr, yb, z_base], [xl, yb, z_base])
+
+            # South wall (−Y edge, at yb): neighbour is jj+1 in PNG (lower tile-Y)
+            if jj == H - 1 or not mask[jj + 1, ii]:
+                add_quad([xr, yb, z_bot], [xl, yb, z_bot],
+                         [xl, yb, z_base], [xr, yb, z_base])
+            # North wall (+Y edge, at yt): neighbour is jj−1 in PNG (higher tile-Y)
+            if jj == 0 or not mask[jj - 1, ii]:
+                add_quad([xl, yt, z_bot], [xr, yt, z_bot],
+                         [xr, yt, z_base], [xl, yt, z_base])
+            # West wall (−X edge)
+            if ii == 0 or not mask[jj, ii - 1]:
+                add_quad([xl, yb, z_bot], [xl, yt, z_bot],
+                         [xl, yt, z_base], [xl, yb, z_base])
+            # East wall (+X edge)
+            if ii == W - 1 or not mask[jj, ii + 1]:
+                add_quad([xr, yt, z_bot], [xr, yb, z_bot],
+                         [xr, yb, z_base], [xr, yt, z_base])
+
+    if not verts:
+        return trimesh.Trimesh()
+
+    mesh = trimesh.Trimesh(
+        vertices=np.array(verts, dtype=float),
+        faces=np.array(faces, dtype=np.int32),
+        process=False,
+    )
+    mesh.fix_normals()
+    return mesh
 
 
 # ── Coloured STL export ───────────────────────────────────────────────────────
