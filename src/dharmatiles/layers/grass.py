@@ -305,7 +305,7 @@ def _fill_boundary_seeds(live: list, occ_z: np.ndarray,
 
     # Subsample: one seed per average-blade-width along the edge
     avg_blade_w = (grass.width_min + grass.width_max) / 2.0
-    cell_size   = (surface.cell_w + surface.cell_h) / 2.0
+    cell_size   = surface.cell_w
     step        = max(1, round(avg_blade_w / cell_size))
 
     # Shuffle so fill-seeds don't all point the same direction
@@ -316,7 +316,7 @@ def _fill_boundary_seeds(live: list, occ_z: np.ndarray,
         r  = int(edge_rows[i])
         c  = int(edge_cols[i])
         bx = (c + 0.5) * surface.cell_w
-        by = (r + 0.5) * surface.cell_h
+        by = (r + 0.5) * surface.cell_w
 
         if scene.stone_mask is not None and scene.stone_mask[r, c]:
             continue
@@ -382,8 +382,8 @@ def _stamp(occ_z: np.ndarray, surface: SurfaceConfig,
            x: float, y: float, z: float, hw: float) -> None:
     ix0 = max(0, int((x - hw) / surface.cell_w))
     ix1 = min(surface.grid_w - 1, int((x + hw) / surface.cell_w) + 1)
-    iy0 = max(0, int((y - hw) / surface.cell_h))
-    iy1 = min(surface.grid_h - 1, int((y + hw) / surface.cell_h) + 1)
+    iy0 = max(0, int((y - hw) / surface.cell_w))
+    iy1 = min(surface.grid_h - 1, int((y + hw) / surface.cell_w) + 1)
     np.maximum(occ_z[iy0:iy1 + 1, ix0:ix1 + 1], z,
                out=occ_z[iy0:iy1 + 1, ix0:ix1 + 1])
 
@@ -457,7 +457,7 @@ class GrassLayer:
 
                 # Reject seeds under stones or outside the grass region
                 ix = int(np.clip(int(bx / surface.cell_w), 0, surface.grid_w - 1))
-                iy = int(np.clip(int(by / surface.cell_h), 0, surface.grid_h - 1))
+                iy = int(np.clip(int(by / surface.cell_w), 0, surface.grid_h - 1))
                 if scene.stone_mask is not None and scene.stone_mask[iy, ix]:
                     continue
                 if scene.grass_mask is not None and not scene.grass_mask[iy, ix]:
@@ -537,7 +537,7 @@ class GrassLayer:
                     # Treat stone footprint as a hard wall — steer around it
                     if scene.stone_mask is not None:
                         s_ix = int(np.clip(int(tx / surface.cell_w), 0, surface.grid_w - 1))
-                        s_iy = int(np.clip(int(ty / surface.cell_h), 0, surface.grid_h - 1))
+                        s_iy = int(np.clip(int(ty / surface.cell_w), 0, surface.grid_h - 1))
                         if scene.stone_mask[s_iy, s_ix]:
                             continue
 

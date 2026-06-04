@@ -78,11 +78,6 @@ class SurfaceConfig:
         """mm per grid cell in X."""
         return self.square_mm / self.cells_per_square
 
-    @property
-    def cell_h(self) -> float:
-        """mm per grid cell in Y."""
-        return self.square_mm / self.cells_per_square
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Flow field

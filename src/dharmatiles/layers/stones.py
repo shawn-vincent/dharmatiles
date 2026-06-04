@@ -106,7 +106,7 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
         if len(allowed) == 0:
             return trimesh.Trimesh(process=False)
         chosen = allowed[rng.integers(0, len(allowed), N)]
-        cy = (chosen[:, 0] + rng.uniform(0.0, 1.0, N)) * surface.cell_h
+        cy = (chosen[:, 0] + rng.uniform(0.0, 1.0, N)) * surface.cell_w
         cx = (chosen[:, 1] + rng.uniform(0.0, 1.0, N)) * surface.cell_w
         cx = np.clip(cx, margin, surface.tile_w - margin)
         cy = np.clip(cy, margin, surface.tile_h - margin)
@@ -235,7 +235,7 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
 
     # ── Rasterise stone tops into support_z ───────────────────────────────────
     cw = surface.cell_w
-    ch = surface.cell_h
+    ch = surface.cell_w
     gw = surface.grid_w
     gh = surface.grid_h
 

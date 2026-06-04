@@ -66,7 +66,7 @@ class SoilLayer:
         # ── Arc-length reparameterisation ─────────────────────────────────────
         # Gradient of the pre-bump terrain (clean slope shape).
         gz_y, gz_x = np.gradient(scene.terrain_z,
-                                  self.surface.cell_h,
+                                  self.surface.cell_w,
                                   self.surface.cell_w)
         nz = 1.0 / np.sqrt(gz_x ** 2 + gz_y ** 2 + 1.0)
 

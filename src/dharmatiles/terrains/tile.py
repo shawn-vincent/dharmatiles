@@ -13,13 +13,7 @@ Usage
         Single tile: same naming and directory conventions as batch.
 
     generate-tile-stl --spec tiles/foo.tile -o stl/custom.stl
-        Single tile, explicit output path (legacy behaviour).
-
-    generate-tile-stl --cols 3 --rows 3
-    generate-tile-stl --seed 42 --output stl/tile.stl
-        Flag mode: any shape/output flag triggers a one-off build.
-        Outputs go to stl/tile-dungeonblocks.stl and stl/tile-openlock.stl
-        (or --output path with system suffixes inserted).
+        Single tile, explicit output path.
 """
 from __future__ import annotations
 
@@ -31,8 +25,7 @@ import numpy as np
 import trimesh
 
 from ..core.config import (SceneConfig, SurfaceConfig, FlowConfig, SolverConfig,
-                           GrassConfig, SoilConfig, StonesConfig, BaseConfig,
-                           WaterRippleConfig)
+                           GrassConfig, SoilConfig, StonesConfig, BaseConfig)
 from ..core.tile import TileScene, make_xy_grids
 from ..core.flow import build_flow_field
 from ..core.mesh import make_heightmap_solid, export_coloured_stl
@@ -293,59 +286,6 @@ def _export_system_stls(tile_mesh: trimesh.Trimesh,
             print(f"Saved -> {path}  (VisCAM colours embedded)")
     return result
 
-def build_tile(cfg: SceneConfig,
-               output_path: pathlib.Path,
-               verbose: bool = True,
-               *,
-               system_paths: dict[str, pathlib.Path] | None = None,
-               ) -> trimesh.Trimesh:
-    """Build a tile from a SceneConfig and export system-specific STLs.
-
-    DungeonBlocks output uses the tile as constructed (``cfg.surface.square_mm``
-    = 35 mm by default).  OpenLOCK output regenerates the full scene at
-    25.4 mm/square so physical feature sizes stay correct and are not
-    compressed by an XY scale-down.
-    """
-    if verbose:
-        print(f"=== Building tile "
-              f"({cfg.surface.cols}×{cfg.surface.rows} squares, "
-              f"grid {cfg.surface.grid_w}×{cfg.surface.grid_h}) ===")
-
-    scene = TileScene.from_config(cfg)
-
-    if verbose:
-        print(f"Building flow field  ({cfg.flow.flow_type})...")
-    x_grid, y_grid = make_xy_grids(cfg.surface)
-    flow_angle, flow_curv = build_flow_field(cfg.surface, cfg.flow, x_grid, y_grid)
-
-    tile_mesh = _build_mesh(cfg, scene, flow_angle, flow_curv, verbose=verbose)
-
-    # ── OpenLOCK: regenerate terrain natively at 25.4 mm/square ──────────────
-    ol_tile_mesh: trimesh.Trimesh | None = None
-    ol_surface:   SurfaceConfig   | None = None
-    ol_terrain_z: np.ndarray      | None = None
-    if cfg.base.style != 'none':
-        if verbose:
-            print(f"\n=== Rebuilding scene at OpenLOCK scale "
-                  f"({openlock.OPENLOCK_SQUARE_MM} mm/sq) ===")
-        ol_surface = _make_ol_surface(cfg.surface)
-        ol_cfg     = dataclasses.replace(cfg, surface=ol_surface)
-        ol_scene   = TileScene.from_config(ol_cfg)
-        ol_x, ol_y = make_xy_grids(ol_surface)
-        ol_flow_angle, ol_flow_curv = build_flow_field(
-            ol_surface, ol_cfg.flow, ol_x, ol_y)
-        ol_tile_mesh = _build_mesh(
-            ol_cfg, ol_scene, ol_flow_angle, ol_flow_curv, verbose=verbose)
-        ol_terrain_z = ol_scene.terrain_z
-
-    exports = _export_system_stls(tile_mesh, cfg, scene.terrain_z,
-                                  output_path, verbose=verbose,
-                                  ol_tile_mesh=ol_tile_mesh,
-                                  ol_surface=ol_surface,
-                                  ol_terrain_z=ol_terrain_z,
-                                  system_paths=system_paths)
-    return exports.get(dungeonblocks.SYSTEM_SUFFIX, tile_mesh)
-
 
 def build_tile_from_spec(spec: TileSpec,
                          output_path: pathlib.Path,
@@ -544,7 +484,7 @@ def _extend_bank_slope_into_pool(terrain_z: np.ndarray,
     """
     from scipy.ndimage import binary_erosion, distance_transform_edt
 
-    cell_mm = 0.5 * (surface.cell_w + surface.cell_h)
+    cell_mm = surface.cell_w
 
     # ── Measure bank slope from terrain just outside the water boundary ───────
     # scipy's distance_transform_edt gives, for each TRUE cell, the distance to
@@ -680,77 +620,20 @@ def _collect_stones_layers(
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def _build_parser() -> argparse.ArgumentParser:
-    _S = SurfaceConfig()
-    _F = FlowConfig()
-    _G = GrassConfig()
-    _V = StonesConfig()
-    _B = BaseConfig()
-
     p = argparse.ArgumentParser(
-        description="Generate a terrain tile STL.",
+        description="Generate terrain tile STLs from .tile spec files.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument("--spec", "-s", type=pathlib.Path, default=None,
                    metavar="FILE",
-                   help="YAML (or .tile.py) tile spec; overrides all other flags")
+                   help="YAML (or .tile.py) tile spec.  Omit to process all tiles/")
     p.add_argument("--output", "-o", type=pathlib.Path,
                    default=None,
-                   help="Override output path (legacy flag mode); system suffixes "
+                   help="Override output path (requires --spec); system suffixes "
                         "are inserted before .stl.  Omit to use the canonical "
                         "stl/{system}/{NxM}-{name}-{db|ol}.stl hierarchy.")
-    p.add_argument("--seed",       type=int,   default=_S.seed)
-    p.add_argument("--cols",       type=int,   default=_S.cols,
-                   help="Number of 35 mm squares in X")
-    p.add_argument("--rows",       type=int,   default=_S.rows,
-                   help="Number of 35 mm squares in Y")
-    p.add_argument("--base-h",     type=float, default=_S.base_h, dest="base_h",
-                   help="Slab depth below terrain surface (mm)")
-    p.add_argument("--stones-per-square", type=int, default=_V.stones_per_square,
-                   dest="stones_per_square")
-    p.add_argument("--r-max",      type=float, default=_V.r_max,   dest="r_max")
-    p.add_argument("--size-power", type=float, default=_V.size_power, dest="size_power")
-    p.add_argument("--flow-type",  type=str,   default=_F.flow_type,
-                   choices=["linear","swirl","radial","drain","dipole",
-                            "random-zones","curl"],
-                   dest="flow_type")
-    p.add_argument("--flow-curl-noise", type=float, default=_F.flow_curl_noise,
-                   dest="flow_curl_noise")
-    p.add_argument("--cross-section", type=str, default=_G.cross_section,
-                   choices=["triangle","circle","diamond"], dest="cross_section")
-    p.add_argument("--groups-per-square", type=int, default=_G.groups_per_square,
-                   dest="groups_per_square")
-    p.add_argument("--group-min",  type=int,   default=_G.group_min,  dest="group_min")
-    p.add_argument("--group-max",  type=int,   default=_G.group_max,  dest="group_max")
-    p.add_argument("--group-spread", type=float, default=_G.group_spread_mm,
-                   dest="group_spread_mm")
-    p.add_argument("--max-segs",   type=int,   default=_G.max_segs,   dest="max_segs")
-    p.add_argument("--seg-len",    type=float, default=_G.seg_len,     dest="seg_len")
-    p.add_argument("--rise-cap",   type=float, default=_G.rise_cap,    dest="rise_cap")
-    p.add_argument("--curl-max",   type=float, default=_G.curl_max,    dest="curl_max")
-    p.add_argument("--smooth-sigma", type=float, default=_G.smooth_sigma,
-                   dest="smooth_sigma")
-    p.add_argument("--root-depth", type=float, default=_G.root_depth, dest="root_depth")
-    p.add_argument("--max-bridge", type=float, default=_G.max_bridge_mm,
-                   dest="max_bridge_mm")
-    p.add_argument("--rolling-terrain", action="store_true", dest="rolling_terrain")
-    p.add_argument("--no-base", action="store_true", dest="no_base")
-    p.add_argument("--peg-height", type=float, default=None, dest="peg_height")
     p.add_argument("--quiet", "-q", action="store_true")
     return p
-
-
-def _is_flag_mode(args) -> bool:
-    """True if the user passed shape/output flags that imply a one-off build."""
-    _S = SurfaceConfig()
-    return any([
-        args.output is not None,
-        args.cols         != _S.cols,
-        args.rows         != _S.rows,
-        args.seed         != _S.seed,
-        args.no_base,
-        args.rolling_terrain,
-        args.peg_height   is not None,
-    ])
 
 
 def main(argv=None):
@@ -766,83 +649,39 @@ def main(argv=None):
         output     = args.output
         sys_paths  = None
         if output is None:
-            # New canonical hierarchy
             sys_paths = _new_tile_paths(
                 args.spec, spec.surface.cols, spec.surface.rows,
                 TILES_ROOT, STL_ROOT)
-            output = sys_paths[dungeonblocks.SYSTEM_SUFFIX]   # fallback for 'none' style
+            output = sys_paths[dungeonblocks.SYSTEM_SUFFIX]
         build_tile_from_spec(spec, output_path=output,
                              verbose=verbose, system_paths=sys_paths)
         return
 
-    # ── Batch mode: no --spec AND no shape/output flags ───────────────────────
-    if not _is_flag_mode(args):
-        specs = sorted(TILES_ROOT.rglob("*.tile"))
-        if not specs:
-            print(f"No .tile files found under {TILES_ROOT}/  "
-                  f"(pass --spec FILE to target a specific tile)")
-            return
-        import time as _time
-        t_batch = _time.perf_counter()
-        for sp in specs:
-            if verbose:
-                print(f"\n{'─'*60}")
-                print(f"  {sp}")
-                print(f"{'─'*60}")
-            spec      = load_spec(sp)
-            sys_paths = _new_tile_paths(
-                sp, spec.surface.cols, spec.surface.rows,
-                TILES_ROOT, STL_ROOT)
-            build_tile_from_spec(spec,
-                                 output_path=sys_paths[dungeonblocks.SYSTEM_SUFFIX],
-                                 verbose=verbose,
-                                 system_paths=sys_paths)
-        elapsed = _time.perf_counter() - t_batch
-        n = len(specs)
-        print(f"\n✓  {n} tile{'s' if n != 1 else ''} generated in {elapsed:.1f}s  "
-              f"({elapsed/n:.1f}s/tile)")
+    # ── Batch mode ───────────────────────────────────────────────────────────
+    specs = sorted(TILES_ROOT.rglob("*.tile"))
+    if not specs:
+        print(f"No .tile files found under {TILES_ROOT}/  "
+              f"(pass --spec FILE to target a specific tile)")
         return
-
-    # ── Legacy flag mode: explicit shape/output flags, no --spec ─────────────
-    output = args.output or pathlib.Path("stl/tile.stl")
-    cfg = SceneConfig(
-        surface=SurfaceConfig(
-            cols        = args.cols,
-            rows        = args.rows,
-            base_h      = args.base_h,
-            seed        = args.seed,
-            flat_terrain= not args.rolling_terrain,
-        ),
-        flow=FlowConfig(
-            flow_type       = args.flow_type,
-            flow_curl_noise = args.flow_curl_noise,
-        ),
-        grass=GrassConfig(
-            cross_section   = args.cross_section,
-            max_segs        = args.max_segs,
-            seg_len         = args.seg_len,
-            rise_cap        = args.rise_cap,
-            curl_max        = args.curl_max,
-            smooth_sigma    = args.smooth_sigma,
-            root_depth      = args.root_depth,
-            groups_per_square = args.groups_per_square,
-            group_min       = args.group_min,
-            group_max       = args.group_max,
-            group_spread_mm = args.group_spread_mm,
-            max_bridge_mm   = args.max_bridge_mm,
-        ),
-        soil=SoilConfig(),
-        stones=StonesConfig(
-            stones_per_square = args.stones_per_square,
-            r_max             = args.r_max,
-            size_power        = args.size_power,
-        ),
-        base=BaseConfig(
-            style      = 'none' if args.no_base else 'dungeonblock',
-            peg_height = args.peg_height,
-        ),
-    )
-    build_tile(cfg, output_path=output, verbose=verbose)
+    import time as _time
+    t_batch = _time.perf_counter()
+    for sp in specs:
+        if verbose:
+            print(f"\n{'─'*60}")
+            print(f"  {sp}")
+            print(f"{'─'*60}")
+        spec      = load_spec(sp)
+        sys_paths = _new_tile_paths(
+            sp, spec.surface.cols, spec.surface.rows,
+            TILES_ROOT, STL_ROOT)
+        build_tile_from_spec(spec,
+                             output_path=sys_paths[dungeonblocks.SYSTEM_SUFFIX],
+                             verbose=verbose,
+                             system_paths=sys_paths)
+    elapsed = _time.perf_counter() - t_batch
+    n = len(specs)
+    print(f"\n{n} tile{'s' if n != 1 else ''} generated in {elapsed:.1f}s  "
+          f"({elapsed/n:.1f}s/tile)")
 
 
 if __name__ == "__main__":

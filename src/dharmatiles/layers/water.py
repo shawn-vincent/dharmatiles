@@ -111,7 +111,7 @@ class WaterLayer:
         # ── Vertex positions ──────────────────────────────────────────────────
         x_v, y_v = np.meshgrid(
             np.arange(gw + 1, dtype=float) * surface.cell_w,
-            np.arange(gh + 1, dtype=float) * surface.cell_h,
+            np.arange(gh + 1, dtype=float) * surface.cell_w,
         )
         z_v   = h + vz_disp
         verts = np.stack([x_v.ravel(), y_v.ravel(), z_v.ravel()], axis=1)
@@ -154,7 +154,7 @@ def _build_ripple_displacement(
     gh, gw      = water_mask.shape
     eval_mask   = compute_mask if compute_mask is not None else water_mask
     rng         = np.random.default_rng(surface.seed ^ 0xC0A574)
-    cell_mm     = 0.5 * (surface.cell_w + surface.cell_h)
+    cell_mm     = surface.cell_w
 
     # ── Shore boundary ────────────────────────────────────────────────────────
     # border_value=1 → outside tile treated as water → only cells adjacent to
@@ -194,7 +194,7 @@ def _build_ripple_displacement(
             stone_pts = np.array(centers, dtype=int)
 
     # ── Coordinate grids (mm) ─────────────────────────────────────────────────
-    rows_mm = np.arange(gh, dtype=float)[:, None] * surface.cell_h
+    rows_mm = np.arange(gh, dtype=float)[:, None] * surface.cell_w
     cols_mm = np.arange(gw, dtype=float)[None, :] * surface.cell_w
 
     # ── Accumulate circular waves ─────────────────────────────────────────────
@@ -203,7 +203,7 @@ def _build_ripple_displacement(
 
     def _add_sources(pts, amplitude):
         for (sr, sc) in pts:
-            sr_mm  = sr * surface.cell_h
+            sr_mm  = sr * surface.cell_w
             sc_mm  = sc * surface.cell_w
             dist   = np.sqrt((rows_mm - sr_mm) ** 2 + (cols_mm - sc_mm) ** 2)
             d_eff  = np.maximum(0.0, dist - cfg.start_offset_mm)

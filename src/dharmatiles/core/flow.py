@@ -128,7 +128,7 @@ def build_flow_field(surface: SurfaceConfig, flow: FlowConfig,
         amp = frng.uniform(0.3, 1.0)
         P  += amp * np.sin(fx_ * 2 * np.pi * xn + phx) * np.cos(fy_ * 2 * np.pi * yn + phy)
 
-    dPdy, dPdx = np.gradient(P, surface.cell_h, surface.cell_w)
+    dPdy, dPdx = np.gradient(P, surface.cell_w, surface.cell_w)
     cnx, cny = dPdy, -dPdx
     cmag = np.sqrt(cnx**2 + cny**2) + 1e-9
     cnx /= cmag;  cny /= cmag
@@ -143,7 +143,7 @@ def build_flow_field(surface: SurfaceConfig, flow: FlowConfig,
     angle_field = np.arctan2(fx, fy)
 
     # ── 4. Signed curvature κ = ∇θ · f̂ ───────────────────────────────────────
-    dθdy, dθdx = np.gradient(angle_field, surface.cell_h, surface.cell_w)
+    dθdy, dθdx = np.gradient(angle_field, surface.cell_w, surface.cell_w)
     kappa = dθdx * fx + dθdy * fy
     scale = np.percentile(np.abs(kappa), 95) + 1e-9
     curv_field = np.clip(kappa / scale, -1.0, 1.0)

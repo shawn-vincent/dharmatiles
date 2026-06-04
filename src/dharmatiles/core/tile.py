@@ -29,7 +29,7 @@ from .terrain import (TerrainGrid, TerrainType,
 def make_xy_grids(surface: SurfaceConfig):
     """Return (x_grid, y_grid) world-coordinate arrays (grid_h × grid_w)."""
     iy, ix = np.mgrid[0:surface.grid_h, 0:surface.grid_w]
-    return (ix * surface.cell_w).astype(float), (iy * surface.cell_h).astype(float)
+    return (ix * surface.cell_w).astype(float), (iy * surface.cell_w).astype(float)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ class TileScene:
     #       Returns world-Z unit vector [0, 0, 1] when terrain_z is flat.
     #       """
     #       cw = self.config.surface.cell_w
-    #       ch = self.config.surface.cell_h
+    #       ch = self.config.surface.cell_w
     #       # ... bilinear sample of gradient ...
     #
     # Callers that need updating when this is implemented:

@@ -232,77 +232,109 @@ def make_heightmap_solid(z_grid: np.ndarray, tile_w: float, tile_h: float,
         region instead of duplicating coplanar terrain faces.
     """
     nrows, ncols = z_grid.shape
-    sr = list(range(0, ncols, subsample))
-    if sr[-1] != ncols - 1:
-        sr.append(ncols - 1)
-    sc = list(range(0, nrows, subsample))
-    if sc[-1] != nrows - 1:
-        sc.append(nrows - 1)
-    ns_c = len(sr)   # sampled cols
-    ns_r = len(sc)   # sampled rows
+    sr_arr = np.arange(0, ncols, subsample)
+    if sr_arr[-1] != ncols - 1:
+        sr_arr = np.append(sr_arr, ncols - 1)
+    sc_arr = np.arange(0, nrows, subsample)
+    if sc_arr[-1] != nrows - 1:
+        sc_arr = np.append(sc_arr, nrows - 1)
+    ns_c = len(sr_arr)   # sampled cols
+    ns_r = len(sc_arr)   # sampled rows
     gx   = tile_w / max(ncols - 1, 1)
     gy   = tile_h / max(nrows - 1, 1)
 
-    verts: list = []
-    faces: list = []
+    # ── Build all vertices in one shot ────────────────────────────────────────
+    # Top: ns_r × ns_c vertices.  Bottom: same layout at z = -base_h.
+    # Flat index: top[jj, ii] = jj*ns_c + ii;  bot[jj, ii] = ns_r*ns_c + jj*ns_c + ii
+    n_top_v  = ns_r * ns_c
+    n_verts  = 2 * n_top_v
+    verts    = np.empty((n_verts, 3), dtype=float)
 
-    # ── Top surface ────────────────────────────────────────────────────────────
-    top_idx: dict = {}
-    for jj, j in enumerate(sc):
-        for ii, i in enumerate(sr):
-            top_idx[(ii, jj)] = len(verts)
-            verts.append([i * gx, j * gy, z_grid[j, i]])
+    JJ, II   = np.mgrid[0:ns_r, 0:ns_c]
+    I_idx    = sr_arr[II]    # actual column indices into z_grid
+    J_idx    = sc_arr[JJ]    # actual row indices
 
-    # ── Bottom surface (flat) ──────────────────────────────────────────────────
-    bot_z   = -base_h
-    bot_off = len(verts)
-    for jj, j in enumerate(sc):
-        for ii, i in enumerate(sr):
-            verts.append([i * gx, j * gy, bot_z])
+    verts[:n_top_v, 0] = (I_idx * gx).ravel()
+    verts[:n_top_v, 1] = (J_idx * gy).ravel()
+    verts[:n_top_v, 2] = z_grid[J_idx, I_idx].ravel()
 
-    def top(ii, jj): return top_idx[(ii, jj)]
-    def bot(ii, jj): return bot_off + jj * ns_c + ii
+    verts[n_top_v:, 0] = verts[:n_top_v, 0]
+    verts[n_top_v:, 1] = verts[:n_top_v, 1]
+    verts[n_top_v:, 2] = -base_h
 
-    top_face_cells: list[tuple[int, int]] = []
+    # Flat vertex index helpers
+    def top_v(ii, jj): return jj * ns_c + ii
+    def bot_v(ii, jj): return n_top_v + jj * ns_c + ii
 
-    # Top quads (CCW from above)
-    for jj in range(ns_r - 1):
-        for ii in range(ns_c - 1):
-            if omit_top_mask is not None:
-                j0, j1 = sc[jj], sc[jj + 1]
-                i0, i1 = sr[ii], sr[ii + 1]
-                if (omit_top_mask[j0, i0] and omit_top_mask[j0, i1] and
-                        omit_top_mask[j1, i0] and omit_top_mask[j1, i1]):
-                    continue
-            a, b = top(ii, jj), top(ii + 1, jj)
-            c, d = top(ii, jj + 1), top(ii + 1, jj + 1)
-            faces += [[a, b, d], [a, d, c]]
-            top_face_cells += [(jj, ii), (jj, ii)]
+    # ── Build all faces vectorised ────────────────────────────────────────────
+    # Grid of quad corners: (ns_r-1) × (ns_c-1) quads
+    q_r, q_c = np.mgrid[0:ns_r - 1, 0:ns_c - 1]   # quad row/col indices
 
-    # Bottom quads (CW from above = CCW from below)
-    for jj in range(ns_r - 1):
-        for ii in range(ns_c - 1):
-            a, b = bot(ii, jj), bot(ii + 1, jj)
-            c, d = bot(ii, jj + 1), bot(ii + 1, jj + 1)
-            faces += [[a, d, b], [a, c, d]]
+    # Flat vertex indices for quad corners (broadcast over all quads at once)
+    a_top = top_v(q_c,     q_r    )   # (ns_r-1, ns_c-1) each
+    b_top = top_v(q_c + 1, q_r    )
+    c_top = top_v(q_c,     q_r + 1)
+    d_top = top_v(q_c + 1, q_r + 1)
 
-    # Side walls
-    for ii in range(ns_c - 1):
-        faces += [[top(ii, 0),       bot(ii, 0),       top(ii + 1, 0)],
-                  [top(ii + 1, 0),   bot(ii, 0),       bot(ii + 1, 0)]]
-        faces += [[top(ii, ns_r-1),  top(ii+1, ns_r-1), bot(ii, ns_r-1)],
-                  [top(ii+1, ns_r-1),bot(ii+1, ns_r-1), bot(ii, ns_r-1)]]
-    for jj in range(ns_r - 1):
-        faces += [[top(0, jj),       top(0, jj+1),     bot(0, jj)],
-                  [top(0, jj+1),     bot(0, jj+1),     bot(0, jj)]]
-        faces += [[top(ns_c-1, jj),  bot(ns_c-1, jj),  top(ns_c-1, jj+1)],
-                  [top(ns_c-1, jj+1),bot(ns_c-1, jj),  bot(ns_c-1, jj+1)]]
+    # ── Top surface ───────────────────────────────────────────────────────────
+    if omit_top_mask is not None:
+        # Omit quads where all four sampled corners are masked
+        j0 = sc_arr[q_r];      j1 = sc_arr[q_r + 1]
+        i0 = sr_arr[q_c];      i1 = sr_arr[q_c + 1]
+        omit = (omit_top_mask[j0, i0] & omit_top_mask[j0, i1] &
+                omit_top_mask[j1, i0] & omit_top_mask[j1, i1])
+        keep = ~omit
+        a_k, b_k, c_k, d_k = (a_top[keep], b_top[keep],
+                                c_top[keep], d_top[keep])
+    else:
+        a_k, b_k, c_k, d_k = (a_top.ravel(), b_top.ravel(),
+                                c_top.ravel(), d_top.ravel())
 
-    mesh = trimesh.Trimesh(vertices=np.array(verts, dtype=float),
-                           faces=np.array(faces, dtype=int),
+    n_top_quads = len(a_k)
+    top_faces = np.empty((n_top_quads * 2, 3), dtype=np.int32)
+    top_faces[0::2] = np.stack([a_k, b_k, d_k], axis=1)
+    top_faces[1::2] = np.stack([a_k, d_k, c_k], axis=1)
+
+    # ── Bottom surface ────────────────────────────────────────────────────────
+    a_bot = bot_v(q_c,     q_r    ).ravel()
+    b_bot = bot_v(q_c + 1, q_r    ).ravel()
+    c_bot = bot_v(q_c,     q_r + 1).ravel()
+    d_bot = bot_v(q_c + 1, q_r + 1).ravel()
+    n_bot_quads = len(a_bot)
+    bot_faces = np.empty((n_bot_quads * 2, 3), dtype=np.int32)
+    bot_faces[0::2] = np.stack([a_bot, d_bot, b_bot], axis=1)
+    bot_faces[1::2] = np.stack([a_bot, c_bot, d_bot], axis=1)
+
+    # ── Side walls ────────────────────────────────────────────────────────────
+    ii_sw = np.arange(ns_c - 1)
+    jj_sw = np.arange(ns_r - 1)
+
+    # South wall (jj=0): 2 triangles per column segment
+    sw_s = np.empty((2 * (ns_c - 1), 3), dtype=np.int32)
+    sw_s[0::2] = np.stack([top_v(ii_sw, 0),     bot_v(ii_sw, 0),     top_v(ii_sw + 1, 0)], axis=1)
+    sw_s[1::2] = np.stack([top_v(ii_sw + 1, 0), bot_v(ii_sw, 0),     bot_v(ii_sw + 1, 0)], axis=1)
+
+    # North wall (jj=ns_r-1)
+    sw_n = np.empty((2 * (ns_c - 1), 3), dtype=np.int32)
+    sw_n[0::2] = np.stack([top_v(ii_sw, ns_r-1), top_v(ii_sw+1, ns_r-1), bot_v(ii_sw, ns_r-1)],   axis=1)
+    sw_n[1::2] = np.stack([top_v(ii_sw+1, ns_r-1),bot_v(ii_sw+1, ns_r-1),bot_v(ii_sw, ns_r-1)],   axis=1)
+
+    # West wall (ii=0)
+    sw_w = np.empty((2 * (ns_r - 1), 3), dtype=np.int32)
+    sw_w[0::2] = np.stack([top_v(0, jj_sw),     top_v(0, jj_sw + 1), bot_v(0, jj_sw)],     axis=1)
+    sw_w[1::2] = np.stack([top_v(0, jj_sw + 1), bot_v(0, jj_sw + 1), bot_v(0, jj_sw)],     axis=1)
+
+    # East wall (ii=ns_c-1)
+    sw_e = np.empty((2 * (ns_r - 1), 3), dtype=np.int32)
+    sw_e[0::2] = np.stack([top_v(ns_c-1, jj_sw),  bot_v(ns_c-1, jj_sw),  top_v(ns_c-1, jj_sw+1)], axis=1)
+    sw_e[1::2] = np.stack([top_v(ns_c-1, jj_sw+1),bot_v(ns_c-1, jj_sw),  bot_v(ns_c-1, jj_sw+1)], axis=1)
+
+    faces = np.concatenate([top_faces, bot_faces, sw_s, sw_n, sw_w, sw_e])
+
+    mesh = trimesh.Trimesh(vertices=verts,
+                           faces=faces.astype(int),
                            process=False)
-    mesh.metadata['top_face_count'] = len(top_face_cells)
-    mesh.metadata['top_face_cells'] = np.array(top_face_cells, dtype=np.int32)
+    mesh.metadata['top_face_count'] = n_top_quads * 2
     mesh.fix_normals()
     return mesh
 

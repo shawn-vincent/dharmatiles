@@ -148,13 +148,13 @@ class TerrainGrid:
     def world_to_cell(self, x_mm: float, y_mm: float) -> tuple[int, int]:
         """Convert world mm coords to (row, col).  Clamps to grid bounds."""
         col = int(np.clip(x_mm / self.surface.cell_w, 0, self.surface.grid_w - 1))
-        row = int(np.clip(y_mm / self.surface.cell_h, 0, self.surface.grid_h - 1))
+        row = int(np.clip(y_mm / self.surface.cell_w, 0, self.surface.grid_h - 1))
         return row, col
 
     def cell_to_world(self, row: int, col: int) -> tuple[float, float]:
         """Return world mm coords of cell (row, col) center."""
         x = (col + 0.5) * self.surface.cell_w
-        y = (row + 0.5) * self.surface.cell_h
+        y = (row + 0.5) * self.surface.cell_w
         return x, y
 
 

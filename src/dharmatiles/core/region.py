@@ -101,7 +101,7 @@ def _rasterise(path_mm: np.ndarray, surface: SurfaceConfig,
     """
     cols = np.clip((path_mm[:, 0] / surface.cell_w).astype(int),
                    0, surface.grid_w - 1)
-    rows = np.clip((path_mm[:, 1] / surface.cell_h).astype(int),
+    rows = np.clip((path_mm[:, 1] / surface.cell_w).astype(int),
                    0, surface.grid_h - 1)
 
     # Walk consecutive segments and fill any skipped cells
