@@ -12,7 +12,8 @@ import numpy as np
 import trimesh
 
 from ..core.config import BaseConfig, SurfaceConfig
-from ..core.mesh import export_coloured_stl, make_logo_emboss
+from ..core.logo import make_logo_inset
+from ..core.mesh import export_coloured_stl
 
 
 SYSTEM_SUFFIX = "dungeonblocks"
@@ -95,8 +96,7 @@ def make_base(surface: SurfaceConfig,
     z2 = -(peg_height - bevel + flare_h)
     z3 = -(peg_height + flare_h)
 
-    # Logo emboss: centred on each peg tip face (bevel_col × bevel_col at z3).
-    # Scale to 80 % of the available face so a margin surrounds the logo.
+    # Logo inset: centred on each peg tip face at 80 % of bevel_col.
     logo_side = bevel_col * 0.80
 
     parts: list[trimesh.Trimesh] = []
@@ -104,22 +104,20 @@ def make_base(surface: SurfaceConfig,
         for ri in range(surface.rows):
             tx = ci * square_sz
             ty = ri * square_sz
-
             rings = [
-                _square_ring(tx, ty, 0.0,         square_sz, z0),
-                _square_ring(tx, ty, col_inset,    square_sz, z1),
-                _square_ring(tx, ty, col_inset,    square_sz, z2),
-                _square_ring(tx, ty, bevel_inset,  square_sz, z3),
+                _square_ring(tx, ty, 0.0,        square_sz, z0),
+                _square_ring(tx, ty, col_inset,  square_sz, z1),
+                _square_ring(tx, ty, col_inset,  square_sz, z2),
+                _square_ring(tx, ty, bevel_inset,square_sz, z3),
             ]
-            parts.append(_prismatoid_mesh(rings))
+            peg = _prismatoid_mesh(rings)
 
             cx = tx + square_sz / 2.0
             cy = ty + square_sz / 2.0
-            parts.append(make_logo_emboss(
-                x0=cx - logo_side / 2.0, y0=cy - logo_side / 2.0,
-                w=logo_side, h=logo_side,
-                z_base=z3,
-            ))
+            cutter = make_logo_inset(cx, cy, logo_side, z_base=z3)
+            peg = trimesh.boolean.difference([peg, cutter], engine='manifold')
+
+            parts.append(peg)
 
     if not parts:
         return trimesh.Trimesh()

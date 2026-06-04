@@ -12,6 +12,7 @@ dependencies = [
     "trimesh",
     "scipy",
     "pyyaml",
+    "manifold3d",
 ]
 
 [project.scripts]
