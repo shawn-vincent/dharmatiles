@@ -1,20 +1,25 @@
 """
 Grass tile generator: soil + stones + grass blades on a DungeonBlocks base.
 
-Default command (no arguments) produces the canonical 1×1 tile:
-  • flat 35×35 mm terrain base with organic soil bump texture
-  • 15 random stones placed on the surface (grass steers around them)
-  • 240 groups of grass blades grown segment-by-segment
-  • DungeonBlocks-compatible socket-peg base
-
 Usage
 ─────
-    generate-tile-stl                          # writes stl/tile-dungeonblocks.stl
-                                               # and stl/tile-openlock.stl
-    generate-tile-stl --seed 42
-    generate-tile-stl --cols 3 --rows 3
+    generate-tile-stl
+        Batch mode: process every *.tile file under tiles/ and write outputs
+        to stl/dungeonblocks/ and stl/openlock/ with names like
+        1x1-half-grass-soil-db.stl / 1x1-half-grass-soil-ol.stl.
+        Sub-directories under tiles/ are mirrored in the output trees.
+
     generate-tile-stl --spec tiles/half-grass-soil.tile
-    generate-tile-stl --spec tiles/half-grass-soil.tile -o stl/custom.stl
+        Single tile: same naming and directory conventions as batch.
+
+    generate-tile-stl --spec tiles/foo.tile -o stl/custom.stl
+        Single tile, explicit output path (legacy behaviour).
+
+    generate-tile-stl --cols 3 --rows 3
+    generate-tile-stl --seed 42 --output stl/tile.stl
+        Flag mode: any shape/output flag triggers a one-off build.
+        Outputs go to stl/tile-dungeonblocks.stl and stl/tile-openlock.stl
+        (or --output path with system suffixes inserted).
 """
 from __future__ import annotations
 
@@ -206,6 +211,27 @@ def _system_output_path(output_path: pathlib.Path, suffix: str) -> pathlib.Path:
     return output_path.with_name(f"{output_path.stem}-{suffix}{output_path.suffix}")
 
 
+def _new_tile_paths(spec_path: pathlib.Path,
+                    cols: int, rows: int,
+                    tiles_root: pathlib.Path,
+                    stl_root: pathlib.Path) -> dict[str, pathlib.Path]:
+    """Return ``{system: path}`` for the canonical output hierarchy.
+
+    Naming: ``stl/{system}/{subdir}/{N}x{M}-{stem}-{db|ol}.stl``
+    where *subdir* mirrors any directory nesting under *tiles_root*.
+    """
+    try:
+        rel = spec_path.with_suffix('').relative_to(tiles_root)
+    except ValueError:
+        rel = pathlib.Path(spec_path.stem)   # spec outside tiles/ — no subdir
+    stem   = f"{cols}x{rows}-{rel.name}"
+    subdir = rel.parent                       # Path('.') when file is at tiles root
+    return {
+        dungeonblocks.SYSTEM_SUFFIX: stl_root / 'dungeonblocks' / subdir / f"{stem}-db.stl",
+        openlock.SYSTEM_SUFFIX:      stl_root / 'openlock'      / subdir / f"{stem}-ol.stl",
+    }
+
+
 def _make_ol_surface(surface: SurfaceConfig) -> SurfaceConfig:
     """Return a copy of *surface* scaled to the OpenLOCK 25.4 mm per square standard."""
     return dataclasses.replace(surface, square_mm=openlock.OPENLOCK_SQUARE_MM)
@@ -220,29 +246,38 @@ def _export_system_stls(tile_mesh: trimesh.Trimesh,
                         ol_tile_mesh: trimesh.Trimesh | None = None,
                         ol_surface: SurfaceConfig | None = None,
                         ol_terrain_z: np.ndarray | None = None,
+                        system_paths: dict[str, pathlib.Path] | None = None,
                         ) -> dict[str, trimesh.Trimesh]:
     """Export one STL per base system from a base-less tile mesh.
 
+    *system_paths* — when provided, a ``{system_suffix: output_path}`` dict
+    that overrides the paths derived from *output_path*.  Use this to place
+    outputs in the canonical ``stl/{system}/…`` hierarchy.
+
     *ol_tile_mesh* / *ol_surface* / *ol_terrain_z* — when supplied, the
     OpenLOCK export uses these instead of the DungeonBlocks-scale values.
-    This allows the OL tile to have been regenerated natively at 25.4 mm/sq
-    rather than being a scaled-down copy of the 35 mm mesh.
     """
     if cfg.base.style == 'none':
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         export_coloured_stl(tile_mesh, output_path)
         if verbose:
             print(f"Saved -> {output_path}  (no base, VisCAM colours embedded)")
         return {'none': tile_mesh}
 
-    outputs = {
-        dungeonblocks.SYSTEM_SUFFIX: _system_output_path(
-            output_path, dungeonblocks.SYSTEM_SUFFIX),
-        openlock.SYSTEM_SUFFIX: _system_output_path(
-            output_path, openlock.SYSTEM_SUFFIX),
-    }
+    if system_paths is None:
+        system_paths = {
+            dungeonblocks.SYSTEM_SUFFIX: _system_output_path(
+                output_path, dungeonblocks.SYSTEM_SUFFIX),
+            openlock.SYSTEM_SUFFIX: _system_output_path(
+                output_path, openlock.SYSTEM_SUFFIX),
+        }
+
+    # Ensure output directories exist
+    for path in system_paths.values():
+        path.parent.mkdir(parents=True, exist_ok=True)
 
     result: dict[str, trimesh.Trimesh] = {}
-    for system, path in outputs.items():
+    for system, path in system_paths.items():
         if verbose:
             print(f"Building {system} base and exporting...")
         if system == dungeonblocks.SYSTEM_SUFFIX:
@@ -260,7 +295,10 @@ def _export_system_stls(tile_mesh: trimesh.Trimesh,
 
 def build_tile(cfg: SceneConfig,
                output_path: pathlib.Path,
-               verbose: bool = True) -> trimesh.Trimesh:
+               verbose: bool = True,
+               *,
+               system_paths: dict[str, pathlib.Path] | None = None,
+               ) -> trimesh.Trimesh:
     """Build a tile from a SceneConfig and export system-specific STLs.
 
     DungeonBlocks output uses the tile as constructed (``cfg.surface.square_mm``
@@ -304,13 +342,17 @@ def build_tile(cfg: SceneConfig,
                                   output_path, verbose=verbose,
                                   ol_tile_mesh=ol_tile_mesh,
                                   ol_surface=ol_surface,
-                                  ol_terrain_z=ol_terrain_z)
+                                  ol_terrain_z=ol_terrain_z,
+                                  system_paths=system_paths)
     return exports.get(dungeonblocks.SYSTEM_SUFFIX, tile_mesh)
 
 
 def build_tile_from_spec(spec: TileSpec,
                          output_path: pathlib.Path,
-                         verbose: bool = True) -> trimesh.Trimesh:
+                         verbose: bool = True,
+                         *,
+                         system_paths: dict[str, pathlib.Path] | None = None,
+                         ) -> trimesh.Trimesh:
     """Build a tile from a YAML/Python TileSpec and export system-specific STLs."""
     cfg = _scene_config_from_spec(spec)
 
@@ -420,7 +462,8 @@ def build_tile_from_spec(spec: TileSpec,
                                   output_path, verbose=verbose,
                                   ol_tile_mesh=ol_tile_mesh,
                                   ol_surface=ol_surface,
-                                  ol_terrain_z=ol_terrain_z)
+                                  ol_terrain_z=ol_terrain_z,
+                                  system_paths=system_paths)
     return exports.get(dungeonblocks.SYSTEM_SUFFIX, tile_mesh)
 
 
@@ -651,8 +694,10 @@ def _build_parser() -> argparse.ArgumentParser:
                    metavar="FILE",
                    help="YAML (or .tile.py) tile spec; overrides all other flags")
     p.add_argument("--output", "-o", type=pathlib.Path,
-                   default=pathlib.Path("stl/tile.stl"),
-                   help="Base output path; system suffixes are inserted before .stl")
+                   default=None,
+                   help="Override output path (legacy flag mode); system suffixes "
+                        "are inserted before .stl.  Omit to use the canonical "
+                        "stl/{system}/{NxM}-{name}-{db|ol}.stl hierarchy.")
     p.add_argument("--seed",       type=int,   default=_S.seed)
     p.add_argument("--cols",       type=int,   default=_S.cols,
                    help="Number of 35 mm squares in X")
@@ -694,17 +739,72 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def main(argv=None):
-    args = _build_parser().parse_args(argv)
+def _is_flag_mode(args) -> bool:
+    """True if the user passed shape/output flags that imply a one-off build."""
+    _S = SurfaceConfig()
+    return any([
+        args.output is not None,
+        args.cols         != _S.cols,
+        args.rows         != _S.rows,
+        args.seed         != _S.seed,
+        args.no_base,
+        args.rolling_terrain,
+        args.peg_height   is not None,
+    ])
 
-    # ── Spec mode ─────────────────────────────────────────────────────────────
+
+def main(argv=None):
+    args    = _build_parser().parse_args(argv)
+    verbose = not args.quiet
+
+    TILES_ROOT = pathlib.Path("tiles")
+    STL_ROOT   = pathlib.Path("stl")
+
+    # ── Single spec mode ──────────────────────────────────────────────────────
     if args.spec is not None:
-        spec = load_spec(args.spec)
-        build_tile_from_spec(spec, output_path=args.output,
-                             verbose=not args.quiet)
+        spec       = load_spec(args.spec)
+        output     = args.output
+        sys_paths  = None
+        if output is None:
+            # New canonical hierarchy
+            sys_paths = _new_tile_paths(
+                args.spec, spec.surface.cols, spec.surface.rows,
+                TILES_ROOT, STL_ROOT)
+            output = sys_paths[dungeonblocks.SYSTEM_SUFFIX]   # fallback for 'none' style
+        build_tile_from_spec(spec, output_path=output,
+                             verbose=verbose, system_paths=sys_paths)
         return
 
-    # ── Legacy flag mode ──────────────────────────────────────────────────────
+    # ── Batch mode: no --spec AND no shape/output flags ───────────────────────
+    if not _is_flag_mode(args):
+        specs = sorted(TILES_ROOT.rglob("*.tile"))
+        if not specs:
+            print(f"No .tile files found under {TILES_ROOT}/  "
+                  f"(pass --spec FILE to target a specific tile)")
+            return
+        import time as _time
+        t_batch = _time.perf_counter()
+        for sp in specs:
+            if verbose:
+                print(f"\n{'─'*60}")
+                print(f"  {sp}")
+                print(f"{'─'*60}")
+            spec      = load_spec(sp)
+            sys_paths = _new_tile_paths(
+                sp, spec.surface.cols, spec.surface.rows,
+                TILES_ROOT, STL_ROOT)
+            build_tile_from_spec(spec,
+                                 output_path=sys_paths[dungeonblocks.SYSTEM_SUFFIX],
+                                 verbose=verbose,
+                                 system_paths=sys_paths)
+        elapsed = _time.perf_counter() - t_batch
+        n = len(specs)
+        print(f"\n✓  {n} tile{'s' if n != 1 else ''} generated in {elapsed:.1f}s  "
+              f"({elapsed/n:.1f}s/tile)")
+        return
+
+    # ── Legacy flag mode: explicit shape/output flags, no --spec ─────────────
+    output = args.output or pathlib.Path("stl/tile.stl")
     cfg = SceneConfig(
         surface=SurfaceConfig(
             cols        = args.cols,
@@ -742,7 +842,7 @@ def main(argv=None):
             peg_height = args.peg_height,
         ),
     )
-    build_tile(cfg, output_path=args.output, verbose=not args.quiet)
+    build_tile(cfg, output_path=output, verbose=verbose)
 
 
 if __name__ == "__main__":

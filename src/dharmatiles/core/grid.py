@@ -57,7 +57,7 @@ def rasterise_into_support(support_z: np.ndarray, surface: SurfaceConfig,
     ch     = surface.cell_h
 
     samples: list = []
-    half_cell = 0.5 * min(cw, ch)
+    half_cell = 1.5 * min(cw, ch)
 
     for idx in range(len(path) - 1):
         p0, p1   = path[idx], path[idx + 1]

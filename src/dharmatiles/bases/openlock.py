@@ -32,6 +32,13 @@ CUTOUT_WIDE_2 = 12.0
 CUTOUT_WIDE_3 = 10.0
 CUTOUT_DEEP_3 = 5.0
 
+# OpenLOCK clip-retention side-cut dimensions (spec §3c).
+# Two rectangular relief slots, one on each side of each socket, let the clip's
+# spring arms flex past the socket wall and snap into locked position.
+RETENTION_OFFSET_MM = 8.35  # mm — slot centre distance from socket centre
+RETENTION_WIDTH_MM  = 4.7   # mm — slot width along tile-edge axis
+RETENTION_DEPTH_MM  = 9.0   # mm — slot depth into tile (centred on face → ½ × 18 mm SCAD cube)
+
 # T-shaped clip-socket polygon in local (du, dv) coordinates.
 # du = offset from socket centre along the tile edge.
 # dv = depth measured inward from the tile face (0 = face, positive = inside tile).
@@ -194,6 +201,61 @@ def _add_socket_void(verts: list[list[float]],
         faces.append([i, i + 1, i + 2])
 
 
+def _add_retention_cuts(verts: list[list[float]],
+                        faces: list[list[int]],
+                        edge: str,
+                        center: float,
+                        width: float,
+                        height: float) -> None:
+    """Add spring-arm relief slots on both sides of one clip socket.
+
+    Two rectangular voids are cut at ±RETENTION_OFFSET_MM from *center*,
+    each RETENTION_WIDTH_MM wide × RETENTION_DEPTH_MM deep × clip-slot tall.
+    The face openings (dv = 0) must be registered as additional holes in the
+    companion ``_side_with_rect_holes`` call so the outer wall stays open there.
+    """
+    z0 = -WALL_HEIGHT + CUTOUT_START_Z
+    z1 = z0 + CUTOUT_HEIGHT
+
+    def p(u: float, v: float, z: float) -> list[float]:
+        if edge == "south":
+            return [u, v, z]
+        if edge == "north":
+            return [u, height - v, z]
+        if edge == "west":
+            return [v, u, z]
+        if edge == "east":
+            return [width - v, u, z]
+        raise ValueError(f"unknown edge {edge!r}")
+
+    for sign in (-1.0, +1.0):
+        uc = center + sign * RETENTION_OFFSET_MM
+        u0 = uc - RETENTION_WIDTH_MM / 2
+        u1 = uc + RETENTION_WIDTH_MM / 2
+        vd = RETENTION_DEPTH_MM
+
+        # Left wall (u=u0) — normal faces +u (into void)
+        _add_quad(verts, faces,
+                  p(u0, 0, z0), p(u0, vd, z0),
+                  p(u0, vd, z1), p(u0, 0, z1))
+        # Right wall (u=u1) — normal faces −u (into void)
+        _add_quad(verts, faces,
+                  p(u1, vd, z0), p(u1, 0, z0),
+                  p(u1, 0, z1), p(u1, vd, z1))
+        # Back wall (v=vd) — normal faces −v (toward tile face, into void)
+        _add_quad(verts, faces,
+                  p(u0, vd, z0), p(u1, vd, z0),
+                  p(u1, vd, z1), p(u0, vd, z1))
+        # Floor (z=z0) — normal faces +z (up, into void from below)
+        _add_quad(verts, faces,
+                  p(u0, 0, z0), p(u1, 0, z0),
+                  p(u1, vd, z0), p(u0, vd, z0))
+        # Ceiling (z=z1) — normal faces −z (down, into void from above)
+        _add_quad(verts, faces,
+                  p(u0, vd, z1), p(u1, vd, z1),
+                  p(u1, 0, z1), p(u0, 0, z1))
+
+
 def _explicit_base(surface: SurfaceConfig) -> trimesh.Trimesh:
     width  = surface.tile_w    # = cols × square_mm
     height = surface.tile_h    # = rows × square_mm
@@ -215,6 +277,16 @@ def _explicit_base(surface: SurfaceConfig) -> trimesh.Trimesh:
         cap_x_edges.extend([hole[0], hole[1]])
         _add_socket_void(verts, faces, "south", cx, width, height)
         _add_socket_void(verts, faces, "north", cx, width, height)
+        # Retention side cuts — face openings registered as additional holes
+        for sign in (-1.0, +1.0):
+            uc = cx + sign * RETENTION_OFFSET_MM
+            rc_hole = (uc - RETENTION_WIDTH_MM / 2,
+                       uc + RETENTION_WIDTH_MM / 2, z0, z1)
+            south_holes.append(rc_hole)
+            north_holes.append(rc_hole)
+            cap_x_edges.extend([rc_hole[0], rc_hole[1]])
+        _add_retention_cuts(verts, faces, "south", cx, width, height)
+        _add_retention_cuts(verts, faces, "north", cx, width, height)
 
     west_holes = []
     east_holes = []
@@ -226,6 +298,16 @@ def _explicit_base(surface: SurfaceConfig) -> trimesh.Trimesh:
         cap_y_edges.extend([hole[0], hole[1]])
         _add_socket_void(verts, faces, "west", cy, width, height)
         _add_socket_void(verts, faces, "east", cy, width, height)
+        # Retention side cuts — face openings registered as additional holes
+        for sign in (-1.0, +1.0):
+            uc = cy + sign * RETENTION_OFFSET_MM
+            rc_hole = (uc - RETENTION_WIDTH_MM / 2,
+                       uc + RETENTION_WIDTH_MM / 2, z0, z1)
+            west_holes.append(rc_hole)
+            east_holes.append(rc_hole)
+            cap_y_edges.extend([rc_hole[0], rc_hole[1]])
+        _add_retention_cuts(verts, faces, "west", cy, width, height)
+        _add_retention_cuts(verts, faces, "east", cy, width, height)
 
     _cap_grid(verts, faces, width, height, 0.0, cap_x_edges, cap_y_edges)
     _cap_grid(verts, faces, width, height, -WALL_HEIGHT, cap_x_edges, cap_y_edges)
