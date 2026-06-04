@@ -114,10 +114,12 @@ class GrassConfig:
     # 'triangle' — flat ribbon with apex below (printable, fast)
     # 'circle'   — cylindrical tube (reed / rush look)
     # 'diamond'  — 4-vertex rhombus: ridge top, keel bottom
-    cross_section:     str   = 'circle'
+    # 'leaf'     — 6-vert grass blade: arched top, V-keel bottom (default)
+    cross_section:     str   = 'leaf'
     circle_segs:       int   = 12      # segments for 'circle' cross-section (≥3)
-    thickness:         float = 0.5     # mm — 'triangle' apex depth below spine
+    thickness:         float = 0.5     # mm — keel depth below spine (triangle/leaf/diamond)
     diamond_equator:   float = 0.75    # equator position for 'diamond'
+    leaf_arch:         float = 0.4     # arch rise as fraction of thickness (leaf only)
 
     # ── Blade width range (mm) ────────────────────────────────────────────────
     width_min:    float = 0.8015625

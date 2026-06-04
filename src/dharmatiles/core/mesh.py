@@ -106,7 +106,8 @@ def build_tube_mesh(spine_3d: np.ndarray, widths: np.ndarray,
                     thickness: float,
                     cross_section: str = 'triangle',
                     n_segs: int = 8,
-                    diamond_equator: float = 0.75) -> trimesh.Trimesh:
+                    diamond_equator: float = 0.75,
+                    leaf_arch: float = 0.4) -> trimesh.Trimesh:
     """Watertight tube mesh following *spine_3d*.
 
     cross_section='triangle' (default)
@@ -127,6 +128,17 @@ def build_tube_mesh(spine_3d: np.ndarray, widths: np.ndarray,
         4-vertex rhombus / diamond cross-section.
         Spine sits at the top apex; the blade widens at the equator then tapers
         back to a bottom keel apex, giving a ridge-backed, keel-bottomed blade.
+
+    cross_section='leaf'
+        6 verts / ring — real grass-blade silhouette:
+          V0 — keel (spine + thickness * down_loc)
+          V1 — right edge (spine + half_w * up_loc)
+          V2 — upper-right (half-width, arched up by leaf_arch * thickness)
+          V3 — arch top (centred, arched up by leaf_arch * thickness)
+          V4 — upper-left (mirror of V2)
+          V5 — left edge (spine − half_w * up_loc)
+        4 faces on the arched top, 2 faces on the V-keel bottom.
+        *leaf_arch* controls arch rise as a fraction of *thickness* (default 0.4).
     """
     path  = np.asarray(spine_3d, dtype=float)   # (n_pts, 3)
     W_arr = np.asarray(widths,   dtype=float)    # (n_pts,)
@@ -163,10 +175,22 @@ def build_tube_mesh(spine_3d: np.ndarray, widths: np.ndarray,
             path - half_W[:, None] * up_locs   + eq_d * down_locs,
         ], axis=1)
 
+    elif cross_section == 'leaf':
+        n      = 6
+        arch_h = leaf_arch * thickness          # rise above spine (= -down direction)
+        ring_v = np.stack([
+            path + thickness * down_locs,                                       # V0 keel
+            path + half_W[:, None] * up_locs,                                   # V1 right edge
+            path + 0.5 * half_W[:, None] * up_locs - arch_h * down_locs,       # V2 upper-right
+            path                                    - arch_h * down_locs,       # V3 arch top
+            path - 0.5 * half_W[:, None] * up_locs - arch_h * down_locs,       # V4 upper-left
+            path - half_W[:, None] * up_locs,                                   # V5 left edge
+        ], axis=1)
+
     else:
         raise ValueError(
             f"Unknown cross_section {cross_section!r}; "
-            "use 'triangle', 'circle', or 'diamond'"
+            "use 'triangle', 'circle', 'diamond', or 'leaf'"
         )
 
     nv = n * n_pts + 2

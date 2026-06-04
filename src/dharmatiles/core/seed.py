@@ -28,10 +28,11 @@ class GrassSeed:
     width:     float   # blade width (mm)
 
     # ── Cross-section ─────────────────────────────────────────────────────────
-    cross_section:   str    # 'triangle' | 'circle' | 'diamond'
+    cross_section:   str    # 'triangle' | 'circle' | 'diamond' | 'leaf'
     circle_segs:     int    # segments for 'circle' (ignored for others)
-    thickness:       float  # mm — apex depth for 'triangle' / 'diamond'
+    thickness:       float  # mm — keel depth below spine (triangle/leaf/diamond)
     diamond_equator: float  # equator fraction for 'diamond'
+    leaf_arch:       float  # arch rise as fraction of thickness (leaf only)
 
     # ── Spine ─────────────────────────────────────────────────────────────────
     n_path:      int    # spine sample count
@@ -68,6 +69,7 @@ def make_seed(curl: float,
         circle_segs      = grass.circle_segs,
         thickness        = grass.thickness,
         diamond_equator  = grass.diamond_equator,
+        leaf_arch        = grass.leaf_arch,
         n_path           = grass.n_path,
         clearance        = solver.clearance,
         seg_len          = grass.seg_len,
