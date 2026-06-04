@@ -137,7 +137,7 @@ class GrassConfig:
     max_segs:        int   = 12     # max growth segments
     rise_cap:        float = 0.8    # mm: max tolerated rise per step
     smooth_sigma:    float = 2.0    # Gaussian smoothing width (segment units)
-    root_depth:      float = 2.0    # mm — underground anchor depth
+    root_depth:      float = 0.5    # mm — underground anchor depth
 
     # ── Group placement ───────────────────────────────────────────────────────
     # groups_per_square is a density — the layer multiplies by cols × rows
