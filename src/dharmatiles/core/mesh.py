@@ -247,9 +247,150 @@ def build_tube_mesh(spine_3d: np.ndarray, widths: np.ndarray,
 
 # ── Terrain solid ─────────────────────────────────────────────────────────────
 
+def _rdp_edge(z_arr: np.ndarray, threshold: float) -> list[int]:
+    """Ramer-Douglas-Peucker simplification of a 1-D z-profile.
+
+    Returns sorted indices into *z_arr* to keep.  Always includes 0 and
+    ``len(z_arr)-1``.  Intermediate points are kept only when the perpendicular
+    deviation (in z) from the chord between the current endpoints exceeds
+    *threshold* mm.
+    """
+    n = len(z_arr)
+    if n <= 2:
+        return list(range(n))
+    keep: set[int] = {0, n - 1}
+    stack = [(0, n - 1)]
+    while stack:
+        i, j = stack.pop()
+        if j - i <= 1:
+            continue
+        idxs  = np.arange(i + 1, j)
+        t     = (idxs - i) / (j - i)
+        z_lin = z_arr[i] + (z_arr[j] - z_arr[i]) * t
+        dev   = np.abs(z_arr[i + 1 : j] - z_lin)
+        m     = int(np.argmax(dev)) + i + 1
+        if dev[m - i - 1] > threshold:
+            keep.add(m)
+            stack.append((i, m))
+            stack.append((m, j))
+    return sorted(keep)
+
+
+def _make_heightmap_solid_adaptive(
+    z_grid: np.ndarray,
+    tile_w: float, tile_h: float,
+    base_h: float,
+    threshold: float,
+    stride: int = 16,
+) -> trimesh.Trimesh:
+    """Adaptive terrain mesh: dense at high-curvature areas, sparse on flat ground.
+
+    Boundary ring
+    -------------
+    Each of the 4 tile edges is simplified with Ramer-Douglas-Peucker at
+    ``threshold * 8``.  At 35 mm / 256 cells, soil bumps reaching the tile edge
+    are attenuated to ≈ 0.05-0.10 mm; the coarser threshold collapses them so
+    each near-flat edge section becomes a single trapezoid on the side wall (a
+    few triangles per face instead of 255).  The same simplified ring is used
+    for both the top-surface Delaunay and the side walls so no T-junctions form.
+
+    Interior vertex selection
+    -------------------------
+    1. Coarse background grid (every *stride* cells) — bounds max triangle size.
+    2. Interior grid points where |∇²z| > *threshold* — soil bumps and breaks.
+
+    The bottom is a fan from one centre vertex to the simplified ring.
+    """
+    from scipy.spatial import Delaunay
+
+    nrows, ncols = z_grid.shape
+    gx = tile_w / max(ncols - 1, 1)
+    gy = tile_h / max(nrows - 1, 1)
+    side_thr = threshold * 8   # aggressive: collapses edge bumps < ~0.16 mm
+
+    # ── RDP-simplified boundary ring (shared by top Delaunay + side walls) ────
+    sk = _rdp_edge(z_grid[0,  :],         side_thr)  # south: col 0 → ncols-1
+    ek = _rdp_edge(z_grid[:,  ncols - 1], side_thr)  # east:  row 0 → nrows-1
+    nk = _rdp_edge(z_grid[nrows-1, ::-1], side_thr)  # north: col ncols-1 → 0
+    wk = _rdp_edge(z_grid[::-1, 0],       side_thr)  # west:  row nrows-1 → 0
+
+    south = [(0,        c)         for c in sk]
+    east  = [(r,        ncols - 1) for r in ek]
+    north = [(nrows-1,  ncols-1-k) for k in nk]
+    west  = [(nrows-1-k, 0)        for k in wk]
+
+    bdr: list[tuple[int, int]] = south[:-1] + east[:-1] + north[:-1] + west[:-1]
+    n_bdr   = len(bdr)
+    bdr_set = set(bdr)
+
+    # ── Interior points ───────────────────────────────────────────────────────
+    bg_pts: list[tuple[int, int]] = [
+        (int(r), int(c))
+        for r in range(stride, nrows - 1, stride)
+        for c in range(stride, ncols - 1, stride)
+    ]
+    if nrows > 2 and ncols > 2:
+        lap = np.abs(
+            z_grid[2:,  1:-1] + z_grid[:-2,  1:-1] +
+            z_grid[1:-1, 2:] + z_grid[1:-1, :-2] -
+            4.0 * z_grid[1:-1, 1:-1]
+        )
+        ir, ic  = np.where(lap > threshold)
+        lap_pts = [(int(r) + 1, int(c) + 1) for r, c in zip(ir, ic)]
+    else:
+        lap_pts = []
+
+    interior_set = (set(bg_pts) | set(lap_pts)) - bdr_set
+    pts: list[tuple[int, int]] = bdr + sorted(interior_set)
+    n_top = len(pts)
+
+    xy  = np.array([(c * gx, r * gy) for r, c in pts])
+    z_t = np.array([float(z_grid[r, c]) for r, c in pts])
+
+    # ── 2-D Delaunay → top surface ────────────────────────────────────────────
+    top_faces   = Delaunay(xy).simplices.astype(np.int32)
+    n_top_faces = len(top_faces)
+
+    # ── Vertex buffer ─────────────────────────────────────────────────────────
+    # [0 .. n_top-1]          top (simplified bdr + interior)
+    # [n_top .. n_top+n_bdr-1]  bottom ring (same XY as bdr, z = -base_h)
+    # [n_top+n_bdr]             bottom centre
+    xy_bdr  = xy[:n_bdr]
+    bot_ctr = n_top + n_bdr
+
+    verts = np.empty((n_top + n_bdr + 1, 3))
+    verts[:n_top,              :2] = xy
+    verts[:n_top,               2] = z_t
+    verts[n_top:bot_ctr,       :2] = xy_bdr
+    verts[n_top:bot_ctr,        2] = -base_h
+    verts[bot_ctr]                  = [tile_w / 2.0, tile_h / 2.0, -base_h]
+
+    # ── Side walls (vectorised) ───────────────────────────────────────────────
+    ks  = np.arange(n_bdr, dtype=np.int32)
+    ks1 = (ks + 1) % n_bdr
+    side_arr = np.empty((2 * n_bdr, 3), dtype=np.int32)
+    side_arr[0::2] = np.stack([ks,       n_top + ks,  ks1      ], axis=1)
+    side_arr[1::2] = np.stack([ks1,      n_top + ks,  n_top + ks1], axis=1)
+
+    # ── Bottom fan (centre → simplified ring) ─────────────────────────────────
+    bot_arr = np.empty((n_bdr, 3), dtype=np.int32)
+    bot_arr[:, 0] = bot_ctr
+    bot_arr[:, 1] = n_top + ks1
+    bot_arr[:, 2] = n_top + ks
+
+    all_faces = np.vstack([top_faces, side_arr, bot_arr])
+    mesh = trimesh.Trimesh(vertices=verts, faces=all_faces.astype(int),
+                           process=False)
+    mesh.metadata['top_face_count'] = n_top_faces
+    mesh.fix_normals()
+    return mesh
+
+
 def make_heightmap_solid(z_grid: np.ndarray, tile_w: float, tile_h: float,
                          base_h: float, subsample: int = 1,
                          omit_top_mask: np.ndarray | None = None,
+                         error_threshold: float | None = None,
+                         simplify_stride: int = 16,
                          ) -> trimesh.Trimesh:
     """Watertight solid: top = *z_grid* surface, bottom = flat at −*base_h*.
 
@@ -262,7 +403,22 @@ def make_heightmap_solid(z_grid: np.ndarray, tile_w: float, tile_h: float,
     omit_top_mask: optional bool grid. Top quads whose four sampled corners are
         True are omitted so another explicit layer, such as water, can cap that
         region instead of duplicating coplanar terrain faces.
+    error_threshold : float | None
+        When set, use adaptive Laplacian-based triangulation instead of the
+        uniform grid.  Interior vertices are kept only where |∇²z| exceeds
+        this value (mm).  Incompatible with omit_top_mask (falls back to
+        uniform grid when a mask is supplied).
+    simplify_stride : int
+        Coarse background grid spacing in cells for the adaptive path.
     """
+    # ── Adaptive path ─────────────────────────────────────────────────────────
+    if error_threshold is not None and omit_top_mask is None:
+        return _make_heightmap_solid_adaptive(
+            z_grid, tile_w, tile_h, base_h,
+            threshold=error_threshold,
+            stride=simplify_stride,
+        )
+
     nrows, ncols = z_grid.shape
     sr_arr = np.arange(0, ncols, subsample)
     if sr_arr[-1] != ncols - 1:

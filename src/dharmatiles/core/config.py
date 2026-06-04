@@ -47,10 +47,19 @@ class SurfaceConfig:
     cols:             int   = 1
     rows:             int   = 1
     square_mm:      float = 35.0  # mm per square — 35 DB, 25.4 OL imperial, 25.0 OL metric
-    cells_per_square: int   = 128  # heightmap resolution per square
+    cells_per_square: int   = 256  # heightmap resolution per square
     base_h:         float = 0.0  # mm — extra slab below z=0
     seed:           int   = 377
     flat_terrain:   bool  = True   # False → sinusoidal stand-in terrain (legacy)
+
+    # ── Adaptive terrain mesh ─────────────────────────────────────────────────
+    # Laplacian threshold for adaptive top-surface triangulation (mm).
+    # Interior heightmap vertices are kept only where |∇²z| > this value;
+    # a coarse background grid (terrain_simplify_stride cells apart) fills flat
+    # areas so triangles don't grow unboundedly large.
+    # None = uniform full-resolution grid (legacy behaviour).
+    terrain_simplify_threshold: float | None = 0.02
+    terrain_simplify_stride:    int          = 16
 
     # ── Derived dimensions ────────────────────────────────────────────────────
     @property
@@ -135,7 +144,7 @@ class GrassConfig:
     # ── Growth (GrassLayer) ───────────────────────────────────────────────────
     seg_len:         float = 0.8    # mm per growth segment
     max_segs:        int   = 12     # max growth segments
-    rise_cap:        float = 0.8    # mm: max tolerated rise per step
+    rise_cap:        float = 0.50   # mm: max tolerated rise per step
     smooth_sigma:    float = 2.0    # Gaussian smoothing width (segment units)
     root_depth:      float = 0.5    # mm — underground anchor depth
 
@@ -268,8 +277,8 @@ class StonesConfig:
     cut_min:       float = 0.40   # min cut distance as fraction of mean radius
     cut_max:       float = 0.75   # max cut distance as fraction of mean radius
     roughness:     float = 0.06   # small residual per-vertex noise
-    az_segs:       int   = 20     # azimuth facets per stone
-    el_segs:       int   = 8      # elevation rings per stone
+    az_segs:       int   = 32     # azimuth facets per stone
+    el_segs:       int   = 12     # elevation rings per stone
     sink:          float = 0.10   # mm — base sunk below terrain
 
 

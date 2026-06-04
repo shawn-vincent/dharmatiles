@@ -168,6 +168,8 @@ def _build_mesh(cfg: SceneConfig,
     terrain_mesh = make_heightmap_solid(
         scene.terrain_z, cfg.surface.tile_w, cfg.surface.tile_h, cfg.surface.base_h,
         omit_top_mask=overflow_mask,   # None if no overflow → all terrain faces kept
+        error_threshold=cfg.surface.terrain_simplify_threshold,
+        simplify_stride=cfg.surface.terrain_simplify_stride,
     )
     _clear_paint(terrain_mesh)
     _paint_terrain_top(terrain_mesh, COLOUR_SOIL)

@@ -28,6 +28,19 @@ DEFAULT_MAGNET_Z = 35.0
 DEFAULT_MAGNET_SPACING = 80.9
 DEFAULT_LOGO_SIZE = 36.0
 DEFAULT_LOGO_DEPTH = 0.5
+DEFAULT_LIGHTWEIGHT_OUTPUT = Path("extras/craft-paint-modular-organizer-lightweight.stl")
+DEFAULT_LIGHTWEIGHT_CUP_HEIGHT = 50.0
+DEFAULT_LIGHTWEIGHT_CUP_WALL = 1.5
+DEFAULT_LIGHTWEIGHT_FLOOR = 3.0
+DEFAULT_LIGHTWEIGHT_RIB_WIDTH = 2.8
+DEFAULT_LIGHTWEIGHT_RIB_HEIGHT = 3.0
+DEFAULT_LIGHTWEIGHT_MAGNET_Z = 7.0
+DEFAULT_LIGHTWEIGHT_MAGNET_BOSS_DEPTH = 4.5
+DEFAULT_LIGHTWEIGHT_MAGNET_BOSS_WIDTH = 16.0
+DEFAULT_LIGHTWEIGHT_MAGNET_BOSS_HEIGHT = 14.0
+DEFAULT_LIGHTWEIGHT_HEX_RADIUS = 8.0
+DEFAULT_LIGHTWEIGHT_HEX_WIDTH = 1.0
+DEFAULT_LIGHTWEIGHT_HEX_HEIGHT = 2.0
 DEFAULT_LONG_SIDE_MAGNET_POSITIONS = (
     140.0 / 2.0 - DEFAULT_MAGNET_SPACING / 2.0,
     140.0 / 2.0 + DEFAULT_MAGNET_SPACING / 2.0,
@@ -63,6 +76,22 @@ class OrganizerSpec:
     @property
     def roundover(self) -> float:
         return max(self.box_roundover, self.vertical_corner_roundover, self.hole_roundover)
+
+
+@dataclass(frozen=True)
+class LightweightSpec:
+    cup_height: float = DEFAULT_LIGHTWEIGHT_CUP_HEIGHT
+    cup_wall: float = DEFAULT_LIGHTWEIGHT_CUP_WALL
+    floor: float = DEFAULT_LIGHTWEIGHT_FLOOR
+    rib_width: float = DEFAULT_LIGHTWEIGHT_RIB_WIDTH
+    rib_height: float = DEFAULT_LIGHTWEIGHT_RIB_HEIGHT
+    magnet_z: float = DEFAULT_LIGHTWEIGHT_MAGNET_Z
+    magnet_boss_depth: float = DEFAULT_LIGHTWEIGHT_MAGNET_BOSS_DEPTH
+    magnet_boss_width: float = DEFAULT_LIGHTWEIGHT_MAGNET_BOSS_WIDTH
+    magnet_boss_height: float = DEFAULT_LIGHTWEIGHT_MAGNET_BOSS_HEIGHT
+    hex_radius: float = DEFAULT_LIGHTWEIGHT_HEX_RADIUS
+    hex_width: float = DEFAULT_LIGHTWEIGHT_HEX_WIDTH
+    hex_height: float = DEFAULT_LIGHTWEIGHT_HEX_HEIGHT
 
 
 _CUBE_CORNERS = np.array(
@@ -1076,9 +1105,627 @@ def build_sdf_mesh(spec: OrganizerSpec) -> trimesh.Trimesh:
     return mesh
 
 
+def translated_box(extents: tuple[float, float, float], center: tuple[float, float, float]) -> trimesh.Trimesh:
+    mesh = trimesh.creation.box(extents=extents)
+    mesh.apply_translation(center)
+    return mesh
+
+
+def vertical_cylinder(radius: float, height: float, center: tuple[float, float, float], sections: int) -> trimesh.Trimesh:
+    mesh = trimesh.creation.cylinder(radius=radius, height=height, sections=sections)
+    mesh.apply_translation(center)
+    return mesh
+
+
+def axis_cylinder(
+    radius: float,
+    length: float,
+    center: tuple[float, float, float],
+    axis: tuple[float, float, float],
+    sections: int,
+) -> trimesh.Trimesh:
+    mesh = trimesh.creation.cylinder(radius=radius, height=length, sections=sections)
+    transform = trimesh.geometry.align_vectors(np.array([0.0, 0.0, 1.0]), np.asarray(axis, dtype=float))
+    mesh.apply_transform(transform)
+    mesh.apply_translation(center)
+    return mesh
+
+
+def strut_between(
+    point_a: tuple[float, float],
+    point_b: tuple[float, float],
+    width: float,
+    height: float,
+    z_center: float,
+) -> trimesh.Trimesh:
+    a = np.asarray(point_a, dtype=float)
+    b = np.asarray(point_b, dtype=float)
+    vector = b - a
+    length = float(np.linalg.norm(vector))
+    angle = float(np.arctan2(vector[1], vector[0]))
+    mesh = trimesh.creation.box(extents=(length, width, height))
+    mesh.apply_transform(trimesh.transformations.rotation_matrix(angle, [0.0, 0.0, 1.0]))
+    mesh.apply_translation((float((a[0] + b[0]) / 2.0), float((a[1] + b[1]) / 2.0), z_center))
+    return mesh
+
+
+def box_between_3d(
+    point_a: tuple[float, float, float],
+    point_b: tuple[float, float, float],
+    normal: tuple[float, float, float],
+    width: float,
+    height: float,
+) -> trimesh.Trimesh:
+    a = np.asarray(point_a, dtype=float)
+    b = np.asarray(point_b, dtype=float)
+    axis = b - a
+    length = float(np.linalg.norm(axis))
+    if length <= 1e-6:
+        return trimesh.Trimesh()
+
+    x_axis = axis / length
+    y_axis = np.asarray(normal, dtype=float)
+    y_axis = y_axis - x_axis * np.dot(y_axis, x_axis)
+    y_norm = float(np.linalg.norm(y_axis))
+    if y_norm <= 1e-6:
+        y_axis = np.array([0.0, 0.0, 1.0])
+        y_axis = y_axis - x_axis * np.dot(y_axis, x_axis)
+        y_norm = float(np.linalg.norm(y_axis))
+    y_axis = y_axis / y_norm
+    z_axis = np.cross(x_axis, y_axis)
+    z_axis = z_axis / np.linalg.norm(z_axis)
+
+    mesh = trimesh.creation.box(extents=(length, width, height))
+    transform = np.eye(4)
+    transform[:3, :3] = np.column_stack([x_axis, y_axis, z_axis])
+    transform[:3, 3] = (a + b) / 2.0
+    mesh.apply_transform(transform)
+    return mesh
+
+
+def perimeter_rail_band(
+    spec: OrganizerSpec,
+    rail_depth: float,
+    rail_height: float,
+    z_center: float,
+) -> trimesh.Trimesh:
+    import manifold3d as m3d
+
+    straight_segments = max(8, int(np.ceil(max(spec.width, spec.depth) / 1.5 / 4.0)))
+    arc_segments = 24
+    outer = rounded_rectangle_ring(
+        spec.width,
+        spec.depth,
+        0.0,
+        spec.vertical_corner_roundover,
+        straight_segments,
+        arc_segments,
+    )
+    inner = rounded_rectangle_ring(
+        spec.width,
+        spec.depth,
+        rail_depth,
+        max(0.0, spec.vertical_corner_roundover - rail_depth),
+        straight_segments,
+        arc_segments,
+    )
+    cross_section = m3d.CrossSection([outer, inner], fillrule=m3d.FillRule.EvenOdd)
+    solid = m3d.Manifold.extrude(cross_section, height=rail_height)
+    solid = solid.translate((0.0, 0.0, z_center - rail_height / 2.0))
+    raw = solid.to_mesh()
+    mesh = trimesh.Trimesh(
+        vertices=np.array(raw.vert_properties, dtype=float)[:, :3],
+        faces=np.array(raw.tri_verts, dtype=int),
+        process=False,
+    )
+    mesh.merge_vertices(digits_vertex=2)
+    mesh.update_faces(mesh.nondegenerate_faces())
+    mesh.remove_unreferenced_vertices()
+    mesh.fix_normals()
+    solid_components = [component for component in mesh.split(only_watertight=False) if abs(component.volume) > 0.1]
+    if len(solid_components) == 1:
+        mesh = solid_components[0]
+    elif solid_components:
+        mesh = trimesh.util.concatenate(solid_components)
+    mesh = cap_triangular_boundary_loops(mesh)
+    if mesh.volume < 0:
+        mesh.invert()
+    return mesh
+
+
+def lightweight_rib_edges(centers: list[tuple[float, float]], max_length: float = 56.0) -> list[tuple[int, int]]:
+    points = np.asarray(centers, dtype=float)
+    edges: set[tuple[int, int]] = set()
+    for simplex in Delaunay(points).simplices:
+        for local_a, local_b in ((0, 1), (1, 2), (2, 0)):
+            a = int(simplex[local_a])
+            b = int(simplex[local_b])
+            if np.linalg.norm(points[a] - points[b]) <= max_length:
+                edges.add(tuple(sorted((a, b))))
+    return sorted(edges)
+
+
+def clipped_segment_runs(
+    point_a: np.ndarray,
+    point_b: np.ndarray,
+    inside,
+    sample_step: float = 1.0,
+) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    length = float(np.linalg.norm(point_b - point_a))
+    if length <= 1e-6:
+        return []
+    steps = max(2, int(np.ceil(length / sample_step)) + 1)
+    samples = [point_a + (point_b - point_a) * (index / (steps - 1)) for index in range(steps)]
+    flags = [inside(sample) for sample in samples]
+
+    runs: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    start: np.ndarray | None = None
+    previous = samples[0]
+    previous_inside = flags[0]
+    if previous_inside:
+        start = previous
+
+    for current, current_inside in zip(samples[1:], flags[1:]):
+        if current_inside and not previous_inside:
+            start = current
+        elif previous_inside and not current_inside and start is not None:
+            if np.linalg.norm(previous - start) > 1.0:
+                runs.append((tuple(start), tuple(previous)))
+            start = None
+        previous = current
+        previous_inside = current_inside
+
+    if previous_inside and start is not None and np.linalg.norm(previous - start) > 1.0:
+        runs.append((tuple(start), tuple(previous)))
+    return runs
+
+
+def rounded_perimeter_mapper(spec: OrganizerSpec, inset: float):
+    points = rounded_rectangle_ring(
+        spec.width,
+        spec.depth,
+        inset,
+        max(0.0, spec.vertical_corner_roundover - inset),
+        max(8, int(np.ceil(max(spec.width, spec.depth) / 2.0 / 4.0))),
+        20,
+    )
+    segments: list[tuple[np.ndarray, np.ndarray, float, float]] = []
+    total = 0.0
+    for start, end in zip(points, points[1:] + points[:1]):
+        a = np.asarray(start, dtype=float)
+        b = np.asarray(end, dtype=float)
+        length = float(np.linalg.norm(b - a))
+        if length <= 1e-9:
+            continue
+        segments.append((a, b, total, total + length))
+        total += length
+
+    def map_point(s: float, z: float) -> tuple[np.ndarray, np.ndarray]:
+        wrapped = s % total
+        for a, b, s0, s1 in segments:
+            if wrapped <= s1 + 1e-9:
+                t = (wrapped - s0) / (s1 - s0)
+                xy = a + (b - a) * t
+                tangent_xy = (b - a) / np.linalg.norm(b - a)
+                normal_xy = np.array([tangent_xy[1], -tangent_xy[0]])
+                point = np.array([xy[0], xy[1], z], dtype=float)
+                normal = np.array([normal_xy[0], normal_xy[1], 0.0], dtype=float)
+                return point, normal
+        a, b, s0, s1 = segments[-1]
+        tangent_xy = (b - a) / np.linalg.norm(b - a)
+        normal_xy = np.array([tangent_xy[1], -tangent_xy[0]])
+        return np.array([a[0], a[1], z], dtype=float), np.array([normal_xy[0], normal_xy[1], 0.0], dtype=float)
+
+    return total, map_point
+
+
+def side_honeycomb_struts(
+    spec: OrganizerSpec,
+    lightweight: LightweightSpec,
+    z_min: float,
+    z_max: float,
+) -> list[trimesh.Trimesh]:
+    if lightweight.hex_radius <= 0.0 or lightweight.hex_width <= 0.0 or lightweight.hex_height <= 0.0:
+        return []
+    if z_max - z_min <= 2.0:
+        return []
+
+    rail_depth = lightweight.magnet_boss_depth
+    min_depth = lightweight.hex_width
+    perimeter, map_point = rounded_perimeter_mapper(spec, rail_depth / 2.0)
+    column_count = max(3, int(round(perimeter / (np.sqrt(3.0) * lightweight.hex_radius))))
+    radius = perimeter / (np.sqrt(3.0) * column_count)
+    ds = perimeter / column_count
+    dz = 1.5 * radius
+    angles = np.deg2rad(np.arange(90.0, 450.0, 60.0))
+
+    def smoothstep(value: float) -> float:
+        value = float(np.clip(value, 0.0, 1.0))
+        return value * value * (3.0 - 2.0 * value)
+
+    def strut_depth_at_z(z: float) -> float:
+        span = max(1e-6, z_max - z_min)
+        t = float(np.clip((z - z_min) / span, 0.0, 1.0))
+        edge_weight = smoothstep(abs(2.0 * t - 1.0))
+        return min_depth + (rail_depth - min_depth) * edge_weight
+
+    def inside(point: np.ndarray) -> bool:
+        return z_min - 0.25 <= point[1] <= z_max + 0.25
+
+    def append_tapered_strut(start: tuple[float, float], end: tuple[float, float]) -> None:
+        start_array = np.asarray(start, dtype=float)
+        end_array = np.asarray(end, dtype=float)
+        length = float(np.linalg.norm(end_array - start_array))
+        direction = (end_array - start_array) / max(length, 1e-6)
+        depth_a = strut_depth_at_z(float(start_array[1]))
+        depth_b = strut_depth_at_z(float(end_array[1]))
+        point_a, normal_a = map_point(start_array[0], start_array[1])
+        point_b, normal_b = map_point(end_array[0], end_array[1])
+        point_a = point_a + normal_a * ((rail_depth - depth_a) / 2.0)
+        point_b = point_b + normal_b * ((rail_depth - depth_b) / 2.0)
+        axis = point_b - point_a
+        axis_length = float(np.linalg.norm(axis))
+        if axis_length <= 1e-6:
+            return
+        x_axis = axis / axis_length
+        y_axis = normal_a + normal_b
+        y_axis = y_axis - x_axis * np.dot(y_axis, x_axis)
+        if np.linalg.norm(y_axis) <= 1e-6:
+            y_axis = normal_a
+            y_axis = y_axis - x_axis * np.dot(y_axis, x_axis)
+        y_axis = y_axis / np.linalg.norm(y_axis)
+        z_axis = np.cross(x_axis, y_axis)
+        z_axis = z_axis / np.linalg.norm(z_axis)
+        half_height = lightweight.hex_height / 2.0
+
+        vertices = np.array(
+            [
+                point_a + y_axis * depth_a / 2.0 + z_axis * half_height,
+                point_a + y_axis * depth_a / 2.0 - z_axis * half_height,
+                point_a - y_axis * depth_a / 2.0 - z_axis * half_height,
+                point_a - y_axis * depth_a / 2.0 + z_axis * half_height,
+                point_b + y_axis * depth_b / 2.0 + z_axis * half_height,
+                point_b + y_axis * depth_b / 2.0 - z_axis * half_height,
+                point_b - y_axis * depth_b / 2.0 - z_axis * half_height,
+                point_b - y_axis * depth_b / 2.0 + z_axis * half_height,
+            ],
+            dtype=float,
+        )
+        faces = np.array(
+            [
+                [0, 1, 2], [0, 2, 3],
+                [4, 6, 5], [4, 7, 6],
+                [0, 4, 5], [0, 5, 1],
+                [1, 5, 6], [1, 6, 2],
+                [2, 6, 7], [2, 7, 3],
+                [3, 7, 4], [3, 4, 0],
+            ],
+            dtype=int,
+        )
+        meshes.append(trimesh.Trimesh(vertices=vertices, faces=faces, process=False))
+
+    _n_rows = int(np.ceil((z_max - z_min) / dz)) + 2
+    _z_start = (z_min + z_max) / 2.0 - (_n_rows - 1) * dz / 2.0
+    meshes: list[trimesh.Trimesh] = []
+    edges: set[tuple[tuple[float, float], tuple[float, float]]] = set()
+    for row, center_z in enumerate(np.arange(_z_start, _z_start + _n_rows * dz, dz)):
+        s_offset = ds / 2.0 if row % 2 else 0.0
+        for center_s in np.arange(-radius + s_offset, perimeter + radius + ds, ds):
+            vertices = np.column_stack(
+                [
+                    center_s + radius * np.cos(angles),
+                    center_z + radius * np.sin(angles),
+                ]
+            )
+            for start, end in zip(vertices, np.roll(vertices, -1, axis=0)):
+                for clipped_start, clipped_end in clipped_segment_runs(start, end, inside):
+                    if np.linalg.norm(np.subtract(clipped_end, clipped_start)) <= 2.0:
+                        continue
+                    key_a = (round(clipped_start[0] % perimeter, 3), round(clipped_start[1], 3))
+                    key_b = (round(clipped_end[0] % perimeter, 3), round(clipped_end[1], 3))
+                    key = tuple(sorted((key_a, key_b)))
+                    if key in edges:
+                        continue
+                    edges.add(key)
+
+                    append_tapered_strut(clipped_start, clipped_end)
+    return meshes
+
+
+def cylindrical_honeycomb_struts(
+    center: tuple[float, float],
+    radius: float,
+    wall_depth: float,
+    z_min: float,
+    z_max: float,
+    lightweight: LightweightSpec,
+) -> list[trimesh.Trimesh]:
+    if lightweight.hex_radius <= 0.0 or lightweight.hex_width <= 0.0 or lightweight.hex_height <= 0.0:
+        return []
+    if z_max - z_min <= 2.0:
+        return []
+
+    circumference = 2.0 * np.pi * radius
+    column_count = max(3, int(round(circumference / (np.sqrt(3.0) * lightweight.hex_radius))))
+    hex_radius = circumference / (np.sqrt(3.0) * column_count)
+    ds = circumference / column_count
+    dz = 1.5 * hex_radius
+    angles = np.deg2rad(np.arange(90.0, 450.0, 60.0))
+    center_xy = np.asarray(center, dtype=float)
+
+    def inside(point: np.ndarray) -> bool:
+        return z_min - 0.25 <= point[1] <= z_max + 0.25
+
+    def map_point(s: float, z: float) -> tuple[np.ndarray, np.ndarray]:
+        angle = (s % circumference) / circumference * 2.0 * np.pi
+        normal = np.array([np.cos(angle), np.sin(angle), 0.0], dtype=float)
+        point = np.array(
+            [
+                center_xy[0] + radius * normal[0],
+                center_xy[1] + radius * normal[1],
+                z,
+            ],
+            dtype=float,
+        )
+        return point, normal
+
+    _n_rows = int(np.ceil((z_max - z_min) / dz)) + 2
+    _z_start = (z_min + z_max) / 2.0 - (_n_rows - 1) * dz / 2.0
+    meshes: list[trimesh.Trimesh] = []
+    edges: set[tuple[tuple[float, float], tuple[float, float]]] = set()
+    for row, center_z in enumerate(np.arange(_z_start, _z_start + _n_rows * dz, dz)):
+        s_offset = ds / 2.0 if row % 2 else 0.0
+        for center_s in np.arange(-hex_radius + s_offset, circumference + hex_radius + ds, ds):
+            vertices = np.column_stack(
+                [
+                    center_s + hex_radius * np.cos(angles),
+                    center_z + hex_radius * np.sin(angles),
+                ]
+            )
+            for start, end in zip(vertices, np.roll(vertices, -1, axis=0)):
+                for clipped_start, clipped_end in clipped_segment_runs(start, end, inside):
+                    if np.linalg.norm(np.subtract(clipped_end, clipped_start)) <= 2.0:
+                        continue
+                    key_a = (round(clipped_start[0] % circumference, 3), round(clipped_start[1], 3))
+                    key_b = (round(clipped_end[0] % circumference, 3), round(clipped_end[1], 3))
+                    key = tuple(sorted((key_a, key_b)))
+                    if key in edges:
+                        continue
+                    edges.add(key)
+
+                    point_a, normal_a = map_point(clipped_start[0], clipped_start[1])
+                    point_b, normal_b = map_point(clipped_end[0], clipped_end[1])
+                    point_a = point_a + normal_a * ((wall_depth - lightweight.hex_width) / 2.0)
+                    point_b = point_b + normal_b * ((wall_depth - lightweight.hex_width) / 2.0)
+                    normal = normal_a + normal_b
+                    if np.linalg.norm(normal) <= 1e-6:
+                        normal = normal_a
+                    meshes.append(
+                        box_between_3d(
+                            tuple(point_a),
+                            tuple(point_b),
+                            tuple(normal),
+                            wall_depth,
+                            lightweight.hex_height,
+                        )
+                    )
+    return meshes
+
+
+def cap_triangular_boundary_loops(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
+    edges, counts = np.unique(mesh.edges_sorted, axis=0, return_counts=True)
+    boundary_edges = [(int(a), int(b)) for a, b in edges[counts == 1]]
+    if not boundary_edges:
+        return mesh
+
+    adjacency: dict[int, list[int]] = {}
+    for a, b in boundary_edges:
+        adjacency.setdefault(a, []).append(b)
+        adjacency.setdefault(b, []).append(a)
+
+    faces = mesh.faces.tolist()
+    visited: set[int] = set()
+    for start in adjacency:
+        if start in visited:
+            continue
+        stack = [start]
+        component: list[int] = []
+        while stack:
+            current = stack.pop()
+            if current in visited:
+                continue
+            visited.add(current)
+            component.append(current)
+            stack.extend(vertex for vertex in adjacency.get(current, []) if vertex not in visited)
+
+        if len(component) == 3 and all(len(adjacency[vertex]) == 2 for vertex in component):
+            faces.append(component)
+
+    result = trimesh.Trimesh(vertices=mesh.vertices.copy(), faces=np.asarray(faces, dtype=np.int64), process=False)
+    result.merge_vertices(digits_vertex=2)
+    result.update_faces(result.nondegenerate_faces())
+    result.remove_unreferenced_vertices()
+    result.fix_normals()
+    return result
+
+
+def magnet_boss_and_cutter(
+    spec: OrganizerSpec,
+    lightweight: LightweightSpec,
+    side: str,
+    position: float,
+    z: float,
+    circle_segments_count: int,
+) -> tuple[trimesh.Trimesh, trimesh.Trimesh]:
+    boss_depth = lightweight.magnet_boss_depth
+    boss_width = lightweight.magnet_boss_width
+    boss_top = z + lightweight.magnet_boss_height / 2.0
+    boss_height = boss_top
+    boss_z_center = boss_top / 2.0
+    cutter_length = spec.magnet_depth + 0.25
+    magnet_radius = spec.magnet_diameter / 2.0
+
+    if side == "front":
+        boss = translated_box((boss_width, boss_depth, boss_height), (position, boss_depth / 2.0, boss_z_center))
+        cutter = axis_cylinder(
+            magnet_radius,
+            cutter_length,
+            (position, cutter_length / 2.0 - 0.05, z),
+            (0.0, 1.0, 0.0),
+            circle_segments_count,
+        )
+    elif side == "back":
+        boss = translated_box((boss_width, boss_depth, boss_height), (position, spec.depth - boss_depth / 2.0, boss_z_center))
+        cutter = axis_cylinder(
+            magnet_radius,
+            cutter_length,
+            (position, spec.depth - cutter_length / 2.0 + 0.05, z),
+            (0.0, -1.0, 0.0),
+            circle_segments_count,
+        )
+    elif side == "left":
+        boss = translated_box((boss_depth, boss_width, boss_height), (boss_depth / 2.0, position, boss_z_center))
+        cutter = axis_cylinder(
+            magnet_radius,
+            cutter_length,
+            (cutter_length / 2.0 - 0.05, position, z),
+            (1.0, 0.0, 0.0),
+            circle_segments_count,
+        )
+    elif side == "right":
+        boss = translated_box((boss_depth, boss_width, boss_height), (spec.width - boss_depth / 2.0, position, boss_z_center))
+        cutter = axis_cylinder(
+            magnet_radius,
+            cutter_length,
+            (spec.width - cutter_length / 2.0 + 0.05, position, z),
+            (-1.0, 0.0, 0.0),
+            circle_segments_count,
+        )
+    else:
+        raise ValueError(f"Unknown side: {side}")
+    return boss, cutter
+
+
+def build_lightweight_mesh(
+    spec: OrganizerSpec,
+    lightweight: LightweightSpec,
+    circle_segment_length: float = 1.5,
+) -> trimesh.Trimesh:
+    centers = hole_centers(spec)
+    cup_height = min(lightweight.cup_height, spec.height)
+    cup_floor = min(lightweight.floor, cup_height - 0.5)
+    inner_radius = spec.hole_diameter / 2.0
+    outer_radius = inner_radius + lightweight.cup_wall
+    cup_segments = circle_segments(spec.hole_diameter + 2.0 * lightweight.cup_wall, circle_segment_length)
+    magnet_segments = circle_segments(spec.magnet_diameter, circle_segment_length)
+
+    solids: list[trimesh.Trimesh] = []
+    side_solids: list[trimesh.Trimesh] = []
+    cutters: list[trimesh.Trimesh] = []
+    cup_cutters: list[trimesh.Trimesh] = []
+    for cx, cy in centers:
+        inner_height = cup_height - cup_floor + 0.25
+        inner = vertical_cylinder(
+            inner_radius,
+            inner_height,
+            (cx, cy, cup_floor + inner_height / 2.0 - 0.05),
+            cup_segments,
+        )
+        bottom_floor = vertical_cylinder(
+            outer_radius,
+            lightweight.rib_height,
+            (cx, cy, lightweight.rib_height / 2.0),
+            cup_segments,
+        )
+        top_ring_outer = vertical_cylinder(
+            outer_radius,
+            lightweight.rib_height,
+            (cx, cy, cup_height - lightweight.rib_height / 2.0),
+            cup_segments,
+        )
+        solids.append(bottom_floor)
+        solids.append(top_ring_outer)
+        solids.extend(
+            cylindrical_honeycomb_struts(
+                (cx, cy),
+                inner_radius + lightweight.cup_wall / 2.0,
+                lightweight.cup_wall,
+                lightweight.rib_height - 0.2,
+                cup_height - lightweight.rib_height + 0.2,
+                lightweight,
+            )
+        )
+        cup_cutters.append(inner)
+
+    internal_rib_zs = (
+        lightweight.rib_height / 2.0,
+        cup_height - lightweight.rib_height / 2.0,
+    )
+    for rib_z in internal_rib_zs:
+        for a, b in lightweight_rib_edges(centers):
+            solids.append(
+                strut_between(
+                    centers[a],
+                    centers[b],
+                    lightweight.rib_width,
+                    lightweight.rib_height,
+                    rib_z,
+                )
+            )
+
+    rail_depth = lightweight.magnet_boss_depth
+    bottom_rail_z = lightweight.rib_height / 2.0
+    top_rail_z = cup_height - lightweight.rib_height / 2.0
+    solids.append(perimeter_rail_band(spec, rail_depth, lightweight.magnet_boss_height, lightweight.magnet_z))
+    solids.append(perimeter_rail_band(spec, rail_depth, lightweight.rib_height, top_rail_z))
+    side_solids.extend(
+        side_honeycomb_struts(
+            spec,
+            lightweight,
+            lightweight.magnet_z + lightweight.magnet_boss_height / 2.0 - 0.2,
+            cup_height - lightweight.rib_height + 0.2,
+        )
+    )
+
+    magnet_spec = replace(spec, magnet_z=lightweight.magnet_z)
+    for side in ("front", "back", "left", "right"):
+        for position, z in side_panel_pockets(magnet_spec, side):
+            _, cutter = magnet_boss_and_cutter(magnet_spec, lightweight, side, position, z, magnet_segments)
+            cutters.append(cutter)
+
+    mesh = trimesh.boolean.union([*solids, *side_solids], engine="manifold")
+    if cup_cutters or cutters:
+        mesh = trimesh.boolean.difference([mesh, *cup_cutters, *cutters], engine="manifold")
+    mesh.merge_vertices(digits_vertex=2)
+    mesh.update_faces(mesh.nondegenerate_faces())
+    mesh.remove_unreferenced_vertices()
+    mesh.fix_normals()
+    solid_components = [component for component in mesh.split(only_watertight=False) if abs(component.volume) > 0.1]
+    if len(solid_components) == 1:
+        mesh = solid_components[0]
+    elif solid_components:
+        mesh = trimesh.util.concatenate(solid_components)
+    mesh = cap_triangular_boundary_loops(mesh)
+    if mesh.volume < 0:
+        mesh.invert()
+    return mesh
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=Path("extras/craft-paint-modular-organizer.stl"))
+    parser.add_argument(
+        "--variant",
+        choices=("solid", "lightweight"),
+        default="solid",
+        help="Generate the original solid-block organizer or a lightweight rib-and-cup variant.",
+    )
+    parser.add_argument(
+        "--lightweight-output",
+        type=Path,
+        default=DEFAULT_LIGHTWEIGHT_OUTPUT,
+        help="Default output path to use when --variant lightweight is selected and --output is omitted.",
+    )
     parser.add_argument("--pitch", type=float, default=OrganizerSpec.pitch, help="Meshing pitch in mm.")
     parser.add_argument("--stagger", type=float, default=OrganizerSpec.stagger, help="Alternate-row hole stagger in mm.")
     parser.add_argument(
@@ -1110,6 +1757,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--magnet-z", type=float, default=OrganizerSpec.magnet_z, help="Magnet pocket center height in mm.")
     parser.add_argument("--logo-size", type=float, default=OrganizerSpec.logo_size, help="Front logo stamp size in mm.")
     parser.add_argument("--logo-depth", type=float, default=OrganizerSpec.logo_depth, help="Front logo stamp recess depth in mm.")
+    parser.add_argument("--lightweight-cup-height", type=float, default=LightweightSpec.cup_height, help="Cup wall height for the lightweight variant in mm.")
+    parser.add_argument("--lightweight-cup-wall", type=float, default=LightweightSpec.cup_wall, help="Cup wall thickness for the lightweight variant in mm.")
+    parser.add_argument("--lightweight-floor", type=float, default=LightweightSpec.floor, help="Cup floor thickness for the lightweight variant in mm.")
+    parser.add_argument("--lightweight-rib-width", type=float, default=LightweightSpec.rib_width, help="Rib width for the lightweight variant in mm.")
+    parser.add_argument("--lightweight-rib-height", type=float, default=LightweightSpec.rib_height, help="Rib height for the lightweight variant in mm.")
+    parser.add_argument("--lightweight-magnet-z", type=float, default=LightweightSpec.magnet_z, help="Magnet pocket center height for the lightweight variant in mm.")
+    parser.add_argument("--lightweight-magnet-boss-depth", type=float, default=LightweightSpec.magnet_boss_depth, help="Side magnet boss depth for the lightweight variant in mm.")
+    parser.add_argument("--lightweight-magnet-boss-width", type=float, default=LightweightSpec.magnet_boss_width, help="Side magnet boss width for the lightweight variant in mm.")
+    parser.add_argument("--lightweight-magnet-boss-height", type=float, default=LightweightSpec.magnet_boss_height, help="Side magnet boss height for the lightweight variant in mm.")
+    parser.add_argument("--lightweight-hex-radius", type=float, default=LightweightSpec.hex_radius, help="Honeycomb cell radius for the lightweight variant in mm; use 0 to disable.")
+    parser.add_argument("--lightweight-hex-width", type=float, default=LightweightSpec.hex_width, help="Honeycomb strut width for the lightweight variant in mm.")
+    parser.add_argument("--lightweight-hex-height", type=float, default=LightweightSpec.hex_height, help="Honeycomb strut height for the lightweight variant in mm.")
     parser.add_argument("--min-wall", type=float, default=OrganizerSpec.min_wall, help="Minimum wall between holes in mm.")
     parser.add_argument(
         "--edge-wall",
@@ -1155,16 +1814,36 @@ def main() -> None:
         spec = replace(spec, edge_wall=balanced_edge_wall(spec))
         print(f"Solved edge wall: {spec.edge_wall:.3f} mm")
 
-    if args.sdf:
+    lightweight = LightweightSpec(
+        cup_height=args.lightweight_cup_height,
+        cup_wall=args.lightweight_cup_wall,
+        floor=args.lightweight_floor,
+        rib_width=args.lightweight_rib_width,
+        rib_height=args.lightweight_rib_height,
+        magnet_z=args.lightweight_magnet_z,
+        magnet_boss_depth=args.lightweight_magnet_boss_depth,
+        magnet_boss_width=args.lightweight_magnet_boss_width,
+        magnet_boss_height=args.lightweight_magnet_boss_height,
+        hex_radius=args.lightweight_hex_radius,
+        hex_width=args.lightweight_hex_width,
+        hex_height=args.lightweight_hex_height,
+    )
+
+    if args.variant == "lightweight":
+        mesh = build_lightweight_mesh(spec, lightweight)
+        output = args.lightweight_output if args.output == Path("extras/craft-paint-modular-organizer.stl") else args.output
+    elif args.sdf:
         mesh = build_sdf_mesh(spec)
     elif spec.box_roundover > 0.0 or spec.hole_roundover > 0.0:
         mesh = build_rounded_analytic_mesh(spec)
     else:
         mesh = build_analytic_mesh(spec)
-    mesh = apply_logo_inset(mesh, spec)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    mesh.export(args.output)
-    print(f"Wrote {args.output}")
+    if args.variant == "solid":
+        mesh = apply_logo_inset(mesh, spec)
+        output = args.output
+    output.parent.mkdir(parents=True, exist_ok=True)
+    mesh.export(output)
+    print(f"Wrote {output}")
     print(f"Vertices: {len(mesh.vertices):,}")
     print(f"Faces: {len(mesh.faces):,}")
     print(f"Watertight: {mesh.is_watertight}")

@@ -145,13 +145,20 @@ def _load_python_spec(path: Path) -> TileSpec:
 def _parse(data: dict) -> TileSpec:
     # ── Surface ───────────────────────────────────────────────────────────────
     s = data.get('surface', {})
+    _surface_defaults = SurfaceConfig()
     surface = SurfaceConfig(
-        cols            = s.get('cols', 1),
-        rows            = s.get('rows', 1),
-        cells_per_square= s.get('cells_per_square', 128),
-        base_h          = s.get('base_h', 0.0),
-        seed            = s.get('seed', 377),
-        flat_terrain    = s.get('flat_terrain', True),
+        cols            = s.get('cols',             _surface_defaults.cols),
+        rows            = s.get('rows',             _surface_defaults.rows),
+        cells_per_square= s.get('cells_per_square', _surface_defaults.cells_per_square),
+        base_h          = s.get('base_h',           _surface_defaults.base_h),
+        seed            = s.get('seed',             _surface_defaults.seed),
+        flat_terrain    = s.get('flat_terrain',     _surface_defaults.flat_terrain),
+        terrain_simplify_threshold = s.get(
+            'terrain_simplify_threshold',
+            _surface_defaults.terrain_simplify_threshold),
+        terrain_simplify_stride    = s.get(
+            'terrain_simplify_stride',
+            _surface_defaults.terrain_simplify_stride),
     )
 
     # ── Regions ───────────────────────────────────────────────────────────────
