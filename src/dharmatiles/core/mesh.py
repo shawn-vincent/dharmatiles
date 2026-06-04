@@ -192,13 +192,24 @@ def build_tube_mesh(spine_3d: np.ndarray, widths: np.ndarray,
             faces[fi]   = [ra + i1, rb + i,  rb + i1];  fi += 1
 
     rl = (n_pts - 1) * n
-    for i in range(n):
-        faces[fi] = [rl + i, rl + (i + 1) % n, v_tip];  fi += 1
+    if cross_section == 'circle':
+        # Circle side-face winding is already outward-pointing by construction.
+        # Only the top cap needs a reversed winding to match:
+        # [v_tip, rl+(i+1)%n, rl+i] gives normal along +tangent (outward at tip).
+        for i in range(n):
+            faces[fi] = [v_tip, rl + (i + 1) % n, rl + i];  fi += 1
+    else:
+        for i in range(n):
+            faces[fi] = [rl + i, rl + (i + 1) % n, v_tip];  fi += 1
 
     mesh = trimesh.Trimesh(vertices=verts[:vi],
                            faces=faces[:fi].astype(int),
                            process=False)
-    mesh.fix_normals()
+    if cross_section != 'circle':
+        # Triangle and diamond cross-sections have inconsistent face winding
+        # from the generator and require a topology-based normal fix.
+        # Circle is fully consistent after the cap correction above.
+        mesh.fix_normals()
     return mesh
 
 

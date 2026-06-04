@@ -19,6 +19,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import pathlib
 
 import numpy as np
@@ -178,9 +179,22 @@ def _build_mesh(cfg: SceneConfig,
         print("Concatenating...")
     combined = trimesh.util.concatenate(parts)
     if verbose:
+        from collections import Counter as _Counter
+        _edge_cnt   = _Counter(combined.edges_unique_inverse.tolist())
+        _open_e     = sum(1 for c in _edge_cnt.values() if c == 1)
+        _nonmanifold = sum(1 for c in _edge_cnt.values() if c > 2)
+        wt_label = "watertight" if combined.is_watertight else f"open-edges={_open_e:,}"
+        nm_label = f"  ⚠ NON-MANIFOLD={_nonmanifold:,}" if _nonmanifold else ""
         print(f"  vertices: {len(combined.vertices):,}   "
               f"faces: {len(combined.faces):,}   "
-              f"watertight: {combined.is_watertight}")
+              f"{wt_label}{nm_label}")
+        if _nonmanifold:
+            import warnings
+            warnings.warn(
+                f"Mesh has {_nonmanifold:,} non-manifold edges — slicers may "
+                "reject or mis-repair the output.",
+                stacklevel=2,
+            )
     return combined
 
 
@@ -192,12 +206,28 @@ def _system_output_path(output_path: pathlib.Path, suffix: str) -> pathlib.Path:
     return output_path.with_name(f"{output_path.stem}-{suffix}{output_path.suffix}")
 
 
+def _make_ol_surface(surface: SurfaceConfig) -> SurfaceConfig:
+    """Return a copy of *surface* scaled to the OpenLOCK 25.4 mm per square standard."""
+    return dataclasses.replace(surface, square_mm=openlock.OPENLOCK_SQUARE_MM)
+
+
 def _export_system_stls(tile_mesh: trimesh.Trimesh,
                         cfg: SceneConfig,
                         terrain_z: np.ndarray,
                         output_path: pathlib.Path,
-                        verbose: bool = True) -> dict[str, trimesh.Trimesh]:
-    """Export one STL per base system from a shared base-less tile mesh."""
+                        verbose: bool = True,
+                        *,
+                        ol_tile_mesh: trimesh.Trimesh | None = None,
+                        ol_surface: SurfaceConfig | None = None,
+                        ol_terrain_z: np.ndarray | None = None,
+                        ) -> dict[str, trimesh.Trimesh]:
+    """Export one STL per base system from a base-less tile mesh.
+
+    *ol_tile_mesh* / *ol_surface* / *ol_terrain_z* — when supplied, the
+    OpenLOCK export uses these instead of the DungeonBlocks-scale values.
+    This allows the OL tile to have been regenerated natively at 25.4 mm/sq
+    rather than being a scaled-down copy of the 35 mm mesh.
+    """
     if cfg.base.style == 'none':
         export_coloured_stl(tile_mesh, output_path)
         if verbose:
@@ -219,8 +249,11 @@ def _export_system_stls(tile_mesh: trimesh.Trimesh,
             result[system] = dungeonblocks.export(
                 tile_mesh, cfg.surface, cfg.base, terrain_z, path)
         elif system == openlock.SYSTEM_SUFFIX:
+            _mesh     = ol_tile_mesh if ol_tile_mesh is not None else tile_mesh
+            _surface  = ol_surface   if ol_surface   is not None else cfg.surface
+            _terrain  = ol_terrain_z if ol_terrain_z is not None else terrain_z
             result[system] = openlock.export(
-                tile_mesh, cfg.surface, cfg.base, terrain_z, path)
+                _mesh, _surface, cfg.base, _terrain, path)
         if verbose:
             print(f"Saved -> {path}  (VisCAM colours embedded)")
     return result
@@ -228,7 +261,13 @@ def _export_system_stls(tile_mesh: trimesh.Trimesh,
 def build_tile(cfg: SceneConfig,
                output_path: pathlib.Path,
                verbose: bool = True) -> trimesh.Trimesh:
-    """Build a tile from a SceneConfig and export system-specific STLs."""
+    """Build a tile from a SceneConfig and export system-specific STLs.
+
+    DungeonBlocks output uses the tile as constructed (``cfg.surface.square_mm``
+    = 35 mm by default).  OpenLOCK output regenerates the full scene at
+    25.4 mm/square so physical feature sizes stay correct and are not
+    compressed by an XY scale-down.
+    """
     if verbose:
         print(f"=== Building tile "
               f"({cfg.surface.cols}×{cfg.surface.rows} squares, "
@@ -242,8 +281,30 @@ def build_tile(cfg: SceneConfig,
     flow_angle, flow_curv = build_flow_field(cfg.surface, cfg.flow, x_grid, y_grid)
 
     tile_mesh = _build_mesh(cfg, scene, flow_angle, flow_curv, verbose=verbose)
+
+    # ── OpenLOCK: regenerate terrain natively at 25.4 mm/square ──────────────
+    ol_tile_mesh: trimesh.Trimesh | None = None
+    ol_surface:   SurfaceConfig   | None = None
+    ol_terrain_z: np.ndarray      | None = None
+    if cfg.base.style != 'none':
+        if verbose:
+            print(f"\n=== Rebuilding scene at OpenLOCK scale "
+                  f"({openlock.OPENLOCK_SQUARE_MM} mm/sq) ===")
+        ol_surface = _make_ol_surface(cfg.surface)
+        ol_cfg     = dataclasses.replace(cfg, surface=ol_surface)
+        ol_scene   = TileScene.from_config(ol_cfg)
+        ol_x, ol_y = make_xy_grids(ol_surface)
+        ol_flow_angle, ol_flow_curv = build_flow_field(
+            ol_surface, ol_cfg.flow, ol_x, ol_y)
+        ol_tile_mesh = _build_mesh(
+            ol_cfg, ol_scene, ol_flow_angle, ol_flow_curv, verbose=verbose)
+        ol_terrain_z = ol_scene.terrain_z
+
     exports = _export_system_stls(tile_mesh, cfg, scene.terrain_z,
-                                  output_path, verbose=verbose)
+                                  output_path, verbose=verbose,
+                                  ol_tile_mesh=ol_tile_mesh,
+                                  ol_surface=ol_surface,
+                                  ol_terrain_z=ol_terrain_z)
     return exports.get(dungeonblocks.SYSTEM_SUFFIX, tile_mesh)
 
 
@@ -317,8 +378,49 @@ def build_tile_from_spec(spec: TileSpec,
                                verbose=verbose,
                                water_mask=water_mask, water_height=water_height)
 
+    # ── OpenLOCK: regenerate terrain natively at 25.4 mm/square ──────────────
+    # The heightmap grid dimensions (grid_w × grid_h) are set by
+    # cols × cells_per_square and do not change with square_mm, so the existing
+    # region_mask, terrain_z and water_mask are directly reusable.  Only the
+    # physical cell/tile sizes differ, which drives correct feature sizing inside
+    # the soil, stone and grass layers.
+    ol_tile_mesh: trimesh.Trimesh | None = None
+    ol_surface:   SurfaceConfig   | None = None
+    ol_terrain_z: np.ndarray      | None = None
+    if cfg.base.style != 'none':
+        if verbose:
+            print(f"\n=== Rebuilding scene at OpenLOCK scale "
+                  f"({openlock.OPENLOCK_SQUARE_MM} mm/sq) ===")
+        ol_surface = _make_ol_surface(cfg.surface)
+        ol_cfg     = dataclasses.replace(cfg, surface=ol_surface)
+        ol_scene   = TileScene(
+            config     = ol_cfg,
+            terrain_z  = terrain_z.copy(),
+            support_z  = terrain_z.copy(),
+            stone_mask = np.zeros(
+                (ol_cfg.surface.grid_h, ol_cfg.surface.grid_w), dtype=bool),
+        )
+        if region_mask is not None:
+            ol_scene.grass_mask = build_grass_mask(region_mask, spec)
+        if water_mask is not None:
+            ol_scene.support_z[water_mask] = 0.2   # dry-bed floor (same as _build_mesh)
+
+        ol_x, ol_y = make_xy_grids(ol_surface)
+        ol_flow_angle, ol_flow_curv = build_flow_field(
+            ol_surface, ol_cfg.flow, ol_x, ol_y)
+        ol_grass_cfgs   = _collect_grass_configs(spec)
+        ol_stone_layers = _collect_stones_layers(spec, region_mask)
+        ol_tile_mesh = _build_mesh(
+            ol_cfg, ol_scene, ol_flow_angle, ol_flow_curv,
+            grass_cfgs=ol_grass_cfgs, stone_layers=ol_stone_layers,
+            verbose=verbose, water_mask=water_mask, water_height=water_height)
+        ol_terrain_z = ol_scene.terrain_z
+
     exports = _export_system_stls(tile_mesh, cfg, scene.terrain_z,
-                                  output_path, verbose=verbose)
+                                  output_path, verbose=verbose,
+                                  ol_tile_mesh=ol_tile_mesh,
+                                  ol_surface=ol_surface,
+                                  ol_terrain_z=ol_terrain_z)
     return exports.get(dungeonblocks.SYSTEM_SUFFIX, tile_mesh)
 
 

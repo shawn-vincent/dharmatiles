@@ -28,12 +28,16 @@ class SurfaceConfig:
     Parameters
     ----------
     cols, rows : int
-        Number of 35 mm squares along X and Y.  A 1×1 tile is one
-        standard DungeonBlocks square.  A 3×3 tile is nine squares.
+        Number of squares along X and Y.
+    square_mm : float
+        Physical size of one square in mm.  Default 35.0 for DungeonBlocks;
+        use 25.4 for canonical OpenLOCK (1-inch imperial) or 25.0 for metric
+        OpenLOCK.  Changing this rescales all physical dimensions uniformly
+        while keeping per-square density counts and feature sizes (blade widths,
+        stone radii) unchanged.
     cells_per_square : int
-        Heightmap resolution along each axis per square.  Higher values
-        give finer mesh geometry.  Must be a power of two; default 256
-        (≈ 0.137 mm/cell).  Use 128 for legacy behaviour (≈ 0.273 mm/cell).
+        Heightmap resolution along each axis per square.  Higher values give
+        finer mesh geometry.  Default 256 (≈ square_mm/256 mm/cell).
     base_h : float
         Depth of the solid slab below the terrain surface (mm).
     seed : int
@@ -42,7 +46,8 @@ class SurfaceConfig:
     """
     cols:             int   = 1
     rows:             int   = 1
-    cells_per_square: int   = 256  # heightmap resolution per 35 mm square
+    square_mm:      float = 35.0  # mm per square — 35 DB, 25.4 OL imperial, 25.0 OL metric
+    cells_per_square: int   = 256  # heightmap resolution per square
     base_h:         float = 0.0  # mm — extra slab below z=0
     seed:           int   = 377
     flat_terrain:   bool  = True   # False → sinusoidal stand-in terrain (legacy)
@@ -51,12 +56,12 @@ class SurfaceConfig:
     @property
     def tile_w(self) -> float:
         """Total tile width in mm."""
-        return self.cols * 35.0
+        return self.cols * self.square_mm
 
     @property
     def tile_h(self) -> float:
         """Total tile height in mm."""
-        return self.rows * 35.0
+        return self.rows * self.square_mm
 
     @property
     def grid_w(self) -> int:
@@ -71,12 +76,12 @@ class SurfaceConfig:
     @property
     def cell_w(self) -> float:
         """mm per grid cell in X."""
-        return 35.0 / self.cells_per_square
+        return self.square_mm / self.cells_per_square
 
     @property
     def cell_h(self) -> float:
         """mm per grid cell in Y."""
-        return 35.0 / self.cells_per_square
+        return self.square_mm / self.cells_per_square
 
 
 # ─────────────────────────────────────────────────────────────────────────────
