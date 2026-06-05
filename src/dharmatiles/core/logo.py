@@ -130,7 +130,7 @@ def make_logo_inset(cx: float, cy: float,
                     size_mm: float,
                     z_base: float,
                     depth_mm: float = 0.4,
-                    clearance_mm: float = 0.20) -> trimesh.Trimesh:
+                    clearance_mm: float = 0.35) -> trimesh.Trimesh:
     """Return a watertight solid for subtracting a logo inset from a base mesh.
 
     The solid covers the logo footprint at *z_base* and extends *depth_mm*
@@ -153,9 +153,29 @@ def make_logo_inset(cx: float, cy: float,
     import manifold3d as m3d
 
     contours = _logo_contours_mm(cx, cy, size_mm)
-    cs       = m3d.CrossSection(contours, fillrule=m3d.FillRule.EvenOdd)
+
     if clearance_mm > 0.0:
-        cs = cs.offset(-clearance_mm, m3d.JoinType.Miter)
+        # The square-outline groove is a thin ring: offsetting the entire
+        # cross-section inward shrinks it from both sides and collapses it.
+        # Identify the groove as the one contour whose bounding-box area is
+        # far larger than any lotus contour (≥ 50 % of the maximum).  Keep it
+        # unchanged and apply the offset only to the lotus contours.
+        def _bbox_area(c: list[tuple[float, float]]) -> float:
+            xs = [p[0] for p in c]; ys = [p[1] for p in c]
+            return (max(xs) - min(xs)) * (max(ys) - min(ys))
+
+        areas      = [_bbox_area(c) for c in contours]
+        max_area   = max(areas)
+        groove     = [c for c, a in zip(contours, areas) if a / max_area >= 0.5]
+        lotus      = [c for c, a in zip(contours, areas) if a / max_area <  0.5]
+
+        cs_groove  = m3d.CrossSection(groove, fillrule=m3d.FillRule.EvenOdd)
+        cs_lotus   = m3d.CrossSection(lotus,  fillrule=m3d.FillRule.EvenOdd)
+        cs_lotus   = cs_lotus.offset(-clearance_mm, m3d.JoinType.Miter)
+        # Groove and lotus occupy non-overlapping regions, so union is correct.
+        cs = m3d.CrossSection.compose([cs_groove, cs_lotus])
+    else:
+        cs = m3d.CrossSection(contours, fillrule=m3d.FillRule.EvenOdd)
 
     # Extrude depth_mm then translate so bottom face sits at z_base.
     # The solid spans [z_base .. z_base + depth_mm].
