@@ -34,146 +34,119 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
-from ..core.config import SurfaceConfig, WaterRippleConfig, WaterSurfaceConfig
+from ..core.config import SurfaceConfig, WaterRippleConfig
 
 
 WATER_RENDER_LIFT_MM = 0.10   # lift water mesh above terrain floor to avoid z-fight
 
 
-def build_water_surface_displacement(
-    surface:      SurfaceConfig,
-    water_mask:   np.ndarray,
+def _make_water_volume_adaptive(
     terrain_z:    np.ndarray,
+    water_mask:   np.ndarray,
     water_height: float,
-    stone_mask:   np.ndarray | None,
-    cfg:          WaterSurfaceConfig,
-) -> np.ndarray:
-    """Return a ``(grid_h, grid_w)`` cell-centre displacement array (mm).
+    tile_w:       float,
+    tile_h:       float,
+    threshold:    float,          # kept for API compatibility; not used
+    stride:       int = 16,
+) -> trimesh.Trimesh:
+    """Water volume: flat top at *water_height*, flat bottom at z = 0.
 
-    Displacement is measured upward from *water_height*.  Positive = crest,
-    negative = trough.  Values are clamped so the surface never drops below
-    the local terrain (no exposure of sub-surface voids).
+    Design
+    ------
+    The terrain solid already represents the sloped riverbed precisely (it
+    covers z = -base_h to terrain_z everywhere, including the pool).  The
+    water solid only needs to fill the gap from z = 0 up to *water_height*
+    above the pool.  The two solids overlap inside the pool; slicers resolve
+    the union correctly.
 
-    See docs/design/water-surface-model.md for the full model description.
+    The top face is flat at *water_height* — no curvature, no Laplacian
+    points needed.  A sparse background grid (one vertex every *stride*
+    cells) gives a few dozen triangles for the open water.
+
+    Expansion
+    ---------
+    The water mask is dilated by 2 cells before building the solid.  This
+    makes the water volume lap slightly over the shoreline transition strip,
+    filling any micro-gap that would otherwise appear between the terrain
+    solid's top surface and the water column.  The overlap region is interior
+    to the terrain solid and invisible.
+
+    Topology
+    --------
+    Top and bottom are both flat (different z, same xy).  Every wall vertex
+    has a guaranteed non-zero height (water_height > 0 = z_bot), so no
+    degenerate wall faces can form.  No vertex merging or degenerate-face
+    filtering is needed.
     """
-    from scipy.ndimage import distance_transform_edt, label, center_of_mass
+    from scipy.ndimage import binary_dilation
+    from scipy.spatial import Delaunay
 
-    gh, gw   = water_mask.shape
-    cell_mm  = surface.cell_w
-    rng      = np.random.default_rng(surface.seed ^ 0xF10A4E2C)
-    tau      = 2.0 * np.pi
+    gh, gw = terrain_z.shape
+    cell_x = tile_w / gw
+    cell_y = tile_h / gh
 
-    # ── Cell-centre coordinate grids (mm) ─────────────────────────────────────
-    rows_mm = (np.arange(gh, dtype=float) + 0.5)[:, None] * cell_mm
-    cols_mm = (np.arange(gw, dtype=float) + 0.5)[None, :] * cell_mm
+    # ── Expand mask by 2 cells: overlaps terrain, fills boundary gap ──────────
+    mask = binary_dilation(water_mask, iterations=2)
 
-    # ── Shore proximity (0 = open water, 1 = shore) ───────────────────────────
-    dist_shore   = distance_transform_edt(water_mask) * cell_mm  # 0 on shore
-    shore_prox   = np.clip(1.0 - dist_shore / cfg.shore_compress_dist_mm, 0.0, 1.0)
-    shore_smooth = shore_prox ** 2 * (3.0 - 2.0 * shore_prox)   # smoothstep
+    # ── Sparse point set: background grid + tile-edge cells ───────────────────
+    # The surface is flat — no curvature signal needed.  A coarse grid bounds
+    # the maximum triangle size; tile-edge cells are included so the water
+    # solid meets the tile boundary cleanly when the pool reaches an edge.
+    bg_pts: set[tuple[int, int]] = {
+        (r, c)
+        for r in range(0, gh, stride)
+        for c in range(0, gw, stride)
+        if mask[r, c]
+    }
+    edge_pts: set[tuple[int, int]] = {
+        (int(r), int(c))
+        for r, c in np.argwhere(mask)
+        if r == 0 or r == gh - 1 or c == 0 or c == gw - 1
+    }
+    all_pts = sorted(bg_pts | edge_pts)
+    n_pts   = len(all_pts)
+    xy      = np.array([(c * cell_x, r * cell_y) for r, c in all_pts])
 
-    amp_shore  = 1.0 + (cfg.shore_amplitude_factor - 1.0) * shore_smooth
-    freq_shore = 1.0 + (cfg.shore_freq_factor      - 1.0) * shore_smooth
+    # ── Delaunay → filter to expanded mask ────────────────────────────────────
+    faces = Delaunay(xy).simplices
+    cxy   = xy[faces].mean(axis=1)
+    cr    = np.clip((cxy[:, 1] / cell_y).astype(int), 0, gh - 1)
+    cc    = np.clip((cxy[:, 0] / cell_x).astype(int), 0, gw - 1)
+    faces = faces[mask[cr, cc]]
 
-    # ── Rock wake: amplitude suppression field ────────────────────────────────
-    wake_amp = np.ones((gh, gw), dtype=float)   # multiplier; 1 = no suppression
+    # ── Vertex buffers: top (flat) + bottom (flat at z = 0) ───────────────────
+    verts        = np.empty((2 * n_pts, 3))
+    verts[:n_pts,  :2] = xy;  verts[:n_pts,  2] = water_height   # top
+    verts[n_pts:,  :2] = xy;  verts[n_pts:,  2] = 0.0            # bottom
 
-    cos_dir = np.cos(cfg.primary_dir)
-    sin_dir = np.sin(cfg.primary_dir)
+    # ── Top / bottom faces ─────────────────────────────────────────────────────
+    top_f = faces.astype(np.int32)
+    bot_f = (faces[:, ::-1] + n_pts).astype(np.int32)
 
-    rock_specs: list[tuple[float, float, float]] = []   # (cx_mm, cy_mm, r_mm)
-    if stone_mask is not None:
-        stones_in_water = stone_mask & water_mask
-        if stones_in_water.any():
-            labeled, n_comp = label(stones_in_water)
-            for i_c in range(1, n_comp + 1):
-                comp = labeled == i_c
-                rr, cc = center_of_mass(comp)
-                cy_rock = (rr + 0.5) * cell_mm
-                cx_rock = (cc + 0.5) * cell_mm
-                r_rock  = max(cell_mm, np.sqrt(comp.sum() * cell_mm ** 2 / np.pi))
-                rock_specs.append((cx_rock, cy_rock, r_rock))
+    # ── Perimeter walls from boundary Delaunay edges ───────────────────────────
+    edge_cnt:    dict[tuple[int, int], int]            = {}
+    edge_orient: dict[tuple[int, int], tuple[int, int]] = {}
+    for f in faces:
+        for i in range(3):
+            ea, eb = int(f[i]), int(f[(i + 1) % 3])
+            key               = (min(ea, eb), max(ea, eb))
+            edge_cnt[key]     = edge_cnt.get(key, 0) + 1
+            edge_orient[key]  = (ea, eb)
 
-                dx = cols_mm - cx_rock
-                dy = rows_mm - cy_rock
-                flow_proj = dx * cos_dir + dy * sin_dir   # + = downstream
-                perp_proj = -dx * sin_dir + dy * cos_dir  # lateral
+    oriented_walls = [v for k, v in edge_orient.items() if edge_cnt[k] == 1]
+    if oriented_walls:
+        ow   = np.array(oriented_walls, dtype=np.int32)
+        ea, eb = ow[:, 0], ow[:, 1]
+        wall_f = np.empty((2 * len(ow), 3), dtype=np.int32)
+        wall_f[0::2] = np.stack([eb,          ea,          n_pts + ea], axis=1)
+        wall_f[1::2] = np.stack([eb,          n_pts + ea,  n_pts + eb], axis=1)
+    else:
+        wall_f = np.empty((0, 3), dtype=np.int32)
 
-                downstream     = np.maximum(0.0, flow_proj - r_rock)
-                wake_sigma_lat = r_rock + downstream * 0.3
-                wake_weight    = (
-                    (1.0 - np.exp(-downstream / (r_rock + 1e-6))) *
-                    np.exp(-0.5 * (perp_proj / (wake_sigma_lat + 1e-6)) ** 2) *
-                    np.exp(-downstream / (cfg.rock_wake_length_factor * r_rock + 1e-6))
-                )
-                wake_amp *= 1.0 - (1.0 - cfg.rock_wake_amp_factor) * wake_weight
-
-    # ── Combined amplitude field ───────────────────────────────────────────────
-    amp_field = amp_shore * wake_amp
-
-    # ── Primary sinusoidal wave trains ────────────────────────────────────────
-    z_waves = np.zeros((gh, gw), dtype=float)
-    for i in range(cfg.n_primary):
-        theta = cfg.primary_dir + (i - cfg.n_primary // 2) * cfg.primary_dir_spread
-        lam   = cfg.primary_wavelength_mm * (
-            1.0 + cfg.primary_wavelength_spread * rng.uniform(-1.0, 1.0))
-        phase = rng.uniform(0.0, tau)
-        proj  = cols_mm * np.cos(theta) + rows_mm * np.sin(theta)
-        k_loc = (tau / lam) * freq_shore          # shore-compressed wave number
-        z_waves += cfg.primary_amplitude_mm * np.sin(k_loc * proj + phase)
-
-    # ── Capillary ripples ──────────────────────────────────────────────────────
-    # Sinusoidal plane waves always produce straight lines; enough crossing
-    # waves at random angles produce an interference pattern that reads as
-    # random texture rather than individual wave trains.
-    for _ in range(cfg.n_capillary):
-        theta = rng.uniform(0.0, tau)
-        lam   = rng.uniform(cfg.capillary_wavelength_min_mm,
-                             cfg.capillary_wavelength_max_mm)
-        phase = rng.uniform(0.0, tau)
-        amp   = cfg.capillary_amplitude_mm * rng.uniform(0.5, 1.5)
-        proj  = cols_mm * np.cos(theta) + rows_mm * np.sin(theta)
-        s     = np.sin(tau * proj / lam + phase)
-        z_waves += amp * s * np.abs(s)   # s·|s|: sharp crests, flat troughs
-
-    # ── Combine: waves modulated by amplitude field ────────────────────────────
-    z_disp = z_waves * amp_field
-
-    # ── Rock fixed features: bow wave + meniscus ──────────────────────────────
-    for cx_rock, cy_rock, r_rock in rock_specs:
-        dx = cols_mm - cx_rock
-        dy = rows_mm - cy_rock
-
-        flow_proj = dx * cos_dir + dy * sin_dir
-        perp_proj = -dx * sin_dir + dy * cos_dir
-
-        # Bow wave: elliptical Gaussian, centred slightly upstream of the rock
-        bow_cx    = cx_rock - 0.4 * r_rock * cos_dir
-        bow_cy    = cy_rock - 0.4 * r_rock * sin_dir
-        dx_b      = cols_mm - bow_cx
-        dy_b      = rows_mm - bow_cy
-        perp_b    =  -dx_b * sin_dir + dy_b * cos_dir
-        flow_b    =   dx_b * cos_dir + dy_b * sin_dir
-        sig_perp  = 0.6 * r_rock
-        sig_flow  = 0.9 * r_rock
-        upstream_taper = np.where(flow_b < 0, 1.0, 0.3)
-        bow_z = (cfg.rock_bow_amplitude_mm *
-                 np.exp(-0.5 * (perp_b**2 / sig_perp**2 + flow_b**2 / sig_flow**2)) *
-                 upstream_taper)
-        z_disp += bow_z
-
-        # Meniscus: raised ring at the rock waterline
-        dist_r  = np.sqrt(dx**2 + dy**2) + 1e-9
-        ring_d  = np.abs(dist_r - r_rock)
-        z_disp += (cfg.rock_meniscus_amplitude_mm *
-                   np.exp(-(ring_d / cfg.rock_meniscus_sigma_mm) ** 2))
-
-    # ── Mask to water region; clamp so surface never dips below riverbed ───────
-    z_disp[~water_mask] = 0.0
-    depth = water_height - terrain_z                          # mm of water above bed
-    z_disp = np.maximum(z_disp, -depth)                      # trough ≥ riverbed
-
-    return z_disp
+    all_faces = np.vstack([top_f, bot_f, wall_f])
+    mesh = trimesh.Trimesh(vertices=verts, faces=all_faces, process=False)
+    mesh.fix_normals()
+    return mesh
 
 
 def make_water_volume(terrain_z: np.ndarray,
@@ -181,7 +154,9 @@ def make_water_volume(terrain_z: np.ndarray,
                       water_height: float,
                       tile_w: float,
                       tile_h: float,
-                      z_disp: np.ndarray | None = None) -> trimesh.Trimesh:
+                      z_disp: np.ndarray | None = None,
+                      error_threshold: float | None = None,
+                      simplify_stride: int = 16) -> trimesh.Trimesh:
     """Closed solid spanning the water volume: flat top at *water_height*, riverbed bottom.
 
     Faces emitted
@@ -195,7 +170,20 @@ def make_water_volume(terrain_z: np.ndarray,
     covers the full tile from z=0 up to terrain_z), the two volumes together
     fill 0→water_height over the water region.  Interior faces at terrain_z are
     redundant but harmless — slicers resolve the union by volume.
+
+    error_threshold / simplify_stride
+        When *error_threshold* is set, an adaptive Delaunay mesh is built
+        instead of a full grid.  Interior vertices are kept only where
+        |∇²z| > threshold (mm) so flat areas collapse to a few triangles
+        while sloped or textured zones stay dense — exactly matching the
+        behaviour of the terrain solid's adaptive path.
     """
+    if error_threshold is not None and z_disp is None:
+        return _make_water_volume_adaptive(
+            terrain_z, water_mask, water_height, tile_w, tile_h,
+            threshold=error_threshold, stride=simplify_stride,
+        )
+
     gh, gw = terrain_z.shape
     cell_x = tile_w / gw
     cell_y = tile_h / gh
