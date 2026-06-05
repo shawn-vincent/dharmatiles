@@ -112,13 +112,9 @@ def build_water_surface_displacement(
     amp_field = amp_shore * wake_amp
 
     # ── Primary sinusoidal wave trains ────────────────────────────────────────
-    # Evenly-spaced angles create parallel ridges; add per-wave random jitter
-    # (±half the spread step) so waves genuinely cross rather than reinforce.
     z_waves = np.zeros((gh, gw), dtype=float)
     for i in range(cfg.n_primary):
-        base_theta = cfg.primary_dir + (i - cfg.n_primary // 2) * cfg.primary_dir_spread
-        jitter     = cfg.primary_dir_spread * rng.uniform(-0.5, 0.5)
-        theta      = base_theta + jitter
+        theta = cfg.primary_dir + (i - cfg.n_primary // 2) * cfg.primary_dir_spread
         lam   = cfg.primary_wavelength_mm * (
             1.0 + cfg.primary_wavelength_spread * rng.uniform(-1.0, 1.0))
         phase = rng.uniform(0.0, tau)
