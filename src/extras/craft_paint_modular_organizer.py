@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-"""Generate a craft-paint modular organizer STL.
+"""Generate a lightweight craft-paint modular organizer STL.
 
-The model is generated from signed-distance fields and meshed with a compact
-marching-tetrahedra implementation, so it does not need external CAD or boolean
-engines.  Dimensions are millimeters.
+Dimensions are millimeters.
 """
 from __future__ import annotations
 
@@ -28,10 +26,12 @@ DEFAULT_MAGNET_Z = 35.0
 DEFAULT_MAGNET_SPACING = 80.9
 DEFAULT_LOGO_SIZE = 36.0
 DEFAULT_LOGO_DEPTH = 0.5
-DEFAULT_LIGHTWEIGHT_OUTPUT = Path("stl/extras/craft-paint-modular-organizer-lightweight.stl")
 DEFAULT_LIGHTWEIGHT_CUP_HEIGHT = 50.0
 DEFAULT_LIGHTWEIGHT_CUP_WALL = 1.5
 DEFAULT_LIGHTWEIGHT_FLOOR = 3.0
+DEFAULT_LIGHTWEIGHT_RETAINING_RING_HEIGHT = 5.0
+DEFAULT_LIGHTWEIGHT_RETAINING_HOLE_DIAMETER = 29.0
+DEFAULT_LIGHTWEIGHT_RETAINING_BEVEL_HEIGHT = 2.0
 DEFAULT_LIGHTWEIGHT_RIB_WIDTH = 2.8
 DEFAULT_LIGHTWEIGHT_RIB_HEIGHT = 3.0
 DEFAULT_LIGHTWEIGHT_MAGNET_Z = 7.0
@@ -83,6 +83,9 @@ class LightweightSpec:
     cup_height: float = DEFAULT_LIGHTWEIGHT_CUP_HEIGHT
     cup_wall: float = DEFAULT_LIGHTWEIGHT_CUP_WALL
     floor: float = DEFAULT_LIGHTWEIGHT_FLOOR
+    retaining_ring_height: float = DEFAULT_LIGHTWEIGHT_RETAINING_RING_HEIGHT
+    retaining_hole_diameter: float = DEFAULT_LIGHTWEIGHT_RETAINING_HOLE_DIAMETER
+    retaining_bevel_height: float = DEFAULT_LIGHTWEIGHT_RETAINING_BEVEL_HEIGHT
     rib_width: float = DEFAULT_LIGHTWEIGHT_RIB_WIDTH
     rib_height: float = DEFAULT_LIGHTWEIGHT_RIB_HEIGHT
     magnet_z: float = DEFAULT_LIGHTWEIGHT_MAGNET_Z
@@ -1117,6 +1120,54 @@ def vertical_cylinder(radius: float, height: float, center: tuple[float, float, 
     return mesh
 
 
+def vertical_frustum(
+    lower_radius: float,
+    upper_radius: float,
+    height: float,
+    center: tuple[float, float, float],
+    sections: int,
+) -> trimesh.Trimesh:
+    angles = np.linspace(0.0, 2.0 * np.pi, sections, endpoint=False)
+    lower_z = center[2] - height / 2.0
+    upper_z = center[2] + height / 2.0
+    lower = np.column_stack(
+        (
+            center[0] + lower_radius * np.cos(angles),
+            center[1] + lower_radius * np.sin(angles),
+            np.full(sections, lower_z),
+        )
+    )
+    upper = np.column_stack(
+        (
+            center[0] + upper_radius * np.cos(angles),
+            center[1] + upper_radius * np.sin(angles),
+            np.full(sections, upper_z),
+        )
+    )
+    vertices = np.vstack(
+        (
+            lower,
+            upper,
+            np.array(center) + (0.0, 0.0, -height / 2.0),
+            np.array(center) + (0.0, 0.0, height / 2.0),
+        )
+    )
+    lower_center = 2 * sections
+    upper_center = lower_center + 1
+    faces: list[list[int]] = []
+    for index in range(sections):
+        next_index = (index + 1) % sections
+        faces.append([index, next_index, sections + next_index])
+        faces.append([index, sections + next_index, sections + index])
+        faces.append([lower_center, next_index, index])
+        faces.append([upper_center, sections + index, sections + next_index])
+    mesh = trimesh.Trimesh(vertices=vertices, faces=np.asarray(faces, dtype=np.int64), process=False)
+    mesh.fix_normals()
+    if mesh.volume < 0:
+        mesh.invert()
+    return mesh
+
+
 def axis_cylinder(
     radius: float,
     length: float,
@@ -1616,9 +1667,22 @@ def build_lightweight_mesh(
     centers = hole_centers(spec)
     cup_height = min(lightweight.cup_height, spec.height)
     cup_floor = min(lightweight.floor, cup_height - 0.5)
+    retaining_ring_height = max(
+        0.0,
+        min(lightweight.retaining_ring_height, cup_height - cup_floor - 0.5),
+    )
+    retaining_bevel_height = max(
+        0.0,
+        min(lightweight.retaining_bevel_height, cup_height - cup_floor - retaining_ring_height - 0.5),
+    )
+    retaining_ring_top_z = cup_floor + retaining_ring_height
+    main_bore_z = retaining_ring_top_z + retaining_bevel_height
     inner_radius = spec.hole_diameter / 2.0
+    retaining_hole_radius = min(lightweight.retaining_hole_diameter / 2.0, inner_radius - 0.25)
     outer_radius = inner_radius + lightweight.cup_wall
+    top_ring_outer_radius = inner_radius + 2.0 * lightweight.cup_wall
     cup_segments = circle_segments(spec.hole_diameter + 2.0 * lightweight.cup_wall, circle_segment_length)
+    retaining_hole_segments = circle_segments(lightweight.retaining_hole_diameter, circle_segment_length)
     magnet_segments = circle_segments(spec.magnet_diameter, circle_segment_length)
 
     solids: list[trimesh.Trimesh] = []
@@ -1626,21 +1690,42 @@ def build_lightweight_mesh(
     cutters: list[trimesh.Trimesh] = []
     cup_cutters: list[trimesh.Trimesh] = []
     for cx, cy in centers:
-        inner_height = cup_height - cup_floor + 0.25
+        inner_height = cup_height - main_bore_z + 0.25
         inner = vertical_cylinder(
             inner_radius,
             inner_height,
-            (cx, cy, cup_floor + inner_height / 2.0 - 0.05),
+            (cx, cy, main_bore_z + inner_height / 2.0 - 0.05),
             cup_segments,
         )
+        retaining_hole = vertical_cylinder(
+            retaining_hole_radius,
+            retaining_ring_height + 0.25,
+            (cx, cy, cup_floor + retaining_ring_height / 2.0 + 0.075),
+            retaining_hole_segments,
+        )
+        retaining_bevel = vertical_frustum(
+            retaining_hole_radius,
+            inner_radius,
+            retaining_bevel_height + 0.25,
+            (cx, cy, retaining_ring_top_z + retaining_bevel_height / 2.0 + 0.075),
+            cup_segments,
+        )
+        bottom_height = max(lightweight.rib_height, main_bore_z)
         bottom_floor = vertical_cylinder(
             outer_radius,
-            lightweight.rib_height,
-            (cx, cy, lightweight.rib_height / 2.0),
+            bottom_height,
+            (cx, cy, bottom_height / 2.0),
             cup_segments,
         )
         top_ring_outer = vertical_cylinder(
-            outer_radius,
+            top_ring_outer_radius,
+            lightweight.rib_height,
+            (cx, cy, cup_height - lightweight.rib_height / 2.0),
+            cup_segments,
+        )
+        top_ring_bevel = vertical_frustum(
+            inner_radius,
+            top_ring_outer_radius,
             lightweight.rib_height,
             (cx, cy, cup_height - lightweight.rib_height / 2.0),
             cup_segments,
@@ -1658,6 +1743,10 @@ def build_lightweight_mesh(
             )
         )
         cup_cutters.append(inner)
+        cup_cutters.append(retaining_hole)
+        if retaining_bevel_height > 0.0:
+            cup_cutters.append(retaining_bevel)
+        cup_cutters.append(top_ring_bevel)
 
     internal_rib_zs = (
         lightweight.rib_height / 2.0,
@@ -1716,61 +1805,30 @@ def build_lightweight_mesh(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=Path("stl/extras/craft-paint-modular-organizer.stl"))
-    parser.add_argument(
-        "--variant",
-        choices=("solid", "lightweight"),
-        default="solid",
-        help="Generate the original solid-block organizer or a lightweight rib-and-cup variant.",
-    )
-    parser.add_argument(
-        "--lightweight-output",
-        type=Path,
-        default=DEFAULT_LIGHTWEIGHT_OUTPUT,
-        help="Default output path to use when --variant lightweight is selected and --output is omitted.",
-    )
-    parser.add_argument("--pitch", type=float, default=OrganizerSpec.pitch, help="Meshing pitch in mm.")
     parser.add_argument("--stagger", type=float, default=OrganizerSpec.stagger, help="Alternate-row hole stagger in mm.")
-    parser.add_argument(
-        "--roundover",
-        type=float,
-        default=None,
-        help="Convenience option to set both box and hole roundovers in mm.",
-    )
-    parser.add_argument(
-        "--box-roundover",
-        type=float,
-        default=OrganizerSpec.box_roundover,
-        help="Top and bottom outer box edge roundover radius in mm.",
-    )
     parser.add_argument(
         "--vertical-corner-roundover",
         type=float,
         default=OrganizerSpec.vertical_corner_roundover,
         help="Outer box vertical-corner radius in mm.",
     )
-    parser.add_argument(
-        "--hole-roundover",
-        type=float,
-        default=OrganizerSpec.hole_roundover,
-        help="Top and bottom hole roundover radius in mm.",
-    )
     parser.add_argument("--magnet-diameter", type=float, default=OrganizerSpec.magnet_diameter, help="Magnet pocket diameter in mm.")
     parser.add_argument("--magnet-depth", type=float, default=OrganizerSpec.magnet_depth, help="Magnet pocket depth in mm.")
-    parser.add_argument("--magnet-z", type=float, default=OrganizerSpec.magnet_z, help="Magnet pocket center height in mm.")
-    parser.add_argument("--logo-size", type=float, default=OrganizerSpec.logo_size, help="Front logo stamp size in mm.")
-    parser.add_argument("--logo-depth", type=float, default=OrganizerSpec.logo_depth, help="Front logo stamp recess depth in mm.")
-    parser.add_argument("--lightweight-cup-height", type=float, default=LightweightSpec.cup_height, help="Cup wall height for the lightweight variant in mm.")
-    parser.add_argument("--lightweight-cup-wall", type=float, default=LightweightSpec.cup_wall, help="Cup wall thickness for the lightweight variant in mm.")
-    parser.add_argument("--lightweight-floor", type=float, default=LightweightSpec.floor, help="Cup floor thickness for the lightweight variant in mm.")
-    parser.add_argument("--lightweight-rib-width", type=float, default=LightweightSpec.rib_width, help="Rib width for the lightweight variant in mm.")
-    parser.add_argument("--lightweight-rib-height", type=float, default=LightweightSpec.rib_height, help="Rib height for the lightweight variant in mm.")
-    parser.add_argument("--lightweight-magnet-z", type=float, default=LightweightSpec.magnet_z, help="Magnet pocket center height for the lightweight variant in mm.")
-    parser.add_argument("--lightweight-magnet-boss-depth", type=float, default=LightweightSpec.magnet_boss_depth, help="Side magnet boss depth for the lightweight variant in mm.")
-    parser.add_argument("--lightweight-magnet-boss-width", type=float, default=LightweightSpec.magnet_boss_width, help="Side magnet boss width for the lightweight variant in mm.")
-    parser.add_argument("--lightweight-magnet-boss-height", type=float, default=LightweightSpec.magnet_boss_height, help="Side magnet boss height for the lightweight variant in mm.")
-    parser.add_argument("--lightweight-hex-radius", type=float, default=LightweightSpec.hex_radius, help="Honeycomb cell radius for the lightweight variant in mm; use 0 to disable.")
-    parser.add_argument("--lightweight-hex-width", type=float, default=LightweightSpec.hex_width, help="Honeycomb strut width for the lightweight variant in mm.")
-    parser.add_argument("--lightweight-hex-height", type=float, default=LightweightSpec.hex_height, help="Honeycomb strut height for the lightweight variant in mm.")
+    parser.add_argument("--cup-height", type=float, default=LightweightSpec.cup_height, help="Cup wall height in mm.")
+    parser.add_argument("--cup-wall", type=float, default=LightweightSpec.cup_wall, help="Cup wall thickness in mm.")
+    parser.add_argument("--floor", type=float, default=LightweightSpec.floor, help="Cup floor thickness in mm.")
+    parser.add_argument("--retaining-ring-height", type=float, default=LightweightSpec.retaining_ring_height, help="Bottom retaining ring height in mm.")
+    parser.add_argument("--retaining-hole-diameter", type=float, default=LightweightSpec.retaining_hole_diameter, help="Centered hole diameter through each bottom retaining ring in mm.")
+    parser.add_argument("--retaining-bevel-height", type=float, default=LightweightSpec.retaining_bevel_height, help="Taper height above each bottom retaining ring in mm.")
+    parser.add_argument("--rib-width", type=float, default=LightweightSpec.rib_width, help="Rib width in mm.")
+    parser.add_argument("--rib-height", type=float, default=LightweightSpec.rib_height, help="Rib height in mm.")
+    parser.add_argument("--magnet-z", type=float, default=LightweightSpec.magnet_z, help="Magnet pocket center height in mm.")
+    parser.add_argument("--magnet-boss-depth", type=float, default=LightweightSpec.magnet_boss_depth, help="Side magnet boss depth in mm.")
+    parser.add_argument("--magnet-boss-width", type=float, default=LightweightSpec.magnet_boss_width, help="Side magnet boss width in mm.")
+    parser.add_argument("--magnet-boss-height", type=float, default=LightweightSpec.magnet_boss_height, help="Side magnet boss height in mm.")
+    parser.add_argument("--hex-radius", type=float, default=LightweightSpec.hex_radius, help="Honeycomb cell radius in mm; use 0 to disable.")
+    parser.add_argument("--hex-width", type=float, default=LightweightSpec.hex_width, help="Honeycomb strut width in mm.")
+    parser.add_argument("--hex-height", type=float, default=LightweightSpec.hex_height, help="Honeycomb strut height in mm.")
     parser.add_argument("--min-wall", type=float, default=OrganizerSpec.min_wall, help="Minimum wall between holes in mm.")
     parser.add_argument(
         "--edge-wall",
@@ -1783,32 +1841,16 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Search for an edge wall that balances edge and hole-to-hole clearances.",
     )
-    parser.add_argument(
-        "--sdf",
-        action="store_true",
-        help="Use the slower signed-distance mesher instead of the analytic sharp-edge mesh.",
-    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    box_roundover = args.roundover if args.roundover is not None else args.box_roundover
-    vertical_corner_roundover = (
-        args.roundover if args.roundover is not None else args.vertical_corner_roundover
-    )
-    hole_roundover = args.roundover if args.roundover is not None else args.hole_roundover
     spec = OrganizerSpec(
-        pitch=args.pitch,
         stagger=args.stagger,
-        box_roundover=box_roundover,
-        vertical_corner_roundover=vertical_corner_roundover,
-        hole_roundover=hole_roundover,
+        vertical_corner_roundover=args.vertical_corner_roundover,
         magnet_diameter=args.magnet_diameter,
         magnet_depth=args.magnet_depth,
-        magnet_z=args.magnet_z,
-        logo_size=args.logo_size,
-        logo_depth=args.logo_depth,
         min_wall=args.min_wall,
         edge_wall=args.edge_wall,
     )
@@ -1817,32 +1859,25 @@ def main() -> None:
         print(f"Solved edge wall: {spec.edge_wall:.3f} mm")
 
     lightweight = LightweightSpec(
-        cup_height=args.lightweight_cup_height,
-        cup_wall=args.lightweight_cup_wall,
-        floor=args.lightweight_floor,
-        rib_width=args.lightweight_rib_width,
-        rib_height=args.lightweight_rib_height,
-        magnet_z=args.lightweight_magnet_z,
-        magnet_boss_depth=args.lightweight_magnet_boss_depth,
-        magnet_boss_width=args.lightweight_magnet_boss_width,
-        magnet_boss_height=args.lightweight_magnet_boss_height,
-        hex_radius=args.lightweight_hex_radius,
-        hex_width=args.lightweight_hex_width,
-        hex_height=args.lightweight_hex_height,
+        cup_height=args.cup_height,
+        cup_wall=args.cup_wall,
+        floor=args.floor,
+        retaining_ring_height=args.retaining_ring_height,
+        retaining_hole_diameter=args.retaining_hole_diameter,
+        retaining_bevel_height=args.retaining_bevel_height,
+        rib_width=args.rib_width,
+        rib_height=args.rib_height,
+        magnet_z=args.magnet_z,
+        magnet_boss_depth=args.magnet_boss_depth,
+        magnet_boss_width=args.magnet_boss_width,
+        magnet_boss_height=args.magnet_boss_height,
+        hex_radius=args.hex_radius,
+        hex_width=args.hex_width,
+        hex_height=args.hex_height,
     )
 
-    if args.variant == "lightweight":
-        mesh = build_lightweight_mesh(spec, lightweight)
-        output = args.lightweight_output if args.output == Path("stl/extras/craft-paint-modular-organizer.stl") else args.output
-    elif args.sdf:
-        mesh = build_sdf_mesh(spec)
-    elif spec.box_roundover > 0.0 or spec.hole_roundover > 0.0:
-        mesh = build_rounded_analytic_mesh(spec)
-    else:
-        mesh = build_analytic_mesh(spec)
-    if args.variant == "solid":
-        mesh = apply_logo_inset(mesh, spec)
-        output = args.output
+    mesh = build_lightweight_mesh(spec, lightweight)
+    output = args.output
     output.parent.mkdir(parents=True, exist_ok=True)
     mesh.export(output)
     print(f"Wrote {output}")

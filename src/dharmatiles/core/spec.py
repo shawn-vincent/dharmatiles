@@ -114,6 +114,27 @@ class TileSpec:
     surface:    SurfaceConfig
     regions:    list[RegionSpec]    = field(default_factory=list)
     boundaries: list[BoundarySpec]  = field(default_factory=list)
+    sizes:      list[tuple[int, int]] = field(default_factory=lambda: [(1, 1)])
+    # TODO: variants — future upgrade path for per-size overrides (seed, density, etc.)
+    #   Each entry could override surface params for one specific size, e.g.:
+    #   variants: [{size: 3x3, seed: 99, groups_per_square: 180}]
+
+
+# ── Size string helpers ───────────────────────────────────────────────────────
+
+def _parse_size_string(s: str) -> tuple[int, int]:
+    """Parse ``'2x3'`` or ``'2X3'`` → ``(2, 3)``."""
+    parts = str(s).lower().split('x')
+    if len(parts) != 2:
+        raise ValueError(
+            f"Invalid size string {s!r} — expected NxM format (e.g. '1x1', '3x3')"
+        )
+    try:
+        return (int(parts[0]), int(parts[1]))
+    except ValueError:
+        raise ValueError(
+            f"Invalid size string {s!r} — N and M must be integers"
+        )
 
 
 # ── YAML loader ───────────────────────────────────────────────────────────────
@@ -146,9 +167,22 @@ def _parse(data: dict) -> TileSpec:
     # ── Surface ───────────────────────────────────────────────────────────────
     s = data.get('surface', {})
     _surface_defaults = SurfaceConfig()
+
+    # ── Sizes: parse 'sizes' list, 'size' singular, or legacy 'cols'/'rows' ──
+    if 'sizes' in s:
+        sizes: list[tuple[int, int]] = [_parse_size_string(sz) for sz in s['sizes']]
+    elif 'size' in s:
+        sizes = [_parse_size_string(s['size'])]
+    elif 'cols' in s or 'rows' in s:
+        sizes = [(int(s.get('cols', 1)), int(s.get('rows', 1)))]
+    else:
+        sizes = [(1, 1)]
+
+    first_cols, first_rows = sizes[0]
+
     surface = SurfaceConfig(
-        cols            = s.get('cols',             _surface_defaults.cols),
-        rows            = s.get('rows',             _surface_defaults.rows),
+        cols            = first_cols,
+        rows            = first_rows,
         cells_per_square= s.get('cells_per_square', _surface_defaults.cells_per_square),
         base_h          = s.get('base_h',           _surface_defaults.base_h),
         seed            = s.get('seed',             _surface_defaults.seed),
@@ -211,4 +245,4 @@ def _parse(data: dict) -> TileSpec:
             layers        = bnd_layers,
         ))
 
-    return TileSpec(surface=surface, regions=regions, boundaries=boundaries)
+    return TileSpec(surface=surface, regions=regions, boundaries=boundaries, sizes=sizes)

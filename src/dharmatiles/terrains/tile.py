@@ -35,7 +35,7 @@ from ..bases import dungeonblocks, openlock
 from ..layers.soil import SoilLayer
 from ..layers.stones import StonesLayer
 from ..layers.grass import GrassLayer
-from ..layers.water import make_water_volume, build_water_surface_displacement
+from ..layers.water import make_water_volume
 
 
 # ── VisCAM / SolidView colour constants ───────────────────────────────────────
@@ -137,16 +137,12 @@ def _build_mesh(cfg: SceneConfig,
     # ── Water volume ──────────────────────────────────────────────────────────
     if water_mask is not None and water_height is not None:
         if verbose:
-            print("Building water surface displacement...")
-        z_disp = build_water_surface_displacement(
-            cfg.surface, water_mask, scene.terrain_z, water_height,
-            scene.stone_mask, cfg.water_surface)
-        if verbose:
             print("Building water volume...")
         water_mesh = make_water_volume(
             scene.terrain_z, water_mask, water_height,
             cfg.surface.tile_w, cfg.surface.tile_h,
-            z_disp=z_disp)
+            error_threshold=cfg.surface.terrain_simplify_threshold,
+            simplify_stride=cfg.surface.terrain_simplify_stride)
         _paint(water_mesh, COLOUR_WATER)
         parts.append(water_mesh)
 
@@ -603,6 +599,49 @@ def _collect_stones_layers(
     return result
 
 
+# ── Multi-size helpers ────────────────────────────────────────────────────────
+
+def _sized_spec(spec: TileSpec, cols: int, rows: int) -> TileSpec:
+    """Return a copy of *spec* with surface.cols/rows replaced."""
+    sized_surface = dataclasses.replace(spec.surface, cols=cols, rows=rows)
+    return dataclasses.replace(spec, surface=sized_surface)
+
+
+def _build_spec_all_sizes(spec: TileSpec,
+                           spec_path: pathlib.Path,
+                           output: pathlib.Path | None,
+                           tiles_root: pathlib.Path,
+                           stl_root: pathlib.Path,
+                           verbose: bool = True) -> None:
+    """Build every size declared in *spec.sizes* and export system STLs.
+
+    Naming: ``{cols}x{rows}-{stem}-{db|ol}.stl`` under *stl_root*.
+
+    When *output* is given explicitly (``--output``):
+    - Single-size spec: uses *output* as-is (backward-compatible).
+    - Multi-size spec: inserts the size prefix into the output stem so each
+      size gets a distinct file.
+    """
+    for cols, rows in spec.sizes:
+        if len(spec.sizes) > 1 and verbose:
+            print(f"\n{'━'*60}")
+            print(f"  Size: {cols}×{rows}")
+            print(f"{'━'*60}")
+        sized = _sized_spec(spec, cols, rows)
+        if output is None:
+            sys_paths = _new_tile_paths(spec_path, cols, rows, tiles_root, stl_root)
+            out = sys_paths[dungeonblocks.SYSTEM_SUFFIX]
+        elif len(spec.sizes) == 1:
+            sys_paths = None
+            out = output
+        else:
+            # Multiple sizes with explicit --output: insert size prefix into stem.
+            sys_paths = None
+            out = output.with_name(f"{cols}x{rows}-{output.name}")
+        build_tile_from_spec(sized, output_path=out, verbose=verbose,
+                             system_paths=sys_paths)
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -631,19 +670,12 @@ def main(argv=None):
 
     # ── Single spec mode ──────────────────────────────────────────────────────
     if args.spec is not None:
-        spec       = load_spec(args.spec)
-        output     = args.output
-        sys_paths  = None
-        if output is None:
-            sys_paths = _new_tile_paths(
-                args.spec, spec.surface.cols, spec.surface.rows,
-                TILES_ROOT, STL_ROOT)
-            output = sys_paths[dungeonblocks.SYSTEM_SUFFIX]
-        build_tile_from_spec(spec, output_path=output,
-                             verbose=verbose, system_paths=sys_paths)
+        spec = load_spec(args.spec)
+        _build_spec_all_sizes(spec, args.spec, args.output,
+                              TILES_ROOT, STL_ROOT, verbose=verbose)
         return
 
-    # ── Batch mode ───────────────────────────────────────────────────────────
+    # ── Batch mode ────────────────────────────────────────────────────────────
     specs = sorted(TILES_ROOT.rglob("*.tile"))
     if not specs:
         print(f"No .tile files found under {TILES_ROOT}/  "
@@ -656,18 +688,12 @@ def main(argv=None):
             print(f"\n{'─'*60}")
             print(f"  {sp}")
             print(f"{'─'*60}")
-        spec      = load_spec(sp)
-        sys_paths = _new_tile_paths(
-            sp, spec.surface.cols, spec.surface.rows,
-            TILES_ROOT, STL_ROOT)
-        build_tile_from_spec(spec,
-                             output_path=sys_paths[dungeonblocks.SYSTEM_SUFFIX],
-                             verbose=verbose,
-                             system_paths=sys_paths)
+        spec = load_spec(sp)
+        _build_spec_all_sizes(spec, sp, None, TILES_ROOT, STL_ROOT, verbose=verbose)
     elapsed = _time.perf_counter() - t_batch
     n = len(specs)
-    print(f"\n{n} tile{'s' if n != 1 else ''} generated in {elapsed:.1f}s  "
-          f"({elapsed/n:.1f}s/tile)")
+    print(f"\n{n} spec{'s' if n != 1 else ''} processed in {elapsed:.1f}s  "
+          f"({elapsed/n:.1f}s/spec)")
 
 
 if __name__ == "__main__":
