@@ -27,8 +27,8 @@ regions:
         stones_per_square: 2    # → 2 large boulders in the pool (0–3 visible)
         r_min: 3.0              # mm — minimum horizontal semi-axis
         r_max: 5.0              # mm — maximum horizontal semi-axis
-        flat_min: 1.0           # height = flat × mean_r → min ≈ 3 mm body
-        flat_max: 1.4           # max ≈ 7 mm body; tops reach ~4–5 mm from base
+        flat_min: 2.0           # height = flat × mean_r → min ≈ 8 mm body
+        flat_max: 2.8           # max ≈ 11 mm body; tops well above water line
         size_power: 1.0         # uniform draw — all rocks are large
         n_cuts: 3               # fewer cuts → rounder, boulder-like silhouette
 

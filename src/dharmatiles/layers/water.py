@@ -40,6 +40,136 @@ from ..core.config import SurfaceConfig, WaterRippleConfig
 WATER_RENDER_LIFT_MM = 0.10   # lift water mesh above terrain floor to avoid z-fight
 
 
+def make_water_volume(terrain_z: np.ndarray,
+                      water_mask: np.ndarray,
+                      water_height: float,
+                      tile_w: float,
+                      tile_h: float) -> trimesh.Trimesh:
+    """Closed solid spanning the water volume: flat top at *water_height*, riverbed bottom.
+
+    Faces emitted
+    -------------
+    Top face     flat grid at *water_height* over every water cell.
+    Bottom face  terrain_z surface (the textured riverbed) under every water cell.
+    Perimeter    walls connecting top and bottom edges wherever a water cell
+                 borders a non-water cell or the tile boundary.
+
+    The solid is standalone.  When concatenated with the terrain solid (which
+    covers the full tile from z=0 up to terrain_z), the two volumes together
+    fill 0→water_height over the water region.  Interior faces at terrain_z are
+    redundant but harmless — slicers resolve the union by volume.
+    """
+    gh, gw = terrain_z.shape
+    cell_x = tile_w / gw
+    cell_y = tile_h / gh
+
+    nv_r = gh + 1   # vertex grid rows
+    nv_c = gw + 1   # vertex grid cols
+    n_half = nv_r * nv_c
+
+    # ── Bottom corner z: bilinear avg of surrounding water cells only ──────────
+    # Using only water cells prevents non-water terrain heights bleeding into
+    # the riverbed corners at the shoreline.
+    pad_z = np.pad(terrain_z,              1, mode='edge')
+    pad_m = np.pad(water_mask.astype(float), 1, mode='constant')  # 0 outside
+    sum_z = (pad_z[:-1, :-1] * pad_m[:-1, :-1] + pad_z[:-1, 1:] * pad_m[:-1, 1:] +
+             pad_z[1:,  :-1] * pad_m[1:,  :-1] + pad_z[1:,  1:] * pad_m[1:,  1:])
+    sum_w = (pad_m[:-1, :-1] + pad_m[:-1, 1:] +
+             pad_m[1:,  :-1] + pad_m[1:,  1:])
+    bot_z = np.where(sum_w > 0, sum_z / np.maximum(sum_w, 1e-9), water_height)
+    bot_z = np.minimum(bot_z, water_height)   # bottom never above water surface
+
+    # ── Vertex buffer ─────────────────────────────────────────────────────────
+    x_v = np.broadcast_to((np.arange(nv_c) * cell_x)[None, :], (nv_r, nv_c))
+    y_v = np.broadcast_to((np.arange(nv_r) * cell_y)[:, None], (nv_r, nv_c))
+
+    verts = np.empty((2 * n_half, 3))
+    verts[:n_half, 0] = x_v.ravel()
+    verts[:n_half, 1] = y_v.ravel()
+    verts[:n_half, 2] = water_height          # top: flat
+    verts[n_half:, 0] = x_v.ravel()
+    verts[n_half:, 1] = y_v.ravel()
+    verts[n_half:, 2] = bot_z.ravel()         # bottom: riverbed
+
+    def tv(r, c): return np.asarray(r) * nv_c + np.asarray(c)
+    def bv(r, c): return n_half + tv(r, c)
+
+    face_list: list[np.ndarray] = []
+
+    # ── Top and bottom faces (vectorised) ─────────────────────────────────────
+    wr, wc = np.where(water_mask)
+    t00 = tv(wr,   wc);   t01 = tv(wr,   wc + 1)
+    t10 = tv(wr+1, wc);   t11 = tv(wr+1, wc + 1)
+    b00 = bv(wr,   wc);   b01 = bv(wr,   wc + 1)
+    b10 = bv(wr+1, wc);   b11 = bv(wr+1, wc + 1)
+
+    # Top: CCW from above → normal +z
+    top_f = np.empty((2 * len(wr), 3), dtype=np.int32)
+    top_f[0::2] = np.stack([t00, t01, t11], axis=1)
+    top_f[1::2] = np.stack([t00, t11, t10], axis=1)
+    face_list.append(top_f)
+
+    # Bottom: CW from above → normal −z
+    bot_f = np.empty((2 * len(wr), 3), dtype=np.int32)
+    bot_f[0::2] = np.stack([b00, b11, b01], axis=1)
+    bot_f[1::2] = np.stack([b00, b10, b11], axis=1)
+    face_list.append(bot_f)
+
+    # ── Perimeter walls ───────────────────────────────────────────────────────
+    # Extend mask with False border so boundary cells always trigger a wall.
+    ext = np.zeros((gh + 2, gw + 2), dtype=bool)
+    ext[1:-1, 1:-1] = water_mask
+
+    # South wall (normal −y): water cell with no water neighbour at r−1
+    s_mask = water_mask & ~ext[:-2, 1:-1]
+    sr, sc = np.where(s_mask)
+    if len(sr):
+        st0 = tv(sr, sc);     st1 = tv(sr, sc + 1)
+        sb0 = bv(sr, sc);     sb1 = bv(sr, sc + 1)
+        sw_s = np.empty((2 * len(sr), 3), dtype=np.int32)
+        sw_s[0::2] = np.stack([st0, sb0, st1], axis=1)
+        sw_s[1::2] = np.stack([st1, sb0, sb1], axis=1)
+        face_list.append(sw_s)
+
+    # North wall (normal +y): water cell with no water neighbour at r+1
+    n_mask = water_mask & ~ext[2:, 1:-1]
+    nr, nc_ = np.where(n_mask)
+    if len(nr):
+        nt0 = tv(nr + 1, nc_);    nt1 = tv(nr + 1, nc_ + 1)
+        nb0 = bv(nr + 1, nc_);    nb1 = bv(nr + 1, nc_ + 1)
+        sw_n = np.empty((2 * len(nr), 3), dtype=np.int32)
+        sw_n[0::2] = np.stack([nt0, nt1, nb0], axis=1)
+        sw_n[1::2] = np.stack([nt1, nb1, nb0], axis=1)
+        face_list.append(sw_n)
+
+    # West wall (normal −x): water cell with no water neighbour at c−1
+    w_mask = water_mask & ~ext[1:-1, :-2]
+    wr2, wc2 = np.where(w_mask)
+    if len(wr2):
+        wt0 = tv(wr2,     wc2);   wt1 = tv(wr2 + 1, wc2)
+        wb0 = bv(wr2,     wc2);   wb1 = bv(wr2 + 1, wc2)
+        sw_w = np.empty((2 * len(wr2), 3), dtype=np.int32)
+        sw_w[0::2] = np.stack([wt0, wt1, wb0], axis=1)
+        sw_w[1::2] = np.stack([wt1, wb1, wb0], axis=1)
+        face_list.append(sw_w)
+
+    # East wall (normal +x): water cell with no water neighbour at c+1
+    e_mask = water_mask & ~ext[1:-1, 2:]
+    er, ec = np.where(e_mask)
+    if len(er):
+        et0 = tv(er,     ec + 1);  et1 = tv(er + 1, ec + 1)
+        eb0 = bv(er,     ec + 1);  eb1 = bv(er + 1, ec + 1)
+        sw_e = np.empty((2 * len(er), 3), dtype=np.int32)
+        sw_e[0::2] = np.stack([et0, eb0, et1], axis=1)
+        sw_e[1::2] = np.stack([et1, eb0, eb1], axis=1)
+        face_list.append(sw_e)
+
+    all_faces = np.concatenate(face_list)
+    mesh = trimesh.Trimesh(vertices=verts, faces=all_faces, process=False)
+    mesh.fix_normals()
+    return mesh
+
+
 class WaterLayer:
     """Build a water-surface mesh, optionally with point-source ripples.
 

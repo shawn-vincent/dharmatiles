@@ -35,7 +35,7 @@ from ..bases import dungeonblocks, openlock
 from ..layers.soil import SoilLayer
 from ..layers.stones import StonesLayer
 from ..layers.grass import GrassLayer
-from ..layers.water import WaterLayer
+from ..layers.water import make_water_volume
 
 
 # ── VisCAM / SolidView colour constants ───────────────────────────────────────
@@ -91,9 +91,8 @@ def _build_mesh(cfg: SceneConfig,
     pass with its own size distribution and placement region.  Defaults to
     ``[(cfg.stones, None)]`` (single pass, whole-tile placement).
 
-    *water_mask* / *water_height* — when provided, the soil layer's bumps
-    are zeroed out in the water region (keeping the pool floor flat), and a
-    blue placeholder water-surface mesh is inserted above the terrain solid.
+    *water_mask* / *water_height* — when provided, a flat water-surface mesh
+    is placed at *water_height* over the water region.
     """
     if grass_cfgs is None:
         grass_cfgs = [cfg.grass]
@@ -103,29 +102,9 @@ def _build_mesh(cfg: SceneConfig,
     parts: list[trimesh.Trimesh] = []
 
     # ── Soil ──────────────────────────────────────────────────────────────────
-    # For dry riverbeds, snapshot which water cells are at the flat floor
-    # *before* soil runs so we can strip texture from them afterward.
-    # Slope cells (above the floor) keep their texture; the flat bed stays bare.
-    DRY_BED_HEIGHT_MM = 0.2
-    flat_bed_mask: np.ndarray | None = None
-    if water_mask is not None:
-        flat_bed_mask = water_mask & (scene.terrain_z <= DRY_BED_HEIGHT_MM + 0.01)
-
     if verbose:
         print("Building soil texture...")
     SoilLayer(cfg.surface, cfg.soil).build(scene)
-
-    # Restore flat bed to exactly 0.2 mm — no soil texture on the channel floor.
-    if flat_bed_mask is not None and np.any(flat_bed_mask):
-        scene.terrain_z[flat_bed_mask] = DRY_BED_HEIGHT_MM
-
-    # Dry riverbed: set support_z to the bed floor level so grass/stones don't
-    # seed into the channel.  No water clipping or ripple computation needed.
-    if water_mask is not None:
-        scene.support_z[water_mask] = DRY_BED_HEIGHT_MM
-
-    # No ripple/overflow computation — water surface is not rendered.
-    overflow_mask = None
 
     # ── Stones (one independent pass per stone-layer zone) ────────────────────
     n_squares = cfg.surface.cols * cfg.surface.rows
@@ -155,19 +134,21 @@ def _build_mesh(cfg: SceneConfig,
         _paint(grass_parts, COLOUR_GRASS)
         parts.extend(grass_parts)
 
-    # ── Water surface — not rendered (dry riverbed mode) ─────────────────────
-    # Water surface mesh is intentionally omitted.  The sloped bed is left bare
-    # so a separate water layer can be added on top later.
+    # ── Water volume ──────────────────────────────────────────────────────────
+    if water_mask is not None and water_height is not None:
+        if verbose:
+            print("Building water volume...")
+        water_mesh = make_water_volume(
+            scene.terrain_z, water_mask, water_height,
+            cfg.surface.tile_w, cfg.surface.tile_h)
+        _paint(water_mesh, COLOUR_WATER)
+        parts.append(water_mesh)
 
     # ── Terrain solid ─────────────────────────────────────────────────────────
-    # omit_top_mask covers only overflow cells (not the full water zone) so that
-    # the pool floor retains terrain faces — revealed when ripple troughs dip the
-    # water surface below the render_lift threshold.
     if verbose:
         print("Building terrain solid...")
     terrain_mesh = make_heightmap_solid(
         scene.terrain_z, cfg.surface.tile_w, cfg.surface.tile_h, cfg.surface.base_h,
-        omit_top_mask=overflow_mask,   # None if no overflow → all terrain faces kept
         error_threshold=cfg.surface.terrain_simplify_threshold,
         simplify_stride=cfg.surface.terrain_simplify_stride,
     )
@@ -386,9 +367,6 @@ def build_tile_from_spec(spec: TileSpec,
         )
         if region_mask is not None:
             ol_scene.grass_mask = build_grass_mask(region_mask, spec)
-        if water_mask is not None:
-            ol_scene.support_z[water_mask] = 0.2   # dry-bed floor (same as _build_mesh)
-
         ol_x, ol_y = make_xy_grids(ol_surface)
         ol_flow_angle, ol_flow_curv = build_flow_field(
             ol_surface, ol_cfg.flow, ol_x, ol_y)
@@ -397,7 +375,8 @@ def build_tile_from_spec(spec: TileSpec,
         ol_tile_mesh = _build_mesh(
             ol_cfg, ol_scene, ol_flow_angle, ol_flow_curv,
             grass_cfgs=ol_grass_cfgs, stone_layers=ol_stone_layers,
-            verbose=verbose, water_mask=water_mask, water_height=water_height)
+            verbose=verbose,
+            water_mask=water_mask, water_height=water_height)
         ol_terrain_z = ol_scene.terrain_z
 
     exports = _export_system_stls(tile_mesh, cfg, scene.terrain_z,
@@ -514,13 +493,12 @@ def _extend_bank_slope_into_pool(terrain_z: np.ndarray,
     dist_from_shore[~water_mask] = 0.0
 
     # ── Apply smoothstepped slope ─────────────────────────────────────────────
-    # Bed floors at 0.2 mm above the tile base (a thin but solid slab).
     # Rather than a linear ramp (which has sharp corners at top and bottom),
     # we normalise dist → t ∈ [0, 1] over the full slope span and apply a
     # smoothstep curve  t_s = 3t² − 2t³  whose derivative is 0 at both ends.
     # This eases gently out of the bank at the top and eases smoothly into the
     # flat bed at the bottom, removing both hard corners.
-    terrain_z_min = 0.2
+    terrain_z_min = 0.0
     slope_dist    = (water_height - terrain_z_min) / max(slope_rate, 1e-6)
 
     t   = np.clip(dist_from_shore / slope_dist, 0.0, 1.0)   # 0 = shore, 1 = bed

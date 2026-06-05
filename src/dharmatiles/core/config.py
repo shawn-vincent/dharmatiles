@@ -277,7 +277,7 @@ class StonesConfig:
     n_cuts:        int   = 4      # random plane cuts per stone
     cut_min:       float = 0.40   # min cut distance as fraction of mean radius
     cut_max:       float = 0.75   # max cut distance as fraction of mean radius
-    roughness:     float = 0.06   # small residual per-vertex noise
+    roughness:     float = 0.02   # small residual per-vertex noise
     az_segs:       int   = 32     # azimuth facets per stone
     el_segs:       int   = 12     # elevation rings per stone
     sink:          float = 0.10   # mm — base sunk below terrain
