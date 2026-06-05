@@ -4,15 +4,15 @@ Grass tile generator: soil + stones + grass blades on a DungeonBlocks base.
 Usage
 ─────
     generate-tile-stl
-        Batch mode: process every *.tile file under tiles/ and write outputs
-        to stl/dungeonblocks/ and stl/openlock/ with names like
+        Batch mode: process every *.tile file under src/tiles/ and write
+        outputs to stl/dungeonblocks/ and stl/openlock/ with names like
         1x1-half-grass-soil-db.stl / 1x1-half-grass-soil-ol.stl.
-        Sub-directories under tiles/ are mirrored in the output trees.
+        Sub-directories under src/tiles/ are mirrored in the output trees.
 
-    generate-tile-stl --spec tiles/half-grass-soil.tile
+    generate-tile-stl --spec src/tiles/half-grass-soil.tile
         Single tile: same naming and directory conventions as batch.
 
-    generate-tile-stl --spec tiles/foo.tile -o stl/custom.stl
+    generate-tile-stl --spec src/tiles/foo.tile -o stl/custom.stl
         Single tile, explicit output path.
 """
 from __future__ import annotations
@@ -205,7 +205,7 @@ def _new_tile_paths(spec_path: pathlib.Path,
     try:
         rel = spec_path.with_suffix('').relative_to(tiles_root)
     except ValueError:
-        rel = pathlib.Path(spec_path.stem)   # spec outside tiles/ — no subdir
+        rel = pathlib.Path(spec_path.stem)   # spec outside src/tiles/ — no subdir
     stem   = f"{cols}x{rows}-{rel.name}"
     subdir = rel.parent                       # Path('.') when file is at tiles root
     return {
@@ -612,7 +612,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--spec", "-s", type=pathlib.Path, default=None,
                    metavar="FILE",
-                   help="YAML (or .tile.py) tile spec.  Omit to process all tiles/")
+                   help="YAML (or .tile.py) tile spec.  Omit to process all src/tiles/")
     p.add_argument("--output", "-o", type=pathlib.Path,
                    default=None,
                    help="Override output path (requires --spec); system suffixes "
@@ -626,7 +626,7 @@ def main(argv=None):
     args    = _build_parser().parse_args(argv)
     verbose = not args.quiet
 
-    TILES_ROOT = pathlib.Path("tiles")
+    TILES_ROOT = pathlib.Path("src/tiles")
     STL_ROOT   = pathlib.Path("stl")
 
     # ── Single spec mode ──────────────────────────────────────────────────────

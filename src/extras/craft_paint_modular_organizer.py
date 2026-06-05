@@ -28,7 +28,7 @@ DEFAULT_MAGNET_Z = 35.0
 DEFAULT_MAGNET_SPACING = 80.9
 DEFAULT_LOGO_SIZE = 36.0
 DEFAULT_LOGO_DEPTH = 0.5
-DEFAULT_LIGHTWEIGHT_OUTPUT = Path("extras/craft-paint-modular-organizer-lightweight.stl")
+DEFAULT_LIGHTWEIGHT_OUTPUT = Path("stl/extras/craft-paint-modular-organizer-lightweight.stl")
 DEFAULT_LIGHTWEIGHT_CUP_HEIGHT = 50.0
 DEFAULT_LIGHTWEIGHT_CUP_WALL = 1.5
 DEFAULT_LIGHTWEIGHT_FLOOR = 3.0
@@ -1715,7 +1715,7 @@ def build_lightweight_mesh(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=Path("extras/craft-paint-modular-organizer.stl"))
+    parser.add_argument("--output", type=Path, default=Path("stl/extras/craft-paint-modular-organizer.stl"))
     parser.add_argument(
         "--variant",
         choices=("solid", "lightweight"),
@@ -1833,7 +1833,7 @@ def main() -> None:
 
     if args.variant == "lightweight":
         mesh = build_lightweight_mesh(spec, lightweight)
-        output = args.lightweight_output if args.output == Path("extras/craft-paint-modular-organizer.stl") else args.output
+        output = args.lightweight_output if args.output == Path("stl/extras/craft-paint-modular-organizer.stl") else args.output
     elif args.sdf:
         mesh = build_sdf_mesh(spec)
     elif spec.box_roundover > 0.0 or spec.hole_roundover > 0.0:

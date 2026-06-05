@@ -18,12 +18,12 @@ generate-tile-stl
 # Common flags
 generate-tile-stl --seed 42
 generate-tile-stl --cols 3 --rows 3
-generate-tile-stl --spec tiles/half-grass-soil.tile
-generate-tile-stl --spec tiles/grass-and-water.tile -o stl/custom.stl
+generate-tile-stl --spec src/tiles/half-grass-soil.tile
+generate-tile-stl --spec src/tiles/grass-and-water.tile -o stl/custom.stl
 generate-tile-stl --quiet   # suppress progress output
 
 # Run a single script directly (no install needed)
-python -m dharmatiles.terrains.tile --spec tiles/half-grass-soil.tile
+python -m dharmatiles.terrains.tile --spec src/tiles/half-grass-soil.tile
 ```
 
 There are no automated tests; correctness is verified by opening the STL in PrusaSlicer, MeshLab, or Windows 3D Builder and visually inspecting the coloured mesh.
@@ -99,7 +99,7 @@ TileSpec (YAML) ──► build_tile_from_spec()
 
 ### Tile Spec Format (`.tile` files)
 
-YAML files in `tiles/`. Two region types drive the pipeline:
+YAML files in `src/tiles/`. Two region types drive the pipeline:
 - **`grass`** — vegetated ground at 5 mm default height
 - **`water`** — pool at 3 mm default height (2 mm depression); currently renders as dry riverbed with sloped soil bed
 - **`soil`** — bare ground (no layers specified)
@@ -143,9 +143,11 @@ src/dharmatiles/
   core/          pure primitives (config, spec, tile, region, flow, mesh, grid, seed)
   layers/        grass.py, soil.py, stones.py, water.py
   terrains/      tile.py (main entry point)
-tiles/           .tile spec files (YAML)
-stl/             generated STL output (gitignored)
-scripts/         standalone utilities; scripts/archived/ = old generations
+src/tiles/       .tile spec files (YAML)
+src/scripts/     standalone utilities; src/scripts/archived/ = old generations
+src/scad/        OpenSCAD files and experiments
+stl/             generated STL output (committed)
+stl/extras/      STL outputs for non-terrain extras
 docs/            design notes, architecture review transcripts, session memory
 docs/meta/history/  architecture review transcripts
 docs/memory/     persistent session memory (MEMORY.md index)
