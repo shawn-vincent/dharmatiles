@@ -133,7 +133,8 @@ def build_water_surface_displacement(
         phase = rng.uniform(0.0, tau)
         amp   = cfg.capillary_amplitude_mm * rng.uniform(0.5, 1.5)
         proj  = cols_mm * np.cos(theta) + rows_mm * np.sin(theta)
-        z_waves += amp * np.sin(tau * proj / lam + phase)
+        s     = np.sin(tau * proj / lam + phase)
+        z_waves += amp * s * np.abs(s)   # s·|s|: sharp crests, flat troughs
 
     # ── Combine: waves modulated by amplitude field ────────────────────────────
     z_disp = z_waves * amp_field

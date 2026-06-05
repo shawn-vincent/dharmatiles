@@ -366,15 +366,15 @@ class WaterSurfaceConfig:
 
     # ── Capillary ripples ─────────────────────────────────────────────────────
     n_capillary:                int   = 30       # 30 crossing waves → interference noise
-    capillary_wavelength_min_mm:float = 1.39    # mm  (÷1.50, +50% frequency)
-    capillary_wavelength_max_mm:float = 2.78    # mm  (÷1.50, +50% frequency)
-    capillary_amplitude_mm:   float   = 0.0256  # mm — half-amplitude per wave  (×0.80)
+    capillary_wavelength_min_mm:float = 2.08    # mm
+    capillary_wavelength_max_mm:float = 4.17    # mm
+    capillary_amplitude_mm:   float   = 0.0256  # mm — half-amplitude per wave
 
     # ── Rock interactions ──────────────────────────────────────────────────────
-    rock_bow_amplitude_mm:    float   = 0.18    # mm — peak bow-wave height
+    rock_bow_amplitude_mm:    float   = 0.30    # mm — peak bow-wave height
     rock_wake_length_factor:  float   = 4.0     # wake length as × rock radius
     rock_wake_amp_factor:     float   = 0.45    # wave amplitude inside wake
-    rock_meniscus_amplitude_mm:float  = 0.10    # mm — contact-ring lift
+    rock_meniscus_amplitude_mm:float  = 0.18    # mm — contact-ring lift
     rock_meniscus_sigma_mm:   float   = 0.70    # mm — contact-ring bell width
 
 
