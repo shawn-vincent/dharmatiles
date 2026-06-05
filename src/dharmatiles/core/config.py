@@ -129,7 +129,7 @@ class GrassConfig:
     thickness:         float = 0.5     # mm — keel depth below spine (triangle/leaf/diamond)
     diamond_equator:   float = 0.75    # equator position for 'diamond'
     leaf_arch:         float = 0.4     # arch rise as fraction of thickness (leaf only)
-    leaf_ridge:        float = 0.35    # extra midrib lift at V3 as fraction of thickness
+    leaf_ridge:        float = 0.175   # extra midrib lift at V3 as fraction of thickness
 
     # ── Blade width range (mm) ────────────────────────────────────────────────
     width_min:    float = 1.2023438   # 0.8015625 × 1.5
