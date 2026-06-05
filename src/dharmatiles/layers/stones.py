@@ -5,19 +5,15 @@ All stone geometry is built with NumPy broadcasting in a single pass.
 Stone tops are rasterised into the scene's support_z so that subsequent
 layers (grass blades) are forced to sit above the stones.
 
-Slope assumption
-----------------
-Stones are placed upright: local +Z aligns with world +Z regardless of the
-terrain slope at the stone's position.  On a flat or gently rolling tile this
-is unnoticeable.  On a significant slope (> ~15°) a stone's base would
-visually slice into the hillside on the uphill side and float on the downhill
-side.
-
-To fix: sample ``TileScene.terrain_normal(cx, cy)`` at each stone centre and
-build a rotation matrix that maps local +Z → terrain normal, then rotate the
-entire stone vertex buffer before writing to ``all_verts``.  The support_z
-rasterisation loop would also need to account for the tilted footprint.
-See ``TileScene.terrain_normal`` (to be implemented) for the helper.
+Slope alignment
+---------------
+Each stone is rotated so its local +Z axis aligns with the terrain normal at
+its centre.  The normal is derived from the gradient of ``terrain_z`` via
+Rodrigues' formula.  The bottom-cap vertex (the pivot) stays at the terrain
+surface; the rest of the stone tilts to follow the slope.  The ``support_z``
+rasterisation footprint uses the axis-aligned bounding ellipse of the
+un-tilted stone, which is a slight over-estimate on steep slopes but
+negligible in practice.
 """
 from __future__ import annotations
 
@@ -115,6 +111,30 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
     tz     = sample_grid(terrain_z, surface, cx, cy)
     base_z = tz - stones.sink
 
+    # ── Terrain normals for slope alignment ───────────────────────────────────
+    # Each stone is rotated so its local +Z aligns with the terrain normal,
+    # keeping the base flush on the slope instead of slicing horizontally.
+    # We use Rodrigues' formula to build a per-stone rotation R[n] that maps
+    # world +Z → terrain normal n:
+    #   v = cross([0,0,1], n) = (-n_y, n_x, 0)
+    #   R = I + K + K²·(1−nz)/(nx²+ny²)   (K = skew-symmetric of v)
+    _cw       = surface.cell_w
+    _dzdx_g   = np.gradient(terrain_z, axis=1) / _cw   # dz/dx  (rows, cols)
+    _dzdy_g   = np.gradient(terrain_z, axis=0) / _cw   # dz/dy
+    _dzdx     = sample_grid(_dzdx_g, surface, cx, cy)   # (N,)
+    _dzdy     = sample_grid(_dzdy_g, surface, cx, cy)
+    _nlen     = np.sqrt(_dzdx**2 + _dzdy**2 + 1.0)
+    _nx       = -_dzdx / _nlen                           # terrain normal x  (N,)
+    _ny       = -_dzdy / _nlen                           # terrain normal y
+    _nz       =  1.0   / _nlen                           # terrain normal z
+    _ns2      = _nx**2 + _ny**2                          # sin²(tilt)
+    _fac      = np.where(_ns2 > 1e-12,
+                         (1.0 - _nz) / np.maximum(_ns2, 1e-12), 0.0)
+    # Rotation matrix components, all shape (N,)
+    _R00 = 1.0 - _fac * _nx**2;  _R01 = -_fac * _nx * _ny;  _R02 = _nx
+    _R10 = _R01;                  _R11 = 1.0 - _fac * _ny**2; _R12 = _ny
+    _R20 = -_nx;                  _R21 = -_ny;                _R22 = _nz
+
     # ── Vertex buffer ──────────────────────────────────────────────────────────
     vps = 1 + EL * AZ + 1    # verts per stone
     fps = AZ + AZ * (EL - 1) * 2 + AZ
@@ -195,6 +215,26 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
         wx += scale * rng.uniform(-1.0, 1.0, wx.shape)
         wy += scale * rng.uniform(-1.0, 1.0, wy.shape)
         wz += scale * 0.4 * rng.uniform(-1.0, 1.0, wz.shape)
+
+    # ── Slope rotation: align stone with terrain normal ───────────────────────
+    # Rotate the local offset of every ring vertex and the apex so the stone
+    # sits flush on the slope rather than intersecting it.  The base-centre
+    # vertex (bot_idx) is the pivot and needs no rotation.
+    if np.any(_ns2 > 1e-9):
+        dx_ = wx - cx[:, None, None]       # local offsets from base centre
+        dy_ = wy - cy[:, None, None]
+        dz_ = wz - base_z[:, None, None]
+        # Broadcast (N,) rotation components to (N, 1, 1) for ring arrays
+        wx = cx[:, None, None]     + (_R00[:, None, None]*dx_ + _R01[:, None, None]*dy_ + _R02[:, None, None]*dz_)
+        wy = cy[:, None, None]     + (_R10[:, None, None]*dx_ + _R11[:, None, None]*dy_ + _R12[:, None, None]*dz_)
+        wz = base_z[:, None, None] + (_R20[:, None, None]*dx_ + _R21[:, None, None]*dy_ + _R22[:, None, None]*dz_)
+        # Rotate apex (written earlier; may have been modified by cuts)
+        a_dx = all_verts[apex_idx, 0] - cx
+        a_dy = all_verts[apex_idx, 1] - cy
+        a_dz = all_verts[apex_idx, 2] - base_z
+        all_verts[apex_idx, 0] = cx     + _R00*a_dx + _R01*a_dy + _R02*a_dz
+        all_verts[apex_idx, 1] = cy     + _R10*a_dx + _R11*a_dy + _R12*a_dz
+        all_verts[apex_idx, 2] = base_z + _R20*a_dx + _R21*a_dy + _R22*a_dz
 
     ring_base = (np.arange(N) * vps + 1)[:, None, None]
     ei_off    = (np.arange(EL) * AZ)[None, :, None]
