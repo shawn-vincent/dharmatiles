@@ -366,10 +366,9 @@ class WaterSurfaceConfig:
 
     # ── Capillary ripples ─────────────────────────────────────────────────────
     n_capillary:                int   = 30       # 30 crossing waves → interference noise
-    capillary_wavelength_min_mm:float = 2.08    # mm  (÷1.20, +20% frequency)
-    capillary_wavelength_max_mm:float = 4.17    # mm  (÷1.20, +20% frequency)
-    capillary_amplitude_mm:   float   = 0.032   # mm — half-amplitude per wave
-    #   30 waves × 0.032 mm × avg 1.0 envelope ≈ same energy as 10 × 0.045
+    capillary_wavelength_min_mm:float = 1.39    # mm  (÷1.50, +50% frequency)
+    capillary_wavelength_max_mm:float = 2.78    # mm  (÷1.50, +50% frequency)
+    capillary_amplitude_mm:   float   = 0.0256  # mm — half-amplitude per wave  (×0.80)
 
     # ── Rock interactions ──────────────────────────────────────────────────────
     rock_bow_amplitude_mm:    float   = 0.18    # mm — peak bow-wave height
