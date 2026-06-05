@@ -35,7 +35,7 @@ from ..bases import dungeonblocks, openlock
 from ..layers.soil import SoilLayer
 from ..layers.stones import StonesLayer
 from ..layers.grass import GrassLayer
-from ..layers.water import make_water_volume
+from ..layers.water import make_water_displacement, make_water_volume
 
 
 
@@ -107,11 +107,23 @@ def _build_mesh(cfg: SceneConfig,
     if water_mask is not None and water_height is not None:
         if verbose:
             print("Building water volume...")
+        z_disp = make_water_displacement(water_mask, cfg.surface)
+        # Downsample to 32 cells/square: sufficient for 3 mm wave features and
+        # avoids large flat triangles that appear when the displacement fade
+        # near tile edges collapses into coarse quads during post-simplification.
+        s = max(1, cfg.surface.cells_per_square // 32)
+        if s > 1:
+            gh, gw = scene.terrain_z.shape
+            hn, wn = gh // s, gw // s
+            tz = scene.terrain_z[:hn*s, :wn*s].reshape(hn, s, wn, s).mean(axis=(1, 3))
+            wm = water_mask[:hn*s, :wn*s].reshape(hn, s, wn, s).any(axis=(1, 3))
+            zd = z_disp[:hn*s, :wn*s].reshape(hn, s, wn, s).mean(axis=(1, 3))
+        else:
+            tz, wm, zd = scene.terrain_z, water_mask, z_disp
         water_mesh = make_water_volume(
-            scene.terrain_z, water_mask, water_height,
+            tz, wm, water_height,
             cfg.surface.tile_w, cfg.surface.tile_h,
-            error_threshold=cfg.surface.terrain_simplify_threshold,
-            simplify_stride=cfg.surface.terrain_simplify_stride)
+            z_disp=zd)
         parts.append(water_mesh)
 
     # ── Terrain solid ─────────────────────────────────────────────────────────

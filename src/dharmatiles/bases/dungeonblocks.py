@@ -12,7 +12,7 @@ import numpy as np
 import trimesh
 
 from ..core.config import BaseConfig, SurfaceConfig
-from ..core.logo import make_logo_inset
+from ..core.logo import make_logo_manifold
 
 
 SYSTEM_SUFFIX = "dungeonblocks"
@@ -98,7 +98,10 @@ def make_base(surface: SurfaceConfig,
     # Logo inset: centred on each peg tip face at 80 % of bevel_col.
     logo_side = bevel_col * 0.80
 
-    parts: list[trimesh.Trimesh] = []
+    import manifold3d as m3d
+    from manifold3d import Manifold, Mesh as _Mesh
+
+    peg_manifolds: list = []
     for ci in range(surface.cols):
         for ri in range(surface.rows):
             tx = ci * square_sz
@@ -109,18 +112,33 @@ def make_base(surface: SurfaceConfig,
                 _square_ring(tx, ty, col_inset,  square_sz, z2),
                 _square_ring(tx, ty, bevel_inset,square_sz, z3),
             ]
-            peg = _prismatoid_mesh(rings)
+            peg_tm = _prismatoid_mesh(rings)
+            peg_m  = Manifold(mesh=_Mesh(
+                vert_properties=peg_tm.vertices.astype('f4'),
+                tri_verts=peg_tm.faces.astype('u4'),
+            ))
 
             cx = tx + square_sz / 2.0
             cy = ty + square_sz / 2.0
-            cutter = make_logo_inset(cx, cy, logo_side, z_base=z3)
-            peg = trimesh.boolean.difference([peg, cutter], engine='manifold')
+            peg_m -= make_logo_manifold(cx, cy, logo_side, z_base=z3)
+            peg_manifolds.append(peg_m)
 
-            parts.append(peg)
-
-    if not parts:
+    if not peg_manifolds:
         return trimesh.Trimesh()
-    return trimesh.util.concatenate(parts)
+
+    # Union all pegs in manifold space, convert once at the end.
+    base_m = peg_manifolds[0]
+    for pm in peg_manifolds[1:]:
+        base_m += pm
+
+    msh = base_m.to_mesh()
+    mesh = trimesh.Trimesh(
+        vertices=np.array(msh.vert_properties, dtype=float)[:, :3],
+        faces=np.array(msh.tri_verts, dtype=int),
+        process=False,
+    )
+    mesh.fix_normals()
+    return mesh
 
 
 def add_base(tile_mesh: trimesh.Trimesh,

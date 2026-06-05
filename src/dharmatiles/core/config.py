@@ -283,61 +283,6 @@ class StonesConfig:
     sink:          float = 0.10   # mm — base sunk below terrain
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Water ripple
-# ─────────────────────────────────────────────────────────────────────────────
-
-@dataclass
-class WaterRippleConfig:
-    """Water surface ripple displacement driven by discrete point sources.
-
-    Rather than a distance-transform from the full shoreline (which makes
-    wavefronts that exactly mirror the shore shape), N point sources are
-    sampled along the boundary.  Superimposed circular waves create natural
-    interference patterns whose wavefronts are independent of fine shoreline
-    detail.
-
-    Sources
-    -------
-    Shore sources   : evenly spaced along the water-side of the shoreline.
-    Grass sources   : shore cells nearest the grass region — represent blade
-                      tips dipping into the water.
-    Stone sources   : centroid of each stone footprint that overlaps water.
-
-    Displacement per source
-    -----------------------
-        z(d) = amplitude · exp(−max(0, d−start) / decay) · cos(k · max(0, d−start) + φ)
-
-    where d is distance from source, start is the calm-zone offset (ripples
-    build up rather than starting at full strength right at the source), and
-    φ is a small per-source phase jitter.
-
-    Parameters
-    ----------
-    amplitude_mm     Peak crest per source (mm).
-    wavelength_mm    Crest-to-crest spacing (mm).
-    decay_mm         Exponential e-fold decay distance (mm).
-    start_offset_mm  Distance before first crest builds; creates calm zone.
-    n_shore_sources  Point sources sampled evenly along the shoreline.
-    n_grass_sources  Point sources for grass-tip interference.
-    grass_amplitude  Grass source amplitude as fraction of shore amplitude.
-    phase_spread     Per-source phase jitter std dev (radians).
-    """
-    amplitude_mm:    float = 0.07
-    wavelength_mm:   float = 3.6
-    decay_mm:        float = 5.0
-    start_offset_mm: float = 0.0
-    n_shore_sources: int   = 4
-    n_grass_sources: int   = 3
-    grass_amplitude: float = 0.4
-    phase_spread:    float = 0.0   # 0 = fully coherent → clean circle crests
-    extend_mm:       float = 1.5   # how far past the boundary water can escape
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Water surface displacement
-# ─────────────────────────────────────────────────────────────────────────────
-
 
 
 # ─────────────────────────────────────────────────────────────────────────────

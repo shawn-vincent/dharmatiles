@@ -126,29 +126,24 @@ def _logo_contours_mm(cx: float, cy: float,
     ]
 
 
-def make_logo_inset(cx: float, cy: float,
-                    size_mm: float,
-                    z_base: float,
-                    depth_mm: float = 0.4,
-                    clearance_mm: float = 0.35) -> trimesh.Trimesh:
-    """Return a watertight solid for subtracting a logo inset from a base mesh.
+def make_logo_manifold(cx: float, cy: float,
+                       size_mm: float,
+                       z_base: float,
+                       depth_mm: float = 0.4,
+                       clearance_mm: float = 0.35):
+    """Return the logo inset as a ``manifold3d.Manifold`` solid.
 
-    The solid covers the logo footprint at *z_base* and extends *depth_mm*
-    inward (toward z = 0).  Subtract it from the base with::
-
-        result = trimesh.boolean.difference([base_mesh, logo_inset], engine='manifold')
+    Stays entirely in manifold space — no trimesh round-trip.  Use this when
+    the calling code also operates in manifold (e.g. the DB base builder) so
+    the subtraction happens without any floating-point drift from conversion.
 
     Parameters
     ----------
     cx, cy       : centre of the logo in tile XY (mm).
     size_mm      : logo bounding square side length (mm).
-    z_base       : z of the outermost base face (negative for OL / DB bottoms).
+    z_base       : z of the outermost base face (negative for DB/OL bottoms).
     depth_mm     : inset depth in mm (logo floor is at z_base + depth_mm).
-    clearance_mm : inward shrink applied to the cut cross-section before
-                   extrusion.  Contracts every logo cut shape by this amount,
-                   fattening the ridges between them by 2 × clearance_mm
-                   (0.40 mm total per ridge at the default).  Keeps fine
-                   raised ridges printable on FDM hardware.
+    clearance_mm : inward shrink applied to lotus contours before extrusion.
     """
     import manifold3d as m3d
 
@@ -182,7 +177,19 @@ def make_logo_inset(cx: float, cy: float,
     solid    = m3d.Manifold.extrude(cs, height=depth_mm)
     solid    = solid.translate((0.0, 0.0, z_base))
 
-    # Convert manifold → trimesh
+    return solid
+
+
+def make_logo_inset(cx: float, cy: float,
+                    size_mm: float,
+                    z_base: float,
+                    depth_mm: float = 0.4,
+                    clearance_mm: float = 0.35) -> trimesh.Trimesh:
+    """Trimesh wrapper around make_logo_manifold — use for OL where trimesh input
+    is needed.  For DB, call make_logo_manifold directly to stay in manifold space
+    and avoid the round-trip conversion that can corrupt coplanar boolean cuts.
+    """
+    solid = make_logo_manifold(cx, cy, size_mm, z_base, depth_mm, clearance_mm)
     msh  = solid.to_mesh()
     mesh = trimesh.Trimesh(
         vertices=np.array(msh.vert_properties, dtype=float)[:, :3],
