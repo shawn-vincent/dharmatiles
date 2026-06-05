@@ -53,6 +53,144 @@ def make_water_displacement(
     return z
 
 
+def make_water_ripple_displacement(
+    water_mask:     np.ndarray,
+    stone_mask:     np.ndarray | None,
+    cell_w:         float,
+    amplitude_mm:   float = 0.5,
+    wavelength_mm:  float = 3.0,
+    seg_len_min_mm: float = 10.0,
+    seg_len_max_mm: float = 20.0,
+    seg_fade_mm:    float = 15.0,
+    max_offset_mm:  float = 20.0,
+    edge_fade_mm:   float = 15.0,
+    arc_smooth_mm:  float = 2.5,
+    seed:           int   = 0xD3C2,
+) -> np.ndarray:
+    """Scattered-segment ripple displacement for the water surface.
+
+    Each segment has a flat-top envelope: full amplitude across the arc body
+    (seg_len), then a gradual Hann fade over seg_fade_mm on each end.
+    The tile-edge envelope fades all displacement to zero over edge_fade_mm
+    inside every tile boundary.  Amplitude scales linearly with proximity:
+    100 % at 0 mm offset from source, 0 % at max_offset_mm.
+
+    Segment count is auto-scaled: ~1 segment per 6 mm of source perimeter.
+    """
+    from scipy.ndimage import distance_transform_edt
+
+    gh, gw = water_mask.shape
+    rng    = np.random.default_rng(seed)
+
+    # ── Source: internal shoreline + stone footprints in water ────────────────
+    tile_edge = np.zeros((gh, gw), dtype=bool)
+    tile_edge[0, :]  = True
+    tile_edge[-1, :] = True
+    tile_edge[:, 0]  = True
+    tile_edge[:, -1] = True
+
+    ext = np.zeros((gh + 2, gw + 2), dtype=bool)
+    ext[1:-1, 1:-1] = water_mask
+    adj_to_water = ~water_mask & (
+        ext[:-2, 1:-1] | ext[2:, 1:-1] |
+        ext[1:-1, :-2] | ext[1:-1, 2:]
+    )
+    internal_shore = adj_to_water & ~tile_edge
+    stone_in_water = (stone_mask & water_mask) if stone_mask is not None \
+                     else np.zeros((gh, gw), dtype=bool)
+
+    source_mask = internal_shore | stone_in_water
+    if not source_mask.any():
+        return np.zeros((gh, gw))
+
+    # ── Distance (mm) + nearest-source cell index for every cell ─────────────
+    dist_arr, idx = distance_transform_edt(~source_mask, return_indices=True)
+    dist_mm   = dist_arr * cell_w
+    nearest_r = idx[0].astype(np.int32)
+    nearest_c = idx[1].astype(np.int32)
+
+    # ── Smooth the distance field and shore projections ───────────────────────
+    # Gaussian blur within the water mask rounds the jagged iso-distance
+    # contours (which otherwise exactly trace shore bumps) into smooth arcs.
+    # Blurring nearest_r/nearest_c removes Voronoi-ridge seams in the arc
+    # envelope so adjacent segments fade continuously rather than jumping.
+    from scipy.ndimage import gaussian_filter
+    if arc_smooth_mm > 0.0:
+        sigma = arc_smooth_mm / cell_w
+        w   = water_mask.astype(float)
+        wg  = gaussian_filter(w, sigma=sigma)
+        dist_smooth = np.where(
+            water_mask,
+            gaussian_filter(dist_mm * w, sigma=sigma) / np.maximum(wg, 1e-6),
+            dist_mm,
+        )
+        nr_f = gaussian_filter(nearest_r.astype(float), sigma=sigma)
+        nc_f = gaussian_filter(nearest_c.astype(float), sigma=sigma)
+    else:
+        dist_smooth = dist_mm
+        nr_f = nearest_r.astype(float)
+        nc_f = nearest_c.astype(float)
+
+    # ── Auto-scale segment count to approximate shore perimeter ──────────────
+    src_r, src_c = np.where(source_mask)
+    n_src        = len(src_r)
+    n_segments   = max(4, int(n_src * cell_w / 6.0))
+
+    # ── Random segment parameters ─────────────────────────────────────────────
+    chosen   = rng.integers(0, n_src, size=n_segments)
+    center_r = src_r[chosen].astype(np.int32)
+    center_c = src_c[chosen].astype(np.int32)
+    offsets  = rng.uniform(0.0, max_offset_mm, size=n_segments)
+    seg_lens = rng.uniform(seg_len_min_mm, seg_len_max_mm, size=n_segments)
+
+    # ── Accumulate segment displacements ──────────────────────────────────────
+    disp = np.zeros((gh, gw))
+
+    for i in range(n_segments):
+        d_0 = float(offsets[i])
+        A   = amplitude_mm * max(0.0, 1.0 - d_0 / max_offset_mm)
+        if A == 0.0:
+            continue
+
+        # Arc distance using smoothed shore projections — removes Voronoi seams.
+        dr = (nr_f - float(center_r[i])) * cell_w
+        dc = (nc_f - float(center_c[i])) * cell_w
+        shore_dist = np.hypot(dr, dc)
+
+        # Flat-top envelope: 1.0 across the segment body, then a gradual
+        # Hann fade over seg_fade_mm on each end (zero-derivative at cutoff).
+        half_L    = float(seg_lens[i]) * 0.5
+        tail_dist = shore_dist - half_L          # negative inside body, positive in tail
+        fade      = np.where(
+            shore_dist <= half_L,
+            1.0,
+            np.where(
+                tail_dist <= seg_fade_mm,
+                (0.5 * (1.0 + np.cos(np.pi * tail_dist / seg_fade_mm))) ** 0.4,
+                0.0,
+            ),
+        )
+
+        # Full sine using smoothed distance — contours are gentle curves, not
+        # shore-parallel zigzags.
+        in_band = water_mask & (dist_smooth >= d_0) & (dist_smooth <= d_0 + wavelength_mm)
+        disp   += np.where(
+            in_band,
+            A * fade * np.sin(2.0 * np.pi * (dist_smooth - d_0) / wavelength_mm),
+            0.0,
+        )
+
+    # ── Edge envelope: fade to zero within edge_fade_mm of each tile boundary ─
+    if edge_fade_mm > 0.0:
+        row_dist = np.minimum(np.arange(gh), gh - 1 - np.arange(gh)).astype(float) * cell_w
+        col_dist = np.minimum(np.arange(gw), gw - 1 - np.arange(gw)).astype(float) * cell_w
+        edge_dist = np.minimum(row_dist[:, None], col_dist[None, :])
+        t = np.clip(edge_dist / edge_fade_mm, 0.0, 1.0)
+        disp *= 0.5 * (1.0 - np.cos(np.pi * t))
+
+    return disp
+
+
 def _simplify(mesh: trimesh.Trimesh, tolerance_mm: float) -> trimesh.Trimesh:
     """Simplify *mesh* via manifold3d, preserving geometry within tolerance_mm."""
     from manifold3d import Manifold, Mesh

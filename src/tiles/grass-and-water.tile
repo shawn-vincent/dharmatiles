@@ -9,8 +9,8 @@
 # orientation for features placed on non-horizontal surfaces.
 
 surface:
-  sizes: [1x1, 3x3]
-  seed: 99
+  sizes: [1x1]
+  seed: 97
 
 regions:
   meadow:

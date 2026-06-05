@@ -35,7 +35,7 @@ from ..bases import dungeonblocks, openlock
 from ..layers.soil import SoilLayer
 from ..layers.stones import StonesLayer
 from ..layers.grass import GrassLayer
-from ..layers.water import make_water_displacement, make_water_volume
+from ..layers.water import make_water_displacement, make_water_ripple_displacement, make_water_volume
 
 
 
@@ -49,7 +49,8 @@ def _build_mesh(cfg: SceneConfig,
                 stone_layers: list[tuple[StonesConfig, np.ndarray | None]] | None = None,
                 verbose: bool = True,
                 water_mask: np.ndarray | None = None,
-                water_height: float | None = None) -> trimesh.Trimesh:
+                water_height: float | None = None,
+                water_embed_mm: float = 2.0) -> trimesh.Trimesh:
     """Run all layers on *scene* and return the concatenated mesh.
 
     *grass_cfgs* is a list of GrassConfig objects — one per seed-packet
@@ -108,20 +109,33 @@ def _build_mesh(cfg: SceneConfig,
         if verbose:
             print("Building water volume...")
         z_disp = make_water_displacement(water_mask, cfg.surface)
-        # Downsample to 32 cells/square: sufficient for 3 mm wave features and
-        # avoids large flat triangles that appear when the displacement fade
-        # near tile edges collapses into coarse quads during post-simplification.
-        s = max(1, cfg.surface.cells_per_square // 32)
+        # Downsample to 64 cells/square (~0.55 mm/cell for DB scale): enough
+        # resolution for 4 mm wavelength ripples (7+ cells/period) while
+        # keeping the water mesh triangle count manageable.
+        s = max(1, cfg.surface.cells_per_square // 64)
         if s > 1:
             gh, gw = scene.terrain_z.shape
             hn, wn = gh // s, gw // s
             tz = scene.terrain_z[:hn*s, :wn*s].reshape(hn, s, wn, s).mean(axis=(1, 3))
             wm = water_mask[:hn*s, :wn*s].reshape(hn, s, wn, s).any(axis=(1, 3))
             zd = z_disp[:hn*s, :wn*s].reshape(hn, s, wn, s).mean(axis=(1, 3))
+            sm = (scene.stone_mask[:hn*s, :wn*s].reshape(hn, s, wn, s).any(axis=(1, 3))
+                  if scene.stone_mask is not None else None)
+            ds_cell_w = cfg.surface.cell_w * s
         else:
             tz, wm, zd = scene.terrain_z, water_mask, z_disp
+            sm = scene.stone_mask
+            ds_cell_w = cfg.surface.cell_w
+        zd = zd + make_water_ripple_displacement(
+            wm, sm, ds_cell_w, seed=cfg.surface.seed ^ 0xC4F7)
+        # Dilate water mask into the bank (width = boundary strip width) so
+        # the volume physically embeds under the shore — ripples reach the
+        # waterline with no gap between water surface and terrain.
+        from scipy.ndimage import binary_dilation
+        embed_cells = max(1, round(water_embed_mm / ds_cell_w))
+        wm_embed = binary_dilation(wm, iterations=embed_cells)
         water_mesh = make_water_volume(
-            tz, wm, water_height,
+            tz, wm_embed, water_height,
             cfg.surface.tile_w, cfg.surface.tile_h,
             z_disp=zd)
         parts.append(water_mesh)
@@ -280,6 +294,12 @@ def build_tile_from_spec(spec: TileSpec,
     # ── Water region (early, before scene creation) ───────────────────────────
     water_mask, water_height = _collect_water_info(spec, region_mask)
 
+    # ── Embed width: use widest water-adjacent boundary strip ─────────────────
+    embed_mm = max(
+        (b.width_mm for b in spec.boundaries if b.width_mm > 0),
+        default=2.0,
+    )
+
     # ── Extend bank slope into pool ───────────────────────────────────────────
     # The bank slope visible on the shore is extrapolated downward into the pool
     # zone so the bed is a continuous slope (rather than a flat floor) and the
@@ -321,7 +341,8 @@ def build_tile_from_spec(spec: TileSpec,
     tile_mesh    = _build_mesh(cfg, scene, flow_angle, flow_curv,
                                grass_cfgs=grass_cfgs, stone_layers=stone_layers,
                                verbose=verbose,
-                               water_mask=water_mask, water_height=water_height)
+                               water_mask=water_mask, water_height=water_height,
+                               water_embed_mm=embed_mm)
 
     # ── OpenLOCK: regenerate terrain natively at 25.4 mm/square ──────────────
     # The heightmap grid dimensions (grid_w × grid_h) are set by
@@ -360,7 +381,8 @@ def build_tile_from_spec(spec: TileSpec,
             ol_cfg, ol_scene, ol_flow_angle, ol_flow_curv,
             grass_cfgs=ol_grass_cfgs, stone_layers=ol_stone_layers,
             verbose=verbose,
-            water_mask=water_mask, water_height=water_height)
+            water_mask=water_mask, water_height=water_height,
+            water_embed_mm=embed_mm)
         ol_terrain_z = ol_scene.terrain_z
 
     exports = _export_system_stls(tile_mesh, cfg, scene.terrain_z,
@@ -476,23 +498,21 @@ def _extend_bank_slope_into_pool(terrain_z: np.ndarray,
     dist_from_shore = distance_transform_edt(~inner_ring) * cell_mm   # mm
     dist_from_shore[~water_mask] = 0.0
 
-    # ── Apply smoothstepped slope ─────────────────────────────────────────────
-    # Rather than a linear ramp (which has sharp corners at top and bottom),
-    # we normalise dist → t ∈ [0, 1] over the full slope span and apply a
-    # smoothstep curve  t_s = 3t² − 2t³  whose derivative is 0 at both ends.
-    # This eases gently out of the bank at the top and eases smoothly into the
-    # flat bed at the bottom, removing both hard corners.
+    # ── Apply quadratic ease-out slope ───────────────────────────────────────
+    # t² starts with a non-zero derivative at t=0 (the waterline), so the slope
+    # begins immediately with no flat shelf, then eases smoothly into the flat bed.
     terrain_z_min = 0.0
     slope_dist    = (water_height - terrain_z_min) / max(slope_rate, 1e-6)
 
     t   = np.clip(dist_from_shore / slope_dist, 0.0, 1.0)   # 0 = shore, 1 = bed
-    t_s = t * t * (3.0 - 2.0 * t)                            # smoothstep
+    t_s = t * t                                               # quadratic ease-out
 
     sloped = water_height - (water_height - terrain_z_min) * t_s
 
     out = terrain_z.copy()
     out[water_mask] = sloped[water_mask]
     return out
+
 
 
 def _collect_water_info(spec: TileSpec,
