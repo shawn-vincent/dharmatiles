@@ -40,106 +40,209 @@ from ..core.config import SurfaceConfig, WaterRippleConfig
 WATER_RENDER_LIFT_MM = 0.10   # lift water mesh above terrain floor to avoid z-fight
 
 
+def _rdp_2d(pts: np.ndarray, eps: float) -> np.ndarray:
+    """Ramer-Douglas-Peucker simplification of a 2-D polyline.
+
+    Returns a new (k, 2) array containing only the kept points.
+    Uses an iterative stack to avoid Python recursion limits on long paths.
+    """
+    n = len(pts)
+    if n <= 2:
+        return pts.copy()
+
+    keep = np.zeros(n, dtype=bool)
+    keep[0] = keep[-1] = True
+
+    stack = [(0, n - 1)]
+    while stack:
+        lo, hi = stack.pop()
+        if hi - lo < 2:
+            continue
+        seg  = pts[lo:hi + 1]
+        a, b = pts[lo], pts[hi]
+        ab   = b - a
+        l2   = float(np.dot(ab, ab))
+        if l2 < 1e-12:
+            dists = np.linalg.norm(seg - a, axis=1)
+        else:
+            t     = np.clip(((seg - a) @ ab) / l2, 0.0, 1.0)
+            dists = np.linalg.norm(seg - (a + t[:, None] * ab), axis=1)
+        dists[0] = dists[-1] = 0.0
+        m = int(np.argmax(dists)) + lo
+        if dists[m - lo] > eps:
+            keep[m] = True
+            stack.append((lo, m))
+            stack.append((m, hi))
+
+    return pts[keep]
+
+
 def _make_water_volume_adaptive(
     terrain_z:    np.ndarray,
     water_mask:   np.ndarray,
     water_height: float,
     tile_w:       float,
     tile_h:       float,
-    threshold:    float,          # kept for API compatibility; not used
+    threshold:    float,
     stride:       int = 16,
 ) -> trimesh.Trimesh:
-    """Water volume: flat top at *water_height*, flat bottom at z = 0.
+    """Water volume with RDP-simplified boundary and minimal flat surface.
 
     Design
     ------
-    The terrain solid already represents the sloped riverbed precisely (it
-    covers z = -base_h to terrain_z everywhere, including the pool).  The
-    water solid only needs to fill the gap from z = 0 up to *water_height*
-    above the pool.  The two solids overlap inside the pool; slicers resolve
-    the union correctly.
+    The terrain solid already fills z = -base_h → terrain_z everywhere,
+    including the pool floor.  The water solid only needs to fill
+    z = 0 → water_height above the pool, so:
 
-    The top face is flat at *water_height* — no curvature, no Laplacian
-    points needed.  A sparse background grid (one vertex every *stride*
-    cells) gives a few dozen triangles for the open water.
+        top    = flat at water_height
+        bottom = flat at z = 0
+        walls  = vertical faces tracing the (RDP-simplified) shoreline
 
-    Expansion
-    ---------
-    The water mask is dilated by 2 cells before building the solid.  This
-    makes the water volume lap slightly over the shoreline transition strip,
-    filling any micro-gap that would otherwise appear between the terrain
-    solid's top surface and the water column.  The overlap region is interior
-    to the terrain solid and invisible.
+    The mask is dilated by 2 cells so the water solid laps slightly into the
+    terrain, filling any boundary gap without visible consequences.
 
-    Topology
-    --------
-    Top and bottom are both flat (different z, same xy).  Every wall vertex
-    has a guaranteed non-zero height (water_height > 0 = z_bot), so no
-    degenerate wall faces can form.  No vertex merging or degenerate-face
-    filtering is needed.
+    Simplification (mirrors the terrain solid's adaptive path)
+    ----------------------------------------------------------
+    1. **Pass 1** – coarse Delaunay (every *stride* cells) to extract the
+       boundary polygon.  A grid-resolution polygon is accurate enough to
+       seed RDP.
+    2. **2-D RDP** at ``threshold × 8`` (same multiplier used for terrain
+       side walls) – collapses straight shoreline sections to 2 points and
+       keeps only vertices where the curve deviates more than the threshold
+       from its chord.
+    3. **Pass 2** – final Delaunay on *just* the RDP polygon vertices plus
+       one centroid (to anchor the interior triangulation).  Because the
+       top/bottom are perfectly flat (Laplacian = 0 everywhere) no interior
+       curvature points are needed; the flat surface collapses to the minimum
+       number of triangles that cover the polygon.
+    4. **Walls** built from consecutive edges of the simplified polygon (not
+       from the Delaunay boundary edges), so they are exactly as coarse as
+       the simplification allows.
     """
+    from collections import defaultdict
     from scipy.ndimage import binary_dilation
     from scipy.spatial import Delaunay
 
     gh, gw = terrain_z.shape
     cell_x = tile_w / gw
     cell_y = tile_h / gh
+    side_thr = threshold * 8            # match terrain side-wall threshold
 
-    # ── Expand mask by 2 cells: overlaps terrain, fills boundary gap ──────────
+    # ── Expand mask by 2 cells ────────────────────────────────────────────────
     mask = binary_dilation(water_mask, iterations=2)
 
-    # ── Sparse point set: background grid + tile-edge cells ───────────────────
-    # The surface is flat — no curvature signal needed.  A coarse grid bounds
-    # the maximum triangle size; tile-edge cells are included so the water
-    # solid meets the tile boundary cleanly when the pool reaches an edge.
-    bg_pts: set[tuple[int, int]] = {
+    # ── Pass 1: coarse Delaunay to extract the boundary polygon ───────────────
+    bg_pts = sorted({
         (r, c)
         for r in range(0, gh, stride)
         for c in range(0, gw, stride)
         if mask[r, c]
-    }
-    edge_pts: set[tuple[int, int]] = {
+    } | {
         (int(r), int(c))
         for r, c in np.argwhere(mask)
         if r == 0 or r == gh - 1 or c == 0 or c == gw - 1
-    }
-    all_pts = sorted(bg_pts | edge_pts)
-    n_pts   = len(all_pts)
-    xy      = np.array([(c * cell_x, r * cell_y) for r, c in all_pts])
+    })
+    if len(bg_pts) < 3:
+        return trimesh.Trimesh()
 
-    # ── Delaunay → filter to expanded mask ────────────────────────────────────
-    faces = Delaunay(xy).simplices
-    cxy   = xy[faces].mean(axis=1)
-    cr    = np.clip((cxy[:, 1] / cell_y).astype(int), 0, gh - 1)
-    cc    = np.clip((cxy[:, 0] / cell_x).astype(int), 0, gw - 1)
-    faces = faces[mask[cr, cc]]
+    xy_c = np.array([(c * cell_x, r * cell_y) for r, c in bg_pts])
+    tris = Delaunay(xy_c).simplices
+    cxy  = xy_c[tris].mean(axis=1)
+    cr   = np.clip((cxy[:, 1] / cell_y).astype(int), 0, gh - 1)
+    cc   = np.clip((cxy[:, 0] / cell_x).astype(int), 0, gw - 1)
+    tris = tris[mask[cr, cc]]
 
-    # ── Vertex buffers: top (flat) + bottom (flat at z = 0) ───────────────────
-    verts        = np.empty((2 * n_pts, 3))
-    verts[:n_pts,  :2] = xy;  verts[:n_pts,  2] = water_height   # top
-    verts[n_pts:,  :2] = xy;  verts[n_pts:,  2] = 0.0            # bottom
-
-    # ── Top / bottom faces ─────────────────────────────────────────────────────
-    top_f = faces.astype(np.int32)
-    bot_f = (faces[:, ::-1] + n_pts).astype(np.int32)
-
-    # ── Perimeter walls from boundary Delaunay edges ───────────────────────────
-    edge_cnt:    dict[tuple[int, int], int]            = {}
-    edge_orient: dict[tuple[int, int], tuple[int, int]] = {}
-    for f in faces:
+    # Extract boundary edges (each appears in exactly one in-mask triangle)
+    ec: dict[tuple, int]           = {}
+    eo: dict[tuple, tuple[int,int]] = {}
+    for f in tris:
         for i in range(3):
-            ea, eb = int(f[i]), int(f[(i + 1) % 3])
-            key               = (min(ea, eb), max(ea, eb))
-            edge_cnt[key]     = edge_cnt.get(key, 0) + 1
-            edge_orient[key]  = (ea, eb)
+            a, b = int(f[i]), int(f[(i + 1) % 3])
+            k    = (min(a, b), max(a, b))
+            ec[k] = ec.get(k, 0) + 1
+            eo[k] = (a, b)
+    bdr_edges = [(a, b) for k, (a, b) in eo.items() if ec[k] == 1]
 
-    oriented_walls = [v for k, v in edge_orient.items() if edge_cnt[k] == 1]
-    if oriented_walls:
-        ow   = np.array(oriented_walls, dtype=np.int32)
-        ea, eb = ow[:, 0], ow[:, 1]
-        wall_f = np.empty((2 * len(ow), 3), dtype=np.int32)
-        wall_f[0::2] = np.stack([eb,          ea,          n_pts + ea], axis=1)
-        wall_f[1::2] = np.stack([eb,          n_pts + ea,  n_pts + eb], axis=1)
+    # Trace the ordered boundary polygon from boundary edge pairs
+    adj: dict[int, list[int]] = defaultdict(list)
+    for a, b in bdr_edges:
+        adj[a].append(b)
+
+    if not adj:
+        return trimesh.Trimesh()
+
+    start       = min(adj)
+    polygon_idx = [start]
+    prev, curr  = -1, start
+    for _ in range(len(adj) + 2):
+        nxt_list = [n for n in adj[curr] if n != prev]
+        if not nxt_list:
+            break
+        nxt = nxt_list[0]
+        if nxt == start:
+            break
+        polygon_idx.append(nxt)
+        prev, curr = curr, nxt
+
+    if len(polygon_idx) < 3:
+        return trimesh.Trimesh()
+
+    polygon_xy = xy_c[polygon_idx]        # (n_bdr, 2) — one vertex per grid step
+
+    # ── 2-D RDP simplification ────────────────────────────────────────────────
+    # Close the polygon before RDP so the final segment is also simplified.
+    closed     = np.vstack([polygon_xy, polygon_xy[:1]])
+    simp_closed = _rdp_2d(closed, side_thr)
+    simp_xy    = simp_closed[:-1]         # drop the repeated first point
+    n_simp     = len(simp_xy)
+    if n_simp < 3:
+        return trimesh.Trimesh()
+
+    # ── Pass 2: Delaunay on simplified polygon + centroid ─────────────────────
+    # The centroid anchors the interior triangulation for concave polygons.
+    centroid  = simp_xy.mean(axis=0, keepdims=True)
+    pts2      = np.vstack([simp_xy, centroid])    # (n_simp+1, 2)
+    n_pts2    = len(pts2)
+
+    tris2 = Delaunay(pts2).simplices
+    cxy2  = pts2[tris2].mean(axis=1)
+    cr2   = np.clip((cxy2[:, 1] / cell_y).astype(int), 0, gh - 1)
+    cc2   = np.clip((cxy2[:, 0] / cell_x).astype(int), 0, gw - 1)
+    tris2 = tris2[mask[cr2, cc2]]
+
+    if len(tris2) == 0:
+        return trimesh.Trimesh()
+
+    # ── Vertex buffer: top (flat) + bottom (flat at z = 0) ────────────────────
+    verts          = np.empty((2 * n_pts2, 3))
+    verts[:n_pts2,  :2] = pts2;  verts[:n_pts2,  2] = water_height
+    verts[n_pts2:,  :2] = pts2;  verts[n_pts2:,  2] = 0.0
+
+    top_f = tris2.astype(np.int32)
+    bot_f = (tris2[:, ::-1] + n_pts2).astype(np.int32)
+
+    # ── Walls from Pass-2 Delaunay boundary edges ─────────────────────────────
+    # We drive wall density from the *final* Delaunay boundary rather than the
+    # explicit polygon so that the walls share every edge with the top/bottom
+    # faces — guaranteeing a manifold mesh.  The Delaunay of the RDP-simplified
+    # polygon has at most n_simp boundary edges, so walls are already coarser
+    # than a background-grid approach.
+    ec2: dict[tuple, int]            = {}
+    eo2: dict[tuple, tuple[int,int]] = {}
+    for f in tris2:
+        for i in range(3):
+            a, b = int(f[i]), int(f[(i + 1) % 3])
+            k    = (min(a, b), max(a, b))
+            ec2[k] = ec2.get(k, 0) + 1
+            eo2[k] = (a, b)
+    oriented2 = [(a, b) for k, (a, b) in eo2.items() if ec2[k] == 1]
+
+    if oriented2:
+        ow2     = np.array(oriented2, dtype=np.int32)
+        ea2, eb2 = ow2[:, 0], ow2[:, 1]
+        wall_f  = np.empty((2 * len(ow2), 3), dtype=np.int32)
+        wall_f[0::2] = np.stack([eb2,          ea2,           n_pts2 + ea2], axis=1)
+        wall_f[1::2] = np.stack([eb2,          n_pts2 + ea2,  n_pts2 + eb2], axis=1)
     else:
         wall_f = np.empty((0, 3), dtype=np.int32)
 
