@@ -368,7 +368,7 @@ class WaterSurfaceConfig:
     n_capillary:                int   = 10
     capillary_wavelength_min_mm:float = 2.08    # mm  (÷1.20, +20% frequency)
     capillary_wavelength_max_mm:float = 4.17    # mm  (÷1.20, +20% frequency)
-    capillary_amplitude_mm:   float   = 0.045   # mm — half-amplitude
+    capillary_amplitude_mm:   float   = 0.0225  # mm — half-amplitude  (×0.5)
 
     # ── Rock interactions ──────────────────────────────────────────────────────
     rock_bow_amplitude_mm:    float   = 0.18    # mm — peak bow-wave height

@@ -128,7 +128,7 @@ def build_water_surface_displacement(
         lam   = rng.uniform(cfg.capillary_wavelength_min_mm,
                              cfg.capillary_wavelength_max_mm)
         phase = rng.uniform(0.0, tau)
-        amp   = cfg.capillary_amplitude_mm * rng.uniform(0.7, 1.3)
+        amp   = cfg.capillary_amplitude_mm * rng.uniform(0.15, 2.0)
         proj  = cols_mm * np.cos(theta) + rows_mm * np.sin(theta)
         z_waves += amp * np.sin(tau * proj / lam + phase)
 
