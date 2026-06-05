@@ -1,4 +1,5 @@
 *.3mf
+.DS_Store
 *.scad~
 *~
 __pycache__/
