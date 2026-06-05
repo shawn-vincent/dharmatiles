@@ -112,9 +112,13 @@ def build_water_surface_displacement(
     amp_field = amp_shore * wake_amp
 
     # ── Primary sinusoidal wave trains ────────────────────────────────────────
+    # Evenly-spaced angles create parallel ridges; add per-wave random jitter
+    # (±half the spread step) so waves genuinely cross rather than reinforce.
     z_waves = np.zeros((gh, gw), dtype=float)
     for i in range(cfg.n_primary):
-        theta = cfg.primary_dir + (i - cfg.n_primary // 2) * cfg.primary_dir_spread
+        base_theta = cfg.primary_dir + (i - cfg.n_primary // 2) * cfg.primary_dir_spread
+        jitter     = cfg.primary_dir_spread * rng.uniform(-0.5, 0.5)
+        theta      = base_theta + jitter
         lam   = cfg.primary_wavelength_mm * (
             1.0 + cfg.primary_wavelength_spread * rng.uniform(-1.0, 1.0))
         phase = rng.uniform(0.0, tau)
@@ -123,12 +127,15 @@ def build_water_surface_displacement(
         z_waves += cfg.primary_amplitude_mm * np.sin(k_loc * proj + phase)
 
     # ── Capillary ripples ──────────────────────────────────────────────────────
+    # Sinusoidal plane waves always produce straight lines; enough crossing
+    # waves at random angles produce an interference pattern that reads as
+    # random texture rather than individual wave trains.
     for _ in range(cfg.n_capillary):
         theta = rng.uniform(0.0, tau)
         lam   = rng.uniform(cfg.capillary_wavelength_min_mm,
                              cfg.capillary_wavelength_max_mm)
         phase = rng.uniform(0.0, tau)
-        amp   = cfg.capillary_amplitude_mm * rng.uniform(0.15, 2.0)
+        amp   = cfg.capillary_amplitude_mm * rng.uniform(0.5, 1.5)
         proj  = cols_mm * np.cos(theta) + rows_mm * np.sin(theta)
         z_waves += amp * np.sin(tau * proj / lam + phase)
 
