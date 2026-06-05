@@ -28,7 +28,7 @@ from ..core.config import (SceneConfig, SurfaceConfig, FlowConfig, SolverConfig,
                            GrassConfig, SoilConfig, StonesConfig, BaseConfig)
 from ..core.tile import TileScene, make_xy_grids
 from ..core.flow import build_flow_field
-from ..core.mesh import make_heightmap_solid, export_coloured_stl
+from ..core.mesh import make_heightmap_solid
 from ..core.spec import TileSpec, load_spec
 from ..core.region import build_region_mask, build_grass_mask
 from ..bases import dungeonblocks, openlock
@@ -37,37 +37,6 @@ from ..layers.stones import StonesLayer
 from ..layers.grass import GrassLayer
 from ..layers.water import make_water_volume
 
-
-# ── VisCAM / SolidView colour constants ───────────────────────────────────────
-
-COLOUR_SOIL  = (101,  67,  33, 255)   # earthy brown   — terrain surface
-COLOUR_STONE = (120, 120, 120, 255)   # mid-grey        — rocks
-COLOUR_GRASS = ( 50, 120,  30, 255)   # natural green   — blades & supports
-COLOUR_WATER = ( 30, 100, 200, 255)   # water blue      — flat water surface
-
-
-def _paint(mesh_or_list, rgba: tuple) -> None:
-    """Set a uniform face colour on a Trimesh or list of Trimeshes (in-place)."""
-    colour = np.array(rgba, dtype=np.uint8)
-    items  = [mesh_or_list] if isinstance(mesh_or_list, trimesh.Trimesh) else mesh_or_list
-    for m in items:
-        if m is not None and len(m.faces):
-            m.visual.face_colors = colour
-
-
-def _clear_paint(mesh: trimesh.Trimesh) -> None:
-    """Leave every face without an explicit VisCAM/SolidView colour."""
-    mesh.visual.face_colors = np.zeros((len(mesh.faces), 4), dtype=np.uint8)
-
-
-def _paint_terrain_top(mesh: trimesh.Trimesh, rgba: tuple) -> None:
-    """Colour only top terrain faces; sides and bottom remain unspecified."""
-    n_top = int(mesh.metadata.get('top_face_count', 0))
-    if n_top <= 0:
-        return
-    colours = mesh.visual.face_colors.copy()
-    colours[:n_top] = np.array(rgba, dtype=np.uint8)
-    mesh.visual.face_colors = colours
 
 
 # ── Shared layer pipeline ─────────────────────────────────────────────────────
@@ -105,6 +74,8 @@ def _build_mesh(cfg: SceneConfig,
     if verbose:
         print("Building soil texture...")
     SoilLayer(cfg.surface, cfg.soil).build(scene)
+    if water_mask is not None:
+        scene.terrain_z[water_mask] = 0.0
 
     # ── Stones (one independent pass per stone-layer zone) ────────────────────
     n_squares = cfg.surface.cols * cfg.surface.rows
@@ -116,11 +87,10 @@ def _build_mesh(cfg: SceneConfig,
                       f"{stone_cfg.stones_per_square}/sq × {n_squares} sq)...")
             stone_parts = StonesLayer(cfg.surface, stone_cfg).build(
                 scene, placement_mask=stone_pmask, layer_idx=layer_idx)
-            _paint(stone_parts, COLOUR_STONE)
             parts.extend(stone_parts)
 
     # ── Grass (one pass per seed-packet config) ───────────────────────────────
-    if verbose:
+    if grass_cfgs and verbose:
         print("Growing grass...")
     for i, g_cfg in enumerate(grass_cfgs):
         packet_cfg = SceneConfig(
@@ -131,7 +101,6 @@ def _build_mesh(cfg: SceneConfig,
         grown = GrassLayer(packet_cfg)
         grass_parts = grown.build(scene, flow_angle, flow_curv,
                                   verbose=(verbose and i == 0))
-        _paint(grass_parts, COLOUR_GRASS)
         parts.extend(grass_parts)
 
     # ── Water volume ──────────────────────────────────────────────────────────
@@ -143,7 +112,6 @@ def _build_mesh(cfg: SceneConfig,
             cfg.surface.tile_w, cfg.surface.tile_h,
             error_threshold=cfg.surface.terrain_simplify_threshold,
             simplify_stride=cfg.surface.terrain_simplify_stride)
-        _paint(water_mesh, COLOUR_WATER)
         parts.append(water_mesh)
 
     # ── Terrain solid ─────────────────────────────────────────────────────────
@@ -154,30 +122,25 @@ def _build_mesh(cfg: SceneConfig,
         error_threshold=cfg.surface.terrain_simplify_threshold,
         simplify_stride=cfg.surface.terrain_simplify_stride,
     )
-    _clear_paint(terrain_mesh)
-    _paint_terrain_top(terrain_mesh, COLOUR_SOIL)
     parts.insert(0, terrain_mesh)
 
+    solid_parts = [p for p in parts if p.is_volume]
     if verbose:
-        print("Concatenating...")
-    combined = trimesh.util.concatenate(parts)
+        print(f"Computing union  ({len(solid_parts)}/{len(parts)} solid parts)...")
+    import time as _time
+    _t0 = _time.perf_counter()
+    if len(solid_parts) == 0:
+        combined = trimesh.util.concatenate(parts)
+    elif len(solid_parts) == 1:
+        combined = solid_parts[0]
+    else:
+        combined = trimesh.boolean.union(solid_parts, engine='manifold')
+    _t1 = _time.perf_counter()
     if verbose:
-        from collections import Counter as _Counter
-        _edge_cnt   = _Counter(combined.edges_unique_inverse.tolist())
-        _open_e     = sum(1 for c in _edge_cnt.values() if c == 1)
-        _nonmanifold = sum(1 for c in _edge_cnt.values() if c > 2)
-        wt_label = "watertight" if combined.is_watertight else f"open-edges={_open_e:,}"
-        nm_label = f"  ⚠ NON-MANIFOLD={_nonmanifold:,}" if _nonmanifold else ""
+        wt_label = "watertight" if combined.is_watertight else "NOT watertight"
         print(f"  vertices: {len(combined.vertices):,}   "
               f"faces: {len(combined.faces):,}   "
-              f"{wt_label}{nm_label}")
-        if _nonmanifold:
-            import warnings
-            warnings.warn(
-                f"Mesh has {_nonmanifold:,} non-manifold edges — slicers may "
-                "reject or mis-repair the output.",
-                stacklevel=2,
-            )
+              f"{wt_label}   {_t1 - _t0:.1f}s")
     return combined
 
 
@@ -237,9 +200,9 @@ def _export_system_stls(tile_mesh: trimesh.Trimesh,
     """
     if cfg.base.style == 'none':
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        export_coloured_stl(tile_mesh, output_path)
+        tile_mesh.export(str(output_path))
         if verbose:
-            print(f"Saved -> {output_path}  (no base, VisCAM colours embedded)")
+            print(f"Saved -> {output_path}")
         return {'none': tile_mesh}
 
     if system_paths is None:
@@ -268,7 +231,7 @@ def _export_system_stls(tile_mesh: trimesh.Trimesh,
             result[system] = openlock.export(
                 _mesh, _surface, cfg.base, _terrain, path)
         if verbose:
-            print(f"Saved -> {path}  (VisCAM colours embedded)")
+            print(f"Saved -> {path}")
     return result
 
 
@@ -333,12 +296,15 @@ def build_tile_from_spec(spec: TileSpec,
         print(f"  Water coverage: {n_water}/{n_total} cells "
               f"({100 * n_water / n_total:.0f}%)")
 
-    if verbose:
-        print(f"Building flow field  ({cfg.flow.flow_type})...")
-    x_grid, y_grid = make_xy_grids(cfg.surface)
-    flow_angle, flow_curv = build_flow_field(cfg.surface, cfg.flow, x_grid, y_grid)
-
     grass_cfgs   = _collect_grass_configs(spec)
+    if grass_cfgs:
+        if verbose:
+            print(f"Building flow field  ({cfg.flow.flow_type})...")
+        x_grid, y_grid = make_xy_grids(cfg.surface)
+        flow_angle, flow_curv = build_flow_field(cfg.surface, cfg.flow, x_grid, y_grid)
+    else:
+        flow_angle = flow_curv = np.zeros(
+            (cfg.surface.grid_h, cfg.surface.grid_w), dtype=float)
     stone_layers = _collect_stones_layers(spec, region_mask)
     tile_mesh    = _build_mesh(cfg, scene, flow_angle, flow_curv,
                                grass_cfgs=grass_cfgs, stone_layers=stone_layers,
@@ -369,10 +335,14 @@ def build_tile_from_spec(spec: TileSpec,
         )
         if region_mask is not None:
             ol_scene.grass_mask = build_grass_mask(region_mask, spec)
-        ol_x, ol_y = make_xy_grids(ol_surface)
-        ol_flow_angle, ol_flow_curv = build_flow_field(
-            ol_surface, ol_cfg.flow, ol_x, ol_y)
         ol_grass_cfgs   = _collect_grass_configs(spec)
+        if ol_grass_cfgs:
+            ol_x, ol_y = make_xy_grids(ol_surface)
+            ol_flow_angle, ol_flow_curv = build_flow_field(
+                ol_surface, ol_cfg.flow, ol_x, ol_y)
+        else:
+            ol_flow_angle = ol_flow_curv = np.zeros(
+                (ol_cfg.surface.grid_h, ol_cfg.surface.grid_w), dtype=float)
         ol_stone_layers = _collect_stones_layers(spec, region_mask)
         ol_tile_mesh = _build_mesh(
             ol_cfg, ol_scene, ol_flow_angle, ol_flow_curv,
@@ -559,7 +529,7 @@ def _collect_grass_configs(spec: TileSpec) -> list[GrassConfig]:
                 d = vars(defaults).copy()
                 d.update(layer.params)
                 cfgs.append(GrassConfig(**d))
-    return cfgs or [defaults]
+    return cfgs
 
 
 def _collect_stones_layers(

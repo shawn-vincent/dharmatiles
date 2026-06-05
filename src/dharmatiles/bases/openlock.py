@@ -15,7 +15,6 @@ import numpy as np
 import trimesh
 
 from ..core.config import BaseConfig, SurfaceConfig
-from ..core.mesh import export_coloured_stl
 
 
 SYSTEM_SUFFIX = "openlock"
@@ -182,5 +181,5 @@ def export(tile_mesh: trimesh.Trimesh,
            output_path: pathlib.Path) -> trimesh.Trimesh:
     """Attach an OpenLock base and write the system-specific STL."""
     combined = add_base(tile_mesh, surface, base_cfg, terrain_z)
-    export_coloured_stl(combined, output_path)
+    combined.export(str(output_path))
     return combined

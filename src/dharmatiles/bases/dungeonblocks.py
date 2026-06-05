@@ -13,7 +13,6 @@ import trimesh
 
 from ..core.config import BaseConfig, SurfaceConfig
 from ..core.logo import make_logo_inset
-from ..core.mesh import export_coloured_stl
 
 
 SYSTEM_SUFFIX = "dungeonblocks"
@@ -142,6 +141,6 @@ def export(tile_mesh: trimesh.Trimesh,
            output_path: pathlib.Path) -> trimesh.Trimesh:
     """Attach a DungeonBlocks base and write the system-specific STL."""
     combined = add_base(tile_mesh, surface, base_cfg, terrain_z)
-    export_coloured_stl(combined, output_path)
+    combined.export(str(output_path))
     return combined
 
