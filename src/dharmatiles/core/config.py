@@ -129,10 +129,11 @@ class GrassConfig:
     thickness:         float = 0.5     # mm — keel depth below spine (triangle/leaf/diamond)
     diamond_equator:   float = 0.75    # equator position for 'diamond'
     leaf_arch:         float = 0.4     # arch rise as fraction of thickness (leaf only)
+    leaf_ridge:        float = 0.35    # extra midrib lift at V3 as fraction of thickness
 
     # ── Blade width range (mm) ────────────────────────────────────────────────
-    width_min:    float = 0.8015625
-    width_max:    float = 1.06875
+    width_min:    float = 1.2023438   # 0.8015625 × 1.5
+    width_max:    float = 1.6031250   # 1.06875   × 1.5
 
     # ── Spine ─────────────────────────────────────────────────────────────────
     n_path:          int   = 50                       # spine sample count

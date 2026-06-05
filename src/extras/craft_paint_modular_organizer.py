@@ -1404,11 +1404,12 @@ def side_honeycomb_struts(
         )
         meshes.append(trimesh.Trimesh(vertices=vertices, faces=faces, process=False))
 
-    _n_rows = int(np.ceil((z_max - z_min) / dz)) + 2
-    _z_start = (z_min + z_max) / 2.0 - (_n_rows - 1) * dz / 2.0
+    _target_z = z_max - radius / 2.0
+    _n_below = int(np.ceil((_target_z - z_min) / dz)) + 1
+    _z_start = _target_z - _n_below * dz
     meshes: list[trimesh.Trimesh] = []
     edges: set[tuple[tuple[float, float], tuple[float, float]]] = set()
-    for row, center_z in enumerate(np.arange(_z_start, _z_start + _n_rows * dz, dz)):
+    for row, center_z in enumerate(np.arange(_z_start, _target_z + dz * 0.5, dz)):
         s_offset = ds / 2.0 if row % 2 else 0.0
         for center_s in np.arange(-radius + s_offset, perimeter + radius + ds, ds):
             vertices = np.column_stack(
@@ -1469,11 +1470,12 @@ def cylindrical_honeycomb_struts(
         )
         return point, normal
 
-    _n_rows = int(np.ceil((z_max - z_min) / dz)) + 2
-    _z_start = (z_min + z_max) / 2.0 - (_n_rows - 1) * dz / 2.0
+    _target_z = z_max - hex_radius / 2.0
+    _n_below = int(np.ceil((_target_z - z_min) / dz)) + 1
+    _z_start = _target_z - _n_below * dz
     meshes: list[trimesh.Trimesh] = []
     edges: set[tuple[tuple[float, float], tuple[float, float]]] = set()
-    for row, center_z in enumerate(np.arange(_z_start, _z_start + _n_rows * dz, dz)):
+    for row, center_z in enumerate(np.arange(_z_start, _target_z + dz * 0.5, dz)):
         s_offset = ds / 2.0 if row % 2 else 0.0
         for center_s in np.arange(-hex_radius + s_offset, circumference + hex_radius + ds, ds):
             vertices = np.column_stack(

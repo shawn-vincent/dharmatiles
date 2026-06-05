@@ -107,7 +107,8 @@ def build_tube_mesh(spine_3d: np.ndarray, widths: np.ndarray,
                     cross_section: str = 'triangle',
                     n_segs: int = 8,
                     diamond_equator: float = 0.75,
-                    leaf_arch: float = 0.4) -> trimesh.Trimesh:
+                    leaf_arch: float = 0.4,
+                    leaf_ridge: float = 0.0) -> trimesh.Trimesh:
     """Watertight tube mesh following *spine_3d*.
 
     cross_section='triangle' (default)
@@ -134,11 +135,12 @@ def build_tube_mesh(spine_3d: np.ndarray, widths: np.ndarray,
           V0 — keel (spine + thickness * down_loc)
           V1 — right edge (spine + half_w * up_loc)
           V2 — upper-right (half-width, arched up by leaf_arch * thickness)
-          V3 — arch top (centred, arched up by leaf_arch * thickness)
+          V3 — midrib top (centred, arched up by (leaf_arch + leaf_ridge) * thickness)
           V4 — upper-left (mirror of V2)
           V5 — left edge (spine − half_w * up_loc)
         4 faces on the arched top, 2 faces on the V-keel bottom.
-        *leaf_arch* controls arch rise as a fraction of *thickness* (default 0.4).
+        *leaf_arch* controls the shoulder height; *leaf_ridge* adds an extra
+        midrib peak at V3, so the top drops from centre to each side edge.
     """
     path  = np.asarray(spine_3d, dtype=float)   # (n_pts, 3)
     W_arr = np.asarray(widths,   dtype=float)    # (n_pts,)
@@ -181,9 +183,10 @@ def build_tube_mesh(spine_3d: np.ndarray, widths: np.ndarray,
         # six vertices converge to a point as the tip narrows to zero width.
         hw_max   = half_W.max() + 1e-9
         # Per-ring offsets along down_locs (positive = deeper into keel)
-        keel_off = (thickness       / hw_max) * half_W[:, None] * down_locs  # (n_pts,3)
-        arch_off = (leaf_arch * thickness / hw_max) * half_W[:, None] * down_locs
-        # Vertex order: keel → left → upper-left → arch-top → upper-right → right.
+        keel_off  = (thickness                       / hw_max) * half_W[:, None] * down_locs
+        arch_off  = (leaf_arch         * thickness   / hw_max) * half_W[:, None] * down_locs
+        ridge_off = ((leaf_arch + leaf_ridge) * thickness / hw_max) * half_W[:, None] * down_locs
+        # Vertex order: keel → left → upper-left → midrib-top → upper-right → right.
         # This reversed ordering produces outward-facing side-face normals by
         # construction (same winding convention as 'circle'), so fix_normals() is
         # not needed — saving ~20 ms of NetworkX BFS per blade.
@@ -191,7 +194,7 @@ def build_tube_mesh(spine_3d: np.ndarray, widths: np.ndarray,
             path + keel_off,                                                  # V0 keel
             path - half_W[:, None] * up_locs,                                 # V1 left edge
             path - 0.5 * half_W[:, None] * up_locs - arch_off,               # V2 upper-left
-            path                                    - arch_off,               # V3 arch top
+            path                                    - ridge_off,              # V3 midrib top
             path + 0.5 * half_W[:, None] * up_locs - arch_off,               # V4 upper-right
             path + half_W[:, None] * up_locs,                                 # V5 right edge
         ], axis=1)

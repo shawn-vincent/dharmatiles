@@ -33,6 +33,7 @@ class GrassSeed:
     thickness:       float  # mm — keel depth below spine (triangle/leaf/diamond)
     diamond_equator: float  # equator fraction for 'diamond'
     leaf_arch:       float  # arch rise as fraction of thickness (leaf only)
+    leaf_ridge:      float  # extra midrib lift at centre-top as fraction of thickness
 
     # ── Spine ─────────────────────────────────────────────────────────────────
     n_path:      int    # spine sample count
@@ -70,6 +71,7 @@ def make_seed(curl: float,
         thickness        = grass.thickness,
         diamond_equator  = grass.diamond_equator,
         leaf_arch        = grass.leaf_arch,
+        leaf_ridge       = grass.leaf_ridge,
         n_path           = grass.n_path,
         clearance        = solver.clearance,
         seg_len          = grass.seg_len,

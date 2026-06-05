@@ -202,7 +202,8 @@ def _make_support_post(surface: SurfaceConfig, grass: GrassConfig,
                            cross_section=grass.cross_section,
                            n_segs=grass.circle_segs,
                            diamond_equator=grass.diamond_equator,
-                           leaf_arch=grass.leaf_arch)
+                           leaf_arch=grass.leaf_arch,
+                           leaf_ridge=grass.leaf_ridge)
 
 
 def _blade_tip_cone(surface: SurfaceConfig, grass: GrassConfig,
@@ -632,7 +633,8 @@ class GrassLayer:
                                    cross_section=seed.cross_section,
                                    n_segs=seed.circle_segs,
                                    diamond_equator=seed.diamond_equator,
-                                   leaf_arch=seed.leaf_arch)
+                                   leaf_arch=seed.leaf_arch,
+                                   leaf_ridge=seed.leaf_ridge)
             parts.append(mesh)
 
             cones = _blade_support_cones(
