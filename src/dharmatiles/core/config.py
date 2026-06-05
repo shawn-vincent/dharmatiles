@@ -353,28 +353,37 @@ class WaterSurfaceConfig:
     """
     # ── Primary wave field ────────────────────────────────────────────────────
     n_primary:                  int   = 3
-    primary_dir:              float   = 0.52    # rad — dominant direction (~30°)
+    primary_dir:              float   = 1.5708  # rad — dominant direction (π/2 = toward shore → crests parallel to shore)
     primary_dir_spread:       float   = 0.30    # rad — angular spread between trains
-    primary_wavelength_mm:    float   = 12.0    # mm — dominant wavelength
+    primary_wavelength_mm:    float   = 12.0    # mm — base wavelength (far from shore); divided by freq_shore at shore gives effective wavelength
     primary_wavelength_spread:float   = 0.30    # relative variation (±30%)
-    primary_amplitude_mm:     float   = 0.231   # mm — half crest-to-trough  (+5%)
+    primary_amplitude_mm:     float   = 0.64    # mm — per-wave half crest-to-trough; n_primary waves sum to ~√n × this at shore
 
     # ── Shore compression (shoaling) ─────────────────────────────────────────
     shore_compress_dist_mm:   float   = 5.0     # mm — band over which shoaling acts
-    shore_amplitude_factor:   float   = 1.35    # amplitude multiplier at shore
-    shore_freq_factor:        float   = 1.60    # wave-number multiplier at shore
+    shore_amplitude_factor:   float   = 1.0     # amplitude multiplier at shore (1.0 = disabled; wave_decay_mm handles the full profile)
+    shore_freq_factor:        float   = 6.0     # wave-number multiplier at shore; effective_wavelength = primary_wavelength_mm / shore_freq_factor at shore
+
+    # ── Shore-to-center amplitude decay ──────────────────────────────────────
+    # Exponential e-fold decay distance (mm).  Waves fade as they move away
+    # from shore: amp × exp(−dist / wave_decay_mm).  With primary_amplitude_mm
+    # doubled (0.462) and wave_decay_mm = 25, the shore wave peaks at
+    # 0.462 × 1.35 = 0.624 mm and decays to 0.231 mm at ~17.5 mm (halfway
+    # across a 1×1 square), matching the original open-water amplitude.
+    # Set to 0 to disable decay (flat amplitude everywhere).
+    wave_decay_mm:            float   = 10.8   # e-fold decay distance; drives both amplitude and frequency falloff from shore
 
     # ── Capillary ripples ─────────────────────────────────────────────────────
-    n_capillary:                int   = 30       # 30 crossing waves → interference noise
+    n_capillary:                int   = 0        # 0 = disabled; >0 adds fine surface texture
     capillary_wavelength_min_mm:float = 2.08    # mm
     capillary_wavelength_max_mm:float = 4.17    # mm
     capillary_amplitude_mm:   float   = 0.0256  # mm — half-amplitude per wave
 
     # ── Rock interactions ──────────────────────────────────────────────────────
-    rock_bow_amplitude_mm:    float   = 0.30    # mm — peak bow-wave height
+    rock_bow_amplitude_mm:    float   = 0.0     # mm — peak bow-wave height (0 = disabled)
     rock_wake_length_factor:  float   = 4.0     # wake length as × rock radius
     rock_wake_amp_factor:     float   = 0.45    # wave amplitude inside wake
-    rock_meniscus_amplitude_mm:float  = 0.18    # mm — contact-ring lift
+    rock_meniscus_amplitude_mm:float  = 0.0     # mm — contact-ring lift (0 = disabled)
     rock_meniscus_sigma_mm:   float   = 0.70    # mm — contact-ring bell width
 
 
