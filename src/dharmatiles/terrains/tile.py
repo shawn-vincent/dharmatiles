@@ -35,7 +35,7 @@ from ..bases import dungeonblocks, openlock
 from ..layers.soil import SoilLayer
 from ..layers.stones import StonesLayer
 from ..layers.grass import GrassLayer
-from ..layers.water import make_water_volume
+from ..layers.water import make_water_volume, build_water_surface_displacement
 
 
 # ── VisCAM / SolidView colour constants ───────────────────────────────────────
@@ -137,10 +137,16 @@ def _build_mesh(cfg: SceneConfig,
     # ── Water volume ──────────────────────────────────────────────────────────
     if water_mask is not None and water_height is not None:
         if verbose:
+            print("Building water surface displacement...")
+        z_disp = build_water_surface_displacement(
+            cfg.surface, water_mask, scene.terrain_z, water_height,
+            scene.stone_mask, cfg.water_surface)
+        if verbose:
             print("Building water volume...")
         water_mesh = make_water_volume(
             scene.terrain_z, water_mask, water_height,
-            cfg.surface.tile_w, cfg.surface.tile_h)
+            cfg.surface.tile_w, cfg.surface.tile_h,
+            z_disp=z_disp)
         _paint(water_mesh, COLOUR_WATER)
         parts.append(water_mesh)
 

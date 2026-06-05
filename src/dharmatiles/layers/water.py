@@ -34,17 +34,150 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
-from ..core.config import SurfaceConfig, WaterRippleConfig
+from ..core.config import SurfaceConfig, WaterRippleConfig, WaterSurfaceConfig
 
 
 WATER_RENDER_LIFT_MM = 0.10   # lift water mesh above terrain floor to avoid z-fight
+
+
+def build_water_surface_displacement(
+    surface:      SurfaceConfig,
+    water_mask:   np.ndarray,
+    terrain_z:    np.ndarray,
+    water_height: float,
+    stone_mask:   np.ndarray | None,
+    cfg:          WaterSurfaceConfig,
+) -> np.ndarray:
+    """Return a ``(grid_h, grid_w)`` cell-centre displacement array (mm).
+
+    Displacement is measured upward from *water_height*.  Positive = crest,
+    negative = trough.  Values are clamped so the surface never drops below
+    the local terrain (no exposure of sub-surface voids).
+
+    See docs/design/water-surface-model.md for the full model description.
+    """
+    from scipy.ndimage import distance_transform_edt, label, center_of_mass
+
+    gh, gw   = water_mask.shape
+    cell_mm  = surface.cell_w
+    rng      = np.random.default_rng(surface.seed ^ 0xF10A4E2C)
+    tau      = 2.0 * np.pi
+
+    # ── Cell-centre coordinate grids (mm) ─────────────────────────────────────
+    rows_mm = (np.arange(gh, dtype=float) + 0.5)[:, None] * cell_mm
+    cols_mm = (np.arange(gw, dtype=float) + 0.5)[None, :] * cell_mm
+
+    # ── Shore proximity (0 = open water, 1 = shore) ───────────────────────────
+    dist_shore   = distance_transform_edt(water_mask) * cell_mm  # 0 on shore
+    shore_prox   = np.clip(1.0 - dist_shore / cfg.shore_compress_dist_mm, 0.0, 1.0)
+    shore_smooth = shore_prox ** 2 * (3.0 - 2.0 * shore_prox)   # smoothstep
+
+    amp_shore  = 1.0 + (cfg.shore_amplitude_factor - 1.0) * shore_smooth
+    freq_shore = 1.0 + (cfg.shore_freq_factor      - 1.0) * shore_smooth
+
+    # ── Rock wake: amplitude suppression field ────────────────────────────────
+    wake_amp = np.ones((gh, gw), dtype=float)   # multiplier; 1 = no suppression
+
+    cos_dir = np.cos(cfg.primary_dir)
+    sin_dir = np.sin(cfg.primary_dir)
+
+    rock_specs: list[tuple[float, float, float]] = []   # (cx_mm, cy_mm, r_mm)
+    if stone_mask is not None:
+        stones_in_water = stone_mask & water_mask
+        if stones_in_water.any():
+            labeled, n_comp = label(stones_in_water)
+            for i_c in range(1, n_comp + 1):
+                comp = labeled == i_c
+                rr, cc = center_of_mass(comp)
+                cy_rock = (rr + 0.5) * cell_mm
+                cx_rock = (cc + 0.5) * cell_mm
+                r_rock  = max(cell_mm, np.sqrt(comp.sum() * cell_mm ** 2 / np.pi))
+                rock_specs.append((cx_rock, cy_rock, r_rock))
+
+                dx = cols_mm - cx_rock
+                dy = rows_mm - cy_rock
+                flow_proj = dx * cos_dir + dy * sin_dir   # + = downstream
+                perp_proj = -dx * sin_dir + dy * cos_dir  # lateral
+
+                downstream     = np.maximum(0.0, flow_proj - r_rock)
+                wake_sigma_lat = r_rock + downstream * 0.3
+                wake_weight    = (
+                    (1.0 - np.exp(-downstream / (r_rock + 1e-6))) *
+                    np.exp(-0.5 * (perp_proj / (wake_sigma_lat + 1e-6)) ** 2) *
+                    np.exp(-downstream / (cfg.rock_wake_length_factor * r_rock + 1e-6))
+                )
+                wake_amp *= 1.0 - (1.0 - cfg.rock_wake_amp_factor) * wake_weight
+
+    # ── Combined amplitude field ───────────────────────────────────────────────
+    amp_field = amp_shore * wake_amp
+
+    # ── Primary sinusoidal wave trains ────────────────────────────────────────
+    z_waves = np.zeros((gh, gw), dtype=float)
+    for i in range(cfg.n_primary):
+        theta = cfg.primary_dir + (i - cfg.n_primary // 2) * cfg.primary_dir_spread
+        lam   = cfg.primary_wavelength_mm * (
+            1.0 + cfg.primary_wavelength_spread * rng.uniform(-1.0, 1.0))
+        phase = rng.uniform(0.0, tau)
+        proj  = cols_mm * np.cos(theta) + rows_mm * np.sin(theta)
+        k_loc = (tau / lam) * freq_shore          # shore-compressed wave number
+        z_waves += cfg.primary_amplitude_mm * np.sin(k_loc * proj + phase)
+
+    # ── Capillary ripples ──────────────────────────────────────────────────────
+    for _ in range(cfg.n_capillary):
+        theta = rng.uniform(0.0, tau)
+        lam   = rng.uniform(cfg.capillary_wavelength_min_mm,
+                             cfg.capillary_wavelength_max_mm)
+        phase = rng.uniform(0.0, tau)
+        amp   = cfg.capillary_amplitude_mm * rng.uniform(0.7, 1.3)
+        proj  = cols_mm * np.cos(theta) + rows_mm * np.sin(theta)
+        z_waves += amp * np.sin(tau * proj / lam + phase)
+
+    # ── Combine: waves modulated by amplitude field ────────────────────────────
+    z_disp = z_waves * amp_field
+
+    # ── Rock fixed features: bow wave + meniscus ──────────────────────────────
+    for cx_rock, cy_rock, r_rock in rock_specs:
+        dx = cols_mm - cx_rock
+        dy = rows_mm - cy_rock
+
+        flow_proj = dx * cos_dir + dy * sin_dir
+        perp_proj = -dx * sin_dir + dy * cos_dir
+
+        # Bow wave: elliptical Gaussian, centred slightly upstream of the rock
+        bow_cx    = cx_rock - 0.4 * r_rock * cos_dir
+        bow_cy    = cy_rock - 0.4 * r_rock * sin_dir
+        dx_b      = cols_mm - bow_cx
+        dy_b      = rows_mm - bow_cy
+        perp_b    =  -dx_b * sin_dir + dy_b * cos_dir
+        flow_b    =   dx_b * cos_dir + dy_b * sin_dir
+        sig_perp  = 0.6 * r_rock
+        sig_flow  = 0.9 * r_rock
+        upstream_taper = np.where(flow_b < 0, 1.0, 0.3)
+        bow_z = (cfg.rock_bow_amplitude_mm *
+                 np.exp(-0.5 * (perp_b**2 / sig_perp**2 + flow_b**2 / sig_flow**2)) *
+                 upstream_taper)
+        z_disp += bow_z
+
+        # Meniscus: raised ring at the rock waterline
+        dist_r  = np.sqrt(dx**2 + dy**2) + 1e-9
+        ring_d  = np.abs(dist_r - r_rock)
+        z_disp += (cfg.rock_meniscus_amplitude_mm *
+                   np.exp(-(ring_d / cfg.rock_meniscus_sigma_mm) ** 2))
+
+    # ── Mask to water region; clamp so surface never dips below riverbed ───────
+    z_disp[~water_mask] = 0.0
+    depth = water_height - terrain_z                          # mm of water above bed
+    z_disp = np.maximum(z_disp, -depth)                      # trough ≥ riverbed
+
+    return z_disp
 
 
 def make_water_volume(terrain_z: np.ndarray,
                       water_mask: np.ndarray,
                       water_height: float,
                       tile_w: float,
-                      tile_h: float) -> trimesh.Trimesh:
+                      tile_h: float,
+                      z_disp: np.ndarray | None = None) -> trimesh.Trimesh:
     """Closed solid spanning the water volume: flat top at *water_height*, riverbed bottom.
 
     Faces emitted
@@ -79,6 +212,18 @@ def make_water_volume(terrain_z: np.ndarray,
     bot_z = np.where(sum_w > 0, sum_z / np.maximum(sum_w, 1e-9), water_height)
     bot_z = np.minimum(bot_z, water_height)   # bottom never above water surface
 
+    # ── Top surface z: water_height + optional displacement ───────────────────
+    if z_disp is not None:
+        # Bilinear-interpolate cell-centre displacement to vertex corners
+        pad    = np.pad(z_disp, 1, mode='edge')          # (gh+2, gw+2)
+        top_z  = water_height + 0.25 * (
+            pad[ :-1,  :-1] + pad[ :-1, 1:] +
+            pad[1:  ,  :-1] + pad[1:  , 1:])             # (nv_r, nv_c)
+        # Clamp: surface must sit above the riverbed at every vertex
+        top_z  = np.maximum(top_z, bot_z)
+    else:
+        top_z  = np.full((nv_r, nv_c), water_height)
+
     # ── Vertex buffer ─────────────────────────────────────────────────────────
     x_v = np.broadcast_to((np.arange(nv_c) * cell_x)[None, :], (nv_r, nv_c))
     y_v = np.broadcast_to((np.arange(nv_r) * cell_y)[:, None], (nv_r, nv_c))
@@ -86,7 +231,7 @@ def make_water_volume(terrain_z: np.ndarray,
     verts = np.empty((2 * n_half, 3))
     verts[:n_half, 0] = x_v.ravel()
     verts[:n_half, 1] = y_v.ravel()
-    verts[:n_half, 2] = water_height          # top: flat
+    verts[:n_half, 2] = top_z.ravel()         # top: water_height + displacement
     verts[n_half:, 0] = x_v.ravel()
     verts[n_half:, 1] = y_v.ravel()
     verts[n_half:, 2] = bot_z.ravel()         # bottom: riverbed

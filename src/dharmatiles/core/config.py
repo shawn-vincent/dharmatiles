@@ -335,6 +335,50 @@ class WaterRippleConfig:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Water surface displacement
+# ─────────────────────────────────────────────────────────────────────────────
+
+@dataclass
+class WaterSurfaceConfig:
+    """Procedural water surface displacement parameters.
+
+    See docs/design/water-surface-model.md for the full mathematical model.
+
+    The displacement field is:
+        [PrimaryWaves + CapillaryRipples] · AmpField  +  BowWaves  +  Meniscus
+
+    AmpField combines shore amplification (shoaling) with rock wake damping.
+    Physical scale: at 35 mm = 1.5 m game square, the default 12 mm wavelength
+    represents ~0.5 m real waves on a shallow wind-driven pond.
+    """
+    # ── Primary wave field ────────────────────────────────────────────────────
+    n_primary:                  int   = 3
+    primary_dir:              float   = 0.52    # rad — dominant direction (~30°)
+    primary_dir_spread:       float   = 0.30    # rad — angular spread between trains
+    primary_wavelength_mm:    float   = 12.0    # mm — dominant wavelength
+    primary_wavelength_spread:float   = 0.30    # relative variation (±30%)
+    primary_amplitude_mm:     float   = 0.22    # mm — half crest-to-trough
+
+    # ── Shore compression (shoaling) ─────────────────────────────────────────
+    shore_compress_dist_mm:   float   = 5.0     # mm — band over which shoaling acts
+    shore_amplitude_factor:   float   = 1.35    # amplitude multiplier at shore
+    shore_freq_factor:        float   = 1.60    # wave-number multiplier at shore
+
+    # ── Capillary ripples ─────────────────────────────────────────────────────
+    n_capillary:                int   = 10
+    capillary_wavelength_min_mm:float = 2.5     # mm
+    capillary_wavelength_max_mm:float = 5.0     # mm
+    capillary_amplitude_mm:   float   = 0.045   # mm — half-amplitude
+
+    # ── Rock interactions ──────────────────────────────────────────────────────
+    rock_bow_amplitude_mm:    float   = 0.18    # mm — peak bow-wave height
+    rock_wake_length_factor:  float   = 4.0     # wake length as × rock radius
+    rock_wake_amp_factor:     float   = 0.45    # wave amplitude inside wake
+    rock_meniscus_amplitude_mm:float  = 0.10    # mm — contact-ring lift
+    rock_meniscus_sigma_mm:   float   = 0.70    # mm — contact-ring bell width
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Base (underside peg / socket)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -375,10 +419,11 @@ class SceneConfig:
     Layers receive only the sub-config they need; none reads across
     layer boundaries.
     """
-    surface: SurfaceConfig = field(default_factory=SurfaceConfig)
-    flow:    FlowConfig    = field(default_factory=FlowConfig)
-    grass:   GrassConfig   = field(default_factory=GrassConfig)
-    solver:  SolverConfig  = field(default_factory=SolverConfig)
-    soil:    SoilConfig    = field(default_factory=SoilConfig)
-    stones:  StonesConfig  = field(default_factory=StonesConfig)
-    base:    BaseConfig    = field(default_factory=BaseConfig)
+    surface:       SurfaceConfig       = field(default_factory=SurfaceConfig)
+    flow:          FlowConfig          = field(default_factory=FlowConfig)
+    grass:         GrassConfig         = field(default_factory=GrassConfig)
+    solver:        SolverConfig        = field(default_factory=SolverConfig)
+    soil:          SoilConfig          = field(default_factory=SoilConfig)
+    stones:        StonesConfig        = field(default_factory=StonesConfig)
+    base:          BaseConfig          = field(default_factory=BaseConfig)
+    water_surface: WaterSurfaceConfig  = field(default_factory=WaterSurfaceConfig)

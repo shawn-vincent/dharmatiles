@@ -239,14 +239,18 @@ They must not be assumed when building present systems.
 
 ### 9.2 Water System
 
-- Planned: procedural ripples, randomness-based variation, disturbance around
-  objects
-- Current placeholder: a water layer is an explicit blue cap over water cells.
-  Terrain top quads inside the water mask are omitted so the water cap replaces
-  them instead of duplicating coplanar ground faces.
-- Current limitation: a water region has one height value, used as both the
-  terrain depression height and the water surface height. A visible dip,
-  basin, or depth under water requires separate bed and surface heights.
+Current implementation — see `docs/design/water-surface-model.md` for the full
+displacement model.
+
+- **Volume solid:** the water region is a closed mesh (flat/wavy top at
+  `water_height`, textured riverbed bottom, perimeter walls) rather than a
+  thin surface sheet. Unioning with the terrain solid gives correct depth.
+- **Riverbed:** sloped via smoothstep from `water_height` at the shore down to
+  z = 0 at the pool floor. SoilLayer textures the bed naturally.
+- **Surface displacement:** structured wave model — primary sinusoidal wave
+  trains with shore compression (shoaling), capillary ripples, rock bow waves,
+  wake amplitude suppression, and meniscus contact rings. See
+  `WaterSurfaceConfig` in `core/config.py`.
 
 ### 9.3 Object / STL Placement
 
