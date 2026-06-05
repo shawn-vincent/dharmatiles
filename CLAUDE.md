@@ -122,7 +122,7 @@ All geometry layers (soil, stones, grass) treat the terrain surface as **locally
 
 ## Known Open Items (from architecture review)
 
-Items tracked in `memory/terminology-tile-square-cell.md`:
+Items tracked in `docs/memory/terminology-tile-square-cell.md`:
 
 1. `SoilConfig.detail_mult` doubles CPU but the hi-res bump is discarded in `terrains/tile.py` — wire or remove
 2. `build_sub_hull_mesh` imported but never called — delete from `grass.py`, `mesh.py`, `core/__init__.py`
@@ -146,7 +146,7 @@ src/dharmatiles/
 tiles/           .tile spec files (YAML)
 stl/             generated STL output (gitignored)
 scripts/         standalone utilities; scripts/archived/ = old generations
-docs/            design notes
-meta/history/    architecture review transcripts
-memory/          persistent session memory (MEMORY.md index)
+docs/            design notes, architecture review transcripts, session memory
+docs/meta/history/  architecture review transcripts
+docs/memory/     persistent session memory (MEMORY.md index)
 ```
