@@ -357,7 +357,7 @@ class WaterSurfaceConfig:
     primary_dir_spread:       float   = 0.30    # rad — angular spread between trains
     primary_wavelength_mm:    float   = 12.0    # mm — dominant wavelength
     primary_wavelength_spread:float   = 0.30    # relative variation (±30%)
-    primary_amplitude_mm:     float   = 0.22    # mm — half crest-to-trough
+    primary_amplitude_mm:     float   = 0.231   # mm — half crest-to-trough  (+5%)
 
     # ── Shore compression (shoaling) ─────────────────────────────────────────
     shore_compress_dist_mm:   float   = 5.0     # mm — band over which shoaling acts
@@ -366,8 +366,8 @@ class WaterSurfaceConfig:
 
     # ── Capillary ripples ─────────────────────────────────────────────────────
     n_capillary:                int   = 10
-    capillary_wavelength_min_mm:float = 2.5     # mm
-    capillary_wavelength_max_mm:float = 5.0     # mm
+    capillary_wavelength_min_mm:float = 2.08    # mm  (÷1.20, +20% frequency)
+    capillary_wavelength_max_mm:float = 4.17    # mm  (÷1.20, +20% frequency)
     capillary_amplitude_mm:   float   = 0.045   # mm — half-amplitude
 
     # ── Rock interactions ──────────────────────────────────────────────────────
