@@ -144,18 +144,18 @@ def make_logo_inset(cx: float, cy: float,
     size_mm      : logo bounding square side length (mm).
     z_base       : z of the outermost base face (negative for OL / DB bottoms).
     depth_mm     : inset depth in mm (logo floor is at z_base + depth_mm).
-    clearance_mm : outward offset applied to the cut cross-section before
-                   extrusion.  Expands every channel by this amount on each
-                   side (total gap increase = 2 × clearance_mm), making fine
-                   details printable on FDM hardware.  Default 0.20 mm gives
-                   0.40 mm extra clearance per gap — one nozzle width.
+    clearance_mm : inward shrink applied to the cut cross-section before
+                   extrusion.  Contracts every logo cut shape by this amount,
+                   fattening the ridges between them by 2 × clearance_mm
+                   (0.40 mm total per ridge at the default).  Keeps fine
+                   raised ridges printable on FDM hardware.
     """
     import manifold3d as m3d
 
     contours = _logo_contours_mm(cx, cy, size_mm)
     cs       = m3d.CrossSection(contours, fillrule=m3d.FillRule.EvenOdd)
     if clearance_mm > 0.0:
-        cs = cs.offset(clearance_mm, m3d.JoinType.Miter)
+        cs = cs.offset(-clearance_mm, m3d.JoinType.Miter)
 
     # Extrude depth_mm then translate so bottom face sits at z_base.
     # The solid spans [z_base .. z_base + depth_mm].
