@@ -215,7 +215,7 @@ Outside tile or grass region: blade stops
 | `rise_cap` | 2.0 mm | Tallest single-step climb; stones taller than this stop the blade |
 | `max_stack_height` | 2.0 mm | Max occ_z above terrain for seeding or growing |
 | `blade_width_min / blade_width_max` | 0.75–2.0 mm | Blade width range (also sets perpendicular stamp coverage) |
-| `curl_min / curl_max` | 0.0–0.8 rad | Curl magnitude range; sign is chosen randomly per seed |
+| `blade_curl_min / blade_curl_max` | 0.0–0.8 rad | Curl magnitude range; sign is chosen randomly per seed |
 | `groups_per_square` | 50 | Blade group density per 35 mm square |
 | `group_min / group_max` | 20–30 | Blades per group (controls clumping) |
 | `group_dir_jitter` | 0.14 rad | Per-blade direction noise within a group |

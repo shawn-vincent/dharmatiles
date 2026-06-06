@@ -17,8 +17,8 @@ class SpeciesConfig:
     blade_length_min: float = 8.0
     blade_length_max: float = 14.4
     blade_segment_length: float = 0.8
-    curl_min: float = 0.0
-    curl_max: float = 0.8
+    blade_curl_min: float = 0.0
+    blade_curl_max: float = 0.8
     rise_cap: float = 2.0
 
     # Flat ribbon mesh.

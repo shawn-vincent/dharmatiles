@@ -20,6 +20,6 @@ regions:
         blade_length_min: 8
         blade_length_max: 14
         blade_segment_length: 0.8
-        curl_min: 0.3
-        curl_max: 0.8
+        blade_curl_min: 0.3
+        blade_curl_max: 0.8
         rise_cap: 2.0

@@ -170,9 +170,9 @@ def _sample_seed_xy(
 
 
 def _sample_seed_curl(species: SpeciesConfig, rng: np.random.Generator) -> float:
-    curl_min = max(0.0, float(species.curl_min))
-    curl_max = max(curl_min, float(species.curl_max))
-    magnitude = float(rng.uniform(curl_min, curl_max))
+    blade_curl_min = max(0.0, float(species.blade_curl_min))
+    blade_curl_max = max(blade_curl_min, float(species.blade_curl_max))
+    magnitude = float(rng.uniform(blade_curl_min, blade_curl_max))
     if magnitude == 0.0:
         return 0.0
     return magnitude * float(rng.choice([-1.0, 1.0]))

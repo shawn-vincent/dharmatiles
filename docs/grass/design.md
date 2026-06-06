@@ -75,8 +75,8 @@ class SpeciesConfig:
     blade_length_min:     float  # mm
     blade_length_max:     float  # mm
     blade_segment_length: float  # mm — fixed per species; must be >> cell_w
-    curl_min:             float  # radians, magnitude
-    curl_max:             float  # radians, magnitude
+    blade_curl_min:       float  # radians, magnitude
+    blade_curl_max:       float  # radians, magnitude
     rise_cap:             float  # mm per step
 
     # Cross-section (for mesh build)
@@ -122,7 +122,7 @@ group_max+1)` seeds are planted:
    max_stack_height`.
 3. Create a `GrassSeed`:
    - `direction` = group direction + `rng.normal(0, group_dir_jitter)`
-   - `curl` = sampled magnitude from `curl_min` to `curl_max`, with random sign,
+   - `curl` = sampled magnitude from `blade_curl_min` to `blade_curl_max`, with random sign,
      divided across the derived step count
    - `blade_width` = sampled from `blade_width_min` to `blade_width_max`
    - `n_steps` = sampled target length divided by `blade_segment_length`
