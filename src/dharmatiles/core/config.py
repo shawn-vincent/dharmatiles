@@ -132,8 +132,8 @@ class GrassConfig:
     leaf_ridge:        float = 0.175   # extra midrib lift at V3 as fraction of thickness
 
     # ── Blade width range (mm) ────────────────────────────────────────────────
-    width_min:    float = 1.2023438   # 0.8015625 × 1.5
-    width_max:    float = 1.6031250   # 1.06875   × 1.5
+    width_min:    float = 1.0
+    width_max:    float = 1.5
 
     # ── Spine ─────────────────────────────────────────────────────────────────
     n_path:          int   = 50                       # spine sample count
@@ -144,7 +144,7 @@ class GrassConfig:
 
     # ── Growth (GrassLayer) ───────────────────────────────────────────────────
     seg_len:         float = 0.8    # mm per growth segment
-    max_segs:        int   = 12     # max growth segments
+    max_segs:        int   = 18     # max growth segments
     rise_cap:        float = 0.50   # mm: max tolerated rise per step
     smooth_sigma:    float = 2.0    # Gaussian smoothing width (segment units)
     root_depth:      float = 0.5    # mm — underground anchor depth
@@ -155,9 +155,9 @@ class GrassConfig:
     # More groups with fewer blades each → uniform coverage; fewer groups with
     # more blades each → visible clumping.  At 120 groups the jittered-grid
     # spacing is ~3 mm, small enough that directional flow sweeps fill the gaps.
-    groups_per_square: int   = 240
-    group_min:       int   = 3
-    group_max:       int   = 5
+    groups_per_square: int   = 35
+    group_min:       int   = 20
+    group_max:       int   = 30
     group_spread_mm: float = 1.5
     group_dir_jitter:float = 0.14   # per-blade direction jitter within group (rad σ)
 

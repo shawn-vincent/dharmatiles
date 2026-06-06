@@ -42,6 +42,7 @@ class GrassSeed:
     clearance:   float  # mm — gap above support surface
 
     # ── Growth ────────────────────────────────────────────────────────────────
+    max_segs:            int     # per-blade growth limit (±20% of config value)
     seg_len:             float   # mm per growth segment
     rise_cap:            float   # mm: max tolerated rise per step
     smooth_sigma:        float   # Gaussian smoothing width (segments)
@@ -61,11 +62,13 @@ def make_seed(curl: float,
     ``curl`` is already resolved by the caller (from the flow field +
     per-blade jitter).  All other variable geometry is sampled here.
     """
-    width = float(rng.uniform(grass.width_min, grass.width_max))
+    width    = float(rng.uniform(grass.width_min, grass.width_max))
+    max_segs = max(1, int(round(rng.uniform(grass.max_segs * 0.8, grass.max_segs * 1.2))))
 
     return GrassSeed(
         curl             = curl,
         width            = width,
+        max_segs         = max_segs,
         cross_section    = grass.cross_section,
         circle_segs      = grass.circle_segs,
         thickness        = grass.thickness,

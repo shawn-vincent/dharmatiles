@@ -522,8 +522,7 @@ class GrassLayer:
         terrain_z  = scene.terrain_z
 
         # ── Growth rounds ──────────────────────────────────────────────────────
-        # Each blade uses its own seed's rise_cap and seg_len.
-        # max_segs is the global round limit (use the grass config value).
+        # Each blade uses its own seed's rise_cap, seg_len, and max_segs.
         for round_idx in range(grass.max_segs):
             grown = 0
             for bi in rng.permutation(len(live)):
@@ -532,10 +531,14 @@ class GrassLayer:
                     continue
 
                 seed = entry['seed']
+                if round_idx >= seed.max_segs:
+                    entry['alive'] = False
+                    continue
+
                 cx, cy, cz = entry['path'][-1]
                 hw         = seed.width / 2.0
 
-                entry['dir'] += seed.curl * np.pi / grass.max_segs
+                entry['dir'] += seed.curl * np.pi / seed.max_segs
                 direction = entry['dir']
 
                 accepted = None
