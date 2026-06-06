@@ -168,9 +168,6 @@ class GrassConfig:
     # 1.0 = top edge of blade flush with support surface
     spine_sink_fraction: float = 0.5
 
-    # ── Support posts ─────────────────────────────────────────────────────────
-    max_bridge_mm:   float = 10.0   # max unsupported span before a post is added
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Solver / Z-envelope

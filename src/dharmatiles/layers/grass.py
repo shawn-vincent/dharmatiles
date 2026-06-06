@@ -92,53 +92,6 @@ def _smooth_path(path_arr: np.ndarray, n_out: int, sigma: float) -> np.ndarray:
     return np.stack(cols, axis=1)
 
 
-# ── Tip upturn ───────────────────────────────────────────────────────────────
-
-def _apply_tip_upturn(path_arr: np.ndarray, taper_idx: int) -> np.ndarray:
-    """If the blade tip points downward, curl the taper section upward."""
-    n = len(path_arr)
-    if taper_idx < 1 or taper_idx >= n - 2:
-        return path_arr
-
-    tip_raw = path_arr[-1] - path_arr[-2]
-    tip_len = float(np.linalg.norm(tip_raw))
-    if tip_len < 1e-9 or tip_raw[2] / tip_len >= 0.0:
-        return path_arr
-
-    t0 = path_arr[taper_idx + 1] - path_arr[taper_idx]
-    t0_len = float(np.linalg.norm(t0))
-    if t0_len < 1e-9:
-        return path_arr
-    t0 = t0 / t0_len
-
-    t1 = np.array([t0[0], t0[1], 0.1], dtype=float)
-    t1 /= np.linalg.norm(t1)
-
-    L = float(np.sum(np.linalg.norm(np.diff(path_arr[taper_idx:], axis=0), axis=1)))
-    if L < 1e-6:
-        return path_arr
-
-    p0   = path_arr[taper_idx].astype(float)
-    avg  = (t0 + t1) / 2.0
-    avg /= np.linalg.norm(avg)
-    p1   = p0 + avg * L
-
-    n_taper = n - taper_idx
-    tv  = np.linspace(0.0, 1.0, n_taper)
-    m0  = t0 * L
-    m1  = t1 * L
-    h00 =  2*tv**3 - 3*tv**2 + 1
-    h10 =    tv**3 - 2*tv**2 + tv
-    h01 = -2*tv**3 + 3*tv**2
-    h11 =    tv**3 - tv**2
-
-    new_taper = (h00[:, None] * p0 + h10[:, None] * m0 +
-                 h01[:, None] * p1 + h11[:, None] * m1)
-
-    out = path_arr.copy()
-    out[taper_idx:] = new_taper
-    return out
-
 
 
 # ── Grass region edge fill ───────────────────────────────────────────────────
@@ -195,6 +148,8 @@ def _fill_boundary_seeds(live: list, occ_z: np.ndarray,
 
         tz   = float(sample_grid(scene.terrain_z, surface, bx, by))
         sz   = float(sample_grid(occ_z,           surface, bx, by))
+        if sz > tz + solver.max_stack_height:
+            continue
         sink = seed.width * seed.spine_sink_fraction
         z0   = max(tz, sz) + solver.clearance - sink
 
@@ -279,7 +234,6 @@ class GrassLayer:
         self.group_max       = cfg.grass.group_max
         self.group_spread_mm = cfg.grass.group_spread_mm
         self.group_dir_jitter= cfg.grass.group_dir_jitter
-        self.max_bridge_mm   = cfg.grass.max_bridge_mm
 
     def build(self,
               scene: TileScene,
@@ -300,8 +254,9 @@ class GrassLayer:
             self.n_groups, surface, grass, flow_angle_field, rng, edge,
         )
 
-        min_curl = grass.curl_min_fraction * grass.curl_max
-        occ_z    = scene.support_z.copy()
+        min_curl    = grass.curl_min_fraction * grass.curl_max
+        max_stack_h = solver.max_stack_height
+        occ_z       = scene.support_z.copy()
 
         # Each entry: seed + live growth state
         live: list = []   # list of {'seed': GrassSeed, 'path': list, 'dir': float, 'alive': bool, 'base_tz': float}
@@ -345,6 +300,8 @@ class GrassLayer:
 
                 tz   = float(sample_grid(scene.terrain_z, surface, bx, by))
                 sz   = float(sample_grid(occ_z,           surface, bx, by))
+                if sz > tz + max_stack_h:
+                    continue
                 sink = seed.width * seed.spine_sink_fraction
                 z0   = max(tz, sz) + solver.clearance - sink
 
@@ -380,8 +337,8 @@ class GrassLayer:
         th   = surface.tile_h
         gw   = surface.grid_w
         gh   = surface.grid_h
-        stone_mask = scene.stone_mask
-        terrain_z  = scene.terrain_z
+        stone_mask  = scene.stone_mask
+        terrain_z   = scene.terrain_z
 
         # ── Growth rounds ──────────────────────────────────────────────────────
         # Each blade uses its own seed's rise_cap, seg_len, and max_segs.
@@ -420,6 +377,8 @@ class GrassLayer:
 
                     tz_t = float(sample_grid(terrain_z, surface, tx, ty))
                     sz_t = float(sample_grid(occ_z,     surface, tx, ty))
+                    if sz_t > tz_t + max_stack_h:
+                        continue
                     sink = seed.width * seed.spine_sink_fraction
                     nz   = max(tz_t, sz_t) + seed.clearance - sink
 
@@ -457,10 +416,12 @@ class GrassLayer:
             n_raw    = len(raw_arr)
             total_l  = seed.seg_len * (n_raw - 1)
 
-            # Underground anchor
+            # Underground anchor — placed root_depth below the blade's actual
+            # starting z (not below terrain_z) so elevated blades don't produce
+            # a near-vertical column between anchor and base.
             root_x, root_y = raw_arr[0, 0], raw_arr[0, 1]
             underground = np.array([[root_x, root_y,
-                                     entry['base_tz'] - seed.root_depth]])
+                                     raw_arr[0, 2] - seed.root_depth]])
             raw_arr = np.vstack([underground, raw_arr])
 
             # Ground the tip to the surface it was growing on at the end of
@@ -486,9 +447,6 @@ class GrassLayer:
             path_arr = path_arr.copy()
             path_arr[:, 2] += (seed.width / 2.0 - widths / 2.0)
 
-            upturn_idx = int(np.clip(
-                np.searchsorted(s_arr, body_l), 1, n_smooth - 2))
-
             # Clip spine XY so the tube cross-section stays inside the tile
             # footprint.  The tube extends up to seed.width/2 from the spine
             # in the horizontal plane, so keep the spine at least that far
@@ -499,15 +457,6 @@ class GrassLayer:
             _hw = seed.width / 2.0
             path_arr[:, 0] = np.clip(path_arr[:, 0], _hw, surface.tile_w - _hw)
             path_arr[:, 1] = np.clip(path_arr[:, 1], _hw, surface.tile_h - _hw)
-
-            # If the tip is within max_bridge_mm of the terrain, drape it down
-            # to touch — no support cone needed.
-            tip_x_f = float(path_arr[-1, 0])
-            tip_y_f = float(path_arr[-1, 1])
-            z_terr_tip = float(sample_grid(scene.support_z, surface, tip_x_f, tip_y_f))
-            tip_gap = path_arr[-1, 2] - z_terr_tip
-            if 0.0 < tip_gap <= self.max_bridge_mm:
-                path_arr[-1, 2] = z_terr_tip
 
             mesh = build_tube_mesh(path_arr, widths, seed.thickness,
                                    cross_section=seed.cross_section,

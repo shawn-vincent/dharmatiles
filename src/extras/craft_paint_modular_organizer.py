@@ -1467,7 +1467,8 @@ def _build_tree_skeleton(
     raw_dir = raw_dir / raw_norm if raw_norm > 1e-6 else _parent_tangent.copy()
 
     # Blend: trunk leans vertical; higher-level branches follow crown more.
-    vertical_blend = max(0.0, 0.6 - _level * 0.25)
+    # Keeping more vertical bias at deeper levels avoids near-horizontal top branches.
+    vertical_blend = max(0.1, 0.7 - _level * 0.15)
     direction = _parent_tangent * vertical_blend + raw_dir * (1.0 - vertical_blend)
     direction = direction / max(float(np.linalg.norm(direction)), 1e-8)
 
@@ -1488,8 +1489,10 @@ def _build_tree_skeleton(
         return node
 
     # Binary split at a single junction node — no intermediate nodes.
+    # Lower branch_frac keeps splits in the lower portion of each span so top
+    # branches have more vertical height and gentler angles for FDM printability.
     span = z_max - base_pos[2]
-    branch_frac = 0.35 + _level * 0.10 + float(rng.uniform(-0.05, 0.05))
+    branch_frac = 0.25 + _level * 0.08 + float(rng.uniform(-0.04, 0.04))
     branch_z = min(z_max - 2.0, base_pos[2] + span * branch_frac)
     dz = branch_z - base_pos[2]
     branch_pos = base_pos + direction * (dz / max(direction[2], 0.05))
@@ -1948,6 +1951,95 @@ def cylindrical_tree_struts(
     return meshes
 
 
+def _collapse_non_manifold_edges(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
+    """Repair non-manifold edges by vertex collapse.
+
+    Each non-manifold edge (shared by > 2 faces) is an internal seam left by
+    boolean operations.  Collapsing it — merging its two endpoints to their
+    midpoint — makes the adjacent degenerate faces disappear naturally when
+    nondegenerate_faces() runs.  No new geometry is added, so no new
+    non-manifold edges can be introduced (unlike fill_holes on excised patches).
+    """
+    edges, counts = np.unique(mesh.edges_sorted, axis=0, return_counts=True)
+    nm_edges = edges[counts > 2]
+    if len(nm_edges) == 0:
+        return mesh
+
+    vertices = mesh.vertices.copy()
+    faces = mesh.faces.copy()
+
+    # Union-find canonical map: each vertex → its representative.
+    canonical = np.arange(len(vertices))
+
+    def find(x: int) -> int:
+        while canonical[x] != x:
+            canonical[x] = canonical[canonical[x]]
+            x = int(canonical[x])
+        return x
+
+    for e in nm_edges:
+        r0, r1 = find(int(e[0])), find(int(e[1]))
+        if r0 == r1:
+            continue
+        # Merge r1 → r0; place r0 at midpoint.
+        vertices[r0] = (vertices[r0] + vertices[r1]) / 2.0
+        canonical[r1] = r0
+
+    # Remap faces to canonical vertices.
+    new_faces = np.vectorize(find)(faces)
+
+    result = trimesh.Trimesh(vertices=vertices, faces=new_faces, process=False)
+    result.update_faces(result.nondegenerate_faces())
+    result.remove_unreferenced_vertices()
+    result.merge_vertices(digits_vertex=2)
+    result.fix_normals()
+
+    # Collapse any remaining near-degenerate boundary loops.  The vertex collapse
+    # above can leave tiny open triangles whose vertices are < 0.1 mm apart;
+    # cap_triangular_boundary_loops can't close them because the resulting face
+    # has near-zero area and is removed by nondegenerate_faces.  For each such
+    # loop we merge all its vertices to the centroid instead.
+    bedges, bcounts = np.unique(result.edges_sorted, axis=0, return_counts=True)
+    boundary_edges = bedges[bcounts == 1]
+    if len(boundary_edges) > 0:
+        bv: dict[int, list[int]] = {}
+        for a, b in boundary_edges:
+            bv.setdefault(int(a), []).append(int(b))
+            bv.setdefault(int(b), []).append(int(a))
+        visited2: set[int] = set()
+        verts2 = result.vertices.copy()
+        faces2 = result.faces.copy()
+        canonical2 = np.arange(len(verts2))
+        for start2 in bv:
+            if start2 in visited2:
+                continue
+            stack2 = [start2]
+            loop_verts: list[int] = []
+            while stack2:
+                cur2 = stack2.pop()
+                if cur2 in visited2:
+                    continue
+                visited2.add(cur2)
+                loop_verts.append(cur2)
+                stack2.extend(n for n in bv[cur2] if n not in visited2)
+            positions = verts2[loop_verts]
+            span = float(np.linalg.norm(positions.max(axis=0) - positions.min(axis=0)))
+            if span < 0.1:  # near-degenerate — collapse to centroid
+                centroid = positions.mean(axis=0)
+                verts2[loop_verts[0]] = centroid
+                for lv in loop_verts[1:]:
+                    canonical2[lv] = loop_verts[0]
+        new_faces2 = np.vectorize(lambda x: int(canonical2[x]))(faces2)
+        result = trimesh.Trimesh(vertices=verts2, faces=new_faces2, process=False)
+        result.update_faces(result.nondegenerate_faces())
+        result.remove_unreferenced_vertices()
+        result.fix_normals()
+
+    if result.volume < 0:
+        result.invert()
+    return result
+
+
 def cap_triangular_boundary_loops(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
     edges, counts = np.unique(mesh.edges_sorted, axis=0, return_counts=True)
     boundary_edges = [(int(a), int(b)) for a, b in edges[counts == 1]]
@@ -2182,6 +2274,8 @@ def build_lightweight_mesh(
     elif solid_components:
         mesh = trimesh.util.concatenate(solid_components)
     mesh = cap_triangular_boundary_loops(mesh)
+    mesh = _collapse_non_manifold_edges(mesh)
+    mesh = cap_triangular_boundary_loops(mesh)  # patch any triangles opened by collapse
     if mesh.volume < 0:
         mesh.invert()
     return mesh
