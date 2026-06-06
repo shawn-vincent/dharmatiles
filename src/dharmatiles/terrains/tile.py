@@ -26,8 +26,7 @@ import trimesh
 
 from ..core.config import (SceneConfig, SurfaceConfig, FlowConfig, SolverConfig,
                            GrassConfig, SoilConfig, StonesConfig, BaseConfig)
-from ..core.tile import TileScene, make_xy_grids
-from ..core.flow import build_flow_field
+from ..core.tile import TileScene
 from ..core.mesh import make_heightmap_solid
 from ..core.spec import TileSpec, load_spec
 from ..core.region import build_region_mask, build_grass_mask
@@ -44,8 +43,6 @@ from ..layers.water import make_water_displacement, make_water_ripple_displaceme
 
 def _build_mesh(cfg: SceneConfig,
                 scene: TileScene,
-                flow_angle: np.ndarray,
-                flow_curv: np.ndarray,
                 grass_cfgs: list[GrassConfig] | None = None,
                 soil_layers: list[tuple[SoilConfig, np.ndarray | None]] | None = None,
                 stone_layers: list[tuple[StonesConfig, np.ndarray | None]] | None = None,
@@ -104,10 +101,8 @@ def _build_mesh(cfg: SceneConfig,
             solver=cfg.solver,   soil=cfg.soil,  stones=cfg.stones,
             base=cfg.base,
         )
-        # grown = GrassLayer(packet_cfg)
         grown = FloppyGrassLayer(packet_cfg)
-        grass_parts = grown.build(scene, flow_angle, flow_curv,
-                                  verbose=(verbose and i == 0))
+        grass_parts = grown.build(scene, verbose=(verbose and i == 0))
         parts.extend(grass_parts)
 
     # ── Water volume ──────────────────────────────────────────────────────────
@@ -345,17 +340,9 @@ def build_tile_from_spec(spec: TileSpec,
               f"({100 * n_water / n_total:.0f}%)")
 
     grass_cfgs   = _collect_grass_configs(spec)
-    if grass_cfgs:
-        if verbose:
-            print(f"Building flow field  ({cfg.flow.flow_type})...")
-        x_grid, y_grid = make_xy_grids(cfg.surface)
-        flow_angle, flow_curv = build_flow_field(cfg.surface, cfg.flow, x_grid, y_grid)
-    else:
-        flow_angle = flow_curv = np.zeros(
-            (cfg.surface.grid_h, cfg.surface.grid_w), dtype=float)
     soil_layers  = _collect_soil_layers(spec, region_mask)
     stone_layers = _collect_stones_layers(spec, region_mask)
-    tile_mesh    = _build_mesh(cfg, scene, flow_angle, flow_curv,
+    tile_mesh    = _build_mesh(cfg, scene,
                                grass_cfgs=grass_cfgs, soil_layers=soil_layers,
                                stone_layers=stone_layers,
                                verbose=verbose,
@@ -387,17 +374,10 @@ def build_tile_from_spec(spec: TileSpec,
         if region_mask is not None:
             ol_scene.grass_mask = build_grass_mask(region_mask, spec)
         ol_grass_cfgs   = _collect_grass_configs(spec)
-        if ol_grass_cfgs:
-            ol_x, ol_y = make_xy_grids(ol_surface)
-            ol_flow_angle, ol_flow_curv = build_flow_field(
-                ol_surface, ol_cfg.flow, ol_x, ol_y)
-        else:
-            ol_flow_angle = ol_flow_curv = np.zeros(
-                (ol_cfg.surface.grid_h, ol_cfg.surface.grid_w), dtype=float)
         ol_soil_layers  = _collect_soil_layers(spec, region_mask)
         ol_stone_layers = _collect_stones_layers(spec, region_mask)
         ol_tile_mesh = _build_mesh(
-            ol_cfg, ol_scene, ol_flow_angle, ol_flow_curv,
+            ol_cfg, ol_scene,
             grass_cfgs=ol_grass_cfgs, soil_layers=ol_soil_layers,
             stone_layers=ol_stone_layers,
             verbose=verbose,

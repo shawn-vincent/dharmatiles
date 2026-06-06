@@ -25,20 +25,12 @@ species, and a full set of geometry parameters baked in at creation time.
 
 **A seed knows everything about its blade before growth starts:**
 direction, curl, target length, width, cross-section shape.  The growth
-algorithm is generic; it just follows the seed's instructions.  Direction and
-curl come from the seed's clump: each clump chooses a random base direction and
-curl, then each seed receives a small per-seed jitter.  After that the seed is
-self-contained.
+algorithm is generic; it just follows the seed's instructions.
 
 Different **species** can coexist on the same tile.  A species is a template
 for seeds: it sets the ranges for blade width, length, curl intensity, and shape.
 Grass, reeds, ground cover — each is a different species with different parameters.
-
-Species can also have fundamentally different **growth behaviors** — not just
-different parameter values.  A flat grass blade, a curling reed, a spreading
-ground cover — these may grow in structurally different ways.  What they share
-is the contract: start from a seed, advance in steps, read and write the
-occupancy heightmap.
+All species share the same growth algorithm.
 
 ---
 
@@ -50,9 +42,8 @@ multiple seeds placed close together near a group centre.
 - Group centres are distributed across the tile using a slightly randomised grid —
   spread out enough to cover the whole tile, irregular enough to look natural.
 - Seeds within a group are scattered within a small radius of the centre.
-- Each group chooses a random base growth direction and curl.  All seeds in the
-  group inherit those values with small per-seed jitter, so the clump looks
-  coherent without becoming uniform.
+- All seeds in a group share a common growth direction and curl sign, with small
+  per-seed jitter.  This makes a clump look like it belongs together.
 
 The density of groups, the size of groups, and the spread of seeds within a group
 are all tunable per species.
@@ -63,13 +54,6 @@ are all tunable per species.
 
 Each blade grows outward from its seed point one step at a time, following its
 baked-in direction and curling gently to one side.
-
-**Step size is a physical distance in mm — it has nothing to do with the
-heightmap grid resolution.**  A step might be 0.5 mm; the heightmap cell might
-be 0.14 mm.  After each step, every grid cell covered by the blade's physical
-footprint at that position is stamped into the occupancy grid.  The grid is a
-rasterised record of where blades have been placed; the blade itself lives in
-continuous mm-space.
 
 The blade **reads the terrain and occupancy surface** at each step to find its
 Z height.  The rule is simple:
@@ -91,16 +75,16 @@ growing rather than piling up steeply.
 
 ---
 
-## The self-trail non-problem
+## The self-trail problem
 
-Because each step is a physical mm-scale distance — much larger than a single
-grid cell — each new step lands in cells the blade has never touched before.
-The blade is always stepping into fresh territory, so it never reads its own
-prior stamps and never mistakes itself for an obstacle.
+One subtlety: a blade must not treat its own previous segments as obstacles.
+As a blade grows, it stamps its presence into the occupancy surface.  If it
+then reads that stamp at the next step, it will think something is blocking it
+and rise — which creates the next stamp even higher, and so on.  The blade
+would staircase upward on flat terrain.
 
-The only edge case is a blade that curls so tightly it doubles back across its
-own earlier path.  This is handled by the rise limit: a blade can't clear its
-own body in one step without climbing too steeply, so it stops.
+The growth algorithm must distinguish *its own prior stamps* from *real external
+obstacles* (other blades, stones).  Only external obstacles trigger a rise.
 
 ---
 
@@ -111,25 +95,6 @@ the grass region (into a water zone, bare soil, or the tile edge), the blade sto
 
 The boundary should look clean — no obvious gap of bare terrain just inside the
 edge.  Extra seeds planted along the inner edge of the boundary fill this in.
-
----
-
-## Two passes, not one
-
-Generation happens in two distinct phases.
-
-**Pass 1 — Grow.**  All blades advance simultaneously, round by round.  Each
-blade just builds up a list of spine positions (its path).  The occupancy
-heightmap grows as blades stamp their positions.  Nothing is rendered yet.
-
-**Pass 2 — Build.**  Once all paths are complete, every blade's path is turned
-into a mesh in one batch.  No heightmap reads happen here — this pass only
-knows about geometry.
-
-The clean split exists so that future work can insert path processing between
-the two passes — smoothing jagged paths, tapering, analysing blade length
-distributions, whatever.  V1 skips all of that; paths go straight from growth
-to mesh.
 
 ---
 
@@ -153,5 +118,4 @@ to mesh.
 - Blades should not pile up into tall stacks on flat terrain.
 - Blades should not staircase upward across flat ground.
 - Blades should not poke through the tile boundary or through stones.
-- Adjacent blades running alongside each other should lie flat — not jitter
-  up and down.
+- Adjacent blades running alongside each other should lie flat if they are side by side, or one atop the other if they overlap.
