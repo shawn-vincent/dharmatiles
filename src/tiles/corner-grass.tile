@@ -20,7 +20,8 @@ regions:
 
   floor:
     contains: [0.75, 0.75]
-    # no layers → bare soil
+    layers:
+      - type: soil
 
 boundaries:
   corner-cut:

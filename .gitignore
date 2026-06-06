@@ -7,7 +7,5 @@ __pycache__/
 textures/
 *.ply
 
-# Large multi-square STLs exceed GitHub's 100 MB file size limit.
-# 1×1 tiles (~15-30 MB) are committed; larger sizes are generated locally.
-stl/dungeonblocks/[2-9]x*.stl
-stl/openlock/[2-9]x*.stl
+# Generated STL outputs — too large for GitHub, generated locally
+stl/

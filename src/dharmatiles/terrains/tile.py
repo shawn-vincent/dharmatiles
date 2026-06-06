@@ -34,7 +34,8 @@ from ..core.region import build_region_mask, build_grass_mask
 from ..bases import dungeonblocks, openlock
 from ..layers.soil import SoilLayer
 from ..layers.stones import StonesLayer
-from ..layers.grass import GrassLayer
+from ..layers.grass import FloppyGrassLayer
+# from ..layers.grass import GrassLayer
 from ..layers.water import make_water_displacement, make_water_ripple_displacement, make_water_volume, WATER_RENDER_LIFT_MM
 
 
@@ -46,6 +47,7 @@ def _build_mesh(cfg: SceneConfig,
                 flow_angle: np.ndarray,
                 flow_curv: np.ndarray,
                 grass_cfgs: list[GrassConfig] | None = None,
+                soil_layers: list[tuple[SoilConfig, np.ndarray | None]] | None = None,
                 stone_layers: list[tuple[StonesConfig, np.ndarray | None]] | None = None,
                 verbose: bool = True,
                 water_mask: np.ndarray | None = None,
@@ -66,15 +68,18 @@ def _build_mesh(cfg: SceneConfig,
     """
     if grass_cfgs is None:
         grass_cfgs = [cfg.grass]
+    if soil_layers is None:
+        soil_layers = []
     if stone_layers is None:
         stone_layers = [(cfg.stones, None)]
 
     parts: list[trimesh.Trimesh] = []
 
-    # ── Soil ──────────────────────────────────────────────────────────────────
-    if verbose:
-        print("Building soil texture...")
-    SoilLayer(cfg.surface, cfg.soil).build(scene)
+    # ── Soil bump texture (explicit soil layers only) ─────────────────────────
+    for soil_cfg, soil_mask in soil_layers:
+        if verbose:
+            print("Building soil texture...")
+        SoilLayer(cfg.surface, soil_cfg).build(scene, placement_mask=soil_mask)
     if water_mask is not None:
         scene.terrain_z[water_mask] = 0.0
 
@@ -99,7 +104,8 @@ def _build_mesh(cfg: SceneConfig,
             solver=cfg.solver,   soil=cfg.soil,  stones=cfg.stones,
             base=cfg.base,
         )
-        grown = GrassLayer(packet_cfg)
+        # grown = GrassLayer(packet_cfg)
+        grown = FloppyGrassLayer(packet_cfg)
         grass_parts = grown.build(scene, flow_angle, flow_curv,
                                   verbose=(verbose and i == 0))
         parts.extend(grass_parts)
@@ -347,9 +353,11 @@ def build_tile_from_spec(spec: TileSpec,
     else:
         flow_angle = flow_curv = np.zeros(
             (cfg.surface.grid_h, cfg.surface.grid_w), dtype=float)
+    soil_layers  = _collect_soil_layers(spec, region_mask)
     stone_layers = _collect_stones_layers(spec, region_mask)
     tile_mesh    = _build_mesh(cfg, scene, flow_angle, flow_curv,
-                               grass_cfgs=grass_cfgs, stone_layers=stone_layers,
+                               grass_cfgs=grass_cfgs, soil_layers=soil_layers,
+                               stone_layers=stone_layers,
                                verbose=verbose,
                                water_mask=water_mask, water_height=water_height,
                                water_embed_mm=embed_mm)
@@ -386,10 +394,12 @@ def build_tile_from_spec(spec: TileSpec,
         else:
             ol_flow_angle = ol_flow_curv = np.zeros(
                 (ol_cfg.surface.grid_h, ol_cfg.surface.grid_w), dtype=float)
+        ol_soil_layers  = _collect_soil_layers(spec, region_mask)
         ol_stone_layers = _collect_stones_layers(spec, region_mask)
         ol_tile_mesh = _build_mesh(
             ol_cfg, ol_scene, ol_flow_angle, ol_flow_curv,
-            grass_cfgs=ol_grass_cfgs, stone_layers=ol_stone_layers,
+            grass_cfgs=ol_grass_cfgs, soil_layers=ol_soil_layers,
+            stone_layers=ol_stone_layers,
             verbose=verbose,
             water_mask=water_mask, water_height=water_height,
             water_embed_mm=embed_mm)
@@ -572,6 +582,32 @@ def _collect_grass_configs(spec: TileSpec) -> list[GrassConfig]:
                 d.update(layer.params)
                 cfgs.append(GrassConfig(**d))
     return cfgs
+
+
+def _collect_soil_layers(
+    spec: TileSpec,
+    region_mask: np.ndarray | None,
+) -> list[tuple[SoilConfig, np.ndarray | None]]:
+    """Return one ``(SoilConfig, placement_mask)`` pair per soil layer."""
+    result: list[tuple[SoilConfig, np.ndarray | None]] = []
+
+    for idx, region in enumerate(spec.regions):
+        for layer in region.layers:
+            if layer.type == 'soil':
+                cfg = vars(SoilConfig()).copy()
+                cfg.update(layer.params)
+                mask = (region_mask == idx) if region_mask is not None else None
+                result.append((SoilConfig(**cfg), mask))
+
+    for boundary in spec.boundaries:
+        for layer in boundary.layers:
+            if layer.type == 'soil':
+                cfg = vars(SoilConfig()).copy()
+                cfg.update(layer.params)
+                mask = (region_mask < 0) if region_mask is not None else None
+                result.append((SoilConfig(**cfg), mask))
+
+    return result
 
 
 def _collect_stones_layers(

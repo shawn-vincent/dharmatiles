@@ -145,7 +145,7 @@ class GrassConfig:
     # ── Growth (GrassLayer) ───────────────────────────────────────────────────
     seg_len:         float = 0.8    # mm per growth segment
     max_segs:        int   = 18     # max growth segments
-    rise_cap:        float = 0.50   # mm: max tolerated rise per step
+    rise_cap:        float = 2.0    # mm: max tolerated rise per step (≥ tallest obstacle)
     smooth_sigma:    float = 2.0    # Gaussian smoothing width (segment units)
     root_depth:      float = 0.5    # mm — underground anchor depth
 
@@ -161,13 +161,6 @@ class GrassConfig:
     group_spread_mm: float = 1.5
     group_dir_jitter:float = 0.14   # per-blade direction jitter within group (rad σ)
 
-    # ── Spine sink ────────────────────────────────────────────────────────────
-    # Fraction of blade width to sink the spine below the support surface.
-    # 0.0 = spine sits on top of support (old behaviour)
-    # 0.5 = blade centre at support level; bottom half intersects support
-    # 1.0 = top edge of blade flush with support surface
-    spine_sink_fraction: float = 0.5
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Solver / Z-envelope
@@ -176,8 +169,11 @@ class GrassConfig:
 @dataclass
 class SolverConfig:
     """Parameters for the Z-path solver."""
-    clearance:              float = 0.10   # mm — gap above previous blade tops
-    max_stack_height:       float = 6.0    # mm — hard pile-height cap above terrain
+    max_stack_height:       float = 2.0    # mm — max occ_z above terrain_z a blade
+                                           # may seed or grow into.  Must be ≥ the
+                                           # tallest stone in any grass region so
+                                           # blades can clear rocks; keep small to
+                                           # prevent mid-air blade pileups.
 
 
 # ─────────────────────────────────────────────────────────────────────────────

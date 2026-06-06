@@ -1,0 +1,18 @@
+# grass-only.tile
+#
+# One full 1x1 grass region. No soil layer, so the ground is flat.
+
+surface:
+  sizes: [1x1]
+  seed: 123
+
+regions:
+  meadow:
+    contains: [0.5, 0.5]
+    layers:
+      - type: grass
+        groups_per_square: 80
+        group_min: 1
+        group_max: 1
+        width_min: 0.375
+        width_max: 1.0

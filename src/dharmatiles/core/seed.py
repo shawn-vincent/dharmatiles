@@ -38,16 +38,12 @@ class GrassSeed:
     # ── Spine ─────────────────────────────────────────────────────────────────
     n_path:      int    # spine sample count
 
-    # ── Solver ────────────────────────────────────────────────────────────────
-    clearance:   float  # mm — gap above support surface
-
     # ── Growth ────────────────────────────────────────────────────────────────
-    max_segs:            int     # per-blade growth limit (±20% of config value)
-    seg_len:             float   # mm per growth segment
-    rise_cap:            float   # mm: max tolerated rise per step
-    smooth_sigma:        float   # Gaussian smoothing width (segments)
-    root_depth:          float   # mm below terrain for underground anchor
-    spine_sink_fraction: float   # fraction of width to sink spine below support
+    max_segs:     int    # per-blade growth limit (±20% of config value)
+    seg_len:      float  # mm per growth segment
+    rise_cap:     float  # mm: max tolerated rise per step
+    smooth_sigma: float  # Gaussian smoothing width (segments)
+    root_depth:   float  # mm below terrain surface for underground anchor
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -55,7 +51,7 @@ class GrassSeed:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def make_seed(curl: float,
-              grass: GrassConfig, solver: SolverConfig,
+              grass: GrassConfig,
               rng: np.random.Generator) -> GrassSeed:
     """Sample blade geometry from *grass* and return a fully-specified seed.
 
@@ -76,10 +72,8 @@ def make_seed(curl: float,
         leaf_arch        = grass.leaf_arch,
         leaf_ridge       = grass.leaf_ridge,
         n_path           = grass.n_path,
-        clearance        = solver.clearance,
         seg_len          = grass.seg_len,
         rise_cap         = grass.rise_cap,
         smooth_sigma     = grass.smooth_sigma,
         root_depth       = grass.root_depth,
-        spine_sink_fraction = grass.spine_sink_fraction,
     )

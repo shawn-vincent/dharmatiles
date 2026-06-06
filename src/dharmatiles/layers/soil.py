@@ -41,7 +41,8 @@ class SoilLayer:
         self.surface = surface
         self.soil    = soil
 
-    def build(self, scene: TileScene) -> None:
+    def build(self, scene: TileScene,
+              placement_mask: np.ndarray | None = None) -> None:
         """Compute soil bump at 2× resolution, downsample, drape onto surface.
 
         The bump field is treated as a texture defined in surface arc-length
@@ -87,7 +88,11 @@ class SoilLayer:
         projected = map_coordinates(coarse, [arc_rows, arc_cols],
                                     mode='reflect', order=1)
 
-        scene.terrain_z += projected * nz
+        displacement = projected * nz
+        if placement_mask is None:
+            scene.terrain_z += displacement
+        else:
+            scene.terrain_z[placement_mask] += displacement[placement_mask]
 
 
 # ── Internal implementation ───────────────────────────────────────────────────

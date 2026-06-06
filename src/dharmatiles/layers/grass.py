@@ -101,7 +101,10 @@ def _fill_boundary_seeds(live: list, occ_z: np.ndarray,
                          surface: SurfaceConfig, grass: GrassConfig,
                          solver: SolverConfig,
                          flow_angle_field: np.ndarray,
-                         rng: np.random.Generator) -> int:
+                         rng: np.random.Generator,
+                         stamp_support: bool = True,
+                         bottom_on_support: bool = False,
+                         high_resolution: bool = False) -> int:
     """Plant individual seeds along the inner edge of the grass region.
 
     The inner edge is the one-cell-thick ring of grass cells that are
@@ -142,16 +145,18 @@ def _fill_boundary_seeds(live: list, occ_z: np.ndarray,
             continue
 
         blade_curl = float(rng.uniform(-grass.curl_max, grass.curl_max))
-        seed       = make_seed(blade_curl, grass, solver, rng)
+        seed       = make_seed(blade_curl, grass, rng)
+        if high_resolution:
+            seed = _higher_resolution_seed(seed)
         blade_dir  = float(sample_grid(flow_angle_field, surface, bx, by))
         blade_dir += float(rng.normal(0.0, grass.group_dir_jitter))
 
         tz   = float(sample_grid(scene.terrain_z, surface, bx, by))
-        sz   = float(sample_grid(occ_z,           surface, bx, by))
+        hw = seed.width / 2.0
+        sz = _sample_max_support(occ_z, surface, bx, by, hw)
         if sz > tz + solver.max_stack_height:
             continue
-        sink = seed.width * seed.spine_sink_fraction
-        z0   = max(tz, sz) + solver.clearance - sink
+        z0 = max(tz, sz) + _blade_bottom_offset(seed)
 
         live.append({
             'seed':    seed,
@@ -160,7 +165,8 @@ def _fill_boundary_seeds(live: list, occ_z: np.ndarray,
             'alive':   True,
             'base_tz': tz,
         })
-        _stamp(occ_z, surface, bx, by, z0 + seed.width / 2.0, seed.width / 2.0)
+        if stamp_support:
+            _stamp(occ_z, surface, bx, by, z0 + _blade_top_offset(seed), hw)
         n_planted += 1
 
     return n_planted
@@ -208,6 +214,145 @@ def _stamp(occ_z: np.ndarray, surface: SurfaceConfig,
     iy1 = min(surface.grid_h - 1, int((y + hw) / surface.cell_w) + 1)
     np.maximum(occ_z[iy0:iy1 + 1, ix0:ix1 + 1], z,
                out=occ_z[iy0:iy1 + 1, ix0:ix1 + 1])
+
+
+def _stamp_strip(occ_z: np.ndarray, surface: SurfaceConfig,
+                 x: float, y: float, z: float, hw: float,
+                 direction: float, own_stamps: dict) -> None:
+    """Stamp the blade's leading-edge strip into occ_z and own_stamps.
+
+    The strip is **one cell wide in the growth direction** and ±hw wide
+    perpendicular to it — exactly the new territory the blade is entering.
+    Adjacent steps produce adjacent, non-overlapping strips, so the next
+    step's target cell is never inside the current stamp.
+
+    own_stamps maps ``(row, col)`` → highest z this blade has written there.
+    The growth loop uses it to distinguish own-trail support from external
+    obstacles so the blade lies flat but still clears stones and other blades.
+    """
+    cell_w = surface.cell_w
+    # Perpendicular unit vector (90° CW from growth direction)
+    perp_x =  np.cos(direction)
+    perp_y = -np.sin(direction)
+
+    hw_cells = int(hw / cell_w) + 1   # cells to extend each side
+
+    seen: set = set()
+    for k in range(-hw_cells, hw_cells + 1):
+        wx = x + k * perp_x * cell_w
+        wy = y + k * perp_y * cell_w
+        ix = int(np.clip(int(wx / cell_w), 0, surface.grid_w - 1))
+        iy = int(np.clip(int(wy / cell_w), 0, surface.grid_h - 1))
+        key = (iy, ix)
+        if key in seen:
+            continue
+        seen.add(key)
+        if occ_z[iy, ix] < z:
+            occ_z[iy, ix] = z
+        if own_stamps.get(key, 0.0) < z:
+            own_stamps[key] = z
+
+
+def _cell_index(surface: SurfaceConfig, x: float, y: float) -> tuple[int, int]:
+    ix = int(np.clip(int(x / surface.cell_w), 0, surface.grid_w - 1))
+    iy = int(np.clip(int(y / surface.cell_w), 0, surface.grid_h - 1))
+    return ix, iy
+
+
+def _sample_max_support(occ_z: np.ndarray, surface: SurfaceConfig,
+                        x: float, y: float, hw: float) -> float:
+    """Return the max support_z over the blade's full-width footprint (±hw)."""
+    ix0 = max(0, int((x - hw) / surface.cell_w))
+    ix1 = min(surface.grid_w - 1, int((x + hw) / surface.cell_w) + 1)
+    iy0 = max(0, int((y - hw) / surface.cell_w))
+    iy1 = min(surface.grid_h - 1, int((y + hw) / surface.cell_w) + 1)
+    return float(occ_z[iy0:iy1 + 1, ix0:ix1 + 1].max())
+
+
+def _blade_bottom_offset(seed: GrassSeed, width: float | None = None) -> float:
+    """Return spine height above support for the blade bottom to touch it."""
+    w = seed.width if width is None else width
+    if seed.cross_section == 'circle':
+        return w / 2.0
+    if seed.cross_section == 'leaf':
+        return seed.thickness * (w / max(seed.width, 1e-9))
+    if seed.cross_section in ('triangle', 'diamond'):
+        return seed.thickness
+    return max(seed.thickness, w / 2.0)
+
+
+def _blade_top_offset(seed: GrassSeed, width: float | None = None) -> float:
+    """Return blade top height above the spine for support stamping."""
+    w = seed.width if width is None else width
+    if seed.cross_section == 'circle':
+        return w / 2.0
+    if seed.cross_section == 'leaf':
+        return (seed.leaf_arch + seed.leaf_ridge) * seed.thickness * (
+            w / max(seed.width, 1e-9)
+        )
+    return 0.0
+
+
+
+def _higher_resolution_seed(seed: GrassSeed) -> GrassSeed:
+    """Double floppy path resolution while preserving approximate blade length."""
+    return GrassSeed(
+        **{**seed.__dict__,
+           'max_segs': seed.max_segs * 2,
+           'seg_len':  seed.seg_len / 2.0}
+    )
+
+
+def _build_flat_blade_mesh(path: np.ndarray, widths: np.ndarray) -> trimesh.Trimesh:
+    """Build a flat horizontal ribbon whose bottom surface is exactly *path*."""
+    path = np.asarray(path, dtype=float)
+    widths = np.asarray(widths, dtype=float)
+    if len(path) < 2:
+        return trimesh.Trimesh(process=False)
+
+    tangs = np.empty_like(path)
+    tangs[:-1] = path[1:] - path[:-1]
+    tangs[-1] = path[-1] - path[-2]
+    txy = tangs[:, :2]
+    norms = np.linalg.norm(txy, axis=1) + 1e-9
+    side = np.column_stack([-txy[:, 1] / norms, txy[:, 0] / norms])
+    half = widths / 2.0
+
+    z_top = path[:, 2] + 0.06
+    verts = np.empty((len(path) * 4, 3), dtype=float)
+    verts[0::4] = np.column_stack([path[:, 0] + side[:, 0] * half,
+                                   path[:, 1] + side[:, 1] * half,
+                                   path[:, 2]])
+    verts[1::4] = np.column_stack([path[:, 0] - side[:, 0] * half,
+                                   path[:, 1] - side[:, 1] * half,
+                                   path[:, 2]])
+    verts[2::4] = np.column_stack([path[:, 0] + side[:, 0] * half,
+                                   path[:, 1] + side[:, 1] * half,
+                                   z_top])
+    verts[3::4] = np.column_stack([path[:, 0] - side[:, 0] * half,
+                                   path[:, 1] - side[:, 1] * half,
+                                   z_top])
+
+    faces: list[list[int]] = []
+    for i in range(len(path) - 1):
+        a = i * 4
+        b = (i + 1) * 4
+        # top
+        faces += [[a + 2, b + 2, a + 3], [a + 3, b + 2, b + 3]]
+        # bottom
+        faces += [[a, a + 1, b], [a + 1, b + 1, b]]
+        # sides
+        faces += [[a, b, a + 2], [a + 2, b, b + 2]]
+        faces += [[a + 1, a + 3, b + 1], [a + 3, b + 3, b + 1]]
+
+    # end caps
+    faces += [[0, 2, 1], [1, 2, 3]]
+    e = (len(path) - 1) * 4
+    faces += [[e, e + 1, e + 2], [e + 1, e + 3, e + 2]]
+
+    mesh = trimesh.Trimesh(vertices=verts, faces=np.asarray(faces), process=False)
+    mesh.fix_normals()
+    return mesh
 
 
 # ── GrassLayer ───────────────────────────────────────────────────────────
@@ -291,7 +436,7 @@ class GrassLayer:
                     -grass.curl_max, grass.curl_max,
                 ))
 
-                seed = make_seed(blade_curl, grass, solver, rng)
+                seed = make_seed(blade_curl, grass, rng)
                 # Override width from group width for cluster coherence
                 seed = GrassSeed(
                     **{**seed.__dict__,
@@ -299,11 +444,10 @@ class GrassLayer:
                 )
 
                 tz   = float(sample_grid(scene.terrain_z, surface, bx, by))
-                sz   = float(sample_grid(occ_z,           surface, bx, by))
+                sz   = _sample_max_support(occ_z, surface, bx, by, seed.width / 2.0)
                 if sz > tz + max_stack_h:
                     continue
-                sink = seed.width * seed.spine_sink_fraction
-                z0   = max(tz, sz) + solver.clearance - sink
+                z0   = max(tz, sz) + _blade_bottom_offset(seed)
 
                 live.append({
                     'seed':    seed,
@@ -312,9 +456,9 @@ class GrassLayer:
                     'alive':   True,
                     'base_tz': tz,
                 })
-                # Stamp the actual blade top so stacking works correctly
+                # Stamp blade top into occupancy so later blades stack correctly
                 _stamp(occ_z, surface, bx, by,
-                       z0 + seed.width / 2.0, seed.width / 2.0)
+                       z0 + _blade_top_offset(seed), seed.width / 2.0)
 
         if verbose:
             print(f"  Planted {len(live)} blades in {len(group_centers)} groups")
@@ -376,11 +520,10 @@ class GrassLayer:
                             continue
 
                     tz_t = float(sample_grid(terrain_z, surface, tx, ty))
-                    sz_t = float(sample_grid(occ_z,     surface, tx, ty))
+                    sz_t = _sample_max_support(occ_z, surface, tx, ty, hw)
                     if sz_t > tz_t + max_stack_h:
                         continue
-                    sink = seed.width * seed.spine_sink_fraction
-                    nz   = max(tz_t, sz_t) + seed.clearance - sink
+                    nz   = max(tz_t, sz_t) + _blade_bottom_offset(seed)
 
                     if nz - cz <= seed.rise_cap:
                         accepted = (tx, ty, nz, d)
@@ -394,8 +537,8 @@ class GrassLayer:
                 entry['path'].append((tx, ty, nz))
                 entry['dir'] = nd
                 grown += 1
-                # Stamp the actual blade top for occupancy
-                _stamp(occ_z, surface, tx, ty, nz + seed.width / 2.0, hw)
+                # Stamp blade top into occupancy so subsequent blades stack on top
+                _stamp(occ_z, surface, tx, ty, nz + _blade_top_offset(seed), hw)
 
             if verbose:
                 alive = sum(1 for b in live if b['alive'])
@@ -416,20 +559,14 @@ class GrassLayer:
             n_raw    = len(raw_arr)
             total_l  = seed.seg_len * (n_raw - 1)
 
-            # Underground anchor — placed root_depth below the blade's actual
-            # starting z (not below terrain_z) so elevated blades don't produce
-            # a near-vertical column between anchor and base.
+            # Underground anchor — placed root_depth below terrain so the blade
+            # appears to grow from the soil.  The first spine point is at
+            # support + bottom_offset, so subtract bottom_offset to reach terrain
+            # then go root_depth further down.
             root_x, root_y = raw_arr[0, 0], raw_arr[0, 1]
             underground = np.array([[root_x, root_y,
-                                     raw_arr[0, 2] - seed.root_depth]])
+                                     raw_arr[0, 2] - _blade_bottom_offset(seed) - seed.root_depth]])
             raw_arr = np.vstack([underground, raw_arr])
-
-            # Ground the tip to the surface it was growing on at the end of
-            # growth.  nz = surface + clearance - sink, so surface = nz + sink
-            # - clearance.  This is deterministic (derived from the blade's own
-            # last z) and correct for both bottom blades (surface = terrain) and
-            # blades that grew elevated on the occupancy pile (surface = pile top).
-            raw_arr[-1, 2] = raw_arr[-1, 2] + (seed.width * seed.spine_sink_fraction) - seed.clearance
 
             n_smooth = max(seed.n_path, len(raw_arr))
             path_arr = _smooth_path(raw_arr, n_smooth, seed.smooth_sigma)
@@ -440,12 +577,14 @@ class GrassLayer:
             t_tip  = np.clip((s_arr - body_l) / (tip_l + 1e-9), 0.0, 1.0)
             widths = seed.width * (0.25 + 0.75 * np.cos(t_tip * np.pi / 2.0))
 
-            # Per-point sink correction: growth used a fixed seed.width/2 sink,
-            # but the desired sink is widths[i]/2 at each point — so the tip
-            # (width→0) is raised back up, keeping the blade top visible throughout.
-            # Underground anchor (index 0) has widths[0] ≈ seed.width → correction ≈ 0.
+            # Per-point bottom-offset correction: growth placed every spine point at
+            # support + bottom_offset(full_width).  As the blade tapers the offset
+            # reduces proportionally, so we lower the spine at the tip so the blade
+            # keel stays on the support surface throughout.
+            # Underground anchor (index 0) widths[0] ≈ seed.width → correction ≈ 0.
             path_arr = path_arr.copy()
-            path_arr[:, 2] += (seed.width / 2.0 - widths / 2.0)
+            bottom_offsets = np.array([_blade_bottom_offset(seed, w) for w in widths])
+            path_arr[:, 2] += bottom_offsets - _blade_bottom_offset(seed)
 
             # Clip spine XY so the tube cross-section stays inside the tile
             # footprint.  The tube extends up to seed.width/2 from the spine
@@ -498,5 +637,257 @@ class GrassLayer:
         if verbose and n_clipped:
             print(f"  Boundary clamp: {n_clipped} vertex coordinates clamped "
                   f"to tile footprint")
+
+        return parts
+
+
+class FloppyGrassLayer(GrassLayer):
+    """Grow flat ribbon blades one grid-cell at a time on the live support matrix.
+
+    Algorithm
+    ---------
+    Each round every alive blade attempts one ``cell_w`` step forward.
+
+    **Z computation (rise-and-drop)**:
+    The spine Z at the next point is ``max(terrain_z, occ_z) + FLAT_CLEARANCE``
+    sampled at the *exact target cell* (point sample, no footprint).  Point
+    sampling is the key correctness choice:
+
+    * **No self-staircase** — the blade does not climb its own trail.
+      A footprint sample would overlap the previous stamp and force the blade
+      to climb by ~stamp_height per step even on flat empty terrain; point
+      sampling reads only the target cell, which is usually unstamped.
+
+    * **Natural drop after obstacles** — once the blade steps past a stone or
+      another blade, the target cell is back at terrain level and the spine
+      drops naturally.  Footprint sampling would keep the support elevated
+      because the stamp from the previous (higher) step is still in range.
+
+    **Stamps are written immediately** (not deferred to end of round) so blades
+    within the same round stack correctly: blade *B* processed after blade *A*
+    in the same round already sees *A*'s stamp and is placed above it.  The old
+    design used a round-start snapshot which caused all same-round blades to
+    land at identical Z — the coplanar-face bug.
+
+    **Stamp footprint** uses the full ±hw width so adjacent/crossing blades
+    detect each other even when they approach from the side.
+
+    **Rise cap** stops the blade if a single step would require a climb greater
+    than ``seed.rise_cap`` (default 2 mm).  Drops are never capped — the blade
+    can descend any amount in one step.
+    """
+
+    def build(self,
+              scene: TileScene,
+              flow_angle_field: np.ndarray,
+              flow_curv_field: np.ndarray,
+              verbose: bool = True) -> List[trimesh.Trimesh]:
+
+        surface = self.surface
+        grass   = self.grass
+        solver  = self.solver
+        rng     = np.random.default_rng(surface.seed ^ 0x47524F57)   # 'GROW'
+
+        if self.n_groups == 0:
+            return []
+
+        # ── Flat-ribbon geometry constants ─────────────────────────────────
+        # _build_flat_blade_mesh places:
+        #   bottom surface at path_z
+        #   top surface    at path_z + FLAT_STAMP
+        # FLAT_CLEARANCE lifts the spine just above the support surface to
+        # prevent Z-fighting with the terrain mesh below.
+        FLAT_STAMP     = 0.06   # mm — matches _build_flat_blade_mesh top offset
+        FLAT_CLEARANCE = 0.01   # mm — spine clears support surface
+
+        edge = grass.width_max / 2.0 + 0.5
+        group_centers = _jittered_group_centers(
+            self.n_groups, surface, grass, flow_angle_field, rng, edge,
+        )
+
+        # ── Support grids ──────────────────────────────────────────────────
+        # occ_z: live grid, starts as a copy of scene.support_z (terrain +
+        # stones) and grows as blades stamp their positions.
+        #
+        # scene.support_z is never written by this layer, so it naturally
+        # serves as the "before-grass floor" for the own-trail fallback —
+        # no frozen copy needed.
+        occ_z     = scene.support_z.copy()
+        terrain_z = scene.terrain_z
+        max_stack_h   = solver.max_stack_height
+        live: list    = []
+
+        # ── Plant seeds ────────────────────────────────────────────────────
+        for gc in group_centers:
+            n_in_group = int(rng.integers(self.group_min, self.group_max + 1))
+            group_dir  = gc['direction']
+            for _ in range(n_in_group):
+                ang  = rng.uniform(0.0, 2.0 * np.pi)
+                dist = rng.uniform(0.0, self.group_spread_mm)
+                bx   = float(np.clip(gc['base_x'] + dist * np.cos(ang),
+                                     edge, surface.tile_w - edge))
+                by   = float(np.clip(gc['base_y'] + dist * np.sin(ang),
+                                     edge, surface.tile_h - edge))
+
+                ix, iy = _cell_index(surface, bx, by)
+                if scene.stone_mask is not None and scene.stone_mask[iy, ix]:
+                    continue
+                if scene.grass_mask is not None and not scene.grass_mask[iy, ix]:
+                    continue
+
+                seed      = make_seed(0.0, grass, rng)
+                seed      = GrassSeed(**{**seed.__dict__, 'width': gc['width']})
+                direction = group_dir + float(rng.normal(0.0, self.group_dir_jitter))
+
+                # Seed sits on top of whatever occupies this cell right now.
+                # (Other seeds planted earlier contribute to occ_z via their
+                # immediate stamps, so seeds stack correctly.)
+                tz0 = float(terrain_z[iy, ix])
+                sz0 = float(occ_z[iy, ix])
+                if sz0 - tz0 > max_stack_h:
+                    continue   # already stacked too high — skip this seed
+
+                z0         = max(tz0, sz0) + FLAT_CLEARANCE
+                own_stamps: dict = {}    # tracks this blade's own contributions
+                live.append({
+                    'seed':       seed,
+                    'path':       [(bx, by, z0)],
+                    'dir':        direction,
+                    'alive':      True,
+                    'own_stamps': own_stamps,
+                })
+                # Stamp the leading-edge strip at the seed point so adjacent
+                # blades planted later detect this one.
+                _stamp_strip(occ_z, surface, bx, by,
+                             z0 + FLAT_STAMP, seed.width / 2.0, direction, own_stamps)
+
+        if verbose:
+            print(f"  Planted {len(live)} blades in {len(group_centers)} groups")
+
+        tw   = surface.tile_w
+        th   = surface.tile_h
+        step = surface.cell_w
+        max_rounds = max((e['seed'].max_segs for e in live), default=0)
+
+        # ── Growth rounds ──────────────────────────────────────────────────
+        # One fixed global processing order is established before growth begins
+        # and reused every round.  This means blade A always stamps before blade
+        # B in every round — the stacking precedence is consistent and
+        # predictable rather than changing each round.
+        #
+        # For each step the blade reads occ_z at the target cell, then checks
+        # whether the support there comes from its own trail or from an external
+        # obstacle (other blade / stone).  If external, the blade rises to clear
+        # it.  If own-trail only, the blade falls back to scene.support_z
+        # (terrain + stones, never modified here) so it lies flat.
+        blade_order = rng.permutation(len(live)).tolist()
+
+        for round_idx in range(max_rounds):
+            grown = 0
+            for bi in blade_order:
+                entry = live[bi]
+                if not entry['alive']:
+                    continue
+                seed = entry['seed']
+                if round_idx >= seed.max_segs:
+                    entry['alive'] = False
+                    continue
+
+                cx, cy, cz = entry['path'][-1]
+                hw         = seed.width / 2.0
+                direction  = entry['dir']
+
+                tx = cx + step * np.sin(direction)
+                ty = cy + step * np.cos(direction)
+
+                # Tile boundary
+                if not (hw < tx < tw - hw and hw < ty < th - hw):
+                    entry['alive'] = False
+                    continue
+
+                # Grass region mask
+                ix, iy = _cell_index(surface, tx, ty)
+                if scene.grass_mask is not None and not scene.grass_mask[iy, ix]:
+                    entry['alive'] = False
+                    continue
+
+                # ── Own-blind support ──────────────────────────────────────
+                # Read live occupancy at the exact target cell.
+                # If this blade's own stamps are the sole reason the cell is
+                # elevated, fall back to scene.support_z (terrain + stones,
+                # never modified by this layer) so the blade lies flat but
+                # still clears stones.
+                # If an external obstacle (other blade or stone) raised the
+                # cell higher, use that — the blade must rise to avoid it.
+                sz_raw = float(occ_z[iy, ix])
+                own_z  = entry['own_stamps'].get((iy, ix), 0.0)
+                if sz_raw > own_z + 1e-9:
+                    sz_t = sz_raw                               # external obstacle
+                else:
+                    sz_t = float(scene.support_z[iy, ix])      # own trail → ignore
+                tz_t = float(terrain_z[iy, ix])
+                nz   = max(tz_t, sz_t) + FLAT_CLEARANCE
+
+                # Rise cap: stop blade if single-step climb is too steep.
+                # Drops back to terrain are always allowed.
+                if nz > cz + seed.rise_cap:
+                    entry['alive'] = False
+                    continue
+
+                entry['path'].append((tx, ty, nz))
+                _stamp_strip(occ_z, surface, tx, ty,
+                             nz + FLAT_STAMP, hw, direction, entry['own_stamps'])
+                grown += 1
+
+            if verbose:
+                alive = sum(1 for b in live if b['alive'])
+                print(f"  Round {round_idx + 1:2d}: "
+                      f"{grown:3d} segments grown, {alive:3d} blades still alive")
+            if grown == 0:
+                break
+
+        # ── Build meshes ───────────────────────────────────────────────────
+        parts: List[trimesh.Trimesh] = []
+        for entry in live:
+            path = entry['path']
+            seed = entry['seed']
+            if len(path) < 2:
+                continue
+
+            path_arr = np.array(path, dtype=float)
+            total_l  = step * (len(path_arr) - 1)
+            tip_l    = max(total_l * 0.1875, step)
+            body_l   = total_l - tip_l
+            s_arr    = np.linspace(0.0, total_l, len(path_arr))
+            t_tip    = np.clip((s_arr - body_l) / (tip_l + 1e-9), 0.0, 1.0)
+            widths   = seed.width * (0.25 + 0.75 * np.cos(t_tip * np.pi / 2.0))
+
+            hw = seed.width / 2.0
+            path_arr[:, 0] = np.clip(path_arr[:, 0], hw, surface.tile_w - hw)
+            path_arr[:, 1] = np.clip(path_arr[:, 1], hw, surface.tile_h - hw)
+
+            parts.append(_build_flat_blade_mesh(path_arr, widths))
+
+        if verbose:
+            living = [e for e in live if len(e['path']) >= 2]
+            segs   = [len(e['path']) - 1 for e in living]
+            if segs:
+                print(f"  Built {len(living)} blades — "
+                      f"avg {np.mean(segs):.1f} segs "
+                      f"({np.mean(segs) * step:.1f} mm), "
+                      f"max {max(segs)} segs ({max(segs) * step:.1f} mm)")
+
+        # ── Hard tile-boundary clamp ───────────────────────────────────────
+        tw, th = surface.tile_w, surface.tile_h
+        n_clipped = 0
+        for mesh in parts:
+            v = mesh.vertices
+            bad_x = (v[:, 0] < 0.0) | (v[:, 0] > tw)
+            bad_y = (v[:, 1] < 0.0) | (v[:, 1] > th)
+            n_clipped += int(bad_x.sum() + bad_y.sum())
+            np.clip(v[:, 0], 0.0, tw, out=v[:, 0])
+            np.clip(v[:, 1], 0.0, th, out=v[:, 1])
+        if verbose and n_clipped:
+            print(f"  Boundary clamp: {n_clipped} vertex coordinates clamped")
 
         return parts

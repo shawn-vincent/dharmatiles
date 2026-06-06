@@ -18,7 +18,8 @@ regions:
 
   dirt:
     contains: [0.75, 0.5]
-    # no layers → bare soil at default height (5 mm)
+    layers:
+      - type: soil
 
 boundaries:
   margin:
