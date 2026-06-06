@@ -35,7 +35,7 @@ from ..bases import dungeonblocks, openlock
 from ..layers.soil import SoilLayer
 from ..layers.stones import StonesLayer
 from ..layers.grass import GrassLayer
-from ..layers.water import make_water_displacement, make_water_ripple_displacement, make_water_volume
+from ..layers.water import make_water_displacement, make_water_ripple_displacement, make_water_volume, WATER_RENDER_LIFT_MM
 
 
 
@@ -108,34 +108,44 @@ def _build_mesh(cfg: SceneConfig,
     if water_mask is not None and water_height is not None:
         if verbose:
             print("Building water volume...")
-        z_disp = make_water_displacement(water_mask, cfg.surface)
-        # Downsample to 64 cells/square (~0.55 mm/cell for DB scale): enough
-        # resolution for 4 mm wavelength ripples (7+ cells/period) while
-        # keeping the water mesh triangle count manageable.
-        s = max(1, cfg.surface.cells_per_square // 64)
+        # Dilate the pool mask to the far side of the boundary strip so the
+        # displacement and ripple textures extend through the full shore zone.
+        from scipy.ndimage import binary_dilation
+        embed_cells_full = max(1, round(water_embed_mm / cfg.surface.cell_w))
+        wm_disp_full = binary_dilation(water_mask, iterations=embed_cells_full)
+
+        z_disp = make_water_displacement(wm_disp_full, cfg.surface)
+        # Downsample to 128 cells/square (~0.27 mm/cell for DB scale).
+        s = max(1, cfg.surface.cells_per_square // 128)
         if s > 1:
             gh, gw = scene.terrain_z.shape
             hn, wn = gh // s, gw // s
             tz = scene.terrain_z[:hn*s, :wn*s].reshape(hn, s, wn, s).mean(axis=(1, 3))
             wm = water_mask[:hn*s, :wn*s].reshape(hn, s, wn, s).any(axis=(1, 3))
+            wm_disp = wm_disp_full[:hn*s, :wn*s].reshape(hn, s, wn, s).any(axis=(1, 3))
             zd = z_disp[:hn*s, :wn*s].reshape(hn, s, wn, s).mean(axis=(1, 3))
             sm = (scene.stone_mask[:hn*s, :wn*s].reshape(hn, s, wn, s).any(axis=(1, 3))
                   if scene.stone_mask is not None else None)
             ds_cell_w = cfg.surface.cell_w * s
         else:
             tz, wm, zd = scene.terrain_z, water_mask, z_disp
+            wm_disp = wm_disp_full
             sm = scene.stone_mask
             ds_cell_w = cfg.surface.cell_w
         zd = zd + make_water_ripple_displacement(
-            wm, sm, ds_cell_w, seed=cfg.surface.seed ^ 0xC4F7)
-        # Dilate water mask into the bank (width = boundary strip width) so
-        # the volume physically embeds under the shore — ripples reach the
-        # waterline with no gap between water surface and terrain.
-        from scipy.ndimage import binary_dilation
-        embed_cells = max(1, round(water_embed_mm / ds_cell_w))
-        wm_embed = binary_dilation(wm, iterations=embed_cells)
+            wm_disp, sm, ds_cell_w, seed=cfg.surface.seed ^ 0xC4F7)
+        # Outside the pool, raise the water surface to follow terrain_z so the
+        # top of the full-tile slab merges with the shore slope — no flat shelf
+        # at the waterline where the pool mask ends.
+        h_base = water_height + WATER_RENDER_LIFT_MM
+        zd = np.where(wm, zd, np.maximum(tz - h_base, zd))
+
+        # Full-tile water slab: the terrain solid sculpts it naturally through
+        # the union — no perimeter walls or embed dilation needed.
+        hn, wn = wm.shape
+        wm_full = np.ones((hn, wn), dtype=bool)
         water_mesh = make_water_volume(
-            tz, wm_embed, water_height,
+            tz, wm_full, water_height,
             cfg.surface.tile_w, cfg.surface.tile_h,
             z_disp=zd)
         parts.append(water_mesh)
@@ -294,7 +304,7 @@ def build_tile_from_spec(spec: TileSpec,
     # ── Water region (early, before scene creation) ───────────────────────────
     water_mask, water_height = _collect_water_info(spec, region_mask)
 
-    # ── Embed width: use widest water-adjacent boundary strip ─────────────────
+    # ── Boundary strip width: how far to extend displacement into shore ────────
     embed_mm = max(
         (b.width_mm for b in spec.boundaries if b.width_mm > 0),
         default=2.0,

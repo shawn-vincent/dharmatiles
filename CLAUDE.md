@@ -28,6 +28,18 @@ python -m dharmatiles.terrains.tile --spec src/tiles/half-grass-soil.tile
 
 There are no automated tests; correctness is verified by opening the STL in PrusaSlicer, MeshLab, or Windows 3D Builder and visually inspecting the coloured mesh.
 
+## STL Regeneration Policy
+
+**After every code change, regenerate at least one illustrative STL before finishing**, unless the user explicitly says otherwise. Use the most relevant output for the changed code:
+
+| Changed file | Regeneration command |
+|---|---|
+| `src/extras/craft_paint_modular_organizer.py` | `python src/extras/craft_paint_modular_organizer.py` |
+| Tile terrain / layers / core | `generate-tile-stl --spec src/tiles/grass-and-water.tile -o stl/openlock/1x1-grass-and-water-ol.stl` (or whichever spec exercises the change) |
+| Default tile path | `generate-tile-stl` |
+
+Always report the output path, vertex/face counts, and watertight status after generation.
+
 ## Spatial Terminology (canonical — do not deviate)
 
 Three-tier hierarchy; these names are enforced throughout the codebase:

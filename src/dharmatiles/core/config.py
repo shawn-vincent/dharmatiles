@@ -132,8 +132,8 @@ class GrassConfig:
     leaf_ridge:        float = 0.175   # extra midrib lift at V3 as fraction of thickness
 
     # ── Blade width range (mm) ────────────────────────────────────────────────
-    width_min:    float = 1.0
-    width_max:    float = 1.5
+    width_min:    float = 0.75
+    width_max:    float = 2.0
 
     # ── Spine ─────────────────────────────────────────────────────────────────
     n_path:          int   = 50                       # spine sample count
@@ -155,7 +155,7 @@ class GrassConfig:
     # More groups with fewer blades each → uniform coverage; fewer groups with
     # more blades each → visible clumping.  At 120 groups the jittered-grid
     # spacing is ~3 mm, small enough that directional flow sweeps fill the gaps.
-    groups_per_square: int   = 35
+    groups_per_square: int   = 50
     group_min:       int   = 20
     group_max:       int   = 30
     group_spread_mm: float = 1.5

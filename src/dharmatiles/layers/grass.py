@@ -56,7 +56,7 @@ from scipy.ndimage import gaussian_filter1d, binary_erosion
 from ..core.config import SceneConfig, SurfaceConfig, GrassConfig, SolverConfig
 from ..core.tile import TileScene
 from ..core.grid import sample_grid, rasterise_into_support
-from ..core.mesh import build_tube_mesh, blade_frame
+from ..core.mesh import build_tube_mesh
 from ..core.seed import GrassSeed, make_seed
 
 
@@ -77,7 +77,8 @@ def _smooth_path(path_arr: np.ndarray, n_out: int, sigma: float) -> np.ndarray:
         gaussian_filter1d(path_arr[:, i], sigma=sigma, mode='nearest')
         for i in range(3)
     ], axis=1)
-    smoothed[0] = path_arr[0]   # pin base
+    smoothed[0]  = path_arr[0]   # pin base
+    smoothed[-1] = path_arr[-1]  # pin tip
 
     diffs   = np.diff(smoothed, axis=0)
     seg_len = np.linalg.norm(diffs, axis=1)
@@ -138,145 +139,6 @@ def _apply_tip_upturn(path_arr: np.ndarray, taper_idx: int) -> np.ndarray:
     out[taper_idx:] = new_taper
     return out
 
-
-# ── Bridge-support posts ──────────────────────────────────────────────────────
-
-_HORIZ_THRESHOLD = float(np.sin(np.radians(45 * 0.9)))
-
-
-def _make_support_post(surface: SurfaceConfig, grass: GrassConfig,
-                       cx: float, cy: float,
-                       z_top: float,
-                       blade_width: float,
-                       terrain_z: np.ndarray,
-                       rng: np.random.Generator) -> trimesh.Trimesh:
-    """Curved grass-blade tip rising from the terrain to the supported blade.
-
-    Slope assumption: the "down" direction used to find bridging segments is
-    world -Z, not terrain-normal -Z.  On a slope this means the check treats a
-    blade running along the hillside as always bridging (since absolute Δz is
-    zero while Δ-along-normal could be large).  Correcting this requires
-    threading the terrain normal into the bridge detection and height clearance
-    logic.  See ``TileScene.terrain_normal`` (to be implemented).
-    """
-    n_pts = 20
-
-    angle  = rng.uniform(0.0, 2.0 * np.pi)
-    offset = rng.uniform(0.3, 2.0)
-    hw = blade_width / 2.0
-    bx = float(np.clip(cx + offset * np.cos(angle), hw, surface.tile_w - hw))
-    by = float(np.clip(cy + offset * np.sin(angle), hw, surface.tile_h - hw))
-
-    sink   = blade_width / 2.0 + grass.thickness
-    z_base = float(sample_grid(terrain_z, surface, bx, by)) - sink
-
-    p0 = np.array([bx, by, z_base], dtype=float)
-    p1 = np.array([cx, cy, z_top],  dtype=float)
-
-    chord = float(np.linalg.norm(p1 - p0)) or 1e-6
-    m1 = np.array([0.0, 0.0, chord])
-
-    to_tip      = p1 - p0
-    to_tip_norm = to_tip / (np.linalg.norm(to_tip) + 1e-9)
-    h_len = float(np.hypot(to_tip[0], to_tip[1]))
-    if h_len > 1e-6:
-        perp = np.array([-to_tip[1] / h_len, to_tip[0] / h_len, 0.0])
-    else:
-        perp = np.array([1.0, 0.0, 0.0])
-
-    curl = rng.uniform(-1.0, 1.0)
-    m0   = chord * (to_tip_norm + perp * curl * 0.5)
-    m0[2] = max(float(m0[2]), chord * 0.25)
-
-    t   = np.linspace(0.0, 1.0, n_pts)
-    h00 =  2*t**3 - 3*t**2 + 1
-    h10 =    t**3 - 2*t**2 + t
-    h01 = -2*t**3 + 3*t**2
-    h11 =    t**3 - t**2
-
-    path   = (h00[:, None] * p0 + h10[:, None] * m0 +
-              h01[:, None] * p1 + h11[:, None] * m1)
-    widths = blade_width * np.cos(t * np.pi / 2.0)
-
-    return build_tube_mesh(path, widths, grass.thickness,
-                           cross_section=grass.cross_section,
-                           n_segs=grass.circle_segs,
-                           diamond_equator=grass.diamond_equator,
-                           leaf_arch=grass.leaf_arch,
-                           leaf_ridge=grass.leaf_ridge)
-
-
-def _blade_tip_cone(surface: SurfaceConfig, grass: GrassConfig,
-                    solver: SolverConfig,
-                    path_arr: np.ndarray,
-                    widths: np.ndarray,
-                    terrain_z: np.ndarray,
-                    taper_idx: int,
-                    rng: np.random.Generator) -> trimesh.Trimesh | None:
-    tangs, _, down_locs = blade_frame(path_arr)
-    cx  = float(path_arr[taper_idx, 0])
-    cy_ = float(path_arr[taper_idx, 1])
-    if abs(tangs[taper_idx, 2]) >= _HORIZ_THRESHOLD:
-        return None
-    z_ground    = float(sample_grid(terrain_z, surface, cx, cy_))
-    z_underside = float(path_arr[taper_idx, 2]
-                        + grass.thickness * down_locs[taper_idx, 2])
-    z_spine     = float(path_arr[taper_idx, 2])
-    if z_underside <= z_ground + solver.clearance:
-        return None
-    return _make_support_post(surface, grass, cx, cy_, z_spine,
-                              float(widths[taper_idx]), terrain_z, rng)
-
-
-def _blade_support_cones(surface: SurfaceConfig, grass: GrassConfig,
-                          solver: SolverConfig,
-                          path_arr: np.ndarray,
-                          widths: np.ndarray,
-                          terrain_z: np.ndarray,
-                          max_bridge_mm: float,
-                          rng: np.random.Generator) -> List[trimesh.Trimesh]:
-    n_pts    = len(path_arr)
-    tangs, up_locs, down_locs = blade_frame(path_arr)
-    underside_z = path_arr[:, 2] + grass.thickness * down_locs[:, 2]
-    # Vectorised: one batched bilinear lookup replaces n_pts scalar calls
-    ground_z = sample_grid(terrain_z, surface, path_arr[:, 0], path_arr[:, 1])
-    gap = underside_z - ground_z
-
-    seg_lens = np.linalg.norm(np.diff(path_arr, axis=0), axis=1)
-    arc_s    = np.concatenate([[0.0], np.cumsum(seg_lens)])
-    airborne = gap > solver.clearance + 0.05
-
-    cones: List[trimesh.Trimesh] = []
-    i = 0
-    while i < n_pts:
-        if not airborne[i]:
-            i += 1
-            continue
-        j = i + 1
-        while j < n_pts and airborne[j]:
-            j += 1
-
-        span_start_s = arc_s[i]
-        span_end_s   = arc_s[min(j, n_pts - 1)]
-        span_len     = span_end_s - span_start_s
-
-        if span_len > max_bridge_mm:
-            n_cones = int(span_len / max_bridge_mm)
-            for k in range(1, n_cones + 1):
-                target_s = span_start_s + (k - 0.5) * (span_len / n_cones)
-                ci = int(np.searchsorted(arc_s, target_s))
-                ci = int(np.clip(ci, 0, n_pts - 1))
-                cx       = float(path_arr[ci, 0])
-                cy_      = float(path_arr[ci, 1])
-                z_ground = float(sample_grid(terrain_z, surface, cx, cy_))
-                if (underside_z[ci] > z_ground + solver.clearance
-                        and abs(tangs[ci, 2]) < _HORIZ_THRESHOLD):
-                    cones.append(_make_support_post(
-                        surface, grass, cx, cy_, float(path_arr[ci, 2]),
-                        float(widths[ci]), terrain_z, rng,
-                    ))
-        i = j
-    return cones
 
 
 # ── Grass region edge fill ───────────────────────────────────────────────────
@@ -601,14 +463,21 @@ class GrassLayer:
                                      entry['base_tz'] - seed.root_depth]])
             raw_arr = np.vstack([underground, raw_arr])
 
+            # Ground the tip to the surface it was growing on at the end of
+            # growth.  nz = surface + clearance - sink, so surface = nz + sink
+            # - clearance.  This is deterministic (derived from the blade's own
+            # last z) and correct for both bottom blades (surface = terrain) and
+            # blades that grew elevated on the occupancy pile (surface = pile top).
+            raw_arr[-1, 2] = raw_arr[-1, 2] + (seed.width * seed.spine_sink_fraction) - seed.clearance
+
             n_smooth = max(seed.n_path, len(raw_arr))
             path_arr = _smooth_path(raw_arr, n_smooth, seed.smooth_sigma)
 
-            tip_l  = max(total_l * 0.25, seed.seg_len)
+            tip_l  = max(total_l * 0.1875, seed.seg_len)
             body_l = total_l - tip_l
             s_arr  = np.linspace(0.0, total_l, n_smooth)
             t_tip  = np.clip((s_arr - body_l) / (tip_l + 1e-9), 0.0, 1.0)
-            widths = seed.width * np.cos(t_tip * np.pi / 2.0)
+            widths = seed.width * (0.25 + 0.75 * np.cos(t_tip * np.pi / 2.0))
 
             # Per-point sink correction: growth used a fixed seed.width/2 sink,
             # but the desired sink is widths[i]/2 at each point — so the tip
@@ -619,7 +488,6 @@ class GrassLayer:
 
             upturn_idx = int(np.clip(
                 np.searchsorted(s_arr, body_l), 1, n_smooth - 2))
-            path_arr = _apply_tip_upturn(path_arr, upturn_idx)
 
             # Clip spine XY so the tube cross-section stays inside the tile
             # footprint.  The tube extends up to seed.width/2 from the spine
@@ -632,6 +500,15 @@ class GrassLayer:
             path_arr[:, 0] = np.clip(path_arr[:, 0], _hw, surface.tile_w - _hw)
             path_arr[:, 1] = np.clip(path_arr[:, 1], _hw, surface.tile_h - _hw)
 
+            # If the tip is within max_bridge_mm of the terrain, drape it down
+            # to touch — no support cone needed.
+            tip_x_f = float(path_arr[-1, 0])
+            tip_y_f = float(path_arr[-1, 1])
+            z_terr_tip = float(sample_grid(scene.support_z, surface, tip_x_f, tip_y_f))
+            tip_gap = path_arr[-1, 2] - z_terr_tip
+            if 0.0 < tip_gap <= self.max_bridge_mm:
+                path_arr[-1, 2] = z_terr_tip
+
             mesh = build_tube_mesh(path_arr, widths, seed.thickness,
                                    cross_section=seed.cross_section,
                                    n_segs=seed.circle_segs,
@@ -639,21 +516,6 @@ class GrassLayer:
                                    leaf_arch=seed.leaf_arch,
                                    leaf_ridge=seed.leaf_ridge)
             parts.append(mesh)
-
-            cones = _blade_support_cones(
-                surface, grass, solver, path_arr, widths,
-                scene.terrain_z, self.max_bridge_mm, rng,
-            )
-            parts.extend(cones)
-
-            taper_idx = int(np.searchsorted(s_arr, body_l + 0.05 * total_l))
-            taper_idx = int(np.clip(taper_idx, 0, len(path_arr) - 1))
-            tip_cone  = _blade_tip_cone(
-                surface, grass, solver, path_arr, widths,
-                scene.terrain_z, taper_idx, rng,
-            )
-            if tip_cone is not None:
-                parts.append(tip_cone)
 
             rasterise_into_support(scene.support_z, surface,
                                    path_arr, widths / 2.0)
