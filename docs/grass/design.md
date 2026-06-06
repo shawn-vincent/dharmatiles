@@ -86,7 +86,6 @@ class SpeciesConfig:
     groups_per_square: int
     group_min:         int
     group_max:         int
-    group_spread_mm:   float
     dir_jitter:        float  # radians σ — per-blade direction noise within group
     curl_jitter:       float  # radians σ — per-blade curl noise within group
 
@@ -113,11 +112,12 @@ class GrassConfig:
 
 ### Seeding
 
-For each species, group centres are placed with a jittered grid across the tile.
-Each group samples one base direction and one base curl.  For each group centre,
+For each species, random group sites are placed inside the grass mask and the
+mask is partitioned into nearest-site Voronoi-style clump cells.  Each group
+samples one base direction and one base curl.  For each group cell,
 `rng.integers(group_min, group_max+1)` seeds are planted:
 
-1. Pick a random offset from the group centre within `group_spread_mm`.
+1. Pick a random cell from the group's clump cell and jitter within that cell.
 2. Reject if outside `grass_mask`, inside `stone_mask`, or `occ_z - terrain_z >
    max_stack_height`.
 3. Create a `GrassSeed`:
@@ -147,6 +147,11 @@ return [p.to_grass_path() for p in all_paths if len(p.points) >= 2]
 
 Processing order is shuffled once before the loop and reused every round —
 stacking precedence is consistent across all rounds (REQ-OBS-2).
+During growth, each path also carries only its most recent footprint stamp.
+When the next footprint sample overlaps that last stamp and no other blade has
+raised the same cells higher, sampling falls back to `scene.support_z`.  This
+prevents a blade from climbing its immediately previous segment while still
+allowing it to rise over stones and other blades.
 
 ### Per-step logic (flat grass species)
 
@@ -185,10 +190,12 @@ from the previous spine position to `(tx, ty)` — width `seed.width`, length
 `step_len`, aligned with the growth direction.  This records the full physical
 extent of the newly placed segment so subsequent blades detect it correctly.
 
-**No self-trail issue** (REQ-OBS-3):
-Because `step_len >> cell_w`, the sampling cross-section at `(tx, ty)` lands in
-cells well ahead of the previous stamp.  The blade never reads its own prior
-stamps and no explicit self-exclusion is needed.
+**Last-stamp self handling** (REQ-OBS-3):
+Because the sampled footprint can overlap the immediately previous swept stamp,
+each growing path tracks its last stamp only.  If cells in the next sample are
+raised only by that last stamp, the sampler ignores them and uses the pre-grass
+`scene.support_z` value.  Older self-crossings are treated like obstacles and
+will usually stop the blade through the rise cap.
 
 ---
 
@@ -212,11 +219,15 @@ def build_meshes(paths: list[GrassPath],
 
 Given a `GrassPath` with N spine points:
 
-1. **Underground anchor** — prepend one point at `(x0, y0, terrain_z - root_depth)`
-   so the blade appears to emerge from soil.
+1. **Embedded root** — prepend one point at `(x0, y0, terrain_z - root_depth)`
+   and lower the first blade ring so its top face is at or below raw terrain.
+   All four root-ring corners are therefore coincident with or below the terrain
+   surface before the blade emerges upward.
 
 2. **Width taper** — compute per-point width: full width for the first 81.25% of
-   points, then taper to 25% of full width at the tip using a cosine curve.
+   points, then taper to a sub-nozzle point at the tip using a cosine curve.
+   The tip is not allowed to collapse to exact zero width because each blade
+   must remain a closed solid for boolean union.
 
 3. **Build ribbon** — for each consecutive pair of spine points, emit a quad
    (two triangles) for each face: top, bottom, left side, right side.  Cap the
@@ -313,7 +324,7 @@ def build(self, scene, verbose):
 | | Current | New |
 |---|---|---|
 | Step size | `cell_w` (0.14 mm) | `species.step_len` (e.g. 0.4 mm) |
-| Self-trail | `own_stamps` dict per blade | Not needed — step >> cell_w |
+| Self-trail | full `own_stamps` dict per blade | last-stamp tracking only |
 | Stamping | Leading-edge transverse strip only | Full swept rectangle |
 | Jitter | Period-2 Z oscillation from stamp aliasing | Eliminated by larger step |
 | Mesh build | Interleaved with growth | Separate pass |
@@ -356,7 +367,7 @@ Replaces:
 - `GrassConfig` with species list
 - `FlatGrassGrower` — flat ribbon, same visual output as today
 - Full swept-area stamping
-- No self-trail tracking
+- Last-stamp self-trail tracking only
 - Single default species (flat grass)
 
 **Out (future):**

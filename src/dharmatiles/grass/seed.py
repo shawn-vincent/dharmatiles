@@ -23,6 +23,7 @@ class GrowingPath:
     seed: GrassSeed
     points: list[tuple[float, float, float]]
     alive: bool = True
+    last_stamp: dict[tuple[int, int], float] | None = None
 
 
 @dataclass

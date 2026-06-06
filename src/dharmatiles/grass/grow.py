@@ -55,14 +55,14 @@ def plant_seeds(
     paths: list[GrowingPath] = []
     for species in cfg.species:
         n_groups = species.groups_per_square * surface.cols * surface.rows
-        margin = species.width_max / 2.0
-        for gx, gy in _jittered_group_centers(n_groups, surface, margin, rng):
+        groups = _voronoi_groups(n_groups, scene, surface, rng)
+        for group in groups:
             group_dir = float(rng.uniform(0.0, 2.0 * np.pi))
             group_curl = _sample_group_curl(species, rng)
             n_seeds = int(rng.integers(species.group_min, species.group_max + 1))
 
             for _ in range(n_seeds):
-                x, y = _sample_seed_xy(gx, gy, species.group_spread_mm, surface, margin, rng)
+                x, y = _sample_seed_xy(group, surface, rng)
                 ix, iy = _cell_index(surface, x, y)
                 if scene.grass_mask is not None and not scene.grass_mask[iy, ix]:
                     continue
@@ -76,50 +76,97 @@ def plant_seeds(
 
                 seed = _make_seed(x, y, group_dir, group_curl, species, rng)
                 z0 = max(terrain_z, floor_z) + cfg.clearance
-                paths.append(GrowingPath(seed=seed, points=[(x, y, z0)]))
-                _stamp_seed(occ_z, surface, x, y, z0 + species.thickness, seed.width)
+                last_stamp = _stamp_seed(occ_z, surface, x, y, z0 + species.thickness, seed.width)
+                paths.append(GrowingPath(seed=seed, points=[(x, y, z0)], last_stamp=last_stamp))
 
     return paths
 
 
-def _jittered_group_centers(
+def _voronoi_groups(
     n: int,
+    scene,
     surface,
-    margin: float,
     rng: np.random.Generator,
-) -> list[tuple[float, float]]:
+) -> list[dict[str, np.ndarray]]:
+    """Partition the grass mask into random Voronoi-style clump cells."""
     if n <= 0:
         return []
-    cols = max(1, round(np.sqrt(n * surface.tile_w / surface.tile_h)))
-    rows = int(np.ceil(n / cols))
-    usable_w = max(surface.tile_w - 2.0 * margin, surface.cell_w)
-    usable_h = max(surface.tile_h - 2.0 * margin, surface.cell_w)
-    cell_w = usable_w / cols
-    cell_h = usable_h / rows
 
-    centers = []
-    for row in range(rows):
-        for col in range(cols):
-            x = margin + (col + rng.uniform(0.1, 0.9)) * cell_w
-            y = margin + (row + rng.uniform(0.1, 0.9)) * cell_h
-            centers.append((float(np.clip(x, margin, surface.tile_w - margin)),
-                            float(np.clip(y, margin, surface.tile_h - margin))))
-    order = rng.permutation(len(centers))[:n]
-    return [centers[int(i)] for i in order]
+    if scene.grass_mask is None:
+        valid = np.ones((surface.grid_h, surface.grid_w), dtype=bool)
+    else:
+        valid = scene.grass_mask
+    rows, cols = np.where(valid)
+    if len(rows) == 0:
+        return []
+
+    n = min(n, len(rows))
+    centers = _random_spread_sites(rows, cols, n, rng)
+    labels = _nearest_site_labels(rows, cols, centers)
+
+    groups: list[dict[str, np.ndarray]] = []
+    for label in range(len(centers)):
+        member_idx = np.flatnonzero(labels == label)
+        if len(member_idx) == 0:
+            continue
+        groups.append({
+            "rows": rows[member_idx],
+            "cols": cols[member_idx],
+        })
+    return groups
+
+
+def _random_spread_sites(
+    rows: np.ndarray,
+    cols: np.ndarray,
+    n: int,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    """Choose random sites with a mild farthest-point bias for coverage."""
+    first = int(rng.integers(0, len(rows)))
+    chosen = [first]
+    min_d2 = (rows - rows[first]) ** 2 + (cols - cols[first]) ** 2
+
+    for _ in range(1, n):
+        sample_size = min(len(rows), max(64, n * 8))
+        candidates = rng.choice(len(rows), size=sample_size, replace=False)
+        next_idx = int(candidates[np.argmax(min_d2[candidates])])
+        chosen.append(next_idx)
+        d2 = (rows - rows[next_idx]) ** 2 + (cols - cols[next_idx]) ** 2
+        min_d2 = np.minimum(min_d2, d2)
+
+    return np.column_stack([rows[chosen], cols[chosen]])
+
+
+def _nearest_site_labels(
+    rows: np.ndarray,
+    cols: np.ndarray,
+    centers: np.ndarray,
+    chunk_size: int = 8192,
+) -> np.ndarray:
+    labels = np.empty(len(rows), dtype=np.int32)
+    center_rows = centers[:, 0]
+    center_cols = centers[:, 1]
+    for start in range(0, len(rows), chunk_size):
+        stop = min(start + chunk_size, len(rows))
+        d2 = (
+            (rows[start:stop, None] - center_rows[None, :]) ** 2
+            + (cols[start:stop, None] - center_cols[None, :]) ** 2
+        )
+        labels[start:stop] = np.argmin(d2, axis=1)
+    return labels
 
 
 def _sample_seed_xy(
-    gx: float,
-    gy: float,
-    spread: float,
+    group: dict[str, np.ndarray],
     surface,
-    margin: float,
     rng: np.random.Generator,
 ) -> tuple[float, float]:
-    angle = float(rng.uniform(0.0, 2.0 * np.pi))
-    radius = float(spread * np.sqrt(rng.uniform(0.0, 1.0)))
-    x = float(np.clip(gx + radius * np.cos(angle), margin, surface.tile_w - margin))
-    y = float(np.clip(gy + radius * np.sin(angle), margin, surface.tile_h - margin))
+    idx = int(rng.integers(0, len(group["rows"])))
+    row = int(group["rows"][idx])
+    col = int(group["cols"][idx])
+    x = float((col + rng.uniform(0.05, 0.95)) * surface.cell_w)
+    y = float((row + rng.uniform(0.05, 0.95)) * surface.cell_w)
     return x, y
 
 
@@ -164,10 +211,15 @@ def _cell_index(surface, x: float, y: float) -> tuple[int, int]:
     return ix, iy
 
 
-def _stamp_seed(occ_z: np.ndarray, surface, x: float, y: float, z: float, width: float) -> None:
+def _stamp_seed(occ_z: np.ndarray, surface, x: float, y: float, z: float, width: float) -> dict[tuple[int, int], float]:
     hw = width / 2.0
     ix0 = max(0, int((x - hw) / surface.cell_w) - 1)
     ix1 = min(surface.grid_w - 1, int((x + hw) / surface.cell_w) + 1)
     iy0 = max(0, int((y - hw) / surface.cell_w) - 1)
     iy1 = min(surface.grid_h - 1, int((y + hw) / surface.cell_w) + 1)
     np.maximum(occ_z[iy0:iy1 + 1, ix0:ix1 + 1], z, out=occ_z[iy0:iy1 + 1, ix0:ix1 + 1])
+    return {
+        (iy, ix): z
+        for iy in range(iy0, iy1 + 1)
+        for ix in range(ix0, ix1 + 1)
+    }

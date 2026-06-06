@@ -34,7 +34,16 @@ class FlatGrassGrower:
             path.alive = False
             return False
 
-        floor_z = _sample_footprint_max(occ_z, surface, tx, ty, seed.width, direction)
+        floor_z = _sample_footprint_max(
+            occ_z,
+            scene.support_z,
+            path.last_stamp,
+            surface,
+            tx,
+            ty,
+            seed.width,
+            direction,
+        )
         terrain_z = _sample_grid(scene.terrain_z, surface, tx, ty)
         nz = max(terrain_z, floor_z) + cfg.clearance
 
@@ -46,7 +55,7 @@ class FlatGrassGrower:
             return False
 
         path.points.append((float(tx), float(ty), float(nz)))
-        _stamp_swept_footprint(
+        path.last_stamp = _stamp_swept_footprint(
             occ_z,
             surface,
             (cx, cy),
@@ -63,7 +72,8 @@ class FlatGrassGrower:
 
         seed = path.seed
         spine = np.asarray(path.points, dtype=float)
-        root_z = _sample_grid(scene.terrain_z, surface, spine[0, 0], spine[0, 1]) - species.root_depth
+        terrain_root_z = _sample_grid(scene.terrain_z, surface, spine[0, 0], spine[0, 1])
+        root_z = terrain_root_z - species.root_depth
         spine = np.vstack([np.array([[spine[0, 0], spine[0, 1], root_z]]), spine])
 
         n = len(spine)
@@ -71,7 +81,13 @@ class FlatGrassGrower:
         widths = np.full(n, seed.width, dtype=float)
         if taper_start < n:
             t = np.linspace(0.0, 1.0, n - taper_start)
-            widths[taper_start:] = seed.width * (0.25 + 0.75 * np.cos(t * np.pi / 2.0))
+            tip_width = min(seed.width, 0.02)
+            widths[taper_start:] = tip_width + (seed.width - tip_width) * np.cos(t * np.pi / 2.0)
+
+        # The first above-ground ring is the blade base.  Keep its top face
+        # coincident with or below the raw terrain so all four root corners are
+        # embedded before the blade emerges toward its grown path.
+        spine[1, 2] = min(spine[1, 2], terrain_root_z - species.thickness)
 
         return _build_flat_ribbon_mesh(spine, widths, species.thickness, surface)
 
@@ -101,6 +117,8 @@ def _sample_grid(grid: np.ndarray, surface, x: float, y: float) -> float:
 
 def _sample_footprint_max(
     occ_z: np.ndarray,
+    base_z: np.ndarray,
+    last_stamp: dict[tuple[int, int], float] | None,
     surface,
     x: float,
     y: float,
@@ -124,8 +142,18 @@ def _sample_footprint_max(
     mask = np.abs(lateral) <= hw
     if not np.any(mask):
         iy, ix = _cell_index(surface, x, y)
-        return float(occ_z[iy, ix])
-    return float(occ_z[iy0:iy1 + 1, ix0:ix1 + 1][mask].max())
+        return _own_blind_cell_z(occ_z, base_z, last_stamp, iy, ix)
+
+    block = occ_z[iy0:iy1 + 1, ix0:ix1 + 1].copy()
+    if last_stamp:
+        local_rows, local_cols = np.where(mask)
+        for lr, lc in zip(local_rows, local_cols):
+            iy = iy0 + int(lr)
+            ix = ix0 + int(lc)
+            own_z = last_stamp.get((iy, ix))
+            if own_z is not None and block[lr, lc] <= own_z + 1e-9:
+                block[lr, lc] = base_z[iy, ix]
+    return float(block[mask].max())
 
 
 def _stamp_swept_footprint(
@@ -135,7 +163,7 @@ def _stamp_swept_footprint(
     p1: tuple[float, float],
     z: float,
     width: float,
-) -> None:
+) -> dict[tuple[int, int], float]:
     x0, y0 = p0
     x1, y1 = p1
     hw = width / 2.0
@@ -169,6 +197,24 @@ def _stamp_swept_footprint(
     mask = (along >= -surface.cell_w * 0.5) & (along <= seg_len + surface.cell_w * 0.5) & (np.abs(lateral) <= hw)
     block = occ_z[iy0:iy1 + 1, ix0:ix1 + 1]
     np.maximum(block, np.where(mask, z, block), out=block)
+    local_rows, local_cols = np.where(mask)
+    return {
+        (iy0 + int(lr), ix0 + int(lc)): z
+        for lr, lc in zip(local_rows, local_cols)
+    }
+
+
+def _own_blind_cell_z(
+    occ_z: np.ndarray,
+    base_z: np.ndarray,
+    last_stamp: dict[tuple[int, int], float] | None,
+    iy: int,
+    ix: int,
+) -> float:
+    own_z = last_stamp.get((iy, ix)) if last_stamp else None
+    if own_z is not None and occ_z[iy, ix] <= own_z + 1e-9:
+        return float(base_z[iy, ix])
+    return float(occ_z[iy, ix])
 
 
 def _build_flat_ribbon_mesh(path: np.ndarray, widths: np.ndarray, thickness: float, surface) -> trimesh.Trimesh:
@@ -210,5 +256,7 @@ def _build_flat_ribbon_mesh(path: np.ndarray, widths: np.ndarray, thickness: flo
     faces.extend([[e, e + 1, e + 2], [e + 1, e + 3, e + 2]])
 
     mesh = trimesh.Trimesh(vertices=verts, faces=np.asarray(faces), process=False)
+    mesh.update_faces(mesh.area_faces > 1e-12)
+    mesh.remove_unreferenced_vertices()
     mesh.fix_normals()
     return mesh

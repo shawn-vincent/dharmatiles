@@ -29,7 +29,6 @@ class SpeciesConfig:
     groups_per_square: int = 50
     group_min: int = 20
     group_max: int = 30
-    group_spread_mm: float = 1.5
     dir_jitter: float = 0.14
     curl_jitter: float = 0.064
 
@@ -66,7 +65,6 @@ def from_legacy_config(cfg, *, seed: int, max_stack_height: float) -> GrassConfi
         groups_per_square=int(getattr(cfg, "groups_per_square", 50)),
         group_min=int(getattr(cfg, "group_min", 20)),
         group_max=int(getattr(cfg, "group_max", 30)),
-        group_spread_mm=float(getattr(cfg, "group_spread_mm", 1.5)),
         dir_jitter=float(getattr(cfg, "group_dir_jitter", 0.14)),
         curl_jitter=max(curl_max * 0.08, 1e-9),
     )

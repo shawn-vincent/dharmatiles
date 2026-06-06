@@ -16,8 +16,9 @@ Generation runs in two passes:
 the occupancy heightmap at the new footprint, places the spine at
 `floor + clearance`, stamps all covered grid cells at the new top-surface z,
 and records the spine position.  Step size is much larger than the grid cell, so
-each step lands in fresh cells and the blade never reads its own trail.  If the
-required rise exceeds the rise cap, the blade stops.
+each step mostly lands in fresh cells; if the sample overlaps the blade's last
+stamp, that stamp is ignored so the blade does not climb itself.  If the required
+rise exceeds the rise cap, the blade stops.
 
 **Pass 2 — Build.**  All complete spine paths are converted to meshes in one
 batch.  (Future: path smoothing or other per-path processing happens here,
@@ -47,7 +48,7 @@ correctly.
 ## 2. Blade geometry
 
 **REQ-BLD-1.** Each blade is a single continuous ribbon growing outward from a seed
-point in a single direction, tapering to a narrower tip.
+point in a single direction, tapering to a sharp sub-nozzle point at the tip.
 
 **REQ-BLD-2.** Blade width is set at seed creation time (sampled from a per-species
 range) and tapers toward the tip.
@@ -66,12 +67,15 @@ the seed.
 displacement is driven only by terrain height and obstacles, not by the blade's
 own geometry.  Blades do not stand upright.
 
-**REQ-BLD-6.** The blade cross-section must be printable on an FDM printer with a
-0.4 mm nozzle: minimum feature width ≥ 0.4 mm, no overhangs steeper than ~45°
-without support.
+**REQ-BLD-6.** The blade body must be printable on an FDM printer with a 0.4 mm
+nozzle: no overhangs steeper than ~45° without support.  The final pointed tip
+may taper below nozzle width so it slices as a visually sharp end rather than a
+blunt rectangle.
 
 **REQ-BLD-7.** Blades must embed slightly below the terrain surface (configurable
 root depth) so they appear to grow from the soil rather than sitting on top of it.
+At the blade base, all four ribbon corners must be coincident with or below the
+raw terrain surface.
 
 ---
 
@@ -151,11 +155,11 @@ rising over it or stops before it.
 **REQ-OBS-2.** Blades do not grow through other blades. A blade that would intersect
 a previously placed blade rises above it.
 
-**REQ-OBS-3.** A blade does not climb its own body.  Because step size is
-significantly larger than the grid cell, each new step lands in cells not yet
-stamped by any prior step — the blade naturally never samples its own trail.  No
-explicit self-exclusion mechanism is required.  (A blade that curls back toward
-its own path will be stopped by the rise cap before it can climb itself.)
+**REQ-OBS-3.** A blade does not climb its immediately previous segment.  Each
+growing blade tracks only its last footprint stamp; if the next support sample
+hits cells raised only by that last stamp, those cells are read from the
+pre-grass support surface instead.  Older self-crossings are treated as
+obstacles and are limited by the rise cap.
 
 **REQ-OBS-4.** Stacking depth is configurable: blades reject seed positions and stop
 growing if the obstacle height above terrain exceeds the configured limit.
@@ -177,11 +181,12 @@ inward from the edge fill any gaps at the perimeter.
 
 ## 8. Placement / density
 
-**REQ-DEN-1.** Blades are placed in groups (clumps). Group density, group size
-range, and spatial spread within a group are configurable per square.
+**REQ-DEN-1.** Blades are placed in groups (clumps). Group density and group size
+range are configurable per square.
 
-**REQ-DEN-2.** Group centres are distributed with jittered-grid spacing so coverage
-is roughly uniform without being regular.
+**REQ-DEN-2.** Group centres are random sites inside the grass mask.  The grass
+region is partitioned into Voronoi-style clump cells so the active clumps cover
+the whole mask without requiring grid-aligned placement.
 
 **REQ-DEN-3.** Blades within a group share a common clump direction and curl;
 per-seed jitter keeps them from being identical.
@@ -218,6 +223,10 @@ faces (z-fighting).
 **REQ-MSH-3.** The combined grass mesh must not contain non-manifold edges or
 degenerate (zero-area) faces.
 
+**REQ-MSH-4.** The pointed tip must remain non-zero width internally so each blade
+stays a closed solid for boolean union, while still tapering below nozzle width
+so it slices as a sharp visual point.
+
 ---
 
 ## 12. Species
@@ -240,6 +249,6 @@ implements how a seed of that type advances each step.
 **REQ-CFG-1.** A top-level config holds global parameters (stack limit, clearance,
 RNG seed) and a list of species configs.  Each species config holds its own
 geometry ranges (width, length, curl, cross-section) and placement parameters
-(density, group size, spread).
+(density and group size).
 
 **REQ-CFG-2.** A fixed random seed produces identical output across runs.

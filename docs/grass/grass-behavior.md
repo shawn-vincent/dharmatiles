@@ -47,15 +47,16 @@ occupancy heightmap.
 Seeds are not scattered uniformly.  They are planted in **groups** (clumps), with
 multiple seeds placed close together near a group centre.
 
-- Group centres are distributed across the tile using a slightly randomised grid —
-  spread out enough to cover the whole tile, irregular enough to look natural.
-- Seeds within a group are scattered within a small radius of the centre.
+- Group centres are random sites inside the grass mask.  Their Voronoi-style
+  cells partition the whole grass region so every part of the mask belongs to
+  one clump.
+- Seeds within a group are scattered across that group's cell, not just within
+  a fixed radius around the centre.
 - Each group chooses a random base growth direction and curl.  All seeds in the
   group inherit those values with small per-seed jitter, so the clump looks
   coherent without becoming uniform.
 
-The density of groups, the size of groups, and the spread of seeds within a group
-are all tunable per species.
+The density of groups and the number of seeds per group are tunable per species.
 
 ---
 
@@ -93,14 +94,15 @@ growing rather than piling up steeply.
 
 ## The self-trail non-problem
 
-Because each step is a physical mm-scale distance — much larger than a single
-grid cell — each new step lands in cells the blade has never touched before.
-The blade is always stepping into fresh territory, so it never reads its own
-prior stamps and never mistakes itself for an obstacle.
+Because a blade's sampled footprint may overlap the segment it just stamped,
+each blade remembers only its **last stamp**.  On the next step, cells raised
+only by that last stamp are ignored and the blade samples the raw terrain/stone
+support instead.  This lets the blade flop back down immediately after crossing
+its own previous footprint.
 
 The only edge case is a blade that curls so tightly it doubles back across its
-own earlier path.  This is handled by the rise limit: a blade can't clear its
-own body in one step without climbing too steeply, so it stops.
+older path.  Older self-crossings are treated as obstacles; if the blade cannot
+clear them within the rise limit, it stops.
 
 ---
 
@@ -142,7 +144,8 @@ to mesh.
   gaps between groups that make the coverage feel organic rather than uniform.
 - Stones poke out through the grass; blades curve around them or rise over them.
 - Near the edge of the grass region, blades grow inward and fill the boundary.
-- Blades taper to a fine tip.  The widest part is at the root.
+- Blades taper to a sharp sub-nozzle point at the tip.  The widest part is at
+  the root.
 
 ---
 
