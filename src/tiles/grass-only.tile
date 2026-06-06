@@ -14,5 +14,11 @@ regions:
         groups_per_square: 80
         group_min: 1
         group_max: 1
+        group_dir_jitter: 0.14
         width_min: 0.375
         width_max: 1.0
+        seg_len: 0.8
+        max_segs: 18
+        curl_max: 0.8
+        rise_cap: 2.0
+        root_depth: 0.5
