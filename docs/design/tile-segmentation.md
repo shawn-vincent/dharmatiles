@@ -71,9 +71,10 @@ groups_per_square = 200
 [[region.layer]]            # second packet — sparse tall grass over the same area
 type              = "grass"
 groups_per_square = 40
-max_segs          = 18
-width_min         = 1.2
-width_max         = 1.6
+blade_width_min   = 1.2
+blade_width_max   = 1.6
+blade_length_min  = 14.4
+blade_length_max  = 14.4
 ```
 
 A region with no `[[region.layer]]` entries is bare soil at base
@@ -209,9 +210,10 @@ groups_per_square = 240
 [[region.layer]]
 type              = "grass"
 groups_per_square = 30
-max_segs          = 18
-width_min         = 1.3
-width_max         = 1.7
+blade_width_min   = 1.3
+blade_width_max   = 1.7
+blade_length_min  = 14.4
+blade_length_max  = 14.4
 
 
 [[region]]

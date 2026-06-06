@@ -36,12 +36,12 @@ class GrassSeed:
 
     # Growth
     direction: float  # radians — clump base direction + per-seed jitter
-    step_len:  float  # mm — physical step size, >> cell_w
-    n_steps:   int    # target step count (= target_length / step_len, ±variation)
+    blade_segment_length: float  # mm — physical step size, >> cell_w
+    n_steps:   int    # target step count (= target_length / blade_segment_length)
     curl:      float  # radians added to direction per step
 
     # Blade geometry (for mesh build)
-    width:      float  # mm — full width at base
+    blade_width: float  # mm — full width at base
     rise_cap:   float  # mm — max allowed rise per step
     species_id: str    # which SpeciesConfig to use for mesh building
 ```
@@ -70,13 +70,14 @@ class SpeciesConfig:
     name: str
 
     # Blade geometry ranges — sampled at seed creation time
-    width_min:    float  # mm
-    width_max:    float  # mm
-    step_len:     float  # mm — fixed per species; must be >> cell_w
-    length_min:   float  # mm
-    length_max:   float  # mm
-    curl_max:     float  # radians
-    rise_cap:     float  # mm per step
+    blade_width_min:      float  # mm
+    blade_width_max:      float  # mm
+    blade_length_min:     float  # mm
+    blade_length_max:     float  # mm
+    blade_segment_length: float  # mm — fixed per species; must be >> cell_w
+    curl_min:             float  # radians, magnitude
+    curl_max:             float  # radians, magnitude
+    rise_cap:             float  # mm per step
 
     # Cross-section (for mesh build)
     cross_section: str   # 'flat' | 'leaf' | 'diamond' | ...
@@ -86,8 +87,7 @@ class SpeciesConfig:
     groups_per_square: int
     group_min:         int
     group_max:         int
-    dir_jitter:        float  # radians σ — per-blade direction noise within group
-    curl_jitter:       float  # radians σ — per-blade curl noise within group
+    group_dir_jitter:  float  # radians σ — per-blade direction noise within group
 
     # Growth behaviour (pluggable — see Species section)
     grower: type   # class implementing the step() interface
@@ -114,18 +114,19 @@ class GrassConfig:
 
 For each species, random group sites are placed inside the grass mask and the
 mask is partitioned into nearest-site Voronoi-style clump cells.  Each group
-samples one base direction and one base curl.  For each group cell,
-`rng.integers(group_min, group_max+1)` seeds are planted:
+samples one base direction.  For each group cell, `rng.integers(group_min,
+group_max+1)` seeds are planted:
 
 1. Pick a random cell from the group's clump cell and jitter within that cell.
 2. Reject if outside `grass_mask`, inside `stone_mask`, or `occ_z - terrain_z >
    max_stack_height`.
 3. Create a `GrassSeed`:
-   - `direction` = group direction + `rng.normal(0, dir_jitter)`
-   - `curl` = group curl + `rng.normal(0, curl_jitter)`, clamped to the species
-     curl range
-   - `width`, `n_steps` = sampled from species ranges
-   - `step_len` = species.step_len (fixed, not sampled)
+   - `direction` = group direction + `rng.normal(0, group_dir_jitter)`
+   - `curl` = sampled magnitude from `curl_min` to `curl_max`, with random sign,
+     divided across the derived step count
+   - `blade_width` = sampled from `blade_width_min` to `blade_width_max`
+   - `n_steps` = sampled target length divided by `blade_segment_length`
+   - `blade_segment_length` = species.blade_segment_length (fixed, not sampled)
 4. Compute initial z: `z0 = max(terrain_z[ix,iy], occ_z[ix,iy]) + clearance`
 5. Stamp the seed's footprint into `occ_z` immediately so subsequently planted
    seeds stack correctly.
@@ -157,27 +158,27 @@ allowing it to rise over stones and other blades.
 
 ```
 advance direction by seed.curl
-tx, ty = current_pos + step_len * (sin(dir), cos(dir))
+tx, ty = current_pos + blade_segment_length * (sin(dir), cos(dir))
 
 stop if (tx, ty) outside tile boundary  →  alive = False
 stop if (tx, ty) outside grass_mask     →  alive = False
 
-floor_z = sample_footprint_max(occ_z, tx, ty, seed.width, dir)
+floor_z = sample_footprint_max(occ_z, tx, ty, seed.blade_width, dir)
 tz      = terrain_z_at(tx, ty)
 nz      = max(tz, floor_z) + clearance
 
 stop if nz > prev_z + seed.rise_cap     →  alive = False
 
 append (tx, ty, nz) to path.points
-stamp_footprint(occ_z, tx, ty, nz + blade_top_offset, seed.width, dir)
+stamp_footprint(occ_z, tx, ty, nz + blade_top_offset, seed.blade_width, dir)
 ```
 
 ### Heightmap sampling and stamping
 
 **Sampling** (`sample_footprint_max`):
-Read the maximum `occ_z` value over a rectangle of width `seed.width` centered
+Read the maximum `occ_z` value over a rectangle of width `seed.blade_width` centered
 at `(tx, ty)`, aligned perpendicular to the growth direction.  The rectangle
-extends ±`seed.width/2` laterally.  In the forward direction, a point sample at
+extends ±`seed.blade_width/2` laterally.  In the forward direction, a point sample at
 `(tx, ty)` is sufficient — the blade does not look backward.
 
 This is conceptually a thin cross-section at the destination; full swept-area
@@ -186,8 +187,8 @@ only new territory being entered.
 
 **Stamping** (`stamp_footprint`):
 Write `nz + blade_top_offset` to all grid cells covered by the swept rectangle
-from the previous spine position to `(tx, ty)` — width `seed.width`, length
-`step_len`, aligned with the growth direction.  This records the full physical
+from the previous spine position to `(tx, ty)` — width `seed.blade_width`, length
+`blade_segment_length`, aligned with the growth direction.  This records the full physical
 extent of the newly placed segment so subsequent blades detect it correctly.
 
 **Last-stamp self handling** (REQ-OBS-3):
@@ -219,8 +220,8 @@ def build_meshes(paths: list[GrassPath],
 
 Given a `GrassPath` with N spine points:
 
-1. **Embedded root** — prepend one point at `(x0, y0, terrain_z - root_depth)`
-   and lower the first blade ring so its top face is at or below raw terrain.
+1. **Embedded root** — prepend one point just below terrain based on blade
+   thickness and lower the first blade ring so its top face is at or below raw terrain.
    All four root-ring corners are therefore coincident with or below the terrain
    surface before the blade emerges upward.
 
@@ -323,7 +324,7 @@ def build(self, scene, verbose):
 
 | | Current | New |
 |---|---|---|
-| Step size | `cell_w` (0.14 mm) | `species.step_len` (e.g. 0.4 mm) |
+| Step size | `cell_w` (0.14 mm) | `species.blade_segment_length` (e.g. 0.8 mm) |
 | Self-trail | full `own_stamps` dict per blade | last-stamp tracking only |
 | Stamping | Leading-edge transverse strip only | Full swept rectangle |
 | Jitter | Period-2 Z oscillation from stamp aliasing | Eliminated by larger step |

@@ -108,61 +108,6 @@ class FlowConfig:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Grass blade geometry
-# ─────────────────────────────────────────────────────────────────────────────
-
-@dataclass
-class GrassConfig:
-    """Grass blade appearance and placement parameters.
-
-    All geometry values are in mm.  Ranges are sampled per-seed at
-    seeding time and baked into each ``GrassSeed``; they are not used
-    during growth.
-    """
-    # ── Cross-section ─────────────────────────────────────────────────────────
-    # 'triangle' — flat ribbon with apex below (printable, fast)
-    # 'circle'   — cylindrical tube (reed / rush look)
-    # 'diamond'  — 4-vertex rhombus: ridge top, keel bottom
-    # 'leaf'     — 6-vert grass blade: arched top, V-keel bottom (default)
-    cross_section:     str   = 'leaf'
-    circle_segs:       int   = 12      # segments for 'circle' cross-section (≥3)
-    thickness:         float = 0.5     # mm — keel depth below spine (triangle/leaf/diamond)
-    diamond_equator:   float = 0.75    # equator position for 'diamond'
-    leaf_arch:         float = 0.4     # arch rise as fraction of thickness (leaf only)
-    leaf_ridge:        float = 0.175   # extra midrib lift at V3 as fraction of thickness
-
-    # ── Blade width range (mm) ────────────────────────────────────────────────
-    width_min:    float = 0.75
-    width_max:    float = 2.0
-
-    # ── Spine ─────────────────────────────────────────────────────────────────
-    n_path:          int   = 50                       # spine sample count
-
-    # ── Curl ─────────────────────────────────────────────────────────────────
-    curl_max:          float = 0.8
-    curl_min_fraction: float = 0.65   # every blade curves at least this fraction of max
-
-    # ── Growth (GrassLayer) ───────────────────────────────────────────────────
-    seg_len:         float = 0.8    # mm per growth segment
-    max_segs:        int   = 18     # max growth segments
-    rise_cap:        float = 2.0    # mm: max tolerated rise per step (≥ tallest obstacle)
-    smooth_sigma:    float = 2.0    # Gaussian smoothing width (segment units)
-    root_depth:      float = 0.5    # mm — underground anchor depth
-
-    # ── Group placement ───────────────────────────────────────────────────────
-    # groups_per_square is a density — the layer multiplies by cols × rows
-    # to get the actual group count for the surface.
-    # More groups with fewer blades each → uniform coverage; fewer groups with
-    # more blades each → visible clumping.  At 120 groups the jittered-grid
-    # spacing is ~3 mm, small enough that directional flow sweeps fill the gaps.
-    groups_per_square: int   = 50
-    group_min:       int   = 20
-    group_max:       int   = 30
-    group_spread_mm: float = 1.5
-    group_dir_jitter:float = 0.14   # per-blade direction jitter within group (rad σ)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Solver / Z-envelope
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -321,9 +266,7 @@ class SceneConfig:
     """
     surface:       SurfaceConfig       = field(default_factory=SurfaceConfig)
     flow:          FlowConfig          = field(default_factory=FlowConfig)
-    grass:         GrassConfig         = field(default_factory=GrassConfig)
     solver:        SolverConfig        = field(default_factory=SolverConfig)
     soil:          SoilConfig          = field(default_factory=SoilConfig)
     stones:        StonesConfig        = field(default_factory=StonesConfig)
     base:          BaseConfig          = field(default_factory=BaseConfig)
-

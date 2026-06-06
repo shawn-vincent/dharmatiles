@@ -1,5 +1,5 @@
 from .config  import (SceneConfig, SurfaceConfig, FlowConfig,
-                       GrassConfig, SolverConfig, SoilConfig, StonesConfig)
+                       SolverConfig, SoilConfig, StonesConfig)
 from .tile    import TileScene, make_xy_grids
 from .grid    import sample_grid, rasterise_into_support
 from .flow    import build_flow_field

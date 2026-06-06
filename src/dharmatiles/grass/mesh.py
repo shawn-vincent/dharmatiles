@@ -26,7 +26,7 @@ def rasterise_paths_into_support(paths: list[GrassPath], cfg: GrassConfig, scene
     species_map = {species.name: species for species in cfg.species}
     for path in paths:
         species = species_map[path.seed.species_id]
-        _rasterise_flat_path(scene.support_z, surface, np.asarray(path.points, dtype=float), path.seed.width, species.thickness)
+        _rasterise_flat_path(scene.support_z, surface, np.asarray(path.points, dtype=float), path.seed.blade_width, species.thickness)
 
 
 def _rasterise_flat_path(
@@ -61,11 +61,11 @@ def _stamp_segment(support_z: np.ndarray, surface, p0: np.ndarray, p1: np.ndarra
     hw = width / 2.0
     dx = x1 - x0
     dy = y1 - y0
-    seg_len = float(np.hypot(dx, dy))
-    if seg_len < 1e-9:
+    segment_length = float(np.hypot(dx, dy))
+    if segment_length < 1e-9:
         _stamp_disk(support_z, surface, x1, y1, z, hw)
         return
-    ux, uy = dx / seg_len, dy / seg_len
+    ux, uy = dx / segment_length, dy / segment_length
     px, py = -uy, ux
     ix0 = max(0, int((min(x0, x1) - hw) / surface.cell_w) - 1)
     ix1 = min(surface.grid_w - 1, int((max(x0, x1) + hw) / surface.cell_w) + 1)
@@ -81,6 +81,6 @@ def _stamp_segment(support_z: np.ndarray, surface, p0: np.ndarray, p1: np.ndarra
     rel_y = Y - y0
     along = rel_x * ux + rel_y * uy
     lateral = rel_x * px + rel_y * py
-    mask = (along >= -surface.cell_w * 0.5) & (along <= seg_len + surface.cell_w * 0.5) & (np.abs(lateral) <= hw)
+    mask = (along >= -surface.cell_w * 0.5) & (along <= segment_length + surface.cell_w * 0.5) & (np.abs(lateral) <= hw)
     block = support_z[iy0:iy1 + 1, ix0:ix1 + 1]
     np.maximum(block, np.where(mask, z, block), out=block)

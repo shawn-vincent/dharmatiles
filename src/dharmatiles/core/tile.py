@@ -17,7 +17,7 @@ from typing import List
 import numpy as np
 import trimesh
 
-from .config import SceneConfig, SurfaceConfig, GrassConfig, SolverConfig
+from .config import SceneConfig, SurfaceConfig, SolverConfig
 from .terrain import (TerrainGrid, TerrainType,
                       terrain_grid_to_heightmap)
 
@@ -90,10 +90,6 @@ class TileScene:
     @property
     def surface(self) -> SurfaceConfig:
         return self.config.surface
-
-    @property
-    def grass(self) -> GrassConfig:
-        return self.config.grass
 
     @property
     def solver(self) -> SolverConfig:

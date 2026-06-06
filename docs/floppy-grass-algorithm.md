@@ -25,7 +25,7 @@ Flat ribbon grass blades lying on the terrain surface.  Each blade:
 | `grass_mask` | `TileScene` | Boolean grid: which cells may grow grass. |
 | `stone_mask` | `TileScene` | Boolean grid: which cells are under stone centres. |
 | `flow_angle_field` | `build_flow_field()` | Per-cell wind/lean direction (radians). |
-| `GrassConfig` | config | Blade geometry: width, max segments, curl, etc. |
+| `SpeciesConfig` | config | Blade geometry: width, length, segment length, curl, etc. |
 | `SolverConfig` | config | `max_stack_height`: mm above terrain a blade may seed or grow into. |
 
 ---
@@ -111,10 +111,11 @@ include the stone height so the blade doesn't drop back through the stone.
 
 ## Step 1 — Plant seeds
 
-For each group centre (placed on a jittered grid across the tile):
+For each Voronoi-style group cell (seeded from random spread sites across the
+valid grass mask):
 
 1. Choose a random number of blades for this group (`group_min`–`group_max`).
-2. For each blade, pick a random offset from the group centre (within `group_spread_mm`).
+2. For each blade, pick a random cell inside the group cell and jitter within that cell.
 3. **Reject** if the cell is under a stone, outside the grass mask, or `occ_z` is already
    more than `max_stack_height` mm above terrain.
 4. **Z of the seed point** = `max(terrain_z, occ_z) + FLAT_CLEARANCE`
@@ -130,8 +131,10 @@ planted after seed A at the same location correctly stacks above A.
 
 ## Step 2 — Grow (rounds)
 
-Growth runs for up to `max_segs` rounds.  Each round, every alive blade attempts
-one step of size `cell_w` (≈ 0.14 mm) forward.
+Growth runs for up to `round(blade_length / blade_segment_length)` rounds, where
+`blade_length` is sampled from `blade_length_min` to `blade_length_max` at seed
+creation time.  Each round, every alive blade attempts one step of size
+`blade_segment_length` forward.
 
 A **single global processing order** (a random permutation fixed before growth
 begins) is reused every round.  Blade A always stamps before blade B in every
@@ -207,11 +210,12 @@ Outside tile or grass region: blade stops
 
 | Parameter | Default | Effect |
 |---|---|---|
-| `cell_w` (step) | ≈ 0.14 mm | Step size = one heightmap cell. Fixed by grid resolution. |
-| `max_segs` | 18 | Maximum rounds = maximum blade length in steps |
+| `blade_segment_length` | 0.8 mm | Physical growth step length |
+| `blade_length_min / blade_length_max` | 8.0–14.4 mm | Target blade length range sampled at seed creation |
 | `rise_cap` | 2.0 mm | Tallest single-step climb; stones taller than this stop the blade |
 | `max_stack_height` | 2.0 mm | Max occ_z above terrain for seeding or growing |
-| `width_min / width_max` | 0.75–2.0 mm | Blade width range (also sets perpendicular stamp coverage) |
+| `blade_width_min / blade_width_max` | 0.75–2.0 mm | Blade width range (also sets perpendicular stamp coverage) |
+| `curl_min / curl_max` | 0.0–0.8 rad | Curl magnitude range; sign is chosen randomly per seed |
 | `groups_per_square` | 50 | Blade group density per 35 mm square |
 | `group_min / group_max` | 20–30 | Blades per group (controls clumping) |
-| `group_spread_mm` | 1.5 mm | Spatial spread of blades within a group |
+| `group_dir_jitter` | 0.14 rad | Per-blade direction noise within a group |

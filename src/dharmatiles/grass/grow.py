@@ -58,7 +58,6 @@ def plant_seeds(
         groups = _voronoi_groups(n_groups, scene, surface, rng)
         for group in groups:
             group_dir = float(rng.uniform(0.0, 2.0 * np.pi))
-            group_curl = _sample_group_curl(species, rng)
             n_seeds = int(rng.integers(species.group_min, species.group_max + 1))
 
             for _ in range(n_seeds):
@@ -74,9 +73,9 @@ def plant_seeds(
                 if floor_z - terrain_z > cfg.max_stack_height:
                     continue
 
-                seed = _make_seed(x, y, group_dir, group_curl, species, rng)
+                seed = _make_seed(x, y, group_dir, species, rng)
                 z0 = max(terrain_z, floor_z) + cfg.clearance
-                last_stamp = _stamp_seed(occ_z, surface, x, y, z0 + species.thickness, seed.width)
+                last_stamp = _stamp_seed(occ_z, surface, x, y, z0 + species.thickness, seed.blade_width)
                 paths.append(GrowingPath(seed=seed, points=[(x, y, z0)], last_stamp=last_stamp))
 
     return paths
@@ -170,36 +169,36 @@ def _sample_seed_xy(
     return x, y
 
 
-def _sample_group_curl(species: SpeciesConfig, rng: np.random.Generator) -> float:
-    return float(rng.uniform(-species.curl_max, species.curl_max))
+def _sample_seed_curl(species: SpeciesConfig, rng: np.random.Generator) -> float:
+    curl_min = max(0.0, float(species.curl_min))
+    curl_max = max(curl_min, float(species.curl_max))
+    magnitude = float(rng.uniform(curl_min, curl_max))
+    if magnitude == 0.0:
+        return 0.0
+    return magnitude * float(rng.choice([-1.0, 1.0]))
 
 
 def _make_seed(
     x: float,
     y: float,
     group_dir: float,
-    group_curl: float,
     species: SpeciesConfig,
     rng: np.random.Generator,
 ) -> GrassSeed:
-    width = float(rng.uniform(species.width_min, species.width_max))
-    target_length = float(rng.uniform(species.length_min, species.length_max))
-    n_steps = max(1, int(round(target_length / species.step_len)))
-    curl = float(np.clip(
-        group_curl + rng.normal(0.0, species.curl_jitter),
-        -species.curl_max,
-        species.curl_max,
-    ))
+    blade_width = float(rng.uniform(species.blade_width_min, species.blade_width_max))
+    target_length = float(rng.uniform(species.blade_length_min, species.blade_length_max))
+    n_steps = max(1, int(round(target_length / species.blade_segment_length)))
+    curl = _sample_seed_curl(species, rng)
     # Store curl as radians per step, not total blade curl.
     curl_per_step = curl / max(n_steps, 1)
     return GrassSeed(
         x=float(x),
         y=float(y),
-        direction=float(group_dir + rng.normal(0.0, species.dir_jitter)),
-        step_len=float(species.step_len),
+        direction=float(group_dir + rng.normal(0.0, species.group_dir_jitter)),
+        blade_segment_length=float(species.blade_segment_length),
         n_steps=n_steps,
         curl=curl_per_step,
-        width=width,
+        blade_width=blade_width,
         rise_cap=float(species.rise_cap),
         species_id=species.name,
     )

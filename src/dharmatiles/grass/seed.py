@@ -10,10 +10,10 @@ class GrassSeed:
     x: float
     y: float
     direction: float
-    step_len: float
+    blade_segment_length: float
     n_steps: int
     curl: float
-    width: float
+    blade_width: float
     rise_cap: float
     species_id: str
 

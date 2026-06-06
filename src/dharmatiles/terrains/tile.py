@@ -25,7 +25,7 @@ import numpy as np
 import trimesh
 
 from ..core.config import (SceneConfig, SurfaceConfig, FlowConfig, SolverConfig,
-                           GrassConfig, SoilConfig, StonesConfig, BaseConfig)
+                           SoilConfig, StonesConfig, BaseConfig)
 from ..core.tile import TileScene
 from ..core.mesh import make_heightmap_solid
 from ..core.spec import TileSpec, load_spec
@@ -34,6 +34,7 @@ from ..bases import dungeonblocks, openlock
 from ..layers.soil import SoilLayer
 from ..layers.stones import StonesLayer
 from ..layers.grass import FloppyGrassLayer
+from ..grass.config import GrassConfig as RuntimeGrassConfig, SpeciesConfig
 # from ..layers.grass import GrassLayer
 from ..layers.water import make_water_displacement, make_water_ripple_displacement, make_water_volume, WATER_RENDER_LIFT_MM
 
@@ -43,7 +44,7 @@ from ..layers.water import make_water_displacement, make_water_ripple_displaceme
 
 def _build_mesh(cfg: SceneConfig,
                 scene: TileScene,
-                grass_cfgs: list[GrassConfig] | None = None,
+                grass_cfgs: list[SpeciesConfig] | None = None,
                 soil_layers: list[tuple[SoilConfig, np.ndarray | None]] | None = None,
                 stone_layers: list[tuple[StonesConfig, np.ndarray | None]] | None = None,
                 verbose: bool = True,
@@ -52,8 +53,8 @@ def _build_mesh(cfg: SceneConfig,
                 water_embed_mm: float = 2.0) -> trimesh.Trimesh:
     """Run all layers on *scene* and return the concatenated mesh.
 
-    *grass_cfgs* is a list of GrassConfig objects — one per seed-packet
-    layer in the spec.  Defaults to ``[cfg.grass]`` (single packet).
+    *grass_cfgs* is a list of SpeciesConfig objects — one per seed-packet
+    layer in the spec.  Defaults to one package-default species.
 
     *stone_layers* is a list of ``(StonesConfig, placement_mask)`` pairs —
     one per stone-layer zone.  Each pair is one independent stone-placement
@@ -64,7 +65,7 @@ def _build_mesh(cfg: SceneConfig,
     is placed at *water_height* over the water region.
     """
     if grass_cfgs is None:
-        grass_cfgs = [cfg.grass]
+        grass_cfgs = [SpeciesConfig()]
     if soil_layers is None:
         soil_layers = []
     if stone_layers is None:
@@ -96,10 +97,10 @@ def _build_mesh(cfg: SceneConfig,
     if grass_cfgs and verbose:
         print("Growing grass...")
     for i, g_cfg in enumerate(grass_cfgs):
-        packet_cfg = SceneConfig(
-            surface=cfg.surface, flow=cfg.flow, grass=g_cfg,
-            solver=cfg.solver,   soil=cfg.soil,  stones=cfg.stones,
-            base=cfg.base,
+        packet_cfg = RuntimeGrassConfig(
+            species=[g_cfg],
+            max_stack_height=cfg.solver.max_stack_height,
+            seed=cfg.surface.seed ^ 0x47524F57,
         )
         grown = FloppyGrassLayer(packet_cfg)
         grass_parts = grown.build(scene, verbose=(verbose and i == 0))
@@ -543,7 +544,6 @@ def _scene_config_from_spec(spec: TileSpec) -> SceneConfig:
     return SceneConfig(
         surface = spec.surface,
         flow    = FlowConfig(),
-        grass   = GrassConfig(),    # overridden per grass_cfgs in build_tile_from_spec
         solver  = SolverConfig(),
         soil    = SoilConfig(),
         stones  = StonesConfig(),
@@ -551,16 +551,16 @@ def _scene_config_from_spec(spec: TileSpec) -> SceneConfig:
     )
 
 
-def _collect_grass_configs(spec: TileSpec) -> list[GrassConfig]:
-    """Return one GrassConfig per grass LayerSpec found in any region."""
-    defaults = GrassConfig()
-    cfgs: list[GrassConfig] = []
+def _collect_grass_configs(spec: TileSpec) -> list[SpeciesConfig]:
+    """Return one SpeciesConfig per grass LayerSpec found in any region."""
+    defaults = SpeciesConfig()
+    cfgs: list[SpeciesConfig] = []
     for region in spec.regions:
         for layer in region.layers:
             if layer.type == 'grass':
                 d = vars(defaults).copy()
                 d.update(layer.params)
-                cfgs.append(GrassConfig(**d))
+                cfgs.append(SpeciesConfig(**d))
     return cfgs
 
 

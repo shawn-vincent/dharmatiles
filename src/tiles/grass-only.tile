@@ -15,10 +15,11 @@ regions:
         group_min: 1
         group_max: 1
         group_dir_jitter: 0.14
-        width_min: 0.375
-        width_max: 1.0
-        seg_len: 0.8
-        max_segs: 18
+        blade_width_min: 0.75
+        blade_width_max: 2.0
+        blade_length_min: 8
+        blade_length_max: 14
+        blade_segment_length: 0.8
+        curl_min: 0.3
         curl_max: 0.8
         rise_cap: 2.0
-        root_depth: 0.5

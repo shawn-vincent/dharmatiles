@@ -21,9 +21,9 @@ class FlatGrassGrower:
         seed = path.seed
         cx, cy, cz = path.points[-1]
         direction = seed.direction + seed.curl * (len(path.points) - 1)
-        tx = cx + seed.step_len * np.sin(direction)
-        ty = cy + seed.step_len * np.cos(direction)
-        hw = seed.width / 2.0
+        tx = cx + seed.blade_segment_length * np.sin(direction)
+        ty = cy + seed.blade_segment_length * np.cos(direction)
+        hw = seed.blade_width / 2.0
 
         if not (hw <= tx <= surface.tile_w - hw and hw <= ty <= surface.tile_h - hw):
             path.alive = False
@@ -41,7 +41,7 @@ class FlatGrassGrower:
             surface,
             tx,
             ty,
-            seed.width,
+            seed.blade_width,
             direction,
         )
         terrain_z = _sample_grid(scene.terrain_z, surface, tx, ty)
@@ -61,7 +61,7 @@ class FlatGrassGrower:
             (cx, cy),
             (tx, ty),
             nz + species.thickness,
-            seed.width,
+            seed.blade_width,
         )
         return True
 
@@ -73,16 +73,16 @@ class FlatGrassGrower:
         seed = path.seed
         spine = np.asarray(path.points, dtype=float)
         terrain_root_z = _sample_grid(scene.terrain_z, surface, spine[0, 0], spine[0, 1])
-        root_z = terrain_root_z - species.root_depth
+        root_z = terrain_root_z - species.thickness
         spine = np.vstack([np.array([[spine[0, 0], spine[0, 1], root_z]]), spine])
 
         n = len(spine)
         taper_start = max(1, int(np.floor((n - 1) * 0.8125)))
-        widths = np.full(n, seed.width, dtype=float)
+        widths = np.full(n, seed.blade_width, dtype=float)
         if taper_start < n:
             t = np.linspace(0.0, 1.0, n - taper_start)
-            tip_width = min(seed.width, 0.02)
-            widths[taper_start:] = tip_width + (seed.width - tip_width) * np.cos(t * np.pi / 2.0)
+            tip_width = min(seed.blade_width, 0.02)
+            widths[taper_start:] = tip_width + (seed.blade_width - tip_width) * np.cos(t * np.pi / 2.0)
 
         # The first above-ground ring is the blade base.  Keep its top face
         # coincident with or below the raw terrain so all four root corners are
@@ -169,11 +169,11 @@ def _stamp_swept_footprint(
     hw = width / 2.0
     dx = x1 - x0
     dy = y1 - y0
-    seg_len = float(np.hypot(dx, dy))
-    if seg_len < 1e-9:
+    segment_length = float(np.hypot(dx, dy))
+    if segment_length < 1e-9:
         ux, uy = 0.0, 1.0
     else:
-        ux, uy = dx / seg_len, dy / seg_len
+        ux, uy = dx / segment_length, dy / segment_length
     px, py = -uy, ux
 
     min_x = max(0.0, min(x0, x1) - hw)
@@ -194,7 +194,7 @@ def _stamp_swept_footprint(
     rel_y = Y - y0
     along = rel_x * ux + rel_y * uy
     lateral = rel_x * px + rel_y * py
-    mask = (along >= -surface.cell_w * 0.5) & (along <= seg_len + surface.cell_w * 0.5) & (np.abs(lateral) <= hw)
+    mask = (along >= -surface.cell_w * 0.5) & (along <= segment_length + surface.cell_w * 0.5) & (np.abs(lateral) <= hw)
     block = occ_z[iy0:iy1 + 1, ix0:ix1 + 1]
     np.maximum(block, np.where(mask, z, block), out=block)
     local_rows, local_cols = np.where(mask)
