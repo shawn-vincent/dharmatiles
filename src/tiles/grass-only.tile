@@ -11,18 +11,18 @@ regions:
     contains: [0.5, 0.5]
     layers:
       - type: grass
-        groups_per_square: 5
-        group_min: 1
-        group_max: 1
+        groups_per_square: 3
+        group_min: 100
+        group_max: 100
         group_dir_jitter: 0.14
         blade_width_min: 2.0
         blade_width_max: 3.0
-        blade_length_min: 40
-        blade_length_max: 40
+        blade_length_min: 10
+        blade_length_max: 10
         blade_segment_length: 0.8
-        blade_curl_min: 0.3
+        blade_curl_min: 0.5
         blade_curl_max: 0.8
-        blade_smooth: 0
+        blade_smooth: 0.8
         blade_rise_cap: 2.0
         blade_clearance: 0.5
         blade_top_facets: 4

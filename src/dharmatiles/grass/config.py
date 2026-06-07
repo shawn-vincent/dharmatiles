@@ -12,19 +12,19 @@ class SpeciesConfig:
     name: str = "floppy-grass"
 
     # Blade geometry ranges, sampled at seed creation time.
-    blade_width_min: float = 0.75
-    blade_width_max: float = 2.0
-    blade_length_min: float = 8.0
-    blade_length_max: float = 14.4
+    blade_width_min: float = 2.0
+    blade_width_max: float = 3.0
+    blade_length_min: float = 10.0
+    blade_length_max: float = 10.0
     blade_segment_length: float = 0.8
-    blade_taper: float = 3.0
-    blade_base_width: float = 1.0
-    blade_base_taper: float | None = None
-    blade_curl_min: float = 0.0
+    blade_taper: float = 10.0
+    blade_base_width: float = 0.75
+    blade_base_taper: float | None = 10.0
+    blade_curl_min: float = 0.5
     blade_curl_max: float = 0.8
-    blade_smooth: float = 0.0
+    blade_smooth: float = 0.8
     blade_rise_cap: float = 2.0
-    blade_clearance: float = 0.2
+    blade_clearance: float = 0.5
 
     # Cross-section shape.
     # blade_top_facets controls the top profile above the blade equator (spine plane):
@@ -34,14 +34,14 @@ class SpeciesConfig:
     # blade_thickness is the distance from the equator to the top profile peak.
     # keel_fraction sets keel_depth = keel_fraction × blade_width.
     # keel_fraction > 0.5 gives a keel angle steeper than 45° for any width.
-    blade_top_facets: int = 2
-    blade_thickness: float = 0.3
+    blade_top_facets: int = 4
+    blade_thickness: float = 0.2
     keel_fraction: float = 0.6
 
     # Placement.
-    groups_per_square: int = 50
-    group_min: int = 20
-    group_max: int = 30
+    groups_per_square: int = 3
+    group_min: int = 100
+    group_max: int = 100
     group_dir_jitter: float = 0.14
 
     # Growth behavior.
