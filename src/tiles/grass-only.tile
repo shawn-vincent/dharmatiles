@@ -24,3 +24,6 @@ regions:
         blade_curl_max: 0.8
         blade_smooth: 1.0
         rise_cap: 2.0
+        n_top_facets: 2
+        thickness: 0.3
+        keel_fraction: 0.6
