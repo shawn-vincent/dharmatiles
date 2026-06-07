@@ -291,21 +291,13 @@ def _build_blade_mesh(
 # ── Spine smoothing ───────────────────────────────────────────────────────────
 
 def _smooth_blade_spine(spine: np.ndarray, blade_smooth: float) -> np.ndarray:
-    """Blend the grown XY path toward a best-fit quadratic arc.
-
-    Only the X and Y coordinates are smoothed.  Z is left exactly as
-    computed by the growth + mesh-lift phases — smoothing Z would amplify
-    brief obstacle crossings (e.g. brushing another blade's seed stamp)
-    into a full bow-shaped arch visible in side view.
-    """
     amount = float(np.clip(blade_smooth, 0.0, 1.0))
     if amount <= 0.0 or len(spine) < 3:
         return spine
     arc = _fit_quadratic_arc(spine)
-    smoothed = spine.copy()
-    smoothed[:, :2] += amount * (arc[:, :2] - spine[:, :2])   # XY only
-    smoothed[0] = spine[0]   # pin base
-    smoothed[-1] = spine[-1] # pin tip
+    smoothed = spine + amount * (arc - spine)
+    smoothed[0] = spine[0]
+    smoothed[-1] = spine[-1]
     return smoothed
 
 
