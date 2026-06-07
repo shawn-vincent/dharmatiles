@@ -109,12 +109,9 @@ class FlatGrassGrower:
             t = np.linspace(0.0, 1.0, n - taper_start)
             widths[taper_start:] = seed.blade_width * np.cos(t * np.pi / 2.0)
 
-        # ── Keel depth taper (full from seed, taper near tip) ─────────────────
+        # ── Keel depth — fixed throughout; does not taper with width ──────────
         base_keel = species.keel_fraction * seed.blade_width
         keel_depths = np.full(n, base_keel)
-        if taper_start < n:
-            t = np.linspace(0.0, 1.0, n - taper_start)
-            keel_depths[taper_start:] = base_keel * np.cos(t * np.pi / 2.0)
 
         # ── Top-profile height taper (full from seed, taper near tip) ─────────
         thicknesses = np.full(n, species.blade_thickness)

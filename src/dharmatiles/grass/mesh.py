@@ -64,18 +64,12 @@ def _lift_path_points(
 ) -> list[tuple[float, float, float]]:
     """Adjust path points against the current support surface.
 
-    Interior points: raise only — max(planned_z, floor_z).
-    Tip (last point): snap exactly to floor_z whether higher or lower.
+    All points: raise only — max(planned_z, floor_z).
     """
     lifted = []
-    last_idx = len(points) - 1
-    for i, (x, y, z) in enumerate(points):
+    for x, y, z in points:
         floor_z = _sample_grid(support_z, surface, x, y)
-        if i == last_idx:
-            new_z = floor_z          # snap tip to actual surface
-        else:
-            new_z = max(z, floor_z)  # interior: only lift
-        lifted.append((float(x), float(y), float(new_z)))
+        lifted.append((float(x), float(y), float(max(z, floor_z))))
     return lifted
 
 
