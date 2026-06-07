@@ -68,9 +68,17 @@ def plant_seeds(
     for species in cfg.species:
         n_groups = species.groups_per_square * surface.cols * surface.rows
         groups = _voronoi_groups(n_groups, scene, surface, rng)
+        actual_n_groups = len(groups)
         for group in groups:
             group_dir = float(rng.uniform(0.0, 2.0 * np.pi))
-            n_seeds = int(rng.integers(species.group_min, species.group_max + 1))
+            n_seeds = _scaled_group_seed_count(
+                group,
+                surface.grid_w * surface.grid_h,
+                actual_n_groups,
+                species.group_min,
+                species.group_max,
+                rng,
+            )
 
             for _ in range(n_seeds):
                 x, y = _sample_seed_xy(group, surface, rng)
@@ -96,6 +104,31 @@ def plant_seeds(
                 paths.append(GrowingPath(seed=seed, points=[(x, y, z0)]))
 
     return paths
+
+
+def _scaled_group_seed_count(
+    group: dict[str, np.ndarray],
+    total_tile_cells: int,
+    n_groups: int,
+    group_min: int,
+    group_max: int,
+    rng: np.random.Generator,
+) -> int:
+    """Sample blade count for a Voronoi group, scaled by its actual tile area."""
+    if total_tile_cells <= 0 or n_groups <= 0:
+        return 0
+
+    min_count = max(0, int(group_min))
+    max_count = max(min_count, int(group_max))
+    nominal_count = float(rng.integers(min_count, max_count + 1))
+
+    group_cells = len(group["rows"])
+    ideal_group_cells = total_tile_cells / float(n_groups)
+    scaled_count = nominal_count * group_cells / ideal_group_cells
+    base_count = int(np.floor(scaled_count))
+    if rng.random() < scaled_count - base_count:
+        base_count += 1
+    return base_count
 
 
 def _vegetation_depth_at_seed(scene, surface, occ_z: np.ndarray, path: GrowingPath) -> float:
