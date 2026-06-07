@@ -244,12 +244,18 @@ def _export_system_stls(tile_mesh: trimesh.Trimesh,
         return {'none': tile_mesh}
 
     if system_paths is None:
-        system_paths = {
-            dungeonblocks.SYSTEM_SUFFIX: _system_output_path(
-                output_path, dungeonblocks.SYSTEM_SUFFIX),
-            openlock.SYSTEM_SUFFIX: _system_output_path(
-                output_path, openlock.SYSTEM_SUFFIX),
-        }
+        stem = output_path.stem
+        if stem.endswith('-db'):
+            system_paths = {dungeonblocks.SYSTEM_SUFFIX: output_path}
+        elif stem.endswith('-ol'):
+            system_paths = {openlock.SYSTEM_SUFFIX: output_path}
+        else:
+            system_paths = {
+                dungeonblocks.SYSTEM_SUFFIX: output_path.with_name(
+                    f"{stem}-db{output_path.suffix}"),
+                openlock.SYSTEM_SUFFIX: output_path.with_name(
+                    f"{stem}-ol{output_path.suffix}"),
+            }
 
     # Ensure output directories exist
     for path in system_paths.values():
@@ -682,8 +688,11 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="YAML (or .tile.py) tile spec.  Omit to process all src/tiles/")
     p.add_argument("--output", "-o", type=pathlib.Path,
                    default=None,
-                   help="Override output path (requires --spec); system suffixes "
-                        "are inserted before .stl.  Omit to use the canonical "
+                   help="Override output path (requires --spec).  "
+                        "If the path ends with -db.stl or -ol.stl, only that "
+                        "format is generated and the path is used as-is.  "
+                        "Otherwise -db.stl and -ol.stl variants are written "
+                        "alongside the given path.  Omit to use the canonical "
                         "stl/{system}/{NxM}-{name}-{db|ol}.stl hierarchy.")
     p.add_argument("--quiet", "-q", action="store_true")
     return p
