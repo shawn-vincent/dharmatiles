@@ -28,7 +28,7 @@ DEFAULT_LOGO_SIZE = 36.0
 DEFAULT_LOGO_DEPTH = 0.5
 DEFAULT_LIGHTWEIGHT_CUP_HEIGHT = 50.0
 DEFAULT_LIGHTWEIGHT_CUP_WALL = 1.5
-DEFAULT_LIGHTWEIGHT_FLOOR = 0.5
+DEFAULT_LIGHTWEIGHT_FLOOR = 1.0
 DEFAULT_LIGHTWEIGHT_RETAINING_RING_HEIGHT = 5.0
 DEFAULT_LIGHTWEIGHT_RETAINING_HOLE_DIAMETER = 29.0
 DEFAULT_LIGHTWEIGHT_RETAINING_BEVEL_HEIGHT = 2.0
@@ -38,10 +38,7 @@ DEFAULT_LIGHTWEIGHT_MAGNET_Z = 7.0
 DEFAULT_LIGHTWEIGHT_MAGNET_BOSS_DEPTH = 4.5
 DEFAULT_LIGHTWEIGHT_MAGNET_BOSS_WIDTH = 16.0
 DEFAULT_LIGHTWEIGHT_MAGNET_BOSS_HEIGHT = 14.0
-DEFAULT_LIGHTWEIGHT_TREE_STRUT_WIDTH = 2.4
-DEFAULT_LIGHTWEIGHT_TREE_TOP_SPACING = 10.0
-DEFAULT_LIGHTWEIGHT_TREE_ROOTS = 3
-DEFAULT_LIGHTWEIGHT_TREE_BARK = False
+FASTENER_WALL_THICKNESS = 0.4
 DEFAULT_LONG_SIDE_MAGNET_POSITIONS = (
     140.0 / 2.0 - DEFAULT_MAGNET_SPACING / 2.0,
     140.0 / 2.0 + DEFAULT_MAGNET_SPACING / 2.0,
@@ -93,10 +90,6 @@ class LightweightSpec:
     magnet_boss_depth: float = DEFAULT_LIGHTWEIGHT_MAGNET_BOSS_DEPTH
     magnet_boss_width: float = DEFAULT_LIGHTWEIGHT_MAGNET_BOSS_WIDTH
     magnet_boss_height: float = DEFAULT_LIGHTWEIGHT_MAGNET_BOSS_HEIGHT
-    tree_strut_width: float = DEFAULT_LIGHTWEIGHT_TREE_STRUT_WIDTH
-    tree_top_spacing: float = DEFAULT_LIGHTWEIGHT_TREE_TOP_SPACING
-    tree_roots: int = DEFAULT_LIGHTWEIGHT_TREE_ROOTS
-    tree_bark: bool = DEFAULT_LIGHTWEIGHT_TREE_BARK
 
 
 _CUBE_CORNERS = np.array(
@@ -1286,6 +1279,45 @@ def perimeter_rail_band(
     return mesh
 
 
+def perimeter_triangular_top_rib(
+    spec: OrganizerSpec,
+    rib_depth: float,
+    rib_height: float,
+    z_top: float,
+) -> trimesh.Trimesh:
+    """Top outer rib with a triangular cross-section.
+
+    The rib sits at the top of the perimeter wall. Its cross-section is a right
+    triangle: the outer face is vertical (flush with the wall), the top face is
+    horizontal, and the inner face is a bevel from the base of the outer wall
+    (at z_top - rib_height) up to the top inner corner (at z_top, inset=rib_depth).
+    """
+    z_bottom = z_top - rib_height
+    straight_segments = max(8, int(np.ceil(max(spec.width, spec.depth) / 1.5 / 4.0)))
+    arc_segments = 24
+
+    outer_points = rounded_rectangle_ring(
+        spec.width, spec.depth, 0.0, spec.vertical_corner_roundover,
+        straight_segments, arc_segments,
+    )
+    inner_points = rounded_rectangle_ring(
+        spec.width, spec.depth, rib_depth, max(0.0, spec.vertical_corner_roundover - rib_depth),
+        straight_segments, arc_segments,
+    )
+
+    builder = MeshBuilder()
+
+    outer_bottom = [builder.vertex(x, y, z_bottom) for x, y in outer_points]
+    outer_top = [builder.vertex(x, y, z_top) for x, y in outer_points]
+    inner_top = [builder.vertex(x, y, z_top) for x, y in inner_points]
+
+    connect_rings(builder, outer_bottom, outer_top, reverse=False)
+    connect_rings(builder, outer_top, inner_top, reverse=False)
+    connect_rings(builder, inner_top, outer_bottom, reverse=False)
+
+    return builder.mesh()
+
+
 def lightweight_rib_edges(centers: list[tuple[float, float]], max_length: float = 56.0) -> list[tuple[int, int]]:
     points = np.asarray(centers, dtype=float)
     edges: set[tuple[int, int]] = set()
@@ -1296,6 +1328,26 @@ def lightweight_rib_edges(centers: list[tuple[float, float]], max_length: float 
             if np.linalg.norm(points[a] - points[b]) <= max_length:
                 edges.add(tuple(sorted((a, b))))
     return sorted(edges)
+
+
+def perimeter_strut_endpoints(
+    centers: list[tuple[float, float]],
+    spec: OrganizerSpec,
+    max_length: float = 56.0,
+) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    """Return (cup_center, wall_point) pairs for struts from outer cups to the perimeter."""
+    pairs: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    for cx, cy in centers:
+        walls = [
+            (float(cx), (0.0, float(cy))),
+            (float(spec.width - cx), (float(spec.width), float(cy))),
+            (float(cy), (float(cx), 0.0)),
+            (float(spec.depth - cy), (float(cx), float(spec.depth))),
+        ]
+        for dist, endpoint in walls:
+            if dist <= max_length:
+                pairs.append(((float(cx), float(cy)), endpoint))
+    return pairs
 
 
 def clipped_segment_runs(
@@ -1371,827 +1423,32 @@ def rounded_perimeter_mapper(spec: OrganizerSpec, inset: float):
 
     return total, map_point
 
-
-# ---------------------------------------------------------------------------
-# Swept-tube tree system
-# ---------------------------------------------------------------------------
-
-@dataclass
-class _TreeNode:
-    """One node in a tree skeleton."""
-    pos: np.ndarray          # 3-D world position
-    radius: float            # tube radius at this point
-    tangent: np.ndarray      # unit direction of growth arriving at this node
-    children: "list[_TreeNode]"
-
-
-_TREE_RING_VERTS = 18  # vertices per cross-section ring
-_TREE_MAX_ATTRACTORS = 16  # cap per tree; controls recursive branch density
-_TREE_OVAL_RATIO = 1.45  # width multiplier along the surface-tangent axis
-_TREE_BARK_MAX_DEPTH = 1.15  # mm of inward carve at the base of a mature trunk
-_TREE_BARK_TRENCH_WIDTH = 0.55  # mm full-width of each V-shaped trench
-_TREE_BARK_DEPTH_EXPONENT = 0.70  # <1 keeps bark visible higher up the tree
-_TREE_BARK_GROOVE_COUNT = 7.0  # dominant V-shaped trenches around each tree
-
-
-def _transport_frame(
-    tangent: np.ndarray,
-    side: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Parallel-transport a side axis to be perpendicular to a new tangent."""
-    tangent = tangent / max(float(np.linalg.norm(tangent)), 1e-8)
-    side = side - tangent * float(np.dot(side, tangent))
-    side_norm = float(np.linalg.norm(side))
-    if side_norm < 1e-8:
-        # Tangent is nearly parallel to side — pick an arbitrary perp.
-        perp = np.array([1.0, 0.0, 0.0])
-        if abs(float(np.dot(perp, tangent))) > 0.9:
-            perp = np.array([0.0, 1.0, 0.0])
-        side = perp - tangent * float(np.dot(perp, tangent))
-        side = side / max(float(np.linalg.norm(side)), 1e-8)
-    else:
-        side = side / side_norm
-    up = np.cross(tangent, side)
-    up = up / max(float(np.linalg.norm(up)), 1e-8)
-    return side, up
-
-
-def _ring_vertices(
-    center: np.ndarray,
-    radius: float,
-    side: np.ndarray,
-    up: np.ndarray,
-    side_scale: float = 1.0,
-) -> np.ndarray:
-    """Return (RING_VERTS, 3) array of ring vertex positions.
-
-    side_scale > 1 produces an oval cross-section widened along the *side* axis
-    (aligned with the surface tangent at the tree base via parallel transport).
-    """
-    n = _TREE_RING_VERTS
-    angles = np.linspace(0.0, 2.0 * np.pi, n, endpoint=False)
-    return (
-        center
-        + np.outer(np.cos(angles), side) * (radius * side_scale)
-        + np.outer(np.sin(angles), up) * radius
-    )
-
-
-def _connect_rings(
-    verts: list[np.ndarray],
-    faces: list[list[int]],
-    lower_start: int,
-    upper_start: int,
-    n: int,
-) -> None:
-    """Stitch two rings (each n verts) with quads (2 tris each)."""
-    for i in range(n):
-        j = (i + 1) % n
-        faces.append([lower_start + i, lower_start + j, upper_start + j])
-        faces.append([lower_start + i, upper_start + j, upper_start + i])
-
-
-def _build_tree_skeleton(
-    base_pos: np.ndarray,
-    attractors: np.ndarray,        # (M, 3) world-space attractor positions
-    trunk_radius: float,
-    tip_radius: float,
-    z_max: float,
-    seed: float = 0.0,
-    _level: int = 0,
-    _parent_tangent: np.ndarray | None = None,
-) -> _TreeNode:
-    """Recursively build a minimal tree skeleton (branch junctions + leaf tips only).
-
-    No intermediate nodes are added along edges — that keeps the piece count
-    low so the per-tree manifold union stays fast.
-    """
-    rng = np.random.default_rng(int(abs(seed * 1e6)) & 0xFFFFFFFF)
-
-    if _parent_tangent is None:
-        _parent_tangent = np.array([0.0, 0.0, 1.0])
-
-    # No attractors or at the ceiling → single straight tip.
-    if len(attractors) == 0 or base_pos[2] >= z_max - 1.0:
-        tip_pos = base_pos.copy()
-        tip_pos[2] = z_max
-        tip = _TreeNode(pos=tip_pos, radius=tip_radius, tangent=_parent_tangent, children=[])
-        return _TreeNode(pos=base_pos, radius=trunk_radius, tangent=_parent_tangent, children=[tip])
-
-    crown = attractors.mean(axis=0)
-    raw_dir = crown - base_pos
-    raw_norm = float(np.linalg.norm(raw_dir))
-    raw_dir = raw_dir / raw_norm if raw_norm > 1e-6 else _parent_tangent.copy()
-
-    # Blend: trunk leans vertical; higher-level branches follow crown more.
-    # Keeping more vertical bias at deeper levels avoids near-horizontal top branches.
-    vertical_blend = max(0.1, 0.7 - _level * 0.15)
-    direction = _parent_tangent * vertical_blend + raw_dir * (1.0 - vertical_blend)
-    direction = direction / max(float(np.linalg.norm(direction)), 1e-8)
-
-    sway = rng.uniform(-0.10, 0.10, size=3)
-    sway[2] = 0.0
-    direction = (direction + sway)
-    direction = direction / max(float(np.linalg.norm(direction)), 1e-8)
-
-    # Terminal: ≤2 attractors or max depth → grow directly to each.
-    if len(attractors) <= 2 or _level >= 4:
-        node = _TreeNode(pos=base_pos, radius=trunk_radius, tangent=direction, children=[])
-        for attr in attractors:
-            tip_dir = attr - base_pos
-            tip_dir = tip_dir / max(float(np.linalg.norm(tip_dir)), 1e-8)
-            node.children.append(
-                _TreeNode(pos=attr.copy(), radius=tip_radius, tangent=tip_dir, children=[])
-            )
-        return node
-
-    # Binary split at a single junction node — no intermediate nodes.
-    # Lower branch_frac keeps splits in the lower portion of each span so top
-    # branches have more vertical height and gentler angles for FDM printability.
-    span = z_max - base_pos[2]
-    branch_frac = 0.20 + _level * 0.08 + float(rng.uniform(-0.04, 0.04))
-    branch_z = min(z_max - 2.0, base_pos[2] + span * branch_frac)
-    dz = branch_z - base_pos[2]
-    branch_pos = base_pos + direction * (dz / max(direction[2], 0.05))
-    branch_pos[2] = branch_z
-
-    child_r = max(tip_radius * 1.5, trunk_radius * (0.5 ** (1.0 / 2.5)))
-
-    # Split attractors on widest XY axis.
-    spread = attractors.max(axis=0) - attractors.min(axis=0)
-    split_axis = int(np.argmax(spread[:2]))
-    median = float(np.median(attractors[:, split_axis]))
-    left_mask = attractors[:, split_axis] <= median
-    right_mask = ~left_mask
-    if not left_mask.any():
-        left_mask[0] = True; right_mask[0] = False
-    if not right_mask.any():
-        right_mask[-1] = True; left_mask[-1] = False
-
-    branch_node = _TreeNode(pos=branch_pos, radius=trunk_radius * 0.78, tangent=direction, children=[])
-    for mask, child_seed in [(left_mask, seed + 1.3), (right_mask, seed + 2.7)]:
-        branch_node.children.append(
-            _build_tree_skeleton(
-                branch_pos.copy(), attractors[mask], child_r, tip_radius,
-                z_max, seed=child_seed, _level=_level + 1, _parent_tangent=direction,
-            )
-        )
-
-    return _TreeNode(pos=base_pos, radius=trunk_radius, tangent=direction, children=[branch_node])
-
-
-def _swept_tube_along_path(
-    path_points: list[np.ndarray],
-    radii: list[float],
-    sections: int = _TREE_RING_VERTS,
-    initial_side: np.ndarray | None = None,
-    side_scale: float = 1.0,
+def cylindrical_thin_wall(
+    center: tuple[float, float],
+    inner_radius: float,
+    z_bottom: float,
+    height: float,
+    segments: int,
 ) -> trimesh.Trimesh:
-    """Single watertight mesh swept along a polyline, capped at both ends.
+    import manifold3d as m3d
 
-    Uses parallel-transport frames so the cross-section never twists.
-    No boolean operations — one mesh built directly.
-
-    initial_side: seed direction for the parallel-transport frame's side axis.
-        Pass the surface tangent at the tree base so the oval wide axis stays
-        aligned with that surface throughout the branch.  Defaults to (1,0,0).
-    side_scale: oval ratio — the side axis is widened by this factor.
-    """
-    n = sections
-    n_pts = len(path_points)
-    if n_pts < 2:
-        return trimesh.Trimesh()
-
-    # Tangents at each sample point.
-    tangents: list[np.ndarray] = []
-    for i in range(n_pts):
-        if i == 0:
-            t = path_points[1] - path_points[0]
-        elif i == n_pts - 1:
-            t = path_points[-1] - path_points[-2]
-        else:
-            t = path_points[i + 1] - path_points[i - 1]
-        tn = float(np.linalg.norm(t))
-        tangents.append(t / tn if tn > 1e-8 else np.array([0.0, 0.0, 1.0]))
-
-    # Parallel-transport frame seeded with the requested side axis so the oval
-    # stays aligned with the surface tangent throughout the branch.
-    side = initial_side.copy() if initial_side is not None else np.array([1.0, 0.0, 0.0])
-    side, up = _transport_frame(tangents[0], side)
-
-    all_verts: list[list[float]] = []
-    all_faces: list[list[int]] = []
-    ring_starts: list[int] = []
-
-    for pos, r, tang in zip(path_points, radii, tangents):
-        side, up = _transport_frame(tang, side)
-        ring = _ring_vertices(pos, r, side, up, side_scale=side_scale)
-        ring_starts.append(len(all_verts))
-        all_verts.extend(ring.tolist())
-
-    # Lateral quads connecting adjacent rings.
-    for i in range(n_pts - 1):
-        _connect_rings([], all_faces, ring_starts[i], ring_starts[i + 1], n)
-
-    # Bottom cap (inward-facing fan).
-    bc = len(all_verts)
-    all_verts.append(path_points[0].tolist())
-    for j in range(n):
-        all_faces.append([bc, ring_starts[0] + (j + 1) % n, ring_starts[0] + j])
-
-    # Top cap (outward-facing fan).
-    tc = len(all_verts)
-    all_verts.append(path_points[-1].tolist())
-    last = ring_starts[-1]
-    for j in range(n):
-        all_faces.append([tc, last + j, last + (j + 1) % n])
-
+    outer_r = inner_radius + FASTENER_WALL_THICKNESS
+    angles = np.linspace(0.0, 2.0 * np.pi, segments, endpoint=False)
+    inner_pts = [(inner_radius * np.cos(a), inner_radius * np.sin(a)) for a in angles]
+    outer_pts = [(outer_r * np.cos(a), outer_r * np.sin(a)) for a in angles]
+    cross = m3d.CrossSection([outer_pts, list(reversed(inner_pts))], fillrule=m3d.FillRule.EvenOdd)
+    solid = m3d.Manifold.extrude(cross, height=height)
+    solid = solid.translate((center[0], center[1], z_bottom))
+    raw = solid.to_mesh()
     mesh = trimesh.Trimesh(
-        vertices=np.array(all_verts, dtype=np.float64),
-        faces=np.array(all_faces, dtype=np.int64),
+        vertices=np.array(raw.vert_properties, dtype=float)[:, :3],
+        faces=np.array(raw.tri_verts, dtype=int),
         process=False,
     )
-    mesh.merge_vertices(digits_vertex=3)
-    mesh.update_faces(mesh.nondegenerate_faces())
-    mesh.remove_unreferenced_vertices()
     mesh.fix_normals()
     if mesh.volume < 0:
         mesh.invert()
     return mesh
-
-
-_BEZIER_CURVE_SEGMENTS = 8   # samples along each branch Bezier arc
-
-
-def _bezier_branch_tube(
-    p0: np.ndarray,
-    p1: np.ndarray,
-    r0: float,
-    r1: float,
-    bow: float = 0.14,
-    curve_segments: int = _BEZIER_CURVE_SEGMENTS,
-    end_tangent: np.ndarray | None = None,
-    initial_side: np.ndarray | None = None,
-    side_scale: float = 1.0,
-) -> trimesh.Trimesh:
-    """Curved swept tube along a Bezier arc from p0 to p1.
-
-    bow: fraction of branch length used as curvature offset (upward + lateral).
-
-    end_tangent: when provided, a cubic Bezier is used so the tube arrives at
-    p1 with exactly that tangent direction.  Pass (0,0,1) to arrive
-    perpendicular to a horizontal underside surface, eliminating angular
-    clip-through artefacts.  Without end_tangent a simpler quadratic arc is used.
-    """
-    direction = p1 - p0
-    length = float(np.linalg.norm(direction))
-    if length < 1e-6:
-        return trimesh.Trimesh()
-
-    horiz = direction.copy(); horiz[2] = 0.0
-    horiz_len = float(np.linalg.norm(horiz))
-
-    if end_tangent is not None:
-        # Cubic Bezier with constrained end tangent.
-        # c1: follows the natural branch direction with lateral bow.
-        # c2: approaches p1 from below along end_tangent.
-        unit_dir = direction / length
-        if horiz_len > 1e-6:
-            perp = np.array([-horiz[1], horiz[0], 0.0]) / horiz_len
-            unit_dir = unit_dir + perp * (bow * 0.45)
-            unit_dir = unit_dir / max(float(np.linalg.norm(unit_dir)), 1e-8)
-        scale = length / 3.0
-        c1 = p0 + unit_dir * scale
-        end_t = np.asarray(end_tangent, dtype=float)
-        end_t = end_t / max(float(np.linalg.norm(end_t)), 1e-8)
-        c2 = p1 - end_t * scale
-
-        path: list[np.ndarray] = []
-        radii: list[float] = []
-        for i in range(curve_segments):
-            t = i / (curve_segments - 1)
-            tm = 1.0 - t
-            pos = tm**3 * p0 + 3.0*tm**2*t * c1 + 3.0*tm*t**2 * c2 + t**3 * p1
-            path.append(pos)
-            radii.append(r0 + (r1 - r0) * t)
-        return _swept_tube_along_path(path, radii, initial_side=initial_side, side_scale=side_scale)
-
-    # Quadratic Bezier (no end-tangent constraint).
-    offset = np.array([0.0, 0.0, bow * length])
-    if horiz_len > 1e-6:
-        perp = np.array([-horiz[1], horiz[0], 0.0]) / horiz_len
-        offset += perp * (bow * 0.45 * length)
-    control = (p0 + p1) / 2.0 + offset
-
-    path = []
-    radii = []
-    for i in range(curve_segments):
-        t = i / (curve_segments - 1)
-        tm = 1.0 - t
-        pos = tm * tm * p0 + 2.0 * tm * t * control + t * t * p1
-        path.append(pos)
-        radii.append(r0 + (r1 - r0) * t)
-
-    return _swept_tube_along_path(path, radii, initial_side=initial_side, side_scale=side_scale)
-
-
-def _skeleton_to_mesh(
-    root: _TreeNode,
-    flat_base: bool = False,
-    initial_side: np.ndarray | None = None,
-    side_scale: float = 1.0,
-) -> trimesh.Trimesh:
-    """Convert a tree skeleton to a watertight mesh.
-
-    Each edge becomes a curved swept tube (Bezier arc, no per-branch booleans).
-    Junction nodes get a small oval for a natural knuckle.
-    All pieces are merged in one manifold union call per tree.
-
-    flat_base: skip the sphere at the root node so the swept tube's own flat
-    end-cap becomes the base face (no sphere bump on the attachment surface).
-    initial_side / side_scale: the oval wide axis is aligned with initial_side
-    (surface tangent) via parallel transport.  Junction ovoids are stretched
-    the same way so they fill the crotch of each branch fork.
-    """
-    pieces: list[trimesh.Trimesh] = []
-    _is_root = [True]
-    _side_seed = initial_side.copy() if initial_side is not None else np.array([1.0, 0.0, 0.0])
-
-    def walk(node: _TreeNode) -> None:
-        is_root = _is_root[0]
-        _is_root[0] = False
-        is_leaf = len(node.children) == 0
-        # Ovoids at branch junctions blend overlapping tube ends at crotches.
-        # Skip at the root (flat_base=True → flat floor cap suffices) and at
-        # leaf tips (flat tube end-cap is the tip; sphere would add unwanted bulk
-        # and pull the effective tip away from the target surface).
-        if not (flat_base and is_root) and not is_leaf:
-            sphere = trimesh.creation.icosphere(subdivisions=2, radius=node.radius * 1.08)
-            if side_scale != 1.0:
-                # Stretch the sphere along the locally-transported side axis so the
-                # ovoid fills the oval cross-sections of both incoming branches.
-                local_side, _ = _transport_frame(node.tangent, _side_seed)
-                verts = sphere.vertices
-                proj = (verts @ local_side)[:, np.newaxis] * local_side
-                sphere.vertices = verts + (side_scale - 1.0) * proj
-            sphere.apply_translation(node.pos)
-            pieces.append(sphere)
-
-        for child in node.children:
-            is_tip = not child.children
-            # Terminal branches get extra samples for smoother taper and a
-            # forced vertical end-tangent so the flat cap lands flush against
-            # the horizontal underside surface without angled clip-through.
-            tube = _bezier_branch_tube(
-                node.pos, child.pos, node.radius, child.radius,
-                curve_segments=_BEZIER_CURVE_SEGMENTS + (1 if is_tip else 0),
-                end_tangent=np.array([0.0, 0.0, 1.0]) if is_tip else None,
-                initial_side=initial_side,
-                side_scale=side_scale,
-            )
-            if len(tube.vertices) > 0:
-                pieces.append(tube)
-            walk(child)
-
-    walk(root)
-
-    if not pieces:
-        return trimesh.Trimesh()
-
-    valid = []
-    for p in pieces:
-        p.merge_vertices(digits_vertex=3)
-        p.update_faces(p.nondegenerate_faces())
-        p.remove_unreferenced_vertices()
-        p.fix_normals()
-        if p.is_volume and p.volume > 0:
-            valid.append(p)
-    if not valid:
-        return trimesh.Trimesh()
-
-    result = trimesh.boolean.union(valid, engine="manifold")
-    result.fix_normals()
-    if result.volume < 0:
-        result.invert()
-    return result
-
-
-def _evenly_sample_attractors(attractors: np.ndarray, count: int) -> np.ndarray:
-    """Select attractors with broad geometric coverage over the supported patch."""
-    if len(attractors) <= count:
-        return attractors
-
-    points = attractors[:, :2]
-    mins = points.min(axis=0)
-    span = np.ptp(points, axis=0)
-    span[span < 1e-6] = 1.0
-    normalized = (points - mins) / span
-
-    selected: list[int] = []
-    center = normalized.mean(axis=0)
-    first = int(np.argmin(np.sum((normalized - center) ** 2, axis=1)))
-    selected.append(first)
-
-    min_d2 = np.sum((normalized - normalized[first]) ** 2, axis=1)
-    for _ in range(1, count):
-        next_idx = int(np.argmax(min_d2))
-        selected.append(next_idx)
-        d2 = np.sum((normalized - normalized[next_idx]) ** 2, axis=1)
-        min_d2 = np.minimum(min_d2, d2)
-
-    return attractors[np.array(selected, dtype=int)]
-
-
-def _smoothstep(edge0: float, edge1: float, x: np.ndarray) -> np.ndarray:
-    t = np.clip((x - edge0) / max(edge1 - edge0, 1e-8), 0.0, 1.0)
-    return t * t * (3.0 - 2.0 * t)
-
-
-def _value_noise_1d(x: np.ndarray, seed: float) -> np.ndarray:
-    xi = np.floor(x).astype(np.int64)
-    xf = x - xi
-    fade = xf * xf * (3.0 - 2.0 * xf)
-    phase = seed * 12.9898
-    a = np.sin((xi * 127.1 + phase) * 43758.5453)
-    b = np.sin(((xi + 1) * 127.1 + phase) * 43758.5453)
-    a = a - np.floor(a)
-    b = b - np.floor(b)
-    return a * (1.0 - fade) + b * fade
-
-
-def _periodic_v_trenches(
-    phase: np.ndarray,
-    groove_count: float,
-    radius: np.ndarray,
-    width_mm: float,
-) -> np.ndarray:
-    phase_dist = np.abs(np.arctan2(np.sin(phase), np.cos(phase)))
-    angular_dist = phase_dist / max(groove_count, 1e-6)
-    surface_dist = np.maximum(radius, 0.2) * angular_dist
-    half_width = max(width_mm * 0.5, 1e-6)
-    return np.clip(1.0 - surface_dist / half_width, 0.0, 1.0)
-
-
-def _tree_bark_segments(
-    root: _TreeNode,
-    initial_side: np.ndarray | None,
-) -> tuple[list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, float]], float]:
-    side_seed = initial_side.copy() if initial_side is not None else np.array([1.0, 0.0, 0.0])
-    side_seed, _ = _transport_frame(root.tangent, side_seed)
-    segments: list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, float]] = []
-    max_dist = 0.0
-
-    def walk(node: _TreeNode, side: np.ndarray, dist0: float) -> None:
-        nonlocal max_dist
-        for child in node.children:
-            axis = child.pos - node.pos
-            length = float(np.linalg.norm(axis))
-            if length < 1e-6:
-                walk(child, side, dist0)
-                continue
-            tangent = axis / length
-            local_side, local_up = _transport_frame(tangent, side)
-            segments.append((node.pos.copy(), child.pos.copy(), tangent, local_side, local_up, dist0, length))
-            dist1 = dist0 + length
-            max_dist = max(max_dist, dist1)
-            walk(child, local_side, dist1)
-
-    walk(root, side_seed, 0.0)
-    return segments, max(max_dist, 1e-6)
-
-
-def _carve_bark_texture(
-    mesh: trimesh.Trimesh,
-    root: _TreeNode,
-    base_pos: np.ndarray,
-    z_max: float,
-    seed: float,
-    initial_side: np.ndarray | None = None,
-    max_depth: float = _TREE_BARK_MAX_DEPTH,
-) -> trimesh.Trimesh:
-    """Displace side-surface vertices inward to create shallow bark trenches.
-
-    The relief is deepest at the base and follows a curved falloff to zero at
-    the branch tips.  The trench field is evaluated against the nearest tree
-    skeleton segment, so it runs from trunk into both sides of branch splits.
-    """
-    if len(mesh.vertices) == 0 or max_depth <= 0.0:
-        return mesh
-    segments, max_tree_dist = _tree_bark_segments(root, initial_side)
-    if not segments:
-        return mesh
-
-    vertices = mesh.vertices.copy()
-    normals = mesh.vertex_normals
-
-    best_d2 = np.full(len(vertices), np.inf, dtype=np.float64)
-    best_theta = np.zeros(len(vertices), dtype=np.float64)
-    best_t = np.zeros(len(vertices), dtype=np.float64)
-    best_side_weight = np.zeros(len(vertices), dtype=np.float64)
-    best_radius = np.zeros(len(vertices), dtype=np.float64)
-    for p0, _p1, tangent, side, up, dist0, length in segments:
-        rel = vertices - p0
-        along = np.clip(rel @ tangent, 0.0, length)
-        closest = p0 + along[:, np.newaxis] * tangent
-        radial = vertices - closest
-        d2 = np.einsum("ij,ij->i", radial, radial)
-        update = d2 < best_d2
-        if not np.any(update):
-            continue
-        best_d2[update] = d2[update]
-        best_theta[update] = np.arctan2(radial[update] @ up, radial[update] @ side)
-        best_t[update] = np.clip((dist0 + along[update]) / max_tree_dist, 0.0, 1.0)
-        best_radius[update] = np.sqrt(np.maximum(d2[update], 1e-8))
-        normal_axis = np.abs(normals[update] @ tangent)
-        best_side_weight[update] = np.clip(1.0 - normal_axis, 0.0, 1.0) ** 2
-
-    t = best_t
-    theta = best_theta
-    radius = best_radius
-    side_weight = best_side_weight
-    depth_falloff = np.power(np.clip(1.0 - t, 0.0, 1.0), _TREE_BARK_DEPTH_EXPONENT)
-    if not np.any((depth_falloff > 1e-4) & (side_weight > 1e-4)):
-        return mesh
-
-    rng = np.random.default_rng(int(abs(seed * 1e6)) & 0xFFFFFFFF)
-    swirl_turns = float(rng.uniform(0.08, 0.18))
-    phase_seed = float(rng.uniform(0.0, 1000.0))
-    phase_noise = (_value_noise_1d(t * 5.0 + phase_seed, seed + 3.17) - 0.5) * 0.28
-
-    main_phase = (
-        _TREE_BARK_GROOVE_COUNT
-        * (theta + 2.0 * np.pi * swirl_turns * t + phase_noise)
-        + float(rng.uniform(0.0, 2.0 * np.pi))
-    )
-    main_grooves = _periodic_v_trenches(
-        main_phase,
-        _TREE_BARK_GROOVE_COUNT,
-        radius,
-        _TREE_BARK_TRENCH_WIDTH,
-    )
-    organic_depth = 0.88 + 0.12 * _value_noise_1d(theta * 2.8 + t * 11.0, seed + 15.73)
-    groove_field = np.clip(main_grooves * organic_depth, 0.0, 1.0)
-
-    displacement = max_depth * depth_falloff * side_weight * groove_field
-    vertices -= normals * displacement[:, np.newaxis]
-    vertices[:, 2] = np.maximum(vertices[:, 2], float(base_pos[2]))
-
-    carved = trimesh.Trimesh(vertices=vertices, faces=mesh.faces.copy(), process=False)
-    carved.update_faces(carved.nondegenerate_faces())
-    carved.remove_unreferenced_vertices()
-    carved.fix_normals()
-    if carved.volume < 0:
-        carved.invert()
-    if not carved.is_volume:
-        carved = cap_triangular_boundary_loops(carved)
-        carved = _collapse_non_manifold_edges(carved)
-    return carved
-
-
-def _make_tree(
-    base_pos: np.ndarray,
-    attractors: np.ndarray,
-    trunk_radius: float,
-    tip_radius: float,
-    z_max: float,
-    seed: float = 0.0,
-    max_attractors: int = _TREE_MAX_ATTRACTORS,
-    flat_base: bool = False,
-    initial_side: np.ndarray | None = None,
-    side_scale: float = 1.0,
-    bark: bool = False,
-) -> trimesh.Trimesh:
-    """Build one swept-tube tree mesh."""
-    # Cap attractor count — this directly limits terminal tips and recursive
-    # splits, keeping the generated branch count predictable.
-    if len(attractors) > max_attractors:
-        attractors = _evenly_sample_attractors(attractors, max_attractors)
-    root = _build_tree_skeleton(base_pos, attractors, trunk_radius, tip_radius, z_max, seed=seed)
-    mesh = _skeleton_to_mesh(root, flat_base=flat_base, initial_side=initial_side, side_scale=side_scale)
-    if not bark:
-        return mesh
-    bark_depth = min(_TREE_BARK_MAX_DEPTH, max(0.35, trunk_radius * 0.55))
-    return _carve_bark_texture(
-        mesh,
-        root,
-        base_pos,
-        z_max,
-        seed=seed,
-        initial_side=initial_side,
-        max_depth=bark_depth,
-    )
-
-
-def _side_tree_corner_s_positions(
-    spec: OrganizerSpec,
-    inset: float,
-) -> list[float]:
-    """Return arc-length positions at the mid-point of each of the 4 rounded corners."""
-    r_eff = max(0.1, spec.vertical_corner_roundover - inset)
-    arc_quarter = (np.pi / 2.0) * r_eff
-    straight_x = max(0.0, spec.width - 2.0 * spec.vertical_corner_roundover)
-    straight_y = max(0.0, spec.depth - 2.0 * spec.vertical_corner_roundover)
-
-    # Perimeter starts at the bottom-left arc end, traces CCW:
-    #   bottom straight → bottom-right arc → right straight → top-right arc
-    #   → top straight → top-left arc → left straight → bottom-left arc
-    s_br = straight_x + arc_quarter / 2.0
-    s_tr = s_br + arc_quarter / 2.0 + straight_y + arc_quarter / 2.0
-    s_tl = s_tr + arc_quarter / 2.0 + straight_x + arc_quarter / 2.0
-    s_bl = s_tl + arc_quarter / 2.0 + straight_y + arc_quarter / 2.0
-    return [s_br, s_tr, s_tl, s_bl]
-
-
-def _side_tree_base_s_positions(spec: OrganizerSpec, inset: float) -> list[float]:
-    """Arc-length positions for all 12 side-tree bases (4 corners + 2 per side)."""
-    vcr = spec.vertical_corner_roundover
-    r_eff = max(0.1, vcr - inset)
-    arc_quarter = (np.pi / 2.0) * r_eff
-    straight_x = max(0.0, spec.width - 2.0 * vcr)
-    straight_y = max(0.0, spec.depth - 2.0 * vcr)
-    corner_s = _side_tree_corner_s_positions(spec, inset)
-    s_br, s_tr, s_tl, _ = corner_s
-
-    section_data = [
-        (0.0,                          straight_x),   # bottom
-        (s_br + arc_quarter / 2.0,     straight_y),   # right
-        (s_tr + arc_quarter / 2.0,     straight_x),   # top
-        (s_tl + arc_quarter / 2.0,     straight_y),   # left
-    ]
-    extra_s: list[float] = []
-    for sec_start, sec_len in section_data:
-        if sec_len > 10.0:
-            extra_s.append(float(sec_start + sec_len / 3.0))
-            extra_s.append(float(sec_start + 2.0 * sec_len / 3.0))
-    return corner_s + extra_s
-
-
-def side_tree_struts(
-    spec: OrganizerSpec,
-    lightweight: LightweightSpec,
-    z_min: float,
-    z_max: float,
-) -> list[trimesh.Trimesh]:
-    rail_depth = lightweight.magnet_boss_depth
-    inset = rail_depth / 2.0
-    # Keep enough root diameter for stability without filling the whole rail depth.
-    trunk_radius = max(1.15, lightweight.rib_width * 0.45, rail_depth * 0.34)
-    tip_radius = max(0.4, trunk_radius * 0.18)
-
-    perimeter, map_point = rounded_perimeter_mapper(spec, inset)
-
-    base_s_positions = _side_tree_base_s_positions(spec, inset)
-    base_pts = np.array([map_point(s, z_min)[0] for s in base_s_positions])
-
-    # --- 2-D grid attractors: inset from every edge of the top rail by tip_radius ---
-    # Z: tip sphere bottom sits at z_max → centre at z_max + tip_radius.
-    # XY: usable half-depth = rail_depth/2 - tip_radius so every sphere edge
-    #     lands ≥ tip_radius inside both the outer and inner rail faces.
-    # Inset attractor centres by tip_radius so the tube EDGE lands at the rail
-    # face, not the centre.  Z is exempt — flat cap top is already at attr_z.
-    attr_z = z_max
-    usable_half = rail_depth / 2.0 - tip_radius
-    n_perim = max(60, int(np.ceil(perimeter / 2.5)))
-    depth_steps = 6
-    attractors_list: list[np.ndarray] = []
-    attractor_s_vals: list[float] = []
-    for i in range(n_perim):
-        s = perimeter * i / n_perim
-        pt, outward_normal = map_point(s, attr_z)
-        for d in range(depth_steps):
-            # d=0 → outer inset face; d=depth_steps-1 → inner inset face
-            frac = d / (depth_steps - 1)
-            offset = (1.0 - 2.0 * frac) * usable_half
-            attractors_list.append(pt + outward_normal * offset)
-            attractor_s_vals.append(s)
-    attractors = np.array(attractors_list)
-    attractor_s = np.array(attractor_s_vals)
-
-    # Voronoi assignment by arc-length, not XY distance.
-    # XY distance misassigns corner attractors to adjacent straight-section
-    # trees (which are closer in XY despite being far along the perimeter).
-    # Arc-length wraps correctly around the closed perimeter loop.
-    base_s_arr = np.array(base_s_positions)
-    if len(base_s_arr) > 1:
-        raw_diff = np.abs(attractor_s[:, None] - base_s_arr[None, :])
-        arc_dists = np.minimum(raw_diff, perimeter - raw_diff)
-        assignments = np.argmin(arc_dists, axis=1)
-    else:
-        assignments = np.zeros(len(attractors), dtype=int)
-
-    meshes: list[trimesh.Trimesh] = []
-    for si in range(len(base_s_positions)):
-        tree_attractors = attractors[assignments == si]
-        if len(tree_attractors) == 0:
-            tree_attractors = attractors[:max(4, len(attractors) // len(base_s_positions))]
-        # Surface tangent at this base point: rotate the outward normal +90° in XY.
-        _, outward_normal = map_point(base_s_positions[si], z_min)
-        surface_tangent = np.array([-outward_normal[1], outward_normal[0], 0.0], dtype=float)
-        mesh = _make_tree(
-            base_pts[si].copy(), tree_attractors,
-            trunk_radius, tip_radius, z_max,
-            seed=float(si) * 1.618,
-            flat_base=True,
-            initial_side=surface_tangent,
-            side_scale=_TREE_OVAL_RATIO,
-            bark=lightweight.tree_bark,
-        )
-        if len(mesh.vertices) > 0:
-            meshes.append(mesh)
-    return meshes
-
-
-def cylindrical_tree_struts(
-    center: tuple[float, float],
-    radius: float,
-    wall_depth: float,
-    z_min: float,
-    z_max: float,
-    lightweight: LightweightSpec,
-    phase: float = 0.0,
-) -> list[trimesh.Trimesh]:
-    # Slimmer roots reduce volume while preserving a printable base and bore clearance.
-    trunk_radius = max(1.10, lightweight.rib_width * 0.45, wall_depth * 0.40)
-    tip_radius = max(0.4, trunk_radius * 0.18)
-    center_xy = np.asarray(center, dtype=float)
-    n_trees = 6   # evenly spaced at 60° intervals + phase
-
-    # Trunk bases sit just inside the ring, biased toward the inner face but
-    # offset outward by trunk_radius + 0.5 mm so the cup-bore cutter
-    # (which reaches to cup_bore_r = radius - wall_depth/2) cannot intersect
-    # the trunk body.
-    # Top ring spans radius → radius + wall_depth/2 radially.
-    # Attractors are inset from both radial edges and from the bottom z face
-    # by tip_radius so every tip sphere lands fully inside the top ring volume.
-    cup_bore_r = radius - wall_depth / 2.0     # inner edge of ring = bore cut radius
-    base_r = cup_bore_r + trunk_radius + 0.5   # just clear of bore surface
-    # Attractors must span the FULL ring underside: from the bore edge out to the
-    # outer ring face.  raw_inner_r is the bore radius (not the midpoint).
-    raw_inner_r = cup_bore_r                   # actual inner edge of top ring zone
-    raw_outer_r = radius + wall_depth / 2.0   # physical outer edge of top ring zone
-    # Inset attractor centres by tip_radius so the tube EDGE (not centre)
-    # lands at each surface boundary.  Z is exempt — the flat cap top IS at
-    # attr_z so no inset is needed in that direction.
-    inner_r = raw_inner_r + tip_radius
-    outer_r = raw_outer_r - tip_radius
-    if inner_r > outer_r:
-        inner_r = outer_r = (raw_inner_r + raw_outer_r) / 2.0
-
-    # Build attractors with uniform areal density: scale angular sample count
-    # proportionally to circumference at each radial step so inner and outer
-    # rings get the same point spacing (~3 mm target).
-    attr_z = z_max   # flat cap top lands exactly on the ring underside
-    target_spacing = 3.0   # mm between attractor points
-    depth_steps = 6
-    attractors_list: list[np.ndarray] = []
-    for d in range(depth_steps):
-        frac = d / max(depth_steps - 1, 1)
-        r_here = inner_r + frac * (outer_r - inner_r)
-        n_at_r = max(4, int(np.ceil(2.0 * np.pi * r_here / target_spacing)))
-        for i in range(n_at_r):
-            angle = 2.0 * np.pi * i / n_at_r
-            attractors_list.append(np.array([
-                center_xy[0] + r_here * np.cos(angle),
-                center_xy[1] + r_here * np.sin(angle),
-                float(attr_z),
-            ]))
-    attractors = np.array(attractors_list)
-
-    sector_half = np.pi / n_trees   # 45° half-angle for 4 trees
-    meshes: list[trimesh.Trimesh] = []
-
-    for ti in range(n_trees):
-        tree_angle = 2.0 * np.pi * ti / n_trees + phase
-        # Base on the outer cup surface (base_r), not the wider top-ring radius.
-        base_pos = np.array([
-            center_xy[0] + base_r * np.cos(tree_angle),
-            center_xy[1] + base_r * np.sin(tree_angle),
-            float(z_min),
-        ])
-
-        attr_angles = np.arctan2(
-            attractors[:, 1] - center_xy[1],
-            attractors[:, 0] - center_xy[0],
-        )
-        angular_diff = np.abs(((attr_angles - tree_angle + np.pi) % (2.0 * np.pi)) - np.pi)
-        tree_attractors = attractors[angular_diff <= sector_half]
-        if len(tree_attractors) == 0:
-            tree_attractors = attractors
-
-        # Circumferential tangent at this tree angle (tangent to the cup wall).
-        surface_tangent = np.array([-np.sin(tree_angle), np.cos(tree_angle), 0.0], dtype=float)
-        mesh = _make_tree(
-            base_pos, tree_attractors,
-            trunk_radius, tip_radius, z_max,
-            seed=float(ti) * 2.718 + phase,
-            flat_base=True,
-            initial_side=surface_tangent,
-            side_scale=_TREE_OVAL_RATIO,
-            bark=lightweight.tree_bark,
-        )
-        if len(mesh.vertices) > 0:
-            meshes.append(mesh)
-    return meshes
 
 
 def _collapse_non_manifold_edges(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
@@ -2319,6 +1576,26 @@ def cap_triangular_boundary_loops(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
     return result
 
 
+def _make_triangular_prism(
+    tri_a: list[tuple[float, float, float]],
+    tri_b: list[tuple[float, float, float]],
+) -> trimesh.Trimesh:
+    """Closed triangular prism between two parallel triangular faces."""
+    verts = np.array(tri_a + tri_b, dtype=float)
+    faces = np.array([
+        [0, 2, 1],
+        [3, 4, 5],
+        [0, 1, 4], [0, 4, 3],
+        [1, 2, 5], [1, 5, 4],
+        [2, 0, 3], [2, 3, 5],
+    ], dtype=int)
+    mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+    mesh.fix_normals()
+    if mesh.volume < 0:
+        mesh.invert()
+    return mesh
+
+
 def _rounded_top_boss(
     boss_width: float,
     boss_depth: float,
@@ -2337,38 +1614,58 @@ def _rounded_top_boss(
     half_w = boss_width / 2.0
     r = max(0.0, min(fillet, half_w - 1e-3, boss_height - 1e-3))
     if r <= 1e-6:
-        return translated_box(
+        mesh = translated_box(
             (boss_width, boss_depth, boss_height),
             (0.0, boss_depth / 2.0, boss_height / 2.0),
         )
+    else:
+        pts: list[tuple[float, float]] = [
+            (-half_w, 0.0),
+            (half_w, 0.0),
+            (half_w, boss_height - r),
+        ]
+        for i in range(1, arc_segments + 1):
+            theta = i / arc_segments * (np.pi / 2.0)
+            pts.append((half_w - r + r * np.cos(theta), boss_height - r + r * np.sin(theta)))
+        pts.append((-half_w + r, boss_height))
+        for i in range(1, arc_segments + 1):
+            theta = np.pi / 2.0 + i / arc_segments * (np.pi / 2.0)
+            pts.append((-half_w + r + r * np.cos(theta), boss_height - r + r * np.sin(theta)))
 
-    pts: list[tuple[float, float]] = [
-        (-half_w, 0.0),
-        (half_w, 0.0),
-        (half_w, boss_height - r),
-    ]
-    for i in range(1, arc_segments + 1):
-        theta = i / arc_segments * (np.pi / 2.0)
-        pts.append((half_w - r + r * np.cos(theta), boss_height - r + r * np.sin(theta)))
-    pts.append((-half_w + r, boss_height))
-    for i in range(1, arc_segments + 1):
-        theta = np.pi / 2.0 + i / arc_segments * (np.pi / 2.0)
-        pts.append((-half_w + r + r * np.cos(theta), boss_height - r + r * np.sin(theta)))
+        cross = m3d.CrossSection([pts], fillrule=m3d.FillRule.EvenOdd)
+        solid = m3d.Manifold.extrude(cross, height=boss_depth)
+        raw = solid.to_mesh()
+        mesh = trimesh.Trimesh(
+            vertices=np.array(raw.vert_properties, dtype=float)[:, :3],
+            faces=np.array(raw.tri_verts, dtype=int),
+            process=False,
+        )
+        # extrude_polygon-equivalent leaves the mesh with X=width, Y=height, Z=depth.
+        # Rotate +90° around X so depth maps to +Y and height stays as +Z.
+        rotation = trimesh.transformations.rotation_matrix(np.pi / 2.0, [1.0, 0.0, 0.0])
+        mesh.apply_transform(rotation)
+        mesh.apply_translation([0.0, boss_depth, 0.0])
+        mesh.fix_normals()
 
-    cross = m3d.CrossSection([pts], fillrule=m3d.FillRule.EvenOdd)
-    solid = m3d.Manifold.extrude(cross, height=boss_depth)
-    raw = solid.to_mesh()
-    mesh = trimesh.Trimesh(
-        vertices=np.array(raw.vert_properties, dtype=float)[:, :3],
-        faces=np.array(raw.tri_verts, dtype=int),
-        process=False,
+    # Triangular gussets connecting boss edges to the wall face (Y=0).
+    # Each gusset is a right-triangle prism: legs = boss_depth (45°).
+    gd = boss_depth
+    left_gusset = _make_triangular_prism(
+        [(-half_w, 0.0, 0.0), (-half_w - gd, 0.0, 0.0), (-half_w, boss_depth, 0.0)],
+        [(-half_w, 0.0, boss_height), (-half_w - gd, 0.0, boss_height), (-half_w, boss_depth, boss_height)],
     )
-    # extrude_polygon-equivalent leaves the mesh with X=width, Y=height, Z=depth.
-    # Rotate +90° around X so depth maps to +Y and height stays as +Z.
-    rotation = trimesh.transformations.rotation_matrix(np.pi / 2.0, [1.0, 0.0, 0.0])
-    mesh.apply_transform(rotation)
-    mesh.apply_translation([0.0, boss_depth, 0.0])
+    right_gusset = _make_triangular_prism(
+        [(half_w, 0.0, 0.0), (half_w + gd, 0.0, 0.0), (half_w, boss_depth, 0.0)],
+        [(half_w, 0.0, boss_height), (half_w + gd, 0.0, boss_height), (half_w, boss_depth, boss_height)],
+    )
+    top_gusset = _make_triangular_prism(
+        [(-half_w, 0.0, boss_height), (-half_w, 0.0, boss_height + gd), (-half_w, boss_depth, boss_height)],
+        [(half_w, 0.0, boss_height), (half_w, 0.0, boss_height + gd), (half_w, boss_depth, boss_height)],
+    )
+    mesh = trimesh.boolean.union([mesh, left_gusset, right_gusset, top_gusset], engine="manifold")
     mesh.fix_normals()
+    if mesh.volume < 0:
+        mesh.invert()
     return mesh
 
 
@@ -2457,14 +1754,14 @@ def build_lightweight_mesh(
     main_bore_z = retaining_ring_top_z + retaining_bevel_height
     inner_radius = spec.hole_diameter / 2.0
     retaining_hole_radius = min(lightweight.retaining_hole_diameter / 2.0, inner_radius - 0.25)
-    outer_radius = inner_radius + lightweight.cup_wall
+    outer_radius = inner_radius + FASTENER_WALL_THICKNESS
     top_ring_outer_radius = inner_radius + 2.0 * lightweight.cup_wall
     cup_segments = circle_segments(spec.hole_diameter + 2.0 * lightweight.cup_wall, circle_segment_length)
     retaining_hole_segments = circle_segments(lightweight.retaining_hole_diameter, circle_segment_length)
     magnet_segments = circle_segments(spec.magnet_diameter, circle_segment_length)
 
     solids: list[trimesh.Trimesh] = []
-    side_solids: list[trimesh.Trimesh] = []
+    fastener_walls: list[trimesh.Trimesh] = []
     cutters: list[trimesh.Trimesh] = []
     cup_cutters: list[trimesh.Trimesh] = []
     for cup_index, (cx, cy) in enumerate(centers):
@@ -2495,12 +1792,6 @@ def build_lightweight_mesh(
             (cx, cy, bottom_height / 2.0),
             cup_segments,
         )
-        top_ring_outer = vertical_cylinder(
-            top_ring_outer_radius,
-            lightweight.rib_height,
-            (cx, cy, cup_height - lightweight.rib_height / 2.0),
-            cup_segments,
-        )
         top_ring_bevel = vertical_frustum(
             inner_radius,
             top_ring_outer_radius,
@@ -2508,20 +1799,30 @@ def build_lightweight_mesh(
             (cx, cy, cup_height - lightweight.rib_height / 2.0),
             cup_segments,
         )
+        top_ring_drop = 0.5
+        top_ring_bevel_h = top_ring_outer_radius - outer_radius  # 45°: Δz = Δr from horizontal
+        z_top_bevel_start = cup_height - top_ring_drop
+        z_top_bevel_bottom = z_top_bevel_start - top_ring_bevel_h
         solids.append(bottom_floor)
-        solids.append(top_ring_outer)
-        tree_wall_depth = top_ring_outer_radius - inner_radius
-        solids.extend(
-            cylindrical_tree_struts(
-                (cx, cy),
-                inner_radius + tree_wall_depth / 2.0,
-                tree_wall_depth,
-                0.0,
-                cup_height - lightweight.rib_height + 0.2,
-                lightweight,
-                phase=(cup_index * 0.173) % 1.0,
-            )
-        )
+        solids.append(vertical_cylinder(
+            top_ring_outer_radius,
+            top_ring_drop,
+            (cx, cy, cup_height - top_ring_drop / 2.0),
+            cup_segments,
+        ))
+        solids.append(vertical_frustum(
+            outer_radius,
+            top_ring_outer_radius,
+            top_ring_bevel_h,
+            (cx, cy, z_top_bevel_bottom + top_ring_bevel_h / 2.0),
+            cup_segments,
+        ))
+        # Start above the bottom floor to avoid a coincident outer face at r=outer_radius.
+        wall_z_start = bottom_height + 0.1
+        fastener_walls.append(cylindrical_thin_wall(
+            (cx, cy), inner_radius, wall_z_start,
+            cup_height - lightweight.rib_height + 0.2 - wall_z_start, cup_segments,
+        ))
         cup_cutters.append(inner)
         cup_cutters.append(retaining_hole)
         if retaining_bevel_height > 0.0:
@@ -2544,38 +1845,26 @@ def build_lightweight_mesh(
                 )
             )
 
+    for rib_z in internal_rib_zs:
+        for cup_center, wall_point in perimeter_strut_endpoints(centers, spec, max_length=30.0):
+            solids.append(
+                strut_between(
+                    cup_center,
+                    wall_point,
+                    lightweight.rib_width,
+                    lightweight.rib_height,
+                    rib_z,
+                )
+            )
+
     rail_depth = lightweight.magnet_boss_depth
     low_rim_height = lightweight.rib_height
     top_rail_z = cup_height - lightweight.rib_height / 2.0
-    solids.append(perimeter_rail_band(spec, rail_depth, low_rim_height, low_rim_height / 2.0))
-    solids.append(perimeter_rail_band(spec, rail_depth, lightweight.rib_height, top_rail_z))
+    solids.append(perimeter_rail_band(spec, rail_depth / 2.0, low_rim_height, low_rim_height / 2.0))
+    solids.append(perimeter_triangular_top_rib(spec, rail_depth, rail_depth, cup_height))
 
-    # Slim pillars carry side-tree bases (z ≈ magnet_boss_height) where the
-    # bottom rail no longer reaches; magnet bosses provide the same anchor at
-    # the 8 magnet positions.
-    anchor_inset = rail_depth / 2.0
-    anchor_radius = max(1.5, lightweight.tree_strut_width * 0.65)
-    anchor_sections = circle_segments(2.0 * anchor_radius)
-    _, perimeter_map = rounded_perimeter_mapper(spec, anchor_inset)
-    for s in _side_tree_base_s_positions(spec, anchor_inset):
-        pt, _ = perimeter_map(s, 0.0)
-        solids.append(
-            vertical_cylinder(
-                anchor_radius,
-                lightweight.magnet_boss_height,
-                (float(pt[0]), float(pt[1]), lightweight.magnet_boss_height / 2.0),
-                anchor_sections,
-            )
-        )
-
-    side_solids.extend(
-        side_tree_struts(
-            spec,
-            lightweight,
-            lightweight.magnet_z + lightweight.magnet_boss_height / 2.0 - 0.2,
-            cup_height - lightweight.rib_height + 0.2,
-        )
-    )
+    side_z_max = cup_height - lightweight.rib_height + 0.2
+    solids.append(perimeter_rail_band(spec, FASTENER_WALL_THICKNESS, side_z_max, side_z_max / 2.0))
 
     magnet_spec = replace(spec, magnet_z=lightweight.magnet_z)
     for side in ("front", "back", "left", "right"):
@@ -2584,9 +1873,10 @@ def build_lightweight_mesh(
             solids.append(boss)
             cutters.append(cutter)
 
-    mesh = trimesh.boolean.union([*solids, *side_solids], engine="manifold")
+    mesh = trimesh.boolean.union(solids, engine="manifold")
     if cup_cutters or cutters:
         mesh = trimesh.boolean.difference([mesh, *cup_cutters, *cutters], engine="manifold")
+    mesh = trimesh.boolean.union([mesh, *fastener_walls], engine="manifold")
     mesh.merge_vertices(digits_vertex=2)
     mesh.update_faces(mesh.nondegenerate_faces())
     mesh.remove_unreferenced_vertices()
@@ -2598,6 +1888,7 @@ def build_lightweight_mesh(
         mesh = trimesh.util.concatenate(solid_components)
     mesh = cap_triangular_boundary_loops(mesh)
     mesh = _collapse_non_manifold_edges(mesh)
+    mesh = fill_planar_boundary_loops(mesh, z_value=0.0)
 
     # Shear off any sub-zero protrusions (Bezier-arc bow or tilted trunk rings
     # can dip a fraction of a mm below z=0).  Done as a separate boolean so the
@@ -2645,10 +1936,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--magnet-boss-depth", type=float, default=LightweightSpec.magnet_boss_depth, help="Side magnet boss depth in mm.")
     parser.add_argument("--magnet-boss-width", type=float, default=LightweightSpec.magnet_boss_width, help="Side magnet boss width in mm.")
     parser.add_argument("--magnet-boss-height", type=float, default=LightweightSpec.magnet_boss_height, help="Side magnet boss height in mm.")
-    parser.add_argument("--tree-strut-width", type=float, default=LightweightSpec.tree_strut_width, help="Organic tree branch thickness in mm.")
-    parser.add_argument("--tree-top-spacing", type=float, default=LightweightSpec.tree_top_spacing, help="Approximate spacing between tree supports at top ribs in mm.")
-    parser.add_argument("--tree-roots", type=int, default=LightweightSpec.tree_roots, help="Root count for each cylindrical tree support.")
-    parser.add_argument("--tree-bark", action="store_true", default=LightweightSpec.tree_bark, help="Carve V-shaped bark trenches into tree supports.")
     parser.add_argument("--min-wall", type=float, default=OrganizerSpec.min_wall, help="Minimum wall between holes in mm.")
     parser.add_argument(
         "--edge-wall",
@@ -2691,10 +1978,6 @@ def main() -> None:
         magnet_boss_depth=args.magnet_boss_depth,
         magnet_boss_width=args.magnet_boss_width,
         magnet_boss_height=args.magnet_boss_height,
-        tree_strut_width=args.tree_strut_width,
-        tree_top_spacing=args.tree_top_spacing,
-        tree_roots=args.tree_roots,
-        tree_bark=args.tree_bark,
     )
 
     mesh = build_lightweight_mesh(spec, lightweight)

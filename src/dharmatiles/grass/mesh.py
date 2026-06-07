@@ -38,10 +38,10 @@ def build_meshes(paths: list[GrassPath], cfg: GrassConfig, scene, surface) -> li
         # Step 3: update support_z from actual mesh top surface.
         n_pts = len(lifted_points)
         taper_start = max(1, int(np.floor((n_pts - 1) * 0.8125)))
-        pt_thicknesses = np.full(n_pts, species.thickness, dtype=float)
+        pt_thicknesses = np.full(n_pts, species.blade_thickness, dtype=float)
         if taper_start < n_pts:
             t = np.linspace(0.0, 1.0, n_pts - taper_start)
-            pt_thicknesses[taper_start:] = species.thickness * np.cos(t * np.pi / 2.0)
+            pt_thicknesses[taper_start:] = species.blade_thickness * np.cos(t * np.pi / 2.0)
 
         _rasterise_sloped_path(
             scene.support_z,
@@ -49,7 +49,7 @@ def build_meshes(paths: list[GrassPath], cfg: GrassConfig, scene, surface) -> li
             np.asarray(lifted_points, dtype=float),
             path.seed.blade_width,
             pt_thicknesses,
-            species.n_top_facets,
+            species.blade_top_facets,
         )
 
     return meshes

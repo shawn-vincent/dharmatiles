@@ -75,8 +75,8 @@ def plant_seeds(
 
                 seed = _make_seed(x, y, group_dir, species, rng)
                 z0 = max(terrain_z, floor_z) + seed.blade_clearance
-                # For n=1 (flat) thickness has no effect above the equator.
-                effective_top = 0.0 if species.n_top_facets == 1 else species.thickness
+                # For n=1 (flat) blade_thickness has no effect above the equator.
+                effective_top = 0.0 if species.blade_top_facets == 1 else species.blade_thickness
                 last_stamp = _stamp_seed(occ_z, surface, x, y, z0, seed.blade_width)
                 paths.append(GrowingPath(seed=seed, points=[(x, y, z0)], last_stamp=last_stamp))
 

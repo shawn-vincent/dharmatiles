@@ -12,7 +12,7 @@ from ..seed import GrassPath, GrowingPath
 class FlatGrassGrower:
     """Grow and mesh floppy grass blades with a configurable cross-section.
 
-    Cross-section is controlled by ``species.n_top_facets``:
+    Cross-section is controlled by ``species.blade_top_facets``:
       1  → flat (top surface IS the equator; thickness ignored)
       2  → peaked / leaf (two faces, centre ridge at +thickness)
       N  → round  (N faces, sine arc to +thickness at centre)
@@ -81,8 +81,8 @@ class FlatGrassGrower:
             cz,                     # spine z at previous point
             nz,                     # spine z at new point
             seed.blade_width,
-            species.thickness,
-            species.n_top_facets,
+            species.blade_thickness,
+            species.blade_top_facets,
         )
         return True
 
@@ -100,52 +100,35 @@ class FlatGrassGrower:
         spine = np.asarray(path.points, dtype=float)
         spine = _smooth_blade_spine(spine, species.blade_smooth)
 
-        terrain_root_z = _sample_grid(scene.terrain_z, surface, spine[0, 0], spine[0, 1])
-
-        # For n=1 (flat) thickness is zero-effect above the equator; the root
-        # anchor sits at terrain level.  For n≥2 the anchor sits below terrain
-        # so the blade peak emerges exactly at the terrain surface.
-        effective_top = 0.0 if species.n_top_facets == 1 else species.thickness
-        root_z = terrain_root_z - effective_top
-
-        # Prepend the collapsed root anchor (width=0 → single point below terrain)
-        spine = np.vstack([[[spine[0, 0], spine[0, 1], root_z]], spine])
-
         n = len(spine)
         taper_start = max(1, int(np.floor((n - 1) * 0.8125)))
 
-        # ── Width taper ────────────────────────────────────────────────────────
-        widths = np.zeros(n)          # root (index 0) collapses to a point
-        widths[1:] = seed.blade_width
+        # ── Width taper (full from seed, taper to near-zero at tip) ─────────
+        widths = np.full(n, seed.blade_width)
         if taper_start < n:
             t = np.linspace(0.0, 1.0, n - taper_start)
             widths[taper_start:] = seed.blade_width * np.cos(t * np.pi / 2.0)
-        widths[-1] = 0.0  # collapse tip → convergence pyramid, no degenerate ring
 
-        # ── Keel depth taper (0 at root, full through body, 0 at tip) ─────────
+        # ── Keel depth taper (full from seed, taper near tip) ─────────────────
         base_keel = species.keel_fraction * seed.blade_width
-        keel_depths = np.zeros(n)
-        keel_depths[1:taper_start] = base_keel
+        keel_depths = np.full(n, base_keel)
         if taper_start < n:
             t = np.linspace(0.0, 1.0, n - taper_start)
             keel_depths[taper_start:] = base_keel * np.cos(t * np.pi / 2.0)
 
-        # ── Top-profile height taper (0 at root, full through body, 0 at tip) ─
-        thicknesses = np.zeros(n)
-        thicknesses[1:taper_start] = species.thickness
+        # ── Top-profile height taper (full from seed, taper near tip) ─────────
+        thicknesses = np.full(n, species.blade_thickness)
         if taper_start < n:
             t = np.linspace(0.0, 1.0, n - taper_start)
-            thicknesses[taper_start:] = species.thickness * np.cos(t * np.pi / 2.0)
+            thicknesses[taper_start:] = species.blade_thickness * np.cos(t * np.pi / 2.0)
 
-        # Pin first grown ring so the blade emerges cleanly from the terrain
-        spine[1, 2] = min(spine[1, 2], terrain_root_z - effective_top)
-
-        return _build_blade_mesh(spine, widths, thicknesses, keel_depths, species.n_top_facets, surface)
+        # Both ends are normal rings closed with end-caps.  Ring 0 (seed) is
+        # anchored in the terrain via its keel.  The tip ring tapers to ~zero
+        # width; _make_ring_verts collapses it to a point naturally.
+        return _build_blade_mesh(spine, widths, thicknesses, keel_depths, species.blade_top_facets, surface, close_bottom=True, close_top=True)
 
 
 # ── Cross-section ring construction ──────────────────────────────────────────
-
-_RING_COLLAPSE_EPSILON = 1e-6   # mm — rings narrower than this collapse to a point
 
 
 def _make_ring_verts(
@@ -168,17 +151,17 @@ def _make_ring_verts(
     For n=2: three vertices with the centre one at spine_z + thickness.
     For n≥3: sine arc approximating a round cross-section.
 
-    When width < _RING_COLLAPSE_EPSILON all vertices are placed at *center*
-    (a collapsed ring).  The tube between a collapsed ring and its neighbour
-    forms a convergence pyramid, cleanly capping root and tip.
+    When width < 1e-6 all vertices are placed at *center* (a collapsed ring).
+    The tube faces into a collapsed ring are degenerate and get filtered out
+    by the area threshold in _build_blade_mesh.
 
     The lateral direction is perpendicular to the spine tangent in XY.
     Vertical is always world +Z.
     """
     nvr = n_top_facets + 2
 
-    # Collapsed ring — root anchor or fully-tapered tip
-    if width < _RING_COLLAPSE_EPSILON:
+    # Collapsed ring — fully-tapered tip (or any near-zero width)
+    if width < 1e-6:
         return np.tile(center, (nvr, 1))
 
     half_w = width / 2.0
@@ -202,24 +185,24 @@ def _make_ring_verts(
 
 
 def _build_blade_mesh(
-    spine: np.ndarray,          # (n_rings, 3)
-    widths: np.ndarray,         # (n_rings,) — 0 at root and tip (apex)
-    thicknesses: np.ndarray,    # (n_rings,) — profile heights
-    keel_depths: np.ndarray,    # (n_rings,)
+    spine: np.ndarray,           # (n_rings, 3)
+    widths: np.ndarray,          # (n_rings,) — tapers toward zero at tip
+    thicknesses: np.ndarray,     # (n_rings,) — profile heights
+    keel_depths: np.ndarray,     # (n_rings,)
     n_top_facets: int,
     surface,
+    close_bottom: bool = False,  # end-cap across ring 0
+    close_top: bool = False,     # end-cap across last ring
 ) -> trimesh.Trimesh | None:
-    """Build a closed tube mesh along the spine with the given cross-section.
+    """Build a tube mesh along the spine with the given cross-section.
 
-    Rings with width < _RING_COLLAPSE_EPSILON are treated as apex rings and
-    contribute a single vertex (not nvr).  Adjacent apex→normal or normal→apex
-    transitions become convergence fans that close the mesh without requiring
-    merge_vertices, keeping the mesh manifold by construction.
+    Every ring always contributes nvr vertices.  Rings whose width tapers to
+    ~zero have all vertices collapsed to the spine point by _make_ring_verts;
+    the resulting degenerate faces are filtered by the area threshold below.
+    Both ends can be closed with flat end-cap faces.
     """
     n_rings = len(spine)
-    nvr = n_top_facets + 2  # verts per normal ring: keel + (n+1 top-profile verts)
-
-    is_apex = widths < _RING_COLLAPSE_EPSILON
+    nvr = n_top_facets + 2  # verts per ring: keel + (n_top_facets+1) top-profile verts
 
     # Normalised tangents
     tangents = np.empty_like(spine)
@@ -229,23 +212,17 @@ def _build_blade_mesh(
     norms = np.where(norms < 1e-9, 1.0, norms)
     tangents /= norms
 
-    # Build vertices: apex rings → 1 vertex; normal rings → nvr vertices.
-    ring_offsets = np.empty(n_rings, dtype=int)
+    # Every ring contributes exactly nvr vertices.  Rings whose width tapers to
+    # ~zero have all their vertices collapsed to the spine point by _make_ring_verts;
+    # the resulting degenerate faces are filtered by area_faces > 1e-12 below.
     verts_list: list[np.ndarray] = []
-    offset = 0
     for i in range(n_rings):
-        ring_offsets[i] = offset
-        if is_apex[i]:
-            verts_list.append(spine[i : i + 1].copy())
-            offset += 1
-        else:
-            ring = _make_ring_verts(
-                spine[i], tangents[i],
-                widths[i], thicknesses[i], keel_depths[i],
-                n_top_facets,
-            )
-            verts_list.append(ring)
-            offset += nvr
+        ring = _make_ring_verts(
+            spine[i], tangents[i],
+            widths[i], thicknesses[i], keel_depths[i],
+            n_top_facets,
+        )
+        verts_list.append(ring)
 
     all_verts = np.vstack(verts_list)
     np.clip(all_verts[:, 0], 0.0, surface.tile_w, out=all_verts[:, 0])
@@ -253,37 +230,33 @@ def _build_blade_mesh(
 
     faces: list[list[int]] = []
     for i in range(n_rings - 1):
-        a = int(ring_offsets[i])
-        b = int(ring_offsets[i + 1])
-        a_apex = bool(is_apex[i])
-        b_apex = bool(is_apex[i + 1])
+        a = i * nvr
+        b = (i + 1) * nvr
+        for j in range(nvr):
+            j1 = (j + 1) % nvr
+            faces.append([a + j,  b + j,  b + j1])
+            faces.append([a + j,  b + j1, a + j1])
 
-        if a_apex and b_apex:
-            pass  # two adjacent apices — no surface to build
+    # Bottom end-cap: fan from keel vertex (ring 0, vertex 0) across the base.
+    if close_bottom:
+        a = 0
+        for j in range(1, nvr - 1):
+            faces.append([a, a + j, a + j + 1])
 
-        elif a_apex:
-            # Root convergence: fan from single apex vertex to next ring
-            for j in range(nvr):
-                j1 = (j + 1) % nvr
-                faces.append([a, b + j, b + j1])
-
-        elif b_apex:
-            # Tip convergence: fan from ring to single apex vertex
-            for j in range(nvr):
-                j1 = (j + 1) % nvr
-                faces.append([a + j, b, a + j1])
-
-        else:
-            # Normal tube quad — two triangles per cross-section edge
-            for j in range(nvr):
-                j1 = (j + 1) % nvr
-                faces.append([a + j,  b + j,  b + j1])
-                faces.append([a + j,  b + j1, a + j1])
+    # Top end-cap: fan from keel vertex (last ring, vertex 0) across the tip.
+    if close_top:
+        a = (n_rings - 1) * nvr
+        for j in range(1, nvr - 1):
+            faces.append([a, a + j + 1, a + j])
 
     if not faces:
         return None
 
     mesh = trimesh.Trimesh(vertices=all_verts, faces=np.asarray(faces), process=False)
+    # Merge coincident vertices before filtering so that any zero-width ring
+    # (whose nvr vertex copies all sit at the same point) collapses to a single
+    # shared vertex, making convergence faces properly manifold.
+    mesh.merge_vertices()
     mesh.update_faces(mesh.area_faces > 1e-12)
     mesh.remove_unreferenced_vertices()
     mesh.fix_normals()
