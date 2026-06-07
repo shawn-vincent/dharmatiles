@@ -565,12 +565,7 @@ def _collect_grass_configs(spec: TileSpec) -> list[SpeciesConfig]:
         for layer in region.layers:
             if layer.type == 'grass':
                 d = vars(defaults).copy()
-                params = dict(layer.params)
-                if 'baseWidthPercent' in params:
-                    params['base_width_percent'] = params.pop('baseWidthPercent')
-                if 'baseTaperLength' in params:
-                    params['base_taper_length'] = params.pop('baseTaperLength')
-                d.update(params)
+                d.update(layer.params)
                 cfgs.append(SpeciesConfig(**d))
     return cfgs
 

@@ -14,8 +14,8 @@ class GrassSeed:
     blade_segment_length: float
     blade_n_steps: int
     blade_taper: float
-    base_width_percent: float
-    base_taper_length: float
+    blade_base_width: float
+    blade_base_taper: float
     blade_curl: float
     blade_width: float
     blade_rise_cap: float
@@ -48,11 +48,11 @@ class GrassSeed:
         return math.sin(t * math.pi / 2.0)
 
     def _base_taper(self, point_idx: int, blade_n_steps: int) -> float:
-        base_fraction = max(0.0, float(self.base_width_percent)) / 100.0
+        base_fraction = max(0.0, float(self.blade_base_width))
         if base_fraction >= 1.0:
             return 1.0
 
-        taper_len = max(0.0, float(self.base_taper_length))
+        taper_len = max(0.0, float(self.blade_base_taper))
         if taper_len <= 0.0:
             return 1.0
 

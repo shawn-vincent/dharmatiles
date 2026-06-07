@@ -207,9 +207,9 @@ def _make_seed(
         blade_segment_length=float(species.blade_segment_length),
         blade_n_steps=blade_n_steps,
         blade_taper=float(species.blade_taper),
-        base_width_percent=float(species.base_width_percent),
-        base_taper_length=float(
-            species.blade_taper if species.base_taper_length is None else species.base_taper_length
+        blade_base_width=float(species.blade_base_width),
+        blade_base_taper=float(
+            species.blade_taper if species.blade_base_taper is None else species.blade_base_taper
         ),
         blade_curl=curl_per_step,
         blade_width=blade_width,

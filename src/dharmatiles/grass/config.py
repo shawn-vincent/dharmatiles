@@ -18,8 +18,8 @@ class SpeciesConfig:
     blade_length_max: float = 14.4
     blade_segment_length: float = 0.8
     blade_taper: float = 3.0
-    base_width_percent: float = 100.0
-    base_taper_length: float | None = None
+    blade_base_width: float = 1.0
+    blade_base_taper: float | None = None
     blade_curl_min: float = 0.0
     blade_curl_max: float = 0.8
     blade_smooth: float = 0.0
