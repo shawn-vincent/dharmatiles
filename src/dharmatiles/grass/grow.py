@@ -19,12 +19,12 @@ def grow_all(scene, surface, cfg: GrassConfig, rng: np.random.Generator, verbose
 
     _sort_downstream_first(growing)
     species_map = {species.name: species for species in cfg.species}
-    max_steps = max((path.seed.n_steps for path in growing), default=0)
+    max_steps = max((path.seed.blade_n_steps for path in growing), default=0)
 
     for round_idx in range(max_steps):
         grown = 0
         for path in growing:
-            if not path.alive or round_idx >= path.seed.n_steps:
+            if not path.alive or round_idx >= path.seed.blade_n_steps:
                 path.alive = False
                 continue
             species = species_map[path.seed.species_id]
@@ -74,7 +74,7 @@ def plant_seeds(
                     continue
 
                 seed = _make_seed(x, y, group_dir, species, rng)
-                z0 = max(terrain_z, floor_z) + cfg.clearance
+                z0 = max(terrain_z, floor_z) + seed.blade_clearance
                 # For n=1 (flat) thickness has no effect above the equator.
                 effective_top = 0.0 if species.n_top_facets == 1 else species.thickness
                 last_stamp = _stamp_seed(occ_z, surface, x, y, z0, seed.blade_width)
@@ -189,19 +189,20 @@ def _make_seed(
 ) -> GrassSeed:
     blade_width = float(rng.uniform(species.blade_width_min, species.blade_width_max))
     target_length = float(rng.uniform(species.blade_length_min, species.blade_length_max))
-    n_steps = max(1, int(round(target_length / species.blade_segment_length)))
+    blade_n_steps = max(1, int(round(target_length / species.blade_segment_length)))
     curl = _sample_seed_curl(species, rng)
     # Store curl as radians per step, not total blade curl.
-    curl_per_step = curl / max(n_steps, 1)
+    curl_per_step = curl / max(blade_n_steps, 1)
     return GrassSeed(
         x=float(x),
         y=float(y),
-        direction=float(group_dir + rng.normal(0.0, species.group_dir_jitter)),
+        blade_direction=float(group_dir + rng.normal(0.0, species.group_dir_jitter)),
         blade_segment_length=float(species.blade_segment_length),
-        n_steps=n_steps,
-        curl=curl_per_step,
+        blade_n_steps=blade_n_steps,
+        blade_curl=curl_per_step,
         blade_width=blade_width,
-        rise_cap=float(species.rise_cap),
+        blade_rise_cap=float(species.blade_rise_cap),
+        blade_clearance=float(species.blade_clearance),
         species_id=species.name,
     )
 
@@ -221,7 +222,7 @@ def _sort_downstream_first(paths: list[GrowingPath]) -> None:
     build phase automatically sees blades in the same downstream-first sequence.
     """
     paths.sort(
-        key=lambda p: p.seed.x * np.sin(p.seed.direction) + p.seed.y * np.cos(p.seed.direction),
+        key=lambda p: p.seed.x * np.sin(p.seed.blade_direction) + p.seed.y * np.cos(p.seed.blade_direction),
         reverse=True,
     )
 

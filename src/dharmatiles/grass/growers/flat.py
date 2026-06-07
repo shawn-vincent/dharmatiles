@@ -36,7 +36,7 @@ class FlatGrassGrower:
 
         seed = path.seed
         cx, cy, cz = path.points[-1]
-        direction = seed.direction + seed.curl * (len(path.points) - 1)
+        direction = seed.blade_direction + seed.blade_curl * (len(path.points) - 1)
         tx = cx + seed.blade_segment_length * np.sin(direction)
         ty = cy + seed.blade_segment_length * np.cos(direction)
         hw = seed.blade_width / 2.0
@@ -63,12 +63,12 @@ class FlatGrassGrower:
             y0=cy,
         )
         terrain_z = _sample_grid(scene.terrain_z, surface, tx, ty)
-        nz = max(terrain_z, floor_z) + cfg.clearance
+        nz = max(terrain_z, floor_z) + seed.blade_clearance
 
         if floor_z - terrain_z > cfg.max_stack_height:
             path.alive = False
             return False
-        if nz > cz + seed.rise_cap:
+        if nz > cz + seed.blade_rise_cap:
             path.alive = False
             return False
 

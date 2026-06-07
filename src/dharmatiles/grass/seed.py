@@ -9,12 +9,13 @@ from dataclasses import dataclass
 class GrassSeed:
     x: float
     y: float
-    direction: float
+    blade_direction: float
     blade_segment_length: float
-    n_steps: int
-    curl: float
+    blade_n_steps: int
+    blade_curl: float
     blade_width: float
-    rise_cap: float
+    blade_rise_cap: float
+    blade_clearance: float
     species_id: str
 
 

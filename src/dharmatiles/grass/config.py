@@ -20,7 +20,8 @@ class SpeciesConfig:
     blade_curl_min: float = 0.0
     blade_curl_max: float = 0.8
     blade_smooth: float = 0.0
-    rise_cap: float = 2.0
+    blade_rise_cap: float = 2.0
+    blade_clearance: float = 0.2
 
     # Cross-section shape.
     # n_top_facets controls the top profile above the blade equator (spine plane):
@@ -49,6 +50,5 @@ class GrassConfig:
     """Top-level grass config."""
 
     species: list[SpeciesConfig] = field(default_factory=lambda: [SpeciesConfig()])
-    clearance: float = 0.0
     max_stack_height: float = 2.0
     seed: int = 0
