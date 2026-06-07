@@ -332,6 +332,50 @@ Given a `GrassPath` with N spine points, `build_mesh` does:
 
 5. **Clamp XY** — clip all vertices to the tile footprint.
 
+### Keel-end angle at the tip
+
+The tip end-cap is a triangle fan from the keel vertex across the (collapsed)
+top-profile ring.  The angle that face makes relative to the world is the
+critical FDM-printability constraint: faces that overhang more than 45° from
+vertical are unsupported cantilevers; faces that form nearly-vertical slivers
+collapse during printing.
+
+**Two constraints, combined:**
+
+**Rule 1 — shape: keel 45° from tip tangent.**
+In the vertical plane containing the tip tangent, the keel point is placed so
+that the tip end-cap face makes a 45° angle with the tip tangent direction.
+Concretely: project the tip tangent into the vertical plane to get the
+tangent's elevation angle θ (positive = upward).  The keel end-cap face normal
+then points at θ − 45° from horizontal.
+
+| Blade tip elevation | Tip face normal elevation | Angle from Z |
+|---|---|---|
+| +90° (straight up) | +45° | 45° |
+| +30° | −15° | 75° |
+| 0° (horizontal) | −45° | 135°... wait, see Rule 2 |
+| −30° | −75° | clamp → Rule 2 |
+| −90° (straight down) | −135° | clamp → Rule 2 |
+
+**Rule 2 — printability floor: keel never within 45° of world Z.**
+Rule 1 can push the keel face normal to point steeply downward when the blade
+dips below horizontal.  Clamp: the keel direction must always be ≥ 45° from
+the world Z axis (i.e. the keel point is never higher than 45° above the XY
+plane from the spine).  This keeps every tip face within the FDM safe-overhang
+envelope.
+
+**Combined rule:** `keel_angle_from_Z = max(45°, angle_from_Z(rule_1_result))`
+
+For a horizontal blade, Rule 1 gives exactly 45° from Z — at the safe-overhang
+limit.  For upward blades Rule 1 pushes the keel face toward horizontal,
+providing bulk at the tip.  For blades dipping below ~0° elevation, Rule 2
+clamps at 45° — the same geometry as a horizontal blade.
+
+**Implementation note:** this affects only the *tip* end-cap ring's keel depth
+(and the last few tapered rings before it).  The body of the blade uses a
+fixed `keel_depth = keel_fraction × blade_width` as before.  At the tip, the
+keel depth is recomputed from the tip tangent elevation and the two rules above.
+
 ### Future post-processing slot
 
 Between `grow_all()` and `build_meshes()`, insert any path operations here:
