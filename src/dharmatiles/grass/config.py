@@ -17,14 +17,14 @@ class SpeciesConfig:
     blade_length_min: float = 5.0
     blade_length_max: float = 10.0
     blade_segment_length: float = 0.8
-    blade_taper: float = 3.0
+    blade_taper: float = 1.0
     blade_base_width: float = 0.75
     blade_base_taper: float | None = 3.0
     blade_curl_min: float = 0.5
     blade_curl_max: float = 0.8
     blade_smooth: float = 0.8
     blade_rise_cap: float = 2.0
-    blade_clearance: float = 0.2
+    blade_clearance: float = 0.3
 
     # Cross-section shape.
     # blade_top_facets controls the top profile above the blade equator (spine plane):
@@ -34,9 +34,16 @@ class SpeciesConfig:
     # blade_thickness is the distance from the equator to the top profile peak.
     # keel_fraction sets keel_depth = keel_fraction × blade_width.
     # keel_fraction > 0.5 gives a keel angle steeper than 45° for any width.
-    blade_top_facets: int = 4
-    blade_thickness: float = 0.2
+    blade_top_facets: int = 2
+    blade_thickness: float = 0.4
     keel_fraction: float = 0.6
+
+    # FDM printability floor.
+    # The blade body is clamped to at least this width (mm) so short or thin blades
+    # produce walls thick enough for FDM to render without collapsing.  Only the
+    # tip-taper zone (last blade_taper mm) is exempt — that portion still tapers
+    # freely to a point.  Set to 0.0 to disable.
+    min_printable_width: float = 1.2
 
     # Placement.
     groups_per_square: int = 3

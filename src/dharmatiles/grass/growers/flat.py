@@ -116,6 +116,17 @@ class FlatGrassGrower:
         # ── Width taper (physical distance from the actual final tip) ─────────
         widths = seed.blade_width * point_tapers
 
+        # ── Body-width floor (FDM printability) ───────────────────────────────
+        # Clamp widths to min_printable_width everywhere except the tip-taper
+        # zone (last blade_taper mm), which is left free so the tip still tapers
+        # to a point.  For a 0.4 mm nozzle, 1.2 mm = 3× nozzle is the default.
+        min_w = float(species.min_printable_width)
+        if min_w > 0.0:
+            taper_start = total_len - float(seed.blade_taper)
+            body_mask = path_dists <= taper_start
+            # max(width, min_w) in body; max(width, 0) = width in tip zone.
+            widths = np.maximum(widths, min_w * body_mask)
+
         # ── Keel depth — fixed throughout; does not taper with width ──────────
         base_keel = species.keel_fraction * seed.blade_width
         keel_depths = np.full(n, base_keel)
