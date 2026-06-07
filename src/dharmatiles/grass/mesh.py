@@ -36,7 +36,8 @@ def build_meshes(paths: list[GrassPath], cfg: GrassConfig, scene, surface) -> li
 
         # Step 3: update support_z from actual mesh top surface.
         n_pts = len(lifted_points)
-        point_tapers = np.array([path.seed.point_taper(i) for i in range(n_pts)], dtype=float)
+        actual_n_steps = n_pts - 1
+        point_tapers = np.array([path.seed.point_taper(i, actual_n_steps) for i in range(n_pts)], dtype=float)
         pt_thicknesses = species.blade_thickness * point_tapers
         pt_widths = path.seed.blade_width * point_tapers
 

@@ -109,9 +109,10 @@ class FlatGrassGrower:
         spine = _smooth_blade_spine(spine, species.blade_smooth)
 
         n = len(spine)
-        point_tapers = np.array([seed.point_taper(i) for i in range(n)], dtype=float)
+        actual_n_steps = n - 1
+        point_tapers = np.array([seed.point_taper(i, actual_n_steps) for i in range(n)], dtype=float)
 
-        # ── Width taper (physical distance from tip, sampled at seed time) ───
+        # ── Width taper (physical distance from the actual final tip) ─────────
         widths = seed.blade_width * point_tapers
 
         # ── Keel depth — fixed throughout; does not taper with width ──────────
