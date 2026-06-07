@@ -141,6 +141,47 @@ def _spine_distances(spine: np.ndarray) -> np.ndarray:
     return np.concatenate(([0.0], np.cumsum(segment_lengths)))
 
 
+def _compute_keel_direction(tangent: np.ndarray) -> np.ndarray:
+    """Return the unit keel direction for a blade tip with the given tangent.
+
+    Rule 1 — shape: rotate the tangent 45° toward −Z in the vertical plane
+    containing the tangent.  This keeps the keel end-cap at a consistent 45°
+    mitre relative to the blade's own axis — giving upward blades bulk and
+    giving horizontal blades the standard pointy-grass look.
+
+    Rule 2 — printability floor: clamp so the result is never more than 45°
+    below horizontal (elevation ≥ −45°, i.e. keel.z ≥ −1/√2 ≈ −0.707).
+    This prevents the underside of a steeply-downward blade tip from becoming
+    an unsupported FDM cantilever.
+    """
+    COS45 = np.sqrt(0.5)  # 1/√2
+
+    # Singular case: blade is nearly vertical (no preferred horizontal direction).
+    t_horiz_sq = tangent[0] ** 2 + tangent[1] ** 2
+    if t_horiz_sq < 1e-18:
+        # Use +X as the arbitrary horizontal component; keel at 45° below horizontal.
+        return np.array([COS45, 0.0, -COS45])
+
+    # N_down: perpendicular to T in the vertical plane containing T and Z,
+    # pointing "downward" (toward −Z relative to T).
+    z_dot_t = float(tangent[2])
+    perp = np.array([0.0, 0.0, 1.0]) - z_dot_t * tangent  # toward +Z relative to T
+    N_down = -(perp / np.linalg.norm(perp))               # flip → toward −Z relative to T
+
+    # Rule 1: rotate T by 45° toward N_down.
+    # Both T and N_down are orthogonal unit vectors, so the result is a unit vector.
+    K = tangent * COS45 + N_down * COS45
+
+    # Rule 2: clamp elevation to ≥ −45° (K[2] ≥ −COS45).
+    if K[2] < -COS45:
+        K_horiz = np.array([K[0], K[1], 0.0])
+        K_horiz_norm = np.linalg.norm(K_horiz)
+        K_horiz_dir = K_horiz / K_horiz_norm if K_horiz_norm > 1e-9 else np.array([1.0, 0.0, 0.0])
+        K = K_horiz_dir * COS45 + np.array([0.0, 0.0, -COS45])
+
+    return K
+
+
 def _make_ring_verts(
     center: np.ndarray,
     tangent: np.ndarray,
@@ -152,7 +193,7 @@ def _make_ring_verts(
     """Cross-section ring vertices: (n_top_facets + 2, 3).
 
     Layout:
-      vertex 0         — keel  (centre, z = spine_z - keel_depth)
+      vertex 0         — keel  (centre + keel_dir * keel_depth)
       vertices 1..n+1  — top profile from left (−w/2) to right (+w/2),
                          heights = thickness × sin(π × i/n) above spine_z.
 
@@ -161,18 +202,27 @@ def _make_ring_verts(
     For n=2: three vertices with the centre one at spine_z + thickness.
     For n≥3: sine arc approximating a round cross-section.
 
-    When width < 1e-6 all vertices are placed at *center* (a collapsed ring).
-    The tube faces into a collapsed ring are degenerate and get filtered out
-    by the area threshold in _build_blade_mesh.
+    For non-collapsed rings (width ≥ 1e-6), the keel hangs straight down
+    (world −Z).  For collapsed tip rings (width < 1e-6), the top-profile
+    vertices all collapse to *center* but the keel vertex is placed using
+    _compute_keel_direction so the tip end-cap has the correct FDM angle:
+    45° from the blade tangent, clamped to never point more than 45° below
+    horizontal.
 
     The lateral direction is perpendicular to the spine tangent in XY.
     Vertical is always world +Z.
     """
     nvr = n_top_facets + 2
 
-    # Collapsed ring — fully-tapered tip (or any near-zero width)
+    # Collapsed tip ring — all top-profile vertices converge to *center*, but
+    # the keel vertex is placed at the tangent-derived position so the tube
+    # faces from the previous real ring form the correct tip-end angle.
     if width < 1e-6:
-        return np.tile(center, (nvr, 1))
+        verts = np.tile(center, (nvr, 1)).copy()
+        if keel_depth > 1e-9:
+            keel_dir = _compute_keel_direction(tangent)
+            verts[0] = center + keel_dir * keel_depth
+        return verts
 
     half_w = width / 2.0
 
