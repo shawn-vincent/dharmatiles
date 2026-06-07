@@ -1576,20 +1576,65 @@ def cap_triangular_boundary_loops(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
     return result
 
 
-def _make_triangular_prism(
-    tri_a: list[tuple[float, float, float]],
-    tri_b: list[tuple[float, float, float]],
+def _rounded_top_profile(
+    width: float,
+    height: float,
+    fillet: float,
+    arc_segments: int,
+) -> list[tuple[float, float]]:
+    """2D rounded-top boss profile as (x, z) points in counter-clockwise order."""
+    half_w = width / 2.0
+    r = max(0.0, min(fillet, half_w - 1e-3, height - 1e-3))
+    if r <= 1e-6:
+        return [
+            (-half_w, 0.0),
+            (half_w, 0.0),
+            (half_w, height),
+            (-half_w, height),
+        ]
+
+    pts: list[tuple[float, float]] = [
+        (-half_w, 0.0),
+        (half_w, 0.0),
+        (half_w, height - r),
+    ]
+    for i in range(1, arc_segments + 1):
+        theta = i / arc_segments * (np.pi / 2.0)
+        pts.append((half_w - r + r * np.cos(theta), height - r + r * np.sin(theta)))
+    pts.append((-half_w + r, height))
+    for i in range(1, arc_segments + 1):
+        theta = np.pi / 2.0 + i / arc_segments * (np.pi / 2.0)
+        pts.append((-half_w + r + r * np.cos(theta), height - r + r * np.sin(theta)))
+    return pts
+
+
+def _loft_profiles(
+    outer_profile: list[tuple[float, float]],
+    inner_profile: list[tuple[float, float]],
+    depth: float,
 ) -> trimesh.Trimesh:
-    """Closed triangular prism between two parallel triangular faces."""
-    verts = np.array(tri_a + tri_b, dtype=float)
-    faces = np.array([
-        [0, 2, 1],
-        [3, 4, 5],
-        [0, 1, 4], [0, 4, 3],
-        [1, 2, 5], [1, 5, 4],
-        [2, 0, 3], [2, 3, 5],
-    ], dtype=int)
-    mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+    """Closed loft from a wall-facing outer profile at Y=0 to an inner profile."""
+    if len(outer_profile) != len(inner_profile):
+        raise ValueError("Loft profiles must have the same vertex count")
+
+    count = len(outer_profile)
+    vertices = np.array(
+        [(x, 0.0, z) for x, z in outer_profile]
+        + [(x, depth, z) for x, z in inner_profile],
+        dtype=float,
+    )
+    faces: list[list[int]] = []
+
+    for i in range(1, count - 1):
+        faces.append([0, i + 1, i])
+        faces.append([count, count + i, count + i + 1])
+
+    for i in range(count):
+        j = (i + 1) % count
+        faces.append([i, j, count + j])
+        faces.append([i, count + j, count + i])
+
+    mesh = trimesh.Trimesh(vertices=vertices, faces=np.asarray(faces, dtype=int), process=False)
     mesh.fix_normals()
     if mesh.volume < 0:
         mesh.invert()
@@ -1603,66 +1648,24 @@ def _rounded_top_boss(
     fillet: float,
     arc_segments: int = 12,
 ) -> trimesh.Trimesh:
-    """Boss extruded from a rounded-top-rectangle profile (in the wall-facing view).
+    """Boss lofted from a wider wall footprint to a rounded inner profile.
 
-    Returned in 'front-side frame': X in [-boss_width/2, +boss_width/2],
-    Y in [0, boss_depth], Z in [0, boss_height]. Fillet rounds the top X-axis
-    corners (the silhouette seen looking at the wall from inside the box).
+    Returned in 'front-side frame': Y=0 is the outside wall face, and
+    Y=boss_depth is the narrowed magnet-boss face inside the organizer.
     """
-    import manifold3d as m3d
-
     half_w = boss_width / 2.0
     r = max(0.0, min(fillet, half_w - 1e-3, boss_height - 1e-3))
-    if r <= 1e-6:
-        mesh = translated_box(
-            (boss_width, boss_depth, boss_height),
-            (0.0, boss_depth / 2.0, boss_height / 2.0),
-        )
-    else:
-        pts: list[tuple[float, float]] = [
-            (-half_w, 0.0),
-            (half_w, 0.0),
-            (half_w, boss_height - r),
-        ]
-        for i in range(1, arc_segments + 1):
-            theta = i / arc_segments * (np.pi / 2.0)
-            pts.append((half_w - r + r * np.cos(theta), boss_height - r + r * np.sin(theta)))
-        pts.append((-half_w + r, boss_height))
-        for i in range(1, arc_segments + 1):
-            theta = np.pi / 2.0 + i / arc_segments * (np.pi / 2.0)
-            pts.append((-half_w + r + r * np.cos(theta), boss_height - r + r * np.sin(theta)))
+    inner_profile = _rounded_top_profile(boss_width, boss_height, r, arc_segments)
+    taper = boss_depth
+    outer_fillet = 0.0 if r <= 1e-6 else r + taper
+    outer_profile = _rounded_top_profile(
+        boss_width + taper * 2.0,
+        boss_height + taper,
+        outer_fillet,
+        arc_segments,
+    )
+    mesh = _loft_profiles(outer_profile, inner_profile, boss_depth)
 
-        cross = m3d.CrossSection([pts], fillrule=m3d.FillRule.EvenOdd)
-        solid = m3d.Manifold.extrude(cross, height=boss_depth)
-        raw = solid.to_mesh()
-        mesh = trimesh.Trimesh(
-            vertices=np.array(raw.vert_properties, dtype=float)[:, :3],
-            faces=np.array(raw.tri_verts, dtype=int),
-            process=False,
-        )
-        # extrude_polygon-equivalent leaves the mesh with X=width, Y=height, Z=depth.
-        # Rotate +90° around X so depth maps to +Y and height stays as +Z.
-        rotation = trimesh.transformations.rotation_matrix(np.pi / 2.0, [1.0, 0.0, 0.0])
-        mesh.apply_transform(rotation)
-        mesh.apply_translation([0.0, boss_depth, 0.0])
-        mesh.fix_normals()
-
-    # Triangular gussets connecting boss edges to the wall face (Y=0).
-    # Each gusset is a right-triangle prism: legs = boss_depth (45°).
-    gd = boss_depth
-    left_gusset = _make_triangular_prism(
-        [(-half_w, 0.0, 0.0), (-half_w - gd, 0.0, 0.0), (-half_w, boss_depth, 0.0)],
-        [(-half_w, 0.0, boss_height), (-half_w - gd, 0.0, boss_height), (-half_w, boss_depth, boss_height)],
-    )
-    right_gusset = _make_triangular_prism(
-        [(half_w, 0.0, 0.0), (half_w + gd, 0.0, 0.0), (half_w, boss_depth, 0.0)],
-        [(half_w, 0.0, boss_height), (half_w + gd, 0.0, boss_height), (half_w, boss_depth, boss_height)],
-    )
-    top_gusset = _make_triangular_prism(
-        [(-half_w, 0.0, boss_height), (-half_w, 0.0, boss_height + gd), (-half_w, boss_depth, boss_height)],
-        [(half_w, 0.0, boss_height), (half_w, 0.0, boss_height + gd), (half_w, boss_depth, boss_height)],
-    )
-    mesh = trimesh.boolean.union([mesh, left_gusset, right_gusset, top_gusset], engine="manifold")
     mesh.fix_normals()
     if mesh.volume < 0:
         mesh.invert()
@@ -1701,7 +1704,8 @@ def magnet_boss_and_cutter(
             circle_segments_count,
         )
     elif side == "back":
-        boss.apply_translation([position, spec.depth - boss_depth, 0.0])
+        boss.apply_transform(trimesh.transformations.scale_matrix(-1.0, [0.0, 0.0, 0.0], [0.0, 1.0, 0.0]))
+        boss.apply_translation([position, spec.depth, 0.0])
         cutter = axis_cylinder(
             magnet_radius,
             cutter_length,
@@ -1710,8 +1714,8 @@ def magnet_boss_and_cutter(
             circle_segments_count,
         )
     elif side == "left":
-        boss.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2.0, [0.0, 0.0, 1.0]))
-        boss.apply_translation([boss_depth, position, 0.0])
+        boss.apply_transform(trimesh.transformations.rotation_matrix(-np.pi / 2.0, [0.0, 0.0, 1.0]))
+        boss.apply_translation([0.0, position, 0.0])
         cutter = axis_cylinder(
             magnet_radius,
             cutter_length,
@@ -1731,6 +1735,9 @@ def magnet_boss_and_cutter(
         )
     else:
         raise ValueError(f"Unknown side: {side}")
+    boss.fix_normals()
+    if boss.volume < 0:
+        boss.invert()
     return boss, cutter
 
 

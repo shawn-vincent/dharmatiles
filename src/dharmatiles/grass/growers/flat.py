@@ -53,12 +53,10 @@ class FlatGrassGrower:
         floor_z = _sample_footprint_max(
             occ_z,
             scene.support_z,
-            path.last_stamp,
             surface,
             tx,
             ty,
             seed.blade_width,
-            direction,
             x0=cx,
             y0=cy,
         )
@@ -73,7 +71,7 @@ class FlatGrassGrower:
             return False
 
         path.points.append((float(tx), float(ty), float(nz)))
-        path.last_stamp = _stamp_swept_footprint(
+        _stamp_swept_footprint(
             occ_z,
             surface,
             (cx, cy),
@@ -319,103 +317,27 @@ def _sample_grid(grid: np.ndarray, surface, x: float, y: float) -> float:
 def _sample_footprint_max(
     occ_z: np.ndarray,
     base_z: np.ndarray,
-    last_stamp: dict[tuple[int, int], float] | None,
     surface,
     x: float,
     y: float,
     width: float,
-    direction: float,
     x0: float | None = None,
     y0: float | None = None,
 ) -> float:
-    """Sample the maximum occ_z over the swept footprint of the next step.
-
-    The footprint is the swept rectangle from (x0, y0) to (x, y) — identical
-    in shape to the stamp written by ``_stamp_swept_footprint``.  Cells from
-    any previous step that are recorded in ``last_stamp`` are replaced with
-    ``base_z`` so the blade does not climb over its own immediately-previous
-    segment.
-
-    If ``x0``/``y0`` are omitted the old ±hw-square fallback is used (for
-    call-sites that have not yet been updated).
-    """
+    """Sample max occ_z over cells fully contained in the next footprint."""
     hw = width / 2.0
 
-    # ── Swept-rectangle footprint (same geometry as _stamp_swept_footprint) ──
     if x0 is not None and y0 is not None:
-        dx = x - x0
-        dy = y - y0
-        segment_length = float(np.hypot(dx, dy))
-        if segment_length < 1e-9:
-            iy, ix = _cell_index(surface, x, y)
-            return _own_blind_cell_z(occ_z, base_z, last_stamp, iy, ix)
-        ux, uy = dx / segment_length, dy / segment_length   # along unit vector
-        px, py = -uy, ux                                    # lateral unit vector
-
-        min_x = min(x0, x) - hw;  max_x = max(x0, x) + hw
-        min_y = min(y0, y) - hw;  max_y = max(y0, y) + hw
-        ix0g = max(0, int(min_x / surface.cell_w) - 1)
-        ix1g = min(surface.grid_w - 1, int(max_x / surface.cell_w) + 1)
-        iy0g = max(0, int(min_y / surface.cell_w) - 1)
-        iy1g = min(surface.grid_h - 1, int(max_y / surface.cell_w) + 1)
-
-        cols = np.arange(ix0g, ix1g + 1)
-        rows = np.arange(iy0g, iy1g + 1)
-        xx = (cols + 0.5) * surface.cell_w
-        yy = (rows + 0.5) * surface.cell_w
-        X, Y = np.meshgrid(xx, yy)
-        rel_x = X - x0;  rel_y = Y - y0
-        along   = rel_x * ux + rel_y * uy
-        lateral = rel_x * px + rel_y * py
-        mask = (
-            (along >= 0.0)
-            & (along <= segment_length)
-            & (np.abs(lateral) <= hw)
-        )
+        footprint = _contained_segment_cells(surface, x0, y0, x, y, hw, hw)
+        if footprint is None:
+            return _sample_grid(base_z, surface, x, y)
+        ix0g, ix1g, iy0g, iy1g, mask, _, _ = footprint
         if not np.any(mask):
-            iy, ix = _cell_index(surface, x, y)
-            return _own_blind_cell_z(occ_z, base_z, last_stamp, iy, ix)
-
-        block = occ_z[iy0g:iy1g + 1, ix0g:ix1g + 1].copy()
-        if last_stamp:
-            local_rows, local_cols = np.where(mask)
-            for lr, lc in zip(local_rows, local_cols):
-                iy = iy0g + int(lr)
-                ix = ix0g + int(lc)
-                own_z = last_stamp.get((iy, ix))
-                if own_z is not None and block[lr, lc] <= own_z + 1e-9:
-                    block[lr, lc] = base_z[iy, ix]
+            return _sample_grid(base_z, surface, x, y)
+        block = occ_z[iy0g:iy1g + 1, ix0g:ix1g + 1]
         return float(block[mask].max())
 
-    # ── Legacy fallback: ±hw square around endpoint ───────────────────────────
-    ix0 = max(0, int((x - hw) / surface.cell_w) - 1)
-    ix1 = min(surface.grid_w - 1, int((x + hw) / surface.cell_w) + 1)
-    iy0 = max(0, int((y - hw) / surface.cell_w) - 1)
-    iy1 = min(surface.grid_h - 1, int((y + hw) / surface.cell_w) + 1)
-
-    cols = np.arange(ix0, ix1 + 1)
-    rows = np.arange(iy0, iy1 + 1)
-    xx = (cols + 0.5) * surface.cell_w
-    yy = (rows + 0.5) * surface.cell_w
-    X, Y = np.meshgrid(xx, yy)
-    perp_x = np.cos(direction)
-    perp_y = -np.sin(direction)
-    lateral = (X - x) * perp_x + (Y - y) * perp_y
-    mask = np.abs(lateral) <= hw
-    if not np.any(mask):
-        iy, ix = _cell_index(surface, x, y)
-        return _own_blind_cell_z(occ_z, base_z, last_stamp, iy, ix)
-
-    block = occ_z[iy0:iy1 + 1, ix0:ix1 + 1].copy()
-    if last_stamp:
-        local_rows, local_cols = np.where(mask)
-        for lr, lc in zip(local_rows, local_cols):
-            iy = iy0 + int(lr)
-            ix = ix0 + int(lc)
-            own_z = last_stamp.get((iy, ix))
-            if own_z is not None and block[lr, lc] <= own_z + 1e-9:
-                block[lr, lc] = base_z[iy, ix]
-    return float(block[mask].max())
+    return _sample_grid(base_z, surface, x, y)
 
 
 def _stamp_swept_footprint(
@@ -428,8 +350,8 @@ def _stamp_swept_footprint(
     width: float,
     thickness: float,   # top-profile peak height (ignored for n_top_facets=1)
     n_top_facets: int,
-) -> dict[tuple[int, int], float]:
-    """Stamp the swept segment footprint into occ_z.
+) -> None:
+    """Stamp cells fully contained in the swept segment footprint into occ_z.
 
     The stamp height is profile-aware:
       n=1  → flat at equator (z_spine); thickness is ignored.
@@ -440,20 +362,56 @@ def _stamp_swept_footprint(
     """
     x0, y0 = p0
     x1, y1 = p1
-    hw = width / 2.0
+    footprint = _contained_segment_cells(surface, x0, y0, x1, y1, width / 2.0, width / 2.0)
+    if footprint is None:
+        return
+    ix0, ix1, iy0, iy1, mask, along_norm, lateral_frac = footprint
+    if not np.any(mask):
+        return
+
+    z_spine = z0 + (z1 - z0) * along_norm          # slope along segment
+
+    if n_top_facets == 1:
+        z_field = z_spine                           # flat: top IS the equator
+    else:
+        z_field = z_spine + thickness * np.sin(np.pi * lateral_frac)
+
+    block = occ_z[iy0:iy1 + 1, ix0:ix1 + 1]
+    np.maximum(block, np.where(mask, z_field, block), out=block)
+
+
+def _contained_segment_cells(
+    surface,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    hw0: float,
+    hw1: float,
+) -> tuple[int, int, int, int, np.ndarray, np.ndarray, np.ndarray] | None:
+    """Return cells whose full square is inside the segment footprint."""
     dx = x1 - x0
     dy = y1 - y0
     segment_length = float(np.hypot(dx, dy))
     if segment_length < 1e-9:
-        ux, uy = 0.0, 1.0
-    else:
-        ux, uy = dx / segment_length, dy / segment_length
+        return None
+
+    ux, uy = dx / segment_length, dy / segment_length
     px, py = -uy, ux
 
-    min_x = max(0.0, min(x0, x1) - hw)
-    max_x = min(surface.tile_w, max(x0, x1) + hw)
-    min_y = max(0.0, min(y0, y1) - hw)
-    max_y = min(surface.tile_h, max(y0, y1) + hw)
+    corners = np.array([
+        [x0 + px * hw0, y0 + py * hw0],
+        [x0 - px * hw0, y0 - py * hw0],
+        [x1 + px * hw1, y1 + py * hw1],
+        [x1 - px * hw1, y1 - py * hw1],
+    ])
+    min_x = max(0.0, float(corners[:, 0].min()))
+    max_x = min(surface.tile_w, float(corners[:, 0].max()))
+    min_y = max(0.0, float(corners[:, 1].min()))
+    max_y = min(surface.tile_h, float(corners[:, 1].max()))
+    if min_x >= max_x or min_y >= max_y:
+        return None
+
     ix0 = max(0, int(min_x / surface.cell_w) - 1)
     ix1 = min(surface.grid_w - 1, int(max_x / surface.cell_w) + 1)
     iy0 = max(0, int(min_y / surface.cell_w) - 1)
@@ -461,45 +419,39 @@ def _stamp_swept_footprint(
 
     cols = np.arange(ix0, ix1 + 1)
     rows = np.arange(iy0, iy1 + 1)
-    xx = (cols + 0.5) * surface.cell_w
-    yy = (rows + 0.5) * surface.cell_w
-    X, Y = np.meshgrid(xx, yy)
-    rel_x = X - x0
-    rel_y = Y - y0
-    along   = rel_x * ux + rel_y * uy
-    lateral = rel_x * px + rel_y * py
+    left = cols * surface.cell_w
+    right = (cols + 1) * surface.cell_w
+    bottom = rows * surface.cell_w
+    top = (rows + 1) * surface.cell_w
+
+    X0, Y0 = np.meshgrid(left, bottom)
+    X1, Y1 = np.meshgrid(right, bottom)
+    X2, Y2 = np.meshgrid(right, top)
+    X3, Y3 = np.meshgrid(left, top)
+    corner_x = np.stack([X0, X1, X2, X3], axis=0)
+    corner_y = np.stack([Y0, Y1, Y2, Y3], axis=0)
+
+    rel_x = corner_x - x0
+    rel_y = corner_y - y0
+    corner_along = rel_x * ux + rel_y * uy
+    corner_lateral = rel_x * px + rel_y * py
+    corner_t = np.clip(corner_along / segment_length, 0.0, 1.0)
+    corner_hw = hw0 + (hw1 - hw0) * corner_t
+    eps = 1e-9
     mask = (
-        (along >= -surface.cell_w * 0.5)
-        & (along <= segment_length + surface.cell_w * 0.5)
-        & (np.abs(lateral) <= hw)
-    )
+        (corner_along >= -eps)
+        & (corner_along <= segment_length + eps)
+        & (np.abs(corner_lateral) <= corner_hw + eps)
+    ).all(axis=0)
 
-    along_norm = np.clip(along / max(segment_length, 1e-9), 0.0, 1.0)
-    z_spine = z0 + (z1 - z0) * along_norm          # slope along segment
+    center_x = ((cols + 0.5) * surface.cell_w)[None, :]
+    center_y = ((rows + 0.5) * surface.cell_w)[:, None]
+    rel_cx = center_x - x0
+    rel_cy = center_y - y0
+    center_along = rel_cx * ux + rel_cy * uy
+    center_lateral = rel_cx * px + rel_cy * py
+    along_norm = np.clip(center_along / segment_length, 0.0, 1.0)
+    center_hw = hw0 + (hw1 - hw0) * along_norm
+    lateral_frac = np.clip((center_lateral + center_hw) / np.maximum(2.0 * center_hw, 1e-9), 0.0, 1.0)
 
-    if n_top_facets == 1:
-        z_field = z_spine                           # flat: top IS the equator
-    else:
-        x_frac = np.clip((lateral + hw) / max(width, 1e-9), 0.0, 1.0)
-        z_field = z_spine + thickness * np.sin(np.pi * x_frac)
-
-    block = occ_z[iy0:iy1 + 1, ix0:ix1 + 1]
-    np.maximum(block, np.where(mask, z_field, block), out=block)
-    local_rows, local_cols = np.where(mask)
-    return {
-        (iy0 + int(lr), ix0 + int(lc)): float(block[lr, lc])
-        for lr, lc in zip(local_rows, local_cols)
-    }
-
-
-def _own_blind_cell_z(
-    occ_z: np.ndarray,
-    base_z: np.ndarray,
-    last_stamp: dict[tuple[int, int], float] | None,
-    iy: int,
-    ix: int,
-) -> float:
-    own_z = last_stamp.get((iy, ix)) if last_stamp else None
-    if own_z is not None and occ_z[iy, ix] <= own_z + 1e-9:
-        return float(base_z[iy, ix])
-    return float(occ_z[iy, ix])
+    return ix0, ix1, iy0, iy1, mask, along_norm, lateral_frac

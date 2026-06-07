@@ -75,10 +75,7 @@ def plant_seeds(
 
                 seed = _make_seed(x, y, group_dir, species, rng)
                 z0 = max(terrain_z, floor_z) + seed.blade_clearance
-                # For n=1 (flat) blade_thickness has no effect above the equator.
-                effective_top = 0.0 if species.blade_top_facets == 1 else species.blade_thickness
-                last_stamp = _stamp_seed(occ_z, surface, x, y, z0, seed.blade_width)
-                paths.append(GrowingPath(seed=seed, points=[(x, y, z0)], last_stamp=last_stamp))
+                paths.append(GrowingPath(seed=seed, points=[(x, y, z0)]))
 
     return paths
 
@@ -231,17 +228,3 @@ def _cell_index(surface, x: float, y: float) -> tuple[int, int]:
     ix = int(np.clip(int(x / surface.cell_w), 0, surface.grid_w - 1))
     iy = int(np.clip(int(y / surface.cell_w), 0, surface.grid_h - 1))
     return ix, iy
-
-
-def _stamp_seed(occ_z: np.ndarray, surface, x: float, y: float, z: float, width: float) -> dict[tuple[int, int], float]:
-    hw = width / 2.0
-    ix0 = max(0, int((x - hw) / surface.cell_w) - 1)
-    ix1 = min(surface.grid_w - 1, int((x + hw) / surface.cell_w) + 1)
-    iy0 = max(0, int((y - hw) / surface.cell_w) - 1)
-    iy1 = min(surface.grid_h - 1, int((y + hw) / surface.cell_w) + 1)
-    np.maximum(occ_z[iy0:iy1 + 1, ix0:ix1 + 1], z, out=occ_z[iy0:iy1 + 1, ix0:ix1 + 1])
-    return {
-        (iy, ix): z
-        for iy in range(iy0, iy1 + 1)
-        for ix in range(ix0, ix1 + 1)
-    }

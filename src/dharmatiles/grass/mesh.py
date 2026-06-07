@@ -39,15 +39,18 @@ def build_meshes(paths: list[GrassPath], cfg: GrassConfig, scene, surface) -> li
         n_pts = len(lifted_points)
         taper_start = max(1, int(np.floor((n_pts - 1) * 0.8125)))
         pt_thicknesses = np.full(n_pts, species.blade_thickness, dtype=float)
+        pt_widths = np.full(n_pts, path.seed.blade_width, dtype=float)
         if taper_start < n_pts:
             t = np.linspace(0.0, 1.0, n_pts - taper_start)
-            pt_thicknesses[taper_start:] = species.blade_thickness * np.cos(t * np.pi / 2.0)
+            taper = np.cos(t * np.pi / 2.0)
+            pt_thicknesses[taper_start:] = species.blade_thickness * taper
+            pt_widths[taper_start:] = path.seed.blade_width * taper
 
         _rasterise_sloped_path(
             scene.support_z,
             surface,
             np.asarray(lifted_points, dtype=float),
-            path.seed.blade_width,
+            pt_widths,
             pt_thicknesses,
             species.blade_top_facets,
         )
@@ -94,7 +97,7 @@ def _rasterise_sloped_path(
     support_z: np.ndarray,
     surface,
     path: np.ndarray,           # (n, 3) spine positions
-    width: float,
+    widths: np.ndarray,         # (n,) blade widths per point
     thicknesses: np.ndarray,    # (n,) top-profile peak heights per point
     n_top_facets: int,
 ) -> None:
@@ -108,9 +111,6 @@ def _rasterise_sloped_path(
     """
     if len(path) == 0:
         return
-    hw = width / 2.0
-    # Start-point disk: stamp at the profile peak height (equator for n=1)
-    _stamp_disk(support_z, surface, path[0, 0], path[0, 1], path[0, 2] + thicknesses[0], hw)
     for idx in range(1, len(path)):
         prev = path[idx - 1]
         curr = path[idx]
@@ -119,7 +119,8 @@ def _rasterise_sloped_path(
             surface,
             prev,
             curr,
-            width,
+            float(widths[idx - 1]),
+            float(widths[idx]),
             float(prev[2]),
             float(curr[2]),
             float(thicknesses[idx - 1]),
@@ -128,27 +129,13 @@ def _rasterise_sloped_path(
         )
 
 
-def _stamp_disk(
-    support_z: np.ndarray,
-    surface,
-    x: float,
-    y: float,
-    z: float,
-    radius: float,
-) -> None:
-    ix0 = max(0, int((x - radius) / surface.cell_w) - 1)
-    ix1 = min(surface.grid_w - 1, int((x + radius) / surface.cell_w) + 1)
-    iy0 = max(0, int((y - radius) / surface.cell_w) - 1)
-    iy1 = min(surface.grid_h - 1, int((y + radius) / surface.cell_w) + 1)
-    np.maximum(support_z[iy0:iy1 + 1, ix0:ix1 + 1], z, out=support_z[iy0:iy1 + 1, ix0:ix1 + 1])
-
-
 def _stamp_segment_profile(
     support_z: np.ndarray,
     surface,
     p0: np.ndarray,
     p1: np.ndarray,
-    width: float,
+    width0: float,
+    width1: float,
     z0: float,          # spine z at p0
     z1: float,          # spine z at p1
     t0: float,          # top-profile peak height at p0
@@ -164,44 +151,96 @@ def _stamp_segment_profile(
     """
     x0, y0 = float(p0[0]), float(p0[1])
     x1, y1 = float(p1[0]), float(p1[1])
-    hw = width / 2.0
-    dx = x1 - x0
-    dy = y1 - y0
-    segment_length = float(np.hypot(dx, dy))
-    if segment_length < 1e-9:
-        z_max = max(z0 + t0, z1 + t1)
-        _stamp_disk(support_z, surface, x1, y1, z_max, hw)
+    footprint = _contained_segment_cells(surface, x0, y0, x1, y1, width0 / 2.0, width1 / 2.0)
+    if footprint is None:
         return
-    ux, uy = dx / segment_length, dy / segment_length
-    px, py = -uy, ux
-    ix0g = max(0, int((min(x0, x1) - hw) / surface.cell_w) - 1)
-    ix1g = min(surface.grid_w - 1, int((max(x0, x1) + hw) / surface.cell_w) + 1)
-    iy0g = max(0, int((min(y0, y1) - hw) / surface.cell_w) - 1)
-    iy1g = min(surface.grid_h - 1, int((max(y0, y1) + hw) / surface.cell_w) + 1)
-
-    cols = np.arange(ix0g, ix1g + 1)
-    rows = np.arange(iy0g, iy1g + 1)
-    xx = (cols + 0.5) * surface.cell_w
-    yy = (rows + 0.5) * surface.cell_w
-    X, Y = np.meshgrid(xx, yy)
-    rel_x = X - x0
-    rel_y = Y - y0
-    along   = rel_x * ux + rel_y * uy
-    lateral = rel_x * px + rel_y * py
-    mask = (
-        (along >= -surface.cell_w * 0.5)
-        & (along <= segment_length + surface.cell_w * 0.5)
-        & (np.abs(lateral) <= hw)
-    )
-    along_norm = np.clip(along / segment_length, 0.0, 1.0)
+    ix0g, ix1g, iy0g, iy1g, mask, along_norm, lateral_frac = footprint
+    if not np.any(mask):
+        return
     z_spine  = z0 + (z1 - z0) * along_norm          # slope along segment
     t_interp = t0 + (t1 - t0) * along_norm          # profile height along segment
 
     if n_top_facets == 1:
         z_field = z_spine                            # flat: top IS equator
     else:
-        x_frac = np.clip((lateral + hw) / max(width, 1e-9), 0.0, 1.0)
-        z_field = z_spine + t_interp * np.sin(np.pi * x_frac)
+        z_field = z_spine + t_interp * np.sin(np.pi * lateral_frac)
 
     block = support_z[iy0g:iy1g + 1, ix0g:ix1g + 1]
     np.maximum(block, np.where(mask, z_field, block), out=block)
+
+
+def _contained_segment_cells(
+    surface,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    hw0: float,
+    hw1: float,
+) -> tuple[int, int, int, int, np.ndarray, np.ndarray, np.ndarray] | None:
+    """Return cells whose full square is inside the segment footprint."""
+    dx = x1 - x0
+    dy = y1 - y0
+    segment_length = float(np.hypot(dx, dy))
+    if segment_length < 1e-9:
+        return None
+
+    ux, uy = dx / segment_length, dy / segment_length
+    px, py = -uy, ux
+
+    corners = np.array([
+        [x0 + px * hw0, y0 + py * hw0],
+        [x0 - px * hw0, y0 - py * hw0],
+        [x1 + px * hw1, y1 + py * hw1],
+        [x1 - px * hw1, y1 - py * hw1],
+    ])
+    min_x = max(0.0, float(corners[:, 0].min()))
+    max_x = min(surface.tile_w, float(corners[:, 0].max()))
+    min_y = max(0.0, float(corners[:, 1].min()))
+    max_y = min(surface.tile_h, float(corners[:, 1].max()))
+    if min_x >= max_x or min_y >= max_y:
+        return None
+
+    ix0 = max(0, int(min_x / surface.cell_w) - 1)
+    ix1 = min(surface.grid_w - 1, int(max_x / surface.cell_w) + 1)
+    iy0 = max(0, int(min_y / surface.cell_w) - 1)
+    iy1 = min(surface.grid_h - 1, int(max_y / surface.cell_w) + 1)
+
+    cols = np.arange(ix0, ix1 + 1)
+    rows = np.arange(iy0, iy1 + 1)
+    left = cols * surface.cell_w
+    right = (cols + 1) * surface.cell_w
+    bottom = rows * surface.cell_w
+    top = (rows + 1) * surface.cell_w
+
+    X0, Y0 = np.meshgrid(left, bottom)
+    X1, Y1 = np.meshgrid(right, bottom)
+    X2, Y2 = np.meshgrid(right, top)
+    X3, Y3 = np.meshgrid(left, top)
+    corner_x = np.stack([X0, X1, X2, X3], axis=0)
+    corner_y = np.stack([Y0, Y1, Y2, Y3], axis=0)
+
+    rel_x = corner_x - x0
+    rel_y = corner_y - y0
+    corner_along = rel_x * ux + rel_y * uy
+    corner_lateral = rel_x * px + rel_y * py
+    corner_t = np.clip(corner_along / segment_length, 0.0, 1.0)
+    corner_hw = hw0 + (hw1 - hw0) * corner_t
+    eps = 1e-9
+    mask = (
+        (corner_along >= -eps)
+        & (corner_along <= segment_length + eps)
+        & (np.abs(corner_lateral) <= corner_hw + eps)
+    ).all(axis=0)
+
+    center_x = ((cols + 0.5) * surface.cell_w)[None, :]
+    center_y = ((rows + 0.5) * surface.cell_w)[:, None]
+    rel_cx = center_x - x0
+    rel_cy = center_y - y0
+    center_along = rel_cx * ux + rel_cy * uy
+    center_lateral = rel_cx * px + rel_cy * py
+    along_norm = np.clip(center_along / segment_length, 0.0, 1.0)
+    center_hw = hw0 + (hw1 - hw0) * along_norm
+    lateral_frac = np.clip((center_lateral + center_hw) / np.maximum(2.0 * center_hw, 1e-9), 0.0, 1.0)
+
+    return ix0, ix1, iy0, iy1, mask, along_norm, lateral_frac
