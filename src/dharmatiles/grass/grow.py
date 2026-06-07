@@ -77,7 +77,7 @@ def plant_seeds(
                 z0 = max(terrain_z, floor_z) + cfg.clearance
                 # For n=1 (flat) thickness has no effect above the equator.
                 effective_top = 0.0 if species.n_top_facets == 1 else species.thickness
-                last_stamp = _stamp_seed(occ_z, surface, x, y, z0 + effective_top, seed.blade_width)
+                last_stamp = _stamp_seed(occ_z, surface, x, y, z0, seed.blade_width)
                 paths.append(GrowingPath(seed=seed, points=[(x, y, z0)], last_stamp=last_stamp))
 
     return paths

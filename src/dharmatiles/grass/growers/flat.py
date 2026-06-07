@@ -59,6 +59,8 @@ class FlatGrassGrower:
             ty,
             seed.blade_width,
             direction,
+            x0=cx,
+            y0=cy,
         )
         terrain_z = _sample_grid(scene.terrain_z, surface, tx, ty)
         nz = max(terrain_z, floor_z) + cfg.clearance
@@ -353,8 +355,69 @@ def _sample_footprint_max(
     y: float,
     width: float,
     direction: float,
+    x0: float | None = None,
+    y0: float | None = None,
 ) -> float:
+    """Sample the maximum occ_z over the swept footprint of the next step.
+
+    The footprint is the swept rectangle from (x0, y0) to (x, y) — identical
+    in shape to the stamp written by ``_stamp_swept_footprint``.  Cells from
+    any previous step that are recorded in ``last_stamp`` are replaced with
+    ``base_z`` so the blade does not climb over its own immediately-previous
+    segment.
+
+    If ``x0``/``y0`` are omitted the old ±hw-square fallback is used (for
+    call-sites that have not yet been updated).
+    """
     hw = width / 2.0
+
+    # ── Swept-rectangle footprint (same geometry as _stamp_swept_footprint) ──
+    if x0 is not None and y0 is not None:
+        dx = x - x0
+        dy = y - y0
+        segment_length = float(np.hypot(dx, dy))
+        if segment_length < 1e-9:
+            iy, ix = _cell_index(surface, x, y)
+            return _own_blind_cell_z(occ_z, base_z, last_stamp, iy, ix)
+        ux, uy = dx / segment_length, dy / segment_length   # along unit vector
+        px, py = -uy, ux                                    # lateral unit vector
+
+        min_x = min(x0, x) - hw;  max_x = max(x0, x) + hw
+        min_y = min(y0, y) - hw;  max_y = max(y0, y) + hw
+        ix0g = max(0, int(min_x / surface.cell_w) - 1)
+        ix1g = min(surface.grid_w - 1, int(max_x / surface.cell_w) + 1)
+        iy0g = max(0, int(min_y / surface.cell_w) - 1)
+        iy1g = min(surface.grid_h - 1, int(max_y / surface.cell_w) + 1)
+
+        cols = np.arange(ix0g, ix1g + 1)
+        rows = np.arange(iy0g, iy1g + 1)
+        xx = (cols + 0.5) * surface.cell_w
+        yy = (rows + 0.5) * surface.cell_w
+        X, Y = np.meshgrid(xx, yy)
+        rel_x = X - x0;  rel_y = Y - y0
+        along   = rel_x * ux + rel_y * uy
+        lateral = rel_x * px + rel_y * py
+        mask = (
+            (along >= 0.0)
+            & (along <= segment_length)
+            & (np.abs(lateral) <= hw)
+        )
+        if not np.any(mask):
+            iy, ix = _cell_index(surface, x, y)
+            return _own_blind_cell_z(occ_z, base_z, last_stamp, iy, ix)
+
+        block = occ_z[iy0g:iy1g + 1, ix0g:ix1g + 1].copy()
+        if last_stamp:
+            local_rows, local_cols = np.where(mask)
+            for lr, lc in zip(local_rows, local_cols):
+                iy = iy0g + int(lr)
+                ix = ix0g + int(lc)
+                own_z = last_stamp.get((iy, ix))
+                if own_z is not None and block[lr, lc] <= own_z + 1e-9:
+                    block[lr, lc] = base_z[iy, ix]
+        return float(block[mask].max())
+
+    # ── Legacy fallback: ±hw square around endpoint ───────────────────────────
     ix0 = max(0, int((x - hw) / surface.cell_w) - 1)
     ix1 = min(surface.grid_w - 1, int((x + hw) / surface.cell_w) + 1)
     iy0 = max(0, int((y - hw) / surface.cell_w) - 1)
@@ -454,7 +517,7 @@ def _stamp_swept_footprint(
     np.maximum(block, np.where(mask, z_field, block), out=block)
     local_rows, local_cols = np.where(mask)
     return {
-        (iy0 + int(lr), ix0 + int(lc)): float(z_field[lr, lc])
+        (iy0 + int(lr), ix0 + int(lc)): float(block[lr, lc])
         for lr, lc in zip(local_rows, local_cols)
     }
 
