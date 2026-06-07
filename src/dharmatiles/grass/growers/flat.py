@@ -65,6 +65,14 @@ class FlatGrassGrower:
         terrain_z = _sample_grid(scene.terrain_z, surface, tx, ty)
         nz = max(terrain_z, floor_z) + cfg.clearance
 
+        # Smother rule: if anything already occupies space above our current tip
+        # (excluding our own previous segment, already blanked in floor_z), stop.
+        # A blade lying under another blade's canopy cannot grow forward — it is
+        # smothered.  This is distinct from rise_cap (which limits climb rate) and
+        # max_stack_height (which limits absolute stack depth above terrain).
+        if floor_z > cz:
+            path.alive = False
+            return False
         if floor_z - terrain_z > cfg.max_stack_height:
             path.alive = False
             return False

@@ -84,11 +84,42 @@ hair's width above the ground.
 When a blade reaches a stone, it rises over it (up to a configured slope limit),
 then drops back to the ground on the far side.
 
-When a blade reaches another blade that's already lying there, it rises above it
-and continues.
+When a blade reaches another blade that's already lying at the same height, it
+rises above it and continues.
+
+When a blade reaches a position where another blade is **already higher than the
+current tip**, it stops — it has grown under the other blade's canopy and is
+smothered (see *The smother rule* below).
 
 If the obstacle is too steep or the stack is already too deep, the blade stops
 growing rather than piling up steeply.
+
+---
+
+## The smother rule
+
+When a blade advances to its next position, it samples the occupancy heightmap
+across the swept footprint of that step.  If anything already occupies that
+space **above the current blade tip**, the blade stops immediately.
+
+> A blade lying under another blade's canopy cannot grow forward — it is
+> smothered.
+
+"Above the current tip" means `floor_z > cz`, where `floor_z` is the maximum
+occupancy height across the swept footprint (after blanking the blade's own
+immediately-previous segment — see *The self-trail non-problem* below), and
+`cz` is the spine height at the blade's current tip.
+
+The smother rule is one of three blade-termination conditions:
+
+| Condition | Check | What it prevents |
+|---|---|---|
+| **Smother** | `floor_z > cz` | Growing under another blade's canopy |
+| **Rise cap** | `nz > cz + rise_cap` | Climbing too steeply in a single step |
+| **Stack depth** | `floor_z − terrain_z > max_stack_height` | Piling up too many layers above bare ground |
+
+The smother rule fires before the other two so that a smothered blade stops
+immediately rather than also triggering a confusing rise-cap death.
 
 ---
 
