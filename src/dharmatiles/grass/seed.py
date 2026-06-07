@@ -14,6 +14,8 @@ class GrassSeed:
     blade_segment_length: float
     blade_n_steps: int
     blade_taper: float
+    base_width_percent: float
+    base_taper_length: float
     blade_curl: float
     blade_width: float
     blade_rise_cap: float
@@ -23,10 +25,13 @@ class GrassSeed:
     def point_taper(self, point_idx: int) -> float:
         """Width/thickness multiplier for a spine point.
 
-        ``blade_taper`` is a physical distance from the tip over which the blade
-        grows from zero width to full width.  If the blade is shorter than that
-        distance, even the base remains narrower than ``blade_width``.
+        Width is constrained by two independent taper envelopes:
+        a tip taper measured backward from the tip, and a base taper measured
+        forward from the root.  Overlap is allowed; the narrower envelope wins.
         """
+        return min(self._tip_taper(point_idx), self._base_taper(point_idx))
+
+    def _tip_taper(self, point_idx: int) -> float:
         taper_len = max(0.0, float(self.blade_taper))
         if taper_len <= 0.0:
             return 1.0
@@ -40,6 +45,23 @@ class GrassSeed:
 
         t = dist_from_tip / taper_len
         return math.sin(t * math.pi / 2.0)
+
+    def _base_taper(self, point_idx: int) -> float:
+        base_fraction = max(0.0, float(self.base_width_percent)) / 100.0
+        if base_fraction >= 1.0:
+            return 1.0
+
+        taper_len = max(0.0, float(self.base_taper_length))
+        if taper_len <= 0.0:
+            return 1.0
+
+        clamped_idx = min(max(point_idx, 0), self.blade_n_steps)
+        dist_from_base = clamped_idx * self.blade_segment_length
+        if dist_from_base >= taper_len:
+            return 1.0
+
+        t = dist_from_base / taper_len
+        return base_fraction + (1.0 - base_fraction) * math.sin(t * math.pi / 2.0)
 
 
 @dataclass
