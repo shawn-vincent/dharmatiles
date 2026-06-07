@@ -80,6 +80,7 @@ def _build_mesh(cfg: SceneConfig,
         SoilLayer(cfg.surface, soil_cfg).build(scene, placement_mask=soil_mask)
     if water_mask is not None:
         scene.terrain_z[water_mask] = 0.0
+    scene.terrain_support_z[:] = scene.terrain_z
 
     # ── Stones (one independent pass per stone-layer zone) ────────────────────
     n_squares = cfg.surface.cols * cfg.surface.rows
@@ -96,6 +97,7 @@ def _build_mesh(cfg: SceneConfig,
     # ── Grass (one pass per seed-packet config) ───────────────────────────────
     if grass_cfgs and verbose:
         print("Growing grass...")
+    scene.vegetation_support_z = scene.terrain_support_z.copy()
     for i, g_cfg in enumerate(grass_cfgs):
         packet_cfg = RuntimeGrassConfig(
             species=[g_cfg],
@@ -329,7 +331,7 @@ def build_tile_from_spec(spec: TileSpec,
     scene = TileScene(
         config     = cfg,
         terrain_z  = terrain_z,
-        support_z  = terrain_z.copy(),
+        terrain_support_z = terrain_z.copy(),
         stone_mask = np.zeros((cfg.surface.grid_h, cfg.surface.grid_w), dtype=bool),
     )
 
@@ -374,7 +376,7 @@ def build_tile_from_spec(spec: TileSpec,
         ol_scene   = TileScene(
             config     = ol_cfg,
             terrain_z  = terrain_z.copy(),
-            support_z  = terrain_z.copy(),
+            terrain_support_z = terrain_z.copy(),
             stone_mask = np.zeros(
                 (ol_cfg.surface.grid_h, ol_cfg.surface.grid_w), dtype=bool),
         )

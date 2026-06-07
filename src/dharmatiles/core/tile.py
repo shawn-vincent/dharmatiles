@@ -3,7 +3,8 @@ TileScene — mutable state accumulated while building a terrain scene.
 
 The scene holds:
   terrain_z  — float heightmap (read-only after init)
-  support_z  — mutable occupancy surface raised by each layer as it places geometry
+  terrain_support_z — mutable non-vegetation support raised by terrain/stone geometry
+  vegetation_support_z — mutable vegetation support, initialised from terrain support
   stone_mask — bool grid marking stone footprints (grass steers around these)
 
 Configuration lives entirely in SceneConfig sub-configs; TileScene does not
@@ -44,16 +45,31 @@ class TileScene:
     :meth:`from_terrain_grid` (uses a semantic TerrainGrid).
 
     ``terrain_z`` is fixed at construction.
-    ``support_z`` grows as layers rasterise their geometry onto it.
+    ``terrain_support_z`` grows as terrain and stone layers rasterise geometry.
+    ``vegetation_support_z`` grows as vegetation layers rasterise geometry.
     ``parts`` is the list of Trimesh objects to combine at export.
     """
     config:    SceneConfig
     terrain_z: np.ndarray                       # (grid_h, grid_w) — read-only
-    support_z: np.ndarray                       # (grid_h, grid_w) — mutable
+    terrain_support_z: np.ndarray               # (grid_h, grid_w) — mutable
+    vegetation_support_z: np.ndarray | None = None  # (grid_h, grid_w) — mutable
     stone_mask: np.ndarray | None = None        # (grid_h, grid_w) bool — True under a stone
     stone_placement_mask: np.ndarray | None = None  # bool — True where stones may be seeded
     grass_mask: np.ndarray | None = None        # (grid_h, grid_w) bool — True where grass may grow
     parts:     List[trimesh.Trimesh] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if self.vegetation_support_z is None:
+            self.vegetation_support_z = self.terrain_support_z.copy()
+
+    @property
+    def support_z(self) -> np.ndarray:
+        """Compatibility alias for non-vegetation terrain support."""
+        return self.terrain_support_z
+
+    @support_z.setter
+    def support_z(self, value: np.ndarray) -> None:
+        self.terrain_support_z = value
 
     # ── Constructors ──────────────────────────────────────────────────────────
 
@@ -71,7 +87,7 @@ class TileScene:
             terrain_z = _make_sinusoidal_terrain(cfg.surface)
         stone_mask = np.zeros((cfg.surface.grid_h, cfg.surface.grid_w), dtype=bool)
         return cls(config=cfg, terrain_z=terrain_z,
-                   support_z=terrain_z.copy(), stone_mask=stone_mask)
+                   terrain_support_z=terrain_z.copy(), stone_mask=stone_mask)
 
     @classmethod
     def from_terrain_grid(cls, cfg: SceneConfig,
@@ -83,7 +99,7 @@ class TileScene:
         terrain_z = terrain_grid_to_heightmap(grid)
         stone_mask = np.zeros((cfg.surface.grid_h, cfg.surface.grid_w), dtype=bool)
         return cls(config=cfg, terrain_z=terrain_z,
-                   support_z=terrain_z.copy(), stone_mask=stone_mask)
+                   terrain_support_z=terrain_z.copy(), stone_mask=stone_mask)
 
     # ── Convenience properties ────────────────────────────────────────────────
 

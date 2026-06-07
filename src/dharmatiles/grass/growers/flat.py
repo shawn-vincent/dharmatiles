@@ -60,7 +60,7 @@ class FlatGrassGrower:
 
         floor_z = _sample_footprint_max(
             occ_z,
-            scene.support_z,
+            scene.terrain_support_z,
             surface,
             tx,
             ty,

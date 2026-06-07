@@ -11,12 +11,12 @@ from .seed import GrassPath
 
 
 def build_meshes(paths: list[GrassPath], cfg: GrassConfig, scene, surface) -> list[trimesh.Trimesh]:
-    """Build one complete blade mesh at a time, updating support after each path.
+    """Build one complete blade mesh at a time, updating vegetation support after each path.
 
     For each full path (downstream-first order):
-    1. Lift every non-root point to max(planned_z, support_z).
+    1. Lift every non-root point to max(planned_z, vegetation_support_z).
     2. Build the mesh from the adjusted path.
-    3. Update scene.support_z from the actual mesh top surface using
+    3. Update scene.vegetation_support_z from the actual mesh top surface using
        profile-aware, slope-aware rasterisation.
     """
     species_map = {species.name: species for species in cfg.species}
@@ -26,7 +26,7 @@ def build_meshes(paths: list[GrassPath], cfg: GrassConfig, scene, surface) -> li
         grower = GROWERS[species.grower]
 
         # Step 1: adjust path points against the current accumulated surface.
-        lifted_points = _lift_path_points(path.points, scene.support_z, surface)
+        lifted_points = _lift_path_points(path.points, scene.vegetation_support_z, surface)
         lifted_path = GrassPath(seed=path.seed, points=lifted_points)
 
         # Step 2: build mesh.
@@ -34,7 +34,7 @@ def build_meshes(paths: list[GrassPath], cfg: GrassConfig, scene, surface) -> li
         if mesh is not None:
             meshes.append(mesh)
 
-        # Step 3: update support_z from actual mesh top surface.
+        # Step 3: update vegetation support from actual mesh top surface.
         n_pts = len(lifted_points)
         path_dists = _spine_distances(np.asarray(lifted_points, dtype=float))
         total_len = float(path_dists[-1])
@@ -43,7 +43,7 @@ def build_meshes(paths: list[GrassPath], cfg: GrassConfig, scene, surface) -> li
         pt_widths = path.seed.blade_width * point_tapers
 
         _rasterise_sloped_path(
-            scene.support_z,
+            scene.vegetation_support_z,
             surface,
             np.asarray(lifted_points, dtype=float),
             pt_widths,

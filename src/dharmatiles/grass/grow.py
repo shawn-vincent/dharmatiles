@@ -11,7 +11,7 @@ from .seed import GrassPath, GrassSeed, GrowingPath
 
 def grow_all(scene, surface, cfg: GrassConfig, rng: np.random.Generator, verbose: bool = True) -> list[GrassPath]:
     """Plant blades, then fully grow each blade before starting the next one."""
-    occ_z = scene.support_z.copy()
+    occ_z = scene.vegetation_support_z.copy()
     growing = plant_seeds(scene, surface, cfg, occ_z, rng)
 
     if verbose:
@@ -24,6 +24,10 @@ def grow_all(scene, surface, cfg: GrassConfig, rng: np.random.Generator, verbose
     full_length_blades = 0
 
     for path in growing:
+        if _vegetation_depth_at_seed(scene, surface, occ_z, path) > 0.0:
+            path.alive = False
+            continue
+
         species = species_map[path.seed.species_id]
         grower = GROWERS[species.grower]
         grown_segments = 0
@@ -77,7 +81,11 @@ def plant_seeds(
                     continue
 
                 terrain_z = float(scene.terrain_z[iy, ix])
-                floor_z = float(occ_z[iy, ix])
+                terrain_support_z = float(scene.terrain_support_z[iy, ix])
+                if _vegetation_depth(scene.vegetation_support_z, terrain_support_z, ix, iy) > 0.0:
+                    continue
+
+                floor_z = max(terrain_support_z, float(occ_z[iy, ix]))
                 if floor_z - terrain_z > cfg.max_stack_height:
                     continue
 
@@ -88,6 +96,17 @@ def plant_seeds(
                 paths.append(GrowingPath(seed=seed, points=[(x, y, z0)]))
 
     return paths
+
+
+def _vegetation_depth_at_seed(scene, surface, occ_z: np.ndarray, path: GrowingPath) -> float:
+    seed = path.seed
+    ix, iy = _cell_index(surface, seed.x, seed.y)
+    terrain_support_z = float(scene.terrain_support_z[iy, ix])
+    return _vegetation_depth(occ_z, terrain_support_z, ix, iy)
+
+
+def _vegetation_depth(vegetation_support_z: np.ndarray, terrain_support_z: float, ix: int, iy: int) -> float:
+    return max(0.0, float(vegetation_support_z[iy, ix]) - terrain_support_z)
 
 
 def _voronoi_groups(
