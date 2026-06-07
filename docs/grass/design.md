@@ -81,8 +81,15 @@ class SpeciesConfig:
     rise_cap:             float  # mm per step
 
     # Cross-section (for mesh build)
-    cross_section: str   # 'flat' | 'leaf' | 'diamond' | ...
-    thickness:     float # mm
+    # n_top_facets controls the top profile above the blade equator:
+    #   1 → flat (thickness ignored; top surface IS the equator / spine plane)
+    #   2 → peaked / leaf (two faces meeting at a centre ridge)
+    #   N → round  (N faces approximating a half-sine arc)
+    # thickness is the distance from the equator to the profile peak (mm).
+    # keel_fraction × blade_width = keel depth below the equator.
+    n_top_facets:  int   # 1 | 2 | N
+    thickness:     float # mm — ignored for n_top_facets == 1
+    keel_fraction: float # keel_depth = keel_fraction × blade_width
 
     # Placement
     groups_per_square: int
@@ -207,12 +214,18 @@ only new territory being entered.
 **Stamping** (`stamp_footprint`):
 Write the blade-top height to all grid cells covered by the swept rectangle from
 the previous spine position to `(tx, ty)` — width `seed.blade_width`, length
-`blade_segment_length`, aligned with the growth direction.  The height is
-**slope-aware**: each cell receives a value linearly interpolated between
-`prev_z + blade_top_offset` and `nz + blade_top_offset` based on the cell's
-position along the segment, so `occ_z` reflects the actual sloped surface of the
-proposed path rather than a flat stamp at the endpoint height.  The per-cell z
-values are stored in `last_stamp` so own-trail detection continues to work correctly.
+`blade_segment_length`, aligned with the growth direction.  The stamp is both
+**slope-aware** and **profile-aware**:
+
+- *Slope-aware*: each cell's stamp z is linearly interpolated between the spine
+  z at `p0` and the spine z at `p1` based on the cell's position along the segment.
+- *Profile-aware* (n_top_facets ≥ 2 only): the stamp z also rises laterally
+  toward the blade centre following `thickness × sin(π × x_frac)` where
+  `x_frac ∈ [0, 1]` is the cell's normalised position across the blade width.
+  For n=1 (flat), the top surface IS the equator; `thickness` contributes nothing.
+
+The per-cell z values are stored in `last_stamp` so own-trail detection continues
+to work correctly.
 
 **Last-stamp self handling** (REQ-OBS-3):
 Because the sampled footprint can overlap the immediately previous swept stamp,
@@ -264,33 +277,60 @@ segment over-estimates the floor for blades that cross the low end of the segmen
 The slope-aware stamp interpolates linearly between the two endpoint blade-top heights
 so subsequent geometry interacts with a faithful surface representation.
 
-### Flat ribbon mesh (default species)
+### Blade cross-section mesh (default species: `FlatGrassGrower`)
 
-Given a `GrassPath` with N spine points:
+Each blade cross-section is a closed polygon in the plane perpendicular to the
+local spine tangent:
+
+```
+                top profile (n_top_facets faces)
+         ┌──────────────────────────────────────┐
+         L       (sine arc or flat)              R
+          \                                     /
+           \    keel (below spine plane)        /
+            K  ← keel_depth = keel_fraction × blade_width
+```
+
+- **Keel** (vertex K): one vertex below the spine at `keel_depth` below the equator,
+  centred between the two blade edges.  Provides rigidity and a distinct underside.
+- **Top profile** (`n_top_facets + 1` vertices from left edge L to right edge R):
+  - n=1: L and R both at equator height (flat; thickness has no effect)
+  - n=2: L, centre peak, R — two faces forming a leaf shape
+  - N≥3: L … (N+1 evenly spaced vertices) … R following `thickness × sin(π × i/N)`
+    for a round / tubular cross-section
+- **Taper**: the last 18.75% of the blade (from `taper_start = max(1, floor((n−1)×0.8125))`)
+  tapers `width`, `keel_depth`, and `thickness` all to zero at the tip using a
+  quarter-cosine curve.
+
+**Per-ring vertex count**: `nvr = n_top_facets + 2` (one keel + n+1 top-profile vertices).
+
+**Apex rings** (width < ε, at root and tip): contribute a single vertex instead of
+nvr vertices.  The tube builder generates a convergence fan at each apex, making the
+mesh manifold (watertight) by construction without any post-merge step.
+
+Given a `GrassPath` with N spine points, `build_mesh` does:
 
 1. **Optional smoothing** — blend the grown path toward a best-fit quadratic
-   arc through the path points.  `blade_smooth = 0` leaves the path unchanged;
-   `blade_smooth = 1` uses the fitted arc.  The base and tip positions remain
-   pinned.
+   arc.  `blade_smooth = 0` leaves the path unchanged; `blade_smooth = 1` uses
+   the fitted arc.  The base and tip positions remain pinned.
 
-2. **Embedded root** — prepend one point just below terrain based on blade
-   thickness and lower the first blade ring so its top face is at or below raw terrain.
-   All four root-ring corners are therefore coincident with or below the terrain
-   surface before the blade emerges upward.
+2. **Embedded root anchor** — prepend a collapsed apex point just below terrain
+   (at `terrain_z − effective_top`) so the blade appears to grow out of the ground
+   rather than float above it.  `effective_top = 0` for n=1, `species.thickness`
+   otherwise.
 
-3. **Width taper** — compute per-point width: full width for the first 81.25% of
-   points, then taper to a sub-nozzle point at the tip using a cosine curve.
-   The tip is not allowed to collapse to exact zero width because each blade
-   must remain a closed solid for boolean union.
+3. **Per-ring taper arrays** — compute `widths`, `keel_depths`, and `thicknesses`
+   arrays of length `n_rings = N + 1` (spine rings plus prepended root):
+   - Index 0 (root anchor): all three → 0 (apex).
+   - Indices 1..`taper_start`: full `blade_width`, `base_keel`, `species.thickness`.
+   - Indices `taper_start`..−2: cosine taper toward 0.
+   - Index −1 (tip): all three → 0 (apex).
 
-4. **Build ribbon** — for each consecutive pair of spine points, emit a quad
-   (two triangles) for each face: top, bottom, left side, right side.  Cap the
-   root and tip ends.
+4. **Build tube** — for each adjacent ring pair, emit tube quads (two triangles
+   per cross-section edge) for normal rings, or a convergence fan for apex→normal
+   or normal→apex transitions.
 
-4. **Clamp XY** — clip all vertices to the tile footprint.
-
-The ribbon is `blade_top_offset` thick (default 0.06 mm), matching the stamp
-height so the occupancy grid and mesh are consistent.
+5. **Clamp XY** — clip all vertices to the tile footprint.
 
 ### Future post-processing slot
 

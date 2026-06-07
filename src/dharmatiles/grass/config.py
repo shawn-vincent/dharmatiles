@@ -22,9 +22,17 @@ class SpeciesConfig:
     blade_smooth: float = 0.0
     rise_cap: float = 2.0
 
-    # Flat ribbon mesh.
-    cross_section: str = "flat"
-    thickness: float = 0.06
+    # Cross-section shape.
+    # n_top_facets controls the top profile above the blade equator (spine plane):
+    #   1 → flat (thickness ignored; top surface IS the equator)
+    #   2 → peaked / leaf (two faces meeting at a centre ridge)
+    #   N → round (N faces approximating a half-sine arc)
+    # thickness is the distance from the equator to the top profile peak.
+    # keel_fraction sets keel_depth = keel_fraction × blade_width.
+    # keel_fraction > 0.5 gives a keel angle steeper than 45° for any width.
+    n_top_facets: int = 2
+    thickness: float = 0.3
+    keel_fraction: float = 0.6
 
     # Placement.
     groups_per_square: int = 50

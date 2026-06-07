@@ -30,15 +30,38 @@ Flat ribbon grass blades lying on the terrain surface.  Each blade:
 
 ---
 
-## Key constants (flat-blade geometry)
+## Blade cross-section
+
+Each blade is a tube with a configurable cross-section controlled by three
+`SpeciesConfig` parameters:
+
+| Parameter | Default | Effect |
+|---|---|---|
+| `n_top_facets` | 2 | 1=flat, 2=peaked/leaf, N=round (sine arc) |
+| `thickness` | 0.3 mm | Distance from spine equator to profile peak (ignored for n=1) |
+| `keel_fraction` | 0.6 | `keel_depth = keel_fraction × blade_width` below the equator |
 
 ```
-FLAT_STAMP     = 0.06 mm   — physical blade thickness (bottom to top surface)
-FLAT_CLEARANCE = 0.01 mm   — tiny lift so the blade never sits inside the terrain
+                 ┌──── top profile ────┐
+                 L    (sine arc, n=2)   R
+                  \         /\         /
+                   \       /  \       /
+                    \     /    \     /
+                     \   /      \   /
+                      \ /        \ /
+                       K (keel, below equator)
 ```
 
-The mesh builder (`_build_flat_blade_mesh`) puts the **bottom surface at the spine Z**
-and the **top surface at spine Z + FLAT_STAMP**.  These constants must match exactly.
+The keel runs from the two blade edges down to a single centre vertex below the
+spine plane, giving each blade a structural V-keel regardless of `n_top_facets`.
+`keel_fraction > 0.5` means the keel depth exceeds `blade_width/2`, so the keel
+angle is steeper than 45°.
+
+In the taper region (last 18.75% of blade length), `width`, `keel_depth`, and
+`thickness` all taper to zero together via a quarter-cosine curve.  The root also
+starts as a collapsed apex point.  Both apex points use a single vertex
+(not one per cross-section vertex), producing convergence fans that make the mesh
+manifold by construction.
 
 ---
 
@@ -243,3 +266,6 @@ Outside tile or grass region: blade stops
 | `groups_per_square` | 50 | Blade group density per 35 mm square |
 | `group_min / group_max` | 20–30 | Blades per group (controls clumping) |
 | `group_dir_jitter` | 0.14 rad | Per-blade direction noise within a group |
+| `n_top_facets` | 2 | Cross-section top profile: 1=flat, 2=peaked, N=round |
+| `thickness` | 0.3 mm | Distance from equator to top profile peak (ignored for n=1) |
+| `keel_fraction` | 0.6 | keel depth relative to blade width; >0.5 → steeper than 45° |
