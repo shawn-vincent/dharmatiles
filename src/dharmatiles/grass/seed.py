@@ -30,16 +30,21 @@ class GrassSeed:
         forward from the root.  Overlap is allowed; the narrower envelope wins.
         """
         n_steps = self.blade_n_steps if blade_n_steps is None else max(0, int(blade_n_steps))
-        return min(self._tip_taper(point_idx, n_steps), self._base_taper(point_idx, n_steps))
+        point_len = min(max(point_idx, 0), n_steps) * self.blade_segment_length
+        total_len = n_steps * self.blade_segment_length
+        return self.distance_taper(point_len, total_len)
 
-    def _tip_taper(self, point_idx: int, blade_n_steps: int) -> float:
+    def distance_taper(self, point_len: float, total_len: float) -> float:
+        """Width/thickness multiplier at a physical distance along a blade."""
+        total_len = max(0.0, float(total_len))
+        point_len = min(max(0.0, float(point_len)), total_len)
+        return min(self._tip_taper(point_len, total_len), self._base_taper(point_len))
+
+    def _tip_taper(self, point_len: float, total_len: float) -> float:
         taper_len = max(0.0, float(self.blade_taper))
         if taper_len <= 0.0:
             return 1.0
 
-        total_len = blade_n_steps * self.blade_segment_length
-        clamped_idx = min(max(point_idx, 0), blade_n_steps)
-        point_len = clamped_idx * self.blade_segment_length
         dist_from_tip = max(0.0, total_len - point_len)
         if dist_from_tip >= taper_len:
             return 1.0
@@ -47,7 +52,7 @@ class GrassSeed:
         t = dist_from_tip / taper_len
         return math.sin(t * math.pi / 2.0)
 
-    def _base_taper(self, point_idx: int, blade_n_steps: int) -> float:
+    def _base_taper(self, point_len: float) -> float:
         base_fraction = max(0.0, float(self.blade_base_width))
         if base_fraction >= 1.0:
             return 1.0
@@ -56,8 +61,7 @@ class GrassSeed:
         if taper_len <= 0.0:
             return 1.0
 
-        clamped_idx = min(max(point_idx, 0), blade_n_steps)
-        dist_from_base = clamped_idx * self.blade_segment_length
+        dist_from_base = max(0.0, float(point_len))
         if dist_from_base >= taper_len:
             return 1.0
 

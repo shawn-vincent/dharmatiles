@@ -109,8 +109,9 @@ class FlatGrassGrower:
         spine = _smooth_blade_spine(spine, species.blade_smooth)
 
         n = len(spine)
-        actual_n_steps = n - 1
-        point_tapers = np.array([seed.point_taper(i, actual_n_steps) for i in range(n)], dtype=float)
+        path_dists = _spine_distances(spine)
+        total_len = float(path_dists[-1])
+        point_tapers = np.array([seed.distance_taper(d, total_len) for d in path_dists], dtype=float)
 
         # ── Width taper (physical distance from the actual final tip) ─────────
         widths = seed.blade_width * point_tapers
@@ -129,6 +130,15 @@ class FlatGrassGrower:
 
 
 # ── Cross-section ring construction ──────────────────────────────────────────
+
+def _spine_distances(spine: np.ndarray) -> np.ndarray:
+    """Cumulative physical distance along a blade spine."""
+    if len(spine) == 0:
+        return np.array([], dtype=float)
+    if len(spine) == 1:
+        return np.array([0.0], dtype=float)
+    segment_lengths = np.linalg.norm(np.diff(spine, axis=0), axis=1)
+    return np.concatenate(([0.0], np.cumsum(segment_lengths)))
 
 
 def _make_ring_verts(

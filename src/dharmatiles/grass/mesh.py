@@ -36,8 +36,9 @@ def build_meshes(paths: list[GrassPath], cfg: GrassConfig, scene, surface) -> li
 
         # Step 3: update support_z from actual mesh top surface.
         n_pts = len(lifted_points)
-        actual_n_steps = n_pts - 1
-        point_tapers = np.array([path.seed.point_taper(i, actual_n_steps) for i in range(n_pts)], dtype=float)
+        path_dists = _spine_distances(np.asarray(lifted_points, dtype=float))
+        total_len = float(path_dists[-1])
+        point_tapers = np.array([path.seed.distance_taper(d, total_len) for d in path_dists], dtype=float)
         pt_thicknesses = species.blade_thickness * point_tapers
         pt_widths = path.seed.blade_width * point_tapers
 
@@ -54,6 +55,15 @@ def build_meshes(paths: list[GrassPath], cfg: GrassConfig, scene, surface) -> li
 
 
 # ── Point lifting ─────────────────────────────────────────────────────────────
+
+def _spine_distances(spine: np.ndarray) -> np.ndarray:
+    """Cumulative physical distance along a blade spine."""
+    if len(spine) == 0:
+        return np.array([], dtype=float)
+    if len(spine) == 1:
+        return np.array([0.0], dtype=float)
+    segment_lengths = np.linalg.norm(np.diff(spine, axis=0), axis=1)
+    return np.concatenate(([0.0], np.cumsum(segment_lengths)))
 
 def _lift_path_points(
     points: list[tuple[float, float, float]],
