@@ -60,7 +60,8 @@ class FlatGrassGrower:
             surface,
             (cx, cy),
             (tx, ty),
-            nz + species.thickness,
+            cz + species.thickness,   # blade-top z at the previous point
+            nz + species.thickness,   # blade-top z at the new point
             seed.blade_width,
         )
         return True
@@ -72,6 +73,7 @@ class FlatGrassGrower:
 
         seed = path.seed
         spine = np.asarray(path.points, dtype=float)
+        spine = _smooth_blade_spine(spine, species.blade_smooth)
         terrain_root_z = _sample_grid(scene.terrain_z, surface, spine[0, 0], spine[0, 1])
         root_z = terrain_root_z - species.thickness
         spine = np.vstack([np.array([[spine[0, 0], spine[0, 1], root_z]]), spine])
@@ -90,6 +92,41 @@ class FlatGrassGrower:
         spine[1, 2] = min(spine[1, 2], terrain_root_z - species.thickness)
 
         return _build_flat_ribbon_mesh(spine, widths, species.thickness, surface)
+
+
+def _smooth_blade_spine(spine: np.ndarray, blade_smooth: float) -> np.ndarray:
+    amount = float(np.clip(blade_smooth, 0.0, 1.0))
+    if amount <= 0.0 or len(spine) < 3:
+        return spine
+
+    arc = _fit_quadratic_arc(spine)
+    smoothed = spine + amount * (arc - spine)
+    smoothed[0] = spine[0]
+    smoothed[-1] = spine[-1]
+    return smoothed
+
+
+def _fit_quadratic_arc(points: np.ndarray) -> np.ndarray:
+    p0 = points[0]
+    p1 = points[-1]
+    segment_lengths = np.linalg.norm(np.diff(points, axis=0), axis=1)
+    total_length = float(segment_lengths.sum())
+    if total_length <= 1e-9:
+        return points.copy()
+
+    t = np.concatenate([[0.0], np.cumsum(segment_lengths) / total_length])
+    basis = 2.0 * (1.0 - t) * t
+    arc = ((1.0 - t) ** 2)[:, None] * p0 + (t ** 2)[:, None] * p1
+    fit = points - arc
+    denom = float(np.dot(basis, basis))
+    if denom <= 1e-12:
+        return points.copy()
+
+    control = (basis[:, None] * fit).sum(axis=0) / denom
+    arc += basis[:, None] * control
+    arc[0] = p0
+    arc[-1] = p1
+    return arc
 
 
 def _cell_index(surface, x: float, y: float) -> tuple[int, int]:
@@ -161,9 +198,17 @@ def _stamp_swept_footprint(
     surface,
     p0: tuple[float, float],
     p1: tuple[float, float],
-    z: float,
+    z0: float,
+    z1: float,
     width: float,
 ) -> dict[tuple[int, int], float]:
+    """Stamp the swept segment footprint into occ_z with slope-aware z interpolation.
+
+    z0 is the blade-top height at p0; z1 is the blade-top height at p1.
+    Each cell in the covered area is stamped at the linearly-interpolated height
+    for its position along the segment, so the occupancy grid records the actual
+    slope rather than a flat projection of the endpoint height.
+    """
     x0, y0 = p0
     x1, y1 = p1
     hw = width / 2.0
@@ -195,11 +240,16 @@ def _stamp_swept_footprint(
     along = rel_x * ux + rel_y * uy
     lateral = rel_x * px + rel_y * py
     mask = (along >= -surface.cell_w * 0.5) & (along <= segment_length + surface.cell_w * 0.5) & (np.abs(lateral) <= hw)
+
+    # Slope-aware: interpolate blade-top height linearly along the segment.
+    along_normalized = np.clip(along / max(segment_length, 1e-9), 0.0, 1.0)
+    z_field = z0 + (z1 - z0) * along_normalized
+
     block = occ_z[iy0:iy1 + 1, ix0:ix1 + 1]
-    np.maximum(block, np.where(mask, z, block), out=block)
+    np.maximum(block, np.where(mask, z_field, block), out=block)
     local_rows, local_cols = np.where(mask)
     return {
-        (iy0 + int(lr), ix0 + int(lc)): z
+        (iy0 + int(lr), ix0 + int(lc)): float(z_field[lr, lc])
         for lr, lc in zip(local_rows, local_cols)
     }
 

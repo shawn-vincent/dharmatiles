@@ -77,6 +77,7 @@ class SpeciesConfig:
     blade_segment_length: float  # mm — fixed per species; must be >> cell_w
     blade_curl_min:       float  # radians, magnitude
     blade_curl_max:       float  # radians, magnitude
+    blade_smooth:         float  # 0=grown path, 1=best-fit base-to-tip arc
     rise_cap:             float  # mm per step
 
     # Cross-section (for mesh build)
@@ -138,16 +139,34 @@ occ_z = scene.support_z.copy()
 
 all_paths = [GrowingPath(seed, z0) for each planted seed]
 
+# Sort downstream-first: highest projection onto own direction comes first.
+all_paths.sort(key=lambda p: p.seed.x * sin(p.seed.direction)
+                              + p.seed.y * cos(p.seed.direction),
+               reverse=True)
+
 for round in range(max_n_steps_across_all_seeds):
-    for path in shuffle(all_paths):          # fixed order per run, shuffled once
+    for path in all_paths:          # same downstream-first order every round
         if path.alive and round < path.seed.n_steps:
             path.step(occ_z, scene)
 
 return [p.to_grass_path() for p in all_paths if len(p.points) >= 2]
 ```
 
-Processing order is shuffled once before the loop and reused every round —
+**Processing order** is sorted once before the loop and reused every round —
 stacking precedence is consistent across all rounds (REQ-OBS-2).
+
+**Why downstream-first?**  The sort key projects each seed's `(x, y)` position
+onto its own initial growth direction unit vector `(sin(dir), cos(dir))`.  Seeds
+with a higher projection sit further "downstream" in the direction this blade is
+already heading.  Growing them first means their occ_z stamps exist when upstream
+blades later grow into the same area, so upstream blades rise to cross over
+downstream ones rather than the reverse.
+
+The returned `GrassPath` list preserves this sorted order, so `build_meshes`
+automatically processes blades in the same downstream-first sequence.  A single
+sort therefore governs both the growth phase and the mesh-lift phase, keeping
+the two passes consistent.
+
 During growth, each path also carries only its most recent footprint stamp.
 When the next footprint sample overlaps that last stamp and no other blade has
 raised the same cells higher, sampling falls back to `scene.support_z`.  This
@@ -186,10 +205,14 @@ sampling is unnecessary because the blade's leading-edge cross-section is the
 only new territory being entered.
 
 **Stamping** (`stamp_footprint`):
-Write `nz + blade_top_offset` to all grid cells covered by the swept rectangle
-from the previous spine position to `(tx, ty)` — width `seed.blade_width`, length
-`blade_segment_length`, aligned with the growth direction.  This records the full physical
-extent of the newly placed segment so subsequent blades detect it correctly.
+Write the blade-top height to all grid cells covered by the swept rectangle from
+the previous spine position to `(tx, ty)` — width `seed.blade_width`, length
+`blade_segment_length`, aligned with the growth direction.  The height is
+**slope-aware**: each cell receives a value linearly interpolated between
+`prev_z + blade_top_offset` and `nz + blade_top_offset` based on the cell's
+position along the segment, so `occ_z` reflects the actual sloped surface of the
+proposed path rather than a flat stamp at the endpoint height.  The per-cell z
+values are stored in `last_stamp` so own-trail detection continues to work correctly.
 
 **Last-stamp self handling** (REQ-OBS-3):
 Because the sampled footprint can overlap the immediately previous swept stamp,
@@ -202,35 +225,65 @@ will usually stop the blade through the rise cap.
 
 ## Pass 2 — Mesh build
 
-### V1 (no post-processing)
+Meshes are built in downstream-first order (the same order established by the
+growth sort).  For each path the loop does three things:
 
 ```python
-def build_meshes(paths: list[GrassPath],
-                 species_map: dict[str, SpeciesConfig]) -> list[trimesh.Trimesh]:
-    meshes = []
-    for path in paths:
-        species = species_map[path.seed.species_id]
-        mesh    = species.grower.build_mesh(path, species)
-        if mesh is not None:
-            meshes.append(mesh)
-    return meshes
+for path in paths:                              # downstream-first order
+    # 1. Adjust every point against the current accumulated surface.
+    #    Interior points: raise only.  Tip: snap to surface (up or down).
+    floor = support_z_at(x, y)
+    lifted = [(x, y, max(z, floor))  for x,y,z in path.points[:-1]]
+            + [(tip_x, tip_y, support_z_at(tip_x, tip_y))]
+    lifted_path = GrassPath(seed=path.seed, points=lifted)
+
+    # 2. Build the mesh from the adjusted path.
+    mesh = grower.build_mesh(lifted_path, species, scene, surface)
+
+    # 3. Update support_z from the actual mesh contours (slope-aware).
+    rasterise_sloped(scene.support_z, lifted_path, species.thickness)
 ```
+
+**Interior points — raise only.**  `max(planned_z, floor_z)` ensures a blade
+always lies at or above whatever has already been meshed beneath it.
+
+**Tip — snap to surface.**  The tip is pinned to `support_z` at its XY
+regardless of the planned z — up if something sits beneath it, down if the blade
+was planned to float above empty terrain.  This prevents tips from hovering in
+mid-air and eliminates the upward hook at the end of blades that grew into open
+space.
+
+**Why downstream-first order?**  Downstream blades are stamped into `support_z`
+before upstream blades are meshed.  When an upstream blade's points are adjusted,
+downstream surfaces are already present, so the blade rises smoothly to cross
+them rather than lying flat and then spiking up later.
+
+**Why slope-aware rasterisation?**  Each segment of the blade top surface has a
+slope in Z.  Stamping a constant (endpoint) Z over the entire footprint of a sloped
+segment over-estimates the floor for blades that cross the low end of the segment.
+The slope-aware stamp interpolates linearly between the two endpoint blade-top heights
+so subsequent geometry interacts with a faithful surface representation.
 
 ### Flat ribbon mesh (default species)
 
 Given a `GrassPath` with N spine points:
 
-1. **Embedded root** — prepend one point just below terrain based on blade
+1. **Optional smoothing** — blend the grown path toward a best-fit quadratic
+   arc through the path points.  `blade_smooth = 0` leaves the path unchanged;
+   `blade_smooth = 1` uses the fitted arc.  The base and tip positions remain
+   pinned.
+
+2. **Embedded root** — prepend one point just below terrain based on blade
    thickness and lower the first blade ring so its top face is at or below raw terrain.
    All four root-ring corners are therefore coincident with or below the terrain
    surface before the blade emerges upward.
 
-2. **Width taper** — compute per-point width: full width for the first 81.25% of
+3. **Width taper** — compute per-point width: full width for the first 81.25% of
    points, then taper to a sub-nozzle point at the tip using a cosine curve.
    The tip is not allowed to collapse to exact zero width because each blade
    must remain a closed solid for boolean union.
 
-3. **Build ribbon** — for each consecutive pair of spine points, emit a quad
+4. **Build ribbon** — for each consecutive pair of spine points, emit a quad
    (two triangles) for each face: top, bottom, left side, right side.  Cap the
    root and tip ends.
 

@@ -17,7 +17,7 @@ def grow_all(scene, surface, cfg: GrassConfig, rng: np.random.Generator, verbose
         n_groups = sum(s.groups_per_square * surface.cols * surface.rows for s in cfg.species)
         print(f"  Planted {len(growing)} blades in {n_groups} groups")
 
-    rng.shuffle(growing)
+    _sort_downstream_first(growing)
     species_map = {species.name: species for species in cfg.species}
     max_steps = max((path.seed.n_steps for path in growing), default=0)
 
@@ -201,6 +201,26 @@ def _make_seed(
         blade_width=blade_width,
         rise_cap=float(species.rise_cap),
         species_id=species.name,
+    )
+
+
+def _sort_downstream_first(paths: list[GrowingPath]) -> None:
+    """Sort paths in-place so seeds furthest downstream come first.
+
+    Sort key: projection of the seed (x, y) onto its own initial growth direction
+    unit vector ``(sin(direction), cos(direction))``.  A higher value means the
+    seed sits further in the direction this blade is already heading — i.e. it is
+    downstream.
+
+    Processing downstream blades before upstream blades in every round means their
+    occ_z stamps are already present when upstream blades grow through the same
+    area, so upstream blades rise to cross downstream ones rather than the reverse.
+    The returned GrassPath list from grow_all preserves this order, so the mesh
+    build phase automatically sees blades in the same downstream-first sequence.
+    """
+    paths.sort(
+        key=lambda p: p.seed.x * np.sin(p.seed.direction) + p.seed.y * np.cos(p.seed.direction),
+        reverse=True,
     )
 
 

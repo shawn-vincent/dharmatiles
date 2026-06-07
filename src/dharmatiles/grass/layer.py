@@ -7,7 +7,7 @@ import trimesh
 
 from .config import GrassConfig
 from .grow import grow_all
-from .mesh import build_meshes, rasterise_paths_into_support
+from .mesh import build_meshes
 
 
 class GrassLayer:
@@ -21,7 +21,6 @@ class GrassLayer:
         rng = np.random.default_rng(self.cfg.seed)
         paths = grow_all(scene, surface, self.cfg, rng, verbose=verbose)
         meshes = build_meshes(paths, self.cfg, scene, surface)
-        rasterise_paths_into_support(paths, self.cfg, scene, surface)
         if verbose:
             segs = [len(path.points) - 1 for path in paths]
             if segs:

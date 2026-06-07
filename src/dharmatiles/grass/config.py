@@ -19,6 +19,7 @@ class SpeciesConfig:
     blade_segment_length: float = 0.8
     blade_curl_min: float = 0.0
     blade_curl_max: float = 0.8
+    blade_smooth: float = 0.0
     rise_cap: float = 2.0
 
     # Flat ribbon mesh.
@@ -40,6 +41,6 @@ class GrassConfig:
     """Top-level grass config."""
 
     species: list[SpeciesConfig] = field(default_factory=lambda: [SpeciesConfig()])
-    clearance: float = 0.01
+    clearance: float = 0.0
     max_stack_height: float = 2.0
     seed: int = 0

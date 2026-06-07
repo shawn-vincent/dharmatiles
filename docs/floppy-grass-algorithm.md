@@ -136,9 +136,23 @@ Growth runs for up to `round(blade_length / blade_segment_length)` rounds, where
 creation time.  Each round, every alive blade attempts one step of size
 `blade_segment_length` forward.
 
-A **single global processing order** (a random permutation fixed before growth
-begins) is reused every round.  Blade A always stamps before blade B in every
-round — stacking precedence is consistent across all rounds.
+A **single global processing order** (fixed before growth begins, reused every
+round) governs stacking precedence.  Blade A always stamps before blade B in
+every round.
+
+**Order: downstream-first.**  Blades are sorted by the projection of their seed
+position onto their own initial growth direction:
+
+```
+sort_key = seed.x * sin(seed.direction) + seed.y * cos(seed.direction)
+```
+
+Blades with higher projections sit further downstream in the direction they grow
+and are processed first.  As upstream blades later grow into the same territory,
+they see the downstream blades' occ_z stamps and rise to cross over them — which
+is the physically correct stacking order.  The same sorted list is returned from
+the growth pass and used directly by the mesh-build pass, so both phases operate
+in the same downstream-first sequence.
 
 Stamps are written **immediately** after each step, so blade B, processed after
 blade A in the same round, already sees A's new strip.
@@ -182,13 +196,22 @@ back to ground level with no special logic.
 
 ## Step 3 — Build meshes
 
-For each blade with ≥ 2 path points:
+Blades are meshed in the same downstream-first order used during growth.  Before
+building each mesh, every path point is adjusted against the current `scene.support_z`:
 
-1. Taper the width from full → 25% over the last 18.75% of the blade length (the tip).
-2. Clip path XY to tile footprint.
-3. Call `_build_flat_blade_mesh(path_arr, widths)` → closed watertight ribbon.
+- **Interior points** (root through penultimate): `new_z = max(planned_z, support_z_at(x, y))` — raise only, never pull down.
+- **Tip** (last point): `new_z = support_z_at(x, y)` — snap to the actual surface height, whether higher or lower than planned.  This prevents tips from hovering in mid-air and removes the upward hook at the end of blades that grew into open space.
+
+After adjustment, for each blade with ≥ 2 path points:
+
+1. Optionally smooth the spine toward a best-fit base-to-tip arc, pinning base and tip.
+2. Taper the width from full → 25% over the last 18.75% of the blade length (the tip).
+3. Clip path XY to tile footprint.
+4. Call `_build_flat_blade_mesh(path_arr, widths)` → closed watertight ribbon.
    Bottom at `path_z`, top at `path_z + 0.06 mm`.
-4. Hard-clamp all vertices to tile footprint (catches smoothing overshoot).
+5. Hard-clamp all vertices to tile footprint (catches smoothing overshoot).
+6. Update `scene.support_z` from the adjusted path's top surface using slope-aware
+   rasterisation, so the next blade in sequence sees the accurate accumulated surface.
 
 
 ---
@@ -216,6 +239,7 @@ Outside tile or grass region: blade stops
 | `max_stack_height` | 2.0 mm | Max occ_z above terrain for seeding or growing |
 | `blade_width_min / blade_width_max` | 0.75–2.0 mm | Blade width range (also sets perpendicular stamp coverage) |
 | `blade_curl_min / blade_curl_max` | 0.0–0.8 rad | Curl magnitude range; sign is chosen randomly per seed |
+| `blade_smooth` | 0.0 | Blend from grown path to best-fit base-to-tip arc |
 | `groups_per_square` | 50 | Blade group density per 35 mm square |
 | `group_min / group_max` | 20–30 | Blades per group (controls clumping) |
 | `group_dir_jitter` | 0.14 rad | Per-blade direction noise within a group |
