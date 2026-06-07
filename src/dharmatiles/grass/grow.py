@@ -10,6 +10,7 @@ from .seed import GrassPath, GrassSeed, GrowingPath
 
 
 def grow_all(scene, surface, cfg: GrassConfig, rng: np.random.Generator, verbose: bool = True) -> list[GrassPath]:
+    """Plant blades, then fully grow each blade before starting the next one."""
     occ_z = scene.support_z.copy()
     growing = plant_seeds(scene, surface, cfg, occ_z, rng)
 
@@ -19,24 +20,31 @@ def grow_all(scene, surface, cfg: GrassConfig, rng: np.random.Generator, verbose
 
     _sort_downstream_first(growing)
     species_map = {species.name: species for species in cfg.species}
-    max_steps = max((path.seed.blade_n_steps for path in growing), default=0)
+    total_segments = 0
+    full_length_blades = 0
 
-    for round_idx in range(max_steps):
-        grown = 0
-        for path in growing:
-            if not path.alive or round_idx >= path.seed.blade_n_steps:
-                path.alive = False
-                continue
-            species = species_map[path.seed.species_id]
-            grower = GROWERS[species.grower]
-            if grower.step(path, occ_z, scene, surface, cfg, species):
-                grown += 1
+    for path in growing:
+        species = species_map[path.seed.species_id]
+        grower = GROWERS[species.grower]
+        grown_segments = 0
 
-        if verbose:
-            alive = sum(1 for path in growing if path.alive)
-            print(f"  Round {round_idx + 1:2d}: {grown:3d} segments grown, {alive:3d} blades still alive")
-        if grown == 0:
-            break
+        for _ in range(path.seed.blade_n_steps):
+            if not path.alive:
+                break
+            if not grower.step(path, occ_z, scene, surface, cfg, species):
+                break
+            grown_segments += 1
+
+        total_segments += grown_segments
+        if grown_segments == path.seed.blade_n_steps:
+            full_length_blades += 1
+
+    if verbose:
+        viable_blades = sum(1 for path in growing if len(path.points) >= 2)
+        print(
+            f"  Grew {total_segments} segments across {viable_blades} blades "
+            f"({full_length_blades} reached full length)"
+        )
 
     return [
         GrassPath(seed=path.seed, points=path.points)
@@ -198,6 +206,7 @@ def _make_seed(
         blade_direction=float(group_dir + rng.normal(0.0, species.group_dir_jitter)),
         blade_segment_length=float(species.blade_segment_length),
         blade_n_steps=blade_n_steps,
+        blade_taper=float(species.blade_taper),
         blade_curl=curl_per_step,
         blade_width=blade_width,
         blade_rise_cap=float(species.blade_rise_cap),
@@ -214,11 +223,11 @@ def _sort_downstream_first(paths: list[GrowingPath]) -> None:
     seed sits further in the direction this blade is already heading — i.e. it is
     downstream.
 
-    Processing downstream blades before upstream blades in every round means their
+    Processing complete downstream blades before upstream blades means their full
     occ_z stamps are already present when upstream blades grow through the same
     area, so upstream blades rise to cross downstream ones rather than the reverse.
     The returned GrassPath list from grow_all preserves this order, so the mesh
-    build phase automatically sees blades in the same downstream-first sequence.
+    build phase sees blades in the same downstream-first sequence.
     """
     paths.sort(
         key=lambda p: p.seed.x * np.sin(p.seed.blade_direction) + p.seed.y * np.cos(p.seed.blade_direction),

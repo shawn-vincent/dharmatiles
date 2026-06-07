@@ -11,11 +11,10 @@ from .seed import GrassPath
 
 
 def build_meshes(paths: list[GrassPath], cfg: GrassConfig, scene, surface) -> list[trimesh.Trimesh]:
-    """Build meshes for all paths, interleaving point lifting and support updates.
+    """Build one complete blade mesh at a time, updating support after each path.
 
-    For each path (downstream-first order):
-    1. Lift every interior point to max(planned_z, support_z).
-       Snap the tip exactly to support_z (up or down).
+    For each full path (downstream-first order):
+    1. Lift every non-root point to max(planned_z, support_z).
     2. Build the mesh from the adjusted path.
     3. Update scene.support_z from the actual mesh top surface using
        profile-aware, slope-aware rasterisation.
@@ -37,14 +36,9 @@ def build_meshes(paths: list[GrassPath], cfg: GrassConfig, scene, surface) -> li
 
         # Step 3: update support_z from actual mesh top surface.
         n_pts = len(lifted_points)
-        taper_start = max(1, int(np.floor((n_pts - 1) * 0.8125)))
-        pt_thicknesses = np.full(n_pts, species.blade_thickness, dtype=float)
-        pt_widths = np.full(n_pts, path.seed.blade_width, dtype=float)
-        if taper_start < n_pts:
-            t = np.linspace(0.0, 1.0, n_pts - taper_start)
-            taper = np.cos(t * np.pi / 2.0)
-            pt_thicknesses[taper_start:] = species.blade_thickness * taper
-            pt_widths[taper_start:] = path.seed.blade_width * taper
+        point_tapers = np.array([path.seed.point_taper(i) for i in range(n_pts)], dtype=float)
+        pt_thicknesses = species.blade_thickness * point_tapers
+        pt_widths = path.seed.blade_width * point_tapers
 
         _rasterise_sloped_path(
             scene.support_z,

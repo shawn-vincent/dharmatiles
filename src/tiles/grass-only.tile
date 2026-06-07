@@ -27,4 +27,5 @@ regions:
         blade_clearance: 0.5
         blade_top_facets: 4
         blade_thickness: 0.2
+        blade_taper: 10
         keel_fraction: 0.6

@@ -39,7 +39,15 @@ class FlatGrassGrower:
         direction = seed.blade_direction + seed.blade_curl * (len(path.points) - 1)
         tx = cx + seed.blade_segment_length * np.sin(direction)
         ty = cy + seed.blade_segment_length * np.cos(direction)
-        hw = seed.blade_width / 2.0
+        prev_idx = len(path.points) - 1
+        next_idx = len(path.points)
+        prev_taper = seed.point_taper(prev_idx)
+        next_taper = seed.point_taper(next_idx)
+        prev_width = seed.blade_width * prev_taper
+        next_width = seed.blade_width * next_taper
+        prev_thickness = species.blade_thickness * prev_taper
+        next_thickness = species.blade_thickness * next_taper
+        hw = next_width / 2.0
 
         if not (hw <= tx <= surface.tile_w - hw and hw <= ty <= surface.tile_h - hw):
             path.alive = False
@@ -56,7 +64,7 @@ class FlatGrassGrower:
             surface,
             tx,
             ty,
-            seed.blade_width,
+            next_width,
             x0=cx,
             y0=cy,
         )
@@ -78,8 +86,10 @@ class FlatGrassGrower:
             (tx, ty),
             cz,                     # spine z at previous point
             nz,                     # spine z at new point
-            seed.blade_width,
-            species.blade_thickness,
+            prev_width,
+            next_width,
+            prev_thickness,
+            next_thickness,
             species.blade_top_facets,
         )
         return True
@@ -99,23 +109,17 @@ class FlatGrassGrower:
         spine = _smooth_blade_spine(spine, species.blade_smooth)
 
         n = len(spine)
-        taper_start = max(1, int(np.floor((n - 1) * 0.8125)))
+        point_tapers = np.array([seed.point_taper(i) for i in range(n)], dtype=float)
 
-        # ── Width taper (full from seed, taper to near-zero at tip) ─────────
-        widths = np.full(n, seed.blade_width)
-        if taper_start < n:
-            t = np.linspace(0.0, 1.0, n - taper_start)
-            widths[taper_start:] = seed.blade_width * np.cos(t * np.pi / 2.0)
+        # ── Width taper (physical distance from tip, sampled at seed time) ───
+        widths = seed.blade_width * point_tapers
 
         # ── Keel depth — fixed throughout; does not taper with width ──────────
         base_keel = species.keel_fraction * seed.blade_width
         keel_depths = np.full(n, base_keel)
 
         # ── Top-profile height taper (full from seed, taper near tip) ─────────
-        thicknesses = np.full(n, species.blade_thickness)
-        if taper_start < n:
-            t = np.linspace(0.0, 1.0, n - taper_start)
-            thicknesses[taper_start:] = species.blade_thickness * np.cos(t * np.pi / 2.0)
+        thicknesses = species.blade_thickness * point_tapers
 
         # Both ends are normal rings closed with end-caps.  Ring 0 (seed) is
         # anchored in the terrain via its keel.  The tip ring tapers to ~zero
@@ -324,11 +328,11 @@ def _sample_footprint_max(
     x0: float | None = None,
     y0: float | None = None,
 ) -> float:
-    """Sample max occ_z along the leading edge of the next footprint.
+    """Sample max occ_z along the tapered leading edge of the next footprint.
 
     Stamping stays conservative and only writes fully-contained cells.  Sampling
-    only probes the new segment's front cap so the blade reacts to support ahead
-    of it without detecting its own already-stamped swept trail.
+    only probes the new segment's tapered front cap so the blade reacts to
+    support ahead of it without detecting its own already-stamped swept trail.
     """
     hw = width / 2.0
 
@@ -352,22 +356,23 @@ def _stamp_swept_footprint(
     p1: tuple[float, float],
     z0: float,          # spine z at p0
     z1: float,          # spine z at p1
-    width: float,
-    thickness: float,   # top-profile peak height (ignored for n_top_facets=1)
+    width0: float,
+    width1: float,
+    thickness0: float,  # top-profile peak height at p0 (ignored for n_top_facets=1)
+    thickness1: float,  # top-profile peak height at p1 (ignored for n_top_facets=1)
     n_top_facets: int,
 ) -> None:
-    """Stamp cells fully contained in the swept segment footprint into occ_z.
+    """Stamp cells fully contained in the tapered swept segment into occ_z.
 
     The stamp height is profile-aware:
       n=1  → flat at equator (z_spine); thickness is ignored.
-      n≥2  → laterally varying: z_spine + thickness×sin(π×x_frac) where
-              x_frac is the cell's position across the blade width (0=left, 1=right).
+      n≥2  → laterally varying: z_spine + thickness×sin(π×x_frac), with
+              thickness tapered along the segment.
     Height also varies along the segment (linear interpolation of z0..z1).
-    The return dict maps (iy, ix) → stamped z for own-trail detection.
     """
     x0, y0 = p0
     x1, y1 = p1
-    footprint = _contained_segment_cells(surface, x0, y0, x1, y1, width / 2.0, width / 2.0)
+    footprint = _contained_segment_cells(surface, x0, y0, x1, y1, width0 / 2.0, width1 / 2.0)
     if footprint is None:
         return
     ix0, ix1, iy0, iy1, mask, along_norm, lateral_frac = footprint
@@ -375,6 +380,7 @@ def _stamp_swept_footprint(
         return
 
     z_spine = z0 + (z1 - z0) * along_norm          # slope along segment
+    thickness = thickness0 + (thickness1 - thickness0) * along_norm
 
     if n_top_facets == 1:
         z_field = z_spine                           # flat: top IS the equator
