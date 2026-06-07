@@ -66,7 +66,7 @@ def plant_seeds(
 ) -> list[GrowingPath]:
     paths: list[GrowingPath] = []
     for species in cfg.species:
-        n_groups = species.groups_per_square * surface.cols * surface.rows
+        n_groups = _scaled_voronoi_group_count(species.groups_per_square, scene, surface, rng)
         groups = _voronoi_groups(n_groups, scene, surface, rng)
         actual_n_groups = len(groups)
         for group in groups:
@@ -104,6 +104,32 @@ def plant_seeds(
                 paths.append(GrowingPath(seed=seed, points=[(x, y, z0)]))
 
     return paths
+
+
+def _scaled_voronoi_group_count(
+    groups_per_square: int,
+    scene,
+    surface,
+    rng: np.random.Generator,
+) -> int:
+    """Scale Voronoi group count by grass-layer area over total tile area."""
+    total_tile_cells = surface.grid_w * surface.grid_h
+    if total_tile_cells <= 0:
+        return 0
+
+    if scene.grass_mask is None:
+        grass_cells = total_tile_cells
+    else:
+        grass_cells = int(scene.grass_mask.sum())
+    if grass_cells <= 0:
+        return 0
+
+    full_tile_groups = max(0, int(groups_per_square)) * surface.cols * surface.rows
+    expected_groups = full_tile_groups * grass_cells / float(total_tile_cells)
+    base_count = int(np.floor(expected_groups))
+    if rng.random() < expected_groups - base_count:
+        base_count += 1
+    return max(1, base_count)
 
 
 def _scaled_group_seed_count(
