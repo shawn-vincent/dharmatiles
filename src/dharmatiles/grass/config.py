@@ -12,19 +12,19 @@ class SpeciesConfig:
     name: str = "floppy-grass"
 
     # Blade geometry ranges, sampled at seed creation time.
-    blade_width_min: float = 2.0
-    blade_width_max: float = 3.0
-    blade_length_min: float = 10.0
+    blade_width_min: float = 1.0
+    blade_width_max: float = 2.0
+    blade_length_min: float = 5.0
     blade_length_max: float = 10.0
     blade_segment_length: float = 0.8
-    blade_taper: float = 10.0
+    blade_taper: float = 3.0
     blade_base_width: float = 0.75
-    blade_base_taper: float | None = 10.0
+    blade_base_taper: float | None = 3.0
     blade_curl_min: float = 0.5
     blade_curl_max: float = 0.8
     blade_smooth: float = 0.8
     blade_rise_cap: float = 2.0
-    blade_clearance: float = 0.5
+    blade_clearance: float = 0.2
 
     # Cross-section shape.
     # blade_top_facets controls the top profile above the blade equator (spine plane):
