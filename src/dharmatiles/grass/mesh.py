@@ -67,10 +67,14 @@ def _lift_path_points(
 ) -> list[tuple[float, float, float]]:
     """Adjust path points against the current support surface.
 
-    All points: raise only — max(planned_z, floor_z).
+    Ring 0 is the intentional terrain-sunk root.  Other points raise only:
+    max(planned_z, floor_z).
     """
     lifted = []
-    for x, y, z in points:
+    for idx, (x, y, z) in enumerate(points):
+        if idx == 0:
+            lifted.append((float(x), float(y), float(z)))
+            continue
         floor_z = _sample_grid(support_z, surface, x, y)
         lifted.append((float(x), float(y), float(max(z, floor_z))))
     return lifted

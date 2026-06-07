@@ -66,7 +66,7 @@ class FlatGrassGrower:
         if floor_z - terrain_z > cfg.max_stack_height:
             path.alive = False
             return False
-        if nz > cz + seed.blade_rise_cap:
+        if len(path.points) > 1 and nz > cz + seed.blade_rise_cap:
             path.alive = False
             return False
 
@@ -324,11 +324,16 @@ def _sample_footprint_max(
     x0: float | None = None,
     y0: float | None = None,
 ) -> float:
-    """Sample max occ_z over cells fully contained in the next footprint."""
+    """Sample max occ_z along the leading edge of the next footprint.
+
+    Stamping stays conservative and only writes fully-contained cells.  Sampling
+    only probes the new segment's front cap so the blade reacts to support ahead
+    of it without detecting its own already-stamped swept trail.
+    """
     hw = width / 2.0
 
     if x0 is not None and y0 is not None:
-        footprint = _contained_segment_cells(surface, x0, y0, x, y, hw, hw)
+        footprint = _leading_edge_cells(surface, x0, y0, x, y, hw)
         if footprint is None:
             return _sample_grid(base_z, surface, x, y)
         ix0g, ix1g, iy0g, iy1g, mask, _, _ = footprint
@@ -390,6 +395,70 @@ def _contained_segment_cells(
     hw1: float,
 ) -> tuple[int, int, int, int, np.ndarray, np.ndarray, np.ndarray] | None:
     """Return cells whose full square is inside the segment footprint."""
+    return _segment_cells(surface, x0, y0, x1, y1, hw0, hw1)
+
+
+def _leading_edge_cells(
+    surface,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    hw: float,
+) -> tuple[int, int, int, int, np.ndarray, np.ndarray, np.ndarray] | None:
+    """Return cells intersected by the proposed segment's leading edge."""
+    dx = x1 - x0
+    dy = y1 - y0
+    segment_length = float(np.hypot(dx, dy))
+    if segment_length < 1e-9:
+        return None
+
+    ux, uy = dx / segment_length, dy / segment_length
+    px, py = -uy, ux
+    ax = x1 + px * hw
+    ay = y1 + py * hw
+    bx = x1 - px * hw
+    by = y1 - py * hw
+
+    min_x = max(0.0, min(ax, bx))
+    max_x = min(surface.tile_w, max(ax, bx))
+    min_y = max(0.0, min(ay, by))
+    max_y = min(surface.tile_h, max(ay, by))
+    if min_x > max_x or min_y > max_y:
+        return None
+
+    ix0 = max(0, int(min_x / surface.cell_w) - 1)
+    ix1 = min(surface.grid_w - 1, int(max_x / surface.cell_w) + 1)
+    iy0 = max(0, int(min_y / surface.cell_w) - 1)
+    iy1 = min(surface.grid_h - 1, int(max_y / surface.cell_w) + 1)
+
+    cols = np.arange(ix0, ix1 + 1)
+    rows = np.arange(iy0, iy1 + 1)
+    left = cols * surface.cell_w
+    right = (cols + 1) * surface.cell_w
+    bottom = rows * surface.cell_w
+    top = (rows + 1) * surface.cell_w
+
+    eps = 1e-9
+    mask = _segment_intersects_cells(ax, ay, bx, by, left, right, bottom, top, eps)
+    center_x = ((cols + 0.5) * surface.cell_w)[None, :]
+    center_y = ((rows + 0.5) * surface.cell_w)[:, None]
+    edge_len = max(2.0 * hw, eps)
+    lateral_frac = np.clip(((center_x - ax) * (-px) + (center_y - ay) * (-py)) / edge_len, 0.0, 1.0)
+    along_norm = np.ones_like(lateral_frac)
+
+    return ix0, ix1, iy0, iy1, mask, along_norm, lateral_frac
+
+
+def _segment_cells(
+    surface,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    hw0: float,
+    hw1: float,
+) -> tuple[int, int, int, int, np.ndarray, np.ndarray, np.ndarray] | None:
     dx = x1 - x0
     dy = y1 - y0
     segment_length = float(np.hypot(dx, dy))
@@ -401,9 +470,9 @@ def _contained_segment_cells(
 
     corners = np.array([
         [x0 + px * hw0, y0 + py * hw0],
-        [x0 - px * hw0, y0 - py * hw0],
         [x1 + px * hw1, y1 + py * hw1],
         [x1 - px * hw1, y1 - py * hw1],
+        [x0 - px * hw0, y0 - py * hw0],
     ])
     min_x = max(0.0, float(corners[:, 0].min()))
     max_x = min(surface.tile_w, float(corners[:, 0].max()))
@@ -455,3 +524,46 @@ def _contained_segment_cells(
     lateral_frac = np.clip((center_lateral + center_hw) / np.maximum(2.0 * center_hw, 1e-9), 0.0, 1.0)
 
     return ix0, ix1, iy0, iy1, mask, along_norm, lateral_frac
+
+
+def _segment_intersects_cells(
+    ax: float,
+    ay: float,
+    bx: float,
+    by: float,
+    left: np.ndarray,
+    right: np.ndarray,
+    bottom: np.ndarray,
+    top: np.ndarray,
+    eps: float,
+) -> np.ndarray:
+    """Vectorized line-segment/AABB intersection for candidate grid cells."""
+    rows = len(bottom)
+    cols = len(left)
+    t0 = np.zeros((rows, cols), dtype=float)
+    t1 = np.ones((rows, cols), dtype=float)
+    mask = np.ones((rows, cols), dtype=bool)
+
+    dx = bx - ax
+    if abs(dx) <= eps:
+        mask &= (ax >= left[None, :] - eps) & (ax <= right[None, :] + eps)
+    else:
+        tx_a = (left - ax) / dx
+        tx_b = (right - ax) / dx
+        tx_min = np.minimum(tx_a, tx_b)[None, :]
+        tx_max = np.maximum(tx_a, tx_b)[None, :]
+        t0 = np.maximum(t0, tx_min)
+        t1 = np.minimum(t1, tx_max)
+
+    dy = by - ay
+    if abs(dy) <= eps:
+        mask &= (ay >= bottom[:, None] - eps) & (ay <= top[:, None] + eps)
+    else:
+        ty_a = (bottom - ay) / dy
+        ty_b = (top - ay) / dy
+        ty_min = np.minimum(ty_a, ty_b)[:, None]
+        ty_max = np.maximum(ty_a, ty_b)[:, None]
+        t0 = np.maximum(t0, ty_min)
+        t1 = np.minimum(t1, ty_max)
+
+    return mask & (t0 <= t1 + eps) & (t1 >= -eps) & (t0 <= 1.0 + eps)

@@ -4,14 +4,14 @@
 
 surface:
   sizes: [1x1]
-  seed: 123
+  seed: 1
 
 regions:
   meadow:
     contains: [0.5, 0.5]
     layers:
       - type: grass
-        groups_per_square: 1
+        groups_per_square: 5
         group_min: 1
         group_max: 1
         group_dir_jitter: 0.14

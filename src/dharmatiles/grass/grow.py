@@ -74,7 +74,9 @@ def plant_seeds(
                     continue
 
                 seed = _make_seed(x, y, group_dir, species, rng)
-                z0 = max(terrain_z, floor_z) + seed.blade_clearance
+                z0 = max(terrain_z, floor_z) + seed.blade_clearance - (
+                    species.blade_thickness + seed.blade_clearance
+                )
                 paths.append(GrowingPath(seed=seed, points=[(x, y, z0)]))
 
     return paths
