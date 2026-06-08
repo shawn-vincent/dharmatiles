@@ -80,29 +80,27 @@ def plant_seeds(
                 rng,
             )
 
-            interior_pts, half_pts, quarter_pts = _jitter_grid_xy(group, n_seeds, group_dir, surface, rng)
-            for length_scale, candidates in ((1.0, interior_pts), (0.5, half_pts), (0.25, quarter_pts)):
-                for x, y in candidates:
-                    ix, iy = _cell_index(surface, x, y)
-                    if scene.grass_mask is not None and not scene.grass_mask[iy, ix]:
-                        continue
-                    if scene.stone_mask is not None and scene.stone_mask[iy, ix]:
-                        continue
+            for x, y in _jitter_grid_xy(group, n_seeds, group_dir, surface, rng):
+                ix, iy = _cell_index(surface, x, y)
+                if scene.grass_mask is not None and not scene.grass_mask[iy, ix]:
+                    continue
+                if scene.stone_mask is not None and scene.stone_mask[iy, ix]:
+                    continue
 
-                    terrain_z = float(scene.terrain_z[iy, ix])
-                    terrain_support_z = float(scene.terrain_support_z[iy, ix])
-                    if _vegetation_depth(scene.vegetation_support_z, terrain_support_z, ix, iy) > 0.0:
-                        continue
+                terrain_z = float(scene.terrain_z[iy, ix])
+                terrain_support_z = float(scene.terrain_support_z[iy, ix])
+                if _vegetation_depth(scene.vegetation_support_z, terrain_support_z, ix, iy) > 0.0:
+                    continue
 
-                    floor_z = max(terrain_support_z, float(occ_z[iy, ix]))
-                    if floor_z - terrain_z > cfg.max_stack_height:
-                        continue
+                floor_z = max(terrain_support_z, float(occ_z[iy, ix]))
+                if floor_z - terrain_z > cfg.max_stack_height:
+                    continue
 
-                    seed = _make_seed(x, y, group_dir, species, rng, length_scale=length_scale)
-                    z0 = max(terrain_z, floor_z) + seed.blade_clearance - (
-                        species.blade_thickness + seed.blade_clearance
-                    )
-                    paths.append(GrowingPath(seed=seed, points=[(x, y, z0)]))
+                seed = _make_seed(x, y, group_dir, species, rng)
+                z0 = max(terrain_z, floor_z) + seed.blade_clearance - (
+                    species.blade_thickness + seed.blade_clearance
+                )
+                paths.append(GrowingPath(seed=seed, points=[(x, y, z0)]))
 
     return paths
 
@@ -250,131 +248,84 @@ def _jitter_grid_xy(
     group_dir: float,
     surface,
     rng: np.random.Generator,
-) -> tuple[list[tuple[float, float]], list[tuple[float, float]], list[tuple[float, float]]]:
-    """Return ``(interior, edge_half, edge_quarter)`` candidates for this group.
+) -> list[tuple[float, float]]:
+    """Jitter-grid candidates with source-edge-biased density.
 
-    *interior*     — regular jitter grid; spacing chosen so count ≈ n_target.
-    *edge_half*    — random scatter along band 0 of the upstream source face
-                     (cells within 1 cell_w of the minimum projection).
-    *edge_quarter* — random scatter along band 1 (next cell_w band inward).
+    The grid is laid out in a rotated (u, v) frame:
+      u — along the blade direction (sin θ, cos θ); the source edge (face
+          blades grow *away from*) sits at minimum u.
+      v — lateral, perpendicular to u.
 
-    Caller assigns length_scale 1.0 / 0.5 / 0.25 to the three lists so blades
-    shorten toward the source face, hiding the zone boundary under a fringe.
+    The v axis uses uniform spacing.  The u axis is warped by a power
+    function so rows pile up near u_min and thin out toward u_max — more
+    seeds close to the source edge, fewer far away.  Seeds can start right
+    at the source edge (u_lo = u_min − ½ cell_w).
+
+    Total grid cells ≈ n_target; actual in-group count is proportional to
+    the group's fill fraction of its (u, v) bounding rectangle.
     """
     if n_target <= 0:
-        return [], [], []
+        return []
 
     group_rows = group["rows"]
     group_cols = group["cols"]
     n_cells = len(group_rows)
     if n_cells == 0:
-        return [], [], []
+        return []
 
     cell_w = surface.cell_w
 
-    # Boolean membership mask — cheaper than a Python set for the final filter.
     group_mask = np.zeros((surface.grid_h, surface.grid_w), dtype=bool)
     group_mask[group_rows, group_cols] = True
 
-    min_col = int(group_cols.min())
-    max_col = int(group_cols.max())
-    min_row = int(group_rows.min())
-    max_row = int(group_rows.max())
-
-    group_area = n_cells * cell_w * cell_w
-    # spacing such that group_area / spacing² ≈ n_target; floor at half a cell.
-    spacing = max(cell_w * 0.5, np.sqrt(group_area / max(n_target, 1)))
-
-    bbox_w = (max_col - min_col + 1) * cell_w
-    bbox_h = (max_row - min_row + 1) * cell_w
-    n_x = max(1, int(np.ceil(bbox_w / spacing)))
-    n_y = max(1, int(np.ceil(bbox_h / spacing)))
-
-    x_base = min_col * cell_w
-    y_base = min_row * cell_w
-
-    # Vectorised jitter grid: each cell gets its own independent offset.
-    xi = np.arange(n_x, dtype=float)
-    yi = np.arange(n_y, dtype=float)
-    xs = x_base + (xi[:, np.newaxis] + rng.uniform(0.0, 1.0, (n_x, n_y))) * spacing
-    ys = y_base + (yi[np.newaxis, :] + rng.uniform(0.0, 1.0, (n_x, n_y))) * spacing
-
-    xs_flat = xs.ravel()
-    ys_flat = ys.ravel()
-
-    # Cell indices for every candidate point (clipped to grid bounds).
-    ixs = np.clip((xs_flat / cell_w).astype(int), 0, surface.grid_w - 1)
-    iys = np.clip((ys_flat / cell_w).astype(int), 0, surface.grid_h - 1)
-
-    valid = group_mask[iys, ixs]
-    interior = list(zip(xs_flat[valid].tolist(), ys_flat[valid].tolist()))
-
-    # Upstream edge rows — band 0 (½ length) and band 1 (¼ length) fill the
-    # gap at the source face that the jitter grid would otherwise leave bare.
-    edge_half    = _upstream_edge_row(group_rows, group_cols, group_dir, cell_w, spacing, rng, band=0)
-    edge_quarter = _upstream_edge_row(group_rows, group_cols, group_dir, cell_w, spacing, rng, band=1)
-
-    return interior, edge_half, edge_quarter
-
-
-def _upstream_edge_row(
-    group_rows: np.ndarray,
-    group_cols: np.ndarray,
-    group_dir: float,
-    cell_w: float,
-    spacing: float,
-    rng: np.random.Generator,
-    band: int = 0,
-) -> list[tuple[float, float]]:
-    """Scatter seeds along one cell-width band of the upstream (source) face.
-
-    ``band=0`` selects the backmost cell-width strip (projection in
-    ``[min_u, min_u + cell_w]``); ``band=1`` selects the next strip inward,
-    and so on.  Callers use band 0 for ½-length blades and band 1 for
-    ¼-length blades to create a shortening fringe at the source edge.
-
-    The seed count is proportional to the lateral width of the band at the
-    jitter-grid density; positions are a random (unordered) sample of the
-    band's cells — not spread on a regular lattice.
-    """
+    # Rotated frame aligned with the blade direction.
     dx = float(np.sin(group_dir))
     dy = float(np.cos(group_dir))
+    px = float(-np.cos(group_dir))   # lateral direction
+    py = float(np.sin(group_dir))
 
     cx = (group_cols + 0.5) * cell_w
     cy = (group_rows + 0.5) * cell_w
     proj_u = cx * dx + cy * dy
+    proj_v = cx * px + cy * py
 
-    min_u = float(proj_u.min())
-    lo = min_u + band * cell_w
-    hi = min_u + (band + 1) * cell_w
-    edge_mask = (proj_u >= lo - 1e-9) & (proj_u <= hi + 1e-9)
+    u_lo = float(proj_u.min()) - 0.5 * cell_w   # source edge — grid starts here
+    u_hi = float(proj_u.max()) + 0.5 * cell_w
+    v_lo = float(proj_v.min()) - 0.5 * cell_w
+    v_hi = float(proj_v.max()) + 0.5 * cell_w
+    u_span = u_hi - u_lo
+    v_span = v_hi - v_lo
 
-    edge_rows = group_rows[edge_mask]
-    edge_cols = group_cols[edge_mask]
+    group_area = n_cells * cell_w * cell_w
+    spacing = max(cell_w * 0.5, np.sqrt(group_area / max(n_target, 1)))
 
-    if len(edge_rows) == 0:
-        return []
+    n_u = max(1, int(np.ceil(u_span / spacing)))
+    n_v = max(1, int(np.ceil(v_span / spacing)))
 
-    # Lateral extent — used only to estimate how many seeds to scatter.
-    px = float(-np.cos(group_dir))
-    py = float(np.sin(group_dir))
-    edge_v = (edge_cols + 0.5) * cell_w * px + (edge_rows + 0.5) * cell_w * py
-    lateral_extent = float(edge_v.max() - edge_v.min()) + cell_w
-    n_seeds = max(1, int(np.round(4.0 * lateral_extent / spacing)))
+    # Power-law warp along u: t → t² packs rows toward u_lo (source edge).
+    i_u = np.arange(n_u, dtype=float)
+    i_v = np.arange(n_v, dtype=float)
+    t_lo = (i_u / n_u) ** 2                   # (n_u,) warped start of each row
+    t_hi = ((i_u + 1.0) / n_u) ** 2           # (n_u,) warped end of each row
 
-    # Random sample; allow replacement when n_seeds exceeds available cells
-    # so density is always honoured even in thin bands.
-    chosen = rng.choice(len(edge_rows), size=n_seeds, replace=n_seeds > len(edge_rows))
+    jitter_u = rng.uniform(0.0, 1.0, (n_u, n_v))
+    jitter_v = rng.uniform(0.0, 1.0, (n_u, n_v))
 
-    result: list[tuple[float, float]] = []
-    for idx in chosen:
-        r = int(edge_rows[idx])
-        c = int(edge_cols[idx])
-        x = (c + rng.uniform(0.05, 0.95)) * cell_w
-        y = (r + rng.uniform(0.05, 0.95)) * cell_w
-        result.append((x, y))
+    us = u_lo + (t_lo[:, np.newaxis] + jitter_u * (t_hi[:, np.newaxis] - t_lo[:, np.newaxis])) * u_span
+    vs = v_lo + (i_v[np.newaxis, :] + jitter_v) * (v_span / n_v)
 
-    return result
+    # Back to world (x, y).
+    xs = us * dx + vs * px
+    ys = us * dy + vs * py
+
+    xs_flat = xs.ravel()
+    ys_flat = ys.ravel()
+
+    ixs = np.clip((xs_flat / cell_w).astype(int), 0, surface.grid_w - 1)
+    iys = np.clip((ys_flat / cell_w).astype(int), 0, surface.grid_h - 1)
+
+    valid = group_mask[iys, ixs]
+    return list(zip(xs_flat[valid].tolist(), ys_flat[valid].tolist()))
 
 
 def _sample_seed_curl(species: SpeciesConfig, rng: np.random.Generator) -> float:
@@ -392,10 +343,9 @@ def _make_seed(
     group_dir: float,
     species: SpeciesConfig,
     rng: np.random.Generator,
-    length_scale: float = 1.0,
 ) -> GrassSeed:
     blade_width = float(rng.uniform(species.blade_width_min, species.blade_width_max))
-    target_length = float(rng.uniform(species.blade_length_min, species.blade_length_max)) * length_scale
+    target_length = float(rng.uniform(species.blade_length_min, species.blade_length_max))
     blade_n_steps = max(1, int(round(target_length / species.blade_segment_length)))
     curl = _sample_seed_curl(species, rng)
     # Store curl as radians per step, not total blade curl.
