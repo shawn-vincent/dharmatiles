@@ -18,7 +18,7 @@ def grow_all(scene, surface, cfg: GrassConfig, rng: np.random.Generator, verbose
         n_groups = sum(s.groups_per_square * surface.cols * surface.rows for s in cfg.species)
         print(f"  Planted {len(growing)} blades in {n_groups} groups")
 
-    _sort_downstream_first(growing)
+    _sort_upstream_first(growing, surface)
     species_map = {species.name: species for species in cfg.species}
     total_segments = 0
     full_length_blades = 0
@@ -80,8 +80,7 @@ def plant_seeds(
                 rng,
             )
 
-            for _ in range(n_seeds):
-                x, y = _sample_seed_xy(group, surface, rng)
+            for x, y in _jitter_grid_xy(group, n_seeds, group_dir, surface, rng):
                 ix, iy = _cell_index(surface, x, y)
                 if scene.grass_mask is not None and not scene.grass_mask[iy, ix]:
                     continue
@@ -243,17 +242,135 @@ def _nearest_site_labels(
     return labels
 
 
-def _sample_seed_xy(
+def _jitter_grid_xy(
     group: dict[str, np.ndarray],
+    n_target: int,
+    group_dir: float,
     surface,
     rng: np.random.Generator,
-) -> tuple[float, float]:
-    idx = int(rng.integers(0, len(group["rows"])))
-    row = int(group["rows"][idx])
-    col = int(group["cols"][idx])
-    x = float((col + rng.uniform(0.05, 0.95)) * surface.cell_w)
-    y = float((row + rng.uniform(0.05, 0.95)) * surface.cell_w)
-    return x, y
+) -> list[tuple[float, float]]:
+    """Return jitter-grid (x, y) candidates whose cell belongs to this group.
+
+    Spacing is chosen so the number of in-group grid points ≈ n_target.
+    Each grid cell gets an independent uniform random jitter so coverage is
+    thorough yet avoids the regular pattern of a strict lattice.
+
+    An extra row of seeds is appended along the upstream edge (the group face
+    closest to the tile boundary in ``group_dir``) so that there is no bald
+    strip at the leading edge caused by the first grid row being offset by up
+    to one full ``spacing`` from the boundary.
+    """
+    if n_target <= 0:
+        return []
+
+    group_rows = group["rows"]
+    group_cols = group["cols"]
+    n_cells = len(group_rows)
+    if n_cells == 0:
+        return []
+
+    cell_w = surface.cell_w
+
+    # Boolean membership mask — cheaper than a Python set for the final filter.
+    group_mask = np.zeros((surface.grid_h, surface.grid_w), dtype=bool)
+    group_mask[group_rows, group_cols] = True
+
+    min_col = int(group_cols.min())
+    max_col = int(group_cols.max())
+    min_row = int(group_rows.min())
+    max_row = int(group_rows.max())
+
+    group_area = n_cells * cell_w * cell_w
+    # spacing such that group_area / spacing² ≈ n_target; floor at half a cell.
+    spacing = max(cell_w * 0.5, np.sqrt(group_area / max(n_target, 1)))
+
+    bbox_w = (max_col - min_col + 1) * cell_w
+    bbox_h = (max_row - min_row + 1) * cell_w
+    n_x = max(1, int(np.ceil(bbox_w / spacing)))
+    n_y = max(1, int(np.ceil(bbox_h / spacing)))
+
+    x_base = min_col * cell_w
+    y_base = min_row * cell_w
+
+    # Vectorised jitter grid: each cell gets its own independent offset.
+    xi = np.arange(n_x, dtype=float)
+    yi = np.arange(n_y, dtype=float)
+    xs = x_base + (xi[:, np.newaxis] + rng.uniform(0.0, 1.0, (n_x, n_y))) * spacing
+    ys = y_base + (yi[np.newaxis, :] + rng.uniform(0.0, 1.0, (n_x, n_y))) * spacing
+
+    xs_flat = xs.ravel()
+    ys_flat = ys.ravel()
+
+    # Cell indices for every candidate point (clipped to grid bounds).
+    ixs = np.clip((xs_flat / cell_w).astype(int), 0, surface.grid_w - 1)
+    iys = np.clip((ys_flat / cell_w).astype(int), 0, surface.grid_h - 1)
+
+    valid = group_mask[iys, ixs]
+    interior = list(zip(xs_flat[valid].tolist(), ys_flat[valid].tolist()))
+
+    # Upstream edge row — fills the gap between the bounding-box edge and the
+    # first jitter-grid row, which can be up to one full spacing wide.
+    edge = _upstream_edge_row(group_rows, group_cols, group_dir, cell_w, spacing, rng)
+
+    return interior + edge
+
+
+def _upstream_edge_row(
+    group_rows: np.ndarray,
+    group_cols: np.ndarray,
+    group_dir: float,
+    cell_w: float,
+    spacing: float,
+    rng: np.random.Generator,
+) -> list[tuple[float, float]]:
+    """Scatter seeds along the upstream face — the face blades grow *away from*.
+
+    The upstream face is the set of group cells whose centres sit within one
+    cell width of the *minimum* projection onto the blade direction vector
+    ``(sin(group_dir), cos(group_dir))``.  These are the source cells: blades
+    rooted here grow across the full depth of the group before stopping.
+
+    The seed count is proportional to the lateral width of the face at the
+    jitter-grid density, but the positions are chosen by randomly sampling
+    that many cells from the face — not spread on an even lattice.
+    """
+    dx = float(np.sin(group_dir))
+    dy = float(np.cos(group_dir))
+
+    cx = (group_cols + 0.5) * cell_w
+    cy = (group_rows + 0.5) * cell_w
+    proj_u = cx * dx + cy * dy
+
+    # Source face: cells closest to the *back* of the group in blade direction.
+    min_u = float(proj_u.min())
+    edge_mask = proj_u <= min_u + cell_w
+
+    edge_rows = group_rows[edge_mask]
+    edge_cols = group_cols[edge_mask]
+
+    if len(edge_rows) == 0:
+        return []
+
+    # Lateral extent — used only to estimate how many seeds to scatter.
+    px = float(-np.cos(group_dir))
+    py = float(np.sin(group_dir))
+    edge_v = (edge_cols + 0.5) * cell_w * px + (edge_rows + 0.5) * cell_w * py
+    lateral_extent = float(edge_v.max() - edge_v.min()) + cell_w
+    n_seeds = max(1, int(np.round(lateral_extent / spacing)))
+
+    # Random sample (without replacement, capped at available cells).
+    n_pick = min(n_seeds, len(edge_rows))
+    chosen = rng.choice(len(edge_rows), size=n_pick, replace=False)
+
+    result: list[tuple[float, float]] = []
+    for idx in chosen:
+        r = int(edge_rows[idx])
+        c = int(edge_cols[idx])
+        x = (c + rng.uniform(0.05, 0.95)) * cell_w
+        y = (r + rng.uniform(0.05, 0.95)) * cell_w
+        result.append((x, y))
+
+    return result
 
 
 def _sample_seed_curl(species: SpeciesConfig, rng: np.random.Generator) -> float:
@@ -297,24 +414,43 @@ def _make_seed(
     )
 
 
-def _sort_downstream_first(paths: list[GrowingPath]) -> None:
-    """Sort paths in-place so seeds furthest downstream come first.
+def _sort_upstream_first(paths: list[GrowingPath], surface) -> None:
+    """Sort paths in-place: upstream (closest to tile edge in travel direction) first.
 
-    Sort key: projection of the seed (x, y) onto its own initial growth direction
-    unit vector ``(sin(direction), cos(direction))``.  A higher value means the
-    seed sits further in the direction this blade is already heading — i.e. it is
-    downstream.
+    Primary key — upstream distance: the minimum distance from the seed to the
+    tile boundary along the blade's initial travel direction.  Seeds that are
+    physically close to the edge they are heading toward are upstream; they get
+    grown and stamped into occ_z first, so interior blades that pass over the
+    same area subsequently ride up on top of them.
 
-    Processing complete downstream blades before upstream blades means their full
-    occ_z stamps are already present when upstream blades grow through the same
-    area, so upstream blades rise to cross downstream ones rather than the reverse.
-    The returned GrassPath list from grow_all preserves this order, so the mesh
-    build phase sees blades in the same downstream-first sequence.
+    Secondary key — blade direction normalised to [0, 2π): groups blades that
+    point in the same direction together within each upstream band, so the mesh
+    draw order is coherent even when two seeds share the same boundary distance.
+
+    Both keys sort ascending (small upstream-distance first; 0° before 360°).
     """
-    paths.sort(
-        key=lambda p: p.seed.x * np.sin(p.seed.blade_direction) + p.seed.y * np.cos(p.seed.blade_direction),
-        reverse=True,
-    )
+    TWO_PI = 2.0 * np.pi
+
+    def _key(p: GrowingPath) -> tuple[float, float]:
+        seed = p.seed
+        dx = float(np.sin(seed.blade_direction))
+        dy = float(np.cos(seed.blade_direction))
+
+        dists: list[float] = []
+        if dx > 1e-9:
+            dists.append((surface.tile_w - seed.x) / dx)
+        elif dx < -1e-9:
+            dists.append(seed.x / (-dx))
+        if dy > 1e-9:
+            dists.append((surface.tile_h - seed.y) / dy)
+        elif dy < -1e-9:
+            dists.append(seed.y / (-dy))
+
+        boundary_dist = min(dists) if dists else 0.0
+        dir_norm = seed.blade_direction % TWO_PI
+        return (boundary_dist, dir_norm)
+
+    paths.sort(key=_key)
 
 
 def _cell_index(surface, x: float, y: float) -> tuple[int, int]:

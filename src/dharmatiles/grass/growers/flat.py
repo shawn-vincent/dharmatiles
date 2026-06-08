@@ -53,11 +53,6 @@ class FlatGrassGrower:
             path.alive = False
             return False
 
-        ix, iy = _cell_index(surface, tx, ty)
-        if scene.grass_mask is not None and not scene.grass_mask[iy, ix]:
-            path.alive = False
-            return False
-
         floor_z = _sample_footprint_max(
             occ_z,
             scene.terrain_support_z,
