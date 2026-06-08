@@ -38,7 +38,9 @@ DEFAULT_LIGHTWEIGHT_MAGNET_Z = 7.0
 DEFAULT_LIGHTWEIGHT_MAGNET_BOSS_DEPTH = 4.5
 DEFAULT_LIGHTWEIGHT_MAGNET_BOSS_WIDTH = 16.0
 DEFAULT_LIGHTWEIGHT_MAGNET_BOSS_HEIGHT = 14.0
-FASTENER_WALL_THICKNESS = 0.4
+DEFAULT_LIGHTWEIGHT_PERIMETER_RIB_WIDTH = 4.0
+DEFAULT_LIGHTWEIGHT_PERIMETER_RIB_DEPTH = 2.0
+FASTENER_WALL_THICKNESS = 0.8
 DEFAULT_LONG_SIDE_MAGNET_POSITIONS = (
     140.0 / 2.0 - DEFAULT_MAGNET_SPACING / 2.0,
     140.0 / 2.0 + DEFAULT_MAGNET_SPACING / 2.0,
@@ -90,6 +92,9 @@ class LightweightSpec:
     magnet_boss_depth: float = DEFAULT_LIGHTWEIGHT_MAGNET_BOSS_DEPTH
     magnet_boss_width: float = DEFAULT_LIGHTWEIGHT_MAGNET_BOSS_WIDTH
     magnet_boss_height: float = DEFAULT_LIGHTWEIGHT_MAGNET_BOSS_HEIGHT
+    perimeter_rib_width: float = DEFAULT_LIGHTWEIGHT_PERIMETER_RIB_WIDTH
+    perimeter_rib_depth: float = DEFAULT_LIGHTWEIGHT_PERIMETER_RIB_DEPTH
+    cup_wall_ribs: int = 3
 
 
 _CUBE_CORNERS = np.array(
@@ -1318,6 +1323,127 @@ def perimeter_triangular_top_rib(
     return builder.mesh()
 
 
+def _side_rib_positions(
+    side: str,
+    spec: OrganizerSpec,
+    lightweight: LightweightSpec,
+    target_spacing: float = 25.0,
+) -> list[float]:
+    """U-axis positions for vertical perimeter ribs on one side.
+
+    Places mandatory ribs flanking each magnet boss, then fills remaining
+    gaps evenly at approximately target_spacing.
+    """
+    rib_width = lightweight.perimeter_rib_width
+    boss_half_w = lightweight.magnet_boss_width / 2.0
+    rib_half_w = rib_width / 2.0
+    corner = spec.vertical_corner_roundover
+
+    if side in {"front", "back"}:
+        u_min = corner
+        u_max = spec.width - corner
+        magnet_us: list[float] = list(DEFAULT_LONG_SIDE_MAGNET_POSITIONS)
+    else:
+        u_min = corner
+        u_max = spec.depth - corner
+        magnet_us = list(DEFAULT_SHORT_SIDE_MAGNET_POSITIONS)
+
+    anchors: list[float] = []
+    for u_mag in magnet_us:
+        for sign in (-1.0, 1.0):
+            candidate = u_mag + sign * (boss_half_w + rib_half_w)
+            if u_min + rib_half_w - 1e-6 <= candidate <= u_max - rib_half_w + 1e-6:
+                anchors.append(round(candidate, 4))
+    anchors = sorted(set(anchors))
+
+    boundaries = [u_min] + anchors + [u_max]
+    fill: list[float] = []
+    for i in range(len(boundaries) - 1):
+        gap_start, gap_end = boundaries[i], boundaries[i + 1]
+        gap = gap_end - gap_start
+        # n ribs divide the gap into n+1 sub-gaps; pick n so each is ~target_spacing
+        n = max(0, round(gap / target_spacing) - 1)
+        for j in range(1, n + 1):
+            fill.append(round(gap_start + gap * j / (n + 1), 4))
+
+    return sorted(set(anchors + fill))
+
+
+def _vertical_rib_mesh(
+    u: float,
+    side: str,
+    spec: OrganizerSpec,
+    rib_width: float,
+    rib_depth: float,
+    z_bottom: float,
+    z_top: float,
+) -> trimesh.Trimesh:
+    """Triangular-prism rib on the outer face of a flat side wall.
+
+    The base (rib_width wide) lies flush with the wall's outer face;
+    the apex projects rib_depth outward from the wall.
+    """
+    half_w = rib_width / 2.0
+    # Points in CCW order when viewed from above, so bottom cap [0,2,1]
+    # has downward normal and top cap [3,4,5] has upward normal.
+    if side == "front":
+        pts: list[tuple[float, float]] = [
+            (u - half_w, 0.0), (u, rib_depth), (u + half_w, 0.0)
+        ]
+    elif side == "back":
+        pts = [
+            (u + half_w, spec.depth), (u, spec.depth - rib_depth), (u - half_w, spec.depth)
+        ]
+    elif side == "left":
+        pts = [
+            (rib_depth, u), (0.0, u - half_w), (0.0, u + half_w)
+        ]
+    elif side == "right":
+        pts = [
+            (spec.width - rib_depth, u), (spec.width, u + half_w), (spec.width, u - half_w)
+        ]
+    else:
+        raise ValueError(f"Unknown side: {side}")
+
+    verts = np.array(
+        [(x, y, z_bottom) for x, y in pts] + [(x, y, z_top) for x, y in pts],
+        dtype=np.float64,
+    )
+    faces = np.array([
+        [0, 2, 1],        # bottom cap (CW from above → normal points -Z)
+        [3, 4, 5],        # top cap   (CCW from above → normal points +Z)
+        [0, 1, 4], [0, 4, 3],   # side 0→1
+        [1, 2, 5], [1, 5, 4],   # side 1→2
+        [2, 0, 3], [2, 3, 5],   # side 2→0
+    ], dtype=np.int64)
+    mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+    mesh.fix_normals()
+    if mesh.volume < 0:
+        mesh.invert()
+    return mesh
+
+
+def perimeter_vertical_ribs(
+    spec: OrganizerSpec,
+    lightweight: LightweightSpec,
+    z_bottom: float,
+    z_top: float,
+) -> list[trimesh.Trimesh]:
+    """Triangular ribs on all four outer side walls."""
+    ribs: list[trimesh.Trimesh] = []
+    for side in ("front", "back", "left", "right"):
+        for u in _side_rib_positions(side, spec, lightweight):
+            ribs.append(
+                _vertical_rib_mesh(
+                    u, side, spec,
+                    lightweight.perimeter_rib_width,
+                    lightweight.perimeter_rib_depth,
+                    z_bottom, z_top,
+                )
+            )
+    return ribs
+
+
 def lightweight_rib_edges(centers: list[tuple[float, float]], max_length: float = 56.0) -> list[tuple[int, int]]:
     points = np.asarray(centers, dtype=float)
     edges: set[tuple[int, int]] = set()
@@ -1576,102 +1702,6 @@ def cap_triangular_boundary_loops(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
     return result
 
 
-def _rounded_top_profile(
-    width: float,
-    height: float,
-    fillet: float,
-    arc_segments: int,
-) -> list[tuple[float, float]]:
-    """2D rounded-top boss profile as (x, z) points in counter-clockwise order."""
-    half_w = width / 2.0
-    r = max(0.0, min(fillet, half_w - 1e-3, height - 1e-3))
-    if r <= 1e-6:
-        return [
-            (-half_w, 0.0),
-            (half_w, 0.0),
-            (half_w, height),
-            (-half_w, height),
-        ]
-
-    pts: list[tuple[float, float]] = [
-        (-half_w, 0.0),
-        (half_w, 0.0),
-        (half_w, height - r),
-    ]
-    for i in range(1, arc_segments + 1):
-        theta = i / arc_segments * (np.pi / 2.0)
-        pts.append((half_w - r + r * np.cos(theta), height - r + r * np.sin(theta)))
-    pts.append((-half_w + r, height))
-    for i in range(1, arc_segments + 1):
-        theta = np.pi / 2.0 + i / arc_segments * (np.pi / 2.0)
-        pts.append((-half_w + r + r * np.cos(theta), height - r + r * np.sin(theta)))
-    return pts
-
-
-def _loft_profiles(
-    outer_profile: list[tuple[float, float]],
-    inner_profile: list[tuple[float, float]],
-    depth: float,
-) -> trimesh.Trimesh:
-    """Closed loft from a wall-facing outer profile at Y=0 to an inner profile."""
-    if len(outer_profile) != len(inner_profile):
-        raise ValueError("Loft profiles must have the same vertex count")
-
-    count = len(outer_profile)
-    vertices = np.array(
-        [(x, 0.0, z) for x, z in outer_profile]
-        + [(x, depth, z) for x, z in inner_profile],
-        dtype=float,
-    )
-    faces: list[list[int]] = []
-
-    for i in range(1, count - 1):
-        faces.append([0, i + 1, i])
-        faces.append([count, count + i, count + i + 1])
-
-    for i in range(count):
-        j = (i + 1) % count
-        faces.append([i, j, count + j])
-        faces.append([i, count + j, count + i])
-
-    mesh = trimesh.Trimesh(vertices=vertices, faces=np.asarray(faces, dtype=int), process=False)
-    mesh.fix_normals()
-    if mesh.volume < 0:
-        mesh.invert()
-    return mesh
-
-
-def _rounded_top_boss(
-    boss_width: float,
-    boss_depth: float,
-    boss_height: float,
-    fillet: float,
-    arc_segments: int = 12,
-) -> trimesh.Trimesh:
-    """Boss lofted from a wider wall footprint to a rounded inner profile.
-
-    Returned in 'front-side frame': Y=0 is the outside wall face, and
-    Y=boss_depth is the narrowed magnet-boss face inside the organizer.
-    """
-    half_w = boss_width / 2.0
-    r = max(0.0, min(fillet, half_w - 1e-3, boss_height - 1e-3))
-    inner_profile = _rounded_top_profile(boss_width, boss_height, r, arc_segments)
-    taper = boss_depth
-    outer_fillet = 0.0 if r <= 1e-6 else r + taper
-    outer_profile = _rounded_top_profile(
-        boss_width + taper * 2.0,
-        boss_height + taper,
-        outer_fillet,
-        arc_segments,
-    )
-    mesh = _loft_profiles(outer_profile, inner_profile, boss_depth)
-
-    mesh.fix_normals()
-    if mesh.volume < 0:
-        mesh.invert()
-    return mesh
-
-
 def magnet_boss_and_cutter(
     spec: OrganizerSpec,
     lightweight: LightweightSpec,
@@ -1687,12 +1717,12 @@ def magnet_boss_and_cutter(
     cutter_length = spec.magnet_depth + 0.25
     magnet_radius = spec.magnet_diameter / 2.0
 
-    # Top-corner fillet softens the boss silhouette. Capped to keep at least
-    # 2 mm of flat top and to leave ≥1 mm wall around the magnet hole at its
-    # tightest cross-section (verified for the default 16×14 boss + 10 mm Ø
-    # magnet at z=7).
-    fillet = max(0.0, min(6.0, boss_width / 2.0 - 2.0))
-    boss = _rounded_top_boss(boss_width, boss_depth, boss_height, fillet)
+    # Rectangular box in front-side frame: Y=0 is the wall face, Y=boss_depth
+    # is the inner face, z runs from 0 to boss_height.
+    boss = translated_box(
+        (boss_width, boss_depth, boss_height),
+        (0.0, boss_depth / 2.0, boss_height / 2.0),
+    )
 
     if side == "front":
         boss.apply_translation([position, 0.0, 0.0])
@@ -1739,6 +1769,119 @@ def magnet_boss_and_cutter(
     if boss.volume < 0:
         boss.invert()
     return boss, cutter
+
+
+def perimeter_corner_ribs(
+    spec: OrganizerSpec,
+    lightweight: LightweightSpec,
+    z_bottom: float,
+    z_top: float,
+) -> list[trimesh.Trimesh]:
+    """One inward-pointing triangular rib at the midpoint of each corner arc."""
+    corner_r = spec.vertical_corner_roundover
+    rib_width = lightweight.perimeter_rib_width
+    rib_depth = lightweight.perimeter_rib_depth
+    half_w = rib_width / 2.0
+
+    # (arc_center_x, arc_center_y, mid_arc_angle)
+    corners = [
+        (corner_r,               corner_r,               5 * np.pi / 4),  # bottom-left
+        (spec.width - corner_r,  corner_r,               7 * np.pi / 4),  # bottom-right
+        (spec.width - corner_r,  spec.depth - corner_r,  1 * np.pi / 4),  # top-right
+        (corner_r,               spec.depth - corner_r,  3 * np.pi / 4),  # top-left
+    ]
+    ribs: list[trimesh.Trimesh] = []
+    for cx, cy, angle in corners:
+        outward = np.array([np.cos(angle), np.sin(angle)])
+        tangent = np.array([-np.sin(angle), np.cos(angle)])
+        base_xy = np.array([cx, cy]) + corner_r * outward
+        pts = [
+            tuple(base_xy - half_w * tangent),
+            tuple(base_xy - rib_depth * outward),   # inward
+            tuple(base_xy + half_w * tangent),
+        ]
+        verts = np.array(
+            [(x, y, z_bottom) for x, y in pts] + [(x, y, z_top) for x, y in pts],
+            dtype=np.float64,
+        )
+        faces = np.array([
+            [0, 2, 1], [3, 4, 5],
+            [0, 1, 4], [0, 4, 3],
+            [1, 2, 5], [1, 5, 4],
+            [2, 0, 3], [2, 3, 5],
+        ], dtype=np.int64)
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+        mesh.fix_normals()
+        if mesh.volume < 0:
+            mesh.invert()
+        ribs.append(mesh)
+    return ribs
+
+
+def _cup_rib_mesh(
+    cx: float,
+    cy: float,
+    outer_radius: float,
+    angle: float,
+    rib_width: float,
+    rib_depth: float,
+    z_bottom: float,
+    z_top: float,
+) -> trimesh.Trimesh:
+    """Triangular-prism rib on the outer surface of a cylindrical cup."""
+    outward = np.array([np.cos(angle), np.sin(angle)])
+    tangent = np.array([-np.sin(angle), np.cos(angle)])
+    base_xy = np.array([cx, cy]) + outer_radius * outward
+    half_w = rib_width / 2.0
+
+    # CCW from above: right_base → apex → left_base
+    pts = [
+        tuple(base_xy - half_w * tangent),
+        tuple(base_xy + rib_depth * outward),
+        tuple(base_xy + half_w * tangent),
+    ]
+    verts = np.array(
+        [(x, y, z_bottom) for x, y in pts] + [(x, y, z_top) for x, y in pts],
+        dtype=np.float64,
+    )
+    faces = np.array([
+        [0, 2, 1],        # bottom cap
+        [3, 4, 5],        # top cap
+        [0, 1, 4], [0, 4, 3],
+        [1, 2, 5], [1, 5, 4],
+        [2, 0, 3], [2, 3, 5],
+    ], dtype=np.int64)
+    mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+    mesh.fix_normals()
+    if mesh.volume < 0:
+        mesh.invert()
+    return mesh
+
+
+def cup_vertical_ribs(
+    centers: list[tuple[float, float]],
+    outer_radius: float,
+    lightweight: LightweightSpec,
+    z_bottom: float,
+    z_top: float,
+) -> list[trimesh.Trimesh]:
+    """Evenly-spaced vertical ribs on the exterior of every cup."""
+    n = lightweight.cup_wall_ribs
+    if n <= 0:
+        return []
+    angles = np.linspace(0.0, 2.0 * np.pi, n, endpoint=False)
+    ribs: list[trimesh.Trimesh] = []
+    for cx, cy in centers:
+        for angle in angles:
+            ribs.append(
+                _cup_rib_mesh(
+                    cx, cy, outer_radius, float(angle),
+                    lightweight.perimeter_rib_width,
+                    lightweight.perimeter_rib_depth,
+                    z_bottom, z_top,
+                )
+            )
+    return ribs
 
 
 def build_lightweight_mesh(
@@ -1836,6 +1979,8 @@ def build_lightweight_mesh(
             cup_cutters.append(retaining_bevel)
         cup_cutters.append(top_ring_bevel)
 
+    solids.extend(cup_vertical_ribs(centers, outer_radius, lightweight, 0.0, cup_height))
+
     internal_rib_zs = (
         lightweight.rib_height / 2.0,
         cup_height - lightweight.rib_height / 2.0,
@@ -1872,6 +2017,9 @@ def build_lightweight_mesh(
 
     side_z_max = cup_height - lightweight.rib_height + 0.2
     solids.append(perimeter_rail_band(spec, FASTENER_WALL_THICKNESS, side_z_max, side_z_max / 2.0))
+
+    solids.extend(perimeter_vertical_ribs(spec, lightweight, 0.0, cup_height))
+    solids.extend(perimeter_corner_ribs(spec, lightweight, 0.0, cup_height))
 
     magnet_spec = replace(spec, magnet_z=lightweight.magnet_z)
     for side in ("front", "back", "left", "right"):
@@ -1943,6 +2091,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--magnet-boss-depth", type=float, default=LightweightSpec.magnet_boss_depth, help="Side magnet boss depth in mm.")
     parser.add_argument("--magnet-boss-width", type=float, default=LightweightSpec.magnet_boss_width, help="Side magnet boss width in mm.")
     parser.add_argument("--magnet-boss-height", type=float, default=LightweightSpec.magnet_boss_height, help="Side magnet boss height in mm.")
+    parser.add_argument("--perimeter-rib-width", type=float, default=LightweightSpec.perimeter_rib_width, help="Perimeter vertical rib base width in mm.")
+    parser.add_argument("--perimeter-rib-depth", type=float, default=LightweightSpec.perimeter_rib_depth, help="Perimeter vertical rib outward depth in mm.")
+    parser.add_argument("--cup-wall-ribs", type=int, default=LightweightSpec.cup_wall_ribs, help="Number of vertical ribs on the outside of each cup.")
     parser.add_argument("--min-wall", type=float, default=OrganizerSpec.min_wall, help="Minimum wall between holes in mm.")
     parser.add_argument(
         "--edge-wall",
@@ -1985,6 +2136,9 @@ def main() -> None:
         magnet_boss_depth=args.magnet_boss_depth,
         magnet_boss_width=args.magnet_boss_width,
         magnet_boss_height=args.magnet_boss_height,
+        perimeter_rib_width=args.perimeter_rib_width,
+        perimeter_rib_depth=args.perimeter_rib_depth,
+        cup_wall_ribs=args.cup_wall_ribs,
     )
 
     mesh = build_lightweight_mesh(spec, lightweight)
