@@ -360,7 +360,7 @@ def _upstream_edge_row(
     py = float(np.sin(group_dir))
     edge_v = (edge_cols + 0.5) * cell_w * px + (edge_rows + 0.5) * cell_w * py
     lateral_extent = float(edge_v.max() - edge_v.min()) + cell_w
-    n_seeds = max(1, int(np.round(2.0 * lateral_extent / spacing)))
+    n_seeds = max(1, int(np.round(4.0 * lateral_extent / spacing)))
 
     # Random sample; allow replacement when n_seeds exceeds available cells
     # so density is always honoured even in thin bands.
