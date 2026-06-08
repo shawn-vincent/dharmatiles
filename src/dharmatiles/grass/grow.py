@@ -80,8 +80,8 @@ def plant_seeds(
                 rng,
             )
 
-            interior_pts, edge_pts = _jitter_grid_xy(group, n_seeds, group_dir, surface, rng)
-            for length_scale, candidates in ((1.0, interior_pts), (0.5, edge_pts)):
+            interior_pts, half_pts, quarter_pts = _jitter_grid_xy(group, n_seeds, group_dir, surface, rng)
+            for length_scale, candidates in ((1.0, interior_pts), (0.5, half_pts), (0.25, quarter_pts)):
                 for x, y in candidates:
                     ix, iy = _cell_index(surface, x, y)
                     if scene.grass_mask is not None and not scene.grass_mask[iy, ix]:
@@ -250,25 +250,25 @@ def _jitter_grid_xy(
     group_dir: float,
     surface,
     rng: np.random.Generator,
-) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
-    """Return ``(interior, edge)`` jitter-grid candidates for this group.
+) -> tuple[list[tuple[float, float]], list[tuple[float, float]], list[tuple[float, float]]]:
+    """Return ``(interior, edge_half, edge_quarter)`` candidates for this group.
 
-    *interior* — regular jitter grid; spacing chosen so count ≈ n_target.
-    *edge*     — random scatter along the upstream source face (the side
-                 blades grow away from); caller may treat these differently
-                 (e.g. half blade length).
+    *interior*     — regular jitter grid; spacing chosen so count ≈ n_target.
+    *edge_half*    — random scatter along band 0 of the upstream source face
+                     (cells within 1 cell_w of the minimum projection).
+    *edge_quarter* — random scatter along band 1 (next cell_w band inward).
 
-    Each grid cell gets an independent uniform random jitter so coverage is
-    thorough yet avoids the regular pattern of a strict lattice.
+    Caller assigns length_scale 1.0 / 0.5 / 0.25 to the three lists so blades
+    shorten toward the source face, hiding the zone boundary under a fringe.
     """
     if n_target <= 0:
-        return [], []
+        return [], [], []
 
     group_rows = group["rows"]
     group_cols = group["cols"]
     n_cells = len(group_rows)
     if n_cells == 0:
-        return [], []
+        return [], [], []
 
     cell_w = surface.cell_w
 
@@ -309,11 +309,12 @@ def _jitter_grid_xy(
     valid = group_mask[iys, ixs]
     interior = list(zip(xs_flat[valid].tolist(), ys_flat[valid].tolist()))
 
-    # Upstream edge row — fills the gap between the bounding-box edge and the
-    # first jitter-grid row, which can be up to one full spacing wide.
-    edge = _upstream_edge_row(group_rows, group_cols, group_dir, cell_w, spacing, rng)
+    # Upstream edge rows — band 0 (½ length) and band 1 (¼ length) fill the
+    # gap at the source face that the jitter grid would otherwise leave bare.
+    edge_half    = _upstream_edge_row(group_rows, group_cols, group_dir, cell_w, spacing, rng, band=0)
+    edge_quarter = _upstream_edge_row(group_rows, group_cols, group_dir, cell_w, spacing, rng, band=1)
 
-    return interior, edge
+    return interior, edge_half, edge_quarter
 
 
 def _upstream_edge_row(
@@ -323,17 +324,18 @@ def _upstream_edge_row(
     cell_w: float,
     spacing: float,
     rng: np.random.Generator,
+    band: int = 0,
 ) -> list[tuple[float, float]]:
-    """Scatter seeds along the upstream face — the face blades grow *away from*.
+    """Scatter seeds along one cell-width band of the upstream (source) face.
 
-    The upstream face is the set of group cells whose centres sit within one
-    cell width of the *minimum* projection onto the blade direction vector
-    ``(sin(group_dir), cos(group_dir))``.  These are the source cells: blades
-    rooted here grow across the full depth of the group before stopping.
+    ``band=0`` selects the backmost cell-width strip (projection in
+    ``[min_u, min_u + cell_w]``); ``band=1`` selects the next strip inward,
+    and so on.  Callers use band 0 for ½-length blades and band 1 for
+    ¼-length blades to create a shortening fringe at the source edge.
 
-    The seed count is proportional to the lateral width of the face at the
-    jitter-grid density, but the positions are chosen by randomly sampling
-    that many cells from the face — not spread on an even lattice.
+    The seed count is proportional to the lateral width of the band at the
+    jitter-grid density; positions are a random (unordered) sample of the
+    band's cells — not spread on a regular lattice.
     """
     dx = float(np.sin(group_dir))
     dy = float(np.cos(group_dir))
@@ -342,9 +344,10 @@ def _upstream_edge_row(
     cy = (group_rows + 0.5) * cell_w
     proj_u = cx * dx + cy * dy
 
-    # Source face: cells closest to the *back* of the group in blade direction.
     min_u = float(proj_u.min())
-    edge_mask = proj_u <= min_u + cell_w
+    lo = min_u + band * cell_w
+    hi = min_u + (band + 1) * cell_w
+    edge_mask = (proj_u >= lo - 1e-9) & (proj_u <= hi + 1e-9)
 
     edge_rows = group_rows[edge_mask]
     edge_cols = group_cols[edge_mask]
