@@ -21,12 +21,6 @@ make the spec format usable without reading source code.
 it lacks is any image or render of actual output. A newcomer cannot tell what
 a finished tile looks like without generating one themselves.
 
-### 3. Parallel-blade Z jitter (visual check needed)
-The old `own_stamps` aliasing mechanism described in the 2026-06-06 grass requirements
-review is gone from the codebase. `_sample_footprint_max` now probes only the
-leading-edge cells of the next segment, not the blade's own trail. Whether
-parallel blades still cause visible Z jitter needs a visual check of STL output
-with two side-by-side parallel blades.
 
 ## Resolved / obsolete
 
@@ -37,6 +31,9 @@ with two side-by-side parallel blades.
 - **New tile types** — 6 specs already exist: grass-only, half-grass-soil,
   grass-and-water, coast-left, corner-grass, water. Adequate coverage for current
   needs.
+
+- **Parallel-blade Z jitter** — fixed. `own_stamps` mechanism removed; `_sample_footprint_max`
+  probes only leading-edge cells via `_leading_edge_cells`. Visually confirmed fixed 2026-06-08.
 
 - **OpenLOCK retention cuts** — done (commit 88fabaa).
 
