@@ -3,5 +3,4 @@ from .config  import (SceneConfig, SurfaceConfig, FlowConfig,
 from .tile    import TileScene, make_xy_grids
 from .grid    import sample_grid
 from .flow    import build_flow_field
-from .mesh    import (build_tube_mesh, make_heightmap_solid,
-                       blade_frame)
+from .mesh    import make_heightmap_solid

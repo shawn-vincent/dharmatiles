@@ -2,8 +2,8 @@
 StonesLayer: batch-vectorised half-ellipsoid stones placed on terrain.
 
 All stone geometry is built with NumPy broadcasting in a single pass.
-Stone tops are rasterised into the scene's support_z so that subsequent
-layers (grass blades) are forced to sit above the stones.
+Stone tops are rasterised into the scene's terrain_support_z so that
+subsequent layers (grass blades) are forced to sit above the stones.
 
 Slope alignment
 ---------------
@@ -40,7 +40,7 @@ class StonesLayer:
     def build(self, scene: TileScene, *,
               placement_mask=_UNSET,
               layer_idx: int = 0) -> List[trimesh.Trimesh]:
-        """Add stone geometry to *scene.support_z* and return mesh list.
+        """Add stone geometry to *scene.terrain_support_z* and return mesh list.
 
         Parameters
         ----------
@@ -57,7 +57,7 @@ class StonesLayer:
         n_stones  = self.stones.stones_per_square * n_squares
         rng  = np.random.default_rng(self.surface.seed + 7919 + layer_idx * 65537)
         mesh = _build_stones_mesh(self.surface, self.stones, n_stones,
-                                  scene.terrain_z, scene.support_z,
+                                  scene.terrain_z, scene.terrain_support_z,
                                   scene.stone_mask,
                                   placement_mask,
                                   rng)
@@ -159,8 +159,10 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
 
     wx = cx[:, None, None] + ca[:, None, None] * lx - sa[:, None, None] * ly
     wy = cy[:, None, None] + sa[:, None, None] * lx + ca[:, None, None] * ly
+    # wz must be (N, EL, AZ).  base_z*height*z_off broadcasts to (N, EL, 1);
+    # the trailing np.ones expands the AZ axis so wz matches wx/wy's shape.
     wz = (base_z[:, None, None] +
-          height[:, None, None] * z_off[None, :, None] * np.ones((1, 1, AZ)))
+          height[:, None, None] * z_off[None, :, None]) + np.zeros((1, 1, AZ))
 
     mean_r = 0.5 * (rx_arr + ry_arr)                       # (N,) per-stone scale
 

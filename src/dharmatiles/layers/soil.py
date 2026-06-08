@@ -195,12 +195,20 @@ def _compute_bump_field(soil: SoilConfig, seed: int,
         else:
             s_amp = s_phase = s_freq = None
 
+        # g_R and norm depend only on cutoff/power (tile constants); pre-compute
+        # once per tier rather than recomputing inside every _accumulate_blob call.
+        _g_R  = float(np.exp(-(soil.blob_cutoff ** soil.blob_power) * 0.5))
+        _norm = 1.0 - _g_R
+        if _norm < 1e-9:
+            continue   # cutoff so tight nothing survives — skip whole tier
+
         for i in range(n):
             _accumulate_blob(
                 bump, xi, yi, gw, gh,
                 cx[i], cy[i], sigma[i], h[i],
                 aspect[i], angle[i],
                 soil.blob_power, soil.blob_cutoff,
+                _g_R, _norm,
                 wx if perturb else None,
                 wy if perturb else None,
                 tex if perturb else None,
@@ -247,7 +255,8 @@ def _compute_bump_field(soil: SoilConfig, seed: int,
 
 def _accumulate_blob(bump, xi, yi, gw, gh,
                      cx, cy, sigma, h, aspect, angle,
-                     power, cutoff, wx, wy, tex, tex_amp,
+                     power, cutoff, g_R, norm,
+                     wx, wy, tex, tex_amp,
                      s_amp=None, s_phase=None, s_freq=None):
     R    = cutoff * sigma
     r    = int(R) + 1
@@ -279,11 +288,7 @@ def _accumulate_blob(bump, xi, yi, gw, gh,
         dp = ((dx_n * dx_n + dy_n * dy_n) * radial_scale * radial_scale) ** (power * 0.5)
     else:
         dp = (dx_n * dx_n + dy_n * dy_n) ** (power * 0.5)
-    g    = np.exp(-dp * 0.5)
-    g_R  = float(np.exp(-(cutoff ** power) * 0.5))
-    norm = 1.0 - g_R
-    if norm < 1e-9:
-        return
+    g     = np.exp(-dp * 0.5)
     shape = np.maximum(0.0, (g - g_R) / norm)
 
     if tex is not None:

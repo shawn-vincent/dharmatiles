@@ -62,23 +62,15 @@ class TileScene:
         if self.vegetation_support_z is None:
             self.vegetation_support_z = self.terrain_support_z.copy()
 
-    @property
-    def support_z(self) -> np.ndarray:
-        """Compatibility alias for non-vegetation terrain support."""
-        return self.terrain_support_z
-
-    @support_z.setter
-    def support_z(self, value: np.ndarray) -> None:
-        self.terrain_support_z = value
-
     # ── Constructors ──────────────────────────────────────────────────────────
 
     @classmethod
     def from_config(cls, cfg: SceneConfig) -> "TileScene":
         """Initialise with a sinusoidal stand-in terrain heightmap.
 
-        Preserves the old behaviour for scripts that have not yet been
-        migrated to TerrainGrid.
+        Legacy entry point for non-spec initialisation.  Production code
+        uses ``build_tile_from_spec`` which passes a pre-computed *terrain_z*
+        array directly to the constructor.
         """
         if cfg.surface.flat_terrain:
             terrain_z = np.full((cfg.surface.grid_h, cfg.surface.grid_w),

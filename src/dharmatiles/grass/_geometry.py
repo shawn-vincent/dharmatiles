@@ -8,6 +8,11 @@ from __future__ import annotations
 
 import numpy as np
 
+# Re-export core sampler so callers inside the grass package have a single
+# import point.  core.grid.sample_grid handles both scalar and array inputs
+# and is the canonical implementation — no duplicate needed here.
+from ..core.grid import sample_grid as _sample_grid
+
 
 def _spine_distances(spine: np.ndarray) -> np.ndarray:
     """Cumulative physical distance along a blade spine."""
@@ -17,21 +22,6 @@ def _spine_distances(spine: np.ndarray) -> np.ndarray:
         return np.array([0.0], dtype=float)
     segment_lengths = np.linalg.norm(np.diff(spine, axis=0), axis=1)
     return np.concatenate(([0.0], np.cumsum(segment_lengths)))
-
-
-def _sample_grid(grid: np.ndarray, surface, x: float, y: float) -> float:
-    """Bilinear sample of *grid* at world coordinates (scalar result)."""
-    i = np.clip(x / surface.cell_w, 0, surface.grid_w - 1)
-    j = np.clip(y / surface.cell_w, 0, surface.grid_h - 1)
-    i0 = int(np.floor(i)); i1 = min(i0 + 1, surface.grid_w - 1)
-    j0 = int(np.floor(j)); j1 = min(j0 + 1, surface.grid_h - 1)
-    fi = i - i0; fj = j - j0
-    return float(
-        grid[j0, i0] * (1 - fi) * (1 - fj)
-        + grid[j0, i1] * fi * (1 - fj)
-        + grid[j1, i0] * (1 - fi) * fj
-        + grid[j1, i1] * fi * fj
-    )
 
 
 def _cell_index(surface, x: float, y: float) -> tuple[int, int]:
@@ -136,3 +126,47 @@ def _contained_segment_cells(
     )
 
     return ix0, ix1, iy0, iy1, mask, along_norm, lateral_frac
+
+
+def _stamp_segment(
+    support: np.ndarray,
+    surface,
+    x0: float, y0: float,
+    x1: float, y1: float,
+    width0: float, width1: float,
+    z0: float, z1: float,
+    thickness0: float, thickness1: float,
+    n_top_facets: int,
+) -> None:
+    """Stamp the swept footprint of one segment into *support* (in-place max).
+
+    Shared implementation used by both the grow-time occ_z stamping
+    (``growers/flat.py``) and the mesh-time vegetation support rasterisation
+    (``mesh.py``).
+
+    The stamp height at each fully-contained cell is:
+      * ``n_top_facets == 1`` (flat): interpolated spine z (thickness ignored).
+      * ``n_top_facets >= 2`` (peaked/round): spine z + thickness × sin(π × x_frac),
+        where x_frac ∈ [0, 1] across the blade width.
+
+    Both spine z and thickness are interpolated linearly along the segment.
+    """
+    footprint = _contained_segment_cells(
+        surface, x0, y0, x1, y1, width0 / 2.0, width1 / 2.0
+    )
+    if footprint is None:
+        return
+    ix0g, ix1g, iy0g, iy1g, mask, along_norm, lateral_frac = footprint
+    if not np.any(mask):
+        return
+
+    z_spine   = z0 + (z1 - z0) * along_norm
+    thickness = thickness0 + (thickness1 - thickness0) * along_norm
+
+    if n_top_facets == 1:
+        z_field = z_spine
+    else:
+        z_field = z_spine + thickness * np.sin(np.pi * lateral_frac)
+
+    block = support[iy0g:iy1g + 1, ix0g:ix1g + 1]
+    np.maximum(block, np.where(mask, z_field, block), out=block)

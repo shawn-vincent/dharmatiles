@@ -5,7 +5,9 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
-from .._geometry import _contained_segment_cells, _sample_grid, _spine_distances
+from .._geometry import (
+    _contained_segment_cells, _sample_grid, _spine_distances, _stamp_segment,
+)
 from ..config import SpeciesConfig
 from ..seed import GrassPath, GrowingPath
 
@@ -75,17 +77,12 @@ class FlatGrassGrower:
             return False
 
         path.points.append((float(tx), float(ty), float(nz)))
-        _stamp_swept_footprint(
-            occ_z,
-            surface,
-            (cx, cy),
-            (tx, ty),
-            cz,                     # spine z at previous point
-            nz,                     # spine z at new point
-            prev_width,
-            next_width,
-            prev_thickness,
-            next_thickness,
+        _stamp_segment(
+            occ_z, surface,
+            cx, cy, tx, ty,
+            prev_width, next_width,
+            cz, nz,
+            prev_thickness, next_thickness,
             species.blade_top_facets,
         )
         return True
@@ -385,48 +382,6 @@ def _sample_footprint_max(
         return float(block[mask].max())
 
     return _sample_grid(base_z, surface, x, y)
-
-
-def _stamp_swept_footprint(
-    occ_z: np.ndarray,
-    surface,
-    p0: tuple[float, float],
-    p1: tuple[float, float],
-    z0: float,          # spine z at p0
-    z1: float,          # spine z at p1
-    width0: float,
-    width1: float,
-    thickness0: float,  # top-profile peak height at p0 (ignored for n_top_facets=1)
-    thickness1: float,  # top-profile peak height at p1 (ignored for n_top_facets=1)
-    n_top_facets: int,
-) -> None:
-    """Stamp cells fully contained in the tapered swept segment into occ_z.
-
-    The stamp height is profile-aware:
-      n=1  → flat at equator (z_spine); thickness is ignored.
-      n≥2  → laterally varying: z_spine + thickness×sin(π×x_frac), with
-              thickness tapered along the segment.
-    Height also varies along the segment (linear interpolation of z0..z1).
-    """
-    x0, y0 = p0
-    x1, y1 = p1
-    footprint = _contained_segment_cells(surface, x0, y0, x1, y1, width0 / 2.0, width1 / 2.0)
-    if footprint is None:
-        return
-    ix0, ix1, iy0, iy1, mask, along_norm, lateral_frac = footprint
-    if not np.any(mask):
-        return
-
-    z_spine = z0 + (z1 - z0) * along_norm          # slope along segment
-    thickness = thickness0 + (thickness1 - thickness0) * along_norm
-
-    if n_top_facets == 1:
-        z_field = z_spine                           # flat: top IS the equator
-    else:
-        z_field = z_spine + thickness * np.sin(np.pi * lateral_frac)
-
-    block = occ_z[iy0:iy1 + 1, ix0:ix1 + 1]
-    np.maximum(block, np.where(mask, z_field, block), out=block)
 
 
 def _leading_edge_cells(

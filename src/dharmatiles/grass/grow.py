@@ -330,14 +330,11 @@ def _jitter_grid_xy(
     xs = us * dx + vs * px
     ys = us * dy + vs * py
 
-    xs_flat = xs
-    ys_flat = ys
-
-    ixs = np.clip((xs_flat / cell_w).astype(int), 0, surface.grid_w - 1)
-    iys = np.clip((ys_flat / cell_w).astype(int), 0, surface.grid_h - 1)
+    ixs = np.clip((xs / cell_w).astype(int), 0, surface.grid_w - 1)
+    iys = np.clip((ys / cell_w).astype(int), 0, surface.grid_h - 1)
 
     valid = group_mask[iys, ixs]
-    return list(zip(xs_flat[valid].tolist(), ys_flat[valid].tolist()))
+    return list(zip(xs[valid].tolist(), ys[valid].tolist()))
 
 
 def _sample_seed_curl(species: SpeciesConfig, rng: np.random.Generator) -> float:

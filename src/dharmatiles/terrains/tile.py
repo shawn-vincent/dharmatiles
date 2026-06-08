@@ -198,11 +198,6 @@ def _build_mesh(cfg: SceneConfig,
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def _system_output_path(output_path: pathlib.Path, suffix: str) -> pathlib.Path:
-    """Return ``path/to/name-SUFFIX.stl`` for a requested output path."""
-    output_path = pathlib.Path(output_path)
-    return output_path.with_name(f"{output_path.stem}-{suffix}{output_path.suffix}")
-
 
 def _new_tile_paths(spec_path: pathlib.Path,
                     cols: int, rows: int,
@@ -349,28 +344,30 @@ def build_tile_from_spec(spec: TileSpec,
         stone_mask = np.zeros((cfg.surface.grid_h, cfg.surface.grid_w), dtype=bool),
     )
 
-    if region_mask is not None:
-        scene.grass_mask = build_grass_mask(region_mask, spec)
-        if verbose and scene.grass_mask is not None:
-            n_grass = int(scene.grass_mask.sum())
-            n_total = scene.grass_mask.size
-            print(f"  Grass coverage: {n_grass}/{n_total} cells "
-                  f"({100 * n_grass / n_total:.0f}%)")
+    # Compute once; both DB and OL scenes use the same region_mask and spec.
+    grass_mask   = build_grass_mask(region_mask, spec) if region_mask is not None else None
+    grass_cfgs   = _collect_grass_configs(spec, region_mask)
+    soil_layers  = _collect_soil_layers(spec, region_mask)
+    stone_layers = _collect_stones_layers(spec, region_mask)
+
+    scene.grass_mask = grass_mask
+    if verbose and grass_mask is not None:
+        n_grass = int(grass_mask.sum())
+        n_total = grass_mask.size
+        print(f"  Grass coverage: {n_grass}/{n_total} cells "
+              f"({100 * n_grass / n_total:.0f}%)")
     if verbose and water_mask is not None:
         n_water = int(water_mask.sum())
         n_total = water_mask.size
         print(f"  Water coverage: {n_water}/{n_total} cells "
               f"({100 * n_water / n_total:.0f}%)")
 
-    grass_cfgs   = _collect_grass_configs(spec, region_mask)
-    soil_layers  = _collect_soil_layers(spec, region_mask)
-    stone_layers = _collect_stones_layers(spec, region_mask)
-    tile_mesh    = _build_mesh(cfg, scene,
-                               grass_cfgs=grass_cfgs, soil_layers=soil_layers,
-                               stone_layers=stone_layers,
-                               verbose=verbose,
-                               water_mask=water_mask, water_height=water_height,
-                               water_embed_mm=embed_mm)
+    tile_mesh = _build_mesh(cfg, scene,
+                            grass_cfgs=grass_cfgs, soil_layers=soil_layers,
+                            stone_layers=stone_layers,
+                            verbose=verbose,
+                            water_mask=water_mask, water_height=water_height,
+                            water_embed_mm=embed_mm)
 
     # ── OpenLOCK: regenerate terrain natively at 25.4 mm/square ──────────────
     # The heightmap grid dimensions (grid_w × grid_h) are set by
@@ -394,15 +391,12 @@ def build_tile_from_spec(spec: TileSpec,
             stone_mask = np.zeros(
                 (ol_cfg.surface.grid_h, ol_cfg.surface.grid_w), dtype=bool),
         )
-        if region_mask is not None:
-            ol_scene.grass_mask = build_grass_mask(region_mask, spec)
-        ol_grass_cfgs   = _collect_grass_configs(spec, region_mask)
-        ol_soil_layers  = _collect_soil_layers(spec, region_mask)
-        ol_stone_layers = _collect_stones_layers(spec, region_mask)
+        ol_scene.grass_mask = grass_mask   # same result; region_mask unchanged
         ol_tile_mesh = _build_mesh(
             ol_cfg, ol_scene,
-            grass_cfgs=ol_grass_cfgs, soil_layers=ol_soil_layers,
-            stone_layers=ol_stone_layers,
+            grass_cfgs=grass_cfgs,     # reuse — same spec + region_mask
+            soil_layers=soil_layers,
+            stone_layers=stone_layers,
             verbose=verbose,
             water_mask=water_mask, water_height=water_height,
             water_embed_mm=embed_mm)
@@ -568,27 +562,61 @@ def _scene_config_from_spec(spec: TileSpec) -> SceneConfig:
     )
 
 
+def _collect_layers(
+    spec: TileSpec,
+    region_mask: np.ndarray | None,
+    layer_types: set[str],
+    cfg_class,
+    include_boundaries: bool = True,
+) -> list[tuple[object, np.ndarray | None]]:
+    """Generic helper: collect ``(config, placement_mask)`` pairs from a spec.
+
+    Iterates all regions (and optionally boundaries) in *spec*.  For each
+    layer whose ``type`` is in *layer_types*, builds a *cfg_class* instance
+    from the class defaults overridden by ``layer.params``, and pairs it with
+    a boolean placement mask restricting placement to that zone's cells.
+
+    Region masks:   ``region_mask == idx``  (None when no region_mask)
+    Boundary masks: ``region_mask < 0``     (boundary strip cells)
+    """
+    defaults = vars(cfg_class())
+    result: list[tuple[object, np.ndarray | None]] = []
+
+    for idx, region in enumerate(spec.regions):
+        for layer in region.layers:
+            if layer.type in layer_types:
+                cfg = {**defaults, **layer.params}
+                mask = (region_mask == idx) if region_mask is not None else None
+                result.append((cfg_class(**cfg), mask))
+
+    if include_boundaries:
+        for boundary in spec.boundaries:
+            for layer in boundary.layers:
+                if layer.type in layer_types:
+                    cfg = {**defaults, **layer.params}
+                    mask = (region_mask < 0) if region_mask is not None else None
+                    result.append((cfg_class(**cfg), mask))
+
+    return result
+
+
 def _collect_grass_configs(
     spec: TileSpec,
     region_mask: np.ndarray | None,
 ) -> list[tuple[SpeciesConfig, np.ndarray | None]]:
     """Return ``(SpeciesConfig, placement_mask)`` pairs for each grass layer.
 
-    The placement mask restricts seeding to that region's cells, mirroring
-    the per-region masking used by ``_collect_soil_layers`` and
-    ``_collect_stones_layers``.  Without this, a spec with two grass regions
-    using different species would let both species invade both regions.
+    Placement masks restrict seeding to each region's cells so that a spec
+    with two grass regions using different species keeps them separated.
+    Grass is not collected from boundary specs (boundaries have no grass layer
+    type currently).
     """
-    defaults = SpeciesConfig()
-    result: list[tuple[SpeciesConfig, np.ndarray | None]] = []
-    for idx, region in enumerate(spec.regions):
-        for layer in region.layers:
-            if layer.type == 'grass':
-                d = vars(defaults).copy()
-                d.update(layer.params)
-                mask = (region_mask == idx) if region_mask is not None else None
-                result.append((SpeciesConfig(**d), mask))
-    return result
+    return _collect_layers(           # type: ignore[return-value]
+        spec, region_mask,
+        layer_types={'grass'},
+        cfg_class=SpeciesConfig,
+        include_boundaries=False,
+    )
 
 
 def _collect_soil_layers(
@@ -596,25 +624,11 @@ def _collect_soil_layers(
     region_mask: np.ndarray | None,
 ) -> list[tuple[SoilConfig, np.ndarray | None]]:
     """Return one ``(SoilConfig, placement_mask)`` pair per soil layer."""
-    result: list[tuple[SoilConfig, np.ndarray | None]] = []
-
-    for idx, region in enumerate(spec.regions):
-        for layer in region.layers:
-            if layer.type == 'soil':
-                cfg = vars(SoilConfig()).copy()
-                cfg.update(layer.params)
-                mask = (region_mask == idx) if region_mask is not None else None
-                result.append((SoilConfig(**cfg), mask))
-
-    for boundary in spec.boundaries:
-        for layer in boundary.layers:
-            if layer.type == 'soil':
-                cfg = vars(SoilConfig()).copy()
-                cfg.update(layer.params)
-                mask = (region_mask < 0) if region_mask is not None else None
-                result.append((SoilConfig(**cfg), mask))
-
-    return result
+    return _collect_layers(           # type: ignore[return-value]
+        spec, region_mask,
+        layer_types={'soil'},
+        cfg_class=SoilConfig,
+    )
 
 
 def _collect_stones_layers(
@@ -624,34 +638,14 @@ def _collect_stones_layers(
     """Return one ``(StonesConfig, placement_mask)`` pair per stone layer.
 
     Each region or boundary that declares a ``rock``/``rocks``/``stone``/
-    ``stones`` layer gets its own independent stone-placement pass.  The
-    placement mask restricts stone centres to cells belonging to that zone;
-    ``None`` means whole-tile placement.
-
-    Keeping layers independent means a pool region and a shoreline boundary
-    can use entirely different size distributions without merging.
+    ``stones`` layer gets its own independent stone-placement pass, so a pool
+    region and a shoreline boundary can use different size distributions.
     """
-    stone_layer_types = {'rock', 'rocks', 'stone', 'stones'}
-    result: list[tuple[StonesConfig, np.ndarray | None]] = []
-
-    for idx, region in enumerate(spec.regions):
-        for layer in region.layers:
-            if layer.type in stone_layer_types:
-                cfg = vars(StonesConfig()).copy()
-                cfg.update(layer.params)
-                mask = (region_mask == idx) if region_mask is not None else None
-                result.append((StonesConfig(**cfg), mask))
-
-    for boundary in spec.boundaries:
-        for layer in boundary.layers:
-            if layer.type in stone_layer_types:
-                cfg = vars(StonesConfig()).copy()
-                cfg.update(layer.params)
-                # boundary cells: region_mask == -1
-                mask = (region_mask < 0) if region_mask is not None else None
-                result.append((StonesConfig(**cfg), mask))
-
-    return result
+    return _collect_layers(           # type: ignore[return-value]
+        spec, region_mask,
+        layer_types={'rock', 'rocks', 'stone', 'stones'},
+        cfg_class=StonesConfig,
+    )
 
 
 # ── Multi-size helpers ────────────────────────────────────────────────────────
