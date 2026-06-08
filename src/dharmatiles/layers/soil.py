@@ -107,8 +107,9 @@ def _compute_bump_field(soil: SoilConfig, seed: int,
     yi   = np.arange(gh, dtype=float)
 
     # ── Pre-compute per-tile organic perturbation fields ──────────────────────
-    warp_str   = soil.blob_warp_str_mm / cell_mm
-    warp_sigma = max(1.0, warp_str * 2.5)
+    # These are optional: skip allocation entirely when the corresponding
+    # parameter is disabled (zero) to avoid spending RNG state and memory.
+    warp_str = soil.blob_warp_str_mm / cell_mm
 
     def _nf(sigma: float) -> np.ndarray:
         n = rng.standard_normal((gh, gw))
@@ -116,9 +117,15 @@ def _compute_bump_field(soil: SoilConfig, seed: int,
         s = n.std()
         return n / s if s > 0 else n
 
-    wx  = _nf(warp_sigma) * warp_str
-    wy  = _nf(warp_sigma) * warp_str
-    tex = _nf(max(1.0, 1.5))   # fine surface texture, unit-std
+    if warp_str > 0.0:
+        warp_sigma = max(1.0, warp_str * 2.5)
+        wx = _nf(warp_sigma) * warp_str
+        wy = _nf(warp_sigma) * warp_str
+    else:
+        wx = None
+        wy = None
+
+    tex = _nf(max(1.0, 1.5)) if soil.blob_texture_amp > 0.0 else None
 
     # ── Tier definitions ──────────────────────────────────────────────────────
     tiers = [

@@ -150,8 +150,8 @@ class SoilConfig:
     blob_aspect_max:    float = 1.00  # max ratio (circular)
     blob_power:         float = 3.5   # super-Gaussian exponent (2=Gaussian, higher=sharper base)
     blob_cutoff:        float = 2.6   # clip at this × sigma
-    blob_h_min:         float = 0.25  # mm — floor for secondary tier
-    blob_h_max:         float = 0.30  # mm — ceiling for secondary tier
+    blob_h_min:         float = 0.25  # mm — fallback height floor for primary tier if perturb=False (unused in default pipeline)
+    blob_h_max:         float = 0.30  # mm — fallback height ceiling for primary tier if perturb=False (unused in default pipeline)
     blob_h_scale_min:   float = 0.14  # primary tier: height = this × sigma_mm (min)
     blob_h_scale_max:   float = 1.12  # primary tier: height = this × sigma_mm (max)
     blob_h_size_bias:   float = 0.85  # 0=independent, 1=large blobs always at scale_max

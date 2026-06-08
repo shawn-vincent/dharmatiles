@@ -47,8 +47,8 @@ class SpeciesConfig:
 
     # Placement.
     groups_per_square: int = 3
-    group_min: int = 400
-    group_max: int = 400
+    group_density_min: float = 1.0   # blades / mm²  (lower bound of per-group uniform draw)
+    group_density_max: float = 1.0   # blades / mm²  (upper bound)
     group_dir_jitter: float = 0
 
     # Growth behavior.

@@ -23,6 +23,7 @@ import pathlib
 
 import numpy as np
 import trimesh
+from scipy.ndimage import binary_dilation, binary_erosion, distance_transform_edt
 
 from ..core.config import (SceneConfig, SurfaceConfig, FlowConfig, SolverConfig,
                            SoilConfig, StonesConfig, BaseConfig)
@@ -44,7 +45,7 @@ from ..layers.water import make_water_displacement, make_water_ripple_displaceme
 
 def _build_mesh(cfg: SceneConfig,
                 scene: TileScene,
-                grass_cfgs: list[SpeciesConfig] | None = None,
+                grass_cfgs: list[tuple[SpeciesConfig, np.ndarray | None]] | None = None,
                 soil_layers: list[tuple[SoilConfig, np.ndarray | None]] | None = None,
                 stone_layers: list[tuple[StonesConfig, np.ndarray | None]] | None = None,
                 verbose: bool = True,
@@ -53,8 +54,10 @@ def _build_mesh(cfg: SceneConfig,
                 water_embed_mm: float = 2.0) -> trimesh.Trimesh:
     """Run all layers on *scene* and return the concatenated mesh.
 
-    *grass_cfgs* is a list of SpeciesConfig objects — one per seed-packet
-    layer in the spec.  Defaults to one package-default species.
+    *grass_cfgs* is a list of ``(SpeciesConfig, placement_mask)`` pairs — one
+    per grass layer in the spec.  Each pair restricts grass seeding to its
+    region mask (``None`` = whole tile).  Defaults to one package-default
+    species over the whole tile.
 
     *stone_layers* is a list of ``(StonesConfig, placement_mask)`` pairs —
     one per stone-layer zone.  Each pair is one independent stone-placement
@@ -62,10 +65,12 @@ def _build_mesh(cfg: SceneConfig,
     ``[(cfg.stones, None)]`` (single pass, whole-tile placement).
 
     *water_mask* / *water_height* — when provided, a flat water-surface mesh
-    is placed at *water_height* over the water region.
+    is placed at *water_height* over the water region.  The pool floor must
+    already be zeroed in *scene.terrain_z* before this call (done by
+    ``build_tile_from_spec`` before scene construction).
     """
     if grass_cfgs is None:
-        grass_cfgs = [SpeciesConfig()]
+        grass_cfgs = [(SpeciesConfig(), None)]
     if soil_layers is None:
         soil_layers = []
     if stone_layers is None:
@@ -78,8 +83,7 @@ def _build_mesh(cfg: SceneConfig,
         if verbose:
             print("Building soil texture...")
         SoilLayer(cfg.surface, soil_cfg).build(scene, placement_mask=soil_mask)
-    if water_mask is not None:
-        scene.terrain_z[water_mask] = 0.0
+    # Sync terrain_support_z to include soil displacement baked into terrain_z.
     scene.terrain_support_z[:] = scene.terrain_z
 
     # ── Stones (one independent pass per stone-layer zone) ────────────────────
@@ -98,7 +102,15 @@ def _build_mesh(cfg: SceneConfig,
     if grass_cfgs and verbose:
         print("Growing grass...")
     scene.vegetation_support_z = scene.terrain_support_z.copy()
-    for i, g_cfg in enumerate(grass_cfgs):
+    global_grass_mask = scene.grass_mask
+    for i, (g_cfg, region_mask_i) in enumerate(grass_cfgs):
+        # Restrict seeding to this region, intersected with the global grass mask.
+        if region_mask_i is not None and global_grass_mask is not None:
+            scene.grass_mask = global_grass_mask & region_mask_i
+        elif region_mask_i is not None:
+            scene.grass_mask = region_mask_i
+        else:
+            scene.grass_mask = global_grass_mask
         packet_cfg = RuntimeGrassConfig(
             species=[g_cfg],
             max_stack_height=cfg.solver.max_stack_height,
@@ -107,6 +119,7 @@ def _build_mesh(cfg: SceneConfig,
         grown = FloppyGrassLayer(packet_cfg)
         grass_parts = grown.build(scene, verbose=(verbose and i == 0))
         parts.extend(grass_parts)
+    scene.grass_mask = global_grass_mask  # restore original mask
 
     # ── Water volume ──────────────────────────────────────────────────────────
     if water_mask is not None and water_height is not None:
@@ -114,7 +127,6 @@ def _build_mesh(cfg: SceneConfig,
             print("Building water volume...")
         # Dilate the pool mask to the far side of the boundary strip so the
         # displacement and ripple textures extend through the full shore zone.
-        from scipy.ndimage import binary_dilation
         embed_cells_full = max(1, round(water_embed_mm / cfg.surface.cell_w))
         wm_disp_full = binary_dilation(water_mask, iterations=embed_cells_full)
 
@@ -320,13 +332,15 @@ def build_tile_from_spec(spec: TileSpec,
         default=2.0,
     )
 
-    # ── Extend bank slope into pool ───────────────────────────────────────────
-    # The bank slope visible on the shore is extrapolated downward into the pool
-    # zone so the bed is a continuous slope (rather than a flat floor) and the
-    # soil texture applied by SoilLayer runs across the whole bed.
+    # ── Extend bank slope into pool, then zero-out pool floor ────────────────
+    # First, extrapolate the bank slope into the pool so soil can texture the
+    # sloped bed.  Then clamp all pool cells to 0.0 so the pool floor is flat
+    # at the tile base — this must happen before the scene is constructed so
+    # that terrain_z is truly read-only after init (no mutation inside helpers).
     if water_mask is not None and water_height is not None:
         terrain_z = _extend_bank_slope_into_pool(
             terrain_z, water_mask, water_height, cfg.surface)
+        terrain_z[water_mask] = 0.0  # flatten pool floor to tile base
 
     scene = TileScene(
         config     = cfg,
@@ -348,7 +362,7 @@ def build_tile_from_spec(spec: TileSpec,
         print(f"  Water coverage: {n_water}/{n_total} cells "
               f"({100 * n_water / n_total:.0f}%)")
 
-    grass_cfgs   = _collect_grass_configs(spec)
+    grass_cfgs   = _collect_grass_configs(spec, region_mask)
     soil_layers  = _collect_soil_layers(spec, region_mask)
     stone_layers = _collect_stones_layers(spec, region_mask)
     tile_mesh    = _build_mesh(cfg, scene,
@@ -382,7 +396,7 @@ def build_tile_from_spec(spec: TileSpec,
         )
         if region_mask is not None:
             ol_scene.grass_mask = build_grass_mask(region_mask, spec)
-        ol_grass_cfgs   = _collect_grass_configs(spec)
+        ol_grass_cfgs   = _collect_grass_configs(spec, region_mask)
         ol_soil_layers  = _collect_soil_layers(spec, region_mask)
         ol_stone_layers = _collect_stones_layers(spec, region_mask)
         ol_tile_mesh = _build_mesh(
@@ -427,8 +441,6 @@ def _build_spec_terrain(spec: TileSpec, surface: SurfaceConfig,
     world-horizontal.  Full slope-normal orientation for placed geometry is a
     future enhancement.
     """
-    from scipy.ndimage import distance_transform_edt
-
     gh, gw = surface.grid_h, surface.grid_w
     default_h = 5.0
 
@@ -436,7 +448,6 @@ def _build_spec_terrain(spec: TileSpec, surface: SurfaceConfig,
         return np.full((gh, gw), default_h, dtype=float)
 
     heights   = [r.effective_height_mm for r in spec.regions]
-    n_regions = len(heights)
 
     # Fast path: all regions at the same height
     if len(set(heights)) <= 1:
@@ -478,8 +489,6 @@ def _extend_bank_slope_into_pool(terrain_z: np.ndarray,
 
     Returns a copy of *terrain_z* with pool cells updated.
     """
-    from scipy.ndimage import binary_erosion, distance_transform_edt
-
     cell_mm = surface.cell_w
 
     # ── Measure bank slope from terrain just outside the water boundary ───────
@@ -559,17 +568,27 @@ def _scene_config_from_spec(spec: TileSpec) -> SceneConfig:
     )
 
 
-def _collect_grass_configs(spec: TileSpec) -> list[SpeciesConfig]:
-    """Return one SpeciesConfig per grass LayerSpec found in any region."""
+def _collect_grass_configs(
+    spec: TileSpec,
+    region_mask: np.ndarray | None,
+) -> list[tuple[SpeciesConfig, np.ndarray | None]]:
+    """Return ``(SpeciesConfig, placement_mask)`` pairs for each grass layer.
+
+    The placement mask restricts seeding to that region's cells, mirroring
+    the per-region masking used by ``_collect_soil_layers`` and
+    ``_collect_stones_layers``.  Without this, a spec with two grass regions
+    using different species would let both species invade both regions.
+    """
     defaults = SpeciesConfig()
-    cfgs: list[SpeciesConfig] = []
-    for region in spec.regions:
+    result: list[tuple[SpeciesConfig, np.ndarray | None]] = []
+    for idx, region in enumerate(spec.regions):
         for layer in region.layers:
             if layer.type == 'grass':
                 d = vars(defaults).copy()
                 d.update(layer.params)
-                cfgs.append(SpeciesConfig(**d))
-    return cfgs
+                mask = (region_mask == idx) if region_mask is not None else None
+                result.append((SpeciesConfig(**d), mask))
+    return result
 
 
 def _collect_soil_layers(

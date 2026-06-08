@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from ._geometry import _cell_index
 from .config import GrassConfig, SpeciesConfig
 from .growers import GROWERS
 from .seed import GrassPath, GrassSeed, GrowingPath
@@ -73,10 +74,9 @@ def plant_seeds(
             group_dir = float(rng.uniform(0.0, 2.0 * np.pi))
             n_seeds = _scaled_group_seed_count(
                 group,
-                surface.grid_w * surface.grid_h,
-                actual_n_groups,
-                species.group_min,
-                species.group_max,
+                species.group_density_min,
+                species.group_density_max,
+                surface.cell_w,
                 rng,
             )
 
@@ -133,23 +133,17 @@ def _scaled_voronoi_group_count(
 
 def _scaled_group_seed_count(
     group: dict[str, np.ndarray],
-    total_tile_cells: int,
-    n_groups: int,
-    group_min: int,
-    group_max: int,
+    group_density_min: float,
+    group_density_max: float,
+    cell_w: float,
     rng: np.random.Generator,
 ) -> int:
-    """Sample blade count for a Voronoi group, scaled by its actual tile area."""
-    if total_tile_cells <= 0 or n_groups <= 0:
-        return 0
-
-    min_count = max(0, int(group_min))
-    max_count = max(min_count, int(group_max))
-    nominal_count = float(rng.integers(min_count, max_count + 1))
-
-    group_cells = len(group["rows"])
-    ideal_group_cells = total_tile_cells / float(n_groups)
-    scaled_count = nominal_count * group_cells / ideal_group_cells
+    """Sample blade count for a Voronoi group from a blades/mm² density."""
+    density_min = max(0.0, float(group_density_min))
+    density_max = max(density_min, float(group_density_max))
+    density = float(rng.uniform(density_min, density_max))
+    group_area_mm2 = len(group["rows"]) * cell_w * cell_w
+    scaled_count = density * group_area_mm2
     base_count = int(np.floor(scaled_count))
     if rng.random() < scaled_count - base_count:
         base_count += 1
@@ -426,7 +420,3 @@ def _sort_upstream_first(paths: list[GrowingPath], surface) -> None:
     paths.sort(key=_key)
 
 
-def _cell_index(surface, x: float, y: float) -> tuple[int, int]:
-    ix = int(np.clip(int(x / surface.cell_w), 0, surface.grid_w - 1))
-    iy = int(np.clip(int(y / surface.cell_w), 0, surface.grid_h - 1))
-    return ix, iy

@@ -19,8 +19,6 @@ import numpy as np
 import trimesh
 
 from .config import SceneConfig, SurfaceConfig, SolverConfig
-from .terrain import (TerrainGrid, TerrainType,
-                      terrain_grid_to_heightmap)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -41,10 +39,12 @@ def make_xy_grids(surface: SurfaceConfig):
 class TileScene:
     """Mutable state accumulated while building a terrain scene.
 
-    Build with :meth:`from_config` (uses a sinusoidal stand-in terrain) or
-    :meth:`from_terrain_grid` (uses a semantic TerrainGrid).
+    Construct directly or via :meth:`from_config` (sinusoidal stand-in terrain).
+    Production code in ``terrains/tile.py`` passes a pre-computed *terrain_z*
+    array directly to the constructor.
 
-    ``terrain_z`` is fixed at construction.
+    ``terrain_z`` is read-only after construction — no layer or mesh helper
+    may mutate it.
     ``terrain_support_z`` grows as terrain and stone layers rasterise geometry.
     ``vegetation_support_z`` grows as vegetation layers rasterise geometry.
     ``parts`` is the list of Trimesh objects to combine at export.
@@ -85,18 +85,6 @@ class TileScene:
                                 5.0, dtype=float)
         else:
             terrain_z = _make_sinusoidal_terrain(cfg.surface)
-        stone_mask = np.zeros((cfg.surface.grid_h, cfg.surface.grid_w), dtype=bool)
-        return cls(config=cfg, terrain_z=terrain_z,
-                   terrain_support_z=terrain_z.copy(), stone_mask=stone_mask)
-
-    @classmethod
-    def from_terrain_grid(cls, cfg: SceneConfig,
-                          grid: TerrainGrid) -> "TileScene":
-        """Initialise from a semantic TerrainGrid.
-
-        Uses :func:`terrain_grid_to_heightmap` to derive the float heightmap.
-        """
-        terrain_z = terrain_grid_to_heightmap(grid)
         stone_mask = np.zeros((cfg.surface.grid_h, cfg.surface.grid_w), dtype=bool)
         return cls(config=cfg, terrain_z=terrain_z,
                    terrain_support_z=terrain_z.copy(), stone_mask=stone_mask)
@@ -157,8 +145,9 @@ def _make_sinusoidal_terrain(surface: SurfaceConfig,
     Heights are centred at *z_center* (default 5 mm = GROUND height) so they
     stay positive with ``base_h = 0``.
 
-    Stand-in until the semantic TerrainGrid is wired to all entry points.
-    Not part of the target architecture.
+    Legacy stand-in kept for scripts that have not migrated to the
+    IDW-based heightmap in ``terrains/tile.py``.  Not used by the
+    production pipeline.
     """
     x_grid, y_grid = make_xy_grids(surface)
     u = x_grid / surface.tile_w

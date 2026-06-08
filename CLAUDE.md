@@ -99,7 +99,7 @@ TileSpec (YAML) ──► build_tile_from_spec()
 | `core/region.py` | Boundary path generation, Bresenham rasterisation, BFS flood fill |
 | `core/flow.py` | Analytic flow fields (linear/swirl/radial/drain/dipole/random-zones/curl) |
 | `core/mesh.py` | Low-level primitives: blade tube, terrain solid, DungeonBlocks base, coloured STL writer |
-| `core/grid.py` | `sample_grid` (bilinear), `rasterise_into_support` |
+| `core/grid.py` | `sample_grid` (bilinear) |
 | `core/seed.py` | `GrassSeed` dataclass — one per blade, fully self-contained |
 | `layers/soil.py` | Two-tier super-Gaussian blob texture on terrain_z |
 | `layers/stones.py` | Random cut half-ellipsoid stones |
@@ -132,21 +132,26 @@ STL output uses VisCAM/SolidView per-face colour (bit 15 set in the 2-byte attri
 
 All geometry layers (soil, stones, grass) treat the terrain surface as **locally horizontal** — heights and orientations are in world coordinates. This is correct for flat grass regions. The slope strip between regions is bare soil with no placed features, so the error is negligible. See `TileScene` docstring for the planned `terrain_normal()` API when slope-aware placement is needed.
 
-## Known Open Items (from architecture review)
+## Known Open Items (from 2026-06-08 architecture review)
 
-Items tracked in `docs/memory/terminology-tile-square-cell.md`:
+The previous list was 90 % stale.  The four real open items are:
 
-1. `SoilConfig.detail_mult` doubles CPU but the hi-res bump is discarded in `terrains/tile.py` — wire or remove
-2. `build_sub_hull_mesh` imported but never called — delete from `grass.py`, `mesh.py`, `core/__init__.py`
-3. `core/collision.py` entire module is dead — delete + remove re-exports; `SolverConfig.strict_mode` / `strict_base_t` also stranded
-4. `TerrainGrid` allocates at heightmap resolution (65k Python objects) — wrong abstraction
-5. `GrassLayer` has 5 dead class-level defaults overwritten in `__init__`
-6. `GrassSeed.base_x`, `base_y`, `direction` are write-only after construction
-7. `cell_mm_h` in `soil.py:46` — rename to `cell_mm`
-8. `CELL_SIZE_MM` legacy constant — delete from `config.py` and `core/__init__.py`
-9. `cell_h` is always equal to `cell_w` — redundant property
-10. `_make_compat_scene` in `tile.py` raises unconditionally — delete
-11. `TerrainGrid.fill()` uses `cols.start or 0` wrong idiom
+1. **Grass-package DRY** — `grass/_geometry.py` was added to hold canonical
+   shared helpers (`_spine_distances`, `_sample_grid`, `_cell_index`,
+   `_contained_segment_cells`).  No further duplicates known.
+
+2. **`TerrainGrid` was orphaned** — `TerrainCell`, `TerrainGrid`,
+   `terrain_grid_to_heightmap`, and `TileScene.from_terrain_grid` have been
+   deleted.  The live pipeline uses the IDW approach in `_build_spec_terrain`.
+   `core/terrain.py` retains `TerrainType` and transition helpers for future use.
+
+3. **Grass species region-awareness** — fixed: `_collect_grass_configs` now
+   returns `(SpeciesConfig, placement_mask)` pairs mirroring soil and stones,
+   and `_build_mesh` threads the per-region mask into each seeder.
+
+4. **`terrain_z` immutability** — fixed: the water-floor zero-out now happens
+   in `build_tile_from_spec` before scene construction, honouring the
+   "`terrain_z` read-only after init" contract.
 
 ## Project Layout
 

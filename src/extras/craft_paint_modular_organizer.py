@@ -27,7 +27,7 @@ DEFAULT_MAGNET_SPACING = 80.9
 DEFAULT_LOGO_SIZE = 36.0
 DEFAULT_LOGO_DEPTH = 0.5
 DEFAULT_LIGHTWEIGHT_CUP_HEIGHT = 50.0
-DEFAULT_LIGHTWEIGHT_CUP_WALL = 1.5
+DEFAULT_LIGHTWEIGHT_CUP_WALL = 2.0
 DEFAULT_LIGHTWEIGHT_FLOOR = 1.0
 DEFAULT_LIGHTWEIGHT_RETAINING_RING_HEIGHT = 5.0
 DEFAULT_LIGHTWEIGHT_RETAINING_HOLE_DIAMETER = 29.0
@@ -1942,14 +1942,16 @@ def build_lightweight_mesh(
             (cx, cy, bottom_height / 2.0),
             cup_segments,
         )
+        # Inner cone exits below the outer rim so the top edge is a flat annulus, not a razor.
+        top_edge_flat = 1.0
         top_ring_bevel = vertical_frustum(
             inner_radius,
-            top_ring_outer_radius,
+            top_ring_outer_radius - top_edge_flat,
             lightweight.rib_height,
             (cx, cy, cup_height - lightweight.rib_height / 2.0),
             cup_segments,
         )
-        top_ring_drop = 0.5
+        top_ring_drop = 1.0
         top_ring_bevel_h = top_ring_outer_radius - outer_radius  # 45°: Δz = Δr from horizontal
         z_top_bevel_start = cup_height - top_ring_drop
         z_top_bevel_bottom = z_top_bevel_start - top_ring_bevel_h
@@ -1968,10 +1970,11 @@ def build_lightweight_mesh(
             cup_segments,
         ))
         # Start above the bottom floor to avoid a coincident outer face at r=outer_radius.
+        # Extend the wall up into the bevel so the cone-bottom sits flush on it.
         wall_z_start = bottom_height + 0.1
         fastener_walls.append(cylindrical_thin_wall(
             (cx, cy), inner_radius, wall_z_start,
-            cup_height - lightweight.rib_height + 0.2 - wall_z_start, cup_segments,
+            z_top_bevel_bottom + 0.1 - wall_z_start, cup_segments,
         ))
         cup_cutters.append(inner)
         cup_cutters.append(retaining_hole)

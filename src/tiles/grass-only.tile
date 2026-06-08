@@ -12,8 +12,8 @@ regions:
     layers:
       - type: grass
         groups_per_square: 3
-        group_min: 256
-        group_max: 256
+        group_density_min: 0.63
+        group_density_max: 0.63
         group_dir_jitter: 0
         blade_width_min: 1.0
         blade_width_max: 1.0
