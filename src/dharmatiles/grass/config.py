@@ -12,8 +12,8 @@ class SpeciesConfig:
     name: str = "floppy-grass"
 
     # Blade geometry ranges, sampled at seed creation time.
-    blade_width_min: float = 1.0
-    blade_width_max: float = 1.0
+    blade_width_min: float = 1.2
+    blade_width_max: float = 1.2
     blade_length_min: float = 15
     blade_length_max: float = 15
     blade_segment_length: float = 0.5
@@ -35,7 +35,7 @@ class SpeciesConfig:
     # keel_fraction sets keel_depth = keel_fraction × blade_width.
     # keel_fraction > 0.5 gives a keel angle steeper than 45° for any width.
     blade_top_facets: int = 6
-    blade_thickness: float = 0.5
+    blade_thickness: float = 0.6
     keel_fraction: float = 0.6
 
     # FDM printability floor.
