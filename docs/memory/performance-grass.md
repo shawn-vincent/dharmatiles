@@ -29,11 +29,10 @@ both DB and OL passes, 256 cells/square):
 
 **4.6 s wall clock** — within the REQ-PRF-1 target of < 5 s for a 1×1 tile.
 
-## Remaining quick wins (not yet done)
+## P5 — cells_per_square reduction (rejected)
 
-- **P5** `config.py`: `cells_per_square = 256` → `128` — ~4× heightmap+rasterise speedup,
-  zero print-quality impact (nozzle = 0.4 mm >> cell = 0.27 mm at 128). Would bring
-  1×1 time to ~1–2 s and unlock faster iteration on multi-square tiles.
+Reducing `cells_per_square` from 256 → 128 was considered but rejected by the project owner.
+Do not re-propose this. The 256-cell grid is intentional and should be treated as fixed.
 
 See `meta/history/2026-06-04-performance-review.md` for full original analysis.
 
