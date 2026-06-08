@@ -360,11 +360,11 @@ def _upstream_edge_row(
     py = float(np.sin(group_dir))
     edge_v = (edge_cols + 0.5) * cell_w * px + (edge_rows + 0.5) * cell_w * py
     lateral_extent = float(edge_v.max() - edge_v.min()) + cell_w
-    n_seeds = max(1, int(np.round(lateral_extent / spacing)))
+    n_seeds = max(1, int(np.round(2.0 * lateral_extent / spacing)))
 
-    # Random sample (without replacement, capped at available cells).
-    n_pick = min(n_seeds, len(edge_rows))
-    chosen = rng.choice(len(edge_rows), size=n_pick, replace=False)
+    # Random sample; allow replacement when n_seeds exceeds available cells
+    # so density is always honoured even in thin bands.
+    chosen = rng.choice(len(edge_rows), size=n_seeds, replace=n_seeds > len(edge_rows))
 
     result: list[tuple[float, float]] = []
     for idx in chosen:
