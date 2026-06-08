@@ -69,8 +69,8 @@ class TileScene:
         """Initialise with a sinusoidal stand-in terrain heightmap.
 
         Legacy entry point for non-spec initialisation.  Production code
-        uses ``build_tile_from_spec`` which passes a pre-computed *terrain_z*
-        array directly to the constructor.
+        uses ``build_tile_from_spec``, which derives *terrain_z* via IDW
+        blending and passes it directly to the constructor.
         """
         if cfg.surface.flat_terrain:
             terrain_z = np.full((cfg.surface.grid_h, cfg.surface.grid_w),
