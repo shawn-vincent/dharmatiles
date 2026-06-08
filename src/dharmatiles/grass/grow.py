@@ -311,9 +311,9 @@ def _jitter_grid_xy(
     #
     # Count weight: row i gets n_v_i ≈ n_v · (1 − i/n_u)² · scale seeds,
     # where scale normalises the total count to n_u · n_v ≈ n_target.
-    t_row = np.arange(n_u, dtype=float) / n_u          # 0 at source → 1 at far
-    count_w_raw = (1.0 - t_row) ** 2                   # quadratic falloff
-    count_w = count_w_raw * n_u / count_w_raw.sum()    # mean weight = 1
+    t_row = np.arange(n_u, dtype=float) / n_u              # 0 at source → 1 at far
+    count_w_raw = 0.5 * (1.0 - t_row) ** 2 + 0.5          # half-strength quadratic
+    count_w = count_w_raw * n_u / count_w_raw.sum()        # mean weight = 1
 
     all_us: list[np.ndarray] = []
     all_vs: list[np.ndarray] = []
