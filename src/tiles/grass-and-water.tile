@@ -16,8 +16,11 @@ regions:
   meadow:
     contains: [0.5, 0.75]      # centre of top half
     layers:
+      - type: soil
       - type: grass
-        groups_per_square: 50
+        groups_per_square: 2
+        blade_length_min: 10
+        blade_length_max: 10
 
   pool:
     contains: [0.5, 0.25]      # centre of bottom half

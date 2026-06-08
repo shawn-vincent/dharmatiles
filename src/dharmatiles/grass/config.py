@@ -13,18 +13,18 @@ class SpeciesConfig:
 
     # Blade geometry ranges, sampled at seed creation time.
     blade_width_min: float = 1.0
-    blade_width_max: float = 2.0
-    blade_length_min: float = 5.0
-    blade_length_max: float = 10.0
-    blade_segment_length: float = 0.8
+    blade_width_max: float = 1.0
+    blade_length_min: float = 15
+    blade_length_max: float = 15
+    blade_segment_length: float = 0.5
     blade_taper: float = 1.0
-    blade_base_width: float = 0.75
-    blade_base_taper: float | None = 3.0
+    blade_base_width: float = 1.0
+    blade_base_taper: float | None = 0
     blade_curl_min: float = 0.5
     blade_curl_max: float = 0.8
-    blade_smooth: float = 0.8
+    blade_smooth: float = 0.9
     blade_rise_cap: float = 2.0
-    blade_clearance: float = 0.3
+    blade_clearance: float = 0.1
 
     # Cross-section shape.
     # blade_top_facets controls the top profile above the blade equator (spine plane):
@@ -34,8 +34,8 @@ class SpeciesConfig:
     # blade_thickness is the distance from the equator to the top profile peak.
     # keel_fraction sets keel_depth = keel_fraction × blade_width.
     # keel_fraction > 0.5 gives a keel angle steeper than 45° for any width.
-    blade_top_facets: int = 2
-    blade_thickness: float = 0.4
+    blade_top_facets: int = 6
+    blade_thickness: float = 0.5
     keel_fraction: float = 0.6
 
     # FDM printability floor.
@@ -47,9 +47,9 @@ class SpeciesConfig:
 
     # Placement.
     groups_per_square: int = 3
-    group_min: int = 100
-    group_max: int = 100
-    group_dir_jitter: float = 0.14
+    group_min: int = 400
+    group_max: int = 400
+    group_dir_jitter: float = 0
 
     # Growth behavior.
     grower: str = "floppy"

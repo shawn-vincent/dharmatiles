@@ -12,22 +12,22 @@ regions:
     layers:
       - type: grass
         groups_per_square: 3
-        group_min: 100
-        group_max: 100
-        group_dir_jitter: 0.14
-        blade_width_min: 2.0
-        blade_width_max: 3.0
-        blade_length_min: 10
-        blade_length_max: 10
-        blade_segment_length: 0.8
+        group_min: 256
+        group_max: 256
+        group_dir_jitter: 0
+        blade_width_min: 1.0
+        blade_width_max: 1.0
+        blade_length_min: 15
+        blade_length_max: 15
+        blade_segment_length: 0.5
         blade_curl_min: 0.5
         blade_curl_max: 0.8
-        blade_smooth: 0.8
+        blade_smooth: 0.9
         blade_rise_cap: 2.0
-        blade_clearance: 0.5
-        blade_top_facets: 4
-        blade_thickness: 0.2
-        blade_taper: 10
-        blade_base_width: 0.75
-        blade_base_taper: 10
+        blade_clearance: 0.2
+        blade_top_facets: 6
+        blade_thickness: 0.5
+        blade_taper: 1
+        blade_base_width: 1.0
+        blade_base_taper: 0
         keel_fraction: 0.6
