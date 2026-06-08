@@ -302,24 +302,42 @@ def _jitter_grid_xy(
     n_u = max(1, int(np.ceil(u_span / spacing)))
     n_v = max(1, int(np.ceil(v_span / spacing)))
 
-    # Power-law warp along u: t → t² packs rows toward u_lo (source edge).
-    i_u = np.arange(n_u, dtype=float)
-    i_v = np.arange(n_v, dtype=float)
-    t_lo = (i_u / n_u) ** 2                   # (n_u,) warped start of each row
-    t_hi = ((i_u + 1.0) / n_u) ** 2           # (n_u,) warped end of each row
+    # Both position and count use a (1-t)² power law so density falls off
+    # quadratically from the source edge toward the far side.
+    #
+    # Position warp: u-row i occupies the physical range
+    #   [u_lo + (i/n_u)² · u_span,  u_lo + ((i+1)/n_u)² · u_span]
+    # so rows are compressed toward u_lo.
+    #
+    # Count weight: row i gets n_v_i ≈ n_v · (1 − i/n_u)² · scale seeds,
+    # where scale normalises the total count to n_u · n_v ≈ n_target.
+    t_row = np.arange(n_u, dtype=float) / n_u          # 0 at source → 1 at far
+    count_w_raw = (1.0 - t_row) ** 2                   # quadratic falloff
+    count_w = count_w_raw * n_u / count_w_raw.sum()    # mean weight = 1
 
-    jitter_u = rng.uniform(0.0, 1.0, (n_u, n_v))
-    jitter_v = rng.uniform(0.0, 1.0, (n_u, n_v))
+    all_us: list[np.ndarray] = []
+    all_vs: list[np.ndarray] = []
 
-    us = u_lo + (t_lo[:, np.newaxis] + jitter_u * (t_hi[:, np.newaxis] - t_lo[:, np.newaxis])) * u_span
-    vs = v_lo + (i_v[np.newaxis, :] + jitter_v) * (v_span / n_v)
+    for i in range(n_u):
+        n_v_i = max(1, int(round(float(n_v * count_w[i]))))
+        t_lo_i = float((i / n_u) ** 2)
+        t_hi_i = float(((i + 1.0) / n_u) ** 2)
+
+        j_u = rng.uniform(0.0, 1.0, n_v_i)
+        j_v = rng.uniform(0.0, 1.0, n_v_i)
+
+        all_us.append(u_lo + (t_lo_i + j_u * (t_hi_i - t_lo_i)) * u_span)
+        all_vs.append(v_lo + (np.arange(n_v_i) + j_v) * (v_span / n_v_i))
+
+    us = np.concatenate(all_us)
+    vs = np.concatenate(all_vs)
 
     # Back to world (x, y).
     xs = us * dx + vs * px
     ys = us * dy + vs * py
 
-    xs_flat = xs.ravel()
-    ys_flat = ys.ravel()
+    xs_flat = xs
+    ys_flat = ys
 
     ixs = np.clip((xs_flat / cell_w).astype(int), 0, surface.grid_w - 1)
     iys = np.clip((ys_flat / cell_w).astype(int), 0, surface.grid_h - 1)
