@@ -18,7 +18,7 @@ from typing import List
 import numpy as np
 import trimesh
 
-from .config import SceneConfig, SurfaceConfig, SolverConfig
+from .config import SceneConfig, SurfaceConfig
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -86,10 +86,6 @@ class TileScene:
     @property
     def surface(self) -> SurfaceConfig:
         return self.config.surface
-
-    @property
-    def solver(self) -> SolverConfig:
-        return self.config.solver
 
     # ── Slope-normal helpers (future) ─────────────────────────────────────────
     #

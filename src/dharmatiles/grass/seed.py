@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import numpy as np
+
 
 @dataclass(frozen=True)
 class GrassSeed:
@@ -21,6 +23,8 @@ class GrassSeed:
     blade_rise_cap: float
     blade_clearance: float
     species_id: str
+
+    # ── Scalar API ───────────────────────────────────────────────────────────
 
     def point_taper(self, point_idx: int, blade_n_steps: int | None = None) -> float:
         """Width/thickness multiplier for a spine point.
@@ -67,6 +71,40 @@ class GrassSeed:
 
         t = dist_from_base / taper_len
         return base_fraction + (1.0 - base_fraction) * math.sin(t * math.pi / 2.0)
+
+    # ── Vectorised API ───────────────────────────────────────────────────────
+    #
+    # Equivalent to calling distance_taper() over every element of *path_dists*
+    # but uses NumPy operations rather than a Python loop over math.*  functions.
+    # Drop-in replacement for the list-comprehension pattern:
+    #   [seed.distance_taper(d, total_len) for d in path_dists]
+
+    def distance_taper_vec(self, path_dists: np.ndarray,
+                           total_len: float) -> np.ndarray:
+        """Vectorised width/thickness multiplier over an array of distances."""
+        total_len = max(0.0, float(total_len))
+        lens = np.clip(np.asarray(path_dists, dtype=float), 0.0, total_len)
+        return np.minimum(self._tip_taper_vec(lens, total_len),
+                          self._base_taper_vec(lens))
+
+    def _tip_taper_vec(self, lens: np.ndarray, total_len: float) -> np.ndarray:
+        taper_len = max(0.0, float(self.blade_taper))
+        if taper_len <= 0.0:
+            return np.ones(len(lens))
+        dist_from_tip = np.maximum(0.0, total_len - lens)
+        t = np.clip(dist_from_tip / taper_len, 0.0, 1.0)
+        return np.where(dist_from_tip >= taper_len, 1.0, np.sin(t * (np.pi / 2.0)))
+
+    def _base_taper_vec(self, lens: np.ndarray) -> np.ndarray:
+        base_fraction = max(0.0, float(self.blade_base_width))
+        if base_fraction >= 1.0:
+            return np.ones(len(lens))
+        taper_len = max(0.0, float(self.blade_base_taper))
+        if taper_len <= 0.0:
+            return np.ones(len(lens))
+        t = np.clip(lens / taper_len, 0.0, 1.0)
+        return np.where(lens >= taper_len, 1.0,
+                        base_fraction + (1.0 - base_fraction) * np.sin(t * (np.pi / 2.0)))
 
 
 @dataclass

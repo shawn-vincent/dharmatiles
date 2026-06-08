@@ -108,20 +108,6 @@ class FlowConfig:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Solver / Z-envelope
-# ─────────────────────────────────────────────────────────────────────────────
-
-@dataclass
-class SolverConfig:
-    """Parameters for the Z-path solver."""
-    max_stack_height:       float = 2.0    # mm — max occ_z above terrain_z a blade
-                                           # may seed or grow into.  Must be ≥ the
-                                           # tallest stone in any grass region so
-                                           # blades can clear rocks; keep small to
-                                           # prevent mid-air blade pileups.
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Soil
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -264,9 +250,12 @@ class SceneConfig:
     Layers receive only the sub-config they need; none reads across
     layer boundaries.
     """
-    surface:       SurfaceConfig       = field(default_factory=SurfaceConfig)
-    flow:          FlowConfig          = field(default_factory=FlowConfig)
-    solver:        SolverConfig        = field(default_factory=SolverConfig)
-    soil:          SoilConfig          = field(default_factory=SoilConfig)
-    stones:        StonesConfig        = field(default_factory=StonesConfig)
-    base:          BaseConfig          = field(default_factory=BaseConfig)
+    surface:          SurfaceConfig = field(default_factory=SurfaceConfig)
+    flow:             FlowConfig    = field(default_factory=FlowConfig)
+    soil:             SoilConfig    = field(default_factory=SoilConfig)
+    stones:           StonesConfig  = field(default_factory=StonesConfig)
+    base:             BaseConfig    = field(default_factory=BaseConfig)
+    max_stack_height: float         = 2.0
+    # mm — max occ_z above terrain_z a blade may seed or grow into.
+    # Must be ≥ the tallest stone in any grass region so blades can clear
+    # rocks; keep small to prevent mid-air blade pileups.

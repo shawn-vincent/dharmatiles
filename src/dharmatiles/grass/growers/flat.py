@@ -104,7 +104,7 @@ class FlatGrassGrower:
         n = len(spine)
         path_dists = _spine_distances(spine)
         total_len = float(path_dists[-1])
-        point_tapers = np.array([seed.distance_taper(d, total_len) for d in path_dists], dtype=float)
+        point_tapers = seed.distance_taper_vec(path_dists, total_len)
 
         # ── Width taper (physical distance from the actual final tip) ─────────
         widths = seed.blade_width * point_tapers
@@ -250,66 +250,97 @@ def _build_blade_mesh(
 ) -> trimesh.Trimesh | None:
     """Build a tube mesh along the spine with the given cross-section.
 
-    Every ring always contributes nvr vertices.  Rings whose width tapers to
-    ~zero have all vertices collapsed to the spine point by _make_ring_verts;
-    the resulting degenerate faces are filtered by the area threshold below.
-    Both ends can be closed with flat end-cap faces.
+    Ring construction and face connectivity are fully vectorised.  The only
+    remaining Python loop handles the (typically one) collapsed tip ring
+    (width < 1e-6) whose keel direction is tangent-dependent and can't be
+    batched without a separate kernel.
+
+    Both ends can be closed with flat end-cap fans.
     """
     n_rings = len(spine)
     nvr = n_top_facets + 2  # verts per ring: keel + (n_top_facets+1) top-profile verts
 
-    # Normalised tangents
+    # ── Normalised tangents ─────────────────────────────────────────────────
     tangents = np.empty_like(spine)
     tangents[:-1] = spine[1:] - spine[:-1]
-    tangents[-1] = spine[-1] - spine[-2]
-    norms = np.linalg.norm(tangents, axis=1, keepdims=True)
-    norms = np.where(norms < 1e-9, 1.0, norms)
-    tangents /= norms
+    tangents[-1]  = spine[-1] - spine[-2]
+    t_norms = np.linalg.norm(tangents, axis=1, keepdims=True)
+    tangents /= np.where(t_norms < 1e-9, 1.0, t_norms)
 
-    # Every ring contributes exactly nvr vertices.  Rings whose width tapers to
-    # ~zero have all their vertices collapsed to the spine point by _make_ring_verts;
-    # the resulting degenerate faces are filtered by area_faces > 1e-12 below.
-    verts_list: list[np.ndarray] = []
-    for i in range(n_rings):
-        ring = _make_ring_verts(
-            spine[i], tangents[i],
-            widths[i], thicknesses[i], keel_depths[i],
-            n_top_facets,
-        )
-        verts_list.append(ring)
+    # ── Batch ring construction ─────────────────────────────────────────────
+    # Perpendicular to tangent in XY: (-ty, tx, 0), normalised.
+    perp = np.stack([-tangents[:, 1], tangents[:, 0],
+                     np.zeros(n_rings, dtype=float)], axis=1)   # (n_rings, 3)
+    pn = np.linalg.norm(perp, axis=1, keepdims=True)
+    perp = np.where(pn > 1e-9, perp / np.maximum(pn, 1e-9),
+                    np.array([[1.0, 0.0, 0.0]]))
 
-    all_verts = np.vstack(verts_list)
+    # Top-profile x-fractions (constant across rings)
+    x_fracs  = np.arange(n_top_facets + 1) / max(n_top_facets, 1)  # (n_top_facets+1,)
+    sin_vals = np.sin(np.pi * x_fracs)                              # (n_top_facets+1,)
+
+    # Keel vertices: spine_z − keel_depth
+    keel_verts = spine.copy()
+    keel_verts[:, 2] -= keel_depths                                 # (n_rings, 3)
+
+    # Top profile: (n_rings, n_top_facets+1, 3)
+    lats     = (-widths[:, None] / 2.0 +
+                 widths[:, None] * x_fracs[None, :])                # (n_rings, n_top_facets+1)
+    heights  = thicknesses[:, None] * sin_vals[None, :]             # (n_rings, n_top_facets+1)
+    up       = np.array([0.0, 0.0, 1.0])
+    top_verts = (spine[:, None, :] +
+                 perp[:, None, :] * lats[:, :, None] +
+                 up * heights[:, :, None])                          # (n_rings, n_top_facets+1, 3)
+
+    # Combined ring buffer: (n_rings, nvr, 3)
+    all_rings = np.concatenate([keel_verts[:, None, :], top_verts], axis=1)
+
+    # Overwrite collapsed rings (width < 1e-6): all verts → spine; keel → tangent-derived
+    for ci in np.where(widths < 1e-6)[0]:
+        all_rings[ci] = spine[ci]
+        if keel_depths[ci] > 1e-9:
+            kd = _compute_keel_direction(tangents[ci])
+            all_rings[ci, 0] = spine[ci] + kd * keel_depths[ci]
+
+    all_verts = all_rings.reshape(-1, 3)                            # (n_rings * nvr, 3)
     np.clip(all_verts[:, 0], 0.0, surface.tile_w, out=all_verts[:, 0])
     np.clip(all_verts[:, 1], 0.0, surface.tile_h, out=all_verts[:, 1])
 
-    faces: list[list[int]] = []
-    for i in range(n_rings - 1):
-        a = i * nvr
-        b = (i + 1) * nvr
-        for j in range(nvr):
-            j1 = (j + 1) % nvr
-            faces.append([a + j,  b + j,  b + j1])
-            faces.append([a + j,  b + j1, a + j1])
+    # ── Vectorised face construction ────────────────────────────────────────
+    face_parts: list[np.ndarray] = []
 
-    # Bottom end-cap: fan from keel vertex (ring 0, vertex 0) across the base.
+    if n_rings > 1:
+        ri  = np.arange(n_rings - 1, dtype=np.int32)   # (n_rings-1,)
+        vi  = np.arange(nvr, dtype=np.int32)            # (nvr,)
+        vi1 = (vi + 1) % nvr
+
+        a  = ri[:, None] * nvr + vi[None, :]            # (n_rings-1, nvr)
+        a1 = ri[:, None] * nvr + vi1[None, :]
+        b  = (ri[:, None] + 1) * nvr + vi[None, :]
+        b1 = (ri[:, None] + 1) * nvr + vi1[None, :]
+
+        face_parts.append(np.stack([a.ravel(),  b.ravel(),  b1.ravel()], axis=1))
+        face_parts.append(np.stack([a.ravel(),  b1.ravel(), a1.ravel()], axis=1))
+
+    # Bottom end-cap: fan from keel vertex (ring 0, vert 0) across the base.
     if close_bottom:
-        a = 0
-        for j in range(1, nvr - 1):
-            faces.append([a, a + j, a + j + 1])
+        jb = np.arange(1, nvr - 1, dtype=np.int32)
+        face_parts.append(np.column_stack(
+            [np.zeros(nvr - 2, dtype=np.int32), jb, jb + 1]))
 
-    # Top end-cap: fan from keel vertex (last ring, vertex 0) across the tip.
+    # Top end-cap: fan from keel vertex (last ring, vert 0) across the tip.
     if close_top:
-        a = (n_rings - 1) * nvr
-        for j in range(1, nvr - 1):
-            faces.append([a, a + j + 1, a + j])
+        a_t = np.int32((n_rings - 1) * nvr)
+        jt  = np.arange(1, nvr - 1, dtype=np.int32)
+        face_parts.append(np.column_stack(
+            [np.full(nvr - 2, a_t, dtype=np.int32), a_t + jt + 1, a_t + jt]))
 
-    if not faces:
+    if not face_parts:
         return None
 
-    mesh = trimesh.Trimesh(vertices=all_verts, faces=np.asarray(faces), process=False)
-    # Merge coincident vertices before filtering so that any zero-width ring
-    # (whose nvr vertex copies all sit at the same point) collapses to a single
-    # shared vertex, making convergence faces properly manifold.
+    faces_arr = np.vstack(face_parts).astype(np.int32)
+    mesh = trimesh.Trimesh(vertices=all_verts, faces=faces_arr, process=False)
+    # Merge coincident vertices (collapsed tip rings produce duplicate verts).
     mesh.merge_vertices()
     mesh.update_faces(mesh.area_faces > 1e-12)
     mesh.remove_unreferenced_vertices()

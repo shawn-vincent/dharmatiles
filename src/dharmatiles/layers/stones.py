@@ -39,7 +39,10 @@ class StonesLayer:
 
     def build(self, scene: TileScene, *,
               placement_mask=_UNSET,
-              layer_idx: int = 0) -> List[trimesh.Trimesh]:
+              layer_idx: int = 0,
+              terrain_gz_x: np.ndarray | None = None,
+              terrain_gz_y: np.ndarray | None = None,
+              ) -> List[trimesh.Trimesh]:
         """Add stone geometry to *scene.terrain_support_z* and return mesh list.
 
         Parameters
@@ -50,6 +53,11 @@ class StonesLayer:
         layer_idx
             Index among multiple stone-layer passes for the same tile.
             Offsets the RNG seed so each pass produces independent placement.
+        terrain_gz_x, terrain_gz_y
+            Pre-computed ``dz/dx`` and ``dz/dy`` gradient grids (both divided
+            by ``cell_w``).  When supplied, ``_build_stones_mesh`` skips its own
+            ``np.gradient`` call; avoids recomputing the same gradient for each
+            stone-layer pass on the same tile.
         """
         if placement_mask is _UNSET:
             placement_mask = scene.stone_placement_mask
@@ -60,7 +68,9 @@ class StonesLayer:
                                   scene.terrain_z, scene.terrain_support_z,
                                   scene.stone_mask,
                                   placement_mask,
-                                  rng)
+                                  rng,
+                                  terrain_gz_x=terrain_gz_x,
+                                  terrain_gz_y=terrain_gz_y)
         return [mesh]
 
 
@@ -71,7 +81,11 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
                        terrain_z: np.ndarray, support_z: np.ndarray,
                        stone_mask: np.ndarray | None,
                        placement_mask: np.ndarray | None,
-                       rng: np.random.Generator) -> trimesh.Trimesh:
+                       rng: np.random.Generator,
+                       *,
+                       terrain_gz_x: np.ndarray | None = None,
+                       terrain_gz_y: np.ndarray | None = None,
+                       ) -> trimesh.Trimesh:
     """Place *n_stones* stones; return a single merged Trimesh."""
     N  = n_stones
     AZ = stones.az_segs
@@ -118,11 +132,12 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
     # world +Z → terrain normal n:
     #   v = cross([0,0,1], n) = (-n_y, n_x, 0)
     #   R = I + K + K²·(1−nz)/(nx²+ny²)   (K = skew-symmetric of v)
-    _cw       = surface.cell_w
-    _dzdx_g   = np.gradient(terrain_z, axis=1) / _cw   # dz/dx  (rows, cols)
-    _dzdy_g   = np.gradient(terrain_z, axis=0) / _cw   # dz/dy
-    _dzdx     = sample_grid(_dzdx_g, surface, cx, cy)   # (N,)
-    _dzdy     = sample_grid(_dzdy_g, surface, cx, cy)
+    _cw = surface.cell_w
+    if terrain_gz_x is None:
+        terrain_gz_x = np.gradient(terrain_z, axis=1) / _cw   # dz/dx  (rows, cols)
+        terrain_gz_y = np.gradient(terrain_z, axis=0) / _cw   # dz/dy
+    _dzdx = sample_grid(terrain_gz_x, surface, cx, cy)         # (N,)
+    _dzdy = sample_grid(terrain_gz_y, surface, cx, cy)
     _nlen     = np.sqrt(_dzdx**2 + _dzdy**2 + 1.0)
     _nx       = -_dzdx / _nlen                           # terrain normal x  (N,)
     _ny       = -_dzdy / _nlen                           # terrain normal y

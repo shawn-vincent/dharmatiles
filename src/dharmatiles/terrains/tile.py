@@ -25,7 +25,7 @@ import numpy as np
 import trimesh
 from scipy.ndimage import binary_dilation, binary_erosion, distance_transform_edt
 
-from ..core.config import (SceneConfig, SurfaceConfig, FlowConfig, SolverConfig,
+from ..core.config import (SceneConfig, SurfaceConfig, FlowConfig,
                            SoilConfig, StonesConfig, BaseConfig)
 from ..core.tile import TileScene
 from ..core.mesh import make_heightmap_solid
@@ -87,15 +87,25 @@ def _build_mesh(cfg: SceneConfig,
     scene.terrain_support_z[:] = scene.terrain_z
 
     # ── Stones (one independent pass per stone-layer zone) ────────────────────
+    # Pre-compute terrain gradient once (post-soil) so all stone passes share it.
+    # Each pass uses sample_grid on this pre-computed gradient rather than calling
+    # np.gradient again on the same array.
     n_squares = cfg.surface.cols * cfg.surface.rows
+    _stone_gz_x: np.ndarray | None = None
+    _stone_gz_y: np.ndarray | None = None
     for layer_idx, (stone_cfg, stone_pmask) in enumerate(stone_layers):
         n_stones = stone_cfg.stones_per_square * n_squares
         if n_stones > 0:
             if verbose:
                 print(f"Building stones  ({n_stones} stones = "
                       f"{stone_cfg.stones_per_square}/sq × {n_squares} sq)...")
+            if _stone_gz_x is None:
+                _cw = cfg.surface.cell_w
+                _stone_gz_x = np.gradient(scene.terrain_z, axis=1) / _cw
+                _stone_gz_y = np.gradient(scene.terrain_z, axis=0) / _cw
             stone_parts = StonesLayer(cfg.surface, stone_cfg).build(
-                scene, placement_mask=stone_pmask, layer_idx=layer_idx)
+                scene, placement_mask=stone_pmask, layer_idx=layer_idx,
+                terrain_gz_x=_stone_gz_x, terrain_gz_y=_stone_gz_y)
             parts.extend(stone_parts)
 
     # ── Grass (one pass per seed-packet config) ───────────────────────────────
@@ -113,7 +123,7 @@ def _build_mesh(cfg: SceneConfig,
             scene.grass_mask = global_grass_mask
         packet_cfg = RuntimeGrassConfig(
             species=[g_cfg],
-            max_stack_height=cfg.solver.max_stack_height,
+            max_stack_height=cfg.max_stack_height,
             seed=cfg.surface.seed ^ 0x47524F57,
         )
         grown = FloppyGrassLayer(packet_cfg)
@@ -553,12 +563,12 @@ def _collect_water_info(spec: TileSpec,
 def _scene_config_from_spec(spec: TileSpec) -> SceneConfig:
     """Build a SceneConfig from a TileSpec using defaults for unspecified layers."""
     return SceneConfig(
-        surface = spec.surface,
-        flow    = FlowConfig(),
-        solver  = SolverConfig(),
-        soil    = SoilConfig(),
-        stones  = StonesConfig(),
-        base    = BaseConfig(),
+        surface          = spec.surface,
+        flow             = FlowConfig(),
+        soil             = SoilConfig(),
+        stones           = StonesConfig(),
+        base             = BaseConfig(),
+        max_stack_height = 2.0,
     )
 
 

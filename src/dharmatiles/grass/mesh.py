@@ -39,9 +39,7 @@ def build_meshes(paths: list[GrassPath], cfg: GrassConfig, scene, surface) -> li
         pts_arr = np.asarray(lifted_points, dtype=float)
         path_dists = _spine_distances(pts_arr)
         total_len = float(path_dists[-1])
-        point_tapers = np.array(
-            [path.seed.distance_taper(d, total_len) for d in path_dists], dtype=float
-        )
+        point_tapers = path.seed.distance_taper_vec(path_dists, total_len)
         pt_thicknesses = species.blade_thickness * point_tapers
         pt_widths = path.seed.blade_width * point_tapers
 
