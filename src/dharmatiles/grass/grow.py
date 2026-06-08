@@ -80,27 +80,29 @@ def plant_seeds(
                 rng,
             )
 
-            for x, y in _jitter_grid_xy(group, n_seeds, group_dir, surface, rng):
-                ix, iy = _cell_index(surface, x, y)
-                if scene.grass_mask is not None and not scene.grass_mask[iy, ix]:
-                    continue
-                if scene.stone_mask is not None and scene.stone_mask[iy, ix]:
-                    continue
+            interior_pts, edge_pts = _jitter_grid_xy(group, n_seeds, group_dir, surface, rng)
+            for length_scale, candidates in ((1.0, interior_pts), (0.5, edge_pts)):
+                for x, y in candidates:
+                    ix, iy = _cell_index(surface, x, y)
+                    if scene.grass_mask is not None and not scene.grass_mask[iy, ix]:
+                        continue
+                    if scene.stone_mask is not None and scene.stone_mask[iy, ix]:
+                        continue
 
-                terrain_z = float(scene.terrain_z[iy, ix])
-                terrain_support_z = float(scene.terrain_support_z[iy, ix])
-                if _vegetation_depth(scene.vegetation_support_z, terrain_support_z, ix, iy) > 0.0:
-                    continue
+                    terrain_z = float(scene.terrain_z[iy, ix])
+                    terrain_support_z = float(scene.terrain_support_z[iy, ix])
+                    if _vegetation_depth(scene.vegetation_support_z, terrain_support_z, ix, iy) > 0.0:
+                        continue
 
-                floor_z = max(terrain_support_z, float(occ_z[iy, ix]))
-                if floor_z - terrain_z > cfg.max_stack_height:
-                    continue
+                    floor_z = max(terrain_support_z, float(occ_z[iy, ix]))
+                    if floor_z - terrain_z > cfg.max_stack_height:
+                        continue
 
-                seed = _make_seed(x, y, group_dir, species, rng)
-                z0 = max(terrain_z, floor_z) + seed.blade_clearance - (
-                    species.blade_thickness + seed.blade_clearance
-                )
-                paths.append(GrowingPath(seed=seed, points=[(x, y, z0)]))
+                    seed = _make_seed(x, y, group_dir, species, rng, length_scale=length_scale)
+                    z0 = max(terrain_z, floor_z) + seed.blade_clearance - (
+                        species.blade_thickness + seed.blade_clearance
+                    )
+                    paths.append(GrowingPath(seed=seed, points=[(x, y, z0)]))
 
     return paths
 
@@ -248,26 +250,25 @@ def _jitter_grid_xy(
     group_dir: float,
     surface,
     rng: np.random.Generator,
-) -> list[tuple[float, float]]:
-    """Return jitter-grid (x, y) candidates whose cell belongs to this group.
+) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
+    """Return ``(interior, edge)`` jitter-grid candidates for this group.
 
-    Spacing is chosen so the number of in-group grid points ≈ n_target.
+    *interior* — regular jitter grid; spacing chosen so count ≈ n_target.
+    *edge*     — random scatter along the upstream source face (the side
+                 blades grow away from); caller may treat these differently
+                 (e.g. half blade length).
+
     Each grid cell gets an independent uniform random jitter so coverage is
     thorough yet avoids the regular pattern of a strict lattice.
-
-    An extra row of seeds is appended along the upstream edge (the group face
-    closest to the tile boundary in ``group_dir``) so that there is no bald
-    strip at the leading edge caused by the first grid row being offset by up
-    to one full ``spacing`` from the boundary.
     """
     if n_target <= 0:
-        return []
+        return [], []
 
     group_rows = group["rows"]
     group_cols = group["cols"]
     n_cells = len(group_rows)
     if n_cells == 0:
-        return []
+        return [], []
 
     cell_w = surface.cell_w
 
@@ -312,7 +313,7 @@ def _jitter_grid_xy(
     # first jitter-grid row, which can be up to one full spacing wide.
     edge = _upstream_edge_row(group_rows, group_cols, group_dir, cell_w, spacing, rng)
 
-    return interior + edge
+    return interior, edge
 
 
 def _upstream_edge_row(
@@ -388,9 +389,10 @@ def _make_seed(
     group_dir: float,
     species: SpeciesConfig,
     rng: np.random.Generator,
+    length_scale: float = 1.0,
 ) -> GrassSeed:
     blade_width = float(rng.uniform(species.blade_width_min, species.blade_width_max))
-    target_length = float(rng.uniform(species.blade_length_min, species.blade_length_max))
+    target_length = float(rng.uniform(species.blade_length_min, species.blade_length_max)) * length_scale
     blade_n_steps = max(1, int(round(target_length / species.blade_segment_length)))
     curl = _sample_seed_curl(species, rng)
     # Store curl as radians per step, not total blade curl.
