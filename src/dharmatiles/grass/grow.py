@@ -140,12 +140,12 @@ def _scaled_group_seed_count(
 ) -> int:
     """Compute blade count for a Voronoi group from a gap-between-blades distance.
 
-    Centre-to-centre spacing = 2 × blade_width_max + gap_mm.
+    Centre-to-centre spacing = blade_width_max + gap_mm.
     density = 1 / spacing²  (blades per mm²).
     gap_mm = 0 → blades packed edge-to-edge; gap_mm = 2 (default) → one full
     blade-width of clear space between neighbours on average.
     """
-    spacing = max(2.0 * float(blade_width_max) + max(0.0, float(gap_mm)), 1e-3)
+    spacing = max(float(blade_width_max) + max(0.0, float(gap_mm)), 1e-3)
     density = 1.0 / (spacing * spacing)
     group_area_mm2 = len(group["rows"]) * cell_w * cell_w
     scaled_count = density * group_area_mm2

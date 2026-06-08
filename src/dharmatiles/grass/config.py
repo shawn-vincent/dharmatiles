@@ -47,8 +47,8 @@ class SpeciesConfig:
 
     # Placement.
     groups_per_square: int = 3
-    gap_mm: float = 2.0   # average clear gap between adjacent blade edges (mm).
-                          # centre-to-centre spacing = 2 × blade_width_max + gap_mm.
+    gap_mm: float = 1.0   # average clear gap between adjacent blade edges (mm).
+                          # centre-to-centre spacing = blade_width_max + gap_mm.
                           # gap_mm = 0 → blades packed edge-to-edge; higher values
                           # add space between blades.
     group_dir_jitter: float = 0
