@@ -74,8 +74,8 @@ def plant_seeds(
             group_dir = float(rng.uniform(0.0, 2.0 * np.pi))
             n_seeds = _scaled_group_seed_count(
                 group,
-                species.group_density_min,
-                species.group_density_max,
+                species.gap_mm,
+                species.blade_width_max,
                 surface.cell_w,
                 rng,
             )
@@ -133,15 +133,20 @@ def _scaled_voronoi_group_count(
 
 def _scaled_group_seed_count(
     group: dict[str, np.ndarray],
-    group_density_min: float,
-    group_density_max: float,
+    gap_mm: float,
+    blade_width_max: float,
     cell_w: float,
     rng: np.random.Generator,
 ) -> int:
-    """Sample blade count for a Voronoi group from a blades/mm² density."""
-    density_min = max(0.0, float(group_density_min))
-    density_max = max(density_min, float(group_density_max))
-    density = float(rng.uniform(density_min, density_max))
+    """Compute blade count for a Voronoi group from a gap-between-blades distance.
+
+    Centre-to-centre spacing = 2 × blade_width_max + gap_mm.
+    density = 1 / spacing²  (blades per mm²).
+    gap_mm = 0 → blades packed edge-to-edge; gap_mm = 2 (default) → one full
+    blade-width of clear space between neighbours on average.
+    """
+    spacing = max(2.0 * float(blade_width_max) + max(0.0, float(gap_mm)), 1e-3)
+    density = 1.0 / (spacing * spacing)
     group_area_mm2 = len(group["rows"]) * cell_w * cell_w
     scaled_count = density * group_area_mm2
     base_count = int(np.floor(scaled_count))

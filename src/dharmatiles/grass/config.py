@@ -47,8 +47,10 @@ class SpeciesConfig:
 
     # Placement.
     groups_per_square: int = 3
-    group_density_min: float = 1.0   # blades / mm²  (lower bound of per-group uniform draw)
-    group_density_max: float = 1.0   # blades / mm²  (upper bound)
+    gap_mm: float = 2.0   # average clear gap between adjacent blade edges (mm).
+                          # centre-to-centre spacing = 2 × blade_width_max + gap_mm.
+                          # gap_mm = 0 → blades packed edge-to-edge; higher values
+                          # add space between blades.
     group_dir_jitter: float = 0
 
     # Growth behavior.
