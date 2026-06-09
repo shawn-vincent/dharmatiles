@@ -20,10 +20,12 @@ class HexOrganizerSpec:
     retaining_f2f: float = 29.0   # retaining-depression flat-to-flat
     wall: float = 1.0             # wall thickness
     height: float = 60.0          # cup height
-    floor: float = 11.0           # bore floor height above bottom (magnet centre z=6, top edge z=11) (was 5.0)
-    base: float = 5.0             # solid base below depression (was 2.0)
+    floor: float = 12.0           # bore floor / inner ledge height (magnet top edge z=11, ledge 1mm above)
+    base: float = 1.0             # solid base below retaining recess
     magnet_dia: float = 10.0      # magnet disc diameter
     magnet_depth: float = 3.0     # magnet disc thickness / bore depth
+    bottom_roundover: float = 1.0    # convex roundover radius on bottom perimeter edge
+    vertical_roundover: float = 8.0  # convex outside vertical edge roundover radius
     cols: int = 3
     rows: int = 4
 
@@ -50,17 +52,44 @@ def hex_prism(f2f: float, height: float) -> m3d.Manifold:
     return m3d.Manifold.extrude(cs, height=height)
 
 
+def _rounded_hex_cs(f2f: float, r: float) -> m3d.CrossSection:
+    """Hex cross-section with corners rounded inward by radius r.
+
+    Double-offset: contract with Miter (sharpens corners), expand with Round
+    (turns the sharp tips into arcs).  Corner apexes end up at
+    approximately (f2f/√3 - delta) from centre, keeping wall thickness
+    consistent with the outer vertical roundover.
+    """
+    cs = m3d.CrossSection([hex_polygon(f2f)])
+    cs = cs.offset(-r, m3d.JoinType.Miter, miter_limit=10.0)
+    return cs.offset(r, m3d.JoinType.Round, circular_segments=32)
+
+
 def single_cup(spec: HexOrganizerSpec) -> m3d.Manifold:
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
+    R_outer = outer_f2f / np.sqrt(3)
 
     outer = hex_prism(outer_f2f, spec.height)
 
+    # Inner bore and retaining depression corner roundover radius:
+    # bore_r = outer_roundover - (R_outer - R_inner)  keeps wall ~= spec.wall at corners.
+    bore_r = max(0.0, spec.vertical_roundover - (R_outer - spec.bore_f2f / np.sqrt(3)))
+    ret_r  = max(0.0, spec.vertical_roundover - (R_outer - spec.retaining_f2f / np.sqrt(3)))
+
     # Main bore: from z=floor to z=height (open top)
-    bore = hex_prism(spec.bore_f2f, spec.height - spec.floor)
+    if bore_r > 0.0:
+        bore = m3d.Manifold.extrude(_rounded_hex_cs(spec.bore_f2f, bore_r),
+                                    spec.height - spec.floor)
+    else:
+        bore = hex_prism(spec.bore_f2f, spec.height - spec.floor)
     bore = bore.translate((0.0, 0.0, spec.floor))
 
     # Retaining depression: from z=base to z=floor
-    depression = hex_prism(spec.retaining_f2f, spec.floor - spec.base)
+    if ret_r > 0.0:
+        depression = m3d.Manifold.extrude(_rounded_hex_cs(spec.retaining_f2f, ret_r),
+                                          spec.floor - spec.base)
+    else:
+        depression = hex_prism(spec.retaining_f2f, spec.floor - spec.base)
     depression = depression.translate((0.0, 0.0, spec.base))
 
     return outer - bore - depression
@@ -174,6 +203,55 @@ def _subtract_magnets(body: m3d.Manifold, spec: HexOrganizerSpec) -> m3d.Manifol
 # ---------------------------------------------------------------------------
 # Main build function
 # ---------------------------------------------------------------------------
+# Vertical convex edge roundover
+# ---------------------------------------------------------------------------
+
+def _vertical_roundover(body: m3d.Manifold, spec: HexOrganizerSpec, r: float) -> m3d.Manifold:
+    """Round all convex outside vertical edges with radius r; leave concave corners square.
+
+    Uses the double-offset technique: contract inward with Miter (sharpens convex
+    corners, leaves concave corners alone), then expand outward with Round (turns
+    the sharp convex points into arcs). The extruded result is intersected with
+    the body to cut the corners without touching any interior feature.
+    """
+    # Slice below magnet pockets for a clean outer cross-section (no bore cutouts)
+    slice_z = max(0.1, MAGNET_Z - spec.magnet_dia / 2.0 - 0.5)
+    cs = body.slice(slice_z)
+    cs_in = cs.offset(-r, m3d.JoinType.Miter, miter_limit=10.0)
+    cs_round = cs_in.offset(r, m3d.JoinType.Round, circular_segments=32)
+    h = body.bounding_box()[5]
+    return body ^ m3d.Manifold.extrude(cs_round, h)
+
+
+# ---------------------------------------------------------------------------
+# Bottom perimeter roundover
+# ---------------------------------------------------------------------------
+
+def _bottom_roundover(body: m3d.Manifold, spec: HexOrganizerSpec, steps: int = 10) -> m3d.Manifold:
+    """Convex roundover on the bottom perimeter edge, radius spec.bottom_roundover.
+
+    Slices at a z safely below any features (retaining recess, magnet pockets)
+    to get a clean outer cross-section for the template.
+    """
+    r = spec.bottom_roundover
+    # Stay below the retaining recess (starts at z=base) and magnet pockets
+    # (start at z = MAGNET_Z - magnet_dia/2); take 90% of whichever is lower.
+    safe_z = min(spec.base, MAGNET_Z - spec.magnet_dia / 2.0) * 0.9
+    safe_z = max(0.01, safe_z)
+    cs = body.slice(safe_z)
+    h = body.bounding_box()[5]  # bounding_box() → (xmin,ymin,zmin, xmax,ymax,zmax)
+    template = m3d.Manifold.extrude(cs, h - r).translate([0.0, 0.0, r])
+    for i in range(steps):
+        z0 = r * i / steps
+        z1 = r * (i + 1) / steps
+        z_mid = (z0 + z1) * 0.5
+        inset = r - np.sqrt(r * r - (r - z_mid) ** 2)
+        cs_z = cs.offset(-inset, m3d.JoinType.Round, circular_segments=16)
+        template += m3d.Manifold.extrude(cs_z, z1 - z0).translate([0.0, 0.0, z0])
+    return body ^ template
+
+
+# ---------------------------------------------------------------------------
 
 def build_organizer(spec: HexOrganizerSpec) -> m3d.Manifold:
     col_pitch = spec.bore_f2f + spec.wall
@@ -190,7 +268,12 @@ def build_organizer(spec: HexOrganizerSpec) -> m3d.Manifold:
     for c in cups[1:]:
         result = result + c
 
-    return _subtract_magnets(result, spec)
+    result = _subtract_magnets(result, spec)
+    if spec.vertical_roundover > 0.0:
+        result = _vertical_roundover(result, spec, spec.vertical_roundover)
+    if spec.bottom_roundover > 0.0:
+        result = _bottom_roundover(result, spec)
+    return result
 
 
 # ---------------------------------------------------------------------------
