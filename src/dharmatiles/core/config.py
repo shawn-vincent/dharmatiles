@@ -198,7 +198,7 @@ class GrassUnderlayConfig:
     and its companion ``grass`` layer.
     """
     # ── Noise base ────────────────────────────────────────────────────────────
-    noise_amp:      float = 0.50   # mm — peak amplitude of background noise
+    noise_amp:      float = 1.00   # mm — peak amplitude of background noise
     noise_scale_mm: float = 2.0    # mm — Gaussian σ (feature correlation length)
 
     # ── Blade stamp geometry (mirrors SpeciesConfig) ──────────────────────────
