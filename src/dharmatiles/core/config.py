@@ -198,7 +198,7 @@ class GrassUnderlayConfig:
     and its companion ``grass`` layer.
     """
     # ── Noise base ────────────────────────────────────────────────────────────
-    noise_amp:      float = 0.50   # mm — peak amplitude of background noise
+    noise_amp:      float = 1.00   # mm — peak amplitude of background noise
     noise_scale_mm: float = 2.0    # mm — Gaussian σ (feature correlation length)
 
     # ── Blade stamp geometry (mirrors SpeciesConfig) ──────────────────────────
@@ -226,7 +226,7 @@ class GrassUnderlayConfig:
     # original surface rather than building a visible raised plateau.
     # Does not affect texture amplitude — peaks and valleys stay the same
     # distance apart; the whole envelope just shifts.
-    height_offset_mm: float = -0.80
+    height_offset_mm: float = -0.30
 
     # ── Edge fade ─────────────────────────────────────────────────────────────
     # Cosine ramp from 0 (at placement-mask boundary) to 1 (edge_fade_mm inside).
