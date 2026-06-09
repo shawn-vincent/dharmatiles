@@ -19,7 +19,7 @@ generate-tile-stl
 generate-tile-stl --seed 42
 generate-tile-stl --cols 3 --rows 3
 generate-tile-stl --spec "src/tiles/soil+grass.tile"
-generate-tile-stl --spec "src/tiles/water+grass.tile" -o stl/custom.stl
+generate-tile-stl --spec "src/tiles/water+grass.tile"
 generate-tile-stl --quiet   # suppress progress output
 
 # Run a single script directly (no install needed)
@@ -30,15 +30,19 @@ There are no automated tests; correctness is verified by opening the STL in Prus
 
 ## STL Regeneration Policy
 
-**After every code change, regenerate at least one illustrative STL before finishing**, unless the user explicitly says otherwise. Use the most relevant output for the changed code:
+**After every code change, regenerate STLs before finishing**, unless the user explicitly says otherwise.
 
-| Changed file | Regeneration command |
-|---|---|
-| `src/extras/craft_paint_modular_organizer.py` | `python src/extras/craft_paint_modular_organizer.py` |
-| Tile terrain / layers / core | `generate-tile-stl --spec "src/tiles/water+grass.tile" -o stl/openlock/1x1-water+grass-ol.stl` (or whichever spec exercises the change) |
-| Default tile path | `generate-tile-stl` |
+- **Never pass `-o` / `--output`** — let each spec write to its default path.
+- For tile terrain / layers / core changes: regenerate **all** `.tile` specs:
 
-Always report the output path, vertex/face counts, and watertight status after generation.
+```bash
+for spec in src/tiles/*.tile; do generate-tile-stl --spec "$spec"; done
+```
+
+- For the default tile path only: `generate-tile-stl`
+- For `src/extras/craft_paint_modular_organizer.py`: `python src/extras/craft_paint_modular_organizer.py`
+
+Always report vertex/face counts and watertight status for each generated file.
 
 ## Spatial Terminology (canonical — do not deviate)
 
