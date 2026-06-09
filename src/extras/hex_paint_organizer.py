@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
-"""Generate a hexagonal craft-paint organizer STL with magnet interconnects.
+"""Generate a hexagonal craft-paint organizer STL.
 
-3×4 honeycomb grid (default) of pointy-top hexagonal cups.  A rectangular outer
-frame wraps the bottom 10 mm ring; a matching top cap sits at z = height to
-z = height + 4 mm.  Twelve recessed 10 × 3 mm disc-magnet pockets (8 side,
-2 bottom, 2 top) let multiple copies click together in any direction.
-
-See docs/design/hex-organizer-magnets.md for full geometry spec.
+3×4 honeycomb grid (default) of pointy-top hexagonal cups with left/right
+side walls and an open front/back.
 """
 from __future__ import annotations
 
@@ -188,43 +184,6 @@ def build_organizer(spec: HexOrganizerSpec) -> m3d.Manifold:
     for c in cups[1:]:
         result = result + c
 
-    # Hex assembly bounding box and frame dimensions
-    xmin, xmax, ymin, ymax = _hex_bounds(spec)
-    fw = spec.wall
-    fxmin, fxmax = xmin - fw, xmax + fw
-    fymin, fymax = ymin - fw, ymax + fw
-
-    # Solid floor slab: z = 0 to base (5 mm), full outer rectangle.
-    # Fills the triangular gaps between hex cup outer walls and the rectangular
-    # frame inner boundary; without this those gaps are through-holes (genus > 0).
-    floor_slab = _rect_box(fxmin, fxmax, fymin, fymax, 0.0, spec.base)
-    result = result + floor_slab
-
-    # Rectangular outer frame ring: z = 0 to floor (10 mm)
-    # Provides 4 flat outer faces for horizontal magnet pockets.
-    # (Redundant at z=0..base where floor_slab already fills everything, harmless.)
-    frame_outer = _rect_box(fxmin, fxmax, fymin, fymax, 0.0, spec.floor)
-    frame_inner = _rect_box(xmin,  xmax,  ymin,  ymax,  0.0, spec.floor)
-    result = result + (frame_outer - frame_inner)
-
-    # Solid top cap: full rectangle from z=height to z=height+cap_h, bore holes subtracted.
-    # Using cap_outer - hex_bounding_box (like the bottom frame) leaves triangular gap
-    # regions as through-holes (genus > 0).  Instead, fill the entire slab and subtract
-    # only the cup bore openings so bottles can still be inserted.
-    cap_h = spec.magnet_depth + 1.0
-    cap_slab = _rect_box(fxmin, fxmax, fymin, fymax, spec.height, spec.height + cap_h)
-    bore_prism = hex_prism(spec.bore_f2f, cap_h)
-    for row in range(spec.rows):
-        x_stagger = 0.0 if (row % 2) else (col_pitch / 2.0)
-        for col in range(spec.cols):
-            cx = col * col_pitch + x_stagger
-            cy = row * row_pitch
-            cap_slab -= bore_prism.translate([cx, cy, spec.height])
-    result = result + cap_slab
-
-    # Cut all 12 magnet pockets
-    result = _subtract_magnets(result, spec)
-
     return result
 
 
@@ -243,13 +202,10 @@ def main() -> None:
     fw = spec.wall
     frame_w = (xmax - xmin) + 2 * fw
     frame_d = (ymax - ymin) + 2 * fw
-    cap_h = spec.magnet_depth + 1.0
-    total_height = spec.height + cap_h
 
-    print(f"Building hex organizer  ({spec.cols}×{spec.rows} cups, honeycomb + magnet frame)")
+    print(f"Building hex organizer  ({spec.cols}×{spec.rows} cups, open front/back)")
     print(f"  cup: outer F2F {outer_f2f:.1f} mm  col pitch {col_pitch:.1f} mm  row pitch {row_pitch:.2f} mm")
-    print(f"  frame outer: {frame_w:.1f} × {frame_d:.1f} mm  total height {total_height:.0f} mm")
-    print(f"  magnets: {spec.magnet_dia:.0f}×{spec.magnet_depth:.0f} mm — 8 side + 2 bottom + 2 top = 12 pockets")
+    print(f"  frame outer: {frame_w:.1f} × {frame_d:.1f} mm  height {spec.height:.0f} mm")
 
     manifold = build_organizer(spec)
     raw = manifold.to_mesh()
