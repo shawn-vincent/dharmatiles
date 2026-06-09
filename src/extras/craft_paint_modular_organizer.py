@@ -1428,11 +1428,27 @@ def perimeter_vertical_ribs(
     lightweight: LightweightSpec,
     z_bottom: float,
     z_top: float,
+    exclude_xys: list[tuple[float, float]] | None = None,
+    exclude_clearance: float = 6.0,
 ) -> list[trimesh.Trimesh]:
-    """Triangular ribs on all four outer side walls."""
+    """Triangular ribs on all four outer side walls. Ribs whose centerline falls
+    within exclude_clearance of any exclude point are skipped."""
     ribs: list[trimesh.Trimesh] = []
     for side in ("front", "back", "left", "right"):
         for u in _side_rib_positions(side, spec, lightweight):
+            if side == "front":
+                rib_xy = (u, 0.0)
+            elif side == "back":
+                rib_xy = (u, spec.depth)
+            elif side == "left":
+                rib_xy = (0.0, u)
+            else:
+                rib_xy = (spec.width, u)
+            if exclude_xys and any(
+                (rib_xy[0] - ex) ** 2 + (rib_xy[1] - ey) ** 2 < exclude_clearance ** 2
+                for ex, ey in exclude_xys
+            ):
+                continue
             ribs.append(
                 _vertical_rib_mesh(
                     u, side, spec,
@@ -1776,8 +1792,12 @@ def perimeter_corner_ribs(
     lightweight: LightweightSpec,
     z_bottom: float,
     z_top: float,
+    exclude_xys: list[tuple[float, float]] | None = None,
+    exclude_clearance: float = 6.0,
 ) -> list[trimesh.Trimesh]:
-    """One inward-pointing triangular rib at the midpoint of each corner arc."""
+    """One inward-pointing triangular rib at the midpoint of each corner arc.
+    Skips any corner whose midpoint falls within exclude_clearance of an
+    exclude point (so diamonds placed exactly at the corner take precedence)."""
     corner_r = spec.vertical_corner_roundover
     rib_width = lightweight.perimeter_rib_width
     rib_depth = lightweight.perimeter_rib_depth
@@ -1795,6 +1815,11 @@ def perimeter_corner_ribs(
         outward = np.array([np.cos(angle), np.sin(angle)])
         tangent = np.array([-np.sin(angle), np.cos(angle)])
         base_xy = np.array([cx, cy]) + corner_r * outward
+        if exclude_xys and any(
+            (base_xy[0] - ex) ** 2 + (base_xy[1] - ey) ** 2 < exclude_clearance ** 2
+            for ex, ey in exclude_xys
+        ):
+            continue
         pts = [
             tuple(base_xy - half_w * tangent),
             tuple(base_xy - rib_depth * outward),   # inward
@@ -1831,13 +1856,17 @@ def _cup_rib_mesh(
     """Triangular-prism rib on the outer surface of a cylindrical cup."""
     outward = np.array([np.cos(angle), np.sin(angle)])
     tangent = np.array([-np.sin(angle), np.cos(angle)])
-    base_xy = np.array([cx, cy]) + outer_radius * outward
+    # Embed the base inside the cup wall so the rib sides emerge from a solid surface,
+    # not from a tangent line that sits slightly outside the curved wall.
+    embed_depth = 0.2
+    base_xy = np.array([cx, cy]) + (outer_radius - embed_depth) * outward
+    apex_xy = np.array([cx, cy]) + (outer_radius + rib_depth) * outward
     half_w = rib_width / 2.0
 
     # CCW from above: right_base → apex → left_base
     pts = [
         tuple(base_xy - half_w * tangent),
-        tuple(base_xy + rib_depth * outward),
+        tuple(apex_xy),
         tuple(base_xy + half_w * tangent),
     ]
     verts = np.array(
@@ -1864,14 +1893,19 @@ def cup_vertical_ribs(
     lightweight: LightweightSpec,
     z_bottom: float,
     z_top: float,
+    per_cup_angles: list[list[float]] | None = None,
 ) -> list[trimesh.Trimesh]:
-    """Evenly-spaced vertical ribs on the exterior of every cup."""
-    n = lightweight.cup_wall_ribs
-    if n <= 0:
-        return []
-    angles = np.linspace(0.0, 2.0 * np.pi, n, endpoint=False)
+    """Vertical ribs on the exterior of every cup. If per_cup_angles is provided,
+    each cup uses its own list of rib angles; otherwise ribs are evenly spaced."""
+    if per_cup_angles is None:
+        n = lightweight.cup_wall_ribs
+        if n <= 0:
+            return []
+        default_angles = list(np.linspace(0.0, 2.0 * np.pi, n, endpoint=False))
+        per_cup_angles = [default_angles] * len(centers)
+
     ribs: list[trimesh.Trimesh] = []
-    for cx, cy in centers:
+    for (cx, cy), angles in zip(centers, per_cup_angles):
         for angle in angles:
             ribs.append(
                 _cup_rib_mesh(
@@ -1882,6 +1916,380 @@ def cup_vertical_ribs(
                 )
             )
     return ribs
+
+
+def _cup_strut_directions(
+    cup_index: int,
+    centers: list[tuple[float, float]],
+    edges: list[tuple[int, int]],
+    perimeter_pairs: list[tuple[tuple[float, float], tuple[float, float]]],
+) -> list[float]:
+    """Angles (radians) of every strut leaving cup cup_index — both inter-cup
+    Delaunay edges and perpendicular projections to nearby walls."""
+    cx, cy = centers[cup_index]
+    directions: list[float] = []
+    for a, b in edges:
+        if a == cup_index:
+            ox, oy = centers[b]
+        elif b == cup_index:
+            ox, oy = centers[a]
+        else:
+            continue
+        directions.append(np.arctan2(oy - cy, ox - cx))
+    for (pcx, pcy), (wx, wy) in perimeter_pairs:
+        if abs(pcx - cx) < 1e-6 and abs(pcy - cy) < 1e-6:
+            directions.append(np.arctan2(wy - cy, wx - cx))
+    return directions
+
+
+def _select_3_evenly_spaced_angles(directions: list[float]) -> list[float]:
+    """Pick three angles from a candidate list that minimize the variance of
+    inter-angle gaps from 120°. Returns a sorted list of 3 angles in [0, 2π)."""
+    if len(directions) < 3:
+        return [0.0, 2.0 * np.pi / 3.0, 4.0 * np.pi / 3.0]
+    from itertools import combinations
+
+    dirs = [d % (2.0 * np.pi) for d in directions]
+    ideal = 2.0 * np.pi / 3.0
+    best_score = float("inf")
+    best_subset: list[float] | None = None
+    for subset in combinations(dirs, 3):
+        sorted_triple = sorted(subset)
+        gaps = (
+            sorted_triple[1] - sorted_triple[0],
+            sorted_triple[2] - sorted_triple[1],
+            2.0 * np.pi - sorted_triple[2] + sorted_triple[0],
+        )
+        score = sum((g - ideal) ** 2 for g in gaps)
+        if score < best_score:
+            best_score = score
+            best_subset = sorted_triple
+    return best_subset if best_subset is not None else dirs[:3]
+
+
+def _ring_notch_cutter(
+    cx: float,
+    cy: float,
+    r_inner: float,
+    r_outer: float,
+    angle_start: float,
+    angle_end: float,
+    z_bottom: float,
+    z_top: float,
+    arc_segments: int = 12,
+) -> trimesh.Trimesh:
+    """Annular-sector cutter for notching the cup's retaining ring.
+
+    Spans angle_start → angle_end at radii r_inner → r_outer, extruded
+    z_bottom → z_top. The polygon traces the outer arc then back along the
+    inner arc to form a closed curved trapezoid.
+    """
+    import manifold3d as m3d
+
+    angles = np.linspace(angle_start, angle_end, arc_segments + 1)
+    outer_pts = [(cx + r_outer * np.cos(a), cy + r_outer * np.sin(a)) for a in angles]
+    inner_pts = [(cx + r_inner * np.cos(a), cy + r_inner * np.sin(a)) for a in reversed(angles)]
+    polygon = outer_pts + inner_pts
+
+    cross = m3d.CrossSection([polygon], fillrule=m3d.FillRule.EvenOdd)
+    solid = m3d.Manifold.extrude(cross, height=z_top - z_bottom).translate((0.0, 0.0, z_bottom))
+    raw = solid.to_mesh()
+    mesh = trimesh.Trimesh(
+        vertices=np.array(raw.vert_properties, dtype=float)[:, :3],
+        faces=np.array(raw.tri_verts, dtype=int),
+        process=False,
+    )
+    mesh.fix_normals()
+    if mesh.volume < 0:
+        mesh.invert()
+    return mesh
+
+
+def compute_per_cup_rib_angles(
+    centers: list[tuple[float, float]],
+    spec: OrganizerSpec,
+    perimeter_strut_max_length: float = 30.0,
+    nudge_rad: float = 0.02,
+) -> list[list[float]]:
+    """For each cup, choose three strut directions to use as rib angles,
+    favoring an even angular distribution. A tiny angular nudge avoids exact
+    coplanar alignment with the strut box faces, which can confuse the boolean
+    union (faces meeting at vanishing dihedral angles)."""
+    edges = lightweight_rib_edges(centers)
+    perimeter_pairs = perimeter_strut_endpoints(centers, spec, max_length=perimeter_strut_max_length)
+    return [
+        [a + nudge_rad for a in _select_3_evenly_spaced_angles(
+            _cup_strut_directions(i, centers, edges, perimeter_pairs)
+        )]
+        for i in range(len(centers))
+    ]
+
+
+def _wall_diamond_cutter_mesh(
+    px: float,
+    py: float,
+    nx: float,
+    ny: float,
+    z_mid: float,
+    z_half: float,
+    t_half: float,
+    wall_thickness: float,
+    outer_overhang: float = 0.5,
+    inner_overhang: float = 0.3,
+) -> trimesh.Trimesh:
+    """Stretched-hexagon prism cutter for a chopped-diamond through-hole in a
+    flat or curved wall. 45° tips at top and bottom (tip height = t_half),
+    straight tangential walls in the middle. Removes more material than a
+    rhombus of the same bounding box for the same total height/width.
+
+    (px, py) is on the wall's outer surface; (nx, ny) is the inward unit normal.
+    """
+    tx, ty = -ny, nx  # 90° CCW tangent
+
+    r_outer = -outer_overhang
+    r_inner = wall_thickness + inner_overhang
+
+    def at(r: float, dt: float, dz: float) -> tuple[float, float, float]:
+        return (
+            px + r * nx + dt * tx,
+            py + r * ny + dt * ty,
+            z_mid + dz,
+        )
+
+    # Six hexagon vertices in (tangent, z): tip / shoulder / shoulder / tip / shoulder / shoulder.
+    shoulder_z = max(0.0, z_half - t_half)
+    hex_pts = [
+        (0.0,  z_half),         # 0: top tip
+        (t_half,  shoulder_z),  # 1: upper-right shoulder
+        (t_half, -shoulder_z),  # 2: lower-right shoulder
+        (0.0, -z_half),         # 3: bottom tip
+        (-t_half, -shoulder_z), # 4: lower-left shoulder
+        (-t_half,  shoulder_z), # 5: upper-left shoulder
+    ]
+
+    verts = np.array(
+        [at(r_inner, dt, dz) for dt, dz in hex_pts]
+        + [at(r_outer, dt, dz) for dt, dz in hex_pts],
+        dtype=np.float64,
+    )
+
+    faces_list: list[list[int]] = []
+    # Inner cap (toward cup-axis side), hexagon fan from vertex 0.
+    for i in range(1, 5):
+        faces_list.append([0, i, i + 1])
+    # Outer cap, reversed winding.
+    for i in range(1, 5):
+        faces_list.append([6, 6 + i + 1, 6 + i])
+    # Six side quads, two triangles each.
+    for i in range(6):
+        a, b = i, (i + 1) % 6
+        faces_list.append([a, b, b + 6])
+        faces_list.append([a, b + 6, a + 6])
+    faces = np.array(faces_list, dtype=np.int64)
+
+    mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+    mesh.fix_normals()
+    if mesh.volume < 0:
+        mesh.invert()
+    return mesh
+
+
+def _wall_rib_mesh(
+    px: float,
+    py: float,
+    nx: float,
+    ny: float,
+    rib_width: float,
+    rib_depth: float,
+    z_bottom: float,
+    z_top: float,
+    inward: bool = False,
+) -> trimesh.Trimesh:
+    """Triangular-prism rib on a wall at (px, py) with inward unit normal
+    (nx, ny). The rib base sits on the outer wall surface; the apex extends
+    rib_depth outward (along -normal) by default, or inward (along +normal)
+    when inward=True."""
+    tx, ty = -ny, nx  # tangent (90° CCW from normal)
+    half_w = rib_width / 2.0
+    apex_sign = 1.0 if inward else -1.0
+    pts = [
+        (px - half_w * tx, py - half_w * ty),                                # right base (CCW from above)
+        (px + apex_sign * rib_depth * nx, py + apex_sign * rib_depth * ny),  # apex
+        (px + half_w * tx, py + half_w * ty),                                # left base
+    ]
+    verts = np.array(
+        [(x, y, z_bottom) for x, y in pts] + [(x, y, z_top) for x, y in pts],
+        dtype=np.float64,
+    )
+    faces = np.array([
+        [0, 2, 1], [3, 4, 5],
+        [0, 1, 4], [0, 4, 3],
+        [1, 2, 5], [1, 5, 4],
+        [2, 0, 3], [2, 3, 5],
+    ], dtype=np.int64)
+    mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+    mesh.fix_normals()
+    if mesh.volume < 0:
+        mesh.invert()
+    return mesh
+
+
+def perimeter_wall_diamond_positions(
+    spec: OrganizerSpec,
+    target_spacing: float = 11.0,
+    over_magnet_threshold: float = 11.5,
+) -> tuple[
+    list[tuple[float, float, float, float, bool]],
+    list[tuple[float, float, float, float]],
+]:
+    """Yield (diamond_positions, rib_positions) at uniform arc-length intervals
+    around the perimeter. Diamonds at i * spacing; ribs at the gap centers
+    (i + 0.5) * spacing. Diamonds are never filtered — the over-magnet flag
+    lets the caller render those diamonds shorter so they clear the magnet
+    boss instead of intersecting it."""
+    width = spec.width
+    depth = spec.depth
+    corner = spec.vertical_corner_roundover
+
+    magnets_2d = (
+        [(u, 0.0) for u in DEFAULT_LONG_SIDE_MAGNET_POSITIONS]
+        + [(u, depth) for u in DEFAULT_LONG_SIDE_MAGNET_POSITIONS]
+        + [(0.0, u) for u in DEFAULT_SHORT_SIDE_MAGNET_POSITIONS]
+        + [(width, u) for u in DEFAULT_SHORT_SIDE_MAGNET_POSITIONS]
+    )
+
+    flat_x = width - 2.0 * corner
+    flat_y = depth - 2.0 * corner
+    arc_length = np.pi * corner / 2.0
+    total = 2.0 * flat_x + 2.0 * flat_y + 4.0 * arc_length
+
+    def point_normal(s: float) -> tuple[float, float, float, float]:
+        r = s % total
+        if r <= flat_x:
+            return (corner + r, 0.0, 0.0, 1.0)
+        r -= flat_x
+        if r <= arc_length:
+            t = r / arc_length
+            angle = -np.pi / 2.0 + t * np.pi / 2.0
+            return (
+                width - corner + corner * np.cos(angle),
+                corner + corner * np.sin(angle),
+                -np.cos(angle), -np.sin(angle),
+            )
+        r -= arc_length
+        if r <= flat_y:
+            return (width, corner + r, -1.0, 0.0)
+        r -= flat_y
+        if r <= arc_length:
+            t = r / arc_length
+            angle = t * np.pi / 2.0
+            return (
+                width - corner + corner * np.cos(angle),
+                depth - corner + corner * np.sin(angle),
+                -np.cos(angle), -np.sin(angle),
+            )
+        r -= arc_length
+        if r <= flat_x:
+            return (width - corner - r, depth, 0.0, -1.0)
+        r -= flat_x
+        if r <= arc_length:
+            t = r / arc_length
+            angle = np.pi / 2.0 + t * np.pi / 2.0
+            return (
+                corner + corner * np.cos(angle),
+                depth - corner + corner * np.sin(angle),
+                -np.cos(angle), -np.sin(angle),
+            )
+        r -= arc_length
+        if r <= flat_y:
+            return (0.0, depth - corner - r, 1.0, 0.0)
+        r -= flat_y
+        t = min(r / arc_length, 1.0)
+        angle = np.pi + t * np.pi / 2.0
+        return (
+            corner + corner * np.cos(angle),
+            corner + corner * np.sin(angle),
+            -np.cos(angle), -np.sin(angle),
+        )
+
+    n = max(1, round(total / target_spacing))
+    spacing = total / n
+    threshold_sq = over_magnet_threshold ** 2
+
+    diamond_positions: list[tuple[float, float, float, float, bool]] = []
+    rib_positions: list[tuple[float, float, float, float]] = []
+    for i in range(n):
+        s_d = i * spacing
+        s_r = (i + 0.5) * spacing
+        d_px, d_py, d_nx, d_ny = point_normal(s_d % total)
+        r_px, r_py, r_nx, r_ny = point_normal(s_r % total)
+        is_over_magnet = any(
+            (d_px - mx) ** 2 + (d_py - my) ** 2 < threshold_sq for mx, my in magnets_2d
+        )
+        diamond_positions.append((d_px, d_py, d_nx, d_ny, is_over_magnet))
+        rib_positions.append((r_px, r_py, r_nx, r_ny))
+    return diamond_positions, rib_positions
+
+
+def _diamond_cutter_mesh(
+    cx: float,
+    cy: float,
+    outer_radius: float,
+    inner_radius: float,
+    angle: float,
+    z_mid: float,
+    z_half: float,
+    t_half: float,
+    overhang: float = 0.3,
+) -> trimesh.Trimesh:
+    """Stretched-hexagon prism cutter for a chopped-diamond through-hole in a
+    cup wall. 45° tips at top and bottom (tip height = t_half) with straight
+    tangential walls in the middle, extruded radially from past the bore to
+    past the outer wall."""
+    cos_a = np.cos(angle)
+    sin_a = np.sin(angle)
+    r_inner_extr = inner_radius - overhang
+    r_outer_extr = outer_radius + overhang
+
+    def at(r: float, dt: float, dz: float) -> tuple[float, float, float]:
+        return (
+            cx + r * cos_a - dt * sin_a,
+            cy + r * sin_a + dt * cos_a,
+            z_mid + dz,
+        )
+
+    shoulder_z = max(0.0, z_half - t_half)
+    hex_pts = [
+        (0.0,  z_half),         # 0: top tip
+        (t_half,  shoulder_z),  # 1: upper-right shoulder
+        (t_half, -shoulder_z),  # 2: lower-right shoulder
+        (0.0, -z_half),         # 3: bottom tip
+        (-t_half, -shoulder_z), # 4: lower-left shoulder
+        (-t_half,  shoulder_z), # 5: upper-left shoulder
+    ]
+
+    verts = np.array(
+        [at(r_inner_extr, dt, dz) for dt, dz in hex_pts]
+        + [at(r_outer_extr, dt, dz) for dt, dz in hex_pts],
+        dtype=np.float64,
+    )
+
+    faces_list: list[list[int]] = []
+    for i in range(1, 5):
+        faces_list.append([0, i, i + 1])
+    for i in range(1, 5):
+        faces_list.append([6, 6 + i + 1, 6 + i])
+    for i in range(6):
+        a, b = i, (i + 1) % 6
+        faces_list.append([a, b, b + 6])
+        faces_list.append([a, b + 6, a + 6])
+    faces = np.array(faces_list, dtype=np.int64)
+
+    mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+    mesh.fix_normals()
+    if mesh.volume < 0:
+        mesh.invert()
+    return mesh
 
 
 def build_lightweight_mesh(
@@ -1911,9 +2319,12 @@ def build_lightweight_mesh(
     magnet_segments = circle_segments(spec.magnet_diameter, circle_segment_length)
 
     solids: list[trimesh.Trimesh] = []
-    fastener_walls: list[trimesh.Trimesh] = []
     cutters: list[trimesh.Trimesh] = []
     cup_cutters: list[trimesh.Trimesh] = []
+    top_ring_drop = 1.0
+    top_ring_bevel_h = top_ring_outer_radius - outer_radius  # 45°: Δz = Δr from horizontal
+    z_top_bevel_start = cup_height - top_ring_drop
+    z_top_bevel_bottom = z_top_bevel_start - top_ring_bevel_h
     for cup_index, (cx, cy) in enumerate(centers):
         inner_height = cup_height - main_bore_z + 0.25
         inner = vertical_cylinder(
@@ -1935,11 +2346,14 @@ def build_lightweight_mesh(
             (cx, cy, retaining_ring_top_z + retaining_bevel_height / 2.0 + 0.075),
             cup_segments,
         )
-        bottom_height = max(lightweight.rib_height, main_bore_z)
-        bottom_floor = vertical_cylinder(
+        # Unified cup body: single solid cylinder from base up into the top bevel,
+        # carved into an annulus by the inner cutter. Replaces the separate
+        # bottom-floor + fastener-wall pair so there's no joint to crack open.
+        cup_body_height = z_top_bevel_bottom + 0.1
+        cup_body = vertical_cylinder(
             outer_radius,
-            bottom_height,
-            (cx, cy, bottom_height / 2.0),
+            cup_body_height,
+            (cx, cy, cup_body_height / 2.0),
             cup_segments,
         )
         # Inner cone exits below the outer rim so the top edge is a flat annulus, not a razor.
@@ -1951,11 +2365,7 @@ def build_lightweight_mesh(
             (cx, cy, cup_height - lightweight.rib_height / 2.0),
             cup_segments,
         )
-        top_ring_drop = 1.0
-        top_ring_bevel_h = top_ring_outer_radius - outer_radius  # 45°: Δz = Δr from horizontal
-        z_top_bevel_start = cup_height - top_ring_drop
-        z_top_bevel_bottom = z_top_bevel_start - top_ring_bevel_h
-        solids.append(bottom_floor)
+        solids.append(cup_body)
         solids.append(vertical_cylinder(
             top_ring_outer_radius,
             top_ring_drop,
@@ -1969,20 +2379,108 @@ def build_lightweight_mesh(
             (cx, cy, z_top_bevel_bottom + top_ring_bevel_h / 2.0),
             cup_segments,
         ))
-        # Start above the bottom floor to avoid a coincident outer face at r=outer_radius.
-        # Extend the wall up into the bevel so the cone-bottom sits flush on it.
-        wall_z_start = bottom_height + 0.1
-        fastener_walls.append(cylindrical_thin_wall(
-            (cx, cy), inner_radius, wall_z_start,
-            z_top_bevel_bottom + 0.1 - wall_z_start, cup_segments,
-        ))
         cup_cutters.append(inner)
         cup_cutters.append(retaining_hole)
         if retaining_bevel_height > 0.0:
             cup_cutters.append(retaining_bevel)
         cup_cutters.append(top_ring_bevel)
 
-    solids.extend(cup_vertical_ribs(centers, outer_radius, lightweight, 0.0, cup_height))
+    # Align cup ribs with the inter-cup / cup-to-wall struts so each rib
+    # reinforces an actual structural joint. Three ribs per cup, chosen from the
+    # cup's strut directions to be as close to 120° apart as possible.
+    per_cup_rib_angles = compute_per_cup_rib_angles(centers, spec)
+    solids.extend(cup_vertical_ribs(
+        centers, outer_radius, lightweight, 0.0, cup_height,
+        per_cup_angles=per_cup_rib_angles,
+    ))
+
+    # Cup wall hexagonal cutouts — 2 per inter-rib arc (6 per cup, down from
+    # 12). t_half is capped because the flat-faced hexagon cross-section on a
+    # curved cup wall requires sqrt(r_inner² + t_half²) ≤ bore_radius for a
+    # clean through-cut; with overhang=1.0 this safely allows t_half ≤ 4.
+    diamond_z_min = main_bore_z + 1.0
+    diamond_z_max = z_top_bevel_bottom - 1.0
+    diamond_z_mid = (diamond_z_min + diamond_z_max) / 2.0
+    diamond_z_half = (diamond_z_max - diamond_z_min) / 2.0
+    cup_rib_half = lightweight.perimeter_rib_width / 2.0
+    cup_rib_gap = lightweight.perimeter_rib_width  # gap == rib width
+    # Bumped: with overhang=1.0, sqrt(r_inner² + t_half²) ≤ bore_radius is
+    # satisfied up to t_half ≈ 5.83. 5.5 leaves ~0.3 mm of margin so the
+    # hexagon's tangential corners always punch through the curved cup wall.
+    cup_diamond_t_half_max = 5.5
+    cup_diamond_overhang = 1.0
+    for cup_idx, (cx, cy) in enumerate(centers):
+        rib_angles = sorted(per_cup_rib_angles[cup_idx])
+        wrapped = rib_angles + [rib_angles[0] + 2.0 * np.pi]
+        for i in range(3):
+            a1 = wrapped[i]
+            a2 = wrapped[i + 1]
+            arc_angular = a2 - a1
+            arc_mm = arc_angular * outer_radius
+            # Equal-gap layout (rib_half + g + W + g + W + g + rib_half = arc):
+            #   W_natural = (arc_mm − 2·rib_half − 3·g) / 2
+            # If the natural width is bigger than the cap, the leftover slack
+            # is split evenly across the 3 gaps so D-D and R-D edge clearances
+            # stay equal (rather than the diamonds clustering at 1/3, 2/3).
+            W_natural = (arc_mm - 2.0 * cup_rib_half - 3.0 * cup_rib_gap) / 2.0
+            t_h_natural = W_natural / 2.0
+            if t_h_natural < 1.0:
+                continue
+            t_h = min(cup_diamond_t_half_max, t_h_natural)
+            W_actual = 2.0 * t_h
+            slack = arc_mm - (2.0 * cup_rib_half + 3.0 * cup_rib_gap + 2.0 * W_actual)
+            g_actual = cup_rib_gap + slack / 3.0
+            d_offset_mm = cup_rib_half + g_actual + W_actual / 2.0
+            d_offset_angular = d_offset_mm / outer_radius
+            for d_angle in (a1 + d_offset_angular, a2 - d_offset_angular):
+                cup_cutters.append(
+                    _diamond_cutter_mesh(
+                        cx, cy, outer_radius, inner_radius, float(d_angle),
+                        diamond_z_mid, diamond_z_half,
+                        t_h,
+                        overhang=cup_diamond_overhang,
+                    )
+                )
+
+    # Cup retaining-ring + conical-funnel notches: a single tall annular-sector
+    # cutter spans from just below cup_floor up through the bevel zone to just
+    # above main_bore_z, and radially from inside the retaining hole out to
+    # JUST INSIDE the cup wall. The wall itself (r=inner_radius → outer_radius)
+    # is preserved at every angle so the cup remains a complete cylinder from
+    # outside. 6 contact pillars survive at the rib angles + midpoints.
+    ring_contact_arc_mm = 5.0
+    ring_r_inner = retaining_hole_radius - 0.3
+    ring_r_outer = inner_radius - 0.05  # stop just shy of the bore wall to avoid coplanar
+    ring_z_bottom = cup_floor - 0.1
+    ring_z_top = main_bore_z + 0.1
+    half_contact_rad = (ring_contact_arc_mm / 2.0) / inner_radius
+    for cup_idx, (cx, cy) in enumerate(centers):
+        rib_angles_sorted = sorted(per_cup_rib_angles[cup_idx])
+        # 6 contact-center angles: each rib angle + the midpoint between consecutive ribs.
+        contact_centers: list[float] = []
+        for i in range(3):
+            a1 = rib_angles_sorted[i]
+            a2 = rib_angles_sorted[(i + 1) % 3]
+            if a2 <= a1:
+                a2 += 2.0 * np.pi
+            contact_centers.append(a1 % (2.0 * np.pi))
+            contact_centers.append(((a1 + a2) / 2.0) % (2.0 * np.pi))
+        contact_centers.sort()
+        # Notches lie between consecutive contact zones.
+        wrapped_contacts = contact_centers + [contact_centers[0] + 2.0 * np.pi]
+        for i in range(6):
+            c1 = wrapped_contacts[i]
+            c2 = wrapped_contacts[i + 1]
+            notch_start = c1 + half_contact_rad
+            notch_end = c2 - half_contact_rad
+            if notch_end - notch_start < 0.05:
+                continue
+            cup_cutters.append(_ring_notch_cutter(
+                cx, cy,
+                ring_r_inner, ring_r_outer,
+                notch_start, notch_end,
+                ring_z_bottom, ring_z_top,
+            ))
 
     internal_rib_zs = (
         lightweight.rib_height / 2.0,
@@ -2021,8 +2519,92 @@ def build_lightweight_mesh(
     side_z_max = cup_height - lightweight.rib_height + 0.2
     solids.append(perimeter_rail_band(spec, FASTENER_WALL_THICKNESS, side_z_max, side_z_max / 2.0))
 
-    solids.extend(perimeter_vertical_ribs(spec, lightweight, 0.0, cup_height))
-    solids.extend(perimeter_corner_ribs(spec, lightweight, 0.0, cup_height))
+    # Outer-wall diamond cutouts. Uniform spacing around the perimeter — close
+    # enough that a rib fits in each inter-diamond gap. Diamonds over a magnet
+    # boss are shortened vertically so they clear the boss rather than skipped.
+    # Vertical band: 2 mm clear of the bottom rim band and the top triangular
+    # rib (which spans z = cup_height − rail_depth … cup_height).
+    wall_diamond_t_half = 6.0
+    wall_diamond_z_max = cup_height - lightweight.magnet_boss_depth - 1.0
+    wall_diamond_z_min_regular = lightweight.rib_height + 1.0
+    wall_diamond_z_min_over_magnet = lightweight.magnet_boss_height + 1.0
+    # No outward ribs on this design, so the diamond cutter only needs to clear
+    # the wall surface itself. Inner overhang is bumped to cover the corner-arc
+    # sagitta (t_half² / (2·corner_radius) ≈ 0.9 mm at t_half=6) so the hexagon
+    # cuts fully through the wall even at the curved corners.
+    wall_diamond_outer_overhang = 0.5
+    wall_diamond_inner_overhang = (
+        wall_diamond_t_half ** 2 / (2.0 * spec.vertical_corner_roundover) + 0.3
+    )
+    over_magnet_threshold = (
+        lightweight.magnet_boss_width / 2.0 + wall_diamond_t_half + 0.5
+    )
+    # Spacing 17 mm → 32 diamonds at hexagon t_half=6; near the analytical
+    # peak for area = N·(4·z_h·t − 3·t²) under the rib-fits constraint.
+    wall_diamond_positions, wall_rib_positions = perimeter_wall_diamond_positions(
+        spec,
+        target_spacing=17.0,
+        over_magnet_threshold=over_magnet_threshold,
+    )
+
+    # Inward perimeter ribs: 2 per flat side at 25%/75%, 1 per corner at the
+    # arc midpoint. Each target arc-length is snapped to the nearest
+    # inter-diamond gap center so the rib never overlaps a diamond cutter.
+    perimeter_flat_x = spec.width - 2.0 * spec.vertical_corner_roundover
+    perimeter_flat_y = spec.depth - 2.0 * spec.vertical_corner_roundover
+    perimeter_arc = np.pi * spec.vertical_corner_roundover / 2.0
+    perimeter_half_arc = perimeter_arc / 2.0
+    perimeter_total = (
+        2.0 * perimeter_flat_x + 2.0 * perimeter_flat_y + 4.0 * perimeter_arc
+    )
+    s_front = 0.0
+    s_br = s_front + perimeter_flat_x
+    s_right = s_br + perimeter_arc
+    s_tr = s_right + perimeter_flat_y
+    s_back = s_tr + perimeter_arc
+    s_tl = s_back + perimeter_flat_x
+    s_left = s_tl + perimeter_arc
+    s_bl = s_left + perimeter_flat_y
+    target_rib_ss = [
+        s_front + perimeter_flat_x * 0.25,
+        s_front + perimeter_flat_x * 0.75,
+        s_br + perimeter_half_arc,
+        s_right + perimeter_flat_y * 0.25,
+        s_right + perimeter_flat_y * 0.75,
+        s_tr + perimeter_half_arc,
+        s_back + perimeter_flat_x * 0.25,
+        s_back + perimeter_flat_x * 0.75,
+        s_tl + perimeter_half_arc,
+        s_left + perimeter_flat_y * 0.25,
+        s_left + perimeter_flat_y * 0.75,
+        s_bl + perimeter_half_arc,
+    ]
+    n_diamonds = len(wall_diamond_positions)
+    diamond_spacing = perimeter_total / n_diamonds
+    selected_gap_indices = sorted(set(
+        int(round(t / diamond_spacing - 0.5)) % n_diamonds for t in target_rib_ss
+    ))
+    for gap_index in selected_gap_indices:
+        px, py, nx, ny = wall_rib_positions[gap_index]
+        solids.append(_wall_rib_mesh(
+            px, py, nx, ny,
+            lightweight.perimeter_rib_width,
+            lightweight.perimeter_rib_depth,
+            0.0, cup_height,
+            inward=True,
+        ))
+
+    for px, py, nx, ny, is_over_magnet in wall_diamond_positions:
+        z_min = wall_diamond_z_min_over_magnet if is_over_magnet else wall_diamond_z_min_regular
+        z_mid = (z_min + wall_diamond_z_max) / 2.0
+        z_half = (wall_diamond_z_max - z_min) / 2.0
+        cutters.append(_wall_diamond_cutter_mesh(
+            px, py, nx, ny,
+            z_mid, z_half, wall_diamond_t_half,
+            FASTENER_WALL_THICKNESS,
+            outer_overhang=wall_diamond_outer_overhang,
+            inner_overhang=wall_diamond_inner_overhang,
+        ))
 
     magnet_spec = replace(spec, magnet_z=lightweight.magnet_z)
     for side in ("front", "back", "left", "right"):
@@ -2034,7 +2616,6 @@ def build_lightweight_mesh(
     mesh = trimesh.boolean.union(solids, engine="manifold")
     if cup_cutters or cutters:
         mesh = trimesh.boolean.difference([mesh, *cup_cutters, *cutters], engine="manifold")
-    mesh = trimesh.boolean.union([mesh, *fastener_walls], engine="manifold")
     mesh.merge_vertices(digits_vertex=2)
     mesh.update_faces(mesh.nondegenerate_faces())
     mesh.remove_unreferenced_vertices()

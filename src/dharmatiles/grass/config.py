@@ -14,14 +14,14 @@ class SpeciesConfig:
     # Blade geometry ranges, sampled at seed creation time.
     blade_width_min: float = 1.2
     blade_width_max: float = 1.2
-    blade_length_min: float = 15
-    blade_length_max: float = 15
+    blade_length_min: float = 10
+    blade_length_max: float = 10
     blade_segment_length: float = 0.5
     blade_taper: float = 1.0
     blade_base_width: float = 1.0
     blade_base_taper: float | None = 0
-    blade_curl_min: float = 0.5
-    blade_curl_max: float = 0.8
+    blade_curl_min: float = 0.2   # fraction of π (0 = straight, 1.0 = 180° arc = "too much")
+    blade_curl_max: float = 0.45  # gives 36°–81° arc range by default
     blade_smooth: float = 0.9
     blade_rise_cap: float = 2.0
     blade_clearance: float = 0.1
@@ -47,11 +47,11 @@ class SpeciesConfig:
 
     # Placement.
     groups_per_square: int = 3
-    gap_mm: float = 0.5   # average clear gap between adjacent blade edges (mm).
+    gap_mm: float = 0.3   # average clear gap between adjacent blade edges (mm).
                           # centre-to-centre spacing = blade_width_max + gap_mm.
                           # gap_mm = 0 → blades packed edge-to-edge; higher values
                           # add space between blades.
-    group_dir_jitter: float = 0
+    group_dir_jitter: float = 0.1
 
     # Growth behavior.
     grower: str = "floppy"

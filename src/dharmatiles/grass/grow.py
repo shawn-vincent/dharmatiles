@@ -343,12 +343,19 @@ def _jitter_grid_xy(
 
 
 def _sample_seed_curl(species: SpeciesConfig, rng: np.random.Generator) -> float:
+    """Return total arc sweep in radians for one blade.
+
+    The user-facing ``blade_curl`` parameters are dimensionless fractions of π
+    (180°).  A value of 1.0 means the tip sweeps all the way back — "too much"
+    curl — so sensible defaults live in the 0.2–0.5 range (36°–90°).
+    """
     blade_curl_min = max(0.0, float(species.blade_curl_min))
     blade_curl_max = max(blade_curl_min, float(species.blade_curl_max))
     magnitude = float(rng.uniform(blade_curl_min, blade_curl_max))
     if magnitude == 0.0:
         return 0.0
-    return magnitude * float(rng.choice([-1.0, 1.0]))
+    # Scale from fraction-of-π to radians, then pick random left/right.
+    return magnitude * np.pi * float(rng.choice([-1.0, 1.0]))
 
 
 def _make_seed(
