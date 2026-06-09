@@ -141,8 +141,8 @@ def _subtract_magnets(body: m3d.Manifold, spec: HexOrganizerSpec) -> m3d.Manifol
 
     # --- flat magnets: 1 centered magnet on each corner cup's outward flat face.
     # Row 1 (top, code col=top_col): face 0° (+x).  Row 3 (bottom, code col=0): face 180° (−x).
-    # Only the two end code-rows: row=0 (user right end) and row=rows-1 (user left end).
-    for end_row in (0, spec.rows - 1):
+    # Code rows 0 and 2 (0-based) = 1st and 3rd of 4 rows.
+    for end_row in (0, spec.rows - 2):
         cx, cy = centre(end_row, top_col)
         body -= _magnet_pocket(cx, cy, 0.0, spec)
         cx, cy = centre(end_row, bot_col)
