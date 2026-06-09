@@ -18,9 +18,9 @@ import trimesh
 class HexOrganizerSpec:
     bore_f2f: float = 35.0        # main bore flat-to-flat
     retaining_f2f: float = 29.0   # retaining-depression flat-to-flat
-    wall: float = 4.0             # wall thickness (was 1.0; ≥4 needed for magnet pockets)
+    wall: float = 1.0             # wall thickness
     height: float = 60.0          # cup height
-    floor: float = 10.0           # bore floor height above bottom (was 5.0)
+    floor: float = 11.0           # bore floor height above bottom (magnet centre z=6, top edge z=11) (was 5.0)
     base: float = 5.0             # solid base below depression (was 2.0)
     magnet_dia: float = 10.0      # magnet disc diameter
     magnet_depth: float = 3.0     # magnet disc thickness / bore depth
