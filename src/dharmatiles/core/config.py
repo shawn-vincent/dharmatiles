@@ -206,7 +206,7 @@ class GrassUnderlayConfig:
     # noise_amp     — how far the roughness descends BELOW noise_top_mm.
     #                 Pure texture depth; independent of height.
     #                 Noise field ranges from (noise_top_mm - noise_amp) to noise_top_mm.
-    noise_top_mm:   float = 0.00   # mm — height of noise peaks above terrain_z
+    noise_top_mm:   float = 0.50   # mm — height of noise peaks above terrain_z
     noise_amp:      float = 1.00   # mm — roughness depth below noise_top_mm
     noise_scale_mm: float = 2.0    # mm — Gaussian σ (feature correlation length)
 
