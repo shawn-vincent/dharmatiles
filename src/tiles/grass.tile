@@ -1,6 +1,6 @@
 # grass.tile
 #
-# One full 1x1 grass region. No soil layer, so the ground is flat.
+# One full 1x1 grass region. Grass underlay provides embossed ground texture.
 
 surface:
   sizes: [1x1]
@@ -10,6 +10,7 @@ regions:
   meadow:
     contains: [0.5, 0.5]
     layers:
+      - type: grass_underlay
       - type: grass
         groups_per_square: 3
         group_dir_jitter: 0

@@ -15,6 +15,7 @@ regions:
   patch:
     contains: [0.15, 0.15]
     layers:
+      - type: grass_underlay
       - type: grass
         groups_per_square: 240
 

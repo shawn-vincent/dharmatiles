@@ -16,7 +16,7 @@ regions:
   meadow:
     contains: [0.5, 0.75]      # centre of top half
     layers:
-      - type: soil
+      - type: grass_underlay
       - type: grass
         groups_per_square: 2
         blade_length_min: 10
