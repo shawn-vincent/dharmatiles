@@ -219,6 +219,15 @@ class GrassUnderlayConfig:
     blade_raise_mm:     float = 0.40   # mm — guaranteed lift of blade peak above noise_amp
     #   blade stamp peak = noise_amp + blade_raise_mm, so blades always win the max()
 
+    # ── DC height offset ──────────────────────────────────────────────────────
+    # Constant added to the entire field after noise + stamps are composited,
+    # before the edge fade and terrain_z application.  Negative values sink the
+    # whole layer into the terrain so the blade stamps barely poke above the
+    # original surface rather than building a visible raised plateau.
+    # Does not affect texture amplitude — peaks and valleys stay the same
+    # distance apart; the whole envelope just shifts.
+    height_offset_mm: float = -0.80
+
     # ── Edge fade ─────────────────────────────────────────────────────────────
     # Cosine ramp from 0 (at placement-mask boundary) to 1 (edge_fade_mm inside).
     # Keeps the texture from having a hard cut at the grass/soil border.

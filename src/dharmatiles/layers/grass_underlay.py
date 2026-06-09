@@ -76,13 +76,20 @@ class GrassUnderlayLayer:
         for seed in seeds:
             _stamp_blade(field, surface, seed, cfg)
 
-        # ── 3. Edge fade — cosine ramp from 0 at mask boundary to 1 inside ───
+        # ── 3. DC height offset ───────────────────────────────────────────────
+        # Shifts the whole field without changing texture amplitude, so blade
+        # stamps and noise peaks stay the same distance apart but the plateau
+        # sinks into the terrain rather than rising above it.
+        if cfg.height_offset_mm != 0.0:
+            field += cfg.height_offset_mm
+
+        # ── 5. Edge fade — cosine ramp from 0 at mask boundary to 1 inside ───
         # Keeps the texture from cutting hard at the grass/soil border.
         if cfg.edge_fade_mm > 0.0:
             fade = _compute_edge_fade(placement_mask, gh, gw, cfg.edge_fade_mm, surface.cell_w)
             field *= fade
 
-        # ── 4. Apply with mask ────────────────────────────────────────────────
+        # ── 6. Apply with mask ────────────────────────────────────────────────
         if placement_mask is None:
             scene.terrain_z += field
         else:
