@@ -28,7 +28,7 @@ from __future__ import annotations
 _OVERSAMPLE = 2   # internal upscale factor for soil blob detail
 
 import numpy as np
-from scipy.ndimage import gaussian_filter, map_coordinates, zoom
+from scipy.ndimage import distance_transform_edt, gaussian_filter, map_coordinates, zoom
 
 from ..core.config import SurfaceConfig, SoilConfig
 from ..core.tile import TileScene
@@ -89,6 +89,29 @@ class SoilLayer:
                                     mode='reflect', order=1)
 
         displacement = projected * nz
+
+        # ── Placement-mask + tile-edge fade ───────────────────────────────────
+        # The internal bump field already fades at tile edges (soil.edge_fade_mm
+        # applied inside _compute_bump_field).  When a placement mask is given
+        # we additionally fade at the mask boundary so there's no hard cut at
+        # the soil/grass dividing line.  Tile-edge distance is always included
+        # in the minimum so the texture is guaranteed zero at tile edge cells
+        # even when the mask extends to the tile boundary.
+        if self.soil.edge_fade_mm > 0.0:
+            fade_cells = max(self.soil.edge_fade_mm / self.surface.cell_w, 1e-6)
+            ix = np.arange(gw, dtype=float)
+            iy = np.arange(gh, dtype=float)
+            dx = np.minimum(ix, gw - 1 - ix)
+            dy = np.minimum(iy, gh - 1 - iy)
+            tile_dist = np.minimum(dx[np.newaxis, :], dy[:, np.newaxis])
+            if placement_mask is not None:
+                mask_dist = distance_transform_edt(placement_mask)
+                dist = np.minimum(mask_dist, tile_dist)
+            else:
+                dist = tile_dist
+            fade = 0.5 * (1.0 - np.cos(np.pi * np.clip(dist / fade_cells, 0.0, 1.0)))
+            displacement = displacement * fade
+
         if placement_mask is None:
             scene.terrain_z += displacement
         else:

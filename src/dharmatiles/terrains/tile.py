@@ -26,7 +26,7 @@ import trimesh
 from scipy.ndimage import binary_dilation, binary_erosion, distance_transform_edt
 
 from ..core.config import (SceneConfig, SurfaceConfig, FlowConfig,
-                           SoilConfig, StonesConfig, BaseConfig)
+                           SoilConfig, StonesConfig, BaseConfig, GrassUnderlayConfig)
 from ..core.tile import TileScene
 from ..core.mesh import make_heightmap_solid
 from ..core.spec import TileSpec, load_spec
@@ -35,6 +35,7 @@ from ..bases import dungeonblocks, openlock
 from ..layers.soil import SoilLayer
 from ..layers.stones import StonesLayer
 from ..layers.grass import FloppyGrassLayer
+from ..layers.grass_underlay import GrassUnderlayLayer
 from ..grass.config import GrassConfig as RuntimeGrassConfig, SpeciesConfig
 # from ..layers.grass import GrassLayer
 from ..layers.water import make_water_displacement, make_water_ripple_displacement, make_water_volume, WATER_RENDER_LIFT_MM
@@ -47,6 +48,7 @@ def _build_mesh(cfg: SceneConfig,
                 scene: TileScene,
                 grass_cfgs: list[tuple[SpeciesConfig, np.ndarray | None]] | None = None,
                 soil_layers: list[tuple[SoilConfig, np.ndarray | None]] | None = None,
+                underlay_layers: list[tuple[GrassUnderlayConfig, np.ndarray | None]] | None = None,
                 stone_layers: list[tuple[StonesConfig, np.ndarray | None]] | None = None,
                 verbose: bool = True,
                 water_mask: np.ndarray | None = None,
@@ -58,6 +60,10 @@ def _build_mesh(cfg: SceneConfig,
     per grass layer in the spec.  Each pair restricts grass seeding to its
     region mask (``None`` = whole tile).  Defaults to one package-default
     species over the whole tile.
+
+    *underlay_layers* is a list of ``(GrassUnderlayConfig, placement_mask)``
+    pairs — one per ``grass_underlay`` layer in the spec.  Each modifies
+    terrain_z in its region (embossed 2D texture) before stones and 3D grass.
 
     *stone_layers* is a list of ``(StonesConfig, placement_mask)`` pairs —
     one per stone-layer zone.  Each pair is one independent stone-placement
@@ -73,6 +79,8 @@ def _build_mesh(cfg: SceneConfig,
         grass_cfgs = [(SpeciesConfig(), None)]
     if soil_layers is None:
         soil_layers = []
+    if underlay_layers is None:
+        underlay_layers = []
     if stone_layers is None:
         stone_layers = [(cfg.stones, None)]
 
@@ -83,7 +91,14 @@ def _build_mesh(cfg: SceneConfig,
         if verbose:
             print("Building soil texture...")
         SoilLayer(cfg.surface, soil_cfg).build(scene, placement_mask=soil_mask)
-    # Sync terrain_support_z to include soil displacement baked into terrain_z.
+
+    # ── Grass underlay (embossed 2D texture in grass regions) ─────────────────
+    for underlay_cfg, underlay_mask in underlay_layers:
+        if verbose:
+            print("Building grass underlay...")
+        GrassUnderlayLayer(underlay_cfg).build(scene, placement_mask=underlay_mask)
+
+    # Sync terrain_support_z to include soil + underlay baked into terrain_z.
     scene.terrain_support_z[:] = scene.terrain_z
 
     # ── Stones (one independent pass per stone-layer zone) ────────────────────
@@ -355,10 +370,11 @@ def build_tile_from_spec(spec: TileSpec,
     )
 
     # Compute once; both DB and OL scenes use the same region_mask and spec.
-    grass_mask   = build_grass_mask(region_mask, spec) if region_mask is not None else None
-    grass_cfgs   = _collect_grass_configs(spec, region_mask)
-    soil_layers  = _collect_soil_layers(spec, region_mask)
-    stone_layers = _collect_stones_layers(spec, region_mask)
+    grass_mask      = build_grass_mask(region_mask, spec) if region_mask is not None else None
+    grass_cfgs      = _collect_grass_configs(spec, region_mask)
+    soil_layers     = _collect_soil_layers(spec, region_mask)
+    underlay_layers = _collect_grass_underlay_layers(spec, region_mask)
+    stone_layers    = _collect_stones_layers(spec, region_mask)
 
     scene.grass_mask = grass_mask
     if verbose and grass_mask is not None:
@@ -374,6 +390,7 @@ def build_tile_from_spec(spec: TileSpec,
 
     tile_mesh = _build_mesh(cfg, scene,
                             grass_cfgs=grass_cfgs, soil_layers=soil_layers,
+                            underlay_layers=underlay_layers,
                             stone_layers=stone_layers,
                             verbose=verbose,
                             water_mask=water_mask, water_height=water_height,
@@ -404,8 +421,9 @@ def build_tile_from_spec(spec: TileSpec,
         ol_scene.grass_mask = grass_mask   # same result; region_mask unchanged
         ol_tile_mesh = _build_mesh(
             ol_cfg, ol_scene,
-            grass_cfgs=grass_cfgs,     # reuse — same spec + region_mask
+            grass_cfgs=grass_cfgs,          # reuse — same spec + region_mask
             soil_layers=soil_layers,
+            underlay_layers=underlay_layers,
             stone_layers=stone_layers,
             verbose=verbose,
             water_mask=water_mask, water_height=water_height,
@@ -638,6 +656,19 @@ def _collect_soil_layers(
         spec, region_mask,
         layer_types={'soil'},
         cfg_class=SoilConfig,
+    )
+
+
+def _collect_grass_underlay_layers(
+    spec: TileSpec,
+    region_mask: np.ndarray | None,
+) -> list[tuple[GrassUnderlayConfig, np.ndarray | None]]:
+    """Return one ``(GrassUnderlayConfig, placement_mask)`` pair per grass_underlay layer."""
+    return _collect_layers(           # type: ignore[return-value]
+        spec, region_mask,
+        layer_types={'grass_underlay'},
+        cfg_class=GrassUnderlayConfig,
+        include_boundaries=False,
     )
 
 

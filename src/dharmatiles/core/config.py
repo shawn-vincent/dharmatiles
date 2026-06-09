@@ -170,7 +170,62 @@ class SoilConfig:
 
 
 
-    edge_fade_mm: float = 0.8   # mm — cosine fade to zero at tile edges
+    edge_fade_mm: float = 1.0   # mm — cosine fade to zero at tile edges and mask boundary
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Grass underlay
+# ─────────────────────────────────────────────────────────────────────────────
+
+@dataclass
+class GrassUnderlayConfig:
+    """Flat embossed grass-carpet texture stamped into terrain_z under 3D blades.
+
+    Two components are summed into a scratch field and then applied to
+    terrain_z with a placement mask:
+
+    1. **Noise base** — smooth Gaussian-filtered white noise that creates a
+       low-amplitude bumpy background resembling compressed, matted grass.
+
+    2. **Blade stamp footprints** — the top-profile silhouette of each blade
+       rasterised flat onto the ground.  Seeds are planted with the same
+       Voronoi-group logic as the 3D grass layer, using the blade geometry
+       fields below.  For each seed the full blade trajectory is traced and
+       a sin-arc cross-section stamped at each step.
+
+    Blade geometry fields mirror the corresponding SpeciesConfig fields so
+    the same YAML values can be shared between a ``grass_underlay`` layer
+    and its companion ``grass`` layer.
+    """
+    # ── Noise base ────────────────────────────────────────────────────────────
+    noise_amp:      float = 0.50   # mm — peak amplitude of background noise
+    noise_scale_mm: float = 2.0    # mm — Gaussian σ (feature correlation length)
+
+    # ── Blade stamp geometry (mirrors SpeciesConfig) ──────────────────────────
+    blade_width_min:      float = 1.2
+    blade_width_max:      float = 1.2
+    blade_length_min:     float = 10.0
+    blade_length_max:     float = 10.0
+    blade_segment_length: float = 0.5
+    blade_taper:          float = 1.0
+    blade_base_width:     float = 1.0
+    blade_base_taper:     float = 0.0
+    blade_curl_min:       float = 0.2
+    blade_curl_max:       float = 0.45
+    blade_thickness:      float = 0.6   # mm — 3D blade height; used as stamp peak
+
+    # ── Stamp-specific ────────────────────────────────────────────────────────
+    stamp_height_scale: float = 0.80   # fraction of blade_thickness → stamp peak height
+
+    # ── Edge fade ─────────────────────────────────────────────────────────────
+    # Cosine ramp from 0 (at placement-mask boundary) to 1 (edge_fade_mm inside).
+    # Keeps the texture from having a hard cut at the grass/soil border.
+    # Set to 0.0 to disable.
+    edge_fade_mm: float = 1.0
+
+    # ── Placement (match companion grass layer for visual coherence) ──────────
+    groups_per_square: int   = 3
+    gap_mm:            float = 0.3
 
 
 # ─────────────────────────────────────────────────────────────────────────────

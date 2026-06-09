@@ -86,6 +86,26 @@ def boundary_path_mm(spec: BoundarySpec, surface: SurfaceConfig,
     if max_abs > 1e-9 and spec.amplitude_mm > 0.0:
         offset *= spec.amplitude_mm / max_abs
 
+    # ── Detail layer: ~4× frequency, detail_fraction × amplitude ─────────────
+    # Adds fine-grained noise on top of the base low-frequency curve so the
+    # boundary reads as organic rather than a single smooth wave.  The detail
+    # knots are independently seeded (same rng stream, next draw) so they are
+    # deterministic but uncorrelated with the base layer.
+    if spec.detail_fraction > 0.0 and spec.amplitude_mm > 0.0:
+        detail_amp = spec.amplitude_mm * spec.detail_fraction
+        detail_corr_mm = max(spec.wavelength_mm / 4.0, surface.cell_w)
+        d_n_knots  = max(5, int(np.ceil(length / detail_corr_mm)) + 3)
+        d_knot_t   = np.linspace(0.0, 1.0, d_n_knots)
+        d_offsets  = rng.normal(0.0, 0.55 * detail_amp, d_n_knots)
+        d_offsets[0]  = 0.0
+        d_offsets[-1] = 0.0
+        detail = CubicSpline(d_knot_t, d_offsets, bc_type='natural')(t)
+        detail  = detail * taper
+        d_max   = float(np.max(np.abs(detail)))
+        if d_max > 1e-9:
+            detail *= detail_amp / d_max
+        offset = offset + detail
+
     return np.column_stack([xa + t * dx + offset * px,
                             ya + t * dy + offset * py])
 

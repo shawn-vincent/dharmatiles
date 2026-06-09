@@ -1,9 +1,11 @@
 # soil+grass.tile
 #
 # Left half: grass.  Right half: bare soil.
-# Zero-width boundary (no layer) — same elevation on both sides,
-# so no slope is needed.  The organic path alone makes the edge
-# read as a real meadow margin.
+# The organic boundary creates a natural meadow margin.
+#
+# Grass region:  grass_underlay (embossed 2D texture) + grass (3D blades).
+# Soil region:   soil (blob texture), masked to this region only.
+# Boundary:      zero-width (same elevation both sides — no slope needed).
 
 surface:
   seed: 42
@@ -13,13 +15,15 @@ regions:
     contains: [0.25, 0.5]
     # height_mm: 5.0  ← grass default; no need to write it
     layers:
+      - type: grass_underlay
+        groups_per_square: 240   # match companion grass layer
       - type: grass
         groups_per_square: 240
 
   dirt:
     contains: [0.75, 0.5]
     layers:
-      - type: soil
+      - type: soil   # masked to the dirt region only
 
 boundaries:
   margin:

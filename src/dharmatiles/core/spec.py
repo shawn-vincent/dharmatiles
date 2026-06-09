@@ -96,6 +96,7 @@ class BoundarySpec:
     path:        str   = 'organic'   # "organic" | "straight"
     amplitude_mm:  float = 3.0
     wavelength_mm: float = 10.0      # organic smoothness/correlation length
+    detail_fraction: float = 0.25    # relative amplitude of 4× detail layer (0 = off)
     seed_offset:   int   = 0
     width_mm:      float = 0.0       # strip width in mm; 0 = zero-width (no layer)
     layers: list[BoundaryLayerSpec] = field(default_factory=list)
@@ -234,15 +235,16 @@ def _parse(data: dict) -> TileSpec:
             layer_type = str(ld.pop('type'))
             bnd_layers.append(BoundaryLayerSpec(type=layer_type, params=ld))
         boundaries.append(BoundarySpec(
-            id            = bid,
-            from_anchor   = (bdata['from']['edge'], float(bdata['from']['t'])),
-            to_anchor     = (bdata['to']['edge'],   float(bdata['to']['t'])),
-            path          = bdata.get('path', 'organic'),
-            amplitude_mm  = float(bdata.get('amplitude_mm', 3.0)),
-            wavelength_mm = float(bdata.get('wavelength_mm', 10.0)),
-            seed_offset   = int(bdata.get('seed_offset', 0)),
-            width_mm      = width_mm,
-            layers        = bnd_layers,
+            id              = bid,
+            from_anchor     = (bdata['from']['edge'], float(bdata['from']['t'])),
+            to_anchor       = (bdata['to']['edge'],   float(bdata['to']['t'])),
+            path            = bdata.get('path', 'organic'),
+            amplitude_mm    = float(bdata.get('amplitude_mm', 3.0)),
+            wavelength_mm   = float(bdata.get('wavelength_mm', 10.0)),
+            detail_fraction = float(bdata.get('detail_fraction', 0.25)),
+            seed_offset     = int(bdata.get('seed_offset', 0)),
+            width_mm        = width_mm,
+            layers          = bnd_layers,
         ))
 
     return TileSpec(surface=surface, regions=regions, boundaries=boundaries, sizes=sizes)
