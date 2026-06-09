@@ -18,7 +18,7 @@ regions:
       - type: grass_underlay
         groups_per_square: 240   # match companion grass layer
       - type: grass
-        groups_per_square: 240
+        groups_per_square: 24
 
   dirt:
     contains: [0.75, 0.5]
@@ -30,6 +30,6 @@ boundaries:
     from: {edge: top,    t: 0.48}
     to:   {edge: bottom, t: 0.52}
     path: organic
-    amplitude_mm: 3.6
+    amplitude_mm: 5
     wavelength_mm: 10.0
     # width_mm defaults to 0 → zero-width dividing line, no layer
