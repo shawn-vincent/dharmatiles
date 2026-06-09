@@ -67,100 +67,108 @@ def single_cup(spec: HexOrganizerSpec) -> m3d.Manifold:
 
 
 # ---------------------------------------------------------------------------
-# Rectangular frame / cap helpers
-# ---------------------------------------------------------------------------
-
-def _rect_box(
-    x0: float, x1: float,
-    y0: float, y1: float,
-    z0: float, z1: float,
-) -> m3d.Manifold:
-    """Solid axis-aligned rectangular prism."""
-    box = m3d.Manifold.cube([x1 - x0, y1 - y0, z1 - z0])
-    return box.translate([x0, y0, z0])
-
-
-def _hex_bounds(spec: HexOrganizerSpec) -> tuple[float, float, float, float]:
-    """Tight bounding box of the full hex cup assembly: (xmin, xmax, ymin, ymax)."""
-    outer_f2f = spec.bore_f2f + 2.0 * spec.wall
-    R_outer = outer_f2f / np.sqrt(3)
-    col_pitch = spec.bore_f2f + spec.wall
-    row_pitch = col_pitch * np.sqrt(3) / 2.0
-
-    cx_list, cy_list = [], []
-    for row in range(spec.rows):
-        x_stagger = 0.0 if (row % 2) else (col_pitch / 2.0)
-        for col in range(spec.cols):
-            cx_list.append(col * col_pitch + x_stagger)
-            cy_list.append(row * row_pitch)
-
-    return (
-        min(cx_list) - outer_f2f / 2.0,   # xmin (leftmost flat face)
-        max(cx_list) + outer_f2f / 2.0,   # xmax (rightmost flat face)
-        min(cy_list) - R_outer,            # ymin (bottommost vertex)
-        max(cy_list) + R_outer,            # ymax (topmost vertex)
-    )
-
-
-# ---------------------------------------------------------------------------
 # Magnet pocket subtraction
 # ---------------------------------------------------------------------------
+#
+# Magnets sit in the exposed perimeter faces of the honeycomb itself (no added
+# frame / cap).  Geometry is described in CODE coordinates (pointy-top hexes:
+# flat faces face ±x, vertices point ±y) but the spec was given in the USER's
+# view, which is this part rotated +90° CCW so that the hex points are
+# horizontal and a code-row of `cols` cups reads as a vertical column.
+#
+# Edge-normal directions (code degrees), per pointy-top hex:
+#     0   = right flat   (+x)  → user TOP flat
+#   180   = left flat    (−x)  → user BOTTOM flat
+#    60   = upper-right diagonal
+#   120   = upper-left  diagonal
+#   240   = lower-left  diagonal
+#   300   = lower-right diagonal
+#
+# Within a column, cups read top→bottom in the user view as c2 → c1 → c0
+# (higher cx is higher up).  Side faces are numbered 0..5 top→bottom; each cup
+# contributes two diagonal faces to a side.
+
+MAGNET_Z = 6.0            # pocket centre height: 1 mm clearance below a 10 mm disc
+MAGNET_OVERSHOOT = 0.6    # start pocket this far outside the face for a clean cut
+
+
+def _face_normal(deg: float) -> tuple[float, float]:
+    return (float(np.cos(np.radians(deg))), float(np.sin(np.radians(deg))))
+
+
+def _magnet_pocket(
+    cx: float, cy: float, deg: float, spec: HexOrganizerSpec,
+    *, tangent_offset: float = 0.0,
+) -> m3d.Manifold:
+    """A horizontal cylindrical pocket cut into the face at edge-normal `deg`.
+
+    The cup centre is (cx, cy); the face outer surface lies one apothem out
+    along the normal.  `tangent_offset` slides the pocket along the face
+    (used to place two magnets on a single flat face).
+    """
+    apothem = (spec.bore_f2f + 2.0 * spec.wall) / 2.0
+    nx, ny = _face_normal(deg)
+    tx, ty = -ny, nx  # in-plane tangent (perpendicular to normal)
+
+    # Outer face midpoint, slid along the tangent, started just outside the face.
+    fx = cx + apothem * nx + tangent_offset * tx + MAGNET_OVERSHOOT * nx
+    fy = cy + apothem * ny + tangent_offset * ty + MAGNET_OVERSHOOT * ny
+
+    length = spec.magnet_depth + MAGNET_OVERSHOOT
+    cyl = m3d.Manifold.cylinder(length, spec.magnet_dia / 2.0, circular_segments=64)
+    cyl = cyl.rotate([0, 90, 0])        # +z axis → +x
+    cyl = cyl.rotate([0, 0, deg + 180]) # +x → inward (−normal), boring into the wall
+    return cyl.translate([fx, fy, MAGNET_Z])
+
 
 def _subtract_magnets(body: m3d.Manifold, spec: HexOrganizerSpec) -> m3d.Manifold:
-    """Cut 12 magnet pockets from body: 8 side (horizontal) + 2 bottom + 2 top."""
-    xmin, xmax, ymin, ymax = _hex_bounds(spec)
-    fw = spec.wall  # frame wall matches cup wall
-    fxmin, fxmax = xmin - fw, xmax + fw
-    fymin, fymax = ymin - fw, ymax + fw
-    frame_w = fxmax - fxmin
-    frame_d = fymax - fymin
+    """Cut 20 magnet pockets into the honeycomb's exposed perimeter faces.
 
-    z_side = spec.floor / 2.0          # vertical centre of side pockets = 5 mm
-    cap_h = spec.magnet_depth + 1.0    # top cap height = 4 mm
+    8 top-flat (2 per top-row cup) + 8 bottom-flat (2 per bottom-row cup)
+    + 4 side (high column faces 1 & 4, low column faces 0 & 3).
+    """
+    col_pitch = spec.bore_f2f + spec.wall
+    row_pitch = col_pitch * np.sqrt(3) / 2.0
+    top_col = spec.cols - 1   # highest cx in a row → top of the user-view column
+    bot_col = 0               # lowest cx → bottom of the column
 
-    cyl = m3d.Manifold.cylinder(spec.magnet_depth, spec.magnet_dia / 2.0, circular_segments=32)
+    def centre(row: int, col: int) -> tuple[float, float]:
+        x_stagger = 0.0 if (row % 2) else (col_pitch / 2.0)
+        return (col * col_pitch + x_stagger, row * row_pitch)
 
-    # --- 8 side pockets (horizontal axis, 2 per face) ----------------------
-    #
-    # Rotation conventions (single-axis, degrees):
-    #   rotate([-90, 0, 0])  →  +z axis points in +y  (south face, bore inward)
-    #   rotate([ 90, 0, 0])  →  +z axis points in -y  (north face, bore inward)
-    #   rotate([  0, 90, 0]) →  +z axis points in +x  (west face,  bore inward)
-    #   rotate([  0,-90, 0]) →  +z axis points in -x  (east face,  bore inward)
+    # Two magnets straddling a flat face's centre.
+    R = (spec.bore_f2f + 2.0 * spec.wall) / np.sqrt(3)  # edge length = circumradius
+    flat_off = R / 4.0
 
-    # South face  (y = fymin, bore in +y)
-    cyl_py = cyl.rotate([-90, 0, 0])
-    for frac in (1 / 3, 2 / 3):
-        body -= cyl_py.translate([fxmin + frame_w * frac, fymin, z_side])
+    # --- flat magnets: top-row cups get top flat (+x, 0°), bottom-row the
+    #     bottom flat (−x, 180°); middle rows skipped. ----------------------
+    for row in range(spec.rows):
+        cx, cy = centre(row, top_col)
+        for off in (-flat_off, flat_off):
+            body -= _magnet_pocket(cx, cy, 0.0, spec, tangent_offset=off)
+        cx, cy = centre(row, bot_col)
+        for off in (-flat_off, flat_off):
+            body -= _magnet_pocket(cx, cy, 180.0, spec, tangent_offset=off)
 
-    # North face  (y = fymax, bore in -y)
-    cyl_ny = cyl.rotate([90, 0, 0])
-    for frac in (1 / 3, 2 / 3):
-        body -= cyl_ny.translate([fxmin + frame_w * frac, fymax, z_side])
+    # --- side magnets on the two perimeter columns ------------------------
+    # Rightmost code-row (row 0, smallest cy) = HIGH column → faces 1 & 4.
+    #   face 1 = top cup's lower-right diagonal (240°)
+    #   face 4 = bottom cup's upper-right diagonal (300°)
+    high_row = 0
+    cx, cy = centre(high_row, top_col)
+    body -= _magnet_pocket(cx, cy, 240.0, spec)
+    cx, cy = centre(high_row, bot_col)
+    body -= _magnet_pocket(cx, cy, 300.0, spec)
 
-    # West face  (x = fxmin, bore in +x)
-    cyl_px = cyl.rotate([0, 90, 0])
-    for frac in (1 / 3, 2 / 3):
-        body -= cyl_px.translate([fxmin, fymin + frame_d * frac, z_side])
-
-    # East face  (x = fxmax, bore in -x)
-    cyl_nx = cyl.rotate([0, -90, 0])
-    for frac in (1 / 3, 2 / 3):
-        body -= cyl_nx.translate([fxmax, fymin + frame_d * frac, z_side])
-
-    # --- 2 bottom pockets (vertical, from z=0 upward) ----------------------
-    # Centred in the south and north frame walls; x = midpoint of frame width.
-    xc_bot = (fxmin + fxmax) / 2.0
-    y_south_wall = (fymin + ymin) / 2.0   # midline of south 4 mm wall
-    y_north_wall = (fymax + ymax) / 2.0   # midline of north 4 mm wall
-    for yc in (y_south_wall, y_north_wall):
-        body -= cyl.translate([xc_bot, yc, 0.0])
-
-    # --- 2 top pockets (vertical, from z=height+cap_h downward) -----------
-    # Same XY as bottom pockets; bored from the top of the cap downward.
-    z_top = spec.height + cap_h - spec.magnet_depth   # = height + 1 mm
-    for yc in (y_south_wall, y_north_wall):
-        body -= cyl.translate([xc_bot, yc, z_top])
+    # Leftmost code-row (largest cy) = LOW column → faces 0 & 3.
+    #   face 0 = top cup's upper-left diagonal (60°)
+    #   face 3 = middle cup's lower-left diagonal (120°)
+    low_row = spec.rows - 1
+    mid_col = spec.cols // 2
+    cx, cy = centre(low_row, top_col)
+    body -= _magnet_pocket(cx, cy, 60.0, spec)
+    cx, cy = centre(low_row, mid_col)
+    body -= _magnet_pocket(cx, cy, 120.0, spec)
 
     return body
 
@@ -184,7 +192,7 @@ def build_organizer(spec: HexOrganizerSpec) -> m3d.Manifold:
     for c in cups[1:]:
         result = result + c
 
-    return result
+    return _subtract_magnets(result, spec)
 
 
 # ---------------------------------------------------------------------------
@@ -195,17 +203,12 @@ def main() -> None:
     spec = HexOrganizerSpec()
 
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
-    R_outer = outer_f2f / np.sqrt(3)
     col_pitch = spec.bore_f2f + spec.wall
     row_pitch = col_pitch * np.sqrt(3) / 2.0
-    xmin, xmax, ymin, ymax = _hex_bounds(spec)
-    fw = spec.wall
-    frame_w = (xmax - xmin) + 2 * fw
-    frame_d = (ymax - ymin) + 2 * fw
 
     print(f"Building hex organizer  ({spec.cols}×{spec.rows} cups, open front/back)")
     print(f"  cup: outer F2F {outer_f2f:.1f} mm  col pitch {col_pitch:.1f} mm  row pitch {row_pitch:.2f} mm")
-    print(f"  frame outer: {frame_w:.1f} × {frame_d:.1f} mm  height {spec.height:.0f} mm")
+    print(f"  magnets: {spec.magnet_dia:.0f} mm dia × {spec.magnet_depth:.0f} mm deep, centre z={MAGNET_Z:.0f} mm")
 
     manifold = build_organizer(spec)
     raw = manifold.to_mesh()

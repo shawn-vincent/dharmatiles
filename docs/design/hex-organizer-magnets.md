@@ -2,190 +2,149 @@
 
 ## Goal
 
-Add recessed 10 × 3 mm disc-magnet pockets so that multiple copies of the organizer
-can be joined together in a flat 2-D grid: front-to-back, left-to-right, or any
-combination.
+Add recessed 10 × 3 mm disc-magnet pockets so multiple copies of the organizer
+can be clipped together edge-to-edge on a desktop (and optionally stacked
+vertically). Magnets are embedded **directly in the hexagon walls** — no added
+frame, cap, or other structure. The cup's solid lower region (base + retaining
+ring) provides the bulk that backs each pocket.
 
 ---
 
-## Terminology
+## Orientation & Terminology
 
-Because the organizer sits flat on a table, "top" and "bottom" refer to the two
-**horizontal faces** (the ones you'd see looking straight down or up), while
-"sides" refers to the four **vertical outer walls**.  The user requested:
+The geometry is built in **code coordinates**: pointy-top hexes whose flat faces
+face ±x and whose vertices point ±y. A code-row of `cols` cups is staggered in x;
+rows stack in y.
 
-| Name used here | Physical face | Connections to… |
+The magnet spec, however, was given in the **user's view** — the part rotated
+**+90° CCW** — so that:
+
+- hex points are **horizontal**,
+- each code-row of `cols` cups reads as a **vertical column** (the default is
+  3 cups tall), and
+- adjacent columns alternate **offset up / offset down** (the honeycomb stagger).
+
+| User-view feature | Code equivalent |
+|---|---|
+| Column (3 cups tall) | one code-row, cups `c0…c{cols-1}` |
+| Top cup of a column | highest cx → `c{cols-1}` |
+| Bottom cup of a column | lowest cx → `c0` |
+| Flat **top** face | right flat, normal **0° (+x)** |
+| Flat **bottom** face | left flat, normal **180° (−x)** |
+| Right-side diagonals (upper, lower) | normals **300°, 240°** |
+| Left-side diagonals (upper, lower) | normals **60°, 120°** |
+| **High** column (offset up) | even code-row (here row 0, rightmost) |
+| **Low** column (offset down) | odd code-row (here row 3, leftmost) |
+
+Hex edge-normal directions (code degrees): `0` right flat, `60` upper-right,
+`120` upper-left, `180` left flat, `240` lower-left, `300` lower-right.
+
+---
+
+## Cup Parameters (unchanged honeycomb)
+
+| Field | Value | Note |
 |---|---|---|
-| **Top face** | z = height (looking up) | underside of a vertically stacked copy |
-| **Bottom face** | z = 0 (resting on table) | top face of a copy below |
-| **North wall** | high-Y vertical face | south wall of a copy behind |
-| **South wall** | low-Y vertical face | north wall of a copy in front |
-| **West wall** | low-X vertical face | east wall of a copy to the left |
-| **East wall** | high-X vertical face | west wall of a copy to the right |
+| `bore_f2f` | 35.0 mm | main bore flat-to-flat |
+| `retaining_f2f` | 29.0 mm | retaining-depression flat-to-flat |
+| `wall` | 4.0 mm | gives ≥1 mm backing behind a 3 mm pocket in the bore wall |
+| `height` | 60.0 mm | |
+| `floor` | 10.0 mm | bore floor above the depression |
+| `base` | 5.0 mm | solid base below the depression |
+| `magnet_dia` | 10.0 mm | N52 disc magnet diameter |
+| `magnet_depth` | 3.0 mm | N52 disc thickness / pocket bore depth |
 
-**Primary use case:** horizontal tiling (north ↔ south, west ↔ east) — multiple
-organizers clipped together on a desktop.  Top/bottom magnets enable optional
-vertical stacking (one organizer on top of another).
-
----
-
-## Parameter Changes
-
-| Field | Old | New | Reason |
-|---|---|---|---|
-| `wall` | 1.0 mm | **4.0 mm** | Accommodates 3 mm-deep magnet pocket + 1 mm backing |
-| `floor` | 5.0 mm | **10.0 mm** | Taller bottom ring gives room for all side magnet centres |
-| `base` | 2.0 mm | **5.0 mm** | Ensures solid material for bottom-face vertical pockets |
-| `magnet_dia` | *(new)* | **10.0 mm** | Standard N52 disc magnet diameter |
-| `magnet_depth` | *(new)* | **3.0 mm** | Standard N52 disc magnet thickness / bore depth |
+Derived (3×4 default): `outer_f2f` = 43.0 mm, circumradius `R` = 24.83 mm,
+`col_pitch` = 39.0 mm (cups overlap by `wall`, merging into shared walls),
+`row_pitch` = 33.78 mm.
 
 ---
 
-## Derived Dimensions (3 cols × 4 rows default)
+## Pocket Geometry (all magnets)
 
-| Symbol | Formula | Value |
-|---|---|---|
-| `outer_f2f` | `bore_f2f + 2 × wall` | 43.00 mm |
-| `R_outer` | `outer_f2f / √3` | 24.83 mm |
-| `col_pitch` | `bore_f2f + wall` | 39.00 mm |
-| `row_pitch` | `col_pitch × √3/2` | 33.78 mm |
-| Hex bounding box W | `2×col_pitch + outer_f2f + col_pitch/2` | 140.50 mm |
-| Hex bounding box D | `3×row_pitch + 2×R_outer` | 150.98 mm |
+Every magnet is a **horizontal cylindrical pocket**, axis along the outward face
+normal, bored into the wall from the exposed outer surface:
 
----
+- Diameter 10 mm, depth 3 mm.
+- Centre height **z = 6 mm** — i.e. **1 mm clearance** below the 10 mm disc
+  (disc spans z = 1 → 11 mm). This keeps the magnet in the cup's bulk lower
+  region: z = 0–5 solid base, z = 5–10 retaining ring (≈7 mm of radial backing),
+  with only the top ~1 mm reaching the thinner bore wall.
+- The cutter starts 0.6 mm outside the face for a clean boolean break; the
+  effective recess depth into the material is exactly 3 mm.
 
-## Structural Additions
-
-### 1. Rectangular outer frame (z = 0 – 10 mm)
-
-The hex honeycomb's outer perimeter is irregular: in a pointy-top layout the
-boundary alternates between flat ±x faces and 60° angled vertices, so there are
-no consistent flat faces in the ±y direction.  A **rectangular outer frame** wraps
-the lower 10 mm to give four clean flat faces for magnet pockets and module-to-module
-contact.
-
-```
-Frame inner rect  (= hex bounding box):
-  X  [−21.50,  119.00]   width 140.50 mm
-  Y  [−24.83,  126.15]   depth 150.98 mm
-
-Frame outer rect  (inner + frame_wall = 4 mm on each side):
-  X  [−25.50,  123.00]   width 148.50 mm
-  Y  [−28.83,  130.15]   depth 158.98 mm
-
-Frame height:  10 mm  (z = 0 → floor)
-Frame wall:     4 mm
-```
-
-The frame is built as a solid rectangular prism (outer dims) with the hex cup
-assembly unioned into it.  Hex bores and depressions are subtracted afterwards,
-leaving solid frame walls everywhere from z = 0 to z = 10 mm.
-
-### 2. Solid top cap (z = 60 – 64 mm)
-
-At z = height (60 mm) only the 4 mm-wide cup-wall ring is solid per cup.
-A 10 mm-diameter vertical bore cannot fit in 4 mm of ring material (needs 5 mm
-clearance each side).  A **solid rectangular top cap** (same outer footprint as the
-frame, 4 mm tall) is added above the cups to provide a flush top surface with
-sufficient material for vertical magnet pockets.
-
-```
-Top cap outer rect:  X [−25.50, 123.00]  Y [−28.83, 130.15]
-Top cap height:  4 mm  (z = 60 → 64)
-```
-
-The cup bores pierce through the cap (bore F2F 35 mm hex subtracted to z = 64 mm)
-so the bottles still drop in.  The solid cap material is the rectangular frame
-ring, identical in XY cross-section to the bottom frame.
+Implementation: `_magnet_pocket(cx, cy, deg, spec, tangent_offset=…)` builds the
+cylinder along +z, rotates `+z → +x`, then rotates about z by `deg + 180` so the
+axis bores **inward** (−normal). `tangent_offset` slides it along the face for the
+paired flat-face magnets.
 
 ---
 
-## Magnet Pocket Catalogue
+## Magnet Catalogue (20 pockets total)
 
-### Side magnets — 8 total (2 per vertical face)
+### Flat top / bottom — 16 pockets (2 per face)
 
-All are **horizontal cylinders**, axis perpendicular to the face, 10 mm dia, 3 mm
-deep, centred at **z = 5 mm** (mid-height of the 10 mm frame).  Backing = 1 mm
-(4 mm wall − 3 mm bore).
+Magnets sit only on the **first and third rows** of each column (top and bottom
+cups); the middle row is skipped.
 
-```
-South face  (y_outer = −28.83 mm, bore axis = +y):
-  S1:  x =  24.00 mm,  y_entry = −28.83 mm
-  S2:  x =  73.50 mm,  y_entry = −28.83 mm
+- **Top-flat** (normal 0°): 2 magnets on the +x flat of every top cup
+  (`c{cols-1}` of each row) → 4 faces × 2 = **8**.
+- **Bottom-flat** (normal 180°): 2 magnets on the −x flat of every bottom cup
+  (`c0` of each row) → 4 faces × 2 = **8**.
 
-North face  (y_outer = 130.15 mm, bore axis = −y):
-  N1:  x =  24.00 mm,  y_entry = 130.15 mm
-  N2:  x =  73.50 mm,  y_entry = 130.15 mm
+The pair straddles the face centre by `±R/4` (≈ ±6.2 mm), keeping both 10 mm
+discs within the ~24.8 mm face width. These enable vertical stacking
+(top faces of one copy mate with bottom faces of the copy above).
 
-West face  (x_outer = −25.50 mm, bore axis = +x):
-  W1:  y =  24.17 mm,  x_entry = −25.50 mm
-  W2:  y =  77.16 mm,  x_entry = −25.50 mm
+### Side diagonals — 4 pockets
 
-East face  (x_outer = 123.00 mm, bore axis = −x):
-  E1:  y =  24.17 mm,  x_entry = 123.00 mm
-  E2:  y =  77.16 mm,  x_entry = 123.00 mm
-```
+Side faces are numbered **0…5 top→bottom** along one side of a column (each cup
+contributes two diagonal faces). Magnets go on the two perimeter columns only:
 
-Spacing derivation:
-- S/N x-centres at 1/3 and 2/3 of frame width 148.50 mm → −25.50 + 49.5 = **24.0 mm**, −25.50 + 99.0 = **73.5 mm**
-- W/E y-centres at 1/3 and 2/3 of frame depth 158.98 mm → −28.83 + 53.0 = **24.17 mm**, −28.83 + 106.0 = **77.17 mm**
+- **High column** (row 0, rightmost, offset up) → **faces 1 & 4**
+  - face 1 = top cup's lower-right diagonal — normal **240°**
+  - face 4 = bottom cup's upper-right diagonal — normal **300°**
+- **Low column** (row 3, leftmost, offset down) → **faces 0 & 3**
+  - face 0 = top cup's upper-left diagonal — normal **60°**
+  - face 3 = middle cup's lower-left diagonal — normal **120°**
 
-Centre-to-centre separation: 49.5 mm (S/N), 53.0 mm (W/E) — both far exceed the 10 mm minimum.
-
-### Bottom face magnets — 2 total
-
-**Vertical cylinders**, axis = +z, bored from z = 0 upward 3 mm.  Solid material
-extends to z = base = 5 mm, giving 2 mm margin beyond the bore.
-
-Position: centred in the solid south and north **frame walls** at the bottom face.
-
-```
-Bottom-1:  x =  48.75 mm,  y = −26.83 mm   (south frame-wall midline)
-Bottom-2:  x =  48.75 mm,  y = 128.15 mm   (north frame-wall midline)
-```
-
-`x = 48.75` is the midpoint of the frame's outer X span (−25.5 to 123.0).
-`y` values are midpoints of the south/north frame wall bands.
-
-### Top face magnets — 2 total
-
-**Vertical cylinders**, axis = −z, bored from z = 64 mm downward 3 mm.  Same XY
-positions as bottom magnets so a stacked module aligns exactly.
-
-```
-Top-1:  x =  48.75 mm,  y = −26.83 mm,  z_entry = 64 mm
-Top-2:  x =  48.75 mm,  y = 128.15 mm,  z_entry = 64 mm
-```
+This offset pairing is what lets a high column's right edge mesh with the
+neighbouring copy's low column left edge: high-side face 1 meets low-side face 0,
+and high-side face 4 meets low-side face 3, with opposing (attracting) normals.
 
 ---
 
 ## Fit Checks
 
-| Pocket | Bore depth | Available material | Backing |
+| Pocket location | Bore depth | Radial backing | Margin |
 |---|---|---|---|
-| Side (frame wall) | 3 mm | 4 mm wall | 1 mm ✓ |
-| Bottom (frame base) | 3 mm | 5 mm solid base | 2 mm ✓ |
-| Top (top cap) | 3 mm | 4 mm cap height | 1 mm ✓ |
+| Flat / diagonal face at z 5–10 (retaining ring) | 3 mm | ≈7 mm | ✓ |
+| Same face at z 10–11 (bore wall) | 3 mm | 1 mm (wall − depth) | ✓ |
+| Below disc | — | 1 mm to z = 0 | ✓ |
 
 ---
 
 ## Module Connectivity
 
-When two modules share a face, their opposing magnet pockets face each other.
-Insert a 10 × 3 mm neodymium disc magnet into each pocket (press-fit or glue
-flush).  Modules click together along any of the four vertical walls (horizontal
-tiling) or stack vertically via the top/bottom face magnets.
+Insert a 10 × 3 mm neodymium disc into each pocket (press-fit or glue flush).
+Modules clip together along the perimeter side faces (horizontal tiling) or stack
+vertically via the top/bottom flat-face magnets.
 
-Polarity rule: magnets on **opposing faces must attract**.  When installing, verify
-orientation before gluing.
+**Polarity rule:** magnets on opposing faces must attract. Because a high column
+meets a low column when tiling, verify orientation against the face-pairing above
+before gluing.
 
 ---
 
-## Implementation Plan
+## Implementation Notes
 
-1. **Update `HexOrganizerSpec`** — add `floor`, `base`, `magnet_dia`, `magnet_depth` fields; update `wall` default.
-2. **`build_organizer`** — after the honeycomb union, union in the rectangular outer frame (bottom 10 mm) and the top cap (top 4 mm).
-3. **`_subtract_magnets(manifold, spec)`** — helper that cuts the 12 cylinder pockets (8 side + 2 bottom + 2 top) from the assembled manifold.
-4. **`main`** — report new overall dimensions.
-
-No changes to `single_cup` geometry except the updated `wall` / `floor` / `base` defaults.
+- `_subtract_magnets(body, spec)` cuts all 20 pockets after the honeycomb union;
+  it is the only magnet entry point and is called at the end of
+  `build_organizer`.
+- The previous rectangular-frame / top-cap design (and helpers `_rect_box`,
+  `_hex_bounds`) has been removed — the magnets now live in the hex walls
+  themselves.
+- Constants `MAGNET_Z` (6 mm) and `MAGNET_OVERSHOOT` (0.6 mm) are module-level in
+  `src/extras/hex_paint_organizer.py`.
+</content>
+</invoke>
