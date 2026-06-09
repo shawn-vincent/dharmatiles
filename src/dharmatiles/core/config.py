@@ -225,8 +225,11 @@ class GrassUnderlayConfig:
 
     # ── Stamp-specific ────────────────────────────────────────────────────────
     stamp_height_scale: float = 0.80   # fraction of blade_thickness → stamp peak height (unused; kept for YAML compat)
-    blade_raise_mm:     float = 0.40   # mm — how far blade peaks rise above noise_top_mm
+    blade_raise_mm:     float = 0.40   # mm — how far blade stamps rise above noise_top_mm
     #   blade stamp peak = noise_top_mm + blade_raise_mm, always above the noise ceiling
+    stamp_min_taper:    float = 0.40   # fraction [0..1] — skip stamp steps below this taper.
+    #   Prevents thin tapered blade tips from capping the noise field in
+    #   inter-blade areas.  0 = stamp the full blade length; 1 = stamp only at the base.
 
     # ── Edge fade ─────────────────────────────────────────────────────────────
     # Cosine ramp from 0 (at placement-mask boundary) to 1 (edge_fade_mm inside).

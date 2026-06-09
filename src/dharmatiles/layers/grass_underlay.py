@@ -217,6 +217,15 @@ def _stamp_blade(
         if width < cell_w or peak_h < 1e-4:
             break
 
+        # Skip thin-taper steps — tapered tips of dense blades would otherwise
+        # spread across inter-blade areas via np.maximum and cap the noise valleys,
+        # creating a false "floor" that limits texture in the interior.
+        if taper < cfg.stamp_min_taper:
+            x += seed.blade_segment_length * math.sin(direction)
+            y += seed.blade_segment_length * math.cos(direction)
+            direction += seed.blade_curl
+            continue
+
         hw = width / 2.0
 
         # Mirror the 3D blade containment rule: the blade centre must stay at
