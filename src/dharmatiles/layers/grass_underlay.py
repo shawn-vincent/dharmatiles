@@ -55,6 +55,10 @@ class GrassUnderlayLayer:
         field = np.zeros((gh, gw), dtype=float)
 
         # ── 1. Noise base ─────────────────────────────────────────────────────
+        # Additive (not clipped via maximum) so the field has both peaks AND
+        # valleys — true up-and-down texture rather than bumps on a flat floor.
+        # noise is normalised to std=1 then scaled by noise_amp, giving a range
+        # of roughly ±noise_amp (3-sigma tails aside).
         if cfg.noise_amp > 0.0:
             sigma = max(1.0, cfg.noise_scale_mm / surface.cell_w)
             noise = rng.standard_normal((gh, gw))
@@ -62,18 +66,15 @@ class GrassUnderlayLayer:
             s = float(noise.std())
             if s > 1e-12:
                 noise /= s
-            np.maximum(field, noise * cfg.noise_amp, out=field)
+            field += noise * cfg.noise_amp
 
         # ── 2. Blade stamp footprints ─────────────────────────────────────────
-        # Stamps are accumulated into a *separate* array and then ADDED to the
-        # noise field so each blade rises above the surface beneath it rather
-        # than competing with it via maximum.  Overlapping blades still merge
-        # with each other via maximum (so the taller one wins where they cross).
-        stamps = np.zeros((gh, gw), dtype=float)
+        # Blade peak = noise_amp + blade_raise_mm so blades always clear the
+        # noise ceiling and win the np.maximum merge without any noise texture
+        # appearing on the blade face.  Overlapping blades take the taller value.
         seeds = _collect_seeds(scene, surface, cfg, rng)
         for seed in seeds:
-            _stamp_blade(stamps, surface, seed, cfg)
-        field += stamps
+            _stamp_blade(field, surface, seed, cfg)
 
         # ── 3. Edge fade — cosine ramp from 0 at mask boundary to 1 inside ───
         # Keeps the texture from cutting hard at the grass/soil border.
@@ -193,7 +194,9 @@ def _stamp_blade(
     blade width (0 = left edge, 1 = right edge) — zero at edges, peak at centre.
     """
     total_len = seed.blade_n_steps * seed.blade_segment_length
-    stamp_h_max = cfg.blade_thickness * cfg.stamp_height_scale
+    # Peak height is noise_amp + blade_raise_mm so every blade clears the noise
+    # ceiling — np.maximum then ensures no noise texture bleeds onto the blade face.
+    stamp_h_max = cfg.noise_amp + cfg.blade_raise_mm
     cell_w = surface.cell_w
     half_seg = seed.blade_segment_length / 2.0
 

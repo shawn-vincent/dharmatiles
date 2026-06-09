@@ -216,6 +216,8 @@ class GrassUnderlayConfig:
 
     # ── Stamp-specific ────────────────────────────────────────────────────────
     stamp_height_scale: float = 0.80   # fraction of blade_thickness → stamp peak height
+    blade_raise_mm:     float = 0.40   # mm — guaranteed lift of blade peak above noise_amp
+    #   blade stamp peak = noise_amp + blade_raise_mm, so blades always win the max()
 
     # ── Edge fade ─────────────────────────────────────────────────────────────
     # Cosine ramp from 0 (at placement-mask boundary) to 1 (edge_fade_mm inside).
