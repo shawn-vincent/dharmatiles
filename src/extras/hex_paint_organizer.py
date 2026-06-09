@@ -122,33 +122,31 @@ def _magnet_pocket(
 
 
 def _subtract_magnets(body: m3d.Manifold, spec: HexOrganizerSpec) -> m3d.Manifold:
-    """Cut 20 magnet pockets into the honeycomb's exposed perimeter faces.
+    """Cut 8 magnet pockets into the honeycomb's exposed perimeter faces.
 
-    8 top-flat (2 per top-row cup) + 8 bottom-flat (2 per bottom-row cup)
+    4 flat (1 per corner cup: user-row 1 and 3, left and right ends)
     + 4 side (high column faces 1 & 4, low column faces 0 & 3).
+
+    User-view rows: row 1 (top) = code col=cols-1, row 3 (bottom) = code col=0.
+    Left/right ends = code row=rows-1 (leftmost) and code row=0 (rightmost).
     """
     col_pitch = spec.bore_f2f + spec.wall
     row_pitch = col_pitch * np.sqrt(3) / 2.0
-    top_col = spec.cols - 1   # highest cx in a row → top of the user-view column
-    bot_col = 0               # lowest cx → bottom of the column
+    top_col = spec.cols - 1   # highest cx → top of user-view column
+    bot_col = 0               # lowest cx → bottom of user-view column
 
     def centre(row: int, col: int) -> tuple[float, float]:
         x_stagger = 0.0 if (row % 2) else (col_pitch / 2.0)
         return (col * col_pitch + x_stagger, row * row_pitch)
 
-    # Two magnets straddling a flat face's centre.
-    R = (spec.bore_f2f + 2.0 * spec.wall) / np.sqrt(3)  # edge length = circumradius
-    flat_off = R / 4.0
-
-    # --- flat magnets: top-row cups get top flat (+x, 0°), bottom-row the
-    #     bottom flat (−x, 180°); middle rows skipped. ----------------------
-    for row in range(spec.rows):
-        cx, cy = centre(row, top_col)
-        for off in (-flat_off, flat_off):
-            body -= _magnet_pocket(cx, cy, 0.0, spec, tangent_offset=off)
-        cx, cy = centre(row, bot_col)
-        for off in (-flat_off, flat_off):
-            body -= _magnet_pocket(cx, cy, 180.0, spec, tangent_offset=off)
+    # --- flat magnets: 1 centered magnet on each corner cup's outward flat face.
+    # Row 1 (top, code col=top_col): face 0° (+x).  Row 3 (bottom, code col=0): face 180° (−x).
+    # Only the two end code-rows: row=0 (user right end) and row=rows-1 (user left end).
+    for end_row in (0, spec.rows - 1):
+        cx, cy = centre(end_row, top_col)
+        body -= _magnet_pocket(cx, cy, 0.0, spec)
+        cx, cy = centre(end_row, bot_col)
+        body -= _magnet_pocket(cx, cy, 180.0, spec)
 
     # --- side magnets on the two perimeter columns ------------------------
     # Rightmost code-row (row 0, smallest cy) = HIGH column → faces 1 & 4.
@@ -208,7 +206,7 @@ def main() -> None:
 
     print(f"Building hex organizer  ({spec.cols}×{spec.rows} cups, open front/back)")
     print(f"  cup: outer F2F {outer_f2f:.1f} mm  col pitch {col_pitch:.1f} mm  row pitch {row_pitch:.2f} mm")
-    print(f"  magnets: {spec.magnet_dia:.0f} mm dia × {spec.magnet_depth:.0f} mm deep, centre z={MAGNET_Z:.0f} mm")
+    print(f"  magnets: {spec.magnet_dia:.0f}×{spec.magnet_depth:.0f} mm, z={MAGNET_Z:.0f} mm  (4 flat corners + 4 side diagonals = 8 total)")
 
     manifold = build_organizer(spec)
     raw = manifold.to_mesh()
