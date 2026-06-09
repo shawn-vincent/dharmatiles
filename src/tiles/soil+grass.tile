@@ -30,6 +30,6 @@ boundaries:
     from: {edge: top,    t: 0.48}
     to:   {edge: bottom, t: 0.52}
     path: organic
-    amplitude_mm: 3.0
+    amplitude_mm: 3.6
     wavelength_mm: 10.0
     # width_mm defaults to 0 → zero-width dividing line, no layer
