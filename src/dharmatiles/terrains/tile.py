@@ -6,10 +6,10 @@ Usage
     generate-tile-stl
         Batch mode: process every *.tile file under src/tiles/ and write
         outputs to stl/dungeonblocks/ and stl/openlock/ with names like
-        1x1-half-grass-soil-db.stl / 1x1-half-grass-soil-ol.stl.
+        1x1-soil+grass-db.stl / 1x1-soil+grass-ol.stl.
         Sub-directories under src/tiles/ are mirrored in the output trees.
 
-    generate-tile-stl --spec src/tiles/half-grass-soil.tile
+    generate-tile-stl --spec "src/tiles/soil+grass.tile"
         Single tile: same naming and directory conventions as batch.
 
     generate-tile-stl --spec src/tiles/foo.tile -o stl/custom.stl

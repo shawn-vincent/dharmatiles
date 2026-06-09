@@ -1,4 +1,4 @@
-# half-grass-soil.tile
+# soil+grass.tile
 #
 # Left half: grass.  Right half: bare soil.
 # Zero-width boundary (no layer) — same elevation on both sides,

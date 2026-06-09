@@ -1,4 +1,4 @@
-# corner-grass.tile
+# soil+grass-corner.tile
 #
 # A patch of grass in the bottom-left corner; the rest is bare soil.
 # Works as a transition tile where a meadow ends at a path corner.

@@ -137,7 +137,7 @@ pip install -e .
 generate-tile-stl
 
 # Generate one tile
-generate-tile-stl --spec src/tiles/half-grass-soil.tile
+generate-tile-stl --spec "src/tiles/soil+grass.tile"
 
 # Custom output
 generate-tile-stl --spec src/tiles/foo.tile -o stl/custom.stl

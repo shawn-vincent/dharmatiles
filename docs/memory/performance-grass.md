@@ -24,7 +24,7 @@ directly with no spine-walking loop. The P1 fix is superseded.
 
 ## Current baseline (2026-06-08)
 
-`generate-tile-stl --spec src/tiles/grass-and-water.tile` (grass + water + soil + stones,
+`generate-tile-stl --spec "src/tiles/water+grass.tile"` (grass + water + soil + stones,
 both DB and OL passes, 256 cells/square):
 
 **4.6 s wall clock** — within the REQ-PRF-1 target of < 5 s for a 1×1 tile.

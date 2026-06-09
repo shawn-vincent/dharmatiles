@@ -95,7 +95,7 @@ class TileScene:
     # objects are placed upright regardless of the local slope angle.
     #
     # This is correct for the flat grass zone and the flat water pool.  The
-    # only slope in the grass-and-water tile (≈22° over a 5 mm strip) is bare
+    # only slope in the water+grass tile (≈22° over a 5 mm strip) is bare
     # soil with no placed features, so the visual error is negligible there.
     #
     # When slope-aware placement is needed the entry point is:

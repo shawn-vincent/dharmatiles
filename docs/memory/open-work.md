@@ -28,9 +28,8 @@ a finished tile looks like without generating one themselves.
   current architecture. Seeds distribute via Voronoi groups; `_sort_upstream_first`
   handles ordering. The specific mechanism the old review described is gone.
 
-- **New tile types** — 6 specs already exist: grass-only, half-grass-soil,
-  grass-and-water, coast-left, corner-grass, water. Adequate coverage for current
-  needs.
+- **New tile types** — 5 specs already exist: grass, soil+grass, water+grass,
+  soil+grass-corner, water. Adequate coverage for current needs.
 
 - **Parallel-blade Z jitter** — fixed. `own_stamps` mechanism removed; `_sample_footprint_max`
   probes only leading-edge cells via `_leading_edge_cells`. Visually confirmed fixed 2026-06-08.

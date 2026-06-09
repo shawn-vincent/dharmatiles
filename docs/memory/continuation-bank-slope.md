@@ -60,4 +60,4 @@ Keep that.  Keep passing `water_embed_mm=embed_mm` to `_build_mesh`.
 2. In `_extend_bank_slope_into_pool`, change `t_s = t * t * (3.0 - 2.0 * t)` (smoothstep)
    to `t_s = t * t` (quadratic ease-out) so the slope starts immediately at the
    waterline with no flat shelf.
-3. Regenerate `src/tiles/grass-and-water.tile`.
+3. Regenerate `src/tiles/water+grass.tile`.

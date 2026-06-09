@@ -11,7 +11,7 @@ world-Z based except for the terrain heightmap itself.
 - Stones, grass blades, and support cones currently use world-up/world-down
   frames rather than terrain-normal frames.
 
-For `tiles/grass-and-water.tile`, this is acceptable today: grass grows only
+For `tiles/water+grass.tile`, this is acceptable today: grass grows only
 in the flat 5 mm meadow, water is flat at 3 mm, and the 5 mm to 3 mm transition
 strip is bare soil. The shoreline slope is therefore visually plausible even
 though the small soil bumps are vertical offsets rather than true normal

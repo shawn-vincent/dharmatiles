@@ -189,7 +189,7 @@ visible seam layer.
 ## Tile spec file format (TOML)
 
 ```toml
-# tiles/coast-left.tile
+# tiles/water+grass.tile  (formerly coast-left.tile)
 
 [surface]
 cols = 1
@@ -409,7 +409,7 @@ depth_mm = 1.5
 
 **Q1: `contains` units — normalised or mm?**
 Using `[0..1, 0..1]` normalised coordinates means specs are
-tile-size-independent (a `corner-grass.tile` works for 1×1 and 3×3).
+tile-size-independent (a `soil+grass-corner.tile` works for 1×1 and 3×3).
 Using mm is more intuitive when hand-authoring coastlines.
 *Leaning toward normalised; add a note in the doc that `[0.5, 0.5]`
 is tile centre.*

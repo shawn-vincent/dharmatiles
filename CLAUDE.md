@@ -18,12 +18,12 @@ generate-tile-stl
 # Common flags
 generate-tile-stl --seed 42
 generate-tile-stl --cols 3 --rows 3
-generate-tile-stl --spec src/tiles/half-grass-soil.tile
-generate-tile-stl --spec src/tiles/grass-and-water.tile -o stl/custom.stl
+generate-tile-stl --spec "src/tiles/soil+grass.tile"
+generate-tile-stl --spec "src/tiles/water+grass.tile" -o stl/custom.stl
 generate-tile-stl --quiet   # suppress progress output
 
 # Run a single script directly (no install needed)
-python -m dharmatiles.terrains.tile --spec src/tiles/half-grass-soil.tile
+python -m dharmatiles.terrains.tile --spec "src/tiles/soil+grass.tile"
 ```
 
 There are no automated tests; correctness is verified by opening the STL in PrusaSlicer, MeshLab, or Windows 3D Builder and visually inspecting the coloured mesh.
@@ -35,7 +35,7 @@ There are no automated tests; correctness is verified by opening the STL in Prus
 | Changed file | Regeneration command |
 |---|---|
 | `src/extras/craft_paint_modular_organizer.py` | `python src/extras/craft_paint_modular_organizer.py` |
-| Tile terrain / layers / core | `generate-tile-stl --spec src/tiles/grass-and-water.tile -o stl/openlock/1x1-grass-and-water-ol.stl` (or whichever spec exercises the change) |
+| Tile terrain / layers / core | `generate-tile-stl --spec "src/tiles/water+grass.tile" -o stl/openlock/1x1-water+grass-ol.stl` (or whichever spec exercises the change) |
 | Default tile path | `generate-tile-stl` |
 
 Always report the output path, vertex/face counts, and watertight status after generation.
