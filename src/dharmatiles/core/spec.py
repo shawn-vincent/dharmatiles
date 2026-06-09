@@ -94,7 +94,7 @@ class BoundarySpec:
     from_anchor: tuple[str, float]   # (edge, t)  edge ∈ {top, bottom, left, right}
     to_anchor:   tuple[str, float]   # (edge, t)
     path:        str   = 'organic'   # "organic" | "straight"
-    amplitude_mm:  float = 3.0
+    amplitude_mm:  float = 3.6
     wavelength_mm: float = 10.0      # organic smoothness/correlation length
     detail_fraction: float = 0.25    # relative amplitude of 4× detail layer (0 = off)
     seed_offset:   int   = 0
@@ -239,7 +239,7 @@ def _parse(data: dict) -> TileSpec:
             from_anchor     = (bdata['from']['edge'], float(bdata['from']['t'])),
             to_anchor       = (bdata['to']['edge'],   float(bdata['to']['t'])),
             path            = bdata.get('path', 'organic'),
-            amplitude_mm    = float(bdata.get('amplitude_mm', 3.0)),
+            amplitude_mm    = float(bdata.get('amplitude_mm', 3.6)),
             wavelength_mm   = float(bdata.get('wavelength_mm', 10.0)),
             detail_fraction = float(bdata.get('detail_fraction', 0.25)),
             seed_offset     = int(bdata.get('seed_offset', 0)),
