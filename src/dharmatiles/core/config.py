@@ -198,7 +198,16 @@ class GrassUnderlayConfig:
     and its companion ``grass`` layer.
     """
     # ── Noise base ────────────────────────────────────────────────────────────
-    noise_amp:      float = 1.00   # mm — peak amplitude of background noise
+    # noise_top_mm  — where the noise PEAKS sit relative to original terrain_z.
+    #                 0 = peaks flush with terrain surface.
+    #                 Positive = peaks above; negative = peaks below.
+    #                 This is the single height knob; changing it never requires
+    #                 compensating any other parameter.
+    # noise_amp     — how far the roughness descends BELOW noise_top_mm.
+    #                 Pure texture depth; independent of height.
+    #                 Noise field ranges from (noise_top_mm - noise_amp) to noise_top_mm.
+    noise_top_mm:   float = 0.00   # mm — height of noise peaks above terrain_z
+    noise_amp:      float = 1.00   # mm — roughness depth below noise_top_mm
     noise_scale_mm: float = 2.0    # mm — Gaussian σ (feature correlation length)
 
     # ── Blade stamp geometry (mirrors SpeciesConfig) ──────────────────────────
@@ -215,18 +224,9 @@ class GrassUnderlayConfig:
     blade_thickness:      float = 0.6   # mm — 3D blade height; used as stamp peak
 
     # ── Stamp-specific ────────────────────────────────────────────────────────
-    stamp_height_scale: float = 0.80   # fraction of blade_thickness → stamp peak height
-    blade_raise_mm:     float = 0.40   # mm — guaranteed lift of blade peak above noise_amp
-    #   blade stamp peak = noise_amp + blade_raise_mm, so blades always win the max()
-
-    # ── DC height offset ──────────────────────────────────────────────────────
-    # Constant added to the entire field after noise + stamps are composited,
-    # before the edge fade and terrain_z application.  Negative values sink the
-    # whole layer into the terrain so the blade stamps barely poke above the
-    # original surface rather than building a visible raised plateau.
-    # Does not affect texture amplitude — peaks and valleys stay the same
-    # distance apart; the whole envelope just shifts.
-    height_offset_mm: float = -0.30
+    stamp_height_scale: float = 0.80   # fraction of blade_thickness → stamp peak height (unused; kept for YAML compat)
+    blade_raise_mm:     float = 0.40   # mm — how far blade peaks rise above noise_top_mm
+    #   blade stamp peak = noise_top_mm + blade_raise_mm, always above the noise ceiling
 
     # ── Edge fade ─────────────────────────────────────────────────────────────
     # Cosine ramp from 0 (at placement-mask boundary) to 1 (edge_fade_mm inside).

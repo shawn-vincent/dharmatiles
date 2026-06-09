@@ -55,41 +55,36 @@ class GrassUnderlayLayer:
         field = np.zeros((gh, gw), dtype=float)
 
         # ── 1. Noise base ─────────────────────────────────────────────────────
-        # Additive (not clipped via maximum) so the field has both peaks AND
-        # valleys — true up-and-down texture rather than bumps on a flat floor.
-        # noise is normalised to std=1 then scaled by noise_amp, giving a range
-        # of roughly ±noise_amp (3-sigma tails aside).
+        # Noise peaks land exactly at noise_top_mm; valleys descend noise_amp
+        # below that.  Normalise to [-1, 0] (peak-referenced) then scale+shift:
+        #   field = noise_top_mm + noise_amp * unit_noise,  unit_noise ∈ [-1, 0]
+        # Changing noise_top_mm slides the whole envelope; changing noise_amp
+        # widens/narrows the roughness — the two are fully independent.
         if cfg.noise_amp > 0.0:
             sigma = max(1.0, cfg.noise_scale_mm / surface.cell_w)
             noise = rng.standard_normal((gh, gw))
             noise = gaussian_filter(noise, sigma=sigma)
-            s = float(noise.std())
-            if s > 1e-12:
-                noise /= s
-            field += noise * cfg.noise_amp
+            noise -= float(noise.max())          # shift so peak = 0
+            n_min = float(noise.min())
+            if abs(n_min) > 1e-12:
+                noise /= abs(n_min)              # now ∈ [-1, 0]
+            field += cfg.noise_top_mm + cfg.noise_amp * noise
 
         # ── 2. Blade stamp footprints ─────────────────────────────────────────
-        # Blade peak = noise_amp + blade_raise_mm so blades always clear the
-        # noise ceiling and win the np.maximum merge without any noise texture
-        # appearing on the blade face.  Overlapping blades take the taller value.
+        # Blade peak = noise_top_mm + blade_raise_mm, always above the noise
+        # ceiling (noise_top_mm), so blades win np.maximum cleanly with no
+        # noise texture on the blade face.
         seeds = _collect_seeds(scene, surface, cfg, rng)
         for seed in seeds:
             _stamp_blade(field, surface, seed, cfg)
 
-        # ── 3. DC height offset ───────────────────────────────────────────────
-        # Shifts the whole field without changing texture amplitude, so blade
-        # stamps and noise peaks stay the same distance apart but the plateau
-        # sinks into the terrain rather than rising above it.
-        if cfg.height_offset_mm != 0.0:
-            field += cfg.height_offset_mm
-
-        # ── 5. Edge fade — cosine ramp from 0 at mask boundary to 1 inside ───
+        # ── 3. Edge fade — cosine ramp from 0 at mask boundary to 1 inside ───
         # Keeps the texture from cutting hard at the grass/soil border.
         if cfg.edge_fade_mm > 0.0:
             fade = _compute_edge_fade(placement_mask, gh, gw, cfg.edge_fade_mm, surface.cell_w)
             field *= fade
 
-        # ── 6. Apply with mask ────────────────────────────────────────────────
+        # ── 4. Apply with mask ────────────────────────────────────────────────
         if placement_mask is None:
             scene.terrain_z += field
         else:
@@ -201,9 +196,9 @@ def _stamp_blade(
     blade width (0 = left edge, 1 = right edge) — zero at edges, peak at centre.
     """
     total_len = seed.blade_n_steps * seed.blade_segment_length
-    # Peak height is noise_amp + blade_raise_mm so every blade clears the noise
-    # ceiling — np.maximum then ensures no noise texture bleeds onto the blade face.
-    stamp_h_max = cfg.noise_amp + cfg.blade_raise_mm
+    # Blade peaks at noise_top_mm + blade_raise_mm — above the noise ceiling
+    # (noise_top_mm) by blade_raise_mm, so np.maximum always picks the blade.
+    stamp_h_max = cfg.noise_top_mm + cfg.blade_raise_mm
     cell_w = surface.cell_w
     half_seg = seed.blade_segment_length / 2.0
 
