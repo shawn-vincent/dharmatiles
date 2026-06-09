@@ -65,9 +65,15 @@ class GrassUnderlayLayer:
             np.maximum(field, noise * cfg.noise_amp, out=field)
 
         # ── 2. Blade stamp footprints ─────────────────────────────────────────
+        # Stamps are accumulated into a *separate* array and then ADDED to the
+        # noise field so each blade rises above the surface beneath it rather
+        # than competing with it via maximum.  Overlapping blades still merge
+        # with each other via maximum (so the taller one wins where they cross).
+        stamps = np.zeros((gh, gw), dtype=float)
         seeds = _collect_seeds(scene, surface, cfg, rng)
         for seed in seeds:
-            _stamp_blade(field, surface, seed, cfg)
+            _stamp_blade(stamps, surface, seed, cfg)
+        field += stamps
 
         # ── 3. Edge fade — cosine ramp from 0 at mask boundary to 1 inside ───
         # Keeps the texture from cutting hard at the grass/soil border.
