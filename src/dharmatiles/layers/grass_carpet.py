@@ -1,5 +1,5 @@
 """
-GrassCarpetLayer: embossed grass-carpet texture under the 3D blades.
+GrassCarpet: embossed grass-carpet texture under the 3D blades.
 
 Two components are produced:
 
@@ -25,7 +25,6 @@ See docs/design/grass-underlay.md for the original design rationale.
 from __future__ import annotations
 
 import dataclasses
-import math
 
 import numpy as np
 from scipy.ndimage import distance_transform_edt, gaussian_filter
@@ -39,55 +38,31 @@ from ..grass.grow import plant_seeds as _plant_seeds
 from ..grass.seed import GrassPath, GrassSeed
 
 
-_UNDERLAY_FIELDS = {f.name for f in dataclasses.fields(GrassUnderlayConfig)
-                    if f.name != 'species'}
-_SPECIES_FIELDS  = {f.name for f in dataclasses.fields(SpeciesConfig)}
-
-
-class GrassCarpetLayer:
+class GrassCarpet:
     """Embossed grass carpet: noise base in terrain_z + flat blade tube meshes.
 
-    Flat kwargs are split between ``GrassUnderlayConfig`` and
-    ``SpeciesConfig``; pass ``species=SpeciesConfig(...)`` to share blade
-    geometry with a companion 3D ``Grass`` instance.
+    Pass ``species=SpeciesConfig(...)`` to share blade geometry with a
+    companion 3D ``Grass`` instance.  Pass ``underlay=GrassUnderlayConfig(...)``
+    to customise carpet-specific settings (noise amplitude, edge fade, etc.);
+    if both are given, ``species`` overrides the species inside ``underlay``.
     """
 
     height_default_mm: float = 5.0
 
-    # Carpet-only multipliers applied to the shared SpeciesConfig: shorter,
-    # sparser blades than the 3-D grass layer that grows from the same species.
-    # Skipped per-field when the caller passes that field explicitly.
-    _CARPET_LENGTH_SCALE: float = 0.75            # 75 % of species blade length
-    _CARPET_COUNT_SCALE:  float = 2.0 / 3.0       # 2/3 of species blade count
-
-    def __init__(self, species: SpeciesConfig | None = None, **kwargs) -> None:
-        base_species = species or SpeciesConfig()
-        species_over = {k: v for k, v in kwargs.items() if k in _SPECIES_FIELDS}
-        carpet_over  = {k: v for k, v in kwargs.items() if k in _UNDERLAY_FIELDS}
-        unknown = set(kwargs) - _SPECIES_FIELDS - _UNDERLAY_FIELDS
-        if unknown:
-            raise TypeError(f"GrassCarpetLayer: unknown kwargs {sorted(unknown)!r}")
-        final_species = (dataclasses.replace(base_species, **species_over)
-                         if species_over else base_species)
-
-        # Apply carpet-only defaults where the caller didn't override.
-        carpet_defaults: dict = {}
-        if 'blade_length_min' not in species_over:
-            carpet_defaults['blade_length_min'] = (
-                final_species.blade_length_min * self._CARPET_LENGTH_SCALE)
-        if 'blade_length_max' not in species_over:
-            carpet_defaults['blade_length_max'] = (
-                final_species.blade_length_max * self._CARPET_LENGTH_SCALE)
-        if 'gap_mm' not in species_over:
-            # Count = density × area where density = 1 / (footprint + gap)².
-            # To scale count by k, multiply centre-to-centre spacing by 1/√k.
-            old_spacing = final_species.blade_width_max + final_species.gap_mm
-            new_spacing = old_spacing / math.sqrt(self._CARPET_COUNT_SCALE)
-            carpet_defaults['gap_mm'] = new_spacing - final_species.blade_width_max
-        if carpet_defaults:
-            final_species = dataclasses.replace(final_species, **carpet_defaults)
-
-        self.cfg = GrassUnderlayConfig(species=final_species, **carpet_over)
+    def __init__(
+        self,
+        species: SpeciesConfig | None = None,
+        *,
+        underlay: GrassUnderlayConfig | None = None,
+    ) -> None:
+        _species = species or SpeciesConfig()
+        if underlay is None:
+            self.cfg = GrassUnderlayConfig(species=_species)
+        elif species is not None:
+            # Caller supplied both: use underlay settings, override its species.
+            self.cfg = dataclasses.replace(underlay, species=_species)
+        else:
+            self.cfg = underlay
 
     def apply(
         self,

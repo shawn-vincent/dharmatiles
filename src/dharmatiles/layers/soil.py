@@ -1,5 +1,5 @@
 """
-SoilCarpetLayer: two-tier random super-Gaussian blob clumps baked into terrain_z.
+SoilCarpet: two-tier random super-Gaussian blob clumps baked into terrain_z.
 
 The bump field is computed at 2× the coarse grid resolution so individual
 soil mounds have sub-cell detail; the result is then downsampled back to
@@ -34,11 +34,11 @@ from ..core.config import SoilConfig
 from ..core.tile import TileScene
 
 
-class SoilCarpetLayer:
+class SoilCarpet:
     """Bake super-Gaussian soil clumps into scene.terrain_z.
 
     Accepts flat ``SoilConfig`` kwargs; reads the active ``SurfaceConfig``
-    from ``scene.surface`` inside ``apply()``.
+    Reads ``scene.surface`` inside ``apply()``.
     """
 
     height_default_mm: float = 5.0

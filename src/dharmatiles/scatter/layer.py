@@ -1,5 +1,5 @@
 """
-ScatterLayer: a tile layer that scatters one or more things into a region.
+Scatter: a tile layer that scatters one or more things into a region.
 
 Each "thing" is a ``Rocks`` or ``Grass`` instance with a ``scatter()`` method.
 Things are placed in the order given — author writes ``Rocks`` before
@@ -11,7 +11,7 @@ import numpy as np
 import trimesh
 
 
-class ScatterLayer:
+class Scatter:
     """Scatter a sequence of things into a region in spec order."""
 
     height_default_mm: float = 5.0

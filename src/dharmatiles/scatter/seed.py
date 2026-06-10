@@ -5,7 +5,7 @@ Seed sort keys use a two-element tuple ``(priority, secondary_key)``:
   priority 0 — rocks  → secondary: −mean_radius (big rocks first)
   priority 1 — grass  → secondary: upstream_dist (GrassSeed, in grass/seed.py)
 
-The ScatterLayer realises all priority-0 seeds before priority-1 seeds so that
+The Scatter layer realises all priority-0 seeds before priority-1 seeds so that
 rock ``terrain_support_z`` stamps are complete when grass seeds are planted.
 """
 from __future__ import annotations

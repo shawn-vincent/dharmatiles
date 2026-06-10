@@ -5,15 +5,15 @@ A ``.tile.py`` file is executed as Python and must bind a module-level
 ``tile`` variable to a :class:`Tile` instance.
 
 The spec is the implementation language: ``Region.layers`` holds real
-layer instances (``SoilCarpetLayer``, ``GrassCarpetLayer``,
-``ScatterLayer``, ``WaterLayer``), and the orchestrator runs their
-``apply()`` methods in the order they appear.  No string types, no
-``params=dict(...)``, no phase enum.
+layer instances (``SoilCarpet``, ``GrassCarpet``, ``Scatter``, ``Water``),
+and the orchestrator runs their ``apply()`` methods in the order they appear.
+No string types, no ``params=dict(...)``, no phase enum.
 
 Example::
 
+    from dataclasses import replace
     from dharmatiles.spec import Tile, Region, Boundary, SurfaceConfig, SpeciesConfig
-    from dharmatiles.layers import SoilCarpetLayer, GrassCarpetLayer, ScatterLayer
+    from dharmatiles.layers import SoilCarpet, GrassCarpet, Scatter
     from dharmatiles.scatter import Rocks, Grass
 
     species = SpeciesConfig()
@@ -21,14 +21,14 @@ Example::
         surface=SurfaceConfig(seed=42),
         regions=[
             Region(id='meadow', contains=(0.25, 0.5), layers=[
-                GrassCarpetLayer(species=species, groups_per_square=240),
-                ScatterLayer(
+                GrassCarpet(species=replace(species, groups_per_square=240)),
+                Scatter(
                     Rocks(r_min=0.8, r_max=2.2),
-                    Grass(species=species, groups_per_square=24),
+                    Grass(species=replace(species, groups_per_square=24)),
                 ),
             ]),
             Region(id='dirt', contains=(0.75, 0.5), layers=[
-                SoilCarpetLayer(),
+                SoilCarpet(),
             ]),
         ],
     )

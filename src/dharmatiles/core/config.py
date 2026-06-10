@@ -22,7 +22,7 @@ import numpy as np
 class SpeciesConfig:
     """Template for one plant species.
 
-    Both ``GrassCarpetLayer`` (2D stamps) and ``Grass`` (3D blades) consume a
+    Both ``GrassCarpet`` (2D stamps) and ``Grass`` (3D blades) consume a
     ``SpeciesConfig``.  Defining one object and sharing it between the two
     layer instances in a ``.tile.py`` file keeps blade geometry in a single
     place.
@@ -232,11 +232,11 @@ class GrassUnderlayConfig:
        logic as the companion 3D grass layer.
 
     ``species`` holds all blade geometry.  Pass the *same* ``SpeciesConfig``
-    instance to both the ``grass_carpet`` and ``grass`` layers in a tile spec
-    so the 2D stamps and 3D blades share identical *geometry* (width, taper,
-    curl, cross-section).  Their *positions* are independently seeded — the
-    carpet provides a dense field of flat footprints; the 3D blades stand up
-    through it at different locations.
+    instance to both the ``GrassCarpet`` and ``Grass`` in a tile spec so the
+    2D stamps and 3D blades share identical *geometry* (width, taper, curl,
+    cross-section).  Their *positions* are independently seeded — the carpet
+    provides a dense field of flat footprints; the 3D blades stand up through
+    it at different locations.
     """
 
     # ── Noise base ────────────────────────────────────────────────────────────

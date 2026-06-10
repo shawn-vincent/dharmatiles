@@ -84,4 +84,4 @@ class TileScene:
     #   - FloppyGrassLayer (blade origin)  → sink along normal, not world-Z
     #   - FloppyGrassLayer (rise_cap check)→ compare Δ along normal, not abs Δz
     #   - _make_support_post               → measure z_top clearance along normal
-    #   - SoilCarpetLayer._accumulate_blob → displace bump along normal
+    #   - SoilCarpet._accumulate_blob → displace bump along normal

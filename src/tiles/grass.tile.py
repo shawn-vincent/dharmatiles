@@ -6,7 +6,7 @@
 # guaranteeing the two passes use identical blade geometry.
 
 from dharmatiles.spec import Tile, Region, SurfaceConfig, SpeciesConfig
-from dharmatiles.layers import GrassCarpetLayer, ScatterLayer
+from dharmatiles.layers import GrassCarpet, Scatter
 from dharmatiles.scatter import Grass
 
 _meadow = SpeciesConfig(
@@ -26,8 +26,8 @@ tile = Tile(
             id='meadow',
             contains=(0.5, 0.5),
             layers=[
-                GrassCarpetLayer(species=_meadow),
-                ScatterLayer(
+                GrassCarpet(species=_meadow),
+                Scatter(
                     Grass(species=_meadow),
                 ),
             ],

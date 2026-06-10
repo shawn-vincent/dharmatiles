@@ -106,12 +106,6 @@ def single_cup(spec: HexOrganizerSpec) -> m3d.Manifold:
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
     R_outer = outer_f2f / np.sqrt(3)
 
-    if spec.height < 50:
-        # Hollow tube: open top and bottom, no floor geometry.
-        outer = hex_prism(outer_f2f, spec.height)
-        bore  = hex_prism(spec.bore_f2f, spec.height)
-        return outer - bore
-
     outer = hex_prism(outer_f2f, spec.outer_wall_height)
 
     # Inner bore and retaining depression corner roundover radius:
@@ -331,7 +325,43 @@ def _mark_origin_cup(body: m3d.Manifold, spec: HexOrganizerSpec) -> m3d.Manifold
     return body - dent
 
 
+def _build_hollow(spec: HexOrganizerSpec) -> m3d.Manifold:
+    """Hollow tube mode (height < 50): union solid outer shells, apply
+    roundovers to the solid union, then subtract bores.  Roundovers must run
+    on the solid honeycomb — the 8 mm inward offset collapses thin ring
+    cross-sections, which is what you get if bores are cut first."""
+    outer_f2f = spec.bore_f2f + 2.0 * spec.wall
+    R_outer = outer_f2f / np.sqrt(3)
+    bore_r = max(0.0, spec.vertical_roundover - (R_outer - spec.bore_f2f / np.sqrt(3)))
+
+    outer_shell = hex_prism(outer_f2f, spec.height)
+    shells = [outer_shell.translate((*cup_centre(spec, c, r), 0.0))
+              for c in range(spec.cols) for r in range(spec.rows)]
+    result = shells[0]
+    for s in shells[1:]:
+        result = result + s
+
+    if spec.vertical_roundover > 0.0:
+        result = _vertical_roundover(result, spec, spec.vertical_roundover)
+    if spec.bottom_roundover > 0.0:
+        result = _bottom_roundover(result, spec)
+
+    if bore_r > 0.0:
+        bore = m3d.Manifold.extrude(_rounded_hex_cs(spec.bore_f2f, bore_r), spec.height)
+    else:
+        bore = hex_prism(spec.bore_f2f, spec.height)
+    for c in range(spec.cols):
+        for r in range(spec.rows):
+            cx, cy = cup_centre(spec, c, r)
+            result -= bore.translate((cx, cy, 0.0))
+
+    return result
+
+
 def build_organizer(spec: HexOrganizerSpec) -> m3d.Manifold:
+    if spec.height < 50:
+        return _build_hollow(spec)
+
     # Honeycomb cup union
     cup = single_cup(spec)
     cups = []
@@ -343,18 +373,16 @@ def build_organizer(spec: HexOrganizerSpec) -> m3d.Manifold:
     for c in cups[1:]:
         result = result + c
 
-    if spec.height >= 50:
-        result = _subtract_magnets(result, spec)
-    if spec.height >= 50 and spec.vertical_roundover > 0.0:
+    result = _subtract_magnets(result, spec)
+    if spec.vertical_roundover > 0.0:
         result = _vertical_roundover(result, spec, spec.vertical_roundover)
-    if spec.height >= 50 and spec.bottom_roundover > 0.0:
+    if spec.bottom_roundover > 0.0:
         result = _bottom_roundover(result, spec)
-    if spec.height >= 50:
-        # Cut the logo stamps and orientation marker last: they sit inside the
-        # base slab, and the roundovers slice the body at low z to build their
-        # templates — interior holes there would get swept through the model.
-        result = _stamp_logos(result, spec)
-        result = _mark_origin_cup(result, spec)
+    # Cut the logo stamps and orientation marker last: they sit inside the
+    # base slab, and the roundovers slice the body at low z to build their
+    # templates — interior holes there would get swept through the model.
+    result = _stamp_logos(result, spec)
+    result = _mark_origin_cup(result, spec)
     return result
 
 

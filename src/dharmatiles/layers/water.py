@@ -11,10 +11,10 @@ from ..core.config import SurfaceConfig
 WATER_RENDER_LIFT_MM = 0.10
 
 
-class WaterLayer:
+class Water:
     """Reshape the pool floor + bank slope and emit the water volume mesh.
 
-    Used as ``Region(layers=[..., WaterLayer()])``.  Place after any rocks
+    Used as ``Region(layers=[..., Water()])``.  Place after any rocks
     in the same region so the ripple displacement can react to rocks
     standing in the water.
 

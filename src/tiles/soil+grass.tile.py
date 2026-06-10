@@ -3,8 +3,9 @@
 # Left half: grass.  Right half: bare soil.
 # The organic boundary creates a natural meadow margin.
 
+from dataclasses import replace
 from dharmatiles.spec import Tile, Region, Boundary, SurfaceConfig, SpeciesConfig
-from dharmatiles.layers import SoilCarpetLayer, GrassCarpetLayer, ScatterLayer
+from dharmatiles.layers import SoilCarpet, GrassCarpet, Scatter
 from dharmatiles.scatter import Grass
 
 _species = SpeciesConfig()
@@ -16,9 +17,9 @@ tile = Tile(
             id='meadow',
             contains=(0.25, 0.5),
             layers=[
-                GrassCarpetLayer(species=_species, groups_per_square=240),
-                ScatterLayer(
-                    Grass(species=_species, groups_per_square=24),
+                GrassCarpet(species=replace(_species, groups_per_square=240)),
+                Scatter(
+                    Grass(species=replace(_species, groups_per_square=24)),
                 ),
             ],
         ),
@@ -26,7 +27,7 @@ tile = Tile(
             id='dirt',
             contains=(0.75, 0.5),
             layers=[
-                SoilCarpetLayer(),
+                SoilCarpet(),
             ],
         ),
     ],

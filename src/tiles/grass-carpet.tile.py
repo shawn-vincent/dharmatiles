@@ -4,7 +4,7 @@
 # Use this to inspect the embossed 2D grass-carpet layer in isolation.
 
 from dharmatiles.spec import Tile, Region, SurfaceConfig
-from dharmatiles.layers import GrassCarpetLayer
+from dharmatiles.layers import GrassCarpet
 
 tile = Tile(
     surface=SurfaceConfig(seed=42),
@@ -13,7 +13,7 @@ tile = Tile(
             id='meadow',
             contains=(0.5, 0.5),
             layers=[
-                GrassCarpetLayer(),
+                GrassCarpet(),
             ],
         ),
     ],

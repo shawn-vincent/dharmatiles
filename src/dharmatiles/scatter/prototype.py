@@ -1,13 +1,11 @@
 """
-Rocks and Grass: the things you scatter inside a ``ScatterLayer``.
+Rocks and Grass: the things you scatter inside a ``Scatter`` layer.
 
 Each class has one method, ``scatter(scene, *, placement_mask)``, which
 samples positions, sorts seeds, builds meshes, and stamps the relevant
 scene support fields.  No seed/realise split — one call does it all.
 """
 from __future__ import annotations
-
-import dataclasses
 
 import numpy as np
 import trimesh
@@ -17,10 +15,10 @@ from ..core.config import (RocksConfig, SpeciesConfig,
 from .config import ScatterConfig
 from .seed import RockSeed
 from .distribute import scatter_positions
+import dataclasses
 
 
-_ROCK_FIELDS    = {f.name for f in dataclasses.fields(RocksConfig)}
-_SPECIES_FIELDS = {f.name for f in dataclasses.fields(SpeciesConfig)}
+_ROCK_FIELDS = {f.name for f in dataclasses.fields(RocksConfig)}
 
 
 # ── Rocks ─────────────────────────────────────────────────────────────────────
@@ -106,8 +104,9 @@ class Rocks:
 class Grass:
     """One species of 3D blades to scatter into a region.
 
-    Pass a ``SpeciesConfig`` (sharable with a companion ``GrassCarpetLayer``)
-    plus optional flat overrides to specialise this instance.
+    Pass a ``SpeciesConfig`` (sharable with a companion ``GrassCarpet``)
+    to specify blade geometry.  Pass ``scatter=ScatterConfig(...)`` to
+    override placement behaviour.
     """
 
     def __init__(
@@ -116,14 +115,8 @@ class Grass:
         *,
         scatter: ScatterConfig | None = None,
         max_stack_height: float = 2.0,
-        **species_overrides,
     ):
-        unknown = set(species_overrides) - _SPECIES_FIELDS
-        if unknown:
-            raise TypeError(f"Grass: unknown kwargs {sorted(unknown)!r}")
-        base = species or SpeciesConfig()
-        self.species = (dataclasses.replace(base, **species_overrides)
-                        if species_overrides else base)
+        self.species = species or SpeciesConfig()
         self.scatter_cfg = scatter or ScatterConfig(
             groups_per_square = self.species.groups_per_square,
             gap_mm            = self.species.gap_mm,

@@ -1,12 +1,12 @@
 """Public layer classes for tile specs."""
-from .soil         import SoilCarpetLayer
-from .grass_carpet import GrassCarpetLayer
-from .water        import WaterLayer
-from ..scatter.layer import ScatterLayer
+from .soil         import SoilCarpet
+from .grass_carpet import GrassCarpet
+from .water        import Water
+from ..scatter.layer import Scatter
 
 __all__ = [
-    'SoilCarpetLayer',
-    'GrassCarpetLayer',
-    'ScatterLayer',
-    'WaterLayer',
+    'SoilCarpet',
+    'GrassCarpet',
+    'Scatter',
+    'Water',
 ]

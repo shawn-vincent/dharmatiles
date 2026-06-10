@@ -9,8 +9,8 @@
 # that grows the grass.  Pool comes before meadow so its rocks are stamped
 # into terrain_support_z before meadow blades plan their growth.
 
-from dharmatiles.spec import Tile, Region, Boundary, SurfaceConfig
-from dharmatiles.layers import SoilCarpetLayer, GrassCarpetLayer, ScatterLayer, WaterLayer
+from dharmatiles.spec import Tile, Region, Boundary, SurfaceConfig, SpeciesConfig
+from dharmatiles.layers import SoilCarpet, GrassCarpet, Scatter, Water
 from dharmatiles.scatter import Rocks, Grass
 
 tile = Tile(
@@ -21,7 +21,7 @@ tile = Tile(
             contains=(0.5, 0.25),
             height_mm=3.0,
             layers=[
-                ScatterLayer(
+                Scatter(
                     Rocks(
                         rocks_per_square=2,
                         r_min=3.0,
@@ -32,20 +32,20 @@ tile = Tile(
                         n_cuts=3,
                     ),
                 ),
-                WaterLayer(embed_mm=2.5),
+                Water(embed_mm=2.5),
             ],
         ),
         Region(
             id='meadow',
             contains=(0.5, 0.75),
             layers=[
-                GrassCarpetLayer(),
-                ScatterLayer(
-                    Grass(
+                GrassCarpet(),
+                Scatter(
+                    Grass(species=SpeciesConfig(
                         groups_per_square=2,
                         blade_length_min=10,
                         blade_length_max=10,
-                    ),
+                    )),
                 ),
             ],
         ),
@@ -60,8 +60,8 @@ tile = Tile(
             wavelength_mm=12.0,
             width_mm=2.5,
             layers=[
-                SoilCarpetLayer(),
-                ScatterLayer(
+                SoilCarpet(),
+                Scatter(
                     Rocks(
                         rocks_per_square=60,
                         r_min=0.8,
