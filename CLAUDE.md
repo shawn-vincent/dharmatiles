@@ -200,6 +200,15 @@ composition all work.  The orchestrator (`terrains/tile.py`) walks
 in the order they appear in its argument list.  Put `Rocks` first so the
 following `Grass` blades can steer around already-stamped rock footprints.
 
+The same ordering rule applies across regions and boundaries: the
+orchestrator runs all regions in spec order, then all boundaries in spec
+order.  3D grass only steers around rocks that have already been stamped
+into `terrain_support_z` *before* `Grass.scatter()` runs.  Put any region
+whose rocks the grass should respect ahead of the grass-bearing region in
+the spec.  Rocks in a boundary always run after every region, so grass
+blades growing into a boundary strip will plow through its rocks —
+documented behaviour: put rocks on grass, you get rocks on grass.
+
 - `Rocks.scatter()` samples positions from its `ScatterConfig`, builds
   `RockSeed`s, sorts big→small, and calls `_build_rocks_mesh_from_seeds`
   (vectorised NumPy) which also stamps `terrain_support_z` and `rock_mask`.

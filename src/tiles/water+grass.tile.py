@@ -4,8 +4,10 @@
 # Bottom half: flat water pool (3 mm) — blue placeholder surface.
 # Transition: organic shoreline with a 2.5 mm dirt slope between the two levels.
 #
-# Layer order matters: within the pool region, rocks are placed first so
-# WaterLayer's ripple displacement reacts to rocks standing in the water.
+# Region/boundary order matters globally: layers run in spec order, so
+# anything that should steer 3D grass blades must appear before the region
+# that grows the grass.  Pool comes before meadow so its rocks are stamped
+# into terrain_support_z before meadow blades plan their growth.
 
 from dharmatiles.spec import Tile, Region, Boundary, SurfaceConfig
 from dharmatiles.layers import SoilCarpetLayer, GrassCarpetLayer, ScatterLayer, WaterLayer
@@ -15,20 +17,6 @@ tile = Tile(
     surface=SurfaceConfig(seed=97),
     sizes=[(1, 1)],
     regions=[
-        Region(
-            id='meadow',
-            contains=(0.5, 0.75),
-            layers=[
-                GrassCarpetLayer(),
-                ScatterLayer(
-                    Grass(
-                        groups_per_square=2,
-                        blade_length_min=10,
-                        blade_length_max=10,
-                    ),
-                ),
-            ],
-        ),
         Region(
             id='pool',
             contains=(0.5, 0.25),
@@ -46,6 +34,20 @@ tile = Tile(
                     ),
                 ),
                 WaterLayer(embed_mm=2.5),
+            ],
+        ),
+        Region(
+            id='meadow',
+            contains=(0.5, 0.75),
+            layers=[
+                GrassCarpetLayer(),
+                ScatterLayer(
+                    Grass(
+                        groups_per_square=2,
+                        blade_length_min=10,
+                        blade_length_max=10,
+                    ),
+                ),
             ],
         ),
     ],

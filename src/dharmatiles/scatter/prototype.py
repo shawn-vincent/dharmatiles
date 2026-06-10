@@ -169,6 +169,12 @@ class Grass:
         )
         layer = FloppyGrassLayer(grass_cfg)
 
+        # Lift vegetation_support_z to include rock tops (and any other
+        # terrain support stamped by prior layers) so the grower's
+        # leading-edge sampler and the seed-depth check both see them.
+        np.maximum(scene.vegetation_support_z, scene.terrain_support_z,
+                   out=scene.vegetation_support_z)
+
         old_grass_mask = scene.grass_mask
         if placement_mask is not None:
             scene.grass_mask = (old_grass_mask & placement_mask
