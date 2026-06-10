@@ -20,10 +20,11 @@ class FloppyGrassLayer:
     def __init__(self, cfg: GrassConfig) -> None:
         self.cfg = cfg
 
-    def build(self, scene, verbose: bool = True) -> list[trimesh.Trimesh]:
-        surface = scene.config.surface
+    def build(self, scene, verbose: bool = True, placement_mask=None) -> list[trimesh.Trimesh]:
+        surface = scene.surface
         rng = np.random.default_rng(self.cfg.seed)
-        paths = grow_all(scene, surface, self.cfg, rng, verbose=verbose)
+        paths = grow_all(scene, surface, self.cfg, rng, verbose=verbose,
+                         placement_mask=placement_mask)
         meshes = build_meshes(paths, self.cfg, scene, surface)
         if verbose:
             segs = [len(path.points) - 1 for path in paths]

@@ -101,7 +101,7 @@ class GrassCarpetLayer:
         subsequent scatter layer sees the updated noise surface.
         """
         cfg = self.cfg
-        surface = scene.config.surface
+        surface = scene.surface
         rng = np.random.default_rng(surface.seed ^ 0x554E_4445)  # "UNDE"
 
         # Reset vegetation_support_z to the bare terrain baseline so that
@@ -145,16 +145,7 @@ class GrassCarpetLayer:
         scene.terrain_support_z[:] = scene.terrain_z
 
         # ── 4. Build blade tube meshes ────────────────────────────────────────
-        # _plant_seeds reads scene.grass_mask; set it to this layer's placement
-        # mask so seeds don't get planted outside the carpet region (e.g. in a
-        # neighbouring water pool).
-        old_grass_mask = scene.grass_mask
-        if placement_mask is not None:
-            scene.grass_mask = placement_mask
-        try:
-            seeds = _collect_seeds(scene, surface, cfg, rng)
-        finally:
-            scene.grass_mask = old_grass_mask
+        seeds = _collect_seeds(scene, surface, cfg, rng, placement_mask=placement_mask)
         parts: list = []
         for seed in seeds:
             mesh = _build_carpet_blade_mesh(scene, surface, seed, cfg, placement_mask)
@@ -210,12 +201,14 @@ def _collect_seeds(
     surface,
     cfg: GrassUnderlayConfig,
     rng: np.random.Generator,
+    placement_mask=None,
 ) -> list[GrassSeed]:
     """Plant blade seeds using the same Voronoi-group logic as the 3D layer."""
     grass_cfg = _RuntimeGrassConfig(species=[cfg.species])
     occ_z = scene.terrain_z.copy()
     plant_rng = np.random.default_rng(int(rng.integers(2**31)))
-    paths = _plant_seeds(scene, surface, grass_cfg, occ_z, plant_rng)
+    paths = _plant_seeds(scene, surface, grass_cfg, occ_z, plant_rng,
+                         placement_mask=placement_mask)
     return [p.seed for p in paths]
 
 

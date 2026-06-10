@@ -111,8 +111,8 @@ def _voronoi_positions(
 
     Returns ``(x, y, group_dir)`` tuples.
     """
-    n_groups = scaled_voronoi_group_count(cfg.groups_per_square, scene, surface, rng)
-    groups   = voronoi_groups(n_groups, scene, surface, rng, mask=placement_mask)
+    n_groups = scaled_voronoi_group_count(cfg.groups_per_square, placement_mask, surface, rng)
+    groups   = voronoi_groups(n_groups, surface, rng, mask=placement_mask)
 
     positions: list[tuple[float, float, float]] = []
     for group in groups:
@@ -139,27 +139,27 @@ def _voronoi_positions(
 
 def scaled_voronoi_group_count(
     groups_per_square: int,
-    scene,
+    mask,              # bool ndarray | None — placement mask for this layer
     surface,
     rng: np.random.Generator,
 ) -> int:
-    """Scale Voronoi group count by the fraction of the tile that is valid grass.
+    """Scale Voronoi group count by the fraction of the tile covered by *mask*.
 
-    Keeps group density proportional to the actual grass area so sparse
-    grass regions don't get as many groups as full-tile grass.
+    Keeps group density proportional to the actual placement area so sparse
+    regions don't get as many groups as full-tile regions.
     """
     total_tile_cells = surface.grid_w * surface.grid_h
     if total_tile_cells <= 0:
         return 0
-    if scene.grass_mask is None:
-        grass_cells = total_tile_cells
+    if mask is None:
+        masked_cells = total_tile_cells
     else:
-        grass_cells = int(scene.grass_mask.sum())
-    if grass_cells <= 0:
+        masked_cells = int(mask.sum())
+    if masked_cells <= 0:
         return 0
 
     full_tile_groups = max(0, int(groups_per_square)) * surface.cols * surface.rows
-    expected_groups  = full_tile_groups * grass_cells / float(total_tile_cells)
+    expected_groups  = full_tile_groups * masked_cells / float(total_tile_cells)
     base_count       = int(np.floor(expected_groups))
     if rng.random() < expected_groups - base_count:
         base_count += 1
@@ -191,24 +191,19 @@ def scaled_group_seed_count(
 
 def voronoi_groups(
     n: int,
-    scene,
     surface,
     rng: np.random.Generator,
     mask=None,
 ) -> list[dict]:
     """Partition valid cells into n random Voronoi clump cells.
 
-    If *mask* is provided it takes precedence over ``scene.grass_mask``.
+    *mask* restricts candidate cells; ``None`` means the full tile.
     """
     if n <= 0:
         return []
 
-    if mask is not None:
-        valid = mask
-    elif scene.grass_mask is not None:
-        valid = scene.grass_mask
-    else:
-        valid = np.ones((surface.grid_h, surface.grid_w), dtype=bool)
+    valid = (mask if mask is not None
+             else np.ones((surface.grid_h, surface.grid_w), dtype=bool))
 
     rows, cols = np.where(valid)
     if len(rows) == 0:

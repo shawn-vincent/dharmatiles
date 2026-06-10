@@ -45,7 +45,7 @@ class WaterLayer:
     ) -> list[trimesh.Trimesh]:
         if placement_mask is None or not placement_mask.any():
             return []
-        surface = scene.config.surface
+        surface = scene.surface
 
         # Region height = max terrain_z over the (still flat) pool region.
         water_height = (self.height_mm if self.height_mm is not None

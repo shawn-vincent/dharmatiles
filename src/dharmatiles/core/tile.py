@@ -2,13 +2,12 @@
 TileScene — mutable state accumulated while building a terrain scene.
 
 The scene holds:
-  terrain_z  — float heightmap (read-only after init)
+  surface           — SurfaceConfig (dimensions, seed, resolution)
+  terrain_z         — float heightmap (read-only after init)
   terrain_support_z — mutable non-vegetation support raised by terrain/rock geometry
   vegetation_support_z — mutable vegetation support, initialised from terrain support
-  rock_mask — bool grid marking rock footprints (grass steers around these)
-
-Configuration lives entirely in SceneConfig sub-configs; TileScene does not
-hold configuration itself.
+  rock_mask         — bool grid marking rock footprints (grass steers around these)
+  parts             — Trimesh objects accumulated during the pipeline
 """
 from __future__ import annotations
 
@@ -18,7 +17,7 @@ from typing import List
 import numpy as np
 import trimesh
 
-from .config import SceneConfig, SurfaceConfig
+from .config import SurfaceConfig
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -39,53 +38,22 @@ def make_xy_grids(surface: SurfaceConfig):
 class TileScene:
     """Mutable state accumulated while building a terrain scene.
 
-    Construct directly or via :meth:`from_config` (sinusoidal stand-in terrain).
-    Production code in ``terrains/tile.py`` passes a pre-computed *terrain_z*
-    array directly to the constructor.
-
     ``terrain_z`` is read-only after construction — no layer or mesh helper
     may mutate it.
     ``terrain_support_z`` grows as terrain and rock layers rasterise geometry.
     ``vegetation_support_z`` grows as vegetation layers rasterise geometry.
     ``parts`` is the list of Trimesh objects to combine at export.
     """
-    config:    SceneConfig
+    surface:   SurfaceConfig
     terrain_z: np.ndarray                       # (grid_h, grid_w) — read-only
     terrain_support_z: np.ndarray               # (grid_h, grid_w) — mutable
     vegetation_support_z: np.ndarray | None = None  # (grid_h, grid_w) — mutable
     rock_mask: np.ndarray | None = None         # (grid_h, grid_w) bool — True under a rock
-    rock_placement_mask: np.ndarray | None = None   # bool — True where rocks may be seeded
-    grass_mask: np.ndarray | None = None        # (grid_h, grid_w) bool — True where grass may grow
     parts:     List[trimesh.Trimesh] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.vegetation_support_z is None:
             self.vegetation_support_z = self.terrain_support_z.copy()
-
-    # ── Constructors ──────────────────────────────────────────────────────────
-
-    @classmethod
-    def from_config(cls, cfg: SceneConfig) -> "TileScene":
-        """Initialise with a sinusoidal stand-in terrain heightmap.
-
-        Legacy entry point for non-spec initialisation.  Production code
-        uses ``build_tile_from_spec``, which derives *terrain_z* via IDW
-        blending and passes it directly to the constructor.
-        """
-        if cfg.surface.flat_terrain:
-            terrain_z = np.full((cfg.surface.grid_h, cfg.surface.grid_w),
-                                5.0, dtype=float)
-        else:
-            terrain_z = _make_sinusoidal_terrain(cfg.surface)
-        rock_mask = np.zeros((cfg.surface.grid_h, cfg.surface.grid_w), dtype=bool)
-        return cls(config=cfg, terrain_z=terrain_z,
-                   terrain_support_z=terrain_z.copy(), rock_mask=rock_mask)
-
-    # ── Convenience properties ────────────────────────────────────────────────
-
-    @property
-    def surface(self) -> SurfaceConfig:
-        return self.config.surface
 
     # ── Slope-normal helpers (future) ─────────────────────────────────────────
     #
@@ -108,8 +76,7 @@ class TileScene:
     #       where dz/dx and dz/dy are in mm/mm (dimensionless slope).
     #       Returns world-Z unit vector [0, 0, 1] when terrain_z is flat.
     #       """
-    #       cw = self.config.surface.cell_w
-    #       ch = self.config.surface.cell_w
+    #       cw = self.surface.cell_w
     #       # ... bilinear sample of gradient ...
     #
     # Callers that need updating when this is implemented:
@@ -118,29 +85,3 @@ class TileScene:
     #   - FloppyGrassLayer (rise_cap check)→ compare Δ along normal, not abs Δz
     #   - _make_support_post               → measure z_top clearance along normal
     #   - SoilCarpetLayer._accumulate_blob → displace bump along normal
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Sinusoidal stand-in terrain
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _make_sinusoidal_terrain(surface: SurfaceConfig,
-                              amp: float = 1.0,
-                              freq: float = 1.5,
-                              z_center: float = 5.0) -> np.ndarray:
-    """Build a sinusoidal test heightmap (grid_h × grid_w).
-
-    Heights are centred at *z_center* (default 5 mm = GROUND height) so they
-    stay positive with ``base_h = 0``.
-
-    Legacy stand-in kept for scripts that have not migrated to the
-    IDW-based heightmap in ``terrains/tile.py``.  Not used by the
-    production pipeline.
-    """
-    x_grid, y_grid = make_xy_grids(surface)
-    u = x_grid / surface.tile_w
-    v = y_grid / surface.tile_h
-    envelope = np.sin(np.pi * u) * np.sin(np.pi * v)
-    wave = (np.sin(2 * np.pi * freq * u) *
-            np.cos(2 * np.pi * freq * v))
-    return (z_center + amp * envelope * wave).astype(float)

@@ -40,14 +40,14 @@ def _build_tile_mesh(tile: Tile,
                      region_mask: np.ndarray | None,
                      verbose: bool = True) -> tuple[trimesh.Trimesh, TileScene]:
     """Run all spec layers in spec order; return (final mesh, scene)."""
-    terrain_z = _build_spec_terrain(tile, scene_cfg.surface, region_mask)
+    surface   = scene_cfg.surface
+    terrain_z = _build_spec_terrain(tile, surface, region_mask)
 
     scene = TileScene(
-        config            = scene_cfg,
+        surface           = surface,
         terrain_z         = terrain_z,
         terrain_support_z = terrain_z.copy(),
-        rock_mask         = np.zeros(
-            (scene_cfg.surface.grid_h, scene_cfg.surface.grid_w), dtype=bool),
+        rock_mask         = np.zeros((surface.grid_h, surface.grid_w), dtype=bool),
     )
 
     parts: list[trimesh.Trimesh] = []
@@ -71,10 +71,10 @@ def _build_tile_mesh(tile: Tile,
     if verbose:
         print("Building terrain solid...")
     terrain_mesh = make_heightmap_solid(
-        scene.terrain_z, scene_cfg.surface.tile_w, scene_cfg.surface.tile_h,
-        scene_cfg.surface.base_h,
-        error_threshold=scene_cfg.surface.terrain_simplify_threshold,
-        simplify_stride=scene_cfg.surface.terrain_simplify_stride,
+        scene.terrain_z, surface.tile_w, surface.tile_h,
+        surface.base_h,
+        error_threshold=surface.terrain_simplify_threshold,
+        simplify_stride=surface.terrain_simplify_stride,
     )
     parts.insert(0, terrain_mesh)
 

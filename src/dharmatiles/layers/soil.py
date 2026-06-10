@@ -38,7 +38,7 @@ class SoilCarpetLayer:
     """Bake super-Gaussian soil clumps into scene.terrain_z.
 
     Accepts flat ``SoilConfig`` kwargs; reads the active ``SurfaceConfig``
-    from ``scene.config.surface`` inside ``apply()``.
+    from ``scene.surface`` inside ``apply()``.
     """
 
     height_default_mm: float = 5.0
@@ -53,7 +53,7 @@ class SoilCarpetLayer:
         Ends with a ``terrain_support_z[:] = terrain_z`` sync so subsequent
         scatter layers see the updated surface.
         """
-        surface   = scene.config.surface
+        surface   = scene.surface
         gh, gw    = scene.terrain_z.shape
         cell_mm   = surface.cell_w / _OVERSAMPLE
         n_squares = surface.cols * surface.rows
@@ -145,10 +145,13 @@ def _compute_bump_field(soil: SoilConfig, seed: int,
     tex = _nf(max(1.0, 1.5)) if soil.blob_texture_amp > 0.0 else None
 
     # ── Tier definitions ──────────────────────────────────────────────────────
+    # Each tier: (count, sigma_min_mm, sigma_max_mm, h_min, h_max, perturb).
+    # perturb=True → height derived from sigma (h_min/h_max unused).
+    # perturb=False (fine grain) → height sampled from h_min/h_max.
     tiers = [
         (soil.n_blobs * n_squares,
          soil.blob_sigma_min_mm, soil.blob_sigma_max_mm,
-         soil.blob_h_min,        soil.blob_h_max,
+         0.0, 0.0,               # h_min/h_max unused when perturb=True
          True),    # primary: elliptical + warp + texture
         (soil.n_small * n_squares,
          soil.small_sigma_min_mm, soil.small_sigma_max_mm,

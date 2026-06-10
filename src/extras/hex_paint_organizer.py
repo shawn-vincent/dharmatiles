@@ -9,6 +9,7 @@ intended viewing frame: +x = column direction (4 across), +y = row direction
 """
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,6 +35,10 @@ class HexOrganizerSpec:
     vertical_roundover: float = 8.0  # convex outside vertical edge roundover radius
     cols: int = 4                    # columns across (x)
     rows: int = 3                    # cups per column (y)
+
+    def __post_init__(self) -> None:
+        if self.height < 15.0:
+            raise ValueError(f"--height ({self.height} mm) must be at least 15 mm")
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +217,8 @@ def _subtract_magnets(body: m3d.Manifold, spec: HexOrganizerSpec) -> m3d.Manifol
         (3, 1,  30.0),   # upper-right (top-right slope)
     ]
     for col, row, deg in placements:
+        if col >= spec.cols or row >= spec.rows:
+            continue
         cx, cy = cup_centre(spec, col, row)
         body -= _magnet_pocket(cx, cy, deg, spec)
 
@@ -348,7 +355,13 @@ def build_organizer(spec: HexOrganizerSpec) -> m3d.Manifold:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    spec = HexOrganizerSpec()
+    parser = argparse.ArgumentParser(description="Generate a hexagonal craft-paint organizer STL.")
+    parser.add_argument("--cols", type=int, default=4, help="Number of columns (default: 4)")
+    parser.add_argument("--rows", type=int, default=3, help="Number of rows (default: 3)")
+    parser.add_argument("--height", type=float, default=75.0, help="Overall cup height in mm (default: 75.0)")
+    args = parser.parse_args()
+
+    spec = HexOrganizerSpec(cols=args.cols, rows=args.rows, height=args.height)
 
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
     pitch_x, pitch_y = _pitches(spec)

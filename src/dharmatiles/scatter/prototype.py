@@ -67,26 +67,18 @@ class Rocks:
 
         Stamps ``scene.terrain_support_z`` and ``scene.rock_mask`` in place.
         """
-        surface = scene.config.surface
+        surface = scene.surface
         rng_seed = (surface.seed
                     ^ 0x726F636B          # "rock"
                     ^ self.scatter_cfg.seed
                     ^ (layer_idx * 65537))
         rng = np.random.default_rng(rng_seed)
 
-        # scatter_positions reads scene.grass_mask via scaled_voronoi_group_count;
-        # temporarily set it to this layer's mask so density scaling is correct.
-        old_grass_mask = scene.grass_mask
-        if placement_mask is not None:
-            scene.grass_mask = placement_mask
-        try:
-            n_sq      = surface.cols * surface.rows
-            positions = scatter_positions(
-                self.scatter_cfg, n_sq, self.footprint_mm(),
-                placement_mask, scene, surface, rng,
-            )
-        finally:
-            scene.grass_mask = old_grass_mask
+        n_sq      = surface.cols * surface.rows
+        positions = scatter_positions(
+            self.scatter_cfg, n_sq, self.footprint_mm(),
+            placement_mask, scene, surface, rng,
+        )
 
         seeds = [self._make_seed(x, y, rng) for x, y, _gd in positions]
         seeds.sort(key=lambda s: s.sort_key())
@@ -157,7 +149,7 @@ class Grass:
         """
         from ..grass.layer import FloppyGrassLayer
 
-        surface = scene.config.surface
+        surface = scene.surface
         seed    = (surface.seed
                    ^ 0x47524F57          # "GROW"
                    ^ self.scatter_cfg.seed
@@ -175,11 +167,4 @@ class Grass:
         np.maximum(scene.vegetation_support_z, scene.terrain_support_z,
                    out=scene.vegetation_support_z)
 
-        old_grass_mask = scene.grass_mask
-        if placement_mask is not None:
-            scene.grass_mask = (old_grass_mask & placement_mask
-                                if old_grass_mask is not None else placement_mask)
-        try:
-            return layer.build(scene, verbose=verbose)
-        finally:
-            scene.grass_mask = old_grass_mask
+        return layer.build(scene, verbose=verbose, placement_mask=placement_mask)

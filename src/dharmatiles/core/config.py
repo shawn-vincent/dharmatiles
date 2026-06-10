@@ -112,7 +112,6 @@ class SurfaceConfig:
     cells_per_square: int   = 256  # heightmap resolution per square
     base_h:         float = 0.0  # mm — extra slab below z=0
     seed:           int   = 377
-    flat_terrain:   bool  = True   # False → sinusoidal stand-in terrain (legacy)
 
     # ── Adaptive terrain mesh ─────────────────────────────────────────────────
     # Laplacian threshold for adaptive top-surface triangulation (mm).
@@ -179,8 +178,6 @@ class SoilConfig:
     blob_aspect_max:    float = 1.00  # max ratio (circular)
     blob_power:         float = 3.5   # super-Gaussian exponent (2=Gaussian, higher=sharper base)
     blob_cutoff:        float = 2.6   # clip at this × sigma
-    blob_h_min:         float = 0.25  # mm — fallback height floor for primary tier if perturb=False (unused in default pipeline)
-    blob_h_max:         float = 0.30  # mm — fallback height ceiling for primary tier if perturb=False (unused in default pipeline)
     blob_h_scale_min:   float = 0.14  # primary tier: height = this × sigma_mm (min)
     blob_h_scale_max:   float = 1.12  # primary tier: height = this × sigma_mm (max)
     blob_h_size_bias:   float = 0.85  # 0=independent, 1=large blobs always at scale_max
@@ -251,7 +248,6 @@ class GrassUnderlayConfig:
 
     # ── Stamp rendering ───────────────────────────────────────────────────────
     blade_raise_mm:  float = 0.40  # mm — blade stamps rise this far above noise_top_mm
-    stamp_min_taper: float = 0.40  # skip stamp steps below this taper fraction [0..1]
 
     # ── Edge fade ─────────────────────────────────────────────────────────────
     # Cosine ramp toward 0 at every boundary, rising to 1 over edge_fade_mm.

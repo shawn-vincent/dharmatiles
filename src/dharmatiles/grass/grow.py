@@ -22,10 +22,17 @@ from ..scatter.distribute import (
 )
 
 
-def grow_all(scene, surface, cfg: GrassConfig, rng: np.random.Generator, verbose: bool = True) -> list[GrassPath]:
+def grow_all(
+    scene,
+    surface,
+    cfg: GrassConfig,
+    rng: np.random.Generator,
+    verbose: bool = True,
+    placement_mask=None,
+) -> list[GrassPath]:
     """Plant blades, then fully grow each blade before starting the next one."""
     occ_z = scene.vegetation_support_z.copy()
-    growing = plant_seeds(scene, surface, cfg, occ_z, rng)
+    growing = plant_seeds(scene, surface, cfg, occ_z, rng, placement_mask=placement_mask)
 
     if verbose:
         n_groups = sum(s.groups_per_square * surface.cols * surface.rows for s in cfg.species)
@@ -76,11 +83,12 @@ def plant_seeds(
     cfg: GrassConfig,
     occ_z: np.ndarray,
     rng: np.random.Generator,
+    placement_mask=None,
 ) -> list[GrowingPath]:
     paths: list[GrowingPath] = []
     for species in cfg.species:
-        n_groups = _scaled_voronoi_group_count(species.groups_per_square, scene, surface, rng)
-        groups = _voronoi_groups(n_groups, scene, surface, rng)
+        n_groups = _scaled_voronoi_group_count(species.groups_per_square, placement_mask, surface, rng)
+        groups = _voronoi_groups(n_groups, surface, rng, mask=placement_mask)
         actual_n_groups = len(groups)
         for group in groups:
             group_dir = float(rng.uniform(0.0, 2.0 * np.pi))
@@ -94,7 +102,7 @@ def plant_seeds(
 
             for x, y in _jitter_grid_xy(group, n_seeds, group_dir, surface, rng):
                 ix, iy = _cell_index(surface, x, y)
-                if scene.grass_mask is not None and not scene.grass_mask[iy, ix]:
+                if placement_mask is not None and not placement_mask[iy, ix]:
                     continue
                 if scene.rock_mask is not None and scene.rock_mask[iy, ix]:
                     continue
