@@ -68,13 +68,16 @@ def _make_heightmap_solid_adaptive(
     nrows, ncols = z_grid.shape
     gx = tile_w / max(ncols - 1, 1)
     gy = tile_h / max(nrows - 1, 1)
-    side_thr = threshold * 8   # aggressive: collapses edge bumps < ~0.16 mm
 
-    # ── RDP-simplified boundary ring (shared by top Delaunay + side walls) ────
-    sk = _rdp_edge(z_grid[0,  :],         side_thr)  # south: col 0 → ncols-1
-    ek = _rdp_edge(z_grid[:,  ncols - 1], side_thr)  # east:  row 0 → nrows-1
-    nk = _rdp_edge(z_grid[nrows-1, ::-1], side_thr)  # north: col ncols-1 → 0
-    wk = _rdp_edge(z_grid[::-1, 0],       side_thr)  # west:  row nrows-1 → 0
+    # ── Full-resolution boundary ring (every perimeter cell is an anchor) ─────
+    # Skipping RDP here avoids the failure mode where a perimeter fade (e.g.
+    # the grass-carpet edge fade) attenuates the outer ring below the RDP
+    # threshold, which would collapse each edge to its two corner anchors and
+    # let Delaunay fan long flat triangles inward.  ~1 K extra vertices.
+    sk = list(range(ncols))           # south: col 0 → ncols-1
+    ek = list(range(nrows))           # east:  row 0 → nrows-1
+    nk = list(range(ncols))           # north: col ncols-1 → 0 (reversed below)
+    wk = list(range(nrows))           # west:  row nrows-1 → 0 (reversed below)
 
     south = [(0,        c)         for c in sk]
     east  = [(r,        ncols - 1) for r in ek]

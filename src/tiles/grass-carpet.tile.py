@@ -13,7 +13,7 @@ tile = Tile(
             id='meadow',
             contains=(0.5, 0.5),
             layers=[
-                GrassCarpetLayer(groups_per_square=240),
+                GrassCarpetLayer(),
             ],
         ),
     ],

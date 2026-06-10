@@ -93,10 +93,14 @@ class WaterLayer:
 
         hn, wn = wm.shape
         wm_full = np.ones((hn, wn), dtype=bool)
+        # Match the terrain's simplify threshold so the flat bottom and any
+        # near-planar bands of the rippled top collapse to far fewer triangles.
+        simplify_tol = surface.terrain_simplify_threshold or 0.0
         water_mesh = make_water_volume(
             tz, wm_full, water_height,
             surface.tile_w, surface.tile_h,
-            z_disp=zd)
+            z_disp=zd,
+            simplify_tolerance=simplify_tol)
         return [water_mesh]
 
 

@@ -1,26 +1,31 @@
 """
-GrassCarpetLayer: embossed 2D grass-carpet texture stamped into terrain_z.
+GrassCarpetLayer: embossed grass-carpet texture under the 3D blades.
 
-The layer runs after SoilCarpetLayer and before any ScatterLayer (rocks +
-3D grass).  It modifies terrain_z in-place and adds no Trimesh geometry to
-the scene.
+Two components are produced:
 
-Two components are composited via np.maximum onto a scratch field, then
-added to terrain_z (with an optional placement mask):
+1.  Noise base — Gaussian-filtered white noise added into ``terrain_z`` with
+    an optional placement mask.  Gives the compressed-grass background
+    texture that shows between upright blades.
 
-1.  Noise base — Gaussian-filtered white noise clipped to ≥ 0.  Gives the
-    compressed-grass background texture that shows between upright blades.
+2.  Blade tube meshes — one flat tube mesh per blade seed, built with the
+    SAME mesh builder as the 3-D grass blades (``FlatGrassGrower.build_mesh``).
+    Each blade's spine xy follows the same curl trajectory used in the 3-D
+    layer; spine z is sampled from ``terrain_z`` so the blade conforms to
+    the noise base.  ``blade_thickness`` is overridden to
+    ``noise_top_mm + blade_raise_mm`` so the ridge stands clear of the noise
+    envelope.  Meshes are returned in the parts list and unioned with the
+    terrain solid by the orchestrator — giving sub-cell smooth blade edges
+    rather than the staircased heightmap rasterisation we used to produce.
 
-2.  Blade stamp footprints — each blade seed's top-profile silhouette is
-    rasterised step-by-step onto the scratch field.  Seeds are planted with
-    the same Voronoi-group logic as the 3D grass layer using the blade
-    geometry parameters on GrassUnderlayConfig.
+Seeds are planted with the same Voronoi-group logic as the 3-D grass layer
+using the blade geometry parameters on ``GrassUnderlayConfig``.
 
-See docs/design/grass-underlay.md for the full design rationale.
+See docs/design/grass-underlay.md for the original design rationale.
 """
 from __future__ import annotations
 
 import dataclasses
+import math
 
 import numpy as np
 from scipy.ndimage import distance_transform_edt, gaussian_filter
@@ -28,9 +33,10 @@ from scipy.ndimage import distance_transform_edt, gaussian_filter
 from ..core.config import (GrassConfig as _RuntimeGrassConfig,
                            GrassUnderlayConfig, SpeciesConfig)
 from ..core.tile import TileScene
-from ..grass._geometry import _blade_step_geometry, _stamp_segment
+from ..grass._geometry import _blade_step_geometry, _sample_grid
+from ..grass.growers.flat import FlatGrassGrower
 from ..grass.grow import plant_seeds as _plant_seeds
-from ..grass.seed import GrassSeed
+from ..grass.seed import GrassPath, GrassSeed
 
 
 _UNDERLAY_FIELDS = {f.name for f in dataclasses.fields(GrassUnderlayConfig)
@@ -39,7 +45,7 @@ _SPECIES_FIELDS  = {f.name for f in dataclasses.fields(SpeciesConfig)}
 
 
 class GrassCarpetLayer:
-    """Emboss a 2D grass-carpet texture into scene.terrain_z.
+    """Embossed grass carpet: noise base in terrain_z + flat blade tube meshes.
 
     Flat kwargs are split between ``GrassUnderlayConfig`` and
     ``SpeciesConfig``; pass ``species=SpeciesConfig(...)`` to share blade
@@ -47,6 +53,12 @@ class GrassCarpetLayer:
     """
 
     height_default_mm: float = 5.0
+
+    # Carpet-only multipliers applied to the shared SpeciesConfig: shorter,
+    # sparser blades than the 3-D grass layer that grows from the same species.
+    # Skipped per-field when the caller passes that field explicitly.
+    _CARPET_LENGTH_SCALE: float = 0.75            # 75 % of species blade length
+    _CARPET_COUNT_SCALE:  float = 2.0 / 3.0       # 2/3 of species blade count
 
     def __init__(self, species: SpeciesConfig | None = None, **kwargs) -> None:
         base_species = species or SpeciesConfig()
@@ -57,6 +69,24 @@ class GrassCarpetLayer:
             raise TypeError(f"GrassCarpetLayer: unknown kwargs {sorted(unknown)!r}")
         final_species = (dataclasses.replace(base_species, **species_over)
                          if species_over else base_species)
+
+        # Apply carpet-only defaults where the caller didn't override.
+        carpet_defaults: dict = {}
+        if 'blade_length_min' not in species_over:
+            carpet_defaults['blade_length_min'] = (
+                final_species.blade_length_min * self._CARPET_LENGTH_SCALE)
+        if 'blade_length_max' not in species_over:
+            carpet_defaults['blade_length_max'] = (
+                final_species.blade_length_max * self._CARPET_LENGTH_SCALE)
+        if 'gap_mm' not in species_over:
+            # Count = density × area where density = 1 / (footprint + gap)².
+            # To scale count by k, multiply centre-to-centre spacing by 1/√k.
+            old_spacing = final_species.blade_width_max + final_species.gap_mm
+            new_spacing = old_spacing / math.sqrt(self._CARPET_COUNT_SCALE)
+            carpet_defaults['gap_mm'] = new_spacing - final_species.blade_width_max
+        if carpet_defaults:
+            final_species = dataclasses.replace(final_species, **carpet_defaults)
+
         self.cfg = GrassUnderlayConfig(species=final_species, **carpet_over)
 
     def apply(
@@ -65,10 +95,10 @@ class GrassCarpetLayer:
         *,
         placement_mask: np.ndarray | None = None,
     ) -> list:
-        """Compute and apply the underlay heightmap bump to terrain_z.
+        """Apply noise base to terrain_z and return blade tube meshes.
 
         Ends with a ``terrain_support_z[:] = terrain_z`` sync so any
-        subsequent scatter layer sees the updated surface.
+        subsequent scatter layer sees the updated noise surface.
         """
         cfg = self.cfg
         surface = scene.config.surface
@@ -76,53 +106,61 @@ class GrassCarpetLayer:
 
         # Reset vegetation_support_z to the bare terrain baseline so that
         # plant_seeds' _vegetation_depth check returns 0 for every cell and
-        # no carpet seed is spuriously rejected.  Nothing has elevated
-        # vegetation_support_z yet at this point in the pipeline; this is a
-        # defensive guard against future reordering.
+        # no carpet seed is spuriously rejected.
         scene.vegetation_support_z = scene.terrain_support_z.copy()
 
         gh, gw = scene.terrain_z.shape
-        field = np.zeros((gh, gw), dtype=float)
+        noise_field = np.zeros((gh, gw), dtype=float)
 
         # ── 1. Noise base ─────────────────────────────────────────────────────
+        # Two octaves at half and double ``noise_scale_mm`` are summed 50/50
+        # before normalisation, giving fine grain on top of broader undulation.
         # Noise peaks land exactly at noise_top_mm; valleys descend noise_amp
         # below that.  Normalise to [-1, 0] (peak-referenced) then scale+shift:
         #   field = noise_top_mm + noise_amp * unit_noise,  unit_noise ∈ [-1, 0]
-        # Changing noise_top_mm slides the whole envelope; changing noise_amp
-        # widens/narrows the roughness — the two are fully independent.
         if cfg.noise_amp > 0.0:
-            sigma = max(1.0, cfg.noise_scale_mm / surface.cell_w)
-            noise = rng.standard_normal((gh, gw))
-            noise = gaussian_filter(noise, sigma=sigma)
+            sigma_hi = max(1.0, (cfg.noise_scale_mm * 0.5) / surface.cell_w)
+            sigma_lo = max(1.0, (cfg.noise_scale_mm * 2.0) / surface.cell_w)
+            noise_hi = gaussian_filter(rng.standard_normal((gh, gw)), sigma=sigma_hi)
+            noise_lo = gaussian_filter(rng.standard_normal((gh, gw)), sigma=sigma_lo)
+            noise = 0.5 * noise_hi + 0.5 * noise_lo
             noise -= float(noise.max())          # shift so peak = 0
             n_min = float(noise.min())
             if abs(n_min) > 1e-12:
                 noise /= abs(n_min)              # now ∈ [-1, 0]
-            field += cfg.noise_top_mm + cfg.noise_amp * noise
+            noise_field += cfg.noise_top_mm + cfg.noise_amp * noise
 
-        # ── 2. Blade stamp footprints ─────────────────────────────────────────
-        # Blade peak = noise_top_mm + blade_raise_mm, always above the noise
-        # ceiling (noise_top_mm), so blades win np.maximum cleanly with no
-        # noise texture on the blade face.
-        seeds = _collect_seeds(scene, surface, cfg, rng)
-        for seed in seeds:
-            _stamp_blade(field, surface, seed, cfg)
-
-        # ── 3. Edge fade — cosine ramp from 0 at mask boundary to 1 inside ───
-        # Keeps the texture from cutting hard at the grass/soil border.
+        # ── 2. Edge fade — cosine ramp from 0 at mask boundary to 1 inside ───
         if cfg.edge_fade_mm > 0.0:
             fade = _compute_edge_fade(placement_mask, gh, gw, cfg.edge_fade_mm, surface.cell_w)
-            field *= fade
+            noise_field *= fade
 
-        # ── 4. Apply with mask ────────────────────────────────────────────────
+        # ── 3. Apply noise to terrain_z ───────────────────────────────────────
         if placement_mask is None:
-            scene.terrain_z += field
+            scene.terrain_z += noise_field
         else:
-            scene.terrain_z[placement_mask] += field[placement_mask]
+            scene.terrain_z[placement_mask] += noise_field[placement_mask]
 
-        # Keep terrain_support_z in sync with the modified terrain_z.
+        # Keep terrain_support_z in sync; blade meshes will sit on this surface.
         scene.terrain_support_z[:] = scene.terrain_z
-        return []
+
+        # ── 4. Build blade tube meshes ────────────────────────────────────────
+        # _plant_seeds reads scene.grass_mask; set it to this layer's placement
+        # mask so seeds don't get planted outside the carpet region (e.g. in a
+        # neighbouring water pool).
+        old_grass_mask = scene.grass_mask
+        if placement_mask is not None:
+            scene.grass_mask = placement_mask
+        try:
+            seeds = _collect_seeds(scene, surface, cfg, rng)
+        finally:
+            scene.grass_mask = old_grass_mask
+        parts: list = []
+        for seed in seeds:
+            mesh = _build_carpet_blade_mesh(scene, surface, seed, cfg, placement_mask)
+            if mesh is not None:
+                parts.append(mesh)
+        return parts
 
 
 # ── Edge fade ─────────────────────────────────────────────────────────────────
@@ -134,33 +172,30 @@ def _compute_edge_fade(
     edge_fade_mm: float,
     cell_w: float,
 ) -> np.ndarray:
-    """Return a [0..1] weight array that tapers to 0 at every boundary.
+    """Return a [0..1] weight array that tapers toward 0 at every boundary.
 
-    Two distance fields are combined by taking their minimum so that the
-    fade goes to zero at whichever boundary is closest — the placement-mask
-    edge OR the physical tile edge.  This is necessary because when the
-    grass mask extends all the way to a tile edge, EDT only sees the
-    interior grass/soil boundary as the nearest False cell and gives those
-    tile-edge cells a large distance, leaving the texture non-zero there.
-
-    Tile-edge distance is always included so the texture is guaranteed to
-    be zero at the outermost grid cell on all four sides of the tile.
+    The fade rises smoothly to 1 over ``edge_fade_mm`` inward.  Mask-boundary
+    cells (False) genuinely fade to 0 (so the carpet vanishes cleanly into
+    soil).  The TILE edge, however, is shifted +1 cell — the zero crossing
+    sits one cell outside the grid, so the outermost real cell carries a
+    small but nonzero fade weight instead of exactly zero.  That avoids the
+    flat "bare-tile" strip you'd otherwise see at the perimeter where the
+    outermost cell row is pinned to z=baseline.
     """
     fade_cells = max(edge_fade_mm / cell_w, 1e-6)
 
-    # Distance (in cells) from each tile edge — zero at columns 0 / gw-1
-    # and rows 0 / gh-1, increasing inward.
+    # Distance (in cells) from each tile edge, plus the +1 cell shift so the
+    # outermost real cell sits one fade-step in from the virtual zero point.
     ix = np.arange(gw, dtype=float)
     iy = np.arange(gh, dtype=float)
-    dx = np.minimum(ix, gw - 1 - ix)                        # (gw,)
-    dy = np.minimum(iy, gh - 1 - iy)                        # (gh,)
-    tile_edge_dist = np.minimum(dx[np.newaxis, :], dy[:, np.newaxis])  # (gh, gw)
+    dx = np.minimum(ix, gw - 1 - ix)
+    dy = np.minimum(iy, gh - 1 - iy)
+    tile_edge_dist = np.minimum(dx[np.newaxis, :], dy[:, np.newaxis]) + 1.0
 
-    if placement_mask is not None:
-        # EDT gives the distance to the nearest False cell (mask boundary).
-        # False cells get 0, so outside-mask cells already resolve to 0.
+    if placement_mask is not None and not placement_mask.all():
+        # EDT gives the distance from each True cell to the nearest False cell;
+        # this stays unshifted so the carpet really does fade to 0 at the seam.
         mask_dist = distance_transform_edt(placement_mask)
-        # Tightest constraint wins: zero wherever either boundary is within range.
         dist = np.minimum(mask_dist, tile_edge_dist)
     else:
         dist = tile_edge_dist
@@ -184,47 +219,84 @@ def _collect_seeds(
     return [p.seed for p in paths]
 
 
-# ── Stamp ─────────────────────────────────────────────────────────────────────
+# ── Blade mesh ────────────────────────────────────────────────────────────────
 
-def _stamp_blade(
-    field: np.ndarray,
-    surface,
-    seed: GrassSeed,
-    cfg: GrassUnderlayConfig,
-) -> None:
-    """Rasterise a blade's swept footprint onto field via _stamp_segment.
+def _build_carpet_blade_mesh(
+    scene, surface, seed: GrassSeed, cfg: GrassUnderlayConfig,
+    placement_mask: np.ndarray | None = None,
+):
+    """Build one flat blade tube mesh.
 
-    Walks the same spine trajectory as the 3D grower and delegates each
-    segment to the shared ``_stamp_segment`` helper (grass._geometry), which
-    applies the same sin-arc cross-section profile used by the 3D mesh.
+    The xy spine follows the same curl trajectory as the 3-D grower.  The z
+    spine sits on the terrain, but with a quarter-sin arc offset so the base
+    sinks one blade-thickness below the surface and rises smoothly back to
+    terrain level at the tip:
 
-    Stamping into a delta field (z_spine = 0): the resulting height offsets
-    are added to terrain_z by the caller, so ``thickness`` here equals the
-    desired absolute bump height above terrain.
+        z_spine(t) = terrain_z(x, y) + thickness * (sin(π·t/2) − 1)
+
+    The base is rooted in the ground (only the centre ridge kisses the
+    surface where the cross-section sin arc adds ``thickness`` above the
+    spine); the blade emerges and rises clear of the terrain over its
+    length, ending in a tapered tip at the surface.
+
+    ``blade_thickness`` is overridden to ``noise_top_mm + blade_raise_mm`` so
+    the ridge clears the noise envelope.  Mesh construction is delegated to
+    ``FlatGrassGrower.build_mesh`` so the carpet and the 3-D blades share a
+    single mesh builder.
+
+    If ``placement_mask`` is provided, the trajectory walk stops the moment a
+    step lands outside the mask — blades planted near the region edge taper
+    off before crossing into neighbouring regions (e.g. a water pool).
     """
+    species = cfg.species
     stamp_hmax = cfg.noise_top_mm + cfg.blade_raise_mm
+    species_for_mesh = dataclasses.replace(species, blade_thickness=stamp_hmax)
+
+    def _inside_mask(xi: float, yi: float) -> bool:
+        if placement_mask is None:
+            return True
+        ix = int(xi / surface.cell_w)
+        iy = int(yi / surface.cell_w)
+        if not (0 <= ix < surface.grid_w and 0 <= iy < surface.grid_h):
+            return False
+        return bool(placement_mask[iy, ix])
+
+    # Walk the same xy trajectory as the 3-D grower's step().
+    xy_pts: list[tuple[float, float]] = []
     x, y = seed.x, seed.y
 
+    # Ring 0 (seed root).
+    taper0 = seed.distance_taper(0.0, seed.blade_n_steps * seed.blade_segment_length)
+    hw0 = seed.blade_width * taper0 / 2.0
+    if not (hw0 <= x <= surface.tile_w - hw0 and hw0 <= y <= surface.tile_h - hw0):
+        return None
+    if not _inside_mask(x, y):
+        return None
+    xy_pts.append((x, y))
+
     for step in range(seed.blade_n_steps):
-        tx, ty, _, taper0, taper1 = _blade_step_geometry(seed, step, x, y)
-
-        # Mirror the 3D containment rule: blade centre must stay ≥ hw from edges.
-        hw = seed.blade_width * taper0 / 2.0
-        if x < hw or x > surface.tile_w - hw or y < hw or y > surface.tile_h - hw:
+        tx, ty, _, _taper0, taper1 = _blade_step_geometry(seed, step, x, y)
+        hw = seed.blade_width * taper1 / 2.0
+        if not (hw <= tx <= surface.tile_w - hw and hw <= ty <= surface.tile_h - hw):
             break
-
-        # Stamp only where taper is above the threshold; always advance position.
-        if taper0 >= cfg.stamp_min_taper:
-            _stamp_segment(
-                field, surface,
-                x, y, tx, ty,
-                seed.blade_width * taper0, seed.blade_width * taper1,
-                0.0, 0.0,                            # z_spine = 0 (delta field)
-                stamp_hmax * taper0, stamp_hmax * taper1,
-                cfg.species.blade_top_facets,
-            )
-
+        if not _inside_mask(tx, ty):
+            break
+        xy_pts.append((tx, ty))
         x, y = tx, ty
 
-        if x < 0.0 or x >= surface.tile_w or y < 0.0 or y >= surface.tile_h:
-            break
+    n = len(xy_pts)
+    if n < 2:
+        return None
+
+    # Quarter-sin arc: −thickness at t=0 (buried base), 0 at t=1 (tip at surface).
+    # Derivative is zero at t=1 so the spine flattens smoothly into the tip.
+    t_vals = np.linspace(0.0, 1.0, n)
+    z_arc = stamp_hmax * (np.sin(np.pi * t_vals / 2.0) - 1.0)
+
+    points: list[tuple[float, float, float]] = []
+    for (xi, yi), za in zip(xy_pts, z_arc):
+        terrain_zi = float(_sample_grid(scene.terrain_z, surface, xi, yi))
+        points.append((xi, yi, terrain_zi + float(za)))
+
+    path = GrassPath(seed=seed, points=points)
+    return FlatGrassGrower.build_mesh(path, species_for_mesh, scene, surface)

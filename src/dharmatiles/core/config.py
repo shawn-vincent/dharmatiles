@@ -247,14 +247,19 @@ class GrassUnderlayConfig:
     # noise_amp     — depth of roughness below noise_top_mm (pure texture depth).
     noise_top_mm:   float = 0.50   # mm — height of noise peaks above terrain_z
     noise_amp:      float = 1.00   # mm — roughness depth below noise_top_mm
-    noise_scale_mm: float = 2.0    # mm — Gaussian σ (feature correlation length)
+    noise_scale_mm: float = 0.2    # mm — Gaussian σ (feature correlation length)
 
     # ── Stamp rendering ───────────────────────────────────────────────────────
     blade_raise_mm:  float = 0.40  # mm — blade stamps rise this far above noise_top_mm
     stamp_min_taper: float = 0.40  # skip stamp steps below this taper fraction [0..1]
 
     # ── Edge fade ─────────────────────────────────────────────────────────────
-    edge_fade_mm: float = 1.0      # cosine ramp to 0 at mask boundary; 0 = disabled
+    # Cosine ramp toward 0 at every boundary, rising to 1 over edge_fade_mm.
+    # The tile edge is shifted +1 cell so the outermost real cell sits at a
+    # small (≈ 4 %) nonzero fade weight instead of exactly zero — that avoids
+    # a flat "bare-tile" strip at the perimeter while still pulling the noise
+    # crests way down so the vertical side joins the top cleanly.
+    edge_fade_mm: float = 1.0      # mm — 0 disables the fade entirely
 
     # ── Blade geometry (shared with companion 3D grass layer) ─────────────────
     species: SpeciesConfig = field(default_factory=SpeciesConfig)
