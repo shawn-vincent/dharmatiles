@@ -282,38 +282,24 @@ def _scene_config_from_spec(tile: Tile) -> SceneConfig:
     )
 
 
-# ── Multi-size helpers ────────────────────────────────────────────────────────
+# ── Spec → build helper ───────────────────────────────────────────────────────
 
-def _sized_spec(tile: Tile, cols: int, rows: int) -> Tile:
-    """Return a copy of *tile* with surface.cols/rows replaced."""
-    sized_surface = dataclasses.replace(tile.surface, cols=cols, rows=rows)
-    return dataclasses.replace(tile, surface=sized_surface)
-
-
-def _build_spec_all_sizes(tile: Tile,
-                           spec_path: pathlib.Path,
-                           output: pathlib.Path | None,
-                           tiles_root: pathlib.Path,
-                           stl_root: pathlib.Path,
-                           verbose: bool = True) -> None:
-    """Build every size declared in *tile.sizes* and export system STLs."""
-    for cols, rows in tile.sizes:
-        if len(tile.sizes) > 1 and verbose:
-            print(f"\n{'━'*60}")
-            print(f"  Size: {cols}×{rows}")
-            print(f"{'━'*60}")
-        sized = _sized_spec(tile, cols, rows)
-        if output is None:
-            sys_paths = _new_tile_paths(spec_path, cols, rows, tiles_root, stl_root)
-            out = sys_paths[dungeonblocks.SYSTEM_SUFFIX]
-        elif len(tile.sizes) == 1:
-            sys_paths = None
-            out = output
-        else:
-            sys_paths = None
-            out = output.with_name(f"{cols}x{rows}-{output.name}")
-        build_tile_from_spec(sized, output_path=out, verbose=verbose,
-                             system_paths=sys_paths)
+def _build_spec(tile: Tile,
+                spec_path: pathlib.Path,
+                output: pathlib.Path | None,
+                tiles_root: pathlib.Path,
+                stl_root: pathlib.Path,
+                verbose: bool = True) -> None:
+    """Build one tile spec at the size declared on its surface config."""
+    cols, rows = tile.surface.cols, tile.surface.rows
+    if output is None:
+        sys_paths = _new_tile_paths(spec_path, cols, rows, tiles_root, stl_root)
+        out = sys_paths[dungeonblocks.SYSTEM_SUFFIX]
+    else:
+        sys_paths = None
+        out = output
+    build_tile_from_spec(tile, output_path=out, verbose=verbose,
+                         system_paths=sys_paths)
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -342,8 +328,8 @@ def main(argv=None):
 
     if args.spec is not None:
         tile = load_spec(args.spec)
-        _build_spec_all_sizes(tile, args.spec, args.output,
-                              TILES_ROOT, STL_ROOT, verbose=verbose)
+        _build_spec(tile, args.spec, args.output,
+                    TILES_ROOT, STL_ROOT, verbose=verbose)
         return
 
     specs = sorted(TILES_ROOT.rglob("*.tile.py"))
@@ -358,7 +344,7 @@ def main(argv=None):
             print(f"  {sp}")
             print(f"{'─'*60}")
         tile = load_spec(sp)
-        _build_spec_all_sizes(tile, sp, None, TILES_ROOT, STL_ROOT, verbose=verbose)
+        _build_spec(tile, sp, None, TILES_ROOT, STL_ROOT, verbose=verbose)
     elapsed = _time.perf_counter() - t_batch
     n = len(specs)
     print(f"\n{n} spec{'s' if n != 1 else ''} processed in {elapsed:.1f}s  "

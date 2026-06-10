@@ -15,7 +15,6 @@ from dharmatiles.scatter import Rocks, Grass
 
 tile = Tile(
     surface=SurfaceConfig(seed=97),
-    sizes=[(1, 1)],
     regions=[
         Region(
             id='pool',

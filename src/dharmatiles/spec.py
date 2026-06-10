@@ -119,11 +119,15 @@ class Boundary:
 
 @dataclass
 class Tile:
-    """Complete specification for one tile."""
+    """Complete specification for one tile.
+
+    One ``.tile.py`` file → one ``Tile`` → one output size.  Tile size
+    is set on ``surface.cols`` / ``surface.rows``.  To emit several
+    sizes of the same tile, write one spec file per size.
+    """
     surface:    SurfaceConfig
     regions:    list[Region]   = field(default_factory=list)
     boundaries: list[Boundary] = field(default_factory=list)
-    sizes:      list[tuple[int, int]] = field(default_factory=lambda: [(1, 1)])
 
 
 def load_spec(path: Path) -> Tile:

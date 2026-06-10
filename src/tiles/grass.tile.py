@@ -21,7 +21,6 @@ _meadow = SpeciesConfig(
 
 tile = Tile(
     surface=SurfaceConfig(seed=1),
-    sizes=[(1, 1)],
     regions=[
         Region(
             id='meadow',
