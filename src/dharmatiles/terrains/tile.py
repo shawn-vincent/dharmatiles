@@ -20,12 +20,13 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import pathlib
+import time as _time
 
 import numpy as np
 import trimesh
 from scipy.ndimage import binary_dilation, binary_erosion, distance_transform_edt
 
-from ..core.config import (SceneConfig, SurfaceConfig, FlowConfig,
+from ..core.config import (SceneConfig, SurfaceConfig,
                            SoilConfig, RocksConfig, BaseConfig,
                            GrassUnderlayConfig, SpeciesConfig, GrassConfig as RuntimeGrassConfig)
 from ..core.tile import TileScene
@@ -203,7 +204,6 @@ def _build_mesh(cfg: SceneConfig,
     solid_parts = [p for p in parts if p.is_volume]
     if verbose:
         print(f"Computing union  ({len(solid_parts)}/{len(parts)} solid parts)...")
-    import time as _time
     _t0 = _time.perf_counter()
     if len(solid_parts) == 0:
         combined = trimesh.util.concatenate(parts)
@@ -318,7 +318,7 @@ def build_tile_from_spec(spec: TileSpec,
                          *,
                          system_paths: dict[str, pathlib.Path] | None = None,
                          ) -> trimesh.Trimesh:
-    """Build a tile from a YAML/Python TileSpec and export system-specific STLs."""
+    """Build a tile from a Python TileSpec and export system-specific STLs."""
     cfg = _scene_config_from_spec(spec)
 
     if verbose:
@@ -582,7 +582,6 @@ def _scene_config_from_spec(spec: TileSpec) -> SceneConfig:
     """Build a SceneConfig from a TileSpec using defaults for unspecified layers."""
     return SceneConfig(
         surface          = spec.surface,
-        flow             = FlowConfig(),
         soil             = SoilConfig(),
         rocks            = RocksConfig(),
         base             = BaseConfig(),
@@ -826,7 +825,6 @@ def main(argv=None):
         print(f"No .tile.py files found under {TILES_ROOT}/  "
               f"(pass --spec FILE to target a specific tile)")
         return
-    import time as _time
     t_batch = _time.perf_counter()
     for sp in specs:
         if verbose:

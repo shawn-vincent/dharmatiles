@@ -18,6 +18,11 @@ tile = TileSpec(
             id='meadow',
             contains=(0.25, 0.5),
             layers=[
+                # grass_carpet: dense 2D footprint field (10× the 3D count).
+                # Carpet and 3D seeds are placed independently (different RNG),
+                # so their positions don't align — that's intentional.  The
+                # carpet gives the impression of a trampled ground; the 3D blades
+                # stand up through it at sparser intervals.
                 LayerSpec(type='grass_carpet', params=dict(groups_per_square=240)),
                 LayerSpec(type='grass', params=dict(groups_per_square=24)),
             ],

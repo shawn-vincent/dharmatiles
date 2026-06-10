@@ -49,6 +49,13 @@ class GrassCarpetLayer:
         surface = scene.config.surface
         rng = np.random.default_rng(surface.seed ^ 0x554E_4445)  # "UNDE"
 
+        # Reset vegetation_support_z to the bare terrain baseline so that
+        # plant_seeds' _vegetation_depth check returns 0 for every cell and
+        # no carpet seed is spuriously rejected.  Nothing has elevated
+        # vegetation_support_z yet at this point in the pipeline; this is a
+        # defensive guard against future reordering.
+        scene.vegetation_support_z = scene.terrain_support_z.copy()
+
         gh, gw = scene.terrain_z.shape
         field = np.zeros((gh, gw), dtype=float)
 
@@ -142,11 +149,6 @@ def _collect_seeds(
 ) -> list[GrassSeed]:
     """Plant blade seeds using the same Voronoi-group logic as the 3D layer."""
     grass_cfg = _RuntimeGrassConfig(species=[cfg.species])
-
-    # Ensure vegetation_support_z is current so planting respects the post-soil
-    # terrain height (no prior vegetation stacked above it yet).
-    scene.vegetation_support_z = scene.terrain_support_z.copy()
-
     occ_z = scene.terrain_z.copy()
     plant_rng = np.random.default_rng(int(rng.integers(2**31)))
     paths = _plant_seeds(scene, surface, grass_cfg, occ_z, plant_rng)

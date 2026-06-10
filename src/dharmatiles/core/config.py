@@ -151,25 +151,6 @@ class SurfaceConfig:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Flow field
-# ─────────────────────────────────────────────────────────────────────────────
-
-@dataclass
-class FlowConfig:
-    """Flow vector field parameters.
-
-    The field drives blade lean direction and lateral curl across the surface.
-
-    flow_type : 'linear' | 'swirl' | 'radial' | 'drain' | 'dipole' |
-                'random-zones' | 'curl'
-    """
-    flow_type:       str   = 'random-zones'
-    flow_curl_noise: float = 0.0           # 0 = pure base field, 1 = all curl noise
-    dir_spread:      float = float(np.radians(5))  # per-blade Gaussian jitter (rad)
-    curl_from_curv:  float = 0.80          # 0 = random curl, 1 = curvature-driven
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Soil
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -254,8 +235,11 @@ class GrassUnderlayConfig:
        logic as the companion 3D grass layer.
 
     ``species`` holds all blade geometry.  Pass the *same* ``SpeciesConfig``
-    instance to both the ``grass_carpet`` and ``grass`` layers in a tile
-    spec to guarantee the 2D stamps exactly match the 3D blades.
+    instance to both the ``grass_carpet`` and ``grass`` layers in a tile spec
+    so the 2D stamps and 3D blades share identical *geometry* (width, taper,
+    curl, cross-section).  Their *positions* are independently seeded — the
+    carpet provides a dense field of flat footprints; the 3D blades stand up
+    through it at different locations.
     """
 
     # ── Noise base ────────────────────────────────────────────────────────────
@@ -354,7 +338,6 @@ class SceneConfig:
     layer boundaries.
     """
     surface:          SurfaceConfig = field(default_factory=SurfaceConfig)
-    flow:             FlowConfig    = field(default_factory=FlowConfig)
     soil:             SoilConfig    = field(default_factory=SoilConfig)
     rocks:            RocksConfig   = field(default_factory=RocksConfig)
     base:             BaseConfig    = field(default_factory=BaseConfig)

@@ -274,8 +274,7 @@ def _jitter_grid_xy(
 
     cell_w = surface.cell_w
 
-    group_mask = np.zeros((surface.grid_h, surface.grid_w), dtype=bool)
-    group_mask[group_rows, group_cols] = True
+    group_set = frozenset(zip(group_rows.tolist(), group_cols.tolist()))
 
     # Rotated frame aligned with the blade direction.
     dx = float(np.sin(group_dir))
@@ -338,7 +337,10 @@ def _jitter_grid_xy(
     ixs = np.clip((xs / cell_w).astype(int), 0, surface.grid_w - 1)
     iys = np.clip((ys / cell_w).astype(int), 0, surface.grid_h - 1)
 
-    valid = group_mask[iys, ixs]
+    valid = np.fromiter(
+        ((int(iy), int(ix)) in group_set for iy, ix in zip(iys.tolist(), ixs.tolist())),
+        dtype=bool, count=len(iys),
+    )
     return list(zip(xs[valid].tolist(), ys[valid].tolist()))
 
 
