@@ -5,6 +5,22 @@ All rock geometry is built with NumPy broadcasting in a single pass.
 Rock tops are rasterised into the scene's terrain_support_z so that
 subsequent layers (grass blades) are forced to sit above the rocks.
 
+Entry points
+------------
+``RocksLayer.build()``
+    Legacy path: generates positions + sizes internally from ``RocksConfig``,
+    then delegates to ``_build_rocks_mesh_core``.
+
+``_build_rocks_mesh_from_seeds(seeds, ...)``
+    Scatter-layer path: accepts a pre-sorted list of ``RockSeed`` objects
+    (geometry already baked in) and delegates to ``_build_rocks_mesh_core``.
+    Called by ``scatter.prototype.RockPrototype.realize()``.
+
+``_build_rocks_mesh_core(cx, cy, rx_arr, ry_arr, height, angle, ...)``
+    Shared kernel: given arrays of positions and geometry, builds the
+    half-ellipsoid meshes, applies cuts, roughness, and slope rotation,
+    and rasterises tops into support_z / rock_mask.
+
 Slope alignment
 ---------------
 Each rock is rotated so its local +Z axis aligns with the terrain normal at
@@ -31,7 +47,12 @@ _UNSET = object()  # sentinel: "fall back to scene.rock_placement_mask"
 
 
 class RocksLayer:
-    """Place random rocks across the tile surface and update support_z."""
+    """Legacy rock layer — place rocks using fully internal position / size generation.
+
+    New code should use ``scatter.RockPrototype`` via ``scatter.ScatterLayer``,
+    which separates seed generation from mesh building and supports Voronoi
+    grouping.  ``RocksLayer`` is retained for backward compatibility.
+    """
 
     def __init__(self, surface: SurfaceConfig, rocks: RocksConfig) -> None:
         self.surface = surface
@@ -43,22 +64,7 @@ class RocksLayer:
               terrain_gz_x: np.ndarray | None = None,
               terrain_gz_y: np.ndarray | None = None,
               ) -> List[trimesh.Trimesh]:
-        """Add rock geometry to *scene.terrain_support_z* and return mesh list.
-
-        Parameters
-        ----------
-        placement_mask
-            Restrict rock centres to True cells in this bool array.
-            When omitted, falls back to ``scene.rock_placement_mask``.
-        layer_idx
-            Index among multiple rock-layer passes for the same tile.
-            Offsets the RNG seed so each pass produces independent placement.
-        terrain_gz_x, terrain_gz_y
-            Pre-computed ``dz/dx`` and ``dz/dy`` gradient grids (both divided
-            by ``cell_w``).  When supplied, ``_build_rocks_mesh`` skips its own
-            ``np.gradient`` call; avoids recomputing the same gradient for each
-            rock-layer pass on the same tile.
-        """
+        """Add rock geometry to *scene.terrain_support_z* and return mesh list."""
         if placement_mask is _UNSET:
             placement_mask = scene.rock_placement_mask
         n_squares = self.surface.cols * self.surface.rows
@@ -74,35 +80,80 @@ class RocksLayer:
         return [mesh]
 
 
-# ── Internal implementation ───────────────────────────────────────────────────
+# ── Scatter entry point ───────────────────────────────────────────────────────
 
-def _build_rocks_mesh(surface: SurfaceConfig, rocks: RocksConfig,
-                      n_rocks: int,
-                      terrain_z: np.ndarray, support_z: np.ndarray,
-                      rock_mask: np.ndarray | None,
-                      placement_mask: np.ndarray | None,
-                      rng: np.random.Generator,
-                      *,
-                      terrain_gz_x: np.ndarray | None = None,
-                      terrain_gz_y: np.ndarray | None = None,
-                      ) -> trimesh.Trimesh:
-    """Place *n_rocks* rocks; return a single merged Trimesh."""
-    N  = n_rocks
-    AZ = rocks.az_segs
-    EL = rocks.el_segs
+def _build_rocks_mesh_from_seeds(
+    seeds,                         # list[RockSeed] — pre-sorted big→small
+    rocks: RocksConfig,
+    surface: SurfaceConfig,
+    terrain_z: np.ndarray,
+    support_z: np.ndarray,
+    rock_mask: np.ndarray | None,
+    *,
+    layer_idx:    int                  = 0,
+    terrain_gz_x: np.ndarray | None   = None,
+    terrain_gz_y: np.ndarray | None   = None,
+) -> trimesh.Trimesh:
+    """Build a mesh from pre-generated ``RockSeed`` objects.
+
+    Called by ``scatter.RockPrototype.realize()``.  Positions and sizes are
+    already baked into the seeds; this function handles terrain sampling,
+    slope rotation, plane cuts, roughness, and support_z rasterisation.
+    """
+    N = len(seeds)
+    if N == 0:
+        return trimesh.Trimesh(process=False)
+
+    cx     = np.array([s.x      for s in seeds], dtype=float)
+    cy     = np.array([s.y      for s in seeds], dtype=float)
+    rx_arr = np.array([s.rx     for s in seeds], dtype=float)
+    ry_arr = np.array([s.ry     for s in seeds], dtype=float)
+    height = np.array([s.height for s in seeds], dtype=float)
+    angle  = np.array([s.angle  for s in seeds], dtype=float)
+
+    # Independent RNG for plane cuts and roughness.  Positions and sizes
+    # are already determined by the seeds; this stream only drives the
+    # stochastic detail passes so each layer_idx gets a different texture.
+    rng = np.random.default_rng(surface.seed ^ 0x636F726B ^ layer_idx * 65537)
+
+    return _build_rocks_mesh_core(
+        cx, cy, rx_arr, ry_arr, height, angle,
+        rocks, surface, terrain_z, support_z, rock_mask, rng,
+        terrain_gz_x=terrain_gz_x,
+        terrain_gz_y=terrain_gz_y,
+    )
+
+
+# ── Legacy entry point ────────────────────────────────────────────────────────
+
+def _build_rocks_mesh(
+    surface: SurfaceConfig,
+    rocks: RocksConfig,
+    n_rocks: int,
+    terrain_z: np.ndarray,
+    support_z: np.ndarray,
+    rock_mask: np.ndarray | None,
+    placement_mask: np.ndarray | None,
+    rng: np.random.Generator,
+    *,
+    terrain_gz_x: np.ndarray | None = None,
+    terrain_gz_y: np.ndarray | None = None,
+) -> trimesh.Trimesh:
+    """Generate positions + sizes internally, then build.  Used by RocksLayer."""
+    N = n_rocks
     if N <= 0:
         return trimesh.Trimesh(process=False)
 
     # Power-law size draw: U^power skews toward r_min; power=1 = uniform
     u_x    = rng.uniform(0.0, 1.0, N) ** rocks.size_power
     rx_arr = rocks.r_min + (rocks.r_max - rocks.r_min) * u_x
-    # Second axis: aspect ratio bounded to [aspect_min, 1.0] so rocks stay roundish
+    # Second axis: aspect ratio bounded to [aspect_min, 1.0]
     aspect = rng.uniform(rocks.aspect_min, 1.0, N)
     ry_arr = rx_arr * aspect
-    h_frac  = rng.uniform(rocks.flat_min, rocks.flat_max, N)
-    height  = 0.5 * (rx_arr + ry_arr) * h_frac
-    angle   = rng.uniform(0, np.pi, N)
-    margin  = np.maximum(rx_arr, ry_arr)
+    h_frac = rng.uniform(rocks.flat_min, rocks.flat_max, N)
+    height = 0.5 * (rx_arr + ry_arr) * h_frac
+    angle  = rng.uniform(0, np.pi, N)
+    margin = np.maximum(rx_arr, ry_arr)
 
     span_x = np.maximum(surface.tile_w - 2 * margin, 0.0)
     span_y = np.maximum(surface.tile_h - 2 * margin, 0.0)
@@ -110,8 +161,6 @@ def _build_rocks_mesh(surface: SurfaceConfig, rocks: RocksConfig,
     cy = margin + rng.uniform(0, 1, N) * span_y
 
     if placement_mask is not None:
-        # The mask constrains only the rock centre.  The rock footprint may
-        # cross region boundaries, but clipping by margin keeps it on the tile.
         allowed = np.argwhere(placement_mask)
         if len(allowed) == 0:
             return trimesh.Trimesh(process=False)
@@ -120,6 +169,44 @@ def _build_rocks_mesh(surface: SurfaceConfig, rocks: RocksConfig,
         cx = (chosen[:, 1] + rng.uniform(0.0, 1.0, N)) * surface.cell_w
         cx = np.clip(cx, margin, surface.tile_w - margin)
         cy = np.clip(cy, margin, surface.tile_h - margin)
+
+    return _build_rocks_mesh_core(
+        cx, cy, rx_arr, ry_arr, height, angle,
+        rocks, surface, terrain_z, support_z, rock_mask, rng,
+        terrain_gz_x=terrain_gz_x,
+        terrain_gz_y=terrain_gz_y,
+    )
+
+
+# ── Shared mesh kernel ────────────────────────────────────────────────────────
+
+def _build_rocks_mesh_core(
+    cx:     np.ndarray,   # (N,) centre X
+    cy:     np.ndarray,   # (N,) centre Y
+    rx_arr: np.ndarray,   # (N,) semi-axis X
+    ry_arr: np.ndarray,   # (N,) semi-axis Y
+    height: np.ndarray,   # (N,) height above base_z
+    angle:  np.ndarray,   # (N,) yaw rotation (radians)
+    rocks:  RocksConfig,
+    surface: SurfaceConfig,
+    terrain_z: np.ndarray,
+    support_z: np.ndarray,
+    rock_mask: np.ndarray | None,
+    rng:    np.random.Generator,
+    *,
+    terrain_gz_x: np.ndarray | None = None,
+    terrain_gz_y: np.ndarray | None = None,
+) -> trimesh.Trimesh:
+    """Build half-ellipsoid rock meshes from pre-computed geometry arrays.
+
+    This is the shared kernel used by both ``_build_rocks_mesh`` (legacy) and
+    ``_build_rocks_mesh_from_seeds`` (scatter).  It performs terrain sampling,
+    slope alignment, plane cuts, roughness, face assembly, and support_z
+    rasterisation.
+    """
+    N  = len(cx)
+    AZ = rocks.az_segs
+    EL = rocks.el_segs
 
     ca, sa = np.cos(angle), np.sin(angle)
     tz     = sample_grid(terrain_z, surface, cx, cy)
@@ -134,24 +221,23 @@ def _build_rocks_mesh(surface: SurfaceConfig, rocks: RocksConfig,
     #   R = I + K + K²·(1−nz)/(nx²+ny²)   (K = skew-symmetric of v)
     _cw = surface.cell_w
     if terrain_gz_x is None:
-        terrain_gz_x = np.gradient(terrain_z, axis=1) / _cw   # dz/dx  (rows, cols)
+        terrain_gz_x = np.gradient(terrain_z, axis=1) / _cw   # dz/dx
         terrain_gz_y = np.gradient(terrain_z, axis=0) / _cw   # dz/dy
-    _dzdx = sample_grid(terrain_gz_x, surface, cx, cy)         # (N,)
+    _dzdx = sample_grid(terrain_gz_x, surface, cx, cy)
     _dzdy = sample_grid(terrain_gz_y, surface, cx, cy)
     _nlen     = np.sqrt(_dzdx**2 + _dzdy**2 + 1.0)
-    _nx       = -_dzdx / _nlen                           # terrain normal x  (N,)
-    _ny       = -_dzdy / _nlen                           # terrain normal y
-    _nz       =  1.0   / _nlen                           # terrain normal z
-    _ns2      = _nx**2 + _ny**2                          # sin²(tilt)
+    _nx       = -_dzdx / _nlen
+    _ny       = -_dzdy / _nlen
+    _nz       =  1.0   / _nlen
+    _ns2      = _nx**2 + _ny**2
     _fac      = np.where(_ns2 > 1e-12,
                          (1.0 - _nz) / np.maximum(_ns2, 1e-12), 0.0)
-    # Rotation matrix components, all shape (N,)
     _R00 = 1.0 - _fac * _nx**2;  _R01 = -_fac * _nx * _ny;  _R02 = _nx
     _R10 = _R01;                  _R11 = 1.0 - _fac * _ny**2; _R12 = _ny
     _R20 = -_nx;                  _R21 = -_ny;                _R22 = _nz
 
     # ── Vertex buffer ──────────────────────────────────────────────────────────
-    vps = 1 + EL * AZ + 1    # verts per rock
+    vps = 1 + EL * AZ + 1    # verts per rock: apex + rings + base-centre
     fps = AZ + AZ * (EL - 1) * 2 + AZ
 
     all_verts = np.empty((N * vps, 3), dtype=float)
@@ -174,51 +260,44 @@ def _build_rocks_mesh(surface: SurfaceConfig, rocks: RocksConfig,
 
     wx = cx[:, None, None] + ca[:, None, None] * lx - sa[:, None, None] * ly
     wy = cy[:, None, None] + sa[:, None, None] * lx + ca[:, None, None] * ly
-    # wz must be (N, EL, AZ).  base_z*height*z_off broadcasts to (N, EL, 1);
-    # the trailing np.ones expands the AZ axis so wz matches wx/wy's shape.
     wz = (base_z[:, None, None] +
           height[:, None, None] * z_off[None, :, None]) + np.zeros((1, 1, AZ))
 
-    mean_r = 0.5 * (rx_arr + ry_arr)                       # (N,) per-rock scale
+    mean_r = 0.5 * (rx_arr + ry_arr)
 
     # ── Plane cuts: slice random chunks off each rock ─────────────────────────
-    # For each cut, project vertices past a random half-plane back onto it.
-    # Normals are biased horizontal so cuts create side-face chunks, not
-    # slices off the top.
     n_cuts = rocks.n_cuts
     if n_cuts > 0:
-        # Local coords relative to rock base-centre (so centre = 0,0,0)
-        lx_v = wx - cx[:, None, None]   # (N, EL, AZ)
+        lx_v = wx - cx[:, None, None]
         ly_v = wy - cy[:, None, None]
         lz_v = wz - base_z[:, None, None]
-        pts  = np.stack([lx_v, ly_v, lz_v], axis=-1)   # (N, EL, AZ, 3)
+        pts  = np.stack([lx_v, ly_v, lz_v], axis=-1)
 
         raw = rng.standard_normal((N, n_cuts, 3))
-        raw[:, :, 2] = np.abs(raw[:, :, 2]) * 0.3      # mostly horizontal cuts
+        raw[:, :, 2] = np.abs(raw[:, :, 2]) * 0.3
         norms = raw / (np.linalg.norm(raw, axis=-1, keepdims=True) + 1e-8)
 
         cut_d = (rng.uniform(rocks.cut_min, rocks.cut_max, (N, n_cuts))
-                 * mean_r[:, None])                     # (N, n_cuts) in mm
+                 * mean_r[:, None])
 
         for k in range(n_cuts):
-            n_k  = norms[:, k, :][:, None, None, :]    # (N,1,1,3)
-            d_k  = cut_d[:, k][:, None, None]          # (N,1,1)
-            dot  = (pts * n_k).sum(axis=-1)             # (N, EL, AZ)
-            exc  = np.maximum(0.0, dot - d_k)          # only vertices past plane
+            n_k  = norms[:, k, :][:, None, None, :]
+            d_k  = cut_d[:, k][:, None, None]
+            dot  = (pts * n_k).sum(axis=-1)
+            exc  = np.maximum(0.0, dot - d_k)
             pts -= exc[:, :, :, None] * n_k
 
-        pts[..., 2] = np.maximum(pts[..., 2], 0.0)     # don't cut below base
+        pts[..., 2] = np.maximum(pts[..., 2], 0.0)
         wx = cx[:, None, None]       + pts[..., 0]
         wy = cy[:, None, None]       + pts[..., 1]
         wz = base_z[:, None, None]   + pts[..., 2]
 
-        # Apply same cuts to the apex vertex so it can't spike above a cut top
         apex_pts = np.zeros((N, 3))
-        apex_pts[:, 2] = height                          # local (0, 0, h)
+        apex_pts[:, 2] = height
         for k in range(n_cuts):
-            n_k = norms[:, k, :]                         # (N, 3)
-            d_k = cut_d[:, k]                            # (N,)
-            dot = (apex_pts * n_k).sum(axis=-1)          # (N,)
+            n_k = norms[:, k, :]
+            d_k = cut_d[:, k]
+            dot = (apex_pts * n_k).sum(axis=-1)
             exc = np.maximum(0.0, dot - d_k)
             apex_pts -= exc[:, None] * n_k
         apex_pts[:, 2] = np.maximum(apex_pts[:, 2], 0.0)
@@ -226,7 +305,7 @@ def _build_rocks_mesh(surface: SurfaceConfig, rocks: RocksConfig,
         all_verts[apex_idx, 1] = cy + apex_pts[:, 1]
         all_verts[apex_idx, 2] = base_z + apex_pts[:, 2]
 
-    # ── Residual roughness: tiny per-vertex noise to break perfect flat faces ─
+    # ── Residual roughness: tiny per-vertex noise ──────────────────────────────
     if rocks.roughness > 0.0:
         scale = (rocks.roughness * mean_r)[:, None, None]
         wx += scale * rng.uniform(-1.0, 1.0, wx.shape)
@@ -234,18 +313,13 @@ def _build_rocks_mesh(surface: SurfaceConfig, rocks: RocksConfig,
         wz += scale * 0.4 * rng.uniform(-1.0, 1.0, wz.shape)
 
     # ── Slope rotation: align rock with terrain normal ────────────────────────
-    # Rotate the local offset of every ring vertex and the apex so the rock
-    # sits flush on the slope rather than intersecting it.  The base-centre
-    # vertex (bot_idx) is the pivot and needs no rotation.
     if np.any(_ns2 > 1e-9):
-        dx_ = wx - cx[:, None, None]       # local offsets from base centre
+        dx_ = wx - cx[:, None, None]
         dy_ = wy - cy[:, None, None]
         dz_ = wz - base_z[:, None, None]
-        # Broadcast (N,) rotation components to (N, 1, 1) for ring arrays
         wx = cx[:, None, None]     + (_R00[:, None, None]*dx_ + _R01[:, None, None]*dy_ + _R02[:, None, None]*dz_)
         wy = cy[:, None, None]     + (_R10[:, None, None]*dx_ + _R11[:, None, None]*dy_ + _R12[:, None, None]*dz_)
         wz = base_z[:, None, None] + (_R20[:, None, None]*dx_ + _R21[:, None, None]*dy_ + _R22[:, None, None]*dz_)
-        # Rotate apex (written earlier; may have been modified by cuts)
         a_dx = all_verts[apex_idx, 0] - cx
         a_dy = all_verts[apex_idx, 1] - cy
         a_dz = all_verts[apex_idx, 2] - base_z

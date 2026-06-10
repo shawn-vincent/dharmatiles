@@ -35,10 +35,11 @@ from ..core.spec import TileSpec, load_spec
 from ..core.region import build_region_mask, build_grass_mask
 from ..bases import dungeonblocks, openlock
 from ..layers.soil import SoilCarpetLayer
-from ..layers.rocks import RocksLayer
-from ..layers.grass import FloppyGrassLayer
 from ..layers.grass_carpet import GrassCarpetLayer
 from ..layers.water import make_water_displacement, make_water_ripple_displacement, make_water_volume, WATER_RENDER_LIFT_MM
+from ..scatter.config import ScatterConfig
+from ..scatter.prototype import RockPrototype, GrassPrototype
+from ..scatter.layer import ScatterLayer
 
 
 
@@ -46,43 +47,38 @@ from ..layers.water import make_water_displacement, make_water_ripple_displaceme
 
 def _build_mesh(cfg: SceneConfig,
                 scene: TileScene,
-                grass_cfgs: list[tuple[SpeciesConfig, np.ndarray | None]] | None = None,
+                scatter_pairs: list[tuple[object, np.ndarray | None]] | None = None,
                 soil_carpet_layers: list[tuple[SoilConfig, np.ndarray | None]] | None = None,
                 grass_carpet_layers: list[tuple[GrassUnderlayConfig, np.ndarray | None]] | None = None,
-                rock_layers: list[tuple[RocksConfig, np.ndarray | None]] | None = None,
                 verbose: bool = True,
                 water_mask: np.ndarray | None = None,
                 water_height: float | None = None,
                 water_embed_mm: float = 2.0) -> trimesh.Trimesh:
     """Run all layers on *scene* and return the concatenated mesh.
 
-    *grass_cfgs* is a list of ``(SpeciesConfig, placement_mask)`` pairs — one
-    per grass layer in the spec.  Each pair restricts grass seeding to its
-    region mask (``None`` = whole tile).  Defaults to one package-default
-    species over the whole tile.
+    *scatter_pairs* is a list of ``(prototype, placement_mask)`` pairs processed
+    by ``ScatterLayer`` in priority order (rocks first, grass second).  Each
+    prototype is a ``RockPrototype`` or ``GrassPrototype`` instance.  Defaults to
+    one ``RockPrototype`` + one ``GrassPrototype`` over the whole tile.
 
     *grass_carpet_layers* is a list of ``(GrassUnderlayConfig, placement_mask)``
     pairs — one per ``grass_carpet`` layer in the spec.  Each modifies
     terrain_z in its region (embossed 2D texture) before stones and 3D grass.
-
-    *rock_layers* is a list of ``(RocksConfig, placement_mask)`` pairs —
-    one per rock-layer zone.  Each pair is one independent rock-placement
-    pass with its own size distribution and placement region.  Defaults to
-    ``[(cfg.rocks, None)]`` (single pass, whole-tile placement).
 
     *water_mask* / *water_height* — when provided, a flat water-surface mesh
     is placed at *water_height* over the water region.  The pool floor must
     already be zeroed in *scene.terrain_z* before this call (done by
     ``build_tile_from_spec`` before scene construction).
     """
-    if grass_cfgs is None:
-        grass_cfgs = [(SpeciesConfig(), None)]
+    if scatter_pairs is None:
+        scatter_pairs = [
+            (RockPrototype(cfg.rocks), None),
+            (GrassPrototype(SpeciesConfig()), None),
+        ]
     if soil_carpet_layers is None:
         soil_carpet_layers = []
     if grass_carpet_layers is None:
         grass_carpet_layers = []
-    if rock_layers is None:
-        rock_layers = [(cfg.rocks, None)]
 
     parts: list[trimesh.Trimesh] = []
 
@@ -101,50 +97,11 @@ def _build_mesh(cfg: SceneConfig,
     # Sync terrain_support_z to include soil + underlay baked into terrain_z.
     scene.terrain_support_z[:] = scene.terrain_z
 
-    # ── Stones (one independent pass per stone-layer zone) ────────────────────
-    # Pre-compute terrain gradient once (post-soil) so all rock passes share it.
-    # Each pass uses sample_grid on this pre-computed gradient rather than calling
-    # np.gradient again on the same array.
-    n_squares = cfg.surface.cols * cfg.surface.rows
-    _rock_gz_x: np.ndarray | None = None
-    _rock_gz_y: np.ndarray | None = None
-    for layer_idx, (rock_cfg, rock_pmask) in enumerate(rock_layers):
-        n_rocks = rock_cfg.rocks_per_square * n_squares
-        if n_rocks > 0:
-            if verbose:
-                print(f"Building rocks  ({n_rocks} rocks = "
-                      f"{rock_cfg.rocks_per_square}/sq × {n_squares} sq)...")
-            if _rock_gz_x is None:
-                _cw = cfg.surface.cell_w
-                _rock_gz_x = np.gradient(scene.terrain_z, axis=1) / _cw
-                _rock_gz_y = np.gradient(scene.terrain_z, axis=0) / _cw
-            rock_parts = RocksLayer(cfg.surface, rock_cfg).build(
-                scene, placement_mask=rock_pmask, layer_idx=layer_idx,
-                terrain_gz_x=_rock_gz_x, terrain_gz_y=_rock_gz_y)
-            parts.extend(rock_parts)
-
-    # ── Grass (one pass per seed-packet config) ───────────────────────────────
-    if grass_cfgs and verbose:
-        print("Growing grass...")
-    scene.vegetation_support_z = scene.terrain_support_z.copy()
-    global_grass_mask = scene.grass_mask
-    for i, (g_cfg, region_mask_i) in enumerate(grass_cfgs):
-        # Restrict seeding to this region, intersected with the global grass mask.
-        if region_mask_i is not None and global_grass_mask is not None:
-            scene.grass_mask = global_grass_mask & region_mask_i
-        elif region_mask_i is not None:
-            scene.grass_mask = region_mask_i
-        else:
-            scene.grass_mask = global_grass_mask
-        packet_cfg = RuntimeGrassConfig(
-            species=[g_cfg],
-            max_stack_height=cfg.max_stack_height,
-            seed=cfg.surface.seed ^ 0x47524F57,
-        )
-        grown = FloppyGrassLayer(packet_cfg)
-        grass_parts = grown.build(scene, verbose=(verbose and i == 0))
-        parts.extend(grass_parts)
-    scene.grass_mask = global_grass_mask  # restore original mask
+    # ── Scatter (rocks → grass, in priority order) ────────────────────────────
+    scatter_layer = ScatterLayer(scatter_pairs)
+    scatter_parts = scatter_layer.build(scene, verbose=verbose,
+                                        max_stack_height=cfg.max_stack_height)
+    parts.extend(scatter_parts)
 
     # ── Water volume ──────────────────────────────────────────────────────────
     if water_mask is not None and water_height is not None:
@@ -369,11 +326,10 @@ def build_tile_from_spec(spec: TileSpec,
     )
 
     # Compute once; both DB and OL scenes use the same region_mask and spec.
-    grass_mask      = build_grass_mask(region_mask, spec) if region_mask is not None else None
-    grass_cfgs      = _collect_grass_configs(spec, region_mask)
+    grass_mask          = build_grass_mask(region_mask, spec) if region_mask is not None else None
+    scatter_pairs       = _collect_scatter_pairs(spec, region_mask)
     soil_carpet_layers  = _collect_soil_carpet_layers(spec, region_mask)
     grass_carpet_layers = _collect_grass_carpet_layers(spec, region_mask)
-    rock_layers     = _collect_rocks_layers(spec, region_mask)
 
     scene.grass_mask = grass_mask
     if verbose and grass_mask is not None:
@@ -388,10 +344,9 @@ def build_tile_from_spec(spec: TileSpec,
               f"({100 * n_water / n_total:.0f}%)")
 
     tile_mesh = _build_mesh(cfg, scene,
-                            grass_cfgs=grass_cfgs,
+                            scatter_pairs=scatter_pairs,
                             soil_carpet_layers=soil_carpet_layers,
                             grass_carpet_layers=grass_carpet_layers,
-                            rock_layers=rock_layers,
                             verbose=verbose,
                             water_mask=water_mask, water_height=water_height,
                             water_embed_mm=embed_mm)
@@ -421,10 +376,9 @@ def build_tile_from_spec(spec: TileSpec,
         ol_scene.grass_mask = grass_mask   # same result; region_mask unchanged
         ol_tile_mesh = _build_mesh(
             ol_cfg, ol_scene,
-            grass_cfgs=grass_cfgs,          # reuse — same spec + region_mask
+            scatter_pairs=scatter_pairs,    # reuse — same spec + region_mask
             soil_carpet_layers=soil_carpet_layers,
             grass_carpet_layers=grass_carpet_layers,
-            rock_layers=rock_layers,
             verbose=verbose,
             water_mask=water_mask, water_height=water_height,
             water_embed_mm=embed_mm)
@@ -627,39 +581,109 @@ def _collect_layers(
     return result
 
 
-def _collect_grass_configs(
+def _collect_scatter_pairs(
     spec: TileSpec,
     region_mask: np.ndarray | None,
-) -> list[tuple[SpeciesConfig, np.ndarray | None]]:
-    """Return ``(SpeciesConfig, placement_mask)`` pairs for each grass layer.
+) -> list[tuple[object, np.ndarray | None]]:
+    """Return ``(prototype, placement_mask)`` pairs for all scatter layers.
 
+    Collects both ``rocks`` and ``grass`` layer types from all regions and
+    boundaries, wrapping each in the appropriate prototype class.  The returned
+    list is ordered rocks-first (priority 0), grass-second (priority 1) within
+    each region; ``ScatterLayer.build()`` preserves this ordering.
+
+    ``rocks`` layer params
+    ~~~~~~~~~~~~~~~~~~~~~~
+    All ``RocksConfig`` fields are accepted as flat kwargs.  An optional
+    ``scatter=ScatterConfig(...)`` key supplies grouping / density overrides;
+    without it, a default ``ScatterConfig`` matching the current
+    ``rocks_per_square`` count and no Voronoi grouping is used.
+
+    ``grass`` layer params
+    ~~~~~~~~~~~~~~~~~~~~~~
     Blade geometry can be supplied as:
 
-    * a ``SpeciesConfig`` instance —
-      ``LayerSpec(type='grass', params=dict(species=my_species))``
-    * flat ``blade_*`` kwargs —
-      ``LayerSpec(type='grass', params=dict(groups_per_square=24, ...))``
-    * any mix: ``species=`` sets the base; extra flat kwargs override it.
+    * a ``SpeciesConfig`` instance via ``params=dict(species=my_species)``.
+    * flat ``blade_*`` / placement kwargs folded into a ``SpeciesConfig``.
+    * any mix: ``species=`` sets the base; flat kwargs override specific fields.
 
-    Grass is not collected from boundary specs.
+    An optional ``scatter=ScatterConfig(...)`` key overrides distribution
+    parameters; otherwise defaults are derived from the ``SpeciesConfig``.
+
+    Grass is not collected from boundary specs (rocks in boundaries are
+    supported, matching the previous behaviour).
     """
-    _default = SpeciesConfig()
-    _fields  = {f.name for f in dataclasses.fields(SpeciesConfig)}
-    result: list[tuple[SpeciesConfig, np.ndarray | None]] = []
+    _rock_defaults  = vars(RocksConfig())
+    _rock_fields    = set(_rock_defaults)
+    _spec_default   = SpeciesConfig()
+    _spec_fields    = {f.name for f in dataclasses.fields(SpeciesConfig)}
 
+    result: list[tuple[object, np.ndarray | None]] = []
+
+    # Helper: build a ScatterConfig from params (pop 'scatter' key if present)
+    def _pop_scatter(params: dict, fallback_fn) -> ScatterConfig:
+        sc = params.pop('scatter', None)
+        if sc is not None:
+            if not isinstance(sc, ScatterConfig):
+                raise TypeError(f"'scatter' must be a ScatterConfig, got {type(sc)!r}")
+            return sc
+        return fallback_fn()
+
+    # ── rocks ──────────────────────────────────────────────────────────────────
+    for idx, region in enumerate(spec.regions):
+        for layer in region.layers:
+            if layer.type == 'rocks':
+                mask   = (region_mask == idx) if region_mask is not None else None
+                params = dict(layer.params)
+                scatter = _pop_scatter(params, lambda: None)  # resolved below
+                rock_kwargs = {k: v for k, v in params.items() if k in _rock_fields}
+                rocks_cfg   = RocksConfig(**{**_rock_defaults, **rock_kwargs})
+                if scatter is None:
+                    scatter = ScatterConfig(
+                        items_per_square  = rocks_cfg.rocks_per_square,
+                        groups_per_square = 0,
+                        group_dir_mode    = 'none',
+                    )
+                result.append((RockPrototype(rocks=rocks_cfg, scatter=scatter), mask))
+
+    for boundary in spec.boundaries:
+        for layer in boundary.layers:
+            if layer.type == 'rocks':
+                mask   = (region_mask < 0) if region_mask is not None else None
+                params = dict(layer.params)
+                scatter = _pop_scatter(params, lambda: None)
+                rock_kwargs = {k: v for k, v in params.items() if k in _rock_fields}
+                rocks_cfg   = RocksConfig(**{**_rock_defaults, **rock_kwargs})
+                if scatter is None:
+                    scatter = ScatterConfig(
+                        items_per_square  = rocks_cfg.rocks_per_square,
+                        groups_per_square = 0,
+                        group_dir_mode    = 'none',
+                    )
+                result.append((RockPrototype(rocks=rocks_cfg, scatter=scatter), mask))
+
+    # ── grass ──────────────────────────────────────────────────────────────────
     for idx, region in enumerate(spec.regions):
         for layer in region.layers:
             if layer.type == 'grass':
-                mask = (region_mask == idx) if region_mask is not None else None
+                mask   = (region_mask == idx) if region_mask is not None else None
                 params = dict(layer.params)
-                base   = params.pop('species', _default)
+                scatter = _pop_scatter(params, lambda: None)
+                base    = params.pop('species', _spec_default)
                 if not isinstance(base, SpeciesConfig):
                     raise TypeError(
                         f"grass layer 'species' must be a SpeciesConfig, got {type(base)!r}"
                     )
-                overrides = {k: v for k, v in params.items() if k in _fields}
+                overrides = {k: v for k, v in params.items() if k in _spec_fields}
                 species   = dataclasses.replace(base, **overrides) if overrides else base
-                result.append((species, mask))
+                if scatter is None:
+                    scatter = ScatterConfig(
+                        groups_per_square = species.groups_per_square,
+                        gap_mm            = species.gap_mm,
+                        group_dir_mode    = 'random',
+                    )
+                result.append((GrassPrototype(species=species, scatter=scatter), mask))
+
     return result
 
 
@@ -722,22 +746,6 @@ def _collect_grass_carpet_layers(
                 result.append((cfg, mask))
     return result
 
-
-def _collect_rocks_layers(
-    spec: TileSpec,
-    region_mask: np.ndarray | None,
-) -> list[tuple[RocksConfig, np.ndarray | None]]:
-    """Return one ``(RocksConfig, placement_mask)`` pair per rocks layer.
-
-    Each region or boundary that declares a ``rocks`` layer gets its own
-    independent rock-placement pass, so a pool region and a shoreline
-    boundary can use different size distributions.
-    """
-    return _collect_layers(           # type: ignore[return-value]
-        spec, region_mask,
-        layer_types={'rocks'},
-        cfg_class=RocksConfig,
-    )
 
 
 # ── Multi-size helpers ────────────────────────────────────────────────────────

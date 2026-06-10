@@ -72,13 +72,17 @@ TileSpec (.tile.py) ──► build_tile_from_spec()
              (DB scale)                    (OL scale — re-run
                                             at 25.4 mm/sq)
                    │
-         ┌─────────┼──────────┬────────────────┐
-         ▼         ▼          ▼                ▼
-   SoilCarpetLayer  GrassCarpetLayer  RocksLayer  FloppyGrassLayer
-   (blob texture     (embossed 2D      (cut half-  (segment-by-segment
-    on terrain_z)     stamps on         ellipsoids)  blade growth)
-                      terrain_z)
-         └─────────┼──────────┴────────────────┘
+         ┌─────────┼──────────┬────────────────────────────┐
+         ▼         ▼          ▼                            ▼
+   SoilCarpetLayer  GrassCarpetLayer          ScatterLayer
+   (blob texture     (embossed 2D         (priority-ordered pass:)
+    on terrain_z)     stamps on           ├─ phase 0: RockPrototype(s)
+                      terrain_z)          │    seed → sort big→small
+                                          │    → vectorised mesh +
+                                          │      stamp support_z
+                                          └─ phase 1: GrassPrototype(s)
+                                               plant + grow blades
+         └─────────┼──────────┴────────────────────────────┘
                    ▼
          (optional) WaterVolume
                    ▼
@@ -108,22 +112,27 @@ TileSpec (.tile.py) ──► build_tile_from_spec()
 | `core/grid.py` | `sample_grid` (bilinear) |
 | `core/terrain.py` | `TerrainType` enum and height/transition helpers (metadata only) |
 | `core/logo.py` | SVG lotus logo → manifold3d inset solid |
-| `grass/seed.py` | `GrassSeed` dataclass — per-blade geometry, taper curves |
-| `grass/grow.py` | Seeding (Voronoi groups, jitter grid) and segment-by-segment growth |
+| `grass/seed.py` | `GrassSeed` dataclass — per-blade geometry, taper curves, `sort_key()` |
+| `grass/grow.py` | Segment-by-segment growth; imports distribution helpers from `scatter/distribute.py` |
 | `grass/mesh.py` | Blade mesh construction + vegetation support rasterisation |
 | `grass/growers/flat.py` | `FlatGrassGrower` — cross-section rings, keel, spine smoothing |
 | `grass/_geometry.py` | Shared helpers: `_blade_step_geometry`, `_stamp_segment`, `_contained_segment_cells`, etc. |
 | `grass/layer.py` | `GrassLayer` / `FloppyGrassLayer` entry points |
+| `scatter/config.py` | `ScatterConfig` — spatial distribution params (groups, gap, dir mode) |
+| `scatter/seed.py` | `RockSeed` — fully-resolved rock instance with `sort_key()` |
+| `scatter/distribute.py` | Voronoi grouping, jitter grid, `scatter_positions()` — shared by rocks + grass |
+| `scatter/prototype.py` | `RockPrototype` + `GrassPrototype` — seed generation and realisation |
+| `scatter/layer.py` | `ScatterLayer` — phase 0 rocks (big→small), phase 1 grass (upstream first) |
 | `layers/soil.py` | `SoilCarpetLayer` — two-tier super-Gaussian blobs into terrain_z |
-| `layers/rocks.py` | `RocksLayer` — vectorised cut half-ellipsoid rocks with slope alignment |
+| `layers/rocks.py` | `_build_rocks_mesh_core` — vectorised half-ellipsoid kernel; `RocksLayer` (legacy) |
 | `layers/grass.py` | Compatibility re-export of `FloppyGrassLayer` |
 | `layers/grass_carpet.py` | `GrassCarpetLayer` — embossed 2D blade-stamp texture into terrain_z |
 | `layers/water.py` | Water displacement, ripple, and volume mesh |
 | `bases/dungeonblocks.py` | DungeonBlocks socket-peg base; logo inset; STL export |
 | `bases/openlock.py` | OpenLOCK T-slot base via manifold3d CSG; STL export |
-| `terrains/tile.py` | Entry point: `build_tile_from_spec()`, spec collectors, CLI |
+| `terrains/tile.py` | Entry point: `build_tile_from_spec()`, `_collect_scatter_pairs()`, CLI |
 
-`core/` modules are pure primitives (array in / array out). `grass/` holds the full grass sub-pipeline. `layers/` modules implement the `.build(scene)` interface. `bases/` attaches system-specific underside geometry. `terrains/` is the entry point that assembles everything.
+`core/` modules are pure primitives (array in / array out). `grass/` holds the grass growth sub-pipeline. `scatter/` is the unified placement system for rocks and grass. `layers/` has terrain-texture layers (soil, grass carpet, water). `bases/` attaches system-specific underside geometry. `terrains/` is the entry point that assembles everything.
 
 ### Tile Spec Format (`.tile.py` files)
 
@@ -143,10 +152,12 @@ from dharmatiles.core.spec import (
 | Type | Effect |
 |---|---|
 | `grass_carpet` | Embossed 2D blade stamps + noise base into terrain_z |
-| `grass` | 3D blade growth (FloppyGrassLayer) |
+| `grass` | 3D blade growth via `GrassPrototype` → `ScatterLayer` |
 | `soil_carpet` | Soil blob texture into terrain_z |
 | `water` | Marks region as water pool (triggers shoreline + volume mesh) |
-| `rocks` | Scattered rocks placed in this region |
+| `rocks` | Scattered rocks via `RockPrototype` → `ScatterLayer`; accepts optional `scatter=ScatterConfig(groups_per_square=N)` for Voronoi clustering |
+
+Both `rocks` and `grass` params accept an optional `scatter=ScatterConfig(...)` key for distribution overrides. Without it, sensible defaults are used (rocks: count-based, no groups; grass: area-based, Voronoi groups from `SpeciesConfig`).
 
 **Height defaults** (total slab thickness from tile bottom to surface):
 
@@ -160,6 +171,15 @@ Boundaries are curves from one tile edge to another. `width_mm=0` = zero-width d
 
 Tile files may freely use imports, helper functions, calculations, shared constants,
 and composition. The pipeline only consumes the final `TileSpec` object.
+
+### Scatter System (rocks + grass)
+
+Both `rocks` and `grass` layers go through `ScatterLayer` in `scatter/layer.py`.  The layer runs in two phases:
+
+1. **Phase 0 — rocks** (`sort_priority = 0`): `RockPrototype.make_seed()` samples geometry from `RocksConfig` and returns a `RockSeed(x, y, rx, ry, height, angle)`.  Seeds are sorted big→small (`sort_key() = (0, −mean_radius)`), then the full list is passed to `_build_rocks_mesh_core` (vectorised NumPy) which also stamps `terrain_support_z` and `rock_mask`.
+2. **Phase 1 — grass** (`sort_priority = 1`): `GrassPrototype.realize()` delegates to `FloppyGrassLayer` after `vegetation_support_z` is synced from the completed `terrain_support_z`. `GrassSeed` sort key is `(1, upstream_dist)` — seeds closest to the tile boundary they face grow first.
+
+`ScatterConfig` (in `scatter/config.py`) controls: `items_per_square` (hard count), `groups_per_square` (Voronoi clumps; 0 = uniform random), `gap_mm`, `group_dir_mode`.  Distribution helpers (`voronoi_groups`, `jitter_grid_xy`, etc.) live in `scatter/distribute.py` and are imported by `grass/grow.py` as well.
 
 ### Grass Carpet vs. 3D Grass
 
@@ -193,8 +213,9 @@ All geometry layers (soil, rocks, grass) treat the terrain surface as **locally 
 ```
 src/dharmatiles/
   core/          pure primitives: config, spec, tile, region, mesh, grid, terrain, logo
-  grass/         grass sub-pipeline: seed, grow, mesh, growers/, _geometry, layer, config
-  layers/        soil.py, rocks.py, grass.py (wrapper), grass_carpet.py, water.py
+  scatter/       unified placement system: config, seed, distribute, prototype, layer
+  grass/         grass growth sub-pipeline: seed, grow, mesh, growers/, _geometry, layer, config
+  layers/        soil.py, rocks.py (kernel), grass.py (wrapper), grass_carpet.py, water.py
   bases/         dungeonblocks.py, openlock.py
   terrains/      tile.py (main entry point + CLI)
 src/tiles/       .tile.py spec files (Python)

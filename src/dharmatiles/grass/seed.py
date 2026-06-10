@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -23,6 +23,16 @@ class GrassSeed:
     blade_rise_cap: float
     blade_clearance: float
     species_id: str
+
+    # Precomputed for sorting — distance from seed to tile boundary along
+    # blade_direction.  Seeds closer to the boundary they face are grown
+    # first (upstream) so interior blades ride on top of outer ones.
+    # Stored here so sort_key() is self-contained (no surface needed).
+    upstream_dist: float = field(default=0.0)
+
+    def sort_key(self) -> tuple:
+        """(priority=1, upstream_dist) — grass after rocks, upstream first."""
+        return (1, self.upstream_dist, self.blade_direction % (2.0 * math.pi))
 
     # ── Scalar API ───────────────────────────────────────────────────────────
 
