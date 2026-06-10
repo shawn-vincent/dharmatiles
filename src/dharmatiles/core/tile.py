@@ -113,10 +113,10 @@ class TileScene:
     #       # ... bilinear sample of gradient ...
     #
     # Callers that need updating when this is implemented:
-    #   - RocksLayer._build_rocks_mesh    → rotate rock local-Z to terrain_normal
-    #   - GrassLayer (blade origin)       → sink along normal, not world-Z
-    #   - GrassLayer (rise_cap check)     → compare Δ along normal, not abs Δz
-    #   - _make_support_post              → measure z_top clearance along normal
+    #   - _build_rocks_mesh_core           → rotate rock local-Z to terrain_normal
+    #   - FloppyGrassLayer (blade origin)  → sink along normal, not world-Z
+    #   - FloppyGrassLayer (rise_cap check)→ compare Δ along normal, not abs Δz
+    #   - _make_support_post               → measure z_top clearance along normal
     #   - SoilCarpetLayer._accumulate_blob → displace bump along normal
 
 

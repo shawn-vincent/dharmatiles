@@ -1,8 +1,9 @@
 """
 GrassCarpetLayer: embossed 2D grass-carpet texture stamped into terrain_z.
 
-The layer runs after SoilCarpetLayer and before RocksLayer / GrassLayer (3D).
-It modifies terrain_z in-place and adds no Trimesh geometry to the scene.
+The layer runs after SoilCarpetLayer and before any ScatterLayer (rocks +
+3D grass).  It modifies terrain_z in-place and adds no Trimesh geometry to
+the scene.
 
 Two components are composited via np.maximum onto a scratch field, then
 added to terrain_z (with an optional placement mask):
@@ -19,31 +20,55 @@ See docs/design/grass-underlay.md for the full design rationale.
 """
 from __future__ import annotations
 
+import dataclasses
+
 import numpy as np
 from scipy.ndimage import distance_transform_edt, gaussian_filter
 
-from ..core.config import GrassConfig as _RuntimeGrassConfig, GrassUnderlayConfig
+from ..core.config import (GrassConfig as _RuntimeGrassConfig,
+                           GrassUnderlayConfig, SpeciesConfig)
 from ..core.tile import TileScene
 from ..grass._geometry import _blade_step_geometry, _stamp_segment
 from ..grass.grow import plant_seeds as _plant_seeds
 from ..grass.seed import GrassSeed
 
 
+_UNDERLAY_FIELDS = {f.name for f in dataclasses.fields(GrassUnderlayConfig)
+                    if f.name != 'species'}
+_SPECIES_FIELDS  = {f.name for f in dataclasses.fields(SpeciesConfig)}
+
+
 class GrassCarpetLayer:
-    """Emboss a 2D grass-carpet texture into scene.terrain_z."""
+    """Emboss a 2D grass-carpet texture into scene.terrain_z.
 
-    def __init__(self, cfg: GrassUnderlayConfig) -> None:
-        self.cfg = cfg
+    Flat kwargs are split between ``GrassUnderlayConfig`` and
+    ``SpeciesConfig``; pass ``species=SpeciesConfig(...)`` to share blade
+    geometry with a companion 3D ``Grass`` instance.
+    """
 
-    def build(
+    height_default_mm: float = 5.0
+
+    def __init__(self, species: SpeciesConfig | None = None, **kwargs) -> None:
+        base_species = species or SpeciesConfig()
+        species_over = {k: v for k, v in kwargs.items() if k in _SPECIES_FIELDS}
+        carpet_over  = {k: v for k, v in kwargs.items() if k in _UNDERLAY_FIELDS}
+        unknown = set(kwargs) - _SPECIES_FIELDS - _UNDERLAY_FIELDS
+        if unknown:
+            raise TypeError(f"GrassCarpetLayer: unknown kwargs {sorted(unknown)!r}")
+        final_species = (dataclasses.replace(base_species, **species_over)
+                         if species_over else base_species)
+        self.cfg = GrassUnderlayConfig(species=final_species, **carpet_over)
+
+    def apply(
         self,
         scene: TileScene,
+        *,
         placement_mask: np.ndarray | None = None,
-    ) -> None:
+    ) -> list:
         """Compute and apply the underlay heightmap bump to terrain_z.
 
-        Must be called after SoilCarpetLayer (terrain_z already has soil bumps)
-        and before the terrain_support_z sync, RocksLayer, and GrassLayer.
+        Ends with a ``terrain_support_z[:] = terrain_z`` sync so any
+        subsequent scatter layer sees the updated surface.
         """
         cfg = self.cfg
         surface = scene.config.surface
@@ -94,6 +119,10 @@ class GrassCarpetLayer:
             scene.terrain_z += field
         else:
             scene.terrain_z[placement_mask] += field[placement_mask]
+
+        # Keep terrain_support_z in sync with the modified terrain_z.
+        scene.terrain_support_z[:] = scene.terrain_z
+        return []
 
 
 # ── Edge fade ─────────────────────────────────────────────────────────────────

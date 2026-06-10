@@ -1,5 +1,5 @@
 """
-RocksLayer: batch-vectorised half-ellipsoid rocks placed on terrain.
+Vectorised half-ellipsoid rock mesh kernel.
 
 All rock geometry is built with NumPy broadcasting in a single pass.
 Rock tops are rasterised into the scene's terrain_support_z so that
@@ -7,14 +7,10 @@ subsequent layers (grass blades) are forced to sit above the rocks.
 
 Entry points
 ------------
-``RocksLayer.build()``
-    Legacy path: generates positions + sizes internally from ``RocksConfig``,
-    then delegates to ``_build_rocks_mesh_core``.
-
 ``_build_rocks_mesh_from_seeds(seeds, ...)``
-    Scatter-layer path: accepts a pre-sorted list of ``RockSeed`` objects
+    Public path: accepts a pre-sorted list of ``RockSeed`` objects
     (geometry already baked in) and delegates to ``_build_rocks_mesh_core``.
-    Called by ``scatter.prototype.RockPrototype.realize()``.
+    Called by ``scatter.prototype.Rocks.scatter()``.
 
 ``_build_rocks_mesh_core(cx, cy, rx_arr, ry_arr, height, angle, ...)``
     Shared kernel: given arrays of positions and geometry, builds the
@@ -33,51 +29,11 @@ negligible in practice.
 """
 from __future__ import annotations
 
-from typing import List
-
 import numpy as np
 import trimesh
 
 from ..core.config import SurfaceConfig, RocksConfig
-from ..core.tile import TileScene
 from ..core.grid import sample_grid
-
-
-_UNSET = object()  # sentinel: "fall back to scene.rock_placement_mask"
-
-
-class RocksLayer:
-    """Legacy rock layer — place rocks using fully internal position / size generation.
-
-    New code should use ``scatter.RockPrototype`` via ``scatter.ScatterLayer``,
-    which separates seed generation from mesh building and supports Voronoi
-    grouping.  ``RocksLayer`` is retained for backward compatibility.
-    """
-
-    def __init__(self, surface: SurfaceConfig, rocks: RocksConfig) -> None:
-        self.surface = surface
-        self.rocks   = rocks
-
-    def build(self, scene: TileScene, *,
-              placement_mask=_UNSET,
-              layer_idx: int = 0,
-              terrain_gz_x: np.ndarray | None = None,
-              terrain_gz_y: np.ndarray | None = None,
-              ) -> List[trimesh.Trimesh]:
-        """Add rock geometry to *scene.terrain_support_z* and return mesh list."""
-        if placement_mask is _UNSET:
-            placement_mask = scene.rock_placement_mask
-        n_squares = self.surface.cols * self.surface.rows
-        n_rocks   = self.rocks.rocks_per_square * n_squares
-        rng  = np.random.default_rng(self.surface.seed + 7919 + layer_idx * 65537)
-        mesh = _build_rocks_mesh(self.surface, self.rocks, n_rocks,
-                                 scene.terrain_z, scene.terrain_support_z,
-                                 scene.rock_mask,
-                                 placement_mask,
-                                 rng,
-                                 terrain_gz_x=terrain_gz_x,
-                                 terrain_gz_y=terrain_gz_y)
-        return [mesh]
 
 
 # ── Scatter entry point ───────────────────────────────────────────────────────
@@ -96,7 +52,7 @@ def _build_rocks_mesh_from_seeds(
 ) -> trimesh.Trimesh:
     """Build a mesh from pre-generated ``RockSeed`` objects.
 
-    Called by ``scatter.RockPrototype.realize()``.  Positions and sizes are
+    Called by ``scatter.prototype.Rocks.scatter()``.  Positions and sizes are
     already baked into the seeds; this function handles terrain sampling,
     slope rotation, plane cuts, roughness, and support_z rasterisation.
     """
@@ -115,60 +71,6 @@ def _build_rocks_mesh_from_seeds(
     # are already determined by the seeds; this stream only drives the
     # stochastic detail passes so each layer_idx gets a different texture.
     rng = np.random.default_rng(surface.seed ^ 0x636F726B ^ layer_idx * 65537)
-
-    return _build_rocks_mesh_core(
-        cx, cy, rx_arr, ry_arr, height, angle,
-        rocks, surface, terrain_z, support_z, rock_mask, rng,
-        terrain_gz_x=terrain_gz_x,
-        terrain_gz_y=terrain_gz_y,
-    )
-
-
-# ── Legacy entry point ────────────────────────────────────────────────────────
-
-def _build_rocks_mesh(
-    surface: SurfaceConfig,
-    rocks: RocksConfig,
-    n_rocks: int,
-    terrain_z: np.ndarray,
-    support_z: np.ndarray,
-    rock_mask: np.ndarray | None,
-    placement_mask: np.ndarray | None,
-    rng: np.random.Generator,
-    *,
-    terrain_gz_x: np.ndarray | None = None,
-    terrain_gz_y: np.ndarray | None = None,
-) -> trimesh.Trimesh:
-    """Generate positions + sizes internally, then build.  Used by RocksLayer."""
-    N = n_rocks
-    if N <= 0:
-        return trimesh.Trimesh(process=False)
-
-    # Power-law size draw: U^power skews toward r_min; power=1 = uniform
-    u_x    = rng.uniform(0.0, 1.0, N) ** rocks.size_power
-    rx_arr = rocks.r_min + (rocks.r_max - rocks.r_min) * u_x
-    # Second axis: aspect ratio bounded to [aspect_min, 1.0]
-    aspect = rng.uniform(rocks.aspect_min, 1.0, N)
-    ry_arr = rx_arr * aspect
-    h_frac = rng.uniform(rocks.flat_min, rocks.flat_max, N)
-    height = 0.5 * (rx_arr + ry_arr) * h_frac
-    angle  = rng.uniform(0, np.pi, N)
-    margin = np.maximum(rx_arr, ry_arr)
-
-    span_x = np.maximum(surface.tile_w - 2 * margin, 0.0)
-    span_y = np.maximum(surface.tile_h - 2 * margin, 0.0)
-    cx = margin + rng.uniform(0, 1, N) * span_x
-    cy = margin + rng.uniform(0, 1, N) * span_y
-
-    if placement_mask is not None:
-        allowed = np.argwhere(placement_mask)
-        if len(allowed) == 0:
-            return trimesh.Trimesh(process=False)
-        chosen = allowed[rng.integers(0, len(allowed), N)]
-        cy = (chosen[:, 0] + rng.uniform(0.0, 1.0, N)) * surface.cell_w
-        cx = (chosen[:, 1] + rng.uniform(0.0, 1.0, N)) * surface.cell_w
-        cx = np.clip(cx, margin, surface.tile_w - margin)
-        cy = np.clip(cy, margin, surface.tile_h - margin)
 
     return _build_rocks_mesh_core(
         cx, cy, rx_arr, ry_arr, height, angle,
@@ -199,10 +101,8 @@ def _build_rocks_mesh_core(
 ) -> trimesh.Trimesh:
     """Build half-ellipsoid rock meshes from pre-computed geometry arrays.
 
-    This is the shared kernel used by both ``_build_rocks_mesh`` (legacy) and
-    ``_build_rocks_mesh_from_seeds`` (scatter).  It performs terrain sampling,
-    slope alignment, plane cuts, roughness, face assembly, and support_z
-    rasterisation.
+    Performs terrain sampling, slope alignment, plane cuts, roughness, face
+    assembly, and support_z rasterisation.
     """
     N  = len(cx)
     AZ = rocks.az_segs

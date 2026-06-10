@@ -3,31 +3,33 @@
 # A patch of grass in the bottom-left corner; the rest is bare soil.
 # Works as a transition tile where a meadow ends at a path corner.
 
-from dharmatiles.core.spec import (
-    TileSpec, RegionSpec, LayerSpec, BoundarySpec, SurfaceConfig,
-)
+from dharmatiles.spec import Tile, Region, Boundary, SurfaceConfig
+from dharmatiles.layers import SoilCarpetLayer, GrassCarpetLayer, ScatterLayer
+from dharmatiles.scatter import Grass
 
-tile = TileSpec(
+tile = Tile(
     surface=SurfaceConfig(cols=1, rows=1, seed=99),
     regions=[
-        RegionSpec(
+        Region(
             id='patch',
             contains=(0.15, 0.15),
             layers=[
-                LayerSpec(type='grass_carpet'),
-                LayerSpec(type='grass', params=dict(groups_per_square=240)),
+                GrassCarpetLayer(),
+                ScatterLayer(
+                    Grass(groups_per_square=240),
+                ),
             ],
         ),
-        RegionSpec(
+        Region(
             id='floor',
             contains=(0.75, 0.75),
             layers=[
-                LayerSpec(type='soil_carpet'),
+                SoilCarpetLayer(),
             ],
         ),
     ],
     boundaries=[
-        BoundarySpec(
+        Boundary(
             id='corner-cut',
             from_anchor=('left', 0.5),
             to_anchor=('bottom', 0.5),

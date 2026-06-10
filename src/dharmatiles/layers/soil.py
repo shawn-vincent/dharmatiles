@@ -30,34 +30,37 @@ _OVERSAMPLE = 2   # internal upscale factor for soil blob detail
 import numpy as np
 from scipy.ndimage import distance_transform_edt, gaussian_filter, map_coordinates, zoom
 
-from ..core.config import SurfaceConfig, SoilConfig
+from ..core.config import SoilConfig
 from ..core.tile import TileScene
 
 
 class SoilCarpetLayer:
-    """Scatter random super-Gaussian soil clumps into scene.terrain_z."""
+    """Bake super-Gaussian soil clumps into scene.terrain_z.
 
-    def __init__(self, surface: SurfaceConfig, soil: SoilConfig) -> None:
-        self.surface = surface
-        self.soil    = soil
+    Accepts flat ``SoilConfig`` kwargs; reads the active ``SurfaceConfig``
+    from ``scene.config.surface`` inside ``apply()``.
+    """
 
-    def build(self, scene: TileScene,
-              placement_mask: np.ndarray | None = None) -> None:
+    height_default_mm: float = 5.0
+
+    def __init__(self, **soil_kwargs) -> None:
+        self.soil = SoilConfig(**soil_kwargs)
+
+    def apply(self, scene: TileScene, *,
+              placement_mask: np.ndarray | None = None) -> list:
         """Compute soil bump at 2× resolution, downsample, drape onto surface.
 
-        The bump field is treated as a texture defined in surface arc-length
-        space.  Each world cell is mapped to its arc-length-equivalent position
-        in the flat bump field so that bump footprints compress on steep slopes
-        and remain symmetric in the surface-normal view.  Height is then scaled
-        by nz = cos(slope_angle) to give the correct world-Z increment.
+        Ends with a ``terrain_support_z[:] = terrain_z`` sync so subsequent
+        scatter layers see the updated surface.
         """
+        surface   = scene.config.surface
         gh, gw    = scene.terrain_z.shape
-        cell_mm   = self.surface.cell_w / _OVERSAMPLE
-        n_squares = self.surface.cols * self.surface.rows
+        cell_mm   = surface.cell_w / _OVERSAMPLE
+        n_squares = surface.cols * surface.rows
 
         hires_bump = _compute_bump_field(
             soil=self.soil,
-            seed=self.surface.seed,
+            seed=surface.seed,
             gh=gh * _OVERSAMPLE, gw=gw * _OVERSAMPLE,
             cell_mm=cell_mm,
             n_squares=n_squares,
@@ -65,16 +68,11 @@ class SoilCarpetLayer:
         coarse = zoom(hires_bump, 1.0 / _OVERSAMPLE, order=1)
 
         # ── Arc-length reparameterisation ─────────────────────────────────────
-        # Gradient of the pre-bump terrain (clean slope shape).
         gz_y, gz_x = np.gradient(scene.terrain_z,
-                                  self.surface.cell_w,
-                                  self.surface.cell_w)
+                                  surface.cell_w,
+                                  surface.cell_w)
         nz = 1.0 / np.sqrt(gz_x ** 2 + gz_y ** 2 + 1.0)
 
-        # stretch_x[r,c] = surface arc per world cell in X at (r,c).
-        # Cumulating gives arc_cols: the flat-space column that has the same
-        # cumulative arc length as world column c.  On flat ground this is just
-        # the identity (stretch=1 everywhere, arc_cols[r,c]=c).
         stretch_x = np.sqrt(gz_x ** 2 + 1.0)
         stretch_y = np.sqrt(gz_y ** 2 + 1.0)
 
@@ -83,22 +81,14 @@ class SoilCarpetLayer:
         arc_cols[:, 1:] = np.cumsum(stretch_x[:, :-1], axis=1)
         arc_rows[1:, :] = np.cumsum(stretch_y[:-1, :], axis=0)
 
-        # Resample: each world cell pulls from its arc-equivalent flat position.
-        # mode='reflect' tiles seamlessly when arc coords exceed the field size.
         projected = map_coordinates(coarse, [arc_rows, arc_cols],
                                     mode='reflect', order=1)
 
         displacement = projected * nz
 
         # ── Placement-mask + tile-edge fade ───────────────────────────────────
-        # The internal bump field already fades at tile edges (soil.edge_fade_mm
-        # applied inside _compute_bump_field).  When a placement mask is given
-        # we additionally fade at the mask boundary so there's no hard cut at
-        # the soil/grass dividing line.  Tile-edge distance is always included
-        # in the minimum so the texture is guaranteed zero at tile edge cells
-        # even when the mask extends to the tile boundary.
         if self.soil.edge_fade_mm > 0.0:
-            fade_cells = max(self.soil.edge_fade_mm / self.surface.cell_w, 1e-6)
+            fade_cells = max(self.soil.edge_fade_mm / surface.cell_w, 1e-6)
             ix = np.arange(gw, dtype=float)
             iy = np.arange(gh, dtype=float)
             dx = np.minimum(ix, gw - 1 - ix)
@@ -116,6 +106,10 @@ class SoilCarpetLayer:
             scene.terrain_z += displacement
         else:
             scene.terrain_z[placement_mask] += displacement[placement_mask]
+
+        # Keep terrain_support_z in sync with the modified terrain_z.
+        scene.terrain_support_z[:] = scene.terrain_z
+        return []
 
 
 # ── Internal implementation ───────────────────────────────────────────────────

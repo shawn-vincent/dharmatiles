@@ -1,4 +1,4 @@
-"""Grass layer entry point."""
+"""Internal grass blade builder used by ``scatter.Grass``."""
 
 from __future__ import annotations
 
@@ -10,8 +10,12 @@ from .grow import grow_all
 from .mesh import build_meshes
 
 
-class GrassLayer:
-    """Generate grass paths, build meshes, and update scene support."""
+class FloppyGrassLayer:
+    """Grow grass paths, build blade meshes, and update scene support.
+
+    Not part of the public spec API — ``scatter.Grass.scatter()`` is the
+    caller.  Instantiated with a single-species ``GrassConfig``.
+    """
 
     def __init__(self, cfg: GrassConfig) -> None:
         self.cfg = cfg
@@ -28,7 +32,3 @@ class GrassLayer:
                 max_len = max(segs[i] * paths[i].seed.blade_segment_length for i in range(len(paths)))
                 print(f"  Built {len(paths)} blades — avg {avg_len:.1f} mm, max {max_len:.1f} mm")
         return meshes
-
-
-class FloppyGrassLayer(GrassLayer):
-    """Compatibility name for the first species: simple floppy grass."""

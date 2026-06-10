@@ -22,10 +22,10 @@ import numpy as np
 class SpeciesConfig:
     """Template for one plant species.
 
-    Both the 2D ``grass_carpet`` layer and the 3D ``grass`` layer consume a
+    Both ``GrassCarpetLayer`` (2D stamps) and ``Grass`` (3D blades) consume a
     ``SpeciesConfig``.  Defining one object and sharing it between the two
-    ``LayerSpec`` entries in a ``.tile.py`` file keeps blade geometry in a
-    single place.
+    layer instances in a ``.tile.py`` file keeps blade geometry in a single
+    place.
     """
 
     name: str = "floppy-grass"
@@ -268,7 +268,7 @@ class GrassUnderlayConfig:
 class RocksConfig:
     """Random rock geometry parameters.
 
-    ``rocks_per_square`` is a density — RocksLayer multiplies by
+    ``rocks_per_square`` is a density — ``Rocks`` multiplies by
     cols × rows to get the actual rock count for the tile.
 
     Size distribution

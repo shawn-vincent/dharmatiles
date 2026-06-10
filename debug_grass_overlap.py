@@ -33,7 +33,7 @@ from dharmatiles.grass.config import GrassConfig, SpeciesConfig
 import dharmatiles.grass.grow as grow_mod
 import dharmatiles.grass.mesh as mesh_mod
 from dharmatiles.terrains.tile import build_tile_from_spec
-from dharmatiles.core.spec import load_spec
+from dharmatiles.spec import load_spec
 
 
 # ──────────────────────────────────────────────────────────────────────────────

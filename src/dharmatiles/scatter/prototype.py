@@ -1,63 +1,53 @@
 """
-RockPrototype and GrassPrototype: scatter-layer seed generators.
+Rocks and Grass: the things you scatter inside a ``ScatterLayer``.
 
-A *prototype* knows how to:
-  1. Report its footprint radius (for spacing calculations).
-  2. Create a fully-resolved seed from a position + direction + rng.
-  3. Realise a list of pre-sorted seeds into scene geometry.
-
-``sort_priority`` controls global placement order inside ScatterLayer:
-  0 — rocks: realised first so support_z / rock_mask are ready for grass.
-  1 — grass: realised after all priority-0 seeds are stamped.
+Each class has one method, ``scatter(scene, *, placement_mask)``, which
+samples positions, sorts seeds, builds meshes, and stamps the relevant
+scene support fields.  No seed/realise split — one call does it all.
 """
 from __future__ import annotations
+
+import dataclasses
 
 import numpy as np
 import trimesh
 
-from ..core.config import RocksConfig, SpeciesConfig, GrassConfig as _RuntimeGrassConfig
+from ..core.config import (RocksConfig, SpeciesConfig,
+                           GrassConfig as _RuntimeGrassConfig)
 from .config import ScatterConfig
 from .seed import RockSeed
+from .distribute import scatter_positions
 
 
-# ── RockPrototype ─────────────────────────────────────────────────────────────
+_ROCK_FIELDS    = {f.name for f in dataclasses.fields(RocksConfig)}
+_SPECIES_FIELDS = {f.name for f in dataclasses.fields(SpeciesConfig)}
 
-class RockPrototype:
-    """Generates rock seeds from a ``RocksConfig`` and realises them as meshes.
 
-    Default ``ScatterConfig`` matches current rocks behaviour: hard count
-    (``items_per_square = rocks.rocks_per_square``), no Voronoi grouping.
-    Pass ``ScatterConfig(groups_per_square=N)`` to cluster rocks into N
-    Voronoi groups per square — rocks then share a direction hint per group,
-    though the mesh builder ignores that direction today.
+# ── Rocks ─────────────────────────────────────────────────────────────────────
+
+class Rocks:
+    """One pass of half-ellipsoid rocks to scatter into a region.
+
+    Flat kwargs build a ``RocksConfig``.  Optional ``scatter=ScatterConfig(...)``
+    overrides the default (count-based, no Voronoi grouping).
     """
 
-    sort_priority: int = 0
-
-    def __init__(
-        self,
-        rocks:   RocksConfig | None  = None,
-        scatter: ScatterConfig | None = None,
-    ) -> None:
-        self.rocks   = rocks or RocksConfig()
-        self.scatter = scatter or ScatterConfig(
-            items_per_square = self.rocks.rocks_per_square,
+    def __init__(self, *, scatter: ScatterConfig | None = None, **rocks_kwargs):
+        unknown = set(rocks_kwargs) - _ROCK_FIELDS
+        if unknown:
+            raise TypeError(f"Rocks: unknown kwargs {sorted(unknown)!r}")
+        self.rocks = RocksConfig(**rocks_kwargs)
+        self.scatter_cfg = scatter or ScatterConfig(
+            items_per_square  = self.rocks.rocks_per_square,
             groups_per_square = 0,
             group_dir_mode    = 'none',
         )
 
     def footprint_mm(self) -> float:
-        """Representative footprint radius for spacing calculations (mm)."""
         return self.rocks.r_max
 
-    def make_seed(
-        self,
-        x: float,
-        y: float,
-        group_dir: float,          # noqa: ARG002 — ignored for rocks today
-        rng: np.random.Generator,
-    ) -> RockSeed:
-        """Sample geometry from RocksConfig; return a fully-resolved RockSeed."""
+    def _make_seed(self, x: float, y: float,
+                   rng: np.random.Generator) -> RockSeed:
         u      = float(rng.uniform(0.0, 1.0)) ** self.rocks.size_power
         rx     = self.rocks.r_min + (self.rocks.r_max - self.rocks.r_min) * u
         ry     = rx * float(rng.uniform(self.rocks.aspect_min, 1.0))
@@ -66,24 +56,48 @@ class RockPrototype:
         angle  = float(rng.uniform(0.0, np.pi))
         return RockSeed(x=x, y=y, rx=rx, ry=ry, height=height, angle=angle)
 
-    def realize(
+    def scatter(
         self,
-        seeds: list[RockSeed],
         scene,
-        surface,
         *,
-        layer_idx:    int                   = 0,
-        verbose:      bool                  = False,
-        terrain_gz_x: np.ndarray | None     = None,
-        terrain_gz_y: np.ndarray | None     = None,
+        placement_mask: np.ndarray | None = None,
+        layer_idx:      int               = 0,
     ) -> list[trimesh.Trimesh]:
-        """Build meshes for *seeds* (already sorted big→small) and update scene.
+        """Sample positions, build seeds (sorted big→small), return mesh parts.
 
-        Stamps each rock's top surface into ``scene.terrain_support_z`` and
-        marks the footprint in ``scene.rock_mask``.
+        Stamps ``scene.terrain_support_z`` and ``scene.rock_mask`` in place.
         """
+        surface = scene.config.surface
+        rng_seed = (surface.seed
+                    ^ 0x726F636B          # "rock"
+                    ^ self.scatter_cfg.seed
+                    ^ (layer_idx * 65537))
+        rng = np.random.default_rng(rng_seed)
+
+        # scatter_positions reads scene.grass_mask via scaled_voronoi_group_count;
+        # temporarily set it to this layer's mask so density scaling is correct.
+        old_grass_mask = scene.grass_mask
+        if placement_mask is not None:
+            scene.grass_mask = placement_mask
+        try:
+            n_sq      = surface.cols * surface.rows
+            positions = scatter_positions(
+                self.scatter_cfg, n_sq, self.footprint_mm(),
+                placement_mask, scene, surface, rng,
+            )
+        finally:
+            scene.grass_mask = old_grass_mask
+
+        seeds = [self._make_seed(x, y, rng) for x, y, _gd in positions]
+        seeds.sort(key=lambda s: s.sort_key())
         if not seeds:
             return []
+
+        # Pre-compute terrain gradient for slope-aligned rock rotation.
+        cw         = surface.cell_w
+        terrain_gz_x = np.gradient(scene.terrain_z, axis=1) / cw
+        terrain_gz_y = np.gradient(scene.terrain_z, axis=0) / cw
+
         from ..layers.rocks import _build_rocks_mesh_from_seeds
         mesh = _build_rocks_mesh_from_seeds(
             seeds, self.rocks, surface,
@@ -95,72 +109,71 @@ class RockPrototype:
         return [mesh] if len(mesh.vertices) > 0 else []
 
 
-# ── GrassPrototype ────────────────────────────────────────────────────────────
+# ── Grass ─────────────────────────────────────────────────────────────────────
 
-class GrassPrototype:
-    """Generates 3D grass blades via the existing FloppyGrass pipeline.
+class Grass:
+    """One species of 3D blades to scatter into a region.
 
-    ``sort_priority = 1`` ensures grass seeds are planted after all
-    ``RockPrototype`` seeds (priority 0) have fully updated
-    ``terrain_support_z`` and ``rock_mask``.
-
-    The ``ScatterConfig`` is stored for documentation/inspection purposes.
-    Actual grass density and grouping are driven by ``SpeciesConfig``
-    (``groups_per_square``, ``gap_mm``) through the existing Voronoi +
-    jitter-grid pipeline inside ``GrassLayer.build()``.
+    Pass a ``SpeciesConfig`` (sharable with a companion ``GrassCarpetLayer``)
+    plus optional flat overrides to specialise this instance.
     """
-
-    sort_priority: int = 1
 
     def __init__(
         self,
-        species: SpeciesConfig | None  = None,
-        scatter: ScatterConfig | None  = None,
-    ) -> None:
-        self.species = species or SpeciesConfig()
-        self.scatter = scatter or ScatterConfig(
+        species: SpeciesConfig | None = None,
+        *,
+        scatter: ScatterConfig | None = None,
+        max_stack_height: float = 2.0,
+        **species_overrides,
+    ):
+        unknown = set(species_overrides) - _SPECIES_FIELDS
+        if unknown:
+            raise TypeError(f"Grass: unknown kwargs {sorted(unknown)!r}")
+        base = species or SpeciesConfig()
+        self.species = (dataclasses.replace(base, **species_overrides)
+                        if species_overrides else base)
+        self.scatter_cfg = scatter or ScatterConfig(
             groups_per_square = self.species.groups_per_square,
             gap_mm            = self.species.gap_mm,
             group_dir_mode    = 'random',
         )
+        self.max_stack_height = max_stack_height
 
     def footprint_mm(self) -> float:
-        """Representative footprint radius for spacing calculations (mm)."""
         return self.species.blade_width_max
 
-    def realize(
+    def scatter(
         self,
         scene,
-        surface,
         *,
-        placement_mask:   np.ndarray | None = None,
-        layer_seed:       int  | None       = None,
-        verbose:          bool               = False,
-        max_stack_height: float              = 2.0,
+        placement_mask: np.ndarray | None = None,
+        layer_idx:      int               = 0,
+        verbose:        bool              = False,
     ) -> list[trimesh.Trimesh]:
-        """Grow 3D grass blades and return their mesh list.
+        """Plant + grow blades inside *placement_mask*, return mesh parts.
 
-        Delegates to ``FloppyGrassLayer.build()`` which internally handles
-        Voronoi seeding, segment-by-segment growth, and vegetation support
-        rasterisation.  Must be called after all ``RockPrototype`` realise
-        calls are complete.
+        Reads ``scene.terrain_support_z`` (populated by any prior Rocks)
+        and stamps ``scene.vegetation_support_z`` as blades grow.
         """
         from ..grass.layer import FloppyGrassLayer
 
-        seed = (layer_seed if layer_seed is not None
-                else (surface.seed ^ 0x47524F57))
+        surface = scene.config.surface
+        seed    = (surface.seed
+                   ^ 0x47524F57          # "GROW"
+                   ^ self.scatter_cfg.seed
+                   ^ (layer_idx * 65537))
         grass_cfg = _RuntimeGrassConfig(
             species          = [self.species],
-            max_stack_height = max_stack_height,
+            max_stack_height = self.max_stack_height,
             seed             = seed,
         )
         layer = FloppyGrassLayer(grass_cfg)
 
-        old_mask = scene.grass_mask
+        old_grass_mask = scene.grass_mask
         if placement_mask is not None:
-            scene.grass_mask = (old_mask & placement_mask
-                                if old_mask is not None else placement_mask)
+            scene.grass_mask = (old_grass_mask & placement_mask
+                                if old_grass_mask is not None else placement_mask)
         try:
             return layer.build(scene, verbose=verbose)
         finally:
-            scene.grass_mask = old_mask
+            scene.grass_mask = old_grass_mask

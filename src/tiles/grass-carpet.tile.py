@@ -3,16 +3,17 @@
 # Full-square grass carpet only — no 3D blades, no soil texture.
 # Use this to inspect the embossed 2D grass-carpet layer in isolation.
 
-from dharmatiles.core.spec import TileSpec, RegionSpec, LayerSpec, SurfaceConfig
+from dharmatiles.spec import Tile, Region, SurfaceConfig
+from dharmatiles.layers import GrassCarpetLayer
 
-tile = TileSpec(
+tile = Tile(
     surface=SurfaceConfig(seed=42),
     regions=[
-        RegionSpec(
+        Region(
             id='meadow',
             contains=(0.5, 0.5),
             layers=[
-                LayerSpec(type='grass_carpet', params=dict(groups_per_square=240)),
+                GrassCarpetLayer(groups_per_square=240),
             ],
         ),
     ],

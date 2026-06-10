@@ -5,12 +5,10 @@
 # A single SpeciesConfig drives both the 2D carpet stamps and the 3D blades,
 # guaranteeing the two passes use identical blade geometry.
 
-from dharmatiles.core.spec import (
-    TileSpec, RegionSpec, LayerSpec, SurfaceConfig, SpeciesConfig,
-)
+from dharmatiles.spec import Tile, Region, SurfaceConfig, SpeciesConfig
+from dharmatiles.layers import GrassCarpetLayer, ScatterLayer
+from dharmatiles.scatter import Grass
 
-# Non-default blade geometry for this meadow.
-# All omitted fields use SpeciesConfig defaults.
 _meadow = SpeciesConfig(
     groups_per_square=3,
     group_dir_jitter=0,
@@ -21,16 +19,18 @@ _meadow = SpeciesConfig(
     blade_clearance=0.2,
 )
 
-tile = TileSpec(
+tile = Tile(
     surface=SurfaceConfig(seed=1),
     sizes=[(1, 1)],
     regions=[
-        RegionSpec(
+        Region(
             id='meadow',
             contains=(0.5, 0.5),
             layers=[
-                LayerSpec(type='grass_carpet', params=dict(species=_meadow)),
-                LayerSpec(type='grass',          params=dict(species=_meadow)),
+                GrassCarpetLayer(species=_meadow),
+                ScatterLayer(
+                    Grass(species=_meadow),
+                ),
             ],
         ),
     ],

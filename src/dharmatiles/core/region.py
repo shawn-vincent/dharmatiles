@@ -4,10 +4,7 @@ Region mask generation: boundary rasterisation + flood fill.
 The region mask is a (grid_h, grid_w) int32 array:
   -2  = unassigned (no region flood-fill reached this cell)
   -1  = boundary line (impassable to flood fill)
-   N  = region index N (0-based, matching spec.regions order)
-
-``build_grass_mask`` derives a bool mask from the region mask: True where
-grass seeds should be planted.
+   N  = region index N (0-based, matching tile.regions order)
 """
 from __future__ import annotations
 
@@ -16,7 +13,7 @@ from collections import deque
 import numpy as np
 
 from .config import SurfaceConfig
-from .spec import TileSpec, BoundarySpec
+from ..spec import Tile, Boundary
 
 
 # Sentinel values in the region mask
@@ -38,7 +35,7 @@ def _anchor_to_mm(edge: str, t: float,
 
 # ── Boundary path generation ─────────────────────────────────────────────────
 
-def boundary_path_mm(spec: BoundarySpec, surface: SurfaceConfig,
+def boundary_path_mm(spec: Boundary, surface: SurfaceConfig,
                      n_samples: int = 4000) -> np.ndarray:
     """Return (n_samples, 2) float array of (x, y) path points in mm.
 
@@ -131,7 +128,7 @@ def _rasterise(path_mm: np.ndarray, surface: SurfaceConfig,
         _bresenham(mask, r0, c0, r1, c1)
 
 
-def _rasterise_boundary(bnd: BoundarySpec, surface: SurfaceConfig,
+def _rasterise_boundary(bnd: Boundary, surface: SurfaceConfig,
                         mask: np.ndarray) -> None:
     """Mark a boundary centreline or finite-width strip as _BOUNDARY."""
     path = boundary_path_mm(bnd, surface)
@@ -192,23 +189,21 @@ def _flood_fill(mask: np.ndarray, row: int, col: int, value: int) -> bool:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def build_region_mask(spec: TileSpec) -> np.ndarray:
+def build_region_mask(tile: Tile) -> np.ndarray:
     """Return (grid_h, grid_w) int32 array: region index per cell.
 
     Values:
       _UNASSIGNED (-2)  — no region claimed this cell
       _BOUNDARY   (-1)  — lies on a boundary curve
-      N ≥ 0             — belongs to spec.regions[N]
+      N ≥ 0             — belongs to tile.regions[N]
     """
-    surface = spec.surface
+    surface = tile.surface
     mask = np.full((surface.grid_h, surface.grid_w), _UNASSIGNED, dtype=np.int32)
 
-    # Rasterise all boundary curves/strips.
-    for bnd in spec.boundaries:
+    for bnd in tile.boundaries:
         _rasterise_boundary(bnd, surface, mask)
 
-    # Flood-fill each named region from its contains point
-    for idx, region in enumerate(spec.regions):
+    for idx, region in enumerate(tile.regions):
         cx_n, cy_n = region.contains
         col = int(np.clip(cx_n * surface.grid_w, 0, surface.grid_w - 1))
         row = int(np.clip(cy_n * surface.grid_h, 0, surface.grid_h - 1))
@@ -217,22 +212,8 @@ def build_region_mask(spec: TileSpec) -> np.ndarray:
             import warnings
             warnings.warn(
                 f"Region '{region.id}': contains point ({cx_n:.2f}, {cy_n:.2f}) "
-                f"landed on a boundary or another region — check your spec.",
+                f"landed on a boundary or another region — check your tile spec.",
                 stacklevel=2,
             )
 
     return mask
-
-
-def build_grass_mask(region_mask: np.ndarray, spec: TileSpec) -> np.ndarray | None:
-    """Return bool mask (True = plant grass here), or None if no grass regions."""
-    grass_indices = {
-        i for i, r in enumerate(spec.regions)
-        if any(l.type == 'grass' for l in r.layers)
-    }
-    if not grass_indices:
-        return None
-    result = np.zeros(region_mask.shape, dtype=bool)
-    for idx in grass_indices:
-        result |= (region_mask == idx)
-    return result

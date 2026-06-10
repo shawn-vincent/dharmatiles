@@ -3,11 +3,140 @@ from __future__ import annotations
 
 import numpy as np
 import trimesh
+from scipy.ndimage import binary_dilation, binary_erosion, distance_transform_edt
 
 from ..core.config import SurfaceConfig
 
 
 WATER_RENDER_LIFT_MM = 0.10
+
+
+class WaterLayer:
+    """Reshape the pool floor + bank slope and emit the water volume mesh.
+
+    Used as ``Region(layers=[..., WaterLayer()])``.  Place after any rocks
+    in the same region so the ripple displacement can react to rocks
+    standing in the water.
+
+    Parameters
+    ----------
+    embed_mm
+        Distance (mm) by which the displacement texture extends past the
+        water_mask into the shore zone — keeps the wavy water surface
+        smoothly meeting the shore slope.
+    height_mm
+        Water surface height.  ``None`` → derive from the region's
+        terrain_z (its max value over the placement mask, which the
+        orchestrator sets to the region's effective height).
+    """
+
+    height_default_mm: float = 3.0
+
+    def __init__(self, *, embed_mm: float = 2.0,
+                 height_mm: float | None = None) -> None:
+        self.embed_mm  = embed_mm
+        self.height_mm = height_mm
+
+    def apply(
+        self,
+        scene,
+        *,
+        placement_mask: np.ndarray | None = None,
+    ) -> list[trimesh.Trimesh]:
+        if placement_mask is None or not placement_mask.any():
+            return []
+        surface = scene.config.surface
+
+        # Region height = max terrain_z over the (still flat) pool region.
+        water_height = (self.height_mm if self.height_mm is not None
+                        else float(scene.terrain_z[placement_mask].max()))
+
+        # ── Reshape pool floor: extend bank slope inward, then flatten ────────
+        scene.terrain_z[:] = _extend_bank_slope_into_pool(
+            scene.terrain_z, placement_mask, water_height, surface)
+        scene.terrain_z[placement_mask] = 0.0
+        scene.terrain_support_z[:] = scene.terrain_z
+
+        # ── Build the water volume mesh ──────────────────────────────────────
+        embed_cells = max(1, round(self.embed_mm / surface.cell_w))
+        wm_disp_full = binary_dilation(placement_mask, iterations=embed_cells)
+
+        z_disp = make_water_displacement(wm_disp_full, surface)
+
+        # Downsample to ~128 cells/square for performance.
+        s = max(1, surface.cells_per_square // 128)
+        if s > 1:
+            gh, gw = scene.terrain_z.shape
+            hn, wn = gh // s, gw // s
+            tz = scene.terrain_z[:hn*s, :wn*s].reshape(hn, s, wn, s).mean(axis=(1, 3))
+            wm = placement_mask[:hn*s, :wn*s].reshape(hn, s, wn, s).any(axis=(1, 3))
+            wm_disp = wm_disp_full[:hn*s, :wn*s].reshape(hn, s, wn, s).any(axis=(1, 3))
+            zd = z_disp[:hn*s, :wn*s].reshape(hn, s, wn, s).mean(axis=(1, 3))
+            sm = (scene.rock_mask[:hn*s, :wn*s].reshape(hn, s, wn, s).any(axis=(1, 3))
+                  if scene.rock_mask is not None else None)
+            ds_cell_w = surface.cell_w * s
+        else:
+            tz = scene.terrain_z
+            wm = placement_mask
+            wm_disp = wm_disp_full
+            zd = z_disp
+            sm = scene.rock_mask
+            ds_cell_w = surface.cell_w
+
+        zd = zd + make_water_ripple_displacement(
+            wm_disp, sm, ds_cell_w, seed=surface.seed ^ 0xC4F7)
+
+        # Outside the pool, raise the water surface to follow terrain_z so
+        # the full-tile slab merges with the shore slope.
+        h_base = water_height + WATER_RENDER_LIFT_MM
+        zd = np.where(wm, zd, np.maximum(tz - h_base, zd))
+
+        hn, wn = wm.shape
+        wm_full = np.ones((hn, wn), dtype=bool)
+        water_mesh = make_water_volume(
+            tz, wm_full, water_height,
+            surface.tile_w, surface.tile_h,
+            z_disp=zd)
+        return [water_mesh]
+
+
+def _extend_bank_slope_into_pool(terrain_z: np.ndarray,
+                                  water_mask: np.ndarray,
+                                  water_height: float,
+                                  surface: SurfaceConfig) -> np.ndarray:
+    """Extrapolate the bank slope downward into the pool zone.
+
+    Returns a copy of *terrain_z* with pool cells updated.
+    """
+    cell_mm = surface.cell_w
+
+    dist_land_to_water = distance_transform_edt(~water_mask)
+    band = ~water_mask & (dist_land_to_water >= 1) & (dist_land_to_water <= 5)
+    if band.any():
+        band_z_mean    = float(terrain_z[band].mean())
+        band_dist_mean = float(dist_land_to_water[band].mean()) * cell_mm
+        slope_rate     = (band_z_mean - water_height) / max(band_dist_mean, 1e-6)
+        slope_rate     = float(np.clip(slope_rate, 0.1, 8.0))
+    else:
+        slope_rate = 0.8
+
+    water_eroded = binary_erosion(water_mask, border_value=1)
+    inner_ring   = water_mask & ~water_eroded
+
+    dist_from_shore = distance_transform_edt(~inner_ring) * cell_mm
+    dist_from_shore[~water_mask] = 0.0
+
+    terrain_z_min = 0.0
+    slope_dist    = (water_height - terrain_z_min) / max(slope_rate, 1e-6)
+
+    t   = np.clip(dist_from_shore / slope_dist, 0.0, 1.0)
+    t_s = t * t
+
+    sloped = water_height - (water_height - terrain_z_min) * t_s
+
+    out = terrain_z.copy()
+    out[water_mask] = sloped[water_mask]
+    return out
 
 
 def make_water_displacement(
