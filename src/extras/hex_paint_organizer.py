@@ -106,6 +106,12 @@ def single_cup(spec: HexOrganizerSpec) -> m3d.Manifold:
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
     R_outer = outer_f2f / np.sqrt(3)
 
+    if spec.height < 50:
+        # Hollow tube: open top and bottom, no floor geometry.
+        outer = hex_prism(outer_f2f, spec.height)
+        bore  = hex_prism(spec.bore_f2f, spec.height)
+        return outer - bore
+
     outer = hex_prism(outer_f2f, spec.outer_wall_height)
 
     # Inner bore and retaining depression corner roundover radius:
@@ -337,16 +343,18 @@ def build_organizer(spec: HexOrganizerSpec) -> m3d.Manifold:
     for c in cups[1:]:
         result = result + c
 
-    result = _subtract_magnets(result, spec)
-    if spec.vertical_roundover > 0.0:
+    if spec.height >= 50:
+        result = _subtract_magnets(result, spec)
+    if spec.height >= 50 and spec.vertical_roundover > 0.0:
         result = _vertical_roundover(result, spec, spec.vertical_roundover)
-    if spec.bottom_roundover > 0.0:
+    if spec.height >= 50 and spec.bottom_roundover > 0.0:
         result = _bottom_roundover(result, spec)
-    # Cut the logo stamps and orientation marker last: they sit inside the
-    # base slab, and the roundovers slice the body at low z to build their
-    # templates — interior holes there would get swept through the model.
-    result = _stamp_logos(result, spec)
-    result = _mark_origin_cup(result, spec)
+    if spec.height >= 50:
+        # Cut the logo stamps and orientation marker last: they sit inside the
+        # base slab, and the roundovers slice the body at low z to build their
+        # templates — interior holes there would get swept through the model.
+        result = _stamp_logos(result, spec)
+        result = _mark_origin_cup(result, spec)
     return result
 
 
