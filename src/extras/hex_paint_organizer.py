@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Generate a hexagonal craft-paint organizer STL.
 
-3×4 honeycomb grid (default) of pointy-top hexagonal cups with left/right
-side walls and an open front/back.
+4×3 honeycomb grid (default) — 4 columns of 3 flat-top hexagonal cups (hex
+points face left/right, flats face up/down).  Open front/back; magnets are
+recessed into the exposed perimeter faces.  The code coordinate frame is the
+intended viewing frame: +x = column direction (4 across), +y = row direction
+(3 tall).
 """
 from __future__ import annotations
 
@@ -12,6 +15,8 @@ from pathlib import Path
 import manifold3d as m3d
 import numpy as np
 import trimesh
+
+from dharmatiles.core.logo import make_logo_manifold
 
 
 @dataclass(frozen=True)
@@ -27,8 +32,8 @@ class HexOrganizerSpec:
     outer_wall_height: float = 40.0  # height of the outer hex shell (cups extend to spec.height)
     bottom_roundover: float = 1.0    # convex roundover radius on bottom perimeter edge
     vertical_roundover: float = 8.0  # convex outside vertical edge roundover radius
-    cols: int = 3
-    rows: int = 4
+    cols: int = 4                    # columns across (x)
+    rows: int = 3                    # cups per column (y)
 
 
 # ---------------------------------------------------------------------------
@@ -36,21 +41,47 @@ class HexOrganizerSpec:
 # ---------------------------------------------------------------------------
 
 def hex_polygon(f2f: float) -> list[tuple[float, float]]:
-    """CCW pointy-top regular hexagon vertices, centred at origin.
+    """CCW flat-top regular hexagon vertices, centred at origin.
 
-    Pointy-top: flat sides face left/right; vertices at top/bottom.
-    Width (x, flat-to-flat) = f2f.  Height (y, point-to-point) = f2f * 2/√3.
+    Flat-top: vertices point left/right; flat sides face up/down.
+    Height (y, flat-to-flat) = f2f.  Width (x, point-to-point) = f2f * 2/√3.
     """
     R = f2f / np.sqrt(3)  # circumradius
     return [
         (float(R * np.cos(np.radians(a))), float(R * np.sin(np.radians(a))))
-        for a in range(30, 390, 60)  # 30, 90, 150, 210, 270, 330
+        for a in range(0, 360, 60)  # 0, 60, 120, 180, 240, 300
     ]
 
 
 def hex_prism(f2f: float, height: float) -> m3d.Manifold:
     cs = m3d.CrossSection([hex_polygon(f2f)])
     return m3d.Manifold.extrude(cs, height=height)
+
+
+# ---------------------------------------------------------------------------
+# Honeycomb layout
+# ---------------------------------------------------------------------------
+#
+# Flat-top hex packing for a 4-columns-of-3 grid:
+#   - cups in a column share horizontal flat walls  → vertical pitch = f2f + wall
+#   - adjacent columns interlock at half height     → horizontal pitch = pitch_y·√3/2
+#   - odd columns sit half a cup higher than even ones, so the offset reads
+#     low, high, low, high from left to right
+
+def _pitches(spec: HexOrganizerSpec) -> tuple[float, float]:
+    pitch_y = spec.bore_f2f + spec.wall       # within a column (shared flat walls)
+    pitch_x = pitch_y * np.sqrt(3) / 2.0      # between columns (offset packing)
+    return pitch_x, pitch_y
+
+
+def cup_centre(spec: HexOrganizerSpec, col: int, row: int) -> tuple[float, float]:
+    """Centre (x, y) of the cup at grid position (col, row).
+
+    col increases left→right (0..cols-1); row increases bottom→top (0..rows-1).
+    """
+    pitch_x, pitch_y = _pitches(spec)
+    y_stagger = pitch_y / 2.0 if (col % 2 == 1) else 0.0
+    return (col * pitch_x, row * pitch_y + y_stagger)
 
 
 def _rounded_hex_cs(f2f: float, r: float) -> m3d.CrossSection:
@@ -109,22 +140,18 @@ def single_cup(spec: HexOrganizerSpec) -> m3d.Manifold:
 # ---------------------------------------------------------------------------
 #
 # Magnets sit in the exposed perimeter faces of the honeycomb itself (no added
-# frame / cap).  Geometry is described in CODE coordinates (pointy-top hexes:
-# flat faces face ±x, vertices point ±y) but the spec was given in the USER's
-# view, which is this part rotated +90° CCW so that the hex points are
-# horizontal and a code-row of `cols` cups reads as a vertical column.
+# frame / cap).  Each flat-top cup has six faces, named by their outward-normal
+# direction in degrees:
 #
-# Edge-normal directions (code degrees), per pointy-top hex:
-#     0   = right flat   (+x)  → user TOP flat
-#   180   = left flat    (−x)  → user BOTTOM flat
-#    60   = upper-right diagonal
-#   120   = upper-left  diagonal
-#   240   = lower-left  diagonal
-#   300   = lower-right diagonal
+#     90  = top flat      (+y)
+#    270  = bottom flat    (−y)
+#     30  = upper-right diagonal
+#    150  = upper-left  diagonal
+#    210  = lower-left  diagonal
+#    330  = lower-right diagonal
 #
-# Within a column, cups read top→bottom in the user view as c2 → c1 → c0
-# (higher cx is higher up).  Side faces are numbered 0..5 top→bottom; each cup
-# contributes two diagonal faces to a side.
+# Eight magnets are placed on the perimeter (see _subtract_magnets); they are
+# asymmetric by design so that two organizers only mate in one orientation.
 
 MAGNET_Z = 6.0            # pocket centre height: 1 mm clearance below a 10 mm disc
 MAGNET_OVERSHOOT = 0.6    # start pocket this far outside the face for a clean cut
@@ -162,49 +189,31 @@ def _magnet_pocket(
 def _subtract_magnets(body: m3d.Manifold, spec: HexOrganizerSpec) -> m3d.Manifold:
     """Cut 8 magnet pockets into the honeycomb's exposed perimeter faces.
 
-    4 flat (1 per corner cup: user-row 1 and 3, left and right ends)
-    + 4 side (high column faces 1 & 4, low column faces 0 & 3).
+    Placement (col, row, face-normal degrees) — asymmetric by design:
 
-    User-view rows: row 1 (top) = code col=cols-1, row 3 (bottom) = code col=0.
-    Left/right ends = code row=rows-1 (leftmost) and code row=0 (rightmost).
+        (0,0) → bottom flat (270°) + upper-left  diagonal (150°)
+        (0,2) → top flat (90°)     + lower-left  diagonal (210°)
+        (2,0) → bottom flat (270°)
+        (2,2) → top flat (90°)
+        (3,0) → lower-right diagonal (330°)
+        (3,1) → upper-right diagonal (30°)
+
+    Cup centres come from cup_centre().
     """
-    col_pitch = spec.bore_f2f + spec.wall
-    row_pitch = col_pitch * np.sqrt(3) / 2.0
-    top_col = spec.cols - 1   # highest cx → top of user-view column
-    bot_col = 0               # lowest cx → bottom of user-view column
-
-    def centre(row: int, col: int) -> tuple[float, float]:
-        x_stagger = 0.0 if (row % 2) else (col_pitch / 2.0)
-        return (col * col_pitch + x_stagger, row * row_pitch)
-
-    # --- flat magnets: 1 centered magnet on each corner cup's outward flat face.
-    # Row 1 (top, code col=top_col): face 0° (+x).  Row 3 (bottom, code col=0): face 180° (−x).
-    # Code rows 0 and 2 (0-based) = 1st and 3rd of 4 rows.
-    for end_row in (0, spec.rows - 2):
-        cx, cy = centre(end_row, top_col)
-        body -= _magnet_pocket(cx, cy, 0.0, spec)
-        cx, cy = centre(end_row, bot_col)
-        body -= _magnet_pocket(cx, cy, 180.0, spec)
-
-    # --- side magnets on the two perimeter columns ------------------------
-    # Rightmost code-row (row 0, smallest cy) = HIGH column → faces 1 & 4.
-    #   face 1 = top cup's lower-right diagonal (240°)
-    #   face 4 = bottom cup's upper-right diagonal (300°)
-    high_row = 0
-    cx, cy = centre(high_row, top_col)
-    body -= _magnet_pocket(cx, cy, 240.0, spec)
-    cx, cy = centre(high_row, bot_col)
-    body -= _magnet_pocket(cx, cy, 300.0, spec)
-
-    # Leftmost code-row (largest cy) = LOW column → faces 0 & 3.
-    #   face 0 = top cup's upper-left diagonal (60°)
-    #   face 3 = middle cup's lower-left diagonal (120°)
-    low_row = spec.rows - 1
-    mid_col = spec.cols // 2
-    cx, cy = centre(low_row, top_col)
-    body -= _magnet_pocket(cx, cy, 60.0, spec)
-    cx, cy = centre(low_row, mid_col)
-    body -= _magnet_pocket(cx, cy, 120.0, spec)
+    # (col, row, face-normal degrees)
+    placements = [
+        (0, 0, 270.0),   # bottom flat
+        (0, 0, 150.0),   # upper-left (top-left slope)
+        (0, 2,  90.0),   # top flat
+        (0, 2, 210.0),   # lower-left  (bottom-left slope)
+        (2, 0, 270.0),   # bottom flat
+        (2, 2,  90.0),   # top flat
+        (3, 0, 330.0),   # lower-right (bottom-right slope)
+        (3, 1,  30.0),   # upper-right (top-right slope)
+    ]
+    for col, row, deg in placements:
+        cx, cy = cup_centre(spec, col, row)
+        body -= _magnet_pocket(cx, cy, deg, spec)
 
     return body
 
@@ -262,17 +271,61 @@ def _bottom_roundover(body: m3d.Manifold, spec: HexOrganizerSpec, steps: int = 1
 
 # ---------------------------------------------------------------------------
 
-def build_organizer(spec: HexOrganizerSpec) -> m3d.Manifold:
-    col_pitch = spec.bore_f2f + spec.wall
-    row_pitch = col_pitch * np.sqrt(3) / 2.0
+CUP_LOGO_SIZE_MM = 20.0   # logo bounding square in each cup floor; fits inside 29 mm retaining hex
 
+
+def _stamp_logos(body: m3d.Manifold, spec: HexOrganizerSpec) -> m3d.Manifold:
+    """Stamp the dharmatiles lotus into each cup floor and into the back centre.
+
+    Each cup gets a CUP_LOGO_SIZE_MM logo recessed into the retaining-recess
+    floor (visible looking into the cup, cut downward from z=spec.base).  The
+    back face (z=0) gets a double-sized logo at the assembly's XY centre, cut
+    upward from below.  Both stamps go 1/4 of the way through the spec.base
+    slab.
+    """
+    depth     = spec.base / 4.0
+    back_size = CUP_LOGO_SIZE_MM * 2.0
+
+    for col in range(spec.cols):
+        for row in range(spec.rows):
+            cx, cy = cup_centre(spec, col, row)
+            body -= make_logo_manifold(cx, cy, CUP_LOGO_SIZE_MM,
+                                       z_base=spec.base - depth,
+                                       depth_mm=depth)
+
+    pitch_x, pitch_y = _pitches(spec)
+    top = spec.rows - 1
+    last_stagger = pitch_y / 2.0 if (spec.cols - 1) % 2 == 1 else 0.0
+    center_x = (spec.cols - 1) * pitch_x / 2.0
+    center_y = (top * pitch_y + last_stagger) / 2.0
+    body -= make_logo_manifold(center_x, center_y, back_size,
+                               z_base=0.0, depth_mm=depth)
+
+    return body
+
+
+def _mark_origin_cup(body: m3d.Manifold, spec: HexOrganizerSpec) -> m3d.Manifold:
+    """Shallow circular dent in the floor of the (col=0, row=0) cup.
+
+    Orientation-check marker: confirms the (0,0) cup sits at the expected
+    bottom-left corner of the model.  Cut a ~5 mm shallow disc into the
+    retaining-recess floor (top of the solid base at z=spec.base).
+    """
+    cx, cy = cup_centre(spec, 0, 0)
+    depth, radius = 0.5, 5.0
+    dent = m3d.Manifold.cylinder(depth + 0.2, radius, circular_segments=48)
+    dent = dent.translate([cx, cy, spec.base - depth])
+    return body - dent
+
+
+def build_organizer(spec: HexOrganizerSpec) -> m3d.Manifold:
     # Honeycomb cup union
     cup = single_cup(spec)
     cups = []
-    for row in range(spec.rows):
-        x_stagger = 0.0 if (row % 2) else (col_pitch / 2.0)
-        for col in range(spec.cols):
-            cups.append(cup.translate((col * col_pitch + x_stagger, row * row_pitch, 0.0)))
+    for col in range(spec.cols):
+        for row in range(spec.rows):
+            cx, cy = cup_centre(spec, col, row)
+            cups.append(cup.translate((cx, cy, 0.0)))
     result = cups[0]
     for c in cups[1:]:
         result = result + c
@@ -282,6 +335,11 @@ def build_organizer(spec: HexOrganizerSpec) -> m3d.Manifold:
         result = _vertical_roundover(result, spec, spec.vertical_roundover)
     if spec.bottom_roundover > 0.0:
         result = _bottom_roundover(result, spec)
+    # Cut the logo stamps and orientation marker last: they sit inside the
+    # base slab, and the roundovers slice the body at low z to build their
+    # templates — interior holes there would get swept through the model.
+    result = _stamp_logos(result, spec)
+    result = _mark_origin_cup(result, spec)
     return result
 
 
@@ -293,12 +351,12 @@ def main() -> None:
     spec = HexOrganizerSpec()
 
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
-    col_pitch = spec.bore_f2f + spec.wall
-    row_pitch = col_pitch * np.sqrt(3) / 2.0
+    pitch_x, pitch_y = _pitches(spec)
 
-    print(f"Building hex organizer  ({spec.cols}×{spec.rows} cups, open front/back)")
-    print(f"  cup: outer F2F {outer_f2f:.1f} mm  col pitch {col_pitch:.1f} mm  row pitch {row_pitch:.2f} mm")
-    print(f"  magnets: {spec.magnet_dia:.0f}×{spec.magnet_depth:.0f} mm, z={MAGNET_Z:.0f} mm  (4 flat corners + 4 side diagonals = 8 total)")
+    print(f"Building hex organizer  ({spec.cols} columns of {spec.rows} cups, open front/back)")
+    print(f"  cup: outer F2F {outer_f2f:.1f} mm  col pitch {pitch_x:.2f} mm  row pitch {pitch_y:.1f} mm")
+    print(f"  magnets: {spec.magnet_dia:.0f}×{spec.magnet_depth:.0f} mm, z={MAGNET_Z:.0f} mm  (4 flat + 4 diagonal = 8 total)")
+    print("  marker: orientation dent in the (0,0) cup floor (bottom-left)")
 
     manifold = build_organizer(spec)
     raw = manifold.to_mesh()
