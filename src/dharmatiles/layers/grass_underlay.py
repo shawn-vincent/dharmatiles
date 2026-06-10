@@ -26,6 +26,7 @@ from scipy.ndimage import distance_transform_edt, gaussian_filter
 
 from ..core.config import GrassConfig as _RuntimeGrassConfig, GrassUnderlayConfig
 from ..core.tile import TileScene
+from ..grass._geometry import _stamp_segment
 from ..grass.grow import plant_seeds as _plant_seeds
 from ..grass.seed import GrassSeed
 
@@ -162,121 +163,46 @@ def _stamp_blade(
     seed: GrassSeed,
     cfg: GrassUnderlayConfig,
 ) -> None:
-    """Rasterise a blade's 2D top-profile footprint onto field via np.maximum.
+    """Rasterise a blade's swept footprint onto field via _stamp_segment.
 
-    Traces the blade trajectory (same curl / taper as the 3D seed) and stamps
-    a sin-arc cross-section at each step.  Each cross-section is confined to
-    ±(blade_segment_length/2 + cell_w) in the along-blade direction so adjacent
-    steps tile cleanly with no gaps or double-counting.
+    Walks the same spine trajectory as the 3D grower and delegates each
+    segment to the shared ``_stamp_segment`` helper (grass._geometry), which
+    applies the same sin-arc cross-section profile used by the 3D mesh.
 
-    Profile: h = peak_h × sin(π × norm_x)  where norm_x ∈ [0, 1] across the
-    blade width (0 = left edge, 1 = right edge) — zero at edges, peak at centre.
+    Stamping into a delta field (z_spine = 0): the resulting height offsets
+    are added to terrain_z by the caller, so ``thickness`` here equals the
+    desired absolute bump height above terrain.
     """
-    total_len = seed.blade_n_steps * seed.blade_segment_length
-    # Blade peaks at noise_top_mm + blade_raise_mm — above the noise ceiling
-    # (noise_top_mm) by blade_raise_mm, so np.maximum always picks the blade.
-    stamp_h_max = cfg.noise_top_mm + cfg.blade_raise_mm
-    cell_w = surface.cell_w
-    half_seg = seed.blade_segment_length / 2.0
+    total_len  = seed.blade_n_steps * seed.blade_segment_length
+    stamp_hmax = cfg.noise_top_mm + cfg.blade_raise_mm
 
-    x = seed.x
-    y = seed.y
-    direction = seed.blade_direction
+    x, y, direction = seed.x, seed.y, seed.blade_direction
 
     for step in range(seed.blade_n_steps):
-        dist_along = step * seed.blade_segment_length
-        taper = seed.distance_taper(dist_along, total_len)
+        taper0 = seed.distance_taper(step * seed.blade_segment_length, total_len)
+        taper1 = seed.distance_taper((step + 1) * seed.blade_segment_length, total_len)
 
-        width = seed.blade_width * taper
-        peak_h = stamp_h_max * taper
+        tx = x + seed.blade_segment_length * math.sin(direction)
+        ty = y + seed.blade_segment_length * math.cos(direction)
 
-        # Stop once the blade has tapered away (width < one cell, or effectively flat)
-        if width < cell_w or peak_h < 1e-4:
+        # Mirror the 3D containment rule: blade centre must stay ≥ hw from edges.
+        hw = seed.blade_width * taper0 / 2.0
+        if x < hw or x > surface.tile_w - hw or y < hw or y > surface.tile_h - hw:
             break
 
-        # Skip thin-taper steps — tapered tips of dense blades would otherwise
-        # spread across inter-blade areas via np.maximum and cap the noise valleys,
-        # creating a false "floor" that limits texture in the interior.
-        if taper < cfg.stamp_min_taper:
-            x += seed.blade_segment_length * math.sin(direction)
-            y += seed.blade_segment_length * math.cos(direction)
-            direction += seed.blade_curl
-            continue
+        # Stamp only where taper is above the threshold; always advance position.
+        if taper0 >= cfg.stamp_min_taper:
+            _stamp_segment(
+                field, surface,
+                x, y, tx, ty,
+                seed.blade_width * taper0, seed.blade_width * taper1,
+                0.0, 0.0,                            # z_spine = 0 (delta field)
+                stamp_hmax * taper0, stamp_hmax * taper1,
+                cfg.species.blade_top_facets,
+            )
 
-        hw = width / 2.0
+        x, y = tx, ty
+        direction += seed.blade_curl
 
-        # Mirror the 3D blade containment rule: the blade centre must stay at
-        # least hw from every tile edge so no partial (half-stamped) blades
-        # appear at the boundary.  Stop the whole blade, not just this step.
-        if (x < hw or x > surface.tile_w - hw or
-                y < hw or y > surface.tile_h - hw):
-            break
-
-        # Blade tangent and perpendicular (in XY; Z is always up)
-        # direction convention: tangent = (sin θ, cos θ) — matches grow.py
-        tx = math.sin(direction)
-        ty = math.cos(direction)
-        px =  math.cos(direction)   # perpendicular (90° CCW from tangent)
-        py = -math.sin(direction)
-
-        # Bounding box in grid indices
-        r_cells = int((hw + half_seg + cell_w) / cell_w) + 1
-        ix_c = int(x / cell_w)
-        iy_c = int(y / cell_w)
-        ix0 = max(0, ix_c - r_cells)
-        ix1 = min(surface.grid_w - 1, ix_c + r_cells)
-        iy0 = max(0, iy_c - r_cells)
-        iy1 = min(surface.grid_h - 1, iy_c + r_cells)
-
-        if ix0 > ix1 or iy0 > iy1:
-            break
-
-        # Cell-centre world coordinates
-        ix_arr = np.arange(ix0, ix1 + 1)
-        iy_arr = np.arange(iy0, iy1 + 1)
-        cx_arr = (ix_arr + 0.5) * cell_w   # (nx,)
-        cy_arr = (iy_arr + 0.5) * cell_w   # (ny,)
-
-        # Offsets from current step position
-        dx = cx_arr[np.newaxis, :] - x    # (1, nx)
-        dy = cy_arr[:, np.newaxis] - y    # (ny, 1)
-
-        # Lateral distance (perpendicular to blade)
-        lat   = dx * px + dy * py         # (ny, nx)
-        along = dx * tx + dy * ty         # (ny, nx) — along-blade component
-
-        lat_frac = lat / hw               # −1 (left edge) → +1 (right edge)
-
-        # Accept cells within blade width AND within this step's along-blade strip
-        in_range = (
-            (lat_frac >= -1.0) &
-            (lat_frac <=  1.0) &
-            (np.abs(along) <= half_seg + cell_w)
-        )
-
-        if not np.any(in_range):
-            # Advance and continue — don't break; the blade may re-enter range
-            x += seed.blade_segment_length * tx
-            y += seed.blade_segment_length * ty
-            direction += seed.blade_curl
-            continue
-
-        # sin(π × norm_x) profile: 0 at both edges, peak_h at centre
-        norm_x = (lat_frac + 1.0) / 2.0   # 0 … 1 across blade width
-        h = np.zeros((iy1 - iy0 + 1, ix1 - ix0 + 1), dtype=float)
-        h[in_range] = peak_h * np.sin(np.pi * norm_x[in_range])
-
-        np.maximum(
-            field[iy0:iy1 + 1, ix0:ix1 + 1],
-            h,
-            out=field[iy0:iy1 + 1, ix0:ix1 + 1],
-        )
-
-        # Advance along blade trajectory
-        x += seed.blade_segment_length * tx
-        y += seed.blade_segment_length * ty
-        direction += seed.blade_curl   # seed.blade_curl is already per-step (radians/step)
-
-        # Stop if we've walked off the tile
         if x < 0.0 or x >= surface.tile_w or y < 0.0 or y >= surface.tile_h:
             break
