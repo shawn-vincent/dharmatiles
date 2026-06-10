@@ -205,13 +205,12 @@ def _compute_upstream_dist(x: float, y: float, direction: float, surface) -> flo
 def _sort_upstream_first(paths: list[GrowingPath], surface) -> None:
     """Sort paths in-place using GrassSeed.sort_key().
 
-    GrassSeed.sort_key() returns (priority=1, dir_norm, upstream_dist).
+    GrassSeed.sort_key() returns (priority=1, upstream_dist, dir_norm).
     Since all seeds here share priority=1, the effective sort is:
-      1. blade direction [0, 2π) — same-direction blades grown together so
-         their occ_z stamps are spatially coherent.
-      2. upstream_dist ascending — within each direction band, seeds closest
-         to the boundary they face are grown first so interior blades ride
-         on top of outer ones.
+      1. upstream_dist ascending — seeds closest to the boundary they face
+         grow first so interior blades ride on top of outer ones.
+      2. blade direction [0, 2π) — tiebreaker: groups same-direction blades
+         together within each upstream band.
     """
     paths.sort(key=lambda p: p.seed.sort_key())
 
