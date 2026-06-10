@@ -24,6 +24,7 @@ class HexOrganizerSpec:
     base: float = 1.0             # solid base below retaining recess
     magnet_dia: float = 10.0      # magnet disc diameter
     magnet_depth: float = 3.0     # magnet disc thickness / bore depth
+    outer_wall_height: float = 40.0  # height of the outer hex shell (cups extend to spec.height)
     bottom_roundover: float = 1.0    # convex roundover radius on bottom perimeter edge
     vertical_roundover: float = 8.0  # convex outside vertical edge roundover radius
     cols: int = 3
@@ -69,7 +70,7 @@ def single_cup(spec: HexOrganizerSpec) -> m3d.Manifold:
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
     R_outer = outer_f2f / np.sqrt(3)
 
-    outer = hex_prism(outer_f2f, spec.height / 2.0)
+    outer = hex_prism(outer_f2f, spec.outer_wall_height)
 
     # Inner bore and retaining depression corner roundover radius:
     # bore_r = outer_roundover - (R_outer - R_inner)  keeps wall ~= spec.wall at corners.

@@ -190,9 +190,12 @@ def _new_tile_paths(spec_path: pathlib.Path,
     where *subdir* mirrors any directory nesting under *tiles_root*.
     """
     try:
-        rel = spec_path.with_suffix('').relative_to(tiles_root)
+        no_py   = spec_path.with_suffix('')                              # foo.tile.py → foo.tile
+        no_tile = no_py.with_suffix('') if no_py.suffix == '.tile' else no_py
+        rel     = no_tile.relative_to(tiles_root)
     except ValueError:
-        rel = pathlib.Path(spec_path.stem)   # spec outside src/tiles/ — no subdir
+        no_py   = pathlib.Path(spec_path.stem)                           # spec outside src/tiles/
+        rel     = no_py.with_suffix('') if no_py.suffix == '.tile' else no_py
     stem   = f"{cols}x{rows}-{rel.name}"
     subdir = rel.parent                       # Path('.') when file is at tiles root
     return {
