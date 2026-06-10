@@ -20,7 +20,7 @@ class HexOrganizerSpec:
     retaining_f2f: float = 29.0   # retaining-depression flat-to-flat
     wall: float = 1.0             # wall thickness
     height: float = 60.0          # cup height
-    floor: float = 12.0           # bore floor / inner ledge height (magnet top edge z=11, ledge 1mm above)
+    floor: float = 14.5           # bore floor / inner ledge height (magnet top edge z=11, bevel starts 0.5mm above)
     base: float = 1.0             # solid base below retaining recess
     magnet_dia: float = 10.0      # magnet disc diameter
     magnet_depth: float = 3.0     # magnet disc thickness / bore depth
@@ -69,7 +69,7 @@ def single_cup(spec: HexOrganizerSpec) -> m3d.Manifold:
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
     R_outer = outer_f2f / np.sqrt(3)
 
-    outer = hex_prism(outer_f2f, spec.height)
+    outer = hex_prism(outer_f2f, spec.height / 2.0)
 
     # Inner bore and retaining depression corner roundover radius:
     # bore_r = outer_roundover - (R_outer - R_inner)  keeps wall ~= spec.wall at corners.

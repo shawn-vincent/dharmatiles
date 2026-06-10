@@ -31,8 +31,16 @@ class GrassSeed:
     upstream_dist: float = field(default=0.0)
 
     def sort_key(self) -> tuple:
-        """(priority=1, upstream_dist) — grass after rocks, upstream first."""
-        return (1, self.upstream_dist, self.blade_direction % (2.0 * math.pi))
+        """(priority=1, direction_norm, upstream_dist) — grass after rocks.
+
+        Primary:   blade direction normalised to [0, 2π) — blades pointing the
+                   same way are grown together so their occ_z stamps are spatially
+                   coherent before the next direction group starts.
+        Secondary: upstream distance — within each direction band, seeds closest
+                   to the tile boundary they face are grown first so interior
+                   blades ride on top of outer ones.
+        """
+        return (1, self.blade_direction % (2.0 * math.pi), self.upstream_dist)
 
     # ── Scalar API ───────────────────────────────────────────────────────────
 
