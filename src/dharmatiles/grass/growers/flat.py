@@ -6,6 +6,7 @@ import numpy as np
 import trimesh
 
 from .._geometry import (
+    _blade_step_geometry,
     _contained_segment_cells, _sample_grid, _spine_distances, _stamp_segment,
 )
 from ..config import SpeciesConfig
@@ -39,13 +40,8 @@ class FlatGrassGrower:
 
         seed = path.seed
         cx, cy, cz = path.points[-1]
-        direction = seed.blade_direction + seed.blade_curl * (len(path.points) - 1)
-        tx = cx + seed.blade_segment_length * np.sin(direction)
-        ty = cy + seed.blade_segment_length * np.cos(direction)
-        prev_idx = len(path.points) - 1
-        next_idx = len(path.points)
-        prev_taper = seed.point_taper(prev_idx)
-        next_taper = seed.point_taper(next_idx)
+        step_idx = len(path.points) - 1
+        tx, ty, _, prev_taper, next_taper = _blade_step_geometry(seed, step_idx, cx, cy)
         prev_width = seed.blade_width * prev_taper
         next_width = seed.blade_width * next_taper
         prev_thickness = species.blade_thickness * prev_taper

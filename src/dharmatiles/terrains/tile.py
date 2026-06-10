@@ -26,18 +26,17 @@ import trimesh
 from scipy.ndimage import binary_dilation, binary_erosion, distance_transform_edt
 
 from ..core.config import (SceneConfig, SurfaceConfig, FlowConfig,
-                           SoilConfig, StonesConfig, BaseConfig,
+                           SoilConfig, RocksConfig, BaseConfig,
                            GrassUnderlayConfig, SpeciesConfig, GrassConfig as RuntimeGrassConfig)
 from ..core.tile import TileScene
 from ..core.mesh import make_heightmap_solid
 from ..core.spec import TileSpec, load_spec
 from ..core.region import build_region_mask, build_grass_mask
 from ..bases import dungeonblocks, openlock
-from ..layers.soil import SoilLayer
-from ..layers.stones import StonesLayer
+from ..layers.soil import SoilCarpetLayer
+from ..layers.rocks import RocksLayer
 from ..layers.grass import FloppyGrassLayer
-from ..layers.grass_underlay import GrassUnderlayLayer
-# from ..layers.grass import GrassLayer
+from ..layers.grass_carpet import GrassCarpetLayer
 from ..layers.water import make_water_displacement, make_water_ripple_displacement, make_water_volume, WATER_RENDER_LIFT_MM
 
 
@@ -47,9 +46,9 @@ from ..layers.water import make_water_displacement, make_water_ripple_displaceme
 def _build_mesh(cfg: SceneConfig,
                 scene: TileScene,
                 grass_cfgs: list[tuple[SpeciesConfig, np.ndarray | None]] | None = None,
-                soil_layers: list[tuple[SoilConfig, np.ndarray | None]] | None = None,
-                underlay_layers: list[tuple[GrassUnderlayConfig, np.ndarray | None]] | None = None,
-                stone_layers: list[tuple[StonesConfig, np.ndarray | None]] | None = None,
+                soil_carpet_layers: list[tuple[SoilConfig, np.ndarray | None]] | None = None,
+                grass_carpet_layers: list[tuple[GrassUnderlayConfig, np.ndarray | None]] | None = None,
+                rock_layers: list[tuple[RocksConfig, np.ndarray | None]] | None = None,
                 verbose: bool = True,
                 water_mask: np.ndarray | None = None,
                 water_height: float | None = None,
@@ -61,14 +60,14 @@ def _build_mesh(cfg: SceneConfig,
     region mask (``None`` = whole tile).  Defaults to one package-default
     species over the whole tile.
 
-    *underlay_layers* is a list of ``(GrassUnderlayConfig, placement_mask)``
-    pairs — one per ``grass_underlay`` layer in the spec.  Each modifies
+    *grass_carpet_layers* is a list of ``(GrassUnderlayConfig, placement_mask)``
+    pairs — one per ``grass_carpet`` layer in the spec.  Each modifies
     terrain_z in its region (embossed 2D texture) before stones and 3D grass.
 
-    *stone_layers* is a list of ``(StonesConfig, placement_mask)`` pairs —
-    one per stone-layer zone.  Each pair is one independent stone-placement
+    *rock_layers* is a list of ``(RocksConfig, placement_mask)`` pairs —
+    one per rock-layer zone.  Each pair is one independent rock-placement
     pass with its own size distribution and placement region.  Defaults to
-    ``[(cfg.stones, None)]`` (single pass, whole-tile placement).
+    ``[(cfg.rocks, None)]`` (single pass, whole-tile placement).
 
     *water_mask* / *water_height* — when provided, a flat water-surface mesh
     is placed at *water_height* over the water region.  The pool floor must
@@ -77,51 +76,51 @@ def _build_mesh(cfg: SceneConfig,
     """
     if grass_cfgs is None:
         grass_cfgs = [(SpeciesConfig(), None)]
-    if soil_layers is None:
-        soil_layers = []
-    if underlay_layers is None:
-        underlay_layers = []
-    if stone_layers is None:
-        stone_layers = [(cfg.stones, None)]
+    if soil_carpet_layers is None:
+        soil_carpet_layers = []
+    if grass_carpet_layers is None:
+        grass_carpet_layers = []
+    if rock_layers is None:
+        rock_layers = [(cfg.rocks, None)]
 
     parts: list[trimesh.Trimesh] = []
 
-    # ── Soil bump texture (explicit soil layers only) ─────────────────────────
-    for soil_cfg, soil_mask in soil_layers:
+    # ── Soil carpet (terrain_z texture, bare-ground regions) ──────────────────
+    for soil_cfg, soil_mask in soil_carpet_layers:
         if verbose:
             print("Building soil texture...")
-        SoilLayer(cfg.surface, soil_cfg).build(scene, placement_mask=soil_mask)
+        SoilCarpetLayer(cfg.surface, soil_cfg).build(scene, placement_mask=soil_mask)
 
-    # ── Grass underlay (embossed 2D texture in grass regions) ─────────────────
-    for underlay_cfg, underlay_mask in underlay_layers:
+    # ── Grass carpet (terrain_z texture, grass regions) ───────────────────────
+    for carpet_cfg, carpet_mask in grass_carpet_layers:
         if verbose:
-            print("Building grass underlay...")
-        GrassUnderlayLayer(underlay_cfg).build(scene, placement_mask=underlay_mask)
+            print("Building grass carpet...")
+        GrassCarpetLayer(carpet_cfg).build(scene, placement_mask=carpet_mask)
 
     # Sync terrain_support_z to include soil + underlay baked into terrain_z.
     scene.terrain_support_z[:] = scene.terrain_z
 
     # ── Stones (one independent pass per stone-layer zone) ────────────────────
-    # Pre-compute terrain gradient once (post-soil) so all stone passes share it.
+    # Pre-compute terrain gradient once (post-soil) so all rock passes share it.
     # Each pass uses sample_grid on this pre-computed gradient rather than calling
     # np.gradient again on the same array.
     n_squares = cfg.surface.cols * cfg.surface.rows
-    _stone_gz_x: np.ndarray | None = None
-    _stone_gz_y: np.ndarray | None = None
-    for layer_idx, (stone_cfg, stone_pmask) in enumerate(stone_layers):
-        n_stones = stone_cfg.stones_per_square * n_squares
-        if n_stones > 0:
+    _rock_gz_x: np.ndarray | None = None
+    _rock_gz_y: np.ndarray | None = None
+    for layer_idx, (rock_cfg, rock_pmask) in enumerate(rock_layers):
+        n_rocks = rock_cfg.rocks_per_square * n_squares
+        if n_rocks > 0:
             if verbose:
-                print(f"Building stones  ({n_stones} stones = "
-                      f"{stone_cfg.stones_per_square}/sq × {n_squares} sq)...")
-            if _stone_gz_x is None:
+                print(f"Building rocks  ({n_rocks} rocks = "
+                      f"{rock_cfg.rocks_per_square}/sq × {n_squares} sq)...")
+            if _rock_gz_x is None:
                 _cw = cfg.surface.cell_w
-                _stone_gz_x = np.gradient(scene.terrain_z, axis=1) / _cw
-                _stone_gz_y = np.gradient(scene.terrain_z, axis=0) / _cw
-            stone_parts = StonesLayer(cfg.surface, stone_cfg).build(
-                scene, placement_mask=stone_pmask, layer_idx=layer_idx,
-                terrain_gz_x=_stone_gz_x, terrain_gz_y=_stone_gz_y)
-            parts.extend(stone_parts)
+                _rock_gz_x = np.gradient(scene.terrain_z, axis=1) / _cw
+                _rock_gz_y = np.gradient(scene.terrain_z, axis=0) / _cw
+            rock_parts = RocksLayer(cfg.surface, rock_cfg).build(
+                scene, placement_mask=rock_pmask, layer_idx=layer_idx,
+                terrain_gz_x=_rock_gz_x, terrain_gz_y=_rock_gz_y)
+            parts.extend(rock_parts)
 
     # ── Grass (one pass per seed-packet config) ───────────────────────────────
     if grass_cfgs and verbose:
@@ -165,13 +164,13 @@ def _build_mesh(cfg: SceneConfig,
             wm = water_mask[:hn*s, :wn*s].reshape(hn, s, wn, s).any(axis=(1, 3))
             wm_disp = wm_disp_full[:hn*s, :wn*s].reshape(hn, s, wn, s).any(axis=(1, 3))
             zd = z_disp[:hn*s, :wn*s].reshape(hn, s, wn, s).mean(axis=(1, 3))
-            sm = (scene.stone_mask[:hn*s, :wn*s].reshape(hn, s, wn, s).any(axis=(1, 3))
-                  if scene.stone_mask is not None else None)
+            sm = (scene.rock_mask[:hn*s, :wn*s].reshape(hn, s, wn, s).any(axis=(1, 3))
+                  if scene.rock_mask is not None else None)
             ds_cell_w = cfg.surface.cell_w * s
         else:
             tz, wm, zd = scene.terrain_z, water_mask, z_disp
             wm_disp = wm_disp_full
-            sm = scene.stone_mask
+            sm = scene.rock_mask
             ds_cell_w = cfg.surface.cell_w
         zd = zd + make_water_ripple_displacement(
             wm_disp, sm, ds_cell_w, seed=cfg.surface.seed ^ 0xC4F7)
@@ -366,15 +365,15 @@ def build_tile_from_spec(spec: TileSpec,
         config     = cfg,
         terrain_z  = terrain_z,
         terrain_support_z = terrain_z.copy(),
-        stone_mask = np.zeros((cfg.surface.grid_h, cfg.surface.grid_w), dtype=bool),
+        rock_mask = np.zeros((cfg.surface.grid_h, cfg.surface.grid_w), dtype=bool),
     )
 
     # Compute once; both DB and OL scenes use the same region_mask and spec.
     grass_mask      = build_grass_mask(region_mask, spec) if region_mask is not None else None
     grass_cfgs      = _collect_grass_configs(spec, region_mask)
-    soil_layers     = _collect_soil_layers(spec, region_mask)
-    underlay_layers = _collect_grass_underlay_layers(spec, region_mask)
-    stone_layers    = _collect_stones_layers(spec, region_mask)
+    soil_carpet_layers  = _collect_soil_carpet_layers(spec, region_mask)
+    grass_carpet_layers = _collect_grass_carpet_layers(spec, region_mask)
+    rock_layers     = _collect_rocks_layers(spec, region_mask)
 
     scene.grass_mask = grass_mask
     if verbose and grass_mask is not None:
@@ -389,9 +388,10 @@ def build_tile_from_spec(spec: TileSpec,
               f"({100 * n_water / n_total:.0f}%)")
 
     tile_mesh = _build_mesh(cfg, scene,
-                            grass_cfgs=grass_cfgs, soil_layers=soil_layers,
-                            underlay_layers=underlay_layers,
-                            stone_layers=stone_layers,
+                            grass_cfgs=grass_cfgs,
+                            soil_carpet_layers=soil_carpet_layers,
+                            grass_carpet_layers=grass_carpet_layers,
+                            rock_layers=rock_layers,
                             verbose=verbose,
                             water_mask=water_mask, water_height=water_height,
                             water_embed_mm=embed_mm)
@@ -401,7 +401,7 @@ def build_tile_from_spec(spec: TileSpec,
     # cols × cells_per_square and do not change with square_mm, so the existing
     # region_mask, terrain_z and water_mask are directly reusable.  Only the
     # physical cell/tile sizes differ, which drives correct feature sizing inside
-    # the soil, stone and grass layers.
+    # the soil, rock and grass layers.
     ol_tile_mesh: trimesh.Trimesh | None = None
     ol_surface:   SurfaceConfig   | None = None
     ol_terrain_z: np.ndarray      | None = None
@@ -415,16 +415,16 @@ def build_tile_from_spec(spec: TileSpec,
             config     = ol_cfg,
             terrain_z  = terrain_z.copy(),
             terrain_support_z = terrain_z.copy(),
-            stone_mask = np.zeros(
+            rock_mask = np.zeros(
                 (ol_cfg.surface.grid_h, ol_cfg.surface.grid_w), dtype=bool),
         )
         ol_scene.grass_mask = grass_mask   # same result; region_mask unchanged
         ol_tile_mesh = _build_mesh(
             ol_cfg, ol_scene,
             grass_cfgs=grass_cfgs,          # reuse — same spec + region_mask
-            soil_layers=soil_layers,
-            underlay_layers=underlay_layers,
-            stone_layers=stone_layers,
+            soil_carpet_layers=soil_carpet_layers,
+            grass_carpet_layers=grass_carpet_layers,
+            rock_layers=rock_layers,
             verbose=verbose,
             water_mask=water_mask, water_height=water_height,
             water_embed_mm=embed_mm)
@@ -584,7 +584,7 @@ def _scene_config_from_spec(spec: TileSpec) -> SceneConfig:
         surface          = spec.surface,
         flow             = FlowConfig(),
         soil             = SoilConfig(),
-        stones           = StonesConfig(),
+        rocks            = RocksConfig(),
         base             = BaseConfig(),
         max_stack_height = 2.0,
     )
@@ -664,23 +664,23 @@ def _collect_grass_configs(
     return result
 
 
-def _collect_soil_layers(
+def _collect_soil_carpet_layers(
     spec: TileSpec,
     region_mask: np.ndarray | None,
 ) -> list[tuple[SoilConfig, np.ndarray | None]]:
-    """Return one ``(SoilConfig, placement_mask)`` pair per soil layer."""
+    """Return one ``(SoilConfig, placement_mask)`` pair per soil_carpet layer."""
     return _collect_layers(           # type: ignore[return-value]
         spec, region_mask,
-        layer_types={'soil'},
+        layer_types={'soil_carpet'},
         cfg_class=SoilConfig,
     )
 
 
-def _collect_grass_underlay_layers(
+def _collect_grass_carpet_layers(
     spec: TileSpec,
     region_mask: np.ndarray | None,
 ) -> list[tuple[GrassUnderlayConfig, np.ndarray | None]]:
-    """Return one ``(GrassUnderlayConfig, placement_mask)`` pair per grass_underlay layer.
+    """Return one ``(GrassUnderlayConfig, placement_mask)`` pair per grass_carpet layer.
 
     Blade geometry can be supplied in three ways (identical to
     ``_collect_grass_configs``):
@@ -691,7 +691,7 @@ def _collect_grass_underlay_layers(
     * Flat ``blade_*`` / placement kwargs — folded into a ``SpeciesConfig``.
     * Mix: ``species=`` sets the base; flat kwargs override specific fields.
 
-    Underlay-specific params (``noise_*``, ``blade_raise_mm``,
+    Carpet-specific params (``noise_*``, ``blade_raise_mm``,
     ``stamp_min_taper``, ``edge_fade_mm``) are always flat kwargs on
     ``GrassUnderlayConfig``.
     """
@@ -704,18 +704,18 @@ def _collect_grass_underlay_layers(
 
     for idx, region in enumerate(spec.regions):
         for layer in region.layers:
-            if layer.type == 'grass_underlay':
+            if layer.type == 'grass_carpet':
                 mask   = (region_mask == idx) if region_mask is not None else None
                 params = dict(layer.params)
 
-                # Partition params: underlay-specific vs species (blade geometry).
+                # Partition params: carpet-specific vs species (blade geometry).
                 u_over = {k: v for k, v in params.items() if k in _u_fields}
                 s_over = {k: v for k, v in params.items() if k in _s_fields}
 
                 base_s = params.get('species', _default_s)
                 if not isinstance(base_s, SpeciesConfig):
                     raise TypeError(
-                        f"grass_underlay layer 'species' must be a SpeciesConfig, "
+                        f"grass_carpet layer 'species' must be a SpeciesConfig, "
                         f"got {type(base_s)!r}"
                     )
                 species = dataclasses.replace(base_s, **s_over) if s_over else base_s
@@ -724,20 +724,20 @@ def _collect_grass_underlay_layers(
     return result
 
 
-def _collect_stones_layers(
+def _collect_rocks_layers(
     spec: TileSpec,
     region_mask: np.ndarray | None,
-) -> list[tuple[StonesConfig, np.ndarray | None]]:
-    """Return one ``(StonesConfig, placement_mask)`` pair per stone layer.
+) -> list[tuple[RocksConfig, np.ndarray | None]]:
+    """Return one ``(RocksConfig, placement_mask)`` pair per rocks layer.
 
-    Each region or boundary that declares a ``rock``/``rocks``/``stone``/
-    ``stones`` layer gets its own independent stone-placement pass, so a pool
-    region and a shoreline boundary can use different size distributions.
+    Each region or boundary that declares a ``rocks`` layer gets its own
+    independent rock-placement pass, so a pool region and a shoreline
+    boundary can use different size distributions.
     """
     return _collect_layers(           # type: ignore[return-value]
         spec, region_mask,
-        layer_types={'rock', 'rocks', 'stone', 'stones'},
-        cfg_class=StonesConfig,
+        layer_types={'rocks'},
+        cfg_class=RocksConfig,
     )
 
 

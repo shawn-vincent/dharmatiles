@@ -55,7 +55,7 @@ def make_water_displacement(
 
 def make_water_ripple_displacement(
     water_mask:     np.ndarray,
-    stone_mask:     np.ndarray | None,
+    rock_mask:      np.ndarray | None,
     cell_w:         float,
     amplitude_mm:   float = 0.5,
     wavelength_mm:  float = 3.0,
@@ -96,7 +96,7 @@ def make_water_ripple_displacement(
         ext[1:-1, :-2] | ext[1:-1, 2:]
     )
     internal_shore = adj_to_water & ~tile_edge
-    stone_in_water = (stone_mask & water_mask) if stone_mask is not None \
+    stone_in_water = (rock_mask & water_mask) if rock_mask is not None \
                      else np.zeros((gh, gw), dtype=bool)
 
     source_mask = internal_shore | stone_in_water

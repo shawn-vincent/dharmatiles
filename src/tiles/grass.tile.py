@@ -1,8 +1,8 @@
 # grass.tile.py
 #
-# One full 1×1 grass region. Grass underlay provides embossed ground texture.
+# One full 1×1 grass region. Grass carpet provides embossed ground texture.
 #
-# A single SpeciesConfig drives both the 2D underlay stamps and the 3D blades,
+# A single SpeciesConfig drives both the 2D carpet stamps and the 3D blades,
 # guaranteeing the two passes use identical blade geometry.
 
 from dharmatiles.core.spec import (
@@ -29,7 +29,7 @@ tile = TileSpec(
             id='meadow',
             contains=(0.5, 0.5),
             layers=[
-                LayerSpec(type='grass_underlay', params=dict(species=_meadow)),
+                LayerSpec(type='grass_carpet', params=dict(species=_meadow)),
                 LayerSpec(type='grass',          params=dict(species=_meadow)),
             ],
         ),

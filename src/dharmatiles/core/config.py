@@ -22,7 +22,7 @@ import numpy as np
 class SpeciesConfig:
     """Template for one plant species.
 
-    Both the 2D grass-underlay layer and the 3D grass-blade layer consume a
+    Both the 2D ``grass_carpet`` layer and the 3D ``grass`` layer consume a
     ``SpeciesConfig``.  Defining one object and sharing it between the two
     ``LayerSpec`` entries in a ``.tile.py`` file keeps blade geometry in a
     single place.
@@ -254,7 +254,7 @@ class GrassUnderlayConfig:
        logic as the companion 3D grass layer.
 
     ``species`` holds all blade geometry.  Pass the *same* ``SpeciesConfig``
-    instance to both the ``grass_underlay`` and ``grass`` layers in a tile
+    instance to both the ``grass_carpet`` and ``grass`` layers in a tile
     spec to guarantee the 2D stamps exactly match the 3D blades.
     """
 
@@ -277,15 +277,15 @@ class GrassUnderlayConfig:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Stones
+# Rocks
 # ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
-class StonesConfig:
-    """Random stone geometry parameters.
+class RocksConfig:
+    """Random rock geometry parameters.
 
-    ``stones_per_square`` is a density — StonesLayer multiplies by
-    cols × rows to get the actual stone count for the tile.
+    ``rocks_per_square`` is a density — RocksLayer multiplies by
+    cols × rows to get the actual rock count for the tile.
 
     Size distribution
     -----------------
@@ -294,7 +294,7 @@ class StonesConfig:
     higher values skew strongly toward small rocks while still allowing the
     occasional large one up to r_max.
     """
-    stones_per_square: int   = 15
+    rocks_per_square: int    = 15
     r_min:         float = 1.82   # mm — minimum horizontal semi-axis
     r_max:         float = 2.40   # mm — maximum horizontal semi-axis
     size_power:    float = 2.5    # distribution skew: >1 = more small rocks
@@ -356,7 +356,7 @@ class SceneConfig:
     surface:          SurfaceConfig = field(default_factory=SurfaceConfig)
     flow:             FlowConfig    = field(default_factory=FlowConfig)
     soil:             SoilConfig    = field(default_factory=SoilConfig)
-    stones:           StonesConfig  = field(default_factory=StonesConfig)
+    rocks:            RocksConfig   = field(default_factory=RocksConfig)
     base:             BaseConfig    = field(default_factory=BaseConfig)
     max_stack_height: float         = 2.0
     # mm — max occ_z above terrain_z a blade may seed or grow into.

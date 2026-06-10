@@ -3,8 +3,8 @@
 # Left half: grass.  Right half: bare soil.
 # The organic boundary creates a natural meadow margin.
 #
-# Grass region:  grass_underlay (embossed 2D texture) + grass (3D blades).
-# Soil region:   soil (blob texture), masked to this region only.
+# Grass region:  grass_carpet (embossed 2D texture) + grass (3D blades).
+# Soil region:   soil_carpet (blob texture), masked to this region only.
 # Boundary:      zero-width (same elevation both sides — no slope needed).
 
 from dharmatiles.core.spec import (
@@ -18,7 +18,7 @@ tile = TileSpec(
             id='meadow',
             contains=(0.25, 0.5),
             layers=[
-                LayerSpec(type='grass_underlay', params=dict(groups_per_square=240)),
+                LayerSpec(type='grass_carpet', params=dict(groups_per_square=240)),
                 LayerSpec(type='grass', params=dict(groups_per_square=24)),
             ],
         ),
@@ -26,7 +26,7 @@ tile = TileSpec(
             id='dirt',
             contains=(0.75, 0.5),
             layers=[
-                LayerSpec(type='soil'),
+                LayerSpec(type='soil_carpet'),
             ],
         ),
     ],

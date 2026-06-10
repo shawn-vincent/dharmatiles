@@ -14,6 +14,33 @@ import numpy as np
 from ..core.grid import sample_grid as _sample_grid
 
 
+def _blade_step_geometry(
+    seed,
+    step_idx: int,
+    x: float,
+    y: float,
+) -> tuple[float, float, float, float, float]:
+    """Direction, next position, and taper pair for one blade spine step.
+
+    Returns ``(tx, ty, direction, taper0, taper1)`` where *direction* is the
+    travel angle (radians) at this step, *(tx, ty)* is the next spine point,
+    *taper0* is the width/thickness multiplier at *(x, y)* and *taper1* at
+    *(tx, ty)*.
+
+    Canonical implementation shared by the 2-D grass-carpet stamper
+    (``layers/grass_carpet._stamp_blade``) and the 3-D flat grower
+    (``growers/flat.FlatGrassGrower.step``).
+    """
+    seg_len   = seed.blade_segment_length
+    total_len = seed.blade_n_steps * seg_len
+    direction = seed.blade_direction + seed.blade_curl * step_idx
+    tx = float(x + seg_len * np.sin(direction))
+    ty = float(y + seg_len * np.cos(direction))
+    taper0 = seed.distance_taper(step_idx * seg_len, total_len)
+    taper1 = seed.distance_taper((step_idx + 1) * seg_len, total_len)
+    return tx, ty, direction, taper0, taper1
+
+
 def _spine_distances(spine: np.ndarray) -> np.ndarray:
     """Cumulative physical distance along a blade spine."""
     if len(spine) == 0:

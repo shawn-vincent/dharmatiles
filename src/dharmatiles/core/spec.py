@@ -17,9 +17,9 @@ height_mm is the total slab thickness from the flat bottom face to the
 region surface.  When two adjacent regions have different heights the
 boundary slope interpolates between them.
 
-    grass / soil  →  5.0 mm   (natural ground level)
-    water         →  3.0 mm   (2 mm below ground — the depression)
-    floor         → 10.0 mm   (raised masonry / dungeon floor)
+    grass_carpet / soil_carpet  →  5.0 mm   (natural ground level)
+    water                       →  3.0 mm   (2 mm below ground — the depression)
+    floor                       → 10.0 mm   (raised masonry / dungeon floor)
 
 Override ``height_mm`` on the region to depart from the default.
 """
@@ -43,11 +43,12 @@ __all__ = [
 # ── Height defaults by layer type ─────────────────────────────────────────────
 
 HEIGHT_DEFAULTS: dict[str, float] = {
-    'grass': 5.0,
-    'soil':  5.0,
-    'water': 3.0,
-    'floor': 10.0,
-    'wall':  5.0,   # base slab; wall geometry rises above this
+    'grass_carpet': 5.0,
+    'soil_carpet':  5.0,
+    'grass':        5.0,   # 3D-only grass region (no carpet layer)
+    'water':        3.0,
+    'floor':        10.0,
+    'wall':         5.0,   # base slab; wall geometry rises above this
 }
 
 
@@ -56,7 +57,7 @@ HEIGHT_DEFAULTS: dict[str, float] = {
 @dataclass
 class LayerSpec:
     """One content layer sprayed into a region."""
-    type:   str                        # "grass" | "soil" | "water" | "floor" | …
+    type:   str  # "grass_carpet" | "soil_carpet" | "grass" | "rocks" | "water" | "floor" | …
     params: dict = field(default_factory=dict)   # forwarded to the layer config
 
 
@@ -84,7 +85,7 @@ class BoundaryLayerSpec:
     The strip *width* is a property of the BoundarySpec, not this layer.
     This class only describes what terrain type lives inside the strip.
     """
-    type:   str = 'soil'                       # "soil" | "water" | "rocks" | …
+    type:   str = 'soil_carpet'                # "soil_carpet" | "water" | "rocks" | …
     params: dict = field(default_factory=dict) # forwarded to layer config
 
 

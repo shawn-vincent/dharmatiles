@@ -1,7 +1,7 @@
 """
-GrassUnderlayLayer: embossed 2D grass-carpet texture stamped into terrain_z.
+GrassCarpetLayer: embossed 2D grass-carpet texture stamped into terrain_z.
 
-The layer runs after SoilLayer and before StonesLayer / GrassLayer (3D).
+The layer runs after SoilCarpetLayer and before RocksLayer / GrassLayer (3D).
 It modifies terrain_z in-place and adds no Trimesh geometry to the scene.
 
 Two components are composited via np.maximum onto a scratch field, then
@@ -19,19 +19,17 @@ See docs/design/grass-underlay.md for the full design rationale.
 """
 from __future__ import annotations
 
-import math
-
 import numpy as np
 from scipy.ndimage import distance_transform_edt, gaussian_filter
 
 from ..core.config import GrassConfig as _RuntimeGrassConfig, GrassUnderlayConfig
 from ..core.tile import TileScene
-from ..grass._geometry import _stamp_segment
+from ..grass._geometry import _blade_step_geometry, _stamp_segment
 from ..grass.grow import plant_seeds as _plant_seeds
 from ..grass.seed import GrassSeed
 
 
-class GrassUnderlayLayer:
+class GrassCarpetLayer:
     """Emboss a 2D grass-carpet texture into scene.terrain_z."""
 
     def __init__(self, cfg: GrassUnderlayConfig) -> None:
@@ -44,8 +42,8 @@ class GrassUnderlayLayer:
     ) -> None:
         """Compute and apply the underlay heightmap bump to terrain_z.
 
-        Must be called after SoilLayer (terrain_z already has soil bumps) and
-        before the terrain_support_z sync, StonesLayer, and GrassLayer.
+        Must be called after SoilCarpetLayer (terrain_z already has soil bumps)
+        and before the terrain_support_z sync, RocksLayer, and GrassLayer.
         """
         cfg = self.cfg
         surface = scene.config.surface
@@ -173,17 +171,11 @@ def _stamp_blade(
     are added to terrain_z by the caller, so ``thickness`` here equals the
     desired absolute bump height above terrain.
     """
-    total_len  = seed.blade_n_steps * seed.blade_segment_length
     stamp_hmax = cfg.noise_top_mm + cfg.blade_raise_mm
-
-    x, y, direction = seed.x, seed.y, seed.blade_direction
+    x, y = seed.x, seed.y
 
     for step in range(seed.blade_n_steps):
-        taper0 = seed.distance_taper(step * seed.blade_segment_length, total_len)
-        taper1 = seed.distance_taper((step + 1) * seed.blade_segment_length, total_len)
-
-        tx = x + seed.blade_segment_length * math.sin(direction)
-        ty = y + seed.blade_segment_length * math.cos(direction)
+        tx, ty, _, taper0, taper1 = _blade_step_geometry(seed, step, x, y)
 
         # Mirror the 3D containment rule: blade centre must stay ≥ hw from edges.
         hw = seed.blade_width * taper0 / 2.0
@@ -202,7 +194,6 @@ def _stamp_blade(
             )
 
         x, y = tx, ty
-        direction += seed.blade_curl
 
         if x < 0.0 or x >= surface.tile_w or y < 0.0 or y >= surface.tile_h:
             break

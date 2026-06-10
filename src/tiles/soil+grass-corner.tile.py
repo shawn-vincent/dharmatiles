@@ -14,7 +14,7 @@ tile = TileSpec(
             id='patch',
             contains=(0.15, 0.15),
             layers=[
-                LayerSpec(type='grass_underlay'),
+                LayerSpec(type='grass_carpet'),
                 LayerSpec(type='grass', params=dict(groups_per_square=240)),
             ],
         ),
@@ -22,7 +22,7 @@ tile = TileSpec(
             id='floor',
             contains=(0.75, 0.75),
             layers=[
-                LayerSpec(type='soil'),
+                LayerSpec(type='soil_carpet'),
             ],
         ),
     ],

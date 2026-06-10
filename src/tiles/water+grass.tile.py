@@ -16,7 +16,7 @@ tile = TileSpec(
             id='meadow',
             contains=(0.5, 0.75),
             layers=[
-                LayerSpec(type='grass_underlay'),
+                LayerSpec(type='grass_carpet'),
                 LayerSpec(type='grass', params=dict(
                     groups_per_square=2,
                     blade_length_min=10,
@@ -31,7 +31,7 @@ tile = TileSpec(
             layers=[
                 LayerSpec(type='water'),
                 LayerSpec(type='rocks', params=dict(
-                    stones_per_square=2,
+                    rocks_per_square=2,
                     r_min=3.0,
                     r_max=5.0,
                     flat_min=2.0,
@@ -52,9 +52,9 @@ tile = TileSpec(
             wavelength_mm=12.0,
             width_mm=2.5,
             layers=[
-                BoundaryLayerSpec(type='soil'),
+                BoundaryLayerSpec(type='soil_carpet'),
                 BoundaryLayerSpec(type='rocks', params=dict(
-                    stones_per_square=60,
+                    rocks_per_square=60,
                     r_min=0.8,
                     r_max=2.2,
                     size_power=1.5,

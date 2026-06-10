@@ -3,9 +3,9 @@ TileScene — mutable state accumulated while building a terrain scene.
 
 The scene holds:
   terrain_z  — float heightmap (read-only after init)
-  terrain_support_z — mutable non-vegetation support raised by terrain/stone geometry
+  terrain_support_z — mutable non-vegetation support raised by terrain/rock geometry
   vegetation_support_z — mutable vegetation support, initialised from terrain support
-  stone_mask — bool grid marking stone footprints (grass steers around these)
+  rock_mask — bool grid marking rock footprints (grass steers around these)
 
 Configuration lives entirely in SceneConfig sub-configs; TileScene does not
 hold configuration itself.
@@ -45,7 +45,7 @@ class TileScene:
 
     ``terrain_z`` is read-only after construction — no layer or mesh helper
     may mutate it.
-    ``terrain_support_z`` grows as terrain and stone layers rasterise geometry.
+    ``terrain_support_z`` grows as terrain and rock layers rasterise geometry.
     ``vegetation_support_z`` grows as vegetation layers rasterise geometry.
     ``parts`` is the list of Trimesh objects to combine at export.
     """
@@ -53,8 +53,8 @@ class TileScene:
     terrain_z: np.ndarray                       # (grid_h, grid_w) — read-only
     terrain_support_z: np.ndarray               # (grid_h, grid_w) — mutable
     vegetation_support_z: np.ndarray | None = None  # (grid_h, grid_w) — mutable
-    stone_mask: np.ndarray | None = None        # (grid_h, grid_w) bool — True under a stone
-    stone_placement_mask: np.ndarray | None = None  # bool — True where stones may be seeded
+    rock_mask: np.ndarray | None = None         # (grid_h, grid_w) bool — True under a rock
+    rock_placement_mask: np.ndarray | None = None   # bool — True where rocks may be seeded
     grass_mask: np.ndarray | None = None        # (grid_h, grid_w) bool — True where grass may grow
     parts:     List[trimesh.Trimesh] = field(default_factory=list)
 
@@ -77,9 +77,9 @@ class TileScene:
                                 5.0, dtype=float)
         else:
             terrain_z = _make_sinusoidal_terrain(cfg.surface)
-        stone_mask = np.zeros((cfg.surface.grid_h, cfg.surface.grid_w), dtype=bool)
+        rock_mask = np.zeros((cfg.surface.grid_h, cfg.surface.grid_w), dtype=bool)
         return cls(config=cfg, terrain_z=terrain_z,
-                   terrain_support_z=terrain_z.copy(), stone_mask=stone_mask)
+                   terrain_support_z=terrain_z.copy(), rock_mask=rock_mask)
 
     # ── Convenience properties ────────────────────────────────────────────────
 
@@ -113,11 +113,11 @@ class TileScene:
     #       # ... bilinear sample of gradient ...
     #
     # Callers that need updating when this is implemented:
-    #   - StonesLayer._build_stones_mesh  → rotate stone local-Z to terrain_normal
+    #   - RocksLayer._build_rocks_mesh    → rotate rock local-Z to terrain_normal
     #   - GrassLayer (blade origin)       → sink along normal, not world-Z
     #   - GrassLayer (rise_cap check)     → compare Δ along normal, not abs Δz
     #   - _make_support_post              → measure z_top clearance along normal
-    #   - SoilLayer._accumulate_blob      → displace bump along normal
+    #   - SoilCarpetLayer._accumulate_blob → displace bump along normal
 
 
 # ─────────────────────────────────────────────────────────────────────────────

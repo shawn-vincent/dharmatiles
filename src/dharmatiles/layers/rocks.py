@@ -1,18 +1,18 @@
 """
-StonesLayer: batch-vectorised half-ellipsoid stones placed on terrain.
+RocksLayer: batch-vectorised half-ellipsoid rocks placed on terrain.
 
-All stone geometry is built with NumPy broadcasting in a single pass.
-Stone tops are rasterised into the scene's terrain_support_z so that
-subsequent layers (grass blades) are forced to sit above the stones.
+All rock geometry is built with NumPy broadcasting in a single pass.
+Rock tops are rasterised into the scene's terrain_support_z so that
+subsequent layers (grass blades) are forced to sit above the rocks.
 
 Slope alignment
 ---------------
-Each stone is rotated so its local +Z axis aligns with the terrain normal at
+Each rock is rotated so its local +Z axis aligns with the terrain normal at
 its centre.  The normal is derived from the gradient of ``terrain_z`` via
 Rodrigues' formula.  The bottom-cap vertex (the pivot) stays at the terrain
-surface; the rest of the stone tilts to follow the slope.  The ``support_z``
+surface; the rest of the rock tilts to follow the slope.  The ``support_z``
 rasterisation footprint uses the axis-aligned bounding ellipse of the
-un-tilted stone, which is a slight over-estimate on steep slopes but
+un-tilted rock, which is a slight over-estimate on steep slopes but
 negligible in practice.
 """
 from __future__ import annotations
@@ -22,20 +22,20 @@ from typing import List
 import numpy as np
 import trimesh
 
-from ..core.config import SurfaceConfig, StonesConfig
+from ..core.config import SurfaceConfig, RocksConfig
 from ..core.tile import TileScene
 from ..core.grid import sample_grid
 
 
-_UNSET = object()  # sentinel: "fall back to scene.stone_placement_mask"
+_UNSET = object()  # sentinel: "fall back to scene.rock_placement_mask"
 
 
-class StonesLayer:
-    """Place random stones across the tile surface and update support_z."""
+class RocksLayer:
+    """Place random rocks across the tile surface and update support_z."""
 
-    def __init__(self, surface: SurfaceConfig, stones: StonesConfig) -> None:
+    def __init__(self, surface: SurfaceConfig, rocks: RocksConfig) -> None:
         self.surface = surface
-        self.stones  = stones
+        self.rocks   = rocks
 
     def build(self, scene: TileScene, *,
               placement_mask=_UNSET,
@@ -43,63 +43,63 @@ class StonesLayer:
               terrain_gz_x: np.ndarray | None = None,
               terrain_gz_y: np.ndarray | None = None,
               ) -> List[trimesh.Trimesh]:
-        """Add stone geometry to *scene.terrain_support_z* and return mesh list.
+        """Add rock geometry to *scene.terrain_support_z* and return mesh list.
 
         Parameters
         ----------
         placement_mask
-            Restrict stone centres to True cells in this bool array.
-            When omitted, falls back to ``scene.stone_placement_mask``.
+            Restrict rock centres to True cells in this bool array.
+            When omitted, falls back to ``scene.rock_placement_mask``.
         layer_idx
-            Index among multiple stone-layer passes for the same tile.
+            Index among multiple rock-layer passes for the same tile.
             Offsets the RNG seed so each pass produces independent placement.
         terrain_gz_x, terrain_gz_y
             Pre-computed ``dz/dx`` and ``dz/dy`` gradient grids (both divided
-            by ``cell_w``).  When supplied, ``_build_stones_mesh`` skips its own
+            by ``cell_w``).  When supplied, ``_build_rocks_mesh`` skips its own
             ``np.gradient`` call; avoids recomputing the same gradient for each
-            stone-layer pass on the same tile.
+            rock-layer pass on the same tile.
         """
         if placement_mask is _UNSET:
-            placement_mask = scene.stone_placement_mask
+            placement_mask = scene.rock_placement_mask
         n_squares = self.surface.cols * self.surface.rows
-        n_stones  = self.stones.stones_per_square * n_squares
+        n_rocks   = self.rocks.rocks_per_square * n_squares
         rng  = np.random.default_rng(self.surface.seed + 7919 + layer_idx * 65537)
-        mesh = _build_stones_mesh(self.surface, self.stones, n_stones,
-                                  scene.terrain_z, scene.terrain_support_z,
-                                  scene.stone_mask,
-                                  placement_mask,
-                                  rng,
-                                  terrain_gz_x=terrain_gz_x,
-                                  terrain_gz_y=terrain_gz_y)
+        mesh = _build_rocks_mesh(self.surface, self.rocks, n_rocks,
+                                 scene.terrain_z, scene.terrain_support_z,
+                                 scene.rock_mask,
+                                 placement_mask,
+                                 rng,
+                                 terrain_gz_x=terrain_gz_x,
+                                 terrain_gz_y=terrain_gz_y)
         return [mesh]
 
 
 # ── Internal implementation ───────────────────────────────────────────────────
 
-def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
-                       n_stones: int,
-                       terrain_z: np.ndarray, support_z: np.ndarray,
-                       stone_mask: np.ndarray | None,
-                       placement_mask: np.ndarray | None,
-                       rng: np.random.Generator,
-                       *,
-                       terrain_gz_x: np.ndarray | None = None,
-                       terrain_gz_y: np.ndarray | None = None,
-                       ) -> trimesh.Trimesh:
-    """Place *n_stones* stones; return a single merged Trimesh."""
-    N  = n_stones
-    AZ = stones.az_segs
-    EL = stones.el_segs
+def _build_rocks_mesh(surface: SurfaceConfig, rocks: RocksConfig,
+                      n_rocks: int,
+                      terrain_z: np.ndarray, support_z: np.ndarray,
+                      rock_mask: np.ndarray | None,
+                      placement_mask: np.ndarray | None,
+                      rng: np.random.Generator,
+                      *,
+                      terrain_gz_x: np.ndarray | None = None,
+                      terrain_gz_y: np.ndarray | None = None,
+                      ) -> trimesh.Trimesh:
+    """Place *n_rocks* rocks; return a single merged Trimesh."""
+    N  = n_rocks
+    AZ = rocks.az_segs
+    EL = rocks.el_segs
     if N <= 0:
         return trimesh.Trimesh(process=False)
 
     # Power-law size draw: U^power skews toward r_min; power=1 = uniform
-    u_x    = rng.uniform(0.0, 1.0, N) ** stones.size_power
-    rx_arr = stones.r_min + (stones.r_max - stones.r_min) * u_x
+    u_x    = rng.uniform(0.0, 1.0, N) ** rocks.size_power
+    rx_arr = rocks.r_min + (rocks.r_max - rocks.r_min) * u_x
     # Second axis: aspect ratio bounded to [aspect_min, 1.0] so rocks stay roundish
-    aspect = rng.uniform(stones.aspect_min, 1.0, N)
+    aspect = rng.uniform(rocks.aspect_min, 1.0, N)
     ry_arr = rx_arr * aspect
-    h_frac  = rng.uniform(stones.flat_min, stones.flat_max, N)
+    h_frac  = rng.uniform(rocks.flat_min, rocks.flat_max, N)
     height  = 0.5 * (rx_arr + ry_arr) * h_frac
     angle   = rng.uniform(0, np.pi, N)
     margin  = np.maximum(rx_arr, ry_arr)
@@ -110,7 +110,7 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
     cy = margin + rng.uniform(0, 1, N) * span_y
 
     if placement_mask is not None:
-        # The mask constrains only the stone centre.  The stone footprint may
+        # The mask constrains only the rock centre.  The rock footprint may
         # cross region boundaries, but clipping by margin keeps it on the tile.
         allowed = np.argwhere(placement_mask)
         if len(allowed) == 0:
@@ -123,12 +123,12 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
 
     ca, sa = np.cos(angle), np.sin(angle)
     tz     = sample_grid(terrain_z, surface, cx, cy)
-    base_z = tz - stones.sink
+    base_z = tz - rocks.sink
 
     # ── Terrain normals for slope alignment ───────────────────────────────────
-    # Each stone is rotated so its local +Z aligns with the terrain normal,
+    # Each rock is rotated so its local +Z aligns with the terrain normal,
     # keeping the base flush on the slope instead of slicing horizontally.
-    # We use Rodrigues' formula to build a per-stone rotation R[n] that maps
+    # We use Rodrigues' formula to build a per-rock rotation R[n] that maps
     # world +Z → terrain normal n:
     #   v = cross([0,0,1], n) = (-n_y, n_x, 0)
     #   R = I + K + K²·(1−nz)/(nx²+ny²)   (K = skew-symmetric of v)
@@ -151,7 +151,7 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
     _R20 = -_nx;                  _R21 = -_ny;                _R22 = _nz
 
     # ── Vertex buffer ──────────────────────────────────────────────────────────
-    vps = 1 + EL * AZ + 1    # verts per stone
+    vps = 1 + EL * AZ + 1    # verts per rock
     fps = AZ + AZ * (EL - 1) * 2 + AZ
 
     all_verts = np.empty((N * vps, 3), dtype=float)
@@ -179,15 +179,15 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
     wz = (base_z[:, None, None] +
           height[:, None, None] * z_off[None, :, None]) + np.zeros((1, 1, AZ))
 
-    mean_r = 0.5 * (rx_arr + ry_arr)                       # (N,) per-stone scale
+    mean_r = 0.5 * (rx_arr + ry_arr)                       # (N,) per-rock scale
 
-    # ── Plane cuts: slice random chunks off each stone ────────────────────────
+    # ── Plane cuts: slice random chunks off each rock ─────────────────────────
     # For each cut, project vertices past a random half-plane back onto it.
     # Normals are biased horizontal so cuts create side-face chunks, not
     # slices off the top.
-    n_cuts = stones.n_cuts
+    n_cuts = rocks.n_cuts
     if n_cuts > 0:
-        # Local coords relative to stone base-centre (so centre = 0,0,0)
+        # Local coords relative to rock base-centre (so centre = 0,0,0)
         lx_v = wx - cx[:, None, None]   # (N, EL, AZ)
         ly_v = wy - cy[:, None, None]
         lz_v = wz - base_z[:, None, None]
@@ -197,7 +197,7 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
         raw[:, :, 2] = np.abs(raw[:, :, 2]) * 0.3      # mostly horizontal cuts
         norms = raw / (np.linalg.norm(raw, axis=-1, keepdims=True) + 1e-8)
 
-        cut_d = (rng.uniform(stones.cut_min, stones.cut_max, (N, n_cuts))
+        cut_d = (rng.uniform(rocks.cut_min, rocks.cut_max, (N, n_cuts))
                  * mean_r[:, None])                     # (N, n_cuts) in mm
 
         for k in range(n_cuts):
@@ -227,14 +227,14 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
         all_verts[apex_idx, 2] = base_z + apex_pts[:, 2]
 
     # ── Residual roughness: tiny per-vertex noise to break perfect flat faces ─
-    if stones.roughness > 0.0:
-        scale = (stones.roughness * mean_r)[:, None, None]
+    if rocks.roughness > 0.0:
+        scale = (rocks.roughness * mean_r)[:, None, None]
         wx += scale * rng.uniform(-1.0, 1.0, wx.shape)
         wy += scale * rng.uniform(-1.0, 1.0, wy.shape)
         wz += scale * 0.4 * rng.uniform(-1.0, 1.0, wz.shape)
 
-    # ── Slope rotation: align stone with terrain normal ───────────────────────
-    # Rotate the local offset of every ring vertex and the apex so the stone
+    # ── Slope rotation: align rock with terrain normal ────────────────────────
+    # Rotate the local offset of every ring vertex and the apex so the rock
     # sits flush on the slope rather than intersecting it.  The base-centre
     # vertex (bot_idx) is the pivot and needs no rotation.
     if np.any(_ns2 > 1e-9):
@@ -283,14 +283,14 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
         canon.append([last_ring + ai, bot_local, last_ring + (ai + 1) % AZ])
 
     canon_faces = np.array(canon, dtype=np.int32)
-    stone_bases = (np.arange(N) * vps).astype(np.int32)
+    rock_bases  = (np.arange(N) * vps).astype(np.int32)
     all_faces   = (canon_faces[None, :, :] +
-                   stone_bases[:, None, None]).reshape(-1, 3)
+                   rock_bases[:, None, None]).reshape(-1, 3)
 
     mesh = trimesh.Trimesh(vertices=all_verts, faces=all_faces, process=False)
     mesh.fix_normals()
 
-    # ── Rasterise stone tops into support_z ───────────────────────────────────
+    # ── Rasterise rock tops into support_z ────────────────────────────────────
     cw = surface.cell_w
     ch = surface.cell_w
     gw = surface.grid_w
@@ -329,7 +329,7 @@ def _build_stones_mesh(surface: SurfaceConfig, stones: StonesConfig,
         sl = support_z[j_lo:j_hi + 1, i_lo:i_hi + 1]
         np.maximum(sl, z_top, out=sl)
 
-        if stone_mask is not None:
-            stone_mask[j_lo:j_hi + 1, i_lo:i_hi + 1] |= inside
+        if rock_mask is not None:
+            rock_mask[j_lo:j_hi + 1, i_lo:i_hi + 1] |= inside
 
     return mesh
