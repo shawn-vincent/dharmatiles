@@ -18,12 +18,12 @@ generate-tile-stl
 # Common flags
 generate-tile-stl --seed 42
 generate-tile-stl --cols 3 --rows 3
-generate-tile-stl --spec "src/tiles/soil+grass.tile"
-generate-tile-stl --spec "src/tiles/water+grass.tile"
+generate-tile-stl --spec "src/tiles/soil+grass.tile.py"
+generate-tile-stl --spec "src/tiles/water+grass.tile.py"
 generate-tile-stl --quiet   # suppress progress output
 
 # Run a single script directly (no install needed)
-python -m dharmatiles.terrains.tile --spec "src/tiles/soil+grass.tile"
+python -m dharmatiles.terrains.tile --spec "src/tiles/soil+grass.tile.py"
 ```
 
 There are no automated tests; correctness is verified by opening the STL in PrusaSlicer, MeshLab, or Windows 3D Builder and visually inspecting the coloured mesh.
@@ -33,10 +33,10 @@ There are no automated tests; correctness is verified by opening the STL in Prus
 **After every code change, regenerate STLs before finishing**, unless the user explicitly says otherwise.
 
 - **Never pass `-o` / `--output`** — let each spec write to its default path.
-- For tile terrain / layers / core changes: regenerate **all** `.tile` specs:
+- For tile terrain / layers / core changes: regenerate **all** `.tile.py` specs:
 
 ```bash
-for spec in src/tiles/*.tile; do generate-tile-stl --spec "$spec"; done
+for spec in src/tiles/*.tile.py; do generate-tile-stl --spec "$spec"; done
 ```
 
 - For the default tile path only: `generate-tile-stl`
@@ -61,7 +61,7 @@ Three-tier hierarchy; these names are enforced throughout the codebase:
 ### Generation Pipeline (in order)
 
 ```
-TileSpec (YAML) ──► build_tile_from_spec()
+TileSpec (.tile.py) ──► build_tile_from_spec()
                           │
                           ▼
               region mask (flood-fill from boundary curves)
@@ -98,7 +98,7 @@ TileSpec (YAML) ──► build_tile_from_spec()
 | File | Role |
 |---|---|
 | `core/config.py` | All config dataclasses: `SceneConfig`, `SurfaceConfig`, `FlowConfig`, `GrassConfig`, `SoilConfig`, `StonesConfig`, `BaseConfig`, `SolverConfig` |
-| `core/spec.py` | `TileSpec` dataclasses + YAML/.tile.py loader |
+| `core/spec.py` | `TileSpec` dataclasses + `.tile.py` loader |
 | `core/tile.py` | `TileScene` accumulator + `make_xy_grids` |
 | `core/region.py` | Boundary path generation, Bresenham rasterisation, BFS flood fill |
 | `core/flow.py` | Analytic flow fields (linear/swirl/radial/drain/dipole/random-zones/curl) |
@@ -109,20 +109,32 @@ TileSpec (YAML) ──► build_tile_from_spec()
 | `layers/stones.py` | Random cut half-ellipsoid stones |
 | `layers/grass.py` | Segment-by-segment blade growth with obstacle steering |
 | `layers/water.py` | Water layer (placeholder; dry riverbed mode active) |
-| `terrains/tile.py` | Entry point; `build_tile()` (flags) and `build_tile_from_spec()` (YAML) |
+| `terrains/tile.py` | Entry point; `build_tile()` (flags) and `build_tile_from_spec()` |
 
 `core/` modules are pure primitives (array in / array out). `layers/` modules implement the `.build(scene)` interface. `terrains/` modules are entry points that assemble layers into a full pipeline.
 
-### Tile Spec Format (`.tile` files)
+### Tile Spec Format (`.tile.py` files)
 
-YAML files in `src/tiles/`. Two region types drive the pipeline:
+Python files in `src/tiles/`. Each file builds and binds a `TileSpec` to the
+module-level name `tile`. All types are importable from `dharmatiles.core.spec`:
+
+```python
+from dharmatiles.core.spec import (
+    TileSpec, RegionSpec, LayerSpec,
+    BoundarySpec, BoundaryLayerSpec,
+    SurfaceConfig,
+)
+```
+
+Two region types drive the pipeline:
 - **`grass`** — vegetated ground at 5 mm default height
 - **`water`** — pool at 3 mm default height (2 mm depression); currently renders as dry riverbed with sloped soil bed
 - **`soil`** — bare ground (no layers specified)
 
-Boundaries are curves from one tile edge to another. `width_mm: 0` = zero-width dividing line; `width_mm > 0` = physical slope strip. The shoreline strip height is interpolated via IDW blend + smoothstep slope.
+Boundaries are curves from one tile edge to another. `width_mm=0` = zero-width dividing line; `width_mm > 0` = physical slope strip. The shoreline strip height is interpolated via IDW blend + smoothstep slope.
 
-A `.tile.py` Python escape hatch is also supported — the file must bind a `TileSpec` to the name `tile`.
+Tile files may freely use imports, helper functions, calculations, shared constants,
+and composition. The pipeline only consumes the final `TileSpec` object.
 
 ### Colour Encoding
 
@@ -164,7 +176,7 @@ src/dharmatiles/
   core/          pure primitives (config, spec, tile, region, flow, mesh, grid, seed)
   layers/        grass.py, soil.py, stones.py, water.py
   terrains/      tile.py (main entry point)
-src/tiles/       .tile spec files (YAML)
+src/tiles/       .tile.py spec files (Python)
 src/scripts/     standalone utilities; src/scripts/archived/ = old generations
 src/scad/        OpenSCAD files and experiments
 stl/             generated STL output (committed)

@@ -4,15 +4,15 @@ Grass tile generator: soil + stones + grass blades on a DungeonBlocks base.
 Usage
 ─────
     generate-tile-stl
-        Batch mode: process every *.tile file under src/tiles/ and write
+        Batch mode: process every *.tile.py file under src/tiles/ and write
         outputs to stl/dungeonblocks/ and stl/openlock/ with names like
         1x1-soil+grass-db.stl / 1x1-soil+grass-ol.stl.
         Sub-directories under src/tiles/ are mirrored in the output trees.
 
-    generate-tile-stl --spec "src/tiles/soil+grass.tile"
+    generate-tile-stl --spec "src/tiles/soil+grass.tile.py"
         Single tile: same naming and directory conventions as batch.
 
-    generate-tile-stl --spec src/tiles/foo.tile -o stl/custom.stl
+    generate-tile-stl --spec src/tiles/foo.tile.py -o stl/custom.stl
         Single tile, explicit output path.
 """
 from __future__ import annotations
@@ -736,12 +736,12 @@ def _build_spec_all_sizes(spec: TileSpec,
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Generate terrain tile STLs from .tile spec files.",
+        description="Generate terrain tile STLs from .tile.py spec files.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument("--spec", "-s", type=pathlib.Path, default=None,
                    metavar="FILE",
-                   help="YAML (or .tile.py) tile spec.  Omit to process all src/tiles/")
+                   help=".tile.py Python spec.  Omit to process all src/tiles/")
     p.add_argument("--output", "-o", type=pathlib.Path,
                    default=None,
                    help="Override output path (requires --spec).  "
@@ -769,9 +769,9 @@ def main(argv=None):
         return
 
     # ── Batch mode ────────────────────────────────────────────────────────────
-    specs = sorted(TILES_ROOT.rglob("*.tile"))
+    specs = sorted(TILES_ROOT.rglob("*.tile.py"))
     if not specs:
-        print(f"No .tile files found under {TILES_ROOT}/  "
+        print(f"No .tile.py files found under {TILES_ROOT}/  "
               f"(pass --spec FILE to target a specific tile)")
         return
     import time as _time

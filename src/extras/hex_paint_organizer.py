@@ -24,6 +24,7 @@ class HexOrganizerSpec:
     base: float = 1.0             # solid base below retaining recess
     magnet_dia: float = 10.0      # magnet disc diameter
     magnet_depth: float = 3.0     # magnet disc thickness / bore depth
+    retaining_bevel: float = 1.0      # chamfer height at top of retaining ring to ease tube insertion
     bottom_roundover: float = 1.0    # convex roundover radius on bottom perimeter edge
     vertical_roundover: float = 8.0  # convex outside vertical edge roundover radius
     cols: int = 3
@@ -92,7 +93,15 @@ def single_cup(spec: HexOrganizerSpec) -> m3d.Manifold:
         depression = hex_prism(spec.retaining_f2f, spec.floor - spec.base)
     depression = depression.translate((0.0, 0.0, spec.base))
 
-    return outer - bore - depression
+    # Bevel at the top of the retaining ring: taper from retaining_f2f at the
+    # bottom up to bore_f2f at the top so paint tubes slide in without catching.
+    bevel_h = min(spec.retaining_bevel, spec.floor - spec.base - 0.1)
+    bevel_cs = m3d.CrossSection([hex_polygon(spec.retaining_f2f)])
+    bevel_scale = spec.bore_f2f / spec.retaining_f2f
+    entry_bevel = m3d.Manifold.extrude(bevel_cs, bevel_h, scale_top=(bevel_scale, bevel_scale))
+    entry_bevel = entry_bevel.translate((0.0, 0.0, spec.floor - bevel_h))
+
+    return outer - bore - depression - entry_bevel
 
 
 # ---------------------------------------------------------------------------

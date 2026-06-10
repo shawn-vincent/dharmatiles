@@ -1,9 +1,15 @@
 """
-TileSpec: dataclasses for the YAML tile specification format, plus loader.
+TileSpec: dataclasses for the Python tile specification format, plus loader.
 
-A .tile file is a YAML document that describes surface dimensions, named
-regions, and the boundaries between them.  Loaded into a TileSpec, it drives
-``build_tile_from_spec()`` in ``dharmatiles.terrains.tile``.
+A .tile.py file is executed as Python; it must bind a module-level variable
+named ``tile`` to a TileSpec instance.  All types needed to build a spec are
+importable from this module::
+
+    from dharmatiles.core.spec import (
+        TileSpec, RegionSpec, LayerSpec,
+        BoundarySpec, BoundaryLayerSpec,
+        SurfaceConfig,
+    )
 
 Height defaults by layer type
 ------------------------------
@@ -16,12 +22,6 @@ boundary slope interpolates between them.
     floor         → 10.0 mm   (raised masonry / dungeon floor)
 
 Override ``height_mm`` on the region to depart from the default.
-
-Python escape hatch
--------------------
-A .tile.py file is executed as Python; it must bind a module-level variable
-named ``tile`` to a TileSpec instance.  All TileSpec dataclasses are
-importable from ``dharmatiles.core.spec``.
 """
 from __future__ import annotations
 
@@ -30,6 +30,14 @@ from pathlib import Path
 from typing import Any
 
 from .config import SurfaceConfig
+
+# Re-export SurfaceConfig so tile files need only one import.
+__all__ = [
+    'TileSpec', 'RegionSpec', 'LayerSpec',
+    'BoundarySpec', 'BoundaryLayerSpec',
+    'SurfaceConfig',
+    'HEIGHT_DEFAULTS',
+]
 
 
 # ── Height defaults by layer type ─────────────────────────────────────────────
@@ -121,130 +129,19 @@ class TileSpec:
     #   variants: [{size: 3x3, seed: 99, groups_per_square: 180}]
 
 
-# ── Size string helpers ───────────────────────────────────────────────────────
-
-def _parse_size_string(s: str) -> tuple[int, int]:
-    """Parse ``'2x3'`` or ``'2X3'`` → ``(2, 3)``."""
-    parts = str(s).lower().split('x')
-    if len(parts) != 2:
-        raise ValueError(
-            f"Invalid size string {s!r} — expected NxM format (e.g. '1x1', '3x3')"
-        )
-    try:
-        return (int(parts[0]), int(parts[1]))
-    except ValueError:
-        raise ValueError(
-            f"Invalid size string {s!r} — N and M must be integers"
-        )
-
-
-# ── YAML loader ───────────────────────────────────────────────────────────────
+# ── Loader ────────────────────────────────────────────────────────────────────
 
 def load_spec(path: Path) -> TileSpec:
-    """Load a .tile (YAML) or .tile.py (Python) file and return a TileSpec."""
+    """Load a .tile.py Python spec file and return a TileSpec."""
     path = Path(path)
-    if path.suffix == '.py':
-        return _load_python_spec(path)
-    return _load_yaml_spec(path)
-
-
-def _load_yaml_spec(path: Path) -> TileSpec:
-    import yaml
-    with open(path) as fh:
-        data = yaml.safe_load(fh)
-    return _parse(data)
-
-
-def _load_python_spec(path: Path) -> TileSpec:
+    if path.suffix != '.py':
+        raise ValueError(
+            f"{path}: only .tile.py Python specs are supported "
+            f"(YAML .tile files have been retired)."
+        )
     ns: dict[str, Any] = {}
     exec(compile(path.read_text(), path, 'exec'), ns)
     spec = ns.get('tile')
     if not isinstance(spec, TileSpec):
         raise ValueError(f"{path}: Python spec must bind a TileSpec to 'tile'")
     return spec
-
-
-def _parse(data: dict) -> TileSpec:
-    # ── Surface ───────────────────────────────────────────────────────────────
-    s = data.get('surface', {})
-    _surface_defaults = SurfaceConfig()
-
-    # ── Sizes: parse 'sizes' list, 'size' singular, or legacy 'cols'/'rows' ──
-    if 'sizes' in s:
-        sizes: list[tuple[int, int]] = [_parse_size_string(sz) for sz in s['sizes']]
-    elif 'size' in s:
-        sizes = [_parse_size_string(s['size'])]
-    elif 'cols' in s or 'rows' in s:
-        sizes = [(int(s.get('cols', 1)), int(s.get('rows', 1)))]
-    else:
-        sizes = [(1, 1)]
-
-    first_cols, first_rows = sizes[0]
-
-    surface = SurfaceConfig(
-        cols            = first_cols,
-        rows            = first_rows,
-        cells_per_square= s.get('cells_per_square', _surface_defaults.cells_per_square),
-        base_h          = s.get('base_h',           _surface_defaults.base_h),
-        seed            = s.get('seed',             _surface_defaults.seed),
-        flat_terrain    = s.get('flat_terrain',     _surface_defaults.flat_terrain),
-        terrain_simplify_threshold = s.get(
-            'terrain_simplify_threshold',
-            _surface_defaults.terrain_simplify_threshold),
-        terrain_simplify_stride    = s.get(
-            'terrain_simplify_stride',
-            _surface_defaults.terrain_simplify_stride),
-    )
-
-    # ── Regions ───────────────────────────────────────────────────────────────
-    regions: list[RegionSpec] = []
-    for rid, rdata in data.get('regions', {}).items():
-        layers = [
-            LayerSpec(type=str(ld.pop('type')), params=dict(ld))
-            for ld in [dict(l) for l in rdata.get('layers', [])]
-        ]
-        regions.append(RegionSpec(
-            id        = rid,
-            contains  = tuple(rdata['contains']),
-            layers    = layers,
-            height_mm = rdata.get('height_mm'),
-        ))
-
-    # ── Boundaries ────────────────────────────────────────────────────────────
-    boundaries: list[BoundarySpec] = []
-    for bid, bdata in data.get('boundaries', {}).items():
-        width_mm  = float(bdata.get('width_mm', 0.0))
-        bnd_layers: list[BoundaryLayerSpec] = []
-        if 'layer' in bdata:
-            ld = bdata['layer']
-            if 'width_mm' in ld:
-                raise ValueError(
-                    f"Boundary '{bid}': put width_mm on the boundary, "
-                    f"not inside its layer."
-                )
-            params = dict(ld)
-            layer_type = str(params.pop('type', 'soil'))
-            bnd_layers.append(BoundaryLayerSpec(type=layer_type, params=params))
-        for raw_layer in bdata.get('layers', []):
-            ld = dict(raw_layer)
-            if 'width_mm' in ld:
-                raise ValueError(
-                    f"Boundary '{bid}': put width_mm on the boundary, "
-                    f"not inside its layers."
-                )
-            layer_type = str(ld.pop('type'))
-            bnd_layers.append(BoundaryLayerSpec(type=layer_type, params=ld))
-        boundaries.append(BoundarySpec(
-            id              = bid,
-            from_anchor     = (bdata['from']['edge'], float(bdata['from']['t'])),
-            to_anchor       = (bdata['to']['edge'],   float(bdata['to']['t'])),
-            path            = bdata.get('path', 'organic'),
-            amplitude_mm    = float(bdata.get('amplitude_mm', 3.6)),
-            wavelength_mm   = float(bdata.get('wavelength_mm', 10.0)),
-            detail_fraction = float(bdata.get('detail_fraction', 0.25)),
-            seed_offset     = int(bdata.get('seed_offset', 0)),
-            width_mm        = width_mm,
-            layers          = bnd_layers,
-        ))
-
-    return TileSpec(surface=surface, regions=regions, boundaries=boundaries, sizes=sizes)
