@@ -26,7 +26,8 @@ import trimesh
 from scipy.ndimage import binary_dilation, binary_erosion, distance_transform_edt
 
 from ..core.config import (SceneConfig, SurfaceConfig, FlowConfig,
-                           SoilConfig, StonesConfig, BaseConfig, GrassUnderlayConfig)
+                           SoilConfig, StonesConfig, BaseConfig,
+                           GrassUnderlayConfig, SpeciesConfig, GrassConfig as RuntimeGrassConfig)
 from ..core.tile import TileScene
 from ..core.mesh import make_heightmap_solid
 from ..core.spec import TileSpec, load_spec
@@ -36,7 +37,6 @@ from ..layers.soil import SoilLayer
 from ..layers.stones import StonesLayer
 from ..layers.grass import FloppyGrassLayer
 from ..layers.grass_underlay import GrassUnderlayLayer
-from ..grass.config import GrassConfig as RuntimeGrassConfig, SpeciesConfig
 # from ..layers.grass import GrassLayer
 from ..layers.water import make_water_displacement, make_water_ripple_displacement, make_water_volume, WATER_RENDER_LIFT_MM
 
@@ -634,17 +634,34 @@ def _collect_grass_configs(
 ) -> list[tuple[SpeciesConfig, np.ndarray | None]]:
     """Return ``(SpeciesConfig, placement_mask)`` pairs for each grass layer.
 
-    Placement masks restrict seeding to each region's cells so that a spec
-    with two grass regions using different species keeps them separated.
-    Grass is not collected from boundary specs (boundaries have no grass layer
-    type currently).
+    Blade geometry can be supplied as:
+
+    * a ``SpeciesConfig`` instance —
+      ``LayerSpec(type='grass', params=dict(species=my_species))``
+    * flat ``blade_*`` kwargs —
+      ``LayerSpec(type='grass', params=dict(groups_per_square=24, ...))``
+    * any mix: ``species=`` sets the base; extra flat kwargs override it.
+
+    Grass is not collected from boundary specs.
     """
-    return _collect_layers(           # type: ignore[return-value]
-        spec, region_mask,
-        layer_types={'grass'},
-        cfg_class=SpeciesConfig,
-        include_boundaries=False,
-    )
+    _default = SpeciesConfig()
+    _fields  = {f.name for f in dataclasses.fields(SpeciesConfig)}
+    result: list[tuple[SpeciesConfig, np.ndarray | None]] = []
+
+    for idx, region in enumerate(spec.regions):
+        for layer in region.layers:
+            if layer.type == 'grass':
+                mask = (region_mask == idx) if region_mask is not None else None
+                params = dict(layer.params)
+                base   = params.pop('species', _default)
+                if not isinstance(base, SpeciesConfig):
+                    raise TypeError(
+                        f"grass layer 'species' must be a SpeciesConfig, got {type(base)!r}"
+                    )
+                overrides = {k: v for k, v in params.items() if k in _fields}
+                species   = dataclasses.replace(base, **overrides) if overrides else base
+                result.append((species, mask))
+    return result
 
 
 def _collect_soil_layers(
@@ -663,13 +680,48 @@ def _collect_grass_underlay_layers(
     spec: TileSpec,
     region_mask: np.ndarray | None,
 ) -> list[tuple[GrassUnderlayConfig, np.ndarray | None]]:
-    """Return one ``(GrassUnderlayConfig, placement_mask)`` pair per grass_underlay layer."""
-    return _collect_layers(           # type: ignore[return-value]
-        spec, region_mask,
-        layer_types={'grass_underlay'},
-        cfg_class=GrassUnderlayConfig,
-        include_boundaries=False,
-    )
+    """Return one ``(GrassUnderlayConfig, placement_mask)`` pair per grass_underlay layer.
+
+    Blade geometry can be supplied in three ways (identical to
+    ``_collect_grass_configs``):
+
+    * ``species=SpeciesConfig(...)`` — pass the species object directly.
+      Share the same instance with the companion ``grass`` layer to guarantee
+      that 2D stamps and 3D blades use identical geometry.
+    * Flat ``blade_*`` / placement kwargs — folded into a ``SpeciesConfig``.
+    * Mix: ``species=`` sets the base; flat kwargs override specific fields.
+
+    Underlay-specific params (``noise_*``, ``blade_raise_mm``,
+    ``stamp_min_taper``, ``edge_fade_mm``) are always flat kwargs on
+    ``GrassUnderlayConfig``.
+    """
+    _u_fields = {f.name for f in dataclasses.fields(GrassUnderlayConfig)
+                 if f.name != 'species'}
+    _s_fields = {f.name for f in dataclasses.fields(SpeciesConfig)}
+    _default_u = GrassUnderlayConfig()
+    _default_s = SpeciesConfig()
+    result: list[tuple[GrassUnderlayConfig, np.ndarray | None]] = []
+
+    for idx, region in enumerate(spec.regions):
+        for layer in region.layers:
+            if layer.type == 'grass_underlay':
+                mask   = (region_mask == idx) if region_mask is not None else None
+                params = dict(layer.params)
+
+                # Partition params: underlay-specific vs species (blade geometry).
+                u_over = {k: v for k, v in params.items() if k in _u_fields}
+                s_over = {k: v for k, v in params.items() if k in _s_fields}
+
+                base_s = params.get('species', _default_s)
+                if not isinstance(base_s, SpeciesConfig):
+                    raise TypeError(
+                        f"grass_underlay layer 'species' must be a SpeciesConfig, "
+                        f"got {type(base_s)!r}"
+                    )
+                species = dataclasses.replace(base_s, **s_over) if s_over else base_s
+                cfg     = dataclasses.replace(_default_u, species=species, **u_over)
+                result.append((cfg, mask))
+    return result
 
 
 def _collect_stones_layers(

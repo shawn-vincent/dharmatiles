@@ -1,9 +1,24 @@
 # grass.tile.py
 #
 # One full 1×1 grass region. Grass underlay provides embossed ground texture.
+#
+# A single SpeciesConfig drives both the 2D underlay stamps and the 3D blades,
+# guaranteeing the two passes use identical blade geometry.
 
 from dharmatiles.core.spec import (
-    TileSpec, RegionSpec, LayerSpec, SurfaceConfig,
+    TileSpec, RegionSpec, LayerSpec, SurfaceConfig, SpeciesConfig,
+)
+
+# Non-default blade geometry for this meadow.
+# All omitted fields use SpeciesConfig defaults.
+_meadow = SpeciesConfig(
+    groups_per_square=3,
+    group_dir_jitter=0,
+    blade_length_min=15,
+    blade_length_max=15,
+    blade_curl_min=0.5,
+    blade_curl_max=0.8,
+    blade_clearance=0.2,
 )
 
 tile = TileSpec(
@@ -14,27 +29,8 @@ tile = TileSpec(
             id='meadow',
             contains=(0.5, 0.5),
             layers=[
-                LayerSpec(type='grass_underlay'),
-                LayerSpec(type='grass', params=dict(
-                    groups_per_square=3,
-                    group_dir_jitter=0,
-                    blade_width_min=1.2,
-                    blade_width_max=1.2,
-                    blade_length_min=15,
-                    blade_length_max=15,
-                    blade_segment_length=0.5,
-                    blade_curl_min=0.5,
-                    blade_curl_max=0.8,
-                    blade_smooth=0.9,
-                    blade_rise_cap=2.0,
-                    blade_clearance=0.2,
-                    blade_top_facets=6,
-                    blade_thickness=0.6,
-                    blade_taper=1,
-                    blade_base_width=1.0,
-                    blade_base_taper=0,
-                    keel_fraction=0.6,
-                )),
+                LayerSpec(type='grass_underlay', params=dict(species=_meadow)),
+                LayerSpec(type='grass',          params=dict(species=_meadow)),
             ],
         ),
     ],

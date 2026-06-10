@@ -29,13 +29,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .config import SurfaceConfig
+from .config import SurfaceConfig, SpeciesConfig
 
-# Re-export SurfaceConfig so tile files need only one import.
+# Re-export so tile files need only one import line.
 __all__ = [
     'TileSpec', 'RegionSpec', 'LayerSpec',
     'BoundarySpec', 'BoundaryLayerSpec',
-    'SurfaceConfig',
+    'SurfaceConfig', 'SpeciesConfig',
     'HEIGHT_DEFAULTS',
 ]
 

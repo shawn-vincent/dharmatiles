@@ -24,9 +24,8 @@ import math
 import numpy as np
 from scipy.ndimage import distance_transform_edt, gaussian_filter
 
-from ..core.config import GrassUnderlayConfig
+from ..core.config import GrassConfig as _RuntimeGrassConfig, GrassUnderlayConfig
 from ..core.tile import TileScene
-from ..grass.config import GrassConfig as _RuntimeGrassConfig, SpeciesConfig as _SpeciesConfig
 from ..grass.grow import plant_seeds as _plant_seeds
 from ..grass.seed import GrassSeed
 
@@ -143,27 +142,8 @@ def _collect_seeds(
     rng: np.random.Generator,
 ) -> list[GrassSeed]:
     """Plant blade seeds using the same Voronoi-group logic as the 3D layer."""
-    # Build a minimal SpeciesConfig from the underlay blade-geometry fields.
-    # Fields not relevant to 2D stamping (blade_top_facets, min_printable_width,
-    # blade_rise_cap, blade_clearance, grower) are left at their SpeciesConfig
-    # defaults — they don't affect seed placement or stamp shape.
-    species = _SpeciesConfig(
-        blade_width_min=cfg.blade_width_min,
-        blade_width_max=cfg.blade_width_max,
-        blade_length_min=cfg.blade_length_min,
-        blade_length_max=cfg.blade_length_max,
-        blade_segment_length=cfg.blade_segment_length,
-        blade_taper=cfg.blade_taper,
-        blade_base_width=cfg.blade_base_width,
-        blade_base_taper=cfg.blade_base_taper,
-        blade_curl_min=cfg.blade_curl_min,
-        blade_curl_max=cfg.blade_curl_max,
-        blade_thickness=cfg.blade_thickness,
-        groups_per_square=cfg.groups_per_square,
-        gap_mm=cfg.gap_mm,
-    )
     grass_cfg = _RuntimeGrassConfig(
-        species=[species],
+        species=[cfg.species],
         seed=int(rng.integers(2**31)),
     )
 
