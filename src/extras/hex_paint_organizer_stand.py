@@ -1,19 +1,29 @@
 #!/usr/bin/env python3
-"""Generate a stand STL by chopping the Hexpaint organizer with a flat cut.
+"""Generate a stand STL — a small slab matching the top of the Hex paint organizer.
 
-Build the full organizer, then keep only the slab with y >= cut_y.  The
-default cut passes through the centre y of the topmost cup in the
-upward-staggered columns (cols 1, 3 in the default 4-col layout), so:
+Built from scratch in the stand's own coordinate frame (not by chopping a full
+organizer build):
 
-    col 0  →  thin top-edge strip      (~0.5 mm of y left)
-    col 1  →  half hexagon              (top half of the topmost outer hex)
-    col 2  →  thin top-edge strip
-    col 3  →  half hexagon
+    +X  left → right across the desk (column direction, same as organizer)
+    +Y  back → front depth (cup-axis direction; was organizer's +Z)
+    +Z  up — vertical, gravity = −Z   (was organizer's +Y)
 
-Two and a half to three hexagons per column are erased.  All organizer
-features above the cut are preserved (vertical roundover, bottom-edge
-roundover, base, retaining recesses, any logos/bevels, and the (col 0,2
-row 2, +y face) magnet pockets if they survive the slice).
+The cut plane lands on **z = 0** (the stand sits on its cut face on the desk).
+Hex outlines stand vertically in the XZ plane and extrude along +Y.
+
+For the default 4×3 organizer the surviving geometry is:
+
+    cols 0, 2  →  thin top-edge strip       (≈0.5 mm of z above cut)
+    cols 1, 3  →  upper half of the topmost cup, including its bore, retaining
+                  depression and entry bevel
+
+Of the 8 organizer magnet pockets, only the two top-flat (90°) pockets on
+(col=0, top_row) and (col=2, top_row) sit above the cut.  They survive as
+shallow (~1 mm) divots on the underside of the stand — not functional retainers,
+just the honest cut-off cross-section.
+
+Intentionally minimal: no logos, no roundovers, no origin dent.  Add
+stand-specific features here as the design evolves.
 """
 from __future__ import annotations
 
@@ -28,16 +38,18 @@ import trimesh
 sys.path.insert(0, str(Path(__file__).parent))
 from hex_paint_organizer import (  # noqa: E402
     HexOrganizerSpec,
-    build_organizer,
+    _magnet_pocket,
     cup_centre,
+    single_cup,
 )
 
 
 @dataclass(frozen=True)
 class HexStandSpec:
     organizer: HexOrganizerSpec = field(default_factory=HexOrganizerSpec)
-    # cut_y: if None, compute from the organizer geometry (centre y of the
-    # topmost cup in the upward-staggered column, i.e. col 1).
+    # cut_y is in the *organizer's* Y axis (row direction).  The stand's z=0
+    # plane corresponds to this value.  None → centre y of the topmost cup in
+    # the upward-staggered column (col=1, top row).
     cut_y: float | None = None
 
 
@@ -60,22 +72,52 @@ def _y_halfspace_block(cut_y: float, bb) -> m3d.Manifold:
 
 
 def build_stand(stand: HexStandSpec) -> m3d.Manifold:
-    org = stand.organizer
-    body = build_organizer(org)
+    """Return the stand in its own frame: cut face on z=0, cup-axis along +Y."""
+    spec = stand.organizer
+    cut_y = stand.cut_y if stand.cut_y is not None else _default_cut_y(spec)
 
-    cut_y = stand.cut_y if stand.cut_y is not None else _default_cut_y(org)
-    return body ^ _y_halfspace_block(cut_y, body.bounding_box())
+    # Construction frame matches the organizer's XYZ (X=cols, Y=rows, Z=cup-axis).
+    # Only the topmost row of cups can survive a cut at cut_y — build just that row,
+    # not the full organizer.
+    top_row = spec.rows - 1
+    cup = single_cup(spec)
+    cups = [cup.translate((*cup_centre(spec, col, top_row), 0.0))
+            for col in range(spec.cols)]
+    body = cups[0]
+    for c in cups[1:]:
+        body = body + c
+
+    # Of the 8 organizer magnets, only the two 90° top-flats on (col=0, top_row)
+    # and (col=2, top_row) survive the cut.
+    for col in (0, 2):
+        if col >= spec.cols:
+            continue
+        cx, cy = cup_centre(spec, col, top_row)
+        body = body - _magnet_pocket(cx, cy, 90.0, spec)
+
+    # Drop everything below the cut.
+    body = body ^ _y_halfspace_block(cut_y, body.bounding_box())
+
+    # Reframe into stand coordinates:
+    #   rotate +90° about +X:  (x, y, z) → (x, -z, y)
+    #     → construction Y (rows) becomes stand Z (vertical)
+    #     → construction Z (cup-axis) becomes stand Y (depth)
+    #   translate so the cut face lands on z=0 and the slab sits at y ≥ 0.
+    body = body.rotate([90.0, 0.0, 0.0])
+    body = body.translate([0.0, spec.outer_wall_height, -cut_y])
+
+    return body
 
 
 def main() -> None:
     stand = HexStandSpec()
-    org = stand.organizer
-    cut_y = stand.cut_y if stand.cut_y is not None else _default_cut_y(org)
+    spec = stand.organizer
+    cut_y = stand.cut_y if stand.cut_y is not None else _default_cut_y(spec)
 
-    print(f"Building hex organizer stand by chopping the organizer")
-    print(f"  cut at y = {cut_y:.2f} mm  (col-1 row-{org.rows - 1} centre)")
-    print(f"  half-hex columns: 1, 3  (each contributes the top half of one outer hex)")
-    print(f"  edge-strip columns: 0, 2  (each contributes a thin top strip in y)")
+    print("Building hex organizer stand (from-scratch, stand frame)")
+    print(f"  cut at organizer y = {cut_y:.2f} mm  (col-1 row-{spec.rows - 1} centre)")
+    print(f"  cols 0, 2 → top strips;  cols 1, 3 → upper half-hexes")
+    print(f"  magnets: (0, {spec.rows - 1}, 90°) and (2, {spec.rows - 1}, 90°) → shallow divots on cut face")
 
     manifold = build_stand(stand)
     raw = manifold.to_mesh()
