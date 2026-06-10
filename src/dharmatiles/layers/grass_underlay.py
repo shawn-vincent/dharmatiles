@@ -142,10 +142,7 @@ def _collect_seeds(
     rng: np.random.Generator,
 ) -> list[GrassSeed]:
     """Plant blade seeds using the same Voronoi-group logic as the 3D layer."""
-    grass_cfg = _RuntimeGrassConfig(
-        species=[cfg.species],
-        seed=int(rng.integers(2**31)),
-    )
+    grass_cfg = _RuntimeGrassConfig(species=[cfg.species])
 
     # Ensure vegetation_support_z is current so planting respects the post-soil
     # terrain height (no prior vegetation stacked above it yet).
