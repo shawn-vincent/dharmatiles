@@ -35,9 +35,11 @@ Example::
 """
 from __future__ import annotations
 
+import importlib.util
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar, Protocol
+from typing import ClassVar, Protocol
 
 import numpy as np
 import trimesh
@@ -131,15 +133,44 @@ class Tile:
 
 
 def load_spec(path: Path) -> Tile:
-    """Load a .tile.py Python spec file and return a Tile."""
-    path = Path(path)
+    """Load a ``.tile.py`` Python spec file and return its ``Tile``.
+
+    The spec is loaded as a real Python module via ``importlib`` (not
+    ``exec()``) so that:
+
+    - the module appears in ``sys.modules`` and stack traces show its
+      filename;
+    - the spec file can ``import`` sibling helper modules from the same
+      directory, e.g. ``from _shared import SHARED_SPECIES``;
+    - tooling that introspects modules (debuggers, IDEs) sees the spec
+      the way it sees any other Python file.
+
+    The spec's containing directory is added to ``sys.path`` so plain
+    absolute imports against sibling files resolve.  The module name is
+    derived from the resolved path (sanitised for the few characters
+    Python forbids in module names — ``+``, ``.``, etc.).
+    """
+    path = Path(path).resolve()
     if path.suffix != '.py':
         raise ValueError(
             f"{path}: only .tile.py Python specs are supported."
         )
-    ns: dict[str, Any] = {}
-    exec(compile(path.read_text(), path, 'exec'), ns)
-    spec = ns.get('tile')
-    if not isinstance(spec, Tile):
+
+    parent = str(path.parent)
+    if parent not in sys.path:
+        sys.path.insert(0, parent)
+
+    mod_name = '_dharmatiles_spec_' + ''.join(
+        c if c.isalnum() else '_' for c in str(path)
+    )
+    py_spec = importlib.util.spec_from_file_location(mod_name, path)
+    if py_spec is None or py_spec.loader is None:
+        raise ImportError(f"{path}: could not create module loader")
+    module = importlib.util.module_from_spec(py_spec)
+    sys.modules[mod_name] = module
+    py_spec.loader.exec_module(module)
+
+    tile = getattr(module, 'tile', None)
+    if not isinstance(tile, Tile):
         raise ValueError(f"{path}: spec must bind a Tile to 'tile'")
-    return spec
+    return tile
