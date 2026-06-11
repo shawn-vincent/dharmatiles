@@ -273,6 +273,50 @@ def _build_spec(
     build_tile_from_spec(tile, system_paths=sys_paths, reporter=reporter)
 
 
+# ── Closing quote ─────────────────────────────────────────────────────────────
+
+_QUOTE_PROMPT = (
+    "Give me one short, obscure Buddhist quote suited to someone who makes physical "
+    "things — a craftsperson or builder. Draw from a lesser-cited source: a Jataka tale, "
+    "a minor sutta, Abhidharma text, Zen record, Tibetan teaching, or similar. Include "
+    "the exact reference: text name, chapter or verse number, translator if applicable. "
+    "Reply with exactly two lines: the quote first (no inline attribution), then the "
+    "reference on the second line. No preamble, no explanation, nothing else."
+)
+
+
+def _print_closing_quote() -> None:
+    """Ask codex for a Buddhist quote and print it — silently skipped if codex is absent."""
+    import shutil
+    import subprocess
+    codex = shutil.which("codex")
+    if not codex:
+        return
+    try:
+        result = subprocess.run(
+            [codex, "exec", _QUOTE_PROMPT],
+            capture_output=True, text=True, timeout=60,
+        )
+        text = result.stdout.strip()
+    except Exception:
+        return
+    if not text:
+        return
+    try:
+        from rich.console import Console
+        from rich.rule import Rule
+        console = Console(highlight=False)
+        console.print()
+        console.print(Rule(style="dim"))
+        lines = [l.strip() for l in text.splitlines() if l.strip()]
+        for i, line in enumerate(lines):
+            console.print(f"  {'[italic]' if i == 0 else '[dim]'}{line}{'[/italic]' if i == 0 else '[/dim]'}")
+        console.print(Rule(style="dim"))
+        console.print()
+    except ImportError:
+        print(f"\n{'─'*60}\n{text}\n{'─'*60}\n")
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -291,6 +335,10 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv=None):
     args     = _build_parser().parse_args(argv)
     reporter = make_reporter(quiet=args.quiet)
+
+    if not args.quiet:
+        from ..logo_render import render_header
+        render_header()
 
     TILES_ROOT = pathlib.Path("src/tiles")
     STL_ROOT   = pathlib.Path("stl")
@@ -313,6 +361,8 @@ def main(argv=None):
             t0 = _time.perf_counter()
             _build_spec(tile, args.spec, TILES_ROOT, STL_ROOT, reporter)
             reporter.tile_end(_time.perf_counter() - t0)
+        if not args.quiet:
+            _print_closing_quote()
         return
 
     # ── Batch ─────────────────────────────────────────────────────────────────
@@ -348,6 +398,8 @@ def main(argv=None):
         reporter.batch_spec_done(spec_name, _time.perf_counter() - t_spec)
 
     reporter.batch_end(len(spec_paths), _time.perf_counter() - t_batch)
+    if not args.quiet:
+        _print_closing_quote()
 
 
 if __name__ == "__main__":
