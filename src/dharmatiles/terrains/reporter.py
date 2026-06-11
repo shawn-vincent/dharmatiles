@@ -144,6 +144,36 @@ class TextReporter(TileReporter):
               f"processed in {elapsed:.1f}s  ({elapsed/max(n_specs,1):.1f}s/spec)")
 
 
+# ── Animated spinner renderable ───────────────────────────────────────────────
+
+class _SpinnerLine:
+    """Rich renderable: '  ⠙ {label}' — spinner indented to match the ✓ column.
+
+    ``rich.Status`` always places its spinner at column 0 with the label
+    text to its right.  This renderable puts the two-space indent *before*
+    the spinner character so the animated frame lines up with the ``✓`` that
+    replaces it when the step completes.
+
+    Passed to ``rich.Live(transient=True)`` so it is erased automatically
+    when the Live context exits, leaving the cursor exactly where
+    ``console.print("  ✓ …")`` will write the permanent completion line.
+    """
+
+    _FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    _FPS    = 12.5   # frames per second
+
+    def __init__(self, label: str) -> None:
+        from rich.markup import escape
+        self._label = escape(label)
+        self._t0    = time.monotonic()
+
+    def __rich_console__(self, console, options):
+        from rich.text import Text
+        elapsed = time.monotonic() - self._t0
+        frame   = self._FRAMES[int(elapsed * self._FPS) % len(self._FRAMES)]
+        yield Text.from_markup(f"  [cyan]{frame}[/cyan] {self._label}")
+
+
 # ── Rich ──────────────────────────────────────────────────────────────────────
 
 class RichReporter(TileReporter):
@@ -154,7 +184,7 @@ class RichReporter(TileReporter):
     def __init__(self) -> None:
         from rich.console import Console
         self._console = Console(highlight=False)
-        self._status  = None          # active rich Status context
+        self._live    = None          # active rich Live context (spinner)
         self._t0_tile:  float | None  = None
         self._t0_batch: float | None  = None
         self._batch_rows: list[dict]  = []
@@ -164,14 +194,19 @@ class RichReporter(TileReporter):
     # ── Internal ─────────────────────────────────────────────────────────────
 
     def _stop_status(self) -> None:
-        if self._status is not None:
-            self._status.__exit__(None, None, None)
-            self._status = None
+        if self._live is not None:
+            self._live.__exit__(None, None, None)
+            self._live = None
 
     def _start_status(self, label: str) -> None:
-        from rich.status import Status
-        self._status = Status(f"  {label}", console=self._console, spinner="dots")
-        self._status.__enter__()
+        from rich.live import Live
+        self._live = Live(
+            _SpinnerLine(label),
+            console=self._console,
+            refresh_per_second=12,
+            transient=True,   # erases spinner line on exit so ✓ can overwrite
+        )
+        self._live.__enter__()
 
     def _time_color(self, elapsed: float) -> str:
         if elapsed < 2.0:
