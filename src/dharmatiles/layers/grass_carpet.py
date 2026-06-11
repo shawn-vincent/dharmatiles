@@ -117,15 +117,23 @@ class GrassCarpet:
         scene.displace_terrain(noise_field, placement_mask)
 
         # ── 4. Build blade tube meshes ────────────────────────────────────────
+        # Carpet blades are decorative texture, not watertight volumes.
+        # Batch-concatenate them into a single Trimesh so the boolean union
+        # receives one non-volume part instead of hundreds — the orchestrator
+        # passes non-volume parts straight through concatenate, skipping the
+        # expensive manifold boolean for each individual blade.
         seeds = _collect_seeds(scene, surface, cfg, rng,
                                placement_mask=placement_mask,
                                placement=self._placement)
-        parts: list = []
+        blade_meshes: list = []
         for seed in seeds:
             mesh = _build_carpet_blade_mesh(scene, surface, seed, cfg, placement_mask)
             if mesh is not None:
-                parts.append(mesh)
-        return parts
+                blade_meshes.append(mesh)
+        if not blade_meshes:
+            return []
+        import trimesh as _trimesh
+        return [_trimesh.util.concatenate(blade_meshes)]
 
 
 # ── Edge fade ─────────────────────────────────────────────────────────────────

@@ -121,19 +121,16 @@ def _rasterise(path_mm: np.ndarray, surface: SurfaceConfig,
                mask: np.ndarray) -> None:
     """Mark cells along path_mm as _BOUNDARY (in-place).
 
-    Uses Bresenham-style segment stepping between consecutive sample pairs
-    so there are no gaps even for coarser grids.
+    With the default 4 000 samples per boundary path, consecutive sample
+    pairs are ≤ 0.1 cells apart on any realistic tile, so no gap-filling is
+    needed.  A single vectorised index write replaces the old per-segment
+    Bresenham loop.
     """
     cols = np.clip((path_mm[:, 0] / surface.cell_w).astype(int),
                    0, surface.grid_w - 1)
     rows = np.clip((path_mm[:, 1] / surface.cell_w).astype(int),
                    0, surface.grid_h - 1)
-
-    # Walk consecutive segments and fill any skipped cells
-    for i in range(len(cols) - 1):
-        c0, r0 = int(cols[i]),     int(rows[i])
-        c1, r1 = int(cols[i + 1]), int(rows[i + 1])
-        _bresenham(mask, r0, c0, r1, c1)
+    mask[rows, cols] = _BOUNDARY
 
 
 def _rasterise_boundary(bnd: Boundary, surface: SurfaceConfig,
@@ -153,23 +150,6 @@ def _rasterise_boundary(bnd: Boundary, surface: SurfaceConfig,
     # Boundary width is physical strip width, centred on the path.
     half_width_cells = max(0.5, bnd.width_mm / (2.0 * surface.cell_w))
     mask[dist_cells <= half_width_cells] = _BOUNDARY
-
-
-def _bresenham(mask: np.ndarray, r0: int, c0: int, r1: int, c1: int) -> None:
-    """Mark all cells on the Bresenham line from (r0,c0) to (r1,c1)."""
-    gh, gw = mask.shape
-    dr = abs(r1 - r0);  sr = 1 if r1 > r0 else -1
-    dc = abs(c1 - c0);  sc = 1 if c1 > c0 else -1
-    err = dr - dc
-    r, c = r0, c0
-    while True:
-        if 0 <= r < gh and 0 <= c < gw:
-            mask[r, c] = _BOUNDARY
-        if r == r1 and c == c1:
-            break
-        e2 = 2 * err
-        if e2 > -dc:  err -= dc;  r += sr
-        if e2 <  dr:  err += dr;  c += sc
 
 
 # ── Flood fill ────────────────────────────────────────────────────────────────

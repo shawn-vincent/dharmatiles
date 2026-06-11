@@ -11,7 +11,7 @@ Usage
         Single tile: same naming and directory conventions as batch.
 
     generate-tile-stl --quiet
-        Suppress progress output.
+        Suppress all output.
 """
 from __future__ import annotations
 
@@ -29,15 +29,16 @@ from ..core.tile import TileScene
 from ..core.mesh import make_heightmap_solid
 from ..core.region import build_region_mask
 from ..spec import Tile, Region, Boundary, load_spec
+from .reporter import TileReporter, make_reporter
 
 
 # ── Internal mesh builder ─────────────────────────────────────────────────────
 
 def _build_tile_mesh(
-    tile: Tile,
-    surface: SurfaceConfig,
+    tile:        Tile,
+    surface:     SurfaceConfig,
     region_mask: np.ndarray | None,
-    verbose: bool = True,
+    reporter:    TileReporter,
 ) -> tuple[trimesh.Trimesh, TileScene]:
     """Run all spec layers in ``tile.areas`` order; return (mesh, scene).
 
@@ -59,8 +60,6 @@ def _build_tile_mesh(
 
     if region_mask is not None:
         boundary_mask = (region_mask < 0)
-        # Build a fast id → index lookup so we can map each Region to its mask
-        # value.  The index matches enumerate(tile.regions) order.
         region_idx: dict[int, int] = {
             id(r): i for i, r in enumerate(tile.regions)
         }
@@ -70,37 +69,55 @@ def _build_tile_mesh(
                 idx  = region_idx[id(area)]
                 mask = (region_mask == idx)
                 for layer in area.layers:
-                    parts.extend(layer.apply(scene, placement_mask=mask))
+                    label = f"{area.id}: {type(layer).__name__}"
+                    reporter.step_begin(label)
+                    t0 = _time.perf_counter()
+                    new_parts = layer.apply(scene, placement_mask=mask)
+                    elapsed = _time.perf_counter() - t0
+                    reporter.step_end(label, elapsed)
+                    parts.extend(new_parts)
+
             elif isinstance(area, Boundary) and area.layers:
                 for layer in area.layers:
-                    parts.extend(layer.apply(scene, placement_mask=boundary_mask))
+                    label = f"{area.id}: {type(layer).__name__}"
+                    reporter.step_begin(label)
+                    t0 = _time.perf_counter()
+                    new_parts = layer.apply(scene, placement_mask=boundary_mask)
+                    elapsed = _time.perf_counter() - t0
+                    reporter.step_end(label, elapsed)
+                    parts.extend(new_parts)
 
-    if verbose:
-        print("Building terrain solid...")
+    reporter.step_begin("Terrain solid")
+    t0 = _time.perf_counter()
     terrain_mesh = make_heightmap_solid(
         scene.terrain_z, surface.tile_w, surface.tile_h,
         surface.base_h,
         error_threshold=surface.terrain_simplify_threshold,
         simplify_stride=surface.terrain_simplify_stride,
     )
+    elapsed = _time.perf_counter() - t0
+    reporter.step_end("Terrain solid", elapsed,
+                      f"{len(terrain_mesh.vertices):,} verts · "
+                      f"{len(terrain_mesh.faces):,} faces")
     parts.insert(0, terrain_mesh)
 
     solid_parts = [p for p in parts if p.is_volume]
-    if verbose:
-        print(f"Computing union  ({len(solid_parts)}/{len(parts)} solid parts)...")
-    _t0 = _time.perf_counter()
+    union_label = f"Boolean union  ({len(solid_parts)}/{len(parts)} solid)"
+    reporter.step_begin(union_label)
+    t0 = _time.perf_counter()
     if len(solid_parts) == 0:
         combined = trimesh.util.concatenate(parts)
     elif len(solid_parts) == 1:
         combined = solid_parts[0]
     else:
         combined = trimesh.boolean.union(solid_parts, engine='manifold')
-    _t1 = _time.perf_counter()
-    if verbose:
-        wt_label = "watertight" if combined.is_watertight else "NOT watertight"
-        print(f"  vertices: {len(combined.vertices):,}   "
-              f"faces: {len(combined.faces):,}   "
-              f"{wt_label}   {_t1 - _t0:.1f}s")
+    elapsed = _time.perf_counter() - t0
+    wt_label = "watertight" if combined.is_watertight else "NOT watertight"
+    reporter.step_end(union_label, elapsed,
+                      f"{wt_label}  "
+                      f"{len(combined.vertices):,} verts · "
+                      f"{len(combined.faces):,} faces")
+
     return combined, scene
 
 
@@ -110,7 +127,7 @@ def build_tile_from_spec(
     tile:         Tile,
     *,
     system_paths: dict[str, pathlib.Path],
-    verbose:      bool = True,
+    reporter:     TileReporter,
 ) -> trimesh.Trimesh:
     """Build a tile from a Python ``Tile`` spec and export one STL per system.
 
@@ -123,21 +140,19 @@ def build_tile_from_spec(
     """
     surface = tile.surface
 
-    if verbose:
-        region_ids = [r.id for r in tile.regions]
-        bnd_ids    = [b.id for b in tile.boundaries]
-        print(f"=== Building tile from spec "
-              f"({surface.cols}x{surface.rows} squares, "
-              f"grid {surface.grid_w}x{surface.grid_h}) ===")
-        if region_ids:
-            print(f"  Regions:    {region_ids}")
-        if bnd_ids:
-            print(f"  Boundaries: {bnd_ids}")
+    region_ids   = [r.id for r in tile.regions]
+    boundary_ids = [b.id for b in tile.boundaries]
 
-    region_mask = build_region_mask(tile) if tile.areas else None
+    # ── Region mask (once, at primary scale) ─────────────────────────────────
+    if tile.areas:
+        reporter.step_begin("Region mask")
+        t0 = _time.perf_counter()
+        region_mask = build_region_mask(tile)
+        reporter.step_end("Region mask", _time.perf_counter() - t0)
+    else:
+        region_mask = None
 
-    # Cache (tile_mesh, scene) keyed by square_mm so we don't rebuild
-    # at the same scale twice (e.g. two DB-scale systems would share one build).
+    # ── Build each system's mesh (cache equal-scale results) ─────────────────
     built: dict[float, tuple[trimesh.Trimesh, TileScene]] = {}
     first_result: trimesh.Trimesh | None = None
 
@@ -147,24 +162,31 @@ def build_tile_from_spec(
 
         if sq_mm not in built:
             is_primary = (sq_mm == surface.square_mm and not built)
-            if verbose and not is_primary:
-                print(f"\n=== Rebuilding scene at {sys_surface.square_mm} mm/sq ===")
-            # Build with this system's surface scale; reuse region_mask.
+            if not is_primary:
+                reporter.rebuild_begin(sys_surface.square_mm)
+
             sys_tile = dataclasses.replace(tile, surface=sys_surface)
             mesh, scene = _build_tile_mesh(
-                sys_tile, sys_surface, region_mask,
-                verbose=verbose,
+                sys_tile, sys_surface, region_mask, reporter,
             )
             built[sq_mm] = (mesh, scene)
 
         tile_mesh, scene = built[sq_mm]
         out_path = system_paths[system.suffix]
 
-        if verbose:
-            print(f"Building {system.suffix} base and exporting...")
+        reporter.step_begin(f"Export {system.suffix}")
+        t0 = _time.perf_counter()
         result = system.export(tile_mesh, sys_surface, scene.terrain_z, out_path)
-        if verbose:
-            print(f"Saved -> {out_path}")
+        elapsed = _time.perf_counter() - t0
+
+        reporter.export_done(
+            suffix     = system.suffix,
+            path       = out_path,
+            n_verts    = len(result.vertices),
+            n_faces    = len(result.faces),
+            watertight = result.is_watertight,
+            elapsed    = elapsed,
+        )
 
         if first_result is None:
             first_result = result
@@ -246,11 +268,11 @@ def _build_spec(
     spec_path:  pathlib.Path,
     tiles_root: pathlib.Path,
     stl_root:   pathlib.Path,
-    verbose:    bool = True,
+    reporter:   TileReporter,
 ) -> None:
     """Build one tile spec at the size declared on its surface config."""
     sys_paths = _system_paths_for(spec_path, tile, tiles_root, stl_root)
-    build_tile_from_spec(tile, system_paths=sys_paths, verbose=verbose)
+    build_tile_from_spec(tile, system_paths=sys_paths, reporter=reporter)
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -263,39 +285,71 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--spec", "-s", type=pathlib.Path, default=None,
                    metavar="FILE",
                    help=".tile.py Python spec.  Omit to process all src/tiles/")
-    p.add_argument("--quiet", "-q", action="store_true")
+    p.add_argument("--quiet", "-q", action="store_true",
+                   help="Suppress all output.")
     return p
 
 
 def main(argv=None):
-    args    = _build_parser().parse_args(argv)
-    verbose = not args.quiet
+    args     = _build_parser().parse_args(argv)
+    reporter = make_reporter(quiet=args.quiet)
 
     TILES_ROOT = pathlib.Path("src/tiles")
     STL_ROOT   = pathlib.Path("stl")
 
+    # ── Single spec ───────────────────────────────────────────────────────────
     if args.spec is not None:
-        for tile in load_spec(args.spec):
-            _build_spec(tile, args.spec, TILES_ROOT, STL_ROOT, verbose=verbose)
+        specs = list(load_spec(args.spec))
+        for tile in specs:
+            surface = tile.surface
+            name    = args.spec.stem.replace('.tile', '')
+            reporter.tile_begin(
+                name         = name,
+                cols         = surface.cols,
+                rows         = surface.rows,
+                grid_w       = surface.grid_w,
+                grid_h       = surface.grid_h,
+                region_ids   = [r.id for r in tile.regions],
+                boundary_ids = [b.id for b in tile.boundaries],
+            )
+            t0 = _time.perf_counter()
+            _build_spec(tile, args.spec, TILES_ROOT, STL_ROOT, reporter)
+            reporter.tile_end(_time.perf_counter() - t0)
         return
 
-    specs = sorted(TILES_ROOT.rglob("*.tile.py"))
-    if not specs:
+    # ── Batch ─────────────────────────────────────────────────────────────────
+    spec_paths = sorted(TILES_ROOT.rglob("*.tile.py"))
+    if not spec_paths:
         print(f"No .tile.py files found under {TILES_ROOT}/  "
               f"(pass --spec FILE to target a specific tile)")
         return
+
+    reporter.batch_begin(len(spec_paths))
     t_batch = _time.perf_counter()
-    for sp in specs:
-        if verbose:
-            print(f"\n{'─'*60}")
-            print(f"  {sp}")
-            print(f"{'─'*60}")
+
+    for sp in spec_paths:
+        spec_name = sp.stem.replace('.tile', '')
+        reporter.batch_spec_begin(spec_name)
+        t_spec = _time.perf_counter()
+
         for tile in load_spec(sp):
-            _build_spec(tile, sp, TILES_ROOT, STL_ROOT, verbose=verbose)
-    elapsed = _time.perf_counter() - t_batch
-    n = len(specs)
-    print(f"\n{n} spec{'s' if n != 1 else ''} processed in {elapsed:.1f}s  "
-          f"({elapsed/n:.1f}s/spec)")
+            surface = tile.surface
+            reporter.tile_begin(
+                name         = spec_name,
+                cols         = surface.cols,
+                rows         = surface.rows,
+                grid_w       = surface.grid_w,
+                grid_h       = surface.grid_h,
+                region_ids   = [r.id for r in tile.regions],
+                boundary_ids = [b.id for b in tile.boundaries],
+            )
+            t0 = _time.perf_counter()
+            _build_spec(tile, sp, TILES_ROOT, STL_ROOT, reporter)
+            reporter.tile_end(_time.perf_counter() - t0)
+
+        reporter.batch_spec_done(spec_name, _time.perf_counter() - t_spec)
+
+    reporter.batch_end(len(spec_paths), _time.perf_counter() - t_batch)
 
 
 if __name__ == "__main__":

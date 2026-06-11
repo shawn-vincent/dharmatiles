@@ -305,7 +305,9 @@ def jitter_grid_xy(
         return []
 
     cell_w    = surface.cell_w
-    group_set = frozenset(zip(group_rows.tolist(), group_cols.tolist()))
+    # Vectorised membership grid — O(1) NumPy index vs O(n) Python generator.
+    in_group = np.zeros((surface.grid_h, surface.grid_w), dtype=bool)
+    in_group[group_rows, group_cols] = True
 
     # Rotated frame aligned with the item direction.
     dx = float(np.sin(group_dir))
@@ -359,9 +361,5 @@ def jitter_grid_xy(
     ixs = np.clip((xs / cell_w).astype(int), 0, surface.grid_w - 1)
     iys = np.clip((ys / cell_w).astype(int), 0, surface.grid_h - 1)
 
-    valid = np.fromiter(
-        ((int(iy), int(ix)) in group_set
-         for iy, ix in zip(iys.tolist(), ixs.tolist())),
-        dtype=bool, count=len(iys),
-    )
+    valid = in_group[iys, ixs]
     return list(zip(xs[valid].tolist(), ys[valid].tolist()))

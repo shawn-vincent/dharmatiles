@@ -171,8 +171,15 @@ def as_distribution(value: Sample[T]) -> Distribution[T]:
 
 
 def sample(value: Sample[T], rng: np.random.Generator, size=None):
+    # Fast path for the overwhelmingly common case: plain numeric constant.
+    # Avoids constructing a Constant() wrapper on every call in tight loops
+    # (soil blobs, rock seeds, grass seeds all call this hundreds of times).
+    if isinstance(value, (int, float)):
+        return value if size is None else np.full(size, value, dtype=float)
     return as_distribution(value).sample(rng, size)
 
 
 def bounds(value: Sample[T]) -> tuple[T, T]:
+    if isinstance(value, (int, float)):
+        return value, value  # type: ignore[return-value]
     return as_distribution(value).bounds()

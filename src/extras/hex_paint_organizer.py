@@ -37,8 +37,6 @@ class HexOrganizerSpec:
     rows: int = 3                    # cups per column (y)
 
     def __post_init__(self) -> None:
-        if self.height < 15.0:
-            raise ValueError(f"--height ({self.height} mm) must be at least 15 mm")
         if self.interior_wall > 2.0 * self.wall:
             raise ValueError(
                 "interior_wall cannot exceed 2 * wall; adjacent cup shells would separate"

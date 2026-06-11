@@ -3,3 +3,4 @@ trimesh
 scipy
 pyyaml
 manifold3d
+rich
