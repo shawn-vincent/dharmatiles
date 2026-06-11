@@ -11,7 +11,7 @@ _species = SpeciesConfig()
 
 tile = Tile(
     surface=SurfaceConfig(seed=42),
-    regions=[
+    areas=[
         Region(
             id='meadow',
             selector=FloodFill(0.25, 0.5),
@@ -22,15 +22,6 @@ tile = Tile(
                 ),
             ],
         ),
-        Region(
-            id='dirt',
-            selector=FloodFill(0.75, 0.5),
-            layers=[
-                SoilCarpet(),
-            ],
-        ),
-    ],
-    boundaries=[
         Boundary(
             id='margin',
             from_anchor=Edge.TOP(0.48),
@@ -38,6 +29,13 @@ tile = Tile(
             path='organic',
             amplitude_mm=5.0,
             wavelength_mm=10.0,
+        ),
+        Region(
+            id='dirt',
+            selector=FloodFill(0.75, 0.5),
+            layers=[
+                SoilCarpet(),
+            ],
         ),
     ],
 )

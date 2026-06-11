@@ -15,7 +15,7 @@ from dharmatiles.scatter import Rocks, Grass, Grouped, Uniform
 
 tile = Tile(
     surface=SurfaceConfig(seed=97),
-    regions=[
+    areas=[
         Region(
             id='pool',
             selector=FloodFill(0.5, 0.25),
@@ -35,24 +35,6 @@ tile = Tile(
                 Water(embed_mm=2.5),
             ],
         ),
-        Region(
-            id='meadow',
-            selector=FloodFill(0.5, 0.75),
-            layers=[
-                GrassCarpet(placement=Grouped(groups_per_square=2)),
-                Scatter(
-                    Grass(
-                        species=SpeciesConfig(
-                            blade_length_min=10,
-                            blade_length_max=10,
-                        ),
-                        placement=Grouped(groups_per_square=2),
-                    ),
-                ),
-            ],
-        ),
-    ],
-    boundaries=[
         Boundary(
             id='shoreline',
             from_anchor=Edge.LEFT(0.48),
@@ -69,6 +51,22 @@ tile = Tile(
                         r_min=0.8,
                         r_max=2.2,
                         size_power=1.5,
+                    ),
+                ),
+            ],
+        ),
+        Region(
+            id='meadow',
+            selector=FloodFill(0.5, 0.75),
+            layers=[
+                GrassCarpet(placement=Grouped(groups_per_square=2)),
+                Scatter(
+                    Grass(
+                        species=SpeciesConfig(
+                            blade_length_min=10,
+                            blade_length_max=10,
+                        ),
+                        placement=Grouped(groups_per_square=2),
                     ),
                 ),
             ],

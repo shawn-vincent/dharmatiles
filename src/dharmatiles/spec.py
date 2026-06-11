@@ -2,7 +2,8 @@
 Tile spec: executable layer-based tile specifications.
 
 A ``.tile.py`` file is executed as Python and must bind a module-level
-``tile`` variable to a :class:`Tile` instance.
+``tile`` variable to a :class:`Tile` instance, **or** a ``tiles``
+variable to a list of :class:`Tile` instances.
 
 The spec is the implementation language: ``Region.layers`` holds real
 layer instances (``SoilCarpet``, ``GrassCarpet``, ``Scatter``, ``Water``),
@@ -12,14 +13,15 @@ No string types, no ``params=dict(...)``, no phase enum.
 Example::
 
     from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill
-    from dharmatiles.spec import SurfaceConfig, SpeciesConfig
+    from dharmatiles.spec import SurfaceConfig, SpeciesConfig, repeat_sizes
+    from dharmatiles.systems import DungeonBlocks, OpenLOCK
     from dharmatiles.layers import SoilCarpet, GrassCarpet, Scatter
     from dharmatiles.scatter import Rocks, Grass, Grouped
 
     species = SpeciesConfig()
-    tile = Tile(
+    _base = Tile(
         surface=SurfaceConfig(seed=42),
-        regions=[
+        areas=[
             Region(id='meadow', selector=FloodFill(0.25, 0.5), layers=[
                 GrassCarpet(species=species,
                             placement=Grouped(groups_per_square=240)),
@@ -29,19 +31,21 @@ Example::
                           placement=Grouped(groups_per_square=24)),
                 ),
             ]),
+            Boundary(id='margin',
+                     from_anchor=Edge.TOP(0.48),
+                     to_anchor=Edge.BOTTOM(0.52)),
             Region(id='dirt', selector=FloodFill(0.75, 0.5), layers=[
                 SoilCarpet(),
             ]),
         ],
-        boundaries=[
-            Boundary(id='margin',
-                     from_anchor=Edge.TOP(0.48),
-                     to_anchor=Edge.BOTTOM(0.52)),
-        ],
     )
+
+    # Emit 1×1 and 3×3 from one spec file:
+    tiles = repeat_sizes(_base, [(1, 1), (3, 3)])
 """
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import sys
 from dataclasses import dataclass, field
@@ -58,6 +62,7 @@ __all__ = [
     'Tile', 'Region', 'Boundary', 'TileLayer',
     'Anchor', 'Edge', 'FloodFill',
     'SurfaceConfig', 'SpeciesConfig',
+    'repeat_sizes',
     'load_spec',
 ]
 
@@ -207,20 +212,67 @@ class Boundary:
 class Tile:
     """Complete specification for one tile.
 
-    One ``.tile.py`` file → one ``Tile`` → one output size.  Tile size
-    is set on ``surface.cols`` / ``surface.rows``.  To emit several
-    sizes of the same tile, write one spec file per size.
+    ``areas`` is an ordered list of :class:`Region` and :class:`Boundary`
+    items.  The orchestrator runs each area's layers in the order they appear
+    here, so you control which region's rocks are stamped before another
+    region's grass grows.
+
+    ``systems`` lists the base-attachment targets to emit (default:
+    ``[DungeonBlocks(), OpenLOCK()]``).  Each system builds the tile at its
+    own scale and attaches its base.
     """
-    surface:    SurfaceConfig
-    regions:    list[Region]   = field(default_factory=list)
-    boundaries: list[Boundary] = field(default_factory=list)
+    surface:  SurfaceConfig
+    areas:    list = field(default_factory=list)   # list[Region | Boundary]
+    systems:  list = field(default_factory=list)   # list[DungeonBlocks | OpenLOCK | ...]
+
+    def __post_init__(self) -> None:
+        if not self.systems:
+            from .systems import DungeonBlocks, OpenLOCK
+            self.systems = [DungeonBlocks(), OpenLOCK()]
+
+    # Convenience views (read-only iteration; used by build helpers and tests)
+    @property
+    def regions(self) -> list[Region]:
+        """All Region entries in ``areas``, in declaration order."""
+        return [a for a in self.areas if isinstance(a, Region)]
+
+    @property
+    def boundaries(self) -> list[Boundary]:
+        """All Boundary entries in ``areas``, in declaration order."""
+        return [a for a in self.areas if isinstance(a, Boundary)]
 
 
-def load_spec(path: Path) -> Tile:
-    """Load a ``.tile.py`` Python spec file and return its ``Tile``.
+# ── Multi-tile helpers ────────────────────────────────────────────────────────
 
-    The spec is loaded as a real Python module via ``importlib`` (not
-    ``exec()``) so that:
+def repeat_sizes(base: Tile, sizes: list[tuple[int, int]]) -> list[Tile]:
+    """Return one :class:`Tile` per ``(cols, rows)`` size pair.
+
+    Each tile is a copy of *base* with ``surface.cols`` and
+    ``surface.rows`` set to the given values.  Bind the result to
+    ``tiles`` in your spec file::
+
+        tiles = repeat_sizes(tile, [(1, 1), (3, 3)])
+
+    The orchestrator picks up both ``tile`` (single) and ``tiles`` (list)
+    bindings from spec files.
+    """
+    return [
+        dataclasses.replace(
+            base,
+            surface=dataclasses.replace(base.surface, cols=c, rows=r),
+        )
+        for c, r in sizes
+    ]
+
+
+def load_spec(path: Path) -> list[Tile]:
+    """Load a ``.tile.py`` spec file and return its :class:`Tile` instance(s).
+
+    Looks for a module-level ``tiles`` binding first (a list of
+    ``Tile`` instances), then falls back to a single ``tile`` binding.
+    Always returns a list — callers iterate over it.
+
+    The spec is loaded as a real Python module via ``importlib`` so that:
 
     - the module appears in ``sys.modules`` and stack traces show its
       filename;
@@ -228,11 +280,6 @@ def load_spec(path: Path) -> Tile:
       directory, e.g. ``from _shared import SHARED_SPECIES``;
     - tooling that introspects modules (debuggers, IDEs) sees the spec
       the way it sees any other Python file.
-
-    The spec's containing directory is added to ``sys.path`` so plain
-    absolute imports against sibling files resolve.  The module name is
-    derived from the resolved path (sanitised for the few characters
-    Python forbids in module names — ``+``, ``.``, etc.).
     """
     path = Path(path).resolve()
     if path.suffix != '.py':
@@ -254,7 +301,17 @@ def load_spec(path: Path) -> Tile:
     sys.modules[mod_name] = module
     py_spec.loader.exec_module(module)
 
+    # Prefer explicit ``tiles`` list, then fall back to single ``tile``
+    tiles = getattr(module, 'tiles', None)
+    if tiles is not None:
+        if not isinstance(tiles, list) or not all(isinstance(t, Tile) for t in tiles):
+            raise ValueError(
+                f"{path}: 'tiles' must be a list of Tile instances"
+            )
+        return tiles
+
     tile = getattr(module, 'tile', None)
-    if not isinstance(tile, Tile):
-        raise ValueError(f"{path}: spec must bind a Tile to 'tile'")
-    return tile
+    if isinstance(tile, Tile):
+        return [tile]
+
+    raise ValueError(f"{path}: spec must bind a Tile to 'tile' or a list to 'tiles'")

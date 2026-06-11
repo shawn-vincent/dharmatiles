@@ -9,7 +9,7 @@ from dharmatiles.scatter import Grass, Grouped
 
 tile = Tile(
     surface=SurfaceConfig(cols=1, rows=1, seed=99),
-    regions=[
+    areas=[
         Region(
             id='patch',
             selector=FloodFill(0.15, 0.15),
@@ -27,8 +27,6 @@ tile = Tile(
                 SoilCarpet(),
             ],
         ),
-    ],
-    boundaries=[
         Boundary(
             id='corner-cut',
             from_anchor=Edge.LEFT(0.5),

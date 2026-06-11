@@ -7,7 +7,7 @@ from dharmatiles.layers import Water
 
 tile = Tile(
     surface=SurfaceConfig(seed=17),
-    regions=[
+    areas=[
         Region(
             id='pool',
             selector=FloodFill(0.5, 0.5),

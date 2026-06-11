@@ -23,7 +23,7 @@ _placement_blades = Grouped(groups_per_square=3)
 
 tile = Tile(
     surface=SurfaceConfig(seed=1),
-    regions=[
+    areas=[
         Region(
             id='meadow',
             selector=FloodFill(0.5, 0.5),
