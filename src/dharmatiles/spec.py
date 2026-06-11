@@ -48,6 +48,7 @@ from __future__ import annotations
 import dataclasses
 import importlib.util
 import sys
+import types
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import ClassVar, Protocol
@@ -307,7 +308,7 @@ def load_spec(path: Path) -> list[Tile]:
     - the module appears in ``sys.modules`` and stack traces show its
       filename;
     - the spec file can ``import`` sibling helper modules from the same
-      directory, e.g. ``from _shared import SHARED_SPECIES``;
+      directory, e.g. ``from . import shared_helpers``;
     - tooling that introspects modules (debuggers, IDEs) sees the spec
       the way it sees any other Python file.
     """
@@ -321,8 +322,20 @@ def load_spec(path: Path) -> list[Tile]:
     if parent not in sys.path:
         sys.path.insert(0, parent)
 
-    mod_name = '_dharmatiles_spec_' + ''.join(
-        c if c.isalnum() else '_' for c in str(path)
+    package_name = '_dharmatiles_spec_pkg_' + ''.join(
+        c if c.isalnum() else '_' for c in str(path.parent)
+    )
+    package = sys.modules.get(package_name)
+    if package is None:
+        package = types.ModuleType(package_name)
+        package.__path__ = [parent]  # type: ignore[attr-defined]
+        package.__package__ = package_name
+        sys.modules[package_name] = package
+    else:
+        package.__path__ = [parent]  # type: ignore[attr-defined]
+
+    mod_name = package_name + '.' + ''.join(
+        c if c.isalnum() else '_' for c in path.name
     )
     py_spec = importlib.util.spec_from_file_location(mod_name, path)
     if py_spec is None or py_spec.loader is None:
