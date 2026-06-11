@@ -10,7 +10,7 @@ from dharmatiles.layers import GrassCarpet, Scatter
 from dharmatiles.scatter import Grass, Grouped
 
 _meadow = SpeciesConfig(
-    group_dir_jitter=0,
+    blade_direction_jitter=0,
     blade_length=15,
     blade_curl=D[0.5:0.8],
     blade_clearance=0.2,

@@ -42,7 +42,7 @@ class Rocks:
         ry     = rx * float(sample(self.rocks.aspect, rng))
         h_frac = float(sample(self.rocks.flat, rng))
         height = 0.5 * (rx + ry) * h_frac
-        angle  = float(rng.uniform(0.0, np.pi))
+        angle  = float(sample(self.rocks.angle, rng))
         return RockSeed(x=x, y=y, rx=rx, ry=ry, height=height, angle=angle)
 
     def scatter(

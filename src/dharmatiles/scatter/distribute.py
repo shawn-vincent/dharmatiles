@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from ..dist import sample
 from .config import Uniform, Grouped
 
 
@@ -60,9 +61,10 @@ def _uniform_positions(
     otherwise derived from tile area divided by ``(footprint_mm + gap_mm)²``.
     """
     if cfg.count_per_square is not None:
-        n = cfg.count_per_square * n_squares
+        n = max(0, int(round(sample(cfg.count_per_square, rng)))) * n_squares
     else:
-        spacing = max(footprint_mm + max(0.0, cfg.gap_mm), 1e-3)
+        gap_mm = float(sample(cfg.gap_mm, rng))
+        spacing = max(footprint_mm + max(0.0, gap_mm), 1e-3)
         area_mm2 = surface.tile_w * surface.tile_h
         if placement_mask is not None:
             total_cells = surface.grid_w * surface.grid_h
@@ -110,6 +112,11 @@ def _voronoi_positions(
     """
     n_groups = scaled_voronoi_group_count(cfg.groups_per_square, placement_mask, surface, rng)
     groups   = voronoi_groups(n_groups, surface, rng, mask=placement_mask)
+    count_per_square = (
+        max(0, int(round(sample(cfg.count_per_square, rng))))
+        if cfg.count_per_square is not None
+        else None
+    )
 
     positions: list[tuple[float, float, float]] = []
     for group in groups:
@@ -118,10 +125,10 @@ def _voronoi_positions(
         else:
             group_dir = 0.0
 
-        if cfg.count_per_square is not None:
+        if count_per_square is not None:
             # Distribute the hard count proportionally across groups.
             group_frac = len(group['rows']) / max(surface.grid_w * surface.grid_h, 1)
-            n_group = max(1, int(round(cfg.count_per_square * n_squares * group_frac)))
+            n_group = max(1, int(round(count_per_square * n_squares * group_frac)))
         else:
             n_group = scaled_group_seed_count(
                 group, cfg.gap_mm, footprint_mm, surface.cell_w, rng)
@@ -135,7 +142,7 @@ def _voronoi_positions(
 # ── Voronoi helpers (also imported by grass/grow.py) ─────────────────────────
 
 def scaled_voronoi_group_count(
-    groups_per_square: int,
+    groups_per_square,
     mask,              # bool ndarray | None — placement mask for this layer
     surface,
     rng: np.random.Generator,
@@ -155,7 +162,8 @@ def scaled_voronoi_group_count(
     if masked_cells <= 0:
         return 0
 
-    full_tile_groups = max(0, int(groups_per_square)) * surface.cols * surface.rows
+    groups_per_square = max(0, int(round(sample(groups_per_square, rng))))
+    full_tile_groups = groups_per_square * surface.cols * surface.rows
     expected_groups  = full_tile_groups * masked_cells / float(total_tile_cells)
     base_count       = int(np.floor(expected_groups))
     if rng.random() < expected_groups - base_count:
@@ -165,7 +173,7 @@ def scaled_voronoi_group_count(
 
 def scaled_group_seed_count(
     group: dict,
-    gap_mm: float,
+    gap_mm,
     footprint_mm: float,
     cell_w: float,
     rng: np.random.Generator,
@@ -176,7 +184,8 @@ def scaled_group_seed_count(
     Density = 1 / spacing²  (items per mm²).
     ``gap_mm = 0`` → items packed edge-to-edge.
     """
-    spacing     = max(footprint_mm + max(0.0, float(gap_mm)), 1e-3)
+    gap_mm      = float(sample(gap_mm, rng))
+    spacing     = max(footprint_mm + max(0.0, gap_mm), 1e-3)
     density     = 1.0 / (spacing * spacing)
     group_area  = len(group["rows"]) * cell_w * cell_w
     scaled      = density * group_area

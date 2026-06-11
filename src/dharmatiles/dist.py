@@ -7,6 +7,7 @@ for sampled values:
     r=D[0.8:2.2]
     r=D[0.8:2.2].power(1.5)
     r=D[5:2, 10:1]
+    lean=D.normal(0.0, 0.1)
 """
 from __future__ import annotations
 
@@ -86,6 +87,25 @@ class Triangular(Distribution[float]):
 
 
 @dataclass(frozen=True)
+class Normal(Distribution[float]):
+    mean: float
+    std: float
+    clamp: tuple[float, float] | None = None
+
+    def sample(self, rng: np.random.Generator, size=None):
+        values = rng.normal(self.mean, self.std, size)
+        if self.clamp is not None:
+            low, high = self.clamp
+            values = np.clip(values, low, high)
+        return values
+
+    def bounds(self) -> tuple[float, float]:
+        if self.clamp is not None:
+            return self.clamp
+        return self.mean - 3.0 * self.std, self.mean + 3.0 * self.std
+
+
+@dataclass(frozen=True)
 class WeightedChoice(Distribution[T]):
     items: tuple[tuple[T, float], ...]
 
@@ -128,6 +148,15 @@ class _DistributionBuilder:
     def triangular(self, low: float, mode: float, high: float) -> Triangular:
         return Triangular(low, mode, high)
 
+    def normal(
+        self,
+        mean: float,
+        std: float,
+        *,
+        clamp: tuple[float, float] | None = None,
+    ) -> Normal:
+        return Normal(mean, std, clamp)
+
     def fixed(self, value: T) -> Constant[T]:
         return Constant(value)
 
@@ -147,4 +176,3 @@ def sample(value: Sample[T], rng: np.random.Generator, size=None):
 
 def bounds(value: Sample[T]) -> tuple[T, T]:
     return as_distribution(value).bounds()
-

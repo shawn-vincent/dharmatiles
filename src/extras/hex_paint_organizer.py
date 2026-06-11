@@ -24,13 +24,13 @@ from dharmatiles.core.logo import make_logo_manifold
 class HexOrganizerSpec:
     bore_f2f: float = 35.0        # main bore flat-to-flat
     retaining_f2f: float = 29.0   # retaining-depression flat-to-flat
-    wall: float = 1.0             # wall thickness
+    wall: float = 1.0             # perimeter wall thickness
+    interior_wall: float = 2.0    # shared wall thickness between adjacent cups
     height: float = 60.0          # cup height
     floor: float = 14.5           # bore floor / inner ledge height (magnet top edge z=11, bevel starts 0.5mm above)
     base: float = 1.0             # solid base below retaining recess
     magnet_dia: float = 10.0      # magnet disc diameter
     magnet_depth: float = 3.0     # magnet disc thickness / bore depth
-    outer_wall_height: float = 40.0  # height of the outer hex shell (cups extend to spec.height)
     bottom_roundover: float = 1.0    # convex roundover radius on bottom perimeter edge
     vertical_roundover: float = 8.0  # convex outside vertical edge roundover radius
     cols: int = 4                    # columns across (x)
@@ -39,6 +39,10 @@ class HexOrganizerSpec:
     def __post_init__(self) -> None:
         if self.height < 15.0:
             raise ValueError(f"--height ({self.height} mm) must be at least 15 mm")
+        if self.interior_wall > 2.0 * self.wall:
+            raise ValueError(
+                "interior_wall cannot exceed 2 * wall; adjacent cup shells would separate"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -63,18 +67,25 @@ def hex_prism(f2f: float, height: float) -> m3d.Manifold:
     return m3d.Manifold.extrude(cs, height=height)
 
 
+BOOLEAN_OVERLAP = 0.02  # mm; prevents tangent-cell cracks in the honeycomb union
+
+
+def hex_cross_section(f2f: float) -> m3d.CrossSection:
+    return m3d.CrossSection([hex_polygon(f2f)])
+
+
 # ---------------------------------------------------------------------------
 # Honeycomb layout
 # ---------------------------------------------------------------------------
 #
 # Flat-top hex packing for a 4-columns-of-3 grid:
-#   - cups in a column share horizontal flat walls  → vertical pitch = f2f + wall
+#   - cups in a column share horizontal flat walls  → vertical pitch = f2f + interior_wall
 #   - adjacent columns interlock at half height     → horizontal pitch = pitch_y·√3/2
 #   - odd columns sit half a cup higher than even ones, so the offset reads
 #     low, high, low, high from left to right
 
 def _pitches(spec: HexOrganizerSpec) -> tuple[float, float]:
-    pitch_y = spec.bore_f2f + spec.wall       # within a column (shared flat walls)
+    pitch_y = spec.bore_f2f + spec.interior_wall  # within a column (shared flat walls)
     pitch_x = pitch_y * np.sqrt(3) / 2.0      # between columns (offset packing)
     return pitch_x, pitch_y
 
@@ -102,12 +113,25 @@ def _rounded_hex_cs(f2f: float, r: float) -> m3d.CrossSection:
     return cs.offset(r, m3d.JoinType.Round, circular_segments=32)
 
 
-def single_cup(spec: HexOrganizerSpec) -> m3d.Manifold:
+def honeycomb_footprint_cs(spec: HexOrganizerSpec) -> m3d.CrossSection:
+    """One clean outer footprint for the organizer's full honeycomb body.
+
+    The construction cells intentionally overlap by a tiny amount. Without that,
+    cells with a 2 mm shared-wall pitch and 1 mm perimeter shells only touch
+    tangentially, which can leave visible cracks or notches after booleans.
+    """
+    construction_f2f = spec.bore_f2f + 2.0 * spec.wall + BOOLEAN_OVERLAP
+    cells = []
+    for col in range(spec.cols):
+        for row in range(spec.rows):
+            cx, cy = cup_centre(spec, col, row)
+            cells.append(hex_cross_section(construction_f2f).translate((cx, cy)))
+    return m3d.CrossSection.batch_boolean(cells, m3d.OpType.Add)
+
+
+def _cup_cutters(spec: HexOrganizerSpec) -> tuple[m3d.Manifold, m3d.Manifold, m3d.Manifold]:
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
     R_outer = outer_f2f / np.sqrt(3)
-
-    outer = hex_prism(outer_f2f, spec.outer_wall_height)
-
     # Inner bore and retaining depression corner roundover radius:
     # bore_r = outer_roundover - (R_outer - R_inner)  keeps wall ~= spec.wall at corners.
     bore_r = max(0.0, spec.vertical_roundover - (R_outer - spec.bore_f2f / np.sqrt(3)))
@@ -137,7 +161,18 @@ def single_cup(spec: HexOrganizerSpec) -> m3d.Manifold:
     entry_bevel = m3d.Manifold.extrude(bevel_cs, bevel_h, scale_top=(bevel_scale, bevel_scale))
     entry_bevel = entry_bevel.translate((0.0, 0.0, spec.floor - bevel_h))
 
-    return outer - bore - depression - entry_bevel
+    return bore, depression, entry_bevel
+
+
+def _subtract_cup_cutters(body: m3d.Manifold, spec: HexOrganizerSpec) -> m3d.Manifold:
+    bore, depression, entry_bevel = _cup_cutters(spec)
+    for col in range(spec.cols):
+        for row in range(spec.rows):
+            cx, cy = cup_centre(spec, col, row)
+            body -= bore.translate((cx, cy, 0.0))
+            body -= depression.translate((cx, cy, 0.0))
+            body -= entry_bevel.translate((cx, cy, 0.0))
+    return body
 
 
 # ---------------------------------------------------------------------------
@@ -334,12 +369,7 @@ def _build_hollow(spec: HexOrganizerSpec) -> m3d.Manifold:
     R_outer = outer_f2f / np.sqrt(3)
     bore_r = max(0.0, spec.vertical_roundover - (R_outer - spec.bore_f2f / np.sqrt(3)))
 
-    outer_shell = hex_prism(outer_f2f, spec.height)
-    shells = [outer_shell.translate((*cup_centre(spec, c, r), 0.0))
-              for c in range(spec.cols) for r in range(spec.rows)]
-    result = shells[0]
-    for s in shells[1:]:
-        result = result + s
+    result = m3d.Manifold.extrude(honeycomb_footprint_cs(spec), spec.height)
 
     if spec.vertical_roundover > 0.0:
         result = _vertical_roundover(result, spec, spec.vertical_roundover)
@@ -362,16 +392,8 @@ def build_organizer(spec: HexOrganizerSpec) -> m3d.Manifold:
     if spec.height < 50:
         return _build_hollow(spec)
 
-    # Honeycomb cup union
-    cup = single_cup(spec)
-    cups = []
-    for col in range(spec.cols):
-        for row in range(spec.rows):
-            cx, cy = cup_centre(spec, col, row)
-            cups.append(cup.translate((cx, cy, 0.0)))
-    result = cups[0]
-    for c in cups[1:]:
-        result = result + c
+    result = m3d.Manifold.extrude(honeycomb_footprint_cs(spec), spec.height)
+    result = _subtract_cup_cutters(result, spec)
 
     result = _subtract_magnets(result, spec)
     if spec.vertical_roundover > 0.0:
@@ -394,7 +416,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Generate a hexagonal craft-paint organizer STL.")
     parser.add_argument("--cols", type=int, default=4, help="Number of columns (default: 4)")
     parser.add_argument("--rows", type=int, default=3, help="Number of rows (default: 3)")
-    parser.add_argument("--height", type=float, default=75.0, help="Overall cup height in mm (default: 75.0)")
+    parser.add_argument("--height", type=float, default=60.0, help="Overall cup height in mm (default: 60.0)")
     args = parser.parse_args()
 
     spec = HexOrganizerSpec(cols=args.cols, rows=args.rows, height=args.height)
@@ -403,7 +425,11 @@ def main() -> None:
     pitch_x, pitch_y = _pitches(spec)
 
     print(f"Building hex organizer  ({spec.cols} columns of {spec.rows} cups, open front/back)")
-    print(f"  cup: outer F2F {outer_f2f:.1f} mm  col pitch {pitch_x:.2f} mm  row pitch {pitch_y:.1f} mm")
+    print(
+        f"  cup: outer F2F {outer_f2f:.1f} mm  perimeter wall {spec.wall:.1f} mm  "
+        f"interior wall {spec.interior_wall:.1f} mm"
+    )
+    print(f"  layout: col pitch {pitch_x:.2f} mm  row pitch {pitch_y:.1f} mm")
     print(f"  magnets: {spec.magnet_dia:.0f}×{spec.magnet_depth:.0f} mm, z={MAGNET_Z:.0f} mm  (4 flat + 4 diagonal = 8 total)")
     print("  marker: orientation dent in the (0,0) cup floor (bottom-left)")
 

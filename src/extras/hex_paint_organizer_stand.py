@@ -91,7 +91,7 @@ def build_stand(stand: HexStandSpec) -> m3d.Manifold:
 
     # 1. Solid outer hex prisms (no inner geometry).
     shells = [
-        hex_prism(outer_f2f, spec.outer_wall_height).translate(
+        hex_prism(outer_f2f, spec.height).translate(
             (*cup_centre(spec, col, top_row), 0.0)
         )
         for col in range(spec.cols)
@@ -120,7 +120,7 @@ def build_stand(stand: HexStandSpec) -> m3d.Manifold:
         bore_cs = _rounded_hex_cs(spec.bore_f2f, bore_r)
     else:
         bore_cs = m3d.CrossSection([hex_polygon(spec.bore_f2f)])
-    bore_template = m3d.Manifold.extrude(bore_cs, spec.outer_wall_height)
+    bore_template = m3d.Manifold.extrude(bore_cs, spec.height)
     for col in (1, 3):
         if col >= spec.cols:
             continue
@@ -142,7 +142,7 @@ def build_stand(stand: HexStandSpec) -> m3d.Manifold:
     #     → construction Z (cup-axis) becomes stand Y (depth)
     #   translate so the floor bottom lands on z=0 and the slab sits at y ≥ 0.
     body = body.rotate([90.0, 0.0, 0.0])
-    body = body.translate([0.0, spec.outer_wall_height, -floor_bottom])
+    body = body.translate([0.0, spec.height, -floor_bottom])
 
     return body
 

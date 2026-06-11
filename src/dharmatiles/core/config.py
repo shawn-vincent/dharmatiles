@@ -72,7 +72,7 @@ class SpeciesConfig:
     min_printable_width: float = 1.2
 
     # Blade direction jitter within a Voronoi group.
-    group_dir_jitter: float = 0.1
+    blade_direction_jitter: Sample[float] = D.normal(0.0, 0.1)
 
     # Growth behaviour.
     grower: str = "floppy"
@@ -95,7 +95,8 @@ class SpeciesConfig:
         blade_thickness: float = 0.6,
         keel_fraction: float = 0.6,
         min_printable_width: float = 1.2,
-        group_dir_jitter: float = 0.1,
+        blade_direction_jitter: Sample[float] | None = None,
+        group_dir_jitter: float | None = None,
         grower: str = "floppy",
         blade_width_min: float | None = None,
         blade_width_max: float | None = None,
@@ -113,6 +114,17 @@ class SpeciesConfig:
         blade_curl = _range_compat(
             "blade_curl", blade_curl, blade_curl_min, blade_curl_max, D[0.2:0.45]
         )
+        if blade_direction_jitter is not None and group_dir_jitter is not None:
+            raise TypeError(
+                "blade_direction_jitter: pass either blade_direction_jitter=... "
+                "or legacy group_dir_jitter=..., not both"
+            )
+        if blade_direction_jitter is None:
+            blade_direction_jitter = (
+                D.normal(0.0, group_dir_jitter)
+                if group_dir_jitter is not None
+                else D.normal(0.0, 0.1)
+            )
 
         values = {
             "name": name,
@@ -130,7 +142,7 @@ class SpeciesConfig:
             "blade_thickness": blade_thickness,
             "keel_fraction": keel_fraction,
             "min_printable_width": min_printable_width,
-            "group_dir_jitter": group_dir_jitter,
+            "blade_direction_jitter": blade_direction_jitter,
             "grower": grower,
         }
         for field_name, value in values.items():
@@ -224,7 +236,7 @@ class SurfaceConfig:
 # Soil
 # ─────────────────────────────────────────────────────────────────────────────
 
-@dataclass
+@dataclass(init=False)
 class SoilConfig:
     """Soil texture: two tiers of random super-Gaussian blobs summed into terrain_z.
 
@@ -241,24 +253,17 @@ class SoilConfig:
     # ── Primary clumps ────────────────────────────────────────────────────────
     # Elliptical blobs with random aspect ratio and orientation give organic,
     # rain-eroded shapes rather than perfect circles.
-    n_blobs:            int   = 277   # primary clumps per square (35 × 35 mm)
-    blob_sigma_min_mm:  float = 0.22  # mm — smallest primary σ (major axis)
-    blob_sigma_max_mm:  float = 1.026 # mm — largest  primary σ (major axis)
-    blob_sigma_mode_mm: float = 0.434 # mm — triangular distribution peak (None-like: set < min for uniform)
-    blob_aspect_min:    float = 0.78  # min minor/major axis ratio (elongated)
-    blob_aspect_max:    float = 1.00  # max ratio (circular)
+    n_blobs:            Sample[int]   = 277   # primary clumps per square
+    blob_sigma:         Sample[float] = D.triangular(0.22, 0.434, 1.026)
+    blob_aspect:        Sample[float] = D[0.78:1.0]
     blob_power:         float = 3.5   # super-Gaussian exponent (2=Gaussian, higher=sharper base)
     blob_cutoff:        float = 2.6   # clip at this × sigma
-    blob_h_scale_min:   float = 0.14  # primary tier: height = this × sigma_mm (min)
-    blob_h_scale_max:   float = 1.12  # primary tier: height = this × sigma_mm (max)
-    blob_h_size_bias:   float = 0.85  # 0=independent, 1=large blobs always at scale_max
+    blob_h_scale:       Sample[float] = D[0.14:1.12]
 
     # ── Small-bump / surface-grain tier ──────────────────────────────────────
-    n_small:            int   = 0     # small bumps per square
-    small_sigma_min_mm: float = 0.20  # mm (≥ 1.5 cells at 256/tile — resolvable)
-    small_sigma_max_mm: float = 0.40  # mm
-    small_h_min:        float = 0.004  # mm
-    small_h_max:        float = 0.010  # mm
+    n_small:            Sample[int]   = 0     # small bumps per square
+    small_sigma:        Sample[float] = D[0.20:0.40]
+    small_h:            Sample[float] = D[0.004:0.010]
 
     # ── Per-blob organic perturbation ─────────────────────────────────────────
     # blob_warp_str_mm: displaces blob coordinates before computing distance,
@@ -275,13 +280,108 @@ class SoilConfig:
     surface_texture_scale_mm:   float = 0.27  # mm — spatial scale of texture features
     surface_texture2_amp:       float = 0.03  # mm — amplitude of finer noise layer
     surface_texture2_scale_mm:  float = 0.12  # mm — spatial scale of finer texture
-    blob_jitter:      float = 1.0    # placement jitter: 0=perfect grid, 1=fully random
-    blob_cluster_count:  int   = 30   # number of cluster centres (0 = no clustering)
-    blob_cluster_spread_mm: float = 6.0  # Gaussian spread around each cluster centre (mm)
+    blob_jitter:      Sample[float] = 1.0    # placement jitter: 0=perfect grid, 1=fully random
+    blob_cluster_count:  Sample[int] = 30   # number of cluster centres (0 = no clustering)
+    blob_cluster_spread_mm: Sample[float] = 6.0  # Gaussian spread around each cluster centre (mm)
 
 
 
     edge_fade_mm: float = 1.0   # mm — cosine fade to zero at tile edges and mask boundary
+
+    def __init__(
+        self,
+        *,
+        n_blobs: Sample[int] = 277,
+        blob_sigma: Sample[float] | None = None,
+        blob_aspect: Sample[float] | None = None,
+        blob_power: float = 3.5,
+        blob_cutoff: float = 2.6,
+        blob_h_scale: Sample[float] | None = None,
+        n_small: Sample[int] = 0,
+        small_sigma: Sample[float] | None = None,
+        small_h: Sample[float] | None = None,
+        blob_warp_str_mm: float = 0.0,
+        blob_texture_amp: float = 0.0,
+        blob_shape_noise_amp: float = 0.06,
+        blob_shape_noise_harmonics: int = 4,
+        surface_texture_amp: float = 0.06,
+        surface_texture_scale_mm: float = 0.27,
+        surface_texture2_amp: float = 0.03,
+        surface_texture2_scale_mm: float = 0.12,
+        blob_jitter: Sample[float] = 1.0,
+        blob_cluster_count: Sample[int] = 30,
+        blob_cluster_spread_mm: Sample[float] = 6.0,
+        edge_fade_mm: float = 1.0,
+        blob_sigma_min_mm: float | None = None,
+        blob_sigma_max_mm: float | None = None,
+        blob_sigma_mode_mm: float | None = None,
+        blob_aspect_min: float | None = None,
+        blob_aspect_max: float | None = None,
+        blob_h_scale_min: float | None = None,
+        blob_h_scale_max: float | None = None,
+        blob_h_size_bias: float | None = None,
+        small_sigma_min_mm: float | None = None,
+        small_sigma_max_mm: float | None = None,
+        small_h_min: float | None = None,
+        small_h_max: float | None = None,
+    ) -> None:
+        if blob_sigma is not None and any(
+            v is not None for v in (blob_sigma_min_mm, blob_sigma_max_mm, blob_sigma_mode_mm)
+        ):
+            raise TypeError("blob_sigma: pass either blob_sigma=... or legacy sigma args, not both")
+        if blob_sigma is None:
+            if blob_sigma_min_mm is None and blob_sigma_max_mm is None and blob_sigma_mode_mm is None:
+                blob_sigma = D.triangular(0.22, 0.434, 1.026)
+            elif blob_sigma_min_mm is None or blob_sigma_max_mm is None:
+                raise TypeError("blob_sigma: legacy min/max arguments must be passed together")
+            elif blob_sigma_mode_mm is not None and blob_sigma_mode_mm >= blob_sigma_min_mm:
+                blob_sigma = D.triangular(blob_sigma_min_mm, blob_sigma_mode_mm, blob_sigma_max_mm)
+            else:
+                blob_sigma = D[blob_sigma_min_mm:blob_sigma_max_mm]
+
+        blob_aspect = _range_compat(
+            "blob_aspect", blob_aspect, blob_aspect_min, blob_aspect_max, D[0.78:1.0]
+        )
+        blob_h_scale = _range_compat(
+            "blob_h_scale", blob_h_scale, blob_h_scale_min, blob_h_scale_max, D[0.14:1.12]
+        )
+        small_sigma = _range_compat(
+            "small_sigma", small_sigma, small_sigma_min_mm, small_sigma_max_mm, D[0.20:0.40]
+        )
+        small_h = _range_compat(
+            "small_h", small_h, small_h_min, small_h_max, D[0.004:0.010]
+        )
+        if blob_h_size_bias is not None:
+            raise TypeError(
+                "blob_h_size_bias was removed; express the desired height "
+                "spread directly with blob_h_scale=..."
+            )
+
+        values = {
+            "n_blobs": n_blobs,
+            "blob_sigma": blob_sigma,
+            "blob_aspect": blob_aspect,
+            "blob_power": blob_power,
+            "blob_cutoff": blob_cutoff,
+            "blob_h_scale": blob_h_scale,
+            "n_small": n_small,
+            "small_sigma": small_sigma,
+            "small_h": small_h,
+            "blob_warp_str_mm": blob_warp_str_mm,
+            "blob_texture_amp": blob_texture_amp,
+            "blob_shape_noise_amp": blob_shape_noise_amp,
+            "blob_shape_noise_harmonics": blob_shape_noise_harmonics,
+            "surface_texture_amp": surface_texture_amp,
+            "surface_texture_scale_mm": surface_texture_scale_mm,
+            "surface_texture2_amp": surface_texture2_amp,
+            "surface_texture2_scale_mm": surface_texture2_scale_mm,
+            "blob_jitter": blob_jitter,
+            "blob_cluster_count": blob_cluster_count,
+            "blob_cluster_spread_mm": blob_cluster_spread_mm,
+            "edge_fade_mm": edge_fade_mm,
+        }
+        for field_name, value in values.items():
+            setattr(self, field_name, value)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -350,6 +450,7 @@ class RocksConfig:
     r:             Sample[float] = D[1.82:2.40].power(2.5)
     aspect:        Sample[float] = D[0.65:1.0]
     flat:          Sample[float] = D[0.32:1.20]
+    angle:         Sample[float] = D[0.0:np.pi]
     n_cuts:        int   = 4      # random plane cuts per stone
     cut:           Sample[float] = D[0.40:0.75]
     roughness:     float = 0.02   # small residual per-vertex noise
@@ -363,6 +464,7 @@ class RocksConfig:
         r: Sample[float] | None = None,
         aspect: Sample[float] | None = None,
         flat: Sample[float] | None = None,
+        angle: Sample[float] | None = None,
         n_cuts: int = 4,
         cut: Sample[float] | None = None,
         roughness: float = 0.02,
@@ -395,11 +497,13 @@ class RocksConfig:
         )
         flat = _range_compat("flat", flat, flat_min, flat_max, D[0.32:1.20])
         cut = _range_compat("cut", cut, cut_min, cut_max, D[0.40:0.75])
+        angle = D[0.0:np.pi] if angle is None else angle
 
         values = {
             "r": r,
             "aspect": aspect,
             "flat": flat,
+            "angle": angle,
             "n_cuts": n_cuts,
             "cut": cut,
             "roughness": roughness,

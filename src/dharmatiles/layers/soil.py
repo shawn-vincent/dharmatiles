@@ -32,6 +32,7 @@ from scipy.ndimage import distance_transform_edt, gaussian_filter, map_coordinat
 
 from ..core.config import SoilConfig
 from ..core.tile import TileScene, derive_seed
+from ..dist import sample
 
 
 class SoilCarpet:
@@ -138,31 +139,37 @@ def _compute_bump_field(soil: SoilConfig, seed: int,
 
     tex = _nf(max(1.0, 1.5)) if soil.blob_texture_amp > 0.0 else None
 
+    blob_jitter = float(sample(soil.blob_jitter, rng))
+    blob_cluster_count = max(0, int(round(sample(soil.blob_cluster_count, rng))))
+    blob_cluster_spread_mm = float(sample(soil.blob_cluster_spread_mm, rng))
+
     # ── Tier definitions ──────────────────────────────────────────────────────
-    # Each tier: (count, sigma_min_mm, sigma_max_mm, h_min, h_max, perturb).
-    # perturb=True → height derived from sigma (h_min/h_max unused).
-    # perturb=False (fine grain) → height sampled from h_min/h_max.
+    # Each tier: (count, sigma distribution, height distribution, perturb).
+    # perturb=True → height is sigma_mm × sampled height scale.
+    # perturb=False → height is sampled directly.
     tiers = [
-        (soil.n_blobs * n_squares,
-         soil.blob_sigma_min_mm, soil.blob_sigma_max_mm,
-         0.0, 0.0,               # h_min/h_max unused when perturb=True
+        (max(0, int(round(sample(soil.n_blobs, rng)))) * n_squares,
+         soil.blob_sigma,
+         soil.blob_h_scale,
          True),    # primary: elliptical + warp + texture
-        (soil.n_small * n_squares,
-         soil.small_sigma_min_mm, soil.small_sigma_max_mm,
-         soil.small_h_min,        soil.small_h_max,
+        (max(0, int(round(sample(soil.n_small, rng)))) * n_squares,
+         soil.small_sigma,
+         soil.small_h,
          False),   # fine grain: circular, no extra perturbation
     ]
 
-    for (n, sig_min, sig_max, h_min, h_max, perturb) in tiers:
-        if perturb and soil.blob_cluster_count > 0:
+    for (n, sigma_dist, height_dist, perturb) in tiers:
+        if n <= 0:
+            continue
+        if perturb and blob_cluster_count > 0:
             # Cluster process: place blobs around random cluster centres
-            spread_cells = soil.blob_cluster_spread_mm / cell_mm
-            centres_x = rng.uniform(0.0, gw, soil.blob_cluster_count)
-            centres_y = rng.uniform(0.0, gh, soil.blob_cluster_count)
-            which     = rng.integers(0, soil.blob_cluster_count, n)
+            spread_cells = blob_cluster_spread_mm / cell_mm
+            centres_x = rng.uniform(0.0, gw, blob_cluster_count)
+            centres_y = rng.uniform(0.0, gh, blob_cluster_count)
+            which     = rng.integers(0, blob_cluster_count, n)
             cx = np.clip(centres_x[which] + rng.normal(0, spread_cells, n), 0, gw - 1)
             cy = np.clip(centres_y[which] + rng.normal(0, spread_cells, n), 0, gh - 1)
-        elif perturb and soil.blob_jitter < 1.0:
+        elif perturb and blob_jitter < 1.0:
             # Jittered grid: divide surface into n cells, one blob per cell
             n_cols = max(1, int(round(np.sqrt(n * gw / gh))))
             n_rows = max(1, int(round(n / n_cols)))
@@ -171,30 +178,19 @@ def _compute_bump_field(soil: SoilConfig, seed: int,
             base_x = (np.arange(n_cols) + 0.5) * cw_
             base_y = (np.arange(n_rows) + 0.5) * ch_
             bx, by = np.meshgrid(base_x, base_y)
-            cx = (bx + soil.blob_jitter * (rng.uniform(-0.5, 0.5, bx.shape) * cw_)).ravel()
-            cy = (by + soil.blob_jitter * (rng.uniform(-0.5, 0.5, by.shape) * ch_)).ravel()
+            cx = (bx + blob_jitter * (rng.uniform(-0.5, 0.5, bx.shape) * cw_)).ravel()
+            cy = (by + blob_jitter * (rng.uniform(-0.5, 0.5, by.shape) * ch_)).ravel()
         else:
             cx = rng.uniform(0.0, gw, n)
             cy = rng.uniform(0.0, gh, n)
-        if perturb and soil.blob_sigma_mode_mm >= sig_min:
-            sigma_mm = rng.triangular(sig_min, soil.blob_sigma_mode_mm, sig_max, n)
-        else:
-            sigma_mm = rng.uniform(sig_min, sig_max, n)
+        sigma_mm = sample(sigma_dist, rng, n)
         sigma    = sigma_mm / cell_mm                        # mm → cells
         if perturb:
-            # Height scales with blob size; larger blobs biased toward scale_max
-            t        = (sigma_mm - sig_min) / (sig_max - sig_min + 1e-8)   # 0→1
-            span     = soil.blob_h_scale_max - soil.blob_h_scale_min
-            bias     = soil.blob_h_size_bias
-            scale_lo = soil.blob_h_scale_min + span * t * bias
-            scale_hi = soil.blob_h_scale_min + span * (t * bias + (1.0 - bias))
-            scale_hi = np.maximum(scale_lo, scale_hi)
-            scale    = rng.uniform(0.0, 1.0, n) * (scale_hi - scale_lo) + scale_lo
-            h = sigma_mm * scale
+            h = sigma_mm * sample(height_dist, rng, n)
         else:
-            h = rng.uniform(h_min, h_max, n)
+            h = sample(height_dist, rng, n)
         if perturb:
-            aspect = rng.uniform(soil.blob_aspect_min, soil.blob_aspect_max, n)
+            aspect = sample(soil.blob_aspect, rng, n)
             angle  = rng.uniform(0.0, np.pi, n)
         else:
             aspect = np.ones(n)

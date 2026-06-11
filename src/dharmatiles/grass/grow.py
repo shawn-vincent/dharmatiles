@@ -170,7 +170,7 @@ def _make_seed(
     curl = _sample_seed_curl(species, rng)
     # Store curl as radians per step, not total blade curl.
     curl_per_step   = curl / max(blade_n_steps, 1)
-    blade_direction = float(group_dir + rng.normal(0.0, species.group_dir_jitter))
+    blade_direction = float(group_dir + sample(species.blade_direction_jitter, rng))
     return GrassSeed(
         x=float(x),
         y=float(y),

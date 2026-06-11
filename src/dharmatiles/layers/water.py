@@ -7,6 +7,7 @@ from scipy.ndimage import binary_dilation, binary_erosion, distance_transform_ed
 
 from ..core.config import SurfaceConfig
 from ..core.tile import derive_seed
+from ..dist import D, Sample, bounds, sample
 
 
 WATER_RENDER_LIFT_MM = 0.10
@@ -33,10 +34,18 @@ class Water:
 
     height_default_mm: float = 3.0
 
-    def __init__(self, *, embed_mm: float = 2.0,
-                 height_mm: float | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        embed_mm: float = 2.0,
+        height_mm: float | None = None,
+        ripple_seg_len: Sample[float] | None = None,
+        ripple_offset: Sample[float] | None = None,
+        ) -> None:
         self.embed_mm  = embed_mm
         self.height_mm = height_mm
+        self.ripple_seg_len = D[10.0:20.0] if ripple_seg_len is None else ripple_seg_len
+        self.ripple_offset = D[0.0:20.0] if ripple_offset is None else ripple_offset
 
     def apply(
         self,
@@ -86,6 +95,8 @@ class Water:
 
         zd = zd + make_water_ripple_displacement(
             wm_disp, sm, ds_cell_w,
+            seg_len=self.ripple_seg_len,
+            offset=self.ripple_offset,
             seed=derive_seed(surface.seed, 'water-ripple'))
 
         # Outside the pool, raise the water surface to follow terrain_z so
@@ -194,10 +205,9 @@ def make_water_ripple_displacement(
     cell_w:         float,
     amplitude_mm:   float = 0.5,
     wavelength_mm:  float = 3.0,
-    seg_len_min_mm: float = 10.0,
-    seg_len_max_mm: float = 20.0,
+    seg_len:        Sample[float] = D[10.0:20.0],
     seg_fade_mm:    float = 15.0,
-    max_offset_mm:  float = 20.0,
+    offset:         Sample[float] = D[0.0:20.0],
     edge_fade_mm:   float = 15.0,
     arc_smooth_mm:  float = 2.5,
     seed:           int   = 0xD3C2,
@@ -208,7 +218,7 @@ def make_water_ripple_displacement(
     (seg_len), then a gradual Hann fade over seg_fade_mm on each end.
     The tile-edge envelope fades all displacement to zero over edge_fade_mm
     inside every tile boundary.  Amplitude scales linearly with proximity:
-    100 % at 0 mm offset from source, 0 % at max_offset_mm.
+    100 % at 0 mm offset from source, 0 % at the configured offset bound.
 
     Segment count is auto-scaled: ~1 segment per 6 mm of source perimeter.
     """
@@ -275,8 +285,9 @@ def make_water_ripple_displacement(
     chosen   = rng.integers(0, n_src, size=n_segments)
     center_r = src_r[chosen].astype(np.int32)
     center_c = src_c[chosen].astype(np.int32)
-    offsets  = rng.uniform(0.0, max_offset_mm, size=n_segments)
-    seg_lens = rng.uniform(seg_len_min_mm, seg_len_max_mm, size=n_segments)
+    offsets  = sample(offset, rng, size=n_segments)
+    seg_lens = sample(seg_len, rng, size=n_segments)
+    max_offset_mm = max(float(bounds(offset)[1]), 1e-6)
 
     # ── Accumulate segment displacements ──────────────────────────────────────
     disp = np.zeros((gh, gw))

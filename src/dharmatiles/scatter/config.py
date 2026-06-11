@@ -15,6 +15,8 @@ direction mode.  There is no sentinel-value overloading.
 from __future__ import annotations
 from dataclasses import dataclass
 
+from ..dist import Sample
+
 
 @dataclass(frozen=True)
 class Uniform:
@@ -31,8 +33,8 @@ class Uniform:
     seed : int
         Per-prototype RNG seed offset, XOR-ed with the surface seed.
     """
-    count_per_square: int | None = None
-    gap_mm:           float      = 2.0
+    count_per_square: Sample[int] | None = None
+    gap_mm:           Sample[float]      = 2.0
     seed:             int        = 0
 
 
@@ -55,8 +57,8 @@ class Grouped:
     seed : int
         Per-prototype RNG seed offset, XOR-ed with the surface seed.
     """
-    groups_per_square: int   = 3
-    count_per_square:  int | None = None
-    gap_mm:            float = 0.3
+    groups_per_square: Sample[int]   = 3
+    count_per_square:  Sample[int] | None = None
+    gap_mm:            Sample[float] = 0.3
     group_dir_mode:    str   = 'random'
     seed:              int   = 0
