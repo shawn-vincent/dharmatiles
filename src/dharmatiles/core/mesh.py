@@ -147,7 +147,14 @@ def _make_heightmap_solid_adaptive(
     mesh = trimesh.Trimesh(vertices=verts, faces=all_faces.astype(int),
                            process=False)
     mesh.metadata['top_face_count'] = n_top_faces
-    mesh.fix_normals()
+    # fix_normals → fix_inversion internally checks `mesh.volume < 0` to decide
+    # whether to flip face winding.  When the terrain is nearly flat (e.g. a
+    # pool floor at z=0), trimesh's Green's-theorem volume integral can produce
+    # exactly 0.0, which makes `integrated / volume` → 0/0 = NaN and fires a
+    # numpy RuntimeWarning.  The NaN result only means "skip the inversion check",
+    # which is fine — the faces are already correctly wound.
+    with np.errstate(invalid='ignore', divide='ignore'):
+        mesh.fix_normals()
     return mesh
 
 
@@ -288,6 +295,7 @@ def make_heightmap_solid(z_grid: np.ndarray, tile_w: float, tile_h: float,
                            faces=faces.astype(int),
                            process=False)
     mesh.metadata['top_face_count'] = n_top_quads * 2
-    mesh.fix_normals()
+    with np.errstate(invalid='ignore', divide='ignore'):
+        mesh.fix_normals()
     return mesh
 
