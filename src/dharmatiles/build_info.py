@@ -86,25 +86,46 @@ _UNKNOWN = BuildInfo(
 )
 
 
+_cached: BuildInfo | None = None
+
+
 def get_build_info() -> BuildInfo:
-    """Return provenance for the running artifact.
+    """Return provenance for the running artifact (cached after first call).
 
     Prefers the embedded _build_info module written by ``generate-build-info``.
-    Falls back to a live git query when that file is absent (development only).
+    Falls back to a live git query when that file is absent (development).
     """
+    global _cached
+    if _cached is not None:
+        return _cached
     try:
         from dharmatiles._build_info import DATA  # generated artifact
-        return BuildInfo(**DATA)
+        _cached = BuildInfo(**DATA)
     except ImportError:
-        return _build_from_git()
+        _cached = _build_from_git()
+    return _cached
 
 
 # ── development fallback ──────────────────────────────────────────────────────
 
-def _git(cwd: str | None = None, *args: str) -> str:
+import pathlib as _pathlib
+
+def _git_root() -> str:
+    """Walk up from this file to find the enclosing git repo root."""
+    p = _pathlib.Path(__file__).resolve().parent
+    while p != p.parent:
+        if (p / ".git").exists():
+            return str(p)
+        p = p.parent
+    return str(_pathlib.Path(__file__).resolve().parent)
+
+_GIT_ROOT = _git_root()
+
+
+def _git(*args: str) -> str:
     try:
         r = subprocess.run(
-            ["git", *args], capture_output=True, text=True, cwd=cwd,
+            ["git", *args], capture_output=True, text=True, cwd=_GIT_ROOT,
         )
         return r.stdout.strip() if r.returncode == 0 else ""
     except FileNotFoundError:
@@ -115,12 +136,12 @@ def _build_from_git() -> BuildInfo:
     """Query git at runtime — development convenience only."""
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    commit       = _git(None, "rev-parse", "HEAD")            or "unknown"
-    commit_short = _git(None, "rev-parse", "--short", "HEAD") or "unknown"
-    branch       = _git(None, "rev-parse", "--abbrev-ref", "HEAD") or "unknown"
-    is_dirty     = bool(_git(None, "status", "--porcelain"))
+    commit       = _git("rev-parse", "HEAD")            or "unknown"
+    commit_short = _git("rev-parse", "--short", "HEAD") or "unknown"
+    branch       = _git("rev-parse", "--abbrev-ref", "HEAD") or "unknown"
+    is_dirty     = bool(_git("status", "--porcelain"))
 
-    describe = _git(None, "describe", "--tags", "--long", "--always")
+    describe = _git("describe", "--tags", "--long", "--always")
     if not describe:
         return BuildInfo(
             version="unknown", commit=commit, commit_short=commit_short,

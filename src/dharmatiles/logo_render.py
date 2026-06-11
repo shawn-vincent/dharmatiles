@@ -45,11 +45,11 @@ def render_header(
 
         render_header("generate-tile-stl", "v0.1.0")
     """
-    if version is None:
-        version = get_build_info().version_line()
     console = Console()
-    _print_frame(console, min(console.width or 80, 80),
-                 title, subtitle, version, url)
+    frame_w = min(console.width or 80, 80)
+    if version is None:
+        version = get_build_info().version_line(width=frame_w - 2 - _OVERHEAD)
+    _print_frame(console, frame_w, title, subtitle, version, url)
 
 
 
