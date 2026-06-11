@@ -10,3 +10,6 @@ textures/
 
 # Generated STL outputs — too large for GitHub, generated locally
 stl/
+
+# Build provenance — generated artifact, must not be committed
+src/dharmatiles/_build_info.py

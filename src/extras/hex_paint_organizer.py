@@ -10,8 +10,11 @@ intended viewing frame: +x = column direction (4 across), +y = row direction
 from __future__ import annotations
 
 import argparse
+import contextlib
+import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Generator
 
 import manifold3d as m3d
 import numpy as np
@@ -387,7 +390,7 @@ def _build_hollow(spec: HexOrganizerSpec) -> m3d.Manifold:
 
 
 def build_organizer(spec: HexOrganizerSpec) -> m3d.Manifold:
-    if spec.height < 50:
+    if spec.height < 15:
         return _build_hollow(spec)
 
     result = m3d.Manifold.extrude(honeycomb_footprint_cs(spec), spec.height)
@@ -407,49 +410,189 @@ def build_organizer(spec: HexOrganizerSpec) -> m3d.Manifold:
 
 
 # ---------------------------------------------------------------------------
+# CLI output helpers
+# ---------------------------------------------------------------------------
+
+_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+_SPINNER_FPS    = 12.5
+
+
+def _time_color(elapsed: float) -> str:
+    """dim → yellow → red gradient keyed on elapsed seconds."""
+    if elapsed < 2.0:
+        return "dim white"
+    if elapsed < 10.0:
+        return "yellow"
+    return "bold red"
+
+
+class _SpinnerLine:
+    """Rich renderable: indented spinner that aligns with the ✓ column."""
+
+    def __init__(self, label: str) -> None:
+        from rich.markup import escape
+        self._label = escape(label)
+        self._t0    = time.monotonic()
+
+    def __rich_console__(self, console, options):
+        from rich.text import Text
+        elapsed = time.monotonic() - self._t0
+        frame   = _SPINNER_FRAMES[int(elapsed * _SPINNER_FPS) % len(_SPINNER_FRAMES)]
+        t_str   = "    s" if elapsed < 0.005 else f"{elapsed:.2f}s"
+        yield Text.from_markup(
+            f"  [cyan]{frame}[/cyan] {self._label:<38}"
+            f" [cyan]{t_str}[/cyan]"
+        )
+
+
+@contextlib.contextmanager
+def _step(console, label: str) -> Generator[None, None, None]:
+    """Spin while work runs, print ✓ when done.  Falls back to plain print."""
+    t0 = time.perf_counter()
+    if console is not None:
+        from rich.live import Live
+        live = Live(
+            _SpinnerLine(label),
+            console=console,
+            refresh_per_second=12,
+            transient=True,
+        )
+        live.__enter__()
+        try:
+            yield
+        finally:
+            live.__exit__(None, None, None)
+            elapsed = time.perf_counter() - t0
+            tc = _time_color(elapsed)
+            console.print(
+                f"  [green]✓[/green] {label:<38} [{tc}]{elapsed:.2f}s[/]"
+            )
+    else:
+        print(f"  {label}…", end="", flush=True)
+        try:
+            yield
+        finally:
+            elapsed = time.perf_counter() - t0
+            print(f"  done  ({elapsed:.2f}s)")
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate a hexagonal craft-paint organizer STL.")
-    parser.add_argument("--cols", type=int, default=4, help="Number of columns (default: 4)")
-    parser.add_argument("--rows", type=int, default=3, help="Number of rows (default: 3)")
+    parser.add_argument("--cols",   type=int,   default=4,    help="Number of columns (default: 4)")
+    parser.add_argument("--rows",   type=int,   default=3,    help="Number of rows (default: 3)")
     parser.add_argument("--height", type=float, default=60.0, help="Overall cup height in mm (default: 60.0)")
+    parser.add_argument("--quiet",  action="store_true",      help="Suppress all output")
     args = parser.parse_args()
 
-    spec = HexOrganizerSpec(cols=args.cols, rows=args.rows, height=args.height)
-
+    spec      = HexOrganizerSpec(cols=args.cols, rows=args.rows, height=args.height)
+    out_path  = Path("stl/extras/hex_paint_organizer.stl")
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
     pitch_x, pitch_y = _pitches(spec)
 
-    print(f"Building hex organizer  ({spec.cols} columns of {spec.rows} cups, open front/back)")
-    print(
-        f"  cup: outer F2F {outer_f2f:.1f} mm  perimeter wall {spec.wall:.1f} mm  "
-        f"interior wall {spec.interior_wall:.1f} mm"
-    )
-    print(f"  layout: col pitch {pitch_x:.2f} mm  row pitch {pitch_y:.1f} mm")
-    print(f"  magnets: {spec.magnet_dia:.0f}×{spec.magnet_depth:.0f} mm, z={MAGNET_Z:.0f} mm  (4 flat + 4 diagonal = 8 total)")
-    print("  marker: orientation dent in the (0,0) cup floor (bottom-left)")
+    # ── Pick output mode ─────────────────────────────────────────────────────
+    console = None
+    if not args.quiet:
+        try:
+            import sys
+            from rich.console import Console
+            if sys.stdout.isatty():
+                console = Console(highlight=False)
+        except ImportError:
+            pass
 
-    manifold = build_organizer(spec)
-    raw = manifold.to_mesh()
-    mesh = trimesh.Trimesh(
-        vertices=np.array(raw.vert_properties, dtype=float)[:, :3],
-        faces=np.array(raw.tri_verts, dtype=int),
-        process=False,
-    )
-    mesh.fix_normals()
-    if mesh.volume < 0:
-        mesh.invert()
+    # ── Header ───────────────────────────────────────────────────────────────
+    if args.quiet:
+        pass
+    elif console is not None:
+        from rich.rule import Rule
+        console.print()
+        console.print(Rule(
+            f"[bold cyan]Hex Paint Organizer[/bold cyan]"
+            f"  [dim]·  {spec.cols} cols × {spec.rows} rows  ·  {spec.height:.0f} mm tall[/dim]",
+            style="cyan",
+        ))
+        console.print(
+            f"  [dim]cup:[/dim]  outer F2F [cyan]{outer_f2f:.1f}[/cyan] mm"
+            f"  ·  perimeter wall [cyan]{spec.wall:.1f}[/cyan] mm"
+            f"  ·  interior wall [cyan]{spec.interior_wall:.1f}[/cyan] mm"
+        )
+        console.print(
+            f"  [dim]layout:[/dim]  col pitch [cyan]{pitch_x:.2f}[/cyan] mm"
+            f"  ·  row pitch [cyan]{pitch_y:.1f}[/cyan] mm"
+        )
+        console.print(
+            f"  [dim]magnets:[/dim]  {spec.magnet_dia:.0f}×{spec.magnet_depth:.0f} mm"
+            f"  at z={MAGNET_Z:.0f} mm"
+            f"  [dim](4 flat + 4 diagonal = 8 total)[/dim]"
+        )
+        console.print(
+            "  [dim]marker:[/dim]  orientation dent in the (0,0) cup floor"
+            "  [dim](bottom-left)[/dim]"
+        )
+    else:
+        print(f"Building hex organizer  ({spec.cols} columns of {spec.rows} cups, open front/back)")
+        print(
+            f"  cup: outer F2F {outer_f2f:.1f} mm  perimeter wall {spec.wall:.1f} mm  "
+            f"interior wall {spec.interior_wall:.1f} mm"
+        )
+        print(f"  layout: col pitch {pitch_x:.2f} mm  row pitch {pitch_y:.1f} mm")
+        print(f"  magnets: {spec.magnet_dia:.0f}×{spec.magnet_depth:.0f} mm, z={MAGNET_Z:.0f} mm  (4 flat + 4 diagonal = 8 total)")
+        print("  marker: orientation dent in the (0,0) cup floor (bottom-left)")
 
-    out_path = Path("stl/extras/hex_paint_organizer.stl")
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    mesh.export(str(out_path))
+    # ── Build ────────────────────────────────────────────────────────────────
+    t0_total = time.perf_counter()
 
-    print(f"Saved → {out_path}")
-    print(f"Vertices: {len(mesh.vertices):,}  Faces: {len(mesh.faces):,}")
-    print(f"Watertight: {mesh.is_watertight}")
-    print(f"Volume: {mesh.volume:.1f} mm³")
+    with _step(console, "Build honeycomb solid"):
+        manifold = build_organizer(spec)
+
+    with _step(console, "Convert to trimesh + fix normals"):
+        raw  = manifold.to_mesh()
+        mesh = trimesh.Trimesh(
+            vertices=np.array(raw.vert_properties, dtype=float)[:, :3],
+            faces=np.array(raw.tri_verts, dtype=int),
+            process=False,
+        )
+        mesh.fix_normals()
+        if mesh.volume < 0:
+            mesh.invert()
+
+    with _step(console, "Export STL"):
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        mesh.export(str(out_path))
+
+    total_elapsed = time.perf_counter() - t0_total
+
+    # ── Stats ────────────────────────────────────────────────────────────────
+    if args.quiet:
+        return
+
+    n_verts    = len(mesh.vertices)
+    n_faces    = len(mesh.faces)
+    watertight = mesh.is_watertight
+    volume     = mesh.volume
+
+    if console is not None:
+        wt_icon  = "[green]●[/green]" if watertight else "[bold red]✗[/bold red]"
+        wt_label = "watertight" if watertight else "NOT watertight"
+        tc_total = _time_color(total_elapsed)
+        console.print(
+            f"\n  {wt_icon} [dim]{wt_label}[/dim]"
+            f"  [dim]{n_verts:,} verts · {n_faces:,} faces · {volume:.0f} mm³[/dim]"
+        )
+        console.print(f"  [#0078d4]{out_path}[/#0078d4]")
+        console.print(
+            f"  [dim]──[/dim] [{tc_total}]{total_elapsed:.1f}s total[/] [dim]──[/dim]\n"
+        )
+    else:
+        print(f"Saved → {out_path}")
+        print(f"Vertices: {n_verts:,}  Faces: {n_faces:,}")
+        print(f"Watertight: {watertight}")
+        print(f"Volume: {volume:.1f} mm³")
+        print(f"Total: {total_elapsed:.1f}s")
 
 
 if __name__ == "__main__":

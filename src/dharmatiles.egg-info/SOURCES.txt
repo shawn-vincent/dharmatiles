@@ -1,7 +1,9 @@
 README.md
 pyproject.toml
 src/dharmatiles/__init__.py
+src/dharmatiles/build_info.py
 src/dharmatiles/dist.py
+src/dharmatiles/logo_render.py
 src/dharmatiles/spec.py
 src/dharmatiles/systems.py
 src/dharmatiles.egg-info/PKG-INFO
@@ -46,8 +48,10 @@ src/dharmatiles/terrains/reporter.py
 src/dharmatiles/terrains/tile.py
 src/extras/hex_paint_organizer.py
 src/extras/hex_paint_organizer_stand.py
+src/scripts/__init__.py
 src/scripts/blade.py
 src/scripts/generate-grass-stl.py
+src/scripts/generate_build_info.py
 src/scripts/archived/generate-grass-blade-heightmap.py
 src/scripts/archived/generate-grass-heightmap-flowfield.py
 src/scripts/archived/generate-grass-heightmap-v1.py

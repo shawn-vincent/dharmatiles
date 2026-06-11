@@ -222,6 +222,42 @@ class RichReporter(TileReporter):
             return "yellow"
         return "bold red"
 
+    @staticmethod
+    def _table_time_color(elapsed: float) -> str:
+        """Smooth gradient for table: #666666 @ 0s → #ffff00 @ 2s → #ff0000 @ 4s+."""
+        _DIM = (102, 102, 102)
+        _YEL = (255, 255, 0)
+        _RED = (255, 0, 0)
+        if elapsed <= 1.0:
+            r, g, b = _DIM
+        elif elapsed <= 2.0:
+            t = elapsed - 1.0          # 0..1 over the 1s→2s range
+            r = int(_DIM[0] + t * (_YEL[0] - _DIM[0]))
+            g = int(_DIM[1] + t * (_YEL[1] - _DIM[1]))
+            b = int(_DIM[2] + t * (_YEL[2] - _DIM[2]))
+        elif elapsed <= 4.0:
+            t = (elapsed - 2.0) / 2.0
+            r = int(_YEL[0] + t * (_RED[0] - _YEL[0]))
+            g = int(_YEL[1] + t * (_RED[1] - _YEL[1]))
+            b = int(_YEL[2] + t * (_RED[2] - _YEL[2]))
+        else:
+            r, g, b = _RED
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    @staticmethod
+    def _table_geo_color(value: int, max_val: int) -> str:
+        """Smooth gradient for verts/faces: #666666 @ 0–100k → #ffff00 @ max_val."""
+        _DIM  = (102, 102, 102)
+        _YEL  = (255, 255, 0)
+        FLOOR = 100_000
+        if max_val <= FLOOR:
+            return f"#{_DIM[0]:02x}{_DIM[1]:02x}{_DIM[2]:02x}"
+        t = max(0.0, min(1.0, (value - FLOOR) / (max_val - FLOOR)))
+        r = int(_DIM[0] + t * (_YEL[0] - _DIM[0]))
+        g = int(_DIM[1] + t * (_YEL[1] - _DIM[1]))
+        b = int(_DIM[2] + t * (_YEL[2] - _DIM[2]))
+        return f"#{r:02x}{g:02x}{b:02x}"
+
     # ── Tile ─────────────────────────────────────────────────────────────────
 
     def tile_begin(self, name, cols, rows, grid_w, grid_h,
@@ -250,8 +286,9 @@ class RichReporter(TileReporter):
 
     def tile_end(self, elapsed: float) -> None:
         self._stop_status()
+        tc = self._table_time_color(elapsed)
         self._console.print(
-            f"  [dim]── {elapsed:.1f}s ──[/dim]"
+            f"  [dim]──[/dim] [{tc}]{elapsed:.1f}s[/] [dim]──[/dim]"
         )
 
     # ── Steps ────────────────────────────────────────────────────────────────
@@ -262,11 +299,11 @@ class RichReporter(TileReporter):
 
     def step_end(self, label: str, elapsed: float, detail: str = "") -> None:
         self._stop_status()
-        tc = self._time_color(elapsed)
+        tc = self._table_time_color(elapsed)
         detail_str = f"  [dim]{detail}[/dim]" if detail else ""
         self._console.print(
             f"  [green]✓[/green] {label:<38}"
-            f" [{tc}]{elapsed:.2f}s[/{tc}]"
+            f" [{tc}]{elapsed:.2f}s[/]"
             f"{detail_str}"
         )
 
@@ -276,7 +313,7 @@ class RichReporter(TileReporter):
         self._stop_status()
         sq = int(square_mm) if square_mm == int(square_mm) else square_mm
         self._console.print(
-            f"  [blue]── building {suffix} at {sq}mm/sq ──[/blue]"
+            f"  [#0078d4]── building {suffix} at {sq}mm/sq ──[/#0078d4]"
         )
 
     # ── Export ───────────────────────────────────────────────────────────────
@@ -285,14 +322,14 @@ class RichReporter(TileReporter):
         self._stop_status()
         wt_icon  = "[green]●[/green]" if watertight else "[bold red]✗[/bold red]"
         wt_label = "watertight" if watertight else "NOT watertight"
-        tc = self._time_color(elapsed)
+        tc = self._table_time_color(elapsed)
         self._console.print(
             f"  [green]✓[/green] Export [{suffix}]"
             f"  {wt_icon} {wt_label}"
             f"  [dim]{n_verts:,} verts · {n_faces:,} faces[/dim]"
-            f"  [{tc}]{elapsed:.2f}s[/{tc}]"
+            f"  [{tc}]{elapsed:.2f}s[/]"
         )
-        self._console.print(f"      [blue]{path}[/blue]")
+        self._console.print(f"      [#0078d4]{path}[/#0078d4]")
         self._current_outputs.append(dict(
             suffix=suffix, path=path,
             n_verts=n_verts, n_faces=n_faces,
@@ -325,26 +362,35 @@ class RichReporter(TileReporter):
 
         from rich.table import Table
 
+        max_verts = max((o['n_verts'] for r in self._batch_rows for o in r['outputs']), default=1)
+        max_faces = max((o['n_faces'] for r in self._batch_rows for o in r['outputs']), default=1)
+
         table = Table(show_header=True, header_style="bold dim",
                       border_style="dim", box=_MINIMAL_BOX)
         table.add_column("Tile",      style="cyan")
         table.add_column("Size",      justify="right")
         table.add_column("Time",      justify="right")
         table.add_column("Type",      style="dim")
-        table.add_column("Verts",     justify="right", style="dim")
-        table.add_column("Faces",     justify="right", style="dim")
+        table.add_column("Verts",     justify="right")
+        table.add_column("Faces",     justify="right")
         table.add_column("Watertight")
 
         for row in self._batch_rows:
             outputs = row["outputs"]
-            verts_str  = "\n".join(f"{o['n_verts']:,}"    for o in outputs)
-            faces_str  = "\n".join(f"{o['n_faces']:,}"    for o in outputs)
+            verts_str  = "\n".join(
+                f"[{self._table_geo_color(o['n_verts'], max_verts)}]{o['n_verts']:,}[/]"
+                for o in outputs
+            )
+            faces_str  = "\n".join(
+                f"[{self._table_geo_color(o['n_faces'], max_faces)}]{o['n_faces']:,}[/]"
+                for o in outputs
+            )
             wt_str     = "\n".join(
                 "[green]✓[/green]" if o["watertight"] else "[red]✗[/red]"
                 for o in outputs
             )
             suffix_str = "\n".join(o["suffix"] for o in outputs)
-            tc = self._time_color(row["elapsed"])
+            tc = self._table_time_color(row["elapsed"])
             cols, rows = row["cols"], row["rows"]
             if cols == 1 and rows == 1:
                 size_str = f"[dim]{cols}×{rows}[/dim]"
@@ -353,7 +399,7 @@ class RichReporter(TileReporter):
             table.add_row(
                 row["name"],
                 size_str,
-                f"[{tc}]{row['elapsed']:.1f}s[/{tc}]",
+                f"[{tc}]{row['elapsed']:.1f}s[/]",
                 suffix_str,
                 verts_str,
                 faces_str,
@@ -363,10 +409,12 @@ class RichReporter(TileReporter):
         self._console.print()
         self._console.print(table)
         per_spec = elapsed / max(n_specs, 1)
+        tc_total    = self._table_time_color(elapsed)
+        tc_per_spec = self._table_time_color(per_spec)
         self._console.print(
             f"\n[bold]{n_specs}[/bold] spec{'s' if n_specs != 1 else ''} "
-            f"in [bold]{elapsed:.1f}s[/bold]"
-            f"  [dim]({per_spec:.1f}s/spec)[/dim]"
+            f"in [{tc_total}]{elapsed:.1f}s[/]"
+            f"  [dim]([/dim][{tc_per_spec}]{per_spec:.1f}s[/][dim]/spec)[/dim]"
         )
 
 

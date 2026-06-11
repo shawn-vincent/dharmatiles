@@ -17,7 +17,9 @@ dependencies = [
 ]
 
 [project.scripts]
-generate-tile-stl = "dharmatiles.terrains.tile:main"
+generate-tile-stl  = "dharmatiles.terrains.tile:main"
+dharmatiles-logo   = "dharmatiles.logo_render:main"
+generate-build-info = "scripts.generate_build_info:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
