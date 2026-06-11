@@ -38,11 +38,16 @@ class HexOrganizerSpec:
     vertical_roundover: float = 8.0  # convex outside vertical edge roundover radius
     cols: int = 4                    # columns across (x)
     rows: int = 3                    # cups per column (y)
+    tolerance: float = 0.3          # added to bore/retaining diameters for clearance
 
     def __post_init__(self) -> None:
         if self.interior_wall > 2.0 * self.wall:
             raise ValueError(
                 "interior_wall cannot exceed 2 * wall; adjacent cup shells would separate"
+            )
+        if self.tolerance >= self.wall:
+            raise ValueError(
+                "tolerance must be less than wall thickness; bore would exceed outer shell"
             )
 
 
@@ -133,32 +138,34 @@ def honeycomb_footprint_cs(spec: HexOrganizerSpec) -> m3d.CrossSection:
 def _cup_cutters(spec: HexOrganizerSpec) -> tuple[m3d.Manifold, m3d.Manifold, m3d.Manifold]:
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
     R_outer = outer_f2f / np.sqrt(3)
+    bore_f2f = spec.bore_f2f + 2.0 * spec.tolerance
+    ret_f2f  = spec.retaining_f2f + 2.0 * spec.tolerance
     # Inner bore and retaining depression corner roundover radius:
     # bore_r = outer_roundover - (R_outer - R_inner)  keeps wall ~= spec.wall at corners.
-    bore_r = max(0.0, spec.vertical_roundover - (R_outer - spec.bore_f2f / np.sqrt(3)))
-    ret_r  = max(0.0, spec.vertical_roundover - (R_outer - spec.retaining_f2f / np.sqrt(3)))
+    bore_r = max(0.0, spec.vertical_roundover - (R_outer - bore_f2f / np.sqrt(3)))
+    ret_r  = max(0.0, spec.vertical_roundover - (R_outer - ret_f2f / np.sqrt(3)))
 
     # Main bore: from z=floor to z=height (open top)
     if bore_r > 0.0:
-        bore = m3d.Manifold.extrude(_rounded_hex_cs(spec.bore_f2f, bore_r),
+        bore = m3d.Manifold.extrude(_rounded_hex_cs(bore_f2f, bore_r),
                                     spec.height - spec.floor)
     else:
-        bore = hex_prism(spec.bore_f2f, spec.height - spec.floor)
+        bore = hex_prism(bore_f2f, spec.height - spec.floor)
     bore = bore.translate((0.0, 0.0, spec.floor))
 
     # Retaining depression: from z=base to z=floor
     if ret_r > 0.0:
-        depression = m3d.Manifold.extrude(_rounded_hex_cs(spec.retaining_f2f, ret_r),
+        depression = m3d.Manifold.extrude(_rounded_hex_cs(ret_f2f, ret_r),
                                           spec.floor - spec.base)
     else:
-        depression = hex_prism(spec.retaining_f2f, spec.floor - spec.base)
+        depression = hex_prism(ret_f2f, spec.floor - spec.base)
     depression = depression.translate((0.0, 0.0, spec.base))
 
     # 45° bevel at the top of the retaining ring: height = apothem drop so the
     # chamfer angle is 45° and paint tubes slide in without catching.
-    bevel_h = min((spec.bore_f2f - spec.retaining_f2f) / 2.0, spec.floor - spec.base - 0.1)
-    bevel_cs = m3d.CrossSection([hex_polygon(spec.retaining_f2f)])
-    bevel_scale = spec.bore_f2f / spec.retaining_f2f
+    bevel_h = min((bore_f2f - ret_f2f) / 2.0, spec.floor - spec.base - 0.1)
+    bevel_cs = m3d.CrossSection([hex_polygon(ret_f2f)])
+    bevel_scale = bore_f2f / ret_f2f
     entry_bevel = m3d.Manifold.extrude(bevel_cs, bevel_h, scale_top=(bevel_scale, bevel_scale))
     entry_bevel = entry_bevel.translate((0.0, 0.0, spec.floor - bevel_h))
 
@@ -482,13 +489,16 @@ def _step(console, label: str) -> Generator[None, None, None]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate a hexagonal craft-paint organizer STL.")
-    parser.add_argument("--cols",   type=int,   default=4,    help="Number of columns (default: 4)")
-    parser.add_argument("--rows",   type=int,   default=3,    help="Number of rows (default: 3)")
-    parser.add_argument("--height", type=float, default=60.0, help="Overall cup height in mm (default: 60.0)")
+    parser.add_argument("--cols",      type=int,   default=4,   help="Number of columns (default: 4)")
+    parser.add_argument("--rows",      type=int,   default=3,   help="Number of rows (default: 3)")
+    parser.add_argument("--height",    type=float, default=60.0, help="Overall cup height in mm (default: 60.0)")
+    parser.add_argument("--tolerance", type=float, default=0.3,
+                        help="Bore clearance added to each bore diameter in mm (default: 0.3)")
     parser.add_argument("--quiet",  action="store_true",      help="Suppress all output")
     args = parser.parse_args()
 
-    spec      = HexOrganizerSpec(cols=args.cols, rows=args.rows, height=args.height)
+    spec      = HexOrganizerSpec(cols=args.cols, rows=args.rows, height=args.height,
+                                  tolerance=args.tolerance)
     out_path  = Path("stl/extras/hex_paint_organizer.stl")
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
     pitch_x, pitch_y = _pitches(spec)
@@ -515,10 +525,12 @@ def main() -> None:
             f"  [dim]·  {spec.cols} cols × {spec.rows} rows  ·  {spec.height:.0f} mm tall[/dim]",
             style="cyan",
         ))
+        tol_str = f"  ·  tolerance [cyan]{spec.tolerance:+.2f}[/cyan] mm" if spec.tolerance else ""
         console.print(
             f"  [dim]cup:[/dim]  outer F2F [cyan]{outer_f2f:.1f}[/cyan] mm"
             f"  ·  perimeter wall [cyan]{spec.wall:.1f}[/cyan] mm"
             f"  ·  interior wall [cyan]{spec.interior_wall:.1f}[/cyan] mm"
+            + tol_str
         )
         console.print(
             f"  [dim]layout:[/dim]  col pitch [cyan]{pitch_x:.2f}[/cyan] mm"

@@ -275,46 +275,33 @@ def _build_spec(
 
 # ── Closing quote ─────────────────────────────────────────────────────────────
 
-_QUOTE_PROMPT = (
-    "Give me one short, obscure Buddhist quote suited to someone who makes physical "
-    "things — a craftsperson or builder. Draw from a lesser-cited source: a Jataka tale, "
-    "a minor sutta, Abhidharma text, Zen record, Tibetan teaching, or similar. Include "
-    "the exact reference: text name, chapter or verse number, translator if applicable. "
-    "Reply with exactly two lines: the quote first (no inline attribution), then the "
-    "reference on the second line. No preamble, no explanation, nothing else."
-)
-
-
 def _print_closing_quote() -> None:
-    """Ask codex for a Buddhist quote and print it — silently skipped if codex is absent."""
-    import shutil
-    import subprocess
-    codex = shutil.which("codex")
-    if not codex:
-        return
+    """Pick a random Buddhist quote from the bundled data file and print it."""
+    import json
+    import random
+    from pathlib import Path
+
     try:
-        result = subprocess.run(
-            [codex, "exec", _QUOTE_PROMPT],
-            capture_output=True, text=True, timeout=60,
-        )
-        text = result.stdout.strip()
+        data_path = Path(__file__).parent.parent / "assets" / "quotes.json"
+        quotes = json.loads(data_path.read_text(encoding="utf-8"))
+        entry = random.choice(quotes)
+        quote_text = entry["q"]
+        source = entry["s"]
     except Exception:
         return
-    if not text:
-        return
+
     try:
         from rich.console import Console
         from rich.rule import Rule
         console = Console(highlight=False)
         console.print()
         console.print(Rule(style="dim"))
-        lines = [l.strip() for l in text.splitlines() if l.strip()]
-        for i, line in enumerate(lines):
-            console.print(f"  {'[italic]' if i == 0 else '[dim]'}{line}{'[/italic]' if i == 0 else '[/dim]'}")
+        console.print(f"  [italic]{quote_text}[/italic]")
+        console.print(f"  [dim]{source}[/dim]")
         console.print(Rule(style="dim"))
         console.print()
     except ImportError:
-        print(f"\n{'─'*60}\n{text}\n{'─'*60}\n")
+        print(f"\n{'─'*60}\n{quote_text}\n{source}\n{'─'*60}\n")
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
