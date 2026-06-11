@@ -161,9 +161,7 @@ def build_tile_from_spec(
         sq_mm       = sys_surface.square_mm
 
         if sq_mm not in built:
-            is_primary = (sq_mm == surface.square_mm and not built)
-            if not is_primary:
-                reporter.rebuild_begin(sys_surface.square_mm)
+            reporter.rebuild_begin(system.suffix, sq_mm)
 
             sys_tile = dataclasses.replace(tile, surface=sys_surface)
             mesh, scene = _build_tile_mesh(

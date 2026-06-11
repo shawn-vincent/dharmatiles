@@ -55,8 +55,8 @@ class TileReporter:
 
     # ── Per-scale events ─────────────────────────────────────────────────────
 
-    def rebuild_begin(self, square_mm: float) -> None:
-        """Called when the pipeline rebuilds the scene at a secondary scale."""
+    def rebuild_begin(self, suffix: str, square_mm: float) -> None:
+        """Called before building each system's mesh (primary and secondary scales)."""
         pass
 
     # ── Export event ─────────────────────────────────────────────────────────
@@ -126,8 +126,9 @@ class TextReporter(TileReporter):
 
     # ── Rebuild ──────────────────────────────────────────────────────────────
 
-    def rebuild_begin(self, square_mm: float) -> None:
-        print(f"\n  ── Rebuilding at {square_mm} mm/sq ──")
+    def rebuild_begin(self, suffix: str, square_mm: float) -> None:
+        sq = int(square_mm) if square_mm == int(square_mm) else square_mm
+        print(f"\n  ── building {suffix} at {sq}mm/sq ──")
 
     # ── Export ───────────────────────────────────────────────────────────────
 
@@ -171,7 +172,11 @@ class _SpinnerLine:
         from rich.text import Text
         elapsed = time.monotonic() - self._t0
         frame   = self._FRAMES[int(elapsed * self._FPS) % len(self._FRAMES)]
-        yield Text.from_markup(f"  [cyan]{frame}[/cyan] {self._label}")
+        t_str = "    s" if elapsed < 0.005 else f"{elapsed:.2f}s"
+        yield Text.from_markup(
+            f"  [cyan]{frame}[/cyan] {self._label:<38}"
+            f" [cyan]{t_str}[/cyan]"
+        )
 
 
 # ── Rich ──────────────────────────────────────────────────────────────────────
@@ -190,6 +195,8 @@ class RichReporter(TileReporter):
         self._batch_rows: list[dict]  = []
         self._current_spec: str       = ""
         self._current_outputs: list[dict] = []
+        self._current_cols: int       = 1
+        self._current_rows: int       = 1
 
     # ── Internal ─────────────────────────────────────────────────────────────
 
@@ -222,6 +229,8 @@ class RichReporter(TileReporter):
         from rich.rule import Rule
         from rich.text import Text
 
+        self._current_cols = cols
+        self._current_rows = rows
         self._t0_tile = time.perf_counter()
         self._current_outputs = []
 
@@ -263,10 +272,11 @@ class RichReporter(TileReporter):
 
     # ── Rebuild ──────────────────────────────────────────────────────────────
 
-    def rebuild_begin(self, square_mm: float) -> None:
+    def rebuild_begin(self, suffix: str, square_mm: float) -> None:
         self._stop_status()
+        sq = int(square_mm) if square_mm == int(square_mm) else square_mm
         self._console.print(
-            f"  [dim]── rebuilding at {square_mm} mm/sq ──[/dim]"
+            f"  [blue]── building {suffix} at {sq}mm/sq ──[/blue]"
         )
 
     # ── Export ───────────────────────────────────────────────────────────────
@@ -281,8 +291,8 @@ class RichReporter(TileReporter):
             f"  {wt_icon} {wt_label}"
             f"  [dim]{n_verts:,} verts · {n_faces:,} faces[/dim]"
             f"  [{tc}]{elapsed:.2f}s[/{tc}]"
-            f"  [blue]{path}[/blue]"
         )
+        self._console.print(f"      [blue]{path}[/blue]")
         self._current_outputs.append(dict(
             suffix=suffix, path=path,
             n_verts=n_verts, n_faces=n_faces,
@@ -304,7 +314,8 @@ class RichReporter(TileReporter):
 
     def batch_spec_done(self, spec_name: str, elapsed: float) -> None:
         self._batch_rows.append(dict(
-            name=spec_name, elapsed=elapsed, outputs=list(self._current_outputs)
+            name=spec_name, elapsed=elapsed, outputs=list(self._current_outputs),
+            cols=self._current_cols, rows=self._current_rows,
         ))
 
     def batch_end(self, n_specs: int, elapsed: float) -> None:
@@ -316,30 +327,37 @@ class RichReporter(TileReporter):
 
         table = Table(show_header=True, header_style="bold dim",
                       border_style="dim", box=_MINIMAL_BOX)
-        table.add_column("Spec",      style="cyan")
+        table.add_column("Tile",      style="cyan")
+        table.add_column("Size",      justify="right")
         table.add_column("Time",      justify="right")
+        table.add_column("Type",      style="dim")
         table.add_column("Verts",     justify="right", style="dim")
         table.add_column("Faces",     justify="right", style="dim")
         table.add_column("Watertight")
-        table.add_column("Outputs",   style="dim")
 
         for row in self._batch_rows:
             outputs = row["outputs"]
-            verts_str  = " / ".join(f"{o['n_verts']:,}"    for o in outputs)
-            faces_str  = " / ".join(f"{o['n_faces']:,}"    for o in outputs)
-            wt_str     = " ".join(
+            verts_str  = "\n".join(f"{o['n_verts']:,}"    for o in outputs)
+            faces_str  = "\n".join(f"{o['n_faces']:,}"    for o in outputs)
+            wt_str     = "\n".join(
                 "[green]✓[/green]" if o["watertight"] else "[red]✗[/red]"
                 for o in outputs
             )
-            suffix_str = " / ".join(o["suffix"] for o in outputs)
+            suffix_str = "\n".join(o["suffix"] for o in outputs)
             tc = self._time_color(row["elapsed"])
+            cols, rows = row["cols"], row["rows"]
+            if cols == 1 and rows == 1:
+                size_str = f"[dim]{cols}×{rows}[/dim]"
+            else:
+                size_str = f"[yellow]{cols}×{rows}[/yellow]"
             table.add_row(
                 row["name"],
-                f"[{tc}]{row['elapsed']:.0f}s[/{tc}]",
+                size_str,
+                f"[{tc}]{row['elapsed']:.1f}s[/{tc}]",
+                suffix_str,
                 verts_str,
                 faces_str,
                 wt_str,
-                suffix_str,
             )
 
         self._console.print()
@@ -358,11 +376,11 @@ try:
     from rich.box import Box as _Box
     _MINIMAL_BOX = _Box(
         "    \n"
-        " ── \n"
         "    \n"
-        " ── \n"
         "    \n"
-        " ── \n"
+        "    \n"
+        "    \n"
+        "    \n"
         "    \n"
         "    \n"
     )
