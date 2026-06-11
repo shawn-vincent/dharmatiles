@@ -88,6 +88,21 @@ class TileReporter:
     def batch_end(self, n_specs: int, elapsed: float) -> None:
         pass
 
+    def inject_batch_row(self, row: dict) -> None:
+        """Inject a pre-built batch row from a parallel worker.
+
+        Called instead of the normal tile_begin / step_end / batch_spec_done
+        sequence when tiles are built in separate worker processes.
+        """
+        pass
+
+    def record_batch_rows(self, rows: list) -> None:
+        """Record multiple rows without printing — used after a Live display
+        has already rendered visual output and we just need the data for the
+        summary table in batch_end().
+        """
+        pass
+
 
 # ── Silent ────────────────────────────────────────────────────────────────────
 
@@ -139,6 +154,14 @@ class TextReporter(TileReporter):
         self.step_end(label, elapsed, detail)
 
     # ── Batch ────────────────────────────────────────────────────────────────
+
+    def inject_batch_row(self, row: dict) -> None:
+        print(f"  ✓ {row['name']:<38} {row['elapsed']:.1f}s")
+
+    def record_batch_rows(self, rows: list) -> None:
+        # TextReporter has no table, so just print completions in order.
+        for row in rows:
+            print(f"  ✓ {row['name']:<38} {row['elapsed']:.1f}s")
 
     def batch_end(self, n_specs: int, elapsed: float) -> None:
         print(f"\n{n_specs} spec{'s' if n_specs != 1 else ''} "
@@ -354,6 +377,27 @@ class RichReporter(TileReporter):
             name=spec_name, elapsed=elapsed, outputs=list(self._current_outputs),
             cols=self._current_cols, rows=self._current_rows,
         ))
+
+    def inject_batch_row(self, row: dict) -> None:
+        """Accept a pre-built result row from a parallel worker process.
+
+        Prints a ✓ completion line and records for the summary table.
+        Used in non-TTY (pipe) fallback.  On a TTY the Live display in
+        ``main()`` handles visual output; use ``record_batch_rows()`` instead.
+        """
+        self._batch_rows.append(row)
+        tc = self._table_time_color(row['elapsed'])
+        self._console.print(
+            f"  [green]✓[/green] {row['name']:<38} [{tc}]{row['elapsed']:.1f}s[/]"
+        )
+
+    def record_batch_rows(self, rows: list) -> None:
+        """Record rows from parallel workers without printing.
+
+        Called after the Live display has already rendered all ✓ lines to
+        the terminal.  Only populates ``_batch_rows`` for ``batch_end()``.
+        """
+        self._batch_rows.extend(rows)
 
     def batch_end(self, n_specs: int, elapsed: float) -> None:
         self._stop_status()

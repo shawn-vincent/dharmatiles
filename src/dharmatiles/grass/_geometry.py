@@ -119,12 +119,12 @@ def _contained_segment_cells(
     bottom = rows * surface.cell_w
     top    = (rows + 1) * surface.cell_w
 
-    X0, Y0 = np.meshgrid(left, bottom)
-    X1, Y1 = np.meshgrid(right, bottom)
-    X2, Y2 = np.meshgrid(right, top)
-    X3, Y3 = np.meshgrid(left, top)
-    corner_x = np.stack([X0, X1, X2, X3], axis=0)
-    corner_y = np.stack([Y0, Y1, Y2, Y3], axis=0)
+    # Build corner arrays via broadcasting instead of 4×meshgrid:
+    # corner i of cell (row,col): x-coords are [left,right,right,left][i][col]
+    #                              y-coords are [bot,bot,top,top][i][row]
+    # Shape: (4, n_rows, n_cols) via (4,1,n_cols) × (4,n_rows,1) broadcast.
+    corner_x = np.array([left, right, right, left])[:, None, :]   # (4,1,n_cols)
+    corner_y = np.array([bottom, bottom, top, top])[:, :, None]   # (4,n_rows,1)
 
     rel_x = corner_x - x0
     rel_y = corner_y - y0
