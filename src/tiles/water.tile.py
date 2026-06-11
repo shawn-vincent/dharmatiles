@@ -2,7 +2,7 @@
 #
 # Entire surface is a water pool at 3 mm (2 mm below the 5 mm ground level).
 
-from dharmatiles.spec import Tile, Region, SurfaceConfig
+from dharmatiles.spec import Tile, Region, FloodFill, SurfaceConfig
 from dharmatiles.layers import Water
 
 tile = Tile(
@@ -10,7 +10,7 @@ tile = Tile(
     regions=[
         Region(
             id='pool',
-            contains=(0.5, 0.5),
+            selector=FloodFill(0.5, 0.5),
             height_mm=3.0,
             layers=[
                 Water(),

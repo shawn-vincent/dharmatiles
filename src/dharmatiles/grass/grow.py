@@ -12,6 +12,7 @@ from .seed import GrassPath, GrassSeed, GrowingPath
 # Distribution helpers live in scatter/distribute.py and are shared with
 # the rock prototype.  Import them here so the rest of this module can use
 # the same names as before without changes.
+from ..scatter.config import Grouped as _Grouped
 from ..scatter.distribute import (
     scaled_voronoi_group_count  as _scaled_voronoi_group_count,
     scaled_group_seed_count     as _scaled_group_seed_count,
@@ -29,14 +30,17 @@ def grow_all(
     rng: np.random.Generator,
     verbose: bool = True,
     placement_mask=None,
+    placement=None,
 ) -> list[GrassPath]:
     """Plant blades, then fully grow each blade before starting the next one."""
     occ_z = scene.vegetation_support_z.copy()
-    growing = plant_seeds(scene, surface, cfg, occ_z, rng, placement_mask=placement_mask)
+    growing = plant_seeds(scene, surface, cfg, occ_z, rng,
+                          placement_mask=placement_mask, placement=placement)
 
     if verbose:
-        n_groups = sum(s.groups_per_square * surface.cols * surface.rows for s in cfg.species)
-        print(f"  Planted {len(growing)} blades in {n_groups} groups")
+        _pl = placement or _Grouped()
+        n_groups = _pl.groups_per_square * surface.cols * surface.rows
+        print(f"  Planted {len(growing)} blades in ~{n_groups} groups")
 
     _sort_upstream_first(growing, surface)
     species_map = {species.name: species for species in cfg.species}
@@ -84,17 +88,18 @@ def plant_seeds(
     occ_z: np.ndarray,
     rng: np.random.Generator,
     placement_mask=None,
+    placement=None,
 ) -> list[GrowingPath]:
+    _placement = placement or _Grouped()
     paths: list[GrowingPath] = []
     for species in cfg.species:
-        n_groups = _scaled_voronoi_group_count(species.groups_per_square, placement_mask, surface, rng)
+        n_groups = _scaled_voronoi_group_count(_placement.groups_per_square, placement_mask, surface, rng)
         groups = _voronoi_groups(n_groups, surface, rng, mask=placement_mask)
-        actual_n_groups = len(groups)
         for group in groups:
             group_dir = float(rng.uniform(0.0, 2.0 * np.pi))
             n_seeds = _scaled_group_seed_count(
                 group,
-                species.gap_mm,
+                _placement.gap_mm,
                 species.blade_width_max,
                 surface.cell_w,
                 rng,

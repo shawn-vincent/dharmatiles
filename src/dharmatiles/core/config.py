@@ -57,9 +57,7 @@ class SpeciesConfig:
     # Set to 0.0 to disable.
     min_printable_width: float = 1.2
 
-    # Placement.
-    groups_per_square: int = 3
-    gap_mm: float = 0.3    # average clear gap between adjacent blade edges (mm)
+    # Blade direction jitter within a Voronoi group.
     group_dir_jitter: float = 0.1
 
     # Growth behaviour.
@@ -267,19 +265,18 @@ class GrassUnderlayConfig:
 
 @dataclass
 class RocksConfig:
-    """Random rock geometry parameters.
+    """Rock geometry parameters (shape and size only).
 
-    ``rocks_per_square`` is a density — ``Rocks`` multiplies by
-    cols × rows to get the actual rock count for the tile.
+    Placement density is controlled by the ``Uniform`` placement strategy
+    on ``Rocks`` -- pass ``placement=Uniform(count_per_square=N)`` there.
 
     Size distribution
     -----------------
-    Radius is sampled as  r = r_min + (r_max − r_min) × U^size_power
+    Radius is sampled as  r = r_min + (r_max - r_min) * U^size_power
     where U ~ Uniform(0, 1).  size_power = 1 gives a flat uniform spread;
     higher values skew strongly toward small rocks while still allowing the
     occasional large one up to r_max.
     """
-    rocks_per_square: int    = 15
     r_min:         float = 1.82   # mm — minimum horizontal semi-axis
     r_max:         float = 2.40   # mm — maximum horizontal semi-axis
     size_power:    float = 2.5    # distribution skew: >1 = more small rocks

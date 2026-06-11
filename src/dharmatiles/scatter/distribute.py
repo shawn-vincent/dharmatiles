@@ -16,13 +16,13 @@ from __future__ import annotations
 
 import numpy as np
 
-from .config import ScatterConfig
+from .config import Uniform, Grouped
 
 
 # ── Public entry point ────────────────────────────────────────────────────────
 
 def scatter_positions(
-    scatter_cfg: ScatterConfig,
+    placement,                 # Uniform | Grouped
     n_squares: int,
     footprint_mm: float,
     placement_mask,            # bool ndarray | None
@@ -32,25 +32,22 @@ def scatter_positions(
 ) -> list[tuple[float, float, float]]:
     """Return ``(x, y, group_dir)`` tuples for seed placement.
 
-    When ``scatter_cfg.groups_per_square == 0``, items are placed by
-    uniform random sampling within the placement mask (rocks default).
-    Otherwise Voronoi groups are used with a jitter grid inside each cell
-    (grass default).
-
-    ``group_dir`` is always ``0.0`` when ``group_dir_mode == 'none'``.
+    *placement* is a ``Uniform`` (random) or ``Grouped`` (Voronoi)
+    placement strategy.  ``group_dir`` is always ``0.0`` for ``Uniform``
+    and when ``Grouped.group_dir_mode == 'none'``.
     """
-    if scatter_cfg.groups_per_square > 0:
-        return _voronoi_positions(scatter_cfg, n_squares, footprint_mm,
+    if isinstance(placement, Grouped):
+        return _voronoi_positions(placement, n_squares, footprint_mm,
                                    placement_mask, scene, surface, rng)
     else:
-        return _uniform_positions(scatter_cfg, n_squares, footprint_mm,
+        return _uniform_positions(placement, n_squares, footprint_mm,
                                    placement_mask, surface, rng)
 
 
 # ── Uniform random placement (rocks default) ──────────────────────────────────
 
 def _uniform_positions(
-    cfg: ScatterConfig,
+    cfg: Uniform,
     n_squares: int,
     footprint_mm: float,
     placement_mask,
@@ -59,11 +56,11 @@ def _uniform_positions(
 ) -> list[tuple[float, float, float]]:
     """Sample N positions uniformly within *placement_mask*.
 
-    N = ``cfg.items_per_square * n_squares`` when ``items_per_square > 0``,
+    N = ``cfg.count_per_square * n_squares`` when ``count_per_square`` is set,
     otherwise derived from tile area divided by ``(footprint_mm + gap_mm)²``.
     """
-    if cfg.items_per_square > 0:
-        n = cfg.items_per_square * n_squares
+    if cfg.count_per_square is not None:
+        n = cfg.count_per_square * n_squares
     else:
         spacing = max(footprint_mm + max(0.0, cfg.gap_mm), 1e-3)
         area_mm2 = surface.tile_w * surface.tile_h
@@ -99,7 +96,7 @@ def _uniform_positions(
 # ── Voronoi grouped placement (grass default, optional for rocks) ─────────────
 
 def _voronoi_positions(
-    cfg: ScatterConfig,
+    cfg: Grouped,
     n_squares: int,
     footprint_mm: float,
     placement_mask,
@@ -121,10 +118,10 @@ def _voronoi_positions(
         else:
             group_dir = 0.0
 
-        if cfg.items_per_square > 0:
+        if cfg.count_per_square is not None:
             # Distribute the hard count proportionally across groups.
             group_frac = len(group['rows']) / max(surface.grid_w * surface.grid_h, 1)
-            n_group = max(1, int(round(cfg.items_per_square * n_squares * group_frac)))
+            n_group = max(1, int(round(cfg.count_per_square * n_squares * group_frac)))
         else:
             n_group = scaled_group_seed_count(
                 group, cfg.gap_mm, footprint_mm, surface.cell_w, rng)

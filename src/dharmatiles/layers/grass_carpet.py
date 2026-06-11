@@ -32,6 +32,7 @@ from scipy.ndimage import distance_transform_edt, gaussian_filter
 from ..core.config import (GrassConfig as _RuntimeGrassConfig,
                            GrassUnderlayConfig, SpeciesConfig)
 from ..core.tile import TileScene
+from ..scatter.config import Grouped
 from ..grass._geometry import _blade_step_geometry, _sample_grid
 from ..grass.growers.flat import FlatGrassGrower
 from ..grass.grow import plant_seeds as _plant_seeds
@@ -53,6 +54,7 @@ class GrassCarpet:
         self,
         species: SpeciesConfig | None = None,
         *,
+        placement: Grouped | None = None,
         underlay: GrassUnderlayConfig | None = None,
     ) -> None:
         _species = species or SpeciesConfig()
@@ -63,6 +65,7 @@ class GrassCarpet:
             self.cfg = dataclasses.replace(underlay, species=_species)
         else:
             self.cfg = underlay
+        self._placement = placement
 
     def apply(
         self,
@@ -120,7 +123,9 @@ class GrassCarpet:
         scene.terrain_support_z[:] = scene.terrain_z
 
         # ── 4. Build blade tube meshes ────────────────────────────────────────
-        seeds = _collect_seeds(scene, surface, cfg, rng, placement_mask=placement_mask)
+        seeds = _collect_seeds(scene, surface, cfg, rng,
+                               placement_mask=placement_mask,
+                               placement=self._placement)
         parts: list = []
         for seed in seeds:
             mesh = _build_carpet_blade_mesh(scene, surface, seed, cfg, placement_mask)
@@ -177,13 +182,14 @@ def _collect_seeds(
     cfg: GrassUnderlayConfig,
     rng: np.random.Generator,
     placement_mask=None,
+    placement=None,
 ) -> list[GrassSeed]:
     """Plant blade seeds using the same Voronoi-group logic as the 3D layer."""
     grass_cfg = _RuntimeGrassConfig(species=[cfg.species])
     occ_z = scene.terrain_z.copy()
     plant_rng = np.random.default_rng(int(rng.integers(2**31)))
     paths = _plant_seeds(scene, surface, grass_cfg, occ_z, plant_rng,
-                         placement_mask=placement_mask)
+                         placement_mask=placement_mask, placement=placement)
     return [p.seed for p in paths]
 
 

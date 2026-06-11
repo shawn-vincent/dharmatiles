@@ -10,12 +10,13 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
+import dataclasses
+
 from ..core.config import (RocksConfig, SpeciesConfig,
                            GrassConfig as _RuntimeGrassConfig)
-from .config import ScatterConfig
+from .config import Uniform, Grouped
 from .seed import RockSeed
 from .distribute import scatter_positions
-import dataclasses
 
 
 _ROCK_FIELDS = {f.name for f in dataclasses.fields(RocksConfig)}
@@ -26,20 +27,17 @@ _ROCK_FIELDS = {f.name for f in dataclasses.fields(RocksConfig)}
 class Rocks:
     """One pass of half-ellipsoid rocks to scatter into a region.
 
-    Flat kwargs build a ``RocksConfig``.  Optional ``scatter=ScatterConfig(...)``
-    overrides the default (count-based, no Voronoi grouping).
+    Flat kwargs set rock geometry (see ``RocksConfig``).
+    Pass ``placement=Uniform(count_per_square=N)`` to control density;
+    default is 15 rocks per square.
     """
 
-    def __init__(self, *, scatter: ScatterConfig | None = None, **rocks_kwargs):
+    def __init__(self, *, placement: Uniform | None = None, **rocks_kwargs):
         unknown = set(rocks_kwargs) - _ROCK_FIELDS
         if unknown:
             raise TypeError(f"Rocks: unknown kwargs {sorted(unknown)!r}")
         self.rocks = RocksConfig(**rocks_kwargs)
-        self.scatter_cfg = scatter or ScatterConfig(
-            items_per_square  = self.rocks.rocks_per_square,
-            groups_per_square = 0,
-            group_dir_mode    = 'none',
-        )
+        self.placement = placement or Uniform(count_per_square=15)
 
     def footprint_mm(self) -> float:
         return self.rocks.r_max
@@ -68,13 +66,13 @@ class Rocks:
         surface = scene.surface
         rng_seed = (surface.seed
                     ^ 0x726F636B          # "rock"
-                    ^ self.scatter_cfg.seed
+                    ^ self.placement.seed
                     ^ (layer_idx * 65537))
         rng = np.random.default_rng(rng_seed)
 
         n_sq      = surface.cols * surface.rows
         positions = scatter_positions(
-            self.scatter_cfg, n_sq, self.footprint_mm(),
+            self.placement, n_sq, self.footprint_mm(),
             placement_mask, scene, surface, rng,
         )
 
@@ -105,23 +103,19 @@ class Grass:
     """One species of 3D blades to scatter into a region.
 
     Pass a ``SpeciesConfig`` (sharable with a companion ``GrassCarpet``)
-    to specify blade geometry.  Pass ``scatter=ScatterConfig(...)`` to
-    override placement behaviour.
+    to specify blade geometry.  Pass ``placement=Grouped(...)`` to control
+    grouping and density; default is 3 Voronoi groups per square.
     """
 
     def __init__(
         self,
         species: SpeciesConfig | None = None,
         *,
-        scatter: ScatterConfig | None = None,
+        placement: Grouped | None = None,
         max_stack_height: float = 2.0,
     ):
         self.species = species or SpeciesConfig()
-        self.scatter_cfg = scatter or ScatterConfig(
-            groups_per_square = self.species.groups_per_square,
-            gap_mm            = self.species.gap_mm,
-            group_dir_mode    = 'random',
-        )
+        self.placement = placement or Grouped()
         self.max_stack_height = max_stack_height
 
     def footprint_mm(self) -> float:
@@ -145,7 +139,7 @@ class Grass:
         surface = scene.surface
         seed    = (surface.seed
                    ^ 0x47524F57          # "GROW"
-                   ^ self.scatter_cfg.seed
+                   ^ self.placement.seed
                    ^ (layer_idx * 65537))
         grass_cfg = _RuntimeGrassConfig(
             species          = [self.species],
@@ -160,4 +154,5 @@ class Grass:
         np.maximum(scene.vegetation_support_z, scene.terrain_support_z,
                    out=scene.vegetation_support_z)
 
-        return layer.build(scene, verbose=verbose, placement_mask=placement_mask)
+        return layer.build(scene, verbose=verbose, placement_mask=placement_mask,
+                           placement=self.placement)

@@ -11,25 +11,32 @@ No string types, no ``params=dict(...)``, no phase enum.
 
 Example::
 
-    from dataclasses import replace
-    from dharmatiles.spec import Tile, Region, Boundary, SurfaceConfig, SpeciesConfig
+    from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill
+    from dharmatiles.spec import SurfaceConfig, SpeciesConfig
     from dharmatiles.layers import SoilCarpet, GrassCarpet, Scatter
-    from dharmatiles.scatter import Rocks, Grass
+    from dharmatiles.scatter import Rocks, Grass, Grouped
 
     species = SpeciesConfig()
     tile = Tile(
         surface=SurfaceConfig(seed=42),
         regions=[
-            Region(id='meadow', contains=(0.25, 0.5), layers=[
-                GrassCarpet(species=replace(species, groups_per_square=240)),
+            Region(id='meadow', selector=FloodFill(0.25, 0.5), layers=[
+                GrassCarpet(species=species,
+                            placement=Grouped(groups_per_square=240)),
                 Scatter(
                     Rocks(r_min=0.8, r_max=2.2),
-                    Grass(species=replace(species, groups_per_square=24)),
+                    Grass(species=species,
+                          placement=Grouped(groups_per_square=24)),
                 ),
             ]),
-            Region(id='dirt', contains=(0.75, 0.5), layers=[
+            Region(id='dirt', selector=FloodFill(0.75, 0.5), layers=[
                 SoilCarpet(),
             ]),
+        ],
+        boundaries=[
+            Boundary(id='margin',
+                     from_anchor=Edge.TOP(0.48),
+                     to_anchor=Edge.BOTTOM(0.52)),
         ],
     )
 """
@@ -49,6 +56,7 @@ from .core.config import SurfaceConfig, SpeciesConfig
 
 __all__ = [
     'Tile', 'Region', 'Boundary', 'TileLayer',
+    'Anchor', 'Edge', 'FloodFill',
     'SurfaceConfig', 'SpeciesConfig',
     'load_spec',
 ]
@@ -72,15 +80,87 @@ class TileLayer(Protocol):
         ...
 
 
+# ── Boundary anchors ──────────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class Anchor:
+    """A point on the tile perimeter, given as an edge name and a 0–1 parameter.
+
+    Use the :class:`Edge` factory class rather than constructing these directly.
+    """
+    edge: str   # 'top' | 'bottom' | 'left' | 'right'
+    t:    float # normalised position along that edge, 0..1
+
+
+class Edge:
+    """Factory for :class:`Anchor` perimeter points.
+
+    Each method returns an ``Anchor`` at the given normalised position *t*
+    (0 = one corner, 1 = the other).
+
+    Usage::
+
+        Boundary(from_anchor=Edge.LEFT(0.5), to_anchor=Edge.RIGHT(0.5))
+    """
+
+    @staticmethod
+    def TOP(t: float) -> Anchor:    return Anchor('top',    t)
+    @staticmethod
+    def BOTTOM(t: float) -> Anchor: return Anchor('bottom', t)
+    @staticmethod
+    def LEFT(t: float) -> Anchor:   return Anchor('left',   t)
+    @staticmethod
+    def RIGHT(t: float) -> Anchor:  return Anchor('right',  t)
+
+
+# ── Region selectors ──────────────────────────────────────────────────────────
+
+class FloodFill:
+    """Select a region by BFS flood fill from one or more seed points.
+
+    Seed points are normalised (x, y) coordinates — (0, 0) is bottom-left,
+    (1, 1) is top-right of the tile.
+
+    Single seed::
+
+        FloodFill(0.25, 0.5)
+
+    Multiple seeds (both flood-fill into the same region index)::
+
+        FloodFill((0.1, 0.1), (0.9, 0.9))
+    """
+
+    def __init__(self, *args):
+        if len(args) == 2 and all(isinstance(a, (int, float)) for a in args):
+            # FloodFill(x, y) — two bare floats → single seed
+            self.seeds: tuple[tuple[float, float], ...] = (
+                (float(args[0]), float(args[1])),
+            )
+        else:
+            # FloodFill((x1,y1), (x2,y2), ...) — explicit seed tuples
+            self.seeds = tuple((float(x), float(y)) for x, y in args)
+        if not self.seeds:
+            raise ValueError("FloodFill requires at least one seed point")
+
+    def __repr__(self) -> str:
+        if len(self.seeds) == 1:
+            x, y = self.seeds[0]
+            return f"FloodFill({x}, {y})"
+        return f"FloodFill({', '.join(str(s) for s in self.seeds)})"
+
+
+# ── Spec dataclasses ──────────────────────────────────────────────────────────
+
 @dataclass
 class Region:
     """A named contiguous area of the tile.
 
+    ``selector`` is a :class:`FloodFill` that seeds the BFS region detection.
     ``layers`` run in the order they appear here.  ``height_mm`` falls
     back to the first layer's ``height_default_mm`` when None.
     """
     id:        str
-    contains:  tuple[float, float]
+    selector:  FloodFill
     layers:    list = field(default_factory=list)   # list[TileLayer]
     height_mm: float | None = None
 
@@ -97,12 +177,16 @@ class Region:
 class Boundary:
     """A curve that divides the tile into two regions.
 
+    ``from_anchor`` and ``to_anchor`` are :class:`Anchor` instances (use
+    :class:`Edge` factory methods).  Legacy ``('edge', t)`` tuples are also
+    accepted.
+
     ``width_mm = 0`` (default) → zero-width dividing line; no layers allowed.
     ``width_mm > 0`` → physical strip; layers fill the strip.
     """
     id:          str
-    from_anchor: tuple[str, float]
-    to_anchor:   tuple[str, float]
+    from_anchor: Anchor | tuple[str, float]
+    to_anchor:   Anchor | tuple[str, float]
     path:        str   = 'organic'
     amplitude_mm:    float = 3.6
     wavelength_mm:   float = 10.0

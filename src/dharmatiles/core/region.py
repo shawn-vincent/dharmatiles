@@ -13,7 +13,7 @@ from collections import deque
 import numpy as np
 
 from .config import SurfaceConfig
-from ..spec import Tile, Boundary
+from ..spec import Tile, Boundary, Anchor
 
 
 # Sentinel values in the region mask
@@ -23,9 +23,17 @@ _BOUNDARY   = -1
 
 # ── Anchor → mm ──────────────────────────────────────────────────────────────
 
-def _anchor_to_mm(edge: str, t: float,
+def _anchor_to_mm(anchor: Anchor | tuple,
                   tile_w: float, tile_h: float) -> tuple[float, float]:
-    """Convert a perimeter anchor (edge, t) to (x_mm, y_mm)."""
+    """Convert a perimeter anchor to (x_mm, y_mm).
+
+    Accepts an :class:`~dharmatiles.spec.Anchor` (from :class:`~dharmatiles.spec.Edge`
+    factory methods) or a legacy ``('edge', t)`` tuple.
+    """
+    if isinstance(anchor, tuple):
+        edge, t = anchor
+    else:
+        edge, t = anchor.edge, anchor.t
     if edge == 'bottom': return (t * tile_w, 0.0)
     if edge == 'top':    return (t * tile_w, tile_h)
     if edge == 'left':   return (0.0, t * tile_h)
@@ -43,8 +51,8 @@ def boundary_path_mm(spec: Boundary, surface: SurfaceConfig,
     For 'organic' paths the noise tapers to zero at both ends so the curve
     hits the anchor points exactly.
     """
-    xa, ya = _anchor_to_mm(*spec.from_anchor, surface.tile_w, surface.tile_h)
-    xb, yb = _anchor_to_mm(*spec.to_anchor,   surface.tile_w, surface.tile_h)
+    xa, ya = _anchor_to_mm(spec.from_anchor, surface.tile_w, surface.tile_h)
+    xb, yb = _anchor_to_mm(spec.to_anchor,   surface.tile_w, surface.tile_h)
 
     t  = np.linspace(0.0, 1.0, n_samples)
     dx = xb - xa
@@ -204,16 +212,16 @@ def build_region_mask(tile: Tile) -> np.ndarray:
         _rasterise_boundary(bnd, surface, mask)
 
     for idx, region in enumerate(tile.regions):
-        cx_n, cy_n = region.contains
-        col = int(np.clip(cx_n * surface.grid_w, 0, surface.grid_w - 1))
-        row = int(np.clip(cy_n * surface.grid_h, 0, surface.grid_h - 1))
-        ok = _flood_fill(mask, row, col, idx)
-        if not ok:
-            import warnings
-            warnings.warn(
-                f"Region '{region.id}': contains point ({cx_n:.2f}, {cy_n:.2f}) "
-                f"landed on a boundary or another region — check your tile spec.",
-                stacklevel=2,
-            )
+        import warnings
+        for cx_n, cy_n in region.selector.seeds:
+            col = int(np.clip(cx_n * surface.grid_w, 0, surface.grid_w - 1))
+            row = int(np.clip(cy_n * surface.grid_h, 0, surface.grid_h - 1))
+            ok = _flood_fill(mask, row, col, idx)
+            if not ok:
+                warnings.warn(
+                    f"Region '{region.id}': seed ({cx_n:.2f}, {cy_n:.2f}) "
+                    f"landed on a boundary or another region — check your tile spec.",
+                    stacklevel=2,
+                )
 
     return mask
