@@ -10,17 +10,13 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
-import dataclasses
-
 from ..core.config import (RocksConfig, SpeciesConfig,
                            GrassConfig as _RuntimeGrassConfig)
 from ..core.tile import derive_seed
+from ..dist import bounds, sample
 from .config import Uniform, Grouped
 from .seed import RockSeed
 from .distribute import scatter_positions
-
-
-_ROCK_FIELDS = {f.name for f in dataclasses.fields(RocksConfig)}
 
 
 # ── Rocks ─────────────────────────────────────────────────────────────────────
@@ -34,21 +30,17 @@ class Rocks:
     """
 
     def __init__(self, *, placement: Uniform | None = None, **rocks_kwargs):
-        unknown = set(rocks_kwargs) - _ROCK_FIELDS
-        if unknown:
-            raise TypeError(f"Rocks: unknown kwargs {sorted(unknown)!r}")
         self.rocks = RocksConfig(**rocks_kwargs)
         self.placement = placement or Uniform(count_per_square=15)
 
     def footprint_mm(self) -> float:
-        return self.rocks.r_max
+        return float(bounds(self.rocks.r)[1])
 
     def _make_seed(self, x: float, y: float,
                    rng: np.random.Generator) -> RockSeed:
-        u      = float(rng.uniform(0.0, 1.0)) ** self.rocks.size_power
-        rx     = self.rocks.r_min + (self.rocks.r_max - self.rocks.r_min) * u
-        ry     = rx * float(rng.uniform(self.rocks.aspect_min, 1.0))
-        h_frac = float(rng.uniform(self.rocks.flat_min, self.rocks.flat_max))
+        rx     = float(sample(self.rocks.r, rng))
+        ry     = rx * float(sample(self.rocks.aspect, rng))
+        h_frac = float(sample(self.rocks.flat, rng))
         height = 0.5 * (rx + ry) * h_frac
         angle  = float(rng.uniform(0.0, np.pi))
         return RockSeed(x=x, y=y, rx=rx, ry=ry, height=height, angle=angle)
@@ -118,7 +110,7 @@ class Grass:
         self.max_stack_height = max_stack_height
 
     def footprint_mm(self) -> float:
-        return self.species.blade_width_max
+        return float(bounds(self.species.blade_width)[1])
 
     def scatter(
         self,

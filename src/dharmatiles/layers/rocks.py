@@ -35,6 +35,7 @@ import trimesh
 from ..core.config import SurfaceConfig, RocksConfig
 from ..core.grid import sample_grid
 from ..core.tile import derive_seed
+from ..dist import sample
 
 
 # ── Scatter entry point ───────────────────────────────────────────────────────
@@ -178,8 +179,7 @@ def _build_rocks_mesh_core(
         raw[:, :, 2] = np.abs(raw[:, :, 2]) * 0.3
         norms = raw / (np.linalg.norm(raw, axis=-1, keepdims=True) + 1e-8)
 
-        cut_d = (rng.uniform(rocks.cut_min, rocks.cut_max, (N, n_cuts))
-                 * mean_r[:, None])
+        cut_d = sample(rocks.cut, rng, (N, n_cuts)) * mean_r[:, None]
 
         for k in range(n_cuts):
             n_k  = norms[:, k, :][:, None, None, :]

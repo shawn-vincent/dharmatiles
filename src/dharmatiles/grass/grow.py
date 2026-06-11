@@ -21,6 +21,7 @@ from ..scatter.distribute import (
     nearest_site_labels         as _nearest_site_labels,
     jitter_grid_xy              as _jitter_grid_xy,
 )
+from ..dist import bounds, sample
 
 
 def grow_all(
@@ -100,7 +101,7 @@ def plant_seeds(
             n_seeds = _scaled_group_seed_count(
                 group,
                 _placement.gap_mm,
-                species.blade_width_max,
+                float(bounds(species.blade_width)[1]),
                 surface.cell_w,
                 rng,
             )
@@ -144,13 +145,11 @@ def _vegetation_depth(vegetation_support_z: np.ndarray, terrain_support_z: float
 def _sample_seed_curl(species: SpeciesConfig, rng: np.random.Generator) -> float:
     """Return total arc sweep in radians for one blade.
 
-    The user-facing ``blade_curl`` parameters are dimensionless fractions of π
+    The user-facing ``blade_curl`` parameter is a dimensionless fraction of π
     (180°).  A value of 1.0 means the tip sweeps all the way back — "too much"
     curl — so sensible defaults live in the 0.2–0.5 range (36°–90°).
     """
-    blade_curl_min = max(0.0, float(species.blade_curl_min))
-    blade_curl_max = max(blade_curl_min, float(species.blade_curl_max))
-    magnitude = float(rng.uniform(blade_curl_min, blade_curl_max))
+    magnitude = max(0.0, float(sample(species.blade_curl, rng)))
     if magnitude == 0.0:
         return 0.0
     # Scale from fraction-of-π to radians, then pick random left/right.
@@ -165,8 +164,8 @@ def _make_seed(
     rng: np.random.Generator,
     surface=None,
 ) -> GrassSeed:
-    blade_width = float(rng.uniform(species.blade_width_min, species.blade_width_max))
-    target_length = float(rng.uniform(species.blade_length_min, species.blade_length_max))
+    blade_width = float(sample(species.blade_width, rng))
+    target_length = float(sample(species.blade_length, rng))
     blade_n_steps = max(1, int(round(target_length / species.blade_segment_length)))
     curl = _sample_seed_curl(species, rng)
     # Store curl as radians per step, not total blade curl.
@@ -226,5 +225,3 @@ def _sort_upstream_first(paths: list[GrowingPath], surface) -> None:
          together within each upstream band.
     """
     paths.sort(key=lambda p: p.seed.sort_key())
-
-

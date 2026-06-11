@@ -12,13 +12,30 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import numpy as np
 
+from ..dist import D, Sample
+
+
+def _range_compat(name: str, value, old_min, old_max, default):
+    """Coerce old ``*_min``/``*_max`` constructor args into one distribution."""
+    if value is not None and (old_min is not None or old_max is not None):
+        raise TypeError(f"{name}: pass either {name}=... or {name}_min/{name}_max, not both")
+    if value is not None:
+        return value
+    if old_min is None and old_max is None:
+        return default
+    if old_min is None or old_max is None:
+        raise TypeError(f"{name}: legacy min/max arguments must be passed together")
+    if old_min == old_max:
+        return old_min
+    return D[old_min:old_max]
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Grass species / runtime grass
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class SpeciesConfig:
     """Template for one plant species.
 
@@ -30,17 +47,14 @@ class SpeciesConfig:
 
     name: str = "floppy-grass"
 
-    # Blade geometry ranges, sampled at seed creation time.
-    blade_width_min: float = 1.2
-    blade_width_max: float = 1.2
-    blade_length_min: float = 10
-    blade_length_max: float = 10
+    # Blade geometry distributions, sampled at seed creation time.
+    blade_width: Sample[float] = 1.2
+    blade_length: Sample[float] = 10
     blade_segment_length: float = 0.5
     blade_taper: float = 1.0
     blade_base_width: float = 1.0
     blade_base_taper: float | None = 0
-    blade_curl_min: float = 0.2    # fraction of π (0 = straight, 1.0 = 180° arc)
-    blade_curl_max: float = 0.45   # gives 36°–81° arc range by default
+    blade_curl: Sample[float] = D[0.2:0.45]  # fraction of π (1.0 = 180° arc)
     blade_smooth: float = 0.9
     blade_rise_cap: float = 2.0
     blade_clearance: float = 0.1
@@ -62,6 +76,65 @@ class SpeciesConfig:
 
     # Growth behaviour.
     grower: str = "floppy"
+
+    def __init__(
+        self,
+        name: str = "floppy-grass",
+        *,
+        blade_width: Sample[float] | None = None,
+        blade_length: Sample[float] | None = None,
+        blade_segment_length: float = 0.5,
+        blade_taper: float = 1.0,
+        blade_base_width: float = 1.0,
+        blade_base_taper: float | None = 0,
+        blade_curl: Sample[float] | None = None,
+        blade_smooth: float = 0.9,
+        blade_rise_cap: float = 2.0,
+        blade_clearance: float = 0.1,
+        blade_top_facets: int = 6,
+        blade_thickness: float = 0.6,
+        keel_fraction: float = 0.6,
+        min_printable_width: float = 1.2,
+        group_dir_jitter: float = 0.1,
+        grower: str = "floppy",
+        blade_width_min: float | None = None,
+        blade_width_max: float | None = None,
+        blade_length_min: float | None = None,
+        blade_length_max: float | None = None,
+        blade_curl_min: float | None = None,
+        blade_curl_max: float | None = None,
+    ) -> None:
+        blade_width = _range_compat(
+            "blade_width", blade_width, blade_width_min, blade_width_max, 1.2
+        )
+        blade_length = _range_compat(
+            "blade_length", blade_length, blade_length_min, blade_length_max, 10
+        )
+        blade_curl = _range_compat(
+            "blade_curl", blade_curl, blade_curl_min, blade_curl_max, D[0.2:0.45]
+        )
+
+        values = {
+            "name": name,
+            "blade_width": blade_width,
+            "blade_length": blade_length,
+            "blade_segment_length": blade_segment_length,
+            "blade_taper": blade_taper,
+            "blade_base_width": blade_base_width,
+            "blade_base_taper": blade_base_taper,
+            "blade_curl": blade_curl,
+            "blade_smooth": blade_smooth,
+            "blade_rise_cap": blade_rise_cap,
+            "blade_clearance": blade_clearance,
+            "blade_top_facets": blade_top_facets,
+            "blade_thickness": blade_thickness,
+            "keel_fraction": keel_fraction,
+            "min_printable_width": min_printable_width,
+            "group_dir_jitter": group_dir_jitter,
+            "grower": grower,
+        }
+        for field_name, value in values.items():
+            object.__setattr__(self, field_name, value)
 
 
 @dataclass(frozen=True)
@@ -263,33 +336,79 @@ class GrassUnderlayConfig:
 # Rocks
 # ─────────────────────────────────────────────────────────────────────────────
 
-@dataclass
+@dataclass(init=False)
 class RocksConfig:
     """Rock geometry parameters (shape and size only).
 
     Placement density is controlled by the ``Uniform`` placement strategy
     on ``Rocks`` -- pass ``placement=Uniform(count_per_square=N)`` there.
 
-    Size distribution
-    -----------------
-    Radius is sampled as  r = r_min + (r_max - r_min) * U^size_power
-    where U ~ Uniform(0, 1).  size_power = 1 gives a flat uniform spread;
-    higher values skew strongly toward small rocks while still allowing the
-    occasional large one up to r_max.
+    Pass plain numbers for fixed values, or ``D[...]`` distributions for
+    sampled values.  For example, ``r=D[0.8:2.2].power(1.5)`` skews toward
+    small rocks while still allowing occasional large ones.
     """
-    r_min:         float = 1.82   # mm — minimum horizontal semi-axis
-    r_max:         float = 2.40   # mm — maximum horizontal semi-axis
-    size_power:    float = 2.5    # distribution skew: >1 = more small rocks
-    aspect_min:    float = 0.65   # min ry/rx ratio — prevents razor-thin slivers
-    flat_min:      float = 0.32   # height = this × mean_radius (flattest)
-    flat_max:      float = 1.20   # height = this × mean_radius (roundest)
+    r:             Sample[float] = D[1.82:2.40].power(2.5)
+    aspect:        Sample[float] = D[0.65:1.0]
+    flat:          Sample[float] = D[0.32:1.20]
     n_cuts:        int   = 4      # random plane cuts per stone
-    cut_min:       float = 0.40   # min cut distance as fraction of mean radius
-    cut_max:       float = 0.75   # max cut distance as fraction of mean radius
+    cut:           Sample[float] = D[0.40:0.75]
     roughness:     float = 0.02   # small residual per-vertex noise
     az_segs:       int   = 32     # azimuth facets per stone
     el_segs:       int   = 12     # elevation rings per stone
     sink:          float = 0.10   # mm — base sunk below terrain
+
+    def __init__(
+        self,
+        *,
+        r: Sample[float] | None = None,
+        aspect: Sample[float] | None = None,
+        flat: Sample[float] | None = None,
+        n_cuts: int = 4,
+        cut: Sample[float] | None = None,
+        roughness: float = 0.02,
+        az_segs: int = 32,
+        el_segs: int = 12,
+        sink: float = 0.10,
+        r_min: float | None = None,
+        r_max: float | None = None,
+        size_power: float | None = None,
+        aspect_min: float | None = None,
+        flat_min: float | None = None,
+        flat_max: float | None = None,
+        cut_min: float | None = None,
+        cut_max: float | None = None,
+    ) -> None:
+        if size_power is not None:
+            if r is not None:
+                raise TypeError("r: pass either r=... or legacy r_min/r_max/size_power, not both")
+            if r_min is None or r_max is None:
+                raise TypeError("r: legacy size_power requires r_min and r_max")
+            r = D[r_min:r_max].power(size_power)
+        else:
+            r = _range_compat("r", r, r_min, r_max, D[1.82:2.40].power(2.5))
+        aspect = _range_compat(
+            "aspect",
+            aspect,
+            aspect_min,
+            1.0 if aspect_min is not None else None,
+            D[0.65:1.0],
+        )
+        flat = _range_compat("flat", flat, flat_min, flat_max, D[0.32:1.20])
+        cut = _range_compat("cut", cut, cut_min, cut_max, D[0.40:0.75])
+
+        values = {
+            "r": r,
+            "aspect": aspect,
+            "flat": flat,
+            "n_cuts": n_cuts,
+            "cut": cut,
+            "roughness": roughness,
+            "az_segs": az_segs,
+            "el_segs": el_segs,
+            "sink": sink,
+        }
+        for field_name, value in values.items():
+            setattr(self, field_name, value)
 
 
 

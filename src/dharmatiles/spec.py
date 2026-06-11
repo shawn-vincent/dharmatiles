@@ -13,7 +13,7 @@ No string types, no ``params=dict(...)``, no phase enum.
 Example::
 
     from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill
-    from dharmatiles.spec import SurfaceConfig, SpeciesConfig, repeat_sizes
+    from dharmatiles.spec import SurfaceConfig, SpeciesConfig, D, repeat_sizes
     from dharmatiles.systems import DungeonBlocks, OpenLOCK
     from dharmatiles.layers import SoilCarpet, GrassCarpet, Scatter
     from dharmatiles.scatter import Rocks, Grass, Grouped
@@ -26,7 +26,7 @@ Example::
                 GrassCarpet(species=species,
                             placement=Grouped(groups_per_square=240)),
                 Scatter(
-                    Rocks(r_min=0.8, r_max=2.2),
+                    Rocks(r=D[0.8:2.2].power(1.5)),
                     Grass(species=species,
                           placement=Grouped(groups_per_square=24)),
                 ),
@@ -57,6 +57,7 @@ import numpy as np
 import trimesh
 
 from .core.config import SurfaceConfig, SpeciesConfig
+from .dist import D
 
 
 __all__ = [
@@ -64,6 +65,7 @@ __all__ = [
     'Anchor', 'Edge', 'FloodFill',
     'FlatHeight',
     'SurfaceConfig', 'SpeciesConfig',
+    'D',
     'repeat_sizes',
     'load_spec',
 ]
