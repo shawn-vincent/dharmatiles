@@ -6,6 +6,7 @@ import trimesh
 from scipy.ndimage import binary_dilation, binary_erosion, distance_transform_edt
 
 from ..core.config import SurfaceConfig
+from ..core.tile import derive_seed
 
 
 WATER_RENDER_LIFT_MM = 0.10
@@ -52,10 +53,10 @@ class Water:
                         else float(scene.terrain_z[placement_mask].max()))
 
         # ── Reshape pool floor: extend bank slope inward, then flatten ────────
-        scene.terrain_z[:] = _extend_bank_slope_into_pool(
+        new_z = _extend_bank_slope_into_pool(
             scene.terrain_z, placement_mask, water_height, surface)
-        scene.terrain_z[placement_mask] = 0.0
-        scene.terrain_support_z[:] = scene.terrain_z
+        new_z[placement_mask] = 0.0
+        scene.set_terrain(new_z)
 
         # ── Build the water volume mesh ──────────────────────────────────────
         embed_cells = max(1, round(self.embed_mm / surface.cell_w))
@@ -84,7 +85,8 @@ class Water:
             ds_cell_w = surface.cell_w
 
         zd = zd + make_water_ripple_displacement(
-            wm_disp, sm, ds_cell_w, seed=surface.seed ^ 0xC4F7)
+            wm_disp, sm, ds_cell_w,
+            seed=derive_seed(surface.seed, 'water-ripple'))
 
         # Outside the pool, raise the water surface to follow terrain_z so
         # the full-tile slab merges with the shore slope.
@@ -159,7 +161,7 @@ def make_water_displacement(
     from scipy.ndimage import gaussian_filter
 
     gh, gw = water_mask.shape
-    rng    = np.random.default_rng(surface.seed ^ 0xA9F3C7B1)
+    rng    = np.random.default_rng(derive_seed(surface.seed, 'water-displacement'))
 
     sigma = feature_scale_mm / surface.cell_w
     noise = rng.standard_normal((gh, gw))

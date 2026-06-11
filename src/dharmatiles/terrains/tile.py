@@ -193,7 +193,7 @@ def _build_spec_terrain(
     if not tile.regions or region_mask is None:
         return np.full((gh, gw), default_h, dtype=float)
 
-    heights = [r.effective_height_mm for r in tile.regions]
+    heights = [r.terrain.height_mm for r in tile.regions]
 
     if len(set(heights)) <= 1:
         return np.full((gh, gw), heights[0] if heights else default_h, dtype=float)

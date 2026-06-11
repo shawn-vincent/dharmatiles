@@ -34,6 +34,7 @@ import trimesh
 
 from ..core.config import SurfaceConfig, RocksConfig
 from ..core.grid import sample_grid
+from ..core.tile import derive_seed
 
 
 # ── Scatter entry point ───────────────────────────────────────────────────────
@@ -70,7 +71,7 @@ def _build_rocks_mesh_from_seeds(
     # Independent RNG for plane cuts and roughness.  Positions and sizes
     # are already determined by the seeds; this stream only drives the
     # stochastic detail passes so each layer_idx gets a different texture.
-    rng = np.random.default_rng(surface.seed ^ 0x636F726B ^ layer_idx * 65537)
+    rng = np.random.default_rng(derive_seed(surface.seed, 'rocks-detail', layer_idx))
 
     return _build_rocks_mesh_core(
         cx, cy, rx_arr, ry_arr, height, angle,

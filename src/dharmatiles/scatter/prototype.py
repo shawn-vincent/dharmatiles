@@ -14,6 +14,7 @@ import dataclasses
 
 from ..core.config import (RocksConfig, SpeciesConfig,
                            GrassConfig as _RuntimeGrassConfig)
+from ..core.tile import derive_seed
 from .config import Uniform, Grouped
 from .seed import RockSeed
 from .distribute import scatter_positions
@@ -63,11 +64,9 @@ class Rocks:
 
         Stamps ``scene.terrain_support_z`` and ``scene.rock_mask`` in place.
         """
-        surface = scene.surface
-        rng_seed = (surface.seed
-                    ^ 0x726F636B          # "rock"
-                    ^ self.placement.seed
-                    ^ (layer_idx * 65537))
+        surface  = scene.surface
+        rng_seed = derive_seed(surface.seed, 'rocks-scatter', layer_idx) \
+                   ^ self.placement.seed
         rng = np.random.default_rng(rng_seed)
 
         n_sq      = surface.cols * surface.rows
@@ -137,10 +136,8 @@ class Grass:
         from ..grass.layer import FloppyGrassLayer
 
         surface = scene.surface
-        seed    = (surface.seed
-                   ^ 0x47524F57          # "GROW"
-                   ^ self.placement.seed
-                   ^ (layer_idx * 65537))
+        seed    = (derive_seed(surface.seed, 'grass-scatter', layer_idx)
+                   ^ self.placement.seed)
         grass_cfg = _RuntimeGrassConfig(
             species          = [self.species],
             max_stack_height = self.max_stack_height,

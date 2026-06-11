@@ -31,7 +31,7 @@ from scipy.ndimage import distance_transform_edt, gaussian_filter
 
 from ..core.config import (GrassConfig as _RuntimeGrassConfig,
                            GrassUnderlayConfig, SpeciesConfig)
-from ..core.tile import TileScene
+from ..core.tile import TileScene, derive_seed
 from ..scatter.config import Grouped
 from ..grass._geometry import _blade_step_geometry, _sample_grid
 from ..grass.growers.flat import FlatGrassGrower
@@ -80,7 +80,7 @@ class GrassCarpet:
         """
         cfg = self.cfg
         surface = scene.surface
-        rng = np.random.default_rng(surface.seed ^ 0x554E_4445)  # "UNDE"
+        rng = np.random.default_rng(scene.derive_seed('grass-carpet'))
 
         # Reset vegetation_support_z to the bare terrain baseline so that
         # plant_seeds' _vegetation_depth check returns 0 for every cell and
@@ -114,13 +114,7 @@ class GrassCarpet:
             noise_field *= fade
 
         # ── 3. Apply noise to terrain_z ───────────────────────────────────────
-        if placement_mask is None:
-            scene.terrain_z += noise_field
-        else:
-            scene.terrain_z[placement_mask] += noise_field[placement_mask]
-
-        # Keep terrain_support_z in sync; blade meshes will sit on this surface.
-        scene.terrain_support_z[:] = scene.terrain_z
+        scene.displace_terrain(noise_field, placement_mask)
 
         # ── 4. Build blade tube meshes ────────────────────────────────────────
         seeds = _collect_seeds(scene, surface, cfg, rng,

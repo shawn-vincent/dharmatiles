@@ -31,7 +31,7 @@ import numpy as np
 from scipy.ndimage import distance_transform_edt, gaussian_filter, map_coordinates, zoom
 
 from ..core.config import SoilConfig
-from ..core.tile import TileScene
+from ..core.tile import TileScene, derive_seed
 
 
 class SoilCarpet:
@@ -60,7 +60,7 @@ class SoilCarpet:
 
         hires_bump = _compute_bump_field(
             soil=self.soil,
-            seed=surface.seed,
+            seed=derive_seed(surface.seed, 'soil-blobs'),
             gh=gh * _OVERSAMPLE, gw=gw * _OVERSAMPLE,
             cell_mm=cell_mm,
             n_squares=n_squares,
@@ -102,13 +102,7 @@ class SoilCarpet:
             fade = 0.5 * (1.0 - np.cos(np.pi * np.clip(dist / fade_cells, 0.0, 1.0)))
             displacement = displacement * fade
 
-        if placement_mask is None:
-            scene.terrain_z += displacement
-        else:
-            scene.terrain_z[placement_mask] += displacement[placement_mask]
-
-        # Keep terrain_support_z in sync with the modified terrain_z.
-        scene.terrain_support_z[:] = scene.terrain_z
+        scene.displace_terrain(displacement, placement_mask)
         return []
 
 
@@ -118,7 +112,7 @@ def _compute_bump_field(soil: SoilConfig, seed: int,
                         gh: int, gw: int, cell_mm: float,
                         n_squares: int) -> np.ndarray:
     """Compute the full soil bump array at (gh × gw) resolution."""
-    rng  = np.random.default_rng(seed ^ 0xC01D_50_11)
+    rng  = np.random.default_rng(seed)   # seed already derived by caller
     bump = np.zeros((gh, gw), dtype=float)
     xi   = np.arange(gw, dtype=float)
     yi   = np.arange(gh, dtype=float)
