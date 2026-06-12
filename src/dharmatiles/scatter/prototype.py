@@ -78,6 +78,7 @@ class Rocks:
         terrain_gz_y = np.gradient(scene.terrain_z, axis=0) / cw
 
         from ..layers.rocks import _build_rocks_mesh_from_seeds
+        from ..core.color import Material, tag as _tag
         mesh = _build_rocks_mesh_from_seeds(
             seeds, self.rocks, surface,
             scene.terrain_z, scene.terrain_support_z, scene.rock_mask,
@@ -85,7 +86,10 @@ class Rocks:
             terrain_gz_x = terrain_gz_x,
             terrain_gz_y = terrain_gz_y,
         )
-        return [mesh] if len(mesh.vertices) > 0 else []
+        if len(mesh.vertices) > 0:
+            _tag(mesh, Material.ROCK)
+            return [mesh]
+        return []
 
 
 # ── Grass ─────────────────────────────────────────────────────────────────────

@@ -11,6 +11,7 @@ import pathlib
 import numpy as np
 import trimesh
 
+from ..core.color import Material, tag as _tag, export_color_stl, build_scene
 from ..core.config import BaseConfig, SurfaceConfig
 from ..core.logo import make_logo_manifold
 
@@ -141,24 +142,36 @@ def make_base(surface: SurfaceConfig,
     return mesh
 
 
-def add_base(tile_mesh: trimesh.Trimesh,
-             surface: SurfaceConfig,
-             base_cfg: BaseConfig,
-             terrain_z: np.ndarray) -> trimesh.Trimesh:
-    """Return *tile_mesh* with a DungeonBlocks base attached."""
-    peg_h = select_peg_height(terrain_z, base_cfg)
-    base_mesh = make_base(surface, peg_h, base_cfg)
-    base_mesh.visual.face_colors = np.zeros((len(base_mesh.faces), 4), dtype=np.uint8)
-    return trimesh.util.concatenate([base_mesh, tile_mesh.copy()])
-
-
-def export(tile_mesh: trimesh.Trimesh,
+def export(colored_meshes: list[trimesh.Trimesh],
            surface: SurfaceConfig,
            base_cfg: BaseConfig,
            terrain_z: np.ndarray,
            output_path: pathlib.Path) -> trimesh.Trimesh:
-    """Attach a DungeonBlocks base and write the system-specific STL."""
-    combined = add_base(tile_mesh, surface, base_cfg, terrain_z)
-    combined.export(str(output_path))
+    """Attach a DungeonBlocks base; write colour STL and 3MF side-by-side.
+
+    Parameters
+    ----------
+    colored_meshes:
+        Per-material mesh list produced by the tile pipeline.
+    surface, base_cfg, terrain_z:
+        As before.
+    output_path:
+        Target ``.stl`` path.  A sibling ``.3mf`` is written automatically.
+    """
+    peg_h     = select_peg_height(terrain_z, base_cfg)
+    base_mesh = make_base(surface, peg_h, base_cfg)
+    _tag(base_mesh, Material.BASE)
+
+    all_meshes = [base_mesh] + list(colored_meshes)
+
+    # ── Colour STL (Materialise RGB15 attribute bytes) ────────────────────────
+    combined = trimesh.util.concatenate(all_meshes)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    export_color_stl(combined, output_path)
+
+    # ── 3MF (one object per material, native multi-colour) ────────────────────
+    tmf_path = output_path.with_suffix('.3mf')
+    build_scene(all_meshes).export(str(tmf_path))
+
     return combined
 

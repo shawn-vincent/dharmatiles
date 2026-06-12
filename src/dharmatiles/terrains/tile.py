@@ -29,6 +29,7 @@ import numpy as np
 import trimesh
 from scipy.ndimage import distance_transform_edt
 
+from ..core.color import Material, tag as _tag, build_scene
 from ..core.config import SurfaceConfig
 from ..core.tile import TileScene
 from ..core.mesh import make_heightmap_solid
@@ -101,6 +102,80 @@ def _batch_worker(args: tuple) -> dict:
     return reporter.to_row(spec_name, _time.perf_counter() - t0)
 
 
+# ── Terrain face-colour helper ────────────────────────────────────────────────
+
+# Layer class-name → terrain material override.
+# Uses type-name strings to avoid cross-package imports; we control all names.
+_LAYER_TERRAIN_MATERIAL: dict[str, "Material"] = {
+    'GrassCarpet':     Material.GRASS,
+    'GrassCarpetLayer': Material.GRASS,
+    'Water':           Material.WATER,
+    'WaterLayer':      Material.WATER,
+    # SoilCarpet / SoilCarpetLayer / Scatter → default TERRAIN
+}
+
+
+def _color_terrain_faces(
+    terrain_mesh: trimesh.Trimesh,
+    region_mask:  np.ndarray | None,
+    regions:      list,           # list[Region]
+    surface:      "SurfaceConfig",
+) -> None:
+    """Apply per-face colours to *terrain_mesh* based on region layer content.
+
+    Faces whose centroid falls inside a grass-carpet region become
+    ``Material.GRASS`` (yellow-green); water-region faces become
+    ``Material.WATER`` (turquoise); everything else stays ``Material.TERRAIN``
+    (reddish-brown).  Side and bottom faces of the slab are coloured by XY
+    centroid, which is fine because they are hidden under the base.
+
+    Modifies *terrain_mesh.visual* in-place; does not change geometry.
+    Does nothing when *region_mask* is None.
+    """
+    from ..core.color import RGBA
+
+    if region_mask is None or not regions:
+        _tag(terrain_mesh, Material.TERRAIN)
+        return
+
+    # Determine the terrain-surface material for each region index.
+    region_mat: list[Material] = []
+    for region in regions:
+        mat = Material.TERRAIN
+        for layer in region.layers:
+            override = _LAYER_TERRAIN_MATERIAL.get(type(layer).__name__)
+            if override is not None:
+                mat = override
+                break
+        region_mat.append(mat)
+
+    # Per-face centroid → grid cell → region index → colour.
+    centroids = terrain_mesh.triangles_center          # (F, 3)
+    gh, gw    = region_mask.shape
+
+    gi = np.clip((centroids[:, 0] / surface.tile_w * gw).astype(int), 0, gw - 1)
+    gj = np.clip((centroids[:, 1] / surface.tile_h * gh).astype(int), 0, gh - 1)
+    ridx = region_mask[gj, gi]          # (F,) — -1=boundary, 0..N=region
+
+    # Start with the default TERRAIN colour for all faces.
+    n          = len(terrain_mesh.faces)
+    face_colors = np.empty((n, 4), dtype=np.uint8)
+    face_colors[:] = RGBA[Material.TERRAIN]
+
+    # Override for each region that maps to a non-default material.
+    for r_idx, mat in enumerate(region_mat):
+        if mat != Material.TERRAIN:
+            mask = (ridx == r_idx)
+            if mask.any():
+                face_colors[mask] = RGBA[mat]
+
+    terrain_mesh.visual = trimesh.visual.ColorVisuals(
+        mesh=terrain_mesh,
+        face_colors=face_colors,
+    )
+    terrain_mesh.metadata['material'] = Material.TERRAIN
+
+
 # ── Internal mesh builder ─────────────────────────────────────────────────────
 
 def _build_tile_mesh(
@@ -108,8 +183,12 @@ def _build_tile_mesh(
     surface:     SurfaceConfig,
     region_mask: np.ndarray | None,
     reporter:    TileReporter,
-) -> tuple[trimesh.Trimesh, TileScene]:
-    """Run all spec layers in ``tile.areas`` order; return (mesh, scene).
+) -> tuple[list[trimesh.Trimesh], TileScene]:
+    """Run all spec layers in ``tile.areas`` order; return (colored_meshes, scene).
+
+    Returns a list of meshes grouped by :class:`~dharmatiles.core.color.Material`
+    — one mesh per material that appears in the tile.  Each mesh carries
+    uniform ``face_colors`` matching the palette in ``core/color.py``.
 
     *surface* may differ from ``tile.surface`` when a system builds at a
     different scale (e.g. OpenLOCK at 25.4 mm/sq).  *region_mask* is
@@ -164,34 +243,67 @@ def _build_tile_mesh(
         error_threshold=surface.terrain_simplify_threshold,
         simplify_stride=surface.terrain_simplify_stride,
     )
+    _color_terrain_faces(terrain_mesh, region_mask, tile.regions, surface)
     elapsed = _time.perf_counter() - t0
     reporter.step_end("Terrain solid", elapsed,
                       f"{len(terrain_mesh.vertices):,} verts · "
                       f"{len(terrain_mesh.faces):,} faces")
     parts.insert(0, terrain_mesh)
 
-    solid_parts = [p for p in parts if p.is_volume]
-    union_label = f"Boolean union  ({len(solid_parts)}/{len(parts)} solid)"
-    reporter.step_begin(union_label)
-    t0 = _time.perf_counter()
-    if len(solid_parts) == 0:
-        combined = trimesh.util.concatenate(parts)
-    elif len(solid_parts) == 1:
-        combined = solid_parts[0]
-    else:
-        # check_volume=False: we already filtered with is_volume above, so the
-        # second is_watertight scan inside boolean_manifold is redundant.
-        combined = trimesh.boolean.union(
-            solid_parts, engine='manifold', check_volume=False
-        )
-    elapsed = _time.perf_counter() - t0
-    wt_label = "watertight" if combined.is_watertight else "NOT watertight"
-    reporter.step_end(union_label, elapsed,
-                      f"{wt_label}  "
-                      f"{len(combined.vertices):,} verts · "
-                      f"{len(combined.faces):,} faces")
+    # ── Per-material grouping ─────────────────────────────────────────────────
+    # Group all parts by their material tag, then union solid parts within
+    # each material group.  No cross-material boolean ops → face colours survive.
+    # GRASS blades are concatenated rather than unioned (they can be numerous
+    # and are thin enough that slicers handle overlaps correctly).
+    from collections import defaultdict
+    _NO_UNION = {Material.GRASS}   # materials where we concatenate, not union
 
-    return combined, scene
+    groups: dict[Material, list[trimesh.Trimesh]] = defaultdict(list)
+    for p in parts:
+        mat = p.metadata.get('material', Material.TERRAIN)
+        groups[mat].append(p)
+
+    group_label = f"Material grouping  ({len(groups)} group(s))"
+    reporter.step_begin(group_label)
+    t0 = _time.perf_counter()
+
+    colored_meshes: list[trimesh.Trimesh] = []
+    for mat in Material:          # deterministic order: TERRAIN ROCK GRASS WATER BASE
+        mesh_list = groups.get(mat)
+        if not mesh_list:
+            continue
+
+        if mat in _NO_UNION:
+            # Fast path: just concatenate (grass blades, etc.)
+            group_mesh = (trimesh.util.concatenate(mesh_list)
+                          if len(mesh_list) > 1 else mesh_list[0])
+        else:
+            solid = [m for m in mesh_list if m.is_volume]
+            if len(solid) > 1:
+                group_mesh = trimesh.boolean.union(
+                    solid, engine='manifold', check_volume=False,
+                )
+            elif solid:
+                group_mesh = solid[0]
+            else:
+                group_mesh = (trimesh.util.concatenate(mesh_list)
+                              if len(mesh_list) > 1 else mesh_list[0])
+
+        if mat == Material.TERRAIN and len(mesh_list) == 1:
+            # Terrain already carries per-face region colours from
+            # _color_terrain_faces(); just ensure the metadata is set.
+            group_mesh.metadata['material'] = Material.TERRAIN
+        else:
+            _tag(group_mesh, mat)   # (re-)apply after union strips attributes
+        colored_meshes.append(group_mesh)
+
+    elapsed = _time.perf_counter() - t0
+    total_v = sum(len(m.vertices) for m in colored_meshes)
+    total_f = sum(len(m.faces)    for m in colored_meshes)
+    reporter.step_end(group_label, elapsed,
+                      f"{total_v:,} verts · {total_f:,} faces total")
+
+    return colored_meshes, scene
 
 
 # ── Public build API ──────────────────────────────────────────────────────────
@@ -226,7 +338,7 @@ def build_tile_from_spec(
         region_mask = None
 
     # ── Build each system's mesh (cache equal-scale results) ─────────────────
-    built: dict[float, tuple[trimesh.Trimesh, TileScene]] = {}
+    built: dict[float, tuple[list[trimesh.Trimesh], TileScene]] = {}
     first_result: trimesh.Trimesh | None = None
 
     for system in tile.systems:
@@ -237,17 +349,17 @@ def build_tile_from_spec(
             reporter.rebuild_begin(system.suffix, sq_mm)
 
             sys_tile = dataclasses.replace(tile, surface=sys_surface)
-            mesh, scene = _build_tile_mesh(
+            colored_meshes, scene = _build_tile_mesh(
                 sys_tile, sys_surface, region_mask, reporter,
             )
-            built[sq_mm] = (mesh, scene)
+            built[sq_mm] = (colored_meshes, scene)
 
-        tile_mesh, scene = built[sq_mm]
+        colored_meshes, scene = built[sq_mm]
         out_path = system_paths[system.suffix]
 
         reporter.step_begin(f"Export {system.suffix}")
         t0 = _time.perf_counter()
-        result = system.export(tile_mesh, sys_surface, scene.terrain_z, out_path)
+        result = system.export(colored_meshes, sys_surface, scene.terrain_z, out_path)
         elapsed = _time.perf_counter() - t0
 
         reporter.export_done(

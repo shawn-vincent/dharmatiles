@@ -40,12 +40,12 @@ class DungeonBlocks:
         """Return the surface to build at — DB uses the spec's native scale."""
         return base_surface
 
-    def export(self, tile_mesh: trimesh.Trimesh, surface: SurfaceConfig,
+    def export(self, colored_meshes: list[trimesh.Trimesh], surface: SurfaceConfig,
                terrain_z: np.ndarray, output_path: pathlib.Path) -> trimesh.Trimesh:
         from .bases import dungeonblocks
         base_cfg = dataclasses.replace(BaseConfig(), peg_height=self.peg_height)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        return dungeonblocks.export(tile_mesh, surface, base_cfg, terrain_z, output_path)
+        return dungeonblocks.export(colored_meshes, surface, base_cfg, terrain_z, output_path)
 
     def __repr__(self) -> str:
         return f"DungeonBlocks(peg_height={self.peg_height!r})"
@@ -68,12 +68,12 @@ class OpenLOCK:
         """Return the surface scaled to this system's square_mm."""
         return dataclasses.replace(base_surface, square_mm=self.square_mm)
 
-    def export(self, tile_mesh: trimesh.Trimesh, surface: SurfaceConfig,
+    def export(self, colored_meshes: list[trimesh.Trimesh], surface: SurfaceConfig,
                terrain_z: np.ndarray, output_path: pathlib.Path) -> trimesh.Trimesh:
         from .bases import openlock
         base_cfg = dataclasses.replace(BaseConfig(), peg_height=self.peg_height)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        return openlock.export(tile_mesh, surface, base_cfg, terrain_z, output_path)
+        return openlock.export(colored_meshes, surface, base_cfg, terrain_z, output_path)
 
     def __repr__(self) -> str:
         return f"OpenLOCK(square_mm={self.square_mm!r}, peg_height={self.peg_height!r})"
@@ -93,11 +93,16 @@ class BareSystem:
     def surface_for(self, base_surface: SurfaceConfig) -> SurfaceConfig:
         return base_surface
 
-    def export(self, tile_mesh: trimesh.Trimesh, surface: SurfaceConfig,
+    def export(self, colored_meshes: list[trimesh.Trimesh], surface: SurfaceConfig,
                terrain_z: np.ndarray, output_path: pathlib.Path) -> trimesh.Trimesh:
+        from .core.color import export_color_stl, build_scene
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        tile_mesh.export(str(output_path))
-        return tile_mesh
+        combined = (trimesh.util.concatenate(colored_meshes)
+                    if colored_meshes else trimesh.Trimesh())
+        export_color_stl(combined, output_path)
+        tmf_path = output_path.with_suffix('.3mf')
+        build_scene(colored_meshes).export(str(tmf_path))
+        return combined
 
     def __repr__(self) -> str:
         return f"BareSystem(suffix={self.suffix!r})"

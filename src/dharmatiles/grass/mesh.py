@@ -9,6 +9,7 @@ from ._geometry import _sample_grid, _spine_distances, _stamp_segment
 from .config import GrassConfig
 from .growers import GROWERS
 from .seed import GrassPath
+from ..core.color import Material, tag as _tag
 
 
 def build_meshes(paths: list[GrassPath], cfg: GrassConfig, scene, surface) -> list[trimesh.Trimesh]:
@@ -33,6 +34,7 @@ def build_meshes(paths: list[GrassPath], cfg: GrassConfig, scene, surface) -> li
         # Step 2: build mesh.
         mesh = grower.build_mesh(lifted_path, species, scene, surface)
         if mesh is not None:
+            _tag(mesh, Material.GRASS)
             meshes.append(mesh)
 
         # Step 3: update vegetation support from actual mesh top surface.

@@ -133,7 +133,10 @@ class GrassCarpet:
         if not blade_meshes:
             return []
         import trimesh as _trimesh
-        return [_trimesh.util.concatenate(blade_meshes)]
+        from ..core.color import Material, tag as _tag
+        carpet = _trimesh.util.concatenate(blade_meshes)
+        _tag(carpet, Material.GRASS)
+        return [carpet]
 
 
 # ── Edge fade ─────────────────────────────────────────────────────────────────

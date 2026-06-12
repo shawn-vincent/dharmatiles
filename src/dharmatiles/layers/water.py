@@ -114,6 +114,8 @@ class Water:
             surface.tile_w, surface.tile_h,
             z_disp=zd,
             simplify_tolerance=simplify_tol)
+        from ..core.color import Material, tag as _tag
+        _tag(water_mesh, Material.WATER)
         return [water_mesh]
 
 
