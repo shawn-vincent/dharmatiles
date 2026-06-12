@@ -179,6 +179,78 @@ def _color_terrain_faces(
     terrain_mesh.metadata['material'] = Material.SOIL
 
 
+# ── Water-from-soil Boolean subtraction ──────────────────────────────────────
+
+def _carve_water_from_soil(
+    colored_meshes: list[trimesh.Trimesh],
+    region_mask:    np.ndarray | None,
+    regions:        list,
+    surface:        SurfaceConfig,
+    overlap_mm:     float = 0.01,
+) -> list[trimesh.Trimesh]:
+    """Subtract the water pool from the soil solid for clean, distinct objects.
+
+    Uses the pool-only cutter mesh stored in ``water_mesh.metadata['pool_cutter']``
+    by :class:`~dharmatiles.layers.water.Water`.  The cutter is shifted down by
+    *overlap_mm* before the boolean difference so it bites slightly into the
+    terrain floor, guaranteeing no hairline gap at the pool seam.
+
+    Returns a new list where the SOIL mesh is replaced by the carved result.
+    The carved mesh has per-face region colours re-applied via
+    :func:`_color_terrain_faces`.  No-op when either SOIL or WATER is absent,
+    or when the required mesh is not watertight.
+    """
+    import manifold3d as m3d
+
+    soil_idx  = next((i for i, m in enumerate(colored_meshes)
+                      if m.metadata.get('material') == Material.SOIL), None)
+    water_idx = next((i for i, m in enumerate(colored_meshes)
+                      if m.metadata.get('material') == Material.WATER), None)
+
+    if soil_idx is None or water_idx is None:
+        return colored_meshes
+
+    soil_mesh  = colored_meshes[soil_idx]
+    water_mesh = colored_meshes[water_idx]
+
+    # Pool-only cutter is built in Water.apply() and stashed in metadata.
+    cutter_src = water_mesh.metadata.get('pool_cutter', None)
+    if cutter_src is None:
+        return colored_meshes
+
+    if not soil_mesh.is_volume or not cutter_src.is_volume:
+        return colored_meshes
+
+    def _to_m3d(verts: np.ndarray, faces: np.ndarray) -> m3d.Manifold:
+        return m3d.Manifold(mesh=m3d.Mesh(
+            vert_properties=verts.astype('f4'),
+            tri_verts=faces.astype('u4'),
+        ))
+
+    # Shift cutter down by overlap_mm so it bites into the terrain floor.
+    cutter_verts = cutter_src.vertices.copy()
+    cutter_verts[:, 2] -= overlap_mm
+
+    soil_m   = _to_m3d(soil_mesh.vertices, soil_mesh.faces)
+    cutter_m = _to_m3d(cutter_verts, cutter_src.faces)
+    carved_m = soil_m - cutter_m
+
+    msh    = carved_m.to_mesh()
+    carved = trimesh.Trimesh(
+        vertices=np.array(msh.vert_properties, dtype=float)[:, :3],
+        faces=np.array(msh.tri_verts, dtype=int),
+        process=False,
+    )
+    carved.fix_normals()
+
+    # Re-apply per-face region colours (boolean op strips attributes).
+    _color_terrain_faces(carved, region_mask, regions, surface)
+
+    result           = list(colored_meshes)
+    result[soil_idx] = carved
+    return result
+
+
 # ── Internal mesh builder ─────────────────────────────────────────────────────
 
 def _build_tile_mesh(
@@ -305,6 +377,23 @@ def _build_tile_mesh(
     total_f = sum(len(m.faces)    for m in colored_meshes)
     reporter.step_end(group_label, elapsed,
                       f"{total_v:,} verts · {total_f:,} faces total")
+
+    # ── Carve water from soil (if any water present) ──────────────────────────
+    has_water = any(m.metadata.get('material') == Material.WATER
+                    for m in colored_meshes)
+    if has_water:
+        carve_label = "Carve water from soil"
+        reporter.step_begin(carve_label)
+        t0 = _time.perf_counter()
+        colored_meshes = _carve_water_from_soil(
+            colored_meshes, region_mask, tile.regions, surface,
+        )
+        elapsed = _time.perf_counter() - t0
+        soil_m  = next((m for m in colored_meshes
+                        if m.metadata.get('material') == Material.SOIL), None)
+        wt = ("watertight" if soil_m is not None and soil_m.is_watertight
+              else "NOT watertight")
+        reporter.step_end(carve_label, elapsed, wt)
 
     return colored_meshes, scene
 

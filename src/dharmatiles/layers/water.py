@@ -114,6 +114,19 @@ class Water:
             surface.tile_w, surface.tile_h,
             z_disp=zd,
             simplify_tolerance=simplify_tol)
+
+        # Pool-only cutter: flat-topped slab covering only the pool cells (wm),
+        # no displacement.  Stored in metadata so _build_tile_mesh can subtract
+        # it from the soil solid to give clean, non-overlapping objects.
+        # The cutter uses the same downsampled grid as the visual mesh so the
+        # geometry exactly matches in world-space coordinates.
+        pool_cutter = make_water_volume(
+            tz, wm, water_height,
+            surface.tile_w, surface.tile_h,
+            z_disp=None, simplify_tolerance=0.0,
+        )
+        water_mesh.metadata['pool_cutter'] = pool_cutter
+
         from ..core.color import Material, tag as _tag
         _tag(water_mesh, Material.WATER)
         return [water_mesh]

@@ -34,6 +34,7 @@ class HexOrganizerSpec:
     base: float = 1.0             # solid base below retaining recess
     magnet_dia: float = 10.0      # magnet disc diameter
     magnet_depth: float = 3.0     # magnet disc thickness / bore depth
+    magnet_clearance: float = 0.1 # added to magnet pocket radius for press-fit clearance
     bottom_roundover: float = 1.0    # convex roundover radius on bottom perimeter edge
     vertical_roundover: float = 8.0  # convex outside vertical edge roundover radius
     cols: int = 4                    # columns across (x)
@@ -231,7 +232,7 @@ def _magnet_pocket(
     fy = cy + apothem * ny + tangent_offset * ty + MAGNET_OVERSHOOT * ny
 
     length = spec.magnet_depth + MAGNET_OVERSHOOT
-    cyl = m3d.Manifold.cylinder(length, spec.magnet_dia / 2.0, circular_segments=64)
+    cyl = m3d.Manifold.cylinder(length, spec.magnet_dia / 2.0 + spec.magnet_clearance, circular_segments=64)
     cyl = cyl.rotate([0, 90, 0])        # +z axis → +x
     cyl = cyl.rotate([0, 0, deg + 180]) # +x → inward (−normal), boring into the wall
     return cyl.translate([fx, fy, MAGNET_Z])
@@ -274,6 +275,19 @@ def _subtract_magnets(body: m3d.Manifold, spec: HexOrganizerSpec) -> m3d.Manifol
 # ---------------------------------------------------------------------------
 # Wall side cutouts
 # ---------------------------------------------------------------------------
+
+def _cutouts_fit(spec: HexOrganizerSpec) -> bool:
+    """Return True if there is enough vertical space for the pointed cutout profile.
+
+    The profile needs a straight section between the bottom point (z_bottom + w2)
+    and the top point (z_top - w2).  When those meet or cross, the shape inverts.
+    """
+    z_bottom = spec.floor + 1.0
+    z_top    = spec.height - 8.0
+    outer_f2f = spec.bore_f2f + 2.0 * spec.wall
+    w2 = spec.side_cutout_width * (outer_f2f / np.sqrt(3)) / 2.0
+    return z_top - z_bottom >= 2.0 * w2
+
 
 def _side_cutouts_manifold(spec: HexOrganizerSpec) -> m3d.Manifold:
     """Union of pointed-top/bottom cutouts through every hex face wall for all cups.
@@ -463,7 +477,7 @@ def _build_hollow(spec: HexOrganizerSpec) -> m3d.Manifold:
             cx, cy = cup_centre(spec, c, r)
             result -= bore.translate((cx, cy, 0.0))
 
-    if spec.side_cutout_width > 0.0:
+    if spec.side_cutout_width > 0.0 and _cutouts_fit(spec):
         result -= _side_cutouts_manifold(spec)
 
     return result
@@ -475,7 +489,7 @@ def build_organizer(spec: HexOrganizerSpec) -> m3d.Manifold:
 
     result = m3d.Manifold.extrude(honeycomb_footprint_cs(spec), spec.height)
     result = _subtract_cup_cutters(result, spec)
-    if spec.side_cutout_width > 0.0:
+    if spec.side_cutout_width > 0.0 and _cutouts_fit(spec):
         result -= _side_cutouts_manifold(spec)
 
     result = _subtract_magnets(result, spec)
@@ -569,6 +583,8 @@ def main() -> None:
     parser.add_argument("--height",    type=float, default=60.0, help="Overall cup height in mm (default: 60.0)")
     parser.add_argument("--tolerance", type=float, default=0.3,
                         help="Bore clearance added to each bore diameter in mm (default: 0.3)")
+    parser.add_argument("--magnet-clearance", type=float, default=0.1,
+                        help="Extra radius added to magnet pocket for press-fit clearance in mm (default: 0.1)")
     parser.add_argument("--side-cutout-width", type=float, default=0.4,
                         help="Rectangular cutout per hex face: fraction of face length, 0=disabled (default: 0.8)")
     parser.add_argument("--quiet",  action="store_true",      help="Suppress all output")
@@ -576,6 +592,7 @@ def main() -> None:
 
     spec      = HexOrganizerSpec(cols=args.cols, rows=args.rows, height=args.height,
                                   tolerance=args.tolerance,
+                                  magnet_clearance=args.magnet_clearance,
                                   side_cutout_width=args.side_cutout_width)
     out_path  = Path("stl/extras/hex_paint_organizer.stl")
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
@@ -617,6 +634,7 @@ def main() -> None:
         console.print(
             f"  [dim]magnets:[/dim]  {spec.magnet_dia:.0f}×{spec.magnet_depth:.0f} mm"
             f"  at z={MAGNET_Z:.0f} mm"
+            f"  ·  clearance [cyan]{spec.magnet_clearance:+.2f}[/cyan] mm"
             f"  [dim](4 flat + 4 diagonal = 8 total)[/dim]"
         )
         console.print(
@@ -630,7 +648,7 @@ def main() -> None:
             f"interior wall {spec.interior_wall:.1f} mm"
         )
         print(f"  layout: col pitch {pitch_x:.2f} mm  row pitch {pitch_y:.1f} mm")
-        print(f"  magnets: {spec.magnet_dia:.0f}×{spec.magnet_depth:.0f} mm, z={MAGNET_Z:.0f} mm  (4 flat + 4 diagonal = 8 total)")
+        print(f"  magnets: {spec.magnet_dia:.0f}×{spec.magnet_depth:.0f} mm, z={MAGNET_Z:.0f} mm  clearance {spec.magnet_clearance:+.2f} mm  (4 flat + 4 diagonal = 8 total)")
         print("  marker: orientation dent in the (0,0) cup floor (bottom-left)")
 
     # ── Build ────────────────────────────────────────────────────────────────
