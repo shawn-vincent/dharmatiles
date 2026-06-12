@@ -453,6 +453,53 @@ def build_tile_from_spec(
     return first_result or trimesh.Trimesh()
 
 
+def build_meshes_for_render(
+    spec_path: pathlib.Path,
+    *,
+    system: str = "db",
+) -> list[trimesh.Trimesh]:
+    """Return coloured trimesh parts (including base) without writing any files.
+
+    Intended for off-screen rendering tools.  *system* selects which base
+    system to attach (``'db'`` for DungeonBlocks, ``'ol'`` for OpenLOCK).
+    Returns a list of properly-indexed trimesh objects, each with ``face_colors``
+    set from the material palette in ``core.color``.
+    """
+    import dataclasses as _dc
+    from ..spec import load_spec
+    from ..systems import DungeonBlocks, OpenLOCK
+    from ..bases import dungeonblocks as _db
+    from ..core.color import Material, tag as _tag
+    from ..core.config import BaseConfig
+
+    tiles = load_spec(spec_path)
+    tile  = tiles[0]
+
+    target = next(
+        (s for s in tile.systems if s.suffix == system),
+        tile.systems[0] if tile.systems else DungeonBlocks(),
+    )
+    surface = target.surface_for(tile.surface)
+
+    region_mask = build_region_mask(tile) if tile.areas else None
+
+    sys_tile = _dc.replace(tile, surface=surface)
+    colored_meshes, scene = _build_tile_mesh(
+        sys_tile, surface, region_mask, TileReporter()
+    )
+
+    # Attach the base (same logic as system.export, but no file I/O)
+    base_cfg = BaseConfig()
+    if isinstance(target, DungeonBlocks) and target.peg_height is not None:
+        base_cfg = _dc.replace(base_cfg, peg_height=target.peg_height)
+
+    peg_h     = _db.select_peg_height(scene.terrain_z, base_cfg)
+    base_mesh = _db.make_base(surface, peg_h, base_cfg)
+    _tag(base_mesh, Material.BASE)
+
+    return [base_mesh] + colored_meshes
+
+
 # ── Spec → terrain helper ─────────────────────────────────────────────────────
 
 def _build_spec_terrain(

@@ -74,7 +74,9 @@ class Water:
         embed_cells = max(1, round(self.embed_mm / surface.cell_w))
         wm_disp_full = binary_dilation(placement_mask, iterations=embed_cells)
 
-        z_disp = make_water_displacement(wm_disp_full, surface)
+        # edge_fade_mm = embed_mm so the taper spans exactly the embed zone.
+        z_disp = make_water_displacement(wm_disp_full, surface,
+                                         edge_fade_mm=max(self.embed_mm, surface.cell_w))
 
         # Downsample to ~128 cells/square for performance.
         s = max(1, surface.cells_per_square // 128)
@@ -100,6 +102,7 @@ class Water:
             wm_disp, sm, ds_cell_w,
             seg_len=self.ripple_seg_len,
             offset=self.ripple_offset,
+            edge_fade_mm=max(self.embed_mm, ds_cell_w),
             seed=derive_seed(surface.seed, 'water-ripple'))
 
         hn, wn = wm.shape
@@ -167,13 +170,18 @@ def make_water_displacement(
     surface:           SurfaceConfig,
     feature_scale_mm:  float = 3.0,
     amplitude_mm:      float = 1.0,
+    edge_fade_mm:      float = 4.0,
 ) -> np.ndarray:
     """Return a (gh, gw) displacement array for the water surface.
 
     Generates Gaussian-filtered white noise blurred at feature_scale_mm,
-    normalised to amplitude_mm RMS, then multiplied by a pyramid fade that
-    is 1.0 at the tile centre and 0.0 at every tile edge.  Non-water cells
-    are zero.
+    normalised to amplitude_mm RMS, then multiplied by a smooth Hann fade
+    that tapers to zero at the boundary of *water_mask* (the outer edge of
+    the embed/shore zone).  Non-water cells are zero.
+
+    *edge_fade_mm* controls the taper width: displacement is 0.0 at the mask
+    boundary and rises to full amplitude within *edge_fade_mm* of that edge.
+    Pass the caller's ``embed_mm`` so the taper spans exactly the embed zone.
     """
     from scipy.ndimage import gaussian_filter
 
@@ -189,17 +197,13 @@ def make_water_displacement(
     if std > 0:
         z = z / std * amplitude_mm
 
-    # Conical fade: 1.0 at tile centre, 0.0 at corners
-    r_mm      = np.arange(gh, dtype=float) * surface.cell_w
-    c_mm      = np.arange(gw, dtype=float) * surface.cell_w
-    tile_h_mm = gh * surface.cell_w
-    tile_w_mm = gw * surface.cell_w
-    dy        = (r_mm - tile_h_mm / 2)[:, None]
-    dx        = (c_mm - tile_w_mm / 2)[None, :]
-    dist      = np.sqrt(dx ** 2 + dy ** 2)
-    max_dist  = np.sqrt((tile_w_mm / 2) ** 2 + (tile_h_mm / 2) ** 2)
-    fade      = np.clip(1.0 - dist / max_dist, 0.0, 1.0)
-    z        *= fade
+    # Smooth Hann taper: 0.0 at the mask boundary, 1.0 at edge_fade_mm inside.
+    # This replaces the old centre-based conical fade, which was incorrect for
+    # water regions not centred on the tile (gave wrong amplitude near the shore).
+    edge_dist_mm = distance_transform_edt(water_mask).astype(float) * surface.cell_w
+    t    = np.clip(edge_dist_mm / max(edge_fade_mm, surface.cell_w), 0.0, 1.0)
+    fade = 0.5 * (1.0 - np.cos(np.pi * t))
+    z   *= fade
 
     z[~water_mask] = 0.0
     return z
@@ -332,13 +336,21 @@ def make_water_ripple_displacement(
             0.0,
         )
 
-    # ── Edge envelope: fade to zero within edge_fade_mm of each tile boundary ─
+    # ── Tile-edge envelope: fade to zero within edge_fade_mm of each tile boundary ─
     if edge_fade_mm > 0.0:
         row_dist = np.minimum(np.arange(gh), gh - 1 - np.arange(gh)).astype(float) * cell_w
         col_dist = np.minimum(np.arange(gw), gw - 1 - np.arange(gw)).astype(float) * cell_w
-        edge_dist = np.minimum(row_dist[:, None], col_dist[None, :])
-        t = np.clip(edge_dist / edge_fade_mm, 0.0, 1.0)
-        disp *= 0.5 * (1.0 - np.cos(np.pi * t))
+        tile_edge_dist = np.minimum(row_dist[:, None], col_dist[None, :])
+        t_tile = np.clip(tile_edge_dist / edge_fade_mm, 0.0, 1.0)
+        disp *= 0.5 * (1.0 - np.cos(np.pi * t_tile))
+
+    # ── Water-mask-boundary envelope: taper to zero at the outer edge of the
+    # water mask (the outer edge of the embed/shore zone adjacent to boundaries).
+    # This prevents sharp cutoffs where the dilated water mask ends.
+    if edge_fade_mm > 0.0:
+        mask_edge_dist_mm = distance_transform_edt(water_mask).astype(float) * cell_w
+        t_mask = np.clip(mask_edge_dist_mm / edge_fade_mm, 0.0, 1.0)
+        disp  *= 0.5 * (1.0 - np.cos(np.pi * t_mask))
 
     return disp
 

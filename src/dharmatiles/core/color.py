@@ -33,11 +33,11 @@ class Material(IntEnum):
 
 #: RGBA uint8 palette — one entry per :class:`Material`.
 RGBA: dict[Material, tuple[int, int, int, int]] = {
-    Material.SOIL:  (139,  90,  43, 255),   # reddish-brown
-    Material.ROCK:  (106, 127, 150, 255),   # blue-gray
-    Material.GRASS: (154, 205,  50, 255),   # yellow-green
-    Material.WATER: ( 64, 224, 208, 255),   # turquoise
-    Material.BASE:  ( 80,  80,  80, 255),   # dark gray
+    Material.SOIL:  (105,  38,  12, 255),   # deep dark red-brown
+    Material.ROCK:  ( 72,  92, 128, 255),   # dark slate blue-grey
+    Material.GRASS: ( 42, 148,  28, 255),   # deep vivid green
+    Material.WATER: ( 20, 200, 195, 255),   # vivid turquoise
+    Material.BASE:  ( 45,  45,  45, 255),   # dark gray
 }
 
 
@@ -119,3 +119,148 @@ def build_scene(meshes: list[trimesh.Trimesh]) -> trimesh.Scene:
         counts[base] = idx + 1
         scene.add_geometry(mesh, geom_name=name)
     return scene
+
+
+def export_3mf_colored(meshes: list[trimesh.Trimesh],
+                        path: str | pathlib.Path) -> None:
+    """Export coloured mesh parts as a 3MF with Material Extension face colours.
+
+    Each mesh's ``face_colors`` are encoded as per-face colour indices using
+    the 3MF Material Extension ``<m:colorgroup>`` mechanism.  Supports both
+    uniform-colour meshes (one colour for all faces) and per-face-coloured
+    meshes (e.g. the terrain solid where regions carry distinct colours).
+
+    Compatible with PrusaSlicer, Bambu Studio, and Windows 3D Builder.
+    """
+    import io
+    import zipfile
+
+    # ── Collect all unique RGBA colours across every mesh ────────────────────
+    all_rgba: list[tuple[int, int, int, int]] = []
+    color_index: dict[tuple[int, int, int, int], int] = {}
+
+    def _register(rgba: tuple[int, int, int, int]) -> int:
+        if rgba not in color_index:
+            color_index[rgba] = len(all_rgba)
+            all_rgba.append(rgba)
+        return color_index[rgba]
+
+    # Pre-scan to build the palette
+    mesh_face_indices: list[np.ndarray] = []
+    for mesh in meshes:
+        n = len(mesh.faces)
+        if n == 0:
+            mesh_face_indices.append(np.empty(0, dtype=np.int32))
+            continue
+        try:
+            fc = mesh.visual.face_colors  # (N, 4) uint8
+            if fc is None or len(fc) != n:
+                raise AttributeError
+            indices = np.array(
+                [_register(tuple(int(c) for c in row)) for row in fc],  # type: ignore[arg-type]
+                dtype=np.int32,
+            )
+        except (AttributeError, Exception):
+            fallback = RGBA.get(mesh.metadata.get('material', Material.SOIL),
+                                RGBA[Material.SOIL])
+            idx = _register(fallback)
+            indices = np.full(n, idx, dtype=np.int32)
+        mesh_face_indices.append(indices)
+
+    # ── Build the 3MF XML ─────────────────────────────────────────────────────
+    COLOR_GID = 1        # colorgroup resource id
+    OBJ_ID_START = 10   # object ids start here
+
+    def _hex(rgba: tuple[int, int, int, int]) -> str:
+        return '#{:02X}{:02X}{:02X}{:02X}'.format(*rgba)
+
+    # colorgroup XML
+    cg_entries = '\n      '.join(
+        f'<m:color color="{_hex(c)}"/>' for c in all_rgba
+    )
+    colorgroup_xml = (
+        f'    <m:colorgroup id="{COLOR_GID}">\n'
+        f'      {cg_entries}\n'
+        f'    </m:colorgroup>'
+    )
+
+    # object XMLs
+    obj_xmls: list[str] = []
+    build_items: list[str] = []
+
+    for obj_i, (mesh, fi) in enumerate(zip(meshes, mesh_face_indices)):
+        oid = OBJ_ID_START + obj_i
+        mat = mesh.metadata.get('material', Material.SOIL)
+        name = mat.name.lower() if isinstance(mat, Material) else f'mesh_{obj_i}'
+
+        if len(mesh.faces) == 0:
+            continue
+
+        verts = mesh.vertices
+        faces = mesh.faces
+
+        # Vertex lines
+        vert_lines = '\n          '.join(
+            f'<vertex x="{v[0]:.5f}" y="{v[1]:.5f}" z="{v[2]:.5f}"/>'
+            for v in verts
+        )
+
+        # Triangle lines — carry per-face colour via p1=p2=p3=index
+        tri_lines = '\n          '.join(
+            f'<triangle v1="{f[0]}" v2="{f[1]}" v3="{f[2]}"'
+            f' pid="{COLOR_GID}" p1="{fi[i]}" p2="{fi[i]}" p3="{fi[i]}"/>'
+            for i, f in enumerate(faces)
+        )
+
+        obj_xmls.append(
+            f'    <object id="{oid}" name="{name}" type="model">\n'
+            f'      <mesh>\n'
+            f'        <vertices>\n'
+            f'          {vert_lines}\n'
+            f'        </vertices>\n'
+            f'        <triangles>\n'
+            f'          {tri_lines}\n'
+            f'        </triangles>\n'
+            f'      </mesh>\n'
+            f'    </object>'
+        )
+        build_items.append(f'    <item objectid="{oid}"/>')
+
+    model_xml = (
+        "<?xml version='1.0' encoding='utf-8'?>\n"
+        '<model unit="millimeter" xml:lang="en-US"\n'
+        '       xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"\n'
+        '       xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">\n'
+        '  <resources>\n'
+        + colorgroup_xml + '\n'
+        + '\n'.join(obj_xmls) + '\n'
+        '  </resources>\n'
+        '  <build>\n'
+        + '\n'.join(build_items) + '\n'
+        '  </build>\n'
+        '</model>\n'
+    )
+
+    content_types = (
+        "<?xml version='1.0' encoding='utf-8'?>\n"
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n'
+        '  <Default Extension="rels"'
+        ' ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n'
+        '  <Default Extension="model"'
+        ' ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>\n'
+        '</Types>\n'
+    )
+
+    rels = (
+        "<?xml version='1.0' encoding='utf-8'?>\n"
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n'
+        '  <Relationship Target="/3D/3dmodel.model" Id="rel0"'
+        ' Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>\n'
+        '</Relationships>\n'
+    )
+
+    out = pathlib.Path(path)
+    with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr('[Content_Types].xml', content_types)
+        zf.writestr('_rels/.rels', rels)
+        zf.writestr('3D/3dmodel.model', model_xml)
