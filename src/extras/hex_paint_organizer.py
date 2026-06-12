@@ -35,6 +35,8 @@ class HexOrganizerSpec:
     magnet_dia: float = 10.0      # magnet disc diameter
     magnet_depth: float = 3.0     # magnet disc thickness / bore depth
     magnet_clearance: float = 0.1 # added to magnet pocket radius for press-fit clearance
+    magnet_bevel: float = 0.4     # 45° chamfer at magnet hole entry (0 = disabled)
+    magnet_pushout: bool = True   # 1 mm push-out hole through the back wall of each magnet pocket
     bottom_roundover: float = 1.0    # convex roundover radius on bottom perimeter edge
     vertical_roundover: float = 8.0  # convex outside vertical edge roundover radius
     cols: int = 4                    # columns across (x)
@@ -53,6 +55,10 @@ class HexOrganizerSpec:
             raise ValueError(
                 "tolerance must be less than wall thickness; bore would exceed outer shell"
             )
+        if self.magnet_bevel < 0.0:
+            raise ValueError("magnet_bevel must be non-negative")
+        if self.magnet_bevel >= self.magnet_depth:
+            raise ValueError("magnet_bevel must be less than magnet_depth")
 
 
 # ---------------------------------------------------------------------------
@@ -173,6 +179,16 @@ def _cup_cutters(spec: HexOrganizerSpec) -> tuple[m3d.Manifold, m3d.Manifold, m3
     entry_bevel = m3d.Manifold.extrude(bevel_cs, bevel_h, scale_top=(bevel_scale, bevel_scale))
     entry_bevel = entry_bevel.translate((0.0, 0.0, spec.floor - bevel_h))
 
+    # Clip the bevel to the bore footprint.  The tapered hex has sharp corners
+    # that extend further than the bore's rounded corners and would cut through
+    # the outer wall.  Intersecting with the bore cross-section caps them.
+    if bore_r > 0.0:
+        bore_cap = m3d.Manifold.extrude(_rounded_hex_cs(bore_f2f, bore_r), bevel_h)
+    else:
+        bore_cap = hex_prism(bore_f2f, bevel_h)
+    bore_cap = bore_cap.translate((0.0, 0.0, spec.floor - bevel_h))
+    entry_bevel = entry_bevel ^ bore_cap
+
     return bore, depression, entry_bevel
 
 
@@ -232,7 +248,22 @@ def _magnet_pocket(
     fy = cy + apothem * ny + tangent_offset * ty + MAGNET_OVERSHOOT * ny
 
     length = spec.magnet_depth + MAGNET_OVERSHOOT
-    cyl = m3d.Manifold.cylinder(length, spec.magnet_dia / 2.0 + spec.magnet_clearance, circular_segments=64)
+    r = spec.magnet_dia / 2.0 + spec.magnet_clearance
+    cyl = m3d.Manifold.cylinder(length, r, circular_segments=64)
+
+    if spec.magnet_bevel > 0.0:
+        # 45° chamfer at the face-surface entry (z=MAGNET_OVERSHOOT in local space).
+        # Frustum widens from r (at depth bevel) to r+bevel (at the face surface).
+        b = spec.magnet_bevel
+        bevel = m3d.Manifold.cylinder(b, r + b, r, circular_segments=64)
+        cyl = cyl + bevel.translate([0.0, 0.0, MAGNET_OVERSHOOT])
+
+    if spec.magnet_pushout:
+        # 1 mm push-out hole along the pocket axis, extending 5 mm past the magnet
+        # bottom — enough to punch through the ~0.7 mm back wall into the depression.
+        pushout = m3d.Manifold.cylinder(length + 5.0, 0.5, circular_segments=32)
+        cyl = cyl + pushout
+
     cyl = cyl.rotate([0, 90, 0])        # +z axis → +x
     cyl = cyl.rotate([0, 0, deg + 180]) # +x → inward (−normal), boring into the wall
     return cyl.translate([fx, fy, MAGNET_Z])
@@ -257,11 +288,11 @@ def _subtract_magnets(body: m3d.Manifold, spec: HexOrganizerSpec) -> m3d.Manifol
         (0, 0, 270.0),   # bottom flat
         (0, 0, 150.0),   # upper-left (top-left slope)
         (0, 2,  90.0),   # top flat
-        (0, 2, 210.0),   # lower-left  (bottom-left slope)
+        (0, 2, 150.0),   # upper-left  (top-left slope)
         (2, 0, 270.0),   # bottom flat
         (2, 2,  90.0),   # top flat
         (3, 0, 330.0),   # lower-right (bottom-right slope)
-        (3, 1,  30.0),   # upper-right (top-right slope)
+        (3, 2, 330.0),   # lower-right (bottom-right slope)
     ]
     for col, row, deg in placements:
         if col >= spec.cols or row >= spec.rows:
@@ -405,7 +436,8 @@ def _bottom_roundover(body: m3d.Manifold, spec: HexOrganizerSpec, steps: int = 1
 
 # ---------------------------------------------------------------------------
 
-CUP_LOGO_SIZE_MM = 20.0   # logo bounding square in each cup floor; fits inside 29 mm retaining hex
+CUP_LOGO_SIZE_MM   = 20.0    # logo bounding square in each cup floor; fits inside 29 mm retaining hex
+_LOGO_BORDER_FRAC  = 20.0 / 1024.0  # outer frame ring width as fraction of logo size (measured from SVG)
 
 
 def _stamp_logos(body: m3d.Manifold, spec: HexOrganizerSpec) -> m3d.Manifold:
@@ -438,18 +470,63 @@ def _stamp_logos(body: m3d.Manifold, spec: HexOrganizerSpec) -> m3d.Manifold:
     return body
 
 
-def _mark_origin_cup(body: m3d.Manifold, spec: HexOrganizerSpec) -> m3d.Manifold:
-    """Shallow circular dent in the floor of the (col=0, row=0) cup.
+def _arrow_cs(length: float, line_w: float, *, point_right: bool = True) -> m3d.CrossSection:
+    """Closed arrow polygon: shaft + arrowhead, centred at origin.
 
-    Orientation-check marker: confirms the (0,0) cup sits at the expected
-    bottom-left corner of the model.  Cut a ~5 mm shallow disc into the
-    retaining-recess floor (top of the solid base at z=spec.base).
+    point_right=True  → tip at +x  (row axis)
+    point_right=False → tip at +y  (column axis, rotated 90° CCW)
     """
-    cx, cy = cup_centre(spec, 0, 0)
-    depth, radius = 0.5, 5.0
-    dent = m3d.Manifold.cylinder(depth + 0.2, radius, circular_segments=48)
-    dent = dent.translate([cx, cy, spec.base - depth])
-    return body - dent
+    head_w = 5.0 * line_w
+    head_h = 4.0 * line_w
+    hw     = line_w / 2.0
+    hbw    = head_w / 2.0
+    x0     = -length / 2.0
+    xhb    = x0 + length - head_h   # x where head base meets shaft
+
+    # CCW winding (manifold3d convention): bottom-left → right along bottom →
+    # head-base-bottom → tip → head-base-top → right along top → back.
+    pts: list[tuple[float, float]] = [
+        (x0,          -hw),
+        (xhb,         -hw),
+        (xhb,        -hbw),
+        (x0 + length, 0.0),
+        (xhb,         hbw),
+        (xhb,          hw),
+        (x0,           hw),
+    ]
+    if not point_right:
+        pts = [(-p[1], p[0]) for p in pts]  # rotate 90° CCW → tip at +y
+
+    return m3d.CrossSection([pts])
+
+
+def _mark_origin_cup(body: m3d.Manifold, spec: HexOrganizerSpec) -> m3d.Manifold:
+    """Two orientation arrows grooved into the (col=0, row=0) cup floor.
+
+    One arrow sits below the logo pointing right (+x, row axis).
+    One arrow sits left of the logo pointing up (+y, column axis).
+    Line width and groove depth match the logo's outer border ring.
+    """
+    cx, cy    = cup_centre(spec, 0, 0)
+    depth     = spec.base / 4.0
+    z_base    = spec.base - depth
+    line_w    = CUP_LOGO_SIZE_MM * _LOGO_BORDER_FRAC
+    logo_half = CUP_LOGO_SIZE_MM / 2.0
+    gap       = 0.3                        # clearance from logo edge to arrow head base
+    arrow_len = CUP_LOGO_SIZE_MM * 0.75   # 15 mm for the default 20 mm logo
+    head_hw   = 2.5 * line_w              # half of head_w (must match _arrow_cs)
+
+    # Arrow below logo, tip pointing right (+x = row axis)
+    ay = cy - logo_half - gap - head_hw
+    cs = _arrow_cs(arrow_len, line_w, point_right=True).translate((cx, ay))
+    body -= m3d.Manifold.extrude(cs, depth).translate((0.0, 0.0, z_base))
+
+    # Arrow left of logo, tip pointing up (+y = column axis)
+    ax = cx - logo_half - gap - head_hw
+    cs = _arrow_cs(arrow_len, line_w, point_right=False).translate((ax, cy))
+    body -= m3d.Manifold.extrude(cs, depth).translate((0.0, 0.0, z_base))
+
+    return body
 
 
 def _build_hollow(spec: HexOrganizerSpec) -> m3d.Manifold:
@@ -492,11 +569,13 @@ def build_organizer(spec: HexOrganizerSpec) -> m3d.Manifold:
     if spec.side_cutout_width > 0.0 and _cutouts_fit(spec):
         result -= _side_cutouts_manifold(spec)
 
-    result = _subtract_magnets(result, spec)
     if spec.vertical_roundover > 0.0:
         result = _vertical_roundover(result, spec, spec.vertical_roundover)
     if spec.bottom_roundover > 0.0:
         result = _bottom_roundover(result, spec)
+    # Magnet holes drilled after roundovers so the intersection in
+    # _vertical_roundover cannot fill the pocket openings back in.
+    result = _subtract_magnets(result, spec)
     # Cut the logo stamps and orientation marker last: they sit inside the
     # base slab, and the roundovers slice the body at low z to build their
     # templates — interior holes there would get swept through the model.
@@ -585,6 +664,10 @@ def main() -> None:
                         help="Bore clearance added to each bore diameter in mm (default: 0.3)")
     parser.add_argument("--magnet-clearance", type=float, default=0.1,
                         help="Extra radius added to magnet pocket for press-fit clearance in mm (default: 0.1)")
+    parser.add_argument("--magnet-bevel", type=float, default=0.4,
+                        help="45° chamfer depth at magnet hole entry in mm, 0=disabled (default: 0.4)")
+    parser.add_argument("--no-magnet-pushout", action="store_true",
+                        help="Disable the 1 mm push-out hole through the back of each magnet pocket")
     parser.add_argument("--side-cutout-width", type=float, default=0.4,
                         help="Rectangular cutout per hex face: fraction of face length, 0=disabled (default: 0.8)")
     parser.add_argument("--quiet",  action="store_true",      help="Suppress all output")
@@ -593,6 +676,8 @@ def main() -> None:
     spec      = HexOrganizerSpec(cols=args.cols, rows=args.rows, height=args.height,
                                   tolerance=args.tolerance,
                                   magnet_clearance=args.magnet_clearance,
+                                  magnet_bevel=args.magnet_bevel,
+                                  magnet_pushout=not args.no_magnet_pushout,
                                   side_cutout_width=args.side_cutout_width)
     out_path  = Path("stl/extras/hex_paint_organizer.stl")
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
@@ -631,15 +716,19 @@ def main() -> None:
             f"  [dim]layout:[/dim]  col pitch [cyan]{pitch_x:.2f}[/cyan] mm"
             f"  ·  row pitch [cyan]{pitch_y:.1f}[/cyan] mm"
         )
+        bevel_str   = (f"  ·  bevel [cyan]{spec.magnet_bevel:.2f}[/cyan] mm"
+                       if spec.magnet_bevel > 0.0 else "")
+        pushout_str = "  ·  push-out hole" if spec.magnet_pushout else ""
         console.print(
             f"  [dim]magnets:[/dim]  {spec.magnet_dia:.0f}×{spec.magnet_depth:.0f} mm"
             f"  at z={MAGNET_Z:.0f} mm"
             f"  ·  clearance [cyan]{spec.magnet_clearance:+.2f}[/cyan] mm"
+            + bevel_str + pushout_str +
             f"  [dim](4 flat + 4 diagonal = 8 total)[/dim]"
         )
         console.print(
-            "  [dim]marker:[/dim]  orientation dent in the (0,0) cup floor"
-            "  [dim](bottom-left)[/dim]"
+            "  [dim]marker:[/dim]  orientation arrows in the (0,0) cup floor"
+            "  [dim]→ right (row) · ↑ up (col)[/dim]"
         )
     else:
         print(f"Building hex organizer  ({spec.cols} columns of {spec.rows} cups, open front/back)")
@@ -648,8 +737,10 @@ def main() -> None:
             f"interior wall {spec.interior_wall:.1f} mm"
         )
         print(f"  layout: col pitch {pitch_x:.2f} mm  row pitch {pitch_y:.1f} mm")
-        print(f"  magnets: {spec.magnet_dia:.0f}×{spec.magnet_depth:.0f} mm, z={MAGNET_Z:.0f} mm  clearance {spec.magnet_clearance:+.2f} mm  (4 flat + 4 diagonal = 8 total)")
-        print("  marker: orientation dent in the (0,0) cup floor (bottom-left)")
+        bevel_str   = f"  bevel {spec.magnet_bevel:.2f} mm" if spec.magnet_bevel > 0.0 else ""
+        pushout_str = "  push-out hole" if spec.magnet_pushout else ""
+        print(f"  magnets: {spec.magnet_dia:.0f}×{spec.magnet_depth:.0f} mm, z={MAGNET_Z:.0f} mm  clearance {spec.magnet_clearance:+.2f} mm{bevel_str}{pushout_str}  (4 flat + 4 diagonal = 8 total)")
+        print("  marker: orientation arrows in (0,0) cup floor  → row axis · ↑ col axis")
 
     # ── Build ────────────────────────────────────────────────────────────────
     t0_total = time.perf_counter()

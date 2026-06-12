@@ -11,6 +11,7 @@ from ..dist import D, Sample, bounds, sample
 
 
 WATER_RENDER_LIFT_MM = 0.10
+WATER_XY_INSET_MM   = 0.001   # keep visual mesh strictly inside the pool boundary
 
 
 class Water:
@@ -61,10 +62,12 @@ class Water:
         water_height = (self.height_mm if self.height_mm is not None
                         else float(scene.terrain_z[placement_mask].max()))
 
-        # ── Reshape pool floor: extend bank slope inward, then flatten ────────
+        # ── Reshape pool floor: extend bank slope inward into the pool ───────
+        # The sloped terrain naturally carves the water volume via the
+        # water − soil CSG step in _build_tile_mesh; do NOT flatten pool
+        # cells to 0 here — that would erase the underwater bevel.
         new_z = _extend_bank_slope_into_pool(
             scene.terrain_z, placement_mask, water_height, surface)
-        new_z[placement_mask] = 0.0
         scene.set_terrain(new_z)
 
         # ── Build the water volume mesh ──────────────────────────────────────
@@ -99,33 +102,21 @@ class Water:
             offset=self.ripple_offset,
             seed=derive_seed(surface.seed, 'water-ripple'))
 
-        # Outside the pool, raise the water surface to follow terrain_z so
-        # the full-tile slab merges with the shore slope.
-        h_base = water_height + WATER_RENDER_LIFT_MM
-        zd = np.where(wm, zd, np.maximum(tz - h_base, zd))
-
         hn, wn = wm.shape
         wm_full = np.ones((hn, wn), dtype=bool)
         # Match the terrain's simplify threshold so the flat bottom and any
         # near-planar bands of the rippled top collapse to far fewer triangles.
         simplify_tol = surface.terrain_simplify_threshold or 0.0
+        # Full-tile slab, inset by WATER_XY_INSET_MM so it never shares exact
+        # boundary faces with the tile walls.  The soil solid is subtracted from
+        # this slab in _build_tile_mesh, which naturally confines the water to
+        # the pool cavity without an explicit pool-shaped cutter.
         water_mesh = make_water_volume(
             tz, wm_full, water_height,
             surface.tile_w, surface.tile_h,
             z_disp=zd,
-            simplify_tolerance=simplify_tol)
-
-        # Pool-only cutter: flat-topped slab covering only the pool cells (wm),
-        # no displacement.  Stored in metadata so _build_tile_mesh can subtract
-        # it from the soil solid to give clean, non-overlapping objects.
-        # The cutter uses the same downsampled grid as the visual mesh so the
-        # geometry exactly matches in world-space coordinates.
-        pool_cutter = make_water_volume(
-            tz, wm, water_height,
-            surface.tile_w, surface.tile_h,
-            z_disp=None, simplify_tolerance=0.0,
-        )
-        water_mesh.metadata['pool_cutter'] = pool_cutter
+            simplify_tolerance=simplify_tol,
+            inset_mm=WATER_XY_INSET_MM)
 
         from ..core.color import Material, tag as _tag
         _tag(water_mesh, Material.WATER)
@@ -372,12 +363,16 @@ def make_water_volume(
     tile_h:             float,
     z_disp:             np.ndarray | None = None,
     simplify_tolerance: float = 0.0,
+    inset_mm:           float = 0.0,
 ) -> trimesh.Trimesh:
     """Closed solid spanning the water volume.
 
     Top face   flat at water_height + z_disp (displaced surface).
     Bottom face terrain_z surface under every water cell.
     Perimeter  walls wherever a water cell borders non-water or the tile edge.
+
+    *inset_mm* shrinks the slab in XY by clipping boundary vertex coordinates
+    inward by that amount, ensuring no face is coincident with the tile walls.
     """
     gh, gw = terrain_z.shape
     cell_x = tile_w / gw
@@ -406,8 +401,13 @@ def make_water_volume(
         top_z = np.full((nv_r, nv_c), h)
 
     # ── Vertex buffer ─────────────────────────────────────────────────────────
-    x_v = np.broadcast_to((np.arange(nv_c) * cell_x)[None, :], (nv_r, nv_c))
-    y_v = np.broadcast_to((np.arange(nv_r) * cell_y)[:, None], (nv_r, nv_c))
+    x_arr = np.arange(nv_c, dtype=float) * cell_x
+    y_arr = np.arange(nv_r, dtype=float) * cell_y
+    if inset_mm > 0.0:
+        x_arr = np.clip(x_arr, inset_mm, tile_w - inset_mm)
+        y_arr = np.clip(y_arr, inset_mm, tile_h - inset_mm)
+    x_v = np.broadcast_to(x_arr[None, :], (nv_r, nv_c))
+    y_v = np.broadcast_to(y_arr[:, None], (nv_r, nv_c))
 
     verts = np.empty((2 * n_half, 3))
     verts[:n_half, 0] = x_v.ravel()
