@@ -39,8 +39,11 @@ class HexOrganizerSpec:
     cols: int = 4                    # columns across (x)
     rows: int = 3                    # cups per column (y)
     tolerance: float = 0.3          # added to bore/retaining diameters for clearance
+    side_cutout_width: float = 0.4  # rectangular cutout per hex face: fraction of face length (0 = disabled)
 
     def __post_init__(self) -> None:
+        if not 0.0 <= self.side_cutout_width <= 1.0:
+            raise ValueError("side_cutout_width must be between 0 and 1")
         if self.interior_wall > 2.0 * self.wall:
             raise ValueError(
                 "interior_wall cannot exceed 2 * wall; adjacent cup shells would separate"
@@ -269,6 +272,73 @@ def _subtract_magnets(body: m3d.Manifold, spec: HexOrganizerSpec) -> m3d.Manifol
 
 
 # ---------------------------------------------------------------------------
+# Wall side cutouts
+# ---------------------------------------------------------------------------
+
+def _side_cutouts_manifold(spec: HexOrganizerSpec) -> m3d.Manifold:
+    """Union of pointed-top/bottom cutouts through every hex face wall for all cups.
+
+    Each face gets a hexagonal prism (pointed top + bottom, straight sides) whose
+    cross-section lives in the (tangent × world-Z) plane.  45° points means the
+    vertical rise to full width = w/2 (rise == run).
+
+    Profile built in manifold3d's XY plane (X=width, Y=height), extruded along Z
+    (depth through wall).  rotate([90, 0, 90+deg]) maps:
+        local X → world tangent   (−sin deg, cos deg, 0)
+        local Y → world Z         (0, 0, 1)
+        local Z → world normal    (cos deg, sin deg, 0)
+    Then translate along the normal to centre the cutter on the wall.
+
+    Face normals for a flat-top hex (vertices at 0°,60°…): 30°,90°,150°,210°,270°,330°.
+    """
+    outer_f2f     = spec.bore_f2f + 2.0 * spec.wall
+    outer_apothem = outer_f2f / 2.0
+    inner_apothem = spec.bore_f2f / 2.0
+    apothem_mid   = (inner_apothem + outer_apothem) / 2.0
+
+    face_len  = outer_f2f / np.sqrt(3)
+    cutout_w  = spec.side_cutout_width * face_len
+    w2        = cutout_w / 2.0         # half-width; also the 45° rise distance
+    z_bottom  = spec.floor + 1.0
+    z_top     = spec.height - 8.0
+    depth     = spec.wall + 0.2        # wall + tiny overshoot each side
+
+    # CCW polygon in local XY (X = tangent width, Y = absolute height)
+    profile = [
+        ( 0.0,  z_bottom),
+        ( w2,   z_bottom + w2),
+        ( w2,   z_top    - w2),
+        ( 0.0,  z_top),
+        (-w2,   z_top    - w2),
+        (-w2,   z_bottom + w2),
+    ]
+    cs    = m3d.CrossSection([profile])
+    prism = m3d.Manifold.extrude(cs, depth)
+
+    face_normals_deg = [30.0, 90.0, 150.0, 210.0, 270.0, 330.0]
+
+    face_cutters = []
+    for deg in face_normals_deg:
+        rad = np.radians(deg)
+        nx, ny = float(np.cos(rad)), float(np.sin(rad))
+        cutter = prism.rotate([90.0, 0.0, 90.0 + deg])
+        # After rotation the extrusion axis (Z → normal) spans 0 → depth.
+        # Shift along the normal so the cutter is centred on the wall.
+        offset = apothem_mid - depth / 2.0
+        cutter = cutter.translate([offset * nx, offset * ny, 0.0])
+        face_cutters.append(cutter)
+
+    all_cutters = []
+    for col in range(spec.cols):
+        for row in range(spec.rows):
+            cx, cy = cup_centre(spec, col, row)
+            for fc in face_cutters:
+                all_cutters.append(fc.translate((cx, cy, 0.0)))
+
+    return m3d.Manifold.batch_boolean(all_cutters, m3d.OpType.Add)
+
+
+# ---------------------------------------------------------------------------
 # Main build function
 # ---------------------------------------------------------------------------
 # Vertical convex edge roundover
@@ -393,6 +463,9 @@ def _build_hollow(spec: HexOrganizerSpec) -> m3d.Manifold:
             cx, cy = cup_centre(spec, c, r)
             result -= bore.translate((cx, cy, 0.0))
 
+    if spec.side_cutout_width > 0.0:
+        result -= _side_cutouts_manifold(spec)
+
     return result
 
 
@@ -402,6 +475,8 @@ def build_organizer(spec: HexOrganizerSpec) -> m3d.Manifold:
 
     result = m3d.Manifold.extrude(honeycomb_footprint_cs(spec), spec.height)
     result = _subtract_cup_cutters(result, spec)
+    if spec.side_cutout_width > 0.0:
+        result -= _side_cutouts_manifold(spec)
 
     result = _subtract_magnets(result, spec)
     if spec.vertical_roundover > 0.0:
@@ -494,11 +569,14 @@ def main() -> None:
     parser.add_argument("--height",    type=float, default=60.0, help="Overall cup height in mm (default: 60.0)")
     parser.add_argument("--tolerance", type=float, default=0.3,
                         help="Bore clearance added to each bore diameter in mm (default: 0.3)")
+    parser.add_argument("--side-cutout-width", type=float, default=0.4,
+                        help="Rectangular cutout per hex face: fraction of face length, 0=disabled (default: 0.8)")
     parser.add_argument("--quiet",  action="store_true",      help="Suppress all output")
     args = parser.parse_args()
 
     spec      = HexOrganizerSpec(cols=args.cols, rows=args.rows, height=args.height,
-                                  tolerance=args.tolerance)
+                                  tolerance=args.tolerance,
+                                  side_cutout_width=args.side_cutout_width)
     out_path  = Path("stl/extras/hex_paint_organizer.stl")
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
     pitch_x, pitch_y = _pitches(spec)
