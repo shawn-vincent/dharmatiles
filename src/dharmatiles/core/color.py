@@ -7,9 +7,9 @@ exporters (3MF scenes, colour-STL) carry the intended palette.
 
 Colour palette
 --------------
-TERRAIN  reddish-brown   #8B5A2B   soil / dirt surface
+SOIL     reddish-brown   #8B5A2B   dirt / bare-soil surface (SoilCarpet regions)
 ROCK     blue-gray        #6A7F96   scattered half-ellipsoid rocks
-GRASS    yellow-green     #9ACD32   3-D blade scatter geometry
+GRASS    yellow-green     #9ACD32   grass carpet + 3-D blade geometry
 WATER    turquoise        #40E0D0   water volume mesh
 BASE     dark gray        #505050   socket-peg / T-slot underside base
 """
@@ -24,20 +24,20 @@ import trimesh
 
 
 class Material(IntEnum):
-    TERRAIN = 0
-    ROCK    = 1
-    GRASS   = 2
-    WATER   = 3
-    BASE    = 4
+    SOIL  = 0
+    ROCK  = 1
+    GRASS = 2
+    WATER = 3
+    BASE  = 4
 
 
 #: RGBA uint8 palette — one entry per :class:`Material`.
 RGBA: dict[Material, tuple[int, int, int, int]] = {
-    Material.TERRAIN: (139,  90,  43, 255),   # reddish-brown
-    Material.ROCK:    (106, 127, 150, 255),   # blue-gray
-    Material.GRASS:   (154, 205,  50, 255),   # yellow-green
-    Material.WATER:   ( 64, 224, 208, 255),   # turquoise
-    Material.BASE:    ( 80,  80,  80, 255),   # dark gray
+    Material.SOIL:  (139,  90,  43, 255),   # reddish-brown
+    Material.ROCK:  (106, 127, 150, 255),   # blue-gray
+    Material.GRASS: (154, 205,  50, 255),   # yellow-green
+    Material.WATER: ( 64, 224, 208, 255),   # turquoise
+    Material.BASE:  ( 80,  80,  80, 255),   # dark gray
 }
 
 
@@ -74,11 +74,11 @@ def export_color_stl(mesh: trimesh.Trimesh,
     normals = mesh.face_normals.astype('<f4')    # (F, 3) little-endian float32
     n       = len(faces)
 
-    # Fetch face colours; fall back to TERRAIN brown if visual is absent.
+    # Fetch face colours; fall back to SOIL brown if visual is absent.
     try:
         fc = mesh.visual.face_colors[:, :3].astype(np.uint16)
     except Exception:
-        c  = RGBA[Material.TERRAIN][:3]
+        c  = RGBA[Material.SOIL][:3]
         fc = np.tile(c, (n, 1)).astype(np.uint16)
 
     r5   = fc[:, 0] >> 3
@@ -112,7 +112,7 @@ def build_scene(meshes: list[trimesh.Trimesh]) -> trimesh.Scene:
     scene: trimesh.Scene = trimesh.Scene()
     counts: dict[str, int] = {}
     for mesh in meshes:
-        mat  = mesh.metadata.get('material', Material.TERRAIN)
+        mat  = mesh.metadata.get('material', Material.SOIL)
         base = mat.name.lower() if isinstance(mat, Material) else str(mat).lower()
         idx  = counts.get(base, 0)
         name = base if idx == 0 else f"{base}_{idx}"

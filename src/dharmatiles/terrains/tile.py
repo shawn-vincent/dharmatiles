@@ -104,14 +104,16 @@ def _batch_worker(args: tuple) -> dict:
 
 # ── Terrain face-colour helper ────────────────────────────────────────────────
 
-# Layer class-name → terrain material override.
+# Layer class-name → terrain-surface material.
 # Uses type-name strings to avoid cross-package imports; we control all names.
+# Layers not listed here default to SOIL (bare dirt).
 _LAYER_TERRAIN_MATERIAL: dict[str, "Material"] = {
-    'GrassCarpet':     Material.GRASS,
+    'GrassCarpet':      Material.GRASS,
     'GrassCarpetLayer': Material.GRASS,
-    'Water':           Material.WATER,
-    'WaterLayer':      Material.WATER,
-    # SoilCarpet / SoilCarpetLayer / Scatter → default TERRAIN
+    'SoilCarpet':       Material.SOIL,
+    'SoilCarpetLayer':  Material.SOIL,
+    'Water':            Material.WATER,
+    'WaterLayer':       Material.WATER,
 }
 
 
@@ -124,24 +126,25 @@ def _color_terrain_faces(
     """Apply per-face colours to *terrain_mesh* based on region layer content.
 
     Faces whose centroid falls inside a grass-carpet region become
-    ``Material.GRASS`` (yellow-green); water-region faces become
-    ``Material.WATER`` (turquoise); everything else stays ``Material.TERRAIN``
-    (reddish-brown).  Side and bottom faces of the slab are coloured by XY
-    centroid, which is fine because they are hidden under the base.
+    ``Material.GRASS`` (yellow-green); soil-carpet regions become
+    ``Material.SOIL`` (reddish-brown); water regions become ``Material.WATER``
+    (turquoise).  Side and bottom faces of the slab are coloured by XY
+    centroid — they are hidden under the base in practice.
 
     Modifies *terrain_mesh.visual* in-place; does not change geometry.
-    Does nothing when *region_mask* is None.
+    Falls back to uniform SOIL when *region_mask* is None.
     """
     from ..core.color import RGBA
 
     if region_mask is None or not regions:
-        _tag(terrain_mesh, Material.TERRAIN)
+        _tag(terrain_mesh, Material.SOIL)
         return
 
     # Determine the terrain-surface material for each region index.
+    # The FIRST recognised layer in a region wins; Scatter has no override.
     region_mat: list[Material] = []
     for region in regions:
-        mat = Material.TERRAIN
+        mat = Material.SOIL       # default: bare dirt
         for layer in region.layers:
             override = _LAYER_TERRAIN_MATERIAL.get(type(layer).__name__)
             if override is not None:
@@ -157,14 +160,14 @@ def _color_terrain_faces(
     gj = np.clip((centroids[:, 1] / surface.tile_h * gh).astype(int), 0, gh - 1)
     ridx = region_mask[gj, gi]          # (F,) — -1=boundary, 0..N=region
 
-    # Start with the default TERRAIN colour for all faces.
-    n          = len(terrain_mesh.faces)
+    # Default all faces to SOIL.
+    n           = len(terrain_mesh.faces)
     face_colors = np.empty((n, 4), dtype=np.uint8)
-    face_colors[:] = RGBA[Material.TERRAIN]
+    face_colors[:] = RGBA[Material.SOIL]
 
-    # Override for each region that maps to a non-default material.
+    # Override for each region whose material differs from SOIL.
     for r_idx, mat in enumerate(region_mat):
-        if mat != Material.TERRAIN:
+        if mat != Material.SOIL:
             mask = (ridx == r_idx)
             if mask.any():
                 face_colors[mask] = RGBA[mat]
@@ -173,7 +176,7 @@ def _color_terrain_faces(
         mesh=terrain_mesh,
         face_colors=face_colors,
     )
-    terrain_mesh.metadata['material'] = Material.TERRAIN
+    terrain_mesh.metadata['material'] = Material.SOIL
 
 
 # ── Internal mesh builder ─────────────────────────────────────────────────────
@@ -260,7 +263,7 @@ def _build_tile_mesh(
 
     groups: dict[Material, list[trimesh.Trimesh]] = defaultdict(list)
     for p in parts:
-        mat = p.metadata.get('material', Material.TERRAIN)
+        mat = p.metadata.get('material', Material.SOIL)
         groups[mat].append(p)
 
     group_label = f"Material grouping  ({len(groups)} group(s))"
@@ -289,10 +292,10 @@ def _build_tile_mesh(
                 group_mesh = (trimesh.util.concatenate(mesh_list)
                               if len(mesh_list) > 1 else mesh_list[0])
 
-        if mat == Material.TERRAIN and len(mesh_list) == 1:
+        if mat == Material.SOIL and len(mesh_list) == 1:
             # Terrain already carries per-face region colours from
             # _color_terrain_faces(); just ensure the metadata is set.
-            group_mesh.metadata['material'] = Material.TERRAIN
+            group_mesh.metadata['material'] = Material.SOIL
         else:
             _tag(group_mesh, mat)   # (re-)apply after union strips attributes
         colored_meshes.append(group_mesh)
@@ -555,6 +558,50 @@ def _run_parallel_live(
     reporter.record_batch_rows([done_rows[n] for n in spec_names if n in done_rows])
 
 
+# ── 3MF pruning ──────────────────────────────────────────────────────────────
+
+def _count_3mf_objects(path: pathlib.Path) -> int:
+    """Return the number of ``<object>`` elements in a 3MF archive.
+
+    Uses a fast byte-level count rather than full XML parsing.
+    Returns 0 on any read error.
+    """
+    import zipfile
+    try:
+        with zipfile.ZipFile(path) as z:
+            model = z.read('3D/3dmodel.model')
+        return model.count(b'<object ')
+    except Exception:
+        return 0
+
+
+def _keep_best_3mf_per_dir(stl_root: pathlib.Path) -> None:
+    """Prune 3MF files under *stl_root* to one per directory.
+
+    Within each directory that contains more than one 3MF, keep the file
+    whose 3MF scene has the most ``<object>`` elements (most material
+    groups).  Ties are broken by keeping the alphabetically-first path so
+    the result is deterministic across runs.
+
+    Called after every batch or single-spec generation so the ``stl/``
+    tree always contains exactly one representative 3MF per output
+    sub-directory.
+    """
+    from collections import defaultdict
+    by_dir: dict[pathlib.Path, list[pathlib.Path]] = defaultdict(list)
+    for p in stl_root.rglob('*.3mf'):
+        by_dir[p.parent].append(p)
+
+    for parent, files in by_dir.items():
+        if len(files) <= 1:
+            continue
+        # Sort alphabetically for determinism, then rank by object count descending.
+        files.sort()
+        ranked = sorted(files, key=_count_3mf_objects, reverse=True)
+        for loser in ranked[1:]:
+            loser.unlink(missing_ok=True)
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -599,6 +646,7 @@ def main(argv=None):
             t0 = _time.perf_counter()
             _build_spec(tile, args.spec, TILES_ROOT, STL_ROOT, reporter)
             reporter.tile_end(_time.perf_counter() - t0)
+        _keep_best_3mf_per_dir(STL_ROOT)
         if not args.quiet:
             _print_closing_quote()
         return
@@ -674,6 +722,7 @@ def main(argv=None):
             reporter.batch_spec_done(spec_name, _time.perf_counter() - t_spec)
 
     reporter.batch_end(len(spec_paths), _time.perf_counter() - t_batch)
+    _keep_best_3mf_per_dir(STL_ROOT)
     if not args.quiet:
         _print_closing_quote()
 
