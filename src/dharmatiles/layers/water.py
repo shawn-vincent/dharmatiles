@@ -40,7 +40,7 @@ class Water:
         displacement is preserved inside this inset rounded square.
     tile_edge_profile_radius_mm
         Corner radius of that rounded-square blend boundary.  ``None`` uses
-        ``tile_edge_profile_fade_mm``.
+        half of ``tile_edge_profile_fade_mm``.
     """
 
     height_default_mm: float = 3.0
@@ -184,7 +184,7 @@ def _force_tile_edge_water_profile(
     if not any(edge_contacts) or wavelength_mm <= 0.0 or fade_mm <= 0.0:
         return top_z
 
-    radius = fade_mm if radius_mm is None else radius_mm
+    radius = fade_mm * 0.5 if radius_mm is None else radius_mm
     nv_r, nv_c = top_z.shape
     x = np.linspace(0.0, tile_w, nv_c)
     y = np.linspace(0.0, tile_h, nv_r)

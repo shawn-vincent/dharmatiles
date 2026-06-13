@@ -55,8 +55,8 @@ class WaterVolumeTests(unittest.TestCase):
 
         normal_surface = 3.0 + WATER_RENDER_LIFT_MM
 
-        self.assertNotAlmostEqual(top_z[6, 6], normal_surface)
-        self.assertAlmostEqual(top_z[7, 7], normal_surface)
+        self.assertNotAlmostEqual(top_z[5, 5], normal_surface)
+        self.assertAlmostEqual(top_z[6, 6], normal_surface)
 
     def test_tile_edge_profile_blends_from_raw_texture_to_sine(self):
         z_disp = np.full((35, 35), 0.8, dtype=float)

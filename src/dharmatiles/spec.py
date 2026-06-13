@@ -219,6 +219,10 @@ class Boundary:
     :class:`Edge` factory methods).  Legacy ``('edge', t)`` tuples are also
     accepted.
 
+    ``waypoints`` are optional normalised ``(x, y)`` interior control points.
+    Boundaries may start and end on the same tile edge; the path plus the
+    perimeter segment between anchors can carve out a flood-fillable region.
+
     ``width_mm = 0`` (default) → zero-width dividing line; no layers allowed.
     ``width_mm > 0`` → physical strip; layers fill the strip.
     """
@@ -226,6 +230,7 @@ class Boundary:
     from_anchor: Anchor | tuple[str, float]
     to_anchor:   Anchor | tuple[str, float]
     path:        str   = 'organic'
+    waypoints:   list[tuple[float, float]] = field(default_factory=list)
     amplitude_mm:    float = 3.6
     wavelength_mm:   float = 10.0
     detail_fraction: float = 0.25

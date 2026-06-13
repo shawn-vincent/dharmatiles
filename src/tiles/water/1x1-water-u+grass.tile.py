@@ -1,12 +1,7 @@
-# water+grass-u.tile.py
+# water-u+grass.tile.py
 #
-# A water cove indents from the right edge; grass meadow wraps the left,
-# top, and bottom sides — a lagoon enclosed by meadow on three sides.
-#
-# Three shoreline boundaries enclose the cove:
-#   left-shore  — vertical at x≈0.6 across full tile height
-#   upper-shore — diagonal from top anchor to upper-right edge
-#   lower-shore — diagonal from bottom anchor to lower-right edge
+# A water cove indents from the right edge; grass meadow surrounds it.
+# One same-edge shoreline boundary carves out the cove.
 
 from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill, FlatHeight, SurfaceConfig, SpeciesConfig, D
 from dharmatiles.layers import SoilCarpet, GrassCarpet, Scatter, Water
@@ -47,35 +42,19 @@ tile = Tile(
                 Water(embed_mm=2.5),
             ],
         ),
-        _meadow('meadow-left',         0.3,  0.5),
-        _meadow('meadow-top-right',    0.85, 0.9),
-        _meadow('meadow-bottom-right', 0.85, 0.1),
+        _meadow('meadow', 0.2, 0.5),
         Boundary(
-            id='left-shore',
-            from_anchor=Edge.TOP(0.6),
-            to_anchor=Edge.BOTTOM(0.6),
-            path='organic',
-            amplitude_mm=1.5,
-            wavelength_mm=10.0,
-            width_mm=2.5,
-            layers=[SoilCarpet(), _shore_rocks()],
-        ),
-        Boundary(
-            id='upper-shore',
-            from_anchor=Edge.TOP(0.6),
+            id='cove-shore',
+            from_anchor=Edge.RIGHT(0.33),
             to_anchor=Edge.RIGHT(0.67),
+            waypoints=[
+                (0.56, 0.20),
+                (0.28, 0.38),
+                (0.34, 0.62),
+                (0.58, 0.80),
+            ],
             path='organic',
-            amplitude_mm=2.0,
-            wavelength_mm=8.0,
-            width_mm=2.5,
-            layers=[SoilCarpet(), _shore_rocks()],
-        ),
-        Boundary(
-            id='lower-shore',
-            from_anchor=Edge.BOTTOM(0.6),
-            to_anchor=Edge.RIGHT(0.33),
-            path='organic',
-            amplitude_mm=2.0,
+            amplitude_mm=1.6,
             wavelength_mm=8.0,
             width_mm=2.5,
             layers=[SoilCarpet(), _shore_rocks()],

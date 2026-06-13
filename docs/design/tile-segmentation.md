@@ -154,7 +154,11 @@ produces a sharp cutoff (valid, just no slope).
 |---|---|
 | `organic` | Straight-line baseline with band-limited perpendicular noise, tapered to zero at both anchors so the path always hits exactly the specified perimeter points |
 | `straight` | Exact straight line — use for walls, water-level cuts |
-| `waypoints` | Explicit list of interior `[x, y]` (normalised) points; organic noise can be layered on top |
+
+Boundaries may also define `waypoints`: an explicit list of interior `[x, y]`
+normalised points.  `straight` paths follow the anchor/waypoint chain exactly;
+`organic` paths add noise between control points while still passing through
+every anchor and waypoint.
 
 ---
 

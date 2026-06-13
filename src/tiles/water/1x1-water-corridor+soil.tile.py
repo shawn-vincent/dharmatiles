@@ -1,31 +1,20 @@
-# water+grass-corridor.tile.py
+# water-corridor+soil.tile.py
 #
-# Grass meadows run along the top and bottom edges; a water channel flows
-# left-to-right through the center — like a stream where you can see both
-# grassy banks at once.
+# Two soil banks flank a central water channel running left to right —
+# like a river ford where both banks are visible from the crossing.
 
-from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill, FlatHeight, SurfaceConfig, SpeciesConfig, D
-from dharmatiles.layers import SoilCarpet, GrassCarpet, Scatter, Water
-from dharmatiles.scatter import Rocks, Grass, Grouped, Uniform
-
-_species = SpeciesConfig()
-
-
-def _meadow(region_id: str, x: float, y: float) -> Region:
-    return Region(
-        id=region_id,
-        selector=FloodFill(x, y),
-        layers=[
-            GrassCarpet(species=_species, placement=Grouped(groups_per_square=240)),
-            Scatter(Grass(species=_species, placement=Grouped(groups_per_square=24))),
-        ],
-    )
-
+from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill, FlatHeight, SurfaceConfig, D
+from dharmatiles.layers import SoilCarpet, Scatter, Water
+from dharmatiles.scatter import Rocks, Uniform
 
 tile = Tile(
-    surface=SurfaceConfig(seed=62),
+    surface=SurfaceConfig(seed=53),
     areas=[
-        _meadow('meadow-top', 0.5, 0.85),
+        Region(
+            id='bank-top',
+            selector=FloodFill(0.5, 0.85),
+            layers=[SoilCarpet()],
+        ),
         Boundary(
             id='north-shore',
             from_anchor=Edge.LEFT(0.67),
@@ -78,6 +67,10 @@ tile = Tile(
                 ),
             ],
         ),
-        _meadow('meadow-bottom', 0.5, 0.15),
+        Region(
+            id='bank-bottom',
+            selector=FloodFill(0.5, 0.15),
+            layers=[SoilCarpet()],
+        ),
     ],
 )

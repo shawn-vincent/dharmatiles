@@ -1,8 +1,12 @@
 import tempfile
 import textwrap
+import warnings
 from pathlib import Path
 from unittest import TestCase
 
+import numpy as np
+
+from dharmatiles.core.region import build_region_mask
 from dharmatiles.spec import load_spec
 
 
@@ -47,3 +51,18 @@ class LoadSpecTests(TestCase):
             tiles = load_spec(relative_spec)
 
         self.assertEqual([t.surface.seed for t in tiles], [123, 456])
+
+    def test_all_tile_specs_build_region_masks(self):
+        tile_paths = sorted(Path("src/tiles").glob("*/*.tile.py"))
+
+        self.assertTrue(tile_paths)
+
+        for path in tile_paths:
+            with self.subTest(path=str(path)):
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
+                    for tile in load_spec(path):
+                        mask = build_region_mask(tile)
+                        self.assertNotIn(-2, np.unique(mask))
+
+                self.assertEqual([str(w.message) for w in caught], [])

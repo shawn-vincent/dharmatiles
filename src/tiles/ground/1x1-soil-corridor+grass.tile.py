@@ -1,4 +1,4 @@
-# soil+grass-corridor.tile.py
+# soil-corridor+grass.tile.py
 #
 # Grass strips run along the top and bottom edges; bare soil cuts across
 # the middle as a path or open clearing.  Two organic boundaries divide

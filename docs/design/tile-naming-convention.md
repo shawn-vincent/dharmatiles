@@ -9,16 +9,20 @@ Types are always listed low → high elevation:
 ## File Naming Pattern
 
 ```
+[lower-type]+[higher-type].tile
+[lower-type]-[shape]+[higher-type].tile
 [lower-type]+[higher-type]-[shape].tile
 ```
 
 - **Pure tile** (single terrain): just the type name — `grass.tile`, `water.tile`
 - **Mixed tile**: `[lower]+[higher]` — the `+` separates the two terrain regions
-- **Shape suffix** (joined with `-`) describes the *higher* type's region topology
+- **Shape suffix** (joined with `-`) describes the topology of the terrain it is attached to
 - Shape suffix is **omitted** when the higher type occupies one full side (half the tile) — that is the implicit default
 
-The `+` has higher visual precedence than `-`, so `soil+grass-corner` reads
-unambiguously as two groups: `soil` and `grass-corner`.
+The `+` separates terrain groups.  `water-corridor+grass` means a water
+corridor through grass; `soil+grass-corner` means a grass corner on soil.
+
+For the full current convention, see `docs/tile-design-guide.md`.
 
 ## Shape Vocabulary
 
@@ -31,6 +35,10 @@ Shape names are borrowed from wall/room topology:
 | `-angle` | Two adjacent sides (L-shape) |
 | `-corridor` | Two opposing sides |
 | `-u` | Three sides |
+| `-corridor-turn` | Corridor connecting two adjacent sides |
+| `-corridor-t` | Corridor connecting three sides |
+| `-corridor-x` | Corridor connecting all four sides |
+| `-corridor-open` | Corridor width opening into a midpoint-width transition |
 
 ## Current Tiles
 
