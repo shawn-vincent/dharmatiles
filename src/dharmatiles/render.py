@@ -101,6 +101,12 @@ def _load_label_font_light(size: int):
     return _load_label_font(size)
 
 
+# Fraction of the cropped logo height occupied by the triangular point above
+# the square border (measured from the asset: 22 px point / 384 px total).
+# Used to vertically centre the square body inside the pill badge.
+_LOGO_POINT_FRACTION = 22 / 384
+
+
 def _load_logo_icon(size: int) -> Image.Image:
     """Dharmatiles logo resized to size×size, white-on-transparent, whitespace cropped."""
     import pathlib
@@ -157,6 +163,7 @@ def _add_label_overlay(img: Image.Image, label: str) -> Image.Image:
     top_y = _bb(name)[1]
 
     gap    = max(6, font_size // 5)
+    hgap   = gap * 2                   # horizontal gap (edges + icon↔text) doubled
     margin = max(14, ih // 45)
     radius = max(6,  font_size // 4)
 
@@ -169,7 +176,7 @@ def _add_label_overlay(img: Image.Image, label: str) -> Image.Image:
 
     icon_w = icon_size if icon is not None else 0
     text_w = pw + nw
-    rect_w = gap + (icon_w + gap if icon is not None else 0) + text_w + gap
+    rect_w = hgap + (icon_w + hgap if icon is not None else 0) + text_w + hgap
 
     x1 = margin
     y1 = ih - margin - rect_h
@@ -186,11 +193,14 @@ def _add_label_overlay(img: Image.Image, label: str) -> Image.Image:
     img.paste(frosted, (x1, y1), mask=pmask)
 
     if icon is not None:
-        icon_y = y1 + (rect_h - icon_size) // 2
-        img.alpha_composite(icon, dest=(x1 + gap, icon_y))
+        # Centre the square body of the logo, not the full icon bounds.
+        # Shift up by half the point height so the square sits mid-pill.
+        point_px = int(_LOGO_POINT_FRACTION * icon_size)
+        icon_y   = y1 + (rect_h - icon_size) // 2 - point_px // 2
+        img.alpha_composite(icon, dest=(x1 + hgap, icon_y))
 
     draw = ImageDraw.Draw(img)
-    tx   = x1 + gap + (icon_w + gap if icon is not None else 0)
+    tx   = x1 + hgap + (icon_w + hgap if icon is not None else 0)
     ty   = y1 + (rect_h - nh) // 2 - top_y + gap // 2
     if prefix:
         draw.text((tx, ty), prefix, font=font_light, fill=(255, 255, 255, 235))
@@ -199,7 +209,7 @@ def _add_label_overlay(img: Image.Image, label: str) -> Image.Image:
     return img
 
 
-def _rounded_corners(img: Image.Image, radius: int = 52) -> Image.Image:
+def _rounded_corners(img: Image.Image, radius: int = 20) -> Image.Image:
     mask = Image.new('L', img.size, 0)
     ImageDraw.Draw(mask).rounded_rectangle(
         [(0, 0), (img.width - 1, img.height - 1)], radius=radius, fill=255,

@@ -9,3 +9,4 @@ Requires-Dist: scipy
 Requires-Dist: pyyaml
 Requires-Dist: manifold3d
 Requires-Dist: rich
+Requires-Dist: Pillow

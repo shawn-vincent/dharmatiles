@@ -105,7 +105,7 @@ def _batch_worker(args: tuple) -> dict:
     t0        = _time.perf_counter()
 
     render_meshes: list[trimesh.Trimesh] | None = None
-    dir_meshes_serial: dict[str, list[dict]] = {}
+    dir_meshes_serial: dict[str, tuple[str, list[dict]]] = {}
     for tile in load_spec(spec_path):
         surface   = tile.surface
         sys_paths = _system_paths_for(spec_path, tile, tiles_root, stl_root)
@@ -122,7 +122,7 @@ def _batch_worker(args: tuple) -> dict:
             tile, system_paths=sys_paths, reporter=reporter,
         )
         for d, ms in dir_to_meshes.items():
-            dir_meshes_serial[str(d)] = _meshes_to_serial(ms)
+            dir_meshes_serial[str(d)] = (spec_name, _meshes_to_serial(ms))
 
     # Render PNG from the already-built meshes (no second build pass).
     _set_phase("Render PNG")
@@ -708,23 +708,92 @@ def _serial_to_meshes(serial: list[dict]) -> list[trimesh.Trimesh]:
     return meshes
 
 
-def _write_dir_3mf(
-    dir_path:     pathlib.Path,
-    meshes_lists: list[list[trimesh.Trimesh]],
-) -> None:
-    """Write one ``<dir>.3mf`` into *dir_path* from one representative tile.
+def _expand_mixed_materials(
+    meshes: list[trimesh.Trimesh],
+) -> list[trimesh.Trimesh]:
+    """Split any mesh whose faces carry mixed material colours into per-material parts.
 
-    *meshes_lists* has one ``[base] + colored_meshes`` list per tile; only the
-    first entry is used so the file stays small and opens quickly.  The file is
-    named after the containing directory (e.g. ``dungeonblocks/dungeonblocks.3mf``
-    or ``water/water.3mf``).
+    The terrain solid is tagged ``Material.SOIL`` in its metadata but holds
+    per-face RGBA colours assigned by ``_color_terrain_faces()`` — grass-carpet
+    region faces are green, soil faces are brown, etc.  PNG rendering reads
+    those face colours directly and looks correct; the 3MF exporter reads
+    ``metadata['material']`` for filament-slot assignment and therefore paints
+    the whole terrain brown.
+
+    This function detects meshes whose face colours span more than one entry in
+    the ``RGBA`` palette, splits them on face-colour boundaries, and tags each
+    part with the correct ``Material`` so the 3MF exporter assigns the right
+    extruder to every region.  Single-colour and untagged meshes pass through
+    unchanged.
+    """
+    from ..core.color import RGBA, Material
+
+    # Reverse palette: (R, G, B) → Material  (ignores alpha so alpha=255 variants match too)
+    _rgb_to_mat: dict[tuple[int, int, int], Material] = {
+        tuple(rgba[:3]): mat  # type: ignore[misc]
+        for mat, rgba in RGBA.items()
+    }
+
+    result: list[trimesh.Trimesh] = []
+    for mesh in meshes:
+        try:
+            fc = mesh.visual.face_colors  # (F, 4) uint8
+        except Exception:
+            result.append(mesh)
+            continue
+
+        if len(fc) == 0:
+            result.append(mesh)
+            continue
+
+        fc3 = fc[:, :3]  # (F, 3) — drop alpha for comparison
+        unique_colors = np.unique(fc3, axis=0)
+
+        if len(unique_colors) <= 1:
+            result.append(mesh)
+            continue
+
+        # Multiple colours → split and retag each part.
+        for color in unique_colors:
+            key = tuple(int(c) for c in color)
+            mat = _rgb_to_mat.get(key, Material.SOIL)  # type: ignore[arg-type]
+            face_idx = np.where(np.all(fc3 == color, axis=1))[0]
+            sub = mesh.submesh([face_idx], append=True)
+            n = len(sub.faces)
+            sub.visual = trimesh.visual.ColorVisuals(
+                mesh=sub,
+                face_colors=np.tile(RGBA[mat], (n, 1)).astype(np.uint8),
+            )
+            sub.metadata['material'] = mat
+            result.append(sub)
+
+    return result
+
+
+def _write_dir_3mf(
+    dir_path: pathlib.Path,
+    tiles:    list[tuple[str, list[trimesh.Trimesh]]],
+) -> None:
+    """Write one ``<dir>.3mf`` into *dir_path* containing all tiles laid out
+    on a Bambu X1C build plate (256 × 256 mm).
+
+    *tiles* is a list of ``(spec_name, meshes)`` pairs — one per tile in this
+    directory.  All tiles are packed into a tight grid, centred on the plate,
+    respecting the X1C front-edge keep-out zone.  When tiles from different
+    terrain groups overflow a single plate the 3MF file contains multiple
+    Bambu Studio virtual plates.
+
+    Mixed-material terrain meshes (terrain solid carrying per-face grass/soil
+    colours from ``_color_terrain_faces``) are split into per-material parts
+    before export so Bambu Studio assigns the correct filament slot to each region.
     """
     from ..core.color import export_3mf_colored
-    if not meshes_lists:
+    if not tiles:
         return
-    all_meshes = list(meshes_lists[0])   # one representative tile
+    names       = [name for name, _ in tiles]
+    meshes_list = [_expand_mixed_materials(ms) for _, ms in tiles]
     dir_path.mkdir(parents=True, exist_ok=True)
-    export_3mf_colored(all_meshes, dir_path / f"{dir_path.name}.3mf")
+    export_3mf_colored(meshes_list, dir_path / f"{dir_path.name}.3mf", names=names)
 
 
 def _render_all_pngs(
@@ -754,6 +823,106 @@ def _render_all_pngs(
         meshes = build_meshes_for_render(sp)
         _render(meshes, out, quiet=quiet, grid_square_mm=tile.surface.square_mm,
                 label=_label_for_png(out, png_root))
+
+
+def _collect_png_sections(png_root: pathlib.Path) -> list[tuple[str, list[pathlib.Path]]]:
+    """Return immediate PNG subdirectories as catalog sections."""
+    if not png_root.exists():
+        return []
+    sections: list[tuple[str, list[pathlib.Path]]] = []
+    for child in sorted(p for p in png_root.iterdir() if p.is_dir()):
+        images = sorted(child.glob("*.png"))
+        if images:
+            sections.append((child.name, images))
+    return sections
+
+
+def _write_tile_catalog_pdf(
+    png_root: pathlib.Path,
+    out:      pathlib.Path,
+    quiet:    bool = False,
+) -> None:
+    """Write a Letter-sized PDF catalog from PNG thumbnails under *png_root*.
+
+    Each immediate subdirectory becomes a section.  Sections start on fresh
+    pages; pages use a fixed two-column grid and as many rows as fit.
+    """
+    sections = _collect_png_sections(png_root)
+    if not sections:
+        return
+
+    try:
+        from PIL import Image, ImageDraw, ImageOps
+        from ..render import _load_label_font, _load_label_font_bold
+    except ImportError:
+        if not quiet:
+            print("Pillow not available — skipping PDF catalog")
+        return
+
+    # Render at 3× (216 DPI) so tiles appear crisp; divide all layout constants
+    # by SCALE to get the same physical dimensions on a Letter page.
+    SCALE          = 3
+    DPI            = 72 * SCALE
+    page_w, page_h = 612 * SCALE, 792 * SCALE   # Letter at DPI
+    margin         = 36  * SCALE
+    title_h        = 44  * SCALE
+    gap            = 16  * SCALE
+    cols           = 2
+    rows           = 3
+    cell_w         = (page_w - 2 * margin - gap) // cols
+    grid_top       = margin + title_h + 14 * SCALE
+    cell_h         = (page_h - grid_top - margin - (rows - 1) * gap) // rows
+
+    title_font = _load_label_font_bold(24 * SCALE)
+    page_font  = _load_label_font(9  * SCALE)
+    pages: list[Image.Image] = []
+
+    def _new_page(section: str, page_num: int, total_pages: int) -> Image.Image:
+        # RGBA so alpha-masked tile paste composites cleanly onto white.
+        page = Image.new("RGBA", (page_w, page_h), (255, 255, 255, 255))
+        draw = ImageDraw.Draw(page)
+        draw.text((margin, margin), section.title(), fill=(24, 24, 24), font=title_font)
+        if total_pages > 1:
+            text = f"{page_num}/{total_pages}"
+            bbox = draw.textbbox((0, 0), text, font=page_font)
+            draw.text((page_w - margin - (bbox[2] - bbox[0]), margin + 9 * SCALE),
+                      text, fill=(100, 100, 100), font=page_font)
+        draw.line((margin, margin + title_h, page_w - margin, margin + title_h),
+                  fill=(220, 220, 220), width=1)
+        return page
+
+    per_page = cols * rows
+    for section, image_paths in sections:
+        total_pages = (len(image_paths) + per_page - 1) // per_page
+        for section_page_idx in range(total_pages):
+            chunk = image_paths[
+                section_page_idx * per_page:(section_page_idx + 1) * per_page
+            ]
+            page = _new_page(section, section_page_idx + 1, total_pages)
+            for idx, image_path in enumerate(chunk):
+                row, col = divmod(idx, cols)
+                x = margin + col * (cell_w + gap)
+                y = grid_top + row * (cell_h + gap)
+                try:
+                    with Image.open(image_path) as img:
+                        # Keep RGBA so rounded-corner alpha is preserved.
+                        thumb = ImageOps.contain(img.convert("RGBA"), (cell_w, cell_h))
+                except Exception:
+                    continue
+                px = x + (cell_w - thumb.width) // 2
+                py = y + (cell_h - thumb.height) // 2
+                # Use the image's own alpha as the paste mask so transparent
+                # corners reveal the white page background (rounded look).
+                page.paste(thumb, (px, py), mask=thumb)
+            pages.append(page)
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    # Convert to RGB for PDF output (white BG already composited above).
+    rgb_pages = [p.convert("RGB") for p in pages]
+    first, rest = rgb_pages[0], rgb_pages[1:]
+    first.save(str(out), "PDF", resolution=float(DPI), save_all=True, append_images=rest)
+    if not quiet:
+        print(f"→ {out}")
 
 
 def _system_paths_for(
@@ -901,6 +1070,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--spec", "-s", type=pathlib.Path, default=None,
                    metavar="FILE",
                    help=".tile.py Python spec.  Omit to process all src/tiles/")
+    p.add_argument("--png-only", action="store_true",
+                   help="Re-render PNG thumbnails and PDF catalog only; skip STL generation.")
     p.add_argument("--quiet", "-q", action="store_true",
                    help="Suppress all output.")
     return p
@@ -917,13 +1088,29 @@ def main(argv=None):
     TILES_ROOT = pathlib.Path("src/tiles")
     STL_ROOT   = pathlib.Path("stl")
     PNG_ROOT   = pathlib.Path("png")
+    CATALOG_PDF = STL_ROOT / "tile-catalog.pdf"
+
+    # ── PNG-only (skip all STL work) ──────────────────────────────────────────
+    if args.png_only:
+        spec_paths = (
+            [args.spec] if args.spec is not None
+            else sorted(TILES_ROOT.rglob("*.tile.py"))
+        )
+        if not spec_paths:
+            print(f"No .tile.py files found under {TILES_ROOT}/")
+            return
+        _render_all_pngs(spec_paths, TILES_ROOT, PNG_ROOT, quiet=args.quiet)
+        _write_tile_catalog_pdf(PNG_ROOT, CATALOG_PDF, quiet=args.quiet)
+        if not args.quiet:
+            _print_closing_quote()
+        return
 
     # ── Single spec ───────────────────────────────────────────────────────────
     if args.spec is not None:
         from collections import defaultdict as _defaultdict
         specs = list(load_spec(args.spec))
         render_meshes: list[trimesh.Trimesh] | None = None
-        dir_3mf_accum: dict[pathlib.Path, list[list[trimesh.Trimesh]]] = _defaultdict(list)
+        dir_3mf_accum: dict[pathlib.Path, list[tuple[str, list[trimesh.Trimesh]]]] = _defaultdict(list)
         for tile in specs:
             surface = tile.surface
             name    = args.spec.stem.replace('.tile', '')
@@ -942,7 +1129,7 @@ def main(argv=None):
             )
             reporter.tile_end(_time.perf_counter() - t0)
             for d, ms in dir_to_meshes.items():
-                dir_3mf_accum[d].append(ms)
+                dir_3mf_accum[d].append((name, ms))
         for d, mls in dir_3mf_accum.items():
             _write_dir_3mf(d, mls)
         if render_meshes is not None and specs:
@@ -951,6 +1138,7 @@ def main(argv=None):
                                 label=_label_for_png(out, PNG_ROOT))
         else:
             _render_all_pngs([args.spec], TILES_ROOT, PNG_ROOT, quiet=args.quiet)
+        _write_tile_catalog_pdf(PNG_ROOT, CATALOG_PDF, quiet=args.quiet)
         if not args.quiet:
             _print_closing_quote()
         return
@@ -1009,17 +1197,18 @@ def main(argv=None):
                         reporter.inject_batch_row(row)
 
         # ── Per-directory 3MF (one per system output dir, all tiles) ─────────
-        dir_3mf_accum: dict[pathlib.Path, list[list[trimesh.Trimesh]]] = _defaultdict(list)
+        dir_3mf_accum: dict[pathlib.Path, list[tuple[str, list[trimesh.Trimesh]]]] = _defaultdict(list)
         for row in all_par_rows:
-            for d_str, serial in row.get('dir_meshes_serial', {}).items():
-                dir_3mf_accum[pathlib.Path(d_str)].append(_serial_to_meshes(serial))
+            for d_str, name_serial in row.get('dir_meshes_serial', {}).items():
+                name, serial = name_serial
+                dir_3mf_accum[pathlib.Path(d_str)].append((name, _serial_to_meshes(serial)))
         for d, mls in dir_3mf_accum.items():
             _write_dir_3mf(d, mls)
 
         pngs_rendered = True
     else:
         # ── Sequential fallback (single-core or --quiet) ─────────────────────
-        dir_3mf_accum_seq: dict[pathlib.Path, list[list[trimesh.Trimesh]]] = _defaultdict(list)
+        dir_3mf_accum_seq: dict[pathlib.Path, list[tuple[str, list[trimesh.Trimesh]]]] = _defaultdict(list)
 
         for sp in spec_paths:
             spec_name = sp.stem.replace('.tile', '')
@@ -1046,7 +1235,7 @@ def main(argv=None):
                 )
                 reporter.tile_end(_time.perf_counter() - t0)
                 for d, ms in dir_to_meshes.items():
-                    dir_3mf_accum_seq[d].append(ms)
+                    dir_3mf_accum_seq[d].append((spec_name, ms))
 
             reporter.batch_spec_done(spec_name, _time.perf_counter() - t_spec)
 
@@ -1067,6 +1256,7 @@ def main(argv=None):
     reporter.batch_end(len(spec_paths), _time.perf_counter() - t_batch)
     if not pngs_rendered:
         _render_all_pngs(spec_paths, TILES_ROOT, PNG_ROOT, quiet=args.quiet)
+    _write_tile_catalog_pdf(PNG_ROOT, CATALOG_PDF, quiet=args.quiet)
     if not args.quiet:
         _print_closing_quote()
 
