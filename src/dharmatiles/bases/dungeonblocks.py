@@ -11,7 +11,7 @@ import pathlib
 import numpy as np
 import trimesh
 
-from ..core.color import Material, tag as _tag, export_color_stl, export_3mf_colored
+from ..core.color import Material, tag as _tag, export_color_stl
 from ..core.config import BaseConfig, SurfaceConfig
 from ..core.logo import make_logo_manifold
 
@@ -162,10 +162,6 @@ def export(colored_meshes: list[trimesh.Trimesh],
     combined = trimesh.util.concatenate(all_meshes)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     export_color_stl(combined, output_path)
-
-    # ── 3MF (one object per material, Material Extension face colours) ────────
-    tmf_path = output_path.with_suffix('.3mf')
-    export_3mf_colored(all_meshes, tmf_path)
 
     return combined, all_meshes
 

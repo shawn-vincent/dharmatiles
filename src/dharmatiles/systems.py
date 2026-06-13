@@ -106,13 +106,11 @@ class BareSystem:
     def export(self, colored_meshes: list[trimesh.Trimesh], surface: SurfaceConfig,
                terrain_z: np.ndarray, output_path: pathlib.Path,
                ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
-        from .core.color import export_color_stl, build_scene
+        from .core.color import export_color_stl
         output_path.parent.mkdir(parents=True, exist_ok=True)
         combined = (trimesh.util.concatenate(colored_meshes)
                     if colored_meshes else trimesh.Trimesh())
         export_color_stl(combined, output_path)
-        tmf_path = output_path.with_suffix('.3mf')
-        build_scene(colored_meshes).export(str(tmf_path))
         return combined, list(colored_meshes)
 
     def __repr__(self) -> str:

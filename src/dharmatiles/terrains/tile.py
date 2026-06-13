@@ -105,6 +105,7 @@ def _batch_worker(args: tuple) -> dict:
     t0        = _time.perf_counter()
 
     render_meshes: list[trimesh.Trimesh] | None = None
+    dir_meshes_serial: dict[str, list[dict]] = {}
     for tile in load_spec(spec_path):
         surface   = tile.surface
         sys_paths = _system_paths_for(spec_path, tile, tiles_root, stl_root)
@@ -117,14 +118,19 @@ def _batch_worker(args: tuple) -> dict:
             region_ids   = [r.id for r in tile.regions],
             boundary_ids = [b.id for b in tile.boundaries],
         )
-        _, render_meshes = build_tile_from_spec(tile, system_paths=sys_paths, reporter=reporter)
+        _, render_meshes, dir_to_meshes = build_tile_from_spec(
+            tile, system_paths=sys_paths, reporter=reporter,
+        )
+        for d, ms in dir_to_meshes.items():
+            dir_meshes_serial[str(d)] = _meshes_to_serial(ms)
 
     # Render PNG from the already-built meshes (no second build pass).
     _set_phase("Render PNG")
     if render_meshes is not None:
         for tile in load_spec(spec_path):
             out = _png_path_for(spec_path, tile, tiles_root, png_root)
-            _render_from_meshes(render_meshes, out, tile.surface.square_mm, quiet=True)
+            _render_from_meshes(render_meshes, out, tile.surface.square_mm, quiet=True,
+                                label=_label_for_png(out, png_root))
             break
     else:
         try:
@@ -133,12 +139,15 @@ def _batch_worker(args: tuple) -> dict:
                 out = _png_path_for(spec_path, tile, tiles_root, png_root)
                 out.parent.mkdir(parents=True, exist_ok=True)
                 meshes = build_meshes_for_render(spec_path)
-                _render(meshes, out, quiet=True, grid_square_mm=tile.surface.square_mm)
+                _render(meshes, out, quiet=True, grid_square_mm=tile.surface.square_mm,
+                        label=_label_for_png(out, png_root))
                 break
         except Exception:
             pass
 
-    return reporter.to_row(spec_name, _time.perf_counter() - t0)
+    row = reporter.to_row(spec_name, _time.perf_counter() - t0)
+    row['dir_meshes_serial'] = dir_meshes_serial
+    return row
 
 
 # ── Terrain face-colour helper ────────────────────────────────────────────────
@@ -432,12 +441,15 @@ def build_tile_from_spec(
     *,
     system_paths: dict[str, pathlib.Path],
     reporter:     TileReporter,
-) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh] | None]:
+) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh] | None, dict[pathlib.Path, list[trimesh.Trimesh]]]:
     """Build a tile from a Python ``Tile`` spec and export one STL per system.
 
-    Returns ``(main_mesh, render_meshes)`` where *render_meshes* is the
-    ``[base] + colored_meshes`` list from the first system (for direct PNG
-    rendering without a second build pass).
+    Returns ``(main_mesh, render_meshes, dir_to_meshes)`` where:
+
+    * *render_meshes* — ``[base] + colored_meshes`` from the first system,
+      used for PNG rendering without a rebuild pass.
+    * *dir_to_meshes* — ``{output_dir: all_meshes}`` per system, used by the
+      caller to accumulate per-directory 3MF data across tiles.
     """
     surface = tile.surface
 
@@ -468,6 +480,7 @@ def build_tile_from_spec(
     built: dict[tuple[float, int, int], tuple[list[trimesh.Trimesh], TileScene]] = {}
     first_result: trimesh.Trimesh | None = None
     first_render_meshes: list[trimesh.Trimesh] | None = None
+    dir_to_meshes: dict[pathlib.Path, list[trimesh.Trimesh]] = {}
 
     for system in tile.systems:
         sys_surface = system.surface_for(surface)
@@ -500,11 +513,13 @@ def build_tile_from_spec(
             elapsed    = elapsed,
         )
 
+        dir_to_meshes[out_path.parent] = rend_meshes
+
         if first_result is None:
             first_result = result
             first_render_meshes = rend_meshes
 
-    return first_result or trimesh.Trimesh(), first_render_meshes
+    return first_result or trimesh.Trimesh(), first_render_meshes, dir_to_meshes
 
 
 def build_meshes_for_render(
@@ -618,22 +633,88 @@ def _png_path_for(
     return png_root / rel.parent / f"{cols}x{rows}-{rel.name}.png"
 
 
+def _label_for_png(out: pathlib.Path, png_root: pathlib.Path) -> str:
+    """Derive the display label from a PNG path (e.g. 'water/1x1-water+grass')."""
+    try:
+        return str(out.relative_to(png_root).with_suffix('')).replace('\\', '/')
+    except ValueError:
+        parent = out.parent.name
+        if parent and parent not in ('tmp', ''):
+            return f"{parent}/{out.stem}"
+        return out.stem
+
+
 def _render_from_meshes(
     meshes:    list[trimesh.Trimesh],
     out:       pathlib.Path,
     square_mm: float,
     quiet:     bool,
+    label:     str | None = None,
 ) -> None:
     """Render one PNG from already-built meshes — no tile rebuild."""
     try:
         from ..render import render as _render
         out.parent.mkdir(parents=True, exist_ok=True)
-        _render(meshes, out, quiet=quiet, grid_square_mm=square_mm)
+        _render(meshes, out, quiet=quiet, grid_square_mm=square_mm, label=label)
     except ImportError:
         if not quiet:
             print("pyrender not available — skipping PNG step")
     except Exception:
         pass
+
+
+def _meshes_to_serial(meshes: list[trimesh.Trimesh]) -> list[dict]:
+    """Serialise trimesh meshes to plain numpy-array dicts for cross-process IPC."""
+    serial = []
+    for m in meshes:
+        try:
+            fc: np.ndarray | None = np.asarray(m.visual.face_colors, dtype=np.uint8)
+            if fc.shape != (len(m.faces), 4):
+                fc = None
+        except Exception:
+            fc = None
+        serial.append({
+            'verts':    m.vertices.astype(np.float32),
+            'faces':    m.faces.astype(np.int32),
+            'colors':   fc,
+            'material': m.metadata.get('material'),
+        })
+    return serial
+
+
+def _serial_to_meshes(serial: list[dict]) -> list[trimesh.Trimesh]:
+    """Reconstruct trimesh meshes from serialised numpy-array dicts."""
+    meshes = []
+    for d in serial:
+        m = trimesh.Trimesh(
+            vertices=d['verts'].astype(float),
+            faces=d['faces'],
+            process=False,
+        )
+        if d['colors'] is not None:
+            m.visual = trimesh.visual.ColorVisuals(mesh=m, face_colors=d['colors'])
+        if d['material'] is not None:
+            m.metadata['material'] = d['material']
+        meshes.append(m)
+    return meshes
+
+
+def _write_dir_3mf(
+    dir_path:     pathlib.Path,
+    meshes_lists: list[list[trimesh.Trimesh]],
+) -> None:
+    """Write one ``tiles.3mf`` into *dir_path* from accumulated per-tile mesh lists.
+
+    *meshes_lists* is one ``[base] + colored_meshes`` list per tile; all are
+    concatenated into a single 3MF so the file contains every tile variant in
+    that output directory.
+    """
+    from ..core.color import export_3mf_colored
+    all_meshes = [m for ml in meshes_lists for m in ml]
+    if not all_meshes:
+        return
+    dir_path.mkdir(parents=True, exist_ok=True)
+    export_3mf_colored(all_meshes, dir_path / "tiles.3mf")
 
 
 def _render_all_pngs(
@@ -661,7 +742,8 @@ def _render_all_pngs(
         out  = _png_path_for(sp, tile, tiles_root, png_root)
         out.parent.mkdir(parents=True, exist_ok=True)
         meshes = build_meshes_for_render(sp)
-        _render(meshes, out, quiet=quiet, grid_square_mm=tile.surface.square_mm)
+        _render(meshes, out, quiet=quiet, grid_square_mm=tile.surface.square_mm,
+                label=_label_for_png(out, png_root))
 
 
 def _system_paths_for(
@@ -693,11 +775,13 @@ def _build_spec(
     tiles_root: pathlib.Path,
     stl_root:   pathlib.Path,
     reporter:   TileReporter,
-) -> list[trimesh.Trimesh] | None:
-    """Build one tile spec; returns render_meshes for direct PNG rendering."""
+) -> tuple[list[trimesh.Trimesh] | None, dict[pathlib.Path, list[trimesh.Trimesh]]]:
+    """Build one tile spec; returns (render_meshes, dir_to_meshes)."""
     sys_paths = _system_paths_for(spec_path, tile, tiles_root, stl_root)
-    _, render_meshes = build_tile_from_spec(tile, system_paths=sys_paths, reporter=reporter)
-    return render_meshes
+    _, render_meshes, dir_to_meshes = build_tile_from_spec(
+        tile, system_paths=sys_paths, reporter=reporter,
+    )
+    return render_meshes, dir_to_meshes
 
 
 # ── Closing quote ─────────────────────────────────────────────────────────────
@@ -806,50 +890,6 @@ def _run_parallel_live(
     reporter.record_batch_rows([done_rows[n] for n in spec_names if n in done_rows])
 
 
-# ── 3MF pruning ──────────────────────────────────────────────────────────────
-
-def _count_3mf_objects(path: pathlib.Path) -> int:
-    """Return the number of ``<object>`` elements in a 3MF archive.
-
-    Uses a fast byte-level count rather than full XML parsing.
-    Returns 0 on any read error.
-    """
-    import zipfile
-    try:
-        with zipfile.ZipFile(path) as z:
-            model = z.read('3D/3dmodel.model')
-        return model.count(b'<object ')
-    except Exception:
-        return 0
-
-
-def _keep_best_3mf_per_dir(stl_root: pathlib.Path) -> None:
-    """Prune 3MF files under *stl_root* to one per directory.
-
-    Within each directory that contains more than one 3MF, keep the file
-    whose 3MF scene has the most ``<object>`` elements (most material
-    groups).  Ties are broken by keeping the alphabetically-first path so
-    the result is deterministic across runs.
-
-    Called after every batch or single-spec generation so the ``stl/``
-    tree always contains exactly one representative 3MF per output
-    sub-directory.
-    """
-    from collections import defaultdict
-    by_dir: dict[pathlib.Path, list[pathlib.Path]] = defaultdict(list)
-    for p in stl_root.rglob('*.3mf'):
-        by_dir[p.parent].append(p)
-
-    for parent, files in by_dir.items():
-        if len(files) <= 1:
-            continue
-        # Sort alphabetically for determinism, then rank by object count descending.
-        files.sort()
-        ranked = sorted(files, key=_count_3mf_objects, reverse=True)
-        for loser in ranked[1:]:
-            loser.unlink(missing_ok=True)
-
-
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -879,8 +919,10 @@ def main(argv=None):
 
     # ── Single spec ───────────────────────────────────────────────────────────
     if args.spec is not None:
+        from collections import defaultdict as _defaultdict
         specs = list(load_spec(args.spec))
         render_meshes: list[trimesh.Trimesh] | None = None
+        dir_3mf_accum: dict[pathlib.Path, list[list[trimesh.Trimesh]]] = _defaultdict(list)
         for tile in specs:
             surface = tile.surface
             name    = args.spec.stem.replace('.tile', '')
@@ -894,12 +936,18 @@ def main(argv=None):
                 boundary_ids = [b.id for b in tile.boundaries],
             )
             t0 = _time.perf_counter()
-            render_meshes = _build_spec(tile, args.spec, TILES_ROOT, STL_ROOT, reporter)
+            render_meshes, dir_to_meshes = _build_spec(
+                tile, args.spec, TILES_ROOT, STL_ROOT, reporter,
+            )
             reporter.tile_end(_time.perf_counter() - t0)
-        _keep_best_3mf_per_dir(STL_ROOT)
+            for d, ms in dir_to_meshes.items():
+                dir_3mf_accum[d].append(ms)
+        for d, mls in dir_3mf_accum.items():
+            _write_dir_3mf(d, mls)
         if render_meshes is not None and specs:
             out = _png_path_for(args.spec, specs[0], TILES_ROOT, PNG_ROOT)
-            _render_from_meshes(render_meshes, out, specs[0].surface.square_mm, args.quiet)
+            _render_from_meshes(render_meshes, out, specs[0].surface.square_mm, args.quiet,
+                                label=_label_for_png(out, PNG_ROOT))
         else:
             _render_all_pngs([args.spec], TILES_ROOT, PNG_ROOT, quiet=args.quiet)
         if not args.quiet:
@@ -923,11 +971,13 @@ def main(argv=None):
     t_batch = _time.perf_counter()
 
     pngs_rendered = False
+    from collections import defaultdict as _defaultdict
 
     if n_workers > 1:
         # ── Parallel path: each spec in its own worker process ──────────────
-        spec_names = [sp.stem.replace('.tile', '') for sp in spec_paths]
-        t_submit   = _time.perf_counter()
+        spec_names   = [sp.stem.replace('.tile', '') for sp in spec_paths]
+        t_submit     = _time.perf_counter()
+        all_par_rows: list[dict] = []   # collected for 3MF assembly
 
         with multiprocessing.Manager() as mgr:
             phase_dict = mgr.dict()
@@ -949,19 +999,27 @@ def main(argv=None):
                         spec_names, future_to_name, t_starts, reporter,
                         phase_dict=phase_dict,
                     )
+                    all_par_rows = [f.result() for f in future_to_name]
                 else:
                     # ── Plain fallback (pipe / --quiet / no rich) ────────────────
-                    collected: list[dict] = []
                     for future in as_completed(future_to_name):
                         row = future.result()
-                        collected.append(row)
+                        all_par_rows.append(row)
                         reporter.inject_batch_row(row)
-                    # SilentReporter has a no-op record_batch_rows, TextReporter
-                    # already printed above; nothing more to do here.
+
+        # ── Per-directory 3MF (one per system output dir, all tiles) ─────────
+        dir_3mf_accum: dict[pathlib.Path, list[list[trimesh.Trimesh]]] = _defaultdict(list)
+        for row in all_par_rows:
+            for d_str, serial in row.get('dir_meshes_serial', {}).items():
+                dir_3mf_accum[pathlib.Path(d_str)].append(_serial_to_meshes(serial))
+        for d, mls in dir_3mf_accum.items():
+            _write_dir_3mf(d, mls)
 
         pngs_rendered = True
     else:
         # ── Sequential fallback (single-core or --quiet) ─────────────────────
+        dir_3mf_accum_seq: dict[pathlib.Path, list[list[trimesh.Trimesh]]] = _defaultdict(list)
+
         for sp in spec_paths:
             spec_name = sp.stem.replace('.tile', '')
             reporter.batch_spec_begin(spec_name)
@@ -982,8 +1040,12 @@ def main(argv=None):
                     boundary_ids = [b.id for b in tile.boundaries],
                 )
                 t0 = _time.perf_counter()
-                rend_seq = _build_spec(tile, sp, TILES_ROOT, STL_ROOT, reporter)
+                rend_seq, dir_to_meshes = _build_spec(
+                    tile, sp, TILES_ROOT, STL_ROOT, reporter,
+                )
                 reporter.tile_end(_time.perf_counter() - t0)
+                for d, ms in dir_to_meshes.items():
+                    dir_3mf_accum_seq[d].append(ms)
 
             reporter.batch_spec_done(spec_name, _time.perf_counter() - t_spec)
 
@@ -991,13 +1053,17 @@ def main(argv=None):
             if rend_seq is not None and sq_mm_seq is not None:
                 for tile in load_spec(sp):
                     out = _png_path_for(sp, tile, TILES_ROOT, PNG_ROOT)
-                    _render_from_meshes(rend_seq, out, sq_mm_seq, args.quiet)
+                    _render_from_meshes(rend_seq, out, sq_mm_seq, args.quiet,
+                                        label=_label_for_png(out, PNG_ROOT))
                     break
+
+        # ── Per-directory 3MF ─────────────────────────────────────────────────
+        for d, mls in dir_3mf_accum_seq.items():
+            _write_dir_3mf(d, mls)
 
         pngs_rendered = True  # rendered inline above
 
     reporter.batch_end(len(spec_paths), _time.perf_counter() - t_batch)
-    _keep_best_3mf_per_dir(STL_ROOT)
     if not pngs_rendered:
         _render_all_pngs(spec_paths, TILES_ROOT, PNG_ROOT, quiet=args.quiet)
     if not args.quiet:

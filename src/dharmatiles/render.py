@@ -53,6 +53,84 @@ def _tight_crop(img: Image.Image, alpha: np.ndarray, padding: int = 48) -> Image
     return img.crop((c0, r0, c1 + 1, r1 + 1))
 
 
+def _load_label_font(size: int):
+    from PIL import ImageFont
+    candidates = [
+        "/System/Library/Fonts/SFNS.ttf",
+        "/System/Library/Fonts/HelveticaNeue.ttc",
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/Library/Fonts/Arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    ]
+    for path in candidates:
+        try:
+            return ImageFont.truetype(path, size)
+        except (OSError, IOError):
+            continue
+    return ImageFont.load_default()
+
+
+def _add_label_overlay(img: Image.Image, label: str) -> Image.Image:
+    """Composite a slick typographic label at the bottom-right of a RGBA image."""
+    img = img.convert('RGBA')
+    iw, ih = img.size
+
+    font_size = max(13, ih // 55)
+    font = _load_label_font(font_size)
+
+    slash = label.find('/')
+    if slash >= 0:
+        prefix = label[:slash + 1]
+        name   = label[slash + 1:]
+    else:
+        prefix = ""
+        name   = label
+
+    probe = ImageDraw.Draw(img)
+
+    def _wh(text: str) -> tuple[int, int]:
+        bb = probe.textbbox((0, 0), text, font=font)
+        return bb[2] - bb[0], bb[3] - bb[1]
+
+    def _top(text: str) -> int:
+        return probe.textbbox((0, 0), text, font=font)[1]
+
+    nw, nh = _wh(name)
+    pw     = _wh(prefix)[0] if prefix else 0
+    text_w = pw + nw
+    text_h = nh
+
+    pad_x, pad_y = 11, 7
+    margin = 18
+
+    rect_w = text_w + pad_x * 2
+    rect_h = text_h + pad_y * 2
+
+    x2, y2 = iw - margin, ih - margin
+    x1, y1 = x2 - rect_w, y2 - rect_h
+
+    # Backdrop: dark semi-transparent pill
+    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    od = ImageDraw.Draw(overlay)
+    od.rounded_rectangle([(x1, y1), (x2, y2)], radius=5, fill=(6, 8, 12, 150))
+
+    # Clip overlay to the base image's opaque region (no bleed into rounded corners)
+    base_a  = np.array(img)[:, :, 3].astype(np.uint32)
+    ov_arr  = np.array(overlay)
+    ov_arr[:, :, 3] = (ov_arr[:, :, 3].astype(np.uint32) * base_a // 255).astype(np.uint8)
+    img = Image.alpha_composite(img, Image.fromarray(ov_arr, 'RGBA'))
+
+    draw = ImageDraw.Draw(img)
+    ty   = y1 + pad_y - _top(name)
+    tx   = x1 + pad_x
+    if prefix:
+        draw.text((tx, ty), prefix, font=font, fill=(255, 255, 255, 130))
+        tx += pw
+    draw.text((tx, ty), name, font=font, fill=(255, 255, 255, 225))
+    return img
+
+
 def _rounded_corners(img: Image.Image, radius: int = 52) -> Image.Image:
     mask = Image.new('L', img.size, 0)
     ImageDraw.Draw(mask).rounded_rectangle(
@@ -149,7 +227,8 @@ def render(meshes: list[trimesh.Trimesh],
            azim: float = -135.0,
            resolution: tuple[int, int] = (1200, 1000),
            quiet: bool = False,
-           grid_square_mm: float | None = None) -> None:
+           grid_square_mm: float | None = None,
+           label: str | None = None) -> None:
     import pyrender  # optional dependency
 
     all_v  = np.vstack([m.vertices for m in meshes if len(m.vertices)])
@@ -222,6 +301,8 @@ def render(meshes: list[trimesh.Trimesh],
     bg.paste(fg, (0, 0), fg)
     bg     = _tight_crop(bg, alpha)
     result = _rounded_corners(bg)
+    if label:
+        result = _add_label_overlay(result, label)
     result.save(str(output))
     if not quiet:
         print(f'→ {output}')
