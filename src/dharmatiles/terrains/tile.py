@@ -615,6 +615,18 @@ def _build_spec_terrain(
 
 # ── CLI helpers ───────────────────────────────────────────────────────────────
 
+import re as _re
+_NXM_PREFIX = _re.compile(r'^\d+x\d+-')
+
+
+def _output_stem(rel_name: str, cols: int, rows: int) -> str:
+    """Return the canonical output stem: use rel_name as-is when it already starts
+    with an NxM- prefix (the spec file carries the dimension), otherwise prepend it."""
+    if _NXM_PREFIX.match(rel_name):
+        return rel_name
+    return f"{cols}x{rows}-{rel_name}"
+
+
 def _png_path_for(
     spec_path:  pathlib.Path,
     tile:       Tile,
@@ -630,7 +642,7 @@ def _png_path_for(
     except ValueError:
         no_py   = pathlib.Path(spec_path.stem)
         rel     = no_py.with_suffix('') if no_py.suffix == '.tile' else no_py
-    return png_root / rel.parent / f"{cols}x{rows}-{rel.name}.png"
+    return png_root / rel.parent / f"{_output_stem(rel.name, cols, rows)}.png"
 
 
 def _label_for_png(out: pathlib.Path, png_root: pathlib.Path) -> str:
@@ -703,18 +715,19 @@ def _write_dir_3mf(
     dir_path:     pathlib.Path,
     meshes_lists: list[list[trimesh.Trimesh]],
 ) -> None:
-    """Write one ``tiles.3mf`` into *dir_path* from accumulated per-tile mesh lists.
+    """Write one ``<dir>.3mf`` into *dir_path* from one representative tile.
 
-    *meshes_lists* is one ``[base] + colored_meshes`` list per tile; all are
-    concatenated into a single 3MF so the file contains every tile variant in
-    that output directory.
+    *meshes_lists* has one ``[base] + colored_meshes`` list per tile; only the
+    first entry is used so the file stays small and opens quickly.  The file is
+    named after the containing directory (e.g. ``dungeonblocks/dungeonblocks.3mf``
+    or ``water/water.3mf``).
     """
     from ..core.color import export_3mf_colored
-    all_meshes = [m for ml in meshes_lists for m in ml]
-    if not all_meshes:
+    if not meshes_lists:
         return
+    all_meshes = list(meshes_lists[0])   # one representative tile
     dir_path.mkdir(parents=True, exist_ok=True)
-    export_3mf_colored(all_meshes, dir_path / "tiles.3mf")
+    export_3mf_colored(all_meshes, dir_path / f"{dir_path.name}.3mf")
 
 
 def _render_all_pngs(
@@ -761,7 +774,7 @@ def _system_paths_for(
     except ValueError:
         no_py   = pathlib.Path(spec_path.stem)
         rel     = no_py.with_suffix('') if no_py.suffix == '.tile' else no_py
-    stem = f"{cols}x{rows}-{rel.name}"
+    stem = _output_stem(rel.name, cols, rows)
     sub  = rel.parent
     return {
         system.suffix: stl_root / system.dir_name / sub / f"{stem}-{system.suffix}.stl"
