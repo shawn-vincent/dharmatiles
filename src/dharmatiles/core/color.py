@@ -150,16 +150,21 @@ def _pack_plates(
     usable_h: float,
     gap_mm: float,
 ) -> list[list[tuple[int, float, float]]]:
-    """Pack tiles onto virtual plates using greedy row-packing.
+    """Pack tiles onto virtual plates, choosing a row width that produces the
+    most compact (square-ish, minimum-perimeter) cluster on each plate.
 
     Tiles are sorted by tile size (min dim, max dim), then terrain group, then
     footprint area descending.  A new plate is started when:
 
     * the incoming tile's size dimensions are disjoint from all dimensions
-      seen so far on the current plate (e.g. a 3×3 tile cannot join a plate
-      that only has 1×1 tiles, but a 1×2 tile *can* join because it shares
-      dimension 1); or
-    * the tile would overflow the plate height after row-wrapping.
+      seen so far on the current plate; or
+    * the tiles overflow the plate height at every candidate row width.
+
+    For each plate's batch of tiles the function tries all candidate target
+    widths (one per possible "first-row tile count") and picks the width that
+    minimises perimeter (total_w + total_h), using aspect ratio as a
+    tiebreaker so truly square clusters win over elongated ones with equal
+    perimeter.
 
     Returns a list of plates; each plate is a list of
     ``(orig_tile_idx, layout_x, layout_y)`` tuples where *layout_x/y* is the
@@ -172,41 +177,89 @@ def _pack_plates(
 
     order = sorted(range(len(tile_infos)), key=_sort_key)
 
-    plates:     list[list[tuple[int, float, float]]] = []
-    plate:      list[tuple[int, float, float]] = []
-    row_x = row_y = row_h = 0.0
-    plate_dims: set[int] = set()
+    # ── inner helpers ─────────────────────────────────────────────────────────
+
+    def _row_pack(indices: list[int], max_row_w: float,
+                  ) -> list[tuple[int, float, float]] | None:
+        """Row-pack *indices* into one plate using *max_row_w* as the row
+        limit.  Returns None if the layout overflows *usable_h*."""
+        result: list[tuple[int, float, float]] = []
+        rx = ry = rh = 0.0
+        for j in indices:
+            _, w, h = tile_infos[j]
+            if result and rx + w > max_row_w + 1e-6:
+                ry += rh + gap_mm
+                rx = rh = 0.0
+            if ry + h > usable_h + 1e-6:
+                return None
+            result.append((j, rx, ry))
+            rx += w + gap_mm
+            rh = max(rh, h)
+        return result
+
+    def _bbox(layout: list[tuple[int, float, float]]) -> tuple[float, float]:
+        tw = max(lx + tile_infos[j][1] for j, lx, _ in layout)
+        th = max(ly + tile_infos[j][2] for j, _, ly in layout)
+        return tw, th
+
+    def _best_for_batch(indices: list[int]) -> list[list[tuple[int, float, float]]]:
+        """Find compact packing for a size-compatible batch; may return
+        multiple plates if the batch overflows *usable_h*."""
+        if not indices:
+            return []
+
+        # Candidate row widths: use exactly k tiles in the first row,
+        # taking the k widest tiles (worst-case first-row width).
+        sorted_w = sorted((tile_infos[j][1] for j in indices), reverse=True)
+        candidates: list[float] = []
+        acc = 0.0
+        for k, w in enumerate(sorted_w, 1):
+            acc += w + (gap_mm if k > 1 else 0.0)
+            if acc <= usable_w + 1e-6:
+                candidates.append(acc)
+
+        best_layout: list[tuple[int, float, float]] | None = None
+        best_score = (float('inf'), float('inf'))
+
+        for max_w in candidates:
+            layout = _row_pack(indices, max_w)
+            if layout is None:
+                continue
+            tw, th = _bbox(layout)
+            perim  = tw + th
+            aspect = max(tw, th) / max(min(tw, th), 1e-6)
+            if (perim, aspect) < best_score:
+                best_score  = (perim, aspect)
+                best_layout = layout
+
+        if best_layout is not None:
+            return [best_layout]
+
+        # Every width overflows usable_h → split batch roughly in half and
+        # recurse so each half gets its own plate.
+        mid = max(1, len(indices) // 2)
+        return _best_for_batch(indices[:mid]) + _best_for_batch(indices[mid:])
+
+    # ── main loop: accumulate size-compatible batches then pack each ──────────
+    plates: list[list[tuple[int, float, float]]] = []
+    batch:      list[int] = []
+    batch_dims: set[int]  = set()
 
     for j in order:
-        name, w, h = tile_infos[j]
+        name      = tile_infos[j][0]
         tile_dims = _size_dims(name)
 
-        # Size incompatibility → force a new plate.
-        if plate and tile_dims.isdisjoint(plate_dims):
-            plates.append(plate)
-            plate = []
-            row_x = row_y = row_h = 0.0
-            plate_dims = set()
+        if batch and tile_dims.isdisjoint(batch_dims):
+            plates.extend(_best_for_batch(batch))
+            batch      = []
+            batch_dims = set()
 
-        # Row overflow → start a new row.
-        if plate and row_x + w > usable_w + 1e-6:
-            row_y += row_h + gap_mm
-            row_x = row_h = 0.0
+        batch.append(j)
+        batch_dims |= tile_dims
 
-        # Plate height overflow → start a new plate.
-        if plate and row_y + h > usable_h + 1e-6:
-            plates.append(plate)
-            plate = []
-            row_x = row_y = row_h = 0.0
-            plate_dims = set()
+    if batch:
+        plates.extend(_best_for_batch(batch))
 
-        plate.append((j, row_x, row_y))
-        row_x += w + gap_mm
-        row_h  = max(row_h, h)
-        plate_dims |= tile_dims
-
-    if plate:
-        plates.append(plate)
     return plates
 
 
