@@ -49,7 +49,7 @@ def render_header(
 
     Example::
 
-        render_header("generate-tile-stl", "v0.1.0")
+        render_header("dharmatiles-gen", "v0.1.0")
     """
     console = Console()
     frame_w = console.width or 80

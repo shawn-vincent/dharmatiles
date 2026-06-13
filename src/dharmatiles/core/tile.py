@@ -78,6 +78,12 @@ class TileScene:
     vegetation_support_z: np.ndarray | None = None  # (grid_h, grid_w) — mutable
     rock_mask: np.ndarray | None = None         # (grid_h, grid_w) bool — True under a rock
     parts:     List[trimesh.Trimesh] = field(default_factory=list)
+    # region_mask: same shape as terrain_z; cell value = region index (≥0) or -ve for boundary.
+    # Populated by the tile builder; None until then.
+    region_mask: np.ndarray | None = None       # (grid_h, grid_w) int32 — region index per cell
+    # water_surface_mm: region_index → water surface height (mm).
+    # Populated by the tile builder for every region that contains a WaterLayer.
+    water_surface_mm: dict = field(default_factory=dict)  # dict[int, float]
 
     def __post_init__(self) -> None:
         if self.vegetation_support_z is None:

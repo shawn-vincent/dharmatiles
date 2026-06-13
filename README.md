@@ -134,13 +134,13 @@ It lets them **interfere with each other**.
 pip install -e .
 
 # Generate everything
-generate-tile-stl
+dharmatiles-gen
 
 # Generate one tile
-generate-tile-stl --spec "src/tiles/soil+grass.tile"
+dharmatiles-gen --spec "src/tiles/soil+grass.tile"
 
 # Custom output
-generate-tile-stl --spec src/tiles/foo.tile -o stl/custom.stl
+dharmatiles-gen --spec src/tiles/foo.tile -o stl/custom.stl
 ```
 
 Then:

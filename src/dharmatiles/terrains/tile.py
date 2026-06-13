@@ -3,14 +3,14 @@ Tile generator: assemble a Tile spec into STL output(s).
 
 Usage
 ─────
-    generate-tile-stl
+    dharmatiles-gen
         Batch mode: process every ``*.tile.py`` file under ``src/tiles/`` and
         write outputs to ``stl/{system_dir}/…``.
 
-    generate-tile-stl --spec "src/tiles/soil+grass.tile.py"
+    dharmatiles-gen --spec "src/tiles/soil+grass.tile.py"
         Single tile: same naming and directory conventions as batch.
 
-    generate-tile-stl --quiet
+    dharmatiles-gen --quiet
         Suppress all output.
 """
 from __future__ import annotations
@@ -307,13 +307,15 @@ def _build_tile_mesh(
     always the one computed at the primary (spec) surface and is reused
     across scales — fractional positions are scale-invariant.
     """
-    terrain_z = _build_spec_terrain(tile, surface, region_mask)
+    terrain_z, water_surface_mm = _build_spec_terrain(tile, surface, region_mask)
 
     scene = TileScene(
-        surface           = surface,
-        terrain_z         = terrain_z,
-        terrain_support_z = terrain_z.copy(),
-        rock_mask         = np.zeros((surface.grid_h, surface.grid_w), dtype=bool),
+        surface          = surface,
+        terrain_z        = terrain_z,
+        terrain_support_z= terrain_z.copy(),
+        rock_mask        = np.zeros((surface.grid_h, surface.grid_w), dtype=bool),
+        region_mask      = region_mask,
+        water_surface_mm = water_surface_mm,
     )
 
     parts: list[trimesh.Trimesh] = []
@@ -575,33 +577,56 @@ def _build_spec_terrain(
     tile:        Tile,
     surface:     SurfaceConfig,
     region_mask: np.ndarray | None,
-) -> np.ndarray:
+) -> tuple[np.ndarray, dict[int, float]]:
     """Derive a terrain heightmap from region heights declared in *tile*.
+
+    Returns ``(terrain_z, water_surface_mm)`` where *water_surface_mm* maps
+    region index → water surface height (mm) for every region that contains
+    a ``WaterLayer``.
 
     Algorithm
     ---------
-    1. Assign each region cell its exact ``effective_height_mm``.
-    2. Boundary cells get an inverse-distance-weighted (IDW) blend of
-       neighbouring region heights.
+    1. For water regions, the IDW contribution is 0 mm (pool floor), not the
+       region's ``FlatHeight`` (which is the water *surface* level).  This
+       confines the shore slope to the boundary strip: the boundary cells blend
+       smoothly from 0 mm (pool floor) up to the neighbouring land height, so
+       the visible waterline sits near the boundary path centreline rather than
+       being pushed into the pool interior.
+    2. Assign each non-water region cell its exact ``effective_height_mm``; water
+       region cells get 0 mm (pool floor).
+    3. Boundary cells get an inverse-distance-weighted (IDW) blend of the above
+       floor heights.
     """
+    from ..layers.water import Water as _WaterLayer  # local import to avoid circularity
+
     gh, gw    = surface.grid_h, surface.grid_w
     default_h = 5.0
 
     if not tile.regions or region_mask is None:
-        return np.full((gh, gw), default_h, dtype=float)
+        return np.full((gh, gw), default_h, dtype=float), {}
 
-    heights = [r.terrain.height_mm for r in tile.regions]
+    # Collect per-region heights; water regions use 0 mm floor for IDW.
+    water_surface_mm: dict[int, float] = {}
+    idw_heights: list[float] = []
+    for idx, region in enumerate(tile.regions):
+        h = region.terrain.height_mm
+        has_water = any(isinstance(layer, _WaterLayer) for layer in region.layers)
+        if has_water:
+            water_surface_mm[idx] = h  # save surface level for WaterLayer to consume
+            idw_heights.append(0.0)    # pool floor drives IDW and z_exact
+        else:
+            idw_heights.append(h)
 
-    if len(set(heights)) <= 1:
-        return np.full((gh, gw), heights[0] if heights else default_h, dtype=float)
+    if len(set(idw_heights)) <= 1:
+        return np.full((gh, gw), idw_heights[0] if idw_heights else default_h, dtype=float), water_surface_mm
 
     z_exact = np.full((gh, gw), default_h, dtype=float)
-    for idx, h in enumerate(heights):
+    for idx, h in enumerate(idw_heights):
         z_exact[region_mask == idx] = h
 
     z_idw = np.zeros((gh, gw), dtype=float)
     w_sum = np.zeros((gh, gw), dtype=float)
-    for idx, h in enumerate(heights):
+    for idx, h in enumerate(idw_heights):
         dist  = distance_transform_edt(region_mask != idx)
         w     = 1.0 / (dist + 0.5)
         z_idw += h * w
@@ -610,7 +635,7 @@ def _build_spec_terrain(
 
     z = z_exact.copy()
     z[region_mask < 0] = z_idw[region_mask < 0]
-    return z.astype(float)
+    return z.astype(float), water_surface_mm
 
 
 # ── CLI helpers ───────────────────────────────────────────────────────────────

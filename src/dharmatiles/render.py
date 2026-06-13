@@ -1,6 +1,6 @@
 """Off-screen PNG rendering for DharmaTiles terrain tiles.
 
-Shared by ``src/extras/render_tile.py`` (CLI) and the ``generate-tile-stl``
+Shared by ``src/extras/render_tile.py`` (CLI) and the ``dharmatiles-gen``
 batch pipeline (automatic PNG output after STL generation).
 """
 from __future__ import annotations

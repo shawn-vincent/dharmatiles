@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 import trimesh
-from scipy.ndimage import binary_dilation, binary_erosion, distance_transform_edt
+from scipy.ndimage import binary_dilation, distance_transform_edt
 
 from ..core.config import SurfaceConfig
 from ..core.tile import derive_seed
@@ -58,17 +58,27 @@ class Water:
             return []
         surface = scene.surface
 
-        # Region height = max terrain_z over the (still flat) pool region.
-        water_height = (self.height_mm if self.height_mm is not None
-                        else float(scene.terrain_z[placement_mask].max()))
+        # ── Resolve water surface height ─────────────────────────────────────
+        # Priority: explicit height_mm → stored water_surface_mm for this
+        # region (populated by _build_spec_terrain) → height_default_mm.
+        # Pool terrain_z is 0 mm at this point (floor), so we cannot derive
+        # water_height from terrain_z.max() any longer.
+        if self.height_mm is not None:
+            water_height = float(self.height_mm)
+        elif scene.water_surface_mm and scene.region_mask is not None:
+            # Find which region index owns the placement_mask cells.
+            region_indices = np.unique(
+                scene.region_mask[placement_mask & (scene.region_mask >= 0)]
+            )
+            ridx = int(region_indices[0]) if len(region_indices) > 0 else -1
+            water_height = float(scene.water_surface_mm.get(ridx, self.height_default_mm))
+        else:
+            water_height = float(self.height_default_mm)
 
-        # ── Reshape pool floor: extend bank slope inward into the pool ───────
-        # The sloped terrain naturally carves the water volume via the
-        # water − soil CSG step in _build_tile_mesh; do NOT flatten pool
-        # cells to 0 here — that would erase the underwater bevel.
-        new_z = _extend_bank_slope_into_pool(
-            scene.terrain_z, placement_mask, water_height, surface)
-        scene.set_terrain(new_z)
+        # Pool floor is already at 0 mm from IDW; no bank-slope extension
+        # into the pool is needed.  The boundary strip carries the full shore
+        # slope (land height → 0 mm), so the visible waterline sits at the
+        # boundary path centreline rather than being pushed into the pool.
 
         # ── Build the water volume mesh ──────────────────────────────────────
         embed_cells = max(1, round(self.embed_mm / surface.cell_w))
@@ -126,43 +136,6 @@ class Water:
         return [water_mesh]
 
 
-def _extend_bank_slope_into_pool(terrain_z: np.ndarray,
-                                  water_mask: np.ndarray,
-                                  water_height: float,
-                                  surface: SurfaceConfig) -> np.ndarray:
-    """Extrapolate the bank slope downward into the pool zone.
-
-    Returns a copy of *terrain_z* with pool cells updated.
-    """
-    cell_mm = surface.cell_w
-
-    dist_land_to_water = distance_transform_edt(~water_mask)
-    band = ~water_mask & (dist_land_to_water >= 1) & (dist_land_to_water <= 5)
-    if band.any():
-        band_z_mean    = float(terrain_z[band].mean())
-        band_dist_mean = float(dist_land_to_water[band].mean()) * cell_mm
-        slope_rate     = (band_z_mean - water_height) / max(band_dist_mean, 1e-6)
-        slope_rate     = float(np.clip(slope_rate, 0.1, 8.0))
-    else:
-        slope_rate = 0.8
-
-    water_eroded = binary_erosion(water_mask, border_value=1)
-    inner_ring   = water_mask & ~water_eroded
-
-    dist_from_shore = distance_transform_edt(~inner_ring) * cell_mm
-    dist_from_shore[~water_mask] = 0.0
-
-    terrain_z_min = 0.0
-    slope_dist    = (water_height - terrain_z_min) / max(slope_rate, 1e-6)
-
-    t   = np.clip(dist_from_shore / slope_dist, 0.0, 1.0)
-    t_s = t * t
-
-    sloped = water_height - (water_height - terrain_z_min) * t_s
-
-    out = terrain_z.copy()
-    out[water_mask] = sloped[water_mask]
-    return out
 
 
 def make_water_displacement(
@@ -395,11 +368,9 @@ def make_water_volume(
     n_half = nv_r * nv_c
 
     # ── Bottom corner z ───────────────────────────────────────────────────────
-    # Flat floor at z=0 gives clean vertical perimeter walls.  The riverbed
-    # slope (from _extend_bank_slope_into_pool) lives in terrain_z and is
-    # present in the union result; having the water volume follow it only
-    # created angled walls at the shoreline where the downsampled cells span
-    # a range of depths.
+    # Flat floor at z=0 gives clean vertical perimeter walls.  The pool floor
+    # (terrain_z) is also flat at 0 mm; depth is the gap from 0 up to
+    # water_height.
     bot_z = np.zeros((nv_r, nv_c))
 
     # ── Top surface z ─────────────────────────────────────────────────────────

@@ -13,12 +13,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 pip install -e .
 
 # Batch mode: process every src/tiles/*.tile.py → stl/{dungeonblocks,openlock}/…
-generate-tile-stl
+dharmatiles-gen
 
 # Single spec (writes to canonical stl/{system}/{NxM}-{name}-{db|ol}.stl)
-generate-tile-stl --spec "src/tiles/soil+grass.tile.py"
-generate-tile-stl --spec "src/tiles/water+grass.tile.py"
-generate-tile-stl --quiet   # suppress progress output
+dharmatiles-gen --spec "src/tiles/soil+grass.tile.py"
+dharmatiles-gen --spec "src/tiles/water+grass.tile.py"
+dharmatiles-gen --quiet   # suppress progress output
 
 # Run a single script directly (no install needed)
 python -m dharmatiles.terrains.tile --spec "src/tiles/soil+grass.tile.py"
@@ -34,7 +34,7 @@ There are no automated tests; correctness is verified by opening the STL in Prus
 - For tile terrain / layers / core changes: regenerate **all** `.tile.py` specs:
 
 ```bash
-for spec in src/tiles/*.tile.py; do generate-tile-stl --spec "$spec"; done
+for spec in src/tiles/*.tile.py; do dharmatiles-gen --spec "$spec"; done
 ```
 
 - For `src/extras/hex_paint_organizer.py`: `python src/extras/hex_paint_organizer.py`
