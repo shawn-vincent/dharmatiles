@@ -11,5 +11,8 @@ textures/
 # Generated STL outputs — too large for GitHub, generated locally
 stl/
 
+# Generated PNG renders — produced locally by the render pipeline
+png/
+
 # Build provenance — generated artifact, must not be committed
 src/dharmatiles/_build_info.py
