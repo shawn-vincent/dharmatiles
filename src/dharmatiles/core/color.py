@@ -123,165 +123,255 @@ def build_scene(meshes: list[trimesh.Trimesh]) -> trimesh.Scene:
 
 def export_3mf_colored(meshes: list[trimesh.Trimesh],
                         path: str | pathlib.Path) -> None:
-    """Export coloured mesh parts as a 3MF with Material Extension face colours.
+    """Export coloured mesh parts as a Bambu Studio-compatible 3MF project.
 
-    Each mesh's ``face_colors`` are encoded as per-face colour indices using
-    the 3MF Material Extension ``<m:colorgroup>`` mechanism.  Supports both
-    uniform-colour meshes (one colour for all faces) and per-face-coloured
-    meshes (e.g. the terrain solid where regions carry distinct colours).
+    Generates the Bambu Studio / PrusaSlicer project format:
 
-    Compatible with PrusaSlicer, Bambu Studio, and Windows 3D Builder.
+    * ``3D/Objects/object_1.model`` — mesh geometry (one object per material part)
+    * ``3D/3dmodel.model`` — assembly wrapper using the 3MF Production Extension
+    * ``3D/_rels/3dmodel.model.rels`` — cross-part reference
+    * ``Metadata/model_settings.config`` — per-part extruder (filament slot) assignments
+    * ``Metadata/project_settings.config`` — filament colour definitions
+
+    Filament slot assignments (1-indexed AMS slots):
+
+    ======= ===== =================
+    Slot    Mat   Colour
+    ======= ===== =================
+    1       BASE  #2D2D2D dark gray
+    2       SOIL  #692C0C brown
+    3       ROCK  #485C80 slate blue
+    4       GRASS #2A941C green
+    5       WATER #1485D5 turquoise
+    ======= ===== =================
     """
-    import io
+    import json as _json
+    import uuid as _uuid_mod
     import zipfile
 
-    # ── Collect all unique RGBA colours across every mesh ────────────────────
-    all_rgba: list[tuple[int, int, int, int]] = []
-    color_index: dict[tuple[int, int, int, int], int] = {}
+    # ── Filament slot configuration ───────────────────────────────────────────
+    # Material → AMS filament slot (1-indexed).
+    _EXT: dict[Material, int] = {
+        Material.BASE:  1,
+        Material.SOIL:  2,
+        Material.ROCK:  3,
+        Material.GRASS: 4,
+        Material.WATER: 5,
+    }
+    # Filament colours for project_settings, indexed by (slot - 1).
+    # Match RGBA palette; use 6-digit #RRGGBB (Bambu ignores alpha).
+    _SLOT_HEX = [
+        "#2D2D2D",  # slot 1 — BASE  dark gray
+        "#692C0C",  # slot 2 — SOIL  reddish-brown
+        "#485C80",  # slot 3 — ROCK  slate blue-gray
+        "#2A941C",  # slot 4 — GRASS deep green
+        "#1485D5",  # slot 5 — WATER blue-turquoise
+    ]
+    N_SLOTS = len(_SLOT_HEX)
 
-    def _register(rgba: tuple[int, int, int, int]) -> int:
-        if rgba not in color_index:
-            color_index[rgba] = len(all_rgba)
-            all_rgba.append(rgba)
-        return color_index[rgba]
+    # ── Filter empty meshes ───────────────────────────────────────────────────
+    parts: list[trimesh.Trimesh] = [m for m in meshes if len(m.faces) > 0]
+    if not parts:
+        return
+    N = len(parts)
 
-    # Pre-scan to build the palette
-    mesh_face_indices: list[np.ndarray] = []
-    for mesh in meshes:
-        n = len(mesh.faces)
-        if n == 0:
-            mesh_face_indices.append(np.empty(0, dtype=np.int32))
-            continue
-        try:
-            fc = mesh.visual.face_colors  # (N, 4) uint8
-            if fc is None or len(fc) != n:
-                raise AttributeError
-            # Vectorised: pack RGBA → uint32, find unique colours once, map all faces.
-            fc_u8 = np.asarray(fc, dtype=np.uint32)
-            packed = (fc_u8[:, 0]
-                      | (fc_u8[:, 1] << 8)
-                      | (fc_u8[:, 2] << 16)
-                      | (fc_u8[:, 3] << 24))
-            unique_packed, inverse = np.unique(packed, return_inverse=True)
-            idx_map = np.empty(len(unique_packed), dtype=np.int32)
-            for k, up in enumerate(unique_packed):
-                rgba = (int(up & 0xFF), int((up >> 8) & 0xFF),
-                        int((up >> 16) & 0xFF), int((up >> 24) & 0xFF))
-                idx_map[k] = _register(rgba)
-            indices = idx_map[inverse].astype(np.int32)
-        except (AttributeError, Exception):
-            fallback = RGBA.get(mesh.metadata.get('material', Material.SOIL),
-                                RGBA[Material.SOIL])
-            idx = _register(fallback)
-            indices = np.full(n, idx, dtype=np.int32)
-        mesh_face_indices.append(indices)
+    # ── ID and UUID helpers ───────────────────────────────────────────────────
+    # Part object IDs in object_1.model: 1 .. N
+    # Assembly wrapper ID in 3dmodel.model: N + 1
+    ASSEMBLY_ID = N + 1
 
-    # ── Build the 3MF XML ─────────────────────────────────────────────────────
-    COLOR_GID = 1        # colorgroup resource id
-    OBJ_ID_START = 10   # object ids start here
+    def _uuid(n: int) -> str:
+        """Deterministic UUID from an integer seed."""
+        return str(_uuid_mod.UUID(int=n))
 
-    def _hex(rgba: tuple[int, int, int, int]) -> str:
-        return '#{:02X}{:02X}{:02X}{:02X}'.format(*rgba)
+    ASSEMBLY_UUID = _uuid(0x0000_0001)
+    BUILD_UUID    = _uuid(0x0000_0000)
+    ITEM_UUID     = _uuid(0x0000_0100)
 
-    # colorgroup XML
-    cg_entries = '\n      '.join(
-        f'<m:color color="{_hex(c)}"/>' for c in all_rgba
-    )
-    colorgroup_xml = (
-        f'    <m:colorgroup id="{COLOR_GID}">\n'
-        f'      {cg_entries}\n'
-        f'    </m:colorgroup>'
-    )
+    def _part_uuid(idx: int) -> str:
+        return _uuid(0x0001_0000 + idx)
 
-    # object XMLs
+    # ── Z-lift for assemble transform (put bottom of tile at build-plate z=0) ─
+    min_z = min(float(m.vertices[:, 2].min()) for m in parts)
+    lift_z = -min_z if min_z < 0.0 else 0.0
+    id_transform   = "1 0 0 0 1 0 0 0 1 0 0 0"
+    assm_transform = f"1 0 0 0 1 0 0 0 1 0 0 {lift_z:.6f}"
+    id_matrix_16   = "1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"   # 4×4 identity, row-major
+
+    # ── 3D/Objects/object_1.model — mesh geometry ─────────────────────────────
+    # Triangles carry NO colour attributes; colour comes from model_settings.
     obj_xmls: list[str] = []
-    build_items: list[str] = []
-
-    for obj_i, (mesh, fi) in enumerate(zip(meshes, mesh_face_indices)):
-        oid = OBJ_ID_START + obj_i
-        mat = mesh.metadata.get('material', Material.SOIL)
-        name = mat.name.lower() if isinstance(mat, Material) else f'mesh_{obj_i}'
-
-        if len(mesh.faces) == 0:
-            continue
-
+    for idx, mesh in enumerate(parts):
+        oid   = idx + 1
+        puuid = _part_uuid(idx)
         verts = mesh.vertices
         faces = mesh.faces
-
-        # Vertex lines — tolist() gives Python floats, faster in f-strings
         vx, vy, vz = verts[:, 0].tolist(), verts[:, 1].tolist(), verts[:, 2].tolist()
-        vert_lines = '\n          '.join(
+        v1l,  v2l,  v3l  = faces[:, 0].tolist(), faces[:, 1].tolist(), faces[:, 2].tolist()
+
+        vert_lines = '\n     '.join(
             f'<vertex x="{x:.5f}" y="{y:.5f}" z="{z:.5f}"/>'
             for x, y, z in zip(vx, vy, vz)
         )
-
-        # Triangle lines — carry per-face colour via p1=p2=p3=index.
-        # Fast path: uniform-colour mesh → precompute the pid attribute once.
-        v1l, v2l, v3l = faces[:, 0].tolist(), faces[:, 1].tolist(), faces[:, 2].tolist()
-        if len(fi) > 0 and int(fi[0]) == int(fi[-1]) and np.all(fi == fi[0]):
-            _p = int(fi[0])
-            _pid = f' pid="{COLOR_GID}" p1="{_p}" p2="{_p}" p3="{_p}"'
-            tri_lines = '\n          '.join(
-                f'<triangle v1="{a}" v2="{b}" v3="{c}"{_pid}/>'
-                for a, b, c in zip(v1l, v2l, v3l)
-            )
-        else:
-            pil = fi.tolist()
-            tri_lines = '\n          '.join(
-                f'<triangle v1="{a}" v2="{b}" v3="{c}"'
-                f' pid="{COLOR_GID}" p1="{p}" p2="{p}" p3="{p}"/>'
-                for a, b, c, p in zip(v1l, v2l, v3l, pil)
-            )
-
-        obj_xmls.append(
-            f'    <object id="{oid}" name="{name}" type="model">\n'
-            f'      <mesh>\n'
-            f'        <vertices>\n'
-            f'          {vert_lines}\n'
-            f'        </vertices>\n'
-            f'        <triangles>\n'
-            f'          {tri_lines}\n'
-            f'        </triangles>\n'
-            f'      </mesh>\n'
-            f'    </object>'
+        tri_lines = '\n     '.join(
+            f'<triangle v1="{a}" v2="{b}" v3="{c}"/>'
+            for a, b, c in zip(v1l, v2l, v3l)
         )
-        build_items.append(f'    <item objectid="{oid}"/>')
+        obj_xmls.append(
+            f'  <object id="{oid}" p:UUID="{puuid}" type="model">\n'
+            f'   <mesh>\n'
+            f'    <vertices>\n'
+            f'     {vert_lines}\n'
+            f'    </vertices>\n'
+            f'    <triangles>\n'
+            f'     {tri_lines}\n'
+            f'    </triangles>\n'
+            f'   </mesh>\n'
+            f'  </object>'
+        )
 
-    model_xml = (
-        "<?xml version='1.0' encoding='utf-8'?>\n"
-        '<model unit="millimeter" xml:lang="en-US"\n'
-        '       xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"\n'
-        '       xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">\n'
-        '  <resources>\n'
-        + colorgroup_xml + '\n'
-        + '\n'.join(obj_xmls) + '\n'
-        '  </resources>\n'
-        '  <build>\n'
-        + '\n'.join(build_items) + '\n'
-        '  </build>\n'
-        '</model>\n'
+    NS_CORE  = 'http://schemas.microsoft.com/3dmanufacturing/core/2015/02'
+    NS_BAMBU = 'http://schemas.bambulab.com/package/2021'
+    NS_PROD  = 'http://schemas.microsoft.com/3dmanufacturing/production/2015/06'
+    _model_hdr = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<model unit="millimeter" xml:lang="en-US"'
+        f' xmlns="{NS_CORE}"'
+        f' xmlns:BambuStudio="{NS_BAMBU}"'
+        f' xmlns:p="{NS_PROD}"'
+        f' requiredextensions="p">\n'
+        f' <metadata name="BambuStudio:3mfVersion">1</metadata>\n'
     )
 
+    object_model_xml = (
+        _model_hdr
+        + ' <resources>\n'
+        + '\n'.join(obj_xmls) + '\n'
+        + ' </resources>\n'
+        + ' <build/>\n'
+        + '</model>\n'
+    )
+
+    # ── 3D/3dmodel.model — assembly wrapper ───────────────────────────────────
+    comp_lines = '\n    '.join(
+        f'<component p:path="/3D/Objects/object_1.model"'
+        f' objectid="{idx + 1}" p:UUID="{_part_uuid(idx)}"'
+        f' transform="{id_transform}"/>'
+        for idx in range(N)
+    )
+
+    assembly_xml = (
+        _model_hdr
+        # Bambu Studio checks this metadata to decide whether to load the full
+        # project (model_settings + project_settings) or geometry only.
+        # Without it, project_settings.config filament colours are ignored.
+        + ' <metadata name="Application">BambuStudio-02.04.00.70</metadata>\n'
+        + ' <resources>\n'
+        + f'  <object id="{ASSEMBLY_ID}" p:UUID="{ASSEMBLY_UUID}" type="model">\n'
+        + f'   <components>\n'
+        + f'    {comp_lines}\n'
+        + f'   </components>\n'
+        + f'  </object>\n'
+        + f' </resources>\n'
+        + f' <build p:UUID="{BUILD_UUID}">\n'
+        + f'  <item objectid="{ASSEMBLY_ID}" p:UUID="{ITEM_UUID}"'
+        + f' transform="{assm_transform}" printable="1"/>\n'
+        + f' </build>\n'
+        + '</model>\n'
+    )
+
+    # ── Metadata/model_settings.config — extruder assignments ─────────────────
+    total_faces = sum(len(m.faces) for m in parts)
+    part_entries: list[str] = []
+    for idx, mesh in enumerate(parts):
+        mat      = mesh.metadata.get('material', Material.SOIL)
+        extruder = _EXT.get(mat, 2)
+        name     = mat.name.lower() if isinstance(mat, Material) else f'part_{idx + 1}'
+        oid      = idx + 1
+        fc       = len(mesh.faces)
+        part_entries.append(
+            f'    <part id="{oid}" subtype="normal_part">\n'
+            f'      <metadata key="name" value="{name}"/>\n'
+            f'      <metadata key="matrix" value="{id_matrix_16}"/>\n'
+            f'      <metadata key="extruder" value="{extruder}"/>\n'
+            f'      <mesh_stat face_count="{fc}"'
+            f' edges_fixed="0" degenerate_facets="0"'
+            f' facets_removed="0" facets_reversed="0" backwards_edges="0"/>\n'
+            f'    </part>'
+        )
+
+    model_settings_xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<config>\n'
+        f'  <object id="{ASSEMBLY_ID}">\n'
+        f'    <metadata key="name" value="terrain"/>\n'
+        f'    <metadata key="extruder" value="1"/>\n'
+        f'    <metadata face_count="{total_faces}"/>\n'
+        + '\n'.join(part_entries) + '\n'
+        + '  </object>\n'
+        + '  <plate>\n'
+        + '    <metadata key="plater_id" value="1"/>\n'
+        + '    <metadata key="plater_name" value=""/>\n'
+        + '    <metadata key="locked" value="false"/>\n'
+        + '    <metadata key="filament_map_mode" value="Auto For Flush"/>\n'
+        + f'    <model_instance>\n'
+        + f'      <metadata key="object_id" value="{ASSEMBLY_ID}"/>\n'
+        + f'      <metadata key="instance_id" value="0"/>\n'
+        + f'      <metadata key="identify_id" value="1"/>\n'
+        + f'    </model_instance>\n'
+        + '  </plate>\n'
+        + '  <assemble>\n'
+        + f'   <assemble_item object_id="{ASSEMBLY_ID}" instance_id="0"'
+        + f' transform="{assm_transform}" offset="0 0 0" />\n'
+        + '  </assemble>\n'
+        + '</config>\n'
+    )
+
+    # ── Metadata/project_settings.config — full Bambu project settings ───────
+    # Load the bundled template (503 keys matching what Bambu Studio expects),
+    # then inject our palette colours.  Using the full template avoids the
+    # "Customized Preset" dialog and "Default Filament" slot names that appear
+    # when too many fields are missing.
+    _tmpl_path = pathlib.Path(__file__).parent.parent / "assets" / "bambu_project_template.json"
+    project_settings = _json.loads(_tmpl_path.read_text(encoding="utf-8"))
+    project_settings["filament_colour"]       = _SLOT_HEX
+    project_settings["filament_multi_colour"] = _SLOT_HEX
+
+    # ── Package files ─────────────────────────────────────────────────────────
     content_types = (
-        "<?xml version='1.0' encoding='utf-8'?>\n"
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n'
-        '  <Default Extension="rels"'
+        ' <Default Extension="rels"'
         ' ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n'
-        '  <Default Extension="model"'
+        ' <Default Extension="model"'
         ' ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>\n'
         '</Types>\n'
     )
 
-    rels = (
-        "<?xml version='1.0' encoding='utf-8'?>\n"
+    root_rels = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n'
-        '  <Relationship Target="/3D/3dmodel.model" Id="rel0"'
+        ' <Relationship Target="/3D/3dmodel.model" Id="rel-1"'
+        ' Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>\n'
+        '</Relationships>\n'
+    )
+
+    model_rels = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n'
+        ' <Relationship Target="/3D/Objects/object_1.model" Id="rel-1"'
         ' Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>\n'
         '</Relationships>\n'
     )
 
     out = pathlib.Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=1) as zf:
-        zf.writestr('[Content_Types].xml', content_types)
-        zf.writestr('_rels/.rels', rels)
-        zf.writestr('3D/3dmodel.model', model_xml)
+        zf.writestr('[Content_Types].xml',              content_types)
+        zf.writestr('_rels/.rels',                      root_rels)
+        zf.writestr('3D/3dmodel.model',                 assembly_xml)
+        zf.writestr('3D/_rels/3dmodel.model.rels',      model_rels)
+        zf.writestr('3D/Objects/object_1.model',        object_model_xml)
+        zf.writestr('Metadata/model_settings.config',   model_settings_xml)
+        zf.writestr('Metadata/project_settings.config',
+                    _json.dumps(project_settings, indent=4))

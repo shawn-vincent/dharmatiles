@@ -42,19 +42,12 @@ def main() -> None:
     print(f'  {len(meshes)} mesh parts, {total:,} faces')
 
     tiles     = load_spec(spec)
-    surface   = tiles[0].surface if tiles else None
-    square_mm = surface.square_mm if surface else 35.0
-    cols      = surface.cols if surface else 1
-    rows      = surface.rows if surface else 1
+    square_mm = tiles[0].surface.square_mm if tiles else 35.0
 
-    # Build a display label: "category/NxM-name" matching the batch PNG convention.
+    # Label: "category/stem" — NxM is already embedded in the filename.
     spec_name = spec.stem.removesuffix('.tile')
     category  = spec.parent.name
-    size_tag  = f"{cols}x{rows}"
-    if category and category not in ('tiles',):
-        label = f"{category}/{size_tag}-{spec_name}"
-    else:
-        label = f"{size_tag}-{spec_name}"
+    label     = f"{category}/{spec_name}" if category not in ('tiles', '') else spec_name
 
     from dharmatiles.render import render
     render(meshes, out, elev=args.elev, azim=args.azim,

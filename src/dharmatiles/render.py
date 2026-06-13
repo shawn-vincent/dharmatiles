@@ -71,13 +71,32 @@ def _load_label_font(size: int):
     return ImageFont.load_default()
 
 
+def _load_logo_icon(size: int) -> Image.Image:
+    """Dharmatiles logo resized to size×size, white-on-transparent, whitespace cropped."""
+    import pathlib
+    path = pathlib.Path(__file__).parent / 'assets' / 'dharmatiles-logo.png'
+    src  = Image.open(path).convert('RGBA')
+    arr  = np.array(src)
+    lum  = arr[:, :, :3].mean(axis=2)
+    # Crop to the bounding box of dark (logo) pixels so whitespace doesn't shrink it
+    dark = lum < 200
+    rows = np.any(dark, axis=1)
+    cols = np.any(dark, axis=0)
+    r0, r1 = np.where(rows)[0][[0, -1]]
+    c0, c1 = np.where(cols)[0][[0, -1]]
+    src  = src.crop((c0, r0, c1 + 1, r1 + 1))
+    arr  = np.array(src)
+    lum  = arr[:, :, :3].mean(axis=2)
+    out  = np.zeros_like(arr)
+    out[:, :, :3] = 255
+    out[:, :, 3]  = np.clip(255 - lum, 0, 255).astype(np.uint8)
+    return Image.fromarray(out, 'RGBA').resize((size, size), Image.LANCZOS)
+
+
 def _add_label_overlay(img: Image.Image, label: str) -> Image.Image:
-    """Composite a slick typographic label at the bottom-right of a RGBA image."""
+    """Single-line pill badge — equal gap left|icon↔text|right and vertically centered."""
     img = img.convert('RGBA')
     iw, ih = img.size
-
-    font_size = max(13, ih // 55)
-    font = _load_label_font(font_size)
 
     slash = label.find('/')
     if slash >= 0:
@@ -87,47 +106,61 @@ def _add_label_overlay(img: Image.Image, label: str) -> Image.Image:
         prefix = ""
         name   = label
 
+    font_size = max(16, ih // 18)
+    font      = _load_label_font(font_size)
+
     probe = ImageDraw.Draw(img)
 
-    def _wh(text: str) -> tuple[int, int]:
-        bb = probe.textbbox((0, 0), text, font=font)
-        return bb[2] - bb[0], bb[3] - bb[1]
+    def _bb(text: str):
+        return probe.textbbox((0, 0), text, font=font)
 
-    def _top(text: str) -> int:
-        return probe.textbbox((0, 0), text, font=font)[1]
+    def _w(text: str) -> int:
+        b = _bb(text); return b[2] - b[0]
 
-    nw, nh = _wh(name)
-    pw     = _wh(prefix)[0] if prefix else 0
+    def _h(text: str) -> int:
+        b = _bb(text); return b[3] - b[1]
+
+    pw    = _w(prefix) if prefix else 0
+    nw    = _w(name)
+    nh    = _h(name)
+    top_y = _bb(name)[1]
+
+    gap    = max(6, font_size // 5)
+    margin = max(14, ih // 45)
+    radius = max(6,  font_size // 4)
+
+    icon_size = int(nh * 1.15)         # slightly taller than text
+    rect_h    = icon_size + gap * 2    # pill height driven by icon + uniform padding
+    try:
+        icon = _load_logo_icon(icon_size)
+    except Exception:
+        icon = None
+
+    icon_w = icon_size if icon is not None else 0
     text_w = pw + nw
-    text_h = nh
+    rect_w = gap + (icon_w + gap if icon is not None else 0) + text_w + gap
 
-    pad_x, pad_y = 11, 7
-    margin = 18
+    x1 = margin
+    y1 = ih - margin - rect_h
+    x2 = x1 + rect_w
+    y2 = y1 + rect_h
 
-    rect_w = text_w + pad_x * 2
-    rect_h = text_h + pad_y * 2
-
-    x2, y2 = iw - margin, ih - margin
-    x1, y1 = x2 - rect_w, y2 - rect_h
-
-    # Backdrop: dark semi-transparent pill
     overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
-    od = ImageDraw.Draw(overlay)
-    od.rounded_rectangle([(x1, y1), (x2, y2)], radius=5, fill=(6, 8, 12, 150))
+    ImageDraw.Draw(overlay).rounded_rectangle(
+        [(x1, y1), (x2, y2)], radius=radius, fill=(6, 8, 14, 170))
+    img = Image.alpha_composite(img, overlay)
 
-    # Clip overlay to the base image's opaque region (no bleed into rounded corners)
-    base_a  = np.array(img)[:, :, 3].astype(np.uint32)
-    ov_arr  = np.array(overlay)
-    ov_arr[:, :, 3] = (ov_arr[:, :, 3].astype(np.uint32) * base_a // 255).astype(np.uint8)
-    img = Image.alpha_composite(img, Image.fromarray(ov_arr, 'RGBA'))
+    if icon is not None:
+        icon_y = y1 + (rect_h - icon_size) // 2
+        img.alpha_composite(icon, dest=(x1 + gap, icon_y))
 
     draw = ImageDraw.Draw(img)
-    ty   = y1 + pad_y - _top(name)
-    tx   = x1 + pad_x
+    tx   = x1 + gap + (icon_w + gap if icon is not None else 0)
+    ty   = y1 + (rect_h - nh) // 2 - top_y + gap // 3
     if prefix:
-        draw.text((tx, ty), prefix, font=font, fill=(255, 255, 255, 130))
+        draw.text((tx, ty), prefix, font=font, fill=(255, 255, 255, 115))
         tx += pw
-    draw.text((tx, ty), name, font=font, fill=(255, 255, 255, 225))
+    draw.text((tx, ty), name, font=font, fill=(255, 255, 255, 235))
     return img
 
 

@@ -615,16 +615,20 @@ def _build_spec_terrain(
 
 # ── CLI helpers ───────────────────────────────────────────────────────────────
 
-import re as _re
-_NXM_PREFIX = _re.compile(r'^\d+x\d+-')
+def _spec_stem(spec_path: pathlib.Path, tiles_root: pathlib.Path) -> tuple[str, pathlib.Path]:
+    """Return (stem, subdir) for a spec path relative to tiles_root.
 
-
-def _output_stem(rel_name: str, cols: int, rows: int) -> str:
-    """Return the canonical output stem: use rel_name as-is when it already starts
-    with an NxM- prefix (the spec file carries the dimension), otherwise prepend it."""
-    if _NXM_PREFIX.match(rel_name):
-        return rel_name
-    return f"{cols}x{rows}-{rel_name}"
+    stem is the spec filename without .tile.py (e.g. '1x1-water+grass').
+    subdir is the path component between tiles_root and the file (e.g. PosixPath('water')).
+    """
+    try:
+        no_py   = spec_path.with_suffix('')
+        no_tile = no_py.with_suffix('') if no_py.suffix == '.tile' else no_py
+        rel     = no_tile.relative_to(tiles_root)
+    except ValueError:
+        no_py   = pathlib.Path(spec_path.stem)
+        rel     = no_py.with_suffix('') if no_py.suffix == '.tile' else no_py
+    return rel.name, rel.parent
 
 
 def _png_path_for(
@@ -634,15 +638,8 @@ def _png_path_for(
     png_root:   pathlib.Path,
 ) -> pathlib.Path:
     """Return the canonical PNG output path for *spec_path* (no system suffix)."""
-    cols, rows = tile.surface.cols, tile.surface.rows
-    try:
-        no_py   = spec_path.with_suffix('')
-        no_tile = no_py.with_suffix('') if no_py.suffix == '.tile' else no_py
-        rel     = no_tile.relative_to(tiles_root)
-    except ValueError:
-        no_py   = pathlib.Path(spec_path.stem)
-        rel     = no_py.with_suffix('') if no_py.suffix == '.tile' else no_py
-    return png_root / rel.parent / f"{_output_stem(rel.name, cols, rows)}.png"
+    stem, sub = _spec_stem(spec_path, tiles_root)
+    return png_root / sub / f"{stem}.png"
 
 
 def _label_for_png(out: pathlib.Path, png_root: pathlib.Path) -> str:
@@ -766,16 +763,7 @@ def _system_paths_for(
     stl_root:   pathlib.Path,
 ) -> dict[str, pathlib.Path]:
     """Return ``{system.suffix: output_path}`` for the canonical hierarchy."""
-    cols, rows = tile.surface.cols, tile.surface.rows
-    try:
-        no_py   = spec_path.with_suffix('')
-        no_tile = no_py.with_suffix('') if no_py.suffix == '.tile' else no_py
-        rel     = no_tile.relative_to(tiles_root)
-    except ValueError:
-        no_py   = pathlib.Path(spec_path.stem)
-        rel     = no_py.with_suffix('') if no_py.suffix == '.tile' else no_py
-    stem = _output_stem(rel.name, cols, rows)
-    sub  = rel.parent
+    stem, sub = _spec_stem(spec_path, tiles_root)
     return {
         system.suffix: stl_root / system.dir_name / sub / f"{stem}-{system.suffix}.stl"
         for system in tile.systems
