@@ -10,7 +10,7 @@ import pathlib
 
 import numpy as np
 import trimesh
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 
 def _boost_saturation(rgba: np.ndarray, factor: float = 1.4) -> np.ndarray:
@@ -56,19 +56,49 @@ def _tight_crop(img: Image.Image, alpha: np.ndarray, padding: int = 48) -> Image
 def _load_label_font(size: int):
     from PIL import ImageFont
     candidates = [
-        "/System/Library/Fonts/SFNS.ttf",
-        "/System/Library/Fonts/HelveticaNeue.ttc",
-        "/System/Library/Fonts/Helvetica.ttc",
-        "/Library/Fonts/Arial.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        ("/System/Library/Fonts/HelveticaNeue.ttc", 0),   # Helvetica Neue Regular
+        ("/System/Library/Fonts/SFNS.ttf",           0),
+        ("/System/Library/Fonts/Helvetica.ttc",      0),
+        ("/Library/Fonts/Arial.ttf",                 0),
+        ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 0),
+        ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", 0),
     ]
-    for path in candidates:
+    for path, index in candidates:
         try:
-            return ImageFont.truetype(path, size)
+            return ImageFont.truetype(path, size, index=index)
         except (OSError, IOError):
             continue
     return ImageFont.load_default()
+
+
+def _load_label_font_bold(size: int):
+    from PIL import ImageFont
+    candidates = [
+        ("/System/Library/Fonts/HelveticaNeue.ttc", 1),   # Helvetica Neue Bold
+        ("/System/Library/Fonts/Avenir.ttc",         3),   # Avenir Heavy
+        ("/Library/Fonts/Arial Bold.ttf",            0),
+        ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 0),
+    ]
+    for path, index in candidates:
+        try:
+            return ImageFont.truetype(path, size, index=index)
+        except (OSError, IOError):
+            continue
+    return _load_label_font(size)
+
+
+def _load_label_font_light(size: int):
+    from PIL import ImageFont
+    candidates = [
+        ("/System/Library/Fonts/HelveticaNeue.ttc", 7),   # Helvetica Neue Light
+        ("/System/Library/Fonts/Avenir.ttc",         6),   # Avenir Light
+    ]
+    for path, index in candidates:
+        try:
+            return ImageFont.truetype(path, size, index=index)
+        except (OSError, IOError):
+            continue
+    return _load_label_font(size)
 
 
 def _load_logo_icon(size: int) -> Image.Image:
@@ -106,21 +136,22 @@ def _add_label_overlay(img: Image.Image, label: str) -> Image.Image:
         prefix = ""
         name   = label
 
-    font_size = max(16, ih // 18)
-    font      = _load_label_font(font_size)
+    font_size  = max(16, ih // 18)
+    font       = _load_label_font_bold(font_size)
+    font_light = _load_label_font_light(font_size)
 
     probe = ImageDraw.Draw(img)
 
-    def _bb(text: str):
-        return probe.textbbox((0, 0), text, font=font)
+    def _bb(text: str, f=None):
+        return probe.textbbox((0, 0), text, font=f or font)
 
-    def _w(text: str) -> int:
-        b = _bb(text); return b[2] - b[0]
+    def _w(text: str, f=None) -> int:
+        b = _bb(text, f); return b[2] - b[0]
 
-    def _h(text: str) -> int:
-        b = _bb(text); return b[3] - b[1]
+    def _h(text: str, f=None) -> int:
+        b = _bb(text, f); return b[3] - b[1]
 
-    pw    = _w(prefix) if prefix else 0
+    pw    = _w(prefix, font_light) if prefix else 0
     nw    = _w(name)
     nh    = _h(name)
     top_y = _bb(name)[1]
@@ -145,10 +176,14 @@ def _add_label_overlay(img: Image.Image, label: str) -> Image.Image:
     x2 = x1 + rect_w
     y2 = y1 + rect_h
 
-    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
-    ImageDraw.Draw(overlay).rounded_rectangle(
-        [(x1, y1), (x2, y2)], radius=radius, fill=(6, 8, 14, 170))
-    img = Image.alpha_composite(img, overlay)
+    # Frosted glass: blur the region behind the pill, then tint it
+    region  = img.crop((x1, y1, x2, y2)).filter(ImageFilter.GaussianBlur(radius=12))
+    tint    = Image.new('RGBA', (x2 - x1, y2 - y1), (6, 8, 14, 155))
+    frosted = Image.alpha_composite(region.convert('RGBA'), tint)
+    pmask   = Image.new('L', (x2 - x1, y2 - y1), 0)
+    ImageDraw.Draw(pmask).rounded_rectangle(
+        [(0, 0), (x2 - x1 - 1, y2 - y1 - 1)], radius=radius, fill=255)
+    img.paste(frosted, (x1, y1), mask=pmask)
 
     if icon is not None:
         icon_y = y1 + (rect_h - icon_size) // 2
@@ -156,9 +191,9 @@ def _add_label_overlay(img: Image.Image, label: str) -> Image.Image:
 
     draw = ImageDraw.Draw(img)
     tx   = x1 + gap + (icon_w + gap if icon is not None else 0)
-    ty   = y1 + (rect_h - nh) // 2 - top_y + gap // 3
+    ty   = y1 + (rect_h - nh) // 2 - top_y + gap // 2
     if prefix:
-        draw.text((tx, ty), prefix, font=font, fill=(255, 255, 255, 115))
+        draw.text((tx, ty), prefix, font=font_light, fill=(255, 255, 255, 235))
         tx += pw
     draw.text((tx, ty), name, font=font, fill=(255, 255, 255, 235))
     return img
