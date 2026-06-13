@@ -20,7 +20,7 @@ tile = Tile(
                     Rocks(
                         placement=Uniform(count_per_square=3),
                         r=D[2.0:4.0],
-                        flat=D[1.5:2.5],
+                        flat=D[1.6375:1.825],
                         n_cuts=2,
                     ),
                 ),

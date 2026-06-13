@@ -12,6 +12,10 @@ from ..dist import D, Sample, bounds, sample
 
 WATER_RENDER_LIFT_MM = 0.10
 WATER_XY_INSET_MM   = 0.001   # keep visual mesh strictly inside the pool boundary
+_EDGE_SOUTH = 0
+_EDGE_NORTH = 1
+_EDGE_WEST  = 2
+_EDGE_EAST  = 3
 
 
 class Water:
@@ -31,6 +35,12 @@ class Water:
         Water surface height.  ``None`` → derive from the region's
         terrain_z (its max value over the placement mask, which the
         orchestrator sets to the region's effective height).
+    tile_edge_profile_fade_mm
+        Depth of the tile-edge sine blend region.  The original water
+        displacement is preserved inside this inset rounded square.
+    tile_edge_profile_radius_mm
+        Corner radius of that rounded-square blend boundary.  ``None`` uses
+        ``tile_edge_profile_fade_mm``.
     """
 
     height_default_mm: float = 3.0
@@ -42,11 +52,15 @@ class Water:
         height_mm: float | None = None,
         ripple_seg_len: Sample[float] | None = None,
         ripple_offset: Sample[float] | None = None,
+        tile_edge_profile_fade_mm: float = 5.0,
+        tile_edge_profile_radius_mm: float | None = None,
         ) -> None:
         self.embed_mm  = embed_mm
         self.height_mm = height_mm
         self.ripple_seg_len = D[10.0:20.0] if ripple_seg_len is None else ripple_seg_len
         self.ripple_offset = D[0.0:20.0] if ripple_offset is None else ripple_offset
+        self.tile_edge_profile_fade_mm = tile_edge_profile_fade_mm
+        self.tile_edge_profile_radius_mm = tile_edge_profile_radius_mm
 
     def apply(
         self,
@@ -83,8 +97,8 @@ class Water:
         # ── Build the water volume mesh ──────────────────────────────────────
         embed_cells = max(1, round(self.embed_mm / surface.cell_w))
         wm_disp_full = binary_dilation(placement_mask, iterations=embed_cells)
+        tile_edge_contacts = _tile_edge_contacts(placement_mask)
 
-        # edge_fade_mm = embed_mm so the taper spans exactly the embed zone.
         z_disp = make_water_displacement(wm_disp_full, surface,
                                          edge_fade_mm=max(self.embed_mm, surface.cell_w))
 
@@ -129,11 +143,166 @@ class Water:
             surface.tile_w, surface.tile_h,
             z_disp=zd,
             simplify_tolerance=simplify_tol,
-            inset_mm=WATER_XY_INSET_MM)
+            inset_mm=WATER_XY_INSET_MM,
+            tile_edge_profile_edges=tile_edge_contacts,
+            tile_edge_profile_square_mm=surface.square_mm,
+            tile_edge_profile_wavelength_mm=surface.square_mm / 2.0,
+            tile_edge_profile_fade_mm=self.tile_edge_profile_fade_mm,
+            tile_edge_profile_radius_mm=self.tile_edge_profile_radius_mm)
 
         from ..core.color import Material, tag as _tag
         _tag(water_mesh, Material.WATER)
         return [water_mesh]
+
+
+def _tile_edge_contacts(water_mask: np.ndarray) -> tuple[bool, bool, bool, bool]:
+    """Return south, north, west, east flags for water touching tile perimeter."""
+    if water_mask.size == 0:
+        return (False, False, False, False)
+    return (
+        bool(water_mask[0, :].any()),
+        bool(water_mask[-1, :].any()),
+        bool(water_mask[:, 0].any()),
+        bool(water_mask[:, -1].any()),
+    )
+
+
+def _force_tile_edge_water_profile(
+    top_z: np.ndarray,
+    water_height: float,
+    tile_w: float,
+    tile_h: float,
+    *,
+    edge_contacts: tuple[bool, bool, bool, bool],
+    square_mm: float,
+    wavelength_mm: float,
+    fade_mm: float,
+    radius_mm: float | None = None,
+    amplitude_mm: float = 1.0,
+) -> np.ndarray:
+    """Blend top water vertices to a shared sinusoidal profile at tile edges."""
+    if not any(edge_contacts) or wavelength_mm <= 0.0 or fade_mm <= 0.0:
+        return top_z
+
+    radius = fade_mm if radius_mm is None else radius_mm
+    nv_r, nv_c = top_z.shape
+    x = np.linspace(0.0, tile_w, nv_c)
+    y = np.linspace(0.0, tile_h, nv_r)
+
+    def _edge_weight(dist: np.ndarray) -> np.ndarray:
+        return 1.0 / np.maximum(dist, max(fade_mm * 1e-6, 1e-9))
+
+    target_sum = np.zeros_like(top_z, dtype=float)
+    weight_sum = np.zeros_like(top_z, dtype=float)
+
+    phase_origin = square_mm * 0.5 - wavelength_mm * 0.25
+    x_profile = water_height + amplitude_mm * np.sin(
+        2.0 * np.pi * (x - phase_origin) / wavelength_mm
+    )
+    y_profile = water_height + amplitude_mm * np.sin(
+        2.0 * np.pi * (y - phase_origin) / wavelength_mm
+    )
+
+    if edge_contacts[_EDGE_SOUTH]:
+        weight = _edge_weight(y)[:, None]
+        target_sum += weight * x_profile[None, :]
+        weight_sum += weight
+    if edge_contacts[_EDGE_NORTH]:
+        weight = _edge_weight(tile_h - y)[:, None]
+        target_sum += weight * x_profile[None, :]
+        weight_sum += weight
+    if edge_contacts[_EDGE_WEST]:
+        weight = _edge_weight(x)[None, :]
+        target_sum += weight * y_profile[:, None]
+        weight_sum += weight
+    if edge_contacts[_EDGE_EAST]:
+        weight = _edge_weight(tile_w - x)[None, :]
+        target_sum += weight * y_profile[:, None]
+        weight_sum += weight
+
+    active = weight_sum > 0.0
+    if not active.any():
+        return top_z
+
+    target = np.where(active, target_sum / np.maximum(weight_sum, 1e-9), top_z)
+    blend = _rounded_square_edge_falloff(
+        x,
+        y,
+        tile_w,
+        tile_h,
+        inset_mm=fade_mm,
+        radius_mm=radius,
+    )
+    blend = np.where(_nearest_edge_is_active(x, y, tile_w, tile_h, edge_contacts),
+                     blend, 0.0)
+    blend = np.where(active, blend, 0.0)
+    return top_z * (1.0 - blend) + target * blend
+
+
+def _nearest_edge_is_active(
+    x: np.ndarray,
+    y: np.ndarray,
+    tile_w: float,
+    tile_h: float,
+    edge_contacts: tuple[bool, bool, bool, bool],
+) -> np.ndarray:
+    distances = [
+        np.broadcast_to(y[:, None], (len(y), len(x))),
+        np.broadcast_to((tile_h - y)[:, None], (len(y), len(x))),
+        np.broadcast_to(x[None, :], (len(y), len(x))),
+        np.broadcast_to((tile_w - x)[None, :], (len(y), len(x))),
+    ]
+    active_distances = [
+        dist for dist, is_active in zip(distances, edge_contacts) if is_active
+    ]
+    inactive_distances = [
+        dist for dist, is_active in zip(distances, edge_contacts) if not is_active
+    ]
+    if not active_distances:
+        return np.zeros((len(y), len(x)), dtype=bool)
+    if not inactive_distances:
+        return np.ones((len(y), len(x)), dtype=bool)
+
+    min_active = np.minimum.reduce(active_distances)
+    min_inactive = np.minimum.reduce(inactive_distances)
+    return min_active <= min_inactive + 1e-9
+
+
+def _rounded_square_edge_falloff(
+    x: np.ndarray,
+    y: np.ndarray,
+    tile_w: float,
+    tile_h: float,
+    *,
+    inset_mm: float,
+    radius_mm: float,
+) -> np.ndarray:
+    """Return a 0→1 blend outside an inset rounded square."""
+    inset = max(0.0, min(inset_mm, tile_w * 0.5, tile_h * 0.5))
+    radius = max(0.0, min(radius_mm, max(tile_w * 0.5 - inset, 0.0),
+                          max(tile_h * 0.5 - inset, 0.0)))
+    if radius == 0.0:
+        edge_dist = np.minimum.reduce([
+            np.broadcast_to(y[:, None], (len(y), len(x))),
+            np.broadcast_to((tile_h - y)[:, None], (len(y), len(x))),
+            np.broadcast_to(x[None, :], (len(y), len(x))),
+            np.broadcast_to((tile_w - x)[None, :], (len(y), len(x))),
+        ])
+        t = np.clip(1.0 - edge_dist / max(inset, 1e-9), 0.0, 1.0)
+        return t * t * (3.0 - 2.0 * t)
+
+    cx = tile_w * 0.5
+    cy = tile_h * 0.5
+    hx = max(tile_w * 0.5 - inset - radius, 0.0)
+    hy = max(tile_h * 0.5 - inset - radius, 0.0)
+
+    qx = np.abs(x[None, :] - cx) - hx
+    qy = np.abs(y[:, None] - cy) - hy
+    outside = np.hypot(np.maximum(qx, 0.0), np.maximum(qy, 0.0))
+    inside = np.minimum(np.maximum(qx, qy), 0.0)
+    signed_dist = outside + inside - radius
+    t = np.clip(signed_dist / max(inset, 1e-9), 0.0, 1.0)
+    return t * t * (3.0 - 2.0 * t)
 
 
 
@@ -149,12 +318,11 @@ def make_water_displacement(
 
     Generates Gaussian-filtered white noise blurred at feature_scale_mm,
     normalised to amplitude_mm RMS, then multiplied by a smooth Hann fade
-    that tapers to zero at the boundary of *water_mask* (the outer edge of
-    the embed/shore zone).  Non-water cells are zero.
+    only at non-water boundaries inside *water_mask*.  Tile perimeter blending
+    is handled later by the sine-edge profile so raw texture survives into
+    that transition region.  Non-water cells are zero.
 
-    *edge_fade_mm* controls the taper width: displacement is 0.0 at the mask
-    boundary and rises to full amplitude within *edge_fade_mm* of that edge.
-    Pass the caller's ``embed_mm`` so the taper spans exactly the embed zone.
+    *edge_fade_mm* controls the non-water boundary taper width.
     """
     from scipy.ndimage import gaussian_filter
 
@@ -170,13 +338,7 @@ def make_water_displacement(
     if std > 0:
         z = z / std * amplitude_mm
 
-    # Smooth Hann taper: 0.0 at the mask boundary, 1.0 at edge_fade_mm inside.
-    # This replaces the old centre-based conical fade, which was incorrect for
-    # water regions not centred on the tile (gave wrong amplitude near the shore).
-    edge_dist_mm = distance_transform_edt(water_mask).astype(float) * surface.cell_w
-    t    = np.clip(edge_dist_mm / max(edge_fade_mm, surface.cell_w), 0.0, 1.0)
-    fade = 0.5 * (1.0 - np.cos(np.pi * t))
-    z   *= fade
+    z *= _mask_boundary_falloff(water_mask, surface.cell_w, edge_fade_mm)
 
     z[~water_mask] = 0.0
     return z
@@ -199,9 +361,10 @@ def make_water_ripple_displacement(
 
     Each segment has a flat-top envelope: full amplitude across the arc body
     (seg_len), then a gradual Hann fade over seg_fade_mm on each end.
-    The tile-edge envelope fades all displacement to zero over edge_fade_mm
-    inside every tile boundary.  Amplitude scales linearly with proximity:
-    100 % at 0 mm offset from source, 0 % at the configured offset bound.
+    Raw ripple displacement is faded only at non-water mask boundaries; tile
+    perimeter blending is handled by the final sine-edge profile.  Amplitude
+    scales linearly with proximity: 100 % at 0 mm offset from source, 0 % at
+    the configured offset bound.
 
     Segment count is auto-scaled: ~1 segment per 6 mm of source perimeter.
     """
@@ -309,23 +472,27 @@ def make_water_ripple_displacement(
             0.0,
         )
 
-    # ── Tile-edge envelope: fade to zero within edge_fade_mm of each tile boundary ─
-    if edge_fade_mm > 0.0:
-        row_dist = np.minimum(np.arange(gh), gh - 1 - np.arange(gh)).astype(float) * cell_w
-        col_dist = np.minimum(np.arange(gw), gw - 1 - np.arange(gw)).astype(float) * cell_w
-        tile_edge_dist = np.minimum(row_dist[:, None], col_dist[None, :])
-        t_tile = np.clip(tile_edge_dist / edge_fade_mm, 0.0, 1.0)
-        disp *= 0.5 * (1.0 - np.cos(np.pi * t_tile))
-
-    # ── Water-mask-boundary envelope: taper to zero at the outer edge of the
-    # water mask (the outer edge of the embed/shore zone adjacent to boundaries).
-    # This prevents sharp cutoffs where the dilated water mask ends.
-    if edge_fade_mm > 0.0:
-        mask_edge_dist_mm = distance_transform_edt(water_mask).astype(float) * cell_w
-        t_mask = np.clip(mask_edge_dist_mm / edge_fade_mm, 0.0, 1.0)
-        disp  *= 0.5 * (1.0 - np.cos(np.pi * t_mask))
+    # Keep this limited to real mask cutoffs. Tile-edge blending is handled
+    # later by _force_tile_edge_water_profile so raw texture survives into that
+    # region and blends directly to the shared sine edge.
+    disp *= _mask_boundary_falloff(water_mask, cell_w, edge_fade_mm)
 
     return disp
+
+
+def _mask_boundary_falloff(
+    water_mask: np.ndarray,
+    cell_w: float,
+    edge_fade_mm: float,
+) -> np.ndarray:
+    """Fade only near non-water cells inside the mask, not at tile edges."""
+    if edge_fade_mm <= 0.0 or not (~water_mask).any():
+        return water_mask.astype(float)
+
+    edge_dist_mm = distance_transform_edt(water_mask).astype(float) * cell_w
+    t = np.clip(edge_dist_mm / max(edge_fade_mm, cell_w), 0.0, 1.0)
+    fade = 0.5 * (1.0 - np.cos(np.pi * t))
+    return np.where(water_mask, fade, 0.0)
 
 
 def _simplify(mesh: trimesh.Trimesh, tolerance_mm: float) -> trimesh.Trimesh:
@@ -349,6 +516,11 @@ def make_water_volume(
     z_disp:             np.ndarray | None = None,
     simplify_tolerance: float = 0.0,
     inset_mm:           float = 0.0,
+    tile_edge_profile_edges: tuple[bool, bool, bool, bool] | None = None,
+    tile_edge_profile_square_mm: float | None = None,
+    tile_edge_profile_wavelength_mm: float | None = None,
+    tile_edge_profile_fade_mm: float | None = None,
+    tile_edge_profile_radius_mm: float | None = None,
 ) -> trimesh.Trimesh:
     """Closed solid spanning the water volume.
 
@@ -358,6 +530,9 @@ def make_water_volume(
 
     *inset_mm* shrinks the slab in XY by clipping boundary vertex coordinates
     inward by that amount, ensuring no face is coincident with the tile walls.
+
+    *tile_edge_profile_edges* constrains only the top surface near tile perimeter
+    edges touched by water.  It is ordered south, north, west, east.
     """
     gh, gw = terrain_z.shape
     cell_x = tile_w / gw
@@ -382,6 +557,26 @@ def make_water_volume(
         top_z = np.maximum(top_z, bot_z)
     else:
         top_z = np.full((nv_r, nv_c), h)
+
+    if tile_edge_profile_edges is not None:
+        top_z = _force_tile_edge_water_profile(
+            top_z,
+            water_height,
+            tile_w,
+            tile_h,
+            edge_contacts=tile_edge_profile_edges,
+            square_mm=(tile_edge_profile_square_mm
+                       if tile_edge_profile_square_mm is not None
+                       else max(tile_w, tile_h)),
+            wavelength_mm=(tile_edge_profile_wavelength_mm
+                           if tile_edge_profile_wavelength_mm is not None
+                           else max(tile_w, tile_h)),
+            fade_mm=(tile_edge_profile_fade_mm
+                     if tile_edge_profile_fade_mm is not None
+                     else max(cell_x, cell_y)),
+            radius_mm=tile_edge_profile_radius_mm,
+        )
+        top_z = np.maximum(top_z, bot_z)
 
     # ── Vertex buffer ─────────────────────────────────────────────────────────
     x_arr = np.arange(nv_c, dtype=float) * cell_x
