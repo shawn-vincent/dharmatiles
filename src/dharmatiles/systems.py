@@ -41,7 +41,8 @@ class DungeonBlocks:
         return base_surface
 
     def export(self, colored_meshes: list[trimesh.Trimesh], surface: SurfaceConfig,
-               terrain_z: np.ndarray, output_path: pathlib.Path) -> trimesh.Trimesh:
+               terrain_z: np.ndarray, output_path: pathlib.Path,
+               ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
         from .bases import dungeonblocks
         base_cfg = dataclasses.replace(BaseConfig(), peg_height=self.peg_height)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -65,11 +66,20 @@ class OpenLOCK:
         self.peg_height = peg_height
 
     def surface_for(self, base_surface: SurfaceConfig) -> SurfaceConfig:
-        """Return the surface scaled to this system's square_mm."""
-        return dataclasses.replace(base_surface, square_mm=self.square_mm)
+        """Return the surface scaled to this system's square_mm.
+
+        Cell count is capped at 64 for OL-scale (<30 mm) tiles: 25.4/64 ≈ 0.40 mm/cell,
+        right at nozzle width — identical print quality, 4× cheaper grid computation.
+        """
+        cps = base_surface.cells_per_square
+        if self.square_mm < 30.0:
+            cps = min(cps, 64)
+        return dataclasses.replace(base_surface, square_mm=self.square_mm,
+                                   cells_per_square=cps)
 
     def export(self, colored_meshes: list[trimesh.Trimesh], surface: SurfaceConfig,
-               terrain_z: np.ndarray, output_path: pathlib.Path) -> trimesh.Trimesh:
+               terrain_z: np.ndarray, output_path: pathlib.Path,
+               ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
         from .bases import openlock
         base_cfg = dataclasses.replace(BaseConfig(), peg_height=self.peg_height)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -94,7 +104,8 @@ class BareSystem:
         return base_surface
 
     def export(self, colored_meshes: list[trimesh.Trimesh], surface: SurfaceConfig,
-               terrain_z: np.ndarray, output_path: pathlib.Path) -> trimesh.Trimesh:
+               terrain_z: np.ndarray, output_path: pathlib.Path,
+               ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
         from .core.color import export_color_stl, build_scene
         output_path.parent.mkdir(parents=True, exist_ok=True)
         combined = (trimesh.util.concatenate(colored_meshes)
@@ -102,7 +113,7 @@ class BareSystem:
         export_color_stl(combined, output_path)
         tmf_path = output_path.with_suffix('.3mf')
         build_scene(colored_meshes).export(str(tmf_path))
-        return combined
+        return combined, list(colored_meshes)
 
     def __repr__(self) -> str:
         return f"BareSystem(suffix={self.suffix!r})"

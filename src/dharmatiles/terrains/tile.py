@@ -104,6 +104,7 @@ def _batch_worker(args: tuple) -> dict:
     reporter  = _CollectingReporter(phase_cb=_set_phase)
     t0        = _time.perf_counter()
 
+    render_meshes: list[trimesh.Trimesh] | None = None
     for tile in load_spec(spec_path):
         surface   = tile.surface
         sys_paths = _system_paths_for(spec_path, tile, tiles_root, stl_root)
@@ -116,20 +117,26 @@ def _batch_worker(args: tuple) -> dict:
             region_ids   = [r.id for r in tile.regions],
             boundary_ids = [b.id for b in tile.boundaries],
         )
-        build_tile_from_spec(tile, system_paths=sys_paths, reporter=reporter)
+        _, render_meshes = build_tile_from_spec(tile, system_paths=sys_paths, reporter=reporter)
 
-    # Render PNG in the same worker pass
-    try:
-        from ..render import render as _render
-        _set_phase("Render PNG")
+    # Render PNG from the already-built meshes (no second build pass).
+    _set_phase("Render PNG")
+    if render_meshes is not None:
         for tile in load_spec(spec_path):
             out = _png_path_for(spec_path, tile, tiles_root, png_root)
-            out.parent.mkdir(parents=True, exist_ok=True)
-            meshes = build_meshes_for_render(spec_path)
-            _render(meshes, out, quiet=True, grid_square_mm=tile.surface.square_mm)
+            _render_from_meshes(render_meshes, out, tile.surface.square_mm, quiet=True)
             break
-    except Exception:
-        pass
+    else:
+        try:
+            from ..render import render as _render
+            for tile in load_spec(spec_path):
+                out = _png_path_for(spec_path, tile, tiles_root, png_root)
+                out.parent.mkdir(parents=True, exist_ok=True)
+                meshes = build_meshes_for_render(spec_path)
+                _render(meshes, out, quiet=True, grid_square_mm=tile.surface.square_mm)
+                break
+        except Exception:
+            pass
 
     return reporter.to_row(spec_name, _time.perf_counter() - t0)
 
@@ -240,7 +247,9 @@ def _carve_soil_from_water(
     soil_mesh  = colored_meshes[soil_idx]
     water_mesh = colored_meshes[water_idx]
 
-    if not soil_mesh.is_volume or not water_mesh.is_volume:
+    with np.errstate(invalid='ignore', divide='ignore'):
+        both_solid = soil_mesh.is_volume and water_mesh.is_volume
+    if not both_solid:
         return colored_meshes
 
     def _to_m3d(verts: np.ndarray, faces: np.ndarray) -> m3d.Manifold:
@@ -259,7 +268,8 @@ def _carve_soil_from_water(
         faces=np.array(msh.tri_verts, dtype=int),
         process=False,
     )
-    carved.fix_normals()
+    with np.errstate(invalid='ignore', divide='ignore'):
+        carved.fix_normals()
     # Re-apply the water material tag + face colours; the boolean op strips
     # all visual attributes from the trimesh result.
     _tag(carved, Material.WATER)
@@ -371,7 +381,8 @@ def _build_tile_mesh(
             group_mesh = (trimesh.util.concatenate(mesh_list)
                           if len(mesh_list) > 1 else mesh_list[0])
         else:
-            solid = [m for m in mesh_list if m.is_volume]
+            with np.errstate(invalid='ignore', divide='ignore'):
+                solid = [m for m in mesh_list if m.is_volume]
             if len(solid) > 1:
                 group_mesh = trimesh.boolean.union(
                     solid, engine='manifold', check_volume=False,
@@ -421,53 +432,63 @@ def build_tile_from_spec(
     *,
     system_paths: dict[str, pathlib.Path],
     reporter:     TileReporter,
-) -> trimesh.Trimesh:
+) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh] | None]:
     """Build a tile from a Python ``Tile`` spec and export one STL per system.
 
-    *system_paths* maps each system's ``suffix`` to its output path.
-    The orchestrator loops over ``tile.systems`` in declaration order,
-    builds a mesh at the system's scale (caching equal-scale meshes), and
-    calls ``system.export()``.
-
-    Returns the mesh from the first system (typically DungeonBlocks).
+    Returns ``(main_mesh, render_meshes)`` where *render_meshes* is the
+    ``[base] + colored_meshes`` list from the first system (for direct PNG
+    rendering without a second build pass).
     """
     surface = tile.surface
 
     region_ids   = [r.id for r in tile.regions]
     boundary_ids = [b.id for b in tile.boundaries]
 
-    # ── Region mask (once, at primary scale) ─────────────────────────────────
+    # ── Region mask (computed per distinct grid size) ─────────────────────────
+    region_masks: dict[tuple[int, int], np.ndarray | None] = {}
+
+    def _get_region_mask(surf: SurfaceConfig) -> np.ndarray | None:
+        key = (surf.grid_h, surf.grid_w)
+        if key not in region_masks:
+            if tile.areas:
+                sys_tile_for_mask = dataclasses.replace(tile, surface=surf)
+                region_masks[key] = build_region_mask(sys_tile_for_mask)
+            else:
+                region_masks[key] = None
+        return region_masks[key]
+
+    # Pre-build primary (DB) region mask and report it once.
     if tile.areas:
         reporter.step_begin("Region mask")
         t0 = _time.perf_counter()
-        region_mask = build_region_mask(tile)
+        _ = _get_region_mask(surface)
         reporter.step_end("Region mask", _time.perf_counter() - t0)
-    else:
-        region_mask = None
 
     # ── Build each system's mesh (cache equal-scale results) ─────────────────
-    built: dict[float, tuple[list[trimesh.Trimesh], TileScene]] = {}
+    built: dict[tuple[float, int, int], tuple[list[trimesh.Trimesh], TileScene]] = {}
     first_result: trimesh.Trimesh | None = None
+    first_render_meshes: list[trimesh.Trimesh] | None = None
 
     for system in tile.systems:
         sys_surface = system.surface_for(surface)
-        sq_mm       = sys_surface.square_mm
+        cache_key   = (sys_surface.square_mm, sys_surface.grid_h, sys_surface.grid_w)
 
-        if sq_mm not in built:
-            reporter.rebuild_begin(system.suffix, sq_mm)
+        if cache_key not in built:
+            reporter.rebuild_begin(system.suffix, sys_surface.square_mm)
 
+            region_mask = _get_region_mask(sys_surface)
             sys_tile = dataclasses.replace(tile, surface=sys_surface)
             colored_meshes, scene = _build_tile_mesh(
                 sys_tile, sys_surface, region_mask, reporter,
             )
-            built[sq_mm] = (colored_meshes, scene)
+            built[cache_key] = (colored_meshes, scene)
 
-        colored_meshes, scene = built[sq_mm]
+        colored_meshes, scene = built[cache_key]
         out_path = system_paths[system.suffix]
 
         reporter.step_begin(f"Export {system.suffix}")
         t0 = _time.perf_counter()
-        result = system.export(colored_meshes, sys_surface, scene.terrain_z, out_path)
+        result, rend_meshes = system.export(colored_meshes, sys_surface, scene.terrain_z, out_path)
         elapsed = _time.perf_counter() - t0
 
         reporter.export_done(
@@ -481,8 +502,9 @@ def build_tile_from_spec(
 
         if first_result is None:
             first_result = result
+            first_render_meshes = rend_meshes
 
-    return first_result or trimesh.Trimesh()
+    return first_result or trimesh.Trimesh(), first_render_meshes
 
 
 def build_meshes_for_render(
@@ -596,13 +618,34 @@ def _png_path_for(
     return png_root / rel.parent / f"{cols}x{rows}-{rel.name}.png"
 
 
+def _render_from_meshes(
+    meshes:    list[trimesh.Trimesh],
+    out:       pathlib.Path,
+    square_mm: float,
+    quiet:     bool,
+) -> None:
+    """Render one PNG from already-built meshes — no tile rebuild."""
+    try:
+        from ..render import render as _render
+        out.parent.mkdir(parents=True, exist_ok=True)
+        _render(meshes, out, quiet=quiet, grid_square_mm=square_mm)
+    except ImportError:
+        if not quiet:
+            print("pyrender not available — skipping PNG step")
+    except Exception:
+        pass
+
+
 def _render_all_pngs(
     spec_paths: list[pathlib.Path],
     tiles_root: pathlib.Path,
     png_root:   pathlib.Path,
     quiet:      bool = False,
 ) -> None:
-    """Render a PNG thumbnail for each spec in *spec_paths* into *png_root*."""
+    """Render a PNG thumbnail for each spec in *spec_paths* into *png_root*.
+
+    Fallback used when pre-built render meshes are unavailable.
+    """
     try:
         from ..render import render as _render
     except ImportError:
@@ -650,10 +693,11 @@ def _build_spec(
     tiles_root: pathlib.Path,
     stl_root:   pathlib.Path,
     reporter:   TileReporter,
-) -> None:
-    """Build one tile spec at the size declared on its surface config."""
+) -> list[trimesh.Trimesh] | None:
+    """Build one tile spec; returns render_meshes for direct PNG rendering."""
     sys_paths = _system_paths_for(spec_path, tile, tiles_root, stl_root)
-    build_tile_from_spec(tile, system_paths=sys_paths, reporter=reporter)
+    _, render_meshes = build_tile_from_spec(tile, system_paths=sys_paths, reporter=reporter)
+    return render_meshes
 
 
 # ── Closing quote ─────────────────────────────────────────────────────────────
@@ -836,6 +880,7 @@ def main(argv=None):
     # ── Single spec ───────────────────────────────────────────────────────────
     if args.spec is not None:
         specs = list(load_spec(args.spec))
+        render_meshes: list[trimesh.Trimesh] | None = None
         for tile in specs:
             surface = tile.surface
             name    = args.spec.stem.replace('.tile', '')
@@ -849,10 +894,14 @@ def main(argv=None):
                 boundary_ids = [b.id for b in tile.boundaries],
             )
             t0 = _time.perf_counter()
-            _build_spec(tile, args.spec, TILES_ROOT, STL_ROOT, reporter)
+            render_meshes = _build_spec(tile, args.spec, TILES_ROOT, STL_ROOT, reporter)
             reporter.tile_end(_time.perf_counter() - t0)
         _keep_best_3mf_per_dir(STL_ROOT)
-        _render_all_pngs([args.spec], TILES_ROOT, PNG_ROOT, quiet=args.quiet)
+        if render_meshes is not None and specs:
+            out = _png_path_for(args.spec, specs[0], TILES_ROOT, PNG_ROOT)
+            _render_from_meshes(render_meshes, out, specs[0].surface.square_mm, args.quiet)
+        else:
+            _render_all_pngs([args.spec], TILES_ROOT, PNG_ROOT, quiet=args.quiet)
         if not args.quiet:
             _print_closing_quote()
         return
@@ -918,8 +967,11 @@ def main(argv=None):
             reporter.batch_spec_begin(spec_name)
             t_spec = _time.perf_counter()
 
+            sq_mm_seq: float | None = None
+            rend_seq:  list[trimesh.Trimesh] | None = None
             for tile in load_spec(sp):
                 surface = tile.surface
+                sq_mm_seq = surface.square_mm
                 reporter.tile_begin(
                     name         = spec_name,
                     cols         = surface.cols,
@@ -930,10 +982,19 @@ def main(argv=None):
                     boundary_ids = [b.id for b in tile.boundaries],
                 )
                 t0 = _time.perf_counter()
-                _build_spec(tile, sp, TILES_ROOT, STL_ROOT, reporter)
+                rend_seq = _build_spec(tile, sp, TILES_ROOT, STL_ROOT, reporter)
                 reporter.tile_end(_time.perf_counter() - t0)
 
             reporter.batch_spec_done(spec_name, _time.perf_counter() - t_spec)
+
+            # Render PNG immediately — no second build pass.
+            if rend_seq is not None and sq_mm_seq is not None:
+                for tile in load_spec(sp):
+                    out = _png_path_for(sp, tile, TILES_ROOT, PNG_ROOT)
+                    _render_from_meshes(rend_seq, out, sq_mm_seq, args.quiet)
+                    break
+
+        pngs_rendered = True  # rendered inline above
 
     reporter.batch_end(len(spec_paths), _time.perf_counter() - t_batch)
     _keep_best_3mf_per_dir(STL_ROOT)

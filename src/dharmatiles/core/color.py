@@ -156,10 +156,19 @@ def export_3mf_colored(meshes: list[trimesh.Trimesh],
             fc = mesh.visual.face_colors  # (N, 4) uint8
             if fc is None or len(fc) != n:
                 raise AttributeError
-            indices = np.array(
-                [_register(tuple(int(c) for c in row)) for row in fc],  # type: ignore[arg-type]
-                dtype=np.int32,
-            )
+            # Vectorised: pack RGBA → uint32, find unique colours once, map all faces.
+            fc_u8 = np.asarray(fc, dtype=np.uint32)
+            packed = (fc_u8[:, 0]
+                      | (fc_u8[:, 1] << 8)
+                      | (fc_u8[:, 2] << 16)
+                      | (fc_u8[:, 3] << 24))
+            unique_packed, inverse = np.unique(packed, return_inverse=True)
+            idx_map = np.empty(len(unique_packed), dtype=np.int32)
+            for k, up in enumerate(unique_packed):
+                rgba = (int(up & 0xFF), int((up >> 8) & 0xFF),
+                        int((up >> 16) & 0xFF), int((up >> 24) & 0xFF))
+                idx_map[k] = _register(rgba)
+            indices = idx_map[inverse].astype(np.int32)
         except (AttributeError, Exception):
             fallback = RGBA.get(mesh.metadata.get('material', Material.SOIL),
                                 RGBA[Material.SOIL])
@@ -199,18 +208,30 @@ def export_3mf_colored(meshes: list[trimesh.Trimesh],
         verts = mesh.vertices
         faces = mesh.faces
 
-        # Vertex lines
+        # Vertex lines — tolist() gives Python floats, faster in f-strings
+        vx, vy, vz = verts[:, 0].tolist(), verts[:, 1].tolist(), verts[:, 2].tolist()
         vert_lines = '\n          '.join(
-            f'<vertex x="{v[0]:.5f}" y="{v[1]:.5f}" z="{v[2]:.5f}"/>'
-            for v in verts
+            f'<vertex x="{x:.5f}" y="{y:.5f}" z="{z:.5f}"/>'
+            for x, y, z in zip(vx, vy, vz)
         )
 
-        # Triangle lines — carry per-face colour via p1=p2=p3=index
-        tri_lines = '\n          '.join(
-            f'<triangle v1="{f[0]}" v2="{f[1]}" v3="{f[2]}"'
-            f' pid="{COLOR_GID}" p1="{fi[i]}" p2="{fi[i]}" p3="{fi[i]}"/>'
-            for i, f in enumerate(faces)
-        )
+        # Triangle lines — carry per-face colour via p1=p2=p3=index.
+        # Fast path: uniform-colour mesh → precompute the pid attribute once.
+        v1l, v2l, v3l = faces[:, 0].tolist(), faces[:, 1].tolist(), faces[:, 2].tolist()
+        if len(fi) > 0 and int(fi[0]) == int(fi[-1]) and np.all(fi == fi[0]):
+            _p = int(fi[0])
+            _pid = f' pid="{COLOR_GID}" p1="{_p}" p2="{_p}" p3="{_p}"'
+            tri_lines = '\n          '.join(
+                f'<triangle v1="{a}" v2="{b}" v3="{c}"{_pid}/>'
+                for a, b, c in zip(v1l, v2l, v3l)
+            )
+        else:
+            pil = fi.tolist()
+            tri_lines = '\n          '.join(
+                f'<triangle v1="{a}" v2="{b}" v3="{c}"'
+                f' pid="{COLOR_GID}" p1="{p}" p2="{p}" p3="{p}"/>'
+                for a, b, c, p in zip(v1l, v2l, v3l, pil)
+            )
 
         obj_xmls.append(
             f'    <object id="{oid}" name="{name}" type="model">\n'
@@ -260,7 +281,7 @@ def export_3mf_colored(meshes: list[trimesh.Trimesh],
     )
 
     out = pathlib.Path(path)
-    with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+    with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=1) as zf:
         zf.writestr('[Content_Types].xml', content_types)
         zf.writestr('_rels/.rels', rels)
         zf.writestr('3D/3dmodel.model', model_xml)

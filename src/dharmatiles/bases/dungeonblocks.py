@@ -146,17 +146,11 @@ def export(colored_meshes: list[trimesh.Trimesh],
            surface: SurfaceConfig,
            base_cfg: BaseConfig,
            terrain_z: np.ndarray,
-           output_path: pathlib.Path) -> trimesh.Trimesh:
+           output_path: pathlib.Path,
+           ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Attach a DungeonBlocks base; write colour STL and 3MF side-by-side.
 
-    Parameters
-    ----------
-    colored_meshes:
-        Per-material mesh list produced by the tile pipeline.
-    surface, base_cfg, terrain_z:
-        As before.
-    output_path:
-        Target ``.stl`` path.  A sibling ``.3mf`` is written automatically.
+    Returns (combined_stl_mesh, all_meshes) where all_meshes = [base] + colored.
     """
     peg_h     = select_peg_height(terrain_z, base_cfg)
     base_mesh = make_base(surface, peg_h, base_cfg)
@@ -173,5 +167,5 @@ def export(colored_meshes: list[trimesh.Trimesh],
     tmf_path = output_path.with_suffix('.3mf')
     export_3mf_colored(all_meshes, tmf_path)
 
-    return combined
+    return combined, all_meshes
 

@@ -8,8 +8,6 @@ The region mask is a (grid_h, grid_w) int32 array:
 """
 from __future__ import annotations
 
-from collections import deque
-
 import numpy as np
 
 from .config import SurfaceConfig
@@ -152,29 +150,6 @@ def _rasterise_boundary(bnd: Boundary, surface: SurfaceConfig,
     mask[dist_cells <= half_width_cells] = _BOUNDARY
 
 
-# ── Flood fill ────────────────────────────────────────────────────────────────
-
-def _flood_fill(mask: np.ndarray, row: int, col: int, value: int) -> bool:
-    """BFS flood fill: paint connected _UNASSIGNED cells with *value*.
-
-    Returns True if at least one cell was filled, False if the seed
-    cell was already occupied (boundary or another region).
-    """
-    gh, gw = mask.shape
-    if mask[row, col] != _UNASSIGNED:
-        return False
-    q = deque([(row, col)])
-    mask[row, col] = value
-    while q:
-        r, c = q.popleft()
-        for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-            nr, nc = r + dr, c + dc
-            if 0 <= nr < gh and 0 <= nc < gw and mask[nr, nc] == _UNASSIGNED:
-                mask[nr, nc] = value
-                q.append((nr, nc))
-    return True
-
-
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def build_region_mask(tile: Tile) -> np.ndarray:
@@ -185,23 +160,34 @@ def build_region_mask(tile: Tile) -> np.ndarray:
       _BOUNDARY   (-1)  — lies on a boundary curve
       N ≥ 0             — belongs to tile.regions[N]
     """
+    import warnings
+    from scipy.ndimage import label as _scipy_label
+
     surface = tile.surface
     mask = np.full((surface.grid_h, surface.grid_w), _UNASSIGNED, dtype=np.int32)
 
     for bnd in tile.boundaries:
         _rasterise_boundary(bnd, surface, mask)
 
+    # Label all connected unassigned regions at once with scipy (C-speed).
+    # Each seed selects the connected component it falls in; first seed wins
+    # if two regions share a component.
+    labeled_arr, _ = _scipy_label(mask == _UNASSIGNED)
+    used_labels: set[int] = set()
+
     for idx, region in enumerate(tile.regions):
-        import warnings
         for cx_n, cy_n in region.selector.seeds:
             col = int(np.clip(cx_n * surface.grid_w, 0, surface.grid_w - 1))
             row = int(np.clip(cy_n * surface.grid_h, 0, surface.grid_h - 1))
-            ok = _flood_fill(mask, row, col, idx)
-            if not ok:
+            seed_label = int(labeled_arr[row, col])
+            if seed_label == 0 or seed_label in used_labels:
                 warnings.warn(
                     f"Region '{region.id}': seed ({cx_n:.2f}, {cy_n:.2f}) "
                     f"landed on a boundary or another region — check your tile spec.",
                     stacklevel=2,
                 )
+            else:
+                mask[labeled_arr == seed_label] = idx
+                used_labels.add(seed_label)
 
     return mask

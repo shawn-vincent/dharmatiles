@@ -192,7 +192,7 @@ class SurfaceConfig:
     cols:             int   = 1
     rows:             int   = 1
     square_mm:      float = 35.0  # mm per square — 35 DB, 25.4 OL imperial, 25.0 OL metric
-    cells_per_square: int   = 256  # heightmap resolution per square
+    cells_per_square: int   = 128  # heightmap resolution per square (35 mm / 128 = 0.27 mm/cell)
     base_h:         float = 0.0  # mm — extra slab below z=0
     seed:           int   = 377
 

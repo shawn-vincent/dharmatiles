@@ -163,17 +163,11 @@ def export(colored_meshes: list[trimesh.Trimesh],
            surface: SurfaceConfig,
            base_cfg: BaseConfig,
            terrain_z: np.ndarray,
-           output_path: pathlib.Path) -> trimesh.Trimesh:
+           output_path: pathlib.Path,
+           ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Attach an OpenLOCK base; write colour STL and 3MF side-by-side.
 
-    Parameters
-    ----------
-    colored_meshes:
-        Per-material mesh list produced by the tile pipeline.
-    surface, base_cfg, terrain_z:
-        As before.
-    output_path:
-        Target ``.stl`` path.  A sibling ``.3mf`` is written automatically.
+    Returns (combined_stl_mesh, all_meshes) where all_meshes = [base] + colored.
     """
     del base_cfg, terrain_z
     base_mesh = make_base(surface)
@@ -190,4 +184,4 @@ def export(colored_meshes: list[trimesh.Trimesh],
     tmf_path = output_path.with_suffix('.3mf')
     build_scene(all_meshes).export(str(tmf_path))
 
-    return combined
+    return combined, all_meshes
