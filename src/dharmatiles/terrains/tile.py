@@ -43,7 +43,8 @@ from .reporter import TileReporter, RichReporter, make_reporter
 class _CollectingReporter(TileReporter):
     """Silent reporter that accumulates export results for the parent process."""
 
-    def __init__(self) -> None:
+    def __init__(self, phase_cb=None) -> None:
+        self._phase_cb  = phase_cb
         self._cols: int = 1
         self._rows: int = 1
         self._outputs: list[dict] = []
@@ -52,6 +53,15 @@ class _CollectingReporter(TileReporter):
                    region_ids, boundary_ids) -> None:
         self._cols = cols
         self._rows = rows
+
+    def step_begin(self, label: str) -> None:
+        if self._phase_cb is not None:
+            phase = label.split(': ', 1)[-1] if ': ' in label else label
+            self._phase_cb(phase[:28])
+
+    def rebuild_begin(self, suffix: str, square_mm: float) -> None:
+        if self._phase_cb is not None:
+            self._phase_cb(f"building {suffix}")
 
     def export_done(self, suffix, path, n_verts, n_faces,
                     watertight, elapsed) -> None:
@@ -70,19 +80,28 @@ class _CollectingReporter(TileReporter):
 
 
 def _batch_worker(args: tuple) -> dict:
-    """Build one tile spec in a worker process; return a summary-row dict.
+    """Build one tile spec (STL + PNG) in a worker process; return a summary-row dict.
 
     This function must be at module level so ProcessPoolExecutor can pickle it.
     The reporter is created inside the worker (not passed) to avoid pickling issues.
     """
-    spec_path_str, tiles_root_str, stl_root_str = args
+    spec_path_str, tiles_root_str, stl_root_str, png_root_str, phase_dict = args
 
     spec_path  = pathlib.Path(spec_path_str)
     tiles_root = pathlib.Path(tiles_root_str)
     stl_root   = pathlib.Path(stl_root_str)
+    png_root   = pathlib.Path(png_root_str)
 
-    reporter  = _CollectingReporter()
     spec_name = spec_path.stem.replace('.tile', '')
+
+    def _set_phase(phase: str) -> None:
+        if phase_dict is not None:
+            try:
+                phase_dict[spec_name] = phase
+            except Exception:
+                pass
+
+    reporter  = _CollectingReporter(phase_cb=_set_phase)
     t0        = _time.perf_counter()
 
     for tile in load_spec(spec_path):
@@ -98,6 +117,19 @@ def _batch_worker(args: tuple) -> dict:
             boundary_ids = [b.id for b in tile.boundaries],
         )
         build_tile_from_spec(tile, system_paths=sys_paths, reporter=reporter)
+
+    # Render PNG in the same worker pass
+    try:
+        from ..render import render as _render
+        _set_phase("Render PNG")
+        for tile in load_spec(spec_path):
+            out = _png_path_for(spec_path, tile, tiles_root, png_root)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            meshes = build_meshes_for_render(spec_path)
+            _render(meshes, out, quiet=True, grid_square_mm=tile.surface.square_mm)
+            break
+    except Exception:
+        pass
 
     return reporter.to_row(spec_name, _time.perf_counter() - t0)
 
@@ -546,6 +578,49 @@ def _build_spec_terrain(
 
 # ── CLI helpers ───────────────────────────────────────────────────────────────
 
+def _png_path_for(
+    spec_path:  pathlib.Path,
+    tile:       Tile,
+    tiles_root: pathlib.Path,
+    png_root:   pathlib.Path,
+) -> pathlib.Path:
+    """Return the canonical PNG output path for *spec_path* (no system suffix)."""
+    cols, rows = tile.surface.cols, tile.surface.rows
+    try:
+        no_py   = spec_path.with_suffix('')
+        no_tile = no_py.with_suffix('') if no_py.suffix == '.tile' else no_py
+        rel     = no_tile.relative_to(tiles_root)
+    except ValueError:
+        no_py   = pathlib.Path(spec_path.stem)
+        rel     = no_py.with_suffix('') if no_py.suffix == '.tile' else no_py
+    return png_root / rel.parent / f"{cols}x{rows}-{rel.name}.png"
+
+
+def _render_all_pngs(
+    spec_paths: list[pathlib.Path],
+    tiles_root: pathlib.Path,
+    png_root:   pathlib.Path,
+    quiet:      bool = False,
+) -> None:
+    """Render a PNG thumbnail for each spec in *spec_paths* into *png_root*."""
+    try:
+        from ..render import render as _render
+    except ImportError:
+        if not quiet:
+            print("pyrender not available — skipping PNG step")
+        return
+
+    for sp in spec_paths:
+        tiles = load_spec(sp)
+        if not tiles:
+            continue
+        tile = tiles[0]
+        out  = _png_path_for(sp, tile, tiles_root, png_root)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        meshes = build_meshes_for_render(sp)
+        _render(meshes, out, quiet=quiet, grid_square_mm=tile.surface.square_mm)
+
+
 def _system_paths_for(
     spec_path:  pathlib.Path,
     tile:       Tile,
@@ -619,6 +694,7 @@ def _run_parallel_live(
     future_to_name: dict,
     t_starts:       dict[str, float],
     reporter:       "RichReporter",
+    phase_dict:     object = None,
 ) -> None:
     """Drive ``future_to_name`` futures with a Rich Live multi-line display.
 
@@ -649,12 +725,20 @@ def _run_parallel_live(
                 tc      = RichReporter._table_time_color(elapsed)
                 lines.append(Text.from_markup(
                     f"  [green]✓[/green] {name:<38} [{tc}]{elapsed:.1f}s[/]"
+                    f"  [green]done[/green]"
                 ))
             else:
                 elapsed = now - t_starts[name]
                 t_str   = f"{elapsed:.1f}s" if elapsed >= 0.05 else "   …"
+                phase   = ""
+                if phase_dict is not None:
+                    try:
+                        phase = phase_dict.get(name, "")
+                    except Exception:
+                        pass
+                phase_str = f"  [dim]{phase}[/dim]" if phase else ""
                 lines.append(Text.from_markup(
-                    f"  [cyan]{frame}[/cyan] {name:<38} [cyan]{t_str}[/]"
+                    f"  [cyan]{frame}[/cyan] {name:<38} [cyan]{t_str}[/]{phase_str}"
                 ))
         return Group(*lines)
 
@@ -747,6 +831,7 @@ def main(argv=None):
 
     TILES_ROOT = pathlib.Path("src/tiles")
     STL_ROOT   = pathlib.Path("stl")
+    PNG_ROOT   = pathlib.Path("png")
 
     # ── Single spec ───────────────────────────────────────────────────────────
     if args.spec is not None:
@@ -767,6 +852,7 @@ def main(argv=None):
             _build_spec(tile, args.spec, TILES_ROOT, STL_ROOT, reporter)
             reporter.tile_end(_time.perf_counter() - t0)
         _keep_best_3mf_per_dir(STL_ROOT)
+        _render_all_pngs([args.spec], TILES_ROOT, PNG_ROOT, quiet=args.quiet)
         if not args.quiet:
             _print_closing_quote()
         return
@@ -787,36 +873,44 @@ def main(argv=None):
     reporter.batch_begin(len(spec_paths))
     t_batch = _time.perf_counter()
 
+    pngs_rendered = False
+
     if n_workers > 1:
         # ── Parallel path: each spec in its own worker process ──────────────
-        worker_args = [
-            (str(sp), str(TILES_ROOT), str(STL_ROOT))
-            for sp in spec_paths
-        ]
         spec_names = [sp.stem.replace('.tile', '') for sp in spec_paths]
         t_submit   = _time.perf_counter()
 
-        with ProcessPoolExecutor(max_workers=n_workers) as executor:
-            future_to_name = {
-                executor.submit(_batch_worker, wa): sp.stem.replace('.tile', '')
-                for sp, wa in zip(spec_paths, worker_args)
-            }
-            t_starts = {name: t_submit for name in spec_names}
+        with multiprocessing.Manager() as mgr:
+            phase_dict = mgr.dict()
+            worker_args = [
+                (str(sp), str(TILES_ROOT), str(STL_ROOT), str(PNG_ROOT), phase_dict)
+                for sp in spec_paths
+            ]
 
-            if isinstance(reporter, RichReporter):
-                # ── Rich Live display: spinner + live clock per tile ─────────
-                _run_parallel_live(
-                    spec_names, future_to_name, t_starts, reporter,
-                )
-            else:
-                # ── Plain fallback (pipe / --quiet / no rich) ────────────────
-                collected: list[dict] = []
-                for future in as_completed(future_to_name):
-                    row = future.result()
-                    collected.append(row)
-                    reporter.inject_batch_row(row)
-                # SilentReporter has a no-op record_batch_rows, TextReporter
-                # already printed above; nothing more to do here.
+            with ProcessPoolExecutor(max_workers=n_workers) as executor:
+                future_to_name = {
+                    executor.submit(_batch_worker, wa): sp.stem.replace('.tile', '')
+                    for sp, wa in zip(spec_paths, worker_args)
+                }
+                t_starts = {name: t_submit for name in spec_names}
+
+                if isinstance(reporter, RichReporter):
+                    # ── Rich Live display: spinner + live clock per tile ─────────
+                    _run_parallel_live(
+                        spec_names, future_to_name, t_starts, reporter,
+                        phase_dict=phase_dict,
+                    )
+                else:
+                    # ── Plain fallback (pipe / --quiet / no rich) ────────────────
+                    collected: list[dict] = []
+                    for future in as_completed(future_to_name):
+                        row = future.result()
+                        collected.append(row)
+                        reporter.inject_batch_row(row)
+                    # SilentReporter has a no-op record_batch_rows, TextReporter
+                    # already printed above; nothing more to do here.
+
+        pngs_rendered = True
     else:
         # ── Sequential fallback (single-core or --quiet) ─────────────────────
         for sp in spec_paths:
@@ -843,6 +937,8 @@ def main(argv=None):
 
     reporter.batch_end(len(spec_paths), _time.perf_counter() - t_batch)
     _keep_best_3mf_per_dir(STL_ROOT)
+    if not pngs_rendered:
+        _render_all_pngs(spec_paths, TILES_ROOT, PNG_ROOT, quiet=args.quiet)
     if not args.quiet:
         _print_closing_quote()
 

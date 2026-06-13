@@ -10,7 +10,7 @@ Colour palette
 SOIL     reddish-brown   #8B5A2B   dirt / bare-soil surface (SoilCarpet regions)
 ROCK     blue-gray        #6A7F96   scattered half-ellipsoid rocks
 GRASS    yellow-green     #9ACD32   grass carpet + 3-D blade geometry
-WATER    turquoise        #40E0D0   water volume mesh
+WATER    bluish-turquoise #149BD2   water volume mesh
 BASE     dark gray        #505050   socket-peg / T-slot underside base
 """
 from __future__ import annotations
@@ -36,7 +36,7 @@ RGBA: dict[Material, tuple[int, int, int, int]] = {
     Material.SOIL:  (105,  38,  12, 255),   # deep dark red-brown
     Material.ROCK:  ( 72,  92, 128, 255),   # dark slate blue-grey
     Material.GRASS: ( 42, 148,  28, 255),   # deep vivid green
-    Material.WATER: ( 20, 200, 195, 255),   # vivid turquoise
+    Material.WATER: ( 20, 133, 213, 255),   # blue-turquoise
     Material.BASE:  ( 45,  45,  45, 255),   # dark gray
 }
 
