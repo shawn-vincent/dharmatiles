@@ -83,6 +83,32 @@ def test_const_skeleton_allows_same_fork_candidates_to_diverge() -> None:
     assert not _candidates_are_compatible(left, crowded, nodes, parents, clearance_mm=0.75)
 
 
+def test_const_skeleton_binary_split_uses_opposed_child_directions() -> None:
+    cfg = ConstTreeConfig(
+        height_max_mm=10.0,
+        n_trunk_segs=0,
+        n_levels=1,
+        n_segs_per_level=[1],
+        spread_angle_deg=[35.0],
+        initial_lean_deg=0.0,
+        wander_deg=0.0,
+        split_count_min=2,
+        split_count_max=2,
+        space_clearance_mm=0.0,
+    )
+    nodes, parents, _arc_dists, _crown_base_z = grow_const_skeleton(
+        0.0, 0.0, 0.0, cfg, np.random.default_rng(7),
+    )
+
+    child_idxs = np.flatnonzero(parents == 0)
+    assert len(child_idxs) == 2
+    child_dirs = [nodes[i] - nodes[0] for i in child_idxs]
+    child_dirs = [d / np.linalg.norm(d) for d in child_dirs]
+    angle = np.degrees(np.arccos(np.clip(np.dot(child_dirs[0], child_dirs[1]), -1.0, 1.0)))
+
+    assert np.isclose(angle, 70.0, atol=1e-6)
+
+
 def test_const_skeleton_respects_height_and_elevation_floor() -> None:
     cfg = ConstTreeConfig(
         height_max_mm=24.0,

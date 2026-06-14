@@ -35,6 +35,13 @@ class _Candidate:
     score: float
 
 
+@dataclass(frozen=True)
+class _PatternCandidate:
+    slot_idx: int
+    candidates: tuple[_Candidate, ...]
+    score: float
+
+
 def _normalize(v: np.ndarray, fallback: np.ndarray | None = None) -> np.ndarray:
     n = float(np.linalg.norm(v))
     if n > 1e-10:
@@ -300,6 +307,46 @@ def _append_batch(
     return new_indices
 
 
+def _patterns_are_compatible(
+    a: _PatternCandidate,
+    b: _PatternCandidate,
+    nodes: list[np.ndarray],
+    parents: list[int],
+    clearance_mm: float,
+) -> bool:
+    return all(
+        _candidates_are_compatible(ca, cb, nodes, parents, clearance_mm)
+        for ca in a.candidates
+        for cb in b.candidates
+    )
+
+
+def _select_patterns(
+    patterns_by_slot: list[list[_PatternCandidate]],
+    nodes: list[np.ndarray],
+    parents: list[int],
+    clearance_mm: float,
+) -> list[_PatternCandidate]:
+    selected: list[_PatternCandidate] = []
+    ordered_slots = sorted(
+        range(len(patterns_by_slot)),
+        key=lambda i: (len(patterns_by_slot[i]), i),
+    )
+
+    for slot_idx in ordered_slots:
+        slot_patterns = sorted(
+            patterns_by_slot[slot_idx],
+            key=lambda p: p.score,
+            reverse=True,
+        )
+        for pattern in slot_patterns:
+            if all(_patterns_are_compatible(pattern, prev, nodes, parents, clearance_mm)
+                   for prev in selected):
+                selected.append(pattern)
+                break
+    return sorted(selected, key=lambda p: p.slot_idx)
+
+
 def _compute_repulsion(
     tip_idx: int,
     active_tips: list[int],
@@ -384,25 +431,29 @@ def _split_tips_batch(
     cfg,
     rng: np.random.Generator,
 ) -> list[int]:
-    candidates_by_slot: list[list[_Candidate]] = []
-    slot_idx = 0
+    patterns_by_slot: list[list[_PatternCandidate]] = []
 
-    for tip_idx, n_children in zip(active_tips, child_counts):
+    for slot_idx, (tip_idx, n_children) in enumerate(zip(active_tips, child_counts)):
         phase = float(rng.uniform(0.0, 2.0 * np.pi))
         parent_dir = dirs[tip_idx]
         repulsion = _compute_repulsion(
             tip_idx, active_tips, nodes, seg_len_mm, cfg.repulsion_z_window,
         )
-        for child_i in range(n_children):
-            child_spread = spread_deg
-            if cfg.dominant_branch and child_i == 0:
-                child_spread *= cfg.dominant_angle_factor
 
-            slot_candidates: list[_Candidate] = []
-            for attempt in range(int(cfg.space_retry_count) + 1):
+        slot_patterns: list[_PatternCandidate] = []
+        for attempt in range(int(cfg.space_retry_count) + 1):
+            pattern: list[_Candidate] = []
+            az_step = 2.0 * np.pi / max(1, n_children)
+            pattern_phase = phase + attempt * _GOLDEN_ANGLE
+
+            for child_i in range(n_children):
+                child_spread = spread_deg
+                if cfg.dominant_branch and child_i == 0:
+                    child_spread *= cfg.dominant_angle_factor
+
                 child_dir = _direction_from_spread(
                     parent_dir,
-                    phase + (child_i + attempt) * _GOLDEN_ANGLE,
+                    pattern_phase + child_i * az_step,
                     child_spread,
                     cfg.min_elevation_deg,
                 )
@@ -410,19 +461,35 @@ def _split_tips_batch(
                 if not _candidate_has_existing_space(
                     tip_idx, end_pos, nodes, parents, z_limit, cfg.space_clearance_mm,
                 ):
-                    continue
+                    pattern = []
+                    break
                 score = _score_candidate(
                     tip_idx, child_dir, end_pos, active_tips, nodes, dirs,
                     repulsion, seg_len_mm,
                 )
-                slot_candidates.append(
-                    _Candidate(slot_idx, tip_idx, child_dir, end_pos, score)
+                pattern.append(
+                    _Candidate(child_i, tip_idx, child_dir, end_pos, score)
                 )
-            candidates_by_slot.append(slot_candidates)
-            slot_idx += 1
 
+            if len(pattern) != n_children:
+                continue
+            if not all(
+                _candidates_are_compatible(a, b, nodes, parents, cfg.space_clearance_mm)
+                for i, a in enumerate(pattern)
+                for b in pattern[i + 1:]
+            ):
+                continue
+            slot_patterns.append(
+                _PatternCandidate(slot_idx, tuple(pattern), sum(c.score for c in pattern))
+            )
+
+        patterns_by_slot.append(slot_patterns)
+
+    selected_patterns = _select_patterns(
+        patterns_by_slot, nodes, parents, cfg.space_clearance_mm,
+    )
     return _append_batch(
-        _select_batch(candidates_by_slot, nodes, parents, cfg.space_clearance_mm),
+        [cand for pattern in selected_patterns for cand in pattern.candidates],
         nodes, dirs, parents,
     )
 
