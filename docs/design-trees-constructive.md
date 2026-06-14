@@ -220,20 +220,15 @@ For each tip's next growth step:
 # 1. Momentum: continue in current direction
 base_dir = tip.dir
 
-# 2. Upward bias: pull toward vertical
-up       = np.array([0, 0, 1])
-biased   = base_dir + upward_bias * (up - base_dir)
-biased  /= np.linalg.norm(biased)
-
-# 3. Sibling repulsion: steer away from other tips at similar Z
+# 2. Sibling repulsion: steer away from other tips at similar Z
 repulsion = _compute_repulsion(tip, active_tips, cfg)
-guided    = biased + repulsion_strength * repulsion
+guided    = base_dir + repulsion_strength * repulsion
 
-# 4. Random wander: Gaussian perturbation in the plane ⊥ to guided
+# 3. Random wander: Gaussian perturbation in the plane ⊥ to guided
 wander  = rng.normal(0, sin(radians(wander_deg)), 2)   # 2D in XY plane
 wandered = guided + [wander[0], wander[1], 0]
 
-# 5. Elevation clamp: never below min_elevation_deg from horizontal
+# 4. Elevation clamp: never below min_elevation_deg from horizontal
 result  = _clamp_elevation(wandered, min_elevation_deg)
 return result / np.linalg.norm(result)
 ```
@@ -372,8 +367,8 @@ class ConstTreeConfig:
     wander_deg:        Sample[float]                   = D[3.0:8.0]
     # Gaussian σ of per-segment angular noise (organic randomness).
 
-    upward_bias:       float                           = 0.30
-    # Strength of vertical pull applied each segment.
+    upward_bias:       float                           = 0.0
+    # Legacy compatibility knob; constructive growth no longer pulls branches upward.
 
     repulsion_strength: float                          = 0.40
     # Blend weight toward the open angular sector (sibling repulsion).

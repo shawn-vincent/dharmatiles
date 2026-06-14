@@ -7,10 +7,15 @@ from __future__ import annotations
 
 import colorsys
 import pathlib
+import sys
 
 import numpy as np
 import trimesh
 from PIL import Image, ImageDraw, ImageFilter
+
+
+_PYGLET_WINDOWS: list[object] = []
+_OFFSCREEN_RENDERERS: list[object] = []
 
 
 def _boost_saturation(rgba: np.ndarray, factor: float = 1.4) -> np.ndarray:
@@ -371,7 +376,6 @@ def render(meshes: list[trimesh.Trimesh],
 
     r = pyrender.OffscreenRenderer(*resolution)
     color, _ = r.render(scene, flags=pyrender.RenderFlags.RGBA)
-    r.delete()
 
     fg     = Image.fromarray(color, mode='RGBA')
     alpha  = np.array(fg)[:, :, 3]
@@ -384,3 +388,22 @@ def render(meshes: list[trimesh.Trimesh],
     result.save(str(output))
     if not quiet:
         print(f'→ {output}')
+    _delete_offscreen_renderer(r)
+
+
+def _delete_offscreen_renderer(renderer) -> None:
+    """Release pyrender resources without tripping pyglet's macOS close crash."""
+    if sys.platform == 'darwin':
+        _OFFSCREEN_RENDERERS.append(renderer)
+        return
+
+    try:
+        platform = getattr(renderer, '_platform', None)
+        window = getattr(platform, '_window', None)
+        if window is not None:
+            _PYGLET_WINDOWS.append(window)
+            window.__class__.close = lambda self, *args, **kwargs: None
+            window.__class__.__del__ = lambda self: None
+        renderer.delete()
+    except Exception:
+        pass

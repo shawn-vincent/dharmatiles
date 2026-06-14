@@ -731,16 +731,6 @@ class ConstTreeConfig:
     split_count_max:   int = 3
     initial_lean_deg:  Sample[float] = D[0.0:8.0]
     wander_deg:        Sample[float] = D[3.0:8.0]
-    upward_bias:       float = 0.30
-    repulsion_strength: float = 0.40
-    repulsion_z_window: float = 2.0
-    space_clearance_mm: float = 0.75
-    space_retry_count: int = 12
-
-    dominant_branch:       bool = False
-    dominant_r_frac:       float = 0.65
-    dominant_angle_factor: float = 0.30
-    taper_within_run:      bool = False
 
     min_elevation_deg: float = 45.0
 
@@ -775,16 +765,7 @@ class ConstTreeConfig:
         split_count_max:    int                  = 3,
         initial_lean_deg:   Sample[float] | None = None,
         wander_deg:         Sample[float] | None = None,
-        upward_bias:        float                = 0.30,
-        repulsion_strength: float                = 0.40,
-        repulsion_z_window: float                = 2.0,
-        space_clearance_mm: float                = 0.75,
-        space_retry_count:  int                  = 12,
-        dominant_branch:       bool             = False,
-        dominant_r_frac:       float            = 0.65,
-        dominant_angle_factor: float            = 0.30,
-        taper_within_run:      bool             = False,
-        min_elevation_deg:     float            = 45.0,
+        min_elevation_deg:  float                = 45.0,
     ) -> None:
         if n_levels < 0:
             raise ValueError("n_levels must be non-negative")
@@ -792,12 +773,6 @@ class ConstTreeConfig:
             raise ValueError("split_count_min/max must define a positive inclusive range")
         if pipe_model_exp <= 0.0:
             raise ValueError("pipe_model_exp must be positive")
-        if space_clearance_mm < 0.0:
-            raise ValueError("space_clearance_mm must be non-negative")
-        if space_retry_count < 0:
-            raise ValueError("space_retry_count must be non-negative")
-        if not (0.0 < dominant_r_frac < 1.0):
-            raise ValueError("dominant_r_frac must be between 0 and 1")
 
         self.bark = BarkConfig(
             r_base_mm=r_base_mm, aspect=aspect, twist_rate=twist_rate,
@@ -824,15 +799,6 @@ class ConstTreeConfig:
                 initial_lean_deg if initial_lean_deg is not None else D[0.0:8.0]
             ),
             'wander_deg': wander_deg if wander_deg is not None else D[3.0:8.0],
-            'upward_bias': upward_bias,
-            'repulsion_strength': repulsion_strength,
-            'repulsion_z_window': repulsion_z_window,
-            'space_clearance_mm': space_clearance_mm,
-            'space_retry_count': space_retry_count,
-            'dominant_branch': dominant_branch,
-            'dominant_r_frac': dominant_r_frac,
-            'dominant_angle_factor': dominant_angle_factor,
-            'taper_within_run': taper_within_run,
             'min_elevation_deg': min_elevation_deg,
         }
         for k, v in vals.items():
