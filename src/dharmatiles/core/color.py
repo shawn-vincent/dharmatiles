@@ -41,7 +41,7 @@ RGBA: dict[Material, tuple[int, int, int, int]] = {
     Material.WATER:  ( 20, 133, 213, 255),   # blue-turquoise
     Material.BASE:   ( 45,  45,  45, 255),   # dark gray
     Material.FLOWER: (245, 195,   0, 255),   # golden yellow
-    Material.WOOD:   ( 61,  31,  10, 255),   # dark bark brown
+    Material.WOOD:   (139,  99,  63, 255),   # light warm brown
 }
 
 
@@ -323,7 +323,7 @@ def export_3mf_colored(
         "#2A941C",  # slot 4 — GRASS
         "#1485D5",  # slot 5 — WATER
         "#F5C300",  # slot 6 — FLOWER (golden yellow)
-        "#3D1F0A",  # slot 7 — WOOD   (dark bark brown)
+        "#8B633F",  # slot 7 — WOOD   (light warm brown)
     ]
 
     # ── Filter empty tiles ────────────────────────────────────────────────────

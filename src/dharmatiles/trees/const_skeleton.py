@@ -98,6 +98,21 @@ def _append_segment(
     return len(nodes) - 1
 
 
+def _append_node_at(
+    tip_idx: int,
+    position: np.ndarray,
+    nodes: list[np.ndarray],
+    dirs: list[np.ndarray],
+    parents: list[int],
+) -> int:
+    """Place a node exactly at *position* as a child of *tip_idx*."""
+    direction = _normalize(position - nodes[tip_idx], _UP)
+    parents.append(tip_idx)
+    nodes.append(position.copy())
+    dirs.append(direction)
+    return len(nodes) - 1
+
+
 def _as_level_list(value, n_levels: int, name: str) -> list:
     if isinstance(value, (list, tuple)):
         if len(value) != n_levels:
@@ -353,14 +368,12 @@ def grow_const_skeleton(
             targets[:, :2], parent_xy, n_children,
         )
 
-        # Grow branches toward targets; collect the new tips
+        # Place one node directly at each target — the surface renderer
+        # curves each single-segment edge with a Hermite cubic.
         new_tips: list[int] = []
         for slot, tip_idx in enumerate(active_tips):
             for t_idx in assignments[slot]:
-                final = _grow_toward_target(
-                    tip_idx, targets[t_idx], n_segs, seg_len_mm,
-                    wander, cfg.min_elevation_deg, nodes, dirs, parents, rng,
-                )
+                final = _append_node_at(tip_idx, targets[t_idx], nodes, dirs, parents)
                 new_tips.append(final)
 
         active_tips = new_tips

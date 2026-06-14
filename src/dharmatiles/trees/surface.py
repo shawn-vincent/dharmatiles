@@ -40,6 +40,40 @@ import trimesh
 from ..dist import sample
 
 
+# ── Math helpers ──────────────────────────────────────────────────────────────
+
+def _normalize(v: np.ndarray) -> np.ndarray:
+    n = float(np.linalg.norm(v))
+    return v / n if n > 1e-10 else np.array([0.0, 0.0, 1.0])
+
+
+def _hermite_pos(t: float, p0, p1, m0, m1) -> np.ndarray:
+    h00 = 2*t**3 - 3*t**2 + 1
+    h10 =   t**3 - 2*t**2 + t
+    h01 = -2*t**3 + 3*t**2
+    h11 =   t**3 -   t**2
+    return h00*p0 + h10*m0 + h01*p1 + h11*m1
+
+
+def _hermite_tan(t: float, p0, p1, m0, m1) -> np.ndarray:
+    dh00 = 6*t**2 - 6*t
+    dh10 = 3*t**2 - 4*t + 1
+    dh01 = -6*t**2 + 6*t
+    dh11 = 3*t**2 - 2*t
+    return dh00*p0 + dh10*m0 + dh01*p1 + dh11*m1
+
+
+def _parallel_transport(v: np.ndarray, t0: np.ndarray, t1: np.ndarray) -> np.ndarray:
+    """Rotate v by the rotation that takes unit vector t0 to unit vector t1."""
+    axis = np.cross(t0, t1)
+    sin_a = float(np.linalg.norm(axis))
+    cos_a = float(np.dot(t0, t1))
+    if sin_a < 1e-8:
+        return v.copy() if cos_a > 0 else -v.copy()
+    k = axis / sin_a
+    return v * cos_a + np.cross(k, v) * sin_a + k * float(np.dot(k, v)) * (1.0 - cos_a)
+
+
 # ── Frame propagation ─────────────────────────────────────────────────────────
 
 def compute_frames(
@@ -98,8 +132,8 @@ def _compute_node_frames(
     nodes_xyz: np.ndarray,
     parents:   np.ndarray,
     normals:   np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Compute per-node (corrected_normal, binormal) using bisector tangents.
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Compute per-node (corrected_normal, binormal, bisector) using bisector tangents.
 
     Each node's canonical tangent bisects the incoming and outgoing edge
     directions, so the ring at a junction splits the bend angle equally
@@ -121,6 +155,7 @@ def _compute_node_frames(
     -------
     normals_out : (N, 3) — corrected normals, ⊥ to the bisector tangent
     binormals   : (N, 3) — ``cross(bisector, corrected_normal)``
+    bisectors   : (N, 3) — unit bisector tangent at each node
     """
     N = len(nodes_xyz)
 
@@ -189,7 +224,7 @@ def _compute_node_frames(
         bn = np.linalg.norm(b)
         binormals[i] = b / bn if bn > 1e-8 else np.array([0., 1., 0.])
 
-    return normals_out, binormals
+    return normals_out, binormals, bisectors
 
 
 # ── Per-ring helpers ──────────────────────────────────────────────────────────
@@ -365,8 +400,8 @@ def build_tree_mesh(
     # compute_frames gives parallel-transported normals (⊥ incoming tangent).
     # _compute_node_frames refines them onto bisector-tangent planes and
     # returns the corrected normals + binormals used for ring construction.
-    pt_normals             = compute_frames(nodes_xyz, parents)
-    normals, binormals     = _compute_node_frames(nodes_xyz, parents, pt_normals)
+    pt_normals                      = compute_frames(nodes_xyz, parents)
+    normals, binormals, bisectors   = _compute_node_frames(nodes_xyz, parents, pt_normals)
 
     N = len(nodes_xyz)
     children: list[list[int]] = [[] for _ in range(N)]
@@ -395,25 +430,68 @@ def build_tree_mesh(
 
     parts: list[trimesh.Trimesh] = []
 
-    # ── One capped frustum per skeleton edge ───────────────────────────────────
+    # ── One capped curved tube per skeleton edge ───────────────────────────────
     #
     # Each edge (parent → child) is built as a fully independent watertight
-    # tube: side strip + base disc cap + tip disc cap.  merge_vertices() is
-    # called on each piece so that the strip's ring boundaries weld to their
-    # respective caps, making the piece genuinely watertight.
+    # tube.  When cfg.curve_segs > 1 the tube follows a Hermite cubic rather
+    # than a straight frustum: intermediate rings are placed along the curve
+    # using per-step parallel transport to carry the parent ring's frame forward.
+    # The bisector tangent at each endpoint acts as the Hermite control tangent,
+    # giving C1 continuity across junctions (all branches from a fork share the
+    # same departure tangent, which bisects the incoming + mean-outgoing dirs).
     #
     # No vertex sharing occurs between pieces, so at branching junctions the
-    # frustums of sibling branches overlap geometrically but remain topologically
-    # independent.  Trimesh's is_watertight check is edge-valence only, so the
-    # concatenated mesh reports watertight without needing a boolean union.
-    # Slicers treat the overlapping closed volumes as a union naturally.
+    # tubes of sibling branches overlap geometrically but remain topologically
+    # independent.  Slicers treat the overlapping closed volumes as a union.
     #
     # The root edge uses a base cap sunk cfg.sink mm below terrain so the trunk
     # extends into the ground and leaves no gap at the soil surface.
+    n_curve = max(1, cfg.curve_segs)
+
     for i in range(1, N):
         p = int(parents[i])
         if rings[p] is None or rings[i] is None:
             continue
+
+        if n_curve <= 1:
+            edge_rings: list[np.ndarray] = [rings[p], rings[i]]  # type: ignore[list-item]
+        else:
+            p0 = nodes_xyz[p]
+            p1 = nodes_xyz[i]
+            chord_len = float(np.linalg.norm(p1 - p0))
+            scale = cfg.curve_tension * chord_len
+            m0 = bisectors[p] * scale
+            m1 = bisectors[i] * scale
+
+            n_cur  = normals[p].copy()
+            tan_cur = bisectors[p].copy()
+
+            edge_rings = [rings[p]]  # type: ignore[assignment]
+
+            for k in range(1, n_curve):
+                t = k / n_curve
+                pos = _hermite_pos(t, p0, p1, m0, m1)
+                tan = _normalize(_hermite_tan(t, p0, p1, m0, m1))
+
+                n_cur = _parallel_transport(n_cur, tan_cur, tan)
+                # Re-orthogonalize: remove any component along the new tangent
+                n_cur = _normalize(n_cur - float(np.dot(n_cur, tan)) * tan)
+                b_cur = np.cross(tan, n_cur)
+                tan_cur = tan
+
+                r     = float(radii[p]) + t * (float(radii[i]) - float(radii[p]))
+                arc_d = float(arc_dists[p]) + t * (float(arc_dists[i]) - float(arc_dists[p]))
+                fm    = _flare_mult(float(pos[2]), tz, crown_base_z, cfg)
+                with_ridges = r >= cfg.ridge_min_r_mm
+
+                ring = _make_ring(
+                    pos, r, n_cur, b_cur, cfg.az_segs, arc_d,
+                    with_ridges, aspect, cfg.twist_rate,
+                    ridge_params, wrinkle_amp, wrinkle_period, wrinkle_phase, fm,
+                )
+                edge_rings.append(ring)
+
+            edge_rings.append(rings[i])
 
         if p == 0:
             base_center = nodes_xyz[0].copy()
@@ -421,10 +499,12 @@ def build_tree_mesh(
         else:
             base_center = nodes_xyz[p].copy()
 
+        strips = [_side_strip(edge_rings[k], edge_rings[k + 1])
+                  for k in range(len(edge_rings) - 1)]
         piece = trimesh.util.concatenate([
-            _side_strip(rings[p], rings[i]),
-            _fan_cap(rings[p], base_center, flip=True),
-            _fan_cap(rings[i], nodes_xyz[i], flip=False),
+            *strips,
+            _fan_cap(edge_rings[0], base_center, flip=True),
+            _fan_cap(edge_rings[-1], nodes_xyz[i], flip=False),
         ])
         piece.merge_vertices()
         parts.append(piece)

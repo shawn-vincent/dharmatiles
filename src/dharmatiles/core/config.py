@@ -562,6 +562,10 @@ class BarkConfig:
     az_segs:           int           = 16             # azimuth facets per ring
     sink:              float         = 0.15           # mm below terrain for watertight base
 
+    # ── Branch curve ──────────────────────────────────────────────────────────
+    curve_segs:        int           = 8              # intermediate rings per skeleton edge
+    curve_tension:     float         = 0.5            # Hermite tangent scale (fraction of chord)
+
     def __init__(
         self,
         *,
@@ -581,6 +585,8 @@ class BarkConfig:
         branch_min_r_mm:    float                = 0.20,
         az_segs:            int                  = 16,
         sink:               float                = 0.15,
+        curve_segs:         int                  = 8,
+        curve_tension:      float                = 0.5,
     ) -> None:
         vals = {
             'r_base_mm':         r_base_mm     if r_base_mm     is not None else D[2.5:4.5],
@@ -599,6 +605,8 @@ class BarkConfig:
             'branch_min_r_mm':   branch_min_r_mm,
             'az_segs':           az_segs,
             'sink':              sink,
+            'curve_segs':        curve_segs,
+            'curve_tension':     curve_tension,
         }
         for k, v in vals.items():
             setattr(self, k, v)
@@ -659,6 +667,8 @@ class ScaTreeConfig:
         branch_min_r_mm:    float                = 0.20,
         az_segs:            int                  = 16,
         sink:               float                = 0.15,
+        curve_segs:         int                  = 8,
+        curve_tension:      float                = 0.5,
         # ── SCA params ───────────────────────────────────────────────────────
         crown_base_z_mm:    Sample[float] | None = None,
         crown_rx:           Sample[float] | None = None,
@@ -684,6 +694,7 @@ class ScaTreeConfig:
             branch_r_tip_mm=branch_r_tip_mm,
             ridge_min_r_mm=ridge_min_r_mm, branch_min_r_mm=branch_min_r_mm,
             az_segs=az_segs, sink=sink,
+            curve_segs=curve_segs, curve_tension=curve_tension,
         )
         sca_vals = {
             'crown_base_z_mm':    crown_base_z_mm  if crown_base_z_mm  is not None else D[15.0:28.0],
@@ -754,6 +765,8 @@ class ConstTreeConfig:
         branch_min_r_mm:    float                = 0.20,
         az_segs:            int                  = 16,
         sink:               float                = 0.15,
+        curve_segs:         int                  = 8,
+        curve_tension:      float                = 0.5,
         # ── Constructive skeleton params ────────────────────────────────────
         height_max_mm:      Sample[float] | None = None,
         n_levels:           int                  = 3,
@@ -783,6 +796,7 @@ class ConstTreeConfig:
             branch_r_tip_mm=branch_r_tip_mm,
             ridge_min_r_mm=ridge_min_r_mm, branch_min_r_mm=branch_min_r_mm,
             az_segs=az_segs, sink=sink,
+            curve_segs=curve_segs, curve_tension=curve_tension,
         )
         vals = {
             'height_max_mm': height_max_mm if height_max_mm is not None else D[20.0:40.0],
