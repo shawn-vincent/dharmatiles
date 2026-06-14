@@ -3,9 +3,49 @@ from __future__ import annotations
 import numpy as np
 
 from dharmatiles.core.config import ConstTreeConfig
-from dharmatiles.trees.const_skeleton import grow_const_skeleton
+from dharmatiles.trees.const_skeleton import (
+    _segment_has_space,
+    _segment_segment_distance,
+    grow_const_skeleton,
+)
 from dharmatiles.trees.radii import assign_radii
 from dharmatiles.trees.tree import build_tree
+
+
+def _assert_nonincident_segments_clear(
+    nodes: np.ndarray,
+    parents: np.ndarray,
+    clearance_mm: float,
+) -> None:
+    edges = [(int(p), i) for i, p in enumerate(parents) if p >= 0]
+    for edge_i, (a0_idx, a1_idx) in enumerate(edges):
+        for b0_idx, b1_idx in edges[edge_i + 1:]:
+            if len({a0_idx, a1_idx, b0_idx, b1_idx}) < 4:
+                continue
+            if parents[a0_idx] >= 0 and parents[a0_idx] == b0_idx:
+                continue
+            if parents[b0_idx] >= 0 and parents[b0_idx] == a0_idx:
+                continue
+            dist = _segment_segment_distance(
+                nodes[a0_idx], nodes[a1_idx], nodes[b0_idx], nodes[b1_idx],
+            )
+            assert dist >= clearance_mm - 1e-6
+
+
+def test_const_skeleton_rejects_segments_that_cross_occupied_space() -> None:
+    nodes = [
+        np.array([0.0, 0.0, 0.0]),
+        np.array([1.0, 1.0, 0.0]),
+        np.array([0.0, 1.0, 0.0]),
+    ]
+    parents = [-1, 0, 1]
+
+    assert not _segment_has_space(
+        2, np.array([1.0, 0.0, 0.0]), nodes, parents, clearance_mm=0.1,
+    )
+    assert _segment_has_space(
+        2, np.array([0.0, 2.0, 0.0]), nodes, parents, clearance_mm=0.1,
+    )
 
 
 def test_const_skeleton_respects_height_and_elevation_floor() -> None:
@@ -17,6 +57,7 @@ def test_const_skeleton_respects_height_and_elevation_floor() -> None:
         spread_angle_deg=[35, 20],
         wander_deg=0.0,
         min_elevation_deg=45.0,
+        space_clearance_mm=0.5,
         split_count_min=2,
         split_count_max=2,
     )
@@ -40,6 +81,8 @@ def test_const_skeleton_respects_height_and_elevation_floor() -> None:
         p = int(parents[i])
         d = nodes[i] - nodes[p]
         assert d[2] / np.linalg.norm(d) >= min_z - 1e-6
+
+    _assert_nonincident_segments_clear(nodes, parents, cfg.space_clearance_mm)
 
 
 def test_const_tree_radius_runs_are_constant_without_taper() -> None:

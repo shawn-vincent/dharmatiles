@@ -734,6 +734,8 @@ class ConstTreeConfig:
     upward_bias:       float = 0.30
     repulsion_strength: float = 0.40
     repulsion_z_window: float = 2.0
+    space_clearance_mm: float = 0.75
+    space_retry_count: int = 12
 
     dominant_branch:       bool = False
     dominant_r_frac:       float = 0.65
@@ -776,6 +778,8 @@ class ConstTreeConfig:
         upward_bias:        float                = 0.30,
         repulsion_strength: float                = 0.40,
         repulsion_z_window: float                = 2.0,
+        space_clearance_mm: float                = 0.75,
+        space_retry_count:  int                  = 12,
         dominant_branch:       bool             = False,
         dominant_r_frac:       float            = 0.65,
         dominant_angle_factor: float            = 0.30,
@@ -788,6 +792,10 @@ class ConstTreeConfig:
             raise ValueError("split_count_min/max must define a positive inclusive range")
         if pipe_model_exp <= 0.0:
             raise ValueError("pipe_model_exp must be positive")
+        if space_clearance_mm < 0.0:
+            raise ValueError("space_clearance_mm must be non-negative")
+        if space_retry_count < 0:
+            raise ValueError("space_retry_count must be non-negative")
         if not (0.0 < dominant_r_frac < 1.0):
             raise ValueError("dominant_r_frac must be between 0 and 1")
 
@@ -819,6 +827,8 @@ class ConstTreeConfig:
             'upward_bias': upward_bias,
             'repulsion_strength': repulsion_strength,
             'repulsion_z_window': repulsion_z_window,
+            'space_clearance_mm': space_clearance_mm,
+            'space_retry_count': space_retry_count,
             'dominant_branch': dominant_branch,
             'dominant_r_frac': dominant_r_frac,
             'dominant_angle_factor': dominant_angle_factor,
