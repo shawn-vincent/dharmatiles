@@ -30,6 +30,7 @@ class Material(IntEnum):
     WATER  = 3
     BASE   = 4
     FLOWER = 5
+    WOOD   = 6
 
 
 #: RGBA uint8 palette — one entry per :class:`Material`.
@@ -40,6 +41,7 @@ RGBA: dict[Material, tuple[int, int, int, int]] = {
     Material.WATER:  ( 20, 133, 213, 255),   # blue-turquoise
     Material.BASE:   ( 45,  45,  45, 255),   # dark gray
     Material.FLOWER: (245, 195,   0, 255),   # golden yellow
+    Material.WOOD:   ( 61,  31,  10, 255),   # dark bark brown
 }
 
 
@@ -312,6 +314,7 @@ def export_3mf_colored(
         Material.GRASS:  4,
         Material.WATER:  5,
         Material.FLOWER: 6,
+        Material.WOOD:   7,
     }
     _SLOT_HEX = [
         "#2D2D2D",  # slot 1 — BASE
@@ -320,6 +323,7 @@ def export_3mf_colored(
         "#2A941C",  # slot 4 — GRASS
         "#1485D5",  # slot 5 — WATER
         "#F5C300",  # slot 6 — FLOWER (golden yellow)
+        "#3D1F0A",  # slot 7 — WOOD   (dark bark brown)
     ]
 
     # ── Filter empty tiles ────────────────────────────────────────────────────
