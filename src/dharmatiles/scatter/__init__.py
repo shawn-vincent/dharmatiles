@@ -3,13 +3,13 @@ from .config    import Uniform, Grouped
 from .seed      import RockSeed
 from .prototype import Rocks, Grass
 from .flowers   import Flowers
-from .trees     import Trees
+from .sca_tree  import ScaTree
 
 __all__ = [
     'Rocks',
     'Grass',
     'Flowers',
-    'Trees',
+    'ScaTree',
     'Uniform',
     'Grouped',
     'RockSeed',

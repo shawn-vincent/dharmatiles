@@ -11,7 +11,7 @@ from dharmatiles.spec import (
     Tile, Region, SurfaceConfig, SpeciesConfig, FloodFill, D,
 )
 from dharmatiles.layers import GrassCarpet, Scatter
-from dharmatiles.scatter import Rocks, Grass, Trees
+from dharmatiles.scatter import Rocks, Grass, ScaTree
 from dharmatiles.scatter.config import Uniform, Grouped
 
 species = SpeciesConfig()
@@ -28,7 +28,7 @@ tile = Tile(
                     placement=Grouped(groups_per_square=240),
                 ),
                 Scatter(
-                    Trees(
+                    ScaTree(
                         crown_base_z_mm  = 10,   # effective trunk height
                         r_base_mm        = D[2.5:4.5],
                         crown_rx         = D[7.0:12.0],

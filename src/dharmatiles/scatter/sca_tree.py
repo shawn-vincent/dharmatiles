@@ -1,9 +1,10 @@
 """
-Trees: a scatter thing that places procedural deciduous trees into a region.
+ScaTree: a scatter thing that places SCA deciduous trees into a region.
 
-Each tree is a unified SCA skeleton: the trunk emerges naturally as the
-attractor-free path below the crown ellipsoid, then branches inside the crown.
-All skeleton edges share the same scale-adaptive bark surface.
+Each tree is a unified Space-Colonization-Algorithm skeleton: the trunk
+emerges naturally as the attractor-free path below the crown ellipsoid,
+then branches inside the crown.  All skeleton edges share the same
+scale-adaptive bark surface.
 
 The class follows the same interface as ``Rocks``, ``Flowers``, and ``Grass``:
 ``scatter(scene, *, placement_mask, layer_idx)`` → list of trimesh parts.
@@ -12,12 +13,12 @@ blades steer around the tree base.
 
 Usage in a tile spec::
 
-    from dharmatiles.scatter import Trees
+    from dharmatiles.scatter import ScaTree
     from dharmatiles.scatter.config import Uniform
     from dharmatiles.layers import Scatter
 
     Scatter(
-        Trees(crown_base_z_mm=D[18:28], placement=Uniform(count_per_square=1)),
+        ScaTree(crown_base_z_mm=D[18:28], placement=Uniform(count_per_square=1)),
         Grass(species=species),
     )
 """
@@ -34,8 +35,8 @@ from .config import Uniform
 from .distribute import scatter_positions
 
 
-class Trees:
-    """Scatter unified deciduous trees (trunk + branches) into a region.
+class ScaTree:
+    """Scatter SCA deciduous trees (trunk + branches) into a region.
 
     Parameters
     ----------
@@ -45,7 +46,7 @@ class Trees:
         Forwarded to :class:`~dharmatiles.core.config.TreeConfig`.  Any
         ``TreeConfig`` field can be overridden here.  Example::
 
-            Trees(crown_base_z_mm=D[20:30], r_base_mm=D[3:5])
+            ScaTree(crown_base_z_mm=D[20:30], r_base_mm=D[3:5])
     """
 
     def __init__(
