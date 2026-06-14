@@ -568,7 +568,7 @@ class TreeConfig:
     sca_kill_r:        float         = 3.5            # attractor kill radius (mm)
     sca_max_steps:     int           = 80             # maximum SCA iterations
     sca_tropism:       float         = 0.25           # upward bias (soft preference for upward growth)
-    sca_min_elevation: float         = 45.0           # degrees above horizontal — hard FDM floor (45° = printable without supports)
+    sca_min_elevation: float         = 45.0           # degrees above horizontal — leaf tips below this angle are pruned after growth
     sca_branch_xy_std: float         = 0.30           # XY std-dev threshold to trigger tip split
     sca_min_branch_att: int          = 3              # min attractors per cluster to allow split
 

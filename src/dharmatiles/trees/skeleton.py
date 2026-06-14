@@ -6,6 +6,16 @@ attractor-free zone — this path *is* the trunk, emerging naturally because
 no attractors exist below ``crown_base_z_mm``.  Above that threshold the
 skeleton fans into the crown ellipsoid, producing the branch structure.
 
+After growth, shallow leaf segments are iteratively pruned: any leaf edge
+whose direction is below ``sca_min_elevation`` degrees above horizontal is
+removed, exposing its parent as the new leaf, which is then re-evaluated.
+Only leaf segments are pruned — internal structural segments are left alone
+because they are thick, supported from below, and don't droop in print.
+
+The alternative (clamping growth *directions* during SCA) prevents branches
+from growing sideways to fill the crown and produces degenerate vertical
+spikes.  Post-pruning lets SCA spread naturally and then trims the tips.
+
 Public API
 ----------
 ``grow_skeleton(cx, cy, tz, cfg, rng)``
@@ -59,22 +69,73 @@ def _compute_arc_dists(
     return arc
 
 
-# ── FDM elevation clamp ───────────────────────────────────────────────────────
+# ── Shallow-tip pruning ───────────────────────────────────────────────────────
 
-def _clamp_elevation(g: np.ndarray, min_z: float) -> np.ndarray:
-    """Return a unit vector with g[2] >= min_z (hard FDM overhang floor).
+def _prune_shallow_tips(
+    nodes_xyz: np.ndarray,
+    parents:   np.ndarray,
+    min_z:     float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Iteratively remove leaf edges with elevation < min_z.
 
-    ``min_z = sin(radians(sca_min_elevation))`` so a value of 0.707 enforces
-    ≥ 45° above horizontal.  When the raw growth direction falls below the
-    floor the Z component is raised to min_z and the vector is re-normalised.
-    If the result would be zero (min_z ≥ 1) the vector is set to straight up.
+    Only *leaf* segments are evaluated each pass — internal edges are never
+    removed, since thick structural branches print fine at any angle and are
+    supported from below by the trunk.  Removing a leaf may expose its parent
+    as the new leaf; that parent is then re-evaluated in the next pass.
+
+    Parameters
+    ----------
+    min_z : ``sin(radians(sca_min_elevation))`` — e.g. 0.707 for 45°.
     """
-    if g[2] >= min_z:
-        return g
-    g    = g.copy()
-    g[2] = min_z
-    gn   = float(np.linalg.norm(g))
-    return g / gn if gn > 1e-8 else np.array([0., 0., 1.])
+    while True:
+        N = len(nodes_xyz)
+        if N <= 1:
+            break
+
+        # Count children
+        child_count = np.zeros(N, dtype=int)
+        for i in range(1, N):
+            p = int(parents[i])
+            if p >= 0:
+                child_count[p] += 1
+
+        # Identify shallow leaf nodes
+        to_remove: list[int] = []
+        for i in range(1, N):
+            if child_count[i] > 0:
+                continue          # not a leaf
+            p = int(parents[i])
+            d  = nodes_xyz[i] - nodes_xyz[p]
+            dn = float(np.linalg.norm(d))
+            if dn > 1e-8 and d[2] / dn < min_z:
+                to_remove.append(i)
+
+        if not to_remove:
+            break                 # all leaf edges now meet the threshold
+
+        # Compact: remove flagged nodes and remap indices
+        keep    = np.ones(N, dtype=bool)
+        for i in to_remove:
+            keep[i] = False
+
+        new_idx = np.full(N, -1, dtype=int)
+        k = 0
+        for i in range(N):
+            if keep[i]:
+                new_idx[i] = k
+                k += 1
+
+        new_xyz = nodes_xyz[keep]
+        new_par = np.full(k, -1, dtype=int)
+        for i in range(1, N):
+            if keep[i]:
+                old_p = int(parents[i])
+                new_par[new_idx[i]] = new_idx[old_p]
+
+        nodes_xyz = new_xyz
+        parents   = new_par
+
+    return nodes_xyz, parents
 
 
 # ── Core SCA loop ─────────────────────────────────────────────────────────────
@@ -89,9 +150,9 @@ def _sca_grow(
 
     Tips split when their visible attractors show sufficient XY spread
     (> ``sca_branch_xy_std``) and both clusters have >= ``sca_min_branch_att``
-    members.  Every growth direction is clamped to at least
-    ``sca_min_elevation`` degrees above horizontal so no segment falls below
-    the FDM overhang threshold.
+    members.  Growth directions are clamped to non-negative Z only (no
+    downward segments); the elevation floor is enforced by post-growth pruning
+    in ``grow_skeleton`` so SCA can spread freely into the crown ellipsoid.
     """
     n_roots = len(root_positions)
     if len(att) == 0:
@@ -101,7 +162,6 @@ def _sca_grow(
     parents:  list[int]        = [-1] * n_roots
     tips:     set[int]         = set(range(n_roots))
     tropism   = np.array([0.0, 0.0, cfg.sca_tropism], dtype=float)
-    min_z     = float(np.sin(np.radians(cfg.sca_min_elevation)))
 
     for _step in range(cfg.sca_max_steps):
         if att.shape[0] == 0 or not tips:
@@ -121,10 +181,10 @@ def _sca_grow(
                 # No attractors in perception range: grow toward the nearest
                 # attractor (+ tropism).  This drives the tip through the
                 # attractor-free trunk zone until it enters the crown.
-                tip_pos  = nodes_arr[tip_idx]
+                tip_pos   = nodes_arr[tip_idx]
                 tip_diffs = att - tip_pos                           # (K, 3)
-                tip_d2   = (tip_diffs * tip_diffs).sum(axis=-1)
-                nn_idx   = int(np.argmin(tip_d2))
+                tip_d2    = (tip_diffs * tip_diffs).sum(axis=-1)
+                nn_idx    = int(np.argmin(tip_d2))
                 direction = tip_diffs[nn_idx]
                 dn        = float(np.linalg.norm(direction))
                 if dn < 1e-8:
@@ -132,7 +192,10 @@ def _sca_grow(
                 g  = direction / dn + tropism
                 gn = float(np.linalg.norm(g))
                 g  = g / gn if gn > 1e-8 else np.array([0., 0., 1.])
-                g  = _clamp_elevation(g, min_z)
+                if g[2] < 0.0:
+                    g[2] = 0.0
+                    gn   = float(np.linalg.norm(g))
+                    g    = g / gn if gn > 1e-8 else np.array([0., 0., 1.])
                 new_nodes.append(
                     (tip_pos + g * cfg.sca_segment_mm, tip_idx)
                 )
@@ -162,7 +225,10 @@ def _sca_grow(
                             g  = dirs_n[submask].mean(axis=0) + tropism
                             gn = np.linalg.norm(g)
                             g  = g / gn if gn > 1e-8 else np.array([0., 0., 1.])
-                            g  = _clamp_elevation(g, min_z)
+                            if g[2] < 0.0:
+                                g[2] = 0.0
+                                gn   = np.linalg.norm(g)
+                                g    = g / gn if gn > 1e-8 else np.array([0., 0., 1.])
                             new_nodes.append(
                                 (nodes_arr[tip_idx] + g * cfg.sca_segment_mm, tip_idx)
                             )
@@ -173,7 +239,10 @@ def _sca_grow(
                 growth = dirs.sum(axis=0) + tropism
                 gn     = np.linalg.norm(growth)
                 growth = growth / gn if gn > 1e-8 else np.array([0., 0., 1.])
-                growth = _clamp_elevation(growth, min_z)
+                if growth[2] < 0.0:
+                    growth[2] = 0.0
+                    gn        = np.linalg.norm(growth)
+                    growth    = growth / gn if gn > 1e-8 else np.array([0., 0., 1.])
                 new_nodes.append(
                     (nodes_arr[tip_idx] + growth * cfg.sca_segment_mm, tip_idx)
                 )
@@ -214,6 +283,9 @@ def grow_skeleton(
     skeleton grows a nearly-vertical path (the trunk) before entering the
     crown and branching.
 
+    After SCA, ``_prune_shallow_tips`` iteratively removes leaf edges whose
+    elevation angle is below ``cfg.sca_min_elevation`` degrees.
+
     Returns
     -------
     nodes_xyz : (N, 3) float
@@ -247,6 +319,12 @@ def grow_skeleton(
     root = np.array([[cx, cy, tz]], dtype=float)
 
     nodes_xyz, parents = _sca_grow(root, att, cfg, rng)
-    arc_dists          = _compute_arc_dists(nodes_xyz, parents)
+
+    # Post-prune shallow leaf tips for FDM printability
+    min_z = float(np.sin(np.radians(cfg.sca_min_elevation)))
+    if min_z > 0.0:
+        nodes_xyz, parents = _prune_shallow_tips(nodes_xyz, parents, min_z)
+
+    arc_dists = _compute_arc_dists(nodes_xyz, parents)
 
     return nodes_xyz, parents, arc_dists, crown_base_z
