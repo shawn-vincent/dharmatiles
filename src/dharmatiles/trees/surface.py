@@ -347,6 +347,106 @@ def _fan_cap(
     return mesh
 
 
+def _build_children(parents: np.ndarray) -> list[list[int]]:
+    children: list[list[int]] = [[] for _ in range(len(parents))]
+    for i in range(1, len(parents)):
+        p = int(parents[i])
+        if p >= 0:
+            children[p].append(i)
+    return children
+
+
+def _extract_runs(children: list[list[int]]) -> list[list[int]]:
+    """Return maximal root/branch/leaf runs through unary guide nodes."""
+    runs: list[list[int]] = []
+    for start, child_idxs in enumerate(children):
+        if start != 0 and len(child_idxs) == 1:
+            continue
+        for child in child_idxs:
+            run = [start, child]
+            cur = child
+            while len(children[cur]) == 1:
+                cur = children[cur][0]
+                run.append(cur)
+            runs.append(run)
+    return runs
+
+
+def _run_endpoint_tangents(
+    points: np.ndarray,
+    start_tangent: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Tangents for one visible branch run.
+
+    Unary guide nodes reserve growth space, but visible geometry should not
+    kink at them.  The branch is therefore one smooth span from first to last
+    run node; guide nodes only influence the departure/arrival tangents.
+
+    If ``start_tangent`` is supplied, the run leaves its base along that fixed
+    direction.  Child runs use this to continue straight out of their parent
+    run before bending toward their own endpoint.
+    """
+    if len(points) <= 1:
+        t = (
+            _normalize(start_tangent)
+            if start_tangent is not None
+            else np.array([0.0, 0.0, 1.0])
+        )
+        return t, t
+    if len(points) == 2:
+        d = _normalize(points[1] - points[0])
+        t0 = _normalize(start_tangent) if start_tangent is not None else d
+        return t0, d
+
+    start_tan = _normalize(points[1] - points[0])
+    end_tan = _normalize(points[-1] - points[-2])
+    direct = _normalize(points[-1] - points[0])
+    t0 = (
+        _normalize(start_tangent)
+        if start_tangent is not None
+        else _normalize(start_tan + direct)
+    )
+
+    # Keep the run globally aimed at its endpoint while letting the nearest
+    # guide nodes bias how it leaves and arrives.
+    return t0, _normalize(end_tan + direct)
+
+
+def _run_start_tangent_overrides(
+    nodes_xyz: np.ndarray,
+    parents: np.ndarray,
+    runs: list[list[int]],
+) -> dict[int, np.ndarray]:
+    """Return fixed start tangents for runs that begin at branchpoints.
+
+    A child branch should initially continue along the direction its base
+    branch had at the branchpoint, then curve toward its own target.  This
+    avoids the visual hard turn created when each child starts tangent to its
+    own chord.
+    """
+    end_tangents: dict[int, np.ndarray] = {}
+    for run in runs:
+        if len(run) < 2:
+            continue
+        _, t1 = _run_endpoint_tangents(nodes_xyz[run])
+        end_tangents[run[-1]] = t1
+
+    start_tangents: dict[int, np.ndarray] = {}
+    for run in runs:
+        start = int(run[0])
+        if start == 0:
+            continue
+        if start in end_tangents:
+            start_tangents[start] = end_tangents[start]
+            continue
+
+        parent = int(parents[start])
+        if parent >= 0:
+            start_tangents[start] = _normalize(nodes_xyz[start] - nodes_xyz[parent])
+
+    return start_tangents
+
+
 # ── Public: full tree mesh ────────────────────────────────────────────────────
 
 def build_tree_mesh(
@@ -404,11 +504,7 @@ def build_tree_mesh(
     normals, binormals, bisectors   = _compute_node_frames(nodes_xyz, parents, pt_normals)
 
     N = len(nodes_xyz)
-    children: list[list[int]] = [[] for _ in range(N)]
-    for i in range(1, N):
-        p = int(parents[i])
-        if p >= 0:
-            children[p].append(i)
+    children = _build_children(parents)
 
     # ── One ring per node ─────────────────────────────────────────────────────
     # All active nodes use cfg.az_segs so ring→ring quad strips are always
@@ -430,15 +526,12 @@ def build_tree_mesh(
 
     parts: list[trimesh.Trimesh] = []
 
-    # ── One capped curved tube per skeleton edge ───────────────────────────────
+    # ── One capped curved tube per visible branch run ─────────────────────────
     #
-    # Each edge (parent → child) is built as a fully independent watertight
-    # tube.  When cfg.curve_segs > 1 the tube follows a Hermite cubic rather
-    # than a straight frustum: intermediate rings are placed along the curve
-    # using per-step parallel transport to carry the parent ring's frame forward.
-    # The bisector tangent at each endpoint acts as the Hermite control tangent,
-    # giving C1 continuity across junctions (all branches from a fork share the
-    # same departure tangent, which bisects the incoming + mean-outgoing dirs).
+    # The skeleton may contain unary guide nodes used only to reserve space and
+    # shape a branch.  Mesh geometry is emitted only once a run reaches a leaf
+    # or real branch point.  Each run is drawn as one smooth Hermite span, not
+    # as piecewise geometry through every guide node.
     #
     # No vertex sharing occurs between pieces, so at branching junctions the
     # tubes of sibling branches overlap geometrically but remain topologically
@@ -448,63 +541,65 @@ def build_tree_mesh(
     # extends into the ground and leaves no gap at the soil surface.
     n_curve = max(1, cfg.curve_segs)
 
-    for i in range(1, N):
-        p = int(parents[i])
-        if rings[p] is None or rings[i] is None:
+    runs = _extract_runs(children)
+    start_tangents = _run_start_tangent_overrides(nodes_xyz, parents, runs)
+
+    for run in runs:
+        if any(rings[i] is None for i in run):
             continue
 
-        if n_curve <= 1:
-            edge_rings: list[np.ndarray] = [rings[p], rings[i]]  # type: ignore[list-item]
-        else:
-            p0 = nodes_xyz[p]
-            p1 = nodes_xyz[i]
-            chord_len = float(np.linalg.norm(p1 - p0))
-            scale = cfg.curve_tension * chord_len
-            m0 = bisectors[p] * scale
-            m1 = bisectors[i] * scale
+        start = run[0]
+        end = run[-1]
+        edge_rings: list[np.ndarray] = [rings[start]]  # type: ignore[list-item]
+        run_points = nodes_xyz[run]
+        p0 = nodes_xyz[start]
+        p1 = nodes_xyz[end]
+        chord_len = float(np.linalg.norm(p1 - p0))
+        t0, t1 = _run_endpoint_tangents(run_points, start_tangents.get(start))
+        m0 = t0 * cfg.curve_tension * chord_len
+        m1 = t1 * cfg.curve_tension * chord_len
 
-            n_cur  = normals[p].copy()
-            tan_cur = bisectors[p].copy()
+        n_cur = normals[start].copy()
+        tan_cur = t0.copy()
+        steps = max(n_curve, n_curve * (len(run) - 1))
 
-            edge_rings = [rings[p]]  # type: ignore[assignment]
+        for k in range(1, steps + 1):
+            t = k / steps
+            if k == steps:
+                edge_rings.append(rings[end])  # type: ignore[arg-type]
+                continue
 
-            for k in range(1, n_curve):
-                t = k / n_curve
-                pos = _hermite_pos(t, p0, p1, m0, m1)
-                tan = _normalize(_hermite_tan(t, p0, p1, m0, m1))
+            pos = _hermite_pos(t, p0, p1, m0, m1)
+            tan = _normalize(_hermite_tan(t, p0, p1, m0, m1))
 
-                n_cur = _parallel_transport(n_cur, tan_cur, tan)
-                # Re-orthogonalize: remove any component along the new tangent
-                n_cur = _normalize(n_cur - float(np.dot(n_cur, tan)) * tan)
-                b_cur = np.cross(tan, n_cur)
-                tan_cur = tan
+            n_cur = _parallel_transport(n_cur, tan_cur, tan)
+            n_cur = _normalize(n_cur - float(np.dot(n_cur, tan)) * tan)
+            b_cur = np.cross(tan, n_cur)
+            tan_cur = tan
 
-                r     = float(radii[p]) + t * (float(radii[i]) - float(radii[p]))
-                arc_d = float(arc_dists[p]) + t * (float(arc_dists[i]) - float(arc_dists[p]))
-                fm    = _flare_mult(float(pos[2]), tz, crown_base_z, cfg)
-                with_ridges = r >= cfg.ridge_min_r_mm
+            r = float(radii[start]) + t * (float(radii[end]) - float(radii[start]))
+            arc_d = float(arc_dists[start]) + t * (float(arc_dists[end]) - float(arc_dists[start]))
+            fm = _flare_mult(float(pos[2]), tz, crown_base_z, cfg)
+            with_ridges = r >= cfg.ridge_min_r_mm
 
-                ring = _make_ring(
-                    pos, r, n_cur, b_cur, cfg.az_segs, arc_d,
-                    with_ridges, aspect, cfg.twist_rate,
-                    ridge_params, wrinkle_amp, wrinkle_period, wrinkle_phase, fm,
-                )
-                edge_rings.append(ring)
+            edge_rings.append(_make_ring(
+                pos, r, n_cur, b_cur, cfg.az_segs, arc_d,
+                with_ridges, aspect, cfg.twist_rate,
+                ridge_params, wrinkle_amp, wrinkle_period, wrinkle_phase, fm,
+            ))
 
-            edge_rings.append(rings[i])
-
-        if p == 0:
+        if start == 0:
             base_center = nodes_xyz[0].copy()
             base_center[2] -= cfg.sink
         else:
-            base_center = nodes_xyz[p].copy()
+            base_center = nodes_xyz[start].copy()
 
         strips = [_side_strip(edge_rings[k], edge_rings[k + 1])
                   for k in range(len(edge_rings) - 1)]
         piece = trimesh.util.concatenate([
             *strips,
             _fan_cap(edge_rings[0], base_center, flip=True),
-            _fan_cap(edge_rings[-1], nodes_xyz[i], flip=False),
+            _fan_cap(edge_rings[-1], nodes_xyz[end], flip=False),
         ])
         piece.merge_vertices()
         parts.append(piece)

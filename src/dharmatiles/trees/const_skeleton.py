@@ -35,6 +35,52 @@ from ..dist import sample
 from .skeleton import _compute_arc_dists
 
 
+def _end_profile(u: float, pointiness: float, curve: float) -> float:
+    """Relative radius moving inward from a crown endpoint.
+
+    ``u`` is 0 at the endpoint and 1 at the widest part.  ``pointiness``
+    blends between a round quarter-arc and a strict linear taper; ``curve``
+    controls how quickly that endpoint reaches full width.
+    """
+    u = float(np.clip(u, 0.0, 1.0))
+    p = float(np.clip(pointiness, 0.0, 1.0))
+    c = max(0.01, float(curve))
+
+    linear = u ** c
+    round_arc = np.sin(0.5 * np.pi * u) ** c
+    return float((1.0 - p) * round_arc + p * linear)
+
+
+def _crown_profile(
+    t: float,
+    bottom_pointiness: float,
+    bottom_curve: float,
+    top_pointiness: float,
+    top_curve: float,
+) -> float:
+    """Normalised crown-radius profile for t in [0, 1].
+
+    The bottom and top endpoint profiles meet by taking the smaller envelope,
+    then a dense normalisation pass makes ``crown_radius_mm`` the actual maximum
+    width regardless of asymmetric endpoint settings.
+    """
+    if t <= 0.0 or t >= 1.0:
+        return 0.0
+    bottom = _end_profile(t, bottom_pointiness, bottom_curve)
+    top = _end_profile(1.0 - t, top_pointiness, top_curve)
+    raw = min(bottom, top)
+
+    samples = np.linspace(0.0, 1.0, 257)
+    vals = np.minimum(
+        [_end_profile(s, bottom_pointiness, bottom_curve) for s in samples],
+        [_end_profile(1.0 - s, top_pointiness, top_curve) for s in samples],
+    )
+    raw_peak = float(np.max(vals))
+    if raw_peak < 1e-12:
+        return 0.0
+    return float(raw / raw_peak)
+
+
 _UP = np.array([0.0, 0.0, 1.0])
 
 
@@ -111,17 +157,6 @@ def _append_node_at(
     dirs.append(direction)
     return len(nodes) - 1
 
-
-def _as_level_list(value, n_levels: int, name: str) -> list:
-    if isinstance(value, (list, tuple)):
-        if len(value) != n_levels:
-            raise ValueError(f"{name} must have {n_levels} entries")
-        return list(value)
-    return [value] * n_levels
-
-
-def _sample_level_values(value, n_levels: int, name: str, rng: np.random.Generator) -> list[float]:
-    return [float(sample(v, rng)) for v in _as_level_list(value, n_levels, name)]
 
 
 # ---------------------------------------------------------------------------
@@ -332,18 +367,16 @@ def grow_const_skeleton(
 
     Algorithm
     ---------
-    1. Derive *seg_len_mm* from *height_max_mm* / total-segment-count so the
-       tree reaches the requested height when growing straight up.
-    2. Grow *n_trunk_segs* bare-trunk segments upward with wander.
-    3. For each branching level:
-       a. Sample the number of children each active tip will produce.
-       b. Place that many target positions using a Fibonacci disc centred at
-          (cx, cy) — the crown cross-section at the height and radius each
-          branch can reach in *n_segs_per_level[level]* steps.
-       c. Assign targets to parents by nearest-XY greedy matching.
-       d. Grow *n_segs_per_level[level]* segments from each parent toward its
-          assigned targets.
-       e. The final nodes of those paths become the next active tips.
+    1. Split total height into an explicit bare trunk and the remaining crown.
+       If ``trunk_height_mm`` is unset, the legacy ``crown_height_fraction``
+       derives the trunk height.  Trunk grows ``n_trunk_segs`` wandering
+       segments.
+    2. Crown levels are evenly spaced in height.  The target disc radius at
+       each level is read from the top/bottom pointiness+curve profile scaled
+       by *crown_radius_mm*, where t is the normalised height within the crown.
+    3. For each branching level, parents fork and aim at repulsion-spread
+       targets on the level's crown disc.  *branch_stagger* spreads the
+       branching events across the level's vertical range.
 
     Returns
     -------
@@ -355,40 +388,34 @@ def grow_const_skeleton(
         root = np.array([[cx, cy, tz]], dtype=float)
         return root, np.array([-1], dtype=int), np.zeros(1), 0.0
 
-    n_segs_per_level = [int(v) for v in _as_level_list(
-        cfg.n_segs_per_level, cfg.n_levels, "n_segs_per_level",
-    )]
-    total_segments = int(cfg.n_trunk_segs) + sum(n_segs_per_level)
-    seg_len_mm = height_max / max(1, total_segments)
+    crown_radius = float(sample(cfg.crown_radius_mm, rng))
+    if getattr(cfg, "trunk_height_mm", None) is None:
+        trunk_height = height_max * (1.0 - float(cfg.crown_height_fraction))
+    else:
+        trunk_height = float(sample(cfg.trunk_height_mm, rng))
+    trunk_height = float(np.clip(trunk_height, 0.0, height_max))
+    crown_height  = max(0.0, height_max - trunk_height)
+    seg_len_mm    = trunk_height / max(1, int(cfg.n_trunk_segs))
+    crown_base_z  = tz + trunk_height
 
-    spread_angles = _sample_level_values(
-        cfg.spread_angle_deg, cfg.n_levels, "spread_angle_deg", rng,
-    )
     wander = float(sample(cfg.wander_deg, rng))
     lean   = float(sample(cfg.initial_lean_deg, rng))
 
-    # ── Crown disc geometry (one disc per branching level) ────────────────────
-    #
-    # For level k, branches grow n_segs_per_level[k] steps at spread_angles[k]
-    # from vertical.  The target disc sits at the expected tip position:
-    #
-    #   horizontal reach from parent:  n_segs * seg_len * sin(spread)
-    #   vertical reach from parent:    n_segs * seg_len * cos(spread)
-    #
-    # crown_r is cumulative (parents at crown_r[k-1], tips at crown_r[k]).
-    # The geometry ensures that the distance from an edge parent to its
-    # furthest-assigned target equals exactly n_segs * seg_len.
+    # ── Crown disc geometry: one disc per branching level ────────────────────
+    # Heights are evenly spaced within the crown; radii come from the smooth
+    # beta-distribution profile so the shape is purely a function of height.
     crown_z: list[float] = []
     crown_r: list[float] = []
-    z_acc = tz + int(cfg.n_trunk_segs) * seg_len_mm
-    r_acc = 0.0
     for level in range(cfg.n_levels):
-        dl = n_segs_per_level[level] * seg_len_mm
-        theta = float(np.radians(spread_angles[level]))
-        r_acc += dl * float(np.sin(theta))
-        z_acc += dl * float(np.cos(theta))
-        crown_r.append(r_acc)
-        crown_z.append(z_acc)
+        t = (level + 1.0) / cfg.n_levels
+        crown_z.append(crown_base_z + t * crown_height)
+        crown_r.append(crown_radius * _crown_profile(
+            t,
+            float(cfg.bottom_pointiness),
+            float(cfg.bottom_curve),
+            float(cfg.top_pointiness),
+            float(cfg.top_curve),
+        ))
 
     # ── Initialise skeleton ───────────────────────────────────────────────────
     lean_rad = float(np.radians(lean))
@@ -410,23 +437,25 @@ def grow_const_skeleton(
         trunk_tip = _append_segment(trunk_tip, d, nodes, dirs, parents, seg_len_mm)
 
     active_tips: list[int] = [trunk_tip]
+    branch_stagger = float(getattr(cfg, 'branch_stagger', 0.0))
 
     # ── Level-by-level branching ──────────────────────────────────────────────
     for level in range(cfg.n_levels):
-        n_segs = n_segs_per_level[level]
-        if n_segs <= 0 or not active_tips:
+        if not active_tips:
             break
 
-        # Each active tip forks into 2–split_count_max children
+        n_parents = len(active_tips)
+
+        # Target disc: always the full crown disc for this level, computed once.
+        # This is independent of stagger — the area children are placed in
+        # depends only on the tree geometry at this level, not on when each
+        # parent happens to branch.
         n_children = [
             max(1, int(rng.integers(cfg.split_count_min, cfg.split_count_max + 1)))
             for _ in active_tips
         ]
         n_total = sum(n_children)
 
-        # Compute one angular zone per parent so children from different
-        # parents can never cross: each zone is a disc wedge whose angular
-        # boundaries bisect the arcs between adjacent parent angles.
         parent_xy = np.array(
             [[nodes[tip_idx][0], nodes[tip_idx][1]] for tip_idx in active_tips],
             dtype=float,
@@ -434,14 +463,11 @@ def grow_const_skeleton(
         center2d = np.array([cx, cy], dtype=float)
         parent_zones = _compute_parent_zones(parent_xy, center2d)
 
-        # Each child inherits its parent's zone
         child_zones = [
             parent_zones[slot]
             for slot, count in enumerate(n_children)
             for _ in range(count)
         ]
-
-        # Seed each child at its parent's XY, then spread by repulsion
         seed_xy = np.array(
             [nodes[tip_idx][:2] for tip_idx, count in zip(active_tips, n_children)
              for _ in range(count)],
@@ -452,29 +478,56 @@ def grow_const_skeleton(
             zones=child_zones,
         )
 
-        # Assignments are fixed by construction — target k belongs to whichever
-        # parent seeded it; no re-assignment needed (zones enforce non-crossing).
-        assignments: list[list[int]] = [[] for _ in range(len(active_tips))]
+        # Target assignment: fixed by construction (zone → parent slot)
+        assignments: list[list[int]] = [[] for _ in range(n_parents)]
         k = 0
         for slot, count in enumerate(n_children):
             assignments[slot] = list(range(k, k + count))
             k += count
 
-        # Place one node directly at each target — the surface renderer
-        # curves each single-segment edge with a Hermite cubic.
+        # Stagger: spread branch events across the level's vertical range.
+        # n_groups=1 (stagger=0) reproduces the original simultaneous branch.
+        n_groups = max(1, round(branch_stagger * n_parents))
+        slot_order = rng.permutation(n_parents)
+        group_of_slot = np.zeros(n_parents, dtype=int)
+        for i, slot in enumerate(slot_order):
+            group_of_slot[slot] = int(i * n_groups / n_parents)
+
+        z_base = crown_z[level - 1] if level > 0 else crown_base_z
+        current_tips = list(active_tips)
         new_tips: list[int] = []
-        for slot, tip_idx in enumerate(active_tips):
-            for t_idx in assignments[slot]:
-                final = _append_node_at(tip_idx, targets[t_idx], nodes, dirs, parents)
-                new_tips.append(final)
+
+        for g in range(n_groups):
+            # Sub-level height at which this group's parents branch
+            z_g = z_base + (g + 1.0) / n_groups * (crown_z[level] - z_base)
+
+            branching_slots = [s for s in range(n_parents) if group_of_slot[s] == g]
+            continuing_slots = [s for s in range(n_parents) if group_of_slot[s] > g]
+
+            # Advance non-branching parents straight up to z_g so they are
+            # at the right height when their own group is reached
+            for s in continuing_slots:
+                tip_idx = current_tips[s]
+                adv_pos = np.array(
+                    [nodes[tip_idx][0], nodes[tip_idx][1], z_g], dtype=float,
+                )
+                current_tips[s] = _append_node_at(tip_idx, adv_pos, nodes, dirs, parents)
+
+            # Branch: each branching parent jumps straight to its pre-computed
+            # target on the full level crown disc (same targets as stagger=0)
+            for slot in branching_slots:
+                for t_idx in assignments[slot]:
+                    final = _append_node_at(
+                        current_tips[slot], targets[t_idx], nodes, dirs, parents,
+                    )
+                    new_tips.append(final)
 
         active_tips = new_tips
         if not active_tips:
             break
 
     # ── Assemble output ───────────────────────────────────────────────────────
-    nodes_xyz   = np.array(nodes, dtype=float)
-    parents_arr = np.array(parents, dtype=int)
-    arc_dists   = _compute_arc_dists(nodes_xyz, parents_arr)
-    crown_base_z = float(tz + max(0.1, int(cfg.n_trunk_segs) * seg_len_mm))
-    return nodes_xyz, parents_arr, arc_dists, crown_base_z
+    nodes_xyz    = np.array(nodes, dtype=float)
+    parents_arr  = np.array(parents, dtype=int)
+    arc_dists    = _compute_arc_dists(nodes_xyz, parents_arr)
+    return nodes_xyz, parents_arr, arc_dists, float(max(tz + 0.1, crown_base_z))

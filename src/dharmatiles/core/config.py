@@ -731,54 +731,72 @@ class ConstTreeConfig:
 
     bark: BarkConfig
 
-    height_max_mm:     Sample[float] = D[20.0:40.0]
-    n_levels:          int = 3
-    n_segs_per_level:  int | list[int] = 4
-    spread_angle_deg:  Sample[float] | list[Sample[float]] = D[20.0:38.0]
-    pipe_model_exp:    float = 2.0
+    height_max_mm:         Sample[float] = D[20.0:40.0]
+    n_levels:              int = 3
+    pipe_model_exp:        float = 2.0
 
-    n_trunk_segs:      int = 5
-    split_count_min:   int = 2
-    split_count_max:   int = 3
-    initial_lean_deg:  Sample[float] = D[0.0:8.0]
-    wander_deg:        Sample[float] = D[3.0:8.0]
+    # Crown shape.  The bare trunk reaches trunk_height_mm; above that, the
+    # radius profile is controlled independently at the crown bottom and top.
+    crown_radius_mm:       Sample[float] = D[7.0:11.0]
+    trunk_height_mm:        Sample[float] | None = None
+    crown_height_fraction: float = 0.70
+    top_pointiness:         float = 0.75
+    top_curve:              float = 1.40
+    bottom_pointiness:      float = 0.35
+    bottom_curve:           float = 0.80
 
-    min_elevation_deg: float = 45.0
+    n_trunk_segs:          int = 5
+    split_count_min:       int = 2
+    split_count_max:       int = 3
+    initial_lean_deg:      Sample[float] = D[0.0:8.0]
+    wander_deg:            Sample[float] = D[3.0:8.0]
+
+    min_elevation_deg:     float = 45.0
+    branch_stagger:        float = 0.0
 
     def __init__(
         self,
         *,
         # ── Bark params (forwarded to BarkConfig) ────────────────────────────
-        r_base_mm:          Sample[float] | None = None,
-        aspect:             Sample[float] | None = None,
-        twist_rate:         float                = 0.018,
-        flare_amp:          float                = 0.55,
-        flare_fraction:     float                = 0.22,
-        flare_power:        float                = 2.5,
-        ridge_harmonics:    int                  = 5,
-        ridge_amp:          float                = 0.10,
-        ridge_drift_mm:     float                = 60.0,
-        wrinkle_amp:        Sample[float] | None = None,
-        wrinkle_period:     Sample[float] | None = None,
-        branch_r_tip_mm:    float                = 0.30,
-        ridge_min_r_mm:     float                = 1.2,
-        branch_min_r_mm:    float                = 0.20,
-        az_segs:            int                  = 16,
-        sink:               float                = 0.15,
-        curve_segs:         int                  = 8,
-        curve_tension:      float                = 0.5,
+        r_base_mm:             Sample[float] | None = None,
+        aspect:                Sample[float] | None = None,
+        twist_rate:            float                = 0.018,
+        flare_amp:             float                = 0.55,
+        flare_fraction:        float                = 0.22,
+        flare_power:           float                = 2.5,
+        ridge_harmonics:       int                  = 5,
+        ridge_amp:             float                = 0.10,
+        ridge_drift_mm:        float                = 60.0,
+        wrinkle_amp:           Sample[float] | None = None,
+        wrinkle_period:        Sample[float] | None = None,
+        branch_r_tip_mm:       float                = 0.30,
+        ridge_min_r_mm:        float                = 1.2,
+        branch_min_r_mm:       float                = 0.20,
+        az_segs:               int                  = 16,
+        sink:                  float                = 0.15,
+        curve_segs:            int                  = 8,
+        curve_tension:         float                = 0.5,
         # ── Constructive skeleton params ────────────────────────────────────
-        height_max_mm:      Sample[float] | None = None,
-        n_levels:           int                  = 3,
-        n_segs_per_level:   int | list[int]      = 4,
-        spread_angle_deg:   Sample[float] | list[Sample[float]] | None = None,
-        pipe_model_exp:     float                = 2.0,
-        n_trunk_segs:       int                  = 5,
-        split_count_min:    int                  = 2,
-        split_count_max:    int                  = 3,
-        initial_lean_deg:   Sample[float] | None = None,
-        wander_deg:         Sample[float] | None = None,
-        min_elevation_deg:  float                = 45.0,
+        height_max_mm:         Sample[float] | None = None,
+        height_mm:             Sample[float] | None = None,
+        n_levels:              int                  = 3,
+        pipe_model_exp:        float                = 2.0,
+        crown_radius_mm:       Sample[float] | None = None,
+        trunk_height_mm:        Sample[float] | None = None,
+        crown_height_fraction: float                = 0.70,
+        top_pointiness:         float                = 0.75,
+        top_curve:              float                = 1.40,
+        bottom_pointiness:      float                = 0.35,
+        bottom_curve:           float                = 0.80,
+        crown_spread:          float | None         = None,
+        crown_taper:           float | None         = None,
+        n_trunk_segs:          int                  = 5,
+        split_count_min:       int                  = 2,
+        split_count_max:       int                  = 3,
+        initial_lean_deg:      Sample[float] | None = None,
+        wander_deg:            Sample[float] | None = None,
+        min_elevation_deg:     float                = 45.0,
+        branch_stagger:        float                = 0.0,
     ) -> None:
         if n_levels < 0:
             raise ValueError("n_levels must be non-negative")
@@ -786,6 +804,14 @@ class ConstTreeConfig:
             raise ValueError("split_count_min/max must define a positive inclusive range")
         if pipe_model_exp <= 0.0:
             raise ValueError("pipe_model_exp must be positive")
+        if not (0.0 < crown_height_fraction < 1.0):
+            raise ValueError("crown_height_fraction must be in (0, 1)")
+        if height_max_mm is not None and height_mm is not None:
+            raise TypeError("pass either height_max_mm=... or height_mm=..., not both")
+        if crown_spread is not None:
+            bottom_curve = crown_spread
+        if crown_taper is not None:
+            top_curve = crown_taper
 
         self.bark = BarkConfig(
             r_base_mm=r_base_mm, aspect=aspect, twist_rate=twist_rate,
@@ -798,22 +824,31 @@ class ConstTreeConfig:
             az_segs=az_segs, sink=sink,
             curve_segs=curve_segs, curve_tension=curve_tension,
         )
+        height_value = (
+            height_max_mm if height_max_mm is not None
+            else height_mm if height_mm is not None
+            else D[20.0:40.0]
+        )
         vals = {
-            'height_max_mm': height_max_mm if height_max_mm is not None else D[20.0:40.0],
-            'n_levels': n_levels,
-            'n_segs_per_level': n_segs_per_level,
-            'spread_angle_deg': (
-                spread_angle_deg if spread_angle_deg is not None else D[20.0:38.0]
-            ),
-            'pipe_model_exp': pipe_model_exp,
-            'n_trunk_segs': n_trunk_segs,
-            'split_count_min': split_count_min,
-            'split_count_max': split_count_max,
-            'initial_lean_deg': (
-                initial_lean_deg if initial_lean_deg is not None else D[0.0:8.0]
-            ),
-            'wander_deg': wander_deg if wander_deg is not None else D[3.0:8.0],
-            'min_elevation_deg': min_elevation_deg,
+            'height_max_mm':         height_value,
+            'n_levels':              n_levels,
+            'pipe_model_exp':        pipe_model_exp,
+            'crown_radius_mm':       crown_radius_mm if crown_radius_mm is not None else D[7.0:11.0],
+            'trunk_height_mm':        trunk_height_mm,
+            'crown_height_fraction': crown_height_fraction,
+            'top_pointiness':         max(0.0, min(1.0, top_pointiness)),
+            'top_curve':              max(0.01, top_curve),
+            'bottom_pointiness':      max(0.0, min(1.0, bottom_pointiness)),
+            'bottom_curve':           max(0.01, bottom_curve),
+            'crown_spread':           max(0.01, bottom_curve),
+            'crown_taper':            max(0.01, top_curve),
+            'n_trunk_segs':          n_trunk_segs,
+            'split_count_min':       split_count_min,
+            'split_count_max':       split_count_max,
+            'initial_lean_deg':      initial_lean_deg if initial_lean_deg is not None else D[0.0:8.0],
+            'wander_deg':            wander_deg if wander_deg is not None else D[3.0:8.0],
+            'min_elevation_deg':     min_elevation_deg,
+            'branch_stagger':        max(0.0, min(1.0, branch_stagger)),
         }
         for k, v in vals.items():
             setattr(self, k, v)
