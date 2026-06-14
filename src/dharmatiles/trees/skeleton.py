@@ -59,6 +59,24 @@ def _compute_arc_dists(
     return arc
 
 
+# ── FDM elevation clamp ───────────────────────────────────────────────────────
+
+def _clamp_elevation(g: np.ndarray, min_z: float) -> np.ndarray:
+    """Return a unit vector with g[2] >= min_z (hard FDM overhang floor).
+
+    ``min_z = sin(radians(sca_min_elevation))`` so a value of 0.707 enforces
+    ≥ 45° above horizontal.  When the raw growth direction falls below the
+    floor the Z component is raised to min_z and the vector is re-normalised.
+    If the result would be zero (min_z ≥ 1) the vector is set to straight up.
+    """
+    if g[2] >= min_z:
+        return g
+    g    = g.copy()
+    g[2] = min_z
+    gn   = float(np.linalg.norm(g))
+    return g / gn if gn > 1e-8 else np.array([0., 0., 1.])
+
+
 # ── Core SCA loop ─────────────────────────────────────────────────────────────
 
 def _sca_grow(
@@ -71,7 +89,9 @@ def _sca_grow(
 
     Tips split when their visible attractors show sufficient XY spread
     (> ``sca_branch_xy_std``) and both clusters have >= ``sca_min_branch_att``
-    members.  Growth is clamped to non-negative Z (FDM overhang safety).
+    members.  Every growth direction is clamped to at least
+    ``sca_min_elevation`` degrees above horizontal so no segment falls below
+    the FDM overhang threshold.
     """
     n_roots = len(root_positions)
     if len(att) == 0:
@@ -81,6 +101,7 @@ def _sca_grow(
     parents:  list[int]        = [-1] * n_roots
     tips:     set[int]         = set(range(n_roots))
     tropism   = np.array([0.0, 0.0, cfg.sca_tropism], dtype=float)
+    min_z     = float(np.sin(np.radians(cfg.sca_min_elevation)))
 
     for _step in range(cfg.sca_max_steps):
         if att.shape[0] == 0 or not tips:
@@ -111,10 +132,7 @@ def _sca_grow(
                 g  = direction / dn + tropism
                 gn = float(np.linalg.norm(g))
                 g  = g / gn if gn > 1e-8 else np.array([0., 0., 1.])
-                if g[2] < 0.0:
-                    g[2] = 0.0
-                    gn   = float(np.linalg.norm(g))
-                    g    = g / gn if gn > 1e-8 else np.array([0., 0., 1.])
+                g  = _clamp_elevation(g, min_z)
                 new_nodes.append(
                     (tip_pos + g * cfg.sca_segment_mm, tip_idx)
                 )
@@ -144,10 +162,7 @@ def _sca_grow(
                             g  = dirs_n[submask].mean(axis=0) + tropism
                             gn = np.linalg.norm(g)
                             g  = g / gn if gn > 1e-8 else np.array([0., 0., 1.])
-                            if g[2] < 0.0:
-                                g[2] = 0.0
-                                gn = np.linalg.norm(g)
-                                g = g / gn if gn > 1e-8 else np.array([0., 0., 1.])
+                            g  = _clamp_elevation(g, min_z)
                             new_nodes.append(
                                 (nodes_arr[tip_idx] + g * cfg.sca_segment_mm, tip_idx)
                             )
@@ -158,10 +173,7 @@ def _sca_grow(
                 growth = dirs.sum(axis=0) + tropism
                 gn     = np.linalg.norm(growth)
                 growth = growth / gn if gn > 1e-8 else np.array([0., 0., 1.])
-                if growth[2] < 0.0:
-                    growth[2] = 0.0
-                    gn = np.linalg.norm(growth)
-                    growth = growth / gn if gn > 1e-8 else np.array([0., 0., 1.])
+                growth = _clamp_elevation(growth, min_z)
                 new_nodes.append(
                     (nodes_arr[tip_idx] + growth * cfg.sca_segment_mm, tip_idx)
                 )

@@ -567,7 +567,8 @@ class TreeConfig:
     sca_perception_r:  float         = 9.0            # attractor influence radius (mm)
     sca_kill_r:        float         = 3.5            # attractor kill radius (mm)
     sca_max_steps:     int           = 80             # maximum SCA iterations
-    sca_tropism:       float         = 0.25           # upward bias (keeps branches FDM-safe)
+    sca_tropism:       float         = 0.25           # upward bias (soft preference for upward growth)
+    sca_min_elevation: float         = 45.0           # degrees above horizontal — hard FDM floor (45° = printable without supports)
     sca_branch_xy_std: float         = 0.30           # XY std-dev threshold to trigger tip split
     sca_min_branch_att: int          = 3              # min attractors per cluster to allow split
 
@@ -608,6 +609,7 @@ class TreeConfig:
         sca_kill_r:         float                = 3.5,
         sca_max_steps:      int                  = 80,
         sca_tropism:        float                = 0.25,
+        sca_min_elevation:  float                = 45.0,
         sca_branch_xy_std:  float                = 0.30,
         sca_min_branch_att: int                  = 3,
         branch_r_tip_mm:    float                = 0.30,
@@ -640,6 +642,7 @@ class TreeConfig:
             'sca_kill_r':        sca_kill_r,
             'sca_max_steps':     sca_max_steps,
             'sca_tropism':       sca_tropism,
+            'sca_min_elevation': sca_min_elevation,
             'sca_branch_xy_std': sca_branch_xy_std,
             'sca_min_branch_att': sca_min_branch_att,
             'branch_r_tip_mm':   branch_r_tip_mm,
