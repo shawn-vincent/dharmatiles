@@ -36,7 +36,6 @@ from .skeleton import _compute_arc_dists
 
 
 _UP = np.array([0.0, 0.0, 1.0])
-_GOLDEN_RATIO = (1.0 + np.sqrt(5.0)) / 2.0
 
 
 # ---------------------------------------------------------------------------
@@ -126,88 +125,162 @@ def _sample_level_values(value, n_levels: int, name: str, rng: np.random.Generat
 
 
 # ---------------------------------------------------------------------------
-# Crown disc: Fibonacci (sunflower) target distribution
+# Angular-sector zone helpers
 # ---------------------------------------------------------------------------
 
-def _fibonacci_disc_targets(
-    cx: float,
-    cy: float,
-    z: float,
-    radius: float,
-    n: int,
-    phase: float,
-    rng: np.random.Generator,
-    jitter_frac: float = 0.25,
-) -> np.ndarray:
-    """Return (n, 3) positions distributed evenly in a disc of radius *radius*.
+def _compute_parent_zones(
+    parent_xy: np.ndarray,
+    center: np.ndarray,
+) -> list[tuple[float, float]]:
+    """Return (zone_center_angle, zone_half_width) for each parent.
 
-    Uses the sunflower / Fibonacci spiral (irrational angular step = 2π/φ²)
-    so n points of any count are optimally spread.  A random *phase* rotates
-    the whole pattern; small Gaussian jitter adds organic variation.
+    Each parent owns the arc from the midpoint between it and its
+    counter-clockwise predecessor to the midpoint between it and its
+    successor.  With n parents equally spaced at 120° the zones are
+    equal 120°-wide wedges; unequal spacing gives proportionally unequal
+    zones.  A single parent owns the full circle (zone_half = π).
+    """
+    n = len(parent_xy)
+    if n == 1:
+        return [(0.0, np.pi)]
+
+    offsets = parent_xy - center
+    angles  = np.arctan2(offsets[:, 1], offsets[:, 0])
+    order   = np.argsort(angles)
+    sa      = angles[order]            # sorted angles
+
+    zones_sorted: list[tuple[float, float]] = []
+    for i in range(n):
+        prev_a = sa[(i - 1) % n]
+        curr_a = sa[i]
+        next_a = sa[(i + 1) % n]
+
+        arc_prev = (curr_a - prev_a) % (2.0 * np.pi)   # CCW arc from prev to curr
+        arc_next = (next_a - curr_a) % (2.0 * np.pi)   # CCW arc from curr to next
+
+        zone_half   = (arc_prev + arc_next) / 4.0
+        zone_center = curr_a + (arc_next - arc_prev) / 4.0
+        zones_sorted.append((float(zone_center), float(zone_half)))
+
+    zones: list[tuple[float, float]] = [(0.0, 0.0)] * n
+    for rank, orig in enumerate(order):
+        zones[orig] = zones_sorted[rank]
+    return zones
+
+
+def _clamp_to_zone(
+    pt:          np.ndarray,
+    center:      np.ndarray,
+    radius:      float,
+    zone_center: float,
+    zone_half:   float,
+) -> np.ndarray:
+    """Clamp a 2-D point to a disc-wedge: radius ≤ *radius*, angle within zone."""
+    off = pt - center
+    r   = float(np.linalg.norm(off))
+
+    if r < 1e-8:
+        # Exactly at centre: push to zone centre at a safe radius
+        r = radius * 0.1
+        return center + np.array([np.cos(zone_center), np.sin(zone_center)]) * r
+
+    # Clamp radius
+    if r > radius:
+        off = off / r * radius
+        r   = radius
+
+    # Clamp angle into [zone_center - zone_half, zone_center + zone_half]
+    angle = float(np.arctan2(off[1], off[0]))
+    diff  = (angle - zone_center + np.pi) % (2.0 * np.pi) - np.pi   # in (-π, π]
+    if abs(diff) > zone_half:
+        clamped_angle = zone_center + np.sign(diff) * zone_half
+        off = np.array([np.cos(clamped_angle), np.sin(clamped_angle)]) * r
+
+    return center + off
+
+
+# ---------------------------------------------------------------------------
+# Crown disc: repulsion-based target distribution with per-child zones
+# ---------------------------------------------------------------------------
+
+def _repulsion_disc_targets(
+    cx:         float,
+    cy:         float,
+    z:          float,
+    radius:     float,
+    n:          int,
+    seed_xy:    np.ndarray,
+    rng:        np.random.Generator,
+    zones:      list[tuple[float, float]] | None = None,
+    max_iters:  int = 400,
+) -> np.ndarray:
+    """Place n points in a disc by repulsion from seed positions.
+
+    Each point starts at its row in *seed_xy* (the parent tip's XY).
+    Points repel each other via position-based constraint projection and
+    are hard-clamped to their disc-wedge zone after every iteration.
+    The loop exits as soon as no pair violates the minimum spacing —
+    minimum total displacement.
+
+    *zones* is a list of (zone_center, zone_half) per child.  ``None``
+    means all children share the full circle (single-parent case).
+
+    Returns (n, 3) with the given z coordinate.
     """
     if n <= 0:
         return np.empty((0, 3), dtype=float)
+
+    center = np.array([cx, cy], dtype=float)
+    full_circle = zones is None
+
     if n == 1:
-        # Single branch: centre of disc (grows straight up from trunk)
-        return np.array([[cx, cy, z]], dtype=float)
+        pt = seed_xy[0].copy().astype(float)
+        zc, zh = (0.0, np.pi) if full_circle else zones[0]
+        pt = _clamp_to_zone(pt, center, radius, zc, zh)
+        return np.array([[pt[0], pt[1], z]], dtype=float)
 
-    i = np.arange(n, dtype=float)
-    r = radius * np.sqrt((i + 0.5) / n)         # even-area radial spacing
-    theta = 2.0 * np.pi * i / _GOLDEN_RATIO ** 2 + phase
+    # target spacing: optimal packing estimate
+    target_spacing = radius * 1.8 / float(np.sqrt(n))
+    ts2 = target_spacing * target_spacing
 
-    x = cx + r * np.cos(theta)
-    y = cy + r * np.sin(theta)
+    # Initialise: clamp each seed to its zone
+    pts = seed_xy[:n].copy().astype(float)
+    for k in range(n):
+        zc, zh = (0.0, np.pi) if full_circle else zones[k]
+        pts[k] = _clamp_to_zone(pts[k], center, radius, zc, zh)
 
-    if jitter_frac > 0.0:
-        avg_spacing = radius / float(np.sqrt(max(n, 1)))
-        sigma = jitter_frac * avg_spacing
-        x = x + rng.normal(0.0, sigma, n)
-        y = y + rng.normal(0.0, sigma, n)
+    # Tiny jitter breaks exact coincidence
+    pts += rng.normal(0.0, radius * 5e-4, pts.shape)
 
-    return np.stack([x, y, np.full(n, z)], axis=1).astype(float)
+    for _ in range(max_iters):
+        any_violated = False
 
+        for i in range(n):
+            for j in range(i + 1, n):
+                diff = pts[i] - pts[j]
+                d2   = float(diff[0] * diff[0] + diff[1] * diff[1])
+                if d2 >= ts2:
+                    continue
+                any_violated = True
+                d = float(np.sqrt(d2))
+                if d < 1e-10:
+                    ang  = float(rng.uniform(0.0, 2.0 * np.pi))
+                    diff = np.array([np.cos(ang), np.sin(ang)])
+                    d    = 1.0
+                direction = diff / d
+                push      = (target_spacing - d) * 0.5
+                pts[i] += direction * push
+                pts[j] -= direction * push
 
-# ---------------------------------------------------------------------------
-# Nearest-neighbour target assignment (balanced by desired child counts)
-# ---------------------------------------------------------------------------
+        # Hard clamp every point to its zone
+        for k in range(n):
+            zc, zh = (0.0, np.pi) if full_circle else zones[k]
+            pts[k] = _clamp_to_zone(pts[k], center, radius, zc, zh)
 
-def _assign_targets_to_parents(
-    targets_xy: np.ndarray,
-    parent_xy: np.ndarray,
-    desired_counts: list[int],
-) -> list[list[int]]:
-    """Assign each target to the nearest parent that still has capacity.
+        if not any_violated:
+            break
 
-    *desired_counts[p]* is the number of children parent *p* must receive.
-    Targets are processed in ascending distance order (greedy), so each
-    parent claims the closest available targets first.
-    """
-    n_targets = len(targets_xy)
-    n_parents = len(parent_xy)
-    if n_targets == 0 or n_parents == 0:
-        return [[] for _ in range(n_parents)]
-
-    # All (dist², target, parent) pairs, sorted ascending
-    pairs: list[tuple[float, int, int]] = []
-    for t in range(n_targets):
-        for p in range(n_parents):
-            dx = float(targets_xy[t, 0] - parent_xy[p, 0])
-            dy = float(targets_xy[t, 1] - parent_xy[p, 1])
-            pairs.append((dx * dx + dy * dy, t, p))
-    pairs.sort()
-
-    assignments: list[list[int]] = [[] for _ in range(n_parents)]
-    remaining = list(desired_counts)
-    taken = [False] * n_targets
-
-    for _d2, t, p in pairs:
-        if taken[t] or remaining[p] <= 0:
-            continue
-        assignments[p].append(t)
-        taken[t] = True
-        remaining[p] -= 1
-
-    return assignments
+    return np.stack([pts[:, 0], pts[:, 1], np.full(n, z)], axis=1).astype(float)
 
 
 # ---------------------------------------------------------------------------
@@ -339,10 +412,6 @@ def grow_const_skeleton(
     active_tips: list[int] = [trunk_tip]
 
     # ── Level-by-level branching ──────────────────────────────────────────────
-    # Phase advances by an irrational fraction each level so consecutive crown
-    # discs are not rotationally aligned.
-    crown_phase = float(rng.uniform(0.0, 2.0 * np.pi))
-
     for level in range(cfg.n_levels):
         n_segs = n_segs_per_level[level]
         if n_segs <= 0 or not active_tips:
@@ -355,18 +424,41 @@ def grow_const_skeleton(
         ]
         n_total = sum(n_children)
 
-        # Distribute targets evenly in the crown cross-section at this level
-        targets = _fibonacci_disc_targets(
-            cx, cy, crown_z[level], crown_r[level], n_total, crown_phase, rng,
+        # Compute one angular zone per parent so children from different
+        # parents can never cross: each zone is a disc wedge whose angular
+        # boundaries bisect the arcs between adjacent parent angles.
+        parent_xy = np.array(
+            [[nodes[tip_idx][0], nodes[tip_idx][1]] for tip_idx in active_tips],
+            dtype=float,
+        )
+        center2d = np.array([cx, cy], dtype=float)
+        parent_zones = _compute_parent_zones(parent_xy, center2d)
+
+        # Each child inherits its parent's zone
+        child_zones = [
+            parent_zones[slot]
+            for slot, count in enumerate(n_children)
+            for _ in range(count)
+        ]
+
+        # Seed each child at its parent's XY, then spread by repulsion
+        seed_xy = np.array(
+            [nodes[tip_idx][:2] for tip_idx, count in zip(active_tips, n_children)
+             for _ in range(count)],
+            dtype=float,
+        )
+        targets = _repulsion_disc_targets(
+            cx, cy, crown_z[level], crown_r[level], n_total, seed_xy, rng,
+            zones=child_zones,
         )
 
-        # Assign targets to their nearest parent (capacity-bounded)
-        parent_xy = np.array(
-            [[nodes[i][0], nodes[i][1]] for i in active_tips], dtype=float,
-        )
-        assignments = _assign_targets_to_parents(
-            targets[:, :2], parent_xy, n_children,
-        )
+        # Assignments are fixed by construction — target k belongs to whichever
+        # parent seeded it; no re-assignment needed (zones enforce non-crossing).
+        assignments: list[list[int]] = [[] for _ in range(len(active_tips))]
+        k = 0
+        for slot, count in enumerate(n_children):
+            assignments[slot] = list(range(k, k + count))
+            k += count
 
         # Place one node directly at each target — the surface renderer
         # curves each single-segment edge with a Hermite cubic.
@@ -377,7 +469,6 @@ def grow_const_skeleton(
                 new_tips.append(final)
 
         active_tips = new_tips
-        crown_phase += 2.0 * np.pi / _GOLDEN_RATIO   # irrational advance
         if not active_tips:
             break
 
