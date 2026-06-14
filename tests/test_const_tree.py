@@ -3,10 +3,12 @@ from __future__ import annotations
 import numpy as np
 
 from dharmatiles.core.config import ConstTreeConfig
+from dharmatiles.core.config import SurfaceScaTreeConfig
 from dharmatiles.trees.const_skeleton import (
     _crown_profile,
     grow_const_skeleton,
 )
+from dharmatiles.trees.surface_skeleton import grow_surface_skeleton
 from dharmatiles.trees.radii import assign_radii
 from dharmatiles.trees.surface import (
     _build_children,
@@ -136,3 +138,47 @@ def test_const_tree_builds_mesh() -> None:
     assert len(mesh.vertices) > 0
     assert len(mesh.faces) > 0
     assert 0.0 < height <= 22.0
+
+
+def test_surface_sca_tree_ends_branches_on_canopy_surface() -> None:
+    cfg = SurfaceScaTreeConfig(
+        height_max_mm=24.0,
+        trunk_height_mm=6.0,
+        n_trunk_segs=4,
+        crown_radius_mm=10.0,
+        top_pointiness=0.75,
+        top_curve=1.4,
+        bottom_pointiness=0.35,
+        bottom_curve=0.8,
+        surface_point_spacing_mm=5.0,
+        surface_branch_segment_mm=2.0,
+        surface_branch_lift_mm=0.5,
+        r_base_mm=2.5,
+        ridge_amp=0.0,
+        wrinkle_amp=0.0,
+    )
+    rng = np.random.default_rng(789)
+    nodes, parents, arc_dists, crown_base_z = grow_surface_skeleton(10.0, 12.0, 1.0, cfg, rng)
+
+    assert len(nodes) > int(cfg.n_trunk_segs) + 1
+    assert np.isclose(crown_base_z, 7.0)
+    assert np.all(parents[1:] >= 0)
+
+    child_count = np.zeros(len(nodes), dtype=int)
+    for i in range(1, len(nodes)):
+        child_count[int(parents[i])] += 1
+        assert np.isclose(
+            arc_dists[i],
+            arc_dists[int(parents[i])] + np.linalg.norm(nodes[i] - nodes[int(parents[i])]),
+        )
+
+    leaves = np.flatnonzero(child_count == 0)
+    assert len(leaves) >= 8
+    assert nodes[leaves, 2].min() >= crown_base_z - 1e-6
+    branchpoints = np.flatnonzero(child_count > 1)
+    assert np.count_nonzero(nodes[branchpoints, 2] > crown_base_z + 2.0) >= 2
+
+    mesh, height = build_tree(10.0, 12.0, 1.0, cfg, np.random.default_rng(789))
+    assert len(mesh.vertices) > 0
+    assert len(mesh.faces) > 0
+    assert 0.0 < height <= 24.0 + cfg.surface_branch_lift_mm

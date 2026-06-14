@@ -1,8 +1,8 @@
 """
-Grass-and-trees tile — one constructive deciduous tree on grass.
+Grass-and-trees tile — one canopy-surface SCA-style deciduous tree on grass.
 
 1×1 only.  One tree is placed per square (count=1).
-The trunk and branches come from the constructive tree grower.
+The trunk and branches terminate on evenly spaced canopy surface points.
 Rocks and 3D grass fill the rest; grass steers around the tree base.
 """
 
@@ -10,7 +10,7 @@ from dharmatiles.spec import (
     Tile, Region, SurfaceConfig, SpeciesConfig, FloodFill, D,
 )
 from dharmatiles.layers import GrassCarpet, Scatter
-from dharmatiles.scatter import Rocks, Grass, ConstTree
+from dharmatiles.scatter import Rocks, Grass, SurfaceScaTree
 from dharmatiles.scatter.config import Uniform, Grouped
 
 species = SpeciesConfig()
@@ -27,13 +27,13 @@ tile = Tile(
                     placement=Grouped(groups_per_square=240),
                 ),
                 Scatter(
-                    ConstTree(
-                        height_max_mm          = D[24.0:31.0],
-                        trunk_height_mm        = D[7.0:9.5],
+                    SurfaceScaTree(
+                        height_max_mm          = 40.0,
+                        trunk_height_mm        = 5.0,
                         n_trunk_segs           = 5,
                         n_levels               = 4,
-                        crown_radius_mm        = D[12.0:20.0],
-                        top_pointiness         = 0.75,
+                        crown_radius_mm        = 20.0,
+                        top_pointiness         = 0.0,
                         top_curve              = 1.40,
                         bottom_pointiness      = 0.35,
                         bottom_curve           = 0.80,
@@ -45,7 +45,11 @@ tile = Tile(
                         min_elevation_deg      = 45.0,
                         ridge_amp              = 0.0,
                         wrinkle_amp            = 0.0,
-                        branch_stagger         = 1.0,
+                        surface_point_spacing_mm  = 7.0,
+                        surface_branch_segment_mm = 2.0,
+                        surface_branch_lift_mm    = 0.7,
+                        surface_sca_target_bias   = 0.65,
+                        surface_sca_tangent_bias  = 0.35,
                         placement              = Uniform(count_per_square=1),
                     ),
                     Rocks(r=D[0.8:2.0]),

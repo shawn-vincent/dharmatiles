@@ -17,6 +17,7 @@ import trimesh
 from ..dist import sample, bounds as _bounds
 from .skeleton import grow_skeleton
 from .const_skeleton import grow_const_skeleton
+from .surface_skeleton import grow_surface_skeleton
 from .radii    import assign_radii
 from .surface  import build_tree_mesh
 
@@ -37,7 +38,13 @@ def build_tree(
     """
     r_root = float(sample(cfg.bark.r_base_mm, rng))
 
-    if hasattr(cfg, "height_max_mm"):
+    if hasattr(cfg, "surface_point_spacing_mm"):
+        nodes_xyz, parents, arc_dists, crown_base_z = grow_surface_skeleton(
+            cx, cy, tz, cfg, rng,
+        )
+        pipe_exp = float(getattr(cfg, "pipe_model_exp", 2.0))
+        include_internal_self = bool(getattr(cfg, "taper_within_run", False))
+    elif hasattr(cfg, "height_max_mm"):
         nodes_xyz, parents, arc_dists, crown_base_z = grow_const_skeleton(
             cx, cy, tz, cfg, rng,
         )

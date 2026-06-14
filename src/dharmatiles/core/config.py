@@ -855,6 +855,73 @@ class ConstTreeConfig:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# SurfaceScaTreeConfig — constructive canopy + surface endpoint SCA-style tree
+# ─────────────────────────────────────────────────────────────────────────────
+
+@dataclass(init=False)
+class SurfaceScaTreeConfig(ConstTreeConfig):
+    """Tree config for branches that terminate on the canopy surface.
+
+    This variant shares ``ConstTreeConfig``'s explicit crown controls, but the
+    skeleton samples terminal points over the canopy surface and uses them as
+    SCA attractors.
+    """
+
+    surface_point_spacing_mm:  float = 4.5
+    surface_branch_segment_mm: float = 2.0
+    surface_branch_lift_mm:    float = 0.8
+    surface_sca_perception_mm: float | None = None
+    surface_sca_kill_mm:       float | None = None
+    surface_sca_max_steps:     int = 160
+    surface_sca_tropism:       float = 0.12
+    surface_sca_branch_xy_std: float = 0.26
+    surface_sca_min_branch_points: int = 3
+    surface_sca_target_bias:   float = 0.55
+    surface_sca_tangent_bias:  float = 0.30
+
+    def __init__(
+        self,
+        *,
+        surface_point_spacing_mm:  float = 4.5,
+        surface_branch_segment_mm: float = 2.0,
+        surface_branch_lift_mm:    float = 0.8,
+        surface_sca_perception_mm: float | None = None,
+        surface_sca_kill_mm:       float | None = None,
+        surface_sca_max_steps:     int = 160,
+        surface_sca_tropism:       float = 0.12,
+        surface_sca_branch_xy_std: float = 0.26,
+        surface_sca_min_branch_points: int = 3,
+        surface_sca_target_bias:   float = 0.55,
+        surface_sca_tangent_bias:  float = 0.30,
+        **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+        if surface_point_spacing_mm <= 0.0:
+            raise ValueError("surface_point_spacing_mm must be positive")
+        if surface_branch_segment_mm <= 0.0:
+            raise ValueError("surface_branch_segment_mm must be positive")
+        if surface_sca_perception_mm is not None and surface_sca_perception_mm <= 0.0:
+            raise ValueError("surface_sca_perception_mm must be positive")
+        if surface_sca_kill_mm is not None and surface_sca_kill_mm <= 0.0:
+            raise ValueError("surface_sca_kill_mm must be positive")
+        if surface_sca_max_steps <= 0:
+            raise ValueError("surface_sca_max_steps must be positive")
+        if surface_sca_min_branch_points <= 0:
+            raise ValueError("surface_sca_min_branch_points must be positive")
+        self.surface_point_spacing_mm = surface_point_spacing_mm
+        self.surface_branch_segment_mm = surface_branch_segment_mm
+        self.surface_branch_lift_mm = max(0.0, surface_branch_lift_mm)
+        self.surface_sca_perception_mm = surface_sca_perception_mm
+        self.surface_sca_kill_mm = surface_sca_kill_mm
+        self.surface_sca_max_steps = surface_sca_max_steps
+        self.surface_sca_tropism = surface_sca_tropism
+        self.surface_sca_branch_xy_std = max(0.0, surface_sca_branch_xy_std)
+        self.surface_sca_min_branch_points = surface_sca_min_branch_points
+        self.surface_sca_target_bias = max(0.0, surface_sca_target_bias)
+        self.surface_sca_tangent_bias = max(0.0, surface_sca_tangent_bias)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Flowers
 # ─────────────────────────────────────────────────────────────────────────────
 
