@@ -23,6 +23,7 @@ from .skeleton import _compute_arc_dists
 
 _UP = np.array([0.0, 0.0, 1.0])
 _GOLDEN_ANGLE = np.radians(137.50776405003785)
+_FORK_CLEARANCE_IGNORE_T = 0.35
 
 
 @dataclass(frozen=True)
@@ -200,12 +201,28 @@ def _candidates_are_compatible(
     a: _Candidate,
     b: _Candidate,
     nodes: list[np.ndarray],
+    parents: list[int],
     clearance_mm: float,
 ) -> bool:
     if clearance_mm <= 0.0:
         return True
+
+    a_parent = int(parents[a.tip_idx]) if a.tip_idx < len(parents) else -1
+    b_parent = int(parents[b.tip_idx]) if b.tip_idx < len(parents) else -1
     if a.tip_idx == b.tip_idx:
-        return True
+        return float(np.linalg.norm(a.end_pos - b.end_pos)) >= clearance_mm
+
+    same_parent_fork = a_parent >= 0 and a_parent == b_parent
+    if same_parent_fork:
+        a_start = nodes[a.tip_idx]
+        b_start = nodes[b.tip_idx]
+        a_clear_start = a_start + (a.end_pos - a_start) * _FORK_CLEARANCE_IGNORE_T
+        b_clear_start = b_start + (b.end_pos - b_start) * _FORK_CLEARANCE_IGNORE_T
+        dist = _segment_segment_distance(
+            a_clear_start, a.end_pos, b_clear_start, b.end_pos,
+        )
+        return dist >= clearance_mm
+
     dist = _segment_segment_distance(
         nodes[a.tip_idx], a.end_pos, nodes[b.tip_idx], b.end_pos,
     )
@@ -245,6 +262,7 @@ def _score_candidate(
 def _select_batch(
     candidates_by_slot: list[list[_Candidate]],
     nodes: list[np.ndarray],
+    parents: list[int],
     clearance_mm: float,
 ) -> list[_Candidate]:
     selected: list[_Candidate] = []
@@ -260,7 +278,7 @@ def _select_batch(
             reverse=True,
         )
         for cand in slot_candidates:
-            if all(_candidates_are_compatible(cand, prev, nodes, clearance_mm)
+            if all(_candidates_are_compatible(cand, prev, nodes, parents, clearance_mm)
                    for prev in selected):
                 selected.append(cand)
                 break
@@ -404,7 +422,7 @@ def _split_tips_batch(
             slot_idx += 1
 
     return _append_batch(
-        _select_batch(candidates_by_slot, nodes, cfg.space_clearance_mm),
+        _select_batch(candidates_by_slot, nodes, parents, cfg.space_clearance_mm),
         nodes, dirs, parents,
     )
 
@@ -445,7 +463,7 @@ def _grow_step_batch(
         candidates_by_slot.append(slot_candidates)
 
     return _append_batch(
-        _select_batch(candidates_by_slot, nodes, cfg.space_clearance_mm),
+        _select_batch(candidates_by_slot, nodes, parents, cfg.space_clearance_mm),
         nodes, dirs, parents,
     )
 

@@ -4,6 +4,8 @@ import numpy as np
 
 from dharmatiles.core.config import ConstTreeConfig
 from dharmatiles.trees.const_skeleton import (
+    _Candidate,
+    _candidates_are_compatible,
     _segment_has_space,
     _segment_segment_distance,
     grow_const_skeleton,
@@ -46,6 +48,39 @@ def test_const_skeleton_rejects_segments_that_cross_occupied_space() -> None:
     assert _segment_has_space(
         2, np.array([0.0, 2.0, 0.0]), nodes, parents, clearance_mm=0.1,
     )
+
+
+def test_const_skeleton_allows_same_fork_candidates_to_diverge() -> None:
+    nodes = [
+        np.array([0.0, 0.0, 0.0]),
+        np.array([-0.2, 0.0, 1.0]),
+        np.array([0.2, 0.0, 1.0]),
+    ]
+    parents = [-1, 0, 0]
+    left = _Candidate(
+        slot_idx=0,
+        tip_idx=1,
+        direction=np.array([-1.0, 0.0, 0.0]),
+        end_pos=np.array([-1.0, 0.0, 1.3]),
+        score=1.0,
+    )
+    right = _Candidate(
+        slot_idx=1,
+        tip_idx=2,
+        direction=np.array([1.0, 0.0, 0.0]),
+        end_pos=np.array([1.0, 0.0, 1.3]),
+        score=1.0,
+    )
+    crowded = _Candidate(
+        slot_idx=2,
+        tip_idx=2,
+        direction=np.array([-1.0, 0.0, 0.0]),
+        end_pos=np.array([-0.4, 0.0, 1.3]),
+        score=1.0,
+    )
+
+    assert _candidates_are_compatible(left, right, nodes, parents, clearance_mm=0.75)
+    assert not _candidates_are_compatible(left, crowded, nodes, parents, clearance_mm=0.75)
 
 
 def test_const_skeleton_respects_height_and_elevation_floor() -> None:
