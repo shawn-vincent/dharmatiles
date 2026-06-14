@@ -37,11 +37,16 @@ def _build_spine(
     lean_mm: float,
     lean_max_mm: float,
     rng: np.random.Generator,
+    initial_dir: np.ndarray | None = None,
 ) -> np.ndarray:
     """Return a (n_seg+1, 3) array: spine control points from base to apex.
 
     A random walk provides a natural lean; 2 passes of Laplacian smoothing
     remove kinks without moving the fixed endpoints.
+
+    *initial_dir* (unit vector) sets the first-segment direction so the trunk
+    grows tangent to the terrain surface at its base.  When None the first
+    segment is vertical.
     """
     seg_len = height / n_seg
     pts = np.empty((n_seg + 1, 3))
@@ -51,6 +56,12 @@ def _build_spine(
         prev = pts[i - 1]
         dx = float(rng.normal(0.0, lean_mm))
         dy = float(rng.normal(0.0, lean_mm))
+        if i == 1 and initial_dir is not None:
+            # First step: follow terrain normal for base tangency.
+            # RNG values are consumed (dx, dy) but not used, keeping the
+            # random sequence for subsequent steps unchanged.
+            pts[1] = prev + initial_dir * seg_len
+            continue
         # Clamp cumulative horizontal offset from base
         new_x = prev[0] + dx
         new_y = prev[1] + dy
@@ -375,27 +386,33 @@ def _stitch_rings(
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def build_trunk(
-    cx:    float,
-    cy:    float,
-    tz:    float,
-    angle: float,
+    cx:             float,
+    cy:             float,
+    tz:             float,
+    angle:          float,
     cfg,
-    rng:   np.random.Generator,
-) -> tuple[trimesh.Trimesh, np.ndarray, np.ndarray, float]:
-    """Build a trunk mesh and return ``(mesh, apex_pos, apex_dir, height_mm)``.
+    rng:            np.random.Generator,
+    terrain_normal: np.ndarray | None = None,
+) -> tuple[trimesh.Trimesh, np.ndarray, np.ndarray, float, np.ndarray]:
+    """Build a trunk mesh and return ``(mesh, apex_pos, apex_dir, height_mm, spine)``.
 
     *angle* rotates the initial Frenet frame so bark ridges face a random
     direction; it also controls the stub azimuth seeding.
 
+    *terrain_normal* (unit vector) orients the first spine segment along the
+    terrain surface normal so the trunk base is tangent to the ground.  When
+    None the trunk grows straight up.
+
     The caller (``scatter/trees.py``) passes the returned ``apex_pos``,
-    ``apex_dir``, and ``height_mm`` into ``build_branches``.
+    ``apex_dir``, ``height_mm``, and ``spine`` into ``build_branches``.
     """
     height  = float(sample(cfg.height_mm,  rng))
     r_base  = float(sample(cfg.r_base_mm,  rng))
     aspect  = float(sample(cfg.aspect,     rng))
 
     spine    = _build_spine(cx, cy, tz, height, cfg.n_seg, cfg.lean_mm,
-                             cfg.lean_max_mm, rng)
+                             cfg.lean_max_mm, rng,
+                             initial_dir=terrain_normal)
     tangents, normals_raw = _compute_frames(spine)
 
     # Rotate initial frame by *angle* so features face a deterministic direction
@@ -427,7 +444,7 @@ def build_trunk(
     mesh = trimesh.util.concatenate(parts)
     mesh.fix_normals()
 
-    return mesh, spine[-1].copy(), tangents[-1].copy(), height
+    return mesh, spine[-1].copy(), tangents[-1].copy(), height, spine.copy()
 
 
 def stamp_trunk(

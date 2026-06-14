@@ -36,6 +36,32 @@ from .config import Uniform
 from .distribute import scatter_positions
 
 
+def _terrain_normal(
+    terrain_z: np.ndarray,
+    cell_w: float,
+    grid_w: int,
+    grid_h: int,
+    x: float,
+    y: float,
+) -> np.ndarray:
+    """Return the unit terrain normal at world position (x, y).
+
+    Computed from the finite-difference gradient of *terrain_z*.  The result
+    is a unit vector pointing away from the terrain surface (upward side).
+    """
+    ix = int(round(x / cell_w))
+    iy = int(round(y / cell_w))
+    ix = max(1, min(grid_w - 2, ix))
+    iy = max(1, min(grid_h - 2, iy))
+
+    gx = (terrain_z[iy, ix + 1] - terrain_z[iy, ix - 1]) / (2.0 * cell_w)
+    gy = (terrain_z[iy + 1, ix] - terrain_z[iy - 1, ix]) / (2.0 * cell_w)
+
+    n  = np.array([-gx, -gy, 1.0])
+    nn = np.linalg.norm(n)
+    return n / nn if nn > 1e-8 else np.array([0.0, 0.0, 1.0])
+
+
 class Trees:
     """Scatter deciduous tree trunks (and optional branch crowns) into a region.
 
@@ -99,11 +125,19 @@ class Trees:
                                       np.array([x]), np.array([y]))[0])
             angle = float(rng.uniform(0.0, 2.0 * np.pi))
 
+            # Terrain normal at this position: lets the trunk grow tangent to slope
+            t_normal = _terrain_normal(
+                scene.terrain_z,
+                surface.cell_w, surface.grid_w, surface.grid_h,
+                x, y,
+            )
+
             # Independent sub-RNG per tree so trees don't share entropy
             tree_rng = np.random.default_rng(int(rng.integers(2 ** 62)))
 
-            trunk_mesh, apex_pos, apex_dir, height_mm = build_trunk(
+            trunk_mesh, apex_pos, apex_dir, height_mm, trunk_spine = build_trunk(
                 x, y, tz, angle, self.cfg, tree_rng,
+                terrain_normal=t_normal,
             )
             if len(trunk_mesh.vertices) > 0:
                 _tag(trunk_mesh, Material.WOOD)
@@ -113,6 +147,7 @@ class Trees:
                 branch_mesh = build_branches(
                     apex_pos, apex_dir, x, y, tz, height_mm,
                     self.cfg, tree_rng,
+                    trunk_spine=trunk_spine,
                 )
                 if branch_mesh is not None and len(branch_mesh.vertices) > 0:
                     _tag(branch_mesh, Material.WOOD)

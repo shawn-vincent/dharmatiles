@@ -1,15 +1,20 @@
 """
 Branch skeleton generation via Space Colonization Algorithm (Runions 2007).
 
-The algorithm grows a tree skeleton from the trunk apex toward a cloud of
-attraction points seeded inside a crown ellipsoid:
+The algorithm grows a tree skeleton from multiple root nodes along the upper
+trunk toward a cloud of attraction points seeded inside a crown ellipsoid:
 
-1. Seed ``n_attractors`` points uniformly in the crown ellipsoid.
+1. Root nodes are taken from the top ``(1 - sca_trunk_root_frac)`` fraction
+   of the trunk spine so that branches appear to emerge from the trunk, not
+   only from the apex.
 2. At each step, for every attraction point find its nearest skeleton node
    within *perception_r*.
-3. For each tip node that has nearby attractors: grow one new node one
-   *segment_mm* in the normalised sum of attraction unit-vectors, plus a
-   vertical tropism bias (FDM-safe upward lean).
+3. For each tip node that has nearby attractors:
+   a. If the XY spread of attraction directions exceeds *sca_branch_xy_std*
+      **and** each prospective cluster has >= *sca_min_branch_att* attractors,
+      the tip **splits** into two children growing in the two cluster means.
+   b. Otherwise the tip grows one new node in the normalised sum of attraction
+      unit-vectors, plus a vertical tropism bias.
 4. Kill attractors within *kill_r* of any new node.
 5. Repeat until all attractors are consumed or *max_steps* is reached.
 
@@ -22,7 +27,7 @@ acceptable for FDM slicing (the slicer union-treats closed shells).
 
 Public API
 ----------
-``build_branches(apex_pos, apex_dir, cx, cy, tz, height_mm, cfg, rng)``
+``build_branches(apex_pos, apex_dir, cx, cy, tz, height_mm, cfg, rng, trunk_spine)``
     Run SCA and return a trimesh (or None if no branches grew).
 """
 from __future__ import annotations
@@ -58,34 +63,46 @@ def _sample_in_ellipsoid(
 # ── Space colonization ────────────────────────────────────────────────────────
 
 def _sca_grow(
-    root_pos:       np.ndarray,
-    n_attractors:   int,
-    crown_center:   np.ndarray,
-    crown_rx:       float,
-    crown_ry:       float,
-    crown_rz:       float,
-    segment_mm:     float,
-    perception_r:   float,
-    kill_r:         float,
-    max_steps:      int,
-    tropism:        float,
-    rng:            np.random.Generator,
+    root_positions:     np.ndarray,   # (N_roots, 3) — starting nodes (all parent = -1)
+    n_attractors:       int,
+    crown_center:       np.ndarray,
+    crown_rx:           float,
+    crown_ry:           float,
+    crown_rz:           float,
+    segment_mm:         float,
+    perception_r:       float,
+    kill_r:             float,
+    max_steps:          int,
+    tropism:            float,
+    branch_xy_std:      float,        # XY direction std-dev threshold for branching
+    min_branch_att:     int,          # min attractors per cluster to allow split
+    rng:                np.random.Generator,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Run SCA; return ``(nodes_xyz (N,3), parents (N,) int)``.
 
-    *root_pos* is node 0 (parent = -1).  All growth directions are clamped to
-    have a non-negative Z component so no branch points downward (FDM safety).
+    *root_positions* are the initial nodes (all with parent = -1).  Typically
+    these are a subset of the trunk spine so branches appear to emerge from
+    the trunk at multiple heights.
+
+    Growth directions are clamped to non-negative Z (FDM safety).
+
+    When a tip's visible attractors show sufficient XY spread (std > *branch_xy_std*)
+    **and** each half has >= *min_branch_att* members, the tip splits into two
+    children, one per cluster.  Otherwise a single child is grown toward the
+    average direction.
     """
+    n_roots = len(root_positions)
     att = _sample_in_ellipsoid(crown_center, crown_rx, crown_ry, crown_rz,
                                 n_attractors, rng)
-    # Discard attractors below the root (crown shouldn't reach underground)
-    att = att[att[:, 2] >= root_pos[2] - segment_mm]
+    # Discard attractors below the lowest root (crown shouldn't be underground)
+    min_root_z = float(root_positions[:, 2].min())
+    att = att[att[:, 2] >= min_root_z - segment_mm]
     if len(att) == 0:
-        return np.array([root_pos]), np.array([-1], dtype=int)
+        return root_positions.copy(), np.full(n_roots, -1, dtype=int)
 
-    node_xyz: list[np.ndarray] = [root_pos.copy()]
-    parents:  list[int]        = [-1]
-    tips:     set[int]         = {0}
+    node_xyz: list[np.ndarray] = [r.copy() for r in root_positions]
+    parents:  list[int]        = [-1] * n_roots
+    tips:     set[int]         = set(range(n_roots))
     tropism_vec = np.array([0.0, 0.0, tropism], dtype=float)
 
     for _step in range(max_steps):
@@ -114,28 +131,58 @@ def _sca_grow(
             if not np.any(mask):
                 continue
 
-            dirs = diff[mask, tip_idx, :]                       # (K_local, 3)
+            dirs  = diff[mask, tip_idx, :]                      # (K_local, 3)
             norms = np.sqrt((dirs * dirs).sum(axis=-1, keepdims=True))
-            dirs  = dirs / np.maximum(norms, 1e-8)
+            dirs_n = dirs / np.maximum(norms, 1e-8)
 
-            growth = dirs.sum(axis=0) + tropism_vec
-            gn     = np.linalg.norm(growth)
-            if gn < 1e-8:
-                growth = np.array([0.0, 0.0, 1.0])
-            else:
-                growth /= gn
+            # ── Branching detection ────────────────────────────────────────
+            # Split when the XY spread of attraction directions is large,
+            # using the direction of maximum XY variance to partition clusters.
+            branched = False
+            n_local = len(dirs_n)
+            if n_local >= 2 * min_branch_att:
+                xy_std = float(dirs_n[:, :2].std())
+                if xy_std > branch_xy_std:
+                    # Choose split axis: X or Y — whichever has more variance
+                    x_std = float(dirs_n[:, 0].std())
+                    y_std = float(dirs_n[:, 1].std())
+                    col   = 0 if x_std >= y_std else 1
+                    split = float(np.median(dirs_n[:, col]))
 
-            # FDM constraint: no downward growth
-            if growth[2] < 0.0:
-                growth[2] = 0.0
-                gn = np.linalg.norm(growth)
+                    mask_a = dirs_n[:, col] >= split
+                    mask_b = ~mask_a
+
+                    if np.sum(mask_a) >= min_branch_att and np.sum(mask_b) >= min_branch_att:
+                        for submask in (mask_a, mask_b):
+                            g = dirs_n[submask].mean(axis=0) + tropism_vec
+                            gn = np.linalg.norm(g)
+                            g  = g / gn if gn > 1e-8 else np.array([0.0, 0.0, 1.0])
+                            if g[2] < 0.0:
+                                g[2] = 0.0
+                                gn   = np.linalg.norm(g)
+                                g    = g / gn if gn > 1e-8 else np.array([0.0, 0.0, 1.0])
+                            new_nodes.append((nodes_arr[tip_idx] + g * segment_mm, tip_idx))
+                        branched = True
+
+            if not branched:
+                # ── Standard single-child growth ───────────────────────────
+                growth = dirs.sum(axis=0) + tropism_vec
+                gn     = np.linalg.norm(growth)
                 if gn < 1e-8:
                     growth = np.array([0.0, 0.0, 1.0])
                 else:
                     growth /= gn
 
-            new_pos = nodes_arr[tip_idx] + growth * segment_mm
-            new_nodes.append((new_pos, tip_idx))
+                # FDM constraint: no downward growth
+                if growth[2] < 0.0:
+                    growth[2] = 0.0
+                    gn = np.linalg.norm(growth)
+                    if gn < 1e-8:
+                        growth = np.array([0.0, 0.0, 1.0])
+                    else:
+                        growth /= gn
+
+                new_nodes.append((nodes_arr[tip_idx] + growth * segment_mm, tip_idx))
 
         if not new_nodes:
             break
@@ -169,6 +216,7 @@ def _assign_radii(
 
     Leaf nodes (no children) get *r_tip_mm*.  Radii are accumulated from
     leaves to root so the root radius reflects the total pipe cross-section.
+    Multiple root nodes (parent = -1) are each accumulated independently.
     """
     N      = len(parents)
     radii  = np.full(N, r_tip_mm, dtype=float)
@@ -197,6 +245,9 @@ def _skeleton_to_mesh(
     Edges whose *max* radius is below *min_r* are skipped (below FDM
     printable minimum).  Geometry at branch junctions overlaps; slicers
     treat overlapping closed shells as a union, which is correct.
+
+    Nodes with parent = -1 are roots; they appear as parents of edges but
+    have no incoming edge themselves.
     """
     parts: list[trimesh.Trimesh] = []
     N = len(nodes_xyz)
@@ -220,24 +271,27 @@ def _skeleton_to_mesh(
 # ── Public entry point ────────────────────────────────────────────────────────
 
 def build_branches(
-    apex_pos:  np.ndarray,
-    apex_dir:  np.ndarray,
-    cx:        float,
-    cy:        float,
-    tz:        float,
-    height_mm: float,
+    apex_pos:   np.ndarray,
+    apex_dir:   np.ndarray,
+    cx:         float,
+    cy:         float,
+    tz:         float,
+    height_mm:  float,
     cfg,
-    rng:       np.random.Generator,
+    rng:        np.random.Generator,
+    trunk_spine: np.ndarray | None = None,
 ) -> trimesh.Trimesh | None:
     """Grow and mesh the branch crown above *apex_pos*.
 
-    Returns a trimesh or ``None`` if no branches grew (e.g. all attractors
-    are below the trunk apex).
+    Returns a trimesh or ``None`` if no branches grew.
+
+    SCA root nodes are taken from the top ``(1 - cfg.sca_trunk_root_frac)``
+    fraction of *trunk_spine* so branches appear to emerge from the trunk at
+    multiple heights rather than only from the apex.  When *trunk_spine* is
+    None, only the apex is used as the root.
 
     Crown ellipsoid centre:
       ``(cx, cy, apex_pos.z + crown_rz*0.3 + crown_offset_z)``
-    This places the crown overlapping the apex and extending upward, which
-    gives natural branching from just below the trunk tip.
     """
     if not cfg.grow_branches:
         return None
@@ -253,22 +307,34 @@ def build_branches(
         apex_pos[2] + crown_rz * 0.3 + crown_offset_z,
     ])
 
+    # ── Root positions: upper trunk spine nodes ────────────────────────────
+    if trunk_spine is not None and len(trunk_spine) >= 3:
+        n      = len(trunk_spine)
+        # Use the top (1 - trunk_root_frac) of the spine as SCA roots,
+        # e.g. frac=0.60 → top 40% (last 40% of spine points).
+        start  = max(0, int(n * cfg.sca_trunk_root_frac))
+        roots  = trunk_spine[start:]          # (N_roots, 3)
+    else:
+        roots = apex_pos.reshape(1, 3)        # fallback: apex only
+
     nodes_xyz, parents = _sca_grow(
-        root_pos     = apex_pos,
-        n_attractors = cfg.n_attractors,
-        crown_center = crown_center,
-        crown_rx     = crown_rx,
-        crown_ry     = crown_ry,
-        crown_rz     = crown_rz,
-        segment_mm   = cfg.sca_segment_mm,
-        perception_r = cfg.sca_perception_r,
-        kill_r       = cfg.sca_kill_r,
-        max_steps    = cfg.sca_max_steps,
-        tropism      = cfg.sca_tropism,
-        rng          = rng,
+        root_positions   = roots,
+        n_attractors     = cfg.n_attractors,
+        crown_center     = crown_center,
+        crown_rx         = crown_rx,
+        crown_ry         = crown_ry,
+        crown_rz         = crown_rz,
+        segment_mm       = cfg.sca_segment_mm,
+        perception_r     = cfg.sca_perception_r,
+        kill_r           = cfg.sca_kill_r,
+        max_steps        = cfg.sca_max_steps,
+        tropism          = cfg.sca_tropism,
+        branch_xy_std    = cfg.sca_branch_xy_std,
+        min_branch_att   = cfg.sca_min_branch_att,
+        rng              = rng,
     )
 
-    if len(nodes_xyz) <= 1:
+    if len(nodes_xyz) <= len(roots):
         return None
 
     radii = _assign_radii(parents, cfg.branch_r_tip_mm)

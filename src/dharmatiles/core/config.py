@@ -567,20 +567,25 @@ class TreeConfig:
     stub_angle_up:     Sample[float] = D[0.15:0.40]   # radians above horizontal (FDM safe)
 
     # ── Space colonization (Phase 2) ──────────────────────────────────────────
-    grow_branches:     bool          = True
-    crown_rx:          Sample[float] = D[8.0:13.0]    # crown ellipsoid X radius (mm)
-    crown_ry:          Sample[float] = D[8.0:13.0]    # crown ellipsoid Y radius (mm)
-    crown_rz:          Sample[float] = D[5.0:9.0]     # crown ellipsoid Z half-height (mm)
-    crown_offset_z:    Sample[float] = D[0.0:3.0]     # extra upward shift of crown centre (mm)
-    n_attractors:      int           = 120             # attraction points seeded in crown
-    sca_segment_mm:    float         = 2.5             # skeleton segment length (mm)
-    sca_perception_r:  float         = 9.0             # attractor influence radius (mm)
-    sca_kill_r:        float         = 2.0             # attractor kill radius (mm)
-    sca_max_steps:     int           = 60              # maximum SCA iterations
-    sca_tropism:       float         = 0.3             # upward bias strength (FDM safe)
-    branch_r_tip_mm:   float         = 0.5             # leaf-node radius (mm)
-    branch_min_r_mm:   float         = 0.35            # skip edges below this radius (mm)
-    branch_az_segs:    int           = 8               # azimuth facets per branch segment
+    grow_branches:        bool          = True
+    crown_rx:             Sample[float] = D[8.0:13.0]  # crown ellipsoid X radius (mm)
+    crown_ry:             Sample[float] = D[8.0:13.0]  # crown ellipsoid Y radius (mm)
+    crown_rz:             Sample[float] = D[5.0:9.0]   # crown ellipsoid Z half-height (mm)
+    crown_offset_z:       Sample[float] = D[0.0:3.0]   # extra upward shift of crown centre (mm)
+    n_attractors:         int           = 120           # attraction points seeded in crown
+    sca_segment_mm:       float         = 2.5           # skeleton segment length (mm)
+    sca_perception_r:     float         = 9.0           # attractor influence radius (mm)
+    sca_kill_r:           float         = 3.0           # attractor kill radius (mm)
+    sca_max_steps:        int           = 60            # maximum SCA iterations
+    sca_tropism:          float         = 0.3           # upward bias strength (FDM safe)
+    # Branching: when XY spread of visible attractors > threshold, a tip splits into two
+    sca_branch_xy_std:    float         = 0.35          # XY direction std-dev threshold
+    sca_min_branch_att:   int           = 3             # min attractors per cluster to split
+    # Spine fraction at which to seed SCA branch roots (0=base, 1=apex)
+    sca_trunk_root_frac:  float         = 0.60          # top (1 - frac) of spine used as roots
+    branch_r_tip_mm:      float         = 0.5           # leaf-node radius (mm)
+    branch_min_r_mm:      float         = 0.35          # skip edges below this radius (mm)
+    branch_az_segs:       int           = 8             # azimuth facets per branch segment
 
     # ── Mesh quality ──────────────────────────────────────────────────────────
     az_segs:           int           = 24              # azimuth facets per trunk ring
@@ -618,9 +623,12 @@ class TreeConfig:
         n_attractors:        int                  = 120,
         sca_segment_mm:      float                = 2.5,
         sca_perception_r:    float                = 9.0,
-        sca_kill_r:          float                = 2.0,
+        sca_kill_r:          float                = 3.0,
         sca_max_steps:       int                  = 60,
         sca_tropism:         float                = 0.3,
+        sca_branch_xy_std:   float                = 0.35,
+        sca_min_branch_att:  int                  = 3,
+        sca_trunk_root_frac: float                = 0.60,
         branch_r_tip_mm:     float                = 0.5,
         branch_min_r_mm:     float                = 0.35,
         branch_az_segs:      int                  = 8,
@@ -660,6 +668,9 @@ class TreeConfig:
             'sca_kill_r':          sca_kill_r,
             'sca_max_steps':       sca_max_steps,
             'sca_tropism':         sca_tropism,
+            'sca_branch_xy_std':   sca_branch_xy_std,
+            'sca_min_branch_att':  sca_min_branch_att,
+            'sca_trunk_root_frac': sca_trunk_root_frac,
             'branch_r_tip_mm':     branch_r_tip_mm,
             'branch_min_r_mm':     branch_min_r_mm,
             'branch_az_segs':      branch_az_segs,
