@@ -5,7 +5,7 @@ Da Vinci pipe-model radius assignment for the unified tree skeleton.
 Leaf nodes start at *branch_r_tip_mm*; radii accumulate bottom-up.
 
 The root node's radius is then overridden by *r_root_mm* (sampled from
-``TreeConfig.r_base_mm``), decoupling trunk girth from branching density.
+``BarkConfig.r_base_mm`` via ``ScaTreeConfig.bark``), decoupling trunk girth from branching density.
 
 Public API
 ----------

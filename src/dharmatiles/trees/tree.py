@@ -34,7 +34,7 @@ def build_tree(
     mesh      : complete tree trimesh
     height_mm : ``max(nodes_xyz[:,2]) - tz``, used for footprint stamping
     """
-    r_root = float(sample(cfg.r_base_mm, rng))
+    r_root = float(sample(cfg.bark.r_base_mm, rng))
 
     nodes_xyz, parents, arc_dists, crown_base_z = grow_skeleton(cx, cy, tz, cfg, rng)
 
@@ -42,11 +42,11 @@ def build_tree(
         # SCA produced no growth (degenerate case — no attractors reached)
         return trimesh.Trimesh(process=False), 0.0
 
-    radii = assign_radii(parents, cfg.branch_r_tip_mm, r_root)
+    radii = assign_radii(parents, cfg.bark.branch_r_tip_mm, r_root)
 
     mesh = build_tree_mesh(
         nodes_xyz, parents, radii, arc_dists,
-        cfg, rng, tz, crown_base_z,
+        cfg.bark, rng, tz, crown_base_z,
     )
 
     height_mm = float(nodes_xyz[:, 2].max()) - tz
@@ -69,7 +69,7 @@ def stamp_tree(
     cover the widest possible root flare.  Grass seeds inside this radius are
     blocked, so blades grow around the tree base rather than through it.
     """
-    r_max   = float(_bounds(cfg.r_base_mm)[1]) * (1.0 + cfg.flare_amp)
+    r_max   = float(_bounds(cfg.bark.r_base_mm)[1]) * (1.0 + cfg.bark.flare_amp)
     block_z = tz + height_mm
 
     cw = surface.cell_w

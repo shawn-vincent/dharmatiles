@@ -341,7 +341,7 @@ def build_tree_mesh(
     parents      : (N,) int  — parent index; -1 for root
     radii        : (N,) float
     arc_dists    : (N,) float — cumulative arc distance from root to each node
-    cfg          : TreeConfig
+    cfg          : BarkConfig
     rng          : seeded random generator (per-tree bark variation)
     tz           : terrain Z at tree base
     crown_base_z : height of crown base above tz (for flare calculation)

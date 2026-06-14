@@ -27,7 +27,7 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
-from ..core.config import TreeConfig
+from ..core.config import ScaTreeConfig
 from ..core.grid import sample_grid
 from ..core.tile import derive_seed
 from ..dist import bounds as _bounds
@@ -43,8 +43,8 @@ class ScaTree:
     placement : Uniform | None
         Placement strategy.  Default: 1 tree per square.
     **tree_kwargs
-        Forwarded to :class:`~dharmatiles.core.config.TreeConfig`.  Any
-        ``TreeConfig`` field can be overridden here.  Example::
+        Forwarded to :class:`~dharmatiles.core.config.ScaTreeConfig`.  Any
+        ``ScaTreeConfig`` field can be overridden here.  Example::
 
             ScaTree(crown_base_z_mm=D[20:30], r_base_mm=D[3:5])
     """
@@ -55,12 +55,12 @@ class ScaTree:
         placement: Uniform | None = None,
         **tree_kwargs,
     ) -> None:
-        self.cfg       = TreeConfig(**tree_kwargs)
+        self.cfg       = ScaTreeConfig(**tree_kwargs)
         self.placement = placement or Uniform(count_per_square=1)
 
     def footprint_mm(self) -> float:
         """Exclusion radius used by scatter_positions gap checking."""
-        return float(_bounds(self.cfg.r_base_mm)[1]) * (1.0 + self.cfg.flare_amp)
+        return float(_bounds(self.cfg.bark.r_base_mm)[1]) * (1.0 + self.cfg.bark.flare_amp)
 
     def scatter(
         self,
