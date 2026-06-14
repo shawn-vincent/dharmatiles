@@ -1,16 +1,13 @@
-"""Procedural deciduous tree generation.
+"""Procedural deciduous tree generation — unified trunk + branch system.
+
+The trunk and branches are one SCA skeleton; all edges share the same
+scale-adaptive bark surface.
 
 Public API (imported by ``scatter/trees.py``):
 
-- ``build_trunk(cx, cy, tz, angle, cfg, rng, *, terrain_normal=None)``
-  → ``(mesh, apex_pos, apex_dir, height_mm, spine)``
-
-- ``stamp_trunk(cx, cy, tz, cfg, height_mm, support_z, obstacle_mask, surface)``
-
-- ``build_branches(apex_pos, apex_dir, cx, cy, tz, height_mm, cfg, rng, trunk_spine=None)``
-  → ``trimesh.Trimesh | None``
+- ``build_tree(cx, cy, tz, cfg, rng)``   → ``(mesh, height_mm)``
+- ``stamp_tree(cx, cy, tz, height_mm, cfg, support_z, obstacle_mask, surface)``
 """
-from .trunk    import build_trunk, stamp_trunk
-from .branches import build_branches
+from .tree import build_tree, stamp_tree
 
-__all__ = ['build_trunk', 'stamp_trunk', 'build_branches']
+__all__ = ['build_tree', 'stamp_tree']

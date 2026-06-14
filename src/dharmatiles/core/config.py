@@ -523,159 +523,131 @@ class RocksConfig:
 
 @dataclass(init=False)
 class TreeConfig:
-    """Deciduous tree: trunk swept cross-section + optional SCA branch crown.
+    """Unified deciduous tree: trunk and branches are one SCA skeleton.
+
+    The trunk emerges naturally as the attractor-free path SCA takes from the
+    ground root up to the crown ellipsoid.  All skeleton edges share the same
+    scale-adaptive bark surface (bark ridges + wrinkles on thick segments,
+    plain swept rings on thin ones, frustum cones on twigs).
 
     All ``Sample[float]`` fields accept plain numbers (fixed geometry) or
     ``D[low:high]`` distributions (per-tree variation).  Distributions are
-    sampled once per tree by ``trees/trunk.py`` / ``trees/branches.py``.
-
-    Phase 1 parameters control the trunk (always built).
-    Phase 2 parameters control space-colonization branches (``grow_branches``).
+    sampled once per tree at build time.
     """
 
-    # ── Trunk dimensions ──────────────────────────────────────────────────────
-    height_mm:         Sample[float] = D[20.0:40.0]   # total trunk height
-    r_base_mm:         Sample[float] = D[2.5:4.5]     # base radius at ground
-    taper_power:       float         = 0.6             # radius power-law exponent
-    aspect:            Sample[float] = D[0.75:1.0]    # cross-section aspect (minor/major)
-    twist_per_seg:     float         = 0.04            # frame yaw per segment (radians)
+    # ── Crown placement (controls effective trunk height) ─────────────────────
+    crown_base_z_mm:   Sample[float] = D[15.0:28.0]  # height of crown bottom above terrain
+    crown_rx:          Sample[float] = D[7.0:13.0]   # crown ellipsoid X radius (mm)
+    crown_ry:          Sample[float] = D[7.0:13.0]   # crown ellipsoid Y radius (mm)
+    crown_rz:          Sample[float] = D[5.0:9.0]    # crown ellipsoid Z half-height (mm)
+    crown_offset_z:    Sample[float] = D[0.0:3.0]    # extra upward shift of crown centre (mm)
 
-    # ── Spine curvature ───────────────────────────────────────────────────────
-    n_seg:             int           = 18              # spine segments (more = smoother)
-    lean_mm:           float         = 1.0             # σ of per-step lateral noise (mm)
-    lean_max_mm:       float         = 3.5             # hard clamp on cumulative lean (mm)
+    # ── Root / bark surface ────────────────────────────────────────────────────
+    r_base_mm:         Sample[float] = D[2.5:4.5]    # root radius override (pipe model at root)
+    aspect:            Sample[float] = D[0.75:1.0]   # cross-section aspect (minor/major axis)
+    twist_rate:        float         = 0.018          # bark twist: radians per mm of arc distance
 
     # ── Root flare ────────────────────────────────────────────────────────────
-    flare_amp:         float         = 0.55            # boost factor at base (fraction of r_base)
-    flare_fraction:    float         = 0.18            # fraction of trunk height for flare zone
-    flare_power:       float         = 2.5             # sharpness of flare taper
+    flare_amp:         float         = 0.55           # boost factor at ground (fraction of r_base)
+    flare_fraction:    float         = 0.22           # fraction of crown_base_z_mm for flare zone
+    flare_power:       float         = 2.5            # sharpness of flare taper
 
-    # ── Bark ridges (axial harmonics) ─────────────────────────────────────────
-    ridge_harmonics:   int           = 5               # number of angular harmonics
-    ridge_amp:         float         = 0.10            # amplitude (fraction of radius)
-    ridge_drift_mm:    float         = 60.0            # Z-period of ridge phase drift (mm)
+    # ── Bark ridges (axial harmonics) — applied when r >= ridge_min_r_mm ──────
+    ridge_harmonics:   int           = 5              # number of angular harmonics (k=2..k+1)
+    ridge_amp:         float         = 0.10           # amplitude (fraction of radius)
+    ridge_drift_mm:    float         = 60.0           # arc-distance period of phase drift (mm)
 
-    # ── Bark wrinkles (horizontal Z-offset) ──────────────────────────────────
-    wrinkle_amp:       Sample[float] = D[0.30:0.60]   # mm amplitude
-    wrinkle_period:    Sample[float] = D[4.0:8.0]     # mm period
+    # ── Bark wrinkles (Z-offset) — applied when r >= ridge_min_r_mm ──────────
+    wrinkle_amp:       Sample[float] = D[0.25:0.55]  # mm amplitude
+    wrinkle_period:    Sample[float] = D[4.0:8.0]    # mm period
 
-    # ── Branch stubs (optional) ───────────────────────────────────────────────
-    n_stubs:           int           = 3               # 0 = no stubs
-    stub_min_height_frac: float      = 0.35            # don't stub below this fraction
-    stub_length_mm:    Sample[float] = D[2.0:4.5]     # stub length
-    stub_r_base_mm:    Sample[float] = D[0.6:1.1]     # stub base radius
-    stub_angle_up:     Sample[float] = D[0.15:0.40]   # radians above horizontal (FDM safe)
+    # ── Space colonization skeleton ───────────────────────────────────────────
+    n_attractors:      int           = 140            # attraction points in crown ellipsoid
+    sca_segment_mm:    float         = 2.0            # skeleton segment length (mm)
+    sca_perception_r:  float         = 9.0            # attractor influence radius (mm)
+    sca_kill_r:        float         = 3.5            # attractor kill radius (mm)
+    sca_max_steps:     int           = 80             # maximum SCA iterations
+    sca_tropism:       float         = 0.25           # upward bias (keeps branches FDM-safe)
+    sca_branch_xy_std: float         = 0.30           # XY std-dev threshold to trigger tip split
+    sca_min_branch_att: int          = 3              # min attractors per cluster to allow split
 
-    # ── Space colonization (Phase 2) ──────────────────────────────────────────
-    grow_branches:        bool          = True
-    crown_rx:             Sample[float] = D[8.0:13.0]  # crown ellipsoid X radius (mm)
-    crown_ry:             Sample[float] = D[8.0:13.0]  # crown ellipsoid Y radius (mm)
-    crown_rz:             Sample[float] = D[5.0:9.0]   # crown ellipsoid Z half-height (mm)
-    crown_offset_z:       Sample[float] = D[0.0:3.0]   # extra upward shift of crown centre (mm)
-    n_attractors:         int           = 120           # attraction points seeded in crown
-    sca_segment_mm:       float         = 2.5           # skeleton segment length (mm)
-    sca_perception_r:     float         = 9.0           # attractor influence radius (mm)
-    sca_kill_r:           float         = 3.0           # attractor kill radius (mm)
-    sca_max_steps:        int           = 60            # maximum SCA iterations
-    sca_tropism:          float         = 0.3           # upward bias strength (FDM safe)
-    # Branching: when XY spread of visible attractors > threshold, a tip splits into two
-    sca_branch_xy_std:    float         = 0.35          # XY direction std-dev threshold
-    sca_min_branch_att:   int           = 3             # min attractors per cluster to split
-    # Spine fraction at which to seed SCA branch roots (0=base, 1=apex)
-    sca_trunk_root_frac:  float         = 0.60          # top (1 - frac) of spine used as roots
-    branch_r_tip_mm:      float         = 0.5           # leaf-node radius (mm)
-    branch_min_r_mm:      float         = 0.35          # skip edges below this radius (mm)
-    branch_az_segs:       int           = 8             # azimuth facets per branch segment
+    # ── Radius assignment ─────────────────────────────────────────────────────
+    branch_r_tip_mm:   float         = 0.30           # leaf-node radius (mm)
+
+    # ── Scale-adaptive detail thresholds ─────────────────────────────────────
+    ridge_min_r_mm:    float         = 1.2            # bark ridges + wrinkles below this radius off
+    ring_min_r_mm:     float         = 0.40           # use frustum cone below this radius
+    branch_min_r_mm:   float         = 0.20           # skip edge entirely below this radius
 
     # ── Mesh quality ──────────────────────────────────────────────────────────
-    az_segs:           int           = 24              # azimuth facets per trunk ring
-    sink:              float         = 0.15            # mm below terrain for watertight base
+    az_segs:           int           = 16             # azimuth facets for thick (trunk) segments
+    sink:              float         = 0.15           # mm below terrain for watertight base
 
     def __init__(
         self,
         *,
-        height_mm:           Sample[float] | None = None,
-        r_base_mm:           Sample[float] | None = None,
-        taper_power:         float                = 0.6,
-        aspect:              Sample[float] | None = None,
-        twist_per_seg:       float                = 0.04,
-        n_seg:               int                  = 18,
-        lean_mm:             float                = 1.0,
-        lean_max_mm:         float                = 3.5,
-        flare_amp:           float                = 0.55,
-        flare_fraction:      float                = 0.18,
-        flare_power:         float                = 2.5,
-        ridge_harmonics:     int                  = 5,
-        ridge_amp:           float                = 0.10,
-        ridge_drift_mm:      float                = 60.0,
-        wrinkle_amp:         Sample[float] | None = None,
-        wrinkle_period:      Sample[float] | None = None,
-        n_stubs:             int                  = 3,
-        stub_min_height_frac: float               = 0.35,
-        stub_length_mm:      Sample[float] | None = None,
-        stub_r_base_mm:      Sample[float] | None = None,
-        stub_angle_up:       Sample[float] | None = None,
-        grow_branches:       bool                 = True,
-        crown_rx:            Sample[float] | None = None,
-        crown_ry:            Sample[float] | None = None,
-        crown_rz:            Sample[float] | None = None,
-        crown_offset_z:      Sample[float] | None = None,
-        n_attractors:        int                  = 120,
-        sca_segment_mm:      float                = 2.5,
-        sca_perception_r:    float                = 9.0,
-        sca_kill_r:          float                = 3.0,
-        sca_max_steps:       int                  = 60,
-        sca_tropism:         float                = 0.3,
-        sca_branch_xy_std:   float                = 0.35,
-        sca_min_branch_att:  int                  = 3,
-        sca_trunk_root_frac: float                = 0.60,
-        branch_r_tip_mm:     float                = 0.5,
-        branch_min_r_mm:     float                = 0.35,
-        branch_az_segs:      int                  = 8,
-        az_segs:             int                  = 24,
-        sink:                float                = 0.15,
+        crown_base_z_mm:    Sample[float] | None = None,
+        crown_rx:           Sample[float] | None = None,
+        crown_ry:           Sample[float] | None = None,
+        crown_rz:           Sample[float] | None = None,
+        crown_offset_z:     Sample[float] | None = None,
+        r_base_mm:          Sample[float] | None = None,
+        aspect:             Sample[float] | None = None,
+        twist_rate:         float                = 0.018,
+        flare_amp:          float                = 0.55,
+        flare_fraction:     float                = 0.22,
+        flare_power:        float                = 2.5,
+        ridge_harmonics:    int                  = 5,
+        ridge_amp:          float                = 0.10,
+        ridge_drift_mm:     float                = 60.0,
+        wrinkle_amp:        Sample[float] | None = None,
+        wrinkle_period:     Sample[float] | None = None,
+        n_attractors:       int                  = 140,
+        sca_segment_mm:     float                = 2.0,
+        sca_perception_r:   float                = 9.0,
+        sca_kill_r:         float                = 3.5,
+        sca_max_steps:      int                  = 80,
+        sca_tropism:        float                = 0.25,
+        sca_branch_xy_std:  float                = 0.30,
+        sca_min_branch_att: int                  = 3,
+        branch_r_tip_mm:    float                = 0.30,
+        ridge_min_r_mm:     float                = 1.2,
+        ring_min_r_mm:      float                = 0.40,
+        branch_min_r_mm:    float                = 0.20,
+        az_segs:            int                  = 16,
+        sink:               float                = 0.15,
     ) -> None:
         vals = {
-            'height_mm':           height_mm      if height_mm      is not None else D[20.0:40.0],
-            'r_base_mm':           r_base_mm      if r_base_mm      is not None else D[2.5:4.5],
-            'taper_power':         taper_power,
-            'aspect':              aspect         if aspect         is not None else D[0.75:1.0],
-            'twist_per_seg':       twist_per_seg,
-            'n_seg':               n_seg,
-            'lean_mm':             lean_mm,
-            'lean_max_mm':         lean_max_mm,
-            'flare_amp':           flare_amp,
-            'flare_fraction':      flare_fraction,
-            'flare_power':         flare_power,
-            'ridge_harmonics':     ridge_harmonics,
-            'ridge_amp':           ridge_amp,
-            'ridge_drift_mm':      ridge_drift_mm,
-            'wrinkle_amp':         wrinkle_amp    if wrinkle_amp    is not None else D[0.30:0.60],
-            'wrinkle_period':      wrinkle_period if wrinkle_period is not None else D[4.0:8.0],
-            'n_stubs':             n_stubs,
-            'stub_min_height_frac': stub_min_height_frac,
-            'stub_length_mm':      stub_length_mm if stub_length_mm is not None else D[2.0:4.5],
-            'stub_r_base_mm':      stub_r_base_mm if stub_r_base_mm is not None else D[0.6:1.1],
-            'stub_angle_up':       stub_angle_up  if stub_angle_up  is not None else D[0.15:0.40],
-            'grow_branches':       grow_branches,
-            'crown_rx':            crown_rx       if crown_rx       is not None else D[8.0:13.0],
-            'crown_ry':            crown_ry       if crown_ry       is not None else D[8.0:13.0],
-            'crown_rz':            crown_rz       if crown_rz       is not None else D[5.0:9.0],
-            'crown_offset_z':      crown_offset_z if crown_offset_z is not None else D[0.0:3.0],
-            'n_attractors':        n_attractors,
-            'sca_segment_mm':      sca_segment_mm,
-            'sca_perception_r':    sca_perception_r,
-            'sca_kill_r':          sca_kill_r,
-            'sca_max_steps':       sca_max_steps,
-            'sca_tropism':         sca_tropism,
-            'sca_branch_xy_std':   sca_branch_xy_std,
-            'sca_min_branch_att':  sca_min_branch_att,
-            'sca_trunk_root_frac': sca_trunk_root_frac,
-            'branch_r_tip_mm':     branch_r_tip_mm,
-            'branch_min_r_mm':     branch_min_r_mm,
-            'branch_az_segs':      branch_az_segs,
-            'az_segs':             az_segs,
-            'sink':                sink,
+            'crown_base_z_mm':   crown_base_z_mm   if crown_base_z_mm is not None else D[15.0:28.0],
+            'crown_rx':          crown_rx           if crown_rx        is not None else D[7.0:13.0],
+            'crown_ry':          crown_ry           if crown_ry        is not None else D[7.0:13.0],
+            'crown_rz':          crown_rz           if crown_rz        is not None else D[5.0:9.0],
+            'crown_offset_z':    crown_offset_z     if crown_offset_z  is not None else D[0.0:3.0],
+            'r_base_mm':         r_base_mm          if r_base_mm       is not None else D[2.5:4.5],
+            'aspect':            aspect             if aspect          is not None else D[0.75:1.0],
+            'twist_rate':        twist_rate,
+            'flare_amp':         flare_amp,
+            'flare_fraction':    flare_fraction,
+            'flare_power':       flare_power,
+            'ridge_harmonics':   ridge_harmonics,
+            'ridge_amp':         ridge_amp,
+            'ridge_drift_mm':    ridge_drift_mm,
+            'wrinkle_amp':       wrinkle_amp    if wrinkle_amp   is not None else D[0.25:0.55],
+            'wrinkle_period':    wrinkle_period if wrinkle_period is not None else D[4.0:8.0],
+            'n_attractors':      n_attractors,
+            'sca_segment_mm':    sca_segment_mm,
+            'sca_perception_r':  sca_perception_r,
+            'sca_kill_r':        sca_kill_r,
+            'sca_max_steps':     sca_max_steps,
+            'sca_tropism':       sca_tropism,
+            'sca_branch_xy_std': sca_branch_xy_std,
+            'sca_min_branch_att': sca_min_branch_att,
+            'branch_r_tip_mm':   branch_r_tip_mm,
+            'ridge_min_r_mm':    ridge_min_r_mm,
+            'ring_min_r_mm':     ring_min_r_mm,
+            'branch_min_r_mm':   branch_min_r_mm,
+            'az_segs':           az_segs,
+            'sink':              sink,
         }
         for k, v in vals.items():
             setattr(self, k, v)
