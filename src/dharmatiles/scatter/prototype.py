@@ -54,7 +54,7 @@ class Rocks:
     ) -> list[trimesh.Trimesh]:
         """Sample positions, build seeds (sorted big→small), return mesh parts.
 
-        Stamps ``scene.terrain_support_z`` and ``scene.rock_mask`` in place.
+        Stamps ``scene.terrain_support_z`` and ``scene.obstacle_mask`` in place.
         """
         surface  = scene.surface
         rng_seed = derive_seed(surface.seed, 'rocks-scatter', layer_idx) \
@@ -81,7 +81,7 @@ class Rocks:
         from ..core.color import Material, tag as _tag
         mesh = _build_rocks_mesh_from_seeds(
             seeds, self.rocks, surface,
-            scene.terrain_z, scene.terrain_support_z, scene.rock_mask,
+            scene.terrain_z, scene.terrain_support_z, scene.obstacle_mask,
             layer_idx    = layer_idx,
             terrain_gz_x = terrain_gz_x,
             terrain_gz_y = terrain_gz_y,

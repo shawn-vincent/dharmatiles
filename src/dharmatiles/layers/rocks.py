@@ -15,7 +15,7 @@ Entry points
 ``_build_rocks_mesh_core(cx, cy, rx_arr, ry_arr, height, angle, ...)``
     Shared kernel: given arrays of positions and geometry, builds the
     half-ellipsoid meshes, applies cuts, roughness, and slope rotation,
-    and rasterises tops into support_z / rock_mask.
+    and rasterises tops into support_z / obstacle_mask.
 
 Slope alignment
 ---------------
@@ -46,7 +46,7 @@ def _build_rocks_mesh_from_seeds(
     surface: SurfaceConfig,
     terrain_z: np.ndarray,
     support_z: np.ndarray,
-    rock_mask: np.ndarray | None,
+    obstacle_mask: np.ndarray | None,
     *,
     layer_idx:    int                  = 0,
     terrain_gz_x: np.ndarray | None   = None,
@@ -76,7 +76,7 @@ def _build_rocks_mesh_from_seeds(
 
     return _build_rocks_mesh_core(
         cx, cy, rx_arr, ry_arr, height, angle,
-        rocks, surface, terrain_z, support_z, rock_mask, rng,
+        rocks, surface, terrain_z, support_z, obstacle_mask, rng,
         terrain_gz_x=terrain_gz_x,
         terrain_gz_y=terrain_gz_y,
     )
@@ -95,7 +95,7 @@ def _build_rocks_mesh_core(
     surface: SurfaceConfig,
     terrain_z: np.ndarray,
     support_z: np.ndarray,
-    rock_mask: np.ndarray | None,
+    obstacle_mask: np.ndarray | None,
     rng:    np.random.Generator,
     *,
     terrain_gz_x: np.ndarray | None = None,
@@ -304,7 +304,7 @@ def _build_rocks_mesh_core(
         sl = support_z[j_lo:j_hi + 1, i_lo:i_hi + 1]
         np.maximum(sl, z_top, out=sl)
 
-        if rock_mask is not None:
-            rock_mask[j_lo:j_hi + 1, i_lo:i_hi + 1] |= inside
+        if obstacle_mask is not None:
+            obstacle_mask[j_lo:j_hi + 1, i_lo:i_hi + 1] |= inside
 
     return mesh

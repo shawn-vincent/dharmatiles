@@ -6,7 +6,7 @@ The scene holds:
   terrain_z         — float heightmap; mutate via displace_terrain / set_terrain
   terrain_support_z — mutable non-vegetation support raised by terrain/rock geometry
   vegetation_support_z — mutable vegetation support, initialised from terrain support
-  rock_mask         — bool grid marking rock footprints (grass steers around these)
+  obstacle_mask     — bool grid marking obstacle footprints (grass steers around these)
   parts             — Trimesh objects accumulated during the pipeline
 
 Free-function helpers
@@ -76,7 +76,7 @@ class TileScene:
     terrain_z: np.ndarray                       # (grid_h, grid_w) — mutable via helpers
     terrain_support_z: np.ndarray               # (grid_h, grid_w) — mutable
     vegetation_support_z: np.ndarray | None = None  # (grid_h, grid_w) — mutable
-    rock_mask: np.ndarray | None = None         # (grid_h, grid_w) bool — True under a rock
+    obstacle_mask: np.ndarray | None = None      # (grid_h, grid_w) bool — True under any placed obstacle (rocks, flowers, …)
     parts:     List[trimesh.Trimesh] = field(default_factory=list)
     # region_mask: same shape as terrain_z; cell value = region index (≥0) or -ve for boundary.
     # Populated by the tile builder; None until then.

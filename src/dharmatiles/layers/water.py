@@ -111,15 +111,15 @@ class Water:
             wm = placement_mask[:hn*s, :wn*s].reshape(hn, s, wn, s).any(axis=(1, 3))
             wm_disp = wm_disp_full[:hn*s, :wn*s].reshape(hn, s, wn, s).any(axis=(1, 3))
             zd = z_disp[:hn*s, :wn*s].reshape(hn, s, wn, s).mean(axis=(1, 3))
-            sm = (scene.rock_mask[:hn*s, :wn*s].reshape(hn, s, wn, s).any(axis=(1, 3))
-                  if scene.rock_mask is not None else None)
+            sm = (scene.obstacle_mask[:hn*s, :wn*s].reshape(hn, s, wn, s).any(axis=(1, 3))
+                  if scene.obstacle_mask is not None else None)
             ds_cell_w = surface.cell_w * s
         else:
             tz = scene.terrain_z
             wm = placement_mask
             wm_disp = wm_disp_full
             zd = z_disp
-            sm = scene.rock_mask
+            sm = scene.obstacle_mask
             ds_cell_w = surface.cell_w
 
         zd = zd + make_water_ripple_displacement(
@@ -346,7 +346,7 @@ def make_water_displacement(
 
 def make_water_ripple_displacement(
     water_mask:     np.ndarray,
-    rock_mask:      np.ndarray | None,
+    obstacle_mask:  np.ndarray | None,
     cell_w:         float,
     amplitude_mm:   float = 0.5,
     wavelength_mm:  float = 3.0,
@@ -387,7 +387,7 @@ def make_water_ripple_displacement(
         ext[1:-1, :-2] | ext[1:-1, 2:]
     )
     internal_shore = adj_to_water & ~tile_edge
-    stone_in_water = (rock_mask & water_mask) if rock_mask is not None \
+    stone_in_water = (obstacle_mask & water_mask) if obstacle_mask is not None \
                      else np.zeros((gh, gw), dtype=bool)
 
     source_mask = internal_shore | stone_in_water

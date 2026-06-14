@@ -6,7 +6,7 @@ import numpy as np
 import trimesh
 
 from .._geometry import (
-    _blade_step_geometry,
+    _blade_step_geometry, _cell_index,
     _contained_segment_cells, _sample_grid, _spine_distances, _stamp_segment,
 )
 from ..config import SpeciesConfig
@@ -51,6 +51,26 @@ class FlatGrassGrower:
         if not (hw <= tx <= surface.tile_w - hw and hw <= ty <= surface.tile_h - hw):
             path.alive = False
             return False
+
+        # Kill blade if the next step's spine OR leading-edge width enters any
+        # obstacle cell.  The leading-edge check catches tangential approach:
+        # a blade growing parallel to a flower boundary can have its physical
+        # mesh (half-width) inside the obstacle even though the spine is just
+        # outside, and the height-based floor_z check misses it because the
+        # leading-edge strip points away from the obstacle interior.
+        if scene.obstacle_mask is not None:
+            tix, tiy = _cell_index(surface, tx, ty)
+            if scene.obstacle_mask[tiy, tix]:
+                path.alive = False
+                return False
+            _fp = _leading_edge_cells(surface, cx, cy, tx, ty, hw)
+            if _fp is not None:
+                _ix0, _ix1, _iy0, _iy1, _le, _, _ = _fp
+                if np.any(_le) and np.any(
+                    scene.obstacle_mask[_iy0:_iy1 + 1, _ix0:_ix1 + 1][_le]
+                ):
+                    path.alive = False
+                    return False
 
         floor_z = _sample_footprint_max(
             occ_z,

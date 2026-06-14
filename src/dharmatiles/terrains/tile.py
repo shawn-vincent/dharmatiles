@@ -313,7 +313,7 @@ def _build_tile_mesh(
         surface          = surface,
         terrain_z        = terrain_z,
         terrain_support_z= terrain_z.copy(),
-        rock_mask        = np.zeros((surface.grid_h, surface.grid_w), dtype=bool),
+        obstacle_mask    = np.zeros((surface.grid_h, surface.grid_w), dtype=bool),
         region_mask      = region_mask,
         water_surface_mm = water_surface_mm,
     )

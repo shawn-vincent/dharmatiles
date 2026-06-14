@@ -110,7 +110,7 @@ def plant_seeds(
                 ix, iy = _cell_index(surface, x, y)
                 if placement_mask is not None and not placement_mask[iy, ix]:
                     continue
-                if scene.rock_mask is not None and scene.rock_mask[iy, ix]:
+                if scene.obstacle_mask is not None and scene.obstacle_mask[iy, ix]:
                     continue
 
                 terrain_z = float(scene.terrain_z[iy, ix])

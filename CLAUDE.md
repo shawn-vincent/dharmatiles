@@ -75,7 +75,7 @@ Tile (.tile.py) ──► build_tile_from_spec()
                 ▼
    For each Region (then Boundary), run its layers in spec order:
    each layer.apply(scene, placement_mask=mask) mutates terrain_z /
-   terrain_support_z / rock_mask and returns trimesh parts.
+   terrain_support_z / obstacle_mask and returns trimesh parts.
 
          SoilCarpetLayer    — blob texture into terrain_z
          GrassCarpetLayer   — embossed 2D blade stamps into terrain_z
@@ -99,7 +99,7 @@ Tile (.tile.py) ──► build_tile_from_spec()
 - `terrain_z` — float heightmap, read-only after construction
 - `terrain_support_z` — grows as terrain and rock layers rasterise occupancy
 - `vegetation_support_z` — grows as grass blades are stamped in
-- `rock_mask` — bool grid; grass steers around rock footprints
+- `obstacle_mask` — bool grid; grass steers around placed obstacle footprints (rocks, flowers, …)
 - `grass_mask` — bool grid; confines grass seeding to eligible regions
 
 ### Key Modules
@@ -180,7 +180,7 @@ tile = Tile(
 
 | Class | Effect |
 |---|---|
-| `Rocks(*, scatter=ScatterConfig(...), **RocksConfig kwargs)` | Vectorised half-ellipsoid rocks; stamps `terrain_support_z` + `rock_mask` |
+| `Rocks(*, scatter=ScatterConfig(...), **RocksConfig kwargs)` | Vectorised half-ellipsoid rocks; stamps `terrain_support_z` + `obstacle_mask` |
 | `Grass(species=…, *, scatter=…, max_stack_height=…, **SpeciesConfig overrides)` | 3D blades planted + grown around rocks |
 
 `Region` height falls back to its first layer's `height_default_mm` when
@@ -211,7 +211,7 @@ documented behaviour: put rocks on grass, you get rocks on grass.
 
 - `Rocks.scatter()` samples positions from its `ScatterConfig`, builds
   `RockSeed`s, sorts big→small, and calls `_build_rocks_mesh_from_seeds`
-  (vectorised NumPy) which also stamps `terrain_support_z` and `rock_mask`.
+  (vectorised NumPy) which also stamps `terrain_support_z` and `obstacle_mask`.
 - `Grass.scatter()` syncs `vegetation_support_z` from the completed
   `terrain_support_z`, then delegates to `FloppyGrassLayer` which plants
   seeds (`GrassSeed.sort_key() = (upstream_dist, direction)` so seeds

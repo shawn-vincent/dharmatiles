@@ -518,6 +518,48 @@ class RocksConfig:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Flowers
+# ─────────────────────────────────────────────────────────────────────────────
+
+@dataclass
+class FlowerConfig:
+    """Flower geometry: a thin dome cap on a support column, repeated N times for petals.
+
+    Each petal / centre dome is built in two parts:
+
+    1. **Support column** — a solid oval prism of height ``column_height_mm``
+       rising from the terrain.  Petal columns get a 45° conical undercut at
+       the base (``petal_undercut_deg``), arcing inward toward the flower
+       centre so the outer tip rests on the terrain while the inner edge
+       lifts off.
+
+    2. **Dome cap** — a thin half-ellipsoid of height ``dome_thickness_mm``
+       (centre dome) or ``petal_thickness_mm`` (petals) sitting on top of the
+       column.  "Thickness" is the vertical height of the cap, NOT the wall
+       thickness of a hollow shell — the cap is solid.
+
+    ``overlap`` controls how far the petal root extends into the centre dome:
+      0.0 → petal base sits at the outer edge of the centre circle
+      1.0 → petal base sits at the flower centre (full overlap)
+    """
+    n_petals:           int   = 5    # number of petals
+    center_radius_mm:   float = 1.5  # radius of the centre dome (and its column)
+    outer_radius_mm:    float = 2.5  # radial distance from flower centre to petal tip
+    column_height_mm:   float = 1.0  # height of support column below each dome cap
+    dome_thickness_mm:  float = 1.0  # height of the centre dome cap
+    petal_thickness_mm: float = 0.5  # height of each petal dome cap
+    overlap:            float = 0.5  # 0 = touch centre edge; 1 = touch centre
+    sink:               float = 0.10 # mm below terrain for watertight base seal
+    az_segs:            int   = 16   # azimuth facets per dome
+    el_segs:            int   = 8    # elevation rings per dome
+
+    @property
+    def height_mm(self) -> float:
+        """Support-ceiling height used by the grass system (terrain_z + height_mm)."""
+        return self.column_height_mm + max(self.dome_thickness_mm, self.petal_thickness_mm)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Base (underside peg / socket)
 # ─────────────────────────────────────────────────────────────────────────────
 

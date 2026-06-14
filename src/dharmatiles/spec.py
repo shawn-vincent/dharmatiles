@@ -75,7 +75,7 @@ class TileLayer(Protocol):
     """A content layer applied to a region or boundary.
 
     Layers are run in spec order by the orchestrator.  Each layer may
-    mutate the scene (``terrain_z``, ``terrain_support_z``, ``rock_mask``)
+    mutate the scene (``terrain_z``, ``terrain_support_z``, ``obstacle_mask``)
     and/or return Trimesh parts for the final union.
     """
     height_default_mm: ClassVar[float]

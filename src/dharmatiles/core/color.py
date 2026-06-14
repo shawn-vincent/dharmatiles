@@ -24,20 +24,22 @@ import trimesh
 
 
 class Material(IntEnum):
-    SOIL  = 0
-    ROCK  = 1
-    GRASS = 2
-    WATER = 3
-    BASE  = 4
+    SOIL   = 0
+    ROCK   = 1
+    GRASS  = 2
+    WATER  = 3
+    BASE   = 4
+    FLOWER = 5
 
 
 #: RGBA uint8 palette — one entry per :class:`Material`.
 RGBA: dict[Material, tuple[int, int, int, int]] = {
-    Material.SOIL:  (105,  38,  12, 255),   # deep dark red-brown
-    Material.ROCK:  ( 72,  92, 128, 255),   # dark slate blue-grey
-    Material.GRASS: ( 42, 148,  28, 255),   # deep vivid green
-    Material.WATER: ( 20, 133, 213, 255),   # blue-turquoise
-    Material.BASE:  ( 45,  45,  45, 255),   # dark gray
+    Material.SOIL:   (105,  38,  12, 255),   # deep dark red-brown
+    Material.ROCK:   ( 72,  92, 128, 255),   # dark slate blue-grey
+    Material.GRASS:  ( 42, 148,  28, 255),   # deep vivid green
+    Material.WATER:  ( 20, 133, 213, 255),   # blue-turquoise
+    Material.BASE:   ( 45,  45,  45, 255),   # dark gray
+    Material.FLOWER: (245, 195,   0, 255),   # golden yellow
 }
 
 
@@ -304,11 +306,12 @@ def export_3mf_colored(
 
     # ── Filament slots ────────────────────────────────────────────────────────
     _EXT: dict[Material, int] = {
-        Material.BASE:  1,
-        Material.SOIL:  2,
-        Material.ROCK:  3,
-        Material.GRASS: 4,
-        Material.WATER: 5,
+        Material.BASE:   1,
+        Material.SOIL:   2,
+        Material.ROCK:   3,
+        Material.GRASS:  4,
+        Material.WATER:  5,
+        Material.FLOWER: 6,
     }
     _SLOT_HEX = [
         "#2D2D2D",  # slot 1 — BASE
@@ -316,6 +319,7 @@ def export_3mf_colored(
         "#485C80",  # slot 3 — ROCK
         "#2A941C",  # slot 4 — GRASS
         "#1485D5",  # slot 5 — WATER
+        "#F5C300",  # slot 6 — FLOWER (golden yellow)
     ]
 
     # ── Filter empty tiles ────────────────────────────────────────────────────
