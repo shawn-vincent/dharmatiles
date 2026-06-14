@@ -82,13 +82,12 @@ to its radius.
 
 ### 3.2  Root flare
 
-The low-radius buttress flare at ground level. This is a *root-node property*:
-only nodes at depth 0 (parent = -1, ground contact) get the flare multiplier.
-There is nothing trunk-specific about it; it could equally apply to secondary
-roots of a multi-trunk tree or to the base of any large branch touching the ground.
+The low-radius buttress flare at ground level. This is a *surface property*
+applied near terrain contact, not a branching-growth rule. The exact implemented
+profile lives in [`design-bark.md` §4](design-bark.md#4--root-flare).
 
-**Fix:** flare is a function of `(depth, is_ground_contact)`, not of "am I in the
-trunk module."
+**Fix:** flare belongs in the shared bark surface builder, not in a separate trunk
+module.
 
 ### 3.3  Spine lean and curvature
 
@@ -135,70 +134,35 @@ points to the actual ground.
 
 Every skeleton edge is rendered as a **swept cross-section** rather than a plain
 frustum. The cross-section is the same for trunk and branches — elliptical, with
-bark ridges and wrinkles — but the detail level is gated on the local radius:
+bark ridges and wrinkles — but the detail level is gated on the local radius.
 
-| Local radius | Surface treatment |
-|---|---|
-| `r ≥ ridge_min_r_mm` (e.g., 1.5 mm) | Full bark ridges + wrinkles + elliptical cross-section |
-| `r ≥ ring_min_r_mm` (e.g., 0.5 mm) | Elliptical cross-section only (ridges below FDM resolution) |
-| `r < ring_min_r_mm` | Plain frustum cone (skeleton segment too thin for detail) |
-
-This is **scale-adaptive detail**: the twig tips are still watertight cones, the
-mid-weight primary branches get elliptical cross-sections, and the trunk gets the
-full bark treatment — but all from the same code path with radius as the gating
-variable.
+The implemented surface model is specified in [`design-bark.md`](design-bark.md),
+especially [`§2`](design-bark.md#2--scale-adaptive-detail) for radius thresholds.
+This unified tree document is responsible only for the skeleton that feeds that
+surface builder.
 
 ### 4.3  Frenet frames along full paths, not per-edge
 
 The current trunk uses parallel-transport frames along the entire spine, giving
-continuous ridge phase. When switching to a skeleton, we need the same continuity
-**along each root-to-tip path** in the tree, not just per-edge.
+continuous ridge phase. The unified skeleton requires the same continuity along
+each root-to-tip path, not just per-edge.
 
-Approach: propagate the frame top-down (root → tips) using the same parallel-
-transport rule. Each node receives a frame from its parent; the child's initial
-normal is the parent's normal projected onto the child tangent plane. This means
-bark ridges "flow" continuously from trunk to branch — they don't reset at each
-bifurcation.
+Frame propagation and arc-distance ridge phase are specified in
+[`design-bark.md` §5](design-bark.md#5--frame-propagation-parallel-transport-bisector)
+and [`§3.2`](design-bark.md#32--axial-bark-ridges).
 
-At bifurcations, each child edge gets an independent parallel-transported frame
-starting from the parent frame. Ridges on the two children will diverge naturally
-as the children grow in different directions.
+### 4.4  Root flare
 
-### 4.4  Root flare as node depth property
-
-```python
-def _flare_multiplier(node_idx, parents, depth, cfg):
-    if depth[node_idx] == 0:   # ground-contact root
-        return 0.0             # handled as a separate profile shape (see §4.5)
-    return 0.0                 # no flare on any other node
-```
-
-The flare profile is applied to rings within `flare_fraction` of the root node's
-Z, independently of the skeleton topology.
+Root flare is a surface property, not an SCA-growth property. It is applied by
+the shared bark builder to low rings near `terrain_z`; see
+[`design-bark.md` §4](design-bark.md#4--root-flare).
 
 ### 4.5  Junction geometry
 
 At a bifurcation, two children branch from one parent. The overlapping frustum
 approach (current branches.py) is FDM-safe because slicers union closed shells.
-For the unified model we have options:
-
-**Option A — Overlapping swept meshes (cheapest, current approach extended)**  
-Each edge is a closed swept mesh. Children and parent overlap at the junction
-node. Zero extra code. Looks fine in slicers. Slight vertex count inefficiency.
-
-**Option B — Junction caps**  
-Each child edge's base ring is projected onto the parent edge's surface and
-trimmed. Complex geometry; adds a manifold CSG requirement. Not worth it for
-FDM printing, where the overlapping union is identical in the slicer.
-
-**Option C — Widened parent tip**  
-At nodes with children, the parent edge's tip ring radius is set to
-`sqrt(Σ r_child²)` (already the pipe model value), so the parent tube is wide
-enough to encompass all children naturally. The children emerge from inside the
-parent radius, which closes any gap without explicit trimming.
-
-**Recommendation: Option A** for implementation simplicity. Option C as a future
-quality improvement if junction appearance becomes a visible issue in renders.
+For the unified model, the implemented strategy is the simple swept-ring junction
+described in [`design-bark.md` §6.5](design-bark.md#65--junction-geometry).
 
 ---
 
@@ -242,22 +206,10 @@ variable perception radius but less physically motivated.
 
 ## 6  Bark Surface Continuity Across Bifurcations
 
-Currently bark ridges are indexed by global Z. In the unified model, we need
-ridges to continue from trunk into branches. The correct independent variable is
-**path distance from root** (arc-length along the skeleton path), not global Z.
-
-For each skeleton edge (parent `p` → child `c`), compute the edge's `arc_dist`
-as the sum of segment lengths from the root to `p` plus half the current segment.
-Then the bark ridge phase at position `s` along this edge:
-
-```
-φ_k(s) = φ_k(root) + (arc_dist + s) * (2π / ridge_drift_mm)
-```
-
-where `φ_k(root)` is a per-tree random phase offset. This makes ridges continuous
-along any root-to-tip path. Ridges on sibling branches will diverge at the
-bifurcation (each child uses its own arc-distance from the branch point), which
-is natural — real trees show ridge bifurcation at branch junctions.
+The unified skeleton must provide `arc_dists`, the cumulative path distance from
+root to each node. The bark builder uses that value for ridge phase and twist so
+surface detail continues from trunk into branches. The detailed formula lives in
+[`design-bark.md` §3.2](design-bark.md#32--axial-bark-ridges).
 
 ---
 
@@ -273,17 +225,15 @@ vertical anyway because of the attractor exclusion zone.
 
 ### 7.2  Minimum printable radius
 
-The `ring_min_r_mm` threshold (§4.2) prevents generating swept-ring geometry
-below the FDM nozzle diameter (~0.4 mm). Below this threshold, plain frustum
-cones are still generated so the topology is complete, but at 0.4 mm radius a
-FDM printer will self-union these anyway.
+The `branch_min_r_mm` threshold in `BarkConfig` prevents generating swept-ring
+geometry below the printable branch radius. The exact scale-adaptive behavior is
+specified in [`design-bark.md` §2](design-bark.md#2--scale-adaptive-detail).
 
 ### 7.3  Root seal
 
-The root node (single point at terrain level) needs a closed base cap, exactly
-as the current trunk code provides. A flat disk cap at `terrain_z - sink_mm`
-closes the bottom of the root swept ring. All other skeleton leaves (branch tips)
-are capped with an apex fan to a single tip vertex.
+The root node receives a closed base cap sunk to `terrain_z - sink_mm`; effective
+leaf nodes receive top caps. See [`design-bark.md` §6.3](design-bark.md#63--base-cap)
+and [`§6.4`](design-bark.md#64--top-fan).
 
 ---
 
@@ -301,9 +251,15 @@ are capped with an apex fan to a single tip vertex.
 
 ### 8.2  New parameters
 
+The unified tree config should hold SCA skeleton parameters plus a `BarkConfig` for
+all surface parameters. The bark fields themselves are specified in
+[`design-bark.md` §7](design-bark.md#7--barkconfig-reference).
+
 ```python
 @dataclass
 class TreeConfig:
+    bark: BarkConfig
+
     # ── Crown placement (controls trunk height) ───────────────────────────
     crown_base_z_mm:    Sample[float] = D[15.0:30.0]  # height of crown bottom above terrain
     crown_rx:           Sample[float] = D[8.0:14.0]   # crown ellipsoid half-widths
@@ -320,32 +276,6 @@ class TreeConfig:
     sca_tropism:        float         = 0.25            # vertical bias (same as before)
     sca_branch_xy_std:  float         = 0.30
     sca_min_branch_att: int           = 3
-
-    # ── Surface: scale-adaptive detail thresholds ─────────────────────────
-    ridge_min_r_mm:     float         = 1.2            # bark ridges below this radius off
-    ring_min_r_mm:      float         = 0.4            # frustum cone below this radius
-
-    # ── Bark surface (same as trunk, now universal) ───────────────────────
-    r_base_mm:          Sample[float] = D[2.0:5.0]    # root node radius (overrides pipe model at root)
-    branch_r_tip_mm:    float         = 0.25
-    branch_az_segs:     int           = 12
-    taper_power:        float         = 0.6
-    aspect:             Sample[float] = D[0.75:1.0]
-    twist_per_seg:      float         = 0.04
-    ridge_harmonics:    int           = 5
-    ridge_amp:          float         = 0.10
-    ridge_drift_mm:     float         = 60.0
-    wrinkle_amp:        Sample[float] = D[0.20:0.55]
-    wrinkle_period:     Sample[float] = D[4.0:9.0]
-
-    # ── Root flare ────────────────────────────────────────────────────────
-    flare_amp:          float         = 0.65
-    flare_fraction:     float         = 0.18            # fraction of crown_base_z_mm
-    flare_power:        float         = 2.5
-
-    # ── FDM / base ────────────────────────────────────────────────────────
-    branch_min_r_mm:    float         = 0.20
-    sink:               float         = 0.15
 ```
 
 The trunk-specific parameters (`height_mm`, `n_seg`, `lean_mm`, `lean_max_mm`,

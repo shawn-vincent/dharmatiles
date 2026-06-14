@@ -117,7 +117,10 @@ low-angled flanges at the base. These are kept at ≤ 45° from vertical by desi
 ## 3  Trunk Geometry (Phase 1)
 
 The trunk is modelled as a **swept cross-section** along a bent spine, analogous
-to the rock system but oriented vertically.
+to the rock system but oriented vertically. The bark cross-section, surface detail,
+root flare, frame propagation, and mesh stitching rules now live in
+[`design-bark.md`](design-bark.md); this section keeps only the Phase 1 trunk-specific
+shape notes.
 
 ### 3.1  Spine Generation
 
@@ -136,8 +139,10 @@ gentle S-curve.
 
 ### 3.2  Cross-Section Profiles
 
-At each spine point a **ring** of `az_segs` vertices is generated. The ring lies
-in the plane perpendicular to the local spine tangent, centred on the spine point.
+At each spine point a **ring** of `az_segs` vertices is generated. See
+[`design-bark.md` §3](design-bark.md#3--cross-section-ring) for the shared ring
+model: elliptical cross-section, axial bark ridges, fine grain, and horizontal
+wrinkles.
 
 **Radius taper** (Weber & Penn power-law):
 
@@ -149,57 +154,17 @@ where `t ∈ [0, 1]` is the fractional height along the trunk. `taper_power = 0.
 gives a realistic deciduous trunk (broader at base, tapering quickly in the lower
 third, more slowly in the upper two-thirds). This is adjustable.
 
-**Elliptical cross-section**: actual trunks are rarely circular. Each ring is
-scaled by a random aspect ratio `aspect ∈ [0.7, 1.0]` (sampled once per tree),
-and a random yaw angle, giving a slightly oval cross-section that rotates slowly
-up the trunk (slow twist via additive angle per step).
-
-**Radial noise (bark ridges)**: bark ridges run axially. Modelled as:
-
-```
-r_noisy(θ, z) = r(z) * (1 + ridge_amp * Σ_k A_k * cos(k * θ + φ_k(z)))
-```
-
-where harmonics `k = 2..6` capture a mix of 2-fold (oval) to 6-fold (deeply
-fissured) ridge patterns. The phase `φ_k(z)` drifts slowly with height (low
-spatial frequency along Z) so ridges run continuously from root to crown rather
-than twisting. Amplitude `A_k` falls off with `k` so low harmonics dominate
-(coarse ridges, not spiky noise).
-
-A secondary high-frequency noise layer adds fine bark grain (small random
-perturbations of ≤ 5% of local radius).
-
 ### 3.3  Root Flare
 
-The bottom `flare_height_mm` of the trunk widens beyond the `r_base` taper to
-simulate buttress roots and ground contact.
-
-Flare radius:
-
-```
-r_flare(t_low) = r_base * (1 + flare_amp * (1 - t_low/flare_fraction)^flare_power)
-```
-
-where `t_low` is the fractional distance from the very bottom of the trunk. The
-flare is applied as a multiplicative boost on top of the taper profile, so the
-transition into the terrain is smooth. The bottom-most ring is wide enough to
-merge naturally into the terrain surface without a visible seam.
-
-The bottom face is a closed cap (flat disk or slight concavity) sunk `sink_mm`
-below `terrain_z` to ensure a watertight seal with the terrain mesh.
+The bottom of the trunk widens beyond the base taper to simulate buttress roots
+and ground contact. The shared flare profile and sunk base cap are specified in
+[`design-bark.md` §4](design-bark.md#4--root-flare) and
+[`design-bark.md` §6.3](design-bark.md#63--base-cap).
 
 ### 3.4  Bark Texture: Horizontal Wrinkles
 
-In addition to axial ridges, deciduous bark has horizontal wrinkle lines (growth
-rings, scar tissue). These are added as a low-amplitude, low-frequency sinusoidal
-perturbation in the Z direction:
-
-```
-z_noisy(z) = z + wrinkle_amp * sin(2π * z / wrinkle_period + φ_wrinkle)
-```
-
-applied uniformly to all vertices at height `z`. `wrinkle_amp ≈ 0.3–0.8 mm`,
-`wrinkle_period ≈ 3–8 mm` (varies per tree via sampling).
+Horizontal wrinkles are part of the shared bark surface model; see
+[`design-bark.md` §3.4](design-bark.md#34--horizontal-wrinkles).
 
 ### 3.5  Branch Stubs (optional in Phase 1)
 
@@ -216,14 +181,14 @@ silhouette.
 ### 3.6  Mesh Construction
 
 1. Generate spine as a list of `N_seg + 1` points (including base and apex).
-2. Build one ring of `az_segs` vertices at each spine point using the local
-   Frenet frame (tangent → normal → binormal).
-3. Stitch adjacent rings with quad pairs (two triangles each), exactly as the
-   rock code does with its elevation rings.
-4. Cap the apex with a fan of triangles to a single apex point.
-5. Cap the base with a closed flat disk (or slight dome) at terrain level.
-6. Merge vertices of all stubs into the main vertex array.
-7. Call `trimesh.Trimesh(..., process=False)` and `fix_normals()`.
+2. Build one ring of `az_segs` vertices at each spine point through the shared
+   bark surface pipeline.
+3. Stitch adjacent rings with quad pairs (two triangles each), cap the apex, cap
+   the base, and call `fix_normals()`.
+4. Merge vertices of all optional stubs into the main vertex array.
+
+The current implementation-level mesh rules are specified in
+[`design-bark.md` §6](design-bark.md#6--swept-ring-mesh-construction).
 
 Vertex count estimate (trunk only, no stubs):
 
@@ -259,6 +224,11 @@ Described briefly for architectural completeness.
 
 ### 5.1  `TreeConfig` dataclass (`core/config.py`)
 
+The original Phase 1 draft mixed trunk-shape fields and bark-surface fields in one
+config. The shared bark fields now live in `BarkConfig`; see
+[`design-bark.md` §7](design-bark.md#7--barkconfig-reference). The trunk-specific
+shape fields are:
+
 ```python
 @dataclass
 class TreeConfig:
@@ -267,31 +237,16 @@ class TreeConfig:
     Phase 1: trunk only (no branches).
     """
 
+    bark: BarkConfig
+
     # ── Trunk dimensions ──────────────────────────────────────────────────
     height_mm:          Sample[float] = D[20.0:45.0]   # total trunk height
-    r_base_mm:          Sample[float] = D[2.0:5.0]     # base radius
     taper_power:        float         = 0.6             # radius taper exponent
-    aspect:             Sample[float] = D[0.70:1.0]    # cross-section aspect ratio
-    twist_per_seg:      float         = 0.05            # radians yaw added per segment
 
     # ── Spine curvature ───────────────────────────────────────────────────
     n_seg:              int           = 18              # spine segments
     lean_mm:            float         = 1.2             # σ of per-step lateral noise
     lean_max_mm:        float         = 4.0             # hard clamp on cumulative lean
-
-    # ── Root flare ────────────────────────────────────────────────────────
-    flare_amp:          float         = 0.65            # flare boost at base (fraction of r_base)
-    flare_fraction:     float         = 0.18            # fraction of trunk height for flare
-    flare_power:        float         = 2.5             # sharpness of flare taper
-
-    # ── Bark ridges (axial) ───────────────────────────────────────────────
-    ridge_harmonics:    int           = 5               # number of angular harmonics
-    ridge_amp:          float         = 0.10            # fractional amplitude of ridges
-    ridge_drift_mm:     float         = 60.0            # Z-period of phase drift (long = straight ridges)
-
-    # ── Bark wrinkles (horizontal) ────────────────────────────────────────
-    wrinkle_amp:        Sample[float] = D[0.25:0.60]   # mm amplitude
-    wrinkle_period:     Sample[float] = D[4.0:9.0]     # mm period
 
     # ── Branch stubs (optional) ───────────────────────────────────────────
     n_stubs:            int           = 3               # 0 = no stubs
@@ -299,10 +254,6 @@ class TreeConfig:
     stub_length_mm:     Sample[float] = D[2.0:5.0]
     stub_r_base_mm:     Sample[float] = D[0.6:1.2]
     stub_angle_up:      Sample[float] = D[0.1:0.4]     # radians above horizontal (FDM safety)
-
-    # ── Mesh quality ──────────────────────────────────────────────────────
-    az_segs:            int           = 24              # azimuth facets per ring
-    sink:               float         = 0.15            # mm below terrain for watertight base
 
     @property
     def height_mm_max(self) -> float:
@@ -347,9 +298,10 @@ and `obstacle_mask`, return merged mesh list.
 
 ### 6.2  Stamping
 
-The trunk footprint is an **ellipse** at the base (same axes as `r_base * aspect`),
-stamped to height `terrain_z + height_mm`. This prevents grass from growing inside
-the trunk and forces subsequent `Grass` blades to steer around the tree.
+The trunk footprint is an **ellipse** at the base, using the root radius and aspect
+from `BarkConfig`, stamped to height `terrain_z + height_mm`. This prevents grass
+from growing inside the trunk and forces subsequent `Grass` blades to steer around
+the tree.
 
 For visual correctness, the obstacle footprint should cover only the actual base
 cross-section, not the full crown radius. The full tree will be tall, but grass
@@ -423,10 +375,11 @@ go here.
    Random walk from base to apex; Laplacian smooth.
 
 2. Write `_rings_from_spine(spine, cfg, rng) → list[ndarray(az_segs, 3)]`  
-   Frenet frame per segment; radial taper + aspect + twist; ridge + wrinkle noise.
+   Delegate cross-section detail, bark texture, flare, and caps to the shared bark
+   surface model in [`design-bark.md`](design-bark.md).
 
 3. Write `_stitch_rings(rings) → (vertices, faces)`  
-   Quad-strip between adjacent rings; apex fan; base disk cap.
+   Quad-strip between adjacent rings; top fan; base disk cap.
 
 4. Write `_build_stubs(spine, cfg, rng) → list[trimesh.Trimesh]`  
    Optional branch stubs; each is a simple tapered cone.
@@ -465,9 +418,9 @@ the Phase 1 interface.
 |---|---|
 | Should the trunk hollow out for material savings at large scales? | Defer. Solid trunk is simpler and correct for miniature scale (3–5 mm base radius). |
 | Should trees stamp a support_z column up to their full height? | **Yes.** This prevents grass from seeding above the trunk footprint, which is correct (grass grows around the base, not through the tree). |
-| Root flare: separate mesh piece or part of trunk rings? | **Rings.** Apply a flare multiplier to the lower spine rings; no extra geometry needed. |
-| Should phase-drift on bark ridges use Perlin noise or a simple sum-of-sines? | **Sum-of-sines.** Perlin adds a scipy dependency and is overkill for bark. |
-| How many FDM overhang issues does a straight trunk actually have? | **None.** The trunk itself is essentially a vertical cylinder. The only borderline geometry is the root flare, which is controllable by `flare_fraction` and `flare_power`. |
+| Root flare: separate mesh piece or part of trunk rings? | Shared bark surface concern; see [`design-bark.md` §4](design-bark.md#4--root-flare). |
+| Should phase-drift on bark ridges use Perlin noise or a simple sum-of-sines? | Shared bark surface concern; see [`design-bark.md` §3.2](design-bark.md#32--axial-bark-ridges). |
+| How many FDM overhang issues does a straight trunk actually have? | **None.** The trunk itself is essentially a vertical cylinder. Root flare constraints are handled by `BarkConfig`. |
 | Can trees be used as region-filling objects (many per tile) or only as accents? | **Accent first.** At 35 mm/square scale, 2–4 trees per 2×2 tile is the right density. A forest tile spec could use higher density but would need thinner trunks. |
 
 ---
