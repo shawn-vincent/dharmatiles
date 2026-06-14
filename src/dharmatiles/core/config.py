@@ -706,6 +706,130 @@ class ScaTreeConfig:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ConstTreeConfig — BarkConfig + constructive skeleton params
+# ─────────────────────────────────────────────────────────────────────────────
+
+@dataclass(init=False)
+class ConstTreeConfig:
+    """Full config for ConstTree: bark surface + constructive skeleton.
+
+    The ``bark`` attribute is the same surface/mesh config used by
+    ``ScaTreeConfig``.  The remaining fields control the deterministic layered
+    constructive grower.
+    """
+
+    bark: BarkConfig
+
+    height_max_mm:     Sample[float] = D[20.0:40.0]
+    n_levels:          int = 3
+    n_segs_per_level:  int | list[int] = 4
+    spread_angle_deg:  Sample[float] | list[Sample[float]] = D[20.0:38.0]
+    pipe_model_exp:    float = 2.0
+
+    n_trunk_segs:      int = 5
+    split_count_min:   int = 2
+    split_count_max:   int = 3
+    initial_lean_deg:  Sample[float] = D[0.0:8.0]
+    wander_deg:        Sample[float] = D[3.0:8.0]
+    upward_bias:       float = 0.30
+    repulsion_strength: float = 0.40
+    repulsion_z_window: float = 2.0
+
+    dominant_branch:       bool = False
+    dominant_r_frac:       float = 0.65
+    dominant_angle_factor: float = 0.30
+    taper_within_run:      bool = False
+
+    min_elevation_deg: float = 45.0
+
+    def __init__(
+        self,
+        *,
+        # ── Bark params (forwarded to BarkConfig) ────────────────────────────
+        r_base_mm:          Sample[float] | None = None,
+        aspect:             Sample[float] | None = None,
+        twist_rate:         float                = 0.018,
+        flare_amp:          float                = 0.55,
+        flare_fraction:     float                = 0.22,
+        flare_power:        float                = 2.5,
+        ridge_harmonics:    int                  = 5,
+        ridge_amp:          float                = 0.10,
+        ridge_drift_mm:     float                = 60.0,
+        wrinkle_amp:        Sample[float] | None = None,
+        wrinkle_period:     Sample[float] | None = None,
+        branch_r_tip_mm:    float                = 0.30,
+        ridge_min_r_mm:     float                = 1.2,
+        branch_min_r_mm:    float                = 0.20,
+        az_segs:            int                  = 16,
+        sink:               float                = 0.15,
+        # ── Constructive skeleton params ────────────────────────────────────
+        height_max_mm:      Sample[float] | None = None,
+        n_levels:           int                  = 3,
+        n_segs_per_level:   int | list[int]      = 4,
+        spread_angle_deg:   Sample[float] | list[Sample[float]] | None = None,
+        pipe_model_exp:     float                = 2.0,
+        n_trunk_segs:       int                  = 5,
+        split_count_min:    int                  = 2,
+        split_count_max:    int                  = 3,
+        initial_lean_deg:   Sample[float] | None = None,
+        wander_deg:         Sample[float] | None = None,
+        upward_bias:        float                = 0.30,
+        repulsion_strength: float                = 0.40,
+        repulsion_z_window: float                = 2.0,
+        dominant_branch:       bool             = False,
+        dominant_r_frac:       float            = 0.65,
+        dominant_angle_factor: float            = 0.30,
+        taper_within_run:      bool             = False,
+        min_elevation_deg:     float            = 45.0,
+    ) -> None:
+        if n_levels < 0:
+            raise ValueError("n_levels must be non-negative")
+        if split_count_min < 1 or split_count_max < split_count_min:
+            raise ValueError("split_count_min/max must define a positive inclusive range")
+        if pipe_model_exp <= 0.0:
+            raise ValueError("pipe_model_exp must be positive")
+        if not (0.0 < dominant_r_frac < 1.0):
+            raise ValueError("dominant_r_frac must be between 0 and 1")
+
+        self.bark = BarkConfig(
+            r_base_mm=r_base_mm, aspect=aspect, twist_rate=twist_rate,
+            flare_amp=flare_amp, flare_fraction=flare_fraction, flare_power=flare_power,
+            ridge_harmonics=ridge_harmonics, ridge_amp=ridge_amp,
+            ridge_drift_mm=ridge_drift_mm,
+            wrinkle_amp=wrinkle_amp, wrinkle_period=wrinkle_period,
+            branch_r_tip_mm=branch_r_tip_mm,
+            ridge_min_r_mm=ridge_min_r_mm, branch_min_r_mm=branch_min_r_mm,
+            az_segs=az_segs, sink=sink,
+        )
+        vals = {
+            'height_max_mm': height_max_mm if height_max_mm is not None else D[20.0:40.0],
+            'n_levels': n_levels,
+            'n_segs_per_level': n_segs_per_level,
+            'spread_angle_deg': (
+                spread_angle_deg if spread_angle_deg is not None else D[20.0:38.0]
+            ),
+            'pipe_model_exp': pipe_model_exp,
+            'n_trunk_segs': n_trunk_segs,
+            'split_count_min': split_count_min,
+            'split_count_max': split_count_max,
+            'initial_lean_deg': (
+                initial_lean_deg if initial_lean_deg is not None else D[0.0:8.0]
+            ),
+            'wander_deg': wander_deg if wander_deg is not None else D[3.0:8.0],
+            'upward_bias': upward_bias,
+            'repulsion_strength': repulsion_strength,
+            'repulsion_z_window': repulsion_z_window,
+            'dominant_branch': dominant_branch,
+            'dominant_r_frac': dominant_r_frac,
+            'dominant_angle_factor': dominant_angle_factor,
+            'taper_within_run': taper_within_run,
+            'min_elevation_deg': min_elevation_deg,
+        }
+        for k, v in vals.items():
+            setattr(self, k, v)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Flowers
 # ─────────────────────────────────────────────────────────────────────────────
 

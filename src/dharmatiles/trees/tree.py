@@ -16,6 +16,7 @@ import trimesh
 
 from ..dist import sample, bounds as _bounds
 from .skeleton import grow_skeleton
+from .const_skeleton import grow_const_skeleton
 from .radii    import assign_radii
 from .surface  import build_tree_mesh
 
@@ -36,13 +37,26 @@ def build_tree(
     """
     r_root = float(sample(cfg.bark.r_base_mm, rng))
 
-    nodes_xyz, parents, arc_dists, crown_base_z = grow_skeleton(cx, cy, tz, cfg, rng)
+    if hasattr(cfg, "height_max_mm"):
+        nodes_xyz, parents, arc_dists, crown_base_z = grow_const_skeleton(
+            cx, cy, tz, cfg, rng,
+        )
+        pipe_exp = float(getattr(cfg, "pipe_model_exp", 2.0))
+        include_internal_self = bool(getattr(cfg, "taper_within_run", False))
+    else:
+        nodes_xyz, parents, arc_dists, crown_base_z = grow_skeleton(cx, cy, tz, cfg, rng)
+        pipe_exp = 2.0
+        include_internal_self = True
 
     if len(nodes_xyz) <= 1:
         # SCA produced no growth (degenerate case — no attractors reached)
         return trimesh.Trimesh(process=False), 0.0
 
-    radii = assign_radii(parents, cfg.bark.branch_r_tip_mm, r_root)
+    radii = assign_radii(
+        parents, cfg.bark.branch_r_tip_mm, r_root,
+        exp=pipe_exp,
+        include_internal_self=include_internal_self,
+    )
 
     mesh = build_tree_mesh(
         nodes_xyz, parents, radii, arc_dists,
