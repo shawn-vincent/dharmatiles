@@ -395,28 +395,39 @@ def build_tree_mesh(
 
     parts: list[trimesh.Trimesh] = []
 
-    # ── Root bottom cap (sunk below terrain for watertight ground seal) ───────
-    if rings[0] is not None:
-        bot = nodes_xyz[0].copy()
-        bot[2] -= cfg.sink
-        parts.append(_fan_cap(rings[0], bot, flip=True))
-
-    # ── Side strips — one per skeleton edge ───────────────────────────────────
+    # ── One capped frustum per skeleton edge ───────────────────────────────────
+    #
+    # Each edge (parent → child) is built as a fully independent watertight
+    # tube: side strip + base disc cap + tip disc cap.  merge_vertices() is
+    # called on each piece so that the strip's ring boundaries weld to their
+    # respective caps, making the piece genuinely watertight.
+    #
+    # No vertex sharing occurs between pieces, so at branching junctions the
+    # frustums of sibling branches overlap geometrically but remain topologically
+    # independent.  Trimesh's is_watertight check is edge-valence only, so the
+    # concatenated mesh reports watertight without needing a boolean union.
+    # Slicers treat the overlapping closed volumes as a union naturally.
+    #
+    # The root edge uses a base cap sunk cfg.sink mm below terrain so the trunk
+    # extends into the ground and leaves no gap at the soil surface.
     for i in range(1, N):
         p = int(parents[i])
         if rings[p] is None or rings[i] is None:
             continue
-        parts.append(_side_strip(rings[p], rings[i]))
 
-    # ── Top caps at effective leaf nodes ──────────────────────────────────────
-    # A node is an effective leaf when it has an active ring but no child with
-    # an active ring (either a true skeleton leaf, or the last active node
-    # above a run of sub-threshold twigs).
-    for i in range(N):
-        if rings[i] is None:
-            continue
-        if not any(rings[c] is not None for c in children[i]):
-            parts.append(_fan_cap(rings[i], nodes_xyz[i], flip=False))
+        if p == 0:
+            base_center = nodes_xyz[0].copy()
+            base_center[2] -= cfg.sink
+        else:
+            base_center = nodes_xyz[p].copy()
+
+        piece = trimesh.util.concatenate([
+            _side_strip(rings[p], rings[i]),
+            _fan_cap(rings[p], base_center, flip=True),
+            _fan_cap(rings[i], nodes_xyz[i], flip=False),
+        ])
+        piece.merge_vertices()
+        parts.append(piece)
 
     if not parts:
         return trimesh.Trimesh(process=False)
