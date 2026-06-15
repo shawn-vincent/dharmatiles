@@ -65,6 +65,7 @@ class CloudTree:
         foliage_bulge_mm: float = 0.0,
         branchiness: float = 1.0,
         branch_target: str = "centroid",
+        branch_fill: float = 0.0,
     ) -> None:
         self.shape = TreeShape(
             height_mm=height_mm,
@@ -90,6 +91,7 @@ class CloudTree:
         self.foliage_bulge_mm  = float(foliage_bulge_mm)
         self.branchiness       = float(np.clip(branchiness, 0.0, 1.0))
         self.branch_target     = str(branch_target)
+        self.branch_fill       = float(np.clip(branch_fill, 0.0, 1.0))
 
     def footprint_mm(self) -> float:
         return float(bounds(self.shape.crown_radius_mm)[1])
@@ -152,6 +154,7 @@ class CloudTree:
                     foliage_bulge_mm=self.foliage_bulge_mm,
                     branchiness=self.branchiness,
                     branch_target=self.branch_target,
+                    branch_fill=self.branch_fill,
                 )
             )
             if len(nodes) < 2:

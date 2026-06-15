@@ -65,6 +65,7 @@ def grow_cloud_skeleton(
     foliage_bulge_mm: float = 0.0,
     branchiness: float = 1.0,
     branch_target: str = "centroid",
+    branch_fill: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Grow a CloudTree skeleton filling *env*.
 
@@ -140,6 +141,7 @@ def grow_cloud_skeleton(
         max_steps     = max_steps,
         group_labels  = group_labels,
         branch_target = branch_target,
+        branch_fill   = float(np.clip(branch_fill, 0.0, 1.0)),
     )
 
     # Compress: drop collinear single-child nodes; they don't affect radii
@@ -176,6 +178,7 @@ def _branch_skeleton(
     max_steps:     int,
     group_labels:  np.ndarray | None = None,
     branch_target: str = "centroid",
+    branch_fill:   float = 0.0,
 ) -> tuple[list, list, list]:
     nodes:      list[np.ndarray] = [root.copy()]
     parents:    list[int]        = [-1]
@@ -246,17 +249,73 @@ def _branch_skeleton(
             primary_labels = labels[~stray_mask] if labels is not None else None
 
             if len(stray) > 0 and len(primary) > 0:
+                # ── Compute stray clusters (needed to know K for fill) ──────
                 if labels is not None:
-                    # One leaf sub-branch per stray group label (no cap).
-                    for gid in np.unique(stray_labels):
-                        cluster = stray[stray_labels == gid]
-                        if len(cluster) > 0:
-                            queue.append((tip_idx, cluster, None, 0))
+                    stray_clusters = [
+                        stray[stray_labels == gid]
+                        for gid in np.unique(stray_labels)
+                        if np.sum(stray_labels == gid) > 0
+                    ]
                 else:
-                    # Original: PCA-based clustering of strays.
-                    for cluster in _cluster_pca(stray, pos, max_branches - 1):
-                        if len(cluster) > 0:
-                            queue.append((tip_idx, cluster, None, 0))
+                    stray_clusters = [
+                        c for c in _cluster_pca(stray, pos, max_branches - 1)
+                        if len(c) > 0
+                    ]
+
+                # ── branch_fill redistribution ─────────────────────────────
+                # At fill=0 (default) each branch keeps its natural cone
+                # subset.  At fill=1 all owned attractors are divided equally
+                # among the K branches at this fork (1 primary + stray clusters).
+                # Intermediate values lerp the primary target count.
+                # In group mode: whole groups are re-assigned, not individuals.
+                if branch_fill > 1e-6 and stray_clusters:
+                    K = 1 + len(stray_clusters)
+                    if labels is None:
+                        # Non-group: re-rank individuals by cos_a.
+                        n_target = int(round(
+                            len(primary) + (len(owned) / K - len(primary)) * branch_fill
+                        ))
+                        n_target = max(1, min(len(owned) - 1, n_target))
+                        order    = np.argsort(-cos_a)
+                        primary  = owned[order[:n_target]]
+                        remaining = owned[order[n_target:]]
+                        stray_clusters = [
+                            c for c in _cluster_pca(remaining, pos, max_branches - 1)
+                            if len(c) > 0
+                        ]
+                        primary_labels = None
+                    else:
+                        # Group mode: re-rank whole groups by centroid cos_a.
+                        all_gids        = np.unique(labels)
+                        n_g             = len(all_gids)
+                        n_primary_groups = (
+                            len(np.unique(primary_labels))
+                            if primary_labels is not None else 0
+                        )
+                        n_g_target = int(round(
+                            n_primary_groups
+                            + (n_g / K - n_primary_groups) * branch_fill
+                        ))
+                        n_g_target = max(1, min(n_g - 1, n_g_target))
+                        # Sort groups by centroid cos_a.
+                        gid_cos = {
+                            gid: float(np.mean(cos_a[labels == gid]))
+                            for gid in all_gids
+                        }
+                        sorted_gids = sorted(all_gids, key=lambda g: -gid_cos[g])
+                        primary_gids = set(sorted_gids[:n_g_target])
+                        primary_mask = np.isin(labels, list(primary_gids))
+                        primary        = owned[primary_mask]
+                        primary_labels = labels[primary_mask]
+                        stray_clusters = [
+                            owned[labels == gid]
+                            for gid in sorted_gids[n_g_target:]
+                            if np.sum(labels == gid) > 0
+                        ]
+
+                # ── Spawn sub-branches ─────────────────────────────────────
+                for cluster in stray_clusters:
+                    queue.append((tip_idx, cluster, None, 0))
 
             if len(primary) == 0:
                 # All stray: keep the largest group/cluster as primary.
