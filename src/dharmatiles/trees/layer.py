@@ -153,7 +153,6 @@ class CloudTree:
         max_branches_per_step: int = 3,
         branch_exponent: float = 2.5,
         smoothing_alpha: float = 0.1,
-        trunk_radius_mm: float = 2.0,
         min_radius_mm: float = 0.45,
         debug_attractors: bool = False,
     ) -> None:
@@ -174,7 +173,6 @@ class CloudTree:
         self.max_branches_per_step = int(max_branches_per_step)
         self.branch_exponent = float(branch_exponent)
         self.smoothing_alpha = float(smoothing_alpha)
-        self.trunk_radius_mm = float(trunk_radius_mm)
         self.min_radius_mm = float(min_radius_mm)
         self.debug_attractors = bool(debug_attractors)
 
@@ -208,7 +206,8 @@ class CloudTree:
             surface,
             rng,
         )
-        meshes: list[trimesh.Trimesh] = []
+        wood_parts: list[trimesh.Trimesh] = []
+        flower_parts: list[trimesh.Trimesh] = []
         for x, y, _gd in positions:
             tz = float(sample_grid(scene.terrain_z, surface, np.array([x]), np.array([y]))[0])
             tree_rng = np.random.default_rng(int(rng.integers(2 ** 62)))
@@ -218,7 +217,6 @@ class CloudTree:
                 tree_rng,
                 n_attraction=self.n_attraction,
                 segment_length_mm=self.segment_length_mm,
-                trunk_radius_mm=self.trunk_radius_mm,
                 min_radius_mm=self.min_radius_mm,
                 min_branch_angle_deg=self.min_branch_angle_deg,
                 branch_split_angle_deg=self.branch_split_angle_deg,
@@ -228,26 +226,32 @@ class CloudTree:
             )
             if len(nodes) < 2:
                 continue
-            mesh = build_cloud_tree_mesh(
+            mesh, attractor_parts = build_cloud_tree_mesh(
                 nodes,
                 parents,
                 radii,
                 prior_dirs,
                 terrain_z=tz,
-                trunk_radius_mm=self.trunk_radius_mm,
                 debug_attractors=attractors if self.debug_attractors else None,
             )
             if len(mesh.vertices) == 0:
                 continue
-            _tag(mesh, Material.WOOD)
-            meshes.append(mesh)
+            wood_parts.append(mesh)
+            flower_parts.extend(attractor_parts)
             _stamp_tree(scene, surface, x, y, env, float(radii[0]))
 
-        if not meshes:
+        if not wood_parts and not flower_parts:
             return []
-        combined = trimesh.util.concatenate(meshes)
-        _tag(combined, Material.WOOD)
-        return [combined]
+        result: list[trimesh.Trimesh] = []
+        if wood_parts:
+            wood_combined = trimesh.util.concatenate(wood_parts)
+            _tag(wood_combined, Material.WOOD)
+            result.append(wood_combined)
+        if flower_parts:
+            flower_combined = trimesh.util.concatenate(flower_parts)
+            _tag(flower_combined, Material.FLOWER)
+            result.append(flower_combined)
+        return result
 
     def _sample_envelope(
         self, x: float, y: float, terrain_z: float, rng: np.random.Generator

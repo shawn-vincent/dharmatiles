@@ -8,21 +8,22 @@ import trimesh
 def build_cloud_tree_mesh(
     nodes: np.ndarray,       # (N, 3)
     parents: np.ndarray,     # (N,) int, -1 for root
-    radii: np.ndarray,       # (N,)
+    radii: np.ndarray,       # (N,) — computed bottom-up; radii[0] is the root radius
     prior_dirs: np.ndarray,  # (N, 3) — Bezier tangent arriving at each node
     *,
     terrain_z: float,
-    trunk_radius_mm: float,
     handle_scale: float = 0.45,
     bezier_samples: int = 8,
     debug_attractors: np.ndarray | None = None,
-    attractor_radius_mm: float = 0.8,
+    attractor_radius_mm: float = 0.6,
 ) -> trimesh.Trimesh:
     """Build a tapered cubic-Bezier tube mesh from a CloudTree node graph.
 
     Each (parent, child) edge is rendered as a cubic Bezier whose start and
     end tangents are the nodes' prior_dirs, giving C1 continuity at branch
     joins (because child prior_dirs are initialised to the parent's heading).
+    Trunk radius is taken from radii[0], which is computed bottom-up from the
+    total branch count — not configured externally.
     """
     meshes: list[trimesh.Trimesh] = []
 
@@ -53,8 +54,8 @@ def build_cloud_tree_mesh(
                 meshes.append(m)
 
     # Root flare anchors the trunk to the terrain surface.
-    base_r = max(float(radii[0]) if len(radii) > 0 else trunk_radius_mm, 0.42)
-    flare_h = min(0.30 * max(trunk_radius_mm, 0.0), 4.0)
+    base_r = max(float(radii[0]) if len(radii) > 0 else 1.0, 0.42)
+    flare_h = min(0.30 * base_r, 4.0)
     if flare_h > 0.2 and len(nodes) > 0:
         root = nodes[0].copy()
         top = nodes[0].copy()
@@ -64,30 +65,27 @@ def build_cloud_tree_mesh(
         if m is not None:
             meshes.append(m)
 
-    # Optional debug markers: one icosahedron per attractor point, golden yellow.
-    if debug_attractors is not None and len(debug_attractors) > 0:
-        ico_base = trimesh.creation.icosphere(subdivisions=0, radius=attractor_radius_mm)
-        yellow = np.array([245, 195, 0, 255], dtype=np.uint8)
-        for pt in debug_attractors:
-            s = ico_base.copy()
-            s.vertices = s.vertices + pt
-            n_f = len(s.faces)
-            s.visual = trimesh.visual.ColorVisuals(
-                mesh=s,
-                face_colors=np.tile(yellow, (n_f, 1)).astype(np.uint8),
-            )
-            s.metadata['material'] = 5  # FLOWER — golden yellow
-            meshes.append(s)
-
     if not meshes:
-        return trimesh.Trimesh(process=False)
+        return trimesh.Trimesh(process=False), []
     mesh = trimesh.util.concatenate(meshes)
     for method in ("remove_duplicate_faces", "remove_degenerate_faces",
                    "remove_unreferenced_vertices"):
         fn = getattr(mesh, method, None)
         if fn is not None:
             fn()
-    return mesh
+
+    # Debug attractor spheres returned separately so the caller can tag them
+    # independently (FLOWER/yellow) without being overwritten by the WOOD tag
+    # applied to the trunk/branch mesh.
+    attractor_meshes: list[trimesh.Trimesh] = []
+    if debug_attractors is not None and len(debug_attractors) > 0:
+        ico_base = trimesh.creation.icosphere(subdivisions=0, radius=attractor_radius_mm)
+        for pt in debug_attractors:
+            s = ico_base.copy()
+            s.vertices = s.vertices + pt
+            attractor_meshes.append(s)
+
+    return mesh, attractor_meshes
 
 
 # ─────────────────────────────────────────────────────────────────────────────
