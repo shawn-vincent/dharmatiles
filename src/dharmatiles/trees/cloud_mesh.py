@@ -39,9 +39,12 @@ def build_cloud_tree_mesh(
        via :func:`_basis`.
     2. For each edge (parent → child) in topological order:
 
-       a. Pre-transport the parent's frame from ``in_dirs[parent]`` to the
-          Bézier start tangent ``out_dirs[child]``, so intermediate rings
-          immediately track the curve rather than the arriving direction.
+       a. Bézier start tangent = ``in_dirs[parent]`` (parent's arriving
+          direction), end tangent = ``in_dirs[child]``.  This gives C1
+          continuity at every junction: every child starts growing in exactly
+          the same direction the parent was already travelling, then curves to
+          its own target.  No pre-transport is needed because the parent's
+          ``(u, v)`` frame is already ⊥ to ``in_dirs[parent]``.
        b. Sample the cubic Bézier at adaptive spacing (~2.5 mm / step, min 4)
           and parallel-transport the frame at each step.
        c. **Ring 0 is the parent's existing ring** (no new vertices added).
@@ -96,8 +99,13 @@ def build_cloud_tree_mesh(
         r0 = max(float(radii[p]), 0.42)
         r1 = max(float(radii[i]), 0.42)
 
-        t0 = _safe_norm(np.asarray(out_dirs[i], float))
-        t1 = _safe_norm(np.asarray(in_dirs[i],  float))
+        # Start tangent = parent's *arriving* direction so every child starts
+        # tangent to the parent branch at the junction (C1 continuity).  The
+        # Bézier then curves from that direction to in_dirs[child] at the tip.
+        # No pre-transport is needed: the parent's (u, v) frame is already
+        # perpendicular to in_dirs[parent], which is now also the start tangent.
+        t0 = _safe_norm(np.asarray(in_dirs[p], float))   # parent's heading
+        t1 = _safe_norm(np.asarray(in_dirs[i], float))   # child's arriving dir
         h  = handle_scale * length
         p1 = p0 + h * t0   # Bézier control points
         p2 = p3 - h * t1
@@ -108,11 +116,7 @@ def build_cloud_tree_mesh(
         curve   = _bezier_eval(p0, p1, p2, p3, ts)
         radii_t = r0 + (r1 - r0) * ts
 
-        # Pre-transport parent frame from in_dirs[p] → out_dirs[i] (Bézier
-        # start tangent), so ring[1] is already perpendicular to the curve.
-        u, v     = pu, pv
-        start_t  = _safe_norm(_bezier_tangent(p0, p1, p2, p3, 0.0))
-        u, v     = _transport(u, v, start_t)
+        u, v = pu, pv
 
         # step_off[0] = parent's ring (no new vertices); [1..] = new rings.
         step_off = [ring_off[p]]
