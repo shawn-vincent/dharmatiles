@@ -17,9 +17,9 @@ from .envelope import TreeEnvelope
 @dataclass(frozen=True)
 class TreeShape:
     height_mm: Sample[float] = 40.0
-    trunk_height_mm: Sample[float] = 5.0
-    crown_radius_mm: Sample[float] = 20.0
-    crown_base_radius_mm: Sample[float] = 5.0
+    trunk_height_mm: Sample[float] = 30.0
+    crown_radius_mm: Sample[float] = 15.0
+    crown_base_radius_mm: Sample[float] = 14.0
     top_pointiness: float = 0.0
     top_curve: float = 1.4
     bottom_pointiness: float = 0.35
@@ -44,9 +44,9 @@ class CloudTree:
         self,
         *,
         height_mm: Sample[float] = 40.0,
-        trunk_height_mm: Sample[float] = 5.0,
-        crown_radius_mm: Sample[float] = 20.0,
-        crown_base_radius_mm: Sample[float] = 5.0,
+        trunk_height_mm: Sample[float] = 30.0,
+        crown_radius_mm: Sample[float] = 15.0,
+        crown_base_radius_mm: Sample[float] = 14.0,
         top_pointiness: float = 0.0,
         top_curve: float = 1.4,
         bottom_pointiness: float = 0.35,
@@ -60,12 +60,12 @@ class CloudTree:
         smoothing_alpha: float = 0.1,
         min_radius_mm: float = 0.45,
         debug_attractors: bool = False,
-        group_width_mm: Sample[float] | None = None,
-        group_height_mm: Sample[float] | None = None,
-        foliage_bulge_mm: float = 0.0,
-        branch_split_eagerness: float = 1.0,
-        branch_target: float = 0.5,
-        branch_fork_balance: float = 0.0,
+        group_width_mm: Sample[float] | None = 20.0,
+        group_height_mm: Sample[float] | None = 20.0,
+        foliage_bulge_mm: float = 6.0,
+        branch_split_eagerness: float = 0.8,
+        branch_target: float = 0.3,
+        branch_fork_balance: float = 1.0,
     ) -> None:
         self.shape = TreeShape(
             height_mm=height_mm,
