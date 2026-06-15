@@ -14,7 +14,6 @@ class _CloudParams:
     kill_radius_mm: float
     trunk_radius_mm: float
     min_radius_mm: float
-    min_up_sin: float        # sin(min_up_angle_deg)
     min_branch_cos: float    # cos(min_branch_angle_deg)
     branch_split_cos: float  # cos(branch_split_angle_deg)
     max_branches_per_step: int
@@ -42,7 +41,6 @@ def grow_cloud_skeleton(
     kill_radius_mm: float | None = None,
     trunk_radius_mm: float = 2.0,
     min_radius_mm: float = 0.45,
-    min_up_angle_deg: float = 20.0,
     min_branch_angle_deg: float = 30.0,
     branch_split_angle_deg: float | None = None,
     max_branches_per_step: int = 3,
@@ -73,7 +71,6 @@ def grow_cloud_skeleton(
         kill_radius_mm=float(kill_radius_mm),
         trunk_radius_mm=float(trunk_radius_mm),
         min_radius_mm=float(min_radius_mm),
-        min_up_sin=float(np.sin(np.radians(min_up_angle_deg))),
         min_branch_cos=float(np.cos(np.radians(min_branch_angle_deg))),
         branch_split_cos=float(np.cos(np.radians(branch_split_angle_deg))),
         max_branches_per_step=int(max_branches_per_step),
@@ -136,11 +133,6 @@ def _grow_one_step(
     # 3a — primary direction with momentum smoothing
     centroid = branch.points.mean(axis=0)
 
-    # Overshoot guard: if the centroid has fallen below the tip (we've grown
-    # past our cloud and min_up prevents turning back), stop here.
-    if tip[2] > p.crown_base_z and centroid[2] < tip[2]:
-        return []
-
     raw = centroid - tip
     raw_len = float(np.linalg.norm(raw))
     centroid_dir = (raw / raw_len) if raw_len > 1e-9 else branch.prior_dir.copy()
@@ -148,8 +140,7 @@ def _grow_one_step(
     a = p.smoothing_alpha
     blended = centroid_dir * (1.0 - a) + branch.prior_dir * a
     b_len = float(np.linalg.norm(blended))
-    blended = (blended / b_len) if b_len > 1e-9 else up_vec()
-    direction = _enforce_min_up(blended, p.min_up_sin)
+    direction = (blended / b_len) if b_len > 1e-9 else centroid_dir
 
     # 3b — stray detection (only above crown base)
     if tip[2] >= p.crown_base_z:
@@ -201,14 +192,7 @@ def _grow_one_step(
         cdr = g_cen - new_tip
         cdr_len = float(np.linalg.norm(cdr))
         child_dir = (cdr / cdr_len) if cdr_len > 1e-9 else direction.copy()
-        child_dir = _enforce_min_up(child_dir, p.min_up_sin)
         child_dir = _enforce_min_branch_angle(direction, child_dir, p.min_branch_cos)
-        # Re-apply min_up after branch-angle push; iterate until stable (≤ 3 passes).
-        for _ in range(3):
-            adj = _enforce_min_up(child_dir, p.min_up_sin)
-            if np.allclose(adj, child_dir, atol=1e-6):
-                break
-            child_dir = _enforce_min_branch_angle(direction, adj, p.min_branch_cos)
 
         # prior_dir initialised to parent's direction → C1 Bezier continuity at join.
         children.append(_CloudBranch(
@@ -225,10 +209,6 @@ def _grow_one_step(
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
-
-def up_vec() -> np.ndarray:
-    return np.array([0.0, 0.0, 1.0], dtype=float)
-
 
 def _pack(
     positions: list[np.ndarray],
@@ -325,18 +305,6 @@ def _sample_cloud(env: TreeEnvelope, rng: np.random.Generator, n: int) -> np.nda
         z = env.crown_base_z + t * env.crown_height
         points.append([env.cx + rho * np.cos(theta), env.cy + rho * np.sin(theta), z])
     return np.array(points, dtype=float) if points else np.empty((0, 3), dtype=float)
-
-
-def _enforce_min_up(d: np.ndarray, min_z: float) -> np.ndarray:
-    """Clamp d to have at least min_z vertical component, preserving azimuth."""
-    if float(d[2]) >= min_z:
-        return d
-    xy = d[:2]
-    n = float(np.linalg.norm(xy))
-    if n < 1e-9:
-        return up_vec()
-    xy_mag = float(np.sqrt(max(0.0, 1.0 - min_z * min_z)))
-    return np.array([xy[0] / n * xy_mag, xy[1] / n * xy_mag, min_z], dtype=float)
 
 
 def _enforce_min_branch_angle(

@@ -148,7 +148,6 @@ class CloudTree:
         placement: Uniform | None = None,
         n_attraction: int = 200,
         segment_length_mm: float = 2.0,
-        min_up_angle_deg: float = 20.0,
         min_branch_angle_deg: float = 30.0,
         branch_split_angle_deg: float = 30.0,
         max_branches_per_step: int = 3,
@@ -170,7 +169,6 @@ class CloudTree:
         self.placement = placement or Uniform(count_per_square=1)
         self.n_attraction = int(n_attraction)
         self.segment_length_mm = float(segment_length_mm)
-        self.min_up_angle_deg = float(min_up_angle_deg)
         self.min_branch_angle_deg = float(min_branch_angle_deg)
         self.branch_split_angle_deg = float(branch_split_angle_deg)
         self.max_branches_per_step = int(max_branches_per_step)
@@ -222,7 +220,6 @@ class CloudTree:
                 segment_length_mm=self.segment_length_mm,
                 trunk_radius_mm=self.trunk_radius_mm,
                 min_radius_mm=self.min_radius_mm,
-                min_up_angle_deg=self.min_up_angle_deg,
                 min_branch_angle_deg=self.min_branch_angle_deg,
                 branch_split_angle_deg=self.branch_split_angle_deg,
                 max_branches_per_step=self.max_branches_per_step,
