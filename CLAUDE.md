@@ -257,6 +257,7 @@ continuity at forks. A root flare anchors the trunk to the terrain surface.
 | `smoothing_alpha` | 0.1 | Heading blend (0 = pure centroid, 1 = straight ahead) |
 | `debug_attractors` | False | Render attractor positions as yellow icosphere markers |
 | `foliage_bulge_mm` | 0.0 | Per-group outward bulge (mm). Requires `group_width_mm`. Edge attractors stay on the canopy surface; the interior is pushed outward by up to this amount following a dome (circular-arc) profile normal to the crown surface. |
+| `branchiness` | 1.0 | 0–1. Controls where splits happen. 1 = current eager behaviour (split at `branch_split_angle_deg`). 0 = maximally lazy (split only when attractor approaches 90° from next_pos — the hard no-backtracking limit). Implemented as `split_cos_effective = branchiness × cos(branch_split_angle_deg)`; lower values produce fewer, longer interior branches with splitting concentrated near the tips. |
 
 ### Scatter System (rocks + grass + trees)
 

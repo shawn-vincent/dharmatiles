@@ -63,6 +63,7 @@ def grow_cloud_skeleton(
     group_width_mm: float | None = None,
     group_height_mm: float | None = None,
     foliage_bulge_mm: float = 0.0,
+    branchiness: float = 1.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Grow a CloudTree skeleton filling *env*.
 
@@ -86,6 +87,15 @@ def grow_cloud_skeleton(
         follow a dome profile: displacement = foliage_bulge_mm × √(2t − t²),
         where t ∈ [0, 1] is the normalised edge-distance.  Has no effect when
         ``group_width_mm`` is None (no groups) or when only one group is created.
+    branchiness:
+        Controls how eagerly branches split (0.0–1.0).  1.0 is the default:
+        split off stray attractors as soon as the lookahead detects them
+        (effective cone = branch_split_angle_deg).  0.0 is maximally lazy:
+        keep attractors in primary until they are about to go perpendicular
+        (effective cone = 90°, the hard no-backtracking limit).  Intermediate
+        values linearly interpolate the effective split cosine:
+            split_cos_effective = branchiness × cos(branch_split_angle_deg)
+        producing fewer, longer interior branches that split closer to the tips.
 
     Returns
     -------
@@ -114,11 +124,16 @@ def grow_cloud_skeleton(
     # Step budget: generous so the branch tree can partition the full cloud.
     max_steps = max(60, int(np.ceil(env.height_mm / segment_length_mm) * 4))
 
+    # branchiness scales the effective split cosine linearly between
+    # cos(branch_split_angle_deg) at 1.0 and 0.0 (= cos 90°) at 0.0.
+    eager_cos     = float(np.cos(np.radians(branch_split_angle_deg)))
+    effective_cos = eager_cos * float(np.clip(branchiness, 0.0, 1.0))
+
     nodes, parents, prior_dirs = _branch_skeleton(
         root         = root,
         pts          = pts,
         seg_len      = float(segment_length_mm),
-        split_cos    = float(np.cos(np.radians(branch_split_angle_deg))),
+        split_cos    = effective_cos,
         max_branches = int(max_branches_per_step),
         alpha        = float(smoothing_alpha),
         max_steps    = max_steps,

@@ -43,6 +43,7 @@ tile = Tile(
                         group_width_mm=20.0,
                         group_height_mm=20.0,
                         foliage_bulge_mm=6.0,
+                        branchiness=0.2,
                     ),
                 ),
             ],
