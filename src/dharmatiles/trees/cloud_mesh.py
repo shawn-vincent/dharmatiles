@@ -1,74 +1,171 @@
-"""Bezier-tube mesh builder for CloudTree skeletons."""
+"""Bezier-tube mesh builder for CloudTree skeletons.
+
+Each (parent → child) edge is a curved tube whose cross-section rings are
+parallel-transported along the Bézier path (Bishop frame), giving smooth,
+twist-free curves.  The base ring of every child tube *reuses* the vertex
+ring already written for its parent, so branch-point vertices are shared and
+the mesh is topologically connected.  At junctions with more than one child
+the shared ring is referenced by two or more child quad-strips; face overlaps
+at those joints are intentional and harmless for 3D printing.
+"""
 from __future__ import annotations
 
 import numpy as np
 import trimesh
 
+# Fixed polygon count for every cross-section ring.
+# A single value is mandatory: child base rings ARE parent tip rings, so all
+# rings must have exactly the same vertex count.
+_N_SIDES = 12
+
 
 def build_cloud_tree_mesh(
-    nodes:    np.ndarray,      # (N, 3) — simplified: root + branch pts + attractors
-    parents:  np.ndarray,      # (N,) int, -1 for root
-    radii:    np.ndarray,      # (N,) — computed bottom-up; radii[0] is root radius
+    nodes:    np.ndarray,      # (N, 3) — root + branch pts + attractors
+    parents:  np.ndarray,      # (N,) int; -1 for root
+    radii:    np.ndarray,      # (N,) — bottom-up pipe-model radii
     in_dirs:  np.ndarray,      # (N, 3) — tangent *arriving* at each node
-    out_dirs: np.ndarray,      # (N, 3) — tangent *leaving* parent toward this node
+    out_dirs: np.ndarray,      # (N, 3) — tangent *leaving* parent toward node
     *,
     terrain_z: float,
     handle_scale: float = 0.45,
     debug_attractors: np.ndarray | None = None,
     attractor_radius_mm: float = 0.6,
 ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
-    """Build a tapered cubic-Bezier tube mesh from a simplified CloudTree skeleton.
+    """Build a connected, curved Bézier-tube mesh from a simplified skeleton.
 
-    Each (parent → child) edge is rendered as one cubic Bézier whose:
-    - start tangent = out_dirs[child]  (outgoing from parent toward this child)
-    - end   tangent = in_dirs[child]   (arriving at the child node)
+    Algorithm
+    ---------
+    1. Seed the root node with a consistent frame ``(u, v) ⊥ in_dirs[0]``
+       via :func:`_basis`.
+    2. For each edge (parent → child) in topological order:
 
-    The number of tube segments along each edge is adaptive (~1 per 2.5 mm) so
-    long branches get smooth curves without over-sampling short twigs.
+       a. Pre-transport the parent's frame from ``in_dirs[parent]`` to the
+          Bézier start tangent ``out_dirs[child]``, so intermediate rings
+          immediately track the curve rather than the arriving direction.
+       b. Sample the cubic Bézier at adaptive spacing (~2.5 mm / step, min 4)
+          and parallel-transport the frame at each step.
+       c. **Ring 0 is the parent's existing ring** (no new vertices added).
+          Rings 1…n_steps are new.
+       d. Connect consecutive ring pairs with a quad strip.
+       e. Store the child's transported frame and ring offset for later edges.
+
+    3. Close the root bottom and every leaf tip with fan-triangulated caps.
     """
-    meshes: list[trimesh.Trimesh] = []
+    n = len(nodes)
 
-    for i, p in enumerate(parents):
-        if p < 0:
-            continue
-        p0 = nodes[int(p)]
-        p3 = nodes[i]
+    # ── flat vertex / face accumulators ────────────────────────────────────
+    verts_acc: list[np.ndarray] = []  # (k, 3) arrays → stacked at the end
+    faces_acc: list[list[int]]  = []
+    n_verts    = 0
+
+    def _add_verts(arr: np.ndarray) -> int:
+        """Append *arr* and return its starting vertex index."""
+        nonlocal n_verts
+        off = n_verts
+        verts_acc.append(np.asarray(arr, float))
+        n_verts += len(arr)
+        return off
+
+    # ── per-node state ─────────────────────────────────────────────────────
+    node_frame: list[tuple[np.ndarray, np.ndarray] | None] = [None] * n
+    ring_off:   list[int]                                   = [-1]   * n
+    is_leaf     = np.ones(n, dtype=bool)   # cleared when a child is processed
+
+    # ── root ──────────────────────────────────────────────────────────────
+    root_in       = _safe_norm(np.asarray(in_dirs[0], float))
+    u0, v0        = _basis(root_in)
+    node_frame[0] = (u0, v0)
+    ring_off[0]   = _add_verts(_make_ring(nodes[0], float(radii[0]), u0, v0))
+
+    # ── edges (topological order guarantees parent < child) ────────────────
+    for i in range(1, n):
+        p  = int(parents[i])
+        is_leaf[p] = False
+
+        p0  = np.asarray(nodes[p], float)
+        p3  = np.asarray(nodes[i], float)
         length = float(np.linalg.norm(p3 - p0))
+        pu, pv = node_frame[p]
+
         if length < 1e-8:
+            # Degenerate edge: copy parent frame, register child ring.
+            node_frame[i] = (pu, pv)
+            ring_off[i]   = _add_verts(_make_ring(nodes[i], float(radii[i]), pu, pv))
             continue
-        r0 = max(float(radii[int(p)]), 0.42)
+
+        r0 = max(float(radii[p]), 0.42)
         r1 = max(float(radii[i]), 0.42)
 
-        # Outgoing tangent from parent, arriving tangent at child.
-        t0 = out_dirs[i]
-        t1 = in_dirs[i]
+        t0 = _safe_norm(np.asarray(out_dirs[i], float))
+        t1 = _safe_norm(np.asarray(in_dirs[i],  float))
         h  = handle_scale * length
-        p1 = p0 + h * t0
+        p1 = p0 + h * t0   # Bézier control points
         p2 = p3 - h * t1
 
-        # Adaptive samples: ~one tube section per 2.5 mm, minimum 4.
-        n_samples = max(4, int(np.ceil(length / 2.5)))
-        ts        = np.linspace(0.0, 1.0, n_samples + 1)
-        curve     = _bezier_eval(p0, p1, p2, p3, ts)
-        radii_t   = r0 + (r1 - r0) * ts
+        # Adaptive sampling: ~one ring per 2.5 mm, at least 4 steps.
+        n_steps = max(4, int(np.ceil(length / 2.5)))
+        ts      = np.linspace(0.0, 1.0, n_steps + 1)
+        curve   = _bezier_eval(p0, p1, p2, p3, ts)
+        radii_t = r0 + (r1 - r0) * ts
 
-        for j in range(n_samples):
-            m = _tapered_tube(curve[j], curve[j + 1], radii_t[j], radii_t[j + 1])
-            if m is not None and len(m.vertices) > 0:
-                meshes.append(m)
+        # Pre-transport parent frame from in_dirs[p] → out_dirs[i] (Bézier
+        # start tangent), so ring[1] is already perpendicular to the curve.
+        u, v     = pu, pv
+        start_t  = _safe_norm(_bezier_tangent(p0, p1, p2, p3, 0.0))
+        u, v     = _transport(u, v, start_t)
 
-    if not meshes:
+        # step_off[0] = parent's ring (no new vertices); [1..] = new rings.
+        step_off = [ring_off[p]]
+        for j in range(1, n_steps + 1):
+            tan  = _safe_norm(_bezier_tangent(p0, p1, p2, p3, ts[j]))
+            u, v = _transport(u, v, tan)
+            step_off.append(_add_verts(_make_ring(curve[j], radii_t[j], u, v)))
+
+        node_frame[i] = (u, v)
+        ring_off[i]   = step_off[-1]
+
+        # Quad strip: two triangles per quad, outward CCW winding.
+        for j in range(n_steps):
+            oa, ob = step_off[j], step_off[j + 1]
+            for k in range(_N_SIDES):
+                k1 = (k + 1) % _N_SIDES
+                faces_acc.append([oa + k, oa + k1, ob + k1])
+                faces_acc.append([oa + k, ob + k1, ob + k])
+
+    # ── end caps ──────────────────────────────────────────────────────────
+    # Root bottom: outward normal points *down* (flip winding).
+    c    = _add_verts(np.asarray(nodes[0], float)[np.newaxis])
+    ro   = ring_off[0]
+    for k in range(_N_SIDES):
+        k1 = (k + 1) % _N_SIDES
+        faces_acc.append([c, ro + k1, ro + k])
+
+    # Leaf tips: outward normal points *away from trunk* (standard winding).
+    is_leaf[0] = False  # root has its own cap above
+    for i in range(n):
+        if not is_leaf[i]:
+            continue
+        c  = _add_verts(np.asarray(nodes[i], float)[np.newaxis])
+        ro = ring_off[i]
+        for k in range(_N_SIDES):
+            k1 = (k + 1) % _N_SIDES
+            faces_acc.append([c, ro + k, ro + k1])
+
+    # ── assemble ──────────────────────────────────────────────────────────
+    if not faces_acc:
         return trimesh.Trimesh(process=False), []
-    mesh = trimesh.util.concatenate(meshes)
+
+    verts = np.vstack(verts_acc)
+    faces = np.array(faces_acc, dtype=np.int32)
+    mesh  = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
     for method in ("remove_duplicate_faces", "remove_degenerate_faces",
                    "remove_unreferenced_vertices"):
         fn = getattr(mesh, method, None)
         if fn is not None:
             fn()
 
-    # Debug attractor spheres returned separately so the caller can tag them
-    # independently (FLOWER/yellow) without being overwritten by the WOOD tag
-    # applied to the trunk/branch mesh.
+    # Debug attractor spheres — returned separately so caller can tag them
+    # with Material.FLOWER independently of the WOOD trunk/branch mesh.
     attractor_meshes: list[trimesh.Trimesh] = []
     if debug_attractors is not None and len(debug_attractors) > 0:
         ico_base = trimesh.creation.icosphere(subdivisions=0, radius=attractor_radius_mm)
@@ -88,6 +185,7 @@ def _bezier_eval(
     p0: np.ndarray, p1: np.ndarray, p2: np.ndarray, p3: np.ndarray,
     ts: np.ndarray,
 ) -> np.ndarray:
+    """Evaluate a cubic Bézier at each *t* in *ts*; returns (len(ts), 3)."""
     t = ts[:, None]
     return (
         (1 - t) ** 3 * p0
@@ -97,47 +195,60 @@ def _bezier_eval(
     )
 
 
-def _tapered_tube(
-    p0: np.ndarray, p1: np.ndarray, r0: float, r1: float,
-) -> trimesh.Trimesh | None:
-    axis = p1 - p0
-    length = float(np.linalg.norm(axis))
-    if length < 1e-8:
-        return None
-    sections = _sections(max(r0, r1))
-    w = axis / length
-    u, v = _basis(w)
-    theta = np.linspace(0.0, 2.0 * np.pi, sections, endpoint=False)
+def _bezier_tangent(
+    p0: np.ndarray, p1: np.ndarray, p2: np.ndarray, p3: np.ndarray,
+    t: float,
+) -> np.ndarray:
+    """First derivative of a cubic Bézier at scalar *t*."""
+    return (
+        3.0 * (1.0 - t) ** 2 * (p1 - p0)
+        + 6.0 * (1.0 - t) * t * (p2 - p1)
+        + 3.0 * t ** 2 * (p3 - p2)
+    )
+
+
+def _safe_norm(v: np.ndarray) -> np.ndarray:
+    """Return *v* / |*v*|; return *v* unchanged if near-zero."""
+    n = float(np.linalg.norm(v))
+    return v / n if n > 1e-12 else v
+
+
+def _transport(
+    u: np.ndarray, v: np.ndarray, new_t: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Parallel-transport frame *(u, v)* into the plane perpendicular to *new_t*.
+
+    Projects *u* onto the plane perp to *new_t*, renormalises, then recomputes
+    *v = cross(new_t, u)* so that ``(u, v, new_t)`` is a right-handed frame.
+    Falls back to :func:`_basis` on near-180° tangent flips.
+    """
+    u_new = u - float(np.dot(u, new_t)) * new_t
+    n     = float(np.linalg.norm(u_new))
+    if n < 1e-10:
+        return _basis(new_t)
+    u_new /= n
+    v_new  = np.cross(new_t, u_new)
+    v_new /= float(np.linalg.norm(v_new)) + 1e-12
+    return u_new, v_new
+
+
+def _make_ring(
+    center: np.ndarray, radius: float,
+    u: np.ndarray, v: np.ndarray,
+) -> np.ndarray:
+    """Return a ``(_N_SIDES, 3)`` ring centred at *center* in the *(u, v)* plane."""
+    theta  = np.linspace(0.0, 2.0 * np.pi, _N_SIDES, endpoint=False)
     circle = np.cos(theta)[:, None] * u + np.sin(theta)[:, None] * v
-    ring0 = p0 + r0 * circle
-    ring1 = p1 + r1 * circle
-    verts = np.vstack([ring0, ring1, p0[None, :], p1[None, :]])
-    c0, c1 = 2 * sections, 2 * sections + 1
-    faces: list[list[int]] = []
-    for a in range(sections):
-        b = (a + 1) % sections
-        faces += [
-            [a, b, sections + b], [a, sections + b, sections + a],
-            [c0, b, a],
-            [c1, sections + a, sections + b],
-        ]
-    return trimesh.Trimesh(vertices=verts, faces=np.array(faces, dtype=int), process=False)
-
-
-def _sections(radius: float) -> int:
-    if radius >= 1.2:
-        return 14
-    if radius >= 0.7:
-        return 12
-    return 10
+    return center + radius * circle
 
 
 def _basis(w: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Return two unit vectors *(u, v)* ⊥ to *w*, forming a right-handed frame."""
     ref = np.array([0.0, 0.0, 1.0])
     if abs(float(np.dot(w, ref))) > 0.9:
         ref = np.array([1.0, 0.0, 0.0])
     u = np.cross(w, ref)
-    u /= np.linalg.norm(u) + 1e-12
+    u /= float(np.linalg.norm(u)) + 1e-12
     v = np.cross(w, u)
-    v /= np.linalg.norm(v) + 1e-12
+    v /= float(np.linalg.norm(v)) + 1e-12
     return u, v
