@@ -13,24 +13,7 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
-from ..core.color import Material, RGBA
-
-# Vivid palette for per-group attractor debug colouring.
-# Cycles if there are more groups than entries.
-_GROUP_COLORS: list[tuple[int, int, int, int]] = [
-    (255,  70,  70, 255),  # red
-    ( 70, 140, 255, 255),  # blue
-    ( 50, 210,  50, 255),  # green
-    (255, 170,  30, 255),  # orange
-    (200,  70, 230, 255),  # purple
-    ( 50, 215, 215, 255),  # cyan
-    (255, 255,  50, 255),  # yellow
-    (255, 110, 180, 255),  # pink
-    (130, 220,  60, 255),  # lime
-    (210, 120,  40, 255),  # brown-orange
-    (110, 110, 255, 255),  # indigo
-    (255, 155,  80, 255),  # amber
-]
+from ..core.color import Material, debug_material, tag as _tag
 
 # Fixed polygon count for every cross-section ring.
 # A single value is mandatory: child base rings ARE parent tip rings, so all
@@ -188,10 +171,11 @@ def build_cloud_tree_mesh(
         if fn is not None:
             fn()
 
-    # Debug attractor spheres — one icosphere per attractor, coloured by group
-    # when group labels are provided (multiple groups), otherwise FLOWER yellow.
-    # Face colours are baked in here; callers must NOT re-tag these meshes or
-    # the per-group colours will be flattened back to a single material colour.
+    # Debug attractor spheres — one icosphere per attractor.
+    # Each sphere is tagged with Material.DEBUG_COLOR_N (where N = group label
+    # mod 12) when multiple groups exist, or Material.FLOWER for ungrouped trees.
+    # The material grouping step in tile.py will then concatenate same-material
+    # spheres and apply the correct colour via _tag(), just like any other part.
     attractor_meshes: list[trimesh.Trimesh] = []
     if debug_attractors is not None and len(debug_attractors) > 0:
         ico_base = trimesh.creation.icosphere(subdivisions=0, radius=attractor_radius_mm)
@@ -199,21 +183,14 @@ def build_cloud_tree_mesh(
             attractor_group_labels is not None
             and len(np.unique(attractor_group_labels)) > 1
         )
-        flower_rgba = RGBA[Material.FLOWER]
         for i, pt in enumerate(debug_attractors):
             s = ico_base.copy()
             s.vertices = s.vertices + pt
-            if use_group_colors:
-                label = int(attractor_group_labels[i])  # type: ignore[index]
-                rgba  = _GROUP_COLORS[label % len(_GROUP_COLORS)]
-            else:
-                rgba = flower_rgba
-            nf = len(s.faces)
-            s.visual = trimesh.visual.ColorVisuals(
-                mesh=s,
-                face_colors=np.tile(rgba, (nf, 1)).astype(np.uint8),
+            mat = (
+                debug_material(int(attractor_group_labels[i]))  # type: ignore[index]
+                if use_group_colors else Material.FLOWER
             )
-            s.metadata['material'] = Material.FLOWER
+            _tag(s, mat)
             attractor_meshes.append(s)
 
     return mesh, attractor_meshes

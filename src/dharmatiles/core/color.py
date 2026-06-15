@@ -7,11 +7,16 @@ exporters (3MF scenes, colour-STL) carry the intended palette.
 
 Colour palette
 --------------
-SOIL     reddish-brown   #8B5A2B   dirt / bare-soil surface (SoilCarpet regions)
-ROCK     blue-gray        #6A7F96   scattered half-ellipsoid rocks
-GRASS    yellow-green     #9ACD32   grass carpet + 3-D blade geometry
-WATER    bluish-turquoise #149BD2   water volume mesh
-BASE     dark gray        #505050   socket-peg / T-slot underside base
+SOIL          reddish-brown     #8B5A2B   dirt / bare-soil surface (SoilCarpet regions)
+ROCK          blue-gray          #6A7F96   scattered half-ellipsoid rocks
+GRASS         yellow-green       #9ACD32   grass carpet + 3-D blade geometry
+WATER         bluish-turquoise   #149BD2   water volume mesh
+BASE          dark gray          #505050   socket-peg / T-slot underside base
+FLOWER        golden yellow      #F5C300   flowers / attractor debug spheres (no groups)
+WOOD          warm brown         #8B633F   tree trunks and branches
+DEBUG_COLOR_* vivid palette      —         12-slot cycling palette for per-group debug
+              (red, blue, green, orange, purple, cyan, yellow, pink, lime,
+               amber, indigo, brown-orange)
 """
 from __future__ import annotations
 
@@ -24,25 +29,65 @@ import trimesh
 
 
 class Material(IntEnum):
-    SOIL   = 0
-    ROCK   = 1
-    GRASS  = 2
-    WATER  = 3
-    BASE   = 4
-    FLOWER = 5
-    WOOD   = 6
+    SOIL          =  0
+    ROCK          =  1
+    GRASS         =  2
+    WATER         =  3
+    BASE          =  4
+    FLOWER        =  5
+    WOOD          =  6
+    # 12-slot vivid palette for per-group debug colouring (e.g. attractor spheres).
+    # Use debug_material(group_label) to map an integer label → Material.
+    DEBUG_COLOR_0  =  7
+    DEBUG_COLOR_1  =  8
+    DEBUG_COLOR_2  =  9
+    DEBUG_COLOR_3  = 10
+    DEBUG_COLOR_4  = 11
+    DEBUG_COLOR_5  = 12
+    DEBUG_COLOR_6  = 13
+    DEBUG_COLOR_7  = 14
+    DEBUG_COLOR_8  = 15
+    DEBUG_COLOR_9  = 16
+    DEBUG_COLOR_10 = 17
+    DEBUG_COLOR_11 = 18
 
 
 #: RGBA uint8 palette — one entry per :class:`Material`.
 RGBA: dict[Material, tuple[int, int, int, int]] = {
-    Material.SOIL:   (105,  38,  12, 255),   # deep dark red-brown
-    Material.ROCK:   ( 72,  92, 128, 255),   # dark slate blue-grey
-    Material.GRASS:  ( 42, 148,  28, 255),   # deep vivid green
-    Material.WATER:  ( 20, 133, 213, 255),   # blue-turquoise
-    Material.BASE:   ( 45,  45,  45, 255),   # dark gray
-    Material.FLOWER: (245, 195,   0, 255),   # golden yellow
-    Material.WOOD:   (139,  99,  63, 255),   # light warm brown
+    Material.SOIL:          (105,  38,  12, 255),   # deep dark red-brown
+    Material.ROCK:          ( 72,  92, 128, 255),   # dark slate blue-grey
+    Material.GRASS:         ( 42, 148,  28, 255),   # deep vivid green
+    Material.WATER:         ( 20, 133, 213, 255),   # blue-turquoise
+    Material.BASE:          ( 45,  45,  45, 255),   # dark gray
+    Material.FLOWER:        (245, 195,   0, 255),   # golden yellow
+    Material.WOOD:          (139,  99,  63, 255),   # light warm brown
+    # Debug palette — vivid, distinct, cycles via debug_material()
+    Material.DEBUG_COLOR_0:  (255,  70,  70, 255),  # red
+    Material.DEBUG_COLOR_1:  ( 70, 140, 255, 255),  # blue
+    Material.DEBUG_COLOR_2:  ( 50, 210,  50, 255),  # green
+    Material.DEBUG_COLOR_3:  (255, 170,  30, 255),  # orange
+    Material.DEBUG_COLOR_4:  (200,  70, 230, 255),  # purple
+    Material.DEBUG_COLOR_5:  ( 50, 215, 215, 255),  # cyan
+    Material.DEBUG_COLOR_6:  (255, 255,  50, 255),  # yellow
+    Material.DEBUG_COLOR_7:  (255, 110, 180, 255),  # pink
+    Material.DEBUG_COLOR_8:  (130, 220,  60, 255),  # lime
+    Material.DEBUG_COLOR_9:  (255, 155,  80, 255),  # amber
+    Material.DEBUG_COLOR_10: (110, 110, 255, 255),  # indigo
+    Material.DEBUG_COLOR_11: (210, 120,  40, 255),  # brown-orange
 }
+
+#: All DEBUG_COLOR_* materials in label order (index = label mod 12).
+DEBUG_COLORS: list[Material] = [
+    Material.DEBUG_COLOR_0,  Material.DEBUG_COLOR_1,  Material.DEBUG_COLOR_2,
+    Material.DEBUG_COLOR_3,  Material.DEBUG_COLOR_4,  Material.DEBUG_COLOR_5,
+    Material.DEBUG_COLOR_6,  Material.DEBUG_COLOR_7,  Material.DEBUG_COLOR_8,
+    Material.DEBUG_COLOR_9,  Material.DEBUG_COLOR_10, Material.DEBUG_COLOR_11,
+]
+
+
+def debug_material(label: int) -> Material:
+    """Map an integer group label to a :class:`Material` debug colour (cycles mod 12)."""
+    return DEBUG_COLORS[int(label) % len(DEBUG_COLORS)]
 
 
 def tag(mesh: trimesh.Trimesh, mat: Material) -> None:

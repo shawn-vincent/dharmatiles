@@ -370,7 +370,12 @@ def _build_tile_mesh(
     # GRASS blades are concatenated rather than unioned (they can be numerous
     # and are thin enough that slicers handle overlaps correctly).
     from collections import defaultdict
-    _NO_UNION = {Material.GRASS}   # materials where we concatenate, not union
+    from ..core.color import DEBUG_COLORS as _DEBUG_COLORS
+    # Materials that are concatenated rather than boolean-unioned.
+    # GRASS: blades are numerous and thin — unioning them is wasteful.
+    # FLOWER + DEBUG_COLOR_*: attractor debug spheres — unioning ~200 small
+    # icospheres is very slow; concatenation is correct and fast.
+    _NO_UNION = {Material.GRASS, Material.FLOWER} | set(_DEBUG_COLORS)
 
     groups: dict[Material, list[trimesh.Trimesh]] = defaultdict(list)
     for p in parts:
@@ -388,7 +393,7 @@ def _build_tile_mesh(
             continue
 
         if mat in _NO_UNION:
-            # Fast path: just concatenate (grass blades, etc.)
+            # Fast path: just concatenate (grass blades, attractor spheres, etc.)
             group_mesh = (trimesh.util.concatenate(mesh_list)
                           if len(mesh_list) > 1 else mesh_list[0])
         else:

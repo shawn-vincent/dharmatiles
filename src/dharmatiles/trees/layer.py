@@ -118,7 +118,7 @@ class CloudTree:
             rng,
         )
         wood_parts:      list[trimesh.Trimesh] = []
-        attractor_parts_all: list[trimesh.Trimesh] = []
+        other_parts:     list[trimesh.Trimesh] = []
         for x, y, _gd in positions:
             tz = float(sample_grid(scene.terrain_z, surface, np.array([x]), np.array([y]))[0])
             tree_rng = np.random.default_rng(int(rng.integers(2 ** 62)))
@@ -163,21 +163,20 @@ class CloudTree:
             if len(mesh.vertices) == 0:
                 continue
             wood_parts.append(mesh)
-            # Attractor spheres have per-face colours already baked in by
-            # build_cloud_tree_mesh; do NOT re-tag them or the group colours
-            # will be flattened to a single material colour.
-            attractor_parts_all.extend(attractor_parts)
+            # Attractor spheres are already tagged with Material.FLOWER or
+            # Material.DEBUG_COLOR_N; let tile.py's material grouping step
+            # concatenate and colour them correctly.
+            other_parts.extend(attractor_parts)
             _stamp_tree(scene, surface, x, y, env, float(radii[0]))
 
-        if not wood_parts and not attractor_parts_all:
+        if not wood_parts and not other_parts:
             return []
         result: list[trimesh.Trimesh] = []
         if wood_parts:
             wood_combined = trimesh.util.concatenate(wood_parts)
             _tag(wood_combined, Material.WOOD)
             result.append(wood_combined)
-        # Add pre-coloured attractor spheres individually (no re-tagging).
-        result.extend(attractor_parts_all)
+        result.extend(other_parts)
         return result
 
     def _sample_envelope(
