@@ -1,330 +1,207 @@
-"""
-Tree skeleton growth via Space Colonization Algorithm (Runions 2007).
-
-Starting from a single ground-level root, SCA grows upward through an
-attractor-free zone — this path *is* the trunk, emerging naturally because
-no attractors exist below ``crown_base_z_mm``.  Above that threshold the
-skeleton fans into the crown ellipsoid, producing the branch structure.
-
-After growth, shallow leaf segments are iteratively pruned: any leaf edge
-whose direction is below ``sca_min_elevation`` degrees above horizontal is
-removed, exposing its parent as the new leaf, which is then re-evaluated.
-Only leaf segments are pruned — internal structural segments are left alone
-because they are thick, supported from below, and don't droop in print.
-
-The alternative (clamping growth *directions* during SCA) prevents branches
-from growing sideways to fill the crown and produces degenerate vertical
-spikes.  Post-pruning lets SCA spread naturally and then trims the tips.
-
-Public API
-----------
-``grow_skeleton(cx, cy, tz, cfg, rng)``
-    Returns ``(nodes_xyz, parents, arc_dists, crown_base_z)``
-    where all arrays are (N,) / (N,3) and ``crown_base_z`` is the sampled
-    height above terrain at which attractors begin.
-"""
+"""Space colonization skeleton growth for envelope trees."""
 from __future__ import annotations
 
 import numpy as np
 
-from ..dist import sample
+from .attractors import sample_attractors
+from .envelope import TreeEnvelope
 
-
-# ── Attractor sampling ────────────────────────────────────────────────────────
-
-def _sample_in_ellipsoid(
-    center: np.ndarray,
-    rx: float,
-    ry: float,
-    rz: float,
-    n: int,
-    rng: np.random.Generator,
-) -> np.ndarray:
-    """Rejection-sample *n* points uniformly inside an axis-aligned ellipsoid."""
-    pts: list[np.ndarray] = []
-    while len(pts) < n:
-        batch  = rng.uniform(-1.0, 1.0, (n * 4, 3))
-        inside = (batch[:, 0] ** 2 + batch[:, 1] ** 2 + batch[:, 2] ** 2) <= 1.0
-        pts.extend(batch[inside])
-    arr = np.array(pts[:n])
-    arr[:, 0] *= rx
-    arr[:, 1] *= ry
-    arr[:, 2] *= rz
-    return arr + center
-
-
-# ── Arc-distance computation ──────────────────────────────────────────────────
-
-def _compute_arc_dists(
-    nodes_xyz: np.ndarray,
-    parents:   np.ndarray,
-) -> np.ndarray:
-    """Cumulative arc distance from the root to each node."""
-    N    = len(nodes_xyz)
-    arc  = np.zeros(N)
-    for i in range(1, N):
-        p = int(parents[i])
-        if p >= 0:
-            arc[i] = arc[p] + float(np.linalg.norm(nodes_xyz[i] - nodes_xyz[p]))
-    return arc
-
-
-# ── Shallow-tip pruning ───────────────────────────────────────────────────────
-
-def _prune_shallow_tips(
-    nodes_xyz: np.ndarray,
-    parents:   np.ndarray,
-    min_z:     float,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Iteratively remove leaf edges with elevation < min_z.
-
-    Only *leaf* segments are evaluated each pass — internal edges are never
-    removed, since thick structural branches print fine at any angle and are
-    supported from below by the trunk.  Removing a leaf may expose its parent
-    as the new leaf; that parent is then re-evaluated in the next pass.
-
-    Parameters
-    ----------
-    min_z : ``sin(radians(sca_min_elevation))`` — e.g. 0.707 for 45°.
-    """
-    while True:
-        N = len(nodes_xyz)
-        if N <= 1:
-            break
-
-        # Count children
-        child_count = np.zeros(N, dtype=int)
-        for i in range(1, N):
-            p = int(parents[i])
-            if p >= 0:
-                child_count[p] += 1
-
-        # Identify shallow leaf nodes
-        to_remove: list[int] = []
-        for i in range(1, N):
-            if child_count[i] > 0:
-                continue          # not a leaf
-            p = int(parents[i])
-            d  = nodes_xyz[i] - nodes_xyz[p]
-            dn = float(np.linalg.norm(d))
-            if dn > 1e-8 and d[2] / dn < min_z:
-                to_remove.append(i)
-
-        if not to_remove:
-            break                 # all leaf edges now meet the threshold
-
-        # Compact: remove flagged nodes and remap indices
-        keep    = np.ones(N, dtype=bool)
-        for i in to_remove:
-            keep[i] = False
-
-        new_idx = np.full(N, -1, dtype=int)
-        k = 0
-        for i in range(N):
-            if keep[i]:
-                new_idx[i] = k
-                k += 1
-
-        new_xyz = nodes_xyz[keep]
-        new_par = np.full(k, -1, dtype=int)
-        for i in range(1, N):
-            if keep[i]:
-                old_p = int(parents[i])
-                new_par[new_idx[i]] = new_idx[old_p]
-
-        nodes_xyz = new_xyz
-        parents   = new_par
-
-    return nodes_xyz, parents
-
-
-# ── Core SCA loop ─────────────────────────────────────────────────────────────
-
-def _sca_grow(
-    root_positions: np.ndarray,   # (N_roots, 3)
-    att:            np.ndarray,   # (K, 3) — attractors
-    cfg,
-    rng:            np.random.Generator,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Run SCA; return ``(nodes_xyz (N,3), parents (N,) int)``.
-
-    Tips split when their visible attractors show sufficient XY spread
-    (> ``sca_branch_xy_std``) and both clusters have >= ``sca_min_branch_att``
-    members.  Growth directions are clamped to non-negative Z only (no
-    downward segments); the elevation floor is enforced by post-growth pruning
-    in ``grow_skeleton`` so SCA can spread freely into the crown ellipsoid.
-    """
-    n_roots = len(root_positions)
-    if len(att) == 0:
-        return root_positions.copy(), np.full(n_roots, -1, dtype=int)
-
-    node_xyz: list[np.ndarray] = [r.copy() for r in root_positions]
-    parents:  list[int]        = [-1] * n_roots
-    tips:     set[int]         = set(range(n_roots))
-    tropism   = np.array([0.0, 0.0, cfg.sca_tropism], dtype=float)
-
-    for _step in range(cfg.sca_max_steps):
-        if att.shape[0] == 0 or not tips:
-            break
-
-        nodes_arr = np.array(node_xyz)                              # (M, 3)
-        diff      = att[:, None, :] - nodes_arr[None, :, :]        # (K, M, 3)
-        dist2     = (diff * diff).sum(axis=-1)                      # (K, M)
-        nearest   = np.argmin(dist2, axis=-1)                       # (K,)
-        near_d2   = dist2[np.arange(len(att)), nearest]            # (K,)
-        in_range  = near_d2 < (cfg.sca_perception_r ** 2)
-
-        new_nodes: list[tuple[np.ndarray, int]] = []
-        for tip_idx in sorted(tips):
-            mask = in_range & (nearest == tip_idx)
-            if not np.any(mask):
-                # No attractors in perception range: grow toward the nearest
-                # attractor (+ tropism).  This drives the tip through the
-                # attractor-free trunk zone until it enters the crown.
-                tip_pos   = nodes_arr[tip_idx]
-                tip_diffs = att - tip_pos                           # (K, 3)
-                tip_d2    = (tip_diffs * tip_diffs).sum(axis=-1)
-                nn_idx    = int(np.argmin(tip_d2))
-                direction = tip_diffs[nn_idx]
-                dn        = float(np.linalg.norm(direction))
-                if dn < 1e-8:
-                    continue
-                g  = direction / dn + tropism
-                gn = float(np.linalg.norm(g))
-                g  = g / gn if gn > 1e-8 else np.array([0., 0., 1.])
-                if g[2] < 0.0:
-                    g[2] = 0.0
-                    gn   = float(np.linalg.norm(g))
-                    g    = g / gn if gn > 1e-8 else np.array([0., 0., 1.])
-                new_nodes.append(
-                    (tip_pos + g * cfg.sca_segment_mm, tip_idx)
-                )
-                continue
-
-            dirs   = diff[mask, tip_idx, :]                         # (K_local, 3)
-            norms  = np.sqrt((dirs * dirs).sum(axis=-1, keepdims=True))
-            dirs_n = dirs / np.maximum(norms, 1e-8)
-
-            # ── Branching detection ────────────────────────────────────────
-            branched  = False
-            n_local   = len(dirs_n)
-            if n_local >= 2 * cfg.sca_min_branch_att:
-                xy_std = float(dirs_n[:, :2].std())
-                if xy_std > cfg.sca_branch_xy_std:
-                    x_std = float(dirs_n[:, 0].std())
-                    y_std = float(dirs_n[:, 1].std())
-                    col   = 0 if x_std >= y_std else 1
-                    split = float(np.median(dirs_n[:, col]))
-
-                    mask_a = dirs_n[:, col] >= split
-                    mask_b = ~mask_a
-
-                    if (np.sum(mask_a) >= cfg.sca_min_branch_att
-                            and np.sum(mask_b) >= cfg.sca_min_branch_att):
-                        for submask in (mask_a, mask_b):
-                            g  = dirs_n[submask].mean(axis=0) + tropism
-                            gn = np.linalg.norm(g)
-                            g  = g / gn if gn > 1e-8 else np.array([0., 0., 1.])
-                            if g[2] < 0.0:
-                                g[2] = 0.0
-                                gn   = np.linalg.norm(g)
-                                g    = g / gn if gn > 1e-8 else np.array([0., 0., 1.])
-                            new_nodes.append(
-                                (nodes_arr[tip_idx] + g * cfg.sca_segment_mm, tip_idx)
-                            )
-                        branched = True
-
-            if not branched:
-                # ── Single-child growth ────────────────────────────────────
-                growth = dirs.sum(axis=0) + tropism
-                gn     = np.linalg.norm(growth)
-                growth = growth / gn if gn > 1e-8 else np.array([0., 0., 1.])
-                if growth[2] < 0.0:
-                    growth[2] = 0.0
-                    gn        = np.linalg.norm(growth)
-                    growth    = growth / gn if gn > 1e-8 else np.array([0., 0., 1.])
-                new_nodes.append(
-                    (nodes_arr[tip_idx] + growth * cfg.sca_segment_mm, tip_idx)
-                )
-
-        if not new_nodes:
-            break
-
-        start_idx = len(node_xyz)
-        spent     = {par for _, par in new_nodes}
-        tips     -= spent
-        for k, (new_pos, par) in enumerate(new_nodes):
-            node_xyz.append(new_pos)
-            parents.append(par)
-            tips.add(start_idx + k)
-
-        # Kill attractors within kill_r of any new node
-        new_arr   = np.array([p for p, _ in new_nodes])
-        kill_diff = att[:, None, :] - new_arr[None, :, :]
-        kill_d2   = (kill_diff * kill_diff).sum(axis=-1)
-        kill_mask = np.any(kill_d2 < (cfg.sca_kill_r ** 2), axis=-1)
-        att       = att[~kill_mask]
-
-    return np.array(node_xyz), np.array(parents, dtype=int)
-
-
-# ── Public API ────────────────────────────────────────────────────────────────
 
 def grow_skeleton(
-    cx:  float,
-    cy:  float,
-    tz:  float,
-    cfg,
+    env: TreeEnvelope,
     rng: np.random.Generator,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
-    """Grow a unified tree skeleton from a single ground-level root.
+) -> tuple[np.ndarray, np.ndarray]:
+    """Grow a printable tree skeleton that fills *env*."""
+    nodes: list[np.ndarray] = [np.array([env.cx, env.cy, env.terrain_z], dtype=float)]
+    parents: list[int] = [-1]
 
-    The attractor cloud is placed entirely above ``crown_base_z_mm``, so the
-    skeleton grows a nearly-vertical path (the trunk) before entering the
-    crown and branching.
+    height = max(env.height_mm, 1e-8)
+    step_len = float(np.clip(height / 18.0, 1.0, 2.2))
+    trunk_step = float(np.clip(height / 18.0, 1.2, 2.4))
+    # Smaller kill radius so attractors survive long enough to guide multiple branches.
+    kill_radius = 1.0 * step_len
+    perception_radius = float(np.clip(0.32 * env.crown_radius_mm, 4.0, 9.0))
 
-    After SCA, ``_prune_shallow_tips`` iteratively removes leaf edges whose
-    elevation angle is below ``cfg.sca_min_elevation`` degrees.
+    trunk_tip = _grow_trunk(nodes, parents, env, trunk_step, rng)
+    active = [trunk_tip]
 
-    Returns
-    -------
-    nodes_xyz : (N, 3) float
-    parents   : (N,) int  — -1 for the root
-    arc_dists : (N,) float — cumulative arc length from root to each node
-    crown_base_z : float  — sampled height of crown bottom above terrain (mm)
-    """
-    crown_base_z   = float(sample(cfg.crown_base_z_mm,  rng))
-    crown_rx       = float(sample(cfg.crown_rx,         rng))
-    crown_ry       = float(sample(cfg.crown_ry,         rng))
-    crown_rz       = float(sample(cfg.crown_rz,         rng))
-    crown_offset_z = float(sample(cfg.crown_offset_z,   rng))
+    attractors = sample_attractors(env, rng)
+    if len(attractors) == 0:
+        return np.array(nodes, dtype=float), np.array(parents, dtype=int)
 
-    # Crown centre: above the attractor exclusion zone
-    crown_center = np.array([
-        cx,
-        cy,
-        tz + crown_base_z + crown_rz * 0.3 + crown_offset_z,
-    ])
+    max_steps = int(np.clip(round(height / step_len * 3.5), 45, 160))
+    min_cluster = max(3, round(len(attractors) / 100))
+    dirs = _initial_dirs(nodes, parents)
 
-    # Over-sample then filter to keep only attractors above the exclusion floor
-    n_over  = cfg.n_attractors * 5
-    att_raw = _sample_in_ellipsoid(crown_center, crown_rx, crown_ry, crown_rz, n_over, rng)
-    att     = att_raw[att_raw[:, 2] >= tz + crown_base_z - cfg.sca_segment_mm]
+    for _ in range(max_steps):
+        if len(attractors) == 0 or not active:
+            break
 
-    if len(att) > cfg.n_attractors:
-        idx = rng.choice(len(att), cfg.n_attractors, replace=False)
-        att = att[idx]
+        active_pts = np.array([nodes[i] for i in active], dtype=float)
+        diff = attractors[:, None, :] - active_pts[None, :, :]
+        dist = np.linalg.norm(diff, axis=2)
+        alive = dist.min(axis=1) > kill_radius
+        attractors = attractors[alive]
+        if len(attractors) == 0:
+            break
 
-    # Single root node at ground level
-    root = np.array([[cx, cy, tz]], dtype=float)
+        diff = attractors[:, None, :] - active_pts[None, :, :]
+        dist = np.linalg.norm(diff, axis=2)
+        nearest = np.argmin(dist, axis=1)
+        nearest_dist = dist[np.arange(len(attractors)), nearest]
+        visible = nearest_dist <= perception_radius
 
-    nodes_xyz, parents = _sca_grow(root, att, cfg, rng)
+        assigned: dict[int, list[np.ndarray]] = {}
+        for att, local_idx, is_visible in zip(attractors, nearest, visible):
+            if is_visible:
+                assigned.setdefault(active[int(local_idx)], []).append(att)
 
-    # Post-prune shallow leaf tips for FDM printability
-    min_z = float(np.sin(np.radians(cfg.sca_min_elevation)))
-    if min_z > 0.0:
-        nodes_xyz, parents = _prune_shallow_tips(nodes_xyz, parents, min_z)
+        new_active: list[int] = []
+        for tip_idx in active:
+            pts = assigned.get(tip_idx)
+            if not pts:
+                continue
+            clusters = _split_clusters(
+                nodes[tip_idx], np.array(pts), min_cluster, rng,
+                crown_base_z=env.crown_base_z, crown_height=env.crown_height,
+            )
+            parent_dir = dirs.get(tip_idx, np.array([0.0, 0.0, 1.0]))
+            for cluster in clusters:
+                d = _growth_direction(nodes[tip_idx], cluster, parent_dir, env)
+                child = nodes[tip_idx] + d * step_len
+                if child[2] >= env.crown_base_z:
+                    child = env.project_inside(child)
+                child_idx = len(nodes)
+                nodes.append(child)
+                parents.append(tip_idx)
+                dirs[child_idx] = d
+                new_active.append(child_idx)
+        active = new_active
 
-    arc_dists = _compute_arc_dists(nodes_xyz, parents)
+    return np.array(nodes, dtype=float), np.array(parents, dtype=int)
 
-    return nodes_xyz, parents, arc_dists, crown_base_z
+
+def _grow_trunk(
+    nodes: list[np.ndarray],
+    parents: list[int],
+    env: TreeEnvelope,
+    trunk_step: float,
+    rng: np.random.Generator,
+) -> int:
+    target_z = env.crown_base_z
+    if target_z <= env.terrain_z + 1e-8:
+        return 0
+    n_steps = max(1, int(np.ceil((target_z - env.terrain_z) / trunk_step)))
+    phase = float(rng.uniform(0.0, 2.0 * np.pi))
+    drift_dir = np.array([np.cos(phase), np.sin(phase), 0.0])
+    max_drift = 0.12 * env.crown_radius_mm
+    tip = 0
+    for i in range(n_steps):
+        f = (i + 1) / n_steps
+        z = env.terrain_z + f * (target_z - env.terrain_z)
+        drift = max_drift * np.sin(f * np.pi) * (0.55 + 0.25 * np.sin(phase + f * 4.0))
+        pos = np.array([env.cx, env.cy, z], dtype=float) + drift_dir * drift
+        parents.append(tip)
+        nodes.append(pos)
+        tip = len(nodes) - 1
+    return tip
+
+
+def _initial_dirs(nodes: list[np.ndarray], parents: list[int]) -> dict[int, np.ndarray]:
+    dirs: dict[int, np.ndarray] = {0: np.array([0.0, 0.0, 1.0])}
+    for i in range(1, len(nodes)):
+        dirs[i] = _normalize(nodes[i] - nodes[parents[i]], np.array([0.0, 0.0, 1.0]))
+    return dirs
+
+
+def _split_clusters(
+    tip: np.ndarray,
+    pts: np.ndarray,
+    min_cluster: int,
+    rng: np.random.Generator,
+    *,
+    crown_base_z: float = 0.0,
+    crown_height: float = 1e8,
+) -> list[np.ndarray]:
+    # Suppress all splits in the lower 20% of crown height.  This keeps a
+    # visible main stem growing up through the lower crown before the first
+    # scaffold branches emerge, matching the look of a natural deciduous tree.
+    crown_frac = (tip[2] - crown_base_z) / max(crown_height, 1e-8)
+    if crown_frac < 0.20:
+        return [pts]
+
+    if len(pts) < min_cluster * 2:
+        return [pts]
+    dirs = pts - tip
+    unit = dirs / (np.linalg.norm(dirs, axis=1, keepdims=True) + 1e-9)
+    centered = unit - unit.mean(axis=0, keepdims=True)
+    try:
+        _u, _s, vh = np.linalg.svd(centered, full_matrices=False)
+    except np.linalg.LinAlgError:
+        return [pts]
+    axis = vh[0]
+    proj = centered @ axis
+    a = pts[proj <= 0.0]
+    b = pts[proj > 0.0]
+    if len(a) < min_cluster or len(b) < min_cluster:
+        return [pts]
+    da = _normalize(a.mean(axis=0) - tip)
+    db = _normalize(b.mean(axis=0) - tip)
+    angle = np.degrees(np.arccos(float(np.clip(np.dot(da, db), -1.0, 1.0))))
+    if angle < 25.0:
+        return [pts]
+    if rng.random() < 0.08:
+        return [pts]
+    return [a, b]
+
+
+def _growth_direction(
+    tip: np.ndarray,
+    attractors: np.ndarray,
+    parent_dir: np.ndarray,
+    env: TreeEnvelope,
+) -> np.ndarray:
+    to_att = attractors - tip
+    to_att /= np.linalg.norm(to_att, axis=1, keepdims=True) + 1e-9
+    d = to_att.mean(axis=0)
+
+    # Use crown-relative height for biases so that lower branches get
+    # a stronger outward push regardless of trunk_height_mm.
+    crown_frac = max(0.0, (tip[2] - env.crown_base_z) / max(env.crown_height, 1e-8))
+
+    up = np.array([0.0, 0.0, 1.0])
+    out = np.array([tip[0] - env.cx, tip[1] - env.cy, 0.0])
+    out = _normalize(out, np.zeros(3))
+
+    # Smaller upward bias (was 0.12) lets attractors guide direction more freely.
+    # Stronger outward push in lower 70% of crown, fading away above that.
+    # Slightly reduced parent inertia (was 0.35) for better attractor response.
+    outward_strength = 0.25 * max(0.0, 0.70 - crown_frac)
+    d = d + 0.07 * up + outward_strength * out + 0.30 * parent_dir
+    d = _normalize(d, up)
+
+    # 20° minimum elevation (was 35°) allows natural horizontal scaffold
+    # branches in the lower crown while still satisfying FDM overhang limits
+    # for thin branches at miniature scale.
+    return _clamp_elevation(d, 20.0)
+
+
+def _clamp_elevation(d: np.ndarray, min_deg: float) -> np.ndarray:
+    d = _normalize(d)
+    min_z = float(np.sin(np.radians(min_deg)))
+    if d[2] >= min_z:
+        return d
+    xy = d[:2]
+    n = float(np.linalg.norm(xy))
+    xy_dir = xy / n if n > 1e-9 else np.array([1.0, 0.0])
+    xy_mag = float(np.sqrt(max(0.0, 1.0 - min_z * min_z)))
+    return np.array([xy_dir[0] * xy_mag, xy_dir[1] * xy_mag, min_z])
+
+
+def _normalize(v: np.ndarray, fallback: np.ndarray | None = None) -> np.ndarray:
+    n = float(np.linalg.norm(v))
+    if n > 1e-9:
+        return v / n
+    if fallback is not None:
+        return fallback.copy()
+    return np.array([0.0, 0.0, 1.0])

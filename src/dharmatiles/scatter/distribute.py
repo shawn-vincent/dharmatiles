@@ -61,7 +61,7 @@ def _uniform_positions(
     otherwise derived from tile area divided by ``(footprint_mm + gap_mm)²``.
     """
     if cfg.count_per_square is not None:
-        n = max(0, int(round(sample(cfg.count_per_square, rng)))) * n_squares
+        n = max(0, int(round(float(sample(cfg.count_per_square, rng)) * n_squares)))
     else:
         gap_mm = float(sample(cfg.gap_mm, rng))
         spacing = max(footprint_mm + max(0.0, gap_mm), 1e-3)
