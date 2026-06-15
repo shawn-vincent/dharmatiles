@@ -180,12 +180,12 @@ def _branch_skeleton(
         pos     = nodes[tip_idx]
         heading = prior_dirs[tip_idx]
 
-        # Primary direction toward the lowest-z attractor in the owned set.
-        # Targeting the bottom of the cloud (rather than the centroid) keeps
-        # branches snaking upward along the base of their attractor cluster;
-        # high-side attractors get peeled off as stray sub-branches sooner.
-        low_idx  = int(np.argmin(owned[:, 2]))
-        target   = owned[low_idx]
+        # Primary direction toward the highest-z attractor in the owned set.
+        # Targeting the top of the cloud drives the main branch upward through
+        # its cluster; lower/sideways attractors get peeled off as stray
+        # sub-branches sooner, producing fewer but taller primary runs.
+        high_idx = int(np.argmax(owned[:, 2]))
+        target   = owned[high_idx]
         raw      = target - pos
         raw_len  = float(np.linalg.norm(raw))
         if raw_len > 1e-9:
