@@ -1,4 +1,4 @@
-"""Envelope-driven printable tree generation."""
-from .layer import Tree
+"""Printable tree generation: envelope SCA (Tree) and point-cloud-partitioned (CloudTree)."""
+from .layer import Tree, CloudTree
 
-__all__ = ["Tree"]
+__all__ = ["Tree", "CloudTree"]
