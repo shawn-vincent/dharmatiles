@@ -141,6 +141,7 @@ def grow_cloud_skeleton(
         in_dirs_s,
         out_dirs_s,
         pts,
+        group_labels,   # None when no grouping; int array (n_attraction,) otherwise
     )
 
 

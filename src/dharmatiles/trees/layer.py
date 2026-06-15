@@ -117,8 +117,8 @@ class CloudTree:
             surface,
             rng,
         )
-        wood_parts: list[trimesh.Trimesh] = []
-        flower_parts: list[trimesh.Trimesh] = []
+        wood_parts:      list[trimesh.Trimesh] = []
+        attractor_parts_all: list[trimesh.Trimesh] = []
         for x, y, _gd in positions:
             tz = float(sample_grid(scene.terrain_z, surface, np.array([x]), np.array([y]))[0])
             tree_rng = np.random.default_rng(int(rng.integers(2 ** 62)))
@@ -132,19 +132,21 @@ class CloudTree:
                 float(sample(self.group_height_mm, tree_rng))
                 if self.group_height_mm is not None else None
             )
-            nodes, parents, radii, in_dirs, out_dirs, attractors = grow_cloud_skeleton(
-                env,
-                tree_rng,
-                n_attraction=self.n_attraction,
-                segment_length_mm=self.segment_length_mm,
-                min_radius_mm=self.min_radius_mm,
-                branch_split_angle_deg=self.branch_split_angle_deg,
-                max_branches_per_step=self.max_branches_per_step,
-                branch_exponent=self.branch_exponent,
-                smoothing_alpha=self.smoothing_alpha,
-                group_width_mm=gw,
-                group_height_mm=gh,
-                foliage_bulge_mm=self.foliage_bulge_mm,
+            nodes, parents, radii, in_dirs, out_dirs, attractors, group_labels = (
+                grow_cloud_skeleton(
+                    env,
+                    tree_rng,
+                    n_attraction=self.n_attraction,
+                    segment_length_mm=self.segment_length_mm,
+                    min_radius_mm=self.min_radius_mm,
+                    branch_split_angle_deg=self.branch_split_angle_deg,
+                    max_branches_per_step=self.max_branches_per_step,
+                    branch_exponent=self.branch_exponent,
+                    smoothing_alpha=self.smoothing_alpha,
+                    group_width_mm=gw,
+                    group_height_mm=gh,
+                    foliage_bulge_mm=self.foliage_bulge_mm,
+                )
             )
             if len(nodes) < 2:
                 continue
@@ -156,24 +158,26 @@ class CloudTree:
                 out_dirs,
                 terrain_z=tz,
                 debug_attractors=attractors if self.debug_attractors else None,
+                attractor_group_labels=group_labels,
             )
             if len(mesh.vertices) == 0:
                 continue
             wood_parts.append(mesh)
-            flower_parts.extend(attractor_parts)
+            # Attractor spheres have per-face colours already baked in by
+            # build_cloud_tree_mesh; do NOT re-tag them or the group colours
+            # will be flattened to a single material colour.
+            attractor_parts_all.extend(attractor_parts)
             _stamp_tree(scene, surface, x, y, env, float(radii[0]))
 
-        if not wood_parts and not flower_parts:
+        if not wood_parts and not attractor_parts_all:
             return []
         result: list[trimesh.Trimesh] = []
         if wood_parts:
             wood_combined = trimesh.util.concatenate(wood_parts)
             _tag(wood_combined, Material.WOOD)
             result.append(wood_combined)
-        if flower_parts:
-            flower_combined = trimesh.util.concatenate(flower_parts)
-            _tag(flower_combined, Material.FLOWER)
-            result.append(flower_combined)
+        # Add pre-coloured attractor spheres individually (no re-tagging).
+        result.extend(attractor_parts_all)
         return result
 
     def _sample_envelope(
