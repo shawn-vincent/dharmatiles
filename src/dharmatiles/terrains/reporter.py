@@ -59,6 +59,20 @@ class TileReporter:
         """Called before building each system's mesh (primary and secondary scales)."""
         pass
 
+    # ── Phase events ─────────────────────────────────────────────────────────
+
+    def phase_header(self, label: str) -> None:
+        """Print a static phase heading (for phases followed by a Live display)."""
+        pass
+
+    def phase_begin(self, label: str) -> None:
+        """Begin a top-level phase with an animated spinner."""
+        pass
+
+    def phase_end(self, label: str, elapsed: float, detail: str = "") -> None:
+        """Stop the phase spinner and print a bold completion line."""
+        pass
+
     # ── Export event ─────────────────────────────────────────────────────────
 
     def export_done(
@@ -145,6 +159,18 @@ class TextReporter(TileReporter):
         sq = int(square_mm) if square_mm == int(square_mm) else square_mm
         print(f"\n  ── building {suffix} at {sq}mm/sq ──")
 
+    # ── Phases ───────────────────────────────────────────────────────────────
+
+    def phase_header(self, label: str) -> None:
+        print(f"\n── {label}")
+
+    def phase_begin(self, label: str) -> None:
+        print(f"\n── {label}…")
+
+    def phase_end(self, label: str, elapsed: float, detail: str = "") -> None:
+        suffix = f"  {detail}" if detail else ""
+        print(f"✓ {label}  {elapsed:.1f}s{suffix}")
+
     # ── Export ───────────────────────────────────────────────────────────────
 
     def export_done(self, suffix, path, n_verts, n_faces, watertight, elapsed) -> None:
@@ -199,6 +225,35 @@ class _SpinnerLine:
         yield Text.from_markup(
             f"  [cyan]{frame}[/cyan] {self._label:<38}"
             f" [cyan]{t_str}[/cyan]"
+        )
+
+
+# ── Phase spinner renderable ──────────────────────────────────────────────────
+
+class _PhaseSpinnerLine:
+    """Rich renderable for a top-level phase spinner (no indent, bold label).
+
+    Visually distinct from ``_SpinnerLine`` (which is indented and used for
+    per-step output): this one sits flush-left with a bolder look so phases
+    stand out above the per-tile / per-step lines nested under them.
+    """
+
+    _FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    _FPS    = 12.5
+
+    def __init__(self, label: str) -> None:
+        from rich.markup import escape
+        self._label = escape(label)
+        self._t0    = time.monotonic()
+
+    def __rich_console__(self, console, options):
+        from rich.text import Text
+        elapsed = time.monotonic() - self._t0
+        frame   = self._FRAMES[int(elapsed * self._FPS) % len(self._FRAMES)]
+        t_str   = f"{elapsed:.1f}s" if elapsed >= 0.05 else "  …"
+        yield Text.from_markup(
+            f"[cyan]{frame}[/cyan] [bold]{self._label}[/bold]"
+            f"  [cyan]{t_str}[/cyan]"
         )
 
 
@@ -337,6 +392,36 @@ class RichReporter(TileReporter):
         sq = int(square_mm) if square_mm == int(square_mm) else square_mm
         self._console.print(
             f"  [#0078d4]── building {suffix} at {sq}mm/sq ──[/#0078d4]"
+        )
+
+    # ── Phases ───────────────────────────────────────────────────────────────
+
+    def phase_header(self, label: str) -> None:
+        """Print a static phase heading (for phases where a Live display follows)."""
+        self._stop_status()
+        self._console.print(f"\n[bold]{label}[/bold]")
+
+    def phase_begin(self, label: str) -> None:
+        """Begin a top-level phase with an animated spinner."""
+        self._stop_status()
+        from rich.live import Live
+        self._live = Live(
+            _PhaseSpinnerLine(label),
+            console=self._console,
+            refresh_per_second=12,
+            transient=True,
+        )
+        self._live.__enter__()
+
+    def phase_end(self, label: str, elapsed: float, detail: str = "") -> None:
+        """Stop the phase spinner and print a bold completion line."""
+        self._stop_status()
+        tc     = self._table_time_color(elapsed)
+        suffix = f"  [dim]{detail}[/dim]" if detail else ""
+        self._console.print(
+            f"[bold green]✓[/bold green] [bold]{label}[/bold]"
+            f"  [{tc}]{elapsed:.1f}s[/]"
+            f"{suffix}"
         )
 
     # ── Export ───────────────────────────────────────────────────────────────

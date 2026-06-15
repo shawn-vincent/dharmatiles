@@ -12,16 +12,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install in editable mode (required before running anything)
 pip install -e .
 
-# Batch mode: process every src/tiles/*.tile.py → stl/{dungeonblocks,openlock}/…
+# Batch mode: process every src/tiles/**/*.tile.py → stl/{dungeonblocks,openlock}/…
 dharmatiles-gen
 
 # Single spec (writes to canonical stl/{system}/{NxM}-{name}-{db|ol}.stl)
-dharmatiles-gen --spec "src/tiles/soil+grass.tile.py"
-dharmatiles-gen --spec "src/tiles/water+grass.tile.py"
+dharmatiles-gen --spec "src/tiles/ground/1x1-soil+grass.tile.py"
+dharmatiles-gen --spec "src/tiles/ground/2x2-grass-cloud-tree.tile.py"
 dharmatiles-gen --quiet   # suppress progress output
 
 # Run a single script directly (no install needed)
-python -m dharmatiles.terrains.tile --spec "src/tiles/soil+grass.tile.py"
+python -m dharmatiles.terrains.tile --spec "src/tiles/ground/1x1-soil+grass.tile.py"
 ```
 
 There are no automated tests; correctness is verified by opening the STL in PrusaSlicer, MeshLab, or Windows 3D Builder and visually inspecting the mesh.
@@ -34,7 +34,7 @@ There are no automated tests; correctness is verified by opening the STL in Prus
 - For tile terrain / layers / core changes: regenerate **all** `.tile.py` specs:
 
 ```bash
-for spec in src/tiles/*.tile.py; do dharmatiles-gen --spec "$spec"; done
+for spec in src/tiles/**/*.tile.py; do dharmatiles-gen --spec "$spec"; done
 ```
 
 - For `src/extras/hex_paint_organizer.py`: `python src/extras/hex_paint_organizer.py`
@@ -82,6 +82,7 @@ Tile (.tile.py) ──► build_tile_from_spec()
          ScatterLayer(
              Rocks(...),    — vectorised half-ellipsoids; stamp support_z
              Grass(...),    — plant + grow 3D blades around rocks
+             CloudTree(...),— space-colonisation trees (see below)
          )
          WaterLayer         — reshape pool floor, emit water volume mesh
                 │
@@ -124,17 +125,21 @@ Tile (.tile.py) ──► build_tile_from_spec()
 | `scatter/seed.py` | `RockSeed` — fully-resolved rock instance with `sort_key()` |
 | `scatter/distribute.py` | Voronoi grouping, jitter grid, `scatter_positions()` — shared by rocks + grass |
 | `scatter/prototype.py` | `Rocks` + `Grass` — scatter-thing classes with `scatter(scene, ...)` |
-| `scatter/layer.py` | `ScatterLayer` — runs `Rocks` / `Grass` things in spec order |
+| `scatter/layer.py` | `ScatterLayer` — runs `Rocks` / `Grass` / `CloudTree` things in spec order |
 | `layers/__init__.py` | Public layer classes: `SoilCarpetLayer`, `GrassCarpetLayer`, `ScatterLayer`, `WaterLayer` |
 | `layers/soil.py` | `SoilCarpetLayer` — two-tier super-Gaussian blobs into terrain_z |
 | `layers/rocks.py` | `_build_rocks_mesh_core` / `_build_rocks_mesh_from_seeds` — vectorised half-ellipsoid kernel |
 | `layers/grass_carpet.py` | `GrassCarpetLayer` — embossed 2D blade-stamp texture into terrain_z |
 | `layers/water.py` | `WaterLayer` — pool-floor reshape, displacement, ripples, volume mesh |
+| `trees/envelope.py` | `TreeEnvelope` — axisymmetric crown envelope dataclass |
+| `trees/cloud_skeleton.py` | `grow_cloud_skeleton()` — two-pass skeleton + `_branch_skeleton` BFS + `_compute_radii_bottom_up` |
+| `trees/cloud_mesh.py` | `build_cloud_tree_mesh()` — tapered cubic-Bezier tube mesh |
+| `trees/layer.py` | `CloudTree` — scatter-thing class; `_stamp_tree` obstacle stamping |
 | `bases/dungeonblocks.py` | DungeonBlocks socket-peg base; logo inset; STL export |
 | `bases/openlock.py` | OpenLOCK T-slot base via manifold3d CSG; STL export |
 | `terrains/tile.py` | Entry point: `build_tile_from_spec()` flat orchestrator + CLI |
 
-`core/` modules are pure primitives (array in / array out). `grass/` holds the grass growth sub-pipeline. `scatter/` is the unified placement system for rocks and grass. `layers/` has terrain-texture layers (soil, grass carpet, water). `bases/` attaches system-specific underside geometry. `terrains/` is the entry point that assembles everything.
+`core/` modules are pure primitives (array in / array out). `grass/` holds the grass growth sub-pipeline. `scatter/` is the unified placement system for rocks, grass, and trees. `layers/` has terrain-texture layers (soil, grass carpet, water). `trees/` holds the CloudTree generator. `bases/` attaches system-specific underside geometry. `terrains/` is the entry point that assembles everything.
 
 ### Tile Spec Format (`.tile.py` files)
 
@@ -144,24 +149,20 @@ module-level name `tile`. The spec language IS the implementation language —
 
 ```python
 from dharmatiles.spec   import Tile, Region, Boundary, SurfaceConfig, SpeciesConfig
-from dharmatiles.layers import (
-    SoilCarpetLayer, GrassCarpetLayer, ScatterLayer, WaterLayer,
-)
-from dharmatiles.scatter import Rocks, Grass
+from dharmatiles.layers import GrassCarpet, Scatter
+from dharmatiles.scatter import Rocks, Grass, CloudTree, Uniform
 
 species = SpeciesConfig()
 tile = Tile(
     surface=SurfaceConfig(seed=42),
-    regions=[
-        Region(id='meadow', contains=(0.25, 0.5), layers=[
-            GrassCarpetLayer(species=species, groups_per_square=240),
-            ScatterLayer(
+    areas=[
+        Region(id='meadow', selector=FloodFill(0.5, 0.5), layers=[
+            GrassCarpet(species=species, placement=Grouped(groups_per_square=3)),
+            Scatter(
                 Rocks(r_min=0.8, r_max=2.2),
-                Grass(species=species, groups_per_square=24),
+                Grass(species=species),
+                CloudTree(height_mm=40.0, placement=Uniform(count_per_square=0.25)),
             ),
-        ]),
-        Region(id='dirt', contains=(0.75, 0.5), layers=[
-            SoilCarpetLayer(),
         ]),
     ],
 )
@@ -173,7 +174,7 @@ tile = Tile(
 |---|---|---|
 | `SoilCarpetLayer(**SoilConfig kwargs)` | Soil blob texture into terrain_z | 5.0 |
 | `GrassCarpetLayer(species=…, **GrassUnderlayConfig kwargs)` | Embossed 2D blade stamps into terrain_z | 5.0 |
-| `ScatterLayer(*things)` | Runs each `Rocks` / `Grass` thing in spec order | 5.0 |
+| `ScatterLayer(*things)` | Runs each `Rocks` / `Grass` / `CloudTree` thing in spec order | 5.0 |
 | `WaterLayer(embed_mm=…, height_mm=…)` | Reshape pool floor + emit water volume mesh | 3.0 |
 
 **Scatter things** (all in `dharmatiles.scatter`):
@@ -182,6 +183,7 @@ tile = Tile(
 |---|---|
 | `Rocks(*, scatter=ScatterConfig(...), **RocksConfig kwargs)` | Vectorised half-ellipsoid rocks; stamps `terrain_support_z` + `obstacle_mask` |
 | `Grass(species=…, *, scatter=…, max_stack_height=…, **SpeciesConfig overrides)` | 3D blades planted + grown around rocks |
+| `CloudTree(height_mm=…, crown_radius_mm=…, placement=…, **kwargs)` | Space-colonisation tree (see CloudTree section) |
 
 `Region` height falls back to its first layer's `height_default_mm` when
 `height_mm=None`.  Boundary curves go from one tile edge to another;
@@ -194,20 +196,80 @@ composition all work.  The orchestrator (`terrains/tile.py`) walks
 `tile.regions` and `tile.boundaries` in spec order and calls
 `layer.apply(scene, placement_mask=mask)` on each layer.
 
-### Scatter System (rocks + grass)
+### CloudTree Generator
 
-`ScatterLayer` runs the `Rocks` / `Grass` instances it was constructed with,
-in the order they appear in its argument list.  Put `Rocks` first so the
-following `Grass` blades can steer around already-stamped rock footprints.
+`CloudTree` is a scatter-thing (placed by `ScatterLayer`) that builds printable
+trees via a two-pass algorithm in `trees/cloud_skeleton.py` +
+`trees/cloud_mesh.py`.
+
+**Invariants (hard constraints; must never be broken):**
+- Every attractor is a **leaf node** — attractors are never branch points.
+- Every branch terminates by landing **exactly at** an attractor position.
+- Branching happens at **synthetic interior nodes only** (never at attractor positions).
+
+**Pass 1 — Skeleton (`_branch_skeleton`):**
+
+Each branch owns a set of attractors and a current tip position (BFS queue).
+At each step:
+
+1. Compute `main_dir` = blended direction toward centroid of owned attractors
+   (`smoothing_alpha` blend with incoming heading for C1 continuity).
+2. **Stray detection** (crown zone only, z ≥ `crown_base_z`): classify owned
+   attractors as *primary* (within `branch_split_angle_deg` of `main_dir`) or
+   *stray* (outside). Stray clusters spawn sub-branches FROM the current
+   synthetic tip (never from an attractor).
+3. **Bidirectional z-passover check**: before each advance step, any attractor
+   that would be left on the wrong side in z is split off proactively.  Going
+   up: split anything below `next_z`.  Going down: split anything above `next_z`.
+   Going horizontal: split anything already below `pos[2]`. Keeps doubling-back
+   to at most one `segment_length_mm`.
+4. When primary reduces to 1 → **terminal mode**: `_grow_to_leaf` drives from
+   current synthetic node toward the single target, initialising `cur_dir` from
+   `dir_to_target` (not inherited heading) so intermediate nodes never walk
+   backward, landing exactly on the attractor.
+5. Otherwise advance one segment, repeat.
+6. Safety: if `max_steps` budget is exhausted, force-split primary (keep nearest
+   as terminal target, hand rest to a new sub-branch from current synthetic position).
+
+**Attractor sampling (`_sample_cloud`):** 3D volumetric rejection sampling
+within the bounding box. Accepts if the point is inside the crown envelope.
+This gives equal attractor density per unit *volume* — the narrow apex gets
+~1 attractor (not 15+ crammed into a 0.5 mm disc) and the widest crown zone
+gets the most. Do NOT revert to uniform-t sampling; the apex club-top artefact
+returns immediately.
+
+**Pass 2 — Radii (`_compute_radii_bottom_up`):** bottom-up pipe model.
+Leaf nodes → `min_radius_mm`. Internal nodes → `(Σ r_child^e)^(1/e)` where
+`e = branch_exponent`. Root radius is fully derived (not configured).
+
+**Mesh (`build_cloud_tree_mesh`):** each (parent, child) skeleton edge is a
+tapered cubic Bezier tube. Start/end tangents are `prior_dirs`, giving C1
+continuity at forks. A root flare anchors the trunk to the terrain surface.
+
+**Key parameters:**
+
+| Parameter | Default | Effect |
+|---|---|---|
+| `n_attraction` | 200 | Number of attractor points (= number of leaves) |
+| `segment_length_mm` | 2.0 | Step size; also caps max doubling-back |
+| `branch_split_angle_deg` | 30.0 | Half-angle of primary cone; larger = earlier splits |
+| `max_branches_per_step` | 3 | Max stray clusters per step |
+| `branch_exponent` | 2.5 | Pipe-model exponent; larger = thicker trunk relative to branches |
+| `min_radius_mm` | 0.45 | Leaf branch radius; scales the entire radius tree |
+| `smoothing_alpha` | 0.1 | Heading blend (0 = pure centroid, 1 = straight ahead) |
+| `debug_attractors` | False | Render attractor positions as yellow icosphere markers |
+
+### Scatter System (rocks + grass + trees)
+
+`ScatterLayer` runs the `Rocks` / `Grass` / `CloudTree` instances it was
+constructed with, in the order they appear in its argument list.  Put `Rocks`
+first so following `Grass` blades can steer around already-stamped rock
+footprints.
 
 The same ordering rule applies across regions and boundaries: the
 orchestrator runs all regions in spec order, then all boundaries in spec
 order.  3D grass only steers around rocks that have already been stamped
-into `terrain_support_z` *before* `Grass.scatter()` runs.  Put any region
-whose rocks the grass should respect ahead of the grass-bearing region in
-the spec.  Rocks in a boundary always run after every region, so grass
-blades growing into a boundary strip will plow through its rocks —
-documented behaviour: put rocks on grass, you get rocks on grass.
+into `terrain_support_z` *before* `Grass.scatter()` runs.
 
 - `Rocks.scatter()` samples positions from its `ScatterConfig`, builds
   `RockSeed`s, sorts big→small, and calls `_build_rocks_mesh_from_seeds`
@@ -215,8 +277,10 @@ documented behaviour: put rocks on grass, you get rocks on grass.
 - `Grass.scatter()` syncs `vegetation_support_z` from the completed
   `terrain_support_z`, then delegates to `FloppyGrassLayer` which plants
   seeds (`GrassSeed.sort_key() = (upstream_dist, direction)` so seeds
-  facing the tile boundary grow first) and runs the segment-by-segment
-  grower.
+  facing the tile boundary grow first) and runs the segment-by-segment grower.
+- `CloudTree.scatter()` calls `grow_cloud_skeleton()` per placed tree, then
+  `build_cloud_tree_mesh()`, then stamps the tree footprint into
+  `terrain_support_z` and `obstacle_mask`.
 
 `ScatterConfig` (in `scatter/config.py`) controls: `items_per_square` (hard
 count), `groups_per_square` (Voronoi clumps; 0 = uniform random), `gap_mm`,
@@ -232,7 +296,7 @@ carpet provides a dense field of flat blade footprints; the 3D blades stand
 up through it at sparser, separately seeded locations.  Pass the same
 `SpeciesConfig` instance to both so they share identical blade *geometry*
 (width, taper, curl, cross-section) even though positions differ.  See
-`src/tiles/soil+grass.tile.py` for an example.
+`src/tiles/ground/2x2-grass-cloud-tree.tile.py` for an example with a tree.
 
 ### Colour Encoding
 
@@ -245,13 +309,17 @@ active in the export pipeline.
 
 All geometry layers (soil, rocks, grass) treat the terrain surface as **locally horizontal** — heights and orientations are in world coordinates. This is correct for flat grass regions. The slope strip between regions is bare soil with no placed features, so the error is negligible. See `TileScene` docstring for the planned `terrain_normal()` API when slope-aware placement is needed.
 
-## Known Open Items (from 2026-06-09 architecture review)
+## Known Open Items (from 2026-06-15)
 
 1. **Grass directions are purely random** — `core/flow.py` (the spatial direction
    field) was removed as dead code.  Blade groups use uniform random directions
    with no spatial coherence.  A future direction-field system would live in
    `core/` and hook into `plant_seeds` / `_make_seed` to enable wind-swept,
    radial, or swirl patterns.
+
+2. **CloudTree doubling-back floor** — the bidirectional z-passover check caps
+   backward branch travel at one `segment_length_mm` (~2 mm).  Reducing
+   `segment_length_mm` to 1.0 would halve this at the cost of doubling node count.
 
 ## Project Layout
 
@@ -262,9 +330,12 @@ src/dharmatiles/
   scatter/       unified placement system: config, seed, distribute, prototype, layer
   grass/         grass growth sub-pipeline: seed, grow, mesh, growers/, _geometry, layer, config
   layers/        soil.py, rocks.py (kernel), grass_carpet.py, water.py
+  trees/         CloudTree generator: envelope, cloud_skeleton, cloud_mesh, layer
   bases/         dungeonblocks.py, openlock.py
   terrains/      tile.py (main entry point + CLI)
-src/tiles/       .tile.py spec files (Python)
+src/tiles/
+  ground/        ground-type tile specs (.tile.py)
+  water/         water-type tile specs (.tile.py)
 src/extras/      standalone non-terrain utilities (hex_paint_organizer.py)
 src/scripts/     standalone utilities; src/scripts/archived/ = old generations
 src/scad/        OpenSCAD files and experiments

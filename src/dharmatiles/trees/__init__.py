@@ -1,4 +1,4 @@
-"""Printable tree generation: envelope SCA (Tree) and point-cloud-partitioned (CloudTree)."""
-from .layer import Tree, CloudTree
+"""Printable tree generation via CloudTree space-colonisation skeleton."""
+from .layer import CloudTree
 
-__all__ = ["Tree", "CloudTree"]
+__all__ = ["CloudTree"]

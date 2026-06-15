@@ -1021,48 +1021,94 @@ def _run_parallel_live(
 ) -> None:
     """Drive ``future_to_name`` futures with a Rich Live multi-line display.
 
-    Shows one line per tile:
-    * ⠙  name   1.4s   — spinner + live clock while the worker is running
-    * ✓  name   3.1s   — green tick + final time once the worker finishes
+    Tiles are shown in four visual groups (top → bottom):
 
-    When the Live context exits the lines stay on screen permanently.
+    * «N tiles complete»  — tiles done more than _COLLAPSE_AFTER seconds ago
+    * ✓  name   3.1s     — recently finished (shown individually for a moment)
+    * ⠙  name   1.4s     — actively running (spinner + live clock + phase label)
+    * «N tiles queued»   — not yet picked up by a worker process
+
+    When the Live context exits the final snapshot stays on screen permanently.
     Completed rows are recorded into the reporter via ``record_batch_rows``.
     """
     from rich.live    import Live
     from rich.console import Group
     from rich.text    import Text
 
-    _FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-    _FPS    = 12.5
+    _FRAMES         = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    _FPS            = 12.5
+    _COLLAPSE_AFTER = 5.0   # seconds before a done tile folds into the summary line
 
-    done_rows:   dict[str, dict] = {}   # name → result row
-    pending_set: set             = set(future_to_name.keys())
+    done_rows:   dict[str, dict]  = {}   # name → result row
+    done_times:  dict[str, float] = {}   # name → perf_counter() at completion
+    pending_set: set              = set(future_to_name.keys())
 
     def _render() -> Group:
         now   = _time.perf_counter()
         frame = _FRAMES[int(now * _FPS) % len(_FRAMES)]
-        lines: list[Text] = []
+
+        n_collapsed:  int       = 0
+        recent_done:  list[str] = []
+        running:      list[str] = []
+        queued:       list[str] = []
+
         for name in spec_names:
             if name in done_rows:
-                elapsed = done_rows[name]['elapsed']
-                tc      = RichReporter._table_time_color(elapsed)
-                lines.append(Text.from_markup(
-                    f"  [green]✓[/green] {name:<38} [{tc}]{elapsed:.1f}s[/]"
-                    f"  [green]done[/green]"
-                ))
+                age = now - done_times.get(name, now)
+                if age >= _COLLAPSE_AFTER:
+                    n_collapsed += 1
+                else:
+                    recent_done.append(name)
             else:
-                elapsed = now - t_starts[name]
-                t_str   = f"{elapsed:.1f}s" if elapsed >= 0.05 else "   …"
-                phase   = ""
-                if phase_dict is not None:
-                    try:
-                        phase = phase_dict.get(name, "")
-                    except Exception:
-                        pass
-                phase_str = f"  [dim]{phase}[/dim]" if phase else ""
-                lines.append(Text.from_markup(
-                    f"  [cyan]{frame}[/cyan] {name:<38} [cyan]{t_str}[/]{phase_str}"
-                ))
+                try:
+                    in_phase = phase_dict is not None and bool(phase_dict.get(name))
+                except Exception:
+                    in_phase = False
+                if in_phase:
+                    running.append(name)
+                else:
+                    queued.append(name)
+
+        lines: list[Text] = []
+
+        # ── Collapsed done summary ────────────────────────────────────────────
+        if n_collapsed:
+            n = n_collapsed
+            lines.append(Text.from_markup(
+                f"  [green]✓✓[/green] [dim]{n} tile{'s' if n != 1 else ''} complete[/dim]"
+            ))
+
+        # ── Recently done (individual, transitioning to collapsed) ────────────
+        for name in recent_done:
+            elapsed = done_rows[name]['elapsed']
+            tc      = RichReporter._table_time_color(elapsed)
+            lines.append(Text.from_markup(
+                f"  [green]✓[/green] {name:<38} [{tc}]{elapsed:.1f}s[/]"
+                f"  [green]done[/green]"
+            ))
+
+        # ── Running (spinner + live clock) ────────────────────────────────────
+        for name in running:
+            elapsed = now - t_starts[name]
+            t_str   = f"{elapsed:.1f}s" if elapsed >= 0.05 else "   …"
+            phase   = ""
+            if phase_dict is not None:
+                try:
+                    phase = phase_dict.get(name, "")
+                except Exception:
+                    pass
+            phase_str = f"  [dim]{phase}[/dim]" if phase else ""
+            lines.append(Text.from_markup(
+                f"  [cyan]{frame}[/cyan] {name:<38} [cyan]{t_str}[/]{phase_str}"
+            ))
+
+        # ── Queued summary ────────────────────────────────────────────────────
+        if queued:
+            n = len(queued)
+            lines.append(Text.from_markup(
+                f"  [dim]·· {n} tile{'s' if n != 1 else ''} queued[/dim]"
+            ))
+
         return Group(*lines)
 
     # Use the reporter's own console so Rich's internal state stays consistent.
@@ -1074,10 +1120,12 @@ def _run_parallel_live(
                 pending_set, timeout=1.0 / _FPS,
                 return_when=FIRST_COMPLETED,
             )
+            now = _time.perf_counter()
             for f in newly_done:
                 row  = f.result()
                 name = future_to_name[f]
-                done_rows[name] = row
+                done_rows[name]  = row
+                done_times[name] = now
             live.update(_render())
 
     # Populate the reporter's batch-table data (no more printing).
@@ -1124,8 +1172,20 @@ def main(argv=None):
         if not spec_paths:
             print(f"No .tile.py files found under {TILES_ROOT}/")
             return
+        n_png = len(spec_paths)
+        t_png = _time.perf_counter()
+        reporter.phase_begin(
+            f"Rendering {n_png} PNG{'s' if n_png != 1 else ''}"
+        )
         _render_all_pngs(spec_paths, TILES_ROOT, PNG_ROOT, quiet=args.quiet)
+        reporter.phase_end(
+            f"Render PNG{'s' if n_png != 1 else ''}",
+            _time.perf_counter() - t_png,
+        )
+        t_cat = _time.perf_counter()
+        reporter.phase_begin("Writing catalog")
         _write_tile_catalog_pdf(PNG_ROOT, CATALOG_PDF, quiet=args.quiet)
+        reporter.phase_end("Write catalog", _time.perf_counter() - t_cat)
         if not args.quiet:
             _print_closing_quote()
         return
@@ -1155,15 +1215,29 @@ def main(argv=None):
             reporter.tile_end(_time.perf_counter() - t0)
             for d, ms in dir_to_meshes.items():
                 dir_3mf_accum[d].append((name, ms))
-        for d, mls in dir_3mf_accum.items():
-            _write_dir_3mf(d, mls)
+        if dir_3mf_accum:
+            t_3mf = _time.perf_counter()
+            n_3mf = len(dir_3mf_accum)
+            reporter.phase_begin("Assembling 3MF")
+            for d, mls in dir_3mf_accum.items():
+                _write_dir_3mf(d, mls)
+            reporter.phase_end(
+                "Assemble 3MF", _time.perf_counter() - t_3mf,
+                f"{n_3mf} file{'s' if n_3mf != 1 else ''}",
+            )
+        t_png = _time.perf_counter()
+        reporter.phase_begin("Render PNG")
         if render_meshes is not None and specs:
             out = _png_path_for(args.spec, specs[0], TILES_ROOT, PNG_ROOT)
             _render_from_meshes(render_meshes, out, specs[0].surface.square_mm, args.quiet,
                                 label=_label_for_png(out, PNG_ROOT))
         else:
             _render_all_pngs([args.spec], TILES_ROOT, PNG_ROOT, quiet=args.quiet)
+        reporter.phase_end("Render PNG", _time.perf_counter() - t_png)
+        t_cat = _time.perf_counter()
+        reporter.phase_begin("Write catalog")
         _write_tile_catalog_pdf(PNG_ROOT, CATALOG_PDF, quiet=args.quiet)
+        reporter.phase_end("Write catalog", _time.perf_counter() - t_cat)
         if not args.quiet:
             _print_closing_quote()
         return
@@ -1186,6 +1260,13 @@ def main(argv=None):
 
     pngs_rendered = False
     from collections import defaultdict as _defaultdict
+
+    n_specs = len(spec_paths)
+    tile_word = f"tile{'s' if n_specs != 1 else ''}"
+
+    # ── Phase: Building tiles ─────────────────────────────────────────────────
+    t_build = _time.perf_counter()
+    reporter.phase_header(f"Building {n_specs} {tile_word}")
 
     if n_workers > 1:
         # ── Parallel path: each spec in its own worker process ──────────────
@@ -1221,16 +1302,25 @@ def main(argv=None):
                         all_par_rows.append(row)
                         reporter.inject_batch_row(row)
 
-        # ── Per-directory 3MF (one per system output dir, all tiles) ─────────
+        reporter.phase_end(f"Build {tile_word}", _time.perf_counter() - t_build)
+        pngs_rendered = True
+
+        # ── Phase: Assemble 3MF (one per system output dir, all tiles) ───────
         dir_3mf_accum: dict[pathlib.Path, list[tuple[str, list[trimesh.Trimesh]]]] = _defaultdict(list)
         for row in all_par_rows:
             for d_str, name_serial in row.get('dir_meshes_serial', {}).items():
                 name, serial = name_serial
                 dir_3mf_accum[pathlib.Path(d_str)].append((name, _serial_to_meshes(serial)))
-        for d, mls in dir_3mf_accum.items():
-            _write_dir_3mf(d, mls)
-
-        pngs_rendered = True
+        if dir_3mf_accum:
+            t_3mf = _time.perf_counter()
+            n_3mf = len(dir_3mf_accum)
+            reporter.phase_begin("Assembling 3MF")
+            for d, mls in dir_3mf_accum.items():
+                _write_dir_3mf(d, mls)
+            reporter.phase_end(
+                "Assemble 3MF", _time.perf_counter() - t_3mf,
+                f"{n_3mf} file{'s' if n_3mf != 1 else ''}",
+            )
     else:
         # ── Sequential fallback (single-core or --quiet) ─────────────────────
         dir_3mf_accum_seq: dict[pathlib.Path, list[tuple[str, list[trimesh.Trimesh]]]] = _defaultdict(list)
@@ -1272,16 +1362,31 @@ def main(argv=None):
                                         label=_label_for_png(out, PNG_ROOT))
                     break
 
-        # ── Per-directory 3MF ─────────────────────────────────────────────────
-        for d, mls in dir_3mf_accum_seq.items():
-            _write_dir_3mf(d, mls)
-
+        reporter.phase_end(f"Build {tile_word}", _time.perf_counter() - t_build)
         pngs_rendered = True  # rendered inline above
 
-    reporter.batch_end(len(spec_paths), _time.perf_counter() - t_batch)
+        # ── Phase: Assemble 3MF ───────────────────────────────────────────────
+        if dir_3mf_accum_seq:
+            t_3mf = _time.perf_counter()
+            n_3mf = len(dir_3mf_accum_seq)
+            reporter.phase_begin("Assembling 3MF")
+            for d, mls in dir_3mf_accum_seq.items():
+                _write_dir_3mf(d, mls)
+            reporter.phase_end(
+                "Assemble 3MF", _time.perf_counter() - t_3mf,
+                f"{n_3mf} file{'s' if n_3mf != 1 else ''}",
+            )
+
+    reporter.batch_end(n_specs, _time.perf_counter() - t_batch)
     if not pngs_rendered:
         _render_all_pngs(spec_paths, TILES_ROOT, PNG_ROOT, quiet=args.quiet)
+
+    # ── Phase: Write catalog ──────────────────────────────────────────────────
+    t_cat = _time.perf_counter()
+    reporter.phase_begin("Writing catalog")
     _write_tile_catalog_pdf(PNG_ROOT, CATALOG_PDF, quiet=args.quiet)
+    reporter.phase_end("Write catalog", _time.perf_counter() - t_cat)
+
     if not args.quiet:
         _print_closing_quote()
 
