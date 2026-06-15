@@ -64,6 +64,7 @@ def grow_cloud_skeleton(
     group_height_mm: float | None = None,
     foliage_bulge_mm: float = 0.0,
     branchiness: float = 1.0,
+    branch_target: str = "centroid",
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Grow a CloudTree skeleton filling *env*.
 
@@ -130,14 +131,15 @@ def grow_cloud_skeleton(
     effective_cos = eager_cos * float(np.clip(branchiness, 0.0, 1.0))
 
     nodes, parents, prior_dirs = _branch_skeleton(
-        root         = root,
-        pts          = pts,
-        seg_len      = float(segment_length_mm),
-        split_cos    = effective_cos,
-        max_branches = int(max_branches_per_step),
-        alpha        = float(smoothing_alpha),
-        max_steps    = max_steps,
-        group_labels = group_labels,
+        root          = root,
+        pts           = pts,
+        seg_len       = float(segment_length_mm),
+        split_cos     = effective_cos,
+        max_branches  = int(max_branches_per_step),
+        alpha         = float(smoothing_alpha),
+        max_steps     = max_steps,
+        group_labels  = group_labels,
+        branch_target = branch_target,
     )
 
     # Compress: drop collinear single-child nodes; they don't affect radii
@@ -165,14 +167,15 @@ def grow_cloud_skeleton(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _branch_skeleton(
-    root:         np.ndarray,
-    pts:          np.ndarray,
-    seg_len:      float,
-    split_cos:    float,
-    max_branches: int,
-    alpha:        float,
-    max_steps:    int,
-    group_labels: np.ndarray | None = None,
+    root:          np.ndarray,
+    pts:           np.ndarray,
+    seg_len:       float,
+    split_cos:     float,
+    max_branches:  int,
+    alpha:         float,
+    max_steps:     int,
+    group_labels:  np.ndarray | None = None,
+    branch_target: str = "centroid",
 ) -> tuple[list, list, list]:
     nodes:      list[np.ndarray] = [root.copy()]
     parents:    list[int]        = [-1]
@@ -196,8 +199,13 @@ def _branch_skeleton(
         pos     = nodes[tip_idx]
         heading = prior_dirs[tip_idx]
 
-        # Primary direction toward centroid of owned attractors.
-        target = owned.mean(axis=0)
+        # Primary target point — centroid, lowest-z, or highest-z attractor.
+        if branch_target == "lowest":
+            target = owned[int(np.argmin(owned[:, 2]))]
+        elif branch_target == "highest":
+            target = owned[int(np.argmax(owned[:, 2]))]
+        else:  # "centroid"
+            target = owned.mean(axis=0)
         raw    = target - pos
         raw_len  = float(np.linalg.norm(raw))
         if raw_len > 1e-9:
