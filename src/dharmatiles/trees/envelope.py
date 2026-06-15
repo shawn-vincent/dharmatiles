@@ -98,5 +98,5 @@ def _end_profile(u, pointiness: float, curve: float) -> np.ndarray:
     p = float(np.clip(pointiness, 0.0, 1.0))
     c = max(0.01, float(curve))
     linear = u_arr ** c
-    round_arc = np.sin(0.5 * np.pi * u_arr) ** c
+    round_arc = np.sqrt(np.clip(1.0 - (1.0 - u_arr) ** 2, 0.0, 1.0))
     return (1.0 - p) * round_arc + p * linear

@@ -270,30 +270,42 @@ def _compute_radii_bottom_up(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _sample_cloud(env: TreeEnvelope, rng: np.random.Generator, n: int) -> np.ndarray:
-    """Volumetric (3D-uniform) rejection sampling inside the crown envelope.
-
-    Sampling t uniformly and picking within the local cross-section circle gives
-    equal attractor *count* per unit height, which massively oversamples the
-    narrow apex — all those points crowd into a tiny disc, creating a thick club
-    top.  3D uniform sampling gives equal attractor *density* per unit volume, so
-    the apex naturally receives few attractors and the widest part of the crown
-    receives most.
-    """
+    """Sample attractors with even coverage over the crown surface."""
     if env.crown_height <= 1e-8 or env.crown_radius_mm <= 1e-8:
         return np.empty((0, 3), dtype=float)
-    cr    = env.crown_radius_mm
-    points: list[list[float]] = []
-    max_attempts = n * 100
-    for _ in range(max_attempts):
-        if len(points) >= n:
-            break
-        x = float(rng.uniform(env.cx - cr, env.cx + cr))
-        y = float(rng.uniform(env.cy - cr, env.cy + cr))
-        z = float(rng.uniform(env.crown_base_z, env.crown_top_z))
-        r = float(np.sqrt((x - env.cx) ** 2 + (y - env.cy) ** 2))
-        if r <= float(env.radius_at_z(z)):
-            points.append([x, y, z])
-    return np.array(points, dtype=float) if points else np.empty((0, 3), dtype=float)
+    n = max(0, int(n))
+    if n == 0:
+        return np.empty((0, 3), dtype=float)
+
+    # Surface area for a surface of revolution: dA = 2*pi*r*sqrt(1+(dr/dz)^2) dz.
+    samples = max(257, n * 8)
+    ts = np.linspace(0.0, 1.0, samples)
+    zs = env.crown_base_z + ts * env.crown_height
+    rs = np.asarray(env.radius_at_t(ts), dtype=float)
+    dr_dz = np.gradient(rs, zs, edge_order=2)
+    density = 2.0 * np.pi * rs * np.sqrt(1.0 + dr_dz * dr_dz)
+    density[~np.isfinite(density)] = 0.0
+    density = np.maximum(density, 0.0)
+
+    cumulative = np.zeros_like(ts)
+    cumulative[1:] = np.cumsum(0.5 * (density[:-1] + density[1:]) * np.diff(zs))
+    total_area = float(cumulative[-1])
+    if total_area <= 1e-9:
+        return np.empty((0, 3), dtype=float)
+
+    area_targets = (np.arange(n, dtype=float) + rng.random(n)) / n * total_area
+    z = np.interp(area_targets, cumulative, zs)
+    r = np.asarray(env.radius_at_z(z), dtype=float)
+
+    theta_step = np.pi * (3.0 - np.sqrt(5.0))
+    theta = np.arange(n, dtype=float) * theta_step + rng.uniform(0.0, 2.0 * np.pi)
+    theta += rng.uniform(-0.5, 0.5, n) * theta_step
+
+    return np.column_stack([
+        env.cx + r * np.cos(theta),
+        env.cy + r * np.sin(theta),
+        z,
+    ])
 
 
 def _cluster_pca(pts: np.ndarray, origin: np.ndarray, max_k: int) -> list[np.ndarray]:

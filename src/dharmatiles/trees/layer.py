@@ -32,8 +32,8 @@ class CloudTree:
     - Every attractor is a leaf node; attractors are never branch points.
     - Every branch terminates by landing exactly at an attractor.
     - Branching happens at synthetic interior nodes only.
-    - Attractors are sampled volumetrically (3D-uniform), so the apex gets
-      ~1 attractor and the widest crown zone gets the most.
+    - Attractors are sampled across the canopy surface, so branch targets land
+      on the crown envelope rather than inside the crown volume.
     - Branch radii are derived bottom-up (pipe model); trunk radius is
       calculated, not specified.
     - Segments are rendered as C1-continuous cubic Bezier tubes.
