@@ -60,6 +60,8 @@ class CloudTree:
         smoothing_alpha: float = 0.1,
         min_radius_mm: float = 0.45,
         debug_attractors: bool = False,
+        group_width_mm: Sample[float] | None = None,
+        group_height_mm: Sample[float] | None = None,
     ) -> None:
         self.shape = TreeShape(
             height_mm=height_mm,
@@ -80,6 +82,8 @@ class CloudTree:
         self.smoothing_alpha = float(smoothing_alpha)
         self.min_radius_mm = float(min_radius_mm)
         self.debug_attractors = bool(debug_attractors)
+        self.group_width_mm  = group_width_mm
+        self.group_height_mm = group_height_mm
 
     def footprint_mm(self) -> float:
         return float(bounds(self.shape.crown_radius_mm)[1])
@@ -117,6 +121,15 @@ class CloudTree:
             tz = float(sample_grid(scene.terrain_z, surface, np.array([x]), np.array([y]))[0])
             tree_rng = np.random.default_rng(int(rng.integers(2 ** 62)))
             env = self._sample_envelope(x, y, tz, tree_rng)
+            # Sample group dimensions per-tree (may be fixed floats or distributions).
+            gw = (
+                float(sample(self.group_width_mm, tree_rng))
+                if self.group_width_mm is not None else None
+            )
+            gh = (
+                float(sample(self.group_height_mm, tree_rng))
+                if self.group_height_mm is not None else None
+            )
             nodes, parents, radii, prior_dirs, attractors = grow_cloud_skeleton(
                 env,
                 tree_rng,
@@ -127,6 +140,8 @@ class CloudTree:
                 max_branches_per_step=self.max_branches_per_step,
                 branch_exponent=self.branch_exponent,
                 smoothing_alpha=self.smoothing_alpha,
+                group_width_mm=gw,
+                group_height_mm=gh,
             )
             if len(nodes) < 2:
                 continue

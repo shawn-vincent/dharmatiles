@@ -8,20 +8,26 @@ Invariants
 
 Algorithm (per branch)
 ──────────────────────
-Each branch owns a set of attractors and a current tip position.
+Each branch owns a set of attractors (and optional group labels) and a current
+tip position.
 
-1. Classify owned attractors as primary (within split_angle of main_dir) or
-   stray (outside).  Stray clusters spawn sub-branches FROM the current
-   synthetic tip, then leave this branch's owned set.
+Attractor groups
+────────────────
+When *group_labels* is provided (array of integer IDs, one per attractor), stray
+detection is lifted to the group level: if any member of group G is stray, the
+*whole* group G splits off together.  Spawned sub-branches (one per stray group)
+drop the labels and use individual-attractor logic for their internal structure.
+Owned attractors that collapse to a single group also drop labels (leaf mode).
 
-2. If primary reduces to 1 attractor → terminal mode: grow intermediate nodes
-   at segment_length_mm intervals, final node lands EXACTLY on the attractor.
-
-3. Otherwise advance one segment toward the primary centroid, repeat.
-
-4. Safety: if the step budget is exhausted before convergence, force-split the
-   primary set — keep the nearest attractor as this branch's terminal target,
-   hand the rest to a new sub-branch from the current synthetic position.
+1. Classify owned attractors (or owned group centroids) as primary / stray.
+2. Stray groups spawn sub-branches FROM the current synthetic tip (leaf mode,
+   no labels).  Stray individuals without labels use PCA clustering as before.
+3. If primary reduces to 1 attractor → terminal mode: grow intermediate nodes at
+   segment_length_mm intervals, final node lands EXACTLY on the attractor.
+4. Otherwise advance one segment toward the primary centroid, repeat.
+5. Safety: if the step budget is exhausted before convergence, force-split the
+   primary set — keep the largest group / nearest attractor, hand the rest to a
+   new sub-branch from the current synthetic position.
 
 Radii
 ─────
@@ -50,16 +56,43 @@ def grow_cloud_skeleton(
     max_branches_per_step: int = 3,
     branch_exponent: float = 2.5,
     smoothing_alpha: float = 0.25,
+    group_width_mm: float | None = None,
+    group_height_mm: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Grow a CloudTree skeleton filling *env*.
 
-    Returns (nodes, parents, radii, prior_dirs, attractors).
+    Parameters
+    ----------
+    group_width_mm:
+        Target XY diameter of each attractor cluster.  When provided, attractors
+        are partitioned into spatial Voronoi groups so that entire groups split
+        off together during branching (coarser, more architectural splits).
+        ``None`` (default) disables grouping; branching uses the original
+        angle-based PCA splitting.
+    group_height_mm:
+        Target Z height of each attractor cluster.  Defaults to *group_width_mm*
+        when not specified.  Ratio group_width / group_height controls the
+        ellipsoidal aspect ratio of the clusters.
+
+    Returns
+    -------
+    (nodes, parents, radii, prior_dirs, attractors)
     """
     if branch_split_angle_deg is None:
         branch_split_angle_deg = min_branch_angle_deg
 
     pts  = _sample_cloud(env, rng, n_attraction)
     root = np.array([env.cx, env.cy, env.terrain_z], dtype=float)
+
+    # ── Attractor grouping ────────────────────────────────────────────────────
+    group_labels: np.ndarray | None = None
+    if group_width_mm is not None and len(pts) >= 2:
+        gh = group_height_mm if group_height_mm is not None else group_width_mm
+        gh = max(gh, 1e-9)
+        n_groups = _compute_n_groups(env, group_width_mm, gh)
+        if n_groups >= 2:
+            z_scale = group_width_mm / gh
+            group_labels = _voronoi_group_attractors(pts, n_groups, rng, z_scale=z_scale)
 
     # Step budget: generous so the branch tree can partition the full cloud.
     max_steps = max(60, int(np.ceil(env.height_mm / segment_length_mm) * 4))
@@ -72,6 +105,7 @@ def grow_cloud_skeleton(
         max_branches = int(max_branches_per_step),
         alpha        = float(smoothing_alpha),
         max_steps    = max_steps,
+        group_labels = group_labels,
     )
 
     radii = _compute_radii_bottom_up(parents, branch_exponent, min_radius_mm)
@@ -97,6 +131,7 @@ def _branch_skeleton(
     max_branches: int,
     alpha:        float,
     max_steps:    int,
+    group_labels: np.ndarray | None = None,
 ) -> tuple[list, list, list]:
     nodes:      list[np.ndarray] = [root.copy()]
     parents:    list[int]        = [-1]
@@ -105,11 +140,15 @@ def _branch_skeleton(
     if len(pts) == 0:
         return nodes, parents, prior_dirs
 
-    # Queue items: (tip_node_idx, owned_attractors, steps_taken)
-    queue: deque[tuple[int, np.ndarray, int]] = deque([(0, pts.copy(), 0)])
+    # Queue items: (tip_node_idx, owned_attractors, owned_group_labels, steps_taken)
+    # owned_group_labels is None for leaf branches (individual-attractor logic)
+    init_labels = group_labels.copy() if group_labels is not None else None
+    queue: deque[tuple[int, np.ndarray, np.ndarray | None, int]] = deque(
+        [(0, pts.copy(), init_labels, 0)]
+    )
 
     while queue:
-        tip_idx, owned, steps = queue.popleft()
+        tip_idx, owned, labels, steps = queue.popleft()
         if len(owned) == 0:
             continue
 
@@ -129,7 +168,9 @@ def _branch_skeleton(
             main_dir = heading
 
         # ── stray detection ────────────────────────────────────────────────
-        primary = owned
+        primary        = owned
+        primary_labels = labels
+
         if len(owned) >= 2 and max_branches > 1:
             to_owned = owned - pos
             unit_to  = to_owned / (np.linalg.norm(to_owned, axis=1, keepdims=True) + 1e-9)
@@ -146,37 +187,89 @@ def _branch_skeleton(
             else:                          # horizontal → split anything already below
                 passover = owned[:, 2] < pos[2]
             stray_mask = (cos_a < split_cos) | passover
-            stray      = owned[stray_mask]
-            primary    = owned[~stray_mask]
+
+            if labels is not None and stray_mask.any():
+                # Group-level stray: if any member of a group is stray,
+                # the whole group becomes stray (they travel together).
+                stray_group_ids = set(labels[stray_mask].tolist())
+                stray_mask = np.isin(labels, list(stray_group_ids))
+
+            stray          = owned[stray_mask]
+            primary        = owned[~stray_mask]
+            stray_labels   = labels[stray_mask]  if labels is not None else None
+            primary_labels = labels[~stray_mask] if labels is not None else None
 
             if len(stray) > 0 and len(primary) > 0:
-                # Spawn stray sub-branches from the CURRENT SYNTHETIC position.
-                for cluster in _cluster_pca(stray, pos, max_branches - 1):
-                    if len(cluster) > 0:
-                        queue.append((tip_idx, cluster, 0))
+                if labels is not None:
+                    # One leaf sub-branch per stray group label (no cap).
+                    for gid in np.unique(stray_labels):
+                        cluster = stray[stray_labels == gid]
+                        if len(cluster) > 0:
+                            queue.append((tip_idx, cluster, None, 0))
+                else:
+                    # Original: PCA-based clustering of strays.
+                    for cluster in _cluster_pca(stray, pos, max_branches - 1):
+                        if len(cluster) > 0:
+                            queue.append((tip_idx, cluster, None, 0))
 
             if len(primary) == 0:
-                # All stray: pick one cluster as our primary, rest as sub-branches.
-                clusters = _cluster_pca(owned, pos, 2)
-                if not clusters:
-                    continue
-                primary = clusters[0]
-                for extra in clusters[1:]:
-                    if len(extra) > 0:
-                        queue.append((tip_idx, extra, 0))
+                # All stray: keep the largest group/cluster as primary.
+                if labels is not None:
+                    stray_unique = np.unique(stray_labels)
+                    best_id = _largest_group_id(stray, stray_labels, stray_unique)
+                    best_mask = stray_labels == best_id
+                    primary        = stray[best_mask]
+                    primary_labels = None   # leaf behavior from here
+                    for gid in stray_unique:
+                        if gid == best_id:
+                            continue
+                        cluster = stray[stray_labels == gid]
+                        if len(cluster) > 0:
+                            queue.append((tip_idx, cluster, None, 0))
+                else:
+                    # All stray: pick one cluster as our primary, rest as sub-branches.
+                    clusters = _cluster_pca(owned, pos, 2)
+                    if not clusters:
+                        continue
+                    primary        = clusters[0]
+                    primary_labels = None
+                    for extra in clusters[1:]:
+                        if len(extra) > 0:
+                            queue.append((tip_idx, extra, None, 0))
+
+            # Drop labels once primary collapses to a single group (leaf mode).
+            if primary_labels is not None and len(np.unique(primary_labels)) <= 1:
+                primary_labels = None
 
         # ── terminal or continue ───────────────────────────────────────────
         force_terminal = (len(primary) == 1) or (steps >= max_steps)
 
         if force_terminal:
             if len(primary) > 1:
-                # Safety: keep the nearest attractor as our terminal target.
-                dists     = np.linalg.norm(primary - pos, axis=1)
-                near_i    = int(np.argmin(dists))
-                rest      = np.delete(primary, near_i, axis=0)
-                if len(rest) > 0:
-                    queue.append((tip_idx, rest, 0))
-                primary = primary[near_i : near_i + 1]
+                # Safety: keep the largest/nearest attractor as our terminal target.
+                if primary_labels is not None:
+                    # Keep the largest group; spawn the rest.
+                    unique_ids = np.unique(primary_labels)
+                    best_id    = _largest_group_id(primary, primary_labels, unique_ids)
+                    best_mask  = primary_labels == best_id
+                    rest       = primary[~best_mask]
+                    if len(rest) > 0:
+                        queue.append((tip_idx, rest, None, 0))
+                    primary = primary[best_mask]
+                    # Now reduce to one attractor within the group
+                    dists   = np.linalg.norm(primary - pos, axis=1)
+                    near_i  = int(np.argmin(dists))
+                    rest2   = np.delete(primary, near_i, axis=0)
+                    if len(rest2) > 0:
+                        queue.append((tip_idx, rest2, None, 0))
+                    primary = primary[near_i : near_i + 1]
+                else:
+                    dists     = np.linalg.norm(primary - pos, axis=1)
+                    near_i    = int(np.argmin(dists))
+                    rest      = np.delete(primary, near_i, axis=0)
+                    if len(rest) > 0:
+                        queue.append((tip_idx, rest, None, 0))
+                    primary = primary[near_i : near_i + 1]
 
             # Grow from synthetic tip to the single target, landing exactly on it.
             _grow_to_leaf(nodes, parents, prior_dirs,
@@ -186,7 +279,7 @@ def _branch_skeleton(
             # Advance one segment toward the primary centroid.
             new_pos = pos + main_dir * seg_len
             new_idx = _add_node(nodes, parents, prior_dirs, new_pos, tip_idx, main_dir)
-            queue.append((new_idx, primary, steps + 1))
+            queue.append((new_idx, primary, primary_labels, steps + 1))
 
     return nodes, parents, prior_dirs
 
@@ -261,6 +354,87 @@ def _compute_radii_bottom_up(
         if children[i]:
             radii[i] = float(sum(radii[c] ** exponent for c in children[i])) ** (1.0 / exponent)
     return radii
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Attractor grouping
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _compute_n_groups(
+    env: TreeEnvelope,
+    group_width_mm: float,
+    group_height_mm: float,
+) -> int:
+    """Estimate how many groups of target size fit across the crown surface."""
+    if group_width_mm <= 0 or group_height_mm <= 0:
+        return 1
+    # Circumferential count at maximum crown radius
+    n_around = max(1, round(2.0 * np.pi * env.crown_radius_mm / group_width_mm))
+    n_tall   = max(1, round(max(0.0, env.crown_height) / group_height_mm))
+    return max(2, n_around * n_tall)
+
+
+def _voronoi_group_attractors(
+    pts:     np.ndarray,
+    n_groups: int,
+    rng:     np.random.Generator,
+    z_scale: float = 1.0,
+) -> np.ndarray:
+    """Assign each attractor to one of *n_groups* spatial Voronoi clusters.
+
+    Uses Lloyd's algorithm (k-means) in a z-scaled space so that clusters have
+    an ellipsoidal aspect ratio matching *group_width* : *group_height*.
+
+    ``z_scale = group_width_mm / group_height_mm`` makes the clusters prefer the
+    target shape: < 1 → elongated vertically, > 1 → pancake-flat.
+
+    Returns integer group labels (0 .. n_groups-1) for each attractor.
+    """
+    n = len(pts)
+    if n == 0 or n_groups <= 1:
+        return np.zeros(n, dtype=int)
+    k = min(n_groups, n)
+
+    # Work in scaled space so distance reflects target cluster shape.
+    scaled        = pts.copy()
+    scaled[:, 2] *= z_scale
+
+    # K-means++ style initialisation: pick k distinct seed points from pts.
+    seed_idx = rng.choice(n, size=k, replace=False)
+    seeds    = scaled[seed_idx].copy()
+
+    # Lloyd's iterations (vectorised, n*k*3 tensors are small for typical sizes).
+    for _ in range(20):
+        diff   = scaled[:, np.newaxis, :] - seeds[np.newaxis, :, :]  # (n, k, 3)
+        dists2 = (diff ** 2).sum(axis=2)                               # (n, k)
+        labels = np.argmin(dists2, axis=1)                             # (n,)
+
+        new_seeds = np.empty_like(seeds)
+        for ki in range(k):
+            members = scaled[labels == ki]
+            new_seeds[ki] = members.mean(axis=0) if len(members) > 0 else seeds[ki]
+
+        if np.allclose(seeds, new_seeds, atol=1e-6):
+            break
+        seeds = new_seeds
+
+    return labels.astype(int)
+
+
+def _largest_group_id(
+    pts:        np.ndarray,
+    labels:     np.ndarray,
+    unique_ids: np.ndarray,
+) -> int:
+    """Return the group label with the most attractors."""
+    best_id    = int(unique_ids[0])
+    best_count = 0
+    for gid in unique_ids:
+        count = int(np.sum(labels == gid))
+        if count > best_count:
+            best_count = count
+            best_id    = int(gid)
+    return best_id
 
 
 # ─────────────────────────────────────────────────────────────────────────────
