@@ -22,7 +22,7 @@ def build_cloud_tree_mesh(
     Each (parent, child) edge is rendered as a cubic Bezier whose start and
     end tangents are the nodes' prior_dirs, giving C1 continuity at branch
     joins (because child prior_dirs are initialised to the parent's heading).
-    Trunk radius is taken from radii[0], which is computed bottom-up from the
+    Root radius is taken from radii[0], which is computed bottom-up from the
     total branch count — not configured externally.
     """
     meshes: list[trimesh.Trimesh] = []
@@ -52,18 +52,6 @@ def build_cloud_tree_mesh(
             m = _tapered_tube(curve[j], curve[j + 1], radii_t[j], radii_t[j + 1])
             if m is not None and len(m.vertices) > 0:
                 meshes.append(m)
-
-    # Root flare anchors the trunk to the terrain surface.
-    base_r = max(float(radii[0]) if len(radii) > 0 else 1.0, 0.42)
-    flare_h = min(0.30 * base_r, 4.0)
-    if flare_h > 0.2 and len(nodes) > 0:
-        root = nodes[0].copy()
-        top = nodes[0].copy()
-        root[2] = terrain_z - 0.2
-        top[2] = terrain_z + flare_h
-        m = _tapered_tube(root, top, max(base_r * 1.35, 1.4), base_r)
-        if m is not None:
-            meshes.append(m)
 
     if not meshes:
         return trimesh.Trimesh(process=False), []

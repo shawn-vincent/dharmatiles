@@ -19,6 +19,7 @@ class TreeShape:
     height_mm: Sample[float] = 40.0
     trunk_height_mm: Sample[float] = 5.0
     crown_radius_mm: Sample[float] = 20.0
+    crown_base_radius_mm: Sample[float] = 5.0
     top_pointiness: float = 0.0
     top_curve: float = 1.4
     bottom_pointiness: float = 0.35
@@ -34,7 +35,7 @@ class CloudTree:
     - Branching happens at synthetic interior nodes only.
     - Attractors are sampled across the canopy surface, so branch targets land
       on the crown envelope rather than inside the crown volume.
-    - Branch radii are derived bottom-up (pipe model); trunk radius is
+    - Branch radii are derived bottom-up (pipe model); root radius is
       calculated, not specified.
     - Segments are rendered as C1-continuous cubic Bezier tubes.
     """
@@ -45,6 +46,7 @@ class CloudTree:
         height_mm: Sample[float] = 40.0,
         trunk_height_mm: Sample[float] = 5.0,
         crown_radius_mm: Sample[float] = 20.0,
+        crown_base_radius_mm: Sample[float] = 5.0,
         top_pointiness: float = 0.0,
         top_curve: float = 1.4,
         bottom_pointiness: float = 0.35,
@@ -63,6 +65,7 @@ class CloudTree:
             height_mm=height_mm,
             trunk_height_mm=trunk_height_mm,
             crown_radius_mm=crown_radius_mm,
+            crown_base_radius_mm=crown_base_radius_mm,
             top_pointiness=top_pointiness,
             top_curve=top_curve,
             bottom_pointiness=bottom_pointiness,
@@ -160,11 +163,13 @@ class CloudTree:
         height = max(0.0, float(sample(self.shape.height_mm, rng)))
         trunk = float(np.clip(sample(self.shape.trunk_height_mm, rng), 0.0, height))
         crown_radius = max(0.0, float(sample(self.shape.crown_radius_mm, rng)))
+        crown_base_radius = max(0.0, float(sample(self.shape.crown_base_radius_mm, rng)))
         return TreeEnvelope(
             cx=x, cy=y, terrain_z=terrain_z,
             height_mm=height,
             trunk_height_mm=trunk,
             crown_radius_mm=crown_radius,
+            crown_base_radius_mm=crown_base_radius,
             top_pointiness=self.shape.top_pointiness,
             top_curve=self.shape.top_curve,
             bottom_pointiness=self.shape.bottom_pointiness,

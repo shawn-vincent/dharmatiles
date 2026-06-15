@@ -24,8 +24,9 @@ tile = Tile(
                 Scatter(
                     CloudTree(
                         height_mm=40.0,
-                        trunk_height_mm=5.0,
+                        trunk_height_mm=20.0,
                         crown_radius_mm=18.0,
+                        crown_base_radius_mm=18.0,
                         top_pointiness=0.0,
                         placement=Uniform(count_per_square=0.25),
                         debug_attractors=True,

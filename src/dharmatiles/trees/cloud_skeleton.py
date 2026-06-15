@@ -61,7 +61,7 @@ def grow_cloud_skeleton(
     pts  = _sample_cloud(env, rng, n_attraction)
     root = np.array([env.cx, env.cy, env.terrain_z], dtype=float)
 
-    # Step budget: generous so the trunk + crown branching both complete.
+    # Step budget: generous so the branch tree can partition the full cloud.
     max_steps = max(60, int(np.ceil(env.height_mm / segment_length_mm) * 4))
 
     nodes, parents, prior_dirs = _branch_skeleton(
@@ -71,7 +71,6 @@ def grow_cloud_skeleton(
         split_cos    = float(np.cos(np.radians(branch_split_angle_deg))),
         max_branches = int(max_branches_per_step),
         alpha        = float(smoothing_alpha),
-        crown_base_z = float(env.crown_base_z),
         max_steps    = max_steps,
     )
 
@@ -97,7 +96,6 @@ def _branch_skeleton(
     split_cos:    float,
     max_branches: int,
     alpha:        float,
-    crown_base_z: float,
     max_steps:    int,
 ) -> tuple[list, list, list]:
     nodes:      list[np.ndarray] = [root.copy()]
@@ -130,9 +128,9 @@ def _branch_skeleton(
         else:
             main_dir = heading
 
-        # ── stray detection (crown zone only) ──────────────────────────────
+        # ── stray detection ────────────────────────────────────────────────
         primary = owned
-        if pos[2] >= crown_base_z and len(owned) >= 2 and max_branches > 1:
+        if len(owned) >= 2 and max_branches > 1:
             to_owned = owned - pos
             unit_to  = to_owned / (np.linalg.norm(to_owned, axis=1, keepdims=True) + 1e-9)
             cos_a    = np.clip(unit_to @ main_dir, -1.0, 1.0)

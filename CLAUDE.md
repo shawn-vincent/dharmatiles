@@ -183,7 +183,7 @@ tile = Tile(
 |---|---|
 | `Rocks(*, scatter=ScatterConfig(...), **RocksConfig kwargs)` | Vectorised half-ellipsoid rocks; stamps `terrain_support_z` + `obstacle_mask` |
 | `Grass(species=…, *, scatter=…, max_stack_height=…, **SpeciesConfig overrides)` | 3D blades planted + grown around rocks |
-| `CloudTree(height_mm=…, crown_radius_mm=…, placement=…, **kwargs)` | Space-colonisation tree (see CloudTree section) |
+| `CloudTree(height_mm=…, crown_radius_mm=…, crown_base_radius_mm=…, placement=…, **kwargs)` | Space-colonisation tree (see CloudTree section) |
 
 `Region` height falls back to its first layer's `height_default_mm` when
 `height_mm=None`.  Boundary curves go from one tile edge to another;
@@ -231,12 +231,11 @@ At each step:
 6. Safety: if `max_steps` budget is exhausted, force-split primary (keep nearest
    as terminal target, hand rest to a new sub-branch from current synthetic position).
 
-**Attractor sampling (`_sample_cloud`):** 3D volumetric rejection sampling
-within the bounding box. Accepts if the point is inside the crown envelope.
-This gives equal attractor density per unit *volume* — the narrow apex gets
-~1 attractor (not 15+ crammed into a 0.5 mm disc) and the widest crown zone
-gets the most. Do NOT revert to uniform-t sampling; the apex club-top artefact
-returns immediately.
+**Attractor sampling (`_sample_cloud`):** canopy side-surface sampling weighted
+by surface area of revolution. Attractors are not sampled on the flat bottom
+disk defined by `crown_base_radius_mm`, but the side surface can receive
+attractors all the way to the top taper. Do NOT revert to uniform-t sampling;
+the apex club-top artefact returns immediately.
 
 **Pass 2 — Radii (`_compute_radii_bottom_up`):** bottom-up pipe model.
 Leaf nodes → `min_radius_mm`. Internal nodes → `(Σ r_child^e)^(1/e)` where

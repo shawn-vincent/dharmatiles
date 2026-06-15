@@ -13,6 +13,7 @@ The author-facing tree shape is controlled only by these parameters:
 | `height_mm` | Total tree height above terrain. |
 | `trunk_height_mm` | Bare trunk height before the crown begins. |
 | `crown_radius_mm` | Maximum horizontal crown radius. |
+| `crown_base_radius_mm` | Horizontal crown radius where the canopy meets the trunk. |
 | `top_pointiness` | Top silhouette blend, `0 = round`, `1 = conic/pointed`. |
 | `top_curve` | How quickly the top reaches full width. |
 | `bottom_pointiness` | Bottom silhouette blend, `0 = round`, `1 = conic/pointed`. |
@@ -47,46 +48,44 @@ end_profile(u, pointiness, curve):
     return lerp(round, point, clamp(pointiness, 0, 1))
 
 raw_radius(t):
-    return min(
-        end_profile(t, bottom_pointiness, bottom_curve),
-        end_profile(1 - t, top_pointiness, top_curve)
+    base = crown_base_radius_mm / crown_radius_mm
+    bottom = base + (1 - base) * end_profile(t, bottom_pointiness, bottom_curve)
+    top = end_profile(1 - t, top_pointiness, top_curve)
+    return smooth_min(
+        bottom,
+        top
     )
 
 radius(t):
     return crown_radius_mm * raw_radius(t) / max(raw_radius(samples))
 ```
 
-The radius is exactly zero at the bottom and top endpoints, and it reaches
-`crown_radius_mm` somewhere between them.  This gives one continuous surface
-that can describe a round deciduous crown, a pear shape, a high umbrella, or a
-pointed conifer-like silhouette without adding species parameters.
+The radius is `crown_base_radius_mm` at the bottom endpoint and exactly zero at
+the top endpoint, and it reaches `crown_radius_mm` somewhere between them.  The
+smoothed join avoids a kink where the top and bottom profiles meet.  This gives
+one continuous surface that can describe a round deciduous crown, a pear shape,
+a high umbrella, or a pointed conifer-like silhouette without adding species
+parameters.
 
 ## Attractor Cloud
 
-Space colonization should fill the envelope by using a biased attractor cloud,
-not by hardcoding branch levels.
+Space colonization should fill the envelope by using a canopy-surface attractor
+cloud, not by hardcoding branch levels.
 
-1. Sample `N` attractors inside the crown volume.
-2. Use rejection sampling in cylindrical coordinates:
+1. Sample `N` attractors on the crown side surface.
+2. Do not sample the bottom disk inside `crown_base_radius_mm`; the base radius
+   shapes the canopy where it meets the trunk, but it is not a leaf target
+   surface.
+3. Do sample the side surface near the top taper, even where its horizontal
+   radius is smaller than `crown_base_radius_mm`.
+4. Weight vertical samples by surface area for a surface of revolution:
 
 ```text
 z = crown_base_z + t * crown_height
-r_max = radius(t)
-r = sqrt(random()) * r_max
+r = radius(t)
 theta = random(0, 2*pi)
 point = (cx + r*cos(theta), cy + r*sin(theta), z)
 ```
-
-3. Bias attractor density toward the envelope surface and upper outer crown:
-
-```text
-density_weight = 0.65 + 0.35 * (r / r_max)^1.7
-height_weight  = 0.85 + 0.30 * smoothstep(0.25, 0.90, t)
-```
-
-Keep the point if `random() < density_weight * height_weight`, retry otherwise.
-This keeps the tree airy in the interior but still gives enough internal targets
-for structural branches.
 
 Derived count:
 
@@ -303,6 +302,7 @@ Tree(
     height_mm=40.0,
     trunk_height_mm=5.0,
     crown_radius_mm=20.0,
+    crown_base_radius_mm=5.0,
     top_pointiness=0.0,
     top_curve=1.4,
     bottom_pointiness=0.35,
@@ -312,9 +312,10 @@ Tree(
 
 Tests should verify:
 
-- `radius(0) == radius(1) == 0`,
+- `radius(0) == crown_base_radius_mm`,
+- `radius(1) == 0`,
 - `max(radius(t)) == crown_radius_mm`,
-- all attractors are inside the envelope,
+- all attractors are on the canopy side surface, with none on the bottom disk,
 - all terminal branch tips are inside or on the envelope,
 - generated mesh is watertight,
 - no branch radius is below the printable minimum,
