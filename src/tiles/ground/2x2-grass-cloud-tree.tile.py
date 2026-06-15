@@ -31,8 +31,8 @@ tile = Tile(
                     CloudTree(
                         height_mm=40.0,
                         trunk_height_mm=20.0,
-                        crown_radius_mm=18.0,
-                        crown_base_radius_mm=18.0,
+                        crown_radius_mm=15.0,
+                        crown_base_radius_mm=14.0,
                         top_pointiness=0.0,
                         placement=Uniform(count_per_square=0.25),
                         debug_attractors=True,
@@ -42,6 +42,7 @@ tile = Tile(
                         # within each cluster uses the organic PCA splitting.
                         group_width_mm=20.0,
                         group_height_mm=20.0,
+                        foliage_bulge_mm=6.0,
                     ),
                 ),
             ],

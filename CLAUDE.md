@@ -214,21 +214,20 @@ At each step:
 
 1. Compute `main_dir` = blended direction toward centroid of owned attractors
    (`smoothing_alpha` blend with incoming heading for C1 continuity).
-2. **Stray detection** (crown zone only, z ≥ `crown_base_z`): classify owned
-   attractors as *primary* (within `branch_split_angle_deg` of `main_dir`) or
-   *stray* (outside). Stray clusters spawn sub-branches FROM the current
-   synthetic tip (never from an attractor).
-3. **Bidirectional z-passover check**: before each advance step, any attractor
-   that would be left on the wrong side in z is split off proactively.  Going
-   up: split anything below `next_z`.  Going down: split anything above `next_z`.
-   Going horizontal: split anything already below `pos[2]`. Keeps doubling-back
-   to at most one `segment_length_mm`.
-4. When primary reduces to 1 → **terminal mode**: `_grow_to_leaf` drives from
+2. **Lookahead stray detection**: compute `next_pos = pos + main_dir * seg_len`.
+   Classify owned attractors as *primary* (within `branch_split_angle_deg` of
+   `main_dir` when measured from `next_pos`) or *stray* (outside). Stray
+   clusters spawn sub-branches FROM the current tip (before stepping) — this
+   guarantees every primary attractor is reachable forward from `next_pos` and
+   no sub-branch ever walks backward. The old z-passover check is superseded:
+   any attractor that would be overshot in z is automatically stray from
+   `next_pos` by angle.
+3. When primary reduces to 1 → **terminal mode**: `_grow_to_leaf` drives from
    current synthetic node toward the single target, initialising `cur_dir` from
    `dir_to_target` (not inherited heading) so intermediate nodes never walk
    backward, landing exactly on the attractor.
-5. Otherwise advance one segment, repeat.
-6. Safety: if `max_steps` budget is exhausted, force-split primary (keep nearest
+4. Otherwise advance one segment, repeat.
+5. Safety: if `max_steps` budget is exhausted, force-split primary (keep nearest
    as terminal target, hand rest to a new sub-branch from current synthetic position).
 
 **Attractor sampling (`_sample_cloud`):** canopy side-surface sampling weighted
@@ -250,13 +249,14 @@ continuity at forks. A root flare anchors the trunk to the terrain surface.
 | Parameter | Default | Effect |
 |---|---|---|
 | `n_attraction` | 200 | Number of attractor points (= number of leaves) |
-| `segment_length_mm` | 2.0 | Step size; also caps max doubling-back |
+| `segment_length_mm` | 5.0 | Step size for skeleton growth |
 | `branch_split_angle_deg` | 30.0 | Half-angle of primary cone; larger = earlier splits |
 | `max_branches_per_step` | 3 | Max stray clusters per step |
 | `branch_exponent` | 2.5 | Pipe-model exponent; larger = thicker trunk relative to branches |
 | `min_radius_mm` | 0.45 | Leaf branch radius; scales the entire radius tree |
 | `smoothing_alpha` | 0.1 | Heading blend (0 = pure centroid, 1 = straight ahead) |
 | `debug_attractors` | False | Render attractor positions as yellow icosphere markers |
+| `foliage_bulge_mm` | 0.0 | Per-group outward bulge (mm). Requires `group_width_mm`. Edge attractors stay on the canopy surface; the interior is pushed outward by up to this amount following a dome (circular-arc) profile normal to the crown surface. |
 
 ### Scatter System (rocks + grass + trees)
 
@@ -315,10 +315,6 @@ All geometry layers (soil, rocks, grass) treat the terrain surface as **locally 
    with no spatial coherence.  A future direction-field system would live in
    `core/` and hook into `plant_seeds` / `_make_seed` to enable wind-swept,
    radial, or swirl patterns.
-
-2. **CloudTree doubling-back floor** — the bidirectional z-passover check caps
-   backward branch travel at one `segment_length_mm` (~2 mm).  Reducing
-   `segment_length_mm` to 1.0 would halve this at the cost of doubling node count.
 
 ## Project Layout
 

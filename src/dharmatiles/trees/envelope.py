@@ -75,6 +75,43 @@ class TreeEnvelope:
             q[:2] = np.array([self.cx, self.cy]) + off / r * max_r
         return q
 
+    def outward_normal_at(self, pts: np.ndarray) -> np.ndarray:
+        """Compute outward unit normals on the crown surface at *pts*.
+
+        For the surface of revolution r(z), the outward normal at a point
+        (x, y, z) on the surface is:
+
+            n = (cos θ, sin θ, −dr/dz) / ‖…‖
+
+        where θ = atan2(y − cy, x − cx) and dr/dz is evaluated numerically.
+
+        Points at or near the symmetry axis fall back to (0, 0, 1).
+        """
+        pts_arr = np.atleast_2d(np.asarray(pts, dtype=float))
+        dx = pts_arr[:, 0] - self.cx
+        dy = pts_arr[:, 1] - self.cy
+        z  = pts_arr[:, 2]
+
+        # Central-difference dr/dz; step = 0.1 % of crown height (min 0.01 mm).
+        dz_step = max(self.crown_height * 0.001, 0.01)
+        dr_dz = (
+            np.asarray(self.radius_at_z(z + dz_step), dtype=float)
+            - np.asarray(self.radius_at_z(z - dz_step), dtype=float)
+        ) / (2.0 * dz_step)
+
+        rxy  = np.hypot(dx, dy)
+        safe = rxy > 1e-9
+        cos_t = np.where(safe, dx / np.where(safe, rxy, 1.0), 0.0)
+        sin_t = np.where(safe, dy / np.where(safe, rxy, 1.0), 0.0)
+
+        norms = np.sqrt(cos_t ** 2 + sin_t ** 2 + dr_dz ** 2)
+        norms = np.maximum(norms, 1e-9)
+        return np.column_stack([
+            cos_t / norms,
+            sin_t / norms,
+            -dr_dz / norms,
+        ])
+
     def volume_mm3(self) -> float:
         if self.crown_height <= 1e-8:
             return 0.0

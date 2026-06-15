@@ -19,9 +19,13 @@ detection is lifted to the group level: if any member of group G is stray, the
 drop the labels and use individual-attractor logic for their internal structure.
 Owned attractors that collapse to a single group also drop labels (leaf mode).
 
-1. Classify owned attractors (or owned group centroids) as primary / stray.
-2. Stray groups spawn sub-branches FROM the current synthetic tip (leaf mode,
-   no labels).  Stray individuals without labels use PCA clustering as before.
+1. Lookahead stray detection: compute next_pos = tip + main_dir * seg_len.
+   Classify owned attractors (or group centroids) as primary / stray based on
+   their angle from *next_pos*.  Stray attractors would be outside the split
+   cone after the next step, so we branch them off *before* stepping.
+2. Stray groups spawn sub-branches FROM the current synthetic tip (before the
+   step), guaranteeing no sub-branch ever walks backward to reach its targets.
+   Stray individuals without labels use PCA clustering as before.
 3. If primary reduces to 1 attractor → terminal mode: grow intermediate nodes at
    segment_length_mm intervals, final node lands EXACTLY on the attractor.
 4. Otherwise advance one segment toward the primary centroid, repeat.
@@ -48,7 +52,7 @@ def grow_cloud_skeleton(
     rng: np.random.Generator,
     *,
     n_attraction: int = 200,
-    segment_length_mm: float = 2.0,
+    segment_length_mm: float = 5.0,
     kill_radius_mm: float | None = None,   # unused; kept for API compatibility
     min_radius_mm: float = 0.45,
     min_branch_angle_deg: float = 30.0,
@@ -58,6 +62,7 @@ def grow_cloud_skeleton(
     smoothing_alpha: float = 0.25,
     group_width_mm: float | None = None,
     group_height_mm: float | None = None,
+    foliage_bulge_mm: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Grow a CloudTree skeleton filling *env*.
 
@@ -73,6 +78,14 @@ def grow_cloud_skeleton(
         Target Z height of each attractor cluster.  Defaults to *group_width_mm*
         when not specified.  Ratio group_width / group_height controls the
         ellipsoidal aspect ratio of the clusters.
+    foliage_bulge_mm:
+        After grouping, displace each group's attractors outward from the canopy
+        surface by up to *foliage_bulge_mm*.  Attractors on the group boundary
+        (nearest to another group) remain on the surface; the attractor furthest
+        from the boundary receives the full displacement.  Intermediate attractors
+        follow a dome profile: displacement = foliage_bulge_mm × √(2t − t²),
+        where t ∈ [0, 1] is the normalised edge-distance.  Has no effect when
+        ``group_width_mm`` is None (no groups) or when only one group is created.
 
     Returns
     -------
@@ -93,6 +106,10 @@ def grow_cloud_skeleton(
         if n_groups >= 2:
             z_scale = group_width_mm / gh
             group_labels = _voronoi_group_attractors(pts, n_groups, rng, z_scale=z_scale)
+
+    # ── Foliage group bulge ───────────────────────────────────────────────────
+    if group_labels is not None and foliage_bulge_mm > 1e-9:
+        pts = _apply_group_bulge(pts, group_labels, env, foliage_bulge_mm)
 
     # Step budget: generous so the branch tree can partition the full cloud.
     max_steps = max(60, int(np.ceil(env.height_mm / segment_length_mm) * 4))
@@ -180,21 +197,18 @@ def _branch_skeleton(
         primary_labels = labels
 
         if len(owned) >= 2 and max_branches > 1:
-            to_owned = owned - pos
+            # Lookahead stray detection: measure angles from the *next* tip
+            # position (pos + main_dir * seg_len) rather than from pos.
+            # We branch from the current pos before stepping, so every
+            # attractor kept in primary is guaranteed within the split cone
+            # from next_pos — no sub-branch ever has to walk backward.
+            # This replaces the old z-passover check, which was compensating
+            # for the same problem and capped doubling-back at one seg_len.
+            next_pos = pos + main_dir * seg_len
+            to_owned = owned - next_pos
             unit_to  = to_owned / (np.linalg.norm(to_owned, axis=1, keepdims=True) + 1e-9)
             cos_a    = np.clip(unit_to @ main_dir, -1.0, 1.0)
-            # Proactive z-passover: before each step, split off any attractor
-            # that would be left on the wrong side in z.  Works in both
-            # directions so sub-branches moving downward don't leave upper
-            # members behind either.
-            next_z = pos[2] + float(main_dir[2]) * seg_len
-            if main_dir[2] > 1e-6:        # going up → split anything below next_z
-                passover = owned[:, 2] < next_z
-            elif main_dir[2] < -1e-6:     # going down → split anything above next_z
-                passover = owned[:, 2] > next_z
-            else:                          # horizontal → split anything already below
-                passover = owned[:, 2] < pos[2]
-            stray_mask = (cos_a < split_cos) | passover
+            stray_mask = cos_a < split_cos
 
             if labels is not None and stray_mask.any():
                 # Group-level stray: if any member of a group is stray,
@@ -499,6 +513,60 @@ def _voronoi_group_attractors(
         seeds = new_seeds
 
     return labels.astype(int)
+
+
+def _apply_group_bulge(
+    pts:          np.ndarray,
+    group_labels: np.ndarray,
+    env:          TreeEnvelope,
+    bulge_mm:     float,
+) -> np.ndarray:
+    """Displace attractor groups outward from the crown envelope, dome-shaped.
+
+    For each Voronoi group the "edge distance" of each attractor is the minimum
+    3-D distance to any attractor belonging to a *different* group.  Normalising
+    by the maximum edge distance in the group gives t ∈ [0, 1] (0 = boundary,
+    1 = deepest interior).  The outward displacement follows a circular-arc
+    (dome) profile:
+
+        displacement = bulge_mm × √(2t − t²)
+
+    which is zero at the boundary and *bulge_mm* at the group centre, with a
+    round shoulder matching the cross-section of a hemisphere.
+
+    Outward direction is the unit normal to the crown surface of revolution at
+    each attractor position (see ``TreeEnvelope.outward_normal_at``).
+    """
+    unique = np.unique(group_labels)
+    if len(unique) <= 1:
+        return pts.copy()  # single group → no inter-group boundary to measure from
+
+    result = pts.copy()
+    for gid in unique:
+        mask     = group_labels == gid
+        in_group = pts[mask]     # (ng, 3)
+        other    = pts[~mask]    # (no, 3)
+        ng       = len(in_group)
+        if ng == 0 or len(other) == 0:
+            continue
+
+        # Minimum 3-D distance from each in-group point to the nearest
+        # out-of-group point → edge proximity measure.
+        diffs  = in_group[:, np.newaxis, :] - other[np.newaxis, :, :]  # (ng, no, 3)
+        d_edge = np.sqrt((diffs ** 2).sum(axis=2).min(axis=1))          # (ng,)
+
+        d_max = d_edge.max()
+        if d_max < 1e-9:
+            continue
+        t = d_edge / d_max  # 0 at boundary, 1 at interior centroid
+
+        # Dome profile: circular-arc cross-section.
+        dome = np.sqrt(np.clip(2.0 * t - t * t, 0.0, 1.0))  # (ng,)
+
+        normals = env.outward_normal_at(in_group)                    # (ng, 3)
+        result[mask] += normals * (dome * bulge_mm)[:, np.newaxis]
+
+    return result
 
 
 def _largest_group_id(

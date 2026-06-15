@@ -53,7 +53,7 @@ class CloudTree:
         bottom_curve: float = 0.8,
         placement: Uniform | None = None,
         n_attraction: int = 200,
-        segment_length_mm: float = 2.0,
+        segment_length_mm: float = 5.0,
         branch_split_angle_deg: float = 30.0,
         max_branches_per_step: int = 3,
         branch_exponent: float = 2.5,
@@ -62,6 +62,7 @@ class CloudTree:
         debug_attractors: bool = False,
         group_width_mm: Sample[float] | None = None,
         group_height_mm: Sample[float] | None = None,
+        foliage_bulge_mm: float = 0.0,
     ) -> None:
         self.shape = TreeShape(
             height_mm=height_mm,
@@ -81,9 +82,10 @@ class CloudTree:
         self.branch_exponent = float(branch_exponent)
         self.smoothing_alpha = float(smoothing_alpha)
         self.min_radius_mm = float(min_radius_mm)
-        self.debug_attractors = bool(debug_attractors)
-        self.group_width_mm  = group_width_mm
-        self.group_height_mm = group_height_mm
+        self.debug_attractors  = bool(debug_attractors)
+        self.group_width_mm    = group_width_mm
+        self.group_height_mm   = group_height_mm
+        self.foliage_bulge_mm  = float(foliage_bulge_mm)
 
     def footprint_mm(self) -> float:
         return float(bounds(self.shape.crown_radius_mm)[1])
@@ -142,6 +144,7 @@ class CloudTree:
                 smoothing_alpha=self.smoothing_alpha,
                 group_width_mm=gw,
                 group_height_mm=gh,
+                foliage_bulge_mm=self.foliage_bulge_mm,
             )
             if len(nodes) < 2:
                 continue
