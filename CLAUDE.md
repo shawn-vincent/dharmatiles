@@ -249,7 +249,7 @@ continuity at forks. A root flare anchors the trunk to the terrain surface.
 | Parameter | Default | Effect |
 |---|---|---|
 | `n_attraction` | 200 | Number of attractor points (= number of leaves) |
-| `segment_length_mm` | 5.0 | Step size for skeleton growth |
+| `segment_length_mm` | 1.0 | Step size for skeleton growth; smaller = less backtracking slip at low branchiness |
 | `branch_split_angle_deg` | 30.0 | Half-angle of primary cone; larger = earlier splits |
 | `max_branches_per_step` | 3 | Max stray clusters per step |
 | `branch_exponent` | 2.5 | Pipe-model exponent; larger = thicker trunk relative to branches |

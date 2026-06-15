@@ -53,7 +53,7 @@ class CloudTree:
         bottom_curve: float = 0.8,
         placement: Uniform | None = None,
         n_attraction: int = 200,
-        segment_length_mm: float = 5.0,
+        segment_length_mm: float = 1.0,
         branch_split_angle_deg: float = 30.0,
         max_branches_per_step: int = 3,
         branch_exponent: float = 2.5,

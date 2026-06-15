@@ -52,7 +52,7 @@ def grow_cloud_skeleton(
     rng: np.random.Generator,
     *,
     n_attraction: int = 200,
-    segment_length_mm: float = 5.0,
+    segment_length_mm: float = 1.0,
     kill_radius_mm: float | None = None,   # unused; kept for API compatibility
     min_radius_mm: float = 0.45,
     min_branch_angle_deg: float = 30.0,
