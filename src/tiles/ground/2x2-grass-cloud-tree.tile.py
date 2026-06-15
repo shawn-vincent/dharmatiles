@@ -30,7 +30,7 @@ tile = Tile(
                 Scatter(
                     CloudTree(
                         height_mm=40.0,
-                        trunk_height_mm=20.0,
+                        trunk_height_mm=30.0,
                         crown_radius_mm=15.0,
                         crown_base_radius_mm=14.0,
                         top_pointiness=0.0,
@@ -43,8 +43,9 @@ tile = Tile(
                         group_width_mm=20.0,
                         group_height_mm=20.0,
                         foliage_bulge_mm=6.0,
-                        branchiness=1.0,
-                        branch_fill=0.5,
+                        branch_target=0.3,
+                        branch_split_eagerness=0.8,
+                        branch_fork_balance=1.0,
                     ),
                 ),
             ],

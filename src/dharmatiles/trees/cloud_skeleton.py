@@ -63,9 +63,9 @@ def grow_cloud_skeleton(
     group_width_mm: float | None = None,
     group_height_mm: float | None = None,
     foliage_bulge_mm: float = 0.0,
-    branchiness: float = 1.0,
-    branch_target: str = "centroid",
-    branch_fill: float = 0.0,
+    branch_split_eagerness: float = 1.0,
+    branch_target: float = 0.5,
+    branch_fork_balance: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Grow a CloudTree skeleton filling *env*.
 
@@ -89,14 +89,14 @@ def grow_cloud_skeleton(
         follow a dome profile: displacement = foliage_bulge_mm × √(2t − t²),
         where t ∈ [0, 1] is the normalised edge-distance.  Has no effect when
         ``group_width_mm`` is None (no groups) or when only one group is created.
-    branchiness:
+    branch_split_eagerness:
         Controls how eagerly branches split (0.0–1.0).  1.0 is the default:
         split off stray attractors as soon as the lookahead detects them
         (effective cone = branch_split_angle_deg).  0.0 is maximally lazy:
         keep attractors in primary until they are about to go perpendicular
         (effective cone = 90°, the hard no-backtracking limit).  Intermediate
         values linearly interpolate the effective split cosine:
-            split_cos_effective = branchiness × cos(branch_split_angle_deg)
+            split_cos_effective = branch_split_eagerness × cos(branch_split_angle_deg)
         producing fewer, longer interior branches that split closer to the tips.
 
     Returns
@@ -126,10 +126,10 @@ def grow_cloud_skeleton(
     # Step budget: generous so the branch tree can partition the full cloud.
     max_steps = max(60, int(np.ceil(env.height_mm / segment_length_mm) * 4))
 
-    # branchiness scales the effective split cosine linearly between
+    # branch_split_eagerness scales the effective split cosine linearly between
     # cos(branch_split_angle_deg) at 1.0 and 0.0 (= cos 90°) at 0.0.
     eager_cos     = float(np.cos(np.radians(branch_split_angle_deg)))
-    effective_cos = eager_cos * float(np.clip(branchiness, 0.0, 1.0))
+    effective_cos = eager_cos * float(np.clip(branch_split_eagerness, 0.0, 1.0))
 
     nodes, parents, prior_dirs = _branch_skeleton(
         root          = root,
@@ -141,7 +141,7 @@ def grow_cloud_skeleton(
         max_steps     = max_steps,
         group_labels  = group_labels,
         branch_target = branch_target,
-        branch_fill   = float(np.clip(branch_fill, 0.0, 1.0)),
+        branch_fork_balance = float(np.clip(branch_fork_balance, 0.0, 1.0)),
     )
 
     # Compress: drop collinear single-child nodes; they don't affect radii
@@ -177,8 +177,8 @@ def _branch_skeleton(
     alpha:         float,
     max_steps:     int,
     group_labels:  np.ndarray | None = None,
-    branch_target: str = "centroid",
-    branch_fill:   float = 0.0,
+    branch_target:       float = 0.5,
+    branch_fork_balance: float = 0.0,
 ) -> tuple[list, list, list]:
     nodes:      list[np.ndarray] = [root.copy()]
     parents:    list[int]        = [-1]
@@ -202,13 +202,10 @@ def _branch_skeleton(
         pos     = nodes[tip_idx]
         heading = prior_dirs[tip_idx]
 
-        # Primary target point — centroid, lowest-z, or highest-z attractor.
-        if branch_target == "lowest":
-            target = owned[int(np.argmin(owned[:, 2]))]
-        elif branch_target == "highest":
-            target = owned[int(np.argmax(owned[:, 2]))]
-        else:  # "centroid"
-            target = owned.mean(axis=0)
+        # Primary target point — lerp between lowest-z (0) and highest-z (1) attractor.
+        lowest  = owned[int(np.argmin(owned[:, 2]))]
+        highest = owned[int(np.argmax(owned[:, 2]))]
+        target  = lowest + float(branch_target) * (highest - lowest)
         raw    = target - pos
         raw_len  = float(np.linalg.norm(raw))
         if raw_len > 1e-9:
@@ -262,18 +259,18 @@ def _branch_skeleton(
                         if len(c) > 0
                     ]
 
-                # ── branch_fill redistribution ─────────────────────────────
+                # ── branch_fork_balance redistribution ────────────────────────────
                 # At fill=0 (default) each branch keeps its natural cone
                 # subset.  At fill=1 all owned attractors are divided equally
                 # among the K branches at this fork (1 primary + stray clusters).
                 # Intermediate values lerp the primary target count.
                 # In group mode: whole groups are re-assigned, not individuals.
-                if branch_fill > 1e-6 and stray_clusters:
+                if branch_fork_balance > 1e-6 and stray_clusters:
                     K = 1 + len(stray_clusters)
                     if labels is None:
                         # Non-group: re-rank individuals by cos_a.
                         n_target = int(round(
-                            len(primary) + (len(owned) / K - len(primary)) * branch_fill
+                            len(primary) + (len(owned) / K - len(primary)) * branch_fork_balance
                         ))
                         n_target = max(1, min(len(owned) - 1, n_target))
                         order    = np.argsort(-cos_a)
@@ -294,7 +291,7 @@ def _branch_skeleton(
                         )
                         n_g_target = int(round(
                             n_primary_groups
-                            + (n_g / K - n_primary_groups) * branch_fill
+                            + (n_g / K - n_primary_groups) * branch_fork_balance
                         ))
                         n_g_target = max(1, min(n_g - 1, n_g_target))
                         # Sort groups by centroid cos_a.

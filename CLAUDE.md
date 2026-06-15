@@ -257,7 +257,9 @@ continuity at forks. A root flare anchors the trunk to the terrain surface.
 | `smoothing_alpha` | 0.1 | Heading blend (0 = pure centroid, 1 = straight ahead) |
 | `debug_attractors` | False | Render attractor positions as yellow icosphere markers |
 | `foliage_bulge_mm` | 0.0 | Per-group outward bulge (mm). Requires `group_width_mm`. Edge attractors stay on the canopy surface; the interior is pushed outward by up to this amount following a dome (circular-arc) profile normal to the crown surface. |
-| `branchiness` | 1.0 | 0–1. Controls where splits happen. 1 = current eager behaviour (split at `branch_split_angle_deg`). 0 = maximally lazy (split only when attractor approaches 90° from next_pos — the hard no-backtracking limit). Implemented as `split_cos_effective = branchiness × cos(branch_split_angle_deg)`; lower values produce fewer, longer interior branches with splitting concentrated near the tips. |
+| `branch_split_eagerness` | 1.0 | 0–1. Controls where splits happen. 1 = eager (split at `branch_split_angle_deg`). 0 = maximally lazy (split only when attractor approaches 90° from next_pos — the hard no-backtracking limit). Implemented as `split_cos_effective = branch_split_eagerness × cos(branch_split_angle_deg)`; lower values produce fewer, longer interior branches with splitting concentrated near the tips. |
+| `branch_target` | 0.5 | 0–1. Aim point within the owned attractor cloud. 0 = lowest-z attractor, 1 = highest-z attractor, 0.5 = midpoint between them. Implemented as `target = lowest + branch_target × (highest − lowest)`. Lower values pull branches outward and downward; higher values drive growth upward. |
+| `branch_fork_balance` | 0.0 | 0–1. How evenly attractors are redistributed at each fork. 0 = each branch keeps only the attractors already classified as stray (no redistribution). 1 = all K branches at the fork receive equal shares of the full attractor pool. Higher values produce more architecturally balanced trees. |
 
 ### Scatter System (rocks + grass + trees)
 
