@@ -130,7 +130,7 @@ class CloudTree:
                 float(sample(self.group_height_mm, tree_rng))
                 if self.group_height_mm is not None else None
             )
-            nodes, parents, radii, prior_dirs, attractors = grow_cloud_skeleton(
+            nodes, parents, radii, in_dirs, out_dirs, attractors = grow_cloud_skeleton(
                 env,
                 tree_rng,
                 n_attraction=self.n_attraction,
@@ -149,7 +149,8 @@ class CloudTree:
                 nodes,
                 parents,
                 radii,
-                prior_dirs,
+                in_dirs,
+                out_dirs,
                 terrain_z=tz,
                 debug_attractors=attractors if self.debug_attractors else None,
             )

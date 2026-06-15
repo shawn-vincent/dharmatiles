@@ -108,13 +108,21 @@ def grow_cloud_skeleton(
         group_labels = group_labels,
     )
 
-    radii = _compute_radii_bottom_up(parents, branch_exponent, min_radius_mm)
+    # Compress: drop collinear single-child nodes; they don't affect radii
+    # (pipe model: r_parent = r_child when there is exactly one child) and
+    # their tangent info is preserved in the per-edge in_dir / out_dir arrays.
+    nodes_s, parents_s, in_dirs_s, out_dirs_s = _simplify_skeleton(
+        nodes, parents, prior_dirs
+    )
+
+    radii = _compute_radii_bottom_up(parents_s, branch_exponent, min_radius_mm)
 
     return (
-        np.array(nodes,      dtype=float),
-        np.array(parents,    dtype=int),
+        nodes_s,
+        parents_s,
         radii,
-        np.array(prior_dirs, dtype=float),
+        in_dirs_s,
+        out_dirs_s,
         pts,
     )
 
@@ -332,6 +340,78 @@ def _add_node(nodes, parents, prior_dirs, pos, parent_idx, direction):
     parents.append(parent_idx)
     prior_dirs.append(direction.copy())
     return idx
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Skeleton simplification
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _simplify_skeleton(
+    nodes:      list | np.ndarray,
+    parents:    list | np.ndarray,
+    prior_dirs: list | np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Remove intermediate single-child nodes, keeping root, branch points,
+    and leaf attractors.
+
+    For each kept edge (parent → child) two tangent vectors are stored:
+    - ``in_dirs[i]``  — direction *arriving* at node i (last step into it)
+    - ``out_dirs[i]`` — direction *leaving* parents[i] toward node i (first step)
+
+    These are the start and end tangents for one cubic Bézier per edge in the
+    mesh, giving C1 continuity without needing to store every intermediate node.
+
+    The pipe-model identity r_parent = r_child for a single-child node means
+    radii are identical along any straight chain, so dropping those nodes leaves
+    the bottom-up radius computation unchanged.
+    """
+    n          = len(nodes)
+    nodes_arr  = np.asarray(nodes,      dtype=float)
+    prior_arr  = np.asarray(prior_dirs, dtype=float)
+    parents_l  = list(parents)
+
+    # Build children list.
+    children: list[list[int]] = [[] for _ in range(n)]
+    for i, p in enumerate(parents_l):
+        if p >= 0:
+            children[p].append(i)
+
+    # Significant nodes: root (no parent), branch points (≠1 child), leaves (0 children).
+    significant: set[int] = set()
+    for i in range(n):
+        if parents_l[i] < 0 or len(children[i]) != 1:
+            significant.add(i)
+
+    # DFS — parents always get lower new-indices than their children (topological
+    # order), which is required by _compute_radii_bottom_up.
+    new_nodes:    list[np.ndarray] = []
+    new_parents:  list[int]        = []
+    new_in_dirs:  list[np.ndarray] = []
+    new_out_dirs: list[np.ndarray] = []
+
+    def _visit(old_idx: int, new_parent_idx: int, edge_out_dir: np.ndarray) -> None:
+        new_idx = len(new_nodes)
+        new_nodes.append(nodes_arr[old_idx])
+        new_parents.append(new_parent_idx)
+        new_in_dirs.append(prior_arr[old_idx].copy())
+        new_out_dirs.append(edge_out_dir)
+        for c in children[old_idx]:
+            # Walk the (possibly empty) chain of non-significant nodes to find
+            # the next significant node; the first step direction is prior_dirs[c].
+            first_step_dir = prior_arr[c].copy()
+            cur = c
+            while cur not in significant:
+                cur = children[cur][0]   # guaranteed exactly one child here
+            _visit(cur, new_idx, first_step_dir)
+
+    _visit(0, -1, prior_arr[0].copy())
+
+    return (
+        np.array(new_nodes,    dtype=float),
+        np.array(new_parents,  dtype=int),
+        np.array(new_in_dirs,  dtype=float),
+        np.array(new_out_dirs, dtype=float),
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
