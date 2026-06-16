@@ -41,7 +41,7 @@ def build_cloud_tree_mesh(
     *,
     terrain_z: float,
     handle_scale: float = 0.45,
-    min_branch_angle_deg: float | None = None,
+    strict_fdm_angle_deg: float | None = None,
     foliage_radius_mm: float = 4.0,
     leaf_clump_length_mm: float | None = None,
     debug_attractors: np.ndarray | None = None,
@@ -61,8 +61,8 @@ def build_cloud_tree_mesh(
         print material).
     """
     n = len(nodes)
-    if min_branch_angle_deg is not None:
-        _warn_if_branch_angle_below_minimum(nodes, parents, min_branch_angle_deg)
+    if strict_fdm_angle_deg is not None:
+        _warn_if_branch_below_strict_fdm_angle(nodes, parents, strict_fdm_angle_deg)
     render_foliage_clumps = foliage_radius_mm > 0.0
 
     # ── leaf classification (before any loop so clump mode can skip leaves) ─
@@ -290,17 +290,22 @@ def build_cloud_tree_mesh(
     return wood_mesh, attractor_meshes, foliage_meshes
 
 
-def _warn_if_branch_angle_below_minimum(
+def _warn_if_branch_below_strict_fdm_angle(
     nodes: np.ndarray,
     parents: np.ndarray,
-    min_branch_angle_deg: float,
+    strict_fdm_angle_deg: float,
 ) -> None:
-    """Warn when a branch points closer to gravity than allowed."""
-    threshold = float(min_branch_angle_deg)
-    if threshold <= 0.0:
-        return
+    """Warn (print-failure) when a branch dips below the strict FDM angle.
 
-    gravity = np.array([0.0, 0.0, -1.0])
+    The FDM angle is the signed elevation of the branch edge above the
+    horizontal plane: +90° points straight up, 0° is horizontal, -90° straight
+    down. The skeleton tries to keep every branch above the *target* FDM angle
+    by splitting, but terminal landing segments can't always be rerouted; any
+    edge below the *strict* angle is treated as an unprintable-overhang failure
+    and reported here.
+    """
+    threshold = float(strict_fdm_angle_deg)
+
     offenders: list[tuple[float, int, int]] = []
     for i in range(1, len(nodes)):
         p = int(parents[i])
@@ -310,20 +315,21 @@ def _warn_if_branch_angle_below_minimum(
         edge_len = float(np.linalg.norm(edge))
         if edge_len < 1e-9:
             continue
-        cos_a = float(np.clip(np.dot(edge / edge_len, gravity), -1.0, 1.0))
-        angle_deg = float(np.degrees(np.arccos(cos_a)))
-        if angle_deg < threshold - 1e-6:
-            offenders.append((angle_deg, p, i))
+        # Elevation above the horizon: arcsin(dz / |edge|).
+        sin_e = float(np.clip(edge[2] / edge_len, -1.0, 1.0))
+        elevation_deg = float(np.degrees(np.arcsin(sin_e)))
+        if elevation_deg < threshold - 1e-6:
+            offenders.append((elevation_deg, p, i))
 
     if not offenders:
         return
 
-    worst_angle, worst_parent, worst_child = min(offenders, key=lambda item: item[0])
+    worst_elev, worst_parent, worst_child = min(offenders, key=lambda item: item[0])
     warnings.warn(
-        "CloudTree branch angle below minimum during mesh creation: "
-        f"minimum={threshold:.2f} deg, worst={worst_angle:.2f} deg "
-        f"on edge {worst_parent}->{worst_child}; "
-        f"{len(offenders)} branch(es) violated the limit.",
+        "CloudTree FDM print failure: branch below strict FDM angle during "
+        f"mesh creation: strict={threshold:.2f} deg above horizon, "
+        f"worst={worst_elev:.2f} deg on edge {worst_parent}->{worst_child}; "
+        f"{len(offenders)} branch(es) violated the strict limit.",
         RuntimeWarning,
         stacklevel=2,
     )

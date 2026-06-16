@@ -57,6 +57,7 @@ def grow_cloud_skeleton(
     min_radius_mm: float = 0.45,
     min_branch_angle_deg: float = 30.0,
     branch_split_angle_deg: float | None = None,
+    target_fdm_angle_deg: float = 35.0,
     max_branches_per_step: int = 3,
     branch_exponent: float = 2.5,
     smoothing_alpha: float = 0.25,
@@ -131,11 +132,17 @@ def grow_cloud_skeleton(
     eager_cos     = float(np.cos(np.radians(branch_split_angle_deg)))
     effective_cos = eager_cos * float(np.clip(branch_split_eagerness, 0.0, 1.0))
 
+    # Target FDM angle: the elevation above horizon we try to keep branches
+    # above by splitting. Stored as a sine so the stray test can compare it
+    # directly against an attractor heading's dz/len.
+    min_elev_sin = float(np.sin(np.radians(target_fdm_angle_deg)))
+
     nodes, parents, prior_dirs = _branch_skeleton(
         root          = root,
         pts           = pts,
         seg_len       = float(segment_length_mm),
         split_cos     = effective_cos,
+        min_elev_sin  = min_elev_sin,
         max_branches  = int(max_branches_per_step),
         alpha         = float(smoothing_alpha),
         max_steps     = max_steps,
@@ -173,6 +180,7 @@ def _branch_skeleton(
     pts:           np.ndarray,
     seg_len:       float,
     split_cos:     float,
+    min_elev_sin:  float,
     max_branches:  int,
     alpha:         float,
     max_steps:     int,
@@ -232,7 +240,13 @@ def _branch_skeleton(
             to_owned = owned - next_pos
             unit_to  = to_owned / (np.linalg.norm(to_owned, axis=1, keepdims=True) + 1e-9)
             cos_a    = np.clip(unit_to @ main_dir, -1.0, 1.0)
-            stray_mask = cos_a < split_cos
+            # An attractor is stray if, measured from the forecasted next step,
+            # reaching it would (a) leave the split cone around main_dir, OR
+            # (b) require a heading below the target FDM angle (its heading's
+            # vertical component is unit_to[:, 2] = sin(elevation)).
+            split_stray = cos_a < split_cos
+            elev_stray  = unit_to[:, 2] < min_elev_sin
+            stray_mask  = split_stray | elev_stray
 
             if labels is not None and stray_mask.any():
                 # Group-level stray: if any member of a group is stray,

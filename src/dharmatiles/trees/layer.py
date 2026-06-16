@@ -55,6 +55,8 @@ class CloudTree:
         n_attraction: int = 200,
         segment_length_mm: float = 1.0,
         branch_split_angle_deg: float = 30.0,
+        target_fdm_angle_deg: float = 35.0,
+        strict_fdm_angle_deg: float = 26.0,
         max_branches_per_step: int = 3,
         branch_exponent: float = 2.5,
         smoothing_alpha: float = 0.1,
@@ -64,7 +66,7 @@ class CloudTree:
         group_height_mm: Sample[float] | None = 20.0,
         foliage_bulge_mm: float = 6.0,
         branch_split_eagerness: float = 0.8,
-        branch_target: float = 0.3,
+        branch_target: float = 0.33,
         branch_fork_balance: float = 1.0,
         # ── Leaf-cone foliage ─────────────────────────────────────────────
         leaf_clumps: bool = True,
@@ -85,6 +87,8 @@ class CloudTree:
         self.n_attraction = int(n_attraction)
         self.segment_length_mm = float(segment_length_mm)
         self.branch_split_angle_deg = float(branch_split_angle_deg)
+        self.target_fdm_angle_deg = float(target_fdm_angle_deg)
+        self.strict_fdm_angle_deg = float(strict_fdm_angle_deg)
         self.max_branches_per_step = int(max_branches_per_step)
         self.branch_exponent = float(branch_exponent)
         self.smoothing_alpha = float(smoothing_alpha)
@@ -155,6 +159,7 @@ class CloudTree:
                     segment_length_mm=self.segment_length_mm,
                     min_radius_mm=self.min_radius_mm,
                     branch_split_angle_deg=self.branch_split_angle_deg,
+                    target_fdm_angle_deg=self.target_fdm_angle_deg,
                     max_branches_per_step=self.max_branches_per_step,
                     branch_exponent=self.branch_exponent,
                     smoothing_alpha=self.smoothing_alpha,
@@ -175,7 +180,7 @@ class CloudTree:
                 in_dirs,
                 out_dirs,
                 terrain_z=tz,
-                min_branch_angle_deg=self.branch_split_angle_deg,
+                strict_fdm_angle_deg=self.strict_fdm_angle_deg,
                 foliage_radius_mm=self.leaf_clump_radius_mm if self.leaf_clumps else 0.0,
                 leaf_clump_length_mm=self.leaf_clump_length_mm if self.leaf_clumps else None,
                 debug_attractors=attractors if self.debug_attractors else None,
