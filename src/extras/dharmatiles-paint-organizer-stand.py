@@ -99,6 +99,138 @@ def _x_halfplane_cs(x0: float, *, keep_greater: bool, margin: float = 1000.0) ->
     return m3d.CrossSection.square([margin, 2.0 * margin]).translate([x_start, -margin])
 
 
+# ---------------------------------------------------------------------------
+# Tip-back brackets
+# ---------------------------------------------------------------------------
+#
+# One L-shaped brace per raised half-hex column (cols 1, 3 in the default
+# layout) — modelled after a tapered shelf-bracket gusset. Both arms meet at
+# the column's OUTER corner edge: at the front (Y=depth, the far open end of
+# the half-hex tube, away from the desk's near edge) and proud of the desk
+# surface by the plate thickness (Z=t):
+#
+#   - vertical arm: a flat panel fills the half-hex tube's open front
+#     (literally giving it a back wall, rounded like the hex itself) for the
+#     column's own height, then continues upward as a tapered fin to the
+#     full arm length.
+#   - horizontal arm: a tapered foot lying flush on the desk, extending
+#     forward (+Y, away from the stand) to widen the effective support
+#     footprint.
+#
+# Both arms taper from a wide elbow to a rounded tip. A single round rib
+# runs the whole bend — a frustum down each arm's outside face into one
+# sphere at the corner — so it reads as one continuous bead that thickens
+# near the corner and blends smoothly around it, rather than two straight
+# ribs butted together.
+
+BRACKET_ARM_LENGTH_MM        = 100.0  # each arm's length from the elbow
+BRACKET_THICKNESS_MM         = 3.0    # flat plate thickness
+BRACKET_WIDTH_ELBOW_MM       = 16.0   # plate width at the elbow
+BRACKET_WIDTH_TIP_MM         = 6.0    # plate width at the tip
+BRACKET_RIB_RADIUS_TIP_MM    = 1.5    # rib bead radius at each tip
+BRACKET_RIB_RADIUS_CORNER_MM = 4.0    # rib bead radius at the corner (thicker)
+
+
+def _column_xz(spec: HexOrganizerSpec, floor_bottom: float, col: int) -> tuple[float, float]:
+    """Column centre (x, z) in the stand's final frame."""
+    cx, cy = cup_centre(spec, col, spec.rows - 1)
+    return cx, cy - floor_bottom
+
+
+def _trapezoid_cs(cx: float, w0: float, w1: float, y0: float, y1: float) -> m3d.CrossSection:
+    """CCW trapezoid in local (x, y): width w0 at y=y0, width w1 at y=y1."""
+    pts = [
+        (cx - w0 / 2.0, y0),
+        (cx + w0 / 2.0, y0),
+        (cx + w1 / 2.0, y1),
+        (cx - w1 / 2.0, y1),
+    ]
+    if y1 < y0:
+        pts = pts[::-1]  # keep CCW winding regardless of taper direction
+    return m3d.CrossSection([pts])
+
+
+def _rounded_tip_cs(cx: float, w0: float, w1: float, y0: float, y1: float) -> m3d.CrossSection:
+    """Tapered trapezoid with a semicircular cap (radius w1/2) at the y1 end."""
+    trapezoid = _trapezoid_cs(cx, w0, w1, y0, y1)
+    cap = m3d.CrossSection.circle(w1 / 2.0, circular_segments=24).translate((cx, y1))
+    return m3d.CrossSection.batch_boolean([trapezoid, cap], m3d.OpType.Add)
+
+
+def _frustum_between(p0: tuple[float, float, float], r0: float,
+                      p1: tuple[float, float, float], r1: float,
+                      *, segments: int = 24) -> m3d.Manifold:
+    """Tapered cylinder from p0 (radius r0) to p1 (radius r1).
+
+    Restricted to segments lying in a single X=const plane (true for every
+    rib segment here, since the bend lives entirely in the column's (Y, Z)
+    plane) — direction has no X-component, so a single rotation about the
+    global X axis aligns the cylinder's default +Z axis with it.
+    """
+    x0, y0, z0 = p0
+    x1, y1, z1 = p1
+    dy, dz = y1 - y0, z1 - z0
+    length = float(np.hypot(dy, dz))
+    cyl = m3d.Manifold.cylinder(length, r0, r1, circular_segments=segments)
+    theta_deg = float(np.degrees(np.arctan2(-dy, dz)))
+    return cyl.rotate([theta_deg, 0.0, 0.0]).translate([x0, y0, z0])
+
+
+def _bracket_for_column(spec: HexOrganizerSpec, floor_bottom: float, depth: float,
+                         col: int) -> m3d.Manifold:
+    """Build one tip-back brace for the raised half-hex at `col`, in the
+    stand's final (X, Y, Z) frame."""
+    cx, cz    = _column_xz(spec, floor_bottom, col)
+    outer_f2f = spec.bore_f2f + 2.0 * spec.wall
+    t, L      = BRACKET_THICKNESS_MM, BRACKET_ARM_LENGTH_MM
+    we, wt    = BRACKET_WIDTH_ELBOW_MM, BRACKET_WIDTH_TIP_MM
+    r_tip     = BRACKET_RIB_RADIUS_TIP_MM
+    r_corner  = BRACKET_RIB_RADIUS_CORNER_MM
+
+    y_attach = depth        # the tube's far open end — front, away from the desk's near edge
+    y_outer  = y_attach + t # vertical plate's outside (convex) face
+
+    # Vertical arm: extrude a 2D shape in local (x, z) — using the same
+    # rounded-corner hex profile as the tube itself — and rotate it into the
+    # Y=[y_attach, y_outer] slab flush against the column's open front.
+    # rotate([90,0,0]) maps (x, y, z) -> (x, -z, y), so the cross-section's
+    # own y becomes final z; translating by y_outer relocates the resulting
+    # [-t, 0] slab to [y_attach, y_outer] without disturbing that mapping.
+    column_outer_cs = (
+        _rounded_hex_cs(outer_f2f, spec.vertical_roundover).translate((cx, cz))
+        ^ _halfplane_cs(0.0)
+    )
+    fin_cs         = _rounded_tip_cs(cx, we, wt, 0.0, L)
+    vertical_cs    = m3d.CrossSection.batch_boolean([column_outer_cs, fin_cs], m3d.OpType.Add)
+    vertical_plate = (m3d.Manifold.extrude(vertical_cs, t)
+                       .rotate([90.0, 0.0, 0.0])
+                       .translate([0.0, y_outer, 0.0]))
+
+    # Horizontal arm: a tapered, rounded-tip foot already in (x, y), extruded
+    # directly along z — no rotation needed, it sits flush on the desk
+    # (z in [0, t]) and extends forward from the elbow to y_attach + L.
+    foot_cs    = _rounded_tip_cs(cx, we, wt, y_attach, y_attach + L)
+    foot_plate = m3d.Manifold.extrude(foot_cs, t)
+
+    # Rib: one continuous round bead — frustum up the vertical arm's outside
+    # face, a sphere at the corner (thicker, and smooth in every direction
+    # so the bend has no seam), frustum out along the horizontal arm's
+    # outside face. Both bend-plane coordinates only ever vary in (y, z), so
+    # _frustum_between's single-axis rotation is exact here.
+    corner_pt   = (cx, y_outer, t)
+    vertical_rib   = _frustum_between((cx, y_outer, L), r_tip, corner_pt, r_corner)
+    horizontal_rib = _frustum_between(corner_pt, r_corner, (cx, y_attach + L, t), r_tip)
+    corner_bead    = m3d.Manifold.sphere(r_corner, circular_segments=24).translate(corner_pt)
+
+    bracket = vertical_plate + foot_plate + vertical_rib + horizontal_rib + corner_bead
+
+    # The corner bead's radius exceeds the foot's thickness, so it dips
+    # below the desk plane (z=0) — clip it flush rather than letting the
+    # brace poke through the print bed.
+    above_desk = m3d.Manifold.cube([2000.0, 2000.0, 2000.0]).translate([-1000.0, -1000.0, 0.0])
+    return bracket ^ above_desk
+
+
 def build_stand(stand: HexStandSpec) -> m3d.Manifold:
     """Return the stand directly in its own frame: cut face on z=0, cup-axis along +Y."""
     spec = stand.organizer
@@ -197,6 +329,13 @@ def build_stand(stand: HexStandSpec) -> m3d.Manifold:
     #    needed here).
     body = body.rotate([90.0, 0.0, 0.0])
     body = body.translate([0.0, depth, 0.0])
+
+    # 7. Tip-back brackets: one per raised half-hex column, built directly in
+    #    this final (X, Y, Z) frame (see _bracket_for_column).
+    for col in (1, 3):
+        if col >= spec.cols:
+            continue
+        body = body + _bracket_for_column(spec, floor_bottom, depth, col)
 
     return body
 

@@ -375,7 +375,8 @@ def _build_tile_mesh(
     # GRASS: blades are numerous and thin — unioning them is wasteful.
     # FLOWER + DEBUG_COLOR_*: attractor debug spheres — unioning ~200 small
     # icospheres is very slow; concatenation is correct and fast.
-    _NO_UNION = {Material.GRASS, Material.FLOWER} | set(_DEBUG_COLORS)
+    # WOOD: tree mesh is built cap-free in a single pass; no union needed.
+    _NO_UNION = {Material.GRASS, Material.FLOWER, Material.WOOD} | set(_DEBUG_COLORS)
 
     groups: dict[Material, list[trimesh.Trimesh]] = defaultdict(list)
     for p in parts:

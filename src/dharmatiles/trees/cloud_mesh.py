@@ -1,23 +1,30 @@
 """Bezier-tube mesh builder for CloudTree skeletons.
 
-Each (parent → child) edge is a curved tube whose cross-section rings are
-parallel-transported along the Bézier path (Bishop frame), giving smooth,
-twist-free curves.  The base ring of every child tube *reuses* the vertex
-ring already written for its parent, so branch-point vertices are shared and
-the mesh is topologically connected.  At junctions with more than one child
-the shared ring is referenced by two or more child quad-strips; face overlaps
-at those joints are intentional and harmless for 3D printing.
+Each (parent → child) edge is a curved tube swept along a cubic Bézier path.
+Cross-section rings are parallel-transported (Bishop frame) for smooth,
+twist-free curves.
 
-When foliage clumps are enabled, leaf branches are not rendered as wood tubes.
-Instead each leaf edge gets an attached foliage-cone mesh: a cone-shaped solid
-whose cross-section rings are true half-circle D-shapes.  Each ring's lower
-semicircle arc has its bottommost point sitting exactly on the Bézier branch
-path (the ring centre is offset upward by the ring radius); the flat chord
-connects the two diameter endpoints horizontally, so the bulk of the foliage
-billows upward and outward while the underside tracks the branch.  The
-attachment ring is copied from the preceding wood ring and left uncapped so the
-assembled STL is continuous at the junction.  When foliage clumps are disabled,
-leaf branches render as ordinary wood branch tubes.
+Architecture
+------------
+Wood skeleton and foliage cones are all written into **one flat vertex/face
+array** — no separate meshes, no boolean union.
+
+Caps appear at exactly two kinds of location:
+
+  * Root bottom  — one fan cap facing downward (terrain side).
+  * Each leaf tip — a hemispherical dome cap facing outward (latitude-band
+    approximation; ``_N_DOME_LATS`` rings + pole vertex).
+
+There are **no caps at branch junctions**.  The child tube's ring-0 is a fresh
+copy of the parent's final ring positions (same world coordinates, new vertex
+indices) and the quad strip continues seamlessly from there.  The open
+boundaries left at fork nodes are small and repaired automatically by slicers.
+
+Foliage (``foliage_radius_mm > 0``) is handled by varying the radius profile
+on leaf branches: the branch tapers outward from the wood radius to
+``foliage_radius_mm`` over the last ``leaf_clump_length_mm`` (or over the
+full branch if that parameter is ``None``).  The same circular cross-section
+is used throughout — no separate D-ring or foliage cone builder.
 """
 from __future__ import annotations
 
@@ -30,6 +37,8 @@ from ..core.color import Material, debug_material, tag as _tag
 
 # Fixed polygon count for every cross-section ring.
 _N_SIDES = 12
+# Latitude bands for the hemispherical dome at each leaf tip.
+_N_DOME_LATS = 4
 
 
 def build_cloud_tree_mesh(
@@ -47,44 +56,30 @@ def build_cloud_tree_mesh(
     debug_attractors: np.ndarray | None = None,
     attractor_group_labels: np.ndarray | None = None,
     attractor_radius_mm: float = 0.6,
-) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh], list[trimesh.Trimesh]]:
-    """Build wood tube mesh + foliage cone meshes from a simplified skeleton.
+) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
+    """Build a single tree mesh from a simplified skeleton.
 
     Returns
     -------
-    wood_mesh
-        Single connected Trimesh for the trunk and all non-leaf branches.
+    tree_mesh
+        Single Trimesh containing trunk, all branches, and foliage sweeps.
+        Tagged ``Material.WOOD``.
     attractor_meshes
         Debug icospheres (empty unless ``debug_attractors`` is set).
-    foliage_meshes
-        One attached cone mesh per leaf branch, un-tagged (caller assigns its
-        print material).
     """
     n = len(nodes)
     if strict_fdm_angle_deg is not None:
         _warn_if_branch_below_strict_fdm_angle(nodes, parents, strict_fdm_angle_deg)
-    render_foliage_clumps = foliage_radius_mm > 0.0
 
-    # ── leaf classification (before any loop so clump mode can skip leaves) ─
-    is_leaf = np.ones(n, dtype=bool)
+    render_foliage = foliage_radius_mm > 0.0
+
+    # ── children list + leaf classification ───────────────────────────────
+    children: list[list[int]] = [[] for _ in range(n)]
     for i in range(1, n):
-        is_leaf[int(parents[i])] = False
-    is_leaf[0] = False   # root has its own bottom cap
+        children[int(parents[i])].append(i)
+    is_leaf = [len(children[i]) == 0 for i in range(n)]
 
-    # Nodes whose *every* child is a leaf need a wood tip cap.
-    has_non_leaf_child = np.zeros(n, dtype=bool)
-    for i in range(1, n):
-        if not is_leaf[i]:
-            has_non_leaf_child[int(parents[i])] = True
-
-    wood_leaves: set[int] = set()
-    for i in range(1, n):
-        if is_leaf[i]:
-            p = int(parents[i])
-            if not has_non_leaf_child[p]:
-                wood_leaves.add(p)
-
-    # ── flat vertex / face accumulators ────────────────────────────────────
+    # ── flat vertex / face accumulators ───────────────────────────────────
     verts_acc: list[np.ndarray] = []
     faces_acc: list[list[int]]  = []
     n_verts    = 0
@@ -96,64 +91,117 @@ def build_cloud_tree_mesh(
         n_verts += len(arr)
         return off
 
-    # ── per-node state ─────────────────────────────────────────────────────
+    # ── per-node state ────────────────────────────────────────────────────
     node_frame: list[tuple[np.ndarray, np.ndarray] | None] = [None] * n
     ring_off:   list[int]                                   = [-1]   * n
     ring_verts: list[np.ndarray | None]                     = [None] * n
 
-    # ── root ──────────────────────────────────────────────────────────────
+    # ── root ring + bottom cap ────────────────────────────────────────────
     root_in       = _safe_norm(np.asarray(in_dirs[0], float))
     u0, v0        = _basis(root_in)
     node_frame[0] = (u0, v0)
-    root_ring     = _make_ring(nodes[0], float(radii[0]), u0, v0)
+    r_root        = max(float(radii[0]), 0.42)
+    root_ring     = _make_ring(nodes[0], r_root, u0, v0)
     ring_off[0]   = _add_verts(root_ring)
     ring_verts[0] = root_ring
 
-    # ── edges ─────────────────────────────────────────────────────────────
-    for i in range(1, n):
-        if render_foliage_clumps and is_leaf[i]:
-            continue                       # leaf branch → foliage cone, not wood
+    c_bot = _add_verts(np.asarray(nodes[0], float)[np.newaxis])
+    ro = ring_off[0]
+    for k in range(_N_SIDES):
+        k1 = (k + 1) % _N_SIDES
+        faces_acc.append([c_bot, ro + k1, ro + k])   # faces downward
+
+    # ── BFS edge loop ─────────────────────────────────────────────────────
+    queue   = list(children[0])
+    visited = [False] * n
+    visited[0] = True
+
+    while queue:
+        i = queue.pop(0)
+        if visited[i]:
+            continue
+        visited[i] = True
 
         p  = int(parents[i])
         p0 = np.asarray(nodes[p], float)
         p3 = np.asarray(nodes[i], float)
-        length = float(np.linalg.norm(p3 - p0))
         pu, pv = node_frame[p]
 
+        length = float(np.linalg.norm(p3 - p0))
+
+        # ── degenerate edge ───────────────────────────────────────────
         if length < 1e-8:
             node_frame[i] = (pu, pv)
-            node_ring     = _make_ring(nodes[i], float(radii[i]), pu, pv)
-            ring_off[i]   = _add_verts(node_ring)
-            ring_verts[i] = node_ring
+            ring_off[i]   = ring_off[p]
+            ring_verts[i] = ring_verts[p]
+            queue.extend(children[i])
             continue
 
-        r0 = max(float(radii[p]), 0.42)
-        r1 = max(float(radii[i]), 0.42)
+        # ── radius profile ────────────────────────────────────────────
+        r_start    = max(float(radii[p]), 0.42)
+        r_end_wood = max(float(radii[i]), 0.42)
 
-        t0 = _safe_norm(np.asarray(in_dirs[p], float))
-        t1 = _safe_norm(np.asarray(in_dirs[i], float))
-        h  = handle_scale * length
-        p1 = p0 + h * t0
-        p2 = p3 - h * t1
+        is_foliage_leaf = render_foliage and is_leaf[i]
+
+        if is_foliage_leaf:
+            if leaf_clump_length_mm is not None:
+                K          = float(leaf_clump_length_mm)
+                clump_len  = min(length, K)
+                t_split    = max(0.0, (length - clump_len) / length)
+                r_cone_end = r_start + (foliage_radius_mm - r_start) * (clump_len / K)
+            else:
+                t_split    = 0.0
+                r_cone_end = float(foliage_radius_mm)
+        else:
+            t_split    = 0.0
+            r_cone_end = r_end_wood
+
+        # ── Bézier path ───────────────────────────────────────────────
+        t0_tan = _safe_norm(np.asarray(in_dirs[p], float))
+        t1_tan = _safe_norm(np.asarray(in_dirs[i], float))
+        h      = handle_scale * length
+        bp1    = p0 + h * t0_tan
+        bp2    = p3 - h * t1_tan
 
         n_steps = max(4, int(np.ceil(length / 2.5)))
         ts      = np.linspace(0.0, 1.0, n_steps + 1)
-        curve   = _bezier_eval(p0, p1, p2, p3, ts)
-        radii_t = r0 + (r1 - r0) * ts
+        curve   = _bezier_eval(p0, bp1, bp2, p3, ts)
 
+        # Radius at each sample point.
+        # Wood phase: linear taper from r_start to r_end_wood up to t_split.
+        # Foliage phase: linear expand from r_end_wood to r_cone_end past t_split.
+        if is_foliage_leaf and t_split > 1e-6:
+            radii_t = np.where(
+                ts <= t_split,
+                r_start + (r_end_wood - r_start) * (ts / t_split),
+                r_end_wood + (r_cone_end - r_end_wood)
+                            * ((ts - t_split) / (1.0 - t_split)),
+            )
+        else:
+            # Normal branch (wood or full-cone foliage with t_split=0)
+            r_final   = r_cone_end if is_foliage_leaf else r_end_wood
+            radii_t   = r_start + (r_final - r_start) * ts
+
+        # ── sweep rings ───────────────────────────────────────────────
         u, v = pu, pv
-        start_ring = np.asarray(ring_verts[p], float)
-        step_off = [_add_verts(start_ring)]
+
+        # Ring 0: fresh copy of the parent's final ring (same world positions,
+        # new vertex indices).  No start cap — this is the key invariant.
+        ring0 = np.asarray(ring_verts[p], float)
+        step_off = [_add_verts(ring0)]
+
         for j in range(1, n_steps + 1):
-            tan  = _safe_norm(_bezier_tangent(p0, p1, p2, p3, ts[j]))
+            tan  = _safe_norm(_bezier_tangent(p0, bp1, bp2, p3, float(ts[j])))
             u, v = _transport(u, v, tan)
-            ring = _make_ring(curve[j], radii_t[j], u, v)
+            ring = _make_ring(curve[j], float(radii_t[j]), u, v)
             step_off.append(_add_verts(ring))
 
+        # Store this node's ring state for its children.
         node_frame[i] = (u, v)
         ring_off[i]   = step_off[-1]
-        ring_verts[i] = _make_ring(p3, r1, u, v)
+        ring_verts[i] = _make_ring(p3, float(radii_t[-1]), u, v)
 
+        # ── quad strip ────────────────────────────────────────────────
         for j in range(n_steps):
             oa, ob = step_off[j], step_off[j + 1]
             for k in range(_N_SIDES):
@@ -161,113 +209,50 @@ def build_cloud_tree_mesh(
                 faces_acc.append([oa + k, oa + k1, ob + k1])
                 faces_acc.append([oa + k, ob + k1, ob + k])
 
-        # Start cap (faces backward, away from child).
-        c_start = _add_verts(curve[0][np.newaxis])
-        ro = step_off[0]
-        for k in range(_N_SIDES):
-            k1 = (k + 1) % _N_SIDES
-            faces_acc.append([c_start, ro + k1, ro + k])
+        # ── leaf tip dome cap (no cap at internal nodes) ──────────────
+        # Build a hemisphere of _N_DOME_LATS latitude bands oriented along
+        # the branch tangent at t=1.  The equator (phi=0) is the existing
+        # final sweep ring; each band adds a smaller ring offset along the
+        # outward tangent until the pole vertex closes the dome.
+        if is_leaf[i]:
+            tip_tan     = _safe_norm(_bezier_tangent(p0, bp1, bp2, p3, 1.0))
+            u_tip, v_tip = u, v          # parallel-transported frame at tip
+            r_tip        = float(radii_t[-1])
+            prev_off     = step_off[-1]
 
-        # End cap (faces forward, toward child).
-        c_end = _add_verts(curve[-1][np.newaxis])
-        ro = step_off[-1]
-        for k in range(_N_SIDES):
-            k1 = (k + 1) % _N_SIDES
-            faces_acc.append([c_end, ro + k, ro + k1])
+            for lat_i in range(1, _N_DOME_LATS + 1):
+                phi      = (np.pi / 2.0) * lat_i / _N_DOME_LATS
+                ring_ctr = curve[-1] + r_tip * float(np.sin(phi)) * tip_tan
 
-    # ── foliage cones + optional exposed wood stubs (one per leaf edge) ──
-    # leaf_clump_length_mm = K: the cone covers only the last min(L, K) mm of
-    # each leaf branch.  The remainder (L − K, if positive) is drawn as a plain
-    # wood tube that starts at the parent node and ends at the split point.
-    # The cone taper rate is fixed at (foliage_radius_mm − r_wood) / K; for
-    # branches shorter than K the r_end scales down proportionally.
-    # leaf_clump_length_mm = None: full branch is a cone (current behaviour).
-    foliage_meshes:  list[trimesh.Trimesh] = []
-    extra_wood_stubs: list[trimesh.Trimesh] = []
+                if lat_i < _N_DOME_LATS:
+                    # Intermediate latitude ring → quad strip
+                    ring_r    = r_tip * float(np.cos(phi))
+                    dome_ring = _make_ring(ring_ctr, ring_r, u_tip, v_tip)
+                    curr_off  = _add_verts(dome_ring)
+                    for k in range(_N_SIDES):
+                        k1 = (k + 1) % _N_SIDES
+                        faces_acc.append([prev_off + k, prev_off + k1, curr_off + k1])
+                        faces_acc.append([prev_off + k, curr_off + k1, curr_off + k])
+                    prev_off = curr_off
+                else:
+                    # Pole vertex (phi = π/2, ring_r = 0) → fan
+                    c_tip = _add_verts(ring_ctr[np.newaxis])
+                    for k in range(_N_SIDES):
+                        k1 = (k + 1) % _N_SIDES
+                        faces_acc.append([c_tip, prev_off + k, prev_off + k1])
 
-    if render_foliage_clumps:
-        for i in range(1, n):
-            if not is_leaf[i]:
-                continue
-            p = int(parents[i])
-            if p < 0 or node_frame[p] is None:
-                continue
+        queue.extend(children[i])
 
-            p0_a  = np.asarray(nodes[p], float)
-            p3_a  = np.asarray(nodes[i], float)
-            t0_a  = np.asarray(in_dirs[p], float)
-            t1_a  = np.asarray(in_dirs[i], float)
-            r_wood = max(float(radii[p]), 0.42)
-            branch_len = float(np.linalg.norm(p3_a - p0_a))
-
-            if leaf_clump_length_mm is not None and branch_len > 1e-8:
-                K         = float(leaf_clump_length_mm)
-                clump_len = min(branch_len, K)
-                t_split   = (branch_len - clump_len) / branch_len
-                # consistent taper rate: r_end = r_wood + (r_max - r_wood) * clump_len / K
-                r_cone_end = r_wood + (foliage_radius_mm - r_wood) * (clump_len / K)
-            else:
-                clump_len  = branch_len
-                t_split    = 0.0
-                r_cone_end = float(foliage_radius_mm)
-
-            if t_split > 1e-6:
-                # Compute the split point and its tangent along the Bezier.
-                t0n = _safe_norm(t0_a)
-                t1n = _safe_norm(t1_a)
-                h   = handle_scale * branch_len
-                bp1 = p0_a + h * t0n
-                bp2 = p3_a - h * t1n
-                p_split   = _bezier_eval(p0_a, bp1, bp2, p3_a, np.array([t_split]))[0]
-                tan_split = _safe_norm(_bezier_tangent(p0_a, bp1, bp2, p3_a, t_split))
-
-                pu, pv = node_frame[p]
-                stub = _build_exposed_wood(
-                    p0=p0_a, p3=p_split,
-                    t0=t0n,  t1=tan_split,
-                    radius=r_wood,
-                    u0=pu,   v0=pv,
-                    handle_scale=handle_scale,
-                    start_ring=ring_verts[p],
-                    cap_start=False,
-                    cap_end=False,
-                )
-                if stub is not None:
-                    stub_mesh, _stub_end_ring = stub
-                    if len(stub_mesh.faces) > 0:
-                        extra_wood_stubs.append(stub_mesh)
-
-                cone_p0 = p_split
-                cone_t0 = tan_split
-            else:
-                cone_p0 = p0_a
-                cone_t0 = t0_a
-
-            cone = _build_foliage_cone(
-                p0=cone_p0, p3=p3_a,
-                t0=cone_t0, t1=t1_a,
-                r_start=r_wood, r_end=r_cone_end,
-                handle_scale=handle_scale,
-            )
-            if cone is not None and len(cone.faces) > 0:
-                foliage_meshes.append(cone)
-
-    # ── assemble wood mesh (main skeleton + exposed stubs) ────────────────
+    # ── assemble ──────────────────────────────────────────────────────────
     if faces_acc:
         verts     = np.vstack(verts_acc)
         faces     = np.array(faces_acc, dtype=np.int32)
-        wood_mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
-        for method in ("remove_duplicate_faces", "remove_degenerate_faces",
-                       "remove_unreferenced_vertices"):
-            fn = getattr(wood_mesh, method, None)
-            if fn is not None:
-                fn()
+        tree_mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+        tree_mesh.fix_normals()
     else:
-        wood_mesh = trimesh.Trimesh(process=False)
+        tree_mesh = trimesh.Trimesh(process=False)
 
-    if extra_wood_stubs:
-        stubs_mesh = trimesh.util.concatenate(extra_wood_stubs)
-        wood_mesh  = trimesh.util.concatenate([wood_mesh, stubs_mesh])
+    _tag(tree_mesh, Material.WOOD)
 
     # ── debug attractor spheres ───────────────────────────────────────────
     attractor_meshes: list[trimesh.Trimesh] = []
@@ -287,44 +272,34 @@ def build_cloud_tree_mesh(
             _tag(s, mat)
             attractor_meshes.append(s)
 
-    return wood_mesh, attractor_meshes, foliage_meshes
+    return tree_mesh, attractor_meshes
 
+
+# ── FDM angle warning ─────────────────────────────────────────────────────────
 
 def _warn_if_branch_below_strict_fdm_angle(
     nodes: np.ndarray,
     parents: np.ndarray,
     strict_fdm_angle_deg: float,
 ) -> None:
-    """Warn (print-failure) when a branch dips below the strict FDM angle.
-
-    The FDM angle is the signed elevation of the branch edge above the
-    horizontal plane: +90° points straight up, 0° is horizontal, -90° straight
-    down. The skeleton tries to keep every branch above the *target* FDM angle
-    by splitting, but terminal landing segments can't always be rerouted; any
-    edge below the *strict* angle is treated as an unprintable-overhang failure
-    and reported here.
-    """
     threshold = float(strict_fdm_angle_deg)
-
     offenders: list[tuple[float, int, int]] = []
     for i in range(1, len(nodes)):
         p = int(parents[i])
         if p < 0:
             continue
-        edge = np.asarray(nodes[i], float) - np.asarray(nodes[p], float)
+        edge     = np.asarray(nodes[i], float) - np.asarray(nodes[p], float)
         edge_len = float(np.linalg.norm(edge))
         if edge_len < 1e-9:
             continue
-        # Elevation above the horizon: arcsin(dz / |edge|).
-        sin_e = float(np.clip(edge[2] / edge_len, -1.0, 1.0))
+        sin_e         = float(np.clip(edge[2] / edge_len, -1.0, 1.0))
         elevation_deg = float(np.degrees(np.arcsin(sin_e)))
         if elevation_deg < threshold - 1e-6:
             offenders.append((elevation_deg, p, i))
 
     if not offenders:
         return
-
-    worst_elev, worst_parent, worst_child = min(offenders, key=lambda item: item[0])
+    worst_elev, worst_parent, worst_child = min(offenders, key=lambda x: x[0])
     warnings.warn(
         "CloudTree FDM print failure: branch below strict FDM angle during "
         f"mesh creation: strict={threshold:.2f} deg above horizon, "
@@ -335,259 +310,7 @@ def _warn_if_branch_below_strict_fdm_angle(
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Exposed-wood stub builder
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _build_exposed_wood(
-    p0: np.ndarray, p3: np.ndarray,
-    t0: np.ndarray, t1: np.ndarray,
-    radius: float,
-    u0: np.ndarray, v0: np.ndarray,
-    handle_scale: float = 0.45,
-    start_ring: np.ndarray | None = None,
-    cap_start: bool = True,
-    cap_end: bool = True,
-) -> tuple[trimesh.Trimesh, np.ndarray] | None:
-    """Constant-radius wood tube for the exposed portion of a leaf branch.
-
-    Starts at the parent node (*p0*) using the parent's Bishop frame (*u0*,
-    *v0*) so the cross-section orientation is continuous with the main wood
-    mesh.  When *start_ring* is provided, ring 0 is copied from the already
-    emitted parent end ring so the attached segment is geometrically
-    continuous.
-    """
-    length = float(np.linalg.norm(p3 - p0))
-    if length < 1e-8:
-        return None
-
-    t0n = _safe_norm(t0)
-    t1n = _safe_norm(t1)
-    h   = handle_scale * length
-    p1  = p0 + h * t0n
-    p2  = p3 - h * t1n
-
-    n_steps = max(2, int(np.ceil(length / 2.5)))
-    ts      = np.linspace(0.0, 1.0, n_steps + 1)
-    curve   = _bezier_eval(p0, p1, p2, p3, ts)
-
-    u, v = u0, v0
-    verts_acc: list[np.ndarray] = []
-    faces_acc: list[list[int]]  = []
-    nv = 0
-
-    ring_offs: list[int] = []
-    for j in range(n_steps + 1):
-        tan = t0n if j == 0 else (t1n if j == n_steps else
-              _safe_norm(_bezier_tangent(p0, p1, p2, p3, float(ts[j]))))
-        if j > 0:
-            u, v = _transport(u, v, tan)
-        ring_offs.append(nv)
-        ring = (
-            np.asarray(start_ring, float)
-            if j == 0 and start_ring is not None
-            else _make_ring(curve[j], radius, u, v)
-        )
-        verts_acc.append(ring)
-        nv += _N_SIDES
-    end_ring = np.asarray(verts_acc[-1], float)
-
-    # Lateral quads
-    for j in range(len(ring_offs) - 1):
-        oa, ob = ring_offs[j], ring_offs[j + 1]
-        for k in range(_N_SIDES):
-            k1 = (k + 1) % _N_SIDES
-            faces_acc.append([oa + k, oa + k1, ob + k1])
-            faces_acc.append([oa + k, ob + k1, ob + k])
-
-    # Start cap (faces backward, away from tip)
-    if cap_start:
-        c_start = nv
-        verts_acc.append(np.asarray(curve[0])[np.newaxis])
-        nv += 1
-        for k in range(_N_SIDES):
-            k1 = (k + 1) % _N_SIDES
-            faces_acc.append([c_start, ring_offs[0] + k1, ring_offs[0] + k])
-
-    # End cap (faces forward, toward split point)
-    if cap_end:
-        c_end = nv
-        verts_acc.append(np.asarray(curve[-1])[np.newaxis])
-        for k in range(_N_SIDES):
-            k1 = (k + 1) % _N_SIDES
-            faces_acc.append([c_end, ring_offs[-1] + k, ring_offs[-1] + k1])
-
-    verts = np.vstack(verts_acc)
-    faces = np.array(faces_acc, dtype=np.int32)
-    return trimesh.Trimesh(vertices=verts, faces=faces, process=False), end_ring
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Foliage cone builder
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _build_foliage_cone(
-    p0: np.ndarray,
-    p3: np.ndarray,
-    t0: np.ndarray,
-    t1: np.ndarray,
-    r_start: float,
-    r_end:   float,
-    handle_scale: float = 0.45,
-    start_ring: np.ndarray | None = None,
-    cap_start: bool = True,
-) -> trimesh.Trimesh | None:
-    """Build a watertight foliage cone for one leaf branch.
-
-    The cone follows the Bézier path from *p0* (parent node) to *p3*
-    (attractor/leaf tip).
-
-    - **Ring 0** (at the wood junction): full circle, vertex-aligned to the
-      D-ring ordering, so the quad strip from ring 0 to ring 1 morphs smoothly
-      from round to flat without any twist.
-    - **Rings 1 … n** (toward the tip): true half-circle D — lower semicircle
-      arc whose bottommost point sits on the branch path, plus a flat chord.
-
-    The foliage therefore transitions seamlessly from the circular wood tube
-    and then billows upward and outward along the D cross-section.
-
-    Start cap: fan from the circle's geometric centre, unless the cone is
-    attached to an existing segment ring.
-    End cap: a quarter-sphere roundover.  The bottom arc rolls forward and
-    upward to the flat top plane, while the chord vertices stay on that plane.
-    """
-    _WORLD_UP = np.array([0.0, 0.0, 1.0])
-    N = _N_SIDES
-
-    length = float(np.linalg.norm(p3 - p0))
-    if length < 1e-8:
-        return None
-
-    t0n = _safe_norm(t0)
-    t1n = _safe_norm(t1)
-    h   = handle_scale * length
-    p1  = p0 + h * t0n
-    p2  = p3 - h * t1n
-
-    n_steps = max(4, int(np.ceil(length / 2.5)))
-    ts      = np.linspace(0.0, 1.0, n_steps + 1)
-    curve   = _bezier_eval(p0, p1, p2, p3, ts)
-    radii_t = r_start + (r_end - r_start) * ts
-
-    def _up_frame(tan: np.ndarray):
-        """Return (up_in_plane, side) — up is world +Z projected onto ⊥tan."""
-        up = _WORLD_UP - float(np.dot(_WORLD_UP, tan)) * tan
-        up_len = float(np.linalg.norm(up))
-        if up_len < 0.05:          # near-vertical branch — fall back to +X
-            ref = np.array([1.0, 0.0, 0.0])
-            up  = ref - float(np.dot(ref, tan)) * tan
-            up_len = float(np.linalg.norm(up))
-        up /= up_len
-        side = np.cross(tan, up)
-        side /= float(np.linalg.norm(side)) + 1e-12
-        return up, side
-
-    # ── Build rings ───────────────────────────────────────────────────────────
-    # Ring 0 (at the wood junction): full circle, theta_start=π/2 so vertex 0
-    # sits at the right diameter endpoint — the same position as vertex 0 of
-    # every subsequent D-ring.  This alignment means the transition quads morph
-    # smoothly from round → flat without any twist.
-    # Rings 1..n_steps: true D-shape (lower semicircle + flat chord).
-    # The terminal flat fan is replaced by a quarter-sphere nose, sampled as
-    # smaller D-rings that move forward while their chord remains in the flat
-    # top plane.
-    rings:       list[np.ndarray] = []
-    cap_centers: list[np.ndarray] = []
-    cap_nose:    np.ndarray | None = None
-
-    for j in range(n_steps + 1):
-        if j == 0:
-            tan = t0n
-        elif j == n_steps:
-            tan = t1n
-        else:
-            tan = _safe_norm(_bezier_tangent(p0, p1, p2, p3, float(ts[j])))
-
-        up, side = _up_frame(tan)
-        r        = float(radii_t[j])
-
-        if j == 0:
-            # Ring 0: full circle centred exactly on the branch path — no upward
-            # offset.  Vertex ordering starts at θ=π/2 (right diameter point)
-            # to align with the D-ring vertex layout that follows.
-            center = curve[j]
-            ideal_ring = _make_ring(center, r, up, side, theta_start=np.pi / 2.0)
-            ring = (
-                _align_ring_to_reference(start_ring, ideal_ring)
-                if start_ring is not None
-                else ideal_ring
-            )
-            rings.append(ring)
-            cap_centers.append(center)          # geometric centre of circle
-        else:
-            # D-rings: offset upward so the arc bottom sits on the branch path.
-            center = curve[j] + r * up
-            rings.append(_make_d_ring(center, r, up, side))
-            cap_centers.append(center - (4.0 * r / (3.0 * np.pi)) * up)
-
-    end_tan = t1n
-    end_up, end_side = _up_frame(end_tan)
-    end_r      = float(radii_t[-1])
-    end_center = curve[-1] + end_r * end_up
-    cap_steps  = 4
-    for s in range(1, cap_steps):
-        phi = (0.5 * np.pi) * (s / cap_steps)
-        rings.append(_make_d_roundover_ring(end_center, end_r, end_up, end_side, end_tan, phi))
-    cap_nose = end_center + end_r * end_tan
-
-    # ── Fill vertex / face buffers ────────────────────────────────────────────
-    verts_parts: list[np.ndarray] = []
-    ring_offs:   list[int]        = []
-    nv = 0
-
-    for ring in rings:
-        ring_offs.append(nv)
-        verts_parts.append(ring)
-        nv += N
-
-    start_cap_idx = -1
-    if cap_start:
-        start_cap_idx = nv
-        verts_parts.append(cap_centers[0][np.newaxis]);  nv += 1
-    cap_nose_idx = nv
-    verts_parts.append(cap_nose[np.newaxis]); nv += 1
-
-    faces_list: list[list[int]] = []
-
-    # Start cap — outward normal faces backward (away from tip).
-    if cap_start:
-        ro0 = ring_offs[0]
-        for k in range(N):
-            k1 = (k + 1) % N
-            faces_list.append([start_cap_idx, ro0 + k1, ro0 + k])
-
-    # Lateral quad strips.
-    for j in range(len(ring_offs) - 1):
-        oa, ob = ring_offs[j], ring_offs[j + 1]
-        for k in range(N):
-            k1 = (k + 1) % N
-            faces_list.append([oa + k, oa + k1, ob + k1])
-            faces_list.append([oa + k, ob + k1, ob + k])
-
-    # Rounded end cap — outward normal faces forward (toward tip).
-    ro_last = ring_offs[-1]
-    for k in range(N):
-        k1 = (k + 1) % N
-        faces_list.append([cap_nose_idx, ro_last + k, ro_last + k1])
-
-    verts = np.vstack(verts_parts)
-    faces = np.array(faces_list, dtype=np.int32)
-    return trimesh.Trimesh(vertices=verts, faces=faces, process=False)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Geometry helpers
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Geometry helpers ──────────────────────────────────────────────────────────
 
 def _bezier_eval(
     p0: np.ndarray, p1: np.ndarray, p2: np.ndarray, p3: np.ndarray,
@@ -622,10 +345,10 @@ def _transport(
     u: np.ndarray, v: np.ndarray, new_t: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
     u_new = u - float(np.dot(u, new_t)) * new_t
-    n     = float(np.linalg.norm(u_new))
-    if n < 1e-10:
+    nn    = float(np.linalg.norm(u_new))
+    if nn < 1e-10:
         return _basis(new_t)
-    u_new /= n
+    u_new /= nn
     v_new  = np.cross(new_t, u_new)
     v_new /= float(np.linalg.norm(v_new)) + 1e-12
     return u_new, v_new
@@ -639,93 +362,6 @@ def _make_ring(
     theta  = np.linspace(theta_start, theta_start + 2.0 * np.pi, _N_SIDES, endpoint=False)
     circle = np.cos(theta)[:, None] * u + np.sin(theta)[:, None] * v
     return center + radius * circle
-
-
-def _align_ring_to_reference(ring: np.ndarray, reference: np.ndarray) -> np.ndarray:
-    """Return *ring* cyclically ordered to best match *reference* vertices."""
-    ring = np.asarray(ring, float)
-    reference = np.asarray(reference, float)
-    if ring.shape != reference.shape or len(ring) == 0:
-        return ring
-
-    best = ring
-    best_score = float("inf")
-    for candidate_base in (ring, ring[::-1]):
-        for shift in range(len(ring)):
-            candidate = np.roll(candidate_base, -shift, axis=0)
-            score = float(np.sum((candidate - reference) ** 2))
-            if score < best_score:
-                best = candidate
-                best_score = score
-    return best
-
-
-def _make_d_ring(
-    center: np.ndarray, radius: float,
-    up: np.ndarray, side: np.ndarray,
-) -> np.ndarray:
-    """True half-circle D polygon with _N_SIDES vertices.
-
-    Layout (N = _N_SIDES):
-    - Vertices 0 … N//2:   lower semicircle arc, from the right diameter
-      endpoint (center + radius*side) around the bottom (center − radius*up)
-      to the left endpoint (center − radius*side).  N//2 + 1 vertices total,
-      including both endpoints.
-    - Vertices N//2+1 … N−1:  N//2 − 1 interior points evenly spaced along
-      the flat chord from left back to right (endpoints already in the arc).
-
-    Total: (N//2 + 1) + (N//2 − 1) = N vertices.  The polygon is a convex
-    half-disk; the centroid lies 4r/(3π) below the diameter toward the arc.
-    """
-    N       = _N_SIDES
-    n_arc   = N // 2 + 1          # arc vertices including both diameter ends
-    n_chord = N - n_arc            # interior chord vertices (no endpoints)
-
-    # Arc: right → bottom → left  (θ from π/2 to 3π/2)
-    theta_arc = np.linspace(np.pi / 2.0, 3.0 * np.pi / 2.0, n_arc)
-    arc_pts   = center + radius * (
-        np.cos(theta_arc)[:, None] * up + np.sin(theta_arc)[:, None] * side
-    )
-
-    if n_chord > 0:
-        # Chord interior: left → right (arc[-1] → arc[0])
-        t         = np.linspace(0.0, 1.0, n_chord + 2)[1:-1]
-        chord_pts = arc_pts[-1] + t[:, None] * (arc_pts[0] - arc_pts[-1])
-    else:
-        chord_pts = np.empty((0, 3))
-
-    return np.vstack([arc_pts, chord_pts])
-
-
-def _make_d_roundover_ring(
-    center: np.ndarray,
-    radius: float,
-    up: np.ndarray,
-    side: np.ndarray,
-    forward: np.ndarray,
-    phi: float,
-) -> np.ndarray:
-    """D-ring cross-section sampled on a quarter-sphere terminal roundover."""
-    N       = _N_SIDES
-    n_arc   = N // 2 + 1
-    n_chord = N - n_arc
-
-    fwd_offset = radius * np.sin(phi)
-    cap_radius = radius * np.cos(phi)
-    cap_center = center + fwd_offset * forward
-
-    theta_arc = np.linspace(np.pi / 2.0, 3.0 * np.pi / 2.0, n_arc)
-    arc_pts   = cap_center + cap_radius * (
-        np.cos(theta_arc)[:, None] * up + np.sin(theta_arc)[:, None] * side
-    )
-
-    if n_chord > 0:
-        t         = np.linspace(0.0, 1.0, n_chord + 2)[1:-1]
-        chord_pts = arc_pts[-1] + t[:, None] * (arc_pts[0] - arc_pts[-1])
-    else:
-        chord_pts = np.empty((0, 3))
-
-    return np.vstack([arc_pts, chord_pts])
 
 
 def _basis(w: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

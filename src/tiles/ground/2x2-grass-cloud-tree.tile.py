@@ -25,7 +25,7 @@ tile = Tile(
                     CloudTree(
                         placement=Uniform(count_per_square=0.25),
                         debug_attractors=False,
-                        leaf_clumps=False,
+                        leaf_clumps=True,
                         n_attraction=120,
                     ),
                 ),

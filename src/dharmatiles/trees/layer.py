@@ -117,7 +117,7 @@ class CloudTree:
         placement_mask: np.ndarray | None = None,
         layer_idx: int = 0,
     ) -> list[trimesh.Trimesh]:
-        from ..core.color import Material, tag as _tag
+        from ..core.color import Material
         from .cloud_skeleton import grow_cloud_skeleton
         from .cloud_mesh import build_cloud_tree_mesh
         surface = scene.surface
@@ -173,7 +173,7 @@ class CloudTree:
             )
             if len(nodes) < 2:
                 continue
-            mesh, attractor_parts, cone_parts = build_cloud_tree_mesh(
+            mesh, attractor_parts = build_cloud_tree_mesh(
                 nodes,
                 parents,
                 radii,
@@ -188,20 +188,22 @@ class CloudTree:
             )
             if len(mesh.vertices) == 0:
                 continue
-            tree_mesh = _union_tree_solids([mesh] + cone_parts) if self.leaf_clumps else mesh
-            tree_parts.append(tree_mesh)
+
+            tree_parts.append(mesh)
             # Attractor spheres are pre-tagged; material grouping in tile.py handles them.
             other_parts.extend(attractor_parts)
-
             _stamp_tree(scene, surface, x, y, env, float(radii[0]))
 
         if not tree_parts and not other_parts:
             return []
+
         result: list[trimesh.Trimesh] = []
         if tree_parts:
-            tree_combined = trimesh.util.concatenate(tree_parts)
-            _tag(tree_combined, Material.WOOD)
-            result.append(tree_combined)
+            combined = (trimesh.util.concatenate(tree_parts)
+                        if len(tree_parts) > 1 else tree_parts[0])
+            combined.metadata['material'] = Material.WOOD
+            result.append(combined)
+
         result.extend(other_parts)
         return result
 
@@ -225,6 +227,7 @@ class CloudTree:
         )
 
 
+
 def _stamp_tree(scene, surface, x: float, y: float, env: TreeEnvelope, root_radius: float) -> None:
     """Block the tree base so later grass grows around it."""
     rr = max(root_radius * 1.8, 1.6)
@@ -241,30 +244,3 @@ def _stamp_tree(scene, surface, x: float, y: float, env: TreeEnvelope, root_radi
                 scene.terrain_support_z[j, i] = max(scene.terrain_support_z[j, i], env.terrain_z + env.height_mm)
                 if scene.obstacle_mask is not None:
                     scene.obstacle_mask[j, i] = True
-
-
-def _union_tree_solids(parts: list[trimesh.Trimesh]) -> trimesh.Trimesh:
-    """Boolean-union a tree's wood skeleton and foliage clumps into one volume."""
-    solid_parts: list[trimesh.Trimesh] = []
-    for part in parts:
-        if len(part.faces) == 0:
-            continue
-        if part.is_volume:
-            solid_parts.append(part)
-            continue
-        solid_parts.extend(
-            component
-            for component in part.split(only_watertight=False)
-            if len(component.faces) > 0 and component.is_volume
-        )
-    if len(solid_parts) == 1:
-        return solid_parts[0]
-    fallback = trimesh.util.concatenate(solid_parts)
-    unioned = trimesh.boolean.union(
-        solid_parts,
-        engine='manifold',
-        check_volume=False,
-    )
-    if len(unioned.faces) == 0:
-        return fallback
-    return unioned
