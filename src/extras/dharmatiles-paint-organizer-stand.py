@@ -118,17 +118,19 @@ def _x_halfplane_cs(x0: float, *, keep_greater: bool, margin: float = 1000.0) ->
 #     footprint.
 #
 # Both arms taper from a wide elbow to a rounded tip. A single round rib
-# runs the whole bend — a frustum down each arm's outside face into one
-# sphere at the corner — so it reads as one continuous bead that thickens
-# near the corner and blends smoothly around it, rather than two straight
-# ribs butted together.
+# runs the whole bend: a straight taper down the vertical arm's outside
+# face, a tangent quarter-torus fillet through the corner, and a straight
+# taper out along the horizontal arm's outside face — one continuous C1
+# curve rather than two straight ribs butted together under a sphere.
+# Each tip is capped with a hemisphere so the rib reads as a rounded rod,
+# not a flat-cut cylinder end.
 
-BRACKET_ARM_LENGTH_MM        = 100.0  # each arm's length from the elbow
 BRACKET_THICKNESS_MM         = 3.0    # flat plate thickness
 BRACKET_WIDTH_ELBOW_MM       = 16.0   # plate width at the elbow
 BRACKET_WIDTH_TIP_MM         = 6.0    # plate width at the tip
 BRACKET_RIB_RADIUS_TIP_MM    = 1.5    # rib bead radius at each tip
-BRACKET_RIB_RADIUS_CORNER_MM = 4.0    # rib bead radius at the corner (thicker)
+BRACKET_RIB_RADIUS_CORNER_MM   = 4.0   # rib bead radius where it meets the fillet
+BRACKET_CORNER_ROUNDOVER_MM    = 20.0  # solid corner gusset's round-over radius
 
 
 def _column_xz(spec: HexOrganizerSpec, floor_bottom: float, col: int) -> tuple[float, float]:
@@ -176,16 +178,112 @@ def _frustum_between(p0: tuple[float, float, float], r0: float,
     return cyl.rotate([theta_deg, 0.0, 0.0]).translate([x0, y0, z0])
 
 
+def _arc_tube(cx: float, center_yz: tuple[float, float], arc_radius: float, tube_radius: float,
+              *, arc_segments: int = 48, tube_segments: int = 24) -> m3d.Manifold:
+    """Circular tube swept around the bracket's 90 degree fillet arc."""
+    oy, oz = center_yz
+    phis = np.linspace(np.pi, 1.5 * np.pi, arc_segments + 1)
+    thetas = np.linspace(0.0, 2.0 * np.pi, tube_segments, endpoint=False)
+
+    vertices: list[list[float]] = []
+    for phi in phis:
+        radial = np.array([0.0, np.cos(phi), np.sin(phi)], dtype=float)
+        centre = np.array([cx, oy + arc_radius * np.cos(phi), oz + arc_radius * np.sin(phi)], dtype=float)
+        for theta in thetas:
+            p = centre + tube_radius * np.cos(theta) * np.array([1.0, 0.0, 0.0]) + tube_radius * np.sin(theta) * radial
+            vertices.append(p.tolist())
+
+    faces: list[list[int]] = []
+    for i in range(arc_segments):
+        row0 = i * tube_segments
+        row1 = (i + 1) * tube_segments
+        for j in range(tube_segments):
+            a = row0 + j
+            b = row0 + (j + 1) % tube_segments
+            c = row1 + (j + 1) % tube_segments
+            d = row1 + j
+            faces.append([a, d, c])
+            faces.append([a, c, b])
+
+    for row, reverse in ((0, True), (arc_segments, False)):
+        centre_idx = len(vertices)
+        phi = phis[row]
+        vertices.append([cx, oy + arc_radius * np.cos(phi), oz + arc_radius * np.sin(phi)])
+        base = row * tube_segments
+        for j in range(tube_segments):
+            a = base + j
+            b = base + (j + 1) % tube_segments
+            faces.append([centre_idx, b, a] if reverse else [centre_idx, a, b])
+
+    mesh = trimesh.Trimesh(vertices=np.array(vertices, dtype=float),
+                           faces=np.array(faces, dtype=np.uint32),
+                           process=True)
+    mesh.fix_normals()
+    if mesh.volume < 0:
+        mesh.invert()
+    return m3d.Manifold(mesh=m3d.Mesh(
+        vert_properties=mesh.vertices.astype("f4"),
+        tri_verts=mesh.faces.astype("u4"),
+    ))
+
+
+def _corner_fillet(cx: float, y_outer: float, t: float, radius: float, tube_radius: float,
+                    *, segments: int = 48) -> tuple[m3d.Manifold, tuple[float, float, float], tuple[float, float, float]]:
+    """Solid rounded-corner gusset joining a vertical rib (heading -Z into
+    the corner, running along x=cx, y=y_outer) to a horizontal rib (heading
+    +Y out of the corner, running along x=cx, z=t).
+
+    In the (y, z) plane this is the square C-A-O-B (C is the actual sharp
+    plate corner, O is diagonally opposite it) with its far corner O rounded
+    off by `radius`: i.e. the square minus a circle of `radius` centered on
+    O. That circle is tangent to edge C-A at A and to edge C-B at B, so the
+    remaining wedge is solid right down to C — no hollow gap behind the
+    curve — while still meeting the straight ribs tangentially at A and B.
+    Extruded along X by the rib's own diameter (`2 * tube_radius`) so it
+    butts flush against the straight tapered ribs there.
+
+    Returns the fillet manifold plus the two points (`point_a` on the
+    vertical line, `point_b` on the horizontal line) where the straight rib
+    segments must end so the whole rib is one continuous tangent curve.
+    """
+    c = (y_outer, t)
+    a = (y_outer, t + radius)
+    o = (y_outer + radius, t + radius)
+    b = (y_outer + radius, t)
+
+    wedge_cs   = m3d.CrossSection([[c, b, o, a]])
+    corner_cut = m3d.CrossSection.circle(radius, circular_segments=segments).translate(o)
+    wedge_cs   = wedge_cs - corner_cut
+
+    width  = 2.0 * tube_radius
+    prism  = m3d.Manifold.extrude(wedge_cs, width)
+    tube   = _arc_tube(cx, o, radius, tube_radius, arc_segments=segments)
+
+    # Cross-section's local (x, y) -> world (Y, Z); extrude axis (local z)
+    # -> world X, centred on cx.
+    mat = np.zeros((3, 4))
+    mat[:, 0] = [0.0, 1.0, 0.0]
+    mat[:, 1] = [0.0, 0.0, 1.0]
+    mat[:, 2] = [1.0, 0.0, 0.0]
+    mat[:, 3] = [cx - width / 2.0, 0.0, 0.0]
+    fillet = prism.transform(mat.tolist()) + tube
+
+    point_a = (cx, y_outer, t + radius)
+    point_b = (cx, y_outer + radius, t)
+    return fillet, point_a, point_b
+
+
 def _bracket_for_column(spec: HexOrganizerSpec, floor_bottom: float, depth: float,
                          col: int) -> m3d.Manifold:
     """Build one tip-back brace for the raised half-hex at `col`, in the
     stand's final (X, Y, Z) frame."""
     cx, cz    = _column_xz(spec, floor_bottom, col)
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
-    t, L      = BRACKET_THICKNESS_MM, BRACKET_ARM_LENGTH_MM
+    t, L      = BRACKET_THICKNESS_MM, spec.height
     we, wt    = BRACKET_WIDTH_ELBOW_MM, BRACKET_WIDTH_TIP_MM
     r_tip     = BRACKET_RIB_RADIUS_TIP_MM
     r_corner  = BRACKET_RIB_RADIUS_CORNER_MM
+    roundover = BRACKET_CORNER_ROUNDOVER_MM
 
     y_attach = depth        # the tube's far open end — front, away from the desk's near edge
     y_outer  = y_attach + t # vertical plate's outside (convex) face
@@ -212,23 +310,31 @@ def _bracket_for_column(spec: HexOrganizerSpec, floor_bottom: float, depth: floa
     foot_cs    = _rounded_tip_cs(cx, we, wt, y_attach, y_attach + L)
     foot_plate = m3d.Manifold.extrude(foot_cs, t)
 
-    # Rib: one continuous round bead — frustum up the vertical arm's outside
-    # face, a sphere at the corner (thicker, and smooth in every direction
-    # so the bend has no seam), frustum out along the horizontal arm's
-    # outside face. Both bend-plane coordinates only ever vary in (y, z), so
-    # _frustum_between's single-axis rotation is exact here.
-    corner_pt   = (cx, y_outer, t)
-    vertical_rib   = _frustum_between((cx, y_outer, L), r_tip, corner_pt, r_corner)
-    horizontal_rib = _frustum_between(corner_pt, r_corner, (cx, y_attach + L, t), r_tip)
-    corner_bead    = m3d.Manifold.sphere(r_corner, circular_segments=24).translate(corner_pt)
+    # Rib: one continuous round bead — a solid rounded-corner gusset filling
+    # the corner (see _corner_fillet; no hollow gap behind the curve), with
+    # straight tapered frustums running from each fillet end out to its own
+    # rounded tip. Both bend-plane coordinates only ever vary in (y, z), so
+    # _frustum_between's single-axis rotation is exact here. Each tip gets a
+    # hemisphere-style cap so the rib reads as a rounded rod rather than a
+    # flat-cut cylinder end.
+    tip_top    = (cx, y_outer, L)
+    tip_bottom = (cx, y_attach + L, t)
+    fillet, point_a, point_b = _corner_fillet(cx, y_outer, t, roundover, r_corner)
+    vertical_rib   = _frustum_between(tip_top, r_tip, point_a, r_corner)
+    horizontal_rib = _frustum_between(point_b, r_corner, tip_bottom, r_tip)
+    tip_cap_top    = m3d.Manifold.sphere(r_tip, circular_segments=24).translate(tip_top)
+    tip_cap_bottom = m3d.Manifold.sphere(r_tip, circular_segments=24).translate(tip_bottom)
 
-    bracket = vertical_plate + foot_plate + vertical_rib + horizontal_rib + corner_bead
+    bracket = (vertical_plate + foot_plate
+               + vertical_rib + fillet + horizontal_rib
+               + tip_cap_top + tip_cap_bottom)
 
-    # The corner bead's radius exceeds the foot's thickness, so it dips
-    # below the desk plane (z=0) — clip it flush rather than letting the
-    # brace poke through the print bed.
+    # The rib is centered on the outside face, but the corner bead is wider
+    # than the vertical plate is thick. Keep the inside attachment face flat
+    # and clip the underside flush to the desk plane.
+    flat_inside = m3d.Manifold.cube([2000.0, 2000.0, 2000.0]).translate([-1000.0, y_attach, -1000.0])
     above_desk = m3d.Manifold.cube([2000.0, 2000.0, 2000.0]).translate([-1000.0, -1000.0, 0.0])
-    return bracket ^ above_desk
+    return bracket ^ flat_inside ^ above_desk
 
 
 def build_stand(stand: HexStandSpec) -> m3d.Manifold:
@@ -387,7 +493,8 @@ def main() -> None:
         faces=np.array(raw.tri_verts, dtype=int),
         process=False,
     )
-    mesh.fix_normals()
+    with np.errstate(invalid="ignore", divide="ignore"):
+        mesh.fix_normals()
     if mesh.volume < 0:
         mesh.invert()
 

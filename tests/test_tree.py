@@ -74,6 +74,7 @@ def test_tree_mesh_is_watertight_and_printable() -> None:
 
     assert float(radii.min()) >= 0.42
     assert mesh.is_watertight
+    assert mesh.is_volume
     assert len(mesh.vertices) > 0
 
 
@@ -89,7 +90,7 @@ def test_tree_mesh_renders_terminal_branch_when_leaf_clumps_disabled() -> None:
     radii = np.array([1.0, 0.7, 0.45])
     dirs = np.tile(np.array([[0.0, 0.0, 1.0]]), (3, 1))
 
-    mesh, _attractor_parts, foliage_parts = build_cloud_tree_mesh(
+    mesh, attractor_parts = build_cloud_tree_mesh(
         nodes,
         parents,
         radii,
@@ -99,11 +100,13 @@ def test_tree_mesh_renders_terminal_branch_when_leaf_clumps_disabled() -> None:
         foliage_radius_mm=0.0,
     )
 
-    assert foliage_parts == []
-    assert np.isclose(float(mesh.vertices[:, 2].max()), 10.0)
+    assert attractor_parts == []
+    assert np.isclose(float(mesh.vertices[:, 2].max()), 10.0 + radii[-1])
+    assert mesh.is_watertight
+    assert mesh.is_volume
 
 
-def test_tree_mesh_warns_when_branch_angle_is_below_minimum() -> None:
+def test_tree_mesh_warns_when_branch_angle_is_below_strict_fdm_angle() -> None:
     nodes = np.array(
         [
             [0.0, 0.0, 5.0],
@@ -114,7 +117,7 @@ def test_tree_mesh_warns_when_branch_angle_is_below_minimum() -> None:
     radii = np.array([1.0, 0.45])
     dirs = np.tile(np.array([[0.0, 0.0, -1.0]]), (2, 1))
 
-    with pytest.warns(RuntimeWarning, match="branch angle below minimum"):
+    with pytest.warns(RuntimeWarning, match="below strict FDM angle"):
         build_cloud_tree_mesh(
             nodes,
             parents,
@@ -122,5 +125,79 @@ def test_tree_mesh_warns_when_branch_angle_is_below_minimum() -> None:
             dirs,
             dirs,
             terrain_z=0.0,
-            min_branch_angle_deg=30.0,
+            strict_fdm_angle_deg=30.0,
         )
+
+
+def test_tree_mesh_unions_continuing_and_diverging_fork() -> None:
+    nodes = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 6.0],
+            [0.0, 0.0, 12.0],
+            [4.5, 0.0, 10.0],
+        ],
+        dtype=float,
+    )
+    parents = np.array([-1, 0, 1, 1])
+    radii = np.array([1.2, 0.95, 0.45, 0.45])
+    in_dirs = np.array(
+        [
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.75, 0.0, 0.66],
+        ],
+        dtype=float,
+    )
+
+    mesh, _attractor_parts = build_cloud_tree_mesh(
+        nodes,
+        parents,
+        radii,
+        in_dirs,
+        in_dirs,
+        terrain_z=0.0,
+        foliage_radius_mm=0.0,
+    )
+
+    assert mesh.is_watertight
+    assert mesh.is_volume
+
+
+def test_tree_mesh_unions_three_child_fork() -> None:
+    nodes = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 6.0],
+            [0.0, 0.0, 12.0],
+            [4.0, 0.0, 10.0],
+            [-3.5, 2.5, 9.5],
+        ],
+        dtype=float,
+    )
+    parents = np.array([-1, 0, 1, 1, 1])
+    radii = np.array([1.35, 1.1, 0.45, 0.45, 0.45])
+    in_dirs = np.array(
+        [
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.7, 0.0, 0.71],
+            [-0.56, 0.4, 0.72],
+        ],
+        dtype=float,
+    )
+
+    mesh, _attractor_parts = build_cloud_tree_mesh(
+        nodes,
+        parents,
+        radii,
+        in_dirs,
+        in_dirs,
+        terrain_z=0.0,
+        foliage_radius_mm=0.0,
+    )
+
+    assert mesh.is_watertight
+    assert mesh.is_volume
