@@ -134,6 +134,7 @@ Tile (.tile.py) ──► build_tile_from_spec()
 | `trees/envelope.py` | `TreeEnvelope` — axisymmetric crown envelope dataclass |
 | `trees/cloud_skeleton.py` | `grow_cloud_skeleton()` — two-pass skeleton + `_branch_skeleton` BFS + `_compute_radii_bottom_up` |
 | `trees/cloud_mesh.py` | `build_cloud_tree_mesh()` — tapered cubic-Bezier tube mesh |
+| `trees/foliage.py` | `build_foliage_clumps()` — one egg/teardrop FOLIAGE mesh per leaf branch |
 | `trees/layer.py` | `CloudTree` — scatter-thing class; `_stamp_tree` obstacle stamping |
 | `bases/dungeonblocks.py` | DungeonBlocks socket-peg base; logo inset; STL export |
 | `bases/openlock.py` | OpenLOCK T-slot base via manifold3d CSG; STL export |
@@ -262,6 +263,9 @@ continuity at forks. A root flare anchors the trunk to the terrain surface.
 | `branch_split_eagerness` | 0.8 | 0–1. Controls where splits happen. 1 = eager (split at `branch_split_angle_deg`). 0 = maximally lazy (split only when attractor approaches 90° from next_pos — the hard no-backtracking limit). Implemented as `split_cos_effective = branch_split_eagerness × cos(branch_split_angle_deg)`; lower values produce fewer, longer interior branches with splitting concentrated near the tips. |
 | `branch_target` | 0.3 | 0–1. Aim point within the owned attractor cloud. 0 = lowest-z attractor, 1 = highest-z attractor. Implemented as `target = lowest + branch_target × (highest − lowest)`. Lower values pull branches outward and downward; higher values drive growth upward. |
 | `branch_fork_balance` | 1.0 | 0–1. How evenly attractors are redistributed at each fork. 0 = each branch keeps only the attractors already classified as stray (no redistribution). 1 = all K branches at the fork receive equal shares of the full attractor pool. Higher values produce more architecturally balanced trees. |
+| `leaf_clumps` | True | Whether to generate foliage clumps on terminal (leaf) branches. |
+| `leaf_clump_radius_mm` | 4.0 | Tip radius (mm) of each foliage clump. Each leaf branch gets a D-section cone tapering from the parent branch radius up to this value at the attractor tip. |
+| `leaf_clump_length_mm` | 15.0 | Maximum clump length (mm). The cone covers only the last `min(branch_len, K)` mm of each leaf branch; the remainder is drawn as a plain wood tube. Taper rate is fixed at `(leaf_clump_radius_mm − r_wood) / K`, so short branches produce proportionally smaller-tipped cones. `None` = full branch is a cone. |
 
 ### Scatter System (rocks + grass + trees)
 

@@ -49,7 +49,7 @@ src/dharmatiles/terrains/__init__.py
 src/dharmatiles/terrains/reporter.py
 src/dharmatiles/terrains/tile.py
 src/extras/hex_paint_organizer.py
-src/extras/hex_paint_organizer_stand.py
+src/extras/hex_paint_organizer_stand_v2.py
 src/extras/render_tile.py
 src/scripts/__init__.py
 src/scripts/blade.py

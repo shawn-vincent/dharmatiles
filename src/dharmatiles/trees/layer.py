@@ -66,6 +66,10 @@ class CloudTree:
         branch_split_eagerness: float = 0.8,
         branch_target: float = 0.3,
         branch_fork_balance: float = 1.0,
+        # ── Leaf-cone foliage ─────────────────────────────────────────────
+        leaf_clumps: bool = True,
+        leaf_clump_radius_mm: float = 4.0,
+        leaf_clump_length_mm: float | None = 15.0,
     ) -> None:
         self.shape = TreeShape(
             height_mm=height_mm,
@@ -92,6 +96,12 @@ class CloudTree:
         self.branch_split_eagerness = float(np.clip(branch_split_eagerness, 0.0, 1.0))
         self.branch_target          = float(np.clip(branch_target, 0.0, 1.0))
         self.branch_fork_balance    = float(np.clip(branch_fork_balance, 0.0, 1.0))
+        # Leaf-cone foliage
+        self.leaf_clumps           = bool(leaf_clumps)
+        self.leaf_clump_radius_mm  = float(leaf_clump_radius_mm)
+        self.leaf_clump_length_mm  = (
+            float(leaf_clump_length_mm) if leaf_clump_length_mm is not None else None
+        )
 
     def footprint_mm(self) -> float:
         return float(bounds(self.shape.crown_radius_mm)[1])
@@ -106,7 +116,6 @@ class CloudTree:
         from ..core.color import Material, tag as _tag
         from .cloud_skeleton import grow_cloud_skeleton
         from .cloud_mesh import build_cloud_tree_mesh
-
         surface = scene.surface
         rng_seed = (
             derive_seed(surface.seed, "cloud-trees-scatter", layer_idx)
@@ -123,8 +132,9 @@ class CloudTree:
             surface,
             rng,
         )
-        wood_parts:      list[trimesh.Trimesh] = []
-        other_parts:     list[trimesh.Trimesh] = []
+        wood_parts:    list[trimesh.Trimesh] = []
+        foliage_parts: list[trimesh.Trimesh] = []
+        other_parts:   list[trimesh.Trimesh] = []
         for x, y, _gd in positions:
             tz = float(sample_grid(scene.terrain_z, surface, np.array([x]), np.array([y]))[0])
             tree_rng = np.random.default_rng(int(rng.integers(2 ** 62)))
@@ -159,32 +169,39 @@ class CloudTree:
             )
             if len(nodes) < 2:
                 continue
-            mesh, attractor_parts = build_cloud_tree_mesh(
+            mesh, attractor_parts, cone_parts = build_cloud_tree_mesh(
                 nodes,
                 parents,
                 radii,
                 in_dirs,
                 out_dirs,
                 terrain_z=tz,
+                foliage_radius_mm=self.leaf_clump_radius_mm if self.leaf_clumps else 0.0,
+                leaf_clump_length_mm=self.leaf_clump_length_mm if self.leaf_clumps else None,
                 debug_attractors=attractors if self.debug_attractors else None,
                 attractor_group_labels=group_labels,
             )
             if len(mesh.vertices) == 0:
                 continue
             wood_parts.append(mesh)
-            # Attractor spheres are already tagged with Material.FLOWER or
-            # Material.DEBUG_COLOR_N; let tile.py's material grouping step
-            # concatenate and colour them correctly.
+            # Attractor spheres are pre-tagged; material grouping in tile.py handles them.
             other_parts.extend(attractor_parts)
+            if self.leaf_clumps:
+                foliage_parts.extend(cone_parts)
+
             _stamp_tree(scene, surface, x, y, env, float(radii[0]))
 
-        if not wood_parts and not other_parts:
+        if not wood_parts and not foliage_parts and not other_parts:
             return []
         result: list[trimesh.Trimesh] = []
         if wood_parts:
             wood_combined = trimesh.util.concatenate(wood_parts)
             _tag(wood_combined, Material.WOOD)
             result.append(wood_combined)
+        if foliage_parts:
+            foliage_combined = trimesh.util.concatenate(foliage_parts)
+            _tag(foliage_combined, Material.FOLIAGE)
+            result.append(foliage_combined)
         result.extend(other_parts)
         return result
 

@@ -288,6 +288,76 @@ def _carve_soil_from_water(
     return result
 
 
+def _union_wood_and_foliage(
+    colored_meshes: list[trimesh.Trimesh],
+) -> list[trimesh.Trimesh]:
+    """Boolean-union tree wood and foliage while preserving face colours.
+
+    The tree generator emits WOOD and FOLIAGE as separate closed solids.  That
+    is convenient for material assignment, but separate overlapping/touching
+    shells can leave intermittent slicer artifacts.  This returns one manifold
+    tree shell whose faces are recoloured by nearest original surface so colour
+    STL rendering remains visually split, and 3MF export can later split those
+    colours back into filament parts.
+    """
+    from scipy.spatial import cKDTree
+    from ..core.color import RGBA
+
+    wood_idx = next((i for i, m in enumerate(colored_meshes)
+                     if m.metadata.get('material') == Material.WOOD), None)
+    foliage_idx = next((i for i, m in enumerate(colored_meshes)
+                        if m.metadata.get('material') == Material.FOLIAGE), None)
+    if wood_idx is None or foliage_idx is None:
+        return colored_meshes
+
+    wood_mesh = colored_meshes[wood_idx]
+    foliage_mesh = colored_meshes[foliage_idx]
+
+    with np.errstate(invalid='ignore', divide='ignore'):
+        both_solid = wood_mesh.is_volume and foliage_mesh.is_volume
+    if not both_solid:
+        return colored_meshes
+
+    try:
+        tree_mesh = trimesh.boolean.union(
+            [wood_mesh, foliage_mesh],
+            engine='manifold',
+            check_volume=False,
+        )
+    except Exception:
+        return colored_meshes
+
+    if len(tree_mesh.faces) == 0:
+        return colored_meshes
+
+    with np.errstate(invalid='ignore', divide='ignore'):
+        tree_mesh.fix_normals()
+
+    centers = tree_mesh.triangles_center
+    wood_tree = cKDTree(wood_mesh.triangles_center)
+    foliage_tree = cKDTree(foliage_mesh.triangles_center)
+    d_wood, _ = wood_tree.query(centers, workers=-1)
+    d_foliage, _ = foliage_tree.query(centers, workers=-1)
+
+    face_colors = np.empty((len(tree_mesh.faces), 4), dtype=np.uint8)
+    face_colors[:] = RGBA[Material.WOOD]
+    face_colors[d_foliage < d_wood] = RGBA[Material.FOLIAGE]
+    tree_mesh.visual = trimesh.visual.ColorVisuals(
+        mesh=tree_mesh,
+        face_colors=face_colors,
+    )
+    # Metadata remains a single material; mixed face colours are expanded back
+    # into per-extruder parts by _expand_mixed_materials() during 3MF export.
+    tree_mesh.metadata['material'] = Material.WOOD
+
+    result = [
+        m for i, m in enumerate(colored_meshes)
+        if i not in {wood_idx, foliage_idx}
+    ]
+    result.append(tree_mesh)
+    return result
+
+
 # ── Internal mesh builder ─────────────────────────────────────────────────────
 
 def _build_tile_mesh(
@@ -422,6 +492,23 @@ def _build_tile_mesh(
     total_f = sum(len(m.faces)    for m in colored_meshes)
     reporter.step_end(group_label, elapsed,
                       f"{total_v:,} verts · {total_f:,} faces total")
+
+    # ── Merge tree material shells ────────────────────────────────────────────
+    has_tree_materials = (
+        any(m.metadata.get('material') == Material.WOOD for m in colored_meshes)
+        and any(m.metadata.get('material') == Material.FOLIAGE for m in colored_meshes)
+    )
+    if has_tree_materials:
+        union_label = "Union wood and foliage"
+        reporter.step_begin(union_label)
+        t0 = _time.perf_counter()
+        colored_meshes = _union_wood_and_foliage(colored_meshes)
+        elapsed = _time.perf_counter() - t0
+        tree_m = next((m for m in colored_meshes
+                       if m.metadata.get('material') == Material.WOOD), None)
+        wt = ("watertight" if tree_m is not None and tree_m.is_watertight
+              else "NOT watertight")
+        reporter.step_end(union_label, elapsed, wt)
 
     # ── Carve soil from water (if any water present) ──────────────────────────
     has_water = any(m.metadata.get('material') == Material.WATER

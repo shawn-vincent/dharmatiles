@@ -25,6 +25,7 @@ tile = Tile(
                     CloudTree(
                         placement=Uniform(count_per_square=0.25),
                         debug_attractors=True,
+                        n_attraction=120,
                     ),
                 ),
             ],

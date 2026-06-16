@@ -14,6 +14,7 @@ WATER         bluish-turquoise   #149BD2   water volume mesh
 BASE          dark gray          #505050   socket-peg / T-slot underside base
 FLOWER        golden yellow      #F5C300   flowers / attractor debug spheres (no groups)
 WOOD          warm brown         #8B633F   tree trunks and branches
+FOLIAGE       dark forest green  #175C0D   tree leaf clumps on terminal branches
 DEBUG_COLOR_* vivid palette      —         12-slot cycling palette for per-group debug
               (red, blue, green, orange, purple, cyan, yellow, pink, lime,
                amber, indigo, brown-orange)
@@ -36,20 +37,21 @@ class Material(IntEnum):
     BASE          =  4
     FLOWER        =  5
     WOOD          =  6
+    FOLIAGE       =  7
     # 12-slot vivid palette for per-group debug colouring (e.g. attractor spheres).
     # Use debug_material(group_label) to map an integer label → Material.
-    DEBUG_COLOR_0  =  7
-    DEBUG_COLOR_1  =  8
-    DEBUG_COLOR_2  =  9
-    DEBUG_COLOR_3  = 10
-    DEBUG_COLOR_4  = 11
-    DEBUG_COLOR_5  = 12
-    DEBUG_COLOR_6  = 13
-    DEBUG_COLOR_7  = 14
-    DEBUG_COLOR_8  = 15
-    DEBUG_COLOR_9  = 16
-    DEBUG_COLOR_10 = 17
-    DEBUG_COLOR_11 = 18
+    DEBUG_COLOR_0  =  8
+    DEBUG_COLOR_1  =  9
+    DEBUG_COLOR_2  = 10
+    DEBUG_COLOR_3  = 11
+    DEBUG_COLOR_4  = 12
+    DEBUG_COLOR_5  = 13
+    DEBUG_COLOR_6  = 14
+    DEBUG_COLOR_7  = 15
+    DEBUG_COLOR_8  = 16
+    DEBUG_COLOR_9  = 17
+    DEBUG_COLOR_10 = 18
+    DEBUG_COLOR_11 = 19
 
 
 #: RGBA uint8 palette — one entry per :class:`Material`.
@@ -61,6 +63,7 @@ RGBA: dict[Material, tuple[int, int, int, int]] = {
     Material.BASE:          ( 45,  45,  45, 255),   # dark gray
     Material.FLOWER:        (245, 195,   0, 255),   # golden yellow
     Material.WOOD:          (139,  99,  63, 255),   # light warm brown
+    Material.FOLIAGE:       ( 23,  92,  13, 255),   # dark forest green
     # Debug palette — vivid, distinct, cycles via debug_material()
     Material.DEBUG_COLOR_0:  (255,  70,  70, 255),  # red
     Material.DEBUG_COLOR_1:  ( 70, 140, 255, 255),  # blue
@@ -353,13 +356,14 @@ def export_3mf_colored(
 
     # ── Filament slots ────────────────────────────────────────────────────────
     _EXT: dict[Material, int] = {
-        Material.BASE:   1,
-        Material.SOIL:   2,
-        Material.ROCK:   3,
-        Material.GRASS:  4,
-        Material.WATER:  5,
-        Material.FLOWER: 6,
-        Material.WOOD:   7,
+        Material.BASE:    1,
+        Material.SOIL:    2,
+        Material.ROCK:    3,
+        Material.GRASS:   4,
+        Material.WATER:   5,
+        Material.FLOWER:  6,
+        Material.WOOD:    7,
+        Material.FOLIAGE: 8,
     }
     _SLOT_HEX = [
         "#2D2D2D",  # slot 1 — BASE
@@ -369,6 +373,7 @@ def export_3mf_colored(
         "#1485D5",  # slot 5 — WATER
         "#F5C300",  # slot 6 — FLOWER (golden yellow)
         "#8B633F",  # slot 7 — WOOD   (light warm brown)
+        "#175C0D",  # slot 8 — FOLIAGE (dark forest green)
     ]
 
     # ── Filter empty tiles ────────────────────────────────────────────────────
