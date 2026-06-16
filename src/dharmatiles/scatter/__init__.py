@@ -8,6 +8,7 @@ __all__ = [
     'Rocks',
     'Grass',
     'Flowers',
+    'BarkConfig',
     'CloudTree',
     'Uniform',
     'Grouped',
@@ -19,4 +20,7 @@ def __getattr__(name):
     if name == 'CloudTree':
         from ..trees import CloudTree
         return CloudTree
+    if name == 'BarkConfig':
+        from ..trees import BarkConfig
+        return BarkConfig
     raise AttributeError(name)

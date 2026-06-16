@@ -11,6 +11,7 @@ from ..core.tile import derive_seed
 from ..dist import Sample, bounds, sample
 from ..scatter.config import Uniform
 from ..scatter.distribute import scatter_positions
+from .bark import BarkConfig
 from .envelope import TreeEnvelope
 
 
@@ -72,6 +73,7 @@ class CloudTree:
         leaf_clumps: bool = True,
         leaf_clump_radius_mm: float = 4.0,
         leaf_clump_length_mm: float | None = 15.0,
+        bark: BarkConfig | None = None,
     ) -> None:
         self.shape = TreeShape(
             height_mm=height_mm,
@@ -106,6 +108,7 @@ class CloudTree:
         self.leaf_clump_length_mm  = (
             float(leaf_clump_length_mm) if leaf_clump_length_mm is not None else None
         )
+        self.bark = BarkConfig() if bark is None else bark
 
     def footprint_mm(self) -> float:
         return float(bounds(self.shape.crown_radius_mm)[1])
@@ -140,7 +143,8 @@ class CloudTree:
         other_parts: list[trimesh.Trimesh] = []
         for x, y, _gd in positions:
             tz = float(sample_grid(scene.terrain_z, surface, np.array([x]), np.array([y]))[0])
-            tree_rng = np.random.default_rng(int(rng.integers(2 ** 62)))
+            tree_seed = int(rng.integers(2 ** 62))
+            tree_rng = np.random.default_rng(tree_seed)
             env = self._sample_envelope(x, y, tz, tree_rng)
             # Sample group dimensions per-tree (may be fixed floats or distributions).
             gw = (
@@ -183,6 +187,8 @@ class CloudTree:
                 strict_fdm_angle_deg=self.strict_fdm_angle_deg,
                 foliage_radius_mm=self.leaf_clump_radius_mm if self.leaf_clumps else 0.0,
                 leaf_clump_length_mm=self.leaf_clump_length_mm if self.leaf_clumps else None,
+                bark=self.bark,
+                bark_seed=tree_seed,
                 debug_attractors=attractors if self.debug_attractors else None,
                 attractor_group_labels=group_labels,
             )
