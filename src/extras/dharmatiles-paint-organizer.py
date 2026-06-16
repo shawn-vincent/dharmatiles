@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a hexagonal craft-paint organizer STL.
+"""Generate a Dharmatiles paint organizer STL.
 
 4×3 honeycomb grid (default) — 4 columns of 3 flat-top hexagonal cups (hex
 points face left/right, flats face up/down).  Open front/back; magnets are
@@ -656,7 +656,7 @@ def _step(console, label: str) -> Generator[None, None, None]:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate a hexagonal craft-paint organizer STL.")
+    parser = argparse.ArgumentParser(description="Generate a Dharmatiles paint organizer STL.")
     parser.add_argument("--cols",      type=int,   default=4,   help="Number of columns (default: 4)")
     parser.add_argument("--rows",      type=int,   default=3,   help="Number of rows (default: 3)")
     parser.add_argument("--height",    type=float, default=60.0, help="Overall cup height in mm (default: 60.0)")
@@ -679,7 +679,7 @@ def main() -> None:
                                   magnet_bevel=args.magnet_bevel,
                                   magnet_pushout=not args.no_magnet_pushout,
                                   side_cutout_width=args.side_cutout_width)
-    out_path  = Path("stl/extras/hex_paint_organizer.stl")
+    out_path  = Path("stl/extras/dharmatiles-paint-organizer.stl")
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
     pitch_x, pitch_y = _pitches(spec)
 
@@ -701,7 +701,7 @@ def main() -> None:
         from rich.rule import Rule
         console.print()
         console.print(Rule(
-            f"[bold cyan]Hex Paint Organizer[/bold cyan]"
+            f"[bold cyan]Dharmatiles Paint Organizer[/bold cyan]"
             f"  [dim]·  {spec.cols} cols × {spec.rows} rows  ·  {spec.height:.0f} mm tall[/dim]",
             style="cyan",
         ))
@@ -731,7 +731,7 @@ def main() -> None:
             "  [dim]→ right (row) · ↑ up (col)[/dim]"
         )
     else:
-        print(f"Building hex organizer  ({spec.cols} columns of {spec.rows} cups, open front/back)")
+        print(f"Building Dharmatiles paint organizer  ({spec.cols} columns of {spec.rows} cups, open front/back)")
         print(
             f"  cup: outer F2F {outer_f2f:.1f} mm  perimeter wall {spec.wall:.1f} mm  "
             f"interior wall {spec.interior_wall:.1f} mm"

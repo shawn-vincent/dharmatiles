@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a stand STL — a small slab matching the top of the Hex paint organizer.
+"""Generate a stand STL for the Dharmatiles paint organizer.
 
 Builds geometry directly in place instead of generate-then-cut-then-rotate:
 it avoids assembling an entire organizer-frame body (X=cols, Y=rows,
@@ -19,8 +19,7 @@ The only unavoidable transform is a single rotate at the very end: manifold3d's
 `extrude()` always extrudes a 2D cross-section along its own Z axis, so the
 cup-axis (this script's extrude axis) has to be swapped into the stand's Y
 (depth) axis once the solid is complete. That swap is a fixed frame-convention
-fix, not a cutting step — contrast with v1, where the equivalent rotate at the
-end follows a chain of construct-in-the-wrong-frame-then-clip operations.
+fix, not a cutting step.
 
 Final stand frame:
 
@@ -41,6 +40,7 @@ organizer's `vertical_roundover`).
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -49,15 +49,22 @@ import manifold3d as m3d
 import numpy as np
 import trimesh
 
-sys.path.insert(0, str(Path(__file__).parent))
-from hex_paint_organizer import (  # noqa: E402
-    BOOLEAN_OVERLAP,
-    HexOrganizerSpec,
-    _magnet_pocket,
-    _rounded_hex_cs,
-    cup_centre,
-    hex_cross_section,
+_ORGANIZER_PATH = Path(__file__).with_name("dharmatiles-paint-organizer.py")
+_ORGANIZER_SPEC = importlib.util.spec_from_file_location(
+    "dharmatiles_paint_organizer", _ORGANIZER_PATH
 )
+if _ORGANIZER_SPEC is None or _ORGANIZER_SPEC.loader is None:
+    raise ImportError(f"Could not load {_ORGANIZER_PATH}")
+_ORGANIZER = importlib.util.module_from_spec(_ORGANIZER_SPEC)
+sys.modules[_ORGANIZER_SPEC.name] = _ORGANIZER
+_ORGANIZER_SPEC.loader.exec_module(_ORGANIZER)
+
+BOOLEAN_OVERLAP = _ORGANIZER.BOOLEAN_OVERLAP
+HexOrganizerSpec = _ORGANIZER.HexOrganizerSpec
+_magnet_pocket = _ORGANIZER._magnet_pocket
+_rounded_hex_cs = _ORGANIZER._rounded_hex_cs
+cup_centre = _ORGANIZER.cup_centre
+hex_cross_section = _ORGANIZER.hex_cross_section
 
 FLOOR_THICKNESS_MM = 4.0
 
@@ -167,7 +174,7 @@ def build_stand(stand: HexStandSpec) -> m3d.Manifold:
     #    above the cut) before extruding, so the floor below stays solid
     #    without ever building the unclipped bore and cutting it down.
     #    bore_f2f matches the organizer's actual open-bore diameter (see
-    #    hex_paint_organizer._cup_cutters) — without the tolerance pad this
+    #    dharmatiles-paint-organizer.py _cup_cutters) — without the tolerance pad this
     #    tube would print 2*tolerance narrower than the cavity it stands in for.
     bore_f2f = spec.bore_f2f + 2.0 * spec.tolerance
     R_outer = outer_f2f / np.sqrt(3)
@@ -196,7 +203,7 @@ def build_stand(stand: HexStandSpec) -> m3d.Manifold:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Generate a stand STL matching the top of the hex paint organizer."
+        description="Generate a stand STL matching the top of the Dharmatiles paint organizer."
     )
     parser.add_argument("--cols",      type=int,   default=4,   help="Number of columns (default: 4)")
     parser.add_argument("--rows",      type=int,   default=3,   help="Number of rows (default: 3)")
@@ -226,7 +233,7 @@ def main() -> None:
     spec = stand.organizer
     cut_y = stand.cut_y if stand.cut_y is not None else _default_cut_y(spec)
 
-    print("Building hex organizer stand (in-place, stand frame)")
+    print("Building Dharmatiles paint organizer stand (in-place, stand frame)")
     print(f"  cut at organizer y = {cut_y:.2f} mm  (col-1 row-{spec.rows - 1} centre)")
     print(f"  depth: {spec.height:.2f} mm + inner-wall clearance {spec.tolerance:.2f} mm = {_stand_depth(spec):.2f} mm")
     print(f"  cols 0, 2 → top strips;  cols 1, 3 → open half-hex tubes")
@@ -245,7 +252,7 @@ def main() -> None:
     if mesh.volume < 0:
         mesh.invert()
 
-    out_path = Path("stl/extras/hex_paint_organizer_stand_v2.stl")
+    out_path = Path("stl/extras/dharmatiles-paint-organizer-stand.stl")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     mesh.export(str(out_path))
 

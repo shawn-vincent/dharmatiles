@@ -132,9 +132,8 @@ class CloudTree:
             surface,
             rng,
         )
-        wood_parts:    list[trimesh.Trimesh] = []
-        foliage_parts: list[trimesh.Trimesh] = []
-        other_parts:   list[trimesh.Trimesh] = []
+        tree_parts:  list[trimesh.Trimesh] = []
+        other_parts: list[trimesh.Trimesh] = []
         for x, y, _gd in positions:
             tz = float(sample_grid(scene.terrain_z, surface, np.array([x]), np.array([y]))[0])
             tree_rng = np.random.default_rng(int(rng.integers(2 ** 62)))
@@ -176,6 +175,7 @@ class CloudTree:
                 in_dirs,
                 out_dirs,
                 terrain_z=tz,
+                min_branch_angle_deg=self.branch_split_angle_deg,
                 foliage_radius_mm=self.leaf_clump_radius_mm if self.leaf_clumps else 0.0,
                 leaf_clump_length_mm=self.leaf_clump_length_mm if self.leaf_clumps else None,
                 debug_attractors=attractors if self.debug_attractors else None,
@@ -183,25 +183,20 @@ class CloudTree:
             )
             if len(mesh.vertices) == 0:
                 continue
-            wood_parts.append(mesh)
+            tree_mesh = _union_tree_solids([mesh] + cone_parts) if self.leaf_clumps else mesh
+            tree_parts.append(tree_mesh)
             # Attractor spheres are pre-tagged; material grouping in tile.py handles them.
             other_parts.extend(attractor_parts)
-            if self.leaf_clumps:
-                foliage_parts.extend(cone_parts)
 
             _stamp_tree(scene, surface, x, y, env, float(radii[0]))
 
-        if not wood_parts and not foliage_parts and not other_parts:
+        if not tree_parts and not other_parts:
             return []
         result: list[trimesh.Trimesh] = []
-        if wood_parts:
-            wood_combined = trimesh.util.concatenate(wood_parts)
-            _tag(wood_combined, Material.WOOD)
-            result.append(wood_combined)
-        if foliage_parts:
-            foliage_combined = trimesh.util.concatenate(foliage_parts)
-            _tag(foliage_combined, Material.FOLIAGE)
-            result.append(foliage_combined)
+        if tree_parts:
+            tree_combined = trimesh.util.concatenate(tree_parts)
+            _tag(tree_combined, Material.WOOD)
+            result.append(tree_combined)
         result.extend(other_parts)
         return result
 
@@ -241,3 +236,30 @@ def _stamp_tree(scene, surface, x: float, y: float, env: TreeEnvelope, root_radi
                 scene.terrain_support_z[j, i] = max(scene.terrain_support_z[j, i], env.terrain_z + env.height_mm)
                 if scene.obstacle_mask is not None:
                     scene.obstacle_mask[j, i] = True
+
+
+def _union_tree_solids(parts: list[trimesh.Trimesh]) -> trimesh.Trimesh:
+    """Boolean-union a tree's wood skeleton and foliage clumps into one volume."""
+    solid_parts: list[trimesh.Trimesh] = []
+    for part in parts:
+        if len(part.faces) == 0:
+            continue
+        if part.is_volume:
+            solid_parts.append(part)
+            continue
+        solid_parts.extend(
+            component
+            for component in part.split(only_watertight=False)
+            if len(component.faces) > 0 and component.is_volume
+        )
+    if len(solid_parts) == 1:
+        return solid_parts[0]
+    fallback = trimesh.util.concatenate(solid_parts)
+    unioned = trimesh.boolean.union(
+        solid_parts,
+        engine='manifold',
+        check_volume=False,
+    )
+    if len(unioned.faces) == 0:
+        return fallback
+    return unioned

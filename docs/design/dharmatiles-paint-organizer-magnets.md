@@ -1,4 +1,4 @@
-# Hex Paint Organizer — Magnet Interconnect Design
+# Dharmatiles Paint Organizer — Magnet Interconnect Design
 
 ## Goal
 
@@ -145,6 +145,6 @@ before gluing.
   `_hex_bounds`) has been removed — the magnets now live in the hex walls
   themselves.
 - Constants `MAGNET_Z` (6 mm) and `MAGNET_OVERSHOOT` (0.6 mm) are module-level in
-  `src/extras/hex_paint_organizer.py`.
+  `src/extras/dharmatiles-paint-organizer.py`.
 </content>
 </invoke>

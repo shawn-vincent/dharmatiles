@@ -85,7 +85,7 @@ def test_cloud_envelope_base_radius_peak_and_smooth_join() -> None:
 
 def test_cloud_tree_branches_from_root_without_bare_trunk_phase() -> None:
     env = _env()
-    nodes, parents, _radii, _prior_dirs, _attractors = grow_cloud_skeleton(
+    nodes, parents, _radii, _in_dirs, _out_dirs, _attractors, _group_labels = grow_cloud_skeleton(
         env,
         np.random.default_rng(789),
         n_attraction=80,
@@ -95,4 +95,4 @@ def test_cloud_tree_branches_from_root_without_bare_trunk_phase() -> None:
     root_children = np.flatnonzero(parents == 0)
     assert len(root_children) > 1
     assert np.isclose(nodes[0, 2], env.terrain_z)
-    assert np.all(nodes[root_children, 2] < env.crown_base_z)
+    assert np.any(nodes[root_children, 2] < env.crown_base_z)

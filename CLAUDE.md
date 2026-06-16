@@ -37,7 +37,7 @@ There are no automated tests; correctness is verified by opening the STL in Prus
 for spec in src/tiles/**/*.tile.py; do dharmatiles-gen --spec "$spec"; done
 ```
 
-- For `src/extras/hex_paint_organizer.py`: `python src/extras/hex_paint_organizer.py`
+- For `src/extras/dharmatiles-paint-organizer.py`: `python src/extras/dharmatiles-paint-organizer.py`
 
 Always report vertex/face counts and watertight status for each generated file.
 
@@ -340,7 +340,7 @@ src/dharmatiles/
 src/tiles/
   ground/        ground-type tile specs (.tile.py)
   water/         water-type tile specs (.tile.py)
-src/extras/      standalone non-terrain utilities (hex_paint_organizer.py)
+src/extras/      standalone non-terrain utilities (dharmatiles-paint-organizer.py)
 src/scripts/     standalone utilities; src/scripts/archived/ = old generations
 src/scad/        OpenSCAD files and experiments
 stl/

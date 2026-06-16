@@ -24,7 +24,8 @@ tile = Tile(
                 Scatter(
                     CloudTree(
                         placement=Uniform(count_per_square=0.25),
-                        debug_attractors=True,
+                        debug_attractors=False,
+                        leaf_clumps=False,
                         n_attraction=120,
                     ),
                 ),
