@@ -13,9 +13,10 @@ before returning a single watertight wood mesh.
 
 Foliage (``foliage_radius_mm > 0``) is handled by building a separate
 icosphere-based clump mesh for the last ``leaf_clump_length_mm`` of every leaf
-branch.  The clump is offset perpendicular-upward so the branch rises up into
-the foliage: at the clump base the offset equals the local ring radius (branch
-halfway embedded), tapering linearly to zero at the tip (fully embedded).
+branch.  The clump is offset perpendicular-upward by its own ring radius
+throughout, so the branch runs along the bottom surface of the clump and
+protrudes below it — the branch is visible beneath the foliage across the full
+clump length.
 """
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ import trimesh
 
 from ..core.color import Material, debug_material, tag as _tag
 from .bark import BarkConfig
+from .leaf import build_leaf_mesh
 
 # Fixed polygon count for every cross-section ring.
 _N_SIDES = 12
@@ -226,7 +228,7 @@ def build_cloud_tree_mesh(
             clump_start_pos, clump_start_tan = _bezier_clump_start(
                 p0, _bbp1, _bbp2, p3, clump_len,
             )
-            clump = _build_foliage_clump_mesh(
+            clump, noise_peak = _build_foliage_clump_mesh(
                 tip_pos=p3,
                 tip_tangent=_bt_end,
                 start_pos=clump_start_pos,
@@ -241,11 +243,24 @@ def build_cloud_tree_mesh(
                 edge_solids.append(clump)
 
             # Single leaf at the tip of each foliage clump.
-            # Offset the leaf base to the outer surface of the forward dome
-            # (the dome's north pole is foliage_radius_mm ahead of p3).
+            # The geometric dome north pole is at:
+            #   p3 + (r_foliage - r_end_wood)*pu + r_foliage*tangent
+            # The noise shift pulls the dome surface inward by noise_peak mm
+            # along each vertex normal.  At the north pole the normal is the
+            # tangent, so the actual eroded tip is noise_peak mm behind the
+            # geometric tip.  We recess the leaf base by that exact amount so
+            # it never protrudes through the noise-eroded dome surface.
             if leaf_enable and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
-                leaf_base = p3 + foliage_radius_mm * _bt_end
-                for leaf_part in _build_leaf_mesh(
+                _wup        = np.array([0.0, 0.0, 1.0])
+                _pu_p       = _wup - float(np.dot(_wup, _bt_end)) * _bt_end
+                _pu_n       = float(np.linalg.norm(_pu_p))
+                _pu         = _pu_p / _pu_n if _pu_n > 1e-6 else np.zeros(3)
+                _dome_shift = max(0.0, foliage_radius_mm - r_end_wood - _FOLIAGE_MAX_NOISE_MM)
+                leaf_base   = (p3
+                               + _dome_shift * _pu
+                               + (foliage_radius_mm - noise_peak) * _bt_end)
+                leaf_seed = _hash01_int(bark_seed, "leaf", i)
+                for leaf_part in build_leaf_mesh(
                     base_pos=leaf_base,
                     tangent=_bt_end,
                     length_mm=leaf_length_mm,
@@ -254,8 +269,7 @@ def build_cloud_tree_mesh(
                     fold_angle_deg=leaf_fold_angle_deg,
                     keel_depth_mm=leaf_keel_depth_mm,
                     keel_tip_angle_deg=leaf_keel_tip_angle_deg,
-                    edge_id=i,
-                    bark_seed=bark_seed,
+                    seed=leaf_seed,
                 ):
                     if len(leaf_part.vertices) > 0:
                         edge_solids.append(leaf_part)
@@ -497,6 +511,10 @@ _FOLIAGE_NOISE_AMPLITUDE_MM        = 0.10  # 1-sigma displacement (mm)
 # Coarse smooth noise: large-scale silhouette distortion.
 _FOLIAGE_COARSE_NOISE_AMPLITUDE_MM = 0.5   # peak ± displacement (mm)
 _FOLIAGE_COARSE_NOISE_CELL_MM      = 4.0   # spatial wavelength (mm)
+# Maximum possible inward noise erosion of the foliage surface: coarse peak
+# amplitude plus 2σ of the fine Gaussian.  Used to pre-sink the foliage cone
+# so branches stay buried under the skin even in the worst-noise case.
+_FOLIAGE_MAX_NOISE_MM = _FOLIAGE_COARSE_NOISE_AMPLITUDE_MM + 2.0 * _FOLIAGE_NOISE_AMPLITUDE_MM
 
 
 def _foliage_gaussian_noise(
@@ -624,18 +642,26 @@ def _build_foliage_clump_mesh(
     clump_length_mm: float,
     edge_id: int,
     bark_seed: int,
-) -> trimesh.Trimesh:
+) -> tuple[trimesh.Trimesh, float]:
     """Foliage clump: icosphere bent along the branch Bezier spine.
 
     Profile arc segments (back → front):
       1. Back hemisphere  (radius r_wood,    arc = π·r_wood/2)
-         — extends backward from start_pos along start_tangent
+         — extends backward from start_pos along start_tangent; ring centres
+           shifted 0.5 × ring_radius perpendicular-upward (tc = 0 factor).
       2. Cone body        (r_wood → r_foliage)
-         — cross-sections swept along the Bezier spine from start_pos to tip_pos;
-           each cross-section is projected perpendicular to the local spine
-           tangent so the clump bends with the branch
+         — cross-sections swept along the Bezier spine from start_pos to tip_pos.
+           Each ring centre is shifted perpendicular-upward by a fraction of
+           its own radius that rises smoothly from 0.5 at the base (tc=0) to
+           (1 − r_wood/r_foliage) at the tip (tc=1):
+               factor(tc) = 0.5 + (0.5 − r_wood/r_foliage) × smoothstep(tc)
+           At tc=0 the branch sits halfway into the lower half of the clump; at
+           tc=1 the ring bottom aligns exactly with the branch bottom (fully
+           embedded — no protrusion).
       3. Forward dome     (radius r_foliage, arc = π·r_foliage/2)
-         — extends forward from tip_pos along tip_tangent
+         — extends forward from tip_pos along tip_tangent; centre shifted
+           (r_foliage − r_wood) perpendicular-upward (tc=1 factor), so the dome
+           bottom aligns with the branch bottom and the branch is fully inside.
 
     Noise applied along surface normals:
       • Fine Gaussian  (0.05 mm cell): per-vertex surface grain
@@ -717,7 +743,8 @@ def _build_foliage_clump_mesh(
         rn     = np.linalg.norm(rp, axis=1, keepdims=True)
         rpu    = np.where(rn > 1e-10, rp / rn, 0.0)
         pu_s   = _pu_unit_scalar(start_t)               # (3,) fixed direction
-        verts[ms] = start_p + pu_s * rr_s[:, None] + ax_s[:, None] * start_t + rpu * rr_s[:, None]
+        # Back hemisphere uses the base factor (0.5) for continuity with the cone.
+        verts[ms] = start_p + pu_s * (0.5 * rr_s[:, None]) + ax_s[:, None] * start_t + rpu * rr_s[:, None]
 
     # ── Cone body: cross-sections swept along Bezier spine ────────────────────
     mc = (~ms) & (u_vals <= south_arc + cone_arc_p)
@@ -741,9 +768,16 @@ def _build_foliage_clump_mesh(
         rn   = np.linalg.norm(rp, axis=1, keepdims=True)
         rpu  = np.where(rn > 1e-10, rp / rn, 0.0)
         pu_c = _pu_unit_batch(st_c)                     # (M, 3) per-vertex direction
-        # Offset fades from full at the base (tc=0) to zero at the tip (tc=1)
-        # so the branch rises into the foliage rather than sitting below it throughout.
-        verts[mc] = sp_c + pu_c * (rr_c * (1.0 - tc))[:, None] + rpu * rr_c[:, None]
+        # Offset rises smoothly from 0.5 at the base (tc=0) to factor_tip at
+        # the tip (tc=1) via cubic smoothstep.
+        # factor_tip gives offset = r_tip - r_base - _FOLIAGE_MAX_NOISE_MM, so
+        # the ring bottom sits _FOLIAGE_MAX_NOISE_MM below the branch bottom.
+        # After the noise erodes the surface inward by up to that amount, the
+        # branch bottom ends up flush with (but not exposed through) the skin.
+        factor_tip = max(0.0, 1.0 - (r_base + _FOLIAGE_MAX_NOISE_MM) / max(r_tip, 1e-6))
+        smooth_tc  = 3.0 * tc ** 2 - 2.0 * tc ** 3     # smoothstep ∈ [0, 1]
+        tc_factor  = 0.5 + (factor_tip - 0.5) * smooth_tc
+        verts[mc] = sp_c + pu_c * (rr_c * tc_factor)[:, None] + rpu * rr_c[:, None]
 
     # ── Forward dome: forward from tip_p along tip_t ──────────────────────────
     mn = u_vals > south_arc + cone_arc_p
@@ -751,8 +785,14 @@ def _build_foliage_clump_mesh(
         phi    = (u_vals[mn] - south_arc - cone_arc_p) / north_arc * (np.pi / 2.0)
         ax_n   = r_tip * np.sin(phi)
         rr_n   = r_tip * np.cos(phi)
-        # No offset at the tip: dome is centred on the branch, fully embedding it.
-        verts[mn] = tip_p + ax_n[:, None] * tip_t + rad_u[mn] * rr_n[:, None]
+        # Dome offset = r_tip - r_base - _FOLIAGE_MAX_NOISE_MM (matching tc=1
+        # factor), so the dome equator bottom sits _FOLIAGE_MAX_NOISE_MM below
+        # the branch bottom.  After noise erodes the surface inward by up to
+        # that amount the branch remains just under the skin.
+        pu_tip      = _pu_unit_scalar(tip_t)
+        dome_shift  = max(0.0, r_tip - r_base - _FOLIAGE_MAX_NOISE_MM)
+        dome_center = tip_p + dome_shift * pu_tip
+        verts[mn] = dome_center + ax_n[:, None] * tip_t + rad_u[mn] * rr_n[:, None]
 
     # ── Normals + two noise layers ────────────────────────────────────────────
     shaped  = trimesh.Trimesh(vertices=verts, faces=ico.faces.copy(), process=False)
@@ -766,352 +806,17 @@ def _build_foliage_clump_mesh(
     # Shift the full noise wave inward: subtract its peak so the maximum
     # displacement is exactly 0 (the smooth envelope) and the full 2A
     # trough range erodes inward — no amplitude loss, no outward expansion.
-    disp = disp - disp.max()
+    # noise_peak is the pre-shift maximum: it equals the uniform inward shift
+    # applied to every vertex, and therefore the minimum guaranteed erosion at
+    # the dome tip.  Callers use it to recess the leaf base by that amount so
+    # the leaf never protrudes through the noise-eroded dome surface.
+    noise_peak = float(disp.max())
+    disp = disp - noise_peak
     verts = verts + normals * disp[:, np.newaxis]
 
     result = trimesh.Trimesh(vertices=verts, faces=ico.faces.copy(), process=False)
     result.fix_normals()
-    return result
-
-
-# ── Single leaf mesh ──────────────────────────────────────────────────────────
-
-_LEAF_N_LONG           = 20    # longitudinal sections (base → tip)
-_LEAF_N_LAT            = 16    # lateral sections across the leaf (must be even)
-_LEAF_CREASE_SHARPNESS = 10.0  # tanh width of midrib crease (larger = narrower)
-# Width profile normalisation: w(s) ∝ s^0.4 × (1-s)^0.8 peaks at s=1/3.
-_LEAF_W_PEAK_NORM  = float((1.0 / 3.0) ** 0.4 * (2.0 / 3.0) ** 0.8)
-# Thickness-along-length profile: t_long(s) ∝ s^0.5 × (1-s)^1.5, peak at s=0.25.
-# Zero at both base (s=0) and tip (s=1), but biased toward the base so the dome
-# bulge is greatest near s=0.25 and the cross-section flattens out toward the tip.
-_LEAF_LONG_T_PEAK  = float(0.25 ** 0.5 * 0.75 ** 1.5)   # ≈ 0.3248
-
-
-def _leaf_width_profile(s: np.ndarray) -> np.ndarray:
-    """Width fraction ∈ [0, 1] at normalised longitudinal position s ∈ [0, 1].
-
-    Broader toward the base (peak at s ≈ 1/3), tapering smoothly to 0 at
-    both ends.  This gives an ovate leaf shape — rounded at the base and
-    pointed at the tip.
-    """
-    s = np.asarray(s, float)
-    raw = (s ** 0.4) * ((1.0 - s) ** 0.8)
-    return raw / _LEAF_W_PEAK_NORM
-
-
-def _build_leaf_keel_prism(
-    base_vertex: np.ndarray,
-    tip_vertex: np.ndarray,
-    neg_t_edge: np.ndarray,
-    pos_t_edge: np.ndarray,
-    N: np.ndarray,
-    T: np.ndarray,
-    s_values: np.ndarray,
-    half_widths: np.ndarray,
-    keel_depth_mm: float,
-    keel_tip_angle_deg: float,
-) -> trimesh.Trimesh:
-    """Leaf keel: a V cross-section that meets at a ridge on the midrib.
-
-    Parameters
-    ----------
-    base_vertex       : (3,)   leaf base point (s=0)
-    tip_vertex        : (3,)   leaf tip point  (s=1)
-    neg_t_edge        : (n,3)  bottom-surface vertices at t=−1 (−T side), s increasing
-    pos_t_edge        : (n,3)  bottom-surface vertices at t=+1 (+T side), s increasing
-    N                 : (3,)   leaf normal (toward top surface)
-    T                 : (3,)   lateral direction (+T = one leaf edge)
-    s_values          : (n,)   s parameter for each interior ring
-    half_widths       : (n,)   leaf half-width w_s at each interior ring (unused)
-    keel_depth_mm     : maximum keel depth below the leaf plane (= the
-        quarter-circle fillet radius)
-    keel_tip_angle_deg: unused — the tip descent is a quarter circle, not a bevel
-
-    Construction
-    ------------
-    The **keel bottom edge** (the ridge along the midrib) is an explicit
-    longitudinal depth profile, independent of leaf width.  A quarter-circle
-    fillet of radius ``keel_depth_mm`` runs from the tip back to the flat
-    full-depth section:
-
-        x = distance back from the tip
-        depth(x) = sqrt(R² − (R − x)²)   for x < R   (R = keel_depth_mm)
-        depth(x) = R                     for x ≥ R
-
-    So it touches the leaf tip (depth 0) descending **vertically** there, curves
-    round to a **horizontal** tangent as it reaches ``keel_depth_mm``, then runs
-    flat at full depth back to the rounded base — where it forms a vertical rear
-    edge (a solid anchor).
-
-    The **side walls** are then built straight from each leaf edge down to the
-    ridge at that station, whatever angle that implies.  The cross-section is a
-    V meeting at the midrib ridge (no flat bottom); only the tip pinches to a
-    point.
-
-    By symmetry about the midrib the −T side mirrors the +T side.
-    """
-    n      = len(pos_t_edge)
-    Nu     = N / max(float(np.linalg.norm(N)), 1e-12)
-    L_len  = float(np.linalg.norm(tip_vertex - base_vertex))
-    D      = float(keel_depth_mm)
-    R      = D                       # quarter-circle fillet radius = full depth
-
-    def _ridge_depth(s: float) -> float:
-        # Quarter circle from the tip: vertical tangent at x=0 (straight down),
-        # horizontal tangent at x=R (straight into the flat full-depth run).
-        x = (1.0 - s) * L_len
-        if x >= R:
-            return D
-        return float(np.sqrt(max(0.0, R * R - (R - x) ** 2)))
-
-    # ── Per-station geometry (k = 0 base · 1..n rings · n+1 tip) ───────────────
-    # Top: the two leaf-edge points.  Ridge: the keel bottom edge on the midrib
-    # line, at the longitudinal depth profile above.
-    s_all = [0.0] + [float(s_values[i]) for i in range(n)] + [1.0]
-    topP, topN, ridge = [], [], []
-    for k, s in enumerate(s_all):
-        if k == 0:
-            tp = tn = base_vertex
-        elif k == n + 1:
-            tp = tn = tip_vertex
-        else:
-            tp, tn = pos_t_edge[k - 1], neg_t_edge[k - 1]
-        mid = base_vertex + s * (tip_vertex - base_vertex)
-        topP.append(tp); topN.append(tn)
-        ridge.append(mid - _ridge_depth(s) * Nu)
-
-    n_st = n + 2   # number of stations
-
-    # ── Assemble vertices ─────────────────────────────────────────────────────
-    verts: list[np.ndarray] = []
-
-    def _add(p: np.ndarray) -> int:
-        verts.append(np.asarray(p, float))
-        return len(verts) - 1
-
-    iTP, iTN, iR = [], [], []
-    for k in range(n_st):
-        width_pinch = (k == 0 or k == n_st - 1)   # leaf outline is a point here
-        itp = _add(topP[k])
-        iTP.append(itp)
-        iTN.append(itp if width_pinch else _add(topN[k]))
-        # The ridge merges into the apex only at the tip (depth 0); at the base
-        # it stays at full depth, forming the vertical rear edge.
-        iR.append(itp if bool(np.allclose(ridge[k], topP[k])) else _add(ridge[k]))
-
-    F: list[list[int]] = []
-
-    def _quad(a: int, b: int, c: int, d: int) -> None:
-        # Two triangles a-b-c / a-c-d, skipping any that collapse to a line at a
-        # pinch (a repeated index ⇒ zero-area face).
-        if a != b and b != c and a != c:
-            F.append([a, b, c])
-        if a != c and c != d and a != d:
-            F.append([a, c, d])
-
-    for k in range(n_st - 1):
-        _quad(iTP[k], iTP[k + 1], iR[k + 1], iR[k])   # +T side wall
-        _quad(iR[k], iR[k + 1], iTN[k + 1], iTN[k])   # −T side wall
-
-    # ── Top cap (leaf-shaped) over the full outline loop ──────────────────────
-    loop = ([iTP[k] for k in range(n_st)] +
-            [iTN[k] for k in range(n_st - 2, 0, -1)])
-    c_top = _add(np.mean([verts[i] for i in loop], axis=0))
-    for a in range(len(loop)):
-        b = (a + 1) % len(loop)
-        F.append([c_top, loop[a], loop[b]])
-
-    mesh = trimesh.Trimesh(
-        vertices=np.array(verts),
-        faces=np.array(F, dtype=np.int32),
-        process=False,
-    )
-    mesh.fix_normals()
-    return mesh
-
-
-def _build_leaf_mesh(
-    *,
-    base_pos: np.ndarray,
-    tangent: np.ndarray,
-    length_mm: float,
-    width_mm: float,
-    thickness_mm: float,
-    fold_angle_deg: float,
-    keel_depth_mm: float = 1.0,
-    keel_tip_angle_deg: float = 45.0,
-    edge_id: int,
-    bark_seed: int,
-) -> list[trimesh.Trimesh]:
-    """Single leaf: ovate outline, dome cross-section with narrow midrib crease.
-
-    Geometry
-    --------
-    * **Outline** (top view): ovate teardrop — peak width at ≈ 1/3 from base,
-      tapering to a rounded base and a pointed tip.
-    * **Cross-section** (perpendicular to midrib): a single dome that rises from
-      the midrib, peaks at mid-lateral, and falls back to zero at the edge.
-      Profile: ``sin(π × |t|) × thickness_mm × long_t(s)``.
-      The longitudinal thickness scale ``long_t`` peaks at ≈ 25 % from the base
-      (``s ≈ 0.25``) and falls steeply toward the tip (``(1−s)^1.5`` decay),
-      so the dome bulge is concentrated near the base and the leaf cross-section
-      flattens out as it approaches the tip.
-    * **Crease**: a narrow tanh fold concentrates the V-indent in a thin band at
-      the midrib (width controlled by ``_LEAF_CREASE_SHARPNESS``), then quickly
-      saturates — both top and bottom surfaces follow this fold baseline.
-    * **Thickness**: zero at both the midrib crease (``|t|=0``) and the leaf
-      edges (``|t|=1``); all thickness comes from the dome curve between them.
-      Bottom surface = fold baseline; top surface = fold + dome.
-
-    The leaf base sits at *base_pos*; it extends in the *tangent* direction for
-    *length_mm*.  A per-leaf random roll from *edge_id* / *bark_seed* orients
-    each leaf differently.
-    """
-    L  = _safe_norm(np.asarray(tangent, float))
-    bp = np.asarray(base_pos, float)
-
-    # Build an orthonormal frame (L, T, N) with N biased toward world-up.
-    world_up = np.array([0.0, 0.0, 1.0])
-    if abs(float(np.dot(L, world_up))) > 0.9:
-        world_up = np.array([1.0, 0.0, 0.0])
-    T0 = np.cross(world_up, L)
-    T0 /= max(float(np.linalg.norm(T0)), 1e-10)
-    N0 = np.cross(L, T0)
-    N0 /= max(float(np.linalg.norm(N0)), 1e-10)
-
-    # Random roll around the branch tangent — unique per leaf.
-    roll  = _hash01(bark_seed, "leaf-roll", edge_id) * 2.0 * np.pi
-    cr, sr = float(np.cos(roll)), float(np.sin(roll))
-    T = cr * T0 + sr * N0   # lateral direction in leaf plane
-    N = -sr * T0 + cr * N0  # leaf normal (toward lobe peaks)
-
-    fold_tan = float(np.tan(np.radians(fold_angle_deg)))
-    N_S = _LEAF_N_LONG
-    N_T = _LEAF_N_LAT
-    t_vals = np.linspace(-1.0, 1.0, N_T + 1)   # lateral param ∈ [-1, 1]
-    abs_t  = np.abs(t_vals)
-
-    # Interior rings only (skip the s=0, s=1 singularities).
-    s_interior = np.linspace(0.0, 1.0, N_S + 1)[1:-1]   # (N_S-1,)
-
-    verts_acc: list[np.ndarray] = []
-    faces_acc: list[list[int]]  = []
-    n_v = 0
-
-    def _add(arr: np.ndarray) -> int:
-        nonlocal n_v
-        off = n_v
-        a = arr.reshape(-1, 3)
-        verts_acc.append(a)
-        n_v += len(a)
-        return off
-
-    ring_top: list[int] = []
-    ring_bot: list[int] = []
-    # Bottom-surface edge vertices and widths for the keel perimeter.
-    neg_t_edge_verts: list[np.ndarray] = []   # j=0,   t=−1 (−T side), s increasing
-    pos_t_edge_verts: list[np.ndarray] = []   # j=N_T, t=+1 (+T side), s increasing
-    half_width_list:  list[float]      = []   # w_s at each s_interior position
-
-    for s in s_interior:
-        w_s    = width_mm * float(_leaf_width_profile(np.array([s]))[0])
-        # Thickness profile: peaks at s≈0.25 (near base), falls steeply to 0 at tip.
-        long_t = float((s ** 0.5) * ((1.0 - s) ** 1.5)) / _LEAF_LONG_T_PEAK
-
-        # Midrib position at this s.
-        midrib = bp + s * length_mm * L           # (3,)
-        # Lateral positions for every t sample.
-        lateral = midrib[np.newaxis, :] + t_vals[:, np.newaxis] * w_s * T  # (N_T+1, 3)
-
-        # Narrow crease: tanh saturates quickly away from the midrib so the
-        # V-indent stays concentrated in a thin band at the center.
-        fold_h  = np.tanh(abs_t * _LEAF_CREASE_SHARPNESS) * w_s * fold_tan * long_t
-
-        # Dome lobe: half-sine rises steeply from the crease, peaks at mid-
-        # lateral, and falls to 0 at the edge.  Zero at both |t|=0 and |t|=1
-        # so all thickness comes from this curve — no constant offset.
-        lobe_h  = thickness_mm * np.sin(np.pi * abs_t) * long_t
-
-        z_top = fold_h + lobe_h   # top surface: dome above the crease fold
-        z_bot = fold_h            # bottom surface: follows crease fold exactly
-
-        top_pts = lateral + z_top[:, np.newaxis] * N   # (N_T+1, 3)
-        bot_pts = lateral + z_bot[:, np.newaxis] * N   # (N_T+1, 3)
-
-        ring_top.append(_add(top_pts))
-        ring_bot.append(_add(bot_pts))
-
-        # Collect edge vertices and half-width for the keel perimeter.
-        neg_t_edge_verts.append(bot_pts[0].copy())    # j=0,   t=−1
-        pos_t_edge_verts.append(bot_pts[N_T].copy())  # j=N_T, t=+1
-        half_width_list.append(w_s)
-
-    v_base = _add(bp[np.newaxis])
-    v_tip  = _add((bp + length_mm * L)[np.newaxis])
-    n_rings = len(s_interior)
-
-    # ── Base fan: base vertex → first ring ────────────────────────────────────
-    ft0, fb0 = ring_top[0], ring_bot[0]
-    for j in range(N_T):
-        j1 = j + 1
-        faces_acc.append([v_base, ft0 + j,  ft0 + j1])  # top half
-        faces_acc.append([v_base, fb0 + j1, fb0 + j ])  # bottom half
-    faces_acc.append([v_base, fb0,        ft0       ])   # left edge
-    faces_acc.append([v_base, ft0 + N_T, fb0 + N_T ])   # right edge
-
-    # ── Body bands: adjacent rings ────────────────────────────────────────────
-    for ri in range(n_rings - 1):
-        ta, tb = ring_top[ri], ring_top[ri + 1]
-        ba, bb = ring_bot[ri], ring_bot[ri + 1]
-        for j in range(N_T):
-            j1 = j + 1
-            # Top surface (normal ~ +N).
-            faces_acc.append([ta + j,  tb + j,  tb + j1])
-            faces_acc.append([ta + j,  tb + j1, ta + j1])
-            # Bottom surface (normal ~ −N).
-            faces_acc.append([ba + j,  ba + j1, bb + j1])
-            faces_acc.append([ba + j,  bb + j1, bb + j ])
-        # Left-edge strip (j = 0).
-        faces_acc.append([ta,       ba,       bb      ])
-        faces_acc.append([ta,       bb,       tb      ])
-        # Right-edge strip (j = N_T).
-        faces_acc.append([ta + N_T, tb + N_T, bb + N_T])
-        faces_acc.append([ta + N_T, bb + N_T, ba + N_T])
-
-    # ── Tip fan: last ring → tip vertex ───────────────────────────────────────
-    ftL, fbL = ring_top[-1], ring_bot[-1]
-    for j in range(N_T):
-        j1 = j + 1
-        faces_acc.append([v_tip, ftL + j1, ftL + j ])  # top half
-        faces_acc.append([v_tip, fbL + j,  fbL + j1])  # bottom half
-    faces_acc.append([v_tip, ftL,        fbL       ])   # left edge
-    faces_acc.append([v_tip, fbL + N_T, ftL + N_T ])   # right edge
-
-    verts = np.vstack(verts_acc)
-    faces = np.array(faces_acc, dtype=np.int32)
-    mesh  = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
-    mesh.fix_normals()
-
-    parts: list[trimesh.Trimesh] = [mesh]
-
-    # ── Keel: leaf silhouette extruded −keel_depth_mm in N ───────────────────
-    if keel_depth_mm > 1e-6:
-        keel = _build_leaf_keel_prism(
-            base_vertex=bp,
-            tip_vertex=(bp + length_mm * L),
-            neg_t_edge=np.array(neg_t_edge_verts),
-            pos_t_edge=np.array(pos_t_edge_verts),
-            N=N,
-            T=T,
-            s_values=s_interior,
-            half_widths=np.array(half_width_list),
-            keel_depth_mm=keel_depth_mm,
-            keel_tip_angle_deg=keel_tip_angle_deg,
-        )
-        if len(keel.vertices) > 0:
-            parts.append(keel)
-
-    return parts
+    return result, noise_peak
 
 
 # ── Bark helpers ──────────────────────────────────────────────────────────────
