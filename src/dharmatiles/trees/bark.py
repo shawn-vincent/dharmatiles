@@ -16,5 +16,5 @@ class BarkConfig:
     wave_length_mm: float = 7.5
     twist_rotations: float = 1.25
     phase_jitter: float = 1.0
-    min_branch_radius_mm: float = 0.58
+    min_branch_radius_mm: float = 0.42
     foliage_clearance_mm: float = 0.6
