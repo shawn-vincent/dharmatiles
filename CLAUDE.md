@@ -257,8 +257,8 @@ continuity at forks. A root flare anchors the trunk to the terrain surface.
 | `target_fdm_angle_deg` | 35.0 | Target FDM angle — the elevation above horizon (+90° = straight up, 0° = horizontal) the skeleton *tries* to keep every branch above. One of the **two** stray-detection conditions evaluated from the forecasted next step (`next_pos`): an owned attractor becomes stray (→ spawns a sub-branch) if reaching it would leave the split cone (`branch_split_angle_deg`) **OR** require a heading below this angle. Not a guarantee — terminal landing segments may still dip below it. |
 | `strict_fdm_angle_deg` | 26.0 | Strict FDM angle — the hard printability floor (elevation above horizon). Re-checked at mesh build; any branch edge below this is treated as an unprintable-overhang **failure** and reported via `RuntimeWarning` (backstops the terminal/single-attractor segments the branching can't reroute). Set below `target_fdm_angle_deg` so the band between them is tolerated without a failure. |
 | `max_branches_per_step` | 3 | Max stray clusters per step |
-| `branch_exponent` | 2.5 | Pipe-model exponent; larger = thicker trunk relative to branches |
-| `min_radius_mm` | 0.45 | Leaf branch radius; scales the entire radius tree |
+| `branch_exponent` | 3.0 | Pipe-model exponent; larger = thicker trunk relative to branches |
+| `min_radius_mm` | 1.0 | Leaf branch radius; scales the entire radius tree |
 | `smoothing_alpha` | 0.1 | Heading blend (0 = pure centroid, 1 = straight ahead) |
 | `debug_attractors` | False | Render attractor positions as yellow icosphere markers |
 | `group_width_mm` | 20.0 | Target XY diameter (mm) of each attractor cluster. Attractors are pre-partitioned into spatial Voronoi groups so entire groups split off together (coarser, more architectural splits). `None` disables grouping. |
@@ -268,7 +268,7 @@ continuity at forks. A root flare anchors the trunk to the terrain surface.
 | `branch_target` | 0.33 | 0–1. Aim point within the owned attractor cloud. 0 = lowest-z attractor, 1 = highest-z attractor. Implemented as `target = lowest + branch_target × (highest − lowest)`. Lower values pull branches outward and downward; higher values drive growth upward. |
 | `branch_fork_balance` | 1.0 | 0–1. How evenly attractors are redistributed at each fork. 0 = each branch keeps only the attractors already classified as stray (no redistribution). 1 = all K branches at the fork receive equal shares of the full attractor pool. Higher values produce more architecturally balanced trees. |
 | `leaf_clumps` | True | Whether to generate foliage clumps on terminal (leaf) branches. |
-| `leaf_clump_radius_mm` | 4.0 | Tip radius (mm) of each foliage clump. Each leaf branch gets a D-section cone tapering from the parent branch radius up to this value at the attractor tip. |
+| `leaf_clump_radius_mm` | 5.5 | Tip radius (mm) of each foliage clump. Each leaf branch gets a D-section cone tapering from the parent branch radius up to this value at the attractor tip. |
 | `leaf_clump_length_mm` | 10.5 | Maximum clump length (mm). The cone covers only the last `min(branch_len, K)` mm of each leaf branch; the remainder is drawn as a plain wood tube. Taper rate is fixed at `(leaf_clump_radius_mm − r_wood) / K`, so short branches produce proportionally smaller-tipped cones. `None` = full branch is a cone. |
 
 ### Scatter System (rocks + grass + trees)

@@ -59,9 +59,9 @@ class CloudTree:
         target_fdm_angle_deg: float = 35.0,
         strict_fdm_angle_deg: float = 26.0,
         max_branches_per_step: int = 3,
-        branch_exponent: float = 2.5,
+        branch_exponent: float = 3.0,
         smoothing_alpha: float = 0.1,
-        min_radius_mm: float = 0.45,
+        min_radius_mm: float = 1.0,
         debug_attractors: bool = False,
         group_width_mm: Sample[float] | None = 20.0,
         group_height_mm: Sample[float] | None = 20.0,
@@ -71,7 +71,7 @@ class CloudTree:
         branch_fork_balance: float = 1.0,
         # ── Leaf-cone foliage ─────────────────────────────────────────────
         leaf_clumps: bool = True,
-        leaf_clump_radius_mm: float = 4.0,
+        leaf_clump_radius_mm: float = 5.5,
         leaf_clump_length_mm: float | None = 10.5,
         # ── Leaf blades ───────────────────────────────────────────────────
         leaf_enable: bool = True,
