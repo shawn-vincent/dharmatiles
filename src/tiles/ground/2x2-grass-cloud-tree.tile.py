@@ -26,7 +26,7 @@ tile = Tile(
                         placement=Uniform(count_per_square=0.25),
                         debug_attractors=False,
                         leaf_clumps=True,
-                        n_attraction=120,
+                        n_attraction=32,
                     ),
                 ),
             ],

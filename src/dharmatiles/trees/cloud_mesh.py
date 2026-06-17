@@ -243,22 +243,12 @@ def build_cloud_tree_mesh(
                 edge_solids.append(clump)
 
             # Single leaf at the tip of each foliage clump.
-            # The geometric dome north pole is at:
-            #   p3 + (r_foliage - r_end_wood)*pu + r_foliage*tangent
-            # The noise shift pulls the dome surface inward by noise_peak mm
-            # along each vertex normal.  At the north pole the normal is the
-            # tangent, so the actual eroded tip is noise_peak mm behind the
-            # geometric tip.  We recess the leaf base by that exact amount so
-            # it never protrudes through the noise-eroded dome surface.
+            # The dome north pole is at p3 + r_foliage * tip_t (no lateral
+            # offset — the blended dome converges to the branch axis at its
+            # tip).  Recess the leaf base by noise_peak so it never protrudes
+            # through the noise-eroded dome surface.
             if leaf_enable and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
-                _wup        = np.array([0.0, 0.0, 1.0])
-                _pu_p       = _wup - float(np.dot(_wup, _bt_end)) * _bt_end
-                _pu_n       = float(np.linalg.norm(_pu_p))
-                _pu         = _pu_p / _pu_n if _pu_n > 1e-6 else np.zeros(3)
-                _dome_shift = max(0.0, foliage_radius_mm - r_end_wood - _FOLIAGE_MAX_NOISE_MM)
-                leaf_base   = (p3
-                               + _dome_shift * _pu
-                               + (foliage_radius_mm - noise_peak) * _bt_end)
+                leaf_base   = p3 + (foliage_radius_mm - noise_peak) * _bt_end
                 leaf_seed = _hash01_int(bark_seed, "leaf", i)
                 for leaf_part in build_leaf_mesh(
                     base_pos=leaf_base,
@@ -785,14 +775,15 @@ def _build_foliage_clump_mesh(
         phi    = (u_vals[mn] - south_arc - cone_arc_p) / north_arc * (np.pi / 2.0)
         ax_n   = r_tip * np.sin(phi)
         rr_n   = r_tip * np.cos(phi)
-        # Dome offset = r_tip - r_base - _FOLIAGE_MAX_NOISE_MM (matching tc=1
-        # factor), so the dome equator bottom sits _FOLIAGE_MAX_NOISE_MM below
-        # the branch bottom.  After noise erodes the surface inward by up to
-        # that amount the branch remains just under the skin.
-        pu_tip      = _pu_unit_scalar(tip_t)
-        dome_shift  = max(0.0, r_tip - r_base - _FOLIAGE_MAX_NOISE_MM)
-        dome_center = tip_p + dome_shift * pu_tip
-        verts[mn] = dome_center + ax_n[:, None] * tip_t + rad_u[mn] * rr_n[:, None]
+        pu_tip     = _pu_unit_scalar(tip_t)
+        dome_shift = max(0.0, r_tip - r_base - _FOLIAGE_MAX_NOISE_MM)
+        # Blend the perp-upward offset from full at the equator (phi=0, matching
+        # tc=1 cone) to zero at the north pole (phi=pi/2), so the dome tip lies
+        # on the branch axis rather than being shifted sideways.  Eliminates the
+        # offset dome appearance under tight branch curves.
+        shift_blend = np.cos(phi)
+        ring_ctr = tip_p + ax_n[:, None] * tip_t + (dome_shift * shift_blend)[:, None] * pu_tip
+        verts[mn] = ring_ctr + rad_u[mn] * rr_n[:, None]
 
     # ── Normals + two noise layers ────────────────────────────────────────────
     shaped  = trimesh.Trimesh(vertices=verts, faces=ico.faces.copy(), process=False)
@@ -826,7 +817,7 @@ def _root_bark_lines(
     bark: BarkConfig,
     bark_seed: int,
 ) -> list[_BarkLine]:
-    n_root = max(3, int(np.floor((2.0 * np.pi * root_radius) / bark.spacing_mm)))
+    n_root = max(5, int(np.floor((2.0 * np.pi * root_radius) / bark.spacing_mm)))
     return [
         _BarkLine(
             line_id=i,
@@ -847,7 +838,7 @@ def _select_bark_lines(
 ) -> list[_BarkLine]:
     if not parent_lines or radius < bark.min_branch_radius_mm:
         return []
-    n_desired = max(1, int(np.floor((2.0 * np.pi * radius) / bark.spacing_mm)))
+    n_desired = max(5, int(np.floor((2.0 * np.pi * radius) / bark.spacing_mm)))
     if n_desired >= len(parent_lines):
         return [_BarkLine(line.line_id, line.phase, line.theta) for line in parent_lines]
 
