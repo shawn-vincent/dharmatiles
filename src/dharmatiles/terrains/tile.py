@@ -85,7 +85,7 @@ def _batch_worker(args: tuple) -> dict:
     This function must be at module level so ProcessPoolExecutor can pickle it.
     The reporter is created inside the worker (not passed) to avoid pickling issues.
     """
-    spec_path_str, tiles_root_str, stl_root_str, png_root_str, phase_dict = args
+    spec_path_str, tiles_root_str, stl_root_str, png_root_str, phase_dict, formats = args
 
     spec_path  = pathlib.Path(spec_path_str)
     tiles_root = pathlib.Path(tiles_root_str)
@@ -107,6 +107,7 @@ def _batch_worker(args: tuple) -> dict:
     render_meshes: list[trimesh.Trimesh] | None = None
     dir_meshes_serial: dict[str, tuple[str, list[dict]]] = {}
     for tile in load_spec(spec_path):
+        _filter_tile_systems(tile, formats)
         surface   = tile.surface
         sys_paths = _system_paths_for(spec_path, tile, tiles_root, stl_root)
         reporter.tile_begin(
@@ -517,12 +518,15 @@ def build_tile_from_spec(
         result, rend_meshes = system.export(colored_meshes, sys_surface, scene.terrain_z, out_path)
         elapsed = _time.perf_counter() - t0
 
+        # Avoid the O(F log F) edge-sort that `is_watertight` triggers on the
+        # combined mesh (which may have millions of faces).  The combined STL
+        # is a concatenation of many shells and will not be watertight anyway.
         reporter.export_done(
             suffix     = system.suffix,
             path       = out_path,
             n_verts    = len(result.vertices),
             n_faces    = len(result.faces),
-            watertight = result.is_watertight,
+            watertight = None,
             elapsed    = elapsed,
         )
 
@@ -783,6 +787,16 @@ def _expand_mixed_materials(
             continue
 
         fc3 = fc[:, :3]  # (F, 3) — drop alpha for comparison
+
+        # Fast path: check first vs last row before committing to an O(F log F)
+        # np.unique sort.  Most meshes (tree, grass, base, water) carry a uniform
+        # single colour applied by tag(); the terrain solid is the only one with
+        # mixed grass/soil colours.  A single np.any(...) scan exits early for
+        # the uniform case.
+        if np.array_equal(fc3[0], fc3[-1]) and not np.any(fc3 != fc3[0]):
+            result.append(mesh)
+            continue
+
         unique_colors = np.unique(fc3, axis=0)
 
         if len(unique_colors) <= 1:
@@ -959,6 +973,21 @@ def _write_tile_catalog_pdf(
     first.save(str(out), "PDF", resolution=float(DPI), save_all=True, append_images=rest)
     if not quiet:
         print(f"→ {out}")
+
+
+def _filter_tile_systems(tile: Tile, formats) -> None:
+    """Restrict ``tile.systems`` to the requested format suffixes (in place).
+
+    *formats* is an iterable of system suffixes (e.g. ``["db", "ol"]``); a
+    falsy value leaves the tile untouched (all systems).  Filtering preserves
+    the tile's original system order and is a no-op if it would leave nothing.
+    """
+    if not formats:
+        return
+    wanted   = set(formats)
+    filtered = [s for s in tile.systems if s.suffix in wanted]
+    if filtered:
+        tile.systems = filtered
 
 
 def _system_paths_for(
@@ -1154,6 +1183,10 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--spec", "-s", type=pathlib.Path, default=None,
                    metavar="FILE",
                    help=".tile.py Python spec.  Omit to process all src/tiles/")
+    p.add_argument("--formats", "-f", nargs="+", choices=["db", "ol"], default=None,
+                   metavar="FMT",
+                   help="Base system(s) to generate: db (DungeonBlocks) and/or ol "
+                        "(OpenLOCK).  Default: every system the spec defines.")
     p.add_argument("--png-only", action="store_true",
                    help="Re-render PNG thumbnails and PDF catalog only; skip STL generation.")
     p.add_argument("--quiet", "-q", action="store_true",
@@ -1208,6 +1241,7 @@ def main(argv=None):
         render_meshes: list[trimesh.Trimesh] | None = None
         dir_3mf_accum: dict[pathlib.Path, list[tuple[str, list[trimesh.Trimesh]]]] = _defaultdict(list)
         for tile in specs:
+            _filter_tile_systems(tile, args.formats)
             surface = tile.surface
             name    = args.spec.stem.replace('.tile', '')
             reporter.tile_begin(
@@ -1288,7 +1322,7 @@ def main(argv=None):
         with multiprocessing.Manager() as mgr:
             phase_dict = mgr.dict()
             worker_args = [
-                (str(sp), str(TILES_ROOT), str(STL_ROOT), str(PNG_ROOT), phase_dict)
+                (str(sp), str(TILES_ROOT), str(STL_ROOT), str(PNG_ROOT), phase_dict, args.formats)
                 for sp in spec_paths
             ]
 
@@ -1344,6 +1378,7 @@ def main(argv=None):
             sq_mm_seq: float | None = None
             rend_seq:  list[trimesh.Trimesh] | None = None
             for tile in load_spec(sp):
+                _filter_tile_systems(tile, args.formats)
                 surface = tile.surface
                 sq_mm_seq = surface.square_mm
                 reporter.tile_begin(

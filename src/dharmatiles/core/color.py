@@ -507,16 +507,17 @@ def export_3mf_colored(
             oid   = tile_part_start[ti] + pi
             verts = mesh.vertices
             faces = mesh.faces
-            vx, vy, vz = verts[:, 0], verts[:, 1], verts[:, 2]
+            # Build vertex/triangle XML lines from a single .tolist() call each
+            # (one C-level array→list conversion rather than three column slices).
+            vert_rows = verts.tolist()
             vert_lines = '\n     '.join(
-                f'<vertex x="{x:.5f}" y="{y:.5f}" z="{z:.5f}"/>'
-                for x, y, z in zip(vx.tolist(), vy.tolist(), vz.tolist())
+                f'<vertex x="{r[0]:.5f}" y="{r[1]:.5f}" z="{r[2]:.5f}"/>'
+                for r in vert_rows
             )
+            face_rows = faces.tolist()
             tri_lines = '\n     '.join(
-                f'<triangle v1="{a}" v2="{b}" v3="{c}"/>'
-                for a, b, c in zip(
-                    faces[:, 0].tolist(), faces[:, 1].tolist(), faces[:, 2].tolist(),
-                )
+                f'<triangle v1="{r[0]}" v2="{r[1]}" v3="{r[2]}"/>'
+                for r in face_rows
             )
             obj_xmls.append(
                 f'  <object id="{oid}" p:UUID="{_part_uuid(oid)}" type="model">\n'

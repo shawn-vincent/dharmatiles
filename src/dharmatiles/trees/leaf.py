@@ -28,8 +28,8 @@ import trimesh
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-_LEAF_N_LONG           = 20    # longitudinal sections (base → tip)
-_LEAF_N_LAT            = 16    # lateral sections across the leaf (must be even)
+_LEAF_N_LONG           = 12    # longitudinal sections (base → tip)
+_LEAF_N_LAT            = 10    # lateral sections across the leaf (must be even)
 _LEAF_CREASE_SHARPNESS = 10.0  # tanh width of midrib crease (larger = narrower)
 # Width profile normalisation: w(s) ∝ s^0.4 × (1-s)^0.8 peaks at s=1/3.
 _LEAF_W_PEAK_NORM  = float((1.0 / 3.0) ** 0.4 * (2.0 / 3.0) ** 0.8)
@@ -38,6 +38,37 @@ _LEAF_LONG_T_PEAK  = float(0.25 ** 0.5 * 0.75 ** 1.5)   # ≈ 0.3248
 
 
 # ── Tiny shared helpers (self-contained so this module has no tree imports) ────
+
+# Corrected-winding face cache.  Every leaf blade (and every keel) of a given
+# topology shares an identical face-connectivity array, and trimesh's
+# ``fix_normals()`` makes winding / outward-flip decisions that are invariant
+# under the rigid placement of each leaf.  So the corrected face array is
+# identical for all leaves of that topology — we run ``fix_normals()`` once per
+# topology and reuse the result, turning ~12k per-leaf calls (the dominant cost
+# of leaf generation) into a handful.  Output geometry is byte-identical.
+_FACE_CACHE: dict[object, np.ndarray] = {}
+
+# Canonical face-connectivity cache (before winding correction).
+# The face index array for a blade or keel depends only on (N_S, N_T) or
+# the keel station count, not on per-leaf positions.  Building it in Python
+# is cheap to do once; the _FACE_CACHE above stores the post-fix_normals
+# version.  Pre-building avoids re-constructing the face array 11k times
+# when _FACE_CACHE already has the corrected version.
+_BLADE_FACES_CACHE: dict[tuple[int, int], np.ndarray] = {}
+
+
+def _mesh_with_fixed_normals(
+    verts: np.ndarray, faces: np.ndarray, cache_key: object
+) -> trimesh.Trimesh:
+    """Trimesh with outward-consistent winding, reusing fix_normals() per topology."""
+    cached = _FACE_CACHE.get(cache_key)
+    if cached is None:
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+        mesh.fix_normals()
+        _FACE_CACHE[cache_key] = mesh.faces.copy()
+        return mesh
+    return trimesh.Trimesh(vertices=verts, faces=cached.copy(), process=False)
+
 
 def _safe_norm(v: np.ndarray) -> np.ndarray:
     n = float(np.linalg.norm(v))
@@ -54,6 +85,70 @@ def _hash01(*parts: object) -> float:
         h ^= 0xFF
         h  = (h * 1099511628211) & 0xFFFFFFFFFFFFFFFF
     return h / float(2 ** 64)
+
+
+# ── Canonical face array builder ───────────────────────────────────────────────
+
+def _build_blade_faces(N_S: int, N_T: int) -> np.ndarray:
+    """Build canonical face connectivity for a leaf blade.
+
+    Vertex layout (matches the vectorised ``build_leaf_mesh`` output):
+      indices 0 … n_rings*(N_T+1)-1           — top-ring vertices, ring-major
+      indices n_rings*(N_T+1) … 2*n*… -1      — bot-ring vertices, ring-major
+      index   2*n_rings*(N_T+1)               — v_base
+      index   2*n_rings*(N_T+1)+1             — v_tip
+    """
+    key = (N_S, N_T)
+    cached = _BLADE_FACES_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    n_rings = N_S - 1
+    stride  = N_T + 1
+    rt = lambda i: i * stride              # ring i top offset
+    rb = lambda i: (n_rings + i) * stride  # ring i bot offset
+    v_base = 2 * n_rings * stride
+    v_tip  = v_base + 1
+
+    faces: list[list[int]] = []
+
+    # Base fan
+    ft0, fb0 = rt(0), rb(0)
+    for j in range(N_T):
+        j1 = j + 1
+        faces.append([v_base, ft0 + j,  ft0 + j1])
+        faces.append([v_base, fb0 + j1, fb0 + j ])
+    faces.append([v_base, fb0,        ft0       ])
+    faces.append([v_base, ft0 + N_T, fb0 + N_T ])
+
+    # Body bands
+    for ri in range(n_rings - 1):
+        ta, tb = rt(ri), rt(ri + 1)
+        ba, bb = rb(ri), rb(ri + 1)
+        for j in range(N_T):
+            j1 = j + 1
+            faces.append([ta + j,  tb + j,  tb + j1])
+            faces.append([ta + j,  tb + j1, ta + j1])
+            faces.append([ba + j,  ba + j1, bb + j1])
+            faces.append([ba + j,  bb + j1, bb + j ])
+        faces.append([ta,       ba,       bb      ])
+        faces.append([ta,       bb,       tb      ])
+        faces.append([ta + N_T, tb + N_T, bb + N_T])
+        faces.append([ta + N_T, bb + N_T, ba + N_T])
+
+    # Tip fan
+    ftL = rt(n_rings - 1)
+    fbL = rb(n_rings - 1)
+    for j in range(N_T):
+        j1 = j + 1
+        faces.append([v_tip, ftL + j1, ftL + j ])
+        faces.append([v_tip, fbL + j,  fbL + j1])
+    faces.append([v_tip, ftL,        fbL       ])
+    faces.append([v_tip, fbL + N_T, ftL + N_T ])
+
+    arr = np.array(faces, dtype=np.int32)
+    _BLADE_FACES_CACHE[key] = arr
+    return arr
 
 
 # ── Profile helpers ────────────────────────────────────────────────────────────
@@ -119,41 +214,59 @@ def _build_leaf_keel_prism(
     L_len  = float(np.linalg.norm(tip_vertex - base_vertex))
     D      = float(keel_depth_mm)
     R      = D
+    n_st   = n + 2
 
-    def _ridge_depth(s: float) -> float:
-        x = (1.0 - s) * L_len
-        if x >= R:
-            return D
-        return float(np.sqrt(max(0.0, R * R - (R - x) ** 2)))
+    # ── Vectorised station geometry ─────────────────────────────────────────
+    # s_all: (n+2,) including base (s=0) and tip (s=1)
+    s_arr  = np.asarray(s_values, float)
+    s_all  = np.concatenate([[0.0], s_arr, [1.0]])          # (n_st,)
 
-    s_all = [0.0] + [float(s_values[i]) for i in range(n)] + [1.0]
-    topP, topN, ridge = [], [], []
-    for k, s in enumerate(s_all):
-        if k == 0:
-            tp = tn = base_vertex
-        elif k == n + 1:
-            tp = tn = tip_vertex
-        else:
-            tp, tn = pos_t_edge[k - 1], neg_t_edge[k - 1]
-        mid = base_vertex + s * (tip_vertex - base_vertex)
-        topP.append(tp); topN.append(tn)
-        ridge.append(mid - _ridge_depth(s) * Nu)
+    # Ridge depth profile: quarter-circle fillet from tip back over keel_depth_mm.
+    x_all  = (1.0 - s_all) * L_len                         # distance from tip
+    ridge_depths = np.where(
+        x_all >= R,
+        D,
+        np.sqrt(np.maximum(0.0, R * R - (R - x_all) ** 2))
+    )  # (n_st,)
 
-    n_st = n + 2
+    # topP / topN station points.
+    # Endpoints (k=0 and k=n_st-1) pinch to base/tip vertex; interior uses edge verts.
+    topP_arr = np.vstack([base_vertex[np.newaxis], pos_t_edge, tip_vertex[np.newaxis]])  # (n_st, 3)
+    topN_arr = np.vstack([base_vertex[np.newaxis], neg_t_edge, tip_vertex[np.newaxis]])  # (n_st, 3)
 
-    verts: list[np.ndarray] = []
+    # Ridge points along the midrib spine.
+    mids  = (base_vertex[np.newaxis] +
+             s_all[:, np.newaxis] * (tip_vertex - base_vertex)[np.newaxis])  # (n_st, 3)
+    ridge_arr = mids - ridge_depths[:, np.newaxis] * Nu[np.newaxis]          # (n_st, 3)
 
-    def _add(p: np.ndarray) -> int:
-        verts.append(np.asarray(p, float))
-        return len(verts) - 1
+    # A station's ridge collapses to the top point when depth ≈ 0 (tip region).
+    degenerate = ridge_depths < 1e-9   # (n_st,) bool — True at tip
 
-    iTP, iTN, iR = [], [], []
+    # ── Build vertex list and index arrays ──────────────────────────────────
+    # Vertex layout: iTP[k] = k (top-P row)
+    #                iTN[k] = k for width-pinch stations, else n_st + (k-1) - offset
+    #                iR[k]  = iTP[k] if degenerate, else ...
+    verts: list[np.ndarray] = list(topP_arr)  # indices 0 … n_st-1
+    n_v = n_st
+    iTP = list(range(n_st))
+
+    iTN: list[int] = []
     for k in range(n_st):
-        width_pinch = (k == 0 or k == n_st - 1)
-        itp = _add(topP[k])
-        iTP.append(itp)
-        iTN.append(itp if width_pinch else _add(topN[k]))
-        iR.append(itp if bool(np.allclose(ridge[k], topP[k])) else _add(ridge[k]))
+        if k == 0 or k == n_st - 1:
+            iTN.append(iTP[k])
+        else:
+            verts.append(topN_arr[k])
+            iTN.append(n_v)
+            n_v += 1
+
+    iR: list[int] = []
+    for k in range(n_st):
+        if degenerate[k]:
+            iR.append(iTP[k])
+        else:
+            verts.append(ridge_arr[k])
+            iR.append(n_v)
+            n_v += 1
 
     F: list[list[int]] = []
 
@@ -167,20 +280,21 @@ def _build_leaf_keel_prism(
         _quad(iTP[k], iTP[k + 1], iR[k + 1], iR[k])
         _quad(iR[k], iR[k + 1], iTN[k + 1], iTN[k])
 
-    loop = ([iTP[k] for k in range(n_st)] +
-            [iTN[k] for k in range(n_st - 2, 0, -1)])
-    c_top = _add(np.mean([verts[i] for i in loop], axis=0))
+    loop = (iTP + [iTN[k] for k in range(n_st - 2, 0, -1)])
+    c_top = len(verts)
+    verts.append(np.mean([verts[i] for i in loop], axis=0))
     for a in range(len(loop)):
         b = (a + 1) % len(loop)
         F.append([c_top, loop[a], loop[b]])
 
-    mesh = trimesh.Trimesh(
-        vertices=np.array(verts),
-        faces=np.array(F, dtype=np.int32),
-        process=False,
+    # Topology (vertex sharing + degenerate-triangle culling) is fully
+    # determined by the leaf length and keel depth, so cache the corrected
+    # winding under those.
+    return _mesh_with_fixed_normals(
+        np.array(verts, dtype=float),
+        np.array(F, dtype=np.int32),
+        ("keel", round(L_len, 6), round(D, 6)),
     )
-    mesh.fix_normals()
-    return mesh
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
@@ -195,6 +309,7 @@ def build_leaf_mesh(
     fold_angle_deg: float = 5.0,
     keel_depth_mm: float = 1.0,
     keel_tip_angle_deg: float = 45.0,
+    up_hint: np.ndarray | None = None,
     seed: int = 0,
 ) -> list[trimesh.Trimesh]:
     """Build a single leaf mesh positioned at *base_pos*, oriented along *tangent*.
@@ -210,6 +325,10 @@ def build_leaf_mesh(
     keel_depth_mm   : maximum depth of the structural keel on the underside.
                       Pass 0 to omit the keel.  Default 1.0.
     keel_tip_angle_deg : reserved for future use.  Default 45.0.
+    up_hint         : (3,) optional "away" reference for the leaf's top/crease
+                      side.  Defaults to world-up; pass the outward surface
+                      normal so leaves on a side/underside face their crease
+                      away from the surface instead of into it.
     seed            : integer seed for the random roll angle.  Different seeds
                       produce differently-oriented leaves; the same seed always
                       produces the same orientation.  Default 0.
@@ -222,111 +341,82 @@ def build_leaf_mesh(
     L  = _safe_norm(np.asarray(tangent, float))
     bp = np.asarray(base_pos, float)
 
-    # Orthonormal frame (L, T, N) with N biased toward world-up.
-    world_up = np.array([0.0, 0.0, 1.0])
+    # Orthonormal frame (L, T, N).  N (the leaf's top/crease side) is biased
+    # toward *up_hint* — the caller's "which way is away" reference.  Default is
+    # world-up (leaves seek the sun); when a leaf grows on the side or underside
+    # of a surface the caller passes the outward surface normal instead, so the
+    # crease/top faces away from that surface rather than into it.
+    world_up = (_safe_norm(np.asarray(up_hint, float)) if up_hint is not None
+                else np.array([0.0, 0.0, 1.0]))
     if abs(float(np.dot(L, world_up))) > 0.9:
-        world_up = np.array([1.0, 0.0, 0.0])
+        # Reference ~parallel to the growth axis → pick an independent fallback.
+        world_up = (np.array([1.0, 0.0, 0.0])
+                    if abs(float(np.dot(L, np.array([0.0, 0.0, 1.0])))) > 0.9
+                    else np.array([0.0, 0.0, 1.0]))
     T0 = np.cross(world_up, L)
     T0 /= max(float(np.linalg.norm(T0)), 1e-10)
     N0 = np.cross(L, T0)
     N0 /= max(float(np.linalg.norm(N0)), 1e-10)
 
-    # Deterministic random roll around the branch tangent.
-    roll  = _hash01(seed, "leaf-roll") * 2.0 * np.pi
-    cr, sr = float(np.cos(roll)), float(np.sin(roll))
-    T = cr * T0 + sr * N0
-    N = -sr * T0 + cr * N0
+    # N is the up_hint component perpendicular to L (top/crease faces "away").
+    T = T0
+    N = N0
 
     fold_tan = float(np.tan(np.radians(fold_angle_deg)))
     N_S = _LEAF_N_LONG
     N_T = _LEAF_N_LAT
-    t_vals = np.linspace(-1.0, 1.0, N_T + 1)
+    n_rings = N_S - 1
+    t_vals = np.linspace(-1.0, 1.0, N_T + 1)   # (N_T+1,)
     abs_t  = np.abs(t_vals)
 
-    s_interior = np.linspace(0.0, 1.0, N_S + 1)[1:-1]
+    s_int = np.linspace(0.0, 1.0, N_S + 1)[1:-1]  # (n_rings,) interior stations
 
-    verts_acc: list[np.ndarray] = []
-    faces_acc: list[list[int]]  = []
-    n_v = 0
+    # ── Vectorised vertex construction ──────────────────────────────────────
+    # Compute all ring vertices in one numpy pass (no Python loop per ring).
+    w_s    = width_mm * _leaf_width_profile(s_int)                    # (n_rings,)
+    long_t = (s_int ** 0.5 * (1.0 - s_int) ** 1.5) / _LEAF_LONG_T_PEAK  # (n_rings,)
 
-    def _add(arr: np.ndarray) -> int:
-        nonlocal n_v
-        off = n_v
-        a = arr.reshape(-1, 3)
-        verts_acc.append(a)
-        n_v += len(a)
-        return off
+    # Midrib positions: (n_rings, 3)
+    midribs = bp[np.newaxis, :] + (s_int[:, np.newaxis] * length_mm) * L[np.newaxis, :]
 
-    ring_top: list[int] = []
-    ring_bot: list[int] = []
-    neg_t_edge_verts: list[np.ndarray] = []
-    pos_t_edge_verts: list[np.ndarray] = []
-    half_width_list:  list[float]      = []
+    # Lateral positions: (n_rings, N_T+1, 3)
+    laterals = (midribs[:, np.newaxis, :]
+                + (t_vals[np.newaxis, :, np.newaxis] * w_s[:, np.newaxis, np.newaxis])
+                * T[np.newaxis, np.newaxis, :])
 
-    for s in s_interior:
-        w_s    = width_mm * float(_leaf_width_profile(np.array([s]))[0])
-        long_t = float((s ** 0.5) * ((1.0 - s) ** 1.5)) / _LEAF_LONG_T_PEAK
+    # Vertical offsets (relative to N axis): (n_rings, N_T+1)
+    tanh_t  = np.tanh(abs_t * _LEAF_CREASE_SHARPNESS)   # (N_T+1,)
+    sin_t   = np.sin(np.pi * abs_t)                      # (N_T+1,)
+    fold_h  = tanh_t[np.newaxis, :] * (w_s[:, np.newaxis] * fold_tan * long_t[:, np.newaxis])
+    lobe_h  = (thickness_mm * sin_t[np.newaxis, :]) * long_t[:, np.newaxis]
+    z_top   = fold_h + lobe_h   # (n_rings, N_T+1)
+    z_bot   = fold_h            # (n_rings, N_T+1)
 
-        midrib  = bp + s * length_mm * L
-        lateral = midrib[np.newaxis, :] + t_vals[:, np.newaxis] * w_s * T
+    # Surface points: (n_rings, N_T+1, 3)
+    top_pts = laterals + z_top[:, :, np.newaxis] * N[np.newaxis, np.newaxis, :]
+    bot_pts = laterals + z_bot[:, :, np.newaxis] * N[np.newaxis, np.newaxis, :]
 
-        fold_h  = np.tanh(abs_t * _LEAF_CREASE_SHARPNESS) * w_s * fold_tan * long_t
-        lobe_h  = thickness_mm * np.sin(np.pi * abs_t) * long_t
+    # Vertex array layout: top rings | bot rings | v_base | v_tip
+    # Matches the index arithmetic in _build_blade_faces().
+    verts = np.concatenate([
+        top_pts.reshape(-1, 3),            # (n_rings*(N_T+1), 3)
+        bot_pts.reshape(-1, 3),            # (n_rings*(N_T+1), 3)
+        bp[np.newaxis, :],                 # v_base
+        (bp + length_mm * L)[np.newaxis, :],  # v_tip
+    ], axis=0)
 
-        z_top = fold_h + lobe_h
-        z_bot = fold_h
+    # Extract keel-input arrays from bot_pts (no extra loops needed).
+    neg_t_edge_verts = bot_pts[:, 0,    :]  # (n_rings, 3)
+    pos_t_edge_verts = bot_pts[:, N_T,  :]  # (n_rings, 3)
+    half_width_list  = w_s.tolist()
 
-        top_pts = lateral + z_top[:, np.newaxis] * N
-        bot_pts = lateral + z_bot[:, np.newaxis] * N
+    # ── Face connectivity ────────────────────────────────────────────────────
+    # Canonical face array is built once per (N_S, N_T) topology and cached.
+    faces = _build_blade_faces(N_S, N_T)
 
-        ring_top.append(_add(top_pts))
-        ring_bot.append(_add(bot_pts))
-
-        neg_t_edge_verts.append(bot_pts[0].copy())
-        pos_t_edge_verts.append(bot_pts[N_T].copy())
-        half_width_list.append(w_s)
-
-    v_base = _add(bp[np.newaxis])
-    v_tip  = _add((bp + length_mm * L)[np.newaxis])
-    n_rings = len(s_interior)
-
-    # Base fan
-    ft0, fb0 = ring_top[0], ring_bot[0]
-    for j in range(N_T):
-        j1 = j + 1
-        faces_acc.append([v_base, ft0 + j,  ft0 + j1])
-        faces_acc.append([v_base, fb0 + j1, fb0 + j ])
-    faces_acc.append([v_base, fb0,        ft0       ])
-    faces_acc.append([v_base, ft0 + N_T, fb0 + N_T ])
-
-    # Body bands
-    for ri in range(n_rings - 1):
-        ta, tb = ring_top[ri], ring_top[ri + 1]
-        ba, bb = ring_bot[ri], ring_bot[ri + 1]
-        for j in range(N_T):
-            j1 = j + 1
-            faces_acc.append([ta + j,  tb + j,  tb + j1])
-            faces_acc.append([ta + j,  tb + j1, ta + j1])
-            faces_acc.append([ba + j,  ba + j1, bb + j1])
-            faces_acc.append([ba + j,  bb + j1, bb + j ])
-        faces_acc.append([ta,       ba,       bb      ])
-        faces_acc.append([ta,       bb,       tb      ])
-        faces_acc.append([ta + N_T, tb + N_T, bb + N_T])
-        faces_acc.append([ta + N_T, bb + N_T, ba + N_T])
-
-    # Tip fan
-    ftL, fbL = ring_top[-1], ring_bot[-1]
-    for j in range(N_T):
-        j1 = j + 1
-        faces_acc.append([v_tip, ftL + j1, ftL + j ])
-        faces_acc.append([v_tip, fbL + j,  fbL + j1])
-    faces_acc.append([v_tip, ftL,        fbL       ])
-    faces_acc.append([v_tip, fbL + N_T, ftL + N_T ])
-
-    verts = np.vstack(verts_acc)
-    faces = np.array(faces_acc, dtype=np.int32)
-    mesh  = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
-    mesh.fix_normals()
+    # Blade topology depends only on the (constant) longitudinal/lateral
+    # section counts, so all blades share one corrected-winding face array.
+    mesh  = _mesh_with_fixed_normals(verts, faces, ("blade", N_S, N_T))
 
     parts: list[trimesh.Trimesh] = [mesh]
 
@@ -334,12 +424,12 @@ def build_leaf_mesh(
         keel = _build_leaf_keel_prism(
             base_vertex=bp,
             tip_vertex=(bp + length_mm * L),
-            neg_t_edge=np.array(neg_t_edge_verts),
-            pos_t_edge=np.array(pos_t_edge_verts),
+            neg_t_edge=neg_t_edge_verts,   # already ndarray (n_rings, 3)
+            pos_t_edge=pos_t_edge_verts,   # already ndarray (n_rings, 3)
             N=N,
             T=T,
-            s_values=s_interior,
-            half_widths=np.array(half_width_list),
+            s_values=s_int,                # already ndarray
+            half_widths=w_s,               # already ndarray
             keel_depth_mm=keel_depth_mm,
             keel_tip_angle_deg=keel_tip_angle_deg,
         )

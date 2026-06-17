@@ -69,12 +69,17 @@ def build_cloud_tree_mesh(
     attractor_radius_mm: float = 0.6,
     # ── Leaf geometry ─────────────────────────────────────────────────────────
     leaf_enable: bool = True,
+    leaf_base_count: int = 5,
     leaf_length_mm: float = 8.0,
     leaf_width_mm: float = 5.0,
     leaf_thickness_mm: float = 1.2,
     leaf_fold_angle_deg: float = 5.0,
     leaf_keel_depth_mm: float = 1.0,
     leaf_keel_tip_angle_deg: float = 45.0,
+    leaf_spacing_factor: float = 1.5,
+    leaf_cap_count: int = 3,
+    leaf_angle_jitter_deg: float = 24.0,
+    leaf_pos_jitter: float = 0.8,
 ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Build a single tree mesh from a simplified skeleton.
 
@@ -118,6 +123,12 @@ def build_cloud_tree_mesh(
     visited = [False] * n
     visited[0] = True
     edge_solids: list[trimesh.Trimesh] = []
+    # Leaf shells are kept out of the boolean union: each leaf is an
+    # independent watertight shell that need not be CSG-merged with the tree or
+    # with other leaves.  Unioning ~thousands of them dominated runtime; we
+    # concatenate them onto the unioned trunk/branches/clumps instead (same
+    # visible surfaces, vastly cheaper).
+    leaf_solids: list[trimesh.Trimesh] = []
 
     while queue:
         i = queue.pop(0)
@@ -228,7 +239,7 @@ def build_cloud_tree_mesh(
             clump_start_pos, clump_start_tan = _bezier_clump_start(
                 p0, _bbp1, _bbp2, p3, clump_len,
             )
-            clump, noise_peak = _build_foliage_clump_mesh(
+            clump, clump_leaves = _build_foliage_clump_mesh(
                 tip_pos=p3,
                 tip_tangent=_bt_end,
                 start_pos=clump_start_pos,
@@ -238,31 +249,22 @@ def build_cloud_tree_mesh(
                 clump_length_mm=clump_len,
                 edge_id=i,
                 bark_seed=bark_seed,
+                leaf_enable=leaf_enable,
+                leaf_base_count=leaf_base_count,
+                leaf_length_mm=leaf_length_mm,
+                leaf_width_mm=leaf_width_mm,
+                leaf_thickness_mm=leaf_thickness_mm,
+                leaf_fold_angle_deg=leaf_fold_angle_deg,
+                leaf_keel_depth_mm=leaf_keel_depth_mm,
+                leaf_keel_tip_angle_deg=leaf_keel_tip_angle_deg,
+                leaf_spacing_factor=leaf_spacing_factor,
+                leaf_cap_count=leaf_cap_count,
+                leaf_angle_jitter_deg=leaf_angle_jitter_deg,
+                leaf_pos_jitter=leaf_pos_jitter,
             )
             if len(clump.vertices) > 0:
                 edge_solids.append(clump)
-
-            # Single leaf at the tip of each foliage clump.
-            # The dome north pole is at p3 + r_foliage * tip_t (no lateral
-            # offset — the blended dome converges to the branch axis at its
-            # tip).  Recess the leaf base by noise_peak so it never protrudes
-            # through the noise-eroded dome surface.
-            if leaf_enable and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
-                leaf_base   = p3 + (foliage_radius_mm - noise_peak) * _bt_end
-                leaf_seed = _hash01_int(bark_seed, "leaf", i)
-                for leaf_part in build_leaf_mesh(
-                    base_pos=leaf_base,
-                    tangent=_bt_end,
-                    length_mm=leaf_length_mm,
-                    width_mm=leaf_width_mm,
-                    thickness_mm=leaf_thickness_mm,
-                    fold_angle_deg=leaf_fold_angle_deg,
-                    keel_depth_mm=leaf_keel_depth_mm,
-                    keel_tip_angle_deg=leaf_keel_tip_angle_deg,
-                    seed=leaf_seed,
-                ):
-                    if len(leaf_part.vertices) > 0:
-                        edge_solids.append(leaf_part)
+            leaf_solids.extend(clump_leaves)
 
         node_frame[i] = end_frame
         node_bark[i] = edge_end_bark
@@ -270,6 +272,14 @@ def build_cloud_tree_mesh(
         queue.extend(children[i])
 
     # ── assemble ──────────────────────────────────────────────────────────
+    # The boolean union cost is driven by the *number* of operands, not their
+    # total faces.  Feeding ~thousands of individual leaf shells in dominated
+    # runtime.  Pre-concatenate every leaf shell into a single operand first:
+    # the union then sees one leaf aggregate instead of thousands, while still
+    # removing the buried leaf/clump overlap faces (keeping the mesh compact).
+    leaf_solids = [m for m in leaf_solids if len(m.vertices) > 0]
+    if leaf_solids:
+        edge_solids.append(trimesh.util.concatenate(leaf_solids))
     tree_mesh = _union_edge_solids(edge_solids)
     _tag(tree_mesh, Material.WOOD)
 
@@ -483,19 +493,20 @@ def _union_edge_solids(edge_solids: list[trimesh.Trimesh]) -> trimesh.Trimesh:
         return trimesh.Trimesh(process=False)
 
     if len(edge_solids) == 1:
-        mesh = edge_solids[0]
-    else:
-        mesh = trimesh.boolean.union(
-            edge_solids, engine="manifold", check_volume=False,
-        )
-    mesh.fix_normals()
-    return mesh
+        return edge_solids[0]
+
+    # Concatenate instead of boolean union.  Each branch tube and foliage
+    # clump is already a closed, correctly-oriented solid; slicers compute
+    # the geometric union during slicing, so overlapping shells produce an
+    # identical 3D-print result.  The manifold boolean on 80+ operands with
+    # 8+ M total faces was taking >16 s per tree — the dominant cost.
+    return trimesh.util.concatenate(edge_solids)
 
 
 # ── Foliage clump: icosphere deformed to cone+dome profile, Gaussian noise ─────
 
 # Icosphere subdivision level for the whole clump.  3 → 1280 faces; 4 → 5120.
-_FOLIAGE_ICO_SUBDIVISIONS          = 4
+_FOLIAGE_ICO_SUBDIVISIONS          = 3
 # Fine Gaussian noise: per-vertex surface grain.
 _FOLIAGE_NOISE_AMPLITUDE_MM        = 0.10  # 1-sigma displacement (mm)
 # Coarse smooth noise: large-scale silhouette distortion.
@@ -505,6 +516,14 @@ _FOLIAGE_COARSE_NOISE_CELL_MM      = 4.0   # spatial wavelength (mm)
 # amplitude plus 2σ of the fine Gaussian.  Used to pre-sink the foliage cone
 # so branches stay buried under the skin even in the worst-noise case.
 _FOLIAGE_MAX_NOISE_MM = _FOLIAGE_COARSE_NOISE_AMPLITUDE_MM + 2.0 * _FOLIAGE_NOISE_AMPLITUDE_MM
+# Extra inward sink for leaf bases past the noised skin, so each base stays in
+# contact (slightly embedded) rather than skimming the surface.
+_LEAF_BASE_EMBED_MM = 0.0
+# Downward droop of leaf bases: weight of the (perp-to-radial) downward
+# component relative to the outward radial when forming the leaf tangent.
+# 0 = straight out along the surface normal; larger = more droop toward the
+# ground.
+_LEAF_DROOP_WEIGHT = 1.4
 
 
 def _foliage_gaussian_noise(
@@ -632,7 +651,19 @@ def _build_foliage_clump_mesh(
     clump_length_mm: float,
     edge_id: int,
     bark_seed: int,
-) -> tuple[trimesh.Trimesh, float]:
+    leaf_enable: bool = False,
+    leaf_base_count: int = 0,
+    leaf_length_mm: float = 0.0,
+    leaf_width_mm: float = 0.0,
+    leaf_thickness_mm: float = 0.24,
+    leaf_fold_angle_deg: float = 5.0,
+    leaf_keel_depth_mm: float = 1.0,
+    leaf_keel_tip_angle_deg: float = 45.0,
+    leaf_spacing_factor: float = 1.5,
+    leaf_cap_count: int = 3,
+    leaf_angle_jitter_deg: float = 24.0,
+    leaf_pos_jitter: float = 0.8,
+) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Foliage clump: icosphere bent along the branch Bezier spine.
 
     Profile arc segments (back → front):
@@ -797,17 +828,141 @@ def _build_foliage_clump_mesh(
     # Shift the full noise wave inward: subtract its peak so the maximum
     # displacement is exactly 0 (the smooth envelope) and the full 2A
     # trough range erodes inward — no amplitude loss, no outward expansion.
-    # noise_peak is the pre-shift maximum: it equals the uniform inward shift
-    # applied to every vertex, and therefore the minimum guaranteed erosion at
-    # the dome tip.  Callers use it to recess the leaf base by that amount so
-    # the leaf never protrudes through the noise-eroded dome surface.
     noise_peak = float(disp.max())
     disp = disp - noise_peak
     verts = verts + normals * disp[:, np.newaxis]
 
+    # ── Leaves: rows up the cone, over the dome, capped at the apex ──────────
+    leaf_parts: list[trimesh.Trimesh] = []
+    if leaf_enable and leaf_base_count > 0 and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
+        _WD = np.array([0.0, 0.0, -1.0])
+        factor_tip = max(0.0, 1.0 - (r_base + _FOLIAGE_MAX_NOISE_MM) / max(r_tip, 1e-6))
+        jit = np.radians(float(leaf_angle_jitter_deg))
+        pj  = float(leaf_pos_jitter)
+        # Leaves wrap the full circumference of every cone and dome (theta is
+        # periodic, so no clipping); theta = 0 points world-up.
+        pu_tip, vp_tip = _two_perp(tip_t)
+
+        def _cone_point(tc: float, theta: float):
+            """Smooth-cone surface point + outward radial + ring radius at (tc, θ)."""
+            sv  = tc * tot_spine
+            sp  = np.array([np.interp(sv, spine_arc, spine_pts[:, d]) for d in range(3)])
+            stj = _safe_norm(np.array([np.interp(sv, spine_arc, spine_tans[:, d]) for d in range(3)]))
+            pu, vp = _two_perp(stj)
+            rr  = r_base + tc * (r_tip - r_base)
+            tcf = 0.5 + (factor_tip - 0.5) * (3.0 * tc ** 2 - 2.0 * tc ** 3)
+            ctr = sp + pu * rr * tcf
+            radial = float(np.cos(theta)) * pu + float(np.sin(theta)) * vp
+            return ctr + rr * radial, radial, rr
+
+        def _dome_point(phi: float, theta: float):
+            """Smooth forward-dome surface point + outward normal + ring radius."""
+            ax  = r_tip * np.sin(phi)
+            rr  = r_tip * np.cos(phi)
+            dome_shift = max(0.0, r_tip - r_base - _FOLIAGE_MAX_NOISE_MM)
+            ctr  = tip_p + ax * tip_t + dome_shift * np.cos(phi) * pu_tip
+            perp = float(np.cos(theta)) * pu_tip + float(np.sin(theta)) * vp_tip
+            pt   = ctr + rr * perp
+            normal = _safe_norm(np.sin(phi) * tip_t + np.cos(phi) * perp)
+            return pt, normal, rr
+
+        def _emit_leaf(base_smooth: np.ndarray, radial: np.ndarray, key) -> None:
+            radial = _safe_norm(radial)
+            # Sink the base from the smooth surface onto the *noised* skin (the
+            # skin was eroded inward by noise_peak − disp along its ≈ normal);
+            # evaluating the same noise fields here reproduces that, then
+            # _LEAF_BASE_EMBED_MM tucks the base slightly inside for contact.
+            disp_base = float(
+                _foliage_gaussian_noise(base_smooth[None, :], edge_id, bark_seed)[0]
+                + _foliage_coarse_noise(base_smooth[None, :], edge_id, bark_seed)[0]
+            )
+            lbase = base_smooth + radial * ((disp_base - noise_peak) - _LEAF_BASE_EMBED_MM)
+            # Growth tangent: outward + droop toward the ground.
+            dp   = _WD - float(np.dot(_WD, radial)) * radial
+            dp_n = float(np.linalg.norm(dp))
+            ltan = _safe_norm(radial + _LEAF_DROOP_WEIGHT * dp / dp_n) if dp_n > 1e-9 else radial
+            # Angle jitter: pitch (extra droop) about the lateral axis, plus a
+            # rotation (yaw) about the surface normal — a few degrees each.
+            if jit > 1e-9:
+                a_pitch = (2.0 * _hash01(bark_seed, "leaf-pitch", edge_id, key) - 1.0) * jit
+                a_yaw   = (2.0 * _hash01(bark_seed, "leaf-yaw",   edge_id, key) - 1.0) * jit
+                ltan = _rotate_vec(ltan, np.cross(ltan, radial), a_pitch)
+                ltan = _safe_norm(_rotate_vec(ltan, radial, a_yaw))
+            lseed = _hash01_int(bark_seed, "base-leaf", edge_id, key)
+            for lp in build_leaf_mesh(
+                base_pos=lbase,
+                tangent=ltan,
+                length_mm=float(leaf_length_mm),
+                width_mm=float(leaf_width_mm),
+                thickness_mm=float(leaf_thickness_mm),
+                fold_angle_deg=float(leaf_fold_angle_deg),
+                keel_depth_mm=float(leaf_keel_depth_mm),
+                keel_tip_angle_deg=float(leaf_keel_tip_angle_deg),
+                up_hint=radial,   # top/crease faces outward, away from the cone
+                seed=lseed,
+            ):
+                if len(lp.vertices) > 0:
+                    leaf_parts.append(lp)
+
+        # Tile leaves side-by-side over the whole cap: a ~leaf_width grid in
+        # surface arc-length (rows) and circumference (columns).  The arc spans
+        # from near the cone base, up the cone, and over the dome — stopping just
+        # short of the apex, which the cap fills.  Row/column counts are derived
+        # from the spacing so coverage stays dense regardless of clump size.
+        spacing = max(float(leaf_width_mm) * float(leaf_spacing_factor), 1e-3)
+        arc_lo  = south_arc + 0.05 * cone_arc_p
+        arc_hi  = total_arc - 0.10 * north_arc
+        arc_span = max(arc_hi - arc_lo, 1e-6)
+        cone_end_arc = south_arc + cone_arc_p
+        n_rows  = max(1, int(np.ceil(arc_span / spacing)))
+
+        def _radius_at_arc(arc: float) -> float:
+            if arc <= cone_end_arc:
+                tc = (arc - south_arc) / max(cone_arc_p, 1e-9)
+                return r_base + tc * (r_tip - r_base)
+            phi = (arc - cone_end_arc) / max(north_arc, 1e-9) * (np.pi / 2.0)
+            return float(r_tip * np.cos(phi))
+
+        for ri in range(n_rows):
+            arc_center = arc_lo + ((ri + 0.5) / n_rows) * arc_span
+            rr_row     = _radius_at_arc(arc_center)   # for column count only
+            # Columns fill the full circumference (2π·rr) at the row spacing.
+            # Alternate rows are offset half a cell (brick stagger).
+            n_col   = max(1, int(np.ceil((2.0 * np.pi * rr_row) / spacing)))
+            stagger = 0.5 * (ri % 2)
+            for ci in range(n_col):
+                # Independent per-leaf jitter in BOTH directions: up/down along
+                # the arc and left/right around the circumference.
+                a_jit = (2.0 * _hash01(bark_seed, "leaf-arc", edge_id, ri, ci) - 1.0) * pj * spacing
+                arc   = float(np.clip(arc_center + a_jit, arc_lo, arc_hi))
+                on_cone = arc <= cone_end_arc
+                if on_cone:
+                    tc  = (arc - south_arc) / max(cone_arc_p, 1e-9)
+                else:
+                    phi = (arc - cone_end_arc) / max(north_arc, 1e-9) * (np.pi / 2.0)
+                rr_leaf = _radius_at_arc(arc)
+                th_jit  = pj * spacing / max(rr_leaf, 1e-6)   # spacing → angle
+                col_f   = (ci + 0.5 + stagger) / n_col
+                t_jit   = (2.0 * _hash01(bark_seed, "leaf-col", edge_id, ri, ci) - 1.0) * th_jit
+                theta   = -np.pi + col_f * 2.0 * np.pi + t_jit
+                if on_cone:
+                    base_smooth, radial, _ = _cone_point(tc, theta)
+                else:
+                    base_smooth, radial, _ = _dome_point(phi, theta)
+                _emit_leaf(base_smooth, radial, (ri, ci))
+
+        # Cap: a few random leaves clustered at the dome apex to fill the space.
+        for ci in range(max(0, int(leaf_cap_count))):
+            u_theta = _hash01(bark_seed, "cap-theta", edge_id, ci)
+            u_phi   = _hash01(bark_seed, "cap-phi",   edge_id, ci)
+            theta   = -np.pi + 2.0 * np.pi * u_theta            # full circle
+            phi     = (np.pi / 2.0) - (0.20 * np.pi / 2.0) * u_phi
+            base_smooth, radial, _ = _dome_point(phi, theta)
+            _emit_leaf(base_smooth, radial, ("cap", ci))
+
     result = trimesh.Trimesh(vertices=verts, faces=ico.faces.copy(), process=False)
     result.fix_normals()
-    return result, noise_peak
+    return result, leaf_parts
 
 
 # ── Bark helpers ──────────────────────────────────────────────────────────────
@@ -1132,6 +1287,16 @@ def _hash01(*parts: object) -> float:
             h = (h * 1099511628211) & 0xFFFFFFFFFFFFFFFF
         h ^= 0xFF
         h = (h * 1099511628211) & 0xFFFFFFFFFFFFFFFF
+    # Final avalanche (murmur3 fmix64).  Without this, FNV barely diffuses the
+    # trailing bytes, so varying only the last argument (e.g. a column index)
+    # leaves the high bits almost unchanged and biased — collapsing per-leaf
+    # jitter into a regular grid.  The finalizer spreads every input bit across
+    # all 64 output bits, giving a centred, full-range uniform.
+    h ^= h >> 33
+    h  = (h * 0xFF51AFD7ED558CCD) & 0xFFFFFFFFFFFFFFFF
+    h ^= h >> 33
+    h  = (h * 0xC4CEB9FE1A85EC53) & 0xFFFFFFFFFFFFFFFF
+    h ^= h >> 33
     return h / float(2 ** 64)
 
 
@@ -1207,6 +1372,40 @@ def _bezier_tangent(
 def _safe_norm(v: np.ndarray) -> np.ndarray:
     n = float(np.linalg.norm(v))
     return v / n if n > 1e-12 else v
+
+
+def _rotate_vec(v: np.ndarray, axis: np.ndarray, angle: float) -> np.ndarray:
+    """Rotate vector *v* about *axis* by *angle* radians (Rodrigues' formula)."""
+    n = float(np.linalg.norm(axis))
+    if n < 1e-12 or abs(angle) < 1e-12:
+        return v
+    k = axis / n
+    c, s = float(np.cos(angle)), float(np.sin(angle))
+    return v * c + np.cross(k, v) * s + k * float(np.dot(k, v)) * (1.0 - c)
+
+
+def _two_perp(axis: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Two orthonormal vectors perpendicular to *axis*.
+
+    The first is biased toward world-up (so it points "up" across the surface,
+    giving leaves a consistent droop reference); the second completes a
+    right-handed frame.  Falls back to an arbitrary perpendicular when *axis*
+    is itself vertical.
+    """
+    a  = _safe_norm(axis)
+    e1 = _WUP_VEC - float(np.dot(_WUP_VEC, a)) * a
+    n1 = float(np.linalg.norm(e1))
+    if n1 < 1e-6:
+        ref = np.array([1.0, 0.0, 0.0])
+        e1  = ref - float(np.dot(ref, a)) * a
+        n1  = float(np.linalg.norm(e1))
+    e1 = e1 / max(n1, 1e-12)
+    e2 = np.cross(a, e1)
+    e2 = e2 / max(float(np.linalg.norm(e2)), 1e-12)
+    return e1, e2
+
+
+_WUP_VEC = np.array([0.0, 0.0, 1.0])
 
 
 def _transport(

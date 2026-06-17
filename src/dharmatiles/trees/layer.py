@@ -75,12 +75,17 @@ class CloudTree:
         leaf_clump_length_mm: float | None = 10.5,
         # ── Leaf blades ───────────────────────────────────────────────────
         leaf_enable: bool = True,
+        leaf_base_count: int = 5,
         leaf_length_mm: float = 1.6,
         leaf_width_mm: float = 1.0,
         leaf_thickness_mm: float = 0.24,
         leaf_fold_angle_deg: float = 5.0,
         leaf_keel_depth_mm: float = 1.0,
         leaf_keel_tip_angle_deg: float = 45.0,
+        leaf_spacing_factor: float = 1.5,
+        leaf_cap_count: int = 3,
+        leaf_angle_jitter_deg: float = 24.0,
+        leaf_pos_jitter: float = 0.8,
         bark: BarkConfig | None = None,
     ) -> None:
         self.shape = TreeShape(
@@ -118,12 +123,17 @@ class CloudTree:
         )
         # Leaf blades
         self.leaf_enable           = bool(leaf_enable)
+        self.leaf_base_count       = int(leaf_base_count)
         self.leaf_length_mm        = float(leaf_length_mm)
         self.leaf_width_mm         = float(leaf_width_mm)
         self.leaf_thickness_mm     = float(leaf_thickness_mm)
         self.leaf_fold_angle_deg   = float(leaf_fold_angle_deg)
         self.leaf_keel_depth_mm        = float(leaf_keel_depth_mm)
         self.leaf_keel_tip_angle_deg   = float(leaf_keel_tip_angle_deg)
+        self.leaf_spacing_factor       = float(leaf_spacing_factor)
+        self.leaf_cap_count            = int(leaf_cap_count)
+        self.leaf_angle_jitter_deg     = float(leaf_angle_jitter_deg)
+        self.leaf_pos_jitter           = float(leaf_pos_jitter)
         self.bark = BarkConfig() if bark is None else bark
 
     def footprint_mm(self) -> float:
@@ -208,12 +218,17 @@ class CloudTree:
                 debug_attractors=attractors if self.debug_attractors else None,
                 attractor_group_labels=group_labels,
                 leaf_enable=self.leaf_enable and self.leaf_clumps,
+                leaf_base_count=self.leaf_base_count,
                 leaf_length_mm=self.leaf_length_mm,
                 leaf_width_mm=self.leaf_width_mm,
                 leaf_thickness_mm=self.leaf_thickness_mm,
                 leaf_fold_angle_deg=self.leaf_fold_angle_deg,
                 leaf_keel_depth_mm=self.leaf_keel_depth_mm,
                 leaf_keel_tip_angle_deg=self.leaf_keel_tip_angle_deg,
+                leaf_spacing_factor=self.leaf_spacing_factor,
+                leaf_cap_count=self.leaf_cap_count,
+                leaf_angle_jitter_deg=self.leaf_angle_jitter_deg,
+                leaf_pos_jitter=self.leaf_pos_jitter,
             )
             if len(mesh.vertices) == 0:
                 continue
