@@ -495,11 +495,11 @@ def _union_edge_solids(edge_solids: list[trimesh.Trimesh]) -> trimesh.Trimesh:
 # ── Foliage clump: icosphere deformed to cone+dome profile, Gaussian noise ─────
 
 # Icosphere subdivision level for the whole clump.  3 → 1280 faces; 4 → 5120.
-_FOLIAGE_ICO_SUBDIVISIONS          = 3
+_FOLIAGE_ICO_SUBDIVISIONS          = 4
 # Fine Gaussian noise: per-vertex surface grain.
 _FOLIAGE_NOISE_AMPLITUDE_MM        = 0.10  # 1-sigma displacement (mm)
 # Coarse smooth noise: large-scale silhouette distortion.
-_FOLIAGE_COARSE_NOISE_AMPLITUDE_MM = 0.5   # peak ± displacement (mm)
+_FOLIAGE_COARSE_NOISE_AMPLITUDE_MM = 1.0   # peak ± displacement (mm)
 _FOLIAGE_COARSE_NOISE_CELL_MM      = 4.0   # spatial wavelength (mm)
 # Maximum possible inward noise erosion of the foliage surface: coarse peak
 # amplitude plus 2σ of the fine Gaussian.  Used to pre-sink the foliage cone
