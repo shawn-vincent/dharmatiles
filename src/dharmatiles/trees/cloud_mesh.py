@@ -11,11 +11,11 @@ slightly behind their parent node, inside the incoming parent branch, so forks
 have real volumetric overlap. The per-edge solids are unioned with manifold3d
 before returning a single watertight wood mesh.
 
-Foliage (``foliage_radius_mm > 0``) is handled by varying the radius profile
-on leaf branches: the branch tapers outward from the wood radius to
-``foliage_radius_mm`` over the last ``leaf_clump_length_mm`` (or over the
-full branch if that parameter is ``None``).  The same circular cross-section
-is used throughout — no separate D-ring or foliage cone builder.
+Foliage (``foliage_radius_mm > 0``) is handled by building a separate
+icosphere-based clump mesh for the last ``leaf_clump_length_mm`` of every leaf
+branch.  The clump is offset perpendicular-upward so the branch rises up into
+the foliage: at the clump base the offset equals the local ring radius (branch
+halfway embedded), tapering linearly to zero at the tip (fully embedded).
 """
 from __future__ import annotations
 
@@ -65,6 +65,12 @@ def build_cloud_tree_mesh(
     debug_attractors: np.ndarray | None = None,
     attractor_group_labels: np.ndarray | None = None,
     attractor_radius_mm: float = 0.6,
+    # ── Leaf geometry ─────────────────────────────────────────────────────────
+    leaf_enable: bool = True,
+    leaf_length_mm: float = 8.0,
+    leaf_width_mm: float = 5.0,
+    leaf_thickness_mm: float = 1.2,
+    leaf_fold_angle_deg: float = 22.0,
 ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Build a single tree mesh from a simplified skeleton.
 
@@ -231,6 +237,21 @@ def build_cloud_tree_mesh(
             )
             if len(clump.vertices) > 0:
                 edge_solids.append(clump)
+
+            # Single leaf at the tip of each foliage clump.
+            if leaf_enable and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
+                leaf = _build_leaf_mesh(
+                    base_pos=p3,
+                    tangent=_bt_end,
+                    length_mm=leaf_length_mm,
+                    width_mm=leaf_width_mm,
+                    thickness_mm=leaf_thickness_mm,
+                    fold_angle_deg=leaf_fold_angle_deg,
+                    edge_id=i,
+                    bark_seed=bark_seed,
+                )
+                if len(leaf.vertices) > 0:
+                    edge_solids.append(leaf)
 
         node_frame[i] = end_frame
         node_bark[i] = edge_end_bark
@@ -659,19 +680,37 @@ def _build_foliage_clump_mesh(
 
     verts  = np.zeros_like(uverts)
 
+    # Perpendicular-upward offset: shift each ring center by that ring's own
+    # radius in the world-up direction projected perp to the local tangent.
+    # This places the bottom edge of every ring exactly at the branch centerline,
+    # exposing the full branch on the underside of the foliage.
+    _WUP = np.array([0.0, 0.0, 1.0])
+
+    def _pu_unit_scalar(tangent: np.ndarray) -> np.ndarray:
+        """World-up perp to tangent, normalised (zero if tangent is vertical)."""
+        p = _WUP - float(np.dot(_WUP, tangent)) * tangent
+        n = float(np.linalg.norm(p))
+        return p / n if n > 1e-6 else np.zeros(3)
+
+    def _pu_unit_batch(tangents: np.ndarray) -> np.ndarray:
+        """Per-row world-up perp to tangent, normalised, shape (M, 3)."""
+        p = _WUP - (tangents * _WUP).sum(axis=1, keepdims=True) * tangents
+        n = np.linalg.norm(p, axis=1, keepdims=True)
+        return np.where(n > 1e-6, p / n, 0.0)
+
     # ── Back hemisphere: backward from start_p along start_t ─────────────────
     ms = u_vals <= south_arc
     if ms.any():
         phi    = (u_vals[ms] / south_arc) * (np.pi / 2.0)
         ax_s   = r_base * (np.sin(phi) - 1.0)           # ≤ 0 (behind start_p)
         rr_s   = r_base * np.cos(phi)
-        # project radial perp to start_t
         ru     = rad_u[ms]
         dp     = (ru * start_t).sum(axis=1, keepdims=True)
         rp     = ru - dp * start_t
         rn     = np.linalg.norm(rp, axis=1, keepdims=True)
         rpu    = np.where(rn > 1e-10, rp / rn, 0.0)
-        verts[ms] = start_p + ax_s[:, None] * start_t + rpu * rr_s[:, None]
+        pu_s   = _pu_unit_scalar(start_t)               # (3,) fixed direction
+        verts[ms] = start_p + pu_s * rr_s[:, None] + ax_s[:, None] * start_t + rpu * rr_s[:, None]
 
     # ── Cone body: cross-sections swept along Bezier spine ────────────────────
     mc = (~ms) & (u_vals <= south_arc + cone_arc_p)
@@ -689,13 +728,15 @@ def _build_foliage_clump_mesh(
         stn  = np.linalg.norm(st_raw, axis=1, keepdims=True)
         st_c = st_raw / np.where(stn > 1e-10, stn, 1.0)   # local spine tangent
 
-        # Project radial direction perp to local spine tangent.
         ru   = rad_u[mc]
         dp   = (ru * st_c).sum(axis=1, keepdims=True)
         rp   = ru - dp * st_c
         rn   = np.linalg.norm(rp, axis=1, keepdims=True)
         rpu  = np.where(rn > 1e-10, rp / rn, 0.0)
-        verts[mc] = sp_c + rpu * rr_c[:, None]
+        pu_c = _pu_unit_batch(st_c)                     # (M, 3) per-vertex direction
+        # Offset fades from full at the base (tc=0) to zero at the tip (tc=1)
+        # so the branch rises into the foliage rather than sitting below it throughout.
+        verts[mc] = sp_c + pu_c * (rr_c * (1.0 - tc))[:, None] + rpu * rr_c[:, None]
 
     # ── Forward dome: forward from tip_p along tip_t ──────────────────────────
     mn = u_vals > south_arc + cone_arc_p
@@ -703,7 +744,7 @@ def _build_foliage_clump_mesh(
         phi    = (u_vals[mn] - south_arc - cone_arc_p) / north_arc * (np.pi / 2.0)
         ax_n   = r_tip * np.sin(phi)
         rr_n   = r_tip * np.cos(phi)
-        # rad_u is already perp to tip_t — no-op projection
+        # No offset at the tip: dome is centred on the branch, fully embedding it.
         verts[mn] = tip_p + ax_n[:, None] * tip_t + rad_u[mn] * rr_n[:, None]
 
     # ── Normals + two noise layers ────────────────────────────────────────────
@@ -720,6 +761,171 @@ def _build_foliage_clump_mesh(
     result = trimesh.Trimesh(vertices=verts, faces=ico.faces.copy(), process=False)
     result.fix_normals()
     return result
+
+
+# ── Single leaf mesh ──────────────────────────────────────────────────────────
+
+_LEAF_N_LONG       = 20    # longitudinal sections (base → tip)
+_LEAF_N_LAT        = 16    # lateral sections across the leaf (must be even)
+_LEAF_MIN_THICK_MM = 0.35  # minimum leaf thickness at midrib and edges
+# Width profile normalisation: w(s) ∝ s^0.4 × (1-s)^0.8 peaks at s=1/3.
+_LEAF_W_PEAK_NORM  = float((1.0 / 3.0) ** 0.4 * (2.0 / 3.0) ** 0.8)
+
+
+def _leaf_width_profile(s: np.ndarray) -> np.ndarray:
+    """Width fraction ∈ [0, 1] at normalised longitudinal position s ∈ [0, 1].
+
+    Broader toward the base (peak at s ≈ 1/3), tapering smoothly to 0 at
+    both ends.  This gives an ovate leaf shape — rounded at the base and
+    pointed at the tip.
+    """
+    s = np.asarray(s, float)
+    raw = (s ** 0.4) * ((1.0 - s) ** 0.8)
+    return raw / _LEAF_W_PEAK_NORM
+
+
+def _build_leaf_mesh(
+    *,
+    base_pos: np.ndarray,
+    tangent: np.ndarray,
+    length_mm: float,
+    width_mm: float,
+    thickness_mm: float,
+    fold_angle_deg: float,
+    edge_id: int,
+    bark_seed: int,
+) -> trimesh.Trimesh:
+    """Single leaf: ovate outline, two convex lobes with a central midrib valley.
+
+    Geometry
+    --------
+    * **Outline** (top view): ovate teardrop — peak width at ≈ 1/3 from base,
+      tapering to a rounded base and a pointed tip.
+    * **Cross-section** (perpendicular to midrib): two convex lobes meeting at
+      a central valley (the midrib).  Each lobe rises from the midrib, peaks at
+      the mid-lateral position, and tapers back to the leaf edge.
+    * **Fold**: the two half-laminas tilt upward by ``fold_angle_deg`` from
+      the leaf plane, producing a V-fold along the midrib.
+    * **Thickness**: a constant ``_LEAF_MIN_THICK_MM`` separates the top
+      surface from the flat underside, closing the solid at the midrib and
+      edges.
+
+    The leaf base sits at *base_pos* (= branch attractor tip); it extends
+    in the *tangent* direction for *length_mm*.  A per-leaf random roll is
+    derived from *edge_id* and *bark_seed* so each leaf faces a different
+    direction without repeating.
+    """
+    L  = _safe_norm(np.asarray(tangent, float))
+    bp = np.asarray(base_pos, float)
+
+    # Build an orthonormal frame (L, T, N) with N biased toward world-up.
+    world_up = np.array([0.0, 0.0, 1.0])
+    if abs(float(np.dot(L, world_up))) > 0.9:
+        world_up = np.array([1.0, 0.0, 0.0])
+    T0 = np.cross(world_up, L)
+    T0 /= max(float(np.linalg.norm(T0)), 1e-10)
+    N0 = np.cross(L, T0)
+    N0 /= max(float(np.linalg.norm(N0)), 1e-10)
+
+    # Random roll around the branch tangent — unique per leaf.
+    roll  = _hash01(bark_seed, "leaf-roll", edge_id) * 2.0 * np.pi
+    cr, sr = float(np.cos(roll)), float(np.sin(roll))
+    T = cr * T0 + sr * N0   # lateral direction in leaf plane
+    N = -sr * T0 + cr * N0  # leaf normal (toward lobe peaks)
+
+    fold_tan = float(np.tan(np.radians(fold_angle_deg)))
+    N_S = _LEAF_N_LONG
+    N_T = _LEAF_N_LAT
+    t_vals = np.linspace(-1.0, 1.0, N_T + 1)   # lateral param ∈ [-1, 1]
+    abs_t  = np.abs(t_vals)
+
+    # Interior rings only (skip the s=0, s=1 singularities).
+    s_interior = np.linspace(0.0, 1.0, N_S + 1)[1:-1]   # (N_S-1,)
+
+    verts_acc: list[np.ndarray] = []
+    faces_acc: list[list[int]]  = []
+    n_v = 0
+
+    def _add(arr: np.ndarray) -> int:
+        nonlocal n_v
+        off = n_v
+        a = arr.reshape(-1, 3)
+        verts_acc.append(a)
+        n_v += len(a)
+        return off
+
+    ring_top: list[int] = []
+    ring_bot: list[int] = []
+
+    for s in s_interior:
+        w_s    = width_mm * float(_leaf_width_profile(np.array([s]))[0])
+        long_t = float(np.sin(np.pi * s) ** 0.5)  # thins toward both ends
+
+        # Midrib position at this s.
+        midrib = bp + s * length_mm * L           # (3,)
+        # Lateral positions for every t sample.
+        lateral = midrib[np.newaxis, :] + t_vals[:, np.newaxis] * w_s * T  # (N_T+1, 3)
+
+        # Fold: each half-lamina tilts up from the midrib by fold_angle_deg.
+        fold_h  = abs_t * w_s * fold_tan * long_t                   # (N_T+1,)
+        # Convex lobe: sin² profile — 0 at midrib, peak at ±0.5, 0 at edges.
+        lobe_h  = thickness_mm * np.sin(np.pi * abs_t) ** 2 * long_t  # (N_T+1,)
+
+        z_top = fold_h + lobe_h                        # top surface height
+        z_bot = fold_h - _LEAF_MIN_THICK_MM            # flat underside
+
+        top_pts = lateral + z_top[:, np.newaxis] * N   # (N_T+1, 3)
+        bot_pts = lateral + z_bot[:, np.newaxis] * N   # (N_T+1, 3)
+
+        ring_top.append(_add(top_pts))
+        ring_bot.append(_add(bot_pts))
+
+    v_base = _add(bp[np.newaxis])
+    v_tip  = _add((bp + length_mm * L)[np.newaxis])
+    n_rings = len(s_interior)
+
+    # ── Base fan: base vertex → first ring ────────────────────────────────────
+    ft0, fb0 = ring_top[0], ring_bot[0]
+    for j in range(N_T):
+        j1 = j + 1
+        faces_acc.append([v_base, ft0 + j,  ft0 + j1])  # top half
+        faces_acc.append([v_base, fb0 + j1, fb0 + j ])  # bottom half
+    faces_acc.append([v_base, fb0,        ft0       ])   # left edge
+    faces_acc.append([v_base, ft0 + N_T, fb0 + N_T ])   # right edge
+
+    # ── Body bands: adjacent rings ────────────────────────────────────────────
+    for ri in range(n_rings - 1):
+        ta, tb = ring_top[ri], ring_top[ri + 1]
+        ba, bb = ring_bot[ri], ring_bot[ri + 1]
+        for j in range(N_T):
+            j1 = j + 1
+            # Top surface (normal ~ +N).
+            faces_acc.append([ta + j,  tb + j,  tb + j1])
+            faces_acc.append([ta + j,  tb + j1, ta + j1])
+            # Bottom surface (normal ~ −N).
+            faces_acc.append([ba + j,  ba + j1, bb + j1])
+            faces_acc.append([ba + j,  bb + j1, bb + j ])
+        # Left-edge strip (j = 0).
+        faces_acc.append([ta,       ba,       bb      ])
+        faces_acc.append([ta,       bb,       tb      ])
+        # Right-edge strip (j = N_T).
+        faces_acc.append([ta + N_T, tb + N_T, bb + N_T])
+        faces_acc.append([ta + N_T, bb + N_T, ba + N_T])
+
+    # ── Tip fan: last ring → tip vertex ───────────────────────────────────────
+    ftL, fbL = ring_top[-1], ring_bot[-1]
+    for j in range(N_T):
+        j1 = j + 1
+        faces_acc.append([v_tip, ftL + j1, ftL + j ])  # top half
+        faces_acc.append([v_tip, fbL + j,  fbL + j1])  # bottom half
+    faces_acc.append([v_tip, ftL,        fbL       ])   # left edge
+    faces_acc.append([v_tip, fbL + N_T, ftL + N_T ])   # right edge
+
+    verts = np.vstack(verts_acc)
+    faces = np.array(faces_acc, dtype=np.int32)
+    mesh  = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+    mesh.fix_normals()
+    return mesh
 
 
 # ── Bark helpers ──────────────────────────────────────────────────────────────

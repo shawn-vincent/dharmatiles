@@ -73,6 +73,12 @@ class CloudTree:
         leaf_clumps: bool = True,
         leaf_clump_radius_mm: float = 4.0,
         leaf_clump_length_mm: float | None = 10.5,
+        # ── Leaf blades ───────────────────────────────────────────────────
+        leaf_enable: bool = True,
+        leaf_length_mm: float = 8.0,
+        leaf_width_mm: float = 5.0,
+        leaf_thickness_mm: float = 1.2,
+        leaf_fold_angle_deg: float = 22.0,
         bark: BarkConfig | None = None,
     ) -> None:
         self.shape = TreeShape(
@@ -108,6 +114,12 @@ class CloudTree:
         self.leaf_clump_length_mm  = (
             float(leaf_clump_length_mm) if leaf_clump_length_mm is not None else None
         )
+        # Leaf blades
+        self.leaf_enable           = bool(leaf_enable)
+        self.leaf_length_mm        = float(leaf_length_mm)
+        self.leaf_width_mm         = float(leaf_width_mm)
+        self.leaf_thickness_mm     = float(leaf_thickness_mm)
+        self.leaf_fold_angle_deg   = float(leaf_fold_angle_deg)
         self.bark = BarkConfig() if bark is None else bark
 
     def footprint_mm(self) -> float:
@@ -191,6 +203,11 @@ class CloudTree:
                 bark_seed=tree_seed,
                 debug_attractors=attractors if self.debug_attractors else None,
                 attractor_group_labels=group_labels,
+                leaf_enable=self.leaf_enable and self.leaf_clumps,
+                leaf_length_mm=self.leaf_length_mm,
+                leaf_width_mm=self.leaf_width_mm,
+                leaf_thickness_mm=self.leaf_thickness_mm,
+                leaf_fold_angle_deg=self.leaf_fold_angle_deg,
             )
             if len(mesh.vertices) == 0:
                 continue
