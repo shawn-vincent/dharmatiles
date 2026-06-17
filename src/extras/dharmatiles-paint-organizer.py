@@ -259,9 +259,9 @@ def _magnet_pocket(
         cyl = cyl + bevel.translate([0.0, 0.0, MAGNET_OVERSHOOT])
 
     if spec.magnet_pushout:
-        # 1 mm push-out hole along the pocket axis, extending 5 mm past the magnet
+        # 2 mm push-out hole along the pocket axis, extending 5 mm past the magnet
         # bottom — enough to punch through the ~0.7 mm back wall into the depression.
-        pushout = m3d.Manifold.cylinder(length + 5.0, 0.5, circular_segments=32)
+        pushout = m3d.Manifold.cylinder(length + 5.0, 1.0, circular_segments=32)
         cyl = cyl + pushout
 
     cyl = cyl.rotate([0, 90, 0])        # +z axis → +x

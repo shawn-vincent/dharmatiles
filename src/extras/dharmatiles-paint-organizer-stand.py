@@ -69,7 +69,7 @@ cup_centre = _ORGANIZER.cup_centre
 hex_cross_section = _ORGANIZER.hex_cross_section
 
 FLOOR_THICKNESS_MM = 4.0
-FOOT_LOGO_SIZE_MM  = 15.0
+FOOT_LOGO_SIZE_MM  = 24.0   # near-max square that keeps its corners inside the foot's hex face
 FOOT_LOGO_DEPTH_MM = 0.4
 
 
@@ -301,6 +301,7 @@ def _bracket_for_column(spec: HexOrganizerSpec, floor_bottom: float, depth: floa
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
     t         = FLOOR_THICKNESS_MM
     L         = spec.height + outer_f2f / 2.0 + FLOOR_THICKNESS_MM
+    L_h       = L / 2.0     # horizontal arm reaches half as far as the vertical arm
     we, wt    = outer_f2f * 2.0 / np.sqrt(3), BRACKET_WIDTH_TIP_MM
     r_tip     = BRACKET_RIB_RADIUS_TIP_MM
     r_corner  = BRACKET_RIB_RADIUS_CORNER_MM
@@ -328,7 +329,7 @@ def _bracket_for_column(spec: HexOrganizerSpec, floor_bottom: float, depth: floa
     # Horizontal arm: a tapered, rounded-tip foot already in (x, y), extruded
     # directly along z — no rotation needed, it sits flush on the desk
     # (z in [0, t]) and extends forward from the elbow to y_attach + L.
-    foot_cs    = _rounded_tip_cs(cx, we, wt, y_attach, y_attach + L, shelf=FLOOR_THICKNESS_MM)
+    foot_cs    = _rounded_tip_cs(cx, we, wt, y_attach, y_attach + L_h, shelf=FLOOR_THICKNESS_MM)
     foot_plate = m3d.Manifold.extrude(foot_cs, t)
 
     # Rib: one continuous round bead — a solid rounded-corner gusset filling
@@ -339,7 +340,7 @@ def _bracket_for_column(spec: HexOrganizerSpec, floor_bottom: float, depth: floa
     # hemisphere-style cap so the rib reads as a rounded rod rather than a
     # flat-cut cylinder end.
     tip_top    = (cx, y_outer, L)
-    tip_bottom = (cx, y_attach + L, t)
+    tip_bottom = (cx, y_attach + L_h, t)
     fillet, point_a, point_b = _corner_fillet(cx, y_outer, t, roundover, r_corner)
     vertical_rib   = _frustum_between(tip_top, r_tip, point_a, r_corner)
     horizontal_rib = _frustum_between(point_b, r_corner, tip_bottom, r_tip)

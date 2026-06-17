@@ -26,12 +26,14 @@ python -m dharmatiles.terrains.tile --spec "src/tiles/ground/1x1-soil+grass.tile
 
 There are no automated tests; correctness is verified by opening the STL in PrusaSlicer, MeshLab, or Windows 3D Builder and visually inspecting the mesh.
 
-## STL Regeneration Policy
+## STL Regeneration
 
-**After every code change, regenerate STLs before finishing**, unless the user explicitly says otherwise.
+Regenerate STLs **only when the user asks** — do not regenerate automatically
+after a code change.  When you do regenerate:
 
 - **Never pass `-o` / `--output`** — let each spec write to its default path.
-- For tile terrain / layers / core changes: regenerate **all** `.tile.py` specs:
+- For tile terrain / layers / core changes, regenerate the relevant `.tile.py`
+  specs (all of them if the change is broad):
 
 ```bash
 for spec in src/tiles/**/*.tile.py; do dharmatiles-gen --spec "$spec"; done
@@ -39,7 +41,7 @@ for spec in src/tiles/**/*.tile.py; do dharmatiles-gen --spec "$spec"; done
 
 - For `src/extras/dharmatiles-paint-organizer.py`: `python src/extras/dharmatiles-paint-organizer.py`
 
-Always report vertex/face counts and watertight status for each generated file.
+Report vertex/face counts and watertight status for each generated file.
 
 ## Spatial Terminology (canonical — do not deviate)
 
