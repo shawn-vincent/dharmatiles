@@ -31,8 +31,12 @@ from .bark import BarkConfig
 _N_SIDES = 12
 # Higher ring resolution used when bark grooves are carved into a branch.
 _N_BARK_SIDES = 48
+# Polygon count for foliage cone/dome rings.
+_N_FOLIAGE_SIDES = 48
 # Latitude bands for the hemispherical dome at each leaf tip.
 _N_DOME_LATS = 4
+# More latitude bands on foliage domes for a rounder cap.
+_N_FOLIAGE_DOME_LATS = 8
 
 
 class _BarkLine:
@@ -134,23 +138,20 @@ def build_cloud_tree_mesh(
 
         is_foliage_leaf = render_foliage and is_leaf[i]
 
+        # Wood tube always uses constant radius — the foliage clump is built
+        # as a separate subdivided mesh and appended to edge_solids below.
+        t_split    = 0.0
+        r_cone_end = r_end_wood
+        clump_len  = 0.0
         if is_foliage_leaf:
-            if leaf_clump_length_mm is not None:
-                K          = float(leaf_clump_length_mm)
-                clump_len  = min(length, K)
-                t_split    = max(0.0, (length - clump_len) / length)
-                r_cone_end = r_start + (foliage_radius_mm - r_start) * (clump_len / K)
-            else:
-                t_split    = 0.0
-                r_cone_end = float(foliage_radius_mm)
-        else:
-            t_split    = 0.0
-            r_cone_end = r_end_wood
+            clump_len = (
+                min(length, float(leaf_clump_length_mm))
+                if leaf_clump_length_mm is not None
+                else length
+            )
 
         bark_end_t = 1.0
         foliage_bark_start_t: float | None = None
-        if is_foliage_leaf:
-            foliage_bark_start_t = t_split
 
         edge_bark = _select_bark_lines(
             node_bark[p],
@@ -191,7 +192,7 @@ def build_cloud_tree_mesh(
             r_cone_end=r_cone_end,
             t_split=t_split,
             handle_scale=handle_scale,
-            is_foliage_leaf=is_foliage_leaf,
+            is_foliage_leaf=False,  # foliage is a separate subdivided mesh
             dome_tip=is_leaf[i],
             bark=bark_config if render_bark else None,
             bark_lines=edge_bark,
@@ -205,6 +206,32 @@ def build_cloud_tree_mesh(
         )
         if len(edge_mesh.vertices) > 0:
             edge_solids.append(edge_mesh)
+
+        # Build the foliage clump as a separate subdivided+displaced solid.
+        if is_foliage_leaf and clump_len > 1e-6:
+            # Locate where the clump starts on this skeleton edge (Bezier).
+            _bt_start = _safe_norm(np.asarray(in_dirs[p], float))
+            _bt_end   = _safe_norm(np.asarray(in_dirs[i], float))
+            _bh       = handle_scale * length
+            _bbp1     = p0 + _bh * _bt_start
+            _bbp2     = p3 - _bh * _bt_end
+            clump_start_pos, clump_start_tan = _bezier_clump_start(
+                p0, _bbp1, _bbp2, p3, clump_len,
+            )
+            clump = _build_foliage_clump_mesh(
+                tip_pos=p3,
+                tip_tangent=_bt_end,
+                start_pos=clump_start_pos,
+                start_tangent=clump_start_tan,
+                r_wood=r_end_wood,
+                r_foliage=foliage_radius_mm,
+                clump_length_mm=clump_len,
+                edge_id=i,
+                bark_seed=bark_seed,
+            )
+            if len(clump.vertices) > 0:
+                edge_solids.append(clump)
+
         node_frame[i] = end_frame
         node_bark[i] = edge_end_bark
 
@@ -324,9 +351,11 @@ def _build_closed_edge_solid(
         n_verts += len(arr)
         return off
 
-    u, v = start_frame
     step_off: list[int] = []
-    n_sides = _N_BARK_SIDES if bark is not None and bark_lines else _N_SIDES
+    n_sides = _N_BARK_SIDES if (bark is not None and bark_lines) else (
+        _N_FOLIAGE_SIDES if is_foliage_leaf else _N_SIDES
+    )
+    u, v = start_frame
     for j in range(len(ts)):
         tan = _safe_norm(_bezier_tangent(p0, bp1, bp2, p3, float(ts[j])))
         if j > 0:
@@ -376,17 +405,18 @@ def _build_closed_edge_solid(
             faces_acc.append([oa + k, oa + k1, ob + k1])
             faces_acc.append([oa + k, ob + k1, ob + k])
 
+    n_dome_lats = _N_FOLIAGE_DOME_LATS if is_foliage_leaf else _N_DOME_LATS
     if dome_tip:
         tip_tan = _safe_norm(_bezier_tangent(p0, bp1, bp2, p3, 1.0))
         u_tip, v_tip = u, v
         r_tip = float(radii_t[-1])
         prev_off = step_off[-1]
-
-        for lat_i in range(1, _N_DOME_LATS + 1):
-            phi = (np.pi / 2.0) * lat_i / _N_DOME_LATS
+        # s offset for dome rings: arc length along the sphere cap surface.
+        for lat_i in range(1, n_dome_lats + 1):
+            phi = (np.pi / 2.0) * lat_i / n_dome_lats
             ring_ctr = curve[-1] + r_tip * float(np.sin(phi)) * tip_tan
 
-            if lat_i < _N_DOME_LATS:
+            if lat_i < n_dome_lats:
                 ring_r = r_tip * float(np.cos(phi))
                 dome_ring = _make_ring(ring_ctr, ring_r, u_tip, v_tip, n_sides=n_sides)
                 curr_off = _add_verts(dome_ring)
@@ -428,6 +458,268 @@ def _union_edge_solids(edge_solids: list[trimesh.Trimesh]) -> trimesh.Trimesh:
         )
     mesh.fix_normals()
     return mesh
+
+
+# ── Foliage clump: icosphere deformed to cone+dome profile, Gaussian noise ─────
+
+# Icosphere subdivision level for the whole clump.  3 → 1280 faces; 4 → 5120.
+_FOLIAGE_ICO_SUBDIVISIONS          = 3
+# Fine Gaussian noise: per-vertex surface grain.
+_FOLIAGE_NOISE_AMPLITUDE_MM        = 0.10  # 1-sigma displacement (mm)
+# Coarse smooth noise: large-scale silhouette distortion.
+_FOLIAGE_COARSE_NOISE_AMPLITUDE_MM = 0.5   # peak ± displacement (mm)
+_FOLIAGE_COARSE_NOISE_CELL_MM      = 4.0   # spatial wavelength (mm)
+
+
+def _foliage_gaussian_noise(
+    verts: np.ndarray,
+    edge_id: int,
+    bark_seed: int,
+) -> np.ndarray:
+    """Per-vertex Gaussian noise keyed on 3-D world position.
+
+    Noise is a function of spatial position, not vertex-array index, so
+    vertices at the same geometric location (e.g. the cone/dome seam ring)
+    receive the same displacement — no seam artefacts and no apex-fan star
+    pattern from the polar singularity.
+
+    A tiny quantisation cell (0.05 mm) means vertices further apart than
+    ~0.05 mm are essentially independent, giving the appearance of per-vertex
+    Gaussian noise while remaining continuous at topology boundaries.
+    """
+    cell_mm = 0.05
+    coords = np.floor(verts / cell_mm).astype(np.int64)   # (N, 3)
+
+    base = np.uint64(_hash01_int(bark_seed, "fol-gauss", edge_id))
+    m64  = np.uint64(1099511628211)
+
+    # Hash each quantised position → uniform u1, u2 in (0, 1].
+    h = np.full(len(verts), base, dtype=np.uint64)
+    for dim in range(3):
+        h ^= coords[:, dim].astype(np.uint64)
+        h  = h * m64
+    u1 = np.clip(h.astype(np.float64) / float(2**64), 1e-10, 1.0)
+
+    h2 = h * m64
+    h2 ^= np.uint64(0xDEADBEEFCAFEBABE)
+    h2  = h2 * m64
+    u2  = h2.astype(np.float64) / float(2**64)
+
+    # Box-Muller: (u1, u2) → standard normal.
+    normal = np.sqrt(-2.0 * np.log(u1)) * np.cos(2.0 * np.pi * u2)
+    return normal * _FOLIAGE_NOISE_AMPLITUDE_MM
+
+
+def _hash01_int(*parts: object) -> int:
+    """Same hash as _hash01 but returns the raw 64-bit integer (no /2^64)."""
+    h = 1469598103934665603
+    for part in parts:
+        for byte in str(part).encode("utf-8"):
+            h ^= byte
+            h  = (h * 1099511628211) & 0xFFFFFFFFFFFFFFFF
+        h ^= 0xFF
+        h  = (h * 1099511628211) & 0xFFFFFFFFFFFFFFFF
+    return h
+
+
+def _foliage_coarse_noise(
+    verts: np.ndarray,
+    edge_id: int,
+    bark_seed: int,
+) -> np.ndarray:
+    """Single-octave 3-D smooth (trilinearly interpolated) value noise.
+
+    Uses a large spatial cell (_FOLIAGE_COARSE_NOISE_CELL_MM) so the
+    displacement varies slowly across the surface, distorting the overall
+    silhouette of the clump rather than adding fine grain.
+    """
+    cell   = _FOLIAGE_COARSE_NOISE_CELL_MM
+    m64    = np.uint64(1099511628211)
+    base   = np.uint64(_hash01_int(bark_seed, "fol-coarse", edge_id))
+    N      = len(verts)
+
+    p    = verts / cell
+    fl   = np.floor(p).astype(np.int64)
+    frac = p - fl
+    s    = frac * frac * (3.0 - 2.0 * frac)   # smoothstep per axis
+
+    val = np.zeros(N, dtype=np.float64)
+    for dz in (0, 1):
+        wz = s[:, 2] if dz else (1.0 - s[:, 2])
+        for dy in (0, 1):
+            wy = s[:, 1] if dy else (1.0 - s[:, 1])
+            for dx in (0, 1):
+                wx = s[:, 0] if dx else (1.0 - s[:, 0])
+                h  = np.full(N, base, dtype=np.uint64)
+                h ^= (fl[:, 0] + dx).astype(np.uint64); h = h * m64
+                h ^= (fl[:, 1] + dy).astype(np.uint64); h = h * m64
+                h ^= (fl[:, 2] + dz).astype(np.uint64); h = h * m64
+                corner = h.astype(np.float64) / np.float64(2**64) * 2.0 - 1.0
+                val += corner * (wx * wy * wz)
+
+    return _FOLIAGE_COARSE_NOISE_AMPLITUDE_MM * val
+
+
+def _bezier_clump_start(
+    p0: np.ndarray,
+    bp1: np.ndarray,
+    bp2: np.ndarray,
+    p3: np.ndarray,
+    clump_len: float,
+    n_samples: int = 64,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Position and tangent on a cubic Bezier at arc-length clump_len from the tip.
+
+    Walks arc length backward from p3 to find where the foliage clump starts,
+    returning (start_pos, start_tangent) for the bent-cone spine.
+    """
+    ts           = np.linspace(0.0, 1.0, n_samples)
+    pts          = _bezier_eval(p0, bp1, bp2, p3, ts)                # (N, 3)
+    segs         = np.linalg.norm(np.diff(pts[::-1], axis=0), axis=1)
+    arc_from_tip = np.concatenate(([0.0], np.cumsum(segs)))
+    t_start      = float(np.clip(
+        np.interp(clump_len, arc_from_tip, ts[::-1]), 0.0, 1.0,
+    ))
+    start_pos    = _bezier_eval(p0, bp1, bp2, p3, np.array([t_start]))[0]
+    start_tan    = _safe_norm(_bezier_tangent(p0, bp1, bp2, p3, t_start))
+    return start_pos, start_tan
+
+
+def _build_foliage_clump_mesh(
+    *,
+    tip_pos: np.ndarray,
+    tip_tangent: np.ndarray,
+    start_pos: np.ndarray,
+    start_tangent: np.ndarray,
+    r_wood: float,
+    r_foliage: float,
+    clump_length_mm: float,
+    edge_id: int,
+    bark_seed: int,
+) -> trimesh.Trimesh:
+    """Foliage clump: icosphere bent along the branch Bezier spine.
+
+    Profile arc segments (back → front):
+      1. Back hemisphere  (radius r_wood,    arc = π·r_wood/2)
+         — extends backward from start_pos along start_tangent
+      2. Cone body        (r_wood → r_foliage)
+         — cross-sections swept along the Bezier spine from start_pos to tip_pos;
+           each cross-section is projected perpendicular to the local spine
+           tangent so the clump bends with the branch
+      3. Forward dome     (radius r_foliage, arc = π·r_foliage/2)
+         — extends forward from tip_pos along tip_tangent
+
+    Noise applied along surface normals:
+      • Fine Gaussian  (0.05 mm cell): per-vertex surface grain
+      • Coarse smooth  (4 mm cell):    large-scale silhouette distortion
+    """
+    r_base  = float(r_wood)
+    r_tip   = float(r_foliage)
+    tip_t   = _safe_norm(np.asarray(tip_tangent,   float))
+    start_t = _safe_norm(np.asarray(start_tangent, float))
+    tip_p   = np.asarray(tip_pos,   float)
+    start_p = np.asarray(start_pos, float)
+
+    # ── Bezier spine: start_pos → tip_pos ────────────────────────────────────
+    spine_d  = float(np.linalg.norm(tip_p - start_p))
+    sh       = 0.45 * max(spine_d, 1e-6)
+    s_bp1    = start_p + sh * start_t
+    s_bp2    = tip_p   - sh * tip_t
+
+    N_SPINE    = 64
+    spine_ts   = np.linspace(0.0, 1.0, N_SPINE)
+    spine_pts  = _bezier_eval(start_p, s_bp1, s_bp2, tip_p, spine_ts)   # (N, 3)
+    spine_traw = np.vstack([
+        _bezier_tangent(start_p, s_bp1, s_bp2, tip_p, float(t))
+        for t in spine_ts
+    ])
+    tn         = np.linalg.norm(spine_traw, axis=1, keepdims=True)
+    spine_tans = spine_traw / np.where(tn > 1e-10, tn, 1.0)             # (N, 3)
+    seg_lens   = np.linalg.norm(np.diff(spine_pts, axis=0), axis=1)
+    spine_arc  = np.concatenate(([0.0], np.cumsum(seg_lens)))            # (N,)
+    tot_spine  = float(spine_arc[-1])
+
+    # ── Profile arc lengths ───────────────────────────────────────────────────
+    south_arc    = (np.pi / 2.0) * r_base
+    cone_arc_p   = float(np.sqrt(tot_spine ** 2 + (r_tip - r_base) ** 2))
+    north_arc    = (np.pi / 2.0) * r_tip
+    total_arc    = south_arc + cone_arc_p + north_arc
+
+    # ── Icosphere ────────────────────────────────────────────────────────────
+    ico    = trimesh.creation.icosphere(subdivisions=_FOLIAGE_ICO_SUBDIVISIONS, radius=1.0)
+    uverts = ico.vertices.copy()                      # (M, 3) unit sphere
+
+    dot_t  = uverts @ tip_t                           # latitude ∈ [-1, 1]
+    u_vals = (dot_t + 1.0) * 0.5 * total_arc         # arc param ∈ [0, total_arc]
+
+    # Unit radial direction for each vertex (perp to tip_t on the unit sphere).
+    rvec   = uverts - dot_t[:, None] * tip_t
+    r_lat  = np.linalg.norm(rvec, axis=1, keepdims=True)
+    rad_u  = np.where(r_lat > 1e-10, rvec / r_lat, 0.0)               # (M, 3)
+
+    verts  = np.zeros_like(uverts)
+
+    # ── Back hemisphere: backward from start_p along start_t ─────────────────
+    ms = u_vals <= south_arc
+    if ms.any():
+        phi    = (u_vals[ms] / south_arc) * (np.pi / 2.0)
+        ax_s   = r_base * (np.sin(phi) - 1.0)           # ≤ 0 (behind start_p)
+        rr_s   = r_base * np.cos(phi)
+        # project radial perp to start_t
+        ru     = rad_u[ms]
+        dp     = (ru * start_t).sum(axis=1, keepdims=True)
+        rp     = ru - dp * start_t
+        rn     = np.linalg.norm(rp, axis=1, keepdims=True)
+        rpu    = np.where(rn > 1e-10, rp / rn, 0.0)
+        verts[ms] = start_p + ax_s[:, None] * start_t + rpu * rr_s[:, None]
+
+    # ── Cone body: cross-sections swept along Bezier spine ────────────────────
+    mc = (~ms) & (u_vals <= south_arc + cone_arc_p)
+    if mc.any():
+        tc   = (u_vals[mc] - south_arc) / cone_arc_p    # [0, 1] along spine
+        rr_c = r_base + tc * (r_tip - r_base)
+        sv   = tc * tot_spine                            # arc position on spine
+
+        sp_c = np.column_stack([
+            np.interp(sv, spine_arc, spine_pts[:, d]) for d in range(3)
+        ])
+        st_raw = np.column_stack([
+            np.interp(sv, spine_arc, spine_tans[:, d]) for d in range(3)
+        ])
+        stn  = np.linalg.norm(st_raw, axis=1, keepdims=True)
+        st_c = st_raw / np.where(stn > 1e-10, stn, 1.0)   # local spine tangent
+
+        # Project radial direction perp to local spine tangent.
+        ru   = rad_u[mc]
+        dp   = (ru * st_c).sum(axis=1, keepdims=True)
+        rp   = ru - dp * st_c
+        rn   = np.linalg.norm(rp, axis=1, keepdims=True)
+        rpu  = np.where(rn > 1e-10, rp / rn, 0.0)
+        verts[mc] = sp_c + rpu * rr_c[:, None]
+
+    # ── Forward dome: forward from tip_p along tip_t ──────────────────────────
+    mn = u_vals > south_arc + cone_arc_p
+    if mn.any():
+        phi    = (u_vals[mn] - south_arc - cone_arc_p) / north_arc * (np.pi / 2.0)
+        ax_n   = r_tip * np.sin(phi)
+        rr_n   = r_tip * np.cos(phi)
+        # rad_u is already perp to tip_t — no-op projection
+        verts[mn] = tip_p + ax_n[:, None] * tip_t + rad_u[mn] * rr_n[:, None]
+
+    # ── Normals + two noise layers ────────────────────────────────────────────
+    shaped  = trimesh.Trimesh(vertices=verts, faces=ico.faces.copy(), process=False)
+    shaped.fix_normals()
+    normals = shaped.vertex_normals.copy()
+
+    disp = (
+        _foliage_gaussian_noise(verts, edge_id, bark_seed)
+        + _foliage_coarse_noise(verts, edge_id, bark_seed)
+    )
+    verts = verts + normals * disp[:, np.newaxis]
+
+    result = trimesh.Trimesh(vertices=verts, faces=ico.faces.copy(), process=False)
+    result.fix_normals()
+    return result
 
 
 # ── Bark helpers ──────────────────────────────────────────────────────────────

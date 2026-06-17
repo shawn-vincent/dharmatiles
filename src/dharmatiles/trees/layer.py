@@ -72,7 +72,7 @@ class CloudTree:
         # ── Leaf-cone foliage ─────────────────────────────────────────────
         leaf_clumps: bool = True,
         leaf_clump_radius_mm: float = 4.0,
-        leaf_clump_length_mm: float | None = 15.0,
+        leaf_clump_length_mm: float | None = 10.5,
         bark: BarkConfig | None = None,
     ) -> None:
         self.shape = TreeShape(

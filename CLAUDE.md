@@ -267,7 +267,7 @@ continuity at forks. A root flare anchors the trunk to the terrain surface.
 | `branch_fork_balance` | 1.0 | 0–1. How evenly attractors are redistributed at each fork. 0 = each branch keeps only the attractors already classified as stray (no redistribution). 1 = all K branches at the fork receive equal shares of the full attractor pool. Higher values produce more architecturally balanced trees. |
 | `leaf_clumps` | True | Whether to generate foliage clumps on terminal (leaf) branches. |
 | `leaf_clump_radius_mm` | 4.0 | Tip radius (mm) of each foliage clump. Each leaf branch gets a D-section cone tapering from the parent branch radius up to this value at the attractor tip. |
-| `leaf_clump_length_mm` | 15.0 | Maximum clump length (mm). The cone covers only the last `min(branch_len, K)` mm of each leaf branch; the remainder is drawn as a plain wood tube. Taper rate is fixed at `(leaf_clump_radius_mm − r_wood) / K`, so short branches produce proportionally smaller-tipped cones. `None` = full branch is a cone. |
+| `leaf_clump_length_mm` | 10.5 | Maximum clump length (mm). The cone covers only the last `min(branch_len, K)` mm of each leaf branch; the remainder is drawn as a plain wood tube. Taper rate is fixed at `(leaf_clump_radius_mm − r_wood) / K`, so short branches produce proportionally smaller-tipped cones. `None` = full branch is a cone. |
 
 ### Scatter System (rocks + grass + trees)
 
