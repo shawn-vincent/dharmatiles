@@ -49,6 +49,8 @@ import manifold3d as m3d
 import numpy as np
 import trimesh
 
+from dharmatiles.core.logo import make_logo_manifold
+
 _ORGANIZER_PATH = Path(__file__).with_name("dharmatiles-paint-organizer.py")
 _ORGANIZER_SPEC = importlib.util.spec_from_file_location(
     "dharmatiles_paint_organizer", _ORGANIZER_PATH
@@ -67,6 +69,8 @@ cup_centre = _ORGANIZER.cup_centre
 hex_cross_section = _ORGANIZER.hex_cross_section
 
 FLOOR_THICKNESS_MM = 4.0
+FOOT_LOGO_SIZE_MM  = 15.0
+FOOT_LOGO_DEPTH_MM = 0.4
 
 
 @dataclass(frozen=True)
@@ -79,8 +83,8 @@ class HexStandSpec:
 
 
 def _stand_depth(spec: HexOrganizerSpec) -> float:
-    """Front-to-back stand depth, including the organizer's inner-wall clearance."""
-    return spec.height + spec.tolerance
+    """Front-to-back stand depth, including 4× the organizer's inner-wall clearance."""
+    return spec.height + 4.0 * spec.tolerance
 
 
 def _default_cut_y(spec: HexOrganizerSpec) -> float:
@@ -126,11 +130,10 @@ def _x_halfplane_cs(x0: float, *, keep_greater: bool, margin: float = 1000.0) ->
 # not a flat-cut cylinder end.
 
 BRACKET_THICKNESS_MM         = 3.0    # flat plate thickness
-BRACKET_WIDTH_ELBOW_MM       = 16.0   # plate width at the elbow
 BRACKET_WIDTH_TIP_MM         = 6.0    # plate width at the tip
-BRACKET_RIB_RADIUS_TIP_MM    = 1.5    # rib bead radius at each tip
-BRACKET_RIB_RADIUS_CORNER_MM   = 4.0   # rib bead radius where it meets the fillet
-BRACKET_CORNER_ROUNDOVER_MM    = 20.0  # solid corner gusset's round-over radius
+BRACKET_RIB_RADIUS_TIP_MM    = 3.0    # rib bead radius at each tip
+BRACKET_RIB_RADIUS_CORNER_MM   = 8.0   # rib bead radius where it meets the fillet
+BRACKET_CORNER_ROUNDOVER_MM    = 25.0  # solid corner gusset's round-over radius
 
 
 def _column_xz(spec: HexOrganizerSpec, floor_bottom: float, col: int) -> tuple[float, float]:
@@ -152,9 +155,26 @@ def _trapezoid_cs(cx: float, w0: float, w1: float, y0: float, y1: float) -> m3d.
     return m3d.CrossSection([pts])
 
 
-def _rounded_tip_cs(cx: float, w0: float, w1: float, y0: float, y1: float) -> m3d.CrossSection:
-    """Tapered trapezoid with a semicircular cap (radius w1/2) at the y1 end."""
-    trapezoid = _trapezoid_cs(cx, w0, w1, y0, y1)
+def _rounded_tip_cs(cx: float, w0: float, w1: float, y0: float, y1: float,
+                     *, shelf: float = 0.0) -> m3d.CrossSection:
+    """Tapered trapezoid with a semicircular cap (radius w1/2) at the y1 end.
+
+    If shelf > 0, the shape holds max width w0 for `shelf` distance from y0
+    before beginning to taper toward w1 at y1.
+    """
+    if shelf > 0.0:
+        y_shoulder = y0 + shelf
+        pts = [
+            (cx - w0 / 2.0, y0),
+            (cx + w0 / 2.0, y0),
+            (cx + w0 / 2.0, y_shoulder),
+            (cx + w1 / 2.0, y1),
+            (cx - w1 / 2.0, y1),
+            (cx - w0 / 2.0, y_shoulder),
+        ]
+        trapezoid = m3d.CrossSection([pts])
+    else:
+        trapezoid = _trapezoid_cs(cx, w0, w1, y0, y1)
     cap = m3d.CrossSection.circle(w1 / 2.0, circular_segments=24).translate((cx, y1))
     return m3d.CrossSection.batch_boolean([trapezoid, cap], m3d.OpType.Add)
 
@@ -279,8 +299,9 @@ def _bracket_for_column(spec: HexOrganizerSpec, floor_bottom: float, depth: floa
     stand's final (X, Y, Z) frame."""
     cx, cz    = _column_xz(spec, floor_bottom, col)
     outer_f2f = spec.bore_f2f + 2.0 * spec.wall
-    t, L      = BRACKET_THICKNESS_MM, spec.height
-    we, wt    = BRACKET_WIDTH_ELBOW_MM, BRACKET_WIDTH_TIP_MM
+    t         = FLOOR_THICKNESS_MM
+    L         = spec.height + outer_f2f / 2.0 + FLOOR_THICKNESS_MM
+    we, wt    = outer_f2f * 2.0 / np.sqrt(3), BRACKET_WIDTH_TIP_MM
     r_tip     = BRACKET_RIB_RADIUS_TIP_MM
     r_corner  = BRACKET_RIB_RADIUS_CORNER_MM
     roundover = BRACKET_CORNER_ROUNDOVER_MM
@@ -298,7 +319,7 @@ def _bracket_for_column(spec: HexOrganizerSpec, floor_bottom: float, depth: floa
         _rounded_hex_cs(outer_f2f, spec.vertical_roundover).translate((cx, cz))
         ^ _halfplane_cs(0.0)
     )
-    fin_cs         = _rounded_tip_cs(cx, we, wt, 0.0, L)
+    fin_cs         = _rounded_tip_cs(cx, we, wt, 0.0, L, shelf=FLOOR_THICKNESS_MM)
     vertical_cs    = m3d.CrossSection.batch_boolean([column_outer_cs, fin_cs], m3d.OpType.Add)
     vertical_plate = (m3d.Manifold.extrude(vertical_cs, t)
                        .rotate([90.0, 0.0, 0.0])
@@ -307,7 +328,7 @@ def _bracket_for_column(spec: HexOrganizerSpec, floor_bottom: float, depth: floa
     # Horizontal arm: a tapered, rounded-tip foot already in (x, y), extruded
     # directly along z — no rotation needed, it sits flush on the desk
     # (z in [0, t]) and extends forward from the elbow to y_attach + L.
-    foot_cs    = _rounded_tip_cs(cx, we, wt, y_attach, y_attach + L)
+    foot_cs    = _rounded_tip_cs(cx, we, wt, y_attach, y_attach + L, shelf=FLOOR_THICKNESS_MM)
     foot_plate = m3d.Manifold.extrude(foot_cs, t)
 
     # Rib: one continuous round bead — a solid rounded-corner gusset filling
@@ -335,6 +356,90 @@ def _bracket_for_column(spec: HexOrganizerSpec, floor_bottom: float, depth: floa
     flat_inside = m3d.Manifold.cube([2000.0, 2000.0, 2000.0]).translate([-1000.0, y_attach, -1000.0])
     above_desk = m3d.Manifold.cube([2000.0, 2000.0, 2000.0]).translate([-1000.0, -1000.0, 0.0])
     return bracket ^ flat_inside ^ above_desk
+
+
+# ---------------------------------------------------------------------------
+# Ramp feet
+# ---------------------------------------------------------------------------
+#
+# Two wedge-shaped feet protrude rearward (−Y) from the near face of the
+# stand body at Y=0 (opposite the tip-back brackets at Y=depth).
+# Side profile (YZ): a ramp whose top is the hex top (cz + outer_f2f/2).
+# Front view (XZ): the rounded hex outline — achieved by intersecting the
+# ramp body with the outer hex profile extruded along Y.
+#
+#     angled face  flat_top  back (Y=0)          front view (XZ)
+#             |___|______________|                  ___
+#            /                  |                /     \
+#           /    logo here      |               |       |   ← hex profile
+#          /                    |               |       |
+#  Z=0 __/                     |                \_____/
+#   Y=−depth              Y=0
+
+
+def _ramp_foot(spec: HexOrganizerSpec, floor_bottom: float, col: int) -> m3d.Manifold:
+    """One ramp foot for *col* at the near face (Y=0), intersected with the
+    outer rounded-hex profile in XZ.  Extends in the −Y direction."""
+    cx, cz = _column_xz(spec, floor_bottom, col)
+
+    outer_f2f  = spec.bore_f2f + 2.0 * spec.wall
+    foot_mask_f2f = outer_f2f + 2.0 * spec.wall   # enlarged by one wall thickness per side
+    foot_top_z = cz + outer_f2f / 2.0 + spec.wall # = top of the enlarged hex in stand Z
+    flat_top   = 2.0 * spec.wall                   # flat crown strip in Y
+    foot_depth = foot_top_z                        # Y extent → ≈45° angle
+    toe_chop   = 2.0 * spec.wall                   # blunt the front edge at z=0
+    toe_x      = foot_depth - toe_chop
+    toe_z      = foot_top_z * toe_chop / (foot_depth - flat_top)
+    slope_dy   = toe_x - flat_top                  # Y run of the angled face
+    slope_dz   = foot_top_z - toe_z
+    hyp        = float(np.hypot(slope_dy, slope_dz))
+    foot_width = foot_mask_f2f * 2.0 / np.sqrt(3) # point-to-point (covers full enlarged hex)
+
+    # Ramp cross-section in local (lx=distance from stand, ly=Z), CCW.
+    # Extruded along local z (→ global X) wide enough to cover the hex.
+    cs   = m3d.CrossSection([[
+        (0.0,        0.0),
+        (toe_x,      0.0),
+        (toe_x,      toe_z),
+        (flat_top,   foot_top_z),
+        (0.0,        foot_top_z),
+    ]])
+    body = m3d.Manifold.extrude(cs, foot_width)
+    body = body.transform([
+        [ 0.0, 0.0, 1.0, cx - foot_width / 2.0],
+        [-1.0, 0.0, 0.0, 0.0],
+        [ 0.0, 1.0, 0.0, 0.0],
+    ])
+
+    # Hex mask: rounded outer-hex profile in the XZ plane, enlarged by the
+    # outside wall thickness and extruded along −Y.
+    # hex_cs lives in 2D (X, local_y=Z); the extrude axis becomes global −Y.
+    hex_cs = (
+        _rounded_hex_cs(outer_f2f, spec.vertical_roundover)
+        .offset(spec.wall, m3d.JoinType.Round, circular_segments=32)
+        .translate((cx, cz))
+        ^ _halfplane_cs(0.0)          # keep only Z >= 0 (above the desk)
+    )
+    hex_prism = m3d.Manifold.extrude(hex_cs, foot_depth + BOOLEAN_OVERLAP)
+    hex_prism = hex_prism.transform([
+        [1.0, 0.0,  0.0, 0.0],   # local X → global X
+        [0.0, 0.0, -1.0, 0.0],   # local Z → global −Y
+        [0.0, 1.0,  0.0, 0.0],   # local Y → global Z
+    ])
+    body = body ^ hex_prism
+
+    # Logo on the angled face (facing −Y toward the user).
+    # Face-up tangent along the remaining angle in global (Y,Z): (+slope_dy, +slope_dz)/hyp
+    # Outward normal (90° CCW): (−slope_dz, +slope_dy)/hyp  [−Y, +Z] ✓
+    # Inward normal (cutter dir): (+slope_dz, −slope_dy)/hyp
+    face_mid = (cx, -(toe_x + flat_top) / 2.0, (toe_z + foot_top_z) / 2.0)
+    logo = make_logo_manifold(0.0, 0.0, FOOT_LOGO_SIZE_MM, 0.0, FOOT_LOGO_DEPTH_MM)
+    logo = logo.transform([
+        [1.0,  0.0,               0.0,              face_mid[0]],
+        [0.0,  slope_dy / hyp,    slope_dz / hyp,   face_mid[1]],
+        [0.0,  slope_dz / hyp,   -slope_dy / hyp,   face_mid[2]],
+    ])
+    return body - logo
 
 
 def build_stand(stand: HexStandSpec) -> m3d.Manifold:
@@ -407,13 +512,17 @@ def build_stand(stand: HexStandSpec) -> m3d.Manifold:
         cx, v = cup_xv(col)
         body -= _magnet_pocket(cx, v, 90.0, spec)
 
-    # 5. Through-bore for cols 1, 3 — open hex tubes through the depth.
+    # 5. Through-bore for cols 1, 3 — open hex tubes.
     #    The bore cross-section is clipped to v >= FLOOR_THICKNESS_MM (i.e.
     #    above the cut) before extruding, so the floor below stays solid
     #    without ever building the unclipped bore and cutting it down.
     #    bore_f2f matches the organizer's actual open-bore diameter (see
     #    dharmatiles-paint-organizer.py _cup_cutters) — without the tolerance pad this
     #    tube would print 2*tolerance narrower than the cavity it stands in for.
+    #    The bore is stopped BRACKET_THICKNESS_MM short of the far end (z=depth in
+    #    the pre-rotation frame, Y=0 in the final frame) so that end is closed
+    #    by a solid wall instead of being left open.
+    bore_depth = depth - BRACKET_THICKNESS_MM
     bore_f2f = spec.bore_f2f + 2.0 * spec.tolerance
     R_outer = outer_f2f / np.sqrt(3)
     bore_r = max(0.0, spec.vertical_roundover - (R_outer - bore_f2f / np.sqrt(3)))
@@ -425,7 +534,7 @@ def build_stand(stand: HexStandSpec) -> m3d.Manifold:
             continue
         cx, v = cup_xv(col)
         bore_cs = bore_cs_local.translate((cx, v)) ^ _halfplane_cs(FLOOR_THICKNESS_MM)
-        body -= m3d.Manifold.extrude(bore_cs, depth)
+        body -= m3d.Manifold.extrude(bore_cs, bore_depth)
 
     # 6. Frame fix: extrude() always extrudes along its own Z, so the extrude
     #    axis (the cup-axis / stand depth) needs to land on Y. rotate([90,0,0])
@@ -442,6 +551,13 @@ def build_stand(stand: HexStandSpec) -> m3d.Manifold:
         if col >= spec.cols:
             continue
         body = body + _bracket_for_column(spec, floor_bottom, depth, col)
+
+    # 8. Ramp feet: one per raised half-hex column, centred on that column's X,
+    #    protruding rearward from the stand's near face (Y=0).
+    for col in (1, 3):
+        if col >= spec.cols:
+            continue
+        body = body + _ramp_foot(spec, floor_bottom, col)
 
     return body
 
@@ -480,7 +596,7 @@ def main() -> None:
 
     print("Building Dharmatiles paint organizer stand (in-place, stand frame)")
     print(f"  cut at organizer y = {cut_y:.2f} mm  (col-1 row-{spec.rows - 1} centre)")
-    print(f"  depth: {spec.height:.2f} mm + inner-wall clearance {spec.tolerance:.2f} mm = {_stand_depth(spec):.2f} mm")
+    print(f"  depth: {spec.height:.2f} mm + 4× inner-wall clearance {spec.tolerance:.2f} mm = {_stand_depth(spec):.2f} mm")
     print(f"  cols 0, 2 → top strips;  cols 1, 3 → open half-hex tubes")
     print(f"  outer vertical edges rounded (r={spec.vertical_roundover:.1f} mm)")
     print(f"  floor: uniform {FLOOR_THICKNESS_MM:.0f} mm slab below the cut plane")
