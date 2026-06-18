@@ -20,16 +20,21 @@ SYSTEM_SUFFIX = "dungeonblocks"
 
 
 def select_peg_height(terrain_z: np.ndarray,
-                      base_cfg: BaseConfig) -> float:
+                      base_cfg: BaseConfig,
+                      tile_max_z: float | None = None) -> float:
     """Return peg column height (mm) for *terrain_z*.
 
     Uses ``base_cfg.peg_height`` when set; otherwise auto-selects
-    ``tall_peg_height`` when the max terrain height exceeds
+    ``tall_peg_height`` when the tallest point on the tile exceeds
     ``auto_threshold_mm``, else ``short_peg_height``.
+
+    ``tile_max_z`` should be the maximum Z of all meshes on the tile
+    (terrain + rocks + trees + grass).  When omitted only the terrain
+    heightmap is considered, which misses tall scatter objects like trees.
     """
     if base_cfg.peg_height is not None:
         return base_cfg.peg_height
-    max_h = float(terrain_z.max())
+    max_h = max(float(terrain_z.max()), tile_max_z or 0.0)
     return (base_cfg.tall_peg_height
             if max_h > base_cfg.auto_threshold_mm
             else base_cfg.short_peg_height)
@@ -152,7 +157,11 @@ def export(colored_meshes: list[trimesh.Trimesh],
 
     Returns (combined_stl_mesh, all_meshes) where all_meshes = [base] + colored.
     """
-    peg_h     = select_peg_height(terrain_z, base_cfg)
+    tile_max_z = max(
+        (float(m.bounds[1, 2]) for m in colored_meshes if len(m.vertices) > 0),
+        default=0.0,
+    )
+    peg_h     = select_peg_height(terrain_z, base_cfg, tile_max_z=tile_max_z)
     base_mesh = make_base(surface, peg_h, base_cfg)
     _tag(base_mesh, Material.BASE)
 

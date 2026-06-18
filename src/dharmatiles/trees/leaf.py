@@ -178,6 +178,7 @@ def _build_leaf_keel_prism(
     half_widths: np.ndarray,
     keel_depth_mm: float,
     keel_tip_angle_deg: float,
+    all_bot_pts: np.ndarray | None = None,
 ) -> trimesh.Trimesh:
     """Leaf keel: a V cross-section that meets at a ridge on the midrib.
 
@@ -193,6 +194,10 @@ def _build_leaf_keel_prism(
     half_widths       : (n,)   leaf half-width w_s at each interior ring (unused)
     keel_depth_mm     : maximum keel depth below the leaf plane
     keel_tip_angle_deg: unused — the tip descent is a quarter circle, not a bevel
+    all_bot_pts       : (n_rings, N_T+1, 3) full blade-bottom vertex array used for
+                        the top-closure surface.  When supplied the top is triangulated
+                        to match the blade's curved underside (no flat); when None the
+                        closure falls back to a centroid fan (legacy behaviour).
 
     Construction
     ------------
@@ -280,20 +285,59 @@ def _build_leaf_keel_prism(
         _quad(iTP[k], iTP[k + 1], iR[k + 1], iR[k])
         _quad(iR[k], iR[k + 1], iTN[k + 1], iTN[k])
 
-    loop = (iTP + [iTN[k] for k in range(n_st - 2, 0, -1)])
-    c_top = len(verts)
-    verts.append(np.mean([verts[i] for i in loop], axis=0))
-    for a in range(len(loop)):
-        b = (a + 1) % len(loop)
-        F.append([c_top, loop[a], loop[b]])
+    # ── Top closure ─────────────────────────────────────────────────────────
+    # When all_bot_pts is supplied (the full blade-bottom vertex grid, shape
+    # (n_rings, N_T+1, 3)) we triangulate the top as a curved surface that
+    # exactly matches the blade underside — this removes the visible flat.
+    # When it is None we fall back to the legacy centroid fan.
+    if all_bot_pts is not None:
+        N_T_top = all_bot_pts.shape[1] - 1   # N_T (number of lateral columns - 1)
+
+        # Build a 2-D index grid: top_grid[row, col] → vertex index in verts.
+        # Rows:  0 = base station, 1..n_st-2 = interior rings, n_st-1 = tip.
+        # Cols:  0 = neg edge (iTN), N_T_top = pos edge (iTP), 1..N_T-1 = new.
+        top_grid = np.empty((n_st, N_T_top + 1), dtype=np.int64)
+
+        # Edge columns: reuse existing keel vertices (no duplicates).
+        top_grid[:, 0]       = iTN          # neg edge (t=0)
+        top_grid[:, N_T_top] = iTP          # pos edge (t=N_T)
+
+        # Base and tip rows are fully degenerate (single shared vertex each).
+        top_grid[0,       :] = iTP[0]       # base vertex
+        top_grid[n_st - 1, :] = iTP[n_st - 1]  # tip vertex
+
+        # Interior columns for each interior ring station.
+        for k in range(1, n_st - 1):        # k = keel station index
+            r = k - 1                        # all_bot_pts ring index
+            for t in range(1, N_T_top):
+                verts.append(all_bot_pts[r, t])
+                top_grid[k, t] = n_v
+                n_v += 1
+
+        # Quad-strip triangulation across the grid.
+        for row in range(n_st - 1):
+            for col in range(N_T_top):
+                a = int(top_grid[row,     col    ])
+                b = int(top_grid[row,     col + 1])
+                c = int(top_grid[row + 1, col + 1])
+                d = int(top_grid[row + 1, col    ])
+                _quad(a, b, c, d)
+    else:
+        # Legacy centroid fan (produces a flat face — kept as fallback).
+        loop = (iTP + [iTN[k] for k in range(n_st - 2, 0, -1)])
+        c_top = len(verts)
+        verts.append(np.mean([verts[i] for i in loop], axis=0))
+        for a in range(len(loop)):
+            b = (a + 1) % len(loop)
+            F.append([c_top, loop[a], loop[b]])
 
     # Topology (vertex sharing + degenerate-triangle culling) is fully
-    # determined by the leaf length and keel depth, so cache the corrected
-    # winding under those.
+    # determined by the leaf length, keel depth, and top-closure mode.
+    cache_tag = "keel_grid" if all_bot_pts is not None else "keel"
     return _mesh_with_fixed_normals(
         np.array(verts, dtype=float),
         np.array(F, dtype=np.int32),
-        ("keel", round(L_len, 6), round(D, 6)),
+        (cache_tag, round(L_len, 6), round(D, 6)),
     )
 
 
@@ -306,7 +350,7 @@ def build_leaf_mesh(
     length_mm: float,
     width_mm: float,
     thickness_mm: float = 0.24,
-    fold_angle_deg: float = 5.0,
+    fold_angle_deg: float = 3.0,
     keel_depth_mm: float = 1.0,
     keel_tip_angle_deg: float = 45.0,
     up_hint: np.ndarray | None = None,
@@ -321,7 +365,7 @@ def build_leaf_mesh(
     length_mm       : leaf length from base to tip.
     width_mm        : maximum leaf width (at ≈ 1/3 from base).
     thickness_mm    : dome height at peak (s ≈ 0.25).  Default 0.24.
-    fold_angle_deg  : midrib crease V-angle.  Default 5.0.
+    fold_angle_deg  : midrib crease V-angle.  Default 3.0.
     keel_depth_mm   : maximum depth of the structural keel on the underside.
                       Pass 0 to omit the keel.  Default 1.0.
     keel_tip_angle_deg : reserved for future use.  Default 45.0.
@@ -432,6 +476,7 @@ def build_leaf_mesh(
             half_widths=w_s,               # already ndarray
             keel_depth_mm=keel_depth_mm,
             keel_tip_angle_deg=keel_tip_angle_deg,
+            all_bot_pts=bot_pts,           # curved closure — no flat underside
         )
         if len(keel.vertices) > 0:
             parts.append(keel)

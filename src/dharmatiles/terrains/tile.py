@@ -579,7 +579,11 @@ def build_meshes_for_render(
     if isinstance(target, DungeonBlocks) and target.peg_height is not None:
         base_cfg = _dc.replace(base_cfg, peg_height=target.peg_height)
 
-    peg_h     = _db.select_peg_height(scene.terrain_z, base_cfg)
+    tile_max_z = max(
+        (float(m.bounds[1, 2]) for m in colored_meshes if len(m.vertices) > 0),
+        default=0.0,
+    )
+    peg_h     = _db.select_peg_height(scene.terrain_z, base_cfg, tile_max_z=tile_max_z)
     base_mesh = _db.make_base(surface, peg_h, base_cfg)
     _tag(base_mesh, Material.BASE)
 

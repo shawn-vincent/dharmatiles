@@ -79,7 +79,7 @@ class CloudTree:
         leaf_length_mm: float = 1.94,
         leaf_width_mm: float = 1.21,
         leaf_thickness_mm: float = 0.24,
-        leaf_fold_angle_deg: float = 5.0,
+        leaf_fold_angle_deg: float = 3.0,
         leaf_keel_depth_mm: float = 1.0,
         leaf_keel_tip_angle_deg: float = 45.0,
         leaf_spacing_factor: float = 1.1,
