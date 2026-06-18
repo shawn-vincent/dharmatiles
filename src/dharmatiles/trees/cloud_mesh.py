@@ -1039,7 +1039,7 @@ def _select_bark_lines(
 ) -> list[_BarkLine]:
     if not parent_lines or radius < bark.min_branch_radius_mm:
         return []
-    n_desired = max(5, int(np.floor((2.0 * np.pi * radius) / bark.spacing_mm)))
+    n_desired = int(np.floor((2.0 * np.pi * radius) / bark.spacing_mm))
     if n_desired >= len(parent_lines):
         return [_BarkLine(line.line_id, line.phase, line.theta) for line in parent_lines]
 
