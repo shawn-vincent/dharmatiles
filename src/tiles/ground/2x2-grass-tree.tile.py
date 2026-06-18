@@ -25,8 +25,11 @@ tile = Tile(
                     Tree(
                         placement=Uniform(count_per_square=0.25),
                         debug_attractors=False,
-                        leaf_clumps=True,
-                        n_attraction=32,
+                        foliage_clusters=True,
+                        n_attractors=32,
+                        leaf_length_mm=3.88,
+                        leaf_width_mm=2.42,
+                        leaf_cap_count=6,
                     ),
                 ),
             ],

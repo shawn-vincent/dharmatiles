@@ -17,7 +17,7 @@ dharmatiles-gen
 
 # Single tile (writes to canonical stl/{system}/{NxM}-{name}-{db|ol}.stl)
 dharmatiles-gen --tile "src/tiles/ground/1x1-soil+grass.tile.py"
-dharmatiles-gen --tile "src/tiles/ground/2x2-grass-cloud-tree.tile.py"
+dharmatiles-gen --tile "src/tiles/ground/2x2-grass-tree.tile.py"
 dharmatiles-gen --quiet   # suppress progress output
 
 # Run a single script directly (no install needed)
@@ -133,10 +133,9 @@ Tile (.tile.py) ──► build_tile_from_spec()
 | `layers/rocks.py` | `_build_rocks_mesh_core` / `_build_rocks_mesh_from_seeds` — vectorised half-ellipsoid kernel |
 | `layers/grass_carpet.py` | `GrassCarpetLayer` — embossed 2D blade-stamp texture into terrain_z |
 | `layers/water.py` | `WaterLayer` — pool-floor reshape, displacement, ripples, volume mesh |
-| `trees/envelope.py` | `TreeEnvelope` — axisymmetric crown envelope dataclass |
-| `trees/cloud_skeleton.py` | `grow_cloud_skeleton()` — two-pass skeleton + `_branch_skeleton` BFS + `_compute_radii_bottom_up` |
-| `trees/cloud_mesh.py` | `build_cloud_tree_mesh()` — tapered cubic-Bezier tube mesh |
-| `trees/foliage.py` | `build_foliage_clumps()` — one egg/teardrop FOLIAGE mesh per leaf branch |
+| `trees/envelope.py` | `CanopyEnvelope` — axisymmetric canopy envelope dataclass |
+| `trees/skeleton.py` | `grow_skeleton()` — two-pass skeleton + `_branch_skeleton` BFS + `_compute_radii_bottom_up` |
+| `trees/mesh.py` | `build_tree_mesh()` — tapered cubic-Bezier tube mesh |
 | `trees/layer.py` | `Tree` — scatter-thing class; `_stamp_tree` obstacle stamping |
 | `bases/dungeonblocks.py` | DungeonBlocks socket-peg base; logo inset; STL export |
 | `bases/openlock.py` | OpenLOCK T-slot base via manifold3d CSG; STL export |
@@ -186,7 +185,7 @@ tile = Tile(
 |---|---|
 | `Rocks(*, scatter=ScatterConfig(...), **RocksConfig kwargs)` | Vectorised half-ellipsoid rocks; stamps `terrain_support_z` + `obstacle_mask` |
 | `Grass(species=…, *, scatter=…, max_stack_height=…, **SpeciesConfig overrides)` | 3D blades planted + grown around rocks |
-| `Tree(height_mm=…, crown_radius_mm=…, crown_base_radius_mm=…, placement=…, **kwargs)` | Space-colonisation tree (see Tree section) |
+| `Tree(height_mm=…, canopy_radius_mm=…, canopy_base_radius_mm=…, placement=…, **kwargs)` | Space-colonisation tree (see Tree section) |
 
 `Region` height falls back to its first layer's `height_default_mm` when
 `height_mm=None`.  Boundary curves go from one tile edge to another;
@@ -202,11 +201,11 @@ composition all work.  The orchestrator (`terrains/tile.py`) walks
 ### Tree Generator
 
 `Tree` is a scatter-thing (placed by `ScatterLayer`) that builds printable
-trees via a two-pass algorithm in `trees/cloud_skeleton.py` +
-`trees/cloud_mesh.py`.
+trees via a two-pass algorithm in `trees/skeleton.py` +
+`trees/mesh.py`.
 
 **Invariants (hard constraints; must never be broken):**
-- Every attractor is a **leaf node** — attractors are never branch points.
+- Every attractor is a **terminal node** — attractors are never branch points.
 - Every branch terminates by landing **exactly at** an attractor position.
 - Branching happens at **synthetic interior nodes only** (never at attractor positions).
 
@@ -225,7 +224,7 @@ At each step:
    no sub-branch ever walks backward. The old z-passover check is superseded:
    any attractor that would be overshot in z is automatically stray from
    `next_pos` by angle.
-3. When primary reduces to 1 → **terminal mode**: `_grow_to_leaf` drives from
+3. When primary reduces to 1 → **terminal branch mode**: `_grow_to_leaf` drives from
    current synthetic node toward the single target, initialising `cur_dir` from
    `dir_to_target` (not inherited heading) so intermediate nodes never walk
    backward, landing exactly on the attractor.
@@ -233,17 +232,17 @@ At each step:
 5. Safety: if `max_steps` budget is exhausted, force-split primary (keep nearest
    as terminal target, hand rest to a new sub-branch from current synthetic position).
 
-**Attractor sampling (`_sample_cloud`):** canopy side-surface sampling weighted
+**Attractor sampling (`_sample_canopy`):** canopy side-surface sampling weighted
 by surface area of revolution. Attractors are not sampled on the flat bottom
-disk defined by `crown_base_radius_mm`, but the side surface can receive
+disk defined by `canopy_base_radius_mm`, but the side surface can receive
 attractors all the way to the top taper. Do NOT revert to uniform-t sampling;
 the apex club-top artefact returns immediately.
 
 **Pass 2 — Radii (`_compute_radii_bottom_up`):** bottom-up pipe model.
-Leaf nodes → `min_radius_mm`. Internal nodes → `(Σ r_child^e)^(1/e)` where
+Terminal nodes → `min_radius_mm`. Internal nodes → `(Σ r_child^e)^(1/e)` where
 `e = branch_exponent`. Root radius is fully derived (not configured).
 
-**Mesh (`build_cloud_tree_mesh`):** each (parent, child) skeleton edge is a
+**Mesh (`build_tree_mesh`):** each (parent, child) skeleton edge is a
 tapered cubic Bezier tube. Start/end tangents are `prior_dirs`, giving C1
 continuity at forks. A root flare anchors the trunk to the terrain surface.
 
@@ -251,25 +250,25 @@ continuity at forks. A root flare anchors the trunk to the terrain surface.
 
 | Parameter | Default | Effect |
 |---|---|---|
-| `n_attraction` | 200 | Number of attractor points (= number of leaves) |
+| `n_attractors` | 200 | Number of attractor points (= number of terminal nodes) |
 | `segment_length_mm` | 1.0 | Step size for skeleton growth; smaller = less backtracking slip at low branchiness |
 | `branch_split_angle_deg` | 30.0 | Half-angle of primary cone; larger = earlier splits |
 | `target_fdm_angle_deg` | 35.0 | Target FDM angle — the elevation above horizon (+90° = straight up, 0° = horizontal) the skeleton *tries* to keep every branch above. One of the **two** stray-detection conditions evaluated from the forecasted next step (`next_pos`): an owned attractor becomes stray (→ spawns a sub-branch) if reaching it would leave the split cone (`branch_split_angle_deg`) **OR** require a heading below this angle. Not a guarantee — terminal landing segments may still dip below it. |
 | `strict_fdm_angle_deg` | 26.0 | Strict FDM angle — the hard printability floor (elevation above horizon). Re-checked at mesh build; any branch edge below this is treated as an unprintable-overhang **failure** and reported via `RuntimeWarning` (backstops the terminal/single-attractor segments the branching can't reroute). Set below `target_fdm_angle_deg` so the band between them is tolerated without a failure. |
 | `max_branches_per_step` | 3 | Max stray clusters per step |
 | `branch_exponent` | 3.0 | Pipe-model exponent; larger = thicker trunk relative to branches |
-| `min_radius_mm` | 1.0 | Leaf branch radius; scales the entire radius tree |
+| `min_radius_mm` | 1.0 | Terminal branch radius; scales the entire radius tree |
 | `smoothing_alpha` | 0.1 | Heading blend (0 = pure centroid, 1 = straight ahead) |
 | `debug_attractors` | False | Render attractor positions as yellow icosphere markers |
 | `group_width_mm` | 20.0 | Target XY diameter (mm) of each attractor cluster. Attractors are pre-partitioned into spatial Voronoi groups so entire groups split off together (coarser, more architectural splits). `None` disables grouping. |
 | `group_height_mm` | 20.0 | Target Z height (mm) of each attractor cluster. Defaults to `group_width_mm` when not specified. Ratio `group_width / group_height` controls ellipsoidal aspect ratio of clusters. |
-| `foliage_bulge_mm` | 6.0 | Per-group outward bulge (mm). Requires `group_width_mm`. Edge attractors stay on the canopy surface; the interior is pushed outward by up to this amount following a dome (circular-arc) profile normal to the crown surface. |
+| `foliage_bulge_mm` | 6.0 | Per-group outward bulge (mm). Requires `group_width_mm`. Edge attractors stay on the canopy surface; the interior is pushed outward by up to this amount following a dome (circular-arc) profile normal to the canopy surface. |
 | `branch_split_eagerness` | 0.8 | 0–1. Controls where splits happen. 1 = eager (split at `branch_split_angle_deg`). 0 = maximally lazy (split only when attractor approaches 90° from next_pos — the hard no-backtracking limit). Implemented as `split_cos_effective = branch_split_eagerness × cos(branch_split_angle_deg)`; lower values produce fewer, longer interior branches with splitting concentrated near the tips. |
 | `branch_target` | 0.33 | 0–1. Aim point within the owned attractor cloud. 0 = lowest-z attractor, 1 = highest-z attractor. Implemented as `target = lowest + branch_target × (highest − lowest)`. Lower values pull branches outward and downward; higher values drive growth upward. |
 | `branch_fork_balance` | 1.0 | 0–1. How evenly attractors are redistributed at each fork. 0 = each branch keeps only the attractors already classified as stray (no redistribution). 1 = all K branches at the fork receive equal shares of the full attractor pool. Higher values produce more architecturally balanced trees. |
-| `leaf_clumps` | True | Whether to generate foliage clumps on terminal (leaf) branches. |
-| `leaf_clump_radius_mm` | 5.5 | Tip radius (mm) of each foliage clump. Each leaf branch gets a D-section cone tapering from the parent branch radius up to this value at the attractor tip. |
-| `leaf_clump_length_mm` | 10.5 | Maximum clump length (mm). The cone covers only the last `min(branch_len, K)` mm of each leaf branch; the remainder is drawn as a plain wood tube. Taper rate is fixed at `(leaf_clump_radius_mm − r_wood) / K`, so short branches produce proportionally smaller-tipped cones. `None` = full branch is a cone. |
+| `foliage_clusters` | True | Whether to generate foliage clusters on terminal branches. |
+| `foliage_cluster_radius_mm` | 5.5 | Tip radius (mm) of each foliage cluster. Each terminal branch gets a D-section cone tapering from the parent branch radius up to this value at the attractor tip. |
+| `foliage_cluster_length_mm` | 10.5 | Maximum cluster length (mm). The cone covers only the last `min(branch_len, K)` mm of each terminal branch; the remainder is drawn as a plain wood tube. Taper rate is fixed at `(foliage_cluster_radius_mm − r_wood) / K`, so short branches produce proportionally smaller-tipped cones. `None` = full branch is a cone. |
 
 ### Scatter System (rocks + grass + trees)
 
@@ -290,8 +289,8 @@ into `terrain_support_z` *before* `Grass.scatter()` runs.
   `terrain_support_z`, then delegates to `FloppyGrassLayer` which plants
   seeds (`GrassSeed.sort_key() = (upstream_dist, direction)` so seeds
   facing the tile boundary grow first) and runs the segment-by-segment grower.
-- `Tree.scatter()` calls `grow_cloud_skeleton()` per placed tree, then
-  `build_cloud_tree_mesh()`, then stamps the tree footprint into
+- `Tree.scatter()` calls `grow_skeleton()` per placed tree, then
+  `build_tree_mesh()`, then stamps the tree footprint into
   `terrain_support_z` and `obstacle_mask`.
 
 `ScatterConfig` (in `scatter/config.py`) controls: `items_per_square` (hard
@@ -308,7 +307,7 @@ carpet provides a dense field of flat blade footprints; the 3D blades stand
 up through it at sparser, separately seeded locations.  Pass the same
 `SpeciesConfig` instance to both so they share identical blade *geometry*
 (width, taper, curl, cross-section) even though positions differ.  See
-`src/tiles/ground/2x2-grass-cloud-tree.tile.py` for an example with a tree.
+`src/tiles/ground/2x2-grass-tree.tile.py` for an example with a tree.
 
 ### Colour Encoding
 
@@ -338,7 +337,7 @@ src/dharmatiles/
   scatter/       unified placement system: config, seed, distribute, prototype, layer
   grass/         grass growth sub-pipeline: seed, grow, mesh, growers/, _geometry, layer, config
   layers/        soil.py, rocks.py (kernel), grass_carpet.py, water.py
-  trees/         Tree generator: envelope, cloud_skeleton, cloud_mesh, layer
+  trees/         Tree generator: envelope, skeleton, mesh, layer
   bases/         dungeonblocks.py, openlock.py
   terrains/      tile.py (main entry point + CLI)
 src/tiles/

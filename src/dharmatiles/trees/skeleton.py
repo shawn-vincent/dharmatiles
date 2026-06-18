@@ -1,8 +1,8 @@
-"""Tree skeleton: SCA growth with attractor-coincident leaf nodes.
+"""Tree skeleton: SCA growth with attractor-coincident terminal nodes.
 
 Invariants
 ──────────
-• Every attractor is a LEAF node.  No attractor is ever a branch point.
+• Every attractor is a TERMINAL node.  No attractor is ever a branch point.
 • Every branch terminates by landing exactly on an attractor.
 • Branching happens at synthetic interior nodes (never at attractor positions).
 
@@ -17,7 +17,7 @@ When *group_labels* is provided (array of integer IDs, one per attractor), stray
 detection is lifted to the group level: if any member of group G is stray, the
 *whole* group G splits off together.  Spawned sub-branches (one per stray group)
 drop the labels and use individual-attractor logic for their internal structure.
-Owned attractors that collapse to a single group also drop labels (leaf mode).
+Owned attractors that collapse to a single group also drop labels (terminal branch mode).
 
 1. Lookahead stray detection: compute next_pos = tip + main_dir * seg_len.
    Classify owned attractors (or group centroids) as primary / stray based on
@@ -26,7 +26,7 @@ Owned attractors that collapse to a single group also drop labels (leaf mode).
 2. Stray groups spawn sub-branches FROM the current synthetic tip (before the
    step), guaranteeing no sub-branch ever walks backward to reach its targets.
    Stray individuals without labels use PCA clustering as before.
-3. If primary reduces to 1 attractor → terminal mode: grow intermediate nodes at
+3. If primary reduces to 1 attractor → terminal branch mode: grow intermediate nodes at
    segment_length_mm intervals, final node lands EXACTLY on the attractor.
 4. Otherwise advance one segment toward the primary centroid, repeat.
 5. Safety: if the step budget is exhausted before convergence, force-split the
@@ -44,14 +44,14 @@ from collections import deque
 
 import numpy as np
 
-from .envelope import TreeEnvelope
+from .envelope import CanopyEnvelope
 
 
-def grow_cloud_skeleton(
-    env: TreeEnvelope,
+def grow_skeleton(
+    env: CanopyEnvelope,
     rng: np.random.Generator,
     *,
-    n_attraction: int = 200,
+    n_attractors: int = 200,
     segment_length_mm: float = 1.0,
     kill_radius_mm: float | None = None,   # unused; kept for API compatibility
     min_radius_mm: float = 1.0,
@@ -107,7 +107,7 @@ def grow_cloud_skeleton(
     if branch_split_angle_deg is None:
         branch_split_angle_deg = min_branch_angle_deg
 
-    pts  = _sample_cloud(env, rng, n_attraction)
+    pts  = _sample_canopy(env, rng, n_attractors)
     root = np.array([env.cx, env.cy, env.terrain_z], dtype=float)
 
     # ── Attractor grouping ────────────────────────────────────────────────────
@@ -167,7 +167,7 @@ def grow_cloud_skeleton(
         in_dirs_s,
         out_dirs_s,
         pts,
-        group_labels,   # None when no grouping; int array (n_attraction,) otherwise
+        group_labels,   # None when no grouping; int array (n_attractors,) otherwise
     )
 
 
@@ -549,16 +549,16 @@ def _compute_radii_bottom_up(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _compute_n_groups(
-    env: TreeEnvelope,
+    env: CanopyEnvelope,
     group_width_mm: float,
     group_height_mm: float,
 ) -> int:
-    """Estimate how many groups of target size fit across the crown surface."""
+    """Estimate how many groups of target size fit across the canopy surface."""
     if group_width_mm <= 0 or group_height_mm <= 0:
         return 1
-    # Circumferential count at maximum crown radius
-    n_around = max(1, round(2.0 * np.pi * env.crown_radius_mm / group_width_mm))
-    n_tall   = max(1, round(max(0.0, env.crown_height) / group_height_mm))
+    # Circumferential count at maximum canopy radius
+    n_around = max(1, round(2.0 * np.pi * env.canopy_radius_mm / group_width_mm))
+    n_tall   = max(1, round(max(0.0, env.canopy_height) / group_height_mm))
     return max(2, n_around * n_tall)
 
 
@@ -612,7 +612,7 @@ def _voronoi_group_attractors(
 def _apply_group_bulge(
     pts:          np.ndarray,
     group_labels: np.ndarray,
-    env:          TreeEnvelope,
+    env:          CanopyEnvelope,
     bulge_mm:     float,
 ) -> np.ndarray:
     """Displace attractor groups outward from the crown envelope, dome-shaped.
@@ -628,8 +628,8 @@ def _apply_group_bulge(
     which is zero at the boundary and *bulge_mm* at the group centre, with a
     round shoulder matching the cross-section of a hemisphere.
 
-    Outward direction is the unit normal to the crown surface of revolution at
-    each attractor position (see ``TreeEnvelope.outward_normal_at``).
+    Outward direction is the unit normal to the canopy surface of revolution at
+    each attractor position (see ``CanopyEnvelope.outward_normal_at``).
     """
     unique = np.unique(group_labels)
     if len(unique) <= 1:
@@ -683,9 +683,9 @@ def _largest_group_id(
 # Shared helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _sample_cloud(env: TreeEnvelope, rng: np.random.Generator, n: int) -> np.ndarray:
-    """Sample attractors with even coverage over the crown surface."""
-    if env.crown_height <= 1e-8 or env.crown_radius_mm <= 1e-8:
+def _sample_canopy(env: CanopyEnvelope, rng: np.random.Generator, n: int) -> np.ndarray:
+    """Sample attractors with even coverage over the canopy surface."""
+    if env.canopy_height <= 1e-8 or env.canopy_radius_mm <= 1e-8:
         return np.empty((0, 3), dtype=float)
     n = max(0, int(n))
     if n == 0:
@@ -694,7 +694,7 @@ def _sample_cloud(env: TreeEnvelope, rng: np.random.Generator, n: int) -> np.nda
     # Surface area for a surface of revolution: dA = 2*pi*r*sqrt(1+(dr/dz)^2) dz.
     samples = max(257, n * 8)
     ts = np.linspace(0.0, 1.0, samples)
-    zs = env.crown_base_z + ts * env.crown_height
+    zs = env.canopy_base_z + ts * env.canopy_height
     rs = np.asarray(env.radius_at_t(ts), dtype=float)
     dr_dz = np.gradient(rs, zs, edge_order=2)
     density = 2.0 * np.pi * rs * np.sqrt(1.0 + dr_dz * dr_dz)

@@ -30,11 +30,14 @@ tile = Tile(
                     # Tree next — trunk footprint stamped before grass is planted
                     Tree(
                         height_mm=35.0,
-                        crown_radius_mm=12.0,
-                        crown_base_radius_mm=11.0,
+                        canopy_radius_mm=12.0,
+                        canopy_base_radius_mm=11.0,
                         placement=Uniform(count_per_square=1),
-                        n_attraction=32,
-                        leaf_clumps=True,
+                        n_attractors=32,
+                        foliage_clusters=True,
+                        leaf_length_mm=3.88,
+                        leaf_width_mm=2.42,
+                        leaf_cap_count=6,
                     ),
                     # Grass last — grows around rocks and tree trunk
                     Grass(

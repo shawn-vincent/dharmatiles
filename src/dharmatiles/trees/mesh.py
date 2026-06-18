@@ -12,7 +12,7 @@ have real volumetric overlap. The per-edge solids are unioned with manifold3d
 before returning a single watertight wood mesh.
 
 Foliage (``foliage_radius_mm > 0``) is handled by building a separate
-icosphere-based clump mesh for the last ``leaf_clump_length_mm`` of every leaf
+icosphere-based cluster mesh for the last ``foliage_cluster_length_mm`` of every terminal
 branch.  The clump is offset perpendicular-upward by its own ring radius
 throughout, so the branch runs along the bottom surface of the clump and
 protrudes below it — the branch is visible beneath the foliage across the full
@@ -33,12 +33,12 @@ from .leaf import build_leaf_mesh
 _N_SIDES = 12
 # Higher ring resolution used when bark grooves are carved into a branch.
 _N_BARK_SIDES = 48
-# Polygon count for foliage cone/dome rings.
-_N_FOLIAGE_SIDES = 48
+# Polygon count for foliage cluster cone/dome rings.
+_N_CLUSTER_SIDES = 48
 # Latitude bands for the hemispherical dome at each leaf tip.
 _N_DOME_LATS = 4
-# More latitude bands on foliage domes for a rounder cap.
-_N_FOLIAGE_DOME_LATS = 8
+# More latitude bands on foliage cluster domes for a rounder cap.
+_N_CLUSTER_DOME_LATS = 8
 
 
 class _BarkLine:
@@ -50,7 +50,7 @@ class _BarkLine:
         self.theta = float(theta)
 
 
-def build_cloud_tree_mesh(
+def build_tree_mesh(
     nodes:    np.ndarray,      # (N, 3) — root + branch pts + attractors
     parents:  np.ndarray,      # (N,) int; -1 for root
     radii:    np.ndarray,      # (N,) — bottom-up pipe-model radii
@@ -60,15 +60,15 @@ def build_cloud_tree_mesh(
     terrain_z: float,
     handle_scale: float = 0.45,
     strict_fdm_angle_deg: float | None = None,
-    foliage_radius_mm: float = 4.0,
-    leaf_clump_length_mm: float | None = None,
+    foliage_cluster_radius_mm: float = 4.0,
+    foliage_cluster_length_mm: float | None = None,
     bark: BarkConfig | None = None,
     bark_seed: int = 0,
     debug_attractors: np.ndarray | None = None,
     attractor_group_labels: np.ndarray | None = None,
     attractor_radius_mm: float = 0.6,
     # ── Leaf geometry ─────────────────────────────────────────────────────────
-    leaf_enable: bool = True,
+    leaves: bool = True,
     leaf_base_count: int = 5,
     leaf_length_mm: float = 8.0,
     leaf_width_mm: float = 5.0,
@@ -96,7 +96,7 @@ def build_cloud_tree_mesh(
     if strict_fdm_angle_deg is not None:
         _warn_if_branch_below_strict_fdm_angle(nodes, parents, strict_fdm_angle_deg)
 
-    render_foliage = foliage_radius_mm > 0.0
+    render_foliage_clusters = foliage_cluster_radius_mm > 0.0
     bark_config = BarkConfig(enabled=False) if bark is None else bark
     render_bark = bool(bark_config.enabled)
     tree_height_mm = max(float(np.max(nodes[:, 2]) - terrain_z), 1e-6)
@@ -105,7 +105,7 @@ def build_cloud_tree_mesh(
     children: list[list[int]] = [[] for _ in range(n)]
     for i in range(1, n):
         children[int(parents[i])].append(i)
-    is_leaf = [len(children[i]) == 0 for i in range(n)]
+    is_terminal = [len(children[i]) == 0 for i in range(n)]
 
     # ── per-node state ────────────────────────────────────────────────────
     node_frame: list[tuple[np.ndarray, np.ndarray] | None] = [None] * n
@@ -157,17 +157,17 @@ def build_cloud_tree_mesh(
         r_start    = max(float(radii[p]), 0.42)
         r_end_wood = max(float(radii[i]), 0.42)
 
-        is_foliage_leaf = render_foliage and is_leaf[i]
+        has_foliage_cluster = render_foliage_clusters and is_terminal[i]
 
-        # Wood tube always uses constant radius — the foliage clump is built
+        # Wood tube always uses constant radius — the foliage cluster is built
         # as a separate subdivided mesh and appended to edge_solids below.
         t_split    = 0.0
         r_cone_end = r_end_wood
-        clump_len  = 0.0
-        if is_foliage_leaf:
-            clump_len = (
-                min(length, float(leaf_clump_length_mm))
-                if leaf_clump_length_mm is not None
+        cluster_len  = 0.0
+        if has_foliage_cluster:
+            cluster_len = (
+                min(length, float(foliage_cluster_length_mm))
+                if foliage_cluster_length_mm is not None
                 else length
             )
 
@@ -213,8 +213,8 @@ def build_cloud_tree_mesh(
             r_cone_end=r_cone_end,
             t_split=t_split,
             handle_scale=handle_scale,
-            is_foliage_leaf=False,  # foliage is a separate subdivided mesh
-            dome_tip=is_leaf[i],
+            has_foliage_cluster=False,  # foliage cluster is a separate subdivided mesh
+            dome_tip=is_terminal[i],
             bark=bark_config if render_bark else None,
             bark_lines=edge_bark,
             bark_seed=bark_seed,
@@ -228,8 +228,8 @@ def build_cloud_tree_mesh(
         if len(edge_mesh.vertices) > 0:
             edge_solids.append(edge_mesh)
 
-        # Build the foliage clump as a separate subdivided+displaced solid.
-        if is_foliage_leaf and clump_len > 1e-6:
+        # Build the foliage cluster as a separate subdivided+displaced solid.
+        if has_foliage_cluster and cluster_len > 1e-6:
             # Locate where the clump starts on this skeleton edge (Bezier).
             _bt_start = _safe_norm(np.asarray(in_dirs[p], float))
             _bt_end   = _safe_norm(np.asarray(in_dirs[i], float))
@@ -237,19 +237,19 @@ def build_cloud_tree_mesh(
             _bbp1     = p0 + _bh * _bt_start
             _bbp2     = p3 - _bh * _bt_end
             clump_start_pos, clump_start_tan = _bezier_clump_start(
-                p0, _bbp1, _bbp2, p3, clump_len,
+                p0, _bbp1, _bbp2, p3, cluster_len,
             )
-            clump, clump_leaves = _build_foliage_clump_mesh(
+            clump, clump_leaves = _build_foliage_cluster_mesh(
                 tip_pos=p3,
                 tip_tangent=_bt_end,
                 start_pos=clump_start_pos,
                 start_tangent=clump_start_tan,
                 r_wood=r_end_wood,
-                r_foliage=foliage_radius_mm,
-                clump_length_mm=clump_len,
+                r_foliage=foliage_cluster_radius_mm,
+                clump_length_mm=cluster_len,
                 edge_id=i,
                 bark_seed=bark_seed,
-                leaf_enable=leaf_enable,
+                leaves=leaves,
                 leaf_base_count=leaf_base_count,
                 leaf_length_mm=leaf_length_mm,
                 leaf_width_mm=leaf_width_mm,
@@ -316,7 +316,7 @@ def _build_closed_edge_solid(
     r_cone_end: float,
     t_split: float,
     handle_scale: float,
-    is_foliage_leaf: bool,
+    has_foliage_cluster: bool,
     dome_tip: bool,
     bark: BarkConfig | None,
     bark_lines: list[_BarkLine],
@@ -344,7 +344,7 @@ def _build_closed_edge_solid(
         step_mm = min(step_mm, max(0.35, bark.roughness_cell_mm))
     n_steps = max(4, int(np.ceil(length / step_mm)))
     base_ts = np.linspace(0.0, 1.0, n_steps + 1)
-    foliage_bark_end_t_by_id = _foliage_bark_endpoint_t_by_id(
+    foliage_bark_end_t_by_id = _foliage_cluster_bark_endpoint_t_by_id(
         bark_lines,
         base_ts,
         foliage_bark_start_t,
@@ -361,7 +361,7 @@ def _build_closed_edge_solid(
     seg_lens = np.linalg.norm(np.diff(curve, axis=0), axis=1)
     arc_s = np.concatenate(([0.0], np.cumsum(seg_lens)))
     foliage_bark_end_s_by_id, foliage_bark_taper_start_s_by_id = (
-        _foliage_bark_endpoint_maps(
+        _foliage_cluster_bark_endpoint_maps(
             foliage_bark_end_t_by_id,
             ts,
             arc_s,
@@ -371,7 +371,7 @@ def _build_closed_edge_solid(
 
     # Wood phase tapers to the skeleton child radius; foliage leaves may then
     # expand over the terminal clump length.
-    if is_foliage_leaf and t_split > 1e-6:
+    if has_foliage_cluster and t_split > 1e-6:
         radii_t = np.where(
             ts <= t_split,
             r_start + (r_end_wood - r_start) * (ts / t_split),
@@ -379,7 +379,7 @@ def _build_closed_edge_solid(
             + (r_cone_end - r_end_wood) * ((ts - t_split) / (1.0 - t_split)),
         )
     else:
-        r_final = r_cone_end if is_foliage_leaf else r_end_wood
+        r_final = r_cone_end if has_foliage_cluster else r_end_wood
         radii_t = r_start + (r_final - r_start) * ts
 
     verts_acc: list[np.ndarray] = []
@@ -395,7 +395,7 @@ def _build_closed_edge_solid(
 
     step_off: list[int] = []
     n_sides = _N_BARK_SIDES if (bark is not None and bark_lines) else (
-        _N_FOLIAGE_SIDES if is_foliage_leaf else _N_SIDES
+        _N_CLUSTER_SIDES if has_foliage_cluster else _N_SIDES
     )
     u, v = start_frame
     for j in range(len(ts)):
@@ -447,7 +447,7 @@ def _build_closed_edge_solid(
             faces_acc.append([oa + k, oa + k1, ob + k1])
             faces_acc.append([oa + k, ob + k1, ob + k])
 
-    n_dome_lats = _N_FOLIAGE_DOME_LATS if is_foliage_leaf else _N_DOME_LATS
+    n_dome_lats = _N_CLUSTER_DOME_LATS if has_foliage_cluster else _N_DOME_LATS
     if dome_tip:
         tip_tan = _safe_norm(_bezier_tangent(p0, bp1, bp2, p3, 1.0))
         u_tip, v_tip = u, v
@@ -640,7 +640,7 @@ def _bezier_clump_start(
     return start_pos, start_tan
 
 
-def _build_foliage_clump_mesh(
+def _build_foliage_cluster_mesh(
     *,
     tip_pos: np.ndarray,
     tip_tangent: np.ndarray,
@@ -651,7 +651,7 @@ def _build_foliage_clump_mesh(
     clump_length_mm: float,
     edge_id: int,
     bark_seed: int,
-    leaf_enable: bool = False,
+    leaves: bool = False,
     leaf_base_count: int = 0,
     leaf_length_mm: float = 0.0,
     leaf_width_mm: float = 0.0,
@@ -834,7 +834,7 @@ def _build_foliage_clump_mesh(
 
     # ── Leaves: rows up the cone, over the dome, capped at the apex ──────────
     leaf_parts: list[trimesh.Trimesh] = []
-    if leaf_enable and leaf_base_count > 0 and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
+    if leaves and leaf_base_count > 0 and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
         _WD = np.array([0.0, 0.0, -1.0])
         factor_tip = max(0.0, 1.0 - (r_base + _FOLIAGE_MAX_NOISE_MM) / max(r_tip, 1e-6))
         jit = np.radians(float(leaf_angle_jitter_deg))
@@ -1077,7 +1077,7 @@ def _advance_bark_lines(
     ]
 
 
-def _foliage_bark_endpoint_t_by_id(
+def _foliage_cluster_bark_endpoint_t_by_id(
     bark_lines: list[_BarkLine],
     ts: np.ndarray,
     foliage_bark_start_t: float | None,
@@ -1100,12 +1100,12 @@ def _foliage_bark_endpoint_t_by_id(
     end_t_by_id: dict[int, float] = {}
     span = segment_end_t - start_t
     for line in bark_lines:
-        u = _hash01(bark_seed, "foliage-bark-end", edge_id, line.line_id)
+        u = _hash01(bark_seed, "foliage-cluster-bark-end", edge_id, line.line_id)
         end_t_by_id[line.line_id] = start_t + span * (0.2 + 0.75 * u)
     return end_t_by_id
 
 
-def _foliage_bark_endpoint_maps(
+def _foliage_cluster_bark_endpoint_maps(
     end_t_by_id: dict[int, float] | None,
     ts: np.ndarray,
     arc_s: np.ndarray,
