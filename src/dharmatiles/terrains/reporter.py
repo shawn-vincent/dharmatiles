@@ -298,14 +298,14 @@ class RichReporter(TileReporter):
             return "dim white"
         if elapsed < 10.0:
             return "yellow"
-        return "bold #ff4400"
+        return "bold #ff6600"
 
     @staticmethod
     def _table_time_color(elapsed: float) -> str:
-        """Smooth gradient for table: #666666 @ 0s → #ffff00 @ 2s → #ff4400 @ 4s+."""
+        """Smooth gradient for table: #666666 @ 0s → #ffff00 @ 2s → #ff6600 @ 4s+."""
         _DIM = (102, 102, 102)
         _YEL = (255, 255, 0)
-        _RED = (255, 68, 0)
+        _RED = (255, 102, 0)
         if elapsed <= 1.0:
             r, g, b = _DIM
         elif elapsed <= 2.0:
