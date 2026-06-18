@@ -13,21 +13,6 @@ import numpy as np
 from ..dist import D, Sample
 
 
-def _range_compat(name: str, value, old_min, old_max, default):
-    """Coerce old ``*_min``/``*_max`` constructor args into one distribution."""
-    if value is not None and (old_min is not None or old_max is not None):
-        raise TypeError(f"{name}: pass either {name}=... or {name}_min/{name}_max, not both")
-    if value is not None:
-        return value
-    if old_min is None and old_max is None:
-        return default
-    if old_min is None or old_max is None:
-        raise TypeError(f"{name}: legacy min/max arguments must be passed together")
-    if old_min == old_max:
-        return old_min
-    return D[old_min:old_max]
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Grass species / runtime grass
 # ─────────────────────────────────────────────────────────────────────────────
@@ -71,76 +56,6 @@ class SpeciesConfig:
 
     # Blade direction jitter within a Voronoi group.
     blade_direction_jitter: Sample[float] = D.normal(0.0, 0.1)
-
-    # Growth behaviour.
-    grower: str = "floppy"
-
-    def __init__(
-        self,
-        name: str = "floppy-grass",
-        *,
-        blade_width: Sample[float] | None = None,
-        blade_length: Sample[float] | None = None,
-        blade_segment_length: float = 0.5,
-        blade_taper: float = 1.0,
-        blade_base_width: float = 1.0,
-        blade_base_taper: float | None = 0,
-        blade_curl: Sample[float] | None = None,
-        blade_smooth: float = 0.9,
-        blade_rise_cap: float = 2.0,
-        blade_clearance: float = 0.1,
-        blade_top_facets: int = 6,
-        blade_thickness: float = 0.6,
-        keel_fraction: float = 0.6,
-        min_printable_width: float = 1.2,
-        blade_direction_jitter: Sample[float] | None = None,
-        group_dir_jitter: float | None = None,
-        grower: str = "floppy",
-        blade_width_min: float | None = None,
-        blade_width_max: float | None = None,
-        blade_length_min: float | None = None,
-        blade_length_max: float | None = None,
-        blade_curl_min: float | None = None,
-        blade_curl_max: float | None = None,
-    ) -> None:
-        blade_width = _range_compat(
-            "blade_width", blade_width, blade_width_min, blade_width_max, 1.2
-        )
-        blade_length = _range_compat(
-            "blade_length", blade_length, blade_length_min, blade_length_max, 10
-        )
-        blade_curl = _range_compat(
-            "blade_curl", blade_curl, blade_curl_min, blade_curl_max, D[0.2:0.45]
-        )
-        if blade_direction_jitter is not None and group_dir_jitter is not None:
-            raise TypeError(
-                "blade_direction_jitter: pass either blade_direction_jitter=... "
-                "or legacy group_dir_jitter=..., not both"
-            )
-        if blade_direction_jitter is None:
-            blade_direction_jitter = (
-                D.normal(0.0, group_dir_jitter)
-                if group_dir_jitter is not None
-                else D.normal(0.0, 0.1)
-            )
-
-        self.name                  = name
-        self.blade_width           = blade_width
-        self.blade_length          = blade_length
-        self.blade_segment_length  = blade_segment_length
-        self.blade_taper           = blade_taper
-        self.blade_base_width      = blade_base_width
-        self.blade_base_taper      = blade_base_taper
-        self.blade_curl            = blade_curl
-        self.blade_smooth          = blade_smooth
-        self.blade_rise_cap        = blade_rise_cap
-        self.blade_clearance       = blade_clearance
-        self.blade_top_facets      = blade_top_facets
-        self.blade_thickness       = blade_thickness
-        self.keel_fraction         = keel_fraction
-        self.min_printable_width   = min_printable_width
-        self.blade_direction_jitter = blade_direction_jitter
-        self.grower                = grower
 
 
 @dataclass(frozen=True)
@@ -278,100 +193,7 @@ class SoilConfig:
     blob_cluster_count:  Sample[int] = 30   # number of cluster centres (0 = no clustering)
     blob_cluster_spread_mm: Sample[float] = 6.0  # Gaussian spread around each cluster centre (mm)
 
-
-
     edge_fade_mm: float = 1.0   # mm — cosine fade to zero at tile edges and mask boundary
-
-    def __init__(
-        self,
-        *,
-        n_blobs: Sample[int] = 277,
-        blob_sigma: Sample[float] | None = None,
-        blob_aspect: Sample[float] | None = None,
-        blob_power: float = 3.5,
-        blob_cutoff: float = 2.6,
-        blob_h_scale: Sample[float] | None = None,
-        n_small: Sample[int] = 0,
-        small_sigma: Sample[float] | None = None,
-        small_h: Sample[float] | None = None,
-        blob_warp_str_mm: float = 0.0,
-        blob_texture_amp: float = 0.0,
-        blob_shape_noise_amp: float = 0.06,
-        blob_shape_noise_harmonics: int = 4,
-        surface_texture_amp: float = 0.06,
-        surface_texture_scale_mm: float = 0.27,
-        surface_texture2_amp: float = 0.03,
-        surface_texture2_scale_mm: float = 0.12,
-        blob_jitter: Sample[float] = 1.0,
-        blob_cluster_count: Sample[int] = 30,
-        blob_cluster_spread_mm: Sample[float] = 6.0,
-        edge_fade_mm: float = 1.0,
-        blob_sigma_min_mm: float | None = None,
-        blob_sigma_max_mm: float | None = None,
-        blob_sigma_mode_mm: float | None = None,
-        blob_aspect_min: float | None = None,
-        blob_aspect_max: float | None = None,
-        blob_h_scale_min: float | None = None,
-        blob_h_scale_max: float | None = None,
-        blob_h_size_bias: float | None = None,
-        small_sigma_min_mm: float | None = None,
-        small_sigma_max_mm: float | None = None,
-        small_h_min: float | None = None,
-        small_h_max: float | None = None,
-    ) -> None:
-        if blob_sigma is not None and any(
-            v is not None for v in (blob_sigma_min_mm, blob_sigma_max_mm, blob_sigma_mode_mm)
-        ):
-            raise TypeError("blob_sigma: pass either blob_sigma=... or legacy sigma args, not both")
-        if blob_sigma is None:
-            if blob_sigma_min_mm is None and blob_sigma_max_mm is None and blob_sigma_mode_mm is None:
-                blob_sigma = D.triangular(0.22, 0.434, 1.026)
-            elif blob_sigma_min_mm is None or blob_sigma_max_mm is None:
-                raise TypeError("blob_sigma: legacy min/max arguments must be passed together")
-            elif blob_sigma_mode_mm is not None and blob_sigma_mode_mm >= blob_sigma_min_mm:
-                blob_sigma = D.triangular(blob_sigma_min_mm, blob_sigma_mode_mm, blob_sigma_max_mm)
-            else:
-                blob_sigma = D[blob_sigma_min_mm:blob_sigma_max_mm]
-
-        blob_aspect = _range_compat(
-            "blob_aspect", blob_aspect, blob_aspect_min, blob_aspect_max, D[0.78:1.0]
-        )
-        blob_h_scale = _range_compat(
-            "blob_h_scale", blob_h_scale, blob_h_scale_min, blob_h_scale_max, D[0.14:1.12]
-        )
-        small_sigma = _range_compat(
-            "small_sigma", small_sigma, small_sigma_min_mm, small_sigma_max_mm, D[0.20:0.40]
-        )
-        small_h = _range_compat(
-            "small_h", small_h, small_h_min, small_h_max, D[0.004:0.010]
-        )
-        if blob_h_size_bias is not None:
-            raise TypeError(
-                "blob_h_size_bias was removed; express the desired height "
-                "spread directly with blob_h_scale=..."
-            )
-
-        self.n_blobs                    = n_blobs
-        self.blob_sigma                 = blob_sigma
-        self.blob_aspect                = blob_aspect
-        self.blob_power                 = blob_power
-        self.blob_cutoff                = blob_cutoff
-        self.blob_h_scale               = blob_h_scale
-        self.n_small                    = n_small
-        self.small_sigma                = small_sigma
-        self.small_h                    = small_h
-        self.blob_warp_str_mm           = blob_warp_str_mm
-        self.blob_texture_amp           = blob_texture_amp
-        self.blob_shape_noise_amp       = blob_shape_noise_amp
-        self.blob_shape_noise_harmonics = blob_shape_noise_harmonics
-        self.surface_texture_amp        = surface_texture_amp
-        self.surface_texture_scale_mm   = surface_texture_scale_mm
-        self.surface_texture2_amp       = surface_texture2_amp
-        self.surface_texture2_scale_mm  = surface_texture2_scale_mm
-        self.blob_jitter                = blob_jitter
-        self.blob_cluster_count         = blob_cluster_count
-        self.blob_cluster_spread_mm     = blob_cluster_spread_mm
-        self.edge_fade_mm               = edge_fade_mm
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -447,58 +269,6 @@ class RocksConfig:
     az_segs:       int   = 32     # azimuth facets per stone
     el_segs:       int   = 12     # elevation rings per stone
     sink:          float = 0.10   # mm — base sunk below terrain
-
-    def __init__(
-        self,
-        *,
-        r: Sample[float] | None = None,
-        aspect: Sample[float] | None = None,
-        flat: Sample[float] | None = None,
-        angle: Sample[float] | None = None,
-        n_cuts: int = 4,
-        cut: Sample[float] | None = None,
-        roughness: float = 0.02,
-        az_segs: int = 32,
-        el_segs: int = 12,
-        sink: float = 0.10,
-        r_min: float | None = None,
-        r_max: float | None = None,
-        size_power: float | None = None,
-        aspect_min: float | None = None,
-        flat_min: float | None = None,
-        flat_max: float | None = None,
-        cut_min: float | None = None,
-        cut_max: float | None = None,
-    ) -> None:
-        if size_power is not None:
-            if r is not None:
-                raise TypeError("r: pass either r=... or legacy r_min/r_max/size_power, not both")
-            if r_min is None or r_max is None:
-                raise TypeError("r: legacy size_power requires r_min and r_max")
-            r = D[r_min:r_max].power(size_power)
-        else:
-            r = _range_compat("r", r, r_min, r_max, D[1.82:2.40].power(2.5))
-        aspect = _range_compat(
-            "aspect",
-            aspect,
-            aspect_min,
-            1.0 if aspect_min is not None else None,
-            D[0.65:1.0],
-        )
-        flat = _range_compat("flat", flat, flat_min, flat_max, D[0.32:1.20])
-        cut = _range_compat("cut", cut, cut_min, cut_max, D[0.40:0.75])
-        angle = D[0.0:np.pi] if angle is None else angle
-
-        self.r         = r
-        self.aspect    = aspect
-        self.flat      = flat
-        self.angle     = angle
-        self.n_cuts    = n_cuts
-        self.cut       = cut
-        self.roughness = roughness
-        self.az_segs   = az_segs
-        self.el_segs   = el_segs
-        self.sink      = sink
 
 
 # ─────────────────────────────────────────────────────────────────────────────
