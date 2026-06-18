@@ -524,6 +524,10 @@ _LEAF_BASE_EMBED_MM = 0.0
 # 0 = straight out along the surface normal; larger = more droop toward the
 # ground.
 _LEAF_DROOP_WEIGHT = 0.8
+# On upper-facing foliage, reduce the final upward component so leaves lie
+# closer to the canopy instead of standing up.  The effect ramps in with the
+# surface normal and preserves some lift and angle jitter.
+_LEAF_UPPER_FLATTEN = 0.55
 
 
 def _foliage_gaussian_noise(
@@ -901,6 +905,11 @@ def _build_foliage_cluster_mesh(
                 a_yaw   = (2.0 * _hash01(bark_seed, "leaf-yaw",   edge_id, key) - 1.0) * jit
                 ltan = _rotate_vec(ltan, np.cross(ltan, radial), a_pitch)
                 ltan = _safe_norm(_rotate_vec(ltan, radial, a_yaw))
+            upper_weight = float(np.clip((radial[2] - 0.25) / 0.65, 0.0, 1.0))
+            if upper_weight > 0.0 and ltan[2] > 0.0:
+                ltan = ltan.copy()
+                ltan[2] *= 1.0 - _LEAF_UPPER_FLATTEN * upper_weight
+                ltan = _safe_norm(ltan)
             lseed = _hash01_int(bark_seed, "base-leaf", edge_id, key)
             for lp in build_leaf_mesh(
                 base_pos=lbase,

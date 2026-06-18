@@ -8,7 +8,7 @@ from dataclasses import dataclass
 class BarkConfig:
     enabled: bool = True
     spacing_mm: float = 2.25
-    depth_mm: float = 0.42
+    depth_mm: float = 0.80
     width_mm: float = 0.72
     roughness_amplitude_mm: float = 0.05
     roughness_cell_mm: float = 0.90

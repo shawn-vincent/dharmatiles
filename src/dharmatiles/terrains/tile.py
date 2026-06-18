@@ -832,7 +832,7 @@ def _write_dir_3mf(
     colours from ``_color_terrain_faces``) are split into per-material parts
     before export so Bambu Studio assigns the correct filament slot to each region.
     """
-    from ..core.color import export_3mf_colored
+    from ..core.export_3mf import export_3mf_colored
     if not tiles:
         return
     names       = [name for name, _ in tiles]

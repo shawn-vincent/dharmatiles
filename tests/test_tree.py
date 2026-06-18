@@ -226,7 +226,7 @@ def test_default_bark_is_coarse_at_model_scale() -> None:
 
     assert len(lines) == 5
     assert bark.width_mm >= 0.7
-    assert bark.depth_mm >= 0.4
+    assert bark.depth_mm >= 0.8
     assert bark.roughness_cell_mm >= bark.width_mm
 
 
