@@ -76,10 +76,10 @@ def build_cloud_tree_mesh(
     leaf_fold_angle_deg: float = 5.0,
     leaf_keel_depth_mm: float = 1.0,
     leaf_keel_tip_angle_deg: float = 45.0,
-    leaf_spacing_factor: float = 1.5,
+    leaf_spacing_factor: float = 1.1,
     leaf_cap_count: int = 12,
     leaf_angle_jitter_deg: float = 24.0,
-    leaf_pos_jitter: float = 0.8,
+    leaf_pos_jitter: float = 0.15,
 ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Build a single tree mesh from a simplified skeleton.
 
@@ -523,7 +523,7 @@ _LEAF_BASE_EMBED_MM = 0.0
 # component relative to the outward radial when forming the leaf tangent.
 # 0 = straight out along the surface normal; larger = more droop toward the
 # ground.
-_LEAF_DROOP_WEIGHT = 1.4
+_LEAF_DROOP_WEIGHT = 0.8
 
 
 def _foliage_gaussian_noise(
@@ -659,10 +659,10 @@ def _build_foliage_clump_mesh(
     leaf_fold_angle_deg: float = 5.0,
     leaf_keel_depth_mm: float = 1.0,
     leaf_keel_tip_angle_deg: float = 45.0,
-    leaf_spacing_factor: float = 1.5,
+    leaf_spacing_factor: float = 1.1,
     leaf_cap_count: int = 12,
     leaf_angle_jitter_deg: float = 24.0,
-    leaf_pos_jitter: float = 0.8,
+    leaf_pos_jitter: float = 0.15,
 ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Foliage clump: icosphere bent along the branch Bezier spine.
 

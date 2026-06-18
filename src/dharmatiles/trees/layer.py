@@ -76,16 +76,16 @@ class CloudTree:
         # ── Leaf blades ───────────────────────────────────────────────────
         leaf_enable: bool = True,
         leaf_base_count: int = 5,
-        leaf_length_mm: float = 1.6,
-        leaf_width_mm: float = 1.0,
+        leaf_length_mm: float = 1.94,
+        leaf_width_mm: float = 1.21,
         leaf_thickness_mm: float = 0.24,
         leaf_fold_angle_deg: float = 5.0,
         leaf_keel_depth_mm: float = 1.0,
         leaf_keel_tip_angle_deg: float = 45.0,
-        leaf_spacing_factor: float = 1.5,
+        leaf_spacing_factor: float = 1.1,
         leaf_cap_count: int = 12,
         leaf_angle_jitter_deg: float = 24.0,
-        leaf_pos_jitter: float = 0.8,
+        leaf_pos_jitter: float = 0.15,
         bark: BarkConfig | None = None,
     ) -> None:
         self.shape = TreeShape(
