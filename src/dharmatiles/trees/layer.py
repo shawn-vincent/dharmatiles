@@ -71,6 +71,7 @@ class Tree:
         leaf_cap_count: int = 12,
         leaf_angle_jitter_deg: float = 24.0,
         leaf_pos_jitter: float = 0.165,
+        leaf_tilt_deg: float = 45.0,
         bark: BarkConfig | None = None,
     ) -> None:
         self.height_mm             = height_mm
@@ -116,6 +117,7 @@ class Tree:
         self.leaf_cap_count            = int(leaf_cap_count)
         self.leaf_angle_jitter_deg     = float(leaf_angle_jitter_deg)
         self.leaf_pos_jitter           = float(leaf_pos_jitter)
+        self.leaf_tilt_deg             = float(leaf_tilt_deg)
         self.bark = BarkConfig() if bark is None else bark
 
     def footprint_mm(self) -> float:
@@ -211,6 +213,7 @@ class Tree:
                 leaf_cap_count=self.leaf_cap_count,
                 leaf_angle_jitter_deg=self.leaf_angle_jitter_deg,
                 leaf_pos_jitter=self.leaf_pos_jitter,
+                leaf_tilt_deg=self.leaf_tilt_deg,
             )
             if len(mesh.vertices) == 0:
                 continue

@@ -80,6 +80,7 @@ def build_tree_mesh(
     leaf_cap_count: int = 12,
     leaf_angle_jitter_deg: float = 24.0,
     leaf_pos_jitter: float = 0.165,
+    leaf_tilt_deg: float = 45.0,
 ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Build a single tree mesh from a simplified skeleton.
 
@@ -261,6 +262,7 @@ def build_tree_mesh(
                 leaf_cap_count=leaf_cap_count,
                 leaf_angle_jitter_deg=leaf_angle_jitter_deg,
                 leaf_pos_jitter=leaf_pos_jitter,
+                leaf_tilt_deg=leaf_tilt_deg,
             )
             if len(clump.vertices) > 0:
                 edge_solids.append(clump)
@@ -519,11 +521,10 @@ _FOLIAGE_MAX_NOISE_MM = _FOLIAGE_COARSE_NOISE_AMPLITUDE_MM + 2.0 * _FOLIAGE_NOIS
 # Extra inward sink for leaf bases past the noised skin, so each base stays in
 # contact (slightly embedded) rather than skimming the surface.
 _LEAF_BASE_EMBED_MM = 0.0
-# Downward droop of leaf bases: weight of the (perp-to-radial) downward
-# component relative to the outward radial when forming the leaf tangent.
-# 0 = straight out along the surface normal; larger = more droop toward the
-# ground.
-_LEAF_DROOP_WEIGHT = 0.8
+# Minimum elevation of the leaf tangent above the foliage surface tangent
+# plane (degrees).  Clamped after all jitter so no leaf ever points into the
+# cluster skin.
+_LEAF_SURFACE_FLOOR_DEG = 5.0
 # On upper-facing foliage, reduce the final upward component so leaves lie
 # closer to the canopy instead of standing up.  The effect ramps in with the
 # surface normal and preserves some lift and angle jitter.
@@ -667,6 +668,7 @@ def _build_foliage_cluster_mesh(
     leaf_cap_count: int = 12,
     leaf_angle_jitter_deg: float = 24.0,
     leaf_pos_jitter: float = 0.165,
+    leaf_tilt_deg: float = 45.0,
 ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Foliage clump: icosphere bent along the branch Bezier spine.
 
@@ -887,19 +889,30 @@ def _build_foliage_cluster_mesh(
                 + _foliage_coarse_noise(base_smooth[None, :], edge_id, bark_seed)[0]
             )
             lbase = base_smooth + radial * ((disp_base - noise_peak) - _LEAF_BASE_EMBED_MM)
-            # Growth tangent: outward + droop toward the ground.
-            # ltan_override bypasses the droop calculation — callers near the pole
-            # pass a horizontal spread direction so the leaf faces the viewer from
-            # above rather than spiking vertically (droop → dp≈0 → ltan≈up at
-            # high phi, producing invisible vertical spikes).
+            # Growth tangent: rotate the outward normal by leaf_tilt_deg toward
+            # world-down so the tip points downward.  Near-pole callers supply
+            # ltan_override (a horizontal spread direction) to avoid the vertical-
+            # spike degenerate that occurs when radial ≈ world-up and the world-
+            # down component in the tangent plane approaches zero.
             if ltan_override is not None:
                 ltan = _safe_norm(np.asarray(ltan_override, float))
             else:
-                dp   = _WD - float(np.dot(_WD, radial)) * radial
-                dp_n = float(np.linalg.norm(dp))
-                ltan = _safe_norm(radial + _LEAF_DROOP_WEIGHT * dp / dp_n) if dp_n > 1e-9 else radial
+                # Target: tip at leaf_tilt_deg below world horizontal.
+                # Horizontal component follows the XY projection of radial so the
+                # leaf still points outward from the cluster in plan view.
+                sin_t = float(np.sin(np.radians(leaf_tilt_deg)))
+                cos_t = float(np.cos(np.radians(leaf_tilt_deg)))
+                rh = radial.copy(); rh[2] = 0.0
+                rh_n = float(np.linalg.norm(rh))
+                if rh_n > 1e-9:
+                    ltan = (cos_t / rh_n) * rh + np.array([0.0, 0.0, -sin_t])
+                    # already unit: cos_t² + sin_t² = 1
+                else:
+                    # radial is nearly vertical — can't derive outward horizontal;
+                    # fall back to radial (floor clamp will handle orientation).
+                    ltan = radial.copy()
             # Angle jitter: pitch (extra droop) about the lateral axis, plus a
-            # rotation (yaw) about the surface normal — a few degrees each.
+            # rotation (yaw) about the surface normal.
             if jit > 1e-9:
                 a_pitch = (2.0 * _hash01(bark_seed, "leaf-pitch", edge_id, key) - 1.0) * jit
                 a_yaw   = (2.0 * _hash01(bark_seed, "leaf-yaw",   edge_id, key) - 1.0) * jit
@@ -910,6 +923,18 @@ def _build_foliage_cluster_mesh(
                 ltan = ltan.copy()
                 ltan[2] *= 1.0 - _LEAF_UPPER_FLATTEN * upper_weight
                 ltan = _safe_norm(ltan)
+            # Surface floor: tip must stay at least _LEAF_SURFACE_FLOOR_DEG above
+            # the tangent plane so no leaf points back into the cluster skin.
+            floor_sin = float(np.sin(np.radians(_LEAF_SURFACE_FLOOR_DEG)))
+            dot_rn = float(np.dot(ltan, radial))
+            if dot_rn < floor_sin:
+                tan_comp = ltan - dot_rn * radial
+                tan_n = float(np.linalg.norm(tan_comp))
+                if tan_n > 1e-9:
+                    cos_floor = float(np.sqrt(max(0.0, 1.0 - floor_sin * floor_sin)))
+                    ltan = floor_sin * radial + cos_floor * (tan_comp / tan_n)
+                else:
+                    ltan = radial
             lseed = _hash01_int(bark_seed, "base-leaf", edge_id, key)
             for lp in build_leaf_mesh(
                 base_pos=lbase,
@@ -1266,25 +1291,29 @@ def _filter_non_overlapping_centers(
 ) -> list[tuple[int, float, float]]:
     if len(centers) < 2:
         return centers
-    remaining = [(line_id, _wrap_angle(theta), strength) for line_id, theta, strength in centers]
-    while len(remaining) > 1:
-        ordered = sorted(remaining, key=lambda item: item[1])
-        gaps = []
-        for idx, (_line_id, theta, _strength) in enumerate(ordered):
-            next_theta = ordered[(idx + 1) % len(ordered)][1]
-            gap = (next_theta - theta) % (2.0 * np.pi)
-            gaps.append(gap * radius)
+    # Sort once.  Removing one element from a sorted list keeps it sorted, so
+    # we never need to re-sort — O(k log k) total instead of O(k² log k).
+    ordered = sorted(
+        [(line_id, _wrap_angle(theta), strength) for line_id, theta, strength in centers],
+        key=lambda item: item[1],
+    )
+    while len(ordered) > 1:
+        n = len(ordered)
+        gaps = [
+            ((ordered[(i + 1) % n][1] - ordered[i][1]) % (2.0 * np.pi)) * radius
+            for i in range(n)
+        ]
         min_idx = int(np.argmin(gaps))
         if gaps[min_idx] >= min_gap_mm:
-            return ordered
+            break
 
         a = ordered[min_idx]
-        b = ordered[(min_idx + 1) % len(ordered)]
+        b = ordered[(min_idx + 1) % n]
         pa = _hash01(bark_seed, "bark-priority", edge_id, a[0])
         pb = _hash01(bark_seed, "bark-priority", edge_id, b[0])
         drop = a if pa < pb else b
-        remaining = [item for item in ordered if item[0] != drop[0]]
-    return remaining
+        ordered = [item for item in ordered if item[0] != drop[0]]
+    return ordered
 
 
 def _bark_cut(
@@ -1476,6 +1505,73 @@ def _transport(
     return u_new, v_new
 
 
+def _bark_cut_vec(
+    theta_arr: np.ndarray,
+    radius: float,
+    bark: BarkConfig | None,
+    groove_centers: list[tuple[int, float, float]],
+) -> np.ndarray:
+    """Vectorised form of _bark_cut — theta_arr is a (n,) array."""
+    if bark is None or not groove_centers:
+        return np.zeros(len(theta_arr))
+    cuts = np.zeros(len(theta_arr))
+    for _line_id, theta_g, strength in groove_centers:
+        half_width = 0.5 * bark.width_mm * strength
+        if half_width <= 1e-9:
+            continue
+        d_mm = radius * np.abs((theta_arr - theta_g + np.pi) % (2.0 * np.pi) - np.pi)
+        cuts = np.maximum(
+            cuts,
+            bark.depth_mm * strength * np.clip(1.0 - d_mm / half_width, 0.0, None),
+        )
+    return cuts
+
+
+def _bark_surface_noise_vec(
+    theta_arr: np.ndarray,
+    radius: float,
+    bark: BarkConfig | None,
+    groove_centers: list[tuple[int, float, float]],
+    *,
+    s: float,
+    edge_id: int,
+    bark_seed: int,
+) -> np.ndarray:
+    """Vectorised form of _bark_surface_noise — theta_arr is a (n,) array."""
+    if bark is None or bark.roughness_amplitude_mm <= 1e-9:
+        return np.zeros(len(theta_arr))
+    if not groove_centers:
+        return np.zeros(len(theta_arr))
+    if bark.roughness_cell_mm <= 1e-9:
+        return np.zeros(len(theta_arr))
+
+    cuts = _bark_cut_vec(theta_arr, radius, bark, groove_centers)
+    in_groove = cuts > 1e-9
+    if in_groove.all():
+        return np.zeros(len(theta_arr))
+
+    # Cell indices for each theta (same formula as scalar _bark_surface_noise).
+    theta_wrapped = theta_arr % (2.0 * np.pi)
+    theta_cells   = np.floor(radius * theta_wrapped / bark.roughness_cell_mm).astype(int)
+    s_cell        = int(np.floor(s / bark.roughness_cell_mm))
+
+    # Hash per unique cell (bounded by n_sides, typically ≤ 48).
+    unique_cells, inv = np.unique(theta_cells, return_inverse=True)
+    u1 = np.array(
+        [max(_hash01(bark_seed, "bark-rough-u1", edge_id, s_cell, int(tc)), 1e-12)
+         for tc in unique_cells]
+    )
+    u2 = np.array(
+        [_hash01(bark_seed, "bark-rough-u2", edge_id, s_cell, int(tc))
+         for tc in unique_cells]
+    )
+
+    normals = np.sqrt(-2.0 * np.log(u1[inv])) * np.cos(2.0 * np.pi * u2[inv])
+    max_amp  = min(float(bark.roughness_amplitude_mm), 0.45 * float(bark.depth_mm))
+    noise    = np.clip(normals, -2.0, 2.0) * max_amp
+    return np.where(in_groove, 0.0, noise)
+
+
 def _make_ring(
     center: np.ndarray, radius: float,
     u: np.ndarray, v: np.ndarray,
@@ -1488,29 +1584,11 @@ def _make_ring(
     edge_id: int = 0,
     bark_seed: int = 0,
 ) -> np.ndarray:
-    theta  = np.linspace(theta_start, theta_start + 2.0 * np.pi, n_sides, endpoint=False)
+    theta   = np.linspace(theta_start, theta_start + 2.0 * np.pi, n_sides, endpoint=False)
     grooves = groove_centers or []
-    cuts = np.array(
-        [
-            _bark_cut(float(t), radius, bark, grooves)
-            for t in theta
-        ],
-        dtype=float,
-    )
-    noise = np.array(
-        [
-            _bark_surface_noise(
-                float(t),
-                radius,
-                bark,
-                grooves,
-                s=s,
-                edge_id=edge_id,
-                bark_seed=bark_seed,
-            )
-            for t in theta
-        ],
-        dtype=float,
+    cuts    = _bark_cut_vec(theta, radius, bark, grooves)
+    noise   = _bark_surface_noise_vec(
+        theta, radius, bark, grooves, s=s, edge_id=edge_id, bark_seed=bark_seed,
     )
     if bark is not None:
         min_safe_radius = max(0.42, radius - 0.35 * radius)

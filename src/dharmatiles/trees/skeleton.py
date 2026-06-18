@@ -539,8 +539,10 @@ def _compute_radii_bottom_up(
 
     radii = np.full(n, min_radius_mm, dtype=float)
     for i in range(n - 1, -1, -1):
-        if children[i]:
-            radii[i] = float(sum(radii[c] ** exponent for c in children[i])) ** (1.0 / exponent)
+        ch = children[i]
+        if ch:
+            # radii[ch] uses NumPy fancy-indexing on a Python list → no generator loop.
+            radii[i] = np.sum(radii[ch] ** exponent) ** (1.0 / exponent)
     return radii
 
 
@@ -668,15 +670,9 @@ def _largest_group_id(
     labels:     np.ndarray,
     unique_ids: np.ndarray,
 ) -> int:
-    """Return the group label with the most attractors."""
-    best_id    = int(unique_ids[0])
-    best_count = 0
-    for gid in unique_ids:
-        count = int(np.sum(labels == gid))
-        if count > best_count:
-            best_count = count
-            best_id    = int(gid)
-    return best_id
+    """Return the group label with the most attractors (O(n) via np.bincount)."""
+    counts = np.bincount(labels, minlength=int(unique_ids.max()) + 1)
+    return int(unique_ids[np.argmax(counts[unique_ids])])
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -265,46 +265,62 @@ def _build_rocks_mesh_core(
     mesh = trimesh.Trimesh(vertices=all_verts, faces=all_faces, process=False)
     mesh.fix_normals()
 
-    # ── Rasterise rock tops into support_z ────────────────────────────────────
-    cw = surface.cell_w
-    ch = surface.cell_w
+    # ── Rasterise rock tops into support_z (batched) ─────────────────────────
+    #
+    # Instead of calling np.meshgrid + rotation per rock (N separate allocations),
+    # we pre-compute a shared bounding box of size (box, box) and batch all heavy
+    # math into (N, box, box) arrays in one pass.  Only the per-rock scatter-
+    # accumulate writes remain in the loop — cheap indexed writes with no math.
+    cw = surface.cell_w          # cell width = cell height (square cells)
     gw = surface.grid_w
     gh = surface.grid_h
 
+    r_max_all = max(float(rx_arr.max()), float(ry_arr.max()))
+    half      = int(r_max_all / cw) + 2   # half-width in cells; +2 for rounding margin
+    box       = 2 * half + 1
+
+    # 1-D offset arrays from the integer centre cell — broadcast into (N, box, box).
+    d_xy = np.arange(-half, half + 1, dtype=float) * cw   # (box,)
+
+    # Integer centre cell for each rock + sub-cell correction.
+    i_c   = np.round(cx / cw).astype(int)    # (N,)
+    j_c   = np.round(cy / cw).astype(int)    # (N,)
+    off_x = i_c * cw - cx                     # sub-cell correction in x (N,)
+    off_y = j_c * cw - cy                     # sub-cell correction in y (N,)
+
+    # World offsets from each rock centre:
+    #   DX_r[s, j, i] = d_xy[i] + off_x[s]   — only varies along axis 2 (cols)
+    #   DY_r[s, j, i] = d_xy[j] + off_y[s]   — only varies along axis 1 (rows)
+    # Shapes (N,1,box) and (N,box,1) broadcast to (N,box,box) in the products below.
+    DX_r = d_xy[np.newaxis, np.newaxis, :] + off_x[:, np.newaxis, np.newaxis]  # (N,1,box)
+    DY_r = d_xy[np.newaxis, :, np.newaxis] + off_y[:, np.newaxis, np.newaxis]  # (N,box,1)
+
+    # Rotate into each rock's local ellipse frame — one batched step for all N.
+    LX   =  ca[:, None, None] * DX_r + sa[:, None, None] * DY_r   # (N,box,box)
+    LY   = -sa[:, None, None] * DX_r + ca[:, None, None] * DY_r   # (N,box,box)
+
+    D2     = (LX / rx_arr[:, None, None]) ** 2 + (LY / ry_arr[:, None, None]) ** 2
+    INSIDE = D2 <= 1.0                                              # (N,box,box)
+    ZTOP   = np.where(
+        INSIDE,
+        base_z[:, None, None] + height[:, None, None] * np.sqrt(np.maximum(0.0, 1.0 - D2)),
+        -np.inf,
+    )                                                               # (N,box,box)
+
+    # Per-rock scatter-accumulate: only clipped slice writes remain in the loop.
     for s in range(N):
-        _cx, _cy = cx[s], cy[s]
-        _rx, _ry = rx_arr[s], ry_arr[s]
-        _h       = height[s]
-        _ca, _sa = ca[s], sa[s]
-        _bz      = base_z[s]
-        r_max    = max(_rx, _ry)
-
-        i_lo = max(0,      int((_cx - r_max) / cw))
-        i_hi = min(gw - 1, int((_cx + r_max) / cw) + 1)
-        j_lo = max(0,      int((_cy - r_max) / ch))
-        j_hi = min(gh - 1, int((_cy + r_max) / ch) + 1)
-        if i_lo > i_hi or j_lo > j_hi:
+        i0 = i_c[s] - half;  j0 = j_c[s] - half
+        i0c = max(0, i0);    i1c = min(gw, i0 + box)
+        j0c = max(0, j0);    j1c = min(gh, j0 + box)
+        if i0c >= i1c or j0c >= j1c:
             continue
+        di0 = i0c - i0;  di1 = di0 + (i1c - i0c)
+        dj0 = j0c - j0;  dj1 = dj0 + (j1c - j0c)
 
-        ii_g = np.arange(i_lo, i_hi + 1)
-        jj_g = np.arange(j_lo, j_hi + 1)
-        II, JJ = np.meshgrid(ii_g, jj_g)
-        dx_g =  II * cw - _cx
-        dy_g =  JJ * ch - _cy
-
-        lx_g =  _ca * dx_g + _sa * dy_g
-        ly_g = -_sa * dx_g + _ca * dy_g
-
-        d2     = (lx_g / _rx) ** 2 + (ly_g / _ry) ** 2
-        inside = d2 <= 1.0
-        if not np.any(inside):
-            continue
-
-        z_top = np.where(inside, _bz + _h * np.sqrt(np.maximum(0.0, 1.0 - d2)), -np.inf)
-        sl = support_z[j_lo:j_hi + 1, i_lo:i_hi + 1]
-        np.maximum(sl, z_top, out=sl)
+        sl = support_z[j0c:j1c, i0c:i1c]
+        np.maximum(sl, ZTOP[s, dj0:dj1, di0:di1], out=sl)
 
         if obstacle_mask is not None:
-            obstacle_mask[j_lo:j_hi + 1, i_lo:i_hi + 1] |= inside
+            obstacle_mask[j0c:j1c, i0c:i1c] |= INSIDE[s, dj0:dj1, di0:di1]
 
     return mesh

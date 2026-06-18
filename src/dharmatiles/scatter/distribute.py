@@ -339,16 +339,24 @@ def jitter_grid_xy(
     count_w_raw  = 0.5 * (1.0 - t_row) ** 2 + 0.5
     count_w      = count_w_raw * n_u / count_w_raw.sum()
 
+    # Pre-compute row sizes and batch all RNG calls (2 calls instead of 2×n_u).
+    row_nvs = [max(1, int(round(float(n_v * count_w[i])))) for i in range(n_u)]
+    total   = sum(row_nvs)
+    j_u_all = rng.uniform(0.0, 1.0, total)
+    j_v_all = rng.uniform(0.0, 1.0, total)
+
     all_us: list[np.ndarray] = []
     all_vs: list[np.ndarray] = []
+    offset = 0
 
     for i in range(n_u):
-        n_v_i  = max(1, int(round(float(n_v * count_w[i]))))
+        n_v_i  = row_nvs[i]
         t_lo_i = float((i / n_u) ** 2)
         t_hi_i = float(((i + 1.0) / n_u) ** 2)
 
-        j_u = rng.uniform(0.0, 1.0, n_v_i)
-        j_v = rng.uniform(0.0, 1.0, n_v_i)
+        j_u = j_u_all[offset:offset + n_v_i]
+        j_v = j_v_all[offset:offset + n_v_i]
+        offset += n_v_i
 
         all_us.append(u_lo + (t_lo_i + j_u * (t_hi_i - t_lo_i)) * u_span)
         all_vs.append(v_lo + (np.arange(n_v_i) + j_v) * (v_span / n_v_i))
