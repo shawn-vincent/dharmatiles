@@ -1,4 +1,4 @@
-"""Procedural bark configuration for CloudTree meshes."""
+"""Procedural bark configuration for Tree meshes."""
 from __future__ import annotations
 
 from dataclasses import dataclass

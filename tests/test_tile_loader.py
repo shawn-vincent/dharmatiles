@@ -7,14 +7,14 @@ from unittest import TestCase
 import numpy as np
 
 from dharmatiles.core.region import build_region_mask
-from dharmatiles.spec import load_spec
+from dharmatiles.spec import load_tile
 
 
-class LoadSpecTests(TestCase):
-    def test_load_spec_supports_relative_helper_imports(self):
+class LoadTileTests(TestCase):
+    def test_load_tile_supports_relative_helper_imports(self):
         with tempfile.TemporaryDirectory() as tmp:
-            spec_dir = Path(tmp)
-            (spec_dir / "shared_helpers.py").write_text(
+            tile_dir = Path(tmp)
+            (tile_dir / "shared_helpers.py").write_text(
                 textwrap.dedent(
                     """
                     from dharmatiles.spec import SurfaceConfig
@@ -23,9 +23,9 @@ class LoadSpecTests(TestCase):
                     """
                 )
             )
-            (spec_dir / "_lib").mkdir()
-            (spec_dir / "_lib" / "__init__.py").write_text("")
-            (spec_dir / "_lib" / "shared_surface.py").write_text(
+            (tile_dir / "_lib").mkdir()
+            (tile_dir / "_lib" / "__init__.py").write_text("")
+            (tile_dir / "_lib" / "shared_surface.py").write_text(
                 textwrap.dedent(
                     """
                     from dharmatiles.spec import SurfaceConfig
@@ -34,8 +34,8 @@ class LoadSpecTests(TestCase):
                     """
                 )
             )
-            relative_spec = spec_dir / "relative.tile.py"
-            relative_spec.write_text(
+            relative_tile = tile_dir / "relative.tile.py"
+            relative_tile.write_text(
                 textwrap.dedent(
                     """
                     from dharmatiles.spec import Tile
@@ -48,11 +48,11 @@ class LoadSpecTests(TestCase):
                 )
             )
 
-            tiles = load_spec(relative_spec)
+            tiles = load_tile(relative_tile)
 
         self.assertEqual([t.surface.seed for t in tiles], [123, 456])
 
-    def test_all_tile_specs_build_region_masks(self):
+    def test_all_tiles_build_region_masks(self):
         tile_paths = sorted(Path("src/tiles").glob("*/*.tile.py"))
 
         self.assertTrue(tile_paths)
@@ -61,7 +61,7 @@ class LoadSpecTests(TestCase):
             with self.subTest(path=str(path)):
                 with warnings.catch_warnings(record=True) as caught:
                     warnings.simplefilter("always")
-                    for tile in load_spec(path):
+                    for tile in load_tile(path):
                         mask = build_region_mask(tile)
                         self.assertNotIn(-2, np.unique(mask))
 

@@ -7,7 +7,7 @@ Usage
         Batch mode: process every ``*.tile.py`` file under ``src/tiles/`` and
         write outputs to ``stl/{system_dir}/…``.
 
-    dharmatiles-gen --spec "src/tiles/soil+grass.tile.py"
+    dharmatiles-gen --tile "src/tiles/soil+grass.tile.py"
         Single tile: same naming and directory conventions as batch.
 
     dharmatiles-gen --quiet
@@ -34,7 +34,7 @@ from ..core.config import SurfaceConfig
 from ..core.tile import TileScene
 from ..core.mesh import make_heightmap_solid
 from ..core.region import build_region_mask
-from ..spec import Tile, Region, Boundary, load_spec
+from ..spec import Tile, Region, Boundary, load_tile
 from .reporter import TileReporter, RichReporter, make_reporter
 
 
@@ -85,19 +85,19 @@ def _batch_worker(args: tuple) -> dict:
     This function must be at module level so ProcessPoolExecutor can pickle it.
     The reporter is created inside the worker (not passed) to avoid pickling issues.
     """
-    spec_path_str, tiles_root_str, stl_root_str, png_root_str, phase_dict, formats = args
+    tile_path_str, tiles_root_str, stl_root_str, png_root_str, phase_dict, formats = args
 
-    spec_path  = pathlib.Path(spec_path_str)
+    tile_path  = pathlib.Path(tile_path_str)
     tiles_root = pathlib.Path(tiles_root_str)
     stl_root   = pathlib.Path(stl_root_str)
     png_root   = pathlib.Path(png_root_str)
 
-    spec_name = spec_path.stem.replace('.tile', '')
+    tile_name = tile_path.stem.replace('.tile', '')
 
     def _set_phase(phase: str) -> None:
         if phase_dict is not None:
             try:
-                phase_dict[spec_name] = phase
+                phase_dict[tile_name] = phase
             except Exception:
                 pass
 
@@ -106,12 +106,12 @@ def _batch_worker(args: tuple) -> dict:
 
     render_meshes: list[trimesh.Trimesh] | None = None
     dir_meshes_serial: dict[str, tuple[str, list[dict]]] = {}
-    for tile in load_spec(spec_path):
+    for tile in load_tile(tile_path):
         _filter_tile_systems(tile, formats)
         surface   = tile.surface
-        sys_paths = _system_paths_for(spec_path, tile, tiles_root, stl_root)
+        sys_paths = _system_paths_for(tile_path, tile, tiles_root, stl_root)
         reporter.tile_begin(
-            name         = spec_name,
+            name         = tile_name,
             cols         = surface.cols,
             rows         = surface.rows,
             grid_w       = surface.grid_w,
@@ -123,30 +123,30 @@ def _batch_worker(args: tuple) -> dict:
             tile, system_paths=sys_paths, reporter=reporter,
         )
         for d, ms in dir_to_meshes.items():
-            dir_meshes_serial[str(d)] = (spec_name, _meshes_to_serial(ms))
+            dir_meshes_serial[str(d)] = (tile_name, _meshes_to_serial(ms))
 
     # Render PNG from the already-built meshes (no second build pass).
     _set_phase("Render PNG")
     if render_meshes is not None:
-        for tile in load_spec(spec_path):
-            out = _png_path_for(spec_path, tile, tiles_root, png_root)
+        for tile in load_tile(tile_path):
+            out = _png_path_for(tile_path, tile, tiles_root, png_root)
             _render_from_meshes(render_meshes, out, tile.surface.square_mm, quiet=True,
                                 label=_label_for_png(out, png_root))
             break
     else:
         try:
             from ..render import render as _render
-            for tile in load_spec(spec_path):
-                out = _png_path_for(spec_path, tile, tiles_root, png_root)
+            for tile in load_tile(tile_path):
+                out = _png_path_for(tile_path, tile, tiles_root, png_root)
                 out.parent.mkdir(parents=True, exist_ok=True)
-                meshes = build_meshes_for_render(spec_path)
+                meshes = build_meshes_for_render(tile_path)
                 _render(meshes, out, quiet=True, grid_square_mm=tile.surface.square_mm,
                         label=_label_for_png(out, png_root))
                 break
         except Exception:
             pass
 
-    row = reporter.to_row(spec_name, _time.perf_counter() - t0)
+    row = reporter.to_row(tile_name, _time.perf_counter() - t0)
     row['dir_meshes_serial'] = dir_meshes_serial
     return row
 
@@ -540,7 +540,7 @@ def build_tile_from_spec(
 
 
 def build_meshes_for_render(
-    spec_path: pathlib.Path,
+    tile_path: pathlib.Path,
     *,
     system: str = "db",
 ) -> list[trimesh.Trimesh]:
@@ -552,13 +552,13 @@ def build_meshes_for_render(
     set from the material palette in ``core.color``.
     """
     import dataclasses as _dc
-    from ..spec import load_spec
+    from ..spec import load_tile
     from ..systems import DungeonBlocks, OpenLOCK
     from ..bases import dungeonblocks as _db
     from ..core.color import Material, tag as _tag
     from ..core.config import BaseConfig
 
-    tiles = load_spec(spec_path)
+    tiles = load_tile(tile_path)
     tile  = tiles[0]
 
     target = next(
@@ -659,30 +659,30 @@ def _build_spec_terrain(
 
 # ── CLI helpers ───────────────────────────────────────────────────────────────
 
-def _spec_stem(spec_path: pathlib.Path, tiles_root: pathlib.Path) -> tuple[str, pathlib.Path]:
-    """Return (stem, subdir) for a spec path relative to tiles_root.
+def _tile_stem(tile_path: pathlib.Path, tiles_root: pathlib.Path) -> tuple[str, pathlib.Path]:
+    """Return (stem, subdir) for a tile path relative to tiles_root.
 
-    stem is the spec filename without .tile.py (e.g. '1x1-water+grass').
+    stem is the tile filename without .tile.py (e.g. '1x1-water+grass').
     subdir is the path component between tiles_root and the file (e.g. PosixPath('water')).
     """
     try:
-        no_py   = spec_path.with_suffix('')
+        no_py   = tile_path.with_suffix('')
         no_tile = no_py.with_suffix('') if no_py.suffix == '.tile' else no_py
         rel     = no_tile.relative_to(tiles_root)
     except ValueError:
-        no_py   = pathlib.Path(spec_path.stem)
+        no_py   = pathlib.Path(tile_path.stem)
         rel     = no_py.with_suffix('') if no_py.suffix == '.tile' else no_py
     return rel.name, rel.parent
 
 
 def _png_path_for(
-    spec_path:  pathlib.Path,
+    tile_path:  pathlib.Path,
     tile:       Tile,
     tiles_root: pathlib.Path,
     png_root:   pathlib.Path,
 ) -> pathlib.Path:
-    """Return the canonical PNG output path for *spec_path* (no system suffix)."""
-    stem, sub = _spec_stem(spec_path, tiles_root)
+    """Return the canonical PNG output path for *tile_path* (no system suffix)."""
+    stem, sub = _tile_stem(tile_path, tiles_root)
     return png_root / sub / f"{stem}.png"
 
 
@@ -995,28 +995,28 @@ def _filter_tile_systems(tile: Tile, formats) -> None:
 
 
 def _system_paths_for(
-    spec_path:  pathlib.Path,
+    tile_path:  pathlib.Path,
     tile:       Tile,
     tiles_root: pathlib.Path,
     stl_root:   pathlib.Path,
 ) -> dict[str, pathlib.Path]:
     """Return ``{system.suffix: output_path}`` for the canonical hierarchy."""
-    stem, sub = _spec_stem(spec_path, tiles_root)
+    stem, sub = _tile_stem(tile_path, tiles_root)
     return {
         system.suffix: stl_root / system.dir_name / sub / f"{stem}-{system.suffix}.stl"
         for system in tile.systems
     }
 
 
-def _build_spec(
+def _build_tile(
     tile:       Tile,
-    spec_path:  pathlib.Path,
+    tile_path:  pathlib.Path,
     tiles_root: pathlib.Path,
     stl_root:   pathlib.Path,
     reporter:   TileReporter,
 ) -> tuple[list[trimesh.Trimesh] | None, dict[pathlib.Path, list[trimesh.Trimesh]]]:
-    """Build one tile spec; returns (render_meshes, dir_to_meshes)."""
-    sys_paths = _system_paths_for(spec_path, tile, tiles_root, stl_root)
+    """Build one tile; returns (render_meshes, dir_to_meshes)."""
+    sys_paths = _system_paths_for(tile_path, tile, tiles_root, stl_root)
     _, render_meshes, dir_to_meshes = build_tile_from_spec(
         tile, system_paths=sys_paths, reporter=reporter,
     )
@@ -1181,16 +1181,16 @@ def _run_parallel_live(
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Generate terrain tile STLs from .tile.py spec files.",
+        description="Generate terrain tile STLs from .tile.py files.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--spec", "-s", type=pathlib.Path, default=None,
+    p.add_argument("--tile", "-s", type=pathlib.Path, default=None,
                    metavar="FILE",
-                   help=".tile.py Python spec.  Omit to process all src/tiles/")
+                   help=".tile.py tile file.  Omit to process all src/tiles/")
     p.add_argument("--formats", "-f", nargs="+", choices=["db", "ol"], default=None,
                    metavar="FMT",
                    help="Base system(s) to generate: db (DungeonBlocks) and/or ol "
-                        "(OpenLOCK).  Default: every system the spec defines.")
+                        "(OpenLOCK).  Default: every system the tile defines.")
     p.add_argument("--png-only", action="store_true",
                    help="Re-render PNG thumbnails and PDF catalog only; skip STL generation.")
     p.add_argument("--quiet", "-q", action="store_true",
@@ -1213,19 +1213,19 @@ def main(argv=None):
 
     # ── PNG-only (skip all STL work) ──────────────────────────────────────────
     if args.png_only:
-        spec_paths = (
-            [args.spec] if args.spec is not None
+        tile_paths = (
+            [args.tile] if args.tile is not None
             else sorted(TILES_ROOT.rglob("*.tile.py"))
         )
-        if not spec_paths:
+        if not tile_paths:
             print(f"No .tile.py files found under {TILES_ROOT}/")
             return
-        n_png = len(spec_paths)
+        n_png = len(tile_paths)
         t_png = _time.perf_counter()
         reporter.phase_begin(
             f"Rendering {n_png} PNG{'s' if n_png != 1 else ''}"
         )
-        _render_all_pngs(spec_paths, TILES_ROOT, PNG_ROOT, quiet=args.quiet)
+        _render_all_pngs(tile_paths, TILES_ROOT, PNG_ROOT, quiet=args.quiet)
         reporter.phase_end(
             f"Render PNG{'s' if n_png != 1 else ''}",
             _time.perf_counter() - t_png,
@@ -1238,16 +1238,16 @@ def main(argv=None):
             _print_closing_quote()
         return
 
-    # ── Single spec ───────────────────────────────────────────────────────────
-    if args.spec is not None:
+    # ── Single tile ───────────────────────────────────────────────────────────
+    if args.tile is not None:
         from collections import defaultdict as _defaultdict
-        specs = list(load_spec(args.spec))
+        tiles_list = list(load_tile(args.tile))
         render_meshes: list[trimesh.Trimesh] | None = None
         dir_3mf_accum: dict[pathlib.Path, list[tuple[str, list[trimesh.Trimesh]]]] = _defaultdict(list)
-        for tile in specs:
+        for tile in tiles_list:
             _filter_tile_systems(tile, args.formats)
             surface = tile.surface
-            name    = args.spec.stem.replace('.tile', '')
+            name    = args.tile.stem.replace('.tile', '')
             reporter.tile_begin(
                 name         = name,
                 cols         = surface.cols,
@@ -1258,8 +1258,8 @@ def main(argv=None):
                 boundary_ids = [b.id for b in tile.boundaries],
             )
             t0 = _time.perf_counter()
-            render_meshes, dir_to_meshes = _build_spec(
-                tile, args.spec, TILES_ROOT, STL_ROOT, reporter,
+            render_meshes, dir_to_meshes = _build_tile(
+                tile, args.tile, TILES_ROOT, STL_ROOT, reporter,
             )
             reporter.tile_end(_time.perf_counter() - t0)
             for d, ms in dir_to_meshes.items():
@@ -1276,12 +1276,12 @@ def main(argv=None):
             )
         t_png = _time.perf_counter()
         reporter.phase_begin("Render PNG")
-        if render_meshes is not None and specs:
-            out = _png_path_for(args.spec, specs[0], TILES_ROOT, PNG_ROOT)
-            _render_from_meshes(render_meshes, out, specs[0].surface.square_mm, args.quiet,
+        if render_meshes is not None and tiles_list:
+            out = _png_path_for(args.tile, tiles_list[0], TILES_ROOT, PNG_ROOT)
+            _render_from_meshes(render_meshes, out, tiles_list[0].surface.square_mm, args.quiet,
                                 label=_label_for_png(out, PNG_ROOT))
         else:
-            _render_all_pngs([args.spec], TILES_ROOT, PNG_ROOT, quiet=args.quiet)
+            _render_all_pngs([args.tile], TILES_ROOT, PNG_ROOT, quiet=args.quiet)
         reporter.phase_end("Render PNG", _time.perf_counter() - t_png)
         t_cat = _time.perf_counter()
         reporter.phase_begin("Write catalog")
@@ -1292,55 +1292,55 @@ def main(argv=None):
         return
 
     # ── Batch ─────────────────────────────────────────────────────────────────
-    spec_paths = sorted(TILES_ROOT.rglob("*.tile.py"))
-    if not spec_paths:
+    tile_paths = sorted(TILES_ROOT.rglob("*.tile.py"))
+    if not tile_paths:
         print(f"No .tile.py files found under {TILES_ROOT}/  "
-              f"(pass --spec FILE to target a specific tile)")
+              f"(pass --tile FILE to target a specific tile)")
         return
 
     # Number of parallel workers: half the logical CPU count, capped at 4.
     # We cap at 4 because manifold3d already uses internal threads, so running
     # more than 4 tiles simultaneously tends to thrash rather than help.
-    n_workers = min(4, len(spec_paths),
+    n_workers = min(4, len(tile_paths),
                     max(1, multiprocessing.cpu_count() // 2))
 
-    reporter.batch_begin(len(spec_paths))
+    reporter.batch_begin(len(tile_paths))
     t_batch = _time.perf_counter()
 
     pngs_rendered = False
     from collections import defaultdict as _defaultdict
 
-    n_specs = len(spec_paths)
-    tile_word = f"tile{'s' if n_specs != 1 else ''}"
+    n_tiles = len(tile_paths)
+    tile_word = f"tile{'s' if n_tiles != 1 else ''}"
 
     # ── Phase: Building tiles ─────────────────────────────────────────────────
     t_build = _time.perf_counter()
-    reporter.phase_header(f"Building {n_specs} {tile_word}")
+    reporter.phase_header(f"Building {n_tiles} {tile_word}")
 
     if n_workers > 1:
-        # ── Parallel path: each spec in its own worker process ──────────────
-        spec_names   = [sp.stem.replace('.tile', '') for sp in spec_paths]
+        # ── Parallel path: each tile in its own worker process ──────────────
+        tile_names   = [tp.stem.replace('.tile', '') for tp in tile_paths]
         t_submit     = _time.perf_counter()
         all_par_rows: list[dict] = []   # collected for 3MF assembly
 
         with multiprocessing.Manager() as mgr:
             phase_dict = mgr.dict()
             worker_args = [
-                (str(sp), str(TILES_ROOT), str(STL_ROOT), str(PNG_ROOT), phase_dict, args.formats)
-                for sp in spec_paths
+                (str(tp), str(TILES_ROOT), str(STL_ROOT), str(PNG_ROOT), phase_dict, args.formats)
+                for tp in tile_paths
             ]
 
             with ProcessPoolExecutor(max_workers=n_workers) as executor:
                 future_to_name = {
-                    executor.submit(_batch_worker, wa): sp.stem.replace('.tile', '')
-                    for sp, wa in zip(spec_paths, worker_args)
+                    executor.submit(_batch_worker, wa): tp.stem.replace('.tile', '')
+                    for tp, wa in zip(tile_paths, worker_args)
                 }
-                t_starts = {name: t_submit for name in spec_names}
+                t_starts = {name: t_submit for name in tile_names}
 
                 if isinstance(reporter, RichReporter):
                     # ── Rich Live display: spinner + live clock per tile ─────────
                     _run_parallel_live(
-                        spec_names, future_to_name, t_starts, reporter,
+                        tile_names, future_to_name, t_starts, reporter,
                         phase_dict=phase_dict,
                     )
                     all_par_rows = [f.result() for f in future_to_name]
@@ -1374,19 +1374,19 @@ def main(argv=None):
         # ── Sequential fallback (single-core or --quiet) ─────────────────────
         dir_3mf_accum_seq: dict[pathlib.Path, list[tuple[str, list[trimesh.Trimesh]]]] = _defaultdict(list)
 
-        for sp in spec_paths:
-            spec_name = sp.stem.replace('.tile', '')
-            reporter.batch_spec_begin(spec_name)
-            t_spec = _time.perf_counter()
+        for tp in tile_paths:
+            tile_name = tp.stem.replace('.tile', '')
+            reporter.batch_tile_begin(tile_name)
+            t_tile = _time.perf_counter()
 
             sq_mm_seq: float | None = None
             rend_seq:  list[trimesh.Trimesh] | None = None
-            for tile in load_spec(sp):
+            for tile in load_tile(tp):
                 _filter_tile_systems(tile, args.formats)
                 surface = tile.surface
                 sq_mm_seq = surface.square_mm
                 reporter.tile_begin(
-                    name         = spec_name,
+                    name         = tile_name,
                     cols         = surface.cols,
                     rows         = surface.rows,
                     grid_w       = surface.grid_w,
@@ -1395,19 +1395,19 @@ def main(argv=None):
                     boundary_ids = [b.id for b in tile.boundaries],
                 )
                 t0 = _time.perf_counter()
-                rend_seq, dir_to_meshes = _build_spec(
-                    tile, sp, TILES_ROOT, STL_ROOT, reporter,
+                rend_seq, dir_to_meshes = _build_tile(
+                    tile, tp, TILES_ROOT, STL_ROOT, reporter,
                 )
                 reporter.tile_end(_time.perf_counter() - t0)
                 for d, ms in dir_to_meshes.items():
-                    dir_3mf_accum_seq[d].append((spec_name, ms))
+                    dir_3mf_accum_seq[d].append((tile_name, ms))
 
-            reporter.batch_spec_done(spec_name, _time.perf_counter() - t_spec)
+            reporter.batch_tile_done(tile_name, _time.perf_counter() - t_tile)
 
             # Render PNG immediately — no second build pass.
             if rend_seq is not None and sq_mm_seq is not None:
-                for tile in load_spec(sp):
-                    out = _png_path_for(sp, tile, TILES_ROOT, PNG_ROOT)
+                for tile in load_tile(tp):
+                    out = _png_path_for(tp, tile, TILES_ROOT, PNG_ROOT)
                     _render_from_meshes(rend_seq, out, sq_mm_seq, args.quiet,
                                         label=_label_for_png(out, PNG_ROOT))
                     break
@@ -1427,9 +1427,9 @@ def main(argv=None):
                 f"{n_3mf} file{'s' if n_3mf != 1 else ''}",
             )
 
-    reporter.batch_end(n_specs, _time.perf_counter() - t_batch)
+    reporter.batch_end(n_tiles, _time.perf_counter() - t_batch)
     if not pngs_rendered:
-        _render_all_pngs(spec_paths, TILES_ROOT, PNG_ROOT, quiet=args.quiet)
+        _render_all_pngs(tile_paths, TILES_ROOT, PNG_ROOT, quiet=args.quiet)
 
     # ── Phase: Write catalog ──────────────────────────────────────────────────
     t_cat = _time.perf_counter()

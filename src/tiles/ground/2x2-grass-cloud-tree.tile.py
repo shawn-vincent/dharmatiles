@@ -1,8 +1,8 @@
-"""2x2 grass meadow with one CloudTree (point-cloud-partitioned growth, Bezier tubes)."""
+"""2x2 grass meadow with one Tree (space-colonisation growth, Bezier tubes)."""
 
 from dharmatiles.spec import Tile, Region, FloodFill, SurfaceConfig, SpeciesConfig, D
 from dharmatiles.layers import GrassCarpet, Scatter
-from dharmatiles.scatter import CloudTree, Grouped, Uniform
+from dharmatiles.scatter import Tree, Grouped, Uniform
 
 _species = SpeciesConfig(
     blade_length=D[8:14],
@@ -22,7 +22,7 @@ tile = Tile(
                     placement=Grouped(groups_per_square=3),
                 ),
                 Scatter(
-                    CloudTree(
+                    Tree(
                         placement=Uniform(count_per_square=0.25),
                         debug_attractors=False,
                         leaf_clumps=True,

@@ -1,8 +1,8 @@
-"""1x1 grass meadow with one CloudTree, a few big rocks, and 3D grass blades."""
+"""1x1 grass meadow with one Tree, a few big rocks, and 3D grass blades."""
 
 from dharmatiles.spec import Tile, Region, FloodFill, SurfaceConfig, SpeciesConfig, D
 from dharmatiles.layers import GrassCarpet, Scatter
-from dharmatiles.scatter import Rocks, Grass, CloudTree, Grouped, Uniform
+from dharmatiles.scatter import Rocks, Grass, Tree, Grouped, Uniform
 
 _species = SpeciesConfig(
     blade_length=D[8:14],
@@ -28,7 +28,7 @@ tile = Tile(
                         placement=Uniform(count_per_square=3),
                     ),
                     # Tree next — trunk footprint stamped before grass is planted
-                    CloudTree(
+                    Tree(
                         height_mm=35.0,
                         crown_radius_mm=12.0,
                         crown_base_radius_mm=11.0,

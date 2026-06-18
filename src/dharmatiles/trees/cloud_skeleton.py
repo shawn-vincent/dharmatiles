@@ -1,4 +1,4 @@
-"""CloudTree skeleton: SCA growth with attractor-coincident leaf nodes.
+"""Tree skeleton: SCA growth with attractor-coincident leaf nodes.
 
 Invariants
 ──────────
@@ -68,7 +68,7 @@ def grow_cloud_skeleton(
     branch_target: float = 0.5,
     branch_fork_balance: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Grow a CloudTree skeleton filling *env*.
+    """Grow a Tree skeleton filling *env*.
 
     Parameters
     ----------

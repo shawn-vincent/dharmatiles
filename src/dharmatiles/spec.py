@@ -67,7 +67,8 @@ __all__ = [
     'SurfaceConfig', 'SpeciesConfig',
     'D',
     'repeat_sizes',
-    'load_spec',
+    'load_tile',
+    'load_spec',  # backward-compat alias
 ]
 
 
@@ -303,20 +304,20 @@ def repeat_sizes(base: Tile, sizes: list[tuple[int, int]]) -> list[Tile]:
     ]
 
 
-def load_spec(path: Path) -> list[Tile]:
-    """Load a ``.tile.py`` spec file and return its :class:`Tile` instance(s).
+def load_tile(path: Path) -> list[Tile]:
+    """Load a ``.tile.py`` file and return its :class:`Tile` instance(s).
 
     Looks for a module-level ``tiles`` binding first (a list of
     ``Tile`` instances), then falls back to a single ``tile`` binding.
     Always returns a list — callers iterate over it.
 
-    The spec is loaded as a real Python module via ``importlib`` so that:
+    The tile file is loaded as a real Python module via ``importlib`` so that:
 
     - the module appears in ``sys.modules`` and stack traces show its
       filename;
-    - the spec file can ``import`` sibling helper modules from the same
+    - the tile file can ``import`` sibling helper modules from the same
       directory, e.g. ``from . import shared_helpers``;
-    - tooling that introspects modules (debuggers, IDEs) sees the spec
+    - tooling that introspects modules (debuggers, IDEs) sees the tile
       the way it sees any other Python file.
     """
     path = Path(path).resolve()
@@ -364,4 +365,8 @@ def load_spec(path: Path) -> list[Tile]:
     if isinstance(tile, Tile):
         return [tile]
 
-    raise ValueError(f"{path}: spec must bind a Tile to 'tile' or a list to 'tiles'")
+    raise ValueError(f"{path}: tile file must bind a Tile to 'tile' or a list to 'tiles'")
+
+
+# Backward-compat alias — prefer load_tile
+load_spec = load_tile

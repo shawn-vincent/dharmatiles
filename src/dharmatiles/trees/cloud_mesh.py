@@ -1,4 +1,4 @@
-"""Closed Bezier-tube mesh builder for CloudTree skeletons.
+"""Closed Bezier-tube mesh builder for Tree skeletons.
 
 Each (parent → child) edge is a curved tube swept along a cubic Bézier path.
 Cross-section rings are parallel-transported (Bishop frame) for smooth,
@@ -1380,7 +1380,7 @@ def _warn_if_branch_below_strict_fdm_angle(
         return
     worst_elev, worst_parent, worst_child = min(offenders, key=lambda x: x[0])
     warnings.warn(
-        "CloudTree FDM print failure: branch below strict FDM angle during "
+        "Tree FDM print failure: branch below strict FDM angle during "
         f"mesh creation: strict={threshold:.2f} deg above horizon, "
         f"worst={worst_elev:.2f} deg on edge {worst_parent}->{worst_child}; "
         f"{len(offenders)} branch(es) violated the strict limit.",

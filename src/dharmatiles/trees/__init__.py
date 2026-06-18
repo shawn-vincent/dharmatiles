@@ -1,6 +1,6 @@
-"""Printable tree generation via CloudTree space-colonisation skeleton."""
+"""Printable tree generation via space-colonisation skeleton."""
 from .bark import BarkConfig
-from .layer import CloudTree
+from .layer import Tree
 from .leaf import build_leaf_mesh
 
-__all__ = ["BarkConfig", "CloudTree", "build_leaf_mesh"]
+__all__ = ["BarkConfig", "Tree", "build_leaf_mesh"]

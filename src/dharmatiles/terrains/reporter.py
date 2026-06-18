@@ -88,24 +88,24 @@ class TileReporter:
 
     # ── Batch events ─────────────────────────────────────────────────────────
 
-    def batch_begin(self, n_specs: int) -> None:
+    def batch_begin(self, n_tiles: int) -> None:
         pass
 
-    def batch_spec_begin(self, spec_name: str) -> None:
-        """Called before building a spec; reporters reset per-spec output tracking here."""
+    def batch_tile_begin(self, tile_name: str) -> None:
+        """Called before building a tile; reporters reset per-tile output tracking here."""
         pass
 
-    def batch_spec_done(self, spec_name: str, elapsed: float) -> None:
-        """Called after all tiles in a spec file have been built and exported."""
+    def batch_tile_done(self, tile_name: str, elapsed: float) -> None:
+        """Called after all variants in a tile file have been built and exported."""
         pass
 
-    def batch_end(self, n_specs: int, elapsed: float) -> None:
+    def batch_end(self, n_tiles: int, elapsed: float) -> None:
         pass
 
     def inject_batch_row(self, row: dict) -> None:
         """Inject a pre-built batch row from a parallel worker.
 
-        Called instead of the normal tile_begin / step_end / batch_spec_done
+        Called instead of the normal tile_begin / step_end / batch_tile_done
         sequence when tiles are built in separate worker processes.
         """
         pass
@@ -189,9 +189,9 @@ class TextReporter(TileReporter):
         for row in rows:
             print(f"  ✓ {row['name']:<38} {row['elapsed']:.1f}s")
 
-    def batch_end(self, n_specs: int, elapsed: float) -> None:
-        print(f"\n{n_specs} spec{'s' if n_specs != 1 else ''} "
-              f"processed in {elapsed:.1f}s  ({elapsed/max(n_specs,1):.1f}s/spec)")
+    def batch_end(self, n_tiles: int, elapsed: float) -> None:
+        print(f"\n{n_tiles} tile{'s' if n_tiles != 1 else ''} "
+              f"processed in {elapsed:.1f}s  ({elapsed/max(n_tiles,1):.1f}s/tile)")
 
 
 # ── Animated spinner renderable ───────────────────────────────────────────────
@@ -271,7 +271,7 @@ class RichReporter(TileReporter):
         self._t0_tile:  float | None  = None
         self._t0_batch: float | None  = None
         self._batch_rows: list[dict]  = []
-        self._current_spec: str       = ""
+        self._current_tile: str       = ""
         self._current_outputs: list[dict] = []
         self._current_cols: int       = 1
         self._current_rows: int       = 1
@@ -446,20 +446,20 @@ class RichReporter(TileReporter):
 
     # ── Batch ────────────────────────────────────────────────────────────────
 
-    def batch_begin(self, n_specs: int) -> None:
+    def batch_begin(self, n_tiles: int) -> None:
         self._t0_batch = time.perf_counter()
         self._batch_rows = []
         self._console.print(
-            f"[bold]Batch:[/bold] {n_specs} spec{'s' if n_specs != 1 else ''}"
+            f"[bold]Batch:[/bold] {n_tiles} tile{'s' if n_tiles != 1 else ''}"
         )
 
-    def batch_spec_begin(self, spec_name: str) -> None:
-        self._current_spec    = spec_name
-        self._current_outputs = []   # reset per-spec export list
+    def batch_tile_begin(self, tile_name: str) -> None:
+        self._current_tile    = tile_name
+        self._current_outputs = []   # reset per-tile export list
 
-    def batch_spec_done(self, spec_name: str, elapsed: float) -> None:
+    def batch_tile_done(self, tile_name: str, elapsed: float) -> None:
         self._batch_rows.append(dict(
-            name=spec_name, elapsed=elapsed, outputs=list(self._current_outputs),
+            name=tile_name, elapsed=elapsed, outputs=list(self._current_outputs),
             cols=self._current_cols, rows=self._current_rows,
         ))
 
@@ -484,7 +484,7 @@ class RichReporter(TileReporter):
         """
         self._batch_rows.extend(rows)
 
-    def batch_end(self, n_specs: int, elapsed: float) -> None:
+    def batch_end(self, n_tiles: int, elapsed: float) -> None:
         self._stop_status()
         if not self._batch_rows:
             return
@@ -537,13 +537,13 @@ class RichReporter(TileReporter):
 
         self._console.print()
         self._console.print(table)
-        per_spec = elapsed / max(n_specs, 1)
+        per_tile = elapsed / max(n_tiles, 1)
         tc_total    = self._table_time_color(elapsed)
-        tc_per_spec = self._table_time_color(per_spec)
+        tc_per_tile = self._table_time_color(per_tile)
         self._console.print(
-            f"\n[bold]{n_specs}[/bold] spec{'s' if n_specs != 1 else ''} "
+            f"\n[bold]{n_tiles}[/bold] tile{'s' if n_tiles != 1 else ''} "
             f"in [{tc_total}]{elapsed:.1f}s[/]"
-            f"  [dim]([/dim][{tc_per_spec}]{per_spec:.1f}s[/][dim]/spec)[/dim]"
+            f"  [dim]([/dim][{tc_per_tile}]{per_tile:.1f}s[/][dim]/tile)[/dim]"
         )
 
 

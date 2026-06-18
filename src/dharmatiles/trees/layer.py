@@ -1,4 +1,4 @@
-"""Scatter-layer integration for CloudTree."""
+"""Scatter-layer integration for Tree."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -27,7 +27,7 @@ class TreeShape:
     bottom_curve: float = 0.8
 
 
-class CloudTree:
+class Tree:
     """A printable tree grown with space-colonisation branching.
 
     Invariants (see cloud_skeleton.py):

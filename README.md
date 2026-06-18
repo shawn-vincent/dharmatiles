@@ -27,7 +27,7 @@ You describe a **world**, and a tile falls out of it.
 
 ## What it makes
 
-Given a `.tile` spec, this system produces:
+Given a `.tile.py` tile, this system produces:
 
 * 🌱 Grass that *grows*, bends, and negotiates with its neighbors
 * 🪨 Stones that occupy space and influence everything around them
@@ -48,7 +48,7 @@ Output: STL files that don't just print — they **feel right in the hand**.
 A **terrain grammar engine** pretending to be a tile generator.
 
 ```
-spec → regions → fields → growth → mesh → object
+tile → regions → fields → growth → mesh → object
 ```
 
 Everything flows from a few simple ideas:
@@ -137,10 +137,10 @@ pip install -e .
 dharmatiles-gen
 
 # Generate one tile
-dharmatiles-gen --spec "src/tiles/soil+grass.tile"
+dharmatiles-gen --tile "src/tiles/soil+grass.tile"
 
 # Custom output
-dharmatiles-gen --spec src/tiles/foo.tile -o stl/custom.stl
+dharmatiles-gen --tile src/tiles/foo.tile -o stl/custom.stl
 ```
 
 Then:
@@ -163,14 +163,14 @@ src/dharmatiles/
   terrains/    composition + CLI entry
   bases/       DungeonBlocks, OpenLOCK
 
-src/tiles/     terrain specs (this is where the magic starts)
+src/tiles/     terrain tiles (this is where the magic starts)
 stl/           generated output
 docs/          design notes (the real story)
 ```
 
 ---
 
-## Tile specs (the language)
+## Tile format (the language)
 
 You don't sculpt terrain.
 You define **regions** and **boundaries**.
