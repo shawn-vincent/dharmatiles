@@ -1,10 +1,13 @@
 """Water surface displacement and volume mesh."""
 from __future__ import annotations
 
+from typing import ClassVar
+
 import numpy as np
 import trimesh
 from scipy.ndimage import binary_dilation, distance_transform_edt
 
+from ..core.color import Material
 from ..core.config import SurfaceConfig
 from ..core.tile import derive_seed
 from ..dist import D, Sample, bounds, sample
@@ -44,6 +47,7 @@ class Water:
     """
 
     height_default_mm: float = 3.0
+    terrain_material: ClassVar[Material] = Material.WATER
 
     def __init__(
         self,

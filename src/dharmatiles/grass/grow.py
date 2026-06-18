@@ -6,7 +6,7 @@ import numpy as np
 
 from ._geometry import _cell_index
 from .config import GrassConfig, SpeciesConfig
-from .growers import GROWERS
+from .growers import FlatGrassGrower
 from .seed import GrassPath, GrassSeed, GrowingPath
 
 # Distribution helpers live in scatter/distribute.py and are shared with
@@ -44,7 +44,7 @@ def grow_all(
         print(f"  Planted {len(growing)} blades in ~{n_groups} groups")
 
     _sort_upstream_first(growing, surface)
-    species_map = {species.name: species for species in cfg.species}
+    species = cfg.species
     total_segments = 0
     full_length_blades = 0
 
@@ -53,8 +53,7 @@ def grow_all(
             path.alive = False
             continue
 
-        species = species_map[path.seed.species_id]
-        grower = GROWERS[species.grower]
+        grower = FlatGrassGrower
         grown_segments = 0
 
         for _ in range(path.seed.blade_n_steps):
@@ -92,41 +91,41 @@ def plant_seeds(
     placement=None,
 ) -> list[GrowingPath]:
     _placement = placement or _Grouped()
+    species = cfg.species
     paths: list[GrowingPath] = []
-    for species in cfg.species:
-        n_groups = _scaled_voronoi_group_count(_placement.groups_per_square, placement_mask, surface, rng)
-        groups = _voronoi_groups(n_groups, surface, rng, mask=placement_mask)
-        for group in groups:
-            group_dir = float(rng.uniform(0.0, 2.0 * np.pi))
-            n_seeds = _scaled_group_seed_count(
-                group,
-                _placement.gap_mm,
-                float(bounds(species.blade_width)[1]),
-                surface.cell_w,
-                rng,
+    n_groups = _scaled_voronoi_group_count(_placement.groups_per_square, placement_mask, surface, rng)
+    groups = _voronoi_groups(n_groups, surface, rng, mask=placement_mask)
+    for group in groups:
+        group_dir = float(rng.uniform(0.0, 2.0 * np.pi))
+        n_seeds = _scaled_group_seed_count(
+            group,
+            _placement.gap_mm,
+            float(bounds(species.blade_width)[1]),
+            surface.cell_w,
+            rng,
+        )
+
+        for x, y in _jitter_grid_xy(group, n_seeds, group_dir, surface, rng):
+            ix, iy = _cell_index(surface, x, y)
+            if placement_mask is not None and not placement_mask[iy, ix]:
+                continue
+            if scene.obstacle_mask is not None and scene.obstacle_mask[iy, ix]:
+                continue
+
+            terrain_z = float(scene.terrain_z[iy, ix])
+            terrain_support_z = float(scene.terrain_support_z[iy, ix])
+            if _vegetation_depth(scene.vegetation_support_z, terrain_support_z, ix, iy) > 0.0:
+                continue
+
+            floor_z = max(terrain_support_z, float(occ_z[iy, ix]))
+            if floor_z - terrain_z > cfg.max_stack_height:
+                continue
+
+            seed = _make_seed(x, y, group_dir, species, rng, surface)
+            z0 = max(terrain_z, floor_z) + seed.blade_clearance - (
+                species.blade_thickness + seed.blade_clearance
             )
-
-            for x, y in _jitter_grid_xy(group, n_seeds, group_dir, surface, rng):
-                ix, iy = _cell_index(surface, x, y)
-                if placement_mask is not None and not placement_mask[iy, ix]:
-                    continue
-                if scene.obstacle_mask is not None and scene.obstacle_mask[iy, ix]:
-                    continue
-
-                terrain_z = float(scene.terrain_z[iy, ix])
-                terrain_support_z = float(scene.terrain_support_z[iy, ix])
-                if _vegetation_depth(scene.vegetation_support_z, terrain_support_z, ix, iy) > 0.0:
-                    continue
-
-                floor_z = max(terrain_support_z, float(occ_z[iy, ix]))
-                if floor_z - terrain_z > cfg.max_stack_height:
-                    continue
-
-                seed = _make_seed(x, y, group_dir, species, rng, surface)
-                z0 = max(terrain_z, floor_z) + seed.blade_clearance - (
-                    species.blade_thickness + seed.blade_clearance
-                )
-                paths.append(GrowingPath(seed=seed, points=[(x, y, z0)]))
+            paths.append(GrowingPath(seed=seed, points=[(x, y, z0)]))
 
     return paths
 

@@ -37,9 +37,11 @@ Add a bark configuration object, passed through `CloudTree` to
 @dataclass(frozen=True)
 class BarkConfig:
     enabled: bool = True
-    spacing_mm: float = 1.35
-    depth_mm: float = 0.18
-    width_mm: float = 0.42
+    spacing_mm: float = 2.25
+    depth_mm: float = 0.42
+    width_mm: float = 0.72
+    roughness_amplitude_mm: float = 0.05
+    roughness_cell_mm: float = 0.90
     wave_amplitude_mm: float = 0.22
     wave_length_mm: float = 7.5
     phase_jitter: float = 1.0
@@ -55,6 +57,8 @@ Field meanings:
 | `spacing_mm` | Target arc distance between groove centers around the circumference. |
 | `depth_mm` | Maximum inward cut depth at the groove centerline. |
 | `width_mm` | Tangential width of the V-shaped trench at the original bark surface. |
+| `roughness_amplitude_mm` | Maximum secondary surface roughness outside grooves. |
+| `roughness_cell_mm` | Spatial scale of the secondary surface roughness. |
 | `wave_amplitude_mm` | Tangential side-to-side drift of each groove. |
 | `wave_length_mm` | Distance along the branch before the wave repeats. |
 | `phase_jitter` | Randomizes initial phase per root groove while remaining deterministic. |

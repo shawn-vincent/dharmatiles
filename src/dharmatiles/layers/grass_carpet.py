@@ -25,10 +25,12 @@ See docs/design/grass-underlay.md for the original design rationale.
 from __future__ import annotations
 
 import dataclasses
+from typing import ClassVar
 
 import numpy as np
 from scipy.ndimage import distance_transform_edt, gaussian_filter
 
+from ..core.color import Material
 from ..core.config import (GrassConfig as _RuntimeGrassConfig,
                            GrassUnderlayConfig, SpeciesConfig)
 from ..core.tile import TileScene, derive_seed
@@ -49,6 +51,7 @@ class GrassCarpet:
     """
 
     height_default_mm: float = 5.0
+    terrain_material: ClassVar[Material] = Material.GRASS
 
     def __init__(
         self,
@@ -190,7 +193,7 @@ def _collect_seeds(
     placement=None,
 ) -> list[GrassSeed]:
     """Plant blade seeds using the same Voronoi-group logic as the 3D layer."""
-    grass_cfg = _RuntimeGrassConfig(species=[cfg.species])
+    grass_cfg = _RuntimeGrassConfig(species=cfg.species)
     occ_z = scene.terrain_z.copy()
     plant_rng = np.random.default_rng(int(rng.integers(2**31)))
     paths = _plant_seeds(scene, surface, grass_cfg, occ_z, plant_rng,

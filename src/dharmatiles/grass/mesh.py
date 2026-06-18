@@ -7,7 +7,7 @@ import trimesh
 
 from ._geometry import _sample_grid, _spine_distances, _stamp_segment
 from .config import GrassConfig
-from .growers import GROWERS
+from .growers import FlatGrassGrower
 from .seed import GrassPath
 from ..core.color import Material, tag as _tag
 
@@ -21,11 +21,10 @@ def build_meshes(paths: list[GrassPath], cfg: GrassConfig, scene, surface) -> li
     3. Update scene.vegetation_support_z from the actual mesh top surface using
        profile-aware, slope-aware rasterisation.
     """
-    species_map = {species.name: species for species in cfg.species}
+    species = cfg.species
     meshes: list[trimesh.Trimesh] = []
     for path in paths:
-        species = species_map[path.seed.species_id]
-        grower = GROWERS[species.grower]
+        grower = FlatGrassGrower
 
         # Step 1: adjust path points against the current accumulated surface.
         lifted_points = _lift_path_points(path.points, scene.vegetation_support_z, surface)

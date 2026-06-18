@@ -10,8 +10,7 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
-from ..core.config import (RocksConfig, SpeciesConfig,
-                           GrassConfig as _RuntimeGrassConfig)
+from ..core.config import RocksConfig, SpeciesConfig, GrassConfig as _RuntimeGrassConfig
 from ..core.tile import derive_seed
 from ..dist import bounds, sample
 from .config import Uniform, Grouped
@@ -129,17 +128,18 @@ class Grass:
         Reads ``scene.terrain_support_z`` (populated by any prior Rocks)
         and stamps ``scene.vegetation_support_z`` as blades grow.
         """
-        from ..grass.layer import FloppyGrassLayer
+        from ..grass.grow import grow_all
+        from ..grass.mesh import build_meshes
 
         surface = scene.surface
         seed    = (derive_seed(surface.seed, 'grass-scatter', layer_idx)
                    ^ self.placement.seed)
         grass_cfg = _RuntimeGrassConfig(
-            species          = [self.species],
+            species          = self.species,
             max_stack_height = self.max_stack_height,
             seed             = seed,
         )
-        layer = FloppyGrassLayer(grass_cfg)
+        rng = np.random.default_rng(grass_cfg.seed)
 
         # Lift vegetation_support_z to include rock tops (and any other
         # terrain support stamped by prior layers) so the grower's
@@ -147,5 +147,6 @@ class Grass:
         np.maximum(scene.vegetation_support_z, scene.terrain_support_z,
                    out=scene.vegetation_support_z)
 
-        return layer.build(scene, verbose=verbose, placement_mask=placement_mask,
-                           placement=self.placement)
+        paths = grow_all(scene, surface, grass_cfg, rng, verbose=verbose,
+                         placement_mask=placement_mask, placement=self.placement)
+        return build_meshes(paths, grass_cfg, scene, surface)

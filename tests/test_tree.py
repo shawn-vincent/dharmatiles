@@ -220,6 +220,16 @@ def test_bark_root_groove_count_uses_circumference_spacing() -> None:
     assert len(lines) == int(np.floor((2.0 * np.pi * 2.0) / bark.spacing_mm))
 
 
+def test_default_bark_is_coarse_at_model_scale() -> None:
+    bark = BarkConfig()
+    lines = _root_bark_lines(2.0, bark, bark_seed=123)
+
+    assert len(lines) == 5
+    assert bark.width_mm >= 0.7
+    assert bark.depth_mm >= 0.4
+    assert bark.roughness_cell_mm >= bark.width_mm
+
+
 def test_bark_line_selection_thins_evenly_on_small_branches() -> None:
     bark = BarkConfig(spacing_mm=1.35, min_branch_radius_mm=0.58)
     parent = _root_bark_lines(2.0, bark, bark_seed=123)

@@ -1,8 +1,6 @@
 """Scatter-layer integration for Tree."""
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import numpy as np
 import trimesh
 
@@ -13,18 +11,6 @@ from ..scatter.config import Uniform
 from ..scatter.distribute import scatter_positions
 from .bark import BarkConfig
 from .envelope import CanopyEnvelope
-
-
-@dataclass(frozen=True)
-class TreeShape:
-    height_mm: Sample[float] = 40.0
-    trunk_height_mm: Sample[float] = 30.0
-    canopy_radius_mm: Sample[float] = 15.0
-    canopy_base_radius_mm: Sample[float] = 14.0
-    top_pointiness: float = 0.0
-    top_curve: float = 1.4
-    bottom_pointiness: float = 0.35
-    bottom_curve: float = 0.8
 
 
 class Tree:
@@ -87,16 +73,14 @@ class Tree:
         leaf_pos_jitter: float = 0.165,
         bark: BarkConfig | None = None,
     ) -> None:
-        self.shape = TreeShape(
-            height_mm=height_mm,
-            trunk_height_mm=trunk_height_mm,
-            canopy_radius_mm=canopy_radius_mm,
-            canopy_base_radius_mm=canopy_base_radius_mm,
-            top_pointiness=top_pointiness,
-            top_curve=top_curve,
-            bottom_pointiness=bottom_pointiness,
-            bottom_curve=bottom_curve,
-        )
+        self.height_mm             = height_mm
+        self.trunk_height_mm       = trunk_height_mm
+        self.canopy_radius_mm      = canopy_radius_mm
+        self.canopy_base_radius_mm = canopy_base_radius_mm
+        self.top_pointiness        = top_pointiness
+        self.top_curve             = top_curve
+        self.bottom_pointiness     = bottom_pointiness
+        self.bottom_curve          = bottom_curve
         self.placement = placement or Uniform(count_per_square=1)
         self.n_attractors = int(n_attractors)
         self.segment_length_mm = float(segment_length_mm)
@@ -135,7 +119,7 @@ class Tree:
         self.bark = BarkConfig() if bark is None else bark
 
     def footprint_mm(self) -> float:
-        return float(bounds(self.shape.canopy_radius_mm)[1])
+        return float(bounds(self.canopy_radius_mm)[1])
 
     def scatter(
         self,
@@ -252,20 +236,20 @@ class Tree:
     def _sample_envelope(
         self, x: float, y: float, terrain_z: float, rng: np.random.Generator
     ) -> CanopyEnvelope:
-        height = max(0.0, float(sample(self.shape.height_mm, rng)))
-        trunk = float(np.clip(sample(self.shape.trunk_height_mm, rng), 0.0, height))
-        canopy_radius = max(0.0, float(sample(self.shape.canopy_radius_mm, rng)))
-        canopy_base_radius = max(0.0, float(sample(self.shape.canopy_base_radius_mm, rng)))
+        height = max(0.0, float(sample(self.height_mm, rng)))
+        trunk = float(np.clip(sample(self.trunk_height_mm, rng), 0.0, height))
+        canopy_radius = max(0.0, float(sample(self.canopy_radius_mm, rng)))
+        canopy_base_radius = max(0.0, float(sample(self.canopy_base_radius_mm, rng)))
         return CanopyEnvelope(
             cx=x, cy=y, terrain_z=terrain_z,
             height_mm=height,
             trunk_height_mm=trunk,
             canopy_radius_mm=canopy_radius,
             canopy_base_radius_mm=canopy_base_radius,
-            top_pointiness=self.shape.top_pointiness,
-            top_curve=self.shape.top_curve,
-            bottom_pointiness=self.shape.bottom_pointiness,
-            bottom_curve=self.shape.bottom_curve,
+            top_pointiness=self.top_pointiness,
+            top_curve=self.top_curve,
+            bottom_pointiness=self.bottom_pointiness,
+            bottom_curve=self.bottom_curve,
         )
 
 

@@ -29,7 +29,7 @@ import numpy as np
 import trimesh
 from scipy.ndimage import distance_transform_edt
 
-from ..core.color import Material, tag as _tag, build_scene
+from ..core.color import Material, tag as _tag
 from ..core.config import SurfaceConfig
 from ..core.tile import TileScene
 from ..core.mesh import make_heightmap_solid
@@ -153,19 +153,6 @@ def _batch_worker(args: tuple) -> dict:
 
 # ── Terrain face-colour helper ────────────────────────────────────────────────
 
-# Layer class-name → terrain-surface material.
-# Uses type-name strings to avoid cross-package imports; we control all names.
-# Layers not listed here default to SOIL (bare dirt).
-_LAYER_TERRAIN_MATERIAL: dict[str, "Material"] = {
-    'GrassCarpet':      Material.GRASS,
-    'GrassCarpetLayer': Material.GRASS,
-    'SoilCarpet':       Material.SOIL,
-    'SoilCarpetLayer':  Material.SOIL,
-    'Water':            Material.WATER,
-    'WaterLayer':       Material.WATER,
-}
-
-
 def _color_terrain_faces(
     terrain_mesh: trimesh.Trimesh,
     region_mask:  np.ndarray | None,
@@ -182,6 +169,10 @@ def _color_terrain_faces(
 
     Modifies *terrain_mesh.visual* in-place; does not change geometry.
     Falls back to uniform SOIL when *region_mask* is None.
+
+    Each layer may declare ``terrain_material: ClassVar[Material]`` to
+    indicate which material it paints the terrain surface.  The first layer
+    in a region with such an attribute wins; layers without it are skipped.
     """
     from ..core.color import RGBA
 
@@ -190,14 +181,14 @@ def _color_terrain_faces(
         return
 
     # Determine the terrain-surface material for each region index.
-    # The FIRST recognised layer in a region wins; Scatter has no override.
+    # The FIRST layer with a terrain_material ClassVar wins; others default to SOIL.
     region_mat: list[Material] = []
     for region in regions:
         mat = Material.SOIL       # default: bare dirt
         for layer in region.layers:
-            override = _LAYER_TERRAIN_MATERIAL.get(type(layer).__name__)
-            if override is not None:
-                mat = override
+            layer_mat = getattr(type(layer), 'terrain_material', None)
+            if layer_mat is not None:
+                mat = layer_mat
                 break
         region_mat.append(mat)
 
@@ -868,7 +859,7 @@ def _render_all_pngs(
         return
 
     for sp in spec_paths:
-        tiles = load_spec(sp)
+        tiles = load_tile(sp)
         if not tiles:
             continue
         tile = tiles[0]

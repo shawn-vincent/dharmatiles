@@ -79,14 +79,14 @@ Tile (.tile.py) ──► build_tile_from_spec()
    each layer.apply(scene, placement_mask=mask) mutates terrain_z /
    terrain_support_z / obstacle_mask and returns trimesh parts.
 
-         SoilCarpetLayer    — blob texture into terrain_z
-         GrassCarpetLayer   — embossed 2D blade stamps into terrain_z
-         ScatterLayer(
+         SoilCarpet    — blob texture into terrain_z
+         GrassCarpet   — embossed 2D blade stamps into terrain_z
+         Scatter(
              Rocks(...),    — vectorised half-ellipsoids; stamp support_z
              Grass(...),    — plant + grow 3D blades around rocks
              Tree(...),— space-colonisation trees (see below)
          )
-         WaterLayer         — reshape pool floor, emit water volume mesh
+         Water         — reshape pool floor, emit water volume mesh
                 │
                 ▼
          terrain solid (make_heightmap_solid)
@@ -127,12 +127,12 @@ Tile (.tile.py) ──► build_tile_from_spec()
 | `scatter/seed.py` | `RockSeed` — fully-resolved rock instance with `sort_key()` |
 | `scatter/distribute.py` | Voronoi grouping, jitter grid, `scatter_positions()` — shared by rocks + grass |
 | `scatter/prototype.py` | `Rocks` + `Grass` — scatter-thing classes with `scatter(scene, ...)` |
-| `scatter/layer.py` | `ScatterLayer` — runs `Rocks` / `Grass` / `Tree` things in tile order |
-| `layers/__init__.py` | Public layer classes: `SoilCarpetLayer`, `GrassCarpetLayer`, `ScatterLayer`, `WaterLayer` |
-| `layers/soil.py` | `SoilCarpetLayer` — two-tier super-Gaussian blobs into terrain_z |
+| `scatter/layer.py` | `Scatter` — runs `Rocks` / `Grass` / `Tree` things in tile order |
+| `layers/__init__.py` | Public layer classes: `SoilCarpet`, `GrassCarpet`, `Scatter`, `Water` |
+| `layers/soil.py` | `SoilCarpet` — two-tier super-Gaussian blobs into terrain_z |
 | `layers/rocks.py` | `_build_rocks_mesh_core` / `_build_rocks_mesh_from_seeds` — vectorised half-ellipsoid kernel |
-| `layers/grass_carpet.py` | `GrassCarpetLayer` — embossed 2D blade-stamp texture into terrain_z |
-| `layers/water.py` | `WaterLayer` — pool-floor reshape, displacement, ripples, volume mesh |
+| `layers/grass_carpet.py` | `GrassCarpet` — embossed 2D blade-stamp texture into terrain_z |
+| `layers/water.py` | `Water` — pool-floor reshape, displacement, ripples, volume mesh |
 | `trees/envelope.py` | `CanopyEnvelope` — axisymmetric canopy envelope dataclass |
 | `trees/skeleton.py` | `grow_skeleton()` — two-pass skeleton + `_branch_skeleton` BFS + `_compute_radii_bottom_up` |
 | `trees/mesh.py` | `build_tree_mesh()` — tapered cubic-Bezier tube mesh |
@@ -174,10 +174,10 @@ tile = Tile(
 
 | Class | Effect | `height_default_mm` |
 |---|---|---|
-| `SoilCarpetLayer(**SoilConfig kwargs)` | Soil blob texture into terrain_z | 5.0 |
-| `GrassCarpetLayer(species=…, **GrassUnderlayConfig kwargs)` | Embossed 2D blade stamps into terrain_z | 5.0 |
-| `ScatterLayer(*things)` | Runs each `Rocks` / `Grass` / `Tree` thing in tile order | 5.0 |
-| `WaterLayer(embed_mm=…, height_mm=…)` | Reshape pool floor + emit water volume mesh | 3.0 |
+| `SoilCarpet(**SoilConfig kwargs)` | Soil blob texture into terrain_z | 5.0 |
+| `GrassCarpet(species=…, **GrassUnderlayConfig kwargs)` | Embossed 2D blade stamps into terrain_z | 5.0 |
+| `Scatter(*things)` | Runs each `Rocks` / `Grass` / `Tree` thing in tile order | 5.0 |
+| `Water(embed_mm=…, height_mm=…)` | Reshape pool floor + emit water volume mesh | 3.0 |
 
 **Scatter things** (all in `dharmatiles.scatter`):
 
@@ -200,7 +200,7 @@ composition all work.  The orchestrator (`terrains/tile.py`) walks
 
 ### Tree Generator
 
-`Tree` is a scatter-thing (placed by `ScatterLayer`) that builds printable
+`Tree` is a scatter-thing (placed by `Scatter`) that builds printable
 trees via a two-pass algorithm in `trees/skeleton.py` +
 `trees/mesh.py`.
 
@@ -272,7 +272,7 @@ continuity at forks. A root flare anchors the trunk to the terrain surface.
 
 ### Scatter System (rocks + grass + trees)
 
-`ScatterLayer` runs the `Rocks` / `Grass` / `Tree` instances it was
+`Scatter` runs the `Rocks` / `Grass` / `Tree` instances it was
 constructed with, in the order they appear in its argument list.  Put `Rocks`
 first so following `Grass` blades can steer around already-stamped rock
 footprints.
@@ -302,7 +302,7 @@ area-based, Voronoi groups from `SpeciesConfig`.  Distribution helpers
 
 ### Grass Carpet vs. 3D Grass
 
-`GrassCarpetLayer` and `Grass` use independently seeded positions — the
+`GrassCarpet` and `Grass` use independently seeded positions — the
 carpet provides a dense field of flat blade footprints; the 3D blades stand
 up through it at sparser, separately seeded locations.  Pass the same
 `SpeciesConfig` instance to both so they share identical blade *geometry*

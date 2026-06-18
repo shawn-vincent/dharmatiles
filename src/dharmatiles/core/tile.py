@@ -7,7 +7,6 @@ The scene holds:
   terrain_support_z — mutable non-vegetation support raised by terrain/rock geometry
   vegetation_support_z — mutable vegetation support, initialised from terrain support
   obstacle_mask     — bool grid marking obstacle footprints (grass steers around these)
-  parts             — Trimesh objects accumulated during the pipeline
 
 Free-function helpers
 ---------------------
@@ -21,7 +20,6 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
-from typing import List
 
 import numpy as np
 import trimesh
@@ -70,14 +68,12 @@ class TileScene:
     ``terrain_support_z`` in sync so layers do not need their own sync calls.
     ``terrain_support_z`` grows as terrain and rock layers rasterise geometry.
     ``vegetation_support_z`` grows as vegetation layers rasterise geometry.
-    ``parts`` is the list of Trimesh objects to combine at export.
     """
     surface:   SurfaceConfig
     terrain_z: np.ndarray                       # (grid_h, grid_w) — mutable via helpers
     terrain_support_z: np.ndarray               # (grid_h, grid_w) — mutable
     vegetation_support_z: np.ndarray | None = None  # (grid_h, grid_w) — mutable
     obstacle_mask: np.ndarray | None = None      # (grid_h, grid_w) bool — True under any placed obstacle (rocks, flowers, …)
-    parts:     List[trimesh.Trimesh] = field(default_factory=list)
     # region_mask: same shape as terrain_z; cell value = region index (≥0) or -ve for boundary.
     # Populated by the tile builder; None until then.
     region_mask: np.ndarray | None = None       # (grid_h, grid_w) int32 — region index per cell
@@ -153,8 +149,8 @@ class TileScene:
     #       # ... bilinear sample of gradient ...
     #
     # Callers that need updating when this is implemented:
-    #   - _build_rocks_mesh_core           → rotate rock local-Z to terrain_normal
-    #   - FloppyGrassLayer (blade origin)  → sink along normal, not world-Z
-    #   - FloppyGrassLayer (rise_cap check)→ compare Δ along normal, not abs Δz
-    #   - _make_support_post               → measure z_top clearance along normal
-    #   - SoilCarpet._accumulate_blob → displace bump along normal
+    #   - _build_rocks_mesh_core        → rotate rock local-Z to terrain_normal
+    #   - Grass blade origin            → sink along normal, not world-Z
+    #   - Grass rise_cap check          → compare Δ along normal, not abs Δz
+    #   - _make_support_post            → measure z_top clearance along normal
+    #   - SoilCarpet._accumulate_blob   → displace bump along normal

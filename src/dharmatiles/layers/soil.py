@@ -30,6 +30,9 @@ _OVERSAMPLE = 2   # internal upscale factor for soil blob detail
 import numpy as np
 from scipy.ndimage import distance_transform_edt, gaussian_filter, map_coordinates, zoom
 
+from typing import ClassVar
+
+from ..core.color import Material
 from ..core.config import SoilConfig
 from ..core.tile import TileScene, derive_seed
 from ..dist import sample
@@ -43,6 +46,7 @@ class SoilCarpet:
     """
 
     height_default_mm: float = 5.0
+    terrain_material: ClassVar[Material] = Material.SOIL
 
     def __init__(self, **soil_kwargs) -> None:
         self.soil = SoilConfig(**soil_kwargs)

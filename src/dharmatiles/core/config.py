@@ -2,8 +2,6 @@
 Per-layer configuration dataclasses.
 
 Each layer owns its own config.  No layer reads another layer's config.
-The top-level ``SceneConfig`` bundles them for convenience.
-
 Surface dimensions and grid shape live in ``SurfaceConfig``; everything
 else is layer-specific.
 """
@@ -35,7 +33,7 @@ def _range_compat(name: str, value, old_min, old_max, default):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@dataclass(frozen=True, init=False)
+@dataclass
 class SpeciesConfig:
     """Template for one plant species.
 
@@ -126,34 +124,30 @@ class SpeciesConfig:
                 else D.normal(0.0, 0.1)
             )
 
-        values = {
-            "name": name,
-            "blade_width": blade_width,
-            "blade_length": blade_length,
-            "blade_segment_length": blade_segment_length,
-            "blade_taper": blade_taper,
-            "blade_base_width": blade_base_width,
-            "blade_base_taper": blade_base_taper,
-            "blade_curl": blade_curl,
-            "blade_smooth": blade_smooth,
-            "blade_rise_cap": blade_rise_cap,
-            "blade_clearance": blade_clearance,
-            "blade_top_facets": blade_top_facets,
-            "blade_thickness": blade_thickness,
-            "keel_fraction": keel_fraction,
-            "min_printable_width": min_printable_width,
-            "blade_direction_jitter": blade_direction_jitter,
-            "grower": grower,
-        }
-        for field_name, value in values.items():
-            object.__setattr__(self, field_name, value)
+        self.name                  = name
+        self.blade_width           = blade_width
+        self.blade_length          = blade_length
+        self.blade_segment_length  = blade_segment_length
+        self.blade_taper           = blade_taper
+        self.blade_base_width      = blade_base_width
+        self.blade_base_taper      = blade_base_taper
+        self.blade_curl            = blade_curl
+        self.blade_smooth          = blade_smooth
+        self.blade_rise_cap        = blade_rise_cap
+        self.blade_clearance       = blade_clearance
+        self.blade_top_facets      = blade_top_facets
+        self.blade_thickness       = blade_thickness
+        self.keel_fraction         = keel_fraction
+        self.min_printable_width   = min_printable_width
+        self.blade_direction_jitter = blade_direction_jitter
+        self.grower                = grower
 
 
 @dataclass(frozen=True)
 class GrassConfig:
     """Top-level grass config (passed to the 3D grass layer)."""
 
-    species: list[SpeciesConfig] = field(default_factory=lambda: [SpeciesConfig()])
+    species: SpeciesConfig = field(default_factory=SpeciesConfig)
     max_stack_height: float = 2.0
     seed: int = 0
 
@@ -236,7 +230,7 @@ class SurfaceConfig:
 # Soil
 # ─────────────────────────────────────────────────────────────────────────────
 
-@dataclass(init=False)
+@dataclass
 class SoilConfig:
     """Soil texture: two tiers of random super-Gaussian blobs summed into terrain_z.
 
@@ -357,31 +351,27 @@ class SoilConfig:
                 "spread directly with blob_h_scale=..."
             )
 
-        values = {
-            "n_blobs": n_blobs,
-            "blob_sigma": blob_sigma,
-            "blob_aspect": blob_aspect,
-            "blob_power": blob_power,
-            "blob_cutoff": blob_cutoff,
-            "blob_h_scale": blob_h_scale,
-            "n_small": n_small,
-            "small_sigma": small_sigma,
-            "small_h": small_h,
-            "blob_warp_str_mm": blob_warp_str_mm,
-            "blob_texture_amp": blob_texture_amp,
-            "blob_shape_noise_amp": blob_shape_noise_amp,
-            "blob_shape_noise_harmonics": blob_shape_noise_harmonics,
-            "surface_texture_amp": surface_texture_amp,
-            "surface_texture_scale_mm": surface_texture_scale_mm,
-            "surface_texture2_amp": surface_texture2_amp,
-            "surface_texture2_scale_mm": surface_texture2_scale_mm,
-            "blob_jitter": blob_jitter,
-            "blob_cluster_count": blob_cluster_count,
-            "blob_cluster_spread_mm": blob_cluster_spread_mm,
-            "edge_fade_mm": edge_fade_mm,
-        }
-        for field_name, value in values.items():
-            setattr(self, field_name, value)
+        self.n_blobs                    = n_blobs
+        self.blob_sigma                 = blob_sigma
+        self.blob_aspect                = blob_aspect
+        self.blob_power                 = blob_power
+        self.blob_cutoff                = blob_cutoff
+        self.blob_h_scale               = blob_h_scale
+        self.n_small                    = n_small
+        self.small_sigma                = small_sigma
+        self.small_h                    = small_h
+        self.blob_warp_str_mm           = blob_warp_str_mm
+        self.blob_texture_amp           = blob_texture_amp
+        self.blob_shape_noise_amp       = blob_shape_noise_amp
+        self.blob_shape_noise_harmonics = blob_shape_noise_harmonics
+        self.surface_texture_amp        = surface_texture_amp
+        self.surface_texture_scale_mm   = surface_texture_scale_mm
+        self.surface_texture2_amp       = surface_texture2_amp
+        self.surface_texture2_scale_mm  = surface_texture2_scale_mm
+        self.blob_jitter                = blob_jitter
+        self.blob_cluster_count         = blob_cluster_count
+        self.blob_cluster_spread_mm     = blob_cluster_spread_mm
+        self.edge_fade_mm               = edge_fade_mm
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -436,7 +426,7 @@ class GrassUnderlayConfig:
 # Rocks
 # ─────────────────────────────────────────────────────────────────────────────
 
-@dataclass(init=False)
+@dataclass
 class RocksConfig:
     """Rock geometry parameters (shape and size only).
 
@@ -499,20 +489,16 @@ class RocksConfig:
         cut = _range_compat("cut", cut, cut_min, cut_max, D[0.40:0.75])
         angle = D[0.0:np.pi] if angle is None else angle
 
-        values = {
-            "r": r,
-            "aspect": aspect,
-            "flat": flat,
-            "angle": angle,
-            "n_cuts": n_cuts,
-            "cut": cut,
-            "roughness": roughness,
-            "az_segs": az_segs,
-            "el_segs": el_segs,
-            "sink": sink,
-        }
-        for field_name, value in values.items():
-            setattr(self, field_name, value)
+        self.r         = r
+        self.aspect    = aspect
+        self.flat      = flat
+        self.angle     = angle
+        self.n_cuts    = n_cuts
+        self.cut       = cut
+        self.roughness = roughness
+        self.az_segs   = az_segs
+        self.el_segs   = el_segs
+        self.sink      = sink
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -587,22 +573,3 @@ class BaseConfig:
     col_bevel:         float       = 1.5    # mm — chamfer at peg entry
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Scene bundle
-# ─────────────────────────────────────────────────────────────────────────────
-
-@dataclass
-class SceneConfig:
-    """All configuration for one terrain scene.
-
-    Layers receive only the sub-config they need; none reads across
-    layer boundaries.
-    """
-    surface:          SurfaceConfig = field(default_factory=SurfaceConfig)
-    soil:             SoilConfig    = field(default_factory=SoilConfig)
-    rocks:            RocksConfig   = field(default_factory=RocksConfig)
-    base:             BaseConfig    = field(default_factory=BaseConfig)
-    max_stack_height: float         = 2.0
-    # mm — max occ_z above terrain_z a blade may seed or grow into.
-    # Must be ≥ the tallest stone in any grass region so blades can clear
-    # rocks; keep small to prevent mid-air blade pileups.

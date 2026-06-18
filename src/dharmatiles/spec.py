@@ -68,7 +68,6 @@ __all__ = [
     'D',
     'repeat_sizes',
     'load_tile',
-    'load_spec',  # backward-compat alias
 ]
 
 
@@ -367,6 +366,3 @@ def load_tile(path: Path) -> list[Tile]:
 
     raise ValueError(f"{path}: tile file must bind a Tile to 'tile' or a list to 'tiles'")
 
-
-# Backward-compat alias — prefer load_tile
-load_spec = load_tile
