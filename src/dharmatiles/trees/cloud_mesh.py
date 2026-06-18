@@ -77,7 +77,7 @@ def build_cloud_tree_mesh(
     leaf_keel_depth_mm: float = 1.0,
     leaf_keel_tip_angle_deg: float = 45.0,
     leaf_spacing_factor: float = 1.5,
-    leaf_cap_count: int = 3,
+    leaf_cap_count: int = 12,
     leaf_angle_jitter_deg: float = 24.0,
     leaf_pos_jitter: float = 0.8,
 ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
@@ -660,7 +660,7 @@ def _build_foliage_clump_mesh(
     leaf_keel_depth_mm: float = 1.0,
     leaf_keel_tip_angle_deg: float = 45.0,
     leaf_spacing_factor: float = 1.5,
-    leaf_cap_count: int = 3,
+    leaf_cap_count: int = 12,
     leaf_angle_jitter_deg: float = 24.0,
     leaf_pos_jitter: float = 0.8,
 ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
@@ -866,7 +866,13 @@ def _build_foliage_clump_mesh(
             normal = _safe_norm(np.sin(phi) * tip_t + np.cos(phi) * perp)
             return pt, normal, rr
 
-        def _emit_leaf(base_smooth: np.ndarray, radial: np.ndarray, key) -> None:
+        def _emit_leaf(
+            base_smooth: np.ndarray,
+            radial: np.ndarray,
+            key,
+            *,
+            ltan_override: np.ndarray | None = None,
+        ) -> None:
             radial = _safe_norm(radial)
             # Sink the base from the smooth surface onto the *noised* skin (the
             # skin was eroded inward by noise_peak − disp along its ≈ normal);
@@ -878,9 +884,16 @@ def _build_foliage_clump_mesh(
             )
             lbase = base_smooth + radial * ((disp_base - noise_peak) - _LEAF_BASE_EMBED_MM)
             # Growth tangent: outward + droop toward the ground.
-            dp   = _WD - float(np.dot(_WD, radial)) * radial
-            dp_n = float(np.linalg.norm(dp))
-            ltan = _safe_norm(radial + _LEAF_DROOP_WEIGHT * dp / dp_n) if dp_n > 1e-9 else radial
+            # ltan_override bypasses the droop calculation — callers near the pole
+            # pass a horizontal spread direction so the leaf faces the viewer from
+            # above rather than spiking vertically (droop → dp≈0 → ltan≈up at
+            # high phi, producing invisible vertical spikes).
+            if ltan_override is not None:
+                ltan = _safe_norm(np.asarray(ltan_override, float))
+            else:
+                dp   = _WD - float(np.dot(_WD, radial)) * radial
+                dp_n = float(np.linalg.norm(dp))
+                ltan = _safe_norm(radial + _LEAF_DROOP_WEIGHT * dp / dp_n) if dp_n > 1e-9 else radial
             # Angle jitter: pitch (extra droop) about the lateral axis, plus a
             # rotation (yaw) about the surface normal — a few degrees each.
             if jit > 1e-9:
@@ -951,14 +964,47 @@ def _build_foliage_clump_mesh(
                     base_smooth, radial, _ = _dome_point(phi, theta)
                 _emit_leaf(base_smooth, radial, (ri, ci))
 
-        # Cap: a few random leaves clustered at the dome apex to fill the space.
+        # Near-apex ring: one structured circumferential ring inside the actual
+        # gap zone — between the last main-grid row (~phi 73.5° at default
+        # 1.5mm leaf spacing) and the pole.  At phi=81° the ring sits squarely
+        # in the uncovered cap region and its columns use a horizontal SPREAD
+        # tangent (outward from the tip axis, not the droop direction) so each
+        # leaf presents its face toward a top-down viewer.  The droop formula
+        # produces dp≈0 near the pole, making leaves vertical spikes that are
+        # invisible from above — the spread tangent avoids this.
+        near_apex_phi = (np.pi / 2.0) * 0.90          # ≈ 81° dome latitude
+        near_apex_rr  = r_tip * float(np.cos(near_apex_phi))
+        n_col_na      = max(1, int(np.ceil((2.0 * np.pi * near_apex_rr) / spacing)))
+        phi_jit_scale = pj * spacing / max(r_tip, 1e-6)
+        for ci in range(n_col_na):
+            phi_jit_na = (
+                2.0 * _hash01(bark_seed, "na-arc", edge_id, ci) - 1.0
+            ) * phi_jit_scale
+            phi_na   = float(np.clip(near_apex_phi + phi_jit_na, 0.02, np.pi / 2.0 - 0.02))
+            th_na    = pj * spacing / max(near_apex_rr, 1e-6)
+            t_jit_na = (
+                2.0 * _hash01(bark_seed, "na-col", edge_id, ci) - 1.0
+            ) * th_na
+            theta_na = -np.pi + (ci + 0.5) / n_col_na * 2.0 * np.pi + t_jit_na
+            base_smooth, radial, _ = _dome_point(phi_na, theta_na)
+            spread_na = (
+                float(np.cos(theta_na)) * pu_tip + float(np.sin(theta_na)) * vp_tip
+            )
+            _emit_leaf(base_smooth, radial, ("near-apex", ci), ltan_override=spread_na)
+
+        # Cap: random leaves spread over the polar zone.  Spread tangent (horizontal
+        # outward from the tip axis) makes each leaf face the top-down viewer
+        # rather than standing as a vertical spike.
         for ci in range(max(0, int(leaf_cap_count))):
             u_theta = _hash01(bark_seed, "cap-theta", edge_id, ci)
             u_phi   = _hash01(bark_seed, "cap-phi",   edge_id, ci)
             theta   = -np.pi + 2.0 * np.pi * u_theta            # full circle
-            phi     = (np.pi / 2.0) - (0.20 * np.pi / 2.0) * u_phi
+            phi     = (np.pi / 2.0) - (0.30 * np.pi / 2.0) * u_phi  # spread to ~63°
             base_smooth, radial, _ = _dome_point(phi, theta)
-            _emit_leaf(base_smooth, radial, ("cap", ci))
+            spread_cap = (
+                float(np.cos(theta)) * pu_tip + float(np.sin(theta)) * vp_tip
+            )
+            _emit_leaf(base_smooth, radial, ("cap", ci), ltan_override=spread_cap)
 
     result = trimesh.Trimesh(vertices=verts, faces=ico.faces.copy(), process=False)
     result.fix_normals()

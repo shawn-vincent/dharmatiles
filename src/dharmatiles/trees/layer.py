@@ -83,7 +83,7 @@ class CloudTree:
         leaf_keel_depth_mm: float = 1.0,
         leaf_keel_tip_angle_deg: float = 45.0,
         leaf_spacing_factor: float = 1.5,
-        leaf_cap_count: int = 3,
+        leaf_cap_count: int = 12,
         leaf_angle_jitter_deg: float = 24.0,
         leaf_pos_jitter: float = 0.8,
         bark: BarkConfig | None = None,
