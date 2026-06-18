@@ -79,7 +79,7 @@ def build_cloud_tree_mesh(
     leaf_spacing_factor: float = 1.1,
     leaf_cap_count: int = 12,
     leaf_angle_jitter_deg: float = 24.0,
-    leaf_pos_jitter: float = 0.15,
+    leaf_pos_jitter: float = 0.165,
 ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Build a single tree mesh from a simplified skeleton.
 
@@ -662,7 +662,7 @@ def _build_foliage_clump_mesh(
     leaf_spacing_factor: float = 1.1,
     leaf_cap_count: int = 12,
     leaf_angle_jitter_deg: float = 24.0,
-    leaf_pos_jitter: float = 0.15,
+    leaf_pos_jitter: float = 0.165,
 ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Foliage clump: icosphere bent along the branch Bezier spine.
 

@@ -85,7 +85,7 @@ class CloudTree:
         leaf_spacing_factor: float = 1.1,
         leaf_cap_count: int = 12,
         leaf_angle_jitter_deg: float = 24.0,
-        leaf_pos_jitter: float = 0.15,
+        leaf_pos_jitter: float = 0.165,
         bark: BarkConfig | None = None,
     ) -> None:
         self.shape = TreeShape(
