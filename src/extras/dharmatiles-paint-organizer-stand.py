@@ -70,7 +70,7 @@ hex_cross_section = _ORGANIZER.hex_cross_section
 
 FLOOR_THICKNESS_MM = 4.0
 FOOT_LOGO_SIZE_MM  = 24.0   # near-max square that keeps its corners inside the foot's hex face
-FOOT_LOGO_DEPTH_MM = 0.4
+FOOT_LOGO_DEPTH_MM = 0.8
 
 
 @dataclass(frozen=True)

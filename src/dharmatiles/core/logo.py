@@ -22,6 +22,11 @@ import trimesh
 _SVG_PATH = pathlib.Path(__file__).parent.parent / 'assets' / 'dharmatiles-logo.svg'
 _SVG_VIEWBOX = 1024.0   # logo is defined in a 1024 × 1024 px square viewBox
 
+# Border ring geometry (measured from SVG source):
+# outer x-extent 134–889 = 755 px; average stroke ≈ 20.5 px across all four sides.
+_SVG_OUTER_WIDTH_PX = 755.0
+_SVG_STROKE_PX      = 20.5
+
 
 # ── SVG path parser ───────────────────────────────────────────────────────────
 
@@ -129,7 +134,7 @@ def _logo_contours_mm(cx: float, cy: float,
 def make_logo_manifold(cx: float, cy: float,
                        size_mm: float,
                        z_base: float,
-                       depth_mm: float = 0.4,
+                       depth_mm: float = 0.8,
                        clearance_mm: float = 0.35):
     """Return the logo inset as a ``manifold3d.Manifold`` solid.
 
@@ -167,6 +172,24 @@ def make_logo_manifold(cx: float, cy: float,
         cs_groove  = m3d.CrossSection(groove, fillrule=m3d.FillRule.EvenOdd)
         cs_lotus   = m3d.CrossSection(lotus,  fillrule=m3d.FillRule.EvenOdd)
         cs_lotus   = cs_lotus.offset(-clearance_mm, m3d.JoinType.Miter)
+
+        # Expand the groove outer boundary outward by one stroke width so the
+        # border ring is 2× as wide, with all extra material on the outside.
+        # The inner boundary is preserved unchanged (lotus area unaffected).
+        _gx = [p[0] for c in groove for p in c]
+        _gy = [p[1] for c in groove for p in c]
+        ox_min, ox_max = min(_gx), max(_gx)
+        oy_min, oy_max = min(_gy), max(_gy)
+        _stroke = (ox_max - ox_min) * (_SVG_STROKE_PX / _SVG_OUTER_WIDTH_PX)
+        ex_min = ox_min - _stroke;  ex_max = ox_max + _stroke
+        ey_min = oy_min - _stroke;  ey_max = oy_max + _stroke
+        cs_groove = cs_groove + (
+            m3d.CrossSection([[(ex_min, ey_min), (ex_max, ey_min),
+                               (ex_max, ey_max), (ex_min, ey_max)]])
+            - m3d.CrossSection([[(ox_min, oy_min), (ox_max, oy_min),
+                                 (ox_max, oy_max), (ox_min, oy_max)]])
+        )
+
         # Groove and lotus occupy non-overlapping regions, so union is correct.
         cs = m3d.CrossSection.compose([cs_groove, cs_lotus])
     else:
@@ -186,7 +209,7 @@ def make_logo_manifold(cx: float, cy: float,
 def make_logo_inset(cx: float, cy: float,
                     size_mm: float,
                     z_base: float,
-                    depth_mm: float = 0.4,
+                    depth_mm: float = 0.8,
                     clearance_mm: float = 0.35) -> trimesh.Trimesh:
     """Trimesh wrapper around make_logo_manifold — use for OL where trimesh input
     is needed.  For DB, call make_logo_manifold directly to stay in manifold space
