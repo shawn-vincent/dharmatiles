@@ -8,13 +8,16 @@
 
 ## Status as of 2026-06-18 (post-review)
 
-All five recommendations remain unimplemented. The line-level and elegance findings were addressed first (see those review files). Strategic work is open.
+Elegance and technical findings addressed first (see those review files). All strategic recommendations remain unimplemented, but Rec 1's direction was decided in a follow-up design session — see `2026-06-18-design-session-architecture-direction.md`.
 
-- ⬜ Rec 1 — Name the ordering constraint in the Scatter API (`obstacles=` / `vegetation=` phases or similar)
-- ⬜ Rec 2 — Collapse config toward the thing being configured (partially addressed: `SpeciesConfig`/`SoilConfig`/`RocksConfig` compat inits removed; `GrassUnderlayConfig`/`RocksConfig` still separate from their layer classes)
+- ⬜ Rec 1 — **Dissolve `Scatter`**: `Rocks`/`Grass`/`Tree` become direct `TileLayer`s in `Region.layers`. `ScatterLayer`/`Scatter` deleted. *(Adopted direction — replaces the original `obstacles=`/`vegetation=` phases idea)*
+- ⬜ Rec 2 — Collapse config toward the thing being configured (tackle after/during Rec 1)
 - ⬜ Rec 3 — Make the content/export pipeline boundary explicit
 - ⬜ Rec 4 — Establish a tile template / region library (`src/tiles/shared/` or `dharmatiles.templates`)
-- ⬜ Rec 5 — Document `TileScene` mutation contract in code (Layer contract comment block)
+- ⬜ Rec 5 — Document `TileScene` mutation contract in code
+- ⬜ Rec 6 — Add `TileScene.placed_solids` for 3D mesh queries *(future — from design session)*
+- ⬜ Rec 7 — `_stamp_tree` radial falloff for grass tufting *(near-term — from design session)*
+- ⬜ Rec 8 — Leaf placement via mesh surface sampling *(future — from design session)*
 
 ---
 
@@ -120,15 +123,29 @@ Second, as the scatter vocabulary grows (Rocks, Grass, Tree, Flowers, and presum
 
 The question isn't whether to add a dependency graph now. It's whether the current design — pure temporal ordering via Python list position — is the right model as the system grows, or whether there's a simpler alternative that makes the intent visible without adding a dependency engine.
 
-The simplest alternative: **name the phases explicitly**. Instead of `Scatter(Rocks(...), Grass(...))` where ordering is implicit, something like:
+Two alternatives were considered:
 
+**Option A (Orin's original suggestion):** Name the phases explicitly within `Scatter`:
 ```python
 Scatter(obstacles=[Rocks(...)], plants=[Grass(...)])
 ```
+Structural visibility, no new mechanism, but still bundles ordering inside a wrapper whose name implies a set operation.
 
-This makes the causal relationship structurally visible — "obstacles first, plants second, plants steer around obstacles" — without adding a dependency graph. The two phases run in fixed order. A tile author can't accidentally put grass before rocks because the API doesn't accept `plants=` and `obstacles=` as interchangeable.
+**Option B (Design session 2026-06-18, adopted):** Remove `Scatter` entirely. Make `Rocks`, `Grass`, and `Tree` implement the `TileLayer` protocol (`apply(scene, *, placement_mask)`) and appear directly in `Region.layers`:
+```python
+Region(layers=[
+    GrassCarpet(species=species),
+    Rocks(r=D[0.8:2.2]),
+    Grass(species=species),
+])
+```
+`Region.layers` is already visually a sequence — every tile author already understands that layers run in order. Moving scatter things into `layers` makes the ordering constraint as visible as the soil/carpet ordering. `Scatter(Rocks(), Grass())` looks like a set; `layers=[Rocks(), Grass()]` looks like a list.
 
-This is the single most important architectural question for the tile spec language: how to make temporal constraints explicit in a declaration.
+The design session (see `2026-06-18-design-session-architecture-direction.md`, Part 2) also noted that `Rocks`/`Tree` are **instance placements** (independent per instance) while `Grass` is a **field simulation** (each blade's path depends on prior blades via a shared occupancy grid). These are different categories that happen to share an interface. The module structure and docstrings should acknowledge this distinction even if the `apply()` protocol is shared.
+
+Option B is a breaking API change for existing tile files but the refactor is fully mechanical. It was adopted as the planned direction.
+
+This is the single most important architectural change for the tile spec language.
 
 ---
 
@@ -136,17 +153,30 @@ This is the single most important architectural question for the tile spec langu
 
 These are structural shifts, not line edits. They are ordered by impact.
 
-**1. Name the ordering constraint in the Scatter API** ⬜ OPEN
+**1. Dissolve `Scatter` — scatter things become direct layers** ⬜ OPEN
 
-The most important user-facing change. Introduce explicit phases in `Scatter`: ground-stampers (rocks, flowers, trees) before vegetation (grass). The API should make it impossible to accidentally put grass before rocks. One path: `Scatter(obstacles=[...], vegetation=[...])` with fixed phase order. Another: a `before()` / `after()` declarative API on scatter things. The exact spelling matters less than the principle: ordering constraints should be structural, not conventional.
+**Adopted direction (design session 2026-06-18):** Remove the `Scatter` wrapper class and `scatter/layer.py`. Make `Rocks`, `Grass`, and `Tree` implement `apply(scene, *, placement_mask) -> list[trimesh.Trimesh]` directly, giving them full `TileLayer` status. They move from `Region.layers=[Scatter(Rocks(), Grass())]` to `Region.layers=[Rocks(), Grass()]`.
 
-This is a breaking API change for existing tile files, but the existing tile files are few and the refactor is mechanical.
+What changes:
+- `scatter/layer.py` (`ScatterLayer` / `Scatter`) is deleted
+- `Rocks`, `Grass`, `Tree` gain an `apply()` method (thin wrapper around their existing `scatter()` logic)
+- All tile files updated: `Scatter(...)` unwrapped inline into the surrounding `layers=[...]`
+- `layer_idx` seed derivation shifts → tiles regenerate with different (equally valid) positions
+
+What stays the same:
+- `scatter/distribute.py`, `scatter/config.py`, `scatter/seed.py` are unchanged (pure distribution logic)
+- The ordering constraint is now expressed by list position in `Region.layers` — the same mechanism every other layer already uses
+- `Rocks` before `Grass` in the list remains the rule; it's now visible rather than hidden inside a wrapper
+
+The `Grass`-is-a-field-simulation distinction should be acknowledged in docstrings and potentially in naming (`GrassField`?) even if the `apply()` protocol is shared with `Rocks` and `Tree`.
 
 **2. Collapse config toward the thing being configured** ⬜ OPEN (partial: compat inits removed; `GrassUnderlayConfig`/`RocksConfig` still separate from their layer classes)
 
 `GrassUnderlayConfig` should not be a separate class from `GrassCarpet`. `RocksConfig` should not be a separate class from `Rocks`. The shareability argument for keeping them separate is theoretical — in practice, `RocksConfig` is never shared between two `Rocks` instances. When shareability is actually needed (as with `SpeciesConfig` shared between `GrassCarpet` and `Grass`), the config class is justified. Otherwise, flatten it: put the params directly on the layer class, accept keyword arguments.
 
 This reduces the number of named concepts in the public API and makes the documentation surface smaller for tile authors.
+
+*Note:* Rec 1 (scatter dissolution) changes the API surface of `Rocks`, `Grass`, and `Tree` anyway. Tackle config collapse after or during that refactor, not before.
 
 **3. Make the pipeline's boundary explicit** ⬜ OPEN
 
@@ -166,12 +196,42 @@ This is not a change to the pipeline — it's a change to the tile-authoring con
 
 This is not about adding enforcement. It is about making the implicit contract visible so that new layer authors know what they can safely do and what they should not do. The boundary between "safe to mutate from a layer" and "private to the orchestrator" is currently undocumented at the code level. A short `# Layer contract:` block in the `TileScene` docstring would suffice.
 
+**6. Add `TileScene.placed_solids` for 3D mesh queries** ⬜ OPEN (future)
+
+*(From design session 2026-06-18, Part 4)*
+
+Add one field to `TileScene`:
+```python
+placed_solids: trimesh.Trimesh | None = None
+```
+Every placed solid (rock, tree, wall) is unioned into `placed_solids` after placement. Subsequent layers query it via `trimesh.proximity.closest_point()` or `trimesh.ray`. The BVH is built lazily on first query.
+
+The existing 2D fields (`obstacle_mask`, `terrain_support_z`) remain as fast-path approximations. `placed_solids` is the authoritative 3D scene above the terrain floor. The first concrete payoffs: leaf placement simplification (surface-sample instead of analytical inversion), grass tufting near trunks, tree-tree canopy avoidance.
+
+**7. Change `_stamp_tree` to write a radial falloff** ⬜ OPEN (near-term, low cost)
+
+*(From design session 2026-06-18, Part 3)*
+
+Currently `_stamp_tree` writes a flat ceiling at `tree_height` into `terrain_support_z`. Replace with a radial exponential falloff from the trunk edge:
+```python
+dist_from_trunk = max(0.0, sqrt((xx - x)**2 + (yy - y)**2) - trunk_radius_mm)
+allowed_height  = tree_height * exp(-dist_from_trunk / falloff_mm)
+scene.terrain_support_z[j, i] = max(current, terrain_z + allowed_height)
+```
+Grass blades reading `vegetation_support_z` naturally tuft up alongside the trunk base with zero changes to the grass system. High visual payoff, zero new mechanism.
+
+**8. Refactor leaf placement to use mesh surface sampling** ⬜ OPEN (future)
+
+*(From design session 2026-06-18, Part 4)*
+
+`_build_foliage_clump_mesh` contains ~200 lines of analytical math to answer "where is the foliage surface and which way does it face?" `trimesh.sample.sample_surface(foliage_mesh, count=N)` answers that for any mesh in two lines. Build the foliage clump first, sample its surface, orient leaves to face normals. Eliminates the icosphere-deformation surface inversion. Requires Rec 6 (`placed_solids`) or a local mesh reference, but can proceed independently.
+
 ---
 
-## Architecture Verdict: CLEAN (core), DRIFTING (surface)
+## Architecture Verdict: CLEAN (core), DIRECTION SET (surface)
 
-The pipeline spine is correct. The scatter protocol is a genuine design success. The tile spec language is well-aimed. The mutable accumulator model is the right level of coupling for this problem.
+The pipeline spine is correct. The tile spec language is well-aimed. The mutable accumulator model is the right level of coupling for this problem.
 
-The drift is at the user-facing surface: ordering constraints that are implicit and load-bearing, config classes that multiply without clear justification, and a growing tile library that lacks shared vocabulary. None of this breaks the system. All of it makes the system harder to grow correctly.
+The surface drift identified in the original review has largely been addressed (elegance findings 1–16 all resolved). The remaining work is directional: the `Scatter` wrapper is the last major API shape that lies about what it does, and the design session (2026-06-18) produced a clear decision on how to fix it.
 
-The central investment opportunity is making temporal ordering visible in the Scatter API. Everything else is maintenance. That one change would make the design match its intent.
+The next concrete step is Rec 1 (scatter dissolution). Everything else — config collapse, pipeline boundary, templates, `placed_solids` — follows naturally once the layer vocabulary is right.
