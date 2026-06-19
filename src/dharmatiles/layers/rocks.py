@@ -32,7 +32,7 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
-from ..core.config import SurfaceConfig, RocksConfig
+from ..core.config import SurfaceConfig, _RocksConfig
 from ..core.grid import sample_grid
 from ..core.tile import derive_seed
 from ..dist import sample
@@ -42,7 +42,7 @@ from ..dist import sample
 
 def _build_rocks_mesh_from_seeds(
     seeds,                         # list[RockSeed] — pre-sorted big→small
-    rocks: RocksConfig,
+    rocks: _RocksConfig,
     surface: SurfaceConfig,
     terrain_z: np.ndarray,
     support_z: np.ndarray,

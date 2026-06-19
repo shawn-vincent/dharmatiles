@@ -12,7 +12,7 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
-from ..core.config import RocksConfig, SpeciesConfig, GrassConfig as _RuntimeGrassConfig
+from ..core.config import _RocksConfig, SpeciesConfig, GrassConfig as _RuntimeGrassConfig
 from ..core.tile import derive_seed
 from ..dist import bounds, sample
 from .config import Uniform, Grouped
@@ -25,7 +25,8 @@ from .distribute import scatter_positions
 class Rocks:
     """Scatter half-ellipsoid rocks directly into a region layer list.
 
-    Flat kwargs set rock geometry (see ``RocksConfig``).
+    Flat kwargs set rock geometry (``r``, ``aspect``, ``flat``, ``angle``,
+    ``n_cuts``, ``cut``, ``roughness``, ``az_segs``, ``el_segs``, ``sink``).
     Pass ``placement=Uniform(count_per_square=N)`` to control density;
     default is 15 rocks per square.
 
@@ -36,7 +37,7 @@ class Rocks:
     height_default_mm: float = 5.0
 
     def __init__(self, *, placement: Uniform | None = None, **rocks_kwargs):
-        self.rocks = RocksConfig(**rocks_kwargs)
+        self.rocks = _RocksConfig(**rocks_kwargs)
         self.placement = placement or Uniform(count_per_square=15)
 
     def footprint_mm(self) -> float:

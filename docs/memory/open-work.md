@@ -14,6 +14,10 @@ Verified against the live codebase on 2026-06-19.
 it lacks is any image or render of actual output. A newcomer cannot tell what
 a finished tile looks like without generating one themselves.
 
+### 2. Strategic Recs 6 & 8 (future)
+- **Rec 6** — `TileScene.placed_solids`: union of all placed 3D solids for mesh
+  queries; enables leaf placement, grass tufting near trunks, canopy avoidance.
+- **Rec 8** — Leaf placement via `trimesh.sample.sample_surface()` (depends on Rec 6).
 
 ## Resolved / obsolete
 

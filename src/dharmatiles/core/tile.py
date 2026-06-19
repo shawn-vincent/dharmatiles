@@ -68,6 +68,38 @@ class TileScene:
     ``terrain_support_z`` in sync so layers do not need their own sync calls.
     ``terrain_support_z`` grows as terrain and rock layers rasterise geometry.
     ``vegetation_support_z`` grows as vegetation layers rasterise geometry.
+
+    Layer contract
+    --------------
+    Layers called from the orchestrator via ``apply(scene, *, placement_mask)``
+    MUST follow these rules to preserve the pipeline invariants.
+
+    **Allowed mutations:**
+
+    - ``scene.displace_terrain(delta, mask)`` — raise the ground surface.
+      Atomically keeps ``terrain_support_z`` in sync.  Preferred over any
+      direct ``terrain_z`` write.
+    - ``scene.set_terrain(z)`` — fully replace the heightmap (e.g. water pool
+      shaping).  Also syncs ``terrain_support_z`` automatically.
+    - Raise ``scene.terrain_support_z`` cells — bump the support ceiling so
+      later grass blades cannot grow above placed geometry (rocks, tree trunks,
+      walls).  Only raise; use ``np.maximum`` writes; never lower.
+    - Raise ``scene.vegetation_support_z`` cells — same rule; vegetation layers
+      record their own blade clearances here.  Only raise; never lower.
+    - Set ``scene.obstacle_mask[j, i] = True`` — mark hard no-grass cells
+      (rock footprints, trunk bases).  Never clear existing ``True`` cells.
+    - Return new ``list[trimesh.Trimesh]`` parts from ``apply()``.
+    - Read any field freely.
+
+    **Forbidden mutations (orchestrator-only):**
+
+    - Direct ``terrain_z +=`` / ``terrain_z[:] = ...`` — bypasses the sync
+      invariant; use ``displace_terrain`` / ``set_terrain`` instead.
+    - Write to ``scene.region_mask`` — set by the orchestrator before any
+      layer runs.
+    - Write to ``scene.water_surface_mm`` — populated by ``Water`` via the
+      orchestrator during layer execution.
+    - Lower ``scene.terrain_support_z`` or ``scene.vegetation_support_z``.
     """
     surface:   SurfaceConfig
     terrain_z: np.ndarray                       # (grid_h, grid_w) — mutable via helpers

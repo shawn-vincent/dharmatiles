@@ -18,7 +18,7 @@ Two components are produced:
     rather than the staircased heightmap rasterisation we used to produce.
 
 Seeds are planted with the same Voronoi-group logic as the 3-D grass layer
-using the blade geometry parameters on ``GrassUnderlayConfig``.
+using the blade geometry parameters on ``_GrassUnderlayConfig``.
 
 See docs/design/grass-underlay.md for the original design rationale.
 """
@@ -32,7 +32,7 @@ from scipy.ndimage import distance_transform_edt, gaussian_filter
 
 from ..core.color import Material
 from ..core.config import (GrassConfig as _RuntimeGrassConfig,
-                           GrassUnderlayConfig, SpeciesConfig)
+                           _GrassUnderlayConfig, SpeciesConfig)
 from ..core.tile import TileScene, derive_seed
 from ..scatter.config import Grouped
 from ..grass._geometry import _blade_step_geometry, _sample_grid
@@ -45,9 +45,27 @@ class GrassCarpet:
     """Embossed grass carpet: noise base in terrain_z + flat blade tube meshes.
 
     Pass ``species=SpeciesConfig(...)`` to share blade geometry with a
-    companion 3D ``Grass`` instance.  Pass ``underlay=GrassUnderlayConfig(...)``
-    to customise carpet-specific settings (noise amplitude, edge fade, etc.);
-    if both are given, ``species`` overrides the species inside ``underlay``.
+    companion 3D ``Grass`` instance.  The remaining keyword arguments control
+    the carpet-specific noise and stamp settings; their defaults produce a
+    dense, lightly embossed grass ground cover.
+
+    Parameters
+    ----------
+    species : SpeciesConfig | None
+        Blade geometry.  Shared with a companion ``Grass`` instance so the
+        carpet and 3D blades have the same width/curl/cross-section.
+    placement : Grouped | None
+        Voronoi-group seeding strategy.  Default: ``Grouped()``.
+    noise_top_mm : float
+        Height of noise peaks above ``terrain_z``.
+    noise_amp : float
+        Depth of roughness below ``noise_top_mm``.
+    noise_scale_mm : float
+        Gaussian σ of the noise (feature correlation length, mm).
+    blade_raise_mm : float
+        How far blade stamps rise above ``noise_top_mm``.
+    edge_fade_mm : float
+        Cosine ramp width at every tile/mask boundary (mm).  0 disables fade.
     """
 
     height_default_mm: float = 5.0
@@ -58,16 +76,21 @@ class GrassCarpet:
         species: SpeciesConfig | None = None,
         *,
         placement: Grouped | None = None,
-        underlay: GrassUnderlayConfig | None = None,
+        noise_top_mm:   float = 0.50,
+        noise_amp:      float = 1.00,
+        noise_scale_mm: float = 0.2,
+        blade_raise_mm: float = 0.40,
+        edge_fade_mm:   float = 1.0,
     ) -> None:
         _species = species or SpeciesConfig()
-        if underlay is None:
-            self.cfg = GrassUnderlayConfig(species=_species)
-        elif species is not None:
-            # Caller supplied both: use underlay settings, override its species.
-            self.cfg = dataclasses.replace(underlay, species=_species)
-        else:
-            self.cfg = underlay
+        self.cfg = _GrassUnderlayConfig(
+            species       = _species,
+            noise_top_mm  = noise_top_mm,
+            noise_amp     = noise_amp,
+            noise_scale_mm= noise_scale_mm,
+            blade_raise_mm= blade_raise_mm,
+            edge_fade_mm  = edge_fade_mm,
+        )
         self._placement = placement
 
     def apply(
@@ -188,7 +211,7 @@ def _compute_edge_fade(
 def _collect_seeds(
     scene: TileScene,
     surface,
-    cfg: GrassUnderlayConfig,
+    cfg: _GrassUnderlayConfig,
     rng: np.random.Generator,
     placement_mask=None,
     placement=None,

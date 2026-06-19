@@ -172,10 +172,13 @@ def make_logo_manifold(cx: float, cy: float,
     else:
         cs = m3d.CrossSection(contours, fillrule=m3d.FillRule.EvenOdd)
 
-    # Extrude depth_mm then translate so bottom face sits at z_base.
-    # The solid spans [z_base .. z_base + depth_mm].
-    solid    = m3d.Manifold.extrude(cs, height=depth_mm)
-    solid    = solid.translate((0.0, 0.0, z_base))
+    # Extrude and translate.  Extend the cutter 0.01 mm below z_base so its
+    # bottom face is never coplanar with the peg face — coplanar booleans are
+    # numerically fragile in manifold3d and silently fail on tall pegs.
+    # The pocket depth visible from outside is still depth_mm.
+    _eps  = 0.01
+    solid = m3d.Manifold.extrude(cs, height=depth_mm + _eps)
+    solid = solid.translate((0.0, 0.0, z_base - _eps))
 
     return solid
 

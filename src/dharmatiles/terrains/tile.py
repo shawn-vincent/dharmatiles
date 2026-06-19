@@ -280,19 +280,36 @@ def _carve_soil_from_water(
     return result
 
 
-# ── Internal mesh builder ─────────────────────────────────────────────────────
+# ── Content pipeline ──────────────────────────────────────────────────────────
+# Runs all spec layers, builds the terrain solid, groups meshes by material.
+# Produces TileContent — no base geometry, no file I/O.
 
-def _build_tile_mesh(
+@dataclasses.dataclass
+class TileContent:
+    """Output of the content pipeline; input to the export pipeline.
+
+    The content pipeline (``_build_tile_content``) runs all spec layers,
+    builds the terrain solid, and groups meshes by material.  It knows
+    nothing about base geometry or file output.
+
+    The export pipeline (``system.export()``) receives the meshes and scene
+    from this object, attaches the system-specific base, and writes the STL.
+    """
+    colored_meshes: list  # list[trimesh.Trimesh]
+    scene: TileScene
+
+
+def _build_tile_content(
     tile:        Tile,
     surface:     SurfaceConfig,
     region_mask: np.ndarray | None,
     reporter:    TileReporter,
-) -> tuple[list[trimesh.Trimesh], TileScene]:
-    """Run all spec layers in ``tile.areas`` order; return (colored_meshes, scene).
+) -> TileContent:
+    """Run all spec layers in ``tile.areas`` order; return a ``TileContent``.
 
-    Returns a list of meshes grouped by :class:`~dharmatiles.core.color.Material`
-    — one mesh per material that appears in the tile.  Each mesh carries
-    uniform ``face_colors`` matching the palette in ``core/color.py``.
+    Returns a :class:`TileContent` whose ``colored_meshes`` are grouped by
+    :class:`~dharmatiles.core.color.Material` — one mesh per material that
+    appears in the tile, each with uniform ``face_colors`` from ``core/color.py``.
 
     *surface* may differ from ``tile.surface`` when a system builds at a
     different scale (e.g. OpenLOCK at 25.4 mm/sq).  *region_mask* is
@@ -436,7 +453,7 @@ def _build_tile_mesh(
               else "NOT watertight")
         reporter.step_end(carve_label, elapsed, wt)
 
-    return colored_meshes, scene
+    return TileContent(colored_meshes=colored_meshes, scene=scene)
 
 
 # ── Public build API ──────────────────────────────────────────────────────────
@@ -481,8 +498,10 @@ def build_tile_from_spec(
         _ = _get_region_mask(surface)
         reporter.step_end("Region mask", _time.perf_counter() - t0)
 
-    # ── Build each system's mesh (cache equal-scale results) ─────────────────
-    built: dict[tuple[float, int, int], tuple[list[trimesh.Trimesh], TileScene]] = {}
+    # ── Content pipeline (cached per distinct scale) ──────────────────────────
+    # Runs all layers, builds terrain solid, groups by material.
+    # Produces TileContent — no base geometry, no file I/O.
+    built: dict[tuple[float, int, int], TileContent] = {}
     first_result: trimesh.Trimesh | None = None
     first_render_meshes: list[trimesh.Trimesh] | None = None
     dir_to_meshes: dict[pathlib.Path, list[trimesh.Trimesh]] = {}
@@ -496,17 +515,20 @@ def build_tile_from_spec(
 
             region_mask = _get_region_mask(sys_surface)
             sys_tile = dataclasses.replace(tile, surface=sys_surface)
-            colored_meshes, scene = _build_tile_mesh(
+            built[cache_key] = _build_tile_content(
                 sys_tile, sys_surface, region_mask, reporter,
             )
-            built[cache_key] = (colored_meshes, scene)
 
-        colored_meshes, scene = built[cache_key]
+        # ── Export pipeline ───────────────────────────────────────────────────
+        # Attaches system-specific base, writes STL.
+        content  = built[cache_key]
         out_path = system_paths[system.suffix]
 
         reporter.step_begin(f"Export {system.suffix}")
         t0 = _time.perf_counter()
-        result, rend_meshes = system.export(colored_meshes, sys_surface, scene.terrain_z, out_path)
+        result, rend_meshes = system.export(
+            content.colored_meshes, sys_surface, content.scene.terrain_z, out_path,
+        )
         elapsed = _time.perf_counter() - t0
 
         # Avoid the O(F log F) edge-sort that `is_watertight` triggers on the
@@ -560,25 +582,24 @@ def build_meshes_for_render(
 
     region_mask = build_region_mask(tile) if tile.areas else None
 
+    # ── Content pipeline ──────────────────────────────────────────────────────
     sys_tile = _dc.replace(tile, surface=surface)
-    colored_meshes, scene = _build_tile_mesh(
-        sys_tile, surface, region_mask, TileReporter()
-    )
+    content = _build_tile_content(sys_tile, surface, region_mask, TileReporter())
 
-    # Attach the base (same logic as system.export, but no file I/O)
+    # ── Export pipeline (no file I/O — base attach only) ─────────────────────
     base_cfg = BaseConfig()
     if isinstance(target, DungeonBlocks) and target.peg_height is not None:
         base_cfg = _dc.replace(base_cfg, peg_height=target.peg_height)
 
     tile_max_z = max(
-        (float(m.bounds[1, 2]) for m in colored_meshes if len(m.vertices) > 0),
+        (float(m.bounds[1, 2]) for m in content.colored_meshes if len(m.vertices) > 0),
         default=0.0,
     )
-    peg_h     = _db.select_peg_height(scene.terrain_z, base_cfg, tile_max_z=tile_max_z)
+    peg_h     = _db.select_peg_height(content.scene.terrain_z, base_cfg, tile_max_z=tile_max_z)
     base_mesh = _db.make_base(surface, peg_h, base_cfg)
     _tag(base_mesh, Material.BASE)
 
-    return [base_mesh] + colored_meshes
+    return [base_mesh] + content.colored_meshes
 
 
 # ── Spec → terrain helper ─────────────────────────────────────────────────────

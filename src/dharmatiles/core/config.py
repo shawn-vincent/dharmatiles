@@ -201,7 +201,7 @@ class SoilConfig:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
-class GrassUnderlayConfig:
+class _GrassUnderlayConfig:
     """Embossed 2D grass-carpet texture stamped into terrain_z under 3D blades.
 
     Two components are composited onto a scratch field, then applied to
@@ -249,7 +249,7 @@ class GrassUnderlayConfig:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
-class RocksConfig:
+class _RocksConfig:
     """Rock geometry parameters (shape and size only).
 
     Placement density is controlled by the ``Uniform`` placement strategy

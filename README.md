@@ -25,9 +25,9 @@ The interesting part is how it gets there.
   <td align="center"><img src="png/ground/1x1-grass-flowers.png" width="220"/><br/><sub>1×1 grass with flowers</sub></td>
 </tr>
 <tr>
-  <td align="center"><img src="png/ground/1x1-soil+grass.png" width="220"/><br/><sub>1×1 soil + grass</sub></td>
+  <td align="center"><img src="png/ground/1x1-grass-tree.png" width="220"/><br/><sub>1×1 grass with tree</sub></td>
   <td align="center"><img src="png/water/3x3-water.png" width="220"/><br/><sub>3×3 open water</sub></td>
-  <td align="center"><img src="png/ground/1x1-soil-corridor+grass.png" width="220"/><br/><sub>1×1 soil corridor</sub></td>
+  <td align="center"><img src="png/water/1x1-grass-tree+water.png" width="220"/><br/><sub>1×1 tree + water</sub></td>
 </tr>
 </table>
 

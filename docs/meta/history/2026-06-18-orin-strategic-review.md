@@ -6,18 +6,18 @@
 
 ---
 
-## Status as of 2026-06-18 (post-review)
+## Status as of 2026-06-19 (post-implementation)
 
 Elegance and technical findings addressed first (see those review files). All strategic recommendations remain unimplemented, but Rec 1's direction was decided in a follow-up design session — see `2026-06-18-design-session-architecture-direction.md`.
 
 - ✅ Rec 1 — **Dissolve `Scatter`**: `Rocks`/`Grass`/`Tree` become direct `TileLayer`s in `Region.layers`. `ScatterLayer`/`Scatter` deleted. *(Implemented 2026-06-18)*
-- ⬜ Rec 2 — Collapse config toward the thing being configured (tackle after/during Rec 1)
-- ⬜ Rec 3 — Make the content/export pipeline boundary explicit
-- ⬜ Rec 4 — Establish a tile template / region library (`src/tiles/shared/` or `dharmatiles.templates`)
-- ⬜ Rec 5 — Document `TileScene` mutation contract in code
+- ✅ Rec 2 — **Collapse config**: `GrassUnderlayConfig` → `_GrassUnderlayConfig` (private); `RocksConfig` → `_RocksConfig` (private). `GrassCarpet.__init__` now takes direct named params (`noise_top_mm`, `noise_amp`, `noise_scale_mm`, `blade_raise_mm`, `edge_fade_mm`). *(Implemented 2026-06-19)*
+- ✅ Rec 3 — **Pipeline boundary explicit**: `_build_tile_mesh` renamed `_build_tile_content`; new `TileContent` dataclass separates content and export phases. *(Implemented 2026-06-19)*
+- ✅ Rec 4 — **Tile template / region library**: `src/tiles/shared/__init__.py` with `meadow_region`, `soil_region`, `water_pool_region`, `shoreline_boundary`, `soil_margin_boundary`; `src/tiles/shared/species.py` with `DEFAULT_GRASS`, `LUSH_GRASS`, `TALL_GRASS`. *(Implemented 2026-06-19)*
+- ✅ Rec 5 — **`TileScene` mutation contract**: `Layer contract` block added to `TileScene` docstring in `core/tile.py`. *(Implemented 2026-06-19)*
 - ⬜ Rec 6 — Add `TileScene.placed_solids` for 3D mesh queries *(future — from design session)*
-- ⬜ Rec 7 — `_stamp_tree` radial falloff for grass tufting *(near-term — from design session)*
-- ⬜ Rec 8 — Leaf placement via mesh surface sampling *(future — from design session)*
+- ✅ Rec 7 — **`_stamp_tree` radial falloff**: `_stamp_tree` now writes an exponential falloff into `terrain_support_z`; `Tree` gains `stamp_falloff_mm=5.0` param. Grass tufts naturally at trunk base. *(Implemented 2026-06-19)*
+- ⬜ Rec 8 — Leaf placement via mesh surface sampling *(future, depends on Rec 6)*
 
 ---
 

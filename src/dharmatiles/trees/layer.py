@@ -79,6 +79,7 @@ class Tree:
         leaf_pos_jitter: float = 0.165,
         leaf_tilt_deg: float = 45.0,
         bark: BarkConfig | None = None,
+        stamp_falloff_mm: float = 5.0,
     ) -> None:
         self.height_mm             = height_mm
         self.trunk_height_mm       = trunk_height_mm
@@ -125,6 +126,7 @@ class Tree:
         self.leaf_pos_jitter           = float(leaf_pos_jitter)
         self.leaf_tilt_deg             = float(leaf_tilt_deg)
         self.bark = BarkConfig() if bark is None else bark
+        self.stamp_falloff_mm = float(stamp_falloff_mm)
 
     def footprint_mm(self) -> float:
         return float(bounds(self.canopy_radius_mm)[1])
@@ -231,7 +233,8 @@ class Tree:
                 foliage_parts.append(foliage_mesh)
             # Attractor spheres are pre-tagged; material grouping in tile.py handles them.
             other_parts.extend(attractor_parts)
-            _stamp_tree(scene, surface, x, y, env, float(radii[0]))
+            _stamp_tree(scene, surface, x, y, env, float(radii[0]),
+                        falloff_mm=self.stamp_falloff_mm)
 
         if not branch_parts and not foliage_parts and not other_parts:
             return []
@@ -282,20 +285,50 @@ class Tree:
 
 
 
-def _stamp_tree(scene, surface, x: float, y: float, env: CanopyEnvelope, root_radius: float) -> None:
-    """Block the tree base so later grass grows around it."""
-    rr = max(root_radius * 1.8, 1.6)
+def _stamp_tree(
+    scene, surface, x: float, y: float,
+    env: CanopyEnvelope, root_radius: float,
+    falloff_mm: float = 5.0,
+) -> None:
+    """Stamp tree footprint into scene support fields.
+
+    Two effects:
+
+    1. **obstacle_mask** — hard no-grass circle of radius
+       ``rr = max(root_radius * 1.8, 1.6)`` centred on the trunk.
+       Grass is blocked entirely within this footprint.
+
+    2. **terrain_support_z** — exponential falloff from the trunk edge:
+       full tree height at ``root_radius``, decaying by a factor of ``e``
+       every ``falloff_mm`` outward.  Grass blades close to the trunk can
+       therefore grow tall (tufting effect); blades further away return
+       naturally to their unobstructed height.
+
+    Setting ``falloff_mm=0`` disables the falloff and reverts to a flat
+    ceiling at the obstacle radius only (legacy behaviour).
+    """
+    rr = max(root_radius * 1.8, 1.6)          # hard obstacle radius
     cw = surface.cell_w
-    j0 = max(0, int(np.floor((y - rr) / cw)))
-    j1 = min(surface.grid_h - 1, int(np.ceil((y + rr) / cw)))
-    i0 = max(0, int(np.floor((x - rr) / cw)))
-    i1 = min(surface.grid_w - 1, int(np.ceil((x + rr) / cw)))
+    # Search window: obstacle circle + 3 e-folding lengths of falloff.
+    window = rr + 3.0 * falloff_mm
+    j0 = max(0, int(np.floor((y - window) / cw)))
+    j1 = min(surface.grid_h - 1, int(np.ceil((y + window) / cw)))
+    i0 = max(0, int(np.floor((x - window) / cw)))
+    i1 = min(surface.grid_w - 1, int(np.ceil((x + window) / cw)))
     jj = np.arange(j0, j1 + 1) * cw
     ii = np.arange(i0, i1 + 1) * cw
-    YY, XX = np.meshgrid(jj, ii, indexing='ij')         # (rows, cols) in world coords
-    in_circle = (XX - x) ** 2 + (YY - y) ** 2 <= rr ** 2
-    z_top = env.terrain_z + env.height_mm
+    YY, XX = np.meshgrid(jj, ii, indexing='ij')          # (rows, cols) in world coords
+    dist = np.sqrt((XX - x) ** 2 + (YY - y) ** 2)        # distance from tree centre
+    # Exponential falloff starts at trunk edge (dist = root_radius), decays outward.
+    if falloff_mm > 0:
+        dist_from_trunk = np.maximum(0.0, dist - root_radius)
+        allowed_h = env.height_mm * np.exp(-dist_from_trunk / falloff_mm)
+    else:
+        # Legacy flat ceiling inside the obstacle circle only.
+        allowed_h = np.where(dist <= rr, env.height_mm, 0.0)
+    z_top = env.terrain_z + allowed_h
     sl = scene.terrain_support_z[j0:j1 + 1, i0:i1 + 1]
-    np.maximum(sl, np.where(in_circle, z_top, sl), out=sl)
+    np.maximum(sl, z_top, out=sl)
+    # Hard obstacle mask — only within rr.
     if scene.obstacle_mask is not None:
-        scene.obstacle_mask[j0:j1 + 1, i0:i1 + 1] |= in_circle
+        scene.obstacle_mask[j0:j1 + 1, i0:i1 + 1] |= (dist <= rr)

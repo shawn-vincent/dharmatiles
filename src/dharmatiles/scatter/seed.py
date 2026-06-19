@@ -16,8 +16,8 @@ from dataclasses import dataclass
 class RockSeed:
     """One fully-resolved rock instance.
 
-    All size and shape parameters are sampled from the ``RocksConfig``
-    distribution at seed-creation time.  The mesh builder receives a sorted
+    All size and shape parameters are sampled from the ``Rocks`` layer's
+    geometry distributions at seed-creation time.  The mesh builder receives a sorted
     list of ``RockSeed`` objects and realises them in a single vectorised pass.
 
     Sort key: ``(0, −mean_radius)`` — priority 0 ensures rocks are placed
