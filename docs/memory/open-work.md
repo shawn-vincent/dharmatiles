@@ -5,24 +5,21 @@ metadata:
   type: project
 ---
 
-Verified against the live codebase on 2026-06-08. Items from older reviews that no longer
-apply to the current architecture have been struck.
+Verified against the live codebase on 2026-06-19.
 
 ## Active items
 
-### 1. Species presets (code gap)
-No named preset library exists. Every `.tile` file spells out all `SpeciesConfig`
-parameters explicitly. Users have no ready-made starting points (grass, rush, dead
-grass, etc.). A small presets file or library of named `.tile` fragments would
-make the spec format usable without reading source code.
-
-### 2. README images / renders
+### 1. README images / renders
 `README.md` is good — has quick start, structure, spec format, philosophy. What
 it lacks is any image or render of actual output. A newcomer cannot tell what
 a finished tile looks like without generating one themselves.
 
 
 ## Resolved / obsolete
+
+- **Species presets** — subsumed by Strategic Rec 4 (tile template / region library).
+  Named `SpeciesConfig` instances (grass, rush, dead grass, etc.) will live in
+  `src/tiles/shared/` alongside region factories when Rec 4 is implemented.
 
 - **Edge-fill blade direction** — obsolete. No "edge-fill" seeding exists in the
   current architecture. Seeds distribute via Voronoi groups; `_sort_upstream_first`
