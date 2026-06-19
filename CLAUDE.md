@@ -12,10 +12,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install in editable mode (required before running anything)
 pip install -e .
 
-# Batch mode: process every src/tiles/**/*.tile.py → stl/{dungeonblocks,openlock}/…
+# Batch mode: process every src/tiles/**/*.tile.py → stl/{db,ol}/…
 dharmatiles-gen
 
-# Single tile (writes to canonical stl/{system}/{NxM}-{name}-{db|ol}.stl)
+# Single tile (writes to canonical stl/{db|ol}/{NxM}-{name}-{db|ol}.stl)
 dharmatiles-gen --tile "src/tiles/ground/1x1-soil+grass.tile.py"
 dharmatiles-gen --tile "src/tiles/ground/2x2-grass-tree.tile.py"
 dharmatiles-gen --quiet   # suppress progress output
@@ -353,8 +353,8 @@ src/extras/      standalone non-terrain utilities (dharmatiles-paint-organizer.p
 src/scripts/     standalone utilities; src/scripts/archived/ = old generations
 src/scad/        OpenSCAD files and experiments
 stl/
-  dungeonblocks/ generated STL output — DungeonBlocks base system
-  openlock/      generated STL output — OpenLOCK base system
+  db/            generated STL output — DungeonBlocks base system (db)
+  ol/            generated STL output — OpenLOCK base system (ol)
 docs/            design notes, architecture review transcripts, session memory
 docs/meta/history/  architecture review transcripts
 docs/memory/     persistent session memory (MEMORY.md index)

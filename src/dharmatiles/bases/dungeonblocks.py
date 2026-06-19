@@ -14,7 +14,7 @@ from ..core.config import BaseConfig, SurfaceConfig
 from ..core.logo import make_logo_manifold
 
 
-SYSTEM_SUFFIX = "dungeonblocks"
+SYSTEM_SUFFIX = "db"
 
 
 def select_peg_height(terrain_z: np.ndarray,

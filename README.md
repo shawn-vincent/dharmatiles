@@ -176,7 +176,7 @@ the system tries to answer:
 ```bash
 pip install -e .
 
-# Generate every tile in src/tiles/ → stl/{dungeonblocks,openlock}/
+# Generate every tile in src/tiles/ → stl/{db,ol}/
 dharmatiles-gen
 
 # Generate a single tile

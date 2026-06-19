@@ -16,7 +16,7 @@ from ..core.color import Material, tag as _tag
 from ..core.config import BaseConfig, SurfaceConfig
 
 
-SYSTEM_SUFFIX = "openlock"
+SYSTEM_SUFFIX = "ol"
 OPENLOCK_SQUARE_MM = 25.4   # canonical 1-inch imperial standard
 
 # Ported from OpenSCAD-OpenLock/OpenLock.scad.

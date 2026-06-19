@@ -49,7 +49,7 @@ class DungeonBlocks:
     """
 
     suffix   = "db"
-    dir_name = "dungeonblocks"
+    dir_name = "db"
 
     def __init__(self, *, peg_height: float | None = None):
         self.peg_height = peg_height
@@ -82,7 +82,7 @@ class OpenLOCK:
     """
 
     suffix   = "ol"
-    dir_name = "openlock"
+    dir_name = "ol"
 
     def __init__(self, *, square_mm: float = 25.4, peg_height: float | None = None):
         self.square_mm  = square_mm

@@ -1,6 +1,6 @@
-# stl/openlock/
+# stl/ol/
 
-OpenLOCK-compatible terrain tiles (25.4 mm square grid, T-slot underside).
+OpenLOCK-compatible terrain tiles (ol — 25.4 mm square grid, T-slot underside).
 
 This directory is empty in the repository. STL files are generated locally and
 not committed — they are large binary files that reproduce exactly from source.

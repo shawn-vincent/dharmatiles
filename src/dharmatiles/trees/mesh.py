@@ -51,7 +51,7 @@ class _BarkLine:
         self.theta = float(theta)
 
 
-def build_tree_mesh(
+def build_branch_mesh(
     nodes:    np.ndarray,      # (N, 3) — root + branch pts + attractors
     parents:  np.ndarray,      # (N,) int; -1 for root
     radii:    np.ndarray,      # (N,) — bottom-up pipe-model radii
@@ -82,14 +82,16 @@ def build_tree_mesh(
     leaf_angle_jitter_deg: float = 24.0,
     leaf_pos_jitter: float = 0.165,
     leaf_tilt_deg: float = 45.0,
-) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
-    """Build a single tree mesh from a simplified skeleton.
+) -> tuple[trimesh.Trimesh, trimesh.Trimesh, list[trimesh.Trimesh]]:
+    """Build branch and foliage meshes from a simplified skeleton.
 
     Returns
     -------
-    tree_mesh
-        Single Trimesh containing trunk, all branches, and foliage sweeps.
-        Tagged ``Material.WOOD``.
+    branch_mesh
+        Trimesh containing trunk and all branch tubes.  Tagged ``Material.WOOD``.
+    foliage_mesh
+        Trimesh containing foliage icosphere clumps and leaf blades.
+        Tagged ``Material.FOLIAGE``.  Empty when foliage is disabled.
     attractor_meshes
         Debug icospheres (empty unless ``debug_attractors`` is set).
     """
@@ -124,7 +126,8 @@ def build_tree_mesh(
     queue   = list(children[0])
     visited = [False] * n
     visited[0] = True
-    edge_solids: list[trimesh.Trimesh] = []
+    edge_solids:    list[trimesh.Trimesh] = []   # branch tubes (WOOD)
+    foliage_solids: list[trimesh.Trimesh] = []   # icosphere clumps + leaves (FOLIAGE)
     # Leaf shells are kept out of the boolean union: each leaf is an
     # independent watertight shell that need not be CSG-merged with the tree or
     # with other leaves.  Unioning ~thousands of them dominated runtime; we
@@ -266,7 +269,7 @@ def build_tree_mesh(
                 leaf_tilt_deg=leaf_tilt_deg,
             )
             if len(clump.vertices) > 0:
-                edge_solids.append(clump)
+                foliage_solids.append(clump)
             leaf_solids.extend(clump_leaves)
 
         node_frame[i] = end_frame
@@ -275,16 +278,13 @@ def build_tree_mesh(
         queue.extend(children[i])
 
     # ── assemble ──────────────────────────────────────────────────────────
-    # The boolean union cost is driven by the *number* of operands, not their
-    # total faces.  Feeding ~thousands of individual leaf shells in dominated
-    # runtime.  Pre-concatenate every leaf shell into a single operand first:
-    # the union then sees one leaf aggregate instead of thousands, while still
-    # removing the buried leaf/clump overlap faces (keeping the mesh compact).
     leaf_solids = [m for m in leaf_solids if len(m.vertices) > 0]
-    if leaf_solids:
-        edge_solids.append(trimesh.util.concatenate(leaf_solids))
-    tree_mesh = _union_edge_solids(edge_solids)
-    _tag(tree_mesh, Material.WOOD)
+    foliage_solids.extend(leaf_solids)
+
+    branch_mesh  = _union_edge_solids(edge_solids)
+    foliage_mesh = _union_edge_solids(foliage_solids)
+    _tag(branch_mesh,  Material.WOOD)
+    _tag(foliage_mesh, Material.FOLIAGE)
 
     # ── debug attractor spheres ───────────────────────────────────────────
     attractor_meshes: list[trimesh.Trimesh] = []
@@ -304,7 +304,7 @@ def build_tree_mesh(
             _tag(s, mat)
             attractor_meshes.append(s)
 
-    return tree_mesh, attractor_meshes
+    return branch_mesh, foliage_mesh, attractor_meshes
 
 
 def _build_closed_edge_solid(

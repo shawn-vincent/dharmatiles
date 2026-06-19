@@ -138,7 +138,7 @@ class Tree:
     ) -> list[trimesh.Trimesh]:
         from ..core.color import Material
         from .skeleton import grow_skeleton
-        from .mesh import build_tree_mesh
+        from .mesh import build_branch_mesh
         surface = scene.surface
         rng_seed = (
             derive_seed(surface.seed, "trees-scatter", layer_idx)
@@ -155,8 +155,9 @@ class Tree:
             surface,
             rng,
         )
-        tree_parts:  list[trimesh.Trimesh] = []
-        other_parts: list[trimesh.Trimesh] = []
+        branch_parts:  list[trimesh.Trimesh] = []
+        foliage_parts: list[trimesh.Trimesh] = []
+        other_parts:   list[trimesh.Trimesh] = []
         for x, y, _gd in positions:
             tz = float(sample_grid(scene.terrain_z, surface, np.array([x]), np.array([y]))[0])
             tree_seed = int(rng.integers(2 ** 62))
@@ -193,7 +194,7 @@ class Tree:
             )
             if len(nodes) < 2:
                 continue
-            mesh, attractor_parts = build_tree_mesh(
+            branch_mesh, foliage_mesh, attractor_parts = build_branch_mesh(
                 nodes,
                 parents,
                 radii,
@@ -221,23 +222,32 @@ class Tree:
                 leaf_pos_jitter=self.leaf_pos_jitter,
                 leaf_tilt_deg=self.leaf_tilt_deg,
             )
-            if len(mesh.vertices) == 0:
+            if len(branch_mesh.vertices) == 0 and len(foliage_mesh.vertices) == 0:
                 continue
 
-            tree_parts.append(mesh)
+            if len(branch_mesh.vertices) > 0:
+                branch_parts.append(branch_mesh)
+            if len(foliage_mesh.vertices) > 0:
+                foliage_parts.append(foliage_mesh)
             # Attractor spheres are pre-tagged; material grouping in tile.py handles them.
             other_parts.extend(attractor_parts)
             _stamp_tree(scene, surface, x, y, env, float(radii[0]))
 
-        if not tree_parts and not other_parts:
+        if not branch_parts and not foliage_parts and not other_parts:
             return []
 
         result: list[trimesh.Trimesh] = []
-        if tree_parts:
-            combined = (trimesh.util.concatenate(tree_parts)
-                        if len(tree_parts) > 1 else tree_parts[0])
-            combined.metadata['material'] = Material.WOOD
-            result.append(combined)
+        if branch_parts:
+            branch_combined = (trimesh.util.concatenate(branch_parts)
+                               if len(branch_parts) > 1 else branch_parts[0])
+            branch_combined.metadata['material'] = Material.WOOD
+            result.append(branch_combined)
+
+        if foliage_parts:
+            foliage_combined = (trimesh.util.concatenate(foliage_parts)
+                                if len(foliage_parts) > 1 else foliage_parts[0])
+            foliage_combined.metadata['material'] = Material.FOLIAGE
+            result.append(foliage_combined)
 
         result.extend(other_parts)
         return result

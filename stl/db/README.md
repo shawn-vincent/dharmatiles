@@ -1,6 +1,6 @@
-# stl/dungeonblocks/
+# stl/db/
 
-DungeonBlocks-compatible terrain tiles (35 mm square grid, socket-peg underside).
+DungeonBlocks-compatible terrain tiles (db — 35 mm square grid, socket-peg underside).
 
 This directory is empty in the repository. STL files are generated locally and
 not committed — they are large binary files that reproduce exactly from source.

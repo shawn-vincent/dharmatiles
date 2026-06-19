@@ -13,9 +13,9 @@ dharmatiles-gen
 Output lands in:
 
 ```
-stl/dungeonblocks/   DungeonBlocks base system (35 mm square grid)
-stl/openlock/        OpenLOCK base system (25.4 mm square grid)
-stl/extras/          Standalone non-terrain utilities
+stl/db/      DungeonBlocks base system (db — 35 mm square grid)
+stl/ol/      OpenLOCK base system (ol — 25.4 mm square grid)
+stl/extras/  Standalone non-terrain utilities
 ```
 
 Individual tiles can be regenerated with:
