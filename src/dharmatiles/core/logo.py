@@ -22,26 +22,22 @@ import trimesh
 _SVG_PATH = pathlib.Path(__file__).parent.parent / 'assets' / 'dharmatiles-logo.svg'
 _SVG_VIEWBOX = 1024.0   # logo is defined in a 1024 × 1024 px square viewBox
 
-# Border ring geometry (measured from SVG source):
-# outer x-extent 134–889 = 755 px; average stroke ≈ 20.5 px across all four sides.
-_SVG_OUTER_WIDTH_PX = 755.0
-_SVG_STROKE_PX      = 20.5
-
 
 # ── SVG path parser ───────────────────────────────────────────────────────────
 
 def _parse_svg_d(d: str, tol_px: float = 1.5) -> list[list[tuple[float, float]]]:
     """Parse an SVG path *d* attribute into closed polygon contours.
 
-    Handles absolute M / C / L / Z only (sufficient for this logo).
-    Cubic bezier curves are adaptively subdivided until the maximum deviation
-    of the control-point hull from the chord is below *tol_px* SVG units.
+    Handles M/m, L/l, H/h, V/v, C/c, Z/z (absolute and relative) plus
+    SVG implicit coordinate repetition after each command.  Cubic bezier
+    curves are adaptively subdivided until the maximum deviation of the
+    control-point hull from the chord is below *tol_px* SVG units.
 
     Returns a list of contours; each contour is a list of (x, y) tuples in
     SVG coordinate space (Y increases downward, origin at top-left).
     """
     toks = re.findall(
-        r'[MCLZmclz]|[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?', d
+        r'[MLCZHVmlczhv]|[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?', d
     )
     pos = 0
 
@@ -69,35 +65,68 @@ def _parse_svg_d(d: str, tol_px: float = 1.5) -> list[list[tuple[float, float]]]
 
     contours: list[list[tuple[float, float]]] = []
     pts:      list[tuple[float, float]]       = []
-    cx = cy = 0.0
+    px = py = 0.0          # current pen position
+    start_x = start_y = 0.0  # subpath start (for Z closepath)
+    cmd: str | None = None
 
     while pos < len(toks):
         t = toks[pos]
-        if not re.match(r'[MCLZmclz]', t):
+        if re.match(r'[MLCZHVmlczhv]', t):
+            cmd = t
+            pos += 1
+            if cmd in ('Z', 'z'):
+                if pts:
+                    contours.append(pts)
+                pts = []
+                px, py = start_x, start_y
+                cmd = None
+                continue
+
+        if cmd is None:
             raise ValueError(f"Expected SVG path command, got {t!r} at token {pos}")
-        pos += 1
 
-        if t == 'M':
+        if cmd in ('M', 'm'):
+            rel = cmd == 'm'
+            dx, dy = read(), read()
             if pts:
                 contours.append(pts)
-            cx, cy = read(), read()
-            pts = [(cx, cy)]
+            px = (px + dx) if rel else dx
+            py = (py + dy) if rel else dy
+            start_x, start_y = px, py
+            pts = [(px, py)]
+            cmd = 'l' if rel else 'L'  # SVG: implicit lineto after moveto
 
-        elif t == 'L':
-            cx, cy = read(), read()
-            pts.append((cx, cy))
+        elif cmd in ('L', 'l'):
+            rel = cmd == 'l'
+            dx, dy = read(), read()
+            px = (px + dx) if rel else dx
+            py = (py + dy) if rel else dy
+            pts.append((px, py))
 
-        elif t == 'C':
-            x1, y1 = read(), read()
-            x2, y2 = read(), read()
-            x,  y  = read(), read()
-            pts.extend(_subdivide((cx, cy), (x1, y1), (x2, y2), (x, y)))
-            cx, cy = x, y
+        elif cmd in ('H', 'h'):
+            rel = cmd == 'h'
+            dx = read()
+            px = (px + dx) if rel else dx
+            pts.append((px, py))
 
-        elif t == 'Z':
-            if pts:
-                contours.append(pts)
-            pts = []
+        elif cmd in ('V', 'v'):
+            rel = cmd == 'v'
+            dy = read()
+            py = (py + dy) if rel else dy
+            pts.append((px, py))
+
+        elif cmd in ('C', 'c'):
+            rel = cmd == 'c'
+            if rel:
+                x1, y1 = px + read(), py + read()
+                x2, y2 = px + read(), py + read()
+                x,  y  = px + read(), py + read()
+            else:
+                x1, y1 = read(), read()
+                x2, y2 = read(), read()
+                x,  y  = read(), read()
+            pts.extend(_subdivide((px, py), (x1, y1), (x2, y2), (x, y)))
+            px, py = x, y
 
     if pts:
         contours.append(pts)
@@ -172,24 +201,6 @@ def make_logo_manifold(cx: float, cy: float,
         cs_groove  = m3d.CrossSection(groove, fillrule=m3d.FillRule.EvenOdd)
         cs_lotus   = m3d.CrossSection(lotus,  fillrule=m3d.FillRule.EvenOdd)
         cs_lotus   = cs_lotus.offset(-clearance_mm, m3d.JoinType.Miter)
-
-        # Expand the groove outer boundary outward by one stroke width so the
-        # border ring is 2× as wide, with all extra material on the outside.
-        # The inner boundary is preserved unchanged (lotus area unaffected).
-        _gx = [p[0] for c in groove for p in c]
-        _gy = [p[1] for c in groove for p in c]
-        ox_min, ox_max = min(_gx), max(_gx)
-        oy_min, oy_max = min(_gy), max(_gy)
-        _stroke = (ox_max - ox_min) * (_SVG_STROKE_PX / _SVG_OUTER_WIDTH_PX)
-        ex_min = ox_min - _stroke;  ex_max = ox_max + _stroke
-        ey_min = oy_min - _stroke;  ey_max = oy_max + _stroke
-        cs_groove = cs_groove + (
-            m3d.CrossSection([[(ex_min, ey_min), (ex_max, ey_min),
-                               (ex_max, ey_max), (ex_min, ey_max)]])
-            - m3d.CrossSection([[(ox_min, oy_min), (ox_max, oy_min),
-                                 (ox_max, oy_max), (ox_min, oy_max)]])
-        )
-
         # Groove and lotus occupy non-overlapping regions, so union is correct.
         cs = m3d.CrossSection.compose([cs_groove, cs_lotus])
     else:

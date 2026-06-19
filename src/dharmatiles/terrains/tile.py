@@ -85,6 +85,30 @@ def _batch_worker(args: tuple) -> dict:
     This function must be at module level so ProcessPoolExecutor can pickle it.
     The reporter is created inside the worker (not passed) to avoid pickling issues.
     """
+    # Suppress ALL output in worker processes so nothing written to the terminal
+    # can displace the cursor and corrupt the parent's Rich Live panel.
+    #
+    # Two layers of suppression are needed:
+    #   1. OS-level fd redirect (catches C/C++ extensions and macOS system
+    #      messages, e.g. "ApplePersistenceIgnoreState", which are written
+    #      directly to fd 1/2 and bypass Python's sys.stdout/stderr).
+    #   2. Python-level redirect (catches print() calls in tile specs or libs).
+    #
+    # The fd redirect must happen before pyrender/pyglet/AppKit initialises —
+    # that's when macOS emits the per-process ApplePersistenceIgnoreState
+    # message that was the root cause of the stacked-panel bug.
+    import warnings as _warnings, os as _os, sys as _sys
+    _warnings.filterwarnings('ignore')
+    # ── OS fd level ──────────────────────────────────────────────────────────
+    _null_fd = _os.open(_os.devnull, _os.O_WRONLY)
+    _os.dup2(_null_fd, 1)   # stdout (fd 1)
+    _os.dup2(_null_fd, 2)   # stderr (fd 2)
+    _os.close(_null_fd)
+    # ── Python stream level ───────────────────────────────────────────────────
+    _devnull = open(_os.devnull, 'w')
+    _sys.stdout = _devnull
+    _sys.stderr = _devnull
+
     tile_path_str, tiles_root_str, stl_root_str, png_root_str, phase_dict, formats = args
 
     tile_path  = pathlib.Path(tile_path_str)
@@ -1074,115 +1098,113 @@ def _run_parallel_live(
     t_starts:       dict[str, float],
     reporter:       "RichReporter",
     phase_dict:     object = None,
+    n_workers:      int = 4,
+    phase_label:    str   = "",
+    t_phase:        float = 0.0,
 ) -> None:
-    """Drive ``future_to_name`` futures with a Rich Live multi-line display.
+    """Drive ``future_to_name`` futures with a Rich Live fixed-height display.
 
-    Tiles are shown in four visual groups (top → bottom):
+    The panel is always exactly ``n_workers + 1`` lines tall when
+    ``phase_label`` is set (the default in batch mode):
+      - 1 phase-spinner line: ``⠹ Building N tiles  7.4s  ·  M queued``
+      - n_workers slot lines: one per worker; empty padding lines fill unused slots
 
-    * «N tiles complete»  — tiles done more than _COLLAPSE_AFTER seconds ago
-    * ✓  name   3.1s     — recently finished (shown individually for a moment)
-    * ⠙  name   1.4s     — actively running (spinner + live clock + phase label)
-    * «N tiles queued»   — not yet picked up by a worker process
-
-    When the Live context exits the final snapshot stays on screen permanently.
-    Completed rows are recorded into the reporter via ``record_batch_rows``.
+    Fixed height means Rich always knows how many lines to erase on each
+    refresh, which prevents ghost rows when the active-tile count changes.
     """
     from rich.live    import Live
     from rich.console import Group
     from rich.text    import Text
 
-    _FRAMES         = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-    _FPS            = 12.5
-    _COLLAPSE_AFTER = 5.0   # seconds before a done tile folds into the summary line
+    _FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    _FPS    = 12.5
 
-    done_rows:   dict[str, dict]  = {}   # name → result row
-    done_times:  dict[str, float] = {}   # name → perf_counter() at completion
-    pending_set: set              = set(future_to_name.keys())
+    done_rows:   dict[str, dict] = {}
+    pending_set: set             = set(future_to_name.keys())
 
     def _render() -> Group:
         now   = _time.perf_counter()
         frame = _FRAMES[int(now * _FPS) % len(_FRAMES)]
 
-        n_collapsed:  int       = 0
-        recent_done:  list[str] = []
-        running:      list[str] = []
-        queued:       list[str] = []
-
+        running: list[str] = []
+        n_queued = 0
         for name in spec_names:
             if name in done_rows:
-                age = now - done_times.get(name, now)
-                if age >= _COLLAPSE_AFTER:
-                    n_collapsed += 1
-                else:
-                    recent_done.append(name)
+                continue
+            try:
+                in_phase = phase_dict is not None and bool(phase_dict.get(name))
+            except Exception:
+                in_phase = False
+            if in_phase:
+                t_starts.setdefault(name, now)  # record start on first appearance
+                running.append(name)
             else:
-                try:
-                    in_phase = phase_dict is not None and bool(phase_dict.get(name))
-                except Exception:
-                    in_phase = False
-                if in_phase:
-                    running.append(name)
-                else:
-                    queued.append(name)
+                n_queued += 1
 
+        n_done_count = len(done_rows)
         lines: list[Text] = []
 
-        # ── Collapsed done summary ────────────────────────────────────────────
-        if n_collapsed:
-            n = n_collapsed
+        # ── Phase spinner (top-level, flush-left) ────────────────────────────
+        if phase_label:
+            n_total    = len(spec_names)
+            dyn_label  = (
+                f"Building {n_done_count}/{n_total} tiles"
+                if n_done_count > 0 else phase_label
+            )
+            ph_elapsed = now - t_phase
+            ph_t_str   = f"{ph_elapsed:.1f}s" if ph_elapsed >= 0.05 else "  …"
+            queued_str = f"  [dim]·  {n_queued} queued[/dim]" if n_queued else ""
             lines.append(Text.from_markup(
-                f"  [green]✓✓[/green] [dim]{n} tile{'s' if n != 1 else ''} complete[/dim]"
+                f"[cyan]{frame}[/cyan] [bold]{dyn_label}[/bold]"
+                f"  [cyan]{ph_t_str}[/cyan]"
+                f"{queued_str}"
             ))
 
-        # ── Recently done (individual, transitioning to collapsed) ────────────
-        for name in recent_done:
-            elapsed = done_rows[name]['elapsed']
-            tc      = RichReporter._table_time_color(elapsed)
-            lines.append(Text.from_markup(
-                f"  [green]✓[/green] {name:<38} [{tc}]{elapsed:.1f}s[/]"
-                f"  [green]done[/green]"
-            ))
-
-        # ── Running (spinner + live clock) ────────────────────────────────────
-        for name in running:
-            elapsed = now - t_starts[name]
-            t_str   = f"{elapsed:.1f}s" if elapsed >= 0.05 else "   …"
-            phase   = ""
-            if phase_dict is not None:
-                try:
-                    phase = phase_dict.get(name, "")
-                except Exception:
-                    pass
-            phase_str = f"  [dim]{phase}[/dim]" if phase else ""
-            lines.append(Text.from_markup(
-                f"  [cyan]{frame}[/cyan] {name:<38} [cyan]{t_str}[/]{phase_str}"
-            ))
-
-        # ── Queued summary ────────────────────────────────────────────────────
-        if queued:
-            n = len(queued)
-            lines.append(Text.from_markup(
-                f"  [dim]·· {n} tile{'s' if n != 1 else ''} queued[/dim]"
-            ))
+        # ── Worker slots: always exactly n_workers lines ──────────────────────
+        for i in range(n_workers):
+            if i < len(running):
+                name    = running[i]
+                elapsed = now - t_starts[name]
+                t_str   = f"{elapsed:.1f}s" if elapsed >= 0.05 else "   …"
+                phase   = ""
+                if phase_dict is not None:
+                    try:
+                        phase = phase_dict.get(name, "")
+                    except Exception:
+                        pass
+                phase_str = f"  [dim]{phase}[/dim]" if phase else ""
+                lines.append(Text.from_markup(
+                    f"  [cyan]{frame}[/cyan] {name:<38} [cyan]{t_str}[/]{phase_str}"
+                ))
+            else:
+                lines.append(Text(" "))  # non-empty blank — keeps height constant
+                # Text("") can render as 0 segments in some Rich versions and be
+                # miscounted as 0 lines; a single space is always 1 line.
 
         return Group(*lines)
 
-    # Use the reporter's own console so Rich's internal state stays consistent.
     console = reporter._console  # type: ignore[attr-defined]
 
-    with Live(_render(), console=console, refresh_per_second=_FPS) as live:
+    # Use get_renderable= so Rich's auto-refresh thread calls _render() on every
+    # tick — the spinner frame advances smoothly without manual live.update() calls.
+    # auto_refresh=True (default) starts the background refresh thread; this is the
+    # correct pattern for Rich 15 and avoids the "copies scrolling" bug that
+    # auto_refresh=False + refresh=True suffers from.
+    with Live(
+        get_renderable=_render,
+        console=console,
+        refresh_per_second=_FPS,
+        transient=True,   # erase panel on exit so phase_end() prints cleanly below
+    ) as live:  # noqa: F841 — live var unused; context manager handles lifecycle
         while pending_set:
             newly_done, pending_set = _futures_wait(
                 pending_set, timeout=1.0 / _FPS,
                 return_when=FIRST_COMPLETED,
             )
-            now = _time.perf_counter()
             for f in newly_done:
                 row  = f.result()
                 name = future_to_name[f]
-                done_rows[name]  = row
-                done_times[name] = now
-            live.update(_render())
+                done_rows[name] = row
 
     # Populate the reporter's batch-table data (no more printing).
     # Emit in spec_names order so the summary table is alphabetically stable.
@@ -1326,8 +1348,8 @@ def main(argv=None):
     tile_word = f"tile{'s' if n_tiles != 1 else ''}"
 
     # ── Phase: Building tiles ─────────────────────────────────────────────────
-    t_build = _time.perf_counter()
-    reporter.phase_header(f"Building {n_tiles} {tile_word}")
+    t_build      = _time.perf_counter()
+    _build_label = f"Building {n_tiles} {tile_word}"
 
     if n_workers > 1:
         # ── Parallel path: each tile in its own worker process ──────────────
@@ -1347,23 +1369,27 @@ def main(argv=None):
                     executor.submit(_batch_worker, wa): tp.stem.replace('.tile', '')
                     for tp, wa in zip(tile_paths, worker_args)
                 }
-                t_starts = {name: t_submit for name in tile_names}
+                t_starts = {}  # populated lazily in _render() on first activity
 
                 if isinstance(reporter, RichReporter):
-                    # ── Rich Live display: spinner + live clock per tile ─────────
+                    # ── Rich Live display: phase spinner embedded in panel ────────
                     _run_parallel_live(
                         tile_names, future_to_name, t_starts, reporter,
                         phase_dict=phase_dict,
+                        n_workers=n_workers,
+                        phase_label=_build_label,
+                        t_phase=t_build,
                     )
                     all_par_rows = [f.result() for f in future_to_name]
                 else:
                     # ── Plain fallback (pipe / --quiet / no rich) ────────────────
+                    reporter.phase_header(_build_label)
                     for future in as_completed(future_to_name):
                         row = future.result()
                         all_par_rows.append(row)
                         reporter.inject_batch_row(row)
 
-        reporter.phase_end(f"Build {tile_word}", _time.perf_counter() - t_build)
+        reporter.phase_end(f"Build {n_tiles} {tile_word}", _time.perf_counter() - t_build)
         pngs_rendered = True
 
         # ── Phase: Assemble 3MF (one per system output dir, all tiles) ───────
@@ -1384,6 +1410,7 @@ def main(argv=None):
             )
     else:
         # ── Sequential fallback (single-core or --quiet) ─────────────────────
+        reporter.phase_header(_build_label)
         dir_3mf_accum_seq: dict[pathlib.Path, list[tuple[str, list[trimesh.Trimesh]]]] = _defaultdict(list)
 
         for tp in tile_paths:
@@ -1424,7 +1451,7 @@ def main(argv=None):
                                         label=_label_for_png(out, PNG_ROOT))
                     break
 
-        reporter.phase_end(f"Build {tile_word}", _time.perf_counter() - t_build)
+        reporter.phase_end(f"Build {n_tiles} {tile_word}", _time.perf_counter() - t_build)
         pngs_rendered = True  # rendered inline above
 
         # ── Phase: Assemble 3MF ───────────────────────────────────────────────
