@@ -27,9 +27,9 @@
 - ✅ Grass Pipeline — `_lift_path_points` vectorised: single `_sample_grid` batch call over all non-root points
 - ✅ Grass Pipeline — `_cell_range` helper extracted to `_geometry.py`; `_contained_segment_cells` and `_leading_edge_cells` both use it (copy-pasted bbox setup eliminated)
 
-**Acknowledged, deferred:**
-- 🔵 Finding 5 — `nodes: list[np.ndarray]` fragmentation in `_branch_skeleton`: BFS with 400–600 nodes is already negligible; `_simplify_skeleton` already converts to contiguous ndarray. Pre-allocating a contiguous buffer would require a generous max_nodes estimate and adds complexity to `_add_node`/`_grow_to_leaf` without meaningful runtime benefit at current tree sizes. Revisit if trees scale to thousands of attractors.
-- 🔵 Finding 15 — `random_spread_sites` full-array scan: O(n_groups × n_cells) cost is under 50 ms at current scales (n_groups ≤ 50, cells ≤ 65,536). No urgency. Revisit if tile resolution or group count increases significantly.
+**Won't do:**
+- ❌ Finding 5 — `nodes: list[np.ndarray]` fragmentation in `_branch_skeleton`: BFS with 400–600 nodes is negligible; `_simplify_skeleton` already converts to contiguous ndarray. Complexity of pre-allocating a contiguous buffer (requires `max_nodes` estimation, touches `_add_node`/`_grow_to_leaf`) is not justified by any measurable runtime benefit at current tree sizes.
+- ❌ Finding 15 — `random_spread_sites` full-array scan: cost is under 50 ms at current scales (n_groups ≤ 50, cells ≤ 65,536). Not a real problem.
 
 ---
 
