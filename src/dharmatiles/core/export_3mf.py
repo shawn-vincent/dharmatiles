@@ -179,6 +179,38 @@ def _pack_plates(
     return plates
 
 
+def _vert_lines_xml(verts: np.ndarray) -> str:
+    """Vectorized: '<vertex x="…" y="…" z="…"/>' for every row of *verts* (N×3)."""
+    xs = np.char.mod('%.5f', verts[:, 0])
+    ys = np.char.mod('%.5f', verts[:, 1])
+    zs = np.char.mod('%.5f', verts[:, 2])
+    lines = np.char.add(
+        '<vertex x="',
+        np.char.add(xs, np.char.add(
+            '" y="', np.char.add(ys, np.char.add(
+                '" z="', np.char.add(zs, '"/>'),
+            )),
+        )),
+    )
+    return '\n     '.join(lines.tolist())
+
+
+def _face_lines_xml(faces: np.ndarray) -> str:
+    """Vectorized: '<triangle v1="…" v2="…" v3="…"/>' for every row of *faces* (F×3)."""
+    v1s = np.char.mod('%d', faces[:, 0])
+    v2s = np.char.mod('%d', faces[:, 1])
+    v3s = np.char.mod('%d', faces[:, 2])
+    lines = np.char.add(
+        '<triangle v1="',
+        np.char.add(v1s, np.char.add(
+            '" v2="', np.char.add(v2s, np.char.add(
+                '" v3="', np.char.add(v3s, '"/>'),
+            )),
+        )),
+    )
+    return '\n     '.join(lines.tolist())
+
+
 def export_3mf_colored(
     tiles: list[list[trimesh.Trimesh]],
     path:  str | pathlib.Path,
@@ -371,18 +403,8 @@ def export_3mf_colored(
             oid   = tile_part_start[ti] + pi
             verts = mesh.vertices
             faces = mesh.faces
-            # Build vertex/triangle XML lines from a single .tolist() call each
-            # (one C-level array→list conversion rather than three column slices).
-            vert_rows = verts.tolist()
-            vert_lines = '\n     '.join(
-                f'<vertex x="{r[0]:.5f}" y="{r[1]:.5f}" z="{r[2]:.5f}"/>'
-                for r in vert_rows
-            )
-            face_rows = faces.tolist()
-            tri_lines = '\n     '.join(
-                f'<triangle v1="{r[0]}" v2="{r[1]}" v3="{r[2]}"/>'
-                for r in face_rows
-            )
+            vert_lines = _vert_lines_xml(verts)
+            tri_lines  = _face_lines_xml(faces)
             obj_xmls.append(
                 f'  <object id="{oid}" p:UUID="{_part_uuid(oid)}" type="model">\n'
                 f'   <mesh>\n'
