@@ -8,11 +8,14 @@ __pycache__/
 textures/
 *.ply
 
-# Generated STL outputs — too large for GitHub, generated locally
-stl/
+# Generated STL/3MF outputs — too large for GitHub, generated locally.
+# README files inside stl/ ARE tracked so the directories exist for cloners.
+stl/**/*.stl
+stl/**/*.3mf
+stl/**/*.pdf
 
-# Generated PNG renders — produced locally by the render pipeline
-png/
+# Generated PNG renders — committed to git as documentation.
+# (Remove this line if you want to re-ignore them.)
 
 # Build provenance — generated artifact, must not be committed
 src/dharmatiles/_build_info.py

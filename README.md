@@ -16,6 +16,26 @@ The interesting part is how it gets there.
 
 ---
 
+## Renders
+
+<table>
+<tr>
+  <td align="center"><img src="png/ground/2x2-grass-tree.png" width="220"/><br/><sub>2×2 meadow with tree</sub></td>
+  <td align="center"><img src="png/water/1x1-water+grass.png" width="220"/><br/><sub>1×1 water + grass shoreline</sub></td>
+  <td align="center"><img src="png/ground/1x1-grass-flowers.png" width="220"/><br/><sub>1×1 grass with flowers</sub></td>
+</tr>
+<tr>
+  <td align="center"><img src="png/ground/1x1-soil+grass.png" width="220"/><br/><sub>1×1 soil + grass</sub></td>
+  <td align="center"><img src="png/water/3x3-water.png" width="220"/><br/><sub>3×3 open water</sub></td>
+  <td align="center"><img src="png/ground/1x1-soil-corridor+grass.png" width="220"/><br/><sub>1×1 soil corridor</sub></td>
+</tr>
+</table>
+
+Renders are produced by the built-in pyrender pipeline. All tiles have a
+DungeonBlocks or OpenLOCK compatible underside (socket-peg / T-slot).
+
+---
+
 ## Why?
 
 Most terrain systems work by placing objects.
@@ -47,31 +67,26 @@ So DharmaTiles treats terrain as a collection of systems rather than a collectio
 At a high level:
 
 ```text
-tile
-  → regions
-  → fields
-  → growth
-  → mesh
+tile spec (.tile.py)
+  → regions + boundaries
+  → heightmap + masks
+  → layers applied in order (soil, grass, rocks, trees, water…)
+  → terrain solid
+  → base attached (DungeonBlocks or OpenLOCK)
   → STL
 ```
 
 A tile defines regions and boundaries.
 
-Those regions generate fields such as:
+Layers then use those regions to generate geometry.
 
-* height
-* slope
-* flow
-* distance-to-edge
-* influence masks
+Grass grows segment by segment, steering around rocks and other blades.
 
-Layers then use those fields to generate geometry.
+Water reshapes the terrain floor and emits a water-volume mesh.
 
-Grass grows.
+Rocks stamp their footprint so that grass steers around them.
 
-Water shapes itself to terrain.
-
-Stones occupy space and influence nearby systems.
+Trees are built via space-colonisation and stamped into the obstacle grid.
 
 Everything contributes to a single final mesh.
 
@@ -85,27 +100,39 @@ The goal is that geometry is mostly a consequence of rules rather than explicit 
 
 Grass is generated from seed points.
 
-Each blade grows incrementally through a flow field while responding to nearby obstacles and neighboring blades.
+Each blade grows incrementally while responding to nearby obstacles and neighbouring blades.
 
-The result is not physically accurate, but it tends to produce clusters and directional behavior that feel more natural than random scatter.
+The result is not physically accurate, but it tends to produce clusters and directional behaviour that feel more natural than random scatter.
 
-### Stones
+### Rocks
 
-Stones are generated as terrain features rather than decorative objects.
+Rocks are vectorised half-ellipsoids scattered across the tile surface.
 
-They occupy space and create influence fields that other systems can react to.
+They occupy space and stamp an obstacle footprint so grass steers around them.
+
+### Trees
+
+Trees are built via space-colonisation skeleton growth.
+
+Each tree is a branching tube mesh with configurable bark, foliage clusters, and leaves — all printable without supports.
+
+### Flowers
+
+Dome-on-column 3D flowers scattered using the same placement system as rocks.
 
 ### Water
 
 Water is represented as a terrain layer rather than a separate object.
 
-Shorelines, boundaries, and nearby features all contribute to its final shape.
+The pool floor is reshaped, ripples are added, and a water-volume mesh is emitted.
+
+Shorelines blend into surrounding grass or soil.
 
 ### Soil
 
-Soil is the boring layer that quietly makes everything else work.
+Soil is the quiet layer that makes everything else work.
 
-Most terrain transitions, support geometry, and blending behavior ultimately happen here.
+Blob-textured height variation, terrain transitions, and blending all happen here.
 
 ---
 
@@ -122,17 +149,17 @@ Everything is designed with printing in mind:
 * paintable surfaces
 * clean silhouettes at tabletop scale
 
-A terrain feature that looks great in Blender but prints poorly is considered a bug.
+A terrain feature that looks great in a renderer but prints poorly is considered a bug.
 
 ### Deterministic generation
 
-Given the same inputs and seed, the output should be identical.
+Given the same inputs and seed, the output is identical.
 
-Terrain generation is procedural, but it should also be reproducible.
+Terrain generation is procedural but reproducible.
 
 ### Emergence over placement
 
-Whenever possible, systems should produce results from local rules rather than explicit instructions.
+Whenever possible, systems produce results from local rules rather than explicit instructions.
 
 Instead of saying:
 
@@ -144,65 +171,64 @@ the system tries to answer:
 
 ---
 
-## Example tile
-
-```yaml
-surface:
-  cols: 1
-  rows: 1
-  seed: 7
-
-regions:
-  meadow:
-    contains: [0.25, 0.5]
-    layers:
-      - type: grass
-        groups_per_square: 240
-
-  lake:
-    contains: [0.75, 0.5]
-    layers:
-      - type: water
-        depth_mm: 2.0
-
-boundaries:
-  shoreline:
-    from: {edge: top, t: 0.55}
-    to:   {edge: bottom, t: 0.45}
-    path: organic
-    width_mm: 4.0
-    layer:
-      type: soil
-```
-
-The tile description is intentionally small.
-
-Most of the complexity comes from how the systems interact.
-
----
-
 ## Quick start
 
 ```bash
 pip install -e .
 
-# Generate everything
+# Generate every tile in src/tiles/ → stl/{dungeonblocks,openlock}/
 dharmatiles-gen
 
 # Generate a single tile
-dharmatiles-gen --tile src/tiles/example.tile
+dharmatiles-gen --tile src/tiles/ground/1x1-soil+grass.tile.py
 
-# Custom output
-dharmatiles-gen --tile src/tiles/example.tile -o stl/output.stl
+# Suppress progress output
+dharmatiles-gen --quiet
 ```
 
-Then print it.
+Then open the STL in PrusaSlicer, Bambu Studio, or your slicer of choice and print.
 
-Paint it if you want.
+---
 
-Or don't.
+## Example tile spec
 
-The point is that the tile should feel like a place rather than a collection of terrain pieces.
+Tile specs are plain Python files. The spec language IS the implementation — no DSL, no YAML, no parsing step.
+
+```python
+from dharmatiles.spec    import Tile, Region, Boundary
+from dharmatiles.core.config import SurfaceConfig, SpeciesConfig
+from dharmatiles.layers  import GrassCarpet, Water
+from dharmatiles.scatter import Rocks, Grass
+
+species = SpeciesConfig()
+
+tile = Tile(
+    surface=SurfaceConfig(cols=1, rows=1, seed=42),
+    areas=[
+        Region(
+            id='meadow',
+            selector=FloodFill(0.25, 0.5),
+            height_mm=5.0,
+            layers=[
+                GrassCarpet(species=species),
+                Rocks(r_min=0.8, r_max=2.2),
+                Grass(species=species),
+            ],
+        ),
+        Boundary(width_mm=4.0),
+        Region(
+            id='lake',
+            selector=FloodFill(0.75, 0.5),
+            height_mm=3.0,
+            layers=[
+                Water(embed_mm=1.5),
+            ],
+        ),
+    ],
+)
+```
+
+Layer ordering in `Region.layers` is the state-dependency contract: `Rocks` before `Grass` so blades steer around placed rock footprints.
 
 ---
 
@@ -210,32 +236,29 @@ The point is that the tile should feel like a place rather than a collection of 
 
 ```text
 src/dharmatiles/
-  core/        grids, fields, mesh generation
-  layers/      grass, soil, stones, water
-  terrains/    composition and generation
-  bases/       DungeonBlocks, OpenLOCK
+  core/          pure primitives: heightmap, grid, region, mesh, config
+  grass/         grass growth sub-pipeline
+  scatter/       placement layers: Rocks, Grass, Flowers + distribution helpers
+  layers/        terrain-texture layers: SoilCarpet, GrassCarpet, Water
+  trees/         Tree generator (space-colonisation skeleton + tube mesh)
+  bases/         DungeonBlocks, OpenLOCK base attachment
+  terrains/      entry point: build_tile_from_spec() + CLI
 
-src/tiles/     tile definitions
-stl/           generated output
-docs/          design notes
+src/tiles/
+  ground/        ground tile specs (.tile.py)
+  water/         water tile specs (.tile.py)
+
+stl/             generated STL output (not in git — see stl/README.md)
+png/             rendered previews
+docs/            design notes and architecture reviews
 ```
 
 ---
 
 ## Status
 
-Very much a work in progress.
+Active development. The architecture is stable; the tile vocabulary is growing.
 
-Current focus areas:
+Current tile library: 35+ tile variants across ground and water categories, including corridors, corners, U-shapes, T-junctions, and cross-junctions in both grass and soil variants.
 
-* terrain grammar
-* vegetation systems
-* water behavior
-* printable detail generation
-* OpenLOCK support
-
-The architecture is fairly stable.
-
-The ideas are not.
-
-That's the fun part.
+Output scale: 35 mm square grid (DungeonBlocks) and 25.4 mm square grid (OpenLOCK), generated in parallel from the same tile spec.
