@@ -4,7 +4,7 @@
 # Works as a transition tile where a meadow ends at a path corner.
 
 from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill, SurfaceConfig, SpeciesConfig
-from dharmatiles.layers import SoilCarpet, GrassCarpet, Scatter
+from dharmatiles.layers import SoilCarpet, GrassCarpet
 from dharmatiles.scatter import Grass, Grouped
 
 tile = Tile(
@@ -15,9 +15,7 @@ tile = Tile(
             selector=FloodFill(0.15, 0.15),
             layers=[
                 GrassCarpet(placement=Grouped(groups_per_square=240)),
-                Scatter(
-                    Grass(placement=Grouped(groups_per_square=240)),
-                ),
+                Grass(placement=Grouped(groups_per_square=240)),
             ],
         ),
         Region(

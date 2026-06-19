@@ -9,7 +9,7 @@
 # blade geometry so the two passes use identical blade proportions.
 
 from dharmatiles.spec import Tile, Region, FloodFill, SurfaceConfig, SpeciesConfig, D
-from dharmatiles.layers import GrassCarpet, Scatter
+from dharmatiles.layers import GrassCarpet
 from dharmatiles.scatter import Grass, Flowers, Grouped, Uniform
 
 _species = SpeciesConfig(
@@ -29,21 +29,19 @@ tile = Tile(
                     species=_species,
                     placement=Grouped(groups_per_square=3),
                 ),
-                Scatter(
-                    # Flowers first — stamp support_z so grass steers around them
-                    Flowers(
-                        n_petals=5,
-                        center_radius_mm=1.5,
-                        outer_radius_mm=2.5,
-                        column_height_mm=1.0,   # support column below each dome
-                        dome_thickness_mm=1.0,  # thin centre dome cap height
-                        petal_thickness_mm=0.5, # thin petal cap height
-                        placement=Uniform(count_per_square=4),
-                    ),
-                    Grass(
-                        species=_species,
-                        placement=Grouped(groups_per_square=3),
-                    ),
+                # Flowers first — stamp support_z so grass steers around them
+                Flowers(
+                    n_petals=5,
+                    center_radius_mm=1.5,
+                    outer_radius_mm=2.5,
+                    column_height_mm=1.0,   # support column below each dome
+                    dome_thickness_mm=1.0,  # thin centre dome cap height
+                    petal_thickness_mm=0.5, # thin petal cap height
+                    placement=Uniform(count_per_square=4),
+                ),
+                Grass(
+                    species=_species,
+                    placement=Grouped(groups_per_square=3),
                 ),
             ],
         ),

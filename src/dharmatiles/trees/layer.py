@@ -1,4 +1,4 @@
-"""Scatter-layer integration for Tree."""
+"""Tree: a direct tile layer that grows and places trees into a region."""
 from __future__ import annotations
 
 import numpy as np
@@ -14,7 +14,11 @@ from .envelope import CanopyEnvelope
 
 
 class Tree:
-    """A printable tree grown with space-colonisation branching.
+    """Grow and place space-colonisation trees directly in a region layer list.
+
+    ``Tree`` is an independent-instance placer: each tree's skeleton is built
+    without knowledge of sibling trees.  Place ``Rocks`` before ``Tree`` in
+    ``Region.layers`` so trunks don't land on existing rock footprints.
 
     Invariants (see skeleton.py):
     - Every attractor is a terminal node; attractors are never branch points.
@@ -26,6 +30,8 @@ class Tree:
       calculated, not specified.
     - Segments are rendered as C1-continuous cubic Bezier tubes.
     """
+
+    height_default_mm: float = 5.0
 
     def __init__(
         self,
@@ -235,6 +241,15 @@ class Tree:
 
         result.extend(other_parts)
         return result
+
+    def apply(
+        self,
+        scene,
+        *,
+        placement_mask: np.ndarray | None = None,
+    ) -> list[trimesh.Trimesh]:
+        """``TileLayer`` entry point — delegates to ``scatter()``."""
+        return self.scatter(scene, placement_mask=placement_mask)
 
     def _sample_envelope(
         self, x: float, y: float, terrain_z: float, rng: np.random.Generator

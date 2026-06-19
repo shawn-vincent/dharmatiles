@@ -6,16 +6,23 @@ A ``.tile.py`` file is executed as Python and must bind a module-level
 variable to a list of :class:`Tile` instances.
 
 The spec is the implementation language: ``Region.layers`` holds real
-layer instances (``SoilCarpet``, ``GrassCarpet``, ``Scatter``, ``Water``),
-and the orchestrator runs their ``apply()`` methods in the order they appear.
-No string types, no ``params=dict(...)``, no phase enum.
+layer instances (``SoilCarpet``, ``GrassCarpet``, ``Rocks``, ``Grass``,
+``Water``, etc.), and the orchestrator runs their ``apply()`` methods in
+the order they appear.  No string types, no ``params=dict(...)``, no
+phase enum.
+
+Layer ordering in ``Region.layers`` is the author's contract for state
+dependencies: place ``Rocks`` before ``Grass`` so blades steer around
+already-stamped rock footprints; ``Tree`` before ``Grass`` for the same
+reason.  This is the same ordering mechanism used by ``SoilCarpet`` and
+``GrassCarpet`` — list position is always the sequencing primitive.
 
 Example::
 
     from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill
     from dharmatiles.spec import SurfaceConfig, SpeciesConfig, D, repeat_sizes
     from dharmatiles.systems import DungeonBlocks, OpenLOCK
-    from dharmatiles.layers import SoilCarpet, GrassCarpet, Scatter
+    from dharmatiles.layers import SoilCarpet, GrassCarpet
     from dharmatiles.scatter import Rocks, Grass, Grouped
 
     species = SpeciesConfig()
@@ -25,11 +32,9 @@ Example::
             Region(id='meadow', selector=FloodFill(0.25, 0.5), layers=[
                 GrassCarpet(species=species,
                             placement=Grouped(groups_per_square=240)),
-                Scatter(
-                    Rocks(r=D[0.8:2.2].power(1.5)),
-                    Grass(species=species,
-                          placement=Grouped(groups_per_square=24)),
-                ),
+                Rocks(r=D[0.8:2.2].power(1.5)),
+                Grass(species=species,
+                      placement=Grouped(groups_per_square=24)),
             ]),
             Boundary(id='margin',
                      from_anchor=Edge.TOP(0.48),

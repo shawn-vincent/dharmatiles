@@ -6,7 +6,7 @@
 # guaranteeing the two passes use identical blade geometry.
 
 from dharmatiles.spec import Tile, Region, FloodFill, SurfaceConfig, SpeciesConfig, D
-from dharmatiles.layers import GrassCarpet, Scatter
+from dharmatiles.layers import GrassCarpet
 from dharmatiles.scatter import Grass, Grouped
 
 _meadow = SpeciesConfig(
@@ -27,9 +27,7 @@ tile = Tile(
             selector=FloodFill(0.5, 0.5),
             layers=[
                 GrassCarpet(species=_meadow, placement=_placement_carpet),
-                Scatter(
-                    Grass(species=_meadow, placement=_placement_blades),
-                ),
+                Grass(species=_meadow, placement=_placement_blades),
             ],
         ),
     ],

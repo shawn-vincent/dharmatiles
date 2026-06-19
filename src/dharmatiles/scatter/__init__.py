@@ -1,4 +1,11 @@
-"""Things you scatter inside a ``Scatter`` layer."""
+"""Scatter things: direct tile layers that place elements into a region.
+
+``Rocks``, ``Grass``, ``Flowers``, and ``Tree`` each implement the
+``TileLayer`` protocol (``apply()``) and may be placed directly in
+``Region.layers`` alongside ``SoilCarpet``, ``GrassCarpet``, and ``Water``.
+Ordering in the list is the author's contract for state dependencies:
+put ``Rocks`` before ``Grass`` so blades steer around rock footprints.
+"""
 from .config    import Uniform, Grouped
 from .seed      import RockSeed
 from .prototype import Rocks, Grass

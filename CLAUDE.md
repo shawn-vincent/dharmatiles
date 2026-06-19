@@ -126,9 +126,8 @@ Tile (.tile.py) ──► build_tile_from_spec()
 | `scatter/config.py` | `ScatterConfig` — spatial distribution params (groups, gap, dir mode) |
 | `scatter/seed.py` | `RockSeed` — fully-resolved rock instance with `sort_key()` |
 | `scatter/distribute.py` | Voronoi grouping, jitter grid, `scatter_positions()` — shared by rocks + grass |
-| `scatter/prototype.py` | `Rocks` + `Grass` — scatter-thing classes with `scatter(scene, ...)` |
-| `scatter/layer.py` | `Scatter` — runs `Rocks` / `Grass` / `Tree` things in tile order |
-| `layers/__init__.py` | Public layer classes: `SoilCarpet`, `GrassCarpet`, `Scatter`, `Water` |
+| `scatter/prototype.py` | `Rocks` + `Grass` — direct tile layers with `apply()` + `scatter(scene, ...)` |
+| `layers/__init__.py` | Public layer classes: `SoilCarpet`, `GrassCarpet`, `Water` |
 | `layers/soil.py` | `SoilCarpet` — two-tier super-Gaussian blobs into terrain_z |
 | `layers/rocks.py` | `_build_rocks_mesh_core` / `_build_rocks_mesh_from_seeds` — vectorised half-ellipsoid kernel |
 | `layers/grass_carpet.py` | `GrassCarpet` — embossed 2D blade-stamp texture into terrain_z |
@@ -136,12 +135,12 @@ Tile (.tile.py) ──► build_tile_from_spec()
 | `trees/envelope.py` | `CanopyEnvelope` — axisymmetric canopy envelope dataclass |
 | `trees/skeleton.py` | `grow_skeleton()` — two-pass skeleton + `_branch_skeleton` BFS + `_compute_radii_bottom_up` |
 | `trees/mesh.py` | `build_tree_mesh()` — tapered cubic-Bezier tube mesh |
-| `trees/layer.py` | `Tree` — scatter-thing class; `_stamp_tree` obstacle stamping |
+| `trees/layer.py` | `Tree` — direct tile layer with `apply()` + `scatter()`; `_stamp_tree` obstacle stamping |
 | `bases/dungeonblocks.py` | DungeonBlocks socket-peg base; logo inset; STL export |
 | `bases/openlock.py` | OpenLOCK T-slot base via manifold3d CSG; STL export |
 | `terrains/tile.py` | Entry point: `build_tile_from_spec()` flat orchestrator + CLI |
 
-`core/` modules are pure primitives (array in / array out). `grass/` holds the grass growth sub-pipeline. `scatter/` is the unified placement system for rocks, grass, and trees. `layers/` has terrain-texture layers (soil, grass carpet, water). `trees/` holds the Tree generator. `bases/` attaches system-specific underside geometry. `terrains/` is the entry point that assembles everything.
+`core/` modules are pure primitives (array in / array out). `grass/` holds the grass growth sub-pipeline. `scatter/` holds direct tile layers for placed elements (Rocks, Grass, Flowers) plus distribution primitives. `layers/` has terrain-texture layers (soil, grass carpet, water). `trees/` holds the Tree generator (also a direct tile layer). `bases/` attaches system-specific underside geometry. `terrains/` is the entry point that assembles everything.
 
 ### Tile Format (`.tile.py` files)
 
@@ -151,7 +150,7 @@ module-level name `tile`. The tile language IS the implementation language —
 
 ```python
 from dharmatiles.spec   import Tile, Region, Boundary, SurfaceConfig, SpeciesConfig
-from dharmatiles.layers import GrassCarpet, Scatter
+from dharmatiles.layers import GrassCarpet
 from dharmatiles.scatter import Rocks, Grass, Tree, Uniform
 
 species = SpeciesConfig()
@@ -160,15 +159,17 @@ tile = Tile(
     areas=[
         Region(id='meadow', selector=FloodFill(0.5, 0.5), layers=[
             GrassCarpet(species=species, placement=Grouped(groups_per_square=3)),
-            Scatter(
-                Rocks(r_min=0.8, r_max=2.2),
-                Grass(species=species),
-                Tree(height_mm=40.0, placement=Uniform(count_per_square=0.25)),
-            ),
+            Rocks(r_min=0.8, r_max=2.2),
+            Tree(height_mm=40.0, placement=Uniform(count_per_square=0.25)),
+            Grass(species=species),
         ]),
     ],
 )
 ```
+
+Layer ordering in `Region.layers` is the contract for state dependencies:
+`Rocks` before `Grass` so blades steer around stamped rock footprints;
+`Tree` before `Grass` for the same reason.
 
 **Public layer classes** (all in `dharmatiles.layers`):
 
@@ -176,16 +177,16 @@ tile = Tile(
 |---|---|---|
 | `SoilCarpet(**SoilConfig kwargs)` | Soil blob texture into terrain_z | 5.0 |
 | `GrassCarpet(species=…, **GrassUnderlayConfig kwargs)` | Embossed 2D blade stamps into terrain_z | 5.0 |
-| `Scatter(*things)` | Runs each `Rocks` / `Grass` / `Tree` thing in tile order | 5.0 |
 | `Water(embed_mm=…, height_mm=…)` | Reshape pool floor + emit water volume mesh | 3.0 |
 
-**Scatter things** (all in `dharmatiles.scatter`):
+**Direct placement layers** (all in `dharmatiles.scatter`, or `dharmatiles.trees` for Tree):
 
-| Class | Effect |
-|---|---|
-| `Rocks(*, scatter=ScatterConfig(...), **RocksConfig kwargs)` | Vectorised half-ellipsoid rocks; stamps `terrain_support_z` + `obstacle_mask` |
-| `Grass(species=…, *, scatter=…, max_stack_height=…, **SpeciesConfig overrides)` | 3D blades planted + grown around rocks |
-| `Tree(height_mm=…, canopy_radius_mm=…, canopy_base_radius_mm=…, placement=…, **kwargs)` | Space-colonisation tree (see Tree section) |
+| Class | Effect | `height_default_mm` |
+|---|---|---|
+| `Rocks(*, placement=…, **RocksConfig kwargs)` | Vectorised half-ellipsoid rocks; stamps `terrain_support_z` + `obstacle_mask` | 5.0 |
+| `Grass(species=…, *, placement=…, max_stack_height=…)` | 3D blades grown as a field simulation around prior obstacles | 5.0 |
+| `Flowers(*, placement=…, **FlowerConfig kwargs)` | Dome-on-column 3D flowers; stamps `terrain_support_z` + `obstacle_mask` | 5.0 |
+| `Tree(height_mm=…, canopy_radius_mm=…, placement=…, **kwargs)` | Space-colonisation tree (see Tree section) | 5.0 |
 
 `Region` height falls back to its first layer's `height_default_mm` when
 `height_mm=None`.  Boundary curves go from one tile edge to another;
@@ -200,9 +201,10 @@ composition all work.  The orchestrator (`terrains/tile.py`) walks
 
 ### Tree Generator
 
-`Tree` is a scatter-thing (placed by `Scatter`) that builds printable
-trees via a two-pass algorithm in `trees/skeleton.py` +
-`trees/mesh.py`.
+`Tree` is a direct tile layer that builds printable trees via a two-pass
+algorithm in `trees/skeleton.py` + `trees/mesh.py`.  It implements
+`apply(scene, *, placement_mask)` and sits in `Region.layers` alongside
+`Rocks`, `Grass`, `SoilCarpet`, and other layers.
 
 **Invariants (hard constraints; must never be broken):**
 - Every attractor is a **terminal node** — attractors are never branch points.
@@ -270,35 +272,39 @@ continuity at forks. A root flare anchors the trunk to the terrain surface.
 | `foliage_cluster_radius_mm` | 5.5 | Tip radius (mm) of each foliage cluster. Each terminal branch gets a D-section cone tapering from the parent branch radius up to this value at the attractor tip. |
 | `foliage_cluster_length_mm` | 10.5 | Maximum cluster length (mm). The cone covers only the last `min(branch_len, K)` mm of each terminal branch; the remainder is drawn as a plain wood tube. Taper rate is fixed at `(foliage_cluster_radius_mm − r_wood) / K`, so short branches produce proportionally smaller-tipped cones. `None` = full branch is a cone. |
 
-### Scatter System (rocks + grass + trees)
+### Placement Layer Ordering
 
-`Scatter` runs the `Rocks` / `Grass` / `Tree` instances it was
-constructed with, in the order they appear in its argument list.  Put `Rocks`
-first so following `Grass` blades can steer around already-stamped rock
-footprints.
+`Rocks`, `Grass`, `Tree`, and `Flowers` are direct `TileLayer`s placed
+in `Region.layers` (or `Boundary.layers`) alongside `SoilCarpet`,
+`GrassCarpet`, and `Water`.  Each implements `apply(scene, *, placement_mask)`.
 
-The same ordering rule applies across regions and boundaries: the
-orchestrator runs all regions in tile order, then all boundaries in spec
-order.  3D grass only steers around rocks that have already been stamped
-into `terrain_support_z` *before* `Grass.scatter()` runs.
+**Ordering is the author's contract for state dependencies.**  The
+orchestrator runs layers in list order within each area, then areas in
+spec order.  3D grass only steers around obstacles stamped into
+`terrain_support_z` *before* `Grass.apply()` runs, so place `Rocks`
+and `Tree` before `Grass` in the same `Region.layers`.
 
-- `Rocks.scatter()` samples positions from its `ScatterConfig`, builds
+- `Rocks.apply()` samples positions from its placement config, builds
   `RockSeed`s, sorts big→small, and calls `_build_rocks_mesh_from_seeds`
   (vectorised NumPy) which also stamps `terrain_support_z` and `obstacle_mask`.
-- `Grass.scatter()` syncs `vegetation_support_z` from the completed
-  `terrain_support_z`, then delegates to `FloppyGrassLayer` which plants
-  seeds (`GrassSeed.sort_key() = (upstream_dist, direction)` so seeds
-  facing the tile boundary grow first) and runs the segment-by-segment grower.
-- `Tree.scatter()` calls `grow_skeleton()` per placed tree, then
+- `Grass.apply()` syncs `vegetation_support_z` from the completed
+  `terrain_support_z`, then runs a field simulation: seeds are planted and
+  grown sequentially, each blade reading the shared occupancy grid left by
+  prior blades.  (`GrassSeed.sort_key() = (upstream_dist, direction)` so seeds
+  facing the tile boundary grow first.)
+- `Tree.apply()` calls `grow_skeleton()` per placed tree, then
   `build_tree_mesh()`, then stamps the tree footprint into
   `terrain_support_z` and `obstacle_mask`.
 
-`ScatterConfig` (in `scatter/config.py`) controls: `items_per_square` (hard
-count), `groups_per_square` (Voronoi clumps; 0 = uniform random), `gap_mm`,
-`group_dir_mode`.  Defaults: `Rocks` → count-based, no groups; `Grass` →
-area-based, Voronoi groups from `SpeciesConfig`.  Distribution helpers
-(`voronoi_groups`, `jitter_grid_xy`, `scatter_positions`) live in
-`scatter/distribute.py` and are imported by `grass/grow.py` too.
+Placement is configured via `Uniform` or `Grouped` (both in `dharmatiles.scatter`):
+
+| Strategy | Controls |
+|---|---|
+| `Uniform(count_per_square=N, gap_mm=…)` | Uniform random positions; `Rocks` default |
+| `Grouped(groups_per_square=N, gap_mm=…, group_dir_mode=…)` | Voronoi-grouped positions; `Grass` default |
+
+Distribution helpers (`voronoi_groups`, `jitter_grid_xy`, `scatter_positions`)
+live in `scatter/distribute.py` and are imported by `grass/grow.py` too.
 
 ### Grass Carpet vs. 3D Grass
 
@@ -334,7 +340,7 @@ All geometry layers (soil, rocks, grass) treat the terrain surface as **locally 
 src/dharmatiles/
   spec.py        Tile / Region / Boundary + TileLayer protocol + load_tile
   core/          pure primitives: config, tile, region, mesh, grid, terrain, logo
-  scatter/       unified placement system: config, seed, distribute, prototype, layer
+  scatter/       direct placement layers: Rocks, Grass, Flowers + config, seed, distribute
   grass/         grass growth sub-pipeline: seed, grow, mesh, growers/, _geometry, layer, config
   layers/        soil.py, rocks.py (kernel), grass_carpet.py, water.py
   trees/         Tree generator: envelope, skeleton, mesh, layer

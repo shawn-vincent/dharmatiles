@@ -10,7 +10,7 @@
 
 Elegance and technical findings addressed first (see those review files). All strategic recommendations remain unimplemented, but Rec 1's direction was decided in a follow-up design session — see `2026-06-18-design-session-architecture-direction.md`.
 
-- ⬜ Rec 1 — **Dissolve `Scatter`**: `Rocks`/`Grass`/`Tree` become direct `TileLayer`s in `Region.layers`. `ScatterLayer`/`Scatter` deleted. *(Adopted direction — replaces the original `obstacles=`/`vegetation=` phases idea)*
+- ✅ Rec 1 — **Dissolve `Scatter`**: `Rocks`/`Grass`/`Tree` become direct `TileLayer`s in `Region.layers`. `ScatterLayer`/`Scatter` deleted. *(Implemented 2026-06-18)*
 - ⬜ Rec 2 — Collapse config toward the thing being configured (tackle after/during Rec 1)
 - ⬜ Rec 3 — Make the content/export pipeline boundary explicit
 - ⬜ Rec 4 — Establish a tile template / region library (`src/tiles/shared/` or `dharmatiles.templates`)

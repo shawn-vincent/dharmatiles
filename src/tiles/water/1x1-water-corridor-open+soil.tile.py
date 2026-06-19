@@ -3,14 +3,14 @@
 # Water enters as a corridor on the left and opens into a broad side.
 
 from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill, SurfaceConfig, D
-from dharmatiles.layers import SoilCarpet, Scatter, Water
+from dharmatiles.layers import SoilCarpet, Water
 from dharmatiles.scatter import Rocks, Uniform
 
 
 def _shore() -> list:
     return [
         SoilCarpet(),
-        Scatter(Rocks(placement=Uniform(count_per_square=40), r=D[0.8:2.0].power(1.5))),
+        Rocks(placement=Uniform(count_per_square=40), r=D[0.8:2.0].power(1.5)),
     ]
 
 
@@ -22,7 +22,7 @@ tile = Tile(
             selector=FloodFill(0.75, 0.5),
             height_mm=3.0,
             layers=[
-                Scatter(Rocks(placement=Uniform(count_per_square=1), r=D[3.0:5.0], flat=D[1.725:1.86], n_cuts=3)),
+                Rocks(placement=Uniform(count_per_square=1), r=D[3.0:5.0], flat=D[1.725:1.86], n_cuts=3),
                 Water(embed_mm=2.5),
             ],
         ),

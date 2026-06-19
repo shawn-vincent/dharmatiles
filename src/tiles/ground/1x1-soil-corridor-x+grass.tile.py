@@ -3,7 +3,7 @@
 # Bare soil forms a four-way crossing through grass.
 
 from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill, SurfaceConfig, SpeciesConfig
-from dharmatiles.layers import SoilCarpet, GrassCarpet, Scatter
+from dharmatiles.layers import SoilCarpet, GrassCarpet
 from dharmatiles.scatter import Grass, Grouped
 
 _species = SpeciesConfig()
@@ -18,7 +18,7 @@ tile = Tile(
             selector=FloodFill((0.08, 0.08), (0.08, 0.92), (0.92, 0.92), (0.92, 0.08)),
             layers=[
                 GrassCarpet(species=_species, placement=Grouped(groups_per_square=240)),
-                Scatter(Grass(species=_species, placement=Grouped(groups_per_square=24))),
+                Grass(species=_species, placement=Grouped(groups_per_square=24)),
             ],
         ),
         Boundary(id='southwest-margin', from_anchor=Edge.LEFT(0.33), to_anchor=Edge.BOTTOM(0.33), path='organic', amplitude_mm=2.2, wavelength_mm=10.0),

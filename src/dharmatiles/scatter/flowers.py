@@ -306,7 +306,15 @@ def _stamp_flower(
 # ── Flowers scatter thing ─────────────────────────────────────────────────────
 
 class Flowers:
-    """Scattered 3D flowers: thin dome caps on inverted-cone support columns."""
+    """Scatter 3D flowers directly into a region layer list.
+
+    Each flower has a thin dome cap atop an inverted-cone support column, plus
+    N petal domes.  Flower footprints are stamped into ``terrain_support_z``
+    and ``obstacle_mask`` so subsequent ``Grass`` blades steer around them.
+    Place ``Flowers`` before ``Grass`` in ``Region.layers``.
+    """
+
+    height_default_mm: float = 5.0
 
     def __init__(self, *, placement: Uniform | None = None, **flower_kwargs) -> None:
         self.cfg       = FlowerConfig(**flower_kwargs)
@@ -359,3 +367,12 @@ class Flowers:
         from ..core.color import Material, tag as _tag
         _tag(combined, Material.FLOWER)
         return [combined]
+
+    def apply(
+        self,
+        scene,
+        *,
+        placement_mask: np.ndarray | None = None,
+    ) -> list[trimesh.Trimesh]:
+        """``TileLayer`` entry point — delegates to ``scatter()``."""
+        return self.scatter(scene, placement_mask=placement_mask)

@@ -1,9 +1,11 @@
 """
-Rocks and Grass: the things you scatter inside a ``Scatter`` layer.
+Rocks and Grass: direct tile layers that scatter elements into a region.
 
-Each class has one method, ``scatter(scene, *, placement_mask)``, which
+Each class implements the ``TileLayer`` protocol via ``apply()``, which
 samples positions, sorts seeds, builds meshes, and stamps the relevant
-scene support fields.  No seed/realise split — one call does it all.
+scene support fields.  Ordering in ``Region.layers`` is the author's
+contract: put ``Rocks`` before ``Grass`` so blades steer around rock
+footprints already stamped into ``terrain_support_z``.
 """
 from __future__ import annotations
 
@@ -21,12 +23,17 @@ from .distribute import scatter_positions
 # ── Rocks ─────────────────────────────────────────────────────────────────────
 
 class Rocks:
-    """One pass of half-ellipsoid rocks to scatter into a region.
+    """Scatter half-ellipsoid rocks directly into a region layer list.
 
     Flat kwargs set rock geometry (see ``RocksConfig``).
     Pass ``placement=Uniform(count_per_square=N)`` to control density;
     default is 15 rocks per square.
+
+    Place ``Rocks`` before any ``Grass`` in the same ``Region.layers``
+    so grass blades steer around already-stamped rock footprints.
     """
+
+    height_default_mm: float = 5.0
 
     def __init__(self, *, placement: Uniform | None = None, **rocks_kwargs):
         self.rocks = RocksConfig(**rocks_kwargs)
@@ -90,16 +97,32 @@ class Rocks:
             return [mesh]
         return []
 
+    def apply(
+        self,
+        scene,
+        *,
+        placement_mask: np.ndarray | None = None,
+    ) -> list[trimesh.Trimesh]:
+        """``TileLayer`` entry point — delegates to ``scatter()``."""
+        return self.scatter(scene, placement_mask=placement_mask)
+
 
 # ── Grass ─────────────────────────────────────────────────────────────────────
 
 class Grass:
-    """One species of 3D blades to scatter into a region.
+    """Grow a field of 3D grass blades into a region layer list.
 
     Pass a ``SpeciesConfig`` (sharable with a companion ``GrassCarpet``)
     to specify blade geometry.  Pass ``placement=Grouped(...)`` to control
     grouping and density; default is 3 Voronoi groups per square.
+
+    Unlike ``Rocks``, ``Grass`` is a *field simulation*: each blade's
+    growth path depends on prior blades' shared occupancy grid.  Place
+    ``Rocks`` (and any other obstacle-stamping layers) before ``Grass``
+    in ``Region.layers`` so blades route around existing footprints.
     """
+
+    height_default_mm: float = 5.0
 
     def __init__(
         self,
@@ -150,3 +173,12 @@ class Grass:
         paths = grow_all(scene, surface, grass_cfg, rng, verbose=verbose,
                          placement_mask=placement_mask, placement=self.placement)
         return build_meshes(paths, grass_cfg, scene, surface)
+
+    def apply(
+        self,
+        scene,
+        *,
+        placement_mask: np.ndarray | None = None,
+    ) -> list[trimesh.Trimesh]:
+        """``TileLayer`` entry point — delegates to ``scatter()``."""
+        return self.scatter(scene, placement_mask=placement_mask)

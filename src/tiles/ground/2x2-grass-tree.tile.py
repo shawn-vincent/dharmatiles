@@ -1,7 +1,7 @@
 """2x2 grass meadow with one Tree (space-colonisation growth, Bezier tubes)."""
 
 from dharmatiles.spec import Tile, Region, FloodFill, SurfaceConfig, SpeciesConfig, D
-from dharmatiles.layers import GrassCarpet, Scatter
+from dharmatiles.layers import GrassCarpet
 from dharmatiles.scatter import Tree, Grouped, Uniform
 
 _species = SpeciesConfig(
@@ -21,16 +21,14 @@ tile = Tile(
                     species=_species,
                     placement=Grouped(groups_per_square=3),
                 ),
-                Scatter(
-                    Tree(
-                        placement=Uniform(count_per_square=0.25),
-                        debug_attractors=False,
-                        foliage_clusters=True,
-                        n_attractors=32,
-                        leaf_length_mm=3.88,
-                        leaf_width_mm=2.42,
-                        leaf_cap_count=6,
-                    ),
+                Tree(
+                    placement=Uniform(count_per_square=0.25),
+                    debug_attractors=False,
+                    foliage_clusters=True,
+                    n_attractors=32,
+                    leaf_length_mm=3.88,
+                    leaf_width_mm=2.42,
+                    leaf_cap_count=6,
                 ),
             ],
         ),

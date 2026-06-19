@@ -3,7 +3,7 @@
 # Bare soil enters as a corridor on the left and opens into a broad side.
 
 from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill, SurfaceConfig, SpeciesConfig
-from dharmatiles.layers import SoilCarpet, GrassCarpet, Scatter
+from dharmatiles.layers import SoilCarpet, GrassCarpet
 from dharmatiles.scatter import Grass, Grouped
 
 _species = SpeciesConfig()
@@ -18,7 +18,7 @@ tile = Tile(
             selector=FloodFill((0.08, 0.08), (0.08, 0.92)),
             layers=[
                 GrassCarpet(species=_species, placement=Grouped(groups_per_square=240)),
-                Scatter(Grass(species=_species, placement=Grouped(groups_per_square=24))),
+                Grass(species=_species, placement=Grouped(groups_per_square=24)),
             ],
         ),
         Boundary(
