@@ -53,9 +53,34 @@ def _spine_distances(spine: np.ndarray) -> np.ndarray:
 
 def _cell_index(surface, x: float, y: float) -> tuple[int, int]:
     """Return the (ix, iy) grid-cell indices for world position (x, y)."""
-    ix = int(np.clip(int(x / surface.cell_w), 0, surface.grid_w - 1))
-    iy = int(np.clip(int(y / surface.cell_w), 0, surface.grid_h - 1))
+    ix = max(0, min(int(x / surface.cell_w), surface.grid_w - 1))
+    iy = max(0, min(int(y / surface.cell_w), surface.grid_h - 1))
     return ix, iy
+
+
+def _cell_range(
+    surface,
+    min_x: float,
+    max_x: float,
+    min_y: float,
+    max_y: float,
+) -> tuple[int, int, int, int, np.ndarray, np.ndarray]:
+    """Cell index range + coordinate arrays for an axis-aligned bounding box.
+
+    Returns ``(ix0, ix1, iy0, iy1, cols, rows)`` where *cols* and *rows* are
+    integer index arrays covering the cells that intersect the bbox, padded by
+    one cell on each side.
+
+    Shared by ``_contained_segment_cells`` and ``_leading_edge_cells`` (in
+    ``grower.py``) — single-source implementation of the identical bbox setup.
+    """
+    ix0 = max(0, int(min_x / surface.cell_w) - 1)
+    ix1 = min(surface.grid_w - 1, int(max_x / surface.cell_w) + 1)
+    iy0 = max(0, int(min_y / surface.cell_w) - 1)
+    iy1 = min(surface.grid_h - 1, int(max_y / surface.cell_w) + 1)
+    cols = np.arange(ix0, ix1 + 1)
+    rows = np.arange(iy0, iy1 + 1)
+    return ix0, ix1, iy0, iy1, cols, rows
 
 
 def _contained_segment_cells(
@@ -107,13 +132,7 @@ def _contained_segment_cells(
     if min_x >= max_x or min_y >= max_y:
         return None
 
-    ix0 = max(0, int(min_x / surface.cell_w) - 1)
-    ix1 = min(surface.grid_w - 1, int(max_x / surface.cell_w) + 1)
-    iy0 = max(0, int(min_y / surface.cell_w) - 1)
-    iy1 = min(surface.grid_h - 1, int(max_y / surface.cell_w) + 1)
-
-    cols = np.arange(ix0, ix1 + 1)
-    rows = np.arange(iy0, iy1 + 1)
+    ix0, ix1, iy0, iy1, cols, rows = _cell_range(surface, min_x, max_x, min_y, max_y)
     left   = cols * surface.cell_w
     right  = (cols + 1) * surface.cell_w
     bottom = rows * surface.cell_w

@@ -6,7 +6,7 @@ import numpy as np
 import trimesh
 
 from ._geometry import (
-    _blade_step_geometry, _cell_index,
+    _blade_step_geometry, _cell_index, _cell_range,
     _contained_segment_cells, _sample_grid, _spine_distances, _stamp_segment,
 )
 from .config import SpeciesConfig
@@ -395,7 +395,7 @@ def _fit_quadratic_arc(points: np.ndarray) -> np.ndarray:
     basis = 2.0 * (1.0 - t) * t
     arc = ((1.0 - t) ** 2)[:, None] * p0 + (t ** 2)[:, None] * p1
     fit = points - arc
-    denom = float(np.dot(basis, basis))
+    denom = float((basis * basis).sum())
     if denom <= 1e-12:
         return points.copy()
     control = (basis[:, None] * fit).sum(axis=0) / denom
@@ -467,17 +467,11 @@ def _leading_edge_cells(
     if min_x > max_x or min_y > max_y:
         return None
 
-    ix0 = max(0, int(min_x / surface.cell_w) - 1)
-    ix1 = min(surface.grid_w - 1, int(max_x / surface.cell_w) + 1)
-    iy0 = max(0, int(min_y / surface.cell_w) - 1)
-    iy1 = min(surface.grid_h - 1, int(max_y / surface.cell_w) + 1)
-
-    cols = np.arange(ix0, ix1 + 1)
-    rows = np.arange(iy0, iy1 + 1)
-    left = cols * surface.cell_w
-    right = (cols + 1) * surface.cell_w
+    ix0, ix1, iy0, iy1, cols, rows = _cell_range(surface, min_x, max_x, min_y, max_y)
+    left   = cols * surface.cell_w
+    right  = (cols + 1) * surface.cell_w
     bottom = rows * surface.cell_w
-    top = (rows + 1) * surface.cell_w
+    top    = (rows + 1) * surface.cell_w
 
     eps = 1e-9
     mask = _segment_intersects_cells(ax, ay, bx, by, left, right, bottom, top, eps)
@@ -501,33 +495,38 @@ def _segment_intersects_cells(
     top: np.ndarray,
     eps: float,
 ) -> np.ndarray:
-    """Vectorized line-segment/AABB intersection for candidate grid cells."""
-    rows = len(bottom)
-    cols = len(left)
-    t0 = np.zeros((rows, cols), dtype=float)
-    t1 = np.ones((rows, cols), dtype=float)
-    mask = np.ones((rows, cols), dtype=bool)
+    """Vectorized line-segment/AABB intersection for candidate grid cells.
 
+    Uses a unified slab-intersection approach: degenerate axes collapse their
+    slab to an empty t-range (t0 > t1 sentinel) for cells where the endpoint
+    lies outside, rather than maintaining a separate boolean mask.  This avoids
+    the upfront allocation of a full (rows, cols) mask array and the two-path
+    conditional structure.
+    """
     dx = bx - ax
-    if abs(dx) <= eps:
-        mask &= (ax >= left[None, :] - eps) & (ax <= right[None, :] + eps)
-    else:
+    dy = by - ay
+
+    # ── X slab ────────────────────────────────────────────────────────────────
+    if abs(dx) > eps:
         tx_a = (left - ax) / dx
         tx_b = (right - ax) / dx
-        tx_min = np.minimum(tx_a, tx_b)[None, :]
-        tx_max = np.maximum(tx_a, tx_b)[None, :]
-        t0 = np.maximum(t0, tx_min)
-        t1 = np.minimum(t1, tx_max)
-
-    dy = by - ay
-    if abs(dy) <= eps:
-        mask &= (ay >= bottom[:, None] - eps) & (ay <= top[:, None] + eps)
+        t0 = np.minimum(tx_a, tx_b)[None, :]          # (1, cols)
+        t1 = np.maximum(tx_a, tx_b)[None, :]
     else:
+        # Degenerate x: ax must be inside [left-eps, right+eps] for each col.
+        in_x = (ax >= left - eps) & (ax <= right + eps)
+        t0 = np.where(in_x,  0.0, 2.0)[None, :]       # out-of-range sentinel
+        t1 = np.where(in_x,  1.0, -1.0)[None, :]
+
+    # ── Y slab ────────────────────────────────────────────────────────────────
+    if abs(dy) > eps:
         ty_a = (bottom - ay) / dy
         ty_b = (top - ay) / dy
-        ty_min = np.minimum(ty_a, ty_b)[:, None]
-        ty_max = np.maximum(ty_a, ty_b)[:, None]
-        t0 = np.maximum(t0, ty_min)
-        t1 = np.minimum(t1, ty_max)
+        t0 = np.maximum(t0, np.minimum(ty_a, ty_b)[:, None])
+        t1 = np.minimum(t1, np.maximum(ty_a, ty_b)[:, None])
+    else:
+        in_y = (ay >= bottom - eps) & (ay <= top + eps)
+        t0 = np.broadcast_to(t0, (len(bottom), len(left))).copy()
+        t1 = np.where(in_y[:, None], t1, -1.0)        # out-of-range sentinel
 
-    return mask & (t0 <= t1 + eps) & (t1 >= -eps) & (t0 <= 1.0 + eps)
+    return (t0 <= t1 + eps) & (t1 >= -eps) & (t0 <= 1.0 + eps)

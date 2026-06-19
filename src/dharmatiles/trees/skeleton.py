@@ -593,16 +593,21 @@ def _voronoi_group_attractors(
     seed_idx = rng.choice(n, size=k, replace=False)
     seeds    = scaled[seed_idx].copy()
 
-    # Lloyd's iterations (vectorised, n*k*3 tensors are small for typical sizes).
+    # Lloyd's iterations: assignment is O(n*k*3); centroid update uses
+    # np.add.at for O(n) scatter-accumulate instead of a Python k-loop.
     for _ in range(20):
         diff   = scaled[:, np.newaxis, :] - seeds[np.newaxis, :, :]  # (n, k, 3)
         dists2 = (diff ** 2).sum(axis=2)                               # (n, k)
         labels = np.argmin(dists2, axis=1)                             # (n,)
 
-        new_seeds = np.empty_like(seeds)
-        for ki in range(k):
-            members = scaled[labels == ki]
-            new_seeds[ki] = members.mean(axis=0) if len(members) > 0 else seeds[ki]
+        counts    = np.bincount(labels, minlength=k)                   # (k,)
+        new_seeds = np.zeros_like(seeds)
+        np.add.at(new_seeds, labels, scaled)                           # scatter-sum
+        new_seeds /= np.maximum(counts[:, np.newaxis], 1)
+        # Restore empty clusters to their previous centroid (no members → no move).
+        empty = counts == 0
+        if empty.any():
+            new_seeds[empty] = seeds[empty]
 
         if np.allclose(seeds, new_seeds, atol=1e-6):
             break

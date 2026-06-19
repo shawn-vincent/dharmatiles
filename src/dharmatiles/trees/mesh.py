@@ -711,10 +711,7 @@ def _build_foliage_cluster_mesh(
     N_SPINE    = 64
     spine_ts   = np.linspace(0.0, 1.0, N_SPINE)
     spine_pts  = _bezier_eval(start_p, s_bp1, s_bp2, tip_p, spine_ts)   # (N, 3)
-    spine_traw = np.vstack([
-        _bezier_tangent(start_p, s_bp1, s_bp2, tip_p, float(t))
-        for t in spine_ts
-    ])
+    spine_traw = _bezier_tangent_vec(start_p, s_bp1, s_bp2, tip_p, spine_ts)
     tn         = np.linalg.norm(spine_traw, axis=1, keepdims=True)
     spine_tans = spine_traw / np.where(tn > 1e-10, tn, 1.0)             # (N, 3)
     seg_lens   = np.linalg.norm(np.diff(spine_pts, axis=0), axis=1)
@@ -1426,6 +1423,24 @@ def _bezier_tangent(
     p0: np.ndarray, p1: np.ndarray, p2: np.ndarray, p3: np.ndarray,
     t: float,
 ) -> np.ndarray:
+    return (
+        3.0 * (1.0 - t) ** 2 * (p1 - p0)
+        + 6.0 * (1.0 - t) * t * (p2 - p1)
+        + 3.0 * t ** 2 * (p3 - p2)
+    )
+
+
+def _bezier_tangent_vec(
+    p0: np.ndarray, p1: np.ndarray, p2: np.ndarray, p3: np.ndarray,
+    ts: np.ndarray,
+) -> np.ndarray:
+    """Vectorised cubic Bézier tangent for an array of t values.
+
+    Equivalent to ``np.vstack([_bezier_tangent(..., t) for t in ts])`` but
+    in one batched NumPy expression — avoids O(N_SPINE) Python frames in the
+    foliage clump spine.
+    """
+    t = ts[:, None]
     return (
         3.0 * (1.0 - t) ** 2 * (p1 - p0)
         + 6.0 * (1.0 - t) * t * (p2 - p1)

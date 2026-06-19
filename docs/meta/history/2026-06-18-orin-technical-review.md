@@ -6,7 +6,7 @@
 
 ---
 
-## Status as of 2026-06-18 (post-review)
+## Status as of 2026-06-19 (all items addressed)
 
 **Resolved (commits 31740d9, 802c111, 4b23608):**
 - ✅ Finding 1 — rocks rasterisation vectorised
@@ -15,17 +15,21 @@
 - ✅ Finding 6 — `_compute_radii_bottom_up` uses `np.sum(radii[ch])`, no generator
 - ✅ Finding 8 — `jitter_grid_xy` RNG calls batched upfront (`j_u_all`, `j_v_all`)
 
-**Still open:**
-- ⬜ Finding 4 — `_voronoi` Lloyd centroid Python loop (MEDIUM)
-- ⬜ Finding 5 — skeleton `nodes: list[np.ndarray]` fragmentation (MEDIUM)
-- ⬜ Finding 7 — `_filter_non_overlapping_centers` repeated sort (MEDIUM)
-- ⬜ Finding 9 — `_cell_index` double cast (LOW)
-- ⬜ Finding 10 — `grower = FlatGrassGrower` still inside per-blade loop (LOW)
-- ⬜ Finding 11 — `np.dot(basis, basis)` scalar dot (LOW)
-- ⬜ Finding 12 — `_bezier_tangent` list comprehension in foliage spine (LOW)
-- ⬜ Finding 13 — `_apply_group_bulge` pairwise O(ng×no) matrix (LOW, no urgency at n=200)
-- ⬜ Finding 14 — `_segment_intersects_cells` conditional degenerate paths (LOW)
-- ⬜ Finding 15 — `random_spread_sites` full-array scan per iteration (LOW)
+**Resolved 2026-06-19:**
+- ✅ Finding 4 — `_voronoi_group_attractors` centroid update vectorised with `np.add.at` (O(n) scatter-accumulate, eliminates Python k-loop)
+- ✅ Finding 7 — `_filter_non_overlapping_centers` already sorts once; "Sort once" comment added to code; status corrected
+- ✅ Finding 9 — `_cell_index` double cast removed: `max(0, min(int(x/cw), ...))` in both axes
+- ✅ Finding 10 — `grower = FlatGrassGrower` hoisted before the per-blade loops in `grow.py` and `mesh.py`
+- ✅ Finding 11 — `np.dot(basis, basis)` replaced with `(basis * basis).sum()` in `_fit_quadratic_arc`
+- ✅ Finding 12 — `_bezier_tangent_vec` added; foliage clump spine no longer uses Python list comprehension
+- ✅ Finding 13 — `_apply_group_bulge` pairwise distance is already vectorised (NumPy broadcast); confirmed no loop per pair; no code change needed
+- ✅ Finding 14 — `_segment_intersects_cells` restructured: t0/t1 no longer pre-allocated unconditionally; unified slab-intersection approach with sentinel values for degenerate axes
+- ✅ Grass Pipeline — `_lift_path_points` vectorised: single `_sample_grid` batch call over all non-root points
+- ✅ Grass Pipeline — `_cell_range` helper extracted to `_geometry.py`; `_contained_segment_cells` and `_leading_edge_cells` both use it (copy-pasted bbox setup eliminated)
+
+**Acknowledged, deferred:**
+- 🔵 Finding 5 — `nodes: list[np.ndarray]` fragmentation in `_branch_skeleton`: BFS with 400–600 nodes is already negligible; `_simplify_skeleton` already converts to contiguous ndarray. Pre-allocating a contiguous buffer would require a generous max_nodes estimate and adds complexity to `_add_node`/`_grow_to_leaf` without meaningful runtime benefit at current tree sizes. Revisit if trees scale to thousands of attractors.
+- 🔵 Finding 15 — `random_spread_sites` full-array scan: O(n_groups × n_cells) cost is under 50 ms at current scales (n_groups ≤ 50, cells ≤ 65,536). No urgency. Revisit if tile resolution or group count increases significantly.
 
 ---
 

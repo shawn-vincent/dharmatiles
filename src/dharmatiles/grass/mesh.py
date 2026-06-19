@@ -22,10 +22,9 @@ def build_meshes(paths: list[GrassPath], cfg: GrassConfig, scene, surface) -> li
        profile-aware, slope-aware rasterisation.
     """
     species = cfg.species
+    grower = FlatGrassGrower  # class reference; identical for every blade
     meshes: list[trimesh.Trimesh] = []
     for path in paths:
-        grower = FlatGrassGrower
-
         # Step 1: adjust path points against the current accumulated surface.
         lifted_points = _lift_path_points(path.points, scene.vegetation_support_z, surface)
         lifted_path = GrassPath(seed=path.seed, points=lifted_points)
@@ -71,15 +70,22 @@ def _lift_path_points(
 
     Ring 0 is the intentional terrain-sunk root.  Other points raise only:
     max(planned_z, floor_z).
+
+    Samples support_z for all non-root points in a single vectorised call
+    (one bilinear lookup per point rather than one Python frame per point).
     """
-    lifted = []
-    for idx, (x, y, z) in enumerate(points):
-        if idx == 0:
-            lifted.append((float(x), float(y), float(z)))
-            continue
-        floor_z = _sample_grid(support_z, surface, x, y)
-        lifted.append((float(x), float(y), float(max(z, floor_z))))
-    return lifted
+    if len(points) < 2:
+        return [(float(x), float(y), float(z)) for x, y, z in points]
+    pts = np.asarray(points, dtype=float)          # (n, 3)
+    # Batch bilinear sample for all non-root points (indices 1..n-1).
+    floor_zs  = _sample_grid(support_z, surface, pts[1:, 0], pts[1:, 1])
+    lifted_zs = np.maximum(pts[1:, 2], floor_zs)
+    # Reconstruct as list-of-tuples; root point is unchanged.
+    out: list[tuple[float, float, float]] = [
+        (float(pts[0, 0]), float(pts[0, 1]), float(pts[0, 2]))
+    ]
+    out.extend(zip(pts[1:, 0].tolist(), pts[1:, 1].tolist(), lifted_zs.tolist()))
+    return out
 
 
 

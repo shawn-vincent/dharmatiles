@@ -45,6 +45,7 @@ def grow_all(
 
     _sort_upstream_first(growing, surface)
     species = cfg.species
+    grower = FlatGrassGrower  # class reference; identical for every blade
     total_segments = 0
     full_length_blades = 0
 
@@ -53,7 +54,6 @@ def grow_all(
             path.alive = False
             continue
 
-        grower = FlatGrassGrower
         grown_segments = 0
 
         for _ in range(path.seed.blade_n_steps):
