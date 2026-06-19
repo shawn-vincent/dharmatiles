@@ -36,7 +36,7 @@ from ..core.config import (GrassConfig as _RuntimeGrassConfig,
 from ..core.tile import TileScene, derive_seed
 from ..scatter.config import Grouped
 from ..grass._geometry import _blade_step_geometry, _sample_grid
-from ..grass.growers.flat import FlatGrassGrower
+from ..grass.grower import FlatGrassGrower
 from ..grass.grow import plant_seeds as _plant_seeds
 from ..grass.seed import GrassPath, GrassSeed
 
@@ -83,7 +83,8 @@ class GrassCarpet:
         """
         cfg = self.cfg
         surface = scene.surface
-        rng = np.random.default_rng(scene.derive_seed('grass-carpet'))
+        from ..core.tile import derive_seed as _derive_seed
+        rng = np.random.default_rng(_derive_seed(scene.surface.seed, 'grass-carpet'))
 
         # Reset vegetation_support_z to the bare terrain baseline so that
         # plant_seeds' _vegetation_depth check returns 0 for every cell and

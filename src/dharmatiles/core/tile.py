@@ -113,17 +113,6 @@ class TileScene:
         self.terrain_z[:] = z
         self.terrain_support_z[:] = self.terrain_z
 
-    # ── Seed derivation (N) ───────────────────────────────────────────────────
-
-    def derive_seed(self, label: str, layer_idx: int = 0) -> int:
-        """Return a deterministic 32-bit RNG seed for ``(surface.seed, label, layer_idx)``.
-
-        Delegates to the module-level :func:`derive_seed` free function so the
-        same logic is available both on the scene and in helpers that receive
-        only a raw integer seed.
-        """
-        return derive_seed(self.surface.seed, label, layer_idx)
-
     # ── Slope-normal helpers (future) ─────────────────────────────────────────
     #
     # ASSUMPTION (current): all geometry layers (soil, stones, grass) treat the

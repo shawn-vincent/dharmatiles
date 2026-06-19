@@ -7,7 +7,7 @@ import trimesh
 
 from ._geometry import _sample_grid, _spine_distances, _stamp_segment
 from .config import GrassConfig
-from .growers import FlatGrassGrower
+from .grower import FlatGrassGrower
 from .seed import GrassPath
 from ..core.color import Material, tag as _tag
 

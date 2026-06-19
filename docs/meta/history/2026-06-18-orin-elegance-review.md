@@ -7,6 +7,30 @@
 
 ---
 
+## Status as of 2026-06-18 (post-review)
+
+**Resolved:**
+- ✅ Finding 1 — `core/terrain.py` deleted (18b7e5c area)
+- ✅ Finding 2 — `SceneConfig` deleted
+- ✅ Finding 3 — `core/color.py` split; `core/export_3mf.py` extracted (4b23608)
+- ✅ Finding 4 — compat `__init__` removed from `SpeciesConfig`/`SoilConfig`/`RocksConfig` (802c111)
+- ✅ Finding 5 — `FloppyGrassLayer` class removed; `grass/layer.py` deleted
+- ✅ Finding 7 — `TreeShape` wrapper flattened into `Tree`
+- ✅ Finding 9 — `GrassConfig.species` collapsed to single `SpeciesConfig`
+- ✅ Finding 12 — `TileScene.parts` field removed
+- ✅ Finding 14 — `load_spec` alias removed
+- ✅ Finding 15 — String-keyed `_LAYER_TERRAIN_MATERIAL` dict replaced with `terrain_material: ClassVar[Material]` protocol on layers
+
+**All open findings resolved (second pass, 2026-06-18):**
+- ✅ Finding 6 — `growers/` subpackage collapsed: `growers/flat.py` → `grass/grower.py`; subpackage deleted
+- ✅ Finding 8 — `FlatHeight` removed; `Region` uses `height_mm: float` directly; all water tiles updated to `height_mm=3.0`
+- ✅ Finding 10 — `trees/_utils.py` created with `_safe_norm`, `_hash01`, `_WUP_VEC`; dead `_hash01` in `leaf.py` removed; both modules import from `_utils`
+- ✅ Finding 11 — `_stamp_tree` vectorised with meshgrid + boolean mask
+- ✅ Finding 13 — `TileScene.derive_seed()` method removed; one caller in `grass_carpet.py` updated to free function
+- ✅ Finding 16 — `export()` removed from `bases/dungeonblocks.py` and `bases/openlock.py`; shared `_attach_and_export()` helper added to `systems.py`; `DungeonBlocks.export()` and `OpenLOCK.export()` call `make_base()` + helper directly
+
+---
+
 ## Executive Summary
 
 The codebase is architecturally sound at a high level. The pipeline is linear and easy to trace. The tile spec language is clean and expressive. The scatter system is genuinely well-unified. The grower/layer/scene separation holds.
@@ -15,7 +39,7 @@ The entropy lives in specific seams: a dead abstraction layer (TerrainType), a g
 
 ---
 
-## Finding 1 — `TerrainType` enum is dead code [HIGH]
+## Finding 1 — `TerrainType` enum is dead code [HIGH] ✅ DONE
 
 **File:** `src/dharmatiles/core/terrain.py`
 
@@ -29,7 +53,7 @@ This is a planning artifact from an earlier design that was superseded before re
 
 ---
 
-## Finding 2 — `SceneConfig` is a ghost [HIGH]
+## Finding 2 — `SceneConfig` is a ghost [HIGH] ✅ DONE
 
 **File:** `src/dharmatiles/core/config.py` (lines 594–606)
 
@@ -41,7 +65,7 @@ This is a planning artifact from an earlier design that was superseded before re
 
 ---
 
-## Finding 3 — `core/color.py` is three modules in a trench coat [HIGH]
+## Finding 3 — `core/color.py` is three modules in a trench coat [HIGH] ✅ DONE (4b23608)
 
 **File:** `src/dharmatiles/core/color.py`
 
@@ -65,7 +89,7 @@ No functional change needed; just a move. Callers update their imports.
 
 ---
 
-## Finding 4 — Frozen dataclass + custom `__init__` anti-pattern [HIGH]
+## Finding 4 — Frozen dataclass + custom `__init__` anti-pattern [HIGH] ✅ DONE (802c111)
 
 **Files:** `src/dharmatiles/core/config.py` — `SpeciesConfig`, `SoilConfig`, `RocksConfig`
 
@@ -107,7 +131,7 @@ Path B (keep frozen): Keep `@dataclass(frozen=True)` but eliminate the dict loop
 
 ---
 
-## Finding 5 — `FloppyGrassLayer` is ceremony around two function calls [MEDIUM]
+## Finding 5 — `FloppyGrassLayer` is ceremony around two function calls [MEDIUM] ✅ DONE (grass/layer.py deleted)
 
 **File:** `src/dharmatiles/grass/layer.py`
 
@@ -126,7 +150,7 @@ The word "Floppy" in the name is also leakage: it refers to the `FlatGrassGrower
 
 ---
 
-## Finding 6 — `GROWERS` registry with one entry [MEDIUM]
+## Finding 6 — `GROWERS` registry with one entry [MEDIUM] ✅ DONE (`growers/flat.py` → `grass/grower.py`; subpackage deleted)
 
 **File:** `src/dharmatiles/grass/growers/__init__.py`
 
@@ -148,7 +172,7 @@ The `growers/` subdirectory with its `__init__.py` and `flat.py` adds a layer of
 
 ---
 
-## Finding 7 — `TreeShape` wrapper adds one indirection for zero value [MEDIUM]
+## Finding 7 — `TreeShape` wrapper adds one indirection for zero value [MEDIUM] ✅ DONE (flattened into Tree)
 
 **File:** `src/dharmatiles/trees/layer.py` (lines 19–28, 91–100)
 
@@ -167,7 +191,7 @@ The `Tree.__init__` signature lists the same eight parameters that `TreeShape` h
 
 ---
 
-## Finding 8 — `FlatHeight` wraps a single float [MEDIUM]
+## Finding 8 — `FlatHeight` wraps a single float [MEDIUM] ✅ DONE (removed; `Region.height_mm` is now the direct field; all water tiles updated)
 
 **File:** `src/dharmatiles/spec.py` (lines 164–177)
 
@@ -187,7 +211,7 @@ The wrapping pattern is correct IF the protocol solidifies into multiple impleme
 
 ---
 
-## Finding 9 — `GrassConfig.species` is `list[SpeciesConfig]` but always length 1 [MEDIUM]
+## Finding 9 — `GrassConfig.species` is `list[SpeciesConfig]` but always length 1 [MEDIUM] ✅ DONE (collapsed to single SpeciesConfig)
 
 **File:** `src/dharmatiles/core/config.py` (line 156)
 
@@ -205,7 +229,7 @@ Meanwhile, `Grass` (the scatter thing) takes a `species: SpeciesConfig` paramete
 
 ---
 
-## Finding 10 — `_hash01` and `_safe_norm` duplicated in the trees subpackage [MEDIUM]
+## Finding 10 — `_hash01` and `_safe_norm` duplicated in the trees subpackage [MEDIUM] ✅ DONE (`trees/_utils.py` created; dead `_hash01` in `leaf.py` removed)
 
 **Files:** `src/dharmatiles/trees/cloud_mesh.py`, `src/dharmatiles/trees/leaf.py`
 
@@ -217,7 +241,7 @@ The circular-import concern is real: `leaf.py` is imported by `cloud_mesh.py`, s
 
 ---
 
-## Finding 11 — `_stamp_tree` uses a Python nested loop [MEDIUM]
+## Finding 11 — `_stamp_tree` uses a Python nested loop [MEDIUM] ✅ DONE (vectorised with meshgrid + boolean mask)
 
 **File:** `src/dharmatiles/trees/layer.py` (lines 275–290)
 
@@ -240,7 +264,7 @@ For large trees (radius ~15mm, cell_w ~0.27mm) the loop iterates ~(60×60=3600) 
 
 ---
 
-## Finding 12 — `TileScene.parts` is an unused field [LOW]
+## Finding 12 — `TileScene.parts` is an unused field [LOW] ✅ DONE (field removed)
 
 **File:** `src/dharmatiles/core/tile.py` (line 80)
 
@@ -250,7 +274,7 @@ For large trees (radius ~15mm, cell_w ~0.27mm) the loop iterates ~(60×60=3600) 
 
 ---
 
-## Finding 13 — `derive_seed` is both a free function and a method [LOW]
+## Finding 13 — `derive_seed` is both a free function and a method [LOW] ✅ DONE (`TileScene.derive_seed()` method removed; `grass_carpet.py` updated to use free function)
 
 **File:** `src/dharmatiles/core/tile.py` (lines 36–47, 122–129)
 
@@ -260,7 +284,7 @@ This is a minor issue but adds conceptual surface. The method is convenience sug
 
 ---
 
-## Finding 14 — The `load_spec` alias is a ghost export [LOW]
+## Finding 14 — The `load_spec` alias is a ghost export [LOW] ✅ DONE (alias removed)
 
 **File:** `src/dharmatiles/spec.py` (line 372)
 
@@ -274,7 +298,7 @@ load_spec = load_tile   # backward-compat alias
 
 ---
 
-## Finding 15 — `_LAYER_TERRAIN_MATERIAL` uses type-name strings for dispatch [LOW]
+## Finding 15 — `_LAYER_TERRAIN_MATERIAL` uses type-name strings for dispatch [LOW] ✅ DONE (replaced with `terrain_material: ClassVar[Material]` protocol on layers)
 
 **File:** `src/dharmatiles/terrains/tile.py` (lines 159–166)
 
@@ -295,7 +319,7 @@ This is a small surface but represents the wrong direction (stringly-typed dispa
 
 ---
 
-## Finding 16 — `systems.py` / `bases/` double indirection [LOW]
+## Finding 16 — `systems.py` / `bases/` double indirection [LOW] ✅ DONE (`export()` removed from both base modules; `_attach_and_export()` helper in `systems.py`; bases expose only `make_base()`)
 
 **Files:** `src/dharmatiles/systems.py`, `src/dharmatiles/bases/dungeonblocks.py`, `src/dharmatiles/bases/openlock.py`
 
@@ -405,6 +429,6 @@ These are reversible, independent. Do in order.
 
 ---
 
-## Architecture Verdict: DRIFTING
+## Architecture Verdict: DRIFTING → CLEAN (post second-pass fixes 2026-06-18)
 
 The core pipeline is CLEAN. The drift is concentrated in config classes, dead abstractions, and one module whose scope has grown beyond its name. None of these are architectural failures — they are accumulated drag from features that were planned but not built, migrations that were half-completed, and one module that needed to absorb scope without being split. A focused cleanup pass on Findings 1–4 would return the codebase to CLEAN.

@@ -4,7 +4,7 @@
 # pool sits in the bottom-left corner — like a marshy pond tucked into the
 # angle of a riverbank.
 
-from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill, FlatHeight, SurfaceConfig, D
+from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill, SurfaceConfig, D
 from dharmatiles.layers import SoilCarpet, Scatter, Water
 from dharmatiles.scatter import Rocks, Uniform
 
@@ -14,7 +14,7 @@ tile = Tile(
         Region(
             id='pool',
             selector=FloodFill(0.15, 0.15),
-            terrain=FlatHeight(3.0),
+            height_mm=3.0,
             layers=[
                 Scatter(
                     Rocks(

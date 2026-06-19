@@ -21,7 +21,25 @@ import pathlib
 import numpy as np
 import trimesh
 
+from .core.color import Material, export_color_stl, tag as _tag
 from .core.config import BaseConfig, SurfaceConfig
+
+
+def _attach_and_export(
+    base_mesh: trimesh.Trimesh,
+    colored_meshes: list[trimesh.Trimesh],
+    output_path: pathlib.Path,
+) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
+    """Tag *base_mesh*, concatenate with *colored_meshes*, write colour STL.
+
+    Returns (combined_stl_mesh, all_meshes) where all_meshes = [base] + colored.
+    """
+    _tag(base_mesh, Material.BASE)
+    all_meshes = [base_mesh] + list(colored_meshes)
+    combined   = trimesh.util.concatenate(all_meshes)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    export_color_stl(combined, output_path)
+    return combined, all_meshes
 
 
 class DungeonBlocks:
@@ -44,9 +62,14 @@ class DungeonBlocks:
                terrain_z: np.ndarray, output_path: pathlib.Path,
                ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
         from .bases import dungeonblocks
-        base_cfg = dataclasses.replace(BaseConfig(), peg_height=self.peg_height)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        return dungeonblocks.export(colored_meshes, surface, base_cfg, terrain_z, output_path)
+        base_cfg  = dataclasses.replace(BaseConfig(), peg_height=self.peg_height)
+        tile_max_z = max(
+            (float(m.bounds[1, 2]) for m in colored_meshes if len(m.vertices) > 0),
+            default=0.0,
+        )
+        peg_h     = dungeonblocks.select_peg_height(terrain_z, base_cfg, tile_max_z=tile_max_z)
+        base_mesh = dungeonblocks.make_base(surface, peg_h, base_cfg)
+        return _attach_and_export(base_mesh, colored_meshes, output_path)
 
     def __repr__(self) -> str:
         return f"DungeonBlocks(peg_height={self.peg_height!r})"
@@ -81,9 +104,8 @@ class OpenLOCK:
                terrain_z: np.ndarray, output_path: pathlib.Path,
                ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
         from .bases import openlock
-        base_cfg = dataclasses.replace(BaseConfig(), peg_height=self.peg_height)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        return openlock.export(colored_meshes, surface, base_cfg, terrain_z, output_path)
+        base_mesh = openlock.make_base(surface)
+        return _attach_and_export(base_mesh, colored_meshes, output_path)
 
     def __repr__(self) -> str:
         return f"OpenLOCK(square_mm={self.square_mm!r}, peg_height={self.peg_height!r})"
@@ -106,7 +128,6 @@ class BareSystem:
     def export(self, colored_meshes: list[trimesh.Trimesh], surface: SurfaceConfig,
                terrain_z: np.ndarray, output_path: pathlib.Path,
                ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
-        from .core.color import export_color_stl
         output_path.parent.mkdir(parents=True, exist_ok=True)
         combined = (trimesh.util.concatenate(colored_meshes)
                     if colored_meshes else trimesh.Trimesh())

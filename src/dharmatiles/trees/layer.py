@@ -265,11 +265,12 @@ def _stamp_tree(scene, surface, x: float, y: float, env: CanopyEnvelope, root_ra
     j1 = min(surface.grid_h - 1, int(np.ceil((y + rr) / cw)))
     i0 = max(0, int(np.floor((x - rr) / cw)))
     i1 = min(surface.grid_w - 1, int(np.ceil((x + rr) / cw)))
-    for j in range(j0, j1 + 1):
-        yy = j * cw
-        for i in range(i0, i1 + 1):
-            xx = i * cw
-            if (xx - x) ** 2 + (yy - y) ** 2 <= rr ** 2:
-                scene.terrain_support_z[j, i] = max(scene.terrain_support_z[j, i], env.terrain_z + env.height_mm)
-                if scene.obstacle_mask is not None:
-                    scene.obstacle_mask[j, i] = True
+    jj = np.arange(j0, j1 + 1) * cw
+    ii = np.arange(i0, i1 + 1) * cw
+    YY, XX = np.meshgrid(jj, ii, indexing='ij')         # (rows, cols) in world coords
+    in_circle = (XX - x) ** 2 + (YY - y) ** 2 <= rr ** 2
+    z_top = env.terrain_z + env.height_mm
+    sl = scene.terrain_support_z[j0:j1 + 1, i0:i1 + 1]
+    np.maximum(sl, np.where(in_circle, z_top, sl), out=sl)
+    if scene.obstacle_mask is not None:
+        scene.obstacle_mask[j0:j1 + 1, i0:i1 + 1] |= in_circle

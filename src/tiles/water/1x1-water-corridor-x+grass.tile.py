@@ -2,7 +2,7 @@
 #
 # Water forms a four-way crossing through grass.
 
-from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill, FlatHeight, SurfaceConfig, SpeciesConfig, D
+from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill, SurfaceConfig, SpeciesConfig, D
 from dharmatiles.layers import SoilCarpet, GrassCarpet, Scatter, Water
 from dharmatiles.scatter import Rocks, Grass, Grouped, Uniform
 
@@ -22,7 +22,7 @@ tile = Tile(
         Region(
             id='channel',
             selector=FloodFill(0.5, 0.5),
-            terrain=FlatHeight(3.0),
+            height_mm=3.0,
             layers=[
                 Scatter(Rocks(placement=Uniform(count_per_square=1), r=D[3.0:5.0], flat=D[1.725:1.86], n_cuts=3)),
                 Water(embed_mm=2.5),

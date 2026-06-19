@@ -6,12 +6,10 @@ https://www.myminifactory.com/object/3d-print-dungeonblocks-blank-floor-tile-177
 """
 from __future__ import annotations
 
-import pathlib
-
 import numpy as np
 import trimesh
 
-from ..core.color import Material, tag as _tag, export_color_stl
+from ..core.color import Material, tag as _tag
 from ..core.config import BaseConfig, SurfaceConfig
 from ..core.logo import make_logo_manifold
 
@@ -147,30 +145,4 @@ def make_base(surface: SurfaceConfig,
     return mesh
 
 
-def export(colored_meshes: list[trimesh.Trimesh],
-           surface: SurfaceConfig,
-           base_cfg: BaseConfig,
-           terrain_z: np.ndarray,
-           output_path: pathlib.Path,
-           ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
-    """Attach a DungeonBlocks base; write colour STL and 3MF side-by-side.
-
-    Returns (combined_stl_mesh, all_meshes) where all_meshes = [base] + colored.
-    """
-    tile_max_z = max(
-        (float(m.bounds[1, 2]) for m in colored_meshes if len(m.vertices) > 0),
-        default=0.0,
-    )
-    peg_h     = select_peg_height(terrain_z, base_cfg, tile_max_z=tile_max_z)
-    base_mesh = make_base(surface, peg_h, base_cfg)
-    _tag(base_mesh, Material.BASE)
-
-    all_meshes = [base_mesh] + list(colored_meshes)
-
-    # ── Colour STL (Materialise RGB15 attribute bytes) ────────────────────────
-    combined = trimesh.util.concatenate(all_meshes)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    export_color_stl(combined, output_path)
-
-    return combined, all_meshes
 

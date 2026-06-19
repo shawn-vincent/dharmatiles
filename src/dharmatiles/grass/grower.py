@@ -5,12 +5,12 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
-from .._geometry import (
+from ._geometry import (
     _blade_step_geometry, _cell_index,
     _contained_segment_cells, _sample_grid, _spine_distances, _stamp_segment,
 )
-from ..config import SpeciesConfig
-from ..seed import GrassPath, GrowingPath
+from .config import SpeciesConfig
+from .seed import GrassPath, GrowingPath
 
 
 class FlatGrassGrower:

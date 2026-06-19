@@ -26,6 +26,8 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
+from ._utils import _safe_norm
+
 # ── Constants ──────────────────────────────────────────────────────────────────
 
 _LEAF_N_LONG           = 12    # longitudinal sections (base → tip)
@@ -68,23 +70,6 @@ def _mesh_with_fixed_normals(
         _FACE_CACHE[cache_key] = mesh.faces.copy()
         return mesh
     return trimesh.Trimesh(vertices=verts, faces=cached.copy(), process=False)
-
-
-def _safe_norm(v: np.ndarray) -> np.ndarray:
-    n = float(np.linalg.norm(v))
-    return v / n if n > 1e-12 else v
-
-
-def _hash01(*parts: object) -> float:
-    """Deterministic float in [0, 1) from arbitrary hashable parts."""
-    h = 1469598103934665603
-    for part in parts:
-        for byte in str(part).encode("utf-8"):
-            h ^= byte
-            h  = (h * 1099511628211) & 0xFFFFFFFFFFFFFFFF
-        h ^= 0xFF
-        h  = (h * 1099511628211) & 0xFFFFFFFFFFFFFFFF
-    return h / float(2 ** 64)
 
 
 # ── Canonical face array builder ───────────────────────────────────────────────

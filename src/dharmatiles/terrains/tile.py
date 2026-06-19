@@ -597,12 +597,12 @@ def _build_spec_terrain(
     Algorithm
     ---------
     1. For water regions, the IDW contribution is 0 mm (pool floor), not the
-       region's ``FlatHeight`` (which is the water *surface* level).  This
+       region's ``height_mm`` (which is the water *surface* level).  This
        confines the shore slope to the boundary strip: the boundary cells blend
        smoothly from 0 mm (pool floor) up to the neighbouring land height, so
        the visible waterline sits near the boundary path centreline rather than
        being pushed into the pool interior.
-    2. Assign each non-water region cell its exact ``effective_height_mm``; water
+    2. Assign each non-water region cell its exact ``height_mm``; water
        region cells get 0 mm (pool floor).
     3. Boundary cells get an inverse-distance-weighted (IDW) blend of the above
        floor heights.
@@ -619,7 +619,7 @@ def _build_spec_terrain(
     water_surface_mm: dict[int, float] = {}
     idw_heights: list[float] = []
     for idx, region in enumerate(tile.regions):
-        h = region.terrain.height_mm
+        h = region.height_mm
         has_water = any(isinstance(layer, _WaterLayer) for layer in region.layers)
         if has_water:
             water_surface_mm[idx] = h  # save surface level for WaterLayer to consume

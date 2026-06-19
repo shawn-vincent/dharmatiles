@@ -3,7 +3,7 @@
 # Water fills most of the tile; a grass meadow grows in the bottom-left
 # corner — like a small islet or mossy riverbank.
 
-from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill, FlatHeight, SurfaceConfig, SpeciesConfig, D
+from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill, SurfaceConfig, SpeciesConfig, D
 from dharmatiles.layers import SoilCarpet, GrassCarpet, Scatter, Water
 from dharmatiles.scatter import Rocks, Grass, Grouped, Uniform
 
@@ -15,7 +15,7 @@ tile = Tile(
         Region(
             id='pool',
             selector=FloodFill(0.75, 0.75),
-            terrain=FlatHeight(3.0),
+            height_mm=3.0,
             layers=[
                 Scatter(
                     Rocks(

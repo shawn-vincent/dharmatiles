@@ -6,6 +6,18 @@
 
 ---
 
+## Status as of 2026-06-18 (post-review)
+
+All five recommendations remain unimplemented. The line-level and elegance findings were addressed first (see those review files). Strategic work is open.
+
+- ⬜ Rec 1 — Name the ordering constraint in the Scatter API (`obstacles=` / `vegetation=` phases or similar)
+- ⬜ Rec 2 — Collapse config toward the thing being configured (partially addressed: `SpeciesConfig`/`SoilConfig`/`RocksConfig` compat inits removed; `GrassUnderlayConfig`/`RocksConfig` still separate from their layer classes)
+- ⬜ Rec 3 — Make the content/export pipeline boundary explicit
+- ⬜ Rec 4 — Establish a tile template / region library (`src/tiles/shared/` or `dharmatiles.templates`)
+- ⬜ Rec 5 — Document `TileScene` mutation contract in code (Layer contract comment block)
+
+---
+
 ## The Shape of the Thing
 
 DharmaTiles is a **pipeline with a language attached**. The pipeline is a linear sequence: heightmap → region masks → layers applied in order → terrain solid → base attachment → STL. The language is `.tile.py` files: live Python that instantiates the pipeline configuration directly. There is no intermediate representation, no serialization step, no compile phase. The spec is the object graph.
@@ -124,31 +136,31 @@ This is the single most important architectural question for the tile spec langu
 
 These are structural shifts, not line edits. They are ordered by impact.
 
-**1. Name the ordering constraint in the Scatter API**
+**1. Name the ordering constraint in the Scatter API** ⬜ OPEN
 
 The most important user-facing change. Introduce explicit phases in `Scatter`: ground-stampers (rocks, flowers, trees) before vegetation (grass). The API should make it impossible to accidentally put grass before rocks. One path: `Scatter(obstacles=[...], vegetation=[...])` with fixed phase order. Another: a `before()` / `after()` declarative API on scatter things. The exact spelling matters less than the principle: ordering constraints should be structural, not conventional.
 
 This is a breaking API change for existing tile files, but the existing tile files are few and the refactor is mechanical.
 
-**2. Collapse config toward the thing being configured**
+**2. Collapse config toward the thing being configured** ⬜ OPEN (partial: compat inits removed; `GrassUnderlayConfig`/`RocksConfig` still separate from their layer classes)
 
 `GrassUnderlayConfig` should not be a separate class from `GrassCarpet`. `RocksConfig` should not be a separate class from `Rocks`. The shareability argument for keeping them separate is theoretical — in practice, `RocksConfig` is never shared between two `Rocks` instances. When shareability is actually needed (as with `SpeciesConfig` shared between `GrassCarpet` and `Grass`), the config class is justified. Otherwise, flatten it: put the params directly on the layer class, accept keyword arguments.
 
 This reduces the number of named concepts in the public API and makes the documentation surface smaller for tile authors.
 
-**3. Make the pipeline's boundary explicit**
+**3. Make the pipeline's boundary explicit** ⬜ OPEN
 
 The boundary between "content pipeline" and "export pipeline" is currently implicit. The content pipeline ends with a list of colored meshes. The export pipeline takes that list, attaches a base, and writes an STL. These are the two phases of `build_tile_from_spec`, and they have different extension points (a new content type extends the first; a new base system extends the second).
 
 Currently they're interleaved in `build_tile_from_spec` and `_build_tile_mesh`. The internal function boundary (`_build_tile_mesh` returns `(colored_meshes, scene)`, then `system.export()` takes over) is close to the right cut, but the function naming and organization don't emphasize it. Making this split explicit — perhaps as two documented stages with a clean data handoff type — would make it easier to test, debug, and extend each half independently.
 
-**4. Establish a tile template / region library pattern**
+**4. Establish a tile template / region library pattern** ⬜ OPEN
 
 As the tile library grows, the lack of shared region definitions will produce drift. Establish a canonical `src/tiles/shared/` module (or a `dharmatiles.templates` package) with well-tuned, named region factories: `meadow(seed, groups_per_square)`, `shoreline(amplitude_mm, rock_density)`, `water_pool(depth_mm)`. Tile files import and compose these rather than redefining them.
 
 This is not a change to the pipeline — it's a change to the tile-authoring convention. But it prevents the tile library from becoming 30 slightly-different-but-inconsistent meadows.
 
-**5. Treat `TileScene` as the system's documented API contract**
+**5. Treat `TileScene` as the system's documented API contract** ⬜ OPEN
 
 `TileScene` is the one object that every layer, every scatter thing, and every base system touches. It is the integration surface. Currently its docstring describes what it is, but not what layers are allowed to do to it. The mutation contract (`displace_terrain` yes, `terrain_z +=` no; `obstacle_mask` is for stamping, not reading by content layers; etc.) should be explicit.
 

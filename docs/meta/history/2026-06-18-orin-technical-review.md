@@ -6,6 +6,29 @@
 
 ---
 
+## Status as of 2026-06-18 (post-review)
+
+**Resolved (commits 31740d9, 802c111, 4b23608):**
+- ✅ Finding 1 — rocks rasterisation vectorised
+- ✅ Finding 2 — `_make_ring` bark ring vectorised
+- ✅ Finding 3 — `_largest_group_id` uses `np.bincount`
+- ✅ Finding 6 — `_compute_radii_bottom_up` uses `np.sum(radii[ch])`, no generator
+- ✅ Finding 8 — `jitter_grid_xy` RNG calls batched upfront (`j_u_all`, `j_v_all`)
+
+**Still open:**
+- ⬜ Finding 4 — `_voronoi` Lloyd centroid Python loop (MEDIUM)
+- ⬜ Finding 5 — skeleton `nodes: list[np.ndarray]` fragmentation (MEDIUM)
+- ⬜ Finding 7 — `_filter_non_overlapping_centers` repeated sort (MEDIUM)
+- ⬜ Finding 9 — `_cell_index` double cast (LOW)
+- ⬜ Finding 10 — `grower = FlatGrassGrower` still inside per-blade loop (LOW)
+- ⬜ Finding 11 — `np.dot(basis, basis)` scalar dot (LOW)
+- ⬜ Finding 12 — `_bezier_tangent` list comprehension in foliage spine (LOW)
+- ⬜ Finding 13 — `_apply_group_bulge` pairwise O(ng×no) matrix (LOW, no urgency at n=200)
+- ⬜ Finding 14 — `_segment_intersects_cells` conditional degenerate paths (LOW)
+- ⬜ Finding 15 — `random_spread_sites` full-array scan per iteration (LOW)
+
+---
+
 ## Overview
 
 The codebase has a high standard of vectorisation in its hot paths. The heightmap builder (`core/mesh.py`), rock kernel (`layers/rocks.py`), and grass blade builder (`grass/growers/flat.py`) are all properly NumPy-vectorised. The geometry math is generally correct, well-commented, and uses the right coordinate conventions throughout.
@@ -18,7 +41,7 @@ The coordinate conventions are consistent. The codebase uses row = y = j, col = 
 
 ## Findings
 
-### 1 — Rock rasterisation is O(n) Python loop inside the vectorised kernel — `layers/rocks.py` — HIGH
+### 1 — Rock rasterisation is O(n) Python loop inside the vectorised kernel — `layers/rocks.py` — HIGH ✅ DONE (31740d9)
 
 **Lines:** 274–309  
 **Issue:** After the fully vectorised mesh construction (lines 141–263), `_build_rocks_mesh_core` drops into a Python `for s in range(N)` loop to rasterise each rock's ellipse into `support_z` and `obstacle_mask`. The loop body does a `np.meshgrid` and vectorised `np.where` per rock, so each iteration is fast, but the dispatch overhead of N separate Python frames with N separate NumPy calls scales poorly. With default density of 15 rocks per square and a 2×2 tile, N ≈ 60. With `count_per_square=50` on a 4×4 tile, N = 800.
@@ -57,7 +80,7 @@ This eliminates the per-rock `np.meshgrid` allocation, moves the angle rotation 
 
 ---
 
-### 2 — `_make_ring` has two Python loops inside the tree ring-sampling hot path — `trees/cloud_mesh.py` — HIGH
+### 2 — `_make_ring` has two Python loops inside the tree ring-sampling hot path — `trees/cloud_mesh.py` — HIGH ✅ DONE (31740d9)
 
 **Lines:** 1481–1513  
 **Issue:** `_make_ring` is called once per Bézier step per skeleton edge during `_build_closed_edge_solid`. With `step_mm = 2.5` and a 40 mm branch, that is 16 calls per edge. A tree with 50 edges and 200 attractors makes ~800 calls to `_make_ring`. Each call contains two Python `for t in theta` loops:
@@ -95,7 +118,7 @@ noise = _bark_surface_noise_vec(theta, radius, bark, grooves, s=s, ...)
 
 ---
 
-### 3 — `_largest_group_id` is O(n × k) with Python loops where O(k) suffices — `trees/cloud_skeleton.py` — MEDIUM
+### 3 — `_largest_group_id` is O(n × k) with Python loops where O(k) suffices — `trees/cloud_skeleton.py` — MEDIUM ✅ DONE (31740d9)
 
 **Lines:** 667–679  
 **Issue:**
@@ -121,7 +144,7 @@ def _largest_group_id(pts, labels, unique_ids):
 
 ---
 
-### 4 — `_voronoi_group_attractors` Lloyd's iteration has O(n × k) Python loop for centroid update — `trees/cloud_skeleton.py` — MEDIUM
+### 4 — `_voronoi_group_attractors` Lloyd's iteration has O(n × k) Python loop for centroid update — `trees/cloud_skeleton.py` — MEDIUM ⬜ OPEN
 
 **Lines:** 595–609  
 **Issue:** The vectorised distance matrix `diff = scaled[:, np.newaxis, :] - seeds[np.newaxis, :, :]` is correct (O(n × k × 3)). But the centroid update uses a Python loop:
@@ -159,7 +182,7 @@ The truly vectorised version uses `np.add.at` but adds complexity for marginal g
 
 ---
 
-### 5 — Skeleton nodes stored as `list[np.ndarray]` forces repeated copy-on-access — `trees/cloud_skeleton.py` — MEDIUM
+### 5 — Skeleton nodes stored as `list[np.ndarray]` forces repeated copy-on-access — `trees/cloud_skeleton.py` — MEDIUM ⬜ OPEN
 
 **Lines:** 192–193, 447–450  
 **Issue:** The skeleton builder accumulates `nodes: list[np.ndarray]` where each element is a `(3,)` array created with `.copy()` at every `_add_node` call. By the end of a 200-attractor tree, `nodes` contains 400–600 individual 3-element arrays. Every subsequent access (`nodes[tip_idx]`, `nodes[p]`) is a Python list index returning a heap-allocated 3-element array.
@@ -183,7 +206,7 @@ The `_simplify_skeleton` conversion becomes `nodes_arr = nodes[:n_nodes]` — a 
 
 ---
 
-### 6 — `_compute_radii_bottom_up` uses a Python `sum()` of a generator inside a loop — `trees/cloud_skeleton.py` — MEDIUM
+### 6 — `_compute_radii_bottom_up` uses a Python `sum()` of a generator inside a loop — `trees/cloud_skeleton.py` — MEDIUM ✅ DONE (31740d9)
 
 **Lines:** 541–543  
 **Issue:**
@@ -213,7 +236,7 @@ Pass `children` from `_simplify_skeleton` to `_compute_radii_bottom_up` to avoid
 
 ---
 
-### 7 — `_filter_non_overlapping_centers` is O(n²) via repeated sort — `trees/cloud_mesh.py` — MEDIUM
+### 7 — `_filter_non_overlapping_centers` is O(n²) via repeated sort — `trees/cloud_mesh.py` — MEDIUM ⬜ OPEN
 
 **Lines:** 1251–1278  
 **Issue:** The bark-groove deduplication loop repeatedly calls `sorted(remaining, ...)` in a `while len(remaining) > 1` loop. Each iteration sorts the full `remaining` list (O(k log k)) and then does a linear scan for gaps. Worst case with k grooves is O(k² log k).
@@ -224,7 +247,7 @@ For the default spacing of 1.35 mm and trunk radius of ~8 mm, k ≈ 37 bark line
 
 ---
 
-### 8 — `jitter_grid_xy` Python loop over `n_u` grid rows creates `n_u` separate arrays — `scatter/distribute.py` — MEDIUM
+### 8 — `jitter_grid_xy` Python loop over `n_u` grid rows creates `n_u` separate arrays — `scatter/distribute.py` — MEDIUM ✅ DONE (31740d9)
 
 **Lines:** 345–358  
 **Issue:**
@@ -254,7 +277,7 @@ Then scatter by row. This halves RNG calls from 2×n_u to 2 total.
 
 ---
 
-### 9 — `_cell_index` does redundant double-cast — `grass/_geometry.py` — LOW
+### 9 — `_cell_index` does redundant double-cast — `grass/_geometry.py` — LOW ⬜ OPEN
 
 **Lines:** 54–58  
 **Issue:**
@@ -279,7 +302,7 @@ Called during every blade growth step (hundreds of times per tile), so the overh
 
 ---
 
-### 10 — `grow_all` calls `species_map[path.seed.species_id]` inside the per-blade loop — `grass/grow.py` — LOW
+### 10 — `grow_all` calls `species_map[path.seed.species_id]` inside the per-blade loop — `grass/grow.py` — LOW ⬜ OPEN (partial: `species` resolved before loop; `grower = FlatGrassGrower` still inside loop as a trivial rebind)
 
 **Lines:** 47–66  
 **Issue:** `species_map = {species.name: species for species in cfg.species}` is built once (good). But `species = species_map[path.seed.species_id]` and `grower = GROWERS[species.grower]` are looked up inside the `for path in growing` loop. Since `cfg.species` is always a single-element list (see elegance review Finding 9), both lookups always return the same value. The dict lookup is O(1) but the repeated string hashing is avoidable.
@@ -297,7 +320,7 @@ This also makes Finding 9 from the elegance review a forcing function: collapsin
 
 ---
 
-### 11 — `_fit_quadratic_arc` uses `np.dot(basis, basis)` as a scalar that could be `np.inner` or `float` — `grass/growers/flat.py` — LOW
+### 11 — `_fit_quadratic_arc` uses `np.dot(basis, basis)` as a scalar that could be `np.inner` or `float` — `grass/growers/flat.py` — LOW ⬜ OPEN
 
 **Lines:** 396–405  
 **Issue:**
@@ -318,7 +341,7 @@ The deeper issue in this function: `fit = points - arc` computes all residuals b
 
 ---
 
-### 12 — `_build_foliage_clump_mesh` reconstructs the Bézier spine tangents with a Python list comprehension — `trees/cloud_mesh.py` — LOW
+### 12 — `_build_foliage_clump_mesh` reconstructs the Bézier spine tangents with a Python list comprehension — `trees/cloud_mesh.py` — LOW ⬜ OPEN
 
 **Lines:** 707–712  
 **Issue:**
@@ -342,7 +365,7 @@ Called once per foliage clump (once per leaf branch per tree). With 200 attracto
 
 ---
 
-### 13 — `_apply_group_bulge` computes pairwise O(ng × no) distance matrix per group — `trees/cloud_skeleton.py` — LOW
+### 13 — `_apply_group_bulge` computes pairwise O(ng × no) distance matrix per group — `trees/cloud_skeleton.py` — LOW ⬜ OPEN (no urgency at n=200)
 
 **Lines:** 649–661  
 **Issue:**
@@ -358,7 +381,7 @@ At n=200 the current approach is correct and fast. Flag this only if n_attractio
 
 ---
 
-### 14 — `_segment_intersects_cells` conditionally skips axes for near-degenerate segments — `grass/growers/flat.py` — LOW
+### 14 — `_segment_intersects_cells` conditionally skips axes for near-degenerate segments — `grass/growers/flat.py` — LOW ⬜ OPEN
 
 **Lines:** 493–533  
 **Issue:**
@@ -378,7 +401,7 @@ The conditional dispatch `if abs(dx) <= eps` / `else` is a correct degenerate-ca
 
 ---
 
-### 15 — `random_spread_sites` uses O(n) comparison inside a Python loop for spread sites — `scatter/distribute.py` — LOW
+### 15 — `random_spread_sites` uses O(n) comparison inside a Python loop for spread sites — `scatter/distribute.py` — LOW ⬜ OPEN (no urgency at current tile sizes)
 
 **Lines:** 234–253  
 **Issue:**

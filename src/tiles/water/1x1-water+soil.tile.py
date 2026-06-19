@@ -4,7 +4,7 @@
 # Upper half: bare soil bank.
 # Organic shoreline with a soil slope and waterline pebbles.
 
-from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill, FlatHeight, SurfaceConfig, D
+from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill, SurfaceConfig, D
 from dharmatiles.layers import SoilCarpet, Scatter, Water
 from dharmatiles.scatter import Rocks, Uniform
 
@@ -14,7 +14,7 @@ tile = Tile(
         Region(
             id='pool',
             selector=FloodFill(0.5, 0.25),
-            terrain=FlatHeight(3.0),
+            height_mm=3.0,
             layers=[
                 Scatter(
                     Rocks(

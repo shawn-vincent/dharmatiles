@@ -63,7 +63,6 @@ from .dist import D
 __all__ = [
     'Tile', 'Region', 'Boundary', 'TileLayer',
     'Anchor', 'Edge', 'FloodFill',
-    'FlatHeight',
     'SurfaceConfig', 'SpeciesConfig',
     'D',
     'repeat_sizes',
@@ -158,24 +157,6 @@ class FloodFill:
         return f"FloodFill({', '.join(str(s) for s in self.seeds)})"
 
 
-# ── Terrain types (I) ─────────────────────────────────────────────────────────
-
-@dataclass(frozen=True)
-class FlatHeight:
-    """Constant-height terrain specification for a region.
-
-    The orchestrator reads ``height_mm`` to derive the IDW blend target for
-    this region.  Future terrain types (e.g. ``GaussianMound``,
-    ``HeightmapPNG``) will expose the same interface so the orchestrator can
-    treat them uniformly.
-
-    Usage::
-
-        Region(id='pool', terrain=FlatHeight(3.0), layers=[Water()])
-    """
-    height_mm: float
-
-
 # ── Spec dataclasses ──────────────────────────────────────────────────────────
 
 @dataclass
@@ -185,30 +166,20 @@ class Region:
     ``selector`` is a :class:`FloodFill` that seeds the BFS region detection.
     ``layers`` run in the order they appear here.
 
-    Terrain height is set via ``terrain=FlatHeight(h)``; ``height_mm=h`` is a
-    backward-compatible shortcut that is converted to ``FlatHeight(h)`` in
-    ``__post_init__``.  When neither is given, ``terrain`` is derived from the
-    first layer's ``height_default_mm`` (default 5.0 mm).
+    Terrain height is set via ``height_mm=h``.  When not given, ``height_mm``
+    is derived from the first layer's ``height_default_mm`` (default 5.0 mm).
     """
     id:        str
     selector:  FloodFill
     layers:    list = field(default_factory=list)   # list[TileLayer]
-    height_mm: float | None = None                  # backward-compat shortcut
-    terrain:   FlatHeight | None = None             # explicit terrain spec (I)
+    height_mm: float | None = None
 
     def __post_init__(self) -> None:
-        if self.terrain is None:
-            if self.height_mm is not None:
-                self.terrain = FlatHeight(self.height_mm)
-            else:
-                h = (getattr(self.layers[0], 'height_default_mm', 5.0)
-                     if self.layers else 5.0)
-                self.terrain = FlatHeight(h)
-
-    @property
-    def effective_height_mm(self) -> float:
-        """Height used for IDW blending; delegates to ``terrain.height_mm``."""
-        return self.terrain.height_mm if self.terrain is not None else 5.0
+        if self.height_mm is None:
+            self.height_mm = float(
+                getattr(self.layers[0], 'height_default_mm', 5.0)
+                if self.layers else 5.0
+            )
 
 
 @dataclass

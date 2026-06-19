@@ -3,7 +3,7 @@
 # Grass covers two adjacent sides (L-shape, most of the tile); a shallow
 # pool sits in the bottom-left corner — a marshy tarn at the edge of a meadow.
 
-from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill, FlatHeight, SurfaceConfig, SpeciesConfig, D
+from dharmatiles.spec import Tile, Region, Boundary, Edge, FloodFill, SurfaceConfig, SpeciesConfig, D
 from dharmatiles.layers import SoilCarpet, GrassCarpet, Scatter, Water
 from dharmatiles.scatter import Rocks, Grass, Grouped, Uniform
 
@@ -15,7 +15,7 @@ tile = Tile(
         Region(
             id='pool',
             selector=FloodFill(0.15, 0.15),
-            terrain=FlatHeight(3.0),
+            height_mm=3.0,
             layers=[
                 Scatter(
                     Rocks(

@@ -6,7 +6,7 @@ import numpy as np
 
 from ._geometry import _cell_index
 from .config import GrassConfig, SpeciesConfig
-from .growers import FlatGrassGrower
+from .grower import FlatGrassGrower
 from .seed import GrassPath, GrassSeed, GrowingPath
 
 # Distribution helpers live in scatter/distribute.py and are shared with

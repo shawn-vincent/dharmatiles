@@ -28,6 +28,7 @@ import trimesh
 from ..core.color import Material, debug_material, tag as _tag
 from .bark import BarkConfig
 from .leaf import build_leaf_mesh
+from ._utils import _safe_norm, _hash01, _WUP_VEC
 
 # Fixed polygon count for every cross-section ring.
 _N_SIDES = 12
@@ -1363,27 +1364,6 @@ def _bark_surface_noise(
     return float(np.clip(normal, -2.0, 2.0) * max_amp)
 
 
-def _hash01(*parts: object) -> float:
-    h = 1469598103934665603
-    for part in parts:
-        for byte in str(part).encode("utf-8"):
-            h ^= byte
-            h = (h * 1099511628211) & 0xFFFFFFFFFFFFFFFF
-        h ^= 0xFF
-        h = (h * 1099511628211) & 0xFFFFFFFFFFFFFFFF
-    # Final avalanche (murmur3 fmix64).  Without this, FNV barely diffuses the
-    # trailing bytes, so varying only the last argument (e.g. a column index)
-    # leaves the high bits almost unchanged and biased — collapsing per-leaf
-    # jitter into a regular grid.  The finalizer spreads every input bit across
-    # all 64 output bits, giving a centred, full-range uniform.
-    h ^= h >> 33
-    h  = (h * 0xFF51AFD7ED558CCD) & 0xFFFFFFFFFFFFFFFF
-    h ^= h >> 33
-    h  = (h * 0xC4CEB9FE1A85EC53) & 0xFFFFFFFFFFFFFFFF
-    h ^= h >> 33
-    return h / float(2 ** 64)
-
-
 def _wrap_angle(theta: float) -> float:
     return float(theta % (2.0 * np.pi))
 
@@ -1453,11 +1433,6 @@ def _bezier_tangent(
     )
 
 
-def _safe_norm(v: np.ndarray) -> np.ndarray:
-    n = float(np.linalg.norm(v))
-    return v / n if n > 1e-12 else v
-
-
 def _rotate_vec(v: np.ndarray, axis: np.ndarray, angle: float) -> np.ndarray:
     """Rotate vector *v* about *axis* by *angle* radians (Rodrigues' formula)."""
     n = float(np.linalg.norm(axis))
@@ -1487,9 +1462,6 @@ def _two_perp(axis: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     e2 = np.cross(a, e1)
     e2 = e2 / max(float(np.linalg.norm(e2)), 1e-12)
     return e1, e2
-
-
-_WUP_VEC = np.array([0.0, 0.0, 1.0])
 
 
 def _transport(
