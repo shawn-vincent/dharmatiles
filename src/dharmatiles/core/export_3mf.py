@@ -2,8 +2,13 @@
 
 This module handles multi-tile 3MF project generation:
 
-* :func:`export_3mf_colored` — write a Bambu Studio-compatible ``.3mf``
-  containing one or more coloured tiles laid out on a 256 × 256 mm build plate.
+* :func:`tile_xml_parts` — pre-format vertex/face XML for one tile's meshes.
+  Called in tile-build worker processes so the expensive float→string conversion
+  runs in parallel with other tiles being built.
+* :func:`export_3mf_from_parts` — fast assembly from pre-built XML fragments.
+  Called by the main process after all workers complete; no float→string work.
+* :func:`export_3mf_colored` — single-call convenience (converts meshes →
+  pre-built XML → assembles). Used for single-tile and sequential batch modes.
 * :func:`build_scene` — wrap coloured trimesh parts as a :class:`trimesh.Scene`.
 * :func:`_pack_plates` — internal plate-packing algorithm (compact row packing).
 
@@ -180,10 +185,17 @@ def _pack_plates(
 
 
 def _vert_lines_xml(verts: np.ndarray) -> str:
-    """Vectorized: '<vertex x="…" y="…" z="…"/>' for every row of *verts* (N×3)."""
-    xs = np.char.mod('%.5f', verts[:, 0])
-    ys = np.char.mod('%.5f', verts[:, 1])
-    zs = np.char.mod('%.5f', verts[:, 2])
+    """Vectorized: '<vertex x="…" y="…" z="…"/>' for every row of *verts* (N×3).
+
+    Format is ``%.3f`` (0.001 mm = 1 µm precision) — more than sufficient for
+    FDM printing and avoids the overhead of ``%.5f``'s longer strings.
+
+    The N×3 array is flattened to 3N before the single ``np.char.mod`` call so
+    only one ``_vec_string`` invocation (and its ``asarray`` setup) is needed
+    instead of three column-wise calls.
+    """
+    strs = np.char.mod('%.3f', verts.ravel())      # one call: shape (3N,)
+    xs, ys, zs = strs[0::3], strs[1::3], strs[2::3]
     lines = np.char.add(
         '<vertex x="',
         np.char.add(xs, np.char.add(
@@ -196,10 +208,13 @@ def _vert_lines_xml(verts: np.ndarray) -> str:
 
 
 def _face_lines_xml(faces: np.ndarray) -> str:
-    """Vectorized: '<triangle v1="…" v2="…" v3="…"/>' for every row of *faces* (F×3)."""
-    v1s = np.char.mod('%d', faces[:, 0])
-    v2s = np.char.mod('%d', faces[:, 1])
-    v3s = np.char.mod('%d', faces[:, 2])
+    """Vectorized: '<triangle v1="…" v2="…" v3="…"/>' for every row of *faces* (F×3).
+
+    The F×3 index array is flattened to 3F before the single ``np.char.mod``
+    call — same overhead-reduction as :func:`_vert_lines_xml`.
+    """
+    strs = np.char.mod('%d', faces.ravel())         # one call: shape (3F,)
+    v1s, v2s, v3s = strs[0::3], strs[1::3], strs[2::3]
     lines = np.char.add(
         '<triangle v1="',
         np.char.add(v1s, np.char.add(
@@ -211,90 +226,155 @@ def _face_lines_xml(faces: np.ndarray) -> str:
     return '\n     '.join(lines.tolist())
 
 
-def export_3mf_colored(
-    tiles: list[list[trimesh.Trimesh]],
-    path:  str | pathlib.Path,
+# ── Filament slot constants (module-level so workers can see them) ─────────────
+_EXT: dict[Material, int] = {
+    Material.BASE:    1,
+    Material.SOIL:    2,
+    Material.ROCK:    3,
+    Material.GRASS:   4,
+    Material.WATER:   5,
+    Material.FLOWER:  6,
+    Material.WOOD:    7,
+    Material.FOLIAGE: 8,
+}
+_SLOT_HEX = [
+    "#2D2D2D",  # slot 1 — BASE
+    "#692C0C",  # slot 2 — SOIL
+    "#485C80",  # slot 3 — ROCK
+    "#2A941C",  # slot 4 — GRASS
+    "#1485D5",  # slot 5 — WATER
+    "#F5C300",  # slot 6 — FLOWER (golden yellow)
+    "#8B633F",  # slot 7 — WOOD   (light warm brown)
+    "#175C0D",  # slot 8 — FOLIAGE (dark forest green)
+]
+
+
+def _face_xml_key(f: np.ndarray) -> tuple:
+    """Cheap fingerprint for a face index array — used to cache face XML between
+    db/ol scale exports (same topology, different vertex positions).
+
+    Uses shape + three sample indices at the start, middle, and end.  Collision
+    probability for structurally different meshes is negligible.
+    """
+    n = len(f)
+    if n == 0:
+        return (0,)
+    mid = n // 2
+    return (f.shape, int(f[0, 0]), int(f[0, 2]), int(f[mid, 1]), int(f[-1, 0]), int(f[-1, 2]))
+
+
+def tile_xml_parts(
+    meshes: list[trimesh.Trimesh],
     *,
-    names:            list[str] | None = None,
-    plate_mm:         float = 256.0,
-    gap_mm:           float = 1.0,
-    front_margin_mm:  float = 12.0,
-    edge_margin_mm:   float = 5.0,
+    face_xml_cache: dict | None = None,
+) -> dict:
+    """Pre-format vertex/face XML for one tile's mesh parts.
+
+    This is the CPU-intensive step (float→string conversion via
+    :func:`_vert_lines_xml` / :func:`_face_lines_xml`).  Call this in each
+    tile-build worker process so the formatting runs in parallel with other
+    tiles being built.
+
+    Parameters
+    ----------
+    meshes:
+        Mesh parts to serialise.
+    face_xml_cache:
+        Optional dict mapping :func:`_face_xml_key` fingerprints to
+        pre-formatted ``face_xml`` strings.  Pass the **same dict** for the
+        db and ol calls on the same tile — the second call reuses cached face
+        XML instead of regenerating it (face topology is identical between
+        scales; only vertex positions differ).
+
+    Returns a dict::
+
+        {
+            'parts': [
+                {
+                    'vert_xml': str,   # content of <vertices>…</vertices>
+                    'face_xml': str,   # content of <triangles>…</triangles>
+                    'n_verts':  int,
+                    'n_faces':  int,
+                    'material': Material | None,
+                },
+                …
+            ],
+            'bounds': (xmin, ymin, xmax, ymax, zmin),
+        }
+
+    Empty-face meshes are silently skipped.  If all meshes are empty the
+    ``'parts'`` list is ``[]`` and bounds are all zeros.
+    """
+    parts: list[dict] = []
+    all_v: list[np.ndarray] = []
+    for mesh in meshes:
+        if len(mesh.faces) == 0:
+            continue
+        v = mesh.vertices
+        f = mesh.faces
+        all_v.append(v)
+
+        # Face XML is topology-only (vertex indices, not positions) — reuse
+        # across db/ol scales when the caller passes a shared face_xml_cache.
+        if face_xml_cache is not None:
+            fkey = _face_xml_key(f)
+            face_xml = face_xml_cache.get(fkey)
+            if face_xml is None:
+                face_xml = _face_lines_xml(f)
+                face_xml_cache[fkey] = face_xml
+        else:
+            face_xml = _face_lines_xml(f)
+
+        parts.append({
+            'vert_xml': _vert_lines_xml(v),
+            'face_xml': face_xml,
+            'n_verts':  len(v),
+            'n_faces':  len(f),
+            'material': mesh.metadata.get('material'),
+        })
+    if all_v:
+        combined = np.concatenate(all_v)
+        bounds: tuple[float, ...] = (
+            float(combined[:, 0].min()), float(combined[:, 1].min()),
+            float(combined[:, 0].max()), float(combined[:, 1].max()),
+            float(combined[:, 2].min()),
+        )
+    else:
+        bounds = (0.0, 0.0, 0.0, 0.0, 0.0)
+    return {'parts': parts, 'bounds': bounds}
+
+
+def _assemble_3mf(
+    tile_data: list[dict],
+    path: str | pathlib.Path,
+    *,
+    plate_mm:        float = 256.0,
+    gap_mm:          float = 1.0,
+    front_margin_mm: float = 12.0,
+    edge_margin_mm:  float = 5.0,
 ) -> None:
-    """Export multiple coloured tiles as a Bambu Studio-compatible 3MF project.
+    """Package pre-built tile XML fragments into a Bambu Studio-compatible .3mf.
 
-    *tiles* is a list of tiles; each tile is a list of trimesh parts with
-    ``mesh.metadata['material']`` set.  *names* (same length as *tiles*)
-    provides tile names used for terrain-group ordering and layout.
+    *tile_data* is a list of dicts as returned by :func:`tile_xml_parts` plus a
+    ``'name'`` key::
 
-    Tiles are laid out on a 256 × 256 mm build plate (Bambu X1C) with the
-    requested *gap_mm* between them, centred on the plate.  A *front_margin_mm*
-    keep-out zone is honoured at the front edge (Y = 0) to avoid the X1C purge
-    and filament-cutter areas.  If tiles overflow one plate they are split by
-    terrain type onto additional plates within the same 3MF file.
+        [{'name': str, 'parts': [...], 'bounds': (xmin, ymin, xmax, ymax, zmin)}, …]
 
-    Filament slot assignments (1-indexed AMS slots):
-
-    ======= ===== =================
-    Slot    Mat   Colour
-    ======= ===== =================
-    1       BASE  #2D2D2D dark gray
-    2       SOIL  #692C0C brown
-    3       ROCK  #485C80 slate blue
-    4       GRASS #2A941C green
-    5       WATER #1485D5 turquoise
-    ======= ===== =================
+    No mesh objects are accessed here — all geometry is already formatted as
+    XML strings in ``tile_data[i]['parts'][j]['vert_xml'/'face_xml']``.
     """
     import json as _json
     import uuid as _uuid_mod
     import zipfile
-    from collections import defaultdict as _dd
 
-    # ── Filament slots ────────────────────────────────────────────────────────
-    _EXT: dict[Material, int] = {
-        Material.BASE:    1,
-        Material.SOIL:    2,
-        Material.ROCK:    3,
-        Material.GRASS:   4,
-        Material.WATER:   5,
-        Material.FLOWER:  6,
-        Material.WOOD:    7,
-        Material.FOLIAGE: 8,
-    }
-    _SLOT_HEX = [
-        "#2D2D2D",  # slot 1 — BASE
-        "#692C0C",  # slot 2 — SOIL
-        "#485C80",  # slot 3 — ROCK
-        "#2A941C",  # slot 4 — GRASS
-        "#1485D5",  # slot 5 — WATER
-        "#F5C300",  # slot 6 — FLOWER (golden yellow)
-        "#8B633F",  # slot 7 — WOOD   (light warm brown)
-        "#175C0D",  # slot 8 — FOLIAGE (dark forest green)
-    ]
-
-    # ── Filter empty tiles ────────────────────────────────────────────────────
-    tile_parts: list[list[trimesh.Trimesh]] = [
-        [m for m in ms if len(m.faces) > 0] for ms in tiles
-    ]
-    tile_parts = [ms for ms in tile_parts if ms]
-    N = len(tile_parts)
+    # ── Filter tiles with no geometry ─────────────────────────────────────────
+    tile_data = [td for td in tile_data if td.get('parts')]
+    N = len(tile_data)
     if N == 0:
         return
 
-    _names = list(names) if names and len(names) == len(tiles) else [f"tile_{i}" for i in range(len(tiles))]
-    # Re-align names to filtered tile_parts (same filter as above)
-    _names = [_names[i] for i, ms in enumerate(tiles) if any(len(m.faces) > 0 for m in ms)]
-
-    # ── Per-tile XY/Z bounds ──────────────────────────────────────────────────
-    # tile_bounds[i] = (x_min, y_min, x_max, y_max, z_min)
-    tile_bounds: list[tuple[float, float, float, float, float]] = []
-    for ms in tile_parts:
-        v = np.concatenate([m.vertices for m in ms])
-        tile_bounds.append((
-            float(v[:, 0].min()), float(v[:, 1].min()),
-            float(v[:, 0].max()), float(v[:, 1].max()),
-            float(v[:, 2].min()),
-        ))
+    _names      = [td['name']   for td in tile_data]
+    tile_bounds = [td['bounds'] for td in tile_data]
 
     tile_footprints = [
         (_names[i], b[2] - b[0], b[3] - b[1])
@@ -302,13 +382,9 @@ def export_3mf_colored(
     ]
 
     # ── Pack tiles onto plates ────────────────────────────────────────────────
-    # Plate coordinate system (Bambu Studio / BBS 3MF):
-    #   origin = front-left corner of build plate
-    #   X increases right, Y increases toward back, Z increases up
-    #   Front edge = Y=0, back edge = Y=plate_mm
     usable_x0 = edge_margin_mm
     usable_x1 = plate_mm - edge_margin_mm
-    usable_y0 = front_margin_mm          # front keep-out
+    usable_y0 = front_margin_mm
     usable_y1 = plate_mm - edge_margin_mm
     usable_w  = usable_x1 - usable_x0
     usable_h  = usable_y1 - usable_y0
@@ -316,31 +392,21 @@ def export_3mf_colored(
     plate_groups = _pack_plates(tile_footprints, usable_w, usable_h, gap_mm)
 
     # ── Compute per-tile (tx, ty, tz) plate transforms ────────────────────────
-    # Layout space: origin top-left of usable area, y increases downward (toward front).
-    # Plate space:  origin front-left of plate, y increases toward back.
-    # Mapping from layout (lx, ly) to plate (px, py):
-    #   px = usable_x0 + x_center_offset + lx
-    #   py = plate_y_back_of_grid - ly - row_h   (bottom-aligned rows)
-    # where plate_y_back = usable_y0 + usable_h - (usable_h - total_h)/2 = usable_y1 - (usable_h - total_h)/2
-
+    from collections import defaultdict as _dd
     tile_transform: list[tuple[float, float, float]] = [(0.0, 0.0, 0.0)] * N
-    tile_plate:     list[int]                         = [0] * N  # which plate (0-based) each tile is on
+    tile_plate:     list[int]                         = [0] * N
 
     for plate_idx, plate in enumerate(plate_groups):
-        # Row heights (max tile height per layout-y level, for bottom alignment)
         row_heights: dict[float, float] = _dd(float)
         for orig_idx, _lx, ly in plate:
             _, _, h = tile_footprints[orig_idx]
             row_heights[ly] = max(row_heights[ly], h)
 
-        # Total bounding box of this plate's layout
         total_w = max(_lx + tile_footprints[j][1] for j, _lx, _ly in plate)
         total_h = sum(row_heights.values()) + gap_mm * (len(row_heights) - 1)
 
-        # Centre the grid horizontally; centre vertically within usable area
         x_offset = usable_x0 + (usable_w - total_w) / 2
         usable_cy = (usable_y0 + usable_y1) / 2
-        # Back edge of the grid in plate Y coords
         plate_y_back = usable_cy + total_h / 2
         plate_y_back = min(plate_y_back, usable_y1)
 
@@ -349,10 +415,9 @@ def export_3mf_colored(
             _, _, h = tile_footprints[orig_idx]
             rh = row_heights[ly]
 
-            # Bottom-align tiles within each row
             px = x_offset + lx
-            py = plate_y_back - ly - rh        # front edge of row in plate Y
-            py = max(py, usable_y0)            # clamp to front margin
+            py = plate_y_back - ly - rh
+            py = max(py, usable_y0)
 
             tx = px - bx_min
             ty = py - by_min
@@ -361,12 +426,11 @@ def export_3mf_colored(
             tile_plate[orig_idx] = plate_idx
 
     # ── ID assignment ─────────────────────────────────────────────────────────
-    # Part IDs 1..P (cumulative across all tiles), assembly IDs P+1..P+N.
     tile_part_start: list[int] = []
     gpart = 1
-    for ms in tile_parts:
+    for td in tile_data:
         tile_part_start.append(gpart)
-        gpart += len(ms)
+        gpart += len(td['parts'])
     P = gpart - 1
     ASSEMBLY_IDS = [P + 1 + ti for ti in range(N)]
 
@@ -380,8 +444,8 @@ def export_3mf_colored(
     def _part_uuid(global_part_id: int) -> str:
         return _uuid(0x0001_0000 + global_part_id)
 
-    id_transform = "1 0 0 0 1 0 0 0 1 0 0 0"
-    id_matrix_16 = "1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"
+    id_transform   = "1 0 0 0 1 0 0 0 1 0 0 0"
+    id_matrix_16   = "1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"
 
     # ── 3D/Objects/object_1.model — all geometry ─────────────────────────────
     NS_CORE  = 'http://schemas.microsoft.com/3dmanufacturing/core/2015/02'
@@ -397,22 +461,19 @@ def export_3mf_colored(
         f' <metadata name="BambuStudio:3mfVersion">1</metadata>\n'
     )
 
+    # Each part's geometry XML is already formatted — just wrap with <object> tags.
     obj_xmls: list[str] = []
-    for ti, ms in enumerate(tile_parts):
-        for pi, mesh in enumerate(ms):
-            oid   = tile_part_start[ti] + pi
-            verts = mesh.vertices
-            faces = mesh.faces
-            vert_lines = _vert_lines_xml(verts)
-            tri_lines  = _face_lines_xml(faces)
+    for ti, td in enumerate(tile_data):
+        for pi, part in enumerate(td['parts']):
+            oid = tile_part_start[ti] + pi
             obj_xmls.append(
                 f'  <object id="{oid}" p:UUID="{_part_uuid(oid)}" type="model">\n'
                 f'   <mesh>\n'
                 f'    <vertices>\n'
-                f'     {vert_lines}\n'
+                f'     {part["vert_xml"]}\n'
                 f'    </vertices>\n'
                 f'    <triangles>\n'
-                f'     {tri_lines}\n'
+                f'     {part["face_xml"]}\n'
                 f'    </triangles>\n'
                 f'   </mesh>\n'
                 f'  </object>'
@@ -429,13 +490,13 @@ def export_3mf_colored(
 
     # ── 3D/3dmodel.model — assembly wrapper ───────────────────────────────────
     assm_objs: list[str] = []
-    for ti in range(N):
+    for ti, td in enumerate(tile_data):
         comp_lines = '\n    '.join(
             f'<component p:path="/3D/Objects/object_1.model"'
             f' objectid="{tile_part_start[ti] + pi}"'
             f' p:UUID="{_part_uuid(tile_part_start[ti] + pi)}"'
             f' transform="{id_transform}"/>'
-            for pi in range(len(tile_parts[ti]))
+            for pi in range(len(td['parts']))
         )
         assm_objs.append(
             f'  <object id="{ASSEMBLY_IDS[ti]}" p:UUID="{ASSM_UUID[ti]}" type="model">\n'
@@ -447,9 +508,6 @@ def export_3mf_colored(
 
     def _item_transform(ti: int) -> str:
         tx, ty, tz = tile_transform[ti]
-        # Plate N tiles are offset by N * plate_mm in X so each plate occupies a
-        # distinct slice of global 3D space.  Bambu Studio uses the plate sections
-        # in model_settings.config to map each item to its virtual plate.
         tx += tile_plate[ti] * plate_mm
         return f"1 0 0 0 1 0 0 0 1 {tx:.6f} {ty:.6f} {tz:.6f}"
 
@@ -474,18 +532,20 @@ def export_3mf_colored(
     # ── Metadata/model_settings.config ───────────────────────────────────────
     obj_sections:   list[str] = []
     assemble_items: list[str] = []
-    for ti, ms in enumerate(tile_parts):
+    for ti, td in enumerate(tile_data):
         aid    = ASSEMBLY_IDS[ti]
-        ti_fc  = sum(len(m.faces) for m in ms)
+        ti_fc  = sum(p['n_faces'] for p in td['parts'])
         tx, ty, tz = tile_transform[ti]
         assm_t = f"1 0 0 0 1 0 0 0 1 {tx:.6f} {ty:.6f} {tz:.6f}"
         part_entries = []
-        for pi, mesh in enumerate(ms):
+        for pi, part in enumerate(td['parts']):
             oid      = tile_part_start[ti] + pi
-            mat      = mesh.metadata.get('material', Material.SOIL)
+            mat      = part['material']
+            if mat is None:
+                mat = Material.SOIL
             extruder = _EXT.get(mat, 2)
             pname    = mat.name.lower() if isinstance(mat, Material) else f'part_{oid}'
-            fc       = len(mesh.faces)
+            fc       = part['n_faces']
             part_entries.append(
                 f'    <part id="{oid}" subtype="normal_part">\n'
                 f'      <metadata key="name" value="{pname}"/>\n'
@@ -586,3 +646,97 @@ def export_3mf_colored(
         zf.writestr('Metadata/model_settings.config',   model_settings_xml)
         zf.writestr('Metadata/project_settings.config',
                     _json.dumps(project_settings, indent=4))
+
+
+def export_3mf_from_parts(
+    tiles: list[tuple[str, dict]],
+    path:  str | pathlib.Path,
+    *,
+    plate_mm:        float = 256.0,
+    gap_mm:          float = 1.0,
+    front_margin_mm: float = 12.0,
+    edge_margin_mm:  float = 5.0,
+) -> None:
+    """Assemble a 3MF from pre-formatted tile XML fragments (no float→str work).
+
+    *tiles* is a list of ``(name, xml_parts_dict)`` pairs where
+    *xml_parts_dict* is the return value of :func:`tile_xml_parts`.  Call this
+    in the main process after all tile workers have completed; all the expensive
+    vertex/triangle formatting was done in the workers in parallel.
+    """
+    tile_data = [
+        {'name': name, **xml_dict}
+        for name, xml_dict in tiles
+        if xml_dict.get('parts')
+    ]
+    if not tile_data:
+        return
+    _assemble_3mf(
+        tile_data, path,
+        plate_mm=plate_mm,
+        gap_mm=gap_mm,
+        front_margin_mm=front_margin_mm,
+        edge_margin_mm=edge_margin_mm,
+    )
+
+
+def export_3mf_colored(
+    tiles: list[list[trimesh.Trimesh]],
+    path:  str | pathlib.Path,
+    *,
+    names:            list[str] | None = None,
+    plate_mm:         float = 256.0,
+    gap_mm:           float = 1.0,
+    front_margin_mm:  float = 12.0,
+    edge_margin_mm:   float = 5.0,
+) -> None:
+    """Export multiple coloured tiles as a Bambu Studio-compatible 3MF project.
+
+    *tiles* is a list of tiles; each tile is a list of trimesh parts with
+    ``mesh.metadata['material']`` set.  *names* (same length as *tiles*)
+    provides tile names used for terrain-group ordering and layout.
+
+    For batch mode prefer :func:`export_3mf_from_parts` — it receives XML
+    already formatted in parallel by tile workers and avoids re-doing the
+    expensive float→string step here in the main process.
+
+    Filament slot assignments (1-indexed AMS slots):
+
+    ======= ===== =================
+    Slot    Mat   Colour
+    ======= ===== =================
+    1       BASE  #2D2D2D dark gray
+    2       SOIL  #692C0C brown
+    3       ROCK  #485C80 slate blue
+    4       GRASS #2A941C green
+    5       WATER #1485D5 turquoise
+    ======= ===== =================
+    """
+    # ── Filter empty meshes/tiles ─────────────────────────────────────────────
+    tile_parts: list[list[trimesh.Trimesh]] = [
+        [m for m in ms if len(m.faces) > 0] for ms in tiles
+    ]
+    _names_raw = (
+        list(names) if names and len(names) == len(tiles)
+        else [f"tile_{i}" for i in range(len(tiles))]
+    )
+    # Re-align names to non-empty tiles.
+    filtered = [
+        (nm, ms) for nm, ms in zip(_names_raw, tile_parts) if ms
+    ]
+    if not filtered:
+        return
+
+    # ── Build tile_data (XML formatting happens here — the slow step) ─────────
+    tile_data: list[dict] = []
+    for name, ms in filtered:
+        xml_dict = tile_xml_parts(ms)
+        tile_data.append({'name': name, **xml_dict})
+
+    _assemble_3mf(
+        tile_data, path,
+        plate_mm=plate_mm,
+        gap_mm=gap_mm,
+        front_margin_mm=front_margin_mm,
+        edge_margin_mm=edge_margin_mm,
+    )

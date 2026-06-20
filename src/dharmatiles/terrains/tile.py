@@ -129,7 +129,7 @@ def _batch_worker(args: tuple) -> dict:
     t0        = _time.perf_counter()
 
     render_meshes: list[trimesh.Trimesh] | None = None
-    dir_meshes_serial: dict[str, tuple[str, list[dict]]] = {}
+    dir_to_meshes_all: dict[pathlib.Path, list[trimesh.Trimesh]] = {}
     for tile in load_tile(tile_path):
         _filter_tile_systems(tile, formats)
         surface   = tile.surface
@@ -146,8 +146,7 @@ def _batch_worker(args: tuple) -> dict:
         _, render_meshes, dir_to_meshes = build_tile_from_spec(
             tile, system_paths=sys_paths, reporter=reporter,
         )
-        for d, ms in dir_to_meshes.items():
-            dir_meshes_serial[str(d)] = (tile_name, _meshes_to_serial(ms))
+        dir_to_meshes_all.update(dir_to_meshes)
 
     # Render PNG from the already-built meshes (no second build pass).
     _set_phase("Render PNG")
@@ -170,8 +169,25 @@ def _batch_worker(args: tuple) -> dict:
         except Exception:
             pass
 
+    # Pre-format 3MF XML while still in the worker — runs in parallel with
+    # other tiles building.  The main process assembly step then only needs
+    # to concatenate strings and write the ZIP.
+    #
+    # face_xml_cache: db and ol meshes share identical face topology (same
+    # connectivity, only vertex positions differ by scale).  By passing one
+    # cache dict across all system directories, the second call (ol) reuses
+    # face XML from the first call (db) — saving ~half the XML serialisation
+    # time for tiles with both scales.
+    _set_phase("3MF XML")
+    from ..core.export_3mf import tile_xml_parts as _tile_xml_parts
+    dir_3mf_parts: dict[str, tuple[str, dict]] = {}
+    _face_xml_cache: dict = {}
+    for d, ms in dir_to_meshes_all.items():
+        expanded = _expand_mixed_materials(ms)
+        dir_3mf_parts[str(d)] = (tile_name, _tile_xml_parts(expanded, face_xml_cache=_face_xml_cache))
+
     row = reporter.to_row(tile_name, _time.perf_counter() - t0)
-    row['dir_meshes_serial'] = dir_meshes_serial
+    row['dir_3mf_parts'] = dir_3mf_parts
     return row
 
 
@@ -864,18 +880,15 @@ def _write_dir_3mf(
     dir_path: pathlib.Path,
     tiles:    list[tuple[str, list[trimesh.Trimesh]]],
 ) -> None:
-    """Write one ``<dir>.3mf`` into *dir_path* containing all tiles laid out
-    on a Bambu X1C build plate (256 × 256 mm).
+    """Write one ``<dir>.3mf`` from trimesh objects (single-tile / sequential path).
 
-    *tiles* is a list of ``(spec_name, meshes)`` pairs — one per tile in this
-    directory.  All tiles are packed into a tight grid, centred on the plate,
-    respecting the X1C front-edge keep-out zone.  When tiles from different
-    terrain groups overflow a single plate the 3MF file contains multiple
-    Bambu Studio virtual plates.
+    *tiles* is a list of ``(spec_name, meshes)`` pairs.  Mixed-material terrain
+    meshes are split by :func:`_expand_mixed_materials` before export so Bambu
+    Studio assigns the correct filament slot to each region.
 
-    Mixed-material terrain meshes (terrain solid carrying per-face grass/soil
-    colours from ``_color_terrain_faces``) are split into per-material parts
-    before export so Bambu Studio assigns the correct filament slot to each region.
+    For the parallel batch path use :func:`_write_dir_3mf_from_parts` instead —
+    it receives XML already formatted in worker processes and skips the expensive
+    float→string step here in the main process.
     """
     from ..core.export_3mf import export_3mf_colored
     if not tiles:
@@ -884,6 +897,25 @@ def _write_dir_3mf(
     meshes_list = [_expand_mixed_materials(ms) for _, ms in tiles]
     dir_path.mkdir(parents=True, exist_ok=True)
     export_3mf_colored(meshes_list, dir_path / f"{dir_path.name}.3mf", names=names)
+
+
+def _write_dir_3mf_from_parts(
+    dir_path:        pathlib.Path,
+    tile_parts_list: list[tuple[str, dict]],
+) -> None:
+    """Write one ``<dir>.3mf`` from pre-formatted XML parts (parallel batch path).
+
+    *tile_parts_list* is a list of ``(name, xml_parts_dict)`` pairs where
+    *xml_parts_dict* is the return value of
+    :func:`~dharmatiles.core.export_3mf.tile_xml_parts`.  All vertex/triangle
+    XML was already generated in the tile-build worker processes; this function
+    only concatenates strings and writes the ZIP archive.
+    """
+    from ..core.export_3mf import export_3mf_from_parts
+    if not tile_parts_list:
+        return
+    dir_path.mkdir(parents=True, exist_ok=True)
+    export_3mf_from_parts(tile_parts_list, dir_path / f"{dir_path.name}.3mf")
 
 
 def _render_all_pngs(
@@ -1393,17 +1425,17 @@ def main(argv=None):
         pngs_rendered = True
 
         # ── Phase: Assemble 3MF (one per system output dir, all tiles) ───────
-        dir_3mf_accum: dict[pathlib.Path, list[tuple[str, list[trimesh.Trimesh]]]] = _defaultdict(list)
+        # XML is already formatted by workers — just concatenate and ZIP.
+        dir_3mf_accum: dict[pathlib.Path, list[tuple[str, dict]]] = _defaultdict(list)
         for row in all_par_rows:
-            for d_str, name_serial in row.get('dir_meshes_serial', {}).items():
-                name, serial = name_serial
-                dir_3mf_accum[pathlib.Path(d_str)].append((name, _serial_to_meshes(serial)))
+            for d_str, (name, xml_parts) in row.get('dir_3mf_parts', {}).items():
+                dir_3mf_accum[pathlib.Path(d_str)].append((name, xml_parts))
         if dir_3mf_accum:
             t_3mf = _time.perf_counter()
             n_3mf = len(dir_3mf_accum)
             reporter.phase_begin("Assembling 3MF")
-            for d, mls in dir_3mf_accum.items():
-                _write_dir_3mf(d, mls)
+            for d, tile_parts_list in dir_3mf_accum.items():
+                _write_dir_3mf_from_parts(d, tile_parts_list)
             reporter.phase_end(
                 "Assemble 3MF", _time.perf_counter() - t_3mf,
                 f"{n_3mf} file{'s' if n_3mf != 1 else ''}",

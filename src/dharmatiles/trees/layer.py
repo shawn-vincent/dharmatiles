@@ -55,6 +55,8 @@ class Tree:
         smoothing_alpha: float = 0.1,
         min_radius_mm: float = 1.0,
         debug_attractors: bool = False,
+        debug_leaf_connectivity: bool = False,
+        debug_leaf_color: bool = False,
         group_width_mm: Sample[float] | None = 20.0,
         group_height_mm: Sample[float] | None = 20.0,
         foliage_bulge_mm: float = 6.0,
@@ -77,9 +79,14 @@ class Tree:
         leaf_cap_count: int = 12,
         leaf_angle_jitter_deg: float = 24.0,
         leaf_pos_jitter: float = 0.165,
-        leaf_tilt_deg: float = 45.0,
+        leaf_tilt_deg: float = 45.0,       # kept for API compat; unused with branchlets
         bark: BarkConfig | None = None,
         stamp_falloff_mm: float = 5.0,
+        # ── Branchlet parameters ──────────────────────────────────────────────
+        branchlet_length_mm: float = 3.0,
+        branchlet_root_radius_mm: float = 2.0,
+        branchlet_embed_depth_mm: float = 2.5,
+        branchlet_floor_angle_deg: float = 45.0,
     ) -> None:
         self.height_mm             = height_mm
         self.trunk_height_mm       = trunk_height_mm
@@ -99,7 +106,9 @@ class Tree:
         self.branch_exponent = float(branch_exponent)
         self.smoothing_alpha = float(smoothing_alpha)
         self.min_radius_mm = float(min_radius_mm)
-        self.debug_attractors  = bool(debug_attractors)
+        self.debug_attractors        = bool(debug_attractors)
+        self.debug_leaf_connectivity = bool(debug_leaf_connectivity)
+        self.debug_leaf_color        = bool(debug_leaf_color)
         self.group_width_mm    = group_width_mm
         self.group_height_mm   = group_height_mm
         self.foliage_bulge_mm  = float(foliage_bulge_mm)
@@ -127,6 +136,11 @@ class Tree:
         self.leaf_tilt_deg             = float(leaf_tilt_deg)
         self.bark = BarkConfig() if bark is None else bark
         self.stamp_falloff_mm = float(stamp_falloff_mm)
+        # Branchlet
+        self.branchlet_length_mm      = float(branchlet_length_mm)
+        self.branchlet_root_radius_mm = float(branchlet_root_radius_mm)
+        self.branchlet_embed_depth_mm = float(branchlet_embed_depth_mm)
+        self.branchlet_floor_angle_deg = float(branchlet_floor_angle_deg)
 
     def footprint_mm(self) -> float:
         return float(bounds(self.canopy_radius_mm)[1])
@@ -216,13 +230,19 @@ class Tree:
                 leaf_width_mm=self.leaf_width_mm,
                 leaf_thickness_mm=self.leaf_thickness_mm,
                 leaf_fold_angle_deg=self.leaf_fold_angle_deg,
-                leaf_keel_depth_mm=self.leaf_width_mm * 0.83,
+                leaf_keel_depth_mm=0.0,   # branchlet provides support; no keel needed
                 leaf_keel_tip_angle_deg=self.leaf_keel_tip_angle_deg,
                 leaf_spacing_factor=self.leaf_spacing_factor,
                 leaf_cap_count=self.leaf_cap_count,
                 leaf_angle_jitter_deg=self.leaf_angle_jitter_deg,
                 leaf_pos_jitter=self.leaf_pos_jitter,
                 leaf_tilt_deg=self.leaf_tilt_deg,
+                debug_leaf_connectivity=self.debug_leaf_connectivity,
+                debug_leaf_color=self.debug_leaf_color,
+                branchlet_length_mm=self.branchlet_length_mm,
+                branchlet_root_radius_mm=self.branchlet_root_radius_mm,
+                branchlet_embed_depth_mm=self.branchlet_embed_depth_mm,
+                branchlet_floor_angle_deg=self.branchlet_floor_angle_deg,
             )
             if len(branch_mesh.vertices) == 0 and len(foliage_mesh.vertices) == 0:
                 continue

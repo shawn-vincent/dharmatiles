@@ -20,6 +20,62 @@ Public API
 keel) positioned at *base_pos* and oriented along *tangent*.  A *seed* integer
 drives the random roll angle so leaves at the same tip position always look
 identical (deterministic) and different edge seeds produce different orientations.
+
+Leaf Attachment Model
+---------------------
+A leaf can only attach to a surface in the following ways. Any orientation
+outside these rules produces a geometrically impossible leaf.
+
+**BASE point** — The centre of the leaf's top surface at the attachment end
+(opposite the tip).  ``base_pos`` in the API.  The BASE is the point that sits
+on the surface.  All rotations are performed around this point.
+
+**Keel embedding constraint** — The keel (structural ridge on the leaf
+underside, in the −N direction from the leaf plane) projects BELOW the base.
+The backmost point of the keel (at the base end) MUST ALWAYS be embedded into
+the surface.  It is never valid for the base to touch the surface while the keel
+back wall floats above it.  This means the leaf's N axis (crease/top direction)
+always equals the outward surface normal at the attachment point: the blade
+sticks out, the keel sticks in.
+
+**Degrees of freedom** — only three are valid:
+
+1. **Position**: where on the surface the BASE sits.
+
+2. **Twist**: rotation about the base→tip axis.  Controls which direction around
+   the surface normal the tip points.  Equivalently, it is the compass bearing
+   of the leaf within the surface's tangent plane.
+
+   Tips should always point as close to gravity-down as the surface allows.
+   On a vertical surface the tip points straight down (± jitter); on a
+   near-horizontal surface gravity has no preferred tangent-plane direction
+   so the twist is arbitrary (dip carries the tip downward regardless).
+   Tips never point upward on non-horizontal surfaces.
+
+3. **Dip**: rotation about the lateral axis through the BASE (the axis
+   perpendicular to both the current tangent and the surface normal), in the
+   plane of (tangent, surface_normal).
+
+   - dip = 0°  → leaf lies flat against the surface; only the keel is
+     embedded; tip is in the surface's tangent plane.
+   - dip > 0°  → tip rotates toward the surface; progressively more keel is
+     buried.
+   - dip = 90° → tangent points directly into the surface (−surface_normal);
+     both base and tip touch the surface; the entire keel is embedded.
+
+   dip is clamped to [0°, 90°].
+
+**Resulting tangent from surface_normal, twist, and dip**::
+
+    T0  = unit vector in surface tangent plane in the twist direction
+    dip = angle in [0°, 90°]
+    tangent = T0 * cos(dip) − surface_normal * sin(dip)
+    N (up_hint) = surface_normal  (always)
+
+No other axes of freedom exist.  Rotations that don't fit these three (e.g.
+tilting the leaf sideways relative to the surface normal, rotating around the
+tip, or any combination that lifts the keel back off the surface) produce
+nonsensical geometry and must not be introduced.
 """
 from __future__ import annotations
 

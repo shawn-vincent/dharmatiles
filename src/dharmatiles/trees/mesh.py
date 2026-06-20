@@ -27,7 +27,7 @@ import trimesh
 
 from ..core.color import Material, debug_material, tag as _tag
 from .bark import BarkConfig
-from .leaf import build_leaf_mesh
+from .branchlet import build_branchlet_and_leaf
 from ._utils import _safe_norm, _hash01, _WUP_VEC
 
 # Fixed polygon count for every cross-section ring.
@@ -75,13 +75,20 @@ def build_branch_mesh(
     leaf_width_mm: float = 5.0,
     leaf_thickness_mm: float = 1.2,
     leaf_fold_angle_deg: float = 3.0,
-    leaf_keel_depth_mm: float = 1.0,
+    leaf_keel_depth_mm: float = 0.0,
     leaf_keel_tip_angle_deg: float = 45.0,
     leaf_spacing_factor: float = 1.1,
     leaf_cap_count: int = 12,
     leaf_angle_jitter_deg: float = 24.0,
     leaf_pos_jitter: float = 0.165,
-    leaf_tilt_deg: float = 45.0,
+    leaf_tilt_deg: float = 45.0,           # kept for API compat; unused with branchlets
+    debug_leaf_connectivity: bool = False,
+    debug_leaf_color: bool = False,
+    # ── Branchlet geometry ────────────────────────────────────────────────────
+    branchlet_length_mm: float = 3.0,
+    branchlet_root_radius_mm: float = 2.0,
+    branchlet_embed_depth_mm: float = 0.4,
+    branchlet_floor_angle_deg: float = 45.0,
 ) -> tuple[trimesh.Trimesh, trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Build branch and foliage meshes from a simplified skeleton.
 
@@ -267,6 +274,11 @@ def build_branch_mesh(
                 leaf_angle_jitter_deg=leaf_angle_jitter_deg,
                 leaf_pos_jitter=leaf_pos_jitter,
                 leaf_tilt_deg=leaf_tilt_deg,
+                debug_leaf_connectivity=debug_leaf_connectivity,
+                branchlet_length_mm=branchlet_length_mm,
+                branchlet_root_radius_mm=branchlet_root_radius_mm,
+                branchlet_embed_depth_mm=branchlet_embed_depth_mm,
+                branchlet_floor_angle_deg=branchlet_floor_angle_deg,
             )
             if len(clump.vertices) > 0:
                 foliage_solids.append(clump)
@@ -279,7 +291,15 @@ def build_branch_mesh(
 
     # ── assemble ──────────────────────────────────────────────────────────
     leaf_solids = [m for m in leaf_solids if len(m.vertices) > 0]
-    foliage_solids.extend(leaf_solids)
+    if debug_leaf_color:
+        # Keep leaves separate so they can be tagged with a visible debug colour
+        # rather than being buried in the green foliage_mesh.
+        # Rotate through the full 12-slot debug palette so each leaf part gets
+        # a distinct colour (index cycles mod 12 via debug_material).
+        for i, lm in enumerate(leaf_solids):
+            _tag(lm, debug_material(i))
+    else:
+        foliage_solids.extend(leaf_solids)
 
     branch_mesh  = _union_edge_solids(edge_solids)
     foliage_mesh = _union_edge_solids(foliage_solids)
@@ -303,6 +323,9 @@ def build_branch_mesh(
             )
             _tag(s, mat)
             attractor_meshes.append(s)
+
+    if debug_leaf_color:
+        attractor_meshes.extend(leaf_solids)
 
     return branch_mesh, foliage_mesh, attractor_meshes
 
@@ -646,6 +669,85 @@ def _bezier_clump_start(
     return start_pos, start_tan
 
 
+def _check_leaf_cluster_connectivity(
+    leaf: trimesh.Trimesh,
+    cluster_verts: np.ndarray,
+    edge_id: int,
+    leaf_key: object,
+    xy_tolerance_mm: float = 2.5,
+    n_slices: int = 20,
+) -> None:
+    """Warn if any Z slice of *leaf* has no cluster geometry within xy_tolerance_mm."""
+    lv = leaf.vertices
+    if len(lv) == 0 or len(cluster_verts) == 0:
+        return
+
+    z_leaf_min  = float(lv[:, 2].min())
+    z_leaf_max  = float(lv[:, 2].max())
+    z_clust_min = float(cluster_verts[:, 2].min())
+    z_clust_max = float(cluster_verts[:, 2].max())
+
+    # Check whether the leaf extends outside the cluster's Z range at all.
+    if z_leaf_min < z_clust_min - 0.05:
+        warnings.warn(
+            f"leaf-connectivity: leaf {leaf_key} on edge {edge_id} extends "
+            f"{z_clust_min - z_leaf_min:.2f} mm BELOW cluster bottom "
+            f"(leaf z=[{z_leaf_min:.2f}, {z_leaf_max:.2f}] "
+            f"cluster z=[{z_clust_min:.2f}, {z_clust_max:.2f}])",
+            stacklevel=4,
+        )
+        return
+    if z_leaf_max > z_clust_max + 0.05:
+        warnings.warn(
+            f"leaf-connectivity: leaf {leaf_key} on edge {edge_id} extends "
+            f"{z_leaf_max - z_clust_max:.2f} mm ABOVE cluster top "
+            f"(leaf z=[{z_leaf_min:.2f}, {z_leaf_max:.2f}] "
+            f"cluster z=[{z_clust_min:.2f}, {z_clust_max:.2f}])",
+            stacklevel=4,
+        )
+        return
+
+    # XY proximity check: at each sampled Z, leaf vertices must have at least
+    # one cluster vertex within xy_tolerance_mm.  Uses vertex proximity rather
+    # than full cross-section intersection — adequate for diagnosing clear gaps
+    # while avoiding false positives from icosphere vertex sparsity (~1.5 mm
+    # inter-vertex spacing at r=5.5 mm, subdivision 3).
+    z_range = z_leaf_max - z_leaf_min
+    if z_range < 1e-4:
+        return
+    eps = max(z_range / n_slices * 0.6, 0.1)
+
+    for k in range(n_slices + 1):
+        z = z_leaf_min + k * z_range / n_slices
+        leaf_at_z  = lv[np.abs(lv[:, 2] - z) < eps, :2]
+        clust_at_z = cluster_verts[np.abs(cluster_verts[:, 2] - z) < eps, :2]
+
+        if len(leaf_at_z) == 0:
+            continue
+        if len(clust_at_z) == 0:
+            warnings.warn(
+                f"leaf-connectivity: leaf {leaf_key} on edge {edge_id} — "
+                f"no cluster vertices near z={z:.2f} mm "
+                f"(leaf z=[{z_leaf_min:.2f}, {z_leaf_max:.2f}] "
+                f"cluster z=[{z_clust_min:.2f}, {z_clust_max:.2f}])",
+                stacklevel=4,
+            )
+            return
+
+        diffs   = leaf_at_z[:, None, :] - clust_at_z[None, :, :]  # (L, C, 2)
+        min_dist = float(np.sqrt((diffs ** 2).sum(axis=2)).min())
+        if min_dist > xy_tolerance_mm:
+            warnings.warn(
+                f"leaf-connectivity: leaf {leaf_key} on edge {edge_id} — "
+                f"XY gap {min_dist:.2f} mm > {xy_tolerance_mm:.1f} mm tolerance "
+                f"at z={z:.2f} mm "
+                f"(leaf z=[{z_leaf_min:.2f}, {z_leaf_max:.2f}] "
+                f"cluster z=[{z_clust_min:.2f}, {z_clust_max:.2f}])",
+                stacklevel=4,
+            )
+            return
+
+
 def _build_foliage_cluster_mesh(
     *,
     tip_pos: np.ndarray,
@@ -670,6 +772,11 @@ def _build_foliage_cluster_mesh(
     leaf_angle_jitter_deg: float = 24.0,
     leaf_pos_jitter: float = 0.165,
     leaf_tilt_deg: float = 45.0,
+    debug_leaf_connectivity: bool = False,
+    branchlet_length_mm: float = 3.0,
+    branchlet_root_radius_mm: float = 2.0,
+    branchlet_embed_depth_mm: float = 0.4,
+    branchlet_floor_angle_deg: float = 45.0,
 ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Foliage clump: icosphere bent along the branch Bezier spine.
 
@@ -839,7 +946,13 @@ def _build_foliage_cluster_mesh(
     # ── Leaves: rows up the cone, over the dome, capped at the apex ──────────
     leaf_parts: list[trimesh.Trimesh] = []
     if leaves and leaf_base_count > 0 and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
-        _WD = np.array([0.0, 0.0, -1.0])
+        # Build the cluster mesh once (noised verts already applied above) so
+        # build_branchlet_and_leaf can verify every root ring is fully embedded.
+        _cluster_mesh_for_embedding = trimesh.Trimesh(
+            vertices=verts, faces=ico.faces.copy(), process=False
+        )
+        _cluster_mesh_for_embedding.fix_normals()
+
         factor_tip = max(0.0, 1.0 - (r_base + _FOLIAGE_MAX_NOISE_MM) / max(r_tip, 1e-6))
         jit = np.radians(float(leaf_angle_jitter_deg))
         pj  = float(leaf_pos_jitter)
@@ -870,83 +983,64 @@ def _build_foliage_cluster_mesh(
             normal = _safe_norm(np.sin(phi) * tip_t + np.cos(phi) * perp)
             return pt, normal, rr
 
+        # Minimum smooth cluster radius at which a root ring can be embedded.
+        # Below this the noised cluster is too narrow for the ring to fit inside
+        # regardless of embed depth; we skip these leaves rather than error.
+        #
+        # The noise shift spans up to 2 × _FOLIAGE_MAX_NOISE_MM of inward erosion
+        # (peak-to-trough of the combined coarse+fine noise, shifted so max=0).
+        # For the ring of radius root_r to fit inside a noised cluster, the smooth
+        # cluster radius must satisfy: rr ≥ root_r + 2 × _FOLIAGE_MAX_NOISE_MM.
+        _min_cluster_r_mm = (float(branchlet_root_radius_mm)
+                             + 2.0 * _FOLIAGE_MAX_NOISE_MM)
+
         def _emit_leaf(
             base_smooth: np.ndarray,
             radial: np.ndarray,
             key,
-            *,
-            ltan_override: np.ndarray | None = None,
+            cluster_radius_mm: float = float("inf"),
         ) -> None:
-            radial = _safe_norm(radial)
-            # Sink the base from the smooth surface onto the *noised* skin (the
-            # skin was eroded inward by noise_peak − disp along its ≈ normal);
-            # evaluating the same noise fields here reproduces that, then
-            # _LEAF_BASE_EMBED_MM tucks the base slightly inside for contact.
+            # Guard: if the cluster is narrower than the root ring can ever fit
+            # inside (accounting for maximum inward noise), skip this leaf.
+            if cluster_radius_mm < _min_cluster_r_mm:
+                return
+
+            # surface_normal is the outward radial direction from the cluster.
+            # The branchlet algorithm uses it to determine the safe exit direction.
+            surface_normal = _safe_norm(radial)
+
+            # Sink the attachment point onto the noised cluster skin.
             disp_base = float(
                 _foliage_gaussian_noise(base_smooth[None, :], edge_id, bark_seed)[0]
                 + _foliage_coarse_noise(base_smooth[None, :], edge_id, bark_seed)[0]
             )
-            lbase = base_smooth + radial * ((disp_base - noise_peak) - _LEAF_BASE_EMBED_MM)
-            # Growth tangent: rotate the outward normal by leaf_tilt_deg toward
-            # world-down so the tip points downward.  Near-pole callers supply
-            # ltan_override (a horizontal spread direction) to avoid the vertical-
-            # spike degenerate that occurs when radial ≈ world-up and the world-
-            # down component in the tangent plane approaches zero.
-            if ltan_override is not None:
-                ltan = _safe_norm(np.asarray(ltan_override, float))
-            else:
-                # Target: tip at leaf_tilt_deg below world horizontal.
-                # Horizontal component follows the XY projection of radial so the
-                # leaf still points outward from the cluster in plan view.
-                sin_t = float(np.sin(np.radians(leaf_tilt_deg)))
-                cos_t = float(np.cos(np.radians(leaf_tilt_deg)))
-                rh = radial.copy(); rh[2] = 0.0
-                rh_n = float(np.linalg.norm(rh))
-                if rh_n > 1e-9:
-                    ltan = (cos_t / rh_n) * rh + np.array([0.0, 0.0, -sin_t])
-                    # already unit: cos_t² + sin_t² = 1
-                else:
-                    # radial is nearly vertical — can't derive outward horizontal;
-                    # fall back to radial (floor clamp will handle orientation).
-                    ltan = radial.copy()
-            # Angle jitter: pitch (extra droop) about the lateral axis, plus a
-            # rotation (yaw) about the surface normal.
-            if jit > 1e-9:
-                a_pitch = (2.0 * _hash01(bark_seed, "leaf-pitch", edge_id, key) - 1.0) * jit
-                a_yaw   = (2.0 * _hash01(bark_seed, "leaf-yaw",   edge_id, key) - 1.0) * jit
-                ltan = _rotate_vec(ltan, np.cross(ltan, radial), a_pitch)
-                ltan = _safe_norm(_rotate_vec(ltan, radial, a_yaw))
-            upper_weight = float(np.clip((radial[2] - 0.25) / 0.65, 0.0, 1.0))
-            if upper_weight > 0.0 and ltan[2] > 0.0:
-                ltan = ltan.copy()
-                ltan[2] *= 1.0 - _LEAF_UPPER_FLATTEN * upper_weight
-                ltan = _safe_norm(ltan)
-            # Surface floor: tip must stay at least _LEAF_SURFACE_FLOOR_DEG above
-            # the tangent plane so no leaf points back into the cluster skin.
-            floor_sin = float(np.sin(np.radians(_LEAF_SURFACE_FLOOR_DEG)))
-            dot_rn = float(np.dot(ltan, radial))
-            if dot_rn < floor_sin:
-                tan_comp = ltan - dot_rn * radial
-                tan_n = float(np.linalg.norm(tan_comp))
-                if tan_n > 1e-9:
-                    cos_floor = float(np.sqrt(max(0.0, 1.0 - floor_sin * floor_sin)))
-                    ltan = floor_sin * radial + cos_floor * (tan_comp / tan_n)
-                else:
-                    ltan = radial
+            attachment_pt = base_smooth + surface_normal * (disp_base - noise_peak)
+
+            # Yaw: spin the leaf around the world-up axis at its tip.
+            # Uses the same jitter range as the old twist/dip system.
+            yaw = (2.0 * _hash01(bark_seed, "leaf-yaw", edge_id, key) - 1.0) * jit
             lseed = _hash01_int(bark_seed, "base-leaf", edge_id, key)
-            for lp in build_leaf_mesh(
-                base_pos=lbase,
-                tangent=ltan,
-                length_mm=float(leaf_length_mm),
-                width_mm=float(leaf_width_mm),
-                thickness_mm=float(leaf_thickness_mm),
-                fold_angle_deg=float(leaf_fold_angle_deg),
-                keel_depth_mm=float(leaf_keel_depth_mm),
-                keel_tip_angle_deg=float(leaf_keel_tip_angle_deg),
-                up_hint=radial,   # top/crease faces outward, away from the cone
+
+            parts = build_branchlet_and_leaf(
+                attachment_point=attachment_pt,
+                surface_normal=surface_normal,
+                branchlet_length_mm=float(branchlet_length_mm),
+                floor_angle_deg=float(branchlet_floor_angle_deg),
+                root_radius_mm=float(branchlet_root_radius_mm),
+                embed_depth_mm=float(branchlet_embed_depth_mm),
+                yaw_deg=float(np.degrees(yaw)),
                 seed=lseed,
-            ):
+                leaf_length_mm=float(leaf_length_mm),
+                leaf_width_mm=float(leaf_width_mm),
+                leaf_thickness_mm=float(leaf_thickness_mm),
+                leaf_fold_angle_deg=float(leaf_fold_angle_deg),
+                leaf_keel_depth_mm=float(leaf_keel_depth_mm),
+                parent_mesh=_cluster_mesh_for_embedding,
+            )
+            for lp in parts:
                 if len(lp.vertices) > 0:
+                    if debug_leaf_connectivity:
+                        _check_leaf_cluster_connectivity(lp, verts, edge_id, key)
                     leaf_parts.append(lp)
 
         # Tile leaves side-by-side over the whole cap: a ~leaf_width grid in
@@ -991,19 +1085,14 @@ def _build_foliage_cluster_mesh(
                 t_jit   = (2.0 * _hash01(bark_seed, "leaf-col", edge_id, ri, ci) - 1.0) * th_jit
                 theta   = -np.pi + col_f * 2.0 * np.pi + t_jit
                 if on_cone:
-                    base_smooth, radial, _ = _cone_point(tc, theta)
+                    base_smooth, radial, rr_pt = _cone_point(tc, theta)
                 else:
-                    base_smooth, radial, _ = _dome_point(phi, theta)
-                _emit_leaf(base_smooth, radial, (ri, ci))
+                    base_smooth, radial, rr_pt = _dome_point(phi, theta)
+                _emit_leaf(base_smooth, radial, (ri, ci), cluster_radius_mm=rr_pt)
 
         # Near-apex ring: one structured circumferential ring inside the actual
         # gap zone — between the last main-grid row (~phi 73.5° at default
-        # 1.5mm leaf spacing) and the pole.  At phi=81° the ring sits squarely
-        # in the uncovered cap region and its columns use a horizontal SPREAD
-        # tangent (outward from the tip axis, not the droop direction) so each
-        # leaf presents its face toward a top-down viewer.  The droop formula
-        # produces dp≈0 near the pole, making leaves vertical spikes that are
-        # invisible from above — the spread tangent avoids this.
+        # 1.5mm leaf spacing) and the pole.
         near_apex_phi = (np.pi / 2.0) * 0.90          # ≈ 81° dome latitude
         near_apex_rr  = r_tip * float(np.cos(near_apex_phi))
         n_col_na      = max(1, int(np.ceil((2.0 * np.pi * near_apex_rr) / spacing)))
@@ -1018,25 +1107,17 @@ def _build_foliage_cluster_mesh(
                 2.0 * _hash01(bark_seed, "na-col", edge_id, ci) - 1.0
             ) * th_na
             theta_na = -np.pi + (ci + 0.5) / n_col_na * 2.0 * np.pi + t_jit_na
-            base_smooth, radial, _ = _dome_point(phi_na, theta_na)
-            spread_na = (
-                float(np.cos(theta_na)) * pu_tip + float(np.sin(theta_na)) * vp_tip
-            )
-            _emit_leaf(base_smooth, radial, ("near-apex", ci), ltan_override=spread_na)
+            base_smooth, radial, rr_na = _dome_point(phi_na, theta_na)
+            _emit_leaf(base_smooth, radial, ("near-apex", ci), cluster_radius_mm=rr_na)
 
-        # Cap: random leaves spread over the polar zone.  Spread tangent (horizontal
-        # outward from the tip axis) makes each leaf face the top-down viewer
-        # rather than standing as a vertical spike.
+        # Cap: random leaves spread over the polar zone.
         for ci in range(max(0, int(leaf_cap_count))):
             u_theta = _hash01(bark_seed, "cap-theta", edge_id, ci)
             u_phi   = _hash01(bark_seed, "cap-phi",   edge_id, ci)
             theta   = -np.pi + 2.0 * np.pi * u_theta            # full circle
             phi     = (np.pi / 2.0) - (0.30 * np.pi / 2.0) * u_phi  # spread to ~63°
-            base_smooth, radial, _ = _dome_point(phi, theta)
-            spread_cap = (
-                float(np.cos(theta)) * pu_tip + float(np.sin(theta)) * vp_tip
-            )
-            _emit_leaf(base_smooth, radial, ("cap", ci), ltan_override=spread_cap)
+            base_smooth, radial, rr_cap = _dome_point(phi, theta)
+            _emit_leaf(base_smooth, radial, ("cap", ci), cluster_radius_mm=rr_cap)
 
     result = trimesh.Trimesh(vertices=verts, faces=ico.faces.copy(), process=False)
     result.fix_normals()
