@@ -70,8 +70,7 @@ tile = Tile(
                     leaf_cap_count=3,
                     leaf_angle_jitter_deg=15.0,
                     debug_leaf_color=True,
-                    branchlet_length_mm=5.0,
-                    branchlet_root_radius_mm=1.2,
+                    branchlet_length_mm=12.0,
                     branchlet_embed_depth_mm=1.6,
                 ),
                 Grass(

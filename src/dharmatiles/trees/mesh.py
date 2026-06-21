@@ -85,8 +85,8 @@ def build_branch_mesh(
     debug_leaf_connectivity: bool = False,
     debug_leaf_color: bool = False,
     # ── Branchlet geometry ────────────────────────────────────────────────────
-    branchlet_length_mm: float = 3.0,
-    branchlet_root_radius_mm: float = 2.0,
+    branchlet_length_mm: float = 12.0,
+    branchlet_root_radius_mm: float | None = None,
     branchlet_embed_depth_mm: float = 0.4,
     branchlet_floor_angle_deg: float = 45.0,
 ) -> tuple[trimesh.Trimesh, trimesh.Trimesh, list[trimesh.Trimesh]]:
@@ -773,8 +773,8 @@ def _build_foliage_cluster_mesh(
     leaf_pos_jitter: float = 0.165,
     leaf_tilt_deg: float = 45.0,
     debug_leaf_connectivity: bool = False,
-    branchlet_length_mm: float = 3.0,
-    branchlet_root_radius_mm: float = 2.0,
+    branchlet_length_mm: float = 12.0,
+    branchlet_root_radius_mm: float | None = None,
     branchlet_embed_depth_mm: float = 0.4,
     branchlet_floor_angle_deg: float = 45.0,
 ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
@@ -991,8 +991,9 @@ def _build_foliage_cluster_mesh(
         # (peak-to-trough of the combined coarse+fine noise, shifted so max=0).
         # For the ring of radius root_r to fit inside a noised cluster, the smooth
         # cluster radius must satisfy: rr ≥ root_r + 2 × _FOLIAGE_MAX_NOISE_MM.
-        _min_cluster_r_mm = (float(branchlet_root_radius_mm)
-                             + 2.0 * _FOLIAGE_MAX_NOISE_MM)
+        # Adaptive fitting can shrink the root ring, so only skip cluster
+        # sections too narrow for the algorithm's numerical minimum radius.
+        _min_cluster_r_mm = 0.20 + 2.0 * _FOLIAGE_MAX_NOISE_MM
 
         def _emit_leaf(
             base_smooth: np.ndarray,
@@ -1026,7 +1027,7 @@ def _build_foliage_cluster_mesh(
                 surface_normal=surface_normal,
                 branchlet_length_mm=float(branchlet_length_mm),
                 floor_angle_deg=float(branchlet_floor_angle_deg),
-                root_radius_mm=float(branchlet_root_radius_mm),
+                root_radius_mm=branchlet_root_radius_mm,
                 embed_depth_mm=float(branchlet_embed_depth_mm),
                 yaw_deg=float(np.degrees(yaw)),
                 seed=lseed,

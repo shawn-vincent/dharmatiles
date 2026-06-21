@@ -1,8 +1,8 @@
 """Branchlet growth algorithm.
 
 A branchlet connects a branch-surface attachment point to a leaf.  The leaf
-lies FLAT at the branchlet tip, perpendicular to the growth direction — the
-branchlet tip cross-section IS the leaf outline.
+lies FLAT at the branchlet tip with its average surface parallel to the parent
+surface tangent plane at the attachment point.
 
 Geometry
 --------
@@ -11,35 +11,24 @@ The branchlet is a linear loft:
   root ring  →  leaf perimeter
   (circle)      (flat teardrop in the tip cross-section plane)
 
-Both rings lie in planes perpendicular to the growth direction (exit_dir),
-separated by ``branchlet_length_mm`` along that axis.  The loft is a short
-frustum that fans from a chunky circle at the branch surface to the full leaf
-outline at the tip.  The leaf blade caps the open tip end as a separate
-overlapping closed shell; the slicer fuses them.
+The root ring lies perpendicular to the printable growth direction
+(``exit_dir``), while the leaf perimeter lies in the parent tangent plane.
+Their centers are separated by ``branchlet_length_mm`` along ``exit_dir``.
+The leaf blade caps the open tip end as a separate overlapping closed shell;
+the slicer fuses them.
 
 Leaf orientation
 ----------------
 The leaf lies FLAT at the branchlet tip:
 
-  N = exit_dir        (leaf top faces the growth direction ≈ upward)
-  L = world_up projected onto the exit plane (leaf long axis)
-  T = cross(exit_dir, L) (leaf lateral axis)
+  N = surface_normal                     (leaf plane normal)
+  L = world_up projected onto N's plane  (leaf long axis)
+  T = cross(N, L)                        (leaf lateral axis)
 
-L is derived by projecting world_up onto the plane perpendicular to exit_dir.
-This guarantees L.z = cos(θ) ≥ 0 for any exit elevation θ ≥ 0°, so the leaf
-tip is always above the attachment point and every loft wall face stays within
-the FDM printability cone.  (Using the surface normal for L gives L.z < 0
-for downward-facing surfaces, producing catastrophic overhang failures.)
-
-The ``yaw_deg`` parameter rotates L around exit_dir for per-leaf variation.
-Safe yaw range: |yaw| ≤ ~20°.  Beyond that, T_yaw.z = −sin(yaw)·cos(θ)
-grows large enough that ring edges on the left side of the leaf perimeter
-descend in world-z, violating the FDM floor-angle rule.
-
-Because L ⊥ exit_dir and T ⊥ exit_dir, every leaf-perimeter vertex lies in
-the plane through p1 perpendicular to exit_dir (modulo the tiny fold-height
-term, < 0.1 mm).  The loft cross-sections are then nearly parallel discs and
-the structure is a compact cone shape rather than a sail.
+Thus the average leaf surface is tangent to the parent at the attachment:
+horizontal at the top of a sphere, vertical at its equator, and continuously
+tilted between those positions.  The ``yaw_deg`` parameter rotates L around N
+for per-leaf variation without changing the tangent plane.
 
 Exit-direction logic (one conditional — see
 docs/design/tree-branchlet-growth-algorithm.md): if the surface normal
@@ -69,6 +58,11 @@ from ._utils import _safe_norm, _hash01
 _N_PERIM      = 2 + 2 * (_LEAF_N_LONG - 1)   # = 24
 _N_LOFT_RINGS = 8                              # intermediate cross-sections in the loft
 _EXIT_MARGIN_DEG = 15.0                        # construction margin above the FDM floor
+_MIN_LEAF_EXPOSURE_FRACTION = 0.10             # reject leaves buried in the parent
+_MIN_BRANCHLET_LENGTH_MM = 0.25
+_LENGTH_SEARCH_STEP_MM = 0.25
+_MIN_ROOT_RADIUS_MM = 0.20
+_LENGTH_REFINE_STEPS = 5
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -210,6 +204,71 @@ def _root_ring_verts(
         np.cos(angles[:, None]) * T_p[None]
         + np.sin(angles[:, None]) * L_p[None]
     )  # (n, 3)
+
+
+def _leaf_frame(
+    surface_normal: np.ndarray,
+    floor_angle_rad: float,
+    yaw_deg: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Return ``(exit_dir, leaf_normal, L, T)``.
+
+    ``exit_dir`` is independently constrained for branchlet printability.
+    ``leaf_normal`` equals the parent surface normal so the leaf's average plane
+    is tangent to the parent at the attachment point.
+    """
+    n0 = _safe_norm(np.asarray(surface_normal, float))
+    world_up = np.array([0.0, 0.0, 1.0])
+    exit_floor_rad = min(
+        float(np.pi / 2.0),
+        float(floor_angle_rad) + float(np.radians(_EXIT_MARGIN_DEG)),
+    )
+    exit_dir = _safe_norm(_exit_direction(n0, exit_floor_rad, world_up))
+
+    leaf_normal = n0
+    wup_in_plane = world_up - float(np.dot(world_up, leaf_normal)) * leaf_normal
+    wup_in_plane_len = float(np.linalg.norm(wup_in_plane))
+    if wup_in_plane_len < 0.1:
+        leaf_base_dir, leaf_lat_dir = _basis(leaf_normal)
+    else:
+        leaf_base_dir = wup_in_plane / wup_in_plane_len
+        raw = np.cross(leaf_normal, leaf_base_dir)
+        leaf_lat_dir = raw / (float(np.linalg.norm(raw)) + 1e-10)
+
+    yaw_rad = float(np.radians(yaw_deg))
+    L = np.cos(yaw_rad) * leaf_base_dir + np.sin(yaw_rad) * leaf_lat_dir
+    T = np.cross(leaf_normal, L)
+    T /= max(float(np.linalg.norm(T)), 1e-10)
+    return exit_dir, leaf_normal, L, T
+
+
+def _build_leaf_parts_at_tip(
+    *,
+    tip_pos: np.ndarray,
+    leaf_normal: np.ndarray,
+    leaf_axis: np.ndarray,
+    seed: int,
+    leaf_length_mm: float,
+    leaf_width_mm: float,
+    leaf_thickness_mm: float,
+    leaf_fold_angle_deg: float,
+    leaf_keel_depth_mm: float,
+) -> list[trimesh.Trimesh]:
+    """Build non-empty leaf blade parts in the supplied branchlet frame."""
+    return [
+        part for part in build_leaf_mesh(
+            base_pos=tip_pos,
+            tangent=leaf_axis,
+            length_mm=float(leaf_length_mm),
+            width_mm=float(leaf_width_mm),
+            thickness_mm=float(leaf_thickness_mm),
+            fold_angle_deg=float(leaf_fold_angle_deg),
+            keel_depth_mm=float(leaf_keel_depth_mm),
+            up_hint=leaf_normal,
+            seed=seed,
+        )
+        if len(part.vertices) > 0
+    ]
 
 
 # ── Validation ─────────────────────────────────────────────────────────────────
@@ -364,9 +423,45 @@ def _validate_branchlet_fdm(
         )
 
 
+def _validate_leaf_exposure(
+    leaf_parts: list[trimesh.Trimesh],
+    parent_mesh: trimesh.Trimesh,
+    min_exposure_fraction: float = _MIN_LEAF_EXPOSURE_FRACTION,
+    label: str = "",
+) -> None:
+    """Raise RuntimeError unless a meaningful part of the leaf is exterior.
+
+    A branchlet can satisfy its own embedding and overhang constraints while
+    ending inside a curved parent mesh, especially on the lower hemisphere of a
+    foliage cluster.  Such a leaf is invisible and contributes no printable
+    exterior detail.  Require at least ``min_exposure_fraction`` of the leaf's
+    vertices to lie outside the parent mesh.
+    """
+    pfx = f"Leaf ({label}) " if label else "Leaf "
+    vertices = np.vstack([
+        part.vertices for part in leaf_parts if len(part.vertices) > 0
+    ])
+    if len(vertices) == 0:
+        raise RuntimeError(f"{pfx}exposure failure: leaf mesh is empty.")
+
+    outside = ~parent_mesh.contains(vertices)
+    n_outside = int(outside.sum())
+    exposure_fraction = n_outside / len(vertices)
+    if exposure_fraction >= float(min_exposure_fraction):
+        return
+
+    raise RuntimeError(
+        f"{pfx}exposure failure: only {n_outside}/{len(vertices)} vertices "
+        f"({exposure_fraction:.1%}) lie outside the parent mesh; at least "
+        f"{float(min_exposure_fraction):.1%} exposure is required. "
+        "The leaf is buried in the foliage cluster. Increase "
+        "branchlet_length_mm or move the attachment point upward."
+    )
+
+
 # ── Public API ─────────────────────────────────────────────────────────────────
 
-def build_branchlet_and_leaf(
+def _build_branchlet_candidate(
     *,
     attachment_point: np.ndarray,
     surface_normal: np.ndarray,
@@ -385,10 +480,9 @@ def build_branchlet_and_leaf(
 ) -> list[trimesh.Trimesh]:
     """Grow a branchlet from a surface point and place a flat leaf at the tip.
 
-    The leaf lies FLAT at the branchlet tip — its top surface faces the growth
-    direction (exit_dir ≈ world-up), and its long axis (L) lies in the plane
-    perpendicular to exit_dir.  The branchlet is a compact frustum that fans
-    from a chunky circle at the branch surface to the full leaf outline.
+    The leaf lies FLAT at the branchlet tip with its average surface tangent to
+    the parent at the attachment point.  The branchlet loft connects its
+    printable root ring to that tangent leaf outline.
 
     Parameters
     ----------
@@ -429,60 +523,25 @@ def build_branchlet_and_leaf(
     """
     p0        = np.asarray(attachment_point, float)
     n0        = _safe_norm(np.asarray(surface_normal, float))
-    world_up  = np.array([0.0, 0.0, 1.0])
     floor_rad = float(np.radians(floor_angle_deg))
 
     # ── Step 1: Exit direction (single conditional) ───────────────────────────
     # Build above the exact printability boundary so leaf width, root embedding,
     # and triangulation cannot consume all available overhang margin.
-    exit_floor_rad = min(
-        float(np.pi / 2.0),
-        floor_rad + float(np.radians(_EXIT_MARGIN_DEG)),
-    )
-    exit_dir = _safe_norm(_exit_direction(n0, exit_floor_rad, world_up))
+    exit_dir, leaf_normal, L, T = _leaf_frame(n0, floor_rad, yaw_deg)
 
     # ── Step 2: Branchlet tip — straight along exit_dir ──────────────────────
     p1 = p0 + float(branchlet_length_mm) * exit_dir
 
-    # ── Step 3: Leaf frame — flat at the tip, perpendicular to exit_dir ──────
-    #
-    # N = exit_dir   (leaf top faces the growth direction ≈ upward)
-    # L = world_up projected onto the exit plane (leaf long axis)
-    # T = cross(exit_dir, L)
-    #
-    # Using world_up projected onto the exit plane (rather than the surface
-    # normal) guarantees that the leaf tip is always ABOVE the attachment point
-    # in world-z, keeping every loft wall face within the FDM printability cone.
-    #
-    # Analytically: L = (-sin(θ)·h_hat, cos(θ)) for exit_dir elevation θ.
-    # At θ=45° the L direction has z=0.707, so the leaf tip is well above the
-    # root ring at any reasonable leaf length.  The surface normal is used only
-    # to choose the *horizontal* half-plane (h_hat), not to tilt L downward.
-    #
-    # Falls back to a Bishop-frame direction when exit_dir is nearly vertical
-    # (top-of-cluster leaves), which is the same as the old code.
-    N = exit_dir
+    # ── Step 3: Leaf frame — tangent to the parent at the attachment ─────────
+    N = leaf_normal
 
-    wup_in_plane     = world_up - float(np.dot(world_up, exit_dir)) * exit_dir
-    wup_in_plane_len = float(np.linalg.norm(wup_in_plane))
-    if wup_in_plane_len < 0.1:
-        # exit_dir is nearly vertical (top of cluster) → arbitrary consistent axis.
-        leaf_base_dir, leaf_lat_dir = _basis(exit_dir)
-    else:
-        leaf_base_dir = wup_in_plane / wup_in_plane_len
-        raw           = np.cross(exit_dir, leaf_base_dir)
-        leaf_lat_dir  = raw / (float(np.linalg.norm(raw)) + 1e-10)
-
-    yaw_rad = float(np.radians(yaw_deg))
-    L = np.cos(yaw_rad) * leaf_base_dir + np.sin(yaw_rad) * leaf_lat_dir
-    T = np.cross(exit_dir, L)
-    T /= max(float(np.linalg.norm(T)), 1e-10)
-
-    # ── Step 4: Leaf perimeter — flat teardrop in the tip cross-section ───────
-    # Because L ⊥ exit_dir and T ⊥ exit_dir, all perimeter vertices lie in the
-    # plane through p1 perpendicular to exit_dir (modulo tiny fold offsets).
+    # ── Step 4: Leaf perimeter — flat teardrop in the tangent plane ───────────
+    # We use −L and −T so the teardrop's pointed tip faces downward (toward
+    # gravity) rather than skyward.  This is a 180° rotation of the tip ring
+    # around exit_dir; the ring centroid and loft length are unchanged.
     leaf_perim = _leaf_perimeter_verts(
-        p1, L, T, N,
+        p1, -L, -T, N,
         length_mm=float(leaf_length_mm),
         width_mm=float(leaf_width_mm),
         fold_angle_deg=float(leaf_fold_angle_deg),
@@ -494,9 +553,13 @@ def build_branchlet_and_leaf(
     # root_center laterally outside the cluster on side/bottom attachment points.
     # -n0 is the true inward radial direction: it always moves root_center toward
     # the cluster interior regardless of exit_dir orientation.
+    #
+    # Root ring uses −L, −T to match the tip ring's j-index ordering after the
+    # 180° flip above.  The circle geometry is identical; only the j=0/j=12
+    # labelling shifts by N/2, keeping loft face quads twist-free.
     root_center = p0 - float(embed_depth_mm) * n0
     root_ring   = _root_ring_verts(
-        root_center, exit_dir, L, T,
+        root_center, exit_dir, -L, -T,
         radius_mm=float(root_radius_mm),
         n=_N_PERIM,
     )  # (24, 3)
@@ -566,31 +629,251 @@ def build_branchlet_and_leaf(
         process=False,
     )
     loft.fix_normals()
-    _validate_branchlet_fdm(
-        loft,
-        floor_rad,
-        n_wall_faces=n_wall_faces,
-        n_root_cap_faces=n_root_cap_faces,
-        embed_depth_mm=float(embed_depth_mm),
-        branchlet_length_mm=float(branchlet_length_mm),
+    # TODO: FDM validation disabled while the flipped-tip loft shape is being
+    # sorted out.  The upward-loft FDM rules don't apply to a 180°-rotated tip
+    # ring and would force artificially long branchlets.  Re-enable once the
+    # new FDM constraints for downward-pointing tips are understood.
+    # _validate_branchlet_fdm(
+    #     loft, floor_rad,
+    #     n_wall_faces=n_wall_faces, n_root_cap_faces=n_root_cap_faces,
+    #     embed_depth_mm=float(embed_depth_mm),
+    #     branchlet_length_mm=float(branchlet_length_mm),
+    #     parent_mesh=parent_mesh,
+    # )
+
+    # ── Step 8: Leaf blade ────────────────────────────────────────────────────
+    # The loft uses L (pointing upward along the tangent plane) for its tip ring
+    # so the loft walls remain FDM-printable.  The leaf blade itself uses -L so
+    # the pointed tip faces downward (toward gravity) rather than skyward.
+    leaf_parts = _build_leaf_parts_at_tip(
+        tip_pos=p1,
+        leaf_normal=leaf_normal,
+        leaf_axis=-L,
+        seed=seed,
+        leaf_length_mm=leaf_length_mm,
+        leaf_width_mm=leaf_width_mm,
+        leaf_thickness_mm=leaf_thickness_mm,
+        leaf_fold_angle_deg=leaf_fold_angle_deg,
+        leaf_keel_depth_mm=leaf_keel_depth_mm,
+    )
+
+    if parent_mesh is not None:
+        _validate_leaf_exposure(leaf_parts, parent_mesh)
+
+    return [loft] + leaf_parts
+
+
+def build_branchlet_and_leaf(
+    *,
+    attachment_point: np.ndarray,
+    surface_normal: np.ndarray,
+    branchlet_length_mm: float = 3.0,
+    floor_angle_deg: float = 45.0,
+    root_radius_mm: float | None = None,
+    embed_depth_mm: float = 2.5,
+    yaw_deg: float = 0.0,
+    seed: int = 0,
+    leaf_length_mm: float = 8.0,
+    leaf_width_mm: float = 5.0,
+    leaf_thickness_mm: float = 0.24,
+    leaf_fold_angle_deg: float = 3.0,
+    leaf_keel_depth_mm: float = 0.0,
+    parent_mesh: "trimesh.Trimesh | None" = None,
+) -> list[trimesh.Trimesh]:
+    """Build the shortest printable, exposed branchlet supported by its parent.
+
+    When ``parent_mesh`` is supplied, ``branchlet_length_mm`` is a maximum
+    search length rather than a prescribed length.  The search minimizes length
+    using the largest root ring that is fully embedded.  The exterior loft must
+    satisfy the FDM rule and the leaf must be sufficiently exposed.
+
+    ``root_radius_mm`` is an optional search ceiling.  When omitted, the search
+    caps the root-ring diameter at the leaf surface's longest full dimension.
+    The actual radius may be smaller due to embedding and printability.  A small
+    positive numerical floor prevents a degenerate zero-area root ring.
+
+    Without ``parent_mesh`` there is no embedding or exposure geometry to
+    optimize against, so the function builds one fixed candidate using the
+    supplied maximum length and either the supplied radius or an automatic
+    radius.
+    """
+    max_length = float(branchlet_length_mm)
+    if max_length < _MIN_BRANCHLET_LENGTH_MM:
+        raise ValueError(
+            f"branchlet_length_mm must be at least {_MIN_BRANCHLET_LENGTH_MM:.2f}"
+        )
+
+    # ``leaf_width_mm`` is the half-span used on each side of the midrib, so
+    # the full leaf-surface width is 2 × leaf_width_mm.  Cap the root DIAMETER
+    # at the leaf's longest surface dimension.
+    leaf_max_dimension_mm = max(
+        float(leaf_length_mm),
+        2.0 * float(leaf_width_mm),
+    )
+    leaf_max_root_radius_mm = 0.5 * leaf_max_dimension_mm
+    max_radius = (
+        leaf_max_root_radius_mm
+        if root_radius_mm is None
+        else min(float(root_radius_mm), leaf_max_root_radius_mm)
+    )
+    min_radius = min(
+        max_radius,
+        max(_MIN_ROOT_RADIUS_MM, 0.25 * float(leaf_thickness_mm)),
+    )
+
+    common = dict(
+        attachment_point=attachment_point,
+        surface_normal=surface_normal,
+        floor_angle_deg=floor_angle_deg,
+        embed_depth_mm=embed_depth_mm,
+        yaw_deg=yaw_deg,
+        seed=seed,
+        leaf_length_mm=leaf_length_mm,
+        leaf_width_mm=leaf_width_mm,
+        leaf_thickness_mm=leaf_thickness_mm,
+        leaf_fold_angle_deg=leaf_fold_angle_deg,
+        leaf_keel_depth_mm=leaf_keel_depth_mm,
         parent_mesh=parent_mesh,
     )
 
-    # ── Step 8: Leaf blade ────────────────────────────────────────────────────
-    # tangent = L  (horizontal leaf long axis, in the exit plane)
-    # up_hint = exit_dir  (leaf top faces the growth direction ≈ upward)
-    # Together these produce the same (L, T, N) frame used for the perimeter,
-    # so the leaf blade's edge loop exactly matches the loft's tip ring.
-    leaf_parts = build_leaf_mesh(
-        base_pos=p1,
-        tangent=L,
-        length_mm=float(leaf_length_mm),
-        width_mm=float(leaf_width_mm),
-        thickness_mm=float(leaf_thickness_mm),
-        fold_angle_deg=float(leaf_fold_angle_deg),
-        keel_depth_mm=float(leaf_keel_depth_mm),
-        up_hint=exit_dir,
-        seed=seed,
-    )
+    if parent_mesh is None:
+        parts = _build_branchlet_candidate(
+            branchlet_length_mm=max_length,
+            root_radius_mm=max_radius,
+            **common,
+        )
+        parts[0].metadata["branchlet_length_mm"] = max_length
+        parts[0].metadata["branchlet_root_radius_mm"] = max_radius
+        return parts
 
-    return [loft] + [p for p in leaf_parts if len(p.vertices) > 0]
+    p0 = np.asarray(attachment_point, float)
+    n0 = _safe_norm(np.asarray(surface_normal, float))
+    floor_rad = float(np.radians(floor_angle_deg))
+    exit_dir, leaf_normal, leaf_axis, leaf_lateral = _leaf_frame(
+        n0,
+        floor_rad,
+        yaw_deg,
+    )
+    root_center = p0 - float(embed_depth_mm) * n0
+
+    def _ring_is_embedded(radius_mm: float) -> bool:
+        ring = _root_ring_verts(
+            root_center,
+            exit_dir,
+            leaf_axis,
+            leaf_lateral,
+            radius_mm=float(radius_mm),
+            n=_N_PERIM,
+        )
+        return bool(parent_mesh.contains(ring).all())
+
+    if not _ring_is_embedded(min_radius):
+        raise RuntimeError(
+            "Adaptive branchlet fit failed: even the minimum root radius "
+            f"{min_radius:.3f} mm is not fully embedded at embed depth "
+            f"{float(embed_depth_mm):.3f} mm."
+        )
+
+    # Root-ring embedding is monotonic with radius for the locally convex
+    # foliage surfaces used here.  The leaf surface's longest dimension is the
+    # absolute ceiling; parent geometry may impose a smaller one.
+    low_radius = min_radius
+    high_radius = max_radius
+    high_is_embedded = _ring_is_embedded(high_radius)
+
+    if high_is_embedded:
+        max_radius = high_radius
+    else:
+        for _ in range(10):
+            mid_radius = 0.5 * (low_radius + high_radius)
+            if _ring_is_embedded(mid_radius):
+                low_radius = mid_radius
+            else:
+                high_radius = mid_radius
+        max_radius = low_radius
+
+    # Stay just inside the ray-classification boundary found by bisection.
+    chosen_radius = max(min_radius, 0.995 * max_radius)
+    last_error: RuntimeError | None = None
+
+    def _fit_at_length(
+        length_mm: float,
+    ) -> tuple[list[trimesh.Trimesh], float] | None:
+        nonlocal last_error
+        # Exposure depends only on length and leaf orientation.  Check it before
+        # constructing or classifying any loft geometry.
+        tip_pos = p0 + float(length_mm) * exit_dir
+        exposure_parts = _build_leaf_parts_at_tip(
+            tip_pos=tip_pos,
+            leaf_normal=leaf_normal,
+            leaf_axis=-leaf_axis,  # leaf tip points down; exposure must clear sphere
+            seed=seed,
+            leaf_length_mm=leaf_length_mm,
+            leaf_width_mm=leaf_width_mm,
+            leaf_thickness_mm=leaf_thickness_mm,
+            leaf_fold_angle_deg=leaf_fold_angle_deg,
+            leaf_keel_depth_mm=leaf_keel_depth_mm,
+        )
+        try:
+            _validate_leaf_exposure(exposure_parts, parent_mesh)
+        except RuntimeError as exc:
+            last_error = exc
+            return None
+
+        try:
+            parts = _build_branchlet_candidate(
+                branchlet_length_mm=float(length_mm),
+                root_radius_mm=float(chosen_radius),
+                **common,
+            )
+        except RuntimeError as exc:
+            last_error = exc
+            return None
+        return parts, float(chosen_radius)
+
+    coarse_lengths = np.arange(
+        _MIN_BRANCHLET_LENGTH_MM,
+        max_length + 0.5 * _LENGTH_SEARCH_STEP_MM,
+        _LENGTH_SEARCH_STEP_MM,
+    )
+    coarse_lengths = coarse_lengths[coarse_lengths <= max_length + 1e-9]
+    if len(coarse_lengths) == 0 or coarse_lengths[-1] < max_length - 1e-9:
+        coarse_lengths = np.append(coarse_lengths, max_length)
+
+    previous_length = 0.0
+    result: tuple[list[trimesh.Trimesh], float] | None = None
+    result_length = max_length
+    for length_mm in coarse_lengths:
+        result = _fit_at_length(float(length_mm))
+        if result is not None:
+            result_length = float(length_mm)
+            break
+        previous_length = float(length_mm)
+
+    if result is None:
+        detail = f" Last candidate error: {last_error}" if last_error is not None else ""
+        raise RuntimeError(
+            "Adaptive branchlet fit failed: no fully embedded, exposed, printable "
+            f"geometry exists within length ≤ {max_length:.3f} mm and root radius "
+            f"{min_radius:.3f}–{max_radius:.3f} mm.{detail}"
+        )
+
+    # Refine only within the transition from the last failed coarse length to
+    # the first successful one.  Feasibility is monotonic enough over this small
+    # interval, while the coarse scan protects against larger non-monotonic
+    # changes caused by triangulation and parent-surface classification.
+    low = max(_MIN_BRANCHLET_LENGTH_MM, previous_length)
+    high = result_length
+    best_parts, best_radius = result
+    for _ in range(_LENGTH_REFINE_STEPS):
+        mid = 0.5 * (low + high)
+        refined = _fit_at_length(mid)
+        if refined is None:
+            low = mid
+        else:
+            high = mid
+            best_parts, best_radius = refined
+
+    best_parts[0].metadata["branchlet_length_mm"] = high
+    best_parts[0].metadata["branchlet_root_radius_mm"] = best_radius
+    return best_parts

@@ -83,8 +83,8 @@ class Tree:
         bark: BarkConfig | None = None,
         stamp_falloff_mm: float = 5.0,
         # ── Branchlet parameters ──────────────────────────────────────────────
-        branchlet_length_mm: float = 3.0,
-        branchlet_root_radius_mm: float = 2.0,
+        branchlet_length_mm: float = 12.0,
+        branchlet_root_radius_mm: float | None = None,
         branchlet_embed_depth_mm: float = 2.5,
         branchlet_floor_angle_deg: float = 45.0,
     ) -> None:
@@ -138,7 +138,10 @@ class Tree:
         self.stamp_falloff_mm = float(stamp_falloff_mm)
         # Branchlet
         self.branchlet_length_mm      = float(branchlet_length_mm)
-        self.branchlet_root_radius_mm = float(branchlet_root_radius_mm)
+        self.branchlet_root_radius_mm = (
+            None if branchlet_root_radius_mm is None
+            else float(branchlet_root_radius_mm)
+        )
         self.branchlet_embed_depth_mm = float(branchlet_embed_depth_mm)
         self.branchlet_floor_angle_deg = float(branchlet_floor_angle_deg)
 
