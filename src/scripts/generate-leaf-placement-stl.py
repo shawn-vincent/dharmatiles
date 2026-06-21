@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
-"""Generate a debug sphere with leaves at four top-to-bottom positions.
+"""Generate a debug sphere with branchlet+leaf assemblies at four latitudes.
 
-The attachment points follow one meridian of a pure sphere:
+Each branchlet grows straight out along the surface normal.  The loft morphs
+from a circle at the root to the exact leaf perimeter at the tip, and the leaf
+surface is stitched directly to that tip ring — loft walls, root cap, and leaf
+surface form a single closed mesh with no overlapping parts.
 
-* top:           0/4 down, polar angle   0°
-* upper-quarter: 1/4 down, polar angle  45°
-* equator:       2/4 down, polar angle  90°
-* lower-quarter: 3/4 down, polar angle 135°
-
-Each branchlet grows straight out along the surface normal.  Geometry that
-violates the FDM floor-angle rule is coloured debug-red (DEBUG_COLOR_0, reserved
-for failures).  Passing parts use debug colour slots 1+.
+Geometry that violates the FDM floor-angle rule is coloured debug-red
+(DEBUG_COLOR_0, reserved for failures).  Passing parts use slots 1+.
 
 Run from the repository root::
 
@@ -25,7 +22,11 @@ import numpy as np
 import trimesh
 
 from dharmatiles.core.color import Material, debug_material, export_color_stl, tag
-from dharmatiles.trees.leaf import build_leaf_surface
+from dharmatiles.trees.leaf import (
+    compute_leaf_geometry,
+    _LEAF_N_LONG,
+    _LEAF_N_LAT,
+)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -39,7 +40,11 @@ EMBED_DEPTH_MM    = 1.6
 FLOOR_ANGLE_DEG   = 45.0
 ROOT_DIAMETER_FRACTION = 0.90   # root-ring diameter as fraction of max leaf dim
 
-_N_RING_PTS  = 16   # vertices on each loft ring
+# Perimeter vertex count: rounded base + left edge (n_rings pts) +
+#                         pointed tip + right edge (n_rings pts).
+_N_RINGS  = _LEAF_N_LONG - 1          # interior longitudinal rings = 11
+_N_LAT    = _LEAF_N_LAT               # lateral columns = 10
+_NP       = 2 * _N_RINGS + 2          # perimeter vertex count = 24
 _N_LOFT_RINGS = 8
 
 FAIL_MATERIAL: Material = debug_material(0)   # red — reserved for FDM failures
@@ -70,40 +75,37 @@ def _leaf_frame(surface_normal: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return L, T
 
 
-def _ellipse_ring(
+def _circle_ring(
     center: np.ndarray,
     u: np.ndarray, v: np.ndarray,
-    half_a: float, half_b: float,
+    radius: float,
     n_pts: int,
 ) -> np.ndarray:
-    """Elliptical ring of *n_pts* vertices centred at *center*.
-
-    *half_a* along *u*, *half_b* along *v*.  ``half_a == half_b`` gives a circle.
-    """
+    """Circle of *n_pts* vertices in the plane spanned by *u* and *v*."""
     t = np.linspace(0, 2 * np.pi, n_pts, endpoint=False)
-    return center + half_a * np.cos(t[:, None]) * u + half_b * np.sin(t[:, None]) * v
+    return center + radius * (np.cos(t[:, None]) * u + np.sin(t[:, None]) * v)
 
 
 def _is_printable(surface_normal: np.ndarray) -> bool:
-    """True iff the branchlet axis clears the FDM floor angle.
-
-    For a straight frustum the worst wall-face normal is ⊥ to the axis, so
-    axis elevation ≥ floor_angle is both necessary and sufficient.
-    """
+    """True iff the branchlet axis clears the FDM floor angle."""
     n = surface_normal / (np.linalg.norm(surface_normal) + 1e-12)
     return float(n[2]) >= np.sin(np.radians(FLOOR_ANGLE_DEG)) - 1e-6
 
 
-# ── Branchlet builder ─────────────────────────────────────────────────────────
+# ── Branchlet + leaf (single closed mesh) ────────────────────────────────────
 
-def build_simple_branchlet_and_leaf(
+def build_branchlet_and_leaf(
     attachment_point: np.ndarray,
     surface_normal:   np.ndarray,
-    leaf_local:       trimesh.Trimesh,
-) -> tuple[list[trimesh.Trimesh], bool]:
-    """Straight-along-normal loft (circle → oval) capped with *leaf_local*.
+) -> tuple[trimesh.Trimesh, bool]:
+    """Loft from a root circle to the leaf perimeter, stitched as one closed mesh.
 
-    Returns ``([loft, leaf], is_fail)``.
+    The loft morphs from a _NP-vertex circle at the embedded root to the exact
+    24-vertex leaf perimeter at the tip.  The leaf surface (open top face) is
+    stitched directly to that tip ring — no separate leaf object, no overlapping
+    parts.  The root cap closes the buried end.
+
+    Returns ``(mesh, is_fail)``.
     """
     n    = surface_normal / (np.linalg.norm(surface_normal) + 1e-12)
     L, T = _leaf_frame(n)
@@ -112,79 +114,134 @@ def build_simple_branchlet_and_leaf(
     root_center = attachment_point - EMBED_DEPTH_MM * n
     tip_pos     = root_center + (EMBED_DEPTH_MM + LEAF_LENGTH_MM) * n
 
-    # Both rings centred on the branchlet axis — no shear.
-    root_ring = _ellipse_ring(root_center, -L, -T, root_radius,          root_radius,   _N_RING_PTS)
-    tip_ring  = _ellipse_ring(tip_pos,     -L, -T, LEAF_LENGTH_MM / 2.0, LEAF_WIDTH_MM, _N_RING_PTS)
+    # ── Leaf geometry in world space ──────────────────────────────────────────
+    # The leaf's long axis is -L (base = rounded end at +L, tip = pointed end
+    # at -L).  The leaf normal is n (crease faces outward from sphere).
+    g = compute_leaf_geometry(
+        base_pos=tip_pos + (LEAF_LENGTH_MM / 2.0) * L,
+        tangent=-L,
+        length_mm=LEAF_LENGTH_MM,
+        width_mm=LEAF_WIDTH_MM,
+        thickness_mm=LEAF_THICKNESS_MM,
+        fold_angle_deg=LEAF_FOLD_DEG,
+        up_hint=n,
+    )
 
-    # Linear loft: circle → oval.
-    ts    = np.linspace(0, 1, _N_LOFT_RINGS)
-    rings = (1 - ts[:, None, None]) * root_ring + ts[:, None, None] * tip_ring
+    NR = _N_LOFT_RINGS
+    NP = _NP          # 24
+    nr = _N_RINGS     # 11 (interior longitudinal rings)
+    NT = _N_LAT       # 10 (lateral columns)
 
-    NP, NR      = _N_RING_PTS, _N_LOFT_RINGS
+    # ── Leaf perimeter (tip ring, 24 vertices, CCW from +n) ──────────────────
+    # Order: rounded_base | left_edge (s↑) | pointed_tip | right_edge (s↓)
+    boundary = np.vstack([
+        g.bp[np.newaxis],          # k=0:      rounded base   (+L direction)
+        g.top_pts[:, 0, :],        # k=1..11:  left edge, j=0, s increasing
+        g.v_tip[np.newaxis],       # k=12:     pointed tip    (-L direction)
+        g.top_pts[::-1, NT, :],    # k=13..23: right edge, j=NT, s decreasing
+    ])  # (NP, 3)
+
+    # ── Root ring (circle, vertex 0 aligned to boundary vertex 0) ────────────
+    # u=L, v=T → vertex 0 in +L direction; L×T = n → CCW from +n. ✓
+    root_ring = _circle_ring(root_center, L, T, root_radius, NP)
+
+    # ── Loft rings: linear blend from root circle to leaf perimeter ───────────
+    ts    = np.linspace(0.0, 1.0, NR)
+    rings = ((1 - ts)[:, None, None] * root_ring[None]
+             +  ts   [:, None, None] * boundary  [None])  # (NR, NP, 3)
+
+    # ── Leaf interior vertices (top_pts columns 1..NT-1) ─────────────────────
+    leaf_int = g.top_pts[:, 1:NT, :].reshape(-1, 3)  # (nr*(NT-1), 3)
+
+    # ── Vertex layout ─────────────────────────────────────────────────────────
+    # 0 .. NR*NP-1          : loft rings (ring ri, vertex k  = ri*NP + k)
+    # NR*NP                 : root_center (root cap centre)
+    # NR*NP+1 .. NR*NP+nr*(NT-1) : leaf interior grid
     root_cap_vi = NR * NP
-    tip_cap_vi  = NR * NP + 1
-    verts = np.vstack([rings.reshape(-1, 3), root_center, np.mean(tip_ring, axis=0)])
 
-    def _vi(ri: int, j: int) -> int:
-        return ri * NP + (j % NP)
+    verts = np.vstack([
+        rings.reshape(-1, 3),
+        root_center[np.newaxis],
+        leaf_int,
+    ])
 
+    # ── Index helpers ──────────────────────────────────────────────────────────
+    def loft_vi(ri: int, k: int) -> int:
+        return ri * NP + k % NP
+
+    def leaf_vi(ri: int, j: int) -> int:
+        """Index for g.top_pts[ri, j].  ri=0..nr-1, j=0..NT."""
+        if j == 0:
+            return loft_vi(NR - 1, ri + 1)               # left boundary
+        if j == NT:
+            return loft_vi(NR - 1, 2 * nr + 1 - ri)      # right boundary
+        return NR * NP + 1 + ri * (NT - 1) + (j - 1)    # interior
+
+    def leaf_base_vi() -> int:
+        return loft_vi(NR - 1, 0)        # k=0: rounded base
+
+    def leaf_tip_vi() -> int:
+        return loft_vi(NR - 1, nr + 1)   # k=12: pointed tip
+
+    # ── Face construction ─────────────────────────────────────────────────────
     faces: list[list[int]] = []
-    for i in range(NR - 1):
-        for j in range(NP):
-            j1 = (j + 1) % NP
-            a, b, c, d = _vi(i, j), _vi(i, j1), _vi(i+1, j1), _vi(i+1, j)
+
+    # Loft walls (NR-1 bands × NP quads each).
+    for ri in range(NR - 1):
+        for k in range(NP):
+            k1 = (k + 1) % NP
+            a, b = loft_vi(ri, k),    loft_vi(ri, k1)
+            c, d = loft_vi(ri+1, k1), loft_vi(ri+1, k)
             faces += [[a, d, c], [a, c, b]]
-    for j in range(NP):
-        j1 = (j + 1) % NP
-        faces.append([root_cap_vi, _vi(0, j1), _vi(0, j)])
-    for j in range(NP):
-        j1 = (j + 1) % NP
-        faces.append([tip_cap_vi, _vi(NR - 1, j), _vi(NR - 1, j1)])
 
-    loft = trimesh.Trimesh(vertices=verts, faces=np.array(faces, dtype=np.int32), process=False)
-    loft.fix_normals()
+    # Root cap (fan from root_center to ring 0).
+    for k in range(NP):
+        k1 = (k + 1) % NP
+        faces.append([root_cap_vi, loft_vi(0, k1), loft_vi(0, k)])
 
-    # Transform leaf: local +X → −L, +Y → −T, +Z → n, origin → tip_pos.
-    tf = np.eye(4)
-    tf[:3, :3] = np.column_stack([-L, -T, n])
-    tf[:3,  3] = tip_pos
-    leaf_world = leaf_local.copy()
-    leaf_world.apply_transform(tf)
+    # Leaf surface — base fan (rounded base → ring 0 of top_pts).
+    for j in range(NT):
+        faces.append([leaf_base_vi(), leaf_vi(0, j), leaf_vi(0, j + 1)])
 
-    return [loft, leaf_world], not _is_printable(n)
+    # Leaf surface — body quads (interior rows 0..nr-2).
+    for ri in range(nr - 1):
+        for j in range(NT):
+            a, b = leaf_vi(ri,   j),     leaf_vi(ri,   j + 1)
+            c, d = leaf_vi(ri+1, j + 1), leaf_vi(ri+1, j)
+            faces += [[a, d, c], [a, c, b]]
+
+    # Leaf surface — tip fan (last row → pointed tip).
+    for j in range(NT):
+        faces.append([leaf_tip_vi(), leaf_vi(nr - 1, j + 1), leaf_vi(nr - 1, j)])
+
+    mesh = trimesh.Trimesh(
+        vertices=verts,
+        faces=np.array(faces, dtype=np.int32),
+        process=False,
+    )
+    mesh.fix_normals()
+    return mesh, not _is_printable(n)
 
 
 # ── Scene assembly ─────────────────────────────────────────────────────────────
 
 def build_debug_mesh() -> trimesh.Trimesh:
-    """Build the coloured sphere, branchlets, and four leaves."""
+    """Build the coloured sphere and four branchlet+leaf assemblies."""
     sphere = trimesh.creation.icosphere(subdivisions=4, radius=SPHERE_RADIUS_MM)
     sphere.fix_normals()
     tag(sphere, debug_material(1))   # slot 0 reserved for failures
 
     parts: list[trimesh.Trimesh] = [sphere]
 
-    leaf_proto = build_leaf_surface(
-        base_pos=np.array([-LEAF_LENGTH_MM / 2.0, 0.0, 0.0]),
-        tangent=np.array([1.0, 0.0, 0.0]),
-        length_mm=LEAF_LENGTH_MM, width_mm=LEAF_WIDTH_MM,
-        thickness_mm=LEAF_THICKNESS_MM, fold_angle_deg=LEAF_FOLD_DEG,
-        up_hint=np.array([0.0, 0.0, 1.0]),
-        seed=0,
-    )
-
     for leaf_index, (name, fraction_down) in enumerate(PLACEMENTS):
         polar  = np.pi * fraction_down
         normal = np.array([np.sin(polar), 0.0, np.cos(polar)])
-        leaf_parts, is_fail = build_simple_branchlet_and_leaf(
-            SPHERE_RADIUS_MM * normal, normal, leaf_proto,
-        )
-        base_slot = 2 + leaf_index * 2
-        status = "FAIL (red)" if is_fail else f"ok  (slots {base_slot}–{base_slot + 1})"
+        mesh, is_fail = build_branchlet_and_leaf(SPHERE_RADIUS_MM * normal, normal)
+        slot   = 2 + leaf_index
+        status = "FAIL (red)" if is_fail else f"ok  (slot {slot})  watertight={mesh.is_watertight}"
         print(f"  {name:13s}  {status}")
-        for i, part in enumerate(leaf_parts):
-            tag(part, FAIL_MATERIAL if is_fail else debug_material(base_slot + i))
-            parts.append(part)
+        tag(mesh, FAIL_MATERIAL if is_fail else debug_material(slot))
+        parts.append(mesh)
 
     return trimesh.util.concatenate(parts)
 

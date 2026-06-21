@@ -223,7 +223,7 @@ class _LeafGeometry(NamedTuple):
     bot_pts: np.ndarray   # (n_rings, N_T+1, 3) bottom-surface vertex grid
 
 
-def _compute_leaf_geometry(
+def compute_leaf_geometry(
     *,
     base_pos:       np.ndarray,
     tangent:        np.ndarray,
@@ -480,7 +480,7 @@ def build_leaf_surface(
     Parameters mirror :func:`build_leaf_mesh` except that keel parameters are
     absent (the keel is part of the closed shell, not the open surface).
     """
-    g = _compute_leaf_geometry(
+    g = compute_leaf_geometry(
         base_pos=base_pos, tangent=tangent,
         length_mm=length_mm, width_mm=width_mm,
         thickness_mm=thickness_mm, fold_angle_deg=fold_angle_deg,
@@ -569,7 +569,7 @@ def build_leaf_mesh(
     list[trimesh.Trimesh]
         One or two parts: [blade, keel] (keel absent if keel_depth_mm ≤ 0).
     """
-    g = _compute_leaf_geometry(
+    g = compute_leaf_geometry(
         base_pos=base_pos, tangent=tangent,
         length_mm=length_mm, width_mm=width_mm,
         thickness_mm=thickness_mm, fold_angle_deg=fold_angle_deg,
