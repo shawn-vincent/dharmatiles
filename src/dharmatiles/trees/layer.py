@@ -71,9 +71,11 @@ class Tree:
         leaves: bool = True,
         leaf_base_count: int = 5,
         leaf_length_mm: float = 1.94,
-        leaf_width_mm: float = 1.21,
-        leaf_thickness_mm: float = 0.24,
-        leaf_fold_angle_deg: float = 3.0,
+        leaf_width_mm: float = 1.94 * 2.0 / 3.0,
+        leaf_thickness_mm: float = 0.16,
+        leaf_fold_angle_deg: float = 6.0,
+        leaf_inner_curve: float = 1.5,
+        leaf_outer_curve: float = 0.15,
         leaf_keel_tip_angle_deg: float = 45.0,
         leaf_spacing_factor: float = 1.1,
         leaf_cap_count: int = 12,
@@ -128,6 +130,8 @@ class Tree:
         self.leaf_width_mm         = float(leaf_width_mm)
         self.leaf_thickness_mm     = float(leaf_thickness_mm)
         self.leaf_fold_angle_deg   = float(leaf_fold_angle_deg)
+        self.leaf_inner_curve      = float(leaf_inner_curve)
+        self.leaf_outer_curve      = float(leaf_outer_curve)
         self.leaf_keel_tip_angle_deg   = float(leaf_keel_tip_angle_deg)
         self.leaf_spacing_factor       = float(leaf_spacing_factor)
         self.leaf_cap_count            = int(leaf_cap_count)
@@ -233,6 +237,8 @@ class Tree:
                 leaf_width_mm=self.leaf_width_mm,
                 leaf_thickness_mm=self.leaf_thickness_mm,
                 leaf_fold_angle_deg=self.leaf_fold_angle_deg,
+                leaf_inner_curve=self.leaf_inner_curve,
+                leaf_outer_curve=self.leaf_outer_curve,
                 leaf_keel_depth_mm=0.0,   # branchlet provides support; no keel needed
                 leaf_keel_tip_angle_deg=self.leaf_keel_tip_angle_deg,
                 leaf_spacing_factor=self.leaf_spacing_factor,

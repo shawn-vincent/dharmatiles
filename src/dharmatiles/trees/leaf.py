@@ -4,9 +4,9 @@ A leaf is an ovate, keeled blade:
 
 * **Outline** (top view): ovate teardrop — peak width at ≈ 1/3 from base,
   tapering to a rounded base and a pointed tip.
-* **Cross-section**: a dome that rises from the midrib, peaks at mid-lateral,
-  and falls back to zero at the edge.  Profile:
-  ``sin(π × |t|) × thickness_mm × long_t(s)``.
+* **Cross-section**: a quartic Bézier dome that rises from the midrib and falls
+  back to zero at the edge.  Independent ``inner_curve`` and ``outer_curve``
+  controls shape the crease-side and edge-side shoulders of one smooth curve.
   The longitudinal thickness scale ``long_t`` peaks at ≈ 25 % from the base
   (``s ≈ 0.25``) and falls steeply toward the tip (``(1−s)^1.5`` decay).
 * **Crease**: a narrow tanh fold concentrates the V-indent at the midrib
@@ -208,6 +208,38 @@ def _leaf_width_profile(s: np.ndarray) -> np.ndarray:
     return raw / _LEAF_W_PEAK_NORM
 
 
+def _leaf_lobe_profile(
+    r: np.ndarray,
+    inner_curve: float,
+    outer_curve: float,
+) -> np.ndarray:
+    """Smooth crease-to-edge profile controlled by two Bézier shoulders.
+
+    ``r`` runs from 0 at the crease to 1 at the edge.  The quartic Bézier
+    control heights are ``[0, inner_curve, 1, outer_curve, 0]``.  This makes
+    the inner and outer attributes shape one continuous curve rather than two
+    curve segments joined at an arbitrary boundary.  The result is normalized
+    so ``thickness_mm`` remains the actual maximum lobe height.
+    """
+    r = np.asarray(r, float)
+    inner = max(0.0, float(inner_curve))
+    outer = max(0.0, float(outer_curve))
+
+    def _evaluate(x: np.ndarray) -> np.ndarray:
+        q = 1.0 - x
+        return (
+            4.0 * inner * q**3 * x
+            + 6.0 * q**2 * x**2
+            + 4.0 * outer * q * x**3
+        )
+
+    profile = _evaluate(r)
+    normalizer = float(_evaluate(np.linspace(0.0, 1.0, 257)).max())
+    if normalizer <= 1e-12:
+        return np.zeros_like(r)
+    return profile / normalizer
+
+
 # ── Shared geometry computation ───────────────────────────────────────────────
 
 class _LeafGeometry(NamedTuple):
@@ -229,18 +261,31 @@ def compute_leaf_geometry(
     tangent:        np.ndarray,
     length_mm:      float,
     width_mm:       float,
-    thickness_mm:   float = 0.24,
-    fold_angle_deg: float = 3.0,
+    thickness_mm:   float = 0.16,
+    fold_angle_deg: float = 6.0,
+    inner_curve:    float = 1.5,
+    outer_curve:    float = 0.15,
+    arch_deg:       float = 30.0,
     curl_deg:       float = 15.0,
     up_hint:        np.ndarray | None = None,
     seed:           int = 0,
 ) -> _LeafGeometry:
     """Compute all leaf geometry arrays (frame, vertex grids) shared across builders.
 
-    *curl_deg* — total end-to-end longitudinal curl, in degrees, measured as
-    the rotation of the leaf tangent from base (s=0) to tip (s=1) in the
-    L-N plane.  Positive values curve the tip toward +N (convex from the top).
-    Default 15° gives a slight upward arch along the leaf's length.
+    The midrib is a smooth compound curve in the L-N plane:
+
+    * *arch_deg* creates the dominant base-to-tip hump across the whole leaf.
+    * *curl_deg* applies a small correction only in the tip region and sets the
+      final tangent angle above the leaf plane.
+
+    Both values are positive curve magnitudes and remain independently visible.
+    The default 30° arch ensures leaves are arched even when
+    curl is explicitly disabled.
+
+    *inner_curve* and *outer_curve* are dimensionless Bézier control heights
+    for each mirrored crease-to-edge cross-section.  They shape one continuous
+    convex curve on each side: inner controls the crease-side shoulder and
+    outer controls the edge-side shoulder.
     """
     L  = _safe_norm(np.asarray(tangent, float))
     bp = np.asarray(base_pos, float)
@@ -261,43 +306,91 @@ def compute_leaf_geometry(
     abs_t    = np.abs(t_vals)
 
     s_int  = np.linspace(0.0, 1.0, _LEAF_N_LONG + 1)[1:-1]        # (n_rings,)
-    w_s    = width_mm * _leaf_width_profile(s_int)                  # (n_rings,)
+    w_s    = 0.5 * width_mm * _leaf_width_profile(s_int)            # (n_rings,)
     long_t = (s_int ** 0.5 * (1.0 - s_int) ** 1.5) / _LEAF_LONG_T_PEAK
 
-    # ── Longitudinal curl ────────────────────────────────────────────────────
-    # The leaf bends in the L-N plane: at station s the tangent has rotated
-    # by φ(s) = s × curl_rad from L toward N.  The midrib follows a circular
-    # arc of total turning angle curl_rad.  Each ring's vertical offsets
-    # (crease + dome) are applied along the local normal N_local(s) so the
-    # surface profile stays perpendicular to the curved midrib.
-    curl_rad = float(np.radians(curl_deg))
-    phi      = s_int * curl_rad                               # (n_rings,) cumulative angle
+    # ── Compound longitudinal arch + curl ────────────────────────────────────
+    # Work as a height profile over the original leaf plane.  The arch is the
+    # dominant full-length curve.  The curl integrates a quintic smootherstep
+    # slope correction over [CURL_START, 1].  The correction has zero value,
+    # slope, and curvature at CURL_START, so it layers onto the arch with a C2
+    # join instead of replacing the final part of it.
+    curl_start = 0.78
+    curl_zone_length = (1.0 - curl_start) * float(length_mm)
 
-    if abs(curl_rad) < 1e-8:
-        # Degenerate (straight): keep the simple linear formula.
-        midribs = bp[np.newaxis] + (s_int[:, np.newaxis] * length_mm) * L[np.newaxis]
-        v_tip   = bp + length_mm * L
-        N_local = np.tile(N, (len(s_int), 1))                # (n_rings, 3)
-    else:
-        # Arc midrib: integral of [cos(φ)·L + sin(φ)·N] from 0 to s.
-        arc_s   = (np.sin(phi) / curl_rad)[:, np.newaxis]    # (n_rings, 1)
-        arc_n   = ((1.0 - np.cos(phi)) / curl_rad)[:, np.newaxis]
-        midribs = bp[np.newaxis] + length_mm * (arc_s * L[np.newaxis] + arc_n * N[np.newaxis])
-        v_tip   = bp + length_mm * (
-            np.sin(curl_rad) / curl_rad * L + (1.0 - np.cos(curl_rad)) / curl_rad * N
+    # f(s)=s(1-s) spans the entire leaf, leaves the base immediately at
+    # arch_deg, reaches its hump at mid-leaf, and returns to the tip plane.
+    arch_base_slope = np.tan(np.radians(abs(float(arch_deg))))
+    # The curl slope uses smootherstep(u), which starts with zero slope and
+    # curvature and settles close to its final value before the tip.  This
+    # makes the final mesh segment visibly point upward at approximately the
+    # requested angle instead of reaching that angle only at the mathematical
+    # endpoint.
+    curl_tip_slope = np.tan(np.radians(abs(float(curl_deg))))
+
+    def _centerline_profile(s: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Return height and dz/dx for normalized longitudinal stations."""
+        s = np.asarray(s, float)
+        curl_u = np.clip((s - curl_start) / (1.0 - curl_start), 0.0, 1.0)
+
+        arch_z = float(length_mm) * arch_base_slope * s * (1.0 - s)
+        arch_dzdx = arch_base_slope * (1.0 - 2.0 * s)
+
+        curl_active = s > curl_start
+        curl_shape = 2.5 * curl_u**4 - 3.0 * curl_u**5 + curl_u**6
+        curl_slope_shape = 10.0 * curl_u**3 - 15.0 * curl_u**4 + 6.0 * curl_u**5
+        # The full-length arch points downward at the tip.  Curl corrects that
+        # existing slope to the requested upward angle rather than merely
+        # adding curl_deg to it.
+        curl_slope_correction = (
+            curl_tip_slope + arch_base_slope
+            if abs(float(curl_deg)) > 1e-8
+            else 0.0
         )
-        # Local normal at each station: rotate N by φ in the L-N plane.
-        N_local = (-np.sin(phi)[:, np.newaxis] * L[np.newaxis]
-                   + np.cos(phi)[:, np.newaxis] * N[np.newaxis])  # (n_rings, 3)
+        curl_z = np.where(
+            curl_active,
+            curl_zone_length * curl_slope_correction * curl_shape,
+            0.0,
+        )
+        curl_dzdx = np.where(
+            curl_active,
+            curl_slope_correction * curl_slope_shape,
+            0.0,
+        )
+        return arch_z + curl_z, arch_dzdx + curl_dzdx
+
+    mid_n, mid_slope = _centerline_profile(s_int)
+    midribs = (
+        bp[np.newaxis]
+        + (s_int[:, np.newaxis] * float(length_mm)) * L[np.newaxis]
+        + mid_n[:, np.newaxis] * N[np.newaxis]
+    )
+    tip_n, _ = _centerline_profile(np.array(1.0))
+    v_tip = bp + float(length_mm) * L + float(tip_n.item()) * N
+
+    phi = np.arctan(mid_slope)
+    N_local = (-np.sin(phi)[:, np.newaxis] * L[np.newaxis]
+               + np.cos(phi)[:, np.newaxis] * N[np.newaxis])
 
     laterals = (midribs[:, np.newaxis]
                 + (t_vals[np.newaxis, :, np.newaxis] * w_s[:, np.newaxis, np.newaxis])
                 * T[np.newaxis, np.newaxis])
 
     tanh_t = np.tanh(abs_t * _LEAF_CREASE_SHARPNESS)
-    sin_t  = np.sin(np.pi * abs_t)
-    fold_h = tanh_t[np.newaxis] * (w_s[:, np.newaxis] * fold_tan * long_t[:, np.newaxis])
-    lobe_h = (thickness_mm * sin_t[np.newaxis]) * long_t[:, np.newaxis]
+    lobe_profile = _leaf_lobe_profile(abs_t, inner_curve, outer_curve)
+    # Fade the crease over the full leaf length.  Smootherstep gives zero value,
+    # slope, and curvature at the base and increases continuously toward the
+    # tip; long_t then tapers the combined crease smoothly back to zero there.
+    crease_fade = (
+        6.0 * s_int**5 - 15.0 * s_int**4 + 10.0 * s_int**3
+    )
+    fold_h = tanh_t[np.newaxis] * (
+        w_s[:, np.newaxis]
+        * fold_tan
+        * long_t[:, np.newaxis]
+        * crease_fade[:, np.newaxis]
+    )
+    lobe_h = (thickness_mm * lobe_profile[np.newaxis]) * long_t[:, np.newaxis]
 
     # Apply crease + dome offsets along the per-station local normal.
     top_pts = laterals + (fold_h + lobe_h)[:, :, np.newaxis] * N_local[:, np.newaxis, :]
@@ -493,8 +586,11 @@ def build_leaf_surface(
     tangent:        np.ndarray,
     length_mm:      float,
     width_mm:       float,
-    thickness_mm:   float = 0.24,
-    fold_angle_deg: float = 3.0,
+    thickness_mm:   float = 0.16,
+    fold_angle_deg: float = 6.0,
+    inner_curve:    float = 1.5,
+    outer_curve:    float = 0.15,
+    arch_deg:       float = 30.0,
     curl_deg:       float = 15.0,
     up_hint:        np.ndarray | None = None,
     seed:           int = 0,
@@ -508,10 +604,11 @@ def build_leaf_surface(
 
     All geometry of the top face is present: the ovate teardrop outline,
     the dome-shaped lobes (two humps rising from the midrib crease), the
-    V-shaped crease along the midrib, and the longitudinal curl arc.
-    Face normals point outward (+N at the base, rotating with the curl).
+    V-shaped crease along the midrib, and the compound longitudinal curve.
+    Face normals point outward (+N at the base, rotating with the centerline).
 
-    *curl_deg* — see :func:`compute_leaf_geometry`.
+    *inner_curve*, *outer_curve*, *arch_deg*, and *curl_deg* — see
+    :func:`compute_leaf_geometry`.
 
     Parameters otherwise mirror :func:`build_leaf_mesh` minus keel params.
     """
@@ -519,7 +616,8 @@ def build_leaf_surface(
         base_pos=base_pos, tangent=tangent,
         length_mm=length_mm, width_mm=width_mm,
         thickness_mm=thickness_mm, fold_angle_deg=fold_angle_deg,
-        curl_deg=curl_deg,
+        inner_curve=inner_curve, outer_curve=outer_curve,
+        arch_deg=arch_deg, curl_deg=curl_deg,
         up_hint=up_hint, seed=seed,
     )
 
@@ -572,8 +670,11 @@ def build_leaf_mesh(
     tangent: np.ndarray,
     length_mm: float,
     width_mm: float,
-    thickness_mm: float = 0.24,
-    fold_angle_deg: float = 3.0,
+    thickness_mm: float = 0.16,
+    fold_angle_deg: float = 6.0,
+    inner_curve: float = 1.5,
+    outer_curve: float = 0.15,
+    arch_deg: float = 30.0,
     curl_deg: float = 15.0,
     keel_depth_mm: float = 1.0,
     keel_tip_angle_deg: float = 45.0,
@@ -588,8 +689,12 @@ def build_leaf_mesh(
     tangent         : (3,) growth direction (will be normalised).
     length_mm       : leaf length from base to tip.
     width_mm        : maximum leaf width (at ≈ 1/3 from base).
-    thickness_mm    : dome height at peak (s ≈ 0.25).  Default 0.24.
-    fold_angle_deg  : midrib crease V-angle.  Default 3.0.
+    thickness_mm    : dome height at peak (s ≈ 0.25).  Default 0.16.
+    fold_angle_deg  : midrib crease V-angle.  Default 6.0.
+    inner_curve     : crease-side Bézier shoulder height.  Default 1.5.
+    outer_curve     : edge-side Bézier shoulder height.  Default 0.15.
+    arch_deg        : upward tangent angle at the base of the arch.  Default 30.0.
+    curl_deg        : concave tangent turn over the second half.  Default 15.0.
     keel_depth_mm   : maximum depth of the structural keel on the underside.
                       Pass 0 to omit the keel.  Default 1.0.
     keel_tip_angle_deg : reserved for future use.  Default 45.0.
@@ -610,7 +715,8 @@ def build_leaf_mesh(
         base_pos=base_pos, tangent=tangent,
         length_mm=length_mm, width_mm=width_mm,
         thickness_mm=thickness_mm, fold_angle_deg=fold_angle_deg,
-        curl_deg=curl_deg, up_hint=up_hint, seed=seed,
+        inner_curve=inner_curve, outer_curve=outer_curve,
+        arch_deg=arch_deg, curl_deg=curl_deg, up_hint=up_hint, seed=seed,
     )
 
     N_S = _LEAF_N_LONG

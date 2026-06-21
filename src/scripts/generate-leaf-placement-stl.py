@@ -33,10 +33,9 @@ from dharmatiles.trees.leaf import (
 DEFAULT_OUTPUT    = pathlib.Path("debug/leaf-placement.stl")
 SPHERE_RADIUS_MM  = 12.0
 LEAF_LENGTH_MM    = 6.0
-LEAF_WIDTH_MM     = 3.5
-LEAF_THICKNESS_MM = 1.2
-LEAF_FOLD_DEG     = 3.0
-LEAF_CURL_DEG     = 15.0   # end-to-end longitudinal curl; positive = tip curls toward +N (convex from top)
+LEAF_WIDTH_MM     = LEAF_LENGTH_MM * 2.0 / 3.0
+LEAF_FOLD_DEG     = 6.0
+LEAF_CURL_DEG     = 40.0   # concave turn over the second half of the leaf
 EMBED_DEPTH_MM    = 1.6
 FLOOR_ANGLE_DEG   = 45.0
 ROOT_DIAMETER_FRACTION = 0.90   # root-ring diameter as fraction of max leaf dim
@@ -111,7 +110,7 @@ def build_branchlet_and_leaf(
     n    = surface_normal / (np.linalg.norm(surface_normal) + 1e-12)
     L, T = _leaf_frame(n)
 
-    root_radius = 0.5 * ROOT_DIAMETER_FRACTION * max(LEAF_LENGTH_MM, 2.0 * LEAF_WIDTH_MM)
+    root_radius = 0.5 * ROOT_DIAMETER_FRACTION * max(LEAF_LENGTH_MM, LEAF_WIDTH_MM)
     root_center = attachment_point - EMBED_DEPTH_MM * n
     tip_pos     = root_center + (EMBED_DEPTH_MM + LEAF_LENGTH_MM) * n
 
@@ -123,7 +122,6 @@ def build_branchlet_and_leaf(
         tangent=-L,
         length_mm=LEAF_LENGTH_MM,
         width_mm=LEAF_WIDTH_MM,
-        thickness_mm=LEAF_THICKNESS_MM,
         fold_angle_deg=LEAF_FOLD_DEG,
         curl_deg=LEAF_CURL_DEG,
         up_hint=n,

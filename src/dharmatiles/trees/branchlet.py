@@ -252,6 +252,8 @@ def _build_leaf_parts_at_tip(
     leaf_width_mm: float,
     leaf_thickness_mm: float,
     leaf_fold_angle_deg: float,
+    leaf_inner_curve: float,
+    leaf_outer_curve: float,
     leaf_keel_depth_mm: float,
 ) -> list[trimesh.Trimesh]:
     """Build non-empty leaf blade parts in the supplied branchlet frame."""
@@ -263,6 +265,8 @@ def _build_leaf_parts_at_tip(
             width_mm=float(leaf_width_mm),
             thickness_mm=float(leaf_thickness_mm),
             fold_angle_deg=float(leaf_fold_angle_deg),
+            inner_curve=float(leaf_inner_curve),
+            outer_curve=float(leaf_outer_curve),
             keel_depth_mm=float(leaf_keel_depth_mm),
             up_hint=leaf_normal,
             seed=seed,
@@ -473,9 +477,11 @@ def _build_branchlet_candidate(
     yaw_deg: float = 0.0,
     seed: int = 0,
     leaf_length_mm: float = 8.0,
-    leaf_width_mm: float = 5.0,
-    leaf_thickness_mm: float = 0.24,
-    leaf_fold_angle_deg: float = 3.0,
+    leaf_width_mm: float = 16.0 / 3.0,
+    leaf_thickness_mm: float = 0.16,
+    leaf_fold_angle_deg: float = 6.0,
+    leaf_inner_curve: float = 1.5,
+    leaf_outer_curve: float = 0.15,
     leaf_keel_depth_mm: float = 0.0,
     parent_mesh: "trimesh.Trimesh | None" = None,
 ) -> list[trimesh.Trimesh]:
@@ -665,6 +671,8 @@ def _build_branchlet_candidate(
         leaf_width_mm=leaf_width_mm,
         leaf_thickness_mm=leaf_thickness_mm,
         leaf_fold_angle_deg=leaf_fold_angle_deg,
+        leaf_inner_curve=leaf_inner_curve,
+        leaf_outer_curve=leaf_outer_curve,
         leaf_keel_depth_mm=leaf_keel_depth_mm,
     )
 
@@ -685,9 +693,11 @@ def build_branchlet_and_leaf(
     yaw_deg: float = 0.0,
     seed: int = 0,
     leaf_length_mm: float = 8.0,
-    leaf_width_mm: float = 5.0,
-    leaf_thickness_mm: float = 0.24,
-    leaf_fold_angle_deg: float = 3.0,
+    leaf_width_mm: float = 16.0 / 3.0,
+    leaf_thickness_mm: float = 0.16,
+    leaf_fold_angle_deg: float = 6.0,
+    leaf_inner_curve: float = 1.5,
+    leaf_outer_curve: float = 0.15,
     leaf_keel_depth_mm: float = 0.0,
     parent_mesh: "trimesh.Trimesh | None" = None,
 ) -> list[trimesh.Trimesh]:
@@ -743,6 +753,8 @@ def build_branchlet_and_leaf(
         leaf_width_mm=leaf_width_mm,
         leaf_thickness_mm=leaf_thickness_mm,
         leaf_fold_angle_deg=leaf_fold_angle_deg,
+        leaf_inner_curve=leaf_inner_curve,
+        leaf_outer_curve=leaf_outer_curve,
         leaf_keel_depth_mm=leaf_keel_depth_mm,
         parent_mesh=parent_mesh,
     )
@@ -823,6 +835,8 @@ def build_branchlet_and_leaf(
             leaf_width_mm=leaf_width_mm,
             leaf_thickness_mm=leaf_thickness_mm,
             leaf_fold_angle_deg=leaf_fold_angle_deg,
+            leaf_inner_curve=leaf_inner_curve,
+            leaf_outer_curve=leaf_outer_curve,
             leaf_keel_depth_mm=leaf_keel_depth_mm,
         )
         try:
