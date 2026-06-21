@@ -75,7 +75,7 @@ class Tree:
         leaf_thickness_mm: float = 0.16,
         leaf_fold_angle_deg: float = 6.0,
         leaf_inner_curve: float = 1.5,
-        leaf_outer_curve: float = 0.15,
+        leaf_outer_curve: float = 0.6,
         leaf_keel_tip_angle_deg: float = 45.0,
         leaf_spacing_factor: float = 1.1,
         leaf_cap_count: int = 12,

@@ -481,7 +481,7 @@ def _build_branchlet_candidate(
     leaf_thickness_mm: float = 0.16,
     leaf_fold_angle_deg: float = 6.0,
     leaf_inner_curve: float = 1.5,
-    leaf_outer_curve: float = 0.15,
+    leaf_outer_curve: float = 0.6,
     leaf_keel_depth_mm: float = 0.0,
     parent_mesh: "trimesh.Trimesh | None" = None,
 ) -> list[trimesh.Trimesh]:
@@ -697,7 +697,7 @@ def build_branchlet_and_leaf(
     leaf_thickness_mm: float = 0.16,
     leaf_fold_angle_deg: float = 6.0,
     leaf_inner_curve: float = 1.5,
-    leaf_outer_curve: float = 0.15,
+    leaf_outer_curve: float = 0.6,
     leaf_keel_depth_mm: float = 0.0,
     parent_mesh: "trimesh.Trimesh | None" = None,
 ) -> list[trimesh.Trimesh]:
