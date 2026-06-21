@@ -58,7 +58,7 @@ from ._utils import _safe_norm, _hash01
 _N_PERIM      = 2 + 2 * (_LEAF_N_LONG - 1)   # = 24
 _N_LOFT_RINGS = 8                              # intermediate cross-sections in the loft
 _EXIT_MARGIN_DEG = 15.0                        # construction margin above the FDM floor
-_MIN_LEAF_EXPOSURE_FRACTION = 0.10             # reject leaves buried in the parent
+_MIN_LEAF_EXPOSURE_FRACTION = 1.0              # require leaf 100% outside parent
 _MIN_BRANCHLET_LENGTH_MM = 0.25
 _LENGTH_SEARCH_STEP_MM = 0.25
 _MIN_ROOT_RADIUS_MM = 0.20
@@ -429,13 +429,14 @@ def _validate_leaf_exposure(
     min_exposure_fraction: float = _MIN_LEAF_EXPOSURE_FRACTION,
     label: str = "",
 ) -> None:
-    """Raise RuntimeError unless a meaningful part of the leaf is exterior.
+    """Raise RuntimeError unless every leaf vertex lies outside the parent mesh.
 
     A branchlet can satisfy its own embedding and overhang constraints while
     ending inside a curved parent mesh, especially on the lower hemisphere of a
     foliage cluster.  Such a leaf is invisible and contributes no printable
-    exterior detail.  Require at least ``min_exposure_fraction`` of the leaf's
-    vertices to lie outside the parent mesh.
+    exterior detail.  Require ``min_exposure_fraction`` (default 1.0 = 100%) of
+    the leaf's vertices to lie outside the parent mesh so the leaf is fully
+    clear of the cluster before it is accepted.
     """
     pfx = f"Leaf ({label}) " if label else "Leaf "
     vertices = np.vstack([
@@ -452,9 +453,9 @@ def _validate_leaf_exposure(
 
     raise RuntimeError(
         f"{pfx}exposure failure: only {n_outside}/{len(vertices)} vertices "
-        f"({exposure_fraction:.1%}) lie outside the parent mesh; at least "
-        f"{float(min_exposure_fraction):.1%} exposure is required. "
-        "The leaf is buried in the foliage cluster. Increase "
+        f"({exposure_fraction:.1%}) lie outside the parent mesh; "
+        f"{float(min_exposure_fraction):.1%} (100%) is required. "
+        "The leaf is not fully clear of the foliage cluster. Increase "
         "branchlet_length_mm or move the attachment point upward."
     )
 
@@ -530,8 +531,15 @@ def _build_branchlet_candidate(
     # and triangulation cannot consume all available overhang margin.
     exit_dir, leaf_normal, L, T = _leaf_frame(n0, floor_rad, yaw_deg)
 
-    # ── Step 2: Branchlet tip — straight along exit_dir ──────────────────────
-    p1 = p0 + float(branchlet_length_mm) * exit_dir
+    # ── Step 2: Root center + branchlet tip ──────────────────────────────────
+    # root_center is computed first so that p1 is anchored to it.  The loft
+    # translation is then exactly (branchlet_length_mm * exit_dir), which is
+    # guaranteed to have a positive world-Z component (exit_dir is always above
+    # the FDM floor angle).  Anchoring to p0 instead would add the embed vector
+    # (−embed * n0) to the translation, which has negative Z for below-equator
+    # attachments and causes the tip to be lower than the base → undercut.
+    root_center = p0 - float(embed_depth_mm) * n0
+    p1 = root_center + float(branchlet_length_mm) * exit_dir
 
     # ── Step 3: Leaf frame — tangent to the parent at the attachment ─────────
     N = leaf_normal
@@ -547,7 +555,7 @@ def _build_branchlet_candidate(
         fold_angle_deg=float(leaf_fold_angle_deg),
     )  # (_N_PERIM, 3) = (24, 3)
 
-    # ── Step 5: Root ring — chunky circle at the embedded root ───────────────
+    # ── Step 5: Root ring ─────────────────────────────────────────────────────
     # Embed along the INWARD surface normal (not -exit_dir).  exit_dir is
     # tilted upward by the FDM floor constraint, so using -exit_dir can place
     # root_center laterally outside the cluster on side/bottom attachment points.
@@ -557,7 +565,6 @@ def _build_branchlet_candidate(
     # Root ring uses −L, −T to match the tip ring's j-index ordering after the
     # 180° flip above.  The circle geometry is identical; only the j=0/j=12
     # labelling shifts by N/2, keeping loft face quads twist-free.
-    root_center = p0 - float(embed_depth_mm) * n0
     root_ring   = _root_ring_verts(
         root_center, exit_dir, -L, -T,
         radius_mm=float(root_radius_mm),
@@ -802,7 +809,7 @@ def build_branchlet_and_leaf(
         nonlocal last_error
         # Exposure depends only on length and leaf orientation.  Check it before
         # constructing or classifying any loft geometry.
-        tip_pos = p0 + float(length_mm) * exit_dir
+        tip_pos = root_center + float(length_mm) * exit_dir
         exposure_parts = _build_leaf_parts_at_tip(
             tip_pos=tip_pos,
             leaf_normal=leaf_normal,

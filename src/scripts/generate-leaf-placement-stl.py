@@ -32,6 +32,8 @@ from dharmatiles.trees.branchlet import build_branchlet_and_leaf
 
 DEFAULT_OUTPUT = pathlib.Path("debug/leaf-placement.stl")
 SPHERE_RADIUS_MM = 12.0
+LEAF_LENGTH_MM   = 6.0
+LEAF_WIDTH_MM    = 3.5
 
 # Fractions of the meridian arc from the top pole to the bottom pole.
 PLACEMENTS: tuple[tuple[str, float], ...] = (
@@ -67,17 +69,22 @@ def build_debug_mesh(
             SPHERE_RADIUS_MM,
             fraction_down,
         )
+        # Ceiling: large enough that the search is never artificially capped.
+        # Worst case is near the south pole; the leaf tip must travel ~2R in the
+        # horizontal direction to exit the sphere.  3 × SPHERE_RADIUS + one leaf
+        # length is a safe upper bound for all polar angles.
+        max_branchlet_mm = 3.0 * SPHERE_RADIUS_MM + LEAF_LENGTH_MM
         leaf_parts = build_branchlet_and_leaf(
             attachment_point=attachment_point,
             surface_normal=surface_normal,
-            branchlet_length_mm=12.0,
+            branchlet_length_mm=max_branchlet_mm,
             floor_angle_deg=45.0,
             root_radius_mm=None,
             embed_depth_mm=1.6,
             yaw_deg=0.0,
             seed=leaf_index,
-            leaf_length_mm=6.0,
-            leaf_width_mm=3.5,
+            leaf_length_mm=LEAF_LENGTH_MM,
+            leaf_width_mm=LEAF_WIDTH_MM,
             leaf_thickness_mm=1.2,
             leaf_fold_angle_deg=3.0,
             leaf_keel_depth_mm=0.0,
