@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
-"""Generate a debug sphere with leaves at four top-to-bottom positions.
+"""Generate a debug sphere with branchlet+leaf assemblies at four latitudes.
 
-The attachment points follow one meridian of a pure sphere:
+Each branchlet grows straight out along the surface normal.  The leaf surface
+is stitched directly to the open tip of the loft — loft walls, root cap, and
+leaf surface form a single closed mesh with no overlapping parts.
 
-* top:           0/4 down, polar angle   0°
-* upper-quarter: 1/4 down, polar angle  45°
-* equator:       2/4 down, polar angle  90°
-* lower-quarter: 3/4 down, polar angle 135°
-
-Each branchlet grows straight out along the surface normal.  Geometry that
-violates the FDM floor-angle rule is coloured debug-red (DEBUG_COLOR_0, reserved
-for failures).  Passing parts use debug colour slots 1+.
+Geometry that violates the FDM floor-angle rule is coloured debug-red
+(DEBUG_COLOR_0, reserved for failures).  Passing parts use slots 1+.
 
 Run from the repository root::
 
@@ -25,7 +21,6 @@ import numpy as np
 import trimesh
 
 from dharmatiles.core.color import Material, debug_material, export_color_stl, tag
-from dharmatiles.trees.leaf import build_leaf_mesh
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -33,14 +28,11 @@ DEFAULT_OUTPUT    = pathlib.Path("debug/leaf-placement.stl")
 SPHERE_RADIUS_MM  = 12.0
 LEAF_LENGTH_MM    = 6.0
 LEAF_WIDTH_MM     = 3.5
-LEAF_THICKNESS_MM = 1.2
-LEAF_FOLD_DEG     = 3.0
-LEAF_KEEL_MM      = 0.0
 EMBED_DEPTH_MM    = 1.6
 FLOOR_ANGLE_DEG   = 45.0
 ROOT_DIAMETER_FRACTION = 0.90   # root-ring diameter as fraction of max leaf dim
 
-_N_RING_PTS  = 16   # vertices on each loft ring
+_N_RING_PTS   = 16   # vertices on each loft ring
 _N_LOFT_RINGS = 8
 
 FAIL_MATERIAL: Material = debug_material(0)   # red — reserved for FDM failures
@@ -95,16 +87,19 @@ def _is_printable(surface_normal: np.ndarray) -> bool:
     return float(n[2]) >= np.sin(np.radians(FLOOR_ANGLE_DEG)) - 1e-6
 
 
-# ── Branchlet builder ─────────────────────────────────────────────────────────
+# ── Branchlet + leaf (single closed mesh) ────────────────────────────────────
 
 def build_simple_branchlet_and_leaf(
     attachment_point: np.ndarray,
     surface_normal:   np.ndarray,
-    leaf_local:       trimesh.Trimesh,
-) -> tuple[list[trimesh.Trimesh], bool]:
-    """Straight-along-normal loft (circle → oval) capped with *leaf_local*.
+) -> tuple[trimesh.Trimesh, bool]:
+    """Straight-along-normal loft stitched to a leaf surface as one closed mesh.
 
-    Returns ``([loft, leaf], is_fail)``.
+    The loft (circle → oval) is left open at the tip.  The leaf surface fans
+    from the tip ring to an apex in the −L direction, closing the mesh.
+    No overlapping parts; shared vertices at the junction.
+
+    Returns ``(mesh, is_fail)``.
     """
     n    = surface_normal / (np.linalg.norm(surface_normal) + 1e-12)
     L, T = _leaf_frame(n)
@@ -113,82 +108,71 @@ def build_simple_branchlet_and_leaf(
     root_center = attachment_point - EMBED_DEPTH_MM * n
     tip_pos     = root_center + (EMBED_DEPTH_MM + LEAF_LENGTH_MM) * n
 
-    # Both rings centred on the branchlet axis — no shear.
+    # The tip ring is the shared junction between loft and leaf.
     root_ring = _ellipse_ring(root_center, -L, -T, root_radius,          root_radius,   _N_RING_PTS)
     tip_ring  = _ellipse_ring(tip_pos,     -L, -T, LEAF_LENGTH_MM / 2.0, LEAF_WIDTH_MM, _N_RING_PTS)
+
+    # Leaf apex: one full leaf-length in the −L direction from tip_pos,
+    # placing it LEAF_LENGTH/2 beyond the far edge of the oval tip ring.
+    leaf_apex = tip_pos + LEAF_LENGTH_MM * (-L)
 
     # Linear loft: circle → oval.
     ts    = np.linspace(0, 1, _N_LOFT_RINGS)
     rings = (1 - ts[:, None, None]) * root_ring + ts[:, None, None] * tip_ring
 
-    NP, NR      = _N_RING_PTS, _N_LOFT_RINGS
-    root_cap_vi = NR * NP
-    tip_cap_vi  = NR * NP + 1
-    verts = np.vstack([rings.reshape(-1, 3), root_center, np.mean(tip_ring, axis=0)])
+    NP, NR       = _N_RING_PTS, _N_LOFT_RINGS
+    root_cap_vi  = NR * NP        # centre of root cap (buried end)
+    leaf_apex_vi = NR * NP + 1   # leaf tip
+
+    verts = np.vstack([rings.reshape(-1, 3), root_center, leaf_apex])
 
     def _vi(ri: int, j: int) -> int:
         return ri * NP + (j % NP)
 
     faces: list[list[int]] = []
+
+    # Loft walls.
     for i in range(NR - 1):
         for j in range(NP):
             j1 = (j + 1) % NP
             a, b, c, d = _vi(i, j), _vi(i, j1), _vi(i+1, j1), _vi(i+1, j)
             faces += [[a, d, c], [a, c, b]]
+
+    # Root cap — closes the buried end.
     for j in range(NP):
         j1 = (j + 1) % NP
         faces.append([root_cap_vi, _vi(0, j1), _vi(0, j)])
+
+    # Leaf surface — stitched to the open tip ring; closes the mesh.
     for j in range(NP):
         j1 = (j + 1) % NP
-        faces.append([tip_cap_vi, _vi(NR - 1, j), _vi(NR - 1, j1)])
+        faces.append([leaf_apex_vi, _vi(NR - 1, j), _vi(NR - 1, j1)])
 
-    loft = trimesh.Trimesh(vertices=verts, faces=np.array(faces, dtype=np.int32), process=False)
-    loft.fix_normals()
+    mesh = trimesh.Trimesh(vertices=verts, faces=np.array(faces, dtype=np.int32), process=False)
+    mesh.fix_normals()
 
-    # Transform leaf: local +X → −L, +Y → −T, +Z → n, origin → tip_pos.
-    tf = np.eye(4)
-    tf[:3, :3] = np.column_stack([-L, -T, n])
-    tf[:3,  3] = tip_pos
-    leaf_world = leaf_local.copy()
-    leaf_world.apply_transform(tf)
-
-    return [loft, leaf_world], not _is_printable(n)
+    return mesh, not _is_printable(n)
 
 
 # ── Scene assembly ─────────────────────────────────────────────────────────────
 
 def build_debug_mesh() -> trimesh.Trimesh:
-    """Build the coloured sphere, branchlets, and four leaves."""
+    """Build the coloured sphere and four branchlet+leaf assemblies."""
     sphere = trimesh.creation.icosphere(subdivisions=4, radius=SPHERE_RADIUS_MM)
     sphere.fix_normals()
     tag(sphere, debug_material(1))   # slot 0 reserved for failures
 
     parts: list[trimesh.Trimesh] = [sphere]
 
-    leaf_proto_parts = [
-        p for p in build_leaf_mesh(
-            base_pos=np.array([-LEAF_LENGTH_MM / 2.0, 0.0, 0.0]),
-            tangent=np.array([1.0, 0.0, 0.0]),
-            length_mm=LEAF_LENGTH_MM, width_mm=LEAF_WIDTH_MM,
-            thickness_mm=LEAF_THICKNESS_MM, fold_angle_deg=LEAF_FOLD_DEG,
-            keel_depth_mm=LEAF_KEEL_MM, up_hint=np.array([0.0, 0.0, 1.0]),
-            seed=0,
-        ) if len(p.vertices) > 0
-    ]
-    leaf_proto = trimesh.util.concatenate(leaf_proto_parts) if leaf_proto_parts else trimesh.Trimesh()
-
     for leaf_index, (name, fraction_down) in enumerate(PLACEMENTS):
         polar  = np.pi * fraction_down
         normal = np.array([np.sin(polar), 0.0, np.cos(polar)])
-        leaf_parts, is_fail = build_simple_branchlet_and_leaf(
-            SPHERE_RADIUS_MM * normal, normal, leaf_proto,
-        )
-        base_slot = 2 + leaf_index * 2
-        status = "FAIL (red)" if is_fail else f"ok  (slots {base_slot}–{base_slot + 1})"
+        mesh, is_fail = build_simple_branchlet_and_leaf(SPHERE_RADIUS_MM * normal, normal)
+        slot   = 2 + leaf_index
+        status = "FAIL (red)" if is_fail else f"ok  (slot {slot})  watertight={mesh.is_watertight}"
         print(f"  {name:13s}  {status}")
-        for i, part in enumerate(leaf_parts):
-            tag(part, FAIL_MATERIAL if is_fail else debug_material(base_slot + i))
-            parts.append(part)
+        tag(mesh, FAIL_MATERIAL if is_fail else debug_material(slot))
+        parts.append(mesh)
 
     return trimesh.util.concatenate(parts)
 
