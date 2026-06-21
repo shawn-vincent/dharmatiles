@@ -45,7 +45,7 @@ ROOT_DIAMETER_FRACTION = 0.90   # root-ring diameter as fraction of max leaf dim
 _N_RINGS  = _LEAF_N_LONG - 1          # interior longitudinal rings = 11
 _N_LAT    = _LEAF_N_LAT               # lateral columns = 10
 _NP       = 2 * _N_RINGS + 2          # perimeter vertex count = 24
-_N_LOFT_RINGS = 8
+_N_LOFT_RINGS = 2   # root circle + leaf perimeter; no intermediate rings needed
 
 FAIL_MATERIAL: Material = debug_material(0)   # red — reserved for FDM failures
 
