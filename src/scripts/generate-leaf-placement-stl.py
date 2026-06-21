@@ -25,7 +25,7 @@ import numpy as np
 import trimesh
 
 from dharmatiles.core.color import Material, debug_material, export_color_stl, tag
-from dharmatiles.trees.leaf import build_leaf_mesh
+from dharmatiles.trees.leaf import build_leaf_surface
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -35,7 +35,6 @@ LEAF_LENGTH_MM    = 6.0
 LEAF_WIDTH_MM     = 3.5
 LEAF_THICKNESS_MM = 1.2
 LEAF_FOLD_DEG     = 3.0
-LEAF_KEEL_MM      = 0.0
 EMBED_DEPTH_MM    = 1.6
 FLOOR_ANGLE_DEG   = 45.0
 ROOT_DIAMETER_FRACTION = 0.90   # root-ring diameter as fraction of max leaf dim
@@ -165,17 +164,14 @@ def build_debug_mesh() -> trimesh.Trimesh:
 
     parts: list[trimesh.Trimesh] = [sphere]
 
-    leaf_proto_parts = [
-        p for p in build_leaf_mesh(
-            base_pos=np.array([-LEAF_LENGTH_MM / 2.0, 0.0, 0.0]),
-            tangent=np.array([1.0, 0.0, 0.0]),
-            length_mm=LEAF_LENGTH_MM, width_mm=LEAF_WIDTH_MM,
-            thickness_mm=LEAF_THICKNESS_MM, fold_angle_deg=LEAF_FOLD_DEG,
-            keel_depth_mm=LEAF_KEEL_MM, up_hint=np.array([0.0, 0.0, 1.0]),
-            seed=0,
-        ) if len(p.vertices) > 0
-    ]
-    leaf_proto = trimesh.util.concatenate(leaf_proto_parts) if leaf_proto_parts else trimesh.Trimesh()
+    leaf_proto = build_leaf_surface(
+        base_pos=np.array([-LEAF_LENGTH_MM / 2.0, 0.0, 0.0]),
+        tangent=np.array([1.0, 0.0, 0.0]),
+        length_mm=LEAF_LENGTH_MM, width_mm=LEAF_WIDTH_MM,
+        thickness_mm=LEAF_THICKNESS_MM, fold_angle_deg=LEAF_FOLD_DEG,
+        up_hint=np.array([0.0, 0.0, 1.0]),
+        seed=0,
+    )
 
     for leaf_index, (name, fraction_down) in enumerate(PLACEMENTS):
         polar  = np.pi * fraction_down
