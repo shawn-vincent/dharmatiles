@@ -47,6 +47,12 @@ _N_LAT    = _LEAF_N_LAT               # lateral columns = 10
 _NP       = 2 * _N_RINGS + 2          # perimeter vertex count = 24
 _N_LOFT_RINGS = 2   # root circle + leaf perimeter; no intermediate rings needed
 
+LEAF_THICKNESS_MM      = 0.16
+UNDERCUT_MM            = 0.5   # undercut step: down -n and inward by this amount
+UNDERCUT_MIN_ANGLE_DEG = 30.0  # min interior corner angle at perimeter vertex;
+                                # below this the inward displacement creates a spike → fall back to straight-down
+UNDERCUT_MIN_REMAINING_MM = LEAF_THICKNESS_MM
+
 FAIL_MATERIAL: Material = debug_material(0)   # red — reserved for FDM failures
 
 PLACEMENTS: tuple[tuple[str, float], ...] = (
@@ -98,14 +104,19 @@ def build_branchlet_and_leaf(
     attachment_point: np.ndarray,
     surface_normal:   np.ndarray,
 ) -> tuple[trimesh.Trimesh, bool]:
-    """Loft from a root circle to the leaf perimeter, stitched as one closed mesh.
+    """Loft root circle → undercut ring → leaf perimeter, with leaf surface on top.
 
-    The loft morphs from a _NP-vertex circle at the embedded root to the exact
-    24-vertex leaf perimeter at the tip.  The leaf surface (open top face) is
-    stitched directly to that tip ring — no separate leaf object, no overlapping
-    parts.  The root cap closes the buried end.
+    Three-ring topology (root circle, undercut ring, boundary):
+      - Loft walls:    root circle → undercut ring
+      - Undercut wall: undercut ring → boundary  (the undercut itself)
+      - Leaf surface:  stitched to boundary from above
+      - Root cap:      closes the buried root end
 
-    Returns ``(mesh, is_fail)``.
+    The undercut ring is derived from the boundary by stepping −n by
+    LEAF_THICKNESS_MM and then inward toward the perimeter centroid by the
+    same amount.  Because the loft terminates at the undercut ring and the
+    leaf surface attaches to boundary, every boundary edge is shared by
+    exactly two faces (undercut wall + leaf surface), so the mesh is manifold.
     """
     n    = surface_normal / (np.linalg.norm(surface_normal) + 1e-12)
     L, T = _leaf_frame(n)
@@ -114,9 +125,7 @@ def build_branchlet_and_leaf(
     root_center = attachment_point - EMBED_DEPTH_MM * n
     tip_pos     = root_center + (EMBED_DEPTH_MM + LEAF_LENGTH_MM) * n
 
-    # ── Leaf geometry in world space ──────────────────────────────────────────
-    # The leaf's long axis is -L (base = rounded end at +L, tip = pointed end
-    # at -L).  The leaf normal is n (crease faces outward from sphere).
+    # ── Leaf geometry ─────────────────────────────────────────────────────────
     g = compute_leaf_geometry(
         base_pos=tip_pos + (LEAF_LENGTH_MM / 2.0) * L,
         tangent=-L,
@@ -127,77 +136,117 @@ def build_branchlet_and_leaf(
         up_hint=n,
     )
 
-    NR = _N_LOFT_RINGS
-    NP = _NP          # 24
-    nr = _N_RINGS     # 11 (interior longitudinal rings)
-    NT = _N_LAT       # 10 (lateral columns)
+    NP = _NP       # 24  perimeter vertices
+    nr = _N_RINGS  # 11  interior longitudinal rings
+    NT = _N_LAT    # 10  lateral columns
 
-    # ── Leaf perimeter (tip ring, 24 vertices, CCW from +n) ──────────────────
+    # ── Boundary (leaf perimeter, 24 vertices) ────────────────────────────────
     # Order: rounded_base | left_edge (s↑) | pointed_tip | right_edge (s↓)
     boundary = np.vstack([
-        g.bp[np.newaxis],          # k=0:      rounded base   (+L direction)
-        g.top_pts[:, 0, :],        # k=1..11:  left edge, j=0, s increasing
-        g.v_tip[np.newaxis],       # k=12:     pointed tip    (-L direction)
-        g.top_pts[::-1, NT, :],    # k=13..23: right edge, j=NT, s decreasing
+        g.bp[np.newaxis],          # k=0:      rounded base
+        g.top_pts[:, 0, :],        # k=1..11:  left edge, s increasing
+        g.v_tip[np.newaxis],       # k=12:     pointed tip
+        g.top_pts[::-1, NT, :],    # k=13..23: right edge, s decreasing
     ])  # (NP, 3)
 
-    # ── Root ring (circle, vertex 0 aligned to boundary vertex 0) ────────────
-    # u=L, v=T → vertex 0 in +L direction; L×T = n → CCW from +n. ✓
+    # ── Root ring ─────────────────────────────────────────────────────────────
     root_ring = _circle_ring(root_center, L, T, root_radius, NP)
 
-    # ── Loft rings: linear blend from root circle to leaf perimeter ───────────
-    ts    = np.linspace(0.0, 1.0, NR)
-    rings = ((1 - ts)[:, None, None] * root_ring[None]
-             +  ts   [:, None, None] * boundary  [None])  # (NR, NP, 3)
+    # ── Undercut ring ─────────────────────────────────────────────────────────
+    # From each boundary vertex: −n by UNDERCUT_MM, then inward toward the
+    # perimeter centroid by UNDERCUT_MM.
+    # Guard: sharp corners and perimeter spans narrower than the undercut would
+    # create a thin lip or crossing undercut.  Those vertices fall back to
+    # straight-down (−n only).
+    t_mm         = UNDERCUT_MM
+    perim_center = np.mean(boundary, axis=0)
+    inward       = perim_center[None] - boundary
+    inward_unit  = inward / np.maximum(np.linalg.norm(inward, axis=1, keepdims=True), 1e-10)
 
-    # ── Leaf interior vertices (top_pts columns 1..NT-1) ─────────────────────
-    leaf_int = g.top_pts[:, 1:NT, :].reshape(-1, 3)  # (nr*(NT-1), 3)
+    prev_pts  = np.roll(boundary, 1, axis=0)
+    next_pts  = np.roll(boundary, -1, axis=0)
+    edge_in   = boundary - prev_pts
+    edge_out  = next_pts - boundary
+    edge_in  /= np.maximum(np.linalg.norm(edge_in, axis=1, keepdims=True), 1e-10)
+    edge_out /= np.maximum(np.linalg.norm(edge_out, axis=1, keepdims=True), 1e-10)
+    cos_interior = -np.einsum('ij,ij->i', edge_in, edge_out)           # cos(interior corner angle)
+    sharp_corner = cos_interior > np.cos(np.radians(UNDERCUT_MIN_ANGLE_DEG))
+
+    # Per-boundary available half-span measured from the perimeter toward the
+    # leaf centreline.  The pointed tip has zero span even when its perimeter
+    # angle is not acute, so the corner-angle test alone misses it.
+    boundary_half_span = np.concatenate([
+        [0.0],
+        g.w_s,
+        [0.0],
+        g.w_s[::-1],
+    ])
+    narrow_span = (
+        boundary_half_span
+        <= t_mm + UNDERCUT_MIN_REMAINING_MM
+    )
+    thin_lip = sharp_corner | narrow_span
+
+    undercut_ring = np.where(
+        thin_lip[:, None],
+        boundary - t_mm * n[None],                          # straight-down fallback
+        boundary - t_mm * n[None] + t_mm * inward_unit,    # full undercut
+    )  # (NP, 3)
 
     # ── Vertex layout ─────────────────────────────────────────────────────────
-    # 0 .. NR*NP-1          : loft rings (ring ri, vertex k  = ri*NP + k)
-    # NR*NP                 : root_center (root cap centre)
-    # NR*NP+1 .. NR*NP+nr*(NT-1) : leaf interior grid
-    root_cap_vi = NR * NP
+    #   0 .. NP-1          root ring
+    #   NP .. 2*NP-1       undercut ring
+    #   2*NP               root cap centre
+    #   2*NP+1 .. 3*NP     boundary (leaf perimeter)
+    #   3*NP+1 ..          leaf interior grid  (nr*(NT-1) vertices)
+    V_ROOT_CAP = 2 * NP
+    V_BND_BASE = 2 * NP + 1
+    V_INT_BASE = 3 * NP + 1
 
     verts = np.vstack([
-        rings.reshape(-1, 3),
+        root_ring,
+        undercut_ring,
         root_center[np.newaxis],
-        leaf_int,
+        boundary,
+        g.top_pts[:, 1:NT, :].reshape(-1, 3),
     ])
 
-    # ── Index helpers ──────────────────────────────────────────────────────────
-    def loft_vi(ri: int, k: int) -> int:
-        return ri * NP + k % NP
+    # ── Index helpers ─────────────────────────────────────────────────────────
+    def vi_r0(k: int)  -> int: return k % NP
+    def vi_uc(k: int)  -> int: return NP + k % NP
+    def vi_bnd(k: int) -> int: return V_BND_BASE + k % NP
 
     def leaf_vi(ri: int, j: int) -> int:
-        """Index for g.top_pts[ri, j].  ri=0..nr-1, j=0..NT."""
         if j == 0:
-            return loft_vi(NR - 1, ri + 1)               # left boundary
+            return vi_bnd(ri + 1)                       # left edge
         if j == NT:
-            return loft_vi(NR - 1, 2 * nr + 1 - ri)      # right boundary
-        return NR * NP + 1 + ri * (NT - 1) + (j - 1)    # interior
+            return vi_bnd(2 * nr + 1 - ri)              # right edge
+        return V_INT_BASE + ri * (NT - 1) + (j - 1)    # interior
 
-    def leaf_base_vi() -> int:
-        return loft_vi(NR - 1, 0)        # k=0: rounded base
-
-    def leaf_tip_vi() -> int:
-        return loft_vi(NR - 1, nr + 1)   # k=12: pointed tip
+    def leaf_base_vi() -> int: return vi_bnd(0)
+    def leaf_tip_vi()  -> int: return vi_bnd(nr + 1)
 
     # ── Face construction ─────────────────────────────────────────────────────
     faces: list[list[int]] = []
 
-    # Loft walls (NR-1 bands × NP quads each).
-    for ri in range(NR - 1):
-        for k in range(NP):
-            k1 = (k + 1) % NP
-            a, b = loft_vi(ri, k),    loft_vi(ri, k1)
-            c, d = loft_vi(ri+1, k1), loft_vi(ri+1, k)
-            faces += [[a, d, c], [a, c, b]]
-
-    # Root cap (fan from root_center to ring 0).
+    # Loft walls: root ring → undercut ring
     for k in range(NP):
         k1 = (k + 1) % NP
-        faces.append([root_cap_vi, loft_vi(0, k1), loft_vi(0, k)])
+        a, b = vi_r0(k),  vi_r0(k1)
+        c, d = vi_uc(k1), vi_uc(k)
+        faces += [[a, d, c], [a, c, b]]
+
+    # Root cap — closes the embedded root end.
+    for k in range(NP):
+        k1 = (k + 1) % NP
+        faces.append([V_ROOT_CAP, vi_r0(k1), vi_r0(k)])
+
+    # Undercut wall: undercut ring → boundary (outward and upward step).
+    for k in range(NP):
+        k1 = (k + 1) % NP
+        a, b = vi_uc(k),   vi_uc(k1)
+        c, d = vi_bnd(k1), vi_bnd(k)
+        faces += [[a, d, c], [a, c, b]]
 
     # Leaf surface — base fan (rounded base → ring 0 of top_pts).
     for j in range(NT):
