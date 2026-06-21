@@ -636,17 +636,21 @@ def _build_branchlet_candidate(
         process=False,
     )
     loft.fix_normals()
-    # TODO: FDM validation disabled while the flipped-tip loft shape is being
-    # sorted out.  The upward-loft FDM rules don't apply to a 180°-rotated tip
-    # ring and would force artificially long branchlets.  Re-enable once the
-    # new FDM constraints for downward-pointing tips are understood.
-    # _validate_branchlet_fdm(
-    #     loft, floor_rad,
-    #     n_wall_faces=n_wall_faces, n_root_cap_faces=n_root_cap_faces,
-    #     embed_depth_mm=float(embed_depth_mm),
-    #     branchlet_length_mm=float(branchlet_length_mm),
-    #     parent_mesh=parent_mesh,
-    # )
+    # The 180° tip-ring flip does NOT change the FDM rules for the loft walls.
+    # The tip-cap face (which closes the pointed leaf tip) points along exit_dir
+    # (always ≥ floor_angle) so it is harmless.  The real printability concern is
+    # wall faces that run from the root ring DOWN to the lower portion of the leaf
+    # perimeter when the leaf's downward extension (-L direction) is large relative
+    # to the branchlet length.  This is exactly what _validate_branchlet_fdm
+    # catches: the search rejects short candidates for those attachment positions
+    # and keeps lengthening until every exterior wall face is above the floor angle.
+    _validate_branchlet_fdm(
+        loft, floor_rad,
+        n_wall_faces=n_wall_faces, n_root_cap_faces=n_root_cap_faces,
+        embed_depth_mm=float(embed_depth_mm),
+        branchlet_length_mm=float(branchlet_length_mm),
+        parent_mesh=parent_mesh,
+    )
 
     # ── Step 8: Leaf blade ────────────────────────────────────────────────────
     # The loft uses L (pointing upward along the tangent plane) for its tip ring
