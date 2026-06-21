@@ -231,10 +231,17 @@ def compute_leaf_geometry(
     width_mm:       float,
     thickness_mm:   float = 0.24,
     fold_angle_deg: float = 3.0,
+    curl_deg:       float = 15.0,
     up_hint:        np.ndarray | None = None,
     seed:           int = 0,
 ) -> _LeafGeometry:
-    """Compute all leaf geometry arrays (frame, vertex grids) shared across builders."""
+    """Compute all leaf geometry arrays (frame, vertex grids) shared across builders.
+
+    *curl_deg* — total end-to-end longitudinal curl, in degrees, measured as
+    the rotation of the leaf tangent from base (s=0) to tip (s=1) in the
+    L-N plane.  Positive values curve the tip toward +N (convex from the top).
+    Default 15° gives a slight upward arch along the leaf's length.
+    """
     L  = _safe_norm(np.asarray(tangent, float))
     bp = np.asarray(base_pos, float)
 
@@ -257,7 +264,32 @@ def compute_leaf_geometry(
     w_s    = width_mm * _leaf_width_profile(s_int)                  # (n_rings,)
     long_t = (s_int ** 0.5 * (1.0 - s_int) ** 1.5) / _LEAF_LONG_T_PEAK
 
-    midribs  = bp[np.newaxis] + (s_int[:, np.newaxis] * length_mm) * L[np.newaxis]
+    # ── Longitudinal curl ────────────────────────────────────────────────────
+    # The leaf bends in the L-N plane: at station s the tangent has rotated
+    # by φ(s) = s × curl_rad from L toward N.  The midrib follows a circular
+    # arc of total turning angle curl_rad.  Each ring's vertical offsets
+    # (crease + dome) are applied along the local normal N_local(s) so the
+    # surface profile stays perpendicular to the curved midrib.
+    curl_rad = float(np.radians(curl_deg))
+    phi      = s_int * curl_rad                               # (n_rings,) cumulative angle
+
+    if abs(curl_rad) < 1e-8:
+        # Degenerate (straight): keep the simple linear formula.
+        midribs = bp[np.newaxis] + (s_int[:, np.newaxis] * length_mm) * L[np.newaxis]
+        v_tip   = bp + length_mm * L
+        N_local = np.tile(N, (len(s_int), 1))                # (n_rings, 3)
+    else:
+        # Arc midrib: integral of [cos(φ)·L + sin(φ)·N] from 0 to s.
+        arc_s   = (np.sin(phi) / curl_rad)[:, np.newaxis]    # (n_rings, 1)
+        arc_n   = ((1.0 - np.cos(phi)) / curl_rad)[:, np.newaxis]
+        midribs = bp[np.newaxis] + length_mm * (arc_s * L[np.newaxis] + arc_n * N[np.newaxis])
+        v_tip   = bp + length_mm * (
+            np.sin(curl_rad) / curl_rad * L + (1.0 - np.cos(curl_rad)) / curl_rad * N
+        )
+        # Local normal at each station: rotate N by φ in the L-N plane.
+        N_local = (-np.sin(phi)[:, np.newaxis] * L[np.newaxis]
+                   + np.cos(phi)[:, np.newaxis] * N[np.newaxis])  # (n_rings, 3)
+
     laterals = (midribs[:, np.newaxis]
                 + (t_vals[np.newaxis, :, np.newaxis] * w_s[:, np.newaxis, np.newaxis])
                 * T[np.newaxis, np.newaxis])
@@ -267,11 +299,12 @@ def compute_leaf_geometry(
     fold_h = tanh_t[np.newaxis] * (w_s[:, np.newaxis] * fold_tan * long_t[:, np.newaxis])
     lobe_h = (thickness_mm * sin_t[np.newaxis]) * long_t[:, np.newaxis]
 
-    top_pts = laterals + (fold_h + lobe_h)[:, :, np.newaxis] * N[np.newaxis, np.newaxis]
-    bot_pts = laterals + fold_h[:, :, np.newaxis]             * N[np.newaxis, np.newaxis]
+    # Apply crease + dome offsets along the per-station local normal.
+    top_pts = laterals + (fold_h + lobe_h)[:, :, np.newaxis] * N_local[:, np.newaxis, :]
+    bot_pts = laterals + fold_h[:, :, np.newaxis]             * N_local[:, np.newaxis, :]
 
     return _LeafGeometry(
-        L=L, T=T, N=N, bp=bp, v_tip=bp + length_mm * L,
+        L=L, T=T, N=N, bp=bp, v_tip=v_tip,
         s_int=s_int, w_s=w_s, top_pts=top_pts, bot_pts=bot_pts,
     )
 
@@ -462,6 +495,7 @@ def build_leaf_surface(
     width_mm:       float,
     thickness_mm:   float = 0.24,
     fold_angle_deg: float = 3.0,
+    curl_deg:       float = 15.0,
     up_hint:        np.ndarray | None = None,
     seed:           int = 0,
 ) -> trimesh.Trimesh:
@@ -473,17 +507,19 @@ def build_leaf_surface(
     solid with no overlapping parts.
 
     All geometry of the top face is present: the ovate teardrop outline,
-    the dome-shaped lobes (two humps rising from the midrib crease), and the
-    V-shaped crease along the midrib.  Face normals point in the +N direction
-    (outward, away from the leaf underside).
+    the dome-shaped lobes (two humps rising from the midrib crease), the
+    V-shaped crease along the midrib, and the longitudinal curl arc.
+    Face normals point outward (+N at the base, rotating with the curl).
 
-    Parameters mirror :func:`build_leaf_mesh` except that keel parameters are
-    absent (the keel is part of the closed shell, not the open surface).
+    *curl_deg* — see :func:`compute_leaf_geometry`.
+
+    Parameters otherwise mirror :func:`build_leaf_mesh` minus keel params.
     """
     g = compute_leaf_geometry(
         base_pos=base_pos, tangent=tangent,
         length_mm=length_mm, width_mm=width_mm,
         thickness_mm=thickness_mm, fold_angle_deg=fold_angle_deg,
+        curl_deg=curl_deg,
         up_hint=up_hint, seed=seed,
     )
 
@@ -538,6 +574,7 @@ def build_leaf_mesh(
     width_mm: float,
     thickness_mm: float = 0.24,
     fold_angle_deg: float = 3.0,
+    curl_deg: float = 15.0,
     keel_depth_mm: float = 1.0,
     keel_tip_angle_deg: float = 45.0,
     up_hint: np.ndarray | None = None,
@@ -573,7 +610,7 @@ def build_leaf_mesh(
         base_pos=base_pos, tangent=tangent,
         length_mm=length_mm, width_mm=width_mm,
         thickness_mm=thickness_mm, fold_angle_deg=fold_angle_deg,
-        up_hint=up_hint, seed=seed,
+        curl_deg=curl_deg, up_hint=up_hint, seed=seed,
     )
 
     N_S = _LEAF_N_LONG
