@@ -79,6 +79,8 @@ nonsensical geometry and must not be introduced.
 """
 from __future__ import annotations
 
+from typing import NamedTuple
+
 import numpy as np
 import trimesh
 
@@ -204,6 +206,74 @@ def _leaf_width_profile(s: np.ndarray) -> np.ndarray:
     s = np.asarray(s, float)
     raw = (s ** 0.4) * ((1.0 - s) ** 0.8)
     return raw / _LEAF_W_PEAK_NORM
+
+
+# ── Shared geometry computation ───────────────────────────────────────────────
+
+class _LeafGeometry(NamedTuple):
+    """Raw arrays produced once and shared by build_leaf_surface / build_leaf_mesh."""
+    L:       np.ndarray   # (3,) unit growth direction (base → tip)
+    T:       np.ndarray   # (3,) unit lateral direction
+    N:       np.ndarray   # (3,) unit leaf normal (top/crease faces +N)
+    bp:      np.ndarray   # (3,) base position
+    v_tip:   np.ndarray   # (3,) tip position  =  bp + length_mm * L
+    s_int:   np.ndarray   # (n_rings,) longitudinal stations ∈ (0, 1)
+    w_s:     np.ndarray   # (n_rings,) half-widths at each station
+    top_pts: np.ndarray   # (n_rings, N_T+1, 3) top-surface vertex grid
+    bot_pts: np.ndarray   # (n_rings, N_T+1, 3) bottom-surface vertex grid
+
+
+def _compute_leaf_geometry(
+    *,
+    base_pos:       np.ndarray,
+    tangent:        np.ndarray,
+    length_mm:      float,
+    width_mm:       float,
+    thickness_mm:   float = 0.24,
+    fold_angle_deg: float = 3.0,
+    up_hint:        np.ndarray | None = None,
+    seed:           int = 0,
+) -> _LeafGeometry:
+    """Compute all leaf geometry arrays (frame, vertex grids) shared across builders."""
+    L  = _safe_norm(np.asarray(tangent, float))
+    bp = np.asarray(base_pos, float)
+
+    world_up = (_safe_norm(np.asarray(up_hint, float)) if up_hint is not None
+                else np.array([0.0, 0.0, 1.0]))
+    if abs(float(np.dot(L, world_up))) > 0.9:
+        world_up = (np.array([1.0, 0.0, 0.0])
+                    if abs(float(np.dot(L, np.array([0.0, 0.0, 1.0])))) > 0.9
+                    else np.array([0.0, 0.0, 1.0]))
+    T0 = np.cross(world_up, L);  T0 /= max(float(np.linalg.norm(T0)), 1e-10)
+    N0 = np.cross(L, T0);        N0 /= max(float(np.linalg.norm(N0)), 1e-10)
+    T, N = T0, N0
+
+    fold_tan = float(np.tan(np.radians(fold_angle_deg)))
+    N_T      = _LEAF_N_LAT
+    t_vals   = np.linspace(-1.0, 1.0, N_T + 1)   # (N_T+1,)
+    abs_t    = np.abs(t_vals)
+
+    s_int  = np.linspace(0.0, 1.0, _LEAF_N_LONG + 1)[1:-1]        # (n_rings,)
+    w_s    = width_mm * _leaf_width_profile(s_int)                  # (n_rings,)
+    long_t = (s_int ** 0.5 * (1.0 - s_int) ** 1.5) / _LEAF_LONG_T_PEAK
+
+    midribs  = bp[np.newaxis] + (s_int[:, np.newaxis] * length_mm) * L[np.newaxis]
+    laterals = (midribs[:, np.newaxis]
+                + (t_vals[np.newaxis, :, np.newaxis] * w_s[:, np.newaxis, np.newaxis])
+                * T[np.newaxis, np.newaxis])
+
+    tanh_t = np.tanh(abs_t * _LEAF_CREASE_SHARPNESS)
+    sin_t  = np.sin(np.pi * abs_t)
+    fold_h = tanh_t[np.newaxis] * (w_s[:, np.newaxis] * fold_tan * long_t[:, np.newaxis])
+    lobe_h = (thickness_mm * sin_t[np.newaxis]) * long_t[:, np.newaxis]
+
+    top_pts = laterals + (fold_h + lobe_h)[:, :, np.newaxis] * N[np.newaxis, np.newaxis]
+    bot_pts = laterals + fold_h[:, :, np.newaxis]             * N[np.newaxis, np.newaxis]
+
+    return _LeafGeometry(
+        L=L, T=T, N=N, bp=bp, v_tip=bp + length_mm * L,
+        s_int=s_int, w_s=w_s, top_pts=top_pts, bot_pts=bot_pts,
+    )
 
 
 # ── Keel prism ─────────────────────────────────────────────────────────────────
@@ -384,6 +454,82 @@ def _build_leaf_keel_prism(
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
+def build_leaf_surface(
+    *,
+    base_pos:       np.ndarray,
+    tangent:        np.ndarray,
+    length_mm:      float,
+    width_mm:       float,
+    thickness_mm:   float = 0.24,
+    fold_angle_deg: float = 3.0,
+    up_hint:        np.ndarray | None = None,
+    seed:           int = 0,
+) -> trimesh.Trimesh:
+    """Open leaf surface — the top face only, with all visible geometry.
+
+    Returns a single open ``trimesh.Trimesh`` (disk topology).  The mesh has
+    one boundary loop running along the two lateral edges from base to tip —
+    it can be stitched directly to a branchlet loft to form a single closed
+    solid with no overlapping parts.
+
+    All geometry of the top face is present: the ovate teardrop outline,
+    the dome-shaped lobes (two humps rising from the midrib crease), and the
+    V-shaped crease along the midrib.  Face normals point in the +N direction
+    (outward, away from the leaf underside).
+
+    Parameters mirror :func:`build_leaf_mesh` except that keel parameters are
+    absent (the keel is part of the closed shell, not the open surface).
+    """
+    g = _compute_leaf_geometry(
+        base_pos=base_pos, tangent=tangent,
+        length_mm=length_mm, width_mm=width_mm,
+        thickness_mm=thickness_mm, fold_angle_deg=fold_angle_deg,
+        up_hint=up_hint, seed=seed,
+    )
+
+    n_rings = _LEAF_N_LONG - 1
+    N_T     = _LEAF_N_LAT
+    stride  = N_T + 1
+    v_base_i = n_rings * stride
+    v_tip_i  = n_rings * stride + 1
+
+    verts = np.concatenate([
+        g.top_pts.reshape(-1, 3),
+        g.bp[np.newaxis],
+        g.v_tip[np.newaxis],
+    ], axis=0)
+
+    faces: list[list[int]] = []
+
+    # Base fan — v_base fans into ring 0 of the top surface.
+    # Winding [v_base, j, j+1] gives +N outward normals. ✓
+    for j in range(N_T):
+        faces.append([v_base_i, j, j + 1])
+
+    # Body — quad strip across consecutive top rings.
+    # [a, d, c] and [a, c, b] give +N outward normals. ✓
+    for ri in range(n_rings - 1):
+        for j in range(N_T):
+            a = ri * stride + j
+            b = ri * stride + j + 1
+            c = (ri + 1) * stride + j + 1
+            d = (ri + 1) * stride + j
+            faces.append([a, d, c])
+            faces.append([a, c, b])
+
+    # Tip fan — v_tip fans into the last ring of the top surface.
+    # Winding [v_tip, last+j+1, last+j] gives +N outward normals. ✓
+    last = (n_rings - 1) * stride
+    for j in range(N_T):
+        faces.append([v_tip_i, last + j + 1, last + j])
+
+    return _mesh_with_fixed_normals(
+        verts,
+        np.array(faces, dtype=np.int32),
+        ("leaf_surface", _LEAF_N_LONG, N_T),
+    )
+
+
 def build_leaf_mesh(
     *,
     base_pos: np.ndarray,
@@ -423,101 +569,41 @@ def build_leaf_mesh(
     list[trimesh.Trimesh]
         One or two parts: [blade, keel] (keel absent if keel_depth_mm ≤ 0).
     """
-    L  = _safe_norm(np.asarray(tangent, float))
-    bp = np.asarray(base_pos, float)
+    g = _compute_leaf_geometry(
+        base_pos=base_pos, tangent=tangent,
+        length_mm=length_mm, width_mm=width_mm,
+        thickness_mm=thickness_mm, fold_angle_deg=fold_angle_deg,
+        up_hint=up_hint, seed=seed,
+    )
 
-    # Orthonormal frame (L, T, N).  N (the leaf's top/crease side) is biased
-    # toward *up_hint* — the caller's "which way is away" reference.  Default is
-    # world-up (leaves seek the sun); when a leaf grows on the side or underside
-    # of a surface the caller passes the outward surface normal instead, so the
-    # crease/top faces away from that surface rather than into it.
-    world_up = (_safe_norm(np.asarray(up_hint, float)) if up_hint is not None
-                else np.array([0.0, 0.0, 1.0]))
-    if abs(float(np.dot(L, world_up))) > 0.9:
-        # Reference ~parallel to the growth axis → pick an independent fallback.
-        world_up = (np.array([1.0, 0.0, 0.0])
-                    if abs(float(np.dot(L, np.array([0.0, 0.0, 1.0])))) > 0.9
-                    else np.array([0.0, 0.0, 1.0]))
-    T0 = np.cross(world_up, L)
-    T0 /= max(float(np.linalg.norm(T0)), 1e-10)
-    N0 = np.cross(L, T0)
-    N0 /= max(float(np.linalg.norm(N0)), 1e-10)
-
-    # N is the up_hint component perpendicular to L (top/crease faces "away").
-    T = T0
-    N = N0
-
-    fold_tan = float(np.tan(np.radians(fold_angle_deg)))
     N_S = _LEAF_N_LONG
     N_T = _LEAF_N_LAT
-    n_rings = N_S - 1
-    t_vals = np.linspace(-1.0, 1.0, N_T + 1)   # (N_T+1,)
-    abs_t  = np.abs(t_vals)
-
-    s_int = np.linspace(0.0, 1.0, N_S + 1)[1:-1]  # (n_rings,) interior stations
-
-    # ── Vectorised vertex construction ──────────────────────────────────────
-    # Compute all ring vertices in one numpy pass (no Python loop per ring).
-    w_s    = width_mm * _leaf_width_profile(s_int)                    # (n_rings,)
-    long_t = (s_int ** 0.5 * (1.0 - s_int) ** 1.5) / _LEAF_LONG_T_PEAK  # (n_rings,)
-
-    # Midrib positions: (n_rings, 3)
-    midribs = bp[np.newaxis, :] + (s_int[:, np.newaxis] * length_mm) * L[np.newaxis, :]
-
-    # Lateral positions: (n_rings, N_T+1, 3)
-    laterals = (midribs[:, np.newaxis, :]
-                + (t_vals[np.newaxis, :, np.newaxis] * w_s[:, np.newaxis, np.newaxis])
-                * T[np.newaxis, np.newaxis, :])
-
-    # Vertical offsets (relative to N axis): (n_rings, N_T+1)
-    tanh_t  = np.tanh(abs_t * _LEAF_CREASE_SHARPNESS)   # (N_T+1,)
-    sin_t   = np.sin(np.pi * abs_t)                      # (N_T+1,)
-    fold_h  = tanh_t[np.newaxis, :] * (w_s[:, np.newaxis] * fold_tan * long_t[:, np.newaxis])
-    lobe_h  = (thickness_mm * sin_t[np.newaxis, :]) * long_t[:, np.newaxis]
-    z_top   = fold_h + lobe_h   # (n_rings, N_T+1)
-    z_bot   = fold_h            # (n_rings, N_T+1)
-
-    # Surface points: (n_rings, N_T+1, 3)
-    top_pts = laterals + z_top[:, :, np.newaxis] * N[np.newaxis, np.newaxis, :]
-    bot_pts = laterals + z_bot[:, :, np.newaxis] * N[np.newaxis, np.newaxis, :]
 
     # Vertex array layout: top rings | bot rings | v_base | v_tip
     # Matches the index arithmetic in _build_blade_faces().
     verts = np.concatenate([
-        top_pts.reshape(-1, 3),            # (n_rings*(N_T+1), 3)
-        bot_pts.reshape(-1, 3),            # (n_rings*(N_T+1), 3)
-        bp[np.newaxis, :],                 # v_base
-        (bp + length_mm * L)[np.newaxis, :],  # v_tip
+        g.top_pts.reshape(-1, 3),
+        g.bot_pts.reshape(-1, 3),
+        g.bp[np.newaxis],
+        g.v_tip[np.newaxis],
     ], axis=0)
 
-    # Extract keel-input arrays from bot_pts (no extra loops needed).
-    neg_t_edge_verts = bot_pts[:, 0,    :]  # (n_rings, 3)
-    pos_t_edge_verts = bot_pts[:, N_T,  :]  # (n_rings, 3)
-    half_width_list  = w_s.tolist()
-
-    # ── Face connectivity ────────────────────────────────────────────────────
-    # Canonical face array is built once per (N_S, N_T) topology and cached.
     faces = _build_blade_faces(N_S, N_T)
-
-    # Blade topology depends only on the (constant) longitudinal/lateral
-    # section counts, so all blades share one corrected-winding face array.
     mesh  = _mesh_with_fixed_normals(verts, faces, ("blade", N_S, N_T))
-
     parts: list[trimesh.Trimesh] = [mesh]
 
     if keel_depth_mm > 1e-6:
         keel = _build_leaf_keel_prism(
-            base_vertex=bp,
-            tip_vertex=(bp + length_mm * L),
-            neg_t_edge=neg_t_edge_verts,   # already ndarray (n_rings, 3)
-            pos_t_edge=pos_t_edge_verts,   # already ndarray (n_rings, 3)
-            N=N,
-            T=T,
-            s_values=s_int,                # already ndarray
-            half_widths=w_s,               # already ndarray
+            base_vertex=g.bp,
+            tip_vertex=g.v_tip,
+            neg_t_edge=g.bot_pts[:, 0,   :],
+            pos_t_edge=g.bot_pts[:, N_T, :],
+            N=g.N, T=g.T,
+            s_values=g.s_int,
+            half_widths=g.w_s,
             keel_depth_mm=keel_depth_mm,
             keel_tip_angle_deg=keel_tip_angle_deg,
-            all_bot_pts=bot_pts,           # curved closure — no flat underside
+            all_bot_pts=g.bot_pts,
         )
         if len(keel.vertices) > 0:
             parts.append(keel)
