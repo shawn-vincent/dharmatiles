@@ -49,12 +49,11 @@ LEAF_THICKNESS_MM = 1.2
 LEAF_FOLD_DEG     = 3.0
 LEAF_KEEL_MM      = 0.0
 EMBED_DEPTH_MM    = 1.6
-VISIBLE_LENGTH_MM = LEAF_LENGTH_MM   # branchlet length beyond the sphere surface
 FLOOR_ANGLE_DEG   = 45.0
 ROOT_DIAMETER_FRACTION = 0.90        # root-ring diameter as fraction of max leaf dim
 
 _N_LOFT_RINGS = 8
-_N_PERIM      = 2 + 2 * (_LEAF_N_LONG - 1)   # = 24
+_N_PERIM      = 2 + 2 * (_LEAF_N_LONG - 1)
 
 FAIL_MATERIAL: Material = debug_material(0)   # red — reserved for FDM failures
 
@@ -67,16 +66,6 @@ PLACEMENTS: tuple[tuple[str, float], ...] = (
 
 
 # ── Geometry helpers ───────────────────────────────────────────────────────────
-
-def _attachment(
-    radius_mm: float,
-    fraction_down: float,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Surface point and outward normal on the +X meridian."""
-    polar  = np.pi * float(fraction_down)
-    normal = np.array([np.sin(polar), 0.0, np.cos(polar)], dtype=float)
-    return radius_mm * normal, normal
-
 
 def _leaf_frame(
     surface_normal: np.ndarray,
@@ -150,10 +139,7 @@ def _root_ring(
     radius_mm: float,
     n_pts:     int,
 ) -> np.ndarray:
-    """Circle of *n_pts* vertices in the plane spanned by (u, v).
-
-    j=0 aligns with j=0 of the leaf perimeter (base side) so the loft is twist-free.
-    """
+    """Circle of *n_pts* vertices in the plane spanned by (u, v)."""
     angles = -np.pi / 2.0 + 2.0 * np.pi * np.arange(n_pts) / n_pts
     return center + radius_mm * (
         np.cos(angles[:, None]) * v + np.sin(angles[:, None]) * u
@@ -183,59 +169,30 @@ def _is_printable(
     return not (loft.face_normals[ext_mask, 2] < threshold - 1e-6).any()
 
 
-# ── Leaf prototype ─────────────────────────────────────────────────────────────
-
-def build_leaf_at_origin(leaf_index: int) -> trimesh.Trimesh:
-    """Leaf mesh in canonical local space, centred at the origin.
-
-    Local axes: long axis = +X, lateral = +Y, leaf normal = +Z.
-    Base at X = −LEAF_LENGTH_MM/2 so the centroid is at the origin, matching
-    :func:`_leaf_perimeter_local`.  The rigid transform in
-    :func:`build_simple_branchlet_and_leaf` places the centroid at tip_pos.
-    """
-    parts = [
-        p for p in build_leaf_mesh(
-            base_pos       = np.array([-LEAF_LENGTH_MM / 2.0, 0.0, 0.0]),
-            tangent        = np.array([1.0, 0.0, 0.0]),
-            length_mm      = LEAF_LENGTH_MM,
-            width_mm       = LEAF_WIDTH_MM,
-            thickness_mm   = LEAF_THICKNESS_MM,
-            fold_angle_deg = LEAF_FOLD_DEG,
-            keel_depth_mm  = LEAF_KEEL_MM,
-            up_hint        = np.array([0.0, 0.0, 1.0]),
-            seed           = leaf_index,
-        )
-        if len(p.vertices) > 0
-    ]
-    return trimesh.util.concatenate(parts) if parts else trimesh.Trimesh()
-
-
 # ── Branchlet builder ─────────────────────────────────────────────────────────
 
 def build_simple_branchlet_and_leaf(
     attachment_point: np.ndarray,
     surface_normal:   np.ndarray,
     leaf_local:       trimesh.Trimesh,
-    leaf_index:       int,
 ) -> tuple[list[trimesh.Trimesh], bool]:
     """Straight-along-normal branchlet loft capped with *leaf_local*.
 
     Returns ``([loft, leaf], is_fail)`` where *is_fail* is True iff the loft
     fails the FDM floor-angle check.
     """
-    n0   = surface_normal / (np.linalg.norm(surface_normal) + 1e-12)
-    L, T = _leaf_frame(n0)
-
+    n           = surface_normal
+    L, T        = _leaf_frame(n)
     root_radius  = 0.5 * ROOT_DIAMETER_FRACTION * max(LEAF_LENGTH_MM, 2.0 * LEAF_WIDTH_MM)
-    root_center  = attachment_point - EMBED_DEPTH_MM * n0
-    total_length = EMBED_DEPTH_MM + VISIBLE_LENGTH_MM
-    tip_pos      = root_center + total_length * n0
+    root_center  = attachment_point - EMBED_DEPTH_MM * n
+    total_length = EMBED_DEPTH_MM + LEAF_LENGTH_MM
+    tip_pos      = root_center + total_length * n
 
     # Tip ring: leaf perimeter centred at tip_pos.  Local +X → −L so the
     # pointed tip faces gravity; +Y → −T; +Z → N (surface normal).
     leaf_perim = _transform_points(
         _leaf_perimeter_local(LEAF_LENGTH_MM, LEAF_WIDTH_MM, LEAF_FOLD_DEG),
-        tip_pos, -L, -T, n0,
+        tip_pos, -L, -T, n,
     )
     root_ring = _root_ring(root_center, u=-L, v=-T, radius_mm=root_radius, n_pts=_N_PERIM)
 
@@ -268,9 +225,9 @@ def build_simple_branchlet_and_leaf(
     loft = trimesh.Trimesh(vertices=verts, faces=np.array(faces, dtype=np.int32), process=False)
     loft.fix_normals()
 
-    # Transform leaf: local +X → −L, +Y → −T, +Z → n0, origin → tip_pos.
+    # Transform leaf: local +X → −L, +Y → −T, +Z → n, origin → tip_pos.
     tf = np.eye(4)
-    tf[:3, :3] = np.column_stack([-L, -T, n0])
+    tf[:3, :3] = np.column_stack([-L, -T, n])
     tf[:3,  3] = tip_pos
     leaf_world = leaf_local.copy()
     leaf_world.apply_transform(tf)
@@ -287,12 +244,24 @@ def build_debug_mesh() -> trimesh.Trimesh:
     tag(sphere, debug_material(1))   # slot 0 reserved for failures
 
     parts: list[trimesh.Trimesh] = [sphere]
-    leaf_proto = build_leaf_at_origin(leaf_index=0)
+    leaf_proto_parts = [
+        p for p in build_leaf_mesh(
+            base_pos=np.array([-LEAF_LENGTH_MM / 2.0, 0.0, 0.0]),
+            tangent=np.array([1.0, 0.0, 0.0]),
+            length_mm=LEAF_LENGTH_MM, width_mm=LEAF_WIDTH_MM,
+            thickness_mm=LEAF_THICKNESS_MM, fold_angle_deg=LEAF_FOLD_DEG,
+            keel_depth_mm=LEAF_KEEL_MM, up_hint=np.array([0.0, 0.0, 1.0]),
+            seed=0,
+        ) if len(p.vertices) > 0
+    ]
+    leaf_proto = trimesh.util.concatenate(leaf_proto_parts) if leaf_proto_parts else trimesh.Trimesh()
 
     for leaf_index, (name, fraction_down) in enumerate(PLACEMENTS):
-        attachment_point, surface_normal = _attachment(SPHERE_RADIUS_MM, fraction_down)
+        polar  = np.pi * float(fraction_down)
+        normal = np.array([np.sin(polar), 0.0, np.cos(polar)])
+        attachment_point = SPHERE_RADIUS_MM * normal
         leaf_parts, is_fail = build_simple_branchlet_and_leaf(
-            attachment_point, surface_normal, leaf_proto, leaf_index,
+            attachment_point, normal, leaf_proto,
         )
         # Slot 0 = red (failures).  Passing parts: sphere=1, then 2 slots per leaf.
         base_slot = 2 + leaf_index * 2
