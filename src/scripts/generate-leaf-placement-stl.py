@@ -241,9 +241,15 @@ def build_branchlet_and_leaf(
             uc = surface_hits[k] + lat * inward_unit[k]
             km1, kp1 = (k - 1) % NP, (k + 1) % NP
             uc_z = float(uc[2])
-            max_right_bnd_z = max(float(boundary[k][2]),   float(boundary[kp1][2]))
-            max_left_bnd_z  = max(float(boundary[km1][2]), float(boundary[k][2]))
-            in_purple_face = uc_z > max_right_bnd_z or uc_z > max_left_bnd_z
+            # A face can be purple regardless of whether it is "1 uc + 2 bnd" or
+            # "2 uc + 1 bnd".  For the 2-uc-1-bnd case the single boundary vertex
+            # may be bnd[k+1] alone; the OR-of-face-maxima check misses this when
+            # bnd_z[k] > uc_z[k] inflates max_right.  Check each adjacent boundary
+            # vertex individually: if uc_z[k] clears ANY single neighbour the vertex
+            # can be part of a purple face and needs 90°.
+            in_purple_face = (uc_z > float(boundary[km1][2]) or
+                              uc_z > float(boundary[k][2])   or
+                              uc_z > float(boundary[kp1][2]))
             return 90.0 if in_purple_face else UNDERCUT_MIN_ANGLE_DEG
 
         start = float(drop_mm[k])
