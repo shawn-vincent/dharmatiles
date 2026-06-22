@@ -30,6 +30,7 @@ from dharmatiles.trees.leaf import (
     _LEAF_WIDTH_MM_DEFAULT,
     _LEAF_ROOT_DEPTH_MM,
     build_leaf_surface,
+    find_max_dip_for_sphere,
     leaf_placement_from_surface,
     solidify_leaf,
     color_leaf_walls_by_fdm,
@@ -49,13 +50,19 @@ LEAF_CURL_DEG    = 40.0
 
 def build_debug_mesh(
     *,
-    count:      int   = 30,
-    seed:       int   = 42,
-    dip_deg:    float = 0.0,
-    length_mm:  float = _LEAF_LENGTH_MM_DEFAULT,
-    width_mm:   float = _LEAF_WIDTH_MM_DEFAULT,
+    count:      int          = 30,
+    seed:       int          = 42,
+    dip_deg:    float | None = None,
+    length_mm:  float        = _LEAF_LENGTH_MM_DEFAULT,
+    width_mm:   float        = _LEAF_WIDTH_MM_DEFAULT,
 ) -> trimesh.Trimesh:
-    """Sphere + trunk + *count* randomly-placed leaf solids."""
+    """Sphere + trunk + *count* randomly-placed leaf solids.
+
+    When *dip_deg* is ``None`` (default) the dip for each leaf is found
+    automatically via binary search — the maximum angle that presses the leaf
+    flush against the sphere without penetrating it, matching the behaviour of
+    the simplified placement script.
+    """
     sphere = trimesh.creation.icosphere(subdivisions=4, radius=SPHERE_RADIUS_MM)
     sphere.fix_normals()
     tag(sphere, debug_material(1))
@@ -81,14 +88,26 @@ def build_debug_mesh(
     dirs /= np.linalg.norm(dirs, axis=1, keepdims=True)
     pts  = dirs * SPHERE_RADIUS_MM
 
-    dip_rad = np.radians(dip_deg)
+    leaf_shape = dict(
+        length_mm=length_mm, width_mm=width_mm,
+        fold_angle_deg=LEAF_FOLD_DEG, curl_deg=LEAF_CURL_DEG,
+    )
+    fixed_dip_rad = None if dip_deg is None else np.radians(dip_deg)
 
     n_ok_total = n_fail_total = 0
     for i, pt in enumerate(pts):
-        # Placement: snap to sphere surface, get frame.
+        # Placement: snap to sphere surface, get surface frame.
         base_pos, T0, up_hint = leaf_placement_from_surface(sphere, pt)
 
-        # Apply dip: rotate T0 (gravity-down-in-tangent-plane) toward -up_hint.
+        # Dip: find max angle that presses leaf against sphere (or use override).
+        dip_rad = (
+            fixed_dip_rad
+            if fixed_dip_rad is not None
+            else find_max_dip_for_sphere(
+                base_pos, T0, up_hint, SPHERE_RADIUS_MM, **leaf_shape
+            )
+        )
+
         tangent = T0 * np.cos(dip_rad) - up_hint * np.sin(dip_rad)
         tangent /= np.linalg.norm(tangent) + 1e-12
 
@@ -96,10 +115,7 @@ def build_debug_mesh(
             base_pos=base_pos,
             tangent=tangent,
             up_hint=up_hint,
-            length_mm=length_mm,
-            width_mm=width_mm,
-            fold_angle_deg=LEAF_FOLD_DEG,
-            curl_deg=LEAF_CURL_DEG,
+            **leaf_shape,
         )
 
         leaf, wall_faces = solidify_leaf(
@@ -119,7 +135,8 @@ def build_debug_mesh(
 
         parts.append(leaf)
 
-    print(f"  {count} leaves  dip={dip_deg:.0f}°  seed={seed}")
+    dip_label = "auto" if dip_deg is None else f"{dip_deg:.0f}°"
+    print(f"  {count} leaves  dip={dip_label}  seed={seed}")
     print(f"  wall faces: {n_ok_total} green  {n_fail_total} red  "
           f"({'%.0f' % (100*n_ok_total/(n_ok_total+n_fail_total+1e-9))}% printable)")
     return trimesh.util.concatenate(parts)
@@ -133,8 +150,8 @@ def main() -> None:
                         help="Number of leaves (default: 30)")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed (default: 42)")
-    parser.add_argument("--dip-deg", type=float, default=0.0,
-                        help="Tip dip angle into sphere surface, degrees (default: 0)")
+    parser.add_argument("--dip-deg", type=float, default=None,
+                        help="Fix dip angle (degrees). Omit for auto: max dip without penetration (default)")
     parser.add_argument("--length-mm", type=float, default=_LEAF_LENGTH_MM_DEFAULT,
                         help=f"Leaf length mm (default: {_LEAF_LENGTH_MM_DEFAULT})")
     parser.add_argument("--width-mm", type=float, default=_LEAF_WIDTH_MM_DEFAULT,

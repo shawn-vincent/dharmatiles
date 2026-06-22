@@ -922,6 +922,87 @@ def _segment_length_outside_sphere(
     return outside * length
 
 
+def find_max_dip_for_sphere(
+    base_pos:      np.ndarray,
+    T0:            np.ndarray,
+    up_hint:       np.ndarray,
+    sphere_radius: float,
+    *,
+    clearance_mm:  float = 0.0,
+    **leaf_kwargs,
+) -> float:
+    """Find the maximum dip angle (radians) that presses a leaf against a sphere
+    without any leaf vertex penetrating it.
+
+    Builds a flat leaf (dip = 0) to identify which vertices are outside the
+    sphere, then binary-searches for the largest dip rotation that keeps all
+    of those vertices at or outside ``sphere_radius + clearance_mm``.
+
+    The sphere is centred at the origin.  ``T0`` is the flat tangent direction
+    (gravity-down in the surface's tangent plane, as returned by
+    :func:`leaf_placement_from_surface`).  Dip rotates the tangent toward
+    ``-up_hint``:  ``tangent = T0 * cos(dip) - up_hint * sin(dip)``.
+
+    Parameters
+    ----------
+    base_pos      : Leaf base (pivot point for the dip rotation).
+    T0            : Flat (dip = 0) tangent direction.
+    up_hint       : Outward surface normal at base_pos.
+    sphere_radius : Radius of the bounding sphere (centred at origin).
+    clearance_mm  : Minimum clearance from the sphere surface (default 0).
+    **leaf_kwargs : Passed to :func:`build_leaf_surface`
+                   (``length_mm``, ``width_mm``, ``fold_angle_deg``, etc.)
+
+    Returns
+    -------
+    float
+        Maximum dip angle in radians.  Returns 0.0 if no vertices are outside
+        the sphere at dip = 0 (leaf is fully inside — shouldn't normally occur).
+    """
+    flat = build_leaf_surface(
+        base_pos=base_pos, tangent=T0, up_hint=up_hint, **leaf_kwargs
+    )
+    dists    = np.linalg.norm(flat.vertices, axis=1)
+    far_mask = dists >= sphere_radius + clearance_mm
+    far_verts = flat.vertices[far_mask]
+    if len(far_verts) == 0:
+        return 0.0
+
+    # Rodrigues rotation axis: rotating T0 around cross(-T0, up_hint) by angle θ
+    # gives tangent = T0*cos(θ) − up_hint*sin(θ), i.e. the dip formula.
+    axis = _safe_norm(np.cross(-T0, up_hint))
+
+    def _rotate(pts: np.ndarray, theta: float) -> np.ndarray:
+        c, s = np.cos(theta), np.sin(theta)
+        rel  = pts - base_pos
+        return (base_pos
+                + rel * c
+                + np.cross(axis, rel) * s
+                + axis * (rel @ axis)[:, np.newaxis] * (1.0 - c))
+
+    def _ok(theta: float) -> bool:
+        return bool(np.all(
+            np.linalg.norm(_rotate(far_verts, theta), axis=1)
+            >= sphere_radius + clearance_mm
+        ))
+
+    # Bracket: find an upper bound that violates the constraint.
+    lo, hi = 0.0, np.pi
+    while hi > 1e-4 and _ok(hi):
+        hi /= 2.0
+    if _ok(hi):
+        return 0.0
+
+    # Bisect to 48-iteration precision (~4e-15 rad).
+    for _ in range(48):
+        mid = 0.5 * (lo + hi)
+        if _ok(mid):
+            lo = mid
+        else:
+            hi = mid
+    return lo
+
+
 def boundary_loop(mesh: trimesh.Trimesh) -> list[int]:
     """Return the perimeter vertex indices of an open mesh as an ordered loop.
 
