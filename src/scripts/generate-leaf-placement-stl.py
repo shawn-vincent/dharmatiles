@@ -225,15 +225,28 @@ def build_branchlet_and_leaf(
             return _angle_at(boundary[k], _section_anchor(k), trial_ring[k])
 
         def _required_angle(lat: float) -> float:
-            """90° for purple vertices (undercut above boundary in Z); UNDERCUT_MIN_ANGLE_DEG otherwise."""
+            """90° when vertex k would be part of a purple face; UNDERCUT_MIN_ANGLE_DEG otherwise.
+
+            A face is purple when every undercut vertex in it clears every boundary
+            vertex (min_uc_z > max_bnd_z per face).  Vertex k participates in the
+            face to its right (UC: k, k+1 / bnd: k, k+1) and the face to its left
+            (UC: k-1, k / bnd: k-1, k).  A necessary condition for either face to be
+            purple is that uc_z[k] exceeds the maximum boundary z among all three
+            adjacent boundary vertices (k-1, k, k+1).  Use 90° when that holds.
+            """
             uc = surface_hits[k] + lat * inward_unit[k]
-            return 90.0 if float(uc[2]) > float(boundary[k][2]) else UNDERCUT_MIN_ANGLE_DEG
+            km1, kp1 = (k - 1) % NP, (k + 1) % NP
+            max_adj_bnd_z = max(float(boundary[km1][2]),
+                                float(boundary[k][2]),
+                                float(boundary[kp1][2]))
+            return 90.0 if float(uc[2]) > max_adj_bnd_z else UNDERCUT_MIN_ANGLE_DEG
 
         start = float(drop_mm[k])
         if _local_min_angle(start) >= _required_angle(start):
             continue
         # Going outward (decreasing lateral) opens the angle.
-        # Purple vertices (undercut above boundary) require a 90° section angle.
+        # Purple-face vertices (undercut above all adjacent boundary vertices) require
+        # a 90° section angle; others only need UNDERCUT_MIN_ANGLE_DEG.
         # Expand lo outward from start until the condition is met, then bisect.
         lo = hi = start
         outward_step = start
