@@ -228,18 +228,23 @@ def build_branchlet_and_leaf(
             """90° when vertex k would be part of a purple face; UNDERCUT_MIN_ANGLE_DEG otherwise.
 
             A face is purple when every undercut vertex in it clears every boundary
-            vertex (min_uc_z > max_bnd_z per face).  Vertex k participates in the
-            face to its right (UC: k, k+1 / bnd: k, k+1) and the face to its left
-            (UC: k-1, k / bnd: k-1, k).  A necessary condition for either face to be
-            purple is that uc_z[k] exceeds the maximum boundary z among all three
-            adjacent boundary vertices (k-1, k, k+1).  Use 90° when that holds.
+            vertex (min_uc_z > max_bnd_z per face).  Vertex k participates in:
+              - the face to its right (UC: k, k+1  /  bnd: k, k+1)
+              - the face to its left  (UC: k-1, k  /  bnd: k-1, k)
+
+            Vertex k can be part of a purple face if its z clears the boundary max
+            in EITHER adjacent face — use the OR of the two per-face checks, not the
+            AND (which would require clearing the boundary max across all three
+            adjacent boundary vertices and is too strict: a high boundary vertex in
+            one face should not suppress the 90° requirement for the other face).
             """
             uc = surface_hits[k] + lat * inward_unit[k]
             km1, kp1 = (k - 1) % NP, (k + 1) % NP
-            max_adj_bnd_z = max(float(boundary[km1][2]),
-                                float(boundary[k][2]),
-                                float(boundary[kp1][2]))
-            return 90.0 if float(uc[2]) > max_adj_bnd_z else UNDERCUT_MIN_ANGLE_DEG
+            uc_z = float(uc[2])
+            max_right_bnd_z = max(float(boundary[k][2]),   float(boundary[kp1][2]))
+            max_left_bnd_z  = max(float(boundary[km1][2]), float(boundary[k][2]))
+            in_purple_face = uc_z > max_right_bnd_z or uc_z > max_left_bnd_z
+            return 90.0 if in_purple_face else UNDERCUT_MIN_ANGLE_DEG
 
         start = float(drop_mm[k])
         if _local_min_angle(start) >= _required_angle(start):
