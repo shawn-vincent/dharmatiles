@@ -404,9 +404,10 @@ def build_debug_mesh(*, debug_tip: bool = False) -> trimesh.Trimesh:
         tag(mesh, FAIL_MATERIAL if is_fail else debug_material(slot))
 
         # Colour undercut wall faces purple where the undercut-ring end of the face
-        # is higher in world Z than the leaf-perimeter end.  These are the faces
-        # that hang downward from the undercut ring toward the boundary — the
-        # actual undercut overhang faces.
+        # is higher in world Z than ALL of the leaf-perimeter vertices.  A face is
+        # only a true overhang when the undercut ring clears every boundary vertex;
+        # if any boundary vertex sits at or above the highest undercut vertex the
+        # face has something to "lean on" from the boundary side and is not purple.
         #
         # Vertex layout (per mesh):
         #   [0, NP)            root ring
@@ -424,9 +425,11 @@ def build_debug_mesh(*, debug_tip: bool = False) -> trimesh.Trimesh:
             uc_vids  = [v for v in face_vids if _uc_start  <= v < _uc_end]
             bnd_vids = [v for v in face_vids if _bnd_start <= v < _bnd_end]
             if uc_vids and bnd_vids:
-                max_uc_z  = float(np.max([mesh.vertices[v, 2] for v in uc_vids]))
-                min_bnd_z = float(np.min([mesh.vertices[v, 2] for v in bnd_vids]))
-                if max_uc_z > min_bnd_z:
+                min_uc_z  = float(np.min([mesh.vertices[v, 2] for v in uc_vids]))
+                max_bnd_z = float(np.max([mesh.vertices[v, 2] for v in bnd_vids]))
+                # Purple only when every undercut vertex is above every perimeter vertex:
+                # the highest perimeter z must be below all undercut z's.
+                if min_uc_z > max_bnd_z:
                     mesh.visual.face_colors[fi] = _PURPLE
 
         parts.append(mesh)
