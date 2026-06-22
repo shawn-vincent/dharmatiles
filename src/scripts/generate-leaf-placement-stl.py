@@ -217,6 +217,12 @@ def build_branchlet_and_leaf(
             for k in range(NP)
         )
 
+    # Per-vertex construction diagnostics (populated inside loop, read after).
+    _req_start  = [0.0] * NP   # required angle at the initial start position
+    _req_final  = [0.0] * NP   # required angle at the final converged position
+    _act_start  = [0.0] * NP   # actual section angle at the initial start position
+    _continued  = [False] * NP # True if the 'continue' branch was taken (no bisect)
+
     for k in range(NP):
         def _local_min_angle(lat: float) -> float:
             trial = lateral_mm.copy()
@@ -232,47 +238,80 @@ def build_branchlet_and_leaf(
               - the face to its right (UC: k, k+1  /  bnd: k, k+1)
               - the face to its left  (UC: k-1, k  /  bnd: k-1, k)
 
-            Vertex k can be part of a purple face if its z clears the boundary max
-            in EITHER adjacent face — use the OR of the two per-face checks, not the
-            AND (which would require clearing the boundary max across all three
-            adjacent boundary vertices and is too strict: a high boundary vertex in
-            one face should not suppress the 90° requirement for the other face).
+            Check each adjacent boundary vertex individually: if uc_z[k] clears ANY
+            single neighbour the vertex can be part of a purple face and needs 90°.
             """
             uc = surface_hits[k] + lat * inward_unit[k]
             km1, kp1 = (k - 1) % NP, (k + 1) % NP
             uc_z = float(uc[2])
-            # A face can be purple regardless of whether it is "1 uc + 2 bnd" or
-            # "2 uc + 1 bnd".  For the 2-uc-1-bnd case the single boundary vertex
-            # may be bnd[k+1] alone; the OR-of-face-maxima check misses this when
-            # bnd_z[k] > uc_z[k] inflates max_right.  Check each adjacent boundary
-            # vertex individually: if uc_z[k] clears ANY single neighbour the vertex
-            # can be part of a purple face and needs 90°.
             in_purple_face = (uc_z > float(boundary[km1][2]) or
                               uc_z > float(boundary[k][2])   or
                               uc_z > float(boundary[kp1][2]))
             return 90.0 if in_purple_face else UNDERCUT_MIN_ANGLE_DEG
 
         start = float(drop_mm[k])
-        if _local_min_angle(start) >= _required_angle(start):
+        _req_start[k] = _required_angle(start)
+        _act_start[k] = _local_min_angle(start)
+
+        if _act_start[k] >= _req_start[k]:
+            _req_final[k] = _req_start[k]
+            _continued[k] = True
             continue
         # Going outward (decreasing lateral) opens the angle.
-        # Purple-face vertices (undercut above all adjacent boundary vertices) require
-        # a 90° section angle; others only need UNDERCUT_MIN_ANGLE_DEG.
-        # Expand lo outward from start until the condition is met, then bisect.
+        # Purple-face vertices require a 90° section angle; others only UNDERCUT_MIN_ANGLE_DEG.
+        #
+        # IMPORTANT: use req as a CONSTANT throughout the expansion and bisect.
+        # _required_angle(lat) switches from 90° to 25° as lat crosses the point
+        # where uc_z passes the boundary threshold.  Using it dynamically makes
+        # condition(lat) = act(lat) >= req(lat) non-monotone: lo can be set to a
+        # position where req has dropped to 25° while hi stays at req=90°, so the
+        # first bisect step jumps lo into the invalid zone and hi never moves.
+        # Fixing req to its start value preserves monotonicity of condition(lat).
+        req = _req_start[k]
+
         lo = hi = start
         outward_step = start
-        while _local_min_angle(lo) < _required_angle(lo) and outward_step < 8.0 * start:
+        while _local_min_angle(lo) < req and outward_step < 8.0 * start:
             outward_step *= 1.25
             lo = start - outward_step
+        # Bisect for the most INWARD (largest lat) position where act >= req.
+        # Invariant: lo is always in the VALID region (act >= req),
+        #            hi is always in the INVALID region (act < req).
+        # correct update: valid→lo=mid (try more inward), invalid→hi=mid (restrict).
+        # result: lo (rightmost TRUE = minimum outward step).
+        # Previous code had the direction BACKWARDS (valid→hi=mid, invalid→lo=mid,
+        # result=hi), which caused lo to jump past the transition on the first step.
         for _ in range(24):
             mid = 0.5 * (lo + hi)
-            if _local_min_angle(mid) >= _required_angle(mid):
-                hi = mid   # valid; try moving back inward
+            if _local_min_angle(mid) >= req:
+                lo = mid   # valid; try moving further inward
             else:
-                lo = mid   # not yet valid; go more outward
-        lateral_mm[k] = hi
+                hi = mid   # invalid; must stay more outward
+        lateral_mm[k] = lo   # most inward position that satisfies req
+        _req_final[k] = _required_angle(lo)
 
     undercut_ring = surface_hits + lateral_mm[:, None] * inward_unit
+
+    # Build per-vertex diagnostic records (used by debug output in build_debug_mesh).
+    vert_diag: list[dict] = []
+    for k in range(NP):
+        km1, kp1 = (k - 1) % NP, (k + 1) % NP
+        vert_diag.append({
+            'k':          k,
+            'drop_mm':    float(drop_mm[k]),
+            'lat_final':  float(lateral_mm[k]),
+            'surf_z':     float(surface_hits[k, 2]),
+            'inw_z':      float(inward_unit[k, 2]),
+            'uc_z':       float(undercut_ring[k, 2]),
+            'bnd_zm1':    float(boundary[km1, 2]),
+            'bnd_z':      float(boundary[k,   2]),
+            'bnd_zp1':    float(boundary[kp1, 2]),
+            'req_start':  _req_start[k],
+            'act_start':  _act_start[k],
+            'req_final':  _req_final[k],
+            'act_angle':  _angle_at(boundary[k], _section_anchor(k), undercut_ring[k]),
+            'continued':  _continued[k],
+        })
 
     if debug_tip:
         tip_k = nr + 1
@@ -400,7 +439,7 @@ def build_branchlet_and_leaf(
         process=False,
     )
     mesh.fix_normals()
-    return mesh, not _is_printable(n), range(uc_wall_face_start, uc_wall_face_end)
+    return mesh, not _is_printable(n), range(uc_wall_face_start, uc_wall_face_end), vert_diag
 
 
 # ── Scene assembly ─────────────────────────────────────────────────────────────
@@ -413,10 +452,12 @@ def build_debug_mesh(*, debug_tip: bool = False) -> trimesh.Trimesh:
 
     parts: list[trimesh.Trimesh] = [sphere]
 
+    _DEBUG_LEAVES = {"equator", "lower-quarter"}   # East and South-East in the viewer
+
     for leaf_index, (name, fraction_down) in enumerate(PLACEMENTS):
         polar  = np.pi * fraction_down
         normal = np.array([np.sin(polar), 0.0, np.cos(polar)])
-        mesh, is_fail, uc_faces = build_branchlet_and_leaf(
+        mesh, is_fail, uc_faces, vert_diag = build_branchlet_and_leaf(
             SPHERE_RADIUS_MM * normal,
             normal,
             sphere,
@@ -444,6 +485,7 @@ def build_debug_mesh(*, debug_tip: bool = False) -> trimesh.Trimesh:
         _uc_end     = 2 * _NP
         _bnd_start  = 2 * _NP + 1
         _bnd_end    = 3 * _NP + 1
+        purple_faces: set[int] = set()
         for fi in uc_faces:
             face_vids = mesh.faces[fi]
             uc_vids  = [v for v in face_vids if _uc_start  <= v < _uc_end]
@@ -455,6 +497,33 @@ def build_debug_mesh(*, debug_tip: bool = False) -> trimesh.Trimesh:
                 # the highest perimeter z must be below all undercut z's.
                 if min_uc_z > max_bnd_z:
                     mesh.visual.face_colors[fi] = _PURPLE
+                    purple_faces.add(fi)
+
+        # ── Debug: per-vertex construction data for purple faces ────────────────
+        if name in _DEBUG_LEAVES and purple_faces:
+            print(f"\n  ── Purple face debug: '{name}' ({len(purple_faces)} purple faces) ──")
+            # Print one line per unique undercut vertex involved in any purple face.
+            seen_uks: set[int] = set()
+            for fi in sorted(purple_faces):
+                face_vids = mesh.faces[fi]
+                uc_vids = [v for v in face_vids if _uc_start <= v < _uc_end]
+                for v in uc_vids:
+                    uk = v - _uc_start
+                    if uk in seen_uks:
+                        continue
+                    seen_uks.add(uk)
+                    d = vert_diag[uk]
+                    ok = d['act_angle'] >= d['req_final'] - 0.1
+                    cont_flag = " (cont)" if d['continued'] else ""
+                    print(
+                        f"  k={uk:2d}  drop={d['drop_mm']:6.3f}  lat={d['lat_final']:6.3f}"
+                        f"  surf_z={d['surf_z']:7.3f}  inw_z={d['inw_z']:6.3f}"
+                        f"  uc_z={d['uc_z']:7.3f}  bnd_z=({d['bnd_zm1']:6.3f},{d['bnd_z']:6.3f},{d['bnd_zp1']:6.3f})"
+                        f"  req_s={d['req_start']:.0f}  act_s={d['act_start']:6.2f}"
+                        f"  req_f={d['req_final']:.0f}  act_f={d['act_angle']:6.2f}"
+                        f"  {'OK' if ok else 'MISS'}{cont_flag}"
+                    )
+            print()
 
         parts.append(mesh)
 
