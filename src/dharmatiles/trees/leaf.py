@@ -657,10 +657,14 @@ def build_leaf_surface(
     for j in range(N_T):
         faces.append([v_tip_i, last + j + 1, last + j])
 
+    # Include curl_deg in the cache key: the winding decisions made by
+    # fix_normals() can differ between curl=0 (flat arch, tip at base height)
+    # and curl>0 (tip raised above midplane), so they must not share a cache
+    # entry.  Round to 4 dp to avoid float-equality issues.
     return _mesh_with_fixed_normals(
         verts,
         np.array(faces, dtype=np.int32),
-        ("leaf_surface", _LEAF_N_LONG, N_T),
+        ("leaf_surface", _LEAF_N_LONG, N_T, round(float(curl_deg), 4)),
     )
 
 
