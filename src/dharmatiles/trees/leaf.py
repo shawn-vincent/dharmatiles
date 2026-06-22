@@ -638,11 +638,20 @@ def leaf_placement_from_surface(
         )
 
     # 2. Interpolated vertex normal via barycentric coordinates.
+    # Clamp bary to [0, 1] before blending: floating-point rounding in
+    # closest_point can place base_pos just outside the triangle (on a shared
+    # edge or vertex), causing points_to_barycentric to return a small negative
+    # weight.  Clamping + renormalising ensures we interpolate rather than
+    # extrapolate vertex normals.
     face_id   = int(face_ids[0])
     tri_verts = mesh.vertices[mesh.faces[face_id]]          # (3, 3)
     bary      = trimesh.triangles.points_to_barycentric(
         tri_verts[np.newaxis], base_pos[np.newaxis]
     )[0]                                                    # (3,)
+    bary      = np.clip(bary, 0.0, 1.0)
+    bary_sum  = float(bary.sum())
+    if bary_sum > 1e-10:
+        bary /= bary_sum
     v_normals = mesh.vertex_normals[mesh.faces[face_id]]    # (3, 3)
     up_hint   = _safe_norm(bary @ v_normals)                # (3,)
 
@@ -797,7 +806,7 @@ def build_leaf_mesh(
     thickness_mm: float = 0.16,
     fold_angle_deg: float = 6.0,
     inner_curve: float = 1.5,
-    outer_curve: float = 0.6,
+    outer_curve: float = 0.72,
     arch_deg: float = 30.0,
     curl_deg: float = 7.5,
     keel_depth_mm: float = 1.0,
@@ -816,7 +825,7 @@ def build_leaf_mesh(
     thickness_mm    : dome height at peak (s ≈ 0.25).  Default 0.16.
     fold_angle_deg  : midrib crease V-angle.  Default 6.0.
     inner_curve     : crease-side Bézier shoulder height.  Default 1.5.
-    outer_curve     : edge-side Bézier shoulder height.  Default 0.15.
+    outer_curve     : edge-side Bézier shoulder height.  Default 0.72.
     arch_deg        : upward tangent angle at the base of the arch.  Default 30.0.
     curl_deg        : concave tangent turn over the second half.  Default 7.5.
     keel_depth_mm   : maximum depth of the structural keel on the underside.
@@ -986,14 +995,14 @@ def find_max_dip_for_sphere(
             >= sphere_radius + clearance_mm
         ))
 
-    # Bracket: find an upper bound that violates the constraint.
+    # Check upper bound: if the leaf never penetrates even at full π dip, any
+    # dip is valid.  Return π so the caller gets the maximum useful angle.
     lo, hi = 0.0, np.pi
-    while hi > 1e-4 and _ok(hi):
-        hi /= 2.0
     if _ok(hi):
-        return 0.0
+        return hi
 
-    # Bisect to 48-iteration precision (~4e-15 rad).
+    # _ok(π) is False → bisect between lo (ok) and hi (penetrates).
+    # 48 iterations gives ~4e-15 rad precision.
     for _ in range(48):
         mid = 0.5 * (lo + hi)
         if _ok(mid):
@@ -1096,7 +1105,11 @@ def solidify_leaf(
             root[tip_i, 2] = max_z
     # ─────────────────────────────────────────────────────────────────────────
 
-    center    = root.mean(axis=0)
+    # Project the ring mean onto the cap plane (normal = n, through root[0])
+    # so the centroid stays inside the ring even when the ring is non-planar
+    # (e.g. a deeply-dipped leaf on a small sphere).
+    raw_center = root.mean(axis=0)
+    center     = raw_center - float(np.dot(raw_center - root[0], n)) * n
     n_surf    = len(surface.vertices)
     root_base = n_surf
     cap_ctr   = n_surf + NP
