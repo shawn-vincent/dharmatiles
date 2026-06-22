@@ -96,6 +96,14 @@ _LEAF_W_PEAK_NORM  = float((1.0 / 3.0) ** 0.4 * (2.0 / 3.0) ** 0.8)
 # Thickness-along-length profile: t_long(s) ∝ s^0.5 × (1-s)^1.5, peak at s=0.25.
 _LEAF_LONG_T_PEAK  = float(0.25 ** 0.5 * 0.75 ** 1.5)   # ≈ 0.3248
 
+# Default leaf size (mm).  Used as function-argument defaults throughout.
+_LEAF_LENGTH_MM_DEFAULT = 6.0
+_LEAF_WIDTH_MM_DEFAULT  = 4.0   # ≈ 2/3 of length
+
+# Tolerance for leaf_placement_from_surface: pos must be within this distance
+# of the mesh surface or a ValueError is raised.
+_LEAF_SURFACE_MARGIN_MM = 1.0
+
 
 # ── Tiny shared helpers (self-contained so this module has no tree imports) ────
 
@@ -259,8 +267,8 @@ def compute_leaf_geometry(
     *,
     base_pos:       np.ndarray,
     tangent:        np.ndarray,
-    length_mm:      float,
-    width_mm:       float,
+    length_mm:      float = _LEAF_LENGTH_MM_DEFAULT,
+    width_mm:       float = _LEAF_WIDTH_MM_DEFAULT,
     thickness_mm:   float = 0.16,
     fold_angle_deg: float = 6.0,
     inner_curve:    float = 1.5,
@@ -578,14 +586,126 @@ def _build_leaf_keel_prism(
     )
 
 
+# ── Surface-query placement helpers ───────────────────────────────────────────
+
+def leaf_placement_from_surface(
+    mesh: trimesh.Trimesh,
+    pos: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Compute ``(base_pos, tangent, up_hint)`` from a point on a mesh surface.
+
+    Derives all three placement inputs to :func:`build_leaf_mesh` /
+    :func:`build_leaf_surface` from the parent mesh geometry.  The returned
+    values are ready to pass directly to either builder.
+
+    Parameters
+    ----------
+    mesh : Parent ``trimesh.Trimesh`` — the surface the leaf grows from.
+    pos  : Approximate world position.  Snapped to the nearest point on
+           ``mesh``; the returned ``base_pos`` is the snapped point.
+           Raises ``ValueError`` if ``pos`` is farther than
+           ``_LEAF_SURFACE_MARGIN_MM`` from the surface.
+
+    Returns
+    -------
+    (base_pos, tangent, up_hint)
+
+    Notes
+    -----
+    *up_hint* is the **interpolated vertex normal** at the snapped point
+    (barycentric blend of the triangle's three vertex normals), giving smooth
+    results on curved surfaces regardless of mesh resolution.
+
+    *tangent* is gravity-down projected onto the tangent plane — the leaf tip
+    points as far downward as the surface allows.  Callers that need a
+    different orientation can derive their own tangent from the returned frame::
+
+        tangent = T0 * cos(dip) − up_hint * sin(dip)
+
+    where ``T0`` is the returned tangent (dip = 0) and dip is the desired
+    angle into the surface.
+    """
+    pos = np.asarray(pos, float).ravel()[:3]
+
+    # 1. Snap to nearest surface point.
+    pts, dists, face_ids = trimesh.proximity.closest_point(mesh, pos[np.newaxis])
+    base_pos = pts[0]
+    dist = float(dists[0])
+    if dist > _LEAF_SURFACE_MARGIN_MM:
+        raise ValueError(
+            f"pos is {dist:.3f} mm from the mesh surface "
+            f"(limit: _LEAF_SURFACE_MARGIN_MM = {_LEAF_SURFACE_MARGIN_MM})"
+        )
+
+    # 2. Interpolated vertex normal via barycentric coordinates.
+    face_id   = int(face_ids[0])
+    tri_verts = mesh.vertices[mesh.faces[face_id]]          # (3, 3)
+    bary      = trimesh.triangles.points_to_barycentric(
+        tri_verts[np.newaxis], base_pos[np.newaxis]
+    )[0]                                                    # (3,)
+    v_normals = mesh.vertex_normals[mesh.faces[face_id]]    # (3, 3)
+    up_hint   = _safe_norm(bary @ v_normals)                # (3,)
+
+    # 3. Gravity-down projected onto the tangent plane → tangent.
+    gravity_down = np.array([0.0, 0.0, -1.0])
+    grav_proj    = gravity_down - float(np.dot(gravity_down, up_hint)) * up_hint
+    grav_len     = float(np.linalg.norm(grav_proj))
+    if grav_len < 1e-6:
+        # Surface is nearly horizontal — no gravity preference; pick arbitrary tangent.
+        arb = np.array([1.0, 0.0, 0.0])
+        if abs(float(np.dot(arb, up_hint))) > 0.9:
+            arb = np.array([0.0, 1.0, 0.0])
+        tangent = _safe_norm(np.cross(up_hint, arb))
+    else:
+        tangent = grav_proj / grav_len
+
+    return base_pos, tangent, up_hint
+
+
+def build_leaf_on_surface(
+    mesh: trimesh.Trimesh,
+    pos: np.ndarray,
+    *,
+    length_mm: float = _LEAF_LENGTH_MM_DEFAULT,
+    width_mm:  float = _LEAF_WIDTH_MM_DEFAULT,
+    **leaf_kwargs,
+) -> list[trimesh.Trimesh]:
+    """Build a leaf mesh placed on a mesh surface point.
+
+    Convenience wrapper combining :func:`leaf_placement_from_surface` and
+    :func:`build_leaf_mesh` in one call.  All placement inputs (``base_pos``,
+    ``tangent``, ``up_hint``) are derived automatically from the mesh geometry;
+    the leaf tip points gravity-down in the surface's tangent plane.
+
+    Parameters
+    ----------
+    mesh       : Parent ``trimesh.Trimesh`` the leaf grows from.
+    pos        : Approximate world position (snapped to nearest surface point).
+    length_mm  : Leaf length.  Default ``_LEAF_LENGTH_MM_DEFAULT``.
+    width_mm   : Maximum leaf width.  Default ``_LEAF_WIDTH_MM_DEFAULT``.
+    **leaf_kwargs : Forwarded to :func:`build_leaf_mesh`
+                   (``thickness_mm``, ``keel_depth_mm``, etc.)
+
+    Returns
+    -------
+    list[trimesh.Trimesh]
+        ``[blade]`` when ``keel_depth_mm <= 0``, ``[blade, keel]`` otherwise.
+    """
+    base_pos, tangent, up_hint = leaf_placement_from_surface(mesh, pos)
+    return build_leaf_mesh(
+        base_pos=base_pos, tangent=tangent, up_hint=up_hint,
+        length_mm=length_mm, width_mm=width_mm, **leaf_kwargs
+    )
+
+
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 def build_leaf_surface(
     *,
     base_pos:       np.ndarray,
     tangent:        np.ndarray,
-    length_mm:      float,
-    width_mm:       float,
+    length_mm:      float = _LEAF_LENGTH_MM_DEFAULT,
+    width_mm:       float = _LEAF_WIDTH_MM_DEFAULT,
     thickness_mm:   float = 0.16,
     fold_angle_deg: float = 6.0,
     inner_curve:    float = 1.5,
@@ -672,8 +792,8 @@ def build_leaf_mesh(
     *,
     base_pos: np.ndarray,
     tangent: np.ndarray,
-    length_mm: float,
-    width_mm: float,
+    length_mm: float = _LEAF_LENGTH_MM_DEFAULT,
+    width_mm: float = _LEAF_WIDTH_MM_DEFAULT,
     thickness_mm: float = 0.16,
     fold_angle_deg: float = 6.0,
     inner_curve: float = 1.5,
