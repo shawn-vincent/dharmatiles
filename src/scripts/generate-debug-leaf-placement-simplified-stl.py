@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Simplified debug: sphere + trunk + four bare leaf surfaces.
+"""Simplified debug: sphere + trunk + four solid leaf solids.
 
-No loft, no undercut, no root ring.  Each leaf is placed with its base on
-the sphere surface and tilted as far down as possible without any part of the
-leaf penetrating the sphere (plus a small tolerance gap).
+Each leaf surface is closed into a solid by projecting its perimeter inward
+along -normal by LEAF_ROOT_DEPTH_MM, forming a root ring that pierces the
+parent mesh.  Walls connect the leaf perimeter to the root ring; a bottom cap
+closes the root end.
+
+Each leaf is placed with its base on the sphere surface and tilted as far down
+as possible without any part of the leaf penetrating the sphere (plus a small
+tolerance gap).
 
 Leaf positions are always specified by their base point.  The base point is
 chosen so that the flat leaf's midpoint lands at the canonical attachment
@@ -48,6 +53,9 @@ LEAF_CURL_DEG    = 20.0
 
 # Minimum clearance from the sphere surface for any non-base-zone leaf vertex.
 TOLERANCE_GAP_MM = 0.10
+
+# How far the leaf root extends inward along -normal to pierce the parent mesh.
+LEAF_ROOT_DEPTH_MM = 1.0
 
 PLACEMENTS: tuple[tuple[str, float], ...] = (
     ("top",           0.00),
@@ -95,6 +103,88 @@ def _base_for_midpoint(
     base         = sphere_radius * base_normal
     L_base, _    = _leaf_frame(base_normal)
     return base, base_normal, L_base
+
+
+def _boundary_loop(mesh: trimesh.Trimesh) -> list[int]:
+    """Return perimeter vertex indices as an ordered loop for an open mesh."""
+    # Boundary edges appear exactly once when all directed edges are made undirected.
+    edges_sorted = np.sort(mesh.edges, axis=1)
+    unique, counts = np.unique(edges_sorted, axis=0, return_counts=True)
+    bnd_edges = unique[counts == 1]          # shape (NP, 2)
+
+    # Build adjacency for the boundary graph and walk the loop.
+    adj: dict[int, list[int]] = {}
+    for a, b in bnd_edges.tolist():
+        adj.setdefault(a, []).append(b)
+        adj.setdefault(b, []).append(a)
+
+    start = int(bnd_edges[0, 0])
+    loop  = [start]
+    prev, curr = -1, start
+    while True:
+        a, b  = adj[curr]
+        nxt   = b if a == prev else a
+        if nxt == start:
+            break
+        loop.append(nxt)
+        prev, curr = curr, nxt
+    return loop
+
+
+def _solidify_leaf(
+    surface: trimesh.Trimesh,
+    normal:  np.ndarray,
+    depth:   float = LEAF_ROOT_DEPTH_MM,
+) -> trimesh.Trimesh:
+    """Close an open leaf surface into a solid.
+
+    For each boundary vertex of *surface*, create a *leaf_root* vertex
+    offset by ``depth`` along ``-normal`` (into the parent mesh).  Then:
+
+    * **Walls** — quads bridging each boundary edge to the corresponding
+      root edge.
+    * **Bottom cap** — a fan from the centroid of the root ring to close
+      the buried end.
+
+    The original surface faces are preserved as the top of the solid.
+    ``fix_normals()`` is called on the result to ensure consistent winding.
+    """
+    n   = normal / (np.linalg.norm(normal) + 1e-12)
+    loop = _boundary_loop(surface)
+    NP   = len(loop)
+
+    perim  = surface.vertices[loop]               # (NP, 3)  — leaf perimeter
+    root   = perim - depth * n                    # (NP, 3)  — root ring
+    center = root.mean(axis=0)                    # (3,)     — bottom cap centre
+
+    # New vertex block appended after the surface's own vertices.
+    n_surf    = len(surface.vertices)
+    root_base = n_surf                            # root[i] = root_base + i
+    cap_ctr   = n_surf + NP                       # single centre vertex
+
+    all_verts = np.vstack([surface.vertices, root, center[np.newaxis]])
+
+    wall_faces: list[list[int]] = []
+    for i in range(NP):
+        j  = (i + 1) % NP
+        a, b = loop[i], loop[j]                  # perimeter (top)
+        d, c = root_base + i, root_base + j      # root (bottom), swapped for winding
+        wall_faces += [[a, b, c], [a, c, d]]
+
+    cap_faces: list[list[int]] = []
+    for i in range(NP):
+        j = (i + 1) % NP
+        cap_faces.append([cap_ctr, root_base + j, root_base + i])
+
+    all_faces = np.vstack([
+        surface.faces,
+        np.array(wall_faces, dtype=np.int32),
+        np.array(cap_faces,  dtype=np.int32),
+    ])
+
+    solid = trimesh.Trimesh(vertices=all_verts, faces=all_faces, process=False)
+    solid.fix_normals()
+    return solid
 
 
 def _find_tilt(
@@ -169,17 +259,20 @@ def _build_tilted_leaf(
 ) -> tuple[trimesh.Trimesh, np.ndarray]:
     """Build the leaf at tilt angle θ with its base on the sphere.
 
-    The leaf normal — normal to the plane in which the leaf lays flat — is:
+    The leaf normal — normal to the plane in which the leaf lays flat — is
+    computed geometrically from the actual mesh after building:
 
-        normal = cos(θ) · surface_normal + sin(θ) · L
+        midrib  = normalize(tip_vertex − base)          (from real geometry)
+        lateral = normalize(cross(surface_normal, L))   (T axis, unchanged by tilt)
+        normal  = normalize(cross(midrib, lateral))     (normal to that plane)
 
-    Passed as ``up_hint`` so internal geometry (fold, curl, lobe shape) is
-    computed in the leaf's actual tilted frame.  Returned for downstream use.
+    Using ``up_hint`` only as a build hint; the returned normal is derived from
+    the real base-to-tip axis, not the rotation formula.
     """
     c, s = np.cos(theta), np.sin(theta)
 
-    normal  = c * surface_normal + s * L
-    normal /= np.linalg.norm(normal) + 1e-12
+    up_hint  = c * surface_normal + s * L
+    up_hint /= np.linalg.norm(up_hint) + 1e-12
 
     tangent  = -c * L - s * surface_normal
     tangent /= np.linalg.norm(tangent) + 1e-12
@@ -191,8 +284,25 @@ def _build_tilted_leaf(
         width_mm=LEAF_WIDTH_MM,
         fold_angle_deg=LEAF_FOLD_DEG,
         curl_deg=LEAF_CURL_DEG,
-        up_hint=normal,
+        up_hint=up_hint,
     )
+
+    # Compute the midplane normal from the actual leaf geometry:
+    # find the tip (vertex furthest from base along the tangent direction),
+    # then take the normal to the plane spanned by (midrib, lateral).
+    verts   = leaf.vertices
+    tip_pt  = verts[np.argmax((verts - base) @ tangent)]
+    midrib  = tip_pt - base
+    midrib /= np.linalg.norm(midrib) + 1e-12
+
+    lateral  = np.cross(surface_normal, L)   # T axis — perpendicular to tilt plane
+    lateral /= np.linalg.norm(lateral) + 1e-12
+
+    normal   = np.cross(midrib, lateral)
+    normal  /= np.linalg.norm(normal) + 1e-12
+    if np.dot(normal, surface_normal) < 0:   # ensure outward orientation
+        normal = -normal
+
     return leaf, normal
 
 
@@ -236,8 +346,9 @@ def build_debug_mesh() -> trimesh.Trimesh:
             base, n_base, L_base = _base_for_midpoint(midpoint, L_mid, SPHERE_RADIUS_MM)
 
         # Tilt calculation and leaf build both use the base as pivot / origin.
-        theta        = _find_tilt(base, L_base, n_base, SPHERE_RADIUS_MM)
-        leaf, normal = _build_tilted_leaf(base, L_base, n_base, theta)
+        theta          = _find_tilt(base, L_base, n_base, SPHERE_RADIUS_MM)
+        leaf_surf, normal = _build_tilted_leaf(base, L_base, n_base, theta)
+        leaf           = _solidify_leaf(leaf_surf, normal)
 
         tag(leaf, debug_material(2 + leaf_index))
         print(f"  {name:13s}  slot {2 + leaf_index}  "
