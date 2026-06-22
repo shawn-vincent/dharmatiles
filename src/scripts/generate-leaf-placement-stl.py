@@ -48,7 +48,7 @@ _NP       = 2 * _N_RINGS + 2          # perimeter vertex count = 24
 _N_LOFT_RINGS = 2   # root circle + leaf perimeter; no intermediate rings needed
 
 LEAF_THICKNESS_MM      = 0.16
-UNDERCUT_MM            = 0.5   # undercut step: down -n and inward by this amount
+UNDERCUT_MM            = 0.5   # undercut step: outward from perimeter centroid in tangent plane
 UNDERCUT_MIN_ANGLE_DEG = 25.0  # min undercut slope angle above the leaf plane
 
 FAIL_MATERIAL: Material = debug_material(0)   # red — reserved for FDM failures
@@ -153,15 +153,16 @@ def build_branchlet_and_leaf(
     root_ring = _circle_ring(root_center, L, T, root_radius, NP)
 
     # ── Undercut ring ─────────────────────────────────────────────────────────
-    # From each boundary vertex: move inward toward the perimeter centroid by
-    # UNDERCUT_MM.  The -n drop is the amount needed to keep that undercut at
-    # UNDERCUT_MIN_ANGLE_DEG or steeper above the leaf plane.
+    # Each undercut vertex sits UNDERCUT_MM below the boundary along -n (fixed),
+    # then slides in/out in the tangent plane (lateral_mm, positive = inward
+    # toward centroid, negative = outward past the perimeter) until the section
+    # angle at the boundary vertex reaches UNDERCUT_MIN_ANGLE_DEG.
     t_mm         = UNDERCUT_MM
     perim_center = np.mean(boundary, axis=0)
     inward       = perim_center[None] - boundary
     inward_unit  = inward / np.maximum(np.linalg.norm(inward, axis=1, keepdims=True), 1e-10)
 
-    down_mm = np.full(NP, t_mm)
+    lateral_mm = np.full(NP, t_mm)   # start at t_mm inward; solved outward as needed
 
     def _angle_above_leaf_plane(a: np.ndarray, b: np.ndarray) -> float:
         delta = b - a
@@ -184,38 +185,42 @@ def build_branchlet_and_leaf(
             return g.top_pts[-1, NT // 2, :]
         return g.top_pts[2 * nr + 1 - k, NT // 2, :]
 
-    def _undercut_ring_for(depths: np.ndarray) -> np.ndarray:
-        trial_down = np.asarray(depths, dtype=float)
-        return boundary - trial_down[:, None] * n[None] + t_mm * inward_unit
+    def _undercut_ring_for(laterals: np.ndarray) -> np.ndarray:
+        lat = np.asarray(laterals, dtype=float)
+        return boundary - t_mm * n[None] + lat[:, None] * inward_unit
 
-    def _min_undercut_section_angle(depths: np.ndarray) -> float:
-        trial_ring = _undercut_ring_for(depths)
+    def _min_undercut_section_angle(laterals: np.ndarray) -> float:
+        trial_ring = _undercut_ring_for(laterals)
         return min(
             _angle_at(boundary[k], _section_anchor(k), trial_ring[k])
             for k in range(NP)
         )
 
     for k in range(NP):
-        def _local_min_angle(depth: float) -> float:
-            trial_down = down_mm.copy()
-            trial_down[k] = depth
-            trial_ring = _undercut_ring_for(trial_down)
+        def _local_min_angle(lat: float) -> float:
+            trial = lateral_mm.copy()
+            trial[k] = lat
+            trial_ring = _undercut_ring_for(trial)
             return _angle_at(boundary[k], _section_anchor(k), trial_ring[k])
 
         if _local_min_angle(t_mm) >= UNDERCUT_MIN_ANGLE_DEG:
             continue
+        # Going outward (decreasing lateral) opens the angle.
+        # Expand lo outward from t_mm until the angle is met, then bisect.
         lo = hi = t_mm
-        while _local_min_angle(hi) < UNDERCUT_MIN_ANGLE_DEG and hi < 8.0 * t_mm:
-            hi *= 1.25
+        outward_step = t_mm
+        while _local_min_angle(lo) < UNDERCUT_MIN_ANGLE_DEG and outward_step < 8.0 * t_mm:
+            outward_step *= 1.25
+            lo = t_mm - outward_step
         for _ in range(24):
             mid = 0.5 * (lo + hi)
             if _local_min_angle(mid) >= UNDERCUT_MIN_ANGLE_DEG:
-                hi = mid
+                hi = mid   # valid; try moving back inward
             else:
-                lo = mid
-        down_mm[k] = hi
+                lo = mid   # too inward; go more outward
+        lateral_mm[k] = hi
 
-    undercut_ring = boundary - down_mm[:, None] * n[None] + t_mm * inward_unit
+    undercut_ring = boundary - t_mm * n[None] + lateral_mm[:, None] * inward_unit
 
     if debug_tip:
         tip_k = nr + 1
@@ -223,9 +228,9 @@ def build_branchlet_and_leaf(
         print(f"  tip index: {tip_k}")
         print(f"  target angle: {UNDERCUT_MIN_ANGLE_DEG:.2f} deg")
         mid_k = nr // 2 + 1
-        print(f"  normal drop: {down_mm[tip_k]:.4f} mm")
+        print(f"  lateral (+ inward): {lateral_mm[tip_k]:.4f} mm")
         print(f"  mid-edge index: {mid_k}")
-        print(f"  mid-edge normal drop: {down_mm[mid_k]:.4f} mm")
+        print(f"  mid-edge lateral: {lateral_mm[mid_k]:.4f} mm")
         print(
             f"  tip section angle: "
             f"{_angle_at(boundary[tip_k], _section_anchor(tip_k), undercut_ring[tip_k]):.2f} deg"
@@ -244,7 +249,7 @@ def build_branchlet_and_leaf(
                 f"  top tip -> undercut {j}: "
                 f"{_angle_above_leaf_plane(boundary[tip_k], undercut_ring[j]):.2f} deg"
             )
-        print(f"  min undercut section angle: {_min_undercut_section_angle(down_mm):.2f} deg")
+        print(f"  min undercut section angle: {_min_undercut_section_angle(lateral_mm):.2f} deg")
 
     # ── Vertex layout ─────────────────────────────────────────────────────────
     #   0 .. NP-1          root ring
