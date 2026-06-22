@@ -24,12 +24,10 @@ import trimesh
 
 from dharmatiles.core.color import debug_material, export_color_stl, tag
 from dharmatiles.trees.leaf import (
-    boundary_loop,
     build_leaf_surface,
     find_max_dip_for_sphere,
+    find_tip_root,
     solidify_leaf,
-    _LEAF_FDM_FLOOR_DEG,
-    _LEAF_FDM_SUPPORT_TOLERANCE_MM,
 )
 from _leaf_debug import color_leaf_walls_by_fdm
 
@@ -125,28 +123,6 @@ def _build_tilted_leaf(
     return leaf, normal
 
 
-def _fdm_tip_outside_support(
-    surface:      trimesh.Trimesh,
-    normal:       np.ndarray,
-    support_mesh: trimesh.Trimesh,
-    depth:        float,
-) -> bool:
-    """True if the FDM tip-root extension would leave the support mesh."""
-    n     = normal / (np.linalg.norm(normal) + 1e-12)
-    loop  = boundary_loop(surface)
-    perim = surface.vertices[loop]
-    tip_i = int(np.argmin(perim[:, 2]))
-    tip   = perim[tip_i]
-    root  = tip - depth * n
-    horiz = float(np.linalg.norm(root[:2] - tip[:2]))
-    max_z = tip[2] - horiz / np.tan(np.radians(_LEAF_FDM_FLOOR_DEG))
-    if root[2] <= max_z:
-        return False
-    pt = root[np.newaxis]
-    inside = bool(support_mesh.contains(pt)[0])
-    _, dist, _ = support_mesh.nearest.on_surface(pt)
-    return not (inside or dist[0] <= _LEAF_FDM_SUPPORT_TOLERANCE_MM)
-
 
 def _build_leaf_for_sphere(
     base:           np.ndarray,
@@ -154,16 +130,21 @@ def _build_leaf_for_sphere(
     surface_normal: np.ndarray,
     sphere_radius:  float,
     support_mesh:   trimesh.Trimesh,
-    depth:          float,
-) -> tuple[trimesh.Trimesh, np.ndarray, float, float]:
-    """Find tilt and retain curl unless the FDM tip extension leaves support.
+) -> tuple[trimesh.Trimesh, np.ndarray, float, float, np.ndarray | None]:
+    """Find tilt; keep curl if the tip raycast hits the parent mesh, else drop it.
 
-    Returns (leaf_surface, normal, theta, curl_deg_used).
+    Casts a ray from the leaf tip at the minimum FDM-printable angle toward
+    the parent mesh.  If the mesh is hit within the threshold the curl is kept
+    and the hit point is returned as the tip root; otherwise the leaf is
+    rebuilt with curl = 0 and the raycast is retried.
+
+    Returns (leaf_surface, normal, theta, curl_deg_used, tip_root).
+    ``tip_root`` is ``None`` when the zero-curl leaf's tip also misses
+    (edge case: pass straight to :func:`solidify_leaf` for default behaviour).
     """
     for curl_deg in (LEAF_CURL_DEG, 0.0):
-        # T0 = -L: the flat tangent that points the tip downward along the sphere.
-        # cross(-T0, up_hint) = cross(L, surface_normal) — same Rodrigues axis as
-        # the old _find_tilt, so the bisection is sign-equivalent.
+        # T0 = -L: the flat tangent pointing the tip downward along the sphere.
+        # cross(-T0, up_hint) = cross(L, surface_normal) — Rodrigues axis matches.
         theta = find_max_dip_for_sphere(
             base, -L, surface_normal, sphere_radius,
             clearance_mm=TOLERANCE_GAP_MM,
@@ -174,10 +155,9 @@ def _build_leaf_for_sphere(
         )
         leaf_surf, normal = _build_tilted_leaf(base, L, surface_normal, theta,
                                                curl_deg=curl_deg)
-        if curl_deg == 0.0 or not _fdm_tip_outside_support(
-            leaf_surf, normal, support_mesh, depth,
-        ):
-            return leaf_surf, normal, theta, curl_deg
+        tip_root = find_tip_root(leaf_surf, normal, support_mesh)
+        if curl_deg == 0.0 or tip_root is not None:
+            return leaf_surf, normal, theta, curl_deg, tip_root
     raise AssertionError("zero-curl leaf construction did not return")
 
 
@@ -216,14 +196,11 @@ def build_debug_mesh(*, debug_solidify: bool = False) -> trimesh.Trimesh:
         else:
             base, n_base, L_base = _base_for_midpoint(midpoint, L_mid, SPHERE_RADIUS_MM)
 
-        leaf_surf, normal, theta, curl_used = _build_leaf_for_sphere(
-            base, L_base, n_base, SPHERE_RADIUS_MM, support_mesh, depth,
+        leaf_surf, normal, theta, curl_used, tip_root = _build_leaf_for_sphere(
+            base, L_base, n_base, SPHERE_RADIUS_MM, support_mesh,
         )
 
-        leaf, wall_faces = solidify_leaf(
-            leaf_surf, normal, depth,
-            parent_sphere_radius=SPHERE_RADIUS_MM,
-        )
+        leaf, wall_faces = solidify_leaf(leaf_surf, normal, depth, tip_root=tip_root)
         tag(leaf, debug_material(2 + leaf_index))
         color_leaf_walls_by_fdm(leaf, wall_faces, support_mesh)
 

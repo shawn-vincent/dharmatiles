@@ -31,6 +31,7 @@ from dharmatiles.trees.leaf import (
     LEAF_WIDTH_MM_DEFAULT,
     build_leaf_surface,
     find_max_dip_for_sphere,
+    find_tip_root,
     leaf_placement_from_surface,
     solidify_leaf,
 )
@@ -88,40 +89,41 @@ def build_debug_mesh(
     dirs /= np.linalg.norm(dirs, axis=1, keepdims=True)
     pts  = dirs * SPHERE_RADIUS_MM
 
-    leaf_shape = dict(
-        length_mm=length_mm, width_mm=width_mm,
-        fold_angle_deg=LEAF_FOLD_DEG, curl_deg=LEAF_CURL_DEG,
-    )
     fixed_dip_rad = None if dip_deg is None else np.radians(dip_deg)
 
-    n_ok_total = n_fail_total = 0
+    n_ok_total = n_fail_total = n_curl_removed = 0
     for i, pt in enumerate(pts):
         # Placement: snap to sphere surface, get surface frame.
         base_pos, T0, up_hint = leaf_placement_from_surface(sphere, pt)
 
-        # Dip: find max angle that presses leaf against sphere (or use override).
-        dip_rad = (
-            fixed_dip_rad
-            if fixed_dip_rad is not None
-            else find_max_dip_for_sphere(
-                base_pos, T0, up_hint, SPHERE_RADIUS_MM, **leaf_shape
+        # Try with configured curl first; fall back to curl=0 if find_tip_root
+        # returns None (tip would float above the parent mesh at this angle).
+        tip_root   = None
+        curl_used  = LEAF_CURL_DEG
+        leaf_surf  = None
+        for curl_deg in (LEAF_CURL_DEG, 0.0):
+            shape = dict(
+                length_mm=length_mm, width_mm=width_mm,
+                fold_angle_deg=LEAF_FOLD_DEG, curl_deg=curl_deg,
             )
-        )
-
-        tangent = T0 * np.cos(dip_rad) - up_hint * np.sin(dip_rad)
-        tangent /= np.linalg.norm(tangent) + 1e-12
-
-        leaf_surf = build_leaf_surface(
-            base_pos=base_pos,
-            tangent=tangent,
-            up_hint=up_hint,
-            **leaf_shape,
-        )
+            dip_rad = (
+                fixed_dip_rad
+                if fixed_dip_rad is not None
+                else find_max_dip_for_sphere(base_pos, T0, up_hint, SPHERE_RADIUS_MM, **shape)
+            )
+            tangent = T0 * np.cos(dip_rad) - up_hint * np.sin(dip_rad)
+            tangent /= np.linalg.norm(tangent) + 1e-12
+            leaf_surf = build_leaf_surface(
+                base_pos=base_pos, tangent=tangent, up_hint=up_hint, **shape)
+            tip_root = find_tip_root(leaf_surf, up_hint, support_mesh)
+            curl_used = curl_deg
+            if curl_deg == 0.0 or tip_root is not None:
+                break
+        if curl_used == 0.0 and LEAF_CURL_DEG != 0.0:
+            n_curl_removed += 1
 
         leaf, wall_faces = solidify_leaf(
-            leaf_surf, up_hint, LEAF_ROOT_DEPTH_MM,
-            parent_sphere_radius=SPHERE_RADIUS_MM,
-        )
+            leaf_surf, up_hint, LEAF_ROOT_DEPTH_MM, tip_root=tip_root)
 
         # Cycle through colours 2–9 so leaves are visually distinct.
         tag(leaf, debug_material(2 + (i % 8)))
@@ -136,7 +138,8 @@ def build_debug_mesh(
         parts.append(leaf)
 
     dip_label = "auto" if dip_deg is None else f"{dip_deg:.0f}°"
-    print(f"  {count} leaves  dip={dip_label}  seed={seed}")
+    curl_note = f"  curl removed: {n_curl_removed}" if n_curl_removed else ""
+    print(f"  {count} leaves  dip={dip_label}  seed={seed}{curl_note}")
     print(f"  wall faces: {n_ok_total} green  {n_fail_total} red  "
           f"({'%.0f' % (100*n_ok_total/(n_ok_total+n_fail_total+1e-9))}% printable)")
     return trimesh.util.concatenate(parts)

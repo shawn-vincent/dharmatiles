@@ -900,37 +900,83 @@ _LEAF_FDM_FLOOR_DEG: float = 45.0
 # Contact tolerance for support-mesh queries (compensates for faceted surfaces).
 _LEAF_FDM_SUPPORT_TOLERANCE_MM: float = 0.05
 
+# Maximum raycast distance for find_tip_root: hits farther than this are
+# treated as misses and signal the caller to rebuild without curl.
+_LEAF_TIP_MAX_DEPTH_MM: float = 4.0
 
-def _segment_length_outside_sphere(
-    start: np.ndarray,
-    end: np.ndarray,
-    radius: float,
-) -> float:
-    """Return the length of the portion of a line segment lying outside a sphere
-    centred at the origin."""
-    start = np.asarray(start, float)
-    delta = np.asarray(end, float) - start
-    length = float(np.linalg.norm(delta))
-    if length < 1e-12:
-        return 0.0
 
-    a = float(np.dot(delta, delta))
-    b = 2.0 * float(np.dot(start, delta))
-    c = float(np.dot(start, start) - radius * radius)
-    disc = b * b - 4.0 * a * c
-    cuts = [0.0, 1.0]
-    if disc >= 0.0:
-        sq = float(np.sqrt(disc))
-        for t in ((-b - sq) / (2.0 * a), (-b + sq) / (2.0 * a)):
-            if 0.0 < t < 1.0:
-                cuts.append(float(t))
-    cuts.sort()
+def find_tip_root(
+    surface:     trimesh.Trimesh,
+    up_hint:     np.ndarray,
+    parent_mesh: trimesh.Trimesh,
+    *,
+    floor_angle_deg: float = _LEAF_FDM_FLOOR_DEG,
+    max_depth_mm:    float = _LEAF_TIP_MAX_DEPTH_MM,
+) -> np.ndarray | None:
+    """Raycast from the leaf tip to find where it should embed in the parent mesh.
 
-    outside = 0.0
-    for lo, hi in zip(cuts, cuts[1:]):
-        if np.linalg.norm(start + 0.5 * (lo + hi) * delta) > radius + 1e-9:
-            outside += hi - lo
-    return outside * length
+    Finds the lowest-Z boundary vertex of *surface* (the leaf tip), then casts
+    a ray from there at ``floor_angle_deg`` below horizontal, pointing inward
+    toward the parent surface.  If *parent_mesh* is hit within ``max_depth_mm``
+    the hit position is returned; otherwise ``None`` signals that the leaf tip
+    cannot be anchored at a printable angle — the caller should rebuild the
+    leaf without curl.
+
+    The ray direction is derived from ``up_hint``:
+
+    * The horizontal inward component is ``-up_hint`` projected to the XY plane
+      and normalised.  This points toward the parent surface in the horizontal
+      plane.
+    * When ``up_hint`` is nearly vertical (leaf on a horizontal surface), the
+      horizontal component vanishes and the ray goes straight down.
+
+    Parameters
+    ----------
+    surface         : Open leaf surface from :func:`build_leaf_surface`.
+    up_hint         : Outward surface normal at the attachment point.
+    parent_mesh     : Mesh the leaf is attached to (sphere + trunk, etc.).
+    floor_angle_deg : Minimum FDM-printable angle from horizontal (degrees).
+                      The ray goes exactly this far below horizontal.
+    max_depth_mm    : Maximum acceptable hit distance from the tip vertex.
+                      Hits farther than this are treated as misses.
+
+    Returns
+    -------
+    np.ndarray or None
+        Hit position (3,) on *parent_mesh* to use as the tip root vertex in
+        :func:`solidify_leaf`, or ``None`` if the mesh is too far or not hit.
+    """
+    loop  = boundary_loop(surface)
+    perim = surface.vertices[loop]
+    tip   = perim[int(np.argmin(perim[:, 2]))]
+
+    # Ray direction: floor_angle_deg below horizontal, pointing inward.
+    floor_rad = np.radians(floor_angle_deg)
+    n         = _safe_norm(np.asarray(up_hint, float))
+    inward_xy = -n.copy()
+    inward_xy[2] = 0.0
+    len_xy    = float(np.linalg.norm(inward_xy))
+    if len_xy > 1e-8:
+        inward_dir = inward_xy / len_xy
+        ray_dir = (float(np.cos(floor_rad)) * inward_dir
+                   - float(np.sin(floor_rad)) * np.array([0.0, 0.0, 1.0]))
+    else:
+        # up_hint nearly vertical → leaf on a horizontal surface → straight down.
+        ray_dir = np.array([0.0, 0.0, -1.0])
+
+    # Offset origin slightly outward along the surface normal so that a tip
+    # vertex sitting exactly on the parent mesh does not self-intersect.
+    ray_origin = tip + 1e-3 * n
+
+    locs, _, _ = parent_mesh.ray.intersects_location(
+        ray_origins=[ray_origin], ray_directions=[ray_dir],
+    )
+    if len(locs) == 0:
+        return None
+
+    dists   = np.linalg.norm(locs - tip, axis=1)
+    nearest = int(np.argmin(dists))
+    return locs[nearest] if dists[nearest] <= max_depth_mm else None
 
 
 def find_max_dip(
@@ -1096,12 +1142,11 @@ def boundary_loop(mesh: trimesh.Trimesh) -> list[int]:
 
 
 def solidify_leaf(
-    surface: trimesh.Trimesh,
-    up_hint: np.ndarray,
-    depth:   float = LEAF_ROOT_DEPTH_MM,
+    surface:  trimesh.Trimesh,
+    up_hint:  np.ndarray,
+    depth:    float = LEAF_ROOT_DEPTH_MM,
     *,
-    parent_sphere_radius: float | None = None,
-    fdm_floor_deg:        float = _LEAF_FDM_FLOOR_DEG,
+    tip_root: np.ndarray | None = None,
 ) -> tuple[trimesh.Trimesh, range]:
     """Close an open leaf surface into a watertight solid.
 
@@ -1109,20 +1154,20 @@ def solidify_leaf(
     form a *root ring* that embeds into the parent mesh.  Quad walls bridge
     the perimeter to the root ring; a centroid fan caps the buried end.
 
-    A single FDM tip fix is applied to the lowest-Z perimeter vertex: if
-    the root→perimeter wall edge at the tip would be an unsupported overhang
-    **and** the root vertex lies outside ``parent_sphere_radius``, the root
-    vertex is pushed straight down until the wall edge sits exactly at
-    ``fdm_floor_deg``.  Pass ``parent_sphere_radius=None`` to skip this fix.
+    When ``tip_root`` is provided (obtained from :func:`find_tip_root`) the
+    lowest-Z perimeter vertex's root position is set to that point instead of
+    the default ``perim[tip_i] − depth × up_hint``.  This places the tip root
+    exactly on the parent mesh surface at the minimum printable angle, replacing
+    the old sphere-specific FDM heuristic.
 
     Parameters
     ----------
-    surface              : Open leaf surface from :func:`build_leaf_surface`.
-    up_hint              : Leaf plane normal (outward from the parent surface).
-    depth                : Root-ring embedding depth (mm).
-    parent_sphere_radius : Sphere radius for the exposed-wall tip fix.
-                           ``None`` disables the fix.
-    fdm_floor_deg        : Printability floor angle (degrees from horizontal).
+    surface   : Open leaf surface from :func:`build_leaf_surface`.
+    up_hint   : Leaf plane normal (outward from the parent surface).
+    depth     : Root-ring embedding depth for all non-tip perimeter vertices.
+    tip_root  : Override root position for the lowest-Z (tip) perimeter vertex,
+                as returned by :func:`find_tip_root`.  ``None`` keeps the
+                default ``perim[tip_i] - depth * up_hint``.
 
     Returns
     -------
@@ -1139,17 +1184,9 @@ def solidify_leaf(
     perim = surface.vertices[loop]      # (NP, 3)
     root  = perim - depth * n           # (NP, 3)
 
-    # ── FDM tip fix ──────────────────────────────────────────────────────────
-    tip_i  = int(np.argmin(perim[:, 2]))
-    horiz  = float(np.linalg.norm(root[tip_i, :2] - perim[tip_i, :2]))
-    max_z  = perim[tip_i, 2] - horiz / np.tan(np.radians(fdm_floor_deg))
-    if parent_sphere_radius is not None:
-        root_before = root[tip_i].copy()
-        exposed = _segment_length_outside_sphere(perim[tip_i], root_before,
-                                                 parent_sphere_radius)
-        if root[tip_i, 2] > max_z and exposed > 1e-9:
-            root[tip_i, 2] = max_z
-    # ─────────────────────────────────────────────────────────────────────────
+    tip_i = int(np.argmin(perim[:, 2]))
+    if tip_root is not None:
+        root[tip_i] = np.asarray(tip_root, float)
 
     # Project the ring mean onto the cap plane (normal = n, through root[0])
     # so the centroid stays inside the ring even when the ring is non-planar
