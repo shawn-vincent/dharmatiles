@@ -123,7 +123,7 @@ def build_branchlet_and_leaf(
 
     root_radius = 0.5 * ROOT_DIAMETER_FRACTION * max(LEAF_LENGTH_MM, LEAF_WIDTH_MM)
     root_center = attachment_point - EMBED_DEPTH_MM * n
-    tip_pos     = root_center + (EMBED_DEPTH_MM + LEAF_LENGTH_MM) * n
+    tip_pos     = attachment_point   # leaf sits on the parent surface; loft is buried
 
     # ── Leaf geometry ─────────────────────────────────────────────────────────
     g = compute_leaf_geometry(
