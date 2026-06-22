@@ -322,11 +322,30 @@ def build_branchlet_and_leaf(
         faces.append([V_ROOT_CAP, vi_r0(k1), vi_r0(k)])
 
     # Undercut wall: undercut ring → boundary (outward and upward step).
+    # Use adaptive triangulation: for each quad pick the diagonal that keeps
+    # the two resulting triangles most coplanar (minimises max |cos θ| between
+    # triangle normals, i.e. picks the flatter split).
+    def _quad_flatness(p0: np.ndarray, p1: np.ndarray,
+                       p2: np.ndarray, p3: np.ndarray) -> float:
+        """Return |cos(dihedral)| for the p0-p2 diagonal split (lower = flatter)."""
+        n1 = np.cross(p1 - p0, p2 - p0)
+        n2 = np.cross(p2 - p0, p3 - p0)  # noqa: SIM118
+        l1, l2 = np.linalg.norm(n1), np.linalg.norm(n2)
+        if l1 < 1e-10 or l2 < 1e-10:
+            return 0.0
+        return abs(float(np.dot(n1, n2)) / (l1 * l2))
+
     for k in range(NP):
         k1 = (k + 1) % NP
         a, b = vi_uc(k),   vi_uc(k1)
         c, d = vi_bnd(k1), vi_bnd(k)
-        faces += [[a, d, c], [a, c, b]]
+        va, vb = verts[a], verts[b]
+        vc, vd = verts[c], verts[d]
+        # Diagonal a→c  vs  diagonal b→d
+        if _quad_flatness(va, vd, vc, vb) >= _quad_flatness(vd, vc, vb, va):
+            faces += [[a, d, c], [a, c, b]]   # split on a→c
+        else:
+            faces += [[a, d, b], [d, c, b]]   # split on d→b
 
     # Leaf surface — base fan (rounded base → ring 0 of top_pts).
     for j in range(NT):
