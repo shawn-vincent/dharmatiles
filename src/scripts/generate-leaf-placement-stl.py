@@ -101,6 +101,7 @@ def _is_printable(surface_normal: np.ndarray) -> bool:
 def build_branchlet_and_leaf(
     attachment_point: np.ndarray,
     surface_normal:   np.ndarray,
+    parent_mesh:      trimesh.Trimesh,
     *,
     debug_tip: bool = False,
 ) -> tuple[trimesh.Trimesh, bool]:
@@ -112,11 +113,10 @@ def build_branchlet_and_leaf(
       - Leaf surface:  stitched to boundary from above
       - Root cap:      closes the buried root end
 
-    The undercut ring is derived from the boundary by stepping −n by
-    LEAF_THICKNESS_MM and then inward toward the perimeter centroid by the
-    same amount.  Because the loft terminates at the undercut ring and the
-    leaf surface attaches to boundary, every boundary edge is shared by
-    exactly two faces (undercut wall + leaf surface), so the mesh is manifold.
+    The undercut ring is derived by ray-casting each boundary vertex along -n
+    to the parent_mesh surface, then sliding the hit point laterally (in the
+    tangent plane) until the section angle at the boundary vertex reaches
+    UNDERCUT_MIN_ANGLE_DEG.
     """
     n    = surface_normal / (np.linalg.norm(surface_normal) + 1e-12)
     L, T = _leaf_frame(n)
@@ -153,16 +153,37 @@ def build_branchlet_and_leaf(
     root_ring = _circle_ring(root_center, L, T, root_radius, NP)
 
     # ── Undercut ring ─────────────────────────────────────────────────────────
-    # Each undercut vertex sits UNDERCUT_MM below the boundary along -n (fixed),
-    # then slides in/out in the tangent plane (lateral_mm, positive = inward
-    # toward centroid, negative = outward past the perimeter) until the section
-    # angle at the boundary vertex reaches UNDERCUT_MIN_ANGLE_DEG.
+    # Each undercut vertex is placed by:
+    #   1. Ray-casting from the boundary vertex along -n to find where it hits
+    #      the parent mesh surface (the sphere).  That hit is the base position.
+    #   2. Sliding the base laterally in the tangent plane (positive lateral_mm =
+    #      inward toward centroid, negative = outward past the perimeter) until
+    #      the section angle at the boundary vertex reaches UNDERCUT_MIN_ANGLE_DEG.
     t_mm         = UNDERCUT_MM
     perim_center = np.mean(boundary, axis=0)
     inward       = perim_center[None] - boundary
     inward_unit  = inward / np.maximum(np.linalg.norm(inward, axis=1, keepdims=True), 1e-10)
 
-    lateral_mm = np.full(NP, t_mm)   # start at t_mm inward; solved outward as needed
+    # Ray-cast each boundary vertex along -n against the parent mesh.
+    ray_dirs = np.tile(-n, (NP, 1))
+    locs, idx_ray, _ = parent_mesh.ray.intersects_location(
+        ray_origins=boundary,
+        ray_directions=ray_dirs,
+        multiple_hits=True,
+    )
+    # For each vertex pick the closest forward hit; fall back to t_mm drop.
+    surface_hits = boundary - t_mm * n[None]   # fallback
+    for k in range(NP):
+        hits_k = locs[idx_ray == k]
+        if len(hits_k):
+            dists = np.dot(hits_k - boundary[k], -n)   # distance along -n
+            forward = dists > 1e-6
+            if forward.any():
+                surface_hits[k] = hits_k[forward][np.argmin(dists[forward])]
+
+    # Starting lateral = how far each vertex dropped to the surface along -n.
+    drop_mm    = np.einsum('ki,i->k', boundary - surface_hits, n).clip(min=t_mm)
+    lateral_mm = drop_mm.copy()       # start inward by the drop distance; solved outward as needed
 
     def _angle_above_leaf_plane(a: np.ndarray, b: np.ndarray) -> float:
         delta = b - a
@@ -187,7 +208,7 @@ def build_branchlet_and_leaf(
 
     def _undercut_ring_for(laterals: np.ndarray) -> np.ndarray:
         lat = np.asarray(laterals, dtype=float)
-        return boundary - t_mm * n[None] + lat[:, None] * inward_unit
+        return surface_hits + lat[:, None] * inward_unit
 
     def _min_undercut_section_angle(laterals: np.ndarray) -> float:
         trial_ring = _undercut_ring_for(laterals)
@@ -203,15 +224,16 @@ def build_branchlet_and_leaf(
             trial_ring = _undercut_ring_for(trial)
             return _angle_at(boundary[k], _section_anchor(k), trial_ring[k])
 
-        if _local_min_angle(t_mm) >= UNDERCUT_MIN_ANGLE_DEG:
+        start = float(drop_mm[k])
+        if _local_min_angle(start) >= UNDERCUT_MIN_ANGLE_DEG:
             continue
         # Going outward (decreasing lateral) opens the angle.
-        # Expand lo outward from t_mm until the angle is met, then bisect.
-        lo = hi = t_mm
-        outward_step = t_mm
-        while _local_min_angle(lo) < UNDERCUT_MIN_ANGLE_DEG and outward_step < 8.0 * t_mm:
+        # Expand lo outward from start until the angle is met, then bisect.
+        lo = hi = start
+        outward_step = start
+        while _local_min_angle(lo) < UNDERCUT_MIN_ANGLE_DEG and outward_step < 8.0 * start:
             outward_step *= 1.25
-            lo = t_mm - outward_step
+            lo = start - outward_step
         for _ in range(24):
             mid = 0.5 * (lo + hi)
             if _local_min_angle(mid) >= UNDERCUT_MIN_ANGLE_DEG:
@@ -220,7 +242,7 @@ def build_branchlet_and_leaf(
                 lo = mid   # too inward; go more outward
         lateral_mm[k] = hi
 
-    undercut_ring = boundary - t_mm * n[None] + lateral_mm[:, None] * inward_unit
+    undercut_ring = surface_hits + lateral_mm[:, None] * inward_unit
 
     if debug_tip:
         tip_k = nr + 1
@@ -346,6 +368,7 @@ def build_debug_mesh(*, debug_tip: bool = False) -> trimesh.Trimesh:
         mesh, is_fail = build_branchlet_and_leaf(
             SPHERE_RADIUS_MM * normal,
             normal,
+            sphere,
             debug_tip=debug_tip and name == "top",
         )
         slot   = 2 + leaf_index
