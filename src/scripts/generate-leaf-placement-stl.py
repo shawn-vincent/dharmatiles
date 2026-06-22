@@ -32,6 +32,8 @@ from dharmatiles.trees.leaf import (
 
 DEFAULT_OUTPUT    = pathlib.Path("debug/leaf-placement.stl")
 SPHERE_RADIUS_MM  = 12.0
+TRUNK_HEIGHT_MM   = SPHERE_RADIUS_MM * 2.0 / 3.0   # 1/3 of sphere diameter (= 8 mm)
+TRUNK_RADIUS_MM   = TRUNK_HEIGHT_MM / 2.0           # diameter = height → stocky (= 4 mm)
 LEAF_LENGTH_MM    = 6.0
 LEAF_WIDTH_MM     = LEAF_LENGTH_MM * 2.0 / 3.0
 LEAF_FOLD_DEG     = 6.0
@@ -450,7 +452,19 @@ def build_debug_mesh(*, debug_tip: bool = False) -> trimesh.Trimesh:
     sphere.fix_normals()
     tag(sphere, debug_material(1))   # slot 0 reserved for failures
 
-    parts: list[trimesh.Trimesh] = [sphere]
+    # Trunk: stocky cylinder below the sphere (height = diameter = 1/3 sphere diameter).
+    # Embedded 5 mm up into the sphere so there is no gap at the join.
+    _trunk_embed = 5.0
+    trunk = trimesh.creation.cylinder(
+        radius=TRUNK_RADIUS_MM,
+        height=TRUNK_HEIGHT_MM + _trunk_embed,
+        sections=32,
+    )
+    trunk.apply_translation([0.0, 0.0, -SPHERE_RADIUS_MM - TRUNK_HEIGHT_MM / 2.0 + _trunk_embed / 2.0])
+    trunk.fix_normals()
+    tag(trunk, debug_material(1))
+
+    parts: list[trimesh.Trimesh] = [sphere, trunk]
 
     _DEBUG_LEAVES = {"equator", "lower-quarter"}   # East and South-East in the viewer
 
