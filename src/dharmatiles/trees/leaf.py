@@ -876,3 +876,264 @@ def build_leaf_mesh(
             parts.append(keel)
 
     return parts
+
+
+# ── Solidification and FDM analysis ───────────────────────────────────────────
+
+# Root-embedding depth: how far the root ring extends below the leaf plane.
+_LEAF_ROOT_DEPTH_MM: float = 1.0
+
+# FDM printability floor: faces whose downward slope exceeds this are overhangs.
+_LEAF_FDM_FLOOR_DEG: float = 45.0
+
+# Contact tolerance for support-mesh queries (compensates for faceted surfaces).
+_LEAF_FDM_SUPPORT_TOLERANCE_MM: float = 0.05
+
+
+def _segment_length_outside_sphere(
+    start: np.ndarray,
+    end: np.ndarray,
+    radius: float,
+) -> float:
+    """Return the length of the portion of a line segment lying outside a sphere
+    centred at the origin."""
+    start = np.asarray(start, float)
+    delta = np.asarray(end, float) - start
+    length = float(np.linalg.norm(delta))
+    if length < 1e-12:
+        return 0.0
+
+    a = float(np.dot(delta, delta))
+    b = 2.0 * float(np.dot(start, delta))
+    c = float(np.dot(start, start) - radius * radius)
+    disc = b * b - 4.0 * a * c
+    cuts = [0.0, 1.0]
+    if disc >= 0.0:
+        sq = float(np.sqrt(disc))
+        for t in ((-b - sq) / (2.0 * a), (-b + sq) / (2.0 * a)):
+            if 0.0 < t < 1.0:
+                cuts.append(float(t))
+    cuts.sort()
+
+    outside = 0.0
+    for lo, hi in zip(cuts, cuts[1:]):
+        if np.linalg.norm(start + 0.5 * (lo + hi) * delta) > radius + 1e-9:
+            outside += hi - lo
+    return outside * length
+
+
+def boundary_loop(mesh: trimesh.Trimesh) -> list[int]:
+    """Return the perimeter vertex indices of an open mesh as an ordered loop.
+
+    Each boundary edge appears exactly once in an undirected sense; the loop
+    is walked by following the unique chain of boundary adjacencies.
+
+    Parameters
+    ----------
+    mesh : An open ``trimesh.Trimesh`` (one boundary loop).
+
+    Returns
+    -------
+    list[int]
+        Vertex indices forming the boundary loop, in order.  The loop is
+        implicitly closed: the last vertex connects back to the first.
+    """
+    edges_sorted = np.sort(mesh.edges, axis=1)
+    unique, counts = np.unique(edges_sorted, axis=0, return_counts=True)
+    bnd_edges = unique[counts == 1]
+
+    adj: dict[int, list[int]] = {}
+    for a, b in bnd_edges.tolist():
+        adj.setdefault(a, []).append(b)
+        adj.setdefault(b, []).append(a)
+
+    start = int(bnd_edges[0, 0])
+    loop, prev, curr = [start], -1, start
+    while True:
+        a, b = adj[curr]
+        nxt = b if a == prev else a
+        if nxt == start:
+            break
+        loop.append(nxt)
+        prev, curr = curr, nxt
+    return loop
+
+
+def solidify_leaf(
+    surface: trimesh.Trimesh,
+    up_hint: np.ndarray,
+    depth:   float = _LEAF_ROOT_DEPTH_MM,
+    *,
+    parent_sphere_radius: float | None = None,
+    fdm_floor_deg:        float = _LEAF_FDM_FLOOR_DEG,
+) -> tuple[trimesh.Trimesh, range]:
+    """Close an open leaf surface into a watertight solid.
+
+    Projects each boundary vertex inward along ``-up_hint`` by ``depth`` to
+    form a *root ring* that embeds into the parent mesh.  Quad walls bridge
+    the perimeter to the root ring; a centroid fan caps the buried end.
+
+    A single FDM tip fix is applied to the lowest-Z perimeter vertex: if
+    the root→perimeter wall edge at the tip would be an unsupported overhang
+    **and** the root vertex lies outside ``parent_sphere_radius``, the root
+    vertex is pushed straight down until the wall edge sits exactly at
+    ``fdm_floor_deg``.  Pass ``parent_sphere_radius=None`` to skip this fix.
+
+    Parameters
+    ----------
+    surface              : Open leaf surface from :func:`build_leaf_surface`.
+    up_hint              : Leaf plane normal (outward from the parent surface).
+    depth                : Root-ring embedding depth (mm).
+    parent_sphere_radius : Sphere radius for the exposed-wall tip fix.
+                           ``None`` disables the fix.
+    fdm_floor_deg        : Printability floor angle (degrees from horizontal).
+
+    Returns
+    -------
+    (solid, wall_face_range)
+        *solid* is a closed ``trimesh.Trimesh``.  *wall_face_range* is the
+        ``range`` of face indices belonging to the wall quads only (not the
+        original surface faces or the bottom cap), for use with
+        :func:`color_leaf_walls_by_fdm`.
+    """
+    n    = _safe_norm(np.asarray(up_hint, float))
+    loop = boundary_loop(surface)
+    NP   = len(loop)
+
+    perim = surface.vertices[loop]      # (NP, 3)
+    root  = perim - depth * n           # (NP, 3)
+
+    # ── FDM tip fix ──────────────────────────────────────────────────────────
+    tip_i  = int(np.argmin(perim[:, 2]))
+    horiz  = float(np.linalg.norm(root[tip_i, :2] - perim[tip_i, :2]))
+    max_z  = perim[tip_i, 2] - horiz / np.tan(np.radians(fdm_floor_deg))
+    if parent_sphere_radius is not None:
+        root_before = root[tip_i].copy()
+        exposed = _segment_length_outside_sphere(perim[tip_i], root_before,
+                                                 parent_sphere_radius)
+        if root[tip_i, 2] > max_z and exposed > 1e-9:
+            root[tip_i, 2] = max_z
+    # ─────────────────────────────────────────────────────────────────────────
+
+    center    = root.mean(axis=0)
+    n_surf    = len(surface.vertices)
+    root_base = n_surf
+    cap_ctr   = n_surf + NP
+
+    all_verts = np.vstack([surface.vertices, root, center[np.newaxis]])
+
+    wall_faces: list[list[int]] = []
+    for i in range(NP):
+        j    = (i + 1) % NP
+        a, b = loop[i], loop[j]
+        d, c = root_base + i, root_base + j
+        if i == tip_i:
+            wall_faces += [[a, d, b], [b, d, c]]
+        else:
+            wall_faces += [[a, b, c], [a, c, d]]
+
+    cap_faces = [
+        [cap_ctr, root_base + (i + 1) % NP, root_base + i]
+        for i in range(NP)
+    ]
+
+    wall_start = len(surface.faces)
+    wall_end   = wall_start + len(wall_faces)
+
+    all_faces = np.vstack([
+        surface.faces,
+        np.array(wall_faces, dtype=np.int32),
+        np.array(cap_faces,  dtype=np.int32),
+    ])
+
+    solid = trimesh.Trimesh(vertices=all_verts, faces=all_faces, process=False)
+    solid.fix_normals()
+    return solid, range(wall_start, wall_end)
+
+
+def color_leaf_walls_by_fdm(
+    mesh:         trimesh.Trimesh,
+    wall_faces:   range,
+    support_mesh: trimesh.Trimesh,
+    *,
+    floor_angle_deg:      float = _LEAF_FDM_FLOOR_DEG,
+    support_tolerance_mm: float = _LEAF_FDM_SUPPORT_TOLERANCE_MM,
+    color_ok:    np.ndarray = np.array([ 50, 200,  50, 255], dtype=np.uint8),
+    color_fail:  np.ndarray = np.array([220,  50,  50, 255], dtype=np.uint8),
+) -> None:
+    """Color wall faces green/red by FDM printability, in-place.
+
+    Two failure conditions are checked for each wall face:
+
+    1. **Angle** — face normal's Z component is below ``-sin(floor_angle_deg)``.
+    2. **Support** — the face's lowest vertex is not inside ``support_mesh``,
+       not within ``support_tolerance_mm`` of it, and has no geometry below it
+       (downward ray miss).
+
+    Printability propagates upward across shared wall edges from directly
+    supported faces, so a face whose angle is fine but which floats in an
+    unsupported island remains red.
+
+    Surface and cap faces are not touched.
+
+    Parameters
+    ----------
+    mesh                 : Solid returned by :func:`solidify_leaf`.
+    wall_faces           : Range of wall face indices from :func:`solidify_leaf`.
+    support_mesh         : Mesh the leaf rests on (sphere + trunk, etc.).
+    floor_angle_deg      : Printability floor angle (degrees from horizontal).
+    support_tolerance_mm : Distance tolerance for on-surface detection.
+    color_ok             : RGBA colour for printable faces (default green).
+    color_fail           : RGBA colour for overhang faces (default red).
+    """
+    threshold = -np.sin(np.radians(floor_angle_deg))
+    wall_idx  = np.array(list(wall_faces), dtype=np.intp)
+    if len(wall_idx) == 0:
+        return
+
+    wall_nz  = mesh.face_normals[wall_idx, 2]
+    angle_ok = wall_nz >= threshold
+
+    face_verts  = mesh.vertices[mesh.faces[wall_idx]]              # (N, 3, 3)
+    lowest_vi   = face_verts[:, :, 2].argmin(axis=1)
+    lowest_pts  = face_verts[np.arange(len(wall_idx)), lowest_vi]  # (N, 3)
+
+    inside = support_mesh.contains(lowest_pts)
+    _, surf_dist, _ = support_mesh.nearest.on_surface(lowest_pts)
+    inside_or_on = inside | (surf_dist <= support_tolerance_mm)
+
+    has_support = inside_or_on.copy()
+    outside_idx = np.where(~inside_or_on)[0]
+    if len(outside_idx):
+        ray_origins = lowest_pts[outside_idx] - np.array([0.0, 0.0, 1e-3])
+        ray_dirs    = np.tile([0.0, 0.0, -1.0], (len(outside_idx), 1))
+        has_support[outside_idx] = support_mesh.ray.intersects_any(
+            ray_origins, ray_dirs,
+        )
+
+    # Propagate printability upward through angle-OK wall edges.
+    face_min_z: np.ndarray = face_verts[:, :, 2].min(axis=1)
+    edge_to_faces: dict[tuple[int, int], list[int]] = {}
+    for local_i, face in enumerate(mesh.faces[wall_idx]):
+        for a, b in ((face[0], face[1]), (face[1], face[2]), (face[2], face[0])):
+            edge_to_faces.setdefault(tuple(sorted((int(a), int(b)))), []).append(local_i)
+
+    neighbors: list[set[int]] = [set() for _ in wall_idx]
+    for incident in edge_to_faces.values():
+        for fi in incident:
+            neighbors[fi].update(j for j in incident if j != fi)
+
+    printable = has_support.copy()
+    changed = True
+    while changed:
+        changed = False
+        for fi in np.argsort(face_min_z):
+            if printable[fi] or not angle_ok[fi]:
+                continue
+            if any(printable[nb] and face_min_z[nb] <= face_min_z[fi] + 1e-6
+                   for nb in neighbors[fi]):
+                printable[fi] = True
+                changed = True
+
+    mesh.visual.face_colors[wall_idx[ printable]] = color_ok
+    mesh.visual.face_colors[wall_idx[~printable]] = color_fail
