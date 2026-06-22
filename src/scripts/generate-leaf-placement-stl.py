@@ -224,22 +224,28 @@ def build_branchlet_and_leaf(
             trial_ring = _undercut_ring_for(trial)
             return _angle_at(boundary[k], _section_anchor(k), trial_ring[k])
 
+        def _required_angle(lat: float) -> float:
+            """90° for purple vertices (undercut above boundary in Z); UNDERCUT_MIN_ANGLE_DEG otherwise."""
+            uc = surface_hits[k] + lat * inward_unit[k]
+            return 90.0 if float(uc[2]) > float(boundary[k][2]) else UNDERCUT_MIN_ANGLE_DEG
+
         start = float(drop_mm[k])
-        if _local_min_angle(start) >= UNDERCUT_MIN_ANGLE_DEG:
+        if _local_min_angle(start) >= _required_angle(start):
             continue
         # Going outward (decreasing lateral) opens the angle.
-        # Expand lo outward from start until the angle is met, then bisect.
+        # Purple vertices (undercut above boundary) require a 90° section angle.
+        # Expand lo outward from start until the condition is met, then bisect.
         lo = hi = start
         outward_step = start
-        while _local_min_angle(lo) < UNDERCUT_MIN_ANGLE_DEG and outward_step < 8.0 * start:
+        while _local_min_angle(lo) < _required_angle(lo) and outward_step < 8.0 * start:
             outward_step *= 1.25
             lo = start - outward_step
         for _ in range(24):
             mid = 0.5 * (lo + hi)
-            if _local_min_angle(mid) >= UNDERCUT_MIN_ANGLE_DEG:
+            if _local_min_angle(mid) >= _required_angle(mid):
                 hi = mid   # valid; try moving back inward
             else:
-                lo = mid   # too inward; go more outward
+                lo = mid   # not yet valid; go more outward
         lateral_mm[k] = hi
 
     undercut_ring = surface_hits + lateral_mm[:, None] * inward_unit
@@ -335,6 +341,7 @@ def build_branchlet_and_leaf(
             return 0.0
         return abs(float(np.dot(n1, n2)) / (l1 * l2))
 
+    uc_wall_face_start = len(faces)
     for k in range(NP):
         k1 = (k + 1) % NP
         a, b = vi_uc(k),   vi_uc(k1)
@@ -346,6 +353,7 @@ def build_branchlet_and_leaf(
             faces += [[a, d, c], [a, c, b]]   # split on a→c
         else:
             faces += [[a, d, b], [d, c, b]]   # split on d→b
+    uc_wall_face_end = len(faces)
 
     # Leaf surface — base fan (rounded base → ring 0 of top_pts).
     for j in range(NT):
@@ -368,7 +376,7 @@ def build_branchlet_and_leaf(
         process=False,
     )
     mesh.fix_normals()
-    return mesh, not _is_printable(n)
+    return mesh, not _is_printable(n), range(uc_wall_face_start, uc_wall_face_end)
 
 
 # ── Scene assembly ─────────────────────────────────────────────────────────────
@@ -384,7 +392,7 @@ def build_debug_mesh(*, debug_tip: bool = False) -> trimesh.Trimesh:
     for leaf_index, (name, fraction_down) in enumerate(PLACEMENTS):
         polar  = np.pi * fraction_down
         normal = np.array([np.sin(polar), 0.0, np.cos(polar)])
-        mesh, is_fail = build_branchlet_and_leaf(
+        mesh, is_fail, uc_faces = build_branchlet_and_leaf(
             SPHERE_RADIUS_MM * normal,
             normal,
             sphere,
@@ -394,6 +402,33 @@ def build_debug_mesh(*, debug_tip: bool = False) -> trimesh.Trimesh:
         status = "FAIL (red)" if is_fail else f"ok  (slot {slot})  watertight={mesh.is_watertight}"
         print(f"  {name:13s}  {status}")
         tag(mesh, FAIL_MATERIAL if is_fail else debug_material(slot))
+
+        # Colour undercut wall faces purple where the undercut-ring end of the face
+        # is higher in world Z than the leaf-perimeter end.  These are the faces
+        # that hang downward from the undercut ring toward the boundary — the
+        # actual undercut overhang faces.
+        #
+        # Vertex layout (per mesh):
+        #   [0, NP)            root ring
+        #   [NP, 2*NP)         undercut ring   ← "undercut vertices"
+        #   2*NP               root cap centre
+        #   [2*NP+1, 3*NP+1)   boundary        ← "perimeter vertices"
+        #   [3*NP+1, ...)       leaf interior
+        _PURPLE     = np.array([200, 70, 230, 255], dtype=np.uint8)
+        _uc_start   = _NP
+        _uc_end     = 2 * _NP
+        _bnd_start  = 2 * _NP + 1
+        _bnd_end    = 3 * _NP + 1
+        for fi in uc_faces:
+            face_vids = mesh.faces[fi]
+            uc_vids  = [v for v in face_vids if _uc_start  <= v < _uc_end]
+            bnd_vids = [v for v in face_vids if _bnd_start <= v < _bnd_end]
+            if uc_vids and bnd_vids:
+                max_uc_z  = float(np.max([mesh.vertices[v, 2] for v in uc_vids]))
+                min_bnd_z = float(np.min([mesh.vertices[v, 2] for v in bnd_vids]))
+                if max_uc_z > min_bnd_z:
+                    mesh.visual.face_colors[fi] = _PURPLE
+
         parts.append(mesh)
 
     return trimesh.util.concatenate(parts)
