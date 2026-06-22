@@ -24,10 +24,14 @@ import trimesh
 
 from dharmatiles.core.color import debug_material, export_color_stl, tag
 from dharmatiles.trees.leaf import (
+    boundary_loop,
     build_leaf_surface,
+    find_max_dip_for_sphere,
     solidify_leaf,
-    color_leaf_walls_by_fdm,
+    _LEAF_FDM_FLOOR_DEG,
+    _LEAF_FDM_SUPPORT_TOLERANCE_MM,
 )
+from _leaf_debug import color_leaf_walls_by_fdm
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -85,68 +89,6 @@ def _base_for_midpoint(
     return base, base_normal, L_base
 
 
-def _find_tilt(
-    base:           np.ndarray,
-    L:              np.ndarray,
-    surface_normal: np.ndarray,
-    sphere_radius:  float,
-    curl_deg:       float = LEAF_CURL_DEG,
-) -> float:
-    """Binary-search for the maximum downward tilt angle θ (radians).
-
-    The base is the rotation pivot and is on the sphere surface.  At θ=0 the
-    leaf lays flat; at θ>0 the tip rotates toward the sphere.
-
-    Vertices already within TOLERANCE_GAP_MM of the sphere at θ=0 (base-zone
-    vertices near the attachment point) are excluded from the constraint.
-    """
-    flat = build_leaf_surface(
-        base_pos=base,
-        tangent=-L,
-        length_mm=LEAF_LENGTH_MM,
-        width_mm=LEAF_WIDTH_MM,
-        fold_angle_deg=LEAF_FOLD_DEG,
-        curl_deg=curl_deg,
-        up_hint=surface_normal,
-    )
-    dists_flat = np.linalg.norm(flat.vertices, axis=1)
-    far_mask   = dists_flat >= sphere_radius + TOLERANCE_GAP_MM
-    far_idx    = np.where(far_mask)[0]
-
-    if len(far_idx) == 0:
-        return 0.0
-
-    axis = np.cross(L, surface_normal)
-    axis /= np.linalg.norm(axis) + 1e-12
-
-    def _rotate(pts: np.ndarray, theta: float) -> np.ndarray:
-        c, s = np.cos(theta), np.sin(theta)
-        rel  = pts - base
-        return base + rel * c + np.cross(axis, rel) * s \
-               + axis * (rel @ axis)[:, np.newaxis] * (1.0 - c)
-
-    far_verts_flat = flat.vertices[far_idx]
-
-    def _ok(theta: float) -> bool:
-        return bool(
-            np.all(np.linalg.norm(_rotate(far_verts_flat, theta), axis=1)
-                   >= sphere_radius + TOLERANCE_GAP_MM)
-        )
-
-    lo, hi = 0.0, np.pi
-    while hi > 1e-4 and _ok(hi):
-        hi /= 2.0
-    if _ok(hi):
-        return 0.0
-
-    for _ in range(48):
-        mid = 0.5 * (lo + hi)
-        if _ok(mid):
-            lo = mid
-        else:
-            hi = mid
-    return lo
-
 
 def _build_tilted_leaf(
     base:           np.ndarray,
@@ -190,10 +132,6 @@ def _fdm_tip_outside_support(
     depth:        float,
 ) -> bool:
     """True if the FDM tip-root extension would leave the support mesh."""
-    from dharmatiles.trees.leaf import (
-        boundary_loop, _LEAF_ROOT_DEPTH_MM, _LEAF_FDM_FLOOR_DEG,
-        _segment_length_outside_sphere,
-    )
     n     = normal / (np.linalg.norm(normal) + 1e-12)
     loop  = boundary_loop(surface)
     perim = surface.vertices[loop]
@@ -205,7 +143,6 @@ def _fdm_tip_outside_support(
     if root[2] <= max_z:
         return False
     pt = root[np.newaxis]
-    from dharmatiles.trees.leaf import _LEAF_FDM_SUPPORT_TOLERANCE_MM
     inside = bool(support_mesh.contains(pt)[0])
     _, dist, _ = support_mesh.nearest.on_surface(pt)
     return not (inside or dist[0] <= _LEAF_FDM_SUPPORT_TOLERANCE_MM)
@@ -224,7 +161,17 @@ def _build_leaf_for_sphere(
     Returns (leaf_surface, normal, theta, curl_deg_used).
     """
     for curl_deg in (LEAF_CURL_DEG, 0.0):
-        theta = _find_tilt(base, L, surface_normal, sphere_radius, curl_deg=curl_deg)
+        # T0 = -L: the flat tangent that points the tip downward along the sphere.
+        # cross(-T0, up_hint) = cross(L, surface_normal) — same Rodrigues axis as
+        # the old _find_tilt, so the bisection is sign-equivalent.
+        theta = find_max_dip_for_sphere(
+            base, -L, surface_normal, sphere_radius,
+            clearance_mm=TOLERANCE_GAP_MM,
+            length_mm=LEAF_LENGTH_MM,
+            width_mm=LEAF_WIDTH_MM,
+            fold_angle_deg=LEAF_FOLD_DEG,
+            curl_deg=curl_deg,
+        )
         leaf_surf, normal = _build_tilted_leaf(base, L, surface_normal, theta,
                                                curl_deg=curl_deg)
         if curl_deg == 0.0 or not _fdm_tip_outside_support(

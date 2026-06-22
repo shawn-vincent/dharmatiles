@@ -79,7 +79,7 @@ nonsensical geometry and must not be introduced.
 """
 from __future__ import annotations
 
-from typing import NamedTuple
+from typing import Callable, NamedTuple
 
 import numpy as np
 import trimesh
@@ -96,9 +96,10 @@ _LEAF_W_PEAK_NORM  = float((1.0 / 3.0) ** 0.4 * (2.0 / 3.0) ** 0.8)
 # Thickness-along-length profile: t_long(s) ∝ s^0.5 × (1-s)^1.5, peak at s=0.25.
 _LEAF_LONG_T_PEAK  = float(0.25 ** 0.5 * 0.75 ** 1.5)   # ≈ 0.3248
 
-# Default leaf size (mm).  Used as function-argument defaults throughout.
-_LEAF_LENGTH_MM_DEFAULT = 6.0
-_LEAF_WIDTH_MM_DEFAULT  = 4.0   # ≈ 2/3 of length
+# Default leaf size (mm).  Public so callers can reference them without
+# hard-coding magic numbers.
+LEAF_LENGTH_MM_DEFAULT = 6.0
+LEAF_WIDTH_MM_DEFAULT  = 4.0   # ≈ 2/3 of length
 
 # Tolerance for leaf_placement_from_surface: pos must be within this distance
 # of the mesh surface or a ValueError is raised.
@@ -267,8 +268,8 @@ def compute_leaf_geometry(
     *,
     base_pos:       np.ndarray,
     tangent:        np.ndarray,
-    length_mm:      float = _LEAF_LENGTH_MM_DEFAULT,
-    width_mm:       float = _LEAF_WIDTH_MM_DEFAULT,
+    length_mm:      float = LEAF_LENGTH_MM_DEFAULT,
+    width_mm:       float = LEAF_WIDTH_MM_DEFAULT,
     thickness_mm:   float = 0.16,
     fold_angle_deg: float = 6.0,
     inner_curve:    float = 1.5,
@@ -675,8 +676,8 @@ def build_leaf_on_surface(
     mesh: trimesh.Trimesh,
     pos: np.ndarray,
     *,
-    length_mm: float = _LEAF_LENGTH_MM_DEFAULT,
-    width_mm:  float = _LEAF_WIDTH_MM_DEFAULT,
+    length_mm: float = LEAF_LENGTH_MM_DEFAULT,
+    width_mm:  float = LEAF_WIDTH_MM_DEFAULT,
     **leaf_kwargs,
 ) -> list[trimesh.Trimesh]:
     """Build a leaf mesh placed on a mesh surface point.
@@ -690,8 +691,8 @@ def build_leaf_on_surface(
     ----------
     mesh       : Parent ``trimesh.Trimesh`` the leaf grows from.
     pos        : Approximate world position (snapped to nearest surface point).
-    length_mm  : Leaf length.  Default ``_LEAF_LENGTH_MM_DEFAULT``.
-    width_mm   : Maximum leaf width.  Default ``_LEAF_WIDTH_MM_DEFAULT``.
+    length_mm  : Leaf length.  Default ``LEAF_LENGTH_MM_DEFAULT``.
+    width_mm   : Maximum leaf width.  Default ``LEAF_WIDTH_MM_DEFAULT``.
     **leaf_kwargs : Forwarded to :func:`build_leaf_mesh`
                    (``thickness_mm``, ``keel_depth_mm``, etc.)
 
@@ -713,8 +714,8 @@ def build_leaf_surface(
     *,
     base_pos:       np.ndarray,
     tangent:        np.ndarray,
-    length_mm:      float = _LEAF_LENGTH_MM_DEFAULT,
-    width_mm:       float = _LEAF_WIDTH_MM_DEFAULT,
+    length_mm:      float = LEAF_LENGTH_MM_DEFAULT,
+    width_mm:       float = LEAF_WIDTH_MM_DEFAULT,
     thickness_mm:   float = 0.16,
     fold_angle_deg: float = 6.0,
     inner_curve:    float = 1.5,
@@ -801,8 +802,8 @@ def build_leaf_mesh(
     *,
     base_pos: np.ndarray,
     tangent: np.ndarray,
-    length_mm: float = _LEAF_LENGTH_MM_DEFAULT,
-    width_mm: float = _LEAF_WIDTH_MM_DEFAULT,
+    length_mm: float = LEAF_LENGTH_MM_DEFAULT,
+    width_mm: float = LEAF_WIDTH_MM_DEFAULT,
     thickness_mm: float = 0.16,
     fold_angle_deg: float = 6.0,
     inner_curve: float = 1.5,
@@ -890,7 +891,8 @@ def build_leaf_mesh(
 # ── Solidification and FDM analysis ───────────────────────────────────────────
 
 # Root-embedding depth: how far the root ring extends below the leaf plane.
-_LEAF_ROOT_DEPTH_MM: float = 1.0
+# Public so callers can reference it without hard-coding the literal.
+LEAF_ROOT_DEPTH_MM: float = 1.0
 
 # FDM printability floor: faces whose downward slope exceeds this are overhangs.
 _LEAF_FDM_FLOOR_DEG: float = 45.0
@@ -931,6 +933,81 @@ def _segment_length_outside_sphere(
     return outside * length
 
 
+def find_max_dip(
+    base_pos:  np.ndarray,
+    T0:        np.ndarray,
+    up_hint:   np.ndarray,
+    is_clear:  Callable[[np.ndarray], bool],
+    **leaf_kwargs,
+) -> float:
+    """Find the maximum dip angle (radians) using a generic collision-free predicate.
+
+    Builds a flat leaf (dip = 0), identifies *risky* vertices (those currently
+    outside the obstacle that could penetrate it as dip increases), then
+    binary-searches for the largest dip rotation that keeps all risky vertices
+    clear.
+
+    Dip rotates the tangent toward ``-up_hint``:
+    ``tangent = T0 * cos(dip) - up_hint * sin(dip)``.
+
+    Parameters
+    ----------
+    base_pos  : Leaf base (pivot point for the dip rotation).
+    T0        : Flat (dip = 0) tangent direction.
+    up_hint   : Outward surface normal at base_pos.
+    is_clear  : Collision-free predicate.  Called with an (N, 3) vertex array;
+                must return ``True`` iff **all** supplied points are in the
+                free region.  For a sphere of radius *r* centred at the origin::
+
+                    is_clear = lambda pts: np.all(np.linalg.norm(pts, axis=1) >= r)
+
+    **leaf_kwargs : Passed to :func:`build_leaf_surface`
+                   (``length_mm``, ``width_mm``, ``fold_angle_deg``, etc.)
+
+    Returns
+    -------
+    float
+        Maximum dip angle in radians.  Returns 0.0 if no vertices are clear
+        at dip = 0 (leaf fully inside the parent shape — degenerate placement).
+    """
+    flat = build_leaf_surface(base_pos=base_pos, tangent=T0, up_hint=up_hint, **leaf_kwargs)
+
+    # Identify *risky* vertices: those clear at dip = 0 that could become
+    # unclear as dip increases.  Per-vertex calls happen once at setup, not
+    # inside the hot bisection loop.
+    risky_mask  = np.array([is_clear(v[np.newaxis]) for v in flat.vertices])
+    risky_verts = flat.vertices[risky_mask]
+    if len(risky_verts) == 0:
+        return 0.0
+
+    # Rodrigues rotation axis: rotating T0 around cross(-T0, up_hint) by angle θ
+    # gives tangent = T0*cos(θ) − up_hint*sin(θ), i.e. the dip formula.
+    axis = _safe_norm(np.cross(-T0, up_hint))
+
+    def _rotate(pts: np.ndarray, theta: float) -> np.ndarray:
+        c, s = np.cos(theta), np.sin(theta)
+        rel  = pts - base_pos
+        return (base_pos
+                + rel * c
+                + np.cross(axis, rel) * s
+                + axis * (rel @ axis)[:, np.newaxis] * (1.0 - c))
+
+    # Check upper bound: if never penetrates even at full π dip, return π.
+    lo, hi = 0.0, np.pi
+    if is_clear(_rotate(risky_verts, hi)):
+        return hi
+
+    # Bisect between lo (ok) and hi (penetrates).
+    # 48 iterations gives ~4e-15 rad precision.
+    for _ in range(48):
+        mid = 0.5 * (lo + hi)
+        if is_clear(_rotate(risky_verts, mid)):
+            lo = mid
+        else:
+            hi = mid
+    return lo
+
+
 def find_max_dip_for_sphere(
     base_pos:      np.ndarray,
     T0:            np.ndarray,
@@ -943,9 +1020,15 @@ def find_max_dip_for_sphere(
     """Find the maximum dip angle (radians) that presses a leaf against a sphere
     without any leaf vertex penetrating it.
 
-    Builds a flat leaf (dip = 0) to identify which vertices are outside the
-    sphere, then binary-searches for the largest dip rotation that keeps all
-    of those vertices at or outside ``sphere_radius + clearance_mm``.
+    Convenience wrapper around :func:`find_max_dip` for the common case of a
+    sphere centred at the origin.  Equivalent to::
+
+        min_dist = sphere_radius + clearance_mm
+        find_max_dip(
+            base_pos, T0, up_hint,
+            lambda pts: np.all(np.linalg.norm(pts, axis=1) >= min_dist),
+            **leaf_kwargs,
+        )
 
     The sphere is centred at the origin.  ``T0`` is the flat tangent direction
     (gravity-down in the surface's tangent plane, as returned by
@@ -968,48 +1051,11 @@ def find_max_dip_for_sphere(
         Maximum dip angle in radians.  Returns 0.0 if no vertices are outside
         the sphere at dip = 0 (leaf is fully inside — shouldn't normally occur).
     """
-    flat = build_leaf_surface(
-        base_pos=base_pos, tangent=T0, up_hint=up_hint, **leaf_kwargs
+    min_dist: float = sphere_radius + clearance_mm
+    is_clear: Callable[[np.ndarray], bool] = (
+        lambda pts: bool(np.all(np.linalg.norm(pts, axis=1) >= min_dist))
     )
-    dists    = np.linalg.norm(flat.vertices, axis=1)
-    far_mask = dists >= sphere_radius + clearance_mm
-    far_verts = flat.vertices[far_mask]
-    if len(far_verts) == 0:
-        return 0.0
-
-    # Rodrigues rotation axis: rotating T0 around cross(-T0, up_hint) by angle θ
-    # gives tangent = T0*cos(θ) − up_hint*sin(θ), i.e. the dip formula.
-    axis = _safe_norm(np.cross(-T0, up_hint))
-
-    def _rotate(pts: np.ndarray, theta: float) -> np.ndarray:
-        c, s = np.cos(theta), np.sin(theta)
-        rel  = pts - base_pos
-        return (base_pos
-                + rel * c
-                + np.cross(axis, rel) * s
-                + axis * (rel @ axis)[:, np.newaxis] * (1.0 - c))
-
-    def _ok(theta: float) -> bool:
-        return bool(np.all(
-            np.linalg.norm(_rotate(far_verts, theta), axis=1)
-            >= sphere_radius + clearance_mm
-        ))
-
-    # Check upper bound: if the leaf never penetrates even at full π dip, any
-    # dip is valid.  Return π so the caller gets the maximum useful angle.
-    lo, hi = 0.0, np.pi
-    if _ok(hi):
-        return hi
-
-    # _ok(π) is False → bisect between lo (ok) and hi (penetrates).
-    # 48 iterations gives ~4e-15 rad precision.
-    for _ in range(48):
-        mid = 0.5 * (lo + hi)
-        if _ok(mid):
-            lo = mid
-        else:
-            hi = mid
-    return lo
+    return find_max_dip(base_pos, T0, up_hint, is_clear, **leaf_kwargs)
 
 
 def boundary_loop(mesh: trimesh.Trimesh) -> list[int]:
@@ -1052,7 +1098,7 @@ def boundary_loop(mesh: trimesh.Trimesh) -> list[int]:
 def solidify_leaf(
     surface: trimesh.Trimesh,
     up_hint: np.ndarray,
-    depth:   float = _LEAF_ROOT_DEPTH_MM,
+    depth:   float = LEAF_ROOT_DEPTH_MM,
     *,
     parent_sphere_radius: float | None = None,
     fdm_floor_deg:        float = _LEAF_FDM_FLOOR_DEG,
@@ -1083,8 +1129,8 @@ def solidify_leaf(
     (solid, wall_face_range)
         *solid* is a closed ``trimesh.Trimesh``.  *wall_face_range* is the
         ``range`` of face indices belonging to the wall quads only (not the
-        original surface faces or the bottom cap), for use with
-        :func:`color_leaf_walls_by_fdm`.
+        original surface faces or the bottom cap), suitable for external
+        per-face FDM printability analysis.
     """
     n    = _safe_norm(np.asarray(up_hint, float))
     loop = boundary_loop(surface)
@@ -1145,89 +1191,3 @@ def solidify_leaf(
     return solid, range(wall_start, wall_end)
 
 
-def color_leaf_walls_by_fdm(
-    mesh:         trimesh.Trimesh,
-    wall_faces:   range,
-    support_mesh: trimesh.Trimesh,
-    *,
-    floor_angle_deg:      float = _LEAF_FDM_FLOOR_DEG,
-    support_tolerance_mm: float = _LEAF_FDM_SUPPORT_TOLERANCE_MM,
-    color_ok:    np.ndarray = np.array([ 50, 200,  50, 255], dtype=np.uint8),
-    color_fail:  np.ndarray = np.array([220,  50,  50, 255], dtype=np.uint8),
-) -> None:
-    """Color wall faces green/red by FDM printability, in-place.
-
-    Two failure conditions are checked for each wall face:
-
-    1. **Angle** — face normal's Z component is below ``-sin(floor_angle_deg)``.
-    2. **Support** — the face's lowest vertex is not inside ``support_mesh``,
-       not within ``support_tolerance_mm`` of it, and has no geometry below it
-       (downward ray miss).
-
-    Printability propagates upward across shared wall edges from directly
-    supported faces, so a face whose angle is fine but which floats in an
-    unsupported island remains red.
-
-    Surface and cap faces are not touched.
-
-    Parameters
-    ----------
-    mesh                 : Solid returned by :func:`solidify_leaf`.
-    wall_faces           : Range of wall face indices from :func:`solidify_leaf`.
-    support_mesh         : Mesh the leaf rests on (sphere + trunk, etc.).
-    floor_angle_deg      : Printability floor angle (degrees from horizontal).
-    support_tolerance_mm : Distance tolerance for on-surface detection.
-    color_ok             : RGBA colour for printable faces (default green).
-    color_fail           : RGBA colour for overhang faces (default red).
-    """
-    threshold = -np.sin(np.radians(floor_angle_deg))
-    wall_idx  = np.array(list(wall_faces), dtype=np.intp)
-    if len(wall_idx) == 0:
-        return
-
-    wall_nz  = mesh.face_normals[wall_idx, 2]
-    angle_ok = wall_nz >= threshold
-
-    face_verts  = mesh.vertices[mesh.faces[wall_idx]]              # (N, 3, 3)
-    lowest_vi   = face_verts[:, :, 2].argmin(axis=1)
-    lowest_pts  = face_verts[np.arange(len(wall_idx)), lowest_vi]  # (N, 3)
-
-    inside = support_mesh.contains(lowest_pts)
-    _, surf_dist, _ = support_mesh.nearest.on_surface(lowest_pts)
-    inside_or_on = inside | (surf_dist <= support_tolerance_mm)
-
-    has_support = inside_or_on.copy()
-    outside_idx = np.where(~inside_or_on)[0]
-    if len(outside_idx):
-        ray_origins = lowest_pts[outside_idx] - np.array([0.0, 0.0, 1e-3])
-        ray_dirs    = np.tile([0.0, 0.0, -1.0], (len(outside_idx), 1))
-        has_support[outside_idx] = support_mesh.ray.intersects_any(
-            ray_origins, ray_dirs,
-        )
-
-    # Propagate printability upward through angle-OK wall edges.
-    face_min_z: np.ndarray = face_verts[:, :, 2].min(axis=1)
-    edge_to_faces: dict[tuple[int, int], list[int]] = {}
-    for local_i, face in enumerate(mesh.faces[wall_idx]):
-        for a, b in ((face[0], face[1]), (face[1], face[2]), (face[2], face[0])):
-            edge_to_faces.setdefault(tuple(sorted((int(a), int(b)))), []).append(local_i)
-
-    neighbors: list[set[int]] = [set() for _ in wall_idx]
-    for incident in edge_to_faces.values():
-        for fi in incident:
-            neighbors[fi].update(j for j in incident if j != fi)
-
-    printable = has_support.copy()
-    changed = True
-    while changed:
-        changed = False
-        for fi in np.argsort(face_min_z):
-            if printable[fi] or not angle_ok[fi]:
-                continue
-            if any(printable[nb] and face_min_z[nb] <= face_min_z[fi] + 1e-6
-                   for nb in neighbors[fi]):
-                printable[fi] = True
-                changed = True
-
-    mesh.visual.face_colors[wall_idx[ printable]] = color_ok
-    mesh.visual.face_colors[wall_idx[~printable]] = color_fail

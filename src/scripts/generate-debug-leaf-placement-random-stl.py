@@ -26,15 +26,15 @@ import trimesh
 
 from dharmatiles.core.color import debug_material, export_color_stl, tag
 from dharmatiles.trees.leaf import (
-    _LEAF_LENGTH_MM_DEFAULT,
-    _LEAF_WIDTH_MM_DEFAULT,
-    _LEAF_ROOT_DEPTH_MM,
+    LEAF_LENGTH_MM_DEFAULT,
+    LEAF_ROOT_DEPTH_MM,
+    LEAF_WIDTH_MM_DEFAULT,
     build_leaf_surface,
     find_max_dip_for_sphere,
     leaf_placement_from_surface,
     solidify_leaf,
-    color_leaf_walls_by_fdm,
 )
+from _leaf_debug import color_leaf_walls_by_fdm
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -53,8 +53,8 @@ def build_debug_mesh(
     count:      int          = 30,
     seed:       int          = 42,
     dip_deg:    float | None = None,
-    length_mm:  float        = _LEAF_LENGTH_MM_DEFAULT,
-    width_mm:   float        = _LEAF_WIDTH_MM_DEFAULT,
+    length_mm:  float        = LEAF_LENGTH_MM_DEFAULT,
+    width_mm:   float        = LEAF_WIDTH_MM_DEFAULT,
 ) -> trimesh.Trimesh:
     """Sphere + trunk + *count* randomly-placed leaf solids.
 
@@ -119,7 +119,7 @@ def build_debug_mesh(
         )
 
         leaf, wall_faces = solidify_leaf(
-            leaf_surf, up_hint, _LEAF_ROOT_DEPTH_MM,
+            leaf_surf, up_hint, LEAF_ROOT_DEPTH_MM,
             parent_sphere_radius=SPHERE_RADIUS_MM,
         )
 
@@ -152,10 +152,10 @@ def main() -> None:
                         help="Random seed (default: 42)")
     parser.add_argument("--dip-deg", type=float, default=None,
                         help="Fix dip angle (degrees). Omit for auto: max dip without penetration (default)")
-    parser.add_argument("--length-mm", type=float, default=_LEAF_LENGTH_MM_DEFAULT,
-                        help=f"Leaf length mm (default: {_LEAF_LENGTH_MM_DEFAULT})")
-    parser.add_argument("--width-mm", type=float, default=_LEAF_WIDTH_MM_DEFAULT,
-                        help=f"Leaf width mm (default: {_LEAF_WIDTH_MM_DEFAULT})")
+    parser.add_argument("--length-mm", type=float, default=LEAF_LENGTH_MM_DEFAULT,
+                        help=f"Leaf length mm (default: {LEAF_LENGTH_MM_DEFAULT})")
+    parser.add_argument("--width-mm", type=float, default=LEAF_WIDTH_MM_DEFAULT,
+                        help=f"Leaf width mm (default: {LEAF_WIDTH_MM_DEFAULT})")
     args = parser.parse_args()
 
     mesh = build_debug_mesh(
