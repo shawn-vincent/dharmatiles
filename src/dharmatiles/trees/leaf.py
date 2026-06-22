@@ -266,7 +266,7 @@ def compute_leaf_geometry(
     inner_curve:    float = 1.5,
     outer_curve:    float = 0.6,
     arch_deg:       float = 30.0,
-    curl_deg:       float = 15.0,
+    curl_deg:       float = 7.5,
     up_hint:        np.ndarray | None = None,
     seed:           int = 0,
 ) -> _LeafGeometry:
@@ -591,7 +591,7 @@ def build_leaf_surface(
     inner_curve:    float = 1.5,
     outer_curve:    float = 0.6,
     arch_deg:       float = 30.0,
-    curl_deg:       float = 15.0,
+    curl_deg:       float = 7.5,
     up_hint:        np.ndarray | None = None,
     seed:           int = 0,
 ) -> trimesh.Trimesh:
@@ -675,7 +675,7 @@ def build_leaf_mesh(
     inner_curve: float = 1.5,
     outer_curve: float = 0.6,
     arch_deg: float = 30.0,
-    curl_deg: float = 15.0,
+    curl_deg: float = 7.5,
     keel_depth_mm: float = 1.0,
     keel_tip_angle_deg: float = 45.0,
     up_hint: np.ndarray | None = None,
@@ -694,7 +694,7 @@ def build_leaf_mesh(
     inner_curve     : crease-side Bézier shoulder height.  Default 1.5.
     outer_curve     : edge-side Bézier shoulder height.  Default 0.15.
     arch_deg        : upward tangent angle at the base of the arch.  Default 30.0.
-    curl_deg        : concave tangent turn over the second half.  Default 15.0.
+    curl_deg        : concave tangent turn over the second half.  Default 7.5.
     keel_depth_mm   : maximum depth of the structural keel on the underside.
                       Pass 0 to omit the keel.  Default 1.0.
     keel_tip_angle_deg : reserved for future use.  Default 45.0.
