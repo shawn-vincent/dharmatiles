@@ -49,9 +49,7 @@ _N_LOFT_RINGS = 2   # root circle + leaf perimeter; no intermediate rings needed
 
 LEAF_THICKNESS_MM      = 0.16
 UNDERCUT_MM            = 0.5   # undercut step: down -n and inward by this amount
-UNDERCUT_MIN_ANGLE_DEG = 30.0  # min interior corner angle at perimeter vertex;
-                                # below this the inward displacement creates a spike → fall back to straight-down
-UNDERCUT_MIN_REMAINING_MM = LEAF_THICKNESS_MM
+UNDERCUT_MIN_ANGLE_DEG = 25.0  # min undercut slope angle above the leaf plane
 
 FAIL_MATERIAL: Material = debug_material(0)   # red — reserved for FDM failures
 
@@ -103,6 +101,8 @@ def _is_printable(surface_normal: np.ndarray) -> bool:
 def build_branchlet_and_leaf(
     attachment_point: np.ndarray,
     surface_normal:   np.ndarray,
+    *,
+    debug_tip: bool = False,
 ) -> tuple[trimesh.Trimesh, bool]:
     """Loft root circle → undercut ring → leaf perimeter, with leaf surface on top.
 
@@ -153,45 +153,98 @@ def build_branchlet_and_leaf(
     root_ring = _circle_ring(root_center, L, T, root_radius, NP)
 
     # ── Undercut ring ─────────────────────────────────────────────────────────
-    # From each boundary vertex: −n by UNDERCUT_MM, then inward toward the
-    # perimeter centroid by UNDERCUT_MM.
-    # Guard: sharp corners and perimeter spans narrower than the undercut would
-    # create a thin lip or crossing undercut.  Those vertices fall back to
-    # straight-down (−n only).
+    # From each boundary vertex: move inward toward the perimeter centroid by
+    # UNDERCUT_MM.  The -n drop is the amount needed to keep that undercut at
+    # UNDERCUT_MIN_ANGLE_DEG or steeper above the leaf plane.
     t_mm         = UNDERCUT_MM
     perim_center = np.mean(boundary, axis=0)
     inward       = perim_center[None] - boundary
     inward_unit  = inward / np.maximum(np.linalg.norm(inward, axis=1, keepdims=True), 1e-10)
 
-    prev_pts  = np.roll(boundary, 1, axis=0)
-    next_pts  = np.roll(boundary, -1, axis=0)
-    edge_in   = boundary - prev_pts
-    edge_out  = next_pts - boundary
-    edge_in  /= np.maximum(np.linalg.norm(edge_in, axis=1, keepdims=True), 1e-10)
-    edge_out /= np.maximum(np.linalg.norm(edge_out, axis=1, keepdims=True), 1e-10)
-    cos_interior = -np.einsum('ij,ij->i', edge_in, edge_out)           # cos(interior corner angle)
-    sharp_corner = cos_interior > np.cos(np.radians(UNDERCUT_MIN_ANGLE_DEG))
+    down_mm = np.full(NP, t_mm)
 
-    # Per-boundary available half-span measured from the perimeter toward the
-    # leaf centreline.  The pointed tip has zero span even when its perimeter
-    # angle is not acute, so the corner-angle test alone misses it.
-    boundary_half_span = np.concatenate([
-        [0.0],
-        g.w_s,
-        [0.0],
-        g.w_s[::-1],
-    ])
-    narrow_span = (
-        boundary_half_span
-        <= t_mm + UNDERCUT_MIN_REMAINING_MM
-    )
-    thin_lip = sharp_corner | narrow_span
+    def _angle_above_leaf_plane(a: np.ndarray, b: np.ndarray) -> float:
+        delta = b - a
+        normal_delta = abs(float(np.dot(delta, n)))
+        plane_delta = float(np.linalg.norm(delta - np.dot(delta, n) * n))
+        return float(np.degrees(np.arctan2(normal_delta, max(plane_delta, 1e-10))))
 
-    undercut_ring = np.where(
-        thin_lip[:, None],
-        boundary - t_mm * n[None],                          # straight-down fallback
-        boundary - t_mm * n[None] + t_mm * inward_unit,    # full undercut
-    )  # (NP, 3)
+    def _angle_at(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> float:
+        ba = b - a
+        ca = c - a
+        denom = max(float(np.linalg.norm(ba) * np.linalg.norm(ca)), 1e-10)
+        return float(np.degrees(np.arccos(np.clip(float(np.dot(ba, ca)) / denom, -1.0, 1.0))))
+
+    def _section_anchor(k: int) -> np.ndarray:
+        if k == 0:
+            return g.top_pts[0, NT // 2, :]
+        if 1 <= k <= nr:
+            return g.top_pts[k - 1, NT // 2, :]
+        if k == nr + 1:
+            return g.top_pts[-1, NT // 2, :]
+        return g.top_pts[2 * nr + 1 - k, NT // 2, :]
+
+    def _undercut_ring_for(depths: np.ndarray) -> np.ndarray:
+        trial_down = np.asarray(depths, dtype=float)
+        return boundary - trial_down[:, None] * n[None] + t_mm * inward_unit
+
+    def _min_undercut_section_angle(depths: np.ndarray) -> float:
+        trial_ring = _undercut_ring_for(depths)
+        return min(
+            _angle_at(boundary[k], _section_anchor(k), trial_ring[k])
+            for k in range(NP)
+        )
+
+    for k in range(NP):
+        def _local_min_angle(depth: float) -> float:
+            trial_down = down_mm.copy()
+            trial_down[k] = depth
+            trial_ring = _undercut_ring_for(trial_down)
+            return _angle_at(boundary[k], _section_anchor(k), trial_ring[k])
+
+        if _local_min_angle(t_mm) >= UNDERCUT_MIN_ANGLE_DEG:
+            continue
+        lo = hi = t_mm
+        while _local_min_angle(hi) < UNDERCUT_MIN_ANGLE_DEG and hi < 8.0 * t_mm:
+            hi *= 1.25
+        for _ in range(24):
+            mid = 0.5 * (lo + hi)
+            if _local_min_angle(mid) >= UNDERCUT_MIN_ANGLE_DEG:
+                hi = mid
+            else:
+                lo = mid
+        down_mm[k] = hi
+
+    undercut_ring = boundary - down_mm[:, None] * n[None] + t_mm * inward_unit
+
+    if debug_tip:
+        tip_k = nr + 1
+        print("Tip undercut debug:")
+        print(f"  tip index: {tip_k}")
+        print(f"  target angle: {UNDERCUT_MIN_ANGLE_DEG:.2f} deg")
+        mid_k = nr // 2 + 1
+        print(f"  normal drop: {down_mm[tip_k]:.4f} mm")
+        print(f"  mid-edge index: {mid_k}")
+        print(f"  mid-edge normal drop: {down_mm[mid_k]:.4f} mm")
+        print(
+            f"  tip section angle: "
+            f"{_angle_at(boundary[tip_k], _section_anchor(tip_k), undercut_ring[tip_k]):.2f} deg"
+        )
+        print(
+            f"  mid-edge section angle: "
+            f"{_angle_at(boundary[mid_k], _section_anchor(mid_k), undercut_ring[mid_k]):.2f} deg"
+        )
+        for j in (tip_k - 1, tip_k + 1):
+            print(
+                f"  top tip -> top neighbor {j}: "
+                f"{_angle_above_leaf_plane(boundary[tip_k], boundary[j]):.2f} deg"
+            )
+        for j in (tip_k - 1, tip_k, tip_k + 1):
+            print(
+                f"  top tip -> undercut {j}: "
+                f"{_angle_above_leaf_plane(boundary[tip_k], undercut_ring[j]):.2f} deg"
+            )
+        print(f"  min undercut section angle: {_min_undercut_section_angle(down_mm):.2f} deg")
 
     # ── Vertex layout ─────────────────────────────────────────────────────────
     #   0 .. NP-1          root ring
@@ -274,7 +327,7 @@ def build_branchlet_and_leaf(
 
 # ── Scene assembly ─────────────────────────────────────────────────────────────
 
-def build_debug_mesh() -> trimesh.Trimesh:
+def build_debug_mesh(*, debug_tip: bool = False) -> trimesh.Trimesh:
     """Build the coloured sphere and four branchlet+leaf assemblies."""
     sphere = trimesh.creation.icosphere(subdivisions=4, radius=SPHERE_RADIUS_MM)
     sphere.fix_normals()
@@ -285,7 +338,11 @@ def build_debug_mesh() -> trimesh.Trimesh:
     for leaf_index, (name, fraction_down) in enumerate(PLACEMENTS):
         polar  = np.pi * fraction_down
         normal = np.array([np.sin(polar), 0.0, np.cos(polar)])
-        mesh, is_fail = build_branchlet_and_leaf(SPHERE_RADIUS_MM * normal, normal)
+        mesh, is_fail = build_branchlet_and_leaf(
+            SPHERE_RADIUS_MM * normal,
+            normal,
+            debug_tip=debug_tip and name == "top",
+        )
         slot   = 2 + leaf_index
         status = "FAIL (red)" if is_fail else f"ok  (slot {slot})  watertight={mesh.is_watertight}"
         print(f"  {name:13s}  {status}")
@@ -299,9 +356,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", "-o", type=pathlib.Path, default=DEFAULT_OUTPUT,
                         help=f"Output colour-STL path (default: {DEFAULT_OUTPUT})")
+    parser.add_argument("--debug-tip", action="store_true",
+                        help="Print diagnostic angles for the top leaf tip")
     args = parser.parse_args()
 
-    mesh = build_debug_mesh()
+    mesh = build_debug_mesh(debug_tip=args.debug_tip)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     export_color_stl(mesh, args.output)
 
