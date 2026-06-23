@@ -92,6 +92,12 @@ from ._utils import _safe_norm
 
 _LEAF_N_LONG           = 12    # longitudinal sections (base → tip)
 _LEAF_N_LAT            = 10    # lateral sections across the leaf (must be even)
+# Fixed vertex index of the tip point in every leaf *surface* mesh
+# (as returned by build_leaf_surface — open top face only).
+# Layout: top rings | v_base | v_tip  (see build_leaf_surface).
+# NB: build_leaf_mesh has an additional bottom-ring block, so its tip index
+# is 2*(n_rings*stride)+1; do not confuse the two.
+_LEAF_TIP_VERTEX_IDX   = (_LEAF_N_LONG - 1) * (_LEAF_N_LAT + 1) + 1
 _LEAF_CREASE_SHARPNESS = 10.0  # tanh width of midrib crease (larger = narrower)
 # Width profile normalisation: w(s) ∝ s^0.4 × (1-s)^0.8 peaks at s=1/3.
 _LEAF_W_PEAK_NORM  = float((1.0 / 3.0) ** 0.4 * (2.0 / 3.0) ** 0.8)
@@ -1234,19 +1240,21 @@ def solidify_leaf(
     the perimeter to the root ring; a centroid fan caps the buried end.
 
     When ``tip_root`` is provided (obtained from :func:`find_tip_root`) the
-    lowest-Z perimeter vertex's root position is set to that point instead of
-    the default ``perim[tip_i] − depth × up_hint``.  This places the tip root
-    exactly on the parent mesh surface at the minimum printable angle, replacing
-    the old sphere-specific FDM heuristic.
+    tip vertex's root position is overridden with that point instead of the
+    default ``tip_vertex − depth × up_hint``.  This places the tip root
+    exactly on the parent mesh surface at the minimum printable angle.
+
+    The tip vertex is identified by its fixed index in the leaf surface mesh
+    (``_LEAF_TIP_VERTEX_IDX``), independent of world-space Z.
 
     Parameters
     ----------
     surface   : Open leaf surface from :func:`build_leaf_surface`.
     up_hint   : Leaf plane normal (outward from the parent surface).
     depth     : Root-ring embedding depth for all non-tip perimeter vertices.
-    tip_root  : Override root position for the lowest-Z (tip) perimeter vertex,
-                as returned by :func:`find_tip_root`.  ``None`` keeps the
-                default ``perim[tip_i] - depth * up_hint``.
+    tip_root  : Override root position for the tip perimeter vertex, as
+                returned by :func:`find_tip_root`.  ``None`` keeps the
+                default ``tip_vertex - depth * up_hint``.
 
     Returns
     -------
@@ -1263,7 +1271,10 @@ def solidify_leaf(
     perim = surface.vertices[loop]      # (NP, 3)
     root  = perim - depth * n           # (NP, 3)
 
-    tip_i = int(np.argmin(perim[:, 2]))
+    # Locate the tip by its fixed vertex index — it is a well-defined geometric
+    # point, independent of Z.
+    tip_i = loop.index(_LEAF_TIP_VERTEX_IDX)
+
     if tip_root is not None:
         root[tip_i] = np.asarray(tip_root, float)
 
