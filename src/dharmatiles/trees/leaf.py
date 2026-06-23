@@ -1307,3 +1307,77 @@ def solidify_leaf(
     return solid, range(wall_start, wall_end)
 
 
+def place_leaf_on_sphere(
+    base_pos:      np.ndarray,
+    T0:            np.ndarray,
+    up_hint:       np.ndarray,
+    sphere_radius: float,
+    parent_mesh:   trimesh.Trimesh,
+    *,
+    dip_rad:      float | None = None,
+    clearance_mm: float = 0.0,
+    depth:        float = LEAF_ROOT_DEPTH_MM,
+    **leaf_kwargs,
+) -> tuple[trimesh.Trimesh, range]:
+    """Build and solidify a leaf placed on a sphere surface.
+
+    Single primitive that covers the full placement pipeline:
+
+    1. Find max dip — largest angle that presses the leaf against the sphere
+       without penetrating it (skipped when *dip_rad* is supplied).
+    2. Apply dip — rotate *T0* toward ``-up_hint`` for the tangent; rotate
+       *up_hint* toward *T0* for the leaf-plane normal.
+    3. :func:`build_leaf_surface` — open surface mesh.
+    4. :func:`find_tip_root` — raycast from the tip toward *parent_mesh*;
+       ``None`` on a miss (solidification falls back to flat projection).
+    5. :func:`solidify_leaf` — close the surface into a watertight solid.
+
+    Parameters
+    ----------
+    base_pos      : Leaf base position on the sphere surface.
+    T0            : Flat (dip = 0) tangent direction — gravity-down in the
+                    surface tangent plane, as returned by
+                    :func:`leaf_placement_from_surface`.
+    up_hint       : Outward surface normal at *base_pos*.
+    sphere_radius : Radius of the sphere centred at the origin (used only for
+                    the max-dip collision check).
+    parent_mesh   : Full support mesh (sphere + trunk, etc.) used for the tip
+                    root raycast.
+    dip_rad       : Fixed dip angle (radians).  ``None`` (default) → computed
+                    automatically via :func:`find_max_dip_for_sphere`.
+    clearance_mm  : Minimum clearance from the sphere for the dip search.
+    depth         : Root-ring embedding depth passed to :func:`solidify_leaf`.
+    **leaf_kwargs : Passed to :func:`build_leaf_surface` and (for the dip
+                    search) to :func:`find_max_dip_for_sphere`.  Typical keys:
+                    ``length_mm``, ``width_mm``, ``fold_angle_deg``,
+                    ``curl_deg``, ``lift_mm``.
+
+    Returns
+    -------
+    (solid, wall_face_range)
+        *solid* is a closed watertight ``trimesh.Trimesh``.
+        *wall_face_range* is the ``range`` of wall face indices suitable for
+        FDM printability analysis (see :func:`solidify_leaf`).
+    """
+    if dip_rad is None:
+        dip_rad = find_max_dip_for_sphere(
+            base_pos, T0, up_hint, sphere_radius,
+            clearance_mm=clearance_mm,
+            **leaf_kwargs,
+        )
+
+    # Apply dip rotation: tangent tilts toward -up_hint; up_hint tilts toward T0.
+    c, s      = float(np.cos(dip_rad)), float(np.sin(dip_rad))
+    tangent   = _safe_norm(np.asarray(T0, float) * c - np.asarray(up_hint, float) * s)
+    up_dipped = _safe_norm(np.asarray(up_hint, float) * c + np.asarray(T0, float) * s)
+
+    leaf_surf = build_leaf_surface(
+        base_pos=base_pos, tangent=tangent, up_hint=up_dipped, **leaf_kwargs,
+    )
+
+    length_mm = float(leaf_kwargs.get('length_mm', LEAF_LENGTH_MM_DEFAULT))
+    tip_root  = find_tip_root(leaf_surf, up_dipped, parent_mesh, length_mm)
+
+    return solidify_leaf(leaf_surf, up_dipped, depth, tip_root=tip_root)
+
+
