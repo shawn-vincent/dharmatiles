@@ -74,12 +74,12 @@ def _jitter_sphere_pts(
 
 def build_debug_mesh(
     *,
-    count:     int          = 30,
-    seed:      int          = 42,
-    dip_deg:   float | None = None,
-    length_mm: float        = LEAF_LENGTH_MM_DEFAULT,
-    width_mm:  float        = LEAF_WIDTH_MM_DEFAULT,
-    lift_mm:   float        = 1.0,
+    count:              int          = 30,
+    seed:               int          = 42,
+    contact_angle_deg:  float | None = None,
+    length_mm:          float        = LEAF_LENGTH_MM_DEFAULT,
+    width_mm:           float        = LEAF_WIDTH_MM_DEFAULT,
+    lift_mm:            float        = 1.0,
 ) -> trimesh.Trimesh:
     """Sphere + trunk + *count* randomly-placed leaf solids."""
     sphere = trimesh.creation.icosphere(subdivisions=4, radius=SPHERE_RADIUS_MM)
@@ -103,7 +103,7 @@ def build_debug_mesh(
 
     rng = np.random.default_rng(seed)
     pts = _jitter_sphere_pts(count, SPHERE_RADIUS_MM, rng)
-    fixed_dip_rad = None if dip_deg is None else np.radians(dip_deg)
+    contact_angle_rad = None if contact_angle_deg is None else np.radians(contact_angle_deg)
 
     n_ok_total = n_fail_total = 0
     for i, pt in enumerate(pts):
@@ -111,7 +111,7 @@ def build_debug_mesh(
 
         leaf, wall_faces = place_leaf_on_sphere(
             base_pos, T0, up_hint, SPHERE_RADIUS_MM, support_mesh,
-            dip_rad=fixed_dip_rad,
+            contact_angle_rad=contact_angle_rad,
             length_mm=length_mm, width_mm=width_mm,
             fold_angle_deg=LEAF_FOLD_DEG, curl_deg=LEAF_CURL_DEG,
             lift_mm=lift_mm,
@@ -125,8 +125,8 @@ def build_debug_mesh(
         n_fail_total += len(wall_faces) - int(np.sum(wall_colors[:, 0] < 128))
         parts.append(leaf)
 
-    dip_label = "auto" if dip_deg is None else f"{dip_deg:.0f}°"
-    print(f"  {count} leaves  dip={dip_label}  curl={LEAF_CURL_DEG:.0f}°  lift={lift_mm:.1f}mm  seed={seed}")
+    contact_label = "auto" if contact_angle_deg is None else f"{contact_angle_deg:.0f}°"
+    print(f"  {count} leaves  contact={contact_label}  curl={LEAF_CURL_DEG:.0f}°  lift={lift_mm:.1f}mm  seed={seed}")
     print(f"  wall faces: {n_ok_total} green  {n_fail_total} red  "
           f"({'%.0f' % (100*n_ok_total/(n_ok_total+n_fail_total+1e-9))}% printable)")
     return trimesh.util.concatenate(parts)
@@ -140,8 +140,8 @@ def main() -> None:
                         help="Number of leaves (default: 30)")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed (default: 42)")
-    parser.add_argument("--dip-deg", type=float, default=None,
-                        help="Fix dip angle (degrees). Omit for auto (default)")
+    parser.add_argument("--contact-angle-deg", type=float, default=None,
+                        help="Fix contact angle (degrees). Omit for auto (default)")
     parser.add_argument("--length-mm", type=float, default=LEAF_LENGTH_MM_DEFAULT,
                         help=f"Leaf length mm (default: {LEAF_LENGTH_MM_DEFAULT})")
     parser.add_argument("--width-mm", type=float, default=LEAF_WIDTH_MM_DEFAULT,
@@ -153,7 +153,7 @@ def main() -> None:
     mesh = build_debug_mesh(
         count=args.count,
         seed=args.seed,
-        dip_deg=args.dip_deg,
+        contact_angle_deg=args.contact_angle_deg,
         length_mm=args.length_mm,
         width_mm=args.width_mm,
         lift_mm=args.lift_mm,

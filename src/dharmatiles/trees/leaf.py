@@ -49,28 +49,30 @@ sticks out, the keel sticks in.
    Tips should always point as close to gravity-down as the surface allows.
    On a vertical surface the tip points straight down (± jitter); on a
    near-horizontal surface gravity has no preferred tangent-plane direction
-   so the twist is arbitrary (dip carries the tip downward regardless).
-   Tips never point upward on non-horizontal surfaces.
+   so the twist is arbitrary (the contact angle carries the tip downward
+   regardless).  Tips never point upward on non-horizontal surfaces.
 
-3. **Dip**: rotation about the lateral axis through the BASE (the axis
+3. **Lift**: rotation about the lateral axis T through the BASE (the axis
    perpendicular to both the current tangent and the surface normal), in the
-   plane of (tangent, surface_normal).
+   plane of (tangent, surface_normal).  The zero of lift is the *contact
+   angle* — the rotation that presses the leaf tip just against the parent
+   surface.  ``lift_mm`` in :func:`build_leaf_surface` is measured from that
+   zero: positive values raise the tip above surface contact.
 
-   - dip = 0°  → leaf lies flat against the surface; only the keel is
-     embedded; tip is in the surface's tangent plane.
-   - dip > 0°  → tip rotates toward the surface; progressively more keel is
-     buried.
-   - dip = 90° → tangent points directly into the surface (−surface_normal);
-     both base and tip touch the surface; the entire keel is embedded.
+   - contact angle → tip just touches the parent surface; this is lift = 0.
+   - lift > 0      → tip raised further above the surface.
+   - 90°           → tangent points directly into the surface (−surface_normal).
 
-   dip is clamped to [0°, 90°].
+   The contact angle is found by :func:`find_contact_angle_for_sphere` and
+   applied as a frame rotation in :func:`place_leaf_on_sphere` before
+   ``lift_mm`` is added on top.
 
-**Resulting tangent from surface_normal, twist, and dip**::
+**Resulting tangent from surface_normal, twist, and contact angle**::
 
-    T0  = unit vector in surface tangent plane in the twist direction
-    dip = angle in [0°, 90°]
-    tangent = T0 * cos(dip) − surface_normal * sin(dip)
-    N (up_hint) = surface_normal  (always)
+    T0             = unit vector in surface tangent plane in the twist direction
+    contact_angle  = rotation angle in [0°, 90°]
+    tangent        = T0 * cos(contact_angle) − surface_normal * sin(contact_angle)
+    N (up_hint)    = surface_normal rotated by the same angle toward T0
 
 No other axes of freedom exist.  Rotations that don't fit these three (e.g.
 tilting the leaf sideways relative to the surface normal, rotating around the
@@ -672,10 +674,10 @@ def leaf_placement_from_surface(
     points as far downward as the surface allows.  Callers that need a
     different orientation can derive their own tangent from the returned frame::
 
-        tangent = T0 * cos(dip) − up_hint * sin(dip)
+        tangent = T0 * cos(θ) − up_hint * sin(θ)
 
-    where ``T0`` is the returned tangent (dip = 0) and dip is the desired
-    angle into the surface.
+    where ``T0`` is the returned tangent (θ = 0) and θ is the contact angle
+    computed by :func:`find_contact_angle_for_sphere`.
     """
     pos = np.asarray(pos, float).ravel()[:3]
 
@@ -1047,27 +1049,30 @@ def find_tip_root(
     return locs[nearest] if dists[nearest] <= max_depth_mm else None
 
 
-def find_max_dip(
+def find_contact_angle(
     base_pos:  np.ndarray,
     T0:        np.ndarray,
     up_hint:   np.ndarray,
     is_clear:  Callable[[np.ndarray], bool],
     **leaf_kwargs,
 ) -> float:
-    """Find the maximum dip angle (radians) using a generic collision-free predicate.
+    """Find the contact angle (radians) using a generic collision-free predicate.
 
-    Builds a flat leaf (dip = 0), identifies *risky* vertices (those currently
-    outside the obstacle that could penetrate it as dip increases), then
-    binary-searches for the largest dip rotation that keeps all risky vertices
-    clear.
+    The *contact angle* is the rotation around the lateral axis T through
+    ``base_pos`` that presses the leaf tip just against the parent surface —
+    it establishes the zero point from which ``lift_mm`` is measured.
 
-    Dip rotates the tangent toward ``-up_hint``:
-    ``tangent = T0 * cos(dip) - up_hint * sin(dip)``.
+    Builds a flat leaf (contact angle = 0), identifies *risky* vertices (those
+    currently outside the obstacle that could penetrate it as the angle
+    increases), then binary-searches for the largest rotation that keeps all
+    risky vertices clear.
+
+    Rotation formula: ``tangent = T0 * cos(θ) - up_hint * sin(θ)``.
 
     Parameters
     ----------
-    base_pos  : Leaf base (pivot point for the dip rotation).
-    T0        : Flat (dip = 0) tangent direction.
+    base_pos  : Leaf base — pivot point for the rotation.
+    T0        : Flat (angle = 0) tangent direction.
     up_hint   : Outward surface normal at base_pos.
     is_clear  : Collision-free predicate.  Called with an (N, 3) vertex array;
                 must return ``True`` iff **all** supplied points are in the
@@ -1077,36 +1082,33 @@ def find_max_dip(
 
     **leaf_kwargs : Passed to :func:`build_leaf_surface`
                    (``length_mm``, ``width_mm``, ``fold_angle_deg``, etc.)
-                   ``lift_mm`` is **ignored** in this call and forced to 0.0
-                   internally: lift and dip rotate around the same lateral axis
-                   in opposite senses, so including lift in the dip search causes
-                   auto-dip to compensate exactly for the lift, making it
-                   invisible.  The caller should apply the intended ``lift_mm``
-                   when building the final leaf geometry.
+                   ``lift_mm`` is **ignored** here (forced to 0.0): the contact
+                   angle is the zero-lift position, so the search must be run
+                   without lift applied — ``lift_mm`` is added on top afterward
+                   by :func:`place_leaf_on_sphere`.
 
     Returns
     -------
     float
-        Maximum dip angle in radians.  Returns 0.0 if no vertices are clear
-        at dip = 0 (leaf fully inside the parent shape — degenerate placement).
+        Contact angle in radians.  Returns 0.0 if no vertices are clear at
+        angle = 0 (leaf fully inside the parent shape — degenerate placement).
     """
-    # Force lift_mm=0 so the dip is found for the arch+curl shape alone.
-    # Lift is applied AFTER the dip in the leaf creation pipeline; if lift were
-    # included here the auto-dip would simply compensate by pressing the leaf
-    # an equal and opposite amount, making the lift invisible.
+    # Search at lift_mm=0: the contact angle is the zero-lift reference.
+    # Lift is applied on top afterward; including it here would cause the search
+    # to compensate for it, making the lift invisible in the final geometry.
     flat_kwargs = {**leaf_kwargs, 'lift_mm': 0.0}
     flat = build_leaf_surface(base_pos=base_pos, tangent=T0, up_hint=up_hint, **flat_kwargs)
 
-    # Identify *risky* vertices: those clear at dip = 0 that could become
-    # unclear as dip increases.  Per-vertex calls happen once at setup, not
-    # inside the hot bisection loop.
+    # Identify *risky* vertices: those clear at angle = 0 that could become
+    # unclear as the angle increases.  Per-vertex calls happen once at setup,
+    # not inside the hot bisection loop.
     risky_mask  = np.array([is_clear(v[np.newaxis]) for v in flat.vertices])
     risky_verts = flat.vertices[risky_mask]
     if len(risky_verts) == 0:
         return 0.0
 
-    # Rodrigues rotation axis: rotating T0 around cross(-T0, up_hint) by angle θ
-    # gives tangent = T0*cos(θ) − up_hint*sin(θ), i.e. the dip formula.
+    # Rodrigues rotation axis: rotating T0 around cross(-T0, up_hint) by θ
+    # gives tangent = T0*cos(θ) − up_hint*sin(θ).
     axis = _safe_norm(np.cross(-T0, up_hint))
 
     def _rotate(pts: np.ndarray, theta: float) -> np.ndarray:
@@ -1117,7 +1119,7 @@ def find_max_dip(
                 + np.cross(axis, rel) * s
                 + axis * (rel @ axis)[:, np.newaxis] * (1.0 - c))
 
-    # Check upper bound: if never penetrates even at full π dip, return π.
+    # Check upper bound: if never penetrates even at full π, return π.
     lo, hi = 0.0, np.pi
     if is_clear(_rotate(risky_verts, hi)):
         return hi
@@ -1133,7 +1135,7 @@ def find_max_dip(
     return lo
 
 
-def find_max_dip_for_sphere(
+def find_contact_angle_for_sphere(
     base_pos:      np.ndarray,
     T0:            np.ndarray,
     up_hint:       np.ndarray,
@@ -1142,30 +1144,28 @@ def find_max_dip_for_sphere(
     clearance_mm:  float = 0.0,
     **leaf_kwargs,
 ) -> float:
-    """Find the maximum dip angle (radians) that presses a leaf against a sphere
-    without any leaf vertex penetrating it.
+    """Find the contact angle (radians) that presses a leaf against a sphere.
 
-    Convenience wrapper around :func:`find_max_dip` for the common case of a
-    sphere centred at the origin.  Equivalent to::
+    The contact angle is the rotation around the lateral axis T through
+    ``base_pos`` that places the leaf tip just against the sphere surface —
+    the zero point from which ``lift_mm`` is measured.
+
+    Convenience wrapper around :func:`find_contact_angle` for a sphere centred
+    at the origin.  Equivalent to::
 
         min_dist = sphere_radius + clearance_mm
-        find_max_dip(
+        find_contact_angle(
             base_pos, T0, up_hint,
             lambda pts: np.all(np.linalg.norm(pts, axis=1) >= min_dist),
             **leaf_kwargs,
         )
 
-    The sphere is centred at the origin.  ``T0`` is the flat tangent direction
-    (gravity-down in the surface's tangent plane, as returned by
-    :func:`leaf_placement_from_surface`).  Dip rotates the tangent toward
-    ``-up_hint``:  ``tangent = T0 * cos(dip) - up_hint * sin(dip)``.
-
     Parameters
     ----------
-    base_pos      : Leaf base (pivot point for the dip rotation).
-    T0            : Flat (dip = 0) tangent direction.
+    base_pos      : Leaf base — pivot point for the rotation.
+    T0            : Flat (angle = 0) tangent direction.
     up_hint       : Outward surface normal at base_pos.
-    sphere_radius : Radius of the bounding sphere (centred at origin).
+    sphere_radius : Radius of the sphere (centred at origin).
     clearance_mm  : Minimum clearance from the sphere surface (default 0).
     **leaf_kwargs : Passed to :func:`build_leaf_surface`
                    (``length_mm``, ``width_mm``, ``fold_angle_deg``, etc.)
@@ -1173,14 +1173,14 @@ def find_max_dip_for_sphere(
     Returns
     -------
     float
-        Maximum dip angle in radians.  Returns 0.0 if no vertices are outside
-        the sphere at dip = 0 (leaf is fully inside — shouldn't normally occur).
+        Contact angle in radians.  Returns 0.0 if no vertices are outside the
+        sphere at angle = 0 (leaf fully inside — shouldn't normally occur).
     """
     min_dist: float = sphere_radius + clearance_mm
     is_clear: Callable[[np.ndarray], bool] = (
         lambda pts: bool(np.all(np.linalg.norm(pts, axis=1) >= min_dist))
     )
-    return find_max_dip(base_pos, T0, up_hint, is_clear, **leaf_kwargs)
+    return find_contact_angle(base_pos, T0, up_hint, is_clear, **leaf_kwargs)
 
 
 def boundary_loop(mesh: trimesh.Trimesh) -> list[int]:
@@ -1269,7 +1269,7 @@ def solidify_leaf(
 
     # Project the ring mean onto the cap plane (normal = n, through root[0])
     # so the centroid stays inside the ring even when the ring is non-planar
-    # (e.g. a deeply-dipped leaf on a small sphere).
+    # (e.g. a leaf placed at a large contact angle on a small sphere).
     raw_center = root.mean(axis=0)
     center     = raw_center - float(np.dot(raw_center - root[0], n)) * n
     n_surf    = len(surface.vertices)
@@ -1314,43 +1314,52 @@ def place_leaf_on_sphere(
     sphere_radius: float,
     parent_mesh:   trimesh.Trimesh,
     *,
-    dip_rad:      float | None = None,
-    clearance_mm: float = 0.0,
-    depth:        float = LEAF_ROOT_DEPTH_MM,
+    contact_angle_rad: float | None = None,
+    clearance_mm:      float = 0.0,
+    depth:             float = LEAF_ROOT_DEPTH_MM,
     **leaf_kwargs,
 ) -> tuple[trimesh.Trimesh, range]:
     """Build and solidify a leaf placed on a sphere surface.
 
-    Single primitive that covers the full placement pipeline:
+    Single primitive covering the full placement pipeline:
 
-    1. Find max dip — largest angle that presses the leaf against the sphere
-       without penetrating it (skipped when *dip_rad* is supplied).
-    2. Apply dip — rotate *T0* toward ``-up_hint`` for the tangent; rotate
-       *up_hint* toward *T0* for the leaf-plane normal.
-    3. :func:`build_leaf_surface` — open surface mesh.
+    1. Find contact angle — rotation around the lateral axis T that presses
+       the leaf tip just against the sphere (skipped when *contact_angle_rad*
+       is supplied).  This is the zero point: ``lift_mm = 0`` in
+       *leaf_kwargs* means the tip sits at sphere contact; positive values
+       raise it above.
+    2. Apply the contact angle — rotate the frame (tangent and up_hint) so
+       that ``lift_mm`` in :func:`build_leaf_surface` is measured from
+       sphere contact.
+    3. :func:`build_leaf_surface` — open surface mesh (``lift_mm`` applied
+       here as an offset above contact).
     4. :func:`find_tip_root` — raycast from the tip toward *parent_mesh*;
        ``None`` on a miss (solidification falls back to flat projection).
     5. :func:`solidify_leaf` — close the surface into a watertight solid.
 
     Parameters
     ----------
-    base_pos      : Leaf base position on the sphere surface.
-    T0            : Flat (dip = 0) tangent direction — gravity-down in the
-                    surface tangent plane, as returned by
-                    :func:`leaf_placement_from_surface`.
-    up_hint       : Outward surface normal at *base_pos*.
-    sphere_radius : Radius of the sphere centred at the origin (used only for
-                    the max-dip collision check).
-    parent_mesh   : Full support mesh (sphere + trunk, etc.) used for the tip
-                    root raycast.
-    dip_rad       : Fixed dip angle (radians).  ``None`` (default) → computed
-                    automatically via :func:`find_max_dip_for_sphere`.
-    clearance_mm  : Minimum clearance from the sphere for the dip search.
-    depth         : Root-ring embedding depth passed to :func:`solidify_leaf`.
-    **leaf_kwargs : Passed to :func:`build_leaf_surface` and (for the dip
-                    search) to :func:`find_max_dip_for_sphere`.  Typical keys:
-                    ``length_mm``, ``width_mm``, ``fold_angle_deg``,
-                    ``curl_deg``, ``lift_mm``.
+    base_pos           : Leaf base position on the sphere surface.
+    T0                 : Flat tangent direction (angle = 0) — gravity-down in
+                         the surface tangent plane, as returned by
+                         :func:`leaf_placement_from_surface`.
+    up_hint            : Outward surface normal at *base_pos*.
+    sphere_radius      : Radius of the sphere centred at the origin (used only
+                         for the contact-angle search).
+    parent_mesh        : Full support mesh (sphere + trunk, etc.) used for the
+                         tip root raycast.
+    contact_angle_rad  : Override the auto-computed contact angle (radians).
+                         ``None`` (default) → computed automatically via
+                         :func:`find_contact_angle_for_sphere`.
+    clearance_mm       : Minimum clearance from the sphere for the contact
+                         angle search.
+    depth              : Root-ring embedding depth passed to
+                         :func:`solidify_leaf`.
+    **leaf_kwargs      : Passed to :func:`build_leaf_surface` and (for the
+                         contact angle search) to
+                         :func:`find_contact_angle_for_sphere`.  Typical keys:
+                         ``length_mm``, ``width_mm``, ``fold_angle_deg``,
+                         ``curl_deg``, ``lift_mm``.
 
     Returns
     -------
@@ -1359,25 +1368,25 @@ def place_leaf_on_sphere(
         *wall_face_range* is the ``range`` of wall face indices suitable for
         FDM printability analysis (see :func:`solidify_leaf`).
     """
-    if dip_rad is None:
-        dip_rad = find_max_dip_for_sphere(
+    if contact_angle_rad is None:
+        contact_angle_rad = find_contact_angle_for_sphere(
             base_pos, T0, up_hint, sphere_radius,
             clearance_mm=clearance_mm,
             **leaf_kwargs,
         )
 
-    # Apply dip rotation: tangent tilts toward -up_hint; up_hint tilts toward T0.
-    c, s      = float(np.cos(dip_rad)), float(np.sin(dip_rad))
+    # Apply the contact angle: rotate the frame so lift_mm=0 → sphere contact.
+    c, s      = float(np.cos(contact_angle_rad)), float(np.sin(contact_angle_rad))
     tangent   = _safe_norm(np.asarray(T0, float) * c - np.asarray(up_hint, float) * s)
-    up_dipped = _safe_norm(np.asarray(up_hint, float) * c + np.asarray(T0, float) * s)
+    up_placed = _safe_norm(np.asarray(up_hint, float) * c + np.asarray(T0, float) * s)
 
     leaf_surf = build_leaf_surface(
-        base_pos=base_pos, tangent=tangent, up_hint=up_dipped, **leaf_kwargs,
+        base_pos=base_pos, tangent=tangent, up_hint=up_placed, **leaf_kwargs,
     )
 
     length_mm = float(leaf_kwargs.get('length_mm', LEAF_LENGTH_MM_DEFAULT))
-    tip_root  = find_tip_root(leaf_surf, up_dipped, parent_mesh, length_mm)
+    tip_root  = find_tip_root(leaf_surf, up_placed, parent_mesh, length_mm)
 
-    return solidify_leaf(leaf_surf, up_dipped, depth, tip_root=tip_root)
+    return solidify_leaf(leaf_surf, up_placed, depth, tip_root=tip_root)
 
 
