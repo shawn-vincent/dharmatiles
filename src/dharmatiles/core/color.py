@@ -17,9 +17,14 @@ BASE          dark gray          #505050   socket-peg / T-slot underside base
 FLOWER        golden yellow      #F5C300   flowers / attractor debug spheres (no groups)
 WOOD          warm brown         #8B633F   tree trunks and branches
 FOLIAGE       dark forest green  #175C0D   tree leaf clumps on terminal branches
-DEBUG_COLOR_* vivid palette      —         12-slot cycling palette for per-group debug
-              (red, blue, green, orange, purple, cyan, yellow, pink, lime,
-               amber, indigo, brown-orange)
+DEBUG_COLOR_* vivid palette      —         10-slot cycling palette for per-group debug
+              (blue, orange, purple, cyan, yellow, pink, lime, amber, indigo, brown-orange)
+              Red and green are reserved for RGBA_FLAG_FAIL / RGBA_FLAG_PASS.
+
+Status flag colours (not in the cycling palette — use these when signalling a
+binary pass/fail condition anywhere in the codebase, not for group identity):
+RGBA_FLAG_PASS  vivid green   pass / OK / printable
+RGBA_FLAG_FAIL  vivid red     fail / error / overhang
 """
 from __future__ import annotations
 
@@ -81,12 +86,29 @@ RGBA: dict[Material, tuple[int, int, int, int]] = {
     Material.DEBUG_COLOR_11: (210, 120,  40, 255),  # brown-orange
 }
 
-#: All DEBUG_COLOR_* materials in label order (index = label mod 12).
+#: Vivid green — pass / OK status flag for any debug colouring.
+#: Use this (not a DEBUG_COLOR_* slot) when signalling a pass/OK condition.
+RGBA_FLAG_PASS: tuple[int, int, int, int] = ( 50, 210,  50, 255)
+
+#: Vivid red — fail / error status flag for any debug colouring.
+#: Use this (not a DEBUG_COLOR_* slot) when signalling a fail/error condition.
+RGBA_FLAG_FAIL: tuple[int, int, int, int] = (220,  50,  50, 255)
+
+#: Cycling palette for per-group debug colouring — 10 slots, red and green excluded.
+#: Red and green are reserved for pass/fail status (RGBA_FLAG_PASS / RGBA_FLAG_FAIL)
+#: and must not appear as group-identity colours anywhere in the codebase.
 DEBUG_COLORS: list[Material] = [
-    Material.DEBUG_COLOR_0,  Material.DEBUG_COLOR_1,  Material.DEBUG_COLOR_2,
-    Material.DEBUG_COLOR_3,  Material.DEBUG_COLOR_4,  Material.DEBUG_COLOR_5,
-    Material.DEBUG_COLOR_6,  Material.DEBUG_COLOR_7,  Material.DEBUG_COLOR_8,
-    Material.DEBUG_COLOR_9,  Material.DEBUG_COLOR_10, Material.DEBUG_COLOR_11,
+    # slot 0 (red) and slot 2 (green) intentionally omitted — use RGBA_FLAG_FAIL / RGBA_FLAG_PASS
+    Material.DEBUG_COLOR_1,   # blue
+    Material.DEBUG_COLOR_3,   # orange
+    Material.DEBUG_COLOR_4,   # purple
+    Material.DEBUG_COLOR_5,   # cyan
+    Material.DEBUG_COLOR_6,   # yellow
+    Material.DEBUG_COLOR_7,   # pink
+    Material.DEBUG_COLOR_8,   # lime
+    Material.DEBUG_COLOR_9,   # amber
+    Material.DEBUG_COLOR_10,  # indigo
+    Material.DEBUG_COLOR_11,  # brown-orange
 ]
 
 

@@ -18,14 +18,14 @@ import pathlib
 import numpy as np
 import trimesh
 
-from dharmatiles.core.color import debug_material, export_color_stl, tag
+from dharmatiles.core.color import Material, debug_material, export_color_stl, tag
 from dharmatiles.trees.leaf import (
     LEAF_LENGTH_MM_DEFAULT,
     LEAF_WIDTH_MM_DEFAULT,
     leaf_placement_from_surface,
     place_leaf_on_sphere,
 )
-from _leaf_debug import color_leaf_walls_by_fdm, leaf_debug_material
+from _leaf_debug import color_leaf_walls_by_fdm
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -84,7 +84,7 @@ def build_debug_mesh(
     """Sphere + trunk + *count* randomly-placed leaf solids."""
     sphere = trimesh.creation.icosphere(subdivisions=4, radius=SPHERE_RADIUS_MM)
     sphere.fix_normals()
-    tag(sphere, debug_material(1))
+    tag(sphere, Material.DEBUG_COLOR_1)
 
     _trunk_embed = 5.0
     trunk = trimesh.creation.cylinder(
@@ -96,7 +96,7 @@ def build_debug_mesh(
         [0.0, 0.0, -SPHERE_RADIUS_MM - TRUNK_HEIGHT_MM / 2.0 + _trunk_embed / 2.0]
     )
     trunk.fix_normals()
-    tag(trunk, debug_material(1))
+    tag(trunk, Material.DEBUG_COLOR_1)
 
     support_mesh = trimesh.util.concatenate([sphere, trunk])
     parts: list[trimesh.Trimesh] = [sphere, trunk]
@@ -117,7 +117,7 @@ def build_debug_mesh(
             lift_mm=lift_mm,
         )
 
-        tag(leaf, leaf_debug_material(i))
+        tag(leaf, debug_material(i))
         color_leaf_walls_by_fdm(leaf, wall_faces, support_mesh)
 
         wall_colors = leaf.visual.face_colors[list(wall_faces)]

@@ -17,9 +17,9 @@ import pathlib
 import numpy as np
 import trimesh
 
-from dharmatiles.core.color import debug_material, export_color_stl, tag
+from dharmatiles.core.color import Material, debug_material, export_color_stl, tag
 from dharmatiles.trees.leaf import place_leaf_on_sphere
-from _leaf_debug import color_leaf_walls_by_fdm, leaf_debug_material
+from _leaf_debug import color_leaf_walls_by_fdm
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -80,7 +80,7 @@ def build_debug_mesh() -> trimesh.Trimesh:
     """Sphere + trunk + four tilted leaf solids at fixed latitudes."""
     sphere = trimesh.creation.icosphere(subdivisions=4, radius=SPHERE_RADIUS_MM)
     sphere.fix_normals()
-    tag(sphere, debug_material(1))
+    tag(sphere, Material.DEBUG_COLOR_1)
 
     _trunk_embed = 5.0
     trunk = trimesh.creation.cylinder(
@@ -92,7 +92,7 @@ def build_debug_mesh() -> trimesh.Trimesh:
         [0.0, 0.0, -SPHERE_RADIUS_MM - TRUNK_HEIGHT_MM / 2.0 + _trunk_embed / 2.0]
     )
     trunk.fix_normals()
-    tag(trunk, debug_material(1))
+    tag(trunk, Material.DEBUG_COLOR_1)
 
     support_mesh = trimesh.util.concatenate([sphere, trunk])
     parts: list[trimesh.Trimesh] = [sphere, trunk]
@@ -115,7 +115,7 @@ def build_debug_mesh() -> trimesh.Trimesh:
             fold_angle_deg=LEAF_FOLD_DEG, curl_deg=LEAF_CURL_DEG,
         )
 
-        tag(leaf, leaf_debug_material(leaf_index))
+        tag(leaf, debug_material(leaf_index))
         color_leaf_walls_by_fdm(leaf, wall_faces, support_mesh)
 
         wall_colors = leaf.visual.face_colors[list(wall_faces)]

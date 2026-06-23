@@ -5,31 +5,18 @@ Kept separate from ``dharmatiles.trees.leaf`` so production imports of
 
 Import in debug scripts as::
 
-    from _leaf_debug import color_leaf_walls_by_fdm, leaf_debug_material
+    from _leaf_debug import color_leaf_walls_by_fdm
 """
 from __future__ import annotations
 
 import numpy as np
 import trimesh
 
-from dharmatiles.core.color import debug_material
+from dharmatiles.core.color import RGBA_FLAG_FAIL, RGBA_FLAG_PASS
 from dharmatiles.trees.leaf import (
     _LEAF_FDM_FLOOR_DEG,
     _LEAF_FDM_SUPPORT_TOLERANCE_MM,
 )
-
-# Debug palette slots reserved for FDM semantics — must not appear in the
-# per-leaf identity rotation:
-#   slot 0  red  → FDM failure
-#   slot 2  green → FDM pass
-#   slot 8  lime  → visually green, also ambiguous
-_LEAF_COLOR_SKIP = {0, 2, 8}
-_LEAF_PALETTE = [debug_material(i) for i in range(12) if i not in _LEAF_COLOR_SKIP]
-
-
-def leaf_debug_material(index: int):
-    """Return a per-leaf identity colour, skipping red and green slots."""
-    return _LEAF_PALETTE[index % len(_LEAF_PALETTE)]
 
 
 def color_leaf_walls_by_fdm(
@@ -39,10 +26,14 @@ def color_leaf_walls_by_fdm(
     *,
     floor_angle_deg:      float = _LEAF_FDM_FLOOR_DEG,
     support_tolerance_mm: float = _LEAF_FDM_SUPPORT_TOLERANCE_MM,
-    color_ok:    np.ndarray = np.array([ 50, 200,  50, 255], dtype=np.uint8),
-    color_fail:  np.ndarray = np.array([220,  50,  50, 255], dtype=np.uint8),
+    color_ok:    np.ndarray = np.array(RGBA_FLAG_PASS, dtype=np.uint8),
+    color_fail:  np.ndarray = np.array(RGBA_FLAG_FAIL, dtype=np.uint8),
 ) -> None:
     """Color wall faces green/red by FDM printability, in-place.
+
+    Green (``RGBA_FLAG_PASS``) marks printable faces; red (``RGBA_FLAG_FAIL``)
+    marks overhangs.  Both colours come from :mod:`dharmatiles.core.color` so
+    any debug view shares the same pass/fail convention system-wide.
 
     Two failure conditions are checked for each wall face:
 
@@ -64,8 +55,8 @@ def color_leaf_walls_by_fdm(
     support_mesh         : Mesh the leaf rests on (sphere + trunk, etc.).
     floor_angle_deg      : Printability floor angle (degrees from horizontal).
     support_tolerance_mm : Distance tolerance for on-surface detection.
-    color_ok             : RGBA colour for printable faces (default green).
-    color_fail           : RGBA colour for overhang faces (default red).
+    color_ok             : RGBA colour for printable faces (default: ``RGBA_FLAG_PASS``).
+    color_fail           : RGBA colour for overhang faces (default: ``RGBA_FLAG_FAIL``).
     """
     threshold = -np.sin(np.radians(floor_angle_deg))
     wall_idx  = np.array(list(wall_faces), dtype=np.intp)
