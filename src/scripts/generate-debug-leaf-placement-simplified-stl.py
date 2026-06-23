@@ -155,7 +155,7 @@ def _build_leaf_for_sphere(
         )
         leaf_surf, normal = _build_tilted_leaf(base, L, surface_normal, theta,
                                                curl_deg=curl_deg)
-        tip_root = find_tip_root(leaf_surf, normal, support_mesh)
+        tip_root = find_tip_root(leaf_surf, normal, support_mesh, LEAF_LENGTH_MM)
         if curl_deg == 0.0 or tip_root is not None:
             return leaf_surf, normal, theta, curl_deg, tip_root
     raise AssertionError("zero-curl leaf construction did not return")

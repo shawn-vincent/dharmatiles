@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Debug: sphere + trunk + N randomly-placed leaf solids via leaf_placement_from_surface.
+"""Debug: sphere + trunk + N jitter-grid-placed leaf solids via leaf_placement_from_surface.
 
-Leaves are seeded at random points on the sphere surface.  Each point is
-snapped to the nearest mesh vertex (via leaf_placement_from_surface), which
-returns the base position, a gravity-down-in-tangent-plane axis, and the
-outward surface normal.  A configurable dip angle is then applied to angle
-the tip into the sphere before building the leaf solid.
+Leaves are seeded at jittered-grid points on the sphere surface.  The sphere
+is divided into equal-area cells in (cos θ, φ) space; one stratified-random
+sample is drawn per cell and the cells are shuffled, giving even coverage with
+no clustering.  Each point is snapped to the nearest mesh vertex (via
+leaf_placement_from_surface), which returns the base position, a
+gravity-down-in-tangent-plane axis, and the outward surface normal.  A
+configurable dip angle is then applied to angle the tip into the sphere before
+building the leaf solid.
 
 Wall faces are coloured green (printable) or red (overhang / unsupported)
 using the same FDM analysis as the simplified script.
@@ -47,6 +50,42 @@ LEAF_FOLD_DEG    = 6.0
 LEAF_CURL_DEG    = 40.0
 
 
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+def _jitter_sphere_pts(
+    count:  int,
+    radius: float,
+    rng:    np.random.Generator,
+) -> np.ndarray:
+    """Return *count* evenly-distributed jittered points on a sphere of *radius*.
+
+    The sphere surface is divided into equal-area cells in (cos θ, φ) space:
+    ``rows`` latitude bands × ``cols`` longitude slices, with ``rows × cols ≥
+    count``.  One stratified-random sample is drawn inside each cell, the
+    cells are shuffled, and the first *count* are returned.  This eliminates
+    the clustering that pure Gaussian-normalised random sampling produces.
+    """
+    rows   = max(1, round(float(count) ** 0.5 / 2.0 ** 0.5))
+    cols   = max(1, int(np.ceil(count / rows)))
+    n_cell = rows * cols
+
+    # Equal-area latitude grid: equal steps in cos θ → equal solid angle per row.
+    ct_edges = np.linspace(-1.0, 1.0, rows + 1)
+    ph_edges = np.linspace(0.0, 2.0 * np.pi, cols + 1)
+
+    # One jittered (cos θ, φ) sample per cell.
+    ct = (ct_edges[:-1, None]
+          + rng.uniform(0.0, 1.0, (rows, cols)) * np.diff(ct_edges)[:, None]).ravel()
+    ph = (ph_edges[None, :-1]
+          + rng.uniform(0.0, 1.0, (rows, cols)) * np.diff(ph_edges)[None, :]).ravel()
+
+    st   = np.sqrt(np.clip(1.0 - ct ** 2, 0.0, 1.0))
+    dirs = np.stack([st * np.cos(ph), st * np.sin(ph), ct], axis=1)
+
+    idx = rng.permutation(n_cell)[:count]
+    return dirs[idx] * radius
+
+
 # ── Scene assembly ─────────────────────────────────────────────────────────────
 
 def build_debug_mesh(
@@ -56,6 +95,7 @@ def build_debug_mesh(
     dip_deg:    float | None = None,
     length_mm:  float        = LEAF_LENGTH_MM_DEFAULT,
     width_mm:   float        = LEAF_WIDTH_MM_DEFAULT,
+    lift_mm:    float        = 1.0,
 ) -> trimesh.Trimesh:
     """Sphere + trunk + *count* randomly-placed leaf solids.
 
@@ -83,11 +123,13 @@ def build_debug_mesh(
     support_mesh = trimesh.util.concatenate([sphere, trunk])
     parts: list[trimesh.Trimesh] = [sphere, trunk]
 
-    # Random points uniformly distributed on the sphere surface.
+    # Jittered-grid points evenly distributed on the sphere surface.
+    # Stratified sampling in equal-area (cos θ, φ) space: divide the sphere
+    # into rows × cols cells, draw one jittered sample per cell, then shuffle
+    # and take the first *count*.  Eliminates the clustering that pure random
+    # normal-vector sampling produces.
     rng  = np.random.default_rng(seed)
-    dirs = rng.standard_normal((count, 3))
-    dirs /= np.linalg.norm(dirs, axis=1, keepdims=True)
-    pts  = dirs * SPHERE_RADIUS_MM
+    pts  = _jitter_sphere_pts(count, SPHERE_RADIUS_MM, rng)
 
     fixed_dip_rad = None if dip_deg is None else np.radians(dip_deg)
 
@@ -105,6 +147,7 @@ def build_debug_mesh(
             shape = dict(
                 length_mm=length_mm, width_mm=width_mm,
                 fold_angle_deg=LEAF_FOLD_DEG, curl_deg=curl_deg,
+                lift_mm=lift_mm,
             )
             dip_rad = (
                 fixed_dip_rad
@@ -115,7 +158,7 @@ def build_debug_mesh(
             tangent /= np.linalg.norm(tangent) + 1e-12
             leaf_surf = build_leaf_surface(
                 base_pos=base_pos, tangent=tangent, up_hint=up_hint, **shape)
-            tip_root = find_tip_root(leaf_surf, up_hint, support_mesh)
+            tip_root = find_tip_root(leaf_surf, up_hint, support_mesh, length_mm)
             curl_used = curl_deg
             if curl_deg == 0.0 or tip_root is not None:
                 break
@@ -139,7 +182,7 @@ def build_debug_mesh(
 
     dip_label = "auto" if dip_deg is None else f"{dip_deg:.0f}°"
     curl_note = f"  curl removed: {n_curl_removed}" if n_curl_removed else ""
-    print(f"  {count} leaves  dip={dip_label}  seed={seed}{curl_note}")
+    print(f"  {count} leaves  dip={dip_label}  lift={lift_mm:.1f}mm  seed={seed}{curl_note}")
     print(f"  wall faces: {n_ok_total} green  {n_fail_total} red  "
           f"({'%.0f' % (100*n_ok_total/(n_ok_total+n_fail_total+1e-9))}% printable)")
     return trimesh.util.concatenate(parts)
@@ -159,6 +202,8 @@ def main() -> None:
                         help=f"Leaf length mm (default: {LEAF_LENGTH_MM_DEFAULT})")
     parser.add_argument("--width-mm", type=float, default=LEAF_WIDTH_MM_DEFAULT,
                         help=f"Leaf width mm (default: {LEAF_WIDTH_MM_DEFAULT})")
+    parser.add_argument("--lift-mm", type=float, default=1.0,
+                        help="Tip lift in mm along leaf normal (default: 1.0)")
     args = parser.parse_args()
 
     mesh = build_debug_mesh(
@@ -167,6 +212,7 @@ def main() -> None:
         dip_deg=args.dip_deg,
         length_mm=args.length_mm,
         width_mm=args.width_mm,
+        lift_mm=args.lift_mm,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     export_color_stl(mesh, args.output)

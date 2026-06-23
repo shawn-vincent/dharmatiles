@@ -276,6 +276,7 @@ def compute_leaf_geometry(
     outer_curve:    float = 0.72,
     arch_deg:       float = 30.0,
     curl_deg:       float = 7.5,
+    lift_mm:        float = 1.0,
     up_hint:        np.ndarray | None = None,
     seed:           int = 0,
 ) -> _LeafGeometry:
@@ -290,6 +291,11 @@ def compute_leaf_geometry(
     Both values are positive curve magnitudes and remain independently visible.
     The default 30° arch ensures leaves are arched even when
     curl is explicitly disabled.
+
+    *lift_mm* is applied **after** arch and curl as a rigid rotation of the
+    entire surface around the lateral axis (T) through the base point.  The
+    whole leaf tilts so the tip rises by approximately *lift_mm* in the N
+    direction while the base stays fixed.  This is NOT a tip-only z-offset.
 
     *inner_curve* and *outer_curve* are dimensionless Bézier control heights
     for each mirrored crease-to-edge cross-section.  They shape one continuous
@@ -338,7 +344,12 @@ def compute_leaf_geometry(
     curl_tip_slope = np.tan(np.radians(abs(float(curl_deg))))
 
     def _centerline_profile(s: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Return height and dz/dx for normalized longitudinal stations."""
+        """Return arch+curl height and dz/dx for normalized longitudinal stations.
+
+        Lift is NOT computed here — it is applied after all vertex positions
+        are built as a rigid rotation of the entire surface around T through
+        the base (see the lift block below).
+        """
         s = np.asarray(s, float)
         curl_u = np.clip((s - curl_start) / (1.0 - curl_start), 0.0, 1.0)
 
@@ -366,6 +377,7 @@ def compute_leaf_geometry(
             curl_slope_correction * curl_slope_shape,
             0.0,
         )
+
         return arch_z + curl_z, arch_dzdx + curl_dzdx
 
     mid_n, mid_slope = _centerline_profile(s_int)
@@ -404,6 +416,45 @@ def compute_leaf_geometry(
     # Apply crease + dome offsets along the per-station local normal.
     top_pts = laterals + (fold_h + lobe_h)[:, :, np.newaxis] * N_local[:, np.newaxis, :]
     bot_pts = laterals + fold_h[:, :, np.newaxis]             * N_local[:, np.newaxis, :]
+
+    # ── Lift: rigid rotation of the entire surface around T through bp ────────
+    # Applied AFTER arch and curl produce the complete vertex grid; BEFORE
+    # walls or root are constructed.  The rotation keeps bp fixed and lifts
+    # the tip by approximately lift_mm in the N direction.
+    #
+    # Axis: T  (lateral axis).
+    # Sense: rotates L toward N (tip goes up).  Using Rodrigues around −T with
+    #   positive theta achieves R: L → cos*L + sin*N.
+    # Angle: arctan(lift_mm / length_mm) — angle that would lift a flat-length
+    #   leaf's tip by lift_mm; accurate to within a few percent for arched leaves.
+    #
+    # Frame vectors L and N are updated so the keel and other downstream
+    # builders receive the post-lift normal direction.  T is the rotation axis
+    # and is therefore unchanged.
+    if abs(float(lift_mm)) > 1e-8:
+        theta_lift = float(np.arctan2(float(lift_mm), float(length_mm)))
+        c_l = float(np.cos(theta_lift))
+        s_l = float(np.sin(theta_lift))
+
+        def _lift_rot(pts: np.ndarray) -> np.ndarray:
+            """Rodrigues rotation around −T through bp; lifts L toward N."""
+            shape   = pts.shape
+            rel     = pts.reshape(-1, 3) - bp[np.newaxis]   # (N, 3)
+            T_dot   = (rel @ T)[:, np.newaxis]              # (N, 1)
+            T_cross = np.cross(T[np.newaxis], rel)          # (N, 3)  T × rel
+            # R(-T, theta)*v = v*c - (T×v)*s + T*(T·v)*(1-c)
+            rot     = c_l * rel - s_l * T_cross + (1.0 - c_l) * T_dot * T[np.newaxis]
+            return (bp[np.newaxis] + rot).reshape(shape)
+
+        top_pts = _lift_rot(top_pts)
+        bot_pts = _lift_rot(bot_pts)
+        v_tip   = _lift_rot(v_tip[np.newaxis])[0]
+
+        # Rotate the frame vectors to stay consistent with the new geometry.
+        L_prev, N_prev = L.copy(), N.copy()
+        L = c_l * L_prev + s_l * N_prev    # L rotates toward N
+        N = -s_l * L_prev + c_l * N_prev   # N rotates away from L
+        # T is the rotation axis — unchanged.
 
     return _LeafGeometry(
         L=L, T=T, N=N, bp=bp, v_tip=v_tip,
@@ -722,6 +773,7 @@ def build_leaf_surface(
     outer_curve:    float = 0.72,
     arch_deg:       float = 30.0,
     curl_deg:       float = 7.5,
+    lift_mm:        float = 1.0,
     up_hint:        np.ndarray | None = None,
     seed:           int = 0,
 ) -> trimesh.Trimesh:
@@ -747,7 +799,7 @@ def build_leaf_surface(
         length_mm=length_mm, width_mm=width_mm,
         thickness_mm=thickness_mm, fold_angle_deg=fold_angle_deg,
         inner_curve=inner_curve, outer_curve=outer_curve,
-        arch_deg=arch_deg, curl_deg=curl_deg,
+        arch_deg=arch_deg, curl_deg=curl_deg, lift_mm=lift_mm,
         up_hint=up_hint, seed=seed,
     )
 
@@ -787,14 +839,15 @@ def build_leaf_surface(
     for j in range(N_T):
         faces.append([v_tip_i, last + j + 1, last + j])
 
-    # Include curl_deg in the cache key: the winding decisions made by
-    # fix_normals() can differ between curl=0 (flat arch, tip at base height)
-    # and curl>0 (tip raised above midplane), so they must not share a cache
-    # entry.  Round to 4 dp to avoid float-equality issues.
+    # Include curl_deg and lift_mm in the cache key: the winding decisions made
+    # by fix_normals() can differ between curl=0 (flat arch, tip at base height)
+    # and curl>0 (tip raised above midplane), and lift_mm shifts the tip in the
+    # same way.  Round to 4 dp to avoid float-equality issues.
     return _mesh_with_fixed_normals(
         verts,
         np.array(faces, dtype=np.int32),
-        ("leaf_surface", _LEAF_N_LONG, N_T, round(float(curl_deg), 4)),
+        ("leaf_surface", _LEAF_N_LONG, N_T, round(float(curl_deg), 4),
+         round(float(lift_mm), 4)),
     )
 
 
@@ -810,6 +863,7 @@ def build_leaf_mesh(
     outer_curve: float = 0.72,
     arch_deg: float = 30.0,
     curl_deg: float = 7.5,
+    lift_mm: float = 1.0,
     keel_depth_mm: float = 1.0,
     keel_tip_angle_deg: float = 45.0,
     up_hint: np.ndarray | None = None,
@@ -829,6 +883,11 @@ def build_leaf_mesh(
     outer_curve     : edge-side Bézier shoulder height.  Default 0.72.
     arch_deg        : upward tangent angle at the base of the arch.  Default 30.0.
     curl_deg        : concave tangent turn over the second half.  Default 7.5.
+    lift_mm         : tip lift in mm.  The entire arch+curl surface is rotated
+                      rigidly around the lateral axis (T) through the base,
+                      lifting the tip by approximately this amount in the N
+                      direction while keeping the base fixed.  Applied after
+                      arch and curl, before walls and root are built.  Default 1.0.
     keel_depth_mm   : maximum depth of the structural keel on the underside.
                       Pass 0 to omit the keel.  Default 1.0.
     keel_tip_angle_deg : reserved for future use.  Default 45.0.
@@ -850,7 +909,8 @@ def build_leaf_mesh(
         length_mm=length_mm, width_mm=width_mm,
         thickness_mm=thickness_mm, fold_angle_deg=fold_angle_deg,
         inner_curve=inner_curve, outer_curve=outer_curve,
-        arch_deg=arch_deg, curl_deg=curl_deg, up_hint=up_hint, seed=seed,
+        arch_deg=arch_deg, curl_deg=curl_deg, lift_mm=lift_mm,
+        up_hint=up_hint, seed=seed,
     )
 
     N_S = _LEAF_N_LONG
@@ -900,18 +960,20 @@ _LEAF_FDM_FLOOR_DEG: float = 45.0
 # Contact tolerance for support-mesh queries (compensates for faceted surfaces).
 _LEAF_FDM_SUPPORT_TOLERANCE_MM: float = 0.05
 
-# Maximum raycast distance for find_tip_root: hits farther than this are
-# treated as misses and signal the caller to rebuild without curl.
-_LEAF_TIP_MAX_DEPTH_MM: float = 4.0
+# Fraction of leaf length used as the maximum raycast distance for find_tip_root:
+# hits farther than leaf_length_mm * this fraction are treated as misses and
+# signal the caller to rebuild without curl.
+_LEAF_TIP_MAX_DEPTH_FRACTION: float = 0.25
 
 
 def find_tip_root(
-    surface:     trimesh.Trimesh,
-    up_hint:     np.ndarray,
-    parent_mesh: trimesh.Trimesh,
+    surface:        trimesh.Trimesh,
+    up_hint:        np.ndarray,
+    parent_mesh:    trimesh.Trimesh,
+    leaf_length_mm: float,
     *,
     floor_angle_deg: float = _LEAF_FDM_FLOOR_DEG,
-    max_depth_mm:    float = _LEAF_TIP_MAX_DEPTH_MM,
+    max_depth_mm:    float | None = None,
 ) -> np.ndarray | None:
     """Raycast from the leaf tip to find where it should embed in the parent mesh.
 
@@ -935,9 +997,12 @@ def find_tip_root(
     surface         : Open leaf surface from :func:`build_leaf_surface`.
     up_hint         : Outward surface normal at the attachment point.
     parent_mesh     : Mesh the leaf is attached to (sphere + trunk, etc.).
+    leaf_length_mm  : Full length of the leaf blade (mm).  Used to compute the
+                      default ``max_depth_mm`` (¼ of the leaf length).
     floor_angle_deg : Minimum FDM-printable angle from horizontal (degrees).
                       The ray goes exactly this far below horizontal.
     max_depth_mm    : Maximum acceptable hit distance from the tip vertex.
+                      Defaults to ``leaf_length_mm * 0.25`` (¼ leaf length).
                       Hits farther than this are treated as misses.
 
     Returns
@@ -946,6 +1011,9 @@ def find_tip_root(
         Hit position (3,) on *parent_mesh* to use as the tip root vertex in
         :func:`solidify_leaf`, or ``None`` if the mesh is too far or not hit.
     """
+    if max_depth_mm is None:
+        max_depth_mm = leaf_length_mm * _LEAF_TIP_MAX_DEPTH_FRACTION
+
     loop  = boundary_loop(surface)
     perim = surface.vertices[loop]
     tip   = perim[int(np.argmin(perim[:, 2]))]
@@ -1009,6 +1077,12 @@ def find_max_dip(
 
     **leaf_kwargs : Passed to :func:`build_leaf_surface`
                    (``length_mm``, ``width_mm``, ``fold_angle_deg``, etc.)
+                   ``lift_mm`` is **ignored** in this call and forced to 0.0
+                   internally: lift and dip rotate around the same lateral axis
+                   in opposite senses, so including lift in the dip search causes
+                   auto-dip to compensate exactly for the lift, making it
+                   invisible.  The caller should apply the intended ``lift_mm``
+                   when building the final leaf geometry.
 
     Returns
     -------
@@ -1016,7 +1090,12 @@ def find_max_dip(
         Maximum dip angle in radians.  Returns 0.0 if no vertices are clear
         at dip = 0 (leaf fully inside the parent shape — degenerate placement).
     """
-    flat = build_leaf_surface(base_pos=base_pos, tangent=T0, up_hint=up_hint, **leaf_kwargs)
+    # Force lift_mm=0 so the dip is found for the arch+curl shape alone.
+    # Lift is applied AFTER the dip in the leaf creation pipeline; if lift were
+    # included here the auto-dip would simply compensate by pressing the leaf
+    # an equal and opposite amount, making the lift invisible.
+    flat_kwargs = {**leaf_kwargs, 'lift_mm': 0.0}
+    flat = build_leaf_surface(base_pos=base_pos, tangent=T0, up_hint=up_hint, **flat_kwargs)
 
     # Identify *risky* vertices: those clear at dip = 0 that could become
     # unclear as dip increases.  Per-vertex calls happen once at setup, not
