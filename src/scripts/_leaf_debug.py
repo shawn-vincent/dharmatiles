@@ -5,17 +5,31 @@ Kept separate from ``dharmatiles.trees.leaf`` so production imports of
 
 Import in debug scripts as::
 
-    from _leaf_debug import color_leaf_walls_by_fdm
+    from _leaf_debug import color_leaf_walls_by_fdm, leaf_debug_material
 """
 from __future__ import annotations
 
 import numpy as np
 import trimesh
 
+from dharmatiles.core.color import debug_material
 from dharmatiles.trees.leaf import (
     _LEAF_FDM_FLOOR_DEG,
     _LEAF_FDM_SUPPORT_TOLERANCE_MM,
 )
+
+# Debug palette slots reserved for FDM semantics — must not appear in the
+# per-leaf identity rotation:
+#   slot 0  red  → FDM failure
+#   slot 2  green → FDM pass
+#   slot 8  lime  → visually green, also ambiguous
+_LEAF_COLOR_SKIP = {0, 2, 8}
+_LEAF_PALETTE = [debug_material(i) for i in range(12) if i not in _LEAF_COLOR_SKIP]
+
+
+def leaf_debug_material(index: int):
+    """Return a per-leaf identity colour, skipping red and green slots."""
+    return _LEAF_PALETTE[index % len(_LEAF_PALETTE)]
 
 
 def color_leaf_walls_by_fdm(

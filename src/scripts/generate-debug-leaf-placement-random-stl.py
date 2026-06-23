@@ -25,7 +25,7 @@ from dharmatiles.trees.leaf import (
     leaf_placement_from_surface,
     place_leaf_on_sphere,
 )
-from _leaf_debug import color_leaf_walls_by_fdm
+from _leaf_debug import color_leaf_walls_by_fdm, leaf_debug_material
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -117,7 +117,7 @@ def build_debug_mesh(
             lift_mm=lift_mm,
         )
 
-        tag(leaf, debug_material(2 + (i % 8)))
+        tag(leaf, leaf_debug_material(i))
         color_leaf_walls_by_fdm(leaf, wall_faces, support_mesh)
 
         wall_colors = leaf.visual.face_colors[list(wall_faces)]

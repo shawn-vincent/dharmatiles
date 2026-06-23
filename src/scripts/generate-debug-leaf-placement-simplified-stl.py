@@ -19,7 +19,7 @@ import trimesh
 
 from dharmatiles.core.color import debug_material, export_color_stl, tag
 from dharmatiles.trees.leaf import place_leaf_on_sphere
-from _leaf_debug import color_leaf_walls_by_fdm
+from _leaf_debug import color_leaf_walls_by_fdm, leaf_debug_material
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -115,7 +115,7 @@ def build_debug_mesh() -> trimesh.Trimesh:
             fold_angle_deg=LEAF_FOLD_DEG, curl_deg=LEAF_CURL_DEG,
         )
 
-        tag(leaf, debug_material(2 + leaf_index))
+        tag(leaf, leaf_debug_material(leaf_index))
         color_leaf_walls_by_fdm(leaf, wall_faces, support_mesh)
 
         wall_colors = leaf.visual.face_colors[list(wall_faces)]
