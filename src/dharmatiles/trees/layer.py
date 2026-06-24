@@ -167,6 +167,7 @@ class Tree:
         )
         branch_parts:  list[trimesh.Trimesh] = []
         foliage_parts: list[trimesh.Trimesh] = []
+        leaf_parts:    list[trimesh.Trimesh] = []
         other_parts:   list[trimesh.Trimesh] = []
         for x, y, _gd in positions:
             tz = float(sample_grid(scene.terrain_z, surface, np.array([x]), np.array([y]))[0])
@@ -204,7 +205,7 @@ class Tree:
             )
             if len(nodes) < 2:
                 continue
-            branch_mesh, foliage_mesh, attractor_parts = build_branch_mesh(
+            branch_mesh, foliage_mesh, leaf_mesh, attractor_parts = build_branch_mesh(
                 nodes,
                 parents,
                 radii,
@@ -235,19 +236,25 @@ class Tree:
                 leaf_pos_jitter=self.leaf_pos_jitter,
                 debug_leaf_color=self.debug_leaf_color,
             )
-            if len(branch_mesh.vertices) == 0 and len(foliage_mesh.vertices) == 0:
+            if (
+                len(branch_mesh.vertices) == 0
+                and len(foliage_mesh.vertices) == 0
+                and len(leaf_mesh.vertices) == 0
+            ):
                 continue
 
             if len(branch_mesh.vertices) > 0:
                 branch_parts.append(branch_mesh)
             if len(foliage_mesh.vertices) > 0:
                 foliage_parts.append(foliage_mesh)
+            if len(leaf_mesh.vertices) > 0:
+                leaf_parts.append(leaf_mesh)
             # Attractor spheres are pre-tagged; material grouping in tile.py handles them.
             other_parts.extend(attractor_parts)
             _stamp_tree(scene, surface, x, y, env, float(radii[0]),
                         falloff_mm=self.stamp_falloff_mm)
 
-        if not branch_parts and not foliage_parts and not other_parts:
+        if not branch_parts and not foliage_parts and not leaf_parts and not other_parts:
             return []
 
         result: list[trimesh.Trimesh] = []
@@ -262,6 +269,12 @@ class Tree:
                                 if len(foliage_parts) > 1 else foliage_parts[0])
             foliage_combined.metadata['material'] = Material.FOLIAGE
             result.append(foliage_combined)
+
+        if leaf_parts:
+            leaf_combined = (trimesh.util.concatenate(leaf_parts)
+                             if len(leaf_parts) > 1 else leaf_parts[0])
+            leaf_combined.metadata['material'] = Material.LEAF
+            result.append(leaf_combined)
 
         result.extend(other_parts)
         return result

@@ -425,7 +425,13 @@ def _build_tile_content(
     # FLOWER + DEBUG_COLOR_*: attractor debug spheres — unioning ~200 small
     # icospheres is very slow; concatenation is correct and fast.
     # WOOD: each tree is already internally unioned into one closed wood mesh.
-    _NO_UNION = {Material.GRASS, Material.FLOWER, Material.WOOD, Material.FOLIAGE} | set(_DEBUG_COLORS)
+    _NO_UNION = {
+        Material.GRASS,
+        Material.FLOWER,
+        Material.WOOD,
+        Material.FOLIAGE,
+        Material.LEAF,
+    } | set(_DEBUG_COLORS)
 
     groups: dict[Material, list[trimesh.Trimesh]] = defaultdict(list)
     for p in parts:

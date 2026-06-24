@@ -16,7 +16,8 @@ WATER         bluish-turquoise   #149BD2   water volume mesh
 BASE          dark gray          #505050   socket-peg / T-slot underside base
 FLOWER        golden yellow      #F5C300   flowers / attractor debug spheres (no groups)
 WOOD          warm brown         #8B633F   tree trunks and branches
-FOLIAGE       dark forest green  #175C0D   tree leaf clumps on terminal branches
+FOLIAGE       dark forest green  #0E4F08   tree foliage clumps on terminal branches
+LEAF          vivid leaf green    #36B82A   separate tree leaf blades
 DEBUG_COLOR_* vivid palette      —         10-slot cycling palette for per-group debug
               (blue, orange, purple, cyan, yellow, pink, lime, amber, indigo, brown-orange)
               Red and green are reserved for RGBA_FLAG_FAIL / RGBA_FLAG_PASS.
@@ -45,20 +46,21 @@ class Material(IntEnum):
     FLOWER        =  5
     WOOD          =  6
     FOLIAGE       =  7
+    LEAF          =  8
     # 12-slot vivid palette for per-group debug colouring (e.g. attractor spheres).
     # Use debug_material(group_label) to map an integer label → Material.
-    DEBUG_COLOR_0  =  8
-    DEBUG_COLOR_1  =  9
-    DEBUG_COLOR_2  = 10
-    DEBUG_COLOR_3  = 11
-    DEBUG_COLOR_4  = 12
-    DEBUG_COLOR_5  = 13
-    DEBUG_COLOR_6  = 14
-    DEBUG_COLOR_7  = 15
-    DEBUG_COLOR_8  = 16
-    DEBUG_COLOR_9  = 17
-    DEBUG_COLOR_10 = 18
-    DEBUG_COLOR_11 = 19
+    DEBUG_COLOR_0  =  9
+    DEBUG_COLOR_1  = 10
+    DEBUG_COLOR_2  = 11
+    DEBUG_COLOR_3  = 12
+    DEBUG_COLOR_4  = 13
+    DEBUG_COLOR_5  = 14
+    DEBUG_COLOR_6  = 15
+    DEBUG_COLOR_7  = 16
+    DEBUG_COLOR_8  = 17
+    DEBUG_COLOR_9  = 18
+    DEBUG_COLOR_10 = 19
+    DEBUG_COLOR_11 = 20
 
 
 #: RGBA uint8 palette — one entry per :class:`Material`.
@@ -70,7 +72,8 @@ RGBA: dict[Material, tuple[int, int, int, int]] = {
     Material.BASE:          ( 45,  45,  45, 255),   # dark gray
     Material.FLOWER:        (245, 195,   0, 255),   # golden yellow
     Material.WOOD:          (139,  99,  63, 255),   # light warm brown
-    Material.FOLIAGE:       ( 23,  92,  13, 255),   # dark forest green
+    Material.FOLIAGE:       ( 14,  79,   8, 255),   # darker cluster green
+    Material.LEAF:          ( 54, 184,  42, 255),   # brighter leaf green
     # Debug palette — vivid, distinct, cycles via debug_material()
     Material.DEBUG_COLOR_0:  (255,  70,  70, 255),  # red
     Material.DEBUG_COLOR_1:  ( 70, 140, 255, 255),  # blue

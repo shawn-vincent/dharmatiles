@@ -85,7 +85,7 @@ def build_branch_mesh(
     leaf_angle_jitter_deg: float = 24.0,
     leaf_pos_jitter: float = 0.165,
     debug_leaf_color: bool = False,
-) -> tuple[trimesh.Trimesh, trimesh.Trimesh, list[trimesh.Trimesh]]:
+) -> tuple[trimesh.Trimesh, trimesh.Trimesh, trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Build branch and foliage meshes from a simplified skeleton.
 
     Returns
@@ -93,8 +93,11 @@ def build_branch_mesh(
     branch_mesh
         Trimesh containing trunk and all branch tubes.  Tagged ``Material.WOOD``.
     foliage_mesh
-        Trimesh containing foliage icosphere clumps and leaf blades.
-        Tagged ``Material.FOLIAGE``.  Empty when foliage is disabled.
+        Trimesh containing foliage icosphere clumps. Tagged
+        ``Material.FOLIAGE``. Empty when foliage is disabled.
+    leaf_mesh
+        Trimesh containing separate leaf blades. Tagged ``Material.LEAF``.
+        Empty when leaves are disabled.
     attractor_meshes
         Debug icospheres (empty unless ``debug_attractors`` is set).
     """
@@ -130,7 +133,7 @@ def build_branch_mesh(
     visited = [False] * n
     visited[0] = True
     edge_solids:    list[trimesh.Trimesh] = []   # branch tubes (WOOD)
-    foliage_solids: list[trimesh.Trimesh] = []   # icosphere clumps + leaves (FOLIAGE)
+    foliage_solids: list[trimesh.Trimesh] = []   # icosphere clumps (FOLIAGE)
     # Leaf shells are kept out of the boolean union: each leaf is an
     # independent watertight shell that need not be CSG-merged with the tree or
     # with other leaves.  Unioning ~thousands of them dominated runtime; we
@@ -284,8 +287,6 @@ def build_branch_mesh(
 
     # ── assemble ──────────────────────────────────────────────────────────
     leaf_solids = [m for m in leaf_solids if len(m.vertices) > 0]
-    n_clusters  = sum(1 for i in range(1, n) if not children[i])
-    print(f"[tree] {len(leaf_solids)} leaf meshes across {n_clusters} terminal clusters")
     if debug_leaf_color:
         # Keep leaves separate so they can be tagged with a visible debug colour
         # rather than being buried in the green foliage_mesh.
@@ -293,13 +294,13 @@ def build_branch_mesh(
         # a distinct colour (index cycles mod 12 via debug_material).
         for i, lm in enumerate(leaf_solids):
             _tag(lm, debug_material(i))
-    else:
-        foliage_solids.extend(leaf_solids)
 
     branch_mesh  = _union_edge_solids(edge_solids)
     foliage_mesh = _union_edge_solids(foliage_solids)
+    leaf_mesh    = _union_edge_solids(leaf_solids) if not debug_leaf_color else trimesh.Trimesh()
     _tag(branch_mesh,  Material.WOOD)
     _tag(foliage_mesh, Material.FOLIAGE)
+    _tag(leaf_mesh,    Material.LEAF)
 
     # ── debug attractor spheres ───────────────────────────────────────────
     attractor_meshes: list[trimesh.Trimesh] = []
@@ -322,7 +323,7 @@ def build_branch_mesh(
     if debug_leaf_color:
         attractor_meshes.extend(leaf_solids)
 
-    return branch_mesh, foliage_mesh, attractor_meshes
+    return branch_mesh, foliage_mesh, leaf_mesh, attractor_meshes
 
 
 def _build_closed_edge_solid(
@@ -819,7 +820,11 @@ def _build_foliage_cluster_mesh(
     # Unit radial direction for each vertex (perp to tip_t on the unit sphere).
     rvec   = uverts - dot_t[:, None] * tip_t
     r_lat  = np.linalg.norm(rvec, axis=1, keepdims=True)
-    rad_u  = np.where(r_lat > 1e-10, rvec / r_lat, 0.0)               # (M, 3)
+    rad_u  = np.divide(
+        rvec, r_lat,
+        out=np.zeros_like(rvec),
+        where=r_lat > 1e-10,
+    )                                                                # (M, 3)
 
     verts  = np.zeros_like(uverts)
 
@@ -839,7 +844,11 @@ def _build_foliage_cluster_mesh(
         """Per-row world-up perp to tangent, normalised, shape (M, 3)."""
         p = _WUP - (tangents * _WUP).sum(axis=1, keepdims=True) * tangents
         n = np.linalg.norm(p, axis=1, keepdims=True)
-        return np.where(n > 1e-6, p / n, 0.0)
+        return np.divide(
+            p, n,
+            out=np.zeros_like(p),
+            where=n > 1e-6,
+        )
 
     # ── Back hemisphere: backward from start_p along start_t ─────────────────
     ms = u_vals <= south_arc
@@ -851,7 +860,11 @@ def _build_foliage_cluster_mesh(
         dp     = (ru * start_t).sum(axis=1, keepdims=True)
         rp     = ru - dp * start_t
         rn     = np.linalg.norm(rp, axis=1, keepdims=True)
-        rpu    = np.where(rn > 1e-10, rp / rn, 0.0)
+        rpu    = np.divide(
+            rp, rn,
+            out=np.zeros_like(rp),
+            where=rn > 1e-10,
+        )
         pu_s   = _pu_unit_scalar(start_t)               # (3,) fixed direction
         # Back hemisphere uses the base factor (0.5) for continuity with the cone.
         verts[ms] = start_p + pu_s * (0.5 * rr_s[:, None]) + ax_s[:, None] * start_t + rpu * rr_s[:, None]
@@ -876,7 +889,11 @@ def _build_foliage_cluster_mesh(
         dp   = (ru * st_c).sum(axis=1, keepdims=True)
         rp   = ru - dp * st_c
         rn   = np.linalg.norm(rp, axis=1, keepdims=True)
-        rpu  = np.where(rn > 1e-10, rp / rn, 0.0)
+        rpu  = np.divide(
+            rp, rn,
+            out=np.zeros_like(rp),
+            where=rn > 1e-10,
+        )
         pu_c = _pu_unit_batch(st_c)                     # (M, 3) per-vertex direction
         # Offset rises smoothly from 0.5 at the base (tc=0) to factor_tip at
         # the tip (tc=1) via cubic smoothstep.
@@ -980,6 +997,9 @@ def _build_foliage_cluster_mesh(
             *,
             emit_curl_deg: float | None = None,
             emit_lift_mm: float | None = None,
+            emit_yaw_span_rad: float | None = None,
+            emit_length_scale: float = 1.0,
+            emit_width_scale: float = 1.0,
         ) -> None:
             # Skip leaves in sections too narrow for meaningful placement.
             if cluster_radius_mm < 1.0:
@@ -1013,24 +1033,48 @@ def _build_foliage_cluster_mesh(
                 T0 = _proj / _plen
 
             # Yaw jitter: rotate T0 around up_hint (spin in the tangent plane).
-            yaw    = (2.0 * _hash01(bark_seed, "leaf-yaw", edge_id, key) - 1.0) * jit
+            yaw_hash = _hash01(bark_seed, "leaf-yaw", edge_id, key)
+            if emit_yaw_span_rad is None:
+                yaw = (2.0 * yaw_hash - 1.0) * jit
+            else:
+                yaw = yaw_hash * float(emit_yaw_span_rad)
             T0_rot = np.cos(yaw) * T0 + np.sin(yaw) * np.cross(up_hint, T0)
             T0     = _safe_norm(T0_rot)
 
             lseed = _hash01_int(bark_seed, "base-leaf", edge_id, key)
 
+            eff_length_mm = float(leaf_length_mm) * float(emit_length_scale)
+            eff_width_mm = float(leaf_width_mm) * float(emit_width_scale)
+            eff_curl_deg = float(emit_curl_deg) if emit_curl_deg is not None else float(leaf_curl_deg)
+            eff_lift_mm = float(emit_lift_mm) if emit_lift_mm is not None else float(leaf_lift_mm)
+
             # Contact-angle cache lookup.
             #
-            # The contact angle depends only on cluster_radius_mm and the fixed
-            # leaf geometry params (same for all leaves in this cluster call).
+            # The contact angle depends only on cluster_radius_mm and leaf
+            # geometry.  Most leaves share geometry, but supplemental top
+            # leaves may scale their footprint, so include effective geometry
+            # in the cache key.
             # Look it up or compute analytically via _contact_angle_for_sphere.
             # This replaces a 48-iteration binary search (find_contact_angle_for_sphere)
             # with a closed-form computation cached per unique radius — ~10–20 calls
             # instead of ~3400 binary searches per cluster.
-            rr_key = round(float(cluster_radius_mm), 4)
+            rr_key = (
+                round(float(cluster_radius_mm), 4),
+                round(eff_length_mm, 4),
+                round(eff_width_mm, 4),
+                round(eff_curl_deg, 4),
+                round(eff_lift_mm, 4),
+            )
             if rr_key not in _ca_cache:
                 _ca_cache[rr_key] = _contact_angle_for_sphere(
-                    float(cluster_radius_mm), **_ca_leaf_kwargs,
+                    float(cluster_radius_mm),
+                    **{
+                        **_ca_leaf_kwargs,
+                        "length_mm": eff_length_mm,
+                        "width_mm": eff_width_mm,
+                        "curl_deg": eff_curl_deg,
+                        "lift_mm": eff_lift_mm,
+                    },
                 )
             contact_angle = _ca_cache[rr_key]
 
@@ -1051,14 +1095,14 @@ def _build_foliage_cluster_mesh(
             up_placed = _safe_norm(up_hint * c_ca + T0 * s_ca)
 
             leaf_surface_kwargs = dict(
-                length_mm=float(leaf_length_mm),
-                width_mm=float(leaf_width_mm),
+                length_mm=eff_length_mm,
+                width_mm=eff_width_mm,
                 thickness_mm=float(leaf_thickness_mm),
                 fold_angle_deg=float(leaf_fold_angle_deg),
                 inner_curve=float(leaf_inner_curve),
                 outer_curve=float(leaf_outer_curve),
-                curl_deg=float(emit_curl_deg) if emit_curl_deg is not None else float(leaf_curl_deg),
-                lift_mm=float(emit_lift_mm)   if emit_lift_mm  is not None else float(leaf_lift_mm),
+                curl_deg=eff_curl_deg,
+                lift_mm=eff_lift_mm,
                 seed=lseed,
             )
             try:
@@ -1127,19 +1171,13 @@ def _build_foliage_cluster_mesh(
                     emit_lift_mm=0.0  if ri == 0 else None,
                 )
 
-        # Near-apex rings: two structured circumferential rings that bridge the
-        # gap between the last main-grid row and the pole.
-        #
-        # The local ring radius at high dome latitudes (phi ≈ 81°–86°) is well
-        # below 1 mm for typical cluster sizes, so the normal rr_pt guard would
-        # skip every leaf here.  Instead we pass r_tip (the dome radius) as the
-        # sphere radius for the contact-angle calculation: the forward dome IS a
-        # sphere of radius r_tip, so this is the geometrically correct choice
-        # and allows leaves to attach cleanly all the way to the apex.
+        # Branch-axis dome-tip fill.  The main arc grid thins near the forward
+        # dome pole because its local ring radius collapses; keep a dedicated
+        # polar pass for that end of the clump.
         phi_jit_scale = pj * row_step / max(r_tip, 1e-6)
         for na_idx, na_phi_frac in enumerate((0.86, 0.93)):
-            na_phi = (np.pi / 2.0) * na_phi_frac   # ≈ 77.4° and ≈ 83.7°
-            na_rr  = r_tip * float(np.cos(na_phi))  # ring spacing only
+            na_phi = (np.pi / 2.0) * na_phi_frac
+            na_rr = r_tip * float(np.cos(na_phi))
             n_col_na = max(1, int(np.ceil((2.0 * np.pi * na_rr) / col_step)))
             for ci in range(n_col_na):
                 phi_jit_na = (
@@ -1152,18 +1190,11 @@ def _build_foliage_cluster_mesh(
                 ) * th_na
                 theta_na = -np.pi + (ci + 0.5) / n_col_na * 2.0 * np.pi + t_jit_na
                 base_smooth, radial, _ = _dome_point(phi_na, theta_na)
-                # Use r_tip (dome radius) — see note above.
                 _emit_leaf(
                     base_smooth, radial, ("near-apex", na_idx, ci),
                     cluster_radius_mm=r_tip,
                 )
 
-        # Cap: structured polar rings over the apex zone.  This used to be
-        # random polar scatter, which could place two cap leaves almost on top
-        # of each other even when the main leaf field was a jittered grid.
-        # Pass r_tip for the same reason as the near-apex rings: the forward
-        # dome is a sphere of radius r_tip, so even near-polar leaves attach
-        # correctly when the dome radius is used instead of the tiny ring radius.
         for ci, phi, theta in _structured_cap_leaf_angles(
             max(0, int(leaf_cap_count)),
             pos_jitter=pj,
@@ -1175,6 +1206,60 @@ def _build_foliage_cluster_mesh(
         ):
             base_smooth, radial, _ = _dome_point(phi, theta)
             _emit_leaf(base_smooth, radial, ("cap", ci), cluster_radius_mm=r_tip)
+
+        # World-up crest fill.  Terminal foliage clumps are usually tilted,
+        # while leaves droop toward world -Z; the visible top can be far from
+        # the branch-axis dome pole, so it needs its own supplemental pass.
+        top_angles = _structured_world_top_leaf_angles(
+            20 * max(0, int(leaf_cap_count)),
+            arc_lo=arc_lo,
+            arc_hi=arc_hi,
+            cone_end_arc=cone_end_arc,
+            south_arc=south_arc,
+            cone_arc_p=cone_arc_p,
+            north_arc=north_arc,
+            r_tip=r_tip,
+            row_step=0.35 * row_step,
+            col_step=0.35 * col_step,
+            pos_jitter=pj,
+            bark_seed=bark_seed,
+            edge_id=edge_id,
+            top_theta_at_arc=lambda arc: _top_theta_at_arc(
+                arc,
+                cone_end_arc=cone_end_arc,
+                south_arc=south_arc,
+                cone_arc_p=cone_arc_p,
+                north_arc=north_arc,
+                spine_arc=spine_arc,
+                spine_tans=spine_tans,
+                pu_tip=pu_tip,
+                vp_tip=vp_tip,
+            ),
+            z_at_arc_theta=lambda arc, theta: _smooth_z_at_arc_theta(
+                arc,
+                theta,
+                cone_end_arc=cone_end_arc,
+                south_arc=south_arc,
+                cone_arc_p=cone_arc_p,
+                north_arc=north_arc,
+                cone_point=_cone_point,
+                dome_point=_dome_point,
+            ),
+        )
+        for ci, arc, theta in top_angles:
+            on_cone = arc <= cone_end_arc
+            if on_cone:
+                tc = (arc - south_arc) / max(cone_arc_p, 1e-9)
+                base_smooth, radial, rr_pt = _cone_point(tc, theta)
+                cluster_radius = rr_pt
+            else:
+                phi = (arc - cone_end_arc) / max(north_arc, 1e-9) * (np.pi / 2.0)
+                base_smooth, radial, _ = _dome_point(phi, theta)
+                cluster_radius = r_tip
+            _emit_leaf(
+                base_smooth, radial, ("world-top", ci),
+                cluster_radius_mm=cluster_radius,
+            )
 
     result = trimesh.Trimesh(vertices=verts, faces=ico.faces.copy(), process=False)
     result.fix_normals()
@@ -1257,6 +1342,130 @@ def _structured_cap_leaf_angles(
             cap_i += 1
 
     return result
+
+
+def _top_theta_at_arc(
+    arc: float,
+    *,
+    cone_end_arc: float,
+    south_arc: float,
+    cone_arc_p: float,
+    north_arc: float,
+    spine_arc: np.ndarray,
+    spine_tans: np.ndarray,
+    pu_tip: np.ndarray,
+    vp_tip: np.ndarray,
+) -> tuple[float, float]:
+    """Return ``(theta, vertical_amplitude)`` for the world-up side at arc."""
+    if arc <= cone_end_arc:
+        tc = (arc - south_arc) / max(cone_arc_p, 1e-9)
+        sv = tc * float(spine_arc[-1])
+        stj = _safe_norm(np.array([
+            np.interp(sv, spine_arc, spine_tans[:, d]) for d in range(3)
+        ]))
+        pu, vp = _two_perp(stj)
+    else:
+        _ = north_arc
+        pu, vp = pu_tip, vp_tip
+
+    a = float(pu[2])
+    b = float(vp[2])
+    amp = float(np.hypot(a, b))
+    if amp < 1e-6:
+        return 0.0, 0.0
+    return _wrap_angle(float(np.arctan2(b, a))), amp
+
+
+def _structured_world_top_leaf_angles(
+    count: int,
+    *,
+    arc_lo: float,
+    arc_hi: float,
+    cone_end_arc: float,
+    south_arc: float,
+    cone_arc_p: float,
+    north_arc: float,
+    r_tip: float,
+    row_step: float,
+    col_step: float,
+    pos_jitter: float,
+    bark_seed: int,
+    edge_id: int,
+    top_theta_at_arc,
+    z_at_arc_theta,
+) -> list[tuple[int, float, float]]:
+    """Deterministic leaf positions over the clump's high world-Z patch."""
+    count = int(count)
+    if count <= 0:
+        return []
+
+    arc_span = max(float(arc_hi - arc_lo), 1e-6)
+    n_rows = max(2, min(count, int(np.ceil(arc_span / max(float(row_step), 1e-6)))))
+    candidates: list[tuple[float, int, int, float, float]] = []
+
+    for ri in range(n_rows):
+        arc_center = arc_lo + ((ri + 0.5) / n_rows) * arc_span
+        arc_jit = (
+            2.0 * _hash01(bark_seed, "top-arc", edge_id, ri) - 1.0
+        ) * 0.18 * pos_jitter * arc_span / max(n_rows, 1)
+        arc = float(np.clip(arc_center + arc_jit, arc_lo, arc_hi))
+        theta_top, _amp = top_theta_at_arc(arc)
+
+        if arc <= cone_end_arc:
+            tc = (arc - south_arc) / max(cone_arc_p, 1e-9)
+            rr = max(1e-6, tc * r_tip)
+        else:
+            phi = (arc - cone_end_arc) / max(north_arc, 1e-9) * (np.pi / 2.0)
+            rr = max(1e-6, r_tip * float(np.cos(phi)))
+        n_theta = max(12, int(np.ceil((2.0 * np.pi * rr) / max(float(col_step), 1e-6))))
+        theta_step = 2.0 * np.pi / n_theta
+        stagger = 0.5 * (ri % 2)
+        for oi in range(n_theta):
+            offset = (oi + 0.5 + stagger) * theta_step
+            theta_jit = (
+                2.0 * _hash01(bark_seed, "top-theta", edge_id, ri, oi) - 1.0
+            ) * min(0.25 * theta_step, 0.18)
+            theta = _wrap_angle(theta_top - np.pi + offset + theta_jit)
+            z = float(z_at_arc_theta(arc, theta))
+            candidates.append((z, ri, oi, arc, theta))
+
+    if not candidates:
+        return []
+
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    per_row_limit = max(1, int(np.ceil(count / max(n_rows, 1))))
+    row_counts = np.zeros(n_rows, dtype=int)
+    result: list[tuple[int, float, float]] = []
+    for _z, ri, _oi, arc, theta in candidates:
+        if row_counts[ri] >= per_row_limit:
+            continue
+        result.append((len(result), arc, theta))
+        row_counts[ri] += 1
+        if len(result) >= count:
+            break
+
+    return result
+
+
+def _smooth_z_at_arc_theta(
+    arc: float,
+    theta: float,
+    *,
+    cone_end_arc: float,
+    south_arc: float,
+    cone_arc_p: float,
+    north_arc: float,
+    cone_point,
+    dome_point,
+) -> float:
+    """Return smooth cluster surface Z at an arc/theta leaf candidate."""
+    if arc <= cone_end_arc:
+        tc = (arc - south_arc) / max(cone_arc_p, 1e-9)
+        point, _radial, _rr = cone_point(tc, theta)
+    else:
+        phi = (arc - cone_end_arc) / max(north_arc, 1e-9) * (np.pi / 2.0)
+        point, _radial, _rr = dome_point(phi, theta)
+    return float(point[2])
 
 
 # ── Bark helpers ──────────────────────────────────────────────────────────────

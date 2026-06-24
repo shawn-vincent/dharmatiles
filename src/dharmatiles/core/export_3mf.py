@@ -236,6 +236,7 @@ _EXT: dict[Material, int] = {
     Material.FLOWER:  6,
     Material.WOOD:    7,
     Material.FOLIAGE: 8,
+    Material.LEAF:    9,
 }
 _SLOT_HEX = [
     "#2D2D2D",  # slot 1 — BASE
@@ -245,7 +246,8 @@ _SLOT_HEX = [
     "#1485D5",  # slot 5 — WATER
     "#F5C300",  # slot 6 — FLOWER (golden yellow)
     "#8B633F",  # slot 7 — WOOD   (light warm brown)
-    "#175C0D",  # slot 8 — FOLIAGE (dark forest green)
+    "#0E4F08",  # slot 8 — FOLIAGE (dark cluster green)
+    "#36B82A",  # slot 9 — LEAF    (brighter leaf green)
 ]
 
 
