@@ -1326,8 +1326,11 @@ def solidify_leaf(
         np.array(cap_faces,  dtype=np.int32),
     ])
 
-    solid = trimesh.Trimesh(vertices=all_verts, faces=all_faces, process=False)
-    solid.fix_normals()
+    solid = _mesh_with_fixed_normals(
+        all_verts,
+        all_faces,
+        ("solid_leaf", len(surface.vertices), len(surface.faces), NP),
+    )
     return solid, range(wall_start, wall_end)
 
 
@@ -1422,5 +1425,4 @@ def place_leaf_on_sphere(
         parent_mesh=parent_mesh,
         root_wall_angle_deg=root_wall_angle_deg,
     )
-
 

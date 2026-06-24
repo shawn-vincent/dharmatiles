@@ -41,6 +41,7 @@ BASE_SIZE_MM     = 35.0
 BASE_DEPTH_MM    = 6.0
 LEAF_FOLD_DEG    = 6.0
 LEAF_CURL_DEG    = 40.0
+COLOR_LEAF_WALLS_BY_FDM = False
 
 
 # ── Placement helpers ──────────────────────────────────────────────────────────
@@ -173,17 +174,22 @@ def build_debug_mesh(
         )
 
         tag(leaf, debug_material(i))
-        color_leaf_walls_by_fdm(leaf, wall_faces, support_mesh)
+        if COLOR_LEAF_WALLS_BY_FDM:
+            color_leaf_walls_by_fdm(leaf, wall_faces, support_mesh)
 
-        wall_colors = leaf.visual.face_colors[list(wall_faces)]
-        n_ok_total   += int(np.sum(wall_colors[:, 0] < 128))
-        n_fail_total += len(wall_faces) - int(np.sum(wall_colors[:, 0] < 128))
+            wall_colors = leaf.visual.face_colors[list(wall_faces)]
+            n_ok = int(np.sum(wall_colors[:, 0] < 128))
+            n_ok_total   += n_ok
+            n_fail_total += len(wall_faces) - n_ok
         parts.append(leaf)
 
     print(f"  {len(pts)} leaves  h_overlap={h_overlap:.0%}  v_overlap={v_overlap:.0%}  "
           f"curl={LEAF_CURL_DEG:.0f}°  lift={lift_mm:.1f}mm  seed={seed}")
-    print(f"  wall faces: {n_ok_total} green  {n_fail_total} red  "
-          f"({'%.0f' % (100*n_ok_total/(n_ok_total+n_fail_total+1e-9))}% printable)")
+    if COLOR_LEAF_WALLS_BY_FDM:
+        print(f"  wall faces: {n_ok_total} green  {n_fail_total} red  "
+              f"({'%.0f' % (100*n_ok_total/(n_ok_total+n_fail_total+1e-9))}% printable)")
+    else:
+        print("  wall face FDM coloring disabled")
     return trimesh.util.concatenate(parts)
 
 

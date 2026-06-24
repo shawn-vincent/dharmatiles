@@ -50,6 +50,7 @@ LEAF_LENGTH_MM   = 9.0
 LEAF_WIDTH_MM    = LEAF_LENGTH_MM * 2.0 / 3.0
 LEAF_FOLD_DEG    = 6.0
 LEAF_CURL_DEG    = 40.0
+COLOR_LEAF_WALLS_BY_FDM = False
 
 PLACEMENTS: tuple[tuple[str, float], ...] = (
     ("top",           0.00),
@@ -164,13 +165,17 @@ def _place_leaves(
             info = color_leaf_walls_diagnostic(leaf, wall_faces, support_mesh)
             diag_infos.append(info)
         else:
-            color_leaf_walls_by_fdm(leaf, wall_faces, support_mesh)
             diag_infos.append(None)
 
-            wall_colors = leaf.visual.face_colors[list(wall_faces)]
-            n_ok   = int(np.sum(wall_colors[:, 0] < 128))
-            n_fail = len(wall_faces) - n_ok
-            print(f"  {name:13s}  wall green={n_ok} red={n_fail}  watertight={leaf.is_watertight}")
+            if COLOR_LEAF_WALLS_BY_FDM:
+                color_leaf_walls_by_fdm(leaf, wall_faces, support_mesh)
+
+                wall_colors = leaf.visual.face_colors[list(wall_faces)]
+                n_ok   = int(np.sum(wall_colors[:, 0] < 128))
+                n_fail = len(wall_faces) - n_ok
+                print(f"  {name:13s}  wall green={n_ok} red={n_fail}  watertight={leaf.is_watertight}")
+            else:
+                print(f"  {name:13s}  wall coloring disabled  watertight={leaf.is_watertight}")
 
         leaves.append(leaf)
 
