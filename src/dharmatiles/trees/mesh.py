@@ -1129,6 +1129,16 @@ def _build_foliage_cluster_mesh(
                         perim = float(poly.length)
                         if perim < 1e-3:
                             continue
+                        # Cross-section centroid in 3D — used below as the
+                        # local radius origin so the contact angle is correct
+                        # for the actual cone/dome geometry, not a fixed sphere.
+                        c2d         = poly.centroid
+                        c4d         = xform @ np.array(
+                            [float(c2d.x), float(c2d.y), 0.0, 1.0]
+                        )
+                        centroid_3d = np.array(
+                            [float(c4d[0]), float(c4d[1]), float(c4d[2])]
+                        )
                         n_col = max(1, int(np.ceil(perim / col_step)))
                         for ci in range(n_col):
                             t    = float(ci) / float(n_col)
@@ -1146,20 +1156,64 @@ def _build_foliage_cluster_mesh(
                             if raw_len < 1e-6:
                                 continue
                             outward = raw_out / raw_len
-                            # Use r_tip (the foliage sphere radius) as the
-                            # contact-angle sphere radius everywhere.  Using
-                            # the tiny cross-section radius at the dome top
-                            # would push contact_angle past π/2 and skip the
-                            # leaf, producing a bald apex.
+                            # Local radius: actual distance from section
+                            # centroid to this perimeter point.  Correct for
+                            # the cone body (r_wood…r_tip) and dome sides.
+                            # Near the apex local_r → 0 and the contact-angle
+                            # guard rejects the leaf (contact_angle → π/2);
+                            # the explicit apex cap below fills that gap.
+                            local_r = float(np.linalg.norm(pt3d - centroid_3d))
                             _emit_leaf(
                                 pt3d, outward, (row_idx, ci),
-                                cluster_radius_mm=r_tip,
+                                cluster_radius_mm=max(local_r, 1e-3),
                             )
                 except Exception:
                     pass
 
             z_row  += row_step
             row_idx += 1
+
+        # ── Apex cap: explicit leaves fanning from the dome top ──────────────
+        # Z-slices near the apex yield tiny cross-sections; the contact-angle
+        # guard rejects those leaves (local_r → 0 → contact_angle → π/2).
+        # Place leaf_cap_count leaves at evenly-spaced radial angles around the
+        # topmost vertex so the polar gap is always covered.
+        if leaf_cap_count > 0 and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
+            apex_v_idx  = int(np.argmax(shaped.vertices[:, 2]))
+            apex_smooth = shaped.vertices[apex_v_idx].copy()
+            apex_up     = _safe_norm(apex_smooth - mesh_center_3d)
+            if float(np.linalg.norm(apex_up)) < 1e-6:
+                apex_up = tip_t.copy()
+            e1, e2 = _two_perp(apex_up)
+            disp_apex   = float(
+                _foliage_gaussian_noise(apex_smooth[None, :], edge_id, bark_seed)[0]
+                + _foliage_coarse_noise(apex_smooth[None, :], edge_id, bark_seed)[0]
+            )
+            apex_base = apex_smooth + apex_up * (disp_apex - noise_peak)
+            for ci in range(leaf_cap_count):
+                phi   = 2.0 * np.pi * ci / float(leaf_cap_count)
+                T0    = _safe_norm(np.cos(phi) * e1 + np.sin(phi) * e2)
+                lseed = _hash01_int(bark_seed, "apex-leaf", edge_id, ci)
+                try:
+                    leaf_surf = build_leaf_surface(
+                        base_pos=apex_base, tangent=T0, up_hint=apex_up,
+                        length_mm=float(leaf_length_mm),
+                        width_mm=float(leaf_width_mm),
+                        thickness_mm=float(leaf_thickness_mm),
+                        fold_angle_deg=float(leaf_fold_angle_deg),
+                        inner_curve=float(leaf_inner_curve),
+                        outer_curve=float(leaf_outer_curve),
+                        curl_deg=float(leaf_curl_deg),
+                        lift_mm=float(leaf_lift_mm),
+                        seed=lseed,
+                    )
+                    solid, _ = solidify_leaf(
+                        leaf_surf, apex_up, parent_mesh=cluster_mesh
+                    )
+                except (RuntimeError, ValueError):
+                    continue
+                if len(solid.vertices) > 0:
+                    leaf_parts.append(solid)
 
     # ── Leaf-count diagnostic ─────────────────────────────────────────────────
     # Warn if a cluster that was supposed to emit leaves ends up with very few.

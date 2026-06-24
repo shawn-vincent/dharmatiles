@@ -45,8 +45,8 @@ def main() -> None:
     square_mm = tiles[0].surface.square_mm if tiles else 35.0
 
     # Label: "category/stem" — NxM is already embedded in the filename.
-    spec_name = spec.stem.removesuffix('.tile')
-    category  = spec.parent.name
+    spec_name = tile_path.stem.removesuffix('.tile')
+    category  = tile_path.parent.name
     label     = f"{category}/{spec_name}" if category not in ('tiles', '') else spec_name
 
     from dharmatiles.render import render
