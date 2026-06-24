@@ -36,12 +36,11 @@ tile = Tile(
                     foliage_clusters=True,
                     leaf_length_mm=4.5,
                     leaf_width_mm=3.0,
-                    leaf_spacing_factor=2.0,
-                    leaf_h_overlap=0.2,
-                    leaf_v_overlap=0.5,
+                    leaf_h_overlap=0.1,
+                    leaf_v_overlap=0.25,
                     leaf_cap_count=12,
-                    leaf_angle_jitter_deg=20.0,
-                    leaf_pos_jitter=0.20,
+                    leaf_angle_jitter_deg=10.0,
+                    leaf_pos_jitter=0.10,
                 ),
                 # Grass last — grows around rocks and tree trunk
                 Grass(

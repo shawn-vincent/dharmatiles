@@ -982,7 +982,7 @@ _LEAF_ROOT_MAX_HIT_MM: float = 10.0
 # Smaller values undercut inward: the root ring narrows toward the perimeter
 # centroid, giving beefy anchoring especially at sharp corners (tip, base).
 # Public so callers can reference it without hard-coding the literal.
-LEAF_ROOT_WALL_ANGLE_DEG: float = 50.0
+LEAF_ROOT_WALL_ANGLE_DEG: float = 90.0
 
 # FDM printability floor: faces whose downward slope exceeds this are overhangs.
 _LEAF_FDM_FLOOR_DEG: float = 45.0
@@ -1412,6 +1412,132 @@ def place_leaf_on_sphere(
         )
 
     # Apply the contact angle: rotate the frame so lift_mm=0 → sphere contact.
+    c, s      = float(np.cos(contact_angle_rad)), float(np.sin(contact_angle_rad))
+    tangent   = _safe_norm(np.asarray(T0, float) * c - np.asarray(up_hint, float) * s)
+    up_placed = _safe_norm(np.asarray(up_hint, float) * c + np.asarray(T0, float) * s)
+
+    leaf_surf = build_leaf_surface(
+        base_pos=base_pos, tangent=tangent, up_hint=up_placed, **leaf_kwargs,
+    )
+
+    return solidify_leaf(
+        leaf_surf, up_placed, embed_mm,
+        parent_mesh=parent_mesh,
+        root_wall_angle_deg=root_wall_angle_deg,
+    )
+
+
+def _find_contact_angle_for_mesh(
+    base_pos:   np.ndarray,
+    T0:         np.ndarray,
+    up_hint:    np.ndarray,
+    parent_mesh: "trimesh.Trimesh",
+    **leaf_kwargs,
+) -> float:
+    """Batched contact-angle search against a closed mesh.
+
+    Replaces the generic :func:`find_contact_angle` for the mesh case.
+    The key difference: instead of calling ``is_clear(v)`` separately for
+    every leaf vertex (~123 individual ``contains()`` ray-casts), this
+    issues **one batched** ``parent_mesh.contains(flat.vertices)`` call to
+    identify the risky set, then does **one batched** ``contains()`` per
+    binary-search iteration.  Total calls: 1 (init) + 17 (search) per leaf,
+    vs. 123 + 48 for the generic path.
+
+    Uses 16 iterations (≈4.8×10⁻⁵ rad precision) — amply sufficient for FDM.
+    """
+    flat_kwargs = {**leaf_kwargs, 'lift_mm': 0.0}
+    flat = build_leaf_surface(
+        base_pos=base_pos, tangent=T0, up_hint=up_hint, **flat_kwargs,
+    )
+
+    # One batched contains() → True where vertex is INSIDE the mesh.
+    # Risky = outside at θ=0 (could penetrate as the leaf rotates in).
+    risky_mask  = ~parent_mesh.contains(flat.vertices)   # (N,) bool
+    risky_verts = flat.vertices[risky_mask]
+    if len(risky_verts) == 0:
+        return 0.0
+
+    bp   = np.asarray(base_pos, float)
+    T0_a = np.asarray(T0,       float)
+    uph  = np.asarray(up_hint,  float)
+    axis = _safe_norm(np.cross(-T0_a, uph))
+
+    def _rotate(pts: np.ndarray, theta: float) -> np.ndarray:
+        c, s  = np.cos(theta), np.sin(theta)
+        rel   = pts - bp
+        return bp + rel * c + np.cross(axis, rel) * s + axis * (rel @ axis)[:, np.newaxis] * (1.0 - c)
+
+    lo, hi = 0.0, float(np.pi)
+    # If even the full π rotation keeps all risky verts outside, return π.
+    if not parent_mesh.contains(_rotate(risky_verts, hi)).any():
+        return hi
+
+    # Binary search: lo = clear, hi = penetrating.
+    # 16 iterations → π/2¹⁶ ≈ 4.8×10⁻⁵ rad (< 0.003°).
+    for _ in range(16):
+        mid = 0.5 * (lo + hi)
+        if not parent_mesh.contains(_rotate(risky_verts, mid)).any():
+            lo = mid
+        else:
+            hi = mid
+    return lo
+
+
+def place_leaf_on_mesh(
+    base_pos:            np.ndarray,
+    T0:                  np.ndarray,
+    up_hint:             np.ndarray,
+    parent_mesh:         "trimesh.Trimesh",
+    *,
+    contact_angle_rad:   float | None = None,
+    embed_mm:            float = LEAF_ROOT_EMBED_MM,
+    root_wall_angle_deg: float = LEAF_ROOT_WALL_ANGLE_DEG,
+    **leaf_kwargs,
+) -> tuple["trimesh.Trimesh", range]:
+    """Build and solidify a leaf placed on any closed manifold mesh surface.
+
+    Generalises :func:`place_leaf_on_sphere` for an arbitrary parent mesh.
+    The contact angle is found using a mesh ``contains()`` predicate — a leaf
+    vertex is *clear* when it lies outside (not inside) the mesh.
+
+    Parameters
+    ----------
+    base_pos           : Leaf base position on the mesh surface.
+    T0                 : Flat tangent direction (angle = 0) — typically
+                         gravity-down projected onto the surface tangent plane,
+                         as returned by :func:`leaf_placement_from_surface`.
+    up_hint            : Outward surface normal at *base_pos*.
+    parent_mesh        : Closed watertight ``trimesh.Trimesh`` the leaf grows
+                         from.  Used for both the contact-angle ``contains()``
+                         predicate and the per-vertex embed raycasts inside
+                         :func:`solidify_leaf`.
+    contact_angle_rad  : Override the auto-computed contact angle (radians).
+                         ``None`` (default) → computed automatically via
+                         :func:`find_contact_angle`.
+    embed_mm           : How far past the parent surface each root vertex is
+                         placed.  Passed to :func:`solidify_leaf`.
+    root_wall_angle_deg: Angle between the root wall and the leaf surface
+                         plane at the perimeter edge.  Passed to
+                         :func:`solidify_leaf`.
+    **leaf_kwargs      : Forwarded to :func:`build_leaf_surface` and
+                         :func:`find_contact_angle` (e.g. ``length_mm``,
+                         ``width_mm``, ``fold_angle_deg``, ``curl_deg``,
+                         ``lift_mm``).
+
+    Returns
+    -------
+    (solid, wall_face_range)
+        *solid* is a closed watertight ``trimesh.Trimesh``.
+        *wall_face_range* is the ``range`` of wall face indices suitable for
+        FDM printability analysis (see :func:`solidify_leaf`).
+    """
+    if contact_angle_rad is None:
+        contact_angle_rad = _find_contact_angle_for_mesh(
+            base_pos, T0, up_hint, parent_mesh, **leaf_kwargs,
+        )
+
+    # Apply the contact angle: rotate the frame so lift_mm=0 → mesh contact.
     c, s      = float(np.cos(contact_angle_rad)), float(np.sin(contact_angle_rad))
     tangent   = _safe_norm(np.asarray(T0, float) * c - np.asarray(up_hint, float) * s)
     up_placed = _safe_norm(np.asarray(up_hint, float) * c + np.asarray(T0, float) * s)

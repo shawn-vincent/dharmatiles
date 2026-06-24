@@ -55,7 +55,6 @@ class Tree:
         smoothing_alpha: float = 0.1,
         min_radius_mm: float = 1.0,
         debug_attractors: bool = False,
-        debug_leaf_connectivity: bool = False,
         debug_leaf_color: bool = False,
         group_width_mm: Sample[float] | None = 20.0,
         group_height_mm: Sample[float] | None = 20.0,
@@ -78,21 +77,13 @@ class Tree:
         leaf_outer_curve: float = 0.72,
         leaf_curl_deg: float = 40.0,
         leaf_lift_mm: float = 3.0,
-        leaf_keel_tip_angle_deg: float = 45.0,
-        leaf_spacing_factor: float = 2.0,
         leaf_h_overlap: float = 0.2,
         leaf_v_overlap: float = 0.5,
         leaf_cap_count: int = 12,
         leaf_angle_jitter_deg: float = 24.0,
         leaf_pos_jitter: float = 0.165,
-        leaf_tilt_deg: float = 45.0,       # kept for API compat; unused with branchlets
         bark: BarkConfig | None = None,
         stamp_falloff_mm: float = 5.0,
-        # ── Branchlet parameters ──────────────────────────────────────────────
-        branchlet_length_mm: float = 12.0,
-        branchlet_root_radius_mm: float | None = None,
-        branchlet_embed_depth_mm: float = 2.5,
-        branchlet_floor_angle_deg: float = 45.0,
     ) -> None:
         self.height_mm             = height_mm
         self.trunk_height_mm       = trunk_height_mm
@@ -112,9 +103,8 @@ class Tree:
         self.branch_exponent = float(branch_exponent)
         self.smoothing_alpha = float(smoothing_alpha)
         self.min_radius_mm = float(min_radius_mm)
-        self.debug_attractors        = bool(debug_attractors)
-        self.debug_leaf_connectivity = bool(debug_leaf_connectivity)
-        self.debug_leaf_color        = bool(debug_leaf_color)
+        self.debug_attractors = bool(debug_attractors)
+        self.debug_leaf_color = bool(debug_leaf_color)
         self.group_width_mm    = group_width_mm
         self.group_height_mm   = group_height_mm
         self.foliage_bulge_mm  = float(foliage_bulge_mm)
@@ -128,34 +118,23 @@ class Tree:
             float(foliage_cluster_length_mm) if foliage_cluster_length_mm is not None else None
         )
         # Leaf blades
-        self.leaves                = bool(leaves)
-        self.leaf_base_count       = int(leaf_base_count)
-        self.leaf_length_mm        = float(leaf_length_mm)
-        self.leaf_width_mm         = float(leaf_width_mm)
-        self.leaf_thickness_mm     = float(leaf_thickness_mm)
-        self.leaf_fold_angle_deg   = float(leaf_fold_angle_deg)
-        self.leaf_inner_curve      = float(leaf_inner_curve)
-        self.leaf_outer_curve      = float(leaf_outer_curve)
-        self.leaf_curl_deg         = float(leaf_curl_deg)
-        self.leaf_lift_mm          = float(leaf_lift_mm)
-        self.leaf_keel_tip_angle_deg   = float(leaf_keel_tip_angle_deg)
-        self.leaf_spacing_factor       = float(leaf_spacing_factor)
-        self.leaf_h_overlap            = float(np.clip(leaf_h_overlap, 0.0, 0.95))
-        self.leaf_v_overlap            = float(np.clip(leaf_v_overlap, 0.0, 0.95))
-        self.leaf_cap_count            = int(leaf_cap_count)
-        self.leaf_angle_jitter_deg     = float(leaf_angle_jitter_deg)
-        self.leaf_pos_jitter           = float(leaf_pos_jitter)
-        self.leaf_tilt_deg             = float(leaf_tilt_deg)
+        self.leaves              = bool(leaves)
+        self.leaf_base_count     = int(leaf_base_count)
+        self.leaf_length_mm      = float(leaf_length_mm)
+        self.leaf_width_mm       = float(leaf_width_mm)
+        self.leaf_thickness_mm   = float(leaf_thickness_mm)
+        self.leaf_fold_angle_deg = float(leaf_fold_angle_deg)
+        self.leaf_inner_curve    = float(leaf_inner_curve)
+        self.leaf_outer_curve    = float(leaf_outer_curve)
+        self.leaf_curl_deg       = float(leaf_curl_deg)
+        self.leaf_lift_mm        = float(leaf_lift_mm)
+        self.leaf_h_overlap      = float(np.clip(leaf_h_overlap, 0.0, 0.95))
+        self.leaf_v_overlap      = float(np.clip(leaf_v_overlap, 0.0, 0.95))
+        self.leaf_cap_count      = int(leaf_cap_count)
+        self.leaf_angle_jitter_deg = float(leaf_angle_jitter_deg)
+        self.leaf_pos_jitter       = float(leaf_pos_jitter)
         self.bark = BarkConfig() if bark is None else bark
         self.stamp_falloff_mm = float(stamp_falloff_mm)
-        # Branchlet
-        self.branchlet_length_mm      = float(branchlet_length_mm)
-        self.branchlet_root_radius_mm = (
-            None if branchlet_root_radius_mm is None
-            else float(branchlet_root_radius_mm)
-        )
-        self.branchlet_embed_depth_mm = float(branchlet_embed_depth_mm)
-        self.branchlet_floor_angle_deg = float(branchlet_floor_angle_deg)
 
     def footprint_mm(self) -> float:
         return float(bounds(self.canopy_radius_mm)[1])
@@ -249,21 +228,12 @@ class Tree:
                 leaf_outer_curve=self.leaf_outer_curve,
                 leaf_curl_deg=self.leaf_curl_deg,
                 leaf_lift_mm=self.leaf_lift_mm,
-                leaf_keel_depth_mm=0.0,   # branchlet provides support; no keel needed
-                leaf_keel_tip_angle_deg=self.leaf_keel_tip_angle_deg,
-                leaf_spacing_factor=self.leaf_spacing_factor,
                 leaf_h_overlap=self.leaf_h_overlap,
                 leaf_v_overlap=self.leaf_v_overlap,
                 leaf_cap_count=self.leaf_cap_count,
                 leaf_angle_jitter_deg=self.leaf_angle_jitter_deg,
                 leaf_pos_jitter=self.leaf_pos_jitter,
-                leaf_tilt_deg=self.leaf_tilt_deg,
-                debug_leaf_connectivity=self.debug_leaf_connectivity,
                 debug_leaf_color=self.debug_leaf_color,
-                branchlet_length_mm=self.branchlet_length_mm,
-                branchlet_root_radius_mm=self.branchlet_root_radius_mm,
-                branchlet_embed_depth_mm=self.branchlet_embed_depth_mm,
-                branchlet_floor_angle_deg=self.branchlet_floor_angle_deg,
             )
             if len(branch_mesh.vertices) == 0 and len(foliage_mesh.vertices) == 0:
                 continue
