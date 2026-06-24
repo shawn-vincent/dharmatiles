@@ -1210,8 +1210,10 @@ def _build_foliage_cluster_mesh(
         # World-up crest fill.  Terminal foliage clumps are usually tilted,
         # while leaves droop toward world -Z; the visible top can be far from
         # the branch-axis dome pole, so it needs its own supplemental pass.
+        # Count is leaf_cap_count (not 20×) — the main grid already covers the
+        # full circumference, so only a light supplemental is needed here.
         top_angles = _structured_world_top_leaf_angles(
-            20 * max(0, int(leaf_cap_count)),
+            max(0, int(leaf_cap_count)),
             arc_lo=arc_lo,
             arc_hi=arc_hi,
             cone_end_arc=cone_end_arc,
@@ -1261,6 +1263,22 @@ def _build_foliage_cluster_mesh(
                 cluster_radius_mm=cluster_radius,
             )
 
+    # ── Leaf-count diagnostic ─────────────────────────────────────────────────
+    # Warn if a cluster that was supposed to emit leaves ends up with very few.
+    # A count < 3 on a non-trivial cluster is a signal of a coverage regression
+    # (bare-spot risk).  Use this to catch any future changes that thin the leaf
+    # passes too aggressively.
+    if leaves and leaf_base_count > 0 and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
+        if len(leaf_parts) < 3:
+            warnings.warn(
+                f"Foliage cluster edge_id={edge_id} generated only "
+                f"{len(leaf_parts)} leaf(ves) — possible bare-spot regression. "
+                f"(r_tip={r_tip:.2f} mm, clump_length={clump_length_mm:.1f} mm, "
+                f"leaf_cap_count={leaf_cap_count})",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
     result = trimesh.Trimesh(vertices=verts, faces=ico.faces.copy(), process=False)
     result.fix_normals()
     return result, leaf_parts
@@ -1279,9 +1297,10 @@ def _structured_cap_leaf_angles(
     """Return deterministic jittered-ring cap positions as ``(idx, phi, theta)``.
 
     ``phi`` is the forward-dome polar angle used by ``_dome_point`` where
-    ``pi/2`` is the apex.  The cap covers the same top 30% polar band as the
-    previous random sampler, but each leaf now owns a row/column cell and jitter
-    is clamped so it cannot cross into a neighbour's cell.
+    ``pi/2`` is the apex.  The cap covers the top 6% polar band [0.94, 0.98]·π/2 —
+    the true apex zone above the near-apex rings (0.86, 0.93) and the main grid
+    (whose last row center lands at phi≈0.72).  Each leaf owns a row/column cell
+    and jitter is clamped so it cannot cross into a neighbour's cell.
     """
     count = int(count)
     if count <= 0:
@@ -1290,7 +1309,12 @@ def _structured_cap_leaf_angles(
     r_tip = max(float(r_tip), 1e-6)
     pj = max(0.0, float(pos_jitter))
 
-    phi_min = 0.70 * (np.pi / 2.0)
+    # phi_min is set to 0.94 (not 0.70) so the cap covers only the true apex
+    # zone above the near-apex rings (phi=0.86, 0.93) and the main grid (whose
+    # last row center lands at phi≈0.72).  The old 0.70 start caused the cap
+    # to overlap both the main grid and the near-apex rings, adding redundant
+    # leaves in zones that are already covered.
+    phi_min = 0.94 * (np.pi / 2.0)
     phi_max = 0.98 * (np.pi / 2.0)
     band = phi_max - phi_min
 
@@ -1324,6 +1348,12 @@ def _structured_cap_leaf_angles(
 
     for ri, (phi_center, n_col) in enumerate(zip(row_phis, cols)):
         n_col = int(n_col)
+        # Cap n_col by the natural circumference/col_step count so we never
+        # pack leaves tighter than the h_overlap parameter implies, even when
+        # the ring radius is very small (near the apex).
+        rr_ring = max(float(r_tip) * float(np.cos(phi_center)), 1e-6)
+        natural_n_col = max(1, int(np.ceil(2.0 * np.pi * rr_ring / max(float(col_step), 1e-6))))
+        n_col = min(n_col, natural_n_col)
         theta_step = 2.0 * np.pi / n_col
         max_theta_jit = 0.45 * theta_step
         requested_theta_jit = pj * float(col_step) / max(r_tip * np.cos(phi_center), 1e-6)
