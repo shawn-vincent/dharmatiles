@@ -1068,6 +1068,20 @@ def _build_foliage_cluster_mesh(
             tangent   = _safe_norm(T0 * c_ca - up_hint * s_ca)
             up_placed = _safe_norm(up_hint * c_ca + T0 * s_ca)
 
+            # Instrumentation: a leaf pointing strongly upward (tangent_z > 0.7)
+            # means the contact angle or up_hint is wrong — the leaf tip will
+            # spike out of the canopy top rather than lying along the surface.
+            if float(tangent[2]) > 0.707:
+                warnings.warn(
+                    f"[foliage] upward-pointing leaf: edge={edge_id} key={key!r} "
+                    f"tangent_z={float(tangent[2]):.3f} "
+                    f"contact_angle={float(np.degrees(contact_angle)):.1f}° "
+                    f"up_hint_z={float(up_hint[2]):.3f} "
+                    f"cluster_r={cluster_radius_mm:.2f}mm",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+
             leaf_surface_kwargs = dict(
                 length_mm=eff_length_mm,
                 width_mm=eff_width_mm,
@@ -1156,6 +1170,13 @@ def _build_foliage_cluster_mesh(
                             if raw_len < 1e-6:
                                 continue
                             outward = raw_out / raw_len
+                            # Skip the underside of the cluster: when the
+                            # outward direction points downward the contact-
+                            # angle formula flips and the leaf tangent ends up
+                            # pointing upward (into the canopy).  The cluster
+                            # underside is hidden by the branch anyway.
+                            if float(outward[2]) < -0.1:
+                                continue
                             # Local radius: actual distance from section
                             # centroid to this perimeter point.  Correct for
                             # the cone body (r_wood…r_tip) and dome sides.
@@ -1190,13 +1211,37 @@ def _build_foliage_cluster_mesh(
                 + _foliage_coarse_noise(apex_smooth[None, :], edge_id, bark_seed)[0]
             )
             apex_base = apex_smooth + apex_up * (disp_apex - noise_peak)
+
+            # Contact angle for the full foliage radius (valid at the dome apex
+            # where the cluster radius is r_tip).  Same cache as body leaves.
+            _apex_ca_key = (
+                round(r_tip, 4), round(float(leaf_length_mm), 4),
+                round(float(leaf_width_mm), 4),
+                round(float(leaf_curl_deg), 4), round(float(leaf_lift_mm), 4),
+            )
+            if _apex_ca_key not in _ca_cache:
+                _ca_cache[_apex_ca_key] = _contact_angle_for_sphere(
+                    r_tip, **_ca_leaf_kwargs,
+                )
+            apex_ca = _ca_cache[_apex_ca_key]
+            # If somehow invalid, fall through to 0 (no tilt) rather than skip.
+            if apex_ca >= np.pi / 2:
+                apex_ca = 0.0
+            c_apex = float(np.cos(apex_ca))
+            s_apex = float(np.sin(apex_ca))
+
             for ci in range(leaf_cap_count):
-                phi   = 2.0 * np.pi * ci / float(leaf_cap_count)
-                T0    = _safe_norm(np.cos(phi) * e1 + np.sin(phi) * e2)
+                phi    = 2.0 * np.pi * ci / float(leaf_cap_count)
+                T0_raw = _safe_norm(np.cos(phi) * e1 + np.sin(phi) * e2)
+                # Apply contact angle: tilts T0_raw downward from apex_up so
+                # the leaf tip presses into the sphere surface rather than
+                # curling straight up via lift_mm.
+                tangent   = _safe_norm(T0_raw * c_apex - apex_up * s_apex)
+                up_placed = _safe_norm(apex_up  * c_apex + T0_raw * s_apex)
                 lseed = _hash01_int(bark_seed, "apex-leaf", edge_id, ci)
                 try:
                     leaf_surf = build_leaf_surface(
-                        base_pos=apex_base, tangent=T0, up_hint=apex_up,
+                        base_pos=apex_base, tangent=tangent, up_hint=up_placed,
                         length_mm=float(leaf_length_mm),
                         width_mm=float(leaf_width_mm),
                         thickness_mm=float(leaf_thickness_mm),
@@ -1208,7 +1253,7 @@ def _build_foliage_cluster_mesh(
                         seed=lseed,
                     )
                     solid, _ = solidify_leaf(
-                        leaf_surf, apex_up, parent_mesh=cluster_mesh
+                        leaf_surf, up_placed, parent_mesh=cluster_mesh
                     )
                 except (RuntimeError, ValueError):
                     continue
