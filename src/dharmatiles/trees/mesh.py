@@ -71,15 +71,19 @@ def build_branch_mesh(
     # ── Leaf geometry ─────────────────────────────────────────────────────────
     leaves: bool = True,
     leaf_base_count: int = 5,
-    leaf_length_mm: float = 8.0,
-    leaf_width_mm: float = 16.0 / 3.0,
-    leaf_thickness_mm: float = 0.16,
+    leaf_length_mm: float = 4.5,
+    leaf_width_mm: float = 3.0,
+    leaf_thickness_mm: float = 0.24,
     leaf_fold_angle_deg: float = 6.0,
     leaf_inner_curve: float = 1.5,
-    leaf_outer_curve: float = 0.6,
+    leaf_outer_curve: float = 0.72,
+    leaf_curl_deg: float = 40.0,
+    leaf_lift_mm: float = 3.0,
     leaf_keel_depth_mm: float = 0.0,
     leaf_keel_tip_angle_deg: float = 45.0,
-    leaf_spacing_factor: float = 1.1,
+    leaf_spacing_factor: float = 2.0,
+    leaf_h_overlap: float = 0.2,
+    leaf_v_overlap: float = 0.5,
     leaf_cap_count: int = 12,
     leaf_angle_jitter_deg: float = 24.0,
     leaf_pos_jitter: float = 0.165,
@@ -271,9 +275,13 @@ def build_branch_mesh(
                 leaf_fold_angle_deg=leaf_fold_angle_deg,
                 leaf_inner_curve=leaf_inner_curve,
                 leaf_outer_curve=leaf_outer_curve,
+                leaf_curl_deg=leaf_curl_deg,
+                leaf_lift_mm=leaf_lift_mm,
                 leaf_keel_depth_mm=leaf_keel_depth_mm,
                 leaf_keel_tip_angle_deg=leaf_keel_tip_angle_deg,
                 leaf_spacing_factor=leaf_spacing_factor,
+                leaf_h_overlap=leaf_h_overlap,
+                leaf_v_overlap=leaf_v_overlap,
                 leaf_cap_count=leaf_cap_count,
                 leaf_angle_jitter_deg=leaf_angle_jitter_deg,
                 leaf_pos_jitter=leaf_pos_jitter,
@@ -767,13 +775,17 @@ def _build_foliage_cluster_mesh(
     leaf_base_count: int = 0,
     leaf_length_mm: float = 0.0,
     leaf_width_mm: float = 0.0,
-    leaf_thickness_mm: float = 0.16,
+    leaf_thickness_mm: float = 0.24,
     leaf_fold_angle_deg: float = 6.0,
     leaf_inner_curve: float = 1.5,
-    leaf_outer_curve: float = 0.6,
+    leaf_outer_curve: float = 0.72,
     leaf_keel_depth_mm: float = 1.0,
     leaf_keel_tip_angle_deg: float = 45.0,
-    leaf_spacing_factor: float = 1.1,
+    leaf_spacing_factor: float = 2.0,
+    leaf_h_overlap: float = 0.2,
+    leaf_v_overlap: float = 0.5,
+    leaf_curl_deg: float = 40.0,
+    leaf_lift_mm: float = 3.0,
     leaf_cap_count: int = 12,
     leaf_angle_jitter_deg: float = 24.0,
     leaf_pos_jitter: float = 0.165,
@@ -1028,41 +1040,54 @@ def _build_foliage_cluster_mesh(
             yaw = (2.0 * _hash01(bark_seed, "leaf-yaw", edge_id, key) - 1.0) * jit
             lseed = _hash01_int(bark_seed, "base-leaf", edge_id, key)
 
-            parts = build_branchlet_and_leaf(
-                attachment_point=attachment_pt,
-                surface_normal=surface_normal,
-                branchlet_length_mm=float(branchlet_length_mm),
-                floor_angle_deg=float(branchlet_floor_angle_deg),
-                root_radius_mm=branchlet_root_radius_mm,
-                embed_depth_mm=float(branchlet_embed_depth_mm),
-                yaw_deg=float(np.degrees(yaw)),
-                seed=lseed,
-                leaf_length_mm=float(leaf_length_mm),
-                leaf_width_mm=float(leaf_width_mm),
-                leaf_thickness_mm=float(leaf_thickness_mm),
-                leaf_fold_angle_deg=float(leaf_fold_angle_deg),
-                leaf_inner_curve=float(leaf_inner_curve),
-                leaf_outer_curve=float(leaf_outer_curve),
-                leaf_keel_depth_mm=float(leaf_keel_depth_mm),
-                parent_mesh=_cluster_mesh_for_embedding,
-            )
+            try:
+                parts = build_branchlet_and_leaf(
+                    attachment_point=attachment_pt,
+                    surface_normal=surface_normal,
+                    branchlet_length_mm=float(branchlet_length_mm),
+                    floor_angle_deg=float(branchlet_floor_angle_deg),
+                    root_radius_mm=(
+                        branchlet_root_radius_mm
+                        if branchlet_root_radius_mm is not None
+                        else min(0.60, 0.25 * float(leaf_width_mm))
+                    ),
+                    embed_depth_mm=float(branchlet_embed_depth_mm),
+                    yaw_deg=float(np.degrees(yaw)),
+                    seed=lseed,
+                    leaf_length_mm=float(leaf_length_mm),
+                    leaf_width_mm=float(leaf_width_mm),
+                    leaf_thickness_mm=float(leaf_thickness_mm),
+                    leaf_fold_angle_deg=float(leaf_fold_angle_deg),
+                    leaf_inner_curve=float(leaf_inner_curve),
+                    leaf_outer_curve=float(leaf_outer_curve),
+                    leaf_curl_deg=float(leaf_curl_deg),
+                    leaf_lift_mm=float(leaf_lift_mm),
+                    leaf_keel_depth_mm=float(leaf_keel_depth_mm),
+                    parent_mesh=None,
+                )
+            except RuntimeError:
+                return
             for lp in parts:
                 if len(lp.vertices) > 0:
                     if debug_leaf_connectivity:
                         _check_leaf_cluster_connectivity(lp, verts, edge_id, key)
                     leaf_parts.append(lp)
 
-        # Tile leaves side-by-side over the whole cap: a ~leaf_width grid in
-        # surface arc-length (rows) and circumference (columns).  The arc spans
-        # from near the cone base, up the cone, and over the dome — stopping just
-        # short of the apex, which the cap fills.  Row/column counts are derived
-        # from the spacing so coverage stays dense regardless of clump size.
-        spacing = max(float(leaf_width_mm) * float(leaf_spacing_factor), 1e-3)
+        # Tile leaves over the distorted cone+dome using the same principles as
+        # the sphere debug generator: rows advance by leaf length with vertical
+        # shingle overlap, while columns advance by leaf width with side overlap.
+        # ``leaf_spacing_factor`` remains as a global density multiplier for
+        # existing specs.
+        h_overlap = float(np.clip(leaf_h_overlap, 0.0, 0.95))
+        v_overlap = float(np.clip(leaf_v_overlap, 0.0, 0.95))
+        spacing_factor = max(float(leaf_spacing_factor), 1e-3)
+        row_step = max(float(leaf_length_mm) * (1.0 - v_overlap) * spacing_factor, 1e-3)
+        col_step = max(float(leaf_width_mm) * (1.0 - h_overlap) * spacing_factor, 1e-3)
         arc_lo  = south_arc + 0.05 * cone_arc_p
         arc_hi  = total_arc - 0.10 * north_arc
         arc_span = max(arc_hi - arc_lo, 1e-6)
         cone_end_arc = south_arc + cone_arc_p
-        n_rows  = max(1, int(np.ceil(arc_span / spacing)))
+        n_rows  = max(1, int(np.ceil(arc_span / row_step)))
 
         def _radius_at_arc(arc: float) -> float:
             if arc <= cone_end_arc:
@@ -1074,14 +1099,14 @@ def _build_foliage_cluster_mesh(
         for ri in range(n_rows):
             arc_center = arc_lo + ((ri + 0.5) / n_rows) * arc_span
             rr_row     = _radius_at_arc(arc_center)   # for column count only
-            # Columns fill the full circumference (2π·rr) at the row spacing.
+            # Columns fill the full circumference (2π·rr) at the column spacing.
             # Alternate rows are offset half a cell (brick stagger).
-            n_col   = max(1, int(np.ceil((2.0 * np.pi * rr_row) / spacing)))
+            n_col   = max(1, int(np.ceil((2.0 * np.pi * rr_row) / col_step)))
             stagger = 0.5 * (ri % 2)
             for ci in range(n_col):
                 # Independent per-leaf jitter in BOTH directions: up/down along
                 # the arc and left/right around the circumference.
-                a_jit = (2.0 * _hash01(bark_seed, "leaf-arc", edge_id, ri, ci) - 1.0) * pj * spacing
+                a_jit = (2.0 * _hash01(bark_seed, "leaf-arc", edge_id, ri, ci) - 1.0) * pj * row_step
                 arc   = float(np.clip(arc_center + a_jit, arc_lo, arc_hi))
                 on_cone = arc <= cone_end_arc
                 if on_cone:
@@ -1089,7 +1114,7 @@ def _build_foliage_cluster_mesh(
                 else:
                     phi = (arc - cone_end_arc) / max(north_arc, 1e-9) * (np.pi / 2.0)
                 rr_leaf = _radius_at_arc(arc)
-                th_jit  = pj * spacing / max(rr_leaf, 1e-6)   # spacing → angle
+                th_jit  = pj * col_step / max(rr_leaf, 1e-6)   # spacing → angle
                 col_f   = (ci + 0.5 + stagger) / n_col
                 t_jit   = (2.0 * _hash01(bark_seed, "leaf-col", edge_id, ri, ci) - 1.0) * th_jit
                 theta   = -np.pi + col_f * 2.0 * np.pi + t_jit
@@ -1104,14 +1129,14 @@ def _build_foliage_cluster_mesh(
         # 1.5mm leaf spacing) and the pole.
         near_apex_phi = (np.pi / 2.0) * 0.90          # ≈ 81° dome latitude
         near_apex_rr  = r_tip * float(np.cos(near_apex_phi))
-        n_col_na      = max(1, int(np.ceil((2.0 * np.pi * near_apex_rr) / spacing)))
-        phi_jit_scale = pj * spacing / max(r_tip, 1e-6)
+        n_col_na      = max(1, int(np.ceil((2.0 * np.pi * near_apex_rr) / col_step)))
+        phi_jit_scale = pj * row_step / max(r_tip, 1e-6)
         for ci in range(n_col_na):
             phi_jit_na = (
                 2.0 * _hash01(bark_seed, "na-arc", edge_id, ci) - 1.0
             ) * phi_jit_scale
             phi_na   = float(np.clip(near_apex_phi + phi_jit_na, 0.02, np.pi / 2.0 - 0.02))
-            th_na    = pj * spacing / max(near_apex_rr, 1e-6)
+            th_na    = pj * col_step / max(near_apex_rr, 1e-6)
             t_jit_na = (
                 2.0 * _hash01(bark_seed, "na-col", edge_id, ci) - 1.0
             ) * th_na

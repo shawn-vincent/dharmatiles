@@ -44,7 +44,8 @@ import numpy as np
 import trimesh
 
 from .leaf import (
-    build_leaf_mesh,
+    build_leaf_surface,
+    solidify_leaf,
     _LEAF_N_LONG,
     _LEAF_CREASE_SHARPNESS,
     _LEAF_LONG_T_PEAK,
@@ -254,27 +255,33 @@ def _build_leaf_parts_at_tip(
     leaf_fold_angle_deg: float,
     leaf_inner_curve: float,
     leaf_outer_curve: float,
+    leaf_curl_deg: float,
     leaf_lift_mm: float,
     leaf_keel_depth_mm: float,
 ) -> list[trimesh.Trimesh]:
-    """Build non-empty leaf blade parts in the supplied branchlet frame."""
-    return [
-        part for part in build_leaf_mesh(
-            base_pos=tip_pos,
-            tangent=leaf_axis,
-            length_mm=float(leaf_length_mm),
-            width_mm=float(leaf_width_mm),
-            thickness_mm=float(leaf_thickness_mm),
-            fold_angle_deg=float(leaf_fold_angle_deg),
-            inner_curve=float(leaf_inner_curve),
-            outer_curve=float(leaf_outer_curve),
-            lift_mm=float(leaf_lift_mm),
-            keel_depth_mm=float(leaf_keel_depth_mm),
-            up_hint=leaf_normal,
-            seed=seed,
-        )
-        if len(part.vertices) > 0
-    ]
+    """Build a debug-style solid leaf shell in the supplied branchlet frame."""
+    _ = leaf_keel_depth_mm  # Branchlets provide support; match debug leaves, no keel.
+    surface = build_leaf_surface(
+        base_pos=tip_pos,
+        tangent=leaf_axis,
+        length_mm=float(leaf_length_mm),
+        width_mm=float(leaf_width_mm),
+        thickness_mm=float(leaf_thickness_mm),
+        fold_angle_deg=float(leaf_fold_angle_deg),
+        inner_curve=float(leaf_inner_curve),
+        outer_curve=float(leaf_outer_curve),
+        curl_deg=float(leaf_curl_deg),
+        lift_mm=float(leaf_lift_mm),
+        up_hint=leaf_normal,
+        seed=seed,
+    )
+    solid, _ = solidify_leaf(
+        surface,
+        leaf_normal,
+        embed_mm=max(0.25, float(leaf_thickness_mm)),
+        parent_mesh=None,
+    )
+    return [solid] if len(solid.vertices) > 0 else []
 
 
 # ── Validation ─────────────────────────────────────────────────────────────────
@@ -478,13 +485,14 @@ def _build_branchlet_candidate(
     embed_depth_mm: float = 2.5,
     yaw_deg: float = 0.0,
     seed: int = 0,
-    leaf_length_mm: float = 8.0,
-    leaf_width_mm: float = 16.0 / 3.0,
+    leaf_length_mm: float = 4.5,
+    leaf_width_mm: float = 3.0,
     leaf_thickness_mm: float = 0.16,
     leaf_fold_angle_deg: float = 6.0,
     leaf_inner_curve: float = 1.5,
     leaf_outer_curve: float = 0.6,
-    leaf_lift_mm: float = 1.0,
+    leaf_curl_deg: float = 40.0,
+    leaf_lift_mm: float = 3.0,
     leaf_keel_depth_mm: float = 0.0,
     parent_mesh: "trimesh.Trimesh | None" = None,
 ) -> list[trimesh.Trimesh]:
@@ -678,6 +686,7 @@ def _build_branchlet_candidate(
         leaf_fold_angle_deg=leaf_fold_angle_deg,
         leaf_inner_curve=leaf_inner_curve,
         leaf_outer_curve=leaf_outer_curve,
+        leaf_curl_deg=leaf_curl_deg,
         leaf_lift_mm=leaf_lift_mm,
         leaf_keel_depth_mm=leaf_keel_depth_mm,
     )
@@ -698,13 +707,14 @@ def build_branchlet_and_leaf(
     embed_depth_mm: float = 2.5,
     yaw_deg: float = 0.0,
     seed: int = 0,
-    leaf_length_mm: float = 8.0,
-    leaf_width_mm: float = 16.0 / 3.0,
+    leaf_length_mm: float = 4.5,
+    leaf_width_mm: float = 3.0,
     leaf_thickness_mm: float = 0.16,
     leaf_fold_angle_deg: float = 6.0,
     leaf_inner_curve: float = 1.5,
     leaf_outer_curve: float = 0.6,
-    leaf_lift_mm: float = 1.0,
+    leaf_curl_deg: float = 40.0,
+    leaf_lift_mm: float = 3.0,
     leaf_keel_depth_mm: float = 0.0,
     parent_mesh: "trimesh.Trimesh | None" = None,
 ) -> list[trimesh.Trimesh]:
@@ -762,6 +772,7 @@ def build_branchlet_and_leaf(
         leaf_fold_angle_deg=leaf_fold_angle_deg,
         leaf_inner_curve=leaf_inner_curve,
         leaf_outer_curve=leaf_outer_curve,
+        leaf_curl_deg=leaf_curl_deg,
         leaf_lift_mm=leaf_lift_mm,
         leaf_keel_depth_mm=leaf_keel_depth_mm,
         parent_mesh=parent_mesh,
@@ -845,6 +856,7 @@ def build_branchlet_and_leaf(
             leaf_fold_angle_deg=leaf_fold_angle_deg,
             leaf_inner_curve=leaf_inner_curve,
             leaf_outer_curve=leaf_outer_curve,
+            leaf_curl_deg=leaf_curl_deg,
             leaf_lift_mm=leaf_lift_mm,
             leaf_keel_depth_mm=leaf_keel_depth_mm,
         )
