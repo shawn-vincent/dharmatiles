@@ -45,7 +45,7 @@ The browser sandbox limits what Python can do:
 | `pyyaml` | ✓ | No issue. |
 | `rich` | ✓ | Terminal colors will be no-ops; that's fine. |
 | `trimesh` | ✗ | **Not in Pyodide's package list.** Uses optional C extensions (rtree, pyembree) but the base install is mostly pure Python + numpy. May be loadable via micropip if a pure-Python-compatible wheel exists, or a vendored subset could be written. |
-| `manifold3d` | ✗ | **Hard blocker.** Native C++ extension, no WASM build exists. Used for OpenLOCK base CSG and the logo inset. |
+| `manifold3d` | ✗ | **Hard blocker for Python.** Native C++ extension, no Pyodide build. Used for OpenLOCK base CSG and the logo inset. However, the same library ships as `manifold-3d` on npm (a WASM build) — available to JavaScript/TypeScript with full capability. |
 
 ### What Works Without Those Two
 
@@ -133,16 +133,91 @@ For dharmatiles specifically, **PyWebView** might be the cleanest fit: Python pr
 
 ---
 
-## Viability Assessment for a Future New Project
+## Browser-Native Python Design
 
-If you were designing a Python browser app from scratch, knowing these constraints:
+If you're designing a Python browser app from scratch rather than porting dharmatiles, the constraints become design constraints instead of blockers.
 
-- **Choose pure-Python packages or those already in Pyodide's set.** numpy, scipy, shapely, Pillow, networkx, pandas — all fine.
-- **Avoid native C/C++ extensions without a WASM build.** manifold3d, pyembree, rtree, vtk — currently blocked.
-- **Use the Origin Private File System (OPFS) or File System Access API for persistence.** OPFS is universally available in modern browsers; the File System Access API (user-chosen folder) is Chrome/Edge-only.
-- **Design for async.** Pyodide can run in a Web Worker to keep the UI responsive during generation.
+**The key insight:** trimesh is not needed. The real product of the generation pipeline is `(vertices: float32[N,3], faces: int32[M,3])` — plain numpy arrays. You can:
 
-A new procedural geometry tool designed this way (pure numpy/scipy mesh generation, custom STL export, no native CSG) would work beautifully in-browser.
+- Pass those arrays directly to JavaScript as typed arrays with **zero copy** via Pyodide's JS bridge. Three.js renders from `BufferGeometry` built from those arrays, giving you an interactive 3D viewport.
+- Write a ~20-line binary STL serializer directly in numpy — no library needed.
+- Let `scipy.spatial` handle Voronoi, KDTree, Delaunay — all available and fast.
+- Let `scipy.interpolate` handle IDW/RBF terrain blending.
+
+**The clean architecture:**
+
+```
+Python/Pyodide (Web Worker)          JavaScript (main thread)
+  numpy mesh math              →      Three.js BufferGeometry → render
+  scipy distributions          →      File System Access API → save STL
+  heightmap, scatter, trees    →      UI (HTML/CSS/events)
+```
+
+Python never needs to know trimesh exists. CSG operations (OpenLOCK base, logo inset) are either skipped or delegated to a JS CSG library on the JavaScript side.
+
+**Rules for designing to this model:**
+- Use only packages in Pyodide's built-in set (numpy, scipy, shapely, Pillow, networkx).
+- No native extensions. `manifold3d`, `pyembree`, `rtree`, `vtk` are blocked.
+- Use OPFS for persistence (universally available). File System Access API (user-chosen folder) is Chrome/Edge-only.
+- Run generation in a Web Worker (Pyodide supports this) to keep the UI responsive.
+
+---
+
+## TypeScript Alternative
+
+TypeScript (or plain JavaScript) is a serious alternative worth comparing directly. The landscape looks different from the JS side.
+
+### The JS 3D Ecosystem
+
+| Need | Library | Notes |
+|---|---|---|
+| 3D rendering + mesh | Three.js v0.184 | BufferGeometry from typed arrays; STLExporter built in; icosphere/box/cylinder primitives |
+| CSG / boolean ops | `manifold-3d` v3.5.1 | **The same manifold library**, compiled to WASM for JS. Full CSG: union, difference, intersection. This is unavailable to Python/Pyodide but fully available here. |
+| Full declarative CSG | `@jscad/modeling` v2.13.0 | OpenJSCAD's modeling library — primitives, transforms, boolean ops, pure JS |
+| Voronoi / Delaunay | `d3-delaunay` | Fast, well-tested; wraps the Delaunator algorithm |
+| Spatial KDTree | `rbush` | R-tree for 2D spatial queries; no 3D KDTree equivalent to scipy's |
+| Matrix / vector math | `gl-matrix` | Typed-array backed, fast |
+| Polygon triangulation | `earcut` | Used by Three.js internally |
+| Seeded random / noise | `alea`, `simplex-noise` | Reproducible seeds for procedural generation |
+| STL export | Three.js STLExporter | Or ~20 lines of DataView |
+
+### What TypeScript Gains Over Python/Pyodide
+
+**`manifold-3d` works.** This is the single biggest structural difference. The CSG operations that are hard-blocked in Pyodide are fully available in TypeScript via the same underlying library.
+
+**No runtime loading penalty.** Pyodide + numpy + scipy is a ~30–50 MB download with a 5–15 second cold-start. TypeScript bundles start instantly; even a Three.js + manifold-3d bundle is <5 MB and loads in under a second.
+
+**No Python/JS bridge.** In Pyodide, passing geometry between Python and Three.js requires explicit array transfer. In TypeScript, the mesh math and the rendering are in the same language — no marshalling layer.
+
+**Web Workers are native.** Background generation in a Worker is a first-class JS pattern with no extra setup.
+
+**Full browser API access.** IndexedDB, File System Access, WebRTC, WebGPU — all available without wrappers or emulation.
+
+### What TypeScript Loses
+
+**numpy ergonomics.** This is the real cost. numpy's vectorised array operations — broadcasting, slicing, in-place mutation across millions of elements — have no direct equivalent in JS. You'd use typed arrays (`Float32Array`, `Int32Array`) with explicit loops or hand-written SIMD-style operations. For a heightmap touching 200k cells, this means the code is more verbose and more error-prone.
+
+**scipy maturity.** `d3-delaunay` is excellent, but scipy's spatial module is broader and more polished. 3D KDTree queries (used for closest-point lookups), RBF interpolation, and morphological operations have JS equivalents but they're patchwork rather than a unified library.
+
+**Python conciseness for math-heavy code.** The grass field simulation, tree skeleton algorithm, scatter distributions — these are written as readable, dense Python. The TypeScript equivalents would be longer and more imperative.
+
+### Honest Comparison
+
+| Dimension | Python/Pyodide | TypeScript |
+|---|---|---|
+| CSG (manifold) | ✗ blocked | ✓ `manifold-3d` |
+| Startup time | 5–15 s cold | <1 s |
+| Array math ergonomics | ✓ numpy | ✗ verbose typed arrays |
+| 3D rendering | bridge to Three.js | ✓ native Three.js |
+| Spatial algorithms | ✓ scipy | partial (d3-delaunay, rbush) |
+| Package ecosystem for browser | Pyodide set (~250 pkgs) | npm (vast) |
+| Language you write | Python | TypeScript |
+
+**If the goal is "browser-first, full feature set, no install, CSG included":** TypeScript wins. The `manifold-3d` availability closes the biggest gap, and the startup-time difference is material for a tool people use repeatedly.
+
+**If the goal is "I want to write Python and have it run in a browser":** Pyodide + browser-native design works well for a feature set that stays within numpy/scipy and skips CSG. The code is more concise and the algorithms translate directly from the Python mental model.
+
+**The sharpest version of the tradeoff:** you're choosing between numpy's expressive power (Python) and manifold's CSG power (TypeScript). For terrain generation specifically — where you spend more time on distributions, heightmaps, and mesh construction than on boolean ops — Python's array ergonomics are the bigger daily advantage. For a tool that does heavy CSG (interlocking parts, slots, insets), TypeScript's manifold access tips the balance.
 
 ---
 

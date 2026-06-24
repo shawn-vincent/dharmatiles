@@ -946,12 +946,9 @@ def _build_foliage_cluster_mesh(
 
     leaf_parts: list[trimesh.Trimesh] = []
     if leaves and leaf_base_count > 0 and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
-        factor_tip = max(0.0, 1.0 - (r_base + _FOLIAGE_MAX_NOISE_MM) / max(r_tip, 1e-6))
-        jit = np.radians(float(leaf_angle_jitter_deg))
-        pj  = float(leaf_pos_jitter)
-        # Leaves wrap the full circumference of every cone and dome (theta is
-        # periodic, so no clipping); theta = 0 points world-up.
-        pu_tip, vp_tip = _two_perp(tip_t)
+        # Deterministic placement — jitter disabled for clean visual debugging.
+        jit = 0.0
+        pj  = 0.0
 
         # Contact-angle cache: the analytical contact angle depends only on the
         # local sphere radius (cluster_radius_mm) and the fixed leaf geometry
@@ -965,29 +962,6 @@ def _build_foliage_cluster_mesh(
             inner_curve=float(leaf_inner_curve), outer_curve=float(leaf_outer_curve),
             curl_deg=float(leaf_curl_deg), lift_mm=float(leaf_lift_mm),
         )
-
-        def _cone_point(tc: float, theta: float):
-            """Smooth-cone surface point + outward radial + ring radius at (tc, θ)."""
-            sv  = tc * tot_spine
-            sp  = np.array([np.interp(sv, spine_arc, spine_pts[:, d]) for d in range(3)])
-            stj = _safe_norm(np.array([np.interp(sv, spine_arc, spine_tans[:, d]) for d in range(3)]))
-            pu, vp = _two_perp(stj)
-            rr  = r_base + tc * (r_tip - r_base)
-            tcf = 0.5 + (factor_tip - 0.5) * (3.0 * tc ** 2 - 2.0 * tc ** 3)
-            ctr = sp + pu * rr * tcf
-            radial = float(np.cos(theta)) * pu + float(np.sin(theta)) * vp
-            return ctr + rr * radial, radial, rr
-
-        def _dome_point(phi: float, theta: float):
-            """Smooth forward-dome surface point + outward normal + ring radius."""
-            ax  = r_tip * np.sin(phi)
-            rr  = r_tip * np.cos(phi)
-            dome_shift = max(0.0, r_tip - r_base - _FOLIAGE_MAX_NOISE_MM)
-            ctr  = tip_p + ax * tip_t + dome_shift * np.cos(phi) * pu_tip
-            perp = float(np.cos(theta)) * pu_tip + float(np.sin(theta)) * vp_tip
-            pt   = ctr + rr * perp
-            normal = _safe_norm(np.sin(phi) * tip_t + np.cos(phi) * perp)
-            return pt, normal, rr
 
         def _emit_leaf(
             base_smooth: np.ndarray,
@@ -1116,152 +1090,68 @@ def _build_foliage_cluster_mesh(
             if len(solid.vertices) > 0:
                 leaf_parts.append(solid)
 
-        # Tile leaves over the distorted cone+dome using the same algorithm as
-        # the sphere debug generator: row step = leaf_length × (1 − v_overlap),
-        # column step = leaf_width × (1 − h_overlap).  No extra spacing factor.
+        # ── Z-slice leaf placement ─────────────────────────────────────────────
+        # Slice the smooth cluster mesh (``shaped``) horizontally from its
+        # bottom Z to its top Z.  At each slice level the cross-section polygon
+        # is sampled evenly around its perimeter; each sample becomes one leaf.
+        #
+        # Leaves hang downward from their attachment point, so a row placed at
+        # height z covers the surface below it.  Row step =
+        # leaf_length × (1 − v_overlap), column step =
+        # leaf_width × (1 − h_overlap).  No jitter — deterministic placement
+        # so each row and column position is immediately debuggable.
         h_overlap = float(np.clip(leaf_h_overlap, 0.0, 0.95))
         v_overlap = float(np.clip(leaf_v_overlap, 0.0, 0.95))
-        row_step = max(float(leaf_length_mm) * (1.0 - v_overlap), 1e-3)
-        col_step = max(float(leaf_width_mm)  * (1.0 - h_overlap), 1e-3)
-        arc_lo  = south_arc + 0.05 * cone_arc_p
-        arc_hi  = total_arc - 0.10 * north_arc
-        arc_span = max(arc_hi - arc_lo, 1e-6)
-        cone_end_arc = south_arc + cone_arc_p
-        n_rows  = max(1, int(np.ceil(arc_span / row_step)))
+        row_step  = max(float(leaf_length_mm) * (1.0 - v_overlap), 1e-3)
+        col_step  = max(float(leaf_width_mm)  * (1.0 - h_overlap), 1e-3)
 
-        def _radius_at_arc(arc: float) -> float:
-            if arc <= cone_end_arc:
-                tc = (arc - south_arc) / max(cone_arc_p, 1e-9)
-                return r_base + tc * (r_tip - r_base)
-            phi = (arc - cone_end_arc) / max(north_arc, 1e-9) * (np.pi / 2.0)
-            return float(r_tip * np.cos(phi))
+        z_bottom = float(shaped.vertices[:, 2].min())
+        z_top    = float(shaped.vertices[:, 2].max())
 
-        for ri in range(n_rows):
-            arc_center = arc_lo + ((ri + 0.5) / n_rows) * arc_span
-            rr_row     = _radius_at_arc(arc_center)   # for column count only
-            # Columns fill the full circumference (2π·rr) at the column spacing.
-            # Alternate rows are offset half a cell (brick stagger).
-            n_col   = max(1, int(np.ceil((2.0 * np.pi * rr_row) / col_step)))
-            stagger = 0.5 * (ri % 2)
-            for ci in range(n_col):
-                # Independent per-leaf jitter in BOTH directions: up/down along
-                # the arc and left/right around the circumference.
-                a_jit = (2.0 * _hash01(bark_seed, "leaf-arc", edge_id, ri, ci) - 1.0) * pj * row_step
-                arc   = float(np.clip(arc_center + a_jit, arc_lo, arc_hi))
-                on_cone = arc <= cone_end_arc
-                if on_cone:
-                    tc  = (arc - south_arc) / max(cone_arc_p, 1e-9)
-                else:
-                    phi = (arc - cone_end_arc) / max(north_arc, 1e-9) * (np.pi / 2.0)
-                rr_leaf = _radius_at_arc(arc)
-                th_jit  = pj * col_step / max(rr_leaf, 1e-6)   # spacing → angle
-                col_f   = (ci + 0.5 + stagger) / n_col
-                t_jit   = (2.0 * _hash01(bark_seed, "leaf-col", edge_id, ri, ci) - 1.0) * th_jit
-                theta   = -np.pi + col_f * 2.0 * np.pi + t_jit
-                if on_cone:
-                    base_smooth, radial, rr_pt = _cone_point(tc, theta)
-                else:
-                    base_smooth, radial, rr_pt = _dome_point(phi, theta)
-                # Bottom row (ri == 0): flat, unhurried leaves — no curl or lift
-                # so they droop naturally against the cluster base rather than
-                # curling upward like the upper rows.
-                _emit_leaf(
-                    base_smooth, radial, (ri, ci), cluster_radius_mm=rr_pt,
-                    emit_curl_deg=0.0 if ri == 0 else None,
-                    emit_lift_mm=0.0  if ri == 0 else None,
-                )
-
-        # Branch-axis dome-tip fill.  The main arc grid thins near the forward
-        # dome pole because its local ring radius collapses; keep a dedicated
-        # polar pass for that end of the clump.
-        phi_jit_scale = pj * row_step / max(r_tip, 1e-6)
-        for na_idx, na_phi_frac in enumerate((0.86, 0.93)):
-            na_phi = (np.pi / 2.0) * na_phi_frac
-            na_rr = r_tip * float(np.cos(na_phi))
-            n_col_na = max(1, int(np.ceil((2.0 * np.pi * na_rr) / col_step)))
-            for ci in range(n_col_na):
-                phi_jit_na = (
-                    2.0 * _hash01(bark_seed, "na-arc", edge_id, na_idx, ci) - 1.0
-                ) * phi_jit_scale
-                phi_na = float(np.clip(na_phi + phi_jit_na, 0.02, np.pi / 2.0 - 0.02))
-                th_na = pj * col_step / max(na_rr, 1e-6)
-                t_jit_na = (
-                    2.0 * _hash01(bark_seed, "na-col", edge_id, na_idx, ci) - 1.0
-                ) * th_na
-                theta_na = -np.pi + (ci + 0.5) / n_col_na * 2.0 * np.pi + t_jit_na
-                base_smooth, radial, _ = _dome_point(phi_na, theta_na)
-                _emit_leaf(
-                    base_smooth, radial, ("near-apex", na_idx, ci),
-                    cluster_radius_mm=r_tip,
-                )
-
-        for ci, phi, theta in _structured_cap_leaf_angles(
-            max(0, int(leaf_cap_count)),
-            pos_jitter=pj,
-            row_step=row_step,
-            col_step=col_step,
-            r_tip=r_tip,
-            bark_seed=bark_seed,
-            edge_id=edge_id,
-        ):
-            base_smooth, radial, _ = _dome_point(phi, theta)
-            _emit_leaf(base_smooth, radial, ("cap", ci), cluster_radius_mm=r_tip)
-
-        # World-up crest fill.  Terminal foliage clumps are usually tilted,
-        # while leaves droop toward world -Z; the visible top can be far from
-        # the branch-axis dome pole, so it needs its own supplemental pass.
-        # Count is leaf_cap_count (not 20×) — the main grid already covers the
-        # full circumference, so only a light supplemental is needed here.
-        top_angles = _structured_world_top_leaf_angles(
-            max(0, int(leaf_cap_count)),
-            arc_lo=arc_lo,
-            arc_hi=arc_hi,
-            cone_end_arc=cone_end_arc,
-            south_arc=south_arc,
-            cone_arc_p=cone_arc_p,
-            north_arc=north_arc,
-            r_tip=r_tip,
-            row_step=0.35 * row_step,
-            col_step=0.35 * col_step,
-            pos_jitter=pj,
-            bark_seed=bark_seed,
-            edge_id=edge_id,
-            top_theta_at_arc=lambda arc: _top_theta_at_arc(
-                arc,
-                cone_end_arc=cone_end_arc,
-                south_arc=south_arc,
-                cone_arc_p=cone_arc_p,
-                north_arc=north_arc,
-                spine_arc=spine_arc,
-                spine_tans=spine_tans,
-                pu_tip=pu_tip,
-                vp_tip=vp_tip,
-            ),
-            z_at_arc_theta=lambda arc, theta: _smooth_z_at_arc_theta(
-                arc,
-                theta,
-                cone_end_arc=cone_end_arc,
-                south_arc=south_arc,
-                cone_arc_p=cone_arc_p,
-                north_arc=north_arc,
-                cone_point=_cone_point,
-                dome_point=_dome_point,
-            ),
-        )
-        for ci, arc, theta in top_angles:
-            on_cone = arc <= cone_end_arc
-            if on_cone:
-                tc = (arc - south_arc) / max(cone_arc_p, 1e-9)
-                base_smooth, radial, rr_pt = _cone_point(tc, theta)
-                cluster_radius = rr_pt
-            else:
-                phi = (arc - cone_end_arc) / max(north_arc, 1e-9) * (np.pi / 2.0)
-                base_smooth, radial, _ = _dome_point(phi, theta)
-                cluster_radius = r_tip
-            _emit_leaf(
-                base_smooth, radial, ("world-top", ci),
-                cluster_radius_mm=cluster_radius,
+        row_idx = 0
+        z_row   = z_bottom
+        while z_row <= z_top + 1e-6:
+            section = shaped.section(
+                plane_origin=np.array([0.0, 0.0, z_row]),
+                plane_normal=np.array([0.0, 0.0, 1.0]),
             )
+            if section is not None:
+                try:
+                    path2d, xform = section.to_planar()
+                    for poly in path2d.polygons_full:
+                        perim = float(poly.length)
+                        if perim < 1e-3:
+                            continue
+                        n_col = max(1, int(np.ceil(perim / col_step)))
+                        # Centroid in 2D, then transform to 3D world coords.
+                        cx2d = float(poly.centroid.x)
+                        cy2d = float(poly.centroid.y)
+                        c4d  = xform @ np.array([cx2d, cy2d, 0.0, 1.0])
+                        cx3d, cy3d = float(c4d[0]), float(c4d[1])
+                        for ci in range(n_col):
+                            t    = float(ci) / float(n_col)
+                            pt2  = poly.exterior.interpolate(t, normalized=True)
+                            # Transform 2D sample point to 3D world coords.
+                            p4d  = xform @ np.array(
+                                [float(pt2.x), float(pt2.y), 0.0, 1.0]
+                            )
+                            pt3d = np.array([float(p4d[0]), float(p4d[1]), float(p4d[2])])
+                            # Outward normal: centroid → point in the XY plane.
+                            dx = pt3d[0] - cx3d
+                            dy = pt3d[1] - cy3d
+                            rr_local = float(np.hypot(dx, dy))
+                            if rr_local < 1e-6:
+                                continue
+                            outward = np.array([dx / rr_local, dy / rr_local, 0.0])
+                            _emit_leaf(
+                                pt3d, outward, (row_idx, ci),
+                                cluster_radius_mm=rr_local,
+                            )
+                except Exception:
+                    pass
+
+            z_row  += row_step
+            row_idx += 1
 
     # ── Leaf-count diagnostic ─────────────────────────────────────────────────
     # Warn if a cluster that was supposed to emit leaves ends up with very few.
@@ -1284,218 +1174,6 @@ def _build_foliage_cluster_mesh(
     return result, leaf_parts
 
 
-def _structured_cap_leaf_angles(
-    count: int,
-    *,
-    pos_jitter: float,
-    row_step: float,
-    col_step: float,
-    r_tip: float,
-    bark_seed: int,
-    edge_id: int,
-) -> list[tuple[int, float, float]]:
-    """Return deterministic jittered-ring cap positions as ``(idx, phi, theta)``.
-
-    ``phi`` is the forward-dome polar angle used by ``_dome_point`` where
-    ``pi/2`` is the apex.  The cap covers the top 6% polar band [0.94, 0.98]·π/2 —
-    the true apex zone above the near-apex rings (0.86, 0.93) and the main grid
-    (whose last row center lands at phi≈0.72).  Each leaf owns a row/column cell
-    and jitter is clamped so it cannot cross into a neighbour's cell.
-    """
-    count = int(count)
-    if count <= 0:
-        return []
-
-    r_tip = max(float(r_tip), 1e-6)
-    pj = max(0.0, float(pos_jitter))
-
-    # phi_min is set to 0.94 (not 0.70) so the cap covers only the true apex
-    # zone above the near-apex rings (phi=0.86, 0.93) and the main grid (whose
-    # last row center lands at phi≈0.72).  The old 0.70 start caused the cap
-    # to overlap both the main grid and the near-apex rings, adding redundant
-    # leaves in zones that are already covered.
-    phi_min = 0.94 * (np.pi / 2.0)
-    phi_max = 0.98 * (np.pi / 2.0)
-    band = phi_max - phi_min
-
-    # Keep small caps as one clean ring; larger caps get more rows.  For the
-    # common 12-leaf cap this yields two rings, with columns weighted by the
-    # circumference at each ring.
-    n_rows = max(1, min(count, int(round(np.sqrt(count / 3.0)))))
-    row_phis = np.array([
-        phi_min + ((ri + 0.5) / n_rows) * band
-        for ri in range(n_rows)
-    ], dtype=float)
-    weights = np.maximum(np.cos(row_phis), 1e-3)
-    raw = weights / float(weights.sum()) * count
-    cols = np.maximum(1, np.floor(raw).astype(int))
-
-    while int(cols.sum()) > count:
-        candidates = np.where(cols > 1)[0]
-        if len(candidates) == 0:
-            break
-        frac = raw[candidates] - np.floor(raw[candidates])
-        cols[candidates[int(np.argmin(frac))]] -= 1
-    while int(cols.sum()) < count:
-        frac = raw - np.floor(raw)
-        cols[int(np.argmax(frac))] += 1
-
-    result: list[tuple[int, float, float]] = []
-    cap_i = 0
-    row_gap = band / max(n_rows, 1)
-    max_phi_jit = 0.45 * row_gap
-    requested_phi_jit = pj * float(row_step) / r_tip
-
-    for ri, (phi_center, n_col) in enumerate(zip(row_phis, cols)):
-        n_col = int(n_col)
-        # Cap n_col by the natural circumference/col_step count so we never
-        # pack leaves tighter than the h_overlap parameter implies, even when
-        # the ring radius is very small (near the apex).
-        rr_ring = max(float(r_tip) * float(np.cos(phi_center)), 1e-6)
-        natural_n_col = max(1, int(np.ceil(2.0 * np.pi * rr_ring / max(float(col_step), 1e-6))))
-        n_col = min(n_col, natural_n_col)
-        theta_step = 2.0 * np.pi / n_col
-        max_theta_jit = 0.45 * theta_step
-        requested_theta_jit = pj * float(col_step) / max(r_tip * np.cos(phi_center), 1e-6)
-        # Offset alternating cap rows half a cell, matching the main grid.
-        stagger = 0.5 * (ri % 2)
-        for ci in range(n_col):
-            phi_jit = (
-                2.0 * _hash01(bark_seed, "cap-ring-phi", edge_id, ri, ci) - 1.0
-            ) * min(requested_phi_jit, max_phi_jit)
-            theta_jit = (
-                2.0 * _hash01(bark_seed, "cap-ring-theta", edge_id, ri, ci) - 1.0
-            ) * min(requested_theta_jit, max_theta_jit)
-            phi = float(np.clip(phi_center + phi_jit, phi_min, phi_max))
-            theta = -np.pi + (ci + 0.5 + stagger) * theta_step + theta_jit
-            result.append((cap_i, phi, _wrap_angle(theta)))
-            cap_i += 1
-
-    return result
-
-
-def _top_theta_at_arc(
-    arc: float,
-    *,
-    cone_end_arc: float,
-    south_arc: float,
-    cone_arc_p: float,
-    north_arc: float,
-    spine_arc: np.ndarray,
-    spine_tans: np.ndarray,
-    pu_tip: np.ndarray,
-    vp_tip: np.ndarray,
-) -> tuple[float, float]:
-    """Return ``(theta, vertical_amplitude)`` for the world-up side at arc."""
-    if arc <= cone_end_arc:
-        tc = (arc - south_arc) / max(cone_arc_p, 1e-9)
-        sv = tc * float(spine_arc[-1])
-        stj = _safe_norm(np.array([
-            np.interp(sv, spine_arc, spine_tans[:, d]) for d in range(3)
-        ]))
-        pu, vp = _two_perp(stj)
-    else:
-        _ = north_arc
-        pu, vp = pu_tip, vp_tip
-
-    a = float(pu[2])
-    b = float(vp[2])
-    amp = float(np.hypot(a, b))
-    if amp < 1e-6:
-        return 0.0, 0.0
-    return _wrap_angle(float(np.arctan2(b, a))), amp
-
-
-def _structured_world_top_leaf_angles(
-    count: int,
-    *,
-    arc_lo: float,
-    arc_hi: float,
-    cone_end_arc: float,
-    south_arc: float,
-    cone_arc_p: float,
-    north_arc: float,
-    r_tip: float,
-    row_step: float,
-    col_step: float,
-    pos_jitter: float,
-    bark_seed: int,
-    edge_id: int,
-    top_theta_at_arc,
-    z_at_arc_theta,
-) -> list[tuple[int, float, float]]:
-    """Deterministic leaf positions over the clump's high world-Z patch."""
-    count = int(count)
-    if count <= 0:
-        return []
-
-    arc_span = max(float(arc_hi - arc_lo), 1e-6)
-    n_rows = max(2, min(count, int(np.ceil(arc_span / max(float(row_step), 1e-6)))))
-    candidates: list[tuple[float, int, int, float, float]] = []
-
-    for ri in range(n_rows):
-        arc_center = arc_lo + ((ri + 0.5) / n_rows) * arc_span
-        arc_jit = (
-            2.0 * _hash01(bark_seed, "top-arc", edge_id, ri) - 1.0
-        ) * 0.18 * pos_jitter * arc_span / max(n_rows, 1)
-        arc = float(np.clip(arc_center + arc_jit, arc_lo, arc_hi))
-        theta_top, _amp = top_theta_at_arc(arc)
-
-        if arc <= cone_end_arc:
-            tc = (arc - south_arc) / max(cone_arc_p, 1e-9)
-            rr = max(1e-6, tc * r_tip)
-        else:
-            phi = (arc - cone_end_arc) / max(north_arc, 1e-9) * (np.pi / 2.0)
-            rr = max(1e-6, r_tip * float(np.cos(phi)))
-        n_theta = max(12, int(np.ceil((2.0 * np.pi * rr) / max(float(col_step), 1e-6))))
-        theta_step = 2.0 * np.pi / n_theta
-        stagger = 0.5 * (ri % 2)
-        for oi in range(n_theta):
-            offset = (oi + 0.5 + stagger) * theta_step
-            theta_jit = (
-                2.0 * _hash01(bark_seed, "top-theta", edge_id, ri, oi) - 1.0
-            ) * min(0.25 * theta_step, 0.18)
-            theta = _wrap_angle(theta_top - np.pi + offset + theta_jit)
-            z = float(z_at_arc_theta(arc, theta))
-            candidates.append((z, ri, oi, arc, theta))
-
-    if not candidates:
-        return []
-
-    candidates.sort(key=lambda item: item[0], reverse=True)
-    per_row_limit = max(1, int(np.ceil(count / max(n_rows, 1))))
-    row_counts = np.zeros(n_rows, dtype=int)
-    result: list[tuple[int, float, float]] = []
-    for _z, ri, _oi, arc, theta in candidates:
-        if row_counts[ri] >= per_row_limit:
-            continue
-        result.append((len(result), arc, theta))
-        row_counts[ri] += 1
-        if len(result) >= count:
-            break
-
-    return result
-
-
-def _smooth_z_at_arc_theta(
-    arc: float,
-    theta: float,
-    *,
-    cone_end_arc: float,
-    south_arc: float,
-    cone_arc_p: float,
-    north_arc: float,
-    cone_point,
-    dome_point,
-) -> float:
-    """Return smooth cluster surface Z at an arc/theta leaf candidate."""
-    if arc <= cone_end_arc:
-        tc = (arc - south_arc) / max(cone_arc_p, 1e-9)
-        point, _radial, _rr = cone_point(tc, theta)
-    else:
-        phi = (arc - cone_end_arc) / max(north_arc, 1e-9) * (np.pi / 2.0)
-        point, _radial, _rr = dome_point(phi, theta)
-    return float(point[2])
 
 
 # ── Bark helpers ──────────────────────────────────────────────────────────────
