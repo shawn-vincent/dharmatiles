@@ -98,6 +98,12 @@ _LEAF_N_LAT            = 10    # lateral sections across the leaf (must be even)
 # NB: build_leaf_mesh has an additional bottom-ring block, so its tip index
 # is 2*(n_rings*stride)+1; do not confuse the two.
 _LEAF_TIP_VERTEX_IDX   = (_LEAF_N_LONG - 1) * (_LEAF_N_LAT + 1) + 1
+# Vertex index of the base (midrib start) in the leaf surface mesh.
+# The two singular perimeter vertices (tip, base) sit at the axis of symmetry,
+# so their centroid-based inward direction is purely axial (±L), not sideways.
+# solidify_leaf uses this to identify them; their axial inward is a valid
+# in-plane direction and correctly produces root_wall_angle_deg at those points.
+_LEAF_BASE_VERTEX_IDX  = (_LEAF_N_LONG - 1) * (_LEAF_N_LAT + 1)
 _LEAF_CREASE_SHARPNESS = 10.0  # tanh width of midrib crease (larger = narrower)
 # Width profile normalisation: w(s) ∝ s^0.4 × (1-s)^0.8 peaks at s=1/3.
 _LEAF_W_PEAK_NORM  = float((1.0 / 3.0) ** 0.4 * (2.0 / 3.0) ** 0.8)
@@ -106,8 +112,8 @@ _LEAF_LONG_T_PEAK  = float(0.25 ** 0.5 * 0.75 ** 1.5)   # ≈ 0.3248
 
 # Default leaf size (mm).  Public so callers can reference them without
 # hard-coding magic numbers.
-LEAF_LENGTH_MM_DEFAULT = 6.0
-LEAF_WIDTH_MM_DEFAULT  = 4.0   # ≈ 2/3 of length
+LEAF_LENGTH_MM_DEFAULT = 9.0
+LEAF_WIDTH_MM_DEFAULT  = 6.0   # ≈ 2/3 of length
 
 # Tolerance for leaf_placement_from_surface: pos must be within this distance
 # of the mesh surface or a ValueError is raised.
@@ -278,13 +284,13 @@ def compute_leaf_geometry(
     tangent:        np.ndarray,
     length_mm:      float = LEAF_LENGTH_MM_DEFAULT,
     width_mm:       float = LEAF_WIDTH_MM_DEFAULT,
-    thickness_mm:   float = 0.16,
+    thickness_mm:   float = 0.24,
     fold_angle_deg: float = 6.0,
     inner_curve:    float = 1.5,
     outer_curve:    float = 0.72,
     arch_deg:       float = 30.0,
-    curl_deg:       float = 7.5,
-    lift_mm:        float = 1.0,
+    curl_deg:       float = 15.0,
+    lift_mm:        float = 1.5,
     up_hint:        np.ndarray | None = None,
     seed:           int = 0,
 ) -> _LeafGeometry:
@@ -293,8 +299,8 @@ def compute_leaf_geometry(
     The midrib is a smooth compound curve in the L-N plane:
 
     * *arch_deg* creates the dominant base-to-tip hump across the whole leaf.
-    * *curl_deg* applies a small correction only in the tip region and sets the
-      final tangent angle above the leaf plane.
+    * *curl_deg* applies a correction over the tip third (last ⅓) of the leaf
+      and sets the final tangent angle above the leaf plane.
 
     Both values are positive curve magnitudes and remain independently visible.
     The default 30° arch ensures leaves are arched even when
@@ -338,7 +344,7 @@ def compute_leaf_geometry(
     # slope correction over [CURL_START, 1].  The correction has zero value,
     # slope, and curvature at CURL_START, so it layers onto the arch with a C2
     # join instead of replacing the final part of it.
-    curl_start = 0.78
+    curl_start = 2.0 / 3.0          # curl covers the last ⅓ of the leaf
     curl_zone_length = (1.0 - curl_start) * float(length_mm)
 
     # f(s)=s(1-s) spans the entire leaf, leaves the base immediately at
@@ -775,13 +781,13 @@ def build_leaf_surface(
     tangent:        np.ndarray,
     length_mm:      float = LEAF_LENGTH_MM_DEFAULT,
     width_mm:       float = LEAF_WIDTH_MM_DEFAULT,
-    thickness_mm:   float = 0.16,
+    thickness_mm:   float = 0.24,
     fold_angle_deg: float = 6.0,
     inner_curve:    float = 1.5,
     outer_curve:    float = 0.72,
     arch_deg:       float = 30.0,
-    curl_deg:       float = 7.5,
-    lift_mm:        float = 1.0,
+    curl_deg:       float = 15.0,
+    lift_mm:        float = 1.5,
     up_hint:        np.ndarray | None = None,
     seed:           int = 0,
 ) -> trimesh.Trimesh:
@@ -847,15 +853,14 @@ def build_leaf_surface(
     for j in range(N_T):
         faces.append([v_tip_i, last + j + 1, last + j])
 
-    # Include curl_deg and lift_mm in the cache key: the winding decisions made
-    # by fix_normals() can differ between curl=0 (flat arch, tip at base height)
-    # and curl>0 (tip raised above midplane), and lift_mm shifts the tip in the
-    # same way.  Round to 4 dp to avoid float-equality issues.
+    # curl_deg is in the cache key because winding decisions differ between
+    # curl=0 (flat tip) and curl>0 (tip raised).  lift_mm is excluded: it
+    # rotates all vertices uniformly and does not change which side is outward,
+    # so the same winding applies for all lift values at a given curl.
     return _mesh_with_fixed_normals(
         verts,
         np.array(faces, dtype=np.int32),
-        ("leaf_surface", _LEAF_N_LONG, N_T, round(float(curl_deg), 4),
-         round(float(lift_mm), 4)),
+        ("leaf_surface", _LEAF_N_LONG, N_T, round(float(curl_deg), 4)),
     )
 
 
@@ -865,14 +870,14 @@ def build_leaf_mesh(
     tangent: np.ndarray,
     length_mm: float = LEAF_LENGTH_MM_DEFAULT,
     width_mm: float = LEAF_WIDTH_MM_DEFAULT,
-    thickness_mm: float = 0.16,
+    thickness_mm: float = 0.24,
     fold_angle_deg: float = 6.0,
     inner_curve: float = 1.5,
     outer_curve: float = 0.72,
     arch_deg: float = 30.0,
-    curl_deg: float = 7.5,
-    lift_mm: float = 1.0,
-    keel_depth_mm: float = 1.0,
+    curl_deg: float = 15.0,
+    lift_mm: float = 1.5,
+    keel_depth_mm: float = 1.5,
     keel_tip_angle_deg: float = 45.0,
     up_hint: np.ndarray | None = None,
     seed: int = 0,
@@ -890,7 +895,7 @@ def build_leaf_mesh(
     inner_curve     : crease-side Bézier shoulder height.  Default 1.5.
     outer_curve     : edge-side Bézier shoulder height.  Default 0.72.
     arch_deg        : upward tangent angle at the base of the arch.  Default 30.0.
-    curl_deg        : concave tangent turn over the second half.  Default 7.5.
+    curl_deg        : concave tangent turn over the tip third.  Default 15.0.
     lift_mm         : tip lift in mm.  The entire arch+curl surface is rotated
                       rigidly around the lateral axis (T) through the base,
                       lifting the tip by approximately this amount in the N
@@ -958,102 +963,32 @@ def build_leaf_mesh(
 
 # ── Solidification and FDM analysis ───────────────────────────────────────────
 
-# Root-embedding depth: how far the root ring extends below the leaf plane.
+# Root-embedding depth: how far the root ring extends past the parent
+# surface after the per-vertex inward raycast.  When no parent mesh is
+# supplied (or a ray misses), falls back to a flat projection this deep
+# below the perimeter vertex.  Public so callers can reference it without
+# hard-coding the literal.
+LEAF_ROOT_EMBED_MM: float = 0.75
+
+# Maximum raycast hit distance accepted during root embedding.  Hits beyond
+# this are discarded and fall back to the angled-offset default.  Prevents
+# spike vertices when a perimeter vertex ends up inside the parent mesh (e.g.
+# from large roll jitter), causing the ray to hit the far side of the mesh.
+_LEAF_ROOT_MAX_HIT_MM: float = 10.0
+
+# Angle (degrees) between the leaf surface plane and the root wall,
+# measured at the perimeter edge (the "face angle" or "taper angle").
+# 90° = wall perpendicular to leaf surface (ray straight along -n, no taper).
+# Smaller values undercut inward: the root ring narrows toward the perimeter
+# centroid, giving beefy anchoring especially at sharp corners (tip, base).
 # Public so callers can reference it without hard-coding the literal.
-LEAF_ROOT_DEPTH_MM: float = 1.0
+LEAF_ROOT_WALL_ANGLE_DEG: float = 50.0
 
 # FDM printability floor: faces whose downward slope exceeds this are overhangs.
 _LEAF_FDM_FLOOR_DEG: float = 45.0
 
 # Contact tolerance for support-mesh queries (compensates for faceted surfaces).
 _LEAF_FDM_SUPPORT_TOLERANCE_MM: float = 0.05
-
-# Fraction of leaf length used as the maximum raycast distance for find_tip_root:
-# hits farther than leaf_length_mm * this fraction are treated as misses and
-# signal the caller to rebuild without curl.
-_LEAF_TIP_MAX_DEPTH_FRACTION: float = 0.25
-
-
-def find_tip_root(
-    surface:        trimesh.Trimesh,
-    up_hint:        np.ndarray,
-    parent_mesh:    trimesh.Trimesh,
-    leaf_length_mm: float,
-    *,
-    floor_angle_deg: float = _LEAF_FDM_FLOOR_DEG,
-    max_depth_mm:    float | None = None,
-) -> np.ndarray | None:
-    """Raycast from the leaf tip to find where it should embed in the parent mesh.
-
-    Finds the lowest-Z boundary vertex of *surface* (the leaf tip), then casts
-    a ray from there at ``floor_angle_deg`` below horizontal, pointing inward
-    toward the parent surface.  If *parent_mesh* is hit within ``max_depth_mm``
-    the hit position is returned; otherwise ``None`` signals that the leaf tip
-    cannot be anchored at a printable angle — the caller should rebuild the
-    leaf without curl.
-
-    The ray direction is derived from ``up_hint``:
-
-    * The horizontal inward component is ``-up_hint`` projected to the XY plane
-      and normalised.  This points toward the parent surface in the horizontal
-      plane.
-    * When ``up_hint`` is nearly vertical (leaf on a horizontal surface), the
-      horizontal component vanishes and the ray goes straight down.
-
-    Parameters
-    ----------
-    surface         : Open leaf surface from :func:`build_leaf_surface`.
-    up_hint         : Outward surface normal at the attachment point.
-    parent_mesh     : Mesh the leaf is attached to (sphere + trunk, etc.).
-    leaf_length_mm  : Full length of the leaf blade (mm).  Used to compute the
-                      default ``max_depth_mm`` (¼ of the leaf length).
-    floor_angle_deg : Minimum FDM-printable angle from horizontal (degrees).
-                      The ray goes exactly this far below horizontal.
-    max_depth_mm    : Maximum acceptable hit distance from the tip vertex.
-                      Defaults to ``leaf_length_mm * 0.25`` (¼ leaf length).
-                      Hits farther than this are treated as misses.
-
-    Returns
-    -------
-    np.ndarray or None
-        Hit position (3,) on *parent_mesh* to use as the tip root vertex in
-        :func:`solidify_leaf`, or ``None`` if the mesh is too far or not hit.
-    """
-    if max_depth_mm is None:
-        max_depth_mm = leaf_length_mm * _LEAF_TIP_MAX_DEPTH_FRACTION
-
-    loop  = boundary_loop(surface)
-    perim = surface.vertices[loop]
-    tip   = perim[int(np.argmin(perim[:, 2]))]
-
-    # Ray direction: floor_angle_deg below horizontal, pointing inward.
-    floor_rad = np.radians(floor_angle_deg)
-    n         = _safe_norm(np.asarray(up_hint, float))
-    inward_xy = -n.copy()
-    inward_xy[2] = 0.0
-    len_xy    = float(np.linalg.norm(inward_xy))
-    if len_xy > 1e-8:
-        inward_dir = inward_xy / len_xy
-        ray_dir = (float(np.cos(floor_rad)) * inward_dir
-                   - float(np.sin(floor_rad)) * np.array([0.0, 0.0, 1.0]))
-    else:
-        # up_hint nearly vertical → leaf on a horizontal surface → straight down.
-        ray_dir = np.array([0.0, 0.0, -1.0])
-
-    # Offset origin slightly outward along the surface normal so that a tip
-    # vertex sitting exactly on the parent mesh does not self-intersect.
-    ray_origin = tip + 1e-3 * n
-
-    locs, _, _ = parent_mesh.ray.intersects_location(
-        ray_origins=[ray_origin], ray_directions=[ray_dir],
-    )
-    if len(locs) == 0:
-        return None
-
-    dists   = np.linalg.norm(locs - tip, axis=1)
-    nearest = int(np.argmin(dists))
-    return locs[nearest] if dists[nearest] <= max_depth_mm else None
-
 
 def find_contact_angle(
     base_pos:  np.ndarray,
@@ -1227,34 +1162,63 @@ def boundary_loop(mesh: trimesh.Trimesh) -> list[int]:
 
 
 def solidify_leaf(
-    surface:  trimesh.Trimesh,
-    up_hint:  np.ndarray,
-    depth:    float = LEAF_ROOT_DEPTH_MM,
+    surface:              trimesh.Trimesh,
+    up_hint:              np.ndarray,
+    embed_mm:             float = LEAF_ROOT_EMBED_MM,
     *,
-    tip_root: np.ndarray | None = None,
+    parent_mesh:          trimesh.Trimesh | None = None,
+    root_wall_angle_deg:  float = LEAF_ROOT_WALL_ANGLE_DEG,
 ) -> tuple[trimesh.Trimesh, range]:
     """Close an open leaf surface into a watertight solid.
 
-    Projects each boundary vertex inward along ``-up_hint`` by ``depth`` to
-    form a *root ring* that embeds into the parent mesh.  Quad walls bridge
-    the perimeter to the root ring; a centroid fan caps the buried end.
+    For each boundary vertex, casts a ray at ``root_wall_angle_deg`` from
+    the leaf plane — angled inward toward the perimeter centroid — to find
+    where it crosses the parent surface, then places the root vertex
+    ``embed_mm`` further along that same ray.  This embeds a consistent
+    depth past the parent surface regardless of how far arched, curled, or
+    tilted the leaf is from the surface.
 
-    When ``tip_root`` is provided (obtained from :func:`find_tip_root`) the
-    tip vertex's root position is overridden with that point instead of the
-    default ``tip_vertex − depth × up_hint``.  This places the tip root
-    exactly on the parent mesh surface at the minimum printable angle.
+    ``root_wall_angle_deg`` is the angle between the root wall and the leaf
+    surface plane, measured at the perimeter edge — the same angle a
+    machinist would call the *face angle* or *taper angle*:
 
-    The tip vertex is identified by its fixed index in the leaf surface mesh
-    (``_LEAF_TIP_VERTEX_IDX``), independent of world-space Z.
+    * **90°** — wall is perpendicular to the leaf surface.  Ray goes straight
+      along ``-up_hint``.  Root ring is the same shape as the perimeter.
+    * **< 90°** — wall undercuts inward: the root ring converges toward the
+      perimeter centroid, giving a tapered mortise grip.  Sharp corners
+      (tip, base) converge most, producing "beefy" anchoring geometry there.
+    * **50°** (default) — wall makes a 50° angle with the leaf surface plane
+      (40° from perpendicular).  ``sin 50° ≈ 0.77`` along ``-n``,
+      ``cos 50° ≈ 0.64`` toward the centroid.
+
+    When ``parent_mesh`` is ``None`` or a ray misses the surface, the vertex
+    falls back to moving ``embed_mm`` along the same angled direction from
+    the perimeter position (no raycast, fixed offset).
+
+    Quad walls bridge the perimeter to the root ring; a centroid fan caps
+    the buried end.
+
+    The tip vertex is handled the same as every other perimeter vertex —
+    the angled raycast finds the parent surface under it, and ``embed_mm``
+    is applied past the hit.  No special-case override is needed.
 
     Parameters
     ----------
-    surface   : Open leaf surface from :func:`build_leaf_surface`.
-    up_hint   : Leaf plane normal (outward from the parent surface).
-    depth     : Root-ring embedding depth for all non-tip perimeter vertices.
-    tip_root  : Override root position for the tip perimeter vertex, as
-                returned by :func:`find_tip_root`.  ``None`` keeps the
-                default ``tip_vertex - depth * up_hint``.
+    surface             : Open leaf surface from :func:`build_leaf_surface`.
+    up_hint             : Leaf plane normal (outward from the parent surface).
+    embed_mm            : Distance along the ray direction past the parent
+                          surface hit for every root vertex.  Also used as
+                          the angled fallback offset when a ray misses.
+    parent_mesh         : Mesh to raycast against for per-vertex embed depth.
+                          Pass the full support mesh (sphere + trunk, etc.).
+                          ``None`` disables raycasting and uses the angled
+                          fallback for all vertices.
+    root_wall_angle_deg : Angle between the root wall and the leaf surface
+                          plane, measured at the perimeter edge.  90° = wall
+                          perpendicular to the leaf surface (no taper).
+                          Smaller values undercut inward — sharp corners
+                          become beefier.  Default ``LEAF_ROOT_WALL_ANGLE_DEG``
+                          (70°).
 
     Returns
     -------
@@ -1268,15 +1232,67 @@ def solidify_leaf(
     loop = boundary_loop(surface)
     NP   = len(loop)
 
-    perim = surface.vertices[loop]      # (NP, 3)
-    root  = perim - depth * n           # (NP, 3)
+    perim = surface.vertices[loop]     # (NP, 3)
 
-    # Locate the tip by its fixed vertex index — it is a well-defined geometric
-    # point, independent of Z.
-    tip_i = loop.index(_LEAF_TIP_VERTEX_IDX)
+    # ── Per-vertex ray directions ─────────────────────────────────────────────
+    # root_wall_angle_deg is measured relative to the LOCAL leaf surface at
+    # each boundary vertex, not the global up_hint direction.  Arch, curl, and
+    # lift all rotate the local surface normal away from up_hint — especially
+    # at the tip (phi_tip = curl_deg + arch correction).  Using the global n
+    # for every vertex produces the wrong angle at the tip and base where the
+    # deviation is largest.
+    #
+    # Fix: take per-vertex local normals directly from the open surface mesh.
+    # trimesh's vertex_normals are area-weighted face-normal averages; they
+    # track the curved leaf surface closely (dot ≈ 0.998 vs. the analytic
+    # N_local in tests) without any API changes to this function.
+    #
+    # n (global up_hint) is still used below for the cap-plane projection,
+    # where an approximate plane through the buried root ring is sufficient.
+    local_n = surface.vertex_normals[np.array(loop)]   # (NP, 3)  — pre-normalised by trimesh
 
-    if tip_root is not None:
-        root[tip_i] = np.asarray(tip_root, float)
+    centroid   = perim.mean(axis=0)                                   # (3,)
+    raw_inward = centroid[np.newaxis] - perim                         # (NP, 3)
+    # Project each inward vector onto its vertex's OWN local tangent plane.
+    dot_ln     = np.einsum('ij,ij->i', raw_inward, local_n)           # (NP,)
+    raw_inward -= dot_ln[:, np.newaxis] * local_n                     # (NP, 3)
+    inward_norms = np.linalg.norm(raw_inward, axis=1, keepdims=True)
+    inward = np.where(inward_norms > 1e-8,
+                      raw_inward / np.where(inward_norms > 1e-8, inward_norms, 1.0),
+                      0.0)                                            # (NP, 3)
+
+    # ray = sin(angle)*(-local_n) + cos(angle)*inward
+    # → unit vector at root_wall_angle_deg from the local leaf surface.
+    # At 90° this reduces to pure -local_n (no taper).
+    angle_rad = float(np.radians(root_wall_angle_deg))
+    sin_a     = float(np.sin(angle_rad))
+    cos_a     = float(np.cos(angle_rad))
+    ray_dirs  = sin_a * (-local_n) + cos_a * inward                  # (NP, 3)
+
+    # Fallback root: move embed_mm along the ray direction from each perim vertex.
+    root = perim + float(embed_mm) * ray_dirs                         # (NP, 3)
+
+    if parent_mesh is not None:
+        # Raycast each vertex along its angled direction to find the parent
+        # surface, then embed embed_mm past the hit along the same ray.
+        # Offset origins slightly along the LOCAL outward normal so a vertex
+        # sitting exactly on the parent surface doesn't self-intersect.
+        origins = perim + _LEAF_FDM_SUPPORT_TOLERANCE_MM * local_n   # (NP, 3)
+        locs, ray_idx, _ = parent_mesh.ray.intersects_location(
+            ray_origins=origins,
+            ray_directions=ray_dirs,
+            multiple_hits=True,
+        )
+        if len(locs) > 0:
+            for ri in np.unique(ray_idx).tolist():
+                mask  = ray_idx == ri
+                hits  = locs[mask]
+                dists = np.linalg.norm(hits - origins[int(ri)], axis=1)
+                near  = dists <= _LEAF_ROOT_MAX_HIT_MM
+                if near.any():
+                    hit = hits[near][int(np.argmin(dists[near]))]
+                    root[int(ri)] = hit + float(embed_mm) * ray_dirs[int(ri)]
+        # Perimeter vertices whose ray missed or hit too far keep the fallback.
 
     # Project the ring mean onto the cap plane (normal = n, through root[0])
     # so the centroid stays inside the ring even when the ring is non-planar
@@ -1294,10 +1310,7 @@ def solidify_leaf(
         j    = (i + 1) % NP
         a, b = loop[i], loop[j]
         d, c = root_base + i, root_base + j
-        if i == tip_i:
-            wall_faces += [[a, d, b], [b, d, c]]
-        else:
-            wall_faces += [[a, b, c], [a, c, d]]
+        wall_faces += [[a, b, c], [a, c, d]]
 
     cap_faces = [
         [cap_ctr, root_base + (i + 1) % NP, root_base + i]
@@ -1325,9 +1338,10 @@ def place_leaf_on_sphere(
     sphere_radius: float,
     parent_mesh:   trimesh.Trimesh,
     *,
-    contact_angle_rad: float | None = None,
-    clearance_mm:      float = 0.0,
-    depth:             float = LEAF_ROOT_DEPTH_MM,
+    contact_angle_rad:   float | None = None,
+    clearance_mm:        float = 0.0,
+    embed_mm:            float = LEAF_ROOT_EMBED_MM,
+    root_wall_angle_deg: float = LEAF_ROOT_WALL_ANGLE_DEG,
     **leaf_kwargs,
 ) -> tuple[trimesh.Trimesh, range]:
     """Build and solidify a leaf placed on a sphere surface.
@@ -1344,9 +1358,11 @@ def place_leaf_on_sphere(
        sphere contact.
     3. :func:`build_leaf_surface` — open surface mesh (``lift_mm`` applied
        here as an offset above contact).
-    4. :func:`find_tip_root` — raycast from the tip toward *parent_mesh*;
-       ``None`` on a miss (solidification falls back to flat projection).
-    5. :func:`solidify_leaf` — close the surface into a watertight solid.
+    4. :func:`solidify_leaf` — per-vertex inward raycast against
+       *parent_mesh* to find each perimeter vertex's true surface distance,
+       then embed ``embed_mm`` past the surface at ``root_wall_angle_deg``
+       from the leaf surface plane.  The tip vertex is handled identically
+       to every other perimeter vertex.
 
     Parameters
     ----------
@@ -1357,20 +1373,26 @@ def place_leaf_on_sphere(
     up_hint            : Outward surface normal at *base_pos*.
     sphere_radius      : Radius of the sphere centred at the origin (used only
                          for the contact-angle search).
-    parent_mesh        : Full support mesh (sphere + trunk, etc.) used for the
-                         tip root raycast.
+    parent_mesh        : Full support mesh (sphere + trunk, etc.) used for
+                         per-vertex embed raycasts in :func:`solidify_leaf`.
     contact_angle_rad  : Override the auto-computed contact angle (radians).
                          ``None`` (default) → computed automatically via
                          :func:`find_contact_angle_for_sphere`.
     clearance_mm       : Minimum clearance from the sphere for the contact
                          angle search.
-    depth              : Root-ring embedding depth passed to
-                         :func:`solidify_leaf`.
-    **leaf_kwargs      : Passed to :func:`build_leaf_surface` and (for the
-                         contact angle search) to
-                         :func:`find_contact_angle_for_sphere`.  Typical keys:
-                         ``length_mm``, ``width_mm``, ``fold_angle_deg``,
-                         ``curl_deg``, ``lift_mm``.
+    embed_mm             : How far past the parent surface each root vertex is
+                           placed.  Passed to :func:`solidify_leaf`.
+    root_wall_angle_deg  : Angle between the root wall and the leaf surface
+                           plane at the perimeter edge.  90° = perpendicular
+                           (no taper); smaller values undercut inward, giving
+                           beefy corners at the tip and base.  Default
+                           ``LEAF_ROOT_WALL_ANGLE_DEG`` (70°).  Passed to
+                           :func:`solidify_leaf`.
+    **leaf_kwargs        : Passed to :func:`build_leaf_surface` and (for the
+                           contact angle search) to
+                           :func:`find_contact_angle_for_sphere`.  Typical keys:
+                           ``length_mm``, ``width_mm``, ``fold_angle_deg``,
+                           ``curl_deg``, ``lift_mm``.
 
     Returns
     -------
@@ -1395,9 +1417,10 @@ def place_leaf_on_sphere(
         base_pos=base_pos, tangent=tangent, up_hint=up_placed, **leaf_kwargs,
     )
 
-    length_mm = float(leaf_kwargs.get('length_mm', LEAF_LENGTH_MM_DEFAULT))
-    tip_root  = find_tip_root(leaf_surf, up_placed, parent_mesh, length_mm)
-
-    return solidify_leaf(leaf_surf, up_placed, depth, tip_root=tip_root)
+    return solidify_leaf(
+        leaf_surf, up_placed, embed_mm,
+        parent_mesh=parent_mesh,
+        root_wall_angle_deg=root_wall_angle_deg,
+    )
 
 
