@@ -1158,21 +1158,105 @@ def _build_foliage_cluster_mesh(
                     cluster_radius_mm=r_tip,
                 )
 
-        # Cap: random leaves spread over the apex polar zone.
+        # Cap: structured polar rings over the apex zone.  This used to be
+        # random polar scatter, which could place two cap leaves almost on top
+        # of each other even when the main leaf field was a jittered grid.
         # Pass r_tip for the same reason as the near-apex rings: the forward
         # dome is a sphere of radius r_tip, so even near-polar leaves attach
         # correctly when the dome radius is used instead of the tiny ring radius.
-        for ci in range(max(0, int(leaf_cap_count))):
-            u_theta = _hash01(bark_seed, "cap-theta", edge_id, ci)
-            u_phi   = _hash01(bark_seed, "cap-phi",   edge_id, ci)
-            theta   = -np.pi + 2.0 * np.pi * u_theta            # full circle
-            phi     = (np.pi / 2.0) - (0.30 * np.pi / 2.0) * u_phi  # spread to ~63°
+        for ci, phi, theta in _structured_cap_leaf_angles(
+            max(0, int(leaf_cap_count)),
+            pos_jitter=pj,
+            row_step=row_step,
+            col_step=col_step,
+            r_tip=r_tip,
+            bark_seed=bark_seed,
+            edge_id=edge_id,
+        ):
             base_smooth, radial, _ = _dome_point(phi, theta)
             _emit_leaf(base_smooth, radial, ("cap", ci), cluster_radius_mm=r_tip)
 
     result = trimesh.Trimesh(vertices=verts, faces=ico.faces.copy(), process=False)
     result.fix_normals()
     return result, leaf_parts
+
+
+def _structured_cap_leaf_angles(
+    count: int,
+    *,
+    pos_jitter: float,
+    row_step: float,
+    col_step: float,
+    r_tip: float,
+    bark_seed: int,
+    edge_id: int,
+) -> list[tuple[int, float, float]]:
+    """Return deterministic jittered-ring cap positions as ``(idx, phi, theta)``.
+
+    ``phi`` is the forward-dome polar angle used by ``_dome_point`` where
+    ``pi/2`` is the apex.  The cap covers the same top 30% polar band as the
+    previous random sampler, but each leaf now owns a row/column cell and jitter
+    is clamped so it cannot cross into a neighbour's cell.
+    """
+    count = int(count)
+    if count <= 0:
+        return []
+
+    r_tip = max(float(r_tip), 1e-6)
+    pj = max(0.0, float(pos_jitter))
+
+    phi_min = 0.70 * (np.pi / 2.0)
+    phi_max = 0.98 * (np.pi / 2.0)
+    band = phi_max - phi_min
+
+    # Keep small caps as one clean ring; larger caps get more rows.  For the
+    # common 12-leaf cap this yields two rings, with columns weighted by the
+    # circumference at each ring.
+    n_rows = max(1, min(count, int(round(np.sqrt(count / 3.0)))))
+    row_phis = np.array([
+        phi_min + ((ri + 0.5) / n_rows) * band
+        for ri in range(n_rows)
+    ], dtype=float)
+    weights = np.maximum(np.cos(row_phis), 1e-3)
+    raw = weights / float(weights.sum()) * count
+    cols = np.maximum(1, np.floor(raw).astype(int))
+
+    while int(cols.sum()) > count:
+        candidates = np.where(cols > 1)[0]
+        if len(candidates) == 0:
+            break
+        frac = raw[candidates] - np.floor(raw[candidates])
+        cols[candidates[int(np.argmin(frac))]] -= 1
+    while int(cols.sum()) < count:
+        frac = raw - np.floor(raw)
+        cols[int(np.argmax(frac))] += 1
+
+    result: list[tuple[int, float, float]] = []
+    cap_i = 0
+    row_gap = band / max(n_rows, 1)
+    max_phi_jit = 0.45 * row_gap
+    requested_phi_jit = pj * float(row_step) / r_tip
+
+    for ri, (phi_center, n_col) in enumerate(zip(row_phis, cols)):
+        n_col = int(n_col)
+        theta_step = 2.0 * np.pi / n_col
+        max_theta_jit = 0.45 * theta_step
+        requested_theta_jit = pj * float(col_step) / max(r_tip * np.cos(phi_center), 1e-6)
+        # Offset alternating cap rows half a cell, matching the main grid.
+        stagger = 0.5 * (ri % 2)
+        for ci in range(n_col):
+            phi_jit = (
+                2.0 * _hash01(bark_seed, "cap-ring-phi", edge_id, ri, ci) - 1.0
+            ) * min(requested_phi_jit, max_phi_jit)
+            theta_jit = (
+                2.0 * _hash01(bark_seed, "cap-ring-theta", edge_id, ri, ci) - 1.0
+            ) * min(requested_theta_jit, max_theta_jit)
+            phi = float(np.clip(phi_center + phi_jit, phi_min, phi_max))
+            theta = -np.pi + (ci + 0.5 + stagger) * theta_step + theta_jit
+            result.append((cap_i, phi, _wrap_angle(theta)))
+            cap_i += 1
+
+    return result
 
 
 # ── Bark helpers ──────────────────────────────────────────────────────────────
