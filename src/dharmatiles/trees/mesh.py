@@ -1108,6 +1108,13 @@ def _build_foliage_cluster_mesh(
         z_bottom = float(shaped.vertices[:, 2].min())
         z_top    = float(shaped.vertices[:, 2].max())
 
+        # Smooth mesh centroid — used as the origin for 3D outward normals.
+        # Direction from centroid to any surface point gives the correct
+        # outward normal on the dome top (points upward) and on the cone
+        # sides (points outward horizontally), unlike a flat XY direction
+        # which is wrong on the dome and causes blade-on-edge artefacts.
+        mesh_center_3d = shaped.vertices.mean(axis=0)
+
         row_idx = 0
         z_row   = z_bottom
         while z_row <= z_top + 1e-6:
@@ -1123,11 +1130,6 @@ def _build_foliage_cluster_mesh(
                         if perim < 1e-3:
                             continue
                         n_col = max(1, int(np.ceil(perim / col_step)))
-                        # Centroid in 2D, then transform to 3D world coords.
-                        cx2d = float(poly.centroid.x)
-                        cy2d = float(poly.centroid.y)
-                        c4d  = xform @ np.array([cx2d, cy2d, 0.0, 1.0])
-                        cx3d, cy3d = float(c4d[0]), float(c4d[1])
                         for ci in range(n_col):
                             t    = float(ci) / float(n_col)
                             pt2  = poly.exterior.interpolate(t, normalized=True)
@@ -1136,16 +1138,22 @@ def _build_foliage_cluster_mesh(
                                 [float(pt2.x), float(pt2.y), 0.0, 1.0]
                             )
                             pt3d = np.array([float(p4d[0]), float(p4d[1]), float(p4d[2])])
-                            # Outward normal: centroid → point in the XY plane.
-                            dx = pt3d[0] - cx3d
-                            dy = pt3d[1] - cy3d
-                            rr_local = float(np.hypot(dx, dy))
-                            if rr_local < 1e-6:
+                            # 3D outward normal: mesh centroid → surface point.
+                            # Correct on the dome top (points upward) and on
+                            # the cone sides (points outward).
+                            raw_out = pt3d - mesh_center_3d
+                            raw_len = float(np.linalg.norm(raw_out))
+                            if raw_len < 1e-6:
                                 continue
-                            outward = np.array([dx / rr_local, dy / rr_local, 0.0])
+                            outward = raw_out / raw_len
+                            # Use r_tip (the foliage sphere radius) as the
+                            # contact-angle sphere radius everywhere.  Using
+                            # the tiny cross-section radius at the dome top
+                            # would push contact_angle past π/2 and skip the
+                            # leaf, producing a bald apex.
                             _emit_leaf(
                                 pt3d, outward, (row_idx, ci),
-                                cluster_radius_mm=rr_local,
+                                cluster_radius_mm=r_tip,
                             )
                 except Exception:
                     pass
