@@ -84,6 +84,8 @@ def build_branch_mesh(
     leaf_cap_count: int = 12,
     leaf_angle_jitter_deg: float = 24.0,
     leaf_pos_jitter: float = 0.165,
+    leaf_arc_meridians: int = 6,
+    leaf_arc_z_samples: int = 64,
     debug_leaf_color: bool = False,
 ) -> tuple[trimesh.Trimesh, trimesh.Trimesh, trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Build branch and foliage meshes from a simplified skeleton.
@@ -275,6 +277,8 @@ def build_branch_mesh(
                 leaf_cap_count=leaf_cap_count,
                 leaf_angle_jitter_deg=leaf_angle_jitter_deg,
                 leaf_pos_jitter=leaf_pos_jitter,
+                leaf_arc_meridians=leaf_arc_meridians,
+                leaf_arc_z_samples=leaf_arc_z_samples,
             )
             if len(clump.vertices) > 0:
                 foliage_solids.append(clump)
@@ -701,6 +705,257 @@ def _foliage_coarse_noise(
     return _FOLIAGE_COARSE_NOISE_AMPLITUDE_MM * val
 
 
+# ── Meridian-arc placement helpers ───────────────────────────────────────────
+
+
+class _Meridian:
+    """One meridian curve sampled from a closed mesh.
+
+    Stores the Z values, cumulative arc lengths, and outward surface normals
+    at every sampled level for one azimuthal angle φ.
+    """
+    __slots__ = ("z_vals", "arc_vals", "normals")
+
+    def __init__(
+        self,
+        z_vals:   np.ndarray,
+        arc_vals: np.ndarray,
+        normals:  np.ndarray,
+    ) -> None:
+        self.z_vals   = np.asarray(z_vals,  float)   # (K,)
+        self.arc_vals = np.asarray(arc_vals, float)   # (K,) cumulative arc length
+        self.normals  = np.asarray(normals,  float)   # (K, 3) outward unit normals
+
+
+def _build_meridians(
+    shaped:      trimesh.Trimesh,
+    n_meridians: int = 6,
+    z_samples:   int = 64,
+) -> list[_Meridian]:
+    """Sample N meridian curves at evenly-spaced azimuthal angles from a mesh.
+
+    Returns a list of exactly *n_meridians* ``_Meridian`` objects, one for each
+    azimuthal angle φₘ = m·2π/N.  Any meridian with insufficient data is filled
+    from the nearest available neighbour.
+
+    For each Z level, the perimeter point *outermost* from the XY centroid
+    within the half-gap angular cone around φₘ is selected.
+    """
+    z_min = float(shaped.vertices[:, 2].min())
+    z_max = float(shaped.vertices[:, 2].max())
+    eps   = max((z_max - z_min) * 0.005, 1e-4)
+
+    if z_max - z_min < 1e-6:
+        # Degenerate mesh: return N trivial upward meridians.
+        trivial = _Meridian(
+            z_vals   = np.array([z_min, z_max]),
+            arc_vals = np.array([0.0, 1.0]),
+            normals  = np.tile([0.0, 0.0, 1.0], (2, 1)),
+        )
+        return [trivial] * n_meridians
+
+    cx = float(shaped.vertices[:, 0].mean())
+    cy = float(shaped.vertices[:, 1].mean())
+
+    phi_angles = np.linspace(0.0, 2.0 * np.pi, n_meridians, endpoint=False)
+    phi_half   = np.pi / n_meridians  # angular half-gap between meridians
+
+    z_levels = np.linspace(z_min + eps, z_max - eps, z_samples)
+
+    pts_by_meridian: list[list[np.ndarray]] = [[] for _ in range(n_meridians)]
+    z_by_meridian:   list[list[float]]      = [[] for _ in range(n_meridians)]
+
+    for z_level in z_levels:
+        section = shaped.section(
+            plane_origin=np.array([0.0, 0.0, float(z_level)]),
+            plane_normal=np.array([0.0, 0.0, 1.0]),
+        )
+        if section is None:
+            continue
+        try:
+            path2d, xform = section.to_planar()
+        except Exception:
+            continue
+
+        # Gather all 3D perimeter points across every polygon at this level.
+        all_pts: list[np.ndarray] = []
+        for poly in path2d.polygons_full:
+            coords = np.array(poly.exterior.coords, dtype=float)
+            if len(coords) < 2:
+                continue
+            pts2d = coords[:-1]   # drop the repeated closing vertex
+            ones  = np.ones((len(pts2d), 1))
+            p4d   = np.hstack([pts2d, np.zeros((len(pts2d), 1)), ones]) @ xform.T
+            all_pts.append(p4d[:, :3])
+        if not all_pts:
+            continue
+        pts3d = np.vstack(all_pts)  # (M, 3)
+
+        phi_pts = np.arctan2(pts3d[:, 1] - cy, pts3d[:, 0] - cx) % (2.0 * np.pi)
+
+        for m_idx, phi_m in enumerate(phi_angles):
+            d_phi = np.abs(((phi_pts - phi_m + np.pi) % (2.0 * np.pi)) - np.pi)
+            mask  = d_phi <= phi_half + 1e-6
+            if not mask.any():
+                mask = np.zeros(len(pts3d), dtype=bool)
+                mask[int(np.argmin(d_phi))] = True
+            # Among candidates, take the outermost (max radius from centroid XY).
+            r2       = (pts3d[mask, 0] - cx) ** 2 + (pts3d[mask, 1] - cy) ** 2
+            best_loc = int(np.where(mask)[0][int(np.argmax(r2))])
+            pts_by_meridian[m_idx].append(pts3d[best_loc].copy())
+            z_by_meridian[m_idx].append(float(z_level))
+
+    # Build each _Meridian from its accumulated point sequence.
+    built: list[_Meridian | None] = [None] * n_meridians
+    for m_idx in range(n_meridians):
+        pts_list = pts_by_meridian[m_idx]
+        if len(pts_list) < 3:
+            continue
+        pts   = np.array(pts_list, dtype=float)          # (K, 3)
+        z_arr = np.array(z_by_meridian[m_idx], dtype=float)  # (K,)
+
+        segs = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+        arc  = np.concatenate(([0.0], np.cumsum(segs)))  # (K,)
+
+        # Surface tangent (Tr, Tz) in the r-z meridian plane via centred differences.
+        r_arr = np.sqrt((pts[:, 0] - cx) ** 2 + (pts[:, 1] - cy) ** 2)
+        dr = np.gradient(r_arr, arc)
+        dz = np.gradient(z_arr, arc)
+        nrm = np.sqrt(dr ** 2 + dz ** 2) + 1e-12
+        Tr, Tz = dr / nrm, dz / nrm
+
+        # Outward normal: rotate tangent by -90° in (r, z) plane.
+        Nr, Nz =  Tz, -Tr   # N_r = +T_z,  N_z = -T_r
+
+        phi_m   = float(phi_angles[m_idx])
+        n3d     = np.column_stack([
+            Nr * np.cos(phi_m),
+            Nr * np.sin(phi_m),
+            Nz,
+        ])                                                # (K, 3)
+        nn      = np.linalg.norm(n3d, axis=1, keepdims=True) + 1e-12
+        n3d    /= nn
+
+        built[m_idx] = _Meridian(z_vals=z_arr, arc_vals=arc, normals=n3d)
+
+    # Fill any None slots from the nearest available neighbour.
+    for m_idx in range(n_meridians):
+        if built[m_idx] is not None:
+            continue
+        for offset in range(1, n_meridians):
+            nb = built[(m_idx + offset) % n_meridians]
+            if nb is not None:
+                built[m_idx] = nb
+                break
+        if built[m_idx] is None:
+            z2   = np.array([z_min + eps, z_max - eps])
+            arc2 = np.array([0.0, float(z_max - z_min - 2.0 * eps)])
+            n2   = np.tile([0.0, 0.0, 1.0], (2, 1)).astype(float)
+            built[m_idx] = _Meridian(z_vals=z2, arc_vals=arc2, normals=n2)
+
+    return built  # type: ignore[return-value]  # all slots are filled
+
+
+def _avg_z_for_arc(s_target: float, meridians: list) -> float:
+    """Average Z level at a surface arc value across all meridians."""
+    z_vals = [
+        float(np.interp(s_target, m.arc_vals, m.z_vals))
+        for m in meridians
+        if s_target <= m.arc_vals[-1] + 1e-9
+    ]
+    return float(np.mean(z_vals)) if z_vals else 0.0
+
+
+def _avg_arc_for_z(z_target: float, meridians: list) -> float:
+    """Average surface arc value at a given Z across all meridians."""
+    s_vals = [
+        float(np.interp(z_target, m.z_vals, m.arc_vals))
+        for m in meridians
+        if m.z_vals[0] - 1e-9 <= z_target <= m.z_vals[-1] + 1e-9
+    ]
+    return float(np.mean(s_vals)) if s_vals else 0.0
+
+
+def _lowest_placeable_z(meridians: list, normal_z_threshold: float = -0.1) -> float:
+    """Lowest Z where the averaged meridian outward normal clears the threshold."""
+    if not meridians:
+        return 0.0
+    z_min = min(float(m.z_vals[0])  for m in meridians)
+    z_max = max(float(m.z_vals[-1]) for m in meridians)
+    for z in np.linspace(z_min, z_max, 128):
+        nz_vals = [
+            float(np.interp(z, m.z_vals, m.normals[:, 2]))
+            for m in meridians
+            if m.z_vals[0] <= z <= m.z_vals[-1]
+        ]
+        if nz_vals and float(np.mean(nz_vals)) > normal_z_threshold:
+            return float(z)
+    return float(z_min)
+
+
+def _compute_row_z_positions(
+    meridians:      list,
+    leaf_length_mm: float,
+    leaf_v_overlap: float,
+    z_top:          float,
+) -> list[float]:
+    """Row Z positions via equal surface-arc intervals (meridian-arc method).
+
+    Anchors the first row one leaf-length of arc above the lowest upward-facing
+    surface; anchors the last row just below the world-Z apex.  Fills in rows
+    at the integer-optimal arc-step between them.
+    """
+    if not meridians:
+        return []
+
+    z_top_anchor  = z_top - 0.25 * leaf_length_mm
+
+    z_placeable   = _lowest_placeable_z(meridians, normal_z_threshold=-0.1)
+    s_placeable   = _avg_arc_for_z(z_placeable, meridians)
+    z_bot_anchor  = _avg_z_for_arc(s_placeable + leaf_length_mm, meridians)
+    z_bot_anchor  = min(z_bot_anchor, z_top_anchor)
+
+    s_bot     = _avg_arc_for_z(z_bot_anchor, meridians)
+    s_top     = _avg_arc_for_z(z_top_anchor, meridians)
+    inner_arc = max(s_top - s_bot, 1e-6)
+
+    row_step_target = leaf_length_mm * max(1.0 - float(leaf_v_overlap), 0.05)
+    n_gaps          = max(1, round(inner_arc / row_step_target))
+    actual_step     = inner_arc / n_gaps
+
+    row_arc = [s_bot + i * actual_step for i in range(n_gaps + 1)]
+    return [_avg_z_for_arc(s, meridians) for s in row_arc]
+
+
+def _interpolate_meridian_normal(
+    meridians: list,
+    phi_leaf:  float,
+    z_row:     float,
+) -> np.ndarray:
+    """Interpolate the outward surface normal at (phi_leaf, z_row).
+
+    Linearly interpolates between the two azimuthally-bracketing meridians,
+    then normalises.  Falls back to world-up on degenerate inputs.
+    """
+    n = len(meridians)
+    if n == 0:
+        return np.array([0.0, 0.0, 1.0])
+
+    phi_step = 2.0 * np.pi / n
+    phi_w    = float(phi_leaf % (2.0 * np.pi))
+    m_i      = int(phi_w / phi_step) % n
+    m_ip1    = (m_i + 1) % n
+    w        = float(np.clip((phi_w - m_i * phi_step) / phi_step, 0.0, 1.0))
+
+    def _nrm_at(m: _Meridian) -> np.ndarray:
+        return np.array([float(np.interp(z_row, m.z_vals, m.normals[:, j]))
+                         for j in range(3)])
+
+    n_lerp = (1.0 - w) * _nrm_at(meridians[m_i]) + w * _nrm_at(meridians[m_ip1])
+    nn     = float(np.linalg.norm(n_lerp))
+    return n_lerp / max(nn, 1e-12)
+
+
 def _bezier_clump_start(
     p0: np.ndarray,
     bp1: np.ndarray,
@@ -752,6 +1007,8 @@ def _build_foliage_cluster_mesh(
     leaf_cap_count: int = 12,
     leaf_angle_jitter_deg: float = 24.0,
     leaf_pos_jitter: float = 0.165,
+    leaf_arc_meridians: int = 6,
+    leaf_arc_z_samples: int = 64,
 ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Foliage clump: icosphere bent along the branch Bezier spine.
 
@@ -941,7 +1198,7 @@ def _build_foliage_cluster_mesh(
     cluster_mesh.fix_normals()
 
     leaf_parts: list[trimesh.Trimesh] = []
-    if leaves and leaf_base_count > 0 and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
+    if leaves and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
         # Deterministic placement — jitter disabled for clean visual debugging.
         jit = 0.0
         pj  = 0.0
@@ -1097,215 +1354,89 @@ def _build_foliage_cluster_mesh(
             if len(solid.vertices) > 0:
                 leaf_parts.append(solid)
 
-        # ── Z-slice leaf placement ─────────────────────────────────────────────
-        # Slice the smooth cluster mesh (``shaped``) horizontally from its
-        # bottom Z to its top Z.  At each slice level the cross-section polygon
-        # is sampled evenly around its perimeter; each sample becomes one leaf.
-        #
-        # Leaves hang downward from their attachment point, so a row placed at
-        # height z covers the surface below it.  Row step =
-        # leaf_length × (1 − v_overlap), column step =
-        # leaf_width × (1 − h_overlap).  No jitter — deterministic placement
-        # so each row and column position is immediately debuggable.
+        # ── Meridian-arc leaf placement ────────────────────────────────────────
+        # Build N meridian curves from the smooth (pre-noise) cluster mesh, then
+        # place rows at equal surface-arc intervals from bottom to top.  Row
+        # positions track the actual surface arc distance rather than a fixed dZ
+        # step, giving uniform coverage all the way to the world-Z apex — no apex
+        # cap special case needed.
         h_overlap = float(np.clip(leaf_h_overlap, 0.0, 0.95))
         v_overlap = float(np.clip(leaf_v_overlap, 0.0, 0.95))
-        row_step  = max(float(leaf_length_mm) * (1.0 - v_overlap), 1e-3)
-        col_step  = max(float(leaf_width_mm)  * (1.0 - h_overlap), 1e-3)
+        col_step  = max(float(leaf_width_mm) * (1.0 - h_overlap), 1e-3)
 
-        z_bottom = float(shaped.vertices[:, 2].min())
-        z_top    = float(shaped.vertices[:, 2].max())
+        z_top_v = float(shaped.vertices[:, 2].max())
 
-        # Smooth mesh centroid — used as the origin for 3D outward normals.
-        # Direction from centroid to any surface point gives the correct
-        # outward normal on the dome top (points upward) and on the cone
-        # sides (points outward horizontally), unlike a flat XY direction
-        # which is wrong on the dome and causes blade-on-edge artefacts.
-        mesh_center_3d = shaped.vertices.mean(axis=0)
+        # XY centroid of the cluster — azimuthal origin for meridian sampling.
+        cx_m = float(shaped.vertices[:, 0].mean())
+        cy_m = float(shaped.vertices[:, 1].mean())
 
-        row_idx = 0
-        z_row   = z_bottom
-        while z_row <= z_top + 1e-6:
+        meridians = _build_meridians(
+            shaped,
+            n_meridians=int(leaf_arc_meridians),
+            z_samples=int(leaf_arc_z_samples),
+        )
+        row_z_positions = _compute_row_z_positions(
+            meridians, float(leaf_length_mm), v_overlap, z_top_v,
+        )
+
+        for row_idx, z_row in enumerate(row_z_positions):
             section = shaped.section(
                 plane_origin=np.array([0.0, 0.0, z_row]),
                 plane_normal=np.array([0.0, 0.0, 1.0]),
             )
-            if section is not None:
-                try:
-                    path2d, xform = section.to_planar()
-                    for poly in path2d.polygons_full:
-                        perim = float(poly.length)
-                        if perim < 1e-3:
+            if section is None:
+                continue
+            try:
+                path2d, xform = section.to_planar()
+                for poly in path2d.polygons_full:
+                    perim = float(poly.length)
+                    if perim < 1e-3:
+                        continue
+                    c2d = poly.centroid
+                    c4d = xform @ np.array([float(c2d.x), float(c2d.y), 0.0, 1.0])
+                    centroid_3d = np.array(
+                        [float(c4d[0]), float(c4d[1]), float(c4d[2])]
+                    )
+                    n_col = max(1, int(np.ceil(perim / col_step)))
+                    for ci in range(n_col):
+                        t    = float(ci) / float(n_col)
+                        pt2  = poly.exterior.interpolate(t, normalized=True)
+                        p4d  = xform @ np.array(
+                            [float(pt2.x), float(pt2.y), 0.0, 1.0]
+                        )
+                        pt3d = np.array(
+                            [float(p4d[0]), float(p4d[1]), float(p4d[2])]
+                        )
+                        # Azimuthal angle from the cluster XY centroid.
+                        phi_leaf = float(np.arctan2(
+                            pt3d[1] - cy_m, pt3d[0] - cx_m,
+                        ))
+                        # Per-leaf surface normal from meridian interpolation.
+                        up_hint = _interpolate_meridian_normal(
+                            meridians, phi_leaf, z_row,
+                        )
+                        # Skip downward-facing surfaces.
+                        if float(up_hint[2]) < -0.1:
                             continue
-                        # Cross-section centroid in 3D — used below as the
-                        # local radius origin so the contact angle is correct
-                        # for the actual cone/dome geometry, not a fixed sphere.
-                        c2d         = poly.centroid
-                        c4d         = xform @ np.array(
-                            [float(c2d.x), float(c2d.y), 0.0, 1.0]
+                        local_r = float(np.linalg.norm(pt3d - centroid_3d))
+                        _emit_leaf(
+                            pt3d, up_hint, (row_idx, ci),
+                            cluster_radius_mm=max(local_r, 1e-3),
                         )
-                        centroid_3d = np.array(
-                            [float(c4d[0]), float(c4d[1]), float(c4d[2])]
-                        )
-                        n_col = max(1, int(np.ceil(perim / col_step)))
-                        for ci in range(n_col):
-                            t    = float(ci) / float(n_col)
-                            pt2  = poly.exterior.interpolate(t, normalized=True)
-                            # Transform 2D sample point to 3D world coords.
-                            p4d  = xform @ np.array(
-                                [float(pt2.x), float(pt2.y), 0.0, 1.0]
-                            )
-                            pt3d = np.array([float(p4d[0]), float(p4d[1]), float(p4d[2])])
-                            # 3D outward normal: mesh centroid → surface point.
-                            # Correct on the dome top (points upward) and on
-                            # the cone sides (points outward).
-                            raw_out = pt3d - mesh_center_3d
-                            raw_len = float(np.linalg.norm(raw_out))
-                            if raw_len < 1e-6:
-                                continue
-                            outward = raw_out / raw_len
-                            # Skip the underside of the cluster: when the
-                            # outward direction points downward the contact-
-                            # angle formula flips and the leaf tangent ends up
-                            # pointing upward (into the canopy).  The cluster
-                            # underside is hidden by the branch anyway.
-                            if float(outward[2]) < -0.1:
-                                continue
-                            # Local radius: actual distance from section
-                            # centroid to this perimeter point.  Correct for
-                            # the cone body (r_wood…r_tip) and dome sides.
-                            # Near the world-Z apex local_r → 0 and the
-                            # contact-angle guard rejects the leaf; the
-                            # explicit world-Z apex cap below fills that gap.
-                            local_r = float(np.linalg.norm(pt3d - centroid_3d))
-                            _emit_leaf(
-                                pt3d, outward, (row_idx, ci),
-                                cluster_radius_mm=max(local_r, 1e-3),
-                            )
-                except Exception:
-                    pass
-
-            z_row  += row_step
-            row_idx += 1
-
-        # ── World-Z apex cap: covers the highest point of the cluster in world space ──
-        # Z-slices can't place leaves near the world-Z apex: the horizontal
-        # cross-section becomes a tiny circle (local_r → 0), so the contact-
-        # angle formula gives π/2 and the leaf is rejected.  We fill this gap
-        # explicitly with leaf_cap_count leaves fanning out from the apex vertex.
-        #
-        # We target the world-Z apex (argmax z), NOT the branch-direction apex
-        # (argmax dot(tip_t)).  For tilted branches the branch tip is well into
-        # the body of the cluster where Z-slices work fine; only the gravity-top
-        # has the tiny-cross-section problem.  For nearly-vertical branches the
-        # two apices coincide, so this handles both cases correctly.
-        if leaf_cap_count > 0 and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
-            apex_v_idx  = int(np.argmax(shaped.vertices[:, 2]))
-            apex_smooth = shaped.vertices[apex_v_idx].copy()
-            # Outward normal at the world-Z apex: centroid → apex for accuracy.
-            apex_up     = _safe_norm(apex_smooth - mesh_center_3d)
-            if float(np.linalg.norm(apex_up)) < 1e-6:
-                apex_up = np.array([0.0, 0.0, 1.0])  # world-up fallback
-            e1, e2 = _two_perp(apex_up)
-
-            # Contact angle for the full foliage radius (valid at the dome apex
-            # where the local sphere radius is r_tip).  Same cache as body leaves.
-            _apex_ca_key = (
-                round(r_tip, 4), round(float(leaf_length_mm), 4),
-                round(float(leaf_width_mm), 4),
-                round(float(leaf_curl_deg), 4), round(float(leaf_lift_mm), 4),
-            )
-            if _apex_ca_key not in _ca_cache:
-                _ca_cache[_apex_ca_key] = _contact_angle_for_sphere(
-                    r_tip, **_ca_leaf_kwargs,
-                )
-            apex_ca = _ca_cache[_apex_ca_key]
-            # If somehow invalid, fall through to 0 (no tilt) rather than skip.
-            if apex_ca >= np.pi / 2:
-                apex_ca = 0.0
-            c_apex = float(np.cos(apex_ca))
-            s_apex = float(np.sin(apex_ca))
-
-            # Gap: offset each leaf's base from the apex by half a leaf-width,
-            # so leaves don't all start at a common point.
-            # We find the SHAPED MESH VERTEX most aligned with the desired
-            # outward direction (gap_angle away from the apex toward T0_raw).
-            # Using the actual mesh vertex (not an analytic sphere point) is
-            # critical: the dome is offset by dome_shift * pu_tip, so a simple
-            # tip_p + r_tip * base_dir lies INSIDE the shaped mesh, and then
-            # the noise displacement would push the base further inside,
-            # embedding the leaf completely under the cluster surface.
-            gap_mm    = max(float(leaf_width_mm) * 0.5, 0.5)
-            gap_angle = float(np.arcsin(np.clip(gap_mm / max(r_tip, 1e-6), 0.0, 0.95)))
-            shaped_verts = shaped.vertices          # (M, 3) — smooth mesh
-
-            for ci in range(leaf_cap_count):
-                phi    = 2.0 * np.pi * ci / float(leaf_cap_count)
-                T0_raw = _safe_norm(np.cos(phi) * e1 + np.sin(phi) * e2)
-
-                # Desired outward direction: gap_angle from apex along T0_raw.
-                base_dir = _safe_norm(
-                    np.cos(gap_angle) * apex_up + np.sin(gap_angle) * T0_raw
-                )
-
-                # Nearest shaped mesh vertex in that direction — always on the
-                # smooth surface (outside the noised cluster mesh).
-                base_smooth_ci = shaped_verts[int(np.argmax(shaped_verts @ base_dir))]
-                up_hint_ci     = _safe_norm(base_smooth_ci - mesh_center_3d)
-
-                # Sink to the noised cluster surface (identical to _emit_leaf).
-                disp_ci = float(
-                    _foliage_gaussian_noise(base_smooth_ci[None, :], edge_id, bark_seed)[0]
-                    + _foliage_coarse_noise(base_smooth_ci[None, :], edge_id, bark_seed)[0]
-                )
-                base_pos = base_smooth_ci + up_hint_ci * (disp_ci - noise_peak)
-
-                # Project T0_raw onto the tangent plane at up_hint_ci so the
-                # growth direction is tangent to the sphere at the base position.
-                T0_proj = T0_raw - float(np.dot(T0_raw, up_hint_ci)) * up_hint_ci
-                T0_len  = float(np.linalg.norm(T0_proj))
-                if T0_len < 1e-6:
-                    continue
-                T0_leaf = T0_proj / T0_len
-
-                # Apply the contact angle using the per-leaf up_hint so each
-                # leaf drapes against the dome at its own attachment position.
-                tangent   = _safe_norm(T0_leaf * c_apex - up_hint_ci * s_apex)
-                up_placed = _safe_norm(up_hint_ci * c_apex + T0_leaf * s_apex)
-
-                lseed = _hash01_int(bark_seed, "apex-leaf", edge_id, ci)
-                try:
-                    leaf_surf = build_leaf_surface(
-                        base_pos=base_pos, tangent=tangent, up_hint=up_placed,
-                        length_mm=float(leaf_length_mm),
-                        width_mm=float(leaf_width_mm),
-                        thickness_mm=float(leaf_thickness_mm),
-                        fold_angle_deg=float(leaf_fold_angle_deg),
-                        inner_curve=float(leaf_inner_curve),
-                        outer_curve=float(leaf_outer_curve),
-                        curl_deg=float(leaf_curl_deg),
-                        lift_mm=0.0,    # contact angle drapes leaf against dome;
-                        seed=lseed,     # no extra lift — it pushes the tip upward
-                    )
-                    solid, _ = solidify_leaf(
-                        leaf_surf, up_placed, parent_mesh=cluster_mesh
-                    )
-                except (RuntimeError, ValueError):
-                    continue
-                if len(solid.vertices) > 0:
-                    leaf_parts.append(solid)
+            except Exception:
+                pass
 
     # ── Leaf-count diagnostic ─────────────────────────────────────────────────
     # Warn if a cluster that was supposed to emit leaves ends up with very few.
     # A count < 3 on a non-trivial cluster is a signal of a coverage regression
     # (bare-spot risk).  Use this to catch any future changes that thin the leaf
     # passes too aggressively.
-    if leaves and leaf_base_count > 0 and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
+    if leaves and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
         if len(leaf_parts) < 3:
             warnings.warn(
                 f"Foliage cluster edge_id={edge_id} generated only "
                 f"{len(leaf_parts)} leaf(ves) — possible bare-spot regression. "
-                f"(r_tip={r_tip:.2f} mm, clump_length={clump_length_mm:.1f} mm, "
-                f"leaf_cap_count={leaf_cap_count})",
+                f"(r_tip={r_tip:.2f} mm, clump_length={clump_length_mm:.1f} mm)",
                 RuntimeWarning,
                 stacklevel=2,
             )

@@ -82,6 +82,8 @@ class Tree:
         leaf_cap_count: int = 12,
         leaf_angle_jitter_deg: float = 24.0,
         leaf_pos_jitter: float = 0.165,
+        leaf_arc_meridians: int = 6,
+        leaf_arc_z_samples: int = 64,
         bark: BarkConfig | None = None,
         stamp_falloff_mm: float = 5.0,
     ) -> None:
@@ -133,6 +135,8 @@ class Tree:
         self.leaf_cap_count      = int(leaf_cap_count)
         self.leaf_angle_jitter_deg = float(leaf_angle_jitter_deg)
         self.leaf_pos_jitter       = float(leaf_pos_jitter)
+        self.leaf_arc_meridians    = int(leaf_arc_meridians)
+        self.leaf_arc_z_samples    = int(leaf_arc_z_samples)
         self.bark = BarkConfig() if bark is None else bark
         self.stamp_falloff_mm = float(stamp_falloff_mm)
 
@@ -234,6 +238,8 @@ class Tree:
                 leaf_cap_count=self.leaf_cap_count,
                 leaf_angle_jitter_deg=self.leaf_angle_jitter_deg,
                 leaf_pos_jitter=self.leaf_pos_jitter,
+                leaf_arc_meridians=self.leaf_arc_meridians,
+                leaf_arc_z_samples=self.leaf_arc_z_samples,
                 debug_leaf_color=self.debug_leaf_color,
             )
             if (
