@@ -1,19 +1,52 @@
 # Leaf Placement — Specification
-*Current as of 2026-06-24.  See `docs/meta/history/2026-06-24-leaf-rendering-deep-history.md`
-for the full history of what was tried and abandoned before this approach.*
+*Updated 2026-06-25.  Prior algorithm (Z-slice with uniform dZ) is documented below as
+"Current Algorithm (Deprecated)".  The new design is "Meridian-Arc Algorithm (Proposed)".*
+
+*Full history: `docs/meta/history/2026-06-24-leaf-rendering-deep-history.md`,
+`docs/meta/history/2026-06-24-foliage-cluster-baldness.md`,
+`docs/meta/history/2026-06-25-meridian-arc-placement-design-review.md`.*
 
 ---
 
 ## What This Covers
 
-How individual leaves are placed on foliage clusters in the tree generator.  Foliage
-clusters are the bumpy green blobs at the end of each terminal branch.  Leaves are
-separate 3D geometry (watertight solids) that sit on the cluster surface.
+How individual leaves are placed on foliage clusters in the tree generator.
+Foliage clusters are the bumpy green blobs at the tip of each terminal branch.
+Leaves are separate 3D geometry (watertight solids) sitting on the cluster surface.
 
 Implementation files:
 - `src/dharmatiles/trees/leaf.py` — leaf geometry primitives
 - `src/dharmatiles/trees/mesh.py` — placement algorithm (`_build_foliage_cluster_mesh`,
   `_emit_leaf`, `_contact_angle_for_sphere`)
+
+---
+
+## Foliage Cluster Shape
+
+The cluster is a deformed icosphere built from three sections:
+
+1. **Back hemisphere** (radius `r_wood`, behind `start_pos`) — round cap hiding the
+   entry stub where the branch tube enters the cluster.
+2. **Cone body** (`r_wood` → `r_foliage`, swept along the Bézier spine `start_pos` →
+   `tip_pos`) — tapered tube following the branch direction.  Each cross-section ring
+   is offset perpendicular-upward by a smoothly-varying fraction of its radius, so the
+   branch runs along the cluster bottom without protruding through the skin.
+3. **Forward dome** (radius `r_foliage`, ahead of `tip_pos`) — rounded nose, offset
+   upward so the branch bottom aligns with the dome equator.
+
+Noise is applied after geometry: fine Gaussian (σ=0.05 mm) for grain, coarse smooth
+(4 mm cell, ±1 mm) for silhouette variation.  Both layers are shifted inward (subtract
+peak) so the smooth envelope is the outer bound and the branch always stays buried.
+
+The cluster is **NOT axially symmetric in world space**:
+- The cone body follows a curved Bézier spine, not a straight axis.
+- The perpendicular-upward offset is different on each side (depends on the dot product
+  of the ring normal with the world-up direction).
+- For tilted branches the world-Z cross-sections are ellipses, not circles; the longer
+  axis of the ellipse lies in the plane containing the branch and world-up.
+
+This asymmetry is the fundamental reason a single global "outward direction" or a
+single per-Z-level surface slope is insufficient for accurate leaf placement.
 
 ---
 
@@ -24,19 +57,19 @@ A leaf is an ovate, keeled blade:
 - **Outline**: teardrop, peak width at ≈ 1/3 from base, pointed tip, rounded base.
 - **Cross-section**: quartic Bézier dome rising from the midrib crease.
 - **Crease**: narrow tanh V-fold at the midrib.
-- **Walls**: `solidify_leaf()` adds walls from the perimeter down to the cluster surface,
-  plus a root cap.  The result is a watertight closed solid.
+- **Walls**: `solidify_leaf()` adds walls from the perimeter down to the cluster
+  surface via raycast, plus a root cap.  The result is a watertight closed solid.
 
 The keel (a V-ridge on the underside) exists in `build_leaf_mesh()` but is **not used**
-by the foliage placement path.  The cluster placement path uses `build_leaf_surface()` +
-`solidify_leaf()` only (no keel).
+by the foliage placement path.  The foliage path uses `build_leaf_surface()` +
+`solidify_leaf()` only.
 
 ### Leaf parameters (all on `Tree` layer)
 
 | Parameter | Default | Effect |
 |---|---|---|
-| `leaf_length_mm` | 4.5 | Leaf length from base to tip |
-| `leaf_width_mm` | 3.0 | Peak leaf width (at ≈ 1/3 from base) |
+| `leaf_length_mm` | 4.5 | Leaf length, base to tip |
+| `leaf_width_mm` | 3.0 | Peak width at ≈ 1/3 from base |
 | `leaf_thickness_mm` | 0.24 | Dome height at peak |
 | `leaf_fold_angle_deg` | 6.0 | Midrib crease V-angle |
 | `leaf_inner_curve` | 1.5 | Crease-side Bézier shoulder |
@@ -45,10 +78,12 @@ by the foliage placement path.  The cluster placement path uses `build_leaf_surf
 | `leaf_lift_mm` | 3.0 | Additional tip lift above contact-angle position |
 | `leaf_h_overlap` | 0.2 | Fraction of leaf width that overlaps adjacent columns |
 | `leaf_v_overlap` | 0.5 | Fraction of leaf length that overlaps adjacent rows |
-| `leaf_base_count` | 5 | Not used in current Z-slice path (reserved) |
-| `leaf_cap_count` | 12 | Number of leaves in the world-Z apex cap |
+| `leaf_arc_meridians` | 6 | **New.** Number of meridian curves for arc-length computation |
+| `leaf_arc_z_samples` | 64 | **New.** Number of fine Z levels for meridian sampling |
 | `leaf_angle_jitter_deg` | 24.0 | Yaw jitter range (currently disabled: `jit=0`) |
 | `leaf_pos_jitter` | 0.165 | Position jitter fraction (currently disabled: `pj=0`) |
+| `leaf_cap_count` | 12 | **Deprecated by meridian-arc algorithm.** Apex cap leaves |
+| `leaf_base_count` | 5 | Not used in current paths (reserved) |
 
 ---
 
@@ -56,19 +91,19 @@ by the foliage placement path.  The cluster placement path uses `build_leaf_surf
 
 ### What It Is
 
-The contact angle is the rotation about the lateral axis T (perpendicular to both
-the leaf growth direction and the cluster outward normal) that presses the leaf tip
-just against the cluster surface.
+The contact angle is the rotation about the lateral axis T (perpendicular to both the
+leaf growth direction and the cluster outward normal) that presses the leaf tip just
+against the cluster surface.
 
-Without the contact angle, the leaf sits flat on the surface and its walls are
-nearly coplanar with the cluster surface.  The wall-embedding raycast in `solidify_leaf`
-needs the perimeter vertices to be close to the surface and above it; without contact-
-angle tilt, many raycasts miss the mesh and produce 0.75 mm stub walls.
+Without the contact angle, the leaf lies flat on the surface with its arch curving the
+tip away from the surface.  The `solidify_leaf` wall-embedding raycast needs perimeter
+vertices to be close to the surface and just above it; without contact-angle tilt, many
+raycasts miss the mesh and produce stub walls.
 
 ### Frame After Contact-Angle Rotation
 
 ```
-up_hint  = outward radial at attachment point (from cluster centroid → point)
+up_hint  = outward surface normal at the attachment point (see meridian section below)
 T0       = gravity-down projected onto the tangent plane (with yaw jitter)
 ca       = contact angle (radians)
 
@@ -76,185 +111,356 @@ tangent   = T0 * cos(ca) − up_hint * sin(ca)
 up_placed = up_hint * cos(ca) + T0 * sin(ca)
 ```
 
-`build_leaf_surface(base_pos, tangent, up_placed, ...)` then builds the leaf in this
-tilted frame.
+`build_leaf_surface(base_pos, tangent, up_placed, ...)` builds the leaf in this frame.
 
 ### Analytical Computation (`_contact_angle_for_sphere`)
 
-The foliage cluster is locally approximated as a sphere of radius `local_r` at each
-attachment point.  The contact angle satisfies:
+The attachment surface is locally approximated as a sphere of radius `local_r`
+(the cross-section radius at the leaf's Z level and azimuthal position — derived
+from the meridian cross-section, not a global fixed value).
+
+The contact angle satisfies the tip-touching constraint:
 
 ```
-tip(θ) = base + (L·cosθ + N·sinθ)·T0 + (N·cosθ − L·sinθ)·up
-|tip(θ) − local_center|² = local_r²
+|tip(ca) − cluster_center|² = local_r²
 ```
 
-After expanding (T_comp = 0 by bilateral symmetry):
+After expanding (T_comp ≈ 0 by bilateral leaf symmetry):
 
 ```
-N_comp·cosθ − L_comp·sinθ = −D² / (2·local_r)
+contact_angle = arccos(−D / (2·local_r)) − arctan(L_comp / N_comp)
 ```
 
-where D = |v_tip − base| (tip displacement at θ=0, from `compute_leaf_geometry`).
-This is `A·cosθ + B·sinθ = C`, solved analytically with `atan2`.
+where D = |v_tip − base| (tip displacement at ca=0, from `compute_leaf_geometry`),
+and L_comp / N_comp are its projections onto the leaf longitudinal (L) and normal (N)
+axes.
 
-The computation is cached per `(cluster_radius_mm, leaf_geometry_params)`.  Most
-leaves on one cluster share the same `local_r`, so the cache gives O(1) amortized
-cost (~10–20 distinct radii per cluster).
+The computation is cached per `(local_r, leaf_geometry_params)`.
 
 ### Guard
 
-If `contact_angle >= π/2`, the leaf tangent points into the cluster surface rather
-than outward.  This happens when the cluster ring radius is too small for the leaf
-geometry (`D > 2R`).  Such leaves are skipped entirely.
+If `contact_angle >= π/2`, the leaf tangent points into the cluster surface.
+This happens when the cluster cross-section radius is smaller than the leaf geometry
+allows (`D > 2·local_r`).  Such leaves are skipped.
+
+### What the Meridian Changes
+
+Previously, `up_hint` was computed as `normalize(pt3d − mesh_center_3d)` — the
+direction from the 3D centroid of the shaped mesh to the attachment point.
+
+This approximation is:
+- Correct on a true sphere (centroid IS the sphere center).
+- Wrong on the **cone body**: the centroid-to-point direction is not perpendicular to
+  the cone surface.  It is biased toward the centroid, which lies along the spine, not
+  along the cone's own axis.
+- Roughly correct on the **dome**, where the dome center is approximately at
+  `tip_pos + dome_shift * pu_tip`, which differs from `mesh_center_3d`.
+
+The meridian algorithm computes `up_hint` from the actual surface tangent at each
+attachment point (see below), giving geometrically exact normals on both the cone body
+and the dome.
 
 ---
 
-## Z-Slice Placement Algorithm
+## Meridian-Arc Algorithm (Proposed)
 
-The main placement algorithm slices the smooth (pre-noise) cluster mesh with
-horizontal planes at regular vertical steps and places one leaf at each perimeter
-sample.
+### Why Uniform dZ Fails
 
-### Overview
+The cluster surface is not a vertical cone.  The three sections — back hemisphere,
+cone body, forward dome — have very different surface-to-vertical-extent ratios:
+
+| Surface | dZ per unit arc | Coverage per dZ step |
+|---|---|---|
+| Cone body (30° branch) | moderate | moderate — roughly as expected |
+| Dome shoulder | small | large — rows compressed together |
+| Dome top (near apex) | very small | very large — wide bare zone |
+
+With a fixed `row_step = leaf_length × (1 − v_overlap)` in Z, each row step covers
+increasingly more surface area as the dome curves over from vertical to horizontal.
+The top zone gets far fewer rows than it needs for the requested overlap, and the
+last-placed row before the apex can be 5–8 mm of surface arc from the apex, well
+beyond one row_step in actual surface terms.
+
+### Meridian Curves
+
+A **meridian** is the intersection of the smooth cluster mesh with a vertical half-plane
+at a given azimuthal angle φ around the cluster's XY centroid.
+
+Sample `N` meridians at azimuthal angles φ₀, φ₁, …, φ_{N-1} evenly spaced in [0, 2π).
+For each meridian φᵢ:
+
+1. At each of `leaf_arc_z_samples` fine Z levels from `z_bottom` to `z_top`, take a
+   horizontal cross-section of the shaped mesh.
+2. Find the perimeter point at azimuthal angle φᵢ (closest to the half-plane at φᵢ).
+3. String these points into a polyline Mᵢ = [(x₀, y₀, z₀), (x₁, y₁, z₁), …].
+4. Compute cumulative arc length along Mᵢ: s_k = Σ |Mᵢ[k] − Mᵢ[k-1]|.
+5. At each point, compute the local surface tangent (T_r, T_z) in the r-z plane from
+   adjacent points:
+   ```
+   r_k = dist2d(M[k], cluster_centroid_xy)
+   (T_r, T_z) = normalize((r_{k+1} − r_{k-1}, z_{k+1} − z_{k-1}))
+   ```
+6. The outward surface normal in the r-z plane is:
+   ```
+   N_r = T_z         # rotate T by −90°
+   N_z = −T_r
+   ```
+7. Extend to 3D along the azimuthal direction:
+   ```
+   outward_3d = N_r * (cos(φᵢ), sin(φᵢ), 0) + N_z * (0, 0, 1)
+   ```
+
+This gives each meridian a table of (z, arc_length, outward_normal_3d) values.
+
+#### Why N=6?
+
+Six meridians give 60° angular resolution before interpolation.  For the gently-curved
+cluster surface, the angular variation of the normal between adjacent meridians is small
+(< 15° on the cone body, < 30° on the dome shoulder) so linear interpolation of normals
+is accurate.  At N=4 the angular gap is 90° and interpolation degrades on asymmetric
+clusters.  At N=12 the benefit is marginal and the cost doubles.  N is a public
+parameter (`leaf_arc_meridians`) so it can be tuned per-tree.
+
+### Row Z Positions
+
+**Average arc-to-Z mapping:**
+
+For each target surface arc value `s`, find the Z level `z` by averaging over all
+meridians:
 
 ```python
-row_step = leaf_length_mm * (1.0 - v_overlap)   # typically 4.5 × 0.75 = 3.375 mm
-col_step = leaf_width_mm  * (1.0 - h_overlap)   # typically 3.0 × 0.80 = 2.4 mm
+def avg_z_for_arc(s_target, meridians):
+    z_vals = []
+    for m in meridians:
+        z_vals.append(np.interp(s_target, m.arc_vals, m.z_vals))
+    return np.mean(z_vals)
+```
 
+**Pinned top and bottom rows:**
+
+- **Bottom anchor** `z_bot_anchor`: the Z level corresponding to arc distance
+  `leaf_length_mm` from the cluster's world-Z bottom.  A leaf attached here hangs
+  downward and covers the lowest exposed surface.
+  ```python
+  s_bottom_anchor = leaf_length_mm     # leaf hangs down and covers the base
+  z_bot_anchor = avg_z_for_arc(s_bottom_anchor, meridians)
+  ```
+
+- **Top anchor** `z_top_anchor`: placed at (or just below) the world-Z apex.  Use
+  the actual `z_top = shaped.vertices[:, 2].max()`, then find the Z level slightly
+  below it where the cross-section still provides a meaningful polygon:
+  ```python
+  z_top_anchor = z_top - 0.25 * leaf_length_mm   # leaves cover the apex from here
+  ```
+
+**Integer optimization:**
+
+The surface arc between the two anchors, measured on the averaged meridian:
+
+```python
+s_bot = avg_arc_for_z(z_bot_anchor, meridians)   # inverse of avg_z_for_arc
+s_top = avg_arc_for_z(z_top_anchor, meridians)
+inner_arc = s_top - s_bot
+row_step_target = leaf_length_mm * (1.0 - leaf_v_overlap)
+N_gaps = max(1, round(inner_arc / row_step_target))
+actual_row_step_arc = inner_arc / N_gaps
+```
+
+Row Z positions:
+
+```python
+row_arc_positions = [s_bot + i * actual_row_step_arc for i in range(N_gaps + 1)]
+row_z_positions   = [avg_z_for_arc(s, meridians) for s in row_arc_positions]
+# row_z_positions[0]  = z_bot_anchor
+# row_z_positions[-1] = z_top_anchor
+```
+
+The resulting overlap will be `1 − actual_row_step_arc / leaf_length_mm`, which is the
+best integer-fit approximation to the requested `leaf_v_overlap`.  For typical parameters
+(v_overlap=0.5, leaf_length=4.5 mm) the error is < 0.05 on any cluster with 3+ rows.
+
+**No apex cap needed.**  The top anchor row places leaves just below the world-Z apex;
+the leaf geometry (arch + lift) covers the apex from that position.  The `leaf_cap_count`
+parameter is deprecated.
+
+### Per-Leaf Surface Normal (Azimuthal Interpolation)
+
+For each attachment point `pt3d` on the cross-section perimeter:
+
+1. Compute the azimuthal angle of the attachment point relative to the cluster XY centroid:
+   ```python
+   phi_leaf = atan2(pt3d[1] - centroid_xy[1], pt3d[0] - centroid_xy[0])
+   ```
+
+2. Find the two bracketing meridians: φᵢ ≤ φ_leaf < φᵢ₊₁ (wrapping at 2π).
+
+3. At the current row's Z level, interpolate between the two meridian normals:
+   ```python
+   n_i   = meridian_i.normal_at(z_row)
+   n_ip1 = meridian_ip1.normal_at(z_row)
+   w     = (phi_leaf - phi_i) / (phi_ip1 - phi_i)
+   up_hint = normalize(lerp(n_i, n_ip1, w))   # lerp + normalize ≈ slerp for small angles
+   ```
+
+4. Use `up_hint` for contact-angle computation and leaf placement.
+   ```python
+   local_r = dist(pt3d, section_centroid_3d)   # same as current
+   ca = _contact_angle_for_sphere(local_r, ...)
+   tangent   = normalize(T0 * cos(ca) - up_hint * sin(ca))
+   up_placed = normalize(up_hint * cos(ca) + T0 * sin(ca))
+   ```
+
+### Underside Filtering
+
+The current guard `if outward[2] < -0.1: continue` filters downward-facing leaves.
+With meridian normals, the equivalent check is:
+
+```python
+if up_hint[2] < -0.1:
+    continue   # skip downward-facing meridian normals
+```
+
+Additionally, the bottom anchor at arc = `leaf_length_mm` naturally sits above the
+back hemisphere on most clusters, so the underside is implicitly excluded by row
+placement rather than by an explicit filter.  The guard remains as a safety net.
+
+### Placement Loop (Full)
+
+```python
+meridians = _build_meridians(shaped, N=leaf_arc_meridians, Z_samples=leaf_arc_z_samples)
+row_z_positions = _compute_row_z_positions(meridians, leaf_length_mm, leaf_v_overlap,
+                                           z_top, z_bottom)
+
+for z_row in row_z_positions:
+    section = shaped.section(plane_origin=[0, 0, z_row], plane_normal=[0, 0, 1])
+    if section is None:
+        continue
+    path2d, xform = section.to_planar()
+    for poly in path2d.polygons_full:
+        n_col = ceil(poly.length / col_step)
+        centroid_3d = xform @ [*poly.centroid.coords[0], 0, 1]
+        for ci in range(n_col):
+            pt2 = poly.exterior.interpolate(ci / n_col, normalized=True)
+            pt3d = (xform @ [pt2.x, pt2.y, 0, 1])[:3]
+            phi_leaf = atan2(pt3d[1] - cx, pt3d[0] - cx)
+            up_hint  = _interpolate_meridian_normal(meridians, phi_leaf, z_row)
+            if up_hint[2] < -0.1:
+                continue
+            local_r = dist(pt3d, centroid_3d[:3])
+            _emit_leaf(pt3d, up_hint, key=(row_idx, ci), cluster_radius_mm=local_r)
+```
+
+---
+
+## Current Algorithm (Deprecated)
+
+*Retained here for reference.  The meridian-arc algorithm replaces this.*
+
+### Z-Slice with Uniform dZ
+
+```python
+row_step = leaf_length_mm * (1.0 - v_overlap)
 z_row = z_bottom
 while z_row <= z_top:
-    section = shaped_mesh.section(plane_origin=[0,0,z_row], plane_normal=[0,0,1])
-    for polygon in section.polygons_full:
-        n_col = ceil(polygon.perimeter / col_step)
-        for ci in range(n_col):
-            pt3d   = polygon_point_at(ci / n_col)   # on the shaped mesh surface
-            outward = normalize(pt3d - mesh_centroid_3d)
-            local_r = dist(pt3d, slice_centroid)
-            _emit_leaf(pt3d, outward, key=(row, ci), cluster_radius_mm=local_r)
+    section = shaped.section(...)
+    for poly in polygons:
+        outward = normalize(pt3d - mesh_center_3d)   # centroid-to-point approximation
+        local_r = dist(pt3d, slice_centroid)
+        _emit_leaf(pt3d, outward, ...)
     z_row += row_step
 ```
 
-### Outward Direction
+**Failure mode:** fixed dZ ≠ fixed surface arc.  Near the world-Z apex, the dome
+surface is nearly horizontal, so each dZ step covers much more surface area than a
+step on the cone body.  The last few rows before the apex are spread far apart in
+surface terms, and the zone within `~2 × row_step` of the apex gets zero coverage
+from Z-slices.
 
-`outward = normalize(pt3d − mesh_center_3d)` — the 3D centroid of the shaped mesh
-to the surface point.  This is correct on:
-- The cone body: points outward horizontally.
-- The dome top: points upward.
-- The back hemisphere: points backward/downward (filtered — see underside guard below).
+### Apex Cap (Deprecated)
 
-### Local Radius
+The apex cap was a special-case patch to cover the world-Z apex zone that Z-slices
+could not reach.  It placed `leaf_cap_count` leaves fanning outward from the apex
+vertex with `lift_mm = 0` (critical: lift would spike leaves upward).
 
-`local_r = dist(pt3d, section_centroid_3d)` — the 2D radius of the cross-section
-polygon at this slice.  This is the actual cone/dome ring radius, not a fixed value.
-It feeds the contact-angle cache key.
+The cap was correct in spirit but brittle:
+- It used `argmax(dot(tip_t))` (branch-direction apex) before 2026-06-24, missing
+  the world-Z apex on tilted branches by 4–6 mm.
+- The `gap_mm` offset from the apex to avoid all leaves sharing one point was computed
+  analytically, not from the shaped mesh, and could place bases inside the noised mesh.
+- A `contact_angle >= π/2` fallback silently used `ca=0` instead of skipping.
 
-### Underside Guard
-
-```python
-if outward[2] < -0.1:
-    continue   # skip downward-facing surface
-```
-
-The cluster underside (back hemisphere hidden by the branch) has outward vectors
-pointing downward.  The contact-angle formula is invalid there — it pushes the leaf
-tangent upward instead of into the surface, producing vertical spike leaves.  The
-underside is also hidden by the branch and invisible.
-
-The threshold −0.1 allows a 10% downward tolerance, keeping near-equatorial
-side-facing placements while removing true underside positions.
-
-### Instrumentation
-
-`_emit_leaf` emits a `RuntimeWarning` when `tangent[2] > 0.707` (leaf tangent
-pointing more than 45° upward after contact-angle tilt).  This catches apex and
-underside regressions immediately.
+The meridian-arc algorithm eliminates the apex cap by pinning a proper row near the
+world-Z apex from the outset.
 
 ---
 
-## World-Z Apex Cap
+## Examples
 
-### Why It Is Needed
+### Example 1: Nearly Vertical Branch (tip_t ≈ [0, 0, 1])
 
-Near the world-Z apex of the cluster, the horizontal cross-section shrinks to a
-point.  `local_r → 0` causes `contact_angle → π/2` and the leaf is rejected by
-the contact-angle guard.  The gap between the last placed row and the apex is up
-to one `row_step` = 3.375 mm.
+The cluster is roughly symmetric around world-Z.  All six meridians have nearly
+identical arc-to-Z curves.  The averaged mapping is very close to any individual
+meridian.  Row Z positions are distributed as:
 
-### Why `argmax(z)`, not `argmax(dot(tip_t))`
+```
+z_top    = 48.3 mm   z_top_anchor = 47.2 mm  (top row pinned here)
+z_bottom = 30.1 mm   z_bot_anchor = 34.6 mm  (bottom row at arc = 4.5mm up)
 
-**The apex cap targets the world-Z apex vertex, not the branch-direction apex.**
-
-For tilted branches, the branch-direction apex (`argmax(dot(tip_t))`) and the
-world-Z apex (`argmax(z)`) are different vertices, separated by 4–6 mm in Z for
-typical canopy angles.  Z-slices work fine at the branch-direction apex (normal
-cross-section there); only the world-Z apex has the tiny-cross-section problem.
-
-Using `argmax(dot(tip_t))` was a prior bug that produced bald spots on tilted clusters.
-
-### Cap Algorithm
-
-```python
-apex_v_idx  = argmax(shaped.vertices[:, 2])          # world-Z apex
-apex_smooth = shaped.vertices[apex_v_idx]
-apex_up     = normalize(apex_smooth - mesh_center_3d)  # outward at apex
-e1, e2      = two_perp(apex_up)                        # tangent plane basis
-
-for ci in range(leaf_cap_count):
-    phi    = 2π * ci / leaf_cap_count
-    T0_raw = normalize(cos(phi) * e1 + sin(phi) * e2)
-
-    # Offset base from apex by half a leaf-width so leaves don't all share one point.
-    gap_angle = arcsin(clip(leaf_width_mm * 0.5 / r_tip, 0, 0.95))
-    base_dir  = normalize(cos(gap_angle) * apex_up + sin(gap_angle) * T0_raw)
-
-    # Use nearest shaped-mesh vertex in that direction (always outside the
-    # noised cluster surface — analytic sphere points may lie inside).
-    base_smooth = shaped.vertices[argmax(shaped.vertices @ base_dir)]
-    up_hint_ci  = normalize(base_smooth - mesh_center_3d)
-
-    # Sink to the noised cluster skin (identical to _emit_leaf).
-    disp   = gaussian_noise(base_smooth) + coarse_noise(base_smooth) - noise_peak
-    base_pos = base_smooth + up_hint_ci * disp
-
-    # Apply contact angle at r_tip (the dome radius at the apex).
-    ca     = _ca_cache[(r_tip, leaf_geometry...)]
-    tangent   = normalize(T0_leaf * cos(ca) − up_hint_ci * sin(ca))
-    up_placed = normalize(up_hint_ci * cos(ca) + T0_leaf * sin(ca))
-
-    # Build leaf with lift_mm=0: the contact angle already drapes it against
-    # the dome; lift would push the tip back upward into a spike.
-    build_leaf_surface(..., lift_mm=0)
-    solidify_leaf(..., parent_mesh=cluster_mesh)
+inner_arc ≈ 20 mm,  row_step_target ≈ 2.25 mm  →  N_gaps = 9
+row_z ≈ [34.6, 36.8, 39.0, 41.2, 43.4, 45.0, 46.3, 47.0, 47.2]
 ```
 
-**Critical:** apex-cap leaves use `lift_mm=0`.  The contact angle alone drapes
-the leaf against the dome.  Any `lift_mm > 0` would push the tip back upward,
-producing vertical spikes at the apex.
+The rows compress toward the top because the dome surface curves over — but they now
+correctly track surface arc distance rather than vertical distance.  Coverage is
+uniform from bottom to apex.
 
----
+Surface normals from the six meridians are nearly identical at each Z level (cluster
+is symmetric), so interpolation has no visible effect.  The result is similar to the
+current algorithm except for the apex zone.
 
-## Foliage Cluster Shape
+### Example 2: Moderate Tilt (tip_t ≈ [0.5, 0, 0.87], 30° from vertical)
 
-The cluster is not a sphere.  It is a deformed icosphere with three sections:
+The cluster leans 30°.  The world-Z range is similar, but the cluster is no longer
+symmetric:
 
-1. **Back hemisphere** (radius `r_wood`, behind `start_pos`): round cap hiding
-   the stub where the branch enters the cluster.
-2. **Cone body** (`r_wood` → `r_foliage` along the Bezier spine `start_pos` →
-   `tip_pos`): tapered tube following the branch direction.
-3. **Forward dome** (radius `r_foliage`, ahead of `tip_pos`): rounded nose.
+- The upper-front side (toward +X) has a steeper cone surface.  Its meridian has
+  more arc per unit Z than the back side.
+- The world-Z apex is NOT the branch tip; it is on the dome on the upper-front side,
+  approximately 4–5 mm in Z above the branch-direction apex.
 
-The cone body and dome are offset perpendicular-upward so the branch runs along
-the cluster bottom without protruding through the skin.
+**Row Z positions**: the averaged meridian has a slower arc-per-Z rise at the dome
+top than for the vertical case.  N_gaps may be one fewer (the dome extends less in Z
+and is covered by fewer rows).  The top anchor is correctly placed at the world-Z apex
+of the asymmetric dome, not at the branch tip.
 
-Noise is applied after geometry: fine Gaussian (0.05 mm cell) for grain, coarse
-smooth (4 mm cell) for silhouette variation.  Both are shifted inward (subtract
-max) so the smooth envelope is the outer bound.
+**Surface normals**: the front-side meridians have normals tilted more upward; the
+back-side normals tilt more backward.  A leaf placed on the front face gets `up_hint`
+tilted upward (correct — the front dome surface faces up-and-front).  A leaf on the
+back of the cone gets `up_hint` angled backward (correct — the cone back surface faces
+back-and-outward).  These differ by 20–30° from the centroid-to-point approximation.
 
-The Z-slice algorithm works on the **smooth, pre-noise** cluster mesh (`shaped`)
-to get stable cross-section polygons.  Each leaf base is then sunk to the noised
-surface by evaluating both noise layers at the base position and offsetting along
-`up_hint`.
+### Example 3: Steep Tilt (tip_t ≈ [0.85, 0, 0.53], 58° from vertical)
+
+The branch is nearly horizontal.  The cluster is elliptical in world-Z cross-section
+with an aspect ratio of roughly 1.6.  The world-Z range is much smaller than the
+branch-direction range.
+
+Critical differences from the vertical case:
+
+- The world-Z apex may be on the CONE BODY, not the forward dome.  The cone body
+  slopes upward steeply enough that its uppermost point exceeds the dome's world-Z
+  maximum.
+- The back hemisphere is partially above the cone body's equator.  The bottom anchor
+  (at arc = `leaf_length_mm`) may land in the back hemisphere zone; the underside
+  filter `up_hint[2] < -0.1` correctly excludes leaves that would face downward there.
+- The meridians on the upper side are much shorter in arc (steeper surface) than those
+  on the lower side (gentler slope toward underside).  The averaging reduces this to a
+  moderate arc length, and the actual row spacing is a compromise.
+
+For very steep clusters (>70° from vertical) the leaf coverage is intrinsically
+limited: only the upper 90–120° of arc is above the underside threshold, and the number
+of rows is small.  This is physically correct — a nearly-horizontal branch has a mostly
+downward-facing cluster that a viewer sees from the side, not the top.
 
 ---
 
@@ -267,53 +473,54 @@ jit = 0.0   # leaf_angle_jitter_deg
 pj  = 0.0   # leaf_pos_jitter
 ```
 
-These were disabled for visual debugging and never re-enabled.  The placement is
-fully deterministic.  To re-enable: set `jit = float(leaf_angle_jitter_deg)` and
-restore `pj = float(leaf_pos_jitter)` in `_build_foliage_cluster_mesh`.  Verify
-the RuntimeWarning for `tangent[2] > 0.707` does not fire on any cluster after
-re-enabling.
+Disabled for visual debugging, never re-enabled.  Re-enabling: restore
+`jit = float(leaf_angle_jitter_deg)` and `pj = float(leaf_pos_jitter)`.
+Verify the `tangent[2] > 0.707` RuntimeWarning does not fire after re-enabling.
 
-### 2. Lower-body coverage
+### 2. Leaf size not scaled to cluster size
 
-The `outward[2] < -0.1` filter removes all rows in the lower half of the cluster
-(below the equatorial band).  Typically 3–4 rows place leaves per cluster (the
-top ~12 mm of a 14 mm cluster).  The lower-mid body is bare.
+`leaf_length_mm` and `leaf_width_mm` are fixed per tree regardless of cluster size.
+On very small clusters (`r_tip < 2.5 mm`) `contact_angle → π/2` and all leaves are
+skipped, leaving a bare ball.  Consider scaling leaf geometry proportionally to
+`r_tip` so small clusters still get some coverage.
 
-This is currently intentional (the underside is hidden by the branch and the filter
-prevents spike leaves), but has not been explicitly evaluated for visible side-gaps
-in different parameter settings.
+### 3. Contact-angle formula assumes local sphere
 
-### 3. Leaf size fixed across cluster sizes
+The formula `contact_angle = arccos(−D / 2R) − arctan(L_comp / N_comp)` uses the
+cross-section radius as a local sphere radius.  This is accurate on the dome (locally
+spherical) and over-estimates the contact angle on the flat cone body (which has
+infinite curvature radius).  A future improvement: use the meridian's second-derivative
+`d²r/ds²` to compute the actual local surface curvature and feed it into the contact
+angle formula.
 
-`leaf_length_mm` and `leaf_width_mm` are fixed per tree, regardless of cluster size.
-On very small clusters (`r_tip < 2.5 mm`), `contact_angle → π/2` and leaves are
-skipped.  On large clusters, the fixed leaf size looks sparse.  Consider scaling
-leaf geometry proportionally to `r_tip`.
+### 4. Meridian sampling near the back-hemisphere/cone seam
 
-### 4. Apex-cap `contact_angle >= π/2` fallback
+The back hemisphere connects to the cone body at `start_pos`.  The surface normal
+changes direction sharply at this seam (hemisphere is curved; cone is flat).  A
+meridian polyline crossing this seam at a very acute angle may produce a spurious
+tangent spike.  Smoothing the tangent with a 3-point weighted average would suppress
+this.
 
-```python
-if apex_ca >= np.pi / 2:
-    apex_ca = 0.0   # silently falls back to flat placement
-```
+### 5. Diagnostic flag
 
-A flat apex leaf (`ca = 0`) with `lift_mm = 0` grows horizontally from the apex —
-not a spike, but not correct either.  Should skip the cap entirely when the formula
-is invalid rather than silently falling back.
+`DHARMATILES_DEBUG_LEAVES=1` should emit per-cluster row placement diagnostics
+per the protocol in `docs/meta/history/2026-06-24-systematic-algorithm-development.md`.
+This flag is not yet implemented for the meridian-arc algorithm.
 
 ---
 
 ## What Was Tried and Abandoned
 
 - **Embossed surface relief** — leaf shapes as vertex displacement on the icosphere.
-  Never implemented.  Would be faster and print-safe but looks like scales, not leaves.
+  Would be faster and print-safe but looks like scales.
 - **Branchlet/petiole stems** — tiny tubes growing from the cluster, leaf at the tip.
   24+ commits; abandoned because a stem that bends downward creates an FDM undercut.
-- **Arc-parameterized placement** — rows/columns indexed by arc position on the
-  cluster surface.  Replaced by the Z-slice algorithm because the outward direction
-  was wrong at the dome top, producing blade-on-edge artefacts, and the pole required
-  a special case that was brittle.
+- **Arc-parameterized placement (first attempt)** — rows/columns indexed by arc
+  position on the cluster surface.  Replaced by Z-slice because the outward direction
+  was wrong at the dome top, producing blade-on-edge artefacts, and the pole was
+  brittle.
 - **Binary-search contact angle** — `find_contact_angle_for_sphere` at 48 iterations
   per leaf.  Replaced by the analytical closed-form + cache.
-
-See `docs/meta/history/2026-06-24-leaf-rendering-deep-history.md` for full analysis.
+- **Z-slice with uniform dZ (current code)** — correct for cylinders, wrong for the
+  dome.  Produces bald zones near the world-Z apex.  Patched six times with an apex-cap
+  special case that never fully solved the problem.  Replaced by meridian-arc.
