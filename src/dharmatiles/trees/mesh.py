@@ -27,7 +27,7 @@ import trimesh
 
 from ..core.color import Material, debug_material, tag as _tag
 from .bark import BarkConfig
-from .leaf import compute_leaf_geometry, build_leaf_mesh, build_leaf_surface, solidify_leaf
+from .leaf import compute_leaf_geometry, build_leaf_surface, solidify_leaf
 from ._utils import _safe_norm, _hash01, _WUP_VEC
 
 # Fixed polygon count for every cross-section ring.
@@ -543,9 +543,7 @@ def _contact_angle_for_sphere(
 ) -> float:
     """Analytical contact angle (radians) for a leaf pressed against a sphere.
 
-    ``find_contact_angle_for_sphere`` runs a 48-iteration binary search over
-    every leaf vertex.  This replaces it with a closed-form tip-touching
-    formula derived from the constraint |tip(θ) − C|² = R²:
+    Closed-form tip-touching formula derived from the constraint |tip(θ) − C|² = R²:
 
         contact_angle = arccos(−D / 2R) − atan2(L_comp, N_comp)
 
@@ -553,18 +551,16 @@ def _contact_angle_for_sphere(
     ``compute_leaf_geometry`` with lift = 0), and L_comp / N_comp are its
     projections onto the leaf longitudinal (L) and normal (N) axes.
 
-    The tip is the outermost point on a convex leaf, so this equals the
-    binary-search result to within floating-point precision.  The derivation
-    holds because T_comp ≈ 0 by leaf bilateral symmetry (the tip lies in the
+    The tip is the outermost point on a convex leaf, so this gives the exact
+    contact angle.  T_comp ≈ 0 by leaf bilateral symmetry (the tip lies in the
     L–N plane), making D = √(L² + N²) exact.
 
     The result is invariant under rotation of T0 around up_hint (sphere
     symmetry), so it depends only on the leaf shape and sphere radius —
-    not on the circumferential placement angle θ or the direction of gravity.
-    Callers can safely cache by cluster_radius_mm.
+    not on the circumferential placement angle.  Cache by cluster_radius_mm.
 
-    lift_mm is the final per-leaf lift applied on top of the contact angle
-    (as in ``place_leaf_on_sphere``); the search itself is run at lift = 0.
+    lift_mm is the final per-leaf lift applied on top of the contact angle;
+    the formula is run at lift = 0 (contact angle is defined at zero lift).
     """
     # Canonical frame: sphere centred at origin, base at (0, 0, R).
     up = np.array([0.0, 0.0, 1.0])
@@ -980,8 +976,6 @@ def _build_foliage_cluster_mesh(
                 return
 
             # up_hint = smooth outward radial of the cluster at this point.
-            # We use this directly rather than calling leaf_placement_from_surface
-            # (which does a closest_point snap + interpolated normal query).
             # The smooth radial is a good approximation for leaf placement; the
             # noised mesh normals vary at the noise scale and are noisier still.
             up_hint = _safe_norm(radial)
@@ -1029,9 +1023,8 @@ def _build_foliage_cluster_mesh(
             # leaves may scale their footprint, so include effective geometry
             # in the cache key.
             # Look it up or compute analytically via _contact_angle_for_sphere.
-            # This replaces a 48-iteration binary search (find_contact_angle_for_sphere)
-            # with a closed-form computation cached per unique radius — ~10–20 calls
-            # instead of ~3400 binary searches per cluster.
+            # Closed-form computation cached per unique radius — ~10–20 calls
+            # per cluster (see docs/design/leaf-placement.md for derivation).
             rr_key = (
                 round(float(cluster_radius_mm), 4),
                 round(eff_length_mm, 4),
@@ -1180,9 +1173,9 @@ def _build_foliage_cluster_mesh(
                             # Local radius: actual distance from section
                             # centroid to this perimeter point.  Correct for
                             # the cone body (r_wood…r_tip) and dome sides.
-                            # Near the apex local_r → 0 and the contact-angle
-                            # guard rejects the leaf (contact_angle → π/2);
-                            # the explicit apex cap below fills that gap.
+                            # Near the world-Z apex local_r → 0 and the
+                            # contact-angle guard rejects the leaf; the
+                            # explicit world-Z apex cap below fills that gap.
                             local_r = float(np.linalg.norm(pt3d - centroid_3d))
                             _emit_leaf(
                                 pt3d, outward, (row_idx, ci),
@@ -1194,26 +1187,28 @@ def _build_foliage_cluster_mesh(
             z_row  += row_step
             row_idx += 1
 
-        # ── Apex cap: explicit leaves fanning from the dome top ──────────────
-        # Z-slices near the apex yield tiny cross-sections; the contact-angle
-        # guard rejects those leaves (local_r → 0 → contact_angle → π/2).
-        # Place leaf_cap_count leaves at evenly-spaced radial angles around the
-        # topmost vertex so the polar gap is always covered.
+        # ── World-Z apex cap: covers the highest point of the cluster in world space ──
+        # Z-slices can't place leaves near the world-Z apex: the horizontal
+        # cross-section becomes a tiny circle (local_r → 0), so the contact-
+        # angle formula gives π/2 and the leaf is rejected.  We fill this gap
+        # explicitly with leaf_cap_count leaves fanning out from the apex vertex.
+        #
+        # We target the world-Z apex (argmax z), NOT the branch-direction apex
+        # (argmax dot(tip_t)).  For tilted branches the branch tip is well into
+        # the body of the cluster where Z-slices work fine; only the gravity-top
+        # has the tiny-cross-section problem.  For nearly-vertical branches the
+        # two apices coincide, so this handles both cases correctly.
         if leaf_cap_count > 0 and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
             apex_v_idx  = int(np.argmax(shaped.vertices[:, 2]))
             apex_smooth = shaped.vertices[apex_v_idx].copy()
+            # Outward normal at the world-Z apex: centroid → apex for accuracy.
             apex_up     = _safe_norm(apex_smooth - mesh_center_3d)
             if float(np.linalg.norm(apex_up)) < 1e-6:
-                apex_up = tip_t.copy()
+                apex_up = np.array([0.0, 0.0, 1.0])  # world-up fallback
             e1, e2 = _two_perp(apex_up)
-            disp_apex   = float(
-                _foliage_gaussian_noise(apex_smooth[None, :], edge_id, bark_seed)[0]
-                + _foliage_coarse_noise(apex_smooth[None, :], edge_id, bark_seed)[0]
-            )
-            apex_base = apex_smooth + apex_up * (disp_apex - noise_peak)
 
             # Contact angle for the full foliage radius (valid at the dome apex
-            # where the cluster radius is r_tip).  Same cache as body leaves.
+            # where the local sphere radius is r_tip).  Same cache as body leaves.
             _apex_ca_key = (
                 round(r_tip, 4), round(float(leaf_length_mm), 4),
                 round(float(leaf_width_mm), 4),
@@ -1230,18 +1225,57 @@ def _build_foliage_cluster_mesh(
             c_apex = float(np.cos(apex_ca))
             s_apex = float(np.sin(apex_ca))
 
+            # Gap: offset each leaf's base from the apex by half a leaf-width,
+            # so leaves don't all start at a common point.
+            # We find the SHAPED MESH VERTEX most aligned with the desired
+            # outward direction (gap_angle away from the apex toward T0_raw).
+            # Using the actual mesh vertex (not an analytic sphere point) is
+            # critical: the dome is offset by dome_shift * pu_tip, so a simple
+            # tip_p + r_tip * base_dir lies INSIDE the shaped mesh, and then
+            # the noise displacement would push the base further inside,
+            # embedding the leaf completely under the cluster surface.
+            gap_mm    = max(float(leaf_width_mm) * 0.5, 0.5)
+            gap_angle = float(np.arcsin(np.clip(gap_mm / max(r_tip, 1e-6), 0.0, 0.95)))
+            shaped_verts = shaped.vertices          # (M, 3) — smooth mesh
+
             for ci in range(leaf_cap_count):
                 phi    = 2.0 * np.pi * ci / float(leaf_cap_count)
                 T0_raw = _safe_norm(np.cos(phi) * e1 + np.sin(phi) * e2)
-                # Apply contact angle: tilts T0_raw downward from apex_up so
-                # the leaf tip presses into the sphere surface rather than
-                # curling straight up via lift_mm.
-                tangent   = _safe_norm(T0_raw * c_apex - apex_up * s_apex)
-                up_placed = _safe_norm(apex_up  * c_apex + T0_raw * s_apex)
+
+                # Desired outward direction: gap_angle from apex along T0_raw.
+                base_dir = _safe_norm(
+                    np.cos(gap_angle) * apex_up + np.sin(gap_angle) * T0_raw
+                )
+
+                # Nearest shaped mesh vertex in that direction — always on the
+                # smooth surface (outside the noised cluster mesh).
+                base_smooth_ci = shaped_verts[int(np.argmax(shaped_verts @ base_dir))]
+                up_hint_ci     = _safe_norm(base_smooth_ci - mesh_center_3d)
+
+                # Sink to the noised cluster surface (identical to _emit_leaf).
+                disp_ci = float(
+                    _foliage_gaussian_noise(base_smooth_ci[None, :], edge_id, bark_seed)[0]
+                    + _foliage_coarse_noise(base_smooth_ci[None, :], edge_id, bark_seed)[0]
+                )
+                base_pos = base_smooth_ci + up_hint_ci * (disp_ci - noise_peak)
+
+                # Project T0_raw onto the tangent plane at up_hint_ci so the
+                # growth direction is tangent to the sphere at the base position.
+                T0_proj = T0_raw - float(np.dot(T0_raw, up_hint_ci)) * up_hint_ci
+                T0_len  = float(np.linalg.norm(T0_proj))
+                if T0_len < 1e-6:
+                    continue
+                T0_leaf = T0_proj / T0_len
+
+                # Apply the contact angle using the per-leaf up_hint so each
+                # leaf drapes against the dome at its own attachment position.
+                tangent   = _safe_norm(T0_leaf * c_apex - up_hint_ci * s_apex)
+                up_placed = _safe_norm(up_hint_ci * c_apex + T0_leaf * s_apex)
+
                 lseed = _hash01_int(bark_seed, "apex-leaf", edge_id, ci)
                 try:
                     leaf_surf = build_leaf_surface(
-                        base_pos=apex_base, tangent=tangent, up_hint=up_placed,
+                        base_pos=base_pos, tangent=tangent, up_hint=up_placed,
                         length_mm=float(leaf_length_mm),
                         width_mm=float(leaf_width_mm),
                         thickness_mm=float(leaf_thickness_mm),
@@ -1249,8 +1283,8 @@ def _build_foliage_cluster_mesh(
                         inner_curve=float(leaf_inner_curve),
                         outer_curve=float(leaf_outer_curve),
                         curl_deg=float(leaf_curl_deg),
-                        lift_mm=float(leaf_lift_mm),
-                        seed=lseed,
+                        lift_mm=0.0,    # contact angle drapes leaf against dome;
+                        seed=lseed,     # no extra lift — it pushes the tip upward
                     )
                     solid, _ = solidify_leaf(
                         leaf_surf, up_placed, parent_mesh=cluster_mesh

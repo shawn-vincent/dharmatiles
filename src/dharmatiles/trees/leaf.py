@@ -16,10 +16,20 @@ A leaf is an ovate, keeled blade:
 
 Public API
 ----------
+``compute_leaf_geometry(...)`` — returns a :class:`_LeafGeometry` NamedTuple with
+all vertex arrays and axes; used by :func:`build_leaf_surface`,
+:func:`build_leaf_mesh`, and the analytical contact-angle helper in ``mesh.py``.
+
+``build_leaf_surface(...)`` — open top-face mesh (no walls, no keel).  Used by
+:func:`solidify_leaf` and the foliage placement path in ``mesh.py``.
+
 ``build_leaf_mesh(...)`` — returns a list of Trimesh parts (blade body + optional
-keel) positioned at *base_pos* and oriented along *tangent*.  A *seed* integer
-drives the random roll angle so leaves at the same tip position always look
-identical (deterministic) and different edge seeds produce different orientations.
+keel) positioned at *base_pos* and oriented along *tangent*.  For standalone leaf
+geometry when a full solid is not needed.
+
+``solidify_leaf(surface, up_hint, parent_mesh)`` — closes an open surface into a
+watertight solid by raycasting perimeter vertices into the parent mesh and
+building quad walls + a root cap.  The production entry point for all foliage leaves.
 
 Leaf Attachment Model
 ---------------------
@@ -30,58 +40,37 @@ outside these rules produces a geometrically impossible leaf.
 (opposite the tip).  ``base_pos`` in the API.  The BASE is the point that sits
 on the surface.  All rotations are performed around this point.
 
-**Keel embedding constraint** — The keel (structural ridge on the leaf
-underside, in the −N direction from the leaf plane) projects BELOW the base.
-The backmost point of the keel (at the base end) MUST ALWAYS be embedded into
-the surface.  It is never valid for the base to touch the surface while the keel
-back wall floats above it.  This means the leaf's N axis (crease/top direction)
-always equals the outward surface normal at the attachment point: the blade
-sticks out, the keel sticks in.
-
 **Degrees of freedom** — only three are valid:
 
 1. **Position**: where on the surface the BASE sits.
 
 2. **Twist**: rotation about the base→tip axis.  Controls which direction around
-   the surface normal the tip points.  Equivalently, it is the compass bearing
-   of the leaf within the surface's tangent plane.
+   the surface normal the tip points (the compass bearing in the surface tangent
+   plane).  Tips point as close to gravity-down as the surface allows.
 
-   Tips should always point as close to gravity-down as the surface allows.
-   On a vertical surface the tip points straight down (± jitter); on a
-   near-horizontal surface gravity has no preferred tangent-plane direction
-   so the twist is arbitrary (the contact angle carries the tip downward
-   regardless).  Tips never point upward on non-horizontal surfaces.
+3. **Contact angle**: rotation about the lateral axis T through the BASE
+   (perpendicular to both tangent and surface normal), in the plane of
+   (tangent, surface_normal).  The contact angle is the rotation that presses
+   the leaf tip just against the parent surface — the zero point from which
+   ``lift_mm`` is measured.
 
-3. **Lift**: rotation about the lateral axis T through the BASE (the axis
-   perpendicular to both the current tangent and the surface normal), in the
-   plane of (tangent, surface_normal).  The zero of lift is the *contact
-   angle* — the rotation that presses the leaf tip just against the parent
-   surface.  ``lift_mm`` in :func:`build_leaf_surface` is measured from that
-   zero: positive values raise the tip above surface contact.
-
-   - contact angle → tip just touches the parent surface; this is lift = 0.
+   - contact angle → tip just touches the parent surface (lift = 0).
    - lift > 0      → tip raised further above the surface.
-   - 90°           → tangent points directly into the surface (−surface_normal).
 
-   The contact angle is found by :func:`find_contact_angle_for_sphere` and
-   applied as a frame rotation in :func:`place_leaf_on_sphere` before
-   ``lift_mm`` is added on top.
+**Frame after contact-angle rotation**::
 
-**Resulting tangent from surface_normal, twist, and contact angle**::
+    T0             = unit vector in surface tangent plane (twist direction)
+    ca             = contact angle in [0°, 90°]
+    tangent        = T0 * cos(ca) − surface_normal * sin(ca)
+    N (up_hint)    = surface_normal * cos(ca) + T0 * sin(ca)
 
-    T0             = unit vector in surface tangent plane in the twist direction
-    contact_angle  = rotation angle in [0°, 90°]
-    tangent        = T0 * cos(contact_angle) − surface_normal * sin(contact_angle)
-    N (up_hint)    = surface_normal rotated by the same angle toward T0
-
-No other axes of freedom exist.  Rotations that don't fit these three (e.g.
-tilting the leaf sideways relative to the surface normal, rotating around the
-tip, or any combination that lifts the keel back off the surface) produce
-nonsensical geometry and must not be introduced.
+The contact angle is computed analytically in ``mesh.py:_contact_angle_for_sphere``
+and cached per (cluster_radius, leaf_geometry).  See ``docs/design/leaf-placement.md``
+for the full algorithm specification.
 """
 from __future__ import annotations
 
-from typing import Callable, NamedTuple
+from typing import NamedTuple
 
 import numpy as np
 import trimesh
@@ -92,18 +81,6 @@ from ._utils import _safe_norm
 
 _LEAF_N_LONG           = 12    # longitudinal sections (base → tip)
 _LEAF_N_LAT            = 10    # lateral sections across the leaf (must be even)
-# Fixed vertex index of the tip point in every leaf *surface* mesh
-# (as returned by build_leaf_surface — open top face only).
-# Layout: top rings | v_base | v_tip  (see build_leaf_surface).
-# NB: build_leaf_mesh has an additional bottom-ring block, so its tip index
-# is 2*(n_rings*stride)+1; do not confuse the two.
-_LEAF_TIP_VERTEX_IDX   = (_LEAF_N_LONG - 1) * (_LEAF_N_LAT + 1) + 1
-# Vertex index of the base (midrib start) in the leaf surface mesh.
-# The two singular perimeter vertices (tip, base) sit at the axis of symmetry,
-# so their centroid-based inward direction is purely axial (±L), not sideways.
-# solidify_leaf uses this to identify them; their axial inward is a valid
-# in-plane direction and correctly produces root_wall_angle_deg at those points.
-_LEAF_BASE_VERTEX_IDX  = (_LEAF_N_LONG - 1) * (_LEAF_N_LAT + 1)
 _LEAF_CREASE_SHARPNESS = 10.0  # tanh width of midrib crease (larger = narrower)
 # Width profile normalisation: w(s) ∝ s^0.4 × (1-s)^0.8 peaks at s=1/3.
 _LEAF_W_PEAK_NORM  = float((1.0 / 3.0) ** 0.4 * (2.0 / 3.0) ** 0.8)
@@ -114,10 +91,6 @@ _LEAF_LONG_T_PEAK  = float(0.25 ** 0.5 * 0.75 ** 1.5)   # ≈ 0.3248
 # hard-coding magic numbers.
 LEAF_LENGTH_MM_DEFAULT = 9.0
 LEAF_WIDTH_MM_DEFAULT  = 6.0   # ≈ 2/3 of length
-
-# Tolerance for leaf_placement_from_surface: pos must be within this distance
-# of the mesh surface or a ValueError is raised.
-_LEAF_SURFACE_MARGIN_MM = 1.0
 
 
 # ── Tiny shared helpers (self-contained so this module has no tree imports) ────
@@ -652,127 +625,6 @@ def _build_leaf_keel_prism(
     )
 
 
-# ── Surface-query placement helpers ───────────────────────────────────────────
-
-def leaf_placement_from_surface(
-    mesh: trimesh.Trimesh,
-    pos: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Compute ``(base_pos, tangent, up_hint)`` from a point on a mesh surface.
-
-    Derives all three placement inputs to :func:`build_leaf_mesh` /
-    :func:`build_leaf_surface` from the parent mesh geometry.  The returned
-    values are ready to pass directly to either builder.
-
-    Parameters
-    ----------
-    mesh : Parent ``trimesh.Trimesh`` — the surface the leaf grows from.
-    pos  : Approximate world position.  Snapped to the nearest point on
-           ``mesh``; the returned ``base_pos`` is the snapped point.
-           Raises ``ValueError`` if ``pos`` is farther than
-           ``_LEAF_SURFACE_MARGIN_MM`` from the surface.
-
-    Returns
-    -------
-    (base_pos, tangent, up_hint)
-
-    Notes
-    -----
-    *up_hint* is the **interpolated vertex normal** at the snapped point
-    (barycentric blend of the triangle's three vertex normals), giving smooth
-    results on curved surfaces regardless of mesh resolution.
-
-    *tangent* is gravity-down projected onto the tangent plane — the leaf tip
-    points as far downward as the surface allows.  Callers that need a
-    different orientation can derive their own tangent from the returned frame::
-
-        tangent = T0 * cos(θ) − up_hint * sin(θ)
-
-    where ``T0`` is the returned tangent (θ = 0) and θ is the contact angle
-    computed by :func:`find_contact_angle_for_sphere`.
-    """
-    pos = np.asarray(pos, float).ravel()[:3]
-
-    # 1. Snap to nearest surface point.
-    pts, dists, face_ids = trimesh.proximity.closest_point(mesh, pos[np.newaxis])
-    base_pos = pts[0]
-    dist = float(dists[0])
-    if dist > _LEAF_SURFACE_MARGIN_MM:
-        raise ValueError(
-            f"pos is {dist:.3f} mm from the mesh surface "
-            f"(limit: _LEAF_SURFACE_MARGIN_MM = {_LEAF_SURFACE_MARGIN_MM})"
-        )
-
-    # 2. Interpolated vertex normal via barycentric coordinates.
-    # Clamp bary to [0, 1] before blending: floating-point rounding in
-    # closest_point can place base_pos just outside the triangle (on a shared
-    # edge or vertex), causing points_to_barycentric to return a small negative
-    # weight.  Clamping + renormalising ensures we interpolate rather than
-    # extrapolate vertex normals.
-    face_id   = int(face_ids[0])
-    tri_verts = mesh.vertices[mesh.faces[face_id]]          # (3, 3)
-    bary      = trimesh.triangles.points_to_barycentric(
-        tri_verts[np.newaxis], base_pos[np.newaxis]
-    )[0]                                                    # (3,)
-    bary      = np.clip(bary, 0.0, 1.0)
-    bary_sum  = float(bary.sum())
-    if bary_sum > 1e-10:
-        bary /= bary_sum
-    v_normals = mesh.vertex_normals[mesh.faces[face_id]]    # (3, 3)
-    up_hint   = _safe_norm(bary @ v_normals)                # (3,)
-
-    # 3. Gravity-down projected onto the tangent plane → tangent.
-    gravity_down = np.array([0.0, 0.0, -1.0])
-    grav_proj    = gravity_down - float(np.dot(gravity_down, up_hint)) * up_hint
-    grav_len     = float(np.linalg.norm(grav_proj))
-    if grav_len < 1e-6:
-        # Surface is nearly horizontal — no gravity preference; pick arbitrary tangent.
-        arb = np.array([1.0, 0.0, 0.0])
-        if abs(float(np.dot(arb, up_hint))) > 0.9:
-            arb = np.array([0.0, 1.0, 0.0])
-        tangent = _safe_norm(np.cross(up_hint, arb))
-    else:
-        tangent = grav_proj / grav_len
-
-    return base_pos, tangent, up_hint
-
-
-def build_leaf_on_surface(
-    mesh: trimesh.Trimesh,
-    pos: np.ndarray,
-    *,
-    length_mm: float = LEAF_LENGTH_MM_DEFAULT,
-    width_mm:  float = LEAF_WIDTH_MM_DEFAULT,
-    **leaf_kwargs,
-) -> list[trimesh.Trimesh]:
-    """Build a leaf mesh placed on a mesh surface point.
-
-    Convenience wrapper combining :func:`leaf_placement_from_surface` and
-    :func:`build_leaf_mesh` in one call.  All placement inputs (``base_pos``,
-    ``tangent``, ``up_hint``) are derived automatically from the mesh geometry;
-    the leaf tip points gravity-down in the surface's tangent plane.
-
-    Parameters
-    ----------
-    mesh       : Parent ``trimesh.Trimesh`` the leaf grows from.
-    pos        : Approximate world position (snapped to nearest surface point).
-    length_mm  : Leaf length.  Default ``LEAF_LENGTH_MM_DEFAULT``.
-    width_mm   : Maximum leaf width.  Default ``LEAF_WIDTH_MM_DEFAULT``.
-    **leaf_kwargs : Forwarded to :func:`build_leaf_mesh`
-                   (``thickness_mm``, ``keel_depth_mm``, etc.)
-
-    Returns
-    -------
-    list[trimesh.Trimesh]
-        ``[blade]`` when ``keel_depth_mm <= 0``, ``[blade, keel]`` otherwise.
-    """
-    base_pos, tangent, up_hint = leaf_placement_from_surface(mesh, pos)
-    return build_leaf_mesh(
-        base_pos=base_pos, tangent=tangent, up_hint=up_hint,
-        length_mm=length_mm, width_mm=width_mm, **leaf_kwargs
-    )
-
-
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 def build_leaf_surface(
@@ -795,8 +647,7 @@ def build_leaf_surface(
 
     Returns a single open ``trimesh.Trimesh`` (disk topology).  The mesh has
     one boundary loop running along the two lateral edges from base to tip —
-    it can be stitched directly to a branchlet loft to form a single closed
-    solid with no overlapping parts.
+    it can be solidified by :func:`solidify_leaf` to form a watertight solid.
 
     All geometry of the top face is present: the ovate teardrop outline,
     the dome-shaped lobes (two humps rising from the midrib crease), the
@@ -984,144 +835,8 @@ _LEAF_ROOT_MAX_HIT_MM: float = 10.0
 # Public so callers can reference it without hard-coding the literal.
 LEAF_ROOT_WALL_ANGLE_DEG: float = 90.0
 
-# FDM printability floor: faces whose downward slope exceeds this are overhangs.
-_LEAF_FDM_FLOOR_DEG: float = 45.0
-
 # Contact tolerance for support-mesh queries (compensates for faceted surfaces).
 _LEAF_FDM_SUPPORT_TOLERANCE_MM: float = 0.05
-
-def find_contact_angle(
-    base_pos:  np.ndarray,
-    T0:        np.ndarray,
-    up_hint:   np.ndarray,
-    is_clear:  Callable[[np.ndarray], bool],
-    **leaf_kwargs,
-) -> float:
-    """Find the contact angle (radians) using a generic collision-free predicate.
-
-    The *contact angle* is the rotation around the lateral axis T through
-    ``base_pos`` that presses the leaf tip just against the parent surface —
-    it establishes the zero point from which ``lift_mm`` is measured.
-
-    Builds a flat leaf (contact angle = 0), identifies *risky* vertices (those
-    currently outside the obstacle that could penetrate it as the angle
-    increases), then binary-searches for the largest rotation that keeps all
-    risky vertices clear.
-
-    Rotation formula: ``tangent = T0 * cos(θ) - up_hint * sin(θ)``.
-
-    Parameters
-    ----------
-    base_pos  : Leaf base — pivot point for the rotation.
-    T0        : Flat (angle = 0) tangent direction.
-    up_hint   : Outward surface normal at base_pos.
-    is_clear  : Collision-free predicate.  Called with an (N, 3) vertex array;
-                must return ``True`` iff **all** supplied points are in the
-                free region.  For a sphere of radius *r* centred at the origin::
-
-                    is_clear = lambda pts: np.all(np.linalg.norm(pts, axis=1) >= r)
-
-    **leaf_kwargs : Passed to :func:`build_leaf_surface`
-                   (``length_mm``, ``width_mm``, ``fold_angle_deg``, etc.)
-                   ``lift_mm`` is **ignored** here (forced to 0.0): the contact
-                   angle is the zero-lift position, so the search must be run
-                   without lift applied — ``lift_mm`` is added on top afterward
-                   by :func:`place_leaf_on_sphere`.
-
-    Returns
-    -------
-    float
-        Contact angle in radians.  Returns 0.0 if no vertices are clear at
-        angle = 0 (leaf fully inside the parent shape — degenerate placement).
-    """
-    # Search at lift_mm=0: the contact angle is the zero-lift reference.
-    # Lift is applied on top afterward; including it here would cause the search
-    # to compensate for it, making the lift invisible in the final geometry.
-    flat_kwargs = {**leaf_kwargs, 'lift_mm': 0.0}
-    flat = build_leaf_surface(base_pos=base_pos, tangent=T0, up_hint=up_hint, **flat_kwargs)
-
-    # Identify *risky* vertices: those clear at angle = 0 that could become
-    # unclear as the angle increases.  Per-vertex calls happen once at setup,
-    # not inside the hot bisection loop.
-    risky_mask  = np.array([is_clear(v[np.newaxis]) for v in flat.vertices])
-    risky_verts = flat.vertices[risky_mask]
-    if len(risky_verts) == 0:
-        return 0.0
-
-    # Rodrigues rotation axis: rotating T0 around cross(-T0, up_hint) by θ
-    # gives tangent = T0*cos(θ) − up_hint*sin(θ).
-    axis = _safe_norm(np.cross(-T0, up_hint))
-
-    def _rotate(pts: np.ndarray, theta: float) -> np.ndarray:
-        c, s = np.cos(theta), np.sin(theta)
-        rel  = pts - base_pos
-        return (base_pos
-                + rel * c
-                + np.cross(axis, rel) * s
-                + axis * (rel @ axis)[:, np.newaxis] * (1.0 - c))
-
-    # Check upper bound: if never penetrates even at full π, return π.
-    lo, hi = 0.0, np.pi
-    if is_clear(_rotate(risky_verts, hi)):
-        return hi
-
-    # Bisect between lo (ok) and hi (penetrates).
-    # 48 iterations gives ~4e-15 rad precision.
-    for _ in range(48):
-        mid = 0.5 * (lo + hi)
-        if is_clear(_rotate(risky_verts, mid)):
-            lo = mid
-        else:
-            hi = mid
-    return lo
-
-
-def find_contact_angle_for_sphere(
-    base_pos:      np.ndarray,
-    T0:            np.ndarray,
-    up_hint:       np.ndarray,
-    sphere_radius: float,
-    *,
-    clearance_mm:  float = 0.0,
-    **leaf_kwargs,
-) -> float:
-    """Find the contact angle (radians) that presses a leaf against a sphere.
-
-    The contact angle is the rotation around the lateral axis T through
-    ``base_pos`` that places the leaf tip just against the sphere surface —
-    the zero point from which ``lift_mm`` is measured.
-
-    Convenience wrapper around :func:`find_contact_angle` for a sphere centred
-    at the origin.  Equivalent to::
-
-        min_dist = sphere_radius + clearance_mm
-        find_contact_angle(
-            base_pos, T0, up_hint,
-            lambda pts: np.all(np.linalg.norm(pts, axis=1) >= min_dist),
-            **leaf_kwargs,
-        )
-
-    Parameters
-    ----------
-    base_pos      : Leaf base — pivot point for the rotation.
-    T0            : Flat (angle = 0) tangent direction.
-    up_hint       : Outward surface normal at base_pos.
-    sphere_radius : Radius of the sphere (centred at origin).
-    clearance_mm  : Minimum clearance from the sphere surface (default 0).
-    **leaf_kwargs : Passed to :func:`build_leaf_surface`
-                   (``length_mm``, ``width_mm``, ``fold_angle_deg``, etc.)
-
-    Returns
-    -------
-    float
-        Contact angle in radians.  Returns 0.0 if no vertices are outside the
-        sphere at angle = 0 (leaf fully inside — shouldn't normally occur).
-    """
-    min_dist: float = sphere_radius + clearance_mm
-    is_clear: Callable[[np.ndarray], bool] = (
-        lambda pts: bool(np.all(np.linalg.norm(pts, axis=1) >= min_dist))
-    )
-    return find_contact_angle(base_pos, T0, up_hint, is_clear, **leaf_kwargs)
 
 
 def boundary_loop(mesh: trimesh.Trimesh) -> list[int]:
@@ -1332,223 +1047,4 @@ def solidify_leaf(
         ("solid_leaf", len(surface.vertices), len(surface.faces), NP),
     )
     return solid, range(wall_start, wall_end)
-
-
-def place_leaf_on_sphere(
-    base_pos:      np.ndarray,
-    T0:            np.ndarray,
-    up_hint:       np.ndarray,
-    sphere_radius: float,
-    parent_mesh:   trimesh.Trimesh,
-    *,
-    contact_angle_rad:   float | None = None,
-    clearance_mm:        float = 0.0,
-    embed_mm:            float = LEAF_ROOT_EMBED_MM,
-    root_wall_angle_deg: float = LEAF_ROOT_WALL_ANGLE_DEG,
-    **leaf_kwargs,
-) -> tuple[trimesh.Trimesh, range]:
-    """Build and solidify a leaf placed on a sphere surface.
-
-    Single primitive covering the full placement pipeline:
-
-    1. Find contact angle — rotation around the lateral axis T that presses
-       the leaf tip just against the sphere (skipped when *contact_angle_rad*
-       is supplied).  This is the zero point: ``lift_mm = 0`` in
-       *leaf_kwargs* means the tip sits at sphere contact; positive values
-       raise it above.
-    2. Apply the contact angle — rotate the frame (tangent and up_hint) so
-       that ``lift_mm`` in :func:`build_leaf_surface` is measured from
-       sphere contact.
-    3. :func:`build_leaf_surface` — open surface mesh (``lift_mm`` applied
-       here as an offset above contact).
-    4. :func:`solidify_leaf` — per-vertex inward raycast against
-       *parent_mesh* to find each perimeter vertex's true surface distance,
-       then embed ``embed_mm`` past the surface at ``root_wall_angle_deg``
-       from the leaf surface plane.  The tip vertex is handled identically
-       to every other perimeter vertex.
-
-    Parameters
-    ----------
-    base_pos           : Leaf base position on the sphere surface.
-    T0                 : Flat tangent direction (angle = 0) — gravity-down in
-                         the surface tangent plane, as returned by
-                         :func:`leaf_placement_from_surface`.
-    up_hint            : Outward surface normal at *base_pos*.
-    sphere_radius      : Radius of the sphere centred at the origin (used only
-                         for the contact-angle search).
-    parent_mesh        : Full support mesh (sphere + trunk, etc.) used for
-                         per-vertex embed raycasts in :func:`solidify_leaf`.
-    contact_angle_rad  : Override the auto-computed contact angle (radians).
-                         ``None`` (default) → computed automatically via
-                         :func:`find_contact_angle_for_sphere`.
-    clearance_mm       : Minimum clearance from the sphere for the contact
-                         angle search.
-    embed_mm             : How far past the parent surface each root vertex is
-                           placed.  Passed to :func:`solidify_leaf`.
-    root_wall_angle_deg  : Angle between the root wall and the leaf surface
-                           plane at the perimeter edge.  90° = perpendicular
-                           (no taper); smaller values undercut inward, giving
-                           beefy corners at the tip and base.  Default
-                           ``LEAF_ROOT_WALL_ANGLE_DEG`` (70°).  Passed to
-                           :func:`solidify_leaf`.
-    **leaf_kwargs        : Passed to :func:`build_leaf_surface` and (for the
-                           contact angle search) to
-                           :func:`find_contact_angle_for_sphere`.  Typical keys:
-                           ``length_mm``, ``width_mm``, ``fold_angle_deg``,
-                           ``curl_deg``, ``lift_mm``.
-
-    Returns
-    -------
-    (solid, wall_face_range)
-        *solid* is a closed watertight ``trimesh.Trimesh``.
-        *wall_face_range* is the ``range`` of wall face indices suitable for
-        FDM printability analysis (see :func:`solidify_leaf`).
-    """
-    if contact_angle_rad is None:
-        contact_angle_rad = find_contact_angle_for_sphere(
-            base_pos, T0, up_hint, sphere_radius,
-            clearance_mm=clearance_mm,
-            **leaf_kwargs,
-        )
-
-    # Apply the contact angle: rotate the frame so lift_mm=0 → sphere contact.
-    c, s      = float(np.cos(contact_angle_rad)), float(np.sin(contact_angle_rad))
-    tangent   = _safe_norm(np.asarray(T0, float) * c - np.asarray(up_hint, float) * s)
-    up_placed = _safe_norm(np.asarray(up_hint, float) * c + np.asarray(T0, float) * s)
-
-    leaf_surf = build_leaf_surface(
-        base_pos=base_pos, tangent=tangent, up_hint=up_placed, **leaf_kwargs,
-    )
-
-    return solidify_leaf(
-        leaf_surf, up_placed, embed_mm,
-        parent_mesh=parent_mesh,
-        root_wall_angle_deg=root_wall_angle_deg,
-    )
-
-
-def _find_contact_angle_for_mesh(
-    base_pos:   np.ndarray,
-    T0:         np.ndarray,
-    up_hint:    np.ndarray,
-    parent_mesh: "trimesh.Trimesh",
-    **leaf_kwargs,
-) -> float:
-    """Batched contact-angle search against a closed mesh.
-
-    Replaces the generic :func:`find_contact_angle` for the mesh case.
-    The key difference: instead of calling ``is_clear(v)`` separately for
-    every leaf vertex (~123 individual ``contains()`` ray-casts), this
-    issues **one batched** ``parent_mesh.contains(flat.vertices)`` call to
-    identify the risky set, then does **one batched** ``contains()`` per
-    binary-search iteration.  Total calls: 1 (init) + 17 (search) per leaf,
-    vs. 123 + 48 for the generic path.
-
-    Uses 16 iterations (≈4.8×10⁻⁵ rad precision) — amply sufficient for FDM.
-    """
-    flat_kwargs = {**leaf_kwargs, 'lift_mm': 0.0}
-    flat = build_leaf_surface(
-        base_pos=base_pos, tangent=T0, up_hint=up_hint, **flat_kwargs,
-    )
-
-    # One batched contains() → True where vertex is INSIDE the mesh.
-    # Risky = outside at θ=0 (could penetrate as the leaf rotates in).
-    risky_mask  = ~parent_mesh.contains(flat.vertices)   # (N,) bool
-    risky_verts = flat.vertices[risky_mask]
-    if len(risky_verts) == 0:
-        return 0.0
-
-    bp   = np.asarray(base_pos, float)
-    T0_a = np.asarray(T0,       float)
-    uph  = np.asarray(up_hint,  float)
-    axis = _safe_norm(np.cross(-T0_a, uph))
-
-    def _rotate(pts: np.ndarray, theta: float) -> np.ndarray:
-        c, s  = np.cos(theta), np.sin(theta)
-        rel   = pts - bp
-        return bp + rel * c + np.cross(axis, rel) * s + axis * (rel @ axis)[:, np.newaxis] * (1.0 - c)
-
-    lo, hi = 0.0, float(np.pi)
-    # If even the full π rotation keeps all risky verts outside, return π.
-    if not parent_mesh.contains(_rotate(risky_verts, hi)).any():
-        return hi
-
-    # Binary search: lo = clear, hi = penetrating.
-    # 16 iterations → π/2¹⁶ ≈ 4.8×10⁻⁵ rad (< 0.003°).
-    for _ in range(16):
-        mid = 0.5 * (lo + hi)
-        if not parent_mesh.contains(_rotate(risky_verts, mid)).any():
-            lo = mid
-        else:
-            hi = mid
-    return lo
-
-
-def place_leaf_on_mesh(
-    base_pos:            np.ndarray,
-    T0:                  np.ndarray,
-    up_hint:             np.ndarray,
-    parent_mesh:         "trimesh.Trimesh",
-    *,
-    contact_angle_rad:   float | None = None,
-    embed_mm:            float = LEAF_ROOT_EMBED_MM,
-    root_wall_angle_deg: float = LEAF_ROOT_WALL_ANGLE_DEG,
-    **leaf_kwargs,
-) -> tuple["trimesh.Trimesh", range]:
-    """Build and solidify a leaf placed on any closed manifold mesh surface.
-
-    Generalises :func:`place_leaf_on_sphere` for an arbitrary parent mesh.
-    The contact angle is found using a mesh ``contains()`` predicate — a leaf
-    vertex is *clear* when it lies outside (not inside) the mesh.
-
-    Parameters
-    ----------
-    base_pos           : Leaf base position on the mesh surface.
-    T0                 : Flat tangent direction (angle = 0) — typically
-                         gravity-down projected onto the surface tangent plane,
-                         as returned by :func:`leaf_placement_from_surface`.
-    up_hint            : Outward surface normal at *base_pos*.
-    parent_mesh        : Closed watertight ``trimesh.Trimesh`` the leaf grows
-                         from.  Used for both the contact-angle ``contains()``
-                         predicate and the per-vertex embed raycasts inside
-                         :func:`solidify_leaf`.
-    contact_angle_rad  : Override the auto-computed contact angle (radians).
-                         ``None`` (default) → computed automatically via
-                         :func:`find_contact_angle`.
-    embed_mm           : How far past the parent surface each root vertex is
-                         placed.  Passed to :func:`solidify_leaf`.
-    root_wall_angle_deg: Angle between the root wall and the leaf surface
-                         plane at the perimeter edge.  Passed to
-                         :func:`solidify_leaf`.
-    **leaf_kwargs      : Forwarded to :func:`build_leaf_surface` and
-                         :func:`find_contact_angle` (e.g. ``length_mm``,
-                         ``width_mm``, ``fold_angle_deg``, ``curl_deg``,
-                         ``lift_mm``).
-
-    Returns
-    -------
-    (solid, wall_face_range)
-        *solid* is a closed watertight ``trimesh.Trimesh``.
-        *wall_face_range* is the ``range`` of wall face indices suitable for
-        FDM printability analysis (see :func:`solidify_leaf`).
-    """
-    if contact_angle_rad is None:
-        contact_angle_rad = _find_contact_angle_for_mesh(
-            base_pos, T0, up_hint, parent_mesh, **leaf_kwargs,
-        )
-
-    # Apply the contact angle: rotate the frame so lift_mm=0 → mesh contact.
-    c, s      = float(np.cos(contact_angle_rad)), float(np.sin(contact_angle_rad))
-    tangent   = _safe_norm(np.asarray(T0, float) * c - np.asarray(up_hint, float) * s)
-    up_placed = _safe_norm(np.asarray(up_hint, float) * c + np.asarray(T0, float) * s)
-
-    leaf_surf = build_leaf_surface(
-        base_pos=base_pos, tangent=tangent, up_hint=up_placed, **leaf_kwargs,
-    )
-
-    return solidify_leaf(
-        leaf_surf, up_placed, embed_mm,
-        parent_mesh=parent_mesh,
-        root_wall_angle_deg=root_wall_angle_deg,
-    )
 
