@@ -48,6 +48,13 @@ The cluster is **NOT axially symmetric in world space**:
 This asymmetry is the fundamental reason a single global "outward direction" or a
 single per-Z-level surface slope is insufficient for accurate leaf placement.
 
+The meridian-arc placement algorithm has **no knowledge of this internal structure**.
+It treats the shaped mesh as an opaque closed surface and derives everything it needs
+— row positions, surface normals, local radii — directly from horizontal cross-sections
+and meridian curves.  The algorithm would work identically on a pumpkin, a teardrop,
+a sideways egg, or any other mesh satisfying the constraints described in the next
+section.
+
 ---
 
 ## Leaf Geometry
@@ -164,6 +171,40 @@ and the dome.
 
 ## Meridian-Arc Algorithm (Proposed)
 
+### Algorithm Scope — Works on Any Closed Mesh
+
+The meridian-arc algorithm is a **general surface-tiling algorithm**.  Its only input
+is a closed mesh and a set of leaf geometry parameters.  It knows nothing about how
+the mesh was constructed.
+
+**Required mesh properties:**
+
+1. **Closed (watertight).** Every edge is shared by exactly two faces.  No boundary
+   edges, no holes.  Required so that every horizontal cross-section produces a
+   complete, unambiguous closed polygon.
+
+2. **Simply-connected cross-sections.** Every horizontal plane that intersects the
+   mesh should produce one or more closed, simply-connected (no internal holes)
+   polygons.  The algorithm iterates over all polygons in a cross-section
+   (`polygons_full`), so a mesh that produces multiple disjoint blobs at some Z
+   levels is handled — each blob gets its own column of leaves.
+
+3. **Centroid inside each cross-section polygon.** The azimuthal meridian sampling
+   takes, for each angle φ, the outermost perimeter point in that direction from the
+   section centroid.  This requires the centroid to lie inside the polygon.  Satisfied
+   automatically by any convex mesh; satisfied in practice by any mesh without severe
+   concavities.  For deeply non-convex shapes (C-shapes, toroids), a fallback
+   strategy of taking the outermost of multiple intersections is needed.
+
+4. **Non-degenerate Z extent.** `z_top − z_bottom > leaf_length_mm`.  A mesh shorter
+   than one leaf length cannot accommodate even a single row.
+
+**Not required:** spherical, axially symmetric, upright, or any particular orientation.
+A cluster hanging upside-down, lying on its side, or shaped like a banana satisfies
+these constraints and the algorithm places leaves on it correctly.
+
+---
+
 ### Why Uniform dZ Fails
 
 The cluster surface is not a vertical cone.  The three sections — back hemisphere,
@@ -214,12 +255,12 @@ This gives each meridian a table of (z, arc_length, outward_normal_3d) values.
 
 #### Why N=6?
 
-Six meridians give 60° angular resolution before interpolation.  For the gently-curved
-cluster surface, the angular variation of the normal between adjacent meridians is small
-(< 15° on the cone body, < 30° on the dome shoulder) so linear interpolation of normals
-is accurate.  At N=4 the angular gap is 90° and interpolation degrades on asymmetric
-clusters.  At N=12 the benefit is marginal and the cost doubles.  N is a public
-parameter (`leaf_arc_meridians`) so it can be tuned per-tree.
+Six meridians give 60° angular resolution before interpolation.  For a gently-curved
+convex mesh, the angular variation of the surface normal between adjacent meridians is
+small (typically < 30°) so linear interpolation of normals is accurate.  At N=4 the
+angular gap is 90° and interpolation degrades on asymmetric or elongated meshes.  At
+N=12 the benefit is marginal and the cost doubles.  N is a public parameter
+(`leaf_arc_meridians`) so it can be increased for highly irregular meshes.
 
 ### Row Z Positions
 
@@ -238,19 +279,32 @@ def avg_z_for_arc(s_target, meridians):
 
 **Pinned top and bottom rows:**
 
-- **Bottom anchor** `z_bot_anchor`: the Z level corresponding to arc distance
-  `leaf_length_mm` from the cluster's world-Z bottom.  A leaf attached here hangs
-  downward and covers the lowest exposed surface.
+- **Bottom anchor** `z_bot_anchor`: one leaf-length of surface arc above the lowest
+  Z level where the mesh surface is upward-facing enough to receive a leaf.
+
+  The world-Z bottom of the mesh may include surface area whose outward normal points
+  downward — the underside filter will reject all leaves placed there.  Anchoring
+  from the absolute mesh bottom wastes the slot and pushes the first useful row one
+  step higher than intended.  Instead, find the lowest Z where the averaged meridian
+  normal crosses the upward-facing threshold, then place the bottom row one
+  leaf-length of arc above that:
+
   ```python
-  s_bottom_anchor = leaf_length_mm     # leaf hangs down and covers the base
-  z_bot_anchor = avg_z_for_arc(s_bottom_anchor, meridians)
+  # Lowest Z where the averaged meridian normal is upward-facing enough
+  z_placeable = _lowest_placeable_z(meridians, normal_z_threshold=-0.1)
+  s_placeable = avg_arc_for_z(z_placeable, meridians)
+  z_bot_anchor = avg_z_for_arc(s_placeable + leaf_length_mm, meridians)
   ```
 
-- **Top anchor** `z_top_anchor`: placed at (or just below) the world-Z apex.  Use
-  the actual `z_top = shaped.vertices[:, 2].max()`, then find the Z level slightly
-  below it where the cross-section still provides a meaningful polygon:
+  A leaf attached at `z_bot_anchor` hangs downward and covers the lowest visible
+  surface of the mesh.  This is computed entirely from the meridian data — no
+  knowledge of the mesh's internal structure is needed or used.
+
+- **Top anchor** `z_top_anchor`: placed just below the world-Z apex.  Use
+  `z_top = shaped.vertices[:, 2].max()` and step slightly below it to ensure the
+  cross-section is non-degenerate:
   ```python
-  z_top_anchor = z_top - 0.25 * leaf_length_mm   # leaves cover the apex from here
+  z_top_anchor = z_top - 0.25 * leaf_length_mm
   ```
 
 **Integer optimization:**
@@ -312,17 +366,26 @@ For each attachment point `pt3d` on the cross-section perimeter:
 
 ### Underside Filtering
 
-The current guard `if outward[2] < -0.1: continue` filters downward-facing leaves.
-With meridian normals, the equivalent check is:
+Any surface whose outward normal points sufficiently downward cannot hold a leaf —
+the contact-angle formula inverts and the leaf tangent ends up pointing upward into
+the mesh.  The guard:
 
 ```python
 if up_hint[2] < -0.1:
-    continue   # skip downward-facing meridian normals
+    continue   # skip downward-facing surface normals
 ```
 
-Additionally, the bottom anchor at arc = `leaf_length_mm` naturally sits above the
-back hemisphere on most clusters, so the underside is implicitly excluded by row
-placement rather than by an explicit filter.  The guard remains as a safety net.
+…applies uniformly to every attachment point regardless of where on the mesh it sits.
+
+The bottom anchor placement (`z_placeable + leaf_length_mm`) already starts above the
+lowest upward-facing surface, so most underside positions are excluded before the
+placement loop runs.  The per-leaf guard is a safety net for positions that slip
+through (e.g. a non-convex indentation whose section centroid produces a misleading
+normal direction for a specific azimuth).
+
+The threshold −0.1 permits surfaces tilted up to ~96° from vertical (nearly
+horizontal underside) to receive leaves.  Tighten toward 0.0 to restrict leaves to
+more upward-facing surfaces; loosen toward −0.3 to allow leaves on steeper undersides.
 
 ### Placement Loop (Full)
 

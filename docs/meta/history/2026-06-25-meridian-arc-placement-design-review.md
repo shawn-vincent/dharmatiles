@@ -218,26 +218,31 @@ is cleaner and faster.
 
 ## Elegance Opportunities
 
-### 1. The bottom anchor is not "leaf_length from the cluster Z bottom"
+### 1. Bottom anchor from first placeable Z, not world-Z bottom
 
-The design says:
-> bottom anchor at arc distance = `leaf_length_mm` from the cluster's world-Z bottom.
+The original design anchored the bottom row at arc distance = `leaf_length_mm` from
+the mesh's world-Z bottom.  But the world-Z bottom of the mesh may include surface
+area where all leaves are rejected by the underside filter (`up_hint[2] < -0.1`).
+The bottom anchor lands in this dead zone — the row exists but places zero leaves —
+and the first actual placed row ends up one row-step higher than intended.
 
-But the correct reference is not the world-Z bottom of the cluster mesh — it is the
-bottom of the **leaf-covered zone**, which starts at the upper boundary of the back
-hemisphere (the cone/hemisphere seam).  The back hemisphere is always hidden by the
-branch and by the `up_hint[2] < -0.1` filter.  The true bottom of the
-leaf-coverable region is approximately `z_bottom + r_wood` (the equatorial line of the
-back hemisphere).
+The meridian data itself provides the correct reference: find the lowest Z level
+where the averaged meridian normal crosses the upward-facing threshold, then anchor
+one leaf-length of arc above that.  No knowledge of the mesh's internal structure
+is needed.
 
-A cleaner anchor:
 ```python
-s_coverable_bottom = avg_arc_for_z(z_bottom + r_wood, meridians)
-z_bot_anchor = avg_z_for_arc(s_coverable_bottom + leaf_length_mm, meridians)
+z_placeable = _lowest_placeable_z(meridians, normal_z_threshold=-0.1)
+s_placeable = avg_arc_for_z(z_placeable, meridians)
+z_bot_anchor = avg_z_for_arc(s_placeable + leaf_length_mm, meridians)
 ```
 
-This is self-consistent: "start coverage at the top of the back hemisphere, then one
-leaf-length up from there."
+This is a pure function of the meridian data and works for any mesh geometry.
+
+*Note: an earlier version of this review described the fix in terms of the foliage
+cluster's "back hemisphere seam."  That framing was wrong — the algorithm has no
+knowledge of the mesh's internal construction.  The correct fix is the general one
+above, derived entirely from the meridian normals.*
 
 ### 2. The `leaf_cap_count` parameter can be removed entirely
 
