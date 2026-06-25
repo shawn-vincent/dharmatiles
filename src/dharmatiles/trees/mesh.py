@@ -778,9 +778,19 @@ def _build_meridians(
             continue
 
         # Gather all 3D perimeter points across every polygon at this level.
+        # polygons_full can raise AttributeError on degenerate sections (trimesh
+        # edge case: closed[root].exterior is None).  Guard each polygon too so
+        # a single bad contour doesn't discard the whole level.
         all_pts: list[np.ndarray] = []
-        for poly in path2d.polygons_full:
-            coords = np.array(poly.exterior.coords, dtype=float)
+        try:
+            polys = list(path2d.polygons_full)
+        except Exception:
+            continue
+        for poly in polys:
+            try:
+                coords = np.array(poly.exterior.coords, dtype=float)
+            except (AttributeError, Exception):
+                continue
             if len(coords) < 2:
                 continue
             pts2d = coords[:-1]   # drop the repeated closing vertex
