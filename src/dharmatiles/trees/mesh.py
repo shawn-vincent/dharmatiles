@@ -777,11 +777,11 @@ def _build_meridians(
         except Exception:
             continue
 
-        # Gather all 3D perimeter points across every polygon at this level.
+        # Build per-polygon ordered 3D point arrays.
         # polygons_full can raise AttributeError on degenerate sections (trimesh
         # edge case: closed[root].exterior is None).  Guard each polygon too so
         # a single bad contour doesn't discard the whole level.
-        all_pts: list[np.ndarray] = []
+        poly_pts_list: list[np.ndarray] = []
         try:
             polys = list(path2d.polygons_full)
         except Exception:
@@ -796,23 +796,55 @@ def _build_meridians(
             pts2d = coords[:-1]   # drop the repeated closing vertex
             ones  = np.ones((len(pts2d), 1))
             p4d   = np.hstack([pts2d, np.zeros((len(pts2d), 1)), ones]) @ xform.T
-            all_pts.append(p4d[:, :3])
-        if not all_pts:
+            poly_pts_list.append(p4d[:, :3])
+        if not poly_pts_list:
             continue
-        pts3d = np.vstack(all_pts)  # (M, 3)
-
-        phi_pts = np.arctan2(pts3d[:, 1] - cy, pts3d[:, 0] - cx) % (2.0 * np.pi)
 
         for m_idx, phi_m in enumerate(phi_angles):
-            d_phi = np.abs(((phi_pts - phi_m + np.pi) % (2.0 * np.pi)) - np.pi)
-            mask  = d_phi <= phi_half + 1e-6
-            if not mask.any():
-                mask = np.zeros(len(pts3d), dtype=bool)
-                mask[int(np.argmin(d_phi))] = True
-            # Among candidates, take the outermost (max radius from centroid XY).
-            r2       = (pts3d[mask, 0] - cx) ** 2 + (pts3d[mask, 1] - cy) ** 2
-            best_loc = int(np.where(mask)[0][int(np.argmax(r2))])
-            pts_by_meridian[m_idx].append(pts3d[best_loc].copy())
+            # Find the exact perimeter point at azimuth phi_m on the outermost
+            # polygon.  Ray from (cx, cy) at angle phi_m; take the farthest
+            # intersection across all polygons at this level.
+            best_t  = -1.0
+            best_pt: np.ndarray | None = None
+            cos_phi = float(np.cos(phi_m))
+            sin_phi = float(np.sin(phi_m))
+            for poly_pts in poly_pts_list:
+                n = len(poly_pts)
+                if n < 2:
+                    continue
+                vx = poly_pts[:, 0] - cx
+                vy = poly_pts[:, 1] - cy
+                wx = np.roll(vx, -1)
+                wy = np.roll(vy, -1)
+                dx = wx - vx
+                dy = wy - vy
+                det = cos_phi * dy - sin_phi * dx
+                valid = np.abs(det) >= 1e-9
+                safe_det = np.where(valid, det, 1.0)
+                t_arr = np.where(valid, (vx * dy - vy * dx) / safe_det, -1.0)
+                s_arr = np.where(valid, (vx * sin_phi - vy * cos_phi) / safe_det, -1.0)
+                ok = valid & (t_arr > 1e-6) & (s_arr >= -1e-6) & (s_arr <= 1.0 + 1e-6)
+                if ok.any():
+                    idx   = int(np.where(ok)[0][int(np.argmax(t_arr[ok]))])
+                    s_b   = float(np.clip(s_arr[idx], 0.0, 1.0))
+                    t_b   = float(t_arr[idx])
+                    if t_b > best_t:
+                        best_t  = t_b
+                        best_pt = poly_pts[idx] + s_b * (poly_pts[(idx + 1) % n] - poly_pts[idx])
+
+            if best_pt is None:
+                # Fallback: outermost vertex nearest to phi_m across all polygons.
+                pts3d_fb = np.vstack(poly_pts_list)
+                phi_fb   = np.arctan2(pts3d_fb[:, 1] - cy, pts3d_fb[:, 0] - cx) % (2.0 * np.pi)
+                d_phi    = np.abs(((phi_fb - phi_m + np.pi) % (2.0 * np.pi)) - np.pi)
+                mask     = d_phi <= phi_half + 1e-6
+                if not mask.any():
+                    mask = np.zeros(len(pts3d_fb), dtype=bool)
+                    mask[int(np.argmin(d_phi))] = True
+                r2      = (pts3d_fb[mask, 0] - cx) ** 2 + (pts3d_fb[mask, 1] - cy) ** 2
+                best_pt = pts3d_fb[mask][int(np.argmax(r2))].copy()
+
+            pts_by_meridian[m_idx].append(best_pt.copy())
             z_by_meridian[m_idx].append(float(z_level))
 
     # Build each _Meridian from its accumulated point sequence.
@@ -912,21 +944,26 @@ def _compute_row_z_positions(
     """Row Z positions via equal surface-arc intervals (meridian-arc method).
 
     Anchors the first row one leaf-length of arc above the lowest upward-facing
-    surface; anchors the last row just below the world-Z apex.  Fills in rows
-    at the integer-optimal arc-step between them.
+    surface; anchors the last row 0.25-leaf-lengths of surface arc before the
+    apex.  Fills in rows at the integer-optimal arc-step between them.
     """
     if not meridians:
         return []
 
-    z_top_anchor  = z_top - 0.25 * leaf_length_mm
+    # Top anchor: 0.25 leaf-lengths of SURFACE ARC before the apex.
+    # z_top − 0.25·L in z-space is wrong near the apex of any convex mesh:
+    # the surface curves steeply there, so 1 mm of z corresponds to several mm
+    # of arc, leaving room for additional rows that this anchor would skip.
+    s_apex  = float(np.mean([m.arc_vals[-1] for m in meridians]))
+    s_top   = max(s_apex - 0.25 * leaf_length_mm, 1e-6)
 
     z_placeable   = _lowest_placeable_z(meridians, normal_z_threshold=-0.1)
     s_placeable   = _avg_arc_for_z(z_placeable, meridians)
     z_bot_anchor  = _avg_z_for_arc(s_placeable + leaf_length_mm, meridians)
+    z_top_anchor  = _avg_z_for_arc(s_top, meridians)
     z_bot_anchor  = min(z_bot_anchor, z_top_anchor)
 
     s_bot     = _avg_arc_for_z(z_bot_anchor, meridians)
-    s_top     = _avg_arc_for_z(z_top_anchor, meridians)
     inner_arc = max(s_top - s_bot, 1e-6)
 
     row_step_target = leaf_length_mm * max(1.0 - float(leaf_v_overlap), 0.05)
@@ -1312,14 +1349,13 @@ def _build_foliage_cluster_mesh(
                 )
             contact_angle = _ca_cache[rr_key]
 
-            # Guard: at contact_angle ≥ π/2 the leaf tangent points into or
-            # along the cluster surface (–up_hint direction), so the leaf grows
-            # inward rather than outward.  This happens when the cluster ring
-            # radius is too small for the leaf geometry (D > 2R, see
-            # _contact_angle_for_sphere).  The resulting mesh is inside-out and
-            # looks like a spike through the cluster — skip it.
+            # When the local ring radius is too small for press-against-sphere
+            # geometry (D > 2R → contact_angle ≥ π/2), lay the leaf flat instead
+            # of skipping.  ca=0 means tangent=T0 (radially outward, no downward
+            # tilt), giving leaves that grow flat from the surface — natural at the
+            # near-horizontal apex of the cluster.
             if contact_angle >= np.pi / 2:
-                return
+                contact_angle = 0.0
 
             # Apply contact angle: tilt the leaf frame so the tip presses
             # against the local sphere surface, ensuring raycast embedding works.
@@ -1379,6 +1415,12 @@ def _build_foliage_cluster_mesh(
         # XY centroid of the cluster — azimuthal origin for meridian sampling.
         cx_m = float(shaped.vertices[:, 0].mean())
         cy_m = float(shaped.vertices[:, 1].mean())
+        # 3-D mesh centroid for contact-angle radius.  Using the cross-section
+        # centroid (centroid_3d at z_row) gives local_r → 0 at the apex, which
+        # drives ca → 90° and produces leaves that stand vertically.  The 3-D
+        # centroid gives approximately the cluster radius at every surface point.
+        mesh_centroid_3d = np.array([cx_m, cy_m,
+                                     float(shaped.vertices[:, 2].mean())])
 
         meridians = _build_meridians(
             shaped,
@@ -1428,7 +1470,7 @@ def _build_foliage_cluster_mesh(
                         # Skip downward-facing surfaces.
                         if float(up_hint[2]) < -0.1:
                             continue
-                        local_r = float(np.linalg.norm(pt3d - centroid_3d))
+                        local_r = float(np.linalg.norm(pt3d - mesh_centroid_3d))
                         _emit_leaf(
                             pt3d, up_hint, (row_idx, ci),
                             cluster_radius_mm=max(local_r, 1e-3),
