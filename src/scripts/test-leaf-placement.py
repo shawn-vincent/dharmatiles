@@ -151,6 +151,7 @@ class _PlacementStats:
     rows: list[tuple[float, int, int]] = dataclasses.field(default_factory=list)
     # Per-leaf data
     base_positions: list[np.ndarray] = dataclasses.field(default_factory=list)
+    base_tangents: list[np.ndarray] = dataclasses.field(default_factory=list)
     base_row_idx: list[int] = dataclasses.field(default_factory=list)
     root_depths: list[float] = dataclasses.field(default_factory=list)
     # Per-leaf: maximum distance of any curl-region vertex (> L/2 from base)
@@ -160,7 +161,10 @@ class _PlacementStats:
     # Per-leaf: maximum depth of any curl-region vertex that lies INSIDE the
     # mesh (unsigned distance to nearest surface point).  > 0 = buried.
     leaf_buried_depths: list[float] = dataclasses.field(default_factory=list)
+    # Per-row perimeter (sum of all polygon perimeters in that cross-section slice)
+    row_perims: list[float] = dataclasses.field(default_factory=list)
     # Geometry parameters (filled in once after the row loop)
+    leaf_width_mm: float = 0.0      # W — used for effective-overlap calculation
     col_step: float = 0.0           # min expected spacing between same-row leaves
     expected_row_step: float = 0.0  # L * (1 - v_overlap) — target z-gap between rows
     z_top: float = 0.0              # mesh apex Z
@@ -202,6 +206,44 @@ def _min_width_xy(pts: np.ndarray) -> float:
     projs = xy @ dirs.T                                          # (N, 90)
     widths = projs.max(axis=0) - projs.min(axis=0)              # (90,)
     return float(widths.min())
+
+
+def _effective_ring_perimeter(
+    base_positions: list[np.ndarray],
+    tangents: list[np.ndarray],
+    leaf_length_mm: float,
+    cx: float,
+    cy: float,
+) -> float:
+    """Compute the actual path length traced by leaf midpoints around the ring.
+
+    Each leaf's widest cross-section is at L/2 along its growth direction
+    (tangent).  We project midpoints to XY, sort by angle around (cx, cy),
+    sum consecutive distances, and close the ring only when leaves span most
+    of the circumference (largest angular gap < 120°).  This makes no
+    assumption about shape — it works for spheres, cylinders, and any tilted
+    or curved cluster.
+    """
+    if len(base_positions) < 2:
+        return 0.0
+    half_L = leaf_length_mm / 2.0
+    mids = np.array([b + half_L * t for b, t in zip(base_positions, tangents)])
+    xy   = mids[:, :2]
+    angles = np.arctan2(xy[:, 1] - cy, xy[:, 0] - cx)
+    order  = np.argsort(angles)
+    xy_s   = xy[order]
+    ang_s  = angles[order]
+
+    # Gap between consecutive leaves (angular); check whether to close the ring.
+    gaps     = np.diff(ang_s)
+    max_gap  = float(gaps.max()) if len(gaps) else 2 * math.pi
+    close    = max_gap < (2 * math.pi * 2 / 3)   # close if no gap > 240°
+
+    dists = np.linalg.norm(np.diff(xy_s, axis=0), axis=1)
+    total = float(dists.sum())
+    if close:
+        total += float(np.linalg.norm(xy_s[-1] - xy_s[0]))
+    return total
 
 
 # ── Shared leaf / cluster parameters ─────────────────────────────────────────
@@ -293,6 +335,7 @@ def _place_leaves_on_mesh(
     expected_row_step = L * max(1.0 - vov, 0.05)
     stats = _PlacementStats(
         label            = label,
+        leaf_width_mm    = W,
         col_step         = col_step,
         expected_row_step = expected_row_step,
         z_top            = z_top,
@@ -320,6 +363,7 @@ def _place_leaves_on_mesh(
         row_color   = _row_rgba(row_idx)
         row_attempt = 0
         row_placed  = 0
+        row_perim   = 0.0
 
         sec = mesh.section(
             plane_origin = np.array([0.0, 0.0, z_row]),
@@ -327,15 +371,18 @@ def _place_leaves_on_mesh(
         )
         if sec is None:
             stats.rows.append((z_row, 0, 0))
+            stats.row_perims.append(0.0)
             continue
         try:
             path2d, xform = sec.to_planar()
         except Exception:
             stats.rows.append((z_row, 0, 0))
+            stats.row_perims.append(0.0)
             continue
 
         for poly in path2d.polygons_full:
             perim = float(poly.length)
+            row_perim += perim
             if perim < 1e-3:
                 continue
 
@@ -436,6 +483,7 @@ def _place_leaves_on_mesh(
                     stats.leaf_buried_depths.append(0.0)
 
                 stats.base_positions.append(pt3d.copy())
+                stats.base_tangents.append(tangent.copy())
                 stats.base_row_idx.append(row_idx)
                 stats.root_depths.append(root_depth)
                 row_placed        += 1
@@ -446,6 +494,7 @@ def _place_leaves_on_mesh(
                     parts.append(solid)
 
         stats.rows.append((z_row, row_attempt, row_placed))
+        stats.row_perims.append(row_perim)
         stats.n_attempted += row_attempt
 
     stats.n_rows = len(row_zs)
@@ -766,6 +815,50 @@ def _check_artifacts(all_stats: list[_PlacementStats]) -> int:
                     f"top-row bases not converging near apex"
                 )
 
+        # ── 16. Per-row effective horizontal overlap ──────────────────────────
+        # Compute the path length traced by actual leaf midpoints (base + L/2
+        # along tangent) sorted by angle around the centroid.  No shape
+        # assumption — works correctly for spheres, cylinders, and tilted
+        # clusters.
+        # true_hov = 1 - (eff_perim / n_placed) / W
+        #   > 0  → leaf bodies overlap
+        #   = 0  → leaf bodies exactly touch
+        #   < 0  → gap between leaf bodies (negative = wasted space)
+        L = float(_LEAF["leaf_length_mm"])
+        W = stats.leaf_width_mm
+        if W > 0 and has_leaves:
+            spare_rows = []
+            row_ids_arr = np.array(stats.base_row_idx)
+            for row_i, (z, att, pl) in enumerate(stats.rows):
+                if pl < 2:
+                    continue
+                mask = np.where(row_ids_arr == row_i)[0]
+                row_bases = [stats.base_positions[i] for i in mask]
+                row_tangs = [stats.base_tangents[i]  for i in mask]
+                rp = stats.row_perims[row_i] if row_i < len(stats.row_perims) else 0.0
+                eff_perim = _effective_ring_perimeter(
+                    row_bases, row_tangs, L, stats.cx, stats.cy
+                )
+                if eff_perim <= 0:
+                    continue
+                eff_step  = eff_perim / pl
+                true_hov  = 1.0 - eff_step / W
+                total_gap = eff_perim - pl * W
+                extra     = int(math.floor(eff_perim / W)) - pl
+                if extra > 0:
+                    spare_rows.append((z, pl, rp, eff_perim, true_hov, total_gap, extra))
+            if spare_rows:
+                issues.append(
+                    f"UNDERFILLED RINGS: {len(spare_rows)} row(s) could fit "
+                    f"additional leaves — "
+                    + "; ".join(
+                        f"z={z:.1f} has {pl} leaves "
+                        f"(base_perim={rp:.1f} eff_perim={ep:.1f} mm, "
+                        f"true_hov={true_hov:+.2f}, gap={total_gap:.1f} mm, room for +{extra})"
+                        for z, pl, rp, ep, true_hov, total_gap, extra in spare_rows
+                    )
+                )
+
         # ── Print per-object summary ──────────────────────────────────────────
         status = "PASS" if not issues else "FAIL"
         total_issues += len(issues)
@@ -792,6 +885,32 @@ def _check_artifacts(all_stats: list[_PlacementStats]) -> int:
                 f"z={z:.1f}:{pl}/{att}" for z, att, pl in stats.rows
             )
             print(row_bar)
+
+        # Per-row effective overlap table (actual midpoint ring path length)
+        L = float(_LEAF["leaf_length_mm"])
+        W = stats.leaf_width_mm
+        if W > 0 and has_leaves:
+            parts_line = []
+            row_ids_arr2 = np.array(stats.base_row_idx)
+            for row_i, (z, att, pl) in enumerate(stats.rows):
+                if pl < 2:
+                    continue
+                mask = np.where(row_ids_arr2 == row_i)[0]
+                row_bases = [stats.base_positions[i] for i in mask]
+                row_tangs = [stats.base_tangents[i]  for i in mask]
+                rp = stats.row_perims[row_i] if row_i < len(stats.row_perims) else 0.0
+                eff_perim = _effective_ring_perimeter(
+                    row_bases, row_tangs, L, stats.cx, stats.cy
+                )
+                if eff_perim <= 0:
+                    continue
+                true_hov = 1.0 - (eff_perim / pl) / W
+                parts_line.append(
+                    f"z={z:.1f}:hov={true_hov:+.2f}"
+                    f"(base={rp:.1f} eff={eff_perim:.1f} n={pl})"
+                )
+            if parts_line:
+                print("  eff-hov: " + "  ".join(parts_line))
 
         if stats.root_depths:
             print(
