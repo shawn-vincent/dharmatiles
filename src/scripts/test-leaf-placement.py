@@ -129,7 +129,7 @@ _BURIED_LEAF_CURL_DEPTH_MM = 0.5
 # Top-row spread: maximum acceptable minimum-width (mm) of the XY convex hull
 # of the topmost row's base positions.  A large spread means the top row is
 # far from the apex rather than converging near the tip.
-_TOP_ROW_SPREAD_MAX_MM = 8.0
+_TOP_ROW_SPREAD_MAX_MM = 1.0
 
 
 # ── Per-object placement statistics ──────────────────────────────────────────
@@ -215,8 +215,8 @@ _LEAF = dict(
     leaf_outer_curve    = 0.72,
     leaf_curl_deg       = 40.0,
     leaf_lift_mm        = 0.0,
-    leaf_h_overlap      = 0.2,
-    leaf_v_overlap      = 0.5,
+    leaf_h_overlap      = 0.0,
+    leaf_v_overlap      = 0.0,
     leaf_arc_meridians  = 6,
     leaf_arc_z_samples  = 64,
 )
