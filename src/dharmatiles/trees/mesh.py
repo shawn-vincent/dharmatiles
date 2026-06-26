@@ -545,35 +545,43 @@ def _contact_angle_for_sphere(
     curl_deg:       float,
     lift_mm:        float,
 ) -> float:
-    """Analytical contact angle (radians) for a leaf pressed against a sphere.
+    """Contact angle (radians) so the lowest tip-half surface point grazes the sphere.
 
-    Closed-form tip-touching formula derived from the constraint |tip(θ) − C|² = R²:
+    The arch profile raises the midrib to a hump that descends back toward the
+    tip before the curl lifts it again.  When only the tip is used as the
+    reference, the arch belly between s≈0.5 and the curl zone requires a
+    *smaller* contact angle to touch the sphere than the tip does — so at the
+    tip-touching ca the belly is already inside the sphere.
 
-        contact_angle = arccos(−D / 2R) − atan2(L_comp, N_comp)
+    Fix: scan all tip-half midrib stations (s > 0.5) plus the tip vertex and
+    return the *minimum* valid contact angle.  That vertex grazes the sphere
+    first; everything else is above the surface.
 
-    where D = |v_tip − base| (tip displacement magnitude, from
-    ``compute_leaf_geometry`` with lift = 0), and L_comp / N_comp are its
-    projections onto the leaf longitudinal (L) and normal (N) axes.
+    For each midrib displacement d = (d_L, d_N) from base (lateral d_T ≈ 0 at
+    midrib), the constraint |rot_ca(d)|² = R² reduces to:
 
-    The tip is the outermost point on a convex leaf, so this gives the exact
-    contact angle.  T_comp ≈ 0 by leaf bilateral symmetry (the tip lies in the
-    L–N plane), making D = √(L² + N²) exact.
+        d_L·sin(ca) − d_N·cos(ca) = D_LN² / (2R),   D_LN = hypot(d_L, d_N)
 
-    The result is invariant under rotation of T0 around up_hint (sphere
-    symmetry), so it depends only on the leaf shape and sphere radius —
-    not on the circumferential placement angle.  Cache by cluster_radius_mm.
+    which solves to:
 
-    lift_mm is the final per-leaf lift applied on top of the contact angle;
-    the formula is run at lift = 0 (contact angle is defined at zero lift).
+        ca = arctan2(d_N, d_L) + arcsin(D_LN / 2R)
+
+    (equivalent to the former tip formula — verified algebraically.)
+
+    Lateral (off-axis) vertices always require a larger ca than the midrib, so
+    the midrib alone is the binding constraint.
+
+    lift_mm is stacked on top of the contact angle and does not affect it;
+    the search runs at lift = 0.
     """
-    # Canonical frame: sphere centred at origin, base at (0, 0, R).
+    R  = float(cluster_radius_mm)
     up = np.array([0.0, 0.0, 1.0])
     T0 = np.array([1.0, 0.0, 0.0])
-    bp = up * float(cluster_radius_mm)
+    bp = up * R
 
     g = compute_leaf_geometry(
         base_pos=bp, tangent=T0, up_hint=up,
-        lift_mm=0.0,           # search at lift = 0; lift is stacked on top
+        lift_mm=0.0,
         length_mm=length_mm, width_mm=width_mm,
         thickness_mm=thickness_mm, fold_angle_deg=fold_angle_deg,
         inner_curve=inner_curve, outer_curve=outer_curve,
@@ -581,13 +589,32 @@ def _contact_angle_for_sphere(
         curl_deg=curl_deg,
     )
 
-    d      = g.v_tip - g.bp
-    L_comp = float(np.dot(d, g.L))          # longitudinal projection
-    N_comp = float(np.dot(d, g.N))          # normal projection (T_comp ≈ 0)
-    D      = float(np.hypot(L_comp, N_comp))
+    # Tip-half midrib positions: bot_pts at the center column (t=0) equals the
+    # geometric midrib (fold_h=0 at t=0, no lobe offset on bot_pts).
+    col      = g.bot_pts.shape[1] // 2
+    tip_half = g.s_int > 0.5
+    mid_pos  = g.bot_pts[tip_half, col, :]           # (K, 3)
+    cands    = np.vstack([mid_pos, g.v_tip[np.newaxis]])  # (K+1, 3)
 
-    rhs = float(np.clip(-D / (2.0 * float(cluster_radius_mm)), -1.0, 1.0))
-    return float(np.arccos(rhs) - np.arctan2(L_comp, N_comp))
+    d    = cands - g.bp[np.newaxis]       # (K+1, 3) displacements from base
+    d_L  = d @ g.L                        # longitudinal component
+    d_N  = d @ g.N                        # normal component (≥ 0 for arched leaf)
+    D_LN = np.hypot(d_L, d_N)
+
+    valid = (D_LN > 1e-9) & (D_LN <= 2.0 * R)
+    if not valid.any():
+        # Fallback when leaf is wider than sphere diameter: original tip formula.
+        d0     = g.v_tip - g.bp
+        L_comp = float(np.dot(d0, g.L))
+        N_comp = float(np.dot(d0, g.N))
+        D      = float(np.hypot(L_comp, N_comp))
+        rhs    = float(np.clip(-D / (2.0 * R), -1.0, 1.0))
+        return float(np.arccos(rhs) - np.arctan2(L_comp, N_comp))
+
+    ca_vals = (np.arctan2(d_N[valid], d_L[valid])
+               + np.arcsin(np.clip(D_LN[valid] / (2.0 * R), 0.0, 1.0)))
+    pos = ca_vals[ca_vals > 0]
+    return float(pos.min() if len(pos) else ca_vals.min())
 
 
 # ── Foliage clump: icosphere deformed to cone+dome profile, Gaussian noise ─────
