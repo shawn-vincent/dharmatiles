@@ -14,8 +14,7 @@ stl/**/*.stl
 stl/**/*.3mf
 stl/**/*.pdf
 
-# Generated PNG renders — committed to git as documentation.
-# (Remove this line if you want to re-ignore them.)
+stl/test/*.png
 
 # Build provenance — generated artifact, must not be committed
 src/dharmatiles/_build_info.py
