@@ -1,6 +1,6 @@
 # Leaf Placement — Specification
-*Updated 2026-06-25.  Prior algorithm (Z-slice with uniform dZ) is documented below as
-"Current Algorithm (Deprecated)".  The new design is "Meridian-Arc Algorithm (Proposed)".*
+*Updated 2026-06-27.  Meridian-arc algorithm is now implemented.  Prior algorithm
+(Z-slice with uniform dZ) is retained below as "Current Algorithm (Deprecated)".*
 
 *Full history: `docs/meta/history/2026-06-24-leaf-rendering-deep-history.md`,
 `docs/meta/history/2026-06-24-foliage-cluster-baldness.md`,
@@ -15,9 +15,13 @@ Foliage clusters are the bumpy green blobs at the tip of each terminal branch.
 Leaves are separate 3D geometry (watertight solids) sitting on the cluster surface.
 
 Implementation files:
-- `src/dharmatiles/trees/leaf.py` — leaf geometry primitives
-- `src/dharmatiles/trees/mesh.py` — placement algorithm (`_build_foliage_cluster_mesh`,
-  `_emit_leaf`, `_contact_angle_for_sphere`)
+- `src/dharmatiles/trees/leaf.py` — leaf geometry primitives (`compute_leaf_geometry`,
+  `build_leaf_surface`, `solidify_leaf`, `boundary_loop`)
+- `src/dharmatiles/trees/placement.py` — placement algorithm (`place_leaves_on_mesh`,
+  `_contact_angle_for_mesh`, `_leaf_contact_candidates`, `LeafPlacementStats`)
+- `src/dharmatiles/trees/mesh.py` — `_contact_angle_for_sphere` (sphere-radius seed for
+  the mesh contact search), meridian helpers (`_build_meridians`,
+  `_compute_row_z_positions`, `_interpolate_meridian_normal`)
 
 ---
 
@@ -85,8 +89,8 @@ by the foliage placement path.  The foliage path uses `build_leaf_surface()` +
 | `leaf_lift_mm` | 3.0 | Additional tip lift above contact-angle position |
 | `leaf_h_overlap` | 0.2 | Fraction of leaf width that overlaps adjacent columns |
 | `leaf_v_overlap` | 0.5 | Fraction of leaf length that overlaps adjacent rows |
-| `leaf_arc_meridians` | 6 | **New.** Number of meridian curves for arc-length computation |
-| `leaf_arc_z_samples` | 64 | **New.** Number of fine Z levels for meridian sampling |
+| `leaf_arc_meridians` | 6 | Number of meridian curves for arc-length computation |
+| `leaf_arc_z_samples` | 64 | Number of fine Z levels for meridian sampling |
 | `leaf_angle_jitter_deg` | 24.0 | Yaw jitter range (currently disabled: `jit=0`) |
 | `leaf_pos_jitter` | 0.165 | Position jitter fraction (currently disabled: `pj=0`) |
 | `leaf_cap_count` | 12 | **Deprecated by meridian-arc algorithm.** Apex cap leaves |
@@ -99,8 +103,10 @@ by the foliage placement path.  The foliage path uses `build_leaf_surface()` +
 ### What It Is
 
 The contact angle is the rotation about the lateral axis T (perpendicular to both the
-leaf growth direction and the cluster outward normal) that presses the leaf tip just
-against the cluster surface.
+leaf growth direction and the cluster outward normal) that positions the leaf so its
+arch belly grazes the cluster surface.  The belly (the dip between the mid-leaf hump
+and the curl zone, at roughly s ≈ 0.7) is the first part of the leaf to contact the
+surface as the angle increases; the tip floats above the surface at this angle.
 
 Without the contact angle, the leaf lies flat on the surface with its arch curving the
 tip away from the surface.  The `solidify_leaf` wall-embedding raycast needs perimeter
@@ -120,29 +126,72 @@ up_placed = up_hint * cos(ca) + T0 * sin(ca)
 
 `build_leaf_surface(base_pos, tangent, up_placed, ...)` builds the leaf in this frame.
 
-### Analytical Computation (`_contact_angle_for_sphere`)
+### Sphere Seed (`_contact_angle_for_sphere`)
 
-The attachment surface is locally approximated as a sphere of radius `local_r`
-(the cross-section radius at the leaf's Z level and azimuthal position — derived
-from the meridian cross-section, not a global fixed value).
+`_contact_angle_for_sphere` approximates the contact angle assuming the local surface
+is a sphere of radius `local_r`.  It is computed once per unique `local_r` value and
+cached; its result is passed to `_contact_angle_for_mesh` as `initial_angle`.
 
-The contact angle satisfies the tip-touching constraint:
+The leaf arch profile rises from the base to a hump at mid-leaf, then dips back down
+(the *belly*) before the curl in the final third recovers upward.  The belly dip is
+the point that presses against the sphere first as the contact angle grows — not the
+tip.  Using the tip would leave the belly buried inside the sphere surface.
+
+The dip is identified as `argmin(d_normal)` over the tip-half midrib (s > 0.5) plus
+the tip vertex, where `d_normal = d @ along_axis`:
 
 ```
-|tip(ca) − cluster_center|² = local_r²
+col       = lower_grid.shape[1] // 2   # center column = geometric midrib
+tip_half  = s_int > 0.5
+cands     = [lower_grid[tip_half, col], tip_pt]   # tip-half midrib + tip
+
+d         = cands − base_pt            # displacements from base
+d_along   = d @ along_axis             # longitudinal component
+d_normal  = d @ normal_axis            # normal component (arch height)
+D_LN      = hypot(d_along, d_normal)
+
+dip       = argmin(d_normal)           # belly: smallest normal displacement
 ```
 
-After expanding (T_comp ≈ 0 by bilateral leaf symmetry):
+For the belly-dip vertex the sphere-grazing constraint `|rot_ca(d)|² = R²` reduces to:
 
 ```
-contact_angle = arccos(−D / (2·local_r)) − arctan(L_comp / N_comp)
+ca = arctan2(d_normal[dip], d_along[dip]) + arcsin(D_LN[dip] / (2·R))
 ```
 
-where D = |v_tip − base| (tip displacement at ca=0, from `compute_leaf_geometry`),
-and L_comp / N_comp are its projections onto the leaf longitudinal (L) and normal (N)
-axes.
+**Fallback** (when D_LN[dip] > 2R, i.e. leaf larger than the sphere):
 
-The computation is cached per `(local_r, leaf_geometry_params)`.
+```
+along_comp  = dot(tip_pt − base_pt, along_axis)
+normal_comp = dot(tip_pt − base_pt, normal_axis)
+D           = hypot(along_comp, normal_comp)
+ca          = arccos(−D / (2·R)) − arctan2(along_comp, normal_comp)
+```
+
+### Mesh-Based Refinement (`_contact_angle_for_mesh`)
+
+`_contact_angle_for_sphere` gives a close approximation but is only exact on a true
+sphere.  `_contact_angle_for_mesh` refines it against the actual parent mesh using a
+bisection search.
+
+The same tip-half surface sample set used in the sphere seed (`_leaf_contact_candidates`)
+is evaluated at each candidate angle.  Distances are signed via the closest triangle
+normal: positive = inside the mesh (leaf penetrates), negative = outside (leaf floats).
+The target angle is the smallest `ca` where any contact candidate reaches zero signed
+distance (leaf surface just grazes the mesh).
+
+```
+ca_guess = _contact_angle_for_sphere(local_r, ...)   # sphere seed (cached)
+ca       = _contact_angle_for_mesh(
+               mesh, proximity, pt3d, T0, up_hint,
+               contact_candidates,
+               initial_angle=ca_guess,
+           )
+```
+
+The bisection starts from `ca_guess` and expands only as far as the actual mesh
+requires, so the search is fast on surfaces close to spherical and still correct on
+flat cone bodies or asymmetric dome regions.
 
 ### Guard
 
@@ -170,7 +219,7 @@ and the dome.
 
 ---
 
-## Meridian-Arc Algorithm (Proposed)
+## Meridian-Arc Algorithm
 
 ### Algorithm Scope — Works on Any Closed Mesh
 
@@ -414,7 +463,12 @@ for z_row in row_z_positions:
             # Using the cross-section centroid drives local_r → 0 at the apex,
             # pushing ca → π/2 and making apex leaves stand vertically.
             local_r = dist(pt3d, mesh_centroid_3d)
-            _emit_leaf(pt3d, up_hint, key=(row_idx, ci), cluster_radius_mm=local_r)
+            ca_guess = _contact_angle_for_sphere(local_r, ...)   # belly-dip sphere seed (cached)
+            ca = _contact_angle_for_mesh(
+                mesh, proximity, pt3d, T0, up_hint,
+                contact_candidates, initial_angle=ca_guess,
+            )
+            _emit_leaf(pt3d, up_hint, ca=ca, key=(row_idx, ci))
 ```
 
 ---
@@ -551,14 +605,14 @@ On very small clusters (`r_tip < 2.5 mm`) `contact_angle → π/2` and all leave
 skipped, leaving a bare ball.  Consider scaling leaf geometry proportionally to
 `r_tip` so small clusters still get some coverage.
 
-### 3. Contact-angle formula assumes local sphere
+### 3. Contact-angle sphere seed accuracy
 
-The formula `contact_angle = arccos(−D / 2R) − arctan(L_comp / N_comp)` uses the
-cross-section radius as a local sphere radius.  This is accurate on the dome (locally
-spherical) and over-estimates the contact angle on the flat cone body (which has
-infinite curvature radius).  A future improvement: use the meridian's second-derivative
-`d²r/ds²` to compute the actual local surface curvature and feed it into the contact
-angle formula.
+`_contact_angle_for_sphere` approximates local surface curvature as a sphere of radius
+`local_r`.  This is accurate on the dome and over-estimates on the flat cone body.
+`_contact_angle_for_mesh` corrects this by bisecting against the actual mesh, so the
+final `ca` is accurate regardless of local curvature.  The sphere seed only needs to
+be close enough to converge the bisection quickly — no further improvement is needed
+here.
 
 ### 4. Meridian sampling near the back-hemisphere/cone seam
 

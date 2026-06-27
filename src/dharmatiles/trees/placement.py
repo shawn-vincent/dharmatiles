@@ -17,7 +17,7 @@ import numpy as np
 import trimesh
 
 from ._utils import _safe_norm
-from .leaf import boundary_loop, build_leaf_surface, solidify_leaf
+from .leaf import boundary_loop, build_leaf_surface, compute_leaf_geometry, solidify_leaf
 from .mesh import (
     _build_meridians,
     _compute_row_z_positions,
@@ -117,6 +117,143 @@ def effective_ring_perimeter(
     if close:
         total += float(np.linalg.norm(xy_s[-1] - xy_s[0]))
     return total
+
+
+def _leaf_contact_candidates(
+    *,
+    length_mm:      float,
+    width_mm:       float,
+    thickness_mm:   float,
+    fold_angle_deg: float,
+    inner_curve:    float,
+    outer_curve:    float,
+    curl_deg:       float,
+    lift_mm:        float,
+) -> np.ndarray:
+    """Canonical curl-region displacements that can bind against the parent mesh.
+
+    The old sphere formula assumes a single midrib dip point is always the first
+    contact.  On faceted or non-spherical parent meshes the binding point can
+    move laterally or onto the upper/lower surface, so solve against the same
+    tip-half surface sample set used by the artifact detector.
+    """
+    g = compute_leaf_geometry(
+        base_pos=np.zeros(3, dtype=float),
+        tangent=np.array([1.0, 0.0, 0.0]),
+        up_hint=np.array([0.0, 0.0, 1.0]),
+        length_mm=length_mm,
+        width_mm=width_mm,
+        thickness_mm=thickness_mm,
+        fold_angle_deg=fold_angle_deg,
+        inner_curve=inner_curve,
+        outer_curve=outer_curve,
+        curl_deg=curl_deg,
+        lift_mm=0.0,
+    )
+
+    pts = np.vstack([
+        g.upper_grid.reshape(-1, 3),
+        g.lower_grid.reshape(-1, 3),
+        g.tip_pt[np.newaxis],
+    ])
+    base_d = np.linalg.norm(pts - g.base_pt[np.newaxis], axis=1)
+    return pts[base_d > (float(length_mm) / 2.0)]
+
+
+def _contact_angle_for_mesh(
+    mesh: trimesh.Trimesh,
+    proximity: trimesh.proximity.ProximityQuery,
+    base_pos: np.ndarray,
+    tangent0: np.ndarray,
+    up_hint: np.ndarray,
+    candidates: np.ndarray,
+    *,
+    initial_angle: float,
+    iterations: int = 8,
+    contact_tol_mm: float = 0.02,
+) -> float:
+    """Find the first contact angle where the curl region touches *mesh*.
+
+    Distances are signed locally from the closest triangle normal: positive is
+    inside the parent mesh and negative is outside.  The target angle is the
+    smallest rotation where any contact candidate reaches zero distance, which
+    keeps the contact calculation tied to the actual parent mesh rather than to
+    a smooth sphere proxy.
+    """
+    base = np.asarray(base_pos, float)
+    T0   = _safe_norm(np.asarray(tangent0, float))
+    N0   = _safe_norm(np.asarray(up_hint, float))
+    A0   = _safe_norm(np.cross(N0, T0))
+
+    dL = candidates[:, 0]
+    dA = candidates[:, 1]
+    dN = candidates[:, 2]
+
+    def _points(ca: float) -> np.ndarray:
+        c = float(math.cos(ca))
+        s = float(math.sin(ca))
+        return (
+            base[np.newaxis]
+            + (dL * c + dN * s)[:, np.newaxis] * T0[np.newaxis]
+            + dA[:, np.newaxis] * A0[np.newaxis]
+            + (-dL * s + dN * c)[:, np.newaxis] * N0[np.newaxis]
+        )
+
+    eval_cache: dict[float, float] = {}
+
+    def _max_inside(ca: float) -> float:
+        ca = float(np.clip(ca, 0.0, (math.pi / 2.0) - 1e-5))
+        key = round(ca, 12)
+        if key in eval_cache:
+            return eval_cache[key]
+        pts = _points(ca)
+        closest, _, tri_id = proximity.on_surface(pts)
+        normals = mesh.face_normals[np.asarray(tri_id, dtype=np.int64)]
+        signed = -np.einsum("ij,ij->i", pts - closest, normals)
+        val = float(np.max(signed)) if len(signed) else -math.inf
+        eval_cache[key] = val
+        return val
+
+    angle_max = (math.pi / 2.0) - 1e-5
+    ca0 = float(np.clip(initial_angle, 0.0, angle_max))
+    d0 = _max_inside(ca0)
+    if abs(d0) <= contact_tol_mm:
+        return ca0
+
+    lo = ca0
+    hi = ca0
+
+    # Use the analytical sphere angle as a local predictor, then expand only
+    # as far as the actual mesh requires.  This preserves arbitrary-mesh
+    # correctness while avoiding a full 0..90 degree search for every leaf.
+    step = math.radians(2.0)
+    if d0 < 0.0:
+        while hi < angle_max and _max_inside(hi) < 0.0:
+            lo = hi
+            hi = min(angle_max, hi + step)
+            step *= 2.0
+        if _max_inside(hi) < 0.0:
+            return hi
+    else:
+        while lo > 0.0 and _max_inside(lo) > 0.0:
+            hi = lo
+            lo = max(0.0, lo - step)
+            step *= 2.0
+        if _max_inside(lo) > 0.0:
+            return lo
+
+    if _max_inside(lo) >= 0.0:
+        return lo
+    if _max_inside(hi) <= 0.0:
+        return hi
+
+    for _ in range(iterations):
+        mid = 0.5 * (lo + hi)
+        if _max_inside(mid) >= 0.0:
+            hi = mid
+        else:
+            lo = mid
+    return hi
 
 
 def place_leaves_on_mesh(
@@ -242,6 +379,8 @@ def place_leaves_on_mesh(
     _s_ca_ncol = math.sin(_ca_ncol)
 
     parts: list[trimesh.Trimesh] = []
+    _contact_candidates = _leaf_contact_candidates(**_leaf_kw)
+    _proximity = trimesh.proximity.ProximityQuery(mesh)
 
     for row_idx, z_row in enumerate(row_zs):
         row_attempt = 0
@@ -281,8 +420,7 @@ def place_leaves_on_mesh(
 
             _r_ring = perim / (2.0 * math.pi) if perim > 1e-6 else 1.0
             _r_mid  = _r_ring + (L / 2.0) * _t_xy_ncol
-            _eff_perim_est = (perim * (_r_mid / max(_r_ring, 1e-6))
-                              if perim > col_step else perim)
+            _eff_perim_est = perim * (_r_mid / max(_r_ring, 1e-6))
             n_col = max(1, int(math.ceil(_eff_perim_est / col_step)))
 
             for ci in range(n_col):
@@ -303,11 +441,6 @@ def place_leaves_on_mesh(
                     stats.skipped_small_r += 1
                     continue
 
-                ca = _cached_ca(local_r)
-                if ca >= math.pi / 2:
-                    ca = 0.0
-                    stats.ca_clamped += 1
-
                 row_attempt += 1
 
                 grav  = np.array([0.0, 0.0, -1.0])
@@ -320,6 +453,21 @@ def place_leaves_on_mesh(
                     T0 = _safe_norm(np.cross(up_hint, arb))
                 else:
                     T0 = proj / plen
+
+                ca_guess = _cached_ca(local_r)
+                if ca_guess >= math.pi / 2:
+                    ca_guess = (math.pi / 2.0) - 1e-5
+                    stats.ca_clamped += 1
+
+                ca = _contact_angle_for_mesh(
+                    mesh,
+                    _proximity,
+                    pt3d,
+                    T0,
+                    up_hint,
+                    _contact_candidates,
+                    initial_angle=ca_guess,
+                )
 
                 c_ca = math.cos(ca)
                 s_ca = math.sin(ca)
