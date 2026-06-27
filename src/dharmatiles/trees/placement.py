@@ -121,6 +121,39 @@ def effective_ring_perimeter(
     return total
 
 
+def _polygon_point_at_phi(
+    exterior_coords: np.ndarray,
+    cx: float,
+    cy: float,
+    phi: float,
+) -> np.ndarray | None:
+    """Ray→polygon-edge intersection at 2-D azimuth phi from (cx, cy).
+
+    Returns the outermost 2-D point on the polygon boundary hit by the ray, or
+    None if the ray misses all edges (degenerate polygon or pole singularity).
+    """
+    pts   = exterior_coords[:-1]        # drop the repeated closing vertex
+    n     = len(pts)
+    if n < 2:
+        return None
+    vx, vy = pts[:, 0] - cx, pts[:, 1] - cy
+    wx     = np.roll(vx, -1)
+    wy     = np.roll(vy, -1)
+    dx, dy = wx - vx, wy - vy
+    cos_p, sin_p = math.cos(phi), math.sin(phi)
+    det    = cos_p * dy - sin_p * dx
+    valid  = np.abs(det) >= 1e-9
+    safe   = np.where(valid, det, 1.0)
+    t_arr  = np.where(valid, (vx * dy - vy * dx) / safe, -1.0)
+    s_arr  = np.where(valid, (vx * sin_p - vy * cos_p) / safe, -1.0)
+    ok     = valid & (t_arr > 1e-6) & (s_arr >= -1e-6) & (s_arr <= 1.0 + 1e-6)
+    if not ok.any():
+        return None
+    idx = int(np.argmax(np.where(ok, t_arr, -1.0)))
+    s_b = float(np.clip(s_arr[idx], 0.0, 1.0))
+    return pts[idx] + s_b * (pts[(idx + 1) % n] - pts[idx])
+
+
 def _leaf_contact_candidates(
     *,
     length_mm:      float,
@@ -433,11 +466,20 @@ def place_leaves_on_mesh(
                 _belly_perim = perim
             n_col = max(1, int(math.ceil(_belly_perim / col_step)))
 
+            _poly_coords = np.array(poly.exterior.coords, dtype=float)[:, :2]
+            _cx2d, _cy2d = float(c2d.x), float(c2d.y)
+
             for ci in range(n_col):
-                t    = float(ci) / float(n_col)
-                pt2  = poly.exterior.interpolate(t, normalized=True)
-                p4d  = xform @ np.array([float(pt2.x), float(pt2.y), 0.0, 1.0])
-                pt3d = p4d[:3].copy()
+                phi_2d = 2.0 * math.pi * float(ci) / float(n_col)
+                _pt2d  = _polygon_point_at_phi(_poly_coords, _cx2d, _cy2d, phi_2d)
+                if _pt2d is not None:
+                    p4d  = xform @ np.array([float(_pt2d[0]), float(_pt2d[1]), 0.0, 1.0])
+                    pt3d = p4d[:3].copy()
+                else:
+                    t    = float(ci) / float(n_col)
+                    pt2  = poly.exterior.interpolate(t, normalized=True)
+                    p4d  = xform @ np.array([float(pt2.x), float(pt2.y), 0.0, 1.0])
+                    pt3d = p4d[:3].copy()
 
                 phi     = float(np.arctan2(pt3d[1] - cy, pt3d[0] - cx))
                 up_hint = _interpolate_meridian_normal(meridians, phi, z_row)
