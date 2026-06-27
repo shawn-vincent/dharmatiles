@@ -156,8 +156,6 @@ _CLUSTER = dict(
     r_foliage             = 5.5,
     clump_length_mm       = 10.5,
     leaves                = False,   # we run placement ourselves for row colouring
-    leaf_angle_jitter_deg = 0.0,
-    leaf_pos_jitter       = 0.0,
     **_LEAF,
 )
 
