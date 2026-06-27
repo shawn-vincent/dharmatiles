@@ -359,7 +359,7 @@ For each attachment point `pt3d` on the cross-section perimeter:
 
 4. Use `up_hint` for contact-angle computation and leaf placement.
    ```python
-   local_r = dist(pt3d, section_centroid_3d)   # same as current
+   local_r = dist(pt3d, mesh_centroid_3d)   # 3D centroid of whole mesh, NOT cross-section centroid
    ca = _contact_angle_for_sphere(local_r, ...)
    tangent   = normalize(T0 * cos(ca) - up_hint * sin(ca))
    up_placed = normalize(up_hint * cos(ca) + T0 * sin(ca))
