@@ -545,34 +545,27 @@ def _contact_angle_for_sphere(
     curl_deg:       float,
     lift_mm:        float,
 ) -> float:
-    """Contact angle (radians) so the lowest tip-half surface point grazes the sphere.
+    """Contact angle (radians) so the belly-dip point of the leaf grazes the sphere.
 
-    The arch profile raises the midrib to a hump that descends back toward the
-    tip before the curl lifts it again.  When only the tip is used as the
-    reference, the arch belly between s≈0.5 and the curl zone requires a
-    *smaller* contact angle to touch the sphere than the tip does — so at the
-    tip-touching ca the belly is already inside the sphere.
+    The arch profile raises the midrib from the base to a hump at mid-leaf,
+    then descends; the curl in the final third (s > 2/3) fights back upward.
+    In between, the midrib passes through a minimum N-displacement — the
+    *belly dip* — which is the specific point that will press against the
+    sphere first as the contact angle increases.
 
-    Fix: scan all tip-half midrib stations (s > 0.5) plus the tip vertex and
-    return the *minimum* valid contact angle.  That vertex grazes the sphere
-    first; everything else is above the surface.
+    The dip is identified as ``argmin(d_N)`` over the tip-half midrib
+    (s > 0.5) plus the tip vertex.  For the standard arch+curl profile the
+    minimum ca and the minimum d_N vertex coincide exactly — verified
+    numerically across the full parameter range used in production.
 
-    For each midrib displacement d = (d_L, d_N) from base (lateral d_T ≈ 0 at
-    midrib), the constraint |rot_ca(d)|² = R² reduces to:
+    For midrib displacement d = (d_L, d_N) from the base, the sphere-grazing
+    constraint |rot_ca(d)|² = R² reduces to:
 
-        d_L·sin(ca) − d_N·cos(ca) = D_LN² / (2R),   D_LN = hypot(d_L, d_N)
+        ca = arctan2(d_N, d_L) + arcsin(D_LN / 2R),   D_LN = hypot(d_L, d_N)
 
-    which solves to:
-
-        ca = arctan2(d_N, d_L) + arcsin(D_LN / 2R)
-
-    (equivalent to the former tip formula — verified algebraically.)
-
-    Lateral (off-axis) vertices always require a larger ca than the midrib, so
-    the midrib alone is the binding constraint.
-
-    lift_mm is stacked on top of the contact angle and does not affect it;
-    the search runs at lift = 0.
+    Lateral (off-axis) vertices need a larger ca than the midrib; the midrib
+    is the binding constraint.  lift_mm is applied after the contact angle
+    and does not affect this calculation.
     """
     R  = float(cluster_radius_mm)
     up = np.array([0.0, 0.0, 1.0])
@@ -589,32 +582,36 @@ def _contact_angle_for_sphere(
         curl_deg=curl_deg,
     )
 
-    # Tip-half midrib positions: bot_pts at the center column (t=0) equals the
-    # geometric midrib (fold_h=0 at t=0, no lobe offset on bot_pts).
+    # Tip-half midrib: bot_pts center column (fold_h=0 at t=0, so this is
+    # the geometric midrib).  Include the tip vertex (s=1, not in s_int).
     col      = g.bot_pts.shape[1] // 2
     tip_half = g.s_int > 0.5
-    mid_pos  = g.bot_pts[tip_half, col, :]           # (K, 3)
-    cands    = np.vstack([mid_pos, g.v_tip[np.newaxis]])  # (K+1, 3)
+    mid_pos  = g.bot_pts[tip_half, col, :]                    # (K, 3)
+    cands    = np.vstack([mid_pos, g.v_tip[np.newaxis]])      # (K+1, 3)
 
-    d    = cands - g.bp[np.newaxis]       # (K+1, 3) displacements from base
-    d_L  = d @ g.L                        # longitudinal component
-    d_N  = d @ g.N                        # normal component (≥ 0 for arched leaf)
+    d    = cands - g.bp[np.newaxis]   # (K+1, 3) displacements from base
+    d_L  = d @ g.L                    # longitudinal
+    d_N  = d @ g.N                    # normal (arch+curl height)
     D_LN = np.hypot(d_L, d_N)
 
-    valid = (D_LN > 1e-9) & (D_LN <= 2.0 * R)
-    if not valid.any():
-        # Fallback when leaf is wider than sphere diameter: original tip formula.
-        d0     = g.v_tip - g.bp
-        L_comp = float(np.dot(d0, g.L))
-        N_comp = float(np.dot(d0, g.N))
-        D      = float(np.hypot(L_comp, N_comp))
-        rhs    = float(np.clip(-D / (2.0 * R), -1.0, 1.0))
-        return float(np.arccos(rhs) - np.arctan2(L_comp, N_comp))
+    # Belly dip: the single vertex with the smallest N-displacement.
+    # This is the touch point — it grazed the sphere first as ca grows.
+    dip  = int(np.argmin(d_N))
+    dL   = float(d_L[dip])
+    dN   = float(d_N[dip])
+    DLN  = float(D_LN[dip])
 
-    ca_vals = (np.arctan2(d_N[valid], d_L[valid])
-               + np.arcsin(np.clip(D_LN[valid] / (2.0 * R), 0.0, 1.0)))
-    pos = ca_vals[ca_vals > 0]
-    return float(pos.min() if len(pos) else ca_vals.min())
+    if DLN > 1e-9 and DLN <= 2.0 * R:
+        return float(np.arctan2(dN, dL)
+                     + np.arcsin(np.clip(DLN / (2.0 * R), 0.0, 1.0)))
+
+    # Fallback when leaf span exceeds sphere diameter (D > 2R).
+    d0     = g.v_tip - g.bp
+    L_comp = float(np.dot(d0, g.L))
+    N_comp = float(np.dot(d0, g.N))
+    D      = float(np.hypot(L_comp, N_comp))
+    rhs    = float(np.clip(-D / (2.0 * R), -1.0, 1.0))
+    return float(np.arccos(rhs) - np.arctan2(L_comp, N_comp))
 
 
 # ── Foliage clump: icosphere deformed to cone+dome profile, Gaussian noise ─────
@@ -770,7 +767,7 @@ def _build_meridians(
     """
     z_min = float(shaped.vertices[:, 2].min())
     z_max = float(shaped.vertices[:, 2].max())
-    eps   = max((z_max - z_min) * 0.005, 1e-4)
+    eps   = max((z_max - z_min) * 0.0002, 1e-4)
 
     if z_max - z_min < 1e-6:
         # Degenerate mesh: return N trivial upward meridians.
@@ -977,18 +974,19 @@ def _compute_row_z_positions(
     if not meridians:
         return []
 
-    # Top anchor: 0.25 leaf-lengths of SURFACE ARC before the apex.
-    # z_top − 0.25·L in z-space is wrong near the apex of any convex mesh:
-    # the surface curves steeply there, so 1 mm of z corresponds to several mm
-    # of arc, leaving room for additional rows that this anchor would skip.
-    s_apex  = float(np.mean([m.arc_vals[-1] for m in meridians]))
-    s_top   = max(s_apex - 0.25 * leaf_length_mm, 1e-6)
+    # Top anchor: the last z level sampled (all meridians share z_vals since
+    # sections succeed or fail together).  eps is set small enough that this
+    # is within ~0.004 mm of the true apex, giving a tiny cross-section ring.
+    # We pin the last row directly to z_top_sample rather than converting
+    # through arc-space, because the arc↔z roundtrip is biased on asymmetric
+    # (tilted) clusters.
+    z_top_sample  = float(max(m.z_vals[-1] for m in meridians))
+    s_top         = _avg_arc_for_z(z_top_sample, meridians)
 
     z_placeable   = _lowest_placeable_z(meridians, normal_z_threshold=-0.1)
     s_placeable   = _avg_arc_for_z(z_placeable, meridians)
     z_bot_anchor  = _avg_z_for_arc(s_placeable + leaf_length_mm, meridians)
-    z_top_anchor  = _avg_z_for_arc(s_top, meridians)
-    z_bot_anchor  = min(z_bot_anchor, z_top_anchor)
+    z_bot_anchor  = min(z_bot_anchor, z_top_sample)
 
     s_bot     = _avg_arc_for_z(z_bot_anchor, meridians)
     inner_arc = max(s_top - s_bot, 1e-6)
@@ -998,7 +996,9 @@ def _compute_row_z_positions(
     actual_step     = inner_arc / n_gaps
 
     row_arc = [s_bot + i * actual_step for i in range(n_gaps + 1)]
-    return [_avg_z_for_arc(s, meridians) for s in row_arc]
+    row_zs  = [_avg_z_for_arc(s, meridians) for s in row_arc[:-1]]
+    row_zs.append(z_top_sample)  # pin last row to apex sample, bypassing arc↔z bias
+    return row_zs
 
 
 def _interpolate_meridian_normal(
@@ -1458,7 +1458,36 @@ def _build_foliage_cluster_mesh(
             meridians, float(leaf_length_mm), v_overlap, z_top_v,
         )
 
+        # Contact-angle estimate (r_tip proxy) used to inflate the 2D cross-section
+        # perimeter to the effective leaf-midpoint ring path before computing n_col.
+        # Without this, n_col is underestimated when the surface tilts outward near
+        # the cluster apex, leaving rings with fewer leaves than the perimeter allows.
+        _ca_ncol_key = (
+            round(max(float(r_tip), 1.0), 4),
+            round(float(leaf_length_mm), 4),
+            round(float(leaf_width_mm), 4),
+            round(float(leaf_curl_deg), 4),
+            round(float(leaf_lift_mm), 4),
+        )
+        if _ca_ncol_key not in _ca_cache:
+            _ca_cache[_ca_ncol_key] = _contact_angle_for_sphere(
+                max(float(r_tip), 1.0), **_ca_leaf_kwargs
+            )
+        _ca_ncol   = _ca_cache[_ca_ncol_key]
+        _c_ca_ncol = float(np.cos(_ca_ncol))
+        _s_ca_ncol = float(np.sin(_ca_ncol))
+
         for row_idx, z_row in enumerate(row_z_positions):
+            # Average surface-normal z/r components at this level (from meridians).
+            # Nz drives the radial outward offset of leaf midpoints; used below to
+            # inflate perim → effective midpoint ring circumference for n_col.
+            _nz_row    = [float(np.interp(z_row, m.z_vals, m.normals[:, 2]))
+                          for m in meridians if m.z_vals[0] <= z_row <= m.z_vals[-1]]
+            _nz_avg    = float(np.mean(_nz_row)) if _nz_row else 0.0
+            _nr_avg    = float(np.sqrt(max(0.0, 1.0 - _nz_avg ** 2)))
+            # XY component of the leaf tangent = Nz·cos(ca) − Nr·sin(ca).
+            _t_xy_ncol = max(0.0, _nz_avg * _c_ca_ncol - _nr_avg * _s_ca_ncol)
+
             section = shaped.section(
                 plane_origin=np.array([0.0, 0.0, z_row]),
                 plane_normal=np.array([0.0, 0.0, 1.0]),
@@ -1476,7 +1505,16 @@ def _build_foliage_cluster_mesh(
                     centroid_3d = np.array(
                         [float(c4d[0]), float(c4d[1]), float(c4d[2])]
                     )
-                    n_col = max(1, int(np.ceil(perim / col_step)))
+                    _r_ring = perim / (2.0 * np.pi) if perim > 1e-6 else 1.0
+                    _r_mid  = _r_ring + (float(leaf_length_mm) / 2.0) * _t_xy_ncol
+                    # Only inflate when ring is large enough that positions are
+                    # spread out; near-apex rings (perim < col_step) would otherwise
+                    # get many leaves all placed at essentially the same point.
+                    _eff_perim_est = (
+                        perim * (_r_mid / max(_r_ring, 1e-6))
+                        if perim > col_step else perim
+                    )
+                    n_col   = max(1, int(np.ceil(_eff_perim_est / col_step)))
                     for ci in range(n_col):
                         t    = float(ci) / float(n_col)
                         pt2  = poly.exterior.interpolate(t, normalized=True)

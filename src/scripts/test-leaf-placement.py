@@ -124,7 +124,9 @@ _FLOATING_LEAF_CURL_DIST_MM = 1.5
 # inside the parent mesh before the leaf is considered buried.
 # The root embedding stays inside L/2 from the base, so curl-region vertices
 # inside the mesh are always unintentional burial.
-_BURIED_LEAF_CURL_DEPTH_MM = 0.5
+# Set to ~1× leaf thickness (0.24 mm) so shallow tip burial (e.g. apex leaf
+# arching back into the sphere at ~0.35 mm) is caught.
+_BURIED_LEAF_CURL_DEPTH_MM = 0.25
 
 # Top-row spread: maximum acceptable minimum-width (mm) of the XY convex hull
 # of the topmost row's base positions.  A large spread means the top row is
@@ -326,11 +328,9 @@ def _place_leaves_on_mesh(
     )
     row_zs = _compute_row_z_positions(meridians, L, vov, z_top)
 
-    # Mirror the arc-based top-anchor from _compute_row_z_positions so the
-    # BALD TOP check compares against the same target the algorithm uses.
-    s_apex       = float(sum(m.arc_vals[-1] for m in meridians) / len(meridians))
-    s_top_anchor = max(s_apex - 0.25 * L, 1e-6)
-    z_top_anchor = _avg_z_for_arc(s_top_anchor, meridians)
+    # Mirror the top-anchor from _compute_row_z_positions so the BALD TOP
+    # check compares against the same target the algorithm uses.
+    z_top_anchor = float(max(m.z_vals[-1] for m in meridians))
 
     expected_row_step = L * max(1.0 - vov, 0.05)
     stats = _PlacementStats(
@@ -357,6 +357,16 @@ def _place_leaves_on_mesh(
             _ca_cache[key] = _contact_angle_for_sphere(r, **_LEAF_KW)
         return _ca_cache[key]
 
+    # Pre-compute ca using the mesh bounding radius as a proxy for local_r.
+    # Used to inflate the 2D cross-section perimeter to the effective leaf-midpoint
+    # ring path before computing n_col (fixes underfilled rings near the apex).
+    _r_mesh_est = float(np.max(np.linalg.norm(
+        mesh.vertices - mesh_centroid_3d, axis=1
+    )))
+    _ca_ncol   = _cached_ca(max(_r_mesh_est, 1.0))
+    _c_ca_ncol = math.cos(_ca_ncol)
+    _s_ca_ncol = math.sin(_ca_ncol)
+
     parts: list[trimesh.Trimesh] = []
 
     for row_idx, z_row in enumerate(row_zs):
@@ -364,6 +374,13 @@ def _place_leaves_on_mesh(
         row_attempt = 0
         row_placed  = 0
         row_perim   = 0.0
+
+        # Average surface-normal z/r at this level for effective-perimeter estimate.
+        _nz_row    = [float(np.interp(z_row, m.z_vals, m.normals[:, 2]))
+                      for m in meridians if m.z_vals[0] <= z_row <= m.z_vals[-1]]
+        _nz_avg    = float(np.mean(_nz_row)) if _nz_row else 0.0
+        _nr_avg    = math.sqrt(max(0.0, 1.0 - _nz_avg ** 2))
+        _t_xy_ncol = max(0.0, _nz_avg * _c_ca_ncol - _nr_avg * _s_ca_ncol)
 
         sec = mesh.section(
             plane_origin = np.array([0.0, 0.0, z_row]),
@@ -390,7 +407,14 @@ def _place_leaves_on_mesh(
             c4d = xform @ np.array([float(c2d.x), float(c2d.y), 0.0, 1.0])
             centroid_3d = c4d[:3].copy()
 
-            n_col = max(1, int(math.ceil(perim / col_step)))
+            _r_ring = perim / (2.0 * math.pi) if perim > 1e-6 else 1.0
+            _r_mid  = _r_ring + (L / 2.0) * _t_xy_ncol
+            # Only inflate when ring is large enough that positions are spread out.
+            # Near-apex rings (perim < col_step) would otherwise get many leaves
+            # all placed at essentially the same point.
+            _eff_perim_est = (perim * (_r_mid / max(_r_ring, 1e-6))
+                              if perim > col_step else perim)
+            n_col   = max(1, int(math.ceil(_eff_perim_est / col_step)))
             for ci in range(n_col):
                 t    = float(ci) / float(n_col)
                 pt2  = poly.exterior.interpolate(t, normalized=True)
