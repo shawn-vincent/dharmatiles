@@ -340,7 +340,7 @@ def place_leaves_on_mesh(
     meridians = _build_meridians(mesh, n_meridians=n_meridians, z_samples=z_samples)
     row_zs    = _compute_row_z_positions(meridians, L, vov, z_top)
 
-    z_top_anchor      = float(max(m.z_vals[-1] for m in meridians))
+    z_top_anchor      = float(row_zs[-1]) if row_zs else z_top
     expected_row_step = L * max(1.0 - vov, 0.05)
 
     stats = LeafPlacementStats(
@@ -447,10 +447,9 @@ def place_leaves_on_mesh(
                 proj  = grav - float(np.dot(grav, up_hint)) * up_hint
                 plen  = float(np.linalg.norm(proj))
                 if plen < 1e-6:
-                    arb = (np.array([1.0, 0.0, 0.0])
-                           if abs(float(up_hint[0])) < 0.9
-                           else np.array([0.0, 1.0, 0.0]))
-                    T0 = _safe_norm(np.cross(up_hint, arb))
+                    radial = np.array([math.cos(phi), math.sin(phi), 0.0])
+                    radial = radial - float(np.dot(radial, up_hint)) * up_hint
+                    T0 = _safe_norm(radial)
                 else:
                     T0 = proj / plen
 

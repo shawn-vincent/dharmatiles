@@ -27,7 +27,7 @@ import trimesh
 
 from ..core.color import Material, debug_material, tag as _tag
 from .bark import BarkConfig
-from .leaf import compute_leaf_geometry, build_leaf_surface, solidify_leaf
+from .leaf import compute_leaf_geometry
 from ._utils import _safe_norm, _hash01, _WUP_VEC
 
 # Fixed polygon count for every cross-section ring.
@@ -951,8 +951,8 @@ def _compute_row_z_positions(
     """Row Z positions via equal surface-arc intervals (meridian-arc method).
 
     Anchors the first row one leaf-length of arc above the lowest upward-facing
-    surface; anchors the last row 0.25-leaf-lengths of surface arc before the
-    apex.  Fills in rows at the integer-optimal arc-step between them.
+    surface; pins the last row to the sampled world-Z apex.  Fills in rows at
+    the integer-optimal arc-step between them.
     """
     if not meridians:
         return []
