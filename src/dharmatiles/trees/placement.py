@@ -19,6 +19,8 @@ import trimesh
 from ._utils import _safe_norm
 from .leaf import boundary_loop, build_leaf_surface, compute_leaf_geometry, solidify_leaf
 from .mesh import (
+    _avg_arc_for_z,
+    _avg_z_for_arc,
     _build_meridians,
     _compute_row_z_positions,
     _contact_angle_for_sphere,
@@ -368,16 +370,6 @@ def place_leaves_on_mesh(
             _ca_cache[key] = _contact_angle_for_sphere(r, **_leaf_kw)
         return _ca_cache[key]
 
-    # Pre-compute ca using the mesh bounding radius as a proxy for local_r.
-    # Used to inflate the 2D cross-section perimeter to the effective leaf-midpoint
-    # ring path before computing n_col (fixes underfilled rings near the apex).
-    _r_mesh_est = float(np.max(np.linalg.norm(
-        mesh.vertices - mesh_centroid_3d, axis=1
-    )))
-    _ca_ncol   = _cached_ca(max(_r_mesh_est, 1.0))
-    _c_ca_ncol = math.cos(_ca_ncol)
-    _s_ca_ncol = math.sin(_ca_ncol)
-
     parts: list[trimesh.Trimesh] = []
     _contact_candidates = _leaf_contact_candidates(**_leaf_kw)
     _proximity = trimesh.proximity.ProximityQuery(mesh)
@@ -386,12 +378,6 @@ def place_leaves_on_mesh(
         row_attempt = 0
         row_placed  = 0
         row_perim   = 0.0
-
-        _nz_row    = [float(np.interp(z_row, m.z_vals, m.normals[:, 2]))
-                      for m in meridians if m.z_vals[0] <= z_row <= m.z_vals[-1]]
-        _nz_avg    = float(np.mean(_nz_row)) if _nz_row else 0.0
-        _nr_avg    = math.sqrt(max(0.0, 1.0 - _nz_avg ** 2))
-        _t_xy_ncol = max(0.0, _nz_avg * _c_ca_ncol - _nr_avg * _s_ca_ncol)
 
         sec = mesh.section(
             plane_origin = np.array([0.0, 0.0, z_row]),
@@ -408,6 +394,27 @@ def place_leaves_on_mesh(
             stats.row_perims.append(0.0)
             continue
 
+        # Belly slice: mesh cross-section L/2 arc below this row.
+        # Used to count n_col from the actual widest perimeter the leaves span.
+        _s_row   = _avg_arc_for_z(z_row, meridians)
+        _s_belly = max(0.0, _s_row - L / 2.0)
+        _z_belly = _avg_z_for_arc(_s_belly, meridians)
+        _belly_polys: list[tuple[np.ndarray, float]] = []
+        if _z_belly < z_row - 1e-3:
+            _belly_sec = mesh.section(
+                plane_origin=np.array([0.0, 0.0, _z_belly]),
+                plane_normal=np.array([0.0, 0.0, 1.0]),
+            )
+            if _belly_sec is not None:
+                try:
+                    _bp2d, _bxf = _belly_sec.to_planar()
+                    for _bpoly in _bp2d.polygons_full:
+                        _bc   = _bpoly.centroid
+                        _bc4d = _bxf @ np.array([float(_bc.x), float(_bc.y), 0.0, 1.0])
+                        _belly_polys.append((_bc4d[:3].copy(), float(_bpoly.length)))
+                except Exception:
+                    pass
+
         for poly in path2d.polygons_full:
             perim = float(poly.length)
             row_perim += perim
@@ -418,10 +425,13 @@ def place_leaves_on_mesh(
             c4d = xform @ np.array([float(c2d.x), float(c2d.y), 0.0, 1.0])
             centroid_3d = c4d[:3].copy()
 
-            _r_ring = perim / (2.0 * math.pi) if perim > 1e-6 else 1.0
-            _r_mid  = _r_ring + (L / 2.0) * _t_xy_ncol
-            _eff_perim_est = perim * (_r_mid / max(_r_ring, 1e-6))
-            n_col = max(1, int(math.ceil(_eff_perim_est / col_step)))
+            if _belly_polys:
+                _cdists = [float(np.linalg.norm(bc[:2] - centroid_3d[:2]))
+                           for bc, _ in _belly_polys]
+                _belly_perim = _belly_polys[int(np.argmin(_cdists))][1]
+            else:
+                _belly_perim = perim
+            n_col = max(1, int(math.ceil(_belly_perim / col_step)))
 
             for ci in range(n_col):
                 t    = float(ci) / float(n_col)
@@ -443,15 +453,15 @@ def place_leaves_on_mesh(
 
                 row_attempt += 1
 
-                grav  = np.array([0.0, 0.0, -1.0])
-                proj  = grav - float(np.dot(grav, up_hint)) * up_hint
-                plen  = float(np.linalg.norm(proj))
+                outward  = pt3d - centroid_3d
+                outward -= float(np.dot(outward, up_hint)) * up_hint
+                plen     = float(np.linalg.norm(outward))
                 if plen < 1e-6:
                     radial = np.array([math.cos(phi), math.sin(phi), 0.0])
-                    radial = radial - float(np.dot(radial, up_hint)) * up_hint
+                    radial -= float(np.dot(radial, up_hint)) * up_hint
                     T0 = _safe_norm(radial)
                 else:
-                    T0 = proj / plen
+                    T0 = outward / plen
 
                 ca_guess = _cached_ca(local_r)
                 if ca_guess >= math.pi / 2:
