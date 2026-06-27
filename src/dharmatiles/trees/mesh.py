@@ -578,21 +578,21 @@ def _contact_angle_for_sphere(
 
     # Tip-half midrib: bot_pts center column (fold_h=0 at t=0, so this is
     # the geometric midrib).  Include the tip vertex (s=1, not in s_int).
-    col      = g.bot_pts.shape[1] // 2
+    col      = g.lower_grid.shape[1] // 2
     tip_half = g.s_int > 0.5
-    mid_pos  = g.bot_pts[tip_half, col, :]                    # (K, 3)
-    cands    = np.vstack([mid_pos, g.v_tip[np.newaxis]])      # (K+1, 3)
+    mid_pos  = g.lower_grid[tip_half, col, :]                    # (K, 3)
+    cands    = np.vstack([mid_pos, g.tip_pt[np.newaxis]])         # (K+1, 3)
 
-    d    = cands - g.bp[np.newaxis]   # (K+1, 3) displacements from base
-    d_L  = d @ g.L                    # longitudinal
-    d_N  = d @ g.N                    # normal (arch+curl height)
-    D_LN = np.hypot(d_L, d_N)
+    d        = cands - g.base_pt[np.newaxis]   # (K+1, 3) displacements from base
+    d_along  = d @ g.along_axis                # longitudinal
+    d_normal = d @ g.normal_axis               # normal (arch+curl height)
+    D_LN     = np.hypot(d_along, d_normal)
 
-    # Belly dip: the single vertex with the smallest N-displacement.
-    # This is the touch point — it grazed the sphere first as ca grows.
-    dip  = int(np.argmin(d_N))
-    dL   = float(d_L[dip])
-    dN   = float(d_N[dip])
+    # Belly dip: the single vertex with the smallest normal-displacement.
+    # This is the touch point — it grazes the sphere first as ca grows.
+    dip  = int(np.argmin(d_normal))
+    dL   = float(d_along[dip])
+    dN   = float(d_normal[dip])
     DLN  = float(D_LN[dip])
 
     if DLN > 1e-9 and DLN <= 2.0 * R:
@@ -600,12 +600,12 @@ def _contact_angle_for_sphere(
                      + np.arcsin(np.clip(DLN / (2.0 * R), 0.0, 1.0)))
 
     # Fallback when leaf span exceeds sphere diameter (D > 2R).
-    d0     = g.v_tip - g.bp
-    L_comp = float(np.dot(d0, g.L))
-    N_comp = float(np.dot(d0, g.N))
-    D      = float(np.hypot(L_comp, N_comp))
-    rhs    = float(np.clip(-D / (2.0 * R), -1.0, 1.0))
-    return float(np.arccos(rhs) - np.arctan2(L_comp, N_comp))
+    d0          = g.tip_pt - g.base_pt
+    along_comp  = float(np.dot(d0, g.along_axis))
+    normal_comp = float(np.dot(d0, g.normal_axis))
+    D   = float(np.hypot(along_comp, normal_comp))
+    rhs = float(np.clip(-D / (2.0 * R), -1.0, 1.0))
+    return float(np.arccos(rhs) - np.arctan2(along_comp, normal_comp))
 
 
 # ── Foliage clump: icosphere deformed to cone+dome profile, Gaussian noise ─────

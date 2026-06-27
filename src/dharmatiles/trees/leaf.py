@@ -240,15 +240,15 @@ def _leaf_lobe_profile(
 
 class _LeafGeometry(NamedTuple):
     """Raw arrays produced once and shared by build_leaf_surface / build_leaf_mesh."""
-    L:       np.ndarray   # (3,) unit growth direction (base → tip)
-    T:       np.ndarray   # (3,) unit lateral direction
-    N:       np.ndarray   # (3,) unit leaf normal (top/crease faces +N)
-    bp:      np.ndarray   # (3,) base position
-    v_tip:   np.ndarray   # (3,) tip position  =  bp + length_mm * L
-    s_int:   np.ndarray   # (n_rings,) longitudinal stations ∈ (0, 1)
-    w_s:     np.ndarray   # (n_rings,) half-widths at each station
-    top_pts: np.ndarray   # (n_rings, N_T+1, 3) top-surface vertex grid
-    bot_pts: np.ndarray   # (n_rings, N_T+1, 3) bottom-surface vertex grid
+    along_axis:  np.ndarray   # (3,) unit growth direction (base → tip)
+    across_axis: np.ndarray   # (3,) unit lateral direction
+    normal_axis: np.ndarray   # (3,) unit leaf normal (top/crease faces outward)
+    base_pt:     np.ndarray   # (3,) base position (attachment point, s=0)
+    tip_pt:      np.ndarray   # (3,) tip position (pointed end, s=1)
+    s_int:       np.ndarray   # (n_rings,) longitudinal stations ∈ (0, 1)
+    w_s:         np.ndarray   # (n_rings,) half-widths at each station
+    upper_grid:  np.ndarray   # (n_rings, N_T+1, 3) top-surface vertex grid
+    lower_grid:  np.ndarray   # (n_rings, N_T+1, 3) bottom-surface vertex grid
 
 
 def compute_leaf_geometry(
@@ -289,21 +289,22 @@ def compute_leaf_geometry(
     convex curve on each side: inner controls the crease-side shoulder and
     outer controls the edge-side shoulder.
     """
-    L  = _safe_norm(np.asarray(tangent, float))
-    bp = np.asarray(base_pos, float)
+    along_axis = _safe_norm(np.asarray(tangent, float))
+    base_pt    = np.asarray(base_pos, float)
 
     world_up = (_safe_norm(np.asarray(up_hint, float)) if up_hint is not None
                 else np.array([0.0, 0.0, 1.0]))
-    if abs(float(np.dot(L, world_up))) > 0.9:
+    if abs(float(np.dot(along_axis, world_up))) > 0.9:
         world_up = (np.array([1.0, 0.0, 0.0])
-                    if abs(float(np.dot(L, np.array([0.0, 0.0, 1.0])))) > 0.9
+                    if abs(float(np.dot(along_axis, np.array([0.0, 0.0, 1.0])))) > 0.9
                     else np.array([0.0, 0.0, 1.0]))
-    T0 = np.cross(world_up, L);  T0 /= max(float(np.linalg.norm(T0)), 1e-10)
-    N0 = np.cross(L, T0);        N0 /= max(float(np.linalg.norm(N0)), 1e-10)
-    T, N = T0, N0
+    across_axis = np.cross(world_up, along_axis)
+    across_axis /= max(float(np.linalg.norm(across_axis)), 1e-10)
+    normal_axis = np.cross(along_axis, across_axis)
+    normal_axis /= max(float(np.linalg.norm(normal_axis)), 1e-10)
 
     fold_tan = float(np.tan(np.radians(fold_angle_deg)))
-    N_T      = _LEAF_N_LAT
+    N_T      = _LEAF_N_LAT   # number of lateral facets — not the normal axis
     t_vals   = np.linspace(-1.0, 1.0, N_T + 1)   # (N_T+1,)
     abs_t    = np.abs(t_vals)
 
@@ -369,20 +370,20 @@ def compute_leaf_geometry(
 
     mid_n, mid_slope = _centerline_profile(s_int)
     midribs = (
-        bp[np.newaxis]
-        + (s_int[:, np.newaxis] * float(length_mm)) * L[np.newaxis]
-        + mid_n[:, np.newaxis] * N[np.newaxis]
+        base_pt[np.newaxis]
+        + (s_int[:, np.newaxis] * float(length_mm)) * along_axis[np.newaxis]
+        + mid_n[:, np.newaxis] * normal_axis[np.newaxis]
     )
     tip_n, _ = _centerline_profile(np.array(1.0))
-    v_tip = bp + float(length_mm) * L + float(tip_n.item()) * N
+    tip_pt = base_pt + float(length_mm) * along_axis + float(tip_n.item()) * normal_axis
 
     phi = np.arctan(mid_slope)
-    N_local = (-np.sin(phi)[:, np.newaxis] * L[np.newaxis]
-               + np.cos(phi)[:, np.newaxis] * N[np.newaxis])
+    N_local = (-np.sin(phi)[:, np.newaxis] * along_axis[np.newaxis]
+               + np.cos(phi)[:, np.newaxis] * normal_axis[np.newaxis])
 
     laterals = (midribs[:, np.newaxis]
                 + (t_vals[np.newaxis, :, np.newaxis] * w_s[:, np.newaxis, np.newaxis])
-                * T[np.newaxis, np.newaxis])
+                * across_axis[np.newaxis, np.newaxis])
 
     tanh_t = np.tanh(abs_t * _LEAF_CREASE_SHARPNESS)
     lobe_profile = _leaf_lobe_profile(abs_t, inner_curve, outer_curve)
@@ -401,8 +402,8 @@ def compute_leaf_geometry(
     lobe_h = (thickness_mm * lobe_profile[np.newaxis]) * long_t[:, np.newaxis]
 
     # Apply crease + dome offsets along the per-station local normal.
-    top_pts = laterals + (fold_h + lobe_h)[:, :, np.newaxis] * N_local[:, np.newaxis, :]
-    bot_pts = laterals + fold_h[:, :, np.newaxis]             * N_local[:, np.newaxis, :]
+    upper_grid = laterals + (fold_h + lobe_h)[:, :, np.newaxis] * N_local[:, np.newaxis, :]
+    lower_grid = laterals + fold_h[:, :, np.newaxis]             * N_local[:, np.newaxis, :]
 
     # ── Lift: rigid rotation of the entire surface around T through bp ────────
     # Applied AFTER arch and curl produce the complete vertex grid; BEFORE
@@ -424,40 +425,40 @@ def compute_leaf_geometry(
         s_l = float(np.sin(theta_lift))
 
         def _lift_rot(pts: np.ndarray) -> np.ndarray:
-            """Rodrigues rotation around −T through bp; lifts L toward N."""
+            """Rodrigues rotation around −across_axis through base_pt; lifts along_axis toward normal_axis."""
             shape   = pts.shape
-            rel     = pts.reshape(-1, 3) - bp[np.newaxis]   # (N, 3)
-            T_dot   = (rel @ T)[:, np.newaxis]              # (N, 1)
-            T_cross = np.cross(T[np.newaxis], rel)          # (N, 3)  T × rel
-            # R(-T, theta)*v = v*c - (T×v)*s + T*(T·v)*(1-c)
-            rot     = c_l * rel - s_l * T_cross + (1.0 - c_l) * T_dot * T[np.newaxis]
-            return (bp[np.newaxis] + rot).reshape(shape)
+            rel     = pts.reshape(-1, 3) - base_pt[np.newaxis]
+            T_dot   = (rel @ across_axis)[:, np.newaxis]
+            T_cross = np.cross(across_axis[np.newaxis], rel)
+            rot     = c_l * rel - s_l * T_cross + (1.0 - c_l) * T_dot * across_axis[np.newaxis]
+            return (base_pt[np.newaxis] + rot).reshape(shape)
 
-        top_pts = _lift_rot(top_pts)
-        bot_pts = _lift_rot(bot_pts)
-        v_tip   = _lift_rot(v_tip[np.newaxis])[0]
+        upper_grid = _lift_rot(upper_grid)
+        lower_grid = _lift_rot(lower_grid)
+        tip_pt     = _lift_rot(tip_pt[np.newaxis])[0]
 
         # Rotate the frame vectors to stay consistent with the new geometry.
-        L_prev, N_prev = L.copy(), N.copy()
-        L = c_l * L_prev + s_l * N_prev    # L rotates toward N
-        N = -s_l * L_prev + c_l * N_prev   # N rotates away from L
-        # T is the rotation axis — unchanged.
+        along_prev, normal_prev = along_axis.copy(), normal_axis.copy()
+        along_axis  = c_l * along_prev + s_l * normal_prev
+        normal_axis = -s_l * along_prev + c_l * normal_prev
+        # across_axis is the rotation axis — unchanged.
 
     return _LeafGeometry(
-        L=L, T=T, N=N, bp=bp, v_tip=v_tip,
-        s_int=s_int, w_s=w_s, top_pts=top_pts, bot_pts=bot_pts,
+        along_axis=along_axis, across_axis=across_axis, normal_axis=normal_axis,
+        base_pt=base_pt, tip_pt=tip_pt,
+        s_int=s_int, w_s=w_s, upper_grid=upper_grid, lower_grid=lower_grid,
     )
 
 
 # ── Keel prism ─────────────────────────────────────────────────────────────────
 
 def _build_leaf_keel_prism(
-    base_vertex: np.ndarray,
-    tip_vertex: np.ndarray,
-    neg_t_edge: np.ndarray,
-    pos_t_edge: np.ndarray,
-    N: np.ndarray,
-    T: np.ndarray,
+    base_pt: np.ndarray,
+    tip_pt: np.ndarray,
+    left_pts: np.ndarray,
+    right_pts: np.ndarray,
+    normal_axis: np.ndarray,
+    across_axis: np.ndarray,
     s_values: np.ndarray,
     half_widths: np.ndarray,
     keel_depth_mm: float,
@@ -468,12 +469,12 @@ def _build_leaf_keel_prism(
 
     Parameters
     ----------
-    base_vertex       : (3,)   leaf base point (s=0)
-    tip_vertex        : (3,)   leaf tip point  (s=1)
-    neg_t_edge        : (n,3)  bottom-surface vertices at t=−1 (−T side), s increasing
-    pos_t_edge        : (n,3)  bottom-surface vertices at t=+1 (+T side), s increasing
-    N                 : (3,)   leaf normal (toward top surface)
-    T                 : (3,)   lateral direction (+T = one leaf edge)
+    base_pt           : (3,)   leaf base point (s=0)
+    tip_pt            : (3,)   leaf tip point  (s=1)
+    left_pts          : (n,3)  bottom-surface vertices at t=−1 (left edge), s increasing
+    right_pts         : (n,3)  bottom-surface vertices at t=+1 (right edge), s increasing
+    normal_axis       : (3,)   leaf normal (toward top surface)
+    across_axis       : (3,)   lateral direction (one leaf edge at +across_axis)
     s_values          : (n,)   s parameter for each interior ring
     half_widths       : (n,)   leaf half-width w_s at each interior ring (unused)
     keel_depth_mm     : maximum keel depth below the leaf plane
@@ -498,9 +499,9 @@ def _build_leaf_keel_prism(
     at that station.  The cross-section is a V meeting at the midrib ridge; the
     tip pinches to a point.
     """
-    n      = len(pos_t_edge)
-    Nu     = N / max(float(np.linalg.norm(N)), 1e-12)
-    L_len  = float(np.linalg.norm(tip_vertex - base_vertex))
+    n      = len(right_pts)
+    Nu     = normal_axis / max(float(np.linalg.norm(normal_axis)), 1e-12)
+    L_len  = float(np.linalg.norm(tip_pt - base_pt))
     D      = float(keel_depth_mm)
     R      = D
     n_st   = n + 2
@@ -520,15 +521,15 @@ def _build_leaf_keel_prism(
 
     # topP / topN station points.
     # Endpoints (k=0 and k=n_st-1) pinch to base/tip vertex; interior uses edge verts.
-    topP_arr = np.vstack([base_vertex[np.newaxis], pos_t_edge, tip_vertex[np.newaxis]])  # (n_st, 3)
-    topN_arr = np.vstack([base_vertex[np.newaxis], neg_t_edge, tip_vertex[np.newaxis]])  # (n_st, 3)
+    topP_arr = np.vstack([base_pt[np.newaxis], right_pts, tip_pt[np.newaxis]])  # (n_st, 3)
+    topN_arr = np.vstack([base_pt[np.newaxis], left_pts,  tip_pt[np.newaxis]])  # (n_st, 3)
 
-    # Ridge points along the midrib spine.
-    mids  = (base_vertex[np.newaxis] +
-             s_all[:, np.newaxis] * (tip_vertex - base_vertex)[np.newaxis])  # (n_st, 3)
-    ridge_arr = mids - ridge_depths[:, np.newaxis] * Nu[np.newaxis]          # (n_st, 3)
+    # Keel ridge points along the midrib spine.
+    mids     = (base_pt[np.newaxis] +
+                s_all[:, np.newaxis] * (tip_pt - base_pt)[np.newaxis])  # (n_st, 3)
+    keel_pts = mids - ridge_depths[:, np.newaxis] * Nu[np.newaxis]      # (n_st, 3)
 
-    # A station's ridge collapses to the top point when depth ≈ 0 (tip region).
+    # A keel station collapses to the top point when depth ≈ 0 (tip region).
     degenerate = ridge_depths < 1e-9   # (n_st,) bool — True at tip
 
     # ── Build vertex list and index arrays ──────────────────────────────────
@@ -553,7 +554,7 @@ def _build_leaf_keel_prism(
         if degenerate[k]:
             iR.append(iTP[k])
         else:
-            verts.append(ridge_arr[k])
+            verts.append(keel_pts[k])
             iR.append(n_v)
             n_v += 1
 
@@ -619,8 +620,8 @@ def _build_leaf_keel_prism(
     # determined by the leaf length, keel depth, and top-closure mode.
     cache_tag = "keel_grid" if all_bot_pts is not None else "keel"
     return _mesh_with_fixed_normals(
-        np.array(verts, dtype=float),
-        np.array(F, dtype=np.int32),
+        np.array(verts,  dtype=float),
+        np.array(F,      dtype=np.int32),
         (cache_tag, round(L_len, 6), round(D, 6)),
     )
 
@@ -675,9 +676,9 @@ def build_leaf_surface(
     v_tip_i  = n_rings * stride + 1
 
     verts = np.concatenate([
-        g.top_pts.reshape(-1, 3),
-        g.bp[np.newaxis],
-        g.v_tip[np.newaxis],
+        g.upper_grid.reshape(-1, 3),
+        g.base_pt[np.newaxis],
+        g.tip_pt[np.newaxis],
     ], axis=0)
 
     faces: list[list[int]] = []
@@ -783,10 +784,10 @@ def build_leaf_mesh(
     # Vertex array layout: top rings | bot rings | v_base | v_tip
     # Matches the index arithmetic in _build_blade_faces().
     verts = np.concatenate([
-        g.top_pts.reshape(-1, 3),
-        g.bot_pts.reshape(-1, 3),
-        g.bp[np.newaxis],
-        g.v_tip[np.newaxis],
+        g.upper_grid.reshape(-1, 3),
+        g.lower_grid.reshape(-1, 3),
+        g.base_pt[np.newaxis],
+        g.tip_pt[np.newaxis],
     ], axis=0)
 
     faces = _build_blade_faces(N_S, N_T)
@@ -795,16 +796,17 @@ def build_leaf_mesh(
 
     if keel_depth_mm > 1e-6:
         keel = _build_leaf_keel_prism(
-            base_vertex=g.bp,
-            tip_vertex=g.v_tip,
-            neg_t_edge=g.bot_pts[:, 0,   :],
-            pos_t_edge=g.bot_pts[:, N_T, :],
-            N=g.N, T=g.T,
+            base_pt=g.base_pt,
+            tip_pt=g.tip_pt,
+            left_pts=g.lower_grid[:, 0,    :],
+            right_pts=g.lower_grid[:, N_T, :],
+            normal_axis=g.normal_axis,
+            across_axis=g.across_axis,
             s_values=g.s_int,
             half_widths=g.w_s,
             keel_depth_mm=keel_depth_mm,
             keel_tip_angle_deg=keel_tip_angle_deg,
-            all_bot_pts=g.bot_pts,
+            all_bot_pts=g.lower_grid,
         )
         if len(keel.vertices) > 0:
             parts.append(keel)
