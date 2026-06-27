@@ -156,8 +156,6 @@ _CLUSTER = dict(
     r_foliage             = 5.5,
     clump_length_mm       = 10.5,
     leaves                = False,   # we run placement ourselves for row colouring
-    leaf_base_count       = 0,
-    leaf_cap_count        = 0,
     leaf_angle_jitter_deg = 0.0,
     leaf_pos_jitter       = 0.0,
     **_LEAF,
@@ -555,8 +553,8 @@ def _check_artifacts(all_stats: list[LeafPlacementStats]) -> int:
         print(
             f"  placed={stats.n_placed}  rows={stats.n_rows}  "
             f"attempted={stats.n_attempted}  "
-            f"skip(down={stats.skipped_downward} r={stats.skipped_small_r} "
-            f"ca={stats.skipped_ca})  errors={stats.build_errors}"
+            f"skip(down={stats.skipped_downward} r={stats.skipped_small_r})  "
+            f"ca_clamped={stats.ca_clamped}  errors={stats.build_errors}"
         )
 
         # Row-by-row coverage bar: z | pl/att

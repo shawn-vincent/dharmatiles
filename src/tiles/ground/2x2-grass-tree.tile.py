@@ -30,7 +30,6 @@ tile = Tile(
                     leaf_width_mm=3.0,
                     leaf_h_overlap=0.1,
                     leaf_v_overlap=0.25,
-                    leaf_cap_count=12,
                     leaf_angle_jitter_deg=10.0,
                     leaf_pos_jitter=0.10,
                 ),

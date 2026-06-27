@@ -68,7 +68,6 @@ class Tree:
         foliage_cluster_length_mm: float | None = 10.5,
         # ── Leaf blades ───────────────────────────────────────────────────
         leaves: bool = True,
-        leaf_base_count: int = 5,
         leaf_length_mm: float = 4.5,
         leaf_width_mm: float = 3.0,
         leaf_thickness_mm: float = 0.24,
@@ -79,7 +78,6 @@ class Tree:
         leaf_lift_mm: float = 3.0,
         leaf_h_overlap: float = 0.2,
         leaf_v_overlap: float = 0.5,
-        leaf_cap_count: int = 12,
         leaf_angle_jitter_deg: float = 24.0,
         leaf_pos_jitter: float = 0.165,
         leaf_arc_meridians: int = 6,
@@ -121,7 +119,6 @@ class Tree:
         )
         # Leaf blades
         self.leaves              = bool(leaves)
-        self.leaf_base_count     = int(leaf_base_count)
         self.leaf_length_mm      = float(leaf_length_mm)
         self.leaf_width_mm       = float(leaf_width_mm)
         self.leaf_thickness_mm   = float(leaf_thickness_mm)
@@ -132,7 +129,6 @@ class Tree:
         self.leaf_lift_mm        = float(leaf_lift_mm)
         self.leaf_h_overlap      = float(np.clip(leaf_h_overlap, 0.0, 0.95))
         self.leaf_v_overlap      = float(np.clip(leaf_v_overlap, 0.0, 0.95))
-        self.leaf_cap_count      = int(leaf_cap_count)
         self.leaf_angle_jitter_deg = float(leaf_angle_jitter_deg)
         self.leaf_pos_jitter       = float(leaf_pos_jitter)
         self.leaf_arc_meridians    = int(leaf_arc_meridians)
@@ -224,7 +220,6 @@ class Tree:
                 debug_attractors=attractors if self.debug_attractors else None,
                 attractor_group_labels=group_labels,
                 leaves=self.leaves and self.foliage_clusters,
-                leaf_base_count=self.leaf_base_count,
                 leaf_length_mm=self.leaf_length_mm,
                 leaf_width_mm=self.leaf_width_mm,
                 leaf_thickness_mm=self.leaf_thickness_mm,
@@ -235,7 +230,6 @@ class Tree:
                 leaf_lift_mm=self.leaf_lift_mm,
                 leaf_h_overlap=self.leaf_h_overlap,
                 leaf_v_overlap=self.leaf_v_overlap,
-                leaf_cap_count=self.leaf_cap_count,
                 leaf_angle_jitter_deg=self.leaf_angle_jitter_deg,
                 leaf_pos_jitter=self.leaf_pos_jitter,
                 leaf_arc_meridians=self.leaf_arc_meridians,

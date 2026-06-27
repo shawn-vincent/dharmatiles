@@ -70,7 +70,6 @@ def build_branch_mesh(
     attractor_radius_mm: float = 0.6,
     # ── Leaf geometry ─────────────────────────────────────────────────────────
     leaves: bool = True,
-    leaf_base_count: int = 5,
     leaf_length_mm: float = 4.5,
     leaf_width_mm: float = 3.0,
     leaf_thickness_mm: float = 0.24,
@@ -81,7 +80,6 @@ def build_branch_mesh(
     leaf_lift_mm: float = 3.0,
     leaf_h_overlap: float = 0.2,
     leaf_v_overlap: float = 0.5,
-    leaf_cap_count: int = 12,
     leaf_angle_jitter_deg: float = 24.0,
     leaf_pos_jitter: float = 0.165,
     leaf_arc_meridians: int = 6,
@@ -263,7 +261,6 @@ def build_branch_mesh(
                 edge_id=i,
                 bark_seed=bark_seed,
                 leaves=leaves,
-                leaf_base_count=leaf_base_count,
                 leaf_length_mm=leaf_length_mm,
                 leaf_width_mm=leaf_width_mm,
                 leaf_thickness_mm=leaf_thickness_mm,
@@ -274,9 +271,6 @@ def build_branch_mesh(
                 leaf_lift_mm=leaf_lift_mm,
                 leaf_h_overlap=leaf_h_overlap,
                 leaf_v_overlap=leaf_v_overlap,
-                leaf_cap_count=leaf_cap_count,
-                leaf_angle_jitter_deg=leaf_angle_jitter_deg,
-                leaf_pos_jitter=leaf_pos_jitter,
                 leaf_arc_meridians=leaf_arc_meridians,
                 leaf_arc_z_samples=leaf_arc_z_samples,
             )
@@ -627,17 +621,6 @@ _FOLIAGE_COARSE_NOISE_CELL_MM      = 4.0   # spatial wavelength (mm)
 # amplitude plus 2σ of the fine Gaussian.  Used to pre-sink the foliage cone
 # so branches stay buried under the skin even in the worst-noise case.
 _FOLIAGE_MAX_NOISE_MM = _FOLIAGE_COARSE_NOISE_AMPLITUDE_MM + 2.0 * _FOLIAGE_NOISE_AMPLITUDE_MM
-# Extra inward sink for leaf bases past the noised skin, so each base stays in
-# contact (slightly embedded) rather than skimming the surface.
-_LEAF_BASE_EMBED_MM = 0.0
-# Minimum elevation of the leaf tangent above the foliage surface tangent
-# plane (degrees).  Clamped after all jitter so no leaf ever points into the
-# cluster skin.
-_LEAF_SURFACE_FLOOR_DEG = 5.0
-# On upper-facing foliage, reduce the final upward component so leaves lie
-# closer to the canopy instead of standing up.  The effect ramps in with the
-# surface normal and preserves some lift and angle jitter.
-_LEAF_UPPER_FLATTEN = 0.55
 
 
 def _foliage_gaussian_noise(
@@ -1067,7 +1050,6 @@ def _build_foliage_cluster_mesh(
     edge_id: int,
     bark_seed: int,
     leaves: bool = False,
-    leaf_base_count: int = 0,
     leaf_length_mm: float = 0.0,
     leaf_width_mm: float = 0.0,
     leaf_thickness_mm: float = 0.24,
@@ -1078,9 +1060,6 @@ def _build_foliage_cluster_mesh(
     leaf_v_overlap: float = 0.5,
     leaf_curl_deg: float = 40.0,
     leaf_lift_mm: float = 3.0,
-    leaf_cap_count: int = 12,
-    leaf_angle_jitter_deg: float = 24.0,
-    leaf_pos_jitter: float = 0.165,
     leaf_arc_meridians: int = 6,
     leaf_arc_z_samples: int = 64,
 ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
@@ -1273,282 +1252,24 @@ def _build_foliage_cluster_mesh(
 
     leaf_parts: list[trimesh.Trimesh] = []
     if leaves and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
-        # Deterministic placement — jitter disabled for clean visual debugging.
-        jit = 0.0
-        pj  = 0.0
-
-        # Contact-angle cache: the analytical contact angle depends only on the
-        # local sphere radius (cluster_radius_mm) and the fixed leaf geometry
-        # params.  All leaves on the same foliage ring share the same radius,
-        # so we compute once per unique radius and reuse.
-        _ca_cache: dict[float, float] = {}
-        _ca_leaf_kwargs = dict(
-            length_mm=float(leaf_length_mm), width_mm=float(leaf_width_mm),
-            thickness_mm=float(leaf_thickness_mm),
-            fold_angle_deg=float(leaf_fold_angle_deg),
-            inner_curve=float(leaf_inner_curve), outer_curve=float(leaf_outer_curve),
-            curl_deg=float(leaf_curl_deg), lift_mm=float(leaf_lift_mm),
+        from .placement import place_leaves_on_mesh
+        leaf_parts, _ = place_leaves_on_mesh(
+            cluster_mesh,
+            length_mm      = leaf_length_mm,
+            width_mm       = leaf_width_mm,
+            thickness_mm   = leaf_thickness_mm,
+            fold_angle_deg = leaf_fold_angle_deg,
+            inner_curve    = leaf_inner_curve,
+            outer_curve    = leaf_outer_curve,
+            curl_deg       = leaf_curl_deg,
+            lift_mm        = leaf_lift_mm,
+            h_overlap      = leaf_h_overlap,
+            v_overlap      = leaf_v_overlap,
+            n_meridians    = leaf_arc_meridians,
+            z_samples      = leaf_arc_z_samples,
+            seed           = _hash01_int(bark_seed, "leaves", edge_id),
+            label          = f"cluster-{edge_id}",
         )
-
-        def _emit_leaf(
-            base_smooth: np.ndarray,
-            radial: np.ndarray,
-            key,
-            cluster_radius_mm: float = float("inf"),
-            *,
-            emit_curl_deg: float | None = None,
-            emit_lift_mm: float | None = None,
-            emit_yaw_span_rad: float | None = None,
-            emit_length_scale: float = 1.0,
-            emit_width_scale: float = 1.0,
-        ) -> None:
-            # Skip leaves in sections too narrow for meaningful placement.
-            if cluster_radius_mm < 1.0:
-                return
-
-            # up_hint = smooth outward radial of the cluster at this point.
-            # The smooth radial is a good approximation for leaf placement; the
-            # noised mesh normals vary at the noise scale and are noisier still.
-            up_hint = _safe_norm(radial)
-
-            # Sink the base point onto the noised cluster skin.
-            disp_base = float(
-                _foliage_gaussian_noise(base_smooth[None, :], edge_id, bark_seed)[0]
-                + _foliage_coarse_noise(base_smooth[None, :], edge_id, bark_seed)[0]
-            )
-            base_pos = base_smooth + up_hint * (disp_base - noise_peak)
-
-            # T0 = gravity-down projected onto the local tangent plane.
-            _grav  = np.array([0.0, 0.0, -1.0])
-            _proj  = _grav - float(np.dot(_grav, up_hint)) * up_hint
-            _plen  = float(np.linalg.norm(_proj))
-            if _plen < 1e-6:
-                # Near-horizontal surface (cluster top): arbitrary tangent.
-                _arb = np.array([1.0, 0.0, 0.0])
-                if abs(float(np.dot(_arb, up_hint))) > 0.9:
-                    _arb = np.array([0.0, 1.0, 0.0])
-                T0 = _safe_norm(np.cross(up_hint, _arb))
-            else:
-                T0 = _proj / _plen
-
-            # Yaw jitter: rotate T0 around up_hint (spin in the tangent plane).
-            yaw_hash = _hash01(bark_seed, "leaf-yaw", edge_id, key)
-            if emit_yaw_span_rad is None:
-                yaw = (2.0 * yaw_hash - 1.0) * jit
-            else:
-                yaw = yaw_hash * float(emit_yaw_span_rad)
-            T0_rot = np.cos(yaw) * T0 + np.sin(yaw) * np.cross(up_hint, T0)
-            T0     = _safe_norm(T0_rot)
-
-            lseed = _hash01_int(bark_seed, "base-leaf", edge_id, key)
-
-            eff_length_mm = float(leaf_length_mm) * float(emit_length_scale)
-            eff_width_mm = float(leaf_width_mm) * float(emit_width_scale)
-            eff_curl_deg = float(emit_curl_deg) if emit_curl_deg is not None else float(leaf_curl_deg)
-            eff_lift_mm = float(emit_lift_mm) if emit_lift_mm is not None else float(leaf_lift_mm)
-
-            # Contact-angle cache lookup.
-            #
-            # The contact angle depends only on cluster_radius_mm and leaf
-            # geometry.  Most leaves share geometry, but supplemental top
-            # leaves may scale their footprint, so include effective geometry
-            # in the cache key.
-            # Look it up or compute analytically via _contact_angle_for_sphere.
-            # Closed-form computation cached per unique radius — ~10–20 calls
-            # per cluster (see docs/design/leaf-placement.md for derivation).
-            rr_key = (
-                round(float(cluster_radius_mm), 4),
-                round(eff_length_mm, 4),
-                round(eff_width_mm, 4),
-                round(eff_curl_deg, 4),
-                round(eff_lift_mm, 4),
-            )
-            if rr_key not in _ca_cache:
-                _ca_cache[rr_key] = _contact_angle_for_sphere(
-                    float(cluster_radius_mm),
-                    **{
-                        **_ca_leaf_kwargs,
-                        "length_mm": eff_length_mm,
-                        "width_mm": eff_width_mm,
-                        "curl_deg": eff_curl_deg,
-                        "lift_mm": eff_lift_mm,
-                    },
-                )
-            contact_angle = _ca_cache[rr_key]
-
-            # When the local ring radius is too small for press-against-sphere
-            # geometry (D > 2R → contact_angle ≥ π/2), lay the leaf flat instead
-            # of skipping.  ca=0 means tangent=T0 (radially outward, no downward
-            # tilt), giving leaves that grow flat from the surface — natural at the
-            # near-horizontal apex of the cluster.
-            if contact_angle >= np.pi / 2:
-                contact_angle = 0.0
-
-            # Apply contact angle: tilt the leaf frame so the tip presses
-            # against the local sphere surface, ensuring raycast embedding works.
-            c_ca = float(np.cos(contact_angle))
-            s_ca = float(np.sin(contact_angle))
-            tangent   = _safe_norm(T0 * c_ca - up_hint * s_ca)
-            up_placed = _safe_norm(up_hint * c_ca + T0 * s_ca)
-
-            # Instrumentation: a leaf pointing strongly upward (tangent_z > 0.7)
-            # means the contact angle or up_hint is wrong — the leaf tip will
-            # spike out of the canopy top rather than lying along the surface.
-            if float(tangent[2]) > 0.707:
-                warnings.warn(
-                    f"[foliage] upward-pointing leaf: edge={edge_id} key={key!r} "
-                    f"tangent_z={float(tangent[2]):.3f} "
-                    f"contact_angle={float(np.degrees(contact_angle)):.1f}° "
-                    f"up_hint_z={float(up_hint[2]):.3f} "
-                    f"cluster_r={cluster_radius_mm:.2f}mm",
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
-
-            leaf_surface_kwargs = dict(
-                length_mm=eff_length_mm,
-                width_mm=eff_width_mm,
-                thickness_mm=float(leaf_thickness_mm),
-                fold_angle_deg=float(leaf_fold_angle_deg),
-                inner_curve=float(leaf_inner_curve),
-                outer_curve=float(leaf_outer_curve),
-                curl_deg=eff_curl_deg,
-                lift_mm=eff_lift_mm,
-                seed=lseed,
-            )
-            try:
-                leaf_surf = build_leaf_surface(
-                    base_pos=base_pos, tangent=tangent, up_hint=up_placed,
-                    **leaf_surface_kwargs,
-                )
-                solid, _ = solidify_leaf(leaf_surf, up_placed, parent_mesh=cluster_mesh)
-            except (RuntimeError, ValueError):
-                return
-            if len(solid.vertices) > 0:
-                leaf_parts.append(solid)
-
-        # ── Meridian-arc leaf placement ────────────────────────────────────────
-        # Build N meridian curves from the smooth (pre-noise) cluster mesh, then
-        # place rows at equal surface-arc intervals from bottom to top.  Row
-        # positions track the actual surface arc distance rather than a fixed dZ
-        # step, giving uniform coverage all the way to the world-Z apex — no apex
-        # cap special case needed.
-        h_overlap = float(np.clip(leaf_h_overlap, 0.0, 0.95))
-        v_overlap = float(np.clip(leaf_v_overlap, 0.0, 0.95))
-        col_step  = max(float(leaf_width_mm) * (1.0 - h_overlap), 1e-3)
-
-        z_top_v = float(shaped.vertices[:, 2].max())
-
-        # XY centroid of the cluster — azimuthal origin for meridian sampling.
-        cx_m = float(shaped.vertices[:, 0].mean())
-        cy_m = float(shaped.vertices[:, 1].mean())
-        # 3-D mesh centroid for contact-angle radius.  Using the cross-section
-        # centroid (centroid_3d at z_row) gives local_r → 0 at the apex, which
-        # drives ca → 90° and produces leaves that stand vertically.  The 3-D
-        # centroid gives approximately the cluster radius at every surface point.
-        mesh_centroid_3d = np.array([cx_m, cy_m,
-                                     float(shaped.vertices[:, 2].mean())])
-
-        meridians = _build_meridians(
-            shaped,
-            n_meridians=int(leaf_arc_meridians),
-            z_samples=int(leaf_arc_z_samples),
-        )
-        row_z_positions = _compute_row_z_positions(
-            meridians, float(leaf_length_mm), v_overlap, z_top_v,
-        )
-
-        # Contact-angle estimate (r_tip proxy) used to inflate the 2D cross-section
-        # perimeter to the effective leaf-midpoint ring path before computing n_col.
-        # Without this, n_col is underestimated when the surface tilts outward near
-        # the cluster apex, leaving rings with fewer leaves than the perimeter allows.
-        _ca_ncol_key = (
-            round(max(float(r_tip), 1.0), 4),
-            round(float(leaf_length_mm), 4),
-            round(float(leaf_width_mm), 4),
-            round(float(leaf_curl_deg), 4),
-            round(float(leaf_lift_mm), 4),
-        )
-        if _ca_ncol_key not in _ca_cache:
-            _ca_cache[_ca_ncol_key] = _contact_angle_for_sphere(
-                max(float(r_tip), 1.0), **_ca_leaf_kwargs
-            )
-        _ca_ncol   = _ca_cache[_ca_ncol_key]
-        _c_ca_ncol = float(np.cos(_ca_ncol))
-        _s_ca_ncol = float(np.sin(_ca_ncol))
-
-        for row_idx, z_row in enumerate(row_z_positions):
-            # Average surface-normal z/r components at this level (from meridians).
-            # Nz drives the radial outward offset of leaf midpoints; used below to
-            # inflate perim → effective midpoint ring circumference for n_col.
-            _nz_row    = [float(np.interp(z_row, m.z_vals, m.normals[:, 2]))
-                          for m in meridians if m.z_vals[0] <= z_row <= m.z_vals[-1]]
-            _nz_avg    = float(np.mean(_nz_row)) if _nz_row else 0.0
-            _nr_avg    = float(np.sqrt(max(0.0, 1.0 - _nz_avg ** 2)))
-            # XY component of the leaf tangent = Nz·cos(ca) − Nr·sin(ca).
-            _t_xy_ncol = max(0.0, _nz_avg * _c_ca_ncol - _nr_avg * _s_ca_ncol)
-
-            section = shaped.section(
-                plane_origin=np.array([0.0, 0.0, z_row]),
-                plane_normal=np.array([0.0, 0.0, 1.0]),
-            )
-            if section is None:
-                continue
-            try:
-                path2d, xform = section.to_planar()
-                for poly in path2d.polygons_full:
-                    perim = float(poly.length)
-                    if perim < 1e-3:
-                        continue
-                    c2d = poly.centroid
-                    c4d = xform @ np.array([float(c2d.x), float(c2d.y), 0.0, 1.0])
-                    centroid_3d = np.array(
-                        [float(c4d[0]), float(c4d[1]), float(c4d[2])]
-                    )
-                    _r_ring = perim / (2.0 * np.pi) if perim > 1e-6 else 1.0
-                    _r_mid  = _r_ring + (float(leaf_length_mm) / 2.0) * _t_xy_ncol
-                    # Only inflate when ring is large enough that positions are
-                    # spread out; near-apex rings (perim < col_step) would otherwise
-                    # get many leaves all placed at essentially the same point.
-                    _eff_perim_est = (
-                        perim * (_r_mid / max(_r_ring, 1e-6))
-                        if perim > col_step else perim
-                    )
-                    n_col   = max(1, int(np.ceil(_eff_perim_est / col_step)))
-                    for ci in range(n_col):
-                        t    = float(ci) / float(n_col)
-                        pt2  = poly.exterior.interpolate(t, normalized=True)
-                        p4d  = xform @ np.array(
-                            [float(pt2.x), float(pt2.y), 0.0, 1.0]
-                        )
-                        pt3d = np.array(
-                            [float(p4d[0]), float(p4d[1]), float(p4d[2])]
-                        )
-                        # Azimuthal angle from the cluster XY centroid.
-                        phi_leaf = float(np.arctan2(
-                            pt3d[1] - cy_m, pt3d[0] - cx_m,
-                        ))
-                        # Per-leaf surface normal from meridian interpolation.
-                        up_hint = _interpolate_meridian_normal(
-                            meridians, phi_leaf, z_row,
-                        )
-                        # Skip downward-facing surfaces.
-                        if float(up_hint[2]) < -0.1:
-                            continue
-                        local_r = float(np.linalg.norm(pt3d - mesh_centroid_3d))
-                        _emit_leaf(
-                            pt3d, up_hint, (row_idx, ci),
-                            cluster_radius_mm=max(local_r, 1e-3),
-                        )
-            except Exception:
-                pass
-
-    # ── Leaf-count diagnostic ─────────────────────────────────────────────────
-    # Warn if a cluster that was supposed to emit leaves ends up with very few.
-    # A count < 3 on a non-trivial cluster is a signal of a coverage regression
-    # (bare-spot risk).  Use this to catch any future changes that thin the leaf
-    # passes too aggressively.
-    if leaves and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
         if len(leaf_parts) < 3:
             warnings.warn(
                 f"Foliage cluster edge_id={edge_id} generated only "
@@ -1557,7 +1278,6 @@ def _build_foliage_cluster_mesh(
                 RuntimeWarning,
                 stacklevel=2,
             )
-
     result = trimesh.Trimesh(vertices=verts, faces=ico.faces.copy(), process=False)
     result.fix_normals()
     return result, leaf_parts

@@ -70,7 +70,6 @@ tile = Tile(
                     leaf_lift_mm=2.5,
                     leaf_h_overlap=0.1,
                     leaf_v_overlap=0.25,
-                    leaf_cap_count=12,         # was 1; fill the apex properly
                     leaf_angle_jitter_deg=5.0,
                     leaf_pos_jitter=0.075,
                 ),

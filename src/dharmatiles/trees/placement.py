@@ -38,7 +38,7 @@ class LeafPlacementStats:
     # Skip / error breakdown
     skipped_downward: int = 0  # up_hint.z < -0.1 (downward-facing surface)
     skipped_small_r: int = 0   # local_r < 1.0 mm (too close to centroid)
-    skipped_ca: int = 0        # contact angle ≥ π/2 (geometry impossible)
+    ca_clamped: int = 0        # contact angle ≥ π/2, placed flat (ca = 0)
     build_errors: int = 0      # RuntimeError / ValueError from leaf builder
     # Per-row data: (z, attempted, placed) — one entry per generated row
     rows: list[tuple[float, int, int]] = dataclasses.field(default_factory=list)
@@ -306,6 +306,7 @@ def place_leaves_on_mesh(
                 ca = _cached_ca(local_r)
                 if ca >= math.pi / 2:
                     ca = 0.0
+                    stats.ca_clamped += 1
 
                 row_attempt += 1
 

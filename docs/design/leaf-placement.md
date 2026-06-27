@@ -146,9 +146,10 @@ The computation is cached per `(local_r, leaf_geometry_params)`.
 
 ### Guard
 
-If `contact_angle >= π/2`, the leaf tangent points into the cluster surface.
-This happens when the cluster cross-section radius is smaller than the leaf geometry
-allows (`D > 2·local_r`).  Such leaves are skipped.
+If `contact_angle >= π/2`, the leaf geometry cannot press against the surface
+(`D > 2·local_r`).  The leaf is placed **flat** (`ca = 0`) instead of being skipped —
+at the near-horizontal apex of the cluster, a flat leaf lying along the surface is
+visually correct.  This case is counted in `LeafPlacementStats.ca_clamped`.
 
 ### What the Meridian Changes
 
@@ -409,7 +410,10 @@ for z_row in row_z_positions:
             up_hint  = _interpolate_meridian_normal(meridians, phi_leaf, z_row)
             if up_hint[2] < -0.1:
                 continue
-            local_r = dist(pt3d, centroid_3d[:3])
+            # 3D mesh centroid — NOT the cross-section centroid at z_row.
+            # Using the cross-section centroid drives local_r → 0 at the apex,
+            # pushing ca → π/2 and making apex leaves stand vertically.
+            local_r = dist(pt3d, mesh_centroid_3d)
             _emit_leaf(pt3d, up_hint, key=(row_idx, ci), cluster_radius_mm=local_r)
 ```
 
