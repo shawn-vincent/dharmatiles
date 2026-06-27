@@ -346,7 +346,7 @@ def place_leaves_on_mesh(
                 NP         = len(loop)
                 perim_v    = surf.vertices[np.array(loop)]
                 root_v     = solid.vertices[n_surf : n_surf + NP]
-                root_depth = float(np.mean(np.linalg.norm(root_v - perim_v, axis=1)))
+                root_depth = float(np.max(np.linalg.norm(root_v - perim_v, axis=1)))
 
                 # Curl-region float / bury check
                 base_dists_v = np.linalg.norm(surf.vertices - pt3d, axis=1)

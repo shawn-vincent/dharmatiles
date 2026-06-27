@@ -72,6 +72,7 @@ from dharmatiles.core.color import (
     DEBUG_COLORS,
     Material,
     RGBA,
+    RGBA_FLAG_FAIL,
     export_color_stl,
     tag as _color_tag,
 )
@@ -436,7 +437,7 @@ def _check_artifacts(all_stats: list[LeafPlacementStats]) -> int:
             if long:
                 issues.append(
                     f"LONG ROOTS: {len(long)}/{len(stats.root_depths)} leaves "
-                    f"wall depth > {_ROOT_DEPTH_MAX_MM:.1f} mm "
+                    f"max wall depth > {_ROOT_DEPTH_MAX_MM:.1f} mm "
                     f"(max={max(long):.2f} mm, "
                     f"median={float(np.median(stats.root_depths)):.2f} mm)"
                 )
@@ -590,7 +591,7 @@ def _check_artifacts(all_stats: list[LeafPlacementStats]) -> int:
 
         if stats.root_depths:
             print(
-                f"  root depth mm: "
+                f"  max wall depth mm: "
                 f"min={min(stats.root_depths):.2f}  "
                 f"median={float(np.median(stats.root_depths)):.2f}  "
                 f"max={max(stats.root_depths):.2f}"
@@ -668,6 +669,33 @@ def _render_views(all_parts: list[trimesh.Trimesh], stl_path: Path) -> None:
             print(f"  (render failed for {suffix}: {exc})")
 
 
+# ── Error leaf colouring ──────────────────────────────────────────────────────
+
+def _mark_error_leaves(
+    leaves: list[trimesh.Trimesh],
+    stats: LeafPlacementStats,
+) -> None:
+    """Re-colour any leaf that exceeds an error threshold to red (RGBA_FLAG_FAIL).
+
+    Covers: long root, floating curl-region, buried curl-region.
+    Leaves whose index can't be matched to the stats lists are skipped silently.
+    """
+    if len(leaves) != len(stats.root_depths):
+        return
+    error_color = np.asarray(RGBA_FLAG_FAIL, dtype=np.uint8)
+    for i, leaf in enumerate(leaves):
+        is_error = (
+            stats.root_depths[i]       > _ROOT_DEPTH_MAX_MM
+            or stats.leaf_float_dists[i]   > _FLOATING_LEAF_CURL_DIST_MM
+            or stats.leaf_buried_depths[i] > _BURIED_LEAF_CURL_DEPTH_MM
+        )
+        if is_error:
+            leaf.visual = trimesh.visual.ColorVisuals(
+                mesh=leaf,
+                face_colors=np.tile(error_color, (len(leaf.faces), 1)),
+            )
+
+
 # ── Cluster builder ───────────────────────────────────────────────────────────
 
 def _make_cluster_parts(
@@ -708,6 +736,7 @@ def _make_cluster_parts(
     leaves, stats = place_leaves_on_mesh(
         cluster, **_PLACE_KW, seed=edge_id, label=label, row_color_fn=_row_rgba,
     )
+    _mark_error_leaves(leaves, stats)
     print(f"  -> {len(leaves)} leaves  "
           f"(cluster: {len(cluster.vertices):,}v / {len(cluster.faces):,}f)")
     return [cluster] + leaves, stats
@@ -737,6 +766,7 @@ def main() -> None:
     sphere_leaves, sphere_stats = place_leaves_on_mesh(
         sphere, **_PLACE_KW, seed=0, label="sphere", row_color_fn=_row_rgba,
     )
+    _mark_error_leaves(sphere_leaves, sphere_stats)
     sphere_stats.label = "Object 1 — sphere r=10"
     print(f"  -> {len(sphere_leaves)} leaves")
     all_parts.extend(sphere_leaves)
