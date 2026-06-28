@@ -527,7 +527,7 @@ def place_leaves_on_mesh(
                     _bary @ mesh.vertex_normals[mesh.faces[int(_st[0])]]
                 )
 
-                if float(up_hint[2]) < -0.1:
+                if float(up_hint[2]) < -0.5:
                     stats.skipped_downward += 1
                     continue
 

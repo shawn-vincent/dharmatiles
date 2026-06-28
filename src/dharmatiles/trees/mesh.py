@@ -966,7 +966,7 @@ def _compute_row_z_positions(
     z_top_sample  = float(max(m.z_vals[-1] for m in meridians))
     s_top         = _avg_arc_for_z(z_top_sample, meridians)
 
-    z_placeable   = _lowest_placeable_z(meridians, normal_z_threshold=-0.1)
+    z_placeable   = _lowest_placeable_z(meridians, normal_z_threshold=-0.5)
     s_placeable   = _avg_arc_for_z(z_placeable, meridians)
     z_bot_anchor  = _avg_z_for_arc(s_placeable + leaf_length_mm, meridians)
     z_bot_anchor  = min(z_bot_anchor, z_top_sample)
