@@ -527,6 +527,11 @@ def _union_edge_solids(edge_solids: list[trimesh.Trimesh]) -> trimesh.Trimesh:
 
 _LEAF_ARCH_DEG_DEFAULT = 30.0   # must match build_leaf_surface default
 
+# Minimum z-component of the outward surface normal for leaf placement.
+# Corresponds to 60° from the base pole / 30° below horizontal — the FDM
+# printability limit for overhanging leaf attachments.
+_LEAF_PLACEABLE_NORMAL_Z = -0.5
+
 def _contact_angle_for_sphere(
     cluster_radius_mm: float,
     *,
@@ -966,7 +971,7 @@ def _compute_row_z_positions(
     z_top_sample  = float(max(m.z_vals[-1] for m in meridians))
     s_top         = _avg_arc_for_z(z_top_sample, meridians)
 
-    z_placeable   = _lowest_placeable_z(meridians, normal_z_threshold=-0.5)
+    z_placeable   = _lowest_placeable_z(meridians, normal_z_threshold=_LEAF_PLACEABLE_NORMAL_Z)
     s_placeable   = _avg_arc_for_z(z_placeable, meridians)
     z_bot_anchor  = _avg_z_for_arc(s_placeable + leaf_length_mm, meridians)
     z_bot_anchor  = min(z_bot_anchor, z_top_sample)

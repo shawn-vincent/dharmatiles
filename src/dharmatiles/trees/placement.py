@@ -25,6 +25,7 @@ from .mesh import (
     _compute_row_z_positions,
     _contact_angle_for_sphere,
     _hash01_int,
+    _LEAF_PLACEABLE_NORMAL_Z,
 )
 
 
@@ -527,7 +528,7 @@ def place_leaves_on_mesh(
                     _bary @ mesh.vertex_normals[mesh.faces[int(_st[0])]]
                 )
 
-                if float(up_hint[2]) < -0.5:
+                if float(up_hint[2]) < _LEAF_PLACEABLE_NORMAL_Z:
                     stats.skipped_downward += 1
                     continue
 
