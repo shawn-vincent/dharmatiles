@@ -398,22 +398,12 @@ def _check_artifacts(all_stats: list[LeafPlacementStats]) -> int:
 
         # ── 10. Same-row near-duplicates ─────────────────────────────────────
         if has_leaves:
-            dupe_thresh = stats.col_step * _DUPE_FACTOR
-            row_to_bases: dict[int, list[np.ndarray]] = {}
-            for ridx, b in zip(stats.base_row_idx, stats.base_positions):
-                row_to_bases.setdefault(ridx, []).append(b)
-            total_dupes = 0
-            for ridx, bs in row_to_bases.items():
-                if len(bs) < 2:
-                    continue
-                arr  = np.stack(bs)
-                d    = np.linalg.norm(arr[:, np.newaxis] - arr[np.newaxis, :], axis=2)
-                np.fill_diagonal(d, np.inf)
-                total_dupes += int(np.sum(d < dupe_thresh)) // 2
-            if total_dupes:
+            _, n_dupe_pairs = _same_row_duplicate_indices(stats)
+            if n_dupe_pairs:
                 issues.append(
-                    f"SAME-ROW DUPLICATES: {total_dupes} same-row pairs "
-                    f"within {dupe_thresh:.2f} mm ({_DUPE_FACTOR:.0%} of col_step) — "
+                    f"SAME-ROW DUPLICATES: {n_dupe_pairs} same-row pairs "
+                    f"midpoints within {stats.col_step * _DUPE_FACTOR:.2f} mm "
+                    f"({_DUPE_FACTOR:.0%} of col_step) — "
                     f"likely polygon iterated twice"
                 )
 
@@ -698,17 +688,57 @@ def _render_views(all_parts: list[trimesh.Trimesh], stl_path: Path) -> None:
 
 # ── Error leaf colouring ──────────────────────────────────────────────────────
 
+def _same_row_duplicate_indices(
+    stats: LeafPlacementStats,
+) -> tuple[set[int], int]:
+    """Return (leaf_indices_in_duplicate_pairs, n_pairs) for same-row duplicates.
+
+    Overlap is measured at the leaf midpoint (base + L/2 * tangent) — the widest
+    part of the leaf.  Leaves fanning from a shared base in different directions
+    have well-separated midpoints and are not flagged.  True algorithm duplicates
+    (polygon iterated twice → identical tangent) have coincident midpoints.
+    """
+    if not stats.base_positions:
+        return set(), 0
+    half_L = stats.leaf_length_mm / 2.0
+    dupe_thresh = stats.col_step * _DUPE_FACTOR
+    row_to_items: dict[int, list[tuple[int, np.ndarray]]] = {}
+    for i, (ridx, b, t) in enumerate(
+        zip(stats.base_row_idx, stats.base_positions, stats.base_tangents)
+    ):
+        mid = b + half_L * t
+        row_to_items.setdefault(ridx, []).append((i, mid))
+    dupe_set: set[int] = set()
+    n_pairs = 0
+    for items in row_to_items.values():
+        if len(items) < 2:
+            continue
+        global_idxs = [x[0] for x in items]
+        arr = np.stack([x[1] for x in items])
+        d   = np.linalg.norm(arr[:, np.newaxis] - arr[np.newaxis, :], axis=2)
+        np.fill_diagonal(d, np.inf)
+        is_dupe = d < dupe_thresh
+        n_pairs += int(np.sum(is_dupe)) // 2
+        for li, lj in zip(*np.where(is_dupe)):
+            if li < lj:
+                dupe_set.add(global_idxs[int(li)])
+                dupe_set.add(global_idxs[int(lj)])
+    return dupe_set, n_pairs
+
+
 def _mark_error_leaves(
     leaves: list[trimesh.Trimesh],
     stats: LeafPlacementStats,
 ) -> None:
     """Re-colour any leaf that exceeds an error threshold to red (RGBA_FLAG_FAIL).
 
-    Covers: long root, floating curl-region, buried curl-region.
+    Covers: long root, floating curl-region, buried curl-region, upward tangent,
+    same-row duplicate.
     Leaves whose index can't be matched to the stats lists are skipped silently.
     """
     if len(leaves) != len(stats.root_depths):
         return
+    dupe_set, _ = _same_row_duplicate_indices(stats)
     error_color = np.asarray(RGBA_FLAG_FAIL, dtype=np.uint8)
     for i, leaf in enumerate(leaves):
         is_error = (
@@ -716,6 +746,7 @@ def _mark_error_leaves(
             or stats.leaf_float_dists[i]   > _FLOATING_LEAF_CURL_DIST_MM
             or stats.leaf_buried_depths[i] > _BURIED_LEAF_CURL_DEPTH_MM
             or float(stats.base_tangents[i][2]) > _UPWARD_TANGENT_Z_THRESHOLD
+            or i in dupe_set
         )
         if is_error:
             leaf.visual = trimesh.visual.ColorVisuals(
