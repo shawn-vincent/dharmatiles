@@ -528,6 +528,21 @@ def place_leaves_on_mesh(
                     _bary @ mesh.vertex_normals[mesh.faces[int(_st[0])]]
                 )
 
+                # When the belly is below the equator of the mesh (belly
+                # normal.z < 0), projecting outward ⊥ to that downward normal
+                # flips T0.z positive, which makes the leaf grow toward the
+                # apex instead of away from it.  Fall back to the row
+                # position's own normal, which is always on the upper
+                # hemisphere for any leaf that passes the downward filter.
+                if float(up_hint[2]) < 0.0:
+                    _sp_r, _, _st_r = _proximity.on_surface(pt3d[np.newaxis])
+                    _bary_r = trimesh.triangles.points_to_barycentric(
+                        mesh.triangles[_st_r[0]][np.newaxis], _sp_r,
+                    )[0]
+                    up_hint = _safe_norm(
+                        _bary_r @ mesh.vertex_normals[mesh.faces[int(_st_r[0])]]
+                    )
+
                 if float(up_hint[2]) < _LEAF_PLACEABLE_NORMAL_Z:
                     stats.skipped_downward += 1
                     continue
