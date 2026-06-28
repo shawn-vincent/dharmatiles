@@ -554,18 +554,14 @@ def place_leaves_on_mesh(
 
                 row_attempt += 1
 
-                # Lift the reference point half a leaf-length above the
-                # cross-section plane.  centroid_3d and pt3d share the same z,
-                # making outward purely horizontal; when up_hint has a large
-                # horizontal component (near-equatorial positions or meridian
-                # interpolation error), the projection nearly cancels outward
-                # and T0 degenerates.  The z-offset gives outward a stable
-                # downward component that survives the projection.
-                _centroid_ref = centroid_3d + np.array([0.0, 0.0, L * 0.5])
-                outward  = pt3d - _centroid_ref
-                outward -= float(np.dot(outward, up_hint)) * up_hint
-                plen     = float(np.linalg.norm(outward))
+                # Leaf growth direction: steepest descent on the mesh surface.
+                # Project world-down onto the local tangent plane.
+                _d_raw = np.array([0.0, 0.0, -1.0])
+                _d_raw -= float(np.dot(_d_raw, up_hint)) * up_hint
+                plen   = float(np.linalg.norm(_d_raw))
                 if plen < 1e-6:
+                    # Near-horizontal surface (apex): fall back to radially
+                    # outward from the row cross-section centroid.
                     phi    = float(np.arctan2(
                         pt3d[1] - centroid_3d[1], pt3d[0] - centroid_3d[0],
                     ))
@@ -573,7 +569,7 @@ def place_leaves_on_mesh(
                     radial -= float(np.dot(radial, up_hint)) * up_hint
                     T0 = _safe_norm(radial)
                 else:
-                    T0 = outward / plen
+                    T0 = _d_raw / plen
 
                 ca_guess = _cached_ca(local_r)
                 if ca_guess >= math.pi / 2:
