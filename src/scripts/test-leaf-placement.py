@@ -129,6 +129,12 @@ _BURIED_LEAF_CURL_DEPTH_MM = 0.25
 # far from the apex rather than converging near the tip.
 _TOP_ROW_SPREAD_MAX_MM = 1.0
 
+# Upward-pointing tangent: on any convex mesh where the upper surface is covered
+# (up_hint.z > 0), the leaf tangent should have a non-positive z-component —
+# leaves grow outward and downward, not toward the apex.  A tangent.z above this
+# threshold indicates the leaf is pointing the wrong way (upward into the mesh).
+_UPWARD_TANGENT_Z_THRESHOLD = 0.1
+
 
 def _row_rgba(row_idx: int) -> tuple[int, int, int, int]:
     """Map a row index to a cycling debug RGBA colour."""
@@ -536,6 +542,27 @@ def _check_artifacts(all_stats: list[LeafPlacementStats]) -> int:
                     )
                 )
 
+        # ── 17. Upward-pointing tangents ──────────────────────────────────────
+        # On the upper hemisphere of a convex mesh (where leaves are placed),
+        # the leaf tangent should have tangent.z ≤ 0 — leaves droop outward and
+        # downward, never toward the apex.  A positive tangent.z means the leaf
+        # is growing upward into the top of the mesh (wrong direction).
+        if has_leaves:
+            tang_arr    = np.stack(stats.base_tangents)       # (N, 3)
+            upward_mask = tang_arr[:, 2] > _UPWARD_TANGENT_Z_THRESHOLD
+            if upward_mask.any():
+                up_row_ids = np.array(stats.base_row_idx)[upward_mask]
+                affected   = sorted(set(int(r) for r in up_row_ids))
+                worst_z    = float(tang_arr[upward_mask, 2].max())
+                issues.append(
+                    f"UPWARD TANGENTS: {int(upward_mask.sum())} leaves "
+                    f"with tangent.z > {_UPWARD_TANGENT_Z_THRESHOLD:.2f} "
+                    f"(growing toward apex instead of away) — "
+                    f"rows {affected[:8]}"
+                    + ("..." if len(affected) > 8 else "")
+                    + f"  worst tangent.z={worst_z:.3f}"
+                )
+
         # ── Print per-object summary ──────────────────────────────────────────
         status = "PASS" if not issues else "FAIL"
         total_issues += len(issues)
@@ -688,6 +715,7 @@ def _mark_error_leaves(
             stats.root_depths[i]       > _ROOT_DEPTH_MAX_MM
             or stats.leaf_float_dists[i]   > _FLOATING_LEAF_CURL_DIST_MM
             or stats.leaf_buried_depths[i] > _BURIED_LEAF_CURL_DEPTH_MM
+            or float(stats.base_tangents[i][2]) > _UPWARD_TANGENT_Z_THRESHOLD
         )
         if is_error:
             leaf.visual = trimesh.visual.ColorVisuals(
