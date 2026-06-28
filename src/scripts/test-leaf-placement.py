@@ -569,8 +569,9 @@ def _check_artifacts(all_stats: list[LeafPlacementStats]) -> int:
         print(
             f"  placed={stats.n_placed}  rows={stats.n_rows}  "
             f"attempted={stats.n_attempted}  "
-            f"skip(down={stats.skipped_downward} r={stats.skipped_small_r})  "
-            f"ca_clamped={stats.ca_clamped}  errors={stats.build_errors}"
+            f"skip(down={stats.skipped_downward} r={stats.skipped_small_r} "
+            f"preburied={stats.skipped_preburied})  "
+            f"contact_angle_clamped={stats.contact_angle_clamped}  errors={stats.build_errors}"
         )
 
         # Row-by-row coverage bar: z | pl/att

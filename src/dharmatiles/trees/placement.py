@@ -28,6 +28,13 @@ from .mesh import (
     _LEAF_PLACEABLE_NORMAL_Z,
 )
 
+# Curl-region burial depth (mm) above which a post-placement leaf is discarded.
+# Leaves where _contact_angle_for_mesh could not find a valid contact angle and
+# returned contact_angle_rad=0 (flat) may have their curl region genuinely inside
+# the parent mesh.  This threshold matches the artifact-detector's buried-leaf
+# threshold so that discarded leaves are exactly the ones that would have been flagged.
+_PREBURIED_DEPTH_MM: float = 0.25
+
 
 @dataclasses.dataclass
 class LeafPlacementStats:
@@ -38,9 +45,10 @@ class LeafPlacementStats:
     n_attempted: int = 0       # candidates that reached the leaf-build step
     n_placed: int = 0          # leaves successfully solidified
     # Skip / error breakdown
-    skipped_downward: int = 0  # up_hint.z < -0.1 (downward-facing surface)
+    skipped_downward: int = 0   # up_hint.z < -0.5 (downward-facing surface)
     skipped_small_r: int = 0   # local_r < 1.0 mm (too close to centroid)
-    ca_clamped: int = 0        # contact angle ≥ π/2, placed flat (ca = 0)
+    skipped_preburied: int = 0  # post-placement: curl region buried > _PREBURIED_DEPTH_MM
+    contact_angle_clamped: int = 0  # initial contact angle ≥ π/2, clamped to max
     build_errors: int = 0      # RuntimeError / ValueError from leaf builder
     # Per-row data: (z, attempted, placed) — one entry per generated row
     rows: list[tuple[float, int, int]] = dataclasses.field(default_factory=list)
@@ -203,17 +211,21 @@ def _contact_angle_for_mesh(
     up_hint: np.ndarray,
     candidates: np.ndarray,
     *,
-    initial_angle: float,
+    initial_contact_angle_rad: float,
     iterations: int = 8,
     contact_tol_mm: float = 0.02,
 ) -> float:
-    """Find the first contact angle where the curl region touches *mesh*.
+    """Find the contact angle (radians) where the curl region first touches *mesh*.
 
-    Distances are signed locally from the closest triangle normal: positive is
-    inside the parent mesh and negative is outside.  The target angle is the
-    smallest rotation where any contact candidate reaches zero distance, which
-    keeps the contact calculation tied to the actual parent mesh rather than to
-    a smooth sphere proxy.
+    The contact angle is the lean angle of the leaf: 0 = leaf grows flat along
+    the surface (belly floats above); π/2 = leaf grows back into the surface
+    (belly buried).  The returned angle is the smallest value where the belly
+    just grazes the surface — the lean needed to press the leaf against the mesh.
+
+    Distances are signed from the closest triangle normal: positive = inside the
+    parent mesh, negative = outside.  The target is the smallest angle where any
+    contact candidate reaches zero distance, which keeps the result tied to the
+    actual parent mesh rather than a smooth sphere proxy.
     """
     base = np.asarray(base_pos, float)
     T0   = _safe_norm(np.asarray(tangent0, float))
@@ -224,9 +236,9 @@ def _contact_angle_for_mesh(
     dA = candidates[:, 1]
     dN = candidates[:, 2]
 
-    def _points(ca: float) -> np.ndarray:
-        c = float(math.cos(ca))
-        s = float(math.sin(ca))
+    def _points(contact_angle_rad: float) -> np.ndarray:
+        c = float(math.cos(contact_angle_rad))
+        s = float(math.sin(contact_angle_rad))
         return (
             base[np.newaxis]
             + (dL * c + dN * s)[:, np.newaxis] * T0[np.newaxis]
@@ -234,14 +246,21 @@ def _contact_angle_for_mesh(
             + (-dL * s + dN * c)[:, np.newaxis] * N0[np.newaxis]
         )
 
+    angle_max = (math.pi / 2.0) - 1e-5
+    # Negative contact angles lean the leaf outward (away from the surface),
+    # lifting a buried belly clear.  Needed when T0 points into the mesh body
+    # (e.g. at the tip of a steep cluster) and the belly is already buried at
+    # ca=0.  Cap at -π/4 so leaves don't stand fully upright off the surface.
+    angle_min = -math.pi / 4.0
+
     eval_cache: dict[float, float] = {}
 
-    def _max_inside(ca: float) -> float:
-        ca = float(np.clip(ca, 0.0, (math.pi / 2.0) - 1e-5))
-        key = round(ca, 12)
+    def _max_inside(contact_angle_rad: float) -> float:
+        contact_angle_rad = float(np.clip(contact_angle_rad, angle_min, angle_max))
+        key = round(contact_angle_rad, 12)
         if key in eval_cache:
             return eval_cache[key]
-        pts = _points(ca)
+        pts = _points(contact_angle_rad)
         closest, _, tri_id = proximity.on_surface(pts)
         normals = mesh.face_normals[np.asarray(tri_id, dtype=np.int64)]
         signed = -np.einsum("ij,ij->i", pts - closest, normals)
@@ -249,14 +268,13 @@ def _contact_angle_for_mesh(
         eval_cache[key] = val
         return val
 
-    angle_max = (math.pi / 2.0) - 1e-5
-    ca0 = float(np.clip(initial_angle, 0.0, angle_max))
-    d0 = _max_inside(ca0)
+    contact_angle_rad = float(np.clip(initial_contact_angle_rad, 0.0, angle_max))
+    d0 = _max_inside(contact_angle_rad)
     if abs(d0) <= contact_tol_mm:
-        return ca0
+        return contact_angle_rad
 
-    lo = ca0
-    hi = ca0
+    lo = contact_angle_rad
+    hi = contact_angle_rad
 
     # Use the analytical sphere angle as a local predictor, then expand only
     # as far as the actual mesh requires.  This preserves arbitrary-mesh
@@ -270,9 +288,9 @@ def _contact_angle_for_mesh(
         if _max_inside(hi) < 0.0:
             return hi
     else:
-        while lo > 0.0 and _max_inside(lo) > 0.0:
+        while lo > angle_min and _max_inside(lo) > 0.0:
             hi = lo
-            lo = max(0.0, lo - step)
+            lo = max(angle_min, lo - step)
             step *= 2.0
         if _max_inside(lo) > 0.0:
             return lo
@@ -477,7 +495,6 @@ def place_leaves_on_mesh(
                 _best_bi     = -1
                 _belly_perim = perim
             n_col = max(1, int(math.ceil(_belly_perim / col_step)))
-
             _poly_coords = np.array(poly.exterior.coords, dtype=float)[:, :2]
             _cx2d, _cy2d = float(c2d.x), float(c2d.y)
 
@@ -571,25 +588,26 @@ def place_leaves_on_mesh(
                 else:
                     T0 = _d_raw / plen
 
-                ca_guess = _cached_ca(local_r)
-                if ca_guess >= math.pi / 2:
-                    ca_guess = (math.pi / 2.0) - 1e-5
-                    stats.ca_clamped += 1
+                contact_angle_guess_rad = _cached_ca(local_r)
+                if contact_angle_guess_rad >= math.pi / 2:
+                    contact_angle_guess_rad = (math.pi / 2.0) - 1e-5
+                    stats.contact_angle_clamped += 1
 
-                ca = _contact_angle_for_mesh(
+                contact_angle_rad = _contact_angle_for_mesh(
                     mesh,
                     _proximity,
                     pt3d,
                     T0,
                     up_hint,
                     _contact_candidates,
-                    initial_angle=ca_guess,
+                    initial_contact_angle_rad=contact_angle_guess_rad,
                 )
-
-                c_ca = math.cos(ca)
-                s_ca = math.sin(ca)
-                tangent   = _safe_norm(T0 * c_ca - up_hint * s_ca)
-                up_placed = _safe_norm(up_hint * c_ca + T0 * s_ca)
+                tangent   = _safe_norm(
+                    T0 * math.cos(contact_angle_rad) - up_hint * math.sin(contact_angle_rad)
+                )
+                up_placed = _safe_norm(
+                    up_hint * math.cos(contact_angle_rad) + T0 * math.sin(contact_angle_rad)
+                )
 
                 lseed = int(_hash01_int(seed, "leaf", row_idx, ci))
                 try:
@@ -622,15 +640,25 @@ def place_leaves_on_mesh(
                     _inside   = mesh.contains(curl_verts)
                     outside_d = _curl_dists[~_inside]
                     inside_d  = _curl_dists[_inside]
-                    stats.leaf_float_dists.append(
-                        float(outside_d.max()) if len(outside_d) else 0.0
-                    )
-                    stats.leaf_buried_depths.append(
-                        float(inside_d.max()) if len(inside_d) else 0.0
-                    )
+                    _float_d   = float(outside_d.max()) if len(outside_d) else 0.0
+                    _burial_d  = float(inside_d.max()) if len(inside_d) else 0.0
                 else:
-                    stats.leaf_float_dists.append(0.0)
-                    stats.leaf_buried_depths.append(0.0)
+                    _float_d  = 0.0
+                    _burial_d = 0.0
+
+                # Discard leaves where the actual curl region is buried beyond
+                # the visible-burial threshold.  This catches apex-row leaves
+                # that _contact_angle_for_mesh placed at contact_angle_rad=0
+                # (flat) because no valid contact angle existed there.
+                # Using actual solid vertices (not the contact candidates) avoids
+                # false positives on steep bottom-row leaves where the candidates
+                # overreport burial due to canonical-frame mismatch.
+                if _burial_d > _PREBURIED_DEPTH_MM:
+                    stats.skipped_preburied += 1
+                    continue
+
+                stats.leaf_float_dists.append(_float_d)
+                stats.leaf_buried_depths.append(_burial_d)
 
                 stats.base_positions.append(pt3d.copy())
                 stats.base_tangents.append(tangent.copy())
