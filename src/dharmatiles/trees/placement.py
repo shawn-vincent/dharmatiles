@@ -25,7 +25,6 @@ from .mesh import (
     _compute_row_z_positions,
     _contact_angle_for_sphere,
     _hash01_int,
-    _interpolate_meridian_normal,
 )
 
 
@@ -428,11 +427,13 @@ def place_leaves_on_mesh(
             continue
 
         # Belly slice: mesh cross-section L/2 arc below this row.
-        # Used to count n_col from the actual widest perimeter the leaves span.
+        # Drives n_col (leaf count) AND supplies an alternative sampling polygon
+        # when the row cross-section is a degenerate sliver (see _use_belly_pos).
+        # Tuple: (centroid_3d, perim, coords2d, xform, cx2d, cy2d, shapely_poly)
         _s_row   = _avg_arc_for_z(z_row, meridians)
         _s_belly = max(0.0, _s_row - L / 2.0)
         _z_belly = _avg_z_for_arc(_s_belly, meridians)
-        _belly_polys: list[tuple[np.ndarray, float]] = []
+        _belly_polys: list[tuple] = []
         if _z_belly < z_row - 1e-3:
             _belly_sec = mesh.section(
                 plane_origin=np.array([0.0, 0.0, _z_belly]),
@@ -444,7 +445,15 @@ def place_leaves_on_mesh(
                     for _bpoly in _bp2d.polygons_full:
                         _bc   = _bpoly.centroid
                         _bc4d = _bxf @ np.array([float(_bc.x), float(_bc.y), 0.0, 1.0])
-                        _belly_polys.append((_bc4d[:3].copy(), float(_bpoly.length)))
+                        _belly_polys.append((
+                            _bc4d[:3].copy(),
+                            float(_bpoly.length),
+                            np.array(_bpoly.exterior.coords, dtype=float)[:, :2],
+                            _bxf.copy(),
+                            float(_bc.x),
+                            float(_bc.y),
+                            _bpoly,
+                        ))
                 except Exception:
                     pass
 
@@ -459,10 +468,12 @@ def place_leaves_on_mesh(
             centroid_3d = c4d[:3].copy()
 
             if _belly_polys:
-                _cdists = [float(np.linalg.norm(bc[:2] - centroid_3d[:2]))
-                           for bc, _ in _belly_polys]
-                _belly_perim = _belly_polys[int(np.argmin(_cdists))][1]
+                _cdists  = [float(np.linalg.norm(bd[0][:2] - centroid_3d[:2]))
+                            for bd in _belly_polys]
+                _best_bi = int(np.argmin(_cdists))
+                _belly_perim = _belly_polys[_best_bi][1]
             else:
+                _best_bi     = -1
                 _belly_perim = perim
             n_col = max(1, int(math.ceil(_belly_perim / col_step)))
 
@@ -471,6 +482,8 @@ def place_leaves_on_mesh(
 
             for ci in range(n_col):
                 phi_2d = 2.0 * math.pi * float(ci) / float(n_col)
+
+                # Base position: always from the row cross-section.
                 _pt2d  = _polygon_point_at_phi(_poly_coords, _cx2d, _cy2d, phi_2d)
                 if _pt2d is not None:
                     p4d  = xform @ np.array([float(_pt2d[0]), float(_pt2d[1]), 0.0, 1.0])
@@ -481,8 +494,38 @@ def place_leaves_on_mesh(
                     p4d  = xform @ np.array([float(pt2.x), float(pt2.y), 0.0, 1.0])
                     pt3d = p4d[:3].copy()
 
-                phi     = float(np.arctan2(pt3d[1] - cy, pt3d[0] - cx))
-                up_hint = _interpolate_meridian_normal(meridians, phi, z_row)
+                # Normal position: belly cross-section at the same azimuthal
+                # angle.  The belly (L/2 arc below) is always a full ring with
+                # diverse surface normals around its perimeter.  Using it for
+                # the normal — rather than the base position — means that even
+                # when the row cross-section is a degenerate sliver (e.g. a
+                # tilted cluster apex that cuts the forward dome as a thin
+                # strip), each leaf still gets a distinct, correctly-outward
+                # orientation.  For normal rows the belly is close enough that
+                # the normal is essentially the same as at the base.
+                if _best_bi >= 0:
+                    _bd = _belly_polys[_best_bi]
+                    _pt2d_n = _polygon_point_at_phi(_bd[2], _bd[4], _bd[5], phi_2d)
+                    if _pt2d_n is not None:
+                        _p4d_n = _bd[3] @ np.array([float(_pt2d_n[0]), float(_pt2d_n[1]), 0.0, 1.0])
+                        pt3d_n = _p4d_n[:3].copy()
+                    else:
+                        _t_n   = float(ci) / float(n_col)
+                        _pt2_n = _bd[6].exterior.interpolate(_t_n, normalized=True)
+                        _p4d_n = _bd[3] @ np.array([float(_pt2_n.x), float(_pt2_n.y), 0.0, 1.0])
+                        pt3d_n = _p4d_n[:3].copy()
+                else:
+                    pt3d_n = pt3d  # no belly available — fall back to base
+
+                # Surface normal via proximity query at the belly position.
+                # Barycentric-interpolated vertex normals give smooth results.
+                _sp, _sd, _st = _proximity.on_surface(pt3d_n[np.newaxis])
+                _bary   = trimesh.triangles.points_to_barycentric(
+                    mesh.triangles[_st[0]][np.newaxis], _sp,
+                )[0]
+                up_hint = _safe_norm(
+                    _bary @ mesh.vertex_normals[mesh.faces[int(_st[0])]]
+                )
 
                 if float(up_hint[2]) < -0.1:
                     stats.skipped_downward += 1
@@ -495,10 +538,21 @@ def place_leaves_on_mesh(
 
                 row_attempt += 1
 
-                outward  = pt3d - centroid_3d
+                # Lift the reference point half a leaf-length above the
+                # cross-section plane.  centroid_3d and pt3d share the same z,
+                # making outward purely horizontal; when up_hint has a large
+                # horizontal component (near-equatorial positions or meridian
+                # interpolation error), the projection nearly cancels outward
+                # and T0 degenerates.  The z-offset gives outward a stable
+                # downward component that survives the projection.
+                _centroid_ref = centroid_3d + np.array([0.0, 0.0, L * 0.5])
+                outward  = pt3d - _centroid_ref
                 outward -= float(np.dot(outward, up_hint)) * up_hint
                 plen     = float(np.linalg.norm(outward))
                 if plen < 1e-6:
+                    phi    = float(np.arctan2(
+                        pt3d[1] - centroid_3d[1], pt3d[0] - centroid_3d[0],
+                    ))
                     radial = np.array([math.cos(phi), math.sin(phi), 0.0])
                     radial -= float(np.dot(radial, up_hint)) * up_hint
                     T0 = _safe_norm(radial)
