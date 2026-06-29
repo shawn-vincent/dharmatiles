@@ -20,6 +20,7 @@ clump length.
 """
 from __future__ import annotations
 
+import math
 import warnings
 
 import numpy as np
@@ -920,6 +921,23 @@ def _avg_z_for_arc(s_target: float, meridians: list) -> float:
     return float(np.mean(z_vals)) if z_vals else 0.0
 
 
+def _avg_Tz_for_z(z_target: float, meridians: list) -> float:
+    """Average Tz = dz/ds (z-component of the upward meridian tangent) at z_target.
+
+    From the meridian normal construction: Nr = Tz, so Tz equals the radial
+    magnitude of the interpolated outward normal.  Returns a conservative
+    fallback of 0.866 (= sqrt(3)/2, corresponding to a 30° surface slope) when
+    no meridian covers z_target.
+    """
+    Tz_vals = []
+    for m in meridians:
+        if m.z_vals[0] - 1e-9 <= z_target <= m.z_vals[-1] + 1e-9:
+            nx = float(np.interp(z_target, m.z_vals, m.normals[:, 0]))
+            ny = float(np.interp(z_target, m.z_vals, m.normals[:, 1]))
+            Tz_vals.append(float(math.sqrt(nx * nx + ny * ny)))
+    return float(np.mean(Tz_vals)) if Tz_vals else 0.866
+
+
 def _avg_arc_for_z(z_target: float, meridians: list) -> float:
     """Average surface arc value at a given Z across all meridians."""
     s_vals = [
@@ -972,8 +990,7 @@ def _compute_row_z_positions(
     s_top         = _avg_arc_for_z(z_top_sample, meridians)
 
     z_placeable   = _lowest_placeable_z(meridians, normal_z_threshold=_LEAF_PLACEABLE_NORMAL_Z)
-    s_placeable   = _avg_arc_for_z(z_placeable, meridians)
-    z_bot_anchor  = _avg_z_for_arc(s_placeable + leaf_length_mm, meridians)
+    z_bot_anchor  = z_placeable + leaf_length_mm
     z_bot_anchor  = min(z_bot_anchor, z_top_sample)
 
     s_bot     = _avg_arc_for_z(z_bot_anchor, meridians)

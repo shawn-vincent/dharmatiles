@@ -34,6 +34,12 @@ from .mesh import (
 # the parent mesh.  This threshold matches the artifact-detector's buried-leaf
 # threshold so that discarded leaves are exactly the ones that would have been flagged.
 _PREBURIED_DEPTH_MM: float = 0.25
+# Leaves whose midrib tips fall within this distance below the mesh floor are
+# still placed.  The Tz-based bottom anchor can leave the lowest row's tip
+# ~0.087mm below z_min due to arc/world-Z discrepancy on steep cone sections —
+# well below print-layer resolution, so we allow it rather than leaving the
+# bottom row bald.
+_FLOOR_TOL_MM: float = 0.1
 
 
 @dataclasses.dataclass
@@ -48,6 +54,7 @@ class LeafPlacementStats:
     skipped_downward: int = 0   # up_hint.z < -0.5 (downward-facing surface)
     skipped_small_r: int = 0   # local_r < 1.0 mm (too close to centroid)
     skipped_preburied: int = 0  # post-placement: curl region buried > _PREBURIED_DEPTH_MM
+    skipped_below_floor: int = 0  # midrib tip (base + L*tangent) below mesh z_min
     contact_angle_clamped: int = 0  # initial contact angle ≥ π/2, clamped to max
     build_errors: int = 0      # RuntimeError / ValueError from leaf builder
     # Per-row data: (z, attempted, placed) — one entry per generated row
@@ -214,6 +221,7 @@ def _contact_angle_for_mesh(
     initial_contact_angle_rad: float,
     iterations: int = 8,
     contact_tol_mm: float = 0.02,
+    preburied_tol_mm: float = _PREBURIED_DEPTH_MM,
 ) -> float:
     """Find the contact angle (radians) where the curl region first touches *mesh*.
 
@@ -288,11 +296,16 @@ def _contact_angle_for_mesh(
         if _max_inside(hi) < 0.0:
             return hi
     else:
-        while lo > angle_min and _max_inside(lo) > 0.0:
+        # Use contact_tol as the loop threshold so that a tiny positive
+        # burial (within tolerance) is treated as "just touching" rather
+        # than "still buried", preventing the doubling step from jumping
+        # over a real zero-crossing that sits marginally above zero due
+        # to mesh-vertex discretisation artifacts.
+        while lo > angle_min and _max_inside(lo) > contact_tol_mm:
             hi = lo
             lo = max(angle_min, lo - step)
             step *= 2.0
-        if _max_inside(lo) > 0.0:
+        if _max_inside(lo) > contact_tol_mm:
             return lo
 
     if _max_inside(lo) >= 0.0:
@@ -372,6 +385,8 @@ def place_leaves_on_mesh(
     hov = float(h_overlap)
     vov = float(v_overlap)
 
+    _z_min_mesh = float(mesh.vertices[:, 2].min())
+    _z_max_mesh = float(mesh.vertices[:, 2].max())
     # Shared kwargs forwarded to both the contact-angle calculator and the leaf builder.
     _leaf_kw = dict(
         length_mm      = L,
@@ -407,10 +422,6 @@ def place_leaves_on_mesh(
         cx                = cx,
         cy                = cy,
     )
-
-    print(f"  [{label}] meridians={len(meridians)}  rows={len(row_zs)}")
-    if row_zs:
-        print(f"    z_range=[{row_zs[0]:.2f}, {row_zs[-1]:.2f}]  (z_top={z_top:.2f})")
 
     # Contact-angle cache: identical for all leaves sharing the same local radius.
     _ca_cache: dict[int, float] = {}
@@ -494,7 +505,7 @@ def place_leaves_on_mesh(
             else:
                 _best_bi     = -1
                 _belly_perim = perim
-            n_col = max(1, int(math.ceil(_belly_perim / col_step)))
+            n_col = max(1, int(math.ceil(max(_belly_perim, perim) / col_step)))
             _poly_coords = np.array(poly.exterior.coords, dtype=float)[:, :2]
             _cx2d, _cy2d = float(c2d.x), float(c2d.y)
 
@@ -513,14 +524,16 @@ def place_leaves_on_mesh(
                     pt3d = p4d[:3].copy()
 
                 # Normal position: belly cross-section at the same azimuthal
-                # angle.  The belly (L/2 arc below) is always a full ring with
-                # diverse surface normals around its perimeter.  Using it for
-                # the normal — rather than the base position — means that even
-                # when the row cross-section is a degenerate sliver (e.g. a
-                # tilted cluster apex that cuts the forward dome as a thin
-                # strip), each leaf still gets a distinct, correctly-outward
-                # orientation.  For normal rows the belly is close enough that
-                # the normal is essentially the same as at the base.
+                # angle.  Use the polygon-based belly point (original approach),
+                # but detect cases where the 2-D coordinate system of the belly
+                # section is rotated relative to the row section — this causes
+                # a phi mismatch that twists the leaf frame and buries contact
+                # candidates inside the mesh.  Mismatch is measured relative to
+                # each section's own centroid (so that tilted cluster geometry,
+                # where the centroid shifts with z, does not trigger the fallback).
+                # When the local-phi mismatch exceeds ~5°, fall back to placing
+                # the snap query at (belly_centroid + row_radial_offset, z_belly)
+                # to keep the belly reference azimuthally aligned with the row base.
                 if _best_bi >= 0:
                     _bd = _belly_polys[_best_bi]
                     _pt2d_n = _polygon_point_at_phi(_bd[2], _bd[4], _bd[5], phi_2d)
@@ -532,8 +545,33 @@ def place_leaves_on_mesh(
                         _pt2_n = _bd[6].exterior.interpolate(_t_n, normalized=True)
                         _p4d_n = _bd[3] @ np.array([float(_pt2_n.x), float(_pt2_n.y), 0.0, 1.0])
                         pt3d_n = _p4d_n[:3].copy()
+                    # Phi mismatch: compare azimuth of pt3d relative to its own
+                    # cross-section centroid vs azimuth of pt3d_n relative to the
+                    # belly centroid.  True 2-D rotation artefacts show up here;
+                    # geometric centroid shifts from tilting do not.
+                    _belly_c3d = _bd[0]
+                    _phi_row_local = math.atan2(
+                        pt3d[1]   - centroid_3d[1], pt3d[0]   - centroid_3d[0],
+                    )
+                    _phi_bel_local = math.atan2(
+                        pt3d_n[1] - _belly_c3d[1],  pt3d_n[0] - _belly_c3d[0],
+                    )
+                    _phi_err = abs(math.atan2(
+                        math.sin(_phi_bel_local - _phi_row_local),
+                        math.cos(_phi_bel_local - _phi_row_local),
+                    ))
+                    if _phi_err > math.radians(5.0) and abs(_z_belly - pt3d[2]) > 1e-3:
+                        # Translate pt3d's radial offset from its centroid to the
+                        # belly centroid's XY, then snap to the mesh surface.
+                        _rad_xy = np.array([
+                            _belly_c3d[0] + (pt3d[0] - centroid_3d[0]),
+                            _belly_c3d[1] + (pt3d[1] - centroid_3d[1]),
+                            _z_belly,
+                        ])
+                        _snap, _, _ = _proximity.on_surface(_rad_xy[np.newaxis])
+                        pt3d_n = _snap[0].copy()
                 else:
-                    pt3d_n = pt3d  # no belly available — fall back to base
+                    pt3d_n = pt3d  # no belly available — use row base
 
                 # Surface normal via proximity query at the belly position.
                 # Barycentric-interpolated vertex normals give smooth results.
@@ -609,6 +647,15 @@ def place_leaves_on_mesh(
                     up_hint * math.cos(contact_angle_rad) + T0 * math.sin(contact_angle_rad)
                 )
 
+                # Skip leaves whose midrib tip would extend below the mesh floor.
+                # The row anchor is set to keep tips above z_min, but the contact
+                # angle (especially negative outward-lean values) can make the
+                # tangent steeper than Tz-based estimation assumes.
+                _tip_z = pt3d[2] + L * tangent[2]
+                if _tip_z < _z_min_mesh - _FLOOR_TOL_MM:
+                    stats.skipped_below_floor += 1
+                    continue
+
                 lseed = int(_hash01_int(seed, "leaf", row_idx, ci))
                 try:
                     surf  = build_leaf_surface(
@@ -682,4 +729,5 @@ def place_leaves_on_mesh(
         stats.n_attempted += row_attempt
 
     stats.n_rows = len(row_zs)
+
     return parts, stats
