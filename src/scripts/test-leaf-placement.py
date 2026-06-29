@@ -151,9 +151,9 @@ _LEAF = dict(
     leaf_inner_curve    = 1.5,
     leaf_outer_curve    = 0.72,
     leaf_curl_deg       = 40.0,
-    leaf_lift_mm        = 0.0,
-    leaf_h_overlap      = 0.0,
-    leaf_v_overlap      = 0.0,
+    leaf_lift_mm        = 3.0,
+    leaf_h_overlap      = 0.2,
+    leaf_v_overlap      = 0.5,
     leaf_arc_meridians  = 6,
     leaf_arc_z_samples  = 64,
 )
