@@ -1,6 +1,7 @@
 # Leaf Placement — Specification
-*Updated 2026-06-27.  Meridian-arc algorithm is now implemented.  Prior algorithm
-(Z-slice with uniform dZ) is retained below as "Current Algorithm (Deprecated)".*
+*Updated 2026-06-29.  Jitter now wired and working; several placement correctness fixes.
+Meridian-arc algorithm is now implemented.  Prior algorithm (Z-slice with uniform dZ)
+is retained below as "Current Algorithm (Deprecated)".*
 
 *Full history: `docs/meta/history/2026-06-24-leaf-rendering-deep-history.md`,
 `docs/meta/history/2026-06-24-foliage-cluster-baldness.md`,
@@ -91,8 +92,8 @@ by the foliage placement path.  The foliage path uses `build_leaf_surface()` +
 | `leaf_v_overlap` | 0.5 | Fraction of leaf length that overlaps adjacent rows |
 | `leaf_arc_meridians` | 6 | Number of meridian curves for arc-length computation |
 | `leaf_arc_z_samples` | 64 | Number of fine Z levels for meridian sampling |
-| `leaf_angle_jitter_deg` | 24.0 | Yaw jitter range (currently disabled: `jit=0`) |
-| `leaf_pos_jitter` | 0.165 | Position jitter fraction (currently disabled: `pj=0`) |
+| `leaf_angle_jitter_deg` | 24.0 | Azimuthal jitter: rotates T0 around up_hint by ±N° per leaf |
+| `leaf_pos_jitter` | 0.165 | Position jitter: nudges attachment point ±(pj × L) along T0 and lateral |
 | `leaf_cap_count` | 12 | **Deprecated by meridian-arc algorithm.** Apex cap leaves |
 | `leaf_base_count` | 5 | Not used in current paths (reserved) |
 
@@ -341,10 +342,14 @@ def avg_z_for_arc(s_target, meridians):
 
   ```python
   # Lowest Z where the averaged meridian normal is upward-facing enough
-  z_placeable = _lowest_placeable_z(meridians, normal_z_threshold=-0.1)
-  s_placeable = avg_arc_for_z(z_placeable, meridians)
-  z_bot_anchor = avg_z_for_arc(s_placeable + leaf_length_mm, meridians)
+  z_placeable  = _lowest_placeable_z(meridians, normal_z_threshold=-0.1)
+  z_bot_anchor = z_placeable + leaf_length_mm   # direct world-Z offset
   ```
+
+  The arc-to-Z round-trip (`s_placeable = avg_arc_for_z(...)` followed by
+  `z_bot_anchor = avg_z_for_arc(s_placeable + L, ...)`) introduced a small positive
+  bias on steep cone sections, pushing the bottom row too high.  The direct world-Z
+  offset is used instead.
 
   A leaf attached at `z_bot_anchor` hangs downward and covers the lowest visible
   surface of the mesh.  This is computed entirely from the meridian data — no
@@ -585,20 +590,44 @@ downward-facing cluster that a viewer sees from the side, not the top.
 
 ---
 
+## Leaf Jitter
+
+Both jitter parameters are now active and wired through the full call chain.  Both
+are applied **after** `T0` is computed (so the surface frame is available) and
+**before** contact angle (so the contact angle adapts to the jittered position).
+
+### Angle jitter (`leaf_angle_jitter_deg`)
+
+Rotates the leaf's growth direction `T0` around the surface normal `up_hint` using
+Rodrigues' rotation.  The base point stays pinned; the tip swings azimuthally in the
+surface tangent plane.  Each leaf gets an independent random angle from
+`_hash01(seed, "ang_j", row_idx, ci)` scaled to `±leaf_angle_jitter_deg`.
+
+**Important:** use `_hash01` (from `._utils`, has fmix64 finalizer), NOT
+`_hash01_int / 2^64`.  Without the finalizer, varying only `ci` leaves the high bits
+of the hash nearly constant, collapsing all leaves in a row to the same jitter value.
+
+This is NOT a blade roll — the leaf stays flat against the surface.
+
+### Position jitter (`leaf_pos_jitter`)
+
+Nudges the attachment point in two independent random directions within the surface
+tangent plane:
+- Along `T0` (growth direction)
+- Along `cross(up_hint, T0)` (lateral)
+
+Scale is `pos_jitter * leaf_length_mm` per axis.  After nudging, `pt3d` is snapped
+back to the mesh surface via `ProximityQuery.on_surface()`.
+
+**Scale note:** earlier attempts used `pos_jitter * col_step` (≈0.5 mm) which was
+invisible at tile rendering scale.  `pos_jitter * L` (≈0.74 mm at L=4.5 mm) is the
+correct scale.
+
+---
+
 ## Known Open Items
 
-### 1. Jitter disabled
-
-```python
-jit = 0.0   # leaf_angle_jitter_deg
-pj  = 0.0   # leaf_pos_jitter
-```
-
-Disabled for visual debugging, never re-enabled.  Re-enabling: restore
-`jit = float(leaf_angle_jitter_deg)` and `pj = float(leaf_pos_jitter)`.
-Verify the `tangent[2] > 0.707` RuntimeWarning does not fire after re-enabling.
-
-### 2. Leaf size not scaled to cluster size
+### 1. Leaf size not scaled to cluster size
 
 `leaf_length_mm` and `leaf_width_mm` are fixed per tree regardless of cluster size.
 On very small clusters (`r_tip < 2.5 mm`) `contact_angle → π/2` and all leaves are
