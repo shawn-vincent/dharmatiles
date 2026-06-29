@@ -274,6 +274,8 @@ def build_branch_mesh(
                 leaf_v_overlap=leaf_v_overlap,
                 leaf_arc_meridians=leaf_arc_meridians,
                 leaf_arc_z_samples=leaf_arc_z_samples,
+                leaf_angle_jitter_deg=leaf_angle_jitter_deg,
+                leaf_pos_jitter=leaf_pos_jitter,
             )
             if len(clump.vertices) > 0:
                 foliage_solids.append(clump)
@@ -1084,6 +1086,8 @@ def _build_foliage_cluster_mesh(
     leaf_lift_mm: float = 3.0,
     leaf_arc_meridians: int = 6,
     leaf_arc_z_samples: int = 64,
+    leaf_angle_jitter_deg: float = 24.0,
+    leaf_pos_jitter: float = 0.165,
 ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Foliage clump: icosphere bent along the branch Bezier spine.
 
