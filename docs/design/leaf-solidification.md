@@ -1,6 +1,7 @@
 # Leaf Solidification — Design Specification
 *Written 2026-06-29.  Updated 2026-06-29 with confirmed tip-pole raycast failure
-analysis.  Covers the complete pipeline from open leaf surface to watertight solid
+analysis.  Updated 2026-06-29 with tip bulk vertex implementation (open item 1
+resolved).  Covers the complete pipeline from open leaf surface to watertight solid
 embedded in the parent foliage cluster mesh.*
 
 Full history: `docs/meta/history/2026-06-29-leaf-jitter-and-placement-fixes.md`,
@@ -26,7 +27,8 @@ depth, curl burial) and discards leaves that fail.
 
 Implementation files:
 - `src/dharmatiles/trees/leaf.py` — `compute_leaf_geometry`, `build_leaf_surface`,
-  `boundary_loop`, `solidify_leaf`, `LEAF_ROOT_EMBED_MM`, `LEAF_ROOT_WALL_ANGLE_DEG`
+  `boundary_loop`, `solidify_leaf`, `LEAF_TIP_VERTEX_IDX`, `LEAF_ROOT_EMBED_MM`,
+  `LEAF_ROOT_WALL_ANGLE_DEG`, `_LEAF_TIP_BULK_MM`
 - `src/dharmatiles/trees/placement.py` — call site, post-build checks
 
 ---
@@ -89,6 +91,8 @@ which side is outward).
 | `embed_mm` | float | Depth past the parent surface for each root vertex. Default `LEAF_ROOT_EMBED_MM = 0.75 mm` |
 | `parent_mesh` | `trimesh.Trimesh \| None` | Foliage cluster mesh to raycast against |
 | `root_wall_angle_deg` | float | Wall taper angle from leaf surface plane. Default `LEAF_ROOT_WALL_ANGLE_DEG = 90.0°` |
+| `tip_vertex_idx` | `int \| None` | Vertex index of the tip pole in `surface`. Pass `LEAF_TIP_VERTEX_IDX` to enable the tip bulk vertex. Default `None` (disabled). |
+| `tip_bulk_mm` | float | Depth of the tip bulk vertex below tip_pt along its local normal. Default `_LEAF_TIP_BULK_MM = 0.5 mm`. |
 
 ### Outputs
 
@@ -109,9 +113,10 @@ more complex topology).  `boundary_loop` finds it:
 3. Build an adjacency map and walk the chain starting from any boundary vertex.
 
 The loop is returned as an ordered list of vertex indices.  For the default leaf
-geometry (`N_LONG=12`, `N_LAT=10`) the loop has **`NP = 2 × N_LAT + 2 = 22`
-vertices**: two lateral edges of 10 segments each, plus the base_pt and tip_pt
-poles.
+geometry (`N_LONG=12`, `N_LAT=10`) the loop has **`NP = 2 × (N_LONG − 1) + 2 = 24`
+vertices**: two lateral edges of `ring_count = 11` vertices each, plus the base_pt
+and tip_pt poles.  (The lateral boundary runs along the longitudinal direction, so
+it is N_LONG−1 vertices per side, not N_LAT.)
 
 #### Boundary loop adjacency at the tip
 
@@ -147,6 +152,38 @@ surface closely (dot product ≈ 0.998 vs. the analytic local normal in tests).
 
 `up_hint` (the global normal) is still used for the cap-plane projection in Step 5,
 where an approximate shared plane is sufficient.
+
+---
+
+### Step 2b — Tip bulk vertex (optional)
+
+When `tip_vertex_idx` is provided, a **tip bulk vertex** is inserted before the
+centroid and ray-direction computations.
+
+```python
+tip_li = loop.index(tip_vertex_idx)          # position of tip_pt in the loop
+lc_li  = (tip_li - 1) % NP                  # ring-10 left corner (loop position)
+rc_li  = (tip_li + 1) % NP                  # ring-10 right corner (loop position)
+
+tip_bulk_v_pos = perim[tip_li] - tip_bulk_mm * local_n[tip_li]  # 0.5 mm below tip
+perim[tip_li]  = tip_bulk_v_pos              # replace tip_pt in perim in-place
+# local_n[tip_li] unchanged — tip_bulk_v inherits tip_pt's outward normal
+```
+
+`perim[tip_li]` is replaced so that **every subsequent step** — centroid, inward
+directions, fallback root position, and raycast origin — treats the tip bulk vertex
+as if it were the tip perimeter vertex.  The net effect:
+
+- The raycast at position `tip_li` fires from `tip_bulk_v_pos`, which is 0.5 mm
+  closer to the parent mesh than the elevated `tip_pt`.  This converts the
+  previously universal tip-pole miss into a hit on most leaves.
+- The fallback root (used when the raycast still misses) is
+  `tip_bulk_v_pos + embed_mm × ray_dirs[tip_li]`, which is now embedded 0.5 mm
+  deeper than before and positioned much closer to the cluster surface.
+
+`tip_bulk_v_pos` is added as a new explicit vertex in the solid at index
+`n_surf + NP + 1`.  Two **bridge faces** and modified wall quads connect it to
+the rest of the geometry (see Step 6).
 
 ---
 
@@ -219,7 +256,7 @@ This guarantees a positive burial depth regardless of surface curvature.
 
 `embed_mm` default: `LEAF_ROOT_EMBED_MM = 0.75 mm`.
 
-#### Tip-pole raycast: universal miss (confirmed)
+#### Tip-pole raycast: universal miss (confirmed, now resolved)
 
 `tip_pt` is elevated above the parent mesh surface by the combined effect of
 `arch_deg`, `curl_deg`, and `lift_mm`.  Its local surface normal (area-weighted
@@ -229,23 +266,16 @@ ray direction is pure `−local_n_tip`, which therefore points away from the ele
 tip and does not re-intersect the parent mesh.
 
 **Confirmed by instrumentation** (`test-leaf-placement.py`, sphere r=10 mm,
-`lift_mm=3.0`, `curl_deg=40°`, no jitter): 0 of 78 tip-pole rays hit the mesh.
+`lift_mm=3.0`, `curl_deg=40°`, no jitter): 0 of 78 tip-pole rays hit the mesh when
+fired from `tip_pt`.
 
-Consequence: `root[tip_pt]` is always placed by the fallback — exactly
-`embed_mm = 0.75 mm` along `−local_n_tip` from `tip_pt`, floating outside (or
-barely at) the parent mesh surface.  This creates a visible vertex ("V") ~0.75 mm
-below the tip in every solidified leaf, sitting outside the parent mesh rather
-than embedded inside it.
-
-The subsequent cap fan triangle connects V to `cap_center`.  Because `cap_center`
-is projected onto the z-plane of `root[0]` (a vertex near the leaf base, much
-lower in Z than the tip), the edge V → `cap_center` forms a visible downward spike
-extending from V further into the cluster interior.
-
-This is the primary visual artifact in rendered foliage: a small spike visible at
-every leaf tip, pointing down from V through the cluster surface.  The sphere test
-passes because the fallback depth (0.75 mm) is well under the 4 mm "long roots"
-threshold — the artifact is silent from the test's perspective but visible in the mesh.
+**Resolution — tip bulk vertex (Step 2b):** when `tip_vertex_idx` is passed to
+`solidify_leaf`, the raycast for the tip slot fires from `tip_bulk_v_pos` — a point
+0.5 mm below `tip_pt` along the same `−local_n_tip` direction.  Moving the origin
+0.5 mm closer to the cluster surface converts the near-universal miss into a hit on
+most leaves, and the fallback (used when the ray still misses) is now also 0.5 mm
+closer to the mesh surface than it was before.  The visible spike artifact is
+eliminated in both cases.
 
 ---
 
@@ -268,7 +298,7 @@ of how much the ring curves.
 
 ### Step 6 — Wall and cap construction
 
-**Vertex layout of the solid:**
+**Vertex layout of the solid (standard path, no tip bulk):**
 
 | Block | Indices | What |
 |---|---|---|
@@ -276,14 +306,45 @@ of how much the ring curves.
 | Root ring | `n_surf … n_surf+NP−1` | One root vertex per boundary loop vertex |
 | Cap centre | `n_surf+NP` | Single centroid vertex for the root cap |
 
+**With tip bulk vertex active, one additional block is appended:**
+
+| Block | Indices | What |
+|---|---|---|
+| Tip bulk vertex | `n_surf+NP+1` | `tip_bulk_v_pos` — 0.5 mm below tip_pt |
+
 **Wall faces** (`NP × 2` triangles, forming `NP` quads):
+
+Standard path:
 ```
 for i in 0..NP:
     j = (i+1) % NP
-    a, b = loop[i], loop[j]     # adjacent perimeter vertices (surface)
+    a, b = loop[i], loop[j]     # adjacent perimeter vertices (surface indices)
     d, c = root[i], root[j]     # corresponding root ring vertices
     wall faces: [a, b, c] and [a, c, d]
 ```
+
+With tip bulk vertex, the two quads adjacent to the tip are rerouted:
+```
+for i in 0..NP:
+    j = (i+1) % NP
+    if i == lc_li:   a, b = loop[lc_li], tip_bulk_v_idx   # left: ring-10 → tip_bulk_v
+    elif i == tip_li: a, b = tip_bulk_v_idx, loop[rc_li]  # right: tip_bulk_v → ring-10
+    else:             a, b = loop[i], loop[j]              # all other quads unchanged
+    d, c = root[i], root[j]
+    wall faces: [a, b, c] and [a, c, d]
+```
+
+**Bridge faces** (tip bulk only, `2` triangles):
+
+Two triangles connect `tip_pt` and the two ring-10 corners down to `tip_bulk_v`,
+sealing the gap left by rerouting the adjacent wall quads:
+```
+[tip_pt, loop[lc_li], tip_bulk_v_idx]
+[tip_pt, tip_bulk_v_idx, loop[rc_li]]
+```
+
+In the assembled face list, bridge faces come immediately after the surface faces
+(before the wall faces), so `wall_face_range` is offset accordingly.
 
 **Root cap** (`NP` triangles — centroid fan):
 ```
@@ -291,21 +352,30 @@ for i in 0..NP:
     [cap_centre, root[(i+1)%NP], root[i]]
 ```
 
-The winding of wall and cap faces is corrected by `_mesh_with_fixed_normals` using
-the same cache mechanism as the open surface.
+The winding of wall, bridge, and cap faces is corrected by `_mesh_with_fixed_normals`
+using the same cache mechanism as the open surface.  The cache key includes whether
+the tip bulk vertex is active so that tip-bulk and standard solids have separate
+cached winding arrays.
 
 ---
 
 ## Solid Vertex Counts
 
-For the default topology (`N_LONG=12`, `N_LAT=10`, `NP=22`):
+For the default topology (`N_LONG=12`, `N_LAT=10`):
+
+`NP = 2 × (N_LONG − 1) + 2 = 2 × 11 + 2 = 24`
+
+Surface face count: `N_LAT` (base fan) + `(N_LONG−2) × N_LAT × 2` (body) + `N_LAT` (tip fan)
+= 10 + 10×10×2 + 10 = **220 faces**.
 
 | Part | Vertices | Faces |
 |---|---|---|
-| Open surface | 123 | 120 |
-| Root ring | 22 | — |
+| Open surface | 123 | 220 |
+| Root ring | 24 | — |
 | Cap centre | 1 | — |
-| **Total solid** | **146** | **120 (surf) + 44 (walls) + 22 (cap) = 186** |
+| **Total solid (standard)** | **148** | **220 (surf) + 48 (walls) + 24 (cap) = 292** |
+| Tip bulk vertex | +1 | +2 (bridge) |
+| **Total solid (tip bulk active)** | **149** | **294** |
 
 ---
 
@@ -366,8 +436,10 @@ canonical sphere frame and the actual mesh surface.
 
 | Constant | Value | Location | Meaning |
 |---|---|---|---|
+| `LEAF_TIP_VERTEX_IDX` | 122 | `leaf.py` | Index of tip_pt in the open surface (`(N_LONG−1)×(N_LAT+1)+1`) |
 | `LEAF_ROOT_EMBED_MM` | 0.75 mm | `leaf.py` | Depth past parent surface for each root vertex |
 | `LEAF_ROOT_WALL_ANGLE_DEG` | 90.0° | `leaf.py` | Wall taper angle (90° = perpendicular, no taper) |
+| `_LEAF_TIP_BULK_MM` | 0.5 mm | `leaf.py` | Depth of tip bulk vertex below tip_pt |
 | `_LEAF_ROOT_MAX_HIT_MM` | 10.0 mm | `leaf.py` | Max accepted raycast hit distance |
 | `_LEAF_FDM_SUPPORT_TOLERANCE_MM` | 0.05 mm | `leaf.py` | Ray origin offset to avoid self-intersection |
 | `_PREBURIED_DEPTH_MM` | 0.25 mm | `placement.py` | Max tolerated curl-region burial before discard |
@@ -379,54 +451,29 @@ canonical sphere frame and the actual mesh surface.
 
 ## Known Open Items
 
-### 1. Ray direction is wrong at the tip pole — causes universal miss and visible artifact
+### 1. ~~Tip-pole raycast: universal miss~~ — RESOLVED
 
-**This is the most important open item.**
+**Resolved 2026-06-29 by the tip bulk vertex (Step 2b).**
 
-At `root_wall_angle_deg = 90°` the ray is pure `−local_n`, which tracks the
-*leaf surface geometry* (arch, curl, lift) rather than the *parent mesh geometry*.
-At the tip, where lift and curl have rotated the surface normal far from the cluster
-surface normal, the ray does not point toward the parent mesh at all.
-
-The result (confirmed by instrumentation — see Step 4 above): every tip-pole
-raycast misses on every leaf, on every parent mesh.  The fallback places `root[tip_pt]`
-floating 0.75 mm outside the parent mesh, producing a visible spike artifact at
-every leaf tip.
-
-The same mechanism causes **long roots on clusters** for perimeter vertices near
-the tip (the last-ring lateral corners), whose local normals are also rotated away
-from the cluster surface.  Those rays hit the cluster but at large angles, often
-traversing the full interior and striking the far wall at 6–9 mm.
-
-**What the fix needs to do**: the ray direction at the tip (and near-tip perimeter
-vertices) must aim at the actual parent mesh surface rather than follow
-`−local_n_tip`.  Candidate approaches:
-
-- **Nearest-surface direction**: replace `−local_n` with the direction from the
-  perimeter vertex toward its closest point on the parent mesh.  This is
-  geometrically exact and works for any parent shape.
-- **Global up_hint direction**: use `−up_hint` (the cluster surface normal at the
-  base attachment point, passed to `solidify_leaf`) for all perimeter vertices
-  instead of per-vertex leaf normals.  Simpler, correct in the flat-to-moderately-
-  tilted case, wrong when the leaf is heavily contact-angle tilted.
-- **Blend**: interpolate between `−local_n` (correct for mid-leaf perimeter
-  vertices, which sit on or near the surface) and the nearest-surface direction
-  (correct for the tip), weighted by distance from the base.
-
-The parameter `root_wall_angle_deg` is fully wired and the formula already supports
-non-90° values — the fix likely lives in how the *reference direction* for the ray
-is chosen, not in the angle arithmetic itself.
+The root cause was that `tip_pt` is elevated above the parent mesh by lift+curl,
+so its local normal points away from the mesh and the 90° ray misses universally.
+The fix moves the raycast origin 0.5 mm closer to the mesh along the same direction,
+converting the miss to a hit on most leaves.  See Step 2b and Step 4 above.
 
 ### 2. Root cap is a flat centroid fan
 
 The root cap is a simple centroid fan (one central vertex, `NP` triangles radiating
 out).  This produces a non-planar cap when the root ring curves significantly (e.g.
-at large contact angles on small-radius clusters).  Additionally, `cap_center` is
-anchored to the z-plane of `root[0]` (a vertex near the leaf base); for leaves where
-`root[tip_pt]` is much higher in Z than `root[0]` (which is universal given the
-tip-pole miss), the cap triangle at the tip spans a large Z range, creating the
-downward spike from V described in Step 4.  A proper planar cap projected onto the
-least-squares-fit plane of the root ring would reduce both problems.
+at large contact angles on small-radius clusters).  `cap_center` is projected onto
+the plane of `up_hint` through `root[0]`; when the root ring is strongly non-planar
+this projection may place the centroid near the ring boundary, producing thin cap
+triangles.
+
+Note: the downward spike from `root[tip_pt]` described in earlier analysis is
+substantially improved by the tip bulk vertex (the tip root is now much closer to
+the cluster surface), but the fundamental flat-centroid-fan issue for non-planar
+rings remains.  A proper planar cap projected onto the least-squares-fit plane of
+the root ring would be the correct fix.
 
 ### 3. Raycasting is done per-vertex with `multiple_hits=True`
 
@@ -466,9 +513,10 @@ vertex grid around the lateral axis through the base.  It is already baked into 
 vertex positions when `solidify_leaf` is called.  `solidify_leaf` has no special
 knowledge of lift — it treats the lifted geometry the same as unlifted geometry.
 
-This is the root cause of the tip-pole raycast failure: `lift_mm` elevates `tip_pt`
-above the parent mesh surface and rotates its local normal away from the mesh, but
-`solidify_leaf` uses that local normal as the ray direction without any awareness
-that the tip is no longer near the surface.  The ray fires in the wrong direction
-and misses.  The mid-leaf perimeter vertices are much closer to the parent surface
-and their normals are much less rotated, so their raycasts largely succeed.
+This was the root cause of the tip-pole raycast failure: `lift_mm` elevates `tip_pt`
+above the parent mesh surface and rotates its local normal away from the mesh, so
+the ray fired from `tip_pt` pointed away from the cluster and missed.  The tip bulk
+vertex (Step 2b) resolves this by moving the raycast origin 0.5 mm closer to the
+mesh, within range of a successful hit.  `solidify_leaf` still has no explicit
+knowledge of lift — the correction is purely spatial (repositioning the origin)
+rather than directional (changing the ray vector).
