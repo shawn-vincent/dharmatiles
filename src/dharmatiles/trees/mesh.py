@@ -1291,6 +1291,8 @@ def _build_foliage_cluster_mesh(
             z_samples      = leaf_arc_z_samples,
             seed           = _hash01_int(bark_seed, "leaves", edge_id),
             label          = f"cluster-{edge_id}",
+            angle_jitter_deg = leaf_angle_jitter_deg,
+            pos_jitter       = leaf_pos_jitter,
         )
         if len(leaf_parts) < 3:
             warnings.warn(

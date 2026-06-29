@@ -16,7 +16,7 @@ from collections.abc import Callable
 import numpy as np
 import trimesh
 
-from ._utils import _safe_norm
+from ._utils import _hash01, _safe_norm
 from .leaf import boundary_loop, build_leaf_surface, compute_leaf_geometry, solidify_leaf
 from .mesh import (
     _avg_arc_for_z,
@@ -339,6 +339,8 @@ def place_leaves_on_mesh(
     z_samples: int = 64,
     seed: int = 0,
     label: str = "mesh",
+    angle_jitter_deg: float = 0.0,
+    pos_jitter: float = 0.0,
     row_color_fn: Callable[[int], tuple[int, int, int, int]] | None = None,
 ) -> tuple[list[trimesh.Trimesh], LeafPlacementStats]:
     """Run meridian-arc leaf placement on any closed mesh.
@@ -625,6 +627,29 @@ def place_leaves_on_mesh(
                     T0 = _safe_norm(radial)
                 else:
                     T0 = _d_raw / plen
+
+                # Angle jitter: rotate T0 around up_hint so the leaf's growth
+                # direction pivots in the surface tangent plane — base pinned,
+                # tip swings azimuthally. Uses _hash01 (with fmix64 finalizer)
+                # for proper per-leaf independence; _hash01_int without finalizer
+                # has near-constant high bits when only ci varies in a row.
+                if angle_jitter_deg != 0.0:
+                    _theta = math.radians(angle_jitter_deg) * (_hash01(seed, "ang_j", row_idx, ci) * 2.0 - 1.0)
+                    _ct, _st = math.cos(_theta), math.sin(_theta)
+                    T0 = _safe_norm(T0 * _ct + np.cross(up_hint, T0) * _st)
+
+                # Position jitter: two independent offsets in the surface tangent
+                # plane (along T0 and the lateral direction cross(up_hint, T0)),
+                # then snap back to the mesh surface.  Done after T0 so the basis
+                # is the true local surface frame, not world coordinates.
+                if pos_jitter != 0.0:
+                    _jmm    = pos_jitter * L
+                    _lat    = np.cross(up_hint, T0)
+                    _r_t    = _hash01(seed, "pos_jt", row_idx, ci) * 2.0 - 1.0
+                    _r_l    = _hash01(seed, "pos_jl", row_idx, ci) * 2.0 - 1.0
+                    pt3d    = pt3d + T0 * (_jmm * _r_t) + _lat * (_jmm * _r_l)
+                    _snp, _, _ = _proximity.on_surface(pt3d[np.newaxis])
+                    pt3d    = _snp[0].copy()
 
                 contact_angle_guess_rad = _cached_ca(local_r)
                 if contact_angle_guess_rad >= math.pi / 2:

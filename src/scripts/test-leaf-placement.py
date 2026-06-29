@@ -179,8 +179,10 @@ _PLACE_KW = dict(
     lift_mm        = float(_LEAF["leaf_lift_mm"]),
     h_overlap      = float(_LEAF["leaf_h_overlap"]),
     v_overlap      = float(_LEAF["leaf_v_overlap"]),
-    n_meridians    = int(_LEAF["leaf_arc_meridians"]),
-    z_samples      = int(_LEAF["leaf_arc_z_samples"]),
+    n_meridians      = int(_LEAF["leaf_arc_meridians"]),
+    z_samples        = int(_LEAF["leaf_arc_z_samples"]),
+    angle_jitter_deg = 24.0,
+    pos_jitter       = 0.165,
 )
 
 
