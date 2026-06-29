@@ -794,12 +794,22 @@ def build_leaf_mesh(
 
 # ── Solidification and FDM analysis ───────────────────────────────────────────
 
+# Index of the tip pole vertex in the open surface produced by build_leaf_surface.
+# Fixed by the (N_LONG, N_LAT) topology: ring_count*ring_stride + 1.
+# Public so callers can pass it to solidify_leaf without recomputing.
+LEAF_TIP_VERTEX_IDX: int = (_LEAF_N_LONG - 1) * (_LEAF_N_LAT + 1) + 1
+
 # Root-embedding depth: how far the root ring extends past the parent
 # surface after the per-vertex inward raycast.  When no parent mesh is
 # supplied (or a ray misses), falls back to a flat projection this deep
 # below the perimeter vertex.  Public so callers can reference it without
 # hard-coding the literal.
 LEAF_ROOT_EMBED_MM: float = 0.75
+
+# Depth of the tip bulk vertex below tip_pt, along tip_pt's local surface
+# normal.  Moving the raycast origin 0.5 mm closer to the parent mesh
+# dramatically improves the hit rate at the elevated tip.
+_LEAF_TIP_BULK_MM: float = 0.5
 
 # Maximum raycast hit distance accepted during root embedding.  Hits beyond
 # this are discarded and fall back to the angled-offset default.  Prevents
@@ -863,6 +873,8 @@ def solidify_leaf(
     *,
     parent_mesh:          trimesh.Trimesh | None = None,
     root_wall_angle_deg:  float = LEAF_ROOT_WALL_ANGLE_DEG,
+    tip_vertex_idx:       int | None = None,
+    tip_bulk_mm:          float = _LEAF_TIP_BULK_MM,
 ) -> tuple[trimesh.Trimesh, range]:
     """Close an open leaf surface into a watertight solid.
 
@@ -946,6 +958,42 @@ def solidify_leaf(
     # where an approximate plane through the buried root ring is sufficient.
     local_n = surface.vertex_normals[np.array(loop)]   # (NP, 3)  — pre-normalised by trimesh
 
+    # ── Tip bulk vertex ────────────────────────────────────────────────────────
+    # When tip_vertex_idx is given, we add a "tip bulk vertex" placed
+    # tip_bulk_mm below tip_pt along tip_pt's local surface normal.  This
+    # vertex serves two purposes:
+    #
+    #   (a) Raycast origin: fires the root raycast from a point ~0.5 mm
+    #       closer to the parent mesh than the elevated tip pole, greatly
+    #       improving the hit rate (tip_pt's ray universally misses because
+    #       lift+curl rotate the tip normal away from the cluster surface).
+    #
+    #   (b) Wall geometry: replaces tip_pt in the two wall quads adjacent to
+    #       the tip.  Two bridge triangles then connect tip_pt and the two
+    #       ring-10 corner vertices down to the bulk vertex, closing the tip
+    #       section without a visible spike.
+    tip_bulk_v_pos: np.ndarray | None = None
+    tip_li: int | None = None
+    lc_li:  int | None = None   # loop index of ring-10 corner before tip
+    rc_li:  int | None = None   # loop index of ring-10 corner after tip
+
+    if tip_vertex_idx is not None and float(tip_bulk_mm) > 0.0:
+        try:
+            tip_li = loop.index(tip_vertex_idx)
+        except ValueError:
+            pass  # tip_vertex_idx absent from boundary loop — no tip bulk
+
+    if tip_li is not None:
+        lc_li = (tip_li - 1) % NP
+        rc_li = (tip_li + 1) % NP
+        tip_bulk_v_pos = perim[tip_li] - float(tip_bulk_mm) * local_n[tip_li]
+        # Replace tip_pt in perim so every subsequent computation (centroid,
+        # inward directions, fallback root, raycast origin) treats tip_bulk_v
+        # as the tip boundary vertex.  local_n[tip_li] is unchanged — the bulk
+        # vertex inherits the same outward normal as tip_pt.
+        perim = perim.copy()
+        perim[tip_li] = tip_bulk_v_pos
+
     centroid   = perim.mean(axis=0)                                   # (3,)
     raw_inward = centroid[np.newaxis] - perim                         # (NP, 3)
     # Project each inward vector onto its vertex's OWN local tangent plane.
@@ -997,34 +1045,73 @@ def solidify_leaf(
     n_surf    = len(surface.vertices)
     root_base = n_surf
     cap_ctr   = n_surf + NP
+    # tip_bulk_v lives after cap_ctr when the tip bulk feature is active.
+    tip_bulk_v_idx: int | None = (n_surf + NP + 1) if tip_li is not None else None
 
-    all_verts = np.vstack([surface.vertices, root, center[np.newaxis]])
-
+    # ── Wall faces ────────────────────────────────────────────────────────────
+    # Standard: each consecutive loop pair forms one wall quad (2 triangles).
+    # Tip bulk: the two quads adjacent to the tip pole are rerouted through
+    # tip_bulk_v_idx rather than through the surface tip vertex, so the wall
+    # geometry follows the new geometry rather than the elevated tip_pt.
     wall_faces: list[list[int]] = []
     for i in range(NP):
-        j    = (i + 1) % NP
-        a, b = loop[i], loop[j]
+        j = (i + 1) % NP
+        if tip_li is not None and i == lc_li:
+            # Left quad: ring-10 left corner → tip_bulk_v
+            a, b = loop[lc_li], tip_bulk_v_idx
+        elif tip_li is not None and i == tip_li:
+            # Right quad: tip_bulk_v → ring-10 right corner
+            a, b = tip_bulk_v_idx, loop[rc_li]
+        else:
+            a, b = loop[i], loop[j]
         d, c = root_base + i, root_base + j
         wall_faces += [[a, b, c], [a, c, d]]
+
+    # ── Bridge faces (tip bulk only) ──────────────────────────────────────────
+    # Two triangles connect the surface tip_pt down to tip_bulk_v and the
+    # two ring-10 corners, sealing the gap left by rerouting the wall quads.
+    bridge_faces: list[list[int]] = []
+    if tip_li is not None:
+        tip_pt_idx = loop[tip_li]   # surface vertex index of tip_pt
+        bridge_faces = [
+            [tip_pt_idx, loop[lc_li], tip_bulk_v_idx],
+            [tip_pt_idx, tip_bulk_v_idx, loop[rc_li]],
+        ]
 
     cap_faces = [
         [cap_ctr, root_base + (i + 1) % NP, root_base + i]
         for i in range(NP)
     ]
 
-    wall_start = len(surface.faces)
+    n_bridge   = len(bridge_faces)
+    wall_start = len(surface.faces) + n_bridge
     wall_end   = wall_start + len(wall_faces)
 
-    all_faces = np.vstack([
-        surface.faces,
-        np.array(wall_faces, dtype=np.int32),
-        np.array(cap_faces,  dtype=np.int32),
-    ])
+    if tip_li is not None:
+        all_verts = np.vstack([
+            surface.vertices,
+            root,
+            center[np.newaxis],
+            tip_bulk_v_pos[np.newaxis],
+        ])
+        all_faces = np.vstack([
+            surface.faces,
+            np.array(bridge_faces, dtype=np.int32),
+            np.array(wall_faces,   dtype=np.int32),
+            np.array(cap_faces,    dtype=np.int32),
+        ])
+    else:
+        all_verts = np.vstack([surface.vertices, root, center[np.newaxis]])
+        all_faces = np.vstack([
+            surface.faces,
+            np.array(wall_faces, dtype=np.int32),
+            np.array(cap_faces,  dtype=np.int32),
+        ])
 
     solid = _mesh_with_fixed_normals(
         all_verts,
         all_faces,
-        ("solid_leaf", len(surface.vertices), len(surface.faces), NP),
+        ("solid_leaf", len(surface.vertices), len(surface.faces), NP, tip_li is not None),
     )
     return solid, range(wall_start, wall_end)
 

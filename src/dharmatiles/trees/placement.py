@@ -17,7 +17,13 @@ import numpy as np
 import trimesh
 
 from ._utils import _hash01, _safe_norm
-from .leaf import boundary_loop, build_leaf_surface, compute_leaf_geometry, solidify_leaf
+from .leaf import (
+    LEAF_TIP_VERTEX_IDX,
+    boundary_loop,
+    build_leaf_surface,
+    compute_leaf_geometry,
+    solidify_leaf,
+)
 from .mesh import (
     _avg_arc_for_z,
     _avg_z_for_arc,
@@ -702,7 +708,10 @@ def place_leaves_on_mesh(
                         **_leaf_kw,
                     )
                     loop        = boundary_loop(surf)
-                    solid, _    = solidify_leaf(surf, up_placed, parent_mesh=mesh)
+                    solid, _    = solidify_leaf(
+                        surf, up_placed, parent_mesh=mesh,
+                        tip_vertex_idx=LEAF_TIP_VERTEX_IDX,
+                    )
                 except (RuntimeError, ValueError):
                     stats.build_errors += 1
                     continue
