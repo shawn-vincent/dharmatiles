@@ -1,6 +1,7 @@
 # Leaf Solidification — Design Specification
-*Written 2026-06-29.  Covers the complete pipeline from open leaf surface to
-watertight solid embedded in the parent foliage cluster mesh.*
+*Written 2026-06-29.  Updated 2026-06-29 with confirmed tip-pole raycast failure
+analysis.  Covers the complete pipeline from open leaf surface to watertight solid
+embedded in the parent foliage cluster mesh.*
 
 Full history: `docs/meta/history/2026-06-29-leaf-jitter-and-placement-fixes.md`,
 `docs/meta/history/2026-06-24-leaf-rendering-deep-history.md`.
@@ -112,6 +113,20 @@ geometry (`N_LONG=12`, `N_LAT=10`) the loop has **`NP = 2 × N_LAT + 2 = 22`
 vertices**: two lateral edges of 10 segments each, plus the base_pt and tip_pt
 poles.
 
+#### Boundary loop adjacency at the tip
+
+In the tip fan, faces are `[tip_pt, last_ring[j+1], last_ring[j]]` for j in
+0..N_LAT−1.  The edge `(tip_pt, last_ring[j])` appears in two adjacent tip-fan
+faces for every interior j — those edges are interior to the surface.  Only the
+two outermost edges are boundary:
+
+- `(tip_pt, last_ring[0])` — left lateral corner of the last ring
+- `(tip_pt, last_ring[N_LAT])` — right lateral corner of the last ring
+
+These are the only two perimeter vertices adjacent to `tip_pt` in the boundary
+loop.  They sit at s ≈ 0.917 (one ring-step from the tip), t = ±1 (leaf edges),
+roughly 0.5 mm from `tip_pt` in 3D for the default leaf geometry.
+
 ---
 
 ### Step 2 — Per-vertex local surface normals
@@ -203,6 +218,34 @@ The root vertex is placed `embed_mm` **past** the first valid hit, not at the hi
 This guarantees a positive burial depth regardless of surface curvature.
 
 `embed_mm` default: `LEAF_ROOT_EMBED_MM = 0.75 mm`.
+
+#### Tip-pole raycast: universal miss (confirmed)
+
+`tip_pt` is elevated above the parent mesh surface by the combined effect of
+`arch_deg`, `curl_deg`, and `lift_mm`.  Its local surface normal (area-weighted
+average of the 10 tip-fan triangles) points significantly away from the parent
+mesh — upward and outward from the leaf tip.  At `root_wall_angle_deg = 90°` the
+ray direction is pure `−local_n_tip`, which therefore points away from the elevated
+tip and does not re-intersect the parent mesh.
+
+**Confirmed by instrumentation** (`test-leaf-placement.py`, sphere r=10 mm,
+`lift_mm=3.0`, `curl_deg=40°`, no jitter): 0 of 78 tip-pole rays hit the mesh.
+
+Consequence: `root[tip_pt]` is always placed by the fallback — exactly
+`embed_mm = 0.75 mm` along `−local_n_tip` from `tip_pt`, floating outside (or
+barely at) the parent mesh surface.  This creates a visible vertex ("V") ~0.75 mm
+below the tip in every solidified leaf, sitting outside the parent mesh rather
+than embedded inside it.
+
+The subsequent cap fan triangle connects V to `cap_center`.  Because `cap_center`
+is projected onto the z-plane of `root[0]` (a vertex near the leaf base, much
+lower in Z than the tip), the edge V → `cap_center` forms a visible downward spike
+extending from V further into the cluster interior.
+
+This is the primary visual artifact in rendered foliage: a small spike visible at
+every leaf tip, pointing down from V through the cluster surface.  The sphere test
+passes because the fallback depth (0.75 mm) is well under the 4 mm "long roots"
+threshold — the artifact is silent from the test's perspective but visible in the mesh.
 
 ---
 
@@ -336,22 +379,54 @@ canonical sphere frame and the actual mesh surface.
 
 ## Known Open Items
 
-### 1. Root wall angle always 90°
+### 1. Ray direction is wrong at the tip pole — causes universal miss and visible artifact
 
-`LEAF_ROOT_WALL_ANGLE_DEG = 90.0` means walls are always perpendicular to the local
-leaf surface.  Values below 90° create a tapered mortise grip that is structurally
-stronger at sharp corners (the tip and base where lever forces are highest), but
-reduces printable cross-section there.  Values of 60–75° were tried briefly and
-looked good visually; 90° was chosen conservatively.  The parameter is fully wired
-— changing the constant is sufficient to experiment.
+**This is the most important open item.**
+
+At `root_wall_angle_deg = 90°` the ray is pure `−local_n`, which tracks the
+*leaf surface geometry* (arch, curl, lift) rather than the *parent mesh geometry*.
+At the tip, where lift and curl have rotated the surface normal far from the cluster
+surface normal, the ray does not point toward the parent mesh at all.
+
+The result (confirmed by instrumentation — see Step 4 above): every tip-pole
+raycast misses on every leaf, on every parent mesh.  The fallback places `root[tip_pt]`
+floating 0.75 mm outside the parent mesh, producing a visible spike artifact at
+every leaf tip.
+
+The same mechanism causes **long roots on clusters** for perimeter vertices near
+the tip (the last-ring lateral corners), whose local normals are also rotated away
+from the cluster surface.  Those rays hit the cluster but at large angles, often
+traversing the full interior and striking the far wall at 6–9 mm.
+
+**What the fix needs to do**: the ray direction at the tip (and near-tip perimeter
+vertices) must aim at the actual parent mesh surface rather than follow
+`−local_n_tip`.  Candidate approaches:
+
+- **Nearest-surface direction**: replace `−local_n` with the direction from the
+  perimeter vertex toward its closest point on the parent mesh.  This is
+  geometrically exact and works for any parent shape.
+- **Global up_hint direction**: use `−up_hint` (the cluster surface normal at the
+  base attachment point, passed to `solidify_leaf`) for all perimeter vertices
+  instead of per-vertex leaf normals.  Simpler, correct in the flat-to-moderately-
+  tilted case, wrong when the leaf is heavily contact-angle tilted.
+- **Blend**: interpolate between `−local_n` (correct for mid-leaf perimeter
+  vertices, which sit on or near the surface) and the nearest-surface direction
+  (correct for the tip), weighted by distance from the base.
+
+The parameter `root_wall_angle_deg` is fully wired and the formula already supports
+non-90° values — the fix likely lives in how the *reference direction* for the ray
+is chosen, not in the angle arithmetic itself.
 
 ### 2. Root cap is a flat centroid fan
 
 The root cap is a simple centroid fan (one central vertex, `NP` triangles radiating
 out).  This produces a non-planar cap when the root ring curves significantly (e.g.
-at large contact angles on small-radius clusters).  A proper planar cap would
-require projecting all root vertices onto the least-squares-fit plane first.  The
-current approach is good enough for FDM — the root is buried and not visible.
+at large contact angles on small-radius clusters).  Additionally, `cap_center` is
+anchored to the z-plane of `root[0]` (a vertex near the leaf base); for leaves where
+`root[tip_pt]` is much higher in Z than `root[0]` (which is universal given the
+tip-pole miss), the cap triangle at the tip spans a large Z range, creating the
+downward spike from V described in Step 4.  A proper planar cap projected onto the
+least-squares-fit plane of the root ring would reduce both problems.
 
 ### 3. Raycasting is done per-vertex with `multiple_hits=True`
 
@@ -390,3 +465,10 @@ always consistent with the visible blade.
 vertex grid around the lateral axis through the base.  It is already baked into the
 vertex positions when `solidify_leaf` is called.  `solidify_leaf` has no special
 knowledge of lift — it treats the lifted geometry the same as unlifted geometry.
+
+This is the root cause of the tip-pole raycast failure: `lift_mm` elevates `tip_pt`
+above the parent mesh surface and rotates its local normal away from the mesh, but
+`solidify_leaf` uses that local normal as the ray direction without any awareness
+that the tip is no longer near the surface.  The ray fires in the wrong direction
+and misses.  The mid-leaf perimeter vertices are much closer to the parent surface
+and their normals are much less rotated, so their raycasts largely succeed.
