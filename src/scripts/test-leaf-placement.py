@@ -111,10 +111,11 @@ _DUPE_FACTOR = 0.15
 # are stacked (row spacing too tight).
 _STACK_Z_FACTOR = 0.5
 
-# Curl-region floating-leaf threshold: maximum distance (mm) of any outside
-# curl-region vertex from the mesh surface above which the leaf is floating.
-# Curl region = vertices > L/2 from the base attachment point.
-_FLOATING_LEAF_CURL_DIST_MM = 1.5
+# Extra float margin above lift_mm: maximum additional distance (mm) of any
+# outside curl-region vertex from the mesh surface beyond what lift_mm explains.
+# The arch typically adds ~0.5 mm on top of lift; 1.0 mm gives headroom.
+# Full threshold per leaf run = stats.lift_mm + _FLOATING_LEAF_EXTRA_MM.
+_FLOATING_LEAF_EXTRA_MM = 1.0
 
 # Buried-leaf threshold: maximum depth (mm) any curl-region vertex may penetrate
 # inside the parent mesh before the leaf is considered buried.
@@ -446,12 +447,14 @@ def _check_artifacts(all_stats: list[LeafPlacementStats]) -> int:
         # even when lift_mm=0; unsigned-distance min() misses this because some
         # curl-region vertices are still near the sphere surface.
         if stats.leaf_float_dists:
+            _float_thresh = stats.lift_mm + _FLOATING_LEAF_EXTRA_MM
             floaters = [d for d in stats.leaf_float_dists
-                        if d > _FLOATING_LEAF_CURL_DIST_MM]
+                        if d > _float_thresh]
             if floaters:
                 issues.append(
                     f"FLOATING LEAVES: {len(floaters)}/{len(stats.leaf_float_dists)} "
-                    f"leaves have curl-region outside-dist > {_FLOATING_LEAF_CURL_DIST_MM:.2f} mm "
+                    f"leaves have curl-region outside-dist > {_float_thresh:.2f} mm "
+                    f"(lift={stats.lift_mm:.2f}+extra={_FLOATING_LEAF_EXTRA_MM:.2f}) "
                     f"(max={max(floaters):.2f} mm, "
                     f"median={float(np.median(stats.leaf_float_dists)):.2f} mm)"
                 )
@@ -617,7 +620,8 @@ def _check_artifacts(all_stats: list[LeafPlacementStats]) -> int:
                 f"max={max(stats.root_depths):.2f}"
             )
         if stats.leaf_float_dists:
-            n_float  = sum(1 for d in stats.leaf_float_dists  if d > _FLOATING_LEAF_CURL_DIST_MM)
+            _float_thresh = stats.lift_mm + _FLOATING_LEAF_EXTRA_MM
+            n_float  = sum(1 for d in stats.leaf_float_dists  if d > _float_thresh)
             n_buried = sum(1 for d in stats.leaf_buried_depths if d > _BURIED_LEAF_CURL_DEPTH_MM)
             print(
                 f"  curl-region outside-dist mm: "
@@ -743,10 +747,11 @@ def _mark_error_leaves(
         return
     dupe_set, _ = _same_row_duplicate_indices(stats)
     error_color = np.asarray(RGBA_FLAG_FAIL, dtype=np.uint8)
+    _float_thresh = stats.lift_mm + _FLOATING_LEAF_EXTRA_MM
     for i, leaf in enumerate(leaves):
         is_error = (
             stats.root_depths[i]       > _ROOT_DEPTH_MAX_MM
-            or stats.leaf_float_dists[i]   > _FLOATING_LEAF_CURL_DIST_MM
+            or stats.leaf_float_dists[i]   > _float_thresh
             or stats.leaf_buried_depths[i] > _BURIED_LEAF_CURL_DEPTH_MM
             or float(stats.base_tangents[i][2]) > _UPWARD_TANGENT_Z_THRESHOLD
             or i in dupe_set
@@ -807,11 +812,33 @@ def _make_cluster_parts(
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    import argparse
+    parser = argparse.ArgumentParser(description="Leaf placement test")
+    parser.add_argument("out", nargs="?", help="Output STL path")
+    parser.add_argument(
+        "--no-jitter", action="store_true",
+        help="Set angle_jitter_deg and pos_jitter to zero",
+    )
+    parser.add_argument(
+        "--no-overlap", action="store_true",
+        help="Set h_overlap and v_overlap to zero",
+    )
+    args = parser.parse_args()
+
     default_out = (
         Path(__file__).parents[2] / "stl" / "test" / "leaf-placement-test.stl"
     )
-    out = Path(sys.argv[1]) if len(sys.argv) > 1 else default_out
+    out = Path(args.out) if args.out else default_out
     out.parent.mkdir(parents=True, exist_ok=True)
+
+    if args.no_jitter:
+        _PLACE_KW["angle_jitter_deg"] = 0.0
+        _PLACE_KW["pos_jitter"]       = 0.0
+        print("Jitter disabled (angle_jitter_deg=0, pos_jitter=0)")
+    if args.no_overlap:
+        _PLACE_KW["h_overlap"] = 0.0
+        _PLACE_KW["v_overlap"] = 0.0
+        print("Overlap disabled (h_overlap=0, v_overlap=0)")
 
     t0 = time.perf_counter()
     all_parts: list[trimesh.Trimesh] = []

@@ -81,6 +81,7 @@ class LeafPlacementStats:
     z_top_anchor: float = 0.0        # expected topmost row Z ≈ z_top − 0.25·L
     cx: float = 0.0                  # mesh centroid X (for phi-sector analysis)
     cy: float = 0.0                  # mesh centroid Y
+    lift_mm: float = 0.0             # leaf lift parameter used for this run
 
 
 def min_width_xy(pts: np.ndarray) -> float:
@@ -423,6 +424,7 @@ def place_leaves_on_mesh(
         z_top_anchor      = z_top_anchor,
         cx                = cx,
         cy                = cy,
+        lift_mm           = float(lift_mm),
     )
 
     # Contact-angle cache: identical for all leaves sharing the same local radius.
@@ -489,7 +491,16 @@ def place_leaves_on_mesh(
                 except Exception:
                     pass
 
-        for poly in path2d.polygons_full:
+        try:
+            _polygons_full = path2d.polygons_full
+        except Exception:
+            stats.rows.append((z_row, 0, 0))
+            stats.row_perims.append(0.0)
+            continue
+
+        for poly in _polygons_full:
+            if poly is None:
+                continue
             perim = float(poly.length)
             row_perim += perim
             if perim < 1e-3:
