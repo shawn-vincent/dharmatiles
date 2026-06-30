@@ -535,6 +535,28 @@ _LEAF_ARCH_DEG_DEFAULT = 30.0   # must match build_leaf_surface default
 # printability limit for overhanging leaf attachments.
 _LEAF_PLACEABLE_NORMAL_Z = -0.5
 
+
+def _curl_bottom_margin_mm(
+    length_mm: float,
+    curl_deg:  float,
+    lift_mm:   float,
+    arch_deg:  float = 30.0,
+) -> float:
+    """Extra Z clearance needed so the bottom row doesn't overshoot below z_placeable.
+
+    The leaf tip sits at height h_tip = (L/3)*(tan(curl)+tan(arch))/2 above the
+    midrib plane.  After applying the contact angle and lift, the worst-case tip
+    Z below the straight-tangent baseline is sqrt(L²+h_tip²) - L.  Adding this
+    margin to z_bot_anchor keeps every leaf surface above z_placeable.
+    """
+    L     = float(length_mm)
+    h_tip = (L / 3.0) * (
+        math.tan(math.radians(abs(float(curl_deg))))
+        + math.tan(math.radians(abs(float(arch_deg))))
+    ) / 2.0
+    return math.sqrt(L * L + h_tip * h_tip) - L
+
+
 def _contact_angle_for_sphere(
     cluster_radius_mm: float,
     *,
@@ -968,16 +990,21 @@ def _lowest_placeable_z(meridians: list, normal_z_threshold: float = -0.1) -> fl
 
 
 def _compute_row_z_positions(
-    meridians:      list,
-    leaf_length_mm: float,
-    leaf_v_overlap: float,
-    z_top:          float,
+    meridians:        list,
+    leaf_length_mm:   float,
+    leaf_v_overlap:   float,
+    z_top:            float,
+    bottom_extra_mm:  float = 0.0,
 ) -> list[float]:
     """Row Z positions via equal surface-arc intervals (meridian-arc method).
 
     Anchors the first row one leaf-length of arc above the lowest upward-facing
     surface; pins the last row to the sampled world-Z apex.  Fills in rows at
     the integer-optimal arc-step between them.
+
+    *bottom_extra_mm* raises the bottom anchor above the straight-tip baseline
+    to prevent curl/arch overshoot past z_placeable.  Pass the value from
+    :func:`_curl_bottom_margin_mm`.
     """
     if not meridians:
         return []
@@ -992,7 +1019,7 @@ def _compute_row_z_positions(
     s_top         = _avg_arc_for_z(z_top_sample, meridians)
 
     z_placeable   = _lowest_placeable_z(meridians, normal_z_threshold=_LEAF_PLACEABLE_NORMAL_Z)
-    z_bot_anchor  = z_placeable + leaf_length_mm
+    z_bot_anchor  = z_placeable + leaf_length_mm + float(bottom_extra_mm)
     z_bot_anchor  = min(z_bot_anchor, z_top_sample)
 
     s_bot     = _avg_arc_for_z(z_bot_anchor, meridians)

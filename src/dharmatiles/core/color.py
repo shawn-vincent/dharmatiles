@@ -61,6 +61,24 @@ class Material(IntEnum):
     DEBUG_COLOR_9  = 18
     DEBUG_COLOR_10 = 19
     DEBUG_COLOR_11 = 20
+    # 16-slot grayscale ramp: GRAY_0 = black, GRAY_15 = white.
+    # Use GRAY_SHADES[i % 16] for cycling grayscale debug colouring.
+    GRAY_0  = 21
+    GRAY_1  = 22
+    GRAY_2  = 23
+    GRAY_3  = 24
+    GRAY_4  = 25
+    GRAY_5  = 26
+    GRAY_6  = 27
+    GRAY_7  = 28
+    GRAY_8  = 29
+    GRAY_9  = 30
+    GRAY_10 = 31
+    GRAY_11 = 32
+    GRAY_12 = 33
+    GRAY_13 = 34
+    GRAY_14 = 35
+    GRAY_15 = 36
 
 
 #: RGBA uint8 palette — one entry per :class:`Material`.
@@ -87,6 +105,23 @@ RGBA: dict[Material, tuple[int, int, int, int]] = {
     Material.DEBUG_COLOR_9:  (255, 155,  80, 255),  # amber
     Material.DEBUG_COLOR_10: (110, 110, 255, 255),  # indigo
     Material.DEBUG_COLOR_11: (210, 120,  40, 255),  # brown-orange
+    # 16-step grayscale ramp — 25% gray (GRAY_0) to white (GRAY_15)
+    Material.GRAY_0:  ( 64,  64,  64, 255),
+    Material.GRAY_1:  ( 77,  77,  77, 255),
+    Material.GRAY_2:  ( 89,  89,  89, 255),
+    Material.GRAY_3:  (102, 102, 102, 255),
+    Material.GRAY_4:  (115, 115, 115, 255),
+    Material.GRAY_5:  (128, 128, 128, 255),
+    Material.GRAY_6:  (140, 140, 140, 255),
+    Material.GRAY_7:  (153, 153, 153, 255),
+    Material.GRAY_8:  (166, 166, 166, 255),
+    Material.GRAY_9:  (179, 179, 179, 255),
+    Material.GRAY_10: (191, 191, 191, 255),
+    Material.GRAY_11: (204, 204, 204, 255),
+    Material.GRAY_12: (217, 217, 217, 255),
+    Material.GRAY_13: (230, 230, 230, 255),
+    Material.GRAY_14: (242, 242, 242, 255),
+    Material.GRAY_15: (255, 255, 255, 255),
 }
 
 #: Vivid green — pass / OK status flag for any debug colouring.
@@ -112,6 +147,15 @@ DEBUG_COLORS: list[Material] = [
     Material.DEBUG_COLOR_9,   # amber
     Material.DEBUG_COLOR_10,  # indigo
     Material.DEBUG_COLOR_11,  # brown-orange
+]
+
+#: 16-step grayscale ramp for per-row debug colouring.
+#: Index 0 = 25% gray, index 15 = white.  Cycle with ``GRAY_SHADES[i % 16]``.
+GRAY_SHADES: list[Material] = [
+    Material.GRAY_0,  Material.GRAY_1,  Material.GRAY_2,  Material.GRAY_3,
+    Material.GRAY_4,  Material.GRAY_5,  Material.GRAY_6,  Material.GRAY_7,
+    Material.GRAY_8,  Material.GRAY_9,  Material.GRAY_10, Material.GRAY_11,
+    Material.GRAY_12, Material.GRAY_13, Material.GRAY_14, Material.GRAY_15,
 ]
 
 

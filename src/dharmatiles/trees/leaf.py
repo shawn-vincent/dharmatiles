@@ -822,10 +822,9 @@ _LEAF_ROOT_MAX_HIT_MM: float = 10.0
 # Cone framework: half-angles for the two hard constraints in solidify_leaf.
 # cone1 = leaf-surface cone — ray must stay within this angle of −local_n so
 #         the wall junction keeps a minimum thickness.
-# cone2 = FDM printability cone — ray must stay within this angle of world-down
-#         so walls do not require supports.
-_LEAF_CONE1_HALF_ANGLE_DEG: float = 60.0
-_LEAF_CONE2_HALF_ANGLE_DEG: float = 60.0
+# printable cone — ray must stay within this angle of world-down so walls do not require supports.
+_LEAF_ENTRY_CONE_HALF_ANGLE_DEG:     float = 60.0
+_LEAF_PRINTABLE_CONE_HALF_ANGLE_DEG: float = 60.0
 
 # Contact tolerance for support-mesh queries (compensates for faceted surfaces).
 _LEAF_FDM_SUPPORT_TOLERANCE_MM: float = 0.05
@@ -840,98 +839,103 @@ _DEBUG_RAY_DIRS_COLLECTOR: list | None = None
 _DEBUG_TIP_RAY_COLLECTOR: list | None = None
 
 # Set to a list to collect per-leaf cone analysis data for the tip vertex.
-# Each entry: dict with keys c1_axis, inward_tip, c3_axis, ray_dir, raycast_time.
-# c1_axis    = -local_n[tip_li]   (leaf surface cone axis)
-# inward_tip = inward[tip_li]     (undercut preference direction, in tangent plane)
-# c3_axis    = parent mesh inward normal at nearest surface point to tip's perim position
-# ray_dir    = the direction actually selected by _select_ray_dir
-# raycast_time = wall-clock seconds for the full NP-ray intersects_location call
+# Each entry: dict with keys leaf_inward, preferred_undercut, parent_inward, ray_dir, raycast_time.
+# leaf_inward        = -local_n[tip_li]   (leaf-entry cone axis)
+# preferred_undercut = inward[tip_li]     (undercut preference direction, in tangent plane)
+# parent_inward      = parent mesh inward normal at nearest surface point to tip's perim position
+# ray_dir            = the direction actually selected by _select_ray_dir
+# raycast_time       = wall-clock seconds for the full NP-ray intersects_location call
 _DEBUG_CONE_COLLECTOR: list | None = None
 
 _WORLD_DOWN = np.array([0.0, 0.0, -1.0])
 
 
-def _clamp_to_cone(d: np.ndarray, axis: np.ndarray, cos_half: float) -> np.ndarray:
-    """Project unit vector d onto the spherical cap {v : dot(v, axis) >= cos_half}.
+def _clamp_to_cone(direction: np.ndarray, cone_axis: np.ndarray, cos_half_angle: float) -> np.ndarray:
+    """Project unit vector direction onto the spherical cap {v : dot(v, cone_axis) >= cos_half_angle}.
 
-    If d is already inside the cap, returns d unchanged.  Otherwise returns the
-    nearest point on the cap boundary — i.e. rotate axis toward d by the
-    half-angle theta = arccos(cos_half).
+    If direction is already inside the cap, returns it unchanged.  Otherwise returns the
+    nearest point on the cap boundary — i.e. rotate cone_axis toward direction by the
+    half-angle theta = arccos(cos_half_angle).
     """
-    c = float(np.dot(d, axis))
-    if c >= cos_half:
-        return d
-    perp = d - c * axis
-    pn   = float(np.linalg.norm(perp))
-    if pn < 1e-9:
-        return axis.copy()
-    sin_half = math.sqrt(max(0.0, 1.0 - cos_half * cos_half))
-    return cos_half * axis + sin_half * (perp / pn)
+    dot = float(np.dot(direction, cone_axis))
+    if dot >= cos_half_angle:
+        return direction
+    off_axis     = direction - dot * cone_axis
+    off_axis_len = float(np.linalg.norm(off_axis))
+    if off_axis_len < 1e-9:
+        return cone_axis.copy()
+    sin_half_angle = math.sqrt(max(0.0, 1.0 - cos_half_angle * cos_half_angle))
+    return cos_half_angle * cone_axis + sin_half_angle * (off_axis / off_axis_len)
 
 
 def _solve_cones(
-    prefer: np.ndarray,
+    preferred: np.ndarray,
     cones: list[tuple[np.ndarray, float]],
     max_iter: int = 40,
     atol: float = 1e-6,
 ) -> np.ndarray | None:
-    """POCS: find the point in the intersection of spherical caps closest to prefer.
+    """POCS: find the point in the intersection of spherical caps closest to preferred.
 
     Returns None if the intersection appears empty (constraints still violated
     after max_iter alternating projections).
     """
-    d = prefer / max(float(np.linalg.norm(prefer)), 1e-10)
+    ray = preferred / max(float(np.linalg.norm(preferred)), 1e-10)
     for _ in range(max_iter):
-        d_prev = d.copy()
-        for axis, cos_half in cones:
-            d = _clamp_to_cone(d, axis, cos_half)
-            nrm = float(np.linalg.norm(d))
-            if nrm < 1e-10:
+        prev_ray = ray.copy()
+        for cone_axis, cos_half_angle in cones:
+            ray    = _clamp_to_cone(ray, cone_axis, cos_half_angle)
+            length = float(np.linalg.norm(ray))
+            if length < 1e-10:
                 return None
-            d = d / nrm
-        if float(np.linalg.norm(d - d_prev)) < atol:
+            ray = ray / length
+        if float(np.linalg.norm(ray - prev_ray)) < atol:
             break
-    for axis, cos_half in cones:
-        if float(np.dot(d, axis)) < cos_half - 1e-4:
+    for cone_axis, cos_half_angle in cones:
+        if float(np.dot(ray, cone_axis)) < cos_half_angle - 1e-4:
             return None
-    return d
+    return ray
 
 
 def _select_ray_dir(
-    c1_axis: np.ndarray,
-    inward:  np.ndarray,
-    c3_axis: np.ndarray,
-    cone1_cos: float,
-    cone2_cos: float,
+    leaf_inward:       np.ndarray,
+    preferred_undercut: np.ndarray,
+    parent_inward:     np.ndarray,
+    leaf_cone_cos:     float,
+    printable_cos:     float,
 ) -> np.ndarray:
     """Best wall ray direction for one perimeter vertex using cone relaxation.
 
     Cones:
-      1 (hard) — axis c1_axis = -local_n, cos_half = cone1_cos
-      2 (hard) — axis world-down,          cos_half = cone2_cos (FDM printability)
-      3 (soft) — axis c3_axis (mesh inward normal), cos_half = 0 (hemisphere)
+      leaf entry  (hard) — axis leaf_inward,   cos_half = leaf_cone_cos
+      printable   (hard) — axis world-down,     cos_half = printable_cos
+      into parent (soft) — axis parent_inward,  cos_half = 0 (hemisphere)
 
-    Relaxation priority (rays never point upward until FDM is explicitly dropped):
-      1. All three cones + maximise undercut (prefer = inward)
-      2. All three cones, no undercut preference (prefer = c1_axis)
-      3. Relax FDM to horizontal limit (cone2_cos = 0, i.e. ray_z ≤ 0, no upward rays)
-      4. Drop FDM entirely (cone1 + cone3; upward rays allowed — wall may need supports)
-      5. c3_axis directly (last resort; wall needs supports; leaf is anchored)
+    Relaxation priority (rays never point upward until printability is explicitly dropped):
+      1. All three cones + maximise undercut (preferred = preferred_undercut)
+      2. All three cones, no undercut preference (preferred = leaf_inward)
+      3. Relax printability to horizontal limit (preferred = parent_inward clamped to printable cone)
+      4. Drop printability entirely (leaf entry + into-parent; preferred = parent_inward clamped to printable cone)
+      5. parent_inward directly (last resort; wall needs supports; leaf is anchored)
     """
-    fdm_full  = [(c1_axis, cone1_cos), (_WORLD_DOWN, cone2_cos), (c3_axis, 0.0)]
-    fdm_horiz = [(c1_axis, cone1_cos), (_WORLD_DOWN, 0.0),       (c3_axis, 0.0)]
-    no_fdm    = [(c1_axis, cone1_cos),                            (c3_axis, 0.0)]
+    strict_printable = [(leaf_inward, leaf_cone_cos), (_WORLD_DOWN, printable_cos), (parent_inward, 0.0)]
+    allow_horizontal = [(leaf_inward, leaf_cone_cos), (_WORLD_DOWN, 0.0),           (parent_inward, 0.0)]
+    ignore_printable = [(leaf_inward, leaf_cone_cos),                                (parent_inward, 0.0)]
 
-    for cones, prefer in [
-        (fdm_full,  inward),
-        (fdm_full,  c1_axis),
-        (fdm_horiz, _WORLD_DOWN),
-        (no_fdm,    _WORLD_DOWN),
+    # For printability-relaxed fallback tries: prefer the parent inward normal clamped
+    # to the printable cone boundary — the direction closest to parent_inward that still
+    # satisfies the FDM angle.  Better warm-start than world-down itself.
+    parent_inward_printable = _clamp_to_cone(parent_inward, _WORLD_DOWN, printable_cos)
+
+    for cone_set, preferred in [
+        (strict_printable, preferred_undercut),
+        (strict_printable, leaf_inward),
+        (allow_horizontal, parent_inward_printable),
+        (ignore_printable, parent_inward_printable),
     ]:
-        d = _solve_cones(prefer, cones)
-        if d is not None:
-            return d
-    return c3_axis.copy()
+        ray = _solve_cones(preferred, cone_set)
+        if ray is not None:
+            return ray
+    return parent_inward.copy()
 
 
 def boundary_loop(mesh: trimesh.Trimesh) -> list[int]:
@@ -979,8 +983,8 @@ def solidify_leaf(
     parent_mesh:          trimesh.Trimesh | None = None,
     tip_vertex_idx:       int | None = None,
     tip_bulk_mm:          float = _LEAF_TIP_BULK_MM,
-    cone1_half_angle_deg: float = _LEAF_CONE1_HALF_ANGLE_DEG,
-    cone2_half_angle_deg: float = _LEAF_CONE2_HALF_ANGLE_DEG,
+    entry_cone_half_angle_deg:     float = _LEAF_ENTRY_CONE_HALF_ANGLE_DEG,
+    printable_cone_half_angle_deg: float = _LEAF_PRINTABLE_CONE_HALF_ANGLE_DEG,
 ) -> tuple[trimesh.Trimesh, range]:
     """Close an open leaf surface into a watertight solid.
 
@@ -999,11 +1003,11 @@ def solidify_leaf(
     parent_mesh           : Mesh to raycast against for per-vertex embed depth.
                             Also supplies cone-3 axes via a BVH nearest-point query.
                             ``None`` uses perpendicular walls (``ray = -local_n``).
-    cone1_half_angle_deg  : Leaf-surface cone half-angle (degrees).  Ray must
-                            stay within this angle of ``-local_n`` so the wall
-                            junction keeps minimum thickness.  Default 60°.
-    cone2_half_angle_deg  : FDM printability cone half-angle (degrees).  Ray must
-                            stay within this angle of world-down.  Default 60°.
+    entry_cone_half_angle_deg     : Leaf-entry cone half-angle (degrees).  Ray must
+                                    stay within this angle of ``-local_n`` so the wall
+                                    junction keeps minimum thickness.  Default 60°.
+    printable_cone_half_angle_deg : FDM printability cone half-angle (degrees).  Ray must
+                                    stay within this angle of world-down.  Default 60°.
 
     Returns
     -------
@@ -1077,8 +1081,8 @@ def solidify_leaf(
     # cone-3 axes (mesh inward normals) for all NP vertices, then per-vertex
     # _select_ray_dir resolves the three-cone intersection with priority relaxation.
     # Without a parent mesh: walls are perpendicular to the local leaf surface.
-    cone1_cos = math.cos(math.radians(cone1_half_angle_deg))
-    cone2_cos = math.cos(math.radians(cone2_half_angle_deg))
+    leaf_cone_cos = math.cos(math.radians(entry_cone_half_angle_deg))
+    printable_cos = math.cos(math.radians(printable_cone_half_angle_deg))
 
     c3_axes:      np.ndarray | None = None
     _closest_pts: np.ndarray | None = None
@@ -1086,7 +1090,7 @@ def solidify_leaf(
         _closest_pts, _, _face_ids = trimesh.proximity.closest_point(parent_mesh, perim)
         c3_axes  = -parent_mesh.face_normals[_face_ids.astype(np.int64)]   # (NP, 3)
         ray_dirs = np.stack([
-            _select_ray_dir(-local_n[i], inward[i], c3_axes[i], cone1_cos, cone2_cos)
+            _select_ray_dir(-local_n[i], inward[i], c3_axes[i], leaf_cone_cos, printable_cos)
             for i in range(NP)
         ])                                                                   # (NP, 3)
         # BVH fallback: embed from the nearest surface point inward along the
@@ -1142,11 +1146,11 @@ def solidify_leaf(
 
     if _DEBUG_CONE_COLLECTOR is not None and tip_li is not None and c3_axes is not None:
         _DEBUG_CONE_COLLECTOR.append({
-            'c1_axis':      (-local_n[tip_li]).copy(),
-            'inward_tip':   inward[tip_li].copy(),
-            'c3_axis':      c3_axes[tip_li].copy(),
-            'ray_dir':      ray_dirs[tip_li].copy(),
-            'raycast_time': _raycast_time,
+            'leaf_inward':        (-local_n[tip_li]).copy(),
+            'preferred_undercut': inward[tip_li].copy(),
+            'parent_inward':      c3_axes[tip_li].copy(),
+            'ray_dir':            ray_dirs[tip_li].copy(),
+            'raycast_time':       _raycast_time,
         })
 
     # Project the ring mean onto the cap plane (normal = n, through root[0])

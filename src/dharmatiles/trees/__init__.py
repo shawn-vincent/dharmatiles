@@ -7,6 +7,7 @@ from .placement import (
     effective_ring_perimeter,
     min_width_xy,
     place_leaves_on_mesh,
+    place_leaves_on_multiple_meshes,
 )
 
 __all__ = [
@@ -17,4 +18,5 @@ __all__ = [
     "effective_ring_perimeter",
     "min_width_xy",
     "place_leaves_on_mesh",
+    "place_leaves_on_multiple_meshes",
 ]
