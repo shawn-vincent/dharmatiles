@@ -70,6 +70,8 @@ for the full algorithm specification.
 """
 from __future__ import annotations
 
+import math
+import time
 from typing import NamedTuple
 
 import numpy as np
@@ -817,16 +819,119 @@ _LEAF_TIP_BULK_MM: float = 0.5
 # from large roll jitter), causing the ray to hit the far side of the mesh.
 _LEAF_ROOT_MAX_HIT_MM: float = 10.0
 
-# Angle (degrees) between the leaf surface plane and the root wall,
-# measured at the perimeter edge (the "face angle" or "taper angle").
-# 90° = wall perpendicular to leaf surface (ray straight along -n, no taper).
-# Smaller values undercut inward: the root ring narrows toward the perimeter
-# centroid, giving beefy anchoring especially at sharp corners (tip, base).
-# Public so callers can reference it without hard-coding the literal.
-LEAF_ROOT_WALL_ANGLE_DEG: float = 90.0
+# Cone framework: half-angles for the two hard constraints in solidify_leaf.
+# cone1 = leaf-surface cone — ray must stay within this angle of −local_n so
+#         the wall junction keeps a minimum thickness.
+# cone2 = FDM printability cone — ray must stay within this angle of world-down
+#         so walls do not require supports.
+_LEAF_CONE1_HALF_ANGLE_DEG: float = 60.0
+_LEAF_CONE2_HALF_ANGLE_DEG: float = 60.0
 
 # Contact tolerance for support-mesh queries (compensates for faceted surfaces).
 _LEAF_FDM_SUPPORT_TOLERANCE_MM: float = 0.05
+
+# Set to a list to collect per-leaf ray_dirs arrays during solidify_leaf calls.
+# Each append is an (NP, 3) float array of unit ray directions for one leaf.
+# Set back to None to disable collection.
+_DEBUG_RAY_DIRS_COLLECTOR: list | None = None
+
+# Set to a list to collect tip-ray (ray_dir_3, hit_dist) per leaf.
+# hit_dist is the distance to the nearest valid mesh hit, or nan if missed/no mesh.
+_DEBUG_TIP_RAY_COLLECTOR: list | None = None
+
+# Set to a list to collect per-leaf cone analysis data for the tip vertex.
+# Each entry: dict with keys c1_axis, inward_tip, c3_axis, ray_dir, raycast_time.
+# c1_axis    = -local_n[tip_li]   (leaf surface cone axis)
+# inward_tip = inward[tip_li]     (undercut preference direction, in tangent plane)
+# c3_axis    = parent mesh inward normal at nearest surface point to tip's perim position
+# ray_dir    = the direction actually selected by _select_ray_dir
+# raycast_time = wall-clock seconds for the full NP-ray intersects_location call
+_DEBUG_CONE_COLLECTOR: list | None = None
+
+_WORLD_DOWN = np.array([0.0, 0.0, -1.0])
+
+
+def _clamp_to_cone(d: np.ndarray, axis: np.ndarray, cos_half: float) -> np.ndarray:
+    """Project unit vector d onto the spherical cap {v : dot(v, axis) >= cos_half}.
+
+    If d is already inside the cap, returns d unchanged.  Otherwise returns the
+    nearest point on the cap boundary — i.e. rotate axis toward d by the
+    half-angle theta = arccos(cos_half).
+    """
+    c = float(np.dot(d, axis))
+    if c >= cos_half:
+        return d
+    perp = d - c * axis
+    pn   = float(np.linalg.norm(perp))
+    if pn < 1e-9:
+        return axis.copy()
+    sin_half = math.sqrt(max(0.0, 1.0 - cos_half * cos_half))
+    return cos_half * axis + sin_half * (perp / pn)
+
+
+def _solve_cones(
+    prefer: np.ndarray,
+    cones: list[tuple[np.ndarray, float]],
+    max_iter: int = 40,
+    atol: float = 1e-6,
+) -> np.ndarray | None:
+    """POCS: find the point in the intersection of spherical caps closest to prefer.
+
+    Returns None if the intersection appears empty (constraints still violated
+    after max_iter alternating projections).
+    """
+    d = prefer / max(float(np.linalg.norm(prefer)), 1e-10)
+    for _ in range(max_iter):
+        d_prev = d.copy()
+        for axis, cos_half in cones:
+            d = _clamp_to_cone(d, axis, cos_half)
+            nrm = float(np.linalg.norm(d))
+            if nrm < 1e-10:
+                return None
+            d = d / nrm
+        if float(np.linalg.norm(d - d_prev)) < atol:
+            break
+    for axis, cos_half in cones:
+        if float(np.dot(d, axis)) < cos_half - 1e-4:
+            return None
+    return d
+
+
+def _select_ray_dir(
+    c1_axis: np.ndarray,
+    inward:  np.ndarray,
+    c3_axis: np.ndarray,
+    cone1_cos: float,
+    cone2_cos: float,
+) -> np.ndarray:
+    """Best wall ray direction for one perimeter vertex using cone relaxation.
+
+    Cones:
+      1 (hard) — axis c1_axis = -local_n, cos_half = cone1_cos
+      2 (hard) — axis world-down,          cos_half = cone2_cos (FDM printability)
+      3 (soft) — axis c3_axis (mesh inward normal), cos_half = 0 (hemisphere)
+
+    Relaxation priority (rays never point upward until FDM is explicitly dropped):
+      1. All three cones + maximise undercut (prefer = inward)
+      2. All three cones, no undercut preference (prefer = c1_axis)
+      3. Relax FDM to horizontal limit (cone2_cos = 0, i.e. ray_z ≤ 0, no upward rays)
+      4. Drop FDM entirely (cone1 + cone3; upward rays allowed — wall may need supports)
+      5. c3_axis directly (last resort; wall needs supports; leaf is anchored)
+    """
+    fdm_full  = [(c1_axis, cone1_cos), (_WORLD_DOWN, cone2_cos), (c3_axis, 0.0)]
+    fdm_horiz = [(c1_axis, cone1_cos), (_WORLD_DOWN, 0.0),       (c3_axis, 0.0)]
+    no_fdm    = [(c1_axis, cone1_cos),                            (c3_axis, 0.0)]
+
+    for cones, prefer in [
+        (fdm_full,  inward),
+        (fdm_full,  c1_axis),
+        (fdm_horiz, _WORLD_DOWN),
+        (no_fdm,    _WORLD_DOWN),
+    ]:
+        d = _solve_cones(prefer, cones)
+        if d is not None:
+            return d
+    return c3_axis.copy()
 
 
 def boundary_loop(mesh: trimesh.Trimesh) -> list[int]:
@@ -872,60 +977,33 @@ def solidify_leaf(
     embed_mm:             float = LEAF_ROOT_EMBED_MM,
     *,
     parent_mesh:          trimesh.Trimesh | None = None,
-    root_wall_angle_deg:  float = LEAF_ROOT_WALL_ANGLE_DEG,
     tip_vertex_idx:       int | None = None,
     tip_bulk_mm:          float = _LEAF_TIP_BULK_MM,
+    cone1_half_angle_deg: float = _LEAF_CONE1_HALF_ANGLE_DEG,
+    cone2_half_angle_deg: float = _LEAF_CONE2_HALF_ANGLE_DEG,
 ) -> tuple[trimesh.Trimesh, range]:
     """Close an open leaf surface into a watertight solid.
 
-    For each boundary vertex, casts a ray at ``root_wall_angle_deg`` from
-    the leaf plane — angled inward toward the perimeter centroid — to find
-    where it crosses the parent surface, then places the root vertex
-    ``embed_mm`` further along that same ray.  This embeds a consistent
-    depth past the parent surface regardless of how far arched, curled, or
-    tilted the leaf is from the surface.
-
-    ``root_wall_angle_deg`` is the angle between the root wall and the leaf
-    surface plane, measured at the perimeter edge — the same angle a
-    machinist would call the *face angle* or *taper angle*:
-
-    * **90°** — wall is perpendicular to the leaf surface.  Ray goes straight
-      along ``-up_hint``.  Root ring is the same shape as the perimeter.
-    * **< 90°** — wall undercuts inward: the root ring converges toward the
-      perimeter centroid, giving a tapered mortise grip.  Sharp corners
-      (tip, base) converge most, producing "beefy" anchoring geometry there.
-    * **50°** (default) — wall makes a 50° angle with the leaf surface plane
-      (40° from perpendicular).  ``sin 50° ≈ 0.77`` along ``-n``,
-      ``cos 50° ≈ 0.64`` toward the centroid.
-
-    When ``parent_mesh`` is ``None`` or a ray misses the surface, the vertex
-    falls back to moving ``embed_mm`` along the same angled direction from
-    the perimeter position (no raycast, fixed offset).
-
-    Quad walls bridge the perimeter to the root ring; a centroid fan caps
-    the buried end.
-
-    The tip vertex is handled the same as every other perimeter vertex —
-    the angled raycast finds the parent surface under it, and ``embed_mm``
-    is applied past the hit.  No special-case override is needed.
+    For each boundary vertex, selects a ray direction using the cone
+    framework (see :func:`_select_ray_dir`), casts it to find where it
+    crosses the parent surface, then places the root vertex ``embed_mm``
+    further along that same ray.  When no parent mesh is given, walls are
+    perpendicular to the local leaf surface (``ray = -local_n``).
 
     Parameters
     ----------
-    surface             : Open leaf surface from :func:`build_leaf_surface`.
-    up_hint             : Leaf plane normal (outward from the parent surface).
-    embed_mm            : Distance along the ray direction past the parent
-                          surface hit for every root vertex.  Also used as
-                          the angled fallback offset when a ray misses.
-    parent_mesh         : Mesh to raycast against for per-vertex embed depth.
-                          Pass the full support mesh (sphere + trunk, etc.).
-                          ``None`` disables raycasting and uses the angled
-                          fallback for all vertices.
-    root_wall_angle_deg : Angle between the root wall and the leaf surface
-                          plane, measured at the perimeter edge.  90° = wall
-                          perpendicular to the leaf surface (no taper).
-                          Smaller values undercut inward — sharp corners
-                          become beefier.  Default ``LEAF_ROOT_WALL_ANGLE_DEG``
-                          (70°).
+    surface               : Open leaf surface from :func:`build_leaf_surface`.
+    up_hint               : Leaf plane normal (outward from the parent surface).
+    embed_mm              : Depth past the parent surface hit for every root
+                            vertex.  Used as the fallback offset when a ray misses.
+    parent_mesh           : Mesh to raycast against for per-vertex embed depth.
+                            Also supplies cone-3 axes via a BVH nearest-point query.
+                            ``None`` uses perpendicular walls (``ray = -local_n``).
+    cone1_half_angle_deg  : Leaf-surface cone half-angle (degrees).  Ray must
+                            stay within this angle of ``-local_n`` so the wall
+                            junction keeps minimum thickness.  Default 60°.
+    cone2_half_angle_deg  : FDM printability cone half-angle (degrees).  Ray must
+                            stay within this angle of world-down.  Default 60°.
 
     Returns
     -------
@@ -941,21 +1019,11 @@ def solidify_leaf(
 
     perim = surface.vertices[loop]     # (NP, 3)
 
-    # ── Per-vertex ray directions ─────────────────────────────────────────────
-    # root_wall_angle_deg is measured relative to the LOCAL leaf surface at
-    # each boundary vertex, not the global up_hint direction.  Arch, curl, and
-    # lift all rotate the local surface normal away from up_hint — especially
-    # at the tip (phi_tip = curl_deg + arch correction).  Using the global n
-    # for every vertex produces the wrong angle at the tip and base where the
-    # deviation is largest.
-    #
-    # Fix: take per-vertex local normals directly from the open surface mesh.
-    # trimesh's vertex_normals are area-weighted face-normal averages; they
-    # track the curved leaf surface closely (dot ≈ 0.998 vs. the analytic
-    # N_local in tests) without any API changes to this function.
-    #
-    # n (global up_hint) is still used below for the cap-plane projection,
-    # where an approximate plane through the buried root ring is sufficient.
+    # Per-vertex local normals from the open surface mesh.  Arch, curl, and
+    # lift rotate local_n away from up_hint especially at the tip; using
+    # vertex_normals (area-weighted face-normal averages) tracks the curved
+    # surface closely (dot ≈ 0.998 vs. analytic N_local in tests).
+    # n (global up_hint) is still used for the cap-plane projection below.
     local_n = surface.vertex_normals[np.array(loop)]   # (NP, 3)  — pre-normalised by trimesh
 
     # ── Tip bulk vertex ────────────────────────────────────────────────────────
@@ -1004,28 +1072,53 @@ def solidify_leaf(
                       raw_inward / np.where(inward_norms > 1e-8, inward_norms, 1.0),
                       0.0)                                            # (NP, 3)
 
-    # ray = sin(angle)*(-local_n) + cos(angle)*inward
-    # → unit vector at root_wall_angle_deg from the local leaf surface.
-    # At 90° this reduces to pure -local_n (no taper).
-    angle_rad = float(np.radians(root_wall_angle_deg))
-    sin_a     = float(np.sin(angle_rad))
-    cos_a     = float(np.cos(angle_rad))
-    ray_dirs  = sin_a * (-local_n) + cos_a * inward                  # (NP, 3)
+    # ── Ray directions (cone framework) ──────────────────────────────────────────
+    # When a parent mesh is available: one BVH nearest-point query gives the
+    # cone-3 axes (mesh inward normals) for all NP vertices, then per-vertex
+    # _select_ray_dir resolves the three-cone intersection with priority relaxation.
+    # Without a parent mesh: walls are perpendicular to the local leaf surface.
+    cone1_cos = math.cos(math.radians(cone1_half_angle_deg))
+    cone2_cos = math.cos(math.radians(cone2_half_angle_deg))
 
-    # Fallback root: move embed_mm along the ray direction from each perim vertex.
-    root = perim + float(embed_mm) * ray_dirs                         # (NP, 3)
-
+    c3_axes:      np.ndarray | None = None
+    _closest_pts: np.ndarray | None = None
     if parent_mesh is not None:
-        # Raycast each vertex along its angled direction to find the parent
+        _closest_pts, _, _face_ids = trimesh.proximity.closest_point(parent_mesh, perim)
+        c3_axes  = -parent_mesh.face_normals[_face_ids.astype(np.int64)]   # (NP, 3)
+        ray_dirs = np.stack([
+            _select_ray_dir(-local_n[i], inward[i], c3_axes[i], cone1_cos, cone2_cos)
+            for i in range(NP)
+        ])                                                                   # (NP, 3)
+        # BVH fallback: embed from the nearest surface point inward along the
+        # face normal.  Used when the raycast misses.  Guaranteed to touch the
+        # mesh regardless of where the perimeter vertex is in 3-D space.
+        root = _closest_pts + float(embed_mm) * c3_axes                    # (NP, 3)
+    else:
+        ray_dirs = -local_n.copy()                                           # (NP, 3)
+        root     = perim + float(embed_mm) * ray_dirs                       # (NP, 3)
+
+    if _DEBUG_RAY_DIRS_COLLECTOR is not None:
+        _DEBUG_RAY_DIRS_COLLECTOR.append(ray_dirs.copy())
+
+    _tip_hit_dist = float('nan')   # distance to nearest valid tip-ray hit; nan = miss
+    # Raycast origin for the tip slot (used for containment check below).
+    _tip_origin: np.ndarray | None = None
+    if tip_li is not None:
+        _tip_origin = perim[tip_li] + _LEAF_FDM_SUPPORT_TOLERANCE_MM * local_n[tip_li]
+    _raycast_time = 0.0
+    if parent_mesh is not None:
+        # Raycast each vertex along its cone-selected direction to find the parent
         # surface, then embed embed_mm past the hit along the same ray.
         # Offset origins slightly along the LOCAL outward normal so a vertex
         # sitting exactly on the parent surface doesn't self-intersect.
-        origins = perim + _LEAF_FDM_SUPPORT_TOLERANCE_MM * local_n   # (NP, 3)
+        origins = perim + _LEAF_FDM_SUPPORT_TOLERANCE_MM * local_n          # (NP, 3)
+        _rc0 = time.perf_counter()
         locs, ray_idx, _ = parent_mesh.ray.intersects_location(
             ray_origins=origins,
             ray_directions=ray_dirs,
             multiple_hits=True,
         )
+        _raycast_time = time.perf_counter() - _rc0
         if len(locs) > 0:
             for ri in np.unique(ray_idx).tolist():
                 mask  = ray_idx == ri
@@ -1035,7 +1128,26 @@ def solidify_leaf(
                 if near.any():
                     hit = hits[near][int(np.argmin(dists[near]))]
                     root[int(ri)] = hit + float(embed_mm) * ray_dirs[int(ri)]
+                    if tip_li is not None and int(ri) == tip_li:
+                        _tip_hit_dist = float(dists[near].min())
         # Perimeter vertices whose ray missed or hit too far keep the fallback.
+
+    if _DEBUG_TIP_RAY_COLLECTOR is not None and tip_li is not None:
+        is_inside = (
+            bool(parent_mesh.contains(np.array([_tip_origin]))[0])
+            if parent_mesh is not None and _tip_origin is not None
+            else False
+        )
+        _DEBUG_TIP_RAY_COLLECTOR.append((ray_dirs[tip_li].copy(), _tip_hit_dist, is_inside))
+
+    if _DEBUG_CONE_COLLECTOR is not None and tip_li is not None and c3_axes is not None:
+        _DEBUG_CONE_COLLECTOR.append({
+            'c1_axis':      (-local_n[tip_li]).copy(),
+            'inward_tip':   inward[tip_li].copy(),
+            'c3_axis':      c3_axes[tip_li].copy(),
+            'ray_dir':      ray_dirs[tip_li].copy(),
+            'raycast_time': _raycast_time,
+        })
 
     # Project the ring mean onto the cap plane (normal = n, through root[0])
     # so the centroid stays inside the ring even when the ring is non-planar

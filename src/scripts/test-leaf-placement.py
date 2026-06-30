@@ -58,6 +58,8 @@ from pathlib import Path
 import numpy as np
 import trimesh
 
+import dharmatiles.trees.leaf as _leaf_mod
+
 from dharmatiles.trees import (
     LeafPlacementStats,
     effective_ring_perimeter,
@@ -188,6 +190,126 @@ _PLACE_KW = dict(
 
 
 # ── Artifact analysis and reporting ──────────────────────────────────────────
+
+_CONE_LEAF_HALF_DEG = 60.0   # max angle from -local_n  (= min 30° from leaf plane)
+_CONE_FDM_HALF_DEG  = 60.0   # FDM overhang limit
+_CONE_MESH_HALF_DEG = 90.0   # parent mesh — wide because mesh subtends ~hemisphere from tip
+_CONE_N_SAMPLES     = 1000   # uniform sphere samples for intersection check
+_CONE_C2_AXIS       = np.array([0.0, 0.0, -1.0])
+
+
+def _cone_analysis(cone_data: list[dict]) -> None:
+    """Report cone intersection geometry and timing for tip-vertex rays."""
+    rng = np.random.default_rng(42)
+    raw = rng.standard_normal((_CONE_N_SAMPLES, 3))
+    sph = raw / np.linalg.norm(raw, axis=1, keepdims=True)   # (N, 3) unit vectors
+
+    cos1 = math.cos(math.radians(_CONE_LEAF_HALF_DEG))
+    cos2 = math.cos(math.radians(_CONE_FDM_HALF_DEG))
+    cos3 = math.cos(math.radians(_CONE_MESH_HALF_DEG))
+
+    n_empty = 0
+    n_p12_fail = n_p13_fail = n_p23_fail = 0
+    frac_list: list[float] = []
+    ang1_all: list[np.ndarray] = []
+    ang2_all: list[np.ndarray] = []
+    ang3_all: list[np.ndarray] = []
+    total_raycast = 0.0
+
+    # Geometry of empty cases
+    empty_fdm_mesh_angles: list[float] = []   # angle between c2 and c3 for empties
+    empty_c3_z: list[float] = []              # c3_axis z-component (> 0 = mesh faces up)
+    empty_blocked_by_undercut: int = 0        # empties that clear when undercut removed
+
+    for d in cone_data:
+        c1  = d['c1_axis']    # -local_n[tip]
+        c3  = d['c3_axis']    # parent mesh inward normal at nearest point
+        inw = d['inward_tip'] # undercut half-plane normal
+
+        # Pairwise non-emptiness
+        a12 = math.degrees(math.acos(float(np.clip(c1 @ _CONE_C2_AXIS, -1, 1))))
+        a13 = math.degrees(math.acos(float(np.clip(c1 @ c3,            -1, 1))))
+        a23 = math.degrees(math.acos(float(np.clip(_CONE_C2_AXIS @ c3, -1, 1))))
+        if a12 >= _CONE_LEAF_HALF_DEG + _CONE_FDM_HALF_DEG:  n_p12_fail += 1
+        if a13 >= _CONE_LEAF_HALF_DEG + _CONE_MESH_HALF_DEG: n_p13_fail += 1
+        if a23 >= _CONE_FDM_HALF_DEG  + _CONE_MESH_HALF_DEG: n_p23_fail += 1
+
+        # Triple intersection via sampling
+        in_c1    = (sph @ c1)            >= cos1
+        undercut = (sph @ inw)           >= 0.0
+        in_c2    = (sph @ _CONE_C2_AXIS) >= cos2
+        in_c3    = (sph @ c3)            >= cos3
+        feasible = in_c1 & undercut & in_c2 & in_c3
+
+        n_feas = int(feasible.sum())
+        if n_feas == 0:
+            n_empty += 1
+            empty_fdm_mesh_angles.append(a23)
+            empty_c3_z.append(float(c3[2]))
+            # Would it be feasible if we dropped the undercut constraint?
+            if int((in_c1 & in_c2 & in_c3).sum()) > 0:
+                empty_blocked_by_undercut += 1
+        else:
+            frac_list.append(n_feas / _CONE_N_SAMPLES)
+            feas = sph[feasible]
+            ang1_all.append(np.degrees(np.arccos(np.clip(feas @ c1,            -1, 1))))
+            ang2_all.append(np.degrees(np.arccos(np.clip(feas @ _CONE_C2_AXIS, -1, 1))))
+            ang3_all.append(np.degrees(np.arccos(np.clip(feas @ c3,            -1, 1))))
+
+        total_raycast += d['raycast_time']
+
+    n   = len(cone_data)
+    a1  = np.concatenate(ang1_all) if ang1_all else np.array([])
+    a2  = np.concatenate(ang2_all) if ang2_all else np.array([])
+    a3  = np.concatenate(ang3_all) if ang3_all else np.array([])
+    efm = np.array(empty_fdm_mesh_angles)
+    ecz = np.array(empty_c3_z)
+
+    def _stat(arr: np.ndarray, unit: str = "°") -> str:
+        if len(arr) == 0:
+            return "(no data)"
+        return (f"min={arr.min():.1f}{unit}  p25={float(np.percentile(arr,25)):.1f}{unit}"
+                f"  median={float(np.median(arr)):.1f}{unit}"
+                f"  p75={float(np.percentile(arr,75)):.1f}{unit}  max={arr.max():.1f}{unit}")
+
+    print("\n" + "=" * 64)
+    print("CONE INTERSECTION ANALYSIS  (tip vertex, per placed leaf)")
+    print(f"  n={n}  samples={_CONE_N_SAMPLES}")
+    print(f"  cone half-angles: leaf={_CONE_LEAF_HALF_DEG}°  "
+          f"FDM={_CONE_FDM_HALF_DEG}°  mesh={_CONE_MESH_HALF_DEG}°")
+    print(f"\n  Pairwise empty intersections:")
+    print(f"    leaf ∩ FDM  : {n_p12_fail}/{n}")
+    print(f"    leaf ∩ mesh : {n_p13_fail}/{n}")
+    print(f"    FDM  ∩ mesh : {n_p23_fail}/{n}")
+    print(f"\n  Triple intersection (all 3 cones + undercut half-plane):")
+    print(f"    empty                          : {n_empty}/{n}")
+    if n_empty:
+        n_fw = int(np.sum(efm >= _CONE_FDM_HALF_DEG + _CONE_MESH_HALF_DEG))
+        print(f"    ↳ caused by FDM∩mesh pairwise  : {n_fw}/{n_empty}")
+        print(f"    ↳ cleared by dropping undercut : {empty_blocked_by_undercut}/{n_empty}")
+        print(f"    ↳ remaining (geometry only)    : "
+              f"{n_empty - n_fw - empty_blocked_by_undercut}/{n_empty}")
+        print(f"\n  Empty-case geometry:")
+        print(f"    FDM∩mesh angle (c2·c3)   : {_stat(efm)}")
+        print(f"    mesh inward-normal z-comp : {_stat(ecz, '')}")
+        n_up   = int(np.sum(ecz > 0.0))
+        n_horiz = int(np.sum(np.abs(ecz) < 0.3))
+        print(f"    mesh facing upward (c3_z>0)  : {n_up}/{n_empty}")
+        print(f"    mesh near-horizontal (|z|<0.3): {n_horiz}/{n_empty}")
+    if frac_list:
+        fracs = np.array(frac_list)
+        print(f"\n  Feasible (non-empty) intersection coverage:")
+        print(f"    fraction of sphere : {_stat(fracs, '')}")
+    print(f"\n  Angle ranges within intersection (non-empty leaves):")
+    print(f"    from leaf-surface axis (-local_n) : {_stat(a1)}")
+    print(f"    from FDM axis ([0,0,-1])           : {_stat(a2)}")
+    print(f"    from mesh-normal axis              : {_stat(a3)}")
+    mr = total_raycast * 1000
+    print(f"\n  Timing — NP=24 raycast across {n} leaves:")
+    print(f"    {mr:.1f} ms total  {mr/n:.3f} ms/leaf")
+    print(f"  (BVH nearest-point query is now in the main solidify path)")
+    print("=" * 64)
+
 
 def _check_artifacts(all_stats: list[LeafPlacementStats]) -> int:
     """Analyze placement stats; print a structured artifact report.
@@ -844,6 +966,10 @@ def main() -> None:
     all_parts: list[trimesh.Trimesh] = []
     all_stats: list[LeafPlacementStats] = []
 
+    _leaf_mod._DEBUG_RAY_DIRS_COLLECTOR = []
+    _leaf_mod._DEBUG_TIP_RAY_COLLECTOR  = []
+    _leaf_mod._DEBUG_CONE_COLLECTOR     = []
+
     # ── Object 1: sphere ─────────────────────────────────────────────────────
     print("\n=== Object 1: Sphere r=10 mm at XY=(0, 0) ===")
     sphere = trimesh.creation.icosphere(subdivisions=3, radius=10.0)
@@ -915,6 +1041,102 @@ def main() -> None:
     print(f"  vertices={v:,}  faces={f:,}")
     print(f"  bounding box: {bb[0]:.1f} × {bb[1]:.1f} × {bb[2]:.1f} mm")
     print(f"  total time: {time.perf_counter() - t0:.1f}s")
+
+    # ── Ray angle distribution (angle vs world Z-down = [0,0,-1]) ────────────
+    _ray_dirs_all = _leaf_mod._DEBUG_RAY_DIRS_COLLECTOR
+    _tip_ray_all  = _leaf_mod._DEBUG_TIP_RAY_COLLECTOR
+    _cone_data    = _leaf_mod._DEBUG_CONE_COLLECTOR
+    _leaf_mod._DEBUG_RAY_DIRS_COLLECTOR = None
+    _leaf_mod._DEBUG_TIP_RAY_COLLECTOR  = None
+    _leaf_mod._DEBUG_CONE_COLLECTOR     = None
+    if _ray_dirs_all:
+        all_rd = np.concatenate(_ray_dirs_all, axis=0)          # (N_total, 3)
+        # angle between ray and [0,0,-1]: cos(θ) = -ray_z (since dot([0,0,-1], r) = -r_z)
+        cos_theta = np.clip(-all_rd[:, 2], -1.0, 1.0)
+        angles_deg = np.degrees(np.arccos(cos_theta))
+        pcts = [0, 10, 25, 50, 75, 90, 100]
+        percs = np.percentile(angles_deg, pcts)
+        print("\n" + "=" * 64)
+        print("RAY ANGLE vs WORLD Z-DOWN  (0° = pointing straight down)")
+        print("=" * 64)
+        print(f"  samples : {len(angles_deg):,}  ({len(_ray_dirs_all)} leaves × {len(_ray_dirs_all[0])} perimeter vertices)")
+        print(f"  min     : {angles_deg.min():.1f}°")
+        print(f"  max     : {angles_deg.max():.1f}°")
+        print(f"  mean    : {angles_deg.mean():.1f}°")
+        for p, v in zip(pcts, percs):
+            print(f"  p{p:<3}    : {v:.1f}°")
+        # Histogram in 15° buckets
+        bins = np.arange(0, 181, 15)
+        counts, _ = np.histogram(angles_deg, bins=bins)
+        print(f"\n  Histogram (15° buckets):")
+        for lo, hi, c in zip(bins, bins[1:], counts):
+            bar = "█" * int(c / max(counts) * 30)
+            print(f"    {lo:3}–{hi:3}°  {bar}  {c:,}")
+        print("=" * 64)
+
+    # ── Tip-ray angle split: hit vs miss/long-root ────────────────────────────
+    if _tip_ray_all:
+        def _tip_angle(rd: np.ndarray) -> float:
+            return float(np.degrees(np.arccos(np.clip(-rd[2], -1.0, 1.0))))
+
+        hit_entries   = [(rd, d, ins) for rd, d, ins in _tip_ray_all if not np.isnan(d)]
+        miss_entries  = [(rd, d, ins) for rd, d, ins in _tip_ray_all if np.isnan(d)]
+        hit_angles    = [_tip_angle(rd) for rd, d, ins in hit_entries]
+        miss_angles   = [_tip_angle(rd) for rd, d, ins in miss_entries]
+        hit_dists     = [d   for rd, d, ins in hit_entries]
+        n_hit_inside  = sum(1 for rd, d, ins in hit_entries  if ins)
+        n_miss_inside = sum(1 for rd, d, ins in miss_entries if ins)
+
+        # Split hits by whether origin was inside the mesh
+        hit_inside_dists  = [d for rd, d, ins in hit_entries if ins]
+        hit_outside_dists = [d for rd, d, ins in hit_entries if not ins]
+
+        def _dist_report(angles: list[float], label: str, extra: str = "") -> None:
+            if not angles:
+                print(f"\n  {label}: 0 leaves{extra}")
+                return
+            a = np.array(angles)
+            pcts = [0, 10, 25, 50, 75, 90, 100]
+            percs = np.percentile(a, pcts)
+            print(f"\n  {label}: {len(a)} leaves{extra}")
+            print(f"    min={a.min():.1f}°  mean={a.mean():.1f}°  max={a.max():.1f}°")
+            print(f"    " + "  ".join(f"p{p}={v:.1f}°" for p, v in zip(pcts, percs)))
+            bins = np.arange(0, 181, 15)
+            counts, _ = np.histogram(a, bins=bins)
+            peak = max(counts) if counts.max() > 0 else 1
+            for lo, hi, c in zip(bins, bins[1:], counts):
+                if c == 0:
+                    continue
+                bar = "█" * int(c / peak * 20)
+                print(f"    {lo:3}–{hi:3}°  {bar}  {c}")
+
+        print("\n" + "=" * 64)
+        print("TIP RAY ANGLE vs WORLD Z-DOWN — split by hit/miss")
+        print(f"  total leaves: {len(_tip_ray_all)}")
+        _dist_report(
+            hit_angles,
+            f"HIT (ray reached mesh within 10 mm)  origin-inside={n_hit_inside}/{len(hit_entries)}",
+            f"  hit-dist: min={min(hit_dists):.2f}  median={float(np.median(hit_dists)):.2f}  max={max(hit_dists):.2f} mm" if hit_dists else "",
+        )
+        if hit_inside_dists:
+            print(f"    → origin INSIDE  mesh: n={len(hit_inside_dists)}"
+                  f"  hit-dist min={min(hit_inside_dists):.2f}"
+                  f"  median={float(np.median(hit_inside_dists)):.2f}"
+                  f"  max={max(hit_inside_dists):.2f} mm")
+        if hit_outside_dists:
+            print(f"    → origin OUTSIDE mesh: n={len(hit_outside_dists)}"
+                  f"  hit-dist min={min(hit_outside_dists):.2f}"
+                  f"  median={float(np.median(hit_outside_dists)):.2f}"
+                  f"  max={max(hit_outside_dists):.2f} mm")
+        _dist_report(
+            miss_angles,
+            f"MISS (no hit or hit > 10 mm — fallback)  origin-inside={n_miss_inside}/{len(miss_entries)}",
+        )
+        print("=" * 64)
+
+    # ── Cone intersection analysis ────────────────────────────────────────────
+    if _cone_data:
+        _cone_analysis(_cone_data)
 
     # ── Artifact detection ────────────────────────────────────────────────────
     _check_artifacts(all_stats)

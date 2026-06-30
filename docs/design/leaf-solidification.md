@@ -449,6 +449,94 @@ canonical sphere frame and the actual mesh surface.
 
 ---
 
+## Ray Direction Design — Cone Framework
+
+*Added 2026-06-29.*
+
+The ray direction problem — choosing how each perimeter wall vertex fires into the
+parent mesh — can be understood as finding a direction inside the intersection of
+three cones on the unit sphere.  Each cone corresponds to a distinct physical
+constraint.
+
+### The three cones
+
+| Cone | Axis | Half-angle | Type |
+|---|---|---|---|
+| **Leaf surface** | `−local_n` at the vertex | `90° − min_junction_angle` | **Hard constraint** — ray must be close enough to perpendicular to the leaf surface or the wall junction has knife-edge thickness. |
+| **FDM printability** | `[0, 0, −1]` (world down) | ~60° (practical limit) | **Hard constraint** — wall must point within the FDM overhang limit of straight down or it needs supports. |
+| **Parent mesh** | Inward face normal at nearest surface point | ~90° (wide) | **Soft constraint** — aim toward the mesh; empirically nearly a hemisphere so rarely binding. |
+
+**Undercut is a desire, not a constraint.**  The `inward` direction (from the
+perimeter vertex toward the perimeter centroid, projected onto the tangent plane)
+defines which side of `−local_n` produces undercut vs. overcut.  It is not a
+separate cone — it is a preference for which half of the leaf-surface cone to
+occupy.  It should be satisfied when possible and silently dropped when the cone
+intersection forces the ray to the overcut side.
+
+A fourth candidate — **leaf centroid** (`inward`) — is not a cone.  It is the
+preferred in-plane direction within the leaf-surface cone, relevant only after the
+three cones above are satisfied.
+
+### Why the current implementation is limited
+
+`solidify_leaf` has one degree of freedom: `root_wall_angle_deg`.  The formula
+`ray = sin(α)(−local_n) + cos(α)(inward)` moves along a single arc between
+`−local_n` and `inward`.  This conflates junction thickness (a hard constraint)
+with undercut direction (a desire) — they cannot be tuned independently.  The FDM
+and parent-mesh constraints are not represented at all; the ray direction is
+determined entirely by the leaf's own geometry, which is why the tip-pole ray
+points away from the parent mesh when the leaf is lifted.
+
+### Empirical findings (2026-06-29, n=169 placed leaves)
+
+Measured on the standard test scene (sphere r=10 mm + three foliage clusters),
+cone half-angles leaf=60°, FDM=60°, mesh=90°, 1000 sphere samples per leaf:
+
+- **Mesh cone is not binding.**  Empirical probe (300 rays/leaf) shows the mesh
+  subtends 20–30% of the full sphere from each tip, with a half-angle of 49–71°
+  (p25–p75) from the nearest-point normal — effectively a hemisphere.  Using a
+  fixed 90° half-angle is a safe approximation.
+
+- **22/169 tips (13%) have an empty triple intersection.**  All 22 have the parent
+  mesh facing upward at the tip vertex (inward normal z-component > 0, median 0.6).
+  These are leaves on the underside or steep-upward face of a foliage cluster.
+
+- **19/22 empty cases are resolved by dropping the undercut desire.**  The three
+  cones do overlap for those leaves, but the overlap lies entirely on the overcut
+  side.  A wall on an upward-facing mesh surface cannot simultaneously tuck under
+  the leaf and remain FDM-printable; it must flare outward instead.
+
+- **3/22 are geometrically hard.**  The FDM and mesh cones are genuinely
+  incompatible (FDM∩mesh angle > 150°) — the mesh face is pointing nearly
+  straight up.  No wall direction is simultaneously into the mesh and printable.
+  Accept a support-requiring wall or treat these as unfixable.
+
+### Relaxation priority
+
+When the triple intersection is empty, relax in this order:
+
+1. **Drop undercut** — allow the ray to be on the overcut side.  Resolves 19/22
+   cases at no printability cost.
+2. **Relax FDM angle** — widen the FDM cone past 60° toward 75–80°.  Trades
+   some printability for anchor reliability on steep surfaces.
+3. **Accept the mesh-normal direction** — fire straight into the mesh regardless
+   of FDM angle.  Wall will need supports but leaf is anchored.
+
+### Toward a better ray
+
+An improved ray direction would:
+1. Query the parent mesh for the nearest surface point and its inward normal
+   (cone 3 axis) — a single BVH nearest-point lookup, ~6× faster than the
+   current 24-ray batch raycast, yielding the axis directly.
+2. Find the direction in the triple-cone intersection that best satisfies
+   the undercut desire, relaxing constraints in priority order when empty.
+3. Fire a single well-aimed ray in that direction to find the actual root depth.
+
+This decouples axis selection (geometry-driven, cheap) from root depth measurement
+(still needs one ray), and makes all three physical concerns independently tunable.
+
+---
+
 ## Known Open Items
 
 ### 1. ~~Tip-pole raycast: universal miss~~ — RESOLVED
