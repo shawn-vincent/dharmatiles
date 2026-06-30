@@ -986,6 +986,7 @@ def place_leaves_on_multiple_meshes(
     # exercised when two meshes happen to align at a cross-section level.
     all_rows.sort(key=lambda r: r[0])
     _ctx_id_to_mi = {id(ctx): mi for mi, ctx in enumerate(contexts)}
+    _n_total = len(all_rows)
     _step = 0
     i = 0
     while i < len(all_rows):
@@ -1026,7 +1027,7 @@ def place_leaves_on_multiple_meshes(
                     contact_candidates=contact_candidates, ca_cache=ca_cache,
                     leaf_kw=leaf_kw, angle_jitter_deg=angle_jitter_deg,
                     pos_jitter=pos_jitter, row_color_fn=row_color_fn,
-                    color_row_idx=_step,
+                    color_row_idx=round(_step * 15 / max(_n_total - 1, 1)),
                 )
                 key = (mi_k, slot.row_idx)
                 _row_att[key] += att
