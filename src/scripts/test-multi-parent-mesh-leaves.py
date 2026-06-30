@@ -285,6 +285,7 @@ def _render_views(all_parts: list[trimesh.Trimesh], stl_path: Path) -> None:
             _render(
                 all_parts, out_png,
                 elev=elev, azim=azim, resolution=(1600, 900), quiet=False, label=label,
+                smooth=False,
             )
         except Exception as exc:
             print(f"  (render failed for {suffix}: {exc})")

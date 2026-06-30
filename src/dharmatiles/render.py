@@ -311,7 +311,8 @@ def render(meshes: list[trimesh.Trimesh],
            resolution: tuple[int, int] = (1200, 1000),
            quiet: bool = False,
            grid_square_mm: float | None = None,
-           label: str | None = None) -> None:
+           label: str | None = None,
+           smooth: bool = True) -> None:
     import pyrender  # optional dependency
 
     all_v  = np.vstack([m.vertices for m in meshes if len(m.vertices)])
@@ -360,7 +361,7 @@ def render(meshes: list[trimesh.Trimesh],
             metallicFactor=0.0,
             roughnessFactor=0.85,
         )
-        pm = pyrender.Mesh.from_trimesh(m, material=mat, smooth=True)
+        pm = pyrender.Mesh.from_trimesh(m, material=mat, smooth=smooth)
         scene.add(pm)
 
     fov   = np.radians(40.0)
