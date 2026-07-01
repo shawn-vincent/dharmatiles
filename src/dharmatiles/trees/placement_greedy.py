@@ -391,6 +391,11 @@ def place_leaves_greedy(
     col_step = max(W, 1e-3)
     expected_row_step = max(L * 0.5, 1e-3)
 
+    # The greedy placer seats leaves flat against the surface (belly on the
+    # surface) and lifts them only as much as clearing obstacles requires.  The
+    # leaf `lift_mm` rigid tip-rotation is an unconditional up-angle on top of
+    # that, so it is disabled here: greedy leaves have no default angling.
+    del lift_mm
     leaf_kw = dict(
         length_mm      = L,
         width_mm       = W,
@@ -399,7 +404,7 @@ def place_leaves_greedy(
         inner_curve    = float(inner_curve),
         outer_curve    = float(outer_curve),
         curl_deg       = float(curl_deg),
-        lift_mm        = float(lift_mm),
+        lift_mm        = 0.0,
     )
     belly_dip = _leaf_belly_dip(**leaf_kw)   # (dL, dN) — shape-only binding point
 
@@ -430,7 +435,7 @@ def place_leaves_greedy(
             z_top_anchor      = z_top,
             cx                = cx,
             cy                = cy,
-            lift_mm           = float(lift_mm),
+            lift_mm           = 0.0,   # greedy disables the leaf lift rotation
         )
         stats_list.append(stats)
         parts_list.append([])
