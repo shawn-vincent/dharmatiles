@@ -82,6 +82,7 @@ class Tree:
         leaf_pos_jitter: float = 0.165,
         leaf_arc_meridians: int = 6,
         leaf_arc_z_samples: int = 64,
+        leaf_placement: str = "meridian",
         bark: BarkConfig | None = None,
         stamp_falloff_mm: float = 5.0,
     ) -> None:
@@ -133,6 +134,12 @@ class Tree:
         self.leaf_pos_jitter       = float(leaf_pos_jitter)
         self.leaf_arc_meridians    = int(leaf_arc_meridians)
         self.leaf_arc_z_samples    = int(leaf_arc_z_samples)
+        leaf_placement = str(leaf_placement)
+        if leaf_placement not in ("meridian", "greedy"):
+            raise ValueError(
+                f"leaf_placement must be 'meridian' or 'greedy', got {leaf_placement!r}"
+            )
+        self.leaf_placement        = leaf_placement
         self.bark = BarkConfig() if bark is None else bark
         self.stamp_falloff_mm = float(stamp_falloff_mm)
 
@@ -234,6 +241,7 @@ class Tree:
                 leaf_pos_jitter=self.leaf_pos_jitter,
                 leaf_arc_meridians=self.leaf_arc_meridians,
                 leaf_arc_z_samples=self.leaf_arc_z_samples,
+                leaf_placement=self.leaf_placement,
                 debug_leaf_color=self.debug_leaf_color,
             )
             if (

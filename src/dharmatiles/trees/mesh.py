@@ -85,6 +85,7 @@ def build_branch_mesh(
     leaf_pos_jitter: float = 0.165,
     leaf_arc_meridians: int = 6,
     leaf_arc_z_samples: int = 64,
+    leaf_placement: str = "meridian",
     debug_leaf_color: bool = False,
 ) -> tuple[trimesh.Trimesh, trimesh.Trimesh, trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Build branch and foliage meshes from a simplified skeleton.
@@ -103,6 +104,10 @@ def build_branch_mesh(
         Debug icospheres (empty unless ``debug_attractors`` is set).
     """
     _ = terrain_z, out_dirs
+    if leaf_placement not in ("meridian", "greedy"):
+        raise ValueError(
+            f"leaf_placement must be 'meridian' or 'greedy', got {leaf_placement!r}"
+        )
     n = len(nodes)
     if strict_fdm_angle_deg is not None:
         _warn_if_branch_below_strict_fdm_angle(nodes, parents, strict_fdm_angle_deg)
@@ -147,6 +152,9 @@ def build_branch_mesh(
     # isolation left every cluster blind to its neighbours, so the cross-cluster
     # cull and the shared shingle occupancy never engaged on real trees.
     foliage_clumps: list[tuple[trimesh.Trimesh, int]] = []
+    # Smooth (pre-noise) envelope clumps, collected only for the greedy placer.
+    # Populated in parallel with foliage_clumps when leaf_placement == "greedy".
+    foliage_clumps_smooth: list[tuple[trimesh.Trimesh, int]] = []
 
     while queue:
         i = queue.pop(0)
@@ -301,28 +309,49 @@ def build_branch_mesh(
     # into layers instead of skewering.  (Per-cluster placement gave each cluster
     # an empty neighbour list, so neither ever engaged on a real tree.)
     if foliage_clumps:
-        from .placement import place_leaves_on_multiple_meshes
-        _clump_meshes = [c for c, _ in foliage_clumps]
         _clump_eids   = [eid for _, eid in foliage_clumps]
-        _leaf_parts, _ = place_leaves_on_multiple_meshes(
-            _clump_meshes,
-            length_mm      = leaf_length_mm,
-            width_mm       = leaf_width_mm,
-            thickness_mm   = leaf_thickness_mm,
-            fold_angle_deg = leaf_fold_angle_deg,
-            inner_curve    = leaf_inner_curve,
-            outer_curve    = leaf_outer_curve,
-            curl_deg       = leaf_curl_deg,
-            lift_mm        = leaf_lift_mm,
-            h_overlap      = leaf_h_overlap,
-            v_overlap      = leaf_v_overlap,
-            n_meridians    = leaf_arc_meridians,
-            z_samples      = leaf_arc_z_samples,
-            seeds          = [_hash01_int(bark_seed, "leaves", eid) for eid in _clump_eids],
-            labels         = [f"cluster-{eid}" for eid in _clump_eids],
-            angle_jitter_deg = leaf_angle_jitter_deg,
-            pos_jitter       = leaf_pos_jitter,
-        )
+        if leaf_placement == "meridian":
+            from .placement import place_leaves_on_multiple_meshes
+            _clump_meshes = [c for c, _ in foliage_clumps]
+            _leaf_parts, _ = place_leaves_on_multiple_meshes(
+                _clump_meshes,
+                length_mm      = leaf_length_mm,
+                width_mm       = leaf_width_mm,
+                thickness_mm   = leaf_thickness_mm,
+                fold_angle_deg = leaf_fold_angle_deg,
+                inner_curve    = leaf_inner_curve,
+                outer_curve    = leaf_outer_curve,
+                curl_deg       = leaf_curl_deg,
+                lift_mm        = leaf_lift_mm,
+                h_overlap      = leaf_h_overlap,
+                v_overlap      = leaf_v_overlap,
+                n_meridians    = leaf_arc_meridians,
+                z_samples      = leaf_arc_z_samples,
+                seeds          = [_hash01_int(bark_seed, "leaves", eid) for eid in _clump_eids],
+                labels         = [f"cluster-{eid}" for eid in _clump_eids],
+                angle_jitter_deg = leaf_angle_jitter_deg,
+                pos_jitter       = leaf_pos_jitter,
+            )
+        else:  # leaf_placement == "greedy"
+            from .placement_greedy import place_leaves_greedy
+            # The greedy placer runs on the SMOOTH (pre-noise) envelopes so its
+            # analytic clearance guarantees hold (see placement_greedy docstring).
+            _clump_meshes = [c for c, _ in foliage_clumps_smooth]
+            _leaf_parts, _ = place_leaves_greedy(
+                _clump_meshes,
+                length_mm      = leaf_length_mm,
+                width_mm       = leaf_width_mm,
+                thickness_mm   = leaf_thickness_mm,
+                fold_angle_deg = leaf_fold_angle_deg,
+                inner_curve    = leaf_inner_curve,
+                outer_curve    = leaf_outer_curve,
+                curl_deg       = leaf_curl_deg,
+                lift_mm        = leaf_lift_mm,
+                seeds          = [_hash01_int(bark_seed, "leaves", eid) for eid in _clump_eids],
+                labels         = [f"cluster-{eid}" for eid in _clump_eids],
+                angle_jitter_deg = leaf_angle_jitter_deg,
+                pos_jitter       = leaf_pos_jitter,
+            )
         for _lp in _leaf_parts:
             leaf_solids.extend(_lp)
 
