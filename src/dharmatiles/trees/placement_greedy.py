@@ -508,6 +508,46 @@ def place_leaves_greedy(
             continue
 
         stats.n_attempted += 1
+
+        # ── Oval gates FIRST (cheap: build_leaf_oval_offsets is pure NumPy) ────
+        # Reject bad poses before paying for build_leaf_surface / solidify_leaf,
+        # so the expensive surface build happens only for leaves that will ship.
+        lat_ov = np.cross(normal, tangent)
+        lat_ov_len = float(np.linalg.norm(lat_ov))
+        if lat_ov_len > 1e-6:
+            lat_ov = lat_ov / lat_ov_len
+        oval_off = build_leaf_oval_offsets(
+            n_hat=normal, T_along=tangent, across=lat_ov,
+            L=L, W=W, embed_mm=_GREEDY_EMBED_MM,
+        )
+        inner_v = oval_off + pt3d[np.newaxis]
+        # C1: root oval fully embeds into the smooth envelope (small protrusions
+        # where the flat oval overshoots a convex face are tolerated up to the
+        # embed depth; deeper protrusion == rejected).
+        outside = ~meshes[mi].contains(inner_v)
+        if outside.any():
+            _, ov_d, _ = trimesh.proximity.closest_point(meshes[mi], inner_v[outside])
+            if float(ov_d.max()) > _OVAL_PROTRUSION_TOL_MM:
+                stats.build_errors += 1
+                continue
+        # Connection gate: the embedded root oval must reach real material, else
+        # the leaf prints detached.  Exact when the noised clump is supplied
+        # (test the oval directly against it); otherwise fall back to a
+        # smooth-envelope + noise-bound proxy (an oval vertex pushed outward by
+        # the max inward erosion that is still inside smooth is provably >= that
+        # depth below the surface, hence inside the noised clump — sound only
+        # where the local normal ≈ the base normal).
+        if real_meshes is not None:
+            _connected = bool(real_meshes[mi].contains(inner_v).any())
+        else:
+            _connected = bool(
+                meshes[mi].contains(inner_v + _MAX_INWARD_EROSION_MM * normal).any()
+            )
+        if not _connected:
+            stats.build_errors += 1
+            continue
+
+        # ── ACCEPTED: build the surface + solidify (once, for shipped leaves) ──
         try:
             surf, _geom = build_leaf_surface(
                 base_pos = base_blade,
@@ -516,39 +556,6 @@ def place_leaves_greedy(
                 seed     = lseed,
                 **leaf_kw,
             )
-            lat_ov = np.cross(normal, tangent)
-            lat_ov_len = float(np.linalg.norm(lat_ov))
-            if lat_ov_len > 1e-6:
-                lat_ov = lat_ov / lat_ov_len
-            oval_off = build_leaf_oval_offsets(
-                n_hat=normal, T_along=tangent, across=lat_ov,
-                L=L, W=W, embed_mm=_GREEDY_EMBED_MM,
-            )
-            inner_v = oval_off + pt3d[np.newaxis]
-            # C1: root oval fully embeds into the smooth envelope (small
-            # protrusions where the flat oval overshoots a convex face are
-            # tolerated up to the embed depth; deeper protrusion == rejected).
-            inside = meshes[mi].contains(inner_v)
-            outside = ~inside
-            if outside.any():
-                _, ov_d, _ = trimesh.proximity.closest_point(meshes[mi], inner_v[outside])
-                if float(ov_d.max()) > _OVAL_PROTRUSION_TOL_MM:
-                    raise RuntimeError("oval protrudes past embed depth")
-            # Connection gate: the embedded root oval must reach real material,
-            # else the leaf prints detached.  Exact when the noised clump is
-            # supplied (test the oval directly against it); otherwise fall back
-            # to a smooth-envelope + noise-bound proxy (an oval vertex pushed
-            # outward by the max inward erosion that is still inside smooth is
-            # provably >= that depth below the surface, hence inside the noised
-            # clump — sound only where the local normal ≈ the base normal).
-            if real_meshes is not None:
-                _connected = bool(real_meshes[mi].contains(inner_v).any())
-            else:
-                _connected = bool(
-                    meshes[mi].contains(inner_v + _MAX_INWARD_EROSION_MM * normal).any()
-                )
-            if not _connected:
-                raise RuntimeError("root oval does not reach real (noised) material")
             tip_idx = len(surf.vertices) - 1
             solid, _ = solidify_leaf(surf, inner_v)
         except (RuntimeError, ValueError):
