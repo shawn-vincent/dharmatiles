@@ -2,34 +2,34 @@
 
 An alternative to the meridian-arc placer in :mod:`placement`.  Instead of a
 deterministic rows×columns grid per cluster, this grows the canopy by greedy
-accretion over a **pre-generated** candidate set:
+accretion over a **pre-generated** candidate set, working directly on the real
+(noised) foliage clumps:
 
-    Pre-generate candidates (denser than can fit) on each cluster's SMOOTH
-    (pre-noise) envelope, each with an analytic pose.  Sort by printable
-    world-z ascending.  Sweep upward once; accept a candidate iff it is
-    compatible with the already-accepted set (cheap-reject ladder on
-    self-managed hash grids).  Build geometry ONLY for accepted candidates.
+    Sample candidate bases on each real clump surface, each with an analytic
+    pose (interpolated normal; horizontal-outward growth).  Sort by world-z
+    ascending.  Sweep upward once; accept a candidate iff it clears a cheap
+    reject ladder on self-managed hash grids.  Build geometry ONLY for accepted
+    candidates.
 
-Why the smooth envelope (see the experiment doc, "Candidate Generation")
---------------------------------------------------------------------------
-Cluster noise only displaces INWARD (``mesh.py`` peak-shifts the noise so max
-displacement is exactly 0).  The smooth envelope is therefore the strict outer
-surface; the real noisy surface is always at-or-below it.  Two consequences:
-
-* **Clearance is free** — a blade held at/above the smooth surface can never be
-  reached by the real (receded) surface, so "surface not embedded in any mesh"
-  reduces to "clear of the smooth envelopes", already guaranteed by building on
-  smooth + the outward shingle nudge.  No real-mesh intersection test needed.
-* **Root embed must out-reach the noise** — the root oval is the one thing that
-  deliberately dips inward; to guarantee it always reaches real material even in
-  the deepest noise pit we embed by ``_GREEDY_EMBED_MM > _FOLIAGE_MAX_NOISE_MM``.
+Design points
+-------------
+* **Roots seat just below the real surface.**  The root oval embeds a fixed
+  shallow depth (:data:`_GREEDY_EMBED_MM`) at the candidate point — like the
+  meridian placer — so it is trivially in real material (no smooth-envelope
+  bookkeeping, no separate connection gate, no over-long neck).
+* **Leaves grow horizontally outward** (see :func:`_growth_tangent`) so the tip
+  sits above the root without any post-hoc vertical lift.
+* **Clearance is computed, not searched.**  A leaf's tip and belly must clear
+  its own clump, neighbour clumps and previously-placed leaves; the required
+  outward lift is a single ray cast per clump (exit distance along the normal)
+  plus a short cell march for placed leaves — the whole leaf is lifted once by
+  the max.  A leaf that can't clear within :data:`_CLEAR_MAX_MM` is culled.
 
 Hard constraints carried over from the 2026-07-01 perf crisis (do NOT violate):
 no ``trimesh.proximity.closest_point`` / R-tree / per-leaf ``Trimesh`` scans in
 the per-candidate sweep; no ``fix_normals`` on placed leaves; cheap-reject before
 every build.  Per-candidate rejection costs only spatial-hash lookups; geometry
-(build + one ``on_surface`` pull-away against the OWN smooth mesh, exactly as the
-meridian path already pays) is built once per *accepted* leaf.
+is built once per *accepted* leaf.
 
 Public entry point mirrors :func:`placement.place_leaves_on_multiple_meshes` so
 the dispatch in :func:`mesh.build_branch_mesh` is a drop-in.
@@ -51,21 +51,14 @@ from .leaf import (
     build_leaf_surface,
     solidify_leaf,
 )
-from .mesh import (
-    _FOLIAGE_COARSE_NOISE_AMPLITUDE_MM,
-    _FOLIAGE_NOISE_AMPLITUDE_MM,
-    _LEAF_PLACEABLE_NORMAL_Z,
-    _hash01_int,
-)
+from .mesh import _LEAF_PLACEABLE_NORMAL_Z, _hash01_int
 from .placement import (
     _FLOOR_TOL_MM,
     _OVAL_PROTRUSION_TOL_MM,
     _PULL_CLEARANCE_MM,
-    _PULL_MAX_MM,
     _SHINGLE_DELTA_MM,
     _SHINGLE_MAX_LAYERS,
     _SHINGLE_WORLD_CELL_MM,
-    _TIP_Z_CLEARANCE_MM,
     LeafPlacementStats,
     _contact_angle_analytic,
     _leaf_belly_dip,
@@ -76,24 +69,12 @@ from .placement import (
 # Overlap for constraints 2/3 is judged over the widest-point → tip span only.
 _F_W: float = 1.0 / 3.0
 
-# Maximum inward erosion of the noised foliage surface relative to the smooth
-# envelope.  The noise is peak-shifted (mesh.py) so the surface erodes inward by
-# the full trough range — the peak-to-trough span of (coarse + fine)·scale, NOT
-# a single-sided amplitude.  A conservative upper bound: the full coarse range
-# (2·amplitude) plus a 6σ fine-Gaussian span.  Measured max on the test clusters
-# is ~2.3 mm; this bound (~2.6 mm) safely exceeds it.
-_MAX_INWARD_EROSION_MM: float = (
-    2.0 * _FOLIAGE_COARSE_NOISE_AMPLITUDE_MM + 6.0 * _FOLIAGE_NOISE_AMPLITUDE_MM
-)
-
-# Root oval embed depth for the greedy path.  MUST exceed the cluster's maximum
-# inward noise erosion so a root embedded from the smooth envelope still reaches
-# real foliage material in the deepest noise pit (otherwise the leaf floats over
-# a valley and prints detached).  Derived from the noise config in mesh.py.
-_GREEDY_EMBED_MM: float = _MAX_INWARD_EROSION_MM + 0.5
-assert _GREEDY_EMBED_MM > _MAX_INWARD_EROSION_MM, (
-    "greedy root embed must out-reach the cluster's max inward noise erosion"
-)
+# Root oval embed depth.  The placer works directly on the real (noised) clump,
+# so the root seats a fixed shallow amount just below the actual foliage surface
+# at the candidate point — the same value the meridian placer uses.  (No deep
+# smooth-envelope embed: that produced over-long necks and forced large tip-z
+# lifts.)  It is trivially in real material, so no separate connection gate.
+_GREEDY_EMBED_MM: float = 0.75
 
 # Small outward standoff used for the seam / no-valid-standoff test.
 _SEAM_EPS_MM: float = _PULL_CLEARANCE_MM
@@ -212,9 +193,8 @@ def _points_inside_any(meshes: list, pts: np.ndarray, near_pt: np.ndarray, reach
 # occupies its cells (no gaps a tip could slip through).  Self-managed hash: no
 # trimesh.proximity, no per-leaf BVH, O(verts) per query.
 _LEAF_OCC_CELL_MM: float = 0.6
-# Outward step when lifting a leaf clear of obstacles, and the max total standoff
-# (own-mesh pull + clearance lift) before a leaf is deemed unplaceable and culled.
-_CLEAR_STEP_MM: float = 0.30
+# Max outward standoff (ray-cast clump exit + leaf-clearance lift) before a leaf
+# is deemed unplaceable along its normal and culled.
 _CLEAR_MAX_MM: float = 4.5
 
 
@@ -232,6 +212,21 @@ def _occ_hit(leaf_occ: set, pts: np.ndarray, cell: float) -> bool:
         if (int(c[0]), int(c[1]), int(c[2])) in leaf_occ:
             return True
     return False
+
+
+def _ray_exit_distance(mesh, p: np.ndarray, direction: np.ndarray) -> float | None:
+    """Distance from ``p`` along ``+direction`` to the FARTHEST exit of ``mesh``.
+
+    ``p`` is assumed inside ``mesh``.  A single ray cast gives the crossings
+    directly — no iterative lift search.  The farthest crossing is the point at
+    which ``p`` fully leaves the (possibly re-entrant) solid; lifting past it
+    clears the point.  Returns None if the ray finds no exit at all (unclearable
+    along this direction).  The caller culls when the distance exceeds its cap.
+    """
+    locs = mesh.ray.intersects_location(p[np.newaxis], direction[np.newaxis])[0]
+    if len(locs) == 0:
+        return None
+    return float(np.linalg.norm(locs - p[np.newaxis], axis=1).max())
 
 
 # ── Candidate generation ──────────────────────────────────────────────────────
@@ -270,23 +265,26 @@ def _sample_surface(mesh: trimesh.Trimesh, n: int, rng: np.random.Generator):
 
 
 def _growth_tangent(normal: np.ndarray, base: np.ndarray, centroid: np.ndarray) -> np.ndarray:
-    """Steepest-descent growth direction in the local tangent plane.
+    """Horizontal-outward growth direction in the local tangent plane.
 
-    Projects world-down onto the tangent plane (same rule the meridian placer
-    uses).  Near-horizontal surfaces (apex) fall back to radially outward from
-    the cluster centroid.
+    The leaf grows horizontally away from the cluster axis (radial in XY),
+    projected onto the surface tangent plane — so it comes out level "along its
+    bottom" rather than drooping downward.  On the upper canopy this tips the
+    blade slightly upward (tip above the root), giving the tip-z ordering for
+    free with no post-hoc lift.  Falls back to steepest ascent near a vertical
+    surface where the horizontal projection degenerates.
     """
-    down = np.array([0.0, 0.0, -1.0])
-    d = down - float(np.dot(down, normal)) * normal
-    dl = float(np.linalg.norm(d))
-    if dl > 1e-6:
-        return d / dl
-    radial = base - centroid
-    radial[2] = 0.0
-    radial = radial - float(np.dot(radial, normal)) * normal
-    rl = float(np.linalg.norm(radial))
-    if rl > 1e-6:
-        return radial / rl
+    radial = np.array([base[0] - centroid[0], base[1] - centroid[1], 0.0])
+    t = radial - float(np.dot(radial, normal)) * normal
+    tl = float(np.linalg.norm(t))
+    if tl > 1e-6:
+        return t / tl
+    # Degenerate (base directly above/below the axis): grow up-slope.
+    up = np.array([0.0, 0.0, 1.0])
+    u = up - float(np.dot(up, normal)) * normal
+    ul = float(np.linalg.norm(u))
+    if ul > 1e-6:
+        return u / ul
     return _safe_norm(np.array([1.0, 0.0, 0.0]) - float(normal[0]) * normal)
 
 
@@ -339,7 +337,7 @@ def _generate_candidates(
 # ── Public entry point ────────────────────────────────────────────────────────
 
 def place_leaves_greedy(
-    meshes: list[trimesh.Trimesh],          # SMOOTH (pre-noise) envelopes
+    meshes: list[trimesh.Trimesh],          # real (noised) foliage clumps
     *,
     length_mm: float,
     width_mm: float,
@@ -349,7 +347,6 @@ def place_leaves_greedy(
     outer_curve: float,
     curl_deg: float,
     lift_mm: float,
-    real_meshes: list[trimesh.Trimesh] | None = None,
     seeds: int | list[int] = 0,
     labels: str | list[str] | None = None,
     angle_jitter_deg: float = 0.0,
@@ -360,23 +357,17 @@ def place_leaves_greedy(
     row_color_fn: Callable[[int], tuple[int, int, int, int]] | None = None,
     verbose: bool = True,
 ) -> tuple[list[list[trimesh.Trimesh]], list[LeafPlacementStats]]:
-    """Greedy lowest-first leaf placement across multiple SMOOTH cluster envelopes.
+    """Greedy lowest-first leaf placement across the real (noised) foliage clumps.
 
-    ``meshes`` are the SMOOTH (pre-noise) envelopes: all generation, clearance,
-    and pull-away run against them (the clearance-free guarantee).  ``real_meshes``
-    (optional, index-aligned) are the corresponding NOISED clumps that will be
-    printed; when supplied, each accepted leaf's embedded root oval is required to
-    reach into its real clump (exact connection gate) so no leaf prints detached.
-    When omitted, a conservative smooth-envelope + noise-bound heuristic is used
-    instead.
+    Candidates are sampled on the real clump surface; each leaf's root seats a
+    fixed shallow depth just below that surface at the candidate point, and
+    burial clearance is judged against the same real clumps.
 
     Returns ``(parts_per_mesh, stats_per_mesh)`` — the same contract as
     :func:`placement.place_leaves_on_multiple_meshes`.  Meridian-only stats
     fields (``rows``, ``row_perims``, ``n_rows``) are left empty/zero.
     """
     n = len(meshes)
-    if real_meshes is not None and len(real_meshes) != n:
-        raise ValueError("real_meshes must be index-aligned with meshes")
     seeds_list: list[int] = [seeds] * n if isinstance(seeds, int) else list(seeds)
     if labels is None:
         labels_list: list[str] = [f"mesh-{i}" for i in range(n)]
@@ -449,11 +440,6 @@ def place_leaves_greedy(
 
     # Neighbour lists (AABB/bounding-sphere pruned; same rule as the meridian
     # cross-cluster prune) for the seam pre-test and the blade-burial cull.
-    # Burial is judged against the REAL (noised) neighbour clumps when supplied
-    # (a blade inside a neighbour's smooth envelope but outside its receded real
-    # surface is NOT actually buried — testing smooth would over-cull); falls
-    # back to the smooth envelopes otherwise.
-    burial_meshes = real_meshes if real_meshes is not None else meshes
     neighbours: list[list[trimesh.Trimesh]] = []       # real neighbour clumps (cheap culls)
     for mi in range(n):
         nb = []
@@ -462,7 +448,7 @@ def place_leaves_greedy(
                 continue
             gap_c = float(np.linalg.norm(bounds_centers[mi] - bounds_centers[oi]))
             if gap_c <= bounds_radii[mi] + bounds_radii[oi] + L:
-                nb.append(burial_meshes[oi])
+                nb.append(meshes[oi])
         neighbours.append(nb)
 
     # ── Global z-ordered sweep ────────────────────────────────────────────────
@@ -474,7 +460,6 @@ def place_leaves_greedy(
     n_rejected_root = 0
     n_rejected_seam = 0
     n_rejected_sat = 0
-    n_rejected_thin = 0
     n_rejected_buried = 0
 
     for cand in all_cands:
@@ -497,17 +482,6 @@ def place_leaves_greedy(
             neighbours[mi], (base + _SEAM_EPS_MM * normal)[np.newaxis], base, L,
         ):
             n_rejected_seam += 1
-            continue
-
-        # Connection guarantee (constraint 1, made provable for the smooth
-        # envelope): the root embeds _GREEDY_EMBED_MM inward along the normal.
-        # Require that embedded point to lie inside the smooth envelope, which
-        # (a) rejects thin regions where a deep embed would punch out the far
-        # side, and (b) since the point is deeper than the max inward noise
-        # amplitude, guarantees it is inside the REAL noised clump too — so the
-        # root always plugs into real material and never prints detached.
-        if not bool(meshes[mi].contains((base - _GREEDY_EMBED_MM * normal)[np.newaxis])[0]):
-            n_rejected_thin += 1
             continue
 
         # Angle jitter FIRST: pivot the growth direction T0 azimuthally about the
@@ -582,31 +556,18 @@ def place_leaves_greedy(
             L=L, W=W, embed_mm=_GREEDY_EMBED_MM,
         )
         inner_v = oval_off + pt3d[np.newaxis]
-        # C1: root oval fully embeds into the smooth envelope (small protrusions
-        # where the flat oval overshoots a convex face are tolerated up to the
-        # embed depth; deeper protrusion == rejected).
+        # C1: the root oval embeds a fixed shallow depth just below the real
+        # foliage surface at the candidate point.  Small protrusions where the
+        # flat oval overshoots a convex face are tolerated up to the embed depth;
+        # a deeper protrusion means the root would poke out of the foliage —
+        # reject.  (The root is in real material by construction, so there is no
+        # separate connection gate.)
         outside = ~meshes[mi].contains(inner_v)
         if outside.any():
             _, ov_d, _ = trimesh.proximity.closest_point(meshes[mi], inner_v[outside])
             if float(ov_d.max()) > _OVAL_PROTRUSION_TOL_MM:
                 stats.build_errors += 1
                 continue
-        # Connection gate: the embedded root oval must reach real material, else
-        # the leaf prints detached.  Exact when the noised clump is supplied
-        # (test the oval directly against it); otherwise fall back to a
-        # smooth-envelope + noise-bound proxy (an oval vertex pushed outward by
-        # the max inward erosion that is still inside smooth is provably >= that
-        # depth below the surface, hence inside the noised clump — sound only
-        # where the local normal ≈ the base normal).
-        if real_meshes is not None:
-            _connected = bool(real_meshes[mi].contains(inner_v).any())
-        else:
-            _connected = bool(
-                meshes[mi].contains(inner_v + _MAX_INWARD_EROSION_MM * normal).any()
-            )
-        if not _connected:
-            stats.build_errors += 1
-            continue
 
         # ── ACCEPTED: build the surface + solidify (once, for shipped leaves) ──
         try:
@@ -623,100 +584,73 @@ def place_leaves_greedy(
             stats.build_errors += 1
             continue
 
-        # ── Pull-away against the OWN smooth mesh (one on_surface, per placed) ─
-        cl, _, ti = proximities[mi].on_surface(surf.vertices)
-        nrm = meshes[mi].face_normals[np.asarray(ti, dtype=np.int64)]
-        signed = -np.einsum("ij,ij->i", surf.vertices - cl, nrm)   # inside positive
-        curl_mask = np.linalg.norm(surf.vertices - pt3d, axis=1) > (L / 2.0)
-        curl_signed = signed[curl_mask] if curl_mask.any() else np.empty(0)
-        burial_d = float(curl_signed.max()) if len(curl_signed) else 0.0
-
-        pull_away = 0.0
-        if burial_d > _PULL_MAX_MM:
-            stats.skipped_preburied += 1
-            continue
-        if burial_d > 0.0:
-            pull_away = burial_d + _PULL_CLEARANCE_MM
-            pull_vec = pull_away * normal
-            surf.vertices += pull_vec
-            solid.vertices[:len(surf.vertices)] += pull_vec
-            signed -= pull_away
-            burial_d = 0.0
-
-        # ── Clear ALL remaining obstacles: parent clumps + placed leaves ───────
-        # Two guarantees, lifting the blade along the surface normal:
-        #  1. No part of the blade may stay buried in ANY parent clump (its own
-        #     included — a leaf on a tilted/self-overlapping clump can grow into
-        #     the body).  Judged over the whole blade minus the base cap (which
-        #     legitimately seats at the surface) against the receded NOISED
-        #     clumps.  A leaf oriented INTO a clump cannot be lifted out along its
-        #     normal, so it hits the cap and is culled — correctly not leaf-safe.
-        #  2. No widest→tip vertex may stay buried in a previously-placed leaf.
-        #     Lowest-first ⇒ every placed leaf is lower, so this leaf sits ENTIRELY
-        #     above them; a later, higher leaf tucks ITS base over this one
-        #     (imbrication), which is why only the tip region is tested here.
-        # This runs LAST (after the tip-z lift is folded in) so the committed
-        # geometry — not an intermediate — satisfies both guarantees.  Burial
-        # clearance and tip-z ordering are enforced together: a naive "clear then
-        # lift tip-z" order let the +Z tip-z lift shove a just-cleared blade back
-        # into the clump.  Each iteration moves outward along the normal while any
-        # blade vertex is buried, else lifts +Z while the visible tip sits at/below
-        # the embedded root tip; it exits only when BOTH hold.  Both moves are
-        # up/outward, so tip-z trends up and burial trends clear; a leaf that
-        # can't satisfy both within the standoff cap is not leaf-safe and culled.
-        # Cross-clump burial: a leaf cannot be pulled clear of a NEIGHBOUR along
-        # its own normal, so neighbour burial is cull-only — but done ONCE here
-        # (not per iteration) so the dense-canopy many-neighbours cost stays
-        # bounded.  If any widest→tip blade vertex lands inside a neighbour clump
-        # the blade crosses into it — cull.  (Base→neighbour is pre-culled above.)
+        # ── Clear obstacles by lifting the blade along its normal ──────────────
+        # We only require two probe points — the blade TIP and BELLY (the lowest
+        # widest→tip vertex) — to clear every obstruction: the leaf's own clump,
+        # neighbour clumps, and previously-placed leaves.  The lift height is
+        # computed directly, not searched: for a probe inside a clump, a single
+        # ray cast along +normal gives the exit distance; for placed leaves, a
+        # short march counts cells along +normal.  The whole leaf is then lifted
+        # once by the max required distance + a tolerance.
+        base_idx = len(surf.vertices) - 2       # base_pt vertex (surface layout)
+        curl_mask = np.linalg.norm(surf.vertices - surf.vertices[base_idx], axis=1) > (L / 2.0)
+        curl_idx = np.nonzero(curl_mask)[0]
+        if len(curl_idx) == 0:
+            curl_idx = np.arange(len(surf.vertices))
+        belly_idx = int(curl_idx[int(np.argmin(surf.vertices[curl_idx, 2]))])
+        probe_pts = surf.vertices[np.array([tip_idx, belly_idx])]   # (2, 3)
         nbrs = neighbours[mi]
-        own_mesh = burial_meshes[mi]
-        if nbrs and _points_inside_any(nbrs, surf.vertices[curl_mask], pt3d, L):
-            n_rejected_buried += 1
-            stats.skipped_cross_buried += 1
-            continue
-        # A blade whose TIP is inside its OWN clump grows into the body and cannot
-        # be lifted out along the normal — cull without grinding the loop to the cap.
-        if bool(own_mesh.contains(surf.vertices[tip_idx][np.newaxis])[0]):
+        own_mesh = meshes[mi]
+
+        lift_needed = 0.0
+        cull = False
+        for cm in (own_mesh, *nbrs):
+            cb = cm.bounds
+            for p in probe_pts:
+                if (p < cb[0]).any() or (p > cb[1]).any():
+                    continue
+                if not bool(cm.contains(p[np.newaxis])[0]):
+                    continue
+                d = _ray_exit_distance(cm, p, normal)
+                if d is None:               # can't exit along the normal → not leaf-safe
+                    cull = True
+                    break
+                lift_needed = max(lift_needed, d)
+            if cull:
+                break
+        if not cull:
+            march = _LEAF_OCC_CELL_MM * 0.5
+            for p in probe_pts:
+                d = 0.0
+                while d <= _CLEAR_MAX_MM and _occ_hit(
+                    leaf_occ, (p + d * normal)[np.newaxis], _LEAF_OCC_CELL_MM
+                ):
+                    d += march
+                # Overshoot one cell so the lifted vertex lands clearly inside the
+                # free cell rather than on the occupied cell's boundary.
+                if d > 0.0:
+                    d += _LEAF_OCC_CELL_MM
+                lift_needed = max(lift_needed, d)
+        if cull or lift_needed + _PULL_CLEARANCE_MM > _CLEAR_MAX_MM:
             n_rejected_buried += 1
             stats.skipped_cross_buried += 1
             continue
 
-        oval_tip_i = len(surf.vertices) + tip_idx
+        pull_away = (lift_needed + _PULL_CLEARANCE_MM) if lift_needed > 1e-9 else 0.0
+        if pull_away > 0.0:
+            lift_vec = pull_away * normal
+            surf.vertices += lift_vec
+            solid.vertices[:len(surf.vertices)] += lift_vec
+
+        # Tip-z ordering (visible tip above the root tip so the leaf reads as
+        # growing outward, not drooping) is obtained for free from the horizontal
+        # growth direction — no post-hoc +Z lift, which used to shove a cleared
+        # blade back into the clump.
+        burial_d = 0.0
         tip_z_lift = 0.0
-        still_buried = False
-        while True:
-            buried = (
-                _occ_hit(leaf_occ, surf.vertices[curl_mask], _LEAF_OCC_CELL_MM)
-                or bool(own_mesh.contains(surf.vertices).any())
-            )
-            tip_z_clearance = float(solid.vertices[tip_idx, 2] - solid.vertices[oval_tip_i, 2])
-            tip_z_ok = tip_z_clearance >= _TIP_Z_CLEARANCE_MM
-            if not buried and tip_z_ok:
-                break
-            if pull_away + _CLEAR_STEP_MM > _CLEAR_MAX_MM:
-                still_buried = True
-                break
-            if buried:
-                step_vec = _CLEAR_STEP_MM * normal          # lift clear along normal
-                signed -= _CLEAR_STEP_MM
-            else:
-                step_vec = np.array([0.0, 0.0, _CLEAR_STEP_MM])   # +Z for tip-z ordering
-                tip_z_lift += _CLEAR_STEP_MM
-            surf.vertices += step_vec
-            solid.vertices[:len(surf.vertices)] += step_vec
-            pull_away += _CLEAR_STEP_MM
-        if still_buried:
-            n_rejected_buried += 1
-            stats.skipped_cross_buried += 1
-            continue
+        oval_tip_i = len(surf.vertices) + tip_idx
         tip_z_clearance = float(solid.vertices[tip_idx, 2] - solid.vertices[oval_tip_i, 2])
-
-        curl_signed = signed[curl_mask] if curl_mask.any() else np.empty(0)
-        float_d = (
-            float((-curl_signed[curl_signed < 0.0]).max())
-            if np.any(curl_signed < 0.0) else 0.0
-        )
+        float_d = pull_away           # standoff from the seated pose (stat only)
 
         # ── COMMIT ────────────────────────────────────────────────────────────
         _shingle_write(occ, cells, layer)
@@ -753,7 +687,7 @@ def place_leaves_greedy(
         print(
             f"\n── greedy leaf placement ──  {placed} placed  "
             f"({len(all_cands)} candidates: root-rej={n_rejected_root} "
-            f"seam-rej={n_rejected_seam} thin-rej={n_rejected_thin} "
+            f"seam-rej={n_rejected_seam} "
             f"sat-rej={n_rejected_sat} buried-rej={n_rejected_buried})  {elapsed:.3f}s\n"
         )
 

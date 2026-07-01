@@ -152,9 +152,6 @@ def build_branch_mesh(
     # isolation left every cluster blind to its neighbours, so the cross-cluster
     # cull and the shared shingle occupancy never engaged on real trees.
     foliage_clumps: list[tuple[trimesh.Trimesh, int]] = []
-    # Smooth (pre-noise) envelope clumps, collected only for the greedy placer.
-    # Populated in parallel with foliage_clumps when leaf_placement == "greedy".
-    foliage_clumps_smooth: list[tuple[trimesh.Trimesh, int]] = []
 
     while queue:
         i = queue.pop(0)
@@ -295,40 +292,6 @@ def build_branch_mesh(
                 foliage_solids.append(clump)
                 if leaves and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
                     foliage_clumps.append((clump, i))
-                    # Greedy placement runs on the pre-noise (smooth) envelope.
-                    # Cluster noise only erodes inward, so this envelope is the
-                    # strict outer surface: building on / clearing against it is
-                    # provably safe against the real noisy clump (see
-                    # placement_greedy).  Same topology as the noised clump.
-                    if leaf_placement == "greedy":
-                        clump_smooth, _ = _build_foliage_cluster_mesh(
-                            tip_pos=p3,
-                            tip_tangent=_bt_end,
-                            start_pos=clump_start_pos,
-                            start_tangent=clump_start_tan,
-                            r_wood=r_end_wood,
-                            r_foliage=foliage_cluster_radius_mm,
-                            clump_length_mm=cluster_len,
-                            edge_id=i,
-                            bark_seed=bark_seed,
-                            leaves=False,
-                            leaf_length_mm=leaf_length_mm,
-                            leaf_width_mm=leaf_width_mm,
-                            leaf_thickness_mm=leaf_thickness_mm,
-                            leaf_fold_angle_deg=leaf_fold_angle_deg,
-                            leaf_inner_curve=leaf_inner_curve,
-                            leaf_outer_curve=leaf_outer_curve,
-                            leaf_curl_deg=leaf_curl_deg,
-                            leaf_lift_mm=leaf_lift_mm,
-                            leaf_h_overlap=leaf_h_overlap,
-                            leaf_v_overlap=leaf_v_overlap,
-                            leaf_arc_meridians=leaf_arc_meridians,
-                            leaf_arc_z_samples=leaf_arc_z_samples,
-                            leaf_angle_jitter_deg=leaf_angle_jitter_deg,
-                            leaf_pos_jitter=leaf_pos_jitter,
-                            apply_noise=False,
-                        )
-                        foliage_clumps_smooth.append((clump_smooth, i))
             leaf_solids.extend(clump_leaves)
 
         node_frame[i] = end_frame
@@ -368,15 +331,12 @@ def build_branch_mesh(
             )
         else:  # leaf_placement == "greedy"
             from .placement_greedy import place_leaves_greedy
-            # The greedy placer runs on the SMOOTH (pre-noise) envelopes so its
-            # analytic clearance guarantees hold (see placement_greedy docstring).
-            # The NOISED clumps (foliage_clumps, index-aligned) are passed as
-            # real_meshes so the per-leaf root-connection gate is exact.
-            _clump_meshes = [c for c, _ in foliage_clumps_smooth]
-            _clump_real   = [c for c, _ in foliage_clumps]
+            # The greedy placer works directly on the real (noised) clumps: leaf
+            # roots seat just below the actual foliage surface (fixed shallow
+            # embed) and clearance is judged against the real surface.
+            _clump_meshes = [c for c, _ in foliage_clumps]
             _leaf_parts, _ = place_leaves_greedy(
                 _clump_meshes,
-                real_meshes    = _clump_real,
                 length_mm      = leaf_length_mm,
                 width_mm       = leaf_width_mm,
                 thickness_mm   = leaf_thickness_mm,

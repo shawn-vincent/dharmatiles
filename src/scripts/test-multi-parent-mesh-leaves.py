@@ -413,19 +413,10 @@ def main() -> None:
 
     if placement == "greedy":
         print("  Placing leaves on A and B via GREEDY lowest-first accretion …")
-        # Greedy runs on the SMOOTH envelopes; the noised ca/cb are the real
-        # clumps used for the exact per-leaf root-connection gate.
-        ca_s = _make_cluster(
-            cx=0.0, cy=0.0, z_tip=Z_TIP, tip_t=t_vert, start_t=t_vert,
-            edge_id=0, bark_seed=33, label="A", apply_noise=False,
-        )
-        cb_s = _make_cluster(
-            cx=6.0, cy=2.0, z_tip=Z_TIP + 1.0, tip_t=t_55, start_t=t_35,
-            edge_id=1, bark_seed=44, label="B", apply_noise=False,
-        )
+        # Greedy works directly on the real (noised) clumps ca/cb: roots seat
+        # just below the actual foliage surface.
         parts_list, stats_list = place_leaves_greedy(
-            [ca_s, cb_s],
-            real_meshes      = [ca, cb],
+            [ca, cb],
             length_mm        = _PLACE_KW["length_mm"],
             width_mm         = _PLACE_KW["width_mm"],
             thickness_mm     = _PLACE_KW["thickness_mm"],
