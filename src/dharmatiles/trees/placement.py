@@ -81,6 +81,16 @@ _SHINGLE_DELTA_MM: float = 0.30     # per-layer outward standoff (≈ leaf thick
 _SHINGLE_FOOTPRINT_SCALE: float = 0.80
 _SHINGLE_PHI_CELL: float = 2.0 * math.pi / _SHINGLE_PHI_CELLS
 
+# ── Cross-cluster culling (Option A prototype) ────────────────────────────────
+# When two foliage clusters intersect, a leaf whose base sits on the part of one
+# cluster's surface that lies INSIDE another cluster is a "buried-base" leaf: its
+# root plugs into its own cluster but the blade phases out through the other
+# cluster's skin (the "half cut off" artefact).  Before building geometry, the
+# base position is tested against every OTHER cluster's solid via its
+# ProximityQuery.signed_distance (inside = positive in trimesh); if the base is
+# inside another cluster by more than this tolerance, the slot is culled.
+_CROSS_CLUSTER_BURY_TOL_MM: float = 0.0
+
 
 def _shingle_cells(
     phi: float, s_center: float, ring_r: float, W: float, L: float,
@@ -158,6 +168,7 @@ class LeafPlacementStats:
     skipped_small_r: int = 0   # local_r < 1.0 mm (too close to centroid)
     skipped_preburied: int = 0  # post-placement: curl region buried > _PREBURIED_DEPTH_MM
     skipped_below_floor: int = 0  # midrib tip (base + L*tangent) below mesh z_min
+    skipped_cross_buried: int = 0  # base inside another cluster's solid (Option A cull)
     contact_angle_clamped: int = 0  # initial contact angle ≥ π/2, clamped to max
     build_errors: int = 0      # RuntimeError / ValueError from leaf builder
     # Per-row data: (z, attempted, placed) — one entry per generated row
@@ -443,6 +454,9 @@ class _MeshCtx:
     # Shingle occupancy grid: (phi_bin, s_bin) → bitmask of occupied layers.
     # Shared across all rows of this mesh; grows as leaves are placed.
     occ:          dict = dataclasses.field(default_factory=dict)
+    # Proximity queries for every OTHER cluster (Option A cross-cluster cull).
+    # A leaf slot whose base lies inside any of these solids is skipped.
+    other_prox:   list = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -839,6 +853,24 @@ def _place_leaf_slot(
         up_hint * math.cos(contact_angle_rad) + T0 * math.sin(contact_angle_rad)
     )
 
+    # ── Cross-cluster cull (Option A) ──────────────────────────────────────
+    # The offensive artefacts are leaves whose BASE sits on this cluster's
+    # exposed surface but whose BLADE grows across into a neighbouring cluster —
+    # "half cut off" where the neighbour's skin clips the blade, and blade-on-
+    # blade intersections inside the neighbour.  A base-only containment test
+    # misses these (the base is not buried).  Instead, sample points along the
+    # midrib (base, mid, tip ≈ base + f·L·tangent) and cull if ANY lands inside
+    # a neighbouring solid.  signed_distance is positive INSIDE the mesh in
+    # trimesh.  Done before geometry is built; reuses the per-mesh BVH.
+    if ctx.other_prox:
+        _midrib = pt3d[np.newaxis, :] + (
+            np.array([0.0, 0.5, 1.0])[:, np.newaxis] * (L * tangent)[np.newaxis, :]
+        )
+        for _oprox in ctx.other_prox:
+            if (_oprox.signed_distance(_midrib) > _CROSS_CLUSTER_BURY_TOL_MM).any():
+                stats.skipped_cross_buried += 1
+                return 0, 0
+
     # ── Imbrication (shingling) ────────────────────────────────────────────
     # Decide this leaf's normal-offset layer from the shared (phi, s) occupancy
     # grid, then stand the blade off the surface by layer×delta along the
@@ -1094,6 +1126,12 @@ def place_leaves_on_multiple_meshes(
         contexts.append(ctx)
         for ri, z in enumerate(row_zs):
             all_rows.append((z, mi, ri))
+
+    # Cross-cluster cull (Option A): give each context the proximity queries of
+    # every OTHER cluster so buried-base slots can be skipped before any geometry
+    # is built.  Single-cluster runs get an empty list and are unaffected.
+    for mi, ctx in enumerate(contexts):
+        ctx.other_prox = [c.proximity for oi, c in enumerate(contexts) if oi != mi]
 
     # ── Phase 2: place rows in ascending global z, batching same-z rows ─────────
     # Rows at exactly the same z are collected into one batch; their combined

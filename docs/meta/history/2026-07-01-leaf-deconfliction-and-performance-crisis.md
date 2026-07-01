@@ -920,3 +920,112 @@ tall necks where the dome already crests.  Two root causes, both fixed:
 `v_overlap` up to overlap more); shingling engages automatically when leaves
 genuinely overlap.  Next: generalise to tree scale and tune `DELTA_MM`/overlap
 on a full tile.
+
+---
+
+## Cross-Cluster Intersection — Options Review + Option A Prototype (2026-07-01)
+
+The imbrication work above solves **within-cluster** leaf overlap.  A separate
+failure remains: when **two foliage clusters intersect** (the multi-parent-mesh
+test's A + B), leaves are placed on each cluster independently, so the shingle
+map (`_MeshCtx.occ`) — being **per-mesh** — is blind across clusters.
+
+### The "intersection" is really three distinct failures
+
+1. **Buried-base leaves** — a leaf whose root oval sits on the part of A's
+   surface that is *inside* B.  These are the "half cut off" ones: base plugs
+   into A, blade phases out through B's skin.  Should not exist at all.
+2. **Cross-cluster skewering** — one leaf from A, one from B, both on genuinely
+   exposed surface near the seam, phasing through each other coplanar.  Exactly
+   the intra-cluster problem the `(phi, s)` shingle map already solves — but the
+   map is per-`_MeshCtx`, so A and B can't see each other's layers.
+3. **Inward-pointing leaves** — leaves on A's surface that faces *into* B.  Even
+   after removing the truly-buried ones (#1), a leaf on the still-exposed inner
+   flank of the seam grows toward B's body instead of out of the combined
+   silhouette.
+
+Every coordinate the placer uses (`phi` = ray from *this* cluster's 2-D
+centroid via `_polygon_point_at_phi`; `s` = arc along *this* cluster's
+meridians; `occ`) is defined per single axis per blob, so the pipeline
+structurally cannot see any of the three.
+
+### Options considered (with tradeoffs)
+
+- **A — Cull only (cheapest).** Keep independent per-cluster placement; before
+  building a slot, test whether its base is inside any *other* cluster's solid;
+  skip if so.  Fixes #1 fully and most of #3 as a side effect; **misses #2**
+  (survivors still skewer).  No change to the meridian model.
+- **B — Cull + shared world-space shingle occupancy.** A, plus replace per-mesh
+  `occ` with one occupancy structure in world space (two clusters don't share a
+  `(phi,s)` frame).  Fixes #1 + #2 + most of #3.  Loses the cheap 2-D on-surface
+  grid; layering across differently-oriented surfaces is approximate.
+- **C — Union to one shell, place once (the "single parent mesh" idea).** CSG-
+  union (manifold3d already a dep) → one outer surface, one `occ`.  Fixes #1/#2
+  for free, #3 on convex parts.  **Catch:** the union is non-star-convex —
+  `_polygon_point_at_phi` casts from ONE centroid per z-slice, but the union's
+  cross-section is two disjoint loops (below merge) or a concave peanut (at the
+  merge).  Requires rewriting meridians for multi-loop / non-convex sections
+  AND handling the concave crease (two walls facing each other — #3 relocates
+  into the crease rather than vanishing).  Largest effort.
+- **D — Union for *classification*, per-cluster for *placement* (hybrid).** Use
+  CSG only to answer "is this slot on the true outer shell?" (robust cull),
+  keep per-cluster placement on the exposed parts, pair with B's shared
+  occupancy for #2.  Same coverage as B with a cleaner cull; no meridian
+  rewrite.
+
+### Decision
+
+**Recommended end-state: D, not C.**  C trades a bounded problem (two overlapping
+blobs) for an open-ended one (a general non-convex surface placer with concave-
+crease handling).  D keeps what the model is good at (outward-shingled leaves on
+a convex-ish blob) and borrows CSG only for the exposed-surface predicate.
+
+**Immediate step (this session): prototype Option A** — cull buried bases only —
+to *see* how much of the artifact is just #1 before investing in shared
+occupancy (B/D).  Open question the render should answer: is a bald, recessed
+seam acceptable (real stylized foliage has a shadowed valley where clumps meet)?
+If yes, #3's hard residue disappears and C loses its only edge over D.
+
+### Option A prototype — implementation
+
+All in `src/dharmatiles/trees/placement.py`:
+
+- `_CROSS_CLUSTER_BURY_TOL_MM` module constant (mm a base may sit *inside*
+  another cluster before it is culled).
+- `_MeshCtx.other_prox: list[ProximityQuery]` — the other clusters' proximity
+  queries, populated after all contexts are built in
+  `place_leaves_on_multiple_meshes`.
+- `LeafPlacementStats.skipped_cross_buried` counter.
+- In `_place_leaf_slot`, right after the base `pt3d` is computed (before any
+  geometry build), query each `other_prox.signed_distance([pt3d])`; if the base
+  is inside another cluster by more than the tolerance, increment the counter
+  and return `(0, 0)` (culled — not counted as attempted).
+
+`signed_distance` sign convention in trimesh: **inside = positive**.  Reuses the
+`ProximityQuery`/BVH already built per mesh; no new `contains` ray engine, no
+`closest_point`, no R-tree — consistent with the standing hard constraints.
+
+The multi-parent-mesh test (`src/scripts/test-multi-parent-mesh-leaves.py`)
+prints the new `xbury=` count per cluster in its skip line.  Render the three
+views and eyeball whether culling buried bases alone reads acceptably.
+
+### Correction — base-only cull was invisible; must sample the whole midrib
+
+First render showed **no visible change** (`xbury=4/5`, 9 leaves).  Reason: a
+**base-inside** test only catches leaves whose *root* is buried — and those are
+exactly the "leaves rendered inside the structure (fine)" category the user
+already accepted (deep inside, invisible).  The **offensive** leaves ("half cut
+off", intersecting) have their base on the cluster's *exposed* surface and their
+**blade** crossing into the neighbour — the base test misses them entirely.
+
+Fix: moved the cull to *after* the growth `tangent` is known and sample points
+along the **midrib** (`pt3d + f·L·tangent` for `f ∈ {0, 0.5, 1.0}`); cull if ANY
+sample lands inside a neighbouring solid.  `signed_distance` takes the 3 points
+in one call per neighbour; still no BVH rebuild, no `closest_point`.
+
+Result on the two-cluster test: `xbury=12` on A, `xbury=8` on B (20 culled vs 9
+before).  The seam tangle — leaves jutting through the other cluster's skin — is
+gone, replaced by exposed cluster body (bald recessed seam), runtime unchanged
+(~4.9 s).  This is the intended Option A signature; whether the bald seam reads
+acceptably (vs. wanting the seam filled + shingled, i.e. Option B/D) is the
+open decision.

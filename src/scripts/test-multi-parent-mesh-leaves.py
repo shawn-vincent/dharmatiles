@@ -224,7 +224,8 @@ def _check_artifacts(all_stats: list[LeafPlacementStats]) -> int:
             f"  placed={stats.n_placed}  rows={stats.n_rows}  "
             f"attempted={stats.n_attempted}  "
             f"skip(down={stats.skipped_downward} r={stats.skipped_small_r} "
-            f"preburied={stats.skipped_preburied} floor={stats.skipped_below_floor})  "
+            f"preburied={stats.skipped_preburied} floor={stats.skipped_below_floor} "
+            f"xbury={stats.skipped_cross_buried})  "
             f"errors={stats.build_errors}"
         )
         if stats.rows:
