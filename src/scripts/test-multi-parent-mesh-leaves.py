@@ -3,9 +3,10 @@
 Multi-parent-mesh leaf placement test — two intersecting irregular foliage clusters.
 
 Two foliage clusters occupy overlapping regions of 3D space.  Leaves are placed
-via place_leaves_on_multiple_meshes, which processes each mesh independently with
-its own BVH.  Rows from both meshes are interleaved globally by ascending z, so
-bottom-most leaves on both clusters are placed before upper rows on either.
+via place_leaves_on_multiple_meshes, which keeps per-mesh BVHs for surface
+queries but shares one world-space shingle occupancy grid across the clusters.
+Rows from both meshes are interleaved globally by ascending z, so bottom-most
+leaves on both clusters are placed before upper rows on either.
 
 No jitter, no overlap (hardcoded defaults for this test).
 
@@ -253,6 +254,20 @@ def _check_artifacts(all_stats: list[LeafPlacementStats]) -> int:
                 f"median={float(np.median(stats.leaf_buried_depths)):.2f}  "
                 f"max={max(stats.leaf_buried_depths):.2f}  buried={n_buried}"
             )
+        if stats.tip_z_clearances:
+            lifted = [d for d in stats.tip_z_lifts if d > 0.0]
+            print(
+                f"  tip z clearance mm: "
+                f"min={min(stats.tip_z_clearances):.2f}  "
+                f"median={float(np.median(stats.tip_z_clearances)):.2f}  "
+                f"max={max(stats.tip_z_clearances):.2f}  "
+                f"blade_lifted={len(lifted)}"
+            )
+            if lifted:
+                print(
+                    f"  tip z correction mm: "
+                    f"median={float(np.median(lifted)):.2f}  max={max(lifted):.2f}"
+                )
         for issue in issues:
             print(f"  ✗ {issue}")
         if not issues:
@@ -386,7 +401,7 @@ def main() -> None:
 
     print(f"  Cluster A: {len(ca.vertices):,}v / {len(ca.faces):,}f")
     print(f"  Cluster B: {len(cb.vertices):,}v / {len(cb.faces):,}f")
-    print("  Placing leaves on A and B independently, interleaved by global z …")
+    print("  Placing leaves on A and B with shared world-space shingling …")
 
     parts_list, stats_list = place_leaves_on_multiple_meshes(
         [ca, cb],

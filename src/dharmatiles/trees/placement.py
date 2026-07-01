@@ -56,74 +56,119 @@ _FLOOR_TOL_MM: float = 0.1
 # it.  A strict all-inside test rejected such leaves and left bald stripes on
 # the leeward/windward faces of tilted clusters; this tolerance keeps them.
 _OVAL_PROTRUSION_TOL_MM: float = 0.75
+# Minimum world-Z clearance required between the visible blade tip and the
+# embedded root-oval tip.  The root remains plugged at the parent surface; only
+# the blade surface is raised, and only by the sub-mm amount needed to preserve
+# the expected visual ordering.
+_TIP_Z_CLEARANCE_MM: float = 0.02
 
 # ── Imbrication (shingling) ───────────────────────────────────────────────────
 # Overlapping leaves are staggered along the surface normal so they stack into
-# layers instead of phasing through one another coplanar.  A coarse occupancy
-# grid in (phi, s) surface coordinates — shared across ALL rows of a mesh —
-# records, per cell, a bitmask of occupied normal-offset *layers*.  Each new
-# leaf takes the lowest layer free across the cells its W×L footprint covers
-# (greedy lowest-free colouring, which bounds the layer count to the local
-# overlap multiplicity), then stands its *blade* off the surface by
-# layer×_SHINGLE_DELTA_MM along the surface normal.  The root oval stays plugged
-# at the surface, so the leaf never detaches — solidify_leaf just builds a taller
-# connecting neck.  Fully proactive: the layer is chosen before any geometry is
-# built; no BVH, no closest_point, no reactive retry.
-_SHINGLE_PHI_CELLS: int = 180       # angular resolution of the occupancy grid (2° cells)
-_SHINGLE_S_CELL_FRAC: float = 0.25  # meridional cell size as a fraction of leaf length L
+# layers instead of phasing through one another coplanar.  A coarse world-space
+# voxel occupancy grid, shared across all meshes in a placement run, records per
+# cell a bitmask of occupied normal-offset *layers*.  Each new leaf takes the
+# lowest layer free across the cells its W×L footprint covers (greedy lowest-free
+# colouring, which bounds the layer count to the local overlap multiplicity),
+# then stands its *blade* off the surface by layer×_SHINGLE_DELTA_MM along the
+# surface normal.  The root oval stays plugged at the surface, so the leaf never
+# detaches — solidify_leaf just builds a taller connecting neck.  Fully
+# proactive: the layer is chosen before any geometry is built; no BVH, no
+# closest_point, no reactive retry.
 _SHINGLE_MAX_LAYERS: int = 4        # cap on distinct layers (bounds total standoff)
 _SHINGLE_DELTA_MM: float = 0.30     # per-layer outward standoff (≈ leaf thickness)
+_SHINGLE_WORLD_CELL_MM: float = 1.25  # voxel edge length (≈ 1/4 of the default 4.5mm leaf)
 # Footprint is the leaf's overlapping *core*, scaled below its full W×L so that
 # merely touch-packed leaves (spaced exactly one leaf-width/length apart, as at
 # h_overlap=v_overlap=0) do NOT register as overlapping and stay on layer 0.
 # Only leaves that genuinely overlap by more than (1−scale) of a dimension get
 # bumped to a higher shingle layer.
 _SHINGLE_FOOTPRINT_SCALE: float = 0.80
-_SHINGLE_PHI_CELL: float = 2.0 * math.pi / _SHINGLE_PHI_CELLS
 
-# ── Cross-cluster culling (Option A prototype) ────────────────────────────────
-# When two foliage clusters intersect, a leaf whose base sits on the part of one
-# cluster's surface that lies INSIDE another cluster is a "buried-base" leaf: its
-# root plugs into its own cluster but the blade phases out through the other
-# cluster's skin (the "half cut off" artefact).  Before building geometry, the
-# base position is tested against every OTHER cluster's solid via its
-# ProximityQuery.signed_distance (inside = positive in trimesh); if the base is
-# inside another cluster by more than this tolerance, the slot is culled.
-_CROSS_CLUSTER_BURY_TOL_MM: float = 0.0
+# ── Cross-cluster culling ─────────────────────────────────────────────────────
+# When foliage clusters intersect, a leaf on one cluster can grow across into a
+# neighbour ("half cut off" where the neighbour's skin clips the blade, or a
+# blade-on-blade skewer).  Every leaf is tested against neighbouring cluster
+# solids via embree `mesh.contains` (fast inside/outside; embreex is a hard dep):
+#   - a cheap pre-build pass on the midrib centerline drops obviously-buried
+#     slots before geometry is built;
+#   - a final pass on the built + pulled-away blade surface removes leaves that
+#     intersect a neighbour with their blade width / curl, or that pull-away
+#     pushed in (the centerline pass, run before pull-away, misses these).
+# A leaf is culled when at least this FRACTION of its blade-surface vertices land
+# inside a neighbouring cluster.  Fraction (not absolute count) so the threshold
+# is independent of leaf tessellation.  This removes skewering leaves (blade
+# straddling a neighbour's skin) and fully-buried leaves (invisible — dropping
+# them also cuts face count), while keeping leaves that merely graze a seam.
+_CROSS_CLUSTER_BLADE_INSIDE_FRAC: float = 0.30
+
+# ── Analytic contact angle + normal pull-away ─────────────────────────────────
+# The old contact solve made the lean angle do two jobs at once: orient the leaf
+# AND keep it from penetrating the parent mesh.  The non-penetration job forced
+# sub-degree precision, so it was solved by a ~9-eval mesh bisection over a
+# ~140-point candidate cloud — the dominant cost of tree-tile generation.
+#
+# These two jobs are decoupled here:
+#   1. Lean is solved in CLOSED FORM (_contact_angle_analytic) — the belly-dip
+#      grazing angle against a locally-planar surface model.  No iteration.
+#   2. Non-penetration is handled by a separate outward TRANSLATION of the blade
+#      surface along the surface normal ("pull-away") until it clears the mesh.
+#      This is a translation, NOT `lift` (which is a rotation about the base) and
+#      NOT the shingle standoff (which stacks overlapping leaves).  The root oval
+#      stays plugged at the surface; solidify_leaf just builds a taller neck, the
+#      same mechanism the shingle offset already relies on.
+# Because pull-away absorbs any residual penetration, the closed-form lean need
+# not be exact.  Consequence: leaves stand off slightly more on strongly-curved
+# regions (apex, small clusters), and buried leaves that the old path REJECTED
+# now get pulled out and placed (coverage can rise).
+_ANALYTIC_CONTACT: bool = True
+# Extra outward clearance (mm) added on top of the measured penetration depth.
+_PULL_CLEARANCE_MM: float = 0.05
+# Max pull-away (mm).  A leaf still penetrating by more than this after the
+# analytic lean is genuinely stuck inside the mesh and is rejected (preburied).
+_PULL_MAX_MM: float = 3.0
+# When True, measure the surface normal at the belly-dip point (1 extra proximity
+# eval per leaf) to capture local curvature and reduce standoff; when False, use
+# the base normal (0 extra evals — leaves stand off more on curved regions).
+_ANALYTIC_MEASURE_BELLY: bool = True
 
 
-def _shingle_cells(
-    phi: float, s_center: float, ring_r: float, W: float, L: float,
-) -> list[tuple[int, int]]:
-    """Occupancy-grid cells covered by a leaf's W×L footprint in (phi, s) space.
+def _shingle_world_cells(
+    base: np.ndarray,
+    tangent: np.ndarray,
+    lat: np.ndarray,
+    W: float,
+    L: float,
+    cell_mm: float,
+) -> list[tuple[int, int, int]]:
+    """World-voxel cells covered by a leaf's W×L footprint core.
 
-    phi is a global azimuth about the cluster axis (radians); s_center is the
-    meridional surface arc-length at the leaf base.  The circumferential half-
-    width W/2 is converted to an angular half-width via *ring_r* — the ring
-    radius at the leaf's mid-length, where its body actually sits — not the base
-    radius, which collapses toward zero at the apex and would make a single leaf
-    claim the entire ring (forcing every apex leaf onto its own layer).  The
-    half-width is also capped at π/2 so no leaf ever occupies more than half the
-    ring.  The meridional extent is L centred on s_center.  phi bins wrap modulo
-    the full circle so a leaf near phi≈0 and one near phi≈2π share cells.
+    The footprint is sampled from the unoffset surface position, not the
+    layer-offset blade position, so two overlapping leaves map to the same cells
+    regardless of which standoff layer they receive.
     """
-    W_eff    = W * _SHINGLE_FOOTPRINT_SCALE
-    L_eff    = L * _SHINGLE_FOOTPRINT_SCALE
-    half_phi = min((W_eff / 2.0) / max(ring_r, 1e-3), math.pi / 2.0)
-    s_cell   = max(L * _SHINGLE_S_CELL_FRAC, 1e-3)
-    iphi_lo  = int(math.floor((phi - half_phi) / _SHINGLE_PHI_CELL))
-    iphi_hi  = int(math.floor((phi + half_phi) / _SHINGLE_PHI_CELL))
-    is_lo    = int(math.floor((s_center - L_eff / 2.0) / s_cell))
-    is_hi    = int(math.floor((s_center + L_eff / 2.0) / s_cell))
-    cells: list[tuple[int, int]] = []
-    for iphi in range(iphi_lo, iphi_hi + 1):
-        wphi = iphi % _SHINGLE_PHI_CELLS
-        for is_ in range(is_lo, is_hi + 1):
-            cells.append((wphi, is_))
-    return cells
+    cell = max(float(cell_mm), 1e-3)
+    W_eff = float(W) * _SHINGLE_FOOTPRINT_SCALE
+    L_eff = float(L) * _SHINGLE_FOOTPRINT_SCALE
+    # Keep the reduced footprint centred on the physical blade span from base
+    # to tip: at scale=0.8 this samples 10%..90% of the length.
+    along = np.linspace((float(L) - L_eff) / 2.0, (float(L) + L_eff) / 2.0, 5)
+    across = np.linspace(-W_eff / 2.0, W_eff / 2.0, 3)
+    cells: set[tuple[int, int, int]] = set()
+    base_arr = np.asarray(base, dtype=float)
+    T = _safe_norm(np.asarray(tangent, dtype=float))
+    A = _safe_norm(np.asarray(lat, dtype=float))
+    for a in along:
+        for w in across:
+            p = base_arr + a * T + w * A
+            cells.add((
+                int(math.floor(float(p[0]) / cell)),
+                int(math.floor(float(p[1]) / cell)),
+                int(math.floor(float(p[2]) / cell)),
+            ))
+    return list(cells)
 
 
-def _shingle_pick_layer(occ: dict, cells: list[tuple[int, int]]) -> int:
+def _shingle_pick_layer(occ: dict, cells: list[tuple[int, ...]]) -> int:
     """Lowest normal-offset layer free across every covered cell (greedy colouring).
 
     ORs the layer bitmasks of all covered cells, then returns the index of the
@@ -140,7 +185,7 @@ def _shingle_pick_layer(occ: dict, cells: list[tuple[int, int]]) -> int:
     return min(layer, _SHINGLE_MAX_LAYERS - 1)
 
 
-def _shingle_write(occ: dict, cells: list[tuple[int, int]], layer: int) -> None:
+def _shingle_write(occ: dict, cells: list[tuple[int, ...]], layer: int) -> None:
     """Mark *layer* occupied in every covered cell."""
     bit = 1 << layer
     for c in cells:
@@ -186,6 +231,13 @@ class LeafPlacementStats:
     leaf_buried_depths: list[float] = dataclasses.field(default_factory=list)
     # Per-leaf shingle layer (0 = flat on surface, n = stood off by n×delta).
     shingle_layers: list[int] = dataclasses.field(default_factory=list)
+    # Per-leaf: visible blade-tip z minus embedded root-oval-tip z, after any
+    # tiny blade-only correction.  Should never be negative for placed leaves.
+    tip_z_clearances: list[float] = dataclasses.field(default_factory=list)
+    tip_z_lifts: list[float] = dataclasses.field(default_factory=list)
+    # Per-leaf: outward normal translation applied to slide the blade clear of the
+    # parent mesh (analytic-contact path).  0 = blade already clear at the lean.
+    pull_aways: list[float] = dataclasses.field(default_factory=list)
     # Per-row perimeter (sum of all polygon perimeters in that cross-section slice)
     row_perims: list[float] = dataclasses.field(default_factory=list)
     # Geometry parameters (filled in once after the row loop)
@@ -327,6 +379,127 @@ def _leaf_contact_candidates(
     return pts[base_d > (float(length_mm) / 2.0)]
 
 
+def _leaf_belly_dip(
+    *,
+    length_mm:      float,
+    width_mm:       float,
+    thickness_mm:   float,
+    fold_angle_deg: float,
+    inner_curve:    float,
+    outer_curve:    float,
+    curl_deg:       float,
+    lift_mm:        float,
+) -> tuple[float, float]:
+    """Canonical (d_along, d_normal) of the leaf's belly-dip vertex.
+
+    The belly dip is the tip-half midrib vertex with the smallest normal
+    displacement — the point that presses into the parent mesh first as the
+    contact angle grows (the binding constraint used by _contact_angle_for_sphere
+    and now by _contact_angle_analytic).  Shape-only: independent of placement, so
+    it is computed once per placement run and threaded into every slot.
+    """
+    g = compute_leaf_geometry(
+        base_pos=np.zeros(3, dtype=float),
+        tangent=np.array([1.0, 0.0, 0.0]),
+        up_hint=np.array([0.0, 0.0, 1.0]),
+        length_mm=length_mm, width_mm=width_mm,
+        thickness_mm=thickness_mm, fold_angle_deg=fold_angle_deg,
+        inner_curve=inner_curve, outer_curve=outer_curve,
+        curl_deg=curl_deg, lift_mm=0.0,
+    )
+    col      = g.lower_grid.shape[1] // 2
+    tip_half = g.s_int > 0.5
+    mid_pos  = g.lower_grid[tip_half, col, :]
+    cands    = np.vstack([mid_pos, g.tip_pt[np.newaxis]])
+    d        = cands - g.base_pt[np.newaxis]
+    d_along  = d @ g.along_axis
+    d_normal = d @ g.normal_axis
+    dip      = int(np.argmin(d_normal))
+    return float(d_along[dip]), float(d_normal[dip])
+
+
+def _contact_angle_analytic(
+    dL: float,
+    dN: float,
+    T0: np.ndarray,
+    up_hint: np.ndarray,
+    *,
+    m: np.ndarray | None = None,
+    D0: float = 0.0,
+    angle_min: float = -math.pi / 4.0,
+    angle_max: float = math.pi / 2.0 - 1e-5,
+) -> float:
+    """Closed-form contact (lean) angle so the belly-dip grazes the local surface.
+
+    The parent surface is modelled locally as a plane with outward normal ``m``
+    (defaults to the base normal ``up_hint``).  Rotating the belly-dip
+    displacement (dL, dN) about the base in the (T0, up_hint) plane by θ using the
+    same rotation the mesh solver applied::
+
+        p(θ) = base + (dL·cosθ + dN·sinθ)·T0 + (−dL·sinθ + dN·cosθ)·up_hint
+
+    its inside-depth against the plane is ``A·cosθ + B·sinθ`` with
+    ``A = dL·t + dN·n``, ``B = dN·t − dL·n`` (t = T0·m, n = up_hint·m).  Setting
+    that equal to the base inside-depth ``D0`` gives θ in closed form.  The lean
+    closest to flat is returned; residual penetration from surface curvature is
+    absorbed by the outward pull-away, so a plane model is sufficient.
+    """
+    N0 = up_hint
+    if m is None:
+        m = N0
+    t = float(np.dot(T0, m))
+    n = float(np.dot(N0, m))
+    A = dL * t + dN * n
+    B = dN * t - dL * n
+    R = math.hypot(A, B)
+    if R < 1e-9:
+        return 0.0
+    phi = math.atan2(B, A)
+    ratio = D0 / R
+    if ratio >= 1.0 or ratio <= -1.0:
+        # Belly cannot reach the surface by rotation alone; lean toward the
+        # binding phase and let pull-away resolve the remaining penetration.
+        return float(np.clip(phi, angle_min, angle_max))
+    d = math.acos(ratio)
+    # Two roots symmetric about phi; normalise to (−π, π] and take the lean
+    # closest to flat that lies in the printable band.
+    cand = [
+        math.atan2(math.sin(phi - d), math.cos(phi - d)),
+        math.atan2(math.sin(phi + d), math.cos(phi + d)),
+    ]
+    valid = [c for c in cand if angle_min - 1e-6 <= c <= angle_max + 1e-6]
+    pick  = min(valid, key=abs) if valid else min(cand, key=abs)
+    return float(np.clip(pick, angle_min, angle_max))
+
+
+def _inside_neighbour(
+    other_meshes: list,
+    pts: np.ndarray,
+    near_pt: np.ndarray,
+    reach: float,
+    min_frac: float,
+) -> bool:
+    """True if ≥ ``min_frac`` of ``pts`` land inside any one neighbouring solid.
+
+    Uses embree ``mesh.contains`` (fast; a hard dep) rather than
+    ``signed_distance`` (rtree closest-point, ~15× slower) because the cull only
+    needs inside/outside.  A cheap per-neighbour AABB reject keyed on ``near_pt``
+    (expanded by ``reach``, one leaf length) skips neighbours the leaf cannot
+    touch, so the O(leaves × neighbours) test stays bounded on dense canopies.
+    """
+    n = len(pts)
+    if n == 0:
+        return False
+    thresh = max(1, int(math.ceil(min_frac * n)))
+    for _om in other_meshes:
+        _b = _om.bounds
+        if (near_pt < _b[0] - reach).any() or (near_pt > _b[1] + reach).any():
+            continue
+        if int(np.count_nonzero(_om.contains(pts))) >= thresh:
+            return True
+    return False
+
+
 def _contact_angle_for_mesh(
     mesh: trimesh.Trimesh,
     proximity: trimesh.proximity.ProximityQuery,
@@ -336,7 +509,7 @@ def _contact_angle_for_mesh(
     candidates: np.ndarray,
     *,
     initial_contact_angle_rad: float,
-    iterations: int = 8,
+    iterations: int = 5,
     contact_tol_mm: float = 0.02,
     preburied_tol_mm: float = _PREBURIED_DEPTH_MM,
 ) -> float:
@@ -386,10 +559,12 @@ def _contact_angle_for_mesh(
         if key in eval_cache:
             return eval_cache[key]
         pts = _points(contact_angle_rad)
+        _t_eval = time.perf_counter()
         closest, _, tri_id = proximity.on_surface(pts)
         normals = mesh.face_normals[np.asarray(tri_id, dtype=np.int64)]
         signed = -np.einsum("ij,ij->i", pts - closest, normals)
         val = float(np.max(signed)) if len(signed) else -math.inf
+        _pt("contact.bvh_on_surface", time.perf_counter() - _t_eval, len(pts))
         eval_cache[key] = val
         return val
 
@@ -451,12 +626,13 @@ class _MeshCtx:
     seed:         int
     stats:        LeafPlacementStats
     parts:        list   # list[trimesh.Trimesh], mutated in place
-    # Shingle occupancy grid: (phi_bin, s_bin) → bitmask of occupied layers.
-    # Shared across all rows of this mesh; grows as leaves are placed.
+    # Shingle occupancy grid: world voxel key → bitmask of occupied layers.
+    # Shared across all mesh contexts in a multi-mesh placement run; grows as
+    # leaves are placed.
     occ:          dict = dataclasses.field(default_factory=dict)
     # Proximity queries for every OTHER cluster (Option A cross-cluster cull).
     # A leaf slot whose base lies inside any of these solids is skipped.
-    other_prox:   list = dataclasses.field(default_factory=list)
+    other_meshes: list = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -475,8 +651,8 @@ class _LeafSlot:
     z_belly:     float
     poly:        object   # shapely Polygon
     ci:          int
-    # Meridional surface arc-length at this row's z (shared s coordinate for the
-    # shingle occupancy grid; consistent across rows of the same mesh).
+    # Meridional surface arc-length at this row's z.  Retained for diagnostics
+    # and row/belly geometry; shingle occupancy is world-space.
     s_row:       float
     # Approximate 3-D base position on the parent mesh surface (computed from
     # the row cross-section polygon at this slot's azimuthal angle phi_2d =
@@ -654,6 +830,7 @@ def _place_leaf_slot(
     slot: _LeafSlot,
     *,
     contact_candidates: np.ndarray,
+    belly_dip: tuple[float, float],
     ca_cache: dict,
     leaf_kw: dict,
     angle_jitter_deg: float,
@@ -837,15 +1014,29 @@ def _place_leaf_slot(
         contact_angle_guess_rad = (math.pi / 2.0) - 1e-5
         stats.contact_angle_clamped += 1
 
-    contact_angle_rad = _contact_angle_for_mesh(
-        mesh,
-        proximity,
-        pt3d,
-        T0,
-        up_hint,
-        contact_candidates,
-        initial_contact_angle_rad=contact_angle_guess_rad,
-    )
+    _t_contact = time.perf_counter()
+    if _ANALYTIC_CONTACT:
+        # Closed-form lean from the belly-dip; non-penetration is handled later by
+        # the outward pull-away, so no mesh bisection is needed.
+        _m = None
+        if _ANALYTIC_MEASURE_BELLY:
+            _p0 = pt3d + belly_dip[0] * T0 + belly_dip[1] * up_hint
+            _mc, _, _mt = proximity.on_surface(_p0[np.newaxis])
+            _m = mesh.face_normals[int(_mt[0])]
+        contact_angle_rad = _contact_angle_analytic(
+            belly_dip[0], belly_dip[1], T0, up_hint, m=_m,
+        )
+    else:
+        contact_angle_rad = _contact_angle_for_mesh(
+            mesh,
+            proximity,
+            pt3d,
+            T0,
+            up_hint,
+            contact_candidates,
+            initial_contact_angle_rad=contact_angle_guess_rad,
+        )
+    _pt("slot.contact_angle", time.perf_counter() - _t_contact)
     tangent   = _safe_norm(
         T0 * math.cos(contact_angle_rad) - up_hint * math.sin(contact_angle_rad)
     )
@@ -853,45 +1044,30 @@ def _place_leaf_slot(
         up_hint * math.cos(contact_angle_rad) + T0 * math.sin(contact_angle_rad)
     )
 
-    # ── Cross-cluster cull (Option A) ──────────────────────────────────────
-    # The offensive artefacts are leaves whose BASE sits on this cluster's
-    # exposed surface but whose BLADE grows across into a neighbouring cluster —
-    # "half cut off" where the neighbour's skin clips the blade, and blade-on-
-    # blade intersections inside the neighbour.  A base-only containment test
-    # misses these (the base is not buried).  Instead, sample points along the
-    # midrib (base, mid, tip ≈ base + f·L·tangent) and cull if ANY lands inside
-    # a neighbouring solid.  signed_distance is positive INSIDE the mesh in
-    # trimesh.  Done before geometry is built; reuses the per-mesh BVH.
-    if ctx.other_prox:
-        _midrib = pt3d[np.newaxis, :] + (
-            np.array([0.0, 0.5, 1.0])[:, np.newaxis] * (L * tangent)[np.newaxis, :]
-        )
-        for _oprox in ctx.other_prox:
-            if (_oprox.signed_distance(_midrib) > _CROSS_CLUSTER_BURY_TOL_MM).any():
-                stats.skipped_cross_buried += 1
-                return 0, 0
+    # Cross-cluster culling happens AFTER the blade is built and pulled away (see
+    # the blade cull further down).  A pre-build midrib/base test was tried and
+    # removed: in a dense canopy a cluster's own surface is frequently inside a
+    # neighbour, so any base/centerline-inside test culls almost every leaf, not
+    # just the ones that visibly skewer through a neighbour's skin.
 
     # ── Imbrication (shingling) ────────────────────────────────────────────
-    # Decide this leaf's normal-offset layer from the shared (phi, s) occupancy
-    # grid, then stand the blade off the surface by layer×delta along the
-    # surface normal (up_hint).  The root oval stays plugged at pt3d, so the
-    # leaf never detaches; solidify_leaf just builds a taller connecting neck.
-    # Measure azimuth and ring radius at the leaf's mid-length (where its widest
-    # cross-section sits), not at the base.  Near the apex the base radius
-    # collapses toward the cluster axis, but the leaf body fans outward along
-    # tangent to a larger radius — using the mid position keeps azimuthally
-    # separated apex leaves from all claiming the same phi ring.
-    _mid    = pt3d + 0.5 * L * tangent
-    _mdx    = _mid[0] - mesh_centroid_3d[0]
-    _mdy    = _mid[1] - mesh_centroid_3d[1]
-    phi_occ = math.atan2(_mdy, _mdx)
-    ring_r  = float(math.hypot(_mdx, _mdy))
-    _cells  = _shingle_cells(
-        phi_occ, slot.s_row, ring_r, float(leaf_kw["width_mm"]), L,
+    # Decide this leaf's normal-offset layer from the shared world-space
+    # occupancy grid, then stand the blade off the surface by layer×delta along
+    # the surface normal (up_hint).  The footprint is keyed from pt3d (surface
+    # depth, before standoff), so overlapping leaves share cells regardless of
+    # which layer they eventually receive.
+    _t_shingle = time.perf_counter()
+    _lat = np.cross(up_hint, tangent)
+    _lat_len = float(np.linalg.norm(_lat))
+    if _lat_len > 1e-6:
+        _lat /= _lat_len
+    _cells = _shingle_world_cells(
+        pt3d, tangent, _lat, float(leaf_kw["width_mm"]), L, _SHINGLE_WORLD_CELL_MM,
     )
     _layer  = _shingle_pick_layer(ctx.occ, _cells)
     _delta  = float(_layer) * _SHINGLE_DELTA_MM
     base_blade = pt3d + _delta * up_hint
+    _pt("slot.shingle", time.perf_counter() - _t_shingle)
 
     # Skip leaves whose midrib tip would extend below the mesh floor.
     # The row anchor is set to keep tips above z_min, but the contact
@@ -928,14 +1104,19 @@ def _place_leaf_slot(
             L=L, W=float(leaf_kw["width_mm"]),
         )
         inner_v = _oval_off + pt3d[np.newaxis]
+        _t_oval_contains = time.perf_counter()
         _outside = ~mesh.contains(inner_v)
+        _pt("slot.oval_contains", time.perf_counter() - _t_oval_contains, len(inner_v))
         if _outside.any():
             # Accept small overshoots: only reject when the deepest protruding
             # oval vertex clears the embed depth (root no longer reaches the
             # surface).  See _OVAL_PROTRUSION_TOL_MM.
+            _t_oval_prox = time.perf_counter()
             _, _ov_d, _ = trimesh.proximity.closest_point(mesh, inner_v[_outside])
+            _pt("slot.oval_proximity", time.perf_counter() - _t_oval_prox, int(_outside.sum()))
             if float(_ov_d.max()) > _OVAL_PROTRUSION_TOL_MM:
                 raise RuntimeError("oval protrudes past embed depth")
+        _tip_idx = len(surf.vertices) - 1
         solid, _ = solidify_leaf(surf, inner_v)
     except (RuntimeError, ValueError):
         stats.build_errors += 1
@@ -944,31 +1125,94 @@ def _place_leaf_slot(
 
     root_depth = 0.75  # embed_mm used by build_leaf_oval_offsets
 
-    # Curl-region float / bury check
-    base_dists_v = np.linalg.norm(surf.vertices - pt3d, axis=1)
-    curl_mask    = base_dists_v > (L / 2.0)
-    if curl_mask.any():
-        curl_verts = surf.vertices[curl_mask]
-        _, _curl_dists, _ = trimesh.proximity.closest_point(mesh, curl_verts)
-        _inside   = mesh.contains(curl_verts)
-        outside_d = _curl_dists[~_inside]
-        inside_d  = _curl_dists[_inside]
-        _float_d   = float(outside_d.max()) if len(outside_d) else 0.0
-        _burial_d  = float(inside_d.max()) if len(inside_d) else 0.0
-    else:
-        _float_d  = 0.0
-        _burial_d = 0.0
+    # ── Penetration measurement → normal pull-away ─────────────────────────────
+    # Signed depth of every blade-surface vertex from its closest triangle (inside
+    # positive — the same normal-sign convention the contact solve used).  On the
+    # analytic-contact path the blade is then translated OUT along up_hint by the
+    # deepest penetration + clearance, sliding it clear of the parent mesh.  This
+    # is a pure translation (distinct from `lift`, a rotation) and sets the leaf's
+    # standoff so the closed-form lean need not be exact.  The root oval stays
+    # plugged at pt3d.  Leaves that the old bisection path would have rejected as
+    # preburied are pulled out and placed instead.
+    _t_curl = time.perf_counter()
+    _cl, _, _ti = proximity.on_surface(surf.vertices)
+    _nrm    = mesh.face_normals[np.asarray(_ti, dtype=np.int64)]
+    _signed = -np.einsum("ij,ij->i", surf.vertices - _cl, _nrm)   # inside positive
+    _curl_mask = np.linalg.norm(surf.vertices - pt3d, axis=1) > (L / 2.0)
+    _pt("slot.curl_check", time.perf_counter() - _t_curl)
 
-    # Discard leaves where the actual curl region is buried beyond
-    # the visible-burial threshold.  This catches apex-row leaves
-    # that _contact_angle_for_mesh placed at contact_angle_rad=0
-    # (flat) because no valid contact angle existed there.
-    # Using actual solid vertices (not the contact candidates) avoids
-    # false positives on steep bottom-row leaves where the candidates
-    # overreport burial due to canonical-frame mismatch.
-    if _burial_d > _PREBURIED_DEPTH_MM:
+    # Penetration is measured on the curl/blade region only (> L/2 from the
+    # base).  The base region is meant to sit at/in the surface (it plugs the root
+    # oval), so including it would inflate the pull-away and float the whole leaf.
+    _curl_signed = _signed[_curl_mask] if _curl_mask.any() else np.empty(0)
+    _burial_d  = float(_curl_signed.max()) if len(_curl_signed) else 0.0
+    _pull_away = 0.0
+    if _ANALYTIC_CONTACT:
+        if _burial_d > _PULL_MAX_MM:
+            # Genuinely stuck deep inside the mesh — no reasonable standoff clears
+            # it; treat as preburied (matches the old rejection semantics).
+            stats.skipped_preburied += 1
+            return 1, 0
+        if _burial_d > 0.0:
+            _pull_away = _burial_d + _PULL_CLEARANCE_MM
+            _pull_vec  = _pull_away * up_hint
+            surf.vertices                       += _pull_vec
+            solid.vertices[:len(surf.vertices)] += _pull_vec
+            _signed  -= _pull_away
+            _burial_d = 0.0
+    elif _burial_d > _PREBURIED_DEPTH_MM:
+        # Legacy path: discard leaves whose curl region is buried beyond the
+        # visible-burial threshold instead of pulling them out.
         stats.skipped_preburied += 1
         return 1, 0
+
+    # Float artifact stat: curl-region vertices now standing off the surface.
+    _curl_signed = _signed[_curl_mask] if _curl_mask.any() else np.empty(0)
+    _float_d = (
+        float((-_curl_signed[_curl_signed < 0.0]).max())
+        if np.any(_curl_signed < 0.0) else 0.0
+    )
+
+    # ── Cross-cluster blade cull (final, geometry-accurate) ────────────────────
+    # The pre-build midrib test only sampled the centerline before pull-away, so
+    # leaves whose blade width/curl enters a neighbouring cluster — or that
+    # pull-away pushed in — survive it.  Test the actual pulled-away blade surface
+    # against every neighbour and drop the leaf if any vertex sits inside one
+    # beyond the tolerance.  Only seam leaves have neighbours (bbox-sphere pruned),
+    # so the extra signed_distance is paid only where intersections can occur.
+    if ctx.other_meshes:
+        _t_xblade = time.perf_counter()
+        if _inside_neighbour(
+            ctx.other_meshes, surf.vertices, pt3d, L, _CROSS_CLUSTER_BLADE_INSIDE_FRAC,
+        ):
+            _pt("slot.cross_bury_cull", time.perf_counter() - _t_xblade)
+            stats.skipped_cross_buried += 1
+            return 0, 0
+        _pt("slot.cross_bury_cull", time.perf_counter() - _t_xblade)
+
+    # ── Tip-z ordering: visible blade tip must sit above the embedded root tip ──
+    # Computed after pull-away (which already raised the blade); apply only the
+    # residual +Z nudge still needed.
+    _tip_z_lift = 0.0
+    _tip_z_clearance = float(
+        solid.vertices[_tip_idx, 2] - solid.vertices[len(surf.vertices) + _tip_idx, 2]
+    )
+    if _tip_z_clearance < _TIP_Z_CLEARANCE_MM:
+        _tip_z_lift = _TIP_Z_CLEARANCE_MM - _tip_z_clearance
+        _lift_vec = np.array([0.0, 0.0, _tip_z_lift])
+        surf.vertices                       += _lift_vec
+        solid.vertices[:len(surf.vertices)] += _lift_vec
+        _tip_z_clearance = float(
+            solid.vertices[_tip_idx, 2] - solid.vertices[len(surf.vertices) + _tip_idx, 2]
+        )
+    if _tip_z_clearance <= 0.0:
+        raise AssertionError(
+            "leaf surface tip z must be above root oval tip z "
+            f"(surface={solid.vertices[_tip_idx, 2]:.6f}, "
+            f"root={solid.vertices[len(surf.vertices) + _tip_idx, 2]:.6f}, "
+            f"clearance={_tip_z_clearance:.6f}, "
+            f"row={row_idx}, col={ci}, layer={_layer})"
+        )
 
     # Commit this leaf's footprint to the shingle grid so later leaves stack
     # above it.  Only written on success — a rejected build leaves the grid
@@ -982,6 +1226,9 @@ def _place_leaf_slot(
     stats.base_row_idx.append(row_idx)
     stats.root_depths.append(root_depth)
     stats.shingle_layers.append(_layer)
+    stats.tip_z_clearances.append(_tip_z_clearance)
+    stats.tip_z_lifts.append(_tip_z_lift)
+    stats.pull_aways.append(_pull_away)
     stats.n_placed += 1
 
     if len(solid.vertices) > 0:
@@ -1078,6 +1325,7 @@ def place_leaves_on_multiple_meshes(
         lift_mm        = float(lift_mm),
     )
     contact_candidates = _leaf_contact_candidates(**leaf_kw)
+    belly_dip          = _leaf_belly_dip(**leaf_kw)   # (dL, dN); analytic-contact binding point
     ca_cache: dict[int, float] = {}   # shared: leaf_kw is identical for all meshes
 
     # ── Phase 1: pre-computation for every mesh ───────────────────────────────
@@ -1130,8 +1378,33 @@ def place_leaves_on_multiple_meshes(
     # Cross-cluster cull (Option A): give each context the proximity queries of
     # every OTHER cluster so buried-base slots can be skipped before any geometry
     # is built.  Single-cluster runs get an empty list and are unaffected.
+    #
+    # World-space shingling (Option B): all contexts share one occupancy grid so
+    # surviving seam leaves from different clusters can see one another and take
+    # distinct standoff layers.
+    occ_shared: dict = {}
+    _t_prune = time.perf_counter()
+    bounds_centers = []
+    bounds_radii = []
+    for ctx in contexts:
+        b = np.asarray(ctx.mesh.bounds, dtype=float)
+        c = 0.5 * (b[0] + b[1])
+        bounds_centers.append(c)
+        bounds_radii.append(float(np.linalg.norm(b[1] - b[0]) * 0.5))
+
+    n_other_links = 0
     for mi, ctx in enumerate(contexts):
-        ctx.other_prox = [c.proximity for oi, c in enumerate(contexts) if oi != mi]
+        nearby = []
+        for oi, other in enumerate(contexts):
+            if oi == mi:
+                continue
+            center_gap = float(np.linalg.norm(bounds_centers[mi] - bounds_centers[oi]))
+            if center_gap <= bounds_radii[mi] + bounds_radii[oi] + L:
+                nearby.append(other.mesh)
+        ctx.other_meshes = nearby
+        n_other_links += len(nearby)
+        ctx.occ = occ_shared
+    _pt("phase1.cross_prune", time.perf_counter() - _t_prune, n_other_links)
 
     # ── Phase 2: place rows in ascending global z, batching same-z rows ─────────
     # Rows at exactly the same z are collected into one batch; their combined
@@ -1182,7 +1455,8 @@ def place_leaves_on_multiple_meshes(
                 _tslot = time.perf_counter()
                 att, pl = _place_leaf_slot(
                     slot,
-                    contact_candidates=contact_candidates, ca_cache=ca_cache,
+                    contact_candidates=contact_candidates, belly_dip=belly_dip,
+                    ca_cache=ca_cache,
                     leaf_kw=leaf_kw,
                     angle_jitter_deg=angle_jitter_deg,
                     pos_jitter=pos_jitter, row_color_fn=row_color_fn,

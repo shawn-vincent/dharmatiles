@@ -10,6 +10,9 @@ requires-python = ">=3.11"
 dependencies = [
     "numpy",
     "trimesh",
+    "embreex",  # fast Embree ray backend — trimesh falls back to a pure-Python
+                # ray engine without it, making mesh.contains ~90× slower (the
+                # leaf-oval containment gate dominated tree-tile generation).
     "scipy",
     "pyyaml",
     "manifold3d",

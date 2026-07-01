@@ -109,7 +109,7 @@ def _batch_worker(args: tuple) -> dict:
     _sys.stdout = _devnull
     _sys.stderr = _devnull
 
-    tile_path_str, tiles_root_str, stl_root_str, png_root_str, phase_dict, formats = args
+    tile_path_str, tiles_root_str, stl_root_str, png_root_str, phase_dict, formats, render_png = args
 
     tile_path  = pathlib.Path(tile_path_str)
     tiles_root = pathlib.Path(tiles_root_str)
@@ -148,26 +148,29 @@ def _batch_worker(args: tuple) -> dict:
         )
         dir_to_meshes_all.update(dir_to_meshes)
 
-    # Render PNG from the already-built meshes (no second build pass).
-    _set_phase("Render PNG")
-    if render_meshes is not None:
-        for tile in load_tile(tile_path):
-            out = _png_path_for(tile_path, tile, tiles_root, png_root)
-            _render_from_meshes(render_meshes, out, tile.surface.square_mm, quiet=True,
-                                label=_label_for_png(out, png_root))
-            break
-    else:
-        try:
-            from ..render import render as _render
+    # Render PNG from the already-built meshes (no second build pass), unless
+    # explicitly disabled for profiling/headless runs where pyrender can abort
+    # the interpreter on macOS.
+    if render_png:
+        _set_phase("Render PNG")
+        if render_meshes is not None:
             for tile in load_tile(tile_path):
                 out = _png_path_for(tile_path, tile, tiles_root, png_root)
-                out.parent.mkdir(parents=True, exist_ok=True)
-                meshes = build_meshes_for_render(tile_path)
-                _render(meshes, out, quiet=True, grid_square_mm=tile.surface.square_mm,
-                        label=_label_for_png(out, png_root))
+                _render_from_meshes(render_meshes, out, tile.surface.square_mm, quiet=True,
+                                    label=_label_for_png(out, png_root))
                 break
-        except Exception:
-            pass
+        else:
+            try:
+                from ..render import render as _render
+                for tile in load_tile(tile_path):
+                    out = _png_path_for(tile_path, tile, tiles_root, png_root)
+                    out.parent.mkdir(parents=True, exist_ok=True)
+                    meshes = build_meshes_for_render(tile_path)
+                    _render(meshes, out, quiet=True, grid_square_mm=tile.surface.square_mm,
+                            label=_label_for_png(out, png_root))
+                    break
+            except Exception:
+                pass
 
     # Pre-format 3MF XML while still in the worker — runs in parallel with
     # other tiles building.  The main process assembly step then only needs
@@ -1265,13 +1268,18 @@ def _build_parser() -> argparse.ArgumentParser:
                         "(OpenLOCK).  Default: every system the tile defines.")
     p.add_argument("--png-only", action="store_true",
                    help="Re-render PNG thumbnails and PDF catalog only; skip STL generation.")
+    p.add_argument("--no-png", action="store_true",
+                   help="Skip PNG thumbnail rendering and catalog writing after STL/3MF generation.")
     p.add_argument("--quiet", "-q", action="store_true",
                    help="Suppress all output.")
     return p
 
 
 def main(argv=None):
-    args     = _build_parser().parse_args(argv)
+    parser   = _build_parser()
+    args     = parser.parse_args(argv)
+    if args.png_only and args.no_png:
+        parser.error("--png-only and --no-png are mutually exclusive")
     reporter = make_reporter(quiet=args.quiet)
 
     if not args.quiet:
@@ -1346,19 +1354,20 @@ def main(argv=None):
                 "Assemble 3MF", _time.perf_counter() - t_3mf,
                 f"{n_3mf} file{'s' if n_3mf != 1 else ''}",
             )
-        t_png = _time.perf_counter()
-        reporter.phase_begin("Render PNG")
-        if render_meshes is not None and tiles_list:
-            out = _png_path_for(args.tile, tiles_list[0], TILES_ROOT, PNG_ROOT)
-            _render_from_meshes(render_meshes, out, tiles_list[0].surface.square_mm, args.quiet,
-                                label=_label_for_png(out, PNG_ROOT))
-        else:
-            _render_all_pngs([args.tile], TILES_ROOT, PNG_ROOT, quiet=args.quiet)
-        reporter.phase_end("Render PNG", _time.perf_counter() - t_png)
-        t_cat = _time.perf_counter()
-        reporter.phase_begin("Write catalog")
-        _write_tile_catalog_pdf(PNG_ROOT, CATALOG_PDF, quiet=args.quiet)
-        reporter.phase_end("Write catalog", _time.perf_counter() - t_cat)
+        if not args.no_png:
+            t_png = _time.perf_counter()
+            reporter.phase_begin("Render PNG")
+            if render_meshes is not None and tiles_list:
+                out = _png_path_for(args.tile, tiles_list[0], TILES_ROOT, PNG_ROOT)
+                _render_from_meshes(render_meshes, out, tiles_list[0].surface.square_mm, args.quiet,
+                                    label=_label_for_png(out, PNG_ROOT))
+            else:
+                _render_all_pngs([args.tile], TILES_ROOT, PNG_ROOT, quiet=args.quiet)
+            reporter.phase_end("Render PNG", _time.perf_counter() - t_png)
+            t_cat = _time.perf_counter()
+            reporter.phase_begin("Write catalog")
+            _write_tile_catalog_pdf(PNG_ROOT, CATALOG_PDF, quiet=args.quiet)
+            reporter.phase_end("Write catalog", _time.perf_counter() - t_cat)
         if not args.quiet:
             _print_closing_quote()
         return
@@ -1398,7 +1407,10 @@ def main(argv=None):
         with multiprocessing.Manager() as mgr:
             phase_dict = mgr.dict()
             worker_args = [
-                (str(tp), str(TILES_ROOT), str(STL_ROOT), str(PNG_ROOT), phase_dict, args.formats)
+                (
+                    str(tp), str(TILES_ROOT), str(STL_ROOT), str(PNG_ROOT),
+                    phase_dict, args.formats, not args.no_png,
+                )
                 for tp in tile_paths
             ]
 
@@ -1428,7 +1440,7 @@ def main(argv=None):
                         reporter.inject_batch_row(row)
 
         reporter.phase_end(f"Build {n_tiles} {tile_word}", _time.perf_counter() - t_build)
-        pngs_rendered = True
+        pngs_rendered = not args.no_png
 
         # ── Phase: Assemble 3MF (one per system output dir, all tiles) ───────
         # XML is already formatted by workers — just concatenate and ZIP.
@@ -1482,7 +1494,7 @@ def main(argv=None):
             reporter.batch_tile_done(tile_name, _time.perf_counter() - t_tile)
 
             # Render PNG immediately — no second build pass.
-            if rend_seq is not None and sq_mm_seq is not None:
+            if not args.no_png and rend_seq is not None and sq_mm_seq is not None:
                 for tile in load_tile(tp):
                     out = _png_path_for(tp, tile, TILES_ROOT, PNG_ROOT)
                     _render_from_meshes(rend_seq, out, sq_mm_seq, args.quiet,
@@ -1490,7 +1502,7 @@ def main(argv=None):
                     break
 
         reporter.phase_end(f"Build {n_tiles} {tile_word}", _time.perf_counter() - t_build)
-        pngs_rendered = True  # rendered inline above
+        pngs_rendered = not args.no_png  # rendered inline above unless disabled
 
         # ── Phase: Assemble 3MF ───────────────────────────────────────────────
         if dir_3mf_accum_seq:
@@ -1505,14 +1517,15 @@ def main(argv=None):
             )
 
     reporter.batch_end(n_tiles, _time.perf_counter() - t_batch)
-    if not pngs_rendered:
+    if not args.no_png and not pngs_rendered:
         _render_all_pngs(tile_paths, TILES_ROOT, PNG_ROOT, quiet=args.quiet)
 
     # ── Phase: Write catalog ──────────────────────────────────────────────────
-    t_cat = _time.perf_counter()
-    reporter.phase_begin("Writing catalog")
-    _write_tile_catalog_pdf(PNG_ROOT, CATALOG_PDF, quiet=args.quiet)
-    reporter.phase_end("Write catalog", _time.perf_counter() - t_cat)
+    if not args.no_png:
+        t_cat = _time.perf_counter()
+        reporter.phase_begin("Writing catalog")
+        _write_tile_catalog_pdf(PNG_ROOT, CATALOG_PDF, quiet=args.quiet)
+        reporter.phase_end("Write catalog", _time.perf_counter() - t_cat)
 
     if not args.quiet:
         _print_closing_quote()

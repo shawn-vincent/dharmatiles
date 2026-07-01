@@ -1029,3 +1029,554 @@ gone, replaced by exposed cluster body (bald recessed seam), runtime unchanged
 (~4.9 s).  This is the intended Option A signature; whether the bald seam reads
 acceptably (vs. wanting the seam filled + shingled, i.e. Option B/D) is the
 open decision.
+
+### State of the code (end of session)
+
+Option A (blade-sample cull) is **landed and working** on the branch:
+
+- `src/dharmatiles/trees/placement.py`
+  - `_CROSS_CLUSTER_BURY_TOL_MM = 0.0` constant (tolerance a midrib sample may
+    sit inside a neighbour before culling).
+  - `_MeshCtx.other_prox: list` — populated after all contexts are built with
+    the other clusters' `ProximityQuery` objects (empty for single-cluster runs,
+    so those are unaffected).
+  - `LeafPlacementStats.skipped_cross_buried` counter.
+  - Midrib-sample cull in `_place_leaf_slot`, placed **after** `tangent`/
+    `up_placed` are computed and **before** the shingle/geometry build.  The
+    earlier base-only block (right after `pt3d`) was removed.
+- `src/scripts/test-multi-parent-mesh-leaves.py` — prints `xbury=` per cluster.
+
+No `closest_point`, R-tree, `placed_meshes`, or `fix_normals` reintroduced.
+
+### Tuning knobs left in place (for the pending decision)
+
+- `_CROSS_CLUSTER_BURY_TOL_MM` — raise > 0 to let grazing blades survive
+  (narrower bald band); lower < 0 to cull more aggressively.
+- Midrib sample fractions `{0, 0.5, 1.0}` — add points for a stricter test.
+
+### Next action (awaiting user)
+
+Decide from the render whether the bald recessed seam is acceptable:
+- **Accept** → Option A is the fix; Option C (union / single parent mesh) loses
+  its only advantage over the lighter D and can be dropped.
+- **Want seam filled + shingled** → proceed to shared cross-cluster occupancy
+  (Option B/D): keep this cull, add a world-space shingle-layer map shared
+  across clusters so surviving seam leaves stack instead of skewer.
+
+---
+
+## DECISION — Build B (world-space shared shingle occupancy). D dropped. (2026-07-01)
+
+The goal is **filling the inner corners** where clusters meet — leaves in the
+seam that *shingle* instead of skewer — **not** the bald recessed seam that
+Option A alone produces. Real trees have **many** overlapping clusters, so the
+cross-cluster seam is pervasive, not a two-blob special case. Decision: **build
+Option B**. D is dropped, for a concrete reason worth recording:
+
+### Why D buys nothing over B (even at many clusters)
+
+D's pitch is "CSG-union the clusters so the cull tests against the true outer
+shell." But the buried cull is `signed_distance` with **inside = positive**, and
+**a point is inside the union iff it is inside at least one member cluster**
+(union = OR). So the Option A midrib test we already have — *"is this sample
+inside ANY neighbour?"* — is **mathematically identical** to *"inside the CSG
+union?"*, at 2 clusters or 200. CSG only gives something extra if you want the
+union's *surface* to place on (that is Option C, the meridian rewrite). For
+culling, D pays for a manifold3d union and returns an answer B already has for
+free. No CSG anywhere in the plan.
+
+### What "many clusters" actually changes
+
+1. **Occupancy must be world-space, not `(phi, s)`.** The current shingle grid is
+   keyed in per-cluster `(phi, s)` surface coordinates — you cannot share one
+   `(phi, s)` frame across many arbitrarily-oriented clusters. Replace it with a
+   single **world-space voxel grid** shared across all clusters.
+2. **The cull is O(neighbours) per slot.** Fine for the two-cluster test; at tree
+   scale, **spatially prune** `other_prox` to clusters whose bounding spheres
+   overlap the current one. This is a scaling optimisation, **not** required for
+   correctness — defer until a mid-size test shows it matters.
+
+### The B delta over A (what to build)
+
+Option A survivors near the seam still **skewer** each other because `occ` is
+per-`_MeshCtx` — cluster A and cluster B can't see each other's layers. B makes
+the shingle occupancy **one world-space grid shared by every cluster**, so a
+seam leaf from A and a seam leaf from B get assigned **different normal-offset
+layers** and stack. That is the entire mechanism that lets the corner fill
+without re-introducing skewering.
+
+### Current code (grounding for the implementer)
+
+All in `src/dharmatiles/trees/placement.py`:
+
+- **Shingle grid, per-mesh (to be shared):** `_MeshCtx.occ` — line ~456,
+  `dict[(phi_bin, s_bin) → layer bitmask]`, default per-context.
+- **Cell helpers:** `_shingle_cells(phi, s, ring_r, W, L)` (lines ~95–123)
+  computes `(phi, s)` cells; `_shingle_pick_layer(occ, cells)` (lines ~126–140)
+  and `_shingle_write(occ, cells, layer)` (lines ~143–147) are **key-agnostic** —
+  they take a `cells` list + a dict, so they work unchanged with world-space keys.
+- **Build site:** `_place_leaf_slot`, lines ~874–894 compute `phi_occ`,
+  `ring_r`, call `_shingle_cells`, `_shingle_pick_layer`, set
+  `base_blade = pt3d + layer·_SHINGLE_DELTA_MM·up_hint`. Line ~976 writes the
+  grid **only on successful placement**. Keep all of this; swap only the cell
+  computation.
+- **Cull (keep as-is):** lines ~865–872 (midrib `signed_distance` vs
+  `ctx.other_prox`). `other_prox` wired at lines ~1130–1134.
+- **Context setup:** lines ~1085–1135 build one `_MeshCtx` per mesh.
+
+Constants at lines ~72–92: `_SHINGLE_PHI_CELLS`, `_SHINGLE_S_CELL_FRAC`,
+`_SHINGLE_MAX_LAYERS=4`, `_SHINGLE_DELTA_MM=0.30`, `_SHINGLE_FOOTPRINT_SCALE=0.80`.
+
+### Step-by-step implementation plan
+
+**Step 1 — Add `_SHINGLE_WORLD_CELL_MM` constant.** World voxel edge length.
+Start at `L * _SHINGLE_S_CELL_FRAC`-equivalent — i.e. ~¼ leaf length, a few mm.
+Coarse enough that overlapping leaves' footprints land in shared voxels; fine
+enough to separate genuinely disjoint leaves. Tune on the render.
+
+**Step 2 — New helper `_shingle_world_cells(base, tangent, lat, W, L, cell)`.**
+Returns the set of world voxel keys `(ix, iy, iz)` a leaf's `W×L` footprint
+covers. Sample the leaf mid-surface as a small grid (e.g. 3 across × 5 along)
+over the rectangle spanned by `tangent` (length `L·FOOTPRINT_SCALE`) and `lat`
+(width `W·FOOTPRINT_SCALE`), centred so the footprint core matches the old
+behaviour. Voxelise each sample: `key = (floor(x/cell), floor(y/cell),
+floor(z/cell))`; dedupe. **Compute from `pt3d` (the surface point, delta = 0)**,
+NOT from `base_blade` — two overlapping leaves must map to the same voxels
+regardless of which layer they land on, so the footprint reference depth is
+always the surface. `lat = normalize(cross(up_hint, tangent))` (already computed
+as `_lat_ov` at line ~922 — reuse the same vector).
+
+**Step 3 — Share one `occ` dict across all contexts.** In
+`place_leaves_on_multiple_meshes`, after the context loop (near line ~1134,
+alongside the `other_prox` wiring), create `occ_shared: dict = {}` and assign
+`ctx.occ = occ_shared` for every context. (Simplest; `_MeshCtx.occ` keeps its
+default for single-context callers that build contexts directly.) The grid then
+persists across the whole multi-cluster placement run.
+
+**Step 4 — Swap the cell computation at the build site.** Replace lines ~884–891
+(the `_mid`/`phi_occ`/`ring_r`/`_shingle_cells` block) with:
+```python
+_lat = np.cross(up_hint, tangent)
+_lat /= max(float(np.linalg.norm(_lat)), 1e-9)
+_cells = _shingle_world_cells(pt3d, tangent, _lat, W, L, _SHINGLE_WORLD_CELL_MM)
+```
+Leave `_shingle_pick_layer(ctx.occ, _cells)`, `_delta`, `base_blade`, and the
+`_shingle_write(ctx.occ, _cells, _layer)` at line ~976 untouched — they are
+key-agnostic and now operate on the shared world grid. `slot.s_row` (line ~480)
+and `phi_occ` become unused for occupancy; `s_row` may stay for stats or be
+removed. `_shingle_cells` (the `(phi,s)` version) can be deleted once nothing
+references it.
+
+**Step 5 — Layer semantics note (expected approximation).** A layer index is a
+scalar; the actual standoff direction `up_hint` differs per cluster. So "layer 1"
+on A stands off along A's normal, "layer 1" on B along B's normal — the offsets
+aren't coplanar. That's fine and expected (the review flagged B's cross-surface
+layering as "approximate"): deconfliction only needs two overlapping leaves to
+get **different** layers so they sit at different depths. Greedy lowest-free
+across the shared voxels guarantees that regardless of normal direction.
+
+### Hard constraints (still in force)
+
+- No `trimesh.proximity.closest_point` for deconfliction, no R-tree, no
+  `placed_meshes`, no `fix_normals()`. (The `closest_point` calls at lines ~936
+  and ~952 are the pre-existing oval-protrusion and curl float/bury checks —
+  leave them; they are not deconfliction.)
+- Proactive only: layer chosen **before** geometry is built; never build → test →
+  retry.
+- Keep Option A's midrib cull. B *adds* shared occupancy; it does not replace the
+  cull.
+
+### Validation
+
+- **Develop on the two-cluster test** `src/scripts/test-multi-parent-mesh-leaves.py`
+  (~5 s; a full tile is ~18 min). Every cross-cluster pathology shows up in the
+  A+B pair. Confirm watertightness and per-cluster placed counts are unchanged
+  and that seam leaves now stack (inspect `stats.shingle_layers` histogram — expect
+  non-zero layers appearing on seam leaves that previously all sat on layer 0 or
+  were culled).
+- **Then a mid-size test (~6–8 overlapping clusters)** to shake out world-voxel
+  keying and (if added) the bounding-sphere pruning before touching a full tree.
+- **Tuning knobs:** `_SHINGLE_WORLD_CELL_MM` (voxel size — overlap sensitivity),
+  `_SHINGLE_DELTA_MM` (per-layer standoff), `_SHINGLE_MAX_LAYERS` (standoff cap),
+  `_CROSS_CLUSTER_BURY_TOL_MM` (raise > 0 to let more grazing seam leaves survive
+  for the shingle map to stack, narrowing the bald band).
+
+### Open question for the first render
+
+With the cull still at `_CROSS_CLUSTER_BURY_TOL_MM = 0.0`, B lets survivors
+shingle but the aggressively-culled band may still read as too bald. If so, the
+follow-up is to **loosen the cull** (raise the tolerance / drop a midrib sample)
+so more seam leaves survive into the now-safe shared shingle map — the cull and
+the occupancy are the two dials that together set how full the corner reads.
+
+---
+
+## UPDATE — Profiling + tip-z ordering fix (2026-07-01)
+
+User verdict: leaf placement/layout looks good and must not be substantially
+changed, but the latest work is **way too slow**, and some placed leaves have
+visible blade-surface tip `z` lower than the embedded root-oval tip `z`.
+
+### Profiling results
+
+Focused two-cluster script, placement-only cProfile:
+
+- `place_leaves_on_multiple_meshes`: ~6.16 s under cProfile.
+- `_place_leaf_slot`: ~5.88 s.
+- `_contact_angle_for_mesh`: ~3.59 s via `ProximityQuery.on_surface` /
+  `closest_point`.
+- Cross-cluster `signed_distance` cull: only ~0.07 s on the two-cluster case.
+- Shingle occupancy: effectively free (~0.004–0.007 s).
+
+Conclusion: the shared world occupancy is not the runtime problem.  The focused
+test is dominated by the pre-existing contact-angle BVH solve; many-cluster
+tiles also need cull-neighbour pruning because otherwise the midrib cull scales
+as slots × clusters.
+
+### Rejected experiments
+
+- Local-face contact solve using `slot.local_faces`: slower (~6.9 s) and changed
+  coverage (`22/22` → `20/17`).  Rejected.
+- Reduced contact candidate sets (3 or 5 lateral columns): faster (~2.8–3.1 s
+  focused) but changed coverage (`22/22` → `19/16`).  Rejected.
+
+### Landed fixes
+
+- Kept the full contact candidate set to preserve layout.
+- Reduced contact-angle bisection refinement from 8 to 5 iterations after the
+  bracket is found.  Focused test still places `22/22` leaves; `contact` point
+  evals drop from ~118k to ~92k and focused total from ~4.6 s to ~4.1 s in the
+  instrumented run.
+- Added bounding-sphere pruning for `ctx.other_prox`, expanded by one leaf
+  length.  This preserves culling for any cluster a blade could reach, while
+  avoiding all-pairs neighbour checks on larger trees.
+- Added timing counters:
+  - `slot.contact_angle`
+  - `contact.bvh_on_surface`
+  - `slot.cross_bury_cull`
+  - `slot.shingle`
+  - `slot.oval_contains`
+  - `slot.oval_proximity`
+  - `slot.curl_check`
+  - `phase1.cross_prune`
+- Added final geometry invariant for the blade/root tip z ordering:
+  `_TIP_Z_CLEARANCE_MM = 0.02`.  The original surface is still used for the
+  existing accept/reject curl-burial check, then the accepted blade surface is
+  raised in world `+Z` just enough that visible surface tip z is at least
+  `root_oval_tip_z + 0.02`.  The root oval stays plugged at `pt3d`.
+- `LeafPlacementStats` now records `tip_z_clearances` and `tip_z_lifts`; the
+  focused script prints min/median/max clearance and correction counts.
+
+### Current validation
+
+`python -u src/scripts/test-multi-parent-mesh-leaves.py /private/tmp/multi-parent-iter5.stl`
+
+- Placed counts unchanged from the accepted layout: A `22`, B `22`.
+- Tip clearance fixed: min `0.02 mm` on both clusters.
+- Focused timing: total placement ~`4.15 s`; contact solve ~`2.22 s`.
+- Known artifact-report failures remain the pre-existing visual diagnostics:
+  bald bottom row on A and floating curl warnings.
+
+### Latest goal — fail fast on inverted solid tips
+
+User reported both problems continuing on the full tile path and asked for a
+hard assertion after each leaf solid is constructed.  Added a post-construction
+assertion immediately after the accepted blade-surface lift:
+
+```python
+surface_tip_z = solid.vertices[_tip_idx, 2]
+root_tip_z = solid.vertices[len(surf.vertices) + _tip_idx, 2]
+assert surface_tip_z > root_tip_z
+```
+
+This runs after `solidify_leaf(...)`, after the pre-burial curl check, and after
+any `_TIP_Z_CLEARANCE_MM` correction has been applied to the visible blade
+surface.  Failure reports surface/root z, clearance, row, column, and shingle
+layer.
+
+Validation on `src/tiles/water/1x1-grass-tree+water.tile.py`:
+
+- `python -m compileall -q src/dharmatiles/trees/placement.py` passes.
+- `python -m cProfile -o /private/tmp/1x1-grass-tree-water.prof -m dharmatiles.terrains.tile --tile src/tiles/water/1x1-grass-tree+water.tile.py`
+  ran through the DB export and into OL generation with no assertion printed,
+  but exited with process code `-1` before cProfile flushed a `.prof` file.
+- `python -m cProfile -o /private/tmp/1x1-grass-tree-water-db.prof -m dharmatiles.terrains.tile --tile src/tiles/water/1x1-grass-tree+water.tile.py --formats db`
+  generated `stl/db/water/1x1-grass-tree+water-db.stl` with no assertion
+  printed, then exited with code `-1` before cProfile flushed.
+- A wrapper that dumped cProfile in `finally` also exited with code `-1`
+  without running `finally`, so the process termination is not a normal Python
+  exception or `SystemExit`.
+- Added `dharmatiles.terrains.tile --no-png` to skip post-build PNG thumbnail
+  rendering and catalog writing.  Re-running the same DB tile with:
+
+  ```bash
+  python -m cProfile -o /private/tmp/1x1-grass-tree-water-db-no-png.prof \
+    -m dharmatiles.terrains.tile \
+    --tile src/tiles/water/1x1-grass-tree+water.tile.py \
+    --formats db --no-png
+  ```
+
+  exits normally with code `0`, writes the `.prof` file, and still produces no
+  tip-z assertion.  This isolates the previous `-1` to the post-export
+  PNG/render path, almost certainly the native `pyrender`/offscreen renderer
+  teardown path rather than Python control flow.
+
+### Successful full-tile cProfile details (`--no-png`)
+
+Profile file: `/private/tmp/1x1-grass-tree-water-db-no-png.prof`
+
+Command:
+
+```bash
+python -m cProfile -o /private/tmp/1x1-grass-tree-water-db-no-png.prof \
+  -m dharmatiles.terrains.tile \
+  --tile src/tiles/water/1x1-grass-tree+water.tile.py \
+  --formats db --no-png
+```
+
+Result:
+
+- Exit code: `0`
+- Total cProfile runtime: `222.390 s`
+- Function calls: `359,762,754` total (`359,518,373` primitive)
+- Tile output: `stl/db/water/1x1-grass-tree+water-db.stl`
+- 3MF assembly: completed, `1` file
+- Tip-z assertion: no failures
+
+Top cumulative stack:
+
+| function | calls | cumtime |
+|---|---:|---:|
+| `tile.py:1278(main)` | 1 | `221.796 s` |
+| `tile.py:1088(_build_tile)` | 1 | `219.010 s` |
+| `tile.py:510(build_tile_from_spec)` | 1 | `219.010 s` |
+| `tile.py:345(_build_tile_content)` | 1 | `218.534 s` |
+| `layer.py:282(apply)` / `layer.py:142(scatter)` | 1 | `218.003 s` |
+| `mesh.py:55(build_branch_mesh)` | 1 | `217.981 s` |
+| `mesh.py:1107(_build_foliage_cluster_mesh)` | 64 | `217.257 s` |
+| `placement.py:1304(place_leaves_on_mesh)` | 64 | `208.350 s` |
+| `placement.py:1048(place_leaves_on_multiple_meshes)` | 64 | `208.348 s` |
+| `placement.py:668(_place_leaf_slot)` | 2,904 | `199.007 s` |
+
+Placement-specific profile:
+
+| function | calls | cumtime | note |
+|---|---:|---:|---|
+| `_place_leaf_slot` | 2,904 | `199.007 s` | dominant leaf-placement loop |
+| `_contact_angle_for_mesh` | 2,554 | `100.130 s` | contact solve for accepted/build-attempt slots |
+| `_max_inside` | 33,356 | `99.966 s` | repeated contact-angle inside-depth evaluations |
+| `_collect_row_slots` | 290 | `1.330 s` | row/slot enumeration is not a hotspot |
+| `_shingle_world_cells` | 2,554 | `0.186 s` | world shingle footprint is negligible |
+| `_shingle_pick_layer` | 2,554 | `0.013 s` | layer choice is negligible |
+| `_shingle_write` | 1,991 | `0.010 s` | occupancy writes are negligible |
+| `_pt` instrumentation | 40,039 | `0.039 s` | timing instrumentation overhead is negligible |
+
+Trimesh/proximity hot paths:
+
+| function | calls | cumtime | why it matters |
+|---|---:|---:|---|
+| `proximity.py:121(closest_point)` | 34,035 | `110.707 s` | includes contact solve + oval/curl proximity |
+| `proximity.py:314(on_surface)` | 30,899 | `101.772 s` | contact-angle candidate projection |
+| `base.py:3148(contains)` | 4,546 | `82.791 s` | embedded oval containment gate |
+| `ray_triangle.py:156(contains_points)` | 4,546 | `82.788 s` | contains implementation |
+| `ray_triangle.py:177(ray_triangle_id)` | 3,982 | `81.409 s` | ray/triangle work behind contains |
+| `proximity.py:25(nearby_faces)` | 34,035 | `77.663 s` | R-tree face lookup for closest-point |
+| `index.py:755(intersection)` | 4,358,772 | `60.156 s` | spatial-index query underneath proximity/ray checks |
+
+Interpretation:
+
+- The runtime is the tree leaf placement path, not STL export, 3MF assembly,
+  world-space shingling, or the new tip-z assertion.
+- The largest optimization targets are the contact-angle `on_surface` loop and
+  the embedded-oval `mesh.contains` ray path.
+- The shared world shingle system is not responsible for the slowdown: its
+  total cProfile cost is under `0.25 s` across the full DB tile.
+
+The live placement timers on the full DB tile consistently show the same hot
+spots as the focused profile: `slot.contact_angle` / `contact.bvh_on_surface`,
+then `slot.oval_contains` and `slot.initial_build`.  `slot.shingle` remains
+negligible, usually around `0.004–0.007 s` per cluster.
+
+---
+
+## RESOLVED — 8× speedup: embreex + analytic contact angle + normal pull-away (2026-07-01)
+
+The "glacially slow" `1x1-grass-tree+water` tile is fixed.  Full DB tile wall
+time: **~222 s → 28 s (~8×)**, in two independent, stacking changes.  No change
+to the deconfliction/shingle model; the placement *layout* is preserved to
+within the accepted tolerance (per-cluster placed counts equal-or-better).
+
+### Fix 1 — install `embreex` (the missing fast ray backend)
+
+Profiling had already isolated two hot ops in `_place_leaf_slot` against the
+~1280-face foliage-cluster mesh: the contact-angle `on_surface` solve (~100 s)
+and the oval-containment gate `mesh.contains` (~82 s).  The 82 s was **pure
+waste**: `embreex` was not installed, so trimesh silently fell back to its
+pure-Python `ray_triangle` engine (confirmed: `type(m.ray).__module__ ==
+'trimesh.ray.ray_triangle'`).  Benchmarked on a 1280-face cluster-sized mesh,
+`mesh.contains` on ~120 points went **18 ms → 0.20 ms (~90×)** with embreex.
+
+- Installed `embreex 4.4.0` (macOS arm64 wheel available) and **added it to
+  `pyproject.toml` dependencies** with a comment, so a fresh `pip install -e .`
+  never regresses to the slow ray engine.
+- `slot.oval_contains` dropped from ~82 s to ~0.01 s; full DB tile **222 s →
+  102 s**.  Zero output change — embree returns identical inside/outside.
+- Ruled out empirically: a **vectorized brute-force** closest-point/winding
+  replacement is ~5× *slower* than trimesh's rtree-pruned proximity at 1280
+  faces (materializing N×F arrays is memory-bound).  Do not retry it.
+
+### Fix 2 — analytic contact angle + normal pull-away (kills the 100 s solve)
+
+The remaining bottleneck was `_contact_angle_for_mesh`: ~9 `on_surface` evals
+per leaf (measured: histogram 7–11), each over a ~140-point candidate cloud,
+bisecting for the lean angle.  embree does **not** help it (proximity is
+rtree+triangle math, not rays).
+
+**Key reframe (user's):** the contact solve was doing *two* jobs at once —
+orient the leaf AND keep it from penetrating the parent mesh — and the
+non-penetration job is what forced sub-degree precision (hence the iteration).
+Decouple them:
+
+1. **Lean → closed form.**  `_contact_angle_analytic(dL, dN, T0, up_hint, m)`
+   solves the belly-dip grazing angle against a locally-planar surface.  Rotating
+   the belly-dip displacement `(dL, dN)` about the base by θ (the *same* rotation
+   the old mesh solver used), its inside-depth is `A·cosθ + B·sinθ` with
+   `A = dL·t + dN·n`, `B = dN·t − dL·n` (`t = T0·m`, `n = up_hint·m`); set it to
+   the base inside-depth `D0` and solve — one `acos`, no iteration.  The
+   belly-dip `(dL, dN)` is the shape-only binding point (`_leaf_belly_dip`,
+   mirrors `_contact_angle_for_sphere`'s `argmin(d_normal)` over the tip-half
+   midrib), computed once per placement run and threaded into every slot.
+2. **Non-penetration → normal pull-away.**  After the leaf solid is built, the
+   blade surface's curl-region penetration is measured (signed depth via closest-
+   triangle normal — same convention as the old solver) and the blade is
+   **translated outward along `up_hint`** by `penetration + _PULL_CLEARANCE_MM`
+   until it clears.  This is a *translation*, distinct from `lift` (a rotation
+   about the base) and from the shingle standoff (which stacks overlaps).  The
+   root oval stays plugged at `pt3d`; `solidify_leaf` just builds a taller neck —
+   the exact mechanism the shingle offset already relied on.
+
+Because pull-away absorbs any residual penetration, the closed-form lean need
+not be exact.  Two consequences, both acceptable / positive:
+
+- **Coverage rises.**  Leaves the old path *rejected* as preburied are now pulled
+  out and placed instead — `skipped_preburied` went to **0** on the two-cluster
+  test; per-cluster counts A `22 → 23`, B `22 → 23`.
+- **Slightly more standoff on curved regions.**  With the base normal alone the
+  lean under-shoots curvature, inflating float; measuring the surface normal at
+  the belly-dip point (`_ANALYTIC_MEASURE_BELLY = True`, 1 extra `on_surface`
+  per leaf, still ~0.3 ms) recovers curvature.  Final float is comparable to the
+  embree baseline (B lower on every count; A median 1.25 vs 1.39 mm, with one
+  3.98 mm outlier near the A∩B seam).  The render reads the same shingled-cluster
+  silhouette with marginally more visible standoff.
+
+### Implementation (`src/dharmatiles/trees/placement.py`)
+
+- Constants `_ANALYTIC_CONTACT = True`, `_ANALYTIC_MEASURE_BELLY = True`,
+  `_PULL_CLEARANCE_MM = 0.05`, `_PULL_MAX_MM = 3.0` (penetration beyond this is
+  still rejected as preburied — genuinely stuck inside).
+- New `_leaf_belly_dip(**leaf_kw) → (dL, dN)` and `_contact_angle_analytic(...)`.
+- `_place_leaf_slot` gains a `belly_dip` param; the `_contact_angle_for_mesh`
+  call is now behind `if _ANALYTIC_CONTACT` (legacy iterative path kept as the
+  `else` branch for A/B — deletable once the analytic path is confirmed on more
+  tiles, along with the now-legacy-only `contact_candidates`/`ca_cache`).
+- Curl float/bury block rewritten: one `proximity.on_surface(surf.vertices)`
+  measures signed penetration; curl-region max drives the pull-away; tip-z
+  ordering (`_TIP_Z_CLEARANCE_MM`) is applied *after* the pull.  New
+  `LeafPlacementStats.pull_aways` per-leaf record.
+
+### Results
+
+| stage | full DB tile | focused 2-cluster placement | contact solve |
+|---|---:|---:|---|
+| original (pure-Python rays, iterative) | ~222 s | ~24 s → ~5 s (embree) | ~9 evals/leaf, dominant |
+| + embreex | 102 s | ~5 s | unchanged |
+| **+ analytic + pull-away** | **28 s** | **0.45 s** | **~0 (0.01 ms/leaf)** |
+
+Full DB tile exits 0, no tip-z assertion failures, 1.40 M faces (vs 1.32 M —
+more leaves placed).  `NOT watertight` is the pre-existing state (union of
+thousands of separate leaf solids), unrelated to this change.  Hard constraints
+still honoured: no `closest_point`/R-tree deconfliction, no `fix_normals`.
+
+### Open items
+
+- The legacy `_contact_angle_for_mesh` path + `contact_candidates`/`ca_cache`
+  are dead under `_ANALYTIC_CONTACT = True`; delete once confirmed on more tiles.
+- One float outlier (~4 mm) near the A∩B seam — pull-away over-reacting to deep
+  curl penetration on the concave seam; tighten later if it reads badly at tree
+  scale.
+- Next remaining hot spot is `slot.curl_check` (the single pull-away
+  `on_surface`, ~2.8 ms/leaf) and `slot.initial_build`; both are now the floor.
+
+---
+
+## Cross-cluster culling finally wired up (2026-07-01, later)
+
+User saw "a fair number of intersecting leaves (cross mesh)" on the real 1×1 tree
+tile and asked to cull them.
+
+### Root cause — the whole Option A/B system was dead on real tiles
+
+`_build_foliage_cluster_mesh` (mesh.py) called `place_leaves_on_mesh` **once per
+cluster, in isolation**, so every cluster's `other_prox`/`other_meshes` neighbour
+list was empty.  The cross-cluster cull *and* the shared world-space shingle
+occupancy — everything the earlier "Option A / Option B" sections built — had
+therefore **never run in production**; only the two-cluster test (which passes
+both meshes to one call) ever exercised them.  That is why nothing culled the
+intersections.
+
+### Fix 1 — place all foliage clusters together
+
+`build_branch_mesh` (mesh.py) now builds every foliage cluster mesh with
+`leaves=False`, collects them into `foliage_clumps`, and after the build loop
+makes **one** `place_leaves_on_multiple_meshes` call over all clusters (per-cluster
+seeds/labels).  Verified: batched placement reproduces the per-cluster leaf count
+exactly (2156 leaves, 1.399 M faces with culling disabled) — so batching itself
+is neutral; only the cull changes output.  Placement order is global-z batched and
+the shingle `occ` is shared, but non-overlapping clusters occupy disjoint world
+voxels so their layout is unchanged; only overlapping seams reorganise.
+
+### Fix 2 — make the cull correct and fast
+
+Three problems with the cull as inherited, all fixed:
+
+1. **`signed_distance` was too slow.**  With neighbours now non-empty everywhere,
+   the O(leaves × neighbours) `ProximityQuery.signed_distance` (rtree closest-point)
+   blew the tile past 2 min.  Switched the inside test to embree
+   `mesh.contains` (embreex, ~15× faster; needs only inside/outside) in a new
+   `_inside_neighbour(other_meshes, pts, near_pt, reach, min_frac)` helper, with a
+   cheap per-neighbour AABB reject keyed on the leaf base so far clusters are
+   skipped.  Full tile back to ~28 s.
+2. **The pre-build midrib/base cull was catastrophically over-aggressive.**  It
+   culled a leaf if its base/centerline sat inside any neighbour — but in a dense
+   canopy a cluster's own surface is *usually* inside its neighbours, so it nuked
+   almost everything (2156 → ~200 leaves).  **Removed entirely** (this is the same
+   base-inside test the Option A notes had already deprecated once).
+3. **Cull now runs once, on the final geometry, by fraction.**  A single pass over
+   the built + pulled-away blade surface culls the leaf when
+   `≥ _CROSS_CLUSTER_BLADE_INSIDE_FRAC` (0.30) of its blade vertices lie inside any
+   one neighbour (fraction, not count, so it is independent of leaf tessellation).
+   This removes skewering leaves (blade straddling a neighbour's skin) and
+   fully-buried invisible leaves, while keeping leaves that merely graze a seam.
+
+### Result
+
+- Full DB tile: **2156 → 721 leaves**, faces **1.40 M → 0.70 M** (~half — a real
+  print/slice win), runtime unchanged (~28 s).
+- Side-by-side renders (cull off vs frac 0.30) are visually near-identical: the
+  ~1435 culled leaves were the hidden interior/overlap ones; the visible rosette
+  canopy is preserved, intersections cleaned.
+- Two-cluster test: A 29 / B 25 with 13 seam leaves culled (gentler than the old
+  count test, which gave 20/20).
+- `_CROSS_CLUSTER_BLADE_INSIDE_FRAC` is the tuning dial: **lower = cull more**
+  grazing/partial intersections; higher = keep more.  0.30 is a conservative
+  default that provably preserves the silhouette.
+
+### Files
+
+- `mesh.py::build_branch_mesh` — two-phase (collect clumps → one batched
+  placement call); `_build_foliage_cluster_mesh` now always called `leaves=False`
+  (its inline placement path is dead but retained).
+- `placement.py` — `_inside_neighbour` (embree contains + AABB reject);
+  `_CROSS_CLUSTER_BLADE_INSIDE_FRAC`; `_MeshCtx.other_prox` renamed
+  `other_meshes` (stores meshes, not ProximityQueries — the cull uses `.contains`);
+  pre-build midrib cull deleted; single fraction-based blade cull after pull-away.

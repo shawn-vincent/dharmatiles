@@ -141,6 +141,12 @@ def build_branch_mesh(
     # concatenate them onto the unioned trunk/branches/clumps instead (same
     # visible surfaces, vastly cheaper).
     leaf_solids: list[trimesh.Trimesh] = []
+    # Foliage cluster meshes are collected here (with their edge ids) and leaves
+    # are placed on ALL of them together after the build loop — see the batched
+    # place_leaves_on_multiple_meshes call below.  Placing per-cluster in
+    # isolation left every cluster blind to its neighbours, so the cross-cluster
+    # cull and the shared shingle occupancy never engaged on real trees.
+    foliage_clumps: list[tuple[trimesh.Trimesh, int]] = []
 
     while queue:
         i = queue.pop(0)
@@ -261,7 +267,7 @@ def build_branch_mesh(
                 clump_length_mm=cluster_len,
                 edge_id=i,
                 bark_seed=bark_seed,
-                leaves=leaves,
+                leaves=False,   # placement deferred to one multi-mesh call below
                 leaf_length_mm=leaf_length_mm,
                 leaf_width_mm=leaf_width_mm,
                 leaf_thickness_mm=leaf_thickness_mm,
@@ -279,12 +285,46 @@ def build_branch_mesh(
             )
             if len(clump.vertices) > 0:
                 foliage_solids.append(clump)
+                if leaves and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
+                    foliage_clumps.append((clump, i))
             leaf_solids.extend(clump_leaves)
 
         node_frame[i] = end_frame
         node_bark[i] = edge_end_bark
 
         queue.extend(children[i])
+
+    # ── place leaves on ALL foliage clusters together ─────────────────────────
+    # One multi-mesh placement call so every cluster sees its neighbours: the
+    # cross-cluster cull removes leaves that intersect an adjacent cluster, and
+    # the shared world-space shingle occupancy lets surviving seam leaves stack
+    # into layers instead of skewering.  (Per-cluster placement gave each cluster
+    # an empty neighbour list, so neither ever engaged on a real tree.)
+    if foliage_clumps:
+        from .placement import place_leaves_on_multiple_meshes
+        _clump_meshes = [c for c, _ in foliage_clumps]
+        _clump_eids   = [eid for _, eid in foliage_clumps]
+        _leaf_parts, _ = place_leaves_on_multiple_meshes(
+            _clump_meshes,
+            length_mm      = leaf_length_mm,
+            width_mm       = leaf_width_mm,
+            thickness_mm   = leaf_thickness_mm,
+            fold_angle_deg = leaf_fold_angle_deg,
+            inner_curve    = leaf_inner_curve,
+            outer_curve    = leaf_outer_curve,
+            curl_deg       = leaf_curl_deg,
+            lift_mm        = leaf_lift_mm,
+            h_overlap      = leaf_h_overlap,
+            v_overlap      = leaf_v_overlap,
+            n_meridians    = leaf_arc_meridians,
+            z_samples      = leaf_arc_z_samples,
+            seeds          = [_hash01_int(bark_seed, "leaves", eid) for eid in _clump_eids],
+            labels         = [f"cluster-{eid}" for eid in _clump_eids],
+            angle_jitter_deg = leaf_angle_jitter_deg,
+            pos_jitter       = leaf_pos_jitter,
+        )
+        for _lp in _leaf_parts:
+            leaf_solids.extend(_lp)
 
     # ── assemble ──────────────────────────────────────────────────────────
     leaf_solids = [m for m in leaf_solids if len(m.vertices) > 0]
