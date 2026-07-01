@@ -57,6 +57,86 @@ _FLOOR_TOL_MM: float = 0.1
 # the leeward/windward faces of tilted clusters; this tolerance keeps them.
 _OVAL_PROTRUSION_TOL_MM: float = 0.75
 
+# ── Imbrication (shingling) ───────────────────────────────────────────────────
+# Overlapping leaves are staggered along the surface normal so they stack into
+# layers instead of phasing through one another coplanar.  A coarse occupancy
+# grid in (phi, s) surface coordinates — shared across ALL rows of a mesh —
+# records, per cell, a bitmask of occupied normal-offset *layers*.  Each new
+# leaf takes the lowest layer free across the cells its W×L footprint covers
+# (greedy lowest-free colouring, which bounds the layer count to the local
+# overlap multiplicity), then stands its *blade* off the surface by
+# layer×_SHINGLE_DELTA_MM along the surface normal.  The root oval stays plugged
+# at the surface, so the leaf never detaches — solidify_leaf just builds a taller
+# connecting neck.  Fully proactive: the layer is chosen before any geometry is
+# built; no BVH, no closest_point, no reactive retry.
+_SHINGLE_PHI_CELLS: int = 180       # angular resolution of the occupancy grid (2° cells)
+_SHINGLE_S_CELL_FRAC: float = 0.25  # meridional cell size as a fraction of leaf length L
+_SHINGLE_MAX_LAYERS: int = 4        # cap on distinct layers (bounds total standoff)
+_SHINGLE_DELTA_MM: float = 0.30     # per-layer outward standoff (≈ leaf thickness)
+# Footprint is the leaf's overlapping *core*, scaled below its full W×L so that
+# merely touch-packed leaves (spaced exactly one leaf-width/length apart, as at
+# h_overlap=v_overlap=0) do NOT register as overlapping and stay on layer 0.
+# Only leaves that genuinely overlap by more than (1−scale) of a dimension get
+# bumped to a higher shingle layer.
+_SHINGLE_FOOTPRINT_SCALE: float = 0.80
+_SHINGLE_PHI_CELL: float = 2.0 * math.pi / _SHINGLE_PHI_CELLS
+
+
+def _shingle_cells(
+    phi: float, s_center: float, ring_r: float, W: float, L: float,
+) -> list[tuple[int, int]]:
+    """Occupancy-grid cells covered by a leaf's W×L footprint in (phi, s) space.
+
+    phi is a global azimuth about the cluster axis (radians); s_center is the
+    meridional surface arc-length at the leaf base.  The circumferential half-
+    width W/2 is converted to an angular half-width via *ring_r* — the ring
+    radius at the leaf's mid-length, where its body actually sits — not the base
+    radius, which collapses toward zero at the apex and would make a single leaf
+    claim the entire ring (forcing every apex leaf onto its own layer).  The
+    half-width is also capped at π/2 so no leaf ever occupies more than half the
+    ring.  The meridional extent is L centred on s_center.  phi bins wrap modulo
+    the full circle so a leaf near phi≈0 and one near phi≈2π share cells.
+    """
+    W_eff    = W * _SHINGLE_FOOTPRINT_SCALE
+    L_eff    = L * _SHINGLE_FOOTPRINT_SCALE
+    half_phi = min((W_eff / 2.0) / max(ring_r, 1e-3), math.pi / 2.0)
+    s_cell   = max(L * _SHINGLE_S_CELL_FRAC, 1e-3)
+    iphi_lo  = int(math.floor((phi - half_phi) / _SHINGLE_PHI_CELL))
+    iphi_hi  = int(math.floor((phi + half_phi) / _SHINGLE_PHI_CELL))
+    is_lo    = int(math.floor((s_center - L_eff / 2.0) / s_cell))
+    is_hi    = int(math.floor((s_center + L_eff / 2.0) / s_cell))
+    cells: list[tuple[int, int]] = []
+    for iphi in range(iphi_lo, iphi_hi + 1):
+        wphi = iphi % _SHINGLE_PHI_CELLS
+        for is_ in range(is_lo, is_hi + 1):
+            cells.append((wphi, is_))
+    return cells
+
+
+def _shingle_pick_layer(occ: dict, cells: list[tuple[int, int]]) -> int:
+    """Lowest normal-offset layer free across every covered cell (greedy colouring).
+
+    ORs the layer bitmasks of all covered cells, then returns the index of the
+    lowest clear bit.  Clamps to _SHINGLE_MAX_LAYERS-1 so total standoff stays
+    bounded even in pathologically dense regions (leaves there reuse the top
+    layer rather than climbing indefinitely).
+    """
+    mask = 0
+    for c in cells:
+        mask |= occ.get(c, 0)
+    layer = 0
+    while layer < _SHINGLE_MAX_LAYERS and (mask >> layer) & 1:
+        layer += 1
+    return min(layer, _SHINGLE_MAX_LAYERS - 1)
+
+
+def _shingle_write(occ: dict, cells: list[tuple[int, int]], layer: int) -> None:
+    """Mark *layer* occupied in every covered cell."""
+    bit = 1 << layer
+    for c in cells:
+        occ[c] = occ.get(c, 0) | bit
+
+
 # ── Profiling accumulators (cleared and printed by place_leaves_on_multiple_meshes) ──
 _PROF: dict[str, float] = {}
 _PROF_N: dict[str, int] = {}
@@ -93,6 +173,8 @@ class LeafPlacementStats:
     # Per-leaf: maximum depth of any curl-region vertex that lies INSIDE the
     # mesh (unsigned distance to nearest surface point).  > 0 = buried.
     leaf_buried_depths: list[float] = dataclasses.field(default_factory=list)
+    # Per-leaf shingle layer (0 = flat on surface, n = stood off by n×delta).
+    shingle_layers: list[int] = dataclasses.field(default_factory=list)
     # Per-row perimeter (sum of all polygon perimeters in that cross-section slice)
     row_perims: list[float] = dataclasses.field(default_factory=list)
     # Geometry parameters (filled in once after the row loop)
@@ -358,6 +440,9 @@ class _MeshCtx:
     seed:         int
     stats:        LeafPlacementStats
     parts:        list   # list[trimesh.Trimesh], mutated in place
+    # Shingle occupancy grid: (phi_bin, s_bin) → bitmask of occupied layers.
+    # Shared across all rows of this mesh; grows as leaves are placed.
+    occ:          dict = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass
@@ -376,6 +461,9 @@ class _LeafSlot:
     z_belly:     float
     poly:        object   # shapely Polygon
     ci:          int
+    # Meridional surface arc-length at this row's z (shared s coordinate for the
+    # shingle occupancy grid; consistent across rows of the same mesh).
+    s_row:       float
     # Approximate 3-D base position on the parent mesh surface (computed from
     # the row cross-section polygon at this slot's azimuthal angle phi_2d =
     # 2π*ci/n_col).  Available before _place_leaf_slot runs; used for local
@@ -535,6 +623,7 @@ def _collect_row_slots(
                 centroid_3d=centroid_3d,
                 best_bi=_best_bi, belly_polys=_belly_polys,
                 z_belly=_z_belly, poly=poly, ci=ci,
+                s_row=_s_row,
                 approx_base=_approx_base,
                 local_faces=_local_faces,
             ))
@@ -750,11 +839,33 @@ def _place_leaf_slot(
         up_hint * math.cos(contact_angle_rad) + T0 * math.sin(contact_angle_rad)
     )
 
+    # ── Imbrication (shingling) ────────────────────────────────────────────
+    # Decide this leaf's normal-offset layer from the shared (phi, s) occupancy
+    # grid, then stand the blade off the surface by layer×delta along the
+    # surface normal (up_hint).  The root oval stays plugged at pt3d, so the
+    # leaf never detaches; solidify_leaf just builds a taller connecting neck.
+    # Measure azimuth and ring radius at the leaf's mid-length (where its widest
+    # cross-section sits), not at the base.  Near the apex the base radius
+    # collapses toward the cluster axis, but the leaf body fans outward along
+    # tangent to a larger radius — using the mid position keeps azimuthally
+    # separated apex leaves from all claiming the same phi ring.
+    _mid    = pt3d + 0.5 * L * tangent
+    _mdx    = _mid[0] - mesh_centroid_3d[0]
+    _mdy    = _mid[1] - mesh_centroid_3d[1]
+    phi_occ = math.atan2(_mdy, _mdx)
+    ring_r  = float(math.hypot(_mdx, _mdy))
+    _cells  = _shingle_cells(
+        phi_occ, slot.s_row, ring_r, float(leaf_kw["width_mm"]), L,
+    )
+    _layer  = _shingle_pick_layer(ctx.occ, _cells)
+    _delta  = float(_layer) * _SHINGLE_DELTA_MM
+    base_blade = pt3d + _delta * up_hint
+
     # Skip leaves whose midrib tip would extend below the mesh floor.
     # The row anchor is set to keep tips above z_min, but the contact
     # angle (especially negative outward-lean values) can make the
     # tangent steeper than Tz-based estimation assumes.
-    _tip_z = pt3d[2] + L * tangent[2]
+    _tip_z = base_blade[2] + L * tangent[2]
     if _tip_z < z_min_mesh - _FLOOR_TOL_MM:
         stats.skipped_below_floor += 1
         return 1, 0
@@ -763,7 +874,7 @@ def _place_leaf_slot(
     _t_build = time.perf_counter()
     try:
         surf, geom = build_leaf_surface(
-            base_pos = pt3d,
+            base_pos = base_blade,
             tangent  = tangent,
             up_hint  = up_placed,
             seed     = lseed,
@@ -827,12 +938,18 @@ def _place_leaf_slot(
         stats.skipped_preburied += 1
         return 1, 0
 
+    # Commit this leaf's footprint to the shingle grid so later leaves stack
+    # above it.  Only written on success — a rejected build leaves the grid
+    # untouched, so its layer stays free for the next candidate.
+    _shingle_write(ctx.occ, _cells, _layer)
+
     stats.leaf_float_dists.append(_float_d)
     stats.leaf_buried_depths.append(_burial_d)
     stats.base_positions.append(pt3d.copy())
     stats.base_tangents.append(tangent.copy())
     stats.base_row_idx.append(row_idx)
     stats.root_depths.append(root_depth)
+    stats.shingle_layers.append(_layer)
     stats.n_placed += 1
 
     if len(solid.vertices) > 0:

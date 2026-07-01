@@ -662,3 +662,261 @@ Investigation-only scaffolding (a `_DEBUG_CAPTURE` per-candidate hook in
 `placement.py` and `src/scripts/_instrument_multiparent_gaps.py`) was added to
 diagnose the failures and **removed after the fixes landed**; the durable
 per-row placed/attempted counts in the test's artifact report cover regressions.
+
+---
+
+## Current Priority: Re-add Deconfliction via Slot-Level Arc Exclusion (2026-07-01)
+
+The row-spacing and oval-tolerance fixes are landed.  The next item is bringing
+leaf-surface deconfliction back — but via the **right approach** (Option C from
+the Next Steps section above), not the reactive `closest_point` approach that
+was removed.
+
+### Rationale
+
+The removed approach resolved 1/43 conflicts (2.3%) while burning 78% of total
+runtime.  The right approach is proactive, not reactive:
+
+- **O(1) per slot** — angular interval lookup, no BVH, no proximity queries.
+- **Zero geometry cost for skipped slots** — no `build_leaf_surface` call at all.
+- **Prevents conflicts** before geometry is built, instead of reacting after.
+
+### Implementation file
+
+`src/dharmatiles/trees/placement.py`
+
+### Step-by-step spec
+
+**Step 1 — `_OccupiedArcs` structure in `_MeshCtx`**
+
+Add a `dict[int, list[tuple[float, float]]]` field (row index → list of
+`(phi_lo, phi_hi)` occupied angular intervals) to `_MeshCtx`.  Initialise to
+`defaultdict(list)`.  Intervals are in radians; the list for each row is kept
+sorted and merged so lookups stay O(n_intervals) with a small constant.
+
+**Step 2 — Arc check in `_place_leaf_slot` before geometry**
+
+Before calling `build_leaf_surface`, compute the slot's azimuth `phi` (it is
+already available as the column angle on the row ring).  Query the row's arc
+list: a slot is occupied if any interval `(lo, hi)` satisfies
+`lo ≤ phi ≤ hi` — with wraparound handling for intervals that straddle 2π
+(split them into `[lo, 2π)` and `[0, hi − 2π]` on insert; query both).  If
+occupied, skip — return without building any geometry, increment a
+`stats.arc_skipped` counter.
+
+**Step 3 — Arc insert on successful placement**
+
+After a leaf is successfully placed, compute `half_w = (leaf_width_mm / 2) /
+row_ring_radius`, where `row_ring_radius` is the XY radius of the cluster cross-
+section at the leaf's row z (already computed during slot collection — reuse it,
+don't recompute).  Insert `(phi − half_w, phi + half_w)` into the row's arc
+list.  After inserting, merge any overlapping intervals to keep the list short.
+
+**Step 4 — Retain lift for cross-row vertical overlap only**
+
+The existing lift strategy (increase `lift_mm` in small steps) is useful when
+two leaves on adjacent rows are at non-conflicting azimuths but still slightly
+interpenetrate in 3D due to vertical overlap.  Keep it, but gate it on a cheap
+height-range overlap test: compute the z-extent of the candidate leaf (from
+`pt3d` + blade height) and check whether any already-placed leaf on the
+neighbouring rows has an overlapping z-range AND an azimuth within `2 × half_w`
+of the candidate's.  Only enter the lift loop if both conditions hold.  This
+avoids triggering lift on the common (non-overlapping) case.
+
+**Step 5 — Hard constraints**
+
+- Do NOT re-introduce `trimesh.proximity.closest_point`, R-tree intersection,
+  or `placed_meshes`.  They were removed for cause and are not coming back.
+- Do NOT add `fix_normals()` calls — removed from `solidify_leaf` for
+  performance reasons.
+- After this change, a 48-leaf two-cluster run must complete in under 10s
+  (baseline without deconfliction: ~5s).  The arc check budget per slot is
+  effectively zero; total overhead should be < 1s on top of baseline.
+- The wraparound case must be handled: a leaf at phi ≈ 0 and a leaf at
+  phi ≈ 2π on the same row must be detected as conflicting.
+
+---
+
+## SUPERSEDED — Reframed from Exclusion to Imbrication (2026-07-01, design review)
+
+The "slot-level arc exclusion" plan above is **abandoned**.  A design review
+(walking the actual spacing/geometry code) established that it solves the wrong
+problem on the wrong axis, and — more importantly — that the *goal itself* was
+mis-stated.  What follows supersedes everything from "Current Priority" onward.
+
+### Why arc-exclusion was aimed at the wrong axis
+
+Within-row and cross-row spacing are **already analytic and deterministic**:
+
+- `placement.py:919` — `col_step = max(W*(1-h_overlap), 1e-3)` → within-row
+  column spacing is exactly one leaf-width (edges touch at `h_overlap=0`).
+- `mesh.py:1028` — `row_step_target = L*(1-v_overlap)` → cross-row surface-arc
+  spacing is likewise fixed.
+
+So a **per-row** occupied-arc list (the plan's core structure) merely re-derives
+what `col_step`/`n_col` already guarantees, and — because two leaves on
+*different rows* land in *different* arc lists — it is structurally blind to the
+**cross-row** overlap that the profiling section itself named as the dominant
+conflict ("leaf bodies on adjacent rows overlap in 3D").  The plan's Step 4 also
+quietly re-admitted the very `lift` strategy that resolved 1/43 conflicts.
+
+The 89.6% "conflict" rate was additionally a red herring: the removed test used
+a 0.4 mm clearance requirement *stricter than the touch-packing the spacing
+produces*, so it flagged the intended packing as failure.
+
+### The goal, restated (this is the real pivot)
+
+Deconfliction is **not** about preventing overlap, and **not** a surface-gap
+requirement.  The user wants *more* overlap, not less.  The actual goal is
+**imbrication (shingling)**: let leaf footprints overlap freely, but stagger
+overlapping leaves along the surface normal so they **stack into layers** like
+real overlapping leaves, instead of sitting coplanar and phasing through one
+another.  Criterion = "no visible skewering," not "≥ X mm of air."
+
+This kills the arc-exclusion plan outright (its whole job is to *reject*
+overlap) and retires the 0.4 mm clearance target permanently.
+
+### What survives, repurposed: the `(phi, s)` occupancy map → a *layer* index
+
+The one good idea from the old Next Steps — an unwrapped-surface occupancy map
+in `(phi, s)` coordinates (`s` = surface arc-length, already computed via
+`_avg_arc_for_z`; `phi` already in hand per slot) — survives, but its output
+changes from a boolean *skip* to a **shingle-layer index**:
+
+1. Maintain a coarse occupancy grid in `(phi, s)`, shared across **all** rows
+   (not per-row).  Each cell stores a small bitmask of occupied normal-offset
+   **layers**.
+2. Per new leaf, before building: OR the bitmasks of the cells its `W×L`
+   footprint covers; pick the **lowest free layer** (greedy graph colouring).
+   Lowest-free (not max+1) bounds the layer count to the *local* overlap
+   multiplicity (~2–3), so dense regions don't run away.
+3. `layer → δ` standoff, `Δ ≈ thickness_mm` (~0.24–0.3 mm).
+4. Write that layer's bit into every covered cell.
+
+Cost: O(cells covered) per leaf.  No BVH, no `closest_point`, no R-tree, no
+reactive retry.  Fully proactive and deterministic.  Cross-row skewering is
+handled because a blade's footprint spans multiple rows' worth of `s`.
+
+### The actuator — corrected twice during review
+
+**First (wrong) idea:** use `lift_mm`.  Rejected: `lift_mm` is a *rotation*
+about the base (`leaf.py:414`, `lift_angle = arctan2(lift_mm, length_mm)`), tip
+tilts up, **base stays put** — it changes pose, not depth, and leaves the base
+region coplanar.
+
+**Second (wrong) idea:** rigidly translate the whole leaf (`pt3d += δ·up_hint`,
+oval and blade together) — the old removed "Strategy 2 / raise".  Rejected: it
+lifts the root oval out of the parent mesh, detaching the leaf (the old code
+tellingly "skipped the containment check"), forcing an awkward inward-only
+budget bounded by `embed_mm`.
+
+**Correct idea (user's):** we are *constructing* the leaf — decouple blade depth
+from the root.  Keep the **root oval plugged at the surface** (embed as today),
+and build the **blade surface offset outward by δ** along the normal.
+`solidify_leaf` supports this for free: it skins blade-rim → oval-rim with **1:1
+index correspondence** (`leaf.py:897–903`) and assumes only matching vertex
+count/topology (`:864`), *not* coincident rims.  A δ offset simply makes the
+connecting neck taller; the solid stays watertight.
+
+Concretely, at the build site (`placement.py:765`/`:787`):
+
+```python
+surf, geom = build_leaf_surface(base_pos = pt3d + delta * up_hint, ...)  # blade offset out
+inner_v    = _oval_off + pt3d[np.newaxis]                                # oval stays plugged
+```
+
+The pose frame (`tangent`, `up_placed`) is untouched → elevation and growth
+direction are identical; **only the standoff changes.**
+
+### Consequences of the correct actuator
+
+- **No embed budget, no float-check risk.**  The root never moves.  Layers go
+  purely **outward**, which is also the natural shingle direction (later/outer
+  leaves stand further off and overlie earlier ones).
+- **`col_step`/`row_step` become pure overlap-density knobs** — dial them *down*
+  to overlap more; they no longer carry any deconfliction duty.
+- **The one thing to watch is now the neck**, not the root: large δ makes a tall
+  base riser ("leaf on a stalk") and its wall skims the mesh on concave regions.
+  Keep `Δ ≈ thickness_mm` and let the bounded layer count cap total standoff at
+  ~1 mm — enough to separate surfaces visually while still reading as leaves
+  lying against each other.
+
+### Retained hard constraints (still in force)
+
+- Do NOT re-introduce `trimesh.proximity.closest_point`, R-tree intersection, or
+  `placed_meshes`.
+- Do NOT add `fix_normals()` calls.
+- Proactive only — decide the layer *before* building geometry; never build,
+  test, retry.
+
+### Next action
+
+Prototype against the two-cluster test: `(phi, s)` layer map + greedy lowest-free
+layer + blade standoff via offset `base_pos`, with `col_step`/`row_step` dialed
+down so leaves genuinely overlap.  Eyeball whether the shingling reads as real
+overlapping foliage before generalising to tree scale.
+
+---
+
+## IMPLEMENTED — Imbrication (shingling) via (phi, s) layer map (2026-07-01)
+
+Built exactly the actuator/layer-map design above.  All changes in
+`src/dharmatiles/trees/placement.py`; no `closest_point`, R-tree, `placed_meshes`,
+or `fix_normals` reintroduced.  Fully proactive (layer chosen before geometry).
+
+### What was added
+
+- Module constants `_SHINGLE_*`: `PHI_CELLS=180` (2° angular grid),
+  `S_CELL_FRAC=0.25` (meridional cell = L/4), `MAX_LAYERS=4`, `DELTA_MM=0.30`
+  (per-layer outward standoff ≈ leaf thickness), `FOOTPRINT_SCALE=0.80`.
+- `_shingle_cells(phi, s, ring_r, W, L)` → grid cells a leaf's W×L footprint
+  covers; `_shingle_pick_layer(occ, cells)` → lowest free layer (greedy
+  colouring, clamped to `MAX_LAYERS-1`); `_shingle_write(occ, cells, layer)`.
+- `_MeshCtx.occ`: `dict[(phi_bin, s_bin) → layer bitmask]`, shared across all
+  rows of one mesh, persists for the placement run.
+- `_LeafSlot.s_row`: meridional arc-length at the row (from `_avg_arc_for_z`),
+  the shared `s` coordinate.
+- `LeafPlacementStats.shingle_layers`: per-leaf layer, for inspection.
+
+### Actuator (as designed)
+
+At the build site, blade offset out, root oval left plugged:
+```python
+base_blade = pt3d + layer * _SHINGLE_DELTA_MM * up_hint   # blade stands off
+surf, _ = build_leaf_surface(base_pos=base_blade, tangent=tangent, up_hint=up_placed, ...)
+inner_v = _oval_off + pt3d[np.newaxis]                     # oval stays at surface
+```
+Pose frame (`tangent`, `up_placed`) untouched → elevation/growth identical, only
+the standoff changes.  `solidify_leaf` just builds a taller connecting neck; all
+61 test leaves remain watertight.  Grid written only on successful placement.
+
+### Two corrections found by eyeballing the first render
+
+The user flagged the **brown cluster apex leaves raised way more than needed** —
+tall necks where the dome already crests.  Two root causes, both fixed:
+
+1. **Apex phi blow-up.** `half_phi = (W/2)/ring_r` with `ring_r` = *base* ring
+   radius → near the apex `ring_r → 0`, so a single leaf claimed the whole phi
+   ring and every apex leaf was forced onto its own layer (0,1,2,3 → 0.9 mm
+   stalks).  Fix: measure `phi`/`ring_r` at the leaf **mid-length**
+   (`pt3d + 0.5·L·tangent`), where the body actually sits and fans outward to a
+   larger radius, and cap `half_phi` at π/2.  Apex leaves that are azimuthally
+   separated now stay on layer 0.
+2. **Touch-packing over-triggered.** At `h_overlap=v_overlap=0` leaves merely
+   *touch* (spaced exactly W/L apart) yet shared a boundary grid cell → bumped to
+   higher layers.  Fix: `_SHINGLE_FOOTPRINT_SCALE=0.80` shrinks the footprint to
+   the leaf's overlapping *core*, so only genuine overlap (> 20 % of a dimension)
+   escalates a layer.
+
+### Result (two-cluster touch-packed test, `h=v=0`)
+
+- Runtime **5.9 s** (well under the 10 s budget; baseline ~5 s).
+- Layer histograms: A `{0:9, 1:8, 2:7, 3:10}`, B `{0:13, 1:10, 2:4}` — max
+  standoff 0.6–0.9 mm, within the ~1 mm design target.
+- Apex rosette on B now lies flat (top render) instead of on stalks; per-cluster
+  placed counts and watertightness unchanged.
+
+`col_step`/`row_step` are now pure overlap-density knobs (dial `h_overlap`/
+`v_overlap` up to overlap more); shingling engages automatically when leaves
+genuinely overlap.  Next: generalise to tree scale and tune `DELTA_MM`/overlap
+on a full tile.
