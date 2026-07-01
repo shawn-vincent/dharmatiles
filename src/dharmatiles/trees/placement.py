@@ -47,6 +47,15 @@ _PREBURIED_DEPTH_MM: float = 0.25
 # well below print-layer resolution, so we allow it rather than leaving the
 # bottom row bald.
 _FLOOR_TOL_MM: float = 0.1
+# Maximum distance (mm) an embedded leaf-oval vertex may protrude outside the
+# parent mesh and still be accepted.  The oval is the leaf's root, pushed
+# embed_mm (=0.75) into the surface; on a convex or tilted cluster the straight
+# oval overshoots where the surface curves away, poking a few tip-end vertices
+# out.  As long as the protrusion is ≤ the embed depth the root's outer skin is
+# still at/inside the surface, so the leaf plugs in cleanly and the blade hides
+# it.  A strict all-inside test rejected such leaves and left bald stripes on
+# the leeward/windward faces of tilted clusters; this tolerance keeps them.
+_OVAL_PROTRUSION_TOL_MM: float = 0.75
 
 # ── Profiling accumulators (cleared and printed by place_leaves_on_multiple_meshes) ──
 _PROF: dict[str, float] = {}
@@ -776,8 +785,14 @@ def _place_leaf_slot(
             L=L, W=float(leaf_kw["width_mm"]),
         )
         inner_v = _oval_off + pt3d[np.newaxis]
-        if not mesh.contains(inner_v).all():
-            raise RuntimeError("oval not fully inside parent mesh")
+        _outside = ~mesh.contains(inner_v)
+        if _outside.any():
+            # Accept small overshoots: only reject when the deepest protruding
+            # oval vertex clears the embed depth (root no longer reaches the
+            # surface).  See _OVAL_PROTRUSION_TOL_MM.
+            _, _ov_d, _ = trimesh.proximity.closest_point(mesh, inner_v[_outside])
+            if float(_ov_d.max()) > _OVAL_PROTRUSION_TOL_MM:
+                raise RuntimeError("oval protrudes past embed depth")
         solid, _ = solidify_leaf(surf, inner_v)
     except (RuntimeError, ValueError):
         stats.build_errors += 1

@@ -1030,8 +1030,23 @@ def _compute_row_z_positions(
     actual_step     = inner_arc / n_gaps
 
     row_arc = [s_bot + i * actual_step for i in range(n_gaps + 1)]
-    row_zs  = [_avg_z_for_arc(s, meridians) for s in row_arc[:-1]]
-    row_zs.append(z_top_sample)  # pin last row to apex sample, bypassing arc↔z bias
+
+    # Convert uniform arc positions → z by inverting a SINGLE averaged arc(z)
+    # profile.  Using _avg_z_for_arc directly (arc→z) is inconsistent with the
+    # _avg_arc_for_z (z→arc) used to pick s_bot/s_top: the two averages weight
+    # different meridian subsets, because near the apex of a tilted cluster
+    # fewer meridians reach each level.  That inconsistency makes uniform arc
+    # steps realise as *uneven* z rows — the row just below the apex lands too
+    # low, opening a visible gap up to the pinned apex row while overlapping the
+    # row beneath it.  Sampling arc(z) once and inverting the same table makes
+    # the arc↔z round-trip exact, so uniform arc steps stay uniform.  s_top maps
+    # back to z_top_sample by construction, so the apex row stays pinned without
+    # a special case.
+    z_prof = np.linspace(z_bot_anchor, z_top_sample, 400)
+    s_prof = np.array([_avg_arc_for_z(float(z), meridians) for z in z_prof])
+    s_prof = np.maximum.accumulate(s_prof)   # enforce monotone arc(z)
+    row_zs = [float(np.interp(s, s_prof, z_prof)) for s in row_arc]
+    row_zs[-1] = z_top_sample                # exact apex pin (interp already ≈ this)
     return row_zs
 
 

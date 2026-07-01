@@ -533,3 +533,132 @@ The full `phase2.place_slot` avg is 74ms/leaf, so the contact-angle + frame
 calculation costs the remaining 74 − 25 = 49ms/leaf.  That is the next target
 if further speed is needed; for now 74ms/leaf × ~800 leaves/tile ≈ 60s total
 placement is workable.
+
+---
+
+## Brown-Cluster Bald Spot + Uneven Row Gaps (2026-07-01, later session)
+
+### Symptoms reported
+
+On the multi-parent-mesh test's **brown cluster (B — 55° tilt, tip at (6,2))**:
+
+1. **Missing leaves in the 2nd-from-top row**, a "significant gap near the end"
+   (the windward, +x tip direction).
+2. **Inconsistent row gaps**: the apex→2nd-row gap was a visible gap while the
+   2nd→3rd-row gap overlapped.  With 0 % overlap the user expected rows to touch
+   or the slack to distribute evenly.
+
+### Instrumentation added
+
+- `_DEBUG_CAPTURE` / `_DEBUG_RECORDS` opt-in hook in `placement.py`: appends a
+  per-candidate record (outcome, base position, growth tangent, contact angle,
+  and for build errors the failure reason + oval protrusion depth) at each
+  outcome site in `_place_leaf_slot`.  No effect on geometry when disabled.
+- `src/scripts/_instrument_multiparent_gaps.py`: reproduces cluster B alone,
+  reports per-row surface-arc positions + gaps, and dumps the per-candidate
+  outcome table.
+
+### Root cause — both symptoms are one bug in `_compute_row_z_positions`
+
+The meridian-arc row placer picks row positions at **uniform surface-arc steps**,
+then converts arc→z with `_avg_z_for_arc` while the anchors `s_bot`/`s_top` are
+found with `_avg_arc_for_z`.  These two averages are **not mutual inverses**:
+each averages over whichever meridians cover the query level, and near the apex
+of a *tilted* cluster fewer meridians reach each level.  So the arc→z→arc
+round-trip is lossy, worst just below the apex.
+
+Measured (cluster B, before fix), re-derived arc of the 4 realised rows:
+
+| row | z | arc s | Δarc(prev) |
+|---|---|---|---|
+| 0 | 21.49 | 10.71 | — |
+| 1 | 25.04 | 14.92 | 4.21 |
+| 2 | 27.97 | 18.22 | **3.30** |
+| 3 (apex, pinned) | 30.59 | 23.79 | **5.57** |
+
+Row 2 landed ~0.95 arc-units too low → gap to the pinned apex ballooned to 5.57
+(overlap below shrank to 3.30).  The old `z_top_sample` **pin** on the last row
+was a prior workaround for this same bias — it fixed the apex *z* but not the
+*spacing* to the row below, which is exactly the gap the user saw.
+
+The row-2 **bald spot was a downstream symptom**: at the mis-placed z=27.97 the
+windward cross-section curved away fast enough that the straight embedded leaf
+oval poked outside the mesh (`mesh.contains` fail → `build_error`), rejecting the
+two windward leaves (ci=0 protrude 0.751 mm, ci=10 protrude 0.014 mm).
+
+### Fix — consistent arc(z) inversion
+
+Replace the `_avg_z_for_arc` + apex-pin with a single monotone averaged arc(z)
+profile that is **inverted** for the arc→z step:
+
+```python
+z_prof = np.linspace(z_bot_anchor, z_top_sample, 400)
+s_prof = np.maximum.accumulate([_avg_arc_for_z(z, meridians) for z in z_prof])
+row_zs = [np.interp(s, s_prof, z_prof) for s in row_arc]
+row_zs[-1] = z_top_sample   # exact apex pin (interp already ≈ this)
+```
+
+Now the arc↔z round-trip is exact by construction; `s_top` maps back to
+`z_top_sample`, so the apex stays pinned without a special case.
+
+### Result (cluster B, after fix)
+
+| row | z | arc s | Δarc(prev) |
+|---|---|---|---|
+| 0 | 20.98 | 9.94 | — |
+| 1 | 24.69 | 14.56 | **4.61** |
+| 2 | 28.79 | 19.17 | **4.61** |
+| 3 (apex) | 30.59 | 23.79 | **4.61** |
+
+Perfectly even arc spacing.  Row 2 rose to z=28.79 where the cross-section fits
+the oval — **row 2 now places 10/10 leaves, zero build errors**.  Both reported
+symptoms resolved by the single row-spacing fix; the bald spot did not need a
+separate oval-tolerance change.
+
+Residual sub-print oval rejections remained in rows 1 and 3 (protrusions
+0.06–0.54 mm) — not user-reported, but they stacked into a leeward brown stripe
+visible in the side render.  Addressed by the second fix below.
+
+### Second fix — oval-protrusion tolerance (leeward/windward stripes)
+
+The embedded leaf **oval** (root, pushed `embed_mm = 0.75` into the surface) was
+gated by a strict `mesh.contains(inner_v).all()` — any single protruding vertex
+→ `build_error`.  On a convex/tilted cluster the straight oval overshoots where
+the surface curves away, poking a few tip-end vertices out by a fraction of a
+millimetre (e.g. 0.063 mm — a 63-micron poke rejecting a whole leaf).
+
+Replaced the binary test with a tolerance keyed to the embed depth: reject only
+when the deepest protruding vertex clears `_OVAL_PROTRUSION_TOL_MM = 0.75` mm
+(= the embed depth).  Below that, the root's outer skin is still at/inside the
+surface, so the leaf plugs in and the blade hides it.  Genuinely-outside cases
+(bottom-row downward overhangs at 1.4–2.2 mm) are still rejected.
+
+### Combined result (cluster B, both fixes)
+
+| row | before | after Issue-2 fix | after both fixes |
+|---|---|---|---|
+| 0 (bottom, downward — intended bald) | 0/3 | 0/3 | 0/3 |
+| 1 | 9/11 | 6/10 | **10/10** |
+| 2 (2nd-from-top — reported) | 9/11 | **10/10** | **10/10** |
+| 3 (apex) | 5/9 | 5/7 | **7/7** |
+
+Cluster B: 21 → 27 leaves; fully covered except the intended bald bottom row.
+Cluster A (vertical, symmetric) unaffected by the arc fix and improved from
+25 → 33 leaves via the oval tolerance.  Top/perspective/side renders confirm the
+apex rosette now flows into the ring below with no gap, and the 2nd-from-top row
+is solid.
+
+The FLOATING-LEAVES artifact count rose (recovered leaves on overhang faces have
+curl tips that lift up to ~1.85 mm) — a pre-existing cosmetic check, not a bald
+spot; trading a bald spot for a slightly-lifted tip is a net coverage win.
+
+### Files touched
+
+- `mesh.py::_compute_row_z_positions` — consistent arc(z) inversion (Issue 2).
+- `placement.py` — `_OVAL_PROTRUSION_TOL_MM` constant + tolerant oval check
+  (Issue 1 residual).
+
+Investigation-only scaffolding (a `_DEBUG_CAPTURE` per-candidate hook in
+`placement.py` and `src/scripts/_instrument_multiparent_gaps.py`) was added to
+diagnose the failures and **removed after the fixes landed**; the durable
+per-row placed/attempted counts in the test's artifact report cover regressions.
