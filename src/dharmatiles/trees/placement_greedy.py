@@ -275,7 +275,15 @@ def _generate_candidates(
     pts, fi = _sample_surface(mesh, n_cand, rng)
     if len(pts) == 0:
         return []
-    normals = mesh.face_normals[fi]
+    # Smooth (barycentric-interpolated vertex) normals — NOT face normals — so
+    # leaf base orientation varies smoothly across the coarse icosphere instead
+    # of jumping per triangle.  Matches the meridian placer's up_hint.
+    tris = mesh.triangles[fi]                                      # (n, 3, 3)
+    bary = trimesh.triangles.points_to_barycentric(tris, pts)     # (n, 3)
+    vn = mesh.vertex_normals[mesh.faces[fi]]                       # (n, 3, 3)
+    normals = np.einsum("nk,nkj->nj", bary, vn)                    # (n, 3)
+    _nl = np.linalg.norm(normals, axis=1, keepdims=True)
+    normals = np.divide(normals, _nl, out=np.zeros_like(normals), where=_nl > 1e-9)
     cx = float(mesh.vertices[:, 0].mean())
     cy = float(mesh.vertices[:, 1].mean())
     centroid = np.array([cx, cy, float(mesh.vertices[:, 2].mean())])
@@ -457,20 +465,28 @@ def place_leaves_greedy(
             n_rejected_thin += 1
             continue
 
-        # Analytic lean (closed form, base-normal plane model; pull-away absorbs
-        # residual curvature penetration — no proximity query here).
-        ca = _contact_angle_analytic(belly_dip[0], belly_dip[1], T0, normal)
-        tangent = _safe_norm(T0 * math.cos(ca) - normal * math.sin(ca))
-        up_placed = _safe_norm(normal * math.cos(ca) + T0 * math.sin(ca))
-
-        # Angle jitter: pivot the growth direction azimuthally about the normal.
+        # Angle jitter FIRST: pivot the growth direction T0 azimuthally about the
+        # normal, then solve the lean for the jittered direction (matches the
+        # meridian order — jitter T0, not the leaned tangent).
         lseed = int(_hash01_int(int(seeds_list[mi]), "greedy-leaf", cand.idx))
         if angle_jitter_deg != 0.0:
             theta = math.radians(angle_jitter_deg) * (
                 _hash01(int(seeds_list[mi]), "greedy-ang", cand.idx) * 2.0 - 1.0
             )
             ct, st = math.cos(theta), math.sin(theta)
-            tangent = _safe_norm(tangent * ct + np.cross(normal, tangent) * st)
+            T0 = _safe_norm(T0 * ct + np.cross(normal, T0) * st)
+
+        # Analytic lean, pressing the belly-dip against the LOCAL surface.  The
+        # plane normal m is measured at the belly-dip point (one on_surface
+        # query), matching the meridian placer's _ANALYTIC_MEASURE_BELLY=True.
+        # Using the base normal instead makes leaves stand off ("lift") on convex
+        # clumps because it ignores the surface curving away under the belly.
+        _bp = base + belly_dip[0] * T0 + belly_dip[1] * normal
+        _mc, _, _mt = proximities[mi].on_surface(_bp[np.newaxis])
+        _m = meshes[mi].face_normals[int(_mt[0])]
+        ca = _contact_angle_analytic(belly_dip[0], belly_dip[1], T0, normal, m=_m)
+        tangent = _safe_norm(T0 * math.cos(ca) - normal * math.sin(ca))
+        up_placed = _safe_norm(normal * math.cos(ca) + T0 * math.sin(ca))
 
         # C2: tip-half footprint vs the shared shingle occupancy → lowest free
         # standoff layer, or drop if the tip region is saturated to the cap.
