@@ -31,7 +31,7 @@ import numpy as np
 from dharmatiles.trees._utils import _safe_norm
 from dharmatiles.trees.mesh import _build_foliage_cluster_mesh
 from dharmatiles.trees.leaf import _LEAF_N_LONG, _LEAF_N_LAT
-from dharmatiles.trees.placement_greedy import place_leaves_greedy
+from dharmatiles.trees.placement_greedy import place_leaves_greedy, _LEAF_OCC_CELL_MM
 
 _LEAF = dict(
     length_mm      = 4.5,
@@ -94,24 +94,52 @@ def main() -> int:
     print(f"placed {total} leaves in {elapsed:.3f}s "
           f"(A={len(parts[0])}, B={len(parts[1])})")
 
-    # 2 + 3 + 4. Per-leaf correctness.
+    # 2 + 3 + 4 + 6 + 7. Per-leaf correctness.
+    L = float(_LEAF["length_mm"])
+    base_i = _N_OUTER - 2                       # base_pt vertex (surface layout)
+    tip_i = _N_OUTER - 1                        # tip_pt vertex
+    cell = _LEAF_OCC_CELL_MM
     n_nonwatertight = 0
     n_disconnected = 0
     n_tipz = 0
-    for mi, leaves in enumerate(parts):
-        for leaf in leaves:
-            if not leaf.is_watertight:
-                n_nonwatertight += 1
-            # Inner oval = second half of the stacked solid vertices.
-            if len(leaf.vertices) >= 2 * _N_OUTER:
-                oval = leaf.vertices[_N_OUTER:2 * _N_OUTER]
-                inside = noised[mi].contains(oval)
-                if int(inside.sum()) == 0:
-                    n_disconnected += 1
-            # Tip-z: visible blade tip (outer tip) above embedded root tip.
-            tip_i = _N_OUTER - 1
-            if leaf.vertices[tip_i, 2] <= leaf.vertices[_N_OUTER + tip_i, 2]:
-                n_tipz += 1
+    n_buried_mesh = 0
+    n_buried_leaf = 0
+
+    # Flatten leaves + collect each leaf's widest→tip (blade) vertices.
+    flat = [(mi, leaf) for mi, leaves in enumerate(parts) for leaf in leaves]
+    tip_pts_all: list[np.ndarray] = []
+    # Voxel occupancy of every leaf's full blade surface → which leaf ids own a cell.
+    cell_owners: dict[tuple, set] = {}
+    for gid, (mi, leaf) in enumerate(flat):
+        outer = leaf.vertices[:_N_OUTER]
+        base = leaf.vertices[base_i]
+        tip_half = outer[np.linalg.norm(outer - base, axis=1) > (L / 2.0)]
+        tip_pts_all.append(tip_half)
+        q = np.floor(outer / cell).astype(np.int64)
+        for c in q:
+            cell_owners.setdefault((int(c[0]), int(c[1]), int(c[2])), set()).add(gid)
+
+    for gid, (mi, leaf) in enumerate(flat):
+        if not leaf.is_watertight:
+            n_nonwatertight += 1
+        if len(leaf.vertices) >= 2 * _N_OUTER:
+            oval = leaf.vertices[_N_OUTER:2 * _N_OUTER]
+            if int(noised[mi].contains(oval).sum()) == 0:
+                n_disconnected += 1
+        if leaf.vertices[tip_i, 2] <= leaf.vertices[_N_OUTER + tip_i, 2]:
+            n_tipz += 1
+
+        tip_half = tip_pts_all[gid]
+        # Requirement 1: widest→tip blade must not be buried in ANY parent clump.
+        if any(int(nm.contains(tip_half).sum()) > 0 for nm in noised):
+            n_buried_mesh += 1
+        # Requirement 2: no tip vertex buried in ANOTHER leaf's blade.
+        q = np.floor(tip_half / cell).astype(np.int64)
+        for c in q:
+            owners = cell_owners.get((int(c[0]), int(c[1]), int(c[2])))
+            if owners and (owners - {gid}):
+                n_buried_leaf += 1
+                break
 
     if n_nonwatertight:
         failures.append(f"{n_nonwatertight}/{total} leaves not watertight")
@@ -122,10 +150,20 @@ def main() -> int:
         )
     if n_tipz:
         failures.append(f"{n_tipz}/{total} leaves have blade tip at/below root tip")
+    if n_buried_mesh:
+        failures.append(
+            f"{n_buried_mesh}/{total} leaves have their widest→tip blade buried in a parent clump"
+        )
+    if n_buried_leaf:
+        failures.append(
+            f"{n_buried_leaf}/{total} leaves have a tip vertex buried in another leaf"
+        )
 
     print(f"watertight={total - n_nonwatertight}/{total}  "
           f"root-connected={total - n_disconnected}/{total}  "
           f"tip-z-ok={total - n_tipz}/{total}")
+    print(f"blade-clear-of-mesh={total - n_buried_mesh}/{total}  "
+          f"tip-clear-of-leaves={total - n_buried_leaf}/{total}")
 
     # 5. Determinism.
     parts2, stats2 = place_leaves_greedy(

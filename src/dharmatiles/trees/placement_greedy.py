@@ -185,18 +185,51 @@ def _shingle_write(occ: dict, cells: list[tuple[int, int, int]], layer: int) -> 
         occ[c] = occ.get(c, 0) | bit
 
 
-def _point_inside_any(meshes: list, pt: np.ndarray, near_pt: np.ndarray, reach: float) -> bool:
-    """True if ``pt`` is inside any neighbour solid (AABB-pruned by ``near_pt``).
+def _points_inside_any(meshes: list, pts: np.ndarray, near_pt: np.ndarray, reach: float) -> bool:
+    """True if ANY of ``pts`` is inside any neighbour solid (AABB-pruned by ``near_pt``).
 
-    Uses embree ``mesh.contains`` on a single point (~0.002 ms).  Neighbours the
-    candidate cannot reach (bbox expanded by ``reach``) are skipped.
+    Uses embree ``mesh.contains`` (fast; a hard dep).  Neighbours the leaf cannot
+    reach (bbox expanded by ``reach``) are skipped, so the test stays O(k) on a
+    dense canopy.  ``pts`` is a single point (shape (1,3)) for the seam pre-test
+    or the blade's widest→tip vertices for the burial test.
     """
-    p = pt[np.newaxis]
+    if len(pts) == 0:
+        return False
     for _m in meshes:
         _b = _m.bounds
         if (near_pt < _b[0] - reach).any() or (near_pt > _b[1] + reach).any():
             continue
-        if bool(_m.contains(p)[0]):
+        if bool(_m.contains(pts).any()):
+            return True
+    return False
+
+
+# ── Placed-leaf world-voxel occupancy (leaf-vs-leaf clearance) ─────────────────
+# A shared set of occupied world cells recording where every placed leaf's blade
+# surface sits.  A new leaf's widest→tip vertices are lifted along the surface
+# normal until none of them fall in an occupied cell — so no tip ends up buried
+# in a leaf below it.  Cell edge ≈ 2.5× the leaf thickness so a thin blade fully
+# occupies its cells (no gaps a tip could slip through).  Self-managed hash: no
+# trimesh.proximity, no per-leaf BVH, O(verts) per query.
+_LEAF_OCC_CELL_MM: float = 0.6
+# Outward step when lifting a leaf clear of obstacles, and the max total standoff
+# (own-mesh pull + clearance lift) before a leaf is deemed unplaceable and culled.
+_CLEAR_STEP_MM: float = 0.30
+_CLEAR_MAX_MM: float = 4.5
+
+
+def _occ_mark(leaf_occ: set, pts: np.ndarray, cell: float) -> None:
+    q = np.floor(np.asarray(pts, float) / cell).astype(np.int64)
+    for c in q:
+        leaf_occ.add((int(c[0]), int(c[1]), int(c[2])))
+
+
+def _occ_hit(leaf_occ: set, pts: np.ndarray, cell: float) -> bool:
+    if not leaf_occ or len(pts) == 0:
+        return False
+    q = np.floor(np.asarray(pts, float) / cell).astype(np.int64)
+    for c in q:
+        if (int(c[0]), int(c[1]), int(c[2])) in leaf_occ:
             return True
     return False
 
@@ -410,8 +443,13 @@ def place_leaves_greedy(
         bounds_radii.append(float(np.linalg.norm(b[1] - b[0]) * 0.5))
 
     # Neighbour lists (AABB/bounding-sphere pruned; same rule as the meridian
-    # cross-cluster prune) for the seam / no-valid-standoff test.
-    neighbours: list[list[trimesh.Trimesh]] = []
+    # cross-cluster prune) for the seam pre-test and the blade-burial cull.
+    # Burial is judged against the REAL (noised) neighbour clumps when supplied
+    # (a blade inside a neighbour's smooth envelope but outside its receded real
+    # surface is NOT actually buried — testing smooth would over-cull); falls
+    # back to the smooth envelopes otherwise.
+    burial_meshes = real_meshes if real_meshes is not None else meshes
+    neighbours: list[list[trimesh.Trimesh]] = []       # real neighbour clumps (cheap culls)
     for mi in range(n):
         nb = []
         for oi in range(n):
@@ -419,7 +457,7 @@ def place_leaves_greedy(
                 continue
             gap_c = float(np.linalg.norm(bounds_centers[mi] - bounds_centers[oi]))
             if gap_c <= bounds_radii[mi] + bounds_radii[oi] + L:
-                nb.append(meshes[oi])
+                nb.append(burial_meshes[oi])
         neighbours.append(nb)
 
     # ── Global z-ordered sweep ────────────────────────────────────────────────
@@ -427,10 +465,12 @@ def place_leaves_greedy(
 
     root_grid: set[tuple[int, int, int]] = set()   # claimed root cells (shared)
     occ: dict = {}                                  # shingle bitmask (shared)
+    leaf_occ: set[tuple[int, int, int]] = set()     # placed-leaf blade cells (shared)
     n_rejected_root = 0
     n_rejected_seam = 0
     n_rejected_sat = 0
     n_rejected_thin = 0
+    n_rejected_buried = 0
 
     for cand in all_cands:
         mi = cand.mesh_id
@@ -448,8 +488,8 @@ def place_leaves_greedy(
         # Seam / no-valid-standoff (native cross-cluster): if pulling out along
         # the normal immediately re-enters a neighbour, there is no standoff that
         # clears every mesh — pack up to the crease and drop this candidate.
-        if neighbours[mi] and _point_inside_any(
-            neighbours[mi], base + _SEAM_EPS_MM * normal, base, L,
+        if neighbours[mi] and _points_inside_any(
+            neighbours[mi], (base + _SEAM_EPS_MM * normal)[np.newaxis], base, L,
         ):
             n_rejected_seam += 1
             continue
@@ -598,34 +638,87 @@ def place_leaves_greedy(
             signed -= pull_away
             burial_d = 0.0
 
+        # ── Clear ALL remaining obstacles: parent clumps + placed leaves ───────
+        # Two guarantees, lifting the blade along the surface normal:
+        #  1. No part of the blade may stay buried in ANY parent clump (its own
+        #     included — a leaf on a tilted/self-overlapping clump can grow into
+        #     the body).  Judged over the whole blade minus the base cap (which
+        #     legitimately seats at the surface) against the receded NOISED
+        #     clumps.  A leaf oriented INTO a clump cannot be lifted out along its
+        #     normal, so it hits the cap and is culled — correctly not leaf-safe.
+        #  2. No widest→tip vertex may stay buried in a previously-placed leaf.
+        #     Lowest-first ⇒ every placed leaf is lower, so this leaf sits ENTIRELY
+        #     above them; a later, higher leaf tucks ITS base over this one
+        #     (imbrication), which is why only the tip region is tested here.
+        # This runs LAST (after the tip-z lift is folded in) so the committed
+        # geometry — not an intermediate — satisfies both guarantees.  Burial
+        # clearance and tip-z ordering are enforced together: a naive "clear then
+        # lift tip-z" order let the +Z tip-z lift shove a just-cleared blade back
+        # into the clump.  Each iteration moves outward along the normal while any
+        # blade vertex is buried, else lifts +Z while the visible tip sits at/below
+        # the embedded root tip; it exits only when BOTH hold.  Both moves are
+        # up/outward, so tip-z trends up and burial trends clear; a leaf that
+        # can't satisfy both within the standoff cap is not leaf-safe and culled.
+        # Cross-clump burial: a leaf cannot be pulled clear of a NEIGHBOUR along
+        # its own normal, so neighbour burial is cull-only — but done ONCE here
+        # (not per iteration) so the dense-canopy many-neighbours cost stays
+        # bounded.  If any widest→tip blade vertex lands inside a neighbour clump
+        # the blade crosses into it — cull.  (Base→neighbour is pre-culled above.)
+        nbrs = neighbours[mi]
+        own_mesh = burial_meshes[mi]
+        if nbrs and _points_inside_any(nbrs, surf.vertices[curl_mask], pt3d, L):
+            n_rejected_buried += 1
+            stats.skipped_cross_buried += 1
+            continue
+        # A blade whose TIP is inside its OWN clump grows into the body and cannot
+        # be lifted out along the normal — cull without grinding the loop to the cap.
+        if bool(own_mesh.contains(surf.vertices[tip_idx][np.newaxis])[0]):
+            n_rejected_buried += 1
+            stats.skipped_cross_buried += 1
+            continue
+
+        oval_tip_i = len(surf.vertices) + tip_idx
+        tip_z_lift = 0.0
+        still_buried = False
+        while True:
+            buried = (
+                _occ_hit(leaf_occ, surf.vertices[curl_mask], _LEAF_OCC_CELL_MM)
+                or bool(own_mesh.contains(surf.vertices).any())
+            )
+            tip_z_clearance = float(solid.vertices[tip_idx, 2] - solid.vertices[oval_tip_i, 2])
+            tip_z_ok = tip_z_clearance >= _TIP_Z_CLEARANCE_MM
+            if not buried and tip_z_ok:
+                break
+            if pull_away + _CLEAR_STEP_MM > _CLEAR_MAX_MM:
+                still_buried = True
+                break
+            if buried:
+                step_vec = _CLEAR_STEP_MM * normal          # lift clear along normal
+                signed -= _CLEAR_STEP_MM
+            else:
+                step_vec = np.array([0.0, 0.0, _CLEAR_STEP_MM])   # +Z for tip-z ordering
+                tip_z_lift += _CLEAR_STEP_MM
+            surf.vertices += step_vec
+            solid.vertices[:len(surf.vertices)] += step_vec
+            pull_away += _CLEAR_STEP_MM
+        if still_buried:
+            n_rejected_buried += 1
+            stats.skipped_cross_buried += 1
+            continue
+        tip_z_clearance = float(solid.vertices[tip_idx, 2] - solid.vertices[oval_tip_i, 2])
+
         curl_signed = signed[curl_mask] if curl_mask.any() else np.empty(0)
         float_d = (
             float((-curl_signed[curl_signed < 0.0]).max())
             if np.any(curl_signed < 0.0) else 0.0
         )
 
-        # ── Tip-z ordering: visible blade tip above the embedded root-oval tip ─
-        tip_z_lift = 0.0
-        tip_z_clearance = float(
-            solid.vertices[tip_idx, 2] - solid.vertices[len(surf.vertices) + tip_idx, 2]
-        )
-        if tip_z_clearance < _TIP_Z_CLEARANCE_MM:
-            tip_z_lift = _TIP_Z_CLEARANCE_MM - tip_z_clearance
-            lift_vec = np.array([0.0, 0.0, tip_z_lift])
-            surf.vertices += lift_vec
-            solid.vertices[:len(surf.vertices)] += lift_vec
-            tip_z_clearance = float(
-                solid.vertices[tip_idx, 2] - solid.vertices[len(surf.vertices) + tip_idx, 2]
-            )
-        if tip_z_clearance <= 0.0:
-            raise AssertionError(
-                "greedy leaf surface tip z must be above root oval tip z "
-                f"(clearance={tip_z_clearance:.6f}, mesh={mi}, cand={cand.idx})"
-            )
-
         # ── COMMIT ────────────────────────────────────────────────────────────
         _shingle_write(occ, cells, layer)
         root_grid.add(_root_cell(base, gap))
+        # Record this leaf's blade footprint so later (higher) leaves lift clear
+        # of it instead of burying a tip in it.
+        _occ_mark(leaf_occ, surf.vertices, _LEAF_OCC_CELL_MM)
 
         row_idx = int((float(pt3d[2]) - z_mins[mi]) / expected_row_step)
         stats.base_positions.append(pt3d.copy())
@@ -656,7 +749,7 @@ def place_leaves_greedy(
             f"\n── greedy leaf placement ──  {placed} placed  "
             f"({len(all_cands)} candidates: root-rej={n_rejected_root} "
             f"seam-rej={n_rejected_seam} thin-rej={n_rejected_thin} "
-            f"sat-rej={n_rejected_sat})  {elapsed:.3f}s\n"
+            f"sat-rej={n_rejected_sat} buried-rej={n_rejected_buried})  {elapsed:.3f}s\n"
         )
 
     return parts_list, stats_list
