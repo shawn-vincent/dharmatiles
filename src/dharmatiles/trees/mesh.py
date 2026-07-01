@@ -1281,15 +1281,14 @@ def _build_foliage_cluster_mesh(
         ring_ctr = tip_p + ax_n[:, None] * tip_t + (dome_shift * shift_blend)[:, None] * pu_tip
         verts[mn] = ring_ctr + rad_u[mn] * rr_n[:, None]
 
-    # ── Back-cap replacement ──────────────────────────────────────────────────
+    # ── Back-cap dome ─────────────────────────────────────────────────────────
     # The icosphere south polar vertex maps to a single geometric point at
     # start_p - r_base * start_t.  All ~10 surrounding icosphere triangles
     # converge there, producing a visible polar-singularity pinch at the back
     # end of the cluster (worst when r_wood is small).  Fix: drop every
     # icosphere face that touches a back-hemisphere vertex (ms), find the
     # boundary ring on the surviving cone/dome faces, and close the hole with
-    # a simple fan cap — one center vertex at the south-pole point, one
-    # triangle per boundary edge.
+    # a hemispherical dome — matching the rounded forward dome at the wide end.
     _f_orig    = ico.faces                         # (F, 3)
     _keep_mask = ~ms[_f_orig].any(axis=1)          # True  → cone/dome face
     _keep_faces = _f_orig[_keep_mask]              # (K, 3)
@@ -1321,24 +1320,81 @@ def _build_foliage_cluster_mesh(
             _bnd_loop.append(_nx[0])
             _bnd_prev, _bnd_cur = _bnd_cur, _nx[0]
 
-    # Add the center vertex and fan-triangulate to the boundary ring.
-    # Use the mean of the boundary ring vertices as the cap center so the fan
-    # cap is a flat disc rather than a backward-pointing cone.  The old
-    # placement (start_p - r_base * start_t) offset the center one full branch
-    # radius behind start_p, creating a tight 45° cone/pinch visible as a
-    # sharp point at the back of every cluster.
-    _cap_center = (np.mean([verts[v] for v in _bnd_loop], axis=0)
-                   if _bnd_loop else start_p)
-    _cap_idx    = len(verts)
-    verts       = np.vstack([verts, _cap_center[np.newaxis]])
+    # Build a hemispherical dome from the boundary ring backward to
+    # start_p - r_base * start_t, matching the rounded forward dome at the
+    # wide end.  Uses _N_CLUSTER_DOME_LATS latitude bands so the cap is
+    # smoothly curved rather than flat.
     _NL = len(_bnd_loop)
-    _fan_faces = (
-        np.array([[_cap_idx, _bnd_loop[_i], _bnd_loop[(_i + 1) % _NL]]
-                  for _i in range(_NL)], dtype=np.int32)
-        if _NL >= 3 else np.empty((0, 3), dtype=np.int32)
-    )
-    _ico_faces = (np.vstack([_keep_faces, _fan_faces])
-                  if len(_fan_faces) else _keep_faces)
+    if _NL < 3:
+        _ico_faces = _keep_faces
+    else:
+        _bnd_positions = np.array([verts[v] for v in _bnd_loop])   # (_NL, 3)
+        _bnd_center    = _bnd_positions.mean(axis=0)
+        _dome_pole     = start_p - r_base * start_t
+
+        # Perpendicular radius of the boundary ring (in the plane ⊥ start_t).
+        _radial        = _bnd_positions - _bnd_center
+        _axial_proj    = (_radial @ start_t)[:, np.newaxis] * start_t
+        _ring_r0       = float(np.linalg.norm(_radial - _axial_proj, axis=1).mean())
+
+        # Orthonormal frame perp to start_t for generating ring vertices.
+        _pu_s_d        = _pu_unit_scalar(start_t)
+        _pu_v_raw      = np.cross(start_t, _pu_s_d)
+        _pu_v_n        = float(np.linalg.norm(_pu_v_raw))
+        _pu_v          = (_pu_v_raw / _pu_v_n if _pu_v_n > 1e-6
+                          else np.array([0., 1., 0.]))
+
+        # Project bnd_loop into the pu_s_d / pu_v plane to find winding direction
+        # and the starting angle for dome rings.  The dome rings must go around
+        # in the same angular direction as bnd_loop to avoid bow-tie quads.
+        _bnd_u       = (_bnd_positions - _bnd_center) @ _pu_s_d   # (_NL,)
+        _bnd_v_proj  = (_bnd_positions - _bnd_center) @ _pu_v     # (_NL,)
+        _bnd_ang_all = np.arctan2(_bnd_v_proj, _bnd_u)            # (_NL,)
+        _signed_area = 0.5 * float(np.sum(
+            _bnd_u * np.roll(_bnd_v_proj, -1) - np.roll(_bnd_u, -1) * _bnd_v_proj
+        ))
+        _angle_sign  = 1.0 if _signed_area >= 0 else -1.0
+        _angle0      = float(_bnd_ang_all[0])
+
+        _verts_list    = list(verts)
+        _faces_list    = list(_keep_faces)
+        _prev_ring     = _bnd_loop
+
+        for _lat_i in range(1, _N_CLUSTER_DOME_LATS + 1):
+            _phi = (np.pi / 2.0) * _lat_i / _N_CLUSTER_DOME_LATS
+
+            if _lat_i < _N_CLUSTER_DOME_LATS:
+                _t         = float(np.sin(_phi))
+                _rr        = _ring_r0 * float(np.cos(_phi))
+                _ring_ctr  = _bnd_center * (1.0 - _t) + _dome_pole * _t
+                _angles    = _angle0 + _angle_sign * 2.0 * np.pi * np.arange(_NL) / _NL
+                _new_ring  = (
+                    _ring_ctr
+                    + _rr * np.outer(np.cos(_angles), _pu_s_d)
+                    + _rr * np.outer(np.sin(_angles), _pu_v)
+                )                           # (_NL, 3)
+                _ring_base = len(_verts_list)
+                _verts_list.extend(_new_ring)
+                _curr_ring = list(range(_ring_base, _ring_base + _NL))
+
+                for _k in range(_NL):
+                    _k1 = (_k + 1) % _NL
+                    _p0, _p1 = _prev_ring[_k], _prev_ring[_k1]
+                    _c0, _c1 = _curr_ring[_k], _curr_ring[_k1]
+                    _faces_list.append([_p0, _c0, _c1])
+                    _faces_list.append([_p0, _c1, _p1])
+
+                _prev_ring = _curr_ring
+
+            else:
+                _pole_idx = len(_verts_list)
+                _verts_list.append(_dome_pole)
+                for _k in range(_NL):
+                    _k1 = (_k + 1) % _NL
+                    _faces_list.append([_prev_ring[_k], _pole_idx, _prev_ring[_k1]])
+
+        verts      = np.array(_verts_list)
+        _ico_faces = np.array(_faces_list, dtype=np.int32)
 
     # ── Normals + two noise layers ────────────────────────────────────────────
     shaped  = trimesh.Trimesh(vertices=verts, faces=_ico_faces, process=False)

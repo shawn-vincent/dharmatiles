@@ -909,6 +909,5 @@ def solidify_leaf(
     ])
 
     solid = trimesh.Trimesh(vertices=all_verts, faces=all_faces, process=False)
-    solid.fix_normals()
     return solid, range(0, 0)
 

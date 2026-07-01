@@ -11,10 +11,10 @@ from __future__ import annotations
 
 import dataclasses
 import math
+import time
 from collections.abc import Callable
 
 import numpy as np
-import rtree.index as _rtree_idx
 import trimesh
 
 from ._utils import _hash01, _safe_norm
@@ -48,6 +48,13 @@ _PREBURIED_DEPTH_MM: float = 0.25
 # bottom row bald.
 _FLOOR_TOL_MM: float = 0.1
 
+# ── Profiling accumulators (cleared and printed by place_leaves_on_multiple_meshes) ──
+_PROF: dict[str, float] = {}
+_PROF_N: dict[str, int] = {}
+
+def _pt(key: str, dt: float, n: int = 1) -> None:
+    _PROF[key]  = _PROF.get(key,  0.0) + dt
+    _PROF_N[key] = _PROF_N.get(key, 0) + n
 
 @dataclasses.dataclass
 class LeafPlacementStats:
@@ -342,24 +349,6 @@ class _MeshCtx:
     seed:         int
     stats:        LeafPlacementStats
     parts:        list   # list[trimesh.Trimesh], mutated in place
-    # Scene-wide geometric index — shared by reference across every _MeshCtx in
-    # one placement run so any leaf can query the full scene state.
-    #
-    # scene_proximity: ProximityQuery over all parent meshes concatenated.
-    #     Built once in Phase 1; static for the lifetime of the run.
-    #     Use for surface-normal / distance queries that should consider every
-    #     parent cluster, not just this leaf's own mesh.
-    #
-    # placed_index: 3-D R-tree (rtree.index.Index, dimension=3) of every leaf
-    #     successfully placed so far across ALL meshes.  Updated immediately
-    #     after each placement.  Insert key = index into placed_meshes.
-    #     Query with a 6-tuple (xmin, ymin, zmin, xmax, ymax, zmax) bbox.
-    #
-    # placed_meshes: list[trimesh.Trimesh] parallel to placed_index integer IDs.
-    #     placed_meshes[i] is the solidified leaf whose bbox was inserted at key i.
-    scene_proximity: trimesh.proximity.ProximityQuery
-    placed_index:    _rtree_idx.Index     # 3-D R-tree, shared across all contexts
-    placed_meshes:   list                 # list[trimesh.Trimesh], parallel to index IDs
 
 
 @dataclasses.dataclass
@@ -762,6 +751,7 @@ def _place_leaf_slot(
         return 1, 0
 
     lseed = int(_hash01_int(seed, "leaf", row_idx, ci))
+    _t_build = time.perf_counter()
     try:
         surf, geom = build_leaf_surface(
             base_pos = pt3d,
@@ -792,6 +782,7 @@ def _place_leaf_slot(
     except (RuntimeError, ValueError):
         stats.build_errors += 1
         return 1, 0
+    _pt("slot.initial_build", time.perf_counter() - _t_build)
 
     root_depth = 0.75  # embed_mm used by build_leaf_oval_offsets
 
@@ -839,14 +830,6 @@ def _place_leaf_slot(
                 face_colors=np.tile(color, (len(solid.faces), 1)),
             )
         parts.append(solid)
-        # Register in the shared scene-wide placed-leaf index.
-        _leaf_id = len(ctx.placed_meshes)
-        _bb = solid.bounds   # (2, 3): [[xmin,ymin,zmin],[xmax,ymax,zmax]]
-        ctx.placed_index.insert(
-            _leaf_id,
-            (_bb[0, 0], _bb[0, 1], _bb[0, 2], _bb[1, 0], _bb[1, 1], _bb[1, 2]),
-        )
-        ctx.placed_meshes.append(solid)
 
     return 1, 1
 
@@ -935,25 +918,20 @@ def place_leaves_on_multiple_meshes(
 
     # ── Phase 1: pre-computation for every mesh ───────────────────────────────
 
-    # Scene-wide proximity: BVH over every parent mesh concatenated.
-    _scene_mesh = trimesh.util.concatenate(meshes) if len(meshes) > 1 else meshes[0]
-    _scene_proximity = trimesh.proximity.ProximityQuery(_scene_mesh)
-
-    # Shared 3-D R-tree for placed leaves — updated after every successful placement.
-    _rtree_prop = _rtree_idx.Property()
-    _rtree_prop.dimension = 3
-    _placed_index: _rtree_idx.Index = _rtree_idx.Index(properties=_rtree_prop)
-    _placed_meshes: list[trimesh.Trimesh] = []
-
     contexts: list[_MeshCtx] = []
     all_rows: list[tuple[float, int, int]] = []   # (z, mesh_idx, per_mesh_row_idx)
+
+    _PROF.clear(); _PROF_N.clear()
+    _t_total = time.perf_counter()
 
     for mi, (mesh, seed, label) in enumerate(zip(meshes, seeds_list, labels_list)):
         z_top       = float(mesh.vertices[:, 2].max())
         cx          = float(mesh.vertices[:, 0].mean())
         cy          = float(mesh.vertices[:, 1].mean())
         centroid_3d = np.array([cx, cy, float(mesh.vertices[:, 2].mean())])
+        _tm = time.perf_counter()
         meridians   = _build_meridians(mesh, n_meridians=n_meridians, z_samples=z_samples)
+        _pt("phase1.meridians", time.perf_counter() - _tm)
         row_zs      = _compute_row_z_positions(
             meridians, L, vov, z_top,
             bottom_extra_mm=_curl_bottom_margin_mm(L, curl_deg, lift_mm),
@@ -980,9 +958,6 @@ def place_leaves_on_multiple_meshes(
             seed             = seed,
             stats            = stats,
             parts            = [],
-            scene_proximity  = _scene_proximity,
-            placed_index     = _placed_index,
-            placed_meshes    = _placed_meshes,
         )
         contexts.append(ctx)
         for ri, z in enumerate(row_zs):
@@ -1012,9 +987,11 @@ def place_leaves_on_multiple_meshes(
         valid_rows: set   = set()
 
         for z_row, mi, row_idx in batch:
+            _ts = time.perf_counter()
             slots, perim = _collect_row_slots(
                 contexts[mi], row_idx, z_row, L=L, W=W, col_step=col_step,
             )
+            _pt("phase2.collect_slots", time.perf_counter() - _ts)
             row_perims[(mi, row_idx)] = perim
             if slots:
                 valid_rows.add((mi, row_idx))
@@ -1032,13 +1009,16 @@ def place_leaves_on_multiple_meshes(
             for k in _order:
                 slot = batch_slots[k]
                 mi_k = _ctx_id_to_mi[id(slot.ctx)]
+                _tslot = time.perf_counter()
                 att, pl = _place_leaf_slot(
                     slot,
                     contact_candidates=contact_candidates, ca_cache=ca_cache,
-                    leaf_kw=leaf_kw, angle_jitter_deg=angle_jitter_deg,
+                    leaf_kw=leaf_kw,
+                    angle_jitter_deg=angle_jitter_deg,
                     pos_jitter=pos_jitter, row_color_fn=row_color_fn,
                     color_row_idx=round(_step * 15 / max(_n_total - 1, 1)),
                 )
+                _pt("phase2.place_slot", time.perf_counter() - _tslot, att)
                 key = (mi_k, slot.row_idx)
                 _row_att[key] += att
                 _row_pl[key]  += pl
@@ -1059,6 +1039,22 @@ def place_leaves_on_multiple_meshes(
 
     for ctx in contexts:
         ctx.stats.n_rows = len(ctx.row_zs)
+
+    _t_total_elapsed = time.perf_counter() - _t_total
+    _PROF["TOTAL"] = _t_total_elapsed
+    _PROF_N["TOTAL"] = 1
+    print("\n── leaf placement timing ──────────────────────────────────────────")
+    _ordered = sorted(
+        [(k, v) for k, v in _PROF.items() if k != "TOTAL"],
+        key=lambda x: -x[1],
+    )
+    for k, v in _ordered:
+        n = _PROF_N.get(k, 1)
+        avg_ms = 1000.0 * v / n if n else 0.0
+        pct = 100.0 * v / _t_total_elapsed if _t_total_elapsed else 0.0
+        print(f"  {k:<40} {v:8.3f}s  {pct:5.1f}%  n={n:5d}  avg={avg_ms:7.2f}ms")
+    print(f"  {'TOTAL':<40} {_t_total_elapsed:8.3f}s")
+    print()
 
     return [ctx.parts for ctx in contexts], [ctx.stats for ctx in contexts]
 
