@@ -370,9 +370,13 @@ def build_branch_mesh(
             from .placement_greedy import place_leaves_greedy
             # The greedy placer runs on the SMOOTH (pre-noise) envelopes so its
             # analytic clearance guarantees hold (see placement_greedy docstring).
+            # The NOISED clumps (foliage_clumps, index-aligned) are passed as
+            # real_meshes so the per-leaf root-connection gate is exact.
             _clump_meshes = [c for c, _ in foliage_clumps_smooth]
+            _clump_real   = [c for c, _ in foliage_clumps]
             _leaf_parts, _ = place_leaves_greedy(
                 _clump_meshes,
+                real_meshes    = _clump_real,
                 length_mm      = leaf_length_mm,
                 width_mm       = leaf_width_mm,
                 thickness_mm   = leaf_thickness_mm,
