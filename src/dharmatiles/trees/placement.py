@@ -19,8 +19,7 @@ import trimesh
 
 from ._utils import _hash01, _safe_norm
 from .leaf import (
-    LEAF_TIP_VERTEX_IDX,
-    boundary_loop,
+    build_leaf_oval_offsets,
     build_leaf_surface,
     compute_leaf_geometry,
     solidify_leaf,
@@ -388,6 +387,7 @@ class _LeafSlot:
     # Overlapping across adjacent slots is intentional — every face that
     # could plausibly interact with the leaf is included.
     local_faces:  np.ndarray   # (K,) int face indices into ctx.mesh
+    # approx_base and local_faces are retained for future proximity work.
 
 
 def _collect_row_slots(
@@ -529,6 +529,7 @@ def _collect_row_slots(
             _dL          = _delta @ _T0_approx           # (F,)
             _dW          = _delta @ _lat_approx          # (F,)
             _local_faces = np.where(_dL**2 / L**2 + _dW**2 / _W_half**2 < 1.0)[0]
+
             slots.append(_LeafSlot(
                 ctx=ctx, row_idx=row_idx,
                 xform=xform, poly_coords=_poly_coords,
@@ -762,28 +763,37 @@ def _place_leaf_slot(
 
     lseed = int(_hash01_int(seed, "leaf", row_idx, ci))
     try:
-        surf  = build_leaf_surface(
+        surf, geom = build_leaf_surface(
             base_pos = pt3d,
             tangent  = tangent,
             up_hint  = up_placed,
             seed     = lseed,
             **leaf_kw,
         )
-        loop        = boundary_loop(surf)
-        solid, _    = solidify_leaf(
-            surf, up_placed, parent_mesh=mesh,
-            tip_vertex_idx=LEAF_TIP_VERTEX_IDX,
+        # Build the oval using the contact-angle-adjusted tangent so it follows
+        # the actual leaf growth direction rather than the surface-tangent T0.
+        # Using T0 overshoots on an inverted cone (narrow-at-base cluster):
+        # the steep downward T0 extends the oval into the narrow base where the
+        # lateral half-width W/2 exceeds the cluster radius.  Using 'tangent'
+        # (which bends back toward the cluster via the contact angle) keeps the
+        # oval in the wider part of the surface where it reliably fits.
+        _lat_ov = np.cross(up_hint, tangent)
+        _lat_ov_len = float(np.linalg.norm(_lat_ov))
+        if _lat_ov_len > 1e-6:
+            _lat_ov /= _lat_ov_len
+        _oval_off = build_leaf_oval_offsets(
+            n_hat=up_hint, T_along=tangent, across=_lat_ov,
+            L=L, W=float(leaf_kw["width_mm"]),
         )
+        inner_v = _oval_off + pt3d[np.newaxis]
+        if not mesh.contains(inner_v).all():
+            raise RuntimeError("oval not fully inside parent mesh")
+        solid, _ = solidify_leaf(surf, inner_v)
     except (RuntimeError, ValueError):
         stats.build_errors += 1
         return 1, 0
 
-    # Root-depth measurement
-    n_surf     = len(surf.vertices)
-    NP         = len(loop)
-    perim_v    = surf.vertices[np.array(loop)]
-    root_v     = solid.vertices[n_surf : n_surf + NP]
-    root_depth = float(np.max(np.linalg.norm(root_v - perim_v, axis=1)))
+    root_depth = 0.75  # embed_mm used by build_leaf_oval_offsets
 
     # Curl-region float / bury check
     base_dists_v = np.linalg.norm(surf.vertices - pt3d, axis=1)

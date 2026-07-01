@@ -1213,8 +1213,8 @@ def _build_foliage_cluster_mesh(
     ms = u_vals <= south_arc
     if ms.any():
         phi    = (u_vals[ms] / south_arc) * (np.pi / 2.0)
-        ax_s   = r_base * (np.sin(phi) - 1.0)           # ≤ 0 (behind start_p)
-        rr_s   = r_base * np.cos(phi)
+        ax_s   = -r_base * np.cos(phi)                  # ≤ 0 (behind start_p)
+        rr_s   = r_base * np.sin(phi)
         ru     = rad_u[ms]
         dp     = (ru * start_t).sum(axis=1, keepdims=True)
         rp     = ru - dp * start_t
@@ -1281,15 +1281,88 @@ def _build_foliage_cluster_mesh(
         ring_ctr = tip_p + ax_n[:, None] * tip_t + (dome_shift * shift_blend)[:, None] * pu_tip
         verts[mn] = ring_ctr + rad_u[mn] * rr_n[:, None]
 
+    # ── Back-cap replacement ──────────────────────────────────────────────────
+    # The icosphere south polar vertex maps to a single geometric point at
+    # start_p - r_base * start_t.  All ~10 surrounding icosphere triangles
+    # converge there, producing a visible polar-singularity pinch at the back
+    # end of the cluster (worst when r_wood is small).  Fix: drop every
+    # icosphere face that touches a back-hemisphere vertex (ms), find the
+    # boundary ring on the surviving cone/dome faces, and close the hole with
+    # a simple fan cap — one center vertex at the south-pole point, one
+    # triangle per boundary edge.
+    _f_orig    = ico.faces                         # (F, 3)
+    _keep_mask = ~ms[_f_orig].any(axis=1)          # True  → cone/dome face
+    _keep_faces = _f_orig[_keep_mask]              # (K, 3)
+
+    # Count how many kept faces each edge belongs to.  Boundary edges appear
+    # in exactly one kept face.
+    _edge_cnt: dict[tuple[int, int], int] = {}
+    for _f in _keep_faces:
+        for _i in range(3):
+            _e = (int(min(_f[_i], _f[(_i + 1) % 3])),
+                  int(max(_f[_i], _f[(_i + 1) % 3])))
+            _edge_cnt[_e] = _edge_cnt.get(_e, 0) + 1
+    _bnd_edges = [_e for _e, _c in _edge_cnt.items() if _c == 1]
+
+    # Walk boundary edges into a single ordered vertex loop.
+    _bnd_adj: dict[int, list[int]] = {}
+    for _e in _bnd_edges:
+        _bnd_adj.setdefault(_e[0], []).append(_e[1])
+        _bnd_adj.setdefault(_e[1], []).append(_e[0])
+    _bnd_loop: list[int] = []
+    if _bnd_edges:
+        _bnd_start = _bnd_edges[0][0]
+        _bnd_loop  = [_bnd_start]
+        _bnd_prev, _bnd_cur = None, _bnd_start
+        while True:
+            _nx = [v for v in _bnd_adj.get(_bnd_cur, []) if v != _bnd_prev]
+            if not _nx or _nx[0] == _bnd_start:
+                break
+            _bnd_loop.append(_nx[0])
+            _bnd_prev, _bnd_cur = _bnd_cur, _nx[0]
+
+    # Add the center vertex and fan-triangulate to the boundary ring.
+    # Use the mean of the boundary ring vertices as the cap center so the fan
+    # cap is a flat disc rather than a backward-pointing cone.  The old
+    # placement (start_p - r_base * start_t) offset the center one full branch
+    # radius behind start_p, creating a tight 45° cone/pinch visible as a
+    # sharp point at the back of every cluster.
+    _cap_center = (np.mean([verts[v] for v in _bnd_loop], axis=0)
+                   if _bnd_loop else start_p)
+    _cap_idx    = len(verts)
+    verts       = np.vstack([verts, _cap_center[np.newaxis]])
+    _NL = len(_bnd_loop)
+    _fan_faces = (
+        np.array([[_cap_idx, _bnd_loop[_i], _bnd_loop[(_i + 1) % _NL]]
+                  for _i in range(_NL)], dtype=np.int32)
+        if _NL >= 3 else np.empty((0, 3), dtype=np.int32)
+    )
+    _ico_faces = (np.vstack([_keep_faces, _fan_faces])
+                  if len(_fan_faces) else _keep_faces)
+
     # ── Normals + two noise layers ────────────────────────────────────────────
-    shaped  = trimesh.Trimesh(vertices=verts, faces=ico.faces.copy(), process=False)
+    shaped  = trimesh.Trimesh(vertices=verts, faces=_ico_faces, process=False)
     shaped.fix_normals()
     normals = shaped.vertex_normals.copy()
+
+    # Noise scale: suppress noise near the narrow cone base so the coarse
+    # noise (amplitude ~1mm) doesn't crumple vertices where the cone radius
+    # is also ~1mm.  Compute each vertex's perpendicular distance from the
+    # spine chord, then smoothstep from 0 at r_base to 1 at r_tip.
+    _spine_chord = _safe_norm(tip_p - start_p)
+    _rel         = verts - start_p[np.newaxis]                         # (M, 3)
+    _t_proj      = np.clip((_rel @ _spine_chord)[:, np.newaxis],
+                            0.0, tot_spine)
+    _nearest_pt  = start_p + _t_proj * _spine_chord
+    _perp_d      = np.linalg.norm(verts - _nearest_pt, axis=1)        # (M,)
+    _span        = max(r_tip - r_base, 1e-6)
+    _raw_t       = np.clip((_perp_d - r_base) / _span, 0.0, 1.0)
+    _noise_scale = 3.0 * _raw_t ** 2 - 2.0 * _raw_t ** 3             # smoothstep
 
     disp = (
         _foliage_gaussian_noise(verts, edge_id, bark_seed)
         + _foliage_coarse_noise(verts, edge_id, bark_seed)
-    )
+    ) * _noise_scale
     # Shift the full noise wave inward: subtract its peak so the maximum
     # displacement is exactly 0 (the smooth envelope) and the full 2A
     # trough range erodes inward — no amplitude loss, no outward expansion.
@@ -1300,7 +1373,7 @@ def _build_foliage_cluster_mesh(
     # ── Leaves: rows up the cone, over the dome, capped at the apex ──────────
     # Build the noised cluster mesh now (verts is final after the noise step
     # above) so solidify_leaf can raycast into it for root embedding.
-    cluster_mesh = trimesh.Trimesh(vertices=verts, faces=ico.faces.copy(), process=False)
+    cluster_mesh = trimesh.Trimesh(vertices=verts, faces=_ico_faces, process=False)
     cluster_mesh.fix_normals()
 
     leaf_parts: list[trimesh.Trimesh] = []
@@ -1333,7 +1406,7 @@ def _build_foliage_cluster_mesh(
                 RuntimeWarning,
                 stacklevel=2,
             )
-    result = trimesh.Trimesh(vertices=verts, faces=ico.faces.copy(), process=False)
+    result = trimesh.Trimesh(vertices=verts, faces=_ico_faces, process=False)
     result.fix_normals()
     return result, leaf_parts
 

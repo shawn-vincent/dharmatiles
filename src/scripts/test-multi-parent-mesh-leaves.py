@@ -29,8 +29,6 @@ from pathlib import Path
 import numpy as np
 import trimesh
 
-import dharmatiles.trees.leaf as _leaf_mod
-
 from dharmatiles.trees import (
     LeafPlacementStats,
     effective_ring_perimeter,
@@ -58,7 +56,7 @@ _LEAF = dict(
     leaf_inner_curve    = 1.5,
     leaf_outer_curve    = 0.72,
     leaf_curl_deg       = 40.0,
-    leaf_lift_mm        = 1.5,
+    leaf_lift_mm        = 0.0,
     leaf_h_overlap      = 0.0,
     leaf_v_overlap      = 0.0,
     leaf_arc_meridians  = 6,
@@ -356,9 +354,6 @@ def main() -> None:
 
     t0 = time.perf_counter()
 
-    _leaf_mod._DEBUG_RAY_DIRS_COLLECTOR = []
-    _leaf_mod._DEBUG_TIP_RAY_COLLECTOR  = []
-    _leaf_mod._DEBUG_CONE_COLLECTOR     = []
 
     a35 = math.radians(35)
     a55 = math.radians(55)
@@ -426,9 +421,6 @@ def main() -> None:
     print(f"  total time: {time.perf_counter() - t0:.1f}s")
 
     # ── Artifact detection ────────────────────────────────────────────────────
-    _leaf_mod._DEBUG_RAY_DIRS_COLLECTOR = None
-    _leaf_mod._DEBUG_TIP_RAY_COLLECTOR  = None
-    _leaf_mod._DEBUG_CONE_COLLECTOR     = None
     _check_artifacts(all_stats)
 
     # ── PNG renders ───────────────────────────────────────────────────────────
