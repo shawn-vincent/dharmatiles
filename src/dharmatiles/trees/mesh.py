@@ -295,6 +295,40 @@ def build_branch_mesh(
                 foliage_solids.append(clump)
                 if leaves and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
                     foliage_clumps.append((clump, i))
+                    # Greedy placement runs on the pre-noise (smooth) envelope.
+                    # Cluster noise only erodes inward, so this envelope is the
+                    # strict outer surface: building on / clearing against it is
+                    # provably safe against the real noisy clump (see
+                    # placement_greedy).  Same topology as the noised clump.
+                    if leaf_placement == "greedy":
+                        clump_smooth, _ = _build_foliage_cluster_mesh(
+                            tip_pos=p3,
+                            tip_tangent=_bt_end,
+                            start_pos=clump_start_pos,
+                            start_tangent=clump_start_tan,
+                            r_wood=r_end_wood,
+                            r_foliage=foliage_cluster_radius_mm,
+                            clump_length_mm=cluster_len,
+                            edge_id=i,
+                            bark_seed=bark_seed,
+                            leaves=False,
+                            leaf_length_mm=leaf_length_mm,
+                            leaf_width_mm=leaf_width_mm,
+                            leaf_thickness_mm=leaf_thickness_mm,
+                            leaf_fold_angle_deg=leaf_fold_angle_deg,
+                            leaf_inner_curve=leaf_inner_curve,
+                            leaf_outer_curve=leaf_outer_curve,
+                            leaf_curl_deg=leaf_curl_deg,
+                            leaf_lift_mm=leaf_lift_mm,
+                            leaf_h_overlap=leaf_h_overlap,
+                            leaf_v_overlap=leaf_v_overlap,
+                            leaf_arc_meridians=leaf_arc_meridians,
+                            leaf_arc_z_samples=leaf_arc_z_samples,
+                            leaf_angle_jitter_deg=leaf_angle_jitter_deg,
+                            leaf_pos_jitter=leaf_pos_jitter,
+                            apply_noise=False,
+                        )
+                        foliage_clumps_smooth.append((clump_smooth, i))
             leaf_solids.extend(clump_leaves)
 
         node_frame[i] = end_frame
@@ -1199,6 +1233,7 @@ def _build_foliage_cluster_mesh(
     leaf_arc_z_samples: int = 64,
     leaf_angle_jitter_deg: float = 24.0,
     leaf_pos_jitter: float = 0.165,
+    apply_noise: bool = True,
 ) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Foliage clump: icosphere bent along the branch Bezier spine.
 
@@ -1499,16 +1534,22 @@ def _build_foliage_cluster_mesh(
     _raw_t       = np.clip((_perp_d - r_base) / _span, 0.0, 1.0)
     _noise_scale = 3.0 * _raw_t ** 2 - 2.0 * _raw_t ** 3             # smoothstep
 
-    disp = (
-        _foliage_gaussian_noise(verts, edge_id, bark_seed)
-        + _foliage_coarse_noise(verts, edge_id, bark_seed)
-    ) * _noise_scale
-    # Shift the full noise wave inward: subtract its peak so the maximum
-    # displacement is exactly 0 (the smooth envelope) and the full 2A
-    # trough range erodes inward — no amplitude loss, no outward expansion.
-    noise_peak = float(disp.max())
-    disp = disp - noise_peak
-    verts = verts + normals * disp[:, np.newaxis]
+    # The greedy leaf placer requests the SMOOTH (pre-noise) envelope
+    # (apply_noise=False).  Because cluster noise only displaces INWARD (the
+    # peak-shift below forces max disp to exactly 0), the pre-noise verts are
+    # the strict outer envelope — the surface the greedy placer builds on and
+    # clears against.  Skipping the displacement returns that envelope directly.
+    if apply_noise:
+        disp = (
+            _foliage_gaussian_noise(verts, edge_id, bark_seed)
+            + _foliage_coarse_noise(verts, edge_id, bark_seed)
+        ) * _noise_scale
+        # Shift the full noise wave inward: subtract its peak so the maximum
+        # displacement is exactly 0 (the smooth envelope) and the full 2A
+        # trough range erodes inward — no amplitude loss, no outward expansion.
+        noise_peak = float(disp.max())
+        disp = disp - noise_peak
+        verts = verts + normals * disp[:, np.newaxis]
 
     # ── Leaves: rows up the cone, over the dome, capped at the apex ──────────
     # Build the noised cluster mesh now (verts is final after the noise step
