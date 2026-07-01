@@ -597,3 +597,84 @@ rollback is deleting `placement_greedy.py` and the selector.
 - Confirm `embed_mm=0.75 > 2·A_max` for the real cluster noise; adjust if not.
 - Decide if any `greedy_*` knobs get promoted from module constants to `Tree(...)`
   config in this pass or a follow-up (selector-only is the minimum ask).
+
+---
+
+# IMPLEMENTATION RESULTS (2026-07-01, all phases landed on `greedy-leaf-placement`)
+
+All five phases implemented, tested, and pushed. Meridian remains the default;
+`leaf_placement="greedy"` opts in. Summary of what was built and measured.
+
+## What shipped
+
+- **Phase 0** — `leaf_placement` string threaded `Tree.__init__` →
+  `build_branch_mesh` → the batched dispatch; unknown value raises `ValueError`.
+- **Phase 1** — `_build_foliage_cluster_mesh(apply_noise=…)`; greedy path builds
+  a smooth (pre-noise) envelope per terminal tip (`foliage_clumps_smooth`),
+  same topology as the noised clump, provably the strict outer surface.
+- **Phase 2** — `placement_greedy.py`: candidate over-generation on the smooth
+  surface → global z-sort → single sweep with a cheap-reject ladder
+  (root-gap grid, seam/standoff embree point test, thin-region punch-through
+  guard, analytic lean, tip-half shingle occupancy). Geometry built once per
+  accepted leaf, reusing the meridian primitives verbatim.
+- **Phase 3** — `test-multi-parent-mesh-leaves.py --placement {meridian,greedy}`;
+  `1x1-grass-tree+water.tile.py` set to `leaf_placement="greedy"`.
+- **Phase 4** — validation below.
+
+## Correctness — the embed / connection finding (important)
+
+The doc's premise that `embed_mm` must beat the noise was correct, but the
+magnitude was under-stated. The noise is **peak-shifted** (`mesh.py`), so the
+surface erodes inward by the full peak-to-trough *range*, not a single-sided
+amplitude. **Measured** max inward erosion on the test clusters is **~2.3 mm**,
+i.e. ≈2× `_FOLIAGE_MAX_NOISE_MM` (1.2). The greedy embed is therefore derived as
+`_MAX_INWARD_EROSION_MM (≈2.6) + 0.5 = ~3.1 mm`, and — because a scalar-bound
+proof is fragile across the curved oval span — each accepted leaf's root oval is
+tested for connection **directly against the real noised clump** (`real_meshes`,
+passed alongside the smooth envelopes). This is the "defensive: only correct
+leaves are built" guarantee; the new test caught 2–3 would-be-detached leaves
+before it was added.
+
+`src/scripts/test-greedy-leaf-placement.py` asserts, and all pass: non-empty
+placement, **every** leaf watertight, **every** root connected to the real
+noised clump, tip-z ordering, and determinism.
+
+## Performance (measured)
+
+Two-cluster case (`test-multi-parent-mesh-leaves.py`):
+
+| | Meridian | Greedy |
+|---|---|---|
+| leaves | 54 | 45 |
+| placement time | 0.54 s | **0.27 s** |
+| per-leaf watertight | yes | yes |
+
+`1x1-grass-tree+water` tile, meadow `Tree` layer (db, `--no-png`):
+
+| | Meridian | Greedy |
+|---|---|---|
+| leaves placed | (grid) | 342 |
+| leaf placement | 20.6 s | **6.3 s** |
+| Tree layer total | 26.0 s | **16.2 s** |
+| export verts / faces | 355,110 / 698,746 | **261,876 / 513,794** |
+
+Greedy is ~3.3× faster on leaf placement and ~1.6× faster on the whole Tree
+layer, with a lighter mesh — the "avoid wasted builds" thesis held.
+
+## Meridian-default unperturbed (proven)
+
+`ground/1x1-grass-tree` and `ground/2x2-grass-tree` regenerated on the branch and
+on `main` produce **byte-identical** vertex/face counts (259,855 / 512,498 and
+419,313 / 829,322). Phases 0–3 do not touch the default path.
+
+## Open items / next steps (not blocking)
+
+- **Renders not yet eyeballed** for organic-vs-ringed look, seam packing, apex
+  rosette (the doc's first-render questions). The numbers and correctness gates
+  pass; the aesthetic judgement still wants a human look at the PNGs.
+- `min_root_gap_mm` left at `width_mm × 0.5`; `candidate_density` at 2.5. Greedy
+  currently packs denser than meridian near seams — tune on render if desired.
+- Phyllotaxis candidate mode still a `candidate_mode` TODO (current: area-weighted
+  random, which + root-gap rejection already yields blue-noise dart-throwing).
+- Greedy knobs remain module constants; promote to `Tree(...)` config in a
+  follow-up if the experiment graduates.
