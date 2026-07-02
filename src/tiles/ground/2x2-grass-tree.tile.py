@@ -25,6 +25,7 @@ tile = Tile(
                     placement=Uniform(count_per_square=0.25),
                     debug_attractors=False,
                     foliage_clusters=True,
+                    leaf_placement="organic",
                     n_attractors=32,
                     leaf_length_mm=4.5,
                     leaf_width_mm=3.0,

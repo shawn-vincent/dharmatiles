@@ -112,8 +112,15 @@ _ORGANIC_SHINGLE_CAP_MM: float = 1.2
 _ORGANIC_SHINGLE_NEIGHBOR_MM: float = 2.4
 _ORGANIC_STANDOFF_JITTER_MM: float = 0.05
 
-# Flush-blade shape overrides (the "less fancy" leaf).
-_ORGANIC_FLUSH_CURL_DEG: float = 12.0
+# Flush-blade shape overrides.  The flush blade is a pure end-to-end ARCH:
+# no curl, no lift — a parabolic rise (arch_mm at mid-span) between ends
+# that touch/tuck.  On a convex underside lobe a flat blade pinned at both
+# ends chords THROUGH the bulge (~0.5 mm sag over a 4.5 mm blade at
+# r≈5.5); the arch clears it, and unlike curl it can never bend back into
+# the surface.
+_ORGANIC_FLUSH_CURL_DEG: float = 0.0
+_ORGANIC_FLUSH_LIFT_MM: float = 0.0
+_ORGANIC_FLUSH_ARCH_MM: float = 0.8
 
 # Pitched-blade curl override: the configured 40° curl made every blade a
 # curling tongue that presents its EDGE (shaggy canopy); the AC read wants
@@ -127,6 +134,11 @@ _ORGANIC_MAX_NECK_MM: float = 1.8
 
 # Skew cap for pitched blades (fraction of leaf length).
 _ORGANIC_MAX_SKEW_FRAC: float = 0.35
+
+# Point-end conflict radius for the standoff escalation: a leaf's TIP
+# within this of another leaf's base-end/centre/tip is a real overlap;
+# base-to-base nestling is not.
+_ORGANIC_TIP_CONFLICT_MM: float = 1.5
 
 # ── Sheet solidification (EXPERIMENT PARKED — not wired) ──
 # Each leaf is a thin SHEET: the blade surface, a bottom surface offset by
@@ -241,22 +253,32 @@ def _direction_field_angle(p: np.ndarray, seed: int) -> float:
 # ── Shingle standoff ──────────────────────────────────────────────────────────
 
 def _shingle_standoffs(
-    bases: np.ndarray, src_idx: np.ndarray, meshes: list, seed: int,
+    bases: np.ndarray, dirs: np.ndarray, L: float, seed: int,
 ) -> np.ndarray:
-    """Per-root standoff (mm): height-sorted accumulation, capped.
+    """Per-root standoff (mm): height-sorted accumulation over TIP conflicts.
 
-    Bottom-up over ALL leaves: each stands off ``STEP`` more than the
-    tallest already-processed leaf it overlaps (neighbourhood radius
-    ``_ORGANIC_SHINGLE_NEIGHBOR_MM``), clamped to ``CAP``.  Overlapping
-    leaves at different heights therefore differ by a full STEP until the
-    cap; at the cap the tip lift resolves the remaining tip-over-base
-    contacts.  Monotone in processing order ⇒ never inverts.
+    Bottom-up over all leaves: each stands off ``STEP`` more than the
+    tallest already-processed leaf it has a POINT-END conflict with,
+    clamped to ``CAP``.  A conflict exists only when one leaf's TIP comes
+    near the other leaf's body (base-end, centre, or tip) — base-end to
+    base-end adjacency is harmless nestling and must NOT propagate height,
+    or the escalation runs away and every stitch neck stretches.
     """
-    del src_idx, meshes
     n = len(bases)
     out = np.zeros(n)
+    tips = bases + 0.45 * L * dirs
+    tails = bases - 0.45 * L * dirs
     d = _ORGANIC_SHINGLE_NEIGHBOR_MM
-    d2 = d * d
+    r2 = _ORGANIC_TIP_CONFLICT_MM ** 2
+
+    def _tip_conflict(i: int, j: int) -> bool:
+        for a, b in ((i, j), (j, i)):
+            ta = tips[a]
+            for pt in (tails[b], bases[b], tips[b]):
+                if float(((ta - pt) ** 2).sum()) < r2:
+                    return True
+        return False
+
     cells: dict[tuple[int, int, int], list[int]] = {}
     for i in np.argsort(bases[:, 2], kind="stable"):
         p = bases[i]
@@ -266,7 +288,7 @@ def _shingle_standoffs(
             for dy in (-1, 0, 1):
                 for dz in (-1, 0, 1):
                     for j in cells.get((c[0] + dx, c[1] + dy, c[2] + dz), ()):
-                        if float(((p - bases[j]) ** 2).sum()) < d2:
+                        if _tip_conflict(int(i), j):
                             tallest = max(tallest, float(out[j]))
         base_so = 0.0 if tallest < 0.0 else tallest + _ORGANIC_SHINGLE_STEP_MM
         out[i] = (
@@ -416,15 +438,25 @@ def place_leaves_organic(
             src_idx[take] = mi
             assigned |= ins
 
+    # Per-root growth directions (needed by the standoff pass: escalation
+    # only propagates through point-end conflicts, which depend on where
+    # each leaf's TIP lands).
+    dirs_leaf = np.zeros((n_roots, 3))
+    for i in range(n_roots):
+        T0 = _growth_tangent(root_nrm[i], bases[i], centroid)
+        dirs_leaf[i] = _safe_norm(_rotate_about(
+            T0, root_nrm[i], _direction_field_angle(bases[i], seed0),
+        ))
+
     standoffs = (
-        _shingle_standoffs(bases, src_idx, meshes, seed0)
+        _shingle_standoffs(bases, dirs_leaf, L, seed0)
         if n_roots else np.zeros(0)
     )
 
     # Flush-blade variant for the downward zone (see zone constants).
     leaf_kw_flush = dict(
         leaf_kw,
-        lift_mm  = 0.0,
+        lift_mm  = _ORGANIC_FLUSH_LIFT_MM,
         curl_deg = _ORGANIC_FLUSH_CURL_DEG,
     )
 
@@ -433,9 +465,7 @@ def place_leaves_organic(
         base = bases[i]
         nrm = root_nrm[i]
         flush = float(nrm[2]) < _ORGANIC_PITCH_NORMAL_Z
-        T0 = _growth_tangent(nrm, base, centroid)
-        ang = _direction_field_angle(base, seed0)
-        T_leaf = _safe_norm(_rotate_about(T0, nrm, ang))
+        T_leaf = dirs_leaf[i]
         lseed = int(_hash01(seed0, "org-leaf", i) * 2 ** 31)
 
         src = int(src_idx[i])
@@ -477,6 +507,8 @@ def place_leaves_organic(
             max_skew_frac=_ORGANIC_MAX_SKEW_FRAC,
             max_neck_mm=_ORGANIC_MAX_NECK_MM,
             tuck_base=True,
+            tuck_tip=flush,
+            arch_mm=_ORGANIC_FLUSH_ARCH_MM if flush else 0.0,
         )
         if result is None:
             n_build_fail += 1

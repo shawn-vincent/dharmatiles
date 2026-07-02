@@ -64,7 +64,7 @@ tile = Tile(
                     placement=Uniform(count_per_square=1),
                     n_attractors=64,
                     foliage_clusters=True,
-                    leaf_placement="greedy",
+                    leaf_placement="organic",
                     leaf_length_mm=4.5,
                     leaf_width_mm=3.0,
                     leaf_curl_deg=20.0,

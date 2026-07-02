@@ -135,9 +135,10 @@ class Tree:
         self.leaf_arc_meridians    = int(leaf_arc_meridians)
         self.leaf_arc_z_samples    = int(leaf_arc_z_samples)
         leaf_placement = str(leaf_placement)
-        if leaf_placement not in ("meridian", "greedy"):
+        if leaf_placement not in ("meridian", "greedy", "shoots", "organic"):
             raise ValueError(
-                f"leaf_placement must be 'meridian' or 'greedy', got {leaf_placement!r}"
+                f"leaf_placement must be 'meridian', 'greedy', 'shoots' or "
+                f"'organic', got {leaf_placement!r}"
             )
         self.leaf_placement        = leaf_placement
         self.bark = BarkConfig() if bark is None else bark

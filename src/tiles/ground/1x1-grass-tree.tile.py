@@ -34,6 +34,7 @@ tile = Tile(
                     placement=Uniform(count_per_square=1),
                     n_attractors=32,
                     foliage_clusters=True,
+                    leaf_placement="organic",
                     leaf_length_mm=4.5,
                     leaf_width_mm=3.0,
                     leaf_h_overlap=0.1,

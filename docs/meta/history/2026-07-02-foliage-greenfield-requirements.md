@@ -307,3 +307,25 @@ leaves — the placement is really nice... wow. That's amazing!"
 Full tree: 2378 leaves, ~6 s.  The parked sheet-solidification idea
 (constants remain, unwired) stays available if the pillow read ever
 matters again.
+
+## Iteration 6 — underside printability + tip-aware escalation + tile wiring
+
+Shawn's two near-blockers before tile rollout:
+1. Underside flush blades left floating-island tips (curl bends the tip
+   into air below the blade).  Resolution converged over three rounds:
+   tuck_tip (pitch about the anchored base until the tip meets the clump),
+   then tip target changed from embedded to TOUCHING (+0.02 — an embedded
+   tip dragged the mid-blade below convex skins), and finally, per
+   Shawn's call, flush blades became a pure END-TO-END ARCH (new arch_mm
+   parameter: parabolic 4·s·(1−s) offset, 0.8 mm at mid-span; curl and
+   lift zeroed).  An arch can never re-enter the surface between its
+   endpoints, where curl always could.  Underside close-up now shows
+   full distinct-leaf coverage with zero substrate cut-through.
+2. Long necks: standoff escalation now propagates ONLY through point-end
+   conflicts (tip within 1.5 mm of another leaf's base-end/centre/tip) —
+   Shawn's insight that base-to-base nestling is harmless and must not
+   drive height.
+
+leaf_placement="organic" wired into ground/1x1-grass-tree,
+ground/2x2-grass-tree, water/1x1-grass-tree+water (was greedy); Tree
+layer validator extended to all four placers.

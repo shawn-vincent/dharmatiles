@@ -260,6 +260,8 @@ def _attempt_leaf(
     max_skew_frac: float = 0.5,
     max_neck_mm: float | None = None,
     tuck_base: bool = False,
+    tuck_tip: bool = False,
+    arch_mm: float = 0.0,
 ):
     """Seat, build, and cull one leaf at a shoot station.
 
@@ -307,6 +309,22 @@ def _attempt_leaf(
         return None, "error"
     tip_idx = len(surf.vertices) - 1
     base_idx = len(surf.vertices) - 2
+
+    # End-to-end lengthwise ARCH (flush/underside blades): a parabolic
+    # offset 4·s·(1−s)·arch_mm along the seat normal.  Unlike curl (which
+    # bends the tip back down and can re-enter the surface) a pure arch
+    # only ever rises between its endpoints, so a blade whose ends touch a
+    # convex bulge clears it mid-span instead of chording through it.
+    if arch_mm > 0.0:
+        s_prof = np.zeros(len(surf.vertices))
+        s_ring = np.linspace(0.0, 1.0, _LEAF_N_LONG + 1)[1:-1]
+        stride = _LEAF_N_LAT + 1
+        for ri, sv in enumerate(s_ring):
+            s_prof[ri * stride:(ri + 1) * stride] = sv
+        s_prof[base_idx] = 0.0
+        s_prof[tip_idx] = 1.0
+        bulge = 4.0 * s_prof * (1.0 - s_prof) * arch_mm
+        surf.vertices = surf.vertices + bulge[:, np.newaxis] * normal
 
     skew_mm = 0.0
     # skip_skew: flush blade variants lie ON the substrate (walls under a
@@ -416,6 +434,47 @@ def _attempt_leaf(
                     + np.outer(V @ lat, lat) * (1.0 - c)
                 )
 
+    if tuck_tip:
+        # Bury the TIP: on underside-hugging (flush) blades even a gentle
+        # curl leaves the tip hanging in air below the blade — a floating
+        # island for FDM.  Pitch about the (embedded) base vertex until
+        # the tip dives slightly into the clump: the leaf becomes a
+        # relief-like arc with both ends rooted; nothing hangs.
+        tv = surf.vertices[tip_idx]
+        t_in = bool(mesh.contains(tv[np.newaxis])[0])
+        rd = normal if t_in else -normal
+        loc, ridx, _tt = mesh.ray.intersects_location(
+            tv[np.newaxis], rd[np.newaxis], multiple_hits=False,
+        )
+        if len(ridx):
+            tc = (-1.0 if t_in else 1.0) * float(np.linalg.norm(loc[0] - tv))
+            # Tip TOUCHES the surface — not buried.  An embedded target
+            # dragged the whole mid-blade below the skin on convex
+            # undersides (chord of a bulge lies inside it).
+            target = 0.02
+            pivot = surf.vertices[base_idx].copy()
+            r = float(np.linalg.norm(tv - pivot))
+            if tc > target and r > 1e-6:
+                theta = min(
+                    math.asin(min((tc - target) / r, 1.0)),
+                    math.radians(35.0),
+                )
+                lat = _safe_norm(np.cross(normal, tangent_leaf))
+                v0 = tv - pivot
+                for sgn in (1.0, -1.0):
+                    if float(np.dot(
+                        _rotate_about(v0, lat, sgn * theta) - v0, -normal,
+                    )) > 0.0:
+                        break
+                c = math.cos(sgn * theta)
+                sn = math.sin(sgn * theta)
+                V = surf.vertices - pivot
+                surf.vertices = pivot + (
+                    V * c
+                    + np.cross(np.broadcast_to(lat, V.shape), V) * sn
+                    + np.outer(V @ lat, lat) * (1.0 - c)
+                )
+
     curl_mask = np.linalg.norm(
         surf.vertices - surf.vertices[base_idx], axis=1,
     ) > (L / 2.0)
@@ -424,7 +483,9 @@ def _attempt_leaf(
         curl_idx = np.arange(len(surf.vertices))
     belly_idx = int(curl_idx[int(np.argmin(surf.vertices[curl_idx, 2]))])
     probe = surf.vertices[np.array([tip_idx, belly_idx])]
-    if _points_inside_any([mesh, *neighbour_meshes], probe, base, L):
+    # tuck_tip blades are INTENTIONALLY buried at both ends; the burial
+    # cull (and its bury-lift) would pop the tucked tip back out.
+    if not tuck_tip and _points_inside_any([mesh, *neighbour_meshes], probe, base, L):
         # bury_lift (organic placer): a probe dipping into the PARENT
         # surface — e.g. the tip curling under at a dome crown — is lifted
         # out along the seat normal instead of culled (a cull would leave a
