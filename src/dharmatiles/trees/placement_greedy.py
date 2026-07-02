@@ -17,13 +17,14 @@ Design points
   shallow depth (:data:`_GREEDY_EMBED_MM`) at the candidate point — like the
   meridian placer — so it is trivially in real material (no smooth-envelope
   bookkeeping, no separate connection gate, no over-long neck).
-* **Leaves grow horizontally outward** (see :func:`_growth_tangent`) so the tip
-  sits above the root without any post-hoc vertical lift.
-* **Clearance is computed, not searched.**  A leaf's tip and belly must clear
-  its own clump, neighbour clumps and previously-placed leaves; the required
-  outward lift is a single ray cast per clump (exit distance along the normal)
-  plus a short cell march for placed leaves — the whole leaf is lifted once by
-  the max.  A leaf that can't clear within :data:`_CLEAR_MAX_MM` is culled.
+* **Blade and oval share one frame.**  Leaves grow straight down-slope
+  (:func:`_growth_tangent`), tilted onto the surface by the meridian's analytic
+  per-clump contact angle; the root oval is derived from that same frame
+  (:func:`_leaf_frame_and_oval`), so the solidify stitch is aligned by
+  construction.
+* **Clearance is a containment cull, not a search.**  A leaf's tip and belly
+  must clear its own clump and neighbour clumps (``mesh.contains`` probes); a
+  leaf that doesn't clear is culled, never lifted.
 
 Hard constraints carried over from the 2026-07-01 perf crisis (do NOT violate):
 no ``trimesh.proximity.closest_point`` / R-tree / per-leaf ``Trimesh`` scans in
@@ -45,13 +46,15 @@ import trimesh
 
 from ._utils import _safe_norm
 from .leaf import (
-    _LEAF_N_LAT,
-    _LEAF_N_LONG,
-    _leaf_width_profile,
+    build_leaf_oval_offsets,
     build_leaf_surface,
     solidify_leaf,
 )
-from .mesh import _LEAF_PLACEABLE_NORMAL_Z, _hash01_int
+from .mesh import (
+    _LEAF_PLACEABLE_NORMAL_Z,
+    _contact_angle_for_sphere,
+    _hash01_int,
+)
 from .placement import LeafPlacementStats
 
 # ── Greedy-specific constants ─────────────────────────────────────────────────
@@ -112,74 +115,56 @@ def _points_inside_any(meshes: list, pts: np.ndarray, near_pt: np.ndarray, reach
     return False
 
 
-# ── Leaf frame + root oval from two embedded mesh points ──────────────────────
+# ── Leaf frame + root oval, both in the leaf's own frame ──────────────────────
 
 def _leaf_frame_and_oval(
-    P0: np.ndarray, n0: np.ndarray, t_horiz: np.ndarray,
+    P0: np.ndarray, n0: np.ndarray, T0: np.ndarray,
     L: float, W: float, embed_mm: float, protrusion_mm: float,
-    mesh: trimesh.Trimesh,
+    contact_angle_rad: float,
 ):
-    """Build the leaf frame and its flat root oval from the mesh footprint.
+    """Build the blade frame and its root oval in the LEAF's own frame.
 
-    Three surface footprints are measured down-slope from the base ``P0``: the
-    base (``P0``), the mid-leaf (``P0 + 0.5·L·t_horiz``) and the tip
-    (``P0 + L·t_horiz``).  Each is dropped ``embed_mm`` inside along its LOCAL
-    normal.  The root oval is the **tip half** of the leaf — it spans the embedded
-    mid-leaf point (``o_near``) to the embedded tip point (``o_far``), so it is
-    half the leaf length and **aligned with the leaf at the tip** (the leaf's base
-    half tapers inward to ``o_near``, exactly the meridian oval convention).  Both
-    oval ends are embedded by the same amount ⇒ equidistant from the surface; the
-    leaf surface, built one ``embed+protrusion`` step out along the same normal
-    ``N``, inherits that equidistance.
+    This is the meridian convention (``placement.py``): the down-slope surface
+    tangent ``T0`` is rotated DOWN toward the surface by the analytic contact
+    angle — the rotation that presses the leaf's belly against a sphere of the
+    clump's estimated radius — giving the blade tangent.  The root oval is then
+    derived from that same frame by :func:`build_leaf_oval_offsets`: it spans
+    the tip half ``[L/2, L]`` along the blade tangent from the surface point
+    ``P0``, embedded ``embed_mm`` along ``−n0``.  Blade and oval share origin,
+    direction and length BY CONSTRUCTION, so the 1:1 index stitch in
+    :func:`solidify_leaf` produces a short tapered neck everywhere.
 
-    Returns ``(surf_base, axis, N, lat, inner_v)`` — ``inner_v`` is the 123-vertex
-    oval (leaf-surface layout, for :func:`solidify_leaf`) — or ``None`` if
-    degenerate.
+    (The previous construction measured the oval from mesh closest-point
+    footprints while building the blade analytically at full length — on any
+    curved clump the two diverged and the stitch walls splayed into large
+    visible fans.  It also violated the module's no-``closest_point`` perf
+    constraint.)
+
+    Whether the oval actually sits inside the clump is a separate question,
+    answered by the caller's containment guard on the oval end vertices.
+
+    Returns ``(surf_base, tangent_leaf, up_leaf, inner_v)`` — ``inner_v`` is the
+    123-vertex oval (leaf-surface layout, for :func:`solidify_leaf`) — or
+    ``None`` if degenerate.
     """
-    probe = np.array([P0 + 0.5 * L * t_horiz, P0 + L * t_horiz])
-    H, _, tri = trimesh.proximity.closest_point(mesh, probe)
-    P_mid, P_tip = H[0], H[1]
-    n_mid = mesh.face_normals[int(tri[0])]
-    n_tip = mesh.face_normals[int(tri[1])]
-
-    ob = P0 - embed_mm * n0            # base footprint (frame origin)
-    o_near = P_mid - embed_mm * n_mid  # oval NEAR end (mid-leaf)
-    o_far  = P_tip - embed_mm * n_tip  # oval FAR end (tip) — aligned with leaf tip
-
-    # Frame axis runs base→tip (full leaf direction); normal ⟂ axis.
-    av_full = o_far - ob
-    D = float(np.linalg.norm(av_full))
-    if D < 1e-6:
-        return None
-    axis = av_full / D
-    navg = _safe_norm(n0 + n_tip)
-    N = _safe_norm(navg - float(np.dot(navg, axis)) * axis)
-    lat = np.cross(N, axis)
+    ca_c = math.cos(contact_angle_rad)
+    ca_s = math.sin(contact_angle_rad)
+    tangent_leaf = _safe_norm(T0 * ca_c - n0 * ca_s)
+    up_leaf      = _safe_norm(n0 * ca_c + T0 * ca_s)
+    lat = np.cross(n0, tangent_leaf)
     ll = float(np.linalg.norm(lat))
     if ll < 1e-6:
         return None
     lat = lat / ll
 
-    # Oval = tip half, spanning o_near→o_far, with the leaf's width profile
-    # (index-aligned to the surface rings for the 1:1 skin).
-    s_int = np.linspace(0.0, 1.0, _LEAF_N_LONG + 1)[1:-1]     # (ring_count,)
-    lat_pos = np.linspace(-1.0, 1.0, _LEAF_N_LAT + 1)          # (lat_count+1,)
-    w_s = 0.5 * W * _leaf_width_profile(s_int)                 # (ring_count,)
-    oval_av = o_far - o_near
-    centers = o_near[np.newaxis] + s_int[:, np.newaxis] * oval_av[np.newaxis]
-    grid = (
-        centers[:, np.newaxis, :]
-        + (lat_pos[np.newaxis, :, np.newaxis] * w_s[:, np.newaxis, np.newaxis])
-        * lat[np.newaxis, np.newaxis, :]
-    )
-    inner_v = np.concatenate(
-        [grid.reshape(-1, 3), o_near[np.newaxis], o_far[np.newaxis]], axis=0,
-    )
+    inner_v = build_leaf_oval_offsets(
+        n_hat=n0, T_along=tangent_leaf, across=lat,
+        L=L, W=W, embed_mm=embed_mm,
+    ) + P0[np.newaxis]
 
-    # Leaf surface base: one embed+protrusion step out along N (⇒ protrusion above
-    # the surface), built on the same normal as the oval.
-    surf_base = ob + (embed_mm + protrusion_mm) * N
-    return surf_base, axis, N, lat, inner_v
+    # Leaf surface base: protrusion above the surface along the surface normal.
+    surf_base = P0 + protrusion_mm * n0
+    return surf_base, tangent_leaf, up_leaf, inner_v
 
 
 # ── Candidate generation ──────────────────────────────────────────────────────
@@ -335,8 +320,8 @@ def place_leaves_greedy(
     col_step = max(W, 1e-3)
     expected_row_step = max(L * 0.5, 1e-3)
 
-    # The greedy placer seats leaves flat against the surface via the frame
-    # construction (equidistant oval ends → equidistant leaf ends).  The leaf
+    # The greedy placer seats leaves flat against the surface via the analytic
+    # per-clump contact angle (belly grazes the clump sphere).  The leaf
     # `lift_mm` rigid tip-rotation is an extra up-angle on top of that, so it is
     # disabled here: greedy leaves have no default angling.
     del lift_mm
@@ -350,17 +335,6 @@ def place_leaves_greedy(
         curl_deg       = float(curl_deg),
         lift_mm        = 0.0,
     )
-    # The leaf's arch+curl raises its tip endpoint above the base plane by a fixed
-    # angle (same for every leaf of these params).  Measure it once so the build
-    # frame can be tilted down by it — then the built tip lands level with the
-    # base, i.e. base and tip end up equidistant from the surface.
-    _ref, _ = build_leaf_surface(
-        base_pos=np.zeros(3), tangent=np.array([1.0, 0.0, 0.0]),
-        up_hint=np.array([0.0, 0.0, 1.0]), seed=0, **leaf_kw,
-    )
-    _reftip = _ref.vertices[len(_ref.vertices) - 1]
-    tip_rise_angle = math.atan2(float(_reftip[2]), float(_reftip[0]))
-
     t_total = time.perf_counter()
 
     # ── Per-mesh setup: stats, neighbour prune ────────────────────────────────
@@ -368,6 +342,8 @@ def place_leaves_greedy(
     parts_list: list[list[trimesh.Trimesh]] = []
     z_mins: list[float] = []
     all_cands: list[_Candidate] = []
+    contact_angles: list[float] = []   # per-mesh analytic seating tilt (radians)
+    _ca_cache: dict[int, float] = {}
 
     bounds_centers = []
     bounds_radii = []
@@ -397,6 +373,17 @@ def place_leaves_greedy(
         b = np.asarray(mesh.bounds, dtype=float)
         bounds_centers.append(0.5 * (b[0] + b[1]))
         bounds_radii.append(float(np.linalg.norm(b[1] - b[0]) * 0.5))
+        # Analytic seating tilt: the contact angle that presses the leaf belly
+        # against a sphere of this clump's estimated radius (mean vertex
+        # distance from centroid).  Cached on the rounded radius, same as the
+        # meridian placer's ca_cache.
+        r_est = float(np.linalg.norm(
+            mesh.vertices - mesh.vertices.mean(axis=0), axis=1,
+        ).mean())
+        _ca_key = int(round(r_est * 1000.0))
+        if _ca_key not in _ca_cache:
+            _ca_cache[_ca_key] = _contact_angle_for_sphere(r_est, **leaf_kw)
+        contact_angles.append(_ca_cache[_ca_key])
 
     # Neighbour lists (AABB/bounding-sphere pruned; same rule as the meridian
     # cross-cluster prune) for the seam pre-test and the blade-burial cull.
@@ -432,16 +419,18 @@ def place_leaves_greedy(
 
         lseed = int(_hash01_int(int(seeds_list[mi]), "greedy-leaf", cand.idx))
 
-        # Frame + root oval from two embedded mesh points (base end + tip end).
-        # Both oval ends sit embed below the surface, so they are equidistant from
-        # it; the leaf normal N is perpendicular to the axis between them.
+        # Frame + root oval, both in the leaf's own frame: the down-slope
+        # tangent is rotated down by this clump's analytic contact angle and
+        # the oval is derived from the resulting frame, so blade and oval are
+        # aligned by construction (see _leaf_frame_and_oval).
         frame = _leaf_frame_and_oval(
-            base, normal, T0, L, W, _GREEDY_EMBED_MM, _PROTRUSION_MM, meshes[mi],
+            base, normal, T0, L, W, _GREEDY_EMBED_MM, _PROTRUSION_MM,
+            contact_angles[mi],
         )
         if frame is None:
             stats.build_errors += 1
             continue
-        surf_base, axis, N_oval, lat, inner_v = frame
+        surf_base, tangent_leaf, up_leaf, inner_v = frame
 
         # Guard: both oval ends must be inside the clump (a thin spot where the
         # embed punches through the far side would print detached).
@@ -452,14 +441,6 @@ def place_leaves_greedy(
 
         stats.n_attempted += 1
 
-        # Leaf surface: built on the SAME normal N as the oval, one protrusion
-        # above the surface.  The build frame is tilted DOWN by the leaf's
-        # intrinsic tip-rise angle so the curled tip lands level with the base —
-        # base and tip then sit equidistant above the surface (mirroring the
-        # equidistant oval ends below it).
-        _c, _s = math.cos(tip_rise_angle), math.sin(tip_rise_angle)
-        tangent_leaf = _safe_norm(axis * _c - N_oval * _s)
-        up_leaf = _safe_norm(N_oval * _c + axis * _s)
         try:
             surf, _geom = build_leaf_surface(
                 base_pos=surf_base, tangent=tangent_leaf, up_hint=up_leaf,
@@ -494,7 +475,7 @@ def place_leaves_greedy(
         root_grid.add(_root_cell(base, gap))
         row_idx = int((float(base[2]) - z_mins[mi]) / expected_row_step)
         stats.base_positions.append(base.copy())
-        stats.base_tangents.append(axis.copy())
+        stats.base_tangents.append(tangent_leaf.copy())
         stats.base_row_idx.append(row_idx)
         stats.root_depths.append(_GREEDY_EMBED_MM)
         stats.leaf_float_dists.append(0.0)
