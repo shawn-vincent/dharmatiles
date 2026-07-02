@@ -261,6 +261,7 @@ def _attempt_leaf(
     max_neck_mm: float | None = None,
     tuck_base: bool = False,
     tuck_tip: bool = False,
+    tuck_tip_max_mm: float = 0.02,
     arch_mm: float = 0.0,
 ):
     """Seat, build, and cull one leaf at a shoot station.
@@ -448,10 +449,12 @@ def _attempt_leaf(
         )
         if len(ridx):
             tc = (-1.0 if t_in else 1.0) * float(np.linalg.norm(loc[0] - tv))
-            # Tip TOUCHES the surface — not buried.  An embedded target
-            # dragged the whole mid-blade below the skin on convex
-            # undersides (chord of a bulge lies inside it).
-            target = 0.02
+            # Tip clearance CEILING (never a burial): pull the tip down
+            # only when it floats above tuck_tip_max_mm.  Callers blend
+            # the ceiling by surface zone — generous on upward faces,
+            # touching (~0.02) on undersides — for a gradual tip-height
+            # transition down the canopy.
+            target = tuck_tip_max_mm
             pivot = surf.vertices[base_idx].copy()
             r = float(np.linalg.norm(tv - pivot))
             if tc > target and r > 1e-6:

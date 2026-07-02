@@ -69,17 +69,20 @@ _ORGANIC_SPACING_FRAC: float = 0.45
 # Generous so the dart throw actually saturates (maximality needs excess).
 _ORGANIC_CANDIDATE_FACTOR: float = 10.0
 
-# Blade zones by surface normal:
-#   nz ≥ _ORGANIC_PITCH_NORMAL_Z    → pitched blade (tip lifted, skewed)
-#   nz ≥ _ORGANIC_PLACEABLE_NORMAL_Z → FLUSH blade: lift 0, gentle curl,
-#       no printability skew.  A flush blade lies on the substrate (walls
-#       well under a millimetre, supported by the surface below) so it
-#       inherits the cluster's own printability — this is the Q9 "less
-#       fancy leaf" for the downward zone, and it kills the long wall
-#       prisms that skewed pitched blades grew on steep low surfaces.
-#   below → bare (deep underside).
-_ORGANIC_PITCH_NORMAL_Z: float = -0.05
+# Blade shape blends CONTINUOUSLY with the surface normal instead of a
+# hard pitched/flush switch: a smoothstep zone factor st runs 1 on
+# clearly-upward faces (nz ≥ _ORGANIC_ZONE_HI) to 0 on undersides
+# (nz ≤ _ORGANIC_ZONE_LO).  curl, tip lift, shingle standoff and the tip
+# clearance ceiling all scale with st; the end-to-end arch scales with
+# (1−st).  So curl/tip-height fade gradually down the canopy, reaching
+# the fully arch-embedded blade exactly where overhangs would begin.
+# Below _ORGANIC_PLACEABLE_NORMAL_Z → bare (deep underside).
+_ORGANIC_ZONE_HI: float = 0.30
+_ORGANIC_ZONE_LO: float = -0.45
 _ORGANIC_PLACEABLE_NORMAL_Z: float = -0.75
+
+# Tip clearance ceiling blend: ceiling = touch + st × this.
+_ORGANIC_TIP_CEIL_RANGE_MM: float = 1.2
 
 # Direction field: down-slope rotated by a smooth positional angle field.
 # Kept modest: divergent neighbours are the main source of blade sheets
@@ -453,18 +456,16 @@ def place_leaves_organic(
         if n_roots else np.zeros(0)
     )
 
-    # Flush-blade variant for the downward zone (see zone constants).
-    leaf_kw_flush = dict(
-        leaf_kw,
-        lift_mm  = _ORGANIC_FLUSH_LIFT_MM,
-        curl_deg = _ORGANIC_FLUSH_CURL_DEG,
-    )
-
     n_build_fail = 0
     for i in range(n_roots):
         base = bases[i]
         nrm = root_nrm[i]
-        flush = float(nrm[2]) < _ORGANIC_PITCH_NORMAL_Z
+        # Zone factor: 1 = upward face (pitched blade), 0 = underside
+        # (arch-embedded blade), smooth in between.
+        tz = min(max((float(nrm[2]) - _ORGANIC_ZONE_LO)
+                     / (_ORGANIC_ZONE_HI - _ORGANIC_ZONE_LO), 0.0), 1.0)
+        st = tz * tz * (3.0 - 2.0 * tz)
+        flush = st < 0.5
         T_leaf = dirs_leaf[i]
         lseed = int(_hash01(seed0, "org-leaf", i) * 2 ** 31)
 
@@ -478,8 +479,10 @@ def place_leaves_organic(
         Ls = L * scale
         Ws = W * scale
         kw = dict(
-            leaf_kw_flush if flush else leaf_kw,
+            leaf_kw,
             length_mm=Ls, width_mm=Ws,
+            curl_deg=st * min(float(curl_deg), _ORGANIC_PITCH_CURL_DEG),
+            lift_mm=st * _ORGANIC_TIP_LIFT_MM,
         )
 
         # Centre the blade on the root.  The build machinery anchors the
@@ -500,15 +503,16 @@ def place_leaves_organic(
 
         result, reason = _attempt_leaf(
             union, [], anchor, anchor_n, T_leaf, Ls, Ws, kw, lseed,
-            standoff_mm=0.0 if flush else float(standoffs[i]),
+            standoff_mm=st * float(standoffs[i]),
             bury_lift=True,
             seat_fallback_flat=True,
             skip_skew=flush,
             max_skew_frac=_ORGANIC_MAX_SKEW_FRAC,
             max_neck_mm=_ORGANIC_MAX_NECK_MM,
             tuck_base=True,
-            tuck_tip=flush,
-            arch_mm=_ORGANIC_FLUSH_ARCH_MM if flush else 0.0,
+            tuck_tip=True,
+            tuck_tip_max_mm=0.02 + st * _ORGANIC_TIP_CEIL_RANGE_MM,
+            arch_mm=(1.0 - st) * _ORGANIC_FLUSH_ARCH_MM,
         )
         if result is None:
             n_build_fail += 1
