@@ -119,56 +119,65 @@ def _leaf_frame_and_oval(
     L: float, W: float, embed_mm: float, protrusion_mm: float,
     mesh: trimesh.Trimesh,
 ):
-    """Build the leaf frame and its flat root oval from two mesh footprint points.
+    """Build the leaf frame and its flat root oval from the mesh footprint.
 
-    The whole leaf is defined by two surface points — the base-end ``P0`` (the
-    candidate) and the tip-end (the surface point under ``P0 + L·t_horiz``).  Each
-    is dropped ``embed_mm`` inside along its LOCAL surface normal to give the
-    oval's two axial ends (``ob``, ``ot``).  The oval axis runs between them (so it
-    follows the surface), and the oval/leaf normal ``N`` is that average surface
-    normal made perpendicular to the axis.  Because both ends are embedded by the
-    same amount, they are equidistant from the surface — and the leaf surface,
-    built one ``embed+protrusion`` step out along the same ``N``, inherits that
-    equidistance for free.
+    Three surface footprints are measured down-slope from the base ``P0``: the
+    base (``P0``), the mid-leaf (``P0 + 0.5·L·t_horiz``) and the tip
+    (``P0 + L·t_horiz``).  Each is dropped ``embed_mm`` inside along its LOCAL
+    normal.  The root oval is the **tip half** of the leaf — it spans the embedded
+    mid-leaf point (``o_near``) to the embedded tip point (``o_far``), so it is
+    half the leaf length and **aligned with the leaf at the tip** (the leaf's base
+    half tapers inward to ``o_near``, exactly the meridian oval convention).  Both
+    oval ends are embedded by the same amount ⇒ equidistant from the surface; the
+    leaf surface, built one ``embed+protrusion`` step out along the same normal
+    ``N``, inherits that equidistance.
 
-    Returns ``(surf_base, axis, N, lat, inner_v)`` where ``inner_v`` is the
-    123-vertex oval (same layout as the leaf surface, for :func:`solidify_leaf`),
-    or ``None`` if the frame is degenerate.
+    Returns ``(surf_base, axis, N, lat, inner_v)`` — ``inner_v`` is the 123-vertex
+    oval (leaf-surface layout, for :func:`solidify_leaf`) — or ``None`` if
+    degenerate.
     """
-    P1, _, tri = trimesh.proximity.closest_point(mesh, (P0 + L * t_horiz)[np.newaxis])
-    P1 = P1[0]
-    n1 = mesh.face_normals[int(tri[0])]
+    probe = np.array([P0 + 0.5 * L * t_horiz, P0 + L * t_horiz])
+    H, _, tri = trimesh.proximity.closest_point(mesh, probe)
+    P_mid, P_tip = H[0], H[1]
+    n_mid = mesh.face_normals[int(tri[0])]
+    n_tip = mesh.face_normals[int(tri[1])]
 
-    ob = P0 - embed_mm * n0        # oval base end, embed_mm below the surface
-    ot = P1 - embed_mm * n1        # oval tip  end, embed_mm below the surface
-    av = ot - ob
-    D = float(np.linalg.norm(av))
+    ob = P0 - embed_mm * n0            # base footprint (frame origin)
+    o_near = P_mid - embed_mm * n_mid  # oval NEAR end (mid-leaf)
+    o_far  = P_tip - embed_mm * n_tip  # oval FAR end (tip) — aligned with leaf tip
+
+    # Frame axis runs base→tip (full leaf direction); normal ⟂ axis.
+    av_full = o_far - ob
+    D = float(np.linalg.norm(av_full))
     if D < 1e-6:
         return None
-    axis = av / D
-    navg = _safe_norm(n0 + n1)
-    N = _safe_norm(navg - float(np.dot(navg, axis)) * axis)   # oval normal ⟂ axis
+    axis = av_full / D
+    navg = _safe_norm(n0 + n_tip)
+    N = _safe_norm(navg - float(np.dot(navg, axis)) * axis)
     lat = np.cross(N, axis)
     ll = float(np.linalg.norm(lat))
     if ll < 1e-6:
         return None
     lat = lat / ll
 
-    # Flat oval spanning ob→ot with the leaf's own width profile, so it underlies
-    # the blade outline.  Same layout as the leaf surface for the 1:1 skin.
+    # Oval = tip half, spanning o_near→o_far, with the leaf's width profile
+    # (index-aligned to the surface rings for the 1:1 skin).
     s_int = np.linspace(0.0, 1.0, _LEAF_N_LONG + 1)[1:-1]     # (ring_count,)
     lat_pos = np.linspace(-1.0, 1.0, _LEAF_N_LAT + 1)          # (lat_count+1,)
     w_s = 0.5 * W * _leaf_width_profile(s_int)                 # (ring_count,)
-    centers = ob[np.newaxis] + s_int[:, np.newaxis] * av[np.newaxis]
+    oval_av = o_far - o_near
+    centers = o_near[np.newaxis] + s_int[:, np.newaxis] * oval_av[np.newaxis]
     grid = (
         centers[:, np.newaxis, :]
         + (lat_pos[np.newaxis, :, np.newaxis] * w_s[:, np.newaxis, np.newaxis])
         * lat[np.newaxis, np.newaxis, :]
     )
-    inner_v = np.concatenate([grid.reshape(-1, 3), ob[np.newaxis], ot[np.newaxis]], axis=0)
+    inner_v = np.concatenate(
+        [grid.reshape(-1, 3), o_near[np.newaxis], o_far[np.newaxis]], axis=0,
+    )
 
     # Leaf surface base: one embed+protrusion step out along N (⇒ protrusion above
-    # the surface), so the blade is built on the same normal as the oval.
+    # the surface), built on the same normal as the oval.
     surf_base = ob + (embed_mm + protrusion_mm) * N
     return surf_base, axis, N, lat, inner_v
 
