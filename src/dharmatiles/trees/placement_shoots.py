@@ -53,7 +53,7 @@ import trimesh
 
 from ._utils import _hash01, _safe_norm
 from .leaf import _LEAF_N_LAT, _LEAF_N_LONG, build_leaf_surface, solidify_leaf
-from .mesh import _LEAF_PLACEABLE_NORMAL_Z, _hash01_int
+from .mesh import _hash01_int
 from .placement import LeafPlacementStats
 from .placement_greedy import (
     _GREEDY_EMBED_MM,
@@ -114,6 +114,13 @@ _SHOOT_MARCH_LIFT_MM: float = 1.0
 # max inward erosion (~2.3 mm measured, see the 2026-07-01 greedy writeup) or
 # marches truncate in every noise pit.
 _SHOOT_MARCH_DROP_SLACK_MM: float = 2.5
+
+# Underside floor for shoots, looser than the shared
+# _LEAF_PLACEABLE_NORMAL_Z (−0.5): permits bases on surfaces facing up to
+# ~40° below horizontal, pushing the leaf fringe further under the clump so
+# the bare underside zone shrinks.  Print risk rises on that last ring
+# (steeper down-slope blades); tighten back toward −0.5 if prints droop.
+_SHOOT_PLACEABLE_NORMAL_Z: float = -0.65
 
 
 # ── Exact-distance root grid ──────────────────────────────────────────────────
@@ -226,7 +233,7 @@ def _march_stations(
         Pn, nn = proj
         if float(np.linalg.norm(Pn - P)) < 0.25 * step_mm:
             break                       # no progress (apex degeneracy)
-        if float(nn[2]) < _LEAF_PLACEABLE_NORMAL_Z:
+        if float(nn[2]) < _SHOOT_PLACEABLE_NORMAL_Z:
             break                       # marched onto a hidden underside
         P, n = Pn, nn
         T = _growth_tangent(n, P, centroid)
@@ -460,6 +467,7 @@ def place_leaves_shoots(
         all_cands.extend(_generate_candidates(
             mesh, mi, seed,
             candidate_density=candidate_density, min_root_gap_mm=gap,
+            normal_z_floor=_SHOOT_PLACEABLE_NORMAL_Z,
         ))
         b = np.asarray(mesh.bounds, dtype=float)
         bounds_centers.append(0.5 * (b[0] + b[1]))
@@ -565,7 +573,7 @@ def place_leaves_shoots(
                     stats.skipped_cross_buried += 1
                     continue
                 base, bn = proj
-                if float(bn[2]) < _LEAF_PLACEABLE_NORMAL_Z:
+                if float(bn[2]) < _SHOOT_PLACEABLE_NORMAL_Z:
                     stats.skipped_cross_buried += 1
                     continue
                 if _points_inside_any(

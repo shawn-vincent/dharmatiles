@@ -325,6 +325,7 @@ def _generate_candidates(
     *,
     candidate_density: float,
     min_root_gap_mm: float,
+    normal_z_floor: float = _LEAF_PLACEABLE_NORMAL_Z,
 ) -> list[_Candidate]:
     """Over-generate blue-noise-thinnable candidate poses on the smooth surface."""
     rng = np.random.default_rng(int(seed) & 0xFFFFFFFF)
@@ -355,7 +356,7 @@ def _generate_candidates(
         # Cheap printability backstop (edge case #1): reject down-facing bases so
         # leaves never land on hidden undersides.  Root-embed feasibility is the
         # primary gate; this is the reserve normal-elevation floor.
-        if float(n[2]) < _LEAF_PLACEABLE_NORMAL_Z:
+        if float(n[2]) < normal_z_floor:
             continue
         base = pts[k]
         t = _growth_tangent(n, base, centroid)
