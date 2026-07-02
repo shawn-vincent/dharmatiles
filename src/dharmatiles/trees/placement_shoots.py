@@ -64,7 +64,6 @@ from .placement_greedy import (
     _leaf_frame_and_oval,
     _points_inside_any,
     _root_cell,
-    _root_occupied_near,
     _seat_oval_tilt,
 )
 
@@ -115,6 +114,33 @@ _SHOOT_MARCH_LIFT_MM: float = 1.0
 # max inward erosion (~2.3 mm measured, see the 2026-07-01 greedy writeup) or
 # marches truncate in every noise pit.
 _SHOOT_MARCH_DROP_SLACK_MM: float = 2.5
+
+
+# ── Exact-distance root grid ──────────────────────────────────────────────────
+# The greedy placer's cell-set grid (_root_occupied_near) blocks any point
+# whose cell is within the 3×3×3 neighbourhood of a claimed cell — an
+# effective exclusion radius of 1×–2× the gap.  The z-band outcome trace
+# showed that over-blocking starving the clump tops (each root shadowed up
+# to ~4× the area its blade covers), so the shoots placer stores the actual
+# root points per cell and tests true distance: exclusion radius = gap,
+# exactly.
+
+def _root_blocked(root_cells: dict, pt: np.ndarray, gap: float) -> bool:
+    ix, iy, iz = _root_cell(pt, gap)
+    g2 = gap * gap
+    for dx in (-1, 0, 1):
+        for dy in (-1, 0, 1):
+            for dz in (-1, 0, 1):
+                pts = root_cells.get((ix + dx, iy + dy, iz + dz))
+                if pts is not None and any(
+                    float(((pt - q) ** 2).sum()) < g2 for q in pts
+                ):
+                    return True
+    return False
+
+
+def _root_mark(root_cells: dict, pt: np.ndarray, gap: float) -> None:
+    root_cells.setdefault(_root_cell(pt, gap), []).append(np.asarray(pt, float))
 
 
 # ── Small vector helper ───────────────────────────────────────────────────────
@@ -347,6 +373,7 @@ def place_leaves_shoots(
     min_root_gap_mm: float | None = None,
     row_color_fn: Callable[[int], tuple[int, int, int, int]] | None = None,
     verbose: bool = True,
+    debug_outcomes: list | None = None,
 ) -> tuple[list[list[trimesh.Trimesh]], list[LeafPlacementStats]]:
     """Shoot-based leaf placement across the real (noised) foliage clumps.
 
@@ -380,9 +407,12 @@ def place_leaves_shoots(
 
     L = float(length_mm)
     W = float(width_mm)
-    # Slightly tighter default than greedy's W×0.5: shoot leaves taper toward
-    # the apical end (× _SHOOT_TIP_SCALE), so equal-gap packing reads sparser.
-    gap = float(min_root_gap_mm) if min_root_gap_mm is not None else max(W * 0.4, 1e-3)
+    # With the exact-distance root grid this IS the true min spacing (the
+    # greedy cell-set grid effectively doubles its gap).  Tuned on the
+    # multi-parent test: 0.4 over-packs (~2× overlap everywhere), 0.65 goes
+    # sparse with bare lanes; 0.5 gives full coverage with a healthy
+    # shingle overlap.
+    gap = float(min_root_gap_mm) if min_root_gap_mm is not None else max(W * 0.5, 1e-3)
     col_step = max(W, 1e-3)
     expected_row_step = max(L * 0.5, 1e-3)
     step_mm = _SHOOT_INTERNODE_FRAC * L
@@ -449,18 +479,24 @@ def place_leaves_shoots(
     # ── Global z-ordered sweep over shoot starts ──────────────────────────────
     all_cands.sort(key=lambda c: (c.z, c.phi, c.mesh_id, c.idx))
 
-    root_grid: set[tuple[int, int, int]] = set()
+    root_grid: dict[tuple[int, int, int], list[np.ndarray]] = {}
     n_rejected_root = 0
     n_rejected_short = 0
     n_shoots = 0
+
+    def _note(cand, outcome: str) -> None:
+        # Dev hook: per-candidate outcome trace for coverage diagnosis.
+        if debug_outcomes is not None:
+            debug_outcomes.append((cand.mesh_id, float(cand.z), outcome))
 
     for cand in all_cands:
         mi = cand.mesh_id
         stats = stats_list[mi]
 
         # Shoot start blocked by an already-claimed leaf root → dense enough here.
-        if _root_occupied_near(root_grid, cand.base, gap):
+        if _root_blocked(root_grid, cand.base, gap):
             n_rejected_root += 1
+            _note(cand, "root-blocked")
             continue
 
         hseed = int(seeds_list[mi])
@@ -479,19 +515,19 @@ def place_leaves_shoots(
         # anything, so within-shoot stations never collide with each other.
         free = [
             st for st in stations
-            if not _root_occupied_near(root_grid, st[0], gap)
+            if not _root_blocked(root_grid, st[0], gap)
             and not _points_inside_any(neighbours[mi], st[0][np.newaxis], st[0], 0.0)
         ]
-        # A shoot whose MARCH truncated below the minimum (apex/rim geometry —
-        # no spine can exist there) may fall back to a single leaf: rejecting
-        # it leaves a genuinely bald spot.  A shoot shortened by GRID conflicts
-        # is rejected as before — neighbouring leaves already cover that area.
-        min_needed = (
-            _SHOOT_MIN_PLACED_STATIONS
-            if len(stations) >= _SHOOT_MIN_PLACED_STATIONS else 1
-        )
-        if len(free) < min_needed:
+        # Place whatever free stations exist — even a single one.  An earlier
+        # rule rejected shoots shortened below 2 stations by grid conflicts,
+        # reasoning that neighbouring leaves already covered the area; the
+        # z-band outcome trace disproved that: a claimed root blocks a
+        # 1.2–2.4 mm disc in EVERY direction while its blade covers only an
+        # up-slope-pointing patch, so grid-shortened shoots concentrated at
+        # the clump tops and their rejection left the domes bare.
+        if len(free) == 0:
             n_rejected_short += 1
+            _note(cand, f"short(march={len(stations)},free=0)")
             continue
 
         n_free = len(free)
@@ -555,11 +591,15 @@ def place_leaves_shoots(
                     stats.skipped_below_floor += 1
                 else:
                     stats.build_errors += 1
+                if debug_outcomes is not None:
+                    debug_outcomes.append((mi, float(base[2]), f"leaf-{reason}"))
                 continue
+            if debug_outcomes is not None:
+                debug_outcomes.append((mi, float(base[2]), "placed"))
             solid, tangent_leaf, skew_mm, tip_clr, drop_mm = result
 
             # ── COMMIT ────────────────────────────────────────────────────────
-            root_grid.add(_root_cell(base, gap))
+            _root_mark(root_grid, base, gap)
             row_idx = int((float(base[2]) - z_mins[mi]) / expected_row_step)
             stats.base_positions.append(base.copy())
             stats.base_tangents.append(tangent_leaf.copy())
