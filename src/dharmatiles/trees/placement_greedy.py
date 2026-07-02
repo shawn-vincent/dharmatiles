@@ -17,11 +17,14 @@ Design points
   shallow depth (:data:`_GREEDY_EMBED_MM`) at the candidate point — like the
   meridian placer — so it is trivially in real material (no smooth-envelope
   bookkeeping, no separate connection gate, no over-long neck).
-* **Blade and oval share one frame.**  Leaves grow straight down-slope
-  (:func:`_growth_tangent`), tilted onto the surface by the meridian's analytic
-  per-clump contact angle; the root oval is derived from that same frame
+* **The oval is the thing being placed; the blade comes along rigidly.**  The
+  candidate point is the oval CENTER.  The oval keeps its absolute dimensions
+  and is pitched about its own center until both ends sit equally deep in the
+  real mesh (:func:`_seat_oval_tilt` — an iterated split-the-difference Newton
+  step on two embree depth rays).  The blade is derived from the seated frame
   (:func:`_leaf_frame_and_oval`), so the solidify stitch is aligned by
-  construction.
+  construction.  The mesh is only ever asked "how deep is this point?", never
+  "where should this point be" — no closest-point footprints, no sphere fit.
 * **Clearance is a containment cull, not a search.**  A leaf's tip and belly
   must clear its own clump and neighbour clumps (``mesh.contains`` probes); a
   leaf that doesn't clear is culled, never lifted.
@@ -50,11 +53,7 @@ from .leaf import (
     build_leaf_surface,
     solidify_leaf,
 )
-from .mesh import (
-    _LEAF_PLACEABLE_NORMAL_Z,
-    _contact_angle_for_sphere,
-    _hash01_int,
-)
+from .mesh import _LEAF_PLACEABLE_NORMAL_Z, _hash01_int
 from .placement import LeafPlacementStats
 
 # ── Greedy-specific constants ─────────────────────────────────────────────────
@@ -115,40 +114,95 @@ def _points_inside_any(meshes: list, pts: np.ndarray, near_pt: np.ndarray, reach
     return False
 
 
+# ── Oval seating: equal-depth pitch solve against the real mesh ───────────────
+
+def _seat_oval_tilt(
+    mesh: trimesh.Trimesh,
+    P0: np.ndarray, n0: np.ndarray, T0: np.ndarray,
+    L: float, embed_mm: float,
+    *,
+    max_iter: int = 3,
+    tol_mm: float = 0.05,
+    max_tilt_rad: float = math.radians(60.0),
+) -> float | None:
+    """Pitch the rigid root oval about its own center until both ends sit
+    equally deep below the REAL (noised) surface.
+
+    The oval is a rigid segment of half-span ``L/4`` centered at
+    ``C = P0 − embed·n0`` with its axis initially down-slope (``T0``).  Each
+    iteration measures both ends' depth along ``±n0`` (embree rays; negative
+    when an end pokes outside the mesh) and rotates by
+    ``asin(imbalance / (L/2))`` — the Newton step that splits the difference:
+    the deep end comes up by half the imbalance, the shallow end goes down by
+    half.  Curvature and surface noise make one step inexact, so it is
+    iterated (converges geometrically; ``max_iter`` is small on purpose).
+
+    Returns the pitch angle in radians (positive = down-slope end tilts
+    deeper), or ``None`` when a depth ray misses the mesh or the tilt cap is
+    exceeded — pathological spots (past a rim, thin shell) that must be
+    culled, not forced.
+    """
+    C = P0 - embed_mm * n0
+    h = 0.25 * L          # oval half-span: the oval spans [L/2, L] ⇒ length L/2
+    span = 0.5 * L
+    theta = 0.0
+    for _ in range(max_iter):
+        c, s = math.cos(theta), math.sin(theta)
+        t = T0 * c - n0 * s
+        ends = np.array([C - h * t, C + h * t])     # [near (up-slope), far]
+        inside = mesh.contains(ends)
+        # Depth along the base normal: embedded ends cast outward (+n0) to the
+        # exit; poking ends cast inward (−n0) to the surface below (negative).
+        dirs = np.where(inside[:, np.newaxis], n0[np.newaxis], -n0[np.newaxis])
+        loc, ray_idx, _ = mesh.ray.intersects_location(ends, dirs, multiple_hits=False)
+        if {int(i) for i in ray_idx} != {0, 1}:
+            return None
+        d = np.zeros(2)
+        for k, ri in enumerate(ray_idx):
+            ri = int(ri)
+            dist = float(np.linalg.norm(loc[k] - ends[ri]))
+            d[ri] = dist if inside[ri] else -dist
+        imbalance = d[0] - d[1]                     # d_near − d_far
+        if abs(imbalance) <= tol_mm:
+            break
+        theta += math.asin(max(-1.0, min(1.0, imbalance / span)))
+        if abs(theta) > max_tilt_rad:
+            return None
+    return theta
+
+
 # ── Leaf frame + root oval, both in the leaf's own frame ──────────────────────
 
 def _leaf_frame_and_oval(
     P0: np.ndarray, n0: np.ndarray, T0: np.ndarray,
     L: float, W: float, embed_mm: float, protrusion_mm: float,
-    contact_angle_rad: float,
+    tilt_rad: float,
 ):
-    """Build the blade frame and its root oval in the LEAF's own frame.
+    """Build the blade frame and its root oval in the LEAF's own frame,
+    centered on the candidate point.
 
-    This is the meridian convention (``placement.py``): the down-slope surface
-    tangent ``T0`` is rotated DOWN toward the surface by the analytic contact
-    angle — the rotation that presses the leaf's belly against a sphere of the
-    clump's estimated radius — giving the blade tangent.  The root oval is then
-    derived from that same frame by :func:`build_leaf_oval_offsets`: it spans
-    the tip half ``[L/2, L]`` along the blade tangent from the surface point
-    ``P0``, embedded ``embed_mm`` along ``−n0``.  Blade and oval share origin,
-    direction and length BY CONSTRUCTION, so the 1:1 index stitch in
-    :func:`solidify_leaf` produces a short tapered neck everywhere.
+    The candidate point ``P0`` is the surface point directly above the oval
+    CENTER.  The oval — rigid, absolute dimensions, spanning ``[L/2, L]`` of
+    the leaf's own frame (via :func:`build_leaf_oval_offsets`) — is centered
+    at ``P0 − embed·n0`` and pitched about that center by ``tilt_rad``, the
+    angle :func:`_seat_oval_tilt` solved against the real mesh so both oval
+    ends sit equally deep.  The blade is rigidly attached in the same frame
+    (its base anchor is the oval-frame origin, ``0.75·L`` up-slope of the
+    center, protruding ``protrusion_mm`` along ``n0``), so blade and oval
+    share origin, direction and length BY CONSTRUCTION and the 1:1 index
+    stitch in :func:`solidify_leaf` produces a short tapered neck everywhere.
+    Placing the oval is the primary act; the blade comes along for the ride.
 
-    (The previous construction measured the oval from mesh closest-point
-    footprints while building the blade analytically at full length — on any
-    curved clump the two diverged and the stitch walls splayed into large
-    visible fans.  It also violated the module's no-``closest_point`` perf
-    constraint.)
-
-    Whether the oval actually sits inside the clump is a separate question,
-    answered by the caller's containment guard on the oval end vertices.
+    Whether the seated oval actually sits inside the clump is a separate
+    question, answered by the caller's containment guard on the oval end
+    vertices.
 
     Returns ``(surf_base, tangent_leaf, up_leaf, inner_v)`` — ``inner_v`` is the
     123-vertex oval (leaf-surface layout, for :func:`solidify_leaf`) — or
     ``None`` if degenerate.
     """
-    ca_c = math.cos(contact_angle_rad)
-    ca_s = math.sin(contact_angle_rad)
+    ca_c = math.cos(tilt_rad)
+    ca_s = math.sin(tilt_rad)
     tangent_leaf = _safe_norm(T0 * ca_c - n0 * ca_s)
     up_leaf      = _safe_norm(n0 * ca_c + T0 * ca_s)
     lat = np.cross(n0, tangent_leaf)
@@ -157,13 +211,19 @@ def _leaf_frame_and_oval(
         return None
     lat = lat / ll
 
+    # Oval-frame origin: the offsets put the oval center at 0.75·L·T − embed·n̂
+    # relative to it, so anchoring the center at P0 − embed·n0 means the origin
+    # sits 0.75·L up-slope of the candidate point.
+    origin = P0 - 0.75 * L * tangent_leaf
     inner_v = build_leaf_oval_offsets(
         n_hat=n0, T_along=tangent_leaf, across=lat,
         L=L, W=W, embed_mm=embed_mm,
-    ) + P0[np.newaxis]
+    ) + origin[np.newaxis]
 
-    # Leaf surface base: protrusion above the surface along the surface normal.
-    surf_base = P0 + protrusion_mm * n0
+    # Leaf surface base: protrusion above the oval-frame origin along the
+    # surface normal (same rigid blade↔oval relation as before; only the
+    # anchor point moved from the base to the oval center).
+    surf_base = origin + protrusion_mm * n0
     return surf_base, tangent_leaf, up_leaf, inner_v
 
 
@@ -297,9 +357,10 @@ def place_leaves_greedy(
 ) -> tuple[list[list[trimesh.Trimesh]], list[LeafPlacementStats]]:
     """Greedy lowest-first leaf placement across the real (noised) foliage clumps.
 
-    Candidates are sampled on the real clump surface; each leaf's root seats a
-    fixed shallow depth just below that surface at the candidate point, and
-    burial clearance is judged against the same real clumps.
+    Candidates are sampled on the real clump surface; each candidate point is
+    the CENTER of a leaf's root oval, seated a fixed shallow depth below that
+    surface and pitched so both oval ends sit equally deep (_seat_oval_tilt).
+    Burial clearance is judged against the same real clumps.
 
     Returns ``(parts_per_mesh, stats_per_mesh)`` — the same contract as
     :func:`placement.place_leaves_on_multiple_meshes`.  Meridian-only stats
@@ -320,8 +381,8 @@ def place_leaves_greedy(
     col_step = max(W, 1e-3)
     expected_row_step = max(L * 0.5, 1e-3)
 
-    # The greedy placer seats leaves flat against the surface via the analytic
-    # per-clump contact angle (belly grazes the clump sphere).  The leaf
+    # The greedy placer seats leaves flat against the surface via the
+    # per-candidate equal-depth oval seat (_seat_oval_tilt).  The leaf
     # `lift_mm` rigid tip-rotation is an extra up-angle on top of that, so it is
     # disabled here: greedy leaves have no default angling.
     del lift_mm
@@ -342,8 +403,6 @@ def place_leaves_greedy(
     parts_list: list[list[trimesh.Trimesh]] = []
     z_mins: list[float] = []
     all_cands: list[_Candidate] = []
-    contact_angles: list[float] = []   # per-mesh analytic seating tilt (radians)
-    _ca_cache: dict[int, float] = {}
 
     bounds_centers = []
     bounds_radii = []
@@ -373,17 +432,6 @@ def place_leaves_greedy(
         b = np.asarray(mesh.bounds, dtype=float)
         bounds_centers.append(0.5 * (b[0] + b[1]))
         bounds_radii.append(float(np.linalg.norm(b[1] - b[0]) * 0.5))
-        # Analytic seating tilt: the contact angle that presses the leaf belly
-        # against a sphere of this clump's estimated radius (mean vertex
-        # distance from centroid).  Cached on the rounded radius, same as the
-        # meridian placer's ca_cache.
-        r_est = float(np.linalg.norm(
-            mesh.vertices - mesh.vertices.mean(axis=0), axis=1,
-        ).mean())
-        _ca_key = int(round(r_est * 1000.0))
-        if _ca_key not in _ca_cache:
-            _ca_cache[_ca_key] = _contact_angle_for_sphere(r_est, **leaf_kw)
-        contact_angles.append(_ca_cache[_ca_key])
 
     # Neighbour lists (AABB/bounding-sphere pruned; same rule as the meridian
     # cross-cluster prune) for the seam pre-test and the blade-burial cull.
@@ -419,13 +467,20 @@ def place_leaves_greedy(
 
         lseed = int(_hash01_int(int(seeds_list[mi]), "greedy-leaf", cand.idx))
 
-        # Frame + root oval, both in the leaf's own frame: the down-slope
-        # tangent is rotated down by this clump's analytic contact angle and
-        # the oval is derived from the resulting frame, so blade and oval are
-        # aligned by construction (see _leaf_frame_and_oval).
+        # Seat the oval: candidate point = oval center; pitch the rigid oval
+        # about that center until both ends sit equally deep in the REAL mesh.
+        tilt = _seat_oval_tilt(
+            meshes[mi], base, normal, T0, L, _GREEDY_EMBED_MM,
+        )
+        if tilt is None:
+            n_rejected_buried += 1
+            stats.skipped_cross_buried += 1
+            continue
+
+        # Frame + root oval, both in the leaf's own frame: the blade is
+        # rigidly attached to the seated oval (see _leaf_frame_and_oval).
         frame = _leaf_frame_and_oval(
-            base, normal, T0, L, W, _GREEDY_EMBED_MM, _PROTRUSION_MM,
-            contact_angles[mi],
+            base, normal, T0, L, W, _GREEDY_EMBED_MM, _PROTRUSION_MM, tilt,
         )
         if frame is None:
             stats.build_errors += 1
