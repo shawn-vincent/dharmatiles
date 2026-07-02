@@ -43,7 +43,7 @@ from collections.abc import Callable
 import numpy as np
 import trimesh
 
-from ._utils import _hash01, _safe_norm
+from ._utils import _safe_norm
 from .leaf import (
     _LEAF_N_LAT,
     _LEAF_N_LONG,
@@ -209,26 +209,26 @@ def _sample_surface(mesh: trimesh.Trimesh, n: int, rng: np.random.Generator):
 
 
 def _growth_tangent(normal: np.ndarray, base: np.ndarray, centroid: np.ndarray) -> np.ndarray:
-    """Horizontal-outward growth direction in the local tangent plane.
+    """Steepest-DESCENT growth direction in the local tangent plane.
 
-    The leaf grows horizontally away from the cluster axis (radial in XY),
-    projected onto the surface tangent plane — so it comes out level "along its
-    bottom" rather than drooping downward.  On the upper canopy this tips the
-    blade slightly upward (tip above the root), giving the tip-z ordering for
-    free with no post-hoc lift.  Falls back to steepest ascent near a vertical
-    surface where the horizontal projection degenerates.
+    Every leaf points straight down-slope — world-down projected onto the surface
+    tangent plane — so leaves are always vertical (along the surface but pointing
+    down), never sideways and never up.  Near the apex, where the down projection
+    degenerates, fall back to radially-outward-in-XY (which still heads down over
+    the crown).
     """
+    down = np.array([0.0, 0.0, -1.0])
+    d = down - float(np.dot(down, normal)) * normal
+    dl = float(np.linalg.norm(d))
+    if dl > 1e-6:
+        return d / dl
+    # Apex (normal ≈ world-up): no down-slope direction — grow radially outward,
+    # which then heads down over the crown.
     radial = np.array([base[0] - centroid[0], base[1] - centroid[1], 0.0])
-    t = radial - float(np.dot(radial, normal)) * normal
-    tl = float(np.linalg.norm(t))
-    if tl > 1e-6:
-        return t / tl
-    # Degenerate (base directly above/below the axis): grow up-slope.
-    up = np.array([0.0, 0.0, 1.0])
-    u = up - float(np.dot(up, normal)) * normal
-    ul = float(np.linalg.norm(u))
-    if ul > 1e-6:
-        return u / ul
+    r = radial - float(np.dot(radial, normal)) * normal
+    rl = float(np.linalg.norm(r))
+    if rl > 1e-6:
+        return r / rl
     return _safe_norm(np.array([1.0, 0.0, 0.0]) - float(normal[0]) * normal)
 
 
@@ -413,7 +413,7 @@ def place_leaves_greedy(
         mi = cand.mesh_id
         base = cand.base
         normal = cand.normal
-        T0 = cand.tangent
+        T0 = cand.tangent          # steepest-descent (down-slope) growth; no jitter
         stats = stats_list[mi]
 
         # Cull for space-filling: keep roots ~min_root_gap apart (dense packing).
@@ -422,14 +422,6 @@ def place_leaves_greedy(
             continue
 
         lseed = int(_hash01_int(int(seeds_list[mi]), "greedy-leaf", cand.idx))
-        T0 = cand.tangent          # horizontal-outward growth (footprint direction)
-        # Optional azimuthal jitter of the growth direction about the normal.
-        if angle_jitter_deg != 0.0:
-            theta = math.radians(angle_jitter_deg) * (
-                _hash01(int(seeds_list[mi]), "greedy-ang", cand.idx) * 2.0 - 1.0
-            )
-            ct, st = math.cos(theta), math.sin(theta)
-            T0 = _safe_norm(T0 * ct + np.cross(normal, T0) * st)
 
         # Frame + root oval from two embedded mesh points (base end + tip end).
         # Both oval ends sit embed below the surface, so they are equidistant from
