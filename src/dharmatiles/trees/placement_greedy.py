@@ -68,7 +68,9 @@ from .placement import LeafPlacementStats
 # lifts.)  It is trivially in real material, so no separate connection gate.
 _GREEDY_EMBED_MM: float = 0.75
 
-# Fixed outward protrusion of the leaf blade base above the foliage surface.
+# Blade standoff above the real foliage surface: the blade's CLOSEST vertex is
+# placed exactly this far off the noised surface (enforced per leaf by a graze
+# translation along the normal — see _min_blade_standoff in the sweep).
 _PROTRUSION_MM: float = 0.3
 
 # Printability skew: the blade tip must clear the root oval's tip in world z by
@@ -178,6 +180,27 @@ def _seat_oval_tilt(
         if abs(theta) > max_tilt_rad:
             return None
     return theta
+
+
+def _min_blade_standoff(
+    mesh: trimesh.Trimesh, verts: np.ndarray, n0: np.ndarray,
+) -> float | None:
+    """Minimum signed height of ``verts`` above the surface, along ``n0``.
+
+    Outside vertices cast a ray along ``−n0`` to the surface below (positive
+    standoff); inside vertices cast along ``+n0`` to the exit above (negative).
+    Vertices whose ray misses the mesh (past the silhouette) contribute no
+    measurement.  Returns ``None`` when nothing hits.
+    """
+    inside = mesh.contains(verts)
+    dirs = np.where(inside[:, np.newaxis], n0[np.newaxis], -n0[np.newaxis])
+    loc, ray_idx, _ = mesh.ray.intersects_location(verts, dirs, multiple_hits=False)
+    if len(ray_idx) == 0:
+        return None
+    ray_idx = ray_idx.astype(np.int64)
+    d = np.linalg.norm(loc - verts[ray_idx], axis=1)
+    signed = np.where(inside[ray_idx], -d, d)
+    return float(signed.min())
 
 
 # ── Leaf frame + root oval, both in the leaf's own frame ──────────────────────
@@ -516,6 +539,14 @@ def place_leaves_greedy(
         tip_idx = len(surf.vertices) - 1
         base_idx = len(surf.vertices) - 2
 
+        # ── Graze translation: enforce the protrusion constant on the mesh ────
+        # The flat frame leaves the blade floating above a convex surface (the
+        # tangent plane falls away in every direction), so the fixed anchor
+        # offset alone does NOT put the blade _PROTRUSION_MM off the real
+        # surface.  Translate the whole blade along ±n0 so its closest vertex
+        # sits exactly _PROTRUSION_MM above the real (noised) surface.  The
+        # oval keeps its seated depth; the stitch walls just shorten.
+        #
         # ── Printability SKEW ─────────────────────────────────────────────────
         # On down-tilted frames the blade tip can land BELOW the root oval's tip
         # in world z — the tip-end wall would then overhang downward and print
@@ -523,19 +554,45 @@ def place_leaves_greedy(
         # (perpendicular to the leaf normal, toward the base: along
         # −tangent_leaf) until the blade tip sits above the oval tip.  This
         # shears the blade↔oval stitch slightly, but keeps the tip-end walls
-        # climbing upward.  A frame that would need more than L/2 of slide (or
-        # that cannot be fixed by sliding, tangent ≈ horizontal) is culled as
-        # unprintable.
-        skew_mm = 0.0
-        z_need = (float(inner_v[-1][2]) + _SKEW_TIP_MARGIN_MM
-                  - float(surf.vertices[tip_idx][2]))
-        if z_need > 0.0:
-            t_z = float(tangent_leaf[2])
-            skew_mm = z_need / -t_z if t_z < -1e-6 else float("inf")
-            if skew_mm > 0.5 * L:
+        # climbing upward.
+        #
+        # The two corrections perturb each other (the up-slope slide can push
+        # vertices into rising terrain; the graze drop can lower the tip), so
+        # they alternate for two passes, ENDING on the skew — the printability
+        # constraint is exact, the standoff is within the second skew's small
+        # residual.  A blade needing more than L/2 of either correction
+        # (cumulative) is culled.
+        pull_mm = 0.0        # cumulative graze translation (+out / −drop)
+        skew_mm = 0.0        # cumulative in-plane printability slide
+        seat_failed = None   # which stats counter to bump on cull
+        for _seat_pass in range(2):
+            standoff = _min_blade_standoff(
+                meshes[mi], np.asarray(surf.vertices), normal,
+            )
+            if standoff is not None:
+                dp = _PROTRUSION_MM - standoff
+                pull_mm += dp
+                if abs(pull_mm) > 0.5 * L:
+                    seat_failed = "preburied"
+                    break
+                surf.vertices = surf.vertices + dp * normal
+
+            z_need = (float(inner_v[-1][2]) + _SKEW_TIP_MARGIN_MM
+                      - float(surf.vertices[tip_idx][2]))
+            if z_need > 0.0:
+                t_z = float(tangent_leaf[2])
+                ds = z_need / -t_z if t_z < -1e-6 else float("inf")
+                skew_mm += ds
+                if skew_mm > 0.5 * L:
+                    seat_failed = "floor"
+                    break
+                surf.vertices = surf.vertices - ds * tangent_leaf
+        if seat_failed is not None:
+            if seat_failed == "preburied":
+                stats.skipped_preburied += 1
+            else:
                 stats.skipped_below_floor += 1
-                continue
-            surf.vertices = surf.vertices - skew_mm * tangent_leaf
+            continue
 
         # Cull if the blade grows INTO a clump (its own or a neighbour): keep the
         # tip and belly (lowest widest→tip vertex) out of every clump.
@@ -570,7 +627,7 @@ def place_leaves_greedy(
             float(surf.vertices[tip_idx][2]) - float(inner_v[-1][2]),
         )
         stats.tip_z_lifts.append(skew_mm)   # in-plane printability slide (mm)
-        stats.pull_aways.append(0.0)
+        stats.pull_aways.append(pull_mm)   # graze translation along n0 (+out/−drop)
         stats.n_placed += 1
 
         if len(solid.vertices) > 0:
