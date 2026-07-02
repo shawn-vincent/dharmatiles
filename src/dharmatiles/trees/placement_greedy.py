@@ -28,6 +28,10 @@ Design points
 * **Clearance is a containment cull, not a search.**  A leaf's tip and belly
   must clear its own clump and neighbour clumps (``mesh.contains`` probes); a
   leaf that doesn't clear is culled, never lifted.
+* **Printability skew.**  On down-tilted frames the blade is slid in its own
+  plane toward the base (along −tangent) until the blade tip clears the root
+  oval's tip in world z — otherwise the tip-end walls overhang downward and
+  print unsupported.  Frames needing more than L/2 of slide are culled.
 
 Hard constraints carried over from the 2026-07-01 perf crisis (do NOT violate):
 no ``trimesh.proximity.closest_point`` / R-tree / per-leaf ``Trimesh`` scans in
@@ -66,6 +70,11 @@ _GREEDY_EMBED_MM: float = 0.75
 
 # Fixed outward protrusion of the leaf blade base above the foliage surface.
 _PROTRUSION_MM: float = 0.3
+
+# Printability skew: the blade tip must clear the root oval's tip in world z by
+# at least this margin, else the tip-end walls overhang downward (FDM-unprintable).
+# The blade is slid in-plane toward the base until the margin holds.
+_SKEW_TIP_MARGIN_MM: float = 0.05
 
 
 # ── Occupancy structures (self-managed, no trimesh proximity) ─────────────────
@@ -507,6 +516,27 @@ def place_leaves_greedy(
         tip_idx = len(surf.vertices) - 1
         base_idx = len(surf.vertices) - 2
 
+        # ── Printability SKEW ─────────────────────────────────────────────────
+        # On down-tilted frames the blade tip can land BELOW the root oval's tip
+        # in world z — the tip-end wall would then overhang downward and print
+        # unsupported.  Slide the whole blade surface in its own plane
+        # (perpendicular to the leaf normal, toward the base: along
+        # −tangent_leaf) until the blade tip sits above the oval tip.  This
+        # shears the blade↔oval stitch slightly, but keeps the tip-end walls
+        # climbing upward.  A frame that would need more than L/2 of slide (or
+        # that cannot be fixed by sliding, tangent ≈ horizontal) is culled as
+        # unprintable.
+        skew_mm = 0.0
+        z_need = (float(inner_v[-1][2]) + _SKEW_TIP_MARGIN_MM
+                  - float(surf.vertices[tip_idx][2]))
+        if z_need > 0.0:
+            t_z = float(tangent_leaf[2])
+            skew_mm = z_need / -t_z if t_z < -1e-6 else float("inf")
+            if skew_mm > 0.5 * L:
+                stats.skipped_below_floor += 1
+                continue
+            surf.vertices = surf.vertices - skew_mm * tangent_leaf
+
         # Cull if the blade grows INTO a clump (its own or a neighbour): keep the
         # tip and belly (lowest widest→tip vertex) out of every clump.
         curl_mask = np.linalg.norm(surf.vertices - surf.vertices[base_idx], axis=1) > (L / 2.0)
@@ -536,8 +566,10 @@ def place_leaves_greedy(
         stats.leaf_float_dists.append(0.0)
         stats.leaf_buried_depths.append(0.0)
         stats.shingle_layers.append(0)
-        stats.tip_z_clearances.append(0.0)
-        stats.tip_z_lifts.append(0.0)
+        stats.tip_z_clearances.append(
+            float(surf.vertices[tip_idx][2]) - float(inner_v[-1][2]),
+        )
+        stats.tip_z_lifts.append(skew_mm)   # in-plane printability slide (mm)
         stats.pull_aways.append(0.0)
         stats.n_placed += 1
 
