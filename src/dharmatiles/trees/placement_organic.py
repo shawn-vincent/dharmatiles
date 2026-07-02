@@ -52,7 +52,11 @@ import trimesh
 
 from ._utils import _hash01, _safe_norm
 from .placement import LeafPlacementStats
-from .placement_greedy import _growth_tangent, _sample_surface
+from .placement_greedy import (
+    _growth_tangent,
+    _points_inside_any,
+    _sample_surface,
+)
 from .placement_shoots import (
     _GREEDY_EMBED_MM,
     _attempt_leaf,
@@ -321,12 +325,16 @@ def place_leaves_organic(
     pos_jitter: float = 0.0,
     # organic-specific (module-const defaults; promote to config later):
     spacing_frac: float | None = None,
+    avoid_meshes: list[trimesh.Trimesh] | None = None,
     layering: str = "systematic",
     row_color_fn: Callable[[int], tuple[int, int, int, int]] | None = None,
     verbose: bool = True,
     debug_outcomes: list | None = None,
 ) -> tuple[list[list[trimesh.Trimesh]], list[LeafPlacementStats]]:
     """Organic union-surface leaf placement (see module docstring).
+
+    ``avoid_meshes`` (e.g. the branch/wood tubes): any leaf whose blade
+    SURFACE intersects one is culled — leaves must never skewer branches.
 
     ``row_color_fn``, when given, is called with each leaf's LAYER index
     so the overlap layering is legible in debug renders.
@@ -456,6 +464,9 @@ def place_leaves_organic(
         if n_roots else np.zeros(0)
     )
 
+    avoid = list(avoid_meshes) if avoid_meshes else []
+    n_branch_cull = 0
+
     n_build_fail = 0
     for i in range(n_roots):
         base = bases[i]
@@ -529,6 +540,29 @@ def place_leaves_organic(
             debug_outcomes.append((base.copy(), "placed"))
         solid, tangent_leaf, skew_mm, tip_clr, drop_mm = result
 
+        # Branch-collision cull: blade surface (first half of the solid's
+        # vertex block) must not intersect any EXPOSED branch.  A blade
+        # vertex inside a wood tube that is itself inside the canopy union
+        # is invisible and harmless — culling those holes the skin
+        # wherever a branch runs under it (~20% of all leaves).  Only a
+        # vertex that is inside a branch AND outside the canopy skewers
+        # visibly.
+        if avoid:
+            blade_v = solid.vertices[: len(solid.vertices) // 2]
+            in_branch = np.zeros(len(blade_v), dtype=bool)
+            for _bm in avoid:
+                _bb = _bm.bounds
+                if (base < _bb[0] - Ls).any() or (base > _bb[1] + Ls).any():
+                    continue
+                in_branch |= np.asarray(_bm.contains(blade_v), dtype=bool)
+            if in_branch.any() and (~np.asarray(
+                union.contains(blade_v[in_branch]), dtype=bool,
+            )).any():
+                n_branch_cull += 1
+                if debug_outcomes is not None:
+                    debug_outcomes.append((base.copy(), "fail-branch"))
+                continue
+
         row_idx = int((float(base[2]) - z_mins[src]) / expected_row_step)
         stats.base_positions.append(base.copy())
         stats.base_tangents.append(tangent_leaf.copy())
@@ -558,7 +592,8 @@ def place_leaves_organic(
         print(
             f"\n── organic leaf placement ──  {placed} placed / {n_roots} roots "
             f"(spacing={spacing:.2f}mm, layering={layering}, "
-            f"build-fail={n_build_fail}, uncovered-test-pts={n_uncovered})  "
+            f"build-fail={n_build_fail}, branch-cull={n_branch_cull}, "
+            f"uncovered-test-pts={n_uncovered})  "
             f"{elapsed:.3f}s\n"
         )
 

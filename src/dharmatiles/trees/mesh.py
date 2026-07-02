@@ -358,6 +358,12 @@ def build_branch_mesh(
             # roots seat just below the actual foliage surface (fixed shallow
             # embed) and clearance is judged against the real surface.
             _clump_meshes = [c for c, _ in foliage_clumps]
+            # Organic: leaves whose blade surface intersects a branch tube
+            # are culled inside the placer.
+            _extra = (
+                {"avoid_meshes": edge_solids}
+                if leaf_placement == "organic" else {}
+            )
             _leaf_parts, _ = _place_fn(
                 _clump_meshes,
                 length_mm      = leaf_length_mm,
@@ -372,6 +378,7 @@ def build_branch_mesh(
                 labels         = [f"cluster-{eid}" for eid in _clump_eids],
                 angle_jitter_deg = leaf_angle_jitter_deg,
                 pos_jitter       = leaf_pos_jitter,
+                **_extra,
             )
         for _lp in _leaf_parts:
             leaf_solids.extend(_lp)
