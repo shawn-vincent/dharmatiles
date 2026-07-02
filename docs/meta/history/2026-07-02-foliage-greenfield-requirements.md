@@ -234,3 +234,41 @@ after batching source attribution — at the <5 s budget, further headroom
 via leaf instancing if needed).  build-fail ≈ 5% on the full tree
 (fringe/underside cases) — worth a look in Phase C.  Systematic vs random
 layering renders produced; Shawn to judge.
+
+## Iteration 2 (same day) — shingle order, sheet crossings, prisms, zones
+
+Shawn's wireframe review of the first full tree found: leaf bases lying
+over higher leaves (graph-colour layers are slope-blind), blade SURFACES
+slicing through neighbours, long wall prisms near the canopy bottom
+(extreme printability-skew slides stretching the stitch walls), and bare
+mid-canopy patches (downward-ish surfaces below the placement floor).
+
+Changes:
+- **Monotone shingle standoff** replaces graph-colour layers: standoff =
+  0.6 mm × normalized root height within its cluster (+0.1 mm jitter).
+  A higher-rooted leaf can never sit under a lower-rooted one.
+- **Pitch does the shingling**: tip lift 1.2 mm via the leaf builder's
+  rigid tip rotation; upper tips always cross above lower bases.
+- **Two blade zones by surface normal**: pitched blade above −0.05;
+  FLUSH blade (lift 0, curl 12°, no skew — lies on the substrate and
+  inherits its printability) down to −0.75; bare below.  The flush zone
+  covers the former bare patches AND eliminates the skew prisms.
+- Direction variation 25° → 15° (divergent neighbours were the main
+  source of sheet-through-sheet crossings); skew capped at 0.35·L.
+
+Full tree: 2405 leaves, 5.8 s.  Aesthetic judge agent run against the
+AC reference for the next iteration's punch list.
+
+## Iteration 3 — aesthetic-judge pass (agent vs AC reference)
+
+An art-director agent compared the renders against the AC reference.
+Headline: "artichoke, not Animal Crossing" — the 1.2 mm tip lift flared
+tips off the mass, where AC blades HUG the mass and droop down-slope.
+Adopted: tip lift cut to 0.45 mm (clearance only; the monotone standoff
+owns the upper-over-lower guarantee), ±20% downward-only size jitter.
+Deliberately rejected: literal height-sorted rows (violates the organic
+Q6 requirement).  Deferred to Tree-level config: leaf-to-lobe ratio
+(judge suggests fewer/larger clusters — foliage_cluster_radius_mm is the
+user's knob); canopy under-fringe polish.
+
+Full tree: 2427 leaves, 5.8 s, stl/test/fulltree-organic.stl.

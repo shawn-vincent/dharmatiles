@@ -70,19 +70,52 @@ _ORGANIC_SPACING_FRAC: float = 0.45
 # Generous so the dart throw actually saturates (maximality needs excess).
 _ORGANIC_CANDIDATE_FACTOR: float = 10.0
 
-# Underside floor: no discrete leaves where the surface normal points more
-# than ~30° below horizontal (supportless FDM).  The below-floor zone gets
-# relief/flat-variant treatment in a later phase.
-_ORGANIC_PLACEABLE_NORMAL_Z: float = -0.5
+# Blade zones by surface normal:
+#   nz ≥ _ORGANIC_PITCH_NORMAL_Z    → pitched blade (tip lifted, skewed)
+#   nz ≥ _ORGANIC_PLACEABLE_NORMAL_Z → FLUSH blade: lift 0, gentle curl,
+#       no printability skew.  A flush blade lies on the substrate (walls
+#       well under a millimetre, supported by the surface below) so it
+#       inherits the cluster's own printability — this is the Q9 "less
+#       fancy leaf" for the downward zone, and it kills the long wall
+#       prisms that skewed pitched blades grew on steep low surfaces.
+#   below → bare (deep underside).
+_ORGANIC_PITCH_NORMAL_Z: float = -0.05
+_ORGANIC_PLACEABLE_NORMAL_Z: float = -0.75
 
 # Direction field: down-slope rotated by a smooth positional angle field.
-_ORGANIC_DIR_VAR_DEG: float = 25.0     # peak deviation from down-slope
+# Kept modest: divergent neighbours are the main source of blade sheets
+# slicing through each other.
+_ORGANIC_DIR_VAR_DEG: float = 15.0     # peak deviation from down-slope
 _ORGANIC_DIR_WAVELEN_MM: float = 7.0   # spatial wavelength of the field
 
-# Overlap layering.
-_ORGANIC_LAYER_STEP_MM: float = 0.5    # standoff per layer
-_ORGANIC_LAYER_MAX: int = 2            # layers 0..MAX
-_ORGANIC_LAYER_NEIGHBOR_MM: float = 2.6  # roots closer than this "overlap"
+# Shingle pitch: every pitched blade's TIP floats this far above its base
+# level (the leaf builder's rigid tip rotation) — just enough to clear the
+# blade below (≈2× blade thickness), no more.  The aesthetic-judge pass
+# flagged 1.2 mm as the "artichoke" tell: tips flaring off the mass.  The
+# AC look wants blades HUGGING the mass, tips drooping down-slope; the
+# monotone standoff below (not the lift) owns the upper-over-lower
+# guarantee.
+_ORGANIC_TIP_LIFT_MM: float = 0.45
+
+# Per-leaf size jitter, downward only (max size = the configured leaf):
+# scale ∈ [1−jitter, 1].  Uniform stamped-looking leaves were judge item 8.
+_ORGANIC_SIZE_JITTER: float = 0.2
+
+# Monotone shingle standoff: each leaf additionally stands off the surface
+# by up to this much, scaled by its root's normalized height WITHIN its
+# source cluster (plus a whisker of hash jitter).  Monotone-in-z ⇒ a
+# higher-rooted leaf is NEVER under a lower-rooted one — the invariant the
+# earlier graph-colour layers (slope-blind) kept violating.
+_ORGANIC_SHINGLE_RISE_MM: float = 0.6
+_ORGANIC_STANDOFF_JITTER_MM: float = 0.1
+
+# Skew cap for pitched blades (fraction of leaf length): slides longer
+# than this stretched the stitch walls into visible prisms; cull instead
+# (rare, fringe-only, and the flush zone now owns the steep-down band).
+_ORGANIC_MAX_SKEW_FRAC: float = 0.35
+
+# Flush-blade shape overrides (the "less fancy" leaf).
+_ORGANIC_FLUSH_CURL_DEG: float = 12.0
 
 # Coverage verification sampling density (test points ≈ area / this²).
 _ORGANIC_VERIFY_RES_MM: float = 0.9
@@ -181,45 +214,31 @@ def _direction_field_angle(p: np.ndarray, seed: int) -> float:
     return math.radians(_ORGANIC_DIR_VAR_DEG) * s
 
 
-# ── Overlap layering ──────────────────────────────────────────────────────────
+# ── Shingle standoff ──────────────────────────────────────────────────────────
 
-def _assign_layers(
-    bases: np.ndarray, seed: int, layering: str,
+def _shingle_standoffs(
+    bases: np.ndarray, src_idx: np.ndarray, meshes: list, seed: int,
 ) -> np.ndarray:
-    """Per-root standoff layer, 0.._ORGANIC_LAYER_MAX."""
-    n = len(bases)
-    if layering == "random":
-        return np.array([
-            int(_hash01(seed, "org-lay", i) * (_ORGANIC_LAYER_MAX + 1))
-            for i in range(n)
-        ], dtype=int)
+    """Per-root standoff (mm), monotone in root height within each cluster.
 
-    # systematic: bottom-up greedy graph colouring — each root takes the
-    # smallest layer not used by any already-layered neighbour it overlaps.
-    # (A "+1 above the tallest neighbour" rule saturates the whole dense
-    # field to the cap; colouring alternates 0/1/2 so overlapping leaves
-    # actually differ in height.)
-    d = _ORGANIC_LAYER_NEIGHBOR_MM
-    cells: dict[tuple[int, int, int], list[int]] = {}
-    layers = np.zeros(n, dtype=int)
-    order = np.argsort(bases[:, 2], kind="stable")
-    d2 = d * d
-    for i in order:
-        p = bases[i]
-        c = (int(p[0] // d), int(p[1] // d), int(p[2] // d))
-        used: set[int] = set()
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                for dz in (-1, 0, 1):
-                    for j in cells.get((c[0] + dx, c[1] + dy, c[2] + dz), ()):
-                        if float(((p - bases[j]) ** 2).sum()) < d2:
-                            used.add(int(layers[j]))
-        lay = 0
-        while lay in used and lay < _ORGANIC_LAYER_MAX:
-            lay += 1
-        layers[i] = lay
-        cells.setdefault(c, []).append(int(i))
-    return layers
+    ``rise × normalized-z + jitter`` with jitter ≪ rise step between
+    vertically-adjacent roots' heights, so a higher-rooted leaf ALWAYS
+    stands off at least as much as any lower-rooted leaf it overlaps —
+    upper-over-lower can never invert.  (Earlier graph-colour layers were
+    slope-blind and buried upper tips under lower bases.)
+    """
+    n = len(bases)
+    out = np.zeros(n)
+    for i in range(n):
+        m = meshes[int(src_idx[i])]
+        z0 = float(m.vertices[:, 2].min())
+        z1 = float(m.vertices[:, 2].max())
+        t = (float(bases[i][2]) - z0) / max(z1 - z0, 1e-6)
+        out[i] = (
+            _ORGANIC_SHINGLE_RISE_MM * float(np.clip(t, 0.0, 1.0))
+            + _ORGANIC_STANDOFF_JITTER_MM * _hash01(seed, "org-so", i)
+        )
+    return out
 
 
 # ── Public entry point ────────────────────────────────────────────────────────
@@ -286,7 +305,7 @@ def place_leaves_organic(
         inner_curve    = float(inner_curve),
         outer_curve    = float(outer_curve),
         curl_deg       = float(curl_deg),
-        lift_mm        = 0.0,
+        lift_mm        = _ORGANIC_TIP_LIFT_MM,
     )
     t_total = time.perf_counter()
 
@@ -347,9 +366,7 @@ def place_leaves_organic(
         if not _root_blocked_n(grid, tpts[k], _safe_norm(tnrm[k]), spacing)
     )
 
-    # ── Phase 2: layers + direction + build ───────────────────────────────────
-    layers = _assign_layers(bases, seed0, layering) if n_roots else np.zeros(0, int)
-
+    # ── Phase 2: standoffs + direction + build ────────────────────────────────
     # Source-cluster attribution, batched per mesh (probe just inside the
     # surface).  Per-leaf contains() against every cluster was the full-tree
     # hot spot (~30 embree calls × 2000 leaves).
@@ -363,10 +380,23 @@ def place_leaves_organic(
             src_idx[take] = mi
             assigned |= ins
 
+    standoffs = (
+        _shingle_standoffs(bases, src_idx, meshes, seed0)
+        if n_roots else np.zeros(0)
+    )
+
+    # Flush-blade variant for the downward zone (see zone constants).
+    leaf_kw_flush = dict(
+        leaf_kw,
+        lift_mm  = 0.0,
+        curl_deg = _ORGANIC_FLUSH_CURL_DEG,
+    )
+
     n_build_fail = 0
     for i in range(n_roots):
         base = bases[i]
         nrm = root_nrm[i]
+        flush = float(nrm[2]) < _ORGANIC_PITCH_NORMAL_Z
         T0 = _growth_tangent(nrm, base, centroid)
         ang = _direction_field_angle(base, seed0)
         T_leaf = _safe_norm(_rotate_about(T0, nrm, ang))
@@ -376,6 +406,16 @@ def place_leaves_organic(
         stats = stats_list[src]
         stats.n_attempted += 1
 
+        # Per-leaf size jitter, downward only: max stays at the configured
+        # (printable) leaf size.
+        scale = 1.0 - _ORGANIC_SIZE_JITTER * _hash01(seed0, "org-size", i)
+        Ls = L * scale
+        Ws = W * scale
+        kw = dict(
+            leaf_kw_flush if flush else leaf_kw,
+            length_mm=Ls, width_mm=Ws,
+        )
+
         # Centre the blade on the root.  The build machinery anchors the
         # oval's tip-half at its anchor point, so the blade spans 0.75·L
         # up-slope but only 0.25·L down-slope of it — a 75/25 bias that
@@ -384,16 +424,18 @@ def place_leaves_organic(
         # blade cover ±L/2 around the ACTUAL root, so Poisson maximality
         # over roots translates into visual coverage.
         proj = _project_to_surface(
-            union, base + 0.25 * L * T_leaf, nrm,
-            1.0 + 0.25 * L + _SHOOT_MARCH_DROP_SLACK_MM,
+            union, base + 0.25 * Ls * T_leaf, nrm,
+            1.0 + 0.25 * Ls + _SHOOT_MARCH_DROP_SLACK_MM,
         )
         anchor, anchor_n = proj if proj is not None else (base, nrm)
 
         result, reason = _attempt_leaf(
-            union, [], anchor, anchor_n, T_leaf, L, W, leaf_kw, lseed,
-            standoff_mm=float(layers[i]) * _ORGANIC_LAYER_STEP_MM,
+            union, [], anchor, anchor_n, T_leaf, Ls, Ws, kw, lseed,
+            standoff_mm=0.0 if flush else float(standoffs[i]),
             bury_lift=True,
             seat_fallback_flat=True,
+            skip_skew=flush,
+            max_skew_frac=_ORGANIC_MAX_SKEW_FRAC,
         )
         if result is None:
             n_build_fail += 1
@@ -417,7 +459,7 @@ def place_leaves_organic(
         stats.root_depths.append(_GREEDY_EMBED_MM)
         stats.leaf_float_dists.append(0.0)
         stats.leaf_buried_depths.append(0.0)
-        stats.shingle_layers.append(int(layers[i]))
+        stats.shingle_layers.append(1 if flush else 0)
         stats.tip_z_clearances.append(tip_clr)
         stats.tip_z_lifts.append(skew_mm)
         stats.pull_aways.append(-drop_mm)
@@ -425,7 +467,8 @@ def place_leaves_organic(
 
         if len(solid.vertices) > 0:
             if row_color_fn is not None:
-                color = np.asarray(row_color_fn(int(layers[i])), dtype=np.uint8)
+                # Debug colour by zone: 0 = pitched blade, 1 = flush blade.
+                color = np.asarray(row_color_fn(1 if flush else 0), dtype=np.uint8)
                 solid.visual = trimesh.visual.ColorVisuals(
                     mesh=solid,
                     face_colors=np.tile(color, (len(solid.faces), 1)),

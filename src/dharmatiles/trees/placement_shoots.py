@@ -256,6 +256,8 @@ def _attempt_leaf(
     standoff_mm: float = 0.0,
     bury_lift: bool = False,
     seat_fallback_flat: bool = False,
+    skip_skew: bool = False,
+    max_skew_frac: float = 0.5,
 ):
     """Seat, build, and cull one leaf at a shoot station.
 
@@ -305,12 +307,18 @@ def _attempt_leaf(
     base_idx = len(surf.vertices) - 2
 
     skew_mm = 0.0
-    z_need = (float(inner_v[-1][2]) + _SKEW_TIP_MARGIN_MM
-              - float(surf.vertices[tip_idx][2]))
+    # skip_skew: flush blade variants lie ON the substrate (walls under a
+    # millimetre, supported by the surface below) — the tip-z overhang rule
+    # doesn't apply and the slide would only stretch the stitch walls into
+    # long prisms.
+    z_need = 0.0 if skip_skew else (
+        float(inner_v[-1][2]) + _SKEW_TIP_MARGIN_MM
+        - float(surf.vertices[tip_idx][2])
+    )
     if z_need > 0.0:
         t_z = float(tangent_leaf[2])
         skew_mm = z_need / -t_z if t_z < -1e-6 else float("inf")
-        if skew_mm > 0.5 * L:
+        if skew_mm > max_skew_frac * L:
             return None, "floor"
         surf.vertices = surf.vertices - skew_mm * tangent_leaf
 
