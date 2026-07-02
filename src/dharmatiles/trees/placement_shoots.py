@@ -52,7 +52,7 @@ import numpy as np
 import trimesh
 
 from ._utils import _hash01, _safe_norm
-from .leaf import build_leaf_surface, solidify_leaf
+from .leaf import _LEAF_N_LAT, _LEAF_N_LONG, build_leaf_surface, solidify_leaf
 from .mesh import _LEAF_PLACEABLE_NORMAL_Z, _hash01_int
 from .placement import LeafPlacementStats
 from .placement_greedy import (
@@ -228,9 +228,10 @@ def _attempt_leaf(
     cull → solidify), with ``L``/``W`` free so shoot stations can carry
     scaled leaves.
 
-    Returns ``((solid, tangent_leaf, skew_mm, tip_z_clearance), None)`` on
-    success or ``(None, reason)`` with reason in ``{"buried", "floor",
-    "error"}``.
+    Returns ``((solid, tangent_leaf, skew_mm, tip_z_clearance, drop_mm),
+    None)`` on success — ``drop_mm`` is the adaptive seat translation along
+    ``−normal`` (positive = moved toward the surface) — or ``(None, reason)``
+    with reason in ``{"buried", "floor", "error"}``.
     """
     tilt = _seat_oval_tilt(mesh, base, normal, T0, L, _GREEDY_EMBED_MM)
     if tilt is None:
@@ -265,6 +266,45 @@ def _attempt_leaf(
             return None, "floor"
         surf.vertices = surf.vertices - skew_mm * tangent_leaf
 
+    # ── Adaptive seat on the BELLY DIP (after the skew) ───────────────────
+    # The rigid frame anchors the blade BASE _PROTRUSION_MM above the oval
+    # origin, but the arch + seat tilt leave the blade's low point hovering
+    # up to ~1.4 mm off the clump.  The blade's closest-approach point is a
+    # single canonical vertex — the belly dip: the tip-half midrib vertex
+    # (or the tip itself, when there is no curl) with the smallest
+    # displacement along the leaf normal.  Same definition as
+    # :func:`placement._leaf_belly_dip`, located here on the built surface
+    # via the ring layout.  Translate the blade along ±normal so the belly
+    # dip sits exactly _PROTRUSION_MM above the parent surface: one
+    # contains probe + one ray (outside → clearance along −normal; inside
+    # → exit depth along +normal, counted negative to force a raise).  A
+    # positive drop is capped by the tip's remaining z-clearance over the
+    # oval so it never undoes the printability skew above.
+    ring_stride = _LEAF_N_LAT + 1
+    mid_col = _LEAF_N_LAT // 2
+    s_int = np.linspace(0.0, 1.0, _LEAF_N_LONG + 1)[1:-1]
+    mid_idx = np.nonzero(s_int > 0.5)[0] * ring_stride + mid_col
+    cand_idx = np.append(mid_idx, tip_idx)
+    d_normal = (surf.vertices[cand_idx] - surf.vertices[base_idx]) @ up_leaf
+    dip_idx = int(cand_idx[int(np.argmin(d_normal))])
+
+    drop_mm = 0.0
+    dip = surf.vertices[dip_idx]
+    dip_inside = bool(mesh.contains(dip[np.newaxis])[0])
+    ray_dir = normal if dip_inside else -normal
+    loc, ridx, _ = mesh.ray.intersects_location(
+        dip[np.newaxis], ray_dir[np.newaxis], multiple_hits=False,
+    )
+    if len(ridx):
+        c = float(np.linalg.norm(loc[0] - dip))
+        drop_mm = (-c if dip_inside else c) - _PROTRUSION_MM
+        nz = float(normal[2])
+        if drop_mm > 0.0 and nz > 1e-6:
+            tip_slack = (float(surf.vertices[tip_idx][2])
+                         - float(inner_v[-1][2]) - _SKEW_TIP_MARGIN_MM)
+            drop_mm = min(drop_mm, max(tip_slack, 0.0) / nz)
+        surf.vertices = surf.vertices - drop_mm * normal
+
     curl_mask = np.linalg.norm(
         surf.vertices - surf.vertices[base_idx], axis=1,
     ) > (L / 2.0)
@@ -282,7 +322,7 @@ def _attempt_leaf(
         return None, "error"
 
     tip_z_clearance = float(surf.vertices[tip_idx][2]) - float(inner_v[-1][2])
-    return (solid, tangent_leaf, skew_mm, tip_z_clearance), None
+    return (solid, tangent_leaf, skew_mm, tip_z_clearance, drop_mm), None
 
 
 # ── Public entry point ────────────────────────────────────────────────────────
@@ -516,7 +556,7 @@ def place_leaves_shoots(
                 else:
                     stats.build_errors += 1
                 continue
-            solid, tangent_leaf, skew_mm, tip_clr = result
+            solid, tangent_leaf, skew_mm, tip_clr, drop_mm = result
 
             # ── COMMIT ────────────────────────────────────────────────────────
             root_grid.add(_root_cell(base, gap))
@@ -530,7 +570,9 @@ def place_leaves_shoots(
             stats.shingle_layers.append(0)
             stats.tip_z_clearances.append(tip_clr)
             stats.tip_z_lifts.append(skew_mm)
-            stats.pull_aways.append(0.0)
+            # Outward-positive convention: the adaptive seat drop moves the
+            # blade TOWARD the surface, so it lands here negated.
+            stats.pull_aways.append(-drop_mm)
             stats.n_placed += 1
             placed_in_shoot += 1
 
