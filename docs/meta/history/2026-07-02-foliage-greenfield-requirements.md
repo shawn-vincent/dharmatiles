@@ -201,3 +201,36 @@ Working name: `placement_organic.py`, selector `leaf_placement="organic"`.
 Phasing: A) union + placer + both layering modes → B) acceptance renders
 (two-cluster + full tree, layering A/B side by side) → C) underside
 exploration → D) knob promotion / cleanup decisions.
+
+## Phase A/B results (implemented same day)
+
+`placement_organic.py` landed as `leaf_placement="organic"`, wired into the
+dispatch and the multi-parent test (`--placement organic --layering
+systematic|random`).  Findings during bring-up, each diagnosed from
+instrumented runs:
+
+1. **Layering rule**: "+1 above tallest neighbour" saturates a dense field
+   to the cap (everything one layer).  Greedy graph colouring (smallest
+   layer unused by overlapping neighbours) distributes 0/1/2 properly.
+2. **Euclidean Poisson grids fail at seams**: V-walls 1–2 mm apart through
+   space block each other's candidates.  The organic grid stores normals
+   and only counts conflicts between similar-facing surfaces.
+3. **The blade is 75/25 up-slope-biased around its anchor** (oval tip-half
+   at the anchor).  Maximal roots ≠ visual coverage until the anchor is
+   re-projected 0.25·L down-slope so the blade covers ±L/2 around the
+   actual root.
+4. **Burial handling is per-probe**: same-wall burial (tip curling under a
+   crown) lifts out by measured depth; oblique-wall burial (union-seam
+   inside corner) tucks in as-built; unmeasurable contains() grazes are
+   kept.  Seat-solve failures fall back to a flat seat instead of a hole.
+5. **The stubborn "bald bowl"** on the two-cluster scene turned out to be
+   a tilted cluster's dome UNDERSIDE — the designed-bare below-floor zone
+   (Q9), not a placement defect.  Phase C's relief treatment owns it.
+
+Acceptance status: two-cluster scene fully covered above the floor
+(158 leaves, uncovered-test-points=1, 0.2 s); full skeleton-grown tree
+reads as the target Animal Crossing canopy (2033 leaves, 5.1 s placement
+after batching source attribution — at the <5 s budget, further headroom
+via leaf instancing if needed).  build-fail ≈ 5% on the full tree
+(fringe/underside cases) — worth a look in Phase C.  Systematic vs random
+layering renders produced; Shawn to judge.

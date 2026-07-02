@@ -253,6 +253,9 @@ def _attempt_leaf(
     W: float,
     leaf_kw: dict,
     lseed: int,
+    standoff_mm: float = 0.0,
+    bury_lift: bool = False,
+    seat_fallback_flat: bool = False,
 ):
     """Seat, build, and cull one leaf at a shoot station.
 
@@ -261,6 +264,12 @@ def _attempt_leaf(
     cull → solidify), with ``L``/``W`` free so shoot stations can carry
     scaled leaves.
 
+    ``standoff_mm`` lifts the finished blade along the seat normal AFTER
+    the belly-dip drop (root oval stays plugged; the stitch walls stretch)
+    — the overlap-layering hook used by the organic placer.  Raising along
+    +normal can only increase the tip's z-clearance, so it never undoes
+    the printability skew.
+
     Returns ``((solid, tangent_leaf, skew_mm, tip_z_clearance, drop_mm),
     None)`` on success — ``drop_mm`` is the adaptive seat translation along
     ``−normal`` (positive = moved toward the surface) — or ``(None, reason)``
@@ -268,7 +277,13 @@ def _attempt_leaf(
     """
     tilt = _seat_oval_tilt(mesh, base, normal, T0, L, _GREEDY_EMBED_MM)
     if tilt is None:
-        return None, "buried"
+        # The equal-depth solve gives up on pathological spots (crease
+        # pockets, rims).  For coverage-guaranteeing placers a FLAT seat
+        # beats a hole; classic placers keep the cull.
+        if seat_fallback_flat:
+            tilt = 0.0
+        else:
+            return None, "buried-seat"
     frame = _leaf_frame_and_oval(
         base, normal, T0, L, W, _GREEDY_EMBED_MM, _PROTRUSION_MM, tilt,
     )
@@ -277,7 +292,7 @@ def _attempt_leaf(
     surf_base, tangent_leaf, up_leaf, inner_v = frame
 
     if not bool(mesh.contains(inner_v[[-2, -1]]).all()):
-        return None, "buried"
+        return None, "buried-oval"
 
     try:
         surf, _geom = build_leaf_surface(
@@ -338,6 +353,11 @@ def _attempt_leaf(
             drop_mm = min(drop_mm, max(tip_slack, 0.0) / nz)
         surf.vertices = surf.vertices - drop_mm * normal
 
+    # Overlap-layering standoff (organic placer): lift the blade after the
+    # seat so layered leaves ride visibly proud of the layer below.
+    if standoff_mm > 0.0:
+        surf.vertices = surf.vertices + standoff_mm * normal
+
     curl_mask = np.linalg.norm(
         surf.vertices - surf.vertices[base_idx], axis=1,
     ) > (L / 2.0)
@@ -347,7 +367,50 @@ def _attempt_leaf(
     belly_idx = int(curl_idx[int(np.argmin(surf.vertices[curl_idx, 2]))])
     probe = surf.vertices[np.array([tip_idx, belly_idx])]
     if _points_inside_any([mesh, *neighbour_meshes], probe, base, L):
-        return None, "buried"
+        # bury_lift (organic placer): a probe dipping into the PARENT
+        # surface — e.g. the tip curling under at a dome crown — is lifted
+        # out along the seat normal instead of culled (a cull would leave a
+        # permanent coverage hole).  Only the parent mesh is measured; if a
+        # neighbour is the buried-in solid (or the lift doesn't clear), the
+        # cull stands.
+        lifted = False
+        if bury_lift:
+            inside = mesh.contains(probe)
+            if inside.any():
+                idx = np.nonzero(inside)[0]
+                dirs = np.tile(normal[np.newaxis], (len(idx), 1))
+                loc, ridx, tri = mesh.ray.intersects_location(
+                    probe[idx], dirs, multiple_hits=False,
+                )
+                ridx = np.asarray(ridx, dtype=int)
+                tri = np.asarray(tri, dtype=int)
+                # Per-probe classification.  A probe buried under a surface
+                # whose normal diverges strongly from the seat normal (>50°)
+                # has entered the OPPOSITE wall of an inside corner (union
+                # seam) — tucking in is the desired look, keep it.  A probe
+                # buried under its OWN wall (exit normal ≈ seat normal, e.g.
+                # a tip curling under a dome crown) is lifted out by its
+                # measured depth.  A probe whose exit ray misses is a
+                # contains() parity graze right at the surface — not a real
+                # burial; keep it.
+                same_wall_depth = 0.0
+                for j in range(len(ridx)):
+                    d = float(np.linalg.norm(loc[j] - probe[idx[ridx[j]]]))
+                    dot = float(np.dot(mesh.face_normals[tri[j]], normal))
+                    if dot >= 0.64:
+                        same_wall_depth = max(same_wall_depth, d)
+                if same_wall_depth > 0.0:
+                    surf.vertices = (
+                        surf.vertices + (same_wall_depth + 0.05) * normal
+                    )
+                    probe = surf.vertices[np.array([tip_idx, belly_idx])]
+                    lifted = not _points_inside_any(
+                        [mesh, *neighbour_meshes], probe, base, L,
+                    )
+                else:
+                    lifted = True
+        if not lifted:
+            return None, "buried-probe"
 
     try:
         solid, _ = solidify_leaf(surf, inner_v)
@@ -593,7 +656,7 @@ def place_leaves_shoots(
                 meshes[mi], neighbours[mi], base, bn, T_leaf, Ls, Ws, leaf_kw, lseed,
             )
             if result is None:
-                if reason == "buried":
+                if reason.startswith("buried"):
                     stats.skipped_cross_buried += 1
                 elif reason == "floor":
                     stats.skipped_below_floor += 1

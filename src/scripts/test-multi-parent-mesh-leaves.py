@@ -39,6 +39,7 @@ from dharmatiles.trees import (
 from dharmatiles.trees._utils import _safe_norm
 from dharmatiles.trees.mesh import _build_foliage_cluster_mesh
 from dharmatiles.trees.placement_greedy import place_leaves_greedy
+from dharmatiles.trees.placement_organic import place_leaves_organic
 from dharmatiles.trees.placement_shoots import place_leaves_shoots
 
 from dharmatiles.core.color import (
@@ -372,8 +373,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Multi-parent-mesh leaf placement test")
     parser.add_argument("out", nargs="?", help="Output STL path")
     parser.add_argument(
-        "--placement", choices=["meridian", "greedy", "shoots"], default="meridian",
+        "--placement", choices=["meridian", "greedy", "shoots", "organic"],
+        default="meridian",
         help="Leaf placer to exercise (default: meridian).",
+    )
+    parser.add_argument(
+        "--layering", choices=["systematic", "random"], default="systematic",
+        help="Overlap layering mode (organic placer only).",
     )
     args = parser.parse_args()
     placement = args.placement
@@ -418,16 +424,21 @@ def main() -> None:
     print(f"  Cluster A: {len(ca.vertices):,}v / {len(ca.faces):,}f")
     print(f"  Cluster B: {len(cb.vertices):,}v / {len(cb.faces):,}f")
 
-    if placement in ("greedy", "shoots"):
+    if placement in ("greedy", "shoots", "organic"):
         if placement == "greedy":
             print("  Placing leaves on A and B via GREEDY lowest-first accretion …")
             _place_fn = place_leaves_greedy
-        else:
+        elif placement == "shoots":
             print("  Placing leaves on A and B via SHOOT-based accretion …")
             _place_fn = place_leaves_shoots
-        # Both work directly on the real (noised) clumps ca/cb: roots seat
-        # just below the actual foliage surface.  For shoots, leaf shades
-        # cycle per SHOOT (not per z row) so sprig grouping is visible.
+        else:
+            print(f"  Placing leaves on A and B via ORGANIC union-surface "
+                  f"tiling ({args.layering} layering) …")
+            _place_fn = place_leaves_organic
+        # All work directly on the real (noised) clumps ca/cb: roots seat
+        # just below the actual foliage surface.  Debug shades: shoots
+        # colour per SHOOT; organic colours per LAYER (overlap standoff).
+        _extra = {"layering": args.layering} if placement == "organic" else {}
         parts_list, stats_list = _place_fn(
             [ca, cb],
             length_mm        = _PLACE_KW["length_mm"],
@@ -442,7 +453,8 @@ def main() -> None:
             labels           = ["A (vertical)", "B (55° tilt)"],
             angle_jitter_deg = _PLACE_KW["angle_jitter_deg"],
             pos_jitter       = _PLACE_KW["pos_jitter"],
-            row_color_fn     = _shoot_rgba if placement == "shoots" else _row_rgba,
+            row_color_fn     = _row_rgba if placement == "greedy" else _shoot_rgba,
+            **_extra,
         )
     else:
         print("  Placing leaves on A and B with shared world-space shingling …")
