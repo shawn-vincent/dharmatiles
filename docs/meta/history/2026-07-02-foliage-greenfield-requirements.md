@@ -272,3 +272,18 @@ Q6 requirement).  Deferred to Tree-level config: leaf-to-lobe ratio
 user's knob); canopy under-fringe polish.
 
 Full tree: 2427 leaves, 5.8 s, stl/test/fulltree-organic.stl.
+
+## Iteration 4 — height-sorted standoff accumulation + neck gate (Shawn)
+
+Shawn: "you COULD do height-sorted LEAVES and guarantee overlap that way;
+you can increase standoff AND/OR lift" + long-rooted leaves still poking.
+Adopted exactly that: standoffs now accumulate bottom-up per LEAF — each
+leaf sits 0.3 mm above the tallest already-processed leaf it overlaps,
+capped at 1.2 mm (the cap prevents chain ballooning; the 0.6 mm tip lift
+resolves ties at the cap).  The old global ramp spread ~0.04 mm between
+neighbours — too thin against blade-arch variation.  Long-rooted leaves:
+a neck gate rejects blades whose slide+standoff stretch the blade→oval
+stitch past 2 mm, and the anchor re-projection drop budget tightened to
+~1 mm so anchors can't land across a crease.
+
+Full tree: 2374 leaves, 5.7 s.

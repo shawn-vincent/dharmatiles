@@ -55,7 +55,6 @@ from .placement import LeafPlacementStats
 from .placement_greedy import _growth_tangent, _sample_surface
 from .placement_shoots import (
     _GREEDY_EMBED_MM,
-    _SHOOT_MARCH_DROP_SLACK_MM,
     _attempt_leaf,
     _project_to_surface,
     _rotate_about,
@@ -95,19 +94,28 @@ _ORGANIC_DIR_WAVELEN_MM: float = 7.0   # spatial wavelength of the field
 # AC look wants blades HUGGING the mass, tips drooping down-slope; the
 # monotone standoff below (not the lift) owns the upper-over-lower
 # guarantee.
-_ORGANIC_TIP_LIFT_MM: float = 0.45
+_ORGANIC_TIP_LIFT_MM: float = 0.6
 
 # Per-leaf size jitter, downward only (max size = the configured leaf):
 # scale ∈ [1−jitter, 1].  Uniform stamped-looking leaves were judge item 8.
 _ORGANIC_SIZE_JITTER: float = 0.2
 
-# Monotone shingle standoff: each leaf additionally stands off the surface
-# by up to this much, scaled by its root's normalized height WITHIN its
-# source cluster (plus a whisker of hash jitter).  Monotone-in-z ⇒ a
-# higher-rooted leaf is NEVER under a lower-rooted one — the invariant the
-# earlier graph-colour layers (slope-blind) kept violating.
-_ORGANIC_SHINGLE_RISE_MM: float = 0.6
-_ORGANIC_STANDOFF_JITTER_MM: float = 0.1
+# Height-sorted shingle standoff: leaves are processed bottom-up; each
+# leaf stands off by STEP more than the tallest already-processed leaf it
+# overlaps (capped).  Guarantees a REAL separation between any two
+# overlapping leaves at different heights — a global monotone ramp spread
+# the budget so thin (~0.04 mm between neighbours) that blade-arch
+# variation still crossed sheets.  At the cap, ties are resolved by the
+# tip lift (tip always clears a base).
+_ORGANIC_SHINGLE_STEP_MM: float = 0.3
+_ORGANIC_SHINGLE_CAP_MM: float = 1.2
+_ORGANIC_SHINGLE_NEIGHBOR_MM: float = 2.4
+_ORGANIC_STANDOFF_JITTER_MM: float = 0.05
+
+# Neck gate: reject a blade whose accumulated in-plane slide + net normal
+# standoff would stretch the blade→oval stitch walls beyond this — the
+# "long-rooted leaves sticking out peculiarly" (wall chimneys/fans).
+_ORGANIC_MAX_NECK_MM: float = 2.0
 
 # Skew cap for pitched blades (fraction of leaf length): slides longer
 # than this stretched the stitch walls into visible prisms; cull instead
@@ -219,25 +227,37 @@ def _direction_field_angle(p: np.ndarray, seed: int) -> float:
 def _shingle_standoffs(
     bases: np.ndarray, src_idx: np.ndarray, meshes: list, seed: int,
 ) -> np.ndarray:
-    """Per-root standoff (mm), monotone in root height within each cluster.
+    """Per-root standoff (mm): height-sorted accumulation, capped.
 
-    ``rise × normalized-z + jitter`` with jitter ≪ rise step between
-    vertically-adjacent roots' heights, so a higher-rooted leaf ALWAYS
-    stands off at least as much as any lower-rooted leaf it overlaps —
-    upper-over-lower can never invert.  (Earlier graph-colour layers were
-    slope-blind and buried upper tips under lower bases.)
+    Bottom-up over ALL leaves: each stands off ``STEP`` more than the
+    tallest already-processed leaf it overlaps (neighbourhood radius
+    ``_ORGANIC_SHINGLE_NEIGHBOR_MM``), clamped to ``CAP``.  Overlapping
+    leaves at different heights therefore differ by a full STEP until the
+    cap; at the cap the tip lift resolves the remaining tip-over-base
+    contacts.  Monotone in processing order ⇒ never inverts.
     """
+    del src_idx, meshes
     n = len(bases)
     out = np.zeros(n)
-    for i in range(n):
-        m = meshes[int(src_idx[i])]
-        z0 = float(m.vertices[:, 2].min())
-        z1 = float(m.vertices[:, 2].max())
-        t = (float(bases[i][2]) - z0) / max(z1 - z0, 1e-6)
+    d = _ORGANIC_SHINGLE_NEIGHBOR_MM
+    d2 = d * d
+    cells: dict[tuple[int, int, int], list[int]] = {}
+    for i in np.argsort(bases[:, 2], kind="stable"):
+        p = bases[i]
+        c = (int(p[0] // d), int(p[1] // d), int(p[2] // d))
+        tallest = -1.0
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for dz in (-1, 0, 1):
+                    for j in cells.get((c[0] + dx, c[1] + dy, c[2] + dz), ()):
+                        if float(((p - bases[j]) ** 2).sum()) < d2:
+                            tallest = max(tallest, float(out[j]))
+        base_so = 0.0 if tallest < 0.0 else tallest + _ORGANIC_SHINGLE_STEP_MM
         out[i] = (
-            _ORGANIC_SHINGLE_RISE_MM * float(np.clip(t, 0.0, 1.0))
-            + _ORGANIC_STANDOFF_JITTER_MM * _hash01(seed, "org-so", i)
+            min(_ORGANIC_SHINGLE_CAP_MM, base_so)
+            + _ORGANIC_STANDOFF_JITTER_MM * _hash01(seed, "org-so", int(i))
         )
+        cells.setdefault(c, []).append(int(i))
     return out
 
 
@@ -423,9 +443,12 @@ def place_leaves_organic(
         # crest).  Re-projecting the anchor 0.25·L down-slope makes the
         # blade cover ±L/2 around the ACTUAL root, so Poisson maximality
         # over roots translates into visual coverage.
+        # Tight drop budget: a projection that falls further than ~1 mm has
+        # crossed a crease onto a different wall — anchoring there put the
+        # blade millimetres from its root oval (long-neck extrusions).
         proj = _project_to_surface(
             union, base + 0.25 * Ls * T_leaf, nrm,
-            1.0 + 0.25 * Ls + _SHOOT_MARCH_DROP_SLACK_MM,
+            1.0 + 0.25 * Ls + 1.0,
         )
         anchor, anchor_n = proj if proj is not None else (base, nrm)
 
@@ -436,12 +459,13 @@ def place_leaves_organic(
             seat_fallback_flat=True,
             skip_skew=flush,
             max_skew_frac=_ORGANIC_MAX_SKEW_FRAC,
+            max_neck_mm=_ORGANIC_MAX_NECK_MM,
         )
         if result is None:
             n_build_fail += 1
             if reason.startswith("buried"):
                 stats.skipped_cross_buried += 1
-            elif reason == "floor":
+            elif reason in ("floor", "neck"):
                 stats.skipped_below_floor += 1
             else:
                 stats.build_errors += 1

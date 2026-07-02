@@ -258,6 +258,7 @@ def _attempt_leaf(
     seat_fallback_flat: bool = False,
     skip_skew: bool = False,
     max_skew_frac: float = 0.5,
+    max_neck_mm: float | None = None,
 ):
     """Seat, build, and cull one leaf at a shoot station.
 
@@ -365,6 +366,14 @@ def _attempt_leaf(
     # seat so layered leaves ride visibly proud of the layer below.
     if standoff_mm > 0.0:
         surf.vertices = surf.vertices + standoff_mm * normal
+
+    # Neck gate: the blade→oval stitch walls stretch by the accumulated
+    # in-plane slide and net normal offset.  Past max_neck_mm they read as
+    # wall chimneys/fans ("long-rooted leaves"); reject instead.
+    if max_neck_mm is not None:
+        net_normal = max(standoff_mm - drop_mm, 0.0)
+        if math.hypot(skew_mm, net_normal) > max_neck_mm:
+            return None, "neck"
 
     curl_mask = np.linalg.norm(
         surf.vertices - surf.vertices[base_idx], axis=1,
