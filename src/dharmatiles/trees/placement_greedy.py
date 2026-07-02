@@ -47,6 +47,7 @@ from ._utils import _hash01, _safe_norm
 from .leaf import (
     _LEAF_N_LAT,
     _LEAF_N_LONG,
+    _leaf_width_profile,
     build_leaf_surface,
     solidify_leaf,
 )
@@ -111,45 +112,65 @@ def _points_inside_any(meshes: list, pts: np.ndarray, near_pt: np.ndarray, reach
     return False
 
 
-# ── Root oval, tilted to the local surface ────────────────────────────────────
+# ── Leaf frame + root oval from two embedded mesh points ──────────────────────
 
-def _oval_tilted_to_mesh(
-    P: np.ndarray, T_along: np.ndarray, across: np.ndarray,
-    L: float, W: float, mesh: trimesh.Trimesh, embed_mm: float,
-) -> np.ndarray:
-    """Flat root-oval vertices (world), with the oval axis tilted to the surface.
+def _leaf_frame_and_oval(
+    P0: np.ndarray, n0: np.ndarray, t_horiz: np.ndarray,
+    L: float, W: float, embed_mm: float, protrusion_mm: float,
+    mesh: trimesh.Trimesh,
+):
+    """Build the leaf frame and its flat root oval from two mesh footprint points.
 
-    Same 123-vertex layout as :func:`leaf.build_leaf_oval_offsets` (so
-    :func:`leaf.solidify_leaf` can skin the blade rim to it 1:1), but instead of
-    embedding the oval a fixed depth along a single base normal, the oval's two
-    axial ends (at 0.5·L and L along the growth direction) are set from the
-    distance to the mesh: each end is placed ``embed_mm`` below its nearest
-    surface point along that point's LOCAL normal.  The flat oval spanning the two
-    embedded ends therefore lies roughly parallel to — i.e. plugs in normal to —
-    the foliage surface at that point.
+    The whole leaf is defined by two surface points — the base-end ``P0`` (the
+    candidate) and the tip-end (the surface point under ``P0 + L·t_horiz``).  Each
+    is dropped ``embed_mm`` inside along its LOCAL surface normal to give the
+    oval's two axial ends (``ob``, ``ot``).  The oval axis runs between them (so it
+    follows the surface), and the oval/leaf normal ``N`` is that average surface
+    normal made perpendicular to the axis.  Because both ends are embedded by the
+    same amount, they are equidistant from the surface — and the leaf surface,
+    built one ``embed+protrusion`` step out along the same ``N``, inherits that
+    equidistance for free.
+
+    Returns ``(surf_base, axis, N, lat, inner_v)`` where ``inner_v`` is the
+    123-vertex oval (same layout as the leaf surface, for :func:`solidify_leaf`),
+    or ``None`` if the frame is degenerate.
     """
-    ring_count = _LEAF_N_LONG - 1        # 11 interior rings
-    lat_count = _LEAF_N_LAT              # 10
-    s_int = np.linspace(0.0, 1.0, _LEAF_N_LONG + 1)[1:-1]   # (ring_count,)
-    lat_pos = np.linspace(-1.0, 1.0, lat_count + 1)          # (lat_count+1,)
-    oval_hw = (W / 4.0) * np.sin(np.pi * s_int)              # (ring_count,)
+    P1, _, tri = trimesh.proximity.closest_point(mesh, (P0 + L * t_horiz)[np.newaxis])
+    P1 = P1[0]
+    n1 = mesh.face_normals[int(tri[0])]
 
-    # Axial ends at the surface level, then dropped embed below the local surface.
-    ends = np.array([P + 0.5 * L * T_along, P + L * T_along])
-    H, _, tri = trimesh.proximity.closest_point(mesh, ends)
-    nrm = mesh.face_normals[np.asarray(tri, dtype=np.int64)]
-    e_base = H[0] - embed_mm * nrm[0]
-    e_tip  = H[1] - embed_mm * nrm[1]
+    ob = P0 - embed_mm * n0        # oval base end, embed_mm below the surface
+    ot = P1 - embed_mm * n1        # oval tip  end, embed_mm below the surface
+    av = ot - ob
+    D = float(np.linalg.norm(av))
+    if D < 1e-6:
+        return None
+    axis = av / D
+    navg = _safe_norm(n0 + n1)
+    N = _safe_norm(navg - float(np.dot(navg, axis)) * axis)   # oval normal ⟂ axis
+    lat = np.cross(N, axis)
+    ll = float(np.linalg.norm(lat))
+    if ll < 1e-6:
+        return None
+    lat = lat / ll
 
-    centers = e_base[np.newaxis] + s_int[:, np.newaxis] * (e_tip - e_base)[np.newaxis]
+    # Flat oval spanning ob→ot with the leaf's own width profile, so it underlies
+    # the blade outline.  Same layout as the leaf surface for the 1:1 skin.
+    s_int = np.linspace(0.0, 1.0, _LEAF_N_LONG + 1)[1:-1]     # (ring_count,)
+    lat_pos = np.linspace(-1.0, 1.0, _LEAF_N_LAT + 1)          # (lat_count+1,)
+    w_s = 0.5 * W * _leaf_width_profile(s_int)                 # (ring_count,)
+    centers = ob[np.newaxis] + s_int[:, np.newaxis] * av[np.newaxis]
     grid = (
         centers[:, np.newaxis, :]
-        + (lat_pos[np.newaxis, :, np.newaxis] * oval_hw[:, np.newaxis, np.newaxis])
-        * across[np.newaxis, np.newaxis, :]
-    )   # (ring_count, lat_count+1, 3)
-    return np.concatenate([
-        grid.reshape(-1, 3), e_base[np.newaxis], e_tip[np.newaxis],
-    ], axis=0)
+        + (lat_pos[np.newaxis, :, np.newaxis] * w_s[:, np.newaxis, np.newaxis])
+        * lat[np.newaxis, np.newaxis, :]
+    )
+    inner_v = np.concatenate([grid.reshape(-1, 3), ob[np.newaxis], ot[np.newaxis]], axis=0)
+
+    # Leaf surface base: one embed+protrusion step out along N (⇒ protrusion above
+    # the surface), so the blade is built on the same normal as the oval.
+    surf_base = ob + (embed_mm + protrusion_mm) * N
+    return surf_base, axis, N, lat, inner_v
 
 
 # ── Candidate generation ──────────────────────────────────────────────────────
@@ -305,10 +326,10 @@ def place_leaves_greedy(
     col_step = max(W, 1e-3)
     expected_row_step = max(L * 0.5, 1e-3)
 
-    # The greedy placer seats leaves flat against the surface (belly on the
-    # surface) and lifts them only as much as clearing obstacles requires.  The
-    # leaf `lift_mm` rigid tip-rotation is an unconditional up-angle on top of
-    # that, so it is disabled here: greedy leaves have no default angling.
+    # The greedy placer seats leaves flat against the surface via the frame
+    # construction (equidistant oval ends → equidistant leaf ends).  The leaf
+    # `lift_mm` rigid tip-rotation is an extra up-angle on top of that, so it is
+    # disabled here: greedy leaves have no default angling.
     del lift_mm
     leaf_kw = dict(
         length_mm      = L,
@@ -320,6 +341,16 @@ def place_leaves_greedy(
         curl_deg       = float(curl_deg),
         lift_mm        = 0.0,
     )
+    # The leaf's arch+curl raises its tip endpoint above the base plane by a fixed
+    # angle (same for every leaf of these params).  Measure it once so the build
+    # frame can be tilted down by it — then the built tip lands level with the
+    # base, i.e. base and tip end up equidistant from the surface.
+    _ref, _ = build_leaf_surface(
+        base_pos=np.zeros(3), tangent=np.array([1.0, 0.0, 0.0]),
+        up_hint=np.array([0.0, 0.0, 1.0]), seed=0, **leaf_kw,
+    )
+    _reftip = _ref.vertices[len(_ref.vertices) - 1]
+    tip_rise_angle = math.atan2(float(_reftip[2]), float(_reftip[0]))
 
     t_total = time.perf_counter()
 
@@ -391,26 +422,46 @@ def place_leaves_greedy(
             continue
 
         lseed = int(_hash01_int(int(seeds_list[mi]), "greedy-leaf", cand.idx))
-        tangent = T0
+        T0 = cand.tangent          # horizontal-outward growth (footprint direction)
         # Optional azimuthal jitter of the growth direction about the normal.
         if angle_jitter_deg != 0.0:
             theta = math.radians(angle_jitter_deg) * (
                 _hash01(int(seeds_list[mi]), "greedy-ang", cand.idx) * 2.0 - 1.0
             )
             ct, st = math.cos(theta), math.sin(theta)
-            tangent = _safe_norm(tangent * ct + np.cross(normal, tangent) * st)
-        lat = np.cross(normal, tangent)
-        _ll = float(np.linalg.norm(lat))
-        lat = lat / _ll if _ll > 1e-6 else lat
+            T0 = _safe_norm(T0 * ct + np.cross(normal, T0) * st)
+
+        # Frame + root oval from two embedded mesh points (base end + tip end).
+        # Both oval ends sit embed below the surface, so they are equidistant from
+        # it; the leaf normal N is perpendicular to the axis between them.
+        frame = _leaf_frame_and_oval(
+            base, normal, T0, L, W, _GREEDY_EMBED_MM, _PROTRUSION_MM, meshes[mi],
+        )
+        if frame is None:
+            stats.build_errors += 1
+            continue
+        surf_base, axis, N_oval, lat, inner_v = frame
+
+        # Guard: both oval ends must be inside the clump (a thin spot where the
+        # embed punches through the far side would print detached).
+        if not bool(meshes[mi].contains(inner_v[[-2, -1]]).all()):
+            n_rejected_buried += 1
+            stats.skipped_cross_buried += 1
+            continue
 
         stats.n_attempted += 1
 
-        # ── Build the leaf solid ─────────────────────────────────────────────
-        # Blade a fixed protrusion OUTSIDE the surface (no contact lean, no lift).
-        base_blade = base + _PROTRUSION_MM * normal
+        # Leaf surface: built on the SAME normal N as the oval, one protrusion
+        # above the surface.  The build frame is tilted DOWN by the leaf's
+        # intrinsic tip-rise angle so the curled tip lands level with the base —
+        # base and tip then sit equidistant above the surface (mirroring the
+        # equidistant oval ends below it).
+        _c, _s = math.cos(tip_rise_angle), math.sin(tip_rise_angle)
+        tangent_leaf = _safe_norm(axis * _c - N_oval * _s)
+        up_leaf = _safe_norm(N_oval * _c + axis * _s)
         try:
             surf, _geom = build_leaf_surface(
-                base_pos=base_blade, tangent=tangent, up_hint=normal,
+                base_pos=surf_base, tangent=tangent_leaf, up_hint=up_leaf,
                 seed=lseed, **leaf_kw,
             )
         except (RuntimeError, ValueError):
@@ -432,15 +483,6 @@ def place_leaves_greedy(
             stats.skipped_cross_buried += 1
             continue
 
-        # Root oval a fixed embed INSIDE the surface, axis tilted normal to the
-        # local foliage surface (ends set from distance to the mesh).
-        inner_v = _oval_tilted_to_mesh(base, tangent, lat, L, W, meshes[mi], _GREEDY_EMBED_MM)
-        # Guard: the two oval ends must actually be inside the clump (a thin spot
-        # where the embed punches through the far side would print detached).
-        if not bool(meshes[mi].contains(inner_v[[-2, -1]]).all()):
-            n_rejected_buried += 1
-            stats.skipped_cross_buried += 1
-            continue
         try:
             solid, _ = solidify_leaf(surf, inner_v)
         except (RuntimeError, ValueError):
@@ -451,7 +493,7 @@ def place_leaves_greedy(
         root_grid.add(_root_cell(base, gap))
         row_idx = int((float(base[2]) - z_mins[mi]) / expected_row_step)
         stats.base_positions.append(base.copy())
-        stats.base_tangents.append(tangent.copy())
+        stats.base_tangents.append(axis.copy())
         stats.base_row_idx.append(row_idx)
         stats.root_depths.append(_GREEDY_EMBED_MM)
         stats.leaf_float_dists.append(0.0)
