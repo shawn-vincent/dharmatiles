@@ -263,6 +263,23 @@ def build_branch_mesh(
             clump_start_pos, clump_start_tan = _bezier_clump_start(
                 p0, _bbp1, _bbp2, p3, cluster_len,
             )
+            # A terminal edge shorter than the requested cluster length would
+            # compress the whole r_wood→r_foliage flare into the edge's own
+            # (possibly sub-mm) span — a mushroom: a near-flat radial wall
+            # with a stub cap poking out the back.  Extend the cluster spine
+            # straight back along the edge-start tangent to its full length;
+            # the extension tucks back over the parent branch, which the
+            # clump hides anyway.
+            _clump_full_len = (
+                float(foliage_cluster_length_mm)
+                if foliage_cluster_length_mm is not None else cluster_len
+            )
+            if cluster_len < _clump_full_len - 1e-9:
+                clump_start_pos = (
+                    clump_start_pos
+                    - (_clump_full_len - cluster_len) * clump_start_tan
+                )
+                cluster_len = _clump_full_len
             clump, clump_leaves = _build_foliage_cluster_mesh(
                 tip_pos=p3,
                 tip_tangent=_bt_end,
@@ -713,6 +730,11 @@ def _contact_angle_for_sphere(
 
 # Icosphere subdivision level for the whole clump.  3 → 1280 faces; 4 → 5120.
 _FOLIAGE_ICO_SUBDIVISIONS          = 3
+# Rounding radius of the cluster's BACK end, as a fraction of r_foliage.
+# Decoupled from the branch radius: tapering all the way to r_wood makes the
+# small end a near-point (a 1 mm rounding on a 5.5 mm clump); the cap wants
+# a visible rounding.  Branch embedding still uses r_wood.
+_FOLIAGE_BACK_ROUND_FRAC           = 0.4
 # Fine Gaussian noise: per-vertex surface grain.
 _FOLIAGE_NOISE_AMPLITUDE_MM        = 0.10  # 1-sigma displacement (mm)
 # Coarse smooth noise: large-scale silhouette distortion.
@@ -1229,6 +1251,9 @@ def _build_foliage_cluster_mesh(
     """
     r_base  = float(r_wood)
     r_tip   = float(r_foliage)
+    # Back-end rounding radius (see _FOLIAGE_BACK_ROUND_FRAC).  r_base keeps
+    # feeding the branch-embedding offsets (factor_tip / dome_shift) only.
+    r_back  = max(r_base, _FOLIAGE_BACK_ROUND_FRAC * r_tip)
     tip_t   = _safe_norm(np.asarray(tip_tangent,   float))
     start_t = _safe_norm(np.asarray(start_tangent, float))
     tip_p   = np.asarray(tip_pos,   float)
@@ -1251,33 +1276,19 @@ def _build_foliage_cluster_mesh(
     tot_spine  = float(spine_arc[-1])
 
     # ── Profile arc lengths ───────────────────────────────────────────────────
-    south_arc    = (np.pi / 2.0) * r_base
-    cone_arc_p   = float(np.sqrt(tot_spine ** 2 + (r_tip - r_base) ** 2))
+    south_arc    = (np.pi / 2.0) * r_back
+    cone_arc_p   = float(np.sqrt(tot_spine ** 2 + (r_tip - r_back) ** 2))
     north_arc    = (np.pi / 2.0) * r_tip
     total_arc    = south_arc + cone_arc_p + north_arc
 
-    # ── Icosphere ────────────────────────────────────────────────────────────
-    ico    = trimesh.creation.icosphere(subdivisions=_FOLIAGE_ICO_SUBDIVISIONS, radius=1.0)
-    uverts = ico.vertices.copy()                      # (M, 3) unit sphere
-
-    dot_t  = uverts @ tip_t                           # latitude ∈ [-1, 1]
-    u_vals = (dot_t + 1.0) * 0.5 * total_arc         # arc param ∈ [0, total_arc]
-
-    # Unit radial direction for each vertex (perp to tip_t on the unit sphere).
-    rvec   = uverts - dot_t[:, None] * tip_t
-    r_lat  = np.linalg.norm(rvec, axis=1, keepdims=True)
-    rad_u  = np.divide(
-        rvec, r_lat,
-        out=np.zeros_like(rvec),
-        where=r_lat > 1e-10,
-    )                                                                # (M, 3)
-
-    verts  = np.zeros_like(uverts)
-
-    # Perpendicular-upward offset: shift each ring center by that ring's own
-    # radius in the world-up direction projected perp to the local tangent.
-    # This places the bottom edge of every ring exactly at the branch centerline,
-    # exposing the full branch on the underside of the foliage.
+    # ── Structured sweep: rings along the composite profile ──────────────────
+    # A rounded-cone sweep: pole fan → back cap rings → cone rings → front
+    # dome rings → pole fan, with a parallel-transported frame so rings never
+    # twist against each other.  Replaces the bent icosphere: its latitude
+    # binning left the narrow end with too few, unevenly clustered vertices
+    # (rings of ~1 mm radius carried by a handful of irregular points), which
+    # crumpled the back end no matter how the polar cap was patched.  The
+    # profile formulas per section are unchanged.
     _WUP = np.array([0.0, 0.0, 1.0])
 
     def _pu_unit_scalar(tangent: np.ndarray) -> np.ndarray:
@@ -1286,202 +1297,100 @@ def _build_foliage_cluster_mesh(
         n = float(np.linalg.norm(p))
         return p / n if n > 1e-6 else np.zeros(3)
 
-    def _pu_unit_batch(tangents: np.ndarray) -> np.ndarray:
-        """Per-row world-up perp to tangent, normalised, shape (M, 3)."""
-        p = _WUP - (tangents * _WUP).sum(axis=1, keepdims=True) * tangents
-        n = np.linalg.norm(p, axis=1, keepdims=True)
-        return np.divide(
-            p, n,
-            out=np.zeros_like(p),
-            where=n > 1e-6,
-        )
+    _N_THETA = 28
+    _RING_RES_MM = 1.2
+    n_south = max(3, int(np.ceil(south_arc / _RING_RES_MM)))
+    n_cone  = max(4, int(np.ceil(cone_arc_p / _RING_RES_MM)))
+    n_north = max(4, int(np.ceil(north_arc / _RING_RES_MM)))
 
-    # ── Back hemisphere: backward from start_p along start_t ─────────────────
-    ms = u_vals <= south_arc
-    if ms.any():
-        phi    = (u_vals[ms] / south_arc) * (np.pi / 2.0)
-        ax_s   = -r_base * np.cos(phi)                  # ≤ 0 (behind start_p)
-        rr_s   = r_base * np.sin(phi)
-        ru     = rad_u[ms]
-        dp     = (ru * start_t).sum(axis=1, keepdims=True)
-        rp     = ru - dp * start_t
-        rn     = np.linalg.norm(rp, axis=1, keepdims=True)
-        rpu    = np.divide(
-            rp, rn,
-            out=np.zeros_like(rp),
-            where=rn > 1e-10,
-        )
-        pu_s   = _pu_unit_scalar(start_t)               # (3,) fixed direction
-        # Back hemisphere uses the base factor (0.5) for continuity with the cone.
-        verts[ms] = start_p + pu_s * (0.5 * rr_s[:, None]) + ax_s[:, None] * start_t + rpu * rr_s[:, None]
+    factor_tip = max(0.0, 1.0 - (r_base + _FOLIAGE_MAX_NOISE_MM) / max(r_tip, 1e-6))
+    dome_shift = max(0.0, r_tip - r_base - _FOLIAGE_MAX_NOISE_MM)
+    pu_s   = _pu_unit_scalar(start_t)
+    pu_tip = _pu_unit_scalar(tip_t)
 
-    # ── Cone body: cross-sections swept along Bezier spine ────────────────────
-    mc = (~ms) & (u_vals <= south_arc + cone_arc_p)
-    if mc.any():
-        tc   = (u_vals[mc] - south_arc) / cone_arc_p    # [0, 1] along spine
-        rr_c = r_base + tc * (r_tip - r_base)
-        sv   = tc * tot_spine                            # arc position on spine
-
-        sp_c = np.column_stack([
-            np.interp(sv, spine_arc, spine_pts[:, d]) for d in range(3)
-        ])
-        st_raw = np.column_stack([
-            np.interp(sv, spine_arc, spine_tans[:, d]) for d in range(3)
-        ])
-        stn  = np.linalg.norm(st_raw, axis=1, keepdims=True)
-        st_c = st_raw / np.where(stn > 1e-10, stn, 1.0)   # local spine tangent
-
-        ru   = rad_u[mc]
-        dp   = (ru * st_c).sum(axis=1, keepdims=True)
-        rp   = ru - dp * st_c
-        rn   = np.linalg.norm(rp, axis=1, keepdims=True)
-        rpu  = np.divide(
-            rp, rn,
-            out=np.zeros_like(rp),
-            where=rn > 1e-10,
-        )
-        pu_c = _pu_unit_batch(st_c)                     # (M, 3) per-vertex direction
-        # Offset rises smoothly from 0.5 at the base (tc=0) to factor_tip at
-        # the tip (tc=1) via cubic smoothstep.
-        # factor_tip gives offset = r_tip - r_base - _FOLIAGE_MAX_NOISE_MM, so
-        # the ring bottom sits _FOLIAGE_MAX_NOISE_MM below the branch bottom.
-        # After the noise erodes the surface inward by up to that amount, the
-        # branch bottom ends up flush with (but not exposed through) the skin.
-        factor_tip = max(0.0, 1.0 - (r_base + _FOLIAGE_MAX_NOISE_MM) / max(r_tip, 1e-6))
-        smooth_tc  = 3.0 * tc ** 2 - 2.0 * tc ** 3     # smoothstep ∈ [0, 1]
-        tc_factor  = 0.5 + (factor_tip - 0.5) * smooth_tc
-        verts[mc] = sp_c + pu_c * (rr_c * tc_factor)[:, None] + rpu * rr_c[:, None]
-
-    # ── Forward dome: forward from tip_p along tip_t ──────────────────────────
-    mn = u_vals > south_arc + cone_arc_p
-    if mn.any():
-        phi    = (u_vals[mn] - south_arc - cone_arc_p) / north_arc * (np.pi / 2.0)
-        ax_n   = r_tip * np.sin(phi)
-        rr_n   = r_tip * np.cos(phi)
-        pu_tip     = _pu_unit_scalar(tip_t)
-        dome_shift = max(0.0, r_tip - r_base - _FOLIAGE_MAX_NOISE_MM)
-        # Blend the perp-upward offset from full at the equator (phi=0, matching
-        # tc=1 cone) to zero at the north pole (phi=pi/2), so the dome tip lies
-        # on the branch axis rather than being shifted sideways.  Eliminates the
-        # offset dome appearance under tight branch curves.
-        shift_blend = np.cos(phi)
-        ring_ctr = tip_p + ax_n[:, None] * tip_t + (dome_shift * shift_blend)[:, None] * pu_tip
-        verts[mn] = ring_ctr + rad_u[mn] * rr_n[:, None]
-
-    # ── Back-cap dome ─────────────────────────────────────────────────────────
-    # The icosphere south polar vertex maps to a single geometric point at
-    # start_p - r_base * start_t.  All ~10 surrounding icosphere triangles
-    # converge there, producing a visible polar-singularity pinch at the back
-    # end of the cluster (worst when r_wood is small).  Fix: drop every
-    # icosphere face that touches a back-hemisphere vertex (ms), find the
-    # boundary ring on the surviving cone/dome faces, and close the hole with
-    # a hemispherical dome — matching the rounded forward dome at the wide end.
-    _f_orig    = ico.faces                         # (F, 3)
-    _keep_mask = ~ms[_f_orig].any(axis=1)          # True  → cone/dome face
-    _keep_faces = _f_orig[_keep_mask]              # (K, 3)
-
-    # Count how many kept faces each edge belongs to.  Boundary edges appear
-    # in exactly one kept face.
-    _edge_cnt: dict[tuple[int, int], int] = {}
-    for _f in _keep_faces:
-        for _i in range(3):
-            _e = (int(min(_f[_i], _f[(_i + 1) % 3])),
-                  int(max(_f[_i], _f[(_i + 1) % 3])))
-            _edge_cnt[_e] = _edge_cnt.get(_e, 0) + 1
-    _bnd_edges = [_e for _e, _c in _edge_cnt.items() if _c == 1]
-
-    # Walk boundary edges into a single ordered vertex loop.
-    _bnd_adj: dict[int, list[int]] = {}
-    for _e in _bnd_edges:
-        _bnd_adj.setdefault(_e[0], []).append(_e[1])
-        _bnd_adj.setdefault(_e[1], []).append(_e[0])
-    _bnd_loop: list[int] = []
-    if _bnd_edges:
-        _bnd_start = _bnd_edges[0][0]
-        _bnd_loop  = [_bnd_start]
-        _bnd_prev, _bnd_cur = None, _bnd_start
-        while True:
-            _nx = [v for v in _bnd_adj.get(_bnd_cur, []) if v != _bnd_prev]
-            if not _nx or _nx[0] == _bnd_start:
-                break
-            _bnd_loop.append(_nx[0])
-            _bnd_prev, _bnd_cur = _bnd_cur, _nx[0]
-
-    # Build a hemispherical dome from the boundary ring backward to
-    # start_p - r_base * start_t, matching the rounded forward dome at the
-    # wide end.  Uses _N_CLUSTER_DOME_LATS latitude bands so the cap is
-    # smoothly curved rather than flat.
-    _NL = len(_bnd_loop)
-    if _NL < 3:
-        _ico_faces = _keep_faces
-    else:
-        _bnd_positions = np.array([verts[v] for v in _bnd_loop])   # (_NL, 3)
-        _bnd_center    = _bnd_positions.mean(axis=0)
-        _dome_pole     = start_p - r_base * start_t
-
-        # Perpendicular radius of the boundary ring (in the plane ⊥ start_t).
-        _radial        = _bnd_positions - _bnd_center
-        _axial_proj    = (_radial @ start_t)[:, np.newaxis] * start_t
-        _ring_r0       = float(np.linalg.norm(_radial - _axial_proj, axis=1).mean())
-
-        # Orthonormal frame perp to start_t for generating ring vertices.
-        _pu_s_d        = _pu_unit_scalar(start_t)
-        _pu_v_raw      = np.cross(start_t, _pu_s_d)
-        _pu_v_n        = float(np.linalg.norm(_pu_v_raw))
-        _pu_v          = (_pu_v_raw / _pu_v_n if _pu_v_n > 1e-6
-                          else np.array([0., 1., 0.]))
-
-        # Project bnd_loop into the pu_s_d / pu_v plane to find winding direction
-        # and the starting angle for dome rings.  The dome rings must go around
-        # in the same angular direction as bnd_loop to avoid bow-tie quads.
-        _bnd_u       = (_bnd_positions - _bnd_center) @ _pu_s_d   # (_NL,)
-        _bnd_v_proj  = (_bnd_positions - _bnd_center) @ _pu_v     # (_NL,)
-        _bnd_ang_all = np.arctan2(_bnd_v_proj, _bnd_u)            # (_NL,)
-        _signed_area = 0.5 * float(np.sum(
-            _bnd_u * np.roll(_bnd_v_proj, -1) - np.roll(_bnd_u, -1) * _bnd_v_proj
+    # (center, radius, axis) per ring, in sweep order.  Section seams share a
+    # ring (south phi=π/2 == cone tc=0; cone tc=1 == dome phi=0), so the cone
+    # range starts at i=1 and the dome range at j=1.
+    ring_specs: list[tuple[np.ndarray, float, np.ndarray]] = []
+    # Back cap: phi ∈ (0, π/2], behind start_p along start_t.  The center
+    # offset is 0.5·rr along pu (the cone-base factor) for seam continuity.
+    for j in range(1, n_south + 1):
+        phi = (np.pi / 2.0) * j / n_south
+        rr  = r_back * float(np.sin(phi))
+        ax  = -r_back * float(np.cos(phi))
+        ring_specs.append((start_p + ax * start_t + pu_s * (0.5 * rr), rr, start_t))
+    # Cone body: cross-sections along the Bezier spine.  Offset rises from
+    # 0.5 at the base to factor_tip at the tip via cubic smoothstep — at tc=1
+    # the ring bottom sits _FOLIAGE_MAX_NOISE_MM below the branch bottom so
+    # the inward-only noise leaves the branch flush with the skin.
+    for i in range(1, n_cone + 1):
+        tc  = i / n_cone
+        rr  = r_back + tc * (r_tip - r_back)
+        sv  = tc * tot_spine
+        sp  = np.array([float(np.interp(sv, spine_arc, spine_pts[:, d])) for d in range(3)])
+        st  = _safe_norm(np.array([
+            float(np.interp(sv, spine_arc, spine_tans[:, d])) for d in range(3)
+        ]))
+        smooth_tc = 3.0 * tc ** 2 - 2.0 * tc ** 3
+        tc_factor = 0.5 + (factor_tip - 0.5) * smooth_tc
+        ring_specs.append((sp + _pu_unit_scalar(st) * (rr * tc_factor), rr, st))
+    # Front dome: phi ∈ (0, π/2), ahead of tip_p along tip_t.  The pu offset
+    # blends from full at the equator to zero at the pole so the dome tip
+    # lies on the branch axis (no offset-dome under tight curves).
+    for j in range(1, n_north):
+        phi = (np.pi / 2.0) * j / n_north
+        rr  = r_tip * float(np.cos(phi))
+        ax  = r_tip * float(np.sin(phi))
+        ring_specs.append((
+            tip_p + ax * tip_t + (dome_shift * float(np.cos(phi))) * pu_tip,
+            rr, tip_t,
         ))
-        _angle_sign  = 1.0 if _signed_area >= 0 else -1.0
-        _angle0      = float(_bnd_ang_all[0])
 
-        _verts_list    = list(verts)
-        _faces_list    = list(_keep_faces)
-        _prev_ring     = _bnd_loop
+    south_pole = start_p - r_back * start_t
+    north_pole = tip_p + r_tip * tip_t
 
-        for _lat_i in range(1, _N_CLUSTER_DOME_LATS + 1):
-            _phi = (np.pi / 2.0) * _lat_i / _N_CLUSTER_DOME_LATS
+    # Parallel-transport a frame along the ring axes so theta=0 never twists
+    # around the sweep between neighbouring rings.
+    ref = pu_s if float(np.linalg.norm(pu_s)) > 1e-6 else np.array([1.0, 0.0, 0.0])
+    thetas = 2.0 * np.pi * np.arange(_N_THETA) / _N_THETA
+    cos_t  = np.cos(thetas)[:, np.newaxis]
+    sin_t  = np.sin(thetas)[:, np.newaxis]
 
-            if _lat_i < _N_CLUSTER_DOME_LATS:
-                _t         = float(np.sin(_phi))
-                _rr        = _ring_r0 * float(np.cos(_phi))
-                _ring_ctr  = _bnd_center * (1.0 - _t) + _dome_pole * _t
-                _angles    = _angle0 + _angle_sign * 2.0 * np.pi * np.arange(_NL) / _NL
-                _new_ring  = (
-                    _ring_ctr
-                    + _rr * np.outer(np.cos(_angles), _pu_s_d)
-                    + _rr * np.outer(np.sin(_angles), _pu_v)
-                )                           # (_NL, 3)
-                _ring_base = len(_verts_list)
-                _verts_list.extend(_new_ring)
-                _curr_ring = list(range(_ring_base, _ring_base + _NL))
+    _verts_list: list[np.ndarray] = [south_pole]
+    for center, rr, axis in ring_specs:
+        e1 = ref - float(np.dot(ref, axis)) * axis
+        n1 = float(np.linalg.norm(e1))
+        if n1 > 1e-8:
+            e1 = e1 / n1
+        else:                       # axis parallel to ref: pick any perp
+            e1 = _safe_norm(np.cross(axis, _WUP)
+                            if abs(float(axis[2])) < 0.9
+                            else np.cross(axis, np.array([1.0, 0.0, 0.0])))
+        e2 = np.cross(axis, e1)
+        ref = e1
+        _verts_list.extend(center + rr * (cos_t * e1 + sin_t * e2))
+    _verts_list.append(north_pole)
+    verts = np.array(_verts_list)
 
-                for _k in range(_NL):
-                    _k1 = (_k + 1) % _NL
-                    _p0, _p1 = _prev_ring[_k], _prev_ring[_k1]
-                    _c0, _c1 = _curr_ring[_k], _curr_ring[_k1]
-                    _faces_list.append([_p0, _c0, _c1])
-                    _faces_list.append([_p0, _c1, _p1])
-
-                _prev_ring = _curr_ring
-
-            else:
-                _pole_idx = len(_verts_list)
-                _verts_list.append(_dome_pole)
-                for _k in range(_NL):
-                    _k1 = (_k + 1) % _NL
-                    _faces_list.append([_prev_ring[_k], _pole_idx, _prev_ring[_k1]])
-
-        verts      = np.array(_verts_list)
-        _ico_faces = np.array(_faces_list, dtype=np.int32)
+    n_rings = len(ring_specs)
+    _faces_list: list[list[int]] = []
+    _r0 = 1                                        # first ring vertex index
+    for k in range(_N_THETA):                      # south pole fan
+        k1 = (k + 1) % _N_THETA
+        _faces_list.append([0, _r0 + k1, _r0 + k])
+    for ri in range(n_rings - 1):                  # quad strips
+        a = 1 + ri * _N_THETA
+        b = a + _N_THETA
+        for k in range(_N_THETA):
+            k1 = (k + 1) % _N_THETA
+            _faces_list.append([a + k, b + k, b + k1])
+            _faces_list.append([a + k, b + k1, a + k1])
+    _np_idx = 1 + n_rings * _N_THETA               # north pole vertex
+    _last = 1 + (n_rings - 1) * _N_THETA
+    for k in range(_N_THETA):                      # north pole fan
+        k1 = (k + 1) % _N_THETA
+        _faces_list.append([_np_idx, _last + k, _last + k1])
+    _ico_faces = np.array(_faces_list, dtype=np.int32)
 
     # ── Normals + two noise layers ────────────────────────────────────────────
     shaped  = trimesh.Trimesh(vertices=verts, faces=_ico_faces, process=False)
@@ -1498,8 +1407,8 @@ def _build_foliage_cluster_mesh(
                             0.0, tot_spine)
     _nearest_pt  = start_p + _t_proj * _spine_chord
     _perp_d      = np.linalg.norm(verts - _nearest_pt, axis=1)        # (M,)
-    _span        = max(r_tip - r_base, 1e-6)
-    _raw_t       = np.clip((_perp_d - r_base) / _span, 0.0, 1.0)
+    _span        = max(r_tip - r_back, 1e-6)
+    _raw_t       = np.clip((_perp_d - r_back) / _span, 0.0, 1.0)
     _noise_scale = 3.0 * _raw_t ** 2 - 2.0 * _raw_t ** 3             # smoothstep
 
     # The greedy leaf placer requests the SMOOTH (pre-noise) envelope
