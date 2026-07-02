@@ -39,11 +39,13 @@ from dharmatiles.trees import (
 from dharmatiles.trees._utils import _safe_norm
 from dharmatiles.trees.mesh import _build_foliage_cluster_mesh
 from dharmatiles.trees.placement_greedy import place_leaves_greedy
+from dharmatiles.trees.placement_shoots import place_leaves_shoots
 
 from dharmatiles.core.color import (
     GRAY_SHADES,
     Material,
     RGBA,
+    debug_material,
     export_color_stl,
     tag as _color_tag,
 )
@@ -103,6 +105,11 @@ _UPWARD_TANGENT_Z_THRESHOLD = 0.1
 
 def _row_rgba(row_idx: int) -> tuple[int, int, int, int]:
     return RGBA[GRAY_SHADES[row_idx % len(GRAY_SHADES)]]
+
+
+def _shoot_rgba(shoot_idx: int) -> tuple[int, int, int, int]:
+    """Vivid 12-slot debug colour per shoot — all leaves in a shoot match."""
+    return RGBA[debug_material(shoot_idx)]
 
 
 # ── Minimal artifact check ─────────────────────────────────────────────────────
@@ -365,7 +372,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Multi-parent-mesh leaf placement test")
     parser.add_argument("out", nargs="?", help="Output STL path")
     parser.add_argument(
-        "--placement", choices=["meridian", "greedy"], default="meridian",
+        "--placement", choices=["meridian", "greedy", "shoots"], default="meridian",
         help="Leaf placer to exercise (default: meridian).",
     )
     args = parser.parse_args()
@@ -411,11 +418,17 @@ def main() -> None:
     print(f"  Cluster A: {len(ca.vertices):,}v / {len(ca.faces):,}f")
     print(f"  Cluster B: {len(cb.vertices):,}v / {len(cb.faces):,}f")
 
-    if placement == "greedy":
-        print("  Placing leaves on A and B via GREEDY lowest-first accretion …")
-        # Greedy works directly on the real (noised) clumps ca/cb: roots seat
-        # just below the actual foliage surface.
-        parts_list, stats_list = place_leaves_greedy(
+    if placement in ("greedy", "shoots"):
+        if placement == "greedy":
+            print("  Placing leaves on A and B via GREEDY lowest-first accretion …")
+            _place_fn = place_leaves_greedy
+        else:
+            print("  Placing leaves on A and B via SHOOT-based accretion …")
+            _place_fn = place_leaves_shoots
+        # Both work directly on the real (noised) clumps ca/cb: roots seat
+        # just below the actual foliage surface.  For shoots, leaf shades
+        # cycle per SHOOT (not per z row) so sprig grouping is visible.
+        parts_list, stats_list = _place_fn(
             [ca, cb],
             length_mm        = _PLACE_KW["length_mm"],
             width_mm         = _PLACE_KW["width_mm"],
@@ -429,7 +442,7 @@ def main() -> None:
             labels           = ["A (vertical)", "B (55° tilt)"],
             angle_jitter_deg = _PLACE_KW["angle_jitter_deg"],
             pos_jitter       = _PLACE_KW["pos_jitter"],
-            row_color_fn     = _row_rgba,
+            row_color_fn     = _shoot_rgba if placement == "shoots" else _row_rgba,
         )
     else:
         print("  Placing leaves on A and B with shared world-space shingling …")
@@ -476,7 +489,10 @@ def main() -> None:
     print("Colour key:")
     print("  Dark green (FOLIAGE) = cluster A body  (vertical, origin)")
     print("  Warm brown  (WOOD)   = cluster B body  (55° tilt, tip at (6,2))")
-    print("  Black → white per global Z row = leaves (bottom dark, top light, cycles at 16)")
+    if placement == "shoots":
+        print("  Vivid debug colour per SHOOT = leaves (all leaves in a shoot match, cycles at 12)")
+    else:
+        print("  Black → white per global Z row = leaves (bottom dark, top light, cycles at 16)")
 
 
 if __name__ == "__main__":

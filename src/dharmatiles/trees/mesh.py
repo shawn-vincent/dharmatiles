@@ -104,9 +104,10 @@ def build_branch_mesh(
         Debug icospheres (empty unless ``debug_attractors`` is set).
     """
     _ = terrain_z, out_dirs
-    if leaf_placement not in ("meridian", "greedy"):
+    if leaf_placement not in ("meridian", "greedy", "shoots"):
         raise ValueError(
-            f"leaf_placement must be 'meridian' or 'greedy', got {leaf_placement!r}"
+            f"leaf_placement must be 'meridian', 'greedy' or 'shoots', "
+            f"got {leaf_placement!r}"
         )
     n = len(nodes)
     if strict_fdm_angle_deg is not None:
@@ -329,13 +330,16 @@ def build_branch_mesh(
                 angle_jitter_deg = leaf_angle_jitter_deg,
                 pos_jitter       = leaf_pos_jitter,
             )
-        else:  # leaf_placement == "greedy"
-            from .placement_greedy import place_leaves_greedy
-            # The greedy placer works directly on the real (noised) clumps: leaf
+        else:  # leaf_placement in ("greedy", "shoots")
+            if leaf_placement == "greedy":
+                from .placement_greedy import place_leaves_greedy as _place_fn
+            else:
+                from .placement_shoots import place_leaves_shoots as _place_fn
+            # Both placers work directly on the real (noised) clumps: leaf
             # roots seat just below the actual foliage surface (fixed shallow
             # embed) and clearance is judged against the real surface.
             _clump_meshes = [c for c, _ in foliage_clumps]
-            _leaf_parts, _ = place_leaves_greedy(
+            _leaf_parts, _ = _place_fn(
                 _clump_meshes,
                 length_mm      = leaf_length_mm,
                 width_mm       = leaf_width_mm,
