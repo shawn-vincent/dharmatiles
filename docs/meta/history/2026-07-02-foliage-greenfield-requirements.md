@@ -287,3 +287,23 @@ stitch past 2 mm, and the anchor re-projection drop budget tightened to
 ~1 mm so anchors can't land across a crease.
 
 Full tree: 2374 leaves, 5.7 s.
+
+## Iteration 5 — base tuck, capped bury-lift, flattened blades (ACCEPTED)
+
+Shawn's re-review: bases still overlying higher leaves; extensions >2 mm.
+Root causes found: (a) the blade's own BASE END was its high point after
+the belly seat — a lower leaf's proud base pokes over an upper leaf's low
+tip regardless of standoff order; (b) bury-lift ran AFTER the neck gate,
+unbounded.  Fixes: pitch each blade about its belly until the base sits
+slightly EMBEDDED (tuck_base — an embedded base can never overlie
+anything, and anchors better); bury-lift capped at 0.8 mm with the
+remainder kept tucked.  Then, judging the close-up against the AC
+reference side by side: the 40° curl made every blade an edge-presenting
+tongue (shaggy canopy); pitched blades now cap curl at 16°
+(_ORGANIC_PITCH_CURL_DEG) — flat plates presenting their face.
+
+Shawn on the result: "I really like the density and surface of the
+leaves — the placement is really nice... wow. That's amazing!"
+Full tree: 2378 leaves, ~6 s.  The parked sheet-solidification idea
+(constants remain, unwired) stays available if the pillow read ever
+matters again.

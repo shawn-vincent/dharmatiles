@@ -112,18 +112,34 @@ _ORGANIC_SHINGLE_CAP_MM: float = 1.2
 _ORGANIC_SHINGLE_NEIGHBOR_MM: float = 2.4
 _ORGANIC_STANDOFF_JITTER_MM: float = 0.05
 
+# Flush-blade shape overrides (the "less fancy" leaf).
+_ORGANIC_FLUSH_CURL_DEG: float = 12.0
+
+# Pitched-blade curl override: the configured 40° curl made every blade a
+# curling tongue that presents its EDGE (shaggy canopy); the AC read wants
+# flat plates presenting their FACE.  Gentle curl keeps a hint of droop.
+_ORGANIC_PITCH_CURL_DEG: float = 16.0
+
 # Neck gate: reject a blade whose accumulated in-plane slide + net normal
 # standoff would stretch the blade→oval stitch walls beyond this — the
 # "long-rooted leaves sticking out peculiarly" (wall chimneys/fans).
-_ORGANIC_MAX_NECK_MM: float = 2.0
+_ORGANIC_MAX_NECK_MM: float = 1.8
 
-# Skew cap for pitched blades (fraction of leaf length): slides longer
-# than this stretched the stitch walls into visible prisms; cull instead
-# (rare, fringe-only, and the flush zone now owns the steep-down band).
+# Skew cap for pitched blades (fraction of leaf length).
 _ORGANIC_MAX_SKEW_FRAC: float = 0.35
 
-# Flush-blade shape overrides (the "less fancy" leaf).
-_ORGANIC_FLUSH_CURL_DEG: float = 12.0
+# ── Sheet solidification (EXPERIMENT PARKED — not wired) ──
+# Each leaf is a thin SHEET: the blade surface, a bottom surface offset by
+# _ORGANIC_SHEET_MM along the seat normal, and an edge band — plus a root
+# TAB at the base (the bottom offset deepens toward the base and dives
+# into the clump) that anchors the leaf.  This replaces the oval + wall
+# stitch: the old solid dropped a wall skirt from the whole perimeter to
+# a fat embedded oval, which made every leaf read as a PILLOW/pod and
+# grew fan-shaped wall flares wherever the blade sat proud.  No oval ⇒
+# no skew rule, no neck gate, no oval containment guards.
+_ORGANIC_SHEET_MM: float = 0.65        # sheet thickness (≥3 FDM layers)
+_ORGANIC_TAB_EXTRA_MM: float = 0.9     # tab penetration below the surface
+_ORGANIC_TAB_SPAN: float = 0.35        # tab fades out by this s along blade
 
 # Coverage verification sampling density (test points ≈ area / this²).
 _ORGANIC_VERIFY_RES_MM: float = 0.9
@@ -324,7 +340,7 @@ def place_leaves_organic(
         fold_angle_deg = float(fold_angle_deg),
         inner_curve    = float(inner_curve),
         outer_curve    = float(outer_curve),
-        curl_deg       = float(curl_deg),
+        curl_deg       = min(float(curl_deg), _ORGANIC_PITCH_CURL_DEG),
         lift_mm        = _ORGANIC_TIP_LIFT_MM,
     )
     t_total = time.perf_counter()
@@ -460,6 +476,7 @@ def place_leaves_organic(
             skip_skew=flush,
             max_skew_frac=_ORGANIC_MAX_SKEW_FRAC,
             max_neck_mm=_ORGANIC_MAX_NECK_MM,
+            tuck_base=True,
         )
         if result is None:
             n_build_fail += 1

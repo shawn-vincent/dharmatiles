@@ -259,6 +259,7 @@ def _attempt_leaf(
     skip_skew: bool = False,
     max_skew_frac: float = 0.5,
     max_neck_mm: float | None = None,
+    tuck_base: bool = False,
 ):
     """Seat, build, and cull one leaf at a shoot station.
 
@@ -375,6 +376,46 @@ def _attempt_leaf(
         if math.hypot(skew_mm, net_normal) > max_neck_mm:
             return None, "neck"
 
+    if tuck_base:
+        # Tuck the BASE end into the foliage: pitch the blade about its
+        # belly dip until the base sits slightly embedded.  The belly-seat
+        # pins the belly at protrusion+standoff but leaves the base end
+        # free — a base that finishes proud of the surface is the "lower
+        # leaf's base lying over a higher leaf's tip" artifact.  An
+        # embedded base can never overlie anything (and anchors better).
+        bv = surf.vertices[base_idx]
+        b_in = bool(mesh.contains(bv[np.newaxis])[0])
+        rd = normal if b_in else -normal
+        loc, ridx, _tt = mesh.ray.intersects_location(
+            bv[np.newaxis], rd[np.newaxis], multiple_hits=False,
+        )
+        if len(ridx):
+            bc = (-1.0 if b_in else 1.0) * float(np.linalg.norm(loc[0] - bv))
+            target = -0.2
+            pivot = surf.vertices[dip_idx].copy()
+            r = float(np.linalg.norm(bv - pivot))
+            if bc > target and r > 1e-6:
+                theta = min(
+                    math.asin(min((bc - target) / r, 1.0)),
+                    math.radians(30.0),
+                )
+                lat = _safe_norm(np.cross(normal, tangent_leaf))
+                # Pick the rotation sign that moves the base along −normal.
+                v0 = bv - pivot
+                for sgn in (1.0, -1.0):
+                    if float(np.dot(
+                        _rotate_about(v0, lat, sgn * theta) - v0, -normal,
+                    )) > 0.0:
+                        break
+                c = math.cos(sgn * theta)
+                sn = math.sin(sgn * theta)
+                V = surf.vertices - pivot
+                surf.vertices = pivot + (
+                    V * c
+                    + np.cross(np.broadcast_to(lat, V.shape), V) * sn
+                    + np.outer(V @ lat, lat) * (1.0 - c)
+                )
+
     curl_mask = np.linalg.norm(
         surf.vertices - surf.vertices[base_idx], axis=1,
     ) > (L / 2.0)
@@ -417,15 +458,16 @@ def _attempt_leaf(
                     if dot >= 0.64:
                         same_wall_depth = max(same_wall_depth, d)
                 if same_wall_depth > 0.0:
+                    # CAP the lift: an unbounded lift stretched the stitch
+                    # walls into the long extrusions (and ran after the neck
+                    # gate, ungated).  Lift at most 0.8 mm; whatever remains
+                    # buried stays TUCKED into the foliage — visually fine,
+                    # and anchored better, not worse.
                     surf.vertices = (
-                        surf.vertices + (same_wall_depth + 0.05) * normal
+                        surf.vertices
+                        + min(same_wall_depth + 0.05, 0.8) * normal
                     )
-                    probe = surf.vertices[np.array([tip_idx, belly_idx])]
-                    lifted = not _points_inside_any(
-                        [mesh, *neighbour_meshes], probe, base, L,
-                    )
-                else:
-                    lifted = True
+                lifted = True
         if not lifted:
             return None, "buried-probe"
 
