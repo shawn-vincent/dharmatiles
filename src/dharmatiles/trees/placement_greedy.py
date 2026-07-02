@@ -45,30 +45,15 @@ import trimesh
 
 from ._utils import _hash01, _safe_norm
 from .leaf import (
+    _LEAF_N_LAT,
     _LEAF_N_LONG,
-    _leaf_width_profile,
-    build_leaf_oval_offsets,
     build_leaf_surface,
     solidify_leaf,
 )
 from .mesh import _LEAF_PLACEABLE_NORMAL_Z, _hash01_int
-from .placement import (
-    _FLOOR_TOL_MM,
-    _OVAL_PROTRUSION_TOL_MM,
-    _PULL_CLEARANCE_MM,
-    _SHINGLE_DELTA_MM,
-    _SHINGLE_MAX_LAYERS,
-    _SHINGLE_WORLD_CELL_MM,
-    LeafPlacementStats,
-    _contact_angle_analytic,
-    _leaf_belly_dip,
-)
+from .placement import LeafPlacementStats
 
 # ── Greedy-specific constants ─────────────────────────────────────────────────
-# Width-profile peak fraction: leaf half-width peaks at s ≈ 1/3 (leaf.py:198).
-# Overlap for constraints 2/3 is judged over the widest-point → tip span only.
-_F_W: float = 1.0 / 3.0
-
 # Root oval embed depth.  The placer works directly on the real (noised) clump,
 # so the root seats a fixed shallow amount just below the actual foliage surface
 # at the candidate point — the same value the meridian placer uses.  (No deep
@@ -76,8 +61,8 @@ _F_W: float = 1.0 / 3.0
 # lifts.)  It is trivially in real material, so no separate connection gate.
 _GREEDY_EMBED_MM: float = 0.75
 
-# Small outward standoff used for the seam / no-valid-standoff test.
-_SEAM_EPS_MM: float = _PULL_CLEARANCE_MM
+# Fixed outward protrusion of the leaf blade base above the foliage surface.
+_PROTRUSION_MM: float = 0.3
 
 
 # ── Occupancy structures (self-managed, no trimesh proximity) ─────────────────
@@ -107,65 +92,6 @@ def _root_occupied_near(root_grid: set, pt: np.ndarray, gap: float) -> bool:
     return False
 
 
-def _tip_proxy_cells(
-    base: np.ndarray,
-    t: np.ndarray,
-    lat: np.ndarray,
-    L: float,
-    width_mm: float,
-    cell: float,
-    n_along: int = 4,
-    n_across: int = 3,
-) -> list[tuple[int, int, int]]:
-    """World-voxel cells covered by the leaf's widest-point → tip blade span.
-
-    Sampled on the smooth surface (``delta=0``, layer-independent) so two
-    overlapping tips hash to shared voxels regardless of their standoff layer.
-    The base → widest span is deliberately excluded: it tucks under a
-    neighbour's blade (imbrication), which is allowed.
-    """
-    cells: set[tuple[int, int, int]] = set()
-    base = np.asarray(base, float)
-    for i in range(n_along):
-        f = _F_W + (1.0 - _F_W) * i / (n_along - 1)     # widest → tip
-        c = base + (f * L) * t
-        hw = 0.5 * width_mm * float(_leaf_width_profile(np.array(f)))
-        for j in range(n_across):
-            a = (-1.0 + 2.0 * j / (n_across - 1)) * hw   # −hw … +hw across
-            p = c + a * lat
-            cells.add((
-                int(math.floor(float(p[0]) / cell)),
-                int(math.floor(float(p[1]) / cell)),
-                int(math.floor(float(p[2]) / cell)),
-            ))
-    return list(cells)
-
-
-def _lowest_free_layer(occ: dict, cells: list[tuple[int, int, int]]) -> int | None:
-    """Lowest shingle layer free across every covered cell, or None if saturated.
-
-    ORs the cells' layer bitmasks and returns the lowest clear bit.  Returns
-    None when every layer 0…_SHINGLE_MAX_LAYERS-1 is occupied somewhere in the
-    footprint — the "tip region saturated to the cap, drop the candidate" case
-    that thins the over-generated candidate set.
-    """
-    mask = 0
-    for c in cells:
-        mask |= occ.get(c, 0)
-    layer = 0
-    while layer < _SHINGLE_MAX_LAYERS and (mask >> layer) & 1:
-        layer += 1
-    if layer >= _SHINGLE_MAX_LAYERS:
-        return None
-    return layer
-
-
-def _shingle_write(occ: dict, cells: list[tuple[int, int, int]], layer: int) -> None:
-    bit = 1 << layer
-    for c in cells:
-        occ[c] = occ.get(c, 0) | bit
-
-
 def _points_inside_any(meshes: list, pts: np.ndarray, near_pt: np.ndarray, reach: float) -> bool:
     """True if ANY of ``pts`` is inside any neighbour solid (AABB-pruned by ``near_pt``).
 
@@ -185,48 +111,45 @@ def _points_inside_any(meshes: list, pts: np.ndarray, near_pt: np.ndarray, reach
     return False
 
 
-# ── Placed-leaf world-voxel occupancy (leaf-vs-leaf clearance) ─────────────────
-# A shared set of occupied world cells recording where every placed leaf's blade
-# surface sits.  A new leaf's widest→tip vertices are lifted along the surface
-# normal until none of them fall in an occupied cell — so no tip ends up buried
-# in a leaf below it.  Cell edge ≈ 2.5× the leaf thickness so a thin blade fully
-# occupies its cells (no gaps a tip could slip through).  Self-managed hash: no
-# trimesh.proximity, no per-leaf BVH, O(verts) per query.
-_LEAF_OCC_CELL_MM: float = 0.6
-# Max outward standoff (ray-cast clump exit + leaf-clearance lift) before a leaf
-# is deemed unplaceable along its normal and culled.
-_CLEAR_MAX_MM: float = 4.5
+# ── Root oval, tilted to the local surface ────────────────────────────────────
 
+def _oval_tilted_to_mesh(
+    P: np.ndarray, T_along: np.ndarray, across: np.ndarray,
+    L: float, W: float, mesh: trimesh.Trimesh, embed_mm: float,
+) -> np.ndarray:
+    """Flat root-oval vertices (world), with the oval axis tilted to the surface.
 
-def _occ_mark(leaf_occ: set, pts: np.ndarray, cell: float) -> None:
-    q = np.floor(np.asarray(pts, float) / cell).astype(np.int64)
-    for c in q:
-        leaf_occ.add((int(c[0]), int(c[1]), int(c[2])))
-
-
-def _occ_hit(leaf_occ: set, pts: np.ndarray, cell: float) -> bool:
-    if not leaf_occ or len(pts) == 0:
-        return False
-    q = np.floor(np.asarray(pts, float) / cell).astype(np.int64)
-    for c in q:
-        if (int(c[0]), int(c[1]), int(c[2])) in leaf_occ:
-            return True
-    return False
-
-
-def _ray_exit_distance(mesh, p: np.ndarray, direction: np.ndarray) -> float | None:
-    """Distance from ``p`` along ``+direction`` to the FARTHEST exit of ``mesh``.
-
-    ``p`` is assumed inside ``mesh``.  A single ray cast gives the crossings
-    directly — no iterative lift search.  The farthest crossing is the point at
-    which ``p`` fully leaves the (possibly re-entrant) solid; lifting past it
-    clears the point.  Returns None if the ray finds no exit at all (unclearable
-    along this direction).  The caller culls when the distance exceeds its cap.
+    Same 123-vertex layout as :func:`leaf.build_leaf_oval_offsets` (so
+    :func:`leaf.solidify_leaf` can skin the blade rim to it 1:1), but instead of
+    embedding the oval a fixed depth along a single base normal, the oval's two
+    axial ends (at 0.5·L and L along the growth direction) are set from the
+    distance to the mesh: each end is placed ``embed_mm`` below its nearest
+    surface point along that point's LOCAL normal.  The flat oval spanning the two
+    embedded ends therefore lies roughly parallel to — i.e. plugs in normal to —
+    the foliage surface at that point.
     """
-    locs = mesh.ray.intersects_location(p[np.newaxis], direction[np.newaxis])[0]
-    if len(locs) == 0:
-        return None
-    return float(np.linalg.norm(locs - p[np.newaxis], axis=1).max())
+    ring_count = _LEAF_N_LONG - 1        # 11 interior rings
+    lat_count = _LEAF_N_LAT              # 10
+    s_int = np.linspace(0.0, 1.0, _LEAF_N_LONG + 1)[1:-1]   # (ring_count,)
+    lat_pos = np.linspace(-1.0, 1.0, lat_count + 1)          # (lat_count+1,)
+    oval_hw = (W / 4.0) * np.sin(np.pi * s_int)              # (ring_count,)
+
+    # Axial ends at the surface level, then dropped embed below the local surface.
+    ends = np.array([P + 0.5 * L * T_along, P + L * T_along])
+    H, _, tri = trimesh.proximity.closest_point(mesh, ends)
+    nrm = mesh.face_normals[np.asarray(tri, dtype=np.int64)]
+    e_base = H[0] - embed_mm * nrm[0]
+    e_tip  = H[1] - embed_mm * nrm[1]
+
+    centers = e_base[np.newaxis] + s_int[:, np.newaxis] * (e_tip - e_base)[np.newaxis]
+    grid = (
+        centers[:, np.newaxis, :]
+        + (lat_pos[np.newaxis, :, np.newaxis] * oval_hw[:, np.newaxis, np.newaxis])
+        * across[np.newaxis, np.newaxis, :]
+    )   # (ring_count, lat_count+1, 3)
+    return np.concatenate([
+        grid.reshape(-1, 3), e_base[np.newaxis], e_tip[np.newaxis],
+    ], axis=0)
 
 
 # ── Candidate generation ──────────────────────────────────────────────────────
@@ -397,12 +320,10 @@ def place_leaves_greedy(
         curl_deg       = float(curl_deg),
         lift_mm        = 0.0,
     )
-    belly_dip = _leaf_belly_dip(**leaf_kw)   # (dL, dN) — shape-only binding point
 
     t_total = time.perf_counter()
 
-    # ── Per-mesh setup: proximity, stats, neighbour prune ─────────────────────
-    proximities: list[trimesh.proximity.ProximityQuery] = []
+    # ── Per-mesh setup: stats, neighbour prune ────────────────────────────────
     stats_list: list[LeafPlacementStats] = []
     parts_list: list[list[trimesh.Trimesh]] = []
     z_mins: list[float] = []
@@ -411,7 +332,6 @@ def place_leaves_greedy(
     bounds_centers = []
     bounds_radii = []
     for mi, (mesh, seed, label) in enumerate(zip(meshes, seeds_list, labels_list)):
-        proximities.append(trimesh.proximity.ProximityQuery(mesh))
         z_mins.append(float(mesh.vertices[:, 2].min()))
         cx = float(mesh.vertices[:, 0].mean())
         cy = float(mesh.vertices[:, 1].mean())
@@ -454,12 +374,8 @@ def place_leaves_greedy(
     # ── Global z-ordered sweep ────────────────────────────────────────────────
     all_cands.sort(key=lambda c: (c.z, c.phi, c.mesh_id, c.idx))
 
-    root_grid: set[tuple[int, int, int]] = set()   # claimed root cells (shared)
-    occ: dict = {}                                  # shingle bitmask (shared)
-    leaf_occ: set[tuple[int, int, int]] = set()     # placed-leaf blade cells (shared)
+    root_grid: set[tuple[int, int, int]] = set()   # claimed root cells (fill spacing)
     n_rejected_root = 0
-    n_rejected_seam = 0
-    n_rejected_sat = 0
     n_rejected_buried = 0
 
     for cand in all_cands:
@@ -469,207 +385,81 @@ def place_leaves_greedy(
         T0 = cand.tangent
         stats = stats_list[mi]
 
-        # ── Cheap-reject ladder (all O(1)–O(k), no geometry) ─────────────────
-        # C3: base on bare mesh, not another leaf's root.
+        # Cull for space-filling: keep roots ~min_root_gap apart (dense packing).
         if _root_occupied_near(root_grid, base, gap):
             n_rejected_root += 1
             continue
 
-        # Seam / no-valid-standoff (native cross-cluster): if pulling out along
-        # the normal immediately re-enters a neighbour, there is no standoff that
-        # clears every mesh — pack up to the crease and drop this candidate.
-        if neighbours[mi] and _points_inside_any(
-            neighbours[mi], (base + _SEAM_EPS_MM * normal)[np.newaxis], base, L,
-        ):
-            n_rejected_seam += 1
-            continue
-
-        # Angle jitter FIRST: pivot the growth direction T0 azimuthally about the
-        # normal, then solve the lean for the jittered direction (matches the
-        # meridian order — jitter T0, not the leaned tangent).
         lseed = int(_hash01_int(int(seeds_list[mi]), "greedy-leaf", cand.idx))
+        tangent = T0
+        # Optional azimuthal jitter of the growth direction about the normal.
         if angle_jitter_deg != 0.0:
             theta = math.radians(angle_jitter_deg) * (
                 _hash01(int(seeds_list[mi]), "greedy-ang", cand.idx) * 2.0 - 1.0
             )
             ct, st = math.cos(theta), math.sin(theta)
-            T0 = _safe_norm(T0 * ct + np.cross(normal, T0) * st)
-
-        # Analytic lean, pressing the belly-dip against the LOCAL surface.  The
-        # plane normal m is measured at the belly-dip point (one on_surface
-        # query), matching the meridian placer's _ANALYTIC_MEASURE_BELLY=True.
-        # Using the base normal instead makes leaves stand off ("lift") on convex
-        # clumps because it ignores the surface curving away under the belly.
-        _bp = base + belly_dip[0] * T0 + belly_dip[1] * normal
-        _mc, _, _mt = proximities[mi].on_surface(_bp[np.newaxis])
-        _m = meshes[mi].face_normals[int(_mt[0])]
-        ca = _contact_angle_analytic(belly_dip[0], belly_dip[1], T0, normal, m=_m)
-        tangent = _safe_norm(T0 * math.cos(ca) - normal * math.sin(ca))
-        up_placed = _safe_norm(normal * math.cos(ca) + T0 * math.sin(ca))
-
-        # C2: tip-half footprint vs the shared shingle occupancy → lowest free
-        # standoff layer, or drop if the tip region is saturated to the cap.
+            tangent = _safe_norm(tangent * ct + np.cross(normal, tangent) * st)
         lat = np.cross(normal, tangent)
-        lat_len = float(np.linalg.norm(lat))
-        if lat_len > 1e-6:
-            lat = lat / lat_len
-        cells = _tip_proxy_cells(base, tangent, lat, L, W, _SHINGLE_WORLD_CELL_MM)
-        layer = _lowest_free_layer(occ, cells)
-        if layer is None:
-            n_rejected_sat += 1
-            continue
-
-        # ── ACCEPT: build once, on the smooth surface ────────────────────────
-        # pos jitter: tiny in-tangent-plane nudge, re-snapped to the surface
-        # (only paid per accepted candidate).
-        pt3d = base
-        if pos_jitter != 0.0:
-            jmm = pos_jitter * L
-            r_t = _hash01(int(seeds_list[mi]), "greedy-pjt", cand.idx) * 2.0 - 1.0
-            r_l = _hash01(int(seeds_list[mi]), "greedy-pjl", cand.idx) * 2.0 - 1.0
-            pt3d = base + tangent * (jmm * r_t) + lat * (jmm * r_l)
-            _snp, _, _ = proximities[mi].on_surface(pt3d[np.newaxis])
-            pt3d = _snp[0].copy()
-
-        base_blade = pt3d + (float(layer) * _SHINGLE_DELTA_MM) * normal
-
-        # Cheap-reject (still no geometry built): a leaned tip below the mesh
-        # floor would poke out the bottom of the clump.  Not counted as a build
-        # attempt — it is analogous to the meridian grid never emitting a slot
-        # there, so it must not depress the placed/attempted coverage metric.
-        tip_z = base_blade[2] + L * tangent[2]
-        if tip_z < z_mins[mi] - _FLOOR_TOL_MM:
-            stats.skipped_below_floor += 1
-            continue
+        _ll = float(np.linalg.norm(lat))
+        lat = lat / _ll if _ll > 1e-6 else lat
 
         stats.n_attempted += 1
 
-        # ── Oval gates FIRST (cheap: build_leaf_oval_offsets is pure NumPy) ────
-        # Reject bad poses before paying for build_leaf_surface / solidify_leaf,
-        # so the expensive surface build happens only for leaves that will ship.
-        lat_ov = np.cross(normal, tangent)
-        lat_ov_len = float(np.linalg.norm(lat_ov))
-        if lat_ov_len > 1e-6:
-            lat_ov = lat_ov / lat_ov_len
-        oval_off = build_leaf_oval_offsets(
-            n_hat=normal, T_along=tangent, across=lat_ov,
-            L=L, W=W, embed_mm=_GREEDY_EMBED_MM,
-        )
-        inner_v = oval_off + pt3d[np.newaxis]
-        # C1: the root oval embeds a fixed shallow depth just below the real
-        # foliage surface at the candidate point.  Small protrusions where the
-        # flat oval overshoots a convex face are tolerated up to the embed depth;
-        # a deeper protrusion means the root would poke out of the foliage —
-        # reject.  (The root is in real material by construction, so there is no
-        # separate connection gate.)
-        outside = ~meshes[mi].contains(inner_v)
-        if outside.any():
-            _, ov_d, _ = trimesh.proximity.closest_point(meshes[mi], inner_v[outside])
-            if float(ov_d.max()) > _OVAL_PROTRUSION_TOL_MM:
-                stats.build_errors += 1
-                continue
-
-        # ── ACCEPTED: build the surface + solidify (once, for shipped leaves) ──
+        # ── Build the leaf solid ─────────────────────────────────────────────
+        # Blade a fixed protrusion OUTSIDE the surface (no contact lean, no lift).
+        base_blade = base + _PROTRUSION_MM * normal
         try:
             surf, _geom = build_leaf_surface(
-                base_pos = base_blade,
-                tangent  = tangent,
-                up_hint  = up_placed,
-                seed     = lseed,
-                **leaf_kw,
+                base_pos=base_blade, tangent=tangent, up_hint=normal,
+                seed=lseed, **leaf_kw,
             )
-            tip_idx = len(surf.vertices) - 1
-            solid, _ = solidify_leaf(surf, inner_v)
         except (RuntimeError, ValueError):
             stats.build_errors += 1
             continue
+        tip_idx = len(surf.vertices) - 1
+        base_idx = len(surf.vertices) - 2
 
-        # ── Clear obstacles by lifting the blade along its normal ──────────────
-        # We only require two probe points — the blade TIP and BELLY (the lowest
-        # widest→tip vertex) — to clear every obstruction: the leaf's own clump,
-        # neighbour clumps, and previously-placed leaves.  The lift height is
-        # computed directly, not searched: for a probe inside a clump, a single
-        # ray cast along +normal gives the exit distance; for placed leaves, a
-        # short march counts cells along +normal.  The whole leaf is then lifted
-        # once by the max required distance + a tolerance.
-        base_idx = len(surf.vertices) - 2       # base_pt vertex (surface layout)
+        # Cull if the blade grows INTO a clump (its own or a neighbour): keep the
+        # tip and belly (lowest widest→tip vertex) out of every clump.
         curl_mask = np.linalg.norm(surf.vertices - surf.vertices[base_idx], axis=1) > (L / 2.0)
         curl_idx = np.nonzero(curl_mask)[0]
         if len(curl_idx) == 0:
             curl_idx = np.arange(len(surf.vertices))
         belly_idx = int(curl_idx[int(np.argmin(surf.vertices[curl_idx, 2]))])
-        probe_pts = surf.vertices[np.array([tip_idx, belly_idx])]   # (2, 3)
-        nbrs = neighbours[mi]
-        own_mesh = meshes[mi]
-
-        lift_needed = 0.0
-        cull = False
-        for cm in (own_mesh, *nbrs):
-            cb = cm.bounds
-            for p in probe_pts:
-                if (p < cb[0]).any() or (p > cb[1]).any():
-                    continue
-                if not bool(cm.contains(p[np.newaxis])[0]):
-                    continue
-                d = _ray_exit_distance(cm, p, normal)
-                if d is None:               # can't exit along the normal → not leaf-safe
-                    cull = True
-                    break
-                lift_needed = max(lift_needed, d)
-            if cull:
-                break
-        if not cull:
-            march = _LEAF_OCC_CELL_MM * 0.5
-            for p in probe_pts:
-                d = 0.0
-                while d <= _CLEAR_MAX_MM and _occ_hit(
-                    leaf_occ, (p + d * normal)[np.newaxis], _LEAF_OCC_CELL_MM
-                ):
-                    d += march
-                # Overshoot one cell so the lifted vertex lands clearly inside the
-                # free cell rather than on the occupied cell's boundary.
-                if d > 0.0:
-                    d += _LEAF_OCC_CELL_MM
-                lift_needed = max(lift_needed, d)
-        if cull or lift_needed + _PULL_CLEARANCE_MM > _CLEAR_MAX_MM:
+        probe = surf.vertices[np.array([tip_idx, belly_idx])]
+        if _points_inside_any([meshes[mi], *neighbours[mi]], probe, base, L):
             n_rejected_buried += 1
             stats.skipped_cross_buried += 1
             continue
 
-        pull_away = (lift_needed + _PULL_CLEARANCE_MM) if lift_needed > 1e-9 else 0.0
-        if pull_away > 0.0:
-            lift_vec = pull_away * normal
-            surf.vertices += lift_vec
-            solid.vertices[:len(surf.vertices)] += lift_vec
-
-        # Tip-z ordering (visible tip above the root tip so the leaf reads as
-        # growing outward, not drooping) is obtained for free from the horizontal
-        # growth direction — no post-hoc +Z lift, which used to shove a cleared
-        # blade back into the clump.
-        burial_d = 0.0
-        tip_z_lift = 0.0
-        oval_tip_i = len(surf.vertices) + tip_idx
-        tip_z_clearance = float(solid.vertices[tip_idx, 2] - solid.vertices[oval_tip_i, 2])
-        float_d = pull_away           # standoff from the seated pose (stat only)
+        # Root oval a fixed embed INSIDE the surface, axis tilted normal to the
+        # local foliage surface (ends set from distance to the mesh).
+        inner_v = _oval_tilted_to_mesh(base, tangent, lat, L, W, meshes[mi], _GREEDY_EMBED_MM)
+        # Guard: the two oval ends must actually be inside the clump (a thin spot
+        # where the embed punches through the far side would print detached).
+        if not bool(meshes[mi].contains(inner_v[[-2, -1]]).all()):
+            n_rejected_buried += 1
+            stats.skipped_cross_buried += 1
+            continue
+        try:
+            solid, _ = solidify_leaf(surf, inner_v)
+        except (RuntimeError, ValueError):
+            stats.build_errors += 1
+            continue
 
         # ── COMMIT ────────────────────────────────────────────────────────────
-        _shingle_write(occ, cells, layer)
         root_grid.add(_root_cell(base, gap))
-        # Record this leaf's blade footprint so later (higher) leaves lift clear
-        # of it instead of burying a tip in it.
-        _occ_mark(leaf_occ, surf.vertices, _LEAF_OCC_CELL_MM)
-
-        row_idx = int((float(pt3d[2]) - z_mins[mi]) / expected_row_step)
-        stats.base_positions.append(pt3d.copy())
+        row_idx = int((float(base[2]) - z_mins[mi]) / expected_row_step)
+        stats.base_positions.append(base.copy())
         stats.base_tangents.append(tangent.copy())
         stats.base_row_idx.append(row_idx)
         stats.root_depths.append(_GREEDY_EMBED_MM)
-        stats.leaf_float_dists.append(float_d)
-        stats.leaf_buried_depths.append(burial_d)
-        stats.shingle_layers.append(layer)
-        stats.tip_z_clearances.append(tip_z_clearance)
-        stats.tip_z_lifts.append(tip_z_lift)
-        stats.pull_aways.append(pull_away)
+        stats.leaf_float_dists.append(0.0)
+        stats.leaf_buried_depths.append(0.0)
+        stats.shingle_layers.append(0)
+        stats.tip_z_clearances.append(0.0)
+        stats.tip_z_lifts.append(0.0)
+        stats.pull_aways.append(0.0)
         stats.n_placed += 1
 
         if len(solid.vertices) > 0:
@@ -687,8 +477,7 @@ def place_leaves_greedy(
         print(
             f"\n── greedy leaf placement ──  {placed} placed  "
             f"({len(all_cands)} candidates: root-rej={n_rejected_root} "
-            f"seam-rej={n_rejected_seam} "
-            f"sat-rej={n_rejected_sat} buried-rej={n_rejected_buried})  {elapsed:.3f}s\n"
+            f"buried-rej={n_rejected_buried})  {elapsed:.3f}s\n"
         )
 
     return parts_list, stats_list

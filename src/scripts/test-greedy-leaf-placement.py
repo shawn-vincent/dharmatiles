@@ -31,7 +31,7 @@ import numpy as np
 from dharmatiles.trees._utils import _safe_norm
 from dharmatiles.trees.mesh import _build_foliage_cluster_mesh
 from dharmatiles.trees.leaf import _LEAF_N_LONG, _LEAF_N_LAT
-from dharmatiles.trees.placement_greedy import place_leaves_greedy, _LEAF_OCC_CELL_MM
+from dharmatiles.trees.placement_greedy import place_leaves_greedy
 
 _LEAF = dict(
     length_mm      = 4.5,
@@ -93,59 +93,36 @@ def main() -> int:
     print(f"placed {total} leaves in {elapsed:.3f}s "
           f"(A={len(parts[0])}, B={len(parts[1])})")
 
-    # 2 + 3 + 4 + 6 + 7. Per-leaf correctness.
+    # Per-leaf correctness for the stripped model:
+    #   - every leaf solid watertight,
+    #   - root oval reaches real material (embedded below the surface),
+    #   - blade tip + belly not buried in a parent clump (blade grows outward).
+    # Leaves DO overlap each other by design (dense ~½-width packing), so there
+    # is no leaf-vs-leaf non-overlap check.
     L = float(_LEAF["length_mm"])
     base_i = _N_OUTER - 2                       # base_pt vertex (surface layout)
     tip_i = _N_OUTER - 1                        # tip_pt vertex
-    cell = _LEAF_OCC_CELL_MM
     n_nonwatertight = 0
     n_disconnected = 0
-    n_tipz = 0
     n_buried_mesh = 0
-    n_buried_leaf = 0
 
-    # Flatten leaves; for each, the two probe points the placer guarantees clear:
-    # the blade TIP and BELLY (lowest widest→tip vertex).  Sub-mm grazing of the
-    # bumpy noised surface elsewhere on the blade is tolerated (invisible).
     flat = [(mi, leaf) for mi, leaves in enumerate(parts) for leaf in leaves]
-    probe_pts_all: list[np.ndarray] = []
-    base_z_all: list[float] = []
-    # Voxel occupancy of every leaf's full blade surface → which leaf ids own a cell.
-    cell_owners: dict[tuple, set] = {}
-    for gid, (mi, leaf) in enumerate(flat):
-        outer = leaf.vertices[:_N_OUTER]
-        base = leaf.vertices[base_i]
-        tip_half = outer[np.linalg.norm(outer - base, axis=1) > (L / 2.0)]
-        belly = tip_half[int(np.argmin(tip_half[:, 2]))]        # lowest blade point
-        probe_pts_all.append(np.stack([outer[tip_i], belly]))
-        base_z_all.append(float(base[2]))
-        q = np.floor(outer / cell).astype(np.int64)
-        for c in q:
-            cell_owners.setdefault((int(c[0]), int(c[1]), int(c[2])), set()).add(gid)
-
-    for gid, (mi, leaf) in enumerate(flat):
+    for mi, leaf in flat:
         if not leaf.is_watertight:
             n_nonwatertight += 1
         if len(leaf.vertices) >= 2 * _N_OUTER:
             oval = leaf.vertices[_N_OUTER:2 * _N_OUTER]
             if int(noised[mi].contains(oval).sum()) == 0:
                 n_disconnected += 1
-        if leaf.vertices[tip_i, 2] <= leaf.vertices[_N_OUTER + tip_i, 2]:
-            n_tipz += 1
 
-        probe = probe_pts_all[gid]
-        # Requirement 1: tip/belly must not be buried in ANY parent clump.
+        outer = leaf.vertices[:_N_OUTER]
+        base = leaf.vertices[base_i]
+        tip_half = outer[np.linalg.norm(outer - base, axis=1) > (L / 2.0)]
+        belly = tip_half[int(np.argmin(tip_half[:, 2]))]        # lowest blade point
+        probe = np.stack([outer[tip_i], belly])
+        # tip/belly must not be buried in ANY parent clump.
         if any(int(nm.contains(probe).sum()) > 0 for nm in noised):
             n_buried_mesh += 1
-        # Requirement 2: tip/belly must not be buried in a leaf BELOW this one.
-        # (A tip tucked under a HIGHER leaf's base is imbrication — allowed.)
-        my_z = base_z_all[gid]
-        q = np.floor(probe / cell).astype(np.int64)
-        for c in q:
-            owners = cell_owners.get((int(c[0]), int(c[1]), int(c[2])))
-            if owners and any(oid != gid and base_z_all[oid] < my_z - 1e-6 for oid in owners):
-                n_buried_leaf += 1
-                break
 
     if n_nonwatertight:
         failures.append(f"{n_nonwatertight}/{total} leaves not watertight")
@@ -156,21 +133,12 @@ def main() -> int:
         )
     if n_buried_mesh:
         failures.append(
-            f"{n_buried_mesh}/{total} leaves have their widest→tip blade buried in a parent clump"
-        )
-    if n_buried_leaf:
-        failures.append(
-            f"{n_buried_leaf}/{total} leaves have a tip/belly buried in a leaf below"
+            f"{n_buried_mesh}/{total} leaves have tip/belly buried in a parent clump"
         )
 
     print(f"watertight={total - n_nonwatertight}/{total}  "
-          f"root-connected={total - n_disconnected}/{total}")
-    print(f"blade-clear-of-mesh={total - n_buried_mesh}/{total}  "
-          f"tip-clear-of-lower-leaves={total - n_buried_leaf}/{total}")
-    # Informational: the blade tip vs the (buried, invisible) root-oval tip.  The
-    # horizontal growth keeps leaves from drooping; a slightly negative value on a
-    # side-facing leaf is not a print defect, so it is reported, not failed.
-    print(f"(info) tip-above-root-tip={total - n_tipz}/{total}")
+          f"root-connected={total - n_disconnected}/{total}  "
+          f"blade-clear-of-mesh={total - n_buried_mesh}/{total}")
 
     # 5. Determinism.
     parts2, stats2 = place_leaves_greedy(
