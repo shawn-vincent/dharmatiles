@@ -72,7 +72,9 @@ _SKIRT_W_MM       = 2.4     # lapping-soil annulus width around the footprint
 # groove reads as a router slot, not a crack (Shawn, 2026-07-03).
 _CRACK_MIN_FACE_MM2 = 8.0   # start faces must be at least this big —
                             # pebbles/mediums stay untouched by construction
-_CRACK_PROB         = 0.85  # chance each candidate face seeds its crack
+_CRACK_PROB         = 0.5   # chance a SECONDARY crack appears; the primary
+                            # crack is unconditional (a big stone must never
+                            # roll itself bald — seed 3 taught us)
 _CRACK_MAX_PER_STONE = 2
 _CRACK_WIDTH_MM     = 0.5   # groove width at the crack's midpoint
 _CRACK_DEPTH_MM     = 0.55  # groove depth at the crack's midpoint
@@ -80,6 +82,9 @@ _CRACK_PROUD_MM     = 0.15  # wedge top floats this far outside the surface
 _CRACK_SEGS         = 6     # random-walk segments per crack
 _CRACK_STEP_MM      = (1.1, 1.9)   # length of each walk segment
 _CRACK_JITTER_DEG   = 24.0  # per-segment heading jitter (meander)
+_CRACK_BRANCH_PROB  = 1.0   # the primary crack always forks once (Shawn:
+                            # "I'd expect a tiny bit of branching")
+_CRACK_BRANCH_DEG   = (35.0, 60.0)  # fork angle off the parent heading
 
 
 @dataclass
@@ -260,6 +265,29 @@ def _wedge(a: np.ndarray, b: np.ndarray,
     return w
 
 
+def _crack_walk(mesh: trimesh.Trimesh, N: np.ndarray,
+                p0: np.ndarray, n0: np.ndarray, d0: np.ndarray,
+                n_segs: int, rng: np.random.Generator,
+                ) -> tuple[list, list]:
+    """Random-walk *n_segs* steps across the hull surface from *p0*.
+
+    Steps in the local tangent plane with heading jitter, reprojecting
+    each point onto the mesh.  Returns the walked points and their local
+    face normals (excluding the start point)."""
+    pts, nms, d = [], [], d0
+    p, n = p0, n0
+    for _ in range(n_segs):
+        step = rng.uniform(*_CRACK_STEP_MM)
+        jit  = np.radians(rng.uniform(-_CRACK_JITTER_DEG, _CRACK_JITTER_DEG))
+        d = np.cos(jit) * d + np.sin(jit) * np.cross(n, d)
+        q = p + d * step
+        qs, _dist, tid = trimesh.proximity.closest_point(mesh, [q])
+        p, n = qs[0], N[tid[0]]
+        pts.append(p)
+        nms.append(n)
+    return pts, nms
+
+
 def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
                     ground_z: float) -> trimesh.Trimesh:
     """Subtract kinked wedge grooves from facets above the area threshold.
@@ -291,8 +319,9 @@ def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
     elig.sort(key=lambda t: -t[0])
 
     cutters = []
-    for _score, sel in elig[:_CRACK_MAX_PER_STONE]:
-        if rng.random() > _CRACK_PROB:
+    for idx, (_score, sel) in enumerate(elig[:_CRACK_MAX_PER_STONE]):
+        is_primary = idx == 0
+        if not is_primary and rng.random() > _CRACK_PROB:
             continue
         n = N[sel].mean(axis=0)
         n /= np.linalg.norm(n) + 1e-12
@@ -309,35 +338,15 @@ def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
         ang  = np.radians(rng.uniform(-30.0, 30.0))
         dirv = np.cos(ang) * t1 + np.sin(ang) * np.cross(n, t1)
 
-        # Random-walk the crack path across the surface: step in the local
-        # tangent plane, reproject onto the hull, meander the heading.
-        walk_n = [n]
-        walk_p = [c + dirv * 0.1]
-        d = dirv
-        total = _CRACK_SEGS
-        # walk backwards half the segments so the crack straddles the seed
-        d_back = -dirv
-        p = walk_p[0]
-        for _ in range(total // 2):
-            step = rng.uniform(*_CRACK_STEP_MM)
-            jit  = np.radians(rng.uniform(-_CRACK_JITTER_DEG,
-                                          _CRACK_JITTER_DEG))
-            cj, sj = np.cos(jit), np.sin(jit)
-            d_back = cj * d_back + sj * np.cross(walk_n[0], d_back)
-            q = walk_p[0] + d_back * step
-            qs, _dist, tid = trimesh.proximity.closest_point(mesh, [q])
-            walk_p.insert(0, qs[0])
-            walk_n.insert(0, N[tid[0]])
-        for _ in range(total - total // 2):
-            step = rng.uniform(*_CRACK_STEP_MM)
-            jit  = np.radians(rng.uniform(-_CRACK_JITTER_DEG,
-                                          _CRACK_JITTER_DEG))
-            cj, sj = np.cos(jit), np.sin(jit)
-            d = cj * d + sj * np.cross(walk_n[-1], d)
-            q = walk_p[-1] + d * step
-            qs, _dist, tid = trimesh.proximity.closest_point(mesh, [q])
-            walk_p.append(qs[0])
-            walk_n.append(N[tid[0]])
+        # Random-walk the crack path across the surface, both directions
+        # from the seed so the crack straddles it.
+        seed_p, seed_n = c + dirv * 0.1, n
+        back_p, back_n = _crack_walk(mesh, N, seed_p, seed_n, -dirv,
+                                     _CRACK_SEGS // 2, rng)
+        fwd_p,  fwd_n  = _crack_walk(mesh, N, seed_p, seed_n, dirv,
+                                     _CRACK_SEGS - _CRACK_SEGS // 2, rng)
+        walk_p = back_p[::-1] + [seed_p] + fwd_p
+        walk_n = back_n[::-1] + [seed_n] + fwd_n
 
         # Chain tapered wedges: width/depth peak mid-crack, fade at ends.
         K = len(walk_p) - 1
@@ -348,6 +357,28 @@ def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
                 walk_p[k], walk_p[k + 1], walk_n[k], walk_n[k + 1],
                 wa=_CRACK_WIDTH_MM * prof[k], wb=_CRACK_WIDTH_MM * prof[k + 1],
                 da=_CRACK_DEPTH_MM * prof[k], db=_CRACK_DEPTH_MM * prof[k + 1]))
+
+        # Real cracks fork: the stone's primary crack gets one branch,
+        # leaving the fork at a natural angle and fading out.
+        if is_primary and rng.random() < _CRACK_BRANCH_PROB:
+            j = int(rng.integers(K // 3, 2 * K // 3 + 1))
+            pd = walk_p[j + 1] - walk_p[j]
+            pd = pd / (np.linalg.norm(pd) + 1e-12)
+            fork = np.radians(rng.uniform(*_CRACK_BRANCH_DEG)
+                              * (1 if rng.random() < 0.5 else -1))
+            bd = np.cos(fork) * pd + np.sin(fork) * np.cross(walk_n[j], pd)
+            br_p, br_n = _crack_walk(mesh, N, walk_p[j], walk_n[j], bd,
+                                     int(rng.integers(2, 4)), rng)
+            bp = [walk_p[j]] + br_p
+            bn = [walk_n[j]] + br_n
+            bprof = np.linspace(prof[j] * 0.8, 0.18, len(bp))
+            for k in range(len(bp) - 1):
+                cutters.append(_wedge(
+                    bp[k], bp[k + 1], bn[k], bn[k + 1],
+                    wa=_CRACK_WIDTH_MM * bprof[k],
+                    wb=_CRACK_WIDTH_MM * bprof[k + 1],
+                    da=_CRACK_DEPTH_MM * bprof[k],
+                    db=_CRACK_DEPTH_MM * bprof[k + 1]))
 
     if not cutters:
         return mesh
