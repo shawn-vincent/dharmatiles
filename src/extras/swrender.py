@@ -24,9 +24,14 @@ def main():
     p.add_argument('--width', type=int, default=1000)
     p.add_argument('--no-tree', action='store_true',
                    help='skip WOOD/FOLIAGE/LEAF parts (see the ground under a canopy)')
+    p.add_argument('--no-base', action='store_true',
+                   help='skip the socket base part (its huge triangles defeat --box zoom)')
     p.add_argument('--box', type=float, nargs=4, default=None,
                    metavar=('X0','Y0','X1','Y1'),
                    help='crop: only render faces whose centroid xy (mm) is in box')
+    p.add_argument('--zclip', type=float, default=None,
+                   help='drop faces whose centroid z (mm) is below this '
+                        '(hides buried geometry x-rayed by --box crops)')
     args = p.parse_args()
 
     from dharmatiles.terrains.tile import build_meshes_for_render
@@ -49,6 +54,9 @@ def main():
     for m in meshes:
         if args.no_tree and m.metadata.get('material') in (6, 7, 8):
             continue
+        if args.no_base and (m.metadata.get('material') == 4
+                             or m.vertices[:, 2].min() < -1.0):
+            continue
         v, f = m.vertices, m.faces
         verts_all.append(v); faces_all.append(f + off); off += len(v)
         fc = getattr(m.visual, 'face_colors', None)
@@ -66,10 +74,14 @@ def main():
         cols_all.append(np.tile(c, (len(f), 1)))
     V = np.vstack(verts_all); F = np.vstack(faces_all); C = np.vstack(cols_all)
 
-    if args.box is not None:
-        x0, y0, x1, y1 = args.box
+    if args.box is not None or args.zclip is not None:
         fc = V[F].mean(axis=1)
-        keep = (fc[:,0]>=x0)&(fc[:,0]<=x1)&(fc[:,1]>=y0)&(fc[:,1]<=y1)
+        keep = np.ones(len(F), dtype=bool)
+        if args.box is not None:
+            x0, y0, x1, y1 = args.box
+            keep &= (fc[:,0]>=x0)&(fc[:,0]<=x1)&(fc[:,1]>=y0)&(fc[:,1]<=y1)
+        if args.zclip is not None:
+            keep &= fc[:,2] >= args.zclip
         F = F[keep]; C = C[keep]
         used = np.unique(F)
         remap = np.zeros(len(V), dtype=int); remap[used] = np.arange(len(used))
