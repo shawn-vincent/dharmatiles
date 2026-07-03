@@ -154,14 +154,30 @@ class ThatchGrass:
             np.maximum(scene.vegetation_support_z, scene.terrain_support_z,
                        out=scene.vegetation_support_z)
 
+        # ── Effective support: solid geometry only ───────────────────────────
+        # terrain_support_z may carry SOFT fields that are not geometry —
+        # notably the tree's exponential tufting falloff (full tree height
+        # at the trunk, decaying over ~5 mm), a hint for the old grass
+        # simulation.  Treating it as solid turned an 18 mm disc around
+        # every tree into "wall" and stripped the meadow bare.  Support is
+        # real only at (and just around) obstacle footprints.
+        support_eff = scene.terrain_z.copy()
+        if dist_mm is not None:
+            near_obs = dist_mm < 1.0
+            support_eff[near_obs] = scene.terrain_support_z[near_obs]
+        # Rebase vegetation support on solid geometry (earlier layers may
+        # have synced the phantom falloff into it); blades stamp their own
+        # tops back in during the build.
+        scene.vegetation_support_z[:] = np.maximum(scene.terrain_z, support_eff)
+
         # ── Drape surface + direction fields ─────────────────────────────────
         smooth = gaussian_filter(scene.terrain_z, sigma=_SMOOTH_MM / cell_w)
 
         # Rock climb: blades may walk up an obstacle's lower slope until it
         # rises _ROCK_CLIMB_MM above the substrate, then stop.  The tip rests
         # ON the stone (supported — FDM-safe) instead of stopping dead at a
-        # bare moat.  terrain_support_z carries the rock surface heights.
-        rock_rise = scene.terrain_support_z - scene.terrain_z
+        # bare moat.  support_eff carries the solid obstacle heights.
+        rock_rise = support_eff - scene.terrain_z
         passable  = rock_rise <= _ROCK_CLIMB_MM
         # "Wall" cells (too steep even for a leaning tip) deflect blades
         # instead of stopping them: the spine slides along the wall tangent,
@@ -336,7 +352,7 @@ class ThatchGrass:
             # Capping below the surface instead would embed the blade INSIDE
             # the stone — the "grass growing into the rock" artifact.
             zs_sub = _sample_grid(smooth, surface, pxs, pys)
-            zs_sup = _sample_grid(scene.terrain_support_z, surface, pxs, pys)
+            zs_sup = _sample_grid(support_eff, surface, pxs, pys)
             on_rock = zs_sup > zs_sub + 0.05
             zs = (np.where(on_rock, zs_sup + _ROCK_STANDOFF_MM, zs_sub)
                   + species.blade_clearance)
