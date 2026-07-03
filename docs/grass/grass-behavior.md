@@ -1,3 +1,7 @@
+> **SUPERSEDED (2026-07-03)** by `docs/design/grass-mound-thatch.md` (mound-thatch greenfield).
+> Interview & rationale: `docs/meta/history/2026-07-03-grass-greenfield-requirements.md`.
+> Kept for history; describes the flat field-simulation grass.
+
 # Grass — What It Should Do
 
 A plain-language description of the intended grass behavior.

@@ -259,12 +259,16 @@ def _build_carpet_blade_mesh(
     species_for_mesh = dataclasses.replace(species, blade_thickness=stamp_hmax)
 
     def _inside_mask(xi: float, yi: float) -> bool:
-        if placement_mask is None:
-            return True
         ix = int(xi / surface.cell_w)
         iy = int(yi / surface.cell_w)
         if not (0 <= ix < surface.grid_w and 0 <= iy < surface.grid_h):
             return False
+        # Obstacle footprints (rocks, trunks) end a carpet blade the same
+        # way a region boundary does — tubes must not run into stone sides.
+        if scene.obstacle_mask is not None and scene.obstacle_mask[iy, ix]:
+            return False
+        if placement_mask is None:
+            return True
         return bool(placement_mask[iy, ix])
 
     # Walk the same xy trajectory as the 3-D grower's step().

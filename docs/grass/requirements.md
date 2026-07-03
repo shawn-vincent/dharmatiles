@@ -1,3 +1,7 @@
+> **SUPERSEDED (2026-07-03)** by `docs/design/grass-mound-thatch.md` (mound-thatch greenfield).
+> Interview & rationale: `docs/meta/history/2026-07-03-grass-greenfield-requirements.md`.
+> Kept for history; describes the flat field-simulation grass.
+
 # Grass Layer — Functional Requirements
 
 Functional requirements for the grass generation layer.
