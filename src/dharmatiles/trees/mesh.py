@@ -693,6 +693,23 @@ def _bezier_clump_start(
     return start_pos, start_tan
 
 
+def _orient_outward(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
+    """Flip a winding-CONSISTENT mesh so its face normals point outward.
+
+    Cheap O(F) replacement for ``fix_normals()`` when the caller already
+    guarantees mutually-consistent face winding by construction: compute the
+    signed volume (divergence theorem) and reverse every face if it is
+    negative (net inward).  ``fix_normals`` additionally runs ``fix_winding``
+    — an O(E log E) edge-grouping pass — which is pure waste on a mesh that is
+    already consistent, and dominated tree-tile generation.
+    """
+    tri = mesh.vertices[mesh.faces]
+    vol = float(np.einsum("ij,ij->", tri[:, 0], np.cross(tri[:, 1], tri[:, 2])))
+    if vol < 0.0:
+        mesh.faces = np.ascontiguousarray(mesh.faces[:, ::-1])
+    return mesh
+
+
 def _build_foliage_cluster_mesh(
     *,
     tip_pos: np.ndarray,
@@ -857,7 +874,11 @@ def _build_foliage_cluster_mesh(
     _r0 = 1                                        # first ring vertex index
     for k in range(_N_THETA):                      # south pole fan
         k1 = (k + 1) % _N_THETA
-        _faces_list.append([0, _r0 + k1, _r0 + k])
+        # Wound to AGREE with the quad strips below (was [0, k1, k], which
+        # shared the ring edge in the same direction as the strip → globally
+        # inconsistent, forcing fix_winding).  With this order the whole clump
+        # is winding-consistent by construction and _orient_outward suffices.
+        _faces_list.append([0, _r0 + k, _r0 + k1])
     for ri in range(n_rings - 1):                  # quad strips
         a = 1 + ri * _N_THETA
         b = a + _N_THETA
@@ -869,12 +890,14 @@ def _build_foliage_cluster_mesh(
     _last = 1 + (n_rings - 1) * _N_THETA
     for k in range(_N_THETA):                      # north pole fan
         k1 = (k + 1) % _N_THETA
-        _faces_list.append([_np_idx, _last + k, _last + k1])
+        # Wound to AGREE with the quad strips (was [_np, k, k1]); see the
+        # south-fan note above.
+        _faces_list.append([_np_idx, _last + k1, _last + k])
     _ico_faces = np.array(_faces_list, dtype=np.int32)
 
     # ── Normals + two noise layers ────────────────────────────────────────────
     shaped  = trimesh.Trimesh(vertices=verts, faces=_ico_faces, process=False)
-    shaped.fix_normals()
+    _orient_outward(shaped)
     normals = shaped.vertex_normals.copy()
 
     # Noise scale: suppress noise near the narrow cone base so the coarse
@@ -904,7 +927,7 @@ def _build_foliage_cluster_mesh(
     verts = verts + normals * disp[:, np.newaxis]
 
     result = trimesh.Trimesh(vertices=verts, faces=_ico_faces, process=False)
-    result.fix_normals()
+    _orient_outward(result)
     return result
 
 

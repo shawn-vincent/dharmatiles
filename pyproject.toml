@@ -13,6 +13,11 @@ dependencies = [
     "embreex",  # fast Embree ray backend — trimesh falls back to a pure-Python
                 # ray engine without it, making mesh.contains ~90× slower (the
                 # leaf-oval containment gate dominated tree-tile generation).
+    "xxhash",   # fast hash backend for trimesh's mesh-cache validation — without
+                # it trimesh falls back to blake2b, run on every geometry-property
+                # access. Roughly halves embree per-call overhead in leaf
+                # placement (~14% off a tree tile). See docs/meta/history/
+                # 2026-07-03-organic-leaf-placer-performance-analysis.md.
     "scipy",
     "pyyaml",
     "manifold3d",
