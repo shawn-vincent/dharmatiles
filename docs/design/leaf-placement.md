@@ -1,13 +1,12 @@
 # Leaf Placement — Specification
-*Updated 2026-06-29.  Jitter now wired and working; several placement correctness fixes.
-Meridian-arc algorithm is now implemented.  Prior algorithm (Z-slice with uniform dZ)
-is retained below as "Current Algorithm (Deprecated)".*
+*Rewritten 2026-07-03.  The **organic union-surface placer** is the only leaf
+generator.  The three earlier placers (meridian-arc, greedy lowest-first,
+shoots) were deleted in commit `73e24f1`; their shared per-leaf machinery was
+distilled into `placement_leaf.py`.*
 
-*Full history: `docs/meta/history/2026-06-24-leaf-rendering-deep-history.md`,
-`docs/meta/history/2026-06-24-foliage-cluster-baldness.md`,
-`docs/meta/history/2026-06-25-meridian-arc-placement-design-review.md`.
-Forward-looking design review (greedy vs. meridian, shoots/instancing ideas):
-`docs/meta/history/2026-07-02-fable-leaf-placement-design-review.md`.*
+*Requirements source: `docs/meta/history/2026-07-02-foliage-greenfield-requirements.md`.
+Complete development history (all four placers, every iteration, why organic
+won): `docs/meta/history/2026-07-03-leaf-placement-complete-history.md`.*
 
 ---
 
@@ -15,664 +14,350 @@ Forward-looking design review (greedy vs. meridian, shoots/instancing ideas):
 
 How individual leaves are placed on foliage clusters in the tree generator.
 Foliage clusters are the bumpy green blobs at the tip of each terminal branch.
-Leaves are separate 3D geometry (watertight solids) sitting on the cluster surface.
+Leaves are separate 3D geometry (watertight solids) seated on the cluster
+surface.
 
 Implementation files:
-- `src/dharmatiles/trees/leaf.py` — leaf geometry primitives (`compute_leaf_geometry`,
-  `build_leaf_surface`, `solidify_leaf`, `boundary_loop`)
-- `src/dharmatiles/trees/placement.py` — placement algorithm (`place_leaves_on_mesh`,
-  `_contact_angle_for_mesh`, `_leaf_contact_candidates`, `LeafPlacementStats`)
-- `src/dharmatiles/trees/mesh.py` — `_contact_angle_for_sphere` (sphere-radius seed for
-  the mesh contact search), meridian helpers (`_build_meridians`,
-  `_compute_row_z_positions`, `_interpolate_meridian_normal`)
+- `src/dharmatiles/trees/placement_organic.py` — the placer:
+  `place_leaves_organic`, union surface, normal-aware Poisson grid, direction
+  field, shingle standoffs, branch-collision cull.
+- `src/dharmatiles/trees/placement_leaf.py` — shared per-leaf machinery:
+  `LeafPlacementStats`, `_attempt_leaf` (the full seat → build → cull
+  pipeline for one leaf), `_seat_oval_tilt`, `_leaf_frame_and_oval`, surface
+  sampling/projection helpers, seat constants.
+- `src/dharmatiles/trees/leaf.py` — leaf geometry primitives:
+  `build_leaf_surface`, `build_leaf_oval_offsets`, `solidify_leaf`
+  (see `docs/design/leaf-solidification.md`).
+- `src/dharmatiles/trees/mesh.py` — the single call site: all clusters of a
+  tree are placed in ONE `place_leaves_organic` call, with the branch tubes
+  passed as `avoid_meshes`.
 
 ---
 
-## Foliage Cluster Shape
+## Requirements (why the algorithm looks like this)
 
-The cluster is a deformed icosphere built from three sections:
+From the 2026-07-02 greenfield interview, after all three prior placers were
+judged unacceptable on renders:
 
-1. **Back hemisphere** (radius `r_wood`, behind `start_pos`) — round cap hiding the
-   entry stub where the branch tube enters the cluster.
-2. **Cone body** (`r_wood` → `r_foliage`, swept along the Bézier spine `start_pos` →
-   `tip_pos`) — tapered tube following the branch direction.  Each cross-section ring
-   is offset perpendicular-upward by a smoothly-varying fraction of its radius, so the
-   branch runs along the cluster bottom without protruding through the skin.
-3. **Forward dome** (radius `r_foliage`, ahead of `tip_pos`) — rounded nose, offset
-   upward so the branch bottom aligns with the dome equator.
+1. **Total coverage** — no bare patches on any surface above the FDM
+   underside limit.  This was the #1 failure of every prior attempt.
+2. **Organic arrangement** — no visible rows, rings, bands, or grids.
+3. **Overlap with distinct heights** — overlapping leaves must sit at
+   visibly different standoffs from the substrate so each reads as its own
+   leaf.  Overlap density is one knob (moderate ~50% → light ~15%).
+4. **Union seams** — the multi-cluster canopy is tiled as ONE surface;
+   leaves flow through inside corners; no leaf buried in a neighbour.
+5. **Direction** — down-slope with smooth (non-i.i.d.) ±variation.
+6. **Undersides** — no discrete hanging leaves below the printability floor.
+7. **Supportless FDM**, drybrush-friendly relief.
+8. **Performance** — < 5 s leaf placement on a full tree (~30 clusters); no
+   per-leaf mesh scans; embree only; cheap-reject before every build.
 
-Noise is applied after geometry: fine Gaussian (σ=0.05 mm) for grain, coarse smooth
-(4 mm cell, ±1 mm) for silhouette variation.  Both layers are shifted inward (subtract
-peak) so the smooth envelope is the outer bound and the branch always stays buried.
-
-The cluster is **NOT axially symmetric in world space**:
-- The cone body follows a curved Bézier spine, not a straight axis.
-- The perpendicular-upward offset is different on each side (depends on the dot product
-  of the ring normal with the world-up direction).
-- For tilted branches the world-Z cross-sections are ellipses, not circles; the longer
-  axis of the ellipse lies in the plane containing the branch and world-up.
-
-This asymmetry is the fundamental reason a single global "outward direction" or a
-single per-Z-level surface slope is insufficient for accurate leaf placement.
-
-The meridian-arc placement algorithm has **no knowledge of this internal structure**.
-It treats the shaped mesh as an opaque closed surface and derives everything it needs
-— row positions, surface normals, local radii — directly from horizontal cross-sections
-and meridian curves.  The algorithm would work identically on a pumpkin, a teardrop,
-a sideways egg, or any other mesh satisfying the constraints described in the next
-section.
+Style target: Animal Crossing (New Horizons) trees — large discrete chunky
+leaves densely shingling blobby cluster masses — but with the visible banding
+replaced by blue-noise placement.
 
 ---
 
-## Leaf Geometry
+## Algorithm Overview
 
-A leaf is an ovate, keeled blade:
+```
+cluster solids (real, noised)
+        │  boolean union (manifold)
+        ▼
+union placement surface  ──►  area-weighted candidate over-generation
+        │                     (~10 × area / spacing²)
+        ▼
+normal-aware maximal Poisson-disk dart throw  ──►  roots (+ coverage verify)
+        │
+        ▼
+per-root: source-cluster attribution (batched contains)
+          growth direction  = down-slope ⊕ positional angle field
+          shingle standoff  = height-sorted accumulation over tip conflicts
+          zone factor st    = smoothstep(surface normal z)
+        │
+        ▼
+per-root _attempt_leaf:  equal-depth oval seat → rigid blade↔oval frame
+          → oval containment guard → build blade (curl/lift/arch by zone)
+          → printability skew → belly-dip seat → standoff lift → neck gate
+          → base tuck → tip tuck → burial cull (with bury-lift) → solidify
+        │
+        ▼
+branch-collision cull (blade inside an EXPOSED branch tube)
+        │
+        ▼
+watertight leaf solids, attributed per source cluster + stats
+```
 
-- **Outline**: teardrop, peak width at ≈ 1/3 from base, pointed tip, rounded base.
-- **Cross-section**: quartic Bézier dome rising from the midrib crease.
-- **Crease**: narrow tanh V-fold at the midrib.
-- **Walls**: `solidify_leaf()` adds walls from the perimeter down to the cluster
-  surface via raycast, plus a root cap.  The result is a watertight closed solid.
+### 1. Union placement surface
 
-The keel (a V-ridge on the underside) exists in `build_leaf_mesh()` but is **not used**
-by the foliage placement path.  The foliage path uses `build_leaf_surface()` +
-`solidify_leaf()` only.
+The (noised) cluster solids are boolean-unioned into ONE mesh
+(`trimesh.boolean.union`, manifold engine).  All placement queries —
+sampling, normals, seating, containment — run against it.  Inside corners
+between clusters become ordinary creases of the union; "no leaf buried in a
+neighbour" is free because there are no neighbours.  This is the single move
+that dissolved the cross-cluster seam problem all prior placers fought
+reactively.
 
-### Leaf parameters (all on `Tree` layer)
+### 2. Coverage by normal-aware maximal Poisson-disk
+
+Candidates are over-generated area-weighted on the union surface
+(`_ORGANIC_CANDIDATE_FACTOR = 10` × area / spacing²), with smooth barycentric
+vertex normals, then dart-thrown to saturation against an exact-distance
+grid.  Maximality ⇒ every placeable surface point lies within one spacing
+radius of an accepted root ⇒ **no bare patch wider than 2×spacing, by
+construction** — coverage is guaranteed by the sampling scheme, not tuned.
+
+**The grid is normal-aware** (`_root_blocked_n`).  A plain Euclidean disk
+test fails at union seams: the two walls of a seam-V are only 1–2 mm apart
+*through space*, so a root on one wall blocks candidates on the opposite wall
+and every crease grows a bald band beside it.  Each root stores its surface
+normal; a candidate conflicts only with roots whose normal agrees
+(`dot > _ROOT_BLOCK_COS = 0.26`, ≈ 75°).  Opposite V-walls never block each
+other; same-wall neighbours always do.
+
+**Spacing is THE overlap knob**: `spacing = _ORGANIC_SPACING_FRAC × leaf_width`
+(0.45 = moderate AC-style shingle, ~0.8 = light touch).
+
+**Coverage verification** runs every placement: fresh samples on the union
+surface (one per `_ORGANIC_VERIFY_RES_MM²`), each of which must be covered by
+a root under the same normal-aware rule; the `uncovered-test-pts` count is
+printed in the placement summary line.
+
+Surfaces with normal z below `_ORGANIC_PLACEABLE_NORMAL_Z = −0.75` (deep
+undersides) are excluded — designed bare, per requirement 6.
+
+### 3. Anchor re-projection (roots ≠ anchors)
+
+The build machinery anchors the root oval's tip-half at its anchor point, so
+the blade spans 0.75·L up-slope but only 0.25·L down-slope of it — a 75/25
+bias that leaves bare bands wherever "up-slope" exits a face (e.g. over a
+crest).  Each root's anchor is therefore re-projected 0.25·L down-slope
+(`_project_to_surface`, ray drop from a 1 mm lift) so the blade covers ±L/2
+around the ACTUAL root and Poisson maximality over roots translates into
+visual coverage.  The drop budget is tight (~1 mm past the offset): a
+projection that falls further has crossed a crease onto a different wall, and
+anchoring there produces long-neck extrusions.
+
+### 4. Direction field
+
+Growth direction is steepest-descent (world-down projected onto the tangent
+plane; radial-outward fallback at the apex, `_growth_tangent`), rotated by a
+smooth positional angle field (`_direction_field_angle`): three positional
+sines with hash-derived phases, wavelength `_ORGANIC_DIR_WAVELEN_MM = 7`,
+peak deviation `_ORGANIC_DIR_VAR_DEG = 15°`.  Neighbouring leaves deviate
+*together* — coherent variation, not i.i.d. jitter, not combed.  15° (down
+from the requirement's ±25°) because divergent neighbours were the main
+source of blade sheets slicing through each other.
+
+### 5. Blade zones — continuous blend down the canopy
+
+A smoothstep zone factor `st` runs over the surface-normal z from 1 on
+clearly-upward faces (`nz ≥ _ORGANIC_ZONE_HI = +0.30`) to 0 on undersides
+(`nz ≤ _ORGANIC_ZONE_LO = −0.45`):
+
+| Property | scales with | upward face (st=1) | underside (st=0) |
+|---|---|---|---|
+| curl | st | min(leaf_curl_deg, 32°) | 0 |
+| tip lift | st | 1.2 mm | 0 |
+| shingle standoff | st | full | 0 |
+| tip-clearance ceiling | st | 0.02 + 2.4 mm | touching (0.02 mm) |
+| end-to-end arch | 1−st | 0 | 0.8 mm |
+| printability skew | st < 0.5 skips | applied | skipped |
+
+The pitched blade (upward faces) presents its face with an exaggerated
+upturned tip at the crown; the flush blade (undersides) is a pure end-to-end
+**arch** — a parabolic 4·s·(1−s) rise, both ends touching/tucked into the
+clump.  An arch can never re-enter the surface between its endpoints (curl
+always could, burying mid-blades in convex underside lobes), and a blade
+lying on the substrate inherits its printability, so no skew is needed.
+Because everything scales with `st`, curl and tip height fade *gradually*
+down the tree, reaching the fully surface-embedded arch blade exactly where
+overhangs would begin.
+
+### 6. Overlap layering — height-sorted shingle standoff
+
+`_shingle_standoffs` processes leaves bottom-up by root z; each leaf stands
+`_ORGANIC_SHINGLE_STEP_MM = 0.3` above the tallest already-processed leaf it
+conflicts with, capped at `_ORGANIC_SHINGLE_CAP_MM = 1.2` (+0.05 mm jitter).
+At the cap, ties are resolved by the tip lift (a tip always clears a base).
+A higher-rooted leaf can never sit under a lower-rooted one — the
+upper-over-lower guarantee is by construction, not statistical.
+
+**Conflicts are point-end only**: a conflict exists when one leaf's TIP comes
+within `_ORGANIC_TIP_CONFLICT_MM = 1.5` of the other leaf's base-end, centre,
+or tip.  Base-to-base adjacency is harmless nestling and must NOT propagate
+height, or the escalation runs away and every stitch neck stretches (the
+"long-neck chains" of iteration 4/6).
+
+The standoff lifts the finished blade along the seat normal AFTER the
+belly-dip seat — the root oval stays plugged; the stitch walls stretch.
+
+### 7. Per-leaf build (`_attempt_leaf` in placement_leaf.py)
+
+The full pipeline for one leaf, shared constants at top of module
+(`_ROOT_EMBED_MM = 0.75`, `_PROTRUSION_MM = 0.3`, `_SKEW_TIP_MARGIN_MM = 0.05`):
+
+1. **Equal-depth oval seat** (`_seat_oval_tilt`): the rigid root oval
+   (half-size, bottom-aligned — spans [L/2, L] of the leaf frame) is centered
+   at `candidate − embed·n̂` and pitched about its own center by an iterated
+   split-the-difference Newton step (≤3 iterations) until both ends sit
+   equally deep below the real noised surface, measured by embree rays.  The
+   mesh is only ever asked "how deep is this point?", never "where should
+   this point be?".  Failure (ray miss / tilt > 60°) falls back to a FLAT
+   seat for the organic placer (`seat_fallback_flat`) — a coverage hole is
+   worse than an imperfect seat.
+2. **Rigid frame** (`_leaf_frame_and_oval`): blade and oval are built in the
+   same frame — shared origin, direction, and length by construction — so the
+   1:1 index stitch in `solidify_leaf` yields a short tapered neck
+   everywhere.  Placing the oval is the primary act; the blade comes along
+   for the ride.
+3. **Oval containment guard**: both oval ends must be inside the union.
+4. **Build blade** (`build_leaf_surface`) with the zone-blended kwargs, then
+   apply the end-to-end **arch** ((1−st) × 0.8 mm parabolic offset along the
+   seat normal) for flush blades.
+5. **Printability skew** (pitched blades only): slide the whole blade
+   in-plane toward the base until its tip clears the oval tip in world z by
+   `_SKEW_TIP_MARGIN_MM` — otherwise the tip-end stitch walls overhang
+   downward (FDM-unprintable).  Culled if the slide exceeds
+   `_ORGANIC_MAX_SKEW_FRAC = 0.35 × L`.
+6. **Adaptive belly-dip seat**: locate the blade's canonical closest-approach
+   vertex (tip-half midrib vertex or tip with smallest normal displacement)
+   and translate the blade along ±normal so it sits exactly `_PROTRUSION_MM`
+   off the real surface (one contains probe + one ray).  Positive drops are
+   capped by the tip's remaining z-clearance so the skew guarantee holds.
+7. **Standoff lift** (the shingle layer, § 6).
+8. **Neck gate**: reject if `hypot(skew, net normal standoff)` exceeds
+   `_ORGANIC_MAX_NECK_MM = 1.8` — stretched stitch walls read as chimneys/fans
+   ("long-rooted leaves").
+9. **Base tuck** (`tuck_base`): pitch the blade about its belly dip until the
+   BASE end sits slightly embedded (target −0.2 mm).  The base was each
+   blade's high point; a proud base pokes over an upper leaf's low tip
+   regardless of standoff order.  An embedded base can never overlie
+   anything, and anchors better.
+10. **Tip tuck** (`tuck_tip`): pitch about the anchored base until the tip
+    floats no more than the zone-blended ceiling (`0.02 + st × 2.4 mm`).  On
+    undersides this pulls the tip down to touching — kills FDM
+    floating-island tips; both blade ends are rooted, nothing hangs.
+11. **Burial cull with bury-lift** (skipped for tuck_tip blades, whose ends
+    are intentionally buried): tip + lowest-curl-vertex probes must be
+    outside the mesh.  Per-probe classification: same-wall burial (exit
+    normal ≈ seat normal, e.g. a tip curling under a dome crown) lifts out by
+    measured depth, capped at 0.8 mm with the remainder kept tucked;
+    oblique-wall burial (union-seam inside corner, exit normal > 50° off) is
+    the desired tuck — kept; unmeasurable contains() grazes are kept.
+12. **Solidify** (`solidify_leaf`) — outer blade + mirrored oval + perimeter
+    wall stitch = watertight solid.
+
+### 8. Branch-collision cull
+
+`avoid_meshes` (the wood tubes, passed by the `build_branch_mesh` call site):
+a leaf is culled when any blade-surface vertex lies inside a branch tube AND
+outside the canopy union — the visible-skewer case.  Intersections with
+branches running INSIDE the canopy are invisible and kept: culling them holed
+the skin over every under-canopy branch (~20 % of all leaves on the test
+tree; the exposed-only rule culls the handful at wood–canopy junctions).
+
+### 9. Attribution, stats, determinism
+
+Leaves are attributed to the source cluster whose solid their root sits on
+(batched `contains` per cluster — per-leaf attribution was the full-tree hot
+spot).  Each cluster gets a `LeafPlacementStats`; the summary line prints
+placed/roots, spacing, build-fail, branch-cull, and uncovered-test-pts.
+Everything is hash-seeded (`_hash01`) — placement is deterministic per tree
+seed.
+
+---
+
+## Constants Reference
+
+Organic module constants (`placement_organic.py`; promote to `Tree(...)`
+config when the look settles):
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `_ORGANIC_SPACING_FRAC` | 0.45 | Root spacing / leaf width — THE overlap knob |
+| `_ORGANIC_CANDIDATE_FACTOR` | 10.0 | Candidate over-generation for maximality |
+| `_ORGANIC_ZONE_HI / _ZONE_LO` | +0.30 / −0.45 | smoothstep zone bounds on normal z |
+| `_ORGANIC_PLACEABLE_NORMAL_Z` | −0.75 | below → bare underside |
+| `_ORGANIC_TIP_LIFT_MM` | 1.2 | pitched-blade tip lift (crown effect, doubled 43a2d51) |
+| `_ORGANIC_PITCH_CURL_DEG` | 32.0 | curl cap for pitched blades (doubled 43a2d51) |
+| `_ORGANIC_TIP_CEIL_RANGE_MM` | 2.4 | tip-clearance ceiling range (doubled 43a2d51) |
+| `_ORGANIC_FLUSH_ARCH_MM` | 0.8 | underside arch mid-span rise |
+| `_ORGANIC_DIR_VAR_DEG / _WAVELEN_MM` | 15° / 7 mm | direction field |
+| `_ORGANIC_SIZE_JITTER` | 0.2 | per-leaf downward-only size jitter |
+| `_ORGANIC_SHINGLE_STEP/CAP_MM` | 0.3 / 1.2 | height-sorted standoff |
+| `_ORGANIC_TIP_CONFLICT_MM` | 1.5 | point-end conflict radius |
+| `_ORGANIC_MAX_NECK_MM` | 1.8 | stitch-wall neck gate |
+| `_ORGANIC_MAX_SKEW_FRAC` | 0.35 | printability-skew cull (× L) |
+| `_ROOT_BLOCK_COS` | 0.26 | normal-agreement threshold (≈75°) for the Poisson grid |
+| `_ORGANIC_VERIFY_RES_MM` | 0.9 | coverage-verification sample density |
+
+Seat constants (`placement_leaf.py`):
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `_ROOT_EMBED_MM` | 0.75 | oval embed below the real noised surface |
+| `_PROTRUSION_MM` | 0.3 | blade closest-vertex standoff off the surface |
+| `_SKEW_TIP_MARGIN_MM` | 0.05 | tip-over-oval z margin |
+| `_PROJECT_LIFT_MM` | 1.0 | re-projection ray lift |
+
+`Tree(...)` leaf parameters (layer.py):
 
 | Parameter | Default | Effect |
 |---|---|---|
-| `leaf_length_mm` | 4.5 | Leaf length, base to tip |
-| `leaf_width_mm` | 3.0 | Peak width at ≈ 1/3 from base |
-| `leaf_thickness_mm` | 0.24 | Dome height at peak |
-| `leaf_fold_angle_deg` | 6.0 | Midrib crease V-angle |
-| `leaf_inner_curve` | 1.5 | Crease-side Bézier shoulder |
-| `leaf_outer_curve` | 0.72 | Edge-side Bézier shoulder |
-| `leaf_curl_deg` | 40.0 | Concave tip curl (tip curves under) |
-| `leaf_lift_mm` | 3.0 | Additional tip lift above contact-angle position |
-| `leaf_h_overlap` | 0.2 | Fraction of leaf width that overlaps adjacent columns |
-| `leaf_v_overlap` | 0.5 | Fraction of leaf length that overlaps adjacent rows |
-| `leaf_arc_meridians` | 6 | Number of meridian curves for arc-length computation |
-| `leaf_arc_z_samples` | 64 | Number of fine Z levels for meridian sampling |
-| `leaf_angle_jitter_deg` | 24.0 | Azimuthal jitter: rotates T0 around up_hint by ±N° per leaf |
-| `leaf_pos_jitter` | 0.165 | Position jitter: nudges attachment point ±(pj × L) along T0 and lateral |
-| `leaf_cap_count` | 12 | **Deprecated by meridian-arc algorithm.** Apex cap leaves |
-| `leaf_base_count` | 5 | Not used in current paths (reserved) |
-
----
-
-## Contact Angle
-
-### What It Is
-
-The contact angle is the rotation about the lateral axis T (perpendicular to both the
-leaf growth direction and the cluster outward normal) that positions the leaf so its
-arch belly grazes the cluster surface.  The belly (the dip between the mid-leaf hump
-and the curl zone, at roughly s ≈ 0.7) is the first part of the leaf to contact the
-surface as the angle increases; the tip floats above the surface at this angle.
-
-Without the contact angle, the leaf lies flat on the surface with its arch curving the
-tip away from the surface.  The `solidify_leaf` wall-embedding raycast needs perimeter
-vertices to be close to the surface and just above it; without contact-angle tilt, many
-raycasts miss the mesh and produce stub walls.
-
-### Frame After Contact-Angle Rotation
-
-```
-up_hint  = outward surface normal at the attachment point (see meridian section below)
-T0       = gravity-down projected onto the tangent plane (with yaw jitter)
-ca       = contact angle (radians)
-
-tangent   = T0 * cos(ca) − up_hint * sin(ca)
-up_placed = up_hint * cos(ca) + T0 * sin(ca)
-```
-
-`build_leaf_surface(base_pos, tangent, up_placed, ...)` builds the leaf in this frame.
-
-### Sphere Seed (`_contact_angle_for_sphere`)
-
-`_contact_angle_for_sphere` approximates the contact angle assuming the local surface
-is a sphere of radius `local_r`.  It is computed once per unique `local_r` value and
-cached; its result is passed to `_contact_angle_for_mesh` as `initial_angle`.
-
-The leaf arch profile rises from the base to a hump at mid-leaf, then dips back down
-(the *belly*) before the curl in the final third recovers upward.  The belly dip is
-the point that presses against the sphere first as the contact angle grows — not the
-tip.  Using the tip would leave the belly buried inside the sphere surface.
-
-The dip is identified as `argmin(d_normal)` over the tip-half midrib (s > 0.5) plus
-the tip vertex, where `d_normal = d @ along_axis`:
-
-```
-col       = lower_grid.shape[1] // 2   # center column = geometric midrib
-tip_half  = s_int > 0.5
-cands     = [lower_grid[tip_half, col], tip_pt]   # tip-half midrib + tip
-
-d         = cands − base_pt            # displacements from base
-d_along   = d @ along_axis             # longitudinal component
-d_normal  = d @ normal_axis            # normal component (arch height)
-D_LN      = hypot(d_along, d_normal)
-
-dip       = argmin(d_normal)           # belly: smallest normal displacement
-```
-
-For the belly-dip vertex the sphere-grazing constraint `|rot_ca(d)|² = R²` reduces to:
-
-```
-ca = arctan2(d_normal[dip], d_along[dip]) + arcsin(D_LN[dip] / (2·R))
-```
-
-**Fallback** (when D_LN[dip] > 2R, i.e. leaf larger than the sphere):
-
-```
-along_comp  = dot(tip_pt − base_pt, along_axis)
-normal_comp = dot(tip_pt − base_pt, normal_axis)
-D           = hypot(along_comp, normal_comp)
-ca          = arccos(−D / (2·R)) − arctan2(along_comp, normal_comp)
-```
-
-### Mesh-Based Refinement (`_contact_angle_for_mesh`)
-
-`_contact_angle_for_sphere` gives a close approximation but is only exact on a true
-sphere.  `_contact_angle_for_mesh` refines it against the actual parent mesh using a
-bisection search.
-
-The same tip-half surface sample set used in the sphere seed (`_leaf_contact_candidates`)
-is evaluated at each candidate angle.  Distances are signed via the closest triangle
-normal: positive = inside the mesh (leaf penetrates), negative = outside (leaf floats).
-The target angle is the smallest `ca` where any contact candidate reaches zero signed
-distance (leaf surface just grazes the mesh).
-
-```
-ca_guess = _contact_angle_for_sphere(local_r, ...)   # sphere seed (cached)
-ca       = _contact_angle_for_mesh(
-               mesh, proximity, pt3d, T0, up_hint,
-               contact_candidates,
-               initial_angle=ca_guess,
-           )
-```
-
-The bisection starts from `ca_guess` and expands only as far as the actual mesh
-requires, so the search is fast on surfaces close to spherical and still correct on
-flat cone bodies or asymmetric dome regions.
-
-### Guard
-
-If `contact_angle >= π/2`, the leaf geometry cannot press against the surface
-(`D > 2·local_r`).  The leaf is placed **flat** (`ca = 0`) instead of being skipped —
-at the near-horizontal apex of the cluster, a flat leaf lying along the surface is
-visually correct.  This case is counted in `LeafPlacementStats.ca_clamped`.
-
-### What the Meridian Changes
-
-Previously, `up_hint` was computed as `normalize(pt3d − mesh_center_3d)` — the
-direction from the 3D centroid of the shaped mesh to the attachment point.
-
-This approximation is:
-- Correct on a true sphere (centroid IS the sphere center).
-- Wrong on the **cone body**: the centroid-to-point direction is not perpendicular to
-  the cone surface.  It is biased toward the centroid, which lies along the spine, not
-  along the cone's own axis.
-- Roughly correct on the **dome**, where the dome center is approximately at
-  `tip_pos + dome_shift * pu_tip`, which differs from `mesh_center_3d`.
-
-The meridian algorithm computes `up_hint` from the actual surface tangent at each
-attachment point (see below), giving geometrically exact normals on both the cone body
-and the dome.
-
----
-
-## Meridian-Arc Algorithm
-
-### Algorithm Scope — Works on Any Closed Mesh
-
-The meridian-arc algorithm is a **general surface-tiling algorithm**.  Its only input
-is a closed mesh and a set of leaf geometry parameters.  It knows nothing about how
-the mesh was constructed.
-
-**Required mesh properties:**
-
-1. **Closed (watertight).** Every edge is shared by exactly two faces.  No boundary
-   edges, no holes.  Required so that every horizontal cross-section produces a
-   complete, unambiguous closed polygon.
-
-2. **Simply-connected cross-sections.** Every horizontal plane that intersects the
-   mesh should produce one or more closed, simply-connected (no internal holes)
-   polygons.  The algorithm iterates over all polygons in a cross-section
-   (`polygons_full`), so a mesh that produces multiple disjoint blobs at some Z
-   levels is handled — each blob gets its own column of leaves.
-
-3. **Centroid inside each cross-section polygon.** The azimuthal meridian sampling
-   takes, for each angle φ, the outermost perimeter point in that direction from the
-   section centroid.  This requires the centroid to lie inside the polygon.  Satisfied
-   automatically by any convex mesh; satisfied in practice by any mesh without severe
-   concavities.  For deeply non-convex shapes (C-shapes, toroids), a fallback
-   strategy of taking the outermost of multiple intersections is needed.
-
-4. **Non-degenerate Z extent.** `z_top − z_bottom > leaf_length_mm`.  A mesh shorter
-   than one leaf length cannot accommodate even a single row.
-
-**Not required:** spherical, axially symmetric, upright, or any particular orientation.
-A cluster hanging upside-down, lying on its side, or shaped like a banana satisfies
-these constraints and the algorithm places leaves on it correctly.
-
----
-
-### Why Uniform dZ Fails
-
-The cluster surface is not a vertical cone.  The three sections — back hemisphere,
-cone body, forward dome — have very different surface-to-vertical-extent ratios:
-
-| Surface | dZ per unit arc | Coverage per dZ step |
-|---|---|---|
-| Cone body (30° branch) | moderate | moderate — roughly as expected |
-| Dome shoulder | small | large — rows compressed together |
-| Dome top (near apex) | very small | very large — wide bare zone |
-
-With a fixed `row_step = leaf_length × (1 − v_overlap)` in Z, each row step covers
-increasingly more surface area as the dome curves over from vertical to horizontal.
-The top zone gets far fewer rows than it needs for the requested overlap, and the
-last-placed row before the apex can be 5–8 mm of surface arc from the apex, well
-beyond one row_step in actual surface terms.
-
-### Meridian Curves
-
-A **meridian** is the intersection of the smooth cluster mesh with a vertical half-plane
-at a given azimuthal angle φ around the cluster's XY centroid.
-
-Sample `N` meridians at azimuthal angles φ₀, φ₁, …, φ_{N-1} evenly spaced in [0, 2π).
-For each meridian φᵢ:
-
-1. At each of `leaf_arc_z_samples` fine Z levels from `z_bottom` to `z_top`, take a
-   horizontal cross-section of the shaped mesh.
-2. Find the perimeter point at azimuthal angle φᵢ (closest to the half-plane at φᵢ).
-3. String these points into a polyline Mᵢ = [(x₀, y₀, z₀), (x₁, y₁, z₁), …].
-4. Compute cumulative arc length along Mᵢ: s_k = Σ |Mᵢ[k] − Mᵢ[k-1]|.
-5. At each point, compute the local surface tangent (T_r, T_z) in the r-z plane from
-   adjacent points:
-   ```
-   r_k = dist2d(M[k], cluster_centroid_xy)
-   (T_r, T_z) = normalize((r_{k+1} − r_{k-1}, z_{k+1} − z_{k-1}))
-   ```
-6. The outward surface normal in the r-z plane is:
-   ```
-   N_r = T_z         # rotate T by −90°
-   N_z = −T_r
-   ```
-7. Extend to 3D along the azimuthal direction:
-   ```
-   outward_3d = N_r * (cos(φᵢ), sin(φᵢ), 0) + N_z * (0, 0, 1)
-   ```
-
-This gives each meridian a table of (z, arc_length, outward_normal_3d) values.
-
-#### Why N=6?
-
-Six meridians give 60° angular resolution before interpolation.  For a gently-curved
-convex mesh, the angular variation of the surface normal between adjacent meridians is
-small (typically < 30°) so linear interpolation of normals is accurate.  At N=4 the
-angular gap is 90° and interpolation degrades on asymmetric or elongated meshes.  At
-N=12 the benefit is marginal and the cost doubles.  N is a public parameter
-(`leaf_arc_meridians`) so it can be increased for highly irregular meshes.
-
-### Row Z Positions
-
-**Average arc-to-Z mapping:**
-
-For each target surface arc value `s`, find the Z level `z` by averaging over all
-meridians:
-
-```python
-def avg_z_for_arc(s_target, meridians):
-    z_vals = []
-    for m in meridians:
-        z_vals.append(np.interp(s_target, m.arc_vals, m.z_vals))
-    return np.mean(z_vals)
-```
-
-**Pinned top and bottom rows:**
-
-- **Bottom anchor** `z_bot_anchor`: one leaf-length of surface arc above the lowest
-  Z level where the mesh surface is upward-facing enough to receive a leaf.
-
-  The world-Z bottom of the mesh may include surface area whose outward normal points
-  downward — the underside filter will reject all leaves placed there.  Anchoring
-  from the absolute mesh bottom wastes the slot and pushes the first useful row one
-  step higher than intended.  Instead, find the lowest Z where the averaged meridian
-  normal crosses the upward-facing threshold, then place the bottom row one
-  leaf-length of arc above that:
-
-  ```python
-  # Lowest Z where the averaged meridian normal is upward-facing enough
-  z_placeable  = _lowest_placeable_z(meridians, normal_z_threshold=-0.1)
-  z_bot_anchor = z_placeable + leaf_length_mm   # direct world-Z offset
-  ```
-
-  The arc-to-Z round-trip (`s_placeable = avg_arc_for_z(...)` followed by
-  `z_bot_anchor = avg_z_for_arc(s_placeable + L, ...)`) introduced a small positive
-  bias on steep cone sections, pushing the bottom row too high.  The direct world-Z
-  offset is used instead.
-
-  A leaf attached at `z_bot_anchor` hangs downward and covers the lowest visible
-  surface of the mesh.  This is computed entirely from the meridian data — no
-  knowledge of the mesh's internal structure is needed or used.
-
-- **Top anchor** `z_top_anchor`: placed just below the world-Z apex.  Use
-  `z_top = shaped.vertices[:, 2].max()` and step slightly below it to ensure the
-  cross-section is non-degenerate:
-  ```python
-  z_top_anchor = z_top - 0.25 * leaf_length_mm
-  ```
-
-**Integer optimization:**
-
-The surface arc between the two anchors, measured on the averaged meridian:
-
-```python
-s_bot = avg_arc_for_z(z_bot_anchor, meridians)   # inverse of avg_z_for_arc
-s_top = avg_arc_for_z(z_top_anchor, meridians)
-inner_arc = s_top - s_bot
-row_step_target = leaf_length_mm * (1.0 - leaf_v_overlap)
-N_gaps = max(1, round(inner_arc / row_step_target))
-actual_row_step_arc = inner_arc / N_gaps
-```
-
-Row Z positions:
-
-```python
-row_arc_positions = [s_bot + i * actual_row_step_arc for i in range(N_gaps + 1)]
-row_z_positions   = [avg_z_for_arc(s, meridians) for s in row_arc_positions]
-# row_z_positions[0]  = z_bot_anchor
-# row_z_positions[-1] = z_top_anchor
-```
-
-The resulting overlap will be `1 − actual_row_step_arc / leaf_length_mm`, which is the
-best integer-fit approximation to the requested `leaf_v_overlap`.  For typical parameters
-(v_overlap=0.5, leaf_length=4.5 mm) the error is < 0.05 on any cluster with 3+ rows.
-
-**No apex cap needed.**  The top anchor row places leaves just below the world-Z apex;
-the leaf geometry (arch + lift) covers the apex from that position.  The `leaf_cap_count`
-parameter is deprecated.
-
-### Per-Leaf Surface Normal (Azimuthal Interpolation)
-
-For each attachment point `pt3d` on the cross-section perimeter:
-
-1. Compute the azimuthal angle of the attachment point relative to the cluster XY centroid:
-   ```python
-   phi_leaf = atan2(pt3d[1] - centroid_xy[1], pt3d[0] - centroid_xy[0])
-   ```
-
-2. Find the two bracketing meridians: φᵢ ≤ φ_leaf < φᵢ₊₁ (wrapping at 2π).
-
-3. At the current row's Z level, interpolate between the two meridian normals:
-   ```python
-   n_i   = meridian_i.normal_at(z_row)
-   n_ip1 = meridian_ip1.normal_at(z_row)
-   w     = (phi_leaf - phi_i) / (phi_ip1 - phi_i)
-   up_hint = normalize(lerp(n_i, n_ip1, w))   # lerp + normalize ≈ slerp for small angles
-   ```
-
-4. Use `up_hint` for contact-angle computation and leaf placement.
-   ```python
-   local_r = dist(pt3d, mesh_centroid_3d)   # 3D centroid of whole mesh, NOT cross-section centroid
-   ca = _contact_angle_for_sphere(local_r, ...)
-   tangent   = normalize(T0 * cos(ca) - up_hint * sin(ca))
-   up_placed = normalize(up_hint * cos(ca) + T0 * sin(ca))
-   ```
-
-### Underside Filtering
-
-Any surface whose outward normal points sufficiently downward cannot hold a leaf —
-the contact-angle formula inverts and the leaf tangent ends up pointing upward into
-the mesh.  The guard:
-
-```python
-if up_hint[2] < -0.1:
-    continue   # skip downward-facing surface normals
-```
-
-…applies uniformly to every attachment point regardless of where on the mesh it sits.
-
-The bottom anchor placement (`z_placeable + leaf_length_mm`) already starts above the
-lowest upward-facing surface, so most underside positions are excluded before the
-placement loop runs.  The per-leaf guard is a safety net for positions that slip
-through (e.g. a non-convex indentation whose section centroid produces a misleading
-normal direction for a specific azimuth).
-
-The threshold −0.1 permits surfaces tilted up to ~96° from vertical (nearly
-horizontal underside) to receive leaves.  Tighten toward 0.0 to restrict leaves to
-more upward-facing surfaces; loosen toward −0.3 to allow leaves on steeper undersides.
-
-### Placement Loop (Full)
-
-```python
-meridians = _build_meridians(shaped, N=leaf_arc_meridians, Z_samples=leaf_arc_z_samples)
-row_z_positions = _compute_row_z_positions(meridians, leaf_length_mm, leaf_v_overlap,
-                                           z_top, z_bottom)
-
-for z_row in row_z_positions:
-    section = shaped.section(plane_origin=[0, 0, z_row], plane_normal=[0, 0, 1])
-    if section is None:
-        continue
-    path2d, xform = section.to_planar()
-    for poly in path2d.polygons_full:
-        n_col = ceil(poly.length / col_step)
-        centroid_3d = xform @ [*poly.centroid.coords[0], 0, 1]
-        for ci in range(n_col):
-            pt2 = poly.exterior.interpolate(ci / n_col, normalized=True)
-            pt3d = (xform @ [pt2.x, pt2.y, 0, 1])[:3]
-            phi_leaf = atan2(pt3d[1] - cx, pt3d[0] - cx)
-            up_hint  = _interpolate_meridian_normal(meridians, phi_leaf, z_row)
-            if up_hint[2] < -0.1:
-                continue
-            # 3D mesh centroid — NOT the cross-section centroid at z_row.
-            # Using the cross-section centroid drives local_r → 0 at the apex,
-            # pushing ca → π/2 and making apex leaves stand vertically.
-            local_r = dist(pt3d, mesh_centroid_3d)
-            ca_guess = _contact_angle_for_sphere(local_r, ...)   # belly-dip sphere seed (cached)
-            ca = _contact_angle_for_mesh(
-                mesh, proximity, pt3d, T0, up_hint,
-                contact_candidates, initial_angle=ca_guess,
-            )
-            _emit_leaf(pt3d, up_hint, ca=ca, key=(row_idx, ci))
-```
-
----
-
-## Current Algorithm (Deprecated)
-
-*Retained here for reference.  The meridian-arc algorithm replaces this.*
-
-### Z-Slice with Uniform dZ
-
-```python
-row_step = leaf_length_mm * (1.0 - v_overlap)
-z_row = z_bottom
-while z_row <= z_top:
-    section = shaped.section(...)
-    for poly in polygons:
-        outward = normalize(pt3d - mesh_center_3d)   # centroid-to-point approximation
-        local_r = dist(pt3d, slice_centroid)
-        _emit_leaf(pt3d, outward, ...)
-    z_row += row_step
-```
-
-**Failure mode:** fixed dZ ≠ fixed surface arc.  Near the world-Z apex, the dome
-surface is nearly horizontal, so each dZ step covers much more surface area than a
-step on the cone body.  The last few rows before the apex are spread far apart in
-surface terms, and the zone within `~2 × row_step` of the apex gets zero coverage
-from Z-slices.
-
-### Apex Cap (Deprecated)
-
-The apex cap was a special-case patch to cover the world-Z apex zone that Z-slices
-could not reach.  It placed `leaf_cap_count` leaves fanning outward from the apex
-vertex with `lift_mm = 0` (critical: lift would spike leaves upward).
-
-The cap was correct in spirit but brittle:
-- It used `argmax(dot(tip_t))` (branch-direction apex) before 2026-06-24, missing
-  the world-Z apex on tilted branches by 4–6 mm.
-- The `gap_mm` offset from the apex to avoid all leaves sharing one point was computed
-  analytically, not from the shaped mesh, and could place bases inside the noised mesh.
-- A `contact_angle >= π/2` fallback silently used `ca=0` instead of skipping.
-
-The meridian-arc algorithm eliminates the apex cap by pinning a proper row near the
-world-Z apex from the outset.
-
----
-
-## Examples
-
-### Example 1: Nearly Vertical Branch (tip_t ≈ [0, 0, 1])
-
-The cluster is roughly symmetric around world-Z.  All six meridians have nearly
-identical arc-to-Z curves.  The averaged mapping is very close to any individual
-meridian.  Row Z positions are distributed as:
-
-```
-z_top    = 48.3 mm   z_top_anchor = 47.2 mm  (top row pinned here)
-z_bottom = 30.1 mm   z_bot_anchor = 34.6 mm  (bottom row at arc = 4.5mm up)
-
-inner_arc ≈ 20 mm,  row_step_target ≈ 2.25 mm  →  N_gaps = 9
-row_z ≈ [34.6, 36.8, 39.0, 41.2, 43.4, 45.0, 46.3, 47.0, 47.2]
-```
-
-The rows compress toward the top because the dome surface curves over — but they now
-correctly track surface arc distance rather than vertical distance.  Coverage is
-uniform from bottom to apex.
-
-Surface normals from the six meridians are nearly identical at each Z level (cluster
-is symmetric), so interpolation has no visible effect.  The result is similar to the
-current algorithm except for the apex zone.
-
-### Example 2: Moderate Tilt (tip_t ≈ [0.5, 0, 0.87], 30° from vertical)
-
-The cluster leans 30°.  The world-Z range is similar, but the cluster is no longer
-symmetric:
-
-- The upper-front side (toward +X) has a steeper cone surface.  Its meridian has
-  more arc per unit Z than the back side.
-- The world-Z apex is NOT the branch tip; it is on the dome on the upper-front side,
-  approximately 4–5 mm in Z above the branch-direction apex.
-
-**Row Z positions**: the averaged meridian has a slower arc-per-Z rise at the dome
-top than for the vertical case.  N_gaps may be one fewer (the dome extends less in Z
-and is covered by fewer rows).  The top anchor is correctly placed at the world-Z apex
-of the asymmetric dome, not at the branch tip.
-
-**Surface normals**: the front-side meridians have normals tilted more upward; the
-back-side normals tilt more backward.  A leaf placed on the front face gets `up_hint`
-tilted upward (correct — the front dome surface faces up-and-front).  A leaf on the
-back of the cone gets `up_hint` angled backward (correct — the cone back surface faces
-back-and-outward).  These differ by 20–30° from the centroid-to-point approximation.
-
-### Example 3: Steep Tilt (tip_t ≈ [0.85, 0, 0.53], 58° from vertical)
-
-The branch is nearly horizontal.  The cluster is elliptical in world-Z cross-section
-with an aspect ratio of roughly 1.6.  The world-Z range is much smaller than the
-branch-direction range.
-
-Critical differences from the vertical case:
-
-- The world-Z apex may be on the CONE BODY, not the forward dome.  The cone body
-  slopes upward steeply enough that its uppermost point exceeds the dome's world-Z
-  maximum.
-- The back hemisphere is partially above the cone body's equator.  The bottom anchor
-  (at arc = `leaf_length_mm`) may land in the back hemisphere zone; the underside
-  filter `up_hint[2] < -0.1` correctly excludes leaves that would face downward there.
-- The meridians on the upper side are much shorter in arc (steeper surface) than those
-  on the lower side (gentler slope toward underside).  The averaging reduces this to a
-  moderate arc length, and the actual row spacing is a compromise.
-
-For very steep clusters (>70° from vertical) the leaf coverage is intrinsically
-limited: only the upper 90–120° of arc is above the underside threshold, and the number
-of rows is small.  This is physically correct — a nearly-horizontal branch has a mostly
-downward-facing cluster that a viewer sees from the side, not the top.
-
----
-
-## Leaf Jitter
-
-Both jitter parameters are now active and wired through the full call chain.  Both
-are applied **after** `T0` is computed (so the surface frame is available) and
-**before** contact angle (so the contact angle adapts to the jittered position).
-
-### Angle jitter (`leaf_angle_jitter_deg`)
-
-Rotates the leaf's growth direction `T0` around the surface normal `up_hint` using
-Rodrigues' rotation.  The base point stays pinned; the tip swings azimuthally in the
-surface tangent plane.  Each leaf gets an independent random angle from
-`_hash01(seed, "ang_j", row_idx, ci)` scaled to `±leaf_angle_jitter_deg`.
-
-**Important:** use `_hash01` (from `._utils`, has fmix64 finalizer), NOT
-`_hash01_int / 2^64`.  Without the finalizer, varying only `ci` leaves the high bits
-of the hash nearly constant, collapsing all leaves in a row to the same jitter value.
-
-This is NOT a blade roll — the leaf stays flat against the surface.
-
-### Position jitter (`leaf_pos_jitter`)
-
-Nudges the attachment point in two independent random directions within the surface
-tangent plane:
-- Along `T0` (growth direction)
-- Along `cross(up_hint, T0)` (lateral)
-
-Scale is `pos_jitter * leaf_length_mm` per axis.  After nudging, `pt3d` is snapped
-back to the mesh surface via `ProximityQuery.on_surface()`.
-
-**Scale note:** earlier attempts used `pos_jitter * col_step` (≈0.5 mm) which was
-invisible at tile rendering scale.  `pos_jitter * L` (≈0.74 mm at L=4.5 mm) is the
-correct scale.
+| `leaves` | True | enable leaf placement (requires `foliage_clusters`) |
+| `leaf_length_mm` | 4.5 | leaf length, base to tip |
+| `leaf_width_mm` | 3.0 | peak width |
+| `leaf_thickness_mm` | 0.24 | dome height |
+| `leaf_fold_angle_deg` | 6.0 | midrib crease V-angle |
+| `leaf_inner_curve / leaf_outer_curve` | 1.5 / 0.72 | Bézier shoulders |
+| `leaf_curl_deg` | 40.0 | tip curl — capped at 32° by the placer, scaled by zone |
+| `debug_leaf_color` | False | per-leaf debug palette colouring |
+
+(The retired placers' parameters — `leaf_placement`, `leaf_lift_mm`,
+`leaf_h_overlap`, `leaf_v_overlap`, `leaf_angle_jitter_deg`,
+`leaf_pos_jitter`, `leaf_arc_meridians`, `leaf_arc_z_samples` — were removed
+in 73e24f1.)
 
 ---
 
 ## Known Open Items
 
-### 1. Leaf size not scaled to cluster size
-
-`leaf_length_mm` and `leaf_width_mm` are fixed per tree regardless of cluster size.
-On very small clusters (`r_tip < 2.5 mm`) `contact_angle → π/2` and all leaves are
-skipped, leaving a bare ball.  Consider scaling leaf geometry proportionally to
-`r_tip` so small clusters still get some coverage.
-
-### 3. Contact-angle sphere seed accuracy
-
-`_contact_angle_for_sphere` approximates local surface curvature as a sphere of radius
-`local_r`.  This is accurate on the dome and over-estimates on the flat cone body.
-`_contact_angle_for_mesh` corrects this by bisecting against the actual mesh, so the
-final `ca` is accurate regardless of local curvature.  The sphere seed only needs to
-be close enough to converge the bisection quickly — no further improvement is needed
-here.
-
-### 4. Meridian sampling near the back-hemisphere/cone seam
-
-The back hemisphere connects to the cone body at `start_pos`.  The surface normal
-changes direction sharply at this seam (hemisphere is curved; cone is flat).  A
-meridian polyline crossing this seam at a very acute angle may produce a spurious
-tangent spike.  Smoothing the tangent with a 3-point weighted average would suppress
-this.
-
-### 5. Diagnostic flag
-
-`DHARMATILES_DEBUG_LEAVES=1` should emit per-cluster row placement diagnostics
-per the protocol in `docs/meta/history/2026-06-24-systematic-algorithm-development.md`.
-This flag is not yet implemented for the meridian-arc algorithm.
+1. **Knob promotion** — the organic module constants (spacing/overlap above
+   all) are still module-level; promote the settled ones to `Tree(...)`
+   config.
+2. **Underside relief (Phase C of the greenfield plan)** — the designed-bare
+   below-floor zone could take a leaf-silhouette relief stamped into the
+   cluster surface (GrassCarpet-style).  Unexplored.
+3. **Sheet solidification (parked)** — replacing the oval+wall stitch with a
+   thin sheet + root tab (`_ORGANIC_SHEET_*` constants, unwired) if the
+   "pillow" read of the wall skirts ever matters again.
+4. **Leaf instancing** — the leaf solid is fully rigid; a prefab library +
+   rigid transforms would collapse per-leaf build cost if placement ever
+   needs to be faster (from the Fable design review; not currently needed at
+   ~6 s/tree).
 
 ---
 
 ## What Was Tried and Abandoned
 
-- **Embossed surface relief** — leaf shapes as vertex displacement on the icosphere.
-  Would be faster and print-safe but looks like scales.
-- **Branchlet/petiole stems** — tiny tubes growing from the cluster, leaf at the tip.
-  24+ commits; abandoned because a stem that bends downward creates an FDM undercut.
-- **Arc-parameterized placement (first attempt)** — rows/columns indexed by arc
-  position on the cluster surface.  Replaced by Z-slice because the outward direction
-  was wrong at the dome top, producing blade-on-edge artefacts, and the pole was
-  brittle.
-- **Binary-search contact angle** — `find_contact_angle_for_sphere` at 48 iterations
-  per leaf.  Replaced by the analytical closed-form + cache.
-- **Z-slice with uniform dZ (current code)** — correct for cylinders, wrong for the
-  dome.  Produces bald zones near the world-Z apex.  Patched six times with an apex-cap
-  special case that never fully solved the problem.  Replaced by meridian-arc.
+Short version — the full story with root-cause analysis is in
+`docs/meta/history/2026-07-03-leaf-placement-complete-history.md`:
+
+- **Embossed surface relief** — leaf shapes as displacement.  "Looks like
+  scales" (may return as the *underside* treatment, item 2 above).
+- **Branchlet/petiole stems** — 24+ commits; FDM undercuts.
+- **Z-slice rows with uniform dZ + apex cap** — bald zones near the dome
+  apex; patched six times, never solved.
+- **Meridian-arc rows** (`placement.py`, deleted) — correct arc-length row
+  spacing and true surface normals; still a (φ,z) parameterization forced
+  onto irregular unioned blobs; slow (~26 s/tree); judged ugly on render.
+- **Greedy lowest-first accretion** (`placement_greedy.py`, deleted) —
+  z-sorted dart throw; birthplace of the equal-depth oval seat, the rigid
+  blade↔oval frame, the printability skew, and the graze translation, all of
+  which survive in `placement_leaf.py`.  Coverage holes and pod-like reads
+  persisted; judged ugly.
+- **Shoots** (`placement_shoots.py`, deleted) — sprigs of 3–7 leaves in
+  herringbone; birthplace of the exact-distance root grid and the adaptive
+  belly-dip seat.  Judged ugly.

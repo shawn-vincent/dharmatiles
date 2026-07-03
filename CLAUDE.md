@@ -134,7 +134,10 @@ Tile (.tile.py) ──► build_tile_from_spec()
 | `layers/water.py` | `Water` — pool-floor reshape, displacement, ripples, volume mesh |
 | `trees/envelope.py` | `CanopyEnvelope` — axisymmetric canopy envelope dataclass |
 | `trees/skeleton.py` | `grow_skeleton()` — two-pass skeleton + `_branch_skeleton` BFS + `_compute_radii_bottom_up` |
-| `trees/mesh.py` | `build_tree_mesh()` — tapered cubic-Bezier tube mesh |
+| `trees/mesh.py` | `build_branch_mesh()` — tapered cubic-Bezier tubes, foliage cluster sweep, leaf placement dispatch |
+| `trees/leaf.py` | Leaf primitives: `build_leaf_surface`, `build_leaf_oval_offsets`, `solidify_leaf` |
+| `trees/placement_organic.py` | `place_leaves_organic` — union-surface maximal-Poisson leaf placer (the only leaf generator) |
+| `trees/placement_leaf.py` | Shared per-leaf machinery: `_attempt_leaf` seat→build→cull pipeline, `LeafPlacementStats` |
 | `trees/layer.py` | `Tree` — direct tile layer with `apply()` + `scatter()`; `_stamp_tree` obstacle stamping |
 | `bases/dungeonblocks.py` | DungeonBlocks socket-peg base; logo inset; STL export |
 | `bases/openlock.py` | OpenLOCK T-slot base via manifold3d CSG; STL export |
@@ -244,9 +247,28 @@ the apex club-top artefact returns immediately.
 Terminal nodes → `min_radius_mm`. Internal nodes → `(Σ r_child^e)^(1/e)` where
 `e = branch_exponent`. Root radius is fully derived (not configured).
 
-**Mesh (`build_tree_mesh`):** each (parent, child) skeleton edge is a
+**Mesh (`build_branch_mesh`):** each (parent, child) skeleton edge is a
 tapered cubic Bezier tube. Start/end tangents are `prior_dirs`, giving C1
 continuity at forks. A root flare anchors the trunk to the terrain surface.
+
+**Foliage & leaves:** each terminal branch gets a swept rounded-cone foliage
+cluster (`foliage_cluster_*` params below). Leaves are separate watertight
+solids placed by the **organic union-surface placer**
+(`trees/placement_organic.py`) — the only leaf generator (meridian/greedy/
+shoots placers were deleted 2026-07-03). The clusters are boolean-unioned
+into ONE placement surface; roots are dart-thrown to maximal Poisson-disk
+saturation with a normal-aware grid (total coverage by construction); blades
+point down-slope rotated by a coherent positional angle field; overlap is
+layered by height-sorted standoffs; blade shape blends continuously from
+curled/lifted on upward faces to a flush end-to-end arch on undersides
+(supportless FDM). Leaves whose blades skewer an exposed branch tube are
+culled. Per-leaf seat/build/cull machinery lives in
+`trees/placement_leaf.py`. Spec: `docs/design/leaf-placement.md`; history:
+`docs/meta/history/2026-07-03-leaf-placement-complete-history.md`. Leaf
+shape params on `Tree`: `leaves` (True), `leaf_length_mm` (4.5),
+`leaf_width_mm` (3.0), `leaf_thickness_mm` (0.24), `leaf_fold_angle_deg`,
+`leaf_inner_curve`, `leaf_outer_curve`, `leaf_curl_deg` (placer caps the
+effective curl at 32°).
 
 **Key parameters:**
 
@@ -293,7 +315,7 @@ and `Tree` before `Grass` in the same `Region.layers`.
   prior blades.  (`GrassSeed.sort_key() = (upstream_dist, direction)` so seeds
   facing the tile boundary grow first.)
 - `Tree.apply()` calls `grow_skeleton()` per placed tree, then
-  `build_tree_mesh()`, then stamps the tree footprint into
+  `build_branch_mesh()`, then stamps the tree footprint into
   `terrain_support_z` and `obstacle_mask`.
 
 Placement is configured via `Uniform` or `Grouped` (both in `dharmatiles.scatter`):
@@ -343,7 +365,7 @@ src/dharmatiles/
   scatter/       direct placement layers: Rocks, Grass, Flowers + config, seed, distribute
   grass/         grass growth sub-pipeline: seed, grow, mesh, growers/, _geometry, layer, config
   layers/        soil.py, rocks.py (kernel), grass_carpet.py, water.py
-  trees/         Tree generator: envelope, skeleton, mesh, layer
+  trees/         Tree generator: envelope, skeleton, mesh, leaf, placement_leaf, placement_organic, bark, layer
   bases/         dungeonblocks.py, openlock.py
   terrains/      tile.py (main entry point + CLI)
 src/tiles/
