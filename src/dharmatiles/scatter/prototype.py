@@ -13,6 +13,7 @@ import numpy as np
 import trimesh
 
 from ..core.config import _RocksConfig, SpeciesConfig, GrassConfig as _RuntimeGrassConfig
+from ..grass.thatch import ThatchGrass as _ThatchGrass
 from ..core.tile import derive_seed
 from ..dist import bounds, sample
 from .config import Uniform, Grouped
@@ -110,16 +111,34 @@ class Rocks:
 
 # ── Grass ─────────────────────────────────────────────────────────────────────
 
-class Grass:
-    """Grow a field of 3D grass blades into a region layer list.
+class Grass(_ThatchGrass):
+    """All grass in the system is the accepted bushy mound-thatch grass
+    (Shawn, 2026-07-03): ``Grass`` is a compat shim over
+    ``dharmatiles.grass.thatch.ThatchGrass``, which builds its own mound
+    substrate, soil skirts against obstacles, and draped sheaf blades.
 
-    Pass a ``SpeciesConfig`` (sharable with a companion ``GrassCarpet``)
-    to specify blade geometry.  Pass ``placement=Grouped(...)`` to control
-    grouping and density; default is 3 Voronoi groups per square.
+    Legacy arguments are accepted but ``species`` and ``placement`` are
+    IGNORED — the accepted default species and grid placement always
+    apply, so every tile gets the same approved grass.  Use
+    ``ThatchGrass`` directly to experiment with a custom species.
 
-    Unlike ``Rocks``, ``Grass`` is a *field simulation*: each blade's
+    Keep ``Rocks``/``Tree`` before ``Grass`` in ``Region.layers`` (the
+    skirt, crowding, and deflection all read the stamped obstacles).
+    """
+
+    def __init__(self, species=None, *, placement=None,
+                 max_stack_height: float = 1.2):
+        super().__init__(None, max_stack_height=max_stack_height)
+
+
+class FloppyGrass:
+    """The pre-2026-07-03 field-simulation grass (superseded by Grass /
+    ThatchGrass; kept until the mound-thatch system is fully accepted —
+    see docs/design/grass-mound-thatch.md keep/delete inventory).
+
+    Unlike ``Rocks``, ``FloppyGrass`` is a *field simulation*: each blade's
     growth path depends on prior blades' shared occupancy grid.  Place
-    ``Rocks`` (and any other obstacle-stamping layers) before ``Grass``
+    ``Rocks`` (and any other obstacle-stamping layers) before it
     in ``Region.layers`` so blades route around existing footprints.
     """
 

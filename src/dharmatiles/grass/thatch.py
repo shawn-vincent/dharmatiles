@@ -51,6 +51,8 @@ _EDGE_MARGIN_MM    = 0.0    # spines may reach the tile edge exactly; blade
                             # side overhang is clamped to the tile wall after
                             # meshing (REQ-OUT-2), so grass runs edge-to-edge
 _SIZE_JITTER_LO    = 0.75   # downward-only size jitter (leaf-era iter-3 lesson)
+_MOUND_FADE_OBST_MM = 2.5   # mound field fades to zero against obstacle footprints
+_MOUND_FADE_MASK_MM = 2.0   # ... and at region-mask edges (tileability decision)
 _SKIRT_HEIGHT_MM   = 0.8    # soil berm rising against rock bases (turf line climbs)
 _SKIRT_WIDTH_MM    = 2.5    # gaussian falloff of the skirt from the footprint edge
 _ROCK_CLIMB_MM     = 1.3    # blades may ride up a rock's lower slope this far
@@ -89,14 +91,57 @@ class ThatchGrass:
         tile_w  = (gw - 1) * cell_w
         tile_h  = (gh - 1) * cell_w
 
+        dist_mm = None
+        if scene.obstacle_mask is not None and scene.obstacle_mask.any():
+            dist_mm = distance_transform_edt(~scene.obstacle_mask) * cell_w
+
+        # ── Mound substrate (the accepted lumpy relief, built in) ────────────
+        # The mound-thatch look is relief-first: a blob field added into
+        # terrain_z before any blade exists.  Faded at region-mask edges
+        # (tileability decision), against obstacle footprints (rocks placed
+        # earlier must not be buried), and at tile edges (inside the kernel).
+        from ..core.config import SoilConfig
+        from ..layers.soil import _compute_bump_field
+        mound_cfg = SoilConfig(
+            n_blobs=30,
+            blob_sigma=D.triangular(1.4, 1.9, 2.5),
+            blob_h_scale=D[0.6:1.05],
+            blob_power=2.5,
+            blob_aspect=D[0.55:0.95],
+            blob_shape_noise_amp=0.12,
+            blob_jitter=0.85,
+            blob_cluster_count=0,
+            n_small=6,
+            small_sigma=D[3.0:4.5],
+            small_h=D[0.7:1.4],
+            surface_texture_amp=0.0,
+            surface_texture2_amp=0.0,
+            edge_fade_mm=2.0,
+        )
+        bump = _compute_bump_field(
+            mound_cfg, derive_seed(surface.seed, 'thatch-mounds'),
+            gh=gh, gw=gw, cell_mm=cell_w,
+            n_squares=surface.cols * surface.rows,
+        )
+        if placement_mask is not None and not placement_mask.all():
+            mdist_mm = distance_transform_edt(placement_mask) * cell_w
+            bump *= 0.5 * (1.0 - np.cos(np.pi * np.clip(
+                mdist_mm / _MOUND_FADE_MASK_MM, 0.0, 1.0)))
+        if dist_mm is not None:
+            bump *= np.clip(dist_mm / _MOUND_FADE_OBST_MM, 0.0, 1.0)
+        old_support = scene.terrain_support_z.copy()
+        scene.displace_terrain(bump, placement_mask)
+        np.maximum(scene.terrain_support_z, old_support,
+                   out=scene.terrain_support_z)
+        np.maximum(scene.vegetation_support_z, scene.terrain_support_z,
+                   out=scene.vegetation_support_z)
+
         # ── Soil skirt against obstacle bases (rock-lapping) ─────────────────
         # A feathered berm rises against each rock so the turf line climbs
         # the stone instead of meeting it at a flat waterline.  Raising the
         # cells under the footprint too buries the rock base slightly —
         # intended (iceberg read).  Max gradient ≈ H·0.86/W ≈ 15°: FDM-safe.
-        dist_mm = None
-        if scene.obstacle_mask is not None and scene.obstacle_mask.any():
-            dist_mm = distance_transform_edt(~scene.obstacle_mask) * cell_w
+        if dist_mm is not None:
             skirt = _SKIRT_HEIGHT_MM * np.exp(-(dist_mm / _SKIRT_WIDTH_MM) ** 2)
             skirt[skirt < 1e-3] = 0.0
             skirt[scene.obstacle_mask] = 0.0   # rim berm only — don't bury the rock further

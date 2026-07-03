@@ -48,11 +48,9 @@ tile = Tile(
             id='meadow',
             selector=FloodFill(0.5, 0.75),
             layers=[
-                GrassCarpet(
-                    species=_species,
-                    placement=Grouped(groups_per_square=3),
-                ),
-                # Rocks first — stamp obstacle_mask so tree and grass steer around them
+                # Obstacle-stampers (Rocks, Tree) run before the carpet and
+                # grass: carpet tubes end at footprints instead of being
+                # impaled, and the thatch skirts/deflects around them.
                 Rocks(
                     r=D[2.0:3.5],
                     placement=Uniform(count_per_square=4),
@@ -67,6 +65,10 @@ tile = Tile(
                     leaf_length_mm=4.5,
                     leaf_width_mm=3.0,
                     leaf_curl_deg=32.0,
+                ),
+                GrassCarpet(
+                    species=_species,
+                    placement=Grouped(groups_per_square=3),
                 ),
                 Grass(
                     species=_species,

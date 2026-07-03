@@ -47,6 +47,10 @@ def main():
     for m in meshes:
         v, f = m.vertices, m.faces
         verts_all.append(v); faces_all.append(f + off); off += len(v)
+        fc = getattr(m.visual, 'face_colors', None)
+        if fc is not None and len(fc) == len(f) and fc[:, :3].any():
+            cols_all.append(fc[:, :3].astype(float) / 255.0)
+            continue
         mat = m.metadata.get('material')
         if mat is not None and mat in PALETTE:
             c = PALETTE[mat]
