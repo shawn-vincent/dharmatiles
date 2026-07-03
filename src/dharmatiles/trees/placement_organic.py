@@ -86,7 +86,7 @@ _ORGANIC_ZONE_LO: float = -0.45
 _ORGANIC_PLACEABLE_NORMAL_Z: float = -0.75
 
 # Tip clearance ceiling blend: ceiling = touch + st × this.
-_ORGANIC_TIP_CEIL_RANGE_MM: float = 1.2
+_ORGANIC_TIP_CEIL_RANGE_MM: float = 2.4
 
 # Direction field: down-slope rotated by a smooth positional angle field.
 # Kept modest: divergent neighbours are the main source of blade sheets
@@ -95,13 +95,14 @@ _ORGANIC_DIR_VAR_DEG: float = 15.0     # peak deviation from down-slope
 _ORGANIC_DIR_WAVELEN_MM: float = 7.0   # spatial wavelength of the field
 
 # Shingle pitch: every pitched blade's TIP floats this far above its base
-# level (the leaf builder's rigid tip rotation) — just enough to clear the
-# blade below (≈2× blade thickness), no more.  The aesthetic-judge pass
-# flagged 1.2 mm as the "artichoke" tell: tips flaring off the mass.  The
-# AC look wants blades HUGGING the mass, tips drooping down-slope; the
+# level (the leaf builder's rigid tip rotation).  0.6 mm (≈2× blade
+# thickness) was the hug-the-mass baseline after the aesthetic-judge pass
+# flagged flaring tips; now deliberately doubled to EXAGGERATE upturned
+# tips at the crown.  Scales with st, so the underside is untouched and
+# the smoothstep zone provides the transition down the canopy.  The
 # monotone standoff below (not the lift) owns the upper-over-lower
 # guarantee.
-_ORGANIC_TIP_LIFT_MM: float = 0.6
+_ORGANIC_TIP_LIFT_MM: float = 1.2
 
 # Per-leaf size jitter, downward only (max size = the configured leaf):
 # scale ∈ [1−jitter, 1].  Uniform stamped-looking leaves were judge item 8.
@@ -129,10 +130,12 @@ _ORGANIC_FLUSH_CURL_DEG: float = 0.0
 _ORGANIC_FLUSH_LIFT_MM: float = 0.0
 _ORGANIC_FLUSH_ARCH_MM: float = 0.8
 
-# Pitched-blade curl override: the configured 40° curl made every blade a
-# curling tongue that presents its EDGE (shaggy canopy); the AC read wants
-# flat plates presenting their FACE.  Gentle curl keeps a hint of droop.
-_ORGANIC_PITCH_CURL_DEG: float = 16.0
+# Pitched-blade curl cap: the configured 40° curl made every blade a
+# curling tongue that presents its EDGE (shaggy canopy); 16° kept flat
+# plates presenting their FACE.  Doubled to exaggerate upturned crown
+# tips (scales with st, so only clearly-upward faces feel the full cap;
+# a tile's leaf_curl_deg still caps below this).
+_ORGANIC_PITCH_CURL_DEG: float = 32.0
 
 # Neck gate: reject a blade whose accumulated in-plane slide + net normal
 # standoff would stretch the blade→oval stitch walls beyond this — the
