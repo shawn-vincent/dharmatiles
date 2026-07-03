@@ -56,29 +56,56 @@ here). Already installed in this env. Measured effect: **29.0 s → 25.0 s
 - Measured effect: **Tree layer 10.9 s → 5.48 s per scale** (clump build
   ~5.4 s → ~0.5 s). ~7 s off the tile.
 
-### ⏳ Lever 3 — stage-batch placement embree — NOT STARTED
-See the dedicated section below ("The big structural win"). Current state after
-Levers 1+2: placement is ~5 s/scale (~10 s/tile), of which embree
-(`contains` + rays) is the bulk. **Key enabling fact confirmed this session:**
-in the organic call each leaf's `_attempt_leaf` is *fully independent* —
-`neighbour_meshes=[]`, shingle standoffs are precomputed, and `avoid_meshes`
-are branches (not other leaves). So the per-leaf pipeline can be restructured
-into staged passes over all leaves (SoA) with **no cross-leaf dependency**;
-each stage becomes one batched embree call. This is the remaining work: a
-careful rewrite of the `_attempt_leaf` driver in `trees/placement_organic.py` /
-`trees/placement_leaf.py`, guarded by the golden gate above (tallies +
-vertex/face counts must match exactly).
+### ✅ Lever 3 — stage-batch placement embree — DONE & validated
 
-**Where the ~13 embree calls/leaf come from** (batch targets, in loop order):
-`_project_to_surface` (1 ray) · `_seat_oval_tilt` (≤3 × [contains(2)+ray(2)]) ·
-oval containment guard (1 contains) · belly-dip seat (1 contains + 1 ray) ·
-`tuck_base` (1 contains + 1 ray) · `tuck_tip` (1 contains + 1 ray) · burial
-cull / `bury_lift` (1–2 contains + 1 ray).
+Implemented as **request generators**, not a SoA rewrite: the per-leaf
+pipeline (`_attempt_leaf`, `_seat_oval_tilt`, `_project_to_surface`,
+`_points_inside_any`) is now written as generators that ``yield``
+embree requests — ``("contains", mesh, pts)`` / ``("ray", mesh, origins,
+dirs)`` — instead of calling embree inline.  Two drivers in
+`placement_leaf.py` execute them:
 
-Risk note: batching must reproduce the exact same threshold decisions per leaf
-(e.g. `bury_lift` same-wall classification, tuck rotation sign selection) or the
-placed/culled tallies drift. Machine-epsilon differences are acceptable (Lever 2
-already introduced ~2e-16 with zero tally change), but logic differences are not.
+- `_drive_scalar(gen)` — one generator, immediate call per request
+  (behaviourally identical to the old inline code; the public scalar
+  helpers are now thin wrappers over the generators).
+- `_drive_batched(gens)` — advances ALL per-leaf generators in rounds;
+  each round groups every pending same-kind/same-mesh request into ONE
+  embree call and hands each generator back its own slice (ray hits
+  remapped to generator-local indices).  Generators progress
+  independently — one leaf can be on seat iteration 3 while another is
+  at the tuck stage.
+
+`placement_organic.py` wraps each root's whole loop body (anchor
+re-projection → attempt → branch cull) in one `_leaf_job` generator and
+drives them all batched; stats/parts bookkeeping runs afterwards in root
+order, identical to the old sequential loop.
+
+This beats the planned SoA restructure on risk: the per-leaf math is the
+SAME code (only embree call sites became ``yield``), so threshold
+decisions can't drift.  Batching is safe because embree ``contains``
+(ray-parity per point) and first-hit ray queries are per-point/per-ray
+independent — same points in, same answers out, regardless of batch
+composition.
+
+**Validation — golden gate EXACT on both scales** (tallies incl.
+uncovered-test-pts, and export vertex/face counts):
+
+```
+DB: 1497/1838, build-fail=155, branch-cull=186, uncovered=35 → 527,340 v · 1,047,272 f
+OL: 1479/1811, build-fail=134, branch-cull=198, uncovered=38 → 503,991 v · 1,001,006 f
+```
+
+Plus a 50-point unit check: `_seat_oval_tilt` and `_project_to_surface`
+scalar vs batched results are exactly equal on a noised icosphere.
+
+**Measured effect:** placement 4.74 s → 3.12 s (DB) and 4.78 s → 3.08 s
+(OL) per scale; Tree layer 5.4 s → ~3.6 s per scale.  Instrumented embree
+totals for the tile: **contains 48.0k calls / 4.14 s → 3.7k calls /
+0.71 s; rays 47.9k calls / 3.76 s → 1.7k calls / 0.62 s** (−6.6 s of
+embree; residual calls are mostly the per-branch-tube cull groups).  The
+remaining ~3 s/scale of placement is non-embree Python/numpy: union
+boolean, Poisson dart-throw, per-leaf `build_leaf_surface`/`solidify` —
+outside this lever's scope.
 
 ---
 

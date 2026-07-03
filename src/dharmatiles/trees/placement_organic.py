@@ -51,9 +51,10 @@ from ._utils import _hash01, _safe_norm
 from .placement_leaf import (
     _ROOT_EMBED_MM,
     LeafPlacementStats,
-    _attempt_leaf,
+    _attempt_leaf_gen,
+    _drive_batched,
     _growth_tangent,
-    _project_to_surface,
+    _project_to_surface_gen,
     _rotate_about,
     _sample_surface,
 )
@@ -453,36 +454,20 @@ def place_leaves_organic(
     )
 
     avoid = list(avoid_meshes) if avoid_meshes else []
-    n_branch_cull = 0
 
-    n_build_fail = 0
-    for i in range(n_roots):
+    # ── Per-leaf jobs, driven BATCHED ─────────────────────────────────────
+    # Each root's whole pipeline (anchor re-projection → seat/build/tuck →
+    # branch cull) is one request generator; _drive_batched advances all of
+    # them in rounds, grouping every same-kind embree query of a round into
+    # ONE call.  The per-leaf math is the shared scalar pipeline, unchanged
+    # — embree contains/first-hit results are per-point independent, so the
+    # outcomes are identical to the old leaf-at-a-time loop; only the ~85 µs
+    # fixed per-call overhead (~26 tiny calls per leaf) is amortised.
+    def _leaf_job(i: int, Ls: float, Ws: float, kw: dict, st: float, flush: bool,
+                  lseed: int):
         base = bases[i]
         nrm = root_nrm[i]
-        # Zone factor: 1 = upward face (pitched blade), 0 = underside
-        # (arch-embedded blade), smooth in between.
-        tz = min(max((float(nrm[2]) - _ORGANIC_ZONE_LO)
-                     / (_ORGANIC_ZONE_HI - _ORGANIC_ZONE_LO), 0.0), 1.0)
-        st = tz * tz * (3.0 - 2.0 * tz)
-        flush = st < 0.5
         T_leaf = dirs_leaf[i]
-        lseed = int(_hash01(seed0, "org-leaf", i) * 2 ** 31)
-
-        src = int(src_idx[i])
-        stats = stats_list[src]
-        stats.n_attempted += 1
-
-        # Per-leaf size jitter, downward only: max stays at the configured
-        # (printable) leaf size.
-        scale = 1.0 - _ORGANIC_SIZE_JITTER * _hash01(seed0, "org-size", i)
-        Ls = L * scale
-        Ws = W * scale
-        kw = dict(
-            leaf_kw,
-            length_mm=Ls, width_mm=Ws,
-            curl_deg=st * min(float(curl_deg), _ORGANIC_PITCH_CURL_DEG),
-            lift_mm=st * _ORGANIC_TIP_LIFT_MM,
-        )
 
         # Centre the blade on the root.  The build machinery anchors the
         # oval's tip-half at its anchor point, so the blade spans 0.75·L
@@ -494,13 +479,13 @@ def place_leaves_organic(
         # Tight drop budget: a projection that falls further than ~1 mm has
         # crossed a crease onto a different wall — anchoring there put the
         # blade millimetres from its root oval (long-neck extrusions).
-        proj = _project_to_surface(
+        proj = yield from _project_to_surface_gen(
             union, base + 0.25 * Ls * T_leaf, nrm,
             1.0 + 0.25 * Ls + 1.0,
         )
         anchor, anchor_n = proj if proj is not None else (base, nrm)
 
-        result, reason = _attempt_leaf(
+        result, reason = yield from _attempt_leaf_gen(
             union, [], anchor, anchor_n, T_leaf, Ls, Ws, kw, lseed,
             standoff_mm=st * float(standoffs[i]),
             bury_lift=True,
@@ -513,6 +498,71 @@ def place_leaves_organic(
             tuck_tip_max_mm=0.02 + st * _ORGANIC_TIP_CEIL_RANGE_MM,
             arch_mm=(1.0 - st) * _ORGANIC_FLUSH_ARCH_MM,
         )
+        if result is None:
+            return None, reason
+
+        # Branch-collision cull: blade surface (first half of the solid's
+        # vertex block) must not intersect any EXPOSED branch.  A blade
+        # vertex inside a wood tube that is itself inside the canopy union
+        # is invisible and harmless — culling those holes the skin
+        # wherever a branch runs under it (~20% of all leaves).  Only a
+        # vertex that is inside a branch AND outside the canopy skewers
+        # visibly.
+        if avoid:
+            solid = result[0]
+            blade_v = solid.vertices[: len(solid.vertices) // 2]
+            in_branch = np.zeros(len(blade_v), dtype=bool)
+            for _bm in avoid:
+                _bb = _bm.bounds
+                if (base < _bb[0] - Ls).any() or (base > _bb[1] + Ls).any():
+                    continue
+                in_branch |= np.asarray(
+                    (yield ("contains", _bm, blade_v)), dtype=bool,
+                )
+            if in_branch.any() and (~np.asarray(
+                (yield ("contains", union, blade_v[in_branch])), dtype=bool,
+            )).any():
+                return result, "branch"
+        return result, None
+
+    jobs = []
+    flush_flags = np.zeros(n_roots, dtype=bool)
+    for i in range(n_roots):
+        nrm = root_nrm[i]
+        # Zone factor: 1 = upward face (pitched blade), 0 = underside
+        # (arch-embedded blade), smooth in between.
+        tz = min(max((float(nrm[2]) - _ORGANIC_ZONE_LO)
+                     / (_ORGANIC_ZONE_HI - _ORGANIC_ZONE_LO), 0.0), 1.0)
+        st = tz * tz * (3.0 - 2.0 * tz)
+        flush = st < 0.5
+        flush_flags[i] = flush
+        lseed = int(_hash01(seed0, "org-leaf", i) * 2 ** 31)
+        # Per-leaf size jitter, downward only: max stays at the configured
+        # (printable) leaf size.
+        scale = 1.0 - _ORGANIC_SIZE_JITTER * _hash01(seed0, "org-size", i)
+        Ls = L * scale
+        Ws = W * scale
+        kw = dict(
+            leaf_kw,
+            length_mm=Ls, width_mm=Ws,
+            curl_deg=st * min(float(curl_deg), _ORGANIC_PITCH_CURL_DEG),
+            lift_mm=st * _ORGANIC_TIP_LIFT_MM,
+        )
+        jobs.append(_leaf_job(i, Ls, Ws, kw, st, flush, lseed))
+
+    outcomes = _drive_batched(jobs)
+
+    # ── Bookkeeping in root order (identical to the old sequential loop) ──
+    n_branch_cull = 0
+    n_build_fail = 0
+    for i in range(n_roots):
+        base = bases[i]
+        flush = bool(flush_flags[i])
+        src = int(src_idx[i])
+        stats = stats_list[src]
+        stats.n_attempted += 1
+
+        result, reason = outcomes[i]
         if result is None:
             n_build_fail += 1
             if reason.startswith("buried"):
@@ -527,29 +577,11 @@ def place_leaves_organic(
         if debug_outcomes is not None:
             debug_outcomes.append((base.copy(), "placed"))
         solid, tangent_leaf, skew_mm, tip_clr, drop_mm = result
-
-        # Branch-collision cull: blade surface (first half of the solid's
-        # vertex block) must not intersect any EXPOSED branch.  A blade
-        # vertex inside a wood tube that is itself inside the canopy union
-        # is invisible and harmless — culling those holes the skin
-        # wherever a branch runs under it (~20% of all leaves).  Only a
-        # vertex that is inside a branch AND outside the canopy skewers
-        # visibly.
-        if avoid:
-            blade_v = solid.vertices[: len(solid.vertices) // 2]
-            in_branch = np.zeros(len(blade_v), dtype=bool)
-            for _bm in avoid:
-                _bb = _bm.bounds
-                if (base < _bb[0] - Ls).any() or (base > _bb[1] + Ls).any():
-                    continue
-                in_branch |= np.asarray(_bm.contains(blade_v), dtype=bool)
-            if in_branch.any() and (~np.asarray(
-                union.contains(blade_v[in_branch]), dtype=bool,
-            )).any():
-                n_branch_cull += 1
-                if debug_outcomes is not None:
-                    debug_outcomes.append((base.copy(), "fail-branch"))
-                continue
+        if reason == "branch":
+            n_branch_cull += 1
+            if debug_outcomes is not None:
+                debug_outcomes.append((base.copy(), "fail-branch"))
+            continue
 
         row_idx = int((float(base[2]) - z_mins[src]) / expected_row_step)
         stats.base_positions.append(base.copy())

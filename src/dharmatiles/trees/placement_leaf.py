@@ -110,6 +110,108 @@ def _rotate_about(v: np.ndarray, axis: np.ndarray, angle_rad: float) -> np.ndarr
     return v * c + np.cross(axis, v) * s + axis * float(np.dot(axis, v)) * (1.0 - c)
 
 
+# ── Batched embree dispatch ───────────────────────────────────────────────────
+# The seat/build/cull pipeline below is written as GENERATORS that yield embree
+# requests instead of calling embree inline:
+#
+#     inside          = yield ("contains", mesh, pts)           # → bool (n,)
+#     loc, ridx, tri  = yield ("ray", mesh, origins, dirs)      # → first hits
+#
+# Two drivers execute the requests.  :func:`_drive_scalar` runs ONE generator
+# with an immediate embree call per request — behaviourally identical to the
+# old inline code.  :func:`_drive_batched` advances MANY generators in rounds,
+# concatenating every same-kind/same-mesh request of a round into ONE embree
+# call.  ``contains`` (ray-parity per point) and first-hit ray queries are
+# per-point/per-ray independent, so batching returns identical results — it
+# only amortises the ~85 µs fixed per-call overhead that dominated placement
+# (~26 one-or-two-point calls per leaf; see docs/meta/history/
+# 2026-07-03-organic-leaf-placer-performance-analysis.md).
+
+def _exec_request(req):
+    """Execute one embree request tuple immediately (scalar path)."""
+    if req[0] == "contains":
+        _kind, mesh, pts = req
+        return np.asarray(mesh.contains(pts), dtype=bool)
+    _kind, mesh, origins, dirs = req
+    loc, ridx, tri = mesh.ray.intersects_location(origins, dirs, multiple_hits=False)
+    return (
+        np.asarray(loc, dtype=float).reshape(-1, 3),
+        np.asarray(ridx, dtype=int),
+        np.asarray(tri, dtype=int),
+    )
+
+
+def _drive_scalar(gen):
+    """Run one request generator to completion; return its return value."""
+    resp = None
+    try:
+        while True:
+            resp = _exec_request(gen.send(resp))
+    except StopIteration as stop:
+        return stop.value
+
+
+def _drive_batched(gens: list) -> list:
+    """Advance many request generators in rounds with grouped embree calls.
+
+    Each round gathers every pending generator's request, groups them by
+    ``(kind, mesh)``, executes one embree call per group, and hands each
+    generator back exactly the slice of results its own request produced
+    (ray hits are remapped to generator-local ray indices).  Generators
+    progress independently — one can be on its third seat iteration while
+    another is already at the tuck stage; rounds simply mix stages.
+
+    Returns the generators' return values, in input order.
+    """
+    results: list = [None] * len(gens)
+    pending: dict[int, tuple] = {}
+    for i, g in enumerate(gens):
+        try:
+            pending[i] = g.send(None)
+        except StopIteration as stop:
+            results[i] = stop.value
+    while pending:
+        groups: dict[tuple, list[int]] = {}
+        for i, req in pending.items():
+            groups.setdefault((req[0], id(req[1])), []).append(i)
+        responses: dict[int, object] = {}
+        for idxs in groups.values():
+            reqs = [pending[i] for i in idxs]
+            kind, mesh = reqs[0][0], reqs[0][1]
+            counts = [len(r[2]) for r in reqs]
+            if kind == "contains":
+                ins = np.asarray(
+                    mesh.contains(np.concatenate([r[2] for r in reqs], axis=0)),
+                    dtype=bool,
+                )
+                o = 0
+                for i, k in zip(idxs, counts):
+                    responses[i] = ins[o:o + k]
+                    o += k
+            else:
+                origins = np.concatenate([r[2] for r in reqs], axis=0)
+                dirs = np.concatenate([r[3] for r in reqs], axis=0)
+                loc, ridx, tri = mesh.ray.intersects_location(
+                    origins, dirs, multiple_hits=False,
+                )
+                loc = np.asarray(loc, dtype=float).reshape(-1, 3)
+                ridx = np.asarray(ridx, dtype=int)
+                tri = np.asarray(tri, dtype=int)
+                o = 0
+                for i, k in zip(idxs, counts):
+                    sel = (ridx >= o) & (ridx < o + k)
+                    responses[i] = (loc[sel], ridx[sel] - o, tri[sel])
+                    o += k
+        nxt: dict[int, tuple] = {}
+        for i, resp in responses.items():
+            try:
+                nxt[i] = gens[i].send(resp)
+            except StopIteration as stop:
+                results[i] = stop.value
+        pending = nxt
+    return results
+
+
 # ── Surface sampling / projection ─────────────────────────────────────────────
 
 def _sample_surface(mesh: trimesh.Trimesh, n: int, rng: np.random.Generator):
@@ -156,23 +258,22 @@ def _growth_tangent(normal: np.ndarray, base: np.ndarray, centroid: np.ndarray) 
     return _safe_norm(np.array([1.0, 0.0, 0.0]) - float(normal[0]) * normal)
 
 
-def _project_to_surface(
+def _project_to_surface_gen(
     mesh: trimesh.Trimesh,
     Q: np.ndarray,
     n: np.ndarray,
     max_drop_mm: float,
-) -> tuple[np.ndarray, np.ndarray] | None:
+):
     """Drop ``Q`` onto the surface along ``−n`` from a short lift above it.
 
-    Returns ``(point, smooth_normal)`` — the smooth normal is the barycentric
+    Request generator (see "Batched embree dispatch" above).  Returns
+    ``(point, smooth_normal)`` — the smooth normal is the barycentric
     blend of the hit triangle's vertex normals, matching the placer's
     candidate sampling — or ``None`` when the ray misses or lands implausibly
     far (past a rim / on the far side).
     """
     G = Q + _PROJECT_LIFT_MM * n
-    loc, _ray_idx, tri_idx = mesh.ray.intersects_location(
-        G[np.newaxis], (-n)[np.newaxis], multiple_hits=False,
-    )
+    loc, _ray_idx, tri_idx = yield ("ray", mesh, G[np.newaxis], (-n)[np.newaxis])
     if len(loc) == 0:
         return None
     Pn = np.asarray(loc[0], float)
@@ -188,15 +289,25 @@ def _project_to_surface(
     return Pn, nn
 
 
+def _project_to_surface(
+    mesh: trimesh.Trimesh,
+    Q: np.ndarray,
+    n: np.ndarray,
+    max_drop_mm: float,
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Scalar wrapper around :func:`_project_to_surface_gen`."""
+    return _drive_scalar(_project_to_surface_gen(mesh, Q, n, max_drop_mm))
+
+
 # ── Containment probe ─────────────────────────────────────────────────────────
 
-def _points_inside_any(meshes: list, pts: np.ndarray, near_pt: np.ndarray, reach: float) -> bool:
+def _points_inside_any_gen(meshes: list, pts: np.ndarray, near_pt: np.ndarray, reach: float):
     """True if ANY of ``pts`` is inside any neighbour solid (AABB-pruned by ``near_pt``).
 
-    Uses embree ``mesh.contains`` (fast; a hard dep).  Neighbours the leaf cannot
-    reach (bbox expanded by ``reach``) are skipped, so the test stays O(k) on a
-    dense canopy.  ``pts`` is a single point (shape (1,3)) for the seam pre-test
-    or the blade's widest→tip vertices for the burial test.
+    Request generator (see "Batched embree dispatch" above).  Neighbours the
+    leaf cannot reach (bbox expanded by ``reach``) are skipped, so the test
+    stays O(k) on a dense canopy.  ``pts`` is a single point (shape (1,3)) for
+    the seam pre-test or the blade's widest→tip vertices for the burial test.
     """
     if len(pts) == 0:
         return False
@@ -204,14 +315,20 @@ def _points_inside_any(meshes: list, pts: np.ndarray, near_pt: np.ndarray, reach
         _b = _m.bounds
         if (near_pt < _b[0] - reach).any() or (near_pt > _b[1] + reach).any():
             continue
-        if bool(_m.contains(pts).any()):
+        inside = yield ("contains", _m, pts)
+        if bool(inside.any()):
             return True
     return False
 
 
+def _points_inside_any(meshes: list, pts: np.ndarray, near_pt: np.ndarray, reach: float) -> bool:
+    """Scalar wrapper around :func:`_points_inside_any_gen`."""
+    return _drive_scalar(_points_inside_any_gen(meshes, pts, near_pt, reach))
+
+
 # ── Oval seating: equal-depth pitch solve against the real mesh ───────────────
 
-def _seat_oval_tilt(
+def _seat_oval_tilt_gen(
     mesh: trimesh.Trimesh,
     P0: np.ndarray, n0: np.ndarray, T0: np.ndarray,
     L: float, embed_mm: float,
@@ -219,9 +336,11 @@ def _seat_oval_tilt(
     max_iter: int = 3,
     tol_mm: float = 0.05,
     max_tilt_rad: float = math.radians(60.0),
-) -> float | None:
+):
     """Pitch the rigid root oval about its own center until both ends sit
     equally deep below the REAL (noised) surface.
+
+    Request generator (see "Batched embree dispatch" above).
 
     The oval is a rigid segment of half-span ``L/4`` centered at
     ``C = P0 − embed·n0`` with its axis initially down-slope (``T0``).  Each
@@ -245,11 +364,11 @@ def _seat_oval_tilt(
         c, s = math.cos(theta), math.sin(theta)
         t = T0 * c - n0 * s
         ends = np.array([C - h * t, C + h * t])     # [near (up-slope), far]
-        inside = mesh.contains(ends)
+        inside = yield ("contains", mesh, ends)
         # Depth along the base normal: embedded ends cast outward (+n0) to the
         # exit; poking ends cast inward (−n0) to the surface below (negative).
         dirs = np.where(inside[:, np.newaxis], n0[np.newaxis], -n0[np.newaxis])
-        loc, ray_idx, _ = mesh.ray.intersects_location(ends, dirs, multiple_hits=False)
+        loc, ray_idx, _ = yield ("ray", mesh, ends, dirs)
         if {int(i) for i in ray_idx} != {0, 1}:
             return None
         d = np.zeros(2)
@@ -264,6 +383,16 @@ def _seat_oval_tilt(
         if abs(theta) > max_tilt_rad:
             return None
     return theta
+
+
+def _seat_oval_tilt(
+    mesh: trimesh.Trimesh,
+    P0: np.ndarray, n0: np.ndarray, T0: np.ndarray,
+    L: float, embed_mm: float,
+    **kw,
+) -> float | None:
+    """Scalar wrapper around :func:`_seat_oval_tilt_gen`."""
+    return _drive_scalar(_seat_oval_tilt_gen(mesh, P0, n0, T0, L, embed_mm, **kw))
 
 
 # ── Leaf frame + root oval, both in the leaf's own frame ──────────────────────
@@ -324,7 +453,7 @@ def _leaf_frame_and_oval(
 
 # ── Per-leaf attempt: seat → build → skew → seat → cull → solidify ────────────
 
-def _attempt_leaf(
+def _attempt_leaf_gen(
     mesh: trimesh.Trimesh,
     neighbour_meshes: list,
     base: np.ndarray,
@@ -347,6 +476,10 @@ def _attempt_leaf(
 ):
     """Seat, build, and cull one leaf at a candidate point.
 
+    Request generator (see "Batched embree dispatch" above): all embree
+    queries are yielded, so a batch driver can run MANY leaf attempts with
+    grouped calls; :func:`_attempt_leaf` is the immediate scalar form.
+
     The full per-leaf pipeline: equal-depth oval seat → rigid frame → oval
     containment guard → build → printability skew → adaptive belly-dip seat
     → tip/belly burial cull → solidify, with ``L``/``W`` free so callers can
@@ -363,7 +496,7 @@ def _attempt_leaf(
     ``−normal`` (positive = moved toward the surface) — or ``(None, reason)``
     with reason in ``{"buried", "floor", "error"}``.
     """
-    tilt = _seat_oval_tilt(mesh, base, normal, T0, L, _ROOT_EMBED_MM)
+    tilt = yield from _seat_oval_tilt_gen(mesh, base, normal, T0, L, _ROOT_EMBED_MM)
     if tilt is None:
         # The equal-depth solve gives up on pathological spots (crease
         # pockets, rims).  For coverage-guaranteeing placers a FLAT seat
@@ -379,7 +512,8 @@ def _attempt_leaf(
         return None, "error"
     surf_base, tangent_leaf, up_leaf, inner_v = frame
 
-    if not bool(mesh.contains(inner_v[[-2, -1]]).all()):
+    oval_inside = yield ("contains", mesh, inner_v[[-2, -1]])
+    if not bool(oval_inside.all()):
         return None, "buried-oval"
 
     try:
@@ -447,11 +581,9 @@ def _attempt_leaf(
 
     drop_mm = 0.0
     dip = surf.vertices[dip_idx]
-    dip_inside = bool(mesh.contains(dip[np.newaxis])[0])
+    dip_inside = bool((yield ("contains", mesh, dip[np.newaxis]))[0])
     ray_dir = normal if dip_inside else -normal
-    loc, ridx, _ = mesh.ray.intersects_location(
-        dip[np.newaxis], ray_dir[np.newaxis], multiple_hits=False,
-    )
+    loc, ridx, _ = yield ("ray", mesh, dip[np.newaxis], ray_dir[np.newaxis])
     if len(ridx):
         c = float(np.linalg.norm(loc[0] - dip))
         drop_mm = (-c if dip_inside else c) - _PROTRUSION_MM
@@ -483,11 +615,9 @@ def _attempt_leaf(
         # leaf's base lying over a higher leaf's tip" artifact.  An
         # embedded base can never overlie anything (and anchors better).
         bv = surf.vertices[base_idx]
-        b_in = bool(mesh.contains(bv[np.newaxis])[0])
+        b_in = bool((yield ("contains", mesh, bv[np.newaxis]))[0])
         rd = normal if b_in else -normal
-        loc, ridx, _tt = mesh.ray.intersects_location(
-            bv[np.newaxis], rd[np.newaxis], multiple_hits=False,
-        )
+        loc, ridx, _tt = yield ("ray", mesh, bv[np.newaxis], rd[np.newaxis])
         if len(ridx):
             bc = (-1.0 if b_in else 1.0) * float(np.linalg.norm(loc[0] - bv))
             target = -0.2
@@ -522,11 +652,9 @@ def _attempt_leaf(
         # the tip dives slightly into the clump: the leaf becomes a
         # relief-like arc with both ends rooted; nothing hangs.
         tv = surf.vertices[tip_idx]
-        t_in = bool(mesh.contains(tv[np.newaxis])[0])
+        t_in = bool((yield ("contains", mesh, tv[np.newaxis]))[0])
         rd = normal if t_in else -normal
-        loc, ridx, _tt = mesh.ray.intersects_location(
-            tv[np.newaxis], rd[np.newaxis], multiple_hits=False,
-        )
+        loc, ridx, _tt = yield ("ray", mesh, tv[np.newaxis], rd[np.newaxis])
         if len(ridx):
             tc = (-1.0 if t_in else 1.0) * float(np.linalg.norm(loc[0] - tv))
             # Tip clearance CEILING (never a burial): pull the tip down
@@ -568,7 +696,9 @@ def _attempt_leaf(
     probe = surf.vertices[np.array([tip_idx, belly_idx])]
     # tuck_tip blades are INTENTIONALLY buried at both ends; the burial
     # cull (and its bury-lift) would pop the tucked tip back out.
-    if not tuck_tip and _points_inside_any([mesh, *neighbour_meshes], probe, base, L):
+    if not tuck_tip and (
+        yield from _points_inside_any_gen([mesh, *neighbour_meshes], probe, base, L)
+    ):
         # bury_lift (organic placer): a probe dipping into the PARENT
         # surface — e.g. the tip curling under at a dome crown — is lifted
         # out along the seat normal instead of culled (a cull would leave a
@@ -577,13 +707,11 @@ def _attempt_leaf(
         # cull stands.
         lifted = False
         if bury_lift:
-            inside = mesh.contains(probe)
+            inside = yield ("contains", mesh, probe)
             if inside.any():
                 idx = np.nonzero(inside)[0]
                 dirs = np.tile(normal[np.newaxis], (len(idx), 1))
-                loc, ridx, tri = mesh.ray.intersects_location(
-                    probe[idx], dirs, multiple_hits=False,
-                )
+                loc, ridx, tri = yield ("ray", mesh, probe[idx], dirs)
                 ridx = np.asarray(ridx, dtype=int)
                 tri = np.asarray(tri, dtype=int)
                 # Per-probe classification.  A probe buried under a surface
@@ -622,3 +750,21 @@ def _attempt_leaf(
 
     tip_z_clearance = float(surf.vertices[tip_idx][2]) - float(inner_v[-1][2])
     return (solid, tangent_leaf, skew_mm, tip_z_clearance, drop_mm), None
+
+
+def _attempt_leaf(
+    mesh: trimesh.Trimesh,
+    neighbour_meshes: list,
+    base: np.ndarray,
+    normal: np.ndarray,
+    T0: np.ndarray,
+    L: float,
+    W: float,
+    leaf_kw: dict,
+    lseed: int,
+    **kw,
+):
+    """Scalar wrapper around :func:`_attempt_leaf_gen` (one leaf, immediate embree)."""
+    return _drive_scalar(_attempt_leaf_gen(
+        mesh, neighbour_meshes, base, normal, T0, L, W, leaf_kw, lseed, **kw,
+    ))
