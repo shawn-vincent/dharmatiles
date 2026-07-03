@@ -55,8 +55,8 @@ tile = Tile(
                 # r*flat - sink must beat mounds + blade stack (~3.4 mm),
                 # or the stones drown in the grass.
                 Rocks(
-                    r=D[3.2:4.4].power(1.3),
-                    flat=D[1.35:1.6],
+                    r=D[3.6:4.6].power(1.3),
+                    flat=D[1.5:1.7],
                     sink=0.3,
                     n_cuts=5,
                     cut=D[0.82:0.96],

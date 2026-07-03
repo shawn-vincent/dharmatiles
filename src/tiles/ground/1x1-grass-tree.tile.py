@@ -17,14 +17,17 @@ tile = Tile(
             id='meadow',
             selector=FloodFill(0.5, 0.5),
             layers=[
-                GrassCarpet(
-                    species=_species,
-                    placement=Grouped(groups_per_square=3),
-                ),
-                # Rocks first — stamp obstacle_mask so grass steers around them
+                # Obstacle-stampers (Rocks, Tree) before the carpet and grass:
+                # carpet tubes end at footprints instead of being impaled.
+                # Crown rule for rocks in thatch grass: r*flat - sink must
+                # beat mounds + blade stack (~3.4 mm) or the stones drown.
                 Rocks(
-                    r=D[2.5:4.5],
-                    placement=Uniform(count_per_square=3),
+                    r=D[3.6:4.6].power(1.3),
+                    flat=D[1.5:1.7],
+                    sink=0.3,
+                    n_cuts=5,
+                    cut=D[0.82:0.96],
+                    placement=Uniform(count_per_square=3, gap_mm=7),
                 ),
                 # Tree next — trunk footprint stamped before grass is planted
                 Tree(
@@ -36,6 +39,10 @@ tile = Tile(
                     foliage_clusters=True,
                     leaf_length_mm=4.5,
                     leaf_width_mm=3.0,
+                ),
+                GrassCarpet(
+                    species=_species,
+                    placement=Grouped(groups_per_square=3),
                 ),
                 # Grass last — grows around rocks and tree trunk
                 Grass(

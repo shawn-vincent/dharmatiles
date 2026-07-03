@@ -530,6 +530,16 @@ support/obstacle stamp** so deep-cut craggy rocks become safe again.
 Final STL `stl/test/1x1-thatch-bushy-rock-db.stl` (144 k faces,
 watertight); renders `…-thatch-rock-top.png` / `…-interaction.png`.
 
+**Default rollout findings (1x1-grass-tree+water, first real tile):**
+(1) The tree's exponential tufting falloff in `terrain_support_z` (full
+tree height at trunk, e-decay/5 mm — an old-sim hint, not geometry) read
+as an 18 mm impassable wall and stripped the meadow bare; ThatchGrass now
+uses an effective support that is solid only at obstacle footprints.
+(2) **Every legacy rock spec in a grass region is under-sized for the
+thatch** — old rocks were scaled against flat grass (crowns 0.6–2 mm) and
+drown under mounds + blades.  Apply the crown rule (r·flat − sink ≳
+3.4 mm) tile by tile as tiles are regenerated; done for this tile.
+
 **Open punch list for the next session:**
 1. The residual mound-apex bump may be fine (reference print has peaks) —
    judge on a real pyrender render + by Shawn; the sw-render drybrush
