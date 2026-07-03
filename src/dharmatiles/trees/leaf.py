@@ -65,8 +65,8 @@ on the surface.  All rotations are performed around this point.
     tangent        = T0 * cos(ca) − surface_normal * sin(ca)
     N (up_hint)    = surface_normal * cos(ca) + T0 * sin(ca)
 
-The contact angle is computed analytically in ``mesh.py:_contact_angle_for_sphere``
-and cached per (cluster_radius, leaf_geometry).  See ``docs/design/leaf-placement.md``
+The seat pitch is solved against the real clump surface by
+``placement_leaf._seat_oval_tilt``.  See ``docs/design/leaf-placement.md``
 for the full algorithm specification.
 """
 from __future__ import annotations

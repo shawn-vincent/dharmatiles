@@ -75,14 +75,6 @@ class Tree:
         leaf_inner_curve: float = 1.5,
         leaf_outer_curve: float = 0.72,
         leaf_curl_deg: float = 40.0,
-        leaf_lift_mm: float = 3.0,
-        leaf_h_overlap: float = 0.2,
-        leaf_v_overlap: float = 0.5,
-        leaf_angle_jitter_deg: float = 24.0,
-        leaf_pos_jitter: float = 0.165,
-        leaf_arc_meridians: int = 6,
-        leaf_arc_z_samples: int = 64,
-        leaf_placement: str = "meridian",
         bark: BarkConfig | None = None,
         stamp_falloff_mm: float = 5.0,
     ) -> None:
@@ -127,20 +119,6 @@ class Tree:
         self.leaf_inner_curve    = float(leaf_inner_curve)
         self.leaf_outer_curve    = float(leaf_outer_curve)
         self.leaf_curl_deg       = float(leaf_curl_deg)
-        self.leaf_lift_mm        = float(leaf_lift_mm)
-        self.leaf_h_overlap      = float(np.clip(leaf_h_overlap, 0.0, 0.95))
-        self.leaf_v_overlap      = float(np.clip(leaf_v_overlap, 0.0, 0.95))
-        self.leaf_angle_jitter_deg = float(leaf_angle_jitter_deg)
-        self.leaf_pos_jitter       = float(leaf_pos_jitter)
-        self.leaf_arc_meridians    = int(leaf_arc_meridians)
-        self.leaf_arc_z_samples    = int(leaf_arc_z_samples)
-        leaf_placement = str(leaf_placement)
-        if leaf_placement not in ("meridian", "greedy", "shoots", "organic"):
-            raise ValueError(
-                f"leaf_placement must be 'meridian', 'greedy', 'shoots' or "
-                f"'organic', got {leaf_placement!r}"
-            )
-        self.leaf_placement        = leaf_placement
         self.bark = BarkConfig() if bark is None else bark
         self.stamp_falloff_mm = float(stamp_falloff_mm)
 
@@ -235,14 +213,6 @@ class Tree:
                 leaf_inner_curve=self.leaf_inner_curve,
                 leaf_outer_curve=self.leaf_outer_curve,
                 leaf_curl_deg=self.leaf_curl_deg,
-                leaf_lift_mm=self.leaf_lift_mm,
-                leaf_h_overlap=self.leaf_h_overlap,
-                leaf_v_overlap=self.leaf_v_overlap,
-                leaf_angle_jitter_deg=self.leaf_angle_jitter_deg,
-                leaf_pos_jitter=self.leaf_pos_jitter,
-                leaf_arc_meridians=self.leaf_arc_meridians,
-                leaf_arc_z_samples=self.leaf_arc_z_samples,
-                leaf_placement=self.leaf_placement,
                 debug_leaf_color=self.debug_leaf_color,
             )
             if (

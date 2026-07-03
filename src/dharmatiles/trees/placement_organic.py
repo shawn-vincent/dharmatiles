@@ -30,16 +30,13 @@ Algorithm
    The layer lifts the blade along the seat normal AFTER the belly-dip
    seat (root oval stays plugged), so overlapping leaves sit at visibly
    distinct heights.
-5. **Per-leaf build** reuses the shoots pipeline verbatim
-   (:func:`placement_shoots._attempt_leaf`): equal-depth oval seat,
+5. **Per-leaf build** uses the shared per-leaf pipeline
+   (:func:`placement_leaf._attempt_leaf`): equal-depth oval seat,
    rigid blade↔oval frame, printability skew, belly-dip drop to
    ``_PROTRUSION_MM``, tip/belly cull, solidify.
 
 Hard perf constraints (2026-07-01 crisis) remain: no per-leaf mesh scans;
 embree only; cheap-reject before every build.
-
-Public entry point mirrors the other placers so the dispatch in
-:func:`mesh.build_branch_mesh` is a drop-in.
 """
 from __future__ import annotations
 
@@ -51,17 +48,14 @@ import numpy as np
 import trimesh
 
 from ._utils import _hash01, _safe_norm
-from .placement import LeafPlacementStats
-from .placement_greedy import (
-    _growth_tangent,
-    _points_inside_any,
-    _sample_surface,
-)
-from .placement_shoots import (
-    _GREEDY_EMBED_MM,
+from .placement_leaf import (
+    _ROOT_EMBED_MM,
+    LeafPlacementStats,
     _attempt_leaf,
+    _growth_tangent,
     _project_to_surface,
     _rotate_about,
+    _sample_surface,
 )
 
 # ── Organic-specific constants (module constants while iterating) ─────────────
@@ -321,11 +315,8 @@ def place_leaves_organic(
     inner_curve: float,
     outer_curve: float,
     curl_deg: float,
-    lift_mm: float,
     seeds: int | list[int] = 0,
     labels: str | list[str] | None = None,
-    angle_jitter_deg: float = 0.0,
-    pos_jitter: float = 0.0,
     # organic-specific (module-const defaults; promote to config later):
     spacing_frac: float | None = None,
     avoid_meshes: list[trimesh.Trimesh] | None = None,
@@ -342,13 +333,8 @@ def place_leaves_organic(
     ``row_color_fn``, when given, is called with each leaf's LAYER index
     so the overlap layering is legible in debug renders.
 
-    ``lift_mm``, ``angle_jitter_deg`` and ``pos_jitter`` are accepted for
-    signature parity and ignored (the seat replaces the lift; the
-    direction field replaces i.i.d. jitter).
-
-    Returns ``(parts_per_mesh, stats_per_mesh)`` — the same contract as
-    the other placers; each leaf is attributed to the source cluster
-    whose solid its root sits on.
+    Returns ``(parts_per_mesh, stats_per_mesh)``; each leaf is attributed
+    to the source cluster whose solid its root sits on.
     """
     if layering not in ("systematic", "random"):
         raise ValueError(f"layering must be 'systematic' or 'random', got {layering!r}")
@@ -368,7 +354,6 @@ def place_leaves_organic(
     spacing = max(frac * W, 0.3)
     expected_row_step = max(L * 0.5, 1e-3)
 
-    del lift_mm, angle_jitter_deg, pos_jitter   # parity-only
     leaf_kw = dict(
         length_mm      = L,
         width_mm       = W,
@@ -570,7 +555,7 @@ def place_leaves_organic(
         stats.base_positions.append(base.copy())
         stats.base_tangents.append(tangent_leaf.copy())
         stats.base_row_idx.append(row_idx)
-        stats.root_depths.append(_GREEDY_EMBED_MM)
+        stats.root_depths.append(_ROOT_EMBED_MM)
         stats.leaf_float_dists.append(0.0)
         stats.leaf_buried_depths.append(0.0)
         stats.shingle_layers.append(1 if flush else 0)

@@ -2,21 +2,13 @@
 from .bark import BarkConfig
 from .layer import Tree
 from .leaf import build_leaf_mesh
-from .placement import (
-    LeafPlacementStats,
-    effective_ring_perimeter,
-    min_width_xy,
-    place_leaves_on_mesh,
-    place_leaves_on_multiple_meshes,
-)
+from .placement_leaf import LeafPlacementStats
+from .placement_organic import place_leaves_organic
 
 __all__ = [
     "BarkConfig",
     "Tree",
     "build_leaf_mesh",
     "LeafPlacementStats",
-    "effective_ring_perimeter",
-    "min_width_xy",
-    "place_leaves_on_mesh",
-    "place_leaves_on_multiple_meshes",
+    "place_leaves_organic",
 ]
