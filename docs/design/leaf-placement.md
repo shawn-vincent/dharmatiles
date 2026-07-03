@@ -5,7 +5,9 @@ is retained below as "Current Algorithm (Deprecated)".*
 
 *Full history: `docs/meta/history/2026-06-24-leaf-rendering-deep-history.md`,
 `docs/meta/history/2026-06-24-foliage-cluster-baldness.md`,
-`docs/meta/history/2026-06-25-meridian-arc-placement-design-review.md`.*
+`docs/meta/history/2026-06-25-meridian-arc-placement-design-review.md`.
+Forward-looking design review (greedy vs. meridian, shoots/instancing ideas):
+`docs/meta/history/2026-07-02-fable-leaf-placement-design-review.md`.*
 
 ---
 

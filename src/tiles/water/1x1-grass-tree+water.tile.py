@@ -66,12 +66,7 @@ tile = Tile(
                     foliage_clusters=True,
                     leaf_length_mm=4.5,
                     leaf_width_mm=3.0,
-                    leaf_curl_deg=20.0,
-                    leaf_lift_mm=1.5,
-                    leaf_h_overlap=0.1,
-                    leaf_v_overlap=0.25,
-                    leaf_angle_jitter_deg=24.0,
-                    leaf_pos_jitter=0.165,
+                    leaf_curl_deg=32.0,
                 ),
                 Grass(
                     species=_species,

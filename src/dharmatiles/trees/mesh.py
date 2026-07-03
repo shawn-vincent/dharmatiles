@@ -28,7 +28,6 @@ import trimesh
 
 from ..core.color import Material, debug_material, tag as _tag
 from .bark import BarkConfig
-from .leaf import compute_leaf_geometry
 from ._utils import _safe_norm, _hash01, _WUP_VEC
 
 # Fixed polygon count for every cross-section ring.
@@ -78,13 +77,6 @@ def build_branch_mesh(
     leaf_inner_curve: float = 1.5,
     leaf_outer_curve: float = 0.72,
     leaf_curl_deg: float = 40.0,
-    leaf_lift_mm: float = 3.0,
-    leaf_h_overlap: float = 0.2,
-    leaf_v_overlap: float = 0.5,
-    leaf_angle_jitter_deg: float = 24.0,
-    leaf_pos_jitter: float = 0.165,
-    leaf_arc_meridians: int = 6,
-    leaf_arc_z_samples: int = 64,
     debug_leaf_color: bool = False,
 ) -> tuple[trimesh.Trimesh, trimesh.Trimesh, trimesh.Trimesh, list[trimesh.Trimesh]]:
     """Build branch and foliage meshes from a simplified skeleton.
@@ -143,7 +135,7 @@ def build_branch_mesh(
     leaf_solids: list[trimesh.Trimesh] = []
     # Foliage cluster meshes are collected here (with their edge ids) and leaves
     # are placed on ALL of them together after the build loop — see the batched
-    # place_leaves_on_multiple_meshes call below.  Placing per-cluster in
+    # place_leaves_organic call below.  Placing per-cluster in
     # isolation left every cluster blind to its neighbours, so the cross-cluster
     # cull and the shared shingle occupancy never engaged on real trees.
     foliage_clumps: list[tuple[trimesh.Trimesh, int]] = []
@@ -257,7 +249,24 @@ def build_branch_mesh(
             clump_start_pos, clump_start_tan = _bezier_clump_start(
                 p0, _bbp1, _bbp2, p3, cluster_len,
             )
-            clump, clump_leaves = _build_foliage_cluster_mesh(
+            # A terminal edge shorter than the requested cluster length would
+            # compress the whole r_wood→r_foliage flare into the edge's own
+            # (possibly sub-mm) span — a mushroom: a near-flat radial wall
+            # with a stub cap poking out the back.  Extend the cluster spine
+            # straight back along the edge-start tangent to its full length;
+            # the extension tucks back over the parent branch, which the
+            # clump hides anyway.
+            _clump_full_len = (
+                float(foliage_cluster_length_mm)
+                if foliage_cluster_length_mm is not None else cluster_len
+            )
+            if cluster_len < _clump_full_len - 1e-9:
+                clump_start_pos = (
+                    clump_start_pos
+                    - (_clump_full_len - cluster_len) * clump_start_tan
+                )
+                cluster_len = _clump_full_len
+            clump = _build_foliage_cluster_mesh(
                 tip_pos=p3,
                 tip_tangent=_bt_end,
                 start_pos=clump_start_pos,
@@ -267,27 +276,11 @@ def build_branch_mesh(
                 clump_length_mm=cluster_len,
                 edge_id=i,
                 bark_seed=bark_seed,
-                leaves=False,   # placement deferred to one multi-mesh call below
-                leaf_length_mm=leaf_length_mm,
-                leaf_width_mm=leaf_width_mm,
-                leaf_thickness_mm=leaf_thickness_mm,
-                leaf_fold_angle_deg=leaf_fold_angle_deg,
-                leaf_inner_curve=leaf_inner_curve,
-                leaf_outer_curve=leaf_outer_curve,
-                leaf_curl_deg=leaf_curl_deg,
-                leaf_lift_mm=leaf_lift_mm,
-                leaf_h_overlap=leaf_h_overlap,
-                leaf_v_overlap=leaf_v_overlap,
-                leaf_arc_meridians=leaf_arc_meridians,
-                leaf_arc_z_samples=leaf_arc_z_samples,
-                leaf_angle_jitter_deg=leaf_angle_jitter_deg,
-                leaf_pos_jitter=leaf_pos_jitter,
             )
             if len(clump.vertices) > 0:
                 foliage_solids.append(clump)
                 if leaves and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
                     foliage_clumps.append((clump, i))
-            leaf_solids.extend(clump_leaves)
 
         node_frame[i] = end_frame
         node_bark[i] = edge_end_bark
@@ -301,10 +294,16 @@ def build_branch_mesh(
     # into layers instead of skewering.  (Per-cluster placement gave each cluster
     # an empty neighbour list, so neither ever engaged on a real tree.)
     if foliage_clumps:
-        from .placement import place_leaves_on_multiple_meshes
-        _clump_meshes = [c for c, _ in foliage_clumps]
+        from .placement_organic import place_leaves_organic
+
         _clump_eids   = [eid for _, eid in foliage_clumps]
-        _leaf_parts, _ = place_leaves_on_multiple_meshes(
+        # The placer works directly on the real (noised) clumps: leaf roots
+        # seat just below the actual foliage surface (fixed shallow embed)
+        # and clearance is judged against the real surface.  Leaves whose
+        # blade surface intersects an exposed branch tube (avoid_meshes)
+        # are culled inside the placer.
+        _clump_meshes = [c for c, _ in foliage_clumps]
+        _leaf_parts, _ = place_leaves_organic(
             _clump_meshes,
             length_mm      = leaf_length_mm,
             width_mm       = leaf_width_mm,
@@ -313,15 +312,9 @@ def build_branch_mesh(
             inner_curve    = leaf_inner_curve,
             outer_curve    = leaf_outer_curve,
             curl_deg       = leaf_curl_deg,
-            lift_mm        = leaf_lift_mm,
-            h_overlap      = leaf_h_overlap,
-            v_overlap      = leaf_v_overlap,
-            n_meridians    = leaf_arc_meridians,
-            z_samples      = leaf_arc_z_samples,
             seeds          = [_hash01_int(bark_seed, "leaves", eid) for eid in _clump_eids],
             labels         = [f"cluster-{eid}" for eid in _clump_eids],
-            angle_jitter_deg = leaf_angle_jitter_deg,
-            pos_jitter       = leaf_pos_jitter,
+            avoid_meshes   = edge_solids,
         )
         for _lp in _leaf_parts:
             leaf_solids.extend(_lp)
@@ -566,122 +559,15 @@ def _union_edge_solids(edge_solids: list[trimesh.Trimesh]) -> trimesh.Trimesh:
     return trimesh.util.concatenate(edge_solids)
 
 
-# ── Analytical contact-angle for leaf-on-sphere ───────────────────────────────
-
-_LEAF_ARCH_DEG_DEFAULT = 30.0   # must match build_leaf_surface default
-
-# Minimum z-component of the outward surface normal for leaf placement.
-# Corresponds to 60° from the base pole / 30° below horizontal — the FDM
-# printability limit for overhanging leaf attachments.
-_LEAF_PLACEABLE_NORMAL_Z = -0.5
-
-
-def _curl_bottom_margin_mm(
-    length_mm: float,
-    curl_deg:  float,
-    lift_mm:   float,
-    arch_deg:  float = 30.0,
-) -> float:
-    """Extra Z clearance needed so the bottom row doesn't overshoot below z_placeable.
-
-    The leaf tip sits at height h_tip = (L/3)*(tan(curl)+tan(arch))/2 above the
-    midrib plane.  After applying the contact angle and lift, the worst-case tip
-    Z below the straight-tangent baseline is sqrt(L²+h_tip²) - L.  Adding this
-    margin to z_bot_anchor keeps every leaf surface above z_placeable.
-    """
-    L     = float(length_mm)
-    h_tip = (L / 3.0) * (
-        math.tan(math.radians(abs(float(curl_deg))))
-        + math.tan(math.radians(abs(float(arch_deg))))
-    ) / 2.0
-    return math.sqrt(L * L + h_tip * h_tip) - L
-
-
-def _contact_angle_for_sphere(
-    cluster_radius_mm: float,
-    *,
-    length_mm:      float,
-    width_mm:       float,
-    thickness_mm:   float,
-    fold_angle_deg: float,
-    inner_curve:    float,
-    outer_curve:    float,
-    curl_deg:       float,
-    lift_mm:        float,
-) -> float:
-    """Contact angle (radians) so the belly-dip point of the leaf grazes the sphere.
-
-    The arch profile raises the midrib from the base to a hump at mid-leaf,
-    then descends; the curl in the final third (s > 2/3) fights back upward.
-    In between, the midrib passes through a minimum N-displacement — the
-    *belly dip* — which is the specific point that will press against the
-    sphere first as the contact angle increases.
-
-    The dip is identified as ``argmin(d_N)`` over the tip-half midrib
-    (s > 0.5) plus the tip vertex.  For the standard arch+curl profile the
-    minimum ca and the minimum d_N vertex coincide exactly — verified
-    numerically across the full parameter range used in production.
-
-    For midrib displacement d = (d_L, d_N) from the base, the sphere-grazing
-    constraint |rot_ca(d)|² = R² reduces to:
-
-        ca = arctan2(d_N, d_L) + arcsin(D_LN / 2R),   D_LN = hypot(d_L, d_N)
-
-    Lateral (off-axis) vertices need a larger ca than the midrib; the midrib
-    is the binding constraint.  lift_mm is applied after the contact angle
-    and does not affect this calculation.
-    """
-    R  = float(cluster_radius_mm)
-    up = np.array([0.0, 0.0, 1.0])
-    T0 = np.array([1.0, 0.0, 0.0])
-    bp = up * R
-
-    g = compute_leaf_geometry(
-        base_pos=bp, tangent=T0, up_hint=up,
-        lift_mm=0.0,
-        length_mm=length_mm, width_mm=width_mm,
-        thickness_mm=thickness_mm, fold_angle_deg=fold_angle_deg,
-        inner_curve=inner_curve, outer_curve=outer_curve,
-        arch_deg=_LEAF_ARCH_DEG_DEFAULT,
-        curl_deg=curl_deg,
-    )
-
-    # Tip-half midrib: bot_pts center column (fold_h=0 at t=0, so this is
-    # the geometric midrib).  Include the tip vertex (s=1, not in s_int).
-    col      = g.lower_grid.shape[1] // 2
-    tip_half = g.s_int > 0.5
-    mid_pos  = g.lower_grid[tip_half, col, :]                    # (K, 3)
-    cands    = np.vstack([mid_pos, g.tip_pt[np.newaxis]])         # (K+1, 3)
-
-    d        = cands - g.base_pt[np.newaxis]   # (K+1, 3) displacements from base
-    d_along  = d @ g.along_axis                # longitudinal
-    d_normal = d @ g.normal_axis               # normal (arch+curl height)
-    D_LN     = np.hypot(d_along, d_normal)
-
-    # Belly dip: the single vertex with the smallest normal-displacement.
-    # This is the touch point — it grazes the sphere first as ca grows.
-    dip  = int(np.argmin(d_normal))
-    dL   = float(d_along[dip])
-    dN   = float(d_normal[dip])
-    DLN  = float(D_LN[dip])
-
-    if DLN > 1e-9 and DLN <= 2.0 * R:
-        return float(np.arctan2(dN, dL)
-                     + np.arcsin(np.clip(DLN / (2.0 * R), 0.0, 1.0)))
-
-    # Fallback when leaf span exceeds sphere diameter (D > 2R).
-    d0          = g.tip_pt - g.base_pt
-    along_comp  = float(np.dot(d0, g.along_axis))
-    normal_comp = float(np.dot(d0, g.normal_axis))
-    D   = float(np.hypot(along_comp, normal_comp))
-    rhs = float(np.clip(-D / (2.0 * R), -1.0, 1.0))
-    return float(np.arccos(rhs) - np.arctan2(along_comp, normal_comp))
-
-
 # ── Foliage clump: icosphere deformed to cone+dome profile, Gaussian noise ─────
 
 # Icosphere subdivision level for the whole clump.  3 → 1280 faces; 4 → 5120.
 _FOLIAGE_ICO_SUBDIVISIONS          = 3
+# Rounding radius of the cluster's BACK end, as a fraction of r_foliage.
+# Decoupled from the branch radius: tapering all the way to r_wood makes the
+# small end a near-point (a 1 mm rounding on a 5.5 mm clump); the cap wants
+# a visible rounding.  Branch embedding still uses r_wood.
+_FOLIAGE_BACK_ROUND_FRAC           = 0.4
 # Fine Gaussian noise: per-vertex surface grain.
 _FOLIAGE_NOISE_AMPLITUDE_MM        = 0.10  # 1-sigma displacement (mm)
 # Coarse smooth noise: large-scale silhouette distortion.
@@ -782,343 +668,6 @@ def _foliage_coarse_noise(
     return _FOLIAGE_COARSE_NOISE_AMPLITUDE_MM * val
 
 
-# ── Meridian-arc placement helpers ───────────────────────────────────────────
-
-
-class _Meridian:
-    """One meridian curve sampled from a closed mesh.
-
-    Stores the Z values, cumulative arc lengths, and outward surface normals
-    at every sampled level for one azimuthal angle φ.
-    """
-    __slots__ = ("z_vals", "arc_vals", "normals")
-
-    def __init__(
-        self,
-        z_vals:   np.ndarray,
-        arc_vals: np.ndarray,
-        normals:  np.ndarray,
-    ) -> None:
-        self.z_vals   = np.asarray(z_vals,  float)   # (K,)
-        self.arc_vals = np.asarray(arc_vals, float)   # (K,) cumulative arc length
-        self.normals  = np.asarray(normals,  float)   # (K, 3) outward unit normals
-
-
-def _build_meridians(
-    shaped:      trimesh.Trimesh,
-    n_meridians: int = 6,
-    z_samples:   int = 64,
-) -> list[_Meridian]:
-    """Sample N meridian curves at evenly-spaced azimuthal angles from a mesh.
-
-    Returns a list of exactly *n_meridians* ``_Meridian`` objects, one for each
-    azimuthal angle φₘ = m·2π/N.  Any meridian with insufficient data is filled
-    from the nearest available neighbour.
-
-    For each Z level, the perimeter point *outermost* from the XY centroid
-    within the half-gap angular cone around φₘ is selected.
-    """
-    z_min = float(shaped.vertices[:, 2].min())
-    z_max = float(shaped.vertices[:, 2].max())
-    eps   = max((z_max - z_min) * 0.0002, 1e-4)
-
-    if z_max - z_min < 1e-6:
-        # Degenerate mesh: return N trivial upward meridians.
-        trivial = _Meridian(
-            z_vals   = np.array([z_min, z_max]),
-            arc_vals = np.array([0.0, 1.0]),
-            normals  = np.tile([0.0, 0.0, 1.0], (2, 1)),
-        )
-        return [trivial] * n_meridians
-
-    cx = float(shaped.vertices[:, 0].mean())
-    cy = float(shaped.vertices[:, 1].mean())
-
-    phi_angles = np.linspace(0.0, 2.0 * np.pi, n_meridians, endpoint=False)
-    phi_half   = np.pi / n_meridians  # angular half-gap between meridians
-
-    z_levels = np.linspace(z_min + eps, z_max - eps, z_samples)
-
-    pts_by_meridian: list[list[np.ndarray]] = [[] for _ in range(n_meridians)]
-    z_by_meridian:   list[list[float]]      = [[] for _ in range(n_meridians)]
-
-    for z_level in z_levels:
-        section = shaped.section(
-            plane_origin=np.array([0.0, 0.0, float(z_level)]),
-            plane_normal=np.array([0.0, 0.0, 1.0]),
-        )
-        if section is None:
-            continue
-        try:
-            path2d, xform = section.to_planar()
-        except Exception:
-            continue
-
-        # Build per-polygon ordered 3D point arrays.
-        # polygons_full can raise AttributeError on degenerate sections (trimesh
-        # edge case: closed[root].exterior is None).  Guard each polygon too so
-        # a single bad contour doesn't discard the whole level.
-        poly_pts_list: list[np.ndarray] = []
-        try:
-            polys = list(path2d.polygons_full)
-        except Exception:
-            continue
-        for poly in polys:
-            try:
-                coords = np.array(poly.exterior.coords, dtype=float)
-            except (AttributeError, Exception):
-                continue
-            if len(coords) < 2:
-                continue
-            pts2d = coords[:-1]   # drop the repeated closing vertex
-            ones  = np.ones((len(pts2d), 1))
-            p4d   = np.hstack([pts2d, np.zeros((len(pts2d), 1)), ones]) @ xform.T
-            poly_pts_list.append(p4d[:, :3])
-        if not poly_pts_list:
-            continue
-
-        for m_idx, phi_m in enumerate(phi_angles):
-            # Find the exact perimeter point at azimuth phi_m on the outermost
-            # polygon.  Ray from (cx, cy) at angle phi_m; take the farthest
-            # intersection across all polygons at this level.
-            best_t  = -1.0
-            best_pt: np.ndarray | None = None
-            cos_phi = float(np.cos(phi_m))
-            sin_phi = float(np.sin(phi_m))
-            for poly_pts in poly_pts_list:
-                n = len(poly_pts)
-                if n < 2:
-                    continue
-                vx = poly_pts[:, 0] - cx
-                vy = poly_pts[:, 1] - cy
-                wx = np.roll(vx, -1)
-                wy = np.roll(vy, -1)
-                dx = wx - vx
-                dy = wy - vy
-                det = cos_phi * dy - sin_phi * dx
-                valid = np.abs(det) >= 1e-9
-                safe_det = np.where(valid, det, 1.0)
-                t_arr = np.where(valid, (vx * dy - vy * dx) / safe_det, -1.0)
-                s_arr = np.where(valid, (vx * sin_phi - vy * cos_phi) / safe_det, -1.0)
-                ok = valid & (t_arr > 1e-6) & (s_arr >= -1e-6) & (s_arr <= 1.0 + 1e-6)
-                if ok.any():
-                    idx   = int(np.where(ok)[0][int(np.argmax(t_arr[ok]))])
-                    s_b   = float(np.clip(s_arr[idx], 0.0, 1.0))
-                    t_b   = float(t_arr[idx])
-                    if t_b > best_t:
-                        best_t  = t_b
-                        best_pt = poly_pts[idx] + s_b * (poly_pts[(idx + 1) % n] - poly_pts[idx])
-
-            if best_pt is None:
-                # Fallback: outermost vertex nearest to phi_m across all polygons.
-                pts3d_fb = np.vstack(poly_pts_list)
-                phi_fb   = np.arctan2(pts3d_fb[:, 1] - cy, pts3d_fb[:, 0] - cx) % (2.0 * np.pi)
-                d_phi    = np.abs(((phi_fb - phi_m + np.pi) % (2.0 * np.pi)) - np.pi)
-                mask     = d_phi <= phi_half + 1e-6
-                if not mask.any():
-                    mask = np.zeros(len(pts3d_fb), dtype=bool)
-                    mask[int(np.argmin(d_phi))] = True
-                r2      = (pts3d_fb[mask, 0] - cx) ** 2 + (pts3d_fb[mask, 1] - cy) ** 2
-                best_pt = pts3d_fb[mask][int(np.argmax(r2))].copy()
-
-            pts_by_meridian[m_idx].append(best_pt.copy())
-            z_by_meridian[m_idx].append(float(z_level))
-
-    # Build each _Meridian from its accumulated point sequence.
-    built: list[_Meridian | None] = [None] * n_meridians
-    for m_idx in range(n_meridians):
-        pts_list = pts_by_meridian[m_idx]
-        if len(pts_list) < 3:
-            continue
-        pts   = np.array(pts_list, dtype=float)          # (K, 3)
-        z_arr = np.array(z_by_meridian[m_idx], dtype=float)  # (K,)
-
-        segs = np.linalg.norm(np.diff(pts, axis=0), axis=1)
-        arc  = np.concatenate(([0.0], np.cumsum(segs)))  # (K,)
-
-        # Surface tangent (Tr, Tz) in the r-z meridian plane via centred differences.
-        r_arr = np.sqrt((pts[:, 0] - cx) ** 2 + (pts[:, 1] - cy) ** 2)
-        dr = np.gradient(r_arr, arc)
-        dz = np.gradient(z_arr, arc)
-        nrm = np.sqrt(dr ** 2 + dz ** 2) + 1e-12
-        Tr, Tz = dr / nrm, dz / nrm
-
-        # Outward normal: rotate tangent by -90° in (r, z) plane.
-        Nr, Nz =  Tz, -Tr   # N_r = +T_z,  N_z = -T_r
-
-        phi_m   = float(phi_angles[m_idx])
-        n3d     = np.column_stack([
-            Nr * np.cos(phi_m),
-            Nr * np.sin(phi_m),
-            Nz,
-        ])                                                # (K, 3)
-        nn      = np.linalg.norm(n3d, axis=1, keepdims=True) + 1e-12
-        n3d    /= nn
-
-        built[m_idx] = _Meridian(z_vals=z_arr, arc_vals=arc, normals=n3d)
-
-    # Fill any None slots from the nearest available neighbour.
-    for m_idx in range(n_meridians):
-        if built[m_idx] is not None:
-            continue
-        for offset in range(1, n_meridians):
-            nb = built[(m_idx + offset) % n_meridians]
-            if nb is not None:
-                built[m_idx] = nb
-                break
-        if built[m_idx] is None:
-            z2   = np.array([z_min + eps, z_max - eps])
-            arc2 = np.array([0.0, float(z_max - z_min - 2.0 * eps)])
-            n2   = np.tile([0.0, 0.0, 1.0], (2, 1)).astype(float)
-            built[m_idx] = _Meridian(z_vals=z2, arc_vals=arc2, normals=n2)
-
-    return built  # type: ignore[return-value]  # all slots are filled
-
-
-def _avg_z_for_arc(s_target: float, meridians: list) -> float:
-    """Average Z level at a surface arc value across all meridians."""
-    z_vals = [
-        float(np.interp(s_target, m.arc_vals, m.z_vals))
-        for m in meridians
-        if s_target <= m.arc_vals[-1] + 1e-9
-    ]
-    return float(np.mean(z_vals)) if z_vals else 0.0
-
-
-def _avg_Tz_for_z(z_target: float, meridians: list) -> float:
-    """Average Tz = dz/ds (z-component of the upward meridian tangent) at z_target.
-
-    From the meridian normal construction: Nr = Tz, so Tz equals the radial
-    magnitude of the interpolated outward normal.  Returns a conservative
-    fallback of 0.866 (= sqrt(3)/2, corresponding to a 30° surface slope) when
-    no meridian covers z_target.
-    """
-    Tz_vals = []
-    for m in meridians:
-        if m.z_vals[0] - 1e-9 <= z_target <= m.z_vals[-1] + 1e-9:
-            nx = float(np.interp(z_target, m.z_vals, m.normals[:, 0]))
-            ny = float(np.interp(z_target, m.z_vals, m.normals[:, 1]))
-            Tz_vals.append(float(math.sqrt(nx * nx + ny * ny)))
-    return float(np.mean(Tz_vals)) if Tz_vals else 0.866
-
-
-def _avg_arc_for_z(z_target: float, meridians: list) -> float:
-    """Average surface arc value at a given Z across all meridians."""
-    s_vals = [
-        float(np.interp(z_target, m.z_vals, m.arc_vals))
-        for m in meridians
-        if m.z_vals[0] - 1e-9 <= z_target <= m.z_vals[-1] + 1e-9
-    ]
-    return float(np.mean(s_vals)) if s_vals else 0.0
-
-
-def _lowest_placeable_z(meridians: list, normal_z_threshold: float = -0.1) -> float:
-    """Lowest Z where the averaged meridian outward normal clears the threshold."""
-    if not meridians:
-        return 0.0
-    z_min = min(float(m.z_vals[0])  for m in meridians)
-    z_max = max(float(m.z_vals[-1]) for m in meridians)
-    for z in np.linspace(z_min, z_max, 128):
-        nz_vals = [
-            float(np.interp(z, m.z_vals, m.normals[:, 2]))
-            for m in meridians
-            if m.z_vals[0] <= z <= m.z_vals[-1]
-        ]
-        if nz_vals and float(np.mean(nz_vals)) > normal_z_threshold:
-            return float(z)
-    return float(z_min)
-
-
-def _compute_row_z_positions(
-    meridians:        list,
-    leaf_length_mm:   float,
-    leaf_v_overlap:   float,
-    z_top:            float,
-    bottom_extra_mm:  float = 0.0,
-) -> list[float]:
-    """Row Z positions via equal surface-arc intervals (meridian-arc method).
-
-    Anchors the first row one leaf-length of arc above the lowest upward-facing
-    surface; pins the last row to the sampled world-Z apex.  Fills in rows at
-    the integer-optimal arc-step between them.
-
-    *bottom_extra_mm* raises the bottom anchor above the straight-tip baseline
-    to prevent curl/arch overshoot past z_placeable.  Pass the value from
-    :func:`_curl_bottom_margin_mm`.
-    """
-    if not meridians:
-        return []
-
-    # Top anchor: the last z level sampled (all meridians share z_vals since
-    # sections succeed or fail together).  eps is set small enough that this
-    # is within ~0.004 mm of the true apex, giving a tiny cross-section ring.
-    # We pin the last row directly to z_top_sample rather than converting
-    # through arc-space, because the arc↔z roundtrip is biased on asymmetric
-    # (tilted) clusters.
-    z_top_sample  = float(max(m.z_vals[-1] for m in meridians))
-    s_top         = _avg_arc_for_z(z_top_sample, meridians)
-
-    z_placeable   = _lowest_placeable_z(meridians, normal_z_threshold=_LEAF_PLACEABLE_NORMAL_Z)
-    z_bot_anchor  = z_placeable + leaf_length_mm + float(bottom_extra_mm)
-    z_bot_anchor  = min(z_bot_anchor, z_top_sample)
-
-    s_bot     = _avg_arc_for_z(z_bot_anchor, meridians)
-    inner_arc = max(s_top - s_bot, 1e-6)
-
-    row_step_target = leaf_length_mm * max(1.0 - float(leaf_v_overlap), 0.05)
-    n_gaps          = max(1, round(inner_arc / row_step_target))
-    actual_step     = inner_arc / n_gaps
-
-    row_arc = [s_bot + i * actual_step for i in range(n_gaps + 1)]
-
-    # Convert uniform arc positions → z by inverting a SINGLE averaged arc(z)
-    # profile.  Using _avg_z_for_arc directly (arc→z) is inconsistent with the
-    # _avg_arc_for_z (z→arc) used to pick s_bot/s_top: the two averages weight
-    # different meridian subsets, because near the apex of a tilted cluster
-    # fewer meridians reach each level.  That inconsistency makes uniform arc
-    # steps realise as *uneven* z rows — the row just below the apex lands too
-    # low, opening a visible gap up to the pinned apex row while overlapping the
-    # row beneath it.  Sampling arc(z) once and inverting the same table makes
-    # the arc↔z round-trip exact, so uniform arc steps stay uniform.  s_top maps
-    # back to z_top_sample by construction, so the apex row stays pinned without
-    # a special case.
-    z_prof = np.linspace(z_bot_anchor, z_top_sample, 400)
-    s_prof = np.array([_avg_arc_for_z(float(z), meridians) for z in z_prof])
-    s_prof = np.maximum.accumulate(s_prof)   # enforce monotone arc(z)
-    row_zs = [float(np.interp(s, s_prof, z_prof)) for s in row_arc]
-    row_zs[-1] = z_top_sample                # exact apex pin (interp already ≈ this)
-    return row_zs
-
-
-def _interpolate_meridian_normal(
-    meridians: list,
-    phi_leaf:  float,
-    z_row:     float,
-) -> np.ndarray:
-    """Interpolate the outward surface normal at (phi_leaf, z_row).
-
-    Linearly interpolates between the two azimuthally-bracketing meridians,
-    then normalises.  Falls back to world-up on degenerate inputs.
-    """
-    n = len(meridians)
-    if n == 0:
-        return np.array([0.0, 0.0, 1.0])
-
-    phi_step = 2.0 * np.pi / n
-    phi_w    = float(phi_leaf % (2.0 * np.pi))
-    m_i      = int(phi_w / phi_step) % n
-    m_ip1    = (m_i + 1) % n
-    w        = float(np.clip((phi_w - m_i * phi_step) / phi_step, 0.0, 1.0))
-
-    def _nrm_at(m: _Meridian) -> np.ndarray:
-        return np.array([float(np.interp(z_row, m.z_vals, m.normals[:, j]))
-                         for j in range(3)])
-
-    n_lerp = (1.0 - w) * _nrm_at(meridians[m_i]) + w * _nrm_at(meridians[m_ip1])
-    nn     = float(np.linalg.norm(n_lerp))
-    return n_lerp / max(nn, 1e-12)
-
-
 def _bezier_clump_start(
     p0: np.ndarray,
     bp1: np.ndarray,
@@ -1155,22 +704,7 @@ def _build_foliage_cluster_mesh(
     clump_length_mm: float,
     edge_id: int,
     bark_seed: int,
-    leaves: bool = False,
-    leaf_length_mm: float = 0.0,
-    leaf_width_mm: float = 0.0,
-    leaf_thickness_mm: float = 0.24,
-    leaf_fold_angle_deg: float = 6.0,
-    leaf_inner_curve: float = 1.5,
-    leaf_outer_curve: float = 0.72,
-    leaf_h_overlap: float = 0.2,
-    leaf_v_overlap: float = 0.5,
-    leaf_curl_deg: float = 40.0,
-    leaf_lift_mm: float = 3.0,
-    leaf_arc_meridians: int = 6,
-    leaf_arc_z_samples: int = 64,
-    leaf_angle_jitter_deg: float = 24.0,
-    leaf_pos_jitter: float = 0.165,
-) -> tuple[trimesh.Trimesh, list[trimesh.Trimesh]]:
+) -> trimesh.Trimesh:
     """Foliage clump: icosphere bent along the branch Bezier spine.
 
     Profile arc segments (back → front):
@@ -1197,6 +731,9 @@ def _build_foliage_cluster_mesh(
     """
     r_base  = float(r_wood)
     r_tip   = float(r_foliage)
+    # Back-end rounding radius (see _FOLIAGE_BACK_ROUND_FRAC).  r_base keeps
+    # feeding the branch-embedding offsets (factor_tip / dome_shift) only.
+    r_back  = max(r_base, _FOLIAGE_BACK_ROUND_FRAC * r_tip)
     tip_t   = _safe_norm(np.asarray(tip_tangent,   float))
     start_t = _safe_norm(np.asarray(start_tangent, float))
     tip_p   = np.asarray(tip_pos,   float)
@@ -1219,33 +756,19 @@ def _build_foliage_cluster_mesh(
     tot_spine  = float(spine_arc[-1])
 
     # ── Profile arc lengths ───────────────────────────────────────────────────
-    south_arc    = (np.pi / 2.0) * r_base
-    cone_arc_p   = float(np.sqrt(tot_spine ** 2 + (r_tip - r_base) ** 2))
+    south_arc    = (np.pi / 2.0) * r_back
+    cone_arc_p   = float(np.sqrt(tot_spine ** 2 + (r_tip - r_back) ** 2))
     north_arc    = (np.pi / 2.0) * r_tip
     total_arc    = south_arc + cone_arc_p + north_arc
 
-    # ── Icosphere ────────────────────────────────────────────────────────────
-    ico    = trimesh.creation.icosphere(subdivisions=_FOLIAGE_ICO_SUBDIVISIONS, radius=1.0)
-    uverts = ico.vertices.copy()                      # (M, 3) unit sphere
-
-    dot_t  = uverts @ tip_t                           # latitude ∈ [-1, 1]
-    u_vals = (dot_t + 1.0) * 0.5 * total_arc         # arc param ∈ [0, total_arc]
-
-    # Unit radial direction for each vertex (perp to tip_t on the unit sphere).
-    rvec   = uverts - dot_t[:, None] * tip_t
-    r_lat  = np.linalg.norm(rvec, axis=1, keepdims=True)
-    rad_u  = np.divide(
-        rvec, r_lat,
-        out=np.zeros_like(rvec),
-        where=r_lat > 1e-10,
-    )                                                                # (M, 3)
-
-    verts  = np.zeros_like(uverts)
-
-    # Perpendicular-upward offset: shift each ring center by that ring's own
-    # radius in the world-up direction projected perp to the local tangent.
-    # This places the bottom edge of every ring exactly at the branch centerline,
-    # exposing the full branch on the underside of the foliage.
+    # ── Structured sweep: rings along the composite profile ──────────────────
+    # A rounded-cone sweep: pole fan → back cap rings → cone rings → front
+    # dome rings → pole fan, with a parallel-transported frame so rings never
+    # twist against each other.  Replaces the bent icosphere: its latitude
+    # binning left the narrow end with too few, unevenly clustered vertices
+    # (rings of ~1 mm radius carried by a handful of irregular points), which
+    # crumpled the back end no matter how the polar cap was patched.  The
+    # profile formulas per section are unchanged.
     _WUP = np.array([0.0, 0.0, 1.0])
 
     def _pu_unit_scalar(tangent: np.ndarray) -> np.ndarray:
@@ -1254,202 +777,100 @@ def _build_foliage_cluster_mesh(
         n = float(np.linalg.norm(p))
         return p / n if n > 1e-6 else np.zeros(3)
 
-    def _pu_unit_batch(tangents: np.ndarray) -> np.ndarray:
-        """Per-row world-up perp to tangent, normalised, shape (M, 3)."""
-        p = _WUP - (tangents * _WUP).sum(axis=1, keepdims=True) * tangents
-        n = np.linalg.norm(p, axis=1, keepdims=True)
-        return np.divide(
-            p, n,
-            out=np.zeros_like(p),
-            where=n > 1e-6,
-        )
+    _N_THETA = 28
+    _RING_RES_MM = 1.2
+    n_south = max(3, int(np.ceil(south_arc / _RING_RES_MM)))
+    n_cone  = max(4, int(np.ceil(cone_arc_p / _RING_RES_MM)))
+    n_north = max(4, int(np.ceil(north_arc / _RING_RES_MM)))
 
-    # ── Back hemisphere: backward from start_p along start_t ─────────────────
-    ms = u_vals <= south_arc
-    if ms.any():
-        phi    = (u_vals[ms] / south_arc) * (np.pi / 2.0)
-        ax_s   = -r_base * np.cos(phi)                  # ≤ 0 (behind start_p)
-        rr_s   = r_base * np.sin(phi)
-        ru     = rad_u[ms]
-        dp     = (ru * start_t).sum(axis=1, keepdims=True)
-        rp     = ru - dp * start_t
-        rn     = np.linalg.norm(rp, axis=1, keepdims=True)
-        rpu    = np.divide(
-            rp, rn,
-            out=np.zeros_like(rp),
-            where=rn > 1e-10,
-        )
-        pu_s   = _pu_unit_scalar(start_t)               # (3,) fixed direction
-        # Back hemisphere uses the base factor (0.5) for continuity with the cone.
-        verts[ms] = start_p + pu_s * (0.5 * rr_s[:, None]) + ax_s[:, None] * start_t + rpu * rr_s[:, None]
+    factor_tip = max(0.0, 1.0 - (r_base + _FOLIAGE_MAX_NOISE_MM) / max(r_tip, 1e-6))
+    dome_shift = max(0.0, r_tip - r_base - _FOLIAGE_MAX_NOISE_MM)
+    pu_s   = _pu_unit_scalar(start_t)
+    pu_tip = _pu_unit_scalar(tip_t)
 
-    # ── Cone body: cross-sections swept along Bezier spine ────────────────────
-    mc = (~ms) & (u_vals <= south_arc + cone_arc_p)
-    if mc.any():
-        tc   = (u_vals[mc] - south_arc) / cone_arc_p    # [0, 1] along spine
-        rr_c = r_base + tc * (r_tip - r_base)
-        sv   = tc * tot_spine                            # arc position on spine
-
-        sp_c = np.column_stack([
-            np.interp(sv, spine_arc, spine_pts[:, d]) for d in range(3)
-        ])
-        st_raw = np.column_stack([
-            np.interp(sv, spine_arc, spine_tans[:, d]) for d in range(3)
-        ])
-        stn  = np.linalg.norm(st_raw, axis=1, keepdims=True)
-        st_c = st_raw / np.where(stn > 1e-10, stn, 1.0)   # local spine tangent
-
-        ru   = rad_u[mc]
-        dp   = (ru * st_c).sum(axis=1, keepdims=True)
-        rp   = ru - dp * st_c
-        rn   = np.linalg.norm(rp, axis=1, keepdims=True)
-        rpu  = np.divide(
-            rp, rn,
-            out=np.zeros_like(rp),
-            where=rn > 1e-10,
-        )
-        pu_c = _pu_unit_batch(st_c)                     # (M, 3) per-vertex direction
-        # Offset rises smoothly from 0.5 at the base (tc=0) to factor_tip at
-        # the tip (tc=1) via cubic smoothstep.
-        # factor_tip gives offset = r_tip - r_base - _FOLIAGE_MAX_NOISE_MM, so
-        # the ring bottom sits _FOLIAGE_MAX_NOISE_MM below the branch bottom.
-        # After the noise erodes the surface inward by up to that amount, the
-        # branch bottom ends up flush with (but not exposed through) the skin.
-        factor_tip = max(0.0, 1.0 - (r_base + _FOLIAGE_MAX_NOISE_MM) / max(r_tip, 1e-6))
-        smooth_tc  = 3.0 * tc ** 2 - 2.0 * tc ** 3     # smoothstep ∈ [0, 1]
-        tc_factor  = 0.5 + (factor_tip - 0.5) * smooth_tc
-        verts[mc] = sp_c + pu_c * (rr_c * tc_factor)[:, None] + rpu * rr_c[:, None]
-
-    # ── Forward dome: forward from tip_p along tip_t ──────────────────────────
-    mn = u_vals > south_arc + cone_arc_p
-    if mn.any():
-        phi    = (u_vals[mn] - south_arc - cone_arc_p) / north_arc * (np.pi / 2.0)
-        ax_n   = r_tip * np.sin(phi)
-        rr_n   = r_tip * np.cos(phi)
-        pu_tip     = _pu_unit_scalar(tip_t)
-        dome_shift = max(0.0, r_tip - r_base - _FOLIAGE_MAX_NOISE_MM)
-        # Blend the perp-upward offset from full at the equator (phi=0, matching
-        # tc=1 cone) to zero at the north pole (phi=pi/2), so the dome tip lies
-        # on the branch axis rather than being shifted sideways.  Eliminates the
-        # offset dome appearance under tight branch curves.
-        shift_blend = np.cos(phi)
-        ring_ctr = tip_p + ax_n[:, None] * tip_t + (dome_shift * shift_blend)[:, None] * pu_tip
-        verts[mn] = ring_ctr + rad_u[mn] * rr_n[:, None]
-
-    # ── Back-cap dome ─────────────────────────────────────────────────────────
-    # The icosphere south polar vertex maps to a single geometric point at
-    # start_p - r_base * start_t.  All ~10 surrounding icosphere triangles
-    # converge there, producing a visible polar-singularity pinch at the back
-    # end of the cluster (worst when r_wood is small).  Fix: drop every
-    # icosphere face that touches a back-hemisphere vertex (ms), find the
-    # boundary ring on the surviving cone/dome faces, and close the hole with
-    # a hemispherical dome — matching the rounded forward dome at the wide end.
-    _f_orig    = ico.faces                         # (F, 3)
-    _keep_mask = ~ms[_f_orig].any(axis=1)          # True  → cone/dome face
-    _keep_faces = _f_orig[_keep_mask]              # (K, 3)
-
-    # Count how many kept faces each edge belongs to.  Boundary edges appear
-    # in exactly one kept face.
-    _edge_cnt: dict[tuple[int, int], int] = {}
-    for _f in _keep_faces:
-        for _i in range(3):
-            _e = (int(min(_f[_i], _f[(_i + 1) % 3])),
-                  int(max(_f[_i], _f[(_i + 1) % 3])))
-            _edge_cnt[_e] = _edge_cnt.get(_e, 0) + 1
-    _bnd_edges = [_e for _e, _c in _edge_cnt.items() if _c == 1]
-
-    # Walk boundary edges into a single ordered vertex loop.
-    _bnd_adj: dict[int, list[int]] = {}
-    for _e in _bnd_edges:
-        _bnd_adj.setdefault(_e[0], []).append(_e[1])
-        _bnd_adj.setdefault(_e[1], []).append(_e[0])
-    _bnd_loop: list[int] = []
-    if _bnd_edges:
-        _bnd_start = _bnd_edges[0][0]
-        _bnd_loop  = [_bnd_start]
-        _bnd_prev, _bnd_cur = None, _bnd_start
-        while True:
-            _nx = [v for v in _bnd_adj.get(_bnd_cur, []) if v != _bnd_prev]
-            if not _nx or _nx[0] == _bnd_start:
-                break
-            _bnd_loop.append(_nx[0])
-            _bnd_prev, _bnd_cur = _bnd_cur, _nx[0]
-
-    # Build a hemispherical dome from the boundary ring backward to
-    # start_p - r_base * start_t, matching the rounded forward dome at the
-    # wide end.  Uses _N_CLUSTER_DOME_LATS latitude bands so the cap is
-    # smoothly curved rather than flat.
-    _NL = len(_bnd_loop)
-    if _NL < 3:
-        _ico_faces = _keep_faces
-    else:
-        _bnd_positions = np.array([verts[v] for v in _bnd_loop])   # (_NL, 3)
-        _bnd_center    = _bnd_positions.mean(axis=0)
-        _dome_pole     = start_p - r_base * start_t
-
-        # Perpendicular radius of the boundary ring (in the plane ⊥ start_t).
-        _radial        = _bnd_positions - _bnd_center
-        _axial_proj    = (_radial @ start_t)[:, np.newaxis] * start_t
-        _ring_r0       = float(np.linalg.norm(_radial - _axial_proj, axis=1).mean())
-
-        # Orthonormal frame perp to start_t for generating ring vertices.
-        _pu_s_d        = _pu_unit_scalar(start_t)
-        _pu_v_raw      = np.cross(start_t, _pu_s_d)
-        _pu_v_n        = float(np.linalg.norm(_pu_v_raw))
-        _pu_v          = (_pu_v_raw / _pu_v_n if _pu_v_n > 1e-6
-                          else np.array([0., 1., 0.]))
-
-        # Project bnd_loop into the pu_s_d / pu_v plane to find winding direction
-        # and the starting angle for dome rings.  The dome rings must go around
-        # in the same angular direction as bnd_loop to avoid bow-tie quads.
-        _bnd_u       = (_bnd_positions - _bnd_center) @ _pu_s_d   # (_NL,)
-        _bnd_v_proj  = (_bnd_positions - _bnd_center) @ _pu_v     # (_NL,)
-        _bnd_ang_all = np.arctan2(_bnd_v_proj, _bnd_u)            # (_NL,)
-        _signed_area = 0.5 * float(np.sum(
-            _bnd_u * np.roll(_bnd_v_proj, -1) - np.roll(_bnd_u, -1) * _bnd_v_proj
+    # (center, radius, axis) per ring, in sweep order.  Section seams share a
+    # ring (south phi=π/2 == cone tc=0; cone tc=1 == dome phi=0), so the cone
+    # range starts at i=1 and the dome range at j=1.
+    ring_specs: list[tuple[np.ndarray, float, np.ndarray]] = []
+    # Back cap: phi ∈ (0, π/2], behind start_p along start_t.  The center
+    # offset is 0.5·rr along pu (the cone-base factor) for seam continuity.
+    for j in range(1, n_south + 1):
+        phi = (np.pi / 2.0) * j / n_south
+        rr  = r_back * float(np.sin(phi))
+        ax  = -r_back * float(np.cos(phi))
+        ring_specs.append((start_p + ax * start_t + pu_s * (0.5 * rr), rr, start_t))
+    # Cone body: cross-sections along the Bezier spine.  Offset rises from
+    # 0.5 at the base to factor_tip at the tip via cubic smoothstep — at tc=1
+    # the ring bottom sits _FOLIAGE_MAX_NOISE_MM below the branch bottom so
+    # the inward-only noise leaves the branch flush with the skin.
+    for i in range(1, n_cone + 1):
+        tc  = i / n_cone
+        rr  = r_back + tc * (r_tip - r_back)
+        sv  = tc * tot_spine
+        sp  = np.array([float(np.interp(sv, spine_arc, spine_pts[:, d])) for d in range(3)])
+        st  = _safe_norm(np.array([
+            float(np.interp(sv, spine_arc, spine_tans[:, d])) for d in range(3)
+        ]))
+        smooth_tc = 3.0 * tc ** 2 - 2.0 * tc ** 3
+        tc_factor = 0.5 + (factor_tip - 0.5) * smooth_tc
+        ring_specs.append((sp + _pu_unit_scalar(st) * (rr * tc_factor), rr, st))
+    # Front dome: phi ∈ (0, π/2), ahead of tip_p along tip_t.  The pu offset
+    # blends from full at the equator to zero at the pole so the dome tip
+    # lies on the branch axis (no offset-dome under tight curves).
+    for j in range(1, n_north):
+        phi = (np.pi / 2.0) * j / n_north
+        rr  = r_tip * float(np.cos(phi))
+        ax  = r_tip * float(np.sin(phi))
+        ring_specs.append((
+            tip_p + ax * tip_t + (dome_shift * float(np.cos(phi))) * pu_tip,
+            rr, tip_t,
         ))
-        _angle_sign  = 1.0 if _signed_area >= 0 else -1.0
-        _angle0      = float(_bnd_ang_all[0])
 
-        _verts_list    = list(verts)
-        _faces_list    = list(_keep_faces)
-        _prev_ring     = _bnd_loop
+    south_pole = start_p - r_back * start_t
+    north_pole = tip_p + r_tip * tip_t
 
-        for _lat_i in range(1, _N_CLUSTER_DOME_LATS + 1):
-            _phi = (np.pi / 2.0) * _lat_i / _N_CLUSTER_DOME_LATS
+    # Parallel-transport a frame along the ring axes so theta=0 never twists
+    # around the sweep between neighbouring rings.
+    ref = pu_s if float(np.linalg.norm(pu_s)) > 1e-6 else np.array([1.0, 0.0, 0.0])
+    thetas = 2.0 * np.pi * np.arange(_N_THETA) / _N_THETA
+    cos_t  = np.cos(thetas)[:, np.newaxis]
+    sin_t  = np.sin(thetas)[:, np.newaxis]
 
-            if _lat_i < _N_CLUSTER_DOME_LATS:
-                _t         = float(np.sin(_phi))
-                _rr        = _ring_r0 * float(np.cos(_phi))
-                _ring_ctr  = _bnd_center * (1.0 - _t) + _dome_pole * _t
-                _angles    = _angle0 + _angle_sign * 2.0 * np.pi * np.arange(_NL) / _NL
-                _new_ring  = (
-                    _ring_ctr
-                    + _rr * np.outer(np.cos(_angles), _pu_s_d)
-                    + _rr * np.outer(np.sin(_angles), _pu_v)
-                )                           # (_NL, 3)
-                _ring_base = len(_verts_list)
-                _verts_list.extend(_new_ring)
-                _curr_ring = list(range(_ring_base, _ring_base + _NL))
+    _verts_list: list[np.ndarray] = [south_pole]
+    for center, rr, axis in ring_specs:
+        e1 = ref - float(np.dot(ref, axis)) * axis
+        n1 = float(np.linalg.norm(e1))
+        if n1 > 1e-8:
+            e1 = e1 / n1
+        else:                       # axis parallel to ref: pick any perp
+            e1 = _safe_norm(np.cross(axis, _WUP)
+                            if abs(float(axis[2])) < 0.9
+                            else np.cross(axis, np.array([1.0, 0.0, 0.0])))
+        e2 = np.cross(axis, e1)
+        ref = e1
+        _verts_list.extend(center + rr * (cos_t * e1 + sin_t * e2))
+    _verts_list.append(north_pole)
+    verts = np.array(_verts_list)
 
-                for _k in range(_NL):
-                    _k1 = (_k + 1) % _NL
-                    _p0, _p1 = _prev_ring[_k], _prev_ring[_k1]
-                    _c0, _c1 = _curr_ring[_k], _curr_ring[_k1]
-                    _faces_list.append([_p0, _c0, _c1])
-                    _faces_list.append([_p0, _c1, _p1])
-
-                _prev_ring = _curr_ring
-
-            else:
-                _pole_idx = len(_verts_list)
-                _verts_list.append(_dome_pole)
-                for _k in range(_NL):
-                    _k1 = (_k + 1) % _NL
-                    _faces_list.append([_prev_ring[_k], _pole_idx, _prev_ring[_k1]])
-
-        verts      = np.array(_verts_list)
-        _ico_faces = np.array(_faces_list, dtype=np.int32)
+    n_rings = len(ring_specs)
+    _faces_list: list[list[int]] = []
+    _r0 = 1                                        # first ring vertex index
+    for k in range(_N_THETA):                      # south pole fan
+        k1 = (k + 1) % _N_THETA
+        _faces_list.append([0, _r0 + k1, _r0 + k])
+    for ri in range(n_rings - 1):                  # quad strips
+        a = 1 + ri * _N_THETA
+        b = a + _N_THETA
+        for k in range(_N_THETA):
+            k1 = (k + 1) % _N_THETA
+            _faces_list.append([a + k, b + k, b + k1])
+            _faces_list.append([a + k, b + k1, a + k1])
+    _np_idx = 1 + n_rings * _N_THETA               # north pole vertex
+    _last = 1 + (n_rings - 1) * _N_THETA
+    for k in range(_N_THETA):                      # north pole fan
+        k1 = (k + 1) % _N_THETA
+        _faces_list.append([_np_idx, _last + k, _last + k1])
+    _ico_faces = np.array(_faces_list, dtype=np.int32)
 
     # ── Normals + two noise layers ────────────────────────────────────────────
     shaped  = trimesh.Trimesh(vertices=verts, faces=_ico_faces, process=False)
@@ -1466,60 +887,25 @@ def _build_foliage_cluster_mesh(
                             0.0, tot_spine)
     _nearest_pt  = start_p + _t_proj * _spine_chord
     _perp_d      = np.linalg.norm(verts - _nearest_pt, axis=1)        # (M,)
-    _span        = max(r_tip - r_base, 1e-6)
-    _raw_t       = np.clip((_perp_d - r_base) / _span, 0.0, 1.0)
+    _span        = max(r_tip - r_back, 1e-6)
+    _raw_t       = np.clip((_perp_d - r_back) / _span, 0.0, 1.0)
     _noise_scale = 3.0 * _raw_t ** 2 - 2.0 * _raw_t ** 3             # smoothstep
 
+    # Cluster noise only displaces INWARD: the peak-shift below forces the
+    # maximum displacement to exactly 0, so the smooth pre-noise surface is
+    # the strict outer envelope and the full 2A trough range erodes inward —
+    # no amplitude loss, no outward expansion.
     disp = (
         _foliage_gaussian_noise(verts, edge_id, bark_seed)
         + _foliage_coarse_noise(verts, edge_id, bark_seed)
     ) * _noise_scale
-    # Shift the full noise wave inward: subtract its peak so the maximum
-    # displacement is exactly 0 (the smooth envelope) and the full 2A
-    # trough range erodes inward — no amplitude loss, no outward expansion.
     noise_peak = float(disp.max())
     disp = disp - noise_peak
     verts = verts + normals * disp[:, np.newaxis]
 
-    # ── Leaves: rows up the cone, over the dome, capped at the apex ──────────
-    # Build the noised cluster mesh now (verts is final after the noise step
-    # above) so solidify_leaf can raycast into it for root embedding.
-    cluster_mesh = trimesh.Trimesh(vertices=verts, faces=_ico_faces, process=False)
-    cluster_mesh.fix_normals()
-
-    leaf_parts: list[trimesh.Trimesh] = []
-    if leaves and leaf_length_mm > 1e-6 and leaf_width_mm > 1e-6:
-        from .placement import place_leaves_on_mesh
-        leaf_parts, _ = place_leaves_on_mesh(
-            cluster_mesh,
-            length_mm      = leaf_length_mm,
-            width_mm       = leaf_width_mm,
-            thickness_mm   = leaf_thickness_mm,
-            fold_angle_deg = leaf_fold_angle_deg,
-            inner_curve    = leaf_inner_curve,
-            outer_curve    = leaf_outer_curve,
-            curl_deg       = leaf_curl_deg,
-            lift_mm        = leaf_lift_mm,
-            h_overlap      = leaf_h_overlap,
-            v_overlap      = leaf_v_overlap,
-            n_meridians    = leaf_arc_meridians,
-            z_samples      = leaf_arc_z_samples,
-            seed           = _hash01_int(bark_seed, "leaves", edge_id),
-            label          = f"cluster-{edge_id}",
-            angle_jitter_deg = leaf_angle_jitter_deg,
-            pos_jitter       = leaf_pos_jitter,
-        )
-        if len(leaf_parts) < 3:
-            warnings.warn(
-                f"Foliage cluster edge_id={edge_id} generated only "
-                f"{len(leaf_parts)} leaf(ves) — possible bare-spot regression. "
-                f"(r_tip={r_tip:.2f} mm, clump_length={clump_length_mm:.1f} mm)",
-                RuntimeWarning,
-                stacklevel=2,
-            )
     result = trimesh.Trimesh(vertices=verts, faces=_ico_faces, process=False)
     result.fix_normals()
-    return result, leaf_parts
+    return result
 
 
 

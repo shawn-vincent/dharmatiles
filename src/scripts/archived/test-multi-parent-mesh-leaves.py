@@ -38,11 +38,15 @@ from dharmatiles.trees import (
 )
 from dharmatiles.trees._utils import _safe_norm
 from dharmatiles.trees.mesh import _build_foliage_cluster_mesh
+from dharmatiles.trees.placement_greedy import place_leaves_greedy
+from dharmatiles.trees.placement_organic import place_leaves_organic
+from dharmatiles.trees.placement_shoots import place_leaves_shoots
 
 from dharmatiles.core.color import (
     GRAY_SHADES,
     Material,
     RGBA,
+    debug_material,
     export_color_stl,
     tag as _color_tag,
 )
@@ -102,6 +106,11 @@ _UPWARD_TANGENT_Z_THRESHOLD = 0.1
 
 def _row_rgba(row_idx: int) -> tuple[int, int, int, int]:
     return RGBA[GRAY_SHADES[row_idx % len(GRAY_SHADES)]]
+
+
+def _shoot_rgba(shoot_idx: int) -> tuple[int, int, int, int]:
+    """Vivid 12-slot debug colour per shoot — all leaves in a shoot match."""
+    return RGBA[debug_material(shoot_idx)]
 
 
 # ── Minimal artifact check ─────────────────────────────────────────────────────
@@ -332,16 +341,18 @@ def _make_cluster(
     cx: float, cy: float, z_tip: float,
     tip_t: list[float], start_t: list[float],
     edge_id: int, bark_seed: int, label: str,
+    *, apply_noise: bool = True,
 ) -> trimesh.Trimesh:
     tip_t_n   = _safe_norm(np.asarray(tip_t,   float))
     start_t_n = _safe_norm(np.asarray(start_t, float))
     tip_p     = np.array([cx, cy, z_tip], float)
     start_p   = tip_p - float(_CLUSTER["clump_length_mm"]) * tip_t_n
     tilt_deg  = math.degrees(math.acos(float(np.clip(tip_t_n[2], -1.0, 1.0))))
-    print(
-        f"  [{label}] edge_id={edge_id}  tilt={tilt_deg:.1f}°  "
-        f"tip={[f'{v:.1f}' for v in tip_p]}  start={[f'{v:.1f}' for v in start_p]}"
-    )
+    if apply_noise:
+        print(
+            f"  [{label}] edge_id={edge_id}  tilt={tilt_deg:.1f}°  "
+            f"tip={[f'{v:.1f}' for v in tip_p]}  start={[f'{v:.1f}' for v in start_p]}"
+        )
     cluster, _ = _build_foliage_cluster_mesh(
         tip_pos       = tip_p,
         tip_tangent   = tip_t_n,
@@ -349,6 +360,7 @@ def _make_cluster(
         start_tangent = start_t_n,
         edge_id       = edge_id,
         bark_seed     = bark_seed,
+        apply_noise   = apply_noise,
         **_CLUSTER,
     )
     return cluster
@@ -360,7 +372,17 @@ def main() -> None:
     import argparse
     parser = argparse.ArgumentParser(description="Multi-parent-mesh leaf placement test")
     parser.add_argument("out", nargs="?", help="Output STL path")
+    parser.add_argument(
+        "--placement", choices=["meridian", "greedy", "shoots", "organic"],
+        default="meridian",
+        help="Leaf placer to exercise (default: meridian).",
+    )
+    parser.add_argument(
+        "--layering", choices=["systematic", "random"], default="systematic",
+        help="Overlap layering mode (organic placer only).",
+    )
     args = parser.parse_args()
+    placement = args.placement
 
     default_out = (
         Path(__file__).parents[2] / "stl" / "test" / "multi-parent-mesh-leaves.stl"
@@ -401,15 +423,48 @@ def main() -> None:
 
     print(f"  Cluster A: {len(ca.vertices):,}v / {len(ca.faces):,}f")
     print(f"  Cluster B: {len(cb.vertices):,}v / {len(cb.faces):,}f")
-    print("  Placing leaves on A and B with shared world-space shingling …")
 
-    parts_list, stats_list = place_leaves_on_multiple_meshes(
-        [ca, cb],
-        **_PLACE_KW,
-        seeds=[0, 1],
-        labels=["A (vertical)", "B (55° tilt)"],
-        row_color_fn=_row_rgba,
-    )
+    if placement in ("greedy", "shoots", "organic"):
+        if placement == "greedy":
+            print("  Placing leaves on A and B via GREEDY lowest-first accretion …")
+            _place_fn = place_leaves_greedy
+        elif placement == "shoots":
+            print("  Placing leaves on A and B via SHOOT-based accretion …")
+            _place_fn = place_leaves_shoots
+        else:
+            print(f"  Placing leaves on A and B via ORGANIC union-surface "
+                  f"tiling ({args.layering} layering) …")
+            _place_fn = place_leaves_organic
+        # All work directly on the real (noised) clumps ca/cb: roots seat
+        # just below the actual foliage surface.  Debug shades: shoots
+        # colour per SHOOT; organic colours per LAYER (overlap standoff).
+        _extra = {"layering": args.layering} if placement == "organic" else {}
+        parts_list, stats_list = _place_fn(
+            [ca, cb],
+            length_mm        = _PLACE_KW["length_mm"],
+            width_mm         = _PLACE_KW["width_mm"],
+            thickness_mm     = _PLACE_KW["thickness_mm"],
+            fold_angle_deg   = _PLACE_KW["fold_angle_deg"],
+            inner_curve      = _PLACE_KW["inner_curve"],
+            outer_curve      = _PLACE_KW["outer_curve"],
+            curl_deg         = _PLACE_KW["curl_deg"],
+            lift_mm          = _PLACE_KW["lift_mm"],
+            seeds            = [0, 1],
+            labels           = ["A (vertical)", "B (55° tilt)"],
+            angle_jitter_deg = _PLACE_KW["angle_jitter_deg"],
+            pos_jitter       = _PLACE_KW["pos_jitter"],
+            row_color_fn     = _row_rgba if placement == "greedy" else _shoot_rgba,
+            **_extra,
+        )
+    else:
+        print("  Placing leaves on A and B with shared world-space shingling …")
+        parts_list, stats_list = place_leaves_on_multiple_meshes(
+            [ca, cb],
+            **_PLACE_KW,
+            seeds=[0, 1],
+            labels=["A (vertical)", "B (55° tilt)"],
+            row_color_fn=_row_rgba,
+        )
     leaves_a, leaves_b = parts_list
     stats_a,  stats_b  = stats_list
 
@@ -446,7 +501,10 @@ def main() -> None:
     print("Colour key:")
     print("  Dark green (FOLIAGE) = cluster A body  (vertical, origin)")
     print("  Warm brown  (WOOD)   = cluster B body  (55° tilt, tip at (6,2))")
-    print("  Black → white per global Z row = leaves (bottom dark, top light, cycles at 16)")
+    if placement == "shoots":
+        print("  Vivid debug colour per SHOOT = leaves (all leaves in a shoot match, cycles at 12)")
+    else:
+        print("  Black → white per global Z row = leaves (bottom dark, top light, cycles at 16)")
 
 
 if __name__ == "__main__":
