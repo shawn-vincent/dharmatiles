@@ -22,6 +22,8 @@ def main():
     p.add_argument('--elev', type=float, default=40.0)
     p.add_argument('--azim', type=float, default=-135.0)
     p.add_argument('--width', type=int, default=1000)
+    p.add_argument('--no-tree', action='store_true',
+                   help='skip WOOD/FOLIAGE/LEAF parts (see the ground under a canopy)')
     p.add_argument('--box', type=float, nargs=4, default=None,
                    metavar=('X0','Y0','X1','Y1'),
                    help='crop: only render faces whose centroid xy (mm) is in box')
@@ -45,6 +47,8 @@ def main():
     verts_all, faces_all, cols_all = [], [], []
     off = 0
     for m in meshes:
+        if args.no_tree and m.metadata.get('material') in (6, 7, 8):
+            continue
         v, f = m.vertices, m.faces
         verts_all.append(v); faces_all.append(f + off); off += len(v)
         fc = getattr(m.visual, 'face_colors', None)

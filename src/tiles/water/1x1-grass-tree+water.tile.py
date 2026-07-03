@@ -51,9 +51,16 @@ tile = Tile(
                 # Obstacle-stampers (Rocks, Tree) run before the carpet and
                 # grass: carpet tubes end at footprints instead of being
                 # impaled, and the thatch skirts/deflects around them.
+                # Crown rule for rocks in thatch grass: exposed height
+                # r*flat - sink must beat mounds + blade stack (~3.4 mm),
+                # or the stones drown in the grass.
                 Rocks(
-                    r=D[2.0:3.5],
-                    placement=Uniform(count_per_square=4),
+                    r=D[3.2:4.4].power(1.3),
+                    flat=D[1.35:1.6],
+                    sink=0.3,
+                    n_cuts=5,
+                    cut=D[0.82:0.96],
+                    placement=Uniform(count_per_square=3, gap_mm=7),
                 ),
                 Tree(
                     height_mm=35.0,
