@@ -141,6 +141,11 @@ class StoneSpec:
                                  # 0 = crisp shard-cut, ~1.5 = river cobble
     spall_scars:  int   = -1     # concave exfoliation scars: -1 = auto by
                                  # size, 0 = none, N = exactly N bites
+    crown_flat:   float = 0.0    # 0-1: compress the top support points into
+                                 # a plateau — the glacial-erratic loaf has a
+                                 # broad flattish top, never an apex point
+                                 # (low facet counts put a single Fibonacci
+                                 # point at the pole = cone read)
     seed:         int   = 0
 
 
@@ -181,6 +186,12 @@ def _support_points(spec: StoneSpec) -> np.ndarray:
     s = 1.0 - egg * u * u
     pts[:, 0] *= s
     pts[:, 1] *= s
+
+    if spec.crown_flat > 0.0:
+        rz   = spec.height_mm / 2.0
+        zcap = rz * (1.0 - 0.4 * spec.crown_flat)
+        over = pts[:, 2] > zcap
+        pts[over, 2] = zcap + (pts[over, 2] - zcap) * 0.25
     return pts
 
 
