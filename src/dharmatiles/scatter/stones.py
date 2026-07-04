@@ -56,7 +56,21 @@ _UNDULATE_FRAC     = 0.35         # bulge amplitude × roundover: the reference
                                   # boulders are pillowy — broad convex bulges
                                   # flowing into shallow saddles, never flat
                                   # planes (the residual CAD read)
+_UNDULATE_FOOT     = 0.03         # extra amplitude per mm of footprint over
+                                  # 8 mm — fixed-mm bulges vanish on hero
+                                  # stones (E9: reference pillowing is ~5 % of
+                                  # diameter, ours was 2 %)
 _UNDULATE_WAVES    = 4            # random plane waves summed for the bulges
+
+# ── Micro-texture (E10): granular tooth for drybrushing ─────────────────────
+# References show grain at ~1–2 % of size; post-Taubin stones were glass.
+# The goal is FDM-miniature FEEL, not geology: bumps must survive a 0.4 mm
+# nozzle, so grain feature size ~1.3 mm and amplitude 0.1–0.25 mm.
+_MICRO_AMP_FRAC   = 0.012   # amplitude = frac × footprint, clamped below
+_MICRO_AMP_MM     = (0.10, 0.25)
+_MICRO_WAVE_MM    = 1.3     # grain feature size
+_MICRO_WAVES      = 14      # summed random plane waves — an isotropic
+                            # Gaussian field that reads granular, not wavy
 _OVERHANG_NZ      = -0.72   # fail when a face normal's z is below this (≈45°)
 _OVERHANG_CHORD   = 1.6     # mm — under-tucks narrower than this are allowed
 _GROUND_MARGIN    = 1.0     # mm — faces below terrain+margin are exempt from
@@ -459,6 +473,8 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
             # Organic undulation AFTER smoothing (or it gets smoothed
             # away): sum of random plane waves displaces the surface
             # along its normals into pillowy bulges and saddles.
+            # Amplitude scales with footprint too (E9): fixed-mm bulges
+            # vanish on hero-sized stones.
             u_rng = np.random.default_rng((spec.seed ^ 0x0DDA) & 0x7FFFFFFF)
             p  = np.asarray(aged.vertices)
             vn = np.asarray(aged.vertex_normals)
@@ -470,8 +486,25 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
                 f += np.cos(2.0 * np.pi / wl * (p @ d)
                             + u_rng.uniform(0.0, 2.0 * np.pi))
             f /= _UNDULATE_WAVES
-            amp = _UNDULATE_FRAC * spec.roundover_mm
-            v_loc = p + vn * (amp * f)[:, None]
+            amp = (_UNDULATE_FRAC * spec.roundover_mm
+                   + _UNDULATE_FOOT * max(spec.footprint_mm - 8.0, 0.0)
+                     * min(spec.roundover_mm, 1.0))
+
+            # Micro-texture: granular drybrush tooth (E10).  Many short
+            # random waves ≈ isotropic Gaussian grain at ~1.3 mm feature
+            # size — prints on a 0.4 mm nozzle, kills the glass read.
+            g = np.zeros(len(p))
+            for _ in range(_MICRO_WAVES):
+                d = u_rng.normal(size=3)
+                d /= np.linalg.norm(d) + 1e-12
+                mwl = u_rng.uniform(0.75, 1.6) * _MICRO_WAVE_MM
+                g += np.cos(2.0 * np.pi / mwl * (p @ d)
+                            + u_rng.uniform(0.0, 2.0 * np.pi))
+            g /= np.sqrt(_MICRO_WAVES)
+            amp_g = np.clip(_MICRO_AMP_FRAC * spec.footprint_mm,
+                            *_MICRO_AMP_MM)
+
+            v_loc = p + vn * (amp * f + amp_g * 0.5 * g)[:, None]
             faces = np.asarray(aged.faces)
 
     lean, burial = spec.lean_deg, spec.burial
@@ -722,9 +755,13 @@ def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
         p0, n0 = qs[0], N[tid[0]]
         d0 = np.cross(n0, np.array([0.0, 0.0, 1.0]))
         d0 = d0 / (np.linalg.norm(d0) + 1e-12)
-        s_back, sn_back = _crack_walk(mesh, N, p0, n0, -d0, 7, rng,
+        # Seam length and cross-section scale with the stone (E9): a
+        # fixed-mm seam is proportionally thread-thin on a hero boulder.
+        fs      = float(np.clip(footprint_mm / 12.0, 1.0, 2.0))
+        n_segs  = int(np.clip(footprint_mm * 0.55, 7, 14))
+        s_back, sn_back = _crack_walk(mesh, N, p0, n0, -d0, n_segs, rng,
                                       ground_z, pull_z=zs)
-        s_fwd,  sn_fwd  = _crack_walk(mesh, N, p0, n0, d0, 7, rng,
+        s_fwd,  sn_fwd  = _crack_walk(mesh, N, p0, n0, d0, n_segs, rng,
                                       ground_z, pull_z=zs)
         sp = s_back[::-1] + [p0] + s_fwd
         sn = sn_back[::-1] + [n0] + sn_fwd
@@ -732,8 +769,8 @@ def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
             prof = np.sin(np.pi * np.linspace(0.0, 1.0, len(sp))) ** 0.4
             prof = np.maximum(prof, 0.55)
             cutters.append(_crack_solid(sp, sn,
-                                        1.4 * _CRACK_WIDTH_MM * prof,
-                                        1.5 * _CRACK_DEPTH_MM * prof,
+                                        1.4 * fs * _CRACK_WIDTH_MM * prof,
+                                        1.5 * fs * _CRACK_DEPTH_MM * prof,
                                         proud_mm))
 
     if not cutters:

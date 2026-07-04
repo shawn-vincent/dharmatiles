@@ -103,7 +103,10 @@ class Rocks:
                 footprint_mm=foot,
                 height_mm=height,
                 aspect=asp,
-                facets=int(np.clip(6 + foot * 1.1, 7, 14)),
+                # Facet count scales with size, cap raised for hero-sized
+                # stones (E9: a 20 mm boulder with 14 facets shows straight
+                # 10 mm silhouette lines no real rock has).
+                facets=int(np.clip(6 + foot * 1.0, 7, 18)),
                 yaw_deg=yaw,
                 burial=float(rng.uniform(0.85, 1.05)),
                 # Scatter rocks (shore pebbles, water boulders) read as
