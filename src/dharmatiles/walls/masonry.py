@@ -270,8 +270,9 @@ class CutStoneWall:
     """
 
     height_default_mm: float = 5.0
-    yaw_max_deg:  float = _YAW_MAX_DEG
-    tilt_max_deg: float = _TILT_MAX_DEG
+    yaw_max_deg:    float = _YAW_MAX_DEG
+    tilt_max_deg:   float = _TILT_MAX_DEG
+    face_recess_mm: float = _FACE_RECESS_MM
 
     def __init__(self, spine: list[tuple[float, float]], *,
                  thickness_mm: float = 7.0,
@@ -322,8 +323,7 @@ class CutStoneWall:
         T, H = self.thickness_mm, self.height_mm
 
         seat_z = self._seat_z(scene, segs)
-        cells  = _layout(segs, T, H, self.course_mm, self.bay_mm,
-                         self.min_bond_mm, rng)
+        cells  = self._cells(segs, T, H, rng)
 
         parts = self._core_boxes(segs, seat_z)
         for cell in cells:
@@ -340,6 +340,13 @@ class CutStoneWall:
         return [wall]
 
     # ── pieces ───────────────────────────────────────────────────────────────
+    def _cells(self, segs: list[_Seg], T: float, H: float,
+               rng: np.random.Generator) -> list[_Cell]:
+        """Block cells for the wall; subclass hook — FieldstoneWall
+        post-processes these (throughstone merges)."""
+        return _layout(segs, T, H, self.course_mm, self.bay_mm,
+                       self.min_bond_mm, rng)
+
     def _unit_mesh(self, lx: float, ly: float, lz: float, chamfer: float,
                    cell: _Cell, rng: np.random.Generator) -> trimesh.Trimesh:
         """One masonry unit in the local cell frame; subclass hook —
@@ -384,12 +391,13 @@ class CutStoneWall:
         seg = segs[cell.seg]
         j2  = self.joint_mm / 2.0
 
+        fr = self.face_recess_mm
         x0 = cell.t0 + (j2 if cell.end0 == 'joint'
-                        else rng.uniform(0.0, _FACE_RECESS_MM))
+                        else rng.uniform(0.0, fr))
         x1 = cell.t1 - (j2 if cell.end1 == 'joint'
-                        else rng.uniform(0.0, _FACE_RECESS_MM))
-        y0 = rng.uniform(0.0, _FACE_RECESS_MM)
-        y1 = self.thickness_mm - rng.uniform(0.0, _FACE_RECESS_MM)
+                        else rng.uniform(0.0, fr))
+        y0 = rng.uniform(0.0, fr)
+        y1 = self.thickness_mm - rng.uniform(0.0, fr)
         z0 = seat_z + (cell.z0 + j2 if not cell.is_bottom
                        else -self.embed_mm)
         z1 = seat_z + (cell.z1 - (0.0 if cell.is_top else j2))
