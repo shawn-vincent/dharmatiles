@@ -40,6 +40,16 @@ _ROUND_EDGE_STEP_MM = 1.2         # ball spacing along edges: the radius is
                                   # re-rolled at each sample, so the fillet
                                   # wobbles ALONG an edge (per-corner-only
                                   # radii read as rounded dice)
+
+# ── Concave weathering bites (spheroidal-weathering morphology) ──────────────
+# A convex hull can never show a hollow, and real rocks are defined by their
+# concavities: faces retreat non-planar, and exfoliation spalls leave curved
+# concave scars with crisp rims, biased to edges/corners.
+_DISH_MIN_FACE_MM2 = 5.0          # faces at least this big get dished
+_DISH_SAG_FRAC     = (0.05, 0.13) # dish depth × sqrt(face area)
+_SPALL_R_FRAC      = (0.22, 0.42) # scar radius × footprint
+_SPALL_DEPTH_FRAC  = (0.25, 0.45) # scar depth × scar radius
+_SPALL_MIN_FOOT_MM = 3.5          # stones smaller than this get no scars
 _OVERHANG_NZ      = -0.72   # fail when a face normal's z is below this (≈45°)
 _OVERHANG_CHORD   = 1.6     # mm — under-tucks narrower than this are allowed
 _GROUND_MARGIN    = 1.0     # mm — faces below terrain+margin are exempt from
@@ -73,14 +83,16 @@ _CLASS_PARAMS = {
     'shard': ((1.50, 2.10), (0.60, 0.80), (10, 13), (4.0, 14.0), (0.85, 1.00), 0.12),
 }
 _MAX_SEAL_LIFT_MM = 1.3     # don't build soil walls under real overhangs
+_MAX_SKIRT_LIFT_MM = 2.4    # the skirt may bank higher than the rim seal —
+                            # soil piled against a stone flank reads natural,
+                            # and a lower cap leaves arch-shaped voids where
+                            # a stone rim overhangs a terrain pocket
 _SKIRT_W_MM       = 3.0     # lapping-soil annulus width around the footprint
 
 # ── E5 crack engraving (R11) ──────────────────────────────────────────────────
 # A crack is a surface-projected random walk of thin tapered wedges: long,
 # meandering, fading out at both ends.  Proportions matter — a wide short
 # groove reads as a router slot, not a crack (Shawn, 2026-07-03).
-_CRACK_MIN_FACE_MM2 = 8.0   # start faces must be at least this big —
-                            # pebbles/mediums stay untouched by construction
 _CRACK_PROB         = 0.5   # chance a SECONDARY crack appears; the primary
                             # crack is unconditional (a big stone must never
                             # roll itself bald — seed 3 taught us)
@@ -125,6 +137,8 @@ class StoneSpec:
                                  # filleted by ~this radius (randomized per
                                  # corner) while the overall shape stays —
                                  # 0 = crisp shard-cut, ~1.5 = river cobble
+    spall_scars:  int   = -1     # concave exfoliation scars: -1 = auto by
+                                 # size, 0 = none, N = exactly N bites
     seed:         int   = 0
 
 
@@ -188,6 +202,11 @@ def _seat_rotation(verts: np.ndarray, faces: np.ndarray) -> np.ndarray:
     axis = np.cross(nb, target)
     s    = np.linalg.norm(axis)
     c    = float(nb @ target)
+    # Only CORRECT a nearly-stable stone; a large rotation would lay a
+    # planted monolith down on its flank (shards stand because they are
+    # bedded, not because they balance).
+    if np.degrees(np.arccos(np.clip(c, -1.0, 1.0))) > 32.0:
+        return np.eye(3)
     if s < 1e-9:
         return np.eye(3)
     axis /= s
@@ -242,6 +261,81 @@ def _round_edges(verts: np.ndarray, faces: np.ndarray,
     return np.asarray(h.vertices), np.asarray(h.faces)
 
 
+def _weather_bites(crisp_v: np.ndarray, crisp_f: np.ndarray,
+                   spec: StoneSpec, rng: np.random.Generator,
+                   ) -> list[trimesh.Trimesh]:
+    """Concave weathering cutters, anchored on the crisp hull.
+
+    Two families (spheroidal-weathering morphology):
+    - face dishing: a large sphere pressed shallowly into every big face,
+      so no face is glass-flat;
+    - spall scars: oblate bites at random corners — the concave curved
+      scars with crisp rims that exfoliation shells leave behind.
+    """
+    m  = trimesh.Trimesh(vertices=crisp_v, faces=crisp_f, process=False)
+    fn, areas, tris = m.face_normals, m.area_faces, m.triangles
+    cutters: list[trimesh.Trimesh] = []
+
+    # Face dishing scales with the weathering age (roundover): fresh rock
+    # keeps glass-flat joint faces (the reference monolith does); only
+    # weathered stones get retreated, gently concave faces.
+    age = float(np.clip(spec.roundover_mm / 1.0, 0.0, 1.0))
+    if age > 0.15:
+        _, inv = np.unique(np.round(fn, 2), axis=0, return_inverse=True)
+        for g in np.unique(inv):
+            sel  = inv == g
+            area = float(areas[sel].sum())
+            if area < _DISH_MIN_FACE_MM2:
+                continue
+            n = fn[sel].mean(axis=0)
+            n /= np.linalg.norm(n) + 1e-12
+            c = (tris[sel].mean(axis=1) * areas[sel, None]).sum(axis=0) / area
+            w   = np.sqrt(area)
+            sag = rng.uniform(*_DISH_SAG_FRAC) * w * age
+            # Sphere through a rim of width ~w at depth sag.
+            R = min((w * w / 4.0 + sag * sag) / (2.0 * sag), 60.0)
+            ball = trimesh.creation.icosphere(subdivisions=2, radius=R)
+            ball.apply_translation(c + n * (R - sag))
+            cutters.append(ball)
+
+    # Scars scale with the EXPOSED height (bed-to-widest hides ~40 %):
+    # a mostly-buried stone shows only a crest, and a full scar budget
+    # Swiss-cheeses it into an arch.
+    exp_h = spec.height_mm * (1.0 - 0.375 * min(spec.burial, 1.2))
+    if spec.footprint_mm >= _SPALL_MIN_FOOT_MM and exp_h >= 2.5:
+        k = spec.spall_scars
+        if k < 0:
+            k = int(rng.integers(1, 4)) if spec.footprint_mm > 5.0 \
+                else int(rng.integers(0, 2))
+        if exp_h < 5.0:
+            k = min(k, 1)
+        vn  = np.asarray(m.vertex_normals)
+        # Bite only the upper band: bed-to-widest buries roughly the bottom
+        # 40 % of the stone, so lower scars carve arches at the soil line;
+        # an apex scar truncates a monolith's tip.
+        z0, z1 = crisp_v[:, 2].min(), crisp_v[:, 2].max()
+        t = (crisp_v[:, 2] - z0) / max(z1 - z0, 1e-9)
+        band = np.flatnonzero((t > 0.55) & (t < 0.88))
+        idx = band[rng.permutation(len(band))[:k]] if len(band) else []
+        for i in idx:
+            n = vn[i]
+            r     = min(rng.uniform(*_SPALL_R_FRAC) * spec.footprint_mm / 2.0,
+                        0.45 * exp_h)
+            depth = rng.uniform(*_SPALL_DEPTH_FRAC) * r
+            bite = trimesh.creation.icosphere(subdivisions=2, radius=1.0)
+            bite.apply_scale([r, r, depth])
+            # Orient the oblate axis along the corner normal, sink partway.
+            z = np.array([0.0, 0.0, 1.0])
+            ax = np.cross(z, n); s = np.linalg.norm(ax)
+            if s > 1e-9:
+                ang = float(np.arccos(np.clip(z @ n, -1.0, 1.0)))
+                bite.apply_transform(
+                    trimesh.transformations.rotation_matrix(ang, ax / s))
+            bite.apply_translation(crisp_v[i] + n * depth * 0.35)
+            cutters.append(bite)
+    return cutters
+
+
 def _rotation(spec: StoneSpec, lean_deg: float) -> np.ndarray:
     yaw = np.radians(spec.yaw_deg)
     cz, sz = np.cos(yaw), np.sin(yaw)
@@ -288,18 +382,40 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
     v_loc, faces = np.asarray(local.vertices), np.asarray(local.faces)
     # Seat on a stable face before yaw/lean — never balance on an edge.
     v_loc = v_loc @ _seat_rotation(v_loc, faces).T
-    # Weathering fillet BEFORE the bedding loop, so widest-slice, burial,
-    # overhang audit, and the terrain seal all see the final geometry —
-    # rounding afterwards eats the bottom rim and re-opens daylight
-    # under the stone.
+    # Weathering (fillet + concave bites) BEFORE the bedding loop, so
+    # widest-slice, burial, overhang audit, and the terrain seal all see
+    # the final geometry — modifying afterwards eats the bottom rim and
+    # re-opens daylight under the stone.  Bites are anchored on the crisp
+    # hull (rounding preserves the silhouette, so the anchors stay valid).
+    r_rng = np.random.default_rng((spec.seed ^ 0x2CAFE) & 0x7FFFFFFF)
+    bites = _weather_bites(v_loc, faces, spec, r_rng)
     if spec.roundover_mm > 0.0:
-        r_rng = np.random.default_rng((spec.seed ^ 0x2CAFE) & 0x7FFFFFFF)
         v_loc, faces = _round_edges(v_loc, faces, spec.roundover_mm, r_rng)
+    # The FDM audit runs on the CONVEX body: printability is set by the
+    # overall mass, and concave bite interiors self-support (auditing them
+    # force-buried the trio monolith to max depth).
+    v_conv, f_conv = v_loc, faces
+    if bites:
+        body = trimesh.Trimesh(vertices=v_loc, faces=faces, process=False)
+        try:
+            out = trimesh.boolean.difference([body] + bites,
+                                             engine='manifold')
+            v32 = out.vertices.astype(np.float32).astype(np.float64)
+            chk = trimesh.Trimesh(vertices=v32, faces=out.faces.copy(),
+                                  process=True)
+            if len(out.faces) > 0 and out.is_watertight and chk.is_watertight:
+                v_loc = np.asarray(out.vertices)
+                faces = np.asarray(out.faces)
+            else:
+                warnings.warn('weathering bites produced a non-watertight '
+                              'stone; left unbitten', RuntimeWarning)
+        except Exception as exc:                    # noqa: BLE001
+            warnings.warn(f'weathering bites failed: {exc}', RuntimeWarning)
 
     lean, burial = spec.lean_deg, spec.burial
     while True:
         R  = _rotation(spec, lean)
-        v  = v_loc @ R.T
+        v  = v_conv @ R.T
         # Widest horizontal cross-section (searched in the bottom zone so a
         # leaning shard's tip doesn't win): burial is measured against it,
         # so burial ≥ 1 guarantees the visible flanks slope outward into
@@ -309,9 +425,10 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
         radial = np.hypot(v[:, 0] - v[:, 0].mean(), v[:, 1] - v[:, 1].mean())
         z_wide = v[zone, 2][np.argmax(radial[zone])]
         tz = terrain_center_z - burial * (z_wide - zmin) - zmin
-        v  = v + np.array([spec.x, spec.y, tz])
+        offset = np.array([spec.x, spec.y, tz])
+        v = v + offset
 
-        tris    = v[faces]
+        tris    = v[f_conv]
         e1, e2  = tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]
         n       = np.cross(e1, e2)
         n      /= np.linalg.norm(n, axis=1, keepdims=True) + 1e-12
@@ -321,59 +438,64 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
         steep   = n[:, 2] < _OVERHANG_NZ
         wide    = _facet_chords(n, tris) > _OVERHANG_CHORD
         bad     = above & steep & wide
-        if not bad.any():
-            return v, faces, lean, burial
-        if lean > 0.0:
-            lean = max(0.0, lean - _LEAN_STEP_DEG)
-        elif burial < _BURIAL_MAX:
-            burial = min(_BURIAL_MAX, burial + _BURIAL_STEP)
-        else:
+        done    = not bad.any()
+        if not done:
+            if lean > 0.0:
+                lean = max(0.0, lean - _LEAN_STEP_DEG)
+                continue
+            if burial < _BURIAL_MAX:
+                burial = min(_BURIAL_MAX, burial + _BURIAL_STEP)
+                continue
             warnings.warn(
                 f'stone at ({spec.x:.1f},{spec.y:.1f}): '
                 f'{int(bad.sum())} overhang faces remain at lean=0, '
                 f'burial={burial:.2f}', RuntimeWarning)
-            return v, faces, lean, burial
+        # Ship the bitten body under the audited transform.
+        return v_loc @ R.T + offset, faces, lean, burial
 
 
 # ── Crack engraving ───────────────────────────────────────────────────────────
 
-def _wedge(a: np.ndarray, b: np.ndarray,
-           na: np.ndarray, nb: np.ndarray,
-           wa: float, wb: float, da: float, db: float) -> trimesh.Trimesh:
-    """Tapered V-groove segment from *a* to *b*: a triangular frustum whose
-    cross-section (width w, depth d) differs at the two ends, so a chain of
-    these fades in and out like a real crack."""
-    dirv = b - a
-    dirv = dirv / (np.linalg.norm(dirv) + 1e-12)
-    nm   = na + nb
-    nm   = nm / (np.linalg.norm(nm) + 1e-12)
-    side = np.cross(dirv, nm)
-    side = side / (np.linalg.norm(side) + 1e-12)
-    # Generous joint overlap: consecutive wedges twist across arrises and a
-    # short overlap leaves uncut slivers standing in the groove at corners.
-    a = a - dirv * 0.45
-    b = b + dirv * 0.45
-    verts = np.array([
-        a + na * _CRACK_PROUD_MM + side * (wa / 2.0),
-        a + na * _CRACK_PROUD_MM - side * (wa / 2.0),
-        a - na * da,
-        b + nb * _CRACK_PROUD_MM + side * (wb / 2.0),
-        b + nb * _CRACK_PROUD_MM - side * (wb / 2.0),
-        b - nb * db,
-    ])
-    faces = np.array([[0, 1, 2], [3, 5, 4],
-                      [0, 3, 4], [0, 4, 1],
-                      [1, 4, 5], [1, 5, 2],
-                      [2, 5, 3], [2, 3, 0]])
-    w = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
-    w.fix_normals()
-    return w
+def _crack_solid(pts: list, nms: list, widths: np.ndarray,
+                 depths: np.ndarray) -> trimesh.Trimesh:
+    """ONE lofted V-channel along the crack polyline.
+
+    A single swept solid replaces the old chain of overlapping frusta —
+    mutually intersecting cutters made the manifold boolean emit sliver
+    triangles that collapsed under STL float32 quantization and opened
+    the mesh.  Ring per station: two proud top corners + the apex."""
+    K = len(pts)
+    rings = []
+    for k in range(K):
+        prev_p = pts[max(k - 1, 0)]
+        next_p = pts[min(k + 1, K - 1)]
+        d = np.asarray(next_p) - np.asarray(prev_p)
+        d = d / (np.linalg.norm(d) + 1e-12)
+        n = nms[k]
+        side = np.cross(d, n)
+        side = side / (np.linalg.norm(side) + 1e-12)
+        p = np.asarray(pts[k])
+        rings.append([p + n * _CRACK_PROUD_MM + side * (widths[k] / 2.0),
+                      p + n * _CRACK_PROUD_MM - side * (widths[k] / 2.0),
+                      p - n * depths[k]])
+    verts = np.array([v for ring in rings for v in ring])
+    faces = []
+    for k in range(K - 1):
+        a = 3 * k
+        for i in range(3):
+            j = (i + 1) % 3
+            faces += [[a + i, a + 3 + i, a + j],
+                      [a + j, a + 3 + i, a + 3 + j]]
+    faces += [[0, 2, 1], [3 * (K - 1), 3 * (K - 1) + 1, 3 * (K - 1) + 2]]
+    m = trimesh.Trimesh(vertices=verts, faces=np.array(faces), process=False)
+    m.fix_normals()
+    return m
 
 
 def _crack_walk(mesh: trimesh.Trimesh, N: np.ndarray,
                 p0: np.ndarray, n0: np.ndarray, d0: np.ndarray,
                 n_segs: int, rng: np.random.Generator,
-                ) -> tuple[list, list]:
+                ground_z: float) -> tuple[list, list]:
     """Random-walk *n_segs* steps across the hull surface from *p0*.
 
     Steps in the local tangent plane with heading jitter, reprojecting
@@ -390,8 +512,9 @@ def _crack_walk(mesh: trimesh.Trimesh, N: np.ndarray,
         n_new = N[tid[0]]
         # Stop at strong arrises: wrapping a sharp corner leaves uncut
         # stone slivers standing in the groove (and real cracks terminate
-        # at hard edges anyway).
-        if float(n_new @ n) < 0.6:
+        # at hard edges anyway).  Stop before the soil line too — a groove
+        # descending into the skirt reads as an arch-shaped hole.
+        if float(n_new @ n) < 0.6 or qs[0][2] < ground_z + 0.6:
             break
         p, n = qs[0], n_new
         pts.append(p)
@@ -400,44 +523,48 @@ def _crack_walk(mesh: trimesh.Trimesh, N: np.ndarray,
 
 
 def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
-                    ground_z: float) -> trimesh.Trimesh:
-    """Subtract kinked wedge grooves from facets above the area threshold.
+                    ground_z: float, footprint_mm: float) -> trimesh.Trimesh:
+    """Subtract kinked wedge grooves seeded on prominent triangles.
 
-    Cracks are a wash-paintability feature (R11); they run in the facet's
-    long direction with jitter and may cross arrises, like the reference
-    outcrops.  Facets whose centroid is below *ground_z* are skipped —
-    engraving buried stone wastes booleans and chews the soil line.
-    Falls back to the uncracked stone if the boolean fails.
+    Cracks are a wash-paintability feature (R11); they meander with
+    jitter and may cross arrises, like the reference outcrops.  Seeding
+    is per-triangle (concave weathering bites fragment coplanar facet
+    groups): score = area x upward-visibility, seeds kept apart, faces
+    below *ground_z* skipped.  Stones under _SPALL_MIN_FOOT_MM x1.4 get
+    no cracks.  Falls back to the uncracked stone if the boolean fails.
     """
+    if footprint_mm < 5.0:
+        return mesh
+    exposed = float(mesh.vertices[:, 2].max()) - ground_z
+    if exposed < 3.0:
+        return mesh
+    n_cracks = 1 if exposed < 5.0 else _CRACK_MAX_PER_STONE
     N     = mesh.face_normals
     tris  = mesh.triangles
     areas = mesh.area_faces
 
-    _, inv = np.unique(np.round(N, 2), axis=0, return_inverse=True)
-    elig = []
-    for g in np.unique(inv):
-        sel  = inv == g
-        area = areas[sel].sum()
-        if area < _CRACK_MIN_FACE_MM2:
+    cz    = tris[:, :, 2].mean(axis=1)
+    score = areas * (0.4 + np.clip(N[:, 2], 0.0, None))
+    score[(cz < ground_z + 0.5) | (N[:, 2] < -0.3)] = 0.0
+    order = np.argsort(-score)
+
+    seeds: list[int] = []
+    for i in order:
+        if score[i] <= 0.0 or len(seeds) >= n_cracks:
+            break
+        c_i = tris[i].mean(axis=0)
+        if any(np.linalg.norm(tris[j].mean(axis=0)[:2] - c_i[:2]) < 3.0
+               for j in seeds):
             continue
-        if tris[sel].mean(axis=(0, 1))[2] < ground_z + 0.5:
-            continue
-        # Tabletop stones are viewed from above: prefer up-facing faces,
-        # or the crack lands at the soil line and the skirt swallows it.
-        n_z   = N[sel].mean(axis=0)[2]
-        score = area * (0.4 + max(n_z, 0.0))
-        elig.append((score, sel))
-    elig.sort(key=lambda t: -t[0])
+        seeds.append(int(i))
 
     cutters = []
-    for idx, (_score, sel) in enumerate(elig[:_CRACK_MAX_PER_STONE]):
+    for idx, i in enumerate(seeds):
         is_primary = idx == 0
         if not is_primary and rng.random() > _CRACK_PROB:
             continue
-        n = N[sel].mean(axis=0)
-        n /= np.linalg.norm(n) + 1e-12
-        pts = tris[sel].reshape(-1, 3)
-        c   = pts.mean(axis=0)
+        n = N[i]
+        c = tris[i].mean(axis=0)
 
         # Heading: horizontal-ish in the face plane (stratification read).
         h = np.cross(n, np.array([0.0, 0.0, 1.0]))
@@ -453,25 +580,24 @@ def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
         # from the seed so the crack straddles it.
         seed_p, seed_n = c + dirv * 0.1, n
         back_p, back_n = _crack_walk(mesh, N, seed_p, seed_n, -dirv,
-                                     _CRACK_SEGS // 2, rng)
+                                     _CRACK_SEGS // 2, rng, ground_z)
         fwd_p,  fwd_n  = _crack_walk(mesh, N, seed_p, seed_n, dirv,
-                                     _CRACK_SEGS - _CRACK_SEGS // 2, rng)
+                                     _CRACK_SEGS - _CRACK_SEGS // 2, rng,
+                                     ground_z)
         walk_p = back_p[::-1] + [seed_p] + fwd_p
         walk_n = back_n[::-1] + [seed_n] + fwd_n
 
         if len(walk_p) < 3:
             continue
-        # Chain tapered wedges: width/depth peak mid-crack, fade at ends.
+        # One lofted V-channel: width/depth peak mid-crack, fade at ends.
         # Floor keeps the tips stubby — needle tips can't swallow the
         # stone slivers they graze near corners.
         K = len(walk_p) - 1
         prof = np.sin(np.pi * np.linspace(0.0, 1.0, K + 1)) ** 0.6
         prof = np.maximum(prof, 0.4)
-        for k in range(K):
-            cutters.append(_wedge(
-                walk_p[k], walk_p[k + 1], walk_n[k], walk_n[k + 1],
-                wa=_CRACK_WIDTH_MM * prof[k], wb=_CRACK_WIDTH_MM * prof[k + 1],
-                da=_CRACK_DEPTH_MM * prof[k], db=_CRACK_DEPTH_MM * prof[k + 1]))
+        cutters.append(_crack_solid(walk_p, walk_n,
+                                    _CRACK_WIDTH_MM * prof,
+                                    _CRACK_DEPTH_MM * prof))
 
         # Real cracks fork: the stone's primary crack gets one branch,
         # leaving the fork at a natural angle and fading out.
@@ -483,17 +609,14 @@ def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
                               * (1 if rng.random() < 0.5 else -1))
             bd = np.cos(fork) * pd + np.sin(fork) * np.cross(walk_n[j], pd)
             br_p, br_n = _crack_walk(mesh, N, walk_p[j], walk_n[j], bd,
-                                     int(rng.integers(2, 4)), rng)
+                                     int(rng.integers(2, 4)), rng, ground_z)
             bp = [walk_p[j]] + br_p
             bn = [walk_n[j]] + br_n
-            bprof = np.linspace(prof[j] * 0.8, 0.4, len(bp))
-            for k in range(len(bp) - 1):
-                cutters.append(_wedge(
-                    bp[k], bp[k + 1], bn[k], bn[k + 1],
-                    wa=_CRACK_WIDTH_MM * bprof[k],
-                    wb=_CRACK_WIDTH_MM * bprof[k + 1],
-                    da=_CRACK_DEPTH_MM * bprof[k],
-                    db=_CRACK_DEPTH_MM * bprof[k + 1]))
+            if len(bp) >= 2:
+                bprof = np.linspace(prof[j] * 0.8, 0.4, len(bp))
+                cutters.append(_crack_solid(bp, bn,
+                                            _CRACK_WIDTH_MM * bprof,
+                                            _CRACK_DEPTH_MM * bprof))
 
     if not cutters:
         return mesh
@@ -537,7 +660,7 @@ def _build_and_stamp(scene, specs: list[StoneSpec]) -> list[trimesh.Trimesh]:
         _stamp_stone(scene, mesh)
         mesh = _engrave_cracks(
             mesh, np.random.default_rng((spec.seed ^ 0x5EED) & 0x7FFFFFFF),
-            ground_z=tz0)
+            ground_z=tz0, footprint_mm=spec.footprint_mm)
         parts.append(mesh)
 
     if not parts:
@@ -597,8 +720,12 @@ def _stamp_stone(scene, mesh: trimesh.Trimesh) -> None:
     """
     surface = scene.surface
     cw, gw, gh = surface.cell_w, surface.grid_w, surface.grid_h
-    V, F = mesh.vertices, mesh.faces
-    N    = mesh.face_normals
+    # Concave bites break the convex plane-field math; stamp from the
+    # stone's convex hull instead (over-estimates by the bite depth,
+    # which is the safe direction for support/obstacle fields).
+    hull = trimesh.convex.convex_hull(mesh.vertices)
+    V, F = np.asarray(hull.vertices), np.asarray(hull.faces)
+    N    = np.asarray(hull.face_normals)
 
     pad = int(np.ceil(_SKIRT_W_MM / cw)) + 1
     i0 = max(0, int(np.floor(V[:, 0].min() / cw)) - pad)
@@ -637,13 +764,18 @@ def _stamp_stone(scene, mesh: trimesh.Trimesh) -> None:
     # Seal: raise terrain toward the underside inside the footprint,
     # clamped to a max lift so real overhangs keep their shadow.  The
     # clamp (not a skip) keeps the field continuous — no sawtooth where
-    # the lift crosses the cap across soil blobs.
-    target = np.minimum(z_bot + _SEAL_LIP_MM, terrain + _MAX_SEAL_LIFT_MM)
+    # the lift crosses the cap across soil blobs.  The cap grows with
+    # distance INSIDE the silhouette: rim shadows stay shallow, but the
+    # stone's interior fills completely — otherwise a neighbour's skirt
+    # ridge under the stone leaves a see-through arch (trio lump).
+    import scipy.ndimage as ndi
+    dist_in = ndi.distance_transform_edt(inside, sampling=cw)
+    cap = _MAX_SEAL_LIFT_MM + np.clip((dist_in - 0.8) * 2.5, 0.0, 4.0)
+    target = np.minimum(z_bot + _SEAL_LIP_MM, terrain + cap)
     seal   = inside & (target > terrain)
     terrain[seal] = target[seal]
 
     # Skirt: lap the sealed contact ring outward, smoothstep falloff.
-    import scipy.ndimage as ndi
     dist, (jn, in_) = ndi.distance_transform_edt(
         ~inside, sampling=cw, return_indices=True)
     ring = (dist > 0.0) & (dist <= _SKIRT_W_MM)
@@ -652,7 +784,7 @@ def _stamp_stone(scene, mesh: trimesh.Trimesh) -> None:
         t      = 1.0 - dist / _SKIRT_W_MM
         t      = t * t * (3.0 - 2.0 * t)
         targ_r = terrain + np.clip((seal_h - terrain) * t,
-                                   0.0, _MAX_SEAL_LIFT_MM)
+                                   0.0, _MAX_SKIRT_LIFT_MM)
         terrain[ring] = np.maximum(terrain[ring], targ_r[ring])
 
     sl = scene.terrain_support_z[j0:j1, i0:i1]

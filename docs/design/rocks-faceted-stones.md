@@ -146,6 +146,34 @@ composition step between position sampling and seed building:
   ~ D[0.4:0.75]; shared yaw ± jitter.  Optional debris halo of pebbles.
 - Grass-region stones get the `min_crown_mm` solver (R8).
 
+## Weathering (2026-07-04, "iterate until natural" round)
+
+Grounded in spheroidal-weathering morphology (edges/corners weather
+faster than faces; exfoliation spalls leave curved concave scars with
+crisp rims; corestones go "blobby"):
+
+- **Roundover** (`roundover_mm`): rolling-ball fillet whose radius is
+  re-rolled at every corner AND at ~1.2 mm steps along every edge — the
+  fillet wobbles along an edge (constant radii read as rounded dice;
+  facet-count sweeps read as nothing).  Same silhouette, aging knob.
+- **Concave bites** (a convex hull can never show a hollow — the root
+  of the "generic" read): face dishing (large sphere pressed shallowly
+  into each big face; scaled by roundover so FRESH rock keeps flat
+  joint faces) + spall scars (`spall_scars`, oblate bites at corners in
+  the upper band — low bites carve arches at the soil line, apex bites
+  truncate monoliths).  Budgets scale with EXPOSED height, or a
+  mostly-buried stone's crest gets Swiss-cheesed.
+- The FDM audit runs on the CONVEX body (bites self-support; auditing
+  scar ceilings force-buried the trio monolith).  Stamping uses the
+  convex hull of the bitten stone (over-estimate = safe direction).
+- Cracks are ONE lofted V-channel solid per crack (+ one per branch) —
+  chains of overlapping frusta made manifold emit sliver triangles that
+  collapsed under STL float32 quantization and opened the export; the
+  acceptance gate requires surviving the float32 round-trip.
+- Seat rotation is capped at 32° (fix tipping, never lay a monolith on
+  its flank); the skirt may bank higher than the rim seal
+  (`_MAX_SKIRT_LIFT_MM`) so ridge-adjacent stones don't show voids.
+
 ## Keep / delete
 
 - Keep: placement machinery (`scatter/distribute.py`), layer ordering
