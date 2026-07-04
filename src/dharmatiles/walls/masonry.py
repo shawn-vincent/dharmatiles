@@ -83,6 +83,7 @@ class _Cell:
     z1:    float
     is_top:    bool
     is_bottom: bool
+    is_quoin:  bool = False   # bay runs through a corner cell
     key:   tuple = field(default=())
 
 
@@ -179,6 +180,12 @@ def _layout(segs: list[_Seg], thickness_mm: float, height_mm: float,
                          else 'face',
                     z0=float(z0), z1=float(z1),
                     is_top=is_top, is_bottom=is_bottom,
+                    # Both cells at a corner are quoin-class — the
+                    # through-stone AND the butting stone (a rounded
+                    # butting stone curves away from the arris and
+                    # leaves a V-notch against the square below).
+                    is_quoin=((ta == t0 and k > 0)
+                              or (tb == t1 and k < n_joints)),
                     key=(c, k, b),
                 ))
     return cells
@@ -263,6 +270,8 @@ class CutStoneWall:
     """
 
     height_default_mm: float = 5.0
+    yaw_max_deg:  float = _YAW_MAX_DEG
+    tilt_max_deg: float = _TILT_MAX_DEG
 
     def __init__(self, spine: list[tuple[float, float]], *,
                  thickness_mm: float = 7.0,
@@ -331,6 +340,14 @@ class CutStoneWall:
         return [wall]
 
     # ── pieces ───────────────────────────────────────────────────────────────
+    def _unit_mesh(self, lx: float, ly: float, lz: float, chamfer: float,
+                   cell: _Cell, rng: np.random.Generator) -> trimesh.Trimesh:
+        """One masonry unit in the local cell frame; subclass hook —
+        FieldstoneWall swaps this for lumpy rounded stones."""
+        return _block_mesh(lx, ly, lz, chamfer, self.chip_mm,
+                           self.roundover_mm, self.relief_mm,
+                           self.relief_wl, cell.is_top, rng)
+
     def _core_boxes(self, segs: list[_Seg], seat_z: float,
                     ) -> list[trimesh.Trimesh]:
         """Recessed core: full footprint inset by reveal from every visible
@@ -380,16 +397,15 @@ class CutStoneWall:
         chamfer = 0.0 if cell.is_bottom else _CHAMFER_FRAC * self.reveal_mm
         brng = np.random.default_rng(
             (self.seed * 1_000_003 + hash(cell.key)) & 0x7FFFFFFF)
-        body = _block_mesh(x1 - x0, y1 - y0, z1 - z0, chamfer,
-                           self.chip_mm, self.roundover_mm, self.relief_mm,
-                           self.relief_wl, cell.is_top, brng)
+        body = self._unit_mesh(x1 - x0, y1 - y0, z1 - z0, chamfer, cell, brng)
 
         ctr = np.array([(x1 - x0) / 2.0, (y1 - y0) / 2.0, (z1 - z0) / 2.0])
-        yaw = np.radians(brng.uniform(-_YAW_MAX_DEG, _YAW_MAX_DEG))
+        yaw = np.radians(brng.uniform(-self.yaw_max_deg, self.yaw_max_deg))
         body.apply_transform(trimesh.transformations.rotation_matrix(
             yaw, [0.0, 0.0, 1.0], ctr))
         for axis in ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]):
-            tilt = np.radians(brng.uniform(-_TILT_MAX_DEG, _TILT_MAX_DEG))
+            tilt = np.radians(brng.uniform(-self.tilt_max_deg,
+                                           self.tilt_max_deg))
             body.apply_transform(trimesh.transformations.rotation_matrix(
                 tilt, axis, ctr))
 
