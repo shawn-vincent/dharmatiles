@@ -46,7 +46,7 @@ _ROUND_EDGE_STEP_MM = 1.2         # ball spacing along edges: the radius is
 # concavities: faces retreat non-planar, and exfoliation spalls leave curved
 # concave scars with crisp rims, biased to edges/corners.
 _DISH_MIN_FACE_MM2 = 5.0          # faces at least this big get dished
-_DISH_SAG_FRAC     = (0.05, 0.13) # dish depth × sqrt(face area)
+_DISH_SAG_FRAC     = (0.03, 0.08) # dish depth × sqrt(face area)
 _SPALL_R_FRAC      = (0.22, 0.42) # scar radius × footprint
 _SPALL_DEPTH_FRAC  = (0.25, 0.45) # scar depth × scar radius
 _SPALL_MIN_FOOT_MM = 3.5          # stones smaller than this get no scars
@@ -412,8 +412,7 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
                 # keep crisp spall rims, which is the correct geology.
                 if spec.roundover_mm > 0.15:
                     out = out.subdivide()
-                    iters = int(np.clip(2 + 8 * spec.roundover_mm / 1.5,
-                                        2, 12))
+                    iters = int(np.clip(2 + 11 * spec.roundover_mm, 2, 24))
                     trimesh.smoothing.filter_taubin(out, iterations=iters)
                 v_loc = np.asarray(out.vertices)
                 faces = np.asarray(out.faces)
