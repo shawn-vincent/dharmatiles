@@ -414,7 +414,14 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
     # hull (rounding preserves the silhouette, so the anchors stay valid).
     r_rng = np.random.default_rng((spec.seed ^ 0x2CAFE) & 0x7FFFFFFF)
     bites = _weather_bites(v_loc, faces, spec, r_rng)
-    if spec.roundover_mm > 0.0:
+    # Ball fillet only for LIGHT weathering.  On heavy weathering the
+    # Taubin aging dominates the rounding anyway, and the fillet's wobble
+    # (± roundover × 1.6) exceeds the bite depths — a bite rim then
+    # crosses the bumpy surface several times and strands islands of
+    # original stone inside the scar, which aging turns into protruding
+    # nodules (Shawn's MeshLab find).  Heavy stones bite the crisp hull:
+    # flat faces guarantee a single clean rim loop.
+    if 0.0 < spec.roundover_mm <= 0.8:
         v_loc, faces = _round_edges(v_loc, faces, spec.roundover_mm, r_rng)
     # The FDM audit runs on the CONVEX body: printability is set by the
     # overall mass, and concave bite interiors self-support (auditing them
