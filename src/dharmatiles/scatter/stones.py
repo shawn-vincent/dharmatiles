@@ -341,6 +341,37 @@ def _spall_blob(r: float, depth: float, n: np.ndarray,
     return bite
 
 
+def _blur_remesh(body: trimesh.Trimesh, footprint_mm: float,
+                 sigma: float) -> trimesh.Trimesh | None:
+    """Remesh via marching cubes on a Gaussian-blurred occupancy field.
+
+    The single stable-mesh primitive of the pipeline: uniform triangles
+    (Laplacian smoothing is unstable on the hull/fillet needle triangles
+    — it spikes them into sliver pleats) and a sub-voxel smooth
+    isosurface (binary MC quantizes to voxel planes; on flanks nearly
+    parallel to a plane family the steps stretch into 1 mm+ terraces no
+    smoothing removes).  Returns None when MC fails; caller falls back.
+    """
+    import scipy.ndimage as _ndi
+    from skimage import measure as _measure
+    pitch = float(np.clip(footprint_mm / 56.0, 0.18, 0.32))
+    try:
+        vg  = body.voxelized(pitch).fill()
+        mat = np.pad(vg.encoding.dense.astype(np.float32), 4)
+        mat = _ndi.gaussian_filter(mat, sigma=sigma)
+        mv, mf, _n, _v = _measure.marching_cubes(mat, level=0.5)
+        out = trimesh.Trimesh(vertices=mv - 4.0, faces=mf, process=True)
+        out.apply_transform(vg.transform)
+        # skimage's winding is inverted vs trimesh: volume comes out
+        # negative and every downstream boolean refuses ("not a volume").
+        out.fix_normals()
+        if not out.is_watertight or out.volume <= 0:
+            return None
+        return out
+    except Exception:                               # noqa: BLE001
+        return None
+
+
 def _weather_bites(crisp_v: np.ndarray, crisp_f: np.ndarray,
                    spec: StoneSpec, rng: np.random.Generator,
                    ) -> list[trimesh.Trimesh]:
@@ -537,15 +568,21 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
         v_loc = p + disp
         faces = np.asarray(wm.faces)
         if spec.roundover_mm <= 0.15:
-            # Fresh stones get no aging pass to smooth the warp's
-            # tessellation, and the subdivided diamonds read as quilting
-            # under flat shading.  One more subdivision + a whisper of
-            # Taubin de-quilts; 3 iterations barely touches an arris.
-            dq = trimesh.Trimesh(vertices=v_loc, faces=faces,
-                                 process=False)
-            if spec.footprint_mm >= 10.0:
-                dq = dq.subdivide()
-            trimesh.smoothing.filter_taubin(dq, iterations=7)
+            # Fresh stones get no aging pass, so they take the same
+            # stable-mesh remesh with a LIGHTER blur (arrises stay crisp,
+            # ~0.2 mm micro-rounding that even fresh cleaved rock has) —
+            # Taubin on the warped needle tessellation pleated slivers
+            # here exactly like the aged path (field shard, ro=0.05).
+            dq = _blur_remesh(
+                trimesh.Trimesh(vertices=v_loc, faces=faces,
+                                process=False),
+                spec.footprint_mm, sigma=0.9)
+            if dq is None:
+                dq = trimesh.Trimesh(vertices=v_loc, faces=faces,
+                                     process=False)
+                if spec.footprint_mm >= 10.0:
+                    dq = dq.subdivide()
+                trimesh.smoothing.filter_taubin(dq, iterations=7)
             if dq.is_watertight:
                 # Light micro-grain: the warp's smooth curvature flat-shades
                 # as regular diamond banding on a regular tessellation; real
@@ -601,16 +638,8 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
         # the fold slivers Shawn kept finding.  Marching cubes gives
         # uniform triangles by construction; Taubin is then stable.
         body = trimesh.Trimesh(vertices=v_loc, faces=faces, process=False)
-        pitch = float(np.clip(spec.footprint_mm / 56.0, 0.18, 0.32))
-        try:
-            vg = body.voxelized(pitch).fill()
-            aged = vg.marching_cubes
-            # marching_cubes returns voxel-index coordinates; map back to
-            # world or the stone ships at grid scale, floating (E13 bug).
-            aged.apply_transform(vg.transform)
-            if not aged.is_watertight:
-                raise ValueError('marching cubes not watertight')
-        except Exception:                           # noqa: BLE001
+        aged = _blur_remesh(body, spec.footprint_mm, sigma=1.2)
+        if aged is None:
             aged = body.subdivide()
         # Floor at 16: marching cubes leaves voxel stairsteps (z-contour
         # terraces); anything less leaves them visible on light roundover.
