@@ -17,7 +17,6 @@ from ..grass.thatch import ThatchGrass as _ThatchGrass
 from ..core.tile import derive_seed
 from ..dist import bounds, sample
 from .config import Uniform, Grouped
-from .seed import RockSeed
 from .distribute import scatter_positions
 
 
@@ -44,15 +43,6 @@ class Rocks:
     def footprint_mm(self) -> float:
         return float(bounds(self.rocks.r)[1])
 
-    def _make_seed(self, x: float, y: float,
-                   rng: np.random.Generator) -> RockSeed:
-        rx     = float(sample(self.rocks.r, rng))
-        ry     = rx * float(sample(self.rocks.aspect, rng))
-        h_frac = float(sample(self.rocks.flat, rng))
-        height = 0.5 * (rx + ry) * h_frac
-        angle  = float(sample(self.rocks.angle, rng))
-        return RockSeed(x=x, y=y, rx=rx, ry=ry, height=height, angle=angle)
-
     def scatter(
         self,
         scene,
@@ -67,7 +57,7 @@ class Rocks:
         primitive (``scatter/stones.py``, docs/design/rocks-faceted-stones.md):
         legacy ``RocksConfig`` size params map onto ``StoneSpec``s, so every
         existing tile gets bedded faceted stones with no spec edits.  The
-        dome kernel in ``layers/rocks.py`` is retired from this path.
+        old dome kernel (``layers/rocks.py``) was deleted 2026-07-04.
         ``n_cuts``/``cut``/``roughness``/``sink`` are accepted but ignored.
 
         Stamps ``scene.terrain_support_z`` and ``scene.obstacle_mask`` in

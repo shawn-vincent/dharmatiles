@@ -170,7 +170,7 @@ class TileScene:
     #       # ... bilinear sample of gradient ...
     #
     # Callers that need updating when this is implemented:
-    #   - _build_rocks_mesh_core        → rotate rock local-Z to terrain_normal
+    #   - stones.build_stone            → seat/lean along terrain_normal
     #   - Grass blade origin            → sink along normal, not world-Z
     #   - Grass rise_cap check          → compare Δ along normal, not abs Δz
     #   - _make_support_post            → measure z_top clearance along normal

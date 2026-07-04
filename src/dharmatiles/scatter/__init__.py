@@ -7,7 +7,6 @@ Ordering in the list is the author's contract for state dependencies:
 put ``Rocks`` before ``Grass`` so blades steer around rock footprints.
 """
 from .config    import Uniform, Grouped
-from .seed      import RockSeed
 from .prototype import Rocks, Grass
 from .flowers   import Flowers
 
@@ -19,7 +18,6 @@ __all__ = [
     'Tree',
     'Uniform',
     'Grouped',
-    'RockSeed',
 ]
 
 
