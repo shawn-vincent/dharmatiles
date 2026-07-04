@@ -104,6 +104,30 @@ survived:
 - Boolean: `trimesh.boolean.difference(engine='manifold')`, one call per
   stone with all wedge segments; falls back to the uncracked stone on
   failure.
+- **Corner rules** (MeshLab judgment, 2026-07-03 evening): the walk
+  STOPS at strong arrises (normal dot < 0.6) — wrapping a sharp corner
+  leaves uncut stone slivers standing in the groove, and real cracks
+  terminate at hard edges anyway.  Proud height (0.55 mm) must exceed
+  the worst chord dip across an arris or the groove tunnels under the
+  corner leaving a stone flap.  Taper floor 0.4 — needle tips can't
+  swallow the slivers they graze.  Generous joint overlap (0.45 mm).
+- **Branching**: the primary crack always forks once mid-path at 35–60°,
+  2–3 fading segments.  The primary crack is unconditional — per-crack
+  probability once rolled the trio shard bald at 2 % odds; only
+  secondary cracks roll dice.
+
+## Rocks adapter (integration, 2026-07-03 evening)
+
+`scatter.prototype.Rocks` no longer calls the dome kernel: it maps
+legacy `RocksConfig` samples onto `StoneSpec`s (footprint = 2r, height =
+mean-radius × flat × 1.45 compensation for bed-to-widest, facet count
+from footprint, burial 0.85–1.05) and shares `_build_and_stamp`.  Every
+existing tile gets faceted bedded stones with **zero spec edits**;
+`n_cuts`/`cut`/`roughness`/`sink` are accepted and ignored.  S3 (meadow
+crowns above thatch) and S4 (shore pebble bands + water boulder) verified
+by render.  The full tile set needs one regeneration after acceptance;
+the dome kernel in `layers/rocks.py` is now unreferenced and awaits the
+delete-the-losers step.
 - Stamping happens BEFORE engraving — the stamp math assumes convexity,
   and grooves are too small to matter for support/obstacle fields.
 

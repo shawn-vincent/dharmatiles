@@ -78,10 +78,14 @@ _CRACK_PROB         = 0.5   # chance a SECONDARY crack appears; the primary
 _CRACK_MAX_PER_STONE = 2
 _CRACK_WIDTH_MM     = 0.5   # groove width at the crack's midpoint
 _CRACK_DEPTH_MM     = 0.55  # groove depth at the crack's midpoint
-_CRACK_PROUD_MM     = 0.15  # wedge top floats this far outside the surface
-_CRACK_SEGS         = 6     # random-walk segments per crack
-_CRACK_STEP_MM      = (1.1, 1.9)   # length of each walk segment
-_CRACK_JITTER_DEG   = 24.0  # per-segment heading jitter (meander)
+_CRACK_PROUD_MM     = 0.55  # wedge top floats this far outside the surface —
+                            # must exceed the worst chord dip when a segment
+                            # crosses an arris, or the groove tunnels under
+                            # the corner and leaves a stone flap bridging it
+_CRACK_SEGS         = 9     # random-walk segments per crack
+_CRACK_STEP_MM      = (0.7, 1.3)   # length of each walk segment — short
+                            # steps hug corners and wiggle more per mm
+_CRACK_JITTER_DEG   = 30.0  # per-segment heading jitter (meander)
 _CRACK_BRANCH_PROB  = 1.0   # the primary crack always forks once (Shawn:
                             # "I'd expect a tiny bit of branching")
 _CRACK_BRANCH_DEG   = (35.0, 60.0)  # fork angle off the parent heading
@@ -246,8 +250,10 @@ def _wedge(a: np.ndarray, b: np.ndarray,
     nm   = nm / (np.linalg.norm(nm) + 1e-12)
     side = np.cross(dirv, nm)
     side = side / (np.linalg.norm(side) + 1e-12)
-    a = a - dirv * 0.15  # overlap joints so the chained groove stays sealed
-    b = b + dirv * 0.15
+    # Generous joint overlap: consecutive wedges twist across arrises and a
+    # short overlap leaves uncut slivers standing in the groove at corners.
+    a = a - dirv * 0.45
+    b = b + dirv * 0.45
     verts = np.array([
         a + na * _CRACK_PROUD_MM + side * (wa / 2.0),
         a + na * _CRACK_PROUD_MM - side * (wa / 2.0),
@@ -282,7 +288,13 @@ def _crack_walk(mesh: trimesh.Trimesh, N: np.ndarray,
         d = np.cos(jit) * d + np.sin(jit) * np.cross(n, d)
         q = p + d * step
         qs, _dist, tid = trimesh.proximity.closest_point(mesh, [q])
-        p, n = qs[0], N[tid[0]]
+        n_new = N[tid[0]]
+        # Stop at strong arrises: wrapping a sharp corner leaves uncut
+        # stone slivers standing in the groove (and real cracks terminate
+        # at hard edges anyway).
+        if float(n_new @ n) < 0.6:
+            break
+        p, n = qs[0], n_new
         pts.append(p)
         nms.append(n)
     return pts, nms
@@ -348,10 +360,14 @@ def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
         walk_p = back_p[::-1] + [seed_p] + fwd_p
         walk_n = back_n[::-1] + [seed_n] + fwd_n
 
+        if len(walk_p) < 3:
+            continue
         # Chain tapered wedges: width/depth peak mid-crack, fade at ends.
+        # Floor keeps the tips stubby — needle tips can't swallow the
+        # stone slivers they graze near corners.
         K = len(walk_p) - 1
         prof = np.sin(np.pi * np.linspace(0.0, 1.0, K + 1)) ** 0.6
-        prof = np.maximum(prof, 0.18)
+        prof = np.maximum(prof, 0.4)
         for k in range(K):
             cutters.append(_wedge(
                 walk_p[k], walk_p[k + 1], walk_n[k], walk_n[k + 1],
@@ -371,7 +387,7 @@ def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
                                      int(rng.integers(2, 4)), rng)
             bp = [walk_p[j]] + br_p
             bn = [walk_n[j]] + br_n
-            bprof = np.linspace(prof[j] * 0.8, 0.18, len(bp))
+            bprof = np.linspace(prof[j] * 0.8, 0.4, len(bp))
             for k in range(len(bp) - 1):
                 cutters.append(_wedge(
                     bp[k], bp[k + 1], bn[k], bn[k + 1],

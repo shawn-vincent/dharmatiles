@@ -60,9 +60,18 @@ class Rocks:
         placement_mask: np.ndarray | None = None,
         layer_idx:      int               = 0,
     ) -> list[trimesh.Trimesh]:
-        """Sample positions, build seeds (sorted big→small), return mesh parts.
+        """Sample positions, build faceted stones (sorted big→small),
+        return mesh parts.
 
-        Stamps ``scene.terrain_support_z`` and ``scene.obstacle_mask`` in place.
+        Since 2026-07-03 ``Rocks`` is an adapter over the faceted-stone
+        primitive (``scatter/stones.py``, docs/design/rocks-faceted-stones.md):
+        legacy ``RocksConfig`` size params map onto ``StoneSpec``s, so every
+        existing tile gets bedded faceted stones with no spec edits.  The
+        dome kernel in ``layers/rocks.py`` is retired from this path.
+        ``n_cuts``/``cut``/``roughness``/``sink`` are accepted but ignored.
+
+        Stamps ``scene.terrain_support_z`` and ``scene.obstacle_mask`` in
+        place (via the stone build path).
         """
         surface  = scene.surface
         rng_seed = derive_seed(surface.seed, 'rocks-scatter', layer_idx) \
@@ -74,30 +83,32 @@ class Rocks:
             self.placement, n_sq, self.footprint_mm(),
             placement_mask, scene, surface, rng,
         )
-
-        seeds = [self._make_seed(x, y, rng) for x, y, _gd in positions]
-        seeds.sort(key=lambda s: s.sort_key())
-        if not seeds:
+        if not positions:
             return []
 
-        # Pre-compute terrain gradient for slope-aligned rock rotation.
-        cw         = surface.cell_w
-        terrain_gz_x = np.gradient(scene.terrain_z, axis=1) / cw
-        terrain_gz_y = np.gradient(scene.terrain_z, axis=0) / cw
-
-        from ..layers.rocks import _build_rocks_mesh_from_seeds
-        from ..core.color import Material, tag as _tag
-        mesh = _build_rocks_mesh_from_seeds(
-            seeds, self.rocks, surface,
-            scene.terrain_z, scene.terrain_support_z, scene.obstacle_mask,
-            layer_idx    = layer_idx,
-            terrain_gz_x = terrain_gz_x,
-            terrain_gz_y = terrain_gz_y,
-        )
-        if len(mesh.vertices) > 0:
-            _tag(mesh, Material.ROCK)
-            return [mesh]
-        return []
+        from .stones import StoneSpec, _build_and_stamp
+        specs = []
+        for x, y, _gd in positions:
+            rx   = float(sample(self.rocks.r, rng))
+            asp  = float(sample(self.rocks.aspect, rng))
+            flat = float(sample(self.rocks.flat, rng))
+            yaw  = float(np.degrees(sample(self.rocks.angle, rng)))
+            foot = 2.0 * rx
+            # Legacy height was mean-radius x flat measured from the base;
+            # bed-to-widest buries part of it, so compensate (x1.45) and
+            # floor at a stubby proportion so flat pebbles don't vanish.
+            height = max(0.5 * (rx + rx * asp) * flat * 1.45, 0.45 * foot)
+            specs.append(StoneSpec(
+                x=float(x), y=float(y),
+                footprint_mm=foot,
+                height_mm=height,
+                aspect=asp,
+                facets=int(np.clip(6 + foot * 1.1, 7, 14)),
+                yaw_deg=yaw,
+                burial=float(rng.uniform(0.85, 1.05)),
+                seed=int(rng.integers(0, 2**31)),
+            ))
+        return _build_and_stamp(scene, specs)
 
     def apply(
         self,
