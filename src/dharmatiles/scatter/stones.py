@@ -110,6 +110,11 @@ class StoneSpec:
     egg:          float | None = None  # per-stone egg taper; None → _EGG_TAPER.
                                        # Low for shards (mass stays high),
                                        # high for lumps (mass sits low)
+    lumpiness:    float | None = None  # per-point radius jitter; None →
+                                       # _LUMPINESS.  Weathering pairs this
+                                       # with facets: sharp = few facets +
+                                       # high lumpiness, weathered cobble =
+                                       # many facets + low lumpiness
     seed:         int   = 0
 
 
@@ -136,7 +141,8 @@ def _support_points(spec: StoneSpec) -> np.ndarray:
     radii = np.array([spec.footprint_mm / 2.0,
                       spec.footprint_mm * spec.aspect / 2.0,
                       spec.height_mm / 2.0])
-    lump = rng.uniform(1.0 - _LUMPINESS, 1.0 + _LUMPINESS, (M, 1))
+    lumpiness = _LUMPINESS if spec.lumpiness is None else spec.lumpiness
+    lump = rng.uniform(1.0 - lumpiness, 1.0 + lumpiness, (M, 1))
     pts  = d * radii * lump
 
     # Egg profile: taper the horizontal radius above _EGG_WIDEST_T so the
