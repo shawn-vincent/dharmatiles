@@ -34,9 +34,18 @@ _EGG_WIDEST_T     = -0.25   # egg profile: widest slice at this local height
                             # bed-to-widest then buries less stone and the
                             # base doesn't flare into tent-flaps
 _EGG_TAPER        = 0.35    # horizontal shrink at the very top (t = 1)
+_ROUND_JITTER     = (0.3, 1.6)    # roundover randomization range —
+                                  # uniform fillets read CNC, not geology
+_ROUND_EDGE_STEP_MM = 1.2         # ball spacing along edges: the radius is
+                                  # re-rolled at each sample, so the fillet
+                                  # wobbles ALONG an edge (per-corner-only
+                                  # radii read as rounded dice)
 _OVERHANG_NZ      = -0.72   # fail when a face normal's z is below this (≈45°)
 _OVERHANG_CHORD   = 1.6     # mm — under-tucks narrower than this are allowed
-_GROUND_MARGIN    = 0.2     # mm — faces below terrain+margin are exempt
+_GROUND_MARGIN    = 1.0     # mm — faces below terrain+margin are exempt from
+                            # the overhang audit: the seal/skirt laps soil up
+                            # to _MAX_SEAL_LIFT_MM against them, so they are
+                            # supported in the print even though they face down
 _LEAN_STEP_DEG    = 2.0     # corrective lean reduction per audit round
 _BURIAL_STEP      = 0.05    # corrective burial increase per audit round
 _BURIAL_MAX       = 1.40
@@ -63,8 +72,8 @@ _CLASS_PARAMS = {
     'slab':  ((0.55, 0.75), (0.80, 0.95), ( 8, 12), (0.0,  5.0), (0.95, 1.10), 0.35),
     'shard': ((1.50, 2.10), (0.60, 0.80), (10, 13), (4.0, 14.0), (0.85, 1.00), 0.12),
 }
-_MAX_SEAL_LIFT_MM = 0.8     # don't build soil walls under real overhangs
-_SKIRT_W_MM       = 2.4     # lapping-soil annulus width around the footprint
+_MAX_SEAL_LIFT_MM = 1.3     # don't build soil walls under real overhangs
+_SKIRT_W_MM       = 3.0     # lapping-soil annulus width around the footprint
 
 # ── E5 crack engraving (R11) ──────────────────────────────────────────────────
 # A crack is a surface-projected random walk of thin tapered wedges: long,
@@ -111,10 +120,11 @@ class StoneSpec:
                                        # Low for shards (mass stays high),
                                        # high for lumps (mass sits low)
     lumpiness:    float | None = None  # per-point radius jitter; None →
-                                       # _LUMPINESS.  Weathering pairs this
-                                       # with facets: sharp = few facets +
-                                       # high lumpiness, weathered cobble =
-                                       # many facets + low lumpiness
+                                       # _LUMPINESS
+    roundover_mm: float = 0.0    # THE weathering knob: edges/corners are
+                                 # filleted by ~this radius (randomized per
+                                 # corner) while the overall shape stays —
+                                 # 0 = crisp shard-cut, ~1.5 = river cobble
     seed:         int   = 0
 
 
@@ -156,6 +166,80 @@ def _support_points(spec: StoneSpec) -> np.ndarray:
     pts[:, 0] *= s
     pts[:, 1] *= s
     return pts
+
+
+def _seat_rotation(verts: np.ndarray, faces: np.ndarray) -> np.ndarray:
+    """Rotation that lays the stone's best sitting face flat down.
+
+    Stones settle onto a stable face; without this a hull can meet the
+    ground along a single edge and read as about to tip over.  The best
+    face is the largest one already pointing downward (within ~60°);
+    identity if none exists."""
+    tris = verts[faces]
+    n    = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
+    area = 0.5 * np.linalg.norm(n, axis=1)
+    n    = n / (2.0 * area[:, None] + 1e-12)
+    score = area * np.clip(-n[:, 2], 0.0, None)
+    score[n[:, 2] > -0.5] = 0.0
+    if score.max() <= 0.0:
+        return np.eye(3)
+    nb = n[int(score.argmax())]
+    target = np.array([0.0, 0.0, -1.0])
+    axis = np.cross(nb, target)
+    s    = np.linalg.norm(axis)
+    c    = float(nb @ target)
+    if s < 1e-9:
+        return np.eye(3)
+    axis /= s
+    K = np.array([[0.0, -axis[2], axis[1]],
+                  [axis[2], 0.0, -axis[0]],
+                  [-axis[1], axis[0], 0.0]])
+    return np.eye(3) + s * K + (1.0 - c) * (K @ K)
+
+
+def _round_edges(verts: np.ndarray, faces: np.ndarray,
+                 roundover_mm: float, rng: np.random.Generator,
+                 ) -> tuple[np.ndarray, np.ndarray]:
+    """Weathering fillet: a rolling ball whose radius is re-rolled at every
+    corner AND at ~1 mm intervals along every edge, eroded inward and
+    hulled.  The silhouette stays; the fillet radius wobbles along each
+    edge — one edge can stay sharp at one end and round over in the middle
+    (constant-radius fillets read as rounded dice, per Shawn)."""
+    m   = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+    cap = 0.3 * float(m.extents.min())
+
+    cores, rhos = [], []
+    # Corner balls.
+    vn = np.asarray(m.vertex_normals)
+    rv = np.minimum(roundover_mm * rng.uniform(*_ROUND_JITTER, len(verts)),
+                    cap)
+    cores.append(verts - vn * rv[:, None])
+    rhos.append(rv)
+    # Edge balls, radius independently re-rolled per sample.
+    fn = m.face_normals
+    for (f1, f2), (a, b) in zip(m.face_adjacency, m.face_adjacency_edges):
+        va, vb = verts[a], verts[b]
+        L = float(np.linalg.norm(vb - va))
+        k = int(L / _ROUND_EDGE_STEP_MM)
+        if k < 1:
+            continue
+        nd = fn[f1] + fn[f2]
+        nd = nd / (np.linalg.norm(nd) + 1e-12)
+        ts = (np.arange(1, k + 1) + rng.uniform(-0.3, 0.3, k)) / (k + 1)
+        ts = np.clip(ts, 0.08, 0.92)
+        p  = va[None, :] + ts[:, None] * (vb - va)[None, :]
+        r  = np.minimum(roundover_mm * rng.uniform(*_ROUND_JITTER, k), cap)
+        cores.append(p - nd[None, :] * r[:, None])
+        rhos.append(r)
+
+    core = np.vstack(cores)
+    rho  = np.concatenate(rhos)
+    # subdivisions=2 (162 dirs): coarser balls turn fillets into single
+    # chamfer strips — reads as a bevelled box, not weathering.
+    dirs = trimesh.creation.icosphere(subdivisions=2, radius=1.0).vertices
+    pts  = (core[:, None, :] + rho[:, None, None] * dirs[None, :, :])
+    h = trimesh.convex.convex_hull(pts.reshape(-1, 3))
+    return np.asarray(h.vertices), np.asarray(h.faces)
 
 
 def _rotation(spec: StoneSpec, lean_deg: float) -> np.ndarray:
@@ -202,6 +286,15 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
     """
     local = trimesh.convex.convex_hull(_support_points(spec))
     v_loc, faces = np.asarray(local.vertices), np.asarray(local.faces)
+    # Seat on a stable face before yaw/lean — never balance on an edge.
+    v_loc = v_loc @ _seat_rotation(v_loc, faces).T
+    # Weathering fillet BEFORE the bedding loop, so widest-slice, burial,
+    # overhang audit, and the terrain seal all see the final geometry —
+    # rounding afterwards eats the bottom rim and re-opens daylight
+    # under the stone.
+    if spec.roundover_mm > 0.0:
+        r_rng = np.random.default_rng((spec.seed ^ 0x2CAFE) & 0x7FFFFFFF)
+        v_loc, faces = _round_edges(v_loc, faces, spec.roundover_mm, r_rng)
 
     lean, burial = spec.lean_deg, spec.burial
     while True:
@@ -406,8 +499,18 @@ def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
         return mesh
     try:
         out = trimesh.boolean.difference([mesh] + cutters, engine='manifold')
-        if len(out.faces) > 0:
-            return out
+        if len(out.faces) > 0 and out.is_watertight:
+            # STL is float32: crack-tip sliver triangles can collapse under
+            # quantization and open the mesh even though the float64 result
+            # is watertight.  Accept only if the stone survives the same
+            # round-trip the exported STL will take.
+            v32 = out.vertices.astype(np.float32).astype(np.float64)
+            chk = trimesh.Trimesh(vertices=v32, faces=out.faces.copy(),
+                                  process=True)
+            if chk.is_watertight:
+                return out
+        warnings.warn('crack engraving produced a non-watertight stone; '
+                      'left uncracked', RuntimeWarning)
     except Exception as exc:                        # noqa: BLE001
         warnings.warn(f'crack engraving failed, stone left uncracked: {exc}',
                       RuntimeWarning)
@@ -474,7 +577,11 @@ def _footprint_max_z(scene, spec: StoneSpec) -> float:
     X, Y = np.meshgrid(np.arange(i0, i1) * cw, np.arange(j0, j1) * cw)
     disk = (X - spec.x) ** 2 + (Y - spec.y) ** 2 <= r * r
     patch = scene.terrain_z[j0:j1, i0:i1]
-    return float(patch[disk].max()) if disk.any() else float(patch.max())
+    if not disk.any():
+        return float(patch.max())
+    # High percentile, not max: seating on the single highest mound cell
+    # leaves the downslope side of the stone hanging in the air.
+    return float(np.percentile(patch[disk], 80.0))
 
 def _stamp_stone(scene, mesh: trimesh.Trimesh) -> None:
     """Stamp one stone into the scene fields (R5 bedding by construction).
