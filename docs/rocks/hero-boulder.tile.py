@@ -26,7 +26,7 @@ tile = Tile(
                               yaw_deg=35.0, burial=1.0,
                               egg=0.2, roundover_mm=1.1,
                               spall_scars=2, crown_flat=0.8,
-                              seed=_seed),
+                              seam_z=0.45, seed=_seed),
                 ]),
             ],
         ),

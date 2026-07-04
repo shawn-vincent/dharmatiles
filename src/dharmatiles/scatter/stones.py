@@ -52,6 +52,11 @@ _DISH_SAG_FRAC     = (0.03, 0.08) # dish depth × sqrt(face area)
 _SPALL_R_FRAC      = (0.22, 0.42) # scar radius × footprint
 _SPALL_DEPTH_FRAC  = (0.25, 0.45) # scar depth × scar radius
 _SPALL_MIN_FOOT_MM = 3.5          # stones smaller than this get no scars
+_UNDULATE_FRAC     = 0.35         # bulge amplitude × roundover: the reference
+                                  # boulders are pillowy — broad convex bulges
+                                  # flowing into shallow saddles, never flat
+                                  # planes (the residual CAD read)
+_UNDULATE_WAVES    = 4            # random plane waves summed for the bulges
 _OVERHANG_NZ      = -0.72   # fail when a face normal's z is below this (≈45°)
 _OVERHANG_CHORD   = 1.6     # mm — under-tucks narrower than this are allowed
 _GROUND_MARGIN    = 1.0     # mm — faces below terrain+margin are exempt from
@@ -146,6 +151,10 @@ class StoneSpec:
                                  # broad flattish top, never an apex point
                                  # (low facet counts put a single Fibonacci
                                  # point at the pole = cone read)
+    seam_z:       float | None = None  # 0-1 fraction of exposed height: carve
+                                       # one long near-horizontal fracture seam
+                                       # wrapping the stone (Letipea's defining
+                                       # feature — bedding, not a scar)
     seed:         int   = 0
 
 
@@ -440,7 +449,22 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
         iters = int(np.clip(2 + 11 * spec.roundover_mm, 2, 30))
         trimesh.smoothing.filter_taubin(aged, iterations=iters)
         if aged.is_watertight:
-            v_loc = np.asarray(aged.vertices)
+            # Organic undulation AFTER smoothing (or it gets smoothed
+            # away): sum of random plane waves displaces the surface
+            # along its normals into pillowy bulges and saddles.
+            u_rng = np.random.default_rng((spec.seed ^ 0x0DDA) & 0x7FFFFFFF)
+            p  = np.asarray(aged.vertices)
+            vn = np.asarray(aged.vertex_normals)
+            wl = max(spec.footprint_mm / 2.8, 2.0)
+            f  = np.zeros(len(p))
+            for _ in range(_UNDULATE_WAVES):
+                d = u_rng.normal(size=3)
+                d /= np.linalg.norm(d) + 1e-12
+                f += np.cos(2.0 * np.pi / wl * (p @ d)
+                            + u_rng.uniform(0.0, 2.0 * np.pi))
+            f /= _UNDULATE_WAVES
+            amp = _UNDULATE_FRAC * spec.roundover_mm
+            v_loc = p + vn * (amp * f)[:, None]
             faces = np.asarray(aged.faces)
 
     lean, burial = spec.lean_deg, spec.burial
@@ -526,7 +550,8 @@ def _crack_solid(pts: list, nms: list, widths: np.ndarray,
 def _crack_walk(mesh: trimesh.Trimesh, N: np.ndarray,
                 p0: np.ndarray, n0: np.ndarray, d0: np.ndarray,
                 n_segs: int, rng: np.random.Generator,
-                ground_z: float) -> tuple[list, list]:
+                ground_z: float, pull_z: float | None = None,
+                ) -> tuple[list, list]:
     """Random-walk *n_segs* steps across the hull surface from *p0*.
 
     Steps in the local tangent plane with heading jitter, reprojecting
@@ -539,6 +564,8 @@ def _crack_walk(mesh: trimesh.Trimesh, N: np.ndarray,
         jit  = np.radians(rng.uniform(-_CRACK_JITTER_DEG, _CRACK_JITTER_DEG))
         d = np.cos(jit) * d + np.sin(jit) * np.cross(n, d)
         q = p + d * step
+        if pull_z is not None:
+            q[2] = 0.55 * q[2] + 0.45 * pull_z   # seam mode: hug the plane
         qs, _dist, tid = trimesh.proximity.closest_point(mesh, [q])
         n_new = N[tid[0]]
         # Stop at strong arrises: wrapping a sharp corner leaves uncut
@@ -554,7 +581,8 @@ def _crack_walk(mesh: trimesh.Trimesh, N: np.ndarray,
 
 
 def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
-                    ground_z: float, footprint_mm: float) -> trimesh.Trimesh:
+                    ground_z: float, footprint_mm: float,
+                    seam_z: float | None = None) -> trimesh.Trimesh:
     """Subtract kinked wedge grooves seeded on prominent triangles.
 
     Cracks are a wash-paintability feature (R11); they meander with
@@ -649,6 +677,32 @@ def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
                                             _CRACK_WIDTH_MM * bprof,
                                             _CRACK_DEPTH_MM * bprof))
 
+    # Fracture seam: one long near-horizontal groove wrapping the stone
+    # (bedding read, per the Letipea erratic) — walked both ways from a
+    # random azimuth, pulled toward the seam plane at every step.
+    if seam_z is not None and exposed > 4.0:
+        zs = ground_z + seam_z * exposed
+        c  = np.asarray(mesh.vertices).mean(axis=0)
+        az = rng.uniform(0.0, 2.0 * np.pi)
+        q  = c + np.array([np.cos(az), np.sin(az), 0.0]) * footprint_mm
+        q[2] = zs
+        qs, _dist, tid = trimesh.proximity.closest_point(mesh, [q])
+        p0, n0 = qs[0], N[tid[0]]
+        d0 = np.cross(n0, np.array([0.0, 0.0, 1.0]))
+        d0 = d0 / (np.linalg.norm(d0) + 1e-12)
+        s_back, sn_back = _crack_walk(mesh, N, p0, n0, -d0, 7, rng,
+                                      ground_z, pull_z=zs)
+        s_fwd,  sn_fwd  = _crack_walk(mesh, N, p0, n0, d0, 7, rng,
+                                      ground_z, pull_z=zs)
+        sp = s_back[::-1] + [p0] + s_fwd
+        sn = sn_back[::-1] + [n0] + sn_fwd
+        if len(sp) >= 4:
+            prof = np.sin(np.pi * np.linspace(0.0, 1.0, len(sp))) ** 0.4
+            prof = np.maximum(prof, 0.55)
+            cutters.append(_crack_solid(sp, sn,
+                                        1.4 * _CRACK_WIDTH_MM * prof,
+                                        1.5 * _CRACK_DEPTH_MM * prof))
+
     if not cutters:
         return mesh
     try:
@@ -691,7 +745,8 @@ def _build_and_stamp(scene, specs: list[StoneSpec]) -> list[trimesh.Trimesh]:
         _stamp_stone(scene, mesh)
         mesh = _engrave_cracks(
             mesh, np.random.default_rng((spec.seed ^ 0x5EED) & 0x7FFFFFFF),
-            ground_z=tz0, footprint_mm=spec.footprint_mm)
+            ground_z=tz0, footprint_mm=spec.footprint_mm,
+            seam_z=spec.seam_z)
         parts.append(mesh)
 
     if not parts:
