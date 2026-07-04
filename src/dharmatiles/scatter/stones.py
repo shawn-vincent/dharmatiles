@@ -496,7 +496,15 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
         if spec.footprint_mm >= 10.0:   # heroes need finer edge polylines
             wm = wm.subdivide()
         p  = np.asarray(wm.vertices)
-        vn = np.asarray(wm.vertex_normals)
+        # Displace along a SMOOTHED normal field: raw normals flip
+        # abruptly across sharp arrises (heavy stones skip the fillet),
+        # and displacing both sides along diverging directions pleats
+        # the surface into sliver folds (Shawn's MeshLab artifacts).
+        _sn = trimesh.Trimesh(vertices=p.copy(),
+                              faces=np.asarray(wm.faces).copy(),
+                              process=False)
+        trimesh.smoothing.filter_taubin(_sn, iterations=10)
+        vn = np.asarray(_sn.vertex_normals)
         w  = np.zeros(len(p))
         for _ in range(3):
             d = w_rng.normal(size=3)
