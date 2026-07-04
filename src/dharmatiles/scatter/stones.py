@@ -772,9 +772,22 @@ def _build_and_stamp(scene, specs: list[StoneSpec]) -> list[trimesh.Trimesh]:
         v, f, _, _ = build_stone(spec, tz0)
         mesh = trimesh.Trimesh(vertices=v, faces=f, process=False)
         if v[:, 2].min() < _FLOOR_MM:
-            mesh = trimesh.intersections.slice_mesh_plane(
-                mesh, plane_normal=[0.0, 0.0, 1.0],
-                plane_origin=[0.0, 0.0, _FLOOR_MM], cap=True)
+            # Manifold boolean, not slice_mesh_plane: the plane cap fails
+            # to triangulate the wiggly boundary loop of an aged/undulated
+            # surface and ships an open mesh (letipea hero caught it).
+            ext = float(np.abs(v).max()) * 2.0 + 10.0
+            box = trimesh.creation.box(
+                extents=[ext, ext, ext],
+                transform=trimesh.transformations.translation_matrix(
+                    [spec.x, spec.y, _FLOOR_MM + ext / 2.0]))
+            clipped = trimesh.boolean.intersection([mesh, box],
+                                                   engine='manifold')
+            if len(clipped.faces) > 0 and clipped.is_watertight:
+                mesh = clipped
+            else:
+                warnings.warn(f'floor clip failed for stone at '
+                              f'({spec.x:.1f},{spec.y:.1f}); left unclipped',
+                              RuntimeWarning)
         # Stamp from the convex body (the stamp math assumes convexity),
         # then engrave — grooves are too small to matter for support/masks.
         _stamp_stone(scene, mesh)

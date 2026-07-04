@@ -174,6 +174,35 @@ crisp rims; corestones go "blobby"):
   its flank); the skirt may bank higher than the rim seal
   (`_MAX_SKIRT_LIFT_MM`) so ridge-adjacent stones don't show voids.
 
+## E9 hero self-comparison (2026-07-04, vs docs/reference/big-boulders)
+
+Four authored heroes (`docs/rocks/hero-quartet.tile.py`, HERO env var:
+letipea / sylt / yeager / doane), each tuned to its reference photo and
+rendered at 1600 px.  Verdicts and gaps:
+
+- **Stance**: burial ≥ 1.0 sinks a hero into a turtle-shell mound; the
+  references sit PROUD with a buried contact line (~55–65 % of mass
+  visible).  Heroes want burial 0.75–0.9; scatter stones keep ≥ 1.0.
+  First letipea attempt pancaked on exactly this.
+- **Undulation is invisible at hero scale**: amplitude = 0.35 ×
+  roundover ≈ 0.4 mm on a 19 mm stone (2 %).  Reference pillowing is
+  ~5 % of diameter.  → amplitude should also scale with footprint.
+- **Long straight silhouette lines survive** on big stones: the adapter
+  facet cap (14) gives a 20 mm hero the same facet count as an 8 mm
+  stone, and 1 mm roundover can't kill a 10 mm straight arris.  → facet
+  count and roundover should scale with footprint for hero sizes.
+- **No micro-texture**: post-Taubin surfaces are glass-smooth; the
+  references show granular roughness (~1–2 % of size).  A fine
+  high-frequency displacement (0.1–0.2 mm) post-aging would give
+  drybrush tooth and prints fine.  Likely the single biggest detail gap.
+- **Seam too faint at hero scale**: fixed-mm width/depth is
+  proportionally thin on a 19 mm stone; should scale with footprint.
+- Two-tone lichen/moss crown = paint concern (out of geometry scope);
+  crown/base split maps to face normals if colour ever lands.
+- Floor clip is a manifold boolean intersection, NOT slice_mesh_plane —
+  the plane cap fails on aged/undulated boundary loops and ships an
+  open mesh (letipea caught it; no gate existed on that stage).
+
 ## Keep / delete
 
 - Keep: placement machinery (`scatter/distribute.py`), layer ordering
