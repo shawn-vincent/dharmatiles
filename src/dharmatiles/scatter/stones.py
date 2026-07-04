@@ -404,6 +404,17 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
             chk = trimesh.Trimesh(vertices=v32, faces=out.faces.copy(),
                                   process=True)
             if len(out.faces) > 0 and out.is_watertight and chk.is_watertight:
+                # Age the WHOLE surface after the chunks are removed: on a
+                # weathered stone the scar and dish rims must round over
+                # too — cutting them after the fillet left crisp rims on
+                # the most weathered stones (Shawn).  Taubin smoothing on
+                # the subdivided bitten mesh; fresh stones (roundover 0)
+                # keep crisp spall rims, which is the correct geology.
+                if spec.roundover_mm > 0.15:
+                    out = out.subdivide()
+                    iters = int(np.clip(2 + 8 * spec.roundover_mm / 1.5,
+                                        2, 12))
+                    trimesh.smoothing.filter_taubin(out, iterations=iters)
                 v_loc = np.asarray(out.vertices)
                 faces = np.asarray(out.faces)
             else:
