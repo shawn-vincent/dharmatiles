@@ -311,6 +311,36 @@ def _round_edges(verts: np.ndarray, faces: np.ndarray,
     return np.asarray(h.vertices), np.asarray(h.faces)
 
 
+def _spall_blob(r: float, depth: float, n: np.ndarray,
+                rng: np.random.Generator) -> trimesh.Trimesh:
+    """Organic spall cutter: a lumpified oblate blob, not a sphere.
+
+    A perfect icosphere bite leaves a circular scallop with a compass-
+    drawn rim (Shawn's MeshLab find).  Low-frequency radial noise makes
+    the rim wander and the scar floor undulate like a real spall."""
+    bite = trimesh.creation.icosphere(subdivisions=3, radius=1.0)
+    p = np.asarray(bite.vertices)
+    fld = np.zeros(len(p))
+    for _ in range(4):
+        d = rng.normal(size=3)
+        d /= np.linalg.norm(d) + 1e-12
+        fld += np.cos(2.0 * np.pi / rng.uniform(0.9, 1.6) * (p @ d)
+                      + rng.uniform(0.0, 2.0 * np.pi))
+    fld /= 4.0
+    bite.vertices = p * (1.0 + 0.35 * fld)[:, None]
+    bite.apply_scale([r, r * rng.uniform(0.75, 1.0), depth])
+    bite.apply_transform(trimesh.transformations.rotation_matrix(
+        rng.uniform(0.0, 2.0 * np.pi), [0.0, 0.0, 1.0]))
+    z = np.array([0.0, 0.0, 1.0])
+    ax = np.cross(z, n)
+    s  = np.linalg.norm(ax)
+    if s > 1e-9:
+        ang = float(np.arccos(np.clip(z @ n, -1.0, 1.0)))
+        bite.apply_transform(
+            trimesh.transformations.rotation_matrix(ang, ax / s))
+    return bite
+
+
 def _weather_bites(crisp_v: np.ndarray, crisp_f: np.ndarray,
                    spec: StoneSpec, rng: np.random.Generator,
                    ) -> list[trimesh.Trimesh]:
@@ -380,15 +410,7 @@ def _weather_bites(crisp_v: np.ndarray, crisp_f: np.ndarray,
             r     = min(rng.uniform(*_SPALL_R_FRAC) * spec.footprint_mm / 2.0,
                         0.45 * exp_h)
             depth = rng.uniform(*_SPALL_DEPTH_FRAC) * r
-            bite = trimesh.creation.icosphere(subdivisions=2, radius=1.0)
-            bite.apply_scale([r, r, depth])
-            # Orient the oblate axis along the corner normal, sink partway.
-            z = np.array([0.0, 0.0, 1.0])
-            ax = np.cross(z, n); s = np.linalg.norm(ax)
-            if s > 1e-9:
-                ang = float(np.arccos(np.clip(z @ n, -1.0, 1.0)))
-                bite.apply_transform(
-                    trimesh.transformations.rotation_matrix(ang, ax / s))
+            bite = _spall_blob(r, depth, n, rng)
             bite.apply_translation(crisp_v[i] + n * depth * 0.35)
             cutters.append(bite)
     return cutters
@@ -495,25 +517,24 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
                              process=False).subdivide()
         if spec.footprint_mm >= 10.0:   # heroes need finer edge polylines
             wm = wm.subdivide()
-        p  = np.asarray(wm.vertices)
-        # Displace along a SMOOTHED normal field: raw normals flip
-        # abruptly across sharp arrises (heavy stones skip the fillet),
-        # and displacing both sides along diverging directions pleats
-        # the surface into sliver folds (Shawn's MeshLab artifacts).
-        _sn = trimesh.Trimesh(vertices=p.copy(),
-                              faces=np.asarray(wm.faces).copy(),
-                              process=False)
-        trimesh.smoothing.filter_taubin(_sn, iterations=10)
-        vn = np.asarray(_sn.vertex_normals)
-        w  = np.zeros(len(p))
+        p = np.asarray(wm.vertices)
+        # DOMAIN warp, not normal displacement: each wave displaces along
+        # its own constant direction, a smooth deformation of SPACE that
+        # is injective while amplitude x frequency < 1 (ours ~0.38) — it
+        # cannot fold any surface, however tight the local curvature.
+        # Normal-based displacement folded at concave fillet grooves
+        # whose radius was smaller than the amplitude (the sliver pleats
+        # in Shawn's MeshLab, stage-bisected to this warp).
+        disp = np.zeros_like(p)
         for _ in range(3):
             d = w_rng.normal(size=3)
             d /= np.linalg.norm(d) + 1e-12
             wwl = spec.footprint_mm / w_rng.uniform(1.2, 1.8)
-            w += np.cos(2.0 * np.pi / wwl * (p @ d)
-                        + w_rng.uniform(0.0, 2.0 * np.pi))
-        w /= 3.0
-        v_loc = p + vn * (_WARP_FRAC * spec.footprint_mm * w)[:, None]
+            ph  = np.cos(2.0 * np.pi / wwl * (p @ d)
+                         + w_rng.uniform(0.0, 2.0 * np.pi))
+            disp += d[None, :] * (ph * (_WARP_FRAC * spec.footprint_mm
+                                        / 3.0))[:, None]
+        v_loc = p + disp
         faces = np.asarray(wm.faces)
         if spec.roundover_mm <= 0.15:
             # Fresh stones get no aging pass to smooth the warp's
@@ -531,7 +552,14 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
                 # granite grain breaks the regularity (and fresh rock has
                 # tooth too — half the aged amplitude).
                 pq  = np.asarray(dq.vertices)
-                vnq = np.asarray(dq.vertex_normals)
+                _sn3 = trimesh.Trimesh(vertices=pq.copy(),
+                                       faces=np.asarray(dq.faces).copy(),
+                                       process=False)
+                trimesh.smoothing.filter_taubin(_sn3, iterations=10)
+                vnq = np.asarray(_sn3.vertex_normals)
+                _cd3 = np.linalg.norm(pq - np.asarray(_sn3.vertices),
+                                      axis=1)
+                cdq = 1.0 / (1.0 + (_cd3 / 0.35) ** 2)
                 gq  = np.zeros(len(pq))
                 for _ in range(_MICRO_WAVES):
                     d = w_rng.normal(size=3)
@@ -542,7 +570,7 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
                 gq /= np.sqrt(_MICRO_WAVES)
                 amp_q = 0.5 * np.clip(_MICRO_AMP_FRAC * spec.footprint_mm,
                                       *_MICRO_AMP_MM)
-                v_loc = pq + vnq * (amp_q * 0.5 * gq)[:, None]
+                v_loc = pq + vnq * (amp_q * 0.5 * gq * cdq)[:, None]
                 faces = np.asarray(dq.faces)
 
     if bites:
@@ -567,11 +595,26 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
     # subdivision — Taubin can't bend a crease flanked by coarse flat
     # triangles.  Cracks are engraved later and stay crisp by design.
     if spec.roundover_mm > 0.15 and spec.footprint_mm >= _SPALL_MIN_FOOT_MM:
-        aged = trimesh.Trimesh(vertices=v_loc, faces=faces,
-                               process=False).subdivide()
-        if spec.roundover_mm > 0.8:
-            aged = aged.subdivide()
-        iters = int(np.clip(2 + 11 * spec.roundover_mm, 2, 30))
+        # Voxel-remesh before smoothing: the fillet hull (and bite-rim
+        # triangulations) are full of needle triangles, and Laplacian-
+        # family smoothing is unstable on needles — it spikes them into
+        # the fold slivers Shawn kept finding.  Marching cubes gives
+        # uniform triangles by construction; Taubin is then stable.
+        body = trimesh.Trimesh(vertices=v_loc, faces=faces, process=False)
+        pitch = float(np.clip(spec.footprint_mm / 56.0, 0.18, 0.32))
+        try:
+            vg = body.voxelized(pitch).fill()
+            aged = vg.marching_cubes
+            # marching_cubes returns voxel-index coordinates; map back to
+            # world or the stone ships at grid scale, floating (E13 bug).
+            aged.apply_transform(vg.transform)
+            if not aged.is_watertight:
+                raise ValueError('marching cubes not watertight')
+        except Exception:                           # noqa: BLE001
+            aged = body.subdivide()
+        # Floor at 16: marching cubes leaves voxel stairsteps (z-contour
+        # terraces); anything less leaves them visible on light roundover.
+        iters = int(np.clip(2 + 11 * spec.roundover_mm, 16, 30))
         trimesh.smoothing.filter_taubin(aged, iterations=iters)
         if aged.is_watertight:
             # Organic undulation AFTER smoothing (or it gets smoothed
@@ -581,7 +624,23 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
             # vanish on hero-sized stones.
             u_rng = np.random.default_rng((spec.seed ^ 0x0DDA) & 0x7FFFFFFF)
             p  = np.asarray(aged.vertices)
-            vn = np.asarray(aged.vertex_normals)
+            # Smoothed normal field + curvature damping: normal relief
+            # folds wherever amplitude exceeds the local concave radius
+            # (scar rims, groove valleys).  |p - p_relaxed| is a cheap
+            # curvature proxy — relief fades where the surface is tight,
+            # which also reads right (scar interiors shouldn't be grainy).
+            _sn2 = trimesh.Trimesh(vertices=p.copy(),
+                                   faces=np.asarray(aged.faces).copy(),
+                                   process=False)
+            trimesh.smoothing.filter_taubin(_sn2, iterations=10)
+            vn = np.asarray(_sn2.vertex_normals)
+            # Scale 0.35, not 0.12: residual voxel-stairstep curvature
+            # (~0.05 mm) must NOT modulate the relief, or the displacement
+            # amplitude banding paints the z-contours as terraces across
+            # the whole stone (Shawn's MeshLab find on all four heroes).
+            # Only genuinely tight features (scar rims, ~0.4 mm+) damp.
+            _cd = np.linalg.norm(p - np.asarray(_sn2.vertices), axis=1)
+            curv_damp = 1.0 / (1.0 + (_cd / 0.35) ** 2)
             wl = max(spec.footprint_mm / 2.8, 2.0)
             f  = np.zeros(len(p))
             for _ in range(_UNDULATE_WAVES):
@@ -632,7 +691,7 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
                 damp  = 1.0 - _FACE_CALM * wf
 
             v_loc = p + vn * ((amp * f + amp_g * 0.5 * g)
-                              * env * damp)[:, None]
+                              * env * damp * curv_damp)[:, None]
             faces = np.asarray(aged.faces)
 
         # One crisp post-aging spall (E11): aging rounds every scar rim
@@ -657,15 +716,7 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
                 r = min(r_rng.uniform(*_SPALL_R_FRAC)
                         * spec.footprint_mm / 2.0, 0.45 * exp_h)
                 depth = r_rng.uniform(*_SPALL_DEPTH_FRAC) * r
-                bite = trimesh.creation.icosphere(subdivisions=2,
-                                                  radius=1.0)
-                bite.apply_scale([r, r, depth])
-                z = np.array([0.0, 0.0, 1.0])
-                ax = np.cross(z, n); s = np.linalg.norm(ax)
-                if s > 1e-9:
-                    ang = float(np.arccos(np.clip(z @ n, -1.0, 1.0)))
-                    bite.apply_transform(
-                        trimesh.transformations.rotation_matrix(ang, ax / s))
+                bite = _spall_blob(r, depth, n, r_rng)
                 bite.apply_translation(sv[i] + n * depth * 0.35)
                 try:
                     out = trimesh.boolean.difference([sm, bite],
