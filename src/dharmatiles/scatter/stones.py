@@ -512,7 +512,8 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
 # ── Crack engraving ───────────────────────────────────────────────────────────
 
 def _crack_solid(pts: list, nms: list, widths: np.ndarray,
-                 depths: np.ndarray) -> trimesh.Trimesh:
+                 depths: np.ndarray,
+                 proud_mm: float = _CRACK_PROUD_MM) -> trimesh.Trimesh:
     """ONE lofted V-channel along the crack polyline.
 
     A single swept solid replaces the old chain of overlapping frusta —
@@ -520,18 +521,34 @@ def _crack_solid(pts: list, nms: list, widths: np.ndarray,
     triangles that collapsed under STL float32 quantization and opened
     the mesh.  Ring per station: two proud top corners + the apex."""
     K = len(pts)
+    # Smooth the normals along the path: on an undulated surface the raw
+    # face normals swing enough that consecutive rings cross, and the
+    # everted loft turns into ADDED volume after the boolean (the nodule
+    # growths on heavily weathered stones).
+    nsm = []
+    for k in range(K):
+        n = (np.asarray(nms[max(k - 1, 0)]) + np.asarray(nms[k])
+             + np.asarray(nms[min(k + 1, K - 1)]))
+        nsm.append(n / (np.linalg.norm(n) + 1e-12))
     rings = []
+    side_prev = None
     for k in range(K):
         prev_p = pts[max(k - 1, 0)]
         next_p = pts[min(k + 1, K - 1)]
         d = np.asarray(next_p) - np.asarray(prev_p)
         d = d / (np.linalg.norm(d) + 1e-12)
-        n = nms[k]
-        side = np.cross(d, n)
+        n = nsm[k]
+        if side_prev is None:
+            side = np.cross(d, n)
+        else:
+            # Parallel transport: keep the ring orientation continuous
+            # instead of re-deriving it from a wobbling normal.
+            side = side_prev - d * (side_prev @ d)
         side = side / (np.linalg.norm(side) + 1e-12)
+        side_prev = side
         p = np.asarray(pts[k])
-        rings.append([p + n * _CRACK_PROUD_MM + side * (widths[k] / 2.0),
-                      p + n * _CRACK_PROUD_MM - side * (widths[k] / 2.0),
+        rings.append([p + n * proud_mm + side * (widths[k] / 2.0),
+                      p + n * proud_mm - side * (widths[k] / 2.0),
                       p - n * depths[k]])
     verts = np.array([v for ring in rings for v in ring])
     faces = []
@@ -544,6 +561,12 @@ def _crack_solid(pts: list, nms: list, widths: np.ndarray,
     faces += [[0, 2, 1], [3 * (K - 1), 3 * (K - 1) + 1, 3 * (K - 1) + 2]]
     m = trimesh.Trimesh(vertices=verts, faces=np.array(faces), process=False)
     m.fix_normals()
+    # Manifold self-union resolves any residual self-intersection — an
+    # everted loft section must never reach the difference as raw geometry.
+    try:
+        m = trimesh.boolean.union([m], engine='manifold')
+    except Exception:                               # noqa: BLE001
+        pass
     return m
 
 
@@ -582,7 +605,8 @@ def _crack_walk(mesh: trimesh.Trimesh, N: np.ndarray,
 
 def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
                     ground_z: float, footprint_mm: float,
-                    seam_z: float | None = None) -> trimesh.Trimesh:
+                    seam_z: float | None = None,
+                    proud_mm: float = _CRACK_PROUD_MM) -> trimesh.Trimesh:
     """Subtract kinked wedge grooves seeded on prominent triangles.
 
     Cracks are a wash-paintability feature (R11); they meander with
@@ -656,7 +680,7 @@ def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
         prof = np.maximum(prof, 0.4)
         cutters.append(_crack_solid(walk_p, walk_n,
                                     _CRACK_WIDTH_MM * prof,
-                                    _CRACK_DEPTH_MM * prof))
+                                    _CRACK_DEPTH_MM * prof, proud_mm))
 
         # Real cracks fork: the stone's primary crack gets one branch,
         # leaving the fork at a natural angle and fading out.
@@ -675,7 +699,8 @@ def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
                 bprof = np.linspace(prof[j] * 0.8, 0.4, len(bp))
                 cutters.append(_crack_solid(bp, bn,
                                             _CRACK_WIDTH_MM * bprof,
-                                            _CRACK_DEPTH_MM * bprof))
+                                            _CRACK_DEPTH_MM * bprof,
+                                            proud_mm))
 
     # Fracture seam: one long near-horizontal groove wrapping the stone
     # (bedding read, per the Letipea erratic) — walked both ways from a
@@ -701,7 +726,8 @@ def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
             prof = np.maximum(prof, 0.55)
             cutters.append(_crack_solid(sp, sn,
                                         1.4 * _CRACK_WIDTH_MM * prof,
-                                        1.5 * _CRACK_DEPTH_MM * prof))
+                                        1.5 * _CRACK_DEPTH_MM * prof,
+                                        proud_mm))
 
     if not cutters:
         return mesh
@@ -715,10 +741,12 @@ def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
             v32 = out.vertices.astype(np.float32).astype(np.float64)
             chk = trimesh.Trimesh(vertices=v32, faces=out.faces.copy(),
                                   process=True)
-            if chk.is_watertight:
+            # Genus check: a groove that tunnels under a bump leaves a
+            # bridge (a handle) — reject anything that isn't sphere-like.
+            if chk.is_watertight and out.euler_number == 2:
                 return out
-        warnings.warn('crack engraving produced a non-watertight stone; '
-                      'left uncracked', RuntimeWarning)
+        warnings.warn('crack engraving produced a non-watertight or '
+                      'non-spherical stone; left uncracked', RuntimeWarning)
     except Exception as exc:                        # noqa: BLE001
         warnings.warn(f'crack engraving failed, stone left uncracked: {exc}',
                       RuntimeWarning)
@@ -746,7 +774,11 @@ def _build_and_stamp(scene, specs: list[StoneSpec]) -> list[trimesh.Trimesh]:
         mesh = _engrave_cracks(
             mesh, np.random.default_rng((spec.seed ^ 0x5EED) & 0x7FFFFFFF),
             ground_z=tz0, footprint_mm=spec.footprint_mm,
-            seam_z=spec.seam_z)
+            seam_z=spec.seam_z,
+            # Proud height must clear the undulation bulges, or the
+            # groove chords under a bump and tunnels through it (genus 1).
+            proud_mm=_CRACK_PROUD_MM
+                     + _UNDULATE_FRAC * spec.roundover_mm)
         parts.append(mesh)
 
     if not parts:
