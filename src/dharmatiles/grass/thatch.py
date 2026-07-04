@@ -62,6 +62,12 @@ _ROCK_TIP_STEPS    = 2      # only the blade TIP may enter a footprint: at most
 _ROCK_TIP_RISE_MM  = 0.9    # tips may only enter footprint cells this low —
                             # steep flank cells would sink blade edges >1 mm in
 _ROCK_STANDOFF_MM  = 0.2    # extra clearance riding the stone surface
+_CLIFF_CLAMP_MM    = 4.0    # solid support taller than this above the
+                            # substrate is CLIFF-class (a masonry wall, not a
+                            # stone): blades interact with at most the first
+                            # few mm — without the clamp the footprint fringe
+                            # becomes a 50 mm drape target / lift floor and
+                            # blades shoot up the wall face (walls-e4 find)
 
 
 class ThatchGrass:
@@ -164,7 +170,13 @@ class ThatchGrass:
         support_eff = scene.terrain_z.copy()
         if dist_mm is not None:
             near_obs = dist_mm < 1.0
-            support_eff[near_obs] = scene.terrain_support_z[near_obs]
+            # Cliff clamp: the classification thresholds below are all
+            # ≤ _ROCK_CLIMB_MM, so clamping changes nothing for stones —
+            # it only stops wall-height support from bleeding into the
+            # drape surface and the lift floor through the fringe.
+            support_eff[near_obs] = np.minimum(
+                scene.terrain_support_z[near_obs],
+                scene.terrain_z[near_obs] + _CLIFF_CLAMP_MM)
         # Rebase vegetation support on solid geometry (earlier layers may
         # have synced the phantom falloff into it); blades stamp their own
         # tops back in during the build.

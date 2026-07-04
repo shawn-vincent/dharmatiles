@@ -42,13 +42,23 @@ _CHAMFER_FRAC     = 1.0    # bottom chamfer depth = reveal × this (R10: the
                            # block's proud lip never overhangs the joint below)
 _REMESH_SIGMA     = 0.7    # blur-remesh sigma: below the stones' 0.9 "fresh"
                            # setting so chip facets and chamfers stay crisp
-_RELIEF_WL_MM     = (1.5, 6.0)   # broadband relief wavelengths (log-uniform)
-_RELIEF_WAVES     = 24
+_RELIEF_WAVES     = 24     # broadband relief wave count; wavelengths come
+                           # from the texture preset
 _MIN_BAY_FRAC     = 0.45   # bays shorter than this × bay_min are merged away
 _SEAT_PERCENTILE  = 80.0   # seat height over the footprint (stones convention)
-_FLUSH_OVERSHOOT_MM = 0.8  # tile-boundary ends overshoot by this and are
-                           # plane-cut flush at the seam (butt-join, R8)
-_BOUNDARY_EPS_MM  = 0.05   # wall end counts as on-boundary within this
+
+# Texture presets: the surface character of the blocks.  Everything else
+# (layout, joints, core) is family-independent.
+_TEXTURES = {
+    'chipped': dict(chip_mm=0.55, roundover_mm=0.22, relief_mm=0.07,
+                    relief_wl=(1.5, 6.0)),   # Hirst-m50 chipped cut stone
+    'worn':    dict(chip_mm=0.30, roundover_mm=0.60, relief_mm=0.10,
+                    relief_wl=(2.5, 8.0)),   # soft weathered (m24 cryptstone)
+    'hewn':    dict(chip_mm=0.80, roundover_mm=0.15, relief_mm=0.16,
+                    relief_wl=(0.8, 3.0)),   # rough-hewn all-over (m40)
+    'dressed': dict(chip_mm=0.15, roundover_mm=0.12, relief_mm=0.03,
+                    relief_wl=(2.0, 7.0)),   # near-smooth ashlar, crisp arris
+}
 
 
 # ── Layout ────────────────────────────────────────────────────────────────────
@@ -94,19 +104,6 @@ def _segments(spine_mm: list[tuple[float, float]]) -> list[_Seg]:
     return segs
 
 
-def _end_on_tile_boundary(p: np.ndarray, out_dir: np.ndarray,
-                          surface) -> bool:
-    """True when the wall end plane at ``p`` (outward normal ``out_dir``)
-    coincides with a tile boundary plane — the seam of an adjacent tile."""
-    for axis, extent in ((0, surface.tile_w), (1, surface.tile_h)):
-        if abs(abs(out_dir[axis]) - 1.0) > 1e-3:
-            continue
-        if (abs(p[axis]) < _BOUNDARY_EPS_MM
-                or abs(p[axis] - extent) < _BOUNDARY_EPS_MM):
-            return True
-    return False
-
-
 def _course_heights(height_mm: float, lo: float, hi: float,
                     rng: np.random.Generator) -> np.ndarray:
     """Varied course heights that sum EXACTLY to height_mm (cap lands at H)."""
@@ -142,14 +139,13 @@ def _bay_cuts(t0: float, t1: float, lo: float, hi: float,
 
 def _layout(segs: list[_Seg], thickness_mm: float, height_mm: float,
             course_mm: tuple[float, float], bay_mm: tuple[float, float],
-            min_bond_mm: float, rng: np.random.Generator,
-            flush_start: bool = False, flush_end: bool = False,
-            ) -> list[_Cell]:
+            min_bond_mm: float, rng: np.random.Generator) -> list[_Cell]:
     """Courses × bays × quoin alternation → block cells (R5, R7).
 
-    ``flush_start`` / ``flush_end``: the wall end lies on a tile
-    boundary — blocks there overshoot and are plane-cut flush (R8)
-    instead of getting a textured end face.
+    Wall ends are always textured ('face'): visible block ends with the
+    mortar core inset behind them — including at tile boundaries, where
+    two wall tiles butt with their sculpted ends (R8, Shawn's round-2
+    call: "I should be able to see the ends of the bricks").
     """
     T = thickness_mm
     heights = _course_heights(height_mm, *course_mm, rng)
@@ -175,18 +171,12 @@ def _layout(segs: list[_Seg], thickness_mm: float, height_mm: float,
             prev_cuts[k] = cuts
             edges = np.concatenate([[t0], cuts, [t1]])
             for b, (ta, tb) in enumerate(zip(edges[:-1], edges[1:])):
-                if ta > t0 or (k > 0 and not owns_start):
-                    end0 = 'joint'
-                else:
-                    end0 = 'flush' if (k == 0 and flush_start) else 'face'
-                if tb < t1 or (k < n_joints and not owns_end):
-                    end1 = 'joint'
-                else:
-                    end1 = ('flush' if (k == n_joints and flush_end)
-                            else 'face')
                 cells.append(_Cell(
                     seg=k, t0=float(ta), t1=float(tb),
-                    end0=end0, end1=end1,
+                    end0='joint' if ta > t0 or (k > 0 and not owns_start)
+                         else 'face',
+                    end1='joint' if tb < t1 or (k < n_joints and not owns_end)
+                         else 'face',
                     z0=float(z0), z1=float(z1),
                     is_top=is_top, is_bottom=is_bottom,
                     key=(c, k, b),
@@ -198,6 +188,7 @@ def _layout(segs: list[_Seg], thickness_mm: float, height_mm: float,
 
 def _block_mesh(lx: float, ly: float, lz: float, chamfer: float,
                 chip_mm: float, roundover_mm: float, relief_mm: float,
+                relief_wl: tuple[float, float],
                 is_top: bool, rng: np.random.Generator) -> trimesh.Trimesh:
     """One block in local frame [0,lx]×[0,ly]×[0,lz] (x along run, y = depth).
 
@@ -222,11 +213,20 @@ def _block_mesh(lx: float, ly: float, lz: float, chamfer: float,
     _ring(rng.uniform(0.6, 1.0) * ch, 0.0, chip_mm)             # chamfer ring
     if ch > 0.0:
         _ring(0.0, ch, 0.4 * chip_mm)                           # inset base
-    # Full-extent face centres keep each face plane out at the cell wall:
-    # chipped corners then read as facets INSIDE the face, not shrinkage.
-    pts.extend([[lx / 2.0, ly / 2.0, lz],
-                [lx / 2.0, 0.0, lz / 2.0], [lx / 2.0, ly, lz / 2.0],
-                [0.0, ly / 2.0, lz / 2.0], [lx, ly / 2.0, lz / 2.0]])
+    # Face centres are pulled IN by about half the corner-chip budget.
+    # Full-extent centres left a proud hull plateau in the middle of
+    # every face and top ("a shape in the middle of the brick", Shawn's
+    # round-2 find); pulled level with the average chipped corner, the
+    # centre is usually swallowed by the hull and the face reads as a
+    # calm plane with chipped arrises.
+    fc = rng.uniform(0.4, 0.8, 5) * chip_mm
+    top_c = (rng.uniform(0.05, 0.15) if is_top
+             else rng.uniform(0.3, 0.6) * chip_mm)
+    pts.extend([[lx / 2.0, ly / 2.0, lz - top_c],
+                [lx / 2.0, fc[0], lz / 2.0],
+                [lx / 2.0, ly - fc[1], lz / 2.0],
+                [fc[2], ly / 2.0, lz / 2.0],
+                [lx - fc[3], ly / 2.0, lz / 2.0]])
 
     hull = trimesh.convex.convex_hull(np.asarray(pts))
     v, f = np.asarray(hull.vertices), np.asarray(hull.faces)
@@ -241,7 +241,7 @@ def _block_mesh(lx: float, ly: float, lz: float, chamfer: float,
         body = remeshed
         if relief_mm > 0.0:
             disp = relief_mm * _relief_field(
-                body.vertices, rng, _RELIEF_WAVES, *_RELIEF_WL_MM)
+                body.vertices, rng, _RELIEF_WAVES, *relief_wl)
             body = trimesh.Trimesh(
                 vertices=(body.vertices
                           + np.asarray(body.vertex_normals) * disp[:, None]),
@@ -268,28 +268,39 @@ class CutStoneWall:
                  thickness_mm: float = 7.0,
                  height_mm:    float = 49.7,
                  seed:         int   = 0,
+                 texture:      str   = 'chipped',
                  course_mm:    tuple[float, float] = (5.5, 8.5),
                  bay_mm:       tuple[float, float] = (11.0, 20.0),
-                 joint_mm:     float = 1.2,
+                 joint_mm:     float = 0.45,
                  reveal_mm:    float = 1.3,
-                 chip_mm:      float = 0.55,
-                 roundover_mm: float = 0.22,
-                 relief_mm:    float = 0.07,
+                 chip_mm:      float | None = None,
+                 roundover_mm: float | None = None,
+                 relief_mm:    float | None = None,
+                 relief_wl:    tuple[float, float] | None = None,
                  min_bond_mm:  float = 3.0,
                  embed_mm:     float = 2.5):
         if len(spine) < 2:
             raise ValueError('wall spine needs at least two points')
+        if texture not in _TEXTURES:
+            raise ValueError(f'unknown wall texture {texture!r}; '
+                             f'options: {sorted(_TEXTURES)}')
+        preset = _TEXTURES[texture]
         self.spine        = [tuple(map(float, p)) for p in spine]
         self.thickness_mm = thickness_mm
         self.height_mm    = height_mm
         self.seed         = seed
+        self.texture      = texture
         self.course_mm    = course_mm
         self.bay_mm       = bay_mm
         self.joint_mm     = joint_mm
         self.reveal_mm    = reveal_mm
-        self.chip_mm      = chip_mm
-        self.roundover_mm = roundover_mm
-        self.relief_mm    = relief_mm
+        self.chip_mm      = preset['chip_mm'] if chip_mm is None else chip_mm
+        self.roundover_mm = (preset['roundover_mm'] if roundover_mm is None
+                             else roundover_mm)
+        self.relief_mm    = (preset['relief_mm'] if relief_mm is None
+                             else relief_mm)
+        self.relief_wl    = (preset['relief_wl'] if relief_wl is None
+                             else relief_wl)
         self.min_bond_mm  = min_bond_mm
         self.embed_mm     = embed_mm
 
@@ -302,14 +313,10 @@ class CutStoneWall:
         T, H = self.thickness_mm, self.height_mm
 
         seat_z = self._seat_z(scene, segs)
-        f0 = _end_on_tile_boundary(segs[0].a, -segs[0].d, surface)
-        f1 = _end_on_tile_boundary(segs[-1].a + segs[-1].d * segs[-1].L,
-                                   segs[-1].d, surface)
         cells  = _layout(segs, T, H, self.course_mm, self.bay_mm,
-                         self.min_bond_mm, rng,
-                         flush_start=f0, flush_end=f1)
+                         self.min_bond_mm, rng)
 
-        parts = self._core_boxes(segs, seat_z, f0, f1)
+        parts = self._core_boxes(segs, seat_z)
         for cell in cells:
             parts.append(self._place_block(cell, segs, seat_z, rng))
 
@@ -325,7 +332,6 @@ class CutStoneWall:
 
     # ── pieces ───────────────────────────────────────────────────────────────
     def _core_boxes(self, segs: list[_Seg], seat_z: float,
-                    flush_start: bool, flush_end: bool,
                     ) -> list[trimesh.Trimesh]:
         """Recessed core: full footprint inset by reveal from every visible
         face (both wall faces, free ends, corner outer planes, and the
@@ -352,14 +358,8 @@ class CutStoneWall:
         # coincides with this segment's t=0 / t=L plane, so the inset
         # recesses the core from that face too; the two segment cores
         # overlap inside the corner cell, keeping the union connected.
-        # At a tile-boundary end the core overshoots instead — the seam
-        # cut leaves a full flat cross-section, no recessed ring (R8).
-        last = len(segs) - 1
-        for k, seg in enumerate(segs):
-            c0 = -_FLUSH_OVERSHOOT_MM if (k == 0 and flush_start) else rv
-            c1 = (seg.L + _FLUSH_OVERSHOOT_MM
-                  if (k == last and flush_end) else seg.L - rv)
-            boxes.append(_box(seg, c0, c1, rv, T - rv))
+        for seg in segs:
+            boxes.append(_box(seg, rv, seg.L - rv, rv, T - rv))
         return boxes
 
     def _place_block(self, cell: _Cell, segs: list[_Seg], seat_z: float,
@@ -367,15 +367,10 @@ class CutStoneWall:
         seg = segs[cell.seg]
         j2  = self.joint_mm / 2.0
 
-        def _side(t: float, end: str, sgn: float) -> float:
-            if end == 'joint':
-                return t + sgn * j2
-            if end == 'flush':
-                return t - sgn * _FLUSH_OVERSHOOT_MM
-            return t + sgn * rng.uniform(0.0, _FACE_RECESS_MM)
-
-        x0 = _side(cell.t0, cell.end0, +1.0)
-        x1 = _side(cell.t1, cell.end1, -1.0)
+        x0 = cell.t0 + (j2 if cell.end0 == 'joint'
+                        else rng.uniform(0.0, _FACE_RECESS_MM))
+        x1 = cell.t1 - (j2 if cell.end1 == 'joint'
+                        else rng.uniform(0.0, _FACE_RECESS_MM))
         y0 = rng.uniform(0.0, _FACE_RECESS_MM)
         y1 = self.thickness_mm - rng.uniform(0.0, _FACE_RECESS_MM)
         z0 = seat_z + (cell.z0 + j2 if not cell.is_bottom
@@ -387,7 +382,7 @@ class CutStoneWall:
             (self.seed * 1_000_003 + hash(cell.key)) & 0x7FFFFFFF)
         body = _block_mesh(x1 - x0, y1 - y0, z1 - z0, chamfer,
                            self.chip_mm, self.roundover_mm, self.relief_mm,
-                           cell.is_top, brng)
+                           self.relief_wl, cell.is_top, brng)
 
         ctr = np.array([(x1 - x0) / 2.0, (y1 - y0) / 2.0, (z1 - z0) / 2.0])
         yaw = np.radians(brng.uniform(-_YAW_MAX_DEG, _YAW_MAX_DEG))
