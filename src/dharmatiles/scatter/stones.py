@@ -71,6 +71,12 @@ _MICRO_AMP_MM     = (0.10, 0.25)
 _MICRO_WAVE_MM    = 1.3     # grain feature size
 _MICRO_WAVES      = 14      # summed random plane waves — an isotropic
                             # Gaussian field that reads granular, not wavy
+
+# ── E11 calm (essence = contrast between quiet fields and sparse incident) ──
+_ENV_FLOOR  = 0.2   # patchy envelope: quiet zones keep this fraction of the
+                    # undulation+grain amplitude, active zones get 1.0
+_FACE_CALM  = 0.85  # displacement damping on the protected hero face —
+                    # the one big facet that survives aging as a single tone
 _OVERHANG_NZ      = -0.72   # fail when a face normal's z is below this (≈45°)
 _OVERHANG_CHORD   = 1.6     # mm — under-tucks narrower than this are allowed
 _GROUND_MARGIN    = 1.0     # mm — faces below terrain+margin are exempt from
@@ -348,6 +354,11 @@ def _weather_bites(crisp_v: np.ndarray, crisp_f: np.ndarray,
                 else int(rng.integers(0, 2))
         if exp_h < 5.0:
             k = min(k, 1)
+        if spec.roundover_mm > 0.15:
+            # Aged stones get one CRISP scar cut after the aging pass
+            # (E11); these pre-aging bites soften into background dents,
+            # so hand one of the budget to the post-aging cut.
+            k = max(k - 1, 0)
         vn  = np.asarray(m.vertex_normals)
         # Bite only the upper band: bed-to-widest buries roughly the bottom
         # 40 % of the stone, so lower scars carve arches at the soil line;
@@ -426,6 +437,28 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
     # the final geometry — modifying afterwards eats the bottom rim and
     # re-opens daylight under the stone.  Bites are anchored on the crisp
     # hull (rounding preserves the silhouette, so the anchors stay valid).
+    # Protected "hero face" (E11): the references' essence is CALM — one
+    # big quiet plane that catches light as a single tone (Syltstenen's
+    # left face).  Record the largest non-bottom facet of the crisp hull;
+    # weathering displacement is damped there so it survives aging.
+    _hm = trimesh.Trimesh(vertices=v_loc, faces=faces, process=False)
+    _hn, _ha, _ht = _hm.face_normals, _hm.area_faces, _hm.triangles
+    _, _hinv = np.unique(np.round(_hn, 2), axis=0, return_inverse=True)
+    face_n = face_c = None
+    _best = -1.0
+    for _g in np.unique(_hinv):
+        _sel = _hinv == _g
+        _n = _hn[_sel].mean(axis=0)
+        _n /= np.linalg.norm(_n) + 1e-12
+        if _n[2] < -0.2:          # never protect the underside
+            continue
+        _a = float(_ha[_sel].sum())
+        if _a > _best:
+            _best  = _a
+            face_n = _n
+            face_c = (_ht[_sel].mean(axis=1)
+                      * _ha[_sel, None]).sum(axis=0) / _a
+
     r_rng = np.random.default_rng((spec.seed ^ 0x2CAFE) & 0x7FFFFFFF)
     bites = _weather_bites(v_loc, faces, spec, r_rng)
     # Ball fillet only for LIGHT weathering.  On heavy weathering the
@@ -504,8 +537,80 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
             amp_g = np.clip(_MICRO_AMP_FRAC * spec.footprint_mm,
                             *_MICRO_AMP_MM)
 
-            v_loc = p + vn * (amp * f + amp_g * 0.5 * g)[:, None]
+            # Patchy envelope (E11): quiet fields vs active shoulders.
+            # Uniform texture is its own monotony — the references get
+            # their gravitas from CONTRAST between calm and incident.
+            env = np.zeros(len(p))
+            for _ in range(3):
+                d = u_rng.normal(size=3)
+                d /= np.linalg.norm(d) + 1e-12
+                ewl = spec.footprint_mm / u_rng.uniform(0.9, 1.4)
+                env += np.cos(2.0 * np.pi / ewl * (p @ d)
+                              + u_rng.uniform(0.0, 2.0 * np.pi))
+            env = _ENV_FLOOR + (1.0 - _ENV_FLOOR) * np.clip(
+                0.5 + 0.75 * env / 3.0, 0.0, 1.0)
+
+            # Hero-face damping: displacement fades near the protected
+            # plane so one calm facet survives aging.
+            damp = 1.0
+            if face_n is not None:
+                align = np.clip(vn @ face_n, 0.0, None) ** 2
+                dpl   = np.abs((p - face_c) @ face_n)
+                wf    = align * np.exp(-(dpl / (0.18 * spec.footprint_mm))
+                                       ** 2)
+                damp  = 1.0 - _FACE_CALM * wf
+
+            v_loc = p + vn * ((amp * f + amp_g * 0.5 * g)
+                              * env * damp)[:, None]
             faces = np.asarray(aged.faces)
+
+        # One crisp post-aging spall (E11): aging rounds every scar rim
+        # into a gentle dent, deleting the stone's story.  The references
+        # carry sparse COUNTABLE incidents with legible rims, so each aged
+        # stone gets exactly one scar cut after the aging pass.
+        if spec.spall_scars != 0:
+            sm  = trimesh.Trimesh(vertices=v_loc, faces=faces,
+                                  process=False)
+            sv  = np.asarray(sm.vertices)
+            svn = np.asarray(sm.vertex_normals)
+            z0, z1 = sv[:, 2].min(), sv[:, 2].max()
+            t = (sv[:, 2] - z0) / max(z1 - z0, 1e-9)
+            band = (t > 0.55) & (t < 0.88)
+            if face_n is not None:
+                band &= (svn @ face_n) < 0.7   # keep off the calm face
+            idx = np.flatnonzero(band)
+            exp_h = spec.height_mm * (1.0 - 0.375 * min(spec.burial, 1.2))
+            if len(idx) and exp_h > 2.5:
+                i = int(idx[r_rng.integers(0, len(idx))])
+                n = svn[i]
+                r = min(r_rng.uniform(*_SPALL_R_FRAC)
+                        * spec.footprint_mm / 2.0, 0.45 * exp_h)
+                depth = r_rng.uniform(*_SPALL_DEPTH_FRAC) * r
+                bite = trimesh.creation.icosphere(subdivisions=2,
+                                                  radius=1.0)
+                bite.apply_scale([r, r, depth])
+                z = np.array([0.0, 0.0, 1.0])
+                ax = np.cross(z, n); s = np.linalg.norm(ax)
+                if s > 1e-9:
+                    ang = float(np.arccos(np.clip(z @ n, -1.0, 1.0)))
+                    bite.apply_transform(
+                        trimesh.transformations.rotation_matrix(ang, ax / s))
+                bite.apply_translation(sv[i] + n * depth * 0.35)
+                try:
+                    out = trimesh.boolean.difference([sm, bite],
+                                                     engine='manifold')
+                    v32 = np.asarray(out.vertices).astype(
+                        np.float32).astype(np.float64)
+                    chk = trimesh.Trimesh(vertices=v32,
+                                          faces=np.asarray(out.faces).copy(),
+                                          process=True)
+                    if (len(out.faces) > 0 and out.is_watertight
+                            and out.euler_number == 2 and chk.is_watertight):
+                        v_loc = np.asarray(out.vertices)
+                        faces = np.asarray(out.faces)
+                except Exception as exc:            # noqa: BLE001
+                    warnings.warn(f'post-aging spall failed: {exc}',
+                                  RuntimeWarning)
 
     lean, burial = spec.lean_deg, spec.burial
     while True:

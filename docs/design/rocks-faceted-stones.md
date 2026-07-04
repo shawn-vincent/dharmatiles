@@ -203,6 +203,26 @@ rendered at 1600 px.  Verdicts and gaps:
   the plane cap fails on aged/undulated boundary loops and ships an
   open mesh (letipea caught it; no gate existed on that stage).
 
+## E11 calm (2026-07-04): essence = contrast, not texture
+
+Aesthetic re-read of the E10 heroes vs the references: E10 was an
+excellent *generic* boulder but uniformly eventful — grain and
+undulation everywhere.  The references' essence is CALM: vast quiet
+fields punctuated by sparse countable incidents (one seam, one scar).
+Uniform texture is its own monotony and drybrushes as even speckle.
+Three mechanisms:
+
+- **Patchy envelope**: undulation + grain amplitude modulated by a
+  footprint-scale low-frequency field (quiet zones ×0.2, shoulders ×1.0).
+- **Protected hero face**: the largest non-bottom facet of the crisp
+  hull gets displacement damped ×0.15 near its plane — one calm facet
+  survives aging and catches light as a single tone (Syltstenen's
+  identity).
+- **One crisp post-aging spall**: aging rounds every pre-cut scar into
+  a background dent, so each aged stone reserves one scar from its
+  budget and cuts it AFTER aging (same gates: watertight + genus +
+  float32 round-trip), keeping one legible-rimmed incident per stone.
+
 ## Keep / delete
 
 - Keep: placement machinery (`scatter/distribute.py`), layer ordering
