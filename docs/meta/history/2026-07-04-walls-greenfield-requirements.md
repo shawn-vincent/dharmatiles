@@ -91,3 +91,24 @@ Constraints assumed carried over unless contradicted: supportless FDM
 (vertical faces are friendly; relief depth just needs overhang-safe
 angles), paint-catching relief is an explicit requirement, perf parity
 (walls are one solid — should be cheap), DB + OL scales.
+
+---
+
+## Shawn's answers (2026-07-04, mid-research)
+
+1. **Q1/compat:** DungeonBlocks-compatible **by default**, but
+   configurable if needed to have freedom.
+2. **Q2/families:** do analyses of **all** of the different texture
+   families found (→ `docs/reference/walls/commercial-sets-analysis.md`).
+3. **Q3/tops:** **flat cap**, but textured like the top of whatever
+   the wall texture is — so you see the tops of bricks, for example.
+4. **Q4/tiling:** just **butt-join** — no seamless course matching at
+   tile seams.
+5. **Q5/scope:** gen-1 = **straight runs and corners on flat ground**.
+
+Additional references supplied during the research (all analyzed in
+the sets-analysis doc): Hirst Arts (m50 chipped stone, painting
+tutorial, fieldstone/big-block/small-block molds — PDFs saved in
+`docs/reference/walls/hirst-arts/`), Fat Dragon DRAGONLOCK dungeon
+(fdg0160) + caverns (fdg0170), The Dragon's Rest "HQ01" foundation
+set and "AP006 High Ground 01" catalog PDFs.
