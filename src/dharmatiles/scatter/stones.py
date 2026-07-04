@@ -327,7 +327,7 @@ def _spall_blob(r: float, depth: float, n: np.ndarray,
         fld += np.cos(2.0 * np.pi / rng.uniform(0.9, 1.6) * (p @ d)
                       + rng.uniform(0.0, 2.0 * np.pi))
     fld /= 4.0
-    bite.vertices = p * (1.0 + 0.35 * fld)[:, None]
+    bite.vertices = p * (1.0 + 0.5 * fld)[:, None]
     bite.apply_scale([r, r * rng.uniform(0.75, 1.0), depth])
     bite.apply_transform(trimesh.transformations.rotation_matrix(
         rng.uniform(0.0, 2.0 * np.pi), [0.0, 0.0, 1.0]))
@@ -339,6 +339,27 @@ def _spall_blob(r: float, depth: float, n: np.ndarray,
         bite.apply_transform(
             trimesh.transformations.rotation_matrix(ang, ax / s))
     return bite
+
+
+def _relief_field(p: np.ndarray, rng: np.random.Generator, n_waves: int,
+                  wl_lo: float, wl_hi: float,
+                  spectral: float = 0.7) -> np.ndarray:
+    """Broadband random relief: plane waves with LOG-UNIFORM wavelengths
+    and amplitude ∝ wl^spectral, normalized to unit RMS.
+
+    Narrowband noise (every wave at one scale) reads as a regular field
+    of same-sized bumps — an egg carton, not stone (Shawn's find on the
+    doane grain).  Mixing octaves like a 1/f spectrum reads mineral."""
+    f, tot = np.zeros(len(p)), 0.0
+    for _ in range(n_waves):
+        d = rng.normal(size=3)
+        d /= np.linalg.norm(d) + 1e-12
+        wl = float(np.exp(rng.uniform(np.log(wl_lo), np.log(wl_hi))))
+        a  = (wl / wl_hi) ** spectral
+        f += a * np.cos(2.0 * np.pi / wl * (p @ d)
+                        + rng.uniform(0.0, 2.0 * np.pi))
+        tot += a * a
+    return f / np.sqrt(tot / 2.0 + 1e-12)
 
 
 def _blur_remesh(body: trimesh.Trimesh, footprint_mm: float,
@@ -597,14 +618,8 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
                 _cd3 = np.linalg.norm(pq - np.asarray(_sn3.vertices),
                                       axis=1)
                 cdq = 1.0 / (1.0 + (_cd3 / 0.35) ** 2)
-                gq  = np.zeros(len(pq))
-                for _ in range(_MICRO_WAVES):
-                    d = w_rng.normal(size=3)
-                    d /= np.linalg.norm(d) + 1e-12
-                    mwl = w_rng.uniform(0.75, 1.6) * _MICRO_WAVE_MM
-                    gq += np.cos(2.0 * np.pi / mwl * (pq @ d)
-                                 + w_rng.uniform(0.0, 2.0 * np.pi))
-                gq /= np.sqrt(_MICRO_WAVES)
+                gq = 0.7 * _relief_field(pq, w_rng, 16, 0.6, 3.2,
+                                         spectral=0.7)
                 amp_q = 0.5 * np.clip(_MICRO_AMP_FRAC * spec.footprint_mm,
                                       *_MICRO_AMP_MM)
                 v_loc = pq + vnq * (amp_q * 0.5 * gq * cdq)[:, None]
@@ -645,6 +660,39 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
         # terraces); anything less leaves them visible on light roundover.
         iters = int(np.clip(2 + 11 * spec.roundover_mm, 16, 30))
         trimesh.smoothing.filter_taubin(aged, iterations=iters)
+
+        # One crisp scar per aged stone (E11), cut BEFORE the relief pass:
+        # undulation+grain then texture the scar rim and floor along with
+        # everything else, so the rim wanders instead of reading as a
+        # compass curve (Shawn's MeshLab find, round two).  Cut after the
+        # relief it sat as an untextured geometric dish.
+        if spec.spall_scars != 0 and aged.is_watertight:
+            sv  = np.asarray(aged.vertices)
+            svn = np.asarray(aged.vertex_normals)
+            z0, z1 = sv[:, 2].min(), sv[:, 2].max()
+            t = (sv[:, 2] - z0) / max(z1 - z0, 1e-9)
+            band = (t > 0.55) & (t < 0.88)
+            if face_n is not None:
+                band &= (svn @ face_n) < 0.7   # keep off the calm face
+            idx = np.flatnonzero(band)
+            exp_h = spec.height_mm * (1.0 - 0.375 * min(spec.burial, 1.2))
+            if len(idx) and exp_h > 2.5:
+                i = int(idx[r_rng.integers(0, len(idx))])
+                n = svn[i]
+                r = min(r_rng.uniform(*_SPALL_R_FRAC)
+                        * spec.footprint_mm / 2.0, 0.45 * exp_h)
+                depth = r_rng.uniform(*_SPALL_DEPTH_FRAC) * r
+                bite = _spall_blob(r, depth, n, r_rng)
+                bite.apply_translation(sv[i] + n * depth * 0.35)
+                try:
+                    out = trimesh.boolean.difference([aged, bite],
+                                                     engine='manifold')
+                    if (len(out.faces) > 0 and out.is_watertight
+                            and out.euler_number == 2):
+                        aged = out
+                except Exception as exc:            # noqa: BLE001
+                    warnings.warn(f'scar cut failed: {exc}', RuntimeWarning)
+
         if aged.is_watertight:
             # Organic undulation AFTER smoothing (or it gets smoothed
             # away): sum of random plane waves displaces the surface
@@ -670,29 +718,21 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
             # Only genuinely tight features (scar rims, ~0.4 mm+) damp.
             _cd = np.linalg.norm(p - np.asarray(_sn2.vertices), axis=1)
             curv_damp = 1.0 / (1.0 + (_cd / 0.35) ** 2)
-            wl = max(spec.footprint_mm / 2.8, 2.0)
-            f  = np.zeros(len(p))
-            for _ in range(_UNDULATE_WAVES):
-                d = u_rng.normal(size=3)
-                d /= np.linalg.norm(d) + 1e-12
-                f += np.cos(2.0 * np.pi / wl * (p @ d)
-                            + u_rng.uniform(0.0, 2.0 * np.pi))
-            f /= _UNDULATE_WAVES
+            # Broadband pillowing: log-uniform wavelengths from foot/4.5
+            # up to foot/1.6 — narrowband bulges read as one bump size.
+            f = 0.35 * _relief_field(p, u_rng, 6,
+                                     spec.footprint_mm / 4.5,
+                                     spec.footprint_mm / 1.6,
+                                     spectral=1.0)
             amp = (_UNDULATE_FRAC * spec.roundover_mm
                    + _UNDULATE_FOOT * max(spec.footprint_mm - 8.0, 0.0)
                      * min(spec.roundover_mm, 1.0))
 
-            # Micro-texture: granular drybrush tooth (E10).  Many short
-            # random waves ≈ isotropic Gaussian grain at ~1.3 mm feature
-            # size — prints on a 0.4 mm nozzle, kills the glass read.
-            g = np.zeros(len(p))
-            for _ in range(_MICRO_WAVES):
-                d = u_rng.normal(size=3)
-                d /= np.linalg.norm(d) + 1e-12
-                mwl = u_rng.uniform(0.75, 1.6) * _MICRO_WAVE_MM
-                g += np.cos(2.0 * np.pi / mwl * (p @ d)
-                            + u_rng.uniform(0.0, 2.0 * np.pi))
-            g /= np.sqrt(_MICRO_WAVES)
+            # Micro-texture: granular drybrush tooth (E10), broadband
+            # 0.6–3.2 mm — prints on a 0.4 mm nozzle, kills the glass
+            # read without the egg-carton regularity.
+            g = 0.7 * _relief_field(p, u_rng, 16, 0.6, 3.2,
+                                    spectral=0.7)
             amp_g = np.clip(_MICRO_AMP_FRAC * spec.footprint_mm,
                             *_MICRO_AMP_MM)
 
@@ -722,46 +762,6 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
             v_loc = p + vn * ((amp * f + amp_g * 0.5 * g)
                               * env * damp * curv_damp)[:, None]
             faces = np.asarray(aged.faces)
-
-        # One crisp post-aging spall (E11): aging rounds every scar rim
-        # into a gentle dent, deleting the stone's story.  The references
-        # carry sparse COUNTABLE incidents with legible rims, so each aged
-        # stone gets exactly one scar cut after the aging pass.
-        if spec.spall_scars != 0:
-            sm  = trimesh.Trimesh(vertices=v_loc, faces=faces,
-                                  process=False)
-            sv  = np.asarray(sm.vertices)
-            svn = np.asarray(sm.vertex_normals)
-            z0, z1 = sv[:, 2].min(), sv[:, 2].max()
-            t = (sv[:, 2] - z0) / max(z1 - z0, 1e-9)
-            band = (t > 0.55) & (t < 0.88)
-            if face_n is not None:
-                band &= (svn @ face_n) < 0.7   # keep off the calm face
-            idx = np.flatnonzero(band)
-            exp_h = spec.height_mm * (1.0 - 0.375 * min(spec.burial, 1.2))
-            if len(idx) and exp_h > 2.5:
-                i = int(idx[r_rng.integers(0, len(idx))])
-                n = svn[i]
-                r = min(r_rng.uniform(*_SPALL_R_FRAC)
-                        * spec.footprint_mm / 2.0, 0.45 * exp_h)
-                depth = r_rng.uniform(*_SPALL_DEPTH_FRAC) * r
-                bite = _spall_blob(r, depth, n, r_rng)
-                bite.apply_translation(sv[i] + n * depth * 0.35)
-                try:
-                    out = trimesh.boolean.difference([sm, bite],
-                                                     engine='manifold')
-                    v32 = np.asarray(out.vertices).astype(
-                        np.float32).astype(np.float64)
-                    chk = trimesh.Trimesh(vertices=v32,
-                                          faces=np.asarray(out.faces).copy(),
-                                          process=True)
-                    if (len(out.faces) > 0 and out.is_watertight
-                            and out.euler_number == 2 and chk.is_watertight):
-                        v_loc = np.asarray(out.vertices)
-                        faces = np.asarray(out.faces)
-                except Exception as exc:            # noqa: BLE001
-                    warnings.warn(f'post-aging spall failed: {exc}',
-                                  RuntimeWarning)
 
     lean, burial = spec.lean_deg, spec.burial
     while True:
