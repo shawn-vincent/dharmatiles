@@ -77,6 +77,14 @@ _ENV_FLOOR  = 0.2   # patchy envelope: quiet zones keep this fraction of the
                     # undulation+grain amplitude, active zones get 1.0
 _FACE_CALM  = 0.85  # displacement damping on the protected hero face —
                     # the one big facet that survives aging as a single tone
+
+# ── E12 facet-edge warp ──────────────────────────────────────────────────────
+# Hull arrises are straight lines by construction (planes intersecting), but
+# real joint faces are gently CURVED fracture surfaces — reference facet
+# boundaries wander.  A low-frequency bend of the subdivided body curves the
+# faces and their edge lines together while keeping facet identity readable.
+_WARP_FRAC     = 0.04   # bend amplitude × footprint
+_WARP_MIN_FOOT = 4.0    # pebbles skip the warp (and the subdivision cost)
 _OVERHANG_NZ      = -0.72   # fail when a face normal's z is below this (≈45°)
 _OVERHANG_CHORD   = 1.6     # mm — under-tucks narrower than this are allowed
 _GROUND_MARGIN    = 1.0     # mm — faces below terrain+margin are exempt from
@@ -474,6 +482,61 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
     # overall mass, and concave bite interiors self-support (auditing them
     # force-buried the trio monolith to max depth).
     v_conv, f_conv = v_loc, faces
+
+    # Facet-edge warp (E12): bend the whole body with a footprint-scale
+    # field so arrises wander like curved fracture intersections instead
+    # of ruler lines.  Runs on ALL stones above pebble size — fresh
+    # shards otherwise carry dead-straight edges that read cut, not
+    # cleaved.  The audit keeps the unwarped convex body (the warp is a
+    # few percent and self-supporting).
+    if spec.footprint_mm >= _WARP_MIN_FOOT:
+        w_rng = np.random.default_rng((spec.seed ^ 0x3AB5) & 0x7FFFFFFF)
+        wm = trimesh.Trimesh(vertices=v_loc, faces=faces,
+                             process=False).subdivide()
+        if spec.footprint_mm >= 10.0:   # heroes need finer edge polylines
+            wm = wm.subdivide()
+        p  = np.asarray(wm.vertices)
+        vn = np.asarray(wm.vertex_normals)
+        w  = np.zeros(len(p))
+        for _ in range(3):
+            d = w_rng.normal(size=3)
+            d /= np.linalg.norm(d) + 1e-12
+            wwl = spec.footprint_mm / w_rng.uniform(1.2, 1.8)
+            w += np.cos(2.0 * np.pi / wwl * (p @ d)
+                        + w_rng.uniform(0.0, 2.0 * np.pi))
+        w /= 3.0
+        v_loc = p + vn * (_WARP_FRAC * spec.footprint_mm * w)[:, None]
+        faces = np.asarray(wm.faces)
+        if spec.roundover_mm <= 0.15:
+            # Fresh stones get no aging pass to smooth the warp's
+            # tessellation, and the subdivided diamonds read as quilting
+            # under flat shading.  One more subdivision + a whisper of
+            # Taubin de-quilts; 3 iterations barely touches an arris.
+            dq = trimesh.Trimesh(vertices=v_loc, faces=faces,
+                                 process=False)
+            if spec.footprint_mm >= 10.0:
+                dq = dq.subdivide()
+            trimesh.smoothing.filter_taubin(dq, iterations=7)
+            if dq.is_watertight:
+                # Light micro-grain: the warp's smooth curvature flat-shades
+                # as regular diamond banding on a regular tessellation; real
+                # granite grain breaks the regularity (and fresh rock has
+                # tooth too — half the aged amplitude).
+                pq  = np.asarray(dq.vertices)
+                vnq = np.asarray(dq.vertex_normals)
+                gq  = np.zeros(len(pq))
+                for _ in range(_MICRO_WAVES):
+                    d = w_rng.normal(size=3)
+                    d /= np.linalg.norm(d) + 1e-12
+                    mwl = w_rng.uniform(0.75, 1.6) * _MICRO_WAVE_MM
+                    gq += np.cos(2.0 * np.pi / mwl * (pq @ d)
+                                 + w_rng.uniform(0.0, 2.0 * np.pi))
+                gq /= np.sqrt(_MICRO_WAVES)
+                amp_q = 0.5 * np.clip(_MICRO_AMP_FRAC * spec.footprint_mm,
+                                      *_MICRO_AMP_MM)
+                v_loc = pq + vnq * (amp_q * 0.5 * gq)[:, None]
+                faces = np.asarray(dq.faces)
+
     if bites:
         body = trimesh.Trimesh(vertices=v_loc, faces=faces, process=False)
         try:
