@@ -1,6 +1,8 @@
 # Walls — Coursed Masonry Design (gen-1)
 
-**Status: design awaiting Shawn review; no code yet (2026-07-04).**
+**Status: gen-1 prototype implemented (`src/dharmatiles/walls/`),
+first render round E1–E4 built 2026-07-04; awaiting Shawn's MeshLab
+judgment on `stl/test/walls-*.stl`.**
 Interview record: `docs/meta/history/2026-07-04-walls-greenfield-requirements.md`.
 Reference analysis: `docs/reference/walls/commercial-sets-analysis.md` +
 `docs/reference/walls/README.md`.  Baseline judgment:
@@ -164,6 +166,21 @@ Named experiments (E1, E2, …) with kept renders, as in the rocks
 campaign; losers deleted.  Stretch after the core read is accepted:
 crack overlay crossing block boundaries (`_engrave_cracks` on the
 unioned surface — the DB set-13 signature).
+
+## Experiment log
+
+| Exp | Change | Judgment |
+|---|---|---|
+| E1 | First build: hull blocks + core + reveal joints | Structure right (courses/bond/cap); blocks near-square (refs are ~3:1 long bricks); faces pillowy/busy — the rocks hero-face-calm lesson applies |
+| E2 | course (5.5,8.5), bay long, chip 0.55, roundover 0.22, relief 0.07 | Very close to RR-095; exposed ragged tile-seam ends (butt-join defect) |
+| E3 | `flush` end type: boundary ends overshoot + plane-cut at the seam; core overshoots too (no recessed ring on the mating face) | Seam flush ✓; front joints too faint — coplanar faces melt together at glancing light |
+| E4 | joint 1.2, reveal 1.3, face-recess 0.6, per-block tilt ±0.7° | Joints read; each brick takes its own tone; corner quoins alternate correctly; shipped for judgment |
+
+Implementation notes: blocks finish through `_blur_remesh` (σ 0.7) —
+`subdivide_to_size` leaves T-junctions that break the manifold union.
+Open items: wall layer costs ~8 s (design target was ≪1 s; block build
+is embarrassingly parallel / batchable); face incidents (chips, crack
+overlay) deferred until the core read is accepted.
 
 ## Explicitly out of gen-1
 
