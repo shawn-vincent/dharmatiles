@@ -34,8 +34,10 @@ _EGG_WIDEST_T     = -0.25   # egg profile: widest slice at this local height
                             # bed-to-widest then buries less stone and the
                             # base doesn't flare into tent-flaps
 _EGG_TAPER        = 0.35    # horizontal shrink at the very top (t = 1)
-_ROUND_JITTER     = (0.3, 1.6)    # roundover randomization range —
-                                  # uniform fillets read CNC, not geology
+_ROUND_JITTER     = (0.55, 1.6)   # roundover randomization range —
+                                  # uniform fillets read CNC, not geology;
+                                  # the floor keeps every edge VISIBLY
+                                  # rounded on weathered stones
 _ROUND_EDGE_STEP_MM = 1.2         # ball spacing along edges: the radius is
                                   # re-rolled at each sample, so the fillet
                                   # wobbles ALONG an edge (per-corner-only
@@ -290,7 +292,10 @@ def _weather_bites(crisp_v: np.ndarray, crisp_f: np.ndarray,
             n = fn[sel].mean(axis=0)
             n /= np.linalg.norm(n) + 1e-12
             c = (tris[sel].mean(axis=1) * areas[sel, None]).sum(axis=0) / area
-            w   = np.sqrt(area)
+            # Dish rim narrower than the face: a full-width dish cuts into
+            # the edge fillet and re-sharpens the face-to-face transition
+            # (dishes are subtracted AFTER the roundover).
+            w   = 0.62 * np.sqrt(area)
             sag = rng.uniform(*_DISH_SAG_FRAC) * w * age
             # Sphere through a rim of width ~w at depth sag.
             R = min((w * w / 4.0 + sag * sag) / (2.0 * sag), 60.0)
@@ -412,13 +417,10 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
         except Exception as exc:                    # noqa: BLE001
             warnings.warn(f'weathering bites failed: {exc}', RuntimeWarning)
 
-    # Age the WHOLE surface after the chunks are removed: scar and dish
-    # rims must round over with everything else (cutting them after the
-    # fillet left crisp rims on the most weathered stones).  Runs whether
-    # or not bites landed.  Heavy weathering gets a second subdivision —
-    # Taubin can't bend a crease flanked by coarse flat triangles, which
-    # left sharp edges on even the most weathered stones (Shawn).  Fresh
-    # stones (roundover 0) keep crisp facets and spall rims.
+    # Age the whole surface after the chunks are removed (scar/dish rims
+    # round over with everything else).  Heavy weathering gets a second
+    # subdivision — Taubin can't bend a crease flanked by coarse flat
+    # triangles.  Cracks are engraved later and stay crisp by design.
     if spec.roundover_mm > 0.15 and spec.footprint_mm >= _SPALL_MIN_FOOT_MM:
         aged = trimesh.Trimesh(vertices=v_loc, faces=faces,
                                process=False).subdivide()
@@ -426,8 +428,9 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
             aged = aged.subdivide()
         iters = int(np.clip(2 + 11 * spec.roundover_mm, 2, 30))
         trimesh.smoothing.filter_taubin(aged, iterations=iters)
-        v_loc = np.asarray(aged.vertices)
-        faces = np.asarray(aged.faces)
+        if aged.is_watertight:
+            v_loc = np.asarray(aged.vertices)
+            faces = np.asarray(aged.faces)
 
     lean, burial = spec.lean_deg, spec.burial
     while True:
