@@ -106,6 +106,9 @@ class Rocks:
                 facets=int(np.clip(6 + foot * 1.1, 7, 14)),
                 yaw_deg=yaw,
                 burial=float(rng.uniform(0.85, 1.05)),
+                # Scatter rocks (shore pebbles, water boulders) read as
+                # transported stones — well-worn, scaled to size.
+                roundover_mm=float(min(rng.uniform(0.2, 0.45) * rx, 1.6)),
                 seed=int(rng.integers(0, 2**31)),
             ))
         return _build_and_stamp(scene, specs)

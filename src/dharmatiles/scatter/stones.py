@@ -77,10 +77,10 @@ _COMP_MIN_FOOT_MM = 1.6           # companions below this are dropped
 _COMP_DIST        = (0.92, 1.12)  # × (r_dom + r_comp) — touching-ish
 _YAW_JITTER_DEG   = 25.0          # companion yaw jitter around the group yaw
 _CLASS_PARAMS = {
-    #         height/foot    aspect        facets    lean °     burial       egg
-    'lump':  ((0.90, 1.30), (0.75, 0.95), (11, 14), (0.0,  6.0), (0.90, 1.05), 0.35),
-    'slab':  ((0.55, 0.75), (0.80, 0.95), ( 8, 12), (0.0,  5.0), (0.95, 1.10), 0.35),
-    'shard': ((1.50, 2.10), (0.60, 0.80), (10, 13), (4.0, 14.0), (0.85, 1.00), 0.12),
+    #         height/foot    aspect        facets    lean °     burial       egg   roundover mm
+    'lump':  ((0.90, 1.30), (0.75, 0.95), (11, 14), (0.0,  6.0), (0.90, 1.05), 0.35, (0.3, 0.9)),
+    'slab':  ((0.55, 0.75), (0.80, 0.95), ( 8, 12), (0.0,  5.0), (0.95, 1.10), 0.35, (0.2, 0.7)),
+    'shard': ((1.50, 2.10), (0.60, 0.80), (10, 13), (4.0, 14.0), (0.85, 1.00), 0.12, (0.0, 0.25)),
 }
 _MAX_SEAL_LIFT_MM = 1.3     # don't build soil walls under real overhangs
 _MAX_SKIRT_LIFT_MM = 2.4    # the skirt may bank higher than the rim seal —
@@ -404,16 +404,6 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
             chk = trimesh.Trimesh(vertices=v32, faces=out.faces.copy(),
                                   process=True)
             if len(out.faces) > 0 and out.is_watertight and chk.is_watertight:
-                # Age the WHOLE surface after the chunks are removed: on a
-                # weathered stone the scar and dish rims must round over
-                # too — cutting them after the fillet left crisp rims on
-                # the most weathered stones (Shawn).  Taubin smoothing on
-                # the subdivided bitten mesh; fresh stones (roundover 0)
-                # keep crisp spall rims, which is the correct geology.
-                if spec.roundover_mm > 0.15:
-                    out = out.subdivide()
-                    iters = int(np.clip(2 + 11 * spec.roundover_mm, 2, 24))
-                    trimesh.smoothing.filter_taubin(out, iterations=iters)
                 v_loc = np.asarray(out.vertices)
                 faces = np.asarray(out.faces)
             else:
@@ -421,6 +411,23 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
                               'stone; left unbitten', RuntimeWarning)
         except Exception as exc:                    # noqa: BLE001
             warnings.warn(f'weathering bites failed: {exc}', RuntimeWarning)
+
+    # Age the WHOLE surface after the chunks are removed: scar and dish
+    # rims must round over with everything else (cutting them after the
+    # fillet left crisp rims on the most weathered stones).  Runs whether
+    # or not bites landed.  Heavy weathering gets a second subdivision —
+    # Taubin can't bend a crease flanked by coarse flat triangles, which
+    # left sharp edges on even the most weathered stones (Shawn).  Fresh
+    # stones (roundover 0) keep crisp facets and spall rims.
+    if spec.roundover_mm > 0.15 and spec.footprint_mm >= _SPALL_MIN_FOOT_MM:
+        aged = trimesh.Trimesh(vertices=v_loc, faces=faces,
+                               process=False).subdivide()
+        if spec.roundover_mm > 0.8:
+            aged = aged.subdivide()
+        iters = int(np.clip(2 + 11 * spec.roundover_mm, 2, 30))
+        trimesh.smoothing.filter_taubin(aged, iterations=iters)
+        v_loc = np.asarray(aged.vertices)
+        faces = np.asarray(aged.faces)
 
     lean, burial = spec.lean_deg, spec.burial
     while True:
@@ -886,7 +893,7 @@ class StoneField:
 
     @staticmethod
     def _sample_stone(x, y, foot, cls, yaw, rng) -> StoneSpec:
-        hr, ar, fr, lr, br, egg = _CLASS_PARAMS[cls]
+        hr, ar, fr, lr, br, egg, rr = _CLASS_PARAMS[cls]
         return StoneSpec(
             x=float(x), y=float(y),
             footprint_mm=float(foot),
@@ -898,6 +905,7 @@ class StoneField:
             lean_dir_deg=float(rng.uniform(0.0, 360.0)),
             burial=float(rng.uniform(*br)),
             egg=egg,
+            roundover_mm=float(rng.uniform(*rr)),
             seed=int(rng.integers(0, 2**31)),
         )
 
