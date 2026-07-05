@@ -28,8 +28,9 @@ first**:
    neighbouring stones complement each other exactly, by construction.
 3. A stone's face outline IS the polygon its cracks bound, inset by
    half the crack width (shapely), corners rounded.
-4. The solid is that outline lofted through the wall thickness with a
-   gentle belly (pillowed prism), light broadband relief on top.
+4. The solid is that outline extruded straight through the wall
+   thickness with every edge rounded over (E15: the E12 belly/pillow
+   and relief were dropped — "just the cracks and the roundovers").
 
 Tessellation (fill-all-space), tight uniform cracks, and neighbour
 complementarity therefore hold by construction; the rubble hearting
@@ -57,21 +58,17 @@ _WOBBLE_TAPER_MM  = 12.0          # wobble fades to 0 within this of a
                                   # straight and tight
 _DRIFT_MM         = 2.2           # head joints slant up to ±this across
                                   # their course (staggered, never aligned)
-# Stone body
-_BELLY_FACE_SCALE = (0.93, 0.975) # outline scale at the face plane vs the
-                                  # mid-depth belly: cracks are V-grooves —
-                                  # tight at the belly, slightly open at
-                                  # the face, dark by depth
-_BELLY_EXP        = (0.9, 1.4)    # belly profile exponent
-_APEX_DRIFT_FRAC  = 0.08          # belly apex wanders up to this × the
-                                  # stone size: each face catches its own
-                                  # light without breaking tessellation
-                                  # (whole-stone rotation would open wedges)
+# Stone body (E15: no belly/pillow, no relief — "just the cracks and
+# the roundovers".  Stones are straight extruded prisms; every corner
+# is rounded: outline corners by the 2D buffer, face↔side edges by a
+# circular-arc inset over the first/last roundover_mm of depth)
 _PROUD_MM         = (0.10, 0.50)  # per-stone face recession (both faces)
 _PROUD_DEEP_PROB  = 0.12          # a rare stone sits notably deeper —
 _PROUD_DEEP_MM    = (0.70, 1.10)  # the odd deep stone the references show
-_RING_STEP_MM     = 1.2           # outline resample spacing
-_N_STATIONS       = 7             # loft stations through the thickness
+_RING_STEP_MM     = 1.2           # outline densify spacing
+_ARC_T            = (0.0, 0.29, 0.71, 1.0)   # roundover arc stations
+                                             # (cosine-spaced fractions
+                                             # of the roundover radius)
 # Cell topology
 _THROUGH_FRAC     = 0.20          # fraction of eligible cells merged with
                                   # the cell above into a throughstone
@@ -182,14 +179,14 @@ class FieldstoneWall(CutStoneWall):
                  joint_mm:  float = 0.1,   # physical crack gap (Shawn E14:
                                            # nonzero but hairline).  The
                                            # VISIBLE crack stays wider: the
-                                           # belly taper opens each stone
-                                           # ~0.2–0.5 mm at the face plane,
-                                           # so the face shows a dark
-                                           # V-groove that closes to this
-                                           # gap at mid-depth
+                                           # edge roundover recedes each
+                                           # stone by roundover_mm at the
+                                           # face plane, so the face shows
+                                           # a dark V-groove that closes to
+                                           # this gap at roundover depth
                  reveal_mm: float = 2.8,
                  roundover_mm: float | None = 0.42,
-                 relief_mm:    float | None = 0.10,
+                 relief_mm:    float | None = 0.0,
                  relief_wl:    tuple[float, float] | None = (3.0, 9.0),
                  min_bond_mm:  float = 1.8,
                  **kwargs):
@@ -428,35 +425,35 @@ class FieldstoneWall(CutStoneWall):
         dense = shapely.segmentize(poly, _RING_STEP_MM)
         ring = np.asarray(dense.exterior.coords)[:-1]
         n = len(ring)
-        ctr = np.array([poly.centroid.x, poly.centroid.y])
 
-        # Loft through the thickness with a gentle belly.  No whole-stone
-        # rotation — it would open wedges; per-stone tone comes from the
-        # belly apex drift + proudness instead.
+        # Straight prism through the thickness (E15: pillowing dropped);
+        # face↔side edges get a circular-arc roundover: within the
+        # first/last r of depth the outline insets along its 2D outward
+        # vertex normals by d(e) = r − sqrt(2re − e²).  No whole-stone
+        # rotation — it would open wedges; per-stone tone comes from
+        # proudness alone.
         def recess():
             if brng.random() < _PROUD_DEEP_PROB:
                 return brng.uniform(*_PROUD_DEEP_MM)
             return brng.uniform(*_PROUD_MM)
         y0, y1 = recess(), self.thickness_mm - recess()
-        s_face = brng.uniform(*_BELLY_FACE_SCALE)
-        if cell.is_quoin:
-            s_face = max(s_face, 0.955)
-        pexp = brng.uniform(*_BELLY_EXP)
-        size = outline.max(axis=0) - outline.min(axis=0)
-        apex = brng.uniform(-_APEX_DRIFT_FRAC, _APEX_DRIFT_FRAC, 2) * size
 
-        K = _N_STATIONS
+        tang = np.roll(ring, -1, axis=0) - np.roll(ring, 1, axis=0)
+        nrm = np.column_stack([tang[:, 1], -tang[:, 0]])       # CCW → out
+        nrm /= np.linalg.norm(nrm, axis=1, keepdims=True) + 1e-12
+
+        r3 = self.roundover_mm
+        e_front = [t * r3 for t in _ARC_T]
+        stations = ([y0 + e for e in e_front]
+                    + [(y0 + y1) / 2.0]
+                    + [y1 - e for e in reversed(e_front)])
+        K = len(stations)
         verts = []
-        for k in range(K):
-            u = k / (K - 1.0)
-            belly = np.sin(np.pi * u) ** pexp
-            sk = s_face + (1.0 - s_face) * belly
-            c_k = ctr + apex * belly
-            rk = c_k + (ring - ctr) * sk
-            if cell.is_top:
-                # Crown-flat cap: belly in t only, top stays a plane (R6)
-                rk[:, 1] = ctr[1] + (ring[:, 1] - ctr[1]) * 0.99
-            y = y0 + (y1 - y0) * u
+        for y in stations:
+            e = max(min(y - y0, y1 - y), 0.0)
+            d = r3 - np.sqrt(max(2.0 * r3 * e - e * e, 0.0)) if e < r3 \
+                else 0.0
+            rk = ring - nrm * d
             verts.append(np.column_stack([rk[:, 0],
                                           np.full(n, y), rk[:, 1]]))
         v = np.vstack(verts)
@@ -480,13 +477,10 @@ class FieldstoneWall(CutStoneWall):
         extras, capf = self._cap_triangulation(ring, poly)
         m = len(extras)
         if m:
-            e = ctr + (extras - ctr) * s_face
-            if cell.is_top:
-                e[:, 1] = ctr[1] + (extras[:, 1] - ctr[1]) * 0.99
             verts.append(np.column_stack(
-                [e[:, 0], np.full(m, y0), e[:, 1]]))
+                [extras[:, 0], np.full(m, y0), extras[:, 1]]))
             verts.append(np.column_stack(
-                [e[:, 0], np.full(m, y1), e[:, 1]]))
+                [extras[:, 0], np.full(m, y1), extras[:, 1]]))
         v = np.vstack(verts)
         mapF = np.concatenate([np.arange(n), K * n + np.arange(m)])
         mapB = np.concatenate([(K - 1) * n + np.arange(n),
@@ -504,14 +498,14 @@ class FieldstoneWall(CutStoneWall):
                                    faces=np.vstack(faces), process=False)
         trimesh.repair.fix_normals(body)
 
-        # Uniform subdivision (conforming — splits every edge) for
-        # relief sampling density, broadband relief, THEN light Taubin:
-        # smoothing last softens the plane-wave crests, whose organised
-        # interference pattern reads clearly on flat faces (curved
-        # scatter stones always hid it).  No voxel remesh: the fitted
-        # silhouette must not shrink or soften (the E7 shave lesson).
-        body = body.subdivide()
+        # Optional relief (off by default since E15 — crisp prisms with
+        # roundovers only): subdivide for sampling density, displace,
+        # then light Taubin to soften the plane-wave crests, whose
+        # organised interference pattern reads clearly on flat faces.
+        # No voxel remesh: the fitted silhouette must not shrink or
+        # soften (the E7 shave lesson).
         if self.relief_mm > 0.0:
+            body = body.subdivide()
             disp = self.relief_mm * _relief_field(
                 body.vertices, brng, _RELIEF_WAVES, *self.relief_wl)
             body = trimesh.Trimesh(
@@ -519,7 +513,7 @@ class FieldstoneWall(CutStoneWall):
                           + np.asarray(body.vertex_normals)
                           * disp[:, None]),
                 faces=body.faces, process=False)
-        trimesh.smoothing.filter_taubin(body, iterations=4)
+            trimesh.smoothing.filter_taubin(body, iterations=4)
 
         m = np.eye(4)
         m[:2, 0] = seg.d
