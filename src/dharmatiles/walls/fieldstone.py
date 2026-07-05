@@ -58,25 +58,37 @@ _WOBBLE_TAPER_MM  = 12.0          # wobble fades to 0 within this of a
                                   # straight and tight
 _DRIFT_MM         = 2.2           # head joints slant up to ±this across
                                   # their course (staggered, never aligned)
-# Stone body (E15: no belly/pillow, no relief — "just the cracks and
-# the roundovers".  Stones are straight extruded prisms; every corner
-# is rounded: outline corners by the 2D buffer, face↔side edges by a
-# circular-arc inset over the first/last roundover of depth.  E16: the
-# roundover is drawn PER STONE from `roundover_mm` and is big — worn
-# pebble shoulders, not a chamfer)
-_ROUND_SIZE_CAP   = 0.22          # per-stone roundover ≤ this × the
-                                  # outline's smaller bbox dimension: a
-                                  # stone must keep ≥ ~55 % of its face
-                                  # flat — at 0.38 the roundover ate the
-                                  # faces of thin stones and they read
-                                  # as dark slots (E16 first render)
+# Stone body (E17: full pebble morph — "an isosphere morphed to fit
+# the outline/depth of the cracked region".  Sphere topology: longitude
+# follows the crack-bounded outline (the EQUATOR ring is the outline at
+# mid-depth, so silhouette, cracks, and dimensions stay put); latitude
+# sweeps a smooth ellipse-like meridian from face pole to face pole.
+# Every surface is curved; there are no flat faces and no arris lines.
+# `roundover_mm` still rounds the 2D outline corners — the equator
+# silhouette — per stone)
+_ROUND_SIZE_CAP   = 0.22          # per-stone 2D roundover ≤ this × the
+                                  # outline's smaller bbox dimension
+                                  # (thin stones must keep their face)
+_MORPH_A          = (2.0, 3.2)    # superellipse meridian s=(1−|u|^a)^b,
+_MORPH_B          = (0.30, 0.45)  # u=sin(lat): a=2,b=0.5 is a true
+                                  # ellipse — which read as MELTED dough
+                                  # (all curvature at the silhouette,
+                                  # equator-line contact, cracks became
+                                  # soft wide valleys).  Fuller profiles
+                                  # (higher a, lower b) keep a gently
+                                  # domed face and drop fast near the
+                                  # silhouette, so cracks stay narrow
+                                  # and dark.  Drawn per pole: the stone
+                                  # bulges asymmetrically
+_POLE_DRIFT_FRAC  = 0.12          # each pole wanders up to this × the
+                                  # outline size from the centroid: the
+                                  # summit of the dome is off-centre,
+                                  # like a real cobble
 _PROUD_MM         = (0.10, 0.50)  # per-stone face recession (both faces)
 _PROUD_DEEP_PROB  = 0.12          # a rare stone sits notably deeper —
 _PROUD_DEEP_MM    = (0.70, 1.10)  # the odd deep stone the references show
 _RING_STEP_MM     = 1.2           # outline densify spacing
-_ARC_T            = (0.0, 0.29, 0.71, 1.0)   # roundover arc stations
-                                             # (cosine-spaced fractions
-                                             # of the roundover radius)
+_N_LAT            = 17            # latitude rings (poles excluded)
 # Cell topology
 _THROUGH_FRAC     = 0.20          # fraction of eligible cells merged with
                                   # the cell above into a throughstone
@@ -95,56 +107,6 @@ _DIR_JITTER       = 0.12
 # (course, seg, bay), so tagged keys are longer, never equal.
 _K_THROUGH = 9
 _K_SPLIT_B, _K_SPLIT_T = 1, 2
-
-
-def _earcut(pts: np.ndarray) -> np.ndarray:
-    """Ear-clipping triangulation of a simple CCW polygon (n, 2).
-
-    Dependency-free stand-in for mapbox_earcut (not installed): the cap
-    triangulation must follow the polygon interior — a centroid fan
-    makes long radial triangles whose interpolated normals streak under
-    smooth shading."""
-    n = len(pts)
-    idx = list(range(n))
-    tris: list[tuple[int, int, int]] = []
-
-    def area2(a, b, c):
-        return ((b[0] - a[0]) * (c[1] - a[1])
-                - (b[1] - a[1]) * (c[0] - a[0]))
-
-    guard = 0
-    while len(idx) > 3 and guard < 100 * n:
-        guard += 1
-        m = len(idx)
-        clipped = False
-        for k in range(m):
-            i0, i1, i2 = idx[k - 1], idx[k], idx[(k + 1) % m]
-            a, b, c = pts[i0], pts[i1], pts[i2]
-            if area2(a, b, c) <= 1e-12:          # reflex / degenerate
-                continue
-            ok = True
-            for j in idx:
-                if j in (i0, i1, i2):
-                    continue
-                p = pts[j]
-                if (area2(a, b, p) >= -1e-12
-                        and area2(b, c, p) >= -1e-12
-                        and area2(c, a, p) >= -1e-12):
-                    ok = False
-                    break
-            if ok:
-                tris.append((i0, i1, i2))
-                idx.pop(k)
-                clipped = True
-                break
-        if not clipped:
-            break                                # numeric dead end: fan
-    if len(idx) == 3:
-        tris.append(tuple(idx))
-    else:
-        for k in range(1, len(idx) - 1):
-            tris.append((idx[0], idx[k], idx[k + 1]))
-    return np.asarray(tris, dtype=int)
 
 
 def _rubble_mesh(lx: float, ly: float, lz: float,
@@ -325,34 +287,6 @@ class FieldstoneWall(CutStoneWall):
         return out
 
     # ── the stone ────────────────────────────────────────────────────────────
-    @staticmethod
-    def _cap_triangulation(ring: np.ndarray, poly,
-                           clearance: float) -> tuple:
-        """Well-shaped triangulation of the face polygon: Delaunay over
-        the ring plus a ~1.4 mm interior grid, triangles filtered to
-        the polygon interior.  ``clearance`` keeps the grid inside the
-        ROUNDED-OVER face boundary (ring inset by the roundover at the
-        face plane) and far enough off it that ring edges stay locally
-        Delaunay and the cap seams onto the loft."""
-        import scipy.spatial as _ss
-        import shapely as _sh
-        inner = poly.buffer(-clearance)
-        pts = np.empty((0, 2))
-        if not inner.is_empty:
-            x0, z0, x1, z1 = inner.bounds
-            xs = np.arange(x0, x1 + 1e-6, 1.4)
-            zs = np.arange(z0, z1 + 1e-6, 1.4)
-            if len(xs) and len(zs):
-                gx, gz = np.meshgrid(xs, zs)
-                cand = np.column_stack([gx.ravel(), gz.ravel()])
-                keep = _sh.contains_xy(inner, cand[:, 0], cand[:, 1])
-                pts = cand[keep]
-        allp = np.vstack([ring, pts]) if len(pts) else ring
-        tri = _ss.Delaunay(allp)
-        cent = allp[tri.simplices].mean(axis=1)
-        keep = _sh.contains_xy(poly, cent[:, 0], cent[:, 1])
-        return pts, tri.simplices[keep]
-
     def _outline(self, cell: _Cell, seg: _Seg, seg_i: int,
                  ) -> np.ndarray:
         """Face outline polygon (t, z) bounded by the cell's cracks.
@@ -441,41 +375,41 @@ class FieldstoneWall(CutStoneWall):
         ring = np.asarray(dense.exterior.coords)[:-1]
         n = len(ring)
 
-        # Straight prism through the thickness (E15: pillowing dropped);
-        # face↔side edges get a circular-arc roundover: within the
-        # first/last r of depth the outline insets along its 2D outward
-        # vertex normals by d(e) = r − sqrt(2re − e²).  No whole-stone
-        # rotation — it would open wedges; per-stone tone comes from
-        # proudness alone.
+        # Sphere-morph (E17): latitude rings sweep from the front pole
+        # to the back pole; each ring is the outline scaled about the
+        # (drifting) centre by cos(lat)^k, at depth y = mid + h·sin(lat).
+        # The equator IS the outline at mid-depth, so the silhouette,
+        # the cracks, and the stone's dimensions are unchanged — but
+        # every surface is smoothly curved.  No whole-stone rotation —
+        # it would open wedges; per-stone character comes from the
+        # outline, the pole drift, and the meridian exponents.
         def recess():
             if brng.random() < _PROUD_DEEP_PROB:
                 return brng.uniform(*_PROUD_DEEP_MM)
             return brng.uniform(*_PROUD_MM)
         y0, y1 = recess(), self.thickness_mm - recess()
+        h = (y1 - y0) / 2.0
+        ym = (y0 + y1) / 2.0
 
-        tang = np.roll(ring, -1, axis=0) - np.roll(ring, 1, axis=0)
-        nrm = np.column_stack([tang[:, 1], -tang[:, 0]])       # CCW → out
-        nrm /= np.linalg.norm(nrm, axis=1, keepdims=True) + 1e-12
-        # Smooth the normal field: with the big E16 roundovers the
-        # inward offset approaches local feature size on concave
-        # stretches (drift jogs), and raw vertex normals would fold.
-        for _ in range(2):
-            nrm += 0.5 * (np.roll(nrm, 1, axis=0)
-                          + np.roll(nrm, -1, axis=0))
-            nrm /= np.linalg.norm(nrm, axis=1, keepdims=True) + 1e-12
+        ctr = np.array([poly.centroid.x, poly.centroid.y])
+        a_f, a_b = brng.uniform(*_MORPH_A, 2)
+        b_f, b_b = brng.uniform(*_MORPH_B, 2)
+        pole_f = ctr + brng.uniform(-_POLE_DRIFT_FRAC,
+                                    _POLE_DRIFT_FRAC, 2) * span
+        pole_b = ctr + brng.uniform(-_POLE_DRIFT_FRAC,
+                                    _POLE_DRIFT_FRAC, 2) * span
 
-        r3 = r
-        e_front = [t * r3 for t in _ARC_T]
-        stations = ([y0 + e for e in e_front]
-                    + [(y0 + y1) / 2.0]
-                    + [y1 - e for e in reversed(e_front)])
-        K = len(stations)
+        K = _N_LAT
         verts = []
-        for y in stations:
-            e = max(min(y - y0, y1 - y), 0.0)
-            d = r3 - np.sqrt(max(2.0 * r3 * e - e * e, 0.0)) if e < r3 \
-                else 0.0
-            rk = ring - nrm * d
+        for jlat in range(K):
+            lat = -np.pi / 2.0 + np.pi * (jlat + 1) / (K + 1)
+            u = abs(np.sin(lat))
+            ae, be, pole = ((a_f, b_f, pole_f) if lat < 0
+                            else (a_b, b_b, pole_b))
+            sk = (1.0 - u ** ae) ** be
+            c_j = ctr + (pole - ctr) * (1.0 - sk)
+            rk = c_j + (ring - ctr) * sk
+            y = ym + h * np.sin(lat)
             verts.append(np.column_stack([rk[:, 0],
                                           np.full(n, y), rk[:, 1]]))
         v = np.vstack(verts)
@@ -486,38 +420,17 @@ class FieldstoneWall(CutStoneWall):
             a, b = k * n, (k + 1) * n
             faces.append(np.column_stack([a + i, a + j, b + j]))
             faces.append(np.column_stack([a + i, b + j, b + i]))
-        # End caps.  Well-shaped interior triangles matter: the face is
-        # the most visible surface, and skinny cap triangles streak
-        # under smooth shading once relief displaces their vertices
-        # (fan caps and my sequential earcut both showed this; the
-        # blur-remesh alternative terraces — near-planar faces lie
-        # almost parallel to a voxel plane family, marching cubes'
-        # worst case).  Delaunay over ring + interior grid, triangles
-        # filtered to the polygon; earcut fallback if the seam fails.
-        # Front and back stations carry the SAME scale (belly = 0 at
-        # both ends), so one triangulation serves both caps.
-        extras, capf = self._cap_triangulation(ring, poly, r3 + 0.4)
-        m = len(extras)
-        if m:
-            verts.append(np.column_stack(
-                [extras[:, 0], np.full(m, y0), extras[:, 1]]))
-            verts.append(np.column_stack(
-                [extras[:, 0], np.full(m, y1), extras[:, 1]]))
-        v = np.vstack(verts)
-        mapF = np.concatenate([np.arange(n), K * n + np.arange(m)])
-        mapB = np.concatenate([(K - 1) * n + np.arange(n),
-                               K * n + m + np.arange(m)])
-        faces.append(mapF[capf][:, ::-1])                 # front (y0)
-        faces.append(mapB[capf])                          # back  (y1)
+        # Poles close the sphere: small fans on a smoothly curved dome
+        # render cleanly (UV-sphere poles), unlike fans across the old
+        # FLAT caps — no Delaunay cap machinery needed any more.
+        pf = np.array([pole_f[0], y0, pole_f[1]])
+        pb = np.array([pole_b[0], y1, pole_b[1]])
+        v = np.vstack([v, pf[None], pb[None]])
+        faces.append(np.column_stack([np.full(n, K * n), j, i]))
+        faces.append(np.column_stack([np.full(n, K * n + 1),
+                                      (K - 1) * n + i, (K - 1) * n + j]))
         f = np.vstack(faces)
         body = trimesh.Trimesh(vertices=v, faces=f, process=False)
-        if not body.is_watertight:
-            capf = _earcut(ring)
-            faces = faces[:-2]
-            faces.append(capf[:, ::-1])
-            faces.append(capf + (K - 1) * n)
-            body = trimesh.Trimesh(vertices=v[:K * n],
-                                   faces=np.vstack(faces), process=False)
         trimesh.repair.fix_normals(body)
 
         # Optional relief (off by default since E15 — crisp prisms with
