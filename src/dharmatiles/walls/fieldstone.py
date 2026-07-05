@@ -34,13 +34,14 @@ from ..scatter.stones import _blur_remesh, _relief_field, _round_edges
 from .masonry import CutStoneWall, _Cell, _Seg, _RELIEF_WAVES
 
 # ── Iteration knobs (module constants while prototyping) ─────────────────────
-_BLOCKINESS       = (0.55, 0.85)  # ellipsoid↔box blend for body stones —
-                                  # below ~0.5 the silhouette recedes
-                                  # between hull corners and the shared
-                                  # edges open into mortar channels
-                                  # (red diagnostic, round 2)
-_QUOIN_BLOCKINESS = (0.70, 0.90)  # corner stones: same unit, squarer
-_CAP_BLOCKINESS   = (0.60, 0.85)  # coping stones flat-topped and squarer
+_BLOCKINESS       = (0.42, 0.78)  # ellipsoid↔box blend for body stones —
+                                  # wide range = the reference's mix of
+                                  # rounded and squarish stones; with real
+                                  # gaps + hearting behind them (E10) the
+                                  # rounder end no longer opens mortar
+                                  # channels, so the E9 floor is relaxed
+_QUOIN_BLOCKINESS = (0.65, 0.88)  # corner stones: same unit, squarer
+_CAP_BLOCKINESS   = (0.55, 0.80)  # coping stones flat-topped and squarer
 _LUMP             = (0.90, 1.0)   # per-point radius jitter
 _DIR_JITTER       = 0.12          # support-direction jitter
 _FLATTEN          = (0.50, 0.80)  # vertical squash of support directions:
@@ -55,28 +56,31 @@ _FLATTEN_Y        = (0.35, 0.60)  # face squash — broad flattish face patch
                                   # (mortar diagnostic: tangent bellies covered
                                   # ~half the face; red sea between stones)
 _FLATTEN_X_END    = (0.55, 0.80)  # end squash for wall-end stones only
-_OVERLAP_MM       = 0.45          # stones overlap past joint midlines by
-                                  # this — stacked stones TOUCH; the union
-                                  # merges contacts into bedding creases
-_BULGE_MM         = 0.35          # residual vertical swell into joints
+# Stones NEVER overlap (E10, Shawn + the drystone reference photo):
+# a carefully stacked pile reads through the dark outline gap around
+# EVERY stone; unioned overlaps erase those outlines and the wall
+# fuses into one lumpy mass.  Gaps are real (joint_mm), and the rubble
+# hearting behind them is what makes a gap read as stone-filled depth
+# instead of mortar.
 _THROUGH_FRAC     = 0.20          # fraction of eligible cells merged with
                                   # the cell above into a throughstone
-_PIN_PROB         = 1.0           # chance of a pinning stone at each
-                                  # joint/course-line crossing — the star-
-                                  # shaped voids four rounded shoulders
-                                  # open up ("every space filled with a
-                                  # rock", round-4)
-_PIN_W            = (2.5, 5.0)    # pinning stone width
-_PIN_H            = (2.2, 4.2)    # pinning stone height
 _REMESH_SIGMA     = 0.9           # aged read (stones convention)
-_RUBBLE_SPACING_MM = 4.8          # hearting grid pitch over each face
-_RUBBLE_FOOT      = (6.0, 9.5)    # rubble footprint ≥ pitch → the sheet
-                                  # seals by overlap: any void between big
-                                  # stones is a window onto rubble, never
-                                  # onto the flat core ("mortar plane")
-_RUBBLE_H         = (3.8, 6.2)
-_RUBBLE_SETBACK_MM = 0.15         # rubble faces sit this far behind the
-                                  # wall face planes (reads as depth)
+_RUBBLE_SPACING_MM = 4.2          # hearting grid pitch over each face
+_RUBBLE_FOOT      = (8.5, 11.0)   # ≥2× pitch: hull corners recede ~25 %
+                                  # inside their boxes, so box-touching is
+                                  # NOT enough — coverage is guaranteed
+                                  # only when each stone's box overlaps
+                                  # its neighbour by more than the
+                                  # recession (measured 3.8 % box-level
+                                  # holes at 1.3–2× pitch, E10)
+_RUBBLE_H         = (5.5, 7.5)    # ≥1.3× pitch vertically, same rule
+_RUBBLE_SETBACK_MM = 1.6          # rubble faces sit this far behind the
+                                  # wall face planes: deep enough that the
+                                  # face stones stay the wall (at 0.15 the
+                                  # big-footprint rubble reached the face
+                                  # plane and BURIED the coursing — E10),
+                                  # shallow enough to still front the core
+                                  # (reveal 2.2) through every gap
 
 
 def _fieldstone_mesh(lx: float, ly: float, lz: float, blockiness: float,
@@ -151,8 +155,8 @@ class FieldstoneWall(CutStoneWall):
     def __init__(self, spine, *,
                  course_mm: tuple[float, float] = (3.2, 8.8),
                  bay_mm:    tuple[float, float] = (4.5, 16.0),
-                 joint_mm:  float = 0.4,
-                 reveal_mm: float = 2.2,
+                 joint_mm:  float = 0.9,
+                 reveal_mm: float = 2.8,
                  roundover_mm: float | None = 0.45,
                  relief_mm:    float | None = 0.12,
                  relief_wl:    tuple[float, float] | None = (2.0, 7.0),
@@ -214,81 +218,7 @@ class FieldstoneWall(CutStoneWall):
                 break
         out = [c for c in cells if c.key not in drop]
         out.extend(merged)
-        out.extend(self._pin_cells(out, segs, H, rng))
         return out
-
-    def _pin_cells(self, cells: list[_Cell], segs: list[_Seg], H: float,
-                   rng: np.random.Generator) -> list[_Cell]:
-        """Small pinning stones wedged where a vertical joint crosses a
-        course line — filling the voids that rounded shoulders open."""
-        throughs = [c for c in cells if len(c.key) == 4]
-        pins: list[_Cell] = []
-        n = 0
-        for c in cells:
-            segL = segs[c.seg].L
-            # Throughstone flanks: a double-height stone's waist narrows
-            # at the course line it spans, and its neighbours' shoulders
-            # open a void there that the crossing pins never cover (the
-            # crossing itself was consumed by the merge).
-            if len(c.key) == 4 and c.key[3] == 'through':
-                z_mids = {t.z1 for t in cells
-                          if len(t.key) == 3 and t.seg == c.seg
-                          and c.z0 + 0.5 < t.z1 < c.z1 - 0.5}
-                for z_mid in z_mids:
-                    for t_edge in (c.t0, c.t1):
-                        if rng.random() > 0.8:
-                            continue
-                        w = rng.uniform(*_PIN_W)
-                        h = rng.uniform(*_PIN_H)
-                        t0 = np.clip(t_edge - w / 2.0, 0.5, segL - 0.5 - w)
-                        pins.append(_Cell(
-                            seg=c.seg, t0=float(t0), t1=float(t0 + w),
-                            end0='joint', end1='joint',
-                            z0=float(z_mid - h / 2.0),
-                            z1=float(z_mid + h / 2.0),
-                            is_top=False, is_bottom=False,
-                            key=(-1, c.seg, n, 'pin'),
-                        ))
-                        n += 1
-                continue
-            if c.end0 != 'joint':
-                continue
-            for z_line in (c.z0, c.z1):
-                if not 1.0 < z_line < H - 1.0:
-                    # Cap joints get their own flush pins below.
-                    continue
-                if rng.random() > _PIN_PROB:
-                    continue
-                if any(t.seg == c.seg and t.z0 < z_line < t.z1
-                       and t.t0 - 1.0 < c.t0 < t.t1 + 1.0
-                       for t in throughs):
-                    continue
-                w = rng.uniform(*_PIN_W)
-                h = rng.uniform(*_PIN_H)
-                t0 = np.clip(c.t0 - w / 2.0, 0.5, segL - 0.5 - w)
-                pins.append(_Cell(
-                    seg=c.seg, t0=float(t0), t1=float(t0 + w),
-                    end0='joint', end1='joint',
-                    z0=float(z_line - h / 2.0), z1=float(z_line + h / 2.0),
-                    is_top=False, is_bottom=False,
-                    key=(-1, c.seg, n, 'pin'),
-                ))
-                n += 1
-            # Cap-joint pins: a small stone flush with the cap plane
-            # filling the dip between two coping stones.
-            if c.is_top and rng.random() < _PIN_PROB:
-                w = rng.uniform(*_PIN_W)
-                h = rng.uniform(*_PIN_H)
-                t0 = np.clip(c.t0 - w / 2.0, 0.5, segL - 0.5 - w)
-                pins.append(_Cell(
-                    seg=c.seg, t0=float(t0), t1=float(t0 + w),
-                    end0='joint', end1='joint',
-                    z0=float(H - h), z1=float(H),
-                    is_top=True, is_bottom=False,
-                    key=(-1, c.seg, n, 'pin'),
-                ))
-                n += 1
-        return pins
 
     # ── rubble hearting ──────────────────────────────────────────────────────
     def _extra_parts(self, segs: list[_Seg], seat_z: float,
@@ -301,43 +231,51 @@ class FieldstoneWall(CutStoneWall):
         any gap between face stones shows deeper stones, exactly like
         a real drystone wall's packed core.
         """
-        import trimesh as _t
         T, H = self.thickness_mm, self.height_mm
         sb = _RUBBLE_SETBACK_MM
+        # TWO y-layers, half-pitch staggered in t and z (E10): with one
+        # layer, a face gap aligned with a rubble-rubble gap leaks a
+        # sight line onto the core; the offset back layer backs every
+        # front-layer gap.  Layers meet at mid-thickness (hidden).
+        y_bands = [(sb, 0.55 * T), (0.45 * T, T - sb)]
         parts = []
         for seg in segs:
-            nt = max(2, int(round(seg.L / _RUBBLE_SPACING_MM)))
-            nz = max(2, int(round((H - 3.0) / _RUBBLE_SPACING_MM)))
-            for i in range(nt):
-                for j in range(nz):
-                    # Half-pitch stagger per row (brick bond): aligned
-                    # grid crevices can line up with face voids and leak
-                    # a red pinhole through both layers.
-                    tc = ((i + 0.5 + 0.5 * (j % 2)
-                           + rng.uniform(-0.3, 0.3)) * seg.L / nt)
-                    zc = 1.2 + (j + 0.5 + rng.uniform(-0.3, 0.3)) \
-                        * (H - 3.0) / nz
-                    w = rng.uniform(*_RUBBLE_FOOT)
-                    h = rng.uniform(*_RUBBLE_H)
-                    t0 = np.clip(tc - w / 2.0, 0.3, seg.L - 0.3 - w)
-                    body = _fieldstone_mesh(
-                        w, T - 2 * sb, h,
-                        rng.uniform(0.25, 0.55), False,
-                        0.35, 0.0, self.relief_wl, rng,
-                        flatten_y=rng.uniform(0.5, 0.8), aged=False)
-                    b0, b1 = body.bounds
-                    tgt0 = np.array([t0, sb, zc - h / 2.0])
-                    tgt1 = np.array([t0 + w, T - sb, zc + h / 2.0])
-                    body.apply_translation(-b0)
-                    body.apply_scale((tgt1 - tgt0) / (b1 - b0))
-                    body.apply_translation(tgt0)
-                    m = np.eye(4)
-                    m[:2, 0] = seg.d
-                    m[:2, 1] = seg.n
-                    m[:2, 3] = seg.a
-                    m[2, 3] = seat_z
-                    body.apply_transform(m)
-                    parts.append(body)
+            nt = max(2, int(round(seg.L / _RUBBLE_SPACING_MM)) + 1)
+            nz = max(2, int(round(H / _RUBBLE_SPACING_MM)) + 1)
+            for layer, (y0, y1) in enumerate(y_bands):
+                off = 0.5 * layer
+                for i in range(nt):
+                    for j in range(nz):
+                        # Half-pitch stagger per row (brick bond) AND
+                        # per layer.  Row centres span 0..H edge to edge
+                        # (clips pull boundary stones inside).
+                        tc = ((i + 0.5 * (j % 2) + off
+                               + rng.uniform(-0.25, 0.25))
+                              * seg.L / (nt - 1))
+                        zc = ((j + off + rng.uniform(-0.25, 0.25))
+                              * H / (nz - 1))
+                        w = rng.uniform(*_RUBBLE_FOOT)
+                        h = rng.uniform(*_RUBBLE_H)
+                        t0 = np.clip(tc - w / 2.0, 0.3, seg.L - 0.3 - w)
+                        z0 = np.clip(zc - h / 2.0, 0.2, H - 0.6 - h)
+                        body = _fieldstone_mesh(
+                            w, y1 - y0, h,
+                            rng.uniform(0.25, 0.55), False,
+                            0.35, 0.0, self.relief_wl, rng,
+                            flatten_y=rng.uniform(0.5, 0.8), aged=False)
+                        b0, b1 = body.bounds
+                        tgt0 = np.array([t0, y0, z0])
+                        tgt1 = np.array([t0 + w, y1, z0 + h])
+                        body.apply_translation(-b0)
+                        body.apply_scale((tgt1 - tgt0) / (b1 - b0))
+                        body.apply_translation(tgt0)
+                        m = np.eye(4)
+                        m[:2, 0] = seg.d
+                        m[:2, 1] = seg.n
+                        m[:2, 3] = seg.a
+                        m[2, 3] = seat_z
+                        body.apply_transform(m)
+                        parts.append(body)
         return parts
 
     # ── the unit ─────────────────────────────────────────────────────────────
@@ -352,8 +290,6 @@ class FieldstoneWall(CutStoneWall):
         else:
             blockiness = rng.uniform(*_BLOCKINESS)
 
-        up = 0.0 if cell.is_top else rng.uniform(0.0, _BULGE_MM)
-        dn = 0.0 if cell.is_bottom else rng.uniform(0.0, _BULGE_MM)
         # Build OVERSIZE so rounding keeps real curvature, then EXACT-FIT
         # rescale to the target box.  This replaces shave compensation
         # (round-4 fix): guessing the roundover+blur shave either leaves
@@ -366,21 +302,16 @@ class FieldstoneWall(CutStoneWall):
         fx = (rng.uniform(*_FLATTEN_X_END)
               if 'face' in (cell.end0, cell.end1) else 1.0)
         c = _PACK_COMP_MM
-        body = _fieldstone_mesh(lx + c, ly + c, lz + up + dn + c,
+        body = _fieldstone_mesh(lx + c, ly + c, lz + c,
                                 blockiness, cell.is_top or cell.is_quoin,
                                 self.roundover_mm, self.relief_mm,
                                 self.relief_wl, rng,
                                 flatten_y=fy, flatten_x=fx)
-        # Target box overlaps joint midlines (stacked stones touch);
-        # face/end planes and the cap stay exact.
-        ov = self.joint_mm / 2.0 + _OVERLAP_MM
-        ox0 = ov if cell.end0 == 'joint' else 0.0
-        ox1 = ov if cell.end1 == 'joint' else 0.0
-        oz0 = 0.0 if cell.is_bottom else ov
-        oz1 = 0.0 if cell.is_top else ov
+        # Target box IS the jointed cell (E10): stones never overlap —
+        # the outline gap around every stone is the stacked read.
         b0, b1 = body.bounds
-        target0 = np.array([-ox0, 0.0, -dn - oz0])
-        target1 = np.array([lx + ox1, ly, lz + up + oz1])
+        target0 = np.array([0.0, 0.0, 0.0])
+        target1 = np.array([lx, ly, lz])
         body.apply_translation(-b0)
         body.apply_scale((target1 - target0) / (b1 - b0))
         body.apply_translation(target0)
