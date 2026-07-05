@@ -288,6 +288,25 @@ class CutStoneWall:
 
     Stamps ``terrain_support_z`` and ``obstacle_mask`` over the footprint
     (same contracts as Rocks/FacetedStones) so grass steers around.
+
+    **This class is also the masonry CHASSIS** — everything that is
+    family-independent about a per-unit wall: spine → segments, the
+    courses × bays × quoins layout, the recessed core, seat/stamp/clip,
+    the manifold union, and the export guarantees.  A wall FAMILY is
+    this chassis plus a unit kernel, via the subclass hooks:
+
+    - ``_cells``       — post-process the layout (merges, splits)
+    - ``_stone_box``   — the unit's box within its jointed cell
+    - ``_unit_mesh``   — the solid that fills one cell (THE family axis)
+    - ``_place_block`` — full per-cell override when the unit isn't
+      box-shaped (fieldstone's crack-outline sphere-morph)
+    - ``_core_boxes``  — core extent (fieldstone stops it below the cap)
+    - ``_extra_parts`` — additional solids (fieldstone rubble hearting)
+
+    ``FieldstoneWall`` is the worked example; a brick family is this
+    chassis with a small-format unit kernel; a cliff face is the same
+    chassis at geological scale (bedding strata = courses).  Shape and
+    finish primitives for unit kernels live in ``dharmatiles.stone``.
     """
 
     height_default_mm: float = 5.0

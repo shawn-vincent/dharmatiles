@@ -172,6 +172,15 @@ class FieldstoneWall(CutStoneWall):
 
     Same spine convention and contracts as :class:`CutStoneWall`; the
     stones are crack-network tessellated (module docstring).
+
+    The look-defining knobs span the family space (all per-stone
+    uniform ranges): ``roundover_mm`` + ``bed_flat_exp`` set the stone
+    character from thin squared slab toward round cobble;
+    ``head_overlap_mm`` + ``bed_overlap_mm`` set how pressed the
+    contacts read (0 = every crack a shared curve, larger = fused
+    joints, less visible "mortar"); ``proud_mm`` sets face-recession
+    variance (near-coplanar faces vs rugged); ``wobble_amp_mm`` sets
+    bed-crack wander.  Defaults are the approved E25 look.
     """
 
     def __init__(self, spine, *,
@@ -188,6 +197,11 @@ class FieldstoneWall(CutStoneWall):
                  roundover_mm: tuple[float, float] = (1.3, 2.6),
                  relief_mm:    float | None = None,
                  min_bond_mm:  float = 1.8,
+                 wobble_amp_mm:   tuple[float, float] = _WOBBLE_AMP_MM,
+                 head_overlap_mm: tuple[float, float] = _HEAD_OVERLAP_MM,
+                 bed_overlap_mm:  tuple[float, float] = _BED_OVERLAP_MM,
+                 proud_mm:        tuple[float, float] = _PROUD_MM,
+                 bed_flat_exp:    tuple[float, float] = _BED_FLAT_EXP,
                  **kwargs):
         super().__init__(spine, course_mm=course_mm, bay_mm=bay_mm,
                          joint_mm=joint_mm, reveal_mm=reveal_mm,
@@ -198,6 +212,11 @@ class FieldstoneWall(CutStoneWall):
         # is None, but for fieldstone None means "auto amplitude from
         # the stone's footprint" (_stone_texture) — restore it.
         self.relief_mm = relief_mm
+        self.wobble_amp_mm   = wobble_amp_mm
+        self.head_overlap_mm = head_overlap_mm
+        self.bed_overlap_mm  = bed_overlap_mm
+        self.proud_mm        = proud_mm
+        self.bed_flat_exp    = bed_flat_exp
         self._beds:   dict[tuple, tuple] = {}   # (seg, zkey) → sine params
         self._drifts: dict[tuple, tuple] = {}   # (seg,course,tkey) → (d,bow)
 
@@ -214,7 +233,7 @@ class FieldstoneWall(CutStoneWall):
         key = (seg_i, int(round(z * 100.0)))
         if key not in self._beds:
             rng = self._feature_rng(7, *key)
-            amp = rng.uniform(*_WOBBLE_AMP_MM, 2)
+            amp = rng.uniform(*self.wobble_amp_mm, 2)
             wl  = rng.uniform(*_WOBBLE_WL_MM, 2)
             ph  = rng.uniform(0.0, 2.0 * np.pi, 2)
             self._beds[key] = (amp, wl, ph)
@@ -343,8 +362,8 @@ class FieldstoneWall(CutStoneWall):
             ov0 = ov1 = 0.0
         else:
             cap = 0.25 * w
-            ov0 = min(float(brng.uniform(*_HEAD_OVERLAP_MM)), cap)
-            ov1 = min(float(brng.uniform(*_HEAD_OVERLAP_MM)), cap)
+            ov0 = min(float(brng.uniform(*self.head_overlap_mm)), cap)
+            ov1 = min(float(brng.uniform(*self.head_overlap_mm)), cap)
 
         def zeff(z: float, t: float) -> float:
             """Actual (wobbled) height of the bed line at t."""
@@ -406,9 +425,9 @@ class FieldstoneWall(CutStoneWall):
         if not cell.is_top:
             h = cell.z1 - cell.z0
             cap = 0.22 * h
-            ovt = min(float(brng.uniform(*_BED_OVERLAP_MM)), cap)
+            ovt = min(float(brng.uniform(*self.bed_overlap_mm)), cap)
             ovb = 0.0 if cell.is_bottom else min(
-                float(brng.uniform(*_BED_OVERLAP_MM)), cap)
+                float(brng.uniform(*self.bed_overlap_mm)), cap)
             zlo, zhi = pts[:, 1].min(), pts[:, 1].max()
             u = (pts[:, 1] - zlo) / max(zhi - zlo, 1e-9)
             pts[:, 1] += ovt * u - ovb * (1.0 - u)
@@ -496,7 +515,7 @@ class FieldstoneWall(CutStoneWall):
         def recess():
             if brng.random() < _PROUD_DEEP_PROB:
                 return brng.uniform(*_PROUD_DEEP_MM)
-            return brng.uniform(*_PROUD_MM)
+            return brng.uniform(*self.proud_mm)
         y0, y1 = recess(), self.thickness_mm - recess()
         h = (y1 - y0) / 2.0
         ym = (y0 + y1) / 2.0
@@ -504,7 +523,7 @@ class FieldstoneWall(CutStoneWall):
         ctr = np.array([poly.centroid.x, poly.centroid.y])
         a_f, a_b = brng.uniform(*_MORPH_A, 2)
         b_f, b_b = brng.uniform(*_MORPH_B, 2)
-        pz = brng.uniform(*_BED_FLAT_EXP)
+        pz = brng.uniform(*self.bed_flat_exp)
         pole_f = ctr + brng.uniform(-_POLE_DRIFT_FRAC,
                                     _POLE_DRIFT_FRAC, 2) * span
         pole_b = ctr + brng.uniform(-_POLE_DRIFT_FRAC,

@@ -23,6 +23,7 @@ import trimesh
 
 from .core.color import Material, export_color_stl, tag as _tag
 from .core.config import BaseConfig, SurfaceConfig
+from .stone import separate_pinches
 
 
 def _attach_and_export(
@@ -37,6 +38,13 @@ def _attach_and_export(
     _tag(base_mesh, Material.BASE)
     all_meshes = [base_mesh] + list(colored_meshes)
     combined   = trimesh.util.concatenate(all_meshes)
+    # STL stores float32 and readers merge vertices by position: any two
+    # bodies whose surfaces touch to within the float32 grid fuse into a
+    # non-manifold pinch on reload.  Per-layer unions already guard their
+    # own interiors; this catches contacts BETWEEN groups (stone against
+    # sealed terrain, wall against soil) in the one mesh the STL actually
+    # stores.  Sub-micron nudge — invisible at print scale.
+    separate_pinches(combined)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     export_color_stl(combined, output_path)
     return combined, all_meshes
