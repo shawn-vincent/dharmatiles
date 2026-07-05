@@ -342,6 +342,7 @@ class CutStoneWall:
 
         wall = trimesh.boolean.union(parts, engine='manifold')
         wall = self._clip_to_tile(wall, surface)
+        self._separate_pinches(wall)
         if not wall.is_watertight:
             warnings.warn('CutStoneWall union is not watertight',
                           RuntimeWarning)
@@ -482,6 +483,33 @@ class CutStoneWall:
         sl = scene.terrain_support_z[j0:j1, i0:i1]
         np.maximum(sl, np.where(inside, cap_z, -np.inf), out=sl)
         scene.obstacle_mask[j0:j1, i0:i1] |= inside
+
+    @staticmethod
+    def _separate_pinches(wall: trimesh.Trimesh) -> None:
+        """Nudge apart vertex pairs that coincide WITHOUT being
+        topologically connected.  Zero-gap stones + texture displacement
+        leave near-zero clearances somewhere every build; the mesh stays
+        index-manifold, but STL export merges vertices by POSITION on
+        reload, collapsing such a pinch into a non-manifold edge
+        (fieldstone E23).  Moving each vertex 0.15 µm inward along its
+        own normal keeps every contact separated past the float32
+        grid (~0.004 µm at these coordinates)."""
+        from scipy.spatial import cKDTree
+        v = wall.vertices.view(np.ndarray)
+        pairs = cKDTree(v).query_pairs(2e-4, output_type='ndarray')
+        if len(pairs) == 0:
+            return
+        adjacent = {tuple(e) for e in np.sort(wall.edges_unique, axis=1)}
+        vn = np.asarray(wall.vertex_normals)
+        moved = False
+        for i, j in pairs:
+            if (min(i, j), max(i, j)) in adjacent:
+                continue
+            v[i] -= vn[i] * 1.5e-4
+            v[j] -= vn[j] * 1.5e-4
+            moved = True
+        if moved:
+            wall.vertices = v
 
     @staticmethod
     def _clip_to_tile(wall: trimesh.Trimesh, surface) -> trimesh.Trimesh:

@@ -102,12 +102,14 @@ _POLE_DRIFT_FRAC  = 0.12          # each pole wanders up to this × the
                                   # outline size from the centroid: the
                                   # summit of the dome is off-centre,
                                   # like a real cobble
-_BED_FLAT_EXP     = (0.22, 0.42)  # z-scale = s^p (E19): the bed
+_BED_FLAT_EXP     = (0.30, 0.52)  # z-scale = s^p (E19): the bed
                                   # surfaces stay near-FLAT over most of
                                   # the depth and only turn down close
                                   # to the face poles — we're piling
                                   # flat stones, not spheres.  Smaller
-                                  # exponent = flatter beds
+                                  # exponent = flatter beds (E23: raised
+                                  # from 0.22–0.42 — "a bit" rounder
+                                  # tops/bottoms)
 _PROUD_MM         = (0.10, 0.50)  # per-stone face recession (both faces)
 _PROUD_DEEP_PROB  = 0.12          # a rare stone sits notably deeper —
 _PROUD_DEEP_MM    = (0.70, 1.10)  # the odd deep stone the references show
