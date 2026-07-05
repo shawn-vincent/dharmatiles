@@ -174,7 +174,8 @@ class TextReporter(TileReporter):
     # ── Export ───────────────────────────────────────────────────────────────
 
     def export_done(self, suffix, path, n_verts, n_faces, watertight, elapsed) -> None:
-        wt = "watertight" if watertight else "NOT watertight"
+        wt = ("not checked" if watertight is None
+              else "watertight" if watertight else "NOT watertight")
         label = f"Export [{suffix}]"
         detail = f"{wt}  {n_verts:,} verts · {n_faces:,} faces  → {path}"
         self.step_end(label, elapsed, detail)
@@ -428,8 +429,11 @@ class RichReporter(TileReporter):
 
     def export_done(self, suffix, path, n_verts, n_faces, watertight, elapsed) -> None:
         self._stop_status()
-        wt_icon  = "[green]●[/green]" if watertight else "[bold red]✗[/bold red]"
-        wt_label = "watertight" if watertight else "NOT watertight"
+        if watertight is None:
+            wt_icon, wt_label = "[dim]○[/dim]", "not checked"
+        else:
+            wt_icon  = "[green]●[/green]" if watertight else "[bold red]✗[/bold red]"
+            wt_label = "watertight" if watertight else "NOT watertight"
         tc = self._table_time_color(elapsed)
         self._console.print(
             f"  [green]✓[/green] Export [{suffix}]"
