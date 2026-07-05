@@ -166,13 +166,17 @@ must hold.  One commit per stage.
   egg, crown_flat, blockiness)` replacing `_support_points` internals
   and `_rubble_mesh` sampling; fold D6/D7 helpers into their call
   sites.
-- **Stage 4 — unit kernel + shared configurability.**  Document
-  `_unit_mesh`/`_place_block` as the family axis on the chassis;
-  promote the look-defining fieldstone module constants to ctor
-  parameters (defaults unchanged, grouped and named in the same
-  vocabulary as `StoneSpec`/cut-stone: `roundover`, relief amplitudes,
-  overlaps, morph exponents); the finish knobs mean the same thing in
-  all three families.
+- **Stage 4 — unit kernel + shared configurability + export
+  robustness.**  Document the chassis subclass hooks as the family
+  axis; promote the look-defining fieldstone constants to ctor
+  parameters (`wobble_amp_mm`, `head_overlap_mm`, `bed_overlap_mm`,
+  `proud_mm`, `bed_flat_exp` — defaults = the approved E25 look); new
+  `docs/walls/walls-e7-variants.tile.py` demo (slab / default / cobble
+  fieldstone + dressed cut stone on one tile) added to the demo set;
+  and `separate_pinches` runs on the final concatenated mesh in
+  `_attach_and_export` — the three baseline non-watertight demo scenes
+  were cross-group pinches (stone against sealed terrain) that no
+  per-layer fix could see.
 - **Stage 5 — docs + final demo set.**  CLAUDE.md architecture table
   (add `walls/` + `stone/`, fix `scatter/stones.py`, drop
   `layers/rocks.py`), design-doc notes, regenerate everything.

@@ -82,10 +82,12 @@ Tile (.tile.py) ──► build_tile_from_spec()
          SoilCarpet    — blob texture into terrain_z
          GrassCarpet   — embossed 2D blade stamps into terrain_z
          Scatter(
-             Rocks(...),    — vectorised half-ellipsoids; stamp support_z
+             Rocks(...),    — faceted bedded stones; stamp support_z
              Grass(...),    — plant + grow 3D blades around rocks
              Tree(...),— space-colonisation trees (see below)
          )
+         CutStoneWall / FieldstoneWall — per-unit masonry walls on a
+                         plan spine (chassis + unit kernel)
          Water         — reshape pool floor, emit water volume mesh
                 │
                 ▼
@@ -126,10 +128,13 @@ Tile (.tile.py) ──► build_tile_from_spec()
 | `scatter/config.py` | `ScatterConfig` — spatial distribution params (groups, gap, dir mode) |
 | `scatter/seed.py` | `RockSeed` — fully-resolved rock instance with `sort_key()` |
 | `scatter/distribute.py` | Voronoi grouping, jitter grid, `scatter_positions()` — shared by rocks + grass |
-| `scatter/prototype.py` | `Rocks` + `Grass` — direct tile layers with `apply()` + `scatter(scene, ...)` |
+| `scatter/prototype.py` | `Rocks` (adapter over `scatter/stones.py`) + `Grass` — direct tile layers |
+| `scatter/stones.py` | Faceted stone primitive: `StoneSpec`, `build_stone()` (hull → weathering → aged relief → overhang audit), crack engraving, `FacetedStones` + `StoneField` layers |
+| `stone/` | Shared stone-making primitives for ALL families: `relief_field`, `blur_remesh`, `round_edges`, `aged_relief` (the signature texture pass), `fibonacci_sphere`, `rubble_stone`, export guarantees (`separate_pinches`, `clip_to_box`, `survives_stl32`) |
+| `walls/masonry.py` | Masonry CHASSIS (layout, core, quoins, union, clip, stamp) + `CutStoneWall`; subclass hooks are the family axis |
+| `walls/fieldstone.py` | `FieldstoneWall` — crack-network tessellation, sphere-morph stones, rubble hearting |
 | `layers/__init__.py` | Public layer classes: `SoilCarpet`, `GrassCarpet`, `Water` |
 | `layers/soil.py` | `SoilCarpet` — two-tier super-Gaussian blobs into terrain_z |
-| `layers/rocks.py` | `_build_rocks_mesh_core` / `_build_rocks_mesh_from_seeds` — vectorised half-ellipsoid kernel |
 | `layers/grass_carpet.py` | `GrassCarpet` — embossed 2D blade-stamp texture into terrain_z |
 | `layers/water.py` | `Water` — pool-floor reshape, displacement, ripples, volume mesh |
 | `trees/envelope.py` | `CanopyEnvelope` — axisymmetric canopy envelope dataclass |
@@ -143,7 +148,7 @@ Tile (.tile.py) ──► build_tile_from_spec()
 | `bases/openlock.py` | OpenLOCK T-slot base via manifold3d CSG; STL export |
 | `terrains/tile.py` | Entry point: `build_tile_from_spec()` flat orchestrator + CLI |
 
-`core/` modules are pure primitives (array in / array out). `grass/` holds the grass growth sub-pipeline. `scatter/` holds direct tile layers for placed elements (Rocks, Grass, Flowers) plus distribution primitives. `layers/` has terrain-texture layers (soil, grass carpet, water). `trees/` holds the Tree generator (also a direct tile layer). `bases/` attaches system-specific underside geometry. `terrains/` is the entry point that assembles everything.
+`core/` modules are pure primitives (array in / array out). `stone/` holds family-independent stone-making primitives (shape, finish, export guarantees) shared by scatter stones and all wall families. `grass/` holds the grass growth sub-pipeline. `scatter/` holds direct tile layers for placed elements (Rocks, Grass, Flowers) plus distribution primitives. `walls/` holds the masonry chassis and wall families. `layers/` has terrain-texture layers (soil, grass carpet, water). `trees/` holds the Tree generator (also a direct tile layer). `bases/` attaches system-specific underside geometry. `terrains/` is the entry point that assembles everything.
 
 ### Tile Format (`.tile.py` files)
 
@@ -186,10 +191,12 @@ Layer ordering in `Region.layers` is the contract for state dependencies:
 
 | Class | Effect | `height_default_mm` |
 |---|---|---|
-| `Rocks(*, placement=…, **RocksConfig kwargs)` | Vectorised half-ellipsoid rocks; stamps `terrain_support_z` + `obstacle_mask` | 5.0 |
+| `Rocks(*, placement=…, **RocksConfig kwargs)` | Faceted bedded stones (adapter over `scatter/stones.py`; legacy size params map to `StoneSpec`); stamps `terrain_support_z` + `obstacle_mask` | 5.0 |
+| `FacetedStones(stones=[StoneSpec, …])` / `StoneField(placement=…)` | Explicitly authored / cluster-sampled faceted stones (`dharmatiles.scatter.stones`) | 5.0 |
 | `Grass(species=…, *, placement=…, max_stack_height=…)` | 3D blades grown as a field simulation around prior obstacles | 5.0 |
 | `Flowers(*, placement=…, **FlowerConfig kwargs)` | Dome-on-column 3D flowers; stamps `terrain_support_z` + `obstacle_mask` | 5.0 |
 | `Tree(height_mm=…, canopy_radius_mm=…, placement=…, **kwargs)` | Space-colonisation tree (see Tree section) | 5.0 |
+| `CutStoneWall(spine=…, texture=…, …)` / `FieldstoneWall(spine=…, …)` | Per-unit masonry walls on a plan spine (`dharmatiles.walls`); stamp `terrain_support_z` + `obstacle_mask` | 5.0 |
 
 `Region` height falls back to its first layer's `height_default_mm` when
 `height_mm=None`.  Boundary curves go from one tile edge to another;
@@ -362,9 +369,11 @@ All geometry layers (soil, rocks, grass) treat the terrain surface as **locally 
 src/dharmatiles/
   spec.py        Tile / Region / Boundary + TileLayer protocol + load_tile
   core/          pure primitives: config, tile, region, mesh, grid, terrain, logo
-  scatter/       direct placement layers: Rocks, Grass, Flowers + config, seed, distribute
+  stone/         shared stone-making primitives: shape, finish (aged relief), surface, solidify (export guarantees)
+  scatter/       direct placement layers: Rocks, Grass, Flowers, stones.py (faceted stones) + config, seed, distribute
+  walls/         masonry chassis (masonry.py: CutStoneWall) + families (fieldstone.py: FieldstoneWall)
   grass/         grass growth sub-pipeline: seed, grow, mesh, growers/, _geometry, layer, config
-  layers/        soil.py, rocks.py (kernel), grass_carpet.py, water.py
+  layers/        soil.py, grass_carpet.py, water.py
   trees/         Tree generator: envelope, skeleton, mesh, leaf, placement_leaf, placement_organic, bark, layer
   bases/         dungeonblocks.py, openlock.py
   terrains/      tile.py (main entry point + CLI)
