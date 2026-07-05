@@ -179,7 +179,14 @@ class FieldstoneWall(CutStoneWall):
     def __init__(self, spine, *,
                  course_mm: tuple[float, float] = (2.8, 7.5),
                  bay_mm:    tuple[float, float] = (5.0, 16.0),
-                 joint_mm:  float = 0.5,
+                 joint_mm:  float = 0.1,   # physical crack gap (Shawn E14:
+                                           # nonzero but hairline).  The
+                                           # VISIBLE crack stays wider: the
+                                           # belly taper opens each stone
+                                           # ~0.2–0.5 mm at the face plane,
+                                           # so the face shows a dark
+                                           # V-groove that closes to this
+                                           # gap at mid-depth
                  reveal_mm: float = 2.8,
                  roundover_mm: float | None = 0.42,
                  relief_mm:    float | None = 0.10,
