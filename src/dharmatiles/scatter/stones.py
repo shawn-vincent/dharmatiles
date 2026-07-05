@@ -23,8 +23,8 @@ import trimesh
 from ..core.grid import sample_grid
 from ..core.color import Material, tag as _tag
 from ..core.tile import derive_seed
-from ..stone import (blur_remesh, clip_to_box, relief_field, round_edges,
-                     survives_stl32)
+from ..stone import (aged_relief, blur_remesh, clip_to_box, relief_field,
+                     round_edges, survives_stl32)
 from .config import Uniform
 from .distribute import scatter_positions
 
@@ -506,20 +506,10 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
                 # as regular diamond banding on a regular tessellation; real
                 # granite grain breaks the regularity (and fresh rock has
                 # tooth too — half the aged amplitude).
-                pq  = np.asarray(dq.vertices)
-                _sn3 = trimesh.Trimesh(vertices=pq.copy(),
-                                       faces=np.asarray(dq.faces).copy(),
-                                       process=False)
-                trimesh.smoothing.filter_taubin(_sn3, iterations=10)
-                vnq = np.asarray(_sn3.vertex_normals)
-                _cd3 = np.linalg.norm(pq - np.asarray(_sn3.vertices),
-                                      axis=1)
-                cdq = 1.0 / (1.0 + (_cd3 / 0.35) ** 2)
-                gq = 0.7 * relief_field(pq, w_rng, 16, 0.6, 3.2,
-                                         spectral=0.7)
                 amp_q = 0.5 * np.clip(_MICRO_AMP_FRAC * spec.footprint_mm,
                                       *_MICRO_AMP_MM)
-                v_loc = pq + vnq * (amp_q * 0.5 * gq * cdq)[:, None]
+                v_loc = aged_relief(dq, w_rng,
+                                    grain=(amp_q, 0.6, 3.2), grain_mix=0.5)
                 faces = np.asarray(dq.faces)
 
     if bites:
@@ -589,73 +579,27 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
                     warnings.warn(f'scar cut failed: {exc}', RuntimeWarning)
 
         if aged.is_watertight:
-            # Organic undulation AFTER smoothing (or it gets smoothed
-            # away): sum of random plane waves displaces the surface
-            # along its normals into pillowy bulges and saddles.
+            # The shared aged-relief pass (stone/finish.py): pillowy
+            # undulation AFTER smoothing (or it gets smoothed away) +
+            # granular drybrush tooth (E10) × patchy envelope (E11) ×
+            # curvature damp, with the protected hero face kept calm.
             # Amplitude scales with footprint too (E9): fixed-mm bulges
             # vanish on hero-sized stones.
             u_rng = np.random.default_rng((spec.seed ^ 0x0DDA) & 0x7FFFFFFF)
-            p  = np.asarray(aged.vertices)
-            # Smoothed normal field + curvature damping: normal relief
-            # folds wherever amplitude exceeds the local concave radius
-            # (scar rims, groove valleys).  |p - p_relaxed| is a cheap
-            # curvature proxy — relief fades where the surface is tight,
-            # which also reads right (scar interiors shouldn't be grainy).
-            _sn2 = trimesh.Trimesh(vertices=p.copy(),
-                                   faces=np.asarray(aged.faces).copy(),
-                                   process=False)
-            trimesh.smoothing.filter_taubin(_sn2, iterations=10)
-            vn = np.asarray(_sn2.vertex_normals)
-            # Scale 0.35, not 0.12: residual voxel-stairstep curvature
-            # (~0.05 mm) must NOT modulate the relief, or the displacement
-            # amplitude banding paints the z-contours as terraces across
-            # the whole stone (Shawn's MeshLab find on all four heroes).
-            # Only genuinely tight features (scar rims, ~0.4 mm+) damp.
-            _cd = np.linalg.norm(p - np.asarray(_sn2.vertices), axis=1)
-            curv_damp = 1.0 / (1.0 + (_cd / 0.35) ** 2)
-            # Broadband pillowing: log-uniform wavelengths from foot/4.5
-            # up to foot/1.6 — narrowband bulges read as one bump size.
-            f = 0.35 * relief_field(p, u_rng, 6,
-                                     spec.footprint_mm / 4.5,
-                                     spec.footprint_mm / 1.6,
-                                     spectral=1.0)
             amp = (_UNDULATE_FRAC * spec.roundover_mm
                    + _UNDULATE_FOOT * max(spec.footprint_mm - 8.0, 0.0)
                      * min(spec.roundover_mm, 1.0))
-
-            # Micro-texture: granular drybrush tooth (E10), broadband
-            # 0.6–3.2 mm — prints on a 0.4 mm nozzle, kills the glass
-            # read without the egg-carton regularity.
-            g = 0.7 * relief_field(p, u_rng, 16, 0.6, 3.2,
-                                    spectral=0.7)
-            amp_g = np.clip(_MICRO_AMP_FRAC * spec.footprint_mm,
-                            *_MICRO_AMP_MM)
-
-            # Patchy envelope (E11): quiet fields vs active shoulders.
-            # Uniform texture is its own monotony — the references get
-            # their gravitas from CONTRAST between calm and incident.
-            env = np.zeros(len(p))
-            for _ in range(3):
-                d = u_rng.normal(size=3)
-                d /= np.linalg.norm(d) + 1e-12
-                ewl = spec.footprint_mm / u_rng.uniform(0.9, 1.4)
-                env += np.cos(2.0 * np.pi / ewl * (p @ d)
-                              + u_rng.uniform(0.0, 2.0 * np.pi))
-            env = _ENV_FLOOR + (1.0 - _ENV_FLOOR) * np.clip(
-                0.5 + 0.75 * env / 3.0, 0.0, 1.0)
-
-            # Hero-face damping: displacement fades near the protected
-            # plane so one calm facet survives aging.
-            damp = 1.0
-            if face_n is not None:
-                align = np.clip(vn @ face_n, 0.0, None) ** 2
-                dpl   = np.abs((p - face_c) @ face_n)
-                wf    = align * np.exp(-(dpl / (0.18 * spec.footprint_mm))
-                                       ** 2)
-                damp  = 1.0 - _FACE_CALM * wf
-
-            v_loc = p + vn * ((amp * f + amp_g * 0.5 * g)
-                              * env * damp * curv_damp)[:, None]
+            amp_g = float(np.clip(_MICRO_AMP_FRAC * spec.footprint_mm,
+                                  *_MICRO_AMP_MM))
+            v_loc = aged_relief(
+                aged, u_rng,
+                broad=(amp, spec.footprint_mm / 4.5,
+                       spec.footprint_mm / 1.6),
+                grain=(amp_g, 0.6, 3.2), grain_mix=0.5,
+                env=(_ENV_FLOOR, spec.footprint_mm),
+                hero=(None if face_n is None else
+                      (face_n, face_c, _FACE_CALM,
+                       0.18 * spec.footprint_mm)))
             faces = np.asarray(aged.faces)
 
     lean, burial = spec.lean_deg, spec.burial
