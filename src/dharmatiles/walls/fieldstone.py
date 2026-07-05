@@ -61,7 +61,15 @@ _DRIFT_MM         = 2.2           # head joints slant up to ±this across
 # Stone body (E15: no belly/pillow, no relief — "just the cracks and
 # the roundovers".  Stones are straight extruded prisms; every corner
 # is rounded: outline corners by the 2D buffer, face↔side edges by a
-# circular-arc inset over the first/last roundover_mm of depth)
+# circular-arc inset over the first/last roundover of depth.  E16: the
+# roundover is drawn PER STONE from `roundover_mm` and is big — worn
+# pebble shoulders, not a chamfer)
+_ROUND_SIZE_CAP   = 0.22          # per-stone roundover ≤ this × the
+                                  # outline's smaller bbox dimension: a
+                                  # stone must keep ≥ ~55 % of its face
+                                  # flat — at 0.38 the roundover ate the
+                                  # faces of thin stones and they read
+                                  # as dark slots (E16 first render)
 _PROUD_MM         = (0.10, 0.50)  # per-stone face recession (both faces)
 _PROUD_DEEP_PROB  = 0.12          # a rare stone sits notably deeper —
 _PROUD_DEEP_MM    = (0.70, 1.10)  # the odd deep stone the references show
@@ -185,7 +193,7 @@ class FieldstoneWall(CutStoneWall):
                                            # a dark V-groove that closes to
                                            # this gap at roundover depth
                  reveal_mm: float = 2.8,
-                 roundover_mm: float | None = 0.42,
+                 roundover_mm: tuple[float, float] = (0.9, 2.0),
                  relief_mm:    float | None = 0.0,
                  relief_wl:    tuple[float, float] | None = (3.0, 9.0),
                  min_bond_mm:  float = 1.8,
@@ -318,14 +326,17 @@ class FieldstoneWall(CutStoneWall):
 
     # ── the stone ────────────────────────────────────────────────────────────
     @staticmethod
-    def _cap_triangulation(ring: np.ndarray, poly) -> tuple:
+    def _cap_triangulation(ring: np.ndarray, poly,
+                           clearance: float) -> tuple:
         """Well-shaped triangulation of the face polygon: Delaunay over
-        the ring plus a ~1.4 mm interior grid (clear of the boundary so
-        ring edges stay locally Delaunay and the cap seams onto the
-        loft), triangles filtered to the polygon interior."""
+        the ring plus a ~1.4 mm interior grid, triangles filtered to
+        the polygon interior.  ``clearance`` keeps the grid inside the
+        ROUNDED-OVER face boundary (ring inset by the roundover at the
+        face plane) and far enough off it that ring edges stay locally
+        Delaunay and the cap seams onto the loft."""
         import scipy.spatial as _ss
         import shapely as _sh
-        inner = poly.buffer(-1.0)
+        inner = poly.buffer(-clearance)
         pts = np.empty((0, 2))
         if not inner.is_empty:
             x0, z0, x1, z1 = inner.bounds
@@ -403,8 +414,12 @@ class FieldstoneWall(CutStoneWall):
         outline = self._outline(cell, seg, cell.seg)
 
         # Inset by half the crack, round the corners (negative-positive
-        # buffer): the crack is a real thin gap by construction.
-        r = self.roundover_mm
+        # buffer): the crack is a real thin gap by construction.  The
+        # roundover is drawn per stone (E16), capped by the stone's own
+        # size so small stones don't vanish in the inset.
+        span = outline.max(axis=0) - outline.min(axis=0)
+        r = min(float(brng.uniform(*self.roundover_mm)),
+                _ROUND_SIZE_CAP * float(min(span)))
         poly = sgeom.Polygon(outline)
         if not poly.is_valid:
             poly = poly.buffer(0.0)
@@ -441,8 +456,15 @@ class FieldstoneWall(CutStoneWall):
         tang = np.roll(ring, -1, axis=0) - np.roll(ring, 1, axis=0)
         nrm = np.column_stack([tang[:, 1], -tang[:, 0]])       # CCW → out
         nrm /= np.linalg.norm(nrm, axis=1, keepdims=True) + 1e-12
+        # Smooth the normal field: with the big E16 roundovers the
+        # inward offset approaches local feature size on concave
+        # stretches (drift jogs), and raw vertex normals would fold.
+        for _ in range(2):
+            nrm += 0.5 * (np.roll(nrm, 1, axis=0)
+                          + np.roll(nrm, -1, axis=0))
+            nrm /= np.linalg.norm(nrm, axis=1, keepdims=True) + 1e-12
 
-        r3 = self.roundover_mm
+        r3 = r
         e_front = [t * r3 for t in _ARC_T]
         stations = ([y0 + e for e in e_front]
                     + [(y0 + y1) / 2.0]
@@ -474,7 +496,7 @@ class FieldstoneWall(CutStoneWall):
         # filtered to the polygon; earcut fallback if the seam fails.
         # Front and back stations carry the SAME scale (belly = 0 at
         # both ends), so one triangulation serves both caps.
-        extras, capf = self._cap_triangulation(ring, poly)
+        extras, capf = self._cap_triangulation(ring, poly, r3 + 0.4)
         m = len(extras)
         if m:
             verts.append(np.column_stack(
