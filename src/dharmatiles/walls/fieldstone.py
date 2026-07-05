@@ -46,18 +46,35 @@ from .masonry import CutStoneWall, _Cell, _Seg
 
 # ── Iteration knobs (module constants while prototyping) ─────────────────────
 # Crack network
-_WOBBLE_AMP_MM    = (0.14, 0.32)  # per-sine bed wobble amplitude (2 sines).
-                                  # Total ≤ 0.64: two INDEPENDENT beds can
-                                  # close on each other by twice that, and
-                                  # the thinnest stones (split pairs of a
-                                  # 5.5 mm course at 2.8–7.5 mm courses)
-                                  # are ~2.5 mm — the beds must never cross
-_WOBBLE_WL_MM     = (14.0, 40.0)  # bed wobble wavelengths
+_WOBBLE_AMP_MM    = (0.16, 0.38)  # per-sine bed wobble amplitude (2 sines).
+                                  # Total ≤ 0.76: two INDEPENDENT beds can
+                                  # close on each other by twice that —
+                                  # the course minimum (2.6) keeps the
+                                  # thinnest waists ≥ ~1 mm (chink-class,
+                                  # never crossing)
+_WOBBLE_WL_MM     = (11.0, 32.0)  # bed wobble wavelengths (E21: shorter
+                                  # = more wander per stone width)
 _WOBBLE_TAPER_MM  = 12.0          # wobble fades to 0 within this of a
                                   # segment end: corners/butt ends pack
                                   # straight and tight
 _DRIFT_MM         = 2.2           # head joints slant up to ±this across
                                   # their course (staggered, never aligned)
+_BOW_MM           = 1.1           # head joints BOW up to ±this at their
+                                  # midpoint (E21 wandery cracks): the
+                                  # joint is a shared parabola, zero at
+                                  # the bed lines, both neighbours
+                                  # evaluating the same curve
+_RING_NOISE_MM    = (0.04, 0.16)  # per-stone INWARD-only outline noise
+                                  # (floor, max; 2 sinusoids over the
+                                  # perimeter): irregular stone shapes +
+                                  # cracks that open and close along
+                                  # their run.  Inward-only, so the
+                                  # no-overlap guarantee is untouched.
+                                  # The FLOOR keeps contacts hairline-
+                                  # separated instead of exactly tangent
+                                  # — an exact-tangency pinch survived
+                                  # the union as one non-manifold edge
+                                  # after float32 STL rounding (E21)
 # Stone body (E17: full pebble morph — "an isosphere morphed to fit
 # the outline/depth of the cracked region".  Sphere topology: longitude
 # follows the crack-bounded outline (the EQUATOR ring is the outline at
@@ -66,11 +83,12 @@ _DRIFT_MM         = 2.2           # head joints slant up to ±this across
 # Every surface is curved; there are no flat faces and no arris lines.
 # `roundover_mm` still rounds the 2D outline corners — the equator
 # silhouette — per stone)
-_ROUND_SIZE_CAP   = 0.22          # per-stone 2D roundover ≤ this × the
+_ROUND_SIZE_CAP   = 0.26          # per-stone 2D roundover ≤ this × the
                                   # outline's smaller bbox dimension
-                                  # (thin stones must keep their face)
+                                  # (thin stones must keep their face;
+                                  # 0.38 made dark slots of them, E16)
 _MORPH_A          = (2.0, 3.2)    # superellipse meridian s=(1−|u|^a)^b,
-_MORPH_B          = (0.30, 0.45)  # u=sin(lat): a=2,b=0.5 is a true
+_MORPH_B          = (0.33, 0.48)  # u=sin(lat): a=2,b=0.5 is a true
                                   # ellipse — which read as MELTED dough
                                   # (all curvature at the silhouette,
                                   # equator-line contact, cracks became
@@ -154,7 +172,7 @@ class FieldstoneWall(CutStoneWall):
     """
 
     def __init__(self, spine, *,
-                 course_mm: tuple[float, float] = (2.3, 6.2),
+                 course_mm: tuple[float, float] = (2.6, 6.2),
                  bay_mm:    tuple[float, float] = (5.0, 16.0),
                  joint_mm:  float = 0.0,   # physical crack gap (Shawn E18:
                                            # zero — stones TOUCH at their
@@ -164,7 +182,7 @@ class FieldstoneWall(CutStoneWall):
                                            # meeting there, a V-groove
                                            # with no gap at its root)
                  reveal_mm: float = 2.8,
-                 roundover_mm: tuple[float, float] = (0.9, 2.0),
+                 roundover_mm: tuple[float, float] = (1.3, 2.6),
                  relief_mm:    float | None = None,
                  relief_wl:    tuple[float, float] | None = (3.0, 9.0),
                  min_bond_mm:  float = 1.8,
@@ -179,7 +197,7 @@ class FieldstoneWall(CutStoneWall):
         # the stone's footprint" (_stone_texture) — restore it.
         self.relief_mm = relief_mm
         self._beds:   dict[tuple, tuple] = {}   # (seg, zkey) → sine params
-        self._drifts: dict[tuple, float] = {}   # (seg, course, tkey) → drift
+        self._drifts: dict[tuple, tuple] = {}   # (seg,course,tkey) → (d,bow)
 
     # ── shared crack curves ──────────────────────────────────────────────────
     # Both stones flanking a crack evaluate the SAME curve (cached by a
@@ -209,12 +227,15 @@ class FieldstoneWall(CutStoneWall):
             return w * taper
         return f
 
-    def _drift(self, seg_i: int, course: int, t: float) -> float:
-        """Slant of the head joint at cut position t in this course."""
+    def _drift(self, seg_i: int, course: int, t: float) -> tuple:
+        """(slant, bow) of the head joint at cut position t in this
+        course — a shared parabola: zero at the bed lines, bowing at
+        the midpoint, slanting across the course."""
         key = (seg_i, course, int(round(t * 100.0)))
         if key not in self._drifts:
             rng = self._feature_rng(11, *key)
-            self._drifts[key] = float(rng.uniform(-_DRIFT_MM, _DRIFT_MM))
+            self._drifts[key] = (float(rng.uniform(-_DRIFT_MM, _DRIFT_MM)),
+                                 float(rng.uniform(-_BOW_MM, _BOW_MM)))
         return self._drifts[key]
 
     # ── cell topology ────────────────────────────────────────────────────────
@@ -327,11 +348,14 @@ class FieldstoneWall(CutStoneWall):
                         (t_cut, zeff(cell.z1, t_cut))]
             pts = []
             for crs, zb0, zb1 in bands:
-                d = self._drift(seg_i, crs, t_cut)
+                d, bow = self._drift(seg_i, crs, t_cut)
                 zm = (zb0 + zb1) / 2.0
-                for zb in (zb0, zb1):
-                    t = t_cut + d * (zb - zm) / (zb1 - zb0)
-                    pts.append((t, zeff(zb, t)))
+                hh = (zb1 - zb0) / 2.0
+                for z in np.linspace(zb0, zb1, 5):
+                    q = (z - zm) / hh
+                    t = t_cut + d * q / 2.0 + bow * (1.0 - q * q)
+                    zpt = zeff(z, t) if z in (zb0, zb1) else z
+                    pts.append((t, zpt))
             return pts
 
         left  = side(cell.t0, cell.end0)
@@ -388,6 +412,27 @@ class FieldstoneWall(CutStoneWall):
         dense = shapely.segmentize(poly, _RING_STEP_MM)
         ring = np.asarray(dense.exterior.coords)[:-1]
         n = len(ring)
+
+        # Per-stone INWARD outline noise (E21): irregular silhouettes,
+        # cracks that open and close along their run.  Inward-only, so
+        # the no-overlap tessellation guarantee is untouched.
+        tang = np.roll(ring, -1, axis=0) - np.roll(ring, 1, axis=0)
+        nrm = np.column_stack([tang[:, 1], -tang[:, 0]])     # CCW → out
+        nrm /= np.linalg.norm(nrm, axis=1, keepdims=True) + 1e-12
+        for _ in range(2):
+            nrm += 0.5 * (np.roll(nrm, 1, axis=0)
+                          + np.roll(nrm, -1, axis=0))
+            nrm /= np.linalg.norm(nrm, axis=1, keepdims=True) + 1e-12
+        seglen = np.linalg.norm(
+            np.diff(np.vstack([ring, ring[:1]]), axis=0), axis=1)
+        s_arc = np.concatenate([[0.0], np.cumsum(seglen[:-1])])
+        per = float(seglen.sum())
+        wgt = np.ones(n)
+        for lam, ph in zip(per / brng.uniform(1.5, 3.5, 2),
+                           brng.uniform(0.0, 2.0 * np.pi, 2)):
+            wgt *= 0.5 * (1.0 + np.sin(2.0 * np.pi * s_arc / lam + ph))
+        lo, hi = _RING_NOISE_MM
+        ring = ring - nrm * (lo + (hi - lo) * wgt)[:, None]
 
         # Sphere-morph (E17): latitude rings sweep from the front pole
         # to the back pole; each ring is the outline scaled about the
@@ -498,12 +543,12 @@ class FieldstoneWall(CutStoneWall):
         f = 0.35 * _relief_field(p, brng, 6,
                                  max(foot / 4.5, 1.2),
                                  max(foot / 1.6, 3.0), spectral=1.0)
-        amp = (float(np.clip(0.030 * foot, 0.10, 0.30))
+        amp = (float(np.clip(0.045 * foot, 0.14, 0.45))
                if self.relief_mm is None else self.relief_mm)
         # Granular drybrush tooth (stones.py: 16 waves 0.6–3.2 mm; the
         # low end lifted to the subdivided mesh's ~0.6 mm edge length).
         g = 0.7 * _relief_field(p, brng, 16, 0.9, 3.2, spectral=0.7)
-        amp_g = float(np.clip(0.012 * foot, 0.10, 0.25))
+        amp_g = float(np.clip(0.016 * foot, 0.12, 0.30))
 
         # Patchy envelope: calm fields vs active shoulders.
         env = np.zeros(len(p))
@@ -515,7 +560,7 @@ class FieldstoneWall(CutStoneWall):
                           + brng.uniform(0.0, 2.0 * np.pi))
         env = 0.2 + 0.8 * np.clip(0.5 + 0.75 * env / 3.0, 0.0, 1.0)
 
-        disp = (amp * f + amp_g * 0.5 * g) * env * curv_damp
+        disp = (amp * f + amp_g * 0.6 * g) * env * curv_damp
         return trimesh.Trimesh(vertices=p + vn * disp[:, None],
                                faces=body.faces, process=False)
 
