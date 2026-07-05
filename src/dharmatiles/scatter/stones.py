@@ -23,8 +23,8 @@ import trimesh
 from ..core.grid import sample_grid
 from ..core.color import Material, tag as _tag
 from ..core.tile import derive_seed
-from ..stone import (aged_relief, blur_remesh, clip_to_box, relief_field,
-                     round_edges, survives_stl32)
+from ..stone import (aged_relief, blur_remesh, clip_to_box, fibonacci_sphere,
+                     relief_field, round_edges, survives_stl32)
 from .config import Uniform
 from .distribute import scatter_positions
 
@@ -186,13 +186,7 @@ def _support_points(spec: StoneSpec) -> np.ndarray:
     """M lumpy support points on the stone's local ellipsoid (z = up)."""
     M   = spec.facets
     rng = np.random.default_rng(spec.seed)
-
-    i     = np.arange(M) + 0.5
-    phi   = np.arccos(1.0 - 2.0 * i / M)           # polar
-    theta = np.pi * (1.0 + np.sqrt(5.0)) * i        # golden-angle azimuth
-    d = np.stack([np.sin(phi) * np.cos(theta),
-                  np.sin(phi) * np.sin(theta),
-                  np.cos(phi)], axis=1)
+    d   = fibonacci_sphere(M)
 
     # Tangent jitter, bounded to a fraction of the Fibonacci spacing so the
     # minimum angular separation (facet-size floor, R3) survives.

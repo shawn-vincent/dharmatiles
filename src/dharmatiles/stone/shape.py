@@ -4,6 +4,12 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
+# Rubble-stone character (hearting fill, ruin scatter): a cheap lumpy
+# hull — no remesh/relief, it reads through cracks or under grass a
+# millimetre behind the visible faces.
+_RUBBLE_DIR_JITTER = 0.12
+_RUBBLE_LUMP       = (0.90, 1.0)
+
 _ROUND_JITTER = (0.55, 1.6)   # roundover randomization range —
                               # uniform fillets read CNC, not geology;
                               # the floor keeps every edge VISIBLY
@@ -12,6 +18,42 @@ _ROUND_EDGE_STEP_MM = 1.2     # ball spacing along edges: the radius is
                               # re-rolled at each sample, so the fillet
                               # wobbles ALONG an edge (per-corner-only
                               # radii read as rounded dice)
+
+
+def fibonacci_sphere(n: int) -> np.ndarray:
+    """*n* unit directions in a golden-angle spiral — evenly spread, so
+    hull facet size is bounded from below by construction (R3)."""
+    i     = np.arange(n) + 0.5
+    phi   = np.arccos(1.0 - 2.0 * i / n)           # polar
+    theta = np.pi * (1.0 + np.sqrt(5.0)) * i        # golden-angle azimuth
+    return np.stack([np.sin(phi) * np.cos(theta),
+                     np.sin(phi) * np.sin(theta),
+                     np.cos(phi)], axis=1)
+
+
+def rubble_stone(lx: float, ly: float, lz: float,
+                 rng: np.random.Generator) -> trimesh.Trimesh:
+    """Cheap hull stone: jittered fibonacci directions, an
+    ellipsoid↔box radial blend (per-stone blockiness), light lump, and
+    a small roundover — background filler that costs nothing.  Used by
+    the fieldstone rubble hearting; the shape primitive for any future
+    ruin scatter / core fill."""
+    M = int(rng.integers(13, 18))
+    d = fibonacci_sphere(M)
+    d += rng.normal(0.0, _RUBBLE_DIR_JITTER, d.shape)
+    d[:, 1] *= rng.uniform(0.5, 0.8)
+    d /= np.linalg.norm(d, axis=1, keepdims=True) + 1e-12
+    half = np.array([lx / 2.0, ly / 2.0, lz / 2.0])
+    blockiness = rng.uniform(0.25, 0.55)
+    r_ell = 1.0 / np.sqrt(((d / half) ** 2).sum(axis=1))
+    r_box = 1.0 / (np.abs(d) / half).max(axis=1)
+    r = ((1.0 - blockiness) * r_ell + blockiness * r_box)
+    r *= rng.uniform(*_RUBBLE_LUMP, M)
+    p = d * r[:, None] + half
+    hull = trimesh.convex.convex_hull(p)
+    v, f = round_edges(np.asarray(hull.vertices), np.asarray(hull.faces),
+                       0.35, rng)
+    return trimesh.Trimesh(vertices=v, faces=f, process=False)
 
 
 def round_edges(verts: np.ndarray, faces: np.ndarray,

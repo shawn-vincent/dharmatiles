@@ -41,7 +41,7 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
-from ..stone import aged_relief, round_edges
+from ..stone import aged_relief, rubble_stone
 from .masonry import CutStoneWall, _Cell, _Seg, _frame
 
 # ── Iteration knobs (module constants while prototyping) ─────────────────────
@@ -160,41 +160,11 @@ _RUBBLE_SPACING_MM = 4.2
 _RUBBLE_FOOT      = (8.5, 11.0)
 _RUBBLE_H         = (5.5, 7.5)
 _RUBBLE_SETBACK_MM = 1.6
-# Hull-stone shape (rubble only)
-_LUMP             = (0.90, 1.0)
-_DIR_JITTER       = 0.12
 # Cell-key tags (ints, not strings: _place_block hashes cell.key for the
 # per-stone rng and str hashes vary per process).  Base keys are
 # (course, seg, bay), so tagged keys are longer, never equal.
 _K_THROUGH = 9
 _K_SPLIT_B, _K_SPLIT_T = 1, 2
-
-
-def _rubble_mesh(lx: float, ly: float, lz: float,
-                 rng: np.random.Generator) -> trimesh.Trimesh:
-    """Cheap hull stone for the hearting: reads through cracks a
-    millimetre behind the faces — no remesh/relief for ~100 background
-    stones."""
-    M = int(rng.integers(13, 18))
-    i = np.arange(M) + 0.5
-    phi   = np.arccos(1.0 - 2.0 * i / M)
-    theta = np.pi * (1.0 + np.sqrt(5.0)) * i
-    d = np.stack([np.sin(phi) * np.cos(theta),
-                  np.sin(phi) * np.sin(theta), np.cos(phi)], axis=1)
-    d += rng.normal(0.0, _DIR_JITTER, d.shape)
-    d[:, 1] *= rng.uniform(0.5, 0.8)
-    d /= np.linalg.norm(d, axis=1, keepdims=True) + 1e-12
-    half = np.array([lx / 2.0, ly / 2.0, lz / 2.0])
-    blockiness = rng.uniform(0.25, 0.55)
-    r_ell = 1.0 / np.sqrt(((d / half) ** 2).sum(axis=1))
-    r_box = 1.0 / (np.abs(d) / half).max(axis=1)
-    r = ((1.0 - blockiness) * r_ell + blockiness * r_box)
-    r *= rng.uniform(*_LUMP, M)
-    p = d * r[:, None] + half
-    hull = trimesh.convex.convex_hull(p)
-    v, f = round_edges(np.asarray(hull.vertices), np.asarray(hull.faces),
-                        0.35, rng)
-    return trimesh.Trimesh(vertices=v, faces=f, process=False)
 
 
 class FieldstoneWall(CutStoneWall):
@@ -652,7 +622,7 @@ class FieldstoneWall(CutStoneWall):
                         # stone below, not hearting "mortar".
                         z0 = np.clip(zc - h / 2.0, 0.2,
                                      self._cap_z0 - 0.3 - h)
-                        body = _rubble_mesh(w, yb1 - yb0, h, rng)
+                        body = rubble_stone(w, yb1 - yb0, h, rng)
                         b0, b1 = body.bounds
                         tgt0 = np.array([t0, yb0, z0])
                         tgt1 = np.array([t0 + w, yb1, z0 + h])
