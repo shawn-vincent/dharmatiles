@@ -146,6 +146,17 @@ _PROUD_DEEP_PROB  = 0.15          # a rare stone sits notably deeper —
 _PROUD_DEEP_MM    = (0.70, 1.10)  # the odd deep stone the references show
 _RING_STEP_MM     = 1.2           # outline densify spacing
 _N_LAT            = 17            # latitude rings (poles excluded)
+# Coping (E29): a course of thin stones ON EDGE capping the wall —
+# the classic drystone finish (refs 02/05).  Same complementarity
+# trick as the beds: each coping joint's LEAN is a shared line, so
+# neighbouring coping stones lean together.
+_COPING_H_MM       = 6.5          # coping band height (courses fill H − this)
+_COPING_W_MM       = (2.2, 3.6)   # per-stone width (thin slabs on edge)
+_COPING_LEAN       = 0.30         # max shared joint lean (dt per dz)
+_COPING_TOP_DROP_MM = 1.1         # per-stone top drop below H (ragged line)
+_COPING_OV_MM      = (0.15, 0.35) # sideways pressed contact
+_COPING_SEAT_OV_MM = (0.30, 0.60) # downward press into the course below
+_CORNER_SLAB_MM    = (0.5, 1.5)   # corner coping slab extends T + this
 # Cell topology
 _THROUGH_FRAC     = 0.20          # fraction of eligible cells merged with
                                   # the cell above into a throughstone
@@ -174,6 +185,7 @@ _RUBBLE_SETBACK_MM = 1.3
 # (course, seg, bay), so tagged keys are longer, never equal.
 _K_THROUGH = 9
 _K_SPLIT_B, _K_SPLIT_T = 1, 2
+_K_COPING = 5
 
 
 class FieldstoneWall(CutStoneWall):
@@ -211,6 +223,7 @@ class FieldstoneWall(CutStoneWall):
                  bed_overlap_mm:  tuple[float, float] = _BED_OVERLAP_MM,
                  proud_mm:        tuple[float, float] = _PROUD_MM,
                  bed_flat_exp:    tuple[float, float] = _BED_FLAT_EXP,
+                 coping:          str | None = None,
                  **kwargs):
         super().__init__(spine, course_mm=course_mm, bay_mm=bay_mm,
                          joint_mm=joint_mm, reveal_mm=reveal_mm,
@@ -226,8 +239,13 @@ class FieldstoneWall(CutStoneWall):
         self.bed_overlap_mm  = bed_overlap_mm
         self.proud_mm        = proud_mm
         self.bed_flat_exp    = bed_flat_exp
+        if coping not in (None, 'vertical'):
+            raise ValueError(f"unknown coping style {coping!r}; "
+                             f"options: None (perched rocks), 'vertical'")
+        self.coping          = coping
         self._beds:   dict[tuple, tuple] = {}   # (seg, zkey) → sine params
         self._drifts: dict[tuple, tuple] = {}   # (seg,course,tkey) → (d,bow)
+        self._leans:  dict[tuple, float] = {}   # (seg, tkey) → coping lean
 
     # ── shared crack curves ──────────────────────────────────────────────────
     # Both stones flanking a crack evaluate the SAME curve (cached by a
@@ -268,19 +286,83 @@ class FieldstoneWall(CutStoneWall):
                                  float(rng.uniform(-_BOW_MM, _BOW_MM)))
         return self._drifts[key]
 
+    def _lean(self, seg_i: int, t: float) -> float:
+        """Shared lean (dt per dz) of the coping joint at cut position
+        t — both flanking coping stones evaluate the same slanted line,
+        so the whole course leans together."""
+        key = (seg_i, int(round(t * 100.0)))
+        if key not in self._leans:
+            rng = self._feature_rng(13, *key)
+            self._leans[key] = float(rng.uniform(-_COPING_LEAN,
+                                                 _COPING_LEAN))
+        return self._leans[key]
+
     # ── cell topology ────────────────────────────────────────────────────────
     def _cells(self, segs: list[_Seg], T: float, H: float,
                rng: np.random.Generator) -> list[_Cell]:
         self._beds.clear()
         self._drifts.clear()
-        cells = self._merge_throughstones(super()._cells(segs, T, H, rng),
+        self._leans.clear()
+        # With coping the regular courses stop a band short of H; the
+        # coping course of on-edge stones fills the rest.
+        Hc = H - _COPING_H_MM if self.coping else H
+        cells = self._merge_throughstones(super()._cells(segs, T, Hc, rng),
                                           rng)
         cells = self._split_cells(cells, rng)
+        if self.coping:
+            # The ex-top course is interior now: it takes the normal
+            # head/bed overlaps and its top evaluates the SHARED bed
+            # wobble at Hc — the same curve the coping bottoms use.
+            for c in cells:
+                c.is_top = False
+            cells += self._coping_cells(segs, T, Hc, H, rng)
         # Wall-local z where the top course begins: the core and the
         # rubble hearting stop beneath it (E25 — the top course reads
         # as separate rocks perched on the wall, no mortar between).
         self._cap_z0 = min((c.z0 for c in cells if c.is_top), default=H)
         return cells
+
+    def _coping_cells(self, segs: list[_Seg], T: float, z0: float,
+                      H: float, rng: np.random.Generator) -> list[_Cell]:
+        """One course of thin stones ON EDGE from z0 to H.  Owning
+        segments start/end with a wider corner slab spanning the
+        corner cell (a sliver coping quoin reads broken, E11)."""
+        n_joints = len(segs) - 1
+        out: list[_Cell] = []
+        for k, seg in enumerate(segs):
+            owns_start = k > 0 and (k - 1) % 2 != 0
+            owns_end   = k < n_joints and k % 2 == 0
+            t0 = 0.0 if (k == 0 or owns_start) else T
+            t1 = seg.L if (k == n_joints or owns_end) else seg.L - T
+            # Corner slabs claim their span first.
+            slab0 = slab1 = None
+            if k > 0 and owns_start:
+                slab0 = (0.0, T + float(rng.uniform(*_CORNER_SLAB_MM)))
+                t0 = slab0[1]
+            if k < n_joints and owns_end:
+                slab1 = (seg.L - T - float(rng.uniform(*_CORNER_SLAB_MM)),
+                         seg.L)
+                t1 = slab1[0]
+            span = t1 - t0
+            n = max(1, int(round(span / float(np.mean(_COPING_W_MM)))))
+            w = rng.uniform(*_COPING_W_MM, n)
+            w *= span / w.sum()
+            edges = t0 + np.concatenate([[0.0], np.cumsum(w)])
+            pieces = ([slab0] if slab0 else []) \
+                + list(zip(edges[:-1], edges[1:])) \
+                + ([slab1] if slab1 else [])
+            for b, (ta, tb) in enumerate(pieces):
+                first = ta <= 1e-6 and (k == 0 or owns_start)
+                last  = tb >= seg.L - 1e-6 and (k == n_joints or owns_end)
+                cell = _Cell(
+                    seg=k, t0=float(ta), t1=float(tb),
+                    end0='face' if first else 'joint',
+                    end1='face' if last else 'joint',
+                    z0=z0, z1=H, is_top=True, is_bottom=False,
+                    key=(9000 + k, k, b, _K_COPING))
+                cell.coping = True
+                out.append(cell)
+        return out
 
     def _merge_throughstones(self, cells: list[_Cell],
                              rng: np.random.Generator) -> list[_Cell]:
@@ -366,20 +448,28 @@ class FieldstoneWall(CutStoneWall):
         into pressed contact — except in the top course."""
         bands = getattr(cell, 'side_bands',
                         [(cell.key[0], cell.z0, cell.z1)])
+        coping = getattr(cell, 'coping', False)
         w = cell.t1 - cell.t0
-        if cell.is_top:
+        if coping:
+            # On-edge coping stones press sideways into each other.
+            ov0 = float(brng.uniform(*_COPING_OV_MM))
+            ov1 = float(brng.uniform(*_COPING_OV_MM))
+        elif cell.is_top:
             ov0 = ov1 = 0.0
         else:
             cap = 0.25 * w
             ov0 = min(float(brng.uniform(*self.head_overlap_mm)), cap)
             ov1 = min(float(brng.uniform(*self.head_overlap_mm)), cap)
+        # Coping tops drop individually below H — the ragged coping line.
+        top_drop = (float(brng.uniform(0.0, _COPING_TOP_DROP_MM))
+                    if coping else 0.0)
 
         def zeff(z: float, t: float) -> float:
             """Actual (wobbled) height of the bed line at t."""
             if cell.is_bottom and z <= cell.z0 + 1e-9:
                 return -self.embed_mm          # flat buried seat
             if cell.is_top and z >= cell.z1 - 1e-9:
-                return z                       # flat cap plane (R6)
+                return z - top_drop            # flat cap plane (R6)
             return z + float(self._bed(seg_i, z, seg.L)(t))
 
         def side(t_cut: float, end: str, off: float, inward: float):
@@ -397,6 +487,12 @@ class FieldstoneWall(CutStoneWall):
                 tq = t_cut + inward * _END_MARGIN_MM
                 return [(tq, zeff(cell.z0, tq)),
                         (tq, zeff(cell.z1, tq))]
+            if coping:
+                # Shared lean: both flanking stones evaluate the same
+                # slanted joint line (keyed at t_cut).
+                lean = self._lean(seg_i, t_cut)
+                return [(t_cut + off + lean * (z - cell.z0), zeff(z, t_cut))
+                        for z in (cell.z0, cell.z1)]
             pts = []
             for crs, zb0, zb1 in bands:
                 d, bow = self._drift(seg_i, crs, t_cut)
@@ -431,7 +527,13 @@ class FieldstoneWall(CutStoneWall):
         # so vertically adjacent stones press together like the E24
         # head joints.  Top course exempt (perched rocks); the bottom
         # course keeps its flat buried seat.
-        if not cell.is_top:
+        if coping:
+            # Press down into the course below (which also dilates up).
+            zlo, zhi = pts[:, 1].min(), pts[:, 1].max()
+            u = (pts[:, 1] - zlo) / max(zhi - zlo, 1e-9)
+            ovb = float(brng.uniform(*_COPING_SEAT_OV_MM))
+            pts[:, 1] -= ovb * (1.0 - u)
+        elif not cell.is_top:
             h = cell.z1 - cell.z0
             cap = 0.22 * h
             ovt = min(float(brng.uniform(*self.bed_overlap_mm)), cap)
@@ -536,6 +638,7 @@ class FieldstoneWall(CutStoneWall):
         pole_b = ctr + brng.uniform(-_POLE_DRIFT_FRAC,
                                     _POLE_DRIFT_FRAC, 2) * span
 
+        coping = getattr(cell, 'coping', False)
         K = _N_LAT
         verts = []
         for jlat in range(K):
@@ -546,13 +649,16 @@ class FieldstoneWall(CutStoneWall):
             sk = (1.0 - u ** ae) ** be
             # Anisotropic (E19): t follows the morph, z flattens as
             # sk^pz — beds stay planes over most of the depth, closing
-            # to the pole point only right at the faces.
+            # to the pole point only right at the faces.  Coping stones
+            # lie ON EDGE (E29): their flat "beds" are the SIDES, so
+            # the flattened axis swaps from z to t.
             szk = sk ** pz
+            st_, sz_ = (szk, sk) if coping else (sk, szk)
             rk = np.column_stack([
-                ctr[0] + (pole[0] - ctr[0]) * (1.0 - sk)
-                + (ring[:, 0] - ctr[0]) * sk,
-                ctr[1] + (pole[1] - ctr[1]) * (1.0 - szk)
-                + (ring[:, 1] - ctr[1]) * szk,
+                ctr[0] + (pole[0] - ctr[0]) * (1.0 - st_)
+                + (ring[:, 0] - ctr[0]) * st_,
+                ctr[1] + (pole[1] - ctr[1]) * (1.0 - sz_)
+                + (ring[:, 1] - ctr[1]) * sz_,
             ])
             y = ym + h * np.sin(lat)
             verts.append(np.column_stack([rk[:, 0],

@@ -31,6 +31,7 @@ SCENES = {
     'wall-cut-corner':   ('docs/walls/walls-e2-corner.tile.py',    (20, 135)),
     'wall-fieldstone':   ('docs/walls/walls-e6-fieldstone.tile.py', (20, 135)),
     'wall-brick':        ('docs/walls/walls-e8-brick.tile.py',     (20, 135)),
+    'wall-tops':         ('docs/walls/walls-e9-tops.tile.py',      (25, -155)),
     'wall-variants':     ('docs/walls/walls-e7-variants.tile.py',  (30, -160)),
     'wall-meadow':       ('docs/walls/walls-e4-meadow.tile.py',    (35, -155)),
 }

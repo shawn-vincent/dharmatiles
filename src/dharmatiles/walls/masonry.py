@@ -328,7 +328,11 @@ class CutStoneWall:
                  relief_mm:    float | None = None,
                  relief_wl:    tuple[float, float] | None = None,
                  min_bond_mm:  float = 3.0,
-                 embed_mm:     float = 2.5):
+                 embed_mm:     float = 2.5,
+                 crenellated:  bool = False,
+                 merlon_mm:    tuple[float, float] = (8.0, 11.0),
+                 crenel_mm:    tuple[float, float] = (5.5, 7.5),
+                 crenel_depth_mm: float = 11.0):
         if len(spine) < 2:
             raise ValueError('wall spine needs at least two points')
         if texture not in _TEXTURES:
@@ -353,6 +357,12 @@ class CutStoneWall:
                              else relief_wl)
         self.min_bond_mm  = min_bond_mm
         self.embed_mm     = embed_mm
+        self.crenellated  = crenellated
+        self.merlon_mm    = merlon_mm
+        self.crenel_mm    = crenel_mm
+        self.crenel_depth_mm = crenel_depth_mm
+        self._merlons: list[list[tuple[float, float]]] = []   # per segment
+        self._crenel_z = None      # wall-local z of the crenel floor
 
     # ── build ────────────────────────────────────────────────────────────────
     def apply(self, scene, *, placement_mask=None) -> list[trimesh.Trimesh]:
@@ -388,8 +398,64 @@ class CutStoneWall:
                rng: np.random.Generator) -> list[_Cell]:
         """Block cells for the wall; subclass hook — FieldstoneWall
         post-processes these (throughstone merges)."""
-        return _layout(segs, T, H, self.course_mm, self.bay_mm,
-                       self.min_bond_mm, rng)
+        cells = _layout(segs, T, H, self.course_mm, self.bay_mm,
+                        self.min_bond_mm, rng)
+        if self.crenellated:
+            cells = self._crenellate(cells, segs, T, H, rng)
+        return cells
+
+    def _crenellate(self, cells: list[_Cell], segs: list[_Seg], T: float,
+                    H: float, rng: np.random.Generator) -> list[_Cell]:
+        """Merlon/crenel parapet (city-wall-crenellated.jpg): the crenel
+        floor lands on the course boundary nearest ``H − crenel_depth``;
+        parapet cells above it survive only inside merlon intervals,
+        re-cut to the merlon edges (flanks become textured 'face' ends).
+        Merlons are forced at segment ends so every corner is a merlon;
+        interior widths are scaled to fit each segment exactly."""
+        z_edges = sorted({round(c.z1, 6) for c in cells})
+        below = [z for z in z_edges if z < H - 1e-6]
+        if not below:
+            return cells
+        zf = min(below, key=lambda z: abs(z - (H - self.crenel_depth_mm)))
+        self._crenel_z = zf
+
+        wm_avg = float(np.mean(self.merlon_mm))
+        wc_avg = float(np.mean(self.crenel_mm))
+        self._merlons = []
+        for seg in segs:
+            n_c = max(1, int(round((seg.L - wm_avg) / (wm_avg + wc_avg))))
+            wm = rng.uniform(*self.merlon_mm, n_c + 1)
+            wc = rng.uniform(*self.crenel_mm, n_c)
+            scale = seg.L / (wm.sum() + wc.sum())
+            wm *= scale
+            wc *= scale
+            merlons, t = [], 0.0
+            for i in range(n_c + 1):
+                merlons.append((t, t + wm[i]))
+                t += wm[i] + (wc[i] if i < n_c else 0.0)
+            self._merlons.append(merlons)
+
+        out: list[_Cell] = []
+        for c in cells:
+            if c.z0 < zf - 1e-6:
+                out.append(c)
+                continue
+            # Parapet course: keep only the merlon-interval overlaps.
+            for m, (m0, m1) in enumerate(self._merlons[c.seg]):
+                lo, hi = max(c.t0, m0), min(c.t1, m1)
+                if hi - lo < 1.5:
+                    continue
+                cell = _Cell(
+                    seg=c.seg, t0=lo, t1=hi,
+                    end0='face' if lo > c.t0 + 1e-6 else c.end0,
+                    end1='face' if hi < c.t1 - 1e-6 else c.end1,
+                    z0=c.z0, z1=c.z1,
+                    is_top=c.is_top, is_bottom=False,
+                    is_quoin=c.is_quoin,
+                    key=c.key + (m,),
+                )
+                out.append(cell)
+        return out
 
     def _unit_mesh(self, lx: float, ly: float, lz: float, chamfer: float,
                    cell: _Cell, rng: np.random.Generator) -> trimesh.Trimesh:
@@ -414,12 +480,15 @@ class CutStoneWall:
         z0, z1 = seat_z - self.embed_mm, seat_z + self.height_mm - rv
         boxes = []
 
-        def _box(seg: _Seg, t0: float, t1: float,
-                 q0: float, q1: float) -> trimesh.Trimesh:
-            ex = np.array([t1 - t0, q1 - q0, z1 - z0])
+        def _box(seg: _Seg, t0: float, t1: float, q0: float, q1: float,
+                 z_lo: float | None = None,
+                 z_hi: float | None = None) -> trimesh.Trimesh:
+            za = z0 if z_lo is None else z_lo
+            zb = z1 if z_hi is None else z_hi
+            ex = np.array([t1 - t0, q1 - q0, zb - za])
             b = trimesh.creation.box(extents=ex)
             b.apply_translation(ex / 2.0)
-            b.apply_transform(_frame(seg, t0, q0, z0))
+            b.apply_transform(_frame(seg, t0, q0, za))
             return b
 
         # A start/end inset of ``rv`` is right at BOTH free ends and
@@ -427,6 +496,20 @@ class CutStoneWall:
         # coincides with this segment's t=0 / t=L plane, so the inset
         # recesses the core from that face too; the two segment cores
         # overlap inside the corner cell, keeping the union connected.
+        if self.crenellated and self._crenel_z is not None:
+            # Base core stops below the crenel floor (which must read
+            # as block tops, not mortar); each merlon gets a mini-core
+            # inset from its flanks, overlapping down into the base
+            # core so the union stays connected.
+            zc = seat_z + self._crenel_z
+            for seg, merlons in zip(segs, self._merlons):
+                boxes.append(_box(seg, rv, seg.L - rv, rv, T - rv,
+                                  z_hi=zc - rv))
+                for m0, m1 in merlons:
+                    boxes.append(_box(seg, max(m0 + rv, rv),
+                                      min(m1 - rv, seg.L - rv),
+                                      rv, T - rv, z_lo=zc - 2.0))
+            return boxes
         for seg in segs:
             boxes.append(_box(seg, rv, seg.L - rv, rv, T - rv))
         return boxes
