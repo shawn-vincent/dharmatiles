@@ -56,6 +56,13 @@ _PACK_COMP_MM     = 2.1           # oversize before rounding; roundover +
 _BULGE_MM         = 0.35          # residual vertical swell into joints
 _THROUGH_FRAC     = 0.20          # fraction of eligible cells merged with
                                   # the cell above into a throughstone
+_PIN_PROB         = 0.55          # chance of a pinning stone at each
+                                  # joint/course-line crossing — the star-
+                                  # shaped voids four rounded shoulders
+                                  # open up ("every space filled with a
+                                  # rock", round-4)
+_PIN_W            = (2.2, 4.4)    # pinning stone width
+_PIN_H            = (2.0, 3.6)    # pinning stone height
 _REMESH_SIGMA     = 0.9           # aged read (stones convention)
 
 
@@ -119,7 +126,7 @@ class FieldstoneWall(CutStoneWall):
                  course_mm: tuple[float, float] = (3.2, 8.8),
                  bay_mm:    tuple[float, float] = (4.5, 16.0),
                  joint_mm:  float = 0.4,
-                 reveal_mm: float = 1.2,
+                 reveal_mm: float = 1.6,
                  roundover_mm: float | None = 0.45,
                  relief_mm:    float | None = 0.12,
                  relief_wl:    tuple[float, float] | None = (2.0, 7.0),
@@ -181,7 +188,56 @@ class FieldstoneWall(CutStoneWall):
                 break
         out = [c for c in cells if c.key not in drop]
         out.extend(merged)
+        out.extend(self._pin_cells(out, segs, H, rng))
         return out
+
+    def _pin_cells(self, cells: list[_Cell], segs: list[_Seg], H: float,
+                   rng: np.random.Generator) -> list[_Cell]:
+        """Small pinning stones wedged where a vertical joint crosses a
+        course line — filling the voids that rounded shoulders open."""
+        throughs = [c for c in cells if len(c.key) == 4]
+        pins: list[_Cell] = []
+        n = 0
+        for c in cells:
+            if len(c.key) == 4 or c.end0 != 'joint':
+                continue
+            segL = segs[c.seg].L
+            for z_line in (c.z0, c.z1):
+                if not 1.0 < z_line < H - 1.0:
+                    # Cap joints get their own flush pins below.
+                    continue
+                if rng.random() > _PIN_PROB:
+                    continue
+                if any(t.seg == c.seg and t.z0 < z_line < t.z1
+                       and t.t0 - 1.0 < c.t0 < t.t1 + 1.0
+                       for t in throughs):
+                    continue
+                w = rng.uniform(*_PIN_W)
+                h = rng.uniform(*_PIN_H)
+                t0 = np.clip(c.t0 - w / 2.0, 0.5, segL - 0.5 - w)
+                pins.append(_Cell(
+                    seg=c.seg, t0=float(t0), t1=float(t0 + w),
+                    end0='joint', end1='joint',
+                    z0=float(z_line - h / 2.0), z1=float(z_line + h / 2.0),
+                    is_top=False, is_bottom=False,
+                    key=(-1, c.seg, n, 'pin'),
+                ))
+                n += 1
+            # Cap-joint pins: a small stone flush with the cap plane
+            # filling the dip between two coping stones.
+            if c.is_top and rng.random() < _PIN_PROB:
+                w = rng.uniform(*_PIN_W)
+                h = rng.uniform(*_PIN_H)
+                t0 = np.clip(c.t0 - w / 2.0, 0.5, segL - 0.5 - w)
+                pins.append(_Cell(
+                    seg=c.seg, t0=float(t0), t1=float(t0 + w),
+                    end0='joint', end1='joint',
+                    z0=float(H - h), z1=float(H),
+                    is_top=True, is_bottom=False,
+                    key=(-1, c.seg, n, 'pin'),
+                ))
+                n += 1
+        return pins
 
     # ── the unit ─────────────────────────────────────────────────────────────
     def _unit_mesh(self, lx: float, ly: float, lz: float, chamfer: float,
@@ -197,20 +253,23 @@ class FieldstoneWall(CutStoneWall):
 
         up = 0.0 if cell.is_top else rng.uniform(0.0, _BULGE_MM)
         dn = 0.0 if cell.is_bottom else rng.uniform(0.0, _BULGE_MM)
-        # Compensate the rounding shave in ALL THREE axes.  y (thickness)
-        # matters most: without it every stone loses ~0.7 mm per face to
-        # roundover+blur and sits nearly flush with the core — the whole
-        # wall reads as a flat slab with faint lumps (round-4 find; the
-        # standalone strip test looked right because there was no core
-        # to compare against).
-        cx = _PACK_COMP_MM
-        cy = _PACK_COMP_MM
-        cz_up = 0.0 if cell.is_top else _PACK_COMP_MM / 2.0
-        cz_dn = _PACK_COMP_MM / 2.0
-        body = _fieldstone_mesh(lx + cx, ly + cy,
-                                lz + up + dn + cz_up + cz_dn,
+        # Build OVERSIZE so rounding keeps real curvature, then EXACT-FIT
+        # rescale to the target box.  This replaces shave compensation
+        # (round-4 fix): guessing the roundover+blur shave either leaves
+        # stones flush with the core (flat-slab read) or overshoots and
+        # bulges them past the outer face plane, where the tile-boundary
+        # clip PLANES them into flat-faced rocks (Shawn's outside find).
+        # Exact fit makes every belly tangent to its face plane — round
+        # faces by construction, nothing for the clip to shave.
+        c = _PACK_COMP_MM
+        body = _fieldstone_mesh(lx + c, ly + c, lz + up + dn + c,
                                 blockiness, cell.is_top or cell.is_quoin,
                                 self.roundover_mm, self.relief_mm,
                                 self.relief_wl, rng)
-        body.apply_translation([-cx / 2.0, -cy / 2.0, -(dn + cz_dn)])
+        b0, b1 = body.bounds
+        target0 = np.array([0.0, 0.0, -dn])
+        target1 = np.array([lx, ly, lz + up])
+        body.apply_translation(-b0)
+        body.apply_scale((target1 - target0) / (b1 - b0))
+        body.apply_translation(target0)
         return body
