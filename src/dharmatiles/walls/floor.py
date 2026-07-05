@@ -1,23 +1,25 @@
 """
 Stone slab flooring — pavement gridding the ground.
 
-Shawn's ask (2026-07-05): "floor tiles (full 35mm or whatever slabs
-gridding the ground)".  ``StoneFloor`` paves a region with flat stone
-slabs aligned to the DB square grid — the masonry unit kernel laid
-horizontal: each slab is the same chipped-box hull + roundover +
-broadband relief as a wall block (``_block_mesh``), with the wall
-texture presets.
+Shawn (2026-07-05): "floor tiles (full 35mm or whatever slabs gridding
+the ground)" … "the slab should go right to the bottom of the terrain"
+… "None of the floor terrain should be on top of soil.  The floor IS
+the terrain, replaces the soil."
 
-Reads by construction:
+``StoneFloor`` paves a region with flat stone slabs aligned to the DB
+square grid — the masonry unit kernel laid horizontal (``_block_mesh``
+with the wall texture presets).  The floor REPLACES the terrain:
 
-- slabs align to the square grid (``slabs_per_square`` subdivides);
-  the joint gaps land on grid lines, so the pavement IS the grid;
-- joints are real gaps with the SOIL showing through — dirt between
-  pavers;
-- each slab seats on its own patch of terrain (top = local high point
-  + ``proud_mm``), so pavement rolls gently with the ground;
-- ``missing_prob`` slabs leave a bare dirt patch, ``spall_prob``
-  slabs get a broken corner — the grid must be imperfect to read real.
+- every paved pitch cell (including missing-slab cells) has its
+  terrain LOWERED to a thin dirt bed (``bed_mm``) — no soil under or
+  around the pavement surface;
+- slabs run FULL DEPTH, from the tile bottom (z = 0) to the pavement
+  level (``top_mm`` ± jitter) — no undercut can exist, by construction;
+- joints land on the grid lines and read as deep dark slots down to
+  the dirt bed; a ``missing_prob`` slab leaves a sunken dirt pit;
+- ``spall_prob`` slabs get broken corners; ``crack_prob`` slabs are
+  engraved with the standard rock crack (``stone/cracks.py``) — the
+  grid must be imperfect to read real.
 """
 from __future__ import annotations
 
@@ -25,18 +27,21 @@ import numpy as np
 import trimesh
 
 from ..core.color import Material, tag as _tag
+from ..stone.cracks import engrave_cracks
 from .masonry import _TEXTURES, _block_mesh
 
 _TILT_DEG = 0.5      # per-slab tilt: each slab catches its own light
+_TOP_JITTER_MM = 0.3  # per-slab pavement-level jitter
 
 
 class StoneFloor:
-    """Direct TileLayer: stone slab pavement over the region footprint.
+    """Direct TileLayer: stone slab pavement that IS the ground.
 
     Same texture vocabulary as the walls (``chipped`` / ``worn`` /
     ``hewn`` / ``dressed`` presets, plus the same override kwargs).
-    Place after ``SoilCarpet`` and before any ``Grass`` (the paved
-    area stamps ``obstacle_mask`` so grass keeps off the slabs).
+    Place after ``SoilCarpet`` (the pavement flattens the soil under
+    itself) and before any ``Grass`` (the paved area stamps
+    ``obstacle_mask``).
     """
 
     height_default_mm: float = 5.0
@@ -44,15 +49,16 @@ class StoneFloor:
     def __init__(self, *,
                  texture:  str = 'dressed',
                  slabs_per_square: int = 1,
-                 thickness_mm: float = 4.5,
+                 top_mm:       float = 4.2,
+                 bed_mm:       float = 1.2,
                  joint_mm:     float = 1.0,
-                 proud_mm:     float = 1.1,
                  chip_mm:      float | None = None,
                  roundover_mm: float | None = None,
                  relief_mm:    float | None = None,
                  relief_wl:    tuple[float, float] | None = None,
                  missing_prob: float = 0.04,
                  spall_prob:   float = 0.10,
+                 crack_prob:   float = 0.20,
                  seed:         int = 0):
         if texture not in _TEXTURES:
             raise ValueError(f'unknown floor texture {texture!r}; '
@@ -60,9 +66,9 @@ class StoneFloor:
         preset = _TEXTURES[texture]
         self.texture      = texture
         self.slabs_per_square = int(slabs_per_square)
-        self.thickness_mm = thickness_mm
+        self.top_mm       = top_mm
+        self.bed_mm       = bed_mm
         self.joint_mm     = joint_mm
-        self.proud_mm     = proud_mm
         self.chip_mm      = preset['chip_mm'] if chip_mm is None else chip_mm
         self.roundover_mm = (preset['roundover_mm'] if roundover_mm is None
                              else roundover_mm)
@@ -72,6 +78,7 @@ class StoneFloor:
                              else relief_wl)
         self.missing_prob = missing_prob
         self.spall_prob   = spall_prob
+        self.crack_prob   = crack_prob
         self.seed         = seed
 
     def apply(self, scene, *, placement_mask=None) -> list[trimesh.Trimesh]:
@@ -93,37 +100,47 @@ class StoneFloor:
                     continue
                 if placement_mask is not None and not placement_mask[j, i]:
                     continue
-                if brng.random() < self.missing_prob:
-                    continue    # bare dirt patch
 
-                # Seat on the slab's own terrain patch: the pavement
-                # rolls with the ground, each slab at its local level.
+                # The floor IS the terrain: drop this pitch cell (slab
+                # or dirt pit alike) to the thin dirt bed — the soil
+                # never sits at pavement level anywhere paved.
                 i0 = max(0, int(x0 / cw))
-                i1 = min(gw, int((x0 + pitch) / cw) + 1)
+                i1 = min(gw, int(np.ceil((x0 + pitch) / cw)))
                 j0 = max(0, int(y0 / cw))
-                j1 = min(gh, int((y0 + pitch) / cw) + 1)
+                j1 = min(gh, int(np.ceil((y0 + pitch) / cw)))
                 patch = scene.terrain_z[j0:j1, i0:i1]
-                seat = float(np.percentile(patch, 90.0)) if patch.size \
-                    else 0.0
-                top = seat + self.proud_mm
+                np.minimum(patch, self.bed_mm, out=patch)
 
+                if brng.random() < self.missing_prob:
+                    continue    # sunken dirt pit
+
+                top = self.top_mm + float(
+                    brng.uniform(-_TOP_JITTER_MM, _TOP_JITTER_MM))
                 chip = self.chip_mm
                 if brng.random() < self.spall_prob:
                     chip = min(0.30 * pitch * 0.25, 1.6) + self.chip_mm
                 side = pitch - self.joint_mm
-                body = _block_mesh(side, side, self.thickness_mm, 0.0,
+                # Full-depth slab: tile bottom to pavement level.
+                body = _block_mesh(side, side, top, 0.0,
                                    chip, self.roundover_mm, self.relief_mm,
                                    self.relief_wl, True, brng)
-                ctr = np.array([side / 2.0, side / 2.0,
-                                self.thickness_mm / 2.0])
+                ctr = np.array([side / 2.0, side / 2.0, top / 2.0])
                 for axis in ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]):
                     tilt = np.radians(brng.uniform(-_TILT_DEG, _TILT_DEG))
                     body.apply_transform(
                         trimesh.transformations.rotation_matrix(
                             tilt, axis, ctr))
-                body.apply_translation([
-                    x0 + self.joint_mm / 2.0, y0 + self.joint_mm / 2.0,
-                    top - self.thickness_mm])
+                body.apply_translation([x0 + self.joint_mm / 2.0,
+                                        y0 + self.joint_mm / 2.0, 0.0])
+                if brng.random() < self.crack_prob:
+                    # The standard rock crack, walk length scaled to
+                    # the slab so it crosses a good fraction of it.
+                    body = engrave_cracks(
+                        body, np.random.default_rng(
+                            (self.seed * 61 + hash((ix, iy)))
+                            & 0x7FFFFFFF),
+                        ground_z=0.0, footprint_mm=side,
+                        n_segs=int(np.clip(side * 0.7, 9, 26)))
                 parts.append(body)
 
                 # Stamp the slab footprint.
