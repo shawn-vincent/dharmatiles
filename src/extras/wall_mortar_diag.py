@@ -6,8 +6,13 @@ no union — and renders top + four side views with the mortar in red.
 The acceptance test (Shawn, fieldstone round 5): a drystone wall is
 STACKED FIELDSTONES; anywhere red reads on the surface is a defect.
 
-Usage: python src/extras/wall_mortar_diag.py OUT_PREFIX
+Usage: python src/extras/wall_mortar_diag.py OUT_PREFIX [--rubble]
 Writes OUT_PREFIX-{top,south,east,north,west}.png
+
+--rubble colours the rubble hearting red instead of the core: not an
+acceptance test (the hearting is SUPPOSED to show as little rocks in
+the gaps since E27) but a visibility check on how much fill the cracks
+expose and where.
 """
 import pathlib
 import sys
@@ -27,7 +32,8 @@ RED  = np.array([0.85, 0.15, 0.12])
 
 def build_parts(wall: FieldstoneWall, sq: float):
     """Replicate CutStoneWall.apply()'s build, keeping parts separate.
-    Mirrors the rng consumption order of apply() exactly."""
+    Mirrors the rng consumption order of apply() exactly.
+    Returns (core, stones, rubble)."""
     segs = _segments([(x * sq, y * sq) for x, y in wall.spine])
     rng  = np.random.default_rng(wall.seed)
     seat_z = 0.0
@@ -35,8 +41,8 @@ def build_parts(wall: FieldstoneWall, sq: float):
     core   = wall._core_boxes(segs, seat_z)
     stones = [wall._place_block(c, segs, seat_z, rng) for c in cells]
     stones = [s for s in stones if s is not None]
-    stones.extend(wall._extra_parts(segs, seat_z, rng))
-    return core, stones
+    rubble = wall._extra_parts(segs, seat_z, rng)
+    return core, stones, rubble
 
 
 def render(meshes, colors, out, elev, azim, width=1300):
@@ -114,14 +120,17 @@ def render(meshes, colors, out, elev, azim, width=1300):
 
 
 def main():
-    prefix = sys.argv[1] if len(sys.argv) > 1 else 'wall-diag'
+    args = [a for a in sys.argv[1:] if a != '--rubble']
+    show_rubble = '--rubble' in sys.argv[1:]
+    prefix = args[0] if args else 'wall-diag'
     surface = SurfaceConfig(seed=17)
     sq = surface.square_mm
     wall = FieldstoneWall(spine=[(1.0, 1.0), (0.0, 1.0), (0.0, 0.0)],
                           seed=7)
-    core, stones = build_parts(wall, sq)
-    meshes = core + stones
-    colors = [RED] * len(core) + [GREY] * len(stones)
+    core, stones, rubble = build_parts(wall, sq)
+    meshes = core + stones + rubble
+    colors = ([RED] * len(core) + [GREY] * len(stones)
+              + [(RED if show_rubble else GREY)] * len(rubble))
     # Clip below the soil line: the embedded base is buried on the real
     # tile and would dominate the red measurement.
     clipped = []

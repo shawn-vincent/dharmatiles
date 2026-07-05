@@ -155,11 +155,20 @@ _THROUGH_MAX_MM   = 9.5           # merged throughstone height cap (E19:
                                   # ~12–15 mm)
 _SPLIT_H_PROB     = 0.28          # tall cell → two stacked thinner stones
 _SPLIT_H_MIN_MM   = 5.5           # eligible cell height for an h-split
-# Rubble hearting (E10 guarantee, unchanged)
-_RUBBLE_SPACING_MM = 4.2
-_RUBBLE_FOOT      = (8.5, 11.0)
-_RUBBLE_H         = (5.5, 7.5)
-_RUBBLE_SETBACK_MM = 1.6
+# Rubble hearting (E10 guarantee; E27: lots of little rough rocks).
+# The hearting must never READ as mortar: E26's big smooth lumps
+# 1.6 mm behind the face showed bright featureless mid-faces through
+# the head-joint junction holes — "I think I still see mortar".
+# Shawn's call: "should be lots of little rocks --- very rough."  So
+# the fill IS the read: many small crisp shards (rubble_stone, now
+# un-rounded with heavy jitter) packed densely enough that the two
+# staggered sheets stay sealed, sitting close enough to the face that
+# a gap shows packed stone chips — the references' pinning stones —
+# never a smooth plane.
+_RUBBLE_SPACING_MM = 2.8
+_RUBBLE_FOOT      = (3.5, 5.5)
+_RUBBLE_H         = (3.0, 4.5)
+_RUBBLE_SETBACK_MM = 1.3
 # Cell-key tags (ints, not strings: _place_block hashes cell.key for the
 # per-stone rng and str hashes vary per process).  Base keys are
 # (course, seg, bay), so tagged keys are longer, never equal.
