@@ -42,7 +42,7 @@ import numpy as np
 import trimesh
 
 from ..scatter.stones import _relief_field, _round_edges
-from .masonry import CutStoneWall, _Cell, _Seg, _RELIEF_WAVES
+from .masonry import CutStoneWall, _Cell, _Seg
 
 # ── Iteration knobs (module constants while prototyping) ─────────────────────
 # Crack network
@@ -165,7 +165,7 @@ class FieldstoneWall(CutStoneWall):
                                            # with no gap at its root)
                  reveal_mm: float = 2.8,
                  roundover_mm: tuple[float, float] = (0.9, 2.0),
-                 relief_mm:    float | None = 0.0,
+                 relief_mm:    float | None = None,
                  relief_wl:    tuple[float, float] | None = (3.0, 9.0),
                  min_bond_mm:  float = 1.8,
                  **kwargs):
@@ -174,6 +174,10 @@ class FieldstoneWall(CutStoneWall):
                          roundover_mm=roundover_mm, relief_mm=relief_mm,
                          relief_wl=relief_wl, min_bond_mm=min_bond_mm,
                          **kwargs)
+        # The base ctor substitutes its texture preset when relief_mm
+        # is None, but for fieldstone None means "auto amplitude from
+        # the stone's footprint" (_stone_texture) — restore it.
+        self.relief_mm = relief_mm
         self._beds:   dict[tuple, tuple] = {}   # (seg, zkey) → sine params
         self._drifts: dict[tuple, float] = {}   # (seg, course, tkey) → drift
 
@@ -452,22 +456,17 @@ class FieldstoneWall(CutStoneWall):
         body = trimesh.Trimesh(vertices=v, faces=f, process=False)
         trimesh.repair.fix_normals(body)
 
-        # Optional relief (off by default since E15 — crisp prisms with
-        # roundovers only): subdivide for sampling density, displace,
-        # then light Taubin to soften the plane-wave crests, whose
-        # organised interference pattern reads clearly on flat faces.
-        # No voxel remesh: the fitted silhouette must not shrink or
-        # soften (the E7 shave lesson).
-        if self.relief_mm > 0.0:
-            body = body.subdivide()
-            disp = self.relief_mm * _relief_field(
-                body.vertices, brng, _RELIEF_WAVES, *self.relief_wl)
-            body = trimesh.Trimesh(
-                vertices=(body.vertices
-                          + np.asarray(body.vertex_normals)
-                          * disp[:, None]),
-                faces=body.faces, process=False)
-            trimesh.smoothing.filter_taubin(body, iterations=4)
+        # Surface texture (E20): the SHIPPED scatter-stones recipe
+        # (stones.py aged pass), scaled to wall-stone footprints —
+        # broad organic undulation + granular drybrush micro-grain,
+        # modulated by a patchy envelope (calm fields vs active
+        # shoulders), displaced along SMOOTHED normals with curvature
+        # damping (relief fades in tight concave features — which also
+        # protects the crack roots, exactly where stones touch).
+        # relief_mm: None = auto amplitude from the stone's footprint;
+        # 0 disables; a number overrides the undulation amplitude.
+        if self.relief_mm is None or self.relief_mm > 0.0:
+            body = self._stone_texture(body, brng)
 
         m = np.eye(4)
         m[:2, 0] = seg.d
@@ -476,6 +475,49 @@ class FieldstoneWall(CutStoneWall):
         m[2, 3] = seat_z
         body.apply_transform(m)
         return body
+
+    def _stone_texture(self, body: trimesh.Trimesh,
+                       brng: np.random.Generator) -> trimesh.Trimesh:
+        """The scatter-stones aged surface, at wall-stone scale
+        (mirrors stones.py: undulation + micro-grain × patchy envelope,
+        smoothed normals, curvature damping)."""
+        body = body.subdivide()
+        p = np.asarray(body.vertices)
+        foot = float(np.ptp(p[:, [0, 2]], axis=0).max())
+
+        relaxed = trimesh.Trimesh(vertices=p.copy(),
+                                  faces=np.asarray(body.faces).copy(),
+                                  process=False)
+        trimesh.smoothing.filter_taubin(relaxed, iterations=10)
+        vn = np.asarray(relaxed.vertex_normals)
+        cd = np.linalg.norm(p - np.asarray(relaxed.vertices), axis=1)
+        curv_damp = 1.0 / (1.0 + (cd / 0.35) ** 2)
+
+        # Broad pillowy undulation (stones.py: 6 waves, foot/4.5 …
+        # foot/1.6, spectral 1.0).
+        f = 0.35 * _relief_field(p, brng, 6,
+                                 max(foot / 4.5, 1.2),
+                                 max(foot / 1.6, 3.0), spectral=1.0)
+        amp = (float(np.clip(0.030 * foot, 0.10, 0.30))
+               if self.relief_mm is None else self.relief_mm)
+        # Granular drybrush tooth (stones.py: 16 waves 0.6–3.2 mm; the
+        # low end lifted to the subdivided mesh's ~0.6 mm edge length).
+        g = 0.7 * _relief_field(p, brng, 16, 0.9, 3.2, spectral=0.7)
+        amp_g = float(np.clip(0.012 * foot, 0.10, 0.25))
+
+        # Patchy envelope: calm fields vs active shoulders.
+        env = np.zeros(len(p))
+        for _ in range(3):
+            d = brng.normal(size=3)
+            d /= np.linalg.norm(d) + 1e-12
+            ewl = foot / brng.uniform(0.9, 1.4)
+            env += np.cos(2.0 * np.pi / ewl * (p @ d)
+                          + brng.uniform(0.0, 2.0 * np.pi))
+        env = 0.2 + 0.8 * np.clip(0.5 + 0.75 * env / 3.0, 0.0, 1.0)
+
+        disp = (amp * f + amp_g * 0.5 * g) * env * curv_damp
+        return trimesh.Trimesh(vertices=p + vn * disp[:, None],
+                               faces=body.faces, process=False)
 
     # ── rubble hearting ──────────────────────────────────────────────────────
     def _extra_parts(self, segs: list[_Seg], seat_z: float,
