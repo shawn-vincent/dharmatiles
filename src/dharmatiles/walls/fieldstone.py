@@ -64,6 +64,19 @@ _BOW_MM           = 1.1           # head joints BOW up to ±this at their
                                   # joint is a shared parabola, zero at
                                   # the bed lines, both neighbours
                                   # evaluating the same curve
+_HEAD_OVERLAP_MM  = (0.45, 0.95)  # E24: stones extend past their head-
+                                  # joint lines on BOTH sides, drawn per
+                                  # side per stone — neighbours
+                                  # interpenetrate and the union fuses
+                                  # the contact, so the visible mortar
+                                  # at vertical joints shrinks to a
+                                  # pressed crease.  Deliberately breaks
+                                  # the no-overlap rule for head joints
+                                  # only (beds stay shared curves); the
+                                  # TOP COURSE is exempt (Shawn) and the
+                                  # overlap is capped at 0.25× the
+                                  # stone's width so thin stones aren't
+                                  # swallowed
 _RING_NOISE_MM    = (0.04, 0.16)  # per-stone INWARD-only outline noise
                                   # (floor, max; 2 sinusoids over the
                                   # perimeter): irregular stone shapes +
@@ -325,13 +338,21 @@ class FieldstoneWall(CutStoneWall):
 
     # ── the stone ────────────────────────────────────────────────────────────
     def _outline(self, cell: _Cell, seg: _Seg, seg_i: int,
-                 ) -> np.ndarray:
+                 brng: np.random.Generator) -> np.ndarray:
         """Face outline polygon (t, z) bounded by the cell's cracks.
-        Every edge — including every side ENDPOINT — evaluates curves
-        shared with the neighbour across it, so the tessellation has no
-        overlaps and no wedge voids anywhere, by construction."""
+        Every edge evaluates curves shared with the neighbour across it;
+        beds never overlap.  Head joints DO (E24): each stone extends
+        past its side lines so the union fuses side-by-side neighbours
+        into pressed contact — except in the top course."""
         bands = getattr(cell, 'side_bands',
                         [(cell.key[0], cell.z0, cell.z1)])
+        w = cell.t1 - cell.t0
+        if cell.is_top:
+            ov0 = ov1 = 0.0
+        else:
+            cap = 0.25 * w
+            ov0 = min(float(brng.uniform(*_HEAD_OVERLAP_MM)), cap)
+            ov1 = min(float(brng.uniform(*_HEAD_OVERLAP_MM)), cap)
 
         def zeff(z: float, t: float) -> float:
             """Actual (wobbled) height of the bed line at t."""
@@ -341,10 +362,12 @@ class FieldstoneWall(CutStoneWall):
                 return z                       # flat cap plane (R6)
             return z + float(self._bed(seg_i, z, seg.L)(t))
 
-        def side(t_cut: float, end: str):
+        def side(t_cut: float, end: str, off: float):
             """[(t, z), …] bottom→top along this side crack.  Interior
             band boundaries contribute two points (the drift changes
-            where the neighbour changes) — a small shared jog."""
+            where the neighbour changes) — a small shared jog.  ``off``
+            pushes the whole line past the shared curve (head-joint
+            overlap); the curve itself stays keyed at t_cut."""
             if end == 'face':                  # wall end / corner arris
                 return [(t_cut, zeff(cell.z0, t_cut)),
                         (t_cut, zeff(cell.z1, t_cut))]
@@ -355,13 +378,13 @@ class FieldstoneWall(CutStoneWall):
                 hh = (zb1 - zb0) / 2.0
                 for z in np.linspace(zb0, zb1, 5):
                     q = (z - zm) / hh
-                    t = t_cut + d * q / 2.0 + bow * (1.0 - q * q)
+                    t = t_cut + off + d * q / 2.0 + bow * (1.0 - q * q)
                     zpt = zeff(z, t) if z in (zb0, zb1) else z
                     pts.append((t, zpt))
             return pts
 
-        left  = side(cell.t0, cell.end0)
-        right = side(cell.t1, cell.end1)
+        left  = side(cell.t0, cell.end0, -ov0)
+        right = side(cell.t1, cell.end1, +ov1)
 
         def bed(z: float, ta: float, tb: float):
             n = max(2, int(abs(tb - ta) / 4.0) + 2)
@@ -385,7 +408,7 @@ class FieldstoneWall(CutStoneWall):
         seg = segs[cell.seg]
         brng = np.random.default_rng(
             (self.seed * 1_000_003 + hash(cell.key)) & 0x7FFFFFFF)
-        outline = self._outline(cell, seg, cell.seg)
+        outline = self._outline(cell, seg, cell.seg, brng)
 
         # Inset by half the crack, round the corners (negative-positive
         # buffer): the crack is a real thin gap by construction.  The
