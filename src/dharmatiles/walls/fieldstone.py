@@ -45,12 +45,12 @@ from .masonry import CutStoneWall, _Cell, _Seg, _RELIEF_WAVES
 
 # ── Iteration knobs (module constants while prototyping) ─────────────────────
 # Crack network
-_WOBBLE_AMP_MM    = (0.18, 0.40)  # per-sine bed wobble amplitude (2 sines).
-                                  # Total ≤ 0.8: two INDEPENDENT beds can
+_WOBBLE_AMP_MM    = (0.14, 0.32)  # per-sine bed wobble amplitude (2 sines).
+                                  # Total ≤ 0.64: two INDEPENDENT beds can
                                   # close on each other by twice that, and
                                   # the thinnest stones (split pairs of a
-                                  # 6.5 mm course) are ~2.9 mm — the beds
-                                  # must never cross
+                                  # 5.5 mm course at 2.8–7.5 mm courses)
+                                  # are ~2.5 mm — the beds must never cross
 _WOBBLE_WL_MM     = (14.0, 40.0)  # bed wobble wavelengths
 _WOBBLE_TAPER_MM  = 12.0          # wobble fades to 0 within this of a
                                   # segment end: corners/butt ends pack
@@ -75,7 +75,8 @@ _N_STATIONS       = 7             # loft stations through the thickness
 # Cell topology
 _THROUGH_FRAC     = 0.20          # fraction of eligible cells merged with
                                   # the cell above into a throughstone
-_SPLIT_H_PROB     = 0.18          # tall cell → two stacked thinner stones
+_SPLIT_H_PROB     = 0.28          # tall cell → two stacked thinner stones
+_SPLIT_H_MIN_MM   = 5.5           # eligible cell height for an h-split
 # Rubble hearting (E10 guarantee, unchanged)
 _RUBBLE_SPACING_MM = 4.2
 _RUBBLE_FOOT      = (8.5, 11.0)
@@ -176,7 +177,7 @@ class FieldstoneWall(CutStoneWall):
     """
 
     def __init__(self, spine, *,
-                 course_mm: tuple[float, float] = (3.4, 9.6),
+                 course_mm: tuple[float, float] = (2.8, 7.5),
                  bay_mm:    tuple[float, float] = (5.0, 16.0),
                  joint_mm:  float = 0.5,
                  reveal_mm: float = 2.8,
@@ -298,7 +299,8 @@ class FieldstoneWall(CutStoneWall):
         for c in cells:
             h = c.z1 - c.z0
             if (c.is_top or c.is_quoin or len(c.key) > 3
-                    or h < 6.5 or rng.random() > _SPLIT_H_PROB):
+                    or h < _SPLIT_H_MIN_MM
+                    or rng.random() > _SPLIT_H_PROB):
                 out.append(c)
                 continue
             zm = c.z0 + h * rng.uniform(0.45, 0.65)
