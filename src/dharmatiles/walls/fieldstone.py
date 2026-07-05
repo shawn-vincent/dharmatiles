@@ -41,8 +41,8 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
-from ..scatter.stones import _relief_field, _round_edges
-from .masonry import CutStoneWall, _Cell, _Seg
+from ..stone import relief_field, round_edges
+from .masonry import CutStoneWall, _Cell, _Seg, _frame
 
 # ── Iteration knobs (module constants while prototyping) ─────────────────────
 # Crack network
@@ -192,7 +192,7 @@ def _rubble_mesh(lx: float, ly: float, lz: float,
     r *= rng.uniform(*_LUMP, M)
     p = d * r[:, None] + half
     hull = trimesh.convex.convex_hull(p)
-    v, f = _round_edges(np.asarray(hull.vertices), np.asarray(hull.faces),
+    v, f = round_edges(np.asarray(hull.vertices), np.asarray(hull.faces),
                         0.35, rng)
     return trimesh.Trimesh(vertices=v, faces=f, process=False)
 
@@ -595,12 +595,7 @@ class FieldstoneWall(CutStoneWall):
         if self.relief_mm is None or self.relief_mm > 0.0:
             body = self._stone_texture(body, brng)
 
-        m = np.eye(4)
-        m[:2, 0] = seg.d
-        m[:2, 1] = seg.n
-        m[:2, 3] = seg.a
-        m[2, 3] = seat_z
-        body.apply_transform(m)
+        body.apply_transform(_frame(seg, z=seat_z))
         return body
 
     def _stone_texture(self, body: trimesh.Trimesh,
@@ -622,14 +617,14 @@ class FieldstoneWall(CutStoneWall):
 
         # Broad pillowy undulation (stones.py: 6 waves, foot/4.5 …
         # foot/1.6, spectral 1.0).
-        f = 0.35 * _relief_field(p, brng, 6,
+        f = 0.35 * relief_field(p, brng, 6,
                                  max(foot / 4.5, 1.2),
                                  max(foot / 1.6, 3.0), spectral=1.0)
         amp = (float(np.clip(0.045 * foot, 0.14, 0.45))
                if self.relief_mm is None else self.relief_mm)
         # Granular drybrush tooth (stones.py: 16 waves 0.6–3.2 mm; the
         # low end lifted to the subdivided mesh's ~0.6 mm edge length).
-        g = 0.7 * _relief_field(p, brng, 16, 0.9, 3.2, spectral=0.7)
+        g = 0.7 * relief_field(p, brng, 16, 0.9, 3.2, spectral=0.7)
         amp_g = float(np.clip(0.016 * foot, 0.12, 0.30))
 
         # Patchy envelope: calm fields vs active shoulders.
@@ -685,11 +680,6 @@ class FieldstoneWall(CutStoneWall):
                         body.apply_translation(-b0)
                         body.apply_scale((tgt1 - tgt0) / (b1 - b0))
                         body.apply_translation(tgt0)
-                        m = np.eye(4)
-                        m[:2, 0] = seg.d
-                        m[:2, 1] = seg.n
-                        m[:2, 3] = seg.a
-                        m[2, 3] = seat_z
-                        body.apply_transform(m)
+                        body.apply_transform(_frame(seg, z=seat_z))
                         parts.append(body)
         return parts

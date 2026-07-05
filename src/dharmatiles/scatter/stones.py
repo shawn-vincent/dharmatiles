@@ -23,6 +23,8 @@ import trimesh
 from ..core.grid import sample_grid
 from ..core.color import Material, tag as _tag
 from ..core.tile import derive_seed
+from ..stone import (blur_remesh, clip_to_box, relief_field, round_edges,
+                     survives_stl32)
 from .config import Uniform
 from .distribute import scatter_positions
 
@@ -34,14 +36,6 @@ _EGG_WIDEST_T     = -0.25   # egg profile: widest slice at this local height
                             # bed-to-widest then buries less stone and the
                             # base doesn't flare into tent-flaps
 _EGG_TAPER        = 0.35    # horizontal shrink at the very top (t = 1)
-_ROUND_JITTER     = (0.55, 1.6)   # roundover randomization range —
-                                  # uniform fillets read CNC, not geology;
-                                  # the floor keeps every edge VISIBLY
-                                  # rounded on weathered stones
-_ROUND_EDGE_STEP_MM = 1.2         # ball spacing along edges: the radius is
-                                  # re-rolled at each sample, so the fillet
-                                  # wobbles ALONG an edge (per-corner-only
-                                  # radii read as rounded dice)
 
 # ── Concave weathering bites (spheroidal-weathering morphology) ──────────────
 # A convex hull can never show a hollow, and real rocks are defined by their
@@ -266,51 +260,6 @@ def _seat_rotation(verts: np.ndarray, faces: np.ndarray) -> np.ndarray:
     return np.eye(3) + s * K + (1.0 - c) * (K @ K)
 
 
-def _round_edges(verts: np.ndarray, faces: np.ndarray,
-                 roundover_mm: float, rng: np.random.Generator,
-                 ) -> tuple[np.ndarray, np.ndarray]:
-    """Weathering fillet: a rolling ball whose radius is re-rolled at every
-    corner AND at ~1 mm intervals along every edge, eroded inward and
-    hulled.  The silhouette stays; the fillet radius wobbles along each
-    edge — one edge can stay sharp at one end and round over in the middle
-    (constant-radius fillets read as rounded dice, per Shawn)."""
-    m   = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
-    cap = 0.3 * float(m.extents.min())
-
-    cores, rhos = [], []
-    # Corner balls.
-    vn = np.asarray(m.vertex_normals)
-    rv = np.minimum(roundover_mm * rng.uniform(*_ROUND_JITTER, len(verts)),
-                    cap)
-    cores.append(verts - vn * rv[:, None])
-    rhos.append(rv)
-    # Edge balls, radius independently re-rolled per sample.
-    fn = m.face_normals
-    for (f1, f2), (a, b) in zip(m.face_adjacency, m.face_adjacency_edges):
-        va, vb = verts[a], verts[b]
-        L = float(np.linalg.norm(vb - va))
-        k = int(L / _ROUND_EDGE_STEP_MM)
-        if k < 1:
-            continue
-        nd = fn[f1] + fn[f2]
-        nd = nd / (np.linalg.norm(nd) + 1e-12)
-        ts = (np.arange(1, k + 1) + rng.uniform(-0.3, 0.3, k)) / (k + 1)
-        ts = np.clip(ts, 0.08, 0.92)
-        p  = va[None, :] + ts[:, None] * (vb - va)[None, :]
-        r  = np.minimum(roundover_mm * rng.uniform(*_ROUND_JITTER, k), cap)
-        cores.append(p - nd[None, :] * r[:, None])
-        rhos.append(r)
-
-    core = np.vstack(cores)
-    rho  = np.concatenate(rhos)
-    # subdivisions=2 (162 dirs): coarser balls turn fillets into single
-    # chamfer strips — reads as a bevelled box, not weathering.
-    dirs = trimesh.creation.icosphere(subdivisions=2, radius=1.0).vertices
-    pts  = (core[:, None, :] + rho[:, None, None] * dirs[None, :, :])
-    h = trimesh.convex.convex_hull(pts.reshape(-1, 3))
-    return np.asarray(h.vertices), np.asarray(h.faces)
-
-
 def _spall_blob(r: float, depth: float, n: np.ndarray,
                 rng: np.random.Generator) -> trimesh.Trimesh:
     """Organic spall cutter: a lumpified oblate blob, not a sphere.
@@ -339,58 +288,6 @@ def _spall_blob(r: float, depth: float, n: np.ndarray,
         bite.apply_transform(
             trimesh.transformations.rotation_matrix(ang, ax / s))
     return bite
-
-
-def _relief_field(p: np.ndarray, rng: np.random.Generator, n_waves: int,
-                  wl_lo: float, wl_hi: float,
-                  spectral: float = 0.7) -> np.ndarray:
-    """Broadband random relief: plane waves with LOG-UNIFORM wavelengths
-    and amplitude ∝ wl^spectral, normalized to unit RMS.
-
-    Narrowband noise (every wave at one scale) reads as a regular field
-    of same-sized bumps — an egg carton, not stone (Shawn's find on the
-    doane grain).  Mixing octaves like a 1/f spectrum reads mineral."""
-    f, tot = np.zeros(len(p)), 0.0
-    for _ in range(n_waves):
-        d = rng.normal(size=3)
-        d /= np.linalg.norm(d) + 1e-12
-        wl = float(np.exp(rng.uniform(np.log(wl_lo), np.log(wl_hi))))
-        a  = (wl / wl_hi) ** spectral
-        f += a * np.cos(2.0 * np.pi / wl * (p @ d)
-                        + rng.uniform(0.0, 2.0 * np.pi))
-        tot += a * a
-    return f / np.sqrt(tot / 2.0 + 1e-12)
-
-
-def _blur_remesh(body: trimesh.Trimesh, footprint_mm: float,
-                 sigma: float) -> trimesh.Trimesh | None:
-    """Remesh via marching cubes on a Gaussian-blurred occupancy field.
-
-    The single stable-mesh primitive of the pipeline: uniform triangles
-    (Laplacian smoothing is unstable on the hull/fillet needle triangles
-    — it spikes them into sliver pleats) and a sub-voxel smooth
-    isosurface (binary MC quantizes to voxel planes; on flanks nearly
-    parallel to a plane family the steps stretch into 1 mm+ terraces no
-    smoothing removes).  Returns None when MC fails; caller falls back.
-    """
-    import scipy.ndimage as _ndi
-    from skimage import measure as _measure
-    pitch = float(np.clip(footprint_mm / 56.0, 0.18, 0.32))
-    try:
-        vg  = body.voxelized(pitch).fill()
-        mat = np.pad(vg.encoding.dense.astype(np.float32), 4)
-        mat = _ndi.gaussian_filter(mat, sigma=sigma)
-        mv, mf, _n, _v = _measure.marching_cubes(mat, level=0.5)
-        out = trimesh.Trimesh(vertices=mv - 4.0, faces=mf, process=True)
-        out.apply_transform(vg.transform)
-        # skimage's winding is inverted vs trimesh: volume comes out
-        # negative and every downstream boolean refuses ("not a volume").
-        out.fix_normals()
-        if not out.is_watertight or out.volume <= 0:
-            return None
-        return out
-    except Exception:                               # noqa: BLE001
-        return None
 
 
 def _weather_bites(crisp_v: np.ndarray, crisp_f: np.ndarray,
@@ -551,7 +448,7 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
     # nodules (Shawn's MeshLab find).  Heavy stones bite the crisp hull:
     # flat faces guarantee a single clean rim loop.
     if 0.0 < spec.roundover_mm <= 0.8:
-        v_loc, faces = _round_edges(v_loc, faces, spec.roundover_mm, r_rng)
+        v_loc, faces = round_edges(v_loc, faces, spec.roundover_mm, r_rng)
     # The FDM audit runs on the CONVEX body: printability is set by the
     # overall mass, and concave bite interiors self-support (auditing them
     # force-buried the trio monolith to max depth).
@@ -594,7 +491,7 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
             # ~0.2 mm micro-rounding that even fresh cleaved rock has) —
             # Taubin on the warped needle tessellation pleated slivers
             # here exactly like the aged path (field shard, ro=0.05).
-            dq = _blur_remesh(
+            dq = blur_remesh(
                 trimesh.Trimesh(vertices=v_loc, faces=faces,
                                 process=False),
                 spec.footprint_mm, sigma=0.9)
@@ -618,7 +515,7 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
                 _cd3 = np.linalg.norm(pq - np.asarray(_sn3.vertices),
                                       axis=1)
                 cdq = 1.0 / (1.0 + (_cd3 / 0.35) ** 2)
-                gq = 0.7 * _relief_field(pq, w_rng, 16, 0.6, 3.2,
+                gq = 0.7 * relief_field(pq, w_rng, 16, 0.6, 3.2,
                                          spectral=0.7)
                 amp_q = 0.5 * np.clip(_MICRO_AMP_FRAC * spec.footprint_mm,
                                       *_MICRO_AMP_MM)
@@ -630,10 +527,8 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
         try:
             out = trimesh.boolean.difference([body] + bites,
                                              engine='manifold')
-            v32 = out.vertices.astype(np.float32).astype(np.float64)
-            chk = trimesh.Trimesh(vertices=v32, faces=out.faces.copy(),
-                                  process=True)
-            if len(out.faces) > 0 and out.is_watertight and chk.is_watertight:
+            if (len(out.faces) > 0 and out.is_watertight
+                    and survives_stl32(out)):
                 v_loc = np.asarray(out.vertices)
                 faces = np.asarray(out.faces)
             else:
@@ -653,7 +548,7 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
         # the fold slivers Shawn kept finding.  Marching cubes gives
         # uniform triangles by construction; Taubin is then stable.
         body = trimesh.Trimesh(vertices=v_loc, faces=faces, process=False)
-        aged = _blur_remesh(body, spec.footprint_mm, sigma=1.2)
+        aged = blur_remesh(body, spec.footprint_mm, sigma=1.2)
         if aged is None:
             aged = body.subdivide()
         # Floor at 16: marching cubes leaves voxel stairsteps (z-contour
@@ -720,7 +615,7 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
             curv_damp = 1.0 / (1.0 + (_cd / 0.35) ** 2)
             # Broadband pillowing: log-uniform wavelengths from foot/4.5
             # up to foot/1.6 — narrowband bulges read as one bump size.
-            f = 0.35 * _relief_field(p, u_rng, 6,
+            f = 0.35 * relief_field(p, u_rng, 6,
                                      spec.footprint_mm / 4.5,
                                      spec.footprint_mm / 1.6,
                                      spectral=1.0)
@@ -731,7 +626,7 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
             # Micro-texture: granular drybrush tooth (E10), broadband
             # 0.6–3.2 mm — prints on a 0.4 mm nozzle, kills the glass
             # read without the egg-carton regularity.
-            g = 0.7 * _relief_field(p, u_rng, 16, 0.6, 3.2,
+            g = 0.7 * relief_field(p, u_rng, 16, 0.6, 3.2,
                                     spectral=0.7)
             amp_g = np.clip(_MICRO_AMP_FRAC * spec.footprint_mm,
                             *_MICRO_AMP_MM)
@@ -1034,16 +929,9 @@ def _engrave_cracks(mesh: trimesh.Trimesh, rng: np.random.Generator,
     try:
         out = trimesh.boolean.difference([mesh] + cutters, engine='manifold')
         if len(out.faces) > 0 and out.is_watertight:
-            # STL is float32: crack-tip sliver triangles can collapse under
-            # quantization and open the mesh even though the float64 result
-            # is watertight.  Accept only if the stone survives the same
-            # round-trip the exported STL will take.
-            v32 = out.vertices.astype(np.float32).astype(np.float64)
-            chk = trimesh.Trimesh(vertices=v32, faces=out.faces.copy(),
-                                  process=True)
             # Genus check: a groove that tunnels under a bump leaves a
             # bridge (a handle) — reject anything that isn't sphere-like.
-            if chk.is_watertight and out.euler_number == 2:
+            if survives_stl32(out) and out.euler_number == 2:
                 return out
         warnings.warn('crack engraving produced a non-watertight or '
                       'non-spherical stone; left uncracked', RuntimeWarning)
@@ -1073,14 +961,8 @@ def _build_and_stamp(scene, specs: list[StoneSpec]) -> list[trimesh.Trimesh]:
                 extents=[ext, ext, ext],
                 transform=trimesh.transformations.translation_matrix(
                     [spec.x, spec.y, _FLOOR_MM + ext / 2.0]))
-            clipped = trimesh.boolean.intersection([mesh, box],
-                                                   engine='manifold')
-            if len(clipped.faces) > 0 and clipped.is_watertight:
-                mesh = clipped
-            else:
-                warnings.warn(f'floor clip failed for stone at '
-                              f'({spec.x:.1f},{spec.y:.1f}); left unclipped',
-                              RuntimeWarning)
+            mesh = clip_to_box(
+                mesh, box, f'stone floor at ({spec.x:.1f},{spec.y:.1f})')
         # Stamp from the convex body (the stamp math assumes convexity),
         # then engrave — grooves are too small to matter for support/masks.
         _stamp_stone(scene, mesh)

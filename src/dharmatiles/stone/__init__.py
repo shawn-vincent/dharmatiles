@@ -1,0 +1,22 @@
+"""Shared stone-making primitives.
+
+Everything that turns "a solid" into "a stone" lives here, family-
+independent: scatter rocks (``scatter/stones.py``), the cut-stone wall,
+and the fieldstone wall (``walls/``) all build on these.  A family is a
+SHAPE source (faceted hull, jittered box, crack-outline sphere-morph)
+plus this shared finishing/guarantee machinery.
+
+Review + plan: docs/meta/history/2026-07-05-walls-rocks-refactor-review.md.
+"""
+from .shape import round_edges
+from .solidify import clip_to_box, separate_pinches, survives_stl32
+from .surface import blur_remesh, relief_field
+
+__all__ = [
+    'blur_remesh',
+    'clip_to_box',
+    'relief_field',
+    'round_edges',
+    'separate_pinches',
+    'survives_stl32',
+]

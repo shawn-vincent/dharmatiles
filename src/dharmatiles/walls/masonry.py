@@ -25,7 +25,8 @@ import numpy as np
 import trimesh
 
 from ..core.color import Material, tag as _tag
-from ..scatter.stones import _blur_remesh, _relief_field, _round_edges
+from ..stone import (blur_remesh, clip_to_box, relief_field, round_edges,
+                     separate_pinches)
 
 # ── Iteration knobs (module constants while prototyping) ─────────────────────
 _FACE_RECESS_MM   = 0.60   # per-block face jitter: outer/inner/end faces sit
@@ -85,6 +86,18 @@ class _Cell:
     is_bottom: bool
     is_quoin:  bool = False   # bay runs through a corner cell
     key:   tuple = field(default=())
+
+
+def _frame(seg: _Seg, t: float = 0.0, q: float = 0.0,
+           z: float = 0.0) -> np.ndarray:
+    """4×4 transform from a segment-local frame (x along the run, y the
+    inward normal) at run position *t*, depth *q*, world height *z*."""
+    m = np.eye(4)
+    m[:2, 0] = seg.d
+    m[:2, 1] = seg.n
+    m[:2, 3] = seg.a + seg.d * t + seg.n * q
+    m[2, 3]  = z
+    return m
 
 
 def _segments(spine_mm: list[tuple[float, float]]) -> list[_Seg]:
@@ -246,16 +259,16 @@ def _block_mesh(lx: float, ly: float, lz: float, chamfer: float,
     hull = trimesh.convex.convex_hull(np.asarray(pts))
     v, f = np.asarray(hull.vertices), np.asarray(hull.faces)
     if roundover_mm > 0.0:
-        v, f = _round_edges(v, f, roundover_mm, rng)
+        v, f = round_edges(v, f, roundover_mm, rng)
     body = trimesh.Trimesh(vertices=v, faces=f, process=False)
     # Uniform watertight remesh before displacement — subdivide_to_size
     # leaves T-junctions (non-conforming), which breaks the manifold
     # union.  _blur_remesh is the pipeline's stable-mesh primitive.
-    remeshed = _blur_remesh(body, max(lx, ly, lz), _REMESH_SIGMA)
+    remeshed = blur_remesh(body, max(lx, ly, lz), _REMESH_SIGMA)
     if remeshed is not None:
         body = remeshed
         if relief_mm > 0.0:
-            disp = relief_mm * _relief_field(
+            disp = relief_mm * relief_field(
                 body.vertices, rng, _RELIEF_WAVES, *relief_wl)
             body = trimesh.Trimesh(
                 vertices=(body.vertices
@@ -342,7 +355,7 @@ class CutStoneWall:
 
         wall = trimesh.boolean.union(parts, engine='manifold')
         wall = self._clip_to_tile(wall, surface)
-        self._separate_pinches(wall)
+        separate_pinches(wall)
         if not wall.is_watertight:
             warnings.warn('CutStoneWall union is not watertight',
                           RuntimeWarning)
@@ -387,12 +400,7 @@ class CutStoneWall:
             ex = np.array([t1 - t0, q1 - q0, z1 - z0])
             b = trimesh.creation.box(extents=ex)
             b.apply_translation(ex / 2.0)
-            m = np.eye(4)
-            m[:2, 0] = seg.d
-            m[:2, 1] = seg.n
-            m[:2, 3] = seg.a + seg.d * t0 + seg.n * q0
-            m[2, 3]  = z0
-            b.apply_transform(m)
+            b.apply_transform(_frame(seg, t0, q0, z0))
             return b
 
         # A start/end inset of ``rv`` is right at BOTH free ends and
@@ -441,12 +449,7 @@ class CutStoneWall:
             body.apply_transform(trimesh.transformations.rotation_matrix(
                 tilt, axis, ctr))
 
-        m = np.eye(4)
-        m[:2, 0] = seg.d
-        m[:2, 1] = seg.n
-        m[:2, 3] = seg.a + seg.d * x0 + seg.n * y0
-        m[2, 3]  = z0
-        body.apply_transform(m)
+        body.apply_transform(_frame(seg, x0, y0, z0))
         return body
 
     # ── terrain ──────────────────────────────────────────────────────────────
@@ -485,35 +488,6 @@ class CutStoneWall:
         scene.obstacle_mask[j0:j1, i0:i1] |= inside
 
     @staticmethod
-    def _separate_pinches(wall: trimesh.Trimesh) -> None:
-        """Nudge apart vertex pairs that coincide WITHOUT being
-        topologically connected.  Zero-gap stones + texture displacement
-        leave near-zero clearances somewhere every build; the mesh stays
-        index-manifold, but STL export merges vertices by POSITION on
-        reload, collapsing such a pinch into a non-manifold edge
-        (fieldstone E23).  The nudge is ASYMMETRIC (0.15 µm vs 0.30 µm
-        inward along each vertex's own normal) so a pair separates by
-        ≥0.15 µm even when the two normals are parallel — well past the
-        float32 grid (~0.004 µm at these coordinates).  Iterates in case
-        a nudge lands a vertex onto a third one (fieldstone E25)."""
-        from scipy.spatial import cKDTree
-        adjacent = {tuple(e) for e in np.sort(wall.edges_unique, axis=1)}
-        vn = np.asarray(wall.vertex_normals)
-        v = wall.vertices.view(np.ndarray)
-        for _ in range(4):
-            pairs = cKDTree(v).query_pairs(2e-4, output_type='ndarray')
-            moved = False
-            for i, j in pairs:
-                if (min(i, j), max(i, j)) in adjacent:
-                    continue
-                v[i] -= vn[i] * 1.5e-4
-                v[j] -= vn[j] * 3.0e-4
-                moved = True
-            if not moved:
-                break
-        wall.vertices = v
-
-    @staticmethod
     def _clip_to_tile(wall: trimesh.Trimesh, surface) -> trimesh.Trimesh:
         """Butt-join (R8): plane-cut flush at the tile boundary."""
         w, h = surface.tile_w, surface.tile_h
@@ -527,9 +501,4 @@ class CutStoneWall:
             extents=[w, h, zpad],
             transform=trimesh.transformations.translation_matrix(
                 [w / 2.0, h / 2.0, lo[2] - 10.0 + zpad / 2.0]))
-        clipped = trimesh.boolean.intersection([wall, box], engine='manifold')
-        if len(clipped.faces) > 0 and clipped.is_watertight:
-            return clipped
-        warnings.warn('wall tile-boundary clip failed; left unclipped',
-                      RuntimeWarning)
-        return wall
+        return clip_to_box(wall, box, 'wall tile boundary')
