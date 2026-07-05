@@ -146,14 +146,13 @@ class FieldstoneWall(CutStoneWall):
     def __init__(self, spine, *,
                  course_mm: tuple[float, float] = (2.8, 7.5),
                  bay_mm:    tuple[float, float] = (5.0, 16.0),
-                 joint_mm:  float = 0.1,   # physical crack gap (Shawn E14:
-                                           # nonzero but hairline).  The
-                                           # VISIBLE crack stays wider: the
-                                           # edge roundover recedes each
-                                           # stone by roundover_mm at the
-                                           # face plane, so the face shows
-                                           # a dark V-groove that closes to
-                                           # this gap at roundover depth
+                 joint_mm:  float = 0.0,   # physical crack gap (Shawn E18:
+                                           # zero — stones TOUCH at their
+                                           # equators; the crack is drawn
+                                           # entirely by the pole-ward
+                                           # curvature of the two stones
+                                           # meeting there, a V-groove
+                                           # with no gap at its root)
                  reveal_mm: float = 2.8,
                  roundover_mm: tuple[float, float] = (0.9, 2.0),
                  relief_mm:    float | None = 0.0,
