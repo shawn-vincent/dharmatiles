@@ -84,6 +84,12 @@ _POLE_DRIFT_FRAC  = 0.12          # each pole wanders up to this × the
                                   # outline size from the centroid: the
                                   # summit of the dome is off-centre,
                                   # like a real cobble
+_BED_FLAT_EXP     = (0.22, 0.42)  # z-scale = s^p (E19): the bed
+                                  # surfaces stay near-FLAT over most of
+                                  # the depth and only turn down close
+                                  # to the face poles — we're piling
+                                  # flat stones, not spheres.  Smaller
+                                  # exponent = flatter beds
 _PROUD_MM         = (0.10, 0.50)  # per-stone face recession (both faces)
 _PROUD_DEEP_PROB  = 0.12          # a rare stone sits notably deeper —
 _PROUD_DEEP_MM    = (0.70, 1.10)  # the odd deep stone the references show
@@ -92,6 +98,10 @@ _N_LAT            = 17            # latitude rings (poles excluded)
 # Cell topology
 _THROUGH_FRAC     = 0.20          # fraction of eligible cells merged with
                                   # the cell above into a throughstone
+_THROUGH_MAX_MM   = 9.5           # merged throughstone height cap (E19:
+                                  # cross-row stones must not get too
+                                  # tall — two full courses could reach
+                                  # ~12–15 mm)
 _SPLIT_H_PROB     = 0.28          # tall cell → two stacked thinner stones
 _SPLIT_H_MIN_MM   = 5.5           # eligible cell height for an h-split
 # Rubble hearting (E10 guarantee, unchanged)
@@ -144,7 +154,7 @@ class FieldstoneWall(CutStoneWall):
     """
 
     def __init__(self, spine, *,
-                 course_mm: tuple[float, float] = (2.8, 7.5),
+                 course_mm: tuple[float, float] = (2.3, 6.2),
                  bay_mm:    tuple[float, float] = (5.0, 16.0),
                  joint_mm:  float = 0.0,   # physical crack gap (Shawn E18:
                                            # zero — stones TOUCH at their
@@ -229,7 +239,8 @@ class FieldstoneWall(CutStoneWall):
             above = by_course.get((c.key[0] + 1, c.seg), [])
             for a in above:
                 if (a.is_quoin or a.key in taken
-                        or min(c.t1, a.t1) - max(c.t0, a.t0) < 3.0):
+                        or min(c.t1, a.t1) - max(c.t0, a.t0) < 3.0
+                        or a.z1 - c.z0 > _THROUGH_MAX_MM):
                     continue
                 lo = max(c.t0, a.t0)
                 hi = min(c.t1, a.t1)
@@ -393,6 +404,7 @@ class FieldstoneWall(CutStoneWall):
         ctr = np.array([poly.centroid.x, poly.centroid.y])
         a_f, a_b = brng.uniform(*_MORPH_A, 2)
         b_f, b_b = brng.uniform(*_MORPH_B, 2)
+        pz = brng.uniform(*_BED_FLAT_EXP)
         pole_f = ctr + brng.uniform(-_POLE_DRIFT_FRAC,
                                     _POLE_DRIFT_FRAC, 2) * span
         pole_b = ctr + brng.uniform(-_POLE_DRIFT_FRAC,
@@ -406,8 +418,16 @@ class FieldstoneWall(CutStoneWall):
             ae, be, pole = ((a_f, b_f, pole_f) if lat < 0
                             else (a_b, b_b, pole_b))
             sk = (1.0 - u ** ae) ** be
-            c_j = ctr + (pole - ctr) * (1.0 - sk)
-            rk = c_j + (ring - ctr) * sk
+            # Anisotropic (E19): t follows the morph, z flattens as
+            # sk^pz — beds stay planes over most of the depth, closing
+            # to the pole point only right at the faces.
+            szk = sk ** pz
+            rk = np.column_stack([
+                ctr[0] + (pole[0] - ctr[0]) * (1.0 - sk)
+                + (ring[:, 0] - ctr[0]) * sk,
+                ctr[1] + (pole[1] - ctr[1]) * (1.0 - szk)
+                + (ring[:, 1] - ctr[1]) * szk,
+            ])
             y = ym + h * np.sin(lat)
             verts.append(np.column_stack([rk[:, 0],
                                           np.full(n, y), rk[:, 1]]))
