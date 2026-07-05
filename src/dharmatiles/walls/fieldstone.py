@@ -434,16 +434,14 @@ class FieldstoneWall(CutStoneWall):
         return pts
 
     def _core_boxes(self, segs: list[_Seg], seat_z: float) -> list:
-        """The core stops just below the top-course bed (E25): the
-        perched top rocks are attached by the bed overlap pressed up
-        from the course below, so gaps in the top course look onto
-        the stones below, never the core."""
-        real_h = self.height_mm
-        self.height_mm = min(self._cap_z0 - 0.4 + self.reveal_mm, real_h)
-        try:
-            return super()._core_boxes(segs, seat_z)
-        finally:
-            self.height_mm = real_h
+        """Drystone: NO mortar core (E26, Shawn: "don't put mortar in
+        them").  The wall is stones all the way through — face stones
+        interpenetrate at their bed and head overlaps, and the rubble
+        hearting fills the interior, so the union is one connected
+        solid and every crack is floored by deeper stone.  (E25 had
+        already lowered the core below the top course; this removes
+        it everywhere.)"""
+        return []
 
     def _place_block(self, cell: _Cell, segs: list[_Seg], seat_z: float,
                      rng: np.random.Generator) -> trimesh.Trimesh | None:
