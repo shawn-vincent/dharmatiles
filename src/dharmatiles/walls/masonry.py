@@ -328,6 +328,7 @@ class CutStoneWall:
         parts = self._core_boxes(segs, seat_z)
         for cell in cells:
             parts.append(self._place_block(cell, segs, seat_z, rng))
+        parts.extend(self._extra_parts(segs, seat_z, rng))
 
         wall = trimesh.boolean.union(parts, engine='manifold')
         wall = self._clip_to_tile(wall, surface)
@@ -354,6 +355,12 @@ class CutStoneWall:
         return _block_mesh(lx, ly, lz, chamfer, self.chip_mm,
                            self.roundover_mm, self.relief_mm,
                            self.relief_wl, cell.is_top, rng)
+
+    def _extra_parts(self, segs: list[_Seg], seat_z: float,
+                     rng: np.random.Generator) -> list[trimesh.Trimesh]:
+        """Additional solid parts after the units (subclass hook —
+        FieldstoneWall adds rubble hearting)."""
+        return []
 
     def _core_boxes(self, segs: list[_Seg], seat_z: float,
                     ) -> list[trimesh.Trimesh]:
