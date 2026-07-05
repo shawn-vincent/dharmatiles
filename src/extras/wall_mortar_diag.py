@@ -34,6 +34,7 @@ def build_parts(wall: FieldstoneWall, sq: float):
     cells = wall._cells(segs, wall.thickness_mm, wall.height_mm, rng)
     core   = wall._core_boxes(segs, seat_z)
     stones = [wall._place_block(c, segs, seat_z, rng) for c in cells]
+    stones = [s for s in stones if s is not None]
     stones.extend(wall._extra_parts(segs, seat_z, rng))
     return core, stones
 

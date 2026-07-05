@@ -1,96 +1,151 @@
 """
 Fieldstone / drystone wall — walls campaign family 3.
 
-Same chassis as :class:`CutStoneWall` (spine → segments, courses/bays
-with bond offset, quoin alternation, recessed core, seat/stamp/clip);
-the UNIT and the cell field change.  Reference read
-(`docs/reference/walls/README.md` drystone photo, Hirst m70): **flat
-slabby stones laid on their beds** — width ≫ height on the face — in
-rough courses, packed to nearly touching with thin dark shadow joints
-(no mortar), big size variety with occasional throughstones spanning
-two courses, and the corner built from the same stones, just squarer.
+E12 rework (Shawn round-8: "Distinct natural stones, fitting together
+with tight cracks between … stones fitting into all the space").
+Reference set: ``docs/reference/walls/fieldstone/`` — every image
+agrees on the same geometric truths (see the README there):
 
-Shawn round-3 verdict on the first cut ("terrible"): stones were too
-equant and egg-like, the corner kept cut-stone BRICKS, joints gaped,
-sizes were uniform.  This rework:
+- adjacent stones SHARE edge geometry (edges run parallel, a bulge in
+  one stone matches a notch in its neighbour) — the builder chose
+  stones to fit;
+- stone covers >= 90 % of the face; cracks are thin (~0.3–0.7 mm at DB
+  scale) and roughly uniform, never mortar seas or per-stone moats;
+- beds are long, wavy, sub-horizontal shadow lines; head joints short,
+  staggered, slightly slanted;
+- faces are near-coplanar (small per-stone proudness); the drama is
+  the dark crack network + per-stone light tone, not deep relief.
 
-- stones are generated as slabs (vertical support directions squashed)
-  so every stone reads laid-flat, like the m70 strips;
-- corners use the same fieldstone unit at high blockiness — no
-  `_block_mesh` bricks anywhere in this wall;
-- packing: stones overshoot their cells and are shaved back by the
-  rounding (`_PACK_COMP_MM`), joints thin (`joint_mm` 0.5);
-- size irregularity: bay range widened AND a `_cells` post-pass merges
-  ~1/7 of cells with the cell above into a double-height throughstone,
-  plus per-stone height jitter down to ~55 % of the course (small
-  pinning stones between big ones).
+E6–E11 generated an independent hull per grid cell and could never
+produce that complementarity — every round read as separate objects
+arranged on a grid.  E12 inverts the construction, **crack network
+first**:
+
+1. The layout chassis (courses × bays × quoins, from CutStoneWall)
+   provides the crack TOPOLOGY.
+2. Each bed line gets a shared wobble function; each head joint a
+   shared slant.  Both sides of any crack evaluate the SAME curve, so
+   neighbouring stones complement each other exactly, by construction.
+3. A stone's face outline IS the polygon its cracks bound, inset by
+   half the crack width (shapely), corners rounded.
+4. The solid is that outline lofted through the wall thickness with a
+   gentle belly (pillowed prism), light broadband relief on top.
+
+Tessellation (fill-all-space), tight uniform cracks, and neighbour
+complementarity therefore hold by construction; the rubble hearting
+(E10) keeps every crack floored by deeper stone, never the core.
 """
 from __future__ import annotations
 
 import numpy as np
 import trimesh
 
-from ..scatter.stones import _blur_remesh, _relief_field, _round_edges
+from ..scatter.stones import _relief_field, _round_edges
 from .masonry import CutStoneWall, _Cell, _Seg, _RELIEF_WAVES
 
 # ── Iteration knobs (module constants while prototyping) ─────────────────────
-_BLOCKINESS       = (0.42, 0.78)  # ellipsoid↔box blend for body stones —
-                                  # wide range = the reference's mix of
-                                  # rounded and squarish stones; with real
-                                  # gaps + hearting behind them (E10) the
-                                  # rounder end no longer opens mortar
-                                  # channels, so the E9 floor is relaxed
-_QUOIN_BLOCKINESS = (0.65, 0.88)  # corner stones: same unit, squarer
-_CAP_BLOCKINESS   = (0.55, 0.80)  # coping stones flat-topped and squarer
-_LUMP             = (0.90, 1.0)   # per-point radius jitter
-_DIR_JITTER       = 0.12          # support-direction jitter
-_FLATTEN          = (0.50, 0.80)  # vertical squash of support directions:
-                                  # stones are SLABS laid on their beds —
-                                  # the round-3 "flatter stones" call.
-                                  # Applied in direction space, so the hull
-                                  # fills the (short) cell height while the
-                                  # silhouette stays wide
-_PACK_COMP_MM     = 2.1           # build oversize so rounding keeps real
-                                  # curvature; exact-fit rescales to target
-_FLATTEN_Y        = (0.35, 0.60)  # face squash — broad flattish face patch
-                                  # (mortar diagnostic: tangent bellies covered
-                                  # ~half the face; red sea between stones)
-_FLATTEN_X_END    = (0.55, 0.80)  # end squash for wall-end stones only
-# Stones NEVER overlap (E10, Shawn + the drystone reference photo):
-# a carefully stacked pile reads through the dark outline gap around
-# EVERY stone; unioned overlaps erase those outlines and the wall
-# fuses into one lumpy mass.  Gaps are real (joint_mm), and the rubble
-# hearting behind them is what makes a gap read as stone-filled depth
-# instead of mortar.
+# Crack network
+_WOBBLE_AMP_MM    = (0.18, 0.40)  # per-sine bed wobble amplitude (2 sines).
+                                  # Total ≤ 0.8: two INDEPENDENT beds can
+                                  # close on each other by twice that, and
+                                  # the thinnest stones (split pairs of a
+                                  # 6.5 mm course) are ~2.9 mm — the beds
+                                  # must never cross
+_WOBBLE_WL_MM     = (14.0, 40.0)  # bed wobble wavelengths
+_WOBBLE_TAPER_MM  = 12.0          # wobble fades to 0 within this of a
+                                  # segment end: corners/butt ends pack
+                                  # straight and tight
+_DRIFT_MM         = 2.2           # head joints slant up to ±this across
+                                  # their course (staggered, never aligned)
+# Stone body
+_BELLY_FACE_SCALE = (0.93, 0.975) # outline scale at the face plane vs the
+                                  # mid-depth belly: cracks are V-grooves —
+                                  # tight at the belly, slightly open at
+                                  # the face, dark by depth
+_BELLY_EXP        = (0.9, 1.4)    # belly profile exponent
+_APEX_DRIFT_FRAC  = 0.08          # belly apex wanders up to this × the
+                                  # stone size: each face catches its own
+                                  # light without breaking tessellation
+                                  # (whole-stone rotation would open wedges)
+_PROUD_MM         = (0.10, 0.50)  # per-stone face recession (both faces)
+_PROUD_DEEP_PROB  = 0.12          # a rare stone sits notably deeper —
+_PROUD_DEEP_MM    = (0.70, 1.10)  # the odd deep stone the references show
+_RING_STEP_MM     = 1.2           # outline resample spacing
+_N_STATIONS       = 7             # loft stations through the thickness
+# Cell topology
 _THROUGH_FRAC     = 0.20          # fraction of eligible cells merged with
                                   # the cell above into a throughstone
-_REMESH_SIGMA     = 0.9           # aged read (stones convention)
-_RUBBLE_SPACING_MM = 4.2          # hearting grid pitch over each face
-_RUBBLE_FOOT      = (8.5, 11.0)   # ≥2× pitch: hull corners recede ~25 %
-                                  # inside their boxes, so box-touching is
-                                  # NOT enough — coverage is guaranteed
-                                  # only when each stone's box overlaps
-                                  # its neighbour by more than the
-                                  # recession (measured 3.8 % box-level
-                                  # holes at 1.3–2× pitch, E10)
-_RUBBLE_H         = (5.5, 7.5)    # ≥1.3× pitch vertically, same rule
-_RUBBLE_SETBACK_MM = 1.6          # rubble faces sit this far behind the
-                                  # wall face planes: deep enough that the
-                                  # face stones stay the wall (at 0.15 the
-                                  # big-footprint rubble reached the face
-                                  # plane and BURIED the coursing — E10),
-                                  # shallow enough to still front the core
-                                  # (reveal 2.2) through every gap
+_SPLIT_H_PROB     = 0.18          # tall cell → two stacked thinner stones
+# Rubble hearting (E10 guarantee, unchanged)
+_RUBBLE_SPACING_MM = 4.2
+_RUBBLE_FOOT      = (8.5, 11.0)
+_RUBBLE_H         = (5.5, 7.5)
+_RUBBLE_SETBACK_MM = 1.6
+# Hull-stone shape (rubble only)
+_LUMP             = (0.90, 1.0)
+_DIR_JITTER       = 0.12
+# Cell-key tags (ints, not strings: _place_block hashes cell.key for the
+# per-stone rng and str hashes vary per process).  Base keys are
+# (course, seg, bay), so tagged keys are longer, never equal.
+_K_THROUGH = 9
+_K_SPLIT_B, _K_SPLIT_T = 1, 2
 
 
-def _fieldstone_mesh(lx: float, ly: float, lz: float, blockiness: float,
-                     flat_top: bool, roundover_mm: float, relief_mm: float,
-                     relief_wl: tuple[float, float],
-                     rng: np.random.Generator,
-                     flatten_y: float = 1.0,
-                     flatten_x: float = 1.0,
-                     aged: bool = True) -> trimesh.Trimesh:
-    """One flat-bedded stone filling the local box [0,lx]×[0,ly]×[0,lz]."""
+def _earcut(pts: np.ndarray) -> np.ndarray:
+    """Ear-clipping triangulation of a simple CCW polygon (n, 2).
+
+    Dependency-free stand-in for mapbox_earcut (not installed): the cap
+    triangulation must follow the polygon interior — a centroid fan
+    makes long radial triangles whose interpolated normals streak under
+    smooth shading."""
+    n = len(pts)
+    idx = list(range(n))
+    tris: list[tuple[int, int, int]] = []
+
+    def area2(a, b, c):
+        return ((b[0] - a[0]) * (c[1] - a[1])
+                - (b[1] - a[1]) * (c[0] - a[0]))
+
+    guard = 0
+    while len(idx) > 3 and guard < 100 * n:
+        guard += 1
+        m = len(idx)
+        clipped = False
+        for k in range(m):
+            i0, i1, i2 = idx[k - 1], idx[k], idx[(k + 1) % m]
+            a, b, c = pts[i0], pts[i1], pts[i2]
+            if area2(a, b, c) <= 1e-12:          # reflex / degenerate
+                continue
+            ok = True
+            for j in idx:
+                if j in (i0, i1, i2):
+                    continue
+                p = pts[j]
+                if (area2(a, b, p) >= -1e-12
+                        and area2(b, c, p) >= -1e-12
+                        and area2(c, a, p) >= -1e-12):
+                    ok = False
+                    break
+            if ok:
+                tris.append((i0, i1, i2))
+                idx.pop(k)
+                clipped = True
+                break
+        if not clipped:
+            break                                # numeric dead end: fan
+    if len(idx) == 3:
+        tris.append(tuple(idx))
+    else:
+        for k in range(1, len(idx) - 1):
+            tris.append((idx[0], idx[k], idx[k + 1]))
+    return np.asarray(tris, dtype=int)
+
+
+def _rubble_mesh(lx: float, ly: float, lz: float,
+                 rng: np.random.Generator) -> trimesh.Trimesh:
+    """Cheap hull stone for the hearting: reads through cracks a
+    millimetre behind the faces — no remesh/relief for ~100 background
+    stones."""
     M = int(rng.integers(13, 18))
     i = np.arange(M) + 0.5
     phi   = np.arccos(1.0 - 2.0 * i / M)
@@ -98,68 +153,36 @@ def _fieldstone_mesh(lx: float, ly: float, lz: float, blockiness: float,
     d = np.stack([np.sin(phi) * np.cos(theta),
                   np.sin(phi) * np.sin(theta), np.cos(phi)], axis=1)
     d += rng.normal(0.0, _DIR_JITTER, d.shape)
-    # Squashes in direction space flatten the hull toward that axis's
-    # planes.  z: flat-laid bed/top (the slab read).  y: broad flattish
-    # FACE patches — the mortar-diagnostic fix: a round belly touches
-    # the face plane at one point, so straight-on the wall read as
-    # stones floating in mortar; a builder turns the flattest side out.
-    # x: only for wall-end stones (their end is a visible face).
-    d[:, 0] *= flatten_x
-    d[:, 1] *= flatten_y
-    d[:, 2] *= rng.uniform(*_FLATTEN)
+    d[:, 1] *= rng.uniform(0.5, 0.8)
     d /= np.linalg.norm(d, axis=1, keepdims=True) + 1e-12
-
     half = np.array([lx / 2.0, ly / 2.0, lz / 2.0])
+    blockiness = rng.uniform(0.25, 0.55)
     r_ell = 1.0 / np.sqrt(((d / half) ** 2).sum(axis=1))
     r_box = 1.0 / (np.abs(d) / half).max(axis=1)
     r = ((1.0 - blockiness) * r_ell + blockiness * r_box)
     r *= rng.uniform(*_LUMP, M)
-    p = d * r[:, None]
-    if flat_top:
-        p[:, 2] = np.minimum(p[:, 2], 0.90 * half[2])
-    p += half
-
+    p = d * r[:, None] + half
     hull = trimesh.convex.convex_hull(p)
-    v, f = np.asarray(hull.vertices), np.asarray(hull.faces)
-    if roundover_mm > 0.0:
-        v, f = _round_edges(v, f, roundover_mm, rng)
-    body = trimesh.Trimesh(vertices=v, faces=f, process=False)
-    if not aged:
-        # Cheap path for rubble hearting: hull + roundover only.  The
-        # rubble reads through joints, a millimetre behind the faces —
-        # remesh + relief cost would be paid ~100× for background stones.
-        return body
-    remeshed = _blur_remesh(body, max(lx, ly, lz), _REMESH_SIGMA)
-    if remeshed is not None:
-        body = remeshed
-        if relief_mm > 0.0:
-            disp = relief_mm * _relief_field(
-                body.vertices, rng, _RELIEF_WAVES, *relief_wl)
-            body = trimesh.Trimesh(
-                vertices=(body.vertices
-                          + np.asarray(body.vertex_normals) * disp[:, None]),
-                faces=body.faces, process=False)
-    return body
+    v, f = _round_edges(np.asarray(hull.vertices), np.asarray(hull.faces),
+                        0.35, rng)
+    return trimesh.Trimesh(vertices=v, faces=f, process=False)
 
 
 class FieldstoneWall(CutStoneWall):
     """Direct TileLayer: a drystone fieldstone wall on a plan spine.
 
-    Same spine convention and contracts as :class:`CutStoneWall`.
+    Same spine convention and contracts as :class:`CutStoneWall`; the
+    stones are crack-network tessellated (module docstring).
     """
 
-    yaw_max_deg:    float = 2.5   # stones sit less true than cut blocks
-    tilt_max_deg:   float = 1.2
-    face_recess_mm: float = 0.45
-
     def __init__(self, spine, *,
-                 course_mm: tuple[float, float] = (3.2, 8.8),
-                 bay_mm:    tuple[float, float] = (4.5, 16.0),
-                 joint_mm:  float = 0.9,
+                 course_mm: tuple[float, float] = (3.4, 9.6),
+                 bay_mm:    tuple[float, float] = (5.0, 16.0),
+                 joint_mm:  float = 0.5,
                  reveal_mm: float = 2.8,
-                 roundover_mm: float | None = 0.45,
-                 relief_mm:    float | None = 0.12,
-                 relief_wl:    tuple[float, float] | None = (2.0, 7.0),
+                 roundover_mm: float | None = 0.42,
+                 relief_mm:    float | None = 0.10,
+                 relief_wl:    tuple[float, float] | None = (3.0, 9.0),
                  min_bond_mm:  float = 1.8,
                  **kwargs):
         super().__init__(spine, course_mm=course_mm, bay_mm=bay_mm,
@@ -167,15 +190,58 @@ class FieldstoneWall(CutStoneWall):
                          roundover_mm=roundover_mm, relief_mm=relief_mm,
                          relief_wl=relief_wl, min_bond_mm=min_bond_mm,
                          **kwargs)
+        self._beds:   dict[tuple, tuple] = {}   # (seg, zkey) → sine params
+        self._drifts: dict[tuple, float] = {}   # (seg, course, tkey) → drift
 
-    # ── size irregularity: throughstone merges ───────────────────────────────
+    # ── shared crack curves ──────────────────────────────────────────────────
+    # Both stones flanking a crack evaluate the SAME curve (cached by a
+    # quantised key), so complementarity is exact by construction.
+
+    def _feature_rng(self, *key: int) -> np.random.Generator:
+        return np.random.default_rng(
+            hash((self.seed,) + key) & 0x7FFFFFFF)
+
+    def _bed(self, seg_i: int, z: float, L: float):
+        """Wobble function f(t) for the bed line at wall-local z."""
+        key = (seg_i, int(round(z * 100.0)))
+        if key not in self._beds:
+            rng = self._feature_rng(7, *key)
+            amp = rng.uniform(*_WOBBLE_AMP_MM, 2)
+            wl  = rng.uniform(*_WOBBLE_WL_MM, 2)
+            ph  = rng.uniform(0.0, 2.0 * np.pi, 2)
+            self._beds[key] = (amp, wl, ph)
+        amp, wl, ph = self._beds[key]
+
+        def f(t):
+            t = np.asarray(t, dtype=float)
+            taper = np.clip(np.minimum(t, L - t) / _WOBBLE_TAPER_MM,
+                            0.0, 1.0)
+            w = sum(a * np.sin(2.0 * np.pi * t / l + p)
+                    for a, l, p in zip(amp, wl, ph))
+            return w * taper
+        return f
+
+    def _drift(self, seg_i: int, course: int, t: float) -> float:
+        """Slant of the head joint at cut position t in this course."""
+        key = (seg_i, course, int(round(t * 100.0)))
+        if key not in self._drifts:
+            rng = self._feature_rng(11, *key)
+            self._drifts[key] = float(rng.uniform(-_DRIFT_MM, _DRIFT_MM))
+        return self._drifts[key]
+
+    # ── cell topology ────────────────────────────────────────────────────────
     def _cells(self, segs: list[_Seg], T: float, H: float,
                rng: np.random.Generator) -> list[_Cell]:
-        cells = super()._cells(segs, T, H, rng)
-        # Merge some cells with a cell in the course directly above into
-        # a double-height throughstone (drystone structure + the wide
-        # size read).  Candidates must overlap in t and neither cell may
-        # be already merged, a quoin, or the top course.
+        self._beds.clear()
+        self._drifts.clear()
+        cells = self._merge_throughstones(super()._cells(segs, T, H, rng),
+                                          rng)
+        return self._split_cells(cells, rng)
+
+    def _merge_throughstones(self, cells: list[_Cell],
+                             rng: np.random.Generator) -> list[_Cell]:
+        """Merge some vertically adjacent cell pairs into double-height
+        throughstones (drystone structure + the big-stone size read)."""
         by_course: dict[tuple[int, int], list[_Cell]] = {}
         for c in cells:
             by_course.setdefault((c.key[0], c.seg), []).append(c)
@@ -193,15 +259,18 @@ class FieldstoneWall(CutStoneWall):
                     continue
                 lo = max(c.t0, a.t0)
                 hi = min(c.t1, a.t1)
-                # The throughstone takes the overlap column; donor cells
-                # shrink away from it so neighbours stay in place.
-                merged.append(_Cell(
+                cell = _Cell(
                     seg=c.seg, t0=lo, t1=hi,
                     end0='joint', end1='joint',
                     z0=c.z0, z1=a.z1,
                     is_top=a.is_top, is_bottom=c.is_bottom,
-                    key=(c.key[0], c.seg, c.key[2], 'through'),
-                ))
+                    key=(c.key[0], c.seg, c.key[2], _K_THROUGH),
+                )
+                # The side cracks cross two course bands, each shared
+                # with that band's neighbour (drift keyed per course).
+                cell.side_bands = [(c.key[0], c.z0, c.z1),
+                                   (c.key[0] + 1, a.z0, a.z1)]
+                merged.append(cell)
                 taken.add(c.key)
                 taken.add(a.key)
                 for donor in (c, a):
@@ -220,35 +289,256 @@ class FieldstoneWall(CutStoneWall):
         out.extend(merged)
         return out
 
+    def _split_cells(self, cells: list[_Cell],
+                     rng: np.random.Generator) -> list[_Cell]:
+        """Some tall cells become two stacked thinner stones (full
+        width — the pair still fills the cell; both share the new bed
+        line, so the split is a crack like any other)."""
+        out: list[_Cell] = []
+        for c in cells:
+            h = c.z1 - c.z0
+            if (c.is_top or c.is_quoin or len(c.key) > 3
+                    or h < 6.5 or rng.random() > _SPLIT_H_PROB):
+                out.append(c)
+                continue
+            zm = c.z0 + h * rng.uniform(0.45, 0.65)
+            for z0, z1, tag, bot in ((c.z0, zm, _K_SPLIT_B, c.is_bottom),
+                                     (zm, c.z1, _K_SPLIT_T, False)):
+                out.append(_Cell(seg=c.seg, t0=c.t0, t1=c.t1,
+                                 end0=c.end0, end1=c.end1, z0=z0, z1=z1,
+                                 is_top=False, is_bottom=bot,
+                                 key=c.key + (tag,)))
+        return out
+
+    # ── the stone ────────────────────────────────────────────────────────────
+    @staticmethod
+    def _cap_triangulation(ring: np.ndarray, poly) -> tuple:
+        """Well-shaped triangulation of the face polygon: Delaunay over
+        the ring plus a ~1.4 mm interior grid (clear of the boundary so
+        ring edges stay locally Delaunay and the cap seams onto the
+        loft), triangles filtered to the polygon interior."""
+        import scipy.spatial as _ss
+        import shapely as _sh
+        inner = poly.buffer(-1.0)
+        pts = np.empty((0, 2))
+        if not inner.is_empty:
+            x0, z0, x1, z1 = inner.bounds
+            xs = np.arange(x0, x1 + 1e-6, 1.4)
+            zs = np.arange(z0, z1 + 1e-6, 1.4)
+            if len(xs) and len(zs):
+                gx, gz = np.meshgrid(xs, zs)
+                cand = np.column_stack([gx.ravel(), gz.ravel()])
+                keep = _sh.contains_xy(inner, cand[:, 0], cand[:, 1])
+                pts = cand[keep]
+        allp = np.vstack([ring, pts]) if len(pts) else ring
+        tri = _ss.Delaunay(allp)
+        cent = allp[tri.simplices].mean(axis=1)
+        keep = _sh.contains_xy(poly, cent[:, 0], cent[:, 1])
+        return pts, tri.simplices[keep]
+
+    def _outline(self, cell: _Cell, seg: _Seg, seg_i: int,
+                 ) -> np.ndarray:
+        """Face outline polygon (t, z) bounded by the cell's cracks.
+        Every edge — including every side ENDPOINT — evaluates curves
+        shared with the neighbour across it, so the tessellation has no
+        overlaps and no wedge voids anywhere, by construction."""
+        bands = getattr(cell, 'side_bands',
+                        [(cell.key[0], cell.z0, cell.z1)])
+
+        def zeff(z: float, t: float) -> float:
+            """Actual (wobbled) height of the bed line at t."""
+            if cell.is_bottom and z <= cell.z0 + 1e-9:
+                return -self.embed_mm          # flat buried seat
+            if cell.is_top and z >= cell.z1 - 1e-9:
+                return z                       # flat cap plane (R6)
+            return z + float(self._bed(seg_i, z, seg.L)(t))
+
+        def side(t_cut: float, end: str):
+            """[(t, z), …] bottom→top along this side crack.  Interior
+            band boundaries contribute two points (the drift changes
+            where the neighbour changes) — a small shared jog."""
+            if end == 'face':                  # wall end / corner arris
+                return [(t_cut, zeff(cell.z0, t_cut)),
+                        (t_cut, zeff(cell.z1, t_cut))]
+            pts = []
+            for crs, zb0, zb1 in bands:
+                d = self._drift(seg_i, crs, t_cut)
+                zm = (zb0 + zb1) / 2.0
+                for zb in (zb0, zb1):
+                    t = t_cut + d * (zb - zm) / (zb1 - zb0)
+                    pts.append((t, zeff(zb, t)))
+            return pts
+
+        left  = side(cell.t0, cell.end0)
+        right = side(cell.t1, cell.end1)
+
+        def bed(z: float, ta: float, tb: float):
+            n = max(2, int(abs(tb - ta) / 4.0) + 2)
+            ts = np.linspace(ta, tb, n)
+            return [(t, zeff(z, t)) for t in ts]
+
+        bot = bed(cell.z0, left[0][0], right[0][0])
+        top = bed(cell.z1, right[-1][0], left[-1][0])
+
+        # CCW: bottom left→right, right side up, top right→left, left
+        # down.  Slices drop the duplicated corner points (bed edges
+        # include both endpoints, which coincide with the side ends).
+        pts = (bot + right[1:] + top[1:] + left[::-1][1:-1])
+        return np.asarray(pts, dtype=float)
+
+    def _place_block(self, cell: _Cell, segs: list[_Seg], seat_z: float,
+                     rng: np.random.Generator) -> trimesh.Trimesh | None:
+        import shapely
+        import shapely.geometry as sgeom
+
+        seg = segs[cell.seg]
+        brng = np.random.default_rng(
+            (self.seed * 1_000_003 + hash(cell.key)) & 0x7FFFFFFF)
+        outline = self._outline(cell, seg, cell.seg)
+
+        # Inset by half the crack, round the corners (negative-positive
+        # buffer): the crack is a real thin gap by construction.
+        r = self.roundover_mm
+        poly = sgeom.Polygon(outline)
+        if not poly.is_valid:
+            poly = poly.buffer(0.0)
+        poly = poly.buffer(-(self.joint_mm / 2.0 + r), join_style=2,
+                           mitre_limit=2.0)
+        poly = poly.buffer(r, join_style=1, quad_segs=6)
+        if poly.is_empty:
+            return None
+        if poly.geom_type == 'MultiPolygon':
+            poly = max(poly.geoms, key=lambda g: g.area)
+        poly = shapely.geometry.polygon.orient(poly, 1.0)
+
+        # Ring = the polygon's own vertices, long edges densified.  A
+        # uniform arc-length resample UNDER-samples the rounded corners
+        # (2–3 points per 0.4 mm arc) — the sharp normal jumps rendered
+        # as vertical banding fans on the stone flanks.  segmentize
+        # keeps every corner vertex and only adds points on straights.
+        dense = shapely.segmentize(poly, _RING_STEP_MM)
+        ring = np.asarray(dense.exterior.coords)[:-1]
+        n = len(ring)
+        ctr = np.array([poly.centroid.x, poly.centroid.y])
+
+        # Loft through the thickness with a gentle belly.  No whole-stone
+        # rotation — it would open wedges; per-stone tone comes from the
+        # belly apex drift + proudness instead.
+        def recess():
+            if brng.random() < _PROUD_DEEP_PROB:
+                return brng.uniform(*_PROUD_DEEP_MM)
+            return brng.uniform(*_PROUD_MM)
+        y0, y1 = recess(), self.thickness_mm - recess()
+        s_face = brng.uniform(*_BELLY_FACE_SCALE)
+        if cell.is_quoin:
+            s_face = max(s_face, 0.955)
+        pexp = brng.uniform(*_BELLY_EXP)
+        size = outline.max(axis=0) - outline.min(axis=0)
+        apex = brng.uniform(-_APEX_DRIFT_FRAC, _APEX_DRIFT_FRAC, 2) * size
+
+        K = _N_STATIONS
+        verts = []
+        for k in range(K):
+            u = k / (K - 1.0)
+            belly = np.sin(np.pi * u) ** pexp
+            sk = s_face + (1.0 - s_face) * belly
+            c_k = ctr + apex * belly
+            rk = c_k + (ring - ctr) * sk
+            if cell.is_top:
+                # Crown-flat cap: belly in t only, top stays a plane (R6)
+                rk[:, 1] = ctr[1] + (ring[:, 1] - ctr[1]) * 0.99
+            y = y0 + (y1 - y0) * u
+            verts.append(np.column_stack([rk[:, 0],
+                                          np.full(n, y), rk[:, 1]]))
+        v = np.vstack(verts)
+        i = np.arange(n)
+        j = (i + 1) % n
+        faces = []
+        for k in range(K - 1):
+            a, b = k * n, (k + 1) * n
+            faces.append(np.column_stack([a + i, a + j, b + j]))
+            faces.append(np.column_stack([a + i, b + j, b + i]))
+        # End caps.  Well-shaped interior triangles matter: the face is
+        # the most visible surface, and skinny cap triangles streak
+        # under smooth shading once relief displaces their vertices
+        # (fan caps and my sequential earcut both showed this; the
+        # blur-remesh alternative terraces — near-planar faces lie
+        # almost parallel to a voxel plane family, marching cubes'
+        # worst case).  Delaunay over ring + interior grid, triangles
+        # filtered to the polygon; earcut fallback if the seam fails.
+        # Front and back stations carry the SAME scale (belly = 0 at
+        # both ends), so one triangulation serves both caps.
+        extras, capf = self._cap_triangulation(ring, poly)
+        m = len(extras)
+        if m:
+            e = ctr + (extras - ctr) * s_face
+            if cell.is_top:
+                e[:, 1] = ctr[1] + (extras[:, 1] - ctr[1]) * 0.99
+            verts.append(np.column_stack(
+                [e[:, 0], np.full(m, y0), e[:, 1]]))
+            verts.append(np.column_stack(
+                [e[:, 0], np.full(m, y1), e[:, 1]]))
+        v = np.vstack(verts)
+        mapF = np.concatenate([np.arange(n), K * n + np.arange(m)])
+        mapB = np.concatenate([(K - 1) * n + np.arange(n),
+                               K * n + m + np.arange(m)])
+        faces.append(mapF[capf][:, ::-1])                 # front (y0)
+        faces.append(mapB[capf])                          # back  (y1)
+        f = np.vstack(faces)
+        body = trimesh.Trimesh(vertices=v, faces=f, process=False)
+        if not body.is_watertight:
+            capf = _earcut(ring)
+            faces = faces[:-2]
+            faces.append(capf[:, ::-1])
+            faces.append(capf + (K - 1) * n)
+            body = trimesh.Trimesh(vertices=v[:K * n],
+                                   faces=np.vstack(faces), process=False)
+        trimesh.repair.fix_normals(body)
+
+        # Uniform subdivision (conforming — splits every edge) for
+        # relief sampling density, broadband relief, THEN light Taubin:
+        # smoothing last softens the plane-wave crests, whose organised
+        # interference pattern reads clearly on flat faces (curved
+        # scatter stones always hid it).  No voxel remesh: the fitted
+        # silhouette must not shrink or soften (the E7 shave lesson).
+        body = body.subdivide()
+        if self.relief_mm > 0.0:
+            disp = self.relief_mm * _relief_field(
+                body.vertices, brng, _RELIEF_WAVES, *self.relief_wl)
+            body = trimesh.Trimesh(
+                vertices=(body.vertices
+                          + np.asarray(body.vertex_normals)
+                          * disp[:, None]),
+                faces=body.faces, process=False)
+        trimesh.smoothing.filter_taubin(body, iterations=4)
+
+        m = np.eye(4)
+        m[:2, 0] = seg.d
+        m[:2, 1] = seg.n
+        m[:2, 3] = seg.a
+        m[2, 3] = seat_z
+        body.apply_transform(m)
+        return body
+
     # ── rubble hearting ──────────────────────────────────────────────────────
     def _extra_parts(self, segs: list[_Seg], seat_z: float,
                      rng: np.random.Generator) -> list:
-        """A sealed sheet of small rubble stones through the wall body.
-
-        By-construction guarantee for the red-mortar diagnostic: pins
-        chase voids case-by-case, but void shapes are unpredictable —
-        the hearting covers every (t, z) with overlapping rubble, so
-        any gap between face stones shows deeper stones, exactly like
-        a real drystone wall's packed core.
-        """
+        """A sealed sheet of small rubble stones through the wall body
+        (E10): every crack shows deeper stones, never the core plane.
+        Two y-layers, half-pitch staggered in t and z; the rubble honours
+        the face setback in t too — segment END planes are visible faces
+        (free ends and the corner arris)."""
         T, H = self.thickness_mm, self.height_mm
         sb = _RUBBLE_SETBACK_MM
-        # TWO y-layers, half-pitch staggered in t and z (E10): with one
-        # layer, a face gap aligned with a rubble-rubble gap leaks a
-        # sight line onto the core; the offset back layer backs every
-        # front-layer gap.  Layers meet at mid-thickness (hidden).
         y_bands = [(sb, 0.55 * T), (0.45 * T, T - sb)]
         parts = []
         for seg in segs:
             nt = max(2, int(round(seg.L / _RUBBLE_SPACING_MM)) + 1)
             nz = max(2, int(round(H / _RUBBLE_SPACING_MM)) + 1)
-            for layer, (y0, y1) in enumerate(y_bands):
+            for layer, (yb0, yb1) in enumerate(y_bands):
                 off = 0.5 * layer
                 for i in range(nt):
                     for j in range(nz):
-                        # Half-pitch stagger per row (brick bond) AND
-                        # per layer.  Row centres span 0..H edge to edge
-                        # (clips pull boundary stones inside).
                         tc = ((i + 0.5 * (j % 2) + off
                                + rng.uniform(-0.25, 0.25))
                               * seg.L / (nt - 1))
@@ -256,16 +546,12 @@ class FieldstoneWall(CutStoneWall):
                               * H / (nz - 1))
                         w = rng.uniform(*_RUBBLE_FOOT)
                         h = rng.uniform(*_RUBBLE_H)
-                        t0 = np.clip(tc - w / 2.0, 0.3, seg.L - 0.3 - w)
+                        t0 = np.clip(tc - w / 2.0, sb, seg.L - sb - w)
                         z0 = np.clip(zc - h / 2.0, 0.2, H - 0.6 - h)
-                        body = _fieldstone_mesh(
-                            w, y1 - y0, h,
-                            rng.uniform(0.25, 0.55), False,
-                            0.35, 0.0, self.relief_wl, rng,
-                            flatten_y=rng.uniform(0.5, 0.8), aged=False)
+                        body = _rubble_mesh(w, yb1 - yb0, h, rng)
                         b0, b1 = body.bounds
-                        tgt0 = np.array([t0, y0, z0])
-                        tgt1 = np.array([t0 + w, y1, z0 + h])
+                        tgt0 = np.array([t0, yb0, z0])
+                        tgt1 = np.array([t0 + w, yb1, z0 + h])
                         body.apply_translation(-b0)
                         body.apply_scale((tgt1 - tgt0) / (b1 - b0))
                         body.apply_translation(tgt0)
@@ -277,42 +563,3 @@ class FieldstoneWall(CutStoneWall):
                         body.apply_transform(m)
                         parts.append(body)
         return parts
-
-    # ── the unit ─────────────────────────────────────────────────────────────
-    def _unit_mesh(self, lx: float, ly: float, lz: float, chamfer: float,
-                   cell: _Cell, rng: np.random.Generator) -> trimesh.Trimesh:
-        # Same fieldstone unit EVERYWHERE — corners just get squarer
-        # stones (round-3: "you've left bricks in the corner").
-        if cell.is_quoin:
-            blockiness = rng.uniform(*_QUOIN_BLOCKINESS)
-        elif cell.is_top:
-            blockiness = rng.uniform(*_CAP_BLOCKINESS)
-        else:
-            blockiness = rng.uniform(*_BLOCKINESS)
-
-        # Build OVERSIZE so rounding keeps real curvature, then EXACT-FIT
-        # rescale to the target box.  This replaces shave compensation
-        # (round-4 fix): guessing the roundover+blur shave either leaves
-        # stones flush with the core (flat-slab read) or overshoots and
-        # bulges them past the outer face plane, where the tile-boundary
-        # clip PLANES them into flat-faced rocks (Shawn's outside find).
-        # Exact fit makes every belly tangent to its face plane — round
-        # faces by construction, nothing for the clip to shave.
-        fy = rng.uniform(*_FLATTEN_Y)
-        fx = (rng.uniform(*_FLATTEN_X_END)
-              if 'face' in (cell.end0, cell.end1) else 1.0)
-        c = _PACK_COMP_MM
-        body = _fieldstone_mesh(lx + c, ly + c, lz + c,
-                                blockiness, cell.is_top or cell.is_quoin,
-                                self.roundover_mm, self.relief_mm,
-                                self.relief_wl, rng,
-                                flatten_y=fy, flatten_x=fx)
-        # Target box IS the jointed cell (E10): stones never overlap —
-        # the outline gap around every stone is the stacked read.
-        b0, b1 = body.bounds
-        target0 = np.array([0.0, 0.0, 0.0])
-        target1 = np.array([lx, ly, lz])
-        body.apply_translation(-b0)
-        body.apply_scale((target1 - target0) / (b1 - b0))
-        body.apply_translation(target0)
-        return body

@@ -169,6 +169,14 @@ def _layout(segs: list[_Seg], thickness_mm: float, height_mm: float,
             if t1 - t0 < _MIN_BAY_FRAC * bay_mm[0]:
                 continue
             cuts = _bay_cuts(t0, t1, *bay_mm, prev_cuts[k], min_bond_mm, rng)
+            # No cut inside an owned corner cell (+ margin): a joint at
+            # t < T makes a tiny sliver quoin and the corner arris reads
+            # as a broken column of pebbles (fieldstone E11; cut stone's
+            # bay_min > T made this unreachable there).
+            if k > 0 and owns_start:
+                cuts = cuts[cuts >= T + 2.0]
+            if k < n_joints and owns_end:
+                cuts = cuts[cuts <= seg.L - T - 2.0]
             prev_cuts[k] = cuts
             edges = np.concatenate([[t0], cuts, [t1]])
             for b, (ta, tb) in enumerate(zip(edges[:-1], edges[1:])):
@@ -327,7 +335,9 @@ class CutStoneWall:
 
         parts = self._core_boxes(segs, seat_z)
         for cell in cells:
-            parts.append(self._place_block(cell, segs, seat_z, rng))
+            block = self._place_block(cell, segs, seat_z, rng)
+            if block is not None:    # degenerate cell (fieldstone inset)
+                parts.append(block)
         parts.extend(self._extra_parts(segs, seat_z, rng))
 
         wall = trimesh.boolean.union(parts, engine='manifold')
@@ -393,11 +403,11 @@ class CutStoneWall:
             boxes.append(_box(seg, rv, seg.L - rv, rv, T - rv))
         return boxes
 
-    def _place_block(self, cell: _Cell, segs: list[_Seg], seat_z: float,
-                     rng: np.random.Generator) -> trimesh.Trimesh:
-        seg = segs[cell.seg]
-        j2  = self.joint_mm / 2.0
-
+    def _stone_box(self, cell: _Cell, seat_z: float,
+                   rng: np.random.Generator) -> tuple:
+        """Unit box (x0,x1,y0,y1,z0,z1) inside the jointed cell; subclass
+        hook — FieldstoneWall jitters per-stone face recession here."""
+        j2 = self.joint_mm / 2.0
         fr = self.face_recess_mm
         x0 = cell.t0 + (j2 if cell.end0 == 'joint'
                         else rng.uniform(0.0, fr))
@@ -408,6 +418,12 @@ class CutStoneWall:
         z0 = seat_z + (cell.z0 + j2 if not cell.is_bottom
                        else -self.embed_mm)
         z1 = seat_z + (cell.z1 - (0.0 if cell.is_top else j2))
+        return x0, x1, y0, y1, z0, z1
+
+    def _place_block(self, cell: _Cell, segs: list[_Seg], seat_z: float,
+                     rng: np.random.Generator) -> trimesh.Trimesh:
+        seg = segs[cell.seg]
+        x0, x1, y0, y1, z0, z1 = self._stone_box(cell, seat_z, rng)
 
         chamfer = 0.0 if cell.is_bottom else _CHAMFER_FRAC * self.reveal_mm
         brng = np.random.default_rng(
