@@ -41,7 +41,7 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
-from ..stone import aged_relief, rubble_stone
+from ..stone import aged_relief
 from .masonry import CutStoneWall, _Cell, _Seg, _frame
 
 # ── Iteration knobs (module constants while prototyping) ─────────────────────
@@ -166,20 +166,6 @@ _THROUGH_MAX_MM   = 9.5           # merged throughstone height cap (E19:
                                   # ~12–15 mm)
 _SPLIT_H_PROB     = 0.28          # tall cell → two stacked thinner stones
 _SPLIT_H_MIN_MM   = 5.5           # eligible cell height for an h-split
-# Rubble hearting (E10 guarantee; E27: lots of little rough rocks).
-# The hearting must never READ as mortar: E26's big smooth lumps
-# 1.6 mm behind the face showed bright featureless mid-faces through
-# the head-joint junction holes — "I think I still see mortar".
-# Shawn's call: "should be lots of little rocks --- very rough."  So
-# the fill IS the read: many small crisp shards (rubble_stone, now
-# un-rounded with heavy jitter) packed densely enough that the two
-# staggered sheets stay sealed, sitting close enough to the face that
-# a gap shows packed stone chips — the references' pinning stones —
-# never a smooth plane.
-_RUBBLE_SPACING_MM = 2.8
-_RUBBLE_FOOT      = (3.5, 5.5)
-_RUBBLE_H         = (3.0, 4.5)
-_RUBBLE_SETBACK_MM = 1.3
 # Cell-key tags (ints, not strings: _place_block hashes cell.key for the
 # per-stone rng and str hashes vary per process).  Base keys are
 # (course, seg, bay), so tagged keys are longer, never equal.
@@ -203,6 +189,9 @@ class FieldstoneWall(CutStoneWall):
     variance (near-coplanar faces vs rugged); ``wobble_amp_mm`` sets
     bed-crack wander.  Defaults are the approved E25 look.
     """
+
+    #: drystone: the rubble hearting is structural, not a ruin state.
+    hearting = True
 
     def __init__(self, spine, *,
                  course_mm: tuple[float, float] = (2.2, 5.2),
@@ -723,44 +712,10 @@ class FieldstoneWall(CutStoneWall):
                                process=False)
 
     # ── rubble hearting ──────────────────────────────────────────────────────
-    def _extra_parts(self, segs: list[_Seg], seat_z: float,
-                     rng: np.random.Generator) -> list:
-        """A sealed sheet of small rubble stones through the wall body
-        (E10): every crack shows deeper stones, never the core plane.
-        Two y-layers, half-pitch staggered in t and z; the rubble honours
-        the face setback in t too — segment END planes are visible faces
-        (free ends and the corner arris)."""
-        T, H = self.thickness_mm, self.height_mm
-        sb = _RUBBLE_SETBACK_MM
-        y_bands = [(sb, 0.55 * T), (0.45 * T, T - sb)]
-        parts = []
-        for seg in segs:
-            nt = max(2, int(round(seg.L / _RUBBLE_SPACING_MM)) + 1)
-            nz = max(2, int(round(H / _RUBBLE_SPACING_MM)) + 1)
-            for layer, (yb0, yb1) in enumerate(y_bands):
-                off = 0.5 * layer
-                for i in range(nt):
-                    for j in range(nz):
-                        tc = ((i + 0.5 * (j % 2) + off
-                               + rng.uniform(-0.25, 0.25))
-                              * seg.L / (nt - 1))
-                        zc = ((j + off + rng.uniform(-0.25, 0.25))
-                              * H / (nz - 1))
-                        w = rng.uniform(*_RUBBLE_FOOT)
-                        h = rng.uniform(*_RUBBLE_H)
-                        t0 = np.clip(tc - w / 2.0, sb, seg.L - sb - w)
-                        # Rubble stops beneath the top course (E25):
-                        # gaps between the perched top rocks must show
-                        # stone below, not hearting "mortar".
-                        z0 = np.clip(zc - h / 2.0, 0.2,
-                                     self._cap_z0 - 0.3 - h)
-                        body = rubble_stone(w, yb1 - yb0, h, rng)
-                        b0, b1 = body.bounds
-                        tgt0 = np.array([t0, yb0, z0])
-                        tgt1 = np.array([t0 + w, yb1, z0 + h])
-                        body.apply_translation(-b0)
-                        body.apply_scale((tgt1 - tgt0) / (b1 - b0))
-                        body.apply_translation(tgt0)
-                        body.apply_transform(_frame(seg, z=seat_z))
-                        parts.append(body)
-        return parts
+    # The hearting itself lives on the chassis (_hearting_parts); the
+    # fieldstone-specific part is only the fill ceiling: rubble stops
+    # beneath the top course / coping (E25 — gaps between the perched
+    # top rocks or coping stones must show stone below, never chips
+    # poking above them).
+    def _heart_cap(self, seg_i: int, t: float) -> float:
+        return min(super()._heart_cap(seg_i, t), self._cap_z0)

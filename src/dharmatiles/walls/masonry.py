@@ -26,7 +26,7 @@ import trimesh
 
 from ..core.color import Material, tag as _tag
 from ..stone import (blur_remesh, clip_to_box, relief_field, round_edges,
-                     separate_pinches)
+                     rubble_stone, separate_pinches)
 
 # ── Iteration knobs (module constants while prototyping) ─────────────────────
 _FACE_RECESS_MM   = 0.60   # per-block face jitter: outer/inner/end faces sit
@@ -47,6 +47,31 @@ _RELIEF_WAVES     = 24     # broadband relief wave count; wavelengths come
                            # from the texture preset
 _MIN_BAY_FRAC     = 0.45   # bays shorter than this × bay_min are merged away
 _SEAT_PERCENTILE  = 80.0   # seat height over the footprint (stones convention)
+
+# Rubble hearting (E10/E27, chassis-level since the ruins work): a
+# sealed sheet of small rough stone chips through the wall body.
+# Fieldstone uses it always (drystone fill); mortared families get it
+# when ruined — the broken top shows packed rubble core, the
+# hadrians-coursed-rubble.jpg read.
+_RUBBLE_SPACING_MM = 2.8
+_RUBBLE_FOOT      = (3.5, 5.5)
+_RUBBLE_H         = (3.0, 4.5)
+_RUBBLE_SETBACK_MM = 1.3
+
+# Ruin state (city ruins / Hadrian's): a smooth per-segment height
+# envelope breaks the top; straddling blocks survive at random (ragged
+# steps); shed rubble collects at the foot.
+_RUIN_DROP        = (0.20, 0.80)  # envelope drop = ruin × H × this range
+_RUIN_KEEP_P      = 0.5           # P(straddling block survives)
+_RUIN_WOBBLE_WL   = (45.0, 110.0) # envelope wavelengths (2 sines): LONGER
+                                  # than a segment — the break line must
+                                  # undulate slowly across the wall;
+                                  # short wavelengths shred small-stone
+                                  # families into fence pickets
+_FOOT_RUBBLE_EVERY_MM = 5.5       # one foot shard per this × (1/ruin)
+_FOOT_RUBBLE_OFF  = (0.8, 6.5)    # shard offset outside the faces
+_FOOT_RUBBLE_FOOT = (2.2, 4.8)
+_FOOT_RUBBLE_H    = (1.8, 3.4)
 
 # Texture presets: the surface character of the blocks.  Everything else
 # (layout, joints, core) is family-independent.
@@ -332,7 +357,8 @@ class CutStoneWall:
                  crenellated:  bool = False,
                  merlon_mm:    tuple[float, float] = (8.0, 11.0),
                  crenel_mm:    tuple[float, float] = (5.5, 7.5),
-                 crenel_depth_mm: float = 11.0):
+                 crenel_depth_mm: float = 11.0,
+                 ruin:         float = 0.0):
         if len(spine) < 2:
             raise ValueError('wall spine needs at least two points')
         if texture not in _TEXTURES:
@@ -361,8 +387,14 @@ class CutStoneWall:
         self.merlon_mm    = merlon_mm
         self.crenel_mm    = crenel_mm
         self.crenel_depth_mm = crenel_depth_mm
+        self.ruin         = float(np.clip(ruin, 0.0, 1.0))
         self._merlons: list[list[tuple[float, float]]] = []   # per segment
         self._crenel_z = None      # wall-local z of the crenel floor
+        self._ruin_env = None      # per-segment envelope callables
+
+    #: families with a drystone interior build the hearting always;
+    #: mortared families get it when ruined (broken top shows rubble).
+    hearting: bool = False
 
     # ── build ────────────────────────────────────────────────────────────────
     def apply(self, scene, *, placement_mask=None) -> list[trimesh.Trimesh]:
@@ -374,6 +406,8 @@ class CutStoneWall:
 
         seat_z = self._seat_z(scene, segs)
         cells  = self._cells(segs, T, H, rng)
+        if self.ruin > 0.0:
+            cells = self._ruin_cells(cells, segs, H, rng)
 
         parts = self._core_boxes(segs, seat_z)
         for cell in cells:
@@ -465,11 +499,116 @@ class CutStoneWall:
                            self.roundover_mm, self.relief_mm,
                            self.relief_wl, cell.is_top, rng)
 
+    def _ruin_cells(self, cells: list[_Cell], segs: list[_Seg], H: float,
+                    rng: np.random.Generator) -> list[_Cell]:
+        """Break the top along a smooth per-segment height envelope
+        (hadrians-coursed-rubble.jpg): blocks above it go, blocks
+        straddling it survive at random — the ragged stepped ruin
+        line.  Nothing reads as a dressed cap any more."""
+        self._ruin_env = []
+        for seg in segs:
+            wl = rng.uniform(*_RUIN_WOBBLE_WL, 2)
+            ph = rng.uniform(0.0, 2.0 * np.pi, 2)
+
+            def env(t, wl=wl, ph=ph):
+                n01 = 0.5 + sum(np.sin(2.0 * np.pi * t / w + p)
+                                for w, p in zip(wl, ph)) / 4.0
+                lo, hi = _RUIN_DROP
+                return H * (1.0 - self.ruin * (lo + (hi - lo) * n01))
+            self._ruin_env.append(env)
+
+        out: list[_Cell] = []
+        for c in cells:
+            e = float(self._ruin_env[c.seg]((c.t0 + c.t1) / 2.0))
+            if c.z0 >= e:
+                continue
+            if c.z1 > e and rng.random() > _RUIN_KEEP_P:
+                continue
+            c.is_top = False
+            out.append(c)
+        return out
+
     def _extra_parts(self, segs: list[_Seg], seat_z: float,
                      rng: np.random.Generator) -> list[trimesh.Trimesh]:
-        """Additional solid parts after the units (subclass hook —
-        FieldstoneWall adds rubble hearting)."""
-        return []
+        """Rubble hearting (always for drystone families, on ruin for
+        mortared ones) + shed rubble at the foot of a ruin."""
+        parts = []
+        if self.hearting or self.ruin > 0.0:
+            parts += self._hearting_parts(segs, seat_z, rng)
+        if self.ruin > 0.0:
+            parts += self._foot_rubble(segs, seat_z, rng)
+        return parts
+
+    def _heart_cap(self, seg_i: int, t: float) -> float:
+        """Wall-local z the hearting may fill to at (seg, t); families
+        tighten this (fieldstone keeps it under the coping/top course)."""
+        if self._ruin_env is not None:
+            return float(self._ruin_env[seg_i](t))
+        return self.height_mm
+
+    def _hearting_parts(self, segs: list[_Seg], seat_z: float,
+                        rng: np.random.Generator) -> list[trimesh.Trimesh]:
+        """A sealed sheet of small rough stone chips through the wall
+        body (E10/E27): every crack or break shows packed rubble, never
+        a bare core plane.  Two y-layers, half-pitch staggered in t and
+        z; setback keeps it behind the visible faces AND the segment
+        END planes (free ends and the corner arris)."""
+        T, H = self.thickness_mm, self.height_mm
+        sb = _RUBBLE_SETBACK_MM
+        y_bands = [(sb, 0.55 * T), (0.45 * T, T - sb)]
+        parts = []
+        for k, seg in enumerate(segs):
+            nt = max(2, int(round(seg.L / _RUBBLE_SPACING_MM)) + 1)
+            nz = max(2, int(round(H / _RUBBLE_SPACING_MM)) + 1)
+            for layer, (yb0, yb1) in enumerate(y_bands):
+                off = 0.5 * layer
+                for i in range(nt):
+                    for j in range(nz):
+                        tc = ((i + 0.5 * (j % 2) + off
+                               + rng.uniform(-0.25, 0.25))
+                              * seg.L / (nt - 1))
+                        zc = ((j + off + rng.uniform(-0.25, 0.25))
+                              * H / (nz - 1))
+                        w = rng.uniform(*_RUBBLE_FOOT)
+                        h = rng.uniform(*_RUBBLE_H)
+                        t0 = np.clip(tc - w / 2.0, sb, seg.L - sb - w)
+                        cap = self._heart_cap(k, float(tc))
+                        z0 = np.clip(zc - h / 2.0, 0.2, cap - 0.3 - h)
+                        if z0 < 0.2 - 1e-9:
+                            continue
+                        body = rubble_stone(w, yb1 - yb0, h, rng)
+                        b0, b1 = body.bounds
+                        tgt0 = np.array([t0, yb0, z0])
+                        tgt1 = np.array([t0 + w, yb1, z0 + h])
+                        body.apply_translation(-b0)
+                        body.apply_scale((tgt1 - tgt0) / (b1 - b0))
+                        body.apply_translation(tgt0)
+                        body.apply_transform(_frame(seg, z=seat_z))
+                        parts.append(body)
+        return parts
+
+    def _foot_rubble(self, segs: list[_Seg], seat_z: float,
+                     rng: np.random.Generator) -> list[trimesh.Trimesh]:
+        """Shards shed at the base of a ruined wall, both sides,
+        embedded ~40 % into the ground.  Anything outside the tile is
+        trimmed by the boundary clip like every other wall part."""
+        T = self.thickness_mm
+        parts = []
+        for seg in segs:
+            n = int(self.ruin * seg.L / _FOOT_RUBBLE_EVERY_MM)
+            for _ in range(n):
+                t = rng.uniform(2.0, seg.L - 2.0)
+                off = rng.uniform(*_FOOT_RUBBLE_OFF)
+                q = -off if rng.random() < 0.5 else T + off
+                w = rng.uniform(*_FOOT_RUBBLE_FOOT)
+                h = rng.uniform(*_FOOT_RUBBLE_H)
+                body = rubble_stone(w, w * rng.uniform(0.7, 1.0), h, rng)
+                b0, _b1 = body.bounds
+                body.apply_translation(-b0 + np.array(
+                    [t - w / 2.0, q - w / 2.0, -0.4 * h]))
+                body.apply_transform(_frame(seg, z=seat_z))
+                parts.append(body)
+        return parts
 
     def _core_boxes(self, segs: list[_Seg], seat_z: float,
                     ) -> list[trimesh.Trimesh]:
@@ -496,6 +635,17 @@ class CutStoneWall:
         # coincides with this segment's t=0 / t=L plane, so the inset
         # recesses the core from that face too; the two segment cores
         # overlap inside the corner cell, keeping the union connected.
+        if self._ruin_env is not None:
+            # Ruined wall: the mortar core stays below the LOWEST point
+            # of the break envelope; the exposed band above shows the
+            # rubble hearting, never a mortar plane.
+            for k, seg in enumerate(segs):
+                env = self._ruin_env[k]
+                emin = min(float(env(t))
+                           for t in np.linspace(0.0, seg.L, 25))
+                boxes.append(_box(seg, rv, seg.L - rv, rv, T - rv,
+                                  z_hi=seat_z + emin - rv))
+            return boxes
         if self.crenellated and self._crenel_z is not None:
             # Base core stops below the crenel floor (which must read
             # as block tops, not mortar); each merlon gets a mini-core
