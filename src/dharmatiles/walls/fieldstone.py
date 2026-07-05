@@ -64,6 +64,22 @@ _BOW_MM           = 1.1           # head joints BOW up to ±this at their
                                   # joint is a shared parabola, zero at
                                   # the bed lines, both neighbours
                                   # evaluating the same curve
+_BED_OVERLAP_MM   = (0.35, 0.80)  # E25: stones extend past their BED
+                                  # lines too (capped at 0.22× height) —
+                                  # vertical pressed contacts, same
+                                  # mechanism as the head joints.  This
+                                  # is also what welds the perched top-
+                                  # course rocks to the stones below
+                                  # now that the core stops beneath
+                                  # them.  is_top exempt; bottom course
+                                  # keeps its flat buried seat
+_END_MARGIN_MM    = 0.7           # 'face' ends (free ends, corner
+                                  # arris) recede this far inside the
+                                  # tile plane: the surface texture
+                                  # displaces up to ~0.6 mm outward and
+                                  # anything past the boundary is
+                                  # plane-cut — the "sheared-off end
+                                  # rocks" of E24
 _HEAD_OVERLAP_MM  = (0.45, 0.95)  # E24: stones extend past their head-
                                   # joint lines on BOTH sides, drawn per
                                   # side per stone — neighbours
@@ -115,16 +131,18 @@ _POLE_DRIFT_FRAC  = 0.12          # each pole wanders up to this × the
                                   # outline size from the centroid: the
                                   # summit of the dome is off-centre,
                                   # like a real cobble
-_BED_FLAT_EXP     = (0.30, 0.52)  # z-scale = s^p (E19): the bed
+_BED_FLAT_EXP     = (0.40, 0.65)  # z-scale = s^p (E19): the bed
                                   # surfaces stay near-FLAT over most of
                                   # the depth and only turn down close
                                   # to the face poles — we're piling
                                   # flat stones, not spheres.  Smaller
-                                  # exponent = flatter beds (E23: raised
-                                  # from 0.22–0.42 — "a bit" rounder
-                                  # tops/bottoms)
-_PROUD_MM         = (0.10, 0.50)  # per-stone face recession (both faces)
-_PROUD_DEEP_PROB  = 0.12          # a rare stone sits notably deeper —
+                                  # exponent = flatter beds (E23 0.30 →
+                                  # 0.52, E25 0.40 → 0.65: successively
+                                  # rounder tops/bottoms; the bed
+                                  # overlap keeps the contacts pressed)
+_PROUD_MM         = (0.10, 0.70)  # per-stone face recession (both faces;
+                                  # E25: more protrusion variance)
+_PROUD_DEEP_PROB  = 0.15          # a rare stone sits notably deeper —
 _PROUD_DEEP_MM    = (0.70, 1.10)  # the odd deep stone the references show
 _RING_STEP_MM     = 1.2           # outline densify spacing
 _N_LAT            = 17            # latitude rings (poles excluded)
@@ -187,7 +205,7 @@ class FieldstoneWall(CutStoneWall):
     """
 
     def __init__(self, spine, *,
-                 course_mm: tuple[float, float] = (2.6, 6.2),
+                 course_mm: tuple[float, float] = (2.2, 5.2),
                  bay_mm:    tuple[float, float] = (5.0, 16.0),
                  joint_mm:  float = 0.0,   # physical crack gap (Shawn E18:
                                            # zero — stones TOUCH at their
@@ -260,7 +278,12 @@ class FieldstoneWall(CutStoneWall):
         self._drifts.clear()
         cells = self._merge_throughstones(super()._cells(segs, T, H, rng),
                                           rng)
-        return self._split_cells(cells, rng)
+        cells = self._split_cells(cells, rng)
+        # Wall-local z where the top course begins: the core and the
+        # rubble hearting stop beneath it (E25 — the top course reads
+        # as separate rocks perched on the wall, no mortar between).
+        self._cap_z0 = min((c.z0 for c in cells if c.is_top), default=H)
+        return cells
 
     def _merge_throughstones(self, cells: list[_Cell],
                              rng: np.random.Generator) -> list[_Cell]:
@@ -362,15 +385,21 @@ class FieldstoneWall(CutStoneWall):
                 return z                       # flat cap plane (R6)
             return z + float(self._bed(seg_i, z, seg.L)(t))
 
-        def side(t_cut: float, end: str, off: float):
+        def side(t_cut: float, end: str, off: float, inward: float):
             """[(t, z), …] bottom→top along this side crack.  Interior
             band boundaries contribute two points (the drift changes
             where the neighbour changes) — a small shared jog.  ``off``
             pushes the whole line past the shared curve (head-joint
-            overlap); the curve itself stays keyed at t_cut."""
+            overlap); the curve itself stays keyed at t_cut.
+            ``inward`` (+1 left side, −1 right side) orients the
+            'face'-end margin."""
             if end == 'face':                  # wall end / corner arris
-                return [(t_cut, zeff(cell.z0, t_cut)),
-                        (t_cut, zeff(cell.z1, t_cut))]
+                # Recede inside the tile plane: texture displacement
+                # (~0.6 mm) past the boundary gets plane-cut — the
+                # E24 "sheared-off end rocks".
+                tq = t_cut + inward * _END_MARGIN_MM
+                return [(tq, zeff(cell.z0, tq)),
+                        (tq, zeff(cell.z1, tq))]
             pts = []
             for crs, zb0, zb1 in bands:
                 d, bow = self._drift(seg_i, crs, t_cut)
@@ -383,8 +412,8 @@ class FieldstoneWall(CutStoneWall):
                     pts.append((t, zpt))
             return pts
 
-        left  = side(cell.t0, cell.end0, -ov0)
-        right = side(cell.t1, cell.end1, +ov1)
+        left  = side(cell.t0, cell.end0, -ov0, +1.0)
+        right = side(cell.t1, cell.end1, +ov1, -1.0)
 
         def bed(z: float, ta: float, tb: float):
             n = max(2, int(abs(tb - ta) / 4.0) + 2)
@@ -397,8 +426,36 @@ class FieldstoneWall(CutStoneWall):
         # CCW: bottom left→right, right side up, top right→left, left
         # down.  Slices drop the duplicated corner points (bed edges
         # include both endpoints, which coincide with the side ends).
-        pts = (bot + right[1:] + top[1:] + left[::-1][1:-1])
-        return np.asarray(pts, dtype=float)
+        pts = np.asarray(bot + right[1:] + top[1:] + left[::-1][1:-1],
+                         dtype=float)
+
+        # Bed overlap (E25): stretch the outline past its bed lines —
+        # bottom down by ovb, top up by ovt, interiors interpolated —
+        # so vertically adjacent stones press together like the E24
+        # head joints.  Top course exempt (perched rocks); the bottom
+        # course keeps its flat buried seat.
+        if not cell.is_top:
+            h = cell.z1 - cell.z0
+            cap = 0.22 * h
+            ovt = min(float(brng.uniform(*_BED_OVERLAP_MM)), cap)
+            ovb = 0.0 if cell.is_bottom else min(
+                float(brng.uniform(*_BED_OVERLAP_MM)), cap)
+            zlo, zhi = pts[:, 1].min(), pts[:, 1].max()
+            u = (pts[:, 1] - zlo) / max(zhi - zlo, 1e-9)
+            pts[:, 1] += ovt * u - ovb * (1.0 - u)
+        return pts
+
+    def _core_boxes(self, segs: list[_Seg], seat_z: float) -> list:
+        """The core stops just below the top-course bed (E25): the
+        perched top rocks are attached by the bed overlap pressed up
+        from the course below, so gaps in the top course look onto
+        the stones below, never the core."""
+        real_h = self.height_mm
+        self.height_mm = min(self._cap_z0 - 0.4 + self.reveal_mm, real_h)
+        try:
+            return super()._core_boxes(segs, seat_z)
+        finally:
+            self.height_mm = real_h
 
     def _place_block(self, cell: _Cell, segs: list[_Seg], seat_z: float,
                      rng: np.random.Generator) -> trimesh.Trimesh | None:
@@ -616,7 +673,11 @@ class FieldstoneWall(CutStoneWall):
                         w = rng.uniform(*_RUBBLE_FOOT)
                         h = rng.uniform(*_RUBBLE_H)
                         t0 = np.clip(tc - w / 2.0, sb, seg.L - sb - w)
-                        z0 = np.clip(zc - h / 2.0, 0.2, H - 0.6 - h)
+                        # Rubble stops beneath the top course (E25):
+                        # gaps between the perched top rocks must show
+                        # stone below, not hearting "mortar".
+                        z0 = np.clip(zc - h / 2.0, 0.2,
+                                     self._cap_z0 - 0.3 - h)
                         body = _rubble_mesh(w, yb1 - yb0, h, rng)
                         b0, b1 = body.bounds
                         tgt0 = np.array([t0, yb0, z0])

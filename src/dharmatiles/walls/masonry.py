@@ -491,25 +491,27 @@ class CutStoneWall:
         leave near-zero clearances somewhere every build; the mesh stays
         index-manifold, but STL export merges vertices by POSITION on
         reload, collapsing such a pinch into a non-manifold edge
-        (fieldstone E23).  Moving each vertex 0.15 µm inward along its
-        own normal keeps every contact separated past the float32
-        grid (~0.004 µm at these coordinates)."""
+        (fieldstone E23).  The nudge is ASYMMETRIC (0.15 µm vs 0.30 µm
+        inward along each vertex's own normal) so a pair separates by
+        ≥0.15 µm even when the two normals are parallel — well past the
+        float32 grid (~0.004 µm at these coordinates).  Iterates in case
+        a nudge lands a vertex onto a third one (fieldstone E25)."""
         from scipy.spatial import cKDTree
-        v = wall.vertices.view(np.ndarray)
-        pairs = cKDTree(v).query_pairs(2e-4, output_type='ndarray')
-        if len(pairs) == 0:
-            return
         adjacent = {tuple(e) for e in np.sort(wall.edges_unique, axis=1)}
         vn = np.asarray(wall.vertex_normals)
-        moved = False
-        for i, j in pairs:
-            if (min(i, j), max(i, j)) in adjacent:
-                continue
-            v[i] -= vn[i] * 1.5e-4
-            v[j] -= vn[j] * 1.5e-4
-            moved = True
-        if moved:
-            wall.vertices = v
+        v = wall.vertices.view(np.ndarray)
+        for _ in range(4):
+            pairs = cKDTree(v).query_pairs(2e-4, output_type='ndarray')
+            moved = False
+            for i, j in pairs:
+                if (min(i, j), max(i, j)) in adjacent:
+                    continue
+                v[i] -= vn[i] * 1.5e-4
+                v[j] -= vn[j] * 3.0e-4
+                moved = True
+            if not moved:
+                break
+        wall.vertices = v
 
     @staticmethod
     def _clip_to_tile(wall: trimesh.Trimesh, surface) -> trimesh.Trimesh:
