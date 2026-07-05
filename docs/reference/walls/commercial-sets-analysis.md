@@ -28,13 +28,40 @@ hard targets ("compatible by default, configurable for freedom"):
 | Quantity | Value | Source piece |
 |---|---|---|
 | Square grid | 35 × 35 mm | everywhere |
-| Standard wall height | ≈ 49.7 mm above floor | `RR-095-Wall` |
-| Tall wall height | ≈ 89 mm | `RR-103-Tall Wall` |
+| Standard wall height | ≈ 49.7 mm total piece bbox; the slab rises **≈ 24.4 mm above the piece's own floor** (floor plateau ≈ 25.3, tall socket base) | `RR-095-Wall`, `UD-001-Wall` |
+| Tall wall height | ≈ 89 mm bbox; slab ≈ 62 mm above its floor | `RR-103-Tall Wall` |
 | Wall slab thickness | ≈ 7 mm, aligned flush to one tile edge | `RR-095-Wall` |
 | Rampart walkway level | ≈ 35 mm | `RR-086-Rampart Straight` |
 | XL block plan | 105 × 105 mm (3×3 squares) | sets 11, 14, 15 |
 | XL height system | Low / Medium (≈67 mm) / High folders | sets 11, 14, 15 |
 | Mesh budget | 320–660k faces per piece | across sets |
+
+## 1b. Ground surface heights (measured 2026-07-05)
+
+Upward-face area histograms over representative pieces, heights above
+the piece bottom.  Ground pieces use the short socket base (≈ 10.9 mm
+= 5.7 peg + 5.2 flare, matching our `BaseConfig`), so the dharmatiles
+equivalent is *(official − 10.9)* above our terrain datum:
+
+| Surface | Official (above piece bottom) | Above our datum | Source pieces |
+|---|---|---|---|
+| Water surface | 12.8 – 13.3 | 1.9 – 2.4 | UD-074, LC-092, PS-187 |
+| Outdoor dirt | 14.8 – 15.3 | 3.9 – 4.4 | RR-011/012 |
+| Grass | 15.3 – 16.8 | 4.4 – 5.9 | RR-015/016 |
+| Outdoor stone path | 16.3 – 17.3 | 5.4 – 6.4 | MN-009/010 |
+| **Interior stone floor** | **17.8 – 18.8** | **6.9 – 7.9** | UD-057, TS-019 |
+| Themed grounds (graveyard, swamp) | 18.3 – 19.8 | 7.4 – 8.9 | HG-003, CS-102 |
+| Rock ground (outcrop) | ≈ 20.3 | ≈ 9.4 | RR-078 |
+
+dharmatiles calibration: grass (~5.6) and soil (~4.9) already sit in
+the official bands; water (~3.0) is close; `StoneFloor` was raised to
+`top_mm = 7.4` (dead-centre interior floor) — use `top_mm ≈ 6.0` for
+an outdoor path.  Wall pieces use the TALL socket base (16.6; cavity
+ceiling measured at 16.75 on UD-001) and their integrated floor sits
+at ≈ 25.3; the wall slab itself rises only ≈ 24.4 mm above that floor
+— our `height_mm = 49.7` default (measured from the seat) is roughly
+2× the official VISIBLE wall height.  Flagged for a decision, not
+changed.
 
 Structural idiom: a DungeonBlocks "wall" is a **floor square with a
 wall slab rising from one edge** — wall and floor are one printed

@@ -14,8 +14,11 @@ tile = Tile(
     areas=[
         Region(id='court', selector=FloodFill(0.5, 0.3), layers=[
             SoilCarpet(),
-            StoneFloor(texture='chipped', seed=91, crack_prob=0.6),
+            # Wall first: it seats on the original soil; the floor then
+            # drops the soil to the dirt bed and its slabs lap the wall
+            # base — pavement laid against a standing wall.
             CutStoneWall(spine=[(2.0, 2.0), (0.0, 2.0)], seed=92),
+            StoneFloor(texture='chipped', seed=91, crack_prob=0.6),
         ]),
     ],
 )

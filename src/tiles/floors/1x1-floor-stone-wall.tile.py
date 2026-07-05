@@ -11,8 +11,8 @@ tile = Tile(
     areas=[
         Region(id='court', selector=FloodFill(0.5, 0.3), layers=[
             SoilCarpet(),
-            StoneFloor(texture='chipped', seed=22),
             CutStoneWall(spine=[(1.0, 1.0), (0.0, 1.0)], seed=23),
+            StoneFloor(texture='chipped', seed=22),
         ]),
     ],
 )
