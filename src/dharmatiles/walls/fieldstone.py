@@ -696,18 +696,15 @@ class FieldstoneWall(CutStoneWall):
         the crack roots, exactly where the zero-gap stones touch).
         Carve depth auto-scales with the stone's footprint unless
         relief_mm overrides it."""
-        body = body.subdivide()
         p = np.asarray(body.vertices)
         foot = float(np.ptp(p[:, [0, 2]], axis=0).max())
         amp = (float(np.clip(0.05 * foot, 0.15, 0.50))
                if self.relief_mm is None else self.relief_mm)
-        v = stone_relief(body, brng,
-                         scale_mm=max(foot / 2.4, 2.2),
-                         carve_mm=amp, band=0.45,
-                         dish_mm=0.5 * amp,
-                         env=(0.35, foot))
-        return trimesh.Trimesh(vertices=v, faces=body.faces,
-                               process=False)
+        return stone_relief(body, brng,
+                            scale_mm=max(foot / 2.4, 2.2),
+                            carve_mm=amp, band=0.45,
+                            dish_mm=0.5 * amp,
+                            env=(0.35, foot), refine=1)
 
     # ── rubble hearting ──────────────────────────────────────────────────────
     # The hearting itself lives on the chassis (_hearting_parts); the

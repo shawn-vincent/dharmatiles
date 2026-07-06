@@ -35,9 +35,10 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
-from ..stone import stone_relief
+from ..stone import rounded_box, stone_relief
 from ..stone.cracks import engrave_cracks
-from .masonry import _TEXTURES, _block_mesh, assemble_masonry
+from .masonry import (_CORE_ROUND_MM, _TEXTURES, _block_mesh,
+                      assemble_masonry)
 
 _TILT_DEG = 0.5      # per-slab tilt: each slab catches its own light
 _TOP_JITTER_MM = 0.3  # per-slab pavement-level jitter
@@ -133,12 +134,15 @@ class StoneFloor:
                     # Sunken dirt pit: keep the dirt bed visible.
                     np.minimum(patch, self.bed_mm, out=patch)
                     continue
-                # Under a slab there is NO soil at all: the terrain
-                # drops to the datum (z = 0), where the tile's
-                # structural slab still runs base_h deep below it —
-                # the same convention as water pool floors.  At tile
-                # edges you see ONLY the slab side.
-                np.minimum(patch, 0.0, out=patch)
+                # Under a slab the terrain drops to a 0.15 mm film.
+                # NOT zero: surface.base_h is 0, so the heightmap
+                # solid is exactly z_grid down to the datum — a fully
+                # paved tile at 0 makes it a zero-volume degenerate
+                # sheet (found by body inspection).  The film is
+                # invisible by construction: slabs are full-depth and
+                # run flush to the tile boundary, so it lives strictly
+                # inside them.
+                np.minimum(patch, 0.15, out=patch)
 
                 top = self.top_mm + float(
                     brng.uniform(-_TOP_JITTER_MM, _TOP_JITTER_MM))
@@ -177,21 +181,13 @@ class StoneFloor:
                 # plane-wave drybrush pass read as corduroy/chop here
                 # and is gone.  Clamp the underside back to the tile
                 # bottom afterwards.
-                body = body.subdivide()
-                p0 = np.asarray(body.vertices)
                 # Relief budget sized BELOW the core reveal (the wall
-                # rule): carve 0.62 + dish 0.25 + spall chip 1.0 +
-                # tilt all stay above the mortar plane by construction
-                # — no clamps, no artificial plateau floors.
-                v = stone_relief(body, brng, carve_mm=0.62, dish_mm=0.25)
-                # Fade the carve out near the slab base: a deep side
-                # recess at the foot exposes the terrain film at tile
-                # edges (orange flecks).
-                fade = np.clip(p0[:, 2] / 1.5, 0.0, 1.0)[:, None]
-                v = p0 + (v - p0) * fade
-                v[:, 2] = np.maximum(v[:, 2], 0.0)
-                body = trimesh.Trimesh(vertices=v, faces=body.faces,
-                                       process=False)
+                # rule): carve 0.62 + dish 0.25 + spall chip + tilt
+                # all stay above the mortar plane by construction.
+                # base fade: a deep side recess at the foot would
+                # expose the terrain film at tile edges.
+                body = stone_relief(body, brng, carve_mm=0.62,
+                                    dish_mm=0.25, base_fade_mm=1.5)
                 ctr = np.array([side_x / 2.0, side_y / 2.0, top / 2.0])
                 for axis in ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]):
                     tilt = np.radians(brng.uniform(-_TILT_DEG, _TILT_DEG))
@@ -231,17 +227,22 @@ class StoneFloor:
                 if not placed[iy, ix]:
                     continue
                 x0, y0 = ix * pitch, iy * pitch
+                # Visible sides inset by the reveal; interior sides
+                # EXTEND past the cell boundary so neighbouring
+                # (edge-rounded) sheets interpenetrate instead of
+                # merely kissing face-to-face.
+                ov = _CORE_ROUND_MM
                 cx0 = x0 + (rv if ix == 0 or not placed[iy, ix - 1]
-                            else 0.0)
+                            else -ov)
                 cx1 = x0 + pitch - (rv if ix == nx - 1
-                                    or not placed[iy, ix + 1] else 0.0)
+                                    or not placed[iy, ix + 1] else -ov)
                 cy0 = y0 + (rv if iy == 0 or not placed[iy - 1, ix]
-                            else 0.0)
+                            else -ov)
                 cy1 = y0 + pitch - (rv if iy == ny - 1
-                                    or not placed[iy + 1, ix] else 0.0)
+                                    or not placed[iy + 1, ix] else -ov)
                 zc = tops[iy, ix] - rv
-                box = trimesh.creation.box(
-                    extents=[cx1 - cx0, cy1 - cy0, zc])
+                box = rounded_box([cx1 - cx0, cy1 - cy0, zc],
+                                  _CORE_ROUND_MM)
                 box.apply_translation([(cx0 + cx1) / 2.0,
                                        (cy0 + cy1) / 2.0, zc / 2.0])
                 parts.append(box)

@@ -38,7 +38,9 @@ def stone_relief(body, rng, *,
                  octaves: int = 4,
                  env: tuple[float, float] | None = None,
                  hero: tuple[np.ndarray, np.ndarray, float, float]
-                       | None = None) -> np.ndarray:
+                       | None = None,
+                 refine: int = 0,
+                 base_fade_mm: float | None = None) -> trimesh.Trimesh:
     """The common stone relief (docs/design/stone-surface-texture.md):
     a CALM PLATEAU CARVED DOWNWARD, statistically matched to the
     official DungeonBlocks floors (TS-019: RMS 0.32 mm, p5 −0.80,
@@ -54,8 +56,17 @@ def stone_relief(body, rng, *,
     - displaced along Taubin-smoothed normals with curvature damping
       (same guardrail as the aged pass).
 
-    Returns the displaced vertex array (faces unchanged).
+    ``refine`` subdivides the mesh that many times before displacing
+    (rims turn into angular polylines when mesh edges are coarse
+    against the noise scale); ``base_fade_mm`` fades the displacement
+    to zero approaching the body's local z-floor (carved patches at a
+    buried base leave standing ribs / expose what's behind).  Both
+    used to be reimplemented at every call site.
+
+    Returns the displaced MESH.
     """
+    for _ in range(max(refine, 0)):
+        body = body.subdivide()
     p = np.asarray(body.vertices)
     relaxed = trimesh.Trimesh(vertices=p.copy(),
                               faces=np.asarray(body.faces).copy(),
@@ -66,18 +77,30 @@ def stone_relief(body, rng, *,
     curv_damp = 1.0 / (1.0 + (cd / 0.35) ** 2)
 
     seed = int(rng.integers(0, 2**31))
-    n = fbm(p, seed, scale_mm, octaves=octaves)
+    # Random domain rotation: the value-noise lattice is axis-aligned,
+    # and so are block/slab faces — un-rotated, the carve rims trace
+    # lattice-plane level sets and read as straight diagonal scratches
+    # (worst on small faces spanning only a few cells).
+    q = rng.normal(size=4)
+    q /= np.linalg.norm(q) + 1e-12
+    w, x, y, z = q
+    R = np.array([
+        [1 - 2*(y*y + z*z), 2*(x*y - w*z),     2*(x*z + w*y)],
+        [2*(x*y + w*z),     1 - 2*(x*x + z*z), 2*(y*z - w*x)],
+        [2*(x*z - w*y),     2*(y*z + w*x),     1 - 2*(x*x + y*y)]])
+    pr = p @ R.T
+    n = fbm(pr, seed, scale_mm, octaves=octaves)
     t = np.clip((n - threshold) / band, 0.0, 1.0)
     carve = -carve_mm * t * t * (3.0 - 2.0 * t)
     if dish_mm > 0.0:
         foot = float(np.ptp(p, axis=0).max())
         dsc = dish_scale_mm if dish_scale_mm is not None else foot / 1.6
-        carve = carve + dish_mm * fbm(p, seed + 7919, dsc, octaves=2)
+        carve = carve + dish_mm * fbm(pr, seed + 7919, dsc, octaves=2)
     if env is not None:
         # Patchy calm/incident contrast (E11 rocks lesson), now on
         # value noise like everything else.
         floor, foot_e = env
-        e = fbm(p, seed + 15013, foot_e / 1.1, octaves=2)
+        e = fbm(pr, seed + 15013, foot_e / 1.1, octaves=2)
         carve = carve * (floor + (1.0 - floor)
                          * np.clip(0.5 + 1.1 * e, 0.0, 1.0))
     if hero is not None:
@@ -85,4 +108,8 @@ def stone_relief(body, rng, *,
         align = np.clip(vn @ nrm, 0.0, None) ** 2
         dpl   = np.abs((p - c) @ nrm)
         carve = carve * (1.0 - calm * align * np.exp(-(dpl / width) ** 2))
-    return p + vn * (carve * curv_damp)[:, None]
+    if base_fade_mm is not None:
+        zmin = float(p[:, 2].min())
+        carve = carve * np.clip((p[:, 2] - zmin) / base_fade_mm, 0.0, 1.0)
+    return trimesh.Trimesh(vertices=p + vn * (carve * curv_damp)[:, None],
+                           faces=body.faces, process=False)

@@ -479,12 +479,13 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
                 # common carve breaks the regularity.
                 amp_q = 0.5 * float(np.clip(
                     _MICRO_AMP_FRAC * spec.footprint_mm, *_MICRO_AMP_MM))
-                v_loc = stone_relief(dq, w_rng,
-                                     scale_mm=max(spec.footprint_mm / 3.0,
-                                                  1.5),
-                                     carve_mm=amp_q, band=0.5,
-                                     dish_mm=0.5 * amp_q)
-                faces = np.asarray(dq.faces)
+                out = stone_relief(dq, w_rng,
+                                   scale_mm=max(spec.footprint_mm / 3.0,
+                                                1.5),
+                                   carve_mm=amp_q, band=0.5,
+                                   dish_mm=0.5 * amp_q)
+                v_loc = np.asarray(out.vertices)
+                faces = np.asarray(out.faces)
 
     if bites:
         body = trimesh.Trimesh(vertices=v_loc, faces=faces, process=False)
@@ -562,7 +563,7 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
             amp = (_UNDULATE_FRAC * spec.roundover_mm
                    + _UNDULATE_FOOT * max(spec.footprint_mm - 8.0, 0.0)
                      * min(spec.roundover_mm, 1.0))
-            v_loc = stone_relief(
+            out = stone_relief(
                 aged, u_rng,
                 scale_mm=max(spec.footprint_mm / 2.4, 2.0),
                 carve_mm=max(1.6 * amp, 0.2), band=0.45,
@@ -571,7 +572,8 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
                 hero=(None if face_n is None else
                       (face_n, face_c, _FACE_CALM,
                        0.18 * spec.footprint_mm)))
-            faces = np.asarray(aged.faces)
+            v_loc = np.asarray(out.vertices)
+            faces = np.asarray(out.faces)
 
     lean, burial = spec.lean_deg, spec.burial
     while True:

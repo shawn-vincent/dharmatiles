@@ -10,7 +10,8 @@ Review + plan: docs/meta/history/2026-07-05-walls-rocks-refactor-review.md.
 """
 from .finish import stone_relief
 from .noise import fbm, value_noise
-from .shape import fibonacci_sphere, round_edges, rubble_stone
+from .shape import (fibonacci_sphere, round_edges, rounded_box,
+                    rubble_stone)
 from .solidify import clip_to_box, separate_pinches, survives_stl32
 from .surface import blur_remesh
 
@@ -20,6 +21,7 @@ __all__ = [
     'fbm',
     'fibonacci_sphere',
     'round_edges',
+    'rounded_box',
     'rubble_stone',
     'separate_pinches',
     'stone_relief',

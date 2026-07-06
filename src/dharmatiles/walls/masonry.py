@@ -26,7 +26,8 @@ import trimesh
 
 from ..core.color import Material, tag as _tag
 from ..stone import (blur_remesh, clip_to_box, round_edges,
-                     rubble_stone, separate_pinches, stone_relief)
+                     rounded_box, rubble_stone, separate_pinches,
+                     stone_relief)
 
 # ── Iteration knobs (module constants while prototyping) ─────────────────────
 _FACE_RECESS_MM   = 0.60   # per-block face jitter: outer/inner/end faces sit
@@ -45,6 +46,8 @@ _REMESH_SIGMA     = 0.7    # blur-remesh sigma: below the stones' 0.9 "fresh"
                            # setting so chip facets and chamfers stay crisp
 _MIN_BAY_FRAC     = 0.45   # bays shorter than this × bay_min are merged away
 _SEAT_PERCENTILE  = 80.0   # seat height over the footprint (stones convention)
+_CORE_ROUND_MM    = 0.6    # mortar-core edge fillet (walls AND floors):
+                           # set mortar has no sharp arrises
 
 # Rubble hearting (E10/E27, chassis-level since the ruins work): a
 # sealed sheet of small rough stone chips through the wall body.
@@ -313,18 +316,11 @@ def _block_mesh(lx: float, ly: float, lz: float, chamfer: float,
             # Capped by the block's own size — the first pass carved
             # 0.5 mm worn floors into 2.5 mm bricks and ATE them.
             carve = min(relief_mm * 2.0, 0.12 * min(lx, ly, lz))
-            v = stone_relief(body, rng,
-                             scale_mm=float(np.mean(relief_wl)),
-                             carve_mm=carve, band=0.55,
-                             dish_mm=relief_mm * 1.5)
-            # Fade the carve at the buried bottom: carved patches at
-            # the soil interface leave thin standing ribs that read
-            # as drips down the wall base.
-            p0 = np.asarray(body.vertices)
-            fade = np.clip(p0[:, 2] / 1.2, 0.0, 1.0)[:, None]
-            v = p0 + (v - p0) * fade
-            body = trimesh.Trimesh(vertices=v, faces=body.faces,
-                                   process=False)
+            body = stone_relief(body, rng,
+                                scale_mm=float(np.mean(relief_wl)),
+                                carve_mm=carve, band=0.55,
+                                dish_mm=relief_mm * 1.5,
+                                base_fade_mm=1.2)
     return body
 
 
@@ -651,7 +647,10 @@ class CutStoneWall:
             za = z0 if z_lo is None else z_lo
             zb = z1 if z_hi is None else z_hi
             ex = np.array([t1 - t0, q1 - q0, zb - za])
-            b = trimesh.creation.box(extents=ex)
+            # Rounded core edges: wherever a joint looks onto the
+            # mortar plane, a sharp box edge reads as a machined
+            # insert, not set mortar.
+            b = rounded_box(ex, _CORE_ROUND_MM)
             b.apply_translation(ex / 2.0)
             b.apply_transform(_frame(seg, t0, q0, za))
             return b

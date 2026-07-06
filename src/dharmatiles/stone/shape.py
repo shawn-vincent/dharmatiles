@@ -58,6 +58,26 @@ def rubble_stone(lx: float, ly: float, lz: float,
                            faces=np.asarray(hull.faces), process=False)
 
 
+def rounded_box(extents, r: float) -> trimesh.Trimesh:
+    """A box with all edges and corners filleted at radius *r*
+    (Minkowski sum of an inset box with a sphere: convex hull of
+    icosphere points at the eight inset corners).  Centered at the
+    origin like ``trimesh.creation.box``.  Used for the mortar cores —
+    a sharp core edge reads as a machined insert wherever a joint
+    looks onto it."""
+    ex = np.asarray(extents, dtype=float)
+    r = float(min(r, 0.45 * ex.min()))
+    if r <= 1e-6:
+        return trimesh.creation.box(extents=ex)
+    half = ex / 2.0 - r
+    corners = np.array([[sx * half[0], sy * half[1], sz * half[2]]
+                        for sx in (-1, 1) for sy in (-1, 1)
+                        for sz in (-1, 1)])
+    dirs = trimesh.creation.icosphere(subdivisions=2, radius=1.0).vertices
+    pts = (corners[:, None, :] + r * dirs[None, :, :]).reshape(-1, 3)
+    return trimesh.convex.convex_hull(pts)
+
+
 def round_edges(verts: np.ndarray, faces: np.ndarray,
                 roundover_mm: float, rng: np.random.Generator,
                 ) -> tuple[np.ndarray, np.ndarray]:
