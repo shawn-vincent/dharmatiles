@@ -456,7 +456,8 @@ class FieldstoneWall(CutStoneWall):
         def zeff(z: float, t: float) -> float:
             """Actual (wobbled) height of the bed line at t."""
             if cell.is_bottom and z <= cell.z0 + 1e-9:
-                return -self.embed_mm          # flat buried seat
+                # flat buried seat (token embed when seated on pavement)
+                return -getattr(self, '_embed_eff', self.embed_mm)
             if cell.is_top and z >= cell.z1 - 1e-9:
                 return z - top_drop            # flat cap plane (R6)
             return z + float(self._bed(seg_i, z, seg.L)(t))

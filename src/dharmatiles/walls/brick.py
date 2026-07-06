@@ -76,13 +76,13 @@ class BrickWall(CutStoneWall):
             return None
         return super()._place_block(cell, segs, seat_z, rng)
 
-    def _unit_mesh(self, lx: float, ly: float, lz: float, chamfer: float,
+    def _unit_mesh(self, lx: float, ly: float, lz: float,
                    cell: _Cell, rng: np.random.Generator) -> trimesh.Trimesh:
         chip = self.chip_mm
         if not cell.is_quoin and rng.random() < self.spall_prob:
             # Spalled unit: the chip budget jumps to a third of the
             # brick — broken rounded arrises, a crumbling face.
             chip = min(0.35 * min(lx, lz), 1.2)
-        return _block_mesh(lx, ly, lz, chamfer, chip,
+        return _block_mesh(lx, ly, lz, chip,
                            self.roundover_mm, self.relief_mm,
                            self.relief_wl, cell.is_top, rng)

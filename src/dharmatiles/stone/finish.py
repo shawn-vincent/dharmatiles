@@ -40,7 +40,9 @@ def stone_relief(body, rng, *,
                  hero: tuple[np.ndarray, np.ndarray, float, float]
                        | None = None,
                  refine: int = 0,
-                 base_fade_mm: float | None = None) -> trimesh.Trimesh:
+                 base_fade_mm: float | None = None,
+                 grain_mm: float = 0.10,
+                 grain_scale_mm: float = 1.5) -> trimesh.Trimesh:
     """The common stone relief (docs/design/stone-surface-texture.md):
     a CALM PLATEAU CARVED DOWNWARD, statistically matched to the
     official DungeonBlocks floors (TS-019: RMS 0.32 mm, p5 −0.80,
@@ -96,6 +98,14 @@ def stone_relief(body, rng, *,
         foot = float(np.ptp(p, axis=0).max())
         dsc = dish_scale_mm if dish_scale_mm is not None else foot / 1.6
         carve = carve + dish_mm * fbm(pr, seed + 7919, dsc, octaves=2)
+    if grain_mm > 0.0:
+        # Fine uniform tooth over the WHOLE surface — "give dry brush
+        # a little something to work on" (Shawn).  Small enough to
+        # live inside every reveal/joint budget (±0.1), fine enough
+        # (1.5 mm fBm) to catch bristles, uniform so calm plateaus
+        # still read calm at arm's length.
+        carve = carve + grain_mm * fbm(pr, seed + 31337, grain_scale_mm,
+                                       octaves=2)
     if env is not None:
         # Patchy calm/incident contrast (E11 rocks lesson), now on
         # value noise like everything else.

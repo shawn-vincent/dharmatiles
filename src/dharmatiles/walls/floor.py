@@ -171,7 +171,7 @@ class StoneFloor:
                 # slab-scale stone_relief below); letting _block_mesh
                 # add its block-scale pass too double-textured the
                 # surface.
-                body = _block_mesh(side_x, side_y, top, 0.0,
+                body = _block_mesh(side_x, side_y, top,
                                    chip, self.roundover_mm, 0.0,
                                    self.relief_wl, True, brng)
                 # The common stone relief (stone/finish.py, design:

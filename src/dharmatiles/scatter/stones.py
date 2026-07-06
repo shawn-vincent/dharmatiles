@@ -25,6 +25,7 @@ from ..core.color import Material, tag as _tag
 from ..core.tile import derive_seed
 from ..stone import (blur_remesh, clip_to_box, fibonacci_sphere,
                      round_edges, stone_relief, survives_stl32)
+from ..stone.noise import fbm
 from ..stone.cracks import _CRACK_PROUD_MM, engrave_cracks
 from .config import Uniform
 from .distribute import scatter_positions
@@ -236,18 +237,14 @@ def _spall_blob(r: float, depth: float, n: np.ndarray,
     """Organic spall cutter: a lumpified oblate blob, not a sphere.
 
     A perfect icosphere bite leaves a circular scallop with a compass-
-    drawn rim (Shawn's MeshLab find).  Low-frequency radial noise makes
-    the rim wander and the scar floor undulate like a real spall."""
+    drawn rim (Shawn's MeshLab find).  Low-frequency radial fBm makes
+    the rim wander and the scar floor undulate like a real spall
+    (value noise, not summed plane waves — those read as regular
+    ripples)."""
     bite = trimesh.creation.icosphere(subdivisions=3, radius=1.0)
     p = np.asarray(bite.vertices)
-    fld = np.zeros(len(p))
-    for _ in range(4):
-        d = rng.normal(size=3)
-        d /= np.linalg.norm(d) + 1e-12
-        fld += np.cos(2.0 * np.pi / rng.uniform(0.9, 1.6) * (p @ d)
-                      + rng.uniform(0.0, 2.0 * np.pi))
-    fld /= 4.0
-    bite.vertices = p * (1.0 + 0.5 * fld)[:, None]
+    fld = fbm(p, int(rng.integers(0, 2**31)), 1.2, octaves=2)
+    bite.vertices = p * (1.0 + 0.6 * fld)[:, None]
     bite.apply_scale([r, r * rng.uniform(0.75, 1.0), depth])
     bite.apply_transform(trimesh.transformations.rotation_matrix(
         rng.uniform(0.0, 2.0 * np.pi), [0.0, 0.0, 1.0]))
@@ -438,23 +435,20 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
         if spec.footprint_mm >= 10.0:   # heroes need finer edge polylines
             wm = wm.subdivide()
         p = np.asarray(wm.vertices)
-        # DOMAIN warp, not normal displacement: each wave displaces along
-        # its own constant direction, a smooth deformation of SPACE that
-        # is injective while amplitude x frequency < 1 (ours ~0.38) — it
-        # cannot fold any surface, however tight the local curvature.
-        # Normal-based displacement folded at concave fillet grooves
-        # whose radius was smaller than the amplitude (the sliver pleats
-        # in Shawn's MeshLab, stage-bisected to this warp).
-        disp = np.zeros_like(p)
-        for _ in range(3):
-            d = w_rng.normal(size=3)
-            d /= np.linalg.norm(d) + 1e-12
-            wwl = spec.footprint_mm / w_rng.uniform(1.2, 1.8)
-            ph  = np.cos(2.0 * np.pi / wwl * (p @ d)
-                         + w_rng.uniform(0.0, 2.0 * np.pi))
-            disp += d[None, :] * (ph * (_WARP_FRAC * spec.footprint_mm
-                                        / 3.0))[:, None]
-        v_loc = p + disp
+        # DOMAIN warp, not normal displacement: a smooth deformation
+        # of SPACE that is injective while amplitude x frequency < 1
+        # (ours ~0.38) — it cannot fold any surface, however tight the
+        # local curvature.  (Normal-based displacement folded at
+        # concave fillet grooves; the sliver pleats in Shawn's
+        # MeshLab.)  Each component is value-noise fBm, NOT plane
+        # waves: three summed cosines read as regular swells at
+        # footprint scale ("noise, not regular waves" — Shawn).
+        wwl = spec.footprint_mm / 1.5
+        amp = _WARP_FRAC * spec.footprint_mm
+        wseed = int(w_rng.integers(0, 2**31))
+        disp = np.column_stack([
+            fbm(p, wseed + 31 * k, wwl, octaves=2) for k in range(3)])
+        v_loc = p + amp * disp
         faces = np.asarray(wm.faces)
         if spec.roundover_mm <= 0.15:
             # Fresh stones get no aging pass, so they take the same

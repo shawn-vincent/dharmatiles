@@ -25,9 +25,8 @@ import numpy as np
 import trimesh
 
 from ..core.color import Material, tag as _tag
-from ..stone import (blur_remesh, clip_to_box, round_edges,
-                     rounded_box, rubble_stone, separate_pinches,
-                     stone_relief)
+from ..stone import (clip_to_box, rounded_box, rubble_stone,
+                     separate_pinches, stone_relief)
 
 # ── Iteration knobs (module constants while prototyping) ─────────────────────
 _FACE_RECESS_MM   = 0.60   # per-block face jitter: outer/inner/end faces sit
@@ -40,10 +39,6 @@ _TILT_MAX_DEG     = 0.7    # tiny out-of-plane block tilt (pitch/roll): each
                            # face catches its own light tone — without it the
                            # coplanar faces melt into one plane at glancing
                            # angles and the joints stop reading
-_CHAMFER_FRAC     = 1.0    # bottom chamfer depth = reveal × this (R10: the
-                           # block's proud lip never overhangs the joint below)
-_REMESH_SIGMA     = 0.7    # blur-remesh sigma: below the stones' 0.9 "fresh"
-                           # setting so chip facets and chamfers stay crisp
 _MIN_BAY_FRAC     = 0.45   # bays shorter than this × bay_min are merged away
 _SEAT_PERCENTILE  = 80.0   # seat height over the footprint (stones convention)
 _CORE_ROUND_MM    = 0.6    # mortar-core edge fillet (walls AND floors):
@@ -256,7 +251,7 @@ def _layout(segs: list[_Seg], thickness_mm: float, height_mm: float,
 
 # ── Block body ────────────────────────────────────────────────────────────────
 
-def _block_mesh(lx: float, ly: float, lz: float, chamfer: float,
+def _block_mesh(lx: float, ly: float, lz: float,
                 chip_mm: float, roundover_mm: float, relief_mm: float,
                 relief_wl: tuple[float, float],
                 is_top: bool, rng: np.random.Generator) -> trimesh.Trimesh:
@@ -267,8 +262,6 @@ def _block_mesh(lx: float, ly: float, lz: float, chamfer: float,
     proud-lip overhang (R10), then small roundover + broadband
     micro-relief for the drybrush catch (R4/R9).
     """
-    ch = min(chamfer, 0.45 * lz)
-
     # Jitter is drawn PER RING x PER SIDE, never per corner: each face
     # is then bounded by two parallel horizontal lines — coplanar by
     # construction.  Per-corner jitter warped every side quad, and
@@ -289,9 +282,12 @@ def _block_mesh(lx: float, ly: float, lz: float, chamfer: float,
 
     z_top_pull = _TOP_SETTLE_MM if is_top else 0.5 * chip_mm
     _ring(lz - rng.uniform(0.0, z_top_pull), 0.0, chip_mm)      # top ring
-    _ring(rng.uniform(0.6, 1.0) * ch, 0.0, chip_mm)             # chamfer ring
-    if ch > 0.0:
-        _ring(0.0, ch, 0.4 * chip_mm)                           # inset base
+    # Bottom ring identical to the top (Shawn: bricks have the SAME
+    # edge everywhere — the old bottom chamfer read as round-bottomed
+    # bricks).  The R10 overhang it guarded against is the block lip
+    # over the sub-mm joint recess; the official pieces have square
+    # bottoms there and print fine.
+    _ring(0.0, 0.0, chip_mm)                                    # bottom ring
 
     # EXACT tessellation — no voxel grid anywhere.  Blocks went
     # through blur_remesh (binary occupancy + marching cubes) for
@@ -305,41 +301,50 @@ def _block_mesh(lx: float, ly: float, lz: float, chamfer: float,
     # planes — zero ripple by construction.  Extracting the isosurface
     # at +roundover IS the Minkowski roundover, replacing round_edges.
     from skimage import measure as _measure
-    ro = max(roundover_mm, 0.05)
     hull = trimesh.convex.convex_hull(np.asarray(pts))
     N = np.asarray(hull.face_normals)
     D = (N * hull.triangles[:, 0, :]).sum(axis=1)
+    # Dedupe coplanar triangle planes (qhull splits every face): LSE
+    # sums duplicates as +tau*ln(k) — a uniform inward shrink.
+    _, uniq = np.unique(np.round(np.column_stack([N, D]), 3),
+                        axis=0, return_index=True)
+    N, D = N[uniq], D[uniq]
     pitch = float(np.clip(max(lx, ly, lz) / 56.0, 0.18, 0.32))
-    pad = ro + 2.0 * pitch
+    # Smooth-max (log-sum-exp) of the plane fields: on a face one
+    # plane dominates and the level-0 set IS the exact plane (zero
+    # ripple); where planes meet, the LSE blend pulls the surface in
+    # by ~tau*ln2 — the roundover, analytically.  tau is floored at
+    # the grid pitch so the blend is resolved (a hard max creases the
+    # field and MC slivers the crease into non-manifold edges).
+    tau = max(0.7 * roundover_mm, 0.6 * pitch)
+    pad = 2.5 * pitch
     lo = hull.bounds[0] - pad
     hi = hull.bounds[1] + pad
     axes = [np.arange(lo[k], hi[k] + pitch, pitch) for k in range(3)]
     G = np.stack(np.meshgrid(*axes, indexing='ij'), axis=-1)
-    field = np.einsum('xyzk,fk->xyzf', G, N).max(axis=-1) \
-        if False else None
-    # (einsum over all planes at once is memory-hungry; loop planes)
-    field = np.full(G.shape[:3], -np.inf)
+    acc = None
     for n_i, d_i in zip(N, D):
-        np.maximum(field, G @ n_i - d_i, out=field)
+        f = (G @ n_i - d_i) / tau
+        acc = f if acc is None else np.logaddexp(acc, f)
+    field = tau * acc
     mv, mf, _n, _v = _measure.marching_cubes(
-        field, level=ro, spacing=(pitch, pitch, pitch))
+        field, level=0.0, spacing=(pitch, pitch, pitch))
     body = trimesh.Trimesh(vertices=mv + lo, faces=mf, process=True)
     body.fix_normals()
-        if relief_mm > 0.0:
-            # THE FLOOR RECIPE at block scale (Shawn: "fix the walls
-            # to look like the floor"): same deep worn-recess carve
-            # the slabs get — full stone_relief defaults, depth scaled
-            # by the preset (relief_mm/0.10 ≈ 1 for 'worn') and capped
-            # by block size so small bricks aren't eaten.  Shallow
-            # carve is WORSE than none: below ~0.4 mm only the rim
-            # reads and it looks like engraved scratches.
-            carve = min(0.62 * relief_mm / 0.10, 0.62,
-                        0.14 * min(lx, ly, lz))
-            body = stone_relief(body, rng,
-                                carve_mm=carve,
-                                dish_mm=min(0.25,
-                                            0.06 * min(lx, ly, lz)),
-                                base_fade_mm=1.2)
+    if relief_mm > 0.0:
+        # THE FLOOR RECIPE at block scale (Shawn: "fix the walls to
+        # look like the floor"): same deep worn-recess carve the slabs
+        # get — full stone_relief defaults, depth scaled by the preset
+        # (relief_mm/0.10 ≈ 1 for 'worn') and capped by block size so
+        # small bricks aren't eaten.  Shallow carve is WORSE than
+        # none: below ~0.4 mm only the rim reads and it looks like
+        # engraved scratches.
+        carve = min(0.62 * relief_mm / 0.10, 0.62,
+                    0.14 * min(lx, ly, lz))
+        body = stone_relief(body, rng,
+                            carve_mm=carve,
+                            dish_mm=min(0.25, 0.06 * min(lx, ly, lz)),
+                            base_fade_mm=1.2)
     return body
 
 
@@ -532,11 +537,11 @@ class CutStoneWall:
                 out.append(cell)
         return out
 
-    def _unit_mesh(self, lx: float, ly: float, lz: float, chamfer: float,
+    def _unit_mesh(self, lx: float, ly: float, lz: float,
                    cell: _Cell, rng: np.random.Generator) -> trimesh.Trimesh:
         """One masonry unit in the local cell frame; subclass hook —
         FieldstoneWall swaps this for lumpy rounded stones."""
-        return _block_mesh(lx, ly, lz, chamfer, self.chip_mm,
+        return _block_mesh(lx, ly, lz, self.chip_mm,
                            self.roundover_mm, self.relief_mm,
                            self.relief_wl, cell.is_top, rng)
 
@@ -657,7 +662,8 @@ class CutStoneWall:
         face (both wall faces, free ends, corner outer planes, and the
         top); the bottom runs to the embed depth (R3)."""
         rv, T = self.reveal_mm, self.thickness_mm
-        z0, z1 = seat_z - self.embed_mm, seat_z + self.height_mm - rv
+        embed = getattr(self, '_embed_eff', self.embed_mm)
+        z0, z1 = seat_z - embed, seat_z + self.height_mm - rv
         boxes = []
 
         def _box(seg: _Seg, t0: float, t1: float, q0: float, q1: float,
@@ -721,7 +727,7 @@ class CutStoneWall:
         y0 = rng.uniform(0.0, fr)
         y1 = self.thickness_mm - rng.uniform(0.0, fr)
         z0 = seat_z + (cell.z0 + j2 if not cell.is_bottom
-                       else -self.embed_mm)
+                       else -getattr(self, '_embed_eff', self.embed_mm))
         z1 = seat_z + (cell.z1 - (0.0 if cell.is_top else j2))
         return x0, x1, y0, y1, z0, z1
 
@@ -730,10 +736,9 @@ class CutStoneWall:
         seg = segs[cell.seg]
         x0, x1, y0, y1, z0, z1 = self._stone_box(cell, seat_z, rng)
 
-        chamfer = 0.0 if cell.is_bottom else _CHAMFER_FRAC * self.reveal_mm
         brng = np.random.default_rng(
             (self.seed * 1_000_003 + hash(cell.key)) & 0x7FFFFFFF)
-        body = self._unit_mesh(x1 - x0, y1 - y0, z1 - z0, chamfer, cell, brng)
+        body = self._unit_mesh(x1 - x0, y1 - y0, z1 - z0, cell, brng)
 
         ctr = np.array([(x1 - x0) / 2.0, (y1 - y0) / 2.0, (z1 - z0) / 2.0])
         yaw = np.radians(brng.uniform(-self.yaw_max_deg, self.yaw_max_deg))
@@ -771,11 +776,21 @@ class CutStoneWall:
         return inside, (i0, i1, j0, j1)
 
     def _seat_z(self, scene, segs: list[_Seg]) -> float:
+        """Seat on whatever surface is UNDER the wall — pavement
+        included (Shawn: walls sit ON the floor, not buried beneath
+        it).  When the footprint is mostly paved (support well above
+        the soil), the wall stands on the slab tops with a token
+        0.25 mm fusion embed; on bare soil it keeps its normal burial
+        (fine per Shawn)."""
         inside, (i0, i1, j0, j1) = self._footprint(scene, segs)
-        patch = scene.terrain_z[j0:j1, i0:i1]
+        ter = scene.terrain_z[j0:j1, i0:i1]
+        sup = scene.terrain_support_z[j0:j1, i0:i1]
+        surf = np.where(np.isfinite(sup), np.maximum(ter, sup), ter)
         if not inside.any():
-            return float(patch.max())
-        return float(np.percentile(patch[inside], _SEAT_PERCENTILE))
+            return float(surf.max())
+        paved = float(np.percentile((surf - ter)[inside], 60.0)) > 0.5
+        self._embed_eff = 0.25 if paved else self.embed_mm
+        return float(np.percentile(surf[inside], _SEAT_PERCENTILE))
 
     def _stamp(self, scene, segs: list[_Seg], cap_z: float) -> None:
         inside, (i0, i1, j0, j1) = self._footprint(scene, segs)
