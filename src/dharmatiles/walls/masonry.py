@@ -25,8 +25,8 @@ import numpy as np
 import trimesh
 
 from ..core.color import Material, tag as _tag
-from ..stone import (blur_remesh, clip_to_box, relief_field, round_edges,
-                     rubble_stone, separate_pinches)
+from ..stone import (blur_remesh, clip_to_box, round_edges,
+                     rubble_stone, separate_pinches, stone_relief)
 
 # ── Iteration knobs (module constants while prototyping) ─────────────────────
 _FACE_RECESS_MM   = 0.60   # per-block face jitter: outer/inner/end faces sit
@@ -293,12 +293,24 @@ def _block_mesh(lx: float, ly: float, lz: float, chamfer: float,
     if remeshed is not None:
         body = remeshed
         if relief_mm > 0.0:
-            disp = relief_mm * relief_field(
-                body.vertices, rng, _RELIEF_WAVES, *relief_wl)
-            body = trimesh.Trimesh(
-                vertices=(body.vertices
-                          + np.asarray(body.vertex_normals) * disp[:, None]),
-                faces=body.faces, process=False)
+            # The common stone relief (plateau carved downward,
+            # stone/finish.py) at block scale: the preset's relief_mm
+            # sets the carve depth, its wavelengths set the fbm scale.
+            # Capped by the block's own size — the first pass carved
+            # 0.5 mm worn floors into 2.5 mm bricks and ATE them.
+            carve = min(relief_mm * 2.0, 0.12 * min(lx, ly, lz))
+            v = stone_relief(body, rng,
+                             scale_mm=float(np.mean(relief_wl)),
+                             carve_mm=carve, band=0.55,
+                             dish_mm=relief_mm * 1.5)
+            # Fade the carve at the buried bottom: carved patches at
+            # the soil interface leave thin standing ribs that read
+            # as drips down the wall base.
+            p0 = np.asarray(body.vertices)
+            fade = np.clip(p0[:, 2] / 1.2, 0.0, 1.0)[:, None]
+            v = p0 + (v - p0) * fade
+            body = trimesh.Trimesh(vertices=v, faces=body.faces,
+                                   process=False)
     return body
 
 

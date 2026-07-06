@@ -23,6 +23,7 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
+from .noise import fbm
 from .surface import relief_field
 
 
@@ -89,3 +90,48 @@ def aged_relief(body: trimesh.Trimesh, rng: np.random.Generator, *,
         dpl   = np.abs((p - c) @ n)
         disp *= 1.0 - calm * align * np.exp(-(dpl / width) ** 2)
     return p + vn * (disp * curv_damp)[:, None]
+
+
+def stone_relief(body, rng, *,
+                 scale_mm: float = 7.0,
+                 carve_mm: float = 0.9,
+                 threshold: float = 0.05,
+                 band: float = 0.35,
+                 dish_mm: float = 0.35,
+                 dish_scale_mm: float | None = None,
+                 octaves: int = 4) -> np.ndarray:
+    """The common stone relief (docs/design/stone-surface-texture.md):
+    a CALM PLATEAU CARVED DOWNWARD, statistically matched to the
+    official DungeonBlocks floors (TS-019: RMS 0.32 mm, p5 −0.80,
+    p95 +0.24, skew −0.99 — ours at defaults: 0.35 / −0.82 / +0.20 /
+    −0.84).
+
+    - carve: −carve_mm · smoothstep((fbm − threshold)/band) — the
+      recesses SATURATE at a worn floor (a bimodal plateau/floor
+      surface with rims between), the read of eroded stone.  Sparse
+      unsaturated pits came out too spiky (skew −2.3).
+    - dish: gentle two-sided fbm at footprint scale so big faces
+      aren't dead planes.
+    - displaced along Taubin-smoothed normals with curvature damping
+      (same guardrail as the aged pass).
+
+    Returns the displaced vertex array (faces unchanged).
+    """
+    p = np.asarray(body.vertices)
+    relaxed = trimesh.Trimesh(vertices=p.copy(),
+                              faces=np.asarray(body.faces).copy(),
+                              process=False)
+    trimesh.smoothing.filter_taubin(relaxed, iterations=10)
+    vn = np.asarray(relaxed.vertex_normals)
+    cd = np.linalg.norm(p - np.asarray(relaxed.vertices), axis=1)
+    curv_damp = 1.0 / (1.0 + (cd / 0.35) ** 2)
+
+    seed = int(rng.integers(0, 2**31))
+    n = fbm(p, seed, scale_mm, octaves=octaves)
+    t = np.clip((n - threshold) / band, 0.0, 1.0)
+    carve = -carve_mm * t * t * (3.0 - 2.0 * t)
+    if dish_mm > 0.0:
+        foot = float(np.ptp(p, axis=0).max())
+        dsc = dish_scale_mm if dish_scale_mm is not None else foot / 1.6
+        carve = carve + dish_mm * fbm(p, seed + 7919, dsc, octaves=2)
+    return p + vn * (carve * curv_damp)[:, None]

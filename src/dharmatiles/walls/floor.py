@@ -33,7 +33,7 @@ import numpy as np
 import trimesh
 
 from ..core.color import Material, tag as _tag
-from ..stone import aged_relief
+from ..stone import stone_relief
 from ..stone.cracks import engrave_cracks
 from .masonry import _TEXTURES, _block_mesh
 
@@ -116,45 +116,60 @@ class StoneFloor:
                 j0 = max(0, int(y0 / cw))
                 j1 = min(gh, int(np.ceil((y0 + pitch) / cw)))
                 patch = scene.terrain_z[j0:j1, i0:i1]
-                np.minimum(patch, self.bed_mm, out=patch)
-
                 if brng.random() < self.missing_prob:
-                    continue    # sunken dirt pit
+                    # Sunken dirt pit: keep the dirt bed visible.
+                    np.minimum(patch, self.bed_mm, out=patch)
+                    continue
+                # Under a slab the soil all but vanishes (a 0.15 mm
+                # film keeps the heightmap solid well-formed): at tile
+                # edges you see ONLY the slab side, no brown stripe.
+                np.minimum(patch, 0.15, out=patch)
 
                 top = self.top_mm + float(
                     brng.uniform(-_TOP_JITTER_MM, _TOP_JITTER_MM))
                 chip = self.chip_mm
                 if brng.random() < self.spall_prob:
                     chip = min(0.30 * pitch * 0.25, 1.6) + self.chip_mm
-                side = pitch - self.joint_mm
+                # Joints inset the slab EXCEPT at tile boundaries:
+                # floor tiles butt slab-to-slab like walls do (R8) —
+                # only floor block at the tile edge, and the seam
+                # between two tiles reads as its own grid line.
+                jx0 = 0.0 if ix == 0 else self.joint_mm / 2.0
+                jx1 = 0.0 if ix == nx - 1 else self.joint_mm / 2.0
+                jy0 = 0.0 if iy == 0 else self.joint_mm / 2.0
+                jy1 = 0.0 if iy == ny - 1 else self.joint_mm / 2.0
+                side_x = pitch - jx0 - jx1
+                side_y = pitch - jy0 - jy1
+                side = max(side_x, side_y)
                 # Full-depth slab: tile bottom to pavement level.
-                body = _block_mesh(side, side, top, 0.0,
+                body = _block_mesh(side_x, side_y, top, 0.0,
                                    chip, self.roundover_mm, self.relief_mm,
                                    self.relief_wl, True, brng)
-                # Drybrush pass (Shawn: "Dry brush!  Dry brush!"): the
-                # shared aged-relief recipe at slab scale — broad
-                # undulation so the face isn't a plane, granular tooth
-                # the brush can catch.  Subdivide first: on a large
-                # FLAT face the ~0.3 mm remesh pitch aliases short
-                # grain waves into corduroy trains (curvature hides
-                # this on rocks).  Clamp the underside back to the
-                # tile bottom afterwards.
+                # The common stone relief (stone/finish.py, design:
+                # docs/design/stone-surface-texture.md): a calm
+                # plateau carved downward — worn recesses + gentle
+                # dish, matching the measured official floors.  The
+                # plane-wave drybrush pass read as corduroy/chop here
+                # and is gone.  Clamp the underside back to the tile
+                # bottom afterwards.
                 body = body.subdivide()
-                v = aged_relief(body, brng,
-                                broad=(0.50, 1.5, 9.0), broad_waves=40,
-                                grain=(0.22, 0.5, 1.4), grain_waves=24,
-                                grain_mix=0.6, env=(0.4, side))
+                p0 = np.asarray(body.vertices)
+                v = stone_relief(body, brng)
+                # Fade the carve out near the slab base: a deep side
+                # recess at the foot exposes the terrain film at tile
+                # edges (orange flecks).
+                fade = np.clip(p0[:, 2] / 1.5, 0.0, 1.0)[:, None]
+                v = p0 + (v - p0) * fade
                 v[:, 2] = np.maximum(v[:, 2], 0.0)
                 body = trimesh.Trimesh(vertices=v, faces=body.faces,
                                        process=False)
-                ctr = np.array([side / 2.0, side / 2.0, top / 2.0])
+                ctr = np.array([side_x / 2.0, side_y / 2.0, top / 2.0])
                 for axis in ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]):
                     tilt = np.radians(brng.uniform(-_TILT_DEG, _TILT_DEG))
                     body.apply_transform(
                         trimesh.transformations.rotation_matrix(
                             tilt, axis, ctr))
-                body.apply_translation([x0 + self.joint_mm / 2.0,
-                                        y0 + self.joint_mm / 2.0, 0.0])
+                body.apply_translation([x0 + jx0, y0 + jy0, 0.0])
                 if brng.random() < self.crack_prob:
                     # The standard rock crack, walk length scaled to
                     # the slab so it crosses a good fraction of it.

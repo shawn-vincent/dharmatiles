@@ -59,7 +59,12 @@ def separate_pinches(mesh: trimesh.Trimesh) -> None:
         moved = False
         for i, j in pairs:
             if (min(i, j), max(i, j)) in adjacent:
-                continue
+                # A CONNECTED pair this close is a degenerate sliver
+                # edge (manifold unions emit them at tangencies); the
+                # STL reload would collapse it into a non-manifold
+                # edge, so stretch it past the merge range too.
+                if float(np.linalg.norm(v[i] - v[j])) > 2e-5:
+                    continue
             v[i] -= vn[i] * 1.5e-4
             v[j] -= vn[j] * 3.0e-4
             moved = True
