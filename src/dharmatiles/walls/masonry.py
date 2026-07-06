@@ -341,7 +341,13 @@ class CutStoneWall:
 
     def __init__(self, spine: list[tuple[float, float]], *,
                  thickness_mm: float = 7.0,
-                 height_mm:    float = 49.7,
+                 height_mm:    float = 29.6,   # official VISIBLE height:
+                                                # DB wall pieces top out
+                                                # 33.1 mm above the datum
+                                                # (49.7 bbox − 16.6 tall
+                                                # base); from a typical
+                                                # soil seat (~3.5) that is
+                                                # 29.6.  Tall preset: 68.8
                  seed:         int   = 0,
                  texture:      str   = 'chipped',
                  course_mm:    tuple[float, float] = (5.5, 8.5),

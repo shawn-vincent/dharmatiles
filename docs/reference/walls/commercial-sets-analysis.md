@@ -59,9 +59,10 @@ the official bands; water (~3.0) is close; `StoneFloor` was raised to
 an outdoor path.  Wall pieces use the TALL socket base (16.6; cavity
 ceiling measured at 16.75 on UD-001) and their integrated floor sits
 at ≈ 25.3; the wall slab itself rises only ≈ 24.4 mm above that floor
-— our `height_mm = 49.7` default (measured from the seat) is roughly
-2× the official VISIBLE wall height.  Flagged for a decision, not
-changed.
+— our old `height_mm = 49.7` default (measured from the seat) was
+roughly 2× the official VISIBLE wall height; fixed 2026-07-05:
+default is now 29.6 (top ≈ 33 above datum, matching the official wall
+top), tall ≈ 68.8.
 
 Structural idiom: a DungeonBlocks "wall" is a **floor square with a
 wall slab rising from one edge** — wall and floor are one printed

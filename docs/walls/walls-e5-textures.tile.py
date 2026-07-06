@@ -4,18 +4,16 @@
 # back: chipped (m50 cut stone), worn (m24 cryptstone), hewn (m40
 # rough), dressed (near-ashlar).  Runs sit in the tile interior, so
 # both ends of every wall show textured brick ends with inset mortar.
-# Lower height (32 mm) so the back rows stay visible in one render.
 
 from dharmatiles.spec import Tile, Region, FloodFill, SurfaceConfig
 from dharmatiles.layers import SoilCarpet
 from dharmatiles.walls import CutStoneWall
 
-_H = 32.0
 _X0, _X1 = 1.85, 0.15          # walk -x so the body (left side) faces south
 
 
 def _wall(y: float, texture: str, seed: int) -> CutStoneWall:
-    return CutStoneWall(spine=[(_X0, y), (_X1, y)], height_mm=_H,
+    return CutStoneWall(spine=[(_X0, y), (_X1, y)],
                         texture=texture, seed=seed)
 
 

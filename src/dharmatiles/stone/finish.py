@@ -32,7 +32,9 @@ def aged_relief(body: trimesh.Trimesh, rng: np.random.Generator, *,
                 grain_mix: float = 0.5,
                 env: tuple[float, float] | None = None,
                 hero: tuple[np.ndarray, np.ndarray, float, float]
-                      | None = None) -> np.ndarray:
+                      | None = None,
+                broad_waves: int = 6,
+                grain_waves: int = 16) -> np.ndarray:
     """Displaced vertex array for *body* (faces unchanged).
 
     - ``broad``: (amplitude_mm, wl_lo_mm, wl_hi_mm) pillowy undulation.
@@ -45,7 +47,11 @@ def aged_relief(body: trimesh.Trimesh, rng: np.random.Generator, *,
       calm facet survives aging; None = no protected face.
 
     RNG draw order is fixed (broad → grain → envelope) so a caller's
-    stream is reproducible for any parameter subset.
+    stream is reproducible for any parameter subset.  ``broad_waves`` /
+    ``grain_waves`` widen the wave count: a handful of plane waves
+    reads as directional corduroy on large FLAT faces (floor slabs) —
+    curvature hides it on rocks; many waves approach an isotropic
+    field.
     """
     p = np.asarray(body.vertices)
     relaxed = trimesh.Trimesh(vertices=p.copy(),
@@ -59,11 +65,13 @@ def aged_relief(body: trimesh.Trimesh, rng: np.random.Generator, *,
     disp = np.zeros(len(p))
     if broad is not None:
         amp, lo, hi = broad
-        disp += amp * 0.35 * relief_field(p, rng, 6, lo, hi, spectral=1.0)
+        disp += amp * 0.35 * relief_field(p, rng, broad_waves, lo, hi,
+                                          spectral=1.0)
     if grain is not None:
         amp_g, lo, hi = grain
         disp += (amp_g * grain_mix
-                 * 0.7 * relief_field(p, rng, 16, lo, hi, spectral=0.7))
+                 * 0.7 * relief_field(p, rng, grain_waves, lo, hi,
+                                      spectral=0.7))
     if env is not None:
         floor, foot = env
         e = np.zeros(len(p))

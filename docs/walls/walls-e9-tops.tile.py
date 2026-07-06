@@ -16,10 +16,13 @@ tile = Tile(
     areas=[
         Region(id='ground', selector=FloodFill(0.5, 0.05), layers=[
             SoilCarpet(),
-            FieldstoneWall([(_X0, 0.60), (_X1, 0.60)], height_mm=38.0,
-                           seed=71, coping='vertical'),
-            CutStoneWall([(_X0, 1.55), (_X1, 1.55)], height_mm=42.0,
-                         seed=72, crenellated=True),
+            FieldstoneWall([(_X0, 0.60), (_X1, 0.60)], seed=71,
+                           coping='vertical'),
+            # Crenellated city walls are the TALL pieces in the
+            # official sets; at the standard 29.6 the merlons would be
+            # nearly half the wall.
+            CutStoneWall([(_X0, 1.55), (_X1, 1.55)], seed=72,
+                         height_mm=45.0, crenellated=True),
         ]),
     ],
 )

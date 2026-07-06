@@ -18,10 +18,10 @@ tile = Tile(
     areas=[
         Region(id='ground', selector=FloodFill(0.5, 0.05), layers=[
             SoilCarpet(),
-            FieldstoneWall([(_X0, 0.60), (_X1, 0.60)], height_mm=42.0,
-                           seed=81, ruin=0.55),
-            CutStoneWall([(_X0, 1.55), (_X1, 1.55)], height_mm=49.7,
-                         seed=82, ruin=0.6),
+            FieldstoneWall([(_X0, 0.60), (_X1, 0.60)], seed=81,
+                           ruin=0.55),
+            CutStoneWall([(_X0, 1.55), (_X1, 1.55)], seed=82,
+                         ruin=0.6),
         ]),
     ],
 )

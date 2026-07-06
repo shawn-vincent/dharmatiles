@@ -33,6 +33,7 @@ import numpy as np
 import trimesh
 
 from ..core.color import Material, tag as _tag
+from ..stone import aged_relief
 from ..stone.cracks import engrave_cracks
 from .masonry import _TEXTURES, _block_mesh
 
@@ -130,6 +131,22 @@ class StoneFloor:
                 body = _block_mesh(side, side, top, 0.0,
                                    chip, self.roundover_mm, self.relief_mm,
                                    self.relief_wl, True, brng)
+                # Drybrush pass (Shawn: "Dry brush!  Dry brush!"): the
+                # shared aged-relief recipe at slab scale — broad
+                # undulation so the face isn't a plane, granular tooth
+                # the brush can catch.  Subdivide first: on a large
+                # FLAT face the ~0.3 mm remesh pitch aliases short
+                # grain waves into corduroy trains (curvature hides
+                # this on rocks).  Clamp the underside back to the
+                # tile bottom afterwards.
+                body = body.subdivide()
+                v = aged_relief(body, brng,
+                                broad=(0.50, 1.5, 9.0), broad_waves=40,
+                                grain=(0.22, 0.5, 1.4), grain_waves=24,
+                                grain_mix=0.6, env=(0.4, side))
+                v[:, 2] = np.maximum(v[:, 2], 0.0)
+                body = trimesh.Trimesh(vertices=v, faces=body.faces,
+                                       process=False)
                 ctr = np.array([side / 2.0, side / 2.0, top / 2.0])
                 for axis in ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]):
                     tilt = np.radians(brng.uniform(-_TILT_DEG, _TILT_DEG))
