@@ -21,8 +21,10 @@ with the wall texture presets).  The floor REPLACES the terrain:
   sit 17.8–18.8 mm above the piece bottom = 6.9–7.9 mm above our
   terrain datum (base = 5.7 peg + 5.2 flare = 10.9).  Outdoor paths
   are lower (~6.0): pass ``top_mm=6.0`` for a garden path;
-- joints land on the grid lines and read as deep dark slots down to
-  the dirt bed; a ``missing_prob`` slab leaves a sunken dirt pit;
+- joints land on the grid lines and read as razor-thin dark cracks
+  (0.25 mm nominal, thinner than brick joints — the slot's depth draws
+  the grid line, not its width); a ``missing_prob`` slab leaves a
+  sunken dirt pit;
 - ``spall_prob`` slabs get broken corners; ``crack_prob`` slabs are
   engraved with the standard rock crack (``stone/cracks.py``) — the
   grid must be imperfect to read real.
@@ -58,7 +60,12 @@ class StoneFloor:
                  slabs_per_square: int = 1,
                  top_mm:       float = 7.4,
                  bed_mm:       float = 1.2,
-                 joint_mm:     float = 1.0,
+                 joint_mm:     float = 0.25,  # razor-thin crack —
+                                              # thinner than the brick
+                                              # joints (0.5); the deep
+                                              # slot between full-depth
+                                              # slabs draws the grid
+                                              # line all by itself
                  chip_mm:      float | None = None,
                  roundover_mm: float | None = None,
                  relief_mm:    float | None = None,
