@@ -37,6 +37,8 @@ def build_parts(wall: FieldstoneWall, sq: float):
     segs = _segments([(x * sq, y * sq) for x, y in wall.spine])
     rng  = np.random.default_rng(wall.seed)
     seat_z = 0.0
+    if wall.height_mm is None:            # top-anchored default
+        wall.height_mm = wall.top_mm - seat_z
     cells = wall._cells(segs, wall.thickness_mm, wall.height_mm, rng)
     core   = wall._core_boxes(segs, seat_z)
     stones = [wall._place_block(c, segs, seat_z, rng) for c in cells]

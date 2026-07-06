@@ -387,13 +387,21 @@ class CutStoneWall:
 
     def __init__(self, spine: list[tuple[float, float]], *,
                  thickness_mm: float = 7.0,
-                 height_mm:    float = 29.6,   # official VISIBLE height:
-                                                # DB wall pieces top out
-                                                # 33.1 mm above the datum
-                                                # (49.7 bbox − 16.6 tall
-                                                # base); from a typical
-                                                # soil seat (~3.5) that is
-                                                # 29.6.  Tall preset: 68.8
+                 height_mm:    float | None = None,
+                 top_mm:       float = 33.1,   # official wall-top
+                                                # elevation above the
+                                                # datum (49.7 piece bbox
+                                                # − 16.6 tall base).  The
+                                                # default wall hits this
+                                                # TOP regardless of what
+                                                # it seats on — soil,
+                                                # grass, or pavement — so
+                                                # finished heights always
+                                                # rank with the official
+                                                # pieces (tall ≈ 72.3).
+                                                # An explicit height_mm
+                                                # overrides with a
+                                                # seat-relative extent.
                  seed:         int   = 0,
                  texture:      str   = 'chipped',
                  course_mm:    tuple[float, float] = (5.5, 8.5),
@@ -420,6 +428,7 @@ class CutStoneWall:
         self.spine        = [tuple(map(float, p)) for p in spine]
         self.thickness_mm = thickness_mm
         self.height_mm    = height_mm
+        self.top_mm       = top_mm
         self.seed         = seed
         self.texture      = texture
         self.course_mm    = course_mm
@@ -454,9 +463,13 @@ class CutStoneWall:
         sq = surface.square_mm
         segs = _segments([(x * sq, y * sq) for x, y in self.spine])
         rng  = np.random.default_rng(self.seed)
-        T, H = self.thickness_mm, self.height_mm
 
         seat_z = self._seat_z(scene, segs)
+        if self.height_mm is None:
+            # Top-anchored (default): the finished top lands at top_mm
+            # above the datum whatever the seat surface is.
+            self.height_mm = max(self.top_mm - seat_z, 6.0)
+        T, H = self.thickness_mm, self.height_mm
         cells  = self._cells(segs, T, H, rng)
         if self.ruin > 0.0:
             cells = self._ruin_cells(cells, segs, H, rng)
