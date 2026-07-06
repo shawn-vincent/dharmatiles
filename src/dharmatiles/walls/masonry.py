@@ -412,7 +412,7 @@ class CutStoneWall:
                  texture:      str   = 'chipped',
                  course_mm:    tuple[float, float] = (5.5, 8.5),
                  bay_mm:       tuple[float, float] = (11.0, 20.0),
-                 joint_mm:     float = 0.22,  # halved 2026-07-06 (Shawn)
+                 joint_mm:     float = 0.11,  # halved twice 2026-07-06 (Shawn)
                  reveal_mm:    float = 1.3,
                  chip_mm:      float | None = None,
                  roundover_mm: float | None = None,

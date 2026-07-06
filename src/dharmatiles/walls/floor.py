@@ -61,9 +61,9 @@ class StoneFloor:
                  slabs_per_square: int = 1,
                  top_mm:       float = 7.4,
                  bed_mm:       float = 1.2,
-                 joint_mm:     float = 0.25,  # razor-thin crack —
-                                              # thinner than the brick
-                                              # joints (0.5)
+                 joint_mm:     float = 0.125,  # matches the brick
+                                               # joints (halved twice
+                                               # 2026-07-06, Shawn)
                  reveal_mm:    float = 1.3,   # mortar core recessed
                                               # this far below the
                                               # pavement top — joints
