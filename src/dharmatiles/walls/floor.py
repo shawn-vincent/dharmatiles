@@ -22,9 +22,10 @@ with the wall texture presets).  The floor REPLACES the terrain:
   terrain datum (base = 5.7 peg + 5.2 flare = 10.9).  Outdoor paths
   are lower (~6.0): pass ``top_mm=6.0`` for a garden path;
 - joints land on the grid lines and read as razor-thin dark cracks
-  (0.25 mm nominal, thinner than brick joints — the slot's depth draws
-  the grid line, not its width); a ``missing_prob`` slab leaves a
-  sunken dirt pit;
+  (0.25 mm nominal, thinner than brick joints) flooring onto the
+  MORTAR CORE at wall-joint depth (``reveal_mm``): one recessed sheet
+  welds the slabs into a single connected solid, the wall rule turned
+  horizontal; a ``missing_prob`` slab leaves a sunken dirt pit;
 - ``spall_prob`` slabs get broken corners; ``crack_prob`` slabs are
   engraved with the standard rock crack (``stone/cracks.py``) — the
   grid must be imperfect to read real.
@@ -34,10 +35,9 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
-from ..core.color import Material, tag as _tag
 from ..stone import stone_relief
 from ..stone.cracks import engrave_cracks
-from .masonry import _TEXTURES, _block_mesh
+from .masonry import _TEXTURES, _block_mesh, assemble_masonry
 
 _TILT_DEG = 0.5      # per-slab tilt: each slab catches its own light
 _TOP_JITTER_MM = 0.3  # per-slab pavement-level jitter
@@ -62,10 +62,13 @@ class StoneFloor:
                  bed_mm:       float = 1.2,
                  joint_mm:     float = 0.25,  # razor-thin crack —
                                               # thinner than the brick
-                                              # joints (0.5); the deep
-                                              # slot between full-depth
-                                              # slabs draws the grid
-                                              # line all by itself
+                                              # joints (0.5)
+                 reveal_mm:    float = 1.3,   # mortar core recessed
+                                              # this far below the
+                                              # pavement top — joints
+                                              # floor onto mortar at
+                                              # the same depth as the
+                                              # wall joints
                  chip_mm:      float | None = None,
                  roundover_mm: float | None = None,
                  relief_mm:    float | None = None,
@@ -83,6 +86,7 @@ class StoneFloor:
         self.top_mm       = top_mm
         self.bed_mm       = bed_mm
         self.joint_mm     = joint_mm
+        self.reveal_mm    = reveal_mm
         self.chip_mm      = preset['chip_mm'] if chip_mm is None else chip_mm
         self.roundover_mm = (preset['roundover_mm'] if roundover_mm is None
                              else roundover_mm)
@@ -103,6 +107,8 @@ class StoneFloor:
         ny = int(round(surface.tile_h / pitch))
 
         parts = []
+        placed = np.zeros((ny, nx), dtype=bool)
+        tops = np.zeros((ny, nx))
         for iy in range(ny):
             for ix in range(nx):
                 brng = np.random.default_rng(
@@ -136,6 +142,8 @@ class StoneFloor:
 
                 top = self.top_mm + float(
                     brng.uniform(-_TOP_JITTER_MM, _TOP_JITTER_MM))
+                placed[iy, ix] = True
+                tops[iy, ix] = top
                 chip = self.chip_mm
                 if brng.random() < self.spall_prob:
                     chip = min(0.30 * pitch * 0.25, 1.6) + self.chip_mm
@@ -195,9 +203,38 @@ class StoneFloor:
                 np.maximum(sl, top, out=sl)
                 scene.obstacle_mask[j0:j1, i0:i1] = True
 
-        for p in parts:
-            _tag(p, Material.ROCK)
-        return parts
+        if not parts:
+            return []
+        # Mortar core (Shawn: "for structural reasons, have some mortar
+        # inside the floor slabs … the same way we do for walls"): one
+        # sheet per placed cell spanning the FULL pitch (so neighbours'
+        # sheets merge across the joints and the pavement unions into
+        # one connected solid), recessed reveal_mm below the pavement
+        # top — the razor joints floor onto mortar at wall-joint depth
+        # — and inset reveal_mm from every visible side (tile
+        # boundaries, unpaved cells, dirt pits), exactly the wall rule.
+        rv = self.reveal_mm
+        for iy in range(ny):
+            for ix in range(nx):
+                if not placed[iy, ix]:
+                    continue
+                x0, y0 = ix * pitch, iy * pitch
+                cx0 = x0 + (rv if ix == 0 or not placed[iy, ix - 1]
+                            else 0.0)
+                cx1 = x0 + pitch - (rv if ix == nx - 1
+                                    or not placed[iy, ix + 1] else 0.0)
+                cy0 = y0 + (rv if iy == 0 or not placed[iy - 1, ix]
+                            else 0.0)
+                cy1 = y0 + pitch - (rv if iy == ny - 1
+                                    or not placed[iy + 1, ix] else 0.0)
+                zc = tops[iy, ix] - rv
+                box = trimesh.creation.box(
+                    extents=[cx1 - cx0, cy1 - cy0, zc])
+                box.apply_translation([(cx0 + cx1) / 2.0,
+                                       (cy0 + cy1) / 2.0, zc / 2.0])
+                parts.append(box)
+
+        return [assemble_masonry(parts, surface, 'StoneFloor')]
 
     def footprint_mm(self) -> float:
         return 0.0

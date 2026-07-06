@@ -111,6 +111,22 @@ class _Cell:
     key:   tuple = field(default=())
 
 
+def assemble_masonry(parts: list[trimesh.Trimesh], surface,
+                     label: str) -> trimesh.Trimesh:
+    """The masonry assembly tail shared by walls AND floors: manifold
+    union of core + units, tile-boundary clip, pinch separation, the
+    watertight warning, ROCK tagging.  A masonry layer is
+    ``assemble_masonry(core ∪ units)`` regardless of whether the units
+    pave a spine (walls) or a plan grid (floors)."""
+    solid = trimesh.boolean.union(parts, engine='manifold')
+    solid = CutStoneWall._clip_to_tile(solid, surface)
+    separate_pinches(solid)
+    if not solid.is_watertight:
+        warnings.warn(f'{label} union is not watertight', RuntimeWarning)
+    _tag(solid, Material.ROCK)
+    return solid
+
+
 def _frame(seg: _Seg, t: float = 0.0, q: float = 0.0,
            z: float = 0.0) -> np.ndarray:
     """4×4 transform from a segment-local frame (x along the run, y the
@@ -432,15 +448,9 @@ class CutStoneWall:
                 parts.append(block)
         parts.extend(self._extra_parts(segs, seat_z, rng))
 
-        wall = trimesh.boolean.union(parts, engine='manifold')
-        wall = self._clip_to_tile(wall, surface)
-        separate_pinches(wall)
-        if not wall.is_watertight:
-            warnings.warn('CutStoneWall union is not watertight',
-                          RuntimeWarning)
+        wall = assemble_masonry(parts, surface, 'CutStoneWall')
 
         self._stamp(scene, segs, seat_z + H)
-        _tag(wall, Material.ROCK)
         return [wall]
 
     # ── pieces ───────────────────────────────────────────────────────────────
