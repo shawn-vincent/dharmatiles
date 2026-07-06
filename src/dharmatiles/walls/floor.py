@@ -146,7 +146,11 @@ class StoneFloor:
                 tops[iy, ix] = top
                 chip = self.chip_mm
                 if brng.random() < self.spall_prob:
-                    chip = min(0.30 * pitch * 0.25, 1.6) + self.chip_mm
+                    # Spall chips must stay ABOVE the mortar core
+                    # (reveal 1.3): the old 0.3 x pitch budget pulled
+                    # corners 3 mm down and the union padded them with
+                    # dead-flat core plane.
+                    chip = min(0.30 * pitch * 0.25, 0.30) + self.chip_mm
                 # Joints inset the slab EXCEPT at tile boundaries:
                 # floor tiles butt slab-to-slab like walls do (R8) —
                 # only floor block at the tile edge, and the seam
@@ -171,7 +175,11 @@ class StoneFloor:
                 # bottom afterwards.
                 body = body.subdivide()
                 p0 = np.asarray(body.vertices)
-                v = stone_relief(body, brng)
+                # Relief budget sized BELOW the core reveal (the wall
+                # rule): carve 0.62 + dish 0.25 + spall chip 1.0 +
+                # tilt all stay above the mortar plane by construction
+                # — no clamps, no artificial plateau floors.
+                v = stone_relief(body, brng, carve_mm=0.62, dish_mm=0.25)
                 # Fade the carve out near the slab base: a deep side
                 # recess at the foot exposes the terrain film at tile
                 # edges (orange flecks).
