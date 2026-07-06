@@ -120,10 +120,12 @@ class StoneFloor:
                     # Sunken dirt pit: keep the dirt bed visible.
                     np.minimum(patch, self.bed_mm, out=patch)
                     continue
-                # Under a slab the soil all but vanishes (a 0.15 mm
-                # film keeps the heightmap solid well-formed): at tile
-                # edges you see ONLY the slab side, no brown stripe.
-                np.minimum(patch, 0.15, out=patch)
+                # Under a slab there is NO soil at all: the terrain
+                # drops to the datum (z = 0), where the tile's
+                # structural slab still runs base_h deep below it —
+                # the same convention as water pool floors.  At tile
+                # edges you see ONLY the slab side.
+                np.minimum(patch, 0.0, out=patch)
 
                 top = self.top_mm + float(
                     brng.uniform(-_TOP_JITTER_MM, _TOP_JITTER_MM))
