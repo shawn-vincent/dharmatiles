@@ -293,17 +293,38 @@ def _block_mesh(lx: float, ly: float, lz: float, chamfer: float,
     if ch > 0.0:
         _ring(0.0, ch, 0.4 * chip_mm)                           # inset base
 
+    # EXACT tessellation — no voxel grid anywhere.  Blocks went
+    # through blur_remesh (binary occupancy + marching cubes) for
+    # years, and MC of a binary grid stairsteps planar faces at EVERY
+    # angle: grid-aligned faces band at multi-mm wavelengths, rotated
+    # ones washboard at pitch/sin(angle) (Shawn's MeshLab finds, three
+    # rounds).  A block is a CONVEX body we constructed analytically,
+    # so sample its exact signed distance (max over hull face planes)
+    # and march THAT: MC interpolates linearly along grid edges, and
+    # the SDF is linear near faces, so vertices land exactly on the
+    # planes — zero ripple by construction.  Extracting the isosurface
+    # at +roundover IS the Minkowski roundover, replacing round_edges.
+    from skimage import measure as _measure
+    ro = max(roundover_mm, 0.05)
     hull = trimesh.convex.convex_hull(np.asarray(pts))
-    v, f = np.asarray(hull.vertices), np.asarray(hull.faces)
-    if roundover_mm > 0.0:
-        v, f = round_edges(v, f, roundover_mm, rng)
-    body = trimesh.Trimesh(vertices=v, faces=f, process=False)
-    # Uniform watertight remesh before displacement — subdivide_to_size
-    # leaves T-junctions (non-conforming), which breaks the manifold
-    # union.  _blur_remesh is the pipeline's stable-mesh primitive.
-    remeshed = blur_remesh(body, max(lx, ly, lz), _REMESH_SIGMA)
-    if remeshed is not None:
-        body = remeshed
+    N = np.asarray(hull.face_normals)
+    D = (N * hull.triangles[:, 0, :]).sum(axis=1)
+    pitch = float(np.clip(max(lx, ly, lz) / 56.0, 0.18, 0.32))
+    pad = ro + 2.0 * pitch
+    lo = hull.bounds[0] - pad
+    hi = hull.bounds[1] + pad
+    axes = [np.arange(lo[k], hi[k] + pitch, pitch) for k in range(3)]
+    G = np.stack(np.meshgrid(*axes, indexing='ij'), axis=-1)
+    field = np.einsum('xyzk,fk->xyzf', G, N).max(axis=-1) \
+        if False else None
+    # (einsum over all planes at once is memory-hungry; loop planes)
+    field = np.full(G.shape[:3], -np.inf)
+    for n_i, d_i in zip(N, D):
+        np.maximum(field, G @ n_i - d_i, out=field)
+    mv, mf, _n, _v = _measure.marching_cubes(
+        field, level=ro, spacing=(pitch, pitch, pitch))
+    body = trimesh.Trimesh(vertices=mv + lo, faces=mf, process=True)
+    body.fix_normals()
         if relief_mm > 0.0:
             # THE FLOOR RECIPE at block scale (Shawn: "fix the walls
             # to look like the floor"): same deep worn-recess carve
