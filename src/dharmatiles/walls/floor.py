@@ -163,8 +163,12 @@ class StoneFloor:
                 side_y = pitch - jy0 - jy1
                 side = max(side_x, side_y)
                 # Full-depth slab: tile bottom to pavement level.
+                # relief_mm=0 here: the slab owns its relief (the
+                # slab-scale stone_relief below); letting _block_mesh
+                # add its block-scale pass too double-textured the
+                # surface.
                 body = _block_mesh(side_x, side_y, top, 0.0,
-                                   chip, self.roundover_mm, self.relief_mm,
+                                   chip, self.roundover_mm, 0.0,
                                    self.relief_wl, True, brng)
                 # The common stone relief (stone/finish.py, design:
                 # docs/design/stone-surface-texture.md): a calm
