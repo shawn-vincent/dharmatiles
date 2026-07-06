@@ -1,22 +1,24 @@
-"""The aged-surface relief pass — the project's signature stone read.
+"""The common stone relief — the project's signature stone read.
 
-One recipe, used by scatter stones (aged and fresh paths) and the
-fieldstone wall, previously three hand-mirrored copies: displace the
-surface along TAUBIN-SMOOTHED normals by broad pillowy undulation plus
-granular drybrush tooth, modulated by a patchy envelope (calm fields vs
-active shoulders) and damped where the surface is tightly curved.
+ONE surface pass for every rock/block type (floor slabs, cut-stone and
+brick blocks, fieldstone pebbles, scatter rocks), design:
+docs/design/stone-surface-texture.md.  A calm plateau carved DOWNWARD
+into saturating worn recesses (matching the measured official
+DungeonBlocks floors: RMS ≈ 0.3 mm, skew ≈ −1, no sub-2 mm power),
+plus a gentle dish, an optional patchy calm/incident envelope, and an
+optional protected hero face.
 
-The fixed parts are deliberate, hard-won choices:
+Hard-won guardrails that stay regardless of the noise underneath:
 
-- smoothed normals + curvature damping: normal relief folds wherever
-  amplitude exceeds the local concave radius (scar rims, crack roots —
-  exactly where zero-gap wall stones touch); |p − p_relaxed| is a cheap
-  curvature proxy, and the 0.35 mm scale ignores residual voxel
-  stairsteps (~0.05 mm) that would otherwise paint z-contour terraces;
-- broad undulation at spectral 1.0, grain at 0.7: octave mixes that
-  read mineral — narrowband noise reads as an egg carton;
-- the 3-wave patchy envelope: uniform texture is its own monotony; the
-  references get their gravitas from CONTRAST between calm and incident.
+- displacement along TAUBIN-SMOOTHED normals with curvature damping:
+  normal relief folds wherever amplitude exceeds the local concave
+  radius (scar rims, crack roots — exactly where zero-gap wall stones
+  touch); |p − p_relaxed| is a cheap curvature proxy, and the 0.35 mm
+  scale ignores residual voxel stairsteps that would otherwise paint
+  z-contour terraces;
+- the noise is isotropic value-noise fBm (stone/noise.py) — plane
+  waves are Gaussian and phase-coherent, and on large flat faces they
+  read as directional corduroy (the rejected E35 floor texture).
 """
 from __future__ import annotations
 
@@ -24,72 +26,6 @@ import numpy as np
 import trimesh
 
 from .noise import fbm
-from .surface import relief_field
-
-
-def aged_relief(body: trimesh.Trimesh, rng: np.random.Generator, *,
-                broad: tuple[float, float, float] | None = None,
-                grain: tuple[float, float, float] | None = None,
-                grain_mix: float = 0.5,
-                env: tuple[float, float] | None = None,
-                hero: tuple[np.ndarray, np.ndarray, float, float]
-                      | None = None,
-                broad_waves: int = 6,
-                grain_waves: int = 16) -> np.ndarray:
-    """Displaced vertex array for *body* (faces unchanged).
-
-    - ``broad``: (amplitude_mm, wl_lo_mm, wl_hi_mm) pillowy undulation.
-    - ``grain``: (amplitude_mm, wl_lo_mm, wl_hi_mm) drybrush tooth.
-    - ``grain_mix``: grain contribution factor in the sum.
-    - ``env``: (floor, footprint_mm) patchy envelope — quiet zones keep
-      ``floor`` × the amplitude, active zones 1.0; None = uniform.
-    - ``hero``: (face_normal, face_center, calm, width_mm) protected
-      hero-face damping — displacement fades near that plane so one
-      calm facet survives aging; None = no protected face.
-
-    RNG draw order is fixed (broad → grain → envelope) so a caller's
-    stream is reproducible for any parameter subset.  ``broad_waves`` /
-    ``grain_waves`` widen the wave count: a handful of plane waves
-    reads as directional corduroy on large FLAT faces (floor slabs) —
-    curvature hides it on rocks; many waves approach an isotropic
-    field.
-    """
-    p = np.asarray(body.vertices)
-    relaxed = trimesh.Trimesh(vertices=p.copy(),
-                              faces=np.asarray(body.faces).copy(),
-                              process=False)
-    trimesh.smoothing.filter_taubin(relaxed, iterations=10)
-    vn = np.asarray(relaxed.vertex_normals)
-    cd = np.linalg.norm(p - np.asarray(relaxed.vertices), axis=1)
-    curv_damp = 1.0 / (1.0 + (cd / 0.35) ** 2)
-
-    disp = np.zeros(len(p))
-    if broad is not None:
-        amp, lo, hi = broad
-        disp += amp * 0.35 * relief_field(p, rng, broad_waves, lo, hi,
-                                          spectral=1.0)
-    if grain is not None:
-        amp_g, lo, hi = grain
-        disp += (amp_g * grain_mix
-                 * 0.7 * relief_field(p, rng, grain_waves, lo, hi,
-                                      spectral=0.7))
-    if env is not None:
-        floor, foot = env
-        e = np.zeros(len(p))
-        for _ in range(3):
-            d = rng.normal(size=3)
-            d /= np.linalg.norm(d) + 1e-12
-            ewl = foot / rng.uniform(0.9, 1.4)
-            e += np.cos(2.0 * np.pi / ewl * (p @ d)
-                        + rng.uniform(0.0, 2.0 * np.pi))
-        disp *= floor + (1.0 - floor) * np.clip(0.5 + 0.75 * e / 3.0,
-                                                0.0, 1.0)
-    if hero is not None:
-        n, c, calm, width = hero
-        align = np.clip(vn @ n, 0.0, None) ** 2
-        dpl   = np.abs((p - c) @ n)
-        disp *= 1.0 - calm * align * np.exp(-(dpl / width) ** 2)
-    return p + vn * (disp * curv_damp)[:, None]
 
 
 def stone_relief(body, rng, *,
@@ -99,7 +35,10 @@ def stone_relief(body, rng, *,
                  band: float = 0.35,
                  dish_mm: float = 0.35,
                  dish_scale_mm: float | None = None,
-                 octaves: int = 4) -> np.ndarray:
+                 octaves: int = 4,
+                 env: tuple[float, float] | None = None,
+                 hero: tuple[np.ndarray, np.ndarray, float, float]
+                       | None = None) -> np.ndarray:
     """The common stone relief (docs/design/stone-surface-texture.md):
     a CALM PLATEAU CARVED DOWNWARD, statistically matched to the
     official DungeonBlocks floors (TS-019: RMS 0.32 mm, p5 −0.80,
@@ -134,4 +73,16 @@ def stone_relief(body, rng, *,
         foot = float(np.ptp(p, axis=0).max())
         dsc = dish_scale_mm if dish_scale_mm is not None else foot / 1.6
         carve = carve + dish_mm * fbm(p, seed + 7919, dsc, octaves=2)
+    if env is not None:
+        # Patchy calm/incident contrast (E11 rocks lesson), now on
+        # value noise like everything else.
+        floor, foot_e = env
+        e = fbm(p, seed + 15013, foot_e / 1.1, octaves=2)
+        carve = carve * (floor + (1.0 - floor)
+                         * np.clip(0.5 + 1.1 * e, 0.0, 1.0))
+    if hero is not None:
+        nrm, c, calm, width = hero
+        align = np.clip(vn @ nrm, 0.0, None) ** 2
+        dpl   = np.abs((p - c) @ nrm)
+        carve = carve * (1.0 - calm * align * np.exp(-(dpl / width) ** 2))
     return p + vn * (carve * curv_damp)[:, None]

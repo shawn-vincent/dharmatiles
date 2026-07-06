@@ -43,8 +43,6 @@ _CHAMFER_FRAC     = 1.0    # bottom chamfer depth = reveal × this (R10: the
                            # block's proud lip never overhangs the joint below)
 _REMESH_SIGMA     = 0.7    # blur-remesh sigma: below the stones' 0.9 "fresh"
                            # setting so chip facets and chamfers stay crisp
-_RELIEF_WAVES     = 24     # broadband relief wave count; wavelengths come
-                           # from the texture preset
 _MIN_BAY_FRAC     = 0.45   # bays shorter than this × bay_min are merged away
 _SEAT_PERCENTILE  = 80.0   # seat height over the footprint (stones convention)
 

@@ -44,6 +44,10 @@ def main() -> None:
     ap.add_argument('out_dir', type=pathlib.Path)
     ap.add_argument('--only', nargs='*', default=None,
                     help='scene names to build (default: all)')
+    ap.add_argument('--no-render', action='store_true',
+                    help='STLs + watertight report only (pyrender can '
+                         'HANG, not just fail, when the display is '
+                         'locked/asleep)')
     args = ap.parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
     stl_dir = pathlib.Path('stl/test')
@@ -73,6 +77,8 @@ def main() -> None:
         print(f'{name}: {len(m.faces):,} faces  watertight={wt}  '
               f'({time.perf_counter() - t0:.0f}s)')
 
+        if args.no_render:
+            continue
         out_png = args.out_dir / f'{name}.png'
         for attempt in range(3):          # pyglet cocoa init is flaky
             try:

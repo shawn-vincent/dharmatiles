@@ -8,19 +8,17 @@ plus this shared finishing/guarantee machinery.
 
 Review + plan: docs/meta/history/2026-07-05-walls-rocks-refactor-review.md.
 """
-from .finish import aged_relief, stone_relief
+from .finish import stone_relief
 from .noise import fbm, value_noise
 from .shape import fibonacci_sphere, round_edges, rubble_stone
 from .solidify import clip_to_box, separate_pinches, survives_stl32
-from .surface import blur_remesh, relief_field
+from .surface import blur_remesh
 
 __all__ = [
-    'aged_relief',
     'blur_remesh',
     'clip_to_box',
     'fbm',
     'fibonacci_sphere',
-    'relief_field',
     'round_edges',
     'rubble_stone',
     'separate_pinches',

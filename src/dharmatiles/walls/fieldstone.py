@@ -41,7 +41,7 @@ from __future__ import annotations
 import numpy as np
 import trimesh
 
-from ..stone import aged_relief
+from ..stone import stone_relief
 from .masonry import CutStoneWall, _Cell, _Seg, _frame
 
 # ── Iteration knobs (module constants while prototyping) ─────────────────────
@@ -690,24 +690,22 @@ class FieldstoneWall(CutStoneWall):
 
     def _stone_texture(self, body: trimesh.Trimesh,
                        brng: np.random.Generator) -> trimesh.Trimesh:
-        """The shared aged-relief pass (stone/finish.py) at wall-stone
-        scale: undulation + micro-grain × patchy envelope, smoothed
-        normals, curvature damping (which also protects the crack
-        roots, exactly where the zero-gap stones touch).  Grain floor
-        lifted to 0.9 mm (the subdivided mesh's ~0.6 mm edge length);
-        amplitude auto-scales with the stone's footprint unless
+        """The common stone relief (stone/finish.py) at wall-stone
+        scale: plateau carved into worn recesses + gentle dish, patchy
+        calm/incident envelope, curvature damping (which also protects
+        the crack roots, exactly where the zero-gap stones touch).
+        Carve depth auto-scales with the stone's footprint unless
         relief_mm overrides it."""
         body = body.subdivide()
         p = np.asarray(body.vertices)
         foot = float(np.ptp(p[:, [0, 2]], axis=0).max())
-        amp = (float(np.clip(0.045 * foot, 0.14, 0.45))
+        amp = (float(np.clip(0.05 * foot, 0.15, 0.50))
                if self.relief_mm is None else self.relief_mm)
-        amp_g = float(np.clip(0.016 * foot, 0.12, 0.30))
-        v = aged_relief(body, brng,
-                        broad=(amp, max(foot / 4.5, 1.2),
-                               max(foot / 1.6, 3.0)),
-                        grain=(amp_g, 0.9, 3.2), grain_mix=0.6,
-                        env=(0.2, foot))
+        v = stone_relief(body, brng,
+                         scale_mm=max(foot / 2.4, 2.2),
+                         carve_mm=amp, band=0.45,
+                         dish_mm=0.5 * amp,
+                         env=(0.35, foot))
         return trimesh.Trimesh(vertices=v, faces=body.faces,
                                process=False)
 

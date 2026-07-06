@@ -5,27 +5,6 @@ import numpy as np
 import trimesh
 
 
-def relief_field(p: np.ndarray, rng: np.random.Generator, n_waves: int,
-                 wl_lo: float, wl_hi: float,
-                 spectral: float = 0.7) -> np.ndarray:
-    """Broadband random relief: plane waves with LOG-UNIFORM wavelengths
-    and amplitude ∝ wl^spectral, normalized to unit RMS.
-
-    Narrowband noise (every wave at one scale) reads as a regular field
-    of same-sized bumps — an egg carton, not stone (Shawn's find on the
-    doane grain).  Mixing octaves like a 1/f spectrum reads mineral."""
-    f, tot = np.zeros(len(p)), 0.0
-    for _ in range(n_waves):
-        d = rng.normal(size=3)
-        d /= np.linalg.norm(d) + 1e-12
-        wl = float(np.exp(rng.uniform(np.log(wl_lo), np.log(wl_hi))))
-        a  = (wl / wl_hi) ** spectral
-        f += a * np.cos(2.0 * np.pi / wl * (p @ d)
-                        + rng.uniform(0.0, 2.0 * np.pi))
-        tot += a * a
-    return f / np.sqrt(tot / 2.0 + 1e-12)
-
-
 def blur_remesh(body: trimesh.Trimesh, footprint_mm: float,
                 sigma: float) -> trimesh.Trimesh | None:
     """Remesh via marching cubes on a Gaussian-blurred occupancy field.

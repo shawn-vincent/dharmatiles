@@ -23,8 +23,8 @@ import trimesh
 from ..core.grid import sample_grid
 from ..core.color import Material, tag as _tag
 from ..core.tile import derive_seed
-from ..stone import (aged_relief, blur_remesh, clip_to_box, fibonacci_sphere,
-                     relief_field, round_edges, survives_stl32)
+from ..stone import (blur_remesh, clip_to_box, fibonacci_sphere,
+                     round_edges, stone_relief, survives_stl32)
 from ..stone.cracks import _CRACK_PROUD_MM, engrave_cracks
 from .config import Uniform
 from .distribute import scatter_positions
@@ -55,7 +55,6 @@ _UNDULATE_FOOT     = 0.03         # extra amplitude per mm of footprint over
                                   # 8 mm — fixed-mm bulges vanish on hero
                                   # stones (E9: reference pillowing is ~5 % of
                                   # diameter, ours was 2 %)
-_UNDULATE_WAVES    = 4            # random plane waves summed for the bulges
 
 # ── Micro-texture (E10): granular tooth for drybrushing ─────────────────────
 # References show grain at ~1–2 % of size; post-Taubin stones were glass.
@@ -63,9 +62,6 @@ _UNDULATE_WAVES    = 4            # random plane waves summed for the bulges
 # nozzle, so grain feature size ~1.3 mm and amplitude 0.1–0.25 mm.
 _MICRO_AMP_FRAC   = 0.012   # amplitude = frac × footprint, clamped below
 _MICRO_AMP_MM     = (0.10, 0.25)
-_MICRO_WAVE_MM    = 1.3     # grain feature size
-_MICRO_WAVES      = 14      # summed random plane waves — an isotropic
-                            # Gaussian field that reads granular, not wavy
 
 # ── E11 calm (essence = contrast between quiet fields and sparse incident) ──
 _ENV_FLOOR  = 0.2   # patchy envelope: quiet zones keep this fraction of the
@@ -477,14 +473,17 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
                     dq = dq.subdivide()
                 trimesh.smoothing.filter_taubin(dq, iterations=7)
             if dq.is_watertight:
-                # Light micro-grain: the warp's smooth curvature flat-shades
-                # as regular diamond banding on a regular tessellation; real
-                # granite grain breaks the regularity (and fresh rock has
-                # tooth too — half the aged amplitude).
-                amp_q = 0.5 * np.clip(_MICRO_AMP_FRAC * spec.footprint_mm,
-                                      *_MICRO_AMP_MM)
-                v_loc = aged_relief(dq, w_rng,
-                                    grain=(amp_q, 0.6, 3.2), grain_mix=0.5)
+                # Light worn patches even on fresh rock: the warp's
+                # smooth curvature flat-shades as regular diamond
+                # banding on a regular tessellation; a whisper of the
+                # common carve breaks the regularity.
+                amp_q = 0.5 * float(np.clip(
+                    _MICRO_AMP_FRAC * spec.footprint_mm, *_MICRO_AMP_MM))
+                v_loc = stone_relief(dq, w_rng,
+                                     scale_mm=max(spec.footprint_mm / 3.0,
+                                                  1.5),
+                                     carve_mm=amp_q, band=0.5,
+                                     dish_mm=0.5 * amp_q)
                 faces = np.asarray(dq.faces)
 
     if bites:
@@ -554,23 +553,20 @@ def build_stone(spec: StoneSpec, terrain_center_z: float,
                     warnings.warn(f'scar cut failed: {exc}', RuntimeWarning)
 
         if aged.is_watertight:
-            # The shared aged-relief pass (stone/finish.py): pillowy
-            # undulation AFTER smoothing (or it gets smoothed away) +
-            # granular drybrush tooth (E10) × patchy envelope (E11) ×
-            # curvature damp, with the protected hero face kept calm.
-            # Amplitude scales with footprint too (E9): fixed-mm bulges
+            # The common stone relief (stone/finish.py, E36): plateau
+            # carved into worn recesses + dish, patchy calm/incident
+            # envelope, protected hero face kept calm, curvature damp.
+            # Depth scales with footprint (E9): fixed-mm features
             # vanish on hero-sized stones.
             u_rng = np.random.default_rng((spec.seed ^ 0x0DDA) & 0x7FFFFFFF)
             amp = (_UNDULATE_FRAC * spec.roundover_mm
                    + _UNDULATE_FOOT * max(spec.footprint_mm - 8.0, 0.0)
                      * min(spec.roundover_mm, 1.0))
-            amp_g = float(np.clip(_MICRO_AMP_FRAC * spec.footprint_mm,
-                                  *_MICRO_AMP_MM))
-            v_loc = aged_relief(
+            v_loc = stone_relief(
                 aged, u_rng,
-                broad=(amp, spec.footprint_mm / 4.5,
-                       spec.footprint_mm / 1.6),
-                grain=(amp_g, 0.6, 3.2), grain_mix=0.5,
+                scale_mm=max(spec.footprint_mm / 2.4, 2.0),
+                carve_mm=max(1.6 * amp, 0.2), band=0.45,
+                dish_mm=amp,
                 env=(_ENV_FLOOR, spec.footprint_mm),
                 hero=(None if face_n is None else
                       (face_n, face_c, _FACE_CALM,
