@@ -41,7 +41,8 @@ class BrickWall(CutStoneWall):
     def __init__(self, spine, *,
                  course_mm: tuple[float, float] = (2.5, 3.0),
                  bay_mm:    tuple[float, float] = (5.0, 6.6),
-                 joint_mm:  float = 0.5,
+                 joint_mm:  float = 0.25,  # halved 2026-07-06 (Shawn);
+                                           # floors use the same 0.25
                  reveal_mm: float = 1.0,
                  min_bond_mm: float = 2.0,
                  texture:   str = 'worn',

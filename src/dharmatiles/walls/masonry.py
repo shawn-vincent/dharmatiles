@@ -254,7 +254,8 @@ def _layout(segs: list[_Seg], thickness_mm: float, height_mm: float,
 def _block_mesh(lx: float, ly: float, lz: float,
                 chip_mm: float, roundover_mm: float, relief_mm: float,
                 relief_wl: tuple[float, float],
-                is_top: bool, rng: np.random.Generator) -> trimesh.Trimesh:
+                is_top: bool, rng: np.random.Generator,
+                pull_mask: tuple = (1.0, 1.0, 1.0, 1.0)) -> trimesh.Trimesh:
     """One block in local frame [0,lx]×[0,ly]×[0,lz] (x along run, y = depth).
 
     Jittered-box hull: corners pulled inward (chipped arrises) around
@@ -271,12 +272,17 @@ def _block_mesh(lx: float, ly: float, lz: float,
     # the top ring, which was already planar).  The block is a stack
     # of jittered planar rings: an irregular frustum with straight
     # chipped arrises and calm faces.
+    # pull_mask (x0, x1, y0, y1) zeroes the chip pull per side: floor
+    # slabs at a TILE BOUNDARY must run flush to it (the inter-slab
+    # spacing is between slabs on a tile, not between a slab and the
+    # tile edge — Shawn); draws happen regardless so rng streams don't
+    # depend on the mask.
     pts = []
     def _ring(z: float, inset: float, pull: float):
-        x0 = inset + rng.uniform(0.0, pull)
-        x1 = lx - inset - rng.uniform(0.0, pull)
-        y0 = inset + rng.uniform(0.0, pull)
-        y1 = ly - inset - rng.uniform(0.0, pull)
+        x0 = inset + rng.uniform(0.0, pull) * pull_mask[0]
+        x1 = lx - inset - rng.uniform(0.0, pull) * pull_mask[1]
+        y0 = inset + rng.uniform(0.0, pull) * pull_mask[2]
+        y1 = ly - inset - rng.uniform(0.0, pull) * pull_mask[3]
         pts.extend([[x0, y0, z], [x1, y0, z],
                     [x1, y1, z], [x0, y1, z]])
 
@@ -406,7 +412,7 @@ class CutStoneWall:
                  texture:      str   = 'chipped',
                  course_mm:    tuple[float, float] = (5.5, 8.5),
                  bay_mm:       tuple[float, float] = (11.0, 20.0),
-                 joint_mm:     float = 0.45,
+                 joint_mm:     float = 0.22,  # halved 2026-07-06 (Shawn)
                  reveal_mm:    float = 1.3,
                  chip_mm:      float | None = None,
                  roundover_mm: float | None = None,

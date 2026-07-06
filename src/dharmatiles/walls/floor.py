@@ -173,7 +173,11 @@ class StoneFloor:
                 # surface.
                 body = _block_mesh(side_x, side_y, top,
                                    chip, self.roundover_mm, 0.0,
-                                   self.relief_wl, True, brng)
+                                   self.relief_wl, True, brng,
+                                   pull_mask=(float(jx0 > 0.0),
+                                              float(jx1 > 0.0),
+                                              float(jy0 > 0.0),
+                                              float(jy1 > 0.0)))
                 # The common stone relief (stone/finish.py, design:
                 # docs/design/stone-surface-texture.md): a calm
                 # plateau carved downward — worn recesses + gentle
