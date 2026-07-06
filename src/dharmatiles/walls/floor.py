@@ -185,7 +185,9 @@ class StoneFloor:
                 # rule): carve 0.62 + dish 0.25 + spall chip + tilt
                 # all stay above the mortar plane by construction.
                 # base fade: a deep side recess at the foot would
-                # expose the terrain film at tile edges.
+                # expose the terrain film at tile edges.  (An
+                # edge-weighted "structured wear" variant was tried
+                # and REJECTED — Shawn liked this uniform read.)
                 body = stone_relief(body, brng, carve_mm=0.62,
                                     dish_mm=0.25, base_fade_mm=1.5)
                 ctr = np.array([side_x / 2.0, side_y / 2.0, top / 2.0])

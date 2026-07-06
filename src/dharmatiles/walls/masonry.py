@@ -268,35 +268,30 @@ def _block_mesh(lx: float, ly: float, lz: float, chamfer: float,
     micro-relief for the drybrush catch (R4/R9).
     """
     ch = min(chamfer, 0.45 * lz)
-    xy = np.array([[0.0, 0.0], [lx, 0.0], [lx, ly], [0.0, ly]])
-    ctr = np.array([lx / 2.0, ly / 2.0])
 
+    # Jitter is drawn PER RING x PER SIDE, never per corner: each face
+    # is then bounded by two parallel horizontal lines — coplanar by
+    # construction.  Per-corner jitter warped every side quad, and
+    # qhull triangulates a warped quad with a DIAGONAL — the straight
+    # crease line across every wall block face since E1 (Shawn kept
+    # finding it; floors never showed it because their visible face is
+    # the top ring, which was already planar).  The block is a stack
+    # of jittered planar rings: an irregular frustum with straight
+    # chipped arrises and calm faces.
     pts = []
     def _ring(z: float, inset: float, pull: float):
-        for p in xy:
-            q = p + np.sign(ctr - p) * inset
-            q = q + np.sign(ctr - q) * rng.uniform(0.0, pull, 2)
-            pts.append([q[0], q[1], z])
+        x0 = inset + rng.uniform(0.0, pull)
+        x1 = lx - inset - rng.uniform(0.0, pull)
+        y0 = inset + rng.uniform(0.0, pull)
+        y1 = ly - inset - rng.uniform(0.0, pull)
+        pts.extend([[x0, y0, z], [x1, y0, z],
+                    [x1, y1, z], [x0, y1, z]])
 
     z_top_pull = _TOP_SETTLE_MM if is_top else 0.5 * chip_mm
-    _ring(lz - rng.uniform(0.0, z_top_pull), 0.0, chip_mm)      # top corners
+    _ring(lz - rng.uniform(0.0, z_top_pull), 0.0, chip_mm)      # top ring
     _ring(rng.uniform(0.6, 1.0) * ch, 0.0, chip_mm)             # chamfer ring
     if ch > 0.0:
         _ring(0.0, ch, 0.4 * chip_mm)                           # inset base
-    # Face centres are pulled IN by about half the corner-chip budget.
-    # Full-extent centres left a proud hull plateau in the middle of
-    # every face and top ("a shape in the middle of the brick", Shawn's
-    # round-2 find); pulled level with the average chipped corner, the
-    # centre is usually swallowed by the hull and the face reads as a
-    # calm plane with chipped arrises.
-    fc = rng.uniform(0.4, 0.8, 5) * chip_mm
-    top_c = (rng.uniform(0.05, 0.15) if is_top
-             else rng.uniform(0.3, 0.6) * chip_mm)
-    pts.extend([[lx / 2.0, ly / 2.0, lz - top_c],
-                [lx / 2.0, fc[0], lz / 2.0],
-                [lx / 2.0, ly - fc[1], lz / 2.0],
-                [fc[2], ly / 2.0, lz / 2.0],
-                [lx - fc[3], ly / 2.0, lz / 2.0]])
 
     hull = trimesh.convex.convex_hull(np.asarray(pts))
     v, f = np.asarray(hull.vertices), np.asarray(hull.faces)
@@ -310,16 +305,19 @@ def _block_mesh(lx: float, ly: float, lz: float, chamfer: float,
     if remeshed is not None:
         body = remeshed
         if relief_mm > 0.0:
-            # The common stone relief (plateau carved downward,
-            # stone/finish.py) at block scale: the preset's relief_mm
-            # sets the carve depth, its wavelengths set the fbm scale.
-            # Capped by the block's own size — the first pass carved
-            # 0.5 mm worn floors into 2.5 mm bricks and ATE them.
-            carve = min(relief_mm * 2.0, 0.12 * min(lx, ly, lz))
+            # THE FLOOR RECIPE at block scale (Shawn: "fix the walls
+            # to look like the floor"): same deep worn-recess carve
+            # the slabs get — full stone_relief defaults, depth scaled
+            # by the preset (relief_mm/0.10 ≈ 1 for 'worn') and capped
+            # by block size so small bricks aren't eaten.  Shallow
+            # carve is WORSE than none: below ~0.4 mm only the rim
+            # reads and it looks like engraved scratches.
+            carve = min(0.62 * relief_mm / 0.10, 0.62,
+                        0.14 * min(lx, ly, lz))
             body = stone_relief(body, rng,
-                                scale_mm=float(np.mean(relief_wl)),
-                                carve_mm=carve, band=0.55,
-                                dish_mm=relief_mm * 1.5,
+                                carve_mm=carve,
+                                dish_mm=min(0.25,
+                                            0.06 * min(lx, ly, lz)),
                                 base_fade_mm=1.2)
     return body
 
