@@ -521,6 +521,9 @@ class CutStoneWall:
                     [surface.tile_w / 2.0, surface.tile_h / 2.0,
                      (T + 20.0) / 2.0]))
             wall = clip_to_box(wall, box, 'floor bottom')
+            # The boolean returns a fresh mesh with metadata stripped —
+            # untagged parts default to SOIL in the material grouping.
+            _tag(wall, Material.ROCK)
 
         self._stamp(scene, segs, seat_z + (T if self.laid_flat else H))
         return [wall]
