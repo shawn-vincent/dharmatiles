@@ -179,6 +179,19 @@ pitch; fieldstone 1.10 = pressed drystone contact, the union fuses),
 `surround_proud_mm` (surrounds stand proud of both faces — the
 distinct-order read, and the well curb on floors).
 
+**Bond-to-surround fit (2026-07-07, Shawn)**: opening-adjacent wall
+units are RESHAPED to fill the space against a curved surround.  Per
+course band the bond is trimmed against the actual surround unit
+rectangles (toothing into the quoin alternation); too-narrow
+remnants are absorbed by their course neighbour (a mason's cut unit,
+never a column of exposed core); each 'press'-ended block then
+OVERSHOOTS `_SURROUND_FILL_MM` into the surround and is boolean-cut
+against the units dilated by `joint − surround_bond_press` — the
+stone gets an angled face hugging the arch/ring curve, with a thin
+mortar joint (mortared) or pressed contact (drystone).  Scaled
+keystones grow outward only: nothing hangs below the arch soffit
+(FDM).
+
 ## Remaining questions for Shawn
 
 1. Gates (2-square double doors) — in scope after O5?

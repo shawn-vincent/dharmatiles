@@ -47,6 +47,12 @@ _SEAT_PERCENTILE  = 80.0   # seat height over the footprint (stones convention)
 _CORE_ROUND_MM    = 0.6    # mortar-core edge fillet (walls AND floors):
                            # set mortar has no sharp arrises
 
+# Opening-adjacent blocks OVERSHOOT this far into the surround and are
+# boolean-fitted back against the surround units (+ joint): a stone
+# beside a curved ring gets an ANGLED face that fills the space up to
+# the curve (Shawn) instead of a rectangular end + exposed-core wedge.
+_SURROUND_FILL_MM = 4.0
+
 # Rubble hearting (E10/E27, chassis-level since the ruins work): a
 # sealed sheet of small rough stone chips through the wall body.
 # Fieldstone uses it always (drystone fill); mortared families get it
@@ -503,7 +509,8 @@ class CutStoneWall:
         # then the paved strip's plan depth and must be explicit.
         self.laid_flat    = laid_flat
         self.openings     = list(openings or [])
-        self._op_profiles: list = []   # [(seg_i, P, opening)] per build
+        self._op_profiles: list = []   # [(seg_i, P, op, tc)] per build
+        self._op_quads:    list = []   # [(seg_i, [unit quad, …])]
         self._merlons: list[list[tuple[float, float]]] = []   # per segment
         self._crenel_z = None      # wall-local z of the crenel floor
         self._ruin_env = None      # per-segment envelope callables
@@ -532,12 +539,13 @@ class CutStoneWall:
     #: surround units stand proud of both wall faces (refs 05–07: the
     #: surround is a distinct order, not flush bond).
     surround_proud_mm: float = 0.30
-    #: how far the trimmed bond presses INTO the surround ring.  The
-    #: trim line moves this far past the surround's outer plane and
-    #: the cut end ('press') runs straight at it, so wall units
-    #: interpenetrate the jambs and the union fuses the contact.
+    #: how far the fitted bond presses INTO the surround units.  The
+    #: opening-adjacent blocks overshoot into the surround and are
+    #: boolean-cut against the units dilated by (joint_mm − press):
     #: 0 for mortared families (the bond meets the surround at an
-    #: ordinary joint); drystone overrides — stones must TOUCH.
+    #: ordinary thin mortar joint, the fitted face hugging the curve);
+    #: drystone overrides — stones must TOUCH, so the cut leaves them
+    #: interpenetrating and the union fuses the contact.
     surround_bond_press: float = 0.0
 
     def _lay(self, seg: _Seg) -> np.ndarray:
@@ -579,12 +587,18 @@ class CutStoneWall:
 
         parts = self._core_boxes(segs, seat_z)
         parts = self._cut_openings_from_core(parts, segs, seat_z)
+        fitters = self._surround_fit_cutters(segs, seat_z)
         for pc in posed:
             parts.append(self._place_posed(pc, segs, seat_z))
         for cell in cells:
             block = self._place_block(cell, segs, seat_z, rng)
-            if block is not None:    # degenerate cell (fieldstone inset)
-                parts.append(block)
+            if block is None:        # degenerate cell (fieldstone inset)
+                continue
+            if 'press' in (cell.end0, cell.end1) and fitters.get(cell.seg):
+                block = self._fit_block(block, fitters[cell.seg])
+                if block is None:
+                    continue
+            parts.append(block)
         parts.extend(self._extra_parts(segs, seat_z, rng))
 
         leaves = self._leaf_parts(segs, seat_z, surface)
@@ -728,6 +742,7 @@ class CutStoneWall:
         wall top (low walls imply tall walls).  Returns
         (trimmed_cells, posed_cells)."""
         self._op_profiles = []
+        self._op_quads = []
         if not self.openings:
             return cells, []
         arcs = np.concatenate([[0.0], np.cumsum([s_.L for s_ in segs])])
@@ -754,6 +769,7 @@ class CutStoneWall:
                     [[t + dx * ca + dz * sa, z - dx * sa + dz * ca]
                      for dx, dz in ((-w / 2, -d / 2), (w / 2, -d / 2),
                                     (w / 2, d / 2), (-w / 2, d / 2))]))
+            self._op_quads.append((seg_i, quads))
             # 2. exclusion: per course band, the bond runs to the
             #    surround units actually IN that band (+ the normal
             #    'press'/joint treatment at the cut).  The bond tooths
@@ -762,7 +778,10 @@ class CutStoneWall:
             #    ordinary joint, never an exposed mortar wedge.
             import dataclasses as _dc
             out = []
-            press = self.surround_bond_press
+            fill = _SURROUND_FILL_MM   # blocks overshoot into the
+            #             surround; _place-time boolean fit cuts them
+            #             back against the units (+ joint), giving the
+            #             curve-hugging angled end faces.
             absorb = []   # (z0, edge_t, side, target): a remnant too
             #             narrow to keep is ABSORBED by its course
             #             neighbour, which extends across the vanished
@@ -786,17 +805,17 @@ class CutStoneWall:
                 lrem = lo - c.t0
                 rrem = c.t1 - hi
                 if lrem >= _MIN_KEEP_MM:
-                    out.append(_dc.replace(c, t1=lo + press,
+                    out.append(_dc.replace(c, t1=lo + fill,
                                            end1='press',
                                            key=c.key + (701, oi)))
                 elif lrem > 1e-6:
-                    absorb.append((c.z0, c.t0, 'end1', lo + press))
+                    absorb.append((c.z0, c.t0, 'end1', lo + fill))
                 if rrem >= _MIN_KEEP_MM:
-                    out.append(_dc.replace(c, t0=hi - press,
+                    out.append(_dc.replace(c, t0=hi - fill,
                                            end0='press',
                                            key=c.key + (702, oi)))
                 elif rrem > 1e-6:
-                    absorb.append((c.z0, c.t1, 'end0', hi - press))
+                    absorb.append((c.z0, c.t1, 'end0', hi - fill))
             cells = out
             for z0, edge, side, target in absorb:
                 for i, c in enumerate(cells):
@@ -968,6 +987,73 @@ class CutStoneWall:
         mm[2, 3]  = seat_z + z
         body.apply_transform(mm)
         return body
+
+    def _surround_fit_cutters(self, segs: list[_Seg], seat_z: float
+                              ) -> dict[int, list[trimesh.Trimesh]]:
+        """Boolean fitters for 'press'-ended blocks (Shawn: wall
+        stones beside a curved surround are RESHAPED — an angled face
+        fills the space up to the curve).  Per opening: the union of
+        the surround unit rectangles dilated by (joint − press) — a
+        thin mortar line on mortared families, pressed drystone
+        interpenetration on fieldstone — plus the passage profile
+        dilated by the reveal, so an overshot block can never reach
+        the passage through a unit joint.  Holes in the union are
+        filled (only the outer boundary cuts)."""
+        if not self._op_profiles:
+            return {}
+        import shapely.geometry as sgeom
+        from shapely.ops import unary_union
+        delta = self.joint_mm - self.surround_bond_press
+        T = self.thickness_mm
+        out: dict[int, list[trimesh.Trimesh]] = {}
+        for (seg_i, P, op, tc), (_s, quads) in zip(self._op_profiles,
+                                                   self._op_quads):
+            seg = segs[seg_i]
+            region = unary_union(
+                [sgeom.Polygon(q).buffer(delta, join_style=2)
+                 for q in quads]
+                + [sgeom.Polygon(P).buffer(self.reveal_mm, quad_segs=6)])
+            for g in getattr(region, 'geoms', [region]):
+                poly = sgeom.polygon.orient(
+                    sgeom.Polygon(g.exterior), 1.0)
+                prism = trimesh.creation.extrude_polygon(
+                    poly, height=T + 6.0)
+                mm = np.eye(4)
+                if self.laid_flat:
+                    mm[:3, 0] = [seg.d[0], seg.d[1], 0.0]
+                    mm[:3, 1] = [seg.n[0], seg.n[1], 0.0]
+                    mm[:3, 2] = [0.0, 0.0, -1.0]
+                    mm[:2, 3] = seg.a
+                    mm[2, 3]  = T + 3.0
+                else:
+                    mm[:3, 0] = [seg.d[0], seg.d[1], 0.0]
+                    mm[:3, 1] = [0.0, 0.0, 1.0]
+                    mm[:3, 2] = [seg.n[0], seg.n[1], 0.0]
+                    mm[:2, 3] = seg.a + seg.n * (-3.0)
+                    mm[2, 3]  = seat_z
+                prism.apply_transform(mm)
+                out.setdefault(seg_i, []).append(prism)
+        return out
+
+    def _fit_block(self, block: trimesh.Trimesh,
+                   cutters: list[trimesh.Trimesh]
+                   ) -> trimesh.Trimesh | None:
+        """Cut an overshot opening-adjacent block back against the
+        surround; drop crumbs the cut leaves behind."""
+        try:
+            cut = trimesh.boolean.difference([block] + cutters,
+                                             engine='manifold')
+        except Exception:                           # noqa: BLE001
+            warnings.warn('surround fit boolean failed; block dropped',
+                          RuntimeWarning)
+            return None
+        if not len(cut.faces):
+            return None
+        comps = cut.split(only_watertight=True)
+        keep = [c for c in comps if c.volume > 0.8]
+        if not keep:
+            return None
+        return trimesh.util.concatenate(keep)
 
     def _leaf_parts(self, segs: list[_Seg], seat_z: float,
                     surface) -> list[trimesh.Trimesh]:
