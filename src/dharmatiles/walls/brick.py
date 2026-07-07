@@ -38,6 +38,14 @@ class BrickWall(CutStoneWall):
     brick is spalled (heavily chipped broken unit).
     """
 
+    surround_vw:   float = 2.1     # bricks-on-end rowlock arch
+    surround_ring: float = 3.6
+    surround_jd:   float = 3.4
+    surround_jh:   tuple = (2.6, 3.2)
+    surround_chip: float = 0.18    # worn brick arrises, mortar joints
+    surround_ro:   float = 0.30
+    surround_frac: float = 0.94
+
     def __init__(self, spine, *,
                  course_mm: tuple[float, float] = (2.5, 3.0),
                  bay_mm:    tuple[float, float] = (5.0, 6.6),

@@ -27,6 +27,9 @@ import trimesh
 from ..core.color import Material, tag as _tag
 from ..stone import (clip_to_box, rounded_box, rubble_stone,
                      separate_pinches, stone_relief)
+from .openings import (Opening, _JOINT_FRAC, _KEYSTONE, _MIN_KEEP_MM,
+                       _SILL_H_MM, _SILL_OVER_MM, arch_arc, band_extent,
+                       boundary_units, build_profile, point_inside)
 
 # ── Iteration knobs (module constants while prototyping) ─────────────────────
 _FACE_RECESS_MM   = 0.60   # per-block face jitter: outer/inner/end faces sit
@@ -255,7 +258,8 @@ def _block_mesh(lx: float, ly: float, lz: float,
                 chip_mm: float, roundover_mm: float, relief_mm: float,
                 relief_wl: tuple[float, float],
                 is_top: bool, rng: np.random.Generator,
-                pull_mask: tuple = (1.0, 1.0, 1.0, 1.0)) -> trimesh.Trimesh:
+                pull_mask: tuple = (1.0, 1.0, 1.0, 1.0),
+                taper: tuple[str, float] | None = None) -> trimesh.Trimesh:
     """One block in local frame [0,lx]×[0,ly]×[0,lz] (x along run, y = depth).
 
     Jittered-box hull: corners pulled inward (chipped arrises) around
@@ -277,23 +281,40 @@ def _block_mesh(lx: float, ly: float, lz: float,
     # spacing is between slabs on a tile, not between a slab and the
     # tile edge — Shawn); draws happen regardless so rng streams don't
     # depend on the mask.
+    # taper = (axis, mm): voussoir WEDGE — the x-extent grows by mm/2
+    # per side from the min face to the max face of the given axis
+    # ('z': between the two rings; 'y': within each ring).  Radial
+    # joints on a curved ring gape at the outer radius when units are
+    # rectangular; the wedge follows the ring's angular pitch.  The
+    # LOCAL max side is the OUTER face by _place_posed's conventions
+    # (both frames map it to the outward normal).
+    t_axis, t_mm = taper if taper is not None else ('z', 0.0)
     pts = []
-    def _ring(z: float, inset: float, pull: float):
-        x0 = inset + rng.uniform(0.0, pull) * pull_mask[0]
-        x1 = lx - inset - rng.uniform(0.0, pull) * pull_mask[1]
-        y0 = inset + rng.uniform(0.0, pull) * pull_mask[2]
-        y1 = ly - inset - rng.uniform(0.0, pull) * pull_mask[3]
-        pts.extend([[x0, y0, z], [x1, y0, z],
-                    [x1, y1, z], [x0, y1, z]])
+    def _ring(z: float, inset: float, pull: float, widen: float = 0.0):
+        # Clamp per-axis: on small units (arch voussoirs) an unclamped
+        # chip pull can invert the ring and degenerate the hull.
+        px = min(pull, 0.22 * lx)
+        py = min(pull, 0.22 * ly)
+        x0 = inset + rng.uniform(0.0, px) * pull_mask[0]
+        x1 = lx - inset - rng.uniform(0.0, px) * pull_mask[1]
+        y0 = inset + rng.uniform(0.0, py) * pull_mask[2]
+        y1 = ly - inset - rng.uniform(0.0, py) * pull_mask[3]
+        # t_mm is the FULL width difference between the outer and the
+        # inner face; each of the two x sides moves by t/4 per face.
+        wy0 = widen - (t_mm / 4.0 if t_axis == 'y' else 0.0)
+        wy1 = widen + (t_mm / 4.0 if t_axis == 'y' else 0.0)
+        pts.extend([[x0 - wy0, y0, z], [x1 + wy0, y0, z],
+                    [x1 + wy1, y1, z], [x0 - wy1, y1, z]])
 
     z_top_pull = _TOP_SETTLE_MM if is_top else 0.5 * chip_mm
-    _ring(lz - rng.uniform(0.0, z_top_pull), 0.0, chip_mm)      # top ring
+    wz = t_mm / 4.0 if t_axis == 'z' else 0.0
+    _ring(lz - rng.uniform(0.0, z_top_pull), 0.0, chip_mm, +wz)  # top ring
     # Bottom ring identical to the top (Shawn: bricks have the SAME
     # edge everywhere — the old bottom chamfer read as round-bottomed
     # bricks).  The R10 overhang it guarded against is the block lip
     # over the sub-mm joint recess; the official pieces have square
     # bottoms there and print fine.
-    _ring(0.0, 0.0, chip_mm)                                    # bottom ring
+    _ring(0.0, 0.0, chip_mm, -wz)                               # bottom ring
 
     # EXACT tessellation — no voxel grid anywhere.  Blocks went
     # through blur_remesh (binary occupancy + marching cubes) for
@@ -315,28 +336,45 @@ def _block_mesh(lx: float, ly: float, lz: float,
     _, uniq = np.unique(np.round(np.column_stack([N, D]), 3),
                         axis=0, return_index=True)
     N, D = N[uniq], D[uniq]
-    pitch = float(np.clip(max(lx, ly, lz) / 56.0, 0.18, 0.32))
-    # Smooth-max (log-sum-exp) of the plane fields: on a face one
-    # plane dominates and the level-0 set IS the exact plane (zero
-    # ripple); where planes meet, the LSE blend pulls the surface in
-    # by ~tau*ln2 — the roundover, analytically.  tau is floored at
-    # the grid pitch so the blend is resolved (a hard max creases the
-    # field and MC slivers the crease into non-manifold edges).
-    tau = max(0.7 * roundover_mm, 0.6 * pitch)
-    pad = 2.5 * pitch
-    lo = hull.bounds[0] - pad
-    hi = hull.bounds[1] + pad
-    axes = [np.arange(lo[k], hi[k] + pitch, pitch) for k in range(3)]
-    G = np.stack(np.meshgrid(*axes, indexing='ij'), axis=-1)
-    acc = None
-    for n_i, d_i in zip(N, D):
-        f = (G @ n_i - d_i) / tau
-        acc = f if acc is None else np.logaddexp(acc, f)
-    field = tau * acc
-    mv, mf, _n, _v = _measure.marching_cubes(
-        field, level=0.0, spacing=(pitch, pitch, pitch))
-    body = trimesh.Trimesh(vertices=mv + lo, faces=mf, process=True)
-    body.fix_normals()
+    pitch0 = float(np.clip(max(lx, ly, lz) / 56.0, 0.18, 0.32))
+    # Rare grid resonances (vertex-merge knife edges in the MC output)
+    # make a non-volume mesh for specific (dims, pitch) pairs; a small
+    # pitch nudge lands off the resonance.
+    for nudge in (1.0, 1.073, 0.941):
+        pitch = pitch0 * nudge
+        # Smooth-max (log-sum-exp) of the plane fields: on a face one
+        # plane dominates and the level-0 set IS the exact plane (zero
+        # ripple); where planes meet, the LSE blend pulls the surface
+        # in by ~tau*ln2 — the roundover, analytically.  tau is
+        # floored at the grid pitch so the blend is resolved (a hard
+        # max creases the field and MC slivers the crease into
+        # non-manifold edges).
+        # tau capped by the block's own size: LSE lifts the field by
+        # up to tau*ln(k) where planes crowd, and a tau beyond ~a
+        # quarter of the smallest half-dimension lifts EVERYTHING
+        # positive — the isosurface vanishes (found on fieldstone
+        # jambs: roundover ~2 on a 4mm unit).
+        tau = max(min(0.7 * roundover_mm, 0.22 * min(lx, ly, lz)),
+                  0.6 * pitch)
+        pad = 2.5 * pitch
+        lo = hull.bounds[0] - pad
+        hi = hull.bounds[1] + pad
+        axes = [np.arange(lo[k], hi[k] + pitch, pitch) for k in range(3)]
+        G = np.stack(np.meshgrid(*axes, indexing='ij'), axis=-1)
+        acc = None
+        for n_i, d_i in zip(N, D):
+            f = (G @ n_i - d_i) / tau
+            acc = f if acc is None else np.logaddexp(acc, f)
+        field = tau * acc
+        mv, mf, _n, _v = _measure.marching_cubes(
+            field, level=0.0, spacing=(pitch, pitch, pitch))
+        body = trimesh.Trimesh(vertices=mv + lo, faces=mf, process=True)
+        body.fix_normals()
+        if body.is_volume:
+            break
+    else:
+        warnings.warn('block mesh is not a volume after pitch nudges',
+                      RuntimeWarning)
     if relief_mm > 0.0:
         # THE FLOOR RECIPE at block scale (Shawn: "fix the walls to
         # look like the floor"): same deep worn-recess carve the slabs
@@ -425,7 +463,8 @@ class CutStoneWall:
                  crenel_mm:    tuple[float, float] = (5.5, 7.5),
                  crenel_depth_mm: float = 11.0,
                  ruin:         float = 0.0,
-                 laid_flat:    bool = False):
+                 laid_flat:    bool = False,
+                 openings:     list | None = None):
         if len(spine) < 2:
             raise ValueError('wall spine needs at least two points')
         if texture not in _TEXTURES:
@@ -463,6 +502,8 @@ class CutStoneWall:
         # (face proudness = per-stone pavement height).  height_mm is
         # then the paved strip's plan depth and must be explicit.
         self.laid_flat    = laid_flat
+        self.openings     = list(openings or [])
+        self._op_profiles: list = []   # [(seg_i, P, opening)] per build
         self._merlons: list[list[tuple[float, float]]] = []   # per segment
         self._crenel_z = None      # wall-local z of the crenel floor
         self._ruin_env = None      # per-segment envelope callables
@@ -470,6 +511,27 @@ class CutStoneWall:
     #: families with a drystone interior build the hearting always;
     #: mortared families get it when ruined (broken top shows rubble).
     hearting: bool = False
+
+    #: opening-surround sizing (families override): voussoir width,
+    #: voussoir ring depth, jamb depth, jamb block height range.
+    surround_vw:   float = 4.6
+    surround_ring: float = 4.2
+    surround_jd:   float = 4.2
+    surround_jh:   tuple = (4.5, 7.0)
+    #: opening-surround finish — INDEPENDENT of the body texture: the
+    #: surround is dressed work in every family (design: "structurally
+    #: distinct SURROUND").  Surround units are 2–5 mm; the body's chip
+    #: budget (up to 0.22×dim per side) and roundover shrank them into
+    #: gapped pebbles (the E13 fieldstone bead-chain arch).
+    surround_chip: float = 0.15
+    surround_ro:   float = 0.18
+    #: unit width as a fraction of the pitch along the boundary / jamb
+    #: stack: < 1 leaves a mortar joint, > 1 presses units into each
+    #: other (drystone — the union fuses the contact).
+    surround_frac: float = _JOINT_FRAC
+    #: surround units stand proud of both wall faces (refs 05–07: the
+    #: surround is a distinct order, not flush bond).
+    surround_proud_mm: float = 0.30
 
     def _lay(self, seg: _Seg) -> np.ndarray:
         """Flat-mode frame for meshes built in raw wall coordinates
@@ -488,6 +550,7 @@ class CutStoneWall:
     def apply(self, scene, *, placement_mask=None) -> list[trimesh.Trimesh]:
         surface = scene.surface
         sq = surface.square_mm
+        self._sq = sq
         segs = _segments([(x * sq, y * sq) for x, y in self.spine])
         rng  = np.random.default_rng(self.seed)
 
@@ -501,15 +564,23 @@ class CutStoneWall:
             self.height_mm = max(self.top_mm - seat_z, 6.0)
         T, H = self.thickness_mm, self.height_mm
         cells  = self._cells(segs, T, H, rng)
+        cells, posed = self._apply_openings(cells, segs, rng)
         if self.ruin > 0.0:
+            # Surround cells live in `posed` and are exempt: a ruined
+            # wall keeps its surviving arch.
             cells = self._ruin_cells(cells, segs, H, rng)
 
         parts = self._core_boxes(segs, seat_z)
+        parts = self._cut_openings_from_core(parts, segs, seat_z)
+        for pc in posed:
+            parts.append(self._place_posed(pc, segs, seat_z))
         for cell in cells:
             block = self._place_block(cell, segs, seat_z, rng)
             if block is not None:    # degenerate cell (fieldstone inset)
                 parts.append(block)
         parts.extend(self._extra_parts(segs, seat_z, rng))
+
+        leaves = self._leaf_parts(segs, seat_z, surface)
 
         wall = assemble_masonry(parts, surface, 'CutStoneWall')
         if self.laid_flat:
@@ -526,7 +597,7 @@ class CutStoneWall:
             _tag(wall, Material.ROCK)
 
         self._stamp(scene, segs, seat_z + (T if self.laid_flat else H))
-        return [wall]
+        return [wall] + leaves
 
     # ── pieces ───────────────────────────────────────────────────────────────
     def _cells(self, segs: list[_Seg], T: float, H: float,
@@ -599,6 +670,288 @@ class CutStoneWall:
         return _block_mesh(lx, ly, lz, self.chip_mm,
                            self.roundover_mm, self.relief_mm,
                            self.relief_wl, cell.is_top, rng)
+
+    # ── openings: doors, windows, oculi, hatches ────────────────────────────
+    def _cut_openings_from_core(self, parts, segs, seat_z):
+        """Subtract each opening's passage prism (dilated by the
+        reveal) from the mortar core boxes: the core edge stays hidden
+        behind the surround ring (ring depth > reveal), and jamb
+        reveals are real masonry, never core plane."""
+        if not self._op_profiles or not parts:
+            return parts
+        import shapely.geometry as sgeom
+        T = self.thickness_mm
+        cutters = []
+        for seg_i, P, op, _tc in self._op_profiles:
+            seg = segs[seg_i]
+            poly = sgeom.Polygon(P).buffer(self.reveal_mm, quad_segs=6)
+            prism = trimesh.creation.extrude_polygon(poly, height=T + 6.0)
+            mm = np.eye(4)
+            if self.laid_flat:
+                mm[:3, 0] = [seg.d[0], seg.d[1], 0.0]
+                mm[:3, 1] = [seg.n[0], seg.n[1], 0.0]
+                mm[:3, 2] = [0.0, 0.0, -1.0]
+                mm[:2, 3] = seg.a
+                mm[2, 3]  = T + 3.0
+            else:
+                mm[:3, 0] = [seg.d[0], seg.d[1], 0.0]
+                mm[:3, 1] = [0.0, 0.0, 1.0]
+                mm[:3, 2] = [seg.n[0], seg.n[1], 0.0]
+                mm[:2, 3] = seg.a + seg.n * (-3.0)
+                mm[2, 3]  = seat_z
+            prism.apply_transform(mm)
+            cutters.append(prism)
+        out = []
+        for b in parts:
+            try:
+                cut = trimesh.boolean.difference([b] + cutters,
+                                                 engine='manifold')
+                out.append(cut if len(cut.faces) else b)
+            except Exception:                       # noqa: BLE001
+                out.append(b)
+        return out
+
+
+    def _apply_openings(self, cells: list[_Cell], segs: list[_Seg],
+                        rng: np.random.Generator):
+        """Exclude wall cells inside each opening profile and build the
+        posed SURROUND cells (docs/design/walls-doors.md): jamb stacks
+        on near-vertical boundary, radial voussoirs elsewhere, lintel /
+        sill slabs for 'auto' profiles.  Surrounds may rise above the
+        wall top (low walls imply tall walls).  Returns
+        (trimmed_cells, posed_cells)."""
+        self._op_profiles = []
+        if not self.openings:
+            return cells, []
+        arcs = np.concatenate([[0.0], np.cumsum([s_.L for s_ in segs])])
+        posed: list[_Cell] = []
+        for oi, op in enumerate(self.openings):
+            a_mm = op.at * self._sq
+            seg_i = int(np.searchsorted(arcs[1:], a_mm + 1e-6))
+            seg_i = min(seg_i, len(segs) - 1)
+            tc = a_mm - arcs[seg_i]
+            P = build_profile(op, tc)
+            self._op_profiles.append((seg_i, P, op, tc))
+            ring = self.surround_ring
+            # 1. exclusion: trim wall cells against the profile dilated
+            #    by the ring depth (they butt the surround's outer edge).
+            out = []
+            for c in cells:
+                if c.seg != seg_i:
+                    out.append(c)
+                    continue
+                ext = band_extent(P, c.z0, c.z1)
+                if ext is None:
+                    out.append(c)
+                    continue
+                pl, pr = ext[0] - ring, ext[1] + ring
+                if c.t1 <= pl + 1e-6 or c.t0 >= pr - 1e-6:
+                    out.append(c)
+                    continue
+                import dataclasses as _dc
+                if pl - c.t0 >= _MIN_KEEP_MM:
+                    out.append(_dc.replace(c, t1=pl, end1='face',
+                                           key=c.key + (701, oi)))
+                if c.t1 - pr >= _MIN_KEEP_MM:
+                    out.append(_dc.replace(c, t0=pr, end0='face',
+                                           key=c.key + (702, oi)))
+            cells = out
+            # 2. surround
+            posed += self._surround_cells(op, P, seg_i, tc, rng, oi)
+        return cells, posed
+
+    def _posed_cell(self, seg_i, oi, tag, t, z, w, d, ang,
+                    split=None, taper=0.0) -> list[_Cell]:
+        """Posed surround cell(s); with ``split`` (slot system) the
+        unit becomes front+back pair leaving the leaf channel between."""
+        g = getattr(self, '_slot_gap', 0.0) if split else 0.0
+        T = self.thickness_mm
+        p = self.surround_proud_mm
+        qs = [(-p, T + p)] if not split else \
+             [(-p, (T - g) / 2.0), ((T + g) / 2.0, T + p)]
+        outs = []
+        for qi, (q0, q1) in enumerate(qs):
+            c = _Cell(seg=seg_i, t0=t - w / 2.0, t1=t + w / 2.0,
+                      end0='face', end1='face', z0=z - d / 2.0,
+                      z1=z + d / 2.0, is_top=False, is_bottom=False,
+                      key=(801, oi, tag, qi))
+            c.pose = (t, z, ang)
+            c.pdims = (w, d)
+            c.qspan = (q0, q1)
+            c.taper = taper
+            outs.append(c)
+        return outs
+
+    def _surround_cells(self, op, P, seg_i, tc, rng, oi) -> list[_Cell]:
+        vw, ring = self.surround_vw, self.surround_ring
+        jd, jh = self.surround_jd, self.surround_jh
+        frac = self.surround_frac
+        split = op.slot
+        out: list[_Cell] = []
+        w2 = op.width_mm / 2.0
+        if op.profile == 'auto':
+            rise = 0.0 if op.head == 'lintel' else min(
+                op.rise_mm if op.rise_mm is not None else w2,
+                w2, op.head_mm - op.sill_mm)
+            z_sp = op.head_mm - rise
+            # jamb stacks (quoin-style: alternating depth)
+            n_j = max(1, int(round((z_sp - op.sill_mm) / np.mean(jh))))
+            hs = rng.uniform(*jh, n_j)
+            hs *= (z_sp - op.sill_mm) / hs.sum()
+            z = op.sill_mm
+            for k, h in enumerate(hs):
+                d_k = jd * (1.0 if k % 2 == 0 else 0.78)
+                # A door's bottom jamb blocks root below the seat like
+                # the wall's own bottom course (standing walls only —
+                # laid flat, "down" would be a plan direction).
+                emb = (2.0 if k == 0 and op.sill_mm < 0.5
+                       and not self.laid_flat else 0.0)
+                for sgn, tag in ((-1, 10), (+1, 20)):
+                    t = tc + sgn * (w2 + d_k / 2.0)
+                    out += self._posed_cell(
+                        seg_i, oi, tag * 100 + k, t,
+                        z - emb + (h + emb) / 2.0, d_k,
+                        (h + emb) * min(frac, 1.03), 0.0, split)
+                z += h
+            if op.head == 'lintel':
+                lh = 4.5
+                out += self._posed_cell(
+                    seg_i, oi, 30, tc, op.head_mm + lh / 2.0,
+                    op.width_mm + 2.0 * jd + 1.0, lh, 0.0, split)
+            else:
+                # voussoirs along the arc ONLY (open polyline: the end
+                # units land exactly on the jamb tops at the
+                # springings); odd count = one true keystone.
+                units = boundary_units(arch_arc(op, tc), vw,
+                                       closed=False, offset=ring / 2.0,
+                                       force_odd=True)
+                mid = (len(units) - 1) // 2
+                for k, (p, n, ang, step, dth) in enumerate(units):
+                    scale = _KEYSTONE if k == mid else 1.0
+                    out += self._posed_cell(
+                        seg_i, oi, 40 + k, p[0], p[1],
+                        step * frac * scale, ring * scale,
+                        ang, split,
+                        taper=min(dth * ring * scale, 0.5 * step))
+            if op.sill_mm > 0.5:
+                out += self._posed_cell(
+                    seg_i, oi, 50, tc, op.sill_mm - _SILL_H_MM / 2.0,
+                    op.width_mm + 2.0 * jd + 2.0 * _SILL_OVER_MM,
+                    _SILL_H_MM, 0.0, None)
+        else:
+            # circle / custom polygon: generic boundary lining — every
+            # unit a voussoir rotated to the local normal (a circle has
+            # no verticals: full ring — oculus / well).
+            units = boundary_units(P, vw, closed=True, offset=ring / 2.0)
+            apex = max(u[0][1] for u in units)
+            for k, (p, n, ang, step, dth) in enumerate(units):
+                scale = _KEYSTONE if abs(p[1] - apex) < step * 0.6 else 1.0
+                out += self._posed_cell(
+                    seg_i, oi, 60 + k, p[0], p[1],
+                    step * frac * scale, ring * scale, ang, split,
+                    taper=min(dth * ring * scale, 0.5 * step))
+        return out
+
+    def _place_posed(self, cell: _Cell, segs: list[_Seg],
+                     seat_z: float) -> trimesh.Trimesh:
+        """Place one surround unit: an ordinary block kernel rotated to
+        the cell's pose angle — voussoirs are just rotated blocks."""
+        seg = segs[cell.seg]
+        brng = np.random.default_rng(
+            (self.seed * 1_000_003 + hash(cell.key)) & 0x7FFFFFFF)
+        w, d = cell.pdims
+        t, z, ang = cell.pose
+        q0, q1 = cell.qspan
+        ro = self.surround_ro
+        chip = self.surround_chip
+        rel = self.relief_mm if isinstance(self.relief_mm, (int, float)) \
+            and self.relief_mm is not None else 0.10
+        # The kernel's LSE blend pulls every face in by ~tau*ln2 — the
+        # roundover.  On wall-scale blocks that reads as the joint; on
+        # 3–5 mm surround units it is a 25–30 % loss per dimension
+        # (fieldstone jambs rendered as floating pebbles).  Oversize
+        # the in-plane dims by the analytic shrink so the faces land
+        # on their nominal boxes and the units nearly touch.
+        g = 0.0
+        for _ in range(3):      # tau depends on the grown dims; converges
+            dims = (w + g, q1 - q0, d + g)
+            pitch = float(np.clip(max(dims) / 56.0, 0.18, 0.32))
+            tau = max(min(0.7 * ro, 0.22 * min(dims)), 0.6 * pitch)
+            g = 2.0 * tau * np.log(2.0)
+        w += g
+        d += g
+        taper = getattr(cell, 'taper', 0.0)
+        if self.laid_flat:
+            body = _block_mesh(w, d, q1 - q0, chip, ro, rel,
+                               self.relief_wl, False, brng,
+                               taper=('y', taper))
+            body.apply_translation([-w / 2.0, -d / 2.0, -(q1 - q0) / 2.0])
+            body.apply_transform(trimesh.transformations.rotation_matrix(
+                -ang, [0, 0, 1]))
+            mm = np.eye(4)
+            mm[:3, 0] = [seg.d[0], seg.d[1], 0.0]
+            mm[:3, 1] = [seg.n[0], seg.n[1], 0.0]
+            mm[:3, 2] = [0.0, 0.0, 1.0]
+            mm[:2, 3] = seg.a + seg.d * t + seg.n * z
+            mm[2, 3]  = self.thickness_mm - (q0 + q1) / 2.0
+            body.apply_transform(mm)
+            return body
+        body = _block_mesh(w, q1 - q0, d, chip, ro, rel,
+                           self.relief_wl, False, brng,
+                           taper=('z', taper))
+        body.apply_translation([-w / 2.0, -(q1 - q0) / 2.0, -d / 2.0])
+        body.apply_transform(trimesh.transformations.rotation_matrix(
+            ang, [0, 1, 0]))
+        mm = np.eye(4)
+        mm[:2, 0] = seg.d
+        mm[:2, 1] = seg.n
+        mm[:2, 3] = seg.a + seg.d * t + seg.n * ((q0 + q1) / 2.0)
+        mm[2, 3]  = seat_z + z
+        body.apply_transform(mm)
+        return body
+
+    def _leaf_parts(self, segs: list[_Seg], seat_z: float,
+                    surface) -> list[trimesh.Trimesh]:
+        """Integrated leaves (design stage O5): each opening with a
+        ``leaf`` gets a separate WOOD-tagged solid (ROCK for bars)
+        fitted to its clear rectangle — to the springing under an
+        arch, to the head under a lintel.  The leaf embeds into the
+        jamb reveals and roots below its sill, so the export union
+        fuses it to the masonry; it is NOT part of the wall's own
+        union (it keeps its material group)."""
+        from .leaf import build_leaf
+        out = []
+        for li, (seg_i, P, op, tc) in enumerate(self._op_profiles):
+            if op.leaf is None:
+                continue
+            if op.profile != 'auto':
+                warnings.warn('leaves fit rectangular openings only; '
+                              'skipping leaf on a shaped opening',
+                              RuntimeWarning)
+                continue
+            leaf = op.leaf
+            w2 = op.width_mm / 2.0
+            rise = 0.0 if op.head == 'lintel' else min(
+                op.rise_mm if op.rise_mm is not None else w2,
+                w2, op.head_mm - op.sill_mm)
+            z_top = op.head_mm - rise
+            lrng = np.random.default_rng(
+                (self.seed * 9_369_319 + 71 * li + leaf.seed)
+                & 0x7FFFFFFF)
+            body = build_leaf(leaf, op.width_mm, z_top - op.sill_mm,
+                              lrng)
+            # leaf plane mid-thickness on a wall; just under the
+            # walking surface on a floor (flush trapdoor lid).
+            q0 = 0.35 if self.laid_flat else \
+                (self.thickness_mm - leaf.thickness_mm) / 2.0
+            seg = segs[seg_i]
+            body.apply_translation([tc - w2, q0, op.sill_mm])
+            body.apply_transform(self._lay(seg) if self.laid_flat
+                                 else _frame(seg, z=seat_z))
+            body = self._clip_to_tile(body, surface)
+            _tag(body, leaf.material)
+            out.append(body)
+        return out
 
     def _ruin_cells(self, cells: list[_Cell], segs: list[_Seg], H: float,
                     rng: np.random.Generator) -> list[_Cell]:
@@ -676,6 +1029,16 @@ class CutStoneWall:
                         cap = self._heart_cap(k, float(tc))
                         z0 = np.clip(zc - h / 2.0, 0.2, cap - 0.3 - h)
                         if z0 < 0.2 - 1e-9:
+                            continue
+                        # Keep chips out of the passage: test the box
+                        # as PLACED (the z clamp can drag a chip whose
+                        # sampled centre was below the sill up into the
+                        # opening).
+                        if any(si == k and any(
+                                point_inside(P, tp, zp)
+                                for tp in (t0, t0 + w / 2.0, t0 + w)
+                                for zp in (z0, z0 + h / 2.0, z0 + h))
+                               for si, P, *_ in self._op_profiles):
                             continue
                         body = rubble_stone(w, yb1 - yb0, h, rng)
                         b0, b1 = body.bounds

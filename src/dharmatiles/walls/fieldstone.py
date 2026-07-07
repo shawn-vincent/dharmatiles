@@ -193,6 +193,15 @@ class FieldstoneWall(CutStoneWall):
     #: drystone: the rubble hearting is structural, not a ruin state.
     hearting = True
 
+    surround_vw:   float = 2.6     # thin slab voussoirs (refs 03/05)
+    surround_ring: float = 4.6
+    surround_jd:   float = 4.6     # larger squared jamb stones
+    surround_jh:   tuple = (4.0, 6.5)
+    surround_chip: float = 0.35    # roughly squared, not dressed
+    surround_ro:   float = 0.55
+    surround_frac: float = 1.10    # drystone: pressed contact, the
+                                   # union fuses slab against slab
+
     def __init__(self, spine, *,
                  course_mm: tuple[float, float] = (2.2, 5.2),
                  bay_mm:    tuple[float, float] = (5.0, 16.0),

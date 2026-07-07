@@ -7,6 +7,9 @@ and ``StoneFloor`` is the same unit kernel laid horizontal.
 from .brick import BrickWall
 from .fieldstone import FieldstoneWall
 from .floor import StoneFloor
+from .leaf import Leaf
 from .masonry import CutStoneWall
+from .openings import Opening
 
-__all__ = ['BrickWall', 'CutStoneWall', 'FieldstoneWall', 'StoneFloor']
+__all__ = ['BrickWall', 'CutStoneWall', 'FieldstoneWall', 'Leaf',
+           'Opening', 'StoneFloor']

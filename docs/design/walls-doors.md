@@ -37,6 +37,15 @@ Opening(at,                  # centre along the spine, in SQUARES (float)
                              # MAY exceed the wall height (see low walls)
         head      = 'arch',  # 'arch' | 'lintel' — both, for EVERY family
         rise_mm   = None,    # None = semicircular; less = segmental arch
+        profile   = 'auto',  # 'auto' (rect + head) | 'circle' |
+                             # [(t, z), …] custom polygon — the ARCH IS A
+                             # SPECIAL CASE of one boundary-lining rule:
+                             # near-vertical boundary → jamb stacks,
+                             # curved/horizontal → radial voussoirs.  A
+                             # circle has no verticals → a full voussoir
+                             # ring: an OCULUS in a wall, a WELL on a
+                             # floor (Shawn: round holes in the floor;
+                             # arbitrary shaped holes)
         leaf      = None,    # None | Leaf(...) — see taxonomy
         slot      = False)   # portcullis-style channel for swap-in leaves
 
@@ -140,21 +149,33 @@ total (tune on first print); leaf thickness 2.6 mm.
 
 ## Implementation stages (each shippable, per the campaign method)
 
-- **O1** layout exclusion + jambs + LINTEL heads, all three families,
-  open passage (no leaf).  The whole model except arches and leaves.
-- **O2** arch heads (voussoir cells with rotation), all families.
-- **O3** above-wall surrounds + ruin exemption.
-- **O4** windows (sills) + floor hatches via laid_flat.
-- **O5** integrated leaves: planks/shutters/bars, closed and
-  open-at-angle.
-- **O6** slot system + standalone leaf prints (portcullis, swaps).
+- **O1** ✅ layout exclusion + jambs + LINTEL heads, all three
+  families, open passage (no leaf) (`walls/openings.py` +
+  `_apply_openings`/`_surround_cells`/`_place_posed` on the chassis).
+- **O2** ✅ arch heads (voussoir cells with rotation + wedge taper),
+  all families; circle profile = full voussoir ring (oculus/well).
+- **O3** ✅ above-wall surrounds + ruin exemption (surrounds live in
+  `posed`, which `_ruin_cells` never sees).
+- **O4** ✅ windows (sills) + floor hatches/wells via laid_flat
+  (demos: `walls-e13-openings`, `walls-e14-hatch`).
+- **O5** ✅ integrated leaves (`walls/leaf.py`): planks/shutters/
+  bars/trapdoor, closed and open-at-angle about any hinge edge; WOOD
+  group (bars ROCK); fused to the jambs by construction (demo:
+  `walls-e15-leaves`).
+- **O6** slot system + standalone leaf prints (portcullis, swaps) —
+  NOT STARTED (`Opening.slot` plumbing exists: `_posed_cell` already
+  splits surround units front/back around a leaf channel).
+
+**Surround finish note (2026-07-07)**: surround units get their own
+per-family finish knobs on the chassis — `surround_chip`/
+`surround_ro` (the body texture's chip budget and roundover ate the
+2–5 mm units: the E13 bead-chain arch), `surround_frac` (unit width ÷
+pitch; fieldstone 1.10 = pressed drystone contact, the union fuses),
+`surround_proud_mm` (surrounds stand proud of both faces — the
+distinct-order read, and the well curb on floors).
 
 ## Remaining questions for Shawn
 
 1. Gates (2-square double doors) — in scope after O5?
 2. Leaf material: separate WOOD colour group is assumed — OK?
-3. Both of your reference images from this thread failed to reach my
-   image cache (I've proceeded with the online set per your
-   instruction).  If they showed something these references don't
-   cover, drop the files into `docs/reference/walls/doors/` or
-   describe them and I'll fold them in.
+3. (resolved — the "images" were harness artifacts, none were sent.)

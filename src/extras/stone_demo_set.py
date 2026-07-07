@@ -35,6 +35,9 @@ SCENES = {
     'wall-ruins':        ('docs/walls/walls-e10-ruins.tile.py',    (25, -155)),
     'floor-stone':       ('docs/walls/walls-e11-floor.tile.py',    (40, -140)),
     'floor-drystone':    ('docs/walls/walls-e12-drystone-floor.tile.py', (40, -140)),
+    'wall-openings':     ('docs/walls/walls-e13-openings.tile.py', (18, -155)),
+    'floor-hatch':       ('docs/walls/walls-e14-hatch.tile.py',    (50, -140)),
+    'wall-leaves':       ('docs/walls/walls-e15-leaves.tile.py',   (18, -155)),
     'wall-variants':     ('docs/walls/walls-e7-variants.tile.py',  (30, -160)),
     'wall-meadow':       ('docs/walls/walls-e4-meadow.tile.py',    (35, -155)),
 }

@@ -63,6 +63,7 @@ class StoneFloor(CutStoneWall):
                  missing_prob: float = 0.04,
                  spall_prob:   float = 0.10,
                  crack_prob:   float = 0.20,
+                 openings:     list | None = None,
                  seed:         int = 0):
         super().__init__(spine=[(0.0, 0.0), (1.0, 0.0)],  # set in apply
                          laid_flat=True,
@@ -73,7 +74,7 @@ class StoneFloor(CutStoneWall):
                          chip_mm=chip_mm, roundover_mm=roundover_mm,
                          relief_mm=relief_mm, relief_wl=relief_wl,
                          course_mm=(1.0, 1.0), bay_mm=(1.0, 1.0),
-                         min_bond_mm=0.0)
+                         min_bond_mm=0.0, openings=openings)
         self.face_recess_mm   = 0.0   # slabs flush in plan
         self.slabs_per_square = int(slabs_per_square)
         self.missing_prob     = missing_prob
