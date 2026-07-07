@@ -760,8 +760,15 @@ class CutStoneWall:
             #    into the quoin-alternating jamb courses and follows
             #    the arch extrados — the gap to the surround is an
             #    ordinary joint, never an exposed mortar wedge.
+            import dataclasses as _dc
             out = []
             press = self.surround_bond_press
+            absorb = []   # (z0, edge_t, side, target): a remnant too
+            #             narrow to keep is ABSORBED by its course
+            #             neighbour, which extends across the vanished
+            #             head joint to the surround — a mason's cut
+            #             unit, never a column of exposed core (the
+            #             E15 flat mortar band beside the brick door).
             for c in cells:
                 if c.seg != seg_i:
                     out.append(c)
@@ -776,16 +783,35 @@ class CutStoneWall:
                 if c.t1 <= lo + 1e-6 or c.t0 >= hi - 1e-6:
                     out.append(c)
                     continue
-                import dataclasses as _dc
-                if lo - c.t0 >= _MIN_KEEP_MM:
+                lrem = lo - c.t0
+                rrem = c.t1 - hi
+                if lrem >= _MIN_KEEP_MM:
                     out.append(_dc.replace(c, t1=lo + press,
                                            end1='press',
                                            key=c.key + (701, oi)))
-                if c.t1 - hi >= _MIN_KEEP_MM:
+                elif lrem > 1e-6:
+                    absorb.append((c.z0, c.t0, 'end1', lo + press))
+                if rrem >= _MIN_KEEP_MM:
                     out.append(_dc.replace(c, t0=hi - press,
                                            end0='press',
                                            key=c.key + (702, oi)))
+                elif rrem > 1e-6:
+                    absorb.append((c.z0, c.t1, 'end0', hi - press))
             cells = out
+            for z0, edge, side, target in absorb:
+                for i, c in enumerate(cells):
+                    if c.seg != seg_i or abs(c.z0 - z0) > 1e-6:
+                        continue
+                    if side == 'end1' and abs(c.t1 - edge) < 1e-6:
+                        cells[i] = _dc.replace(c, t1=target,
+                                               end1='press',
+                                               key=c.key + (703, oi))
+                        break
+                    if side == 'end0' and abs(c.t0 - edge) < 1e-6:
+                        cells[i] = _dc.replace(c, t0=target,
+                                               end0='press',
+                                               key=c.key + (704, oi))
+                        break
         return cells, posed
 
     def _posed_cell(self, seg_i, oi, tag, t, z, w, d, ang,

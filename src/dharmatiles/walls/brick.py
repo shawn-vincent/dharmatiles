@@ -80,7 +80,7 @@ class BrickWall(CutStoneWall):
             (self.seed * 31 + hash(cell.key)) & 0x7FFFFFFF)
         eligible = (not cell.is_bottom and not cell.is_top
                     and not cell.is_quoin
-                    and cell.end0 != 'face' and cell.end1 != 'face')
+                    and cell.end0 == 'joint' and cell.end1 == 'joint')
         if eligible and mrng.random() < self.missing_prob:
             return None
         return super()._place_block(cell, segs, seat_z, rng)
