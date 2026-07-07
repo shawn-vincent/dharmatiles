@@ -905,37 +905,48 @@ class CutStoneWall:
                 if not kinds:
                     out.append(c)
                     continue
-                if kinds == {'top'} or kinds == {'bottom'}:
-                    # The surround only dips into the band from one
-                    # horizontal side: the block keeps its FULL width
-                    # with a single angled cut on its top (under a
-                    # ring/arch bottom) or bottom (over a keystone) —
-                    # never a dropped middle exposing the core.
-                    side = 'T' if kinds == {'top'} else 'B'
-                    line = _cut_line_h(c, side)
-                    if line is None:
-                        out.append(c)
-                        continue
-                    if side == 'T':
-                        pen = c.z1 - min(line)
-                        keep = max(line) - c.z0
-                    else:
-                        pen = max(line) - c.z0
-                        keep = c.z1 - min(line)
-                    if pen < 0.35:          # graze: fuses invisibly
-                        out.append(c)
-                        continue
-                    if keep < _MIN_KEEP_MM:
-                        continue            # nothing substantial left
-                    nc = _rep(c, key=c.key + (705, oi))
-                    if side == 'T':
-                        nc.cut_z1 = line
-                    else:
-                        nc.cut_z0 = line
-                    out.append(nc)
-                    continue
                 lrem = lo - c.t0
                 rrem = c.t1 - hi
+                if kinds == {'top'} or kinds == {'bottom'}:
+                    # The surround only dips into the band from one
+                    # horizontal side: candidate — the block keeps its
+                    # FULL width with a single angled cut on its top
+                    # (under a ring/arch bottom) or bottom (over a
+                    # keystone).  Taken only when it KEEPS MORE STONE
+                    # than the side cut (a jamb grazing one end of the
+                    # cell classifies 'bottom' too, but there a side
+                    # cut saves the whole brick — the E15 missing
+                    # bottom brick).
+                    side = 'T' if kinds == {'top'} else 'B'
+                    line = _cut_line_h(c, side)
+                    if line is not None:
+                        if side == 'T':
+                            pen = c.z1 - min(line)
+                            keep = max(line) - c.z0
+                        else:
+                            pen = max(line) - c.z0
+                            keep = c.z1 - min(line)
+                        if pen < 0.35:      # graze: fuses invisibly
+                            out.append(c)
+                            continue
+                        bh = c.z1 - c.z0
+                        area_h = ((c.t1 - c.t0) * keep
+                                  if keep >= _MIN_KEEP_MM else 0.0)
+                        area_s = (lrem if lrem >= _MIN_KEEP_MM
+                                  else 0.0) * bh \
+                            + (rrem if rrem >= _MIN_KEEP_MM
+                               else 0.0) * bh
+                        if area_h >= area_s:
+                            if area_h <= 0.0:
+                                continue    # nothing substantial left
+                            nc = _rep(c, key=c.key + (705, oi))
+                            if side == 'T':
+                                nc.cut_z1 = line
+                            else:
+                                nc.cut_z0 = line
+                            out.append(nc)
+                            continue
+                        # else: fall through to the side cut
                 if lrem > 1e-6:
                     line = _cut_line(c.z0, c.z1, 'L')
                     t1 = (max(line) + _CUT_MARGIN_MM) if line else lo
