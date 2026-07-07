@@ -2,8 +2,8 @@
 #
 # Door leaf / window leaf / gate across the families (design:
 # docs/design/walls-doors.md, "Leaves"):
-#   south: cut stone — arched doorway with CLOSED planks door +
-#          lintel window with BARS (prison grille)
+#   south: cut stone — arched doorway with CLOSED arch-top planks
+#          door + round OCULUS window with BARS (round grille)
 #   mid:   brick — segmental-arch doorway with planks door OPEN at
 #          65° (ref-06's red door) + lintel window with SHUTTERS
 #   north: fieldstone LOW wall, full-height arch, planks gate open
@@ -26,8 +26,8 @@ tile = Tile(
             CutStoneWall([(_X0, 0.5), (_X1, 0.5)], seed=201, openings=[
                 Opening(at=0.55, width_mm=22.0, head_mm=30.0,
                         leaf=Leaf('planks')),
-                Opening(at=1.45, width_mm=12.0, sill_mm=12.0,
-                        head_mm=26.0, head='lintel', leaf=Leaf('bars')),
+                Opening(at=1.45, profile='circle', width_mm=13.0,
+                        sill_mm=14.0, head_mm=27.0, leaf=Leaf('bars')),
             ]),
             BrickWall([(_X0, 1.2), (_X1, 1.2)], seed=202, openings=[
                 Opening(at=0.55, width_mm=20.0, head_mm=28.0,

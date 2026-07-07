@@ -914,9 +914,9 @@ class CutStoneWall:
                     surface) -> list[trimesh.Trimesh]:
         """Integrated leaves (design stage O5): each opening with a
         ``leaf`` gets a separate WOOD-tagged solid (ROCK for bars)
-        fitted to its clear rectangle — to the springing under an
-        arch, to the head under a lintel.  The leaf embeds into the
-        jamb reveals and roots below its sill, so the export union
+        fitted to its PROFILE — an arched doorway gets an arch-top
+        door, a circle a round grille/lid.  The leaf embeds into the
+        jamb reveals and surround all round, so the export union
         fuses it to the masonry; it is NOT part of the wall's own
         union (it keeps its material group)."""
         from .leaf import build_leaf
@@ -924,28 +924,20 @@ class CutStoneWall:
         for li, (seg_i, P, op, tc) in enumerate(self._op_profiles):
             if op.leaf is None:
                 continue
-            if op.profile != 'auto':
-                warnings.warn('leaves fit rectangular openings only; '
-                              'skipping leaf on a shaped opening',
-                              RuntimeWarning)
-                continue
             leaf = op.leaf
-            w2 = op.width_mm / 2.0
-            rise = 0.0 if op.head == 'lintel' else min(
-                op.rise_mm if op.rise_mm is not None else w2,
-                w2, op.head_mm - op.sill_mm)
-            z_top = op.head_mm - rise
             lrng = np.random.default_rng(
                 (self.seed * 9_369_319 + 71 * li + leaf.seed)
                 & 0x7FFFFFFF)
-            body = build_leaf(leaf, op.width_mm, z_top - op.sill_mm,
-                              lrng)
+            P = np.asarray(P, dtype=float)
+            xmin = float(P[:, 0].min())
+            zmin = float(P[:, 1].min())
+            body = build_leaf(leaf, P - [xmin, zmin], lrng)
             # leaf plane mid-thickness on a wall; just under the
             # walking surface on a floor (flush trapdoor lid).
             q0 = 0.35 if self.laid_flat else \
                 (self.thickness_mm - leaf.thickness_mm) / 2.0
             seg = segs[seg_i]
-            body.apply_translation([tc - w2, q0, op.sill_mm])
+            body.apply_translation([xmin, q0, zmin])
             body.apply_transform(self._lay(seg) if self.laid_flat
                                  else _frame(seg, z=seat_z))
             body = self._clip_to_tile(body, surface)

@@ -103,9 +103,14 @@ read, ref-06/07).  Consequences by construction:
 ## Leaves (the word is "leaf")
 
 Door leaf / window leaf (shutter) / hatch leaf (trapdoor).  A leaf is
-a separate solid fitted to the opening's clear rectangle (leaves stay
-RECTANGULAR even under arches — ref-02's tympanum or an arch-top
-extension fills the difference when `fill='arch'`).
+a separate solid fitted to the opening's PROFILE (Shawn, 2026-07-07:
+arched doorways get arch-top doors; round openings take leaves too —
+a round grille in an oculus, a round lid on a well.  Supersedes rev
+2's leaves-stay-rectangular/tympanum idea).  Construction reuses the
+WALL strategy at leaf scale: ``union(core, planks)`` — a thin profile
+prism recessed behind both faces + full-thickness planks with reveal
+gaps, so the board grooves read identically on BOTH faces; plank
+faces carry carved wood grain (ridged, gently wavy, along the board).
 
 **Types** (each a small parametric generator, WOOD-tagged unless
 noted):
