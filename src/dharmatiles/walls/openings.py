@@ -44,6 +44,13 @@ class Opening:
     head:      str   = 'arch'        # 'arch' | 'lintel'
     rise_mm:   float | None = None   # None = semicircular
     profile:   object = 'auto'       # 'auto' | 'circle' | [(t_rel, z), …]
+    #: 'jambs' = the classic door construction (quoin-style jamb
+    #: stacks + arch/lintel head + sill slab); 'ring' = line the
+    #: profile with a FRAME of small units — the circle's voussoir
+    #: ring generalized to a rectangle (rows of small bricks + square
+    #: corner blocks).  'auto': hatches in a pavement (laid_flat,
+    #: lintel head) take 'ring'; standing walls take 'jambs'.
+    surround:  str   = 'auto'        # 'auto' | 'jambs' | 'ring'
     leaf:      object = None         # Leaf | None
     slot:      bool  = False
     key:       tuple = field(default=())

@@ -849,7 +849,10 @@ class CutStoneWall:
                     elif at_bot:
                         kinds.add('bottom')
                     else:
-                        kinds.add('full')   # island: no single cut fits
+                        # island (a hatch mid-slab): strips survive on
+                        # BOTH sides — below via cut_z1, above via
+                        # cut_z0
+                        kinds.add('island')
                 return kinds
 
             def _cut_line(z0, z1, side):
@@ -971,6 +974,39 @@ class CutStoneWall:
                         out.append(nc)
                     else:
                         absorb.append((c, 'end0', t0, line))
+                # Middle piece: the side cuts keep the flanks but the
+                # strip UNDER a top-dip (or over a bottom-rise) between
+                # them belonged to no one — bare core south of a hatch
+                # frame.  Fit the mason's third piece: full dip width,
+                # z-clipped by the horizontal support line (skipped
+                # automatically when full-height blockers leave no
+                # clearance: the line lands on the band edge).
+                mid0, mid1 = max(c.t0, lo), min(c.t1, hi)
+                if mid1 - mid0 >= 1.6:
+                    sub = _dc.replace(c, t0=mid0, t1=mid1)
+                    for dip, attr in (('top', 'cut_z1'),
+                                      ('bottom', 'cut_z0')):
+                        if dip not in kinds and 'island' not in kinds:
+                            continue
+                        hl = _cut_line_h(sub, 'T' if dip == 'top'
+                                         else 'B')
+                        if hl is None:
+                            continue
+                        if dip == 'top':
+                            keep = (sum(hl) / 2.0) - c.z0
+                            kw = dict(z1=min(max(hl) + _CUT_MARGIN_MM,
+                                             c.z1), is_top=False)
+                        else:
+                            keep = c.z1 - (sum(hl) / 2.0)
+                            kw = dict(z0=max(min(hl) - _CUT_MARGIN_MM,
+                                             c.z0), is_bottom=False)
+                        if keep < 1.0:
+                            continue
+                        nc = _rep(c, t0=mid0, t1=mid1, end0='press',
+                                  end1='press',
+                                  key=c.key + (709, oi), **kw)
+                        setattr(nc, attr, hl)
+                        out.append(nc)
             cells = out
             for src, side, target, line in absorb:
                 edge = src.t0 if side == 'end1' else src.t1
@@ -1088,6 +1124,62 @@ class CutStoneWall:
             outs.append(c)
         return outs
 
+    def _frame_cells(self, op, seg_i, tc, rng, oi) -> list[_Cell]:
+        """'ring' surround for a rectangular opening: the circle's
+        voussoir ring generalized to a square — a row of small units
+        along each edge + a square block at each outer corner (the
+        Shawn hatch rule: "cut out the door and surround it with a
+        row of small bricks").  Not floor-specific: a wall slab with
+        a door takes the same frame."""
+        vw, ring = self.surround_vw, self.surround_ring
+        frac = self.surround_frac
+        split = op.slot
+        w2 = op.width_mm / 2.0
+        z0, z1 = op.sill_mm, op.head_mm
+        grounded = z0 < 0.5 and not self.laid_flat   # a door: the
+        #                       ground is the bottom edge — no bottom
+        #                       row, side rows root into the seat
+        out: list[_Cell] = []
+        edges = [('R', tc + w2 + ring / 2.0, z0, z1, np.pi / 2.0),
+                 ('L', tc - w2 - ring / 2.0, z0, z1, np.pi / 2.0),
+                 ('T', tc, z1 + ring / 2.0, None, 0.0)]
+        if not grounded:
+            edges.append(('B', tc, z0 - ring / 2.0, None, 0.0))
+        for ei, (side, a, b, c_, ang) in enumerate(edges):
+            if side in ('L', 'R'):
+                length, ctr0, along_z = z1 - z0, (b + c_) / 2.0, True
+            else:
+                length, ctr0, along_z = 2.0 * w2, tc, False
+            n = max(1, int(round(length / vw)))
+            ws = rng.uniform(0.8 * vw, 1.2 * vw, n)
+            ws *= length / ws.sum()
+            pos = np.concatenate([[0.0], np.cumsum(ws)])
+            emb = 2.0 if grounded and side in ('L', 'R') else 0.0
+            for k, (p0, p1) in enumerate(zip(pos[:-1], pos[1:])):
+                w = (p1 - p0) * min(frac, 1.03)
+                mid = (p0 + p1) / 2.0 - length / 2.0
+                if side in ('L', 'R'):
+                    t, z = a, ctr0 + mid
+                    if grounded and k == 0:      # root into the seat
+                        z -= emb / 2.0
+                        w += emb
+                else:
+                    t, z = ctr0 + mid, b
+                out += self._posed_cell(seg_i, oi, 70 + 20 * ei + k,
+                                        t, z, ring if along_z else w,
+                                        w if along_z else ring,
+                                        0.0, split)
+        corners = [(s_t, s_z) for s_t in (-1.0, 1.0)
+                   for s_z in ([1.0] if grounded else (-1.0, 1.0))]
+        for k, (s_t, s_z) in enumerate(corners):
+            out += self._posed_cell(
+                seg_i, oi, 170 + k,
+                tc + s_t * (w2 + ring / 2.0),
+                (z1 + ring / 2.0) if s_z > 0 else (z0 - ring / 2.0),
+                ring * min(frac, 1.03), ring * min(frac, 1.03),
+                0.0, split)
+        return out
+
     def _surround_cells(self, op, P, seg_i, tc, rng, oi) -> list[_Cell]:
         vw, ring = self.surround_vw, self.surround_ring
         jd, jh = self.surround_jd, self.surround_jh
@@ -1095,6 +1187,10 @@ class CutStoneWall:
         split = op.slot
         out: list[_Cell] = []
         w2 = op.width_mm / 2.0
+        if op.profile == 'auto' and op.head == 'lintel' and (
+                op.surround == 'ring'
+                or (op.surround == 'auto' and self.laid_flat)):
+            return self._frame_cells(op, seg_i, tc, rng, oi)
         if op.profile == 'auto':
             rise = 0.0 if op.head == 'lintel' else min(
                 op.rise_mm if op.rise_mm is not None else w2,

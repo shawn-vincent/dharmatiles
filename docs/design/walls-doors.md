@@ -54,8 +54,17 @@ CutStoneWall(spine=…, openings=[Opening(at=0.5), Opening(at=1.5,
 ```
 
 On a `laid_flat` wall (i.e. a floor) the same `Opening` is a HATCH: a
-rectangular gap in the pavement with a slab surround and an optional
-trapdoor leaf.
+rectangular gap in the pavement with an optional trapdoor leaf.
+
+**Surround style** (`surround=`, 2026-07-07 Shawn): ``'jambs'`` is
+the classic door construction (quoin-style jamb stacks + arch/lintel
+head + sill slab); ``'ring'`` cuts the rectangle out and lines it
+with a FRAME of small units — the circle's voussoir ring generalized
+to a square (a row of small bricks per edge + square corner blocks).
+``'auto'``: hatches in a pavement take ``'ring'`` (the jambs+lintel
+construction chopped the floor into weird slabs); standing walls
+take ``'jambs'``.  Not floor-specific — a single wall slab with a
+door in it takes the same frame via ``surround='ring'``.
 
 ## Mechanism (unchanged in essence, approved rev 1)
 
