@@ -473,8 +473,10 @@ class FieldstoneWall(CutStoneWall):
             if end == 'face':                  # wall end / corner arris
                 # Recede inside the tile plane: texture displacement
                 # (~0.6 mm) past the boundary gets plane-cut — the
-                # E24 "sheared-off end rocks".
-                tq = t_cut + inward * _END_MARGIN_MM
+                # E24 "sheared-off end rocks".  Laid flat the ends ARE
+                # tile edges and pavement must run flush (Shawn).
+                em = 0.0 if self.laid_flat else _END_MARGIN_MM
+                tq = t_cut + inward * em
                 return [(tq, zeff(cell.z0, tq)),
                         (tq, zeff(cell.z1, tq))]
             if coping:
@@ -616,6 +618,11 @@ class FieldstoneWall(CutStoneWall):
                 return brng.uniform(*_PROUD_DEEP_MM)
             return brng.uniform(*self.proud_mm)
         y0, y1 = recess(), self.thickness_mm - recess()
+        if self.laid_flat:
+            # q = 0 is the pavement top: keep the proud jitter there
+            # (per-flagstone height variation), overshoot the datum on
+            # the underside for the bottom clip.
+            y1 = self.thickness_mm + 1.0
         h = (y1 - y0) / 2.0
         ym = (y0 + y1) / 2.0
 
@@ -686,7 +693,8 @@ class FieldstoneWall(CutStoneWall):
         if self.relief_mm is None or self.relief_mm > 0.0:
             body = self._stone_texture(body, brng)
 
-        body.apply_transform(_frame(seg, z=seat_z))
+        body.apply_transform(self._lay(seg) if self.laid_flat
+                             else _frame(seg, z=seat_z))
         return body
 
     def _stone_texture(self, body: trimesh.Trimesh,

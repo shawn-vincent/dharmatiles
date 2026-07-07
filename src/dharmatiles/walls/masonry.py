@@ -424,7 +424,8 @@ class CutStoneWall:
                  merlon_mm:    tuple[float, float] = (8.0, 11.0),
                  crenel_mm:    tuple[float, float] = (5.5, 7.5),
                  crenel_depth_mm: float = 11.0,
-                 ruin:         float = 0.0):
+                 ruin:         float = 0.0,
+                 laid_flat:    bool = False):
         if len(spine) < 2:
             raise ValueError('wall spine needs at least two points')
         if texture not in _TEXTURES:
@@ -455,6 +456,13 @@ class CutStoneWall:
         self.crenel_mm    = crenel_mm
         self.crenel_depth_mm = crenel_depth_mm
         self.ruin         = float(np.clip(ruin, 0.0, 1.0))
+        # A FLOOR IS A WALL LYING ON ITS SIDE (Shawn): with laid_flat
+        # the wall's HEIGHT axis becomes the second plan axis (courses
+        # = pavement rows, bays = slabs, bond = row stagger), and its
+        # THICKNESS becomes the pavement depth with the OUTER face up
+        # (face proudness = per-stone pavement height).  height_mm is
+        # then the paved strip's plan depth and must be explicit.
+        self.laid_flat    = laid_flat
         self._merlons: list[list[tuple[float, float]]] = []   # per segment
         self._crenel_z = None      # wall-local z of the crenel floor
         self._ruin_env = None      # per-segment envelope callables
@@ -463,6 +471,19 @@ class CutStoneWall:
     #: mortared families get it when ruined (broken top shows rubble).
     hearting: bool = False
 
+    def _lay(self, seg: _Seg) -> np.ndarray:
+        """Flat-mode frame for meshes built in raw wall coordinates
+        (t, q, z_wall): t stays along the run, z_wall becomes the
+        second plan axis (seg.n), and q becomes DEPTH — the outer face
+        (q = 0) lands on top at z = thickness."""
+        mm = np.eye(4)
+        mm[:3, 0] = [seg.d[0], seg.d[1], 0.0]
+        mm[:3, 1] = [0.0, 0.0, -1.0]
+        mm[:3, 2] = [seg.n[0], seg.n[1], 0.0]
+        mm[:2, 3] = seg.a
+        mm[2, 3]  = self.thickness_mm
+        return mm
+
     # ── build ────────────────────────────────────────────────────────────────
     def apply(self, scene, *, placement_mask=None) -> list[trimesh.Trimesh]:
         surface = scene.surface
@@ -470,6 +491,9 @@ class CutStoneWall:
         segs = _segments([(x * sq, y * sq) for x, y in self.spine])
         rng  = np.random.default_rng(self.seed)
 
+        if self.laid_flat and self.height_mm is None:
+            raise ValueError('laid_flat needs an explicit height_mm '
+                             '(the paved strip depth in mm)')
         seat_z = self._seat_z(scene, segs)
         if self.height_mm is None:
             # Top-anchored (default): the finished top lands at top_mm
@@ -488,8 +512,17 @@ class CutStoneWall:
         parts.extend(self._extra_parts(segs, seat_z, rng))
 
         wall = assemble_masonry(parts, surface, 'CutStoneWall')
+        if self.laid_flat:
+            # Ground the pavement: stones/core overshoot below the
+            # datum for solid seating; one clip flattens the bottom.
+            box = trimesh.creation.box(
+                extents=[surface.tile_w, surface.tile_h, T + 20.0],
+                transform=trimesh.transformations.translation_matrix(
+                    [surface.tile_w / 2.0, surface.tile_h / 2.0,
+                     (T + 20.0) / 2.0]))
+            wall = clip_to_box(wall, box, 'floor bottom')
 
-        self._stamp(scene, segs, seat_z + H)
+        self._stamp(scene, segs, seat_z + (T if self.laid_flat else H))
         return [wall]
 
     # ── pieces ───────────────────────────────────────────────────────────────
@@ -600,7 +633,7 @@ class CutStoneWall:
         parts = []
         if self.hearting or self.ruin > 0.0:
             parts += self._hearting_parts(segs, seat_z, rng)
-        if self.ruin > 0.0:
+        if self.ruin > 0.0 and not self.laid_flat:
             parts += self._foot_rubble(segs, seat_z, rng)
         return parts
 
@@ -648,7 +681,9 @@ class CutStoneWall:
                         body.apply_translation(-b0)
                         body.apply_scale((tgt1 - tgt0) / (b1 - b0))
                         body.apply_translation(tgt0)
-                        body.apply_transform(_frame(seg, z=seat_z))
+                        body.apply_transform(
+                            self._lay(seg) if self.laid_flat
+                            else _frame(seg, z=seat_z))
                         parts.append(body)
         return parts
 
@@ -681,6 +716,20 @@ class CutStoneWall:
         face (both wall faces, free ends, corner outer planes, and the
         top); the bottom runs to the embed depth (R3)."""
         rv, T = self.reveal_mm, self.thickness_mm
+        if self.laid_flat:
+            # Mortar sheet under the pavement: recessed rv below the
+            # top (same joint-floor depth as standing walls), inset rv
+            # from the strip's plan edges, overshooting the datum for
+            # the bottom clip.
+            boxes = []
+            for seg in segs:
+                ex = np.array([seg.L - 2.0 * rv, (T + 0.5) - rv,
+                               self.height_mm - 2.0 * rv])
+                b = rounded_box(ex, _CORE_ROUND_MM)
+                b.apply_translation(ex / 2.0 + np.array([rv, rv, rv]))
+                b.apply_transform(self._lay(seg))
+                boxes.append(b)
+            return boxes
         embed = getattr(self, '_embed_eff', self.embed_mm)
         z0, z1 = seat_z - embed, seat_z + self.height_mm - rv
         boxes = []
@@ -745,6 +794,11 @@ class CutStoneWall:
                         else rng.uniform(0.0, fr))
         y0 = rng.uniform(0.0, fr)
         y1 = self.thickness_mm - rng.uniform(0.0, fr)
+        if self.laid_flat:
+            # q = 0 is the pavement TOP (proud jitter stays); the
+            # inner face overshoots below the datum and is clipped
+            # flat — every slab is grounded, full depth.
+            y1 = self.thickness_mm + 1.0
         z0 = seat_z + (cell.z0 + j2 if not cell.is_bottom
                        else -getattr(self, '_embed_eff', self.embed_mm))
         z1 = seat_z + (cell.z1 - (0.0 if cell.is_top else j2))
@@ -757,9 +811,16 @@ class CutStoneWall:
 
         brng = np.random.default_rng(
             (self.seed * 1_000_003 + hash(cell.key)) & 0x7FFFFFFF)
-        body = self._unit_mesh(x1 - x0, y1 - y0, z1 - z0, cell, brng)
+        if self.laid_flat:
+            # Swapped dims so the unit kernel's local z (its "up",
+            # where the top-ring / relief conventions live) is the
+            # pavement depth q.
+            lx, ly, lz = x1 - x0, z1 - z0, y1 - y0
+        else:
+            lx, ly, lz = x1 - x0, y1 - y0, z1 - z0
+        body = self._unit_mesh(lx, ly, lz, cell, brng)
 
-        ctr = np.array([(x1 - x0) / 2.0, (y1 - y0) / 2.0, (z1 - z0) / 2.0])
+        ctr = np.array([lx / 2.0, ly / 2.0, lz / 2.0])
         yaw = np.radians(brng.uniform(-self.yaw_max_deg, self.yaw_max_deg))
         body.apply_transform(trimesh.transformations.rotation_matrix(
             yaw, [0.0, 0.0, 1.0], ctr))
@@ -769,7 +830,19 @@ class CutStoneWall:
             body.apply_transform(trimesh.transformations.rotation_matrix(
                 tilt, axis, ctr))
 
-        body.apply_transform(_frame(seg, x0, y0, z0))
+        if self.laid_flat:
+            # local x → run, local y → second plan axis (wall z),
+            # local z → up; block top (local lz, the q0 face) lands at
+            # thickness − y0.
+            mm = np.eye(4)
+            mm[:3, 0] = [seg.d[0], seg.d[1], 0.0]
+            mm[:3, 1] = [seg.n[0], seg.n[1], 0.0]
+            mm[:3, 2] = [0.0, 0.0, 1.0]
+            mm[:2, 3] = seg.a + seg.d * x0 + seg.n * z0
+            mm[2, 3]  = self.thickness_mm - y1
+            body.apply_transform(mm)
+        else:
+            body.apply_transform(_frame(seg, x0, y0, z0))
         return body
 
     # ── terrain ──────────────────────────────────────────────────────────────
@@ -777,7 +850,8 @@ class CutStoneWall:
         """Bool grid mask of the wall plan (strips + corner cells)."""
         surface = scene.surface
         cw, gw, gh = surface.cell_w, surface.grid_w, surface.grid_h
-        T = self.thickness_mm
+        # Laid flat, the strip's plan width is the wall HEIGHT.
+        T = self.height_mm if self.laid_flat else self.thickness_mm
         pts = np.vstack([[seg.a, seg.a + seg.d * seg.L,
                           seg.a + seg.n * T,
                           seg.a + seg.d * seg.L + seg.n * T]
@@ -803,6 +877,14 @@ class CutStoneWall:
         (fine per Shawn)."""
         inside, (i0, i1, j0, j1) = self._footprint(scene, segs)
         ter = scene.terrain_z[j0:j1, i0:i1]
+        if self.laid_flat:
+            # The pavement IS the terrain (StoneFloor rule): drop the
+            # soil under the strip to a thin film — NOT zero, the
+            # heightmap solid degenerates (base_h = 0) — and pave from
+            # the datum.
+            ter[inside] = np.minimum(ter[inside], 0.15)
+            self._embed_eff = 0.0
+            return 0.0
         sup = scene.terrain_support_z[j0:j1, i0:i1]
         surf = np.where(np.isfinite(sup), np.maximum(ter, sup), ter)
         if not inside.any():

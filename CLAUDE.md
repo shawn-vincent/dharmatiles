@@ -197,7 +197,7 @@ Layer ordering in `Region.layers` is the contract for state dependencies:
 | `Flowers(*, placement=…, **FlowerConfig kwargs)` | Dome-on-column 3D flowers; stamps `terrain_support_z` + `obstacle_mask` | 5.0 |
 | `Tree(height_mm=…, canopy_radius_mm=…, placement=…, **kwargs)` | Space-colonisation tree (see Tree section) | 5.0 |
 | `CutStoneWall(spine=…, texture=…, crenellated=…, ruin=…)` / `FieldstoneWall(spine=…, coping=…, ruin=…)` / `BrickWall(spine=…, …)` | Per-unit masonry walls on a plan spine (`dharmatiles.walls`); stamp `terrain_support_z` + `obstacle_mask` | 5.0 |
-| `StoneFloor(texture=…, slabs_per_square=…)` | Stone slab pavement gridding the region (`dharmatiles.walls`); stamps `terrain_support_z` + `obstacle_mask` | 5.0 |
+| `StoneFloor(texture=…, slabs_per_square=…)` | Stone slab pavement = `CutStoneWall(laid_flat=True)` pinned to the square grid; any wall family takes `laid_flat` (e.g. `FieldstoneWall(laid_flat=True)` = drystone flagstone floor); stamps `terrain_support_z` + `obstacle_mask` | 5.0 |
 
 `Region` height falls back to its first layer's `height_default_mm` when
 `height_mm=None`.  Boundary curves go from one tile edge to another;
@@ -372,7 +372,7 @@ src/dharmatiles/
   core/          pure primitives: config, tile, region, mesh, grid, terrain, logo
   stone/         shared stone-making primitives: shape, finish (aged relief), surface, solidify (export guarantees)
   scatter/       direct placement layers: Rocks, Grass, Flowers, stones.py (faceted stones) + config, seed, distribute
-  walls/         masonry chassis (masonry.py: CutStoneWall) + families (fieldstone.py, brick.py) + floor.py (StoneFloor pavement)
+  walls/         masonry chassis (masonry.py: CutStoneWall, laid_flat = floors) + families (fieldstone.py, brick.py) + floor.py (StoneFloor = grid-pinned flat wall)
   grass/         grass growth sub-pipeline: seed, grow, mesh, growers/, _geometry, layer, config
   layers/        soil.py, grass_carpet.py, water.py
   trees/         Tree generator: envelope, skeleton, mesh, leaf, placement_leaf, placement_organic, bark, layer

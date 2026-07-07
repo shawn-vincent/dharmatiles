@@ -1,57 +1,51 @@
 """
-Stone slab flooring — pavement gridding the ground.
+Stone slab flooring — a cut-stone wall lying on its side.
 
-Shawn (2026-07-05): "floor tiles (full 35mm or whatever slabs gridding
-the ground)" … "the slab should go right to the bottom of the terrain"
-… "None of the floor terrain should be on top of soil.  The floor IS
-the terrain, replaces the soil."
+Shawn (2026-07-06): "the floor should just be a wall laying on its
+side … with different sized bricks."  ``StoneFloor`` is exactly that:
+``CutStoneWall(laid_flat=True)`` whose courses and bays are pinned to
+the DB square grid (``slabs_per_square`` subdivides), so one masonry
+chassis generates walls AND floors:
 
-``StoneFloor`` paves a region with flat stone slabs aligned to the DB
-square grid — the masonry unit kernel laid horizontal (``_block_mesh``
-with the wall texture presets).  The floor REPLACES the terrain:
+- courses → pavement rows, bays → slabs, bond stagger → off
+  (``min_bond_mm=0`` + exact-pitch ranges give grid alignment);
+- wall thickness → pavement depth: slabs run full depth from the
+  datum (underside overshoots and is clipped flat) to ``top_mm`` —
+  7.4, the measured official interior-floor level (~6.0 reads as an
+  outdoor path);
+- the recessed mortar core → one sheet ``reveal_mm`` below the
+  pavement top, inset from the strip's plan edges — joints floor onto
+  mortar at exactly wall-joint depth;
+- the wall's face proudness, texture presets, common stone relief,
+  and drybrush grain all apply unchanged.
 
-- every paved pitch cell (including missing-slab cells) has its
-  terrain LOWERED to a thin dirt bed (``bed_mm``) — no soil under or
-  around the pavement surface;
-- slabs run FULL DEPTH, from the tile bottom (z = 0) to the pavement
-  level (``top_mm`` ± jitter) — no undercut can exist, by construction.
-  The default 7.4 mm is the OFFICIAL interior-floor standard: measured
-  across the DungeonBlocks library (docs/reference/walls/
-  commercial-sets-analysis.md §ground-heights), interior stone floors
-  sit 17.8–18.8 mm above the piece bottom = 6.9–7.9 mm above our
-  terrain datum (base = 5.7 peg + 5.2 flare = 10.9).  Outdoor paths
-  are lower (~6.0): pass ``top_mm=6.0`` for a garden path;
-- joints land on the grid lines and read as razor-thin dark cracks
-  (0.25 mm nominal, thinner than brick joints) flooring onto the
-  MORTAR CORE at wall-joint depth (``reveal_mm``): one recessed sheet
-  welds the slabs into a single connected solid, the wall rule turned
-  horizontal; a ``missing_prob`` slab leaves a sunken dirt pit;
-- ``spall_prob`` slabs get broken corners; ``crack_prob`` slabs are
-  engraved with the standard rock crack (``stone/cracks.py``) — the
-  grid must be imperfect to read real.
+The floor REPLACES the terrain (chassis ``laid_flat`` rule): soil
+under the strip drops to a 0.15 mm film, invisible inside the
+full-depth slabs.  ``missing_prob`` slabs leave dark pits,
+``spall_prob`` slabs get broken corners, ``crack_prob`` slabs are
+engraved with the standard rock crack — the grid must be imperfect to
+read real.
+
+A DRYSTONE floor is the same idea with the fieldstone family:
+``FieldstoneWall(laid_flat=True, ...)`` — crack-network flagstones
+with rubble chinking in the joints.
 """
 from __future__ import annotations
 
 import numpy as np
-import trimesh
+import trimesh  # noqa: F401  (return-type annotations)
 
-from ..stone import rounded_box, stone_relief
 from ..stone.cracks import engrave_cracks
-from .masonry import (_CORE_ROUND_MM, _TEXTURES, _block_mesh,
-                      assemble_masonry)
-
-_TILT_DEG = 0.5      # per-slab tilt: each slab catches its own light
-_TOP_JITTER_MM = 0.3  # per-slab pavement-level jitter
+from .masonry import CutStoneWall, _Cell, _Seg, _block_mesh
 
 
-class StoneFloor:
+class StoneFloor(CutStoneWall):
     """Direct TileLayer: stone slab pavement that IS the ground.
 
     Same texture vocabulary as the walls (``chipped`` / ``worn`` /
     ``hewn`` / ``dressed`` presets, plus the same override kwargs).
-    Place after ``SoilCarpet`` (the pavement flattens the soil under
-    itself) and before any ``Grass`` (the paved area stamps
-    ``obstacle_mask``).
+    Place after ``SoilCarpet`` and before walls that should stand on
+    the pavement (they seat on ``terrain_support_z``).
     """
 
     height_default_mm: float = 5.0
@@ -60,16 +54,8 @@ class StoneFloor:
                  texture:  str = 'dressed',
                  slabs_per_square: int = 1,
                  top_mm:       float = 7.4,
-                 bed_mm:       float = 1.2,
-                 joint_mm:     float = 0.125,  # matches the brick
-                                               # joints (halved twice
-                                               # 2026-07-06, Shawn)
-                 reveal_mm:    float = 1.3,   # mortar core recessed
-                                              # this far below the
-                                              # pavement top — joints
-                                              # floor onto mortar at
-                                              # the same depth as the
-                                              # wall joints
+                 joint_mm:     float = 0.125,
+                 reveal_mm:    float = 1.3,
                  chip_mm:      float | None = None,
                  roundover_mm: float | None = None,
                  relief_mm:    float | None = None,
@@ -78,182 +64,69 @@ class StoneFloor:
                  spall_prob:   float = 0.10,
                  crack_prob:   float = 0.20,
                  seed:         int = 0):
-        if texture not in _TEXTURES:
-            raise ValueError(f'unknown floor texture {texture!r}; '
-                             f'options: {sorted(_TEXTURES)}')
-        preset = _TEXTURES[texture]
-        self.texture      = texture
+        super().__init__(spine=[(0.0, 0.0), (1.0, 0.0)],  # set in apply
+                         laid_flat=True,
+                         thickness_mm=top_mm,
+                         height_mm=1.0,                    # set in apply
+                         seed=seed, texture=texture,
+                         joint_mm=joint_mm, reveal_mm=reveal_mm,
+                         chip_mm=chip_mm, roundover_mm=roundover_mm,
+                         relief_mm=relief_mm, relief_wl=relief_wl,
+                         course_mm=(1.0, 1.0), bay_mm=(1.0, 1.0),
+                         min_bond_mm=0.0)
+        self.face_recess_mm   = 0.0   # slabs flush in plan
         self.slabs_per_square = int(slabs_per_square)
-        self.top_mm       = top_mm
-        self.bed_mm       = bed_mm
-        self.joint_mm     = joint_mm
-        self.reveal_mm    = reveal_mm
-        self.chip_mm      = preset['chip_mm'] if chip_mm is None else chip_mm
-        self.roundover_mm = (preset['roundover_mm'] if roundover_mm is None
-                             else roundover_mm)
-        self.relief_mm    = (preset['relief_mm'] if relief_mm is None
-                             else relief_mm)
-        self.relief_wl    = (preset['relief_wl'] if relief_wl is None
-                             else relief_wl)
-        self.missing_prob = missing_prob
-        self.spall_prob   = spall_prob
-        self.crack_prob   = crack_prob
-        self.seed         = seed
+        self.missing_prob     = missing_prob
+        self.spall_prob       = spall_prob
+        self.crack_prob       = crack_prob
 
     def apply(self, scene, *, placement_mask=None) -> list[trimesh.Trimesh]:
         surface = scene.surface
-        cw, gw, gh = surface.cell_w, surface.grid_w, surface.grid_h
-        pitch = surface.square_mm / self.slabs_per_square
-        nx = int(round(surface.tile_w / pitch))
-        ny = int(round(surface.tile_h / pitch))
+        sq = surface.square_mm
+        pitch = sq / self.slabs_per_square
+        # Spine along the south edge walking +x: the strip (the wall
+        # body) extends north over the whole tile; courses/bays at
+        # exact grid pitch with bond stagger off → slabs on the grid.
+        self.spine     = [(0.0, 0.0), (float(surface.cols), 0.0)]
+        self.height_mm = surface.rows * sq
+        self.course_mm = (pitch, pitch)
+        self.bay_mm    = (pitch, pitch)
+        return super().apply(scene, placement_mask=placement_mask)
 
-        parts = []
-        placed = np.zeros((ny, nx), dtype=bool)
-        tops = np.zeros((ny, nx))
-        for iy in range(ny):
-            for ix in range(nx):
-                brng = np.random.default_rng(
-                    (self.seed * 1_000_003 + hash((ix, iy))) & 0x7FFFFFFF)
-                x0, y0 = ix * pitch, iy * pitch
-                cx, cy = x0 + pitch / 2.0, y0 + pitch / 2.0
-                i, j = int(cx / cw), int(cy / cw)
-                if not (0 <= i < gw and 0 <= j < gh):
-                    continue
-                if placement_mask is not None and not placement_mask[j, i]:
-                    continue
+    def _place_block(self, cell: _Cell, segs: list[_Seg], seat_z: float,
+                     rng: np.random.Generator) -> trimesh.Trimesh | None:
+        # Missing slab: a dark pit down to the terrain film (the grid
+        # must be imperfect).  Own rng salt, like BrickWall.
+        mrng = np.random.default_rng(
+            (self.seed * 31 + hash(cell.key)) & 0x7FFFFFFF)
+        if mrng.random() < self.missing_prob:
+            return None
+        body = super()._place_block(cell, segs, seat_z, rng)
+        if body is not None and mrng.random() < self.crack_prob:
+            # The standard rock crack, walk length scaled to the slab.
+            side = min(cell.t1 - cell.t0, cell.z1 - cell.z0)
+            body = engrave_cracks(
+                body, np.random.default_rng(
+                    (self.seed * 61 + hash(cell.key)) & 0x7FFFFFFF),
+                ground_z=0.0, footprint_mm=side,
+                n_segs=int(np.clip(side * 0.7, 9, 26)))
+        return body
 
-                # The floor IS the terrain: drop this pitch cell (slab
-                # or dirt pit alike) to the thin dirt bed — the soil
-                # never sits at pavement level anywhere paved.
-                i0 = max(0, int(x0 / cw))
-                i1 = min(gw, int(np.ceil((x0 + pitch) / cw)))
-                j0 = max(0, int(y0 / cw))
-                j1 = min(gh, int(np.ceil((y0 + pitch) / cw)))
-                patch = scene.terrain_z[j0:j1, i0:i1]
-                if brng.random() < self.missing_prob:
-                    # Sunken dirt pit: keep the dirt bed visible.
-                    np.minimum(patch, self.bed_mm, out=patch)
-                    continue
-                # Under a slab the terrain drops to a 0.15 mm film.
-                # NOT zero: surface.base_h is 0, so the heightmap
-                # solid is exactly z_grid down to the datum — a fully
-                # paved tile at 0 makes it a zero-volume degenerate
-                # sheet (found by body inspection).  The film is
-                # invisible by construction: slabs are full-depth and
-                # run flush to the tile boundary, so it lives strictly
-                # inside them.
-                np.minimum(patch, 0.15, out=patch)
-
-                top = self.top_mm + float(
-                    brng.uniform(-_TOP_JITTER_MM, _TOP_JITTER_MM))
-                placed[iy, ix] = True
-                tops[iy, ix] = top
-                chip = self.chip_mm
-                if brng.random() < self.spall_prob:
-                    # Spall chips must stay ABOVE the mortar core
-                    # (reveal 1.3): the old 0.3 x pitch budget pulled
-                    # corners 3 mm down and the union padded them with
-                    # dead-flat core plane.
-                    chip = min(0.30 * pitch * 0.25, 0.30) + self.chip_mm
-                # Joints inset the slab EXCEPT at tile boundaries:
-                # floor tiles butt slab-to-slab like walls do (R8) —
-                # only floor block at the tile edge, and the seam
-                # between two tiles reads as its own grid line.
-                jx0 = 0.0 if ix == 0 else self.joint_mm / 2.0
-                jx1 = 0.0 if ix == nx - 1 else self.joint_mm / 2.0
-                jy0 = 0.0 if iy == 0 else self.joint_mm / 2.0
-                jy1 = 0.0 if iy == ny - 1 else self.joint_mm / 2.0
-                side_x = pitch - jx0 - jx1
-                side_y = pitch - jy0 - jy1
-                side = max(side_x, side_y)
-                # Full-depth slab: tile bottom to pavement level.
-                # relief_mm=0 here: the slab owns its relief (the
-                # slab-scale stone_relief below); letting _block_mesh
-                # add its block-scale pass too double-textured the
-                # surface.
-                body = _block_mesh(side_x, side_y, top,
-                                   chip, self.roundover_mm, 0.0,
-                                   self.relief_wl, True, brng,
-                                   pull_mask=(float(jx0 > 0.0),
-                                              float(jx1 > 0.0),
-                                              float(jy0 > 0.0),
-                                              float(jy1 > 0.0)))
-                # The common stone relief (stone/finish.py, design:
-                # docs/design/stone-surface-texture.md): a calm
-                # plateau carved downward — worn recesses + gentle
-                # dish, matching the measured official floors.  The
-                # plane-wave drybrush pass read as corduroy/chop here
-                # and is gone.  Clamp the underside back to the tile
-                # bottom afterwards.
-                # Relief budget sized BELOW the core reveal (the wall
-                # rule): carve 0.62 + dish 0.25 + spall chip + tilt
-                # all stay above the mortar plane by construction.
-                # base fade: a deep side recess at the foot would
-                # expose the terrain film at tile edges.  (An
-                # edge-weighted "structured wear" variant was tried
-                # and REJECTED — Shawn liked this uniform read.)
-                body = stone_relief(body, brng, carve_mm=0.62,
-                                    dish_mm=0.25, base_fade_mm=1.5)
-                ctr = np.array([side_x / 2.0, side_y / 2.0, top / 2.0])
-                for axis in ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]):
-                    tilt = np.radians(brng.uniform(-_TILT_DEG, _TILT_DEG))
-                    body.apply_transform(
-                        trimesh.transformations.rotation_matrix(
-                            tilt, axis, ctr))
-                body.apply_translation([x0 + jx0, y0 + jy0, 0.0])
-                if brng.random() < self.crack_prob:
-                    # The standard rock crack, walk length scaled to
-                    # the slab so it crosses a good fraction of it.
-                    body = engrave_cracks(
-                        body, np.random.default_rng(
-                            (self.seed * 61 + hash((ix, iy)))
-                            & 0x7FFFFFFF),
-                        ground_z=0.0, footprint_mm=side,
-                        n_segs=int(np.clip(side * 0.7, 9, 26)))
-                parts.append(body)
-
-                # Stamp the slab footprint.
-                sl = scene.terrain_support_z[j0:j1, i0:i1]
-                np.maximum(sl, top, out=sl)
-                scene.obstacle_mask[j0:j1, i0:i1] = True
-
-        if not parts:
-            return []
-        # Mortar core (Shawn: "for structural reasons, have some mortar
-        # inside the floor slabs … the same way we do for walls"): one
-        # sheet per placed cell spanning the FULL pitch (so neighbours'
-        # sheets merge across the joints and the pavement unions into
-        # one connected solid), recessed reveal_mm below the pavement
-        # top — the razor joints floor onto mortar at wall-joint depth
-        # — and inset reveal_mm from every visible side (tile
-        # boundaries, unpaved cells, dirt pits), exactly the wall rule.
-        rv = self.reveal_mm
-        for iy in range(ny):
-            for ix in range(nx):
-                if not placed[iy, ix]:
-                    continue
-                x0, y0 = ix * pitch, iy * pitch
-                # Visible sides inset by the reveal; interior sides
-                # EXTEND past the cell boundary so neighbouring
-                # (edge-rounded) sheets interpenetrate instead of
-                # merely kissing face-to-face.
-                ov = _CORE_ROUND_MM
-                cx0 = x0 + (rv if ix == 0 or not placed[iy, ix - 1]
-                            else -ov)
-                cx1 = x0 + pitch - (rv if ix == nx - 1
-                                    or not placed[iy, ix + 1] else -ov)
-                cy0 = y0 + (rv if iy == 0 or not placed[iy - 1, ix]
-                            else -ov)
-                cy1 = y0 + pitch - (rv if iy == ny - 1
-                                    or not placed[iy + 1, ix] else -ov)
-                zc = tops[iy, ix] - rv
-                box = rounded_box([cx1 - cx0, cy1 - cy0, zc],
-                                  _CORE_ROUND_MM)
-                box.apply_translation([(cx0 + cx1) / 2.0,
-                                       (cy0 + cy1) / 2.0, zc / 2.0])
-                parts.append(box)
-
-        return [assemble_masonry(parts, surface, 'StoneFloor')]
+    def _unit_mesh(self, lx: float, ly: float, lz: float,
+                   cell: _Cell, rng: np.random.Generator) -> trimesh.Trimesh:
+        chip = self.chip_mm
+        if rng.random() < self.spall_prob:
+            # Broken corner, capped below the mortar reveal.
+            chip = min(0.30 * min(lx, ly) * 0.25, 0.30) + self.chip_mm
+        # Chip pull masked flush on tile-boundary sides: the
+        # inter-slab spacing is between slabs on a tile, never between
+        # a slab and the tile edge (local x = run ends; local y = rows,
+        # so the bottom/top rows are the strip's plan edges).
+        mask = (float(cell.end0 == 'joint'), float(cell.end1 == 'joint'),
+                float(not cell.is_bottom), float(not cell.is_top))
+        return _block_mesh(lx, ly, lz, chip, self.roundover_mm,
+                           self.relief_mm, self.relief_wl, True, rng,
+                           pull_mask=mask)
 
     def footprint_mm(self) -> float:
         return 0.0
