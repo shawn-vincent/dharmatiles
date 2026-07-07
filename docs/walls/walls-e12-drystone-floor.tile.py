@@ -16,10 +16,12 @@ tile = Tile(
     areas=[
         Region(id='court', selector=FloodFill(0.5, 0.5), layers=[
             SoilCarpet(),
+            # Stone sizes = the fieldstone WALL defaults (Shawn:
+            # big flagstones looked weird; the floor should read like
+            # the wall's stones, laid flat).
             FieldstoneWall(spine=[(0.0, 0.0), (2.0, 0.0)],
                            laid_flat=True,
                            height_mm=70.0, thickness_mm=7.4,
-                           course_mm=(8.0, 15.0), bay_mm=(9.0, 18.0),
                            seed=95),
             FieldstoneWall(spine=[(2.0, 2.0), (0.0, 2.0)], seed=96),
         ]),
