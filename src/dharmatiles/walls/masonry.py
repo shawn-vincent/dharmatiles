@@ -930,8 +930,12 @@ class CutStoneWall:
                             out.append(c)
                             continue
                         bh = c.z1 - c.z0
+                        # keep is a HEIGHT: floor it at a printable
+                        # course, not _MIN_KEEP_MM (a width rule) — a
+                        # wide 1mm-tall cut course under a sill is
+                        # ordinary masonry.
                         area_h = ((c.t1 - c.t0) * keep
-                                  if keep >= _MIN_KEEP_MM else 0.0)
+                                  if keep >= 1.0 else 0.0)
                         area_s = (lrem if lrem >= _MIN_KEEP_MM
                                   else 0.0) * bh \
                             + (rrem if rrem >= _MIN_KEEP_MM
@@ -956,7 +960,7 @@ class CutStoneWall:
                         nc.cut1 = line
                         out.append(nc)
                     else:
-                        absorb.append((c.z0, c.t0, 'end1', t1, line))
+                        absorb.append((c, 'end1', t1, line))
                 if rrem > 1e-6:
                     line = _cut_line(c.z0, c.z1, 'R')
                     t0 = (min(line) - _CUT_MARGIN_MM) if line else hi
@@ -966,11 +970,12 @@ class CutStoneWall:
                         nc.cut0 = line
                         out.append(nc)
                     else:
-                        absorb.append((c.z0, c.t1, 'end0', t0, line))
+                        absorb.append((c, 'end0', t0, line))
             cells = out
-            for z0, edge, side, target, line in absorb:
+            for src, side, target, line in absorb:
+                edge = src.t0 if side == 'end1' else src.t1
                 for i, c in enumerate(cells):
-                    if c.seg != seg_i or abs(c.z0 - z0) > 1e-6:
+                    if c.seg != seg_i or abs(c.z0 - src.z0) > 1e-6:
                         continue
                     if side == 'end1' and abs(c.t1 - edge) < 1e-6:
                         nc = _rep(c, t1=target, end1='press',
@@ -984,6 +989,81 @@ class CutStoneWall:
                         nc.cut0 = line
                         cells[i] = nc
                         break
+                else:
+                    # No course neighbour to absorb the sliver (the
+                    # remnant sits at a wall end / corner — e.g. the
+                    # strip between a window's projecting sill and the
+                    # free end).  Fit a THIN unit rather than exposing
+                    # a column of bare core.
+                    if side == 'end1':
+                        mean_w = ((sum(line) / 2.0 if line else target)
+                                  - src.t0)
+                    else:
+                        mean_w = src.t1 - (sum(line) / 2.0 if line
+                                           else target)
+                    if mean_w >= 1.1:
+                        # a printable wedge with one angled cut
+                        if side == 'end1':
+                            nc = _rep(src, t1=target, end1='press',
+                                      key=src.key + (706, oi))
+                            nc.cut1 = line
+                        else:
+                            nc = _rep(src, t0=target, end0='press',
+                                      key=src.key + (707, oi))
+                            nc.cut0 = line
+                        cells.append(nc)
+                        continue
+                    # Bimodal blocker (a projecting sill nose over a
+                    # jamb): one straight cut can't clear both, but a
+                    # SHORT brick fits the sub-band where the space is
+                    # wide (the mason's cut brick under the sill).
+                    zs = np.linspace(src.z0 + 0.02, src.z1 - 0.02, 15)
+                    bb0, _zl, bb1, _zh = region.bounds
+                    avail = []
+                    for z in zs:
+                        row = region.intersection(sgeom.LineString(
+                            [(bb0 - 1.0, z), (bb1 + 1.0, z)]))
+                        if row.is_empty:
+                            avail.append(src.t1 - src.t0)
+                            continue
+                        rb = row.bounds
+                        avail.append(rb[0] - src.t0 if side == 'end1'
+                                     else src.t1 - rb[2])
+                    ok = np.asarray(avail) >= 1.8
+                    best, cur = (0, 0), (0, 0)   # (start, stop)
+                    i = 0
+                    while i < len(ok):
+                        if ok[i]:
+                            j = i
+                            while j < len(ok) and ok[j]:
+                                j += 1
+                            if j - i > best[1] - best[0]:
+                                best = (i, j)
+                            i = j
+                        else:
+                            i += 1
+                    if best[1] == best[0]:
+                        continue
+                    z_lo = src.z0 if best[0] == 0 else float(zs[best[0]])
+                    z_hi = src.z1 if best[1] == len(ok) \
+                        else float(zs[best[1] - 1])
+                    if z_hi - z_lo < 1.0:
+                        continue
+                    sline = _cut_line(z_lo, z_hi,
+                                      'L' if side == 'end1' else 'R')
+                    kw = dict(z0=z_lo, z1=z_hi, is_top=False)
+                    if side == 'end1':
+                        kw.update(t1=(max(sline) + _CUT_MARGIN_MM)
+                                  if sline else target, end1='press')
+                    else:
+                        kw.update(t0=(min(sline) - _CUT_MARGIN_MM)
+                                  if sline else target, end0='press')
+                    nc = _rep(src, key=src.key + (708, oi), **kw)
+                    if side == 'end1':
+                        nc.cut1 = sline
+                    else:
+                        nc.cut0 = sline
+                    cells.append(nc)
         return cells, posed
 
     def _posed_cell(self, seg_i, oi, tag, t, z, w, d, ang,
