@@ -448,9 +448,8 @@ class FieldstoneWall(CutStoneWall):
         beds never overlap.  Head joints DO (E24): each stone extends
         past its side lines so the union fuses side-by-side neighbours
         into pressed contact — except in the top course."""
-        bands = getattr(cell, 'side_bands',
-                        [(cell.key[0], cell.z0, cell.z1)])
-        coping = getattr(cell, 'coping', False)
+        bands = cell.side_bands or [(cell.key[0], cell.z0, cell.z1)]
+        coping = cell.coping
         w = cell.t1 - cell.t0
         if coping:
             # On-edge coping stones press sideways into each other.
@@ -580,9 +579,9 @@ class FieldstoneWall(CutStoneWall):
                 float(brng.uniform(*self.bed_overlap_mm)), cap)
             # opening-fit cut edges stay ON their line (the press is
             # already folded into the line via the region dilation)
-            if getattr(cell, 'cut_z1', None) is not None:
+            if cell.cut_z1 is not None:
                 ovt = 0.0
-            if getattr(cell, 'cut_z0', None) is not None:
+            if cell.cut_z0 is not None:
                 ovb = 0.0
             zlo, zhi = pts[:, 1].min(), pts[:, 1].max()
             u = (pts[:, 1] - zlo) / max(zhi - zlo, 1e-9)
@@ -688,7 +687,7 @@ class FieldstoneWall(CutStoneWall):
         pole_b = ctr + brng.uniform(-_POLE_DRIFT_FRAC,
                                     _POLE_DRIFT_FRAC, 2) * span
 
-        coping = getattr(cell, 'coping', False)
+        coping = cell.coping
         K = _N_LAT
         verts = []
         for jlat in range(K):

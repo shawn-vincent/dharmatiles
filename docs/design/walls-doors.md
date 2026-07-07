@@ -205,5 +205,5 @@ grow outward only: nothing hangs below the arch soffit (FDM).
 ## Remaining questions for Shawn
 
 1. Gates (2-square double doors) — in scope after O5?
-2. Leaf material: separate WOOD colour group is assumed — OK?
+2. (resolved 2026-07-07 — Shawn: WOOD colour group for leaves is fine.)
 3. (resolved — the "images" were harness artifacts, none were sent.)

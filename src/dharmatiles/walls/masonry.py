@@ -19,17 +19,18 @@ gives the DungeonBlocks flush-to-edge slab exactly (R1).
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
+import shapely.geometry as sgeom
 import trimesh
+from shapely.ops import unary_union
 
 from ..core.color import Material, tag as _tag
 from ..stone import (clip_to_box, rounded_box, rubble_stone,
                      separate_pinches, stone_relief)
-from .openings import (Opening, _JOINT_FRAC, _KEYSTONE, _MIN_KEEP_MM,
-                       _SILL_H_MM, _SILL_OVER_MM, arch_arc, band_extent,
-                       boundary_units, build_profile, point_inside)
+from .openings import (Opening, arch_arc, band_extent, boundary_units,
+                       build_profile, point_inside)
 
 # ── Iteration knobs (module constants while prototyping) ─────────────────────
 _FACE_RECESS_MM   = 0.60   # per-block face jitter: outer/inner/end faces sit
@@ -54,6 +55,16 @@ _CORE_ROUND_MM    = 0.6    # mortar-core edge fillet (walls AND floors):
 # every other arris.  The block box extends this margin past the cut
 # line so the kernel's own end plane never competes with the cut plane.
 _CUT_MARGIN_MM = 1.2
+
+# Opening-surround construction (masonry sizing rules, used only here).
+_KEYSTONE      = 1.18   # apex voussoir scale (grows outward only)
+_JOINT_FRAC    = 0.96   # surround unit width fraction of its pitch
+                        # (the rest reads as joint); surround_frac default
+_MIN_KEEP_MM   = 2.6    # trimmed wall-cell remnants narrower than this
+                        # are absorbed by a course neighbour or refit as
+                        # thin/short units — never dropped
+_SILL_OVER_MM  = 2.0    # sill slab overhang past the jambs
+_SILL_H_MM     = 2.4
 
 # Rubble hearting (E10/E27, chassis-level since the ruins work): a
 # sealed sheet of small rough stone chips through the wall body.
@@ -118,6 +129,49 @@ class _Cell:
     is_bottom: bool
     is_quoin:  bool = False   # bay runs through a corner cell
     key:   tuple = field(default=())
+    # Opening-fit cuts (walls-doors.md "bond-to-surround fit"): each is
+    # one straight line as an endpoint pair, or None.  cut0/cut1 give t
+    # at (z0, z1) — side cuts against a jamb/ring; cut_z0/cut_z1 give z
+    # at (t0, t1) — a horizontal cut over a keystone / under a ring.
+    cut0:   tuple | None = None
+    cut1:   tuple | None = None
+    cut_z0: tuple | None = None
+    cut_z1: tuple | None = None
+    #: cut lines mapped into the unit's local frame at place time
+    cut_planes_local: list | None = None
+    # Family extras (fieldstone): interior course bands a merged
+    # throughstone spans, and the on-edge coping flag.
+    side_bands: list | None = None
+    coping: bool = False
+
+
+@dataclass
+class _Posed:
+    """One opening-surround unit: an ordinary block kernel POSED in
+    the wall's (t, z) plane — centre (t, z), in-plane dims (w, d),
+    rotated by ``ang`` so the unit's height axis lies along the
+    boundary's outward normal (a voussoir is just a rotated block).
+    ``qspan`` is the unit's extent through the wall thickness; the O6
+    slot system splits it into a front/back pair around the leaf
+    channel.  ``taper`` is the voussoir wedge (mm)."""
+    seg:   int
+    key:   tuple
+    t:     float
+    z:     float
+    w:     float
+    d:     float
+    ang:   float
+    qspan: tuple
+    taper: float = 0.0
+
+    def quad(self) -> np.ndarray:
+        """The unit's rotated rectangle in the wall's (t, z) plane —
+        the same rotation convention ``_place_posed`` applies."""
+        ca, sa = np.cos(self.ang), np.sin(self.ang)
+        w2, d2 = self.w / 2.0, self.d / 2.0
+        return np.array(
+            [[self.t + dx * ca + dz * sa, self.z - dx * sa + dz * ca]
+             for dx, dz in ((-w2, -d2), (w2, -d2), (w2, d2), (-w2, d2))])
 
 
 def assemble_masonry(parts: list[trimesh.Trimesh], surface,
@@ -692,8 +746,7 @@ class CutStoneWall:
         return _block_mesh(lx, ly, lz, self.chip_mm,
                            self.roundover_mm, self.relief_mm,
                            self.relief_wl, cell.is_top, rng,
-                           cut_planes=getattr(cell, 'cut_planes_local',
-                                              None))
+                           cut_planes=cell.cut_planes_local)
 
     # ── openings: doors, windows, oculi, hatches ────────────────────────────
     def _cut_openings_from_core(self, parts, segs, seat_z):
@@ -703,7 +756,6 @@ class CutStoneWall:
         reveals are real masonry, never core plane."""
         if not self._op_profiles or not parts:
             return parts
-        import shapely.geometry as sgeom
         T = self.thickness_mm
         cutters = []
         for seg_i, P, op, _tc in self._op_profiles:
@@ -731,7 +783,12 @@ class CutStoneWall:
                 cut = trimesh.boolean.difference([b] + cutters,
                                                  engine='manifold')
                 out.append(cut if len(cut.faces) else b)
-            except Exception:                       # noqa: BLE001
+            except Exception as e:                  # noqa: BLE001
+                # The uncut core would block the doorway at reveal
+                # depth — visible, so never fail silently.
+                warnings.warn(f'opening core cut failed ({e}); core '
+                              'kept uncut behind the surround',
+                              RuntimeWarning)
                 out.append(b)
         return out
 
@@ -748,7 +805,7 @@ class CutStoneWall:
         if not self.openings:
             return cells, []
         arcs = np.concatenate([[0.0], np.cumsum([s_.L for s_ in segs])])
-        posed: list[_Cell] = []
+        posed: list[_Posed] = []
         for oi, op in enumerate(self.openings):
             a_mm = op.at * self._sq
             seg_i = int(np.searchsorted(arcs[1:], a_mm + 1e-6))
@@ -760,23 +817,17 @@ class CutStoneWall:
             #    actual surround units, not the profile.
             op_cells = self._surround_cells(op, P, seg_i, tc, rng, oi)
             posed += op_cells
-            # Each unit's rotated rectangle in the wall's (t, z) plane
-            # (matching _place_posed's rotation conventions).
-            quads = []
-            for u in op_cells:
-                t, z, ang = u.pose
-                w, d = u.pdims
-                ca, sa = np.cos(ang), np.sin(ang)
-                quads.append(np.array(
-                    [[t + dx * ca + dz * sa, z - dx * sa + dz * ca]
-                     for dx, dz in ((-w / 2, -d / 2), (w / 2, -d / 2),
-                                    (w / 2, d / 2), (-w / 2, d / 2))]))
+            quads = [u.quad() for u in op_cells]
+            ts = np.concatenate([q[:, 0] for q in quads] + [P[:, 0]])
+            if ts.min() < -1e-6 or ts.max() > segs[seg_i].L + 1e-6:
+                raise ValueError(
+                    f'Opening at={op.at} (with its surround) does not '
+                    f'fit within one wall segment — gen-1 openings '
+                    f'must not cross corners or overhang wall ends')
             # The forbidden region a fitted block must clear: the
             # units dilated by (joint − press) — thin mortar line on
             # mortared families, pressed interpenetration on drystone
             # — plus the passage dilated by the reveal.
-            import shapely.geometry as sgeom
-            from shapely.ops import unary_union
             delta = self.joint_mm - self.surround_bond_press
             region = unary_union(
                 [sgeom.Polygon(q).buffer(delta, join_style=2)
@@ -789,15 +840,6 @@ class CutStoneWall:
             #    into the quoin-alternating jamb courses and follows
             #    the arch extrados — the gap to the surround is an
             #    ordinary joint, never an exposed mortar wedge.
-            import dataclasses as _dc
-
-            def _rep(c, **kw):
-                nc = _dc.replace(c, **kw)
-                for a in ('cut0', 'cut1', 'cut_z0', 'cut_z1',
-                          'side_bands', 'coping'):
-                    if hasattr(c, a):
-                        setattr(nc, a, getattr(c, a))
-                return nc
 
             def _cut_line_h(c, side):
                 """Horizontal counterpart of _cut_line: the support
@@ -884,8 +926,8 @@ class CutStoneWall:
                 return (float(m * z0 + k), float(m * z1 + k))
 
             out = []
-            absorb = []   # (z0, edge_t, side, target, line): a remnant
-            #             too narrow to keep is ABSORBED by its course
+            absorb = []   # (cell, side, target, line): a remnant too
+            #             narrow to keep is ABSORBED by its course
             #             neighbour, which extends across the vanished
             #             head joint to the surround — a mason's cut
             #             unit, never a column of exposed core (the
@@ -946,7 +988,7 @@ class CutStoneWall:
                         if area_h >= area_s:
                             if area_h <= 0.0:
                                 continue    # nothing substantial left
-                            nc = _rep(c, key=c.key + (705, oi))
+                            nc = replace(c, key=c.key + (705, oi))
                             if side == 'T':
                                 nc.cut_z1 = line
                             else:
@@ -958,7 +1000,7 @@ class CutStoneWall:
                     line = _cut_line(c.z0, c.z1, 'L')
                     t1 = (max(line) + _CUT_MARGIN_MM) if line else lo
                     if lrem >= _MIN_KEEP_MM:
-                        nc = _rep(c, t1=t1, end1='press',
+                        nc = replace(c, t1=t1, end1='press',
                                   key=c.key + (701, oi))
                         nc.cut1 = line
                         out.append(nc)
@@ -968,7 +1010,7 @@ class CutStoneWall:
                     line = _cut_line(c.z0, c.z1, 'R')
                     t0 = (min(line) - _CUT_MARGIN_MM) if line else hi
                     if rrem >= _MIN_KEEP_MM:
-                        nc = _rep(c, t0=t0, end0='press',
+                        nc = replace(c, t0=t0, end0='press',
                                   key=c.key + (702, oi))
                         nc.cut0 = line
                         out.append(nc)
@@ -983,7 +1025,7 @@ class CutStoneWall:
                 # clearance: the line lands on the band edge).
                 mid0, mid1 = max(c.t0, lo), min(c.t1, hi)
                 if mid1 - mid0 >= 1.6:
-                    sub = _dc.replace(c, t0=mid0, t1=mid1)
+                    sub = replace(c, t0=mid0, t1=mid1)
                     for dip, attr in (('top', 'cut_z1'),
                                       ('bottom', 'cut_z0')):
                         if dip not in kinds and 'island' not in kinds:
@@ -1002,7 +1044,7 @@ class CutStoneWall:
                                              c.z0), is_bottom=False)
                         if keep < 1.0:
                             continue
-                        nc = _rep(c, t0=mid0, t1=mid1, end0='press',
+                        nc = replace(c, t0=mid0, t1=mid1, end0='press',
                                   end1='press',
                                   key=c.key + (709, oi), **kw)
                         setattr(nc, attr, hl)
@@ -1014,13 +1056,13 @@ class CutStoneWall:
                     if c.seg != seg_i or abs(c.z0 - src.z0) > 1e-6:
                         continue
                     if side == 'end1' and abs(c.t1 - edge) < 1e-6:
-                        nc = _rep(c, t1=target, end1='press',
+                        nc = replace(c, t1=target, end1='press',
                                   key=c.key + (703, oi))
                         nc.cut1 = line
                         cells[i] = nc
                         break
                     if side == 'end0' and abs(c.t0 - edge) < 1e-6:
-                        nc = _rep(c, t0=target, end0='press',
+                        nc = replace(c, t0=target, end0='press',
                                   key=c.key + (704, oi))
                         nc.cut0 = line
                         cells[i] = nc
@@ -1040,11 +1082,11 @@ class CutStoneWall:
                     if mean_w >= 1.1:
                         # a printable wedge with one angled cut
                         if side == 'end1':
-                            nc = _rep(src, t1=target, end1='press',
+                            nc = replace(src, t1=target, end1='press',
                                       key=src.key + (706, oi))
                             nc.cut1 = line
                         else:
-                            nc = _rep(src, t0=target, end0='press',
+                            nc = replace(src, t0=target, end0='press',
                                       key=src.key + (707, oi))
                             nc.cut0 = line
                         cells.append(nc)
@@ -1094,7 +1136,7 @@ class CutStoneWall:
                     else:
                         kw.update(t0=(min(sline) - _CUT_MARGIN_MM)
                                   if sline else target, end0='press')
-                    nc = _rep(src, key=src.key + (708, oi), **kw)
+                    nc = replace(src, key=src.key + (708, oi), **kw)
                     if side == 'end1':
                         nc.cut1 = sline
                     else:
@@ -1102,29 +1144,26 @@ class CutStoneWall:
                     cells.append(nc)
         return cells, posed
 
+    #: O6 slot system: the leaf-channel width split surround units
+    #: leave between their front/back halves (leaf thickness +
+    #: clearance).  0 until O6 wires it to the leaf.
+    slot_gap_mm: float = 0.0
+
     def _posed_cell(self, seg_i, oi, tag, t, z, w, d, ang,
-                    split=None, taper=0.0) -> list[_Cell]:
-        """Posed surround cell(s); with ``split`` (slot system) the
-        unit becomes front+back pair leaving the leaf channel between."""
-        g = getattr(self, '_slot_gap', 0.0) if split else 0.0
+                    split=None, taper=0.0) -> list[_Posed]:
+        """Posed surround unit(s); with ``split`` (slot system) the
+        unit becomes a front+back pair leaving the leaf channel
+        between."""
+        g = self.slot_gap_mm if split else 0.0
         T = self.thickness_mm
         p = self.surround_proud_mm
         qs = [(-p, T + p)] if not split else \
              [(-p, (T - g) / 2.0), ((T + g) / 2.0, T + p)]
-        outs = []
-        for qi, (q0, q1) in enumerate(qs):
-            c = _Cell(seg=seg_i, t0=t - w / 2.0, t1=t + w / 2.0,
-                      end0='face', end1='face', z0=z - d / 2.0,
-                      z1=z + d / 2.0, is_top=False, is_bottom=False,
-                      key=(801, oi, tag, qi))
-            c.pose = (t, z, ang)
-            c.pdims = (w, d)
-            c.qspan = (q0, q1)
-            c.taper = taper
-            outs.append(c)
-        return outs
+        return [_Posed(seg=seg_i, key=(801, oi, tag, qi), t=t, z=z,
+                       w=w, d=d, ang=ang, qspan=(q0, q1), taper=taper)
+                for qi, (q0, q1) in enumerate(qs)]
 
-    def _frame_cells(self, op, seg_i, tc, rng, oi) -> list[_Cell]:
+    def _frame_cells(self, op, seg_i, tc, rng, oi) -> list[_Posed]:
         """'ring' surround for a rectangular opening: the circle's
         voussoir ring generalized to a square — a row of small units
         along each edge + a square block at each outer corner (the
@@ -1139,13 +1178,13 @@ class CutStoneWall:
         grounded = z0 < 0.5 and not self.laid_flat   # a door: the
         #                       ground is the bottom edge — no bottom
         #                       row, side rows root into the seat
-        out: list[_Cell] = []
-        edges = [('R', tc + w2 + ring / 2.0, z0, z1, np.pi / 2.0),
-                 ('L', tc - w2 - ring / 2.0, z0, z1, np.pi / 2.0),
-                 ('T', tc, z1 + ring / 2.0, None, 0.0)]
+        out: list[_Posed] = []
+        edges = [('R', tc + w2 + ring / 2.0, z0, z1),
+                 ('L', tc - w2 - ring / 2.0, z0, z1),
+                 ('T', tc, z1 + ring / 2.0, None)]
         if not grounded:
-            edges.append(('B', tc, z0 - ring / 2.0, None, 0.0))
-        for ei, (side, a, b, c_, ang) in enumerate(edges):
+            edges.append(('B', tc, z0 - ring / 2.0, None))
+        for ei, (side, a, b, c_) in enumerate(edges):
             if side in ('L', 'R'):
                 length, ctr0, along_z = z1 - z0, (b + c_) / 2.0, True
             else:
@@ -1180,12 +1219,12 @@ class CutStoneWall:
                 0.0, split)
         return out
 
-    def _surround_cells(self, op, P, seg_i, tc, rng, oi) -> list[_Cell]:
+    def _surround_cells(self, op, P, seg_i, tc, rng, oi) -> list[_Posed]:
         vw, ring = self.surround_vw, self.surround_ring
         jd, jh = self.surround_jd, self.surround_jh
         frac = self.surround_frac
         split = op.slot
-        out: list[_Cell] = []
+        out: list[_Posed] = []
         w2 = op.width_mm / 2.0
         if op.profile == 'auto' and op.head == 'lintel' and (
                 op.surround == 'ring'
@@ -1259,16 +1298,16 @@ class CutStoneWall:
                     taper=min(dth * ring * scale, 0.5 * step))
         return out
 
-    def _place_posed(self, cell: _Cell, segs: list[_Seg],
+    def _place_posed(self, u: _Posed, segs: list[_Seg],
                      seat_z: float) -> trimesh.Trimesh:
         """Place one surround unit: an ordinary block kernel rotated to
-        the cell's pose angle — voussoirs are just rotated blocks."""
-        seg = segs[cell.seg]
+        the unit's pose angle — voussoirs are just rotated blocks."""
+        seg = segs[u.seg]
         brng = np.random.default_rng(
-            (self.seed * 1_000_003 + hash(cell.key)) & 0x7FFFFFFF)
-        w, d = cell.pdims
-        t, z, ang = cell.pose
-        q0, q1 = cell.qspan
+            (self.seed * 1_000_003 + hash(u.key)) & 0x7FFFFFFF)
+        w, d = u.w, u.d
+        t, z, ang = u.t, u.z, u.ang
+        q0, q1 = u.qspan
         ro = self.surround_ro
         chip = self.surround_chip
         rel = self.relief_mm if isinstance(self.relief_mm, (int, float)) \
@@ -1287,7 +1326,7 @@ class CutStoneWall:
             g = 2.0 * tau * np.log(2.0)
         w += g
         d += g
-        taper = getattr(cell, 'taper', 0.0)
+        taper = u.taper
         if self.laid_flat:
             body = _block_mesh(w, d, q1 - q0, chip, ro, rel,
                                self.relief_wl, False, brng,

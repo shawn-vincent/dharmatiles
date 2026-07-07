@@ -19,24 +19,24 @@ replaces the arc with one spanning block.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
-# Surround sizing per family is passed in by the wall (voussoir width,
-# ring depth, jamb depth); these are the shared constants.
-_ARC_SAMPLES   = 48     # profile arc tessellation
-_KEYSTONE      = 1.18   # apex voussoir scale
-_JOINT_FRAC    = 0.96   # voussoir width fraction (rest reads as joint)
-_MIN_KEEP_MM   = 2.6    # trimmed wall-cell remnants below this are dropped
-_SILL_OVER_MM  = 2.0    # sill slab overhang past the jambs
-_SILL_H_MM     = 2.4
+_ARC_SAMPLES = 48       # profile arc tessellation
 
 
 @dataclass
 class Opening:
     """A door (sill 0), window (sill > 0), or — on a laid_flat wall —
-    a hatch/well.  ``at`` is the centre along the spine in SQUARES."""
+    a hatch/well.  ``at`` is the centre along the spine in SQUARES.
+
+    On a standing wall the profile lives in (run-position, height):
+    ``sill_mm``/``head_mm`` are heights above the wall seat.  On a
+    ``laid_flat`` wall (a floor) the same profile lies in the
+    pavement plane: ``at`` stays the run position and ``sill_mm``/
+    ``head_mm`` become the PLAN-DEPTH extent of the hatch, measured
+    from the spine toward the wall's body side."""
     at:        float
     width_mm:  float = 22.0
     sill_mm:   float = 0.0
@@ -52,8 +52,34 @@ class Opening:
     #: lintel head) take 'ring'; standing walls take 'jambs'.
     surround:  str   = 'auto'        # 'auto' | 'jambs' | 'ring'
     leaf:      object = None         # Leaf | None
-    slot:      bool  = False
-    key:       tuple = field(default=())
+    slot:      bool  = False         # O6 (not yet implemented)
+
+    def __post_init__(self):
+        if self.head not in ('arch', 'lintel'):
+            raise ValueError(f"Opening.head must be 'arch' or 'lintel', "
+                             f'got {self.head!r}')
+        if self.surround not in ('auto', 'jambs', 'ring'):
+            raise ValueError(f"Opening.surround must be 'auto', 'jambs' "
+                             f"or 'ring', got {self.surround!r}")
+        if not (self.profile == 'auto' or self.profile == 'circle'
+                or isinstance(self.profile, (list, tuple, np.ndarray))):
+            raise ValueError(f'Opening.profile must be \'auto\', '
+                             f'\'circle\' or a point sequence, '
+                             f'got {self.profile!r}')
+        if self.width_mm <= 0.0:
+            raise ValueError('Opening.width_mm must be positive')
+        if self.head_mm <= self.sill_mm:
+            raise ValueError('Opening.head_mm must exceed sill_mm')
+        if self.surround == 'ring' and not (
+                self.profile == 'auto' and self.head == 'lintel'):
+            raise ValueError(
+                "surround='ring' requires profile='auto' with "
+                "head='lintel' (a circle/custom profile already gets "
+                'a full voussoir ring)')
+        if self.slot:
+            raise NotImplementedError(
+                'Opening.slot is the O6 slot system — not implemented '
+                'yet (design: docs/design/walls-doors.md)')
 
 
 def arch_arc(op: Opening, tc: float) -> np.ndarray:

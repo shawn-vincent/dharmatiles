@@ -32,6 +32,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+import shapely.geometry as sgeom
 import trimesh
 
 from ..core.color import Material
@@ -215,7 +216,6 @@ def _planks_leaf(outline, th: float, rng: np.random.Generator, *,
 def _bars_leaf(outline, th: float) -> trimesh.Trimesh:
     """Grille: a frame band following the profile boundary (an
     annulus on a round opening) + vertical round bars."""
-    import shapely.geometry as sgeom
     x0, z0, x1, z1 = outline.bounds
     inner = outline.buffer(-_BAR_FRAME)
     parts = []
@@ -271,7 +271,6 @@ def build_leaf(leaf: Leaf, profile: np.ndarray,
     round (embedded into jamb reveals, sill, and surround).  y ∈
     [0, thickness] is positioned by the CALLER (the wall knows its
     own thickness and reveal planes)."""
-    import shapely.geometry as sgeom
     th = leaf.thickness_mm
     outline = sgeom.Polygon(profile).buffer(_FUSE_MM, quad_segs=8)
     bounds = outline.bounds
@@ -288,14 +287,13 @@ def build_leaf(leaf: Leaf, profile: np.ndarray,
     elif leaf.kind == 'bars':
         s = _bars_leaf(outline, th)     # bars don't swing
     elif leaf.kind == 'shutters':
-        import shapely.geometry as sg
         x0, z0, x1, z1 = bounds
         xm = (x0 + x1) / 2.0
         halves = []
         for side, hx0, hx1 in (('left', x0, xm - 0.15),
                                ('right', xm + 0.15, x1)):
             half_out = outline.intersection(
-                sg.box(hx0, z0 - 1.0, hx1, z1 + 1.0))
+                sgeom.box(hx0, z0 - 1.0, hx1, z1 + 1.0))
             if half_out.is_empty:
                 continue
             if half_out.geom_type == 'MultiPolygon':

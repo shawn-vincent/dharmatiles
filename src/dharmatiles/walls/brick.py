@@ -81,8 +81,7 @@ class BrickWall(CutStoneWall):
         eligible = (not cell.is_bottom and not cell.is_top
                     and not cell.is_quoin
                     and cell.end0 == 'joint' and cell.end1 == 'joint'
-                    and not any(getattr(cell, a, None) is not None
-                                for a in ('cut_z0', 'cut_z1')))
+                    and cell.cut_z0 is None and cell.cut_z1 is None)
         if eligible and mrng.random() < self.missing_prob:
             return None
         return super()._place_block(cell, segs, seat_z, rng)
@@ -97,5 +96,4 @@ class BrickWall(CutStoneWall):
         return _block_mesh(lx, ly, lz, chip,
                            self.roundover_mm, self.relief_mm,
                            self.relief_wl, cell.is_top, rng,
-                           cut_planes=getattr(cell, 'cut_planes_local',
-                                              None))
+                           cut_planes=cell.cut_planes_local)
