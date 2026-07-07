@@ -184,13 +184,14 @@ units are RESHAPED to fill the space against a curved surround.  Per
 course band the bond is trimmed against the actual surround unit
 rectangles (toothing into the quoin alternation); too-narrow
 remnants are absorbed by their course neighbour (a mason's cut unit,
-never a column of exposed core); each 'press'-ended block then
-OVERSHOOTS `_SURROUND_FILL_MM` into the surround and is boolean-cut
-against the units dilated by `joint − surround_bond_press` — the
-stone gets an angled face hugging the arch/ring curve, with a thin
-mortar joint (mortared) or pressed contact (drystone).  Scaled
-keystones grow outward only: nothing hangs below the arch soffit
-(FDM).
+never a column of exposed core); each cut side then gets a SINGLE
+LINEAR ANGLED CUT (least-squares support line of the surround region
+— units dilated by `joint − surround_bond_press` — within the band),
+not a literal curve trace.  The cut is one extra plane in the block
+kernel's smooth-max, so the cut arris gets the same roundover as
+every other edge; fieldstone applies the same line to its crack
+outline and the sphere-morph rounds it natively.  Scaled keystones
+grow outward only: nothing hangs below the arch soffit (FDM).
 
 ## Remaining questions for Shawn
 

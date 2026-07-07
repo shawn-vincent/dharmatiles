@@ -94,4 +94,6 @@ class BrickWall(CutStoneWall):
             chip = min(0.35 * min(lx, lz), 1.2)
         return _block_mesh(lx, ly, lz, chip,
                            self.roundover_mm, self.relief_mm,
-                           self.relief_wl, cell.is_top, rng)
+                           self.relief_wl, cell.is_top, rng,
+                           cut_planes=getattr(cell, 'cut_planes_local',
+                                              None))

@@ -475,7 +475,8 @@ class FieldstoneWall(CutStoneWall):
                 return z - top_drop            # flat cap plane (R6)
             return z + float(self._bed(seg_i, z, seg.L)(t))
 
-        def side(t_cut: float, end: str, off: float, inward: float):
+        def side(t_cut: float, end: str, off: float, inward: float,
+                 which: str = ''):
             """[(t, z), …] bottom→top along this side crack.  Interior
             band boundaries contribute two points (the drift changes
             where the neighbour changes) — a small shared jog.  ``off``
@@ -484,11 +485,17 @@ class FieldstoneWall(CutStoneWall):
             ``inward`` (+1 left side, −1 right side) orients the
             'face'-end margin."""
             if end == 'press':
-                # Butts an opening surround: straight edge exactly at
-                # the cut line, which already presses
-                # surround_bond_press INTO the jamb — drystone stones
-                # TOUCH; the union fuses the contact (no end margin,
-                # no drift wave that could open a gap).
+                # Butts an opening surround: the single angled cut
+                # line computed at trim time (already pressed
+                # surround_bond_press INTO the units) — drystone
+                # stones TOUCH; the union fuses the contact (no end
+                # margin, no drift wave that could open a gap).  The
+                # sphere-morph rounds the cut arris like every edge.
+                line = getattr(cell, which, None) if which else None
+                if line is not None:
+                    tA, tB = line
+                    return [(tA, zeff(cell.z0, tA)),
+                            (tB, zeff(cell.z1, tB))]
                 return [(t_cut, zeff(cell.z0, t_cut)),
                         (t_cut, zeff(cell.z1, t_cut))]
             if end == 'face':                  # wall end / corner arris
@@ -518,8 +525,8 @@ class FieldstoneWall(CutStoneWall):
                     pts.append((t, zpt))
             return pts
 
-        left  = side(cell.t0, cell.end0, -ov0, +1.0)
-        right = side(cell.t1, cell.end1, +ov1, -1.0)
+        left  = side(cell.t0, cell.end0, -ov0, +1.0, 'cut0')
+        right = side(cell.t1, cell.end1, +ov1, -1.0, 'cut1')
 
         def bed(z: float, ta: float, tb: float):
             n = max(2, int(abs(tb - ta) / 4.0) + 2)
