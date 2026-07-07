@@ -1,112 +1,160 @@
-# Walls — Doorways (design analysis)
+# Walls — Openings: doors, windows, hatches (design, rev 2)
 
-**2026-07-06, design-first round for Shawn's ask: "an elegant solution
-on how to incorporate doors into my walls."**  References:
-`docs/reference/walls/doors/` (photo truths in its README) + the
-official DungeonBlocks door/arch pieces measured below.  No
-implementation yet — this doc proposes the mechanism and lists the
-open decisions.
+**Rev 2, 2026-07-07.**  Rev 1 approved by Shawn ("All of your thoughts
+here sound good") with major additions folded in below: openings of
+arbitrary size and position; doors/windows unified; surrounds allowed
+to rise ABOVE low wall tops; arch AND lintel for fieldstone AND
+brick; a leaf taxonomy including open-at-angle and SLOT-LOADED
+swappable leaves.  References: `docs/reference/walls/doors/` (10
+photos + truths) and the official DungeonBlocks pieces.
 
-## What the official pieces do
+## Evidence recap
 
-Measured/rendered (scratchpad `ref-{ud-door,rr-arch,mt1-door}.png`):
+Official pieces: a doorway occupies a full square between jamb
+columns (clear width 19–27 mm); RR-102 builds its arch from
+individual voussoirs off quoin-stacked jambs; **RR-069/070 "Double
+Door Left/Right" are SEPARATE LEAF pieces** (85 mm tall) that pair
+with the Tall Arch walls — the officials already play the
+swappable-leaf game.
 
-| Piece | Read | Numbers |
-|---|---|---|
-| UD-010 Door | Floor square + freestanding arched DOORWAY assembly: round-top planked leaf, ring handle, hinges, thin surround with quoined jamb | 35×35 plan |
-| RR-102 Arch | Floor square + freestanding pointed arch: quoin-stacked jamb columns rising into individual wedge VOUSSOIRS | clear width ≈ 19 mm, piece 74 tall |
-| TS-015 / MT1-042 Door | TALL wall (77+ bbox) with integrated door + masonry above | clear width ≈ 26 mm |
-| RR-069/070 Double Door | Two-square gate leaves | 85 tall |
+Photo truths: doorway = opening + structurally distinct SURROUND +
+optional leaf; the bond flows AROUND the surround; voussoirs are
+radial (thin slabs in rubble work, ref-03/05; dressed wedges in 1–3
+orders, ref-05/06; bricks-on-end rowlock/segmental, ref-10); leaves
+are planked rectangles or arch-tops; sill slabs at window bases;
+**portcullis grooves are vertical channels cut into the jamb faces**
+(ref-08/09) — the medieval precedent for slot-loaded leaves.
 
-**The official design language: a doorway occupies a full square.**
-The opening spans between two jamb columns at the square's edges;
-plain wall squares butt on either side.  Doors imply the TALL wall
-format — an opening plus headroom does not fit the standard height.
+## The model
 
-## Photo truths (see reference README)
-
-1. Doorway = opening + structurally distinct SURROUND (+ optional
-   leaf).  2. The wall's bond flows AROUND the surround — courses butt
-into jamb stones; nothing is carved out of blocks.  3. Voussoirs are
-radial wedges from the jamb springing, keystone at apex; fieldstone
-arches are thin slabs radiating (ref-03/05), dressed arches larger
-wedges in 1–3 orders.  4. Leaves are planked rectangles (battens,
-studs, ring), square-headed under a tympanum or arch-topped.
-5. Threshold slab at the base.
-
-## The elegant mechanism: openings live in the LAYOUT
-
-The chassis already contains the answer twice over.  Crenellation IS
-an opening machine (it deletes cells inside crenel intervals at the
-top edge and re-cuts straddlers with textured 'face' flanks), and
-quoins/throughstones already force special cells.  A doorway is the
-same move in the middle of the wall — **no booleans, no carved
-blocks, everything stays a placed unit**:
+One concept covers doors, windows, and floor hatches:
 
 ```python
-CutStoneWall(spine=…, height_mm=…,
-             openings=[Doorway(at=0.5,          # squares along spine
-                               width_mm=22.0, height_mm=36.0,
-                               style='arch',    # 'arch'|'lintel'|'open'
-                               leaf='planks')]) # 'planks'|None
+Opening(at,                  # centre along the spine, in SQUARES (float)
+        width_mm  = 22.0,    # clear width — arbitrary
+        sill_mm   = 0.0,     # 0 = door; > 0 = window sill height
+        head_mm   = 36.0,    # clear opening top above the seat — arbitrary;
+                             # MAY exceed the wall height (see low walls)
+        head      = 'arch',  # 'arch' | 'lintel' — both, for EVERY family
+        rise_mm   = None,    # None = semicircular; less = segmental arch
+        leaf      = None,    # None | Leaf(...) — see taxonomy
+        slot      = False)   # portcullis-style channel for swap-in leaves
+
+CutStoneWall(spine=…, openings=[Opening(at=0.5), Opening(at=1.5,
+             sill_mm=14, head_mm=26, width_mm=12, head='lintel')])
 ```
 
-Build order per opening, all at the `_cells` stage:
+On a `laid_flat` wall (i.e. a floor) the same `Opening` is a HATCH: a
+rectangular gap in the pavement with a slab surround and an optional
+trapdoor leaf.
 
-1. **Exclusion**: drop cells inside the opening's (t, z) region;
-   trim straddlers to its edges — trimmed ends become 'face' (they
-   are textured automatically, like every wall end today).
-2. **Jambs**: force a quoin-style stack of dressed cells flanking the
-   opening (alternating depths — the existing quoin read).  For
-   fieldstone: larger squared stones, exactly ref-05.
-3. **Head**:
-   - `lintel`: one merged long cell spanning the opening (the
-     throughstone merge pattern) — the fieldstone/rustic default.
-   - `arch`: NEW but contained geometry — voussoir cells along the
-     arc, each an ordinary unit built in a PER-CELL ROTATED frame
-     (cells gain an optional `angle`; `_place_block` applies it).
-     Semicircular or segmental; keystone = middle voussoir enlarged.
-     Family-appropriate: dressed wedges (cut stone), thin radiating
-     slabs (fieldstone, ref-03), brick-on-end rowlock (brick).
-4. **Bond flows around** by construction: the layout solver treats
-   jamb/arch cells as pre-claimed intervals (same mechanism that
-   keeps bay cuts out of corner cells), so ordinary courses butt into
-   the surround.
-5. **Leaf** (optional): a separate solid in the opening plane —
-   vertical planks + two battens + stud grid + ring, square- or
-   arch-topped; recessed half the wall thickness.  Tagged WOOD so it
-   colors separately.
-6. **Threshold**: one flat slab cell at the base; the door's floor
-   opening is walkable (matters for laid_flat later: the same
-   `openings` list on a FLOOR is a hatch/pit surround for free).
+## Mechanism (unchanged in essence, approved rev 1)
 
-Guarantees preserved: everything is still `union(units + core)` —
-watertight, reveals over the core (the core gets the same exclusion,
-inset by reveal → the opening's inner faces are real textured jamb
-faces with mortar behind, not core planes), FDM-printable (arch
-voussoirs self-support; lintel spans are bridged by the core sheet
-behind).
+Openings live at the LAYOUT level — the crenellation/quoin/
+throughstone machinery generalized.  No booleans; every part remains
+a placed unit; the core takes the same exclusion (inset by reveal) so
+jamb reveals are real masonry.
 
-## Compatibility numbers (proposed defaults)
+1. **Exclusion** in (t, z): drop cells inside, trim straddlers —
+   trimmed ends become textured 'face'.
+2. **Jambs**: forced quoin-style stacks flanking the opening from
+   sill to springing.  Fieldstone: larger squared stones (ref-05);
+   brick: closer bricks; cut: dressed quoins.
+3. **Head**, per family × style (all six combinations supported):
+   | | `arch` | `lintel` |
+   |---|---|---|
+   | cut stone | dressed voussoir wedges, keystone | single dressed lintel block |
+   | fieldstone | thin SLAB voussoirs radiating (ref-03/05) | one big rough lintel slab |
+   | brick | rowlock bricks-on-end, segmental via `rise_mm` (ref-10) | timber lintel beam (WOOD) or stone lintel |
+   Voussoirs are ordinary unit cells with a per-cell ROTATION angle —
+   the only new geometry in the whole campaign.
+4. **Sill** (windows): one projecting slab cell under the opening.
+5. **Bond flows around** by construction (surround cells are
+   pre-claimed intervals in the layout solver).
 
-- Opening clear width **22 mm** (officials 19–27), centered on a
-  square; one doorway per square, like the official language.
-- Clear height **36 mm** above the seat — which requires the TALL
-  wall: a Doorway on a default-height wall auto-promotes it to
-  `top_mm=72.3` (official tall) unless the author explicitly says
-  otherwise.  (A 33.1-top wall has no headroom over a usable door.)
-- Threshold at pavement level; works on soil or `StoneFloor`.
+## Low walls: the surround rises ABOVE the top (new, Shawn)
 
-## Open questions for Shawn
+The point of low walls is to imply tall walls while keeping miniature
+access.  So an `Opening` whose `head_mm` exceeds the wall height is
+LEGAL and default-friendly: the jamb stacks and the arch/lintel are
+built to the opening's own height, proud of the wall top — a low wall
+with a full-height arch rising out of it (the walled-garden-gate
+read, ref-06/07).  Consequences by construction:
 
-1. **Head style default**: arch (officials, most references) or flat
-   lintel (simpler, very drystone)?  Proposal: `arch` for cut
-   stone/brick, `lintel` for fieldstone, both available.
-2. **Leaf default**: integrated closed planked door (officials do
-   this) vs open passage?  Proposal: open (`leaf=None`) by default,
-   `leaf='planks'` opt-in.
-3. **Auto-tall**: OK that adding a Doorway promotes a default wall to
-   the official tall height?
-4. Double-door / gate (2-square opening) in gen-1 or later?
-5. Your reference image from this thread didn't reach my cache — I
-   couldn't see it.  What did it show / should it join the set?
+- surround cells are exempt from the wall-height clip and from the
+  ruin envelope (a ruined wall keeps its surviving arch — the classic
+  ruin picture, and exactly what RR-126 "Tall Arch Broken" sells);
+- the exposed back/top of the above-wall surround is textured like
+  any face (real modeled surfaces, R2);
+- no auto-tall promotion needed (rev 1's proposal is DEAD): the
+  default wall stays at the official 33.1 top and the doorway rises
+  to its own head height.  Tall walls remain available for enclosed
+  doorways with masonry above (TS-015/MT1-042 style).
+
+## Leaves (the word is "leaf")
+
+Door leaf / window leaf (shutter) / hatch leaf (trapdoor).  A leaf is
+a separate solid fitted to the opening's clear rectangle (leaves stay
+RECTANGULAR even under arches — ref-02's tympanum or an arch-top
+extension fills the difference when `fill='arch'`).
+
+**Types** (each a small parametric generator, WOOD-tagged unless
+noted):
+
+| Type | Read | Use |
+|---|---|---|
+| `planks` | vertical planks + 2–3 ledges (battens) + stud grid + ring | the default door |
+| `double` | two `planks` leaves meeting at centre | gates (2-square openings, later) |
+| `shutters` | pair of small side-hinged plank leaves | windows |
+| `bars` | vertical round bars + frame (ROCK/metal tone) | prisons, window grilles |
+| `portcullis` | square grid lattice, pointed feet | gates |
+| `broken` | `planks` with a ragged missing corner | ruins |
+| `trapdoor` | planked square + ring, flush | floor hatches |
+
+**States**: `closed` | `open(angle_deg, hinge='left'|'right'|'top')`
+— the leaf solid is rotated about its hinge edge and unioned standing
+open at any angle (ref-06's red door).  `None` = empty opening.
+
+**Slot system** (Shawn's swap idea; portcullis precedent ref-08/09):
+`slot=True` changes the game —
+
+- the jamb inner faces get vertical GROOVES (channel width =
+  leaf thickness + ~0.5 mm clearance, depth ≈ 1.2 mm, chamfered
+  lead-in), running from the surround TOP down to the sill;
+- the head leaves a through-slot at the top of the channel: the leaf
+  plane sits mid-thickness, BEHIND the arch/lintel face order, so the
+  slot enters cleanly from above — trivially so on above-wall
+  surrounds, where the slot mouth is proud of the wall top;
+- the leaf becomes a SEPARATE PRINT: `Leaf.standalone()` emits a
+  matching STL (tongue edges sized to the grooves, same width/head
+  params), so one wall accepts many leaves — closed door, portcullis,
+  bars, broken door, or nothing — swapped during play.  This is
+  exactly the official RR Double-Door-and-Tall-Arch pairing, done
+  parametrically.
+
+## Compatibility defaults
+
+Clear width 22 mm (officials 19–27); door head 36 mm above seat;
+window default sill 14, head 26, width 12; slot clearance 0.5 mm
+total (tune on first print); leaf thickness 2.6 mm.
+
+## Implementation stages (each shippable, per the campaign method)
+
+- **O1** layout exclusion + jambs + LINTEL heads, all three families,
+  open passage (no leaf).  The whole model except arches and leaves.
+- **O2** arch heads (voussoir cells with rotation), all families.
+- **O3** above-wall surrounds + ruin exemption.
+- **O4** windows (sills) + floor hatches via laid_flat.
+- **O5** integrated leaves: planks/shutters/bars, closed and
+  open-at-angle.
+- **O6** slot system + standalone leaf prints (portcullis, swaps).
+
+## Remaining questions for Shawn
+
+1. Gates (2-square double doors) — in scope after O5?
+2. Leaf material: separate WOOD colour group is assumed — OK?
+3. Both of your reference images from this thread failed to reach my
+   image cache (I've proceeded with the online set per your
+   instruction).  If they showed something these references don't
+   cover, drop the files into `docs/reference/walls/doors/` or
+   describe them and I'll fold them in.

@@ -12,6 +12,11 @@ pieces measured/rendered in the design doc.
 | `ref-03-lintel-doorway.jpg` | Ruined coursed-rubble wall, pointed arch of thin SLAB voussoirs radiating fan-wise, jambs of larger squared blocks, coursed rubble continuing above. The drystone-compatible arch. |
 | `ref-04-gate-arch.jpg` | Fortified gate: arch in a massive wall, context piece. |
 | `ref-05-rough-stone-doorway.jpg` | **The money shot for us**: rubble/fieldstone wall + arched doorway whose surround is DRESSED larger blocks (block jambs, two concentric voussoir rings); the rubble coursing flows around the dressed surround. Exactly our fieldstone family + a surround. |
+| `ref-06-garden-wall-arch.jpg` | Walled-garden gate (Parham): dressed stone arch + quoined jamb surround set in a BRICK wall; red planked door leaf standing OPEN at an angle. Surround-in-contrasting-family + open leaf state. |
+| `ref-07-walled-garden-gate.jpg` | Walled-garden gateway, context. |
+| `ref-08-portcullis-grooves.jpg` | **Slot-leaf precedent** (Cahir Castle): vertical portcullis GROOVES cut into the dressed jamb blocks — a channel the leaf slides in.  Exactly the mechanism for swappable printed leaves. |
+| `ref-09-portcullis-slot.jpg` | Portcullis slot (Maastricht Helpoort), second angle. |
+| `ref-10-brick-segmental-arch.jpg` | Brick SEGMENTAL arch: bricks on end (rowlock) radiating over an opening — the brick-family arch head. |
 
 Geometric truths (all references agree):
 
