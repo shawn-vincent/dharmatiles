@@ -201,6 +201,10 @@ class FieldstoneWall(CutStoneWall):
     surround_ro:   float = 0.55
     surround_frac: float = 1.10    # drystone: pressed contact, the
                                    # union fuses slab against slab
+    surround_bond_press: float = 0.6   # wall stones press INTO the
+                                   # jambs (covers the jamb chip pull
+                                   # 0.35 + ring noise 0.16): stones
+                                   # must TOUCH, never a gap
 
     def __init__(self, spine, *,
                  course_mm: tuple[float, float] = (2.2, 5.2),
@@ -479,6 +483,14 @@ class FieldstoneWall(CutStoneWall):
             overlap); the curve itself stays keyed at t_cut.
             ``inward`` (+1 left side, −1 right side) orients the
             'face'-end margin."""
+            if end == 'press':
+                # Butts an opening surround: straight edge exactly at
+                # the cut line, which already presses
+                # surround_bond_press INTO the jamb — drystone stones
+                # TOUCH; the union fuses the contact (no end margin,
+                # no drift wave that could open a gap).
+                return [(t_cut, zeff(cell.z0, t_cut)),
+                        (t_cut, zeff(cell.z1, t_cut))]
             if end == 'face':                  # wall end / corner arris
                 # Recede inside the tile plane: texture displacement
                 # (~0.6 mm) past the boundary gets plane-cut — the

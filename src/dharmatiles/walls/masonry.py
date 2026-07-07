@@ -102,8 +102,8 @@ class _Cell:
     seg:   int
     t0:    float
     t1:    float
-    end0:  str             # 'joint' | 'face'  (start side along d)
-    end1:  str
+    end0:  str             # 'joint' | 'face' | 'press'  (start side
+    end1:  str             # along d; press = butts an opening surround)
     z0:    float           # course interval, wall-local z (0 = seat)
     z1:    float
     is_top:    bool
@@ -532,6 +532,13 @@ class CutStoneWall:
     #: surround units stand proud of both wall faces (refs 05–07: the
     #: surround is a distinct order, not flush bond).
     surround_proud_mm: float = 0.30
+    #: how far the trimmed bond presses INTO the surround ring.  The
+    #: trim line moves this far past the surround's outer plane and
+    #: the cut end ('press') runs straight at it, so wall units
+    #: interpenetrate the jambs and the union fuses the contact.
+    #: 0 for mortared families (the bond meets the surround at an
+    #: ordinary joint); drystone overrides — stones must TOUCH.
+    surround_bond_press: float = 0.0
 
     def _lay(self, seg: _Seg) -> np.ndarray:
         """Flat-mode frame for meshes built in raw wall coordinates
@@ -749,11 +756,14 @@ class CutStoneWall:
                     out.append(c)
                     continue
                 import dataclasses as _dc
+                press = self.surround_bond_press
                 if pl - c.t0 >= _MIN_KEEP_MM:
-                    out.append(_dc.replace(c, t1=pl, end1='face',
+                    out.append(_dc.replace(c, t1=pl + press,
+                                           end1='press',
                                            key=c.key + (701, oi)))
                 if c.t1 - pr >= _MIN_KEEP_MM:
-                    out.append(_dc.replace(c, t0=pr, end0='face',
+                    out.append(_dc.replace(c, t0=pr - press,
+                                           end0='press',
                                            key=c.key + (702, oi)))
             cells = out
             # 2. surround
@@ -1146,10 +1156,13 @@ class CutStoneWall:
         hook — FieldstoneWall jitters per-stone face recession here."""
         j2 = self.joint_mm / 2.0
         fr = self.face_recess_mm
-        x0 = cell.t0 + (j2 if cell.end0 == 'joint'
-                        else rng.uniform(0.0, fr))
-        x1 = cell.t1 - (j2 if cell.end1 == 'joint'
-                        else rng.uniform(0.0, fr))
+        # 'press' ends (opening trim) sit like joints: the cut line
+        # already includes any surround_bond_press, so the unit runs
+        # tight to it — never the free-end recess draw.
+        x0 = cell.t0 + (rng.uniform(0.0, fr) if cell.end0 == 'face'
+                        else j2)
+        x1 = cell.t1 - (rng.uniform(0.0, fr) if cell.end1 == 'face'
+                        else j2)
         y0 = rng.uniform(0.0, fr)
         y1 = self.thickness_mm - rng.uniform(0.0, fr)
         if self.laid_flat:
