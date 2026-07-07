@@ -739,35 +739,53 @@ class CutStoneWall:
             tc = a_mm - arcs[seg_i]
             P = build_profile(op, tc)
             self._op_profiles.append((seg_i, P, op, tc))
-            ring = self.surround_ring
-            # 1. exclusion: trim wall cells against the profile dilated
-            #    by the ring depth (they butt the surround's outer edge).
+            # 1. surround FIRST — the bond is trimmed against the
+            #    actual surround units, not the profile.
+            op_cells = self._surround_cells(op, P, seg_i, tc, rng, oi)
+            posed += op_cells
+            # Each unit's rotated rectangle in the wall's (t, z) plane
+            # (matching _place_posed's rotation conventions).
+            quads = []
+            for u in op_cells:
+                t, z, ang = u.pose
+                w, d = u.pdims
+                ca, sa = np.cos(ang), np.sin(ang)
+                quads.append(np.array(
+                    [[t + dx * ca + dz * sa, z - dx * sa + dz * ca]
+                     for dx, dz in ((-w / 2, -d / 2), (w / 2, -d / 2),
+                                    (w / 2, d / 2), (-w / 2, d / 2))]))
+            # 2. exclusion: per course band, the bond runs to the
+            #    surround units actually IN that band (+ the normal
+            #    'press'/joint treatment at the cut).  The bond tooths
+            #    into the quoin-alternating jamb courses and follows
+            #    the arch extrados — the gap to the surround is an
+            #    ordinary joint, never an exposed mortar wedge.
             out = []
+            press = self.surround_bond_press
             for c in cells:
                 if c.seg != seg_i:
                     out.append(c)
                     continue
-                ext = band_extent(P, c.z0, c.z1)
-                if ext is None:
+                exts = [e for q in quads
+                        if (e := band_extent(q, c.z0, c.z1)) is not None]
+                if not exts:
                     out.append(c)
                     continue
-                pl, pr = ext[0] - ring, ext[1] + ring
-                if c.t1 <= pl + 1e-6 or c.t0 >= pr - 1e-6:
+                lo = min(e[0] for e in exts)
+                hi = max(e[1] for e in exts)
+                if c.t1 <= lo + 1e-6 or c.t0 >= hi - 1e-6:
                     out.append(c)
                     continue
                 import dataclasses as _dc
-                press = self.surround_bond_press
-                if pl - c.t0 >= _MIN_KEEP_MM:
-                    out.append(_dc.replace(c, t1=pl + press,
+                if lo - c.t0 >= _MIN_KEEP_MM:
+                    out.append(_dc.replace(c, t1=lo + press,
                                            end1='press',
                                            key=c.key + (701, oi)))
-                if c.t1 - pr >= _MIN_KEEP_MM:
-                    out.append(_dc.replace(c, t0=pr - press,
+                if c.t1 - hi >= _MIN_KEEP_MM:
+                    out.append(_dc.replace(c, t0=hi - press,
                                            end0='press',
                                            key=c.key + (702, oi)))
             cells = out
-            # 2. surround
-            posed += self._surround_cells(op, P, seg_i, tc, rng, oi)
         return cells, posed
 
     def _posed_cell(self, seg_i, oi, tag, t, z, w, d, ang,
@@ -838,8 +856,12 @@ class CutStoneWall:
                 mid = (len(units) - 1) // 2
                 for k, (p, n, ang, step, dth) in enumerate(units):
                     scale = _KEYSTONE if k == mid else 1.0
+                    # scaled units grow OUTWARD only: the keystone
+                    # soffit stays ON the arc — nothing hangs below
+                    # the arch head (FDM printability).
+                    pos = p + n * ((scale - 1.0) * ring / 2.0)
                     out += self._posed_cell(
-                        seg_i, oi, 40 + k, p[0], p[1],
+                        seg_i, oi, 40 + k, pos[0], pos[1],
                         step * frac * scale, ring * scale,
                         ang, split,
                         taper=min(dth * ring * scale, 0.5 * step))
@@ -856,8 +878,9 @@ class CutStoneWall:
             apex = max(u[0][1] for u in units)
             for k, (p, n, ang, step, dth) in enumerate(units):
                 scale = _KEYSTONE if abs(p[1] - apex) < step * 0.6 else 1.0
+                pos = p + n * ((scale - 1.0) * ring / 2.0)   # outward only
                 out += self._posed_cell(
-                    seg_i, oi, 60 + k, p[0], p[1],
+                    seg_i, oi, 60 + k, pos[0], pos[1],
                     step * frac * scale, ring * scale, ang, split,
                     taper=min(dth * ring * scale, 0.5 * step))
         return out
