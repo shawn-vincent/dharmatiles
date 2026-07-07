@@ -466,14 +466,33 @@ class FieldstoneWall(CutStoneWall):
         top_drop = (float(brng.uniform(0.0, _COPING_TOP_DROP_MM))
                     if coping else 0.0)
 
+        def _hline(attr: str, t: float):
+            line = getattr(cell, attr, None)
+            if line is None:
+                return None
+            zA, zB = line
+            u = (t - cell.t0) / max(cell.t1 - cell.t0, 1e-9)
+            return zA + (zB - zA) * u
+
         def zeff(z: float, t: float) -> float:
             """Actual (wobbled) height of the bed line at t."""
             if cell.is_bottom and z <= cell.z0 + 1e-9:
                 # flat buried seat (token embed when seated on pavement)
                 return -getattr(self, '_embed_eff', self.embed_mm)
-            if cell.is_top and z >= cell.z1 - 1e-9:
-                return z - top_drop            # flat cap plane (R6)
-            return z + float(self._bed(seg_i, z, seg.L)(t))
+            base = (z - top_drop if cell.is_top and z >= cell.z1 - 1e-9
+                    else z + float(self._bed(seg_i, z, seg.L)(t)))
+            # opening-fit horizontal cuts: the top edge follows the
+            # line under a ring/arch bottom, the bottom edge the line
+            # over a keystone (the sphere-morph rounds the cut arris)
+            if z >= cell.z1 - 1e-9:
+                cut = _hline('cut_z1', t)
+                if cut is not None:
+                    base = min(base, cut)
+            if z <= cell.z0 + 1e-9 and not cell.is_bottom:
+                cut = _hline('cut_z0', t)
+                if cut is not None:
+                    base = max(base, cut)
+            return base
 
         def side(t_cut: float, end: str, off: float, inward: float,
                  which: str = ''):
@@ -559,6 +578,12 @@ class FieldstoneWall(CutStoneWall):
             ovt = min(float(brng.uniform(*self.bed_overlap_mm)), cap)
             ovb = 0.0 if cell.is_bottom else min(
                 float(brng.uniform(*self.bed_overlap_mm)), cap)
+            # opening-fit cut edges stay ON their line (the press is
+            # already folded into the line via the region dilation)
+            if getattr(cell, 'cut_z1', None) is not None:
+                ovt = 0.0
+            if getattr(cell, 'cut_z0', None) is not None:
+                ovb = 0.0
             zlo, zhi = pts[:, 1].min(), pts[:, 1].max()
             u = (pts[:, 1] - zlo) / max(zhi - zlo, 1e-9)
             pts[:, 1] += ovt * u - ovb * (1.0 - u)

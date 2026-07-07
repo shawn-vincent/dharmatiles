@@ -793,10 +793,64 @@ class CutStoneWall:
 
             def _rep(c, **kw):
                 nc = _dc.replace(c, **kw)
-                for a in ('cut0', 'cut1', 'side_bands', 'coping'):
+                for a in ('cut0', 'cut1', 'cut_z0', 'cut_z1',
+                          'side_bands', 'coping'):
                     if hasattr(c, a):
                         setattr(nc, a, getattr(c, a))
                 return nc
+
+            def _cut_line_h(c, side):
+                """Horizontal counterpart of _cut_line: the support
+                line UNDER a surround hanging into the band from
+                above (side 'T' → block keeps full width, cut from
+                the top: the stones beneath a ring/arch bottom) or
+                OVER one rising from below ('B': the bond flowing
+                over a keystone).  Returns (z@t0, z@t1) or None."""
+                ts = np.linspace(c.t0 + 0.05, c.t1 - 0.05, 9)
+                pts = []
+                for t in ts:
+                    col = region.intersection(sgeom.LineString(
+                        [(t, c.z0 - 0.5), (t, c.z1 + 0.5)]))
+                    if col.is_empty:
+                        continue
+                    cb = col.bounds
+                    pts.append((t, cb[1] if side == 'T' else cb[3]))
+                if not pts:
+                    return None
+                ta = np.array([p[0] for p in pts])
+                za = np.array([p[1] for p in pts])
+                if len(pts) == 1:
+                    m, k = 0.0, float(za[0])
+                else:
+                    m, k = np.polyfit(ta, za, 1)
+                res = za - (m * ta + k)
+                k += float(res.min() if side == 'T' else res.max())
+                return (float(m * c.t0 + k), float(m * c.t1 + k))
+
+            def _columns(c):
+                """Classify how the surround region blocks the cell:
+                per t-column, does it span the full band height, hang
+                from the top, or rise from the bottom?"""
+                ts = np.linspace(max(c.t0, lo) + 0.05,
+                                 min(c.t1, hi) - 0.05, 7)
+                kinds = set()
+                for t in ts:
+                    col = region.intersection(sgeom.LineString(
+                        [(t, c.z0 - 0.5), (t, c.z1 + 0.5)]))
+                    if col.is_empty:
+                        continue
+                    cb = col.bounds
+                    at_top = cb[3] >= c.z1 - 0.05
+                    at_bot = cb[1] <= c.z0 + 0.05
+                    if at_top and at_bot:
+                        kinds.add('full')
+                    elif at_top:
+                        kinds.add('top')
+                    elif at_bot:
+                        kinds.add('bottom')
+                    else:
+                        kinds.add('full')   # island: no single cut fits
+                return kinds
 
             def _cut_line(z0, z1, side):
                 """A single linear angled cut clearing the surround
@@ -846,6 +900,39 @@ class CutStoneWall:
                 hi = max(e[1] for e in exts)
                 if c.t1 <= lo + 1e-6 or c.t0 >= hi - 1e-6:
                     out.append(c)
+                    continue
+                kinds = _columns(c)
+                if not kinds:
+                    out.append(c)
+                    continue
+                if kinds == {'top'} or kinds == {'bottom'}:
+                    # The surround only dips into the band from one
+                    # horizontal side: the block keeps its FULL width
+                    # with a single angled cut on its top (under a
+                    # ring/arch bottom) or bottom (over a keystone) —
+                    # never a dropped middle exposing the core.
+                    side = 'T' if kinds == {'top'} else 'B'
+                    line = _cut_line_h(c, side)
+                    if line is None:
+                        out.append(c)
+                        continue
+                    if side == 'T':
+                        pen = c.z1 - min(line)
+                        keep = max(line) - c.z0
+                    else:
+                        pen = max(line) - c.z0
+                        keep = c.z1 - min(line)
+                    if pen < 0.35:          # graze: fuses invisibly
+                        out.append(c)
+                        continue
+                    if keep < _MIN_KEEP_MM:
+                        continue            # nothing substantial left
+                    nc = _rep(c, key=c.key + (705, oi))
+                    if side == 'T':
+                        nc.cut_z1 = line
+                    else:
+                        nc.cut_z0 = line
+                    out.append(nc)
                     continue
                 lrem = lo - c.t0
                 rrem = c.t1 - hi
@@ -1314,23 +1401,39 @@ class CutStoneWall:
             lx, ly, lz = x1 - x0, y1 - y0, z1 - z0
         # Opening-fit cut lines → kernel planes in the block's local
         # frame (the along-height axis is local z standing, local y
-        # laid flat).  One straight angled plane per cut side.
+        # laid flat).  One straight angled plane per cut side —
+        # vertical-ish side cuts against jambs/rings, horizontal-ish
+        # cuts under a ring bottom (cut_z1) or over a keystone
+        # (cut_z0).
         cuts = []
         span = ly if self.laid_flat else lz
         zw0 = z0 - seat_z
-        for attr, sgn in (('cut0', -1.0), ('cut1', +1.0)):
+        for attr in ('cut0', 'cut1', 'cut_z0', 'cut_z1'):
             line = getattr(cell, attr, None)
             if line is None or span <= 1e-6:
                 continue
-            tA, tB = line
-            m = (tB - tA) / max(cell.z1 - cell.z0, 1e-9)
-            xA = tA + m * (zw0 - cell.z0) - x0
-            xB = xA + m * span
-            n2 = np.array([span, xA - xB]) * sgn
+            if attr in ('cut0', 'cut1'):
+                tA, tB = line          # t at cell.z0 / cell.z1
+                m = (tB - tA) / max(cell.z1 - cell.z0, 1e-9)
+                xA = tA + m * (zw0 - cell.z0) - x0
+                xB = xA + m * span
+                p, q = np.array([xA, 0.0]), np.array([xB, span])
+                want = (0, +1.0 if attr == 'cut1' else -1.0)
+            else:
+                zA, zB = line          # z at cell.t0 / cell.t1
+                m = (zB - zA) / max(cell.t1 - cell.t0, 1e-9)
+                hA = zA + m * (x0 - cell.t0) - zw0
+                hB = hA + m * lx
+                p, q = np.array([0.0, hA]), np.array([lx, hB])
+                want = (1, +1.0 if attr == 'cut_z1' else -1.0)
+            d = q - p
+            n2 = np.array([-d[1], d[0]])
+            if n2[want[0]] * want[1] < 0:
+                n2 = -n2
             n2 /= np.linalg.norm(n2)
             n3 = (np.array([n2[0], n2[1], 0.0]) if self.laid_flat
                   else np.array([n2[0], 0.0, n2[1]]))
-            cuts.append((n3, float(n2[0] * xA)))
+            cuts.append((n3, float(n2 @ p)))
         cell.cut_planes_local = cuts or None
         body = self._unit_mesh(lx, ly, lz, cell, brng)
 
