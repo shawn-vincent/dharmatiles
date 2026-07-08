@@ -52,6 +52,8 @@ _RING_T      = 0.38   # handle ring tube radius
 _BAR_R       = 0.65   # window/prison bar radius
 _BAR_PITCH   = 3.1    # bar spacing
 _BAR_FRAME   = 1.7    # bar frame band width (follows the profile)
+_PORT_RAIL_PITCH = 6.0  # portcullis horizontal-rail spacing
+_PORT_FOOT_MM    = 2.4  # pointed feet projecting below the bottom rail
 _GRAIN_AMP   = 0.13   # wood-grain carve depth
 _GRAIN_WL    = (0.8, 1.4)   # ridge pitch across the plank
 
@@ -73,6 +75,9 @@ class Leaf:
     (horizontal edge — a trapdoor lifts about its foot edge, a
     shutter awning tips out about its head).
     """
+    #: 'planks' | 'shutters' | 'bars' | 'trapdoor' | 'portcullis'.
+    #: A slot leaf (Opening.slot) slides rather than swings, so
+    #: ``open_deg`` is ignored there; 'portcullis' is a slot leaf.
     kind:         str   = 'planks'
     open_deg:     float = 0.0
     hinge:        str   = 'left'
@@ -81,7 +86,8 @@ class Leaf:
 
     @property
     def material(self) -> Material:
-        return Material.ROCK if self.kind == 'bars' else Material.WOOD
+        return (Material.ROCK if self.kind in ('bars', 'portcullis')
+                else Material.WOOD)
 
 
 def _box(extents, at, n_sub: int = 3) -> trimesh.Trimesh:
@@ -235,6 +241,45 @@ def _bars_leaf(outline, th: float) -> trimesh.Trimesh:
     return trimesh.boolean.intersection([s, clip], engine='manifold')
 
 
+def _portcullis_leaf(outline, th: float) -> trimesh.Trimesh:
+    """A dropped iron gate: a lattice of vertical round bars +
+    horizontal rails, the verticals tapering to POINTED FEET below the
+    bottom rail (the classic portcullis).  The grid is clipped to the
+    profile; the feet project past it (they spike into the sill)."""
+    x0, z0, x1, z1 = outline.bounds
+    grid = []
+    nv = max(2, int(round((x1 - x0) / _BAR_PITCH)))
+    xs = [x0 + (i + 0.5) * (x1 - x0) / nv for i in range(nv)]
+    for x in xs:
+        b = trimesh.creation.cylinder(radius=_BAR_R, height=z1 - z0,
+                                      sections=12)
+        b.apply_translation([x, th / 2.0, (z0 + z1) / 2.0])
+        grid.append(b)
+    nh = max(2, int(round((z1 - z0) / _PORT_RAIL_PITCH)))
+    for j in range(nh):
+        z = z0 + (j + 0.5) * (z1 - z0) / nh
+        b = trimesh.creation.cylinder(radius=_BAR_R, height=x1 - x0,
+                                      sections=12)
+        b.apply_transform(trimesh.transformations.rotation_matrix(
+            np.pi / 2.0, [0, 1, 0]))
+        b.apply_translation([(x0 + x1) / 2.0, th / 2.0, z])
+        grid.append(b)
+    s = trimesh.boolean.union(grid, engine='manifold')
+    clip = _prism(outline, -2.0, th + 2.0)
+    s = trimesh.boolean.intersection([s, clip], engine='manifold')
+    # Pointed feet: a downward cone under each vertical bar, spiking
+    # below the profile (not clipped) — they seat into the sill.
+    feet = [s]
+    for x in xs:
+        cone = trimesh.creation.cone(radius=_BAR_R, height=_PORT_FOOT_MM,
+                                     sections=12)
+        cone.apply_transform(trimesh.transformations.rotation_matrix(
+            np.pi, [1, 0, 0]))               # apex points down (−z)
+        cone.apply_translation([x, th / 2.0, z0])
+        feet.append(cone)
+    return trimesh.boolean.union(feet, engine='manifold')
+
+
 def _hinge_open(solid: trimesh.Trimesh, open_deg: float, hinge: str,
                 bounds, th: float) -> trimesh.Trimesh:
     """Rotate the leaf about its hinge edge — the dilated outline's
@@ -264,28 +309,47 @@ def _hinge_open(solid: trimesh.Trimesh, open_deg: float, hinge: str,
 
 
 def build_leaf(leaf: Leaf, profile: np.ndarray,
-               rng: np.random.Generator) -> trimesh.Trimesh:
+               rng: np.random.Generator, *,
+               slot_clearance: float | None = None) -> trimesh.Trimesh:
     """The leaf solid in the opening's local frame.  ``profile`` is
     the opening's closed polygon translated so its bbox corner is at
-    the origin; the leaf is that shape dilated by ``_FUSE_MM`` all
-    round (embedded into jamb reveals, sill, and surround).  y ∈
-    [0, thickness] is positioned by the CALLER (the wall knows its
-    own thickness and reveal planes)."""
+    the origin.  y ∈ [0, thickness] is positioned by the CALLER (the
+    wall knows its own thickness and reveal planes).
+
+    Fit (O5 vs O6) is set by ``slot_clearance``:
+
+    - ``None`` — an INTEGRATED leaf: the outline is dilated by
+      ``_FUSE_MM`` so it embeds into the jamb reveals / sill /
+      surround and the export union fuses it to the masonry.  It may
+      swing open about its hinge.
+    - a value — a SLOT leaf: the outline is ERODED by half the
+      clearance so it fits the mid-thickness channel WITHOUT touching
+      the surround, staying a separate removable object.  It slides
+      rather than swings, so ``open_deg`` is ignored."""
     th = leaf.thickness_mm
-    outline = sgeom.Polygon(profile).buffer(_FUSE_MM, quad_segs=8)
+    if slot_clearance is None:
+        outline = sgeom.Polygon(profile).buffer(_FUSE_MM, quad_segs=8)
+    else:
+        outline = sgeom.Polygon(profile).buffer(-slot_clearance / 2.0,
+                                                quad_segs=8)
+    swing = slot_clearance is None
     bounds = outline.bounds
     if leaf.kind == 'planks':
         s = _planks_leaf(outline, th, rng, ledges=True,
                          ring_frac=0.82 if leaf.hinge == 'left'
                          else 0.18)
-        s = _hinge_open(s, leaf.open_deg, leaf.hinge, bounds, th)
+        if swing:
+            s = _hinge_open(s, leaf.open_deg, leaf.hinge, bounds, th)
     elif leaf.kind == 'trapdoor':
         # lid ring sits centred, not at a closing edge
         s = _planks_leaf(outline, th, rng, ledges=False,
                          ring_frac=0.5)
-        s = _hinge_open(s, leaf.open_deg, leaf.hinge, bounds, th)
+        if swing:
+            s = _hinge_open(s, leaf.open_deg, leaf.hinge, bounds, th)
     elif leaf.kind == 'bars':
         s = _bars_leaf(outline, th)     # bars don't swing
+    elif leaf.kind == 'portcullis':
+        s = _portcullis_leaf(outline, th)   # slides in the slot
     elif leaf.kind == 'shutters':
         x0, z0, x1, z1 = bounds
         xm = (x0 + x1) / 2.0
@@ -300,8 +364,9 @@ def build_leaf(leaf: Leaf, profile: np.ndarray,
                 half_out = max(half_out.geoms, key=lambda g: g.area)
             half = _planks_leaf(half_out, th, rng, ledges=True,
                                 ring_frac=None)
-            half = _hinge_open(half, leaf.open_deg, side,
-                               half_out.bounds, th)
+            if swing:
+                half = _hinge_open(half, leaf.open_deg, side,
+                                   half_out.bounds, th)
             halves.append(half)
         s = trimesh.util.concatenate(halves)
     else:

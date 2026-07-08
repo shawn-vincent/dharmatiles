@@ -52,7 +52,12 @@ class Opening:
     #: lintel head) take 'ring'; standing walls take 'jambs'.
     surround:  str   = 'auto'        # 'auto' | 'jambs' | 'ring'
     leaf:      object = None         # Leaf | None
-    slot:      bool  = False         # O6 (not yet implemented)
+    #: slot system (O6): the surround units split front/back leaving a
+    #: mid-thickness CHANNEL; the leaf drops into it as a separate,
+    #: removable solid (a swappable portcullis / door / grille) rather
+    #: than fusing into the jambs.  Requires a leaf (its thickness sets
+    #: the channel width).
+    slot:      bool  = False
 
     def __post_init__(self):
         if self.head not in ('arch', 'lintel'):
@@ -76,10 +81,11 @@ class Opening:
                 "surround='ring' requires profile='auto' with "
                 "head='lintel' (a circle/custom profile already gets "
                 'a full voussoir ring)')
-        if self.slot:
-            raise NotImplementedError(
-                'Opening.slot is the O6 slot system — not implemented '
-                'yet (design: docs/design/walls-doors.md)')
+        if self.slot and self.leaf is None:
+            raise ValueError(
+                'Opening(slot=True) needs a leaf — the slot exists to '
+                'hold a removable leaf, whose thickness sets the '
+                'channel width (design: docs/design/walls-doors.md)')
 
 
 def springing(op: Opening) -> tuple[float, float]:

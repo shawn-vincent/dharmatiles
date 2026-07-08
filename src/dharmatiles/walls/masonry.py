@@ -68,6 +68,9 @@ _GROUND_EMB_MM = 2.0    # a grounded jamb/frame unit roots this far
 _GROUND_SILL_MM = 0.5   # sill below this reads as a door: the ground
                         # IS the bottom edge (no bottom surround row)
 _LINTEL_H_MM   = 4.5    # spanning lintel block height
+_SLOT_CLEAR_MM = 0.5    # total clearance in a slot channel (O6): the
+                        # leaf is thinner and narrower than the channel
+                        # by this, so it drops in and lifts out freely
 
 # Rubble hearting (E10/E27, chassis-level since the ruins work): a
 # sealed sheet of small rough stone chips through the wall body.
@@ -919,6 +922,10 @@ class CutStoneWall:
         jd, jh = self.surround_jd, self.surround_jh
         frac = self.surround_frac
         split = op.slot
+        if split:
+            # The channel is the leaf's thickness plus clearance; the
+            # surround units split front/back around it (_posed_cell).
+            self.slot_gap_mm = op.leaf.thickness_mm + _SLOT_CLEAR_MM
         out: list[_Posed] = []
         w2 = op.width_mm / 2.0
         if op.profile == 'auto' and op.head == 'lintel' and (
@@ -1056,13 +1063,19 @@ class CutStoneWall:
 
     def _leaf_parts(self, segs: list[_Seg], seat_z: float,
                     surface) -> list[trimesh.Trimesh]:
-        """Integrated leaves (design stage O5): each opening with a
-        ``leaf`` gets a separate WOOD-tagged solid (ROCK for bars)
+        """Leaves (design stages O5/O6): each opening with a ``leaf``
+        gets a separate WOOD-tagged solid (ROCK for bars/portcullis)
         fitted to its PROFILE — an arched doorway gets an arch-top
-        door, a circle a round grille/lid.  The leaf embeds into the
-        jamb reveals and surround all round, so the export union
-        fuses it to the masonry; it is NOT part of the wall's own
-        union (it keeps its material group)."""
+        door, a circle a round grille/lid.
+
+        An O5 leaf EMBEDS into the jamb reveals and surround all round,
+        so the export union fuses it to the masonry (an integrated
+        door).  An O6 ``slot`` leaf is the opposite: built undersized
+        by the slot clearance, it sits in the mid-thickness channel
+        WITHOUT touching the surround, so it stays a separate,
+        removable object in the same STL — a swappable portcullis /
+        door / grille.  Either way the leaf keeps its own material
+        group, never joining the wall's own union."""
         from .leaf import build_leaf
         out = []
         for li, (seg_i, P, op, tc) in enumerate(self._op_profiles):
@@ -1075,9 +1088,12 @@ class CutStoneWall:
             P = np.asarray(P, dtype=float)
             xmin = float(P[:, 0].min())
             zmin = float(P[:, 1].min())
-            body = build_leaf(leaf, P - [xmin, zmin], lrng)
-            # leaf plane mid-thickness on a wall; just under the
-            # walking surface on a floor (flush trapdoor lid).
+            body = build_leaf(leaf, P - [xmin, zmin], lrng,
+                              slot_clearance=(_SLOT_CLEAR_MM if op.slot
+                                              else None))
+            # leaf plane mid-thickness on a wall (the slot channel is
+            # centred there); just under the walking surface on a floor
+            # (flush trapdoor lid).
             q0 = 0.35 if self.laid_flat else \
                 (self.thickness_mm - leaf.thickness_mm) / 2.0
             seg = segs[seg_i]
