@@ -64,14 +64,21 @@ to a square (a row of small bricks per edge + square corner blocks).
 ``'auto'``: hatches in a pavement take ``'ring'`` (the jambs+lintel
 construction chopped the floor into weird slabs); standing walls
 take ``'jambs'``.  Not floor-specific — a single wall slab with a
-door in it takes the same frame via ``surround='ring'``.
+door in it takes the same frame via ``surround='ring'``.  ``'ring'``
+requires ``profile='auto'`` with ``head='lintel'`` (a circle/custom
+profile already gets a full voussoir ring); other combinations raise
+in ``Opening.__post_init__`` rather than silently falling back to
+jambs.
 
 ## Mechanism (unchanged in essence, approved rev 1)
 
 Openings live at the LAYOUT level — the crenellation/quoin/
-throughstone machinery generalized.  No booleans; every part remains
-a placed unit; the core takes the same exclusion (inset by reveal) so
-jamb reveals are real masonry.
+throughstone machinery generalized.  Every VISIBLE part is a placed
+unit (the surround and the fitted bond blocks — no boolean carves the
+faces).  The only boolean is on the hidden recessed CORE: the passage
+prism (dilated by the reveal) is differenced out of the mortar core,
+so the core edge stays behind the surround ring and jamb reveals are
+real masonry, never a bare core plane.
 
 1. **Exclusion** in (t, z): drop cells inside, trim straddlers —
    trimmed ends become textured 'face'.
@@ -124,21 +131,28 @@ faces carry carved wood grain (ridged, gently wavy, along the board).
 **Types** (each a small parametric generator, WOOD-tagged unless
 noted):
 
-| Type | Read | Use |
-|---|---|---|
-| `planks` | vertical planks + 2–3 ledges (battens) + stud grid + ring | the default door |
-| `double` | two `planks` leaves meeting at centre | gates (2-square openings, later) |
-| `shutters` | pair of small side-hinged plank leaves | windows |
-| `bars` | vertical round bars + frame (ROCK/metal tone) | prisons, window grilles |
-| `portcullis` | square grid lattice, pointed feet | gates |
-| `broken` | `planks` with a ragged missing corner | ruins |
-| `trapdoor` | planked square + ring, flush | floor hatches |
+Implemented in O5 (`kind=`): `planks`, `shutters`, `bars`,
+`trapdoor`.  The rest are later stages — `build_leaf` raises on them.
 
-**States**: `closed` | `open(angle_deg, hinge='left'|'right'|'top')`
-— the leaf solid is rotated about its hinge edge and unioned standing
-open at any angle (ref-06's red door).  `None` = empty opening.
+| Type | Read | Use | Status |
+|---|---|---|---|
+| `planks` | vertical planks + 2–3 ledges (battens) + stud grid + ring | the default door | O5 ✅ |
+| `shutters` | pair of small side-hinged plank leaves | windows | O5 ✅ |
+| `bars` | vertical round bars + frame (ROCK/metal tone) | prisons, window grilles | O5 ✅ |
+| `trapdoor` | planked square + ring, flush | floor hatches | O5 ✅ |
+| `double` | two `planks` leaves meeting at centre | gates (2-square openings) | later |
+| `portcullis` | square grid lattice, pointed feet | gates | O6 |
+| `broken` | `planks` with a ragged missing corner | ruins | later |
 
-**Slot system** (Shawn's swap idea; portcullis precedent ref-08/09):
+**States**: `open_deg=0` (closed) or an angle — the leaf solid is
+rotated about its hinge EDGE and unioned standing open at any angle
+(ref-06's red door).  `hinge='left'`/`'right'` swings the free
+vertical edge inward through the wall; `'foot'`/`'head'` tips about a
+horizontal edge (a trapdoor lifts about its foot, a shutter awning
+tips out about its head).  `leaf=None` = empty opening.
+
+**Slot system** (Shawn's swap idea; portcullis precedent ref-08/09;
+O6 — `Opening(slot=True)` currently raises `NotImplementedError`):
 `slot=True` changes the game —
 
 - the jamb inner faces get vertical GROOVES (channel width =
@@ -177,8 +191,11 @@ total (tune on first print); leaf thickness 2.6 mm.
   group (bars ROCK); fused to the jambs by construction (demo:
   `walls-e15-leaves`).
 - **O6** slot system + standalone leaf prints (portcullis, swaps) —
-  NOT STARTED (`Opening.slot` plumbing exists: `_posed_cell` already
-  splits surround units front/back around a leaf channel).
+  NOT STARTED.  `Opening(slot=True)` raises until O6 lands.  The
+  plumbing seam exists: `_posed_cell(split=…)` splits a surround
+  unit into a front/back `_Posed` pair around the `slot_gap_mm`
+  channel; O6 wires `slot_gap_mm = leaf.thickness_mm + clearance`,
+  grooves the jamb inner faces, and adds `Leaf.standalone()`.
 
 **Surround finish note (2026-07-07)**: surround units get their own
 per-family finish knobs on the chassis — `surround_chip`/
@@ -188,19 +205,28 @@ pitch; fieldstone 1.10 = pressed drystone contact, the union fuses),
 `surround_proud_mm` (surrounds stand proud of both faces — the
 distinct-order read, and the well curb on floors).
 
-**Bond-to-surround fit (2026-07-07, Shawn)**: opening-adjacent wall
-units are RESHAPED to fill the space against a curved surround.  Per
-course band the bond is trimmed against the actual surround unit
-rectangles (toothing into the quoin alternation); too-narrow
-remnants are absorbed by their course neighbour (a mason's cut unit,
-never a column of exposed core); each cut side then gets a SINGLE
-LINEAR ANGLED CUT (least-squares support line of the surround region
-— units dilated by `joint − surround_bond_press` — within the band),
-not a literal curve trace.  The cut is one extra plane in the block
-kernel's smooth-max, so the cut arris gets the same roundover as
+**Bond-to-surround fit (2026-07-07, Shawn; solver in `walls/fit.py`)**:
+opening-adjacent wall units are RESHAPED to fill the space against a
+curved surround.  Per course band the bond is trimmed against the
+actual surround unit rectangles (toothing into the quoin alternation);
+too-narrow remnants are never dropped — the fallback chain absorbs
+them into a course neighbour (a mason's cut unit, never a column of
+exposed core), else a thin end unit at a wall end, else a short brick
+in the wide sub-band of a bimodal blocker.  Each cut side gets a
+SINGLE LINEAR ANGLED CUT (least-squares support line of the surround
+region — units dilated by `joint − surround_bond_press` — within the
+band), not a literal curve trace.  The cut is one extra plane in the
+block kernel's smooth-max, so the cut arris gets the same roundover as
 every other edge; fieldstone applies the same line to its crack
 outline and the sphere-morph rounds it natively.  Scaled keystones
 grow outward only: nothing hangs below the arch soffit (FDM).
+
+Known constraint: the fit decides which cells to reshape from the
+surround UNIT extents per band, not the passage profile — correct for
+the jambs/ring/arch recipes (which flank every band the passage
+touches), but a custom concave `profile` could expose bare core in a
+band with no surround unit.  Custom profiles are not yet a supported
+surround recipe.
 
 ## Remaining questions for Shawn
 

@@ -82,14 +82,25 @@ class Opening:
                 'yet (design: docs/design/walls-doors.md)')
 
 
+def springing(op: Opening) -> tuple[float, float]:
+    """(z at the springing line, rise) of an arch head.  The rise is
+    the sagitta clamped to the half-width (a semicircle is the tallest
+    arch — the jamb stacks run up to the springing, the voussoirs
+    span from there to the apex) and to the clear height.  Single
+    source for the springing so the jamb tops and the arc's end units
+    always coincide."""
+    w2 = op.width_mm / 2.0
+    rise = min(op.rise_mm if op.rise_mm is not None else w2,
+               w2, op.head_mm - op.sill_mm)
+    return op.head_mm - rise, rise
+
+
 def arch_arc(op: Opening, tc: float) -> np.ndarray:
     """The head arc polyline in absolute (t, z), right → left (CCW):
     a segmental arc through the springings (±w2, z_spring) with apex
     (tc, head) — circle of radius R = (w2² + rise²) / (2·rise)."""
     w2 = op.width_mm / 2.0
-    rise = min(op.rise_mm if op.rise_mm is not None else w2,
-               w2 * 1.0 + 1e-9, op.head_mm - op.sill_mm)
-    z_spring = op.head_mm - rise
+    z_spring, rise = springing(op)
     R = (w2 * w2 + rise * rise) / (2.0 * rise)
     zc = op.head_mm - R
     a1 = np.arctan2(z_spring - zc, +w2)

@@ -30,7 +30,7 @@ from ..stone import (clip_to_box, rounded_box, rubble_stone,
                      separate_pinches, stone_relief)
 from .fit import fit_cells, forbidden_region
 from .openings import (Opening, arch_arc, boundary_units, build_profile,
-                       point_inside)
+                       point_inside, springing)
 
 # ── Iteration knobs (module constants while prototyping) ─────────────────────
 _FACE_RECESS_MM   = 0.60   # per-block face jitter: outer/inner/end faces sit
@@ -61,6 +61,13 @@ _JOINT_FRAC    = 0.96   # surround unit width fraction of its pitch
                         # (the rest reads as joint); surround_frac default
 _SILL_OVER_MM  = 2.0    # sill slab overhang past the jambs
 _SILL_H_MM     = 2.4
+_FRAC_CAP      = 1.03   # a surround unit presses at most this × its
+                        # pitch into its neighbour (drystone contact)
+_GROUND_EMB_MM = 2.0    # a grounded jamb/frame unit roots this far
+                        # below the seat, like the wall's bottom course
+_GROUND_SILL_MM = 0.5   # sill below this reads as a door: the ground
+                        # IS the bottom edge (no bottom surround row)
+_LINTEL_H_MM   = 4.5    # spanning lintel block height
 
 # Rubble hearting (E10/E27, chassis-level since the ruins work): a
 # sealed sheet of small rough stone chips through the wall body.
@@ -861,7 +868,8 @@ class CutStoneWall:
         split = op.slot
         w2 = op.width_mm / 2.0
         z0, z1 = op.sill_mm, op.head_mm
-        grounded = z0 < 0.5 and not self.laid_flat   # a door: the
+        grounded = (z0 < _GROUND_SILL_MM
+                    and not self.laid_flat)   # a door: the
         #                       ground is the bottom edge — no bottom
         #                       row, side rows root into the seat
         out: list[_Posed] = []
@@ -879,9 +887,10 @@ class CutStoneWall:
             ws = rng.uniform(0.8 * vw, 1.2 * vw, n)
             ws *= length / ws.sum()
             pos = np.concatenate([[0.0], np.cumsum(ws)])
-            emb = 2.0 if grounded and side in ('L', 'R') else 0.0
+            emb = (_GROUND_EMB_MM if grounded and side in ('L', 'R')
+                   else 0.0)
             for k, (p0, p1) in enumerate(zip(pos[:-1], pos[1:])):
-                w = (p1 - p0) * min(frac, 1.03)
+                w = (p1 - p0) * min(frac, _FRAC_CAP)
                 mid = (p0 + p1) / 2.0 - length / 2.0
                 if side in ('L', 'R'):
                     t, z = a, ctr0 + mid
@@ -901,8 +910,8 @@ class CutStoneWall:
                 seg_i, oi, 170 + k,
                 tc + s_t * (w2 + ring / 2.0),
                 (z1 + ring / 2.0) if s_z > 0 else (z0 - ring / 2.0),
-                ring * min(frac, 1.03), ring * min(frac, 1.03),
-                0.0, split)
+                ring * min(frac, _FRAC_CAP),
+                ring * min(frac, _FRAC_CAP), 0.0, split)
         return out
 
     def _surround_cells(self, op, P, seg_i, tc, rng, oi) -> list[_Posed]:
@@ -917,11 +926,9 @@ class CutStoneWall:
                 or (op.surround == 'auto' and self.laid_flat)):
             return self._frame_cells(op, seg_i, tc, rng, oi)
         if op.profile == 'auto':
-            rise = 0.0 if op.head == 'lintel' else min(
-                op.rise_mm if op.rise_mm is not None else w2,
-                w2, op.head_mm - op.sill_mm)
-            z_sp = op.head_mm - rise
-            # jamb stacks (quoin-style: alternating depth)
+            # jamb stacks run from the sill to the springing (= head
+            # for a lintel; the voussoirs span springing → apex).
+            z_sp = op.head_mm if op.head == 'lintel' else springing(op)[0]
             n_j = max(1, int(round((z_sp - op.sill_mm) / np.mean(jh))))
             hs = rng.uniform(*jh, n_j)
             hs *= (z_sp - op.sill_mm) / hs.sum()
@@ -931,20 +938,21 @@ class CutStoneWall:
                 # A door's bottom jamb blocks root below the seat like
                 # the wall's own bottom course (standing walls only —
                 # laid flat, "down" would be a plan direction).
-                emb = (2.0 if k == 0 and op.sill_mm < 0.5
+                emb = (_GROUND_EMB_MM if k == 0
+                       and op.sill_mm < _GROUND_SILL_MM
                        and not self.laid_flat else 0.0)
                 for sgn, tag in ((-1, 10), (+1, 20)):
                     t = tc + sgn * (w2 + d_k / 2.0)
                     out += self._posed_cell(
                         seg_i, oi, tag * 100 + k, t,
                         z - emb + (h + emb) / 2.0, d_k,
-                        (h + emb) * min(frac, 1.03), 0.0, split)
+                        (h + emb) * min(frac, _FRAC_CAP), 0.0, split)
                 z += h
             if op.head == 'lintel':
-                lh = 4.5
                 out += self._posed_cell(
-                    seg_i, oi, 30, tc, op.head_mm + lh / 2.0,
-                    op.width_mm + 2.0 * jd + 1.0, lh, 0.0, split)
+                    seg_i, oi, 30, tc, op.head_mm + _LINTEL_H_MM / 2.0,
+                    op.width_mm + 2.0 * jd + 1.0,   # + jamb-face bearing
+                    _LINTEL_H_MM, 0.0, split)
             else:
                 # voussoirs along the arc ONLY (open polyline: the end
                 # units land exactly on the jamb tops at the
@@ -953,35 +961,39 @@ class CutStoneWall:
                                        closed=False, offset=ring / 2.0,
                                        force_odd=True)
                 mid = (len(units) - 1) // 2
-                for k, (p, n, ang, step, dth) in enumerate(units):
-                    scale = _KEYSTONE if k == mid else 1.0
-                    # scaled units grow OUTWARD only: the keystone
-                    # soffit stays ON the arc — nothing hangs below
-                    # the arch head (FDM printability).
-                    pos = p + n * ((scale - 1.0) * ring / 2.0)
-                    out += self._posed_cell(
-                        seg_i, oi, 40 + k, pos[0], pos[1],
-                        step * frac * scale, ring * scale,
-                        ang, split,
-                        taper=min(dth * ring * scale, 0.5 * step))
-            if op.sill_mm > 0.5:
-                out += self._posed_cell(
-                    seg_i, oi, 50, tc, op.sill_mm - _SILL_H_MM / 2.0,
-                    op.width_mm + 2.0 * jd + 2.0 * _SILL_OVER_MM,
-                    _SILL_H_MM, 0.0, None)
+                out += self._voussoir_cells(
+                    units, lambda k, p, step: k == mid,
+                    40, seg_i, oi, ring, frac, split)
         else:
             # circle / custom polygon: generic boundary lining — every
             # unit a voussoir rotated to the local normal (a circle has
             # no verticals: full ring — oculus / well).
             units = boundary_units(P, vw, closed=True, offset=ring / 2.0)
             apex = max(u[0][1] for u in units)
-            for k, (p, n, ang, step, dth) in enumerate(units):
-                scale = _KEYSTONE if abs(p[1] - apex) < step * 0.6 else 1.0
-                pos = p + n * ((scale - 1.0) * ring / 2.0)   # outward only
-                out += self._posed_cell(
-                    seg_i, oi, 60 + k, pos[0], pos[1],
-                    step * frac * scale, ring * scale, ang, split,
-                    taper=min(dth * ring * scale, 0.5 * step))
+            out += self._voussoir_cells(
+                units, lambda k, p, step: abs(p[1] - apex) < step * 0.6,
+                60, seg_i, oi, ring, frac, split)
+        if op.profile == 'auto' and op.sill_mm > _GROUND_SILL_MM:
+            out += self._posed_cell(
+                seg_i, oi, 50, tc, op.sill_mm - _SILL_H_MM / 2.0,
+                op.width_mm + 2.0 * jd + 2.0 * _SILL_OVER_MM,
+                _SILL_H_MM, 0.0, None)
+        return out
+
+    def _voussoir_cells(self, units, is_keystone, tag0, seg_i, oi,
+                        ring, frac, split) -> list[_Posed]:
+        """Radial voussoirs along a boundary: each unit an ordinary
+        block rotated to the local normal, the keystone scaled up.
+        Scaled units grow OUTWARD only — the keystone soffit stays ON
+        the arc, nothing hangs below the head (FDM printability)."""
+        out = []
+        for k, (p, n, ang, step, dth) in enumerate(units):
+            scale = _KEYSTONE if is_keystone(k, p, step) else 1.0
+            pos = p + n * ((scale - 1.0) * ring / 2.0)
+            out += self._posed_cell(
+                seg_i, oi, tag0 + k, pos[0], pos[1],
+                step * frac * scale, ring * scale, ang, split,
+                taper=min(dth * ring * scale, 0.5 * step))
         return out
 
     def _place_posed(self, u: _Posed, segs: list[_Seg],
