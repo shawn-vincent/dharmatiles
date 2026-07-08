@@ -162,21 +162,22 @@ The model is dead simple (Shawn: "don't make this more complex than
   per-brick split; a slotted opening's masonry is identical to an
   unslotted one's.
 - (b) one smooth SLOT is sliced out of the finished wall
-  (`_cut_slots`, a single boolean difference): a thin slab at the
-  leaf plane, the profile grown outward by `_SLOT_GROOVE_MM`, a
-  clearance thicker than the leaf.  This leaves a clean-walled groove
-  in the surround — smooth, because it is a slice, not masonry.  The
-  groove runs around the whole profile (the jamb sides and the arch
-  soffit), open at mid-thickness.
-- the leaf is modelled to FIT the slice: `build_leaf(outline_buffer=
-  groove − clearance/2)` buffers the profile so the leaf tucks into
-  the groove with the clearance gap, sitting in the slot without
-  touching the surround.  It keeps its own material group, so it is a
-  distinct, removable object in the same STL, separated by the gap
-  (Shawn: ">1 object in the same STL, separated by space").  Print
-  it, drop it in; swap it for a `portcullis`, a `planks` door, or
-  nothing.  The official RR Double-Door-and-Tall-Arch pairing, done
-  parametrically.
+  (`_cut_slots`, a single boolean difference): a STRAIGHT VERTICAL
+  CHANNEL — the opening width plus `_SLOT_GROOVE_MM` into each jamb, a
+  thin slab (leaf thickness + clearance) at the leaf plane — run from
+  below the sill up and OUT THE TOP of the wall.  That is a real
+  portcullis housing: the gate drops straight down into it and the
+  open channel mouth reads from above the door.  Smooth walls, because
+  it is a slice, not masonry.
+- the leaf is a matching RECTANGLE modelled to FIT the slice:
+  `build_leaf(outline_buffer=groove − clearance/2)` on the opening's
+  width×height rectangle, so it tucks into the groove with the
+  clearance gap, sitting in the channel without touching the
+  surround.  It keeps its own material group, so it is a distinct,
+  removable object in the same STL, separated by the gap (Shawn: ">1
+  object in the same STL, separated by space").  Print it, drop it in;
+  swap it for a `portcullis`, a `planks` door, or nothing.  The
+  official RR Double-Door-and-Tall-Arch pairing, done parametrically.
 
 A slot leaf slides rather than swings, so `open_deg` is ignored.
 The marquee slot leaf is `Leaf('portcullis')` — a grid of vertical

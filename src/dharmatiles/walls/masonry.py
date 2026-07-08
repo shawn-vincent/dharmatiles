@@ -804,22 +804,29 @@ class CutStoneWall:
 
     def _cut_slots(self, wall, segs, seat_z):
         """Slice the leaf slot out of the finished wall (Shawn: the slot
-        is just a boolean slice, not brick geometry).  For each slotted
-        opening, subtract ONE smooth prism — the profile grown by the
-        groove depth, a thin slab at the leaf plane, clearance wider and
-        thicker than the leaf — so the surround gets a clean-walled
-        groove the leaf slides into.  The leaf (``_leaf_parts``) is
-        modelled to tuck into this same groove with the clearance gap."""
-        slotted = [(si, P, op) for si, P, op, _tc in self._op_profiles
+        is just a boolean slice, not brick geometry).  The slot is a
+        STRAIGHT VERTICAL CHANNEL — the opening width plus a groove into
+        each jamb, a thin slab at the leaf plane — run from the sill up
+        and OUT THE TOP of the wall (a real portcullis housing): the
+        gate drops straight down into it, and the open channel mouth
+        reads from above the door.  The leaf (``_leaf_parts``) is a
+        matching rectangle that tucks into the groove with clearance."""
+        slotted = [(si, op, tc) for si, _P, op, tc in self._op_profiles
                    if op.slot]
         if not slotted:
             return wall
         cutters = []
-        for seg_i, P, op in slotted:
+        for seg_i, op, tc in slotted:
             slot_th = op.leaf.thickness_mm + _SLOT_CLEAR_MM
             q0 = (self.thickness_mm - slot_th) / 2.0    # centred on the leaf
-            poly = sgeom.Polygon(P).buffer(_SLOT_GROOVE_MM, quad_segs=8)
-            prism = trimesh.creation.extrude_polygon(poly, height=slot_th)
+            half = op.width_mm / 2.0 + _SLOT_GROOVE_MM
+            # groove the jambs (± half), the threshold below the sill,
+            # and run out the top — the leaf tucks into all of it.
+            z_bot = op.sill_mm - _SLOT_GROOVE_MM
+            z_top = max(self.height_mm,
+                        op.head_mm + self.surround_ring) + 8.0
+            rect = sgeom.box(tc - half, z_bot, tc + half, z_top)
+            prism = trimesh.creation.extrude_polygon(rect, height=slot_th)
             # local (X=t, Y=profile z, extrude-Z) → leaf frame
             # (x=t, y=through-thickness at q0, z=height)
             prism.apply_transform(np.array([[1.0, 0, 0, 0],
@@ -1113,13 +1120,20 @@ class CutStoneWall:
             lrng = np.random.default_rng(
                 (self.seed * 9_369_319 + 71 * li + leaf.seed)
                 & 0x7FFFFFFF)
+            # A slot leaf is a RECTANGLE that slides in the straight
+            # vertical channel (not the arch profile); an O5 leaf takes
+            # the opening's actual profile.
+            if op.slot:
+                w2 = op.width_mm / 2.0
+                P = np.array([[tc - w2, op.sill_mm], [tc + w2, op.sill_mm],
+                              [tc + w2, op.head_mm], [tc - w2, op.head_mm]])
             P = np.asarray(P, dtype=float)
             xmin = float(P[:, 0].min())
             zmin = float(P[:, 1].min())
             # A slot leaf is buffered to TUCK into the sliced groove
-            # (depth − half the clearance) so it sits in the slot with
-            # a gap all round — a separate, removable object; an O5
-            # leaf keeps its fuse buffer.
+            # (depth − half the clearance) so it sits in the channel
+            # with a gap all round — a separate, removable object; an
+            # O5 leaf keeps its fuse buffer.
             buf = (_SLOT_GROOVE_MM - _SLOT_CLEAR_MM / 2.0
                    if op.slot else None)
             body = build_leaf(leaf, P - [xmin, zmin], lrng,
