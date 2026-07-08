@@ -24,13 +24,13 @@ from dataclasses import dataclass, field, replace
 import numpy as np
 import shapely.geometry as sgeom
 import trimesh
-from shapely.ops import unary_union
 
 from ..core.color import Material, tag as _tag
 from ..stone import (clip_to_box, rounded_box, rubble_stone,
                      separate_pinches, stone_relief)
-from .openings import (Opening, arch_arc, band_extent, boundary_units,
-                       build_profile, point_inside)
+from .fit import fit_cells, forbidden_region
+from .openings import (Opening, arch_arc, boundary_units, build_profile,
+                       point_inside)
 
 # ── Iteration knobs (module constants while prototyping) ─────────────────────
 _FACE_RECESS_MM   = 0.60   # per-block face jitter: outer/inner/end faces sit
@@ -52,17 +52,13 @@ _CORE_ROUND_MM    = 0.6    # mortar-core edge fillet (walls AND floors):
 # clears the surround units in their course band (Shawn: not a literal
 # curve-tracing cut).  The cut is one extra plane in the block kernel's
 # smooth-max, so the cut edges get the SAME roundover treatment as
-# every other arris.  The block box extends this margin past the cut
-# line so the kernel's own end plane never competes with the cut plane.
-_CUT_MARGIN_MM = 1.2
+# every other arris.  The fit solver that computes those cut lines
+# lives in walls/fit.py.
 
 # Opening-surround construction (masonry sizing rules, used only here).
 _KEYSTONE      = 1.18   # apex voussoir scale (grows outward only)
 _JOINT_FRAC    = 0.96   # surround unit width fraction of its pitch
                         # (the rest reads as joint); surround_frac default
-_MIN_KEEP_MM   = 2.6    # trimmed wall-cell remnants narrower than this
-                        # are absorbed by a course neighbour or refit as
-                        # thin/short units — never dropped
 _SILL_OVER_MM  = 2.0    # sill slab overhang past the jambs
 _SILL_H_MM     = 2.4
 
@@ -824,324 +820,14 @@ class CutStoneWall:
                     f'Opening at={op.at} (with its surround) does not '
                     f'fit within one wall segment — gen-1 openings '
                     f'must not cross corners or overhang wall ends')
-            # The forbidden region a fitted block must clear: the
-            # units dilated by (joint − press) — thin mortar line on
-            # mortared families, pressed interpenetration on drystone
-            # — plus the passage dilated by the reveal.
-            delta = self.joint_mm - self.surround_bond_press
-            region = unary_union(
-                [sgeom.Polygon(q).buffer(delta, join_style=2)
-                 for q in quads]
-                + [sgeom.Polygon(P).buffer(self.reveal_mm,
-                                           quad_segs=6)])
-            # 2. exclusion: per course band, the bond runs to the
-            #    surround units actually IN that band (+ the normal
-            #    'press'/joint treatment at the cut).  The bond tooths
-            #    into the quoin-alternating jamb courses and follows
-            #    the arch extrados — the gap to the surround is an
-            #    ordinary joint, never an exposed mortar wedge.
-
-            def _cut_line_h(c, side):
-                """Horizontal counterpart of _cut_line: the support
-                line UNDER a surround hanging into the band from
-                above (side 'T' → block keeps full width, cut from
-                the top: the stones beneath a ring/arch bottom) or
-                OVER one rising from below ('B': the bond flowing
-                over a keystone).  Returns (z@t0, z@t1) or None."""
-                ts = np.linspace(c.t0 + 0.05, c.t1 - 0.05, 9)
-                pts = []
-                for t in ts:
-                    col = region.intersection(sgeom.LineString(
-                        [(t, c.z0 - 0.5), (t, c.z1 + 0.5)]))
-                    if col.is_empty:
-                        continue
-                    cb = col.bounds
-                    pts.append((t, cb[1] if side == 'T' else cb[3]))
-                if not pts:
-                    return None
-                ta = np.array([p[0] for p in pts])
-                za = np.array([p[1] for p in pts])
-                if len(pts) == 1:
-                    m, k = 0.0, float(za[0])
-                else:
-                    m, k = np.polyfit(ta, za, 1)
-                res = za - (m * ta + k)
-                k += float(res.min() if side == 'T' else res.max())
-                return (float(m * c.t0 + k), float(m * c.t1 + k))
-
-            def _columns(c):
-                """Classify how the surround region blocks the cell:
-                per t-column, does it span the full band height, hang
-                from the top, or rise from the bottom?"""
-                ts = np.linspace(max(c.t0, lo) + 0.05,
-                                 min(c.t1, hi) - 0.05, 7)
-                kinds = set()
-                for t in ts:
-                    col = region.intersection(sgeom.LineString(
-                        [(t, c.z0 - 0.5), (t, c.z1 + 0.5)]))
-                    if col.is_empty:
-                        continue
-                    cb = col.bounds
-                    at_top = cb[3] >= c.z1 - 0.05
-                    at_bot = cb[1] <= c.z0 + 0.05
-                    if at_top and at_bot:
-                        kinds.add('full')
-                    elif at_top:
-                        kinds.add('top')
-                    elif at_bot:
-                        kinds.add('bottom')
-                    else:
-                        # island (a hatch mid-slab): strips survive on
-                        # BOTH sides — below via cut_z1, above via
-                        # cut_z0
-                        kinds.add('island')
-                return kinds
-
-            def _cut_line(z0, z1, side):
-                """A single linear angled cut clearing the surround
-                within the band (Shawn: one straight cut per side, not
-                a literal curve trace): sample the region's extent per
-                z, least-squares a line, shift it until every sample
-                clears.  Returns (t@z0, t@z1) or None."""
-                zs = np.linspace(z0 + 0.02, z1 - 0.02, 9)
-                b0, _zl, b1, _zh = region.bounds
-                pts = []
-                for z in zs:
-                    row = region.intersection(
-                        sgeom.LineString([(b0 - 1.0, z), (b1 + 1.0, z)]))
-                    if row.is_empty:
-                        continue
-                    rb = row.bounds
-                    pts.append((z, rb[0] if side == 'L' else rb[2]))
-                if not pts:
-                    return None
-                za = np.array([p[0] for p in pts])
-                ta = np.array([p[1] for p in pts])
-                if len(pts) == 1:
-                    m, k = 0.0, float(ta[0])
-                else:
-                    m, k = np.polyfit(za, ta, 1)
-                res = ta - (m * za + k)
-                k += float(res.min() if side == 'L' else res.max())
-                return (float(m * z0 + k), float(m * z1 + k))
-
-            out = []
-            absorb = []   # (cell, side, target, line): a remnant too
-            #             narrow to keep is ABSORBED by its course
-            #             neighbour, which extends across the vanished
-            #             head joint to the surround — a mason's cut
-            #             unit, never a column of exposed core (the
-            #             E15 flat mortar band beside the brick door).
-            for c in cells:
-                if c.seg != seg_i:
-                    out.append(c)
-                    continue
-                exts = [e for q in quads
-                        if (e := band_extent(q, c.z0, c.z1)) is not None]
-                if not exts:
-                    out.append(c)
-                    continue
-                lo = min(e[0] for e in exts)
-                hi = max(e[1] for e in exts)
-                if c.t1 <= lo + 1e-6 or c.t0 >= hi - 1e-6:
-                    out.append(c)
-                    continue
-                kinds = _columns(c)
-                if not kinds:
-                    out.append(c)
-                    continue
-                lrem = lo - c.t0
-                rrem = c.t1 - hi
-                if kinds == {'top'} or kinds == {'bottom'}:
-                    # The surround only dips into the band from one
-                    # horizontal side: candidate — the block keeps its
-                    # FULL width with a single angled cut on its top
-                    # (under a ring/arch bottom) or bottom (over a
-                    # keystone).  Taken only when it KEEPS MORE STONE
-                    # than the side cut (a jamb grazing one end of the
-                    # cell classifies 'bottom' too, but there a side
-                    # cut saves the whole brick — the E15 missing
-                    # bottom brick).
-                    side = 'T' if kinds == {'top'} else 'B'
-                    line = _cut_line_h(c, side)
-                    if line is not None:
-                        if side == 'T':
-                            pen = c.z1 - min(line)
-                            keep = max(line) - c.z0
-                        else:
-                            pen = max(line) - c.z0
-                            keep = c.z1 - min(line)
-                        if pen < 0.35:      # graze: fuses invisibly
-                            out.append(c)
-                            continue
-                        bh = c.z1 - c.z0
-                        # keep is a HEIGHT: floor it at a printable
-                        # course, not _MIN_KEEP_MM (a width rule) — a
-                        # wide 1mm-tall cut course under a sill is
-                        # ordinary masonry.
-                        area_h = ((c.t1 - c.t0) * keep
-                                  if keep >= 1.0 else 0.0)
-                        area_s = (lrem if lrem >= _MIN_KEEP_MM
-                                  else 0.0) * bh \
-                            + (rrem if rrem >= _MIN_KEEP_MM
-                               else 0.0) * bh
-                        if area_h >= area_s:
-                            if area_h <= 0.0:
-                                continue    # nothing substantial left
-                            nc = replace(c, key=c.key + (705, oi))
-                            if side == 'T':
-                                nc.cut_z1 = line
-                            else:
-                                nc.cut_z0 = line
-                            out.append(nc)
-                            continue
-                        # else: fall through to the side cut
-                if lrem > 1e-6:
-                    line = _cut_line(c.z0, c.z1, 'L')
-                    t1 = (max(line) + _CUT_MARGIN_MM) if line else lo
-                    if lrem >= _MIN_KEEP_MM:
-                        nc = replace(c, t1=t1, end1='press',
-                                  key=c.key + (701, oi))
-                        nc.cut1 = line
-                        out.append(nc)
-                    else:
-                        absorb.append((c, 'end1', t1, line))
-                if rrem > 1e-6:
-                    line = _cut_line(c.z0, c.z1, 'R')
-                    t0 = (min(line) - _CUT_MARGIN_MM) if line else hi
-                    if rrem >= _MIN_KEEP_MM:
-                        nc = replace(c, t0=t0, end0='press',
-                                  key=c.key + (702, oi))
-                        nc.cut0 = line
-                        out.append(nc)
-                    else:
-                        absorb.append((c, 'end0', t0, line))
-                # Middle piece: the side cuts keep the flanks but the
-                # strip UNDER a top-dip (or over a bottom-rise) between
-                # them belonged to no one — bare core south of a hatch
-                # frame.  Fit the mason's third piece: full dip width,
-                # z-clipped by the horizontal support line (skipped
-                # automatically when full-height blockers leave no
-                # clearance: the line lands on the band edge).
-                mid0, mid1 = max(c.t0, lo), min(c.t1, hi)
-                if mid1 - mid0 >= 1.6:
-                    sub = replace(c, t0=mid0, t1=mid1)
-                    for dip, attr in (('top', 'cut_z1'),
-                                      ('bottom', 'cut_z0')):
-                        if dip not in kinds and 'island' not in kinds:
-                            continue
-                        hl = _cut_line_h(sub, 'T' if dip == 'top'
-                                         else 'B')
-                        if hl is None:
-                            continue
-                        if dip == 'top':
-                            keep = (sum(hl) / 2.0) - c.z0
-                            kw = dict(z1=min(max(hl) + _CUT_MARGIN_MM,
-                                             c.z1), is_top=False)
-                        else:
-                            keep = c.z1 - (sum(hl) / 2.0)
-                            kw = dict(z0=max(min(hl) - _CUT_MARGIN_MM,
-                                             c.z0), is_bottom=False)
-                        if keep < 1.0:
-                            continue
-                        nc = replace(c, t0=mid0, t1=mid1, end0='press',
-                                  end1='press',
-                                  key=c.key + (709, oi), **kw)
-                        setattr(nc, attr, hl)
-                        out.append(nc)
-            cells = out
-            for src, side, target, line in absorb:
-                edge = src.t0 if side == 'end1' else src.t1
-                for i, c in enumerate(cells):
-                    if c.seg != seg_i or abs(c.z0 - src.z0) > 1e-6:
-                        continue
-                    if side == 'end1' and abs(c.t1 - edge) < 1e-6:
-                        nc = replace(c, t1=target, end1='press',
-                                  key=c.key + (703, oi))
-                        nc.cut1 = line
-                        cells[i] = nc
-                        break
-                    if side == 'end0' and abs(c.t0 - edge) < 1e-6:
-                        nc = replace(c, t0=target, end0='press',
-                                  key=c.key + (704, oi))
-                        nc.cut0 = line
-                        cells[i] = nc
-                        break
-                else:
-                    # No course neighbour to absorb the sliver (the
-                    # remnant sits at a wall end / corner — e.g. the
-                    # strip between a window's projecting sill and the
-                    # free end).  Fit a THIN unit rather than exposing
-                    # a column of bare core.
-                    if side == 'end1':
-                        mean_w = ((sum(line) / 2.0 if line else target)
-                                  - src.t0)
-                    else:
-                        mean_w = src.t1 - (sum(line) / 2.0 if line
-                                           else target)
-                    if mean_w >= 1.1:
-                        # a printable wedge with one angled cut
-                        if side == 'end1':
-                            nc = replace(src, t1=target, end1='press',
-                                      key=src.key + (706, oi))
-                            nc.cut1 = line
-                        else:
-                            nc = replace(src, t0=target, end0='press',
-                                      key=src.key + (707, oi))
-                            nc.cut0 = line
-                        cells.append(nc)
-                        continue
-                    # Bimodal blocker (a projecting sill nose over a
-                    # jamb): one straight cut can't clear both, but a
-                    # SHORT brick fits the sub-band where the space is
-                    # wide (the mason's cut brick under the sill).
-                    zs = np.linspace(src.z0 + 0.02, src.z1 - 0.02, 15)
-                    bb0, _zl, bb1, _zh = region.bounds
-                    avail = []
-                    for z in zs:
-                        row = region.intersection(sgeom.LineString(
-                            [(bb0 - 1.0, z), (bb1 + 1.0, z)]))
-                        if row.is_empty:
-                            avail.append(src.t1 - src.t0)
-                            continue
-                        rb = row.bounds
-                        avail.append(rb[0] - src.t0 if side == 'end1'
-                                     else src.t1 - rb[2])
-                    ok = np.asarray(avail) >= 1.8
-                    best, cur = (0, 0), (0, 0)   # (start, stop)
-                    i = 0
-                    while i < len(ok):
-                        if ok[i]:
-                            j = i
-                            while j < len(ok) and ok[j]:
-                                j += 1
-                            if j - i > best[1] - best[0]:
-                                best = (i, j)
-                            i = j
-                        else:
-                            i += 1
-                    if best[1] == best[0]:
-                        continue
-                    z_lo = src.z0 if best[0] == 0 else float(zs[best[0]])
-                    z_hi = src.z1 if best[1] == len(ok) \
-                        else float(zs[best[1] - 1])
-                    if z_hi - z_lo < 1.0:
-                        continue
-                    sline = _cut_line(z_lo, z_hi,
-                                      'L' if side == 'end1' else 'R')
-                    kw = dict(z0=z_lo, z1=z_hi, is_top=False)
-                    if side == 'end1':
-                        kw.update(t1=(max(sline) + _CUT_MARGIN_MM)
-                                  if sline else target, end1='press')
-                    else:
-                        kw.update(t0=(min(sline) - _CUT_MARGIN_MM)
-                                  if sline else target, end0='press')
-                    nc = replace(src, key=src.key + (708, oi), **kw)
-                    if side == 'end1':
-                        nc.cut1 = sline
-                    else:
-                        nc.cut0 = sline
-                    cells.append(nc)
+            # 2. exclusion: re-shape the bond around the surround so it
+            #    tooths into the quoin-alternating jambs and follows the
+            #    arch extrados — the gap to the surround is an ordinary
+            #    joint, never an exposed mortar wedge (walls/fit.py).
+            region = forbidden_region(
+                quads, P, self.joint_mm - self.surround_bond_press,
+                self.reveal_mm)
+            cells = fit_cells(cells, seg_i, oi, quads, region)
         return cells, posed
 
     #: O6 slot system: the leaf-channel width split surround units
