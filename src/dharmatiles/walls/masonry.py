@@ -68,9 +68,13 @@ _GROUND_EMB_MM = 2.0    # a grounded jamb/frame unit roots this far
 _GROUND_SILL_MM = 0.5   # sill below this reads as a door: the ground
                         # IS the bottom edge (no bottom surround row)
 _LINTEL_H_MM   = 4.5    # spanning lintel block height
-_SLOT_CLEAR_MM = 0.5    # total clearance in a slot channel (O6): the
-                        # leaf is thinner and narrower than the channel
-                        # by this, so it drops in and lifts out freely
+# Slot system (O6): the wall is built normally, then a smooth SLOT is
+# sliced out of it (a boolean, not a per-brick split) for the leaf to
+# slide into.  The slot bites _SLOT_GROOVE_MM into the surround (the
+# groove the leaf's edges tuck into) and is _SLOT_CLEAR_MM wider /
+# thicker than the leaf all round, so the leaf drops in and lifts out.
+_SLOT_GROOVE_MM = 1.6   # groove depth into the surround
+_SLOT_CLEAR_MM  = 0.5   # total leaf-to-slot clearance
 
 # Rubble hearting (E10/E27, chassis-level since the ruins work): a
 # sealed sheet of small rough stone chips through the wall body.
@@ -157,9 +161,8 @@ class _Posed:
     the wall's (t, z) plane — centre (t, z), in-plane dims (w, d),
     rotated by ``ang`` so the unit's height axis lies along the
     boundary's outward normal (a voussoir is just a rotated block).
-    ``qspan`` is the unit's extent through the wall thickness; the O6
-    slot system splits it into a front/back pair around the leaf
-    channel.  ``taper`` is the voussoir wedge (mm)."""
+    ``qspan`` is the unit's extent through the wall thickness.
+    ``taper`` is the voussoir wedge (mm)."""
     seg:   int
     key:   tuple
     t:     float
@@ -665,6 +668,7 @@ class CutStoneWall:
         leaves = self._leaf_parts(segs, seat_z, surface)
 
         wall = assemble_masonry(parts, surface, 'CutStoneWall')
+        wall = self._cut_slots(wall, segs, seat_z)
         if self.laid_flat:
             # Ground the pavement: stones/core overshoot below the
             # datum for solid seating; one clip flattens the bottom.
@@ -798,6 +802,43 @@ class CutStoneWall:
                 out.append(b)
         return out
 
+    def _cut_slots(self, wall, segs, seat_z):
+        """Slice the leaf slot out of the finished wall (Shawn: the slot
+        is just a boolean slice, not brick geometry).  For each slotted
+        opening, subtract ONE smooth prism — the profile grown by the
+        groove depth, a thin slab at the leaf plane, clearance wider and
+        thicker than the leaf — so the surround gets a clean-walled
+        groove the leaf slides into.  The leaf (``_leaf_parts``) is
+        modelled to tuck into this same groove with the clearance gap."""
+        slotted = [(si, P, op) for si, P, op, _tc in self._op_profiles
+                   if op.slot]
+        if not slotted:
+            return wall
+        cutters = []
+        for seg_i, P, op in slotted:
+            slot_th = op.leaf.thickness_mm + _SLOT_CLEAR_MM
+            q0 = (self.thickness_mm - slot_th) / 2.0    # centred on the leaf
+            poly = sgeom.Polygon(P).buffer(_SLOT_GROOVE_MM, quad_segs=8)
+            prism = trimesh.creation.extrude_polygon(poly, height=slot_th)
+            # local (X=t, Y=profile z, extrude-Z) → leaf frame
+            # (x=t, y=through-thickness at q0, z=height)
+            prism.apply_transform(np.array([[1.0, 0, 0, 0],
+                                            [0, 0, 1.0, q0],
+                                            [0, 1.0, 0, 0],
+                                            [0, 0, 0, 1.0]]))
+            prism.apply_transform(self._lay(segs[seg_i]) if self.laid_flat
+                                  else _frame(segs[seg_i], z=seat_z))
+            cutters.append(prism)
+        try:
+            wall = trimesh.boolean.difference([wall] + cutters,
+                                              engine='manifold')
+        except Exception as e:                          # noqa: BLE001
+            warnings.warn(f'slot cut failed ({e}); wall kept unslotted',
+                          RuntimeWarning)
+            return wall
+        _tag(wall, Material.ROCK)
+        return wall
+
 
     def _apply_openings(self, cells: list[_Cell], segs: list[_Seg],
                         rng: np.random.Generator):
@@ -840,24 +881,18 @@ class CutStoneWall:
             cells = fit_cells(cells, seg_i, oi, quads, region)
         return cells, posed
 
-    #: O6 slot system: the leaf-channel width split surround units
-    #: leave between their front/back halves (leaf thickness +
-    #: clearance).  0 until O6 wires it to the leaf.
-    slot_gap_mm: float = 0.0
-
     def _posed_cell(self, seg_i, oi, tag, t, z, w, d, ang,
-                    split=None, taper=0.0) -> list[_Posed]:
-        """Posed surround unit(s); with ``split`` (slot system) the
-        unit becomes a front+back pair leaving the leaf channel
-        between."""
-        g = self.slot_gap_mm if split else 0.0
+                    taper=0.0) -> list[_Posed]:
+        """One posed surround unit — an ordinary block spanning the
+        full wall thickness (plus proudness), rotated to ``ang``.  The
+        slot channel (Opening.slot) is a boolean cut applied to the
+        finished wall, NOT a per-unit split, so the surround is built
+        the same whether or not the opening is slotted."""
         T = self.thickness_mm
         p = self.surround_proud_mm
-        qs = [(-p, T + p)] if not split else \
-             [(-p, (T - g) / 2.0), ((T + g) / 2.0, T + p)]
-        return [_Posed(seg=seg_i, key=(801, oi, tag, qi), t=t, z=z,
-                       w=w, d=d, ang=ang, qspan=(q0, q1), taper=taper)
-                for qi, (q0, q1) in enumerate(qs)]
+        return [_Posed(seg=seg_i, key=(801, oi, tag, 0), t=t, z=z,
+                       w=w, d=d, ang=ang, qspan=(-p, T + p),
+                       taper=taper)]
 
     def _frame_cells(self, op, seg_i, tc, rng, oi) -> list[_Posed]:
         """'ring' surround for a rectangular opening: the circle's
@@ -868,7 +903,6 @@ class CutStoneWall:
         a door takes the same frame."""
         vw, ring = self.surround_vw, self.surround_ring
         frac = self.surround_frac
-        split = op.slot
         w2 = op.width_mm / 2.0
         z0, z1 = op.sill_mm, op.head_mm
         grounded = (z0 < _GROUND_SILL_MM
@@ -904,8 +938,7 @@ class CutStoneWall:
                     t, z = ctr0 + mid, b
                 out += self._posed_cell(seg_i, oi, 70 + 20 * ei + k,
                                         t, z, ring if along_z else w,
-                                        w if along_z else ring,
-                                        0.0, split)
+                                        w if along_z else ring, 0.0)
         corners = [(s_t, s_z) for s_t in (-1.0, 1.0)
                    for s_z in ([1.0] if grounded else (-1.0, 1.0))]
         for k, (s_t, s_z) in enumerate(corners):
@@ -914,18 +947,13 @@ class CutStoneWall:
                 tc + s_t * (w2 + ring / 2.0),
                 (z1 + ring / 2.0) if s_z > 0 else (z0 - ring / 2.0),
                 ring * min(frac, _FRAC_CAP),
-                ring * min(frac, _FRAC_CAP), 0.0, split)
+                ring * min(frac, _FRAC_CAP), 0.0)
         return out
 
     def _surround_cells(self, op, P, seg_i, tc, rng, oi) -> list[_Posed]:
         vw, ring = self.surround_vw, self.surround_ring
         jd, jh = self.surround_jd, self.surround_jh
         frac = self.surround_frac
-        split = op.slot
-        if split:
-            # The channel is the leaf's thickness plus clearance; the
-            # surround units split front/back around it (_posed_cell).
-            self.slot_gap_mm = op.leaf.thickness_mm + _SLOT_CLEAR_MM
         out: list[_Posed] = []
         w2 = op.width_mm / 2.0
         if op.profile == 'auto' and op.head == 'lintel' and (
@@ -953,13 +981,13 @@ class CutStoneWall:
                     out += self._posed_cell(
                         seg_i, oi, tag * 100 + k, t,
                         z - emb + (h + emb) / 2.0, d_k,
-                        (h + emb) * min(frac, _FRAC_CAP), 0.0, split)
+                        (h + emb) * min(frac, _FRAC_CAP), 0.0)
                 z += h
             if op.head == 'lintel':
                 out += self._posed_cell(
                     seg_i, oi, 30, tc, op.head_mm + _LINTEL_H_MM / 2.0,
                     op.width_mm + 2.0 * jd + 1.0,   # + jamb-face bearing
-                    _LINTEL_H_MM, 0.0, split)
+                    _LINTEL_H_MM, 0.0)
             else:
                 # voussoirs along the arc ONLY (open polyline: the end
                 # units land exactly on the jamb tops at the
@@ -970,7 +998,7 @@ class CutStoneWall:
                 mid = (len(units) - 1) // 2
                 out += self._voussoir_cells(
                     units, lambda k, p, step: k == mid,
-                    40, seg_i, oi, ring, frac, split)
+                    40, seg_i, oi, ring, frac)
         else:
             # circle / custom polygon: generic boundary lining — every
             # unit a voussoir rotated to the local normal (a circle has
@@ -979,16 +1007,16 @@ class CutStoneWall:
             apex = max(u[0][1] for u in units)
             out += self._voussoir_cells(
                 units, lambda k, p, step: abs(p[1] - apex) < step * 0.6,
-                60, seg_i, oi, ring, frac, split)
+                60, seg_i, oi, ring, frac)
         if op.profile == 'auto' and op.sill_mm > _GROUND_SILL_MM:
             out += self._posed_cell(
                 seg_i, oi, 50, tc, op.sill_mm - _SILL_H_MM / 2.0,
                 op.width_mm + 2.0 * jd + 2.0 * _SILL_OVER_MM,
-                _SILL_H_MM, 0.0, None)
+                _SILL_H_MM, 0.0)
         return out
 
     def _voussoir_cells(self, units, is_keystone, tag0, seg_i, oi,
-                        ring, frac, split) -> list[_Posed]:
+                        ring, frac) -> list[_Posed]:
         """Radial voussoirs along a boundary: each unit an ordinary
         block rotated to the local normal, the keystone scaled up.
         Scaled units grow OUTWARD only — the keystone soffit stays ON
@@ -999,7 +1027,7 @@ class CutStoneWall:
             pos = p + n * ((scale - 1.0) * ring / 2.0)
             out += self._posed_cell(
                 seg_i, oi, tag0 + k, pos[0], pos[1],
-                step * frac * scale, ring * scale, ang, split,
+                step * frac * scale, ring * scale, ang,
                 taper=min(dth * ring * scale, 0.5 * step))
         return out
 
@@ -1088,14 +1116,20 @@ class CutStoneWall:
             P = np.asarray(P, dtype=float)
             xmin = float(P[:, 0].min())
             zmin = float(P[:, 1].min())
+            # A slot leaf is buffered to TUCK into the sliced groove
+            # (depth − half the clearance) so it sits in the slot with
+            # a gap all round — a separate, removable object; an O5
+            # leaf keeps its fuse buffer.
+            buf = (_SLOT_GROOVE_MM - _SLOT_CLEAR_MM / 2.0
+                   if op.slot else None)
             body = build_leaf(leaf, P - [xmin, zmin], lrng,
-                              slot_clearance=(_SLOT_CLEAR_MM if op.slot
-                                              else None))
-            # leaf plane mid-thickness on a wall (the slot channel is
-            # centred there); just under the walking surface on a floor
-            # (flush trapdoor lid).
-            q0 = 0.35 if self.laid_flat else \
-                (self.thickness_mm - leaf.thickness_mm) / 2.0
+                              outline_buffer=buf, swing=not op.slot)
+            # A slot leaf sits centred in its channel (mid-thickness),
+            # matching the slot cut.  A flush O5 trapdoor lid sits just
+            # under the walking surface; every other O5 leaf sits
+            # mid-thickness on the wall.
+            q0 = (0.35 if (self.laid_flat and not op.slot)
+                  else (self.thickness_mm - leaf.thickness_mm) / 2.0)
             seg = segs[seg_i]
             body.apply_translation([xmin, q0, zmin])
             body.apply_transform(self._lay(seg) if self.laid_flat

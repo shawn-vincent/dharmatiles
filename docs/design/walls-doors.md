@@ -141,7 +141,7 @@ raises on them.
 | `shutters` | pair of small side-hinged plank leaves | windows | O5 ✅ |
 | `bars` | vertical round bars + frame (ROCK/metal tone) | prisons, window grilles | O5 ✅ |
 | `trapdoor` | planked square + ring, flush | floor hatches | O5 ✅ |
-| `portcullis` | vertical bars + horizontal rails, pointed feet (ROCK) | slot gates | O6 ✅ |
+| `portcullis` | vertical bars + horizontal rails (ROCK/metal) | slot gates | O6 ✅ |
 | `double` | two `planks` leaves meeting at centre | gates (2-square openings) | later |
 | `broken` | `planks` with a ragged missing corner | ruins | later |
 
@@ -155,33 +155,38 @@ tips out about its head).  `leaf=None` = empty opening.
 **Slot system** (Shawn's swap idea; portcullis precedent ref-08/09;
 O6 ✅ shipped — `walls-e16-slots`): `slot=True` changes the game.
 
-The model is the front/back SPLIT, not a shallow face groove (the
-rev-2 "groove ≈ 1.2 mm deep" language is superseded — the split is
-cleaner and is what makes the leaf mid-thickness):
+The model is dead simple (Shawn: "don't make this more complex than
+(a) build the normal geometry, (b) slice the slot out of it"):
 
-- every surround unit splits into a FRONT and BACK half around a
-  mid-thickness channel of width `leaf.thickness_mm + slot clearance`
-  (`_posed_cell(split=…)` → a front/back `_Posed` pair; the channel
-  is `slot_gap_mm`).  The channel runs continuously around the whole
-  profile — the jamb sides ARE the "grooves", emergent from the
-  split, and the head is split too so the slot is open at
-  mid-thickness and the leaf drops in from above (trivially so on an
-  above-wall surround, where the channel mouth is proud of the wall
-  top — the fieldstone portcullis in the demo);
-- the leaf is built UNDERSIZED by the clearance (`build_leaf(…,
-  slot_clearance=…)` erodes the outline instead of dilating it by
-  `_FUSE_MM`), so it sits in the channel WITHOUT touching the
-  surround — a separate, removable solid.  It keeps its own material
-  group and never joins the wall union, so it is a distinct object in
-  the same STL, separated by the clearance gap (Shawn: ">1 object in
-  the same STL, separated by space").  Print it, drop it in; swap it
-  for a `portcullis`, a `planks` door, `bars`, or nothing.  This is
-  the official RR Double-Door-and-Tall-Arch pairing, done
+- (a) the wall — surround included — is built NORMALLY.  There is no
+  per-brick split; a slotted opening's masonry is identical to an
+  unslotted one's.
+- (b) one smooth SLOT is sliced out of the finished wall
+  (`_cut_slots`, a single boolean difference): a thin slab at the
+  leaf plane, the profile grown outward by `_SLOT_GROOVE_MM`, a
+  clearance thicker than the leaf.  This leaves a clean-walled groove
+  in the surround — smooth, because it is a slice, not masonry.  The
+  groove runs around the whole profile (the jamb sides and the arch
+  soffit), open at mid-thickness.
+- the leaf is modelled to FIT the slice: `build_leaf(outline_buffer=
+  groove − clearance/2)` buffers the profile so the leaf tucks into
+  the groove with the clearance gap, sitting in the slot without
+  touching the surround.  It keeps its own material group, so it is a
+  distinct, removable object in the same STL, separated by the gap
+  (Shawn: ">1 object in the same STL, separated by space").  Print
+  it, drop it in; swap it for a `portcullis`, a `planks` door, or
+  nothing.  The official RR Double-Door-and-Tall-Arch pairing, done
   parametrically.
 
 A slot leaf slides rather than swings, so `open_deg` is ignored.
 The marquee slot leaf is `Leaf('portcullis')` — a grid of vertical
-bars + horizontal rails with pointed feet, ROCK/metal tone.
+bars + horizontal rails, ROCK/metal tone.  Two practical notes from
+the demo: a ROCK slot leaf (portcullis/bars) needs a DRESSED surround
+(cut stone / brick) so the smooth slot clears it — drystone's lumpy
+stones close the gap and fuse it; a WOOD leaf (its own material
+group) never fuses, so a plank door slots into any family.  Keep the
+head under the wall top unless the arch is a fully connected ring, or
+the crown voussoirs above the top come away as loose pieces.
 
 ## Compatibility defaults
 
@@ -204,15 +209,16 @@ total (tune on first print); leaf thickness 2.6 mm.
   bars/trapdoor, closed and open-at-angle about any hinge edge; WOOD
   group (bars ROCK); fused to the jambs by construction (demo:
   `walls-e15-leaves`).
-- **O6** ✅ slot system (`Opening(slot=True)`): the surround splits
-  front/back around a mid-thickness channel (`_posed_cell(split=…)`,
-  `slot_gap_mm = leaf.thickness_mm + _SLOT_CLEAR_MM`); the leaf is
-  built undersized (`build_leaf(slot_clearance=…)`) so it sits in the
-  channel as a separate, removable object in the same STL; `portcullis`
-  leaf kind; demo `walls-e16-slots`.  No separate STL file needed —
-  the swap library is multiple objects in one STL, separated by the
-  clearance gap (Shawn).  `Leaf.standalone()` (a dedicated flat print)
-  was dropped as unnecessary.
+- **O6** ✅ slot system (`Opening(slot=True)`): build the wall
+  normally, then slice ONE smooth slot out of it (`_cut_slots`, a
+  boolean difference — the profile grown by `_SLOT_GROOVE_MM`, a
+  slab `leaf.thickness + _SLOT_CLEAR_MM` thick at the leaf plane).
+  The leaf is buffered to tuck into that groove (`build_leaf(
+  outline_buffer=…)`) and keeps its own material group, so it is a
+  separate, removable object in the same STL, separated by the
+  clearance gap (Shawn: ">1 object per STL, separated by space" — no
+  separate-file plumbing / `Leaf.standalone()` needed).  `portcullis`
+  leaf kind; demo `walls-e16-slots`.
 
 **Surround finish note (2026-07-07)**: surround units get their own
 per-family finish knobs on the chassis — `surround_chip`/

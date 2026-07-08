@@ -53,7 +53,6 @@ _BAR_R       = 0.65   # window/prison bar radius
 _BAR_PITCH   = 3.1    # bar spacing
 _BAR_FRAME   = 1.7    # bar frame band width (follows the profile)
 _PORT_RAIL_PITCH = 6.0  # portcullis horizontal-rail spacing
-_PORT_FOOT_MM    = 2.4  # pointed feet projecting below the bottom rail
 _GRAIN_AMP   = 0.13   # wood-grain carve depth
 _GRAIN_WL    = (0.8, 1.4)   # ridge pitch across the plank
 
@@ -243,9 +242,11 @@ def _bars_leaf(outline, th: float) -> trimesh.Trimesh:
 
 def _portcullis_leaf(outline, th: float) -> trimesh.Trimesh:
     """A dropped iron gate: a lattice of vertical round bars +
-    horizontal rails, the verticals tapering to POINTED FEET below the
-    bottom rail (the classic portcullis).  The grid is clipped to the
-    profile; the feet project past it (they spike into the sill)."""
+    horizontal rails, clipped to the profile.  It is a SLOT leaf — a
+    separate, removable object sitting in the sliced channel — so it
+    carries no geometry that would project into the surrounding
+    masonry (no below-sill feet: those spike into the buried jamb
+    stones and fuse the gate to the wall)."""
     x0, z0, x1, z1 = outline.bounds
     grid = []
     nv = max(2, int(round((x1 - x0) / _BAR_PITCH)))
@@ -266,18 +267,7 @@ def _portcullis_leaf(outline, th: float) -> trimesh.Trimesh:
         grid.append(b)
     s = trimesh.boolean.union(grid, engine='manifold')
     clip = _prism(outline, -2.0, th + 2.0)
-    s = trimesh.boolean.intersection([s, clip], engine='manifold')
-    # Pointed feet: a downward cone under each vertical bar, spiking
-    # below the profile (not clipped) — they seat into the sill.
-    feet = [s]
-    for x in xs:
-        cone = trimesh.creation.cone(radius=_BAR_R, height=_PORT_FOOT_MM,
-                                     sections=12)
-        cone.apply_transform(trimesh.transformations.rotation_matrix(
-            np.pi, [1, 0, 0]))               # apex points down (−z)
-        cone.apply_translation([x, th / 2.0, z0])
-        feet.append(cone)
-    return trimesh.boolean.union(feet, engine='manifold')
+    return trimesh.boolean.intersection([s, clip], engine='manifold')
 
 
 def _hinge_open(solid: trimesh.Trimesh, open_deg: float, hinge: str,
@@ -310,29 +300,28 @@ def _hinge_open(solid: trimesh.Trimesh, open_deg: float, hinge: str,
 
 def build_leaf(leaf: Leaf, profile: np.ndarray,
                rng: np.random.Generator, *,
-               slot_clearance: float | None = None) -> trimesh.Trimesh:
+               outline_buffer: float | None = None,
+               swing: bool = True) -> trimesh.Trimesh:
     """The leaf solid in the opening's local frame.  ``profile`` is
     the opening's closed polygon translated so its bbox corner is at
-    the origin.  y ∈ [0, thickness] is positioned by the CALLER (the
-    wall knows its own thickness and reveal planes).
+    the origin; the leaf outline is that shape buffered by
+    ``outline_buffer`` (default ``_FUSE_MM``).  y ∈ [0, thickness] is
+    positioned by the CALLER (the wall knows its own thickness and
+    reveal planes).
 
-    Fit (O5 vs O6) is set by ``slot_clearance``:
+    Two fits, both a single positive buffer:
 
-    - ``None`` — an INTEGRATED leaf: the outline is dilated by
-      ``_FUSE_MM`` so it embeds into the jamb reveals / sill /
-      surround and the export union fuses it to the masonry.  It may
-      swing open about its hinge.
-    - a value — a SLOT leaf: the outline is ERODED by half the
-      clearance so it fits the mid-thickness channel WITHOUT touching
-      the surround, staying a separate removable object.  It slides
-      rather than swings, so ``open_deg`` is ignored."""
+    - O5 INTEGRATED leaf (``outline_buffer=_FUSE_MM``, ``swing=True``):
+      the outline embeds into the jamb reveals / sill / surround and
+      the export union fuses it to the masonry; it may swing open.
+    - O6 SLOT leaf (``outline_buffer`` = groove − clearance, ``swing=
+      False``): the wall has a smooth slot sliced into it and the leaf
+      is buffered to TUCK into that groove with clearance, so it sits
+      in the slot as a separate, removable object.  It slides, so
+      ``open_deg`` is ignored."""
     th = leaf.thickness_mm
-    if slot_clearance is None:
-        outline = sgeom.Polygon(profile).buffer(_FUSE_MM, quad_segs=8)
-    else:
-        outline = sgeom.Polygon(profile).buffer(-slot_clearance / 2.0,
-                                                quad_segs=8)
-    swing = slot_clearance is None
+    buf = _FUSE_MM if outline_buffer is None else outline_buffer
+    outline = sgeom.Polygon(profile).buffer(buf, quad_segs=8)
     bounds = outline.bounds
     if leaf.kind == 'planks':
         s = _planks_leaf(outline, th, rng, ledges=True,
