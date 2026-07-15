@@ -196,7 +196,7 @@ Layer ordering in `Region.layers` is the contract for state dependencies:
 | `Grass(species=…, *, placement=…, max_stack_height=…)` | 3D blades grown as a field simulation around prior obstacles | 5.0 |
 | `Flowers(*, placement=…, **FlowerConfig kwargs)` | Dome-on-column 3D flowers; stamps `terrain_support_z` + `obstacle_mask` | 5.0 |
 | `Tree(height_mm=…, canopy_radius_mm=…, placement=…, **kwargs)` | Space-colonisation tree (see Tree section) | 5.0 |
-| `CutStoneWall(spine=…, texture=…, crenellated=…, ruin=…)` / `FieldstoneWall(spine=…, coping=…, ruin=…)` / `BrickWall(spine=…, …)` | Per-unit masonry walls on a plan spine (`dharmatiles.walls`); stamp `terrain_support_z` + `obstacle_mask` | 5.0 |
+| `CutStoneWall(spine=…, texture=…, bond=…, crenellated=…, ruin=…)` / `FieldstoneWall(spine=…, coping=…, ruin=…)` / `BrickWall(spine=…, …)` / `RegularBrickWall(spine=…, brick_l_mm=…, brick_h_mm=…)` | Per-unit masonry walls on a plan spine (`dharmatiles.walls`); stamp `terrain_support_z` + `obstacle_mask`.  `bond='irregular'` (default) jitters courses/bays; `bond='running'` = uniform courses + half-brick running bond (RegularBrickWall is that preset + a near-flush dressed unit) | 5.0 |
 | `StoneFloor(texture=…, slabs_per_square=…)` | Stone slab pavement = `CutStoneWall(laid_flat=True)` pinned to the square grid; any wall family takes `laid_flat` (e.g. `FieldstoneWall(laid_flat=True)` = drystone flagstone floor); stamps `terrain_support_z` + `obstacle_mask` | 5.0 |
 
 `Region` height falls back to its first layer's `height_default_mm` when
