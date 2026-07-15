@@ -44,6 +44,8 @@ _TILT_MAX_DEG     = 0.7    # tiny out-of-plane block tilt (pitch/roll): each
                            # coplanar faces melt into one plane at glancing
                            # angles and the joints stop reading
 _MIN_BAY_FRAC     = 0.45   # bays shorter than this × bay_min are merged away
+_CLOSER_MIN       = 1.5    # running bond: min end-closer width (mm); a cut
+                           # nearer than this to an end is dropped (no sliver)
 _SEAT_PERCENTILE  = 80.0   # seat height over the footprint (stones convention)
 _CORE_ROUND_MM    = 0.6    # mortar-core edge fillet (walls AND floors):
                            # set mortar has no sharp arrises
@@ -262,10 +264,35 @@ def _bay_cuts(t0: float, t1: float, lo: float, hi: float,
     return cuts[keep]
 
 
+def _running_heights(height_mm: float, lo: float, hi: float) -> np.ndarray:
+    """Uniform course heights (regular running bond): all equal, summing
+    to height_mm.  ``lo``/``hi`` set only the target course count."""
+    n = max(1, int(round(height_mm / ((lo + hi) / 2.0))))
+    return np.full(n, height_mm / n)
+
+
+def _running_cuts(t0: float, t1: float, brick_mm: float,
+                  offset: float) -> np.ndarray:
+    """Regular running-bond cuts in [t0, t1]: bricks of uniform length
+    ``brick_mm`` on a grid phase-shifted by ``offset`` (half a brick on
+    alternate courses).  End bricks may be partial (closers), but a cut
+    landing within _CLOSER_MIN of an end is dropped so no sliver forms."""
+    lo = int(np.floor((t0 - offset) / brick_mm))
+    hi = int(np.ceil((t1 - offset) / brick_mm))
+    cuts = offset + np.arange(lo, hi + 1) * brick_mm
+    return cuts[(cuts > t0 + _CLOSER_MIN) & (cuts < t1 - _CLOSER_MIN)]
+
+
 def _layout(segs: list[_Seg], thickness_mm: float, height_mm: float,
             course_mm: tuple[float, float], bay_mm: tuple[float, float],
-            min_bond_mm: float, rng: np.random.Generator) -> list[_Cell]:
+            min_bond_mm: float, rng: np.random.Generator,
+            bond: str = 'irregular') -> list[_Cell]:
     """Courses × bays × quoin alternation → block cells (R5, R7).
+
+    ``bond='irregular'`` (default) jitters course heights and bay widths
+    for the chipped-rubble read; ``bond='running'`` lays UNIFORM courses
+    and uniform-length bricks in a half-brick running bond (regular
+    brickwork — same chassis, one variant).
 
     Wall ends are always textured ('face'): visible block ends with the
     mortar core inset behind them — including at tile boundaries, where
@@ -273,7 +300,10 @@ def _layout(segs: list[_Seg], thickness_mm: float, height_mm: float,
     call: "I should be able to see the ends of the bricks").
     """
     T = thickness_mm
-    heights = _course_heights(height_mm, *course_mm, rng)
+    running = bond == 'running'
+    heights = (_running_heights(height_mm, *course_mm) if running
+               else _course_heights(height_mm, *course_mm, rng))
+    brick_mm = float(np.mean(bay_mm))
     z_edges = np.concatenate([[0.0], np.cumsum(heights)])
     n_joints = len(segs) - 1
 
@@ -292,7 +322,15 @@ def _layout(segs: list[_Seg], thickness_mm: float, height_mm: float,
             t1 = seg.L if (k == n_joints or owns_end) else seg.L - T
             if t1 - t0 < _MIN_BAY_FRAC * bay_mm[0]:
                 continue
-            cuts = _bay_cuts(t0, t1, *bay_mm, prev_cuts[k], min_bond_mm, rng)
+            if running:
+                # half-brick stagger on alternate courses (measured from
+                # the segment origin so the bond is consistent along the
+                # whole run)
+                cuts = _running_cuts(t0, t1, brick_mm,
+                                     (c % 2) * 0.5 * brick_mm)
+            else:
+                cuts = _bay_cuts(t0, t1, *bay_mm, prev_cuts[k],
+                                 min_bond_mm, rng)
             # No cut inside an owned corner cell (+ margin): a joint at
             # t < T makes a tiny sliver quoin and the corner arris reads
             # as a broken column of pebbles (fieldstone E11; cut stone's
@@ -534,6 +572,7 @@ class CutStoneWall:
                  relief_mm:    float | None = None,
                  relief_wl:    tuple[float, float] | None = None,
                  min_bond_mm:  float = 3.0,
+                 bond:         str = 'irregular',
                  embed_mm:     float = 2.5,
                  crenellated:  bool = False,
                  merlon_mm:    tuple[float, float] = (8.0, 11.0),
@@ -547,6 +586,9 @@ class CutStoneWall:
         if texture not in _TEXTURES:
             raise ValueError(f'unknown wall texture {texture!r}; '
                              f'options: {sorted(_TEXTURES)}')
+        if bond not in ('irregular', 'running'):
+            raise ValueError(f"bond must be 'irregular' or 'running', "
+                             f'got {bond!r}')
         preset = _TEXTURES[texture]
         self.spine        = [tuple(map(float, p)) for p in spine]
         self.thickness_mm = thickness_mm
@@ -566,6 +608,7 @@ class CutStoneWall:
         self.relief_wl    = (preset['relief_wl'] if relief_wl is None
                              else relief_wl)
         self.min_bond_mm  = min_bond_mm
+        self.bond         = bond
         self.embed_mm     = embed_mm
         self.crenellated  = crenellated
         self.merlon_mm    = merlon_mm
@@ -691,7 +734,7 @@ class CutStoneWall:
         """Block cells for the wall; subclass hook — FieldstoneWall
         post-processes these (throughstone merges)."""
         cells = _layout(segs, T, H, self.course_mm, self.bay_mm,
-                        self.min_bond_mm, rng)
+                        self.min_bond_mm, rng, self.bond)
         if self.crenellated:
             cells = self._crenellate(cells, segs, T, H, rng)
         return cells

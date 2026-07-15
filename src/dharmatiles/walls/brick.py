@@ -97,3 +97,47 @@ class BrickWall(CutStoneWall):
                            self.roundover_mm, self.relief_mm,
                            self.relief_wl, cell.is_top, rng,
                            cut_planes=cell.cut_planes_local)
+
+
+class RegularBrickWall(CutStoneWall):
+    """Direct TileLayer: a REGULAR running-bond brick wall — uniform
+    course heights, uniform-length bricks, a clean half-brick stagger.
+    The tidy counterpart to the worn :class:`BrickWall`: same engine,
+    the ``bond='running'`` layout variant plus a near-flush dressed
+    unit (barely any wobble or face recession, so the courses read
+    dead level).  Same spine convention and contracts as
+    :class:`CutStoneWall`.
+
+    ``brick_l_mm`` / ``brick_h_mm`` are the exact brick length and
+    course height (end bricks become closers).  There are no spalled
+    or missing units — for a broken/ruined regular wall, pass the
+    chassis ``ruin=`` knob.
+    """
+
+    # Near-flush, dead-level units: the layout is already uniform, so
+    # keep only a whisper of wobble/recession for the drybrush catch.
+    yaw_max_deg:    float = 0.25
+    tilt_max_deg:   float = 0.15
+    face_recess_mm: float = 0.12
+
+    # brick-scale dressed surround (matches the BrickWall rowlock arch)
+    surround_vw:   float = 2.1
+    surround_ring: float = 3.6
+    surround_jd:   float = 3.4
+    surround_jh:   tuple = (2.6, 3.2)
+    surround_chip: float = 0.15
+    surround_ro:   float = 0.22
+    surround_frac: float = 0.94
+
+    def __init__(self, spine, *,
+                 brick_l_mm: float = 8.5,
+                 brick_h_mm: float = 3.2,
+                 joint_mm:   float = 0.45,   # clean uniform mortar line
+                 reveal_mm:  float = 1.0,
+                 texture:    str = 'dressed',
+                 **kwargs):
+        super().__init__(spine, bond='running',
+                         course_mm=(brick_h_mm, brick_h_mm),
+                         bay_mm=(brick_l_mm, brick_l_mm),
+                         joint_mm=joint_mm, reveal_mm=reveal_mm,
+                         texture=texture, **kwargs)
