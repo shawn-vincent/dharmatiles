@@ -583,7 +583,7 @@ def make_strand_roots(rng, flow, W, H):
     return np.array(roots), np.array(lens), n
 
 
-def build_grass(rng, grid, ground, sw, lenses, flow, W, H):
+def build_grass(rng, grid, ground, sw, lenses, flow, W, H, blocker=None, tuck_mm=0.5):
     """Return H0, mass map T, lip intervals [(I, J, bottom, top), …], soil, stats.
 
     The grass volume is MADE OF FRONDS (REQ-EDGE-1): T starts at the bare
@@ -600,6 +600,11 @@ def build_grass(rng, grid, ground, sw, lenses, flow, W, H):
     T = H0.copy()                          # no free-standing grass layer
     soil_depth = ndimage.distance_transform_edt(soil > 0.5) * vox
     soil_dist = ndimage.distance_transform_edt(soil <= 0.5) * vox   # grass → soil
+    # Optional hard obstacles (e.g. rock footprints, used by meadowlab):
+    # no rooting inside; spines stop once `tuck_mm` inside (pressed against
+    # the obstacle face).  None = grasslab's own behaviour, unchanged.
+    blk_depth = (ndimage.distance_transform_edt(blocker) * vox
+                 if blocker is not None else None)
 
     def h0_at(px, py):
         ii = min(max(int(px / vox), 0), grid.nx - 1)
@@ -631,6 +636,8 @@ def build_grass(rng, grid, ground, sw, lenses, flow, W, H):
     for f in range(N):
         p0, i, sb, lb = roots[f], r_own[f], r_s[f], r_l[f]
         path = paths[f]
+        if blocker is not None and blocker[int(p0[0] / vox), int(p0[1] / vox)]:
+            continue
         sprig = soil[int(p0[0] / vox), int(p0[1] / vox)] > 0.5
         if sprig and rng.random() > SPRIG_PROB:
             continue
@@ -658,6 +665,8 @@ def build_grass(rng, grid, ground, sw, lenses, flow, W, H):
         ci = np.clip((cx / vox).astype(int), 0, grid.nx - 1)
         cj = np.clip((cy / vox).astype(int), 0, grid.ny - 1)
         deep = (soil_depth[ci, cj] > spill) & ~sprig
+        if blk_depth is not None:
+            out = out | (blk_depth[ci, cj] > tuck_mm)
         stop = np.nonzero(out | deep)[0]
         k_h = 1.0
         tip_soft = bool(len(stop)) and bool(deep[stop[0]])

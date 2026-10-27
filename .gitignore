@@ -22,3 +22,4 @@ src/dharmatiles/_build_info.py
 # grasslab experiment outputs (generated locally)
 grasslab/out/
 rocklab/out/
+meadowlab/out/
