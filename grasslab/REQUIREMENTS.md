@@ -1,17 +1,13 @@
 # grasslab — Sculpted Grass Tile: Requirements
 
-*Revision 2, 2026-10-27.  Status: requirements for v1.*
+*Revision 3, 2026-10-27 (matches code v2f).  Supersedes revisions 1–2; their
+retired requirements and the reasons are kept in §7.*
 
-*Visual target: `reference/approved-reference.png` ("Sculpted Grassy
-Terrain Tile Showcase").  Source: the procedural sculpted-grass visual
-specification Shawn supplied on 2026-10-27, which covers a full landscape
-generator.  This document is the grass + hills slice of that spec,
-checked against nine earlier grass attempts (§7) and the failed v0 (§7.3).*
-
-*Revision 2 changes: the grass is now specified **top-down, by visual
-scale**, with swaths as the defining feature.  Revision 1 specified
-blade-scale geometry and hoped the larger structure would emerge, and v0
-showed that it doesn't.*
+*Visual targets: `reference/approved-reference.png` ("Sculpted Grassy
+Terrain Tile Showcase", from the procedural sculpted-grass spec Shawn
+supplied); Shawn's wind-lodged grass photo (long combed ribbons meandering
+in S-curves, parting around eye-shaped bare patches); the Majestic
+Highlands grass texture (coherent, not rigid).*
 
 ---
 
@@ -19,60 +15,61 @@ showed that it doesn't.*
 
 A standalone experiment, kept apart from the dharmatiles tile pipeline, that
 writes **one STL: a standard DungeonBlocks tile of gently hilly ground
-covered in sculpted grass**.
+covered in sculpted grass, with a few bare-earth clearings**.
 
-> **Build the illusion, not botany.**  At tabletop distance the reference
-> reads as grass because of how its **mid-scale masses** are organised:
-> combed swaths that shingle over one another, each with a lit crest and a
-> dark, undercut leading edge.  Fine detail only decorates that structure.
+> **Build the illusion, not botany.**  At tabletop distance grass reads
+> because of its **mid-scale organisation**: combed ribbons that flow,
+> meander and part around obstacles, made of blades with lit crests and
+> dark undercut tips.  Fine detail only decorates that structure.
 
-### 1.1 The three visual scales (the core of this spec)
+### 1.1 Visual scales
 
-| Scale | Size (from the reference) | What it does | Built from |
-|---|---|---|---|
-| **Swath** | 12–25 mm long, 8–16 mm wide | A combed mass where everything points one way.  It rises along the flow to a **crest** and ends in a **leading edge** that laps over the next swath with a dark shadow beneath.  Swaths carry the "flowing grass" read. | the swath layout and its height envelope |
-| **Frond** | 4–8 mm long, 1.8–3 mm wide | Pointed, feather-like lobes that tile each swath's surface and make its leading edge jagged.  They shingle, with each upstream tip over the next downstream base, and fan slightly from the swath axis. | frond bodies |
-| **Groove** | ≥ 0.6 mm wide, 0.4–1.0 mm deep | The dark channels between fronds and under their tips, where the base coat survives a drybrush. | the gaps between frond bodies |
-| *Leaf point* | < 1 mm | **Paint and lighting, not geometry.** | — |
+| Scale | Size | What it does |
+|---|---|---|
+| **Flow / ribbon** | strands 15–30 mm long, 2–3 mm apart; meanders ≈ 15 mm wavelength | Combed ribbons of blades following one smooth direction field; the "flowing grass" read. |
+| **Swath** | cells ≈ 11 mm apart | A height wave only: low upstream and at the sides, cresting downstream, so ribbons rise and lap over each other. |
+| **Frond** | 4.4–10.5 mm long, 1.1–1.8 mm wide | Pointed, domed blades shingled along each strand; their tips are the shadow-casting lips. |
+| **Groove** | ≥ 0.6 mm wide, 0.4–1.0 mm deep | Dark channels between fronds and under tips, where the base coat survives a drybrush. |
+| *Leaf point* | < 1 mm | **Paint and lighting, not geometry.** |
 
-### 1.2 Geometry is true 3D
+### 1.2 Geometry is true 3D, undercuts only where designed
 
-Real 3D undercuts are allowed, but **only where they are designed**: under
-frond tips and swath leading edges, facing downstream (§2.2, REQ-FORM-5).
-Everywhere else the grass is a solid mass down to the ground.
+Undercuts exist only under frond tips (lips) and under the soil-facing
+edges of bank fronds (side ledges), each with a 45° underside.  Everywhere
+else the grass is a solid height field down to the ground.
 
 ### 1.3 Scope
 
 In scope: a standard DB tile (35 mm squares, the existing socket-peg base,
-the official grass height band); independent hills; the grass hierarchy;
-printability by construction plus an audit.  Exposed soil patches are in scope (§2.3a, added at Shawn's request on
-2026-10-27).  Out of scope: rocks,
-OpenLOCK, colour, seamless tiling, and `.tile.py` integration.  The project
-lives in `grasslab/`, imports dharmatiles primitives freely, never modifies
-`src/dharmatiles/`, and writes its output to `grasslab/out/`.
+the official grass height band); independent hills; the grass; bare-earth
+clearings; printability by construction plus an audit.  Out of scope:
+OpenLOCK, colour, seamless tiling, `.tile.py` integration (rocks live in
+`rocklab/`, the combination in `meadowlab/`).  The project lives in
+`grasslab/`, imports dharmatiles primitives freely, never modifies
+`src/dharmatiles/`, and writes to `grasslab/out/`.
 
 ---
 
 ## 2. Requirements
 
-Each requirement is checkable from either a viewer or render (**[R]**) or a
+Each requirement is checkable from a viewer or render (**[R]**) or from a
 script or statistic (**[S]**).
 
 ### 2.1 Output and mesh
 
-- **REQ-OUT-1 [S]** A single run writes one binary STL,
+- **REQ-OUT-1 [S]** A run writes one binary STL,
   `grasslab/out/<cols>x<rows>-sculpted-grass[-flat]-s<seed>.stl`.
-- **REQ-OUT-2 [S]** The mesh is one closed manifold body.  It is
-  watertight, has consistent normals, no self-intersections and no
-  internal voids.  Each run reports vertex, face and body counts.
-- **REQ-OUT-3 [S]** The tile uses the standard DB socket-peg base
-  (`dharmatiles.bases.dungeonblocks`).  The *mean* grass-top height lies
-  in the official DB grass band, **15.3–16.8 mm above the piece bottom**
-  (about 4.4–5.9 mm above our terrain datum; commit `6eb0a55`).
-- **REQ-OUT-4 [S]** The footprint is cols × rows DB squares, defaulting
-  to 2 × 2.
-- **REQ-OUT-5 [S]** It is deterministic: the same seed and parameters
-  produce the same STL.
+- **REQ-OUT-2 [S]** The mesh is one closed manifold body: watertight,
+  consistent normals, no self-intersections, no internal voids.  Crumbs
+  (disconnected slivers) are dropped and reported with vertex and face
+  counts.
+- **REQ-OUT-3 [S]** Standard DB socket-peg base
+  (`dharmatiles.bases.dungeonblocks`).  The *mean* grass-top height lies in
+  the official DB grass band, **15.3–16.8 mm above the piece bottom**
+  (4.4–5.9 mm above the terrain datum; commit `6eb0a55`).
+- **REQ-OUT-4 [S]** Footprint cols × rows DB squares, default 2 × 2.
+- **REQ-OUT-5 [S]** Deterministic: the same seed and parameters give a
+  byte-identical STL.
 - **REQ-OUT-6 [S]** The STL is under 50 MB at 2 × 2, and the build takes
   under 60 s.
 
@@ -83,249 +80,160 @@ script or statistic (**[S]**).
 - **REQ-FDM-2 [S]** No islands: every layer is supported by the layer
   below within 45°.
 - **REQ-FDM-3 [S] Gaps are wedges, never slots.**  An undercut opens from
-  its root at 45° or wider, which is the chamfered underside of a lip.
-  Parallel-walled air gaps thinner than 0.6 mm are forbidden, because
-  slicers fuse them unpredictably and paint can't reach them.
-- **REQ-FDM-4 [S]** Free features (lip tips) are at least 0.9 mm in XY
-  and 0.6 mm thick in z.  No needles.
-- **REQ-FDM-5 [S]** Every body is fused to the mass, with no hinges or
+  its root at 45° or wider.  Parallel-walled air gaps thinner than 0.6 mm
+  are forbidden (slicers fuse them; paint can't reach them).
+- **REQ-FDM-4 [S]** Free features (lips, ledges) are ≥ 0.9 mm in XY and
+  ≥ 0.6 mm thick in z.  No needles.
+- **REQ-FDM-5 [S]** Every feature is fused to the mass: no hinges, no
   pinches.
-- **REQ-FDM-6 [S]** The tile edges are solid, with no thin lips.  How the
-  grass *ends* at the rim is governed by REQ-EDGE-3.
-- **REQ-FDM-7 [S]** Grass stays at most 3.5 mm above the local ground.
-  This is budgeted on the inputs, never clamped afterwards.
-- **REQ-FDM-8 [S]** An automated audit (overhang area, body count,
-  support-filter removals) runs on every output.  Any violation is
-  reported.
+- **REQ-FDM-6 [S]** Tile edges are solid; how grass *ends* at the rim is
+  REQ-EDGE-3.
+- **REQ-FDM-7 [S]** Grass stays ≤ 3.5 mm above the local ground, budgeted
+  on the inputs, never clamped afterwards.
+- **REQ-FDM-8 [S]** An automated audit (overhang area, crumbs, backstop
+  changes) runs on every output and reports any violation.
 
-### 2.3 Hills (unchanged from revision 1)
+### 2.3 Hills
 
-- **REQ-HILL-1** The ground H₀ is generated independently of the grass,
-  and still reads as rolling ground with the grass removed.
-- **REQ-HILL-2 [R]** It is broad and irregular, with landforms 15–40 mm
-  across, no grid and no repeated bumps.
-- **REQ-HILL-3 [S]** Ground peak-to-valley is about 5–6 mm over smaller landforms (σ 10 mm), raised across three review rounds.  The ground stays ≥ 1 mm above the base (soft floor).
-- **REQ-HILL-4 [S]** At least 60% of the area has a slope of 12° or less,
-  and no slope exceeds 34°.
-- **REQ-HILL-5** H₀ has no high-frequency noise.
-- **REQ-HILL-6 [S]** The ground is feathered to a constant edge height.
-- **REQ-HILL-8 [S] Rises only.**  *(Shawn, 2026-10-27.)*  The perimeter
-  level is the lowest ground on the tile.  Hills rise from flat plains
-  at edge height, about 40% of the interior stays plain, and nothing
-  dips below the edge.
-- **REQ-HILL-7** The grass seats on H₀ and follows its curvature.
+- **REQ-HILL-1** The ground H₀ is generated independently of the grass and
+  reads as rolling ground with the grass removed.
+- **REQ-HILL-2 [R]** Broad and irregular: landforms 15–40 mm across, no
+  grid, no repeated bumps, no high-frequency noise.
+- **REQ-HILL-3 [S] Rises only.**  *(Shawn.)*  The perimeter level is the
+  lowest ground on the tile: hills rise from flat plains at edge height,
+  about 40% of the interior stays plain, nothing dips below the edge.
+- **REQ-HILL-4 [S]** At least 60% of the area has slope ≤ 12°; no slope
+  exceeds 34°.
+- **REQ-HILL-5 [S]** The ground is feathered to a constant edge height.
+- **REQ-HILL-6** The grass seats on H₀ and follows its curvature.
 
-### 2.3b Edges: grass ends as grass (all boundaries)
-
-*Added 2026-10-27 after Shawn's review: "the grass is just being uniformly
-chopped down like it was all made of clay", both at the tile edge (a bevel)
-and at bare spots ("a hole in the grass volume with a couple of grass kind
-of things poking around it").  Confirmed: the swath envelope was a
-free-standing clay layer, and boundaries were cuts through it.*
-
-- **REQ-EDGE-1 The grass volume is made of fronds.**  No grass height
-  exists except as part of some frond's body.  There is no free-standing
-  envelope or mass layer, and no mask or scale factor applied to the grass
-  volume as a whole.
-- **REQ-EDGE-2 [R] Soil banks.**  The edge of a bare patch is the outline
-  of the last individual fronds: their tips and sides, at varied heights,
-  with dark gaps between them, lapping slightly over the soil.  There are
-  no carved walls, no continuous cliffs, and no hole-in-a-volume look.
-- **REQ-EDGE-3 [R] Tile rim.**  Fronds near the rim end with their own
-  shapes.  They are shortened (never sliced) so tips stop just inside the
-  wall, and fronds rooted at the rim keep their rounded bases.  There is no
-  uniform bevel or height ramp toward the edge.
-- **REQ-EDGE-4 [R] Swath borders** inside the grass are likewise made of
-  overlapping frond lobes, never vertical steps in a height layer.
-- **REQ-EDGE-5 [R]** Fronds cut short at a boundary are also lower, so a
-  fringe steps down rather than ending in tall stubs.
-- **REQ-EDGE-7 [R] Grass flows to the rim, not away from it.**  Near the
-  tile edge, fronds point *at* the edge or run *alongside* it.  They never
-  point away from it (base at the wall, tip heading inward), which reads
-  as grass sprouting from the wall.  This matches the reference, where
-  grass meeting a tile edge is combed toward or along it.
-  - The steering fades in over about 12 mm from the rim and blends into
-    the interior flow, with no visible seam or band.
-  - Fronds that already point toward the edge lean further toward it
-    the closer they are.
-  - All fronds of one swath turn the **same way** when steered away from
-    an inward heading, so a swath never splits into a parting.
-  - At the very rim, nothing heads further inward than parallel.
-- **REQ-EDGE-8 [R] Irregular rim endings.**  Fronds stop at varied
-  distances from the wall, and steering strength varies from frond to
-  frond.  The rim must never show a ruled line of tips at a constant
-  inset, while REQ-EDGE-7 still holds: nothing at the rim heads inward.
-- **REQ-EDGE-6 [R]** Bank fronds end softly: no flat "sawn log" faces at a
-  cut tip, and no cliff at a base facing the soil.  This must not change
-  interior or rim fronds, because rounding every frond's ends turned the
-  whole tile into fish scales (F7).
-
-### 2.3a Bare soil
-
-*Revised 2026-10-27 after Shawn rejected the first version ("bare patches
-are terrible").  The first version made noise-warped ellipse puddles with
-a faded grass ramp, a dark trench outline and round bubble pebbles, all
-placed independently of the grass.  Reference analysis: bare earth is
-where the grass **parts**.*
-
-- **REQ-SOIL-1 [R] Soil comes from the grass structure.**  Bare earth
-  appears only along a few **swath seams**, the natural breaks between
-  combed masses, preferring low ground and seams where both swaths are
-  already low.  It never appears as free-floating blobs.
-- **REQ-SOIL-2 [S] A few exposures.**  They are spread across the tile
-  (lanes start 18 mm or more apart), cover roughly 10–15% of the area, and
-  stay at least 4 mm from the rim.  Grass stays dominant.
-- **REQ-SOIL-3 [R] Shape.**  Exposures are elongated with the seam, have
-  irregular widths, and are discontinuous: a lane breaks into a few
-  clearings.  They are never circles, puddles or ellipses.
-  - **No slits:** any stretch narrower than about 2.2 mm closes, so
-    nothing reads as a crack or trench line.
-- **REQ-SOIL-4 [R] Banks, not ramps.**  The soil mask decides only *where
-  fronds may root*; it never cuts the grass (REQ-EDGE-1/2).
-  - Bank fronds lap up to about 1.5 mm into the soil.
-  - The soil sits about 0.4 mm below the surrounding ground, in a trough.
-- **REQ-SOIL-5 [R] Soil texture is subordinate.**  It has low roughness
-  (about 0.08 mm) and **sparse, angular, faceted pebbles** of varied size
-  (0.45–1.2 mm radius), shaped as low domes cut by 7–10 shallow facets,
-  with no flat tops, prism walls, round bubbles or clusters.  A few stray grass sprigs grow in the soil.  All of it is
-  height field, so it is printable by construction.
-
-### 2.4 Swaths (the defining feature)
-
-- **REQ-SW-1 [S] Total coverage by construction.**  Every point of the
-  tile belongs to exactly one swath.  There is no space between swaths.
-- **REQ-SW-2 [R] Coherent inside, varied between.**  Within a swath the
-  flow direction is nearly constant, varying ±15° or less apart from the
-  frond fan.  Neighbouring swaths differ by noticeable but bounded
-  angles, as a smooth regional field.  A 2 × 2 tile has at least three
-  visibly different dominant directions.
-- **REQ-SW-3 [R] Wave profile.**  A swath is low at its upstream end and
-  at its lateral sides, and rises along the flow to a crest near its
-  downstream end.  Lateral neighbours meet low, so there are **no cliffs
-  or terraces between side-by-side swaths**.
-- **REQ-SW-4 [R] Shingled leading edge.**  The fronds at a swath's
-  downstream end overhang the low upstream end of the next swath.  That
-  casts the **dominant shadow line** of the tile, a designed undercut
-  roughly 0.8–2 mm high.
-- **REQ-SW-5 [R] Irregular borders.**  Swath boundaries are never straight
-  lines, polygons or repeated shapes.
-- **REQ-SW-6 [R] No crowns or vortices.**  Swath directions come from a
-  smooth, singularity-free field.  There are no starbursts or spirals at
-  any scale.
-
-### 2.5 Fronds
-
-- **REQ-FR-1 [R]** Fronds are elongated along the local flow, at 4–8 mm,
-  with length varying continuously and growing toward the crest.  Planform
-  is widest about one third of the way along and tapers to a blunt point
-  (tip half-width ≥ 0.45 mm).
-- **REQ-FR-2 [R] Shingling.**  Fronds overlap along the flow, each tip
-  lying over the base of the next one downstream.  Overlap always reads in
-  that direction.
-- **REQ-FR-3 [R] Fan.**  Fronds fan slightly away from the swath axis in
-  proportion to their lateral position (up to about ±12°).  This gives the
-  combed, feathered read of the reference close-up.
-- **REQ-FR-4 [R] Domed bodies.**  The cross-section is a rounded dome that
-  catches a drybrush, with no fins, ropes or tubes.  A frond emerges flush
-  from the mass at its base, so no frond is a separate pod sitting on top.
-- **REQ-FR-5 [R] Lifted tips.**  The last part of each frond is a lip
-  whose underside is chamfered at 45°.  It casts a small shadow over
-  whatever lies downstream, and fuses where that surface is high.
-- **REQ-FR-6 [R] Variation without repetition.**  Size, length, fan and
-  slight curvature vary, so no two neighbouring fronds are identical
-  copies.  *Feathery is the target; identical, regularly repeated fronds
-  are the failure (F7).*
-
-- **REQ-FR-7 [R] Fronds arc, coherently.**  Compared against the
-  Majestic Highlands grass texture (Shawn, 2026-10-27), our straight fronds
-  read too rigid.
-  - **Shape:** each frond is a smooth **sickle**.  Its heading turns
-    progressively, with the bend concentrated toward the tip, for a total
-    of roughly 20–70°.
-  - **Not random:** neighbouring fronds arc **in the same sense and by
-    similar amounts**, so clumps read as coherent swirls and sweeps.
-  - **Regional variation:** curvature sign and strength vary smoothly
-    across the tile, with some regions nearly straight and others strongly
-    curled.
-  - **Anti-goals:** no per-frond random bend, and no S-curves within one
-    frond.
-
-### 2.5a Flow ribbons (supersedes REQ-FR-7 sickles and the seam soil of §2.3a)
-
-*Added 2026-10-27, from Shawn's wind-lodged grass photo: long combed
-ribbons meandering in S-curves, with the flow parting around eye-shaped
-bare patches.  The v1k sickles read as "clumps of commas" next to it,
-because each frond bent on its own and no flow line continued from one
-frond into the next.*
+### 2.4 Flow (the defining feature)
 
 - **REQ-FL-1 [R] Fronds follow the flow.**  Every frond's spine is a
-  streamline of the direction field, with no per-frond bend.  Neighbours
-  stay parallel along their whole length, so curvature belongs to the
-  flow, not to individual blades.
-- **REQ-FL-2 [R] Meandering flow.**  The field carries gentle S-curves
-  (wavelength about 10–20 mm, ±10–30°) that are **coherent across the
-  flow**: neighbouring streamlines wave in phase, like combed hair.
-  - Wave phase and amplitude drift across the tile, so the waves are
-    never regular.
-  - Regional direction still varies (several flow regions, not one
-    sweep).
-  - The field stays singularity-free except at the deliberate partings
-    at the upstream end of bare patches (REQ-FL-4).
+  streamline of one direction field, with no per-frond bend.  Neighbours
+  stay parallel along their length; curvature belongs to the flow.
+- **REQ-FL-2 [R] Meandering, varied flow.**  Gentle S-curves (wavelength
+  about 15 mm, ±10–30°) that are **coherent across the flow** (neighbouring
+  streamlines wave in phase, like combed hair), with phase and amplitude
+  drifting so waves are never regular.  Several flow regions, not one
+  sweep: a 2 × 2 tile shows at least three dominant directions.
 - **REQ-FL-3 [R] Ribbons.**  Fronds gather into strands about 2–3 mm
-  apart.  Each strand is 15–30 mm long, built from several fronds
-  shingled along the same streamline.
-  - Dark seams run between strands.
-  - Strands cross their neighbours only at shallow angles.  A few stray
-    fronds (about 5%) cross more steeply.
-- **REQ-FL-4 [R] Flow wraps around bare soil.**  Bare patches are
-  **eye- or lens-shaped openings elongated along the local flow**, with
-  irregular edges, preferring low ground.
-  - The direction field bends tangentially around each patch: grass
-    parts at the upstream end and rejoins downstream, like water around
-    a stone.
-  - Bank fronds lap onto the soil by a varying amount, and the
-    occasional wisp crosses further.
-- **REQ-FL-6 [R] Banks read as piles of blades.**  *(Shawn, 2026-10-27:
-  "a big pile of grass leans up right against [a clearing]… a vertical
-  wall… give it some texture… undercuts at the bottom of the grass blade
-  so there's clear ridges down the side.")*
-  - **Undercuts:** where grass faces a clearing, each blade's
-    soil-facing edge overhangs the body below it as a ledge with a
-    **45° chamfered undercut**.  A stack of blades at different heights
-    therefore shows ridge lines down the bank face, each with a dark
-    shadow beneath.  A vertical bank is fine; a smooth, featureless one
-    is not.
-  - **Variability:** bank grass doesn't all hug the clearing outline.
-    Bank fronds wander in heading, vary in height and spill, and some
-    cross the bank at an angle.  How strongly the flow bends around each
-    clearing also varies, so the bank line meanders and its face has
-    irregular texture.
-  - **Printability:** every side ledge obeys REQ-FDM-1…4 by construction
-    (45° underside, ≥ 0.6 mm thick at the edge, fused to its body).
-- **REQ-FL-5 [R]** Rim rules (REQ-EDGE-7/8) still hold, now enforced on
-  the flow field itself.  Irregularity comes from spatially varying
-  steering and per-frond tip insets.
+  apart, each 15–30 mm long, made of fronds shingled along one streamline.
+  Dark seams run between strands.  Strands cross only at shallow angles; a
+  few strays (about 5%) cross more steeply.
+- **REQ-FL-4 [R] Flow wraps around bare soil.**  The field bends
+  tangentially around each clearing: grass parts at the upstream end and
+  rejoins downstream, like water around a stone.
+- **REQ-FL-5 [R] No crowns or vortices.**  The field is singularity-free
+  except the deliberate partings and rejoins at clearings: no starbursts
+  or spirals at any scale.
+- **REQ-FL-6 [R] Banks read as piles of blades.**  *(Shawn: "a big pile of
+  grass leans up right against [a clearing]… undercuts at the bottom of
+  the grass blade so there's clear ridges down the side.")*
+  - Where grass faces a clearing, each blade's soil-facing edge overhangs
+    the body below as a ledge with a **45° chamfered undercut**, so a stack
+    of blades shows ridge lines with dark shadows down the bank face.  A
+    vertical bank is fine; a smooth featureless one is not (F25).
+  - Bank grass varies: fronds wander in heading, height and spill, some
+    cross at an angle, and how strongly the flow hugs each clearing
+    varies, so the bank line meanders.
+  - Every ledge obeys REQ-FDM-1…4 by construction.
 
-### 2.6 Grooves and surface quality
+### 2.5 Swath height wave
 
-- **REQ-GR-1 [R]** Dark grooves run between adjacent fronds along the
-  flow, and under every lip.  They are at least 0.6 mm wide at half depth
-  and 0.4–1.0 mm deep.
-- **REQ-GR-2 [R] Smooth surfaces.**  There is no voxel terracing or
-  stair-stepping on any surface.  The tessellation resolves 0.6 mm
-  grooves cleanly.
-- **REQ-GR-3 [R] Crisp crests.**  Groove edges are defined, not blurred
-  into soft hills (F10).
+- **REQ-SW-1 [S] Total coverage.**  Every point belongs to exactly one
+  swath cell, so the height wave has no gaps.
+- **REQ-SW-2 [R] Wave profile.**  A swath is low upstream and at its
+  sides and crests downstream; lateral neighbours meet low, so there are
+  **no cliffs or terraces between side-by-side ribbons**.
+- **REQ-SW-3 [R] Shingled leading edge.**  Fronds crossing from a high
+  swath end into the next swath's low start stay high, casting the
+  tile's dominant shadow lines.
+- **REQ-SW-4 [R]** Swath borders are never straight lines, polygons or
+  repeated shapes, and never visible as steps (REQ-EDGE-4).
 
-### 2.7 Parameters and diagnostics
+### 2.6 Fronds
 
-- **REQ-PAR-1** Knobs are named, bounded module constants (promoted once
-  accepted), with one `approved` preset and a seed.
-- **REQ-DIAG-1 [S]** Each run prints its statistics: mesh, hills, grass
-  height, DB band, FDM audit and timing.
-- **REQ-DIAG-2** Before any STL is handed over, Claude checks it with one
-  quick monochrome render, as an internal filter only.  Shawn's eye in a
-  viewer is the judge.
+- **REQ-FR-1 [R]** Fronds are elongated along the flow, 4.4–10.5 mm,
+  longer toward each swath's crest.  Planform is widest about one third
+  along and tapers to a blunt point (tip half-width ≥ 0.45 mm).
+- **REQ-FR-2 [R] Shingling.**  Each tip lies over the next frond's base
+  downstream; overlap always reads in that direction.
+- **REQ-FR-3 [R] Domed bodies.**  Rounded-dome cross-section that catches
+  a drybrush; no fins, ropes or tubes.  A frond emerges flush at its base
+  and arches down toward its tip; no frond is a pod sitting on top.
+- **REQ-FR-4 [R] Lifted tips.**  The last part of each frond (≤ 2 mm) is a
+  lip with a 45° chamfered underside, casting a small shadow downstream
+  and fusing where the surface below is high.
+- **REQ-FR-5 [R] Variation without repetition.**  Length, width, height
+  and small heading offsets vary; no two neighbours are identical copies
+  (F7).
+
+### 2.7 Edges: grass ends as grass
+
+*From Shawn's review of v1e: "the grass is just being uniformly chopped
+down like it was all made of clay."*
+
+- **REQ-EDGE-1 The grass volume is made of fronds.**  No grass height
+  exists except as part of some frond's body: no free-standing envelope
+  or mass layer, no mask or scale applied to the grass as a whole.
+- **REQ-EDGE-2 [R] Soil banks** are the outlines of the last fronds (tips
+  and sides at varied heights, dark gaps between, lapping slightly onto
+  the soil), never carved walls or a hole in a volume (F19).
+- **REQ-EDGE-3 [R] Tile rim.**  Fronds are shortened (never sliced) so
+  tips stop just inside the wall; fronds rooted at the rim keep their
+  rounded bases; no bevel or height ramp toward the edge.
+- **REQ-EDGE-4 [R] Swath borders** inside the grass are overlapping frond
+  lobes, never steps.
+- **REQ-EDGE-5 [R]** Fronds cut short are also lower, so a fringe steps
+  down instead of ending in tall stubs.
+- **REQ-EDGE-6 [R]** Fronds stopped by soil end softly (no "sawn log"
+  faces at a cut tip, no cliff at a base facing soil).  This applies to
+  bank fronds only: rounding every frond's ends made fish scales (F7).
+- **REQ-EDGE-7 [R] Grass flows to the rim, not away from it.**  Near the
+  edge, the flow points *at* or runs *alongside* the wall, never away
+  (F21).  The steering fades in over 9–15 mm and blends into the interior
+  with no seam; flow already heading outward leans further out near the
+  rim; long stretches of rim turn the same way, so the flow does not part
+  along the wall; at the very rim nothing heads inward past parallel.
+- **REQ-EDGE-8 [R] Irregular rim endings.**  Tip insets and steering
+  strength vary along the rim; never a ruled line of tips (F23).
+
+### 2.8 Bare soil
+
+- **REQ-SOIL-1 [R] Lens clearings.**  Bare patches are **eye-shaped
+  openings elongated along the local flow**, with slightly irregular
+  edges, preferring low ground; never puddles or amoebas (F16).
+- **REQ-SOIL-2 [S] A few.**  About 1.3–1.8 clearings per square, at least
+  13 mm apart and 7 mm from the rim, covering about 10% of the tile.
+  Grass stays dominant.
+- **REQ-SOIL-3 [R] Banks, not ramps.**  The soil mask decides only *where
+  fronds may root*; it never cuts the grass.  Each frond laps 0.8–3.2 mm
+  into the soil (skewed short); about 4% are wisps reaching 4 mm.
+- **REQ-SOIL-4 [R] Subordinate texture.**  The soil sits about 0.4 mm
+  below the surrounding ground with no outlining step, low roughness
+  (about 0.08 mm), and **sparse, angular pebbles** (0.45–1.2 mm radius;
+  low domes cut by 7–10 facets; no flat tops, prism walls, bubbles or
+  clusters; F17, F20).  A few grass sprigs grow in the soil.  All of it is
+  height field, printable by construction.
+
+### 2.9 Grooves and surface quality
+
+- **REQ-GR-1 [R]** Dark grooves between adjacent fronds along the flow
+  and under every lip, ≥ 0.6 mm wide at half depth, 0.4–1.0 mm deep.
+- **REQ-GR-2 [R]** No voxel terracing or stair-stepping on any surface.
+- **REQ-GR-3 [R]** Groove edges are crisp, not blurred into soft hills
+  (F10).
+
+### 2.10 Parameters and diagnostics
+
+- **REQ-PAR-1** Knobs are named, bounded module constants grouped by
+  stage, with a seed.
+- **REQ-DIAG-1 [S]** Each run prints mesh, hills, soil, grass-height, DB
+  band, FDM audit and timing statistics.
+- **REQ-DIAG-2** Before any STL is handed over, Claude checks it with
+  quick monochrome renders (`--check`), as an internal filter only.
+  Shawn's eye in a viewer is the judge.
 
 ---
 
@@ -339,25 +247,25 @@ frond into the next.*
 | F4 | **Shag carpet** | uniform everything | Era 6 |
 | F5 | **Wood grain** | long grooves spanning the tile | — |
 | F6 | **Worms / rope** | uniform tubes, random headings | 2026-07-03 baseline |
-| F7 | **Stamped repetition** | identical fronds or swaths in regular patterns (feathery itself is fine) | ThatchGrass bushy |
+| F7 | **Stamped repetition / fish scales** | identical fronds or regular lobes (feathery itself is fine) | ThatchGrass bushy; v1h global soft ends |
 | F8 | **Fingerprints / swirls** | loops, spirals | Era 1 |
-| F9 | **Crumpled foil / rough concrete** | relief everywhere with no mid-scale structure | **grasslab v0** |
+| F9 | **Crumpled foil** | relief everywhere, no mid-scale structure | grasslab v0 |
 | F10 | **Flat or melted** | no silhouette; grooves blurred out | Era 5; ThatchGrass E2 |
 | F11 | **Fragile literal grass** | needles, floating tips | — |
 | F12 | **Tent peaks** | stacks spiking above neighbours | Era 2; ThatchGrass E4 |
 | F13 | **Z-jitter** | neighbours at random heights | Era 5; grasslab v0 |
-| F14 | **Terracing** | voxel stair-steps, side-by-side swath cliffs | **grasslab v0** |
-| F15 | **Ragged rim** | stubs along the tile edge | **grasslab v0** |
-| F16 | **Puddles** | amoeba-shaped bare blobs with wiggly outlines and a trench rim, unrelated to the grass | **grasslab v1c/d** |
-| F17 | **Bubbles** | round, clustered dome pebbles | **grasslab v1c/d** |
-| F19 | **Clay cut** | grass ending as a carved wall, bevel or hole rather than at individual fronds | **grasslab v1e** (rim bevel, soil holes, swath-border steps) |
-| F25 | **Smooth bank wall** | grass at a clearing ends in one featureless vertical face | grasslab v2d |
-| F24 | **Commas** | short independently bent fronds with no continuous flow lines | grasslab v1k (vs lodged-grass photo) |
-| F22 | **Rigid sticks** | straight fronds, no coherent arcing | grasslab v1i (vs Majestic Highlands) |
-| F23 | **Ruled rim** | frond tips lined up at a constant inset along the wall | grasslab v1i |
-| F21 | **Wall sprouts** | grass whose base sits at the tile edge and whose tip points inward | grasslab v1h (Shawn review) |
-| F20 | **Soil debris** | boxy cube-like pebbles, prism chips, and a dashed step outlining each patch | grasslab v1g (fixed in v1h) |
-| F18 | **Cracks** | hairline soil slits along seams | grasslab v1e (fixed) |
+| F14 | **Terracing** | voxel stair-steps, side-by-side swath cliffs | grasslab v0 |
+| F15 | **Ragged rim** | stubs along the tile edge | grasslab v0 |
+| F16 | **Puddles** | amoeba bare blobs with a trench rim, unrelated to the grass | grasslab v1c/d |
+| F17 | **Bubbles** | round, clustered dome pebbles | grasslab v1c/d |
+| F18 | **Cracks** | hairline soil slits along seams | grasslab v1e |
+| F19 | **Clay cut** | grass ending as a carved wall, bevel or hole | grasslab v1e |
+| F20 | **Soil debris** | boxy pebbles, prism chips, a dashed step outlining each patch | grasslab v1g |
+| F21 | **Wall sprouts** | base at the tile edge, tip pointing inward | grasslab v1h |
+| F22 | **Rigid sticks** | straight fronds, no coherent arcing | grasslab v1i |
+| F23 | **Ruled rim** | tips lined up at a constant inset | grasslab v1i |
+| F24 | **Commas** | short independently bent fronds, no continuous flow lines | grasslab v1k |
+| F25 | **Smooth bank wall** | a clearing edged by one featureless vertical face | grasslab v2d |
 
 **Pre-paint test:** the bare grey print must read as grass.
 
@@ -367,35 +275,32 @@ frond into the next.*
 
 | Scene | Content | Passes when |
 |---|---|---|
-| **S0: hills only** | 2 × 2, grass off | Reads as natural ground; REQ-HILL-4 holds. |
-| **S1: swath study** | 1 × 1, flat ground (`--flat`) | Individual swaths with crests, shingled leading edges, fronds and grooves read clearly.  This is judged **first**, before any hill or full-tile tuning. |
-| **S2: approved tile** | 2 × 2 with hills, seed 1 | All of §2 holds, no F-mode is visible, and it reads as the reference's grass. |
-| **S3: seed sweep** | S2 at seeds 1–6 | At least 5 of 6 pass, and none looks stamped. |
-| **S4: print** | the S2 tile, printed, primed and drybrushed | Shadows under the swath edges survive, grooves stay dark, and nothing breaks. |
+| **S0: hills only** | 2 × 2, grass off | Reads as natural ground; REQ-HILL-3/4 hold. |
+| **S1: flat study** | 1 × 1, flat ground (`--flat`) | Ribbons, fronds, lips and grooves read clearly.  Judged first, before hill or full-tile tuning. |
+| **S2: approved tile** | 2 × 2 with hills, seed 1 | All of §2 holds, no F-mode is visible. |
+| **S3: seed sweep** | S2 at seeds 1–6 | At least 5 of 6 pass; none looks stamped. |
+| **S4: print** | S2 printed, primed, drybrushed | Tip and bank shadows survive, grooves stay dark, nothing breaks. |
 
 ---
 
-## 5. Physical starting points (calibrate from prints)
+## 5. Open questions
 
-| Parameter | Start |
-|---|---|
-| Swath spacing / length / width | 11 mm / 12–25 / 8–16 mm |
-| Swath crest height (envelope) | 1.2–2.2 mm above ground |
-| Frond length / half-width / dome height | 5.5–9.5 / 0.55–0.9 / 0.65–1.0 mm (v2d) |
-| Frond spacing (Poisson radius) | 2.0 mm |
-| Lip length / tip thickness | ≤ 2 mm / ≥ 0.6 mm |
-| Direction field coherence / swing | 15 mm / σ 60° |
-| Rim ease | grass height × 0.5 at the edge, full at 3 mm in |
+1. Should fronds carry a midrib or sub-grooves for extra texture, or does
+   the frond-to-frond groove suffice?  Judge on S1.
+2. Final dimensions come from the S4 print.
 
 ---
 
-## 6. Open questions
+## 6. Measured on the current code (seed 1 / seed 2, 2 × 2)
 
-1. Should fronds also carry a midrib or sub-grooves (feather barbs) for
-   extra texture, or does the frond-to-frond groove suffice?  Judge on S1.
-2. Should the swath crest sit at the downstream end, or nearer the middle
-   with a short roll-over?  Judge on S1.
-3. Final dimensions come from the S4 print.
+| Check | Seed 1 | Seed 2 |
+|---|---|---|
+| Ground (REQ-HILL) | 3.40–6.58 mm, max slope 34.0°, 78% ≤ 12° | 3.40–6.56 mm, 34.0°, 90% |
+| Soil (REQ-SOIL-2) | 6 lenses, 9.6%, 26 pebbles | 6 lenses, 10.0%, 30 pebbles |
+| Grass above ground (REQ-FDM-7) | mean 1.38, p95 2.45, max 3.23 mm | 1.43 / 2.37 / 3.44 mm |
+| Mean grass top (REQ-OUT-3) | 5.34 mm (OK) | 5.19 mm (OK) |
+| FDM backstop / overhang | +1,086 / −807 voxels; 5.8 mm² (0.07%) | +931 / −1,169; 8.1 mm² (0.10%) |
+| Mesh, size, time | 247k verts, 24.7 MB, ≈ 15 s | 254k verts, 25.4 MB, ≈ 15 s |
 
 ---
 
@@ -403,36 +308,41 @@ frond into the next.*
 
 ### 7.1 dharmatiles grass, Eras 0–8
 
-These are recorded in
-`docs/meta/history/2026-07-03-grass-greenfield-requirements.md` and
-`docs/design/grass-mound-thatch.md`, and cover the eras up to the current
-ThatchGrass default.  Recurring needs: proud-of-lower layering (reinvented
-five times), coherent but varied direction, and designed (not emergent)
-depth.  Recurring failures: height blowup, Z-jitter, bare borders, a flat
-mat, and indecision churn.
+Recorded in `docs/meta/history/2026-07-03-grass-greenfield-requirements.md`
+and `docs/design/grass-mound-thatch.md`.  Recurring needs: proud-of-lower
+layering (reinvented five times), coherent but varied direction, designed
+(not emergent) depth.  Recurring failures: height blowup, Z-jitter, bare
+borders, a flat mat, indecision churn.  Here each need is a
+by-construction guarantee: shingling (REQ-FR-2), a singularity-free field
+(REQ-FL-5), total coverage (REQ-SW-1), the height budget on the inputs
+(REQ-FDM-7).
 
-### 7.2 What carries over
-
-Each of these becomes a by-construction guarantee here:
-
-- proud-of-lower layering, as shingling (REQ-FR-2);
-- coherent direction, from a singularity-free field (REQ-SW-6);
-- total coverage, from the swath partition (REQ-SW-1);
-- the height budget, enforced on the inputs (REQ-FDM-7).
-
-### 7.3 grasslab v0 (2026-10-27): why it failed
+### 7.2 grasslab v0: why it failed (crumpled foil, F9)
 
 v0 built ~1,800 small lens blades in random order inside a binary voxel
-volume.  It came out printable and watertight, and read as **crumpled
-foil** (F9).
+volume.  It was printable and watertight, and read as crumpled foil.
 
-- **It was built bottom-up.**  There was no swath or crest structure in
-  the requirements, so none appeared in the output.
-- **Undercuts appeared incidentally** on every blade's sides, and the 45°
-  filter chamfered them into grit.  Undercuts must be designed, and only
-  at lips.
-- **Random stacking order** produced Z-jitter (F13).
-- **The binary voxel volume plus blur** produced terracing (F14).
-- **Clipped blades** left a ragged rim (F15).
-- **Process:** the 2 × 2 tile was built before S1 was looked at, and the
-  STL was handed over unseen.
+- **Built bottom-up**: no mid-scale structure was required, so none
+  appeared.  → Specify top-down, by visual scale.
+- **Undercuts appeared incidentally** on every blade side, and the 45°
+  filter chamfered them into grit.  → Design undercuts; only at lips.
+- **Random stacking order** gave Z-jitter; **binary voxels plus blur** gave
+  terracing; **clipped blades** left a ragged rim.
+- **Process**: the 2 × 2 tile was built before S1 was looked at, and the
+  STL was handed over unseen.  → S1 first; self-check renders always.
+
+### 7.3 Retired requirements and rejected approaches (keep the lessons)
+
+| Retired / rejected | Why | Replaced by |
+|---|---|---|
+| Swaths as the defining feature, fronds fanned ±12° off each swath axis (rev 2) | Read as clumps once compared with lodged grass; the flow, not the cell, should carry direction | Streamline fronds in strands (REQ-FL-1/3); swaths kept as a height wave only |
+| Coherent **sickle** curvature field (v1j–v1k, REQ-FR-7) | Each frond bent on its own: "clumps of commas" (F24) | Curvature belongs to the flow's in-phase meanders (REQ-FL-2) |
+| Per-frond rim steering (v1i–v1j) | Per-point side flips made a starburst (+1 source) | Steering applied to the field as a smoothed scalar rotation (REQ-EDGE-7) |
+| Free-standing swath envelope with rim height ease and soil cut (v1–v1e) | Grass "chopped like clay": rim bevel, holes, border steps (F19) | Grass made of fronds; boundaries are frond outlines (REQ-EDGE-1…5) |
+| Soft ends on **every** frond (v1h-a/b) | Whole tile turned into fish scales (F7) | Soft ends for soil-stopped bank fronds only (REQ-EDGE-6) |
+| Noise-warped ellipse puddles with ramp and trench rim (v1c/d) | "Terrible": puddles, bubbles (F16/F17) | Seam lanes (v1e), then lens clearings (v2a) |
+| Soil along **swath seams** (v1e–v1k) | Independent of the flow; the photo shows grass parting around clearings | Flow-aligned lenses the flow wraps (REQ-SOIL-1, REQ-FL-4) |
+| Prism pebbles (flat tops, 45–60° walls) and a hard dip step (v1g) | Boxy debris and a dashed outline (F20) | Faceted low domes; blurred dip mask |
+| Hard sign(b) side choice for lens partings | Long herringbone seam upstream of every lens | tanh side push |
+| Hills with a soft floor that could dip below the edge | Shawn: hills should rise from a consistent perimeter | Rises only (REQ-HILL-3) |
+| A single sweeping flow (θ σ 25 mm, ±35°) | "Not just one big sweep" | σ 15 mm, ±60° plus meanders |

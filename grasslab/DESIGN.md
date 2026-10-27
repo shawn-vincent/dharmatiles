@@ -1,462 +1,308 @@
 # grasslab — Sculpted Grass Tile: Design
 
-*Revision 2, 2026-10-27 (v1).  Implements `REQUIREMENTS.md` rev 2.
-Code: `grasslab/grasslab.py`.  Revision 1 (v0: random lens blades in a
-binary voxel volume) failed as "crumpled foil"; see REQUIREMENTS §7.3.*
+*Revision 3, 2026-10-27 (code v2f).  Implements `REQUIREMENTS.md` rev 3.
+Code: `grasslab/grasslab.py`; section numbers below match its stage
+banners.  Superseded designs and their lessons: §5; iteration log: §6.*
 
 ---
 
-## 1. Core idea: top-down, made of fronds, plus lips
-
-> **Rev 3 (2026-10-27):** the mass map T is no longer seeded with the
-> swath envelope.  T starts at bare ground (H₀), and **every bit of grass
-> height comes from a frond's own body**: a broad *skirt* that carries the
-> swath envelope under the frond's footprint, plus the blade on top.
-> Boundaries are the outlines of the last fronds (REQ-EDGE-1…5).  The rim
-> ease and the soil cut of the envelope are gone.  The diagram below still
-> shows the stage order; read "MASS map" as "soft-max of frond skirts and
-> blades over H₀".
-
-The grass is built **from the largest visual scale down**:
+## 1. Core idea: top-down, made of fronds, plus intervals
 
 ```
- H₀ hills ──► direction field θ ──► SWATH partition (warped anisotropic Voronoi)
-                                          │  per-cell axis, (s, l) coordinates,
-                                          │  wave envelope E(s, l)
-                                          ▼
-                     FRONDS: Poisson roots, each owned by the swath under its root,
-                     riding its own swath's envelope past the cell border
-                                          │
-              ┌───────────────────────────┴──────────────────────────┐
-              ▼                                                      ▼
-   MASS map T(x, y): soft-max of frond                 LIPS: the last ≤ 2 mm of each frond,
-   dome tops, solid to the ground                      a column interval [bottom, top] with
-   (a height field → no overhang)                      the underside chamfered at exactly 45°
-              └───────────────────────────┬──────────────────────────┘
-                                          ▼
-          scalar field F(x, y, z) = max(T − z, lip intervals)  (vertical signed distance)
-                                          ▼
-     FDM backstop (support filter, fill holes, bed connectivity)  →  marching cubes on F
-                                          ▼
-                      ∪ DB socket base (manifold3d) → simplify → STL
+ 1 H₀ hills (rises only) ──► 2 flow θ: regional angle + in-phase meanders + downhill pull
+                                   │
+          3 SWATH cells (warped anisotropic Voronoi) → wave height envelope E(s, l)
+                                   │
+ 4 soil LENSES (flow-aligned eyes) → flow wraps each lens → rim steering → final flow
+                                   │
+ 5 STRANDS of roots on long streamlines → each FROND traced along the flow:
+       skirt (carries E) + domed blade  ──soft-max──►  mass map T(x, y)   (height field)
+       tip lip, bank side ledge          ──────────►  column intervals [bottom, top], 45° undersides
+                                   │
+ 6 F(x, y, z) = max(T − z, intervals), clamped ±2 vox → FDM backstop → marching cubes
+                                   │
+ 7 ∪ DB socket base (manifold3d) → simplify 0.015 mm → keep largest body → STL
 ```
 
-Two guarantees drive this layout:
+Three guarantees drive the layout:
 
-- **Undercuts exist only where they are designed.**  The mass is a height
-  field, so it has no overhangs at all.  The *only* non-height-field
-  geometry is the lips, and each lip's underside rises at exactly 45°
-  from its root.  REQ-FDM-1, REQ-FDM-3 and REQ-FR-5 follow from the
-  geometry and need no filtering.  The bottom-up support filter is kept
-  only as a backstop, and its removal count is reported; it should be
-  about 0.
-- **No terracing.**  Marching cubes runs on a *continuous* field
-  (T − z is linear in z), so surfaces interpolate exactly between grid
-  samples.  There are no occupancy steps and no blur (REQ-GR-2).
+- **Undercuts only where designed.**  The mass T is a height field, so it
+  has no overhangs.  The only non-height-field geometry is the intervals
+  (tip lips, side ledges), each with a 45° underside measured from its own
+  crest.  REQ-FDM-1/3 and REQ-FR-4 follow from the geometry; the support
+  filter is a backstop whose changes are reported.
+- **Made of fronds.**  T starts at bare ground; every bit of grass height
+  is some frond's skirt or blade, so every boundary (rim, soil, swath
+  border) is frond outlines (REQ-EDGE-1…5).
+- **No terracing.**  Marching cubes runs on a *continuous* field (T − z is
+  linear in z), so surfaces interpolate exactly between samples (REQ-GR-2).
+
+Grids: ground, flow and swaths on a 0.25 mm grid extended 12 mm (ground)
+or 10 mm (swaths) past the tile; grass on a 0.12 mm voxel grid (0.1 mm at
+1 × 1) with column centres at (i + ½)·vox, so walls land on the tile edge.
 
 ## 2. Stages
 
-### 2.1 Hills H₀
+### 2.1 Hills H₀ (`make_ground`)
 
-Unchanged from v0, which passed: two-scale band-limited noise, normalised
-to 3 mm peak-to-valley, a slope cap, and a cosine feather to the edge
-level.
+- Noise: unit-variance Gaussian-filtered noise at σ 10 mm plus 0.35 × σ
+  5 mm.
+- **Rises only**: shift so the interior's 40th percentile is 0, soft-floor
+  at 0 with smoothmax (k = 0.25·std, offset so smoothmax(0, 0) = 0), clamp
+  ≥ 0, and scale so the interior max is 7 mm.
+- Cosine feather over 9 mm to the 3.4 mm edge level: h = 3.4 + w(dist)·raw.
+- **Slope cap**: if any slope exceeds 34°, the relief above the edge level
+  is scaled down uniformly.  On seed 1 the cap binds, leaving 3.40–6.58 mm
+  (≈ 3.2 mm of rise); 78% of the area is ≤ 12° (90% on seed 2).
+- `--flat` returns the constant edge level; the hill noise is still drawn
+  so the rest of the RNG stream is unchanged.
 
-Revised after the v1 review: landforms of σ 12 / 6 mm (mid weight 0.35),
-landforms σ 10 / 5 mm, a 7 mm raw relief target, a 9 mm edge feather, a 34° slope cap, a 4.2 mm edge level and a 1 mm soft floor (soft-max, k 0.3).  The
-earlier 6 mm feather forced steep slopes near the rim, which made the cap
-scale the whole relief down.  Realised relief is about 5–6 mm.
+### 2.2 Flow field (`make_direction`, `finish_flow`, `steer_rim`)
 
-**Rises only (v2f)**: the raw noise is shifted so its 40th percentile is
-0, soft-floored at 0 with smoothmax (k = 0.25σ), then hard-clamped at
-≥ 0 and scaled so the max equals the relief target.  The ground is
-therefore ≥ the edge level everywhere.  The 1 mm soft floor is gone, since
-the ground can no longer dip.  The edge level was lowered 3.9 → 3.4 mm
-so the mean grass top stays in the DB band (5.34 mm).  Usable area
-(≤ 12°) fell from 88% to 78%, because the same relief is concentrated in
-fewer, steeper hills.
+All steps before 4 operate on a scalar angle, which cannot form
+singularities (REQ-FL-5).
 
-### 2.1a Bare soil (rev 3: seams, not blobs)
-
-Soil is computed **after the swath partition**, because it comes from it.
-
-- **Seams**: column pairs with different swath owners give the seam
-  pixels for each cell pair (a, b).  Seams shorter than 5 mm, or within
-  4 mm of the rim, are ignored.  Each seam is scored by
-  −z(mean H₀) − z(mean envelope) + noise, so low ground and seams that
-  are already low (lateral or upstream edges) win.
-- **Lanes**: N = U(2.0, 2.5) × squares seams are opened, as chains of up
-  to 3 seams.
-  - Two seams chain only when they meet at a triple junction, meaning
-    (a, b) and (b, c) are both seams and (a, c) is too.  This makes the
-    lanes wind continuously.
-  - Each new lane starts 18 mm or more from existing ones, so the soil
-    spreads across the tile.
-- **Width**: an EDT from the opened seam pixels gives the distance d and
-  the nearest seam pixel.  The half-width is
-  `hw = 4.3 · clip((n + 0.9)/1.3, 0, 1)^0.8`, where n is smooth noise at
-  σ 3.5 mm sampled *at the nearest seam pixel*, so the width varies along
-  the lane.  Stretches with hw < 1.1 mm close entirely (no slits), and the
-  bank line gets 0.35 mm wobble.
-- **Mask**: m = smoothstep over a 0.5 mm bank, tapered to zero within
-  4–6 mm of the rim.
-- **Grass response (rev 3)**: the mask only decides where fronds root;
-  §2.4b gives the bank behaviour.  The rev 2 envelope cut, which carved a
-  hole in the grass volume, was removed.
-- **Soil relief**: −0.4·m_s (the trough, where m_s is the mask blurred
-  with σ 0.8 mm so no step outlines the patch), plus 0.08 mm·m_s
-  roughness, plus faceted pebbles.
-  - **Pebbles**: Poisson with density 0.06/mm² of soil, 1.2 mm or more
-    apart, radius skewed small (0.45–1.2 mm).
-  - **Shape**: each pebble is a low dome (0.5–0.7 r) cut by 7–10 planes
-    at 30–42°.  The rev 2 flat-topped, 45–60° prisms read as boxy chunks
-    on the 0.12 mm grid.
-
-### 2.2 Direction field θ
-
-A scalar angle field: θ₀ + 60°·n(x, y), with n smooth noise at σ = 15 mm,
-blended toward downhill by a bounded weight of 0.3 or less.  A scalar
-angle field has **no singularities**, so it cannot form crowns or vortices
-(REQ-SW-6).
-
-### 2.3 Swath partition (REQ-SW-1…5)
-
-- **Sites**: Poisson-disk at 11 mm over the tile plus a margin.  Each site
-  takes its axis dᵢ = θ(siteᵢ).
-- **Ownership**: each point takes the site minimising the anisotropic
-  distance
-  `‖(Δ·dᵢ)/1.0, (Δ·d⊥ᵢ)/0.65‖ + 2.5 mm · warp(x, y)`,
-  where warp is smooth noise at σ ≈ 3 mm.  Cells come out elongated
-  along their own flow, with irregular, non-polygonal borders
-  (REQ-SW-5).  Every point has exactly one owner, so coverage is total
-  by construction (REQ-SW-1).
-- **Cell coordinates**: the along-axis position a = Δ·dᵢ and lateral
-  position b = Δ·d⊥ᵢ, normalised per cell to
-  s = (a − a_min)/(a_max − a_min) ∈ [0, 1] and l = b/|b|_max ∈ [−1, 1].
-- **Wave envelope**:
-  `E(s, l) = A_i · (0.25 + 0.75·s^1.6) · (1 − l²)^0.6`, with A_i drawn
-  from 1.2–2.2 mm.  The envelope is low upstream and at the sides, and
-  high at the downstream centre (REQ-SW-3).  Lateral neighbours meet
-  near zero, so there are no side-by-side cliffs.
-
-### 2.4 Fronds (REQ-FR-*)
-
-- **Roots**: Poisson-disk at 2.0 mm over the tile plus a margin.  Each
-  frond is owned by the swath under its root and records its own s_b and
-  l_b.
-- **Direction**: dᵢ rotated by a fan of l_b·12° plus ±4° jitter, with a
-  slight curvature κ ∈ ±0.03 /mm (REQ-FR-3, REQ-FR-6).
-- **Length**: L = U(4, 8) · (0.75 + 0.4·s_b), so fronds grow toward the
-  crest.
-- **Local coordinates** for a column: u is the distance along the spine
-  (bent by κu²), and v is the lateral distance.
-- **Planform half-width**:
-  `w(u) = w_tip + (w_max − w_tip)·sin(π(0.25 + 0.75·u/L))`, with
-  w_tip = 0.45 mm.  It is widest at about L/3, and past u = L it closes
-  as a round cap of radius w_tip (REQ-FR-1, REQ-FDM-4).
-- **Height**: the frond **rides its own swath's envelope**, continued past
-  its cell's border.  Its s coordinate along the spine is
-  s(u) = min(s_b + u/len_i, 1).  Then:
-  `top(u, v) = H₀ + E_i(s(u), l_b) + h_f · rise(u) · dome(v/w)`
-  where:
-  - rise is a smoothstep from 0 at the base to 1 by 0.45 L, so the frond
-    emerges flush from the mass (REQ-FR-4).  From 0.55 L it then **droops**
-    smoothly to (1 − 0.35) at the tip, so the frond arches over instead of
-    ending in a raised fin;
-  - dome(q) = (1 − q²)^0.9, a ridged rather than flat-topped dome.
-  
-  A frond crossing into the next, lower swath therefore stays high, which
-  is the shingled leading edge (REQ-SW-4).  Inside a swath, the next
-  frond's base is low, so each tip laps the next base (REQ-FR-2).
-- **Mass versus lip split**: lip_len = min(2.0, 0.35·L).
-  - For u < L − lip_len, the frond contributes `top` to the mass map T
-    with a soft-max (k = 0.12 mm).  This rounds groove bottoms while
-    keeping crests crisp.
-  - For u ≥ L − lip_len, the frond contributes a lip interval instead.
-    The interval's top is `top`.  Its bottom is **measured back from the
-    tip**: `tip_crest − 0.6 − (L_t − u)`, a plane at 45°.  Because the top
-    only rises going back from the drooped tip, the centre line is always
-    at least 0.6 mm thick.  Side columns thinner than 0.6 mm are left out,
-    so the underside is only ever the chamfer plane.  Where the surface
-    below is higher, the lip simply fuses.
-
-### 2.4a Frond skirt (rev 3, REQ-EDGE-1/4)
-
-- Each frond has a **skirt** under its blade.  Its half-width is
-  ws(u) = 2.2·w_max·(1 − ((u − u_c)/u_h)²)^0.6, a lens running from
-  u = −0.6·ws_max (a rounded base behind the root) to the tip L_t.
-- **Skirt height**: `env_i(s(u), l_b) · taper(u) · (1 − q_s³)^1.5`, where
-  q_s = |v|/ws and the taper drops 45% toward the tip.  Neighbouring
-  skirts overlap heavily, so inside the grass their soft-max reproduces
-  the envelope as before.  At any boundary the grass ends in scalloped
-  frond lobes.
-- **Swath borders**: a frond's skirt rides its own swath's envelope past
-  the border and tapers with its own outline.  The leading edge is
-  therefore lobes over the next swath, not a step.
-- **Blade on top**: `h_f · rise(u) · dome(q)` inside the blade planform.
-- **Lip columns**:
-  - Only blade columns past u_lip become lip intervals.
-  - Skirt columns stay in the mass.
-  - Lip side columns too thin to undercut stay solid (a fused blade edge)
-    rather than being dropped, which had made the tips saw-toothed.
-
-### 2.4b Boundaries are where fronds grow (rev 3, REQ-EDGE-2/3/5)
-
-- **Rim**: only fronds rooted inside the tile exist.  Each frond is
-  **shortened** along its spine so the tip stops 0.4 mm inside the wall,
-  and is never sliced.  Skirt bases of fronds rooted right at the rim may
-  meet the wall.  There is no ease and no ramp.
-- **Soil**: fronds don't root in soil (10% become sprigs).  Bank fronds
-  are shortened where their spine reaches 1.5 mm deep into the soil
-  (EDT).  The soil mask never touches T.
-- **Shortened fronds are lower**: blade and skirt heights are scaled by
-  k_h = clip(L/L₀, 0.3, 1)^0.8.
-- **Bank fronds only** (REQ-EDGE-6):
-  - A frond whose spine was stopped by soil gets its skirt ramped to 0
-    over the last 2.2 mm (a pointed, lowering tip).
-  - A frond rooted within 2.5 mm of soil gets its base cap ramped up.
-  - All other fronds keep the rev 3 skirt unchanged.  Applying these
-    ramps globally (tried in v1h-a/b) scalloped the whole tile.
-
-### 2.2a Flow field v2: meanders, obstacles and rim (REQ-FL-2/4/5)
-
-Built on the ground's extended grid (0.25 mm), in this order:
-
-1. **Regional angle**: θ_r = θ₀ + 60°·n₁, with n₁ smooth noise at
-   σ 15 mm (as in v1k).
-2. **Meander**: θ = θ_r + A(x, y)·sin(2π·s/λ + φ(x, y)).
-   - s = x cos θ_r + y sin θ_r is the along-flow coordinate (θ_r varies
-     slowly, so s is locally a valid along-flow distance).
-   - λ = 15 mm.  A = 10° to 30° from smooth noise at σ 12 mm; φ is
-     smooth noise at σ 14 mm, ×2π.
-   - The sine depends only on s, so neighbouring streamlines wave
-     **in phase** (ribbons).  Drifting A and φ keep the waves irregular.
-     θ is still a scalar, so there are no singularities.
-3. **Downhill pull**: the vector blend toward downhill is unchanged
-   (≤ 0.3).
-4. **Obstacle deflection (soil lenses)**: for each patch with centre c,
-   axis a (along flow), half-length ℓ and half-width b:
-   - r is the lens-metric distance and n̂ the outward normal in that
-     metric.
-   - Within the falloff band 1 < r < 1 + 3 mm/b, the inward component
-     of v is removed with weight w = smoothstep: v ← v − w·min(v·n̂, 0)·n̂.
-   - Streamlines therefore slide around the lens.  At the upstream tip,
-     where v is antiparallel to n̂, a sideways push of
-     0.6·w·inward·tanh(b′/0.8 mm) along the lens perpendicular parts the
-     flow.  The side choice is *smooth*: a hard sign(b′) left a long
-     herringbone seam upstream of every lens.
-   - **Measured on seed 1**: 4 singular points in grass, all lens
-     partings and rejoins, and none from the rim.
-5. **Rim steering on the field**: the compress, pull and run-alongside
-   rule is computed per grid point.  Its ramp distance (9–15 mm), allowed
-   angle (70–88°) and pull (0.15–0.45) come from smooth noise maps, so
-   the rim is irregular.
-   - **Turn side**: taken from sin φ smoothed at σ 14 mm, so long
-     stretches of rim turn together.
-   - **Applied as a smoothed scalar rotation**: θ + G_σ1.5mm(wrap(θ_steered − θ)).
-     A continuous Δ added to a continuous θ cannot create singularities.
-     Per-point side flips had created a +1 source (a starburst) in the
-     first v2 run.  Where the side must flip, Δ passes through 0, leaving
+1. **Regional angle**: θ_r = θ₀ + 60°·n(σ 15 mm), θ₀ uniform.
+2. **Meander**: θ = θ_r + A·sin(2π·s/15 mm + φ).
+   - s is the **least-squares along-flow coordinate**, ∇s ≈ (cos θ_r,
+     sin θ_r), solved by FFT Poisson on a mirror-extended grid.  Lines of
+     constant s cross the flow, so neighbouring streamlines wave in phase.
+   - A = 10°–30° from smoothstep(0.5 + 0.35·n(σ 12 mm)); φ = π·n(σ 14 mm).
+3. **Downhill pull**: vector blend toward −∇H₀ with weight
+   0.3·clip(slope / tan 34°, 0, 1).
+4. **Lens wrap** (on the vector field), per lens with its own band
+   U(1.5, 4.5) mm and strength U(0.55, 1.0):
+   - d = lens-metric distance (§2.4), n̂ = normalised metric gradient,
+     w = strength·(1 − smoothstep(d / band)).
+   - Remove the inward component: v ← v − w·min(v·n̂, 0)·n̂.
+   - **Parting** at the upstream tip: v ← v − 0.6·w·min(v·n̂, 0)·tanh(b / 0.8 mm)·p̂,
+     with b the across-lens coordinate and p̂ the lens perpendicular.  The
+     smooth tanh side choice avoids a herringbone seam upstream.
+   - Renormalise.  Lens partings and rejoins are the only singularities.
+5. **Rim steering** (`steer_rim`).  Per grid point, three smooth knob maps
+   (smoothstep(0.5 + 0.35·n(σ 8 mm))): ramp distance 9–15 mm, allowed angle
+   φ_ok 70–88°, pull 0.15–0.45.  For each edge in turn (x = 0, x = W,
+   y = 0, y = H), with φ the heading measured from the edge's outward
+   normal and w = smoothstep(1 − dist/ramp):
+   - **Turn side** from sin φ smoothed at σ 14 mm, so long stretches of
+     rim turn the same way; φ is unwrapped to that side.
+   - **Compress inward headings**: |φ| > φ_ok → φ_ok + (|φ| − φ_ok)(1 − w).
+   - **Pull outward**: |φ| ← |φ|·(1 − pull·w).
+   - **Run alongside** within 3 mm: blend |φ| toward φ_ok with
+     smoothstep(1 − dist/3 mm).  (Without this every rim frond pointed into
+     the wall and was cut short, leaving a bare "picture frame".)
+   - Applied wherever w > 0, so at corners the later edge in that order
+     overrides the earlier one.
+   - The result is applied as a **smoothed scalar rotation**:
+     θ + G_σ1.5mm(wrap(θ_steered − θ)).  A continuous Δ cannot create a
+     singularity; where the turn side flips, Δ passes through 0 and leaves
      a short parting at the wall.
 
-### 2.3a Soil lenses (REQ-FL-4; supersedes seam soil)
+### 2.3 Swath envelope (`Swaths`)
 
-- **Placement**: N = U(1.3, 1.8) per square.  Centres are chosen from
-  interior candidates (7 mm inset) scored by depth plus noise, at least
-  13 mm apart.  Coverage is about 10%.
-- **Shape**: axis = the flow at the centre (pre-deflection).
-  Half-length is 5–9 mm, and the half-width is 0.45–0.65 of that.
-  - The lens planform is |a′|/ℓ + (b′/b)² ≤ 1 with a′ and b′ the local
-    along and across coordinates, which gives pointed ends: an eye.
-  - The border is warped ±0.8 mm by smooth noise at σ 1.2 mm, and the
-    mask is smoothstepped over 0.5 mm.
-- **Relief**: the trough, roughness and faceted pebbles are unchanged.
-- **Grass**: fronds don't root in soil.  Each frond's spill distance is
-  drawn as 0.8 + 2.4·U² mm.  About 4% of bank fronds are wisps allowed
-  4 mm, kept low by k_h.
+Swaths now supply **height only**; frond headings come from the flow.
 
-### 2.4b″ Strands of streamline fronds (REQ-FL-1/3; supersedes §2.4b′)
+- **Sites**: Poisson-disk at 11 mm over the tile + 10 mm margin.  Axis dᵢ =
+  the pre-wrap flow (step 3) at the site.
+- **Ownership**: argmin of ‖(Δ·dᵢ), (Δ·d⊥ᵢ)/0.65‖ + 2.5 mm·warp(x, y)·φᵢ,
+  with warp smooth noise at σ 3 mm and a per-site phase φᵢ ∈ U(−1, 1) (a
+  common warp would shift every distance equally and bend nothing).
+  Every point has one owner (REQ-SW-1); borders are irregular (REQ-SW-4).
+- **Cell coordinates** s = (a − a_min)/(a_max − a_min) ∈ [0, 1],
+  l = b/|b|_max ∈ [−1, 1], normalised per cell on the 0.25 mm grid.
+- **Envelope**: E(s, l) = Aᵢ·(0.25 + 0.75·s^1.6)·(1 − l²)^0.6, Aᵢ ∈
+  U(1.2, 2.2) mm: low upstream and at the sides, cresting downstream
+  (REQ-SW-2).
 
-- **Strand seeds**: Poisson-disk at 2.65 mm over the tile.  Each strand
-  has length U(15, 30) mm, starts up to half its length upstream of the
-  seed, and is traced along the field.
-- **Fronds per strand**: roots are placed every 0.5·L along the strand
-  streamline (L = U(5.5, 9.5)·(0.8 + 0.3·s_b)), each laterally jittered
-  ±0.3 mm.  Consecutive fronds overlap and shingle, building one long
-  ribbon.
-- **Spine**: each frond is traced along the field from its own root, as
-  a batch RK2 for all fronds at a 0.25 mm step, with a small heading
-  offset of ±4°.  Strays (5%) get ±20–35°.  The straight cap behind the
-  root is unchanged.  Projection uses the same `project_spine`.
-- **Seams between strands** come from the 2.65 mm strand spacing against
-  skirt half-widths of 1.2–2.0 mm (blade half-width 0.55–0.9, h_f 0.65–1.0).  Skirts overlap into a continuous
-  mass, while blade crests stand as separate ribbons.
-- Everything else (skirt, blade, lips, bank soft ends, k_h, and the
-  shortening tests) is unchanged.  The swath envelope still supplies
-  height.
+### 2.4 Soil lenses and soil relief (`place_lenses`, `Lenses`, `soil_relief`)
 
-### 2.4b′ Curved spines (REQ-FR-7)
+- **Placement**: N = round(U(1.3, 1.8) × squares), at least 1.  80
+  candidates inside a 7 mm rim inset, scored by −z-score(ground height) +
+  N(0, 0.8), accepted best-first ≥ 13 mm apart.  Typical coverage ≈ 10%.
+- **Shape**: axis = pre-wrap flow at the centre; half-length U(5, 9) mm,
+  half-width × U(0.45, 0.65).  Lens metric f = |a|/ℓ + (b/w)², which gives
+  pointed ends (an eye); approximate distance d = (f − 1)·w/2 plus a shared
+  ±0.8 mm border warp (σ 1.2 mm).  Mask = smoothstep(0.5 − d/0.5 mm).
+- **Grass response**: the mask decides only where fronds root and how far
+  they spill (§2.6); it never touches T.
+- **Relief** (added to H₀ on the grass grid):
+  - trough −0.4 mm·m_s and roughness 0.08 mm·n(σ 0.4 mm)·m_s, where m_s
+    is the mask blurred at σ 0.8 mm, so no step outlines the patch;
+  - **pebbles**: Poisson count at 0.06 per mm² of soil, centres where
+    m > 0.8, radius 0.45 + 0.75·U² mm, ≥ 1.2 mm + r + r′ apart.  Each is a
+    low dome (height 0.5–0.7 r, elongated 1–1.5×) cut by 7–10 planes at
+    30–42° with offsets 0.75–1.0 r, multiplied by the mask.
 
-- **Curvature field**: κ(x, y) = K_MAX · tanh(1.6 · n(x, y)), where n is
-  smooth noise at σ = 5.5 mm and K_MAX = 0.24 /mm.  Neighbours share
-  curvature (coherent clumps), while sign and strength drift across the
-  tile.  It is a scalar field, so nothing can form a vortex.
-- **Per frond**: κ_f = κ(root)·U(0.85, 1.15).  The total bend is
-  B = κ_f·L, with the heading θ(u) = θ_mid + B·((u/L)^1.6 − 0.5^1.6).
-  The bend is concentrated toward the tip (a sickle), never an S.
-  Anchoring at mid-length keeps each frond's *mean* heading on the swath
-  flow.
-- **Spine**: the heading is integrated into a polyline at 0.2 mm steps,
-  and extended straight behind the root by the skirt base cap.
-- **Local coordinates** for each column: project onto the nearest spine
-  segment.  The arc length gives u and the signed perpendicular gives v.
-  This replaces the small-bend parabola, which sheared wide fronds at
-  large bends.  Shortening, bounding boxes and lips all use the same
-  spine.
+### 2.5 Strands and spines (`make_strand_roots`, `plan_fronds`)
 
-### 2.4c Edge flow (REQ-EDGE-7)
+- **Strands**: Poisson seeds at 2.65 mm over the tile + 8 mm margin.  Each
+  strand is U(15, 30) mm long and starts U(0.2, 0.6) of its length
+  upstream of its seed (traced backward), then is traced forward.
+- **Roots** every 0.5·L·U(0.8, 1.2) along the strand, jittered ±0.3 mm
+  laterally, with L = U(5.5, 9.5) mm; only roots inside the tile are kept.
+- **Per root**: swath owner and (s_b, l_b); **bank** = within 4 mm of soil
+  and not in it.  Heading offset: strays (5%, or 12% for bank roots) get
+  ±U(20°, 35°), others U(±4°); bank roots add U(±15°) wander.
+- **Spines**: one batched RK2 trace per root along the final flow, at
+  0.25 mm unit-speed steps, rotated by the root's offset, to
+  9.5·1.1 + 0.45 + 0.5 mm.  Seams between strands come from the 2.65 mm
+  spacing against skirt half-widths of 1.2–2.0 mm: skirts merge into a
+  continuous mass, blade crests stand as separate ribbons.
 
-Each frond's heading is steered at its root, after the fan and jitter and
-before tracing:
+### 2.6 Frond draw and shortening (`draw_frond`)
 
-- **Per edge**: for each tile edge within `EDGE_FLOW_MM` = 12 mm of the
-  root (farthest first, so the nearest edge wins at corners), measure the
-  heading angle φ from that edge's **outward** normal (φ = 0 means
-  pointing at the edge, |φ| = 90° means along it).  The steering weight
-  is w = smoothstep(1 − dist/12 mm).
-- **Compress inward headings**: when |φ| > φ_ok = 80°, set
-  |φ'| = φ_ok + (|φ| − φ_ok)(1 − w).  At the rim, inward fronds become
-  near-parallel; 12 mm in they are untouched.  An 8 mm ramp turned too
-  sharply where the whole flow leaves an edge and read as a band.
-- **Pull toward the edge**: |φ''| = |φ'|·(1 − 0.35·w), so outward fronds
-  lean further toward the edge the closer they are.
-- **Swath-consistent side**: an inward heading must turn left or right,
-  and the swath axis decides.  If the axis is also inward and on the
-  other side of φ = ±180°, φ is unwrapped to the axis's side first.  The
-  whole swath then turns together and never parts down the middle.
-- **Curved fronds** are steered on their mid-length heading, so a
-  sickle's tip cannot curl back toward the interior at the rim.
-- **Irregular rim** (REQ-EDGE-8): per frond, the ramp distance is
-  U(9, 15) mm, the allowed angle is U(70°, 88°), the pull is
-  U(0.15, 0.45), and the tip inset is 0.2 + 1.3·U² mm.  Fronds rooted
-  within 3 mm of a wall are blended toward the allowed angle, so they
-  run *alongside* it.  Without this, every rim frond pointed into the
-  wall and was cut short, leaving a bare "picture frame" strip.
-- **Continuity**: the map is continuous in φ and in w.  Neighbouring
-  fronds have nearly equal roots and headings, so the steered field
-  stays smooth and blends into the interior flow with no band.  Only the
-  frond heading changes; the swath envelope is unchanged.
+- **Skips**: roots under an obstacle (meadowlab's rocks); roots in soil
+  become **sprigs** with 10% probability (L U(1.8, 3.0), half-width 0.5,
+  height 0.5, no skirt), otherwise are dropped.
+- **Dimensions**: L = L_strand·(0.8 + 0.3·s_b) (4.4–10.45 mm, longer
+  toward the crest); half-width w_max U(0.55, 0.9); blade height h_f
+  U(0.65, 1.0); skirt half-width 2.2·w_max.  Bank fronds: h_f × U(0.65, 1.15).
+- **Per-frond endings**: rim tip inset 0.2 + 1.3·U² mm; soil spill
+  0.8 + 2.4·U² mm, or 4 mm for wisps (4%).
+- **Shortening** (never slicing): the spine stops at the first sample
+  inside the rim inset, deeper than the spill into soil (EDT), or deeper
+  than `tuck_mm` into an obstacle.  L becomes that arc length minus the tip
+  cap; fronds shorter than 1.5 mm are dropped.  Shortened fronds are lower:
+  k_h = clip(L/L₀, 0.3, 1)^0.8 scales h_f and the skirt (REQ-EDGE-5).
+- **Soft ends** (bank fronds only, REQ-EDGE-6): *tip_soft* if the spine was
+  stopped by soil; *base_soft* if rooted within 2.5 mm of soil.
 
-### 2.4d Bank piles: side ledges and bank variability (REQ-FL-6)
+### 2.7 Frond body (`frond_spine`, `sculpt_frond`)
 
-- **Bank fronds**: fronds rooted within 4 mm of soil (`soil_dist`).
-- **Variability**, decided before tracing:
-  - extra heading wander of ±15°;
-  - a stray probability of 12% instead of 5%;
-  - a height scale of U(0.65, 1.15) on both the blade and the skirt
-    envelope, so stacked blades sit at different levels.
-  - **Per lens**: the deflection band is U(1.5, 4.5) mm and the strength
-    U(0.55, 1.0), so flow hugs some clearings and spills across others.
-- **Soil-facing side** of a column: the spine tangent at u (from the
-  traced path) gives the outward lateral direction (perp · sign v).  The
-  column faces soil when outward · (−∇soil_dist) > 0.3 and it lies within
-  6 mm of soil.
-- **Side ledge**: on the facing side of a bank frond, with e = w − |v|
-  (the distance in from the blade edge) and W_l = 0.7 mm:
-  - **Body (mass)**: columns with e ≥ W_l, unchanged.  The body therefore
-    ends in a recessed vertical face at e = W_l.
-  - **Ledge (interval)**: columns with 0 ≤ e < W_l and u < u_lip.
-    - Top = the normal frond top, computed with the *full* skirt.
-    - Bottom = top − 0.6 − e, measured from the ledge's own top.  An
-      earlier form measured from the skirt height at the blade edge,
-      which can sit near the ground, and the carve dug holes to bare
-      ground.
-    - The underside descends inward at exactly 45°.  Thickness is
-      top − bottom ≥ 0.6 mm everywhere, because the top only rises
-      inward.
-    - The ledge fuses to the body face at e = W_l.
-  - **Skirt beyond the blade** on the facing side is dropped, so nothing
-    fills under the ledge.
-  - Tip lips (u ≥ u_lip) take precedence over side ledges.
-- **Opening the undercut**: neighbouring skirts fill in under every
-  ledge (measured: 996 of 402k ledge columns open).  So after all fronds
-  are built, the mass under each *visible* ledge column (its top is the
-  surface there) is cut to the ledge bottom, which leaves a wedge.
-- **Result**: each bank frond's edge is a ridge with a dark undercut.
-  Fronds at different heights (from the height scale, the envelope and
-  stacking) give several ridge lines down the bank face.
+- **Spine** = traced path to L_t + 0.3 mm (every second sample) plus a
+  straight cap of length c_b + 0.3 behind the root, c_b = 0.6·skirt width.
+  Columns are projected onto the polyline: arc length u, signed offset v.
+- **Blade planform**: w(u) = w_tip + (w_max − w_tip)·sin(π(0.25 + 0.75·u/L)),
+  w_tip = 0.45 mm, widest at L/3; past u = L a round cap of radius w_tip;
+  L_t = L + w_tip.
+- **Skirt planform**: ws(u) = ws_max·clip(1 − ((u − u_c)/u_h)², 0, 1)^0.6,
+  a lens from −c_b to L_t.
+- **Skirt height**: k_h·h_scale·E(s(u), l_b)·taper·(1 − q_s³)^1.5, with
+  s(u) = min(s_b + u/len_i, 1) (the frond rides its own swath's envelope
+  past the border: shingled leading edges, REQ-SW-3), q_s = |v|/ws, and
+  taper = 1 − 0.45·smoothstep((u − L/2)/(L_t − L/2)).  tip_soft multiplies
+  by a ramp to 0 over the last min(2.2, 0.4·L_t) mm; base_soft ramps the
+  base cap up over 1.5·c_b.
+- **Blade height**: h_f·rise(u)·(1 − q²)^0.9, q = |v|/w.  rise is a
+  smoothstep from 0 to 1 by 0.45 L (flush base), then **droops** from
+  0.55 L to (1 − 0.35) at L_t, so the frond arches over instead of ending
+  in a fin.
+- **top** = H₀ + skirt + blade.  Mass columns contribute
+  T ← smoothmax(T, top, k = 0.12 mm), which rounds groove bottoms and
+  keeps crests crisp.
+- **Tip lip**: blade columns with u ≥ L_t − min(2.0, 0.35·L).  Bottom =
+  tip_crest − 0.6 − (L_t − u), a 45° plane measured back from the drooped
+  crest (ground at the tip + skirt at the tip + h_f·rise(L_t)).  Columns at
+  least 0.6 mm thick become intervals; thinner side columns stay in the
+  mass (dropping them sawtoothed the tips).
+- **Bank side ledge** (REQ-FL-6), bank fronds only:
+  - A column *faces soil* when the outward lateral direction (spine
+    tangent ⊥ · sign v) · (−∇soil_dist) > 0.3 and it lies within 6 mm of
+    soil.  Skirt columns beyond the blade on the facing side are dropped,
+    so nothing fills under the ledge.
+  - Facing blade columns with e = w − |v| < 0.7 mm (and not lip) become a
+    ledge interval: top = the normal frond top, bottom = top − 0.6 − e, a
+    45° underside ≥ 0.6 mm thick that fuses to the recessed body face at
+    e = 0.7 mm.  (Measuring from the skirt height at the blade edge instead
+    dug holes to bare ground.)
+- **Opening the undercuts** (`open_ledges`): neighbouring skirts fill in
+  under almost every ledge, so after all fronds, T is cut down to the ledge
+  bottom wherever the ledge top is the surface (top ≥ T − 0.05), and those
+  columns become intervals: a wedge, never a slot.
 
-### 2.5 Grooves (REQ-GR-*)
+### 2.8 Field, FDM backstop, meshing (`make_field`, `fdm_backstop`, `mesh_field`)
 
-Grooves come from the geometry and are never carved:
+- F = clamp(max(T − z, min(z − bottom, top − z) per interval), ±2·vox) up
+  to max height + 0.3 mm, in float32.
+- **Backstop** on occupancy F > 0: fill holes (open at the top), then up
+  to four rounds of a bottom-up support filter (each voxel needs a
+  4-neighbour or itself below: 45° at one voxel per layer) and bed
+  connectivity (components touching z = 0).  Changed voxels get F = ±vox.
+  Counts are reported; ≈ 1–3k voxels of ~3·10⁷, mostly sealed pockets
+  filled.
+- **Meshing**: pad with air, marching cubes at level 0, trimesh vertex
+  merge, orient outward, convert to manifold3d.  If manifold3d rejects the
+  mesh (coincident vertices from field values ≈ 0 at grid nodes, merged
+  into pinched edges), values with |F| < 10⁻³·vox are pushed to ±10⁻³·vox
+  and the field is re-meshed once.  Valid meshes never take this path.
+- **Base**: ∪ DB base (peg height from the tallest point),
+  `simplify(0.015 mm)`, keep the largest body, report crumbs, export.
 
-- Adjacent domes meet in V-channels whose depth is about h_f at the
-  frond edges.  The soft-max sets a minimum groove radius of about k.
-- Each lip leaves a 45° wedge shadow.
+## 3. Parameters (module constants, `grasslab.py`)
 
-The dome and spacing are sized so neighbouring fronds overlap their
-edges, which keeps grooves about 0.6 mm wide or more at half depth.
-
-### 2.6 Rim (REQ-FDM-6, REQ-EDGE-3)
-
-*Superseded in rev 3.*  The old 0.5 → 1 height ease produced a uniform
-bevel ("chopped at an angle") and was removed.  See §2.4b.
-
-### 2.7 Field, FDM backstop, meshing
-
-- F = clamp(max(T − z, lip intervals), ±2·vox), on a grid of vox = 0.12 mm
-  (0.1 mm for 1 × 1).
-- Backstop on occupancy F > 0: a bottom-up 45° support filter, hole
-  filling and 6-connected bed connectivity.  Every voxel these change has
-  F forced to ±vox.  All changes are counted and reported, and should be
-  about 0 by construction.
-- Meshing pads with air and runs marching cubes on F at level 0, with no
-  blur.  Grid centres sit at (i + ½)·vox so walls land exactly on the tile
-  edges.  Then: ∪ DB base, `simplify(0.015 mm)`, keep the largest body
-  (crumbs are reported), and export.
-
-## 3. Parameters (module constants)
-
-| Constant | v1 |
+| Stage | Constants (value) |
 |---|---|
-| `SWATH_SPACING_MM`, aspect (along : lateral), warp | 11, 1 : 0.65, 2.5 mm @ σ 3 mm |
-| `SWATH_AMP_MM` | 1.2–2.2 |
-| envelope floor / exponent / lateral exponent | 0.25 / 1.6 / 0.6 |
-| `FROND_SPACING_MM` | 1.6 |
-| frond L / w_max / h_f | 5–9 / 0.6–1.0 / 0.7–1.1 mm |
-| dome exponent / tip droop | 0.9 / 0.35 |
-| ground edge level | 3.3 mm (puts the mean grass top in the DB band) |
-| fan / jitter / curvature | 12° / 4° / ±0.03 /mm |
-| lip max / tip t_min | 2.0 mm (0.35 L) / 0.6 mm |
-| soft-max k | 0.12 mm |
-| θ coherence / swing / terrain follow | 15 mm / 60° / 0.3 |
-| rim ease | 0.5 → 1 over 3 mm |
+| grids | `SQUARE_MM` 35, `FIELD_RES_MM` 0.25, `VOX_MM` 0.12, `VOX_1X1_MM` 0.10, `MARGIN_MM` 10 |
+| 1 hills | `HILL_RELIEF_MM` 7.0, `GROUND_EDGE_MM` 3.4, `HILL_SIGMA_LARGE_MM` 10, `HILL_SIGMA_MID_MM` 5, `HILL_MID_WEIGHT` 0.35, `HILL_PLAIN_FRAC` 0.4, `HILL_PLAIN_SOFT` 0.25, `EDGE_MARGIN_MM` 9, `MAX_GROUND_SLOPE_DEG` 34, `USABLE_SLOPE_DEG` 12 |
+| 2 flow | `COHERENCE_MM` 15, `THETA_STD_DEG` 60, `TERRAIN_FOLLOW` 0.3, `MEANDER_WAVELENGTH_MM` 15, `MEANDER_AMP_DEG` 10–30, `MEANDER_AMP_SIGMA_MM` 12, `MEANDER_PHASE_SIGMA_MM` 14 |
+| 3 swaths | `SWATH_SPACING_MM` 11, `SWATH_LATERAL_ASPECT` 0.65, `SWATH_WARP_MM` 2.5, `SWATH_WARP_SIGMA_MM` 3, `SWATH_AMP_MM` 1.2–2.2, `ENV_FLOOR` 0.25, `ENV_EXP` 1.6, `ENV_LATERAL_EXP` 0.6 |
+| 4 lenses | `SOIL_LENSES_PER_SQ` 1.3–1.8, `SOIL_LENS_CANDIDATES` 80, `SOIL_LENS_SCORE_NOISE` 0.8, `SOIL_LENS_HALF_LEN_MM` 5–9, `SOIL_LENS_ASPECT` 0.45–0.65, `SOIL_LENS_SEP_MM` 13, `SOIL_RIM_KEEP_MM` 7, `SOIL_LENS_WARP_MM` 0.8, `SOIL_LENS_WARP_SIGMA_MM` 1.2, `SOIL_EDGE_MM` 0.5 |
+| 4 wrap | `DEFLECT_BAND_MM` 1.5–4.5, `DEFLECT_STRENGTH` 0.55–1.0, `PARTING_PUSH` 0.6, `PARTING_SOFT_MM` 0.8 |
+| 4 relief | `SOIL_DIP_MM` 0.4, `SOIL_DIP_SOFT_MM` 0.8, `SOIL_ROUGH_MM` 0.08, `SOIL_ROUGH_SIGMA_MM` 0.4, `PEBBLE_DENSITY` 0.06, `PEBBLE_R_MM` 0.45–1.2, `PEBBLE_GAP_MM` 1.2 |
+| 4b rim | `RIM_NOISE_SIGMA_MM` 8, `EDGE_FLOW_MM` 9–15, `EDGE_OK_DEG` 70–88, `EDGE_PULL` 0.15–0.45, `RIM_ALONG_MM` 3, `STEER_SIDE_SIGMA_MM` 14, `STEER_SMOOTH_MM` 1.5 |
+| 5 strands | `STRAND_SPACING_MM` 2.65, `STRAND_LEN_MM` 15–30, `STRAND_BACK_FRAC` 0.2–0.6, `STRAND_MARGIN_MM` 8, `STRAND_GAP_FRAC` 0.5, `STRAND_LATERAL_MM` 0.3, `TRACE_STEP_MM` 0.25 |
+| 5 fronds | `FROND_LEN_MM` 5.5–9.5, `FROND_HALF_W_MM` 0.55–0.9, `FROND_H_MM` 0.65–1.0, `FROND_TIP_HALF_W_MM` 0.45, `FROND_MIN_LEN_MM` 1.5, `FROND_DELTA_DEG` 4, `STRAY_FRAC` 0.05, `STRAY_DELTA_DEG` 20–35, `SPINE_PAD_MM` 0.3, `SPRIG_PROB` 0.10, `SPRIG_LEN_MM` 1.8–3.0, `SPRIG_HALF_W_MM` 0.5, `SPRIG_H_MM` 0.5 |
+| 5a body | `DOME_EXP` 0.9, `DROOP` 0.35, `SKIRT_FACTOR` 2.2, `SKIRT_BASE_CAP` 0.6, `SKIRT_TIP_DROP` 0.45, `LIP_MAX_MM` 2.0, `LIP_FRAC` 0.35, `LIP_MIN_T_MM` 0.6, `SOFTMAX_K_MM` 0.12 |
+| 5b endings, banks | `RIM_TIP_INSET_MM` 0.2–1.5, `SOIL_SPILL_MM` 0.8–3.2, `WISP_FRAC` 0.04, `WISP_SPILL_MM` 4.0, `SOIL_BASE_SOFT_MM` 2.5, `SKIRT_END_MM` 2.2, `BANK_REACH_MM` 4, `BANK_FACE_MM` 6, `BANK_WANDER_DEG` 15, `BANK_STRAY_FRAC` 0.12, `BANK_H_SCALE` 0.65–1.15, `SIDE_LIP_W_MM` 0.7 |
+| 6–7 mesh | `SIMPLIFY_TOL_MM` 0.015, `OVERHANG_DEG` 45 (audit counts n_z < −sin 48°), `DB_GRASS_BAND` 4.4–5.9 |
 
-## 4. Risks to judge on S1
+`build_grass(…, blocker=None, tuck_mm=0.5)` is the hook meadowlab uses for
+rock footprints; with `blocker=None` it is grasslab's own behaviour.
 
-- **Swaths reading as fish scales or roof tiles** (F7) if the envelopes
-  are too regular.  Levers: amplitude spread, warp, aspect.
-- **Lip shadows too faint.**  Lever: D and the swath amplitude contrast.
-- **Fronds reading as pods.**  Levers: a lower dome exponent and longer L.
+## 4. Known quirks (kept: changing them changes the approved output)
 
-## 5. v1 iteration log (2026-10-27)
+- The tip-lip crest uses k_h·E for the skirt part but not the bank height
+  scale h_scale, which the skirt itself does get.  For bank fronds the lip
+  underside reference is therefore slightly off the real crest (thinner
+  lips when h_scale < 1, thicker when > 1).
+- Rim steering processes edges in a fixed order and overwrites wherever the
+  ramp is active, so corners follow the y-edges, not the nearest edge.
+- `WISP_FRAC` is drawn for every frond; it only matters where a spine
+  reaches soil.
 
-| Iter | Named artifact (Claude's self-check) | Fix |
+## 5. Superseded designs (lessons kept)
+
+- **Free-standing envelope layer (rev 2, v1–v1e)**: T was seeded with the
+  swath envelope, eased to 0.5× at the rim and cut at soil.  Result:
+  rim bevel, carved holes, border steps ("clay", F19).  Lesson: no grass
+  height outside a frond body.
+- **Swath-axis fronds with fan** (l_b·12° fan, ±4° jitter, κ ± 0.03/mm):
+  superseded by streamline fronds; the flow, not the cell, carries
+  direction.
+- **Seam soil (v1e–v1k)**: lanes along swath seams (triple-junction
+  chains, width from noise at the nearest seam pixel, slits < 2.2 mm
+  closed).  Better than puddles, but unrelated to the flow; replaced by
+  lenses the flow wraps.
+- **Curvature field and sickle spines (v1j–v1k)**: κ = 0.24·tanh(1.6·n)
+  /mm at σ 5.5 mm, bend concentrated toward the tip.  Coherent but still
+  per frond: "commas" (F24) beside the lodged-grass photo.  The spine
+  projection (`project_spine`) survived and is used for streamlines.
+- **Per-frond edge steering (v1i–v1j)**: steering each frond at its root.
+  Superseded by steering the field; per-point side flips had created a
+  starburst.
+- **Global soft frond ends (v1h-a/b)**: fish scales everywhere; now bank
+  fronds only.
+- **v0**: random lens blades in a binary voxel volume; see REQUIREMENTS §7.2.
+
+## 6. Iteration log (2026-10-27, chronological)
+
+| Iter | Trigger | Change |
 |---|---|---|
-| v1a | **shark fins**: frond tips at the crest with vertical fronts; **roof shingles**: wide flat domes, no along-flow grooves; mean top 4.26 mm (below the band) | droop to the tip, underside measured from the tip; narrower and denser fronds; dome exponent 0.55 → 0.9; ground edge 3.0 → 3.3 |
+| v1a | self-check: **shark fins** (tips at the crest, vertical fronts), **roof shingles** (wide flat domes), mean top 4.26 mm (below the band) | tip droop, lip underside measured from the tip; narrower, denser fronds; dome exponent 0.55 → 0.9; edge level 3.0 → 3.3 |
 | v1b | handed to Shawn | — |
+| v1c | Shawn: "increase the hills a bit… a few patches of bare ground" | hills ≈ 4 mm; first bare-soil patches |
 | v1d | Shawn: "slightly more hills, slightly more bare patches" | relief ≈ 5 mm, 30° cap, edge 4.0 mm; 4 patches (8.6%) |
-| v2a | Shawn: lodged-grass photo → "go with the flow-following ribbons" | meandering flow field (in-phase waves), soil lenses that deflect the flow, rim steering on the field, strands of streamline-traced fronds (§2.2a, 2.3a, 2.4b″) |
-| v2f | Shawn: hills should rise from a consistent perimeter ("rises only") | plains at edge height plus rising hills; edge 3.4 mm; ground 3.40–6.58 mm |
-| v2e | Shawn: bank "vertical wall" should look like a pile of blades: undercut ridges, meandering variability | bank side ledges with 45° undercuts (§2.4d), bank heading wander/stray/height scale, per-lens deflection band and strength; undercuts opened by carving under visible ledges.  The FDM backstop now does real work (+3.1k/−1.5k voxels, mostly sealed pockets filled), and the overhang audit reads 11 mm² (0.14%). |
-| v2d | Shawn: "split the difference" between v2b and v2c blades | fronds 5.5–9.5 mm, half-width 0.55–0.9, h_f 0.65–1.0; strands 2.65 mm apart |
-| v2c | Shawn: "at miniature scale the blades should be shorter… still like that meandering look" | fronds 7–12 → 4–7 mm, half-width 0.6–1.0 → 0.5–0.8, h_f 0.7–1.1 → 0.6–0.9; strands 3.0 → 2.3 mm apart; flow field unchanged (≈ 4,000 fronds) |
-| v2b | self-check: starburst near the top-left rim, herringbone seams upstream of lenses, soil at 5% | rim steering as a smoothed scalar Δ with a smoothed turn side; tanh lens side push; lenses enlarged (≈10%); ground edge 4.2 → 3.9 mm (grass top 5.73 → 5.28) |
-| v1k | Shawn: "more curves and a little more variation in the direction… not just one big sweep" | curvature K_MAX 0.16 → 0.24 at σ 5.5 mm; θ swing 35° → 60° at σ 25 → 15 mm; swaths 13 → 11 mm; soil re-tuned to ~13% (smaller swaths had opened 20%) |
-| v1j | Shawn: "our grass is very straight… should be more curved, but not randomly"; edge endings too regular | coherent curvature field + true curved spines (§2.4b′); per-frond random edge steering and tip inset |
-| v1i | Shawn: grass near the edge "shouldn't point in the other direction"; should end at or run alongside the edge | per-frond edge-flow steering (§2.4c), 12 mm ramp |
-| v1h | Shawn: rim good; "bare patches have some weird artifacts" → sawn-log frond ends at banks, boxy prism pebbles, dashed dip step | bank-only soft frond ends (global version scalloped the tile, reverted), dome-faceted pebbles, blurred dip mask |
-| v1g | Shawn: "more hills and bigger bare patches" | smaller landforms (σ 10), relief ≈ 5.4 mm, 34° cap, 1 mm soft floor; soil lanes wider (hw 5.8) and more seams → 12.8% |
-| v1f | Shawn: grass "uniformly chopped down like it was all made of clay" at the rim and the bare spots; confirmed by close-up renders (rim bevel, carved soil walls, swath-border steps) | grass made of fronds: skirts carry the envelope, T starts at H₀, boundaries come from shortening fronds, shortened fronds are lower; rim ease and soil envelope cut removed |
-| v1e | Shawn: "bare patches are terrible" (puddles, trench rims, bubble pebbles) | soil rebuilt from swath seams: winding lanes, sharp banks with limited spill, trough, faceted pebbles, sprigs; slit stretches closed; lanes spread 18 mm apart |
-| v1c | Shawn: "increase the hills a bit… a few patches of bare ground" | hills ≈ 4 mm (see §2.1); bare-soil patches (§2.1a) |
+| v1e | Shawn: "bare patches are terrible" (puddles, trench rims, bubble pebbles) | seam-lane soil, sharp banks with limited spill, trough, faceted pebbles, sprigs |
+| v1f | Shawn: grass "chopped down like it was all made of clay" (rim bevel, soil walls, border steps) | grass made of fronds: skirts carry the envelope, T starts at H₀, boundaries by shortening, shortened fronds lower |
+| v1g | Shawn: "more hills and bigger bare patches" | landforms σ 10/5 mm, 34° cap, 9 mm feather; wider lanes (12.8%) |
+| v1h | Shawn: "bare patches have some weird artifacts" | bank-only soft ends (global version scalloped the tile, reverted), dome-faceted pebbles, blurred dip mask |
+| v1i | Shawn: rim grass "shouldn't point in the other direction" | per-frond edge-flow steering |
+| v1j | Shawn: "our grass is very straight… should be more curved, but not randomly"; rim too regular | curvature field + curved spines; per-frond steering and tip inset variation |
+| v1k | Shawn: "more curves… not just one big sweep" | K_MAX 0.16 → 0.24; θ swing 35° → 60° at σ 25 → 15 mm; swaths 13 → 11 mm |
+| v2a | Shawn: lodged-grass photo → "go with the flow-following ribbons" | in-phase meandering field, soil lenses that deflect the flow, rim steering on the field, strands of streamline fronds |
+| v2b | self-check: rim starburst, herringbone upstream of lenses, soil 5% | smoothed scalar rim rotation with smoothed turn side; tanh parting; lenses ≈ 10%; edge 4.2 → 3.9 mm |
+| v2c | Shawn: "at miniature scale the blades should be shorter… still like that meandering look" | fronds 7–12 → 4–7 mm, narrower and lower; strands 3.0 → 2.3 mm |
+| v2d | Shawn: "split the difference" | fronds 5.5–9.5 mm, half-width 0.55–0.9, h_f 0.65–1.0; strands 2.65 mm |
+| v2e | Shawn: bank "vertical wall" should be a pile of blades | side ledges with 45° undercuts, opened under visible ledges; bank wander/stray/height scale; per-lens deflection band and strength |
+| v2f | Shawn: hills should rise from a consistent perimeter | rises only; edge 3.9 → 3.4 mm (mean top 5.34 mm); usable 88% → 78% |
+| — | refactor (no geometry change; all outputs byte-identical) | stages split (`Surface`, `plan_fronds`, `draw_frond`, `sculpt_frond`, `open_ledges`); constants grouped by stage; meshing retry on non-manifold marching cubes (previously a silent empty STL, seen in meadowlab) |
