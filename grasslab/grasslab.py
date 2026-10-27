@@ -28,14 +28,15 @@ SQUARE_MM            = 35.0
 
 # hills (unchanged from v0)
 HILL_RELIEF_MM       = 7.0
-GROUND_EDGE_MM       = 3.9
+GROUND_EDGE_MM       = 3.4
 HILL_SIGMA_LARGE_MM  = 10.0
 HILL_SIGMA_MID_MM    = 5.0
 HILL_MID_WEIGHT      = 0.35
 MAX_GROUND_SLOPE_DEG = 34.0
 USABLE_SLOPE_DEG     = 12.0
 EDGE_MARGIN_MM       = 9.0
-GROUND_FLOOR_MM      = 1.0
+HILL_PLAIN_FRAC      = 0.4         # share of the interior left at perimeter level
+HILL_PLAIN_SOFT      = 0.25        # softness of the plain→hill toe (× noise std)
 
 # direction field
 COHERENCE_MM         = 15.0
@@ -190,8 +191,14 @@ def make_ground(rng, W, H, res, flat):
     xs, ys = -m + np.arange(nx) * res, -m + np.arange(ny) * res
     X, Y = np.meshgrid(xs, ys, indexing='ij')
     inside = (X >= 0) & (X <= W) & (Y >= 0) & (Y <= H)
-    raw = raw - raw[inside].mean()
-    raw *= HILL_RELIEF_MM / (raw[inside].max() - raw[inside].min())
+    # Rises only: the perimeter level is the lowest ground anywhere.  Low
+    # ground is softly floored to it (flat plains at edge height) and hills
+    # rise from those plains; ~HILL_PLAIN_FRAC of the interior stays plain.
+    raw = raw - np.quantile(raw[inside], HILL_PLAIN_FRAC)
+    sd = raw[inside].std()
+    raw = smoothmax(raw, np.zeros_like(raw), HILL_PLAIN_SOFT * sd) - HILL_PLAIN_SOFT * sd * np.log(2)
+    raw = np.maximum(raw, 0.0)
+    raw *= HILL_RELIEF_MM / max(raw[inside].max(), 1e-9)
     dist = np.minimum.reduce([X, W - X, Y, H - Y])
     wgt = 0.5 - 0.5 * np.cos(np.pi * np.clip(dist / EDGE_MARGIN_MM, 0, 1))
     h = GROUND_EDGE_MM + wgt * raw
@@ -202,9 +209,6 @@ def make_ground(rng, W, H, res, flat):
         h = GROUND_EDGE_MM + (h - GROUND_EDGE_MM) * smax / slope[inside].max()
         gx, gy = np.gradient(h, res)
         slope = np.hypot(gx, gy)
-    # Soft floor: keep the slab ≥ ~GROUND_FLOOR_MM thick over the base in the
-    # deepest dips without flattening them (soft-max, k = 0.3 mm).
-    h = smoothmax(h, np.full_like(h, GROUND_FLOOR_MM), 0.3)
     stats = dict(ground_min=float(h[inside].min()), ground_max=float(h[inside].max()),
                  max_slope_deg=float(np.degrees(np.arctan(slope[inside].max()))),
                  usable=float((slope[inside] <= np.tan(np.radians(USABLE_SLOPE_DEG))).mean()))

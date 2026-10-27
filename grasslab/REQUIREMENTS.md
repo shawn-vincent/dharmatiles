@@ -109,6 +109,10 @@ script or statistic (**[S]**).
   and no slope exceeds 34°.
 - **REQ-HILL-5** H₀ has no high-frequency noise.
 - **REQ-HILL-6 [S]** The ground is feathered to a constant edge height.
+- **REQ-HILL-8 [S] Rises only.**  *(Shawn, 2026-10-27.)*  The perimeter
+  level is the lowest ground on the tile.  Hills rise from flat plains
+  at edge height, about 40% of the interior stays plain, and nothing
+  dips below the edge.
 - **REQ-HILL-7** The grass seats on H₀ and follows its curvature.
 
 ### 2.3b Edges: grass ends as grass (all boundaries)

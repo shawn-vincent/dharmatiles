@@ -67,6 +67,15 @@ landforms σ 10 / 5 mm, a 7 mm raw relief target, a 9 mm edge feather, a 34° sl
 earlier 6 mm feather forced steep slopes near the rim, which made the cap
 scale the whole relief down.  Realised relief is about 5–6 mm.
 
+**Rises only (v2f)**: the raw noise is shifted so its 40th percentile is
+0, soft-floored at 0 with smoothmax (k = 0.25σ), then hard-clamped at
+≥ 0 and scaled so the max equals the relief target.  The ground is
+therefore ≥ the edge level everywhere.  The 1 mm soft floor is gone, since
+the ground can no longer dip.  The edge level was lowered 3.9 → 3.4 mm
+so the mean grass top stays in the DB band (5.34 mm).  Usable area
+(≤ 12°) fell from 88% to 78%, because the same relief is concentrated in
+fewer, steeper hills.
+
 ### 2.1a Bare soil (rev 3: seams, not blobs)
 
 Soil is computed **after the swath partition**, because it comes from it.
@@ -438,6 +447,7 @@ bevel ("chopped at an angle") and was removed.  See §2.4b.
 | v1b | handed to Shawn | — |
 | v1d | Shawn: "slightly more hills, slightly more bare patches" | relief ≈ 5 mm, 30° cap, edge 4.0 mm; 4 patches (8.6%) |
 | v2a | Shawn: lodged-grass photo → "go with the flow-following ribbons" | meandering flow field (in-phase waves), soil lenses that deflect the flow, rim steering on the field, strands of streamline-traced fronds (§2.2a, 2.3a, 2.4b″) |
+| v2f | Shawn: hills should rise from a consistent perimeter ("rises only") | plains at edge height plus rising hills; edge 3.4 mm; ground 3.40–6.58 mm |
 | v2e | Shawn: bank "vertical wall" should look like a pile of blades: undercut ridges, meandering variability | bank side ledges with 45° undercuts (§2.4d), bank heading wander/stray/height scale, per-lens deflection band and strength; undercuts opened by carving under visible ledges.  The FDM backstop now does real work (+3.1k/−1.5k voxels, mostly sealed pockets filled), and the overhang audit reads 11 mm² (0.14%). |
 | v2d | Shawn: "split the difference" between v2b and v2c blades | fronds 5.5–9.5 mm, half-width 0.55–0.9, h_f 0.65–1.0; strands 2.65 mm apart |
 | v2c | Shawn: "at miniature scale the blades should be shorter… still like that meandering look" | fronds 7–12 → 4–7 mm, half-width 0.6–1.0 → 0.5–0.8, h_f 0.7–1.1 → 0.6–0.9; strands 3.0 → 2.3 mm apart; flow field unchanged (≈ 4,000 fronds) |
