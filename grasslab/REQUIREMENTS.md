@@ -246,6 +246,62 @@ where the grass **parts**.*
   - **Anti-goals:** no per-frond random bend, and no S-curves within one
     frond.
 
+### 2.5a Flow ribbons (supersedes REQ-FR-7 sickles and the seam soil of §2.3a)
+
+*Added 2026-10-27, from Shawn's wind-lodged grass photo: long combed
+ribbons meandering in S-curves, with the flow parting around eye-shaped
+bare patches.  The v1k sickles read as "clumps of commas" next to it,
+because each frond bent on its own and no flow line continued from one
+frond into the next.*
+
+- **REQ-FL-1 [R] Fronds follow the flow.**  Every frond's spine is a
+  streamline of the direction field, with no per-frond bend.  Neighbours
+  stay parallel along their whole length, so curvature belongs to the
+  flow, not to individual blades.
+- **REQ-FL-2 [R] Meandering flow.**  The field carries gentle S-curves
+  (wavelength about 10–20 mm, ±10–30°) that are **coherent across the
+  flow**: neighbouring streamlines wave in phase, like combed hair.
+  - Wave phase and amplitude drift across the tile, so the waves are
+    never regular.
+  - Regional direction still varies (several flow regions, not one
+    sweep).
+  - The field stays singularity-free except at the deliberate partings
+    at the upstream end of bare patches (REQ-FL-4).
+- **REQ-FL-3 [R] Ribbons.**  Fronds gather into strands about 2–3 mm
+  apart.  Each strand is 15–30 mm long, built from several fronds
+  shingled along the same streamline.
+  - Dark seams run between strands.
+  - Strands cross their neighbours only at shallow angles.  A few stray
+    fronds (about 5%) cross more steeply.
+- **REQ-FL-4 [R] Flow wraps around bare soil.**  Bare patches are
+  **eye- or lens-shaped openings elongated along the local flow**, with
+  irregular edges, preferring low ground.
+  - The direction field bends tangentially around each patch: grass
+    parts at the upstream end and rejoins downstream, like water around
+    a stone.
+  - Bank fronds lap onto the soil by a varying amount, and the
+    occasional wisp crosses further.
+- **REQ-FL-6 [R] Banks read as piles of blades.**  *(Shawn, 2026-10-27:
+  "a big pile of grass leans up right against [a clearing]… a vertical
+  wall… give it some texture… undercuts at the bottom of the grass blade
+  so there's clear ridges down the side.")*
+  - **Undercuts:** where grass faces a clearing, each blade's
+    soil-facing edge overhangs the body below it as a ledge with a
+    **45° chamfered undercut**.  A stack of blades at different heights
+    therefore shows ridge lines down the bank face, each with a dark
+    shadow beneath.  A vertical bank is fine; a smooth, featureless one
+    is not.
+  - **Variability:** bank grass doesn't all hug the clearing outline.
+    Bank fronds wander in heading, vary in height and spill, and some
+    cross the bank at an angle.  How strongly the flow bends around each
+    clearing also varies, so the bank line meanders and its face has
+    irregular texture.
+  - **Printability:** every side ledge obeys REQ-FDM-1…4 by construction
+    (45° underside, ≥ 0.6 mm thick at the edge, fused to its body).
+- **REQ-FL-5 [R]** Rim rules (REQ-EDGE-7/8) still hold, now enforced on
+  the flow field itself.  Irregularity comes from spatially varying
+  steering and per-frond tip insets.
+
 ### 2.6 Grooves and surface quality
 
 - **REQ-GR-1 [R]** Dark grooves run between adjacent fronds along the
@@ -291,6 +347,8 @@ where the grass **parts**.*
 | F16 | **Puddles** | amoeba-shaped bare blobs with wiggly outlines and a trench rim, unrelated to the grass | **grasslab v1c/d** |
 | F17 | **Bubbles** | round, clustered dome pebbles | **grasslab v1c/d** |
 | F19 | **Clay cut** | grass ending as a carved wall, bevel or hole rather than at individual fronds | **grasslab v1e** (rim bevel, soil holes, swath-border steps) |
+| F25 | **Smooth bank wall** | grass at a clearing ends in one featureless vertical face | grasslab v2d |
+| F24 | **Commas** | short independently bent fronds with no continuous flow lines | grasslab v1k (vs lodged-grass photo) |
 | F22 | **Rigid sticks** | straight fronds, no coherent arcing | grasslab v1i (vs Majestic Highlands) |
 | F23 | **Ruled rim** | frond tips lined up at a constant inset along the wall | grasslab v1i |
 | F21 | **Wall sprouts** | grass whose base sits at the tile edge and whose tip points inward | grasslab v1h (Shawn review) |
@@ -317,12 +375,12 @@ where the grass **parts**.*
 
 | Parameter | Start |
 |---|---|
-| Swath spacing / length / width | 13 mm / 12–25 / 8–16 mm |
+| Swath spacing / length / width | 11 mm / 12–25 / 8–16 mm |
 | Swath crest height (envelope) | 1.2–2.2 mm above ground |
-| Frond length / half-width / dome height | 4–8 / 0.9–1.5 / 0.6–1.0 mm |
+| Frond length / half-width / dome height | 5.5–9.5 / 0.55–0.9 / 0.65–1.0 mm (v2d) |
 | Frond spacing (Poisson radius) | 2.0 mm |
 | Lip length / tip thickness | ≤ 2 mm / ≥ 0.6 mm |
-| Direction field coherence / swing | 25 mm / σ 35° |
+| Direction field coherence / swing | 15 mm / σ 60° |
 | Rim ease | grass height × 0.5 at the edge, full at 3 mm in |
 
 ---
