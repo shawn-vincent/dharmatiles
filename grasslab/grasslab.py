@@ -60,7 +60,11 @@ FROND_H_MM           = (0.7, 1.1)
 FROND_TIP_HALF_W_MM  = 0.45
 FAN_DEG              = 12.0
 JITTER_DEG           = 4.0
-CURVATURE_PER_MM     = 0.03
+CURVATURE_MAX_PER_MM = 0.16        # coherent curvature field amplitude (REQ-FR-7)
+CURVATURE_SIGMA_MM   = 7.0         # curvature field correlation length
+CURVATURE_JITTER     = 0.15        # per-frond ± fraction of the local curvature
+BEND_EXP             = 1.6         # bend concentrated toward the tip (sickle)
+SPINE_STEP_MM        = 0.2
 DOME_EXP             = 0.9
 DROOP                = 0.35     # tip sinks to (1 − DROOP) of the frond crest
 LIP_MAX_MM           = 2.0
@@ -96,8 +100,14 @@ SKIRT_BASE_CAP       = 0.6         # skirt extends this × skirt width behind th
 SKIRT_TIP_DROP       = 0.45        # skirt height falls by this toward the tip
 SKIRT_END_MM         = 2.2         # bank fronds: skirt descends to ~0 over this tip length
 SOIL_BASE_SOFT_MM    = 2.5         # fronds rooted this close to soil get a ramped base
-RIM_TIP_INSET_MM     = 0.4         # fronds are shortened to end this far inside the rim
 FROND_MIN_LEN_MM     = 1.5
+
+# edge flow (REQUIREMENTS REQ-EDGE-7, DESIGN §2.4c)
+EDGE_FLOW_MM         = (9.0, 15.0) # per-frond steering ramp distance from the rim
+EDGE_OK_DEG          = (70.0, 88.0)# per-frond allowed angle from 'at the edge'
+EDGE_PULL            = (0.15, 0.45)# per-frond extra lean toward the edge at the rim
+RIM_TIP_INSET_MM     = (0.2, 1.5)  # per-frond tip inset from the wall (skewed small)
+RIM_ALONG_MM         = 3.0         # fronds rooted this close to a wall run alongside it
 
 SIMPLIFY_TOL_MM      = 0.015
 OVERHANG_DEG         = 45.0
@@ -419,6 +429,81 @@ def _smooth01(t):
     return t * t * (3 - 2 * t)
 
 
+def _wrap(a):
+    return (a + np.pi) % (2 * np.pi) - np.pi
+
+
+def edge_steer(ang, axis_ang, p, W, H, flow_mm, ok_deg, pull):
+    """Steer a frond heading so near the rim it points at or along the edge.
+
+    Continuous in heading and distance; an inward heading turns toward the
+    side its swath axis is on, so whole swaths turn together.
+    """
+    edges = [(p[0], np.pi), (W - p[0], 0.0), (p[1], -np.pi / 2), (H - p[1], np.pi / 2)]
+    ok = np.radians(ok_deg)
+    for dist, out in sorted(edges, key=lambda e: -e[0]):     # nearest edge last
+        if dist >= flow_mm:
+            continue
+        w = float(_smooth01(1 - dist / flow_mm))
+        phi = _wrap(ang - out)
+        phia = _wrap(axis_ang - out)
+        if abs(phi) > np.pi / 2 and abs(phia) > np.pi / 2 and np.sign(phi) != np.sign(phia):
+            phi += 2 * np.pi * np.sign(phia)                 # turn the swath's way
+        a = abs(phi)
+        if a > ok:
+            a = ok + (a - ok) * (1 - w)
+        a *= 1 - pull * w
+        # Hugging the wall: roots right at it run alongside, covering the
+        # rim with their sides instead of stubbing into it (no bare frame).
+        if dist < RIM_ALONG_MM:
+            wa = float(_smooth01(1 - dist / RIM_ALONG_MM))
+            a = a + (ok - a) * wa
+        ang = out + np.sign(phi) * a
+    return ang
+
+
+def make_spine(p0, theta_mid, bend, L, u_lo, u_hi):
+    """Curved centreline: heading θ(u) = θ_mid + bend·((u/L)^e − 0.5^e).
+
+    Integrated at SPINE_STEP_MM from the root (u = 0) forward to u_hi and
+    straight back to u_lo.  Returns points (n, 2) and arc lengths (n,).
+    """
+    e = BEND_EXP
+
+    def theta(u):
+        return theta_mid + bend * ((np.clip(u, 0, L) / L) ** e - 0.5 ** e)
+
+    n_f = max(int(np.ceil(u_hi / SPINE_STEP_MM)), 1)
+    uf = np.linspace(0, u_hi, n_f + 1)
+    du = uf[1] - uf[0]
+    th = theta(uf[:-1] + du / 2)
+    fwd = np.concatenate([[[0.0, 0.0]], np.cumsum(du * np.stack([np.cos(th), np.sin(th)], 1), 0)])
+    t0 = theta(0.0)
+    n_b = max(int(np.ceil(-u_lo / SPINE_STEP_MM)), 1)
+    ub = np.linspace(u_lo, 0, n_b + 1)[:-1]
+    back = np.stack([ub * np.cos(t0), ub * np.sin(t0)], 1)
+    pts = np.concatenate([back, fwd]) + p0
+    us = np.concatenate([ub, uf])
+    return pts, us
+
+
+def project_spine(P, pts, us):
+    """Arc length u and signed lateral offset v of points P on a polyline."""
+    A = pts[:-1]
+    D = pts[1:] - pts[:-1]
+    dd = np.maximum((D * D).sum(1), 1e-12)
+    R = P[:, None, :] - A[None, :, :]
+    t = np.clip((R * D[None]).sum(2) / dd[None], 0, 1)
+    C = R - t[..., None] * D[None]
+    dist2 = (C * C).sum(2)
+    k = dist2.argmin(1)
+    r = np.arange(len(P))
+    u = us[k] + t[r, k] * (us[k + 1] - us[k])
+    cross = D[k, 0] * R[r, k, 1] - D[k, 1] * R[r, k, 0]
+    v = np.sign(cross) * np.sqrt(dist2[r, k])
+    return u, v
+
+
 def build_grass(rng, grid, ground, sw, W, H):
     """Return H0, mass map T, lip intervals [(I, J, bottom, top), …], soil, stats.
 
@@ -446,13 +531,19 @@ def build_grass(rng, grid, ground, sw, W, H):
         jj = min(max(int(py / vox), 0), grid.ny - 1)
         return float(H0[ii, jj])
 
+    # Coherent curvature field (REQ-FR-7): neighbours arc together.
+    cres = 0.25
+    cm = FROND_LEN_MM[1] + 2
+    cn = (int((W + 2 * cm) / cres) + 1, int((H + 2 * cm) / cres) + 1)
+    kfield = Field2D(CURVATURE_MAX_PER_MM * np.tanh(
+        1.6 * _smooth_noise(rng, cn, CURVATURE_SIGMA_MM / cres)), -cm, -cm, cres)
+
     lips = []
     m = FROND_LEN_MM[1]
     roots = poisson_sites(rng, -m, -m, W + m, H + m, FROND_SPACING_MM)
     r_own, r_a, r_b = sw.assign(roots[:, 0], roots[:, 1])
     r_s, r_l = sw.coords(r_own, r_a, r_b)
     wt = FROND_TIP_HALF_W_MM
-    inset = RIM_TIP_INSET_MM
     n_built = 0
     for p0, i, sb, lb in zip(roots, r_own, r_s, r_l):
         in_tile = (0 <= p0[0] < W) and (0 <= p0[1] < H)
@@ -469,18 +560,27 @@ def build_grass(rng, grid, ground, sw, W, H):
             wmax = rng.uniform(*FROND_HALF_W_MM)
             hf = rng.uniform(*FROND_H_MM)
             wsk = SKIRT_FACTOR * wmax
-        ang = (np.arctan2(sw.d[i, 1], sw.d[i, 0])
-               + np.radians(lb * FAN_DEG + rng.uniform(-JITTER_DEG, JITTER_DEG)))
-        d = np.array([np.cos(ang), np.sin(ang)])
-        pp = np.array([-d[1], d[0]])
-        kap = rng.uniform(-CURVATURE_PER_MM, CURVATURE_PER_MM)
+        axis_ang = np.arctan2(sw.d[i, 1], sw.d[i, 0])
+        ang = axis_ang + np.radians(lb * FAN_DEG + rng.uniform(-JITTER_DEG, JITTER_DEG))
+        # Coherent sickle bend; the mean (mid-length) heading follows the flow.
+        kap = float(kfield(p0[0], p0[1])) * rng.uniform(1 - CURVATURE_JITTER,
+                                                         1 + CURVATURE_JITTER)
+        bend = kap * L
+        Ls = L                               # curve shape is fixed by the full length
+        tip_off = bend * (1 - 0.5 ** BEND_EXP)        # tip heading − mid heading
+        # Edge flow (REQ-EDGE-7/8) acts on the TIP heading, with per-frond
+        # randomness so the rim isn't regular.
+        tip_ang = edge_steer(ang + tip_off, axis_ang + tip_off, p0, W, H,
+                             rng.uniform(*EDGE_FLOW_MM), rng.uniform(*EDGE_OK_DEG),
+                             rng.uniform(*EDGE_PULL))
+        ang = tip_ang - tip_off
+        inset = RIM_TIP_INSET_MM[0] + (RIM_TIP_INSET_MM[1] - RIM_TIP_INSET_MM[0]) * rng.random() ** 2
 
         # Shorten (never slice) fronds so their tips end inside the tile and
         # lap at most SOIL_SPILL_MM into bare soil — every frond keeps its
         # own tip shape (REQ-EDGE-2/3).
-        uu = np.linspace(0, L + wt, 48)
-        cx = p0[0] + uu * d[0] + kap * uu ** 2 * pp[0]
-        cy = p0[1] + uu * d[1] + kap * uu ** 2 * pp[1]
+        sp, su_ = make_spine(p0, ang, bend, Ls, 0.0, L + wt)
+        cx, cy, uu = sp[:, 0], sp[:, 1], su_
         out = (cx < inset) | (cx > W - inset) | (cy < inset) | (cy > H - inset)
         ci = np.clip((cx / vox).astype(int), 0, grid.nx - 1)
         cj = np.clip((cy / vox).astype(int), 0, grid.ny - 1)
@@ -496,7 +596,9 @@ def build_grass(rng, grid, ground, sw, W, H):
             if L < FROND_MIN_LEN_MM:
                 continue
             # A frond cut short at a bank or the rim is also lower, so the
-            # fringe steps down instead of ending in tall stubs.
+        # fringe steps down instead of ending in tall stubs.  The spine keeps
+            # its full-length curve (Ls) and is simply truncated, so the tip
+            # stays exactly where the stop test put it.
             k_h = float(np.clip(L / L0, 0.3, 1.0)) ** 0.8
             hf *= k_h
         Lt = L + wt
@@ -504,20 +606,16 @@ def build_grass(rng, grid, ground, sw, W, H):
         u_c, u_h = (Lt - cb) / 2, (Lt + cb) / 2
 
         reach = max(wmax, wsk)
-        uu = np.linspace(-cb, Lt, 14)
-        cx = p0[0] + uu * d[0] + kap * uu ** 2 * pp[0]
-        cy = p0[1] + uu * d[1] + kap * uu ** 2 * pp[1]
-        i0 = max(int((cx.min() - reach) / vox), 0)
-        i1 = min(int((cx.max() + reach) / vox) + 2, grid.nx)
-        j0 = max(int((cy.min() - reach) / vox), 0)
-        j1 = min(int((cy.max() + reach) / vox) + 2, grid.ny)
+        sp, su_ = make_spine(p0, ang, bend, Ls, -cb - 0.3, Lt + 0.3)
+        i0 = max(int((sp[:, 0].min() - reach) / vox), 0)
+        i1 = min(int((sp[:, 0].max() + reach) / vox) + 2, grid.nx)
+        j0 = max(int((sp[:, 1].min() - reach) / vox), 0)
+        j1 = min(int((sp[:, 1].max() + reach) / vox) + 2, grid.ny)
         if i0 >= i1 or j0 >= j1:
             continue
         I, J = np.meshgrid(np.arange(i0, i1), np.arange(j0, j1), indexing='ij')
         I, J = I.ravel(), J.ravel()
-        dx, dy = grid.xc[I] - p0[0], grid.yc[J] - p0[1]
-        u = dx * d[0] + dy * d[1]
-        v = dx * pp[0] + dy * pp[1] - kap * np.clip(u, 0, None) ** 2
+        u, v = project_spine(np.stack([grid.xc[I], grid.yc[J]], 1), sp, su_)
         # Blade planform (pointed lens, round tip cap).
         w = wt + (wmax - wt) * np.sin(np.pi * (0.25 + 0.75 * np.clip(u / L, 0, 1)))
         w = np.where(u > L, np.sqrt(np.clip(wt ** 2 - (u - L) ** 2, 0, None)), w)
@@ -562,7 +660,8 @@ def build_grass(rng, grid, ground, sw, W, H):
             s_tip = min(sb + Lt / sw.len[i], 1.0)
             env_t = 0.0 if sprig else \
                 k_h * sw.env(np.array([i]), np.array([s_tip]), np.array([lb]))[0]
-            g_t = h0_at(p0[0] + Lt * d[0], p0[1] + Lt * d[1])
+            tp = sp[min(np.searchsorted(su_, Lt), len(sp) - 1)]
+            g_t = h0_at(tp[0], tp[1])
             tip = g_t + (0.0 if tip_soft else env_t * (1 - SKIRT_TIP_DROP)) \
                 + hf * float(_rise(Lt, L, Lt))
             bot = tip - LIP_MIN_T_MM - (Lt - u[lp])

@@ -209,6 +209,58 @@ angle field has **no singularities**, so it cannot form crowns or vortices
   - All other fronds keep the rev 3 skirt unchanged.  Applying these
     ramps globally (tried in v1h-a/b) scalloped the whole tile.
 
+### 2.4b′ Curved spines (REQ-FR-7)
+
+- **Curvature field**: κ(x, y) = K_MAX · tanh(1.6 · n(x, y)), where n is
+  smooth noise at σ = 7 mm and K_MAX = 0.16 /mm.  Neighbours share
+  curvature (coherent clumps), while sign and strength drift across the
+  tile.  It is a scalar field, so nothing can form a vortex.
+- **Per frond**: κ_f = κ(root)·U(0.85, 1.15).  The total bend is
+  B = κ_f·L, with the heading θ(u) = θ_mid + B·((u/L)^1.6 − 0.5^1.6).
+  The bend is concentrated toward the tip (a sickle), never an S.
+  Anchoring at mid-length keeps each frond's *mean* heading on the swath
+  flow.
+- **Spine**: the heading is integrated into a polyline at 0.2 mm steps,
+  and extended straight behind the root by the skirt base cap.
+- **Local coordinates** for each column: project onto the nearest spine
+  segment.  The arc length gives u and the signed perpendicular gives v.
+  This replaces the small-bend parabola, which sheared wide fronds at
+  large bends.  Shortening, bounding boxes and lips all use the same
+  spine.
+
+### 2.4c Edge flow (REQ-EDGE-7)
+
+Each frond's heading is steered at its root, after the fan and jitter and
+before tracing:
+
+- **Per edge**: for each tile edge within `EDGE_FLOW_MM` = 12 mm of the
+  root (farthest first, so the nearest edge wins at corners), measure the
+  heading angle φ from that edge's **outward** normal (φ = 0 means
+  pointing at the edge, |φ| = 90° means along it).  The steering weight
+  is w = smoothstep(1 − dist/12 mm).
+- **Compress inward headings**: when |φ| > φ_ok = 80°, set
+  |φ'| = φ_ok + (|φ| − φ_ok)(1 − w).  At the rim, inward fronds become
+  near-parallel; 12 mm in they are untouched.  An 8 mm ramp turned too
+  sharply where the whole flow leaves an edge and read as a band.
+- **Pull toward the edge**: |φ''| = |φ'|·(1 − 0.35·w), so outward fronds
+  lean further toward the edge the closer they are.
+- **Swath-consistent side**: an inward heading must turn left or right,
+  and the swath axis decides.  If the axis is also inward and on the
+  other side of φ = ±180°, φ is unwrapped to the axis's side first.  The
+  whole swath then turns together and never parts down the middle.
+- **Curved fronds** are steered on their mid-length heading, so a
+  sickle's tip cannot curl back toward the interior at the rim.
+- **Irregular rim** (REQ-EDGE-8): per frond, the ramp distance is
+  U(9, 15) mm, the allowed angle is U(70°, 88°), the pull is
+  U(0.15, 0.45), and the tip inset is 0.2 + 1.3·U² mm.  Fronds rooted
+  within 3 mm of a wall are blended toward the allowed angle, so they
+  run *alongside* it.  Without this, every rim frond pointed into the
+  wall and was cut short, leaving a bare "picture frame" strip.
+- **Continuity**: the map is continuous in φ and in w.  Neighbouring
+  fronds have nearly equal roots and headings, so the steered field
+  stays smooth and blends into the interior flow with no band.  Only the
+  frond heading changes; the swath envelope is unchanged.
+
 ### 2.5 Grooves (REQ-GR-*)
 
 Grooves come from the geometry and are never carved:
@@ -269,6 +321,8 @@ bevel ("chopped at an angle") and was removed.  See §2.4b.
 | v1a | **shark fins**: frond tips at the crest with vertical fronts; **roof shingles**: wide flat domes, no along-flow grooves; mean top 4.26 mm (below the band) | droop to the tip, underside measured from the tip; narrower and denser fronds; dome exponent 0.55 → 0.9; ground edge 3.0 → 3.3 |
 | v1b | handed to Shawn | — |
 | v1d | Shawn: "slightly more hills, slightly more bare patches" | relief ≈ 5 mm, 30° cap, edge 4.0 mm; 4 patches (8.6%) |
+| v1j | Shawn: "our grass is very straight… should be more curved, but not randomly"; edge endings too regular | coherent curvature field + true curved spines (§2.4b′); per-frond random edge steering and tip inset |
+| v1i | Shawn: grass near the edge "shouldn't point in the other direction"; should end at or run alongside the edge | per-frond edge-flow steering (§2.4c), 12 mm ramp |
 | v1h | Shawn: rim good; "bare patches have some weird artifacts" → sawn-log frond ends at banks, boxy prism pebbles, dashed dip step | bank-only soft frond ends (global version scalloped the tile, reverted), dome-faceted pebbles, blurred dip mask |
 | v1g | Shawn: "more hills and bigger bare patches" | smaller landforms (σ 10), relief ≈ 5.4 mm, 34° cap, 1 mm soft floor; soil lanes wider (hw 5.8) and more seams → 12.8% |
 | v1f | Shawn: grass "uniformly chopped down like it was all made of clay" at the rim and the bare spots; confirmed by close-up renders (rim bevel, carved soil walls, swath-border steps) | grass made of fronds: skirts carry the envelope, T starts at H₀, boundaries come from shortening fronds, shortened fronds are lower; rim ease and soil envelope cut removed |

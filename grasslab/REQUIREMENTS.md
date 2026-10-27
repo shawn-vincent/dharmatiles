@@ -135,6 +135,22 @@ free-standing clay layer, and boundaries were cuts through it.*
   overlapping frond lobes, never vertical steps in a height layer.
 - **REQ-EDGE-5 [R]** Fronds cut short at a boundary are also lower, so a
   fringe steps down rather than ending in tall stubs.
+- **REQ-EDGE-7 [R] Grass flows to the rim, not away from it.**  Near the
+  tile edge, fronds point *at* the edge or run *alongside* it.  They never
+  point away from it (base at the wall, tip heading inward), which reads
+  as grass sprouting from the wall.  This matches the reference, where
+  grass meeting a tile edge is combed toward or along it.
+  - The steering fades in over about 12 mm from the rim and blends into
+    the interior flow, with no visible seam or band.
+  - Fronds that already point toward the edge lean further toward it
+    the closer they are.
+  - All fronds of one swath turn the **same way** when steered away from
+    an inward heading, so a swath never splits into a parting.
+  - At the very rim, nothing heads further inward than parallel.
+- **REQ-EDGE-8 [R] Irregular rim endings.**  Fronds stop at varied
+  distances from the wall, and steering strength varies from frond to
+  frond.  The rim must never show a ruled line of tips at a constant
+  inset, while REQ-EDGE-7 still holds: nothing at the rim heads inward.
 - **REQ-EDGE-6 [R]** Bank fronds end softly: no flat "sawn log" faces at a
   cut tip, and no cliff at a base facing the soil.  This must not change
   interior or rim fronds, because rounding every frond's ends turned the
@@ -216,6 +232,20 @@ where the grass **parts**.*
   copies.  *Feathery is the target; identical, regularly repeated fronds
   are the failure (F7).*
 
+- **REQ-FR-7 [R] Fronds arc, coherently.**  Compared against the
+  Majestic Highlands grass texture (Shawn, 2026-10-27), our straight fronds
+  read too rigid.
+  - **Shape:** each frond is a smooth **sickle**.  Its heading turns
+    progressively, with the bend concentrated toward the tip, for a total
+    of roughly 20–70°.
+  - **Not random:** neighbouring fronds arc **in the same sense and by
+    similar amounts**, so clumps read as coherent swirls and sweeps.
+  - **Regional variation:** curvature sign and strength vary smoothly
+    across the tile, with some regions nearly straight and others strongly
+    curled.
+  - **Anti-goals:** no per-frond random bend, and no S-curves within one
+    frond.
+
 ### 2.6 Grooves and surface quality
 
 - **REQ-GR-1 [R]** Dark grooves run between adjacent fronds along the
@@ -261,6 +291,9 @@ where the grass **parts**.*
 | F16 | **Puddles** | amoeba-shaped bare blobs with wiggly outlines and a trench rim, unrelated to the grass | **grasslab v1c/d** |
 | F17 | **Bubbles** | round, clustered dome pebbles | **grasslab v1c/d** |
 | F19 | **Clay cut** | grass ending as a carved wall, bevel or hole rather than at individual fronds | **grasslab v1e** (rim bevel, soil holes, swath-border steps) |
+| F22 | **Rigid sticks** | straight fronds, no coherent arcing | grasslab v1i (vs Majestic Highlands) |
+| F23 | **Ruled rim** | frond tips lined up at a constant inset along the wall | grasslab v1i |
+| F21 | **Wall sprouts** | grass whose base sits at the tile edge and whose tip points inward | grasslab v1h (Shawn review) |
 | F20 | **Soil debris** | boxy cube-like pebbles, prism chips, and a dashed step outlining each patch | grasslab v1g (fixed in v1h) |
 | F18 | **Cracks** | hairline soil slits along seams | grasslab v1e (fixed) |
 
