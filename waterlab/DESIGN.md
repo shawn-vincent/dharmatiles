@@ -373,3 +373,32 @@ unchanged.
   - add more wobble, or rounder distance, at concave corners;
   - give enclosed water its own weak interior emitters, so the centre of
     a pond goes to chaos.
+
+### 11a. Enclosed-water fix (2026-10-28)
+
+Shawn: the cube and pyramid shape-following is "perfect", but square
+land surrounds "look a bit odd".
+
+- **Rounded land offsets** (`_round_offsets`, **land only**).
+  - The land distance field is blended toward progressively blurrier
+    copies, σ ≈ 0.45 · d, at σ levels 2/4/8/16 mm.
+  - Crests hug a straight or square shore closely, then relax into
+    rounded curves with distance, as real waves diffract.
+  - Obstacles keep sharp offsets; their shape-following was liked.
+- **Enclosure-scaled land reach**.
+  - f = clip((land share of the tile perimeter − 0.3) / 0.7, 0, 1), and
+    the land decay is multiplied by (1 − 0.75 f).
+  - One bank (about 25%) is untouched, so bank-rock keeps the loved
+    look.  A bay or pond shortens the land's reach, so the middle of
+    enclosed water goes to the rock and to chaos instead of nested U or
+    square contours.
+  - Tried first and rejected: scaling by the pool radius
+    (99th-percentile distance).  It also bit bank-rock and shore-shapes,
+    because rocks shrink the "pool".
+- **Far emitters**: when fewer than 2 tile corners are open water, 3 weak
+  emitters about 220 mm outside the tile, at random bearings, send in
+  near-plane waves.  They supply the open-sea chaos that enclosed water
+  has no corners for.
+- **Result**: land-3 and land-4 show rounded shore waves along the
+  banks, clear rock rings in the middle, and calm crossing water
+  between.  The other scenarios are visually unchanged.

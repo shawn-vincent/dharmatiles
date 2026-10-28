@@ -150,7 +150,13 @@ SWELL_SHORT_SHARPEN = 0.9     # riders get crisp crests
 SWELL_AMP_MM       = 0.8      # ≈ 2× spectral-chaos relief
 SWELL_ROCK_GAIN    = 1.15
 SWELL_WAKE         = 0.9      # extra rock chop on the downstream side
-SWELL_TROUGH_MM    = 1.1      # deepest trough below calm water (bed is at −BED_DEPTH)
+SWELL_TROUGH_MM    = 1.1
+ENCLOSE_FREE       = 0.3      # land perimeter share below which land reach is untouched
+ENCLOSE_CUT        = 0.75     # land decay × (1 − cut·enclosure) for bays / ponds
+FAR_SRC_N          = 3        # far emitters when < 2 open corners
+FAR_SRC_MM         = 220.0
+ROUND_K            = 0.45     # land crest corners round off: blur σ ≈ k · distance
+ROUND_SIGMAS_MM    = (2.0, 4.0, 8.0, 16.0)      # deepest trough below calm water (bed is at −BED_DEPTH)
 
 # ── lapped (rings near obstacles + strokes beyond) ──────────────────────────
 LAPPED_NEAR_MM = 8.0
@@ -598,6 +604,37 @@ def _geodesic(src, passable, cell):
     return d, near.reshape(ny, nx)
 
 
+def _round_offsets(dd, wsmooth):
+    """Corners of a distance field's iso-lines round off with distance: blend
+    the field toward progressively blurrier copies (σ ≈ ROUND_K · d), so crests
+    hug a straight or square shore closely but relax into rounded curves —
+    as real waves diffract — instead of staying mitred squares."""
+    levels = [0.0] + list(ROUND_SIGMAS_MM)
+    fields = [dd] + [wsmooth(dd, sg) for sg in ROUND_SIGMAS_MM]
+    want = ROUND_K * dd                           # desired blur at this distance
+    out = np.zeros(dd.shape)
+    wsum = np.zeros(dd.shape)
+    for lv, f in zip(levels, fields):
+        w = np.exp(-((want - lv) / (0.5 * max(lv, 2.0))) ** 2)
+        out += w * f
+        wsum += w
+    return out / np.maximum(wsum, 1e-9)
+
+
+def _far_sources(rng, sc, n):
+    """Weak emitters far outside the tile (gently curved, near-plane waves from
+    random directions): the 'open sea' that enclosed water lacks corners for."""
+    out = []
+    st, dec, lam, g = CHAOS_CORNER
+    for th in rng.uniform(0, 2 * np.pi, n):
+        cx = sc.W / 2 + FAR_SRC_MM * np.cos(th)
+        cy = sc.H / 2 + FAR_SRC_MM * np.sin(th)
+        d = np.hypot(sc.X - cx, sc.Y - cy) - (FAR_SRC_MM - 45.0)   # ~ tile-scale distances
+        out.append((st * rng.uniform(0.8, 1.2), 1e9, lam, g, np.maximum(d, 0),
+                    np.zeros(d.shape), np.zeros(d.shape)))
+    return out
+
+
 def _emit_sources(rng, sc):
     """Per source: (strength, decay, λ0, growth, dist mm, nearest y, nearest x)
     on the scene grid.  Land and rock distances are geodesic through water, so
@@ -631,6 +668,8 @@ def _emit_sources(rng, sc):
             sg = sigma_mm / CELL_MM
             return ndimage.gaussian_filter(a * wm, sg) / np.maximum(ndimage.gaussian_filter(wm, sg), 1e-6)
         dd = wsmooth(np.minimum(up(d), 200.0), 1.2)
+        if name == 'land':
+            dd = _round_offsets(dd, wsmooth)
         sm = lambda a: wsmooth(up(a) * f, 2.5)
         out.append((st, dec, lam, g, dd, sm(nyy), sm(nxx)))
     # Fallback: waves come in from EMIT_N_EDGES random tile edges, travelling
@@ -764,6 +803,18 @@ def gen_swell_chaos(rng, sc):
             continue
         kinds.append((src, 'land' if (sc.land_mask.any() and src[0] >= 0.99) else 'rock'))
     corners = [(src, 'corner') for src in _corner_sources(rng, sc)]
+    # Enclosed water: land influence scales with pool size, and the open-sea
+    # chaos comes from far emitters when there are too few open corners.
+    # Enclosure = share of the tile perimeter that is land: one bank (~25%)
+    # leaves land waves untouched; a bay or pond shortens their reach so the
+    # middle of enclosed water goes to chaos instead of nested contours.
+    lm = sc.land_mask
+    perim = np.concatenate([lm[0], lm[-1], lm[:, 0], lm[:, -1]])
+    f = float(np.clip((perim.mean() - ENCLOSE_FREE) / (1 - ENCLOSE_FREE), 0, 1))
+    kinds = [((st, dec * (1 - ENCLOSE_CUT * f) if k == 'land' else dec, *rest), k)
+             for (st, dec, *rest), k in kinds]
+    if len(corners) < 2:
+        corners += [(src, 'corner') for src in _far_sources(rng, sc, FAR_SRC_N)]
     # Downstream of the rock = away from the land (land waves travel outward).
     land_src = [s_ for s_, k in kinds if k == 'land']
     num = np.zeros(sc.X.shape); den = np.zeros(sc.X.shape)
