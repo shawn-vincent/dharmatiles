@@ -65,12 +65,10 @@ REED_BAND_MM    = (-1.1, 0.2)  # ground height relative to WL where reeds root
 REED_STEMS      = (5, 12)
 REED_SPREAD_MM  = 2.2
 REED_H_MM       = (5.0, 9.0)
-REED_R_BASE_MM  = (0.6, 0.75)
-REED_R_TIP_MM   = 0.4          # ≥ 0.8 mm tip diameter (printable)
+REED_HALF_W_MM  = (0.9, 1.3)   # blade half-width at the base (chunky)
+REED_THICK      = (0.35, 0.45) # half-thickness / half-width (lemon section)
+REED_TIP_SCALE  = (0.08, 0.15) # section scale at the tip: tapers to a point
 REED_LEAN_DEG   = 18.0
-CATTAIL_PROB    = 0.25
-CATTAIL_R_MM    = 0.95
-CATTAIL_L_MM    = 2.5
 
 WATER_BURY_MM   = 0.3
 
@@ -172,16 +170,16 @@ def make_reeds(rng, ground, W, H):
         for _ in range(int(rng.integers(REED_STEMS[0], REED_STEMS[1] + 1))):
             p = c + rng.normal(0, REED_SPREAD_MM / 2, 2)
             h = rng.uniform(*REED_H_MM)
-            rb = rng.uniform(*REED_R_BASE_MM)
-            stem = m3d.Manifold.cylinder(h + 0.8, rb, REED_R_TIP_MM, circular_segments=12)
-            if rng.random() < CATTAIL_PROB:
-                z1 = h + 0.8 - 1.5
-                z0 = z1 - CATTAIL_L_MM
-                rs = rb + (REED_R_TIP_MM - rb) * (z0 / (h + 0.8))
-                head = (m3d.Manifold.cylinder(0.6, rs, CATTAIL_R_MM, circular_segments=12).translate([0, 0, z0 - 0.6])
-                        + m3d.Manifold.cylinder(CATTAIL_L_MM, CATTAIL_R_MM, CATTAIL_R_MM, circular_segments=12).translate([0, 0, z0])
-                        + m3d.Manifold.cylinder(0.6, CATTAIL_R_MM, REED_R_TIP_MM, circular_segments=12).translate([0, 0, z1]))
-                stem = stem + head
+            hw = rng.uniform(*REED_HALF_W_MM)                       # blade half-width
+            ht = hw * rng.uniform(*REED_THICK)                      # half-thickness
+            # Lemon cross-section (pointed at the two edges), tapering to a
+            # blunt point: chunky at the base so it won't snap off.
+            t_ = np.linspace(0, 2 * np.pi, 24, endpoint=False)
+            sec = np.c_[hw * np.cos(t_), ht * np.sign(np.sin(t_)) * np.abs(np.sin(t_)) ** 1.4]
+            stem = m3d.Manifold.extrude(m3d.CrossSection([sec.tolist()]), h + 0.8,
+                                        n_divisions=8, scale_top=REED_TIP_SCALE)
+            stem = stem.rotate([0.0, 0.0, float(rng.uniform(0, 180))])
+            rb = hw
             dx, dy = -float(gx_f(*p)), -float(gy_f(*p))                # downhill = to water
             nrm = np.hypot(dx, dy) + 1e-9
             lean = rng.uniform(0, REED_LEAN_DEG)

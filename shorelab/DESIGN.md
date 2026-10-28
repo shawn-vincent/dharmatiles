@@ -42,10 +42,14 @@
 8. **Reeds**: 3–5 clumps in the shallows (G within −1.1…+0.2 mm of WL),
    built *before* the water so their stems can emit ripple rings,
    Poisson-placed at least 12 mm apart.
-   - Each clump has 5–12 stems: tapered cylinders, base radius 0.6–0.75 mm
-     to tip radius 0.4 mm, height 5–9 mm, leaning 0–18° toward the water.
-   - 25% of stems carry a cattail head (r 0.95, length 2.5 mm, 1.5 mm
-     below the tip).
+   - Each clump has 5–12 **blades** with a lemon (pointed-oval)
+     cross-section: base half-width 0.9–1.3 mm and half-thickness 0.35–0.45
+     of that.  They are extruded and tapered (scale 0.08 × 0.15 at the top)
+     to a point, height 5–9 mm, at a random yaw, leaning 0–18° toward the
+     water.
+   - Chunky at the base so they don't snap.  Cattails were dropped in
+     v0e at Shawn's request: "nothing more sophisticated".  The
+     contract stays at the base: the blade is about 1.8–2.6 mm wide.
 9. **Union**: grass ∪ water ∪ rocks ∪ reeds ∪ slab ∪ DB base, then
    `stl_safe`.
 10. **Check**: a painted preview with grass, mud, water, rock and reed
@@ -59,6 +63,7 @@
 | v0a | shoreline nearly straight; blue puddles on land; mud strip only ~1% | two-scale shore wobble; water confined to the basin; mud 0–4 mm, bias 0 |
 | v0b | still straight on some seeds (one big wobble peak dominated) | wobble normalised to 2σ instead of the max |
 | v0c | handed to Shawn | — |
+| v0e | Shawn: reeds should be blades (diamond or lemon section, tapering to a point), short and chunky | lemon-section tapered blades; cattails removed |
 | v0d | Shawn: reeds in water should have small ripples circling out from them | reeds root in the shallows (ground −1.1…+0.2 mm about WL, mostly wet).  Each stem footprint becomes waterlab's `sc.reed_mask`, and `gen_swell_chaos` **adds** tiny rings: band 1.8–3 mm, 0.45 mm amplitude, e^(−d/4.5 mm).  They are added rather than blended because reeds sit at the shore, where the land's dominant waves would drown them in a blend. |
 
 waterlab gained `Scene.from_fields` (scene from an external ground plus

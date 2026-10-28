@@ -32,10 +32,12 @@ A 2 × 2 DB tile:
 - **REQ-S-5 [R] The water reacts to the shore,** using swell-chaos: land
   is a strong emitter.  Rocks standing in the water emit their own
   rings.  Rocks on dry land are only meadow rocks.
-- **REQ-S-6 [S] Reeds are printable.**  Each clump has 5–12 tapered
-  stems, at least 0.8 mm diameter at the tip, leaning 20° or less.  Some
-  stems carry a cattail head.  Every stem roots below the ground or water
-  surface and is fused.
+- **REQ-S-6 [S] Reeds are simple, chunky blades.**  Each clump has 5–12
+  blades with a lemon or diamond cross-section, tapering from a chunky
+  base (about 2 mm wide) to a point.  They are short (5–9 mm) and lean
+  20° or less.  There are no heads and no extra sophistication.  Every
+  blade roots below the ground or water surface and is fused.
+  *(Shawn, 2026-10-28.)*
 - **REQ-S-7 [S]** The heights stay coherent:
   - water level 2.6 mm (waterlab);
   - meadow ground at least 3.4 mm (grasslab), with mean grass in the DB
