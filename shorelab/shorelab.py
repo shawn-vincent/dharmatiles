@@ -61,7 +61,7 @@ WET_SURFACE_MM  = 0.6          # wet rocks must show above WL + this
 # ── Reeds ────────────────────────────────────────────────────────────────────
 REED_CLUMPS     = (3, 5)
 REED_SEP_MM     = 12.0
-REED_BAND_MM    = (-0.5, 0.6)  # ground height relative to WL where reeds root
+REED_BAND_MM    = (-1.1, 0.2)  # ground height relative to WL where reeds root
 REED_STEMS      = (5, 12)
 REED_SPREAD_MM  = 2.2
 REED_H_MM       = (5.0, 9.0)
@@ -167,7 +167,7 @@ def make_reeds(rng, ground, W, H):
             break
     gx_f = lambda x, y, e=0.3: (ground(x + e, y) - ground(x - e, y)) / (2 * e)
     gy_f = lambda x, y, e=0.3: (ground(x, y + e) - ground(x, y - e)) / (2 * e)
-    stems = []
+    stems, bases = [], []
     for c in centres:
         for _ in range(int(rng.integers(REED_STEMS[0], REED_STEMS[1] + 1))):
             p = c + rng.normal(0, REED_SPREAD_MM / 2, 2)
@@ -191,12 +191,13 @@ def make_reeds(rng, ground, W, H):
             stem = stem.rotate([float(-lean * uy / un), float(lean * ux / un), 0.0])
             z0 = float(ground(*p)) - 0.8
             stems.append(stem.translate([float(p[0]), float(p[1]), z0]))
+            bases.append((float(p[0]), float(p[1]), rb))
     reeds = m3d.Manifold.batch_boolean(stems, m3d.OpType.Add) if stems else None
-    return reeds, len(centres), len(stems)
+    return reeds, len(centres), len(stems), np.array(bases).reshape(-1, 3)
 
 
 # ── Water ────────────────────────────────────────────────────────────────────
-def build_water(seed, ground, wet_rocks):
+def build_water(seed, ground, wet_rocks, reed_bases=None):
     """swell-chaos water over the bank; returns (Manifold, waterlab scene, z)."""
     from dharmatiles.core.mesh import make_heightmap_solid
     n = int(round(wl.COLS * wl.SQUARE_MM / wl.CELL_MM)) + 1
@@ -204,6 +205,11 @@ def build_water(seed, ground, wet_rocks):
     Xw, Yw = np.meshgrid(x, x)                                     # rows = y
     G = ground(Xw, Yw)
     sc = wl.Scene.from_fields(seed, G, wet_rocks, scenario='shore')
+    if reed_bases is not None and len(reed_bases):
+        rm = np.zeros(Xw.shape, bool)
+        for bx, by, br in reed_bases:                       # stem footprints at the surface
+            rm |= (Xw - bx) ** 2 + (Yw - by) ** 2 <= (br + 0.15) ** 2
+        sc.reed_mask = rm
     relief = wl.gen_swell_chaos(wl.mode_rng(seed, 'swell-chaos'), sc)
     zw = wl.WL_MM + relief * sc.rim * sc.water * wl.smooth01(sc.d / 0.4) + sc.tide
     # Water only in the basin (+ a thin margin up the bank): the tide must not
@@ -256,8 +262,8 @@ def build(seed, cols=2, rows=2):
     wet_posed = [p for p, w_ in zip(posed, wet) if w_]
     wet_rocks = (ml.seat_rocks(wet_posed, [m for m, w_ in zip(masks, wet) if w_],
                                g.H0, T_eff, grid)[0] if wet_posed else None)
-    water, wsc, zw = build_water(seed, ground, wet_rocks)
-    reeds, n_clumps, n_stems = make_reeds(rng, ground, W, H)
+    reeds, n_clumps, n_stems, reed_bases = make_reeds(rng, ground, W, H)
+    water, wsc, zw = build_water(seed, ground, wet_rocks, reed_bases)
 
     P.grass, P.water, P.rocks, P.reeds = grass, water, rocks_all, reeds
     P.ground, P.soil, P.wsc, P.zw, P.g = ground, soil, wsc, zw, g

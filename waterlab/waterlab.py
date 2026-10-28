@@ -143,7 +143,10 @@ SWELL_BANDS = {
     'land':   ((5.0, 16.0, 0.012), 4),  # broad rolling swells + medium riders
     'rock':   ((2.0, 4.5, 0.035), 3),   # short chop (≥ 2 mm: printable)
     'corner': ((5.0, 14.0, 0.0), 3),
+    'reed':   ((1.8, 3.0, 0.0), 2),     # tiny rings off water-plant stems
 }
+REED_RING_AMP_MM   = 0.45
+REED_RING_DECAY_MM = 4.5
 SWELL_AMP_EXP      = 1.4      # long waves dominate
 SWELL_LONG_SHARPEN = 0.15     # swells stay round
 SWELL_SHORT_SHARPEN = 0.9     # riders get crisp crests
@@ -867,6 +870,16 @@ def gen_swell_chaos(rng, sc):
     z = (c * dominant + (1 - c) * chaos) * (CHAOS_FAR_AMP + (1 - CHAOS_FAR_AMP) * c)
     z = z - z[sc.water].mean()
     z = z * SWELL_AMP_MM
+    # Water plants (optional sc.reed_mask, e.g. from shorelab): small rings
+    # circling out from each stem, ADDED on top (a blend would let the land's
+    # dominant waves drown them — reeds stand right at the shore).
+    reed = getattr(sc, 'reed_mask', None)
+    if reed is not None and (reed & sc.water).any():
+        dr = ndimage.distance_transform_edt(~reed) * CELL_MM
+        band, ncomp = SWELL_BANDS['reed']
+        tr = _swell_train(rng, dr, band, 0.02, ncomp)
+        env = np.exp(-dr / REED_RING_DECAY_MM) * smooth01(dr / 0.3)
+        z = z + REED_RING_AMP_MM * env * tr * sc.water
     # Soft floor: troughs deeper than the underwater bed (WL − 1 mm) would be
     # clipped flat by max(land, water) → terraces.  Compress them smoothly.
     fl, k = -SWELL_TROUGH_MM, 0.25

@@ -39,7 +39,8 @@
 7. **Rocks**: seated with meadowlab's `seat_rocks`.  Against the water
    surface the grass top is taken as WL + 0.6 mm, so wet rocks emerge
    from the water.
-8. **Reeds**: 3–5 clumps on the waterline (G within −0.5…+0.6 mm of WL),
+8. **Reeds**: 3–5 clumps in the shallows (G within −1.1…+0.2 mm of WL),
+   built *before* the water so their stems can emit ripple rings,
    Poisson-placed at least 12 mm apart.
    - Each clump has 5–12 stems: tapered cylinders, base radius 0.6–0.75 mm
      to tip radius 0.4 mm, height 5–9 mm, leaning 0–18° toward the water.
@@ -58,6 +59,7 @@
 | v0a | shoreline nearly straight; blue puddles on land; mud strip only ~1% | two-scale shore wobble; water confined to the basin; mud 0–4 mm, bias 0 |
 | v0b | still straight on some seeds (one big wobble peak dominated) | wobble normalised to 2σ instead of the max |
 | v0c | handed to Shawn | — |
+| v0d | Shawn: reeds in water should have small ripples circling out from them | reeds root in the shallows (ground −1.1…+0.2 mm about WL, mostly wet).  Each stem footprint becomes waterlab's `sc.reed_mask`, and `gen_swell_chaos` **adds** tiny rings: band 1.8–3 mm, 0.45 mm amplitude, e^(−d/4.5 mm).  They are added rather than blended because reeds sit at the shore, where the land's dominant waves would drown them in a blend. |
 
 waterlab gained `Scene.from_fields` (scene from an external ground plus
 obstacle solids) for this lab.  Its `ENCLOSE_FREE` went 0.3 → 0.4, so a
