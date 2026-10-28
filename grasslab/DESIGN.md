@@ -1,6 +1,6 @@
 # grasslab — Sculpted Grass Tile: Design
 
-*Revision 3, 2026-10-27 (code v2f).  Implements `REQUIREMENTS.md` rev 3.
+*Revision 4, 2026-10-28 (code v2g).  Implements `REQUIREMENTS.md` rev 3.
 Code: `grasslab/grasslab.py`; section numbers below match its stage
 banners.  Superseded designs and their lessons: §5; iteration log: §6.*
 
@@ -79,24 +79,42 @@ singularities (REQ-FL-5).
      with b the across-lens coordinate and p̂ the lens perpendicular.  The
      smooth tanh side choice avoids a herringbone seam upstream.
    - Renormalise.  Lens partings and rejoins are the only singularities.
-5. **Rim steering** (`steer_rim`).  Per grid point, three smooth knob maps
+5. **Rim steering** (`steer_rim`, rev v2g).  Three smooth knob maps
    (smoothstep(0.5 + 0.35·n(σ 8 mm))): ramp distance 9–15 mm, allowed angle
-   φ_ok 70–88°, pull 0.15–0.45.  For each edge in turn (x = 0, x = W,
-   y = 0, y = H), with φ the heading measured from the edge's outward
-   normal and w = smoothstep(1 − dist/ramp):
-   - **Turn side** from sin φ smoothed at σ 14 mm, so long stretches of
-     rim turn the same way; φ is unwrapped to that side.
-   - **Compress inward headings**: |φ| > φ_ok → φ_ok + (|φ| − φ_ok)(1 − w).
-   - **Pull outward**: |φ| ← |φ|·(1 − pull·w).
-   - **Run alongside** within 3 mm: blend |φ| toward φ_ok with
-     smoothstep(1 − dist/3 mm).  (Without this every rim frond pointed into
-     the wall and was cut short, leaving a bare "picture frame".)
-   - Applied wherever w > 0, so at corners the later edge in that order
-     overrides the earlier one.
-   - The result is applied as a **smoothed scalar rotation**:
-     θ + G_σ1.5mm(wrap(θ_steered − θ)).  A continuous Δ cannot create a
-     singularity; where the turn side flips, Δ passes through 0 and leaves
-     a short parting at the wall.
+   φ_ok 70–88°, pull 0.15–0.45.  φ is the heading measured from an edge's
+   outward normal, w = smoothstep(1 − dist/ramp).
+   - **Turn side, once per stretch of rim** (`_rim_sides`).  Per perimeter
+     sample, the w-weighted mean tangential lean sin φ across the steering
+     band, laid out as one counter-clockwise loop (side +1 = turning CCW on
+     every edge), smoothed at σ 20 mm *along the loop, across corners*.
+     Its sign is the side: one per long stretch, and a corner continues the
+     adjacent edge.  `hard` = that sign smoothed at 2.5 mm (which way
+     inward headings turn), `soft` = smoothed at 8 mm (≈ 0 around a flip).
+   - **Per edge**, a rotation Δ_e of the input angle:
+     - Inward headings (|φ| > φ_ok) are compressed toward ±φ_ok on the rim
+       side; the two candidate rotations (turn +, turn −) are blended by
+       λ = ½(1 + hard), except that headings within 30° of parallel keep
+       their own side (this also masks each candidate's unwrap cut at 90°).
+     - **Pull outward** (|φ| ← |φ|·(1 − pull·w)) only for headings already
+       going outward, faded over ±0.35 rad about 90°.  Pulling turned-in
+       headings too gave an S-bend that read as a herringbone spine
+       parallel to the wall.
+     - **Square up around a flip**: there the pull rises to 0.85·(1 − |soft|)
+       and its ramp reaches up to 2× further, so where two stretches meet the
+       flow comes square to the wall and ends there.
+     - **Run alongside** within 3 mm: blend toward sign(soft)·φ_ok with
+       smoothstep(1 − dist/3 mm)·|soft|, i.e. faded out around a flip.
+       (Without this every rim frond pointed into the wall and was cut
+       short, leaving a bare "picture frame".)
+   - **Corners**: Δ = Σ P_e Δ_e with a nearest-edge partition of unity
+     P_e ∝ exp(−(d_e − d_min)/2 mm) (far edges have Δ_e = 0).
+   - Applied as a **smoothed scalar rotation**: θ + G_σ1.5mm(Δ).  A
+     continuous Δ cannot create a singularity.
+   - Before v2g the side came from a pointwise smoothed preference
+     (σ 14 mm, 2-D) and edges were applied in a fixed order.  Where the
+     preference flipped, the run-alongside band forced opposite headings
+     side by side: long feathered V seams and corner starbursts (meadow
+     seeds 2, 4, 5).
 
 ### 2.3 Swath envelope (`Swaths`)
 
@@ -239,15 +257,20 @@ Swaths now supply **height only**; frond headings come from the flow.
 | 4 lenses | `SOIL_LENSES_PER_SQ` 1.3–1.8, `SOIL_LENS_CANDIDATES` 80, `SOIL_LENS_SCORE_NOISE` 0.8, `SOIL_LENS_HALF_LEN_MM` 5–9, `SOIL_LENS_ASPECT` 0.45–0.65, `SOIL_LENS_SEP_MM` 13, `SOIL_RIM_KEEP_MM` 7, `SOIL_LENS_WARP_MM` 0.8, `SOIL_LENS_WARP_SIGMA_MM` 1.2, `SOIL_EDGE_MM` 0.5 |
 | 4 wrap | `DEFLECT_BAND_MM` 1.5–4.5, `DEFLECT_STRENGTH` 0.55–1.0, `PARTING_PUSH` 0.6, `PARTING_SOFT_MM` 0.8 |
 | 4 relief | `SOIL_DIP_MM` 0.4, `SOIL_DIP_SOFT_MM` 0.8, `SOIL_ROUGH_MM` 0.08, `SOIL_ROUGH_SIGMA_MM` 0.4, `PEBBLE_DENSITY` 0.06, `PEBBLE_R_MM` 0.45–1.2, `PEBBLE_GAP_MM` 1.2 |
-| 4b rim | `RIM_NOISE_SIGMA_MM` 8, `EDGE_FLOW_MM` 9–15, `EDGE_OK_DEG` 70–88, `EDGE_PULL` 0.15–0.45, `RIM_ALONG_MM` 3, `STEER_SIDE_SIGMA_MM` 14, `STEER_SMOOTH_MM` 1.5 |
+| 4b rim | `RIM_NOISE_SIGMA_MM` 8, `EDGE_FLOW_MM` 9–15, `EDGE_OK_DEG` 70–88, `EDGE_PULL` 0.15–0.45, `RIM_ALONG_MM` 3, `STEER_SIDE_SIGMA_MM` 20, `STEER_SIDE_HARD_MM` 2.5, `STEER_SIDE_SOFT_MM` 8, `STEER_NATURAL_DEG` 30, `RIM_SQUARE_PULL` 0.85, `RIM_SQUARE_REACH` 1.0, `PULL_SOFT_RAD` 0.35, `STEER_CORNER_MM` 2, `STEER_SMOOTH_MM` 1.5 |
 | 5 strands | `STRAND_SPACING_MM` 2.65, `STRAND_LEN_MM` 15–30, `STRAND_BACK_FRAC` 0.2–0.6, `STRAND_MARGIN_MM` 8, `STRAND_GAP_FRAC` 0.5, `STRAND_LATERAL_MM` 0.3, `TRACE_STEP_MM` 0.25 |
 | 5 fronds | `FROND_LEN_MM` 5.5–9.5, `FROND_HALF_W_MM` 0.55–0.9, `FROND_H_MM` 0.65–1.0, `FROND_TIP_HALF_W_MM` 0.45, `FROND_MIN_LEN_MM` 1.5, `FROND_DELTA_DEG` 4, `STRAY_FRAC` 0.05, `STRAY_DELTA_DEG` 20–35, `SPINE_PAD_MM` 0.3, `SPRIG_PROB` 0.10, `SPRIG_LEN_MM` 1.8–3.0, `SPRIG_HALF_W_MM` 0.5, `SPRIG_H_MM` 0.5 |
 | 5a body | `DOME_EXP` 0.9, `DROOP` 0.35, `SKIRT_FACTOR` 2.2, `SKIRT_BASE_CAP` 0.6, `SKIRT_TIP_DROP` 0.45, `LIP_MAX_MM` 2.0, `LIP_FRAC` 0.35, `LIP_MIN_T_MM` 0.6, `SOFTMAX_K_MM` 0.12 |
 | 5b endings, banks | `RIM_TIP_INSET_MM` 0.2–1.5, `SOIL_SPILL_MM` 0.8–3.2, `WISP_FRAC` 0.04, `WISP_SPILL_MM` 4.0, `SOIL_BASE_SOFT_MM` 2.5, `SKIRT_END_MM` 2.2, `BANK_REACH_MM` 4, `BANK_FACE_MM` 6, `BANK_WANDER_DEG` 15, `BANK_STRAY_FRAC` 0.12, `BANK_H_SCALE` 0.65–1.15, `SIDE_LIP_W_MM` 0.7 |
 | 6–7 mesh | `SIMPLIFY_TOL_MM` 0.015, `OVERHANG_DEG` 45 (audit counts n_z < −sin 48°), `DB_GRASS_BAND` 4.4–5.9 |
 
-`build_grass(…, blocker=None, tuck_mm=0.5)` is the hook meadowlab uses for
-rock footprints; with `blocker=None` it is grasslab's own behaviour.
+`build_grass(…, blocker=None, tuck_mm=0.5, side_low=1.0, side_mm=1.0)` is
+the hook meadowlab uses for rock footprints; with `blocker=None` it is
+grasslab's own behaviour.  With `side_low < 1`, every frond's skirt and
+blade height is scaled by side_low + (1 − side_low)·smoothstep(d_out/side_mm)
+at distance d_out outside the blocker, and falls to 0 over `SIDE_INNER_MM`
+(0.8 mm) inside it, so grass laps against an obstacle's foot instead of
+swallowing it.
 
 ## 4. Known quirks (kept: changing them changes the approved output)
 
@@ -255,8 +278,6 @@ rock footprints; with `blocker=None` it is grasslab's own behaviour.
   scale h_scale, which the skirt itself does get.  For bank fronds the lip
   underside reference is therefore slightly off the real crest (thinner
   lips when h_scale < 1, thicker when > 1).
-- Rim steering processes edges in a fixed order and overwrites wherever the
-  ramp is active, so corners follow the y-edges, not the nearest edge.
 - `WISP_FRAC` is drawn for every frond; it only matters where a spine
   reaches soil.
 
@@ -305,6 +326,7 @@ rock footprints; with `blocker=None` it is grasslab's own behaviour.
 | v2d | Shawn: "split the difference" | fronds 5.5–9.5 mm, half-width 0.55–0.9, h_f 0.65–1.0; strands 2.65 mm |
 | v2e | Shawn: bank "vertical wall" should be a pile of blades | side ledges with 45° undercuts, opened under visible ledges; bank wander/stray/height scale; per-lens deflection band and strength |
 | v2f | Shawn: hills should rise from a consistent perimeter | rises only; edge 3.9 → 3.4 mm (mean top 5.34 mm); usable 88% → 78% |
+| v2g | meadow seed sweep: long feathered V seams and a corner starburst at the rim (meadow s2/4/5) | rim turn side chosen once per stretch of the rim loop (σ 20 mm, across corners) instead of pointwise; square-up and no run-alongside around a flip; pull for outward headings only; nearest-edge corners (§2.2.5) |
 | — | refactor (no geometry change; all outputs byte-identical) | stages split (`Surface`, `plan_fronds`, `draw_frond`, `sculpt_frond`, `open_ledges`); constants grouped by stage; meshing retry on non-manifold marching cubes (previously a silent empty STL, seen in meadowlab) |
 
 

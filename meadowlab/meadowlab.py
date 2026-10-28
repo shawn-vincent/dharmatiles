@@ -26,6 +26,7 @@ import time
 import manifold3d as m3d
 import numpy as np
 import trimesh
+from scipy import ndimage
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'grasslab'))
@@ -45,17 +46,27 @@ APRON_STRETCH       = (1.2, 1.9)    # half-length / half-width
 APRON_OFFSET        = (0.6, 1.0)    # × R, centre offset to one side of the rock
 FOOTPRINT_Z_MM      = 0.45          # rock outline sampled this far above its base
 TUCK_MM             = 0.5           # fronds stop this far inside the rock face
+SIDE_LOW            = 0.5           # grass height × this at a rock's face…
+SIDE_MM             = 1.2           # …back to full height this far out
 FLOW_RING_MM        = 0.6           # flow wraps a circle this much wider than the rock
-ROCK_SINK_MM        = 0.3           # below the lowest ground under the footprint
+ROCK_SINK_MM        = 0.3           # base below the seat ground height; plinth below the lowest
+ROCK_SEAT_Q         = 0.35          # seat ground height = this quantile of H0 under the footprint
+ROCK_RING_MM        = 1.5           # grass-top ring just outside the footprint
+ROCK_RING_Q         = 0.75          # its grass height (quantile of T)
+ROCK_SHOW_MM        = 1.5           # a rock's top stands at least this far above that grass…
+ROCK_SHOW_FRAC      = 0.45          # …or this fraction of its height, whichever is more
+ROCK_RAISE_MAX_MM   = 1.5           # cap on the lift that ensures it
+PLINTH_TOP_MM       = 0.1           # plinth top, inside the rock's base
 
 
-def footprint_mask(posed, grid):
-    """Bool grid of the rocks' real outlines where they meet the ground."""
+def footprint_masks(posed, grid):
+    """Per-rock bool grids of the real outlines where the rocks meet the ground."""
     from matplotlib.path import Path
     X, Y = np.meshgrid(grid.xc, grid.yc, indexing='ij')
     pts = np.stack([X.ravel(), Y.ravel()], 1)
-    mask = np.zeros(X.shape, bool)
+    masks = []
     for p in posed:
+        mask = np.zeros(X.shape, bool)
         sel = (np.abs(X - p.x) <= p.r + 1) & (np.abs(Y - p.y) <= p.r + 1)
         idx = np.nonzero(sel.ravel())[0]
         for poly in p.solid.slice(FOOTPRINT_Z_MM).to_polygons():
@@ -63,7 +74,13 @@ def footprint_mask(posed, grid):
             if len(poly) >= 3:
                 hit = Path(poly).contains_points(pts[idx])
                 mask.ravel()[idx[hit]] = True
-    return mask
+        masks.append(mask)
+    return masks
+
+
+def footprint_mask(masks, shape):
+    """Union of the per-rock footprints."""
+    return np.logical_or.reduce(masks) if masks else np.zeros(shape, bool)
 
 
 def apron_shapes(rng, flow0, posed):
@@ -118,17 +135,47 @@ def rock_circles(flow0, posed):
     return rc, rax, rr, rr
 
 
-def seat_rocks(posed, H0, foot, grid):
-    """Rocks sit in the ground: base just below the lowest ground under them."""
-    out = []
+def seat_rocks(posed, masks, H0, T, grid):
+    """Seat each rock so it reads as a rock bedded in grass (REQ-M-2, M5).
+
+    - Seat: base at a low quantile of the ground under the footprint,
+      minus ROCK_SINK_MM, not the minimum (which buried the uphill side of
+      rocks on slopes).
+    - Emerge: if the top stands less than max(ROCK_SHOW_MM, ROCK_SHOW_FRAC ×
+      height) above the surrounding grass top (a ring just outside the
+      footprint), raise it, by at most ROCK_RAISE_MAX_MM.
+    - Bed: a plinth (the rock's own base section, extruded straight down)
+      reaches ROCK_SINK_MM below the LOWEST ground under the footprint, so
+      no gap opens on the downhill side.  Where it shows, it reads as the
+      rock's own lower face.
+    Returns (rocks Manifold, per-rock report dicts).
+    """
+    out, rep = [], []
     vox = grid.vox
-    for p in posed:
-        i0, i1 = max(int((p.x - p.r) / vox), 0), min(int((p.x + p.r) / vox) + 1, grid.nx)
-        j0, j1 = max(int((p.y - p.r) / vox), 0), min(int((p.y + p.r) / vox) + 1, grid.ny)
-        sub = foot[i0:i1, j0:j1]
-        z0 = float(H0[i0:i1, j0:j1][sub].min() if sub.any() else H0[i0:i1, j0:j1].min())
-        out.append(p.solid.translate([p.x, p.y, z0 - ROCK_SINK_MM]))
-    return m3d.Manifold.batch_boolean(out, m3d.OpType.Add) if out else None
+    ring_px = max(int(round(ROCK_RING_MM / vox)), 1)
+    for p, m in zip(posed, masks):
+        if not m.any():                          # degenerate: fall back to the centre cell
+            i, j = min(int(p.x / vox), grid.nx - 1), min(int(p.y / vox), grid.ny - 1)
+            m = np.zeros_like(m)
+            m[i, j] = True
+        g = H0[m]
+        ring = ndimage.binary_dilation(m, iterations=ring_px) & ~m
+        grass_top = float(np.quantile(T[ring], ROCK_RING_Q)) if ring.any() else float(g.max())
+        h = p.solid.bounding_box()[5]
+        z0 = float(np.quantile(g, ROCK_SEAT_Q)) - ROCK_SINK_MM
+        need = max(ROCK_SHOW_MM, ROCK_SHOW_FRAC * h) - (z0 + h - grass_top)
+        raise_mm = float(np.clip(need, 0.0, ROCK_RAISE_MAX_MM))
+        z0 += raise_mm
+        depth = z0 - (float(g.min()) - ROCK_SINK_MM)
+        rock = p.solid
+        if depth > 0:
+            sec = p.solid.slice(PLINTH_TOP_MM + 0.05).simplify(0.005)
+            plinth = m3d.Manifold.extrude(sec, depth + PLINTH_TOP_MM).translate([0, 0, -depth])
+            rock = rock + plinth
+        out.append(rock.translate([p.x, p.y, z0]))
+        rep.append(dict(show=z0 + h - grass_top, h=h, raised=raise_mm, plinth=max(depth, 0.0)))
+    rocks = m3d.Manifold.batch_boolean(out, m3d.OpType.Add) if out else None
+    return rocks, rep
 
 
 def attach_base(grass, rocks, cols, rows):
@@ -175,18 +222,20 @@ def main():
     flow0 = gl.make_direction(rng, ground)
     sw = gl.Swaths(rng, W, H, flow0)
     posed = rl.pose(rrng, rl.scatter(rrng, W, H, ROCK_PLACEMENTS_2X2))   # rocks first
-    foot = footprint_mask(posed, grid)
+    masks = footprint_masks(posed, grid)
+    foot = footprint_mask(masks, (grid.nx, grid.ny))
     free = gl.place_lenses(rng, ground, flow0, W, H, FREE_LENS_POOL_PER_SQ)
     aprons = apron_shapes(rrng, flow0, posed)
     soil_l, n_free = fill_bare_earth(free, aprons, foot, grid, BARE_EARTH_FRAC)
     # Flow wraps rocks (circles) and soil lenses alike.
     flow = gl.finish_flow(rng, flow0, combine(soil_l, None, rock_circles(flow0, posed)), W, H)
 
-    g = gl.build_grass(rng, grid, ground, sw, soil_l, flow, W, H, blocker=foot, tuck_mm=TUCK_MM)
+    g = gl.build_grass(rng, grid, ground, sw, soil_l, flow, W, H, blocker=foot, tuck_mm=TUCK_MM,
+                       side_low=SIDE_LOW, side_mm=SIDE_MM)
     F = gl.make_field(grid, g.T, g.lips)
     added, removed = gl.fdm_backstop(F, grid.vox)
     grass, _ = gl.mesh_field(F, grid.vox)
-    rocks = seat_rocks(posed, g.H0, foot, grid)
+    rocks, seats = seat_rocks(posed, masks, g.H0, g.T, grid)
     mesh, peg_h, crumbs, zmax = attach_base(grass, rocks, args.cols, args.rows)
     bare = float(((g.soil > 0.5) | foot).mean())
 
@@ -202,6 +251,9 @@ def main():
           f"crumbs dropped {crumbs[0]} ({crumbs[1]:.3f} mm³)")
     print(f"  rocks: {len(posed)} placements, {n_stones} stones, footprint {foot.mean():.1%} of tile; "
           f"{len(aprons[0])} with bare-earth aprons")
+    print("  rock tops above grass: " + ", ".join(
+        f"{q['show']:.1f}/{q['h']:.1f}" + (f"↑{q['raised']:.1f}" if q['raised'] > 0 else '')
+        for q in seats) + f" mm (show/height, ↑lift); deepest plinth {max(q['plinth'] for q in seats):.1f} mm")
     print(f"  bare earth incl. under rocks: {bare:.1%} (target {BARE_EARTH_FRAC:.0%}); "
           f"visible {float(((g.soil > 0.5) & ~foot).mean()):.1%}; {n_free} free lenses")
     print(f"  {g.n_fronds} fronds in {g.n_strands} strands; ground {gstats['ground_min']:.2f}–"

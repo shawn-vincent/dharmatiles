@@ -96,7 +96,14 @@ EDGE_FLOW_MM         = (9.0, 15.0) # steering ramp distance from the rim
 EDGE_OK_DEG          = (70.0, 88.0)# allowed angle from 'at the edge'
 EDGE_PULL            = (0.15, 0.45)# extra lean toward the edge at the rim
 RIM_ALONG_MM         = 3.0         # this close to a wall the flow runs alongside it
-STEER_SIDE_SIGMA_MM  = 14.0        # smoothing of the turn-side preference
+STEER_SIDE_SIGMA_MM  = 20.0        # smoothing of the lean along the rim loop (1-D, across corners)
+STEER_SIDE_HARD_MM   = 2.5         # width of a turn-side flip for inward headings
+STEER_SIDE_SOFT_MM   = 8.0         # run-alongside fades (and the flow squares up) over this around a flip
+STEER_NATURAL_DEG    = 30.0        # inward headings this close to parallel keep their own side
+RIM_SQUARE_PULL      = 0.85        # pull where an edge's side is undecided (s → 0)
+RIM_SQUARE_REACH     = 1.0         # …and the ramp reaches (1 + this)× further there
+PULL_SOFT_RAD        = 0.35        # pull fades from outward to inward headings over ±this about 90°
+STEER_CORNER_MM      = 2.0         # softness of the nearest-edge split at corners
 STEER_SMOOTH_MM      = 1.5         # smoothing of the rotation field
 
 # 5 strands and fronds
@@ -134,6 +141,7 @@ SOFTMAX_K_MM         = 0.12
 
 # 5b rim and soil endings, banks
 RIM_TIP_INSET_MM     = (0.2, 1.5)  # per-frond tip inset from the wall (U²)
+SIDE_INNER_MM        = 0.8         # obstacles (meadowlab): frond height falls to 0 this far inside
 SOIL_SPILL_MM        = (0.8, 3.2)  # per-frond spill into soil (U²)
 WISP_FRAC            = 0.04        # fronds allowed WISP_SPILL_MM over soil
 WISP_SPILL_MM        = 4.0
@@ -481,11 +489,50 @@ def finish_flow(rng, flow, lenses, W, H):
     return Flow(np.cos(th), np.sin(th), flow.x0, flow.y0, flow.res)
 
 
+def _rim_sides(lean, res):
+    """Turn side around the rim, one value per perimeter sample (CCW loop).
+
+    lean: the band-weighted mean sin φ per sample, in CCW order (side +1 =
+    turning counter-clockwise, on every edge).  The side is the sign of the
+    lean smoothed at STEER_SIDE_SIGMA_MM along the loop, across corners, so
+    it is one side per long stretch and corners continue the adjacent edge.
+    Returns (hard, soft): that sign smoothed short (which way inward
+    headings turn; a flip is a short parting) and long (how strongly the
+    flow runs alongside; ≈ 0 around a flip, where the flow squares up and
+    ends at the wall instead of colliding head-on).
+    """
+    m = ndimage.gaussian_filter1d(lean, STEER_SIDE_SIGMA_MM / res, mode='wrap')
+    sg = np.where(m >= 0, 1.0, -1.0)
+    hard = ndimage.gaussian_filter1d(sg, STEER_SIDE_HARD_MM / res, mode='wrap')
+    soft = ndimage.gaussian_filter1d(sg, STEER_SIDE_SOFT_MM / res, mode='wrap')
+    return hard, soft
+
+
+def _turn(phi, sg, w, wp, ok, pull):
+    """Rotation that compresses and pulls φ with inward headings turned to side sg.
+
+    Continuous in φ except at the unwrap cut φ = −sg·π/2, which the caller
+    masks (its weight is 0 there)."""
+    p = np.where((np.abs(phi) > np.pi / 2) & (np.sign(phi) != sg), phi + 2 * np.pi * sg, phi)
+    a0 = np.abs(p)
+    a = np.where(a0 > ok, ok + (a0 - ok) * (1 - w), a0)
+    # The pull leans flow that already heads outward further out; turned
+    # inward headings only run alongside (pulling those too gave an S-bend
+    # that read as a herringbone spine parallel to the wall).
+    outward = _smooth01((np.pi / 2 + PULL_SOFT_RAD - a0) / (2 * PULL_SOFT_RAD))
+    a = a * (1 - pull * wp * outward)
+    return np.where(p >= 0, 1.0, -1.0) * a - p
+
+
 def steer_rim(rng, th, X, Y, W, H, res):
     """Rim rule on the field (REQ-EDGE-7/8): at or along the edge, never away.
 
     Ramp distance, allowed angle and pull vary smoothly over the tile, so
-    the rim is irregular but continuous.
+    the rim is irregular but continuous.  The turn side is chosen once per
+    long stretch of the rim loop (`_rim_sides`), not per point; around a
+    flip the flow squares up and ends at the wall rather than meeting
+    itself in a V; corners take the nearest edge.  Everything is a
+    continuous rotation Δ of the input angle (no singularities).
     """
     def nmap(lo, hi):
         return lo + (hi - lo) * _smooth01(0.5 + 0.35 * _smooth_noise(
@@ -493,27 +540,68 @@ def steer_rim(rng, th, X, Y, W, H, res):
     flow_mm = nmap(*EDGE_FLOW_MM)
     ok = np.radians(nmap(*EDGE_OK_DEG))
     pull = nmap(*EDGE_PULL)
-    th_in = th.copy()
-    for dist, out in ((X, np.pi), (W - X, 0.0), (Y, -np.pi / 2), (H - Y, np.pi / 2)):
-        w = _smooth01(1 - np.maximum(dist, 0) / flow_mm)
+    xs, ys = X[:, 0], Y[0]
+    ix = np.nonzero((xs >= 0) & (xs <= W))[0]
+    iy = np.nonzero((ys >= 0) & (ys <= H))[0]
+    # Edges in CCW order: (distance, outward normal, along axis, in-tile
+    # along indices in CCW direction).  On every edge side +1 = out + ok
+    # = counter-clockwise.
+    edges = ((Y, -np.pi / 2, 0, ix), (W - X, 0.0, 1, iy),
+             (H - Y, np.pi / 2, 0, ix[::-1]), (X, np.pi, 1, iy[::-1]))
+    prof, cache = [], []
+    for dist, out, along, idx in edges:
+        d = np.maximum(dist, 0)
+        w = _smooth01(1 - d / flow_mm)
         phi = _wrap(th - out)
-        # Turn side from a SMOOTHED preference, so whole stretches of rim turn
-        # the same way and flips are rare.
-        pref = ndimage.gaussian_filter(np.sin(phi), STEER_SIDE_SIGMA_MM / res)
-        sgn = np.where(pref >= 0, 1.0, -1.0)
-        phi = np.where((np.abs(phi) > np.pi / 2) & (np.sign(phi) != sgn), phi + 2 * np.pi * sgn, phi)
-        a = np.abs(phi)
-        a = np.where(a > ok, ok + (a - ok) * (1 - w), a)
-        a = a * (1 - pull * w)
-        wa = _smooth01(1 - np.maximum(dist, 0) / RIM_ALONG_MM)
-        a = a + (ok - a) * wa
-        th = np.where(w > 0, out + sgn * a, th)
-    # Apply the steering as a smoothed SCALAR rotation of the input angle:
-    # θ + Δ with continuous Δ cannot create singularities (no starbursts).
-    # Where the turn side flips, Δ passes through 0 and leaves a short
-    # parting at the wall instead.
-    delta = ndimage.gaussian_filter(_wrap(th - th_in), STEER_SMOOTH_MM / res)
-    return th_in + delta
+        depth = 1 - along
+        wt = w * ((X >= 0) & (X <= W) & (Y >= 0) & (Y <= H))
+        lean = (wt * np.sin(phi)).sum(depth) / np.maximum(wt.sum(depth), 1e-9)
+        prof.append(lean[idx])
+        cache.append((d, phi, along, idx))
+    hard, soft = _rim_sides(np.concatenate(prof), res)
+    deltas, dists = [], []
+    k0 = 0
+    for d, phi, along, idx in cache:
+        k1 = k0 + len(idx)
+        # Back onto the edge's along axis (nearest value past the corners).
+        n_al = phi.shape[along]
+        full_h, full_s = np.empty(n_al), np.empty(n_al)
+        full_h[idx], full_s[idx] = hard[k0:k1], soft[k0:k1]
+        lo, hi = idx.min(), idx.max()
+        full_h[:lo], full_h[hi + 1:] = full_h[lo], full_h[hi]
+        full_s[:lo], full_s[hi + 1:] = full_s[lo], full_s[hi]
+        s_hard = np.expand_dims(full_h, 1 - along)
+        s = np.expand_dims(full_s, 1 - along)
+        k0 = k1
+        # Around a flip the pull (outward headings only) reaches further.
+        wp = _smooth01(1 - d / (flow_mm * (1 + RIM_SQUARE_REACH * (1 - np.abs(s)))))
+        w = _smooth01(1 - d / flow_mm)
+        # Inward headings turn toward the rim side.  Headings within
+        # STEER_NATURAL_DEG of parallel keep their own side, which also
+        # masks each branch's unwrap cut at |φ| = 90° (for |φ| ≤ 90° the
+        # branches agree, so λ is moot there).
+        nat = _smooth01((np.pi / 2 + np.radians(STEER_NATURAL_DEG) - np.abs(phi))
+                        / np.radians(STEER_NATURAL_DEG))
+        lam = 0.5 * (1 + (1 - nat) * s_hard + nat * np.where(phi >= 0, 1.0, -1.0))
+        # Around a flip (flows meeting or splitting at the wall) the pull
+        # squares the flow up to the wall: it ends there in parallel
+        # instead of funnelling into a V.
+        pl = np.maximum(pull, RIM_SQUARE_PULL * (1 - np.abs(s)))
+        r = lam * _turn(phi, 1.0, w, wp, ok, pl) + (1 - lam) * _turn(phi, -1.0, w, wp, ok, pl)
+        # Run alongside near the wall, on the rim side; faded out around a flip.
+        q = _wrap(phi + r)
+        wa = _smooth01(1 - d / RIM_ALONG_MM) * np.abs(s)
+        r = r + (np.sign(s) * ok - q) * wa
+        deltas.append(r)
+        dists.append(d)
+    # Corners: a smooth nearest-edge partition of unity (far edges have Δ = 0).
+    D = np.stack(dists)
+    P = np.exp(-(D - D.min(0)) / STEER_CORNER_MM)
+    delta = (np.stack(deltas) * P).sum(0) / P.sum(0)
+    # Applied as a smoothed SCALAR rotation of the input angle: θ + Δ with
+    # continuous Δ cannot create singularities (no starbursts).
+    delta = ndimage.gaussian_filter(delta, STEER_SMOOTH_MM / res)
+    return th + delta
 
 
 def soil_relief(rng, m, X, Y, vox):
@@ -642,7 +730,8 @@ class Surface:
     """What the fronds read per grass column: ground H0 (with soil relief),
     the soil mask and distances, and optional hard obstacles."""
 
-    def __init__(self, rng, grid, ground, lenses, blocker=None, tuck_mm=0.5):
+    def __init__(self, rng, grid, ground, lenses, blocker=None, tuck_mm=0.5,
+                 side_low=1.0, side_mm=1.0):
         vox = grid.vox
         X, Y = np.meshgrid(grid.xc, grid.yc, indexing='ij')
         H0 = ground(X, Y)
@@ -659,6 +748,16 @@ class Surface:
         self.blocker, self.tuck_mm = blocker, tuck_mm
         self.blk_depth = (ndimage.distance_transform_edt(blocker) * vox
                           if blocker is not None else None)
+        # Grass beside an obstacle is lower: frond height × side_low at the
+        # face, back to full height side_mm out, so fronds passing a rock lap
+        # against its foot instead of swallowing it.  1.0 = no change.
+        self.near = None
+        if blocker is not None and side_low < 1.0:
+            out = ndimage.distance_transform_edt(~blocker) * vox
+            self.near = side_low + (1 - side_low) * _smooth01(out / side_mm)
+            # Inside the face (under the rock) it falls to bare ground, so
+            # skirts of passing fronds cannot fill over a low rock.
+            self.near *= 1 - _smooth01(self.blk_depth / SIDE_INNER_MM)
 
     def cell(self, px, py):
         g = self.grid
@@ -849,6 +948,9 @@ def sculpt_frond(fr, plan, surf, sw, T, lips, ledges):
     # Blade on top.
     q = np.clip(np.abs(v) / np.maximum(w, 1e-6), 0, 1)
     blade = np.where(in_blade, hf * _rise(u, L, Lt) * (1 - q ** 2) ** DOME_EXP, 0.0)
+    if surf.near is not None:
+        k = surf.near[I, J]
+        hs, blade = hs * k, blade * k
     top = surf.H0[I, J] + hs + blade
 
     lip_len = min(LIP_MAX_MM, LIP_FRAC * L)
@@ -910,13 +1012,14 @@ class Grass:
     gaps: float            # off-soil share with < 0.3 mm grass
 
 
-def build_grass(rng, grid, ground, sw, lenses, flow, W, H, blocker=None, tuck_mm=0.5):
+def build_grass(rng, grid, ground, sw, lenses, flow, W, H, blocker=None, tuck_mm=0.5,
+                side_low=1.0, side_mm=1.0):
     """The grass volume is MADE OF FRONDS (REQ-EDGE-1): T starts at the bare
     ground and every bit of grass height comes from some frond's own body —
     a broad skirt carrying its swath's envelope plus the domed blade on top.
     Fronds are streamlines of the flow (REQ-FL-1), gathered into strands.
     """
-    surf = Surface(rng, grid, ground, lenses, blocker, tuck_mm)
+    surf = Surface(rng, grid, ground, lenses, blocker, tuck_mm, side_low, side_mm)
     plan = plan_fronds(rng, surf, sw, flow, W, H)
     T = surf.H0.copy()                     # no free-standing grass layer
     lips, ledges = [], []

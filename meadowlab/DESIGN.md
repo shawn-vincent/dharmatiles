@@ -1,6 +1,6 @@
 # meadowlab — Design
 
-*Revision 2, 2026-10-27 (code v1d).  Code: `meadowlab/meadowlab.py`.  It
+*Revision 3, 2026-10-28 (code v1e).  Code: `meadowlab/meadowlab.py`.  It
 imports `grasslab` and `rocklab` as modules and passes its own knobs as
 arguments (no monkeypatching); all meadowlab knobs are its module
 constants.*
@@ -17,8 +17,9 @@ constants.*
 3. **Rocks first**: `rocklab.scatter(…, ROCK_PLACEMENTS_2X2 = 6–9)` then
    `rocklab.pose`, so each rock's yaw, and therefore its real footprint,
    is fixed before any grass is built.
-4. **Footprint mask** (`footprint_mask`): each rock's slice 0.45 mm above
-   its base (`Manifold.slice`), rasterised onto the 0.12 mm grass grid.
+4. **Footprint masks** (`footprint_masks`, `footprint_mask`): each rock's
+   slice 0.45 mm above its base (`Manifold.slice`), rasterised onto the
+   0.12 mm grass grid; kept per rock (for seating) and as their union.
 5. **Soil**:
    - **Aprons** (`apron_shapes`) for 35% of rocks: a lens with half-width
      U(0.5, 0.9)·R and stretch U(1.2, 1.9), axis along the flow, centred
@@ -36,10 +37,25 @@ constants.*
    circle of radius R + 0.6 mm per rock (as a lens with equal half-length
    and half-width), so grass parts around rocks (REQ-M-3) with no soil
    involved.
-7. **Grass**: `build_grass(…, blocker=footprint, tuck_mm=0.5)`: no rooting
-   inside a footprint; spines stop 0.5 mm inside it, with the usual k_h
-   lowering.  Then grasslab `make_field`, `fdm_backstop`, `mesh_field`.
-8. **Seat rocks** (`seat_rocks`): z₀ = min(H₀ over the footprint) − 0.3 mm.
+7. **Grass**: `build_grass(…, blocker=footprint, tuck_mm=0.5, side_low=0.5,
+   side_mm=1.2)`: no rooting inside a footprint; spines stop 0.5 mm inside
+   it, with the usual k_h lowering.  Frond height is ×0.5 at a rock's face,
+   back to full 1.2 mm out, and falls to 0 within 0.8 mm inside the face, so
+   grass laps against the rock's foot instead of swallowing it.  Then
+   grasslab `make_field`, `fdm_backstop`, `mesh_field`.
+8. **Seat rocks** (`seat_rocks`, per rock):
+   - **Seat**: z₀ = q₀.₃₅(H₀ over the footprint) − 0.3 mm.  The v1d minimum
+     buried the uphill side of rocks on slopes (meadow seed 3: one rock
+     showed as two holes, another as a sliver).
+   - **Emerge**: grass top = q₀.₇₅(T) over a 1.5 mm ring outside the
+     footprint.  If the rock top stands less than max(1.5 mm, 0.45·height)
+     above it, the rock is raised by the shortfall, at most 1.5 mm.
+   - **Bed**: a plinth (the rock's own section 0.15 mm above its base,
+     extruded straight down) reaches 0.3 mm below the *lowest* ground under
+     the footprint, so the downhill side never shows a gap (REQ-M-2).  Where
+     it shows, it reads as the rock's own vertical lower face.
+   - The run reports each rock's top above the grass, its height, any lift
+     and the deepest plinth.
 9. **Union** (`attach_base`): simplified grass ∪ rocks ∪ DB base (peg height
    from the tallest point), keep the largest body, report crumbs.
 
@@ -54,6 +70,9 @@ constants.*
 | `APRON_PROB`, `APRON_WAKE_PROB` | 0.35, 0.6 |
 | `APRON_HALF_W`, `APRON_STRETCH`, `APRON_OFFSET` | 0.5–0.9 R, 1.2–1.9, 0.6–1.0 R |
 | `FOOTPRINT_Z_MM`, `TUCK_MM`, `FLOW_RING_MM`, `ROCK_SINK_MM` | 0.45, 0.5, 0.6, 0.3 |
+| `SIDE_LOW`, `SIDE_MM` (grass beside rocks) | 0.5, 1.2 mm |
+| `ROCK_SEAT_Q`, `ROCK_RING_MM`, `ROCK_RING_Q` | 0.35, 1.5 mm, 0.75 |
+| `ROCK_SHOW_MM`, `ROCK_SHOW_FRAC`, `ROCK_RAISE_MAX_MM`, `PLINTH_TOP_MM` | 1.5 mm, 0.45, 1.5 mm, 0.1 mm |
 
 ## Differences from the parent labs (kept: changing them changes output)
 
@@ -72,6 +91,7 @@ constants.*
 | v1b | Shawn: interaction not natural; not every rock in a bare area | rocks became footprint obstacles (grass pressed against them), one-sided aprons on 35% of rocks, visible bare earth fitted to `BARE_EARTH_FRAC` (by scaling patches) |
 | v1c | 10.1% visible bare earth (target 10%), 2 of 6 rocks with aprons | — |
 | v1d | Shawn: "stop that scaling thing; let the 20% be underneath rocks too" | count-based fill at natural sizes; target 20% incl. under rocks → 20.6% (14.9% visible), 9 free lenses |
+| v1e | seed sweep 1–6: rocks swamped or buried in grass (s3, mildly s1); herringbone rim seams (s2/4/5, grasslab rim steering) | low-quantile seat + emergence lift + plinth to the lowest ground; grass lowered beside and faded under rocks; grasslab v2g rim steering |
 | — | refactor (2026-10-27) | deterministic rocks (rocklab fix); module monkeypatching replaced by arguments (`scatter(…, placements)`, `place_lenses(…, per_sq)`); `copy.copy` lens surgery replaced by `combine`; `rocklab.pose` / `Placement` reused; grasslab's `Grass` result and grass Manifold used directly |
 
 
@@ -79,5 +99,5 @@ constants.*
 
 This uses grasslab's exact slab box and `stl_safe`; see grasslab
 DESIGN, "Export guarantees".  Meadow seed 2 had a zero-volume fin from
-the rock/grass union, which `stl_safe` drops.  Seeds 1–4 reload as one
-watertight body.
+the rock/grass union, which `stl_safe` drops.  Seeds 1–6 reload as one
+watertight body (re-verified at v1e).

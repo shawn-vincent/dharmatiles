@@ -193,9 +193,12 @@ down like it was all made of clay."*
 - **REQ-EDGE-7 [R] Grass flows to the rim, not away from it.**  Near the
   edge, the flow points *at* or runs *alongside* the wall, never away
   (F21).  The steering fades in over 9–15 mm and blends into the interior
-  with no seam; flow already heading outward leans further out near the
-  rim; long stretches of rim turn the same way, so the flow does not part
-  along the wall; at the very rim nothing heads inward past parallel.
+  with no seam (F26); flow already heading outward leans further out near the
+  rim; long stretches of rim turn the same way (one side per stretch,
+  corners continuing the adjacent edge), so the flow does not part along
+  the wall; where two stretches meet, the flow comes square to the wall and
+  ends there: a short parting, never a long feathered V or a starburst; at
+  the very rim nothing heads inward past parallel.
 - **REQ-EDGE-8 [R] Irregular rim endings.**  Tip insets and steering
   strength vary along the rim; never a ruled line of tips (F23).
 
@@ -266,6 +269,7 @@ down like it was all made of clay."*
 | F23 | **Ruled rim** | tips lined up at a constant inset | grasslab v1i |
 | F24 | **Commas** | short independently bent fronds, no continuous flow lines | grasslab v1k |
 | F25 | **Smooth bank wall** | a clearing edged by one featureless vertical face | grasslab v2d |
+| F26 | **Rim seam** | flow meeting itself head-on along the wall: a long feathered V, or a starburst at a corner | meadowlab sweep (v2f) |
 
 **Pre-paint test:** the bare grey print must read as grass.
 
@@ -291,16 +295,16 @@ down like it was all made of clay."*
 
 ---
 
-## 6. Measured on the current code (seed 1 / seed 2, 2 × 2)
+## 6. Measured on the current code (v2g; seed 1 / seed 2, 2 × 2)
 
 | Check | Seed 1 | Seed 2 |
 |---|---|---|
 | Ground (REQ-HILL) | 3.40–6.58 mm, max slope 34.0°, 78% ≤ 12° | 3.40–6.56 mm, 34.0°, 90% |
 | Soil (REQ-SOIL-2) | 6 lenses, 9.6%, 26 pebbles | 6 lenses, 10.0%, 30 pebbles |
-| Grass above ground (REQ-FDM-7) | mean 1.38, p95 2.45, max 3.23 mm | 1.43 / 2.37 / 3.44 mm |
-| Mean grass top (REQ-OUT-3) | 5.34 mm (OK) | 5.19 mm (OK) |
-| FDM backstop / overhang | +1,086 / −807 voxels; 5.8 mm² (0.07%) | +931 / −1,169; 8.1 mm² (0.10%) |
-| Mesh, size, time | 247k verts, 24.7 MB, ≈ 15 s | 254k verts, 25.4 MB, ≈ 15 s |
+| Grass above ground (REQ-FDM-7) | mean 1.36, p95 2.44, max 3.20 mm | 1.43 / 2.37 / 3.44 mm |
+| Mean grass top (REQ-OUT-3) | 5.32 mm (OK) | 5.19 mm (OK) |
+| FDM backstop / overhang | +1,436 / −935 voxels; 5.2 mm² (0.07%) | +817 / −1,242; 6.7 mm² (0.09%) |
+| Mesh, size, time | 244k verts, watertight, ≈ 15 s | 250k verts, watertight, ≈ 15 s |
 
 ---
 
