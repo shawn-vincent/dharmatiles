@@ -151,7 +151,7 @@ SWELL_AMP_MM       = 0.8      # ≈ 2× spectral-chaos relief
 SWELL_ROCK_GAIN    = 1.15
 SWELL_WAKE         = 0.9      # extra rock chop on the downstream side
 SWELL_TROUGH_MM    = 1.1
-ENCLOSE_FREE       = 0.3      # land perimeter share below which land reach is untouched
+ENCLOSE_FREE       = 0.4      # land perimeter share below which land reach is untouched
 ENCLOSE_CUT        = 0.75     # land decay × (1 − cut·enclosure) for bays / ponds
 FAR_SRC_N          = 3        # far emitters when < 2 open corners
 FAR_SRC_MM         = 220.0
@@ -258,7 +258,30 @@ class Scene:
         self.rock = (m3d.Manifold.batch_boolean(solids, m3d.OpType.Add) if solids else None)
         self.rock_mask = (self._footprint(self.rock, WL_MM) if self.rock is not None
                           else np.zeros(X.shape, bool))
-        # Obstacles and distance.
+        self._derive(seed)
+
+    @classmethod
+    def from_fields(cls, seed, land, rock=None, scenario='custom'):
+        """A scene from an externally built ground heightfield on this grid
+        (rows = y, cols = x, CELL_MM spacing incl. both edges) and optional
+        obstacle solids standing in the water.  Used by shorelab."""
+        sc = cls.__new__(cls)
+        sc.scenario, sc.open = scenario, False
+        sc.W, sc.H = COLS * SQUARE_MM, ROWS * SQUARE_MM
+        n = int(round(sc.W / CELL_MM)) + 1
+        sc.x = np.linspace(0, sc.W, n)
+        sc.y = np.linspace(0, sc.H, n)
+        sc.X, sc.Y = np.meshgrid(sc.x, sc.y)
+        sc.land = np.asarray(land, float)
+        sc.rock = rock
+        sc.rock_mask = (sc._footprint(rock, WL_MM) if rock is not None
+                        else np.zeros(sc.X.shape, bool))
+        sc._derive(seed)
+        return sc
+
+    def _derive(self, seed):
+        """Obstacles, distances, rim and tide from self.land / self.rock_mask."""
+        X, Y = self.X, self.Y
         self.land_mask = self.land > WL_MM
         obst = self.land_mask | self.rock_mask
         if not obst.any():                   # distance from nothing: treat as far
