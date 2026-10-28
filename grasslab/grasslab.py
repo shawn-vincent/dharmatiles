@@ -148,6 +148,7 @@ SIDE_LIP_W_MM        = 0.7         # side ledge width (blade edge overhang)
 
 # 6–7 mesh, base, audit
 SIMPLIFY_TOL_MM      = 0.015
+SLAB_BOX_MM          = 1.0         # exact box under the grass solid (ground ≥ edge level)
 OVERHANG_DEG         = 45.0
 DB_GRASS_BAND        = (4.4, 5.9)  # mean grass top above datum
 
@@ -1022,7 +1023,12 @@ def attach_base(grass, cols, rows, tile_max_z):
     base_cfg = BaseConfig()
     peg_h = db.select_peg_height(np.zeros((2, 2)), base_cfg, tile_max_z)
     base = db.make_base(surface, peg_h, base_cfg)
-    solid = (grass + to_manifold(base)).simplify(SIMPLIFY_TOL_MM)
+    # Exact slab box under the marching-cubes solid: the base must meet a
+    # clean planar face.  Meeting the MC bottom directly left 4 sliver edges
+    # at the peg-groove apexes that collapse on STL reload (non-watertight).
+    W, H = cols * SQUARE_MM, rows * SQUARE_MM
+    slab = m3d.Manifold.cube([W, H, SLAB_BOX_MM])
+    solid = (grass + slab + to_manifold(base)).simplify(SIMPLIFY_TOL_MM)
     parts = solid.decompose()
     vols = [q.volume() for q in parts]
     k = int(np.argmax(vols))
@@ -1030,6 +1036,30 @@ def attach_base(grass, cols, rows, tile_max_z):
     out = parts[k].to_mesh()
     mesh = trimesh.Trimesh(out.vert_properties[:, :3], out.tri_verts, process=False)
     return mesh, peg_h, crumbs
+
+
+def stl_safe(mesh):
+    """Export guarantee: the mesh as a slicer will see it.
+
+    STL stores float32 positions and readers merge vertices by position, so
+    a mesh that is manifold in memory can open up on reload (e.g. zero-volume
+    back-to-back "fins" a union leaves at a tangency, or two sheets pinched
+    along an edge).  Separate pinches (dharmatiles.stone.solidify), apply
+    that merge here, drop zero-volume components, and refuse to export
+    anything that is not then a single watertight body.
+    """
+    from dharmatiles.stone.solidify import separate_pinches
+    mesh = trimesh.Trimesh(mesh.vertices.copy(), np.asarray(mesh.faces), process=False)
+    separate_pinches(mesh)              # coincident-but-unconnected vertices → apart
+    v32 = np.asarray(mesh.vertices, dtype=np.float32).astype(np.float64)
+    m = trimesh.Trimesh(v32, np.asarray(mesh.faces), process=True)
+    parts = m.split(only_watertight=False)
+    if len(parts) > 1:
+        m = max(parts, key=lambda q: len(q.faces))
+        m = trimesh.Trimesh(m.vertices, m.faces, process=True)
+    if not m.is_watertight:
+        raise RuntimeError('mesh is not watertight after STL-style merge')
+    return m
 
 
 def audit_overhang(mesh):
@@ -1115,6 +1145,7 @@ def main():
     out_dir.mkdir(exist_ok=True)
     path = out_dir / (f"{args.cols}x{args.rows}-sculpted-grass"
                       f"{'-flat' if args.flat else ''}-s{args.seed}.stl")
+    mesh = stl_safe(mesh)
     mesh.export(path)
 
     mean_top = float(topz.mean())

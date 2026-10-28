@@ -137,7 +137,9 @@ def attach_base(grass, rocks, cols, rows):
     from dharmatiles.core.config import BaseConfig, SurfaceConfig
     from dharmatiles.bases import dungeonblocks as db
 
-    top = grass.simplify(gl.SIMPLIFY_TOL_MM)
+    W, H = cols * gl.SQUARE_MM, rows * gl.SQUARE_MM
+    slab = m3d.Manifold.cube([W, H, gl.SLAB_BOX_MM])      # clean face for the base
+    top = (grass + slab).simplify(gl.SIMPLIFY_TOL_MM)
     if rocks is not None:
         top = top + rocks
     zmax = top.bounding_box()[5]
@@ -191,6 +193,7 @@ def main():
     out = pathlib.Path(__file__).parent / 'out'
     out.mkdir(exist_ok=True)
     path = out / f"{args.cols}x{args.rows}-meadow-s{args.seed}.stl"
+    mesh = gl.stl_safe(mesh)
     mesh.export(path)
     n_stones = sum(len(p.stones) for p in posed)
     print(f"→ {path}  ({path.stat().st_size / 1e6:.1f} MB)")

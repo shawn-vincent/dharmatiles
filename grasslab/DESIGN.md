@@ -306,3 +306,23 @@ rock footprints; with `blocker=None` it is grasslab's own behaviour.
 | v2e | Shawn: bank "vertical wall" should be a pile of blades | side ledges with 45° undercuts, opened under visible ledges; bank wander/stray/height scale; per-lens deflection band and strength |
 | v2f | Shawn: hills should rise from a consistent perimeter | rises only; edge 3.9 → 3.4 mm (mean top 5.34 mm); usable 88% → 78% |
 | — | refactor (no geometry change; all outputs byte-identical) | stages split (`Surface`, `plan_fronds`, `draw_frond`, `sculpt_frond`, `open_ledges`); constants grouped by stage; meshing retry on non-manifold marching cubes (previously a silent empty STL, seen in meadowlab) |
+
+
+### Export guarantees (2026-10-27)
+
+- **Exact slab box**: the marching-cubes solid is unioned with an exact
+  box ([0, W] × [0, H] × [0, 1 mm], inside the ground, which sits at the
+  3.4 mm edge level or higher) before the DB base.  The base must meet a
+  clean planar face.  Meeting the MC bottom directly left 4 sliver edges
+  at the peg-groove apexes under the tile seams, and they collapsed on
+  STL reload.
+- **`stl_safe`**, run before every export:
+  1. `dharmatiles.stone.solidify.separate_pinches` nudges coincident but
+     unconnected vertices apart.
+  2. The mesh is merged exactly as a slicer does (float32 positions,
+     merge by position).
+  3. Zero-volume components (back-to-back union "fins") are dropped.
+  4. It **raises** unless the result is one watertight body.
+  
+  Verified on seeds 1–4.  Before this, grass seed 3 would have exported
+  a non-watertight file without any warning.

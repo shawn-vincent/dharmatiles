@@ -156,3 +156,10 @@ Seed 2: 10 placements, 13 stones, 51–151 facets, overhang 0.02 mm².
 | v1e | Shawn: "the fracture scallops are horrible… just turn up the fine grain" | scallops deleted; grain 0.05 → 0.12 mm at 0.45 mm, 4 octaves, halved on edges |
 | v1f | Shawn: texture "isn't doing it"; big flat faces vs. the reference's mosaic → "make the largest faces smaller" | facet spacing 1.0–3.6 → 0.9–2.5 mm; rounded block/slab profiles; ±8% angle-only lumpiness; chips capped at 8–16.  Harder tilt (22–28°) tried and rejected |
 | — | refactor (2026-10-27) | facet sampling seeded from the rock RNG (it used the unseeded global RNG, so every run differed: REQ-OUT-4 was violated); `make_body` / `cut_facets` split out of `make_rock`; `chips` info field renamed `facets` (it counted facets), real chip count reported; `Placement` record and `pose` shared with meadowlab; dead `family=` parameter and unused stats dropped |
+
+
+### Export guarantee (2026-10-27)
+
+Before export, the mesh is merged exactly as a slicer does (float32
+positions, merge by position) and the run raises unless it is
+watertight.  Seeds 1–4 pass with no repair needed.

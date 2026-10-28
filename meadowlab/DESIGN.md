@@ -73,3 +73,11 @@ constants.*
 | v1c | 10.1% visible bare earth (target 10%), 2 of 6 rocks with aprons | — |
 | v1d | Shawn: "stop that scaling thing; let the 20% be underneath rocks too" | count-based fill at natural sizes; target 20% incl. under rocks → 20.6% (14.9% visible), 9 free lenses |
 | — | refactor (2026-10-27) | deterministic rocks (rocklab fix); module monkeypatching replaced by arguments (`scatter(…, placements)`, `place_lenses(…, per_sq)`); `copy.copy` lens surgery replaced by `combine`; `rocklab.pose` / `Placement` reused; grasslab's `Grass` result and grass Manifold used directly |
+
+
+### Export guarantees (2026-10-27)
+
+This uses grasslab's exact slab box and `stl_safe`; see grasslab
+DESIGN, "Export guarantees".  Meadow seed 2 had a zero-volume fin from
+the rock/grass union, which `stl_safe` drops.  Seeds 1–4 reload as one
+watertight body.

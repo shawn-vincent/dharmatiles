@@ -424,6 +424,12 @@ def main():
     out = pathlib.Path(__file__).parent / 'out'
     out.mkdir(exist_ok=True)
     path = out / f"{args.cols}x{args.rows}-rocks-s{args.seed}.stl"
+    # Export guarantee: still one watertight body after the float32 +
+    # position-merge round-trip a slicer performs.
+    chk = trimesh.Trimesh(np.asarray(mesh.vertices, dtype=np.float32).astype(np.float64),
+                          np.asarray(mesh.faces), process=True)
+    if not chk.is_watertight:
+        raise RuntimeError('mesh is not watertight after STL-style merge')
     mesh.export(path)
     stones = [s for p in placed for s in p.stones]
     fams = {f: sum(s['family'] == f for s in stones) for f in FAMILIES}
