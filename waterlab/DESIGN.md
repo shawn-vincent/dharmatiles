@@ -206,3 +206,41 @@ louder near obstacles.
   This one is the weakest: lumpy, with an odd calm zone round the rock.
 - The **tide** (round 2) still underlies every option.
 - **combed** and **lapped** stay in the code but are retired from the sheet.
+
+## 7. Round 4 (2026-10-28): emitted (waves come from sources)
+
+Shawn: fewer crossing directions.  Waves should come **from the
+obstacles**, with land a strong source and rocks weak.  With neither,
+pick a couple of tile edges and send waves perpendicular to the edge.
+All-directions chop "ends up with a whole bunch of spiky shit".
+
+- **Sources**, each with (strength, decay, λ₀, growth):
+
+  | Source | Strength | Decay | λ₀ | Growth |
+  |---|---|---|---|---|
+  | land | 1.0 | 34 mm | 3.8 mm | 0.022/mm |
+  | rock | 0.55 | 10 mm | 3.0 mm | 0.05 |
+  | 2 random non-land tile edges | 0.28 | 50 mm | 5 mm | — |
+
+- **Distances**: geodesic (Dijkstra through water, 8-connected, on a 0.25 mm
+  grid), so land waves wrap round the rock instead of passing through it.
+  - Distances are smoothed *within water only* (normalised convolution).
+    Plain blurring leaked the 1e3 "unreachable" values out of land and
+    rock and erased every wave (v4c bug).
+  - Edge sources use plain distance from the edge, so waves travel
+    perpendicular to it.
+- **Train per source**: a wobbled log-phase (spacing widens outward) and
+  sharpened crests ((1 + cos)/2)^1.7.  Long, rare breaks (bias 0.55,
+  σ 7 mm) apply to land and rock only; gating edge waves made dashes.
+  A same-source swell at 0.45× wavenumber and 0.55× amplitude rides
+  underneath, so the two scales are related.
+- **Combination (emitted)**: a partition of unity with weights w⁸, so the
+  dominant source rules its territory and only a few directions cross,
+  at hand-overs.  Amplitude × (0.35 + 0.65√w_max): far waves are quieter
+  but still readable.
+- **emitted-sum**: trains weighted by w and summed, so more crossing.
+- **Result (seed 1)**: shore-parallel crests sweep out from the bank,
+  wrap the rock and its contact rings, with crossing edge waves at the
+  far corner.  Risks to watch:
+  - wood-grain or directional rows where land dominates;
+  - small dots and dashes near the shore at break gates.

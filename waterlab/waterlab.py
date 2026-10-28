@@ -102,6 +102,22 @@ SPEC_STEEP     = 0.55          # Stokes 2nd-harmonic strength
 SPEC_SHOAL_K   = 0.35           # wave-number gain at obstacles
 SPEC_SHOAL_MM  = 7.0
 
+# ── emitted: waves radiate from sources (land strong, rocks weak, edges fallback)
+EMIT_CELL_MM    = 0.25        # geodesic-distance grid
+EMIT_SOURCES = {              # strength, decay (mm), base λ (mm), λ growth /mm
+    'land': (1.00, 34.0, 3.8, 0.022),
+    'rock': (0.55, 10.0, 3.0, 0.05),
+    'edge': (0.28, 50.0, 5.0, 0.0),
+}
+EMIT_AMP_MM     = 1.15        # crest height where a source fully dominates
+EMIT_PROFILE_P  = 1.7
+EMIT_WOBBLE_MM  = 1.0
+EMIT_RIDER      = (0.45, 0.55) # same-source swell: wavenumber ×, amplitude ×
+EMIT_BREAK_BIAS = 0.55        # crests mostly continuous; breaks are long and rare
+EMIT_BREAK_SIGMA_MM = 7.0
+EMIT_N_EDGES    = 2
+EMIT_SHARP      = 8.0         # blend exponent: higher → crisper source territories
+
 # ── lapped (rings near obstacles + strokes beyond) ──────────────────────────
 LAPPED_NEAR_MM = 8.0
 LAPPED_BREAK_BIAS = 0.45       # contact rings mostly continuous here
@@ -474,7 +490,137 @@ def gen_spectrum(rng, sc):
     return _sharpen(z, 0.5) * SPEC_RMS_MM * again + lip(sc) * 0.6
 
 
-GENERATORS = {'sim-rings': gen_sim_rings, 'sim': gen_sim, 'sim-wind': gen_sim_wind, 'spectrum': gen_spectrum,
+def _geodesic(src, passable, cell):
+    """Multi-source shortest-path distance through `passable` cells (8-conn);
+    returns (dist mm, index of the nearest source cell) on that grid."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import dijkstra
+    ny, nx = passable.shape
+    idx = np.arange(ny * nx).reshape(ny, nx)
+    rows, cols, w = [], [], []
+    ok = passable | src
+    for dy, dx in ((0, 1), (1, 0), (1, 1), (1, -1)):
+        a = ok[max(0, -dy):ny - max(0, dy), max(0, -dx):nx - max(0, dx)]
+        b = ok[max(0, dy):, max(0, dx):][:a.shape[0], :a.shape[1]] if dx >= 0 else \
+            ok[dy:, :nx + dx][:a.shape[0], :a.shape[1]]
+        ia = idx[max(0, -dy):ny - max(0, dy), max(0, -dx):nx - max(0, dx)]
+        ib = idx[max(0, dy):, max(0, dx):][:a.shape[0], :a.shape[1]] if dx >= 0 else \
+            idx[dy:, :nx + dx][:a.shape[0], :a.shape[1]]
+        m = a & b
+        rows.append(ia[m]); cols.append(ib[m])
+        w.append(np.full(m.sum(), cell * np.hypot(dy, dx)))
+    r, c, ww = np.concatenate(rows), np.concatenate(cols), np.concatenate(w)
+    G = coo_matrix((np.concatenate([ww, ww]), (np.concatenate([r, c]), np.concatenate([c, r]))),
+                   shape=(ny * nx, ny * nx)).tocsr()
+    srcs = idx[src]
+    d, _, near = dijkstra(G, indices=srcs, min_only=True, return_predecessors=True)
+    d = np.where(np.isfinite(d), d, 1e3).reshape(ny, nx)
+    return d, near.reshape(ny, nx)
+
+
+def _emit_sources(rng, sc):
+    """Per source: (strength, decay, λ0, growth, dist mm, nearest y, nearest x)
+    on the scene grid.  Land and rock distances are geodesic through water, so
+    land waves wrap round the rock; edge sources are straight distances."""
+    f = int(round(EMIT_CELL_MM / CELL_MM))
+    water = sc.water[::f, ::f]
+    land = sc.land_mask[::f, ::f]
+    rock = sc.rock_mask[::f, ::f]
+    ny, nx = water.shape
+    from scipy.ndimage import zoom
+
+    def up(a, order=1):
+        out = zoom(a.astype(float), f, order=order)
+        out = np.pad(out, ((0, max(sc.X.shape[0] - out.shape[0], 0)),
+                           (0, max(sc.X.shape[1] - out.shape[1], 0))), mode='edge')
+        return out[:sc.X.shape[0], :sc.X.shape[1]]
+
+    out = []
+    for name, src in (('land', land), ('rock', rock)):
+        if not src.any():
+            continue
+        border = src & ndimage.binary_dilation(water)
+        d, near = _geodesic(border, water, EMIT_CELL_MM)
+        nyy, nxx = np.divmod(np.maximum(near, 0), nx)
+        st, dec, lam, g = EMIT_SOURCES[name]
+        # Smooth: 8-connected geodesic distance is faceted (octagonal), which
+        # shows as stepped crests; smoothing also rounds crests around bumps.
+        wm = sc.water.astype(float)
+
+        def wsmooth(a, sigma_mm):          # normalised convolution inside water only
+            sg = sigma_mm / CELL_MM
+            return ndimage.gaussian_filter(a * wm, sg) / np.maximum(ndimage.gaussian_filter(wm, sg), 1e-6)
+        dd = wsmooth(np.minimum(up(d), 200.0), 1.2)
+        sm = lambda a: wsmooth(up(a) * f, 2.5)
+        out.append((st, dec, lam, g, dd, sm(nyy), sm(nxx)))
+    # Fallback: waves come in from EMIT_N_EDGES random tile edges, travelling
+    # perpendicular to the edge.  Weak, so they only show where land and rocks
+    # don't reach.
+    st, dec, lam, g = EMIT_SOURCES['edge']
+    X, Y = sc.X, sc.Y
+    edges = {'S': (Y, X), 'N': (sc.H - Y, X), 'W': (X, Y), 'E': (sc.W - X, Y)}
+    for e in rng.choice(['S', 'N', 'E'], EMIT_N_EDGES, replace=False):   # W is land here
+        dist, along = edges[e]
+        ii = np.clip(np.round(along / CELL_MM), 0, sc.X.shape[1] - 1)
+        out.append((st * rng.uniform(0.85, 1.15), dec, lam * rng.uniform(0.85, 1.2), g, dist, ii, ii))
+    return out
+
+
+def _train(rng, d, ny_, nx_, lam0, g, n, gated=True):
+    """Crest train on a distance field: wobbled phase, sharpened crests, breaks
+    gated per crest by noise at the crest's source point; plus a shorter
+    riding wave (related scale)."""
+    dw = np.maximum(d + EMIT_WOBBLE_MM * noise(rng, d.shape, 3.0 / CELL_MM), 0)
+    if g > 0:
+        phase = np.log1p(g * dw) / (g * lam0)
+    else:
+        phase = dw / lam0
+    out = np.zeros(d.shape)
+    for mult, amp in ((1.0, 1.0), (EMIT_RIDER[0], EMIT_RIDER[1])):
+        ph = phase * mult + rng.uniform(0, 1)
+        p_ = EMIT_PROFILE_P if mult >= 1 else 1.0          # swell stays round
+        crest = ((1 + np.cos(2 * np.pi * ph)) / 2) ** p_
+        k = np.round(ph)
+        gf = noise(rng, d.shape, EMIT_BREAK_SIGMA_MM / CELL_MM)
+        gy = np.clip((ny_ + k * 37).astype(int), 0, n - 1)
+        gx = np.clip((nx_ + k * 53).astype(int) % n, 0, n - 1)
+        gate = smooth01((gf[gy, gx] + EMIT_BREAK_BIAS) / 0.5 + 0.5) if (mult >= 1 and gated) else 1.0
+        out += amp * crest * gate
+    return out
+
+
+def gen_emitted(rng, sc, mode='blend'):
+    """Waves radiate from sources.  'blend': a partition of unity by source
+    influence, so each region is ruled by its dominant source and only a few
+    directions cross; 'sum': trains add (more interference)."""
+    n = sc.X.shape[0]
+    num = np.zeros(sc.X.shape)
+    den = np.zeros(sc.X.shape)
+    tot = np.zeros(sc.X.shape)
+    for st, dec, lam, g, d, ny_, nx_ in _emit_sources(rng, sc):
+        w = st * np.exp(-d / dec)
+        tr = _train(rng, d, ny_, nx_, lam, g, n, gated=dec < 1e3 and st > 0.4)
+        if mode == 'blend':
+            wq = w ** EMIT_SHARP                 # dominant source rules; short hand-over
+            num += wq * tr
+            den += wq
+            tot = np.maximum(tot, w)
+        else:
+            num += w * tr
+    if mode == 'blend':
+        z = num / np.maximum(den, 1e-9) * (0.35 + 0.65 * np.sqrt(tot))   # far waves quieter, still readable
+    else:
+        z = num
+    z = z - z[sc.water].mean()
+    return z * EMIT_AMP_MM * sc.water + lip(sc)
+
+
+def gen_emitted_sum(rng, sc):
+    return gen_emitted(rng, sc, mode='sum') * 0.8
+
+
+GENERATORS = {'emitted': gen_emitted, 'emitted-sum': gen_emitted_sum,
+              'sim-rings': gen_sim_rings, 'sim': gen_sim, 'sim-wind': gen_sim_wind, 'spectrum': gen_spectrum,
               'combed': gen_combed, 'lapped': gen_lapped, 'rings': gen_rings,
               'legacy': gen_legacy}
 

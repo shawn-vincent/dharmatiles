@@ -27,11 +27,10 @@ import waterlab as wl  # noqa: E402
 
 # Best first.  (option, rank note) — legacy is appended last automatically.
 RANKING = [
-    ('sim-rings', 'wave sim (related scales) quieted near obstacles + rings riding on it'),
-    ('sim', 'wave sim: injected waves shoal, reflect, diffract; real-water chop, rock weak'),
-    ('sim-wind', 'wave sim from one side: most realistic, but directional rows (tiling risk)'),
+    ('emitted', 'waves radiate from sources: land strong, rock weak, 2 edges fallback; dominant source rules'),
     ('rings', 'clearest rock reaction; open water only the tide'),
-    ('spectrum', 'continuous wave spectrum + Stokes crests: lumpy, odd calm round the rock'),
+    ('emitted-sum', 'same sources, trains summed: more crossing, busier'),
+    ('sim-rings', 'prev #1: wave sim + rings; all-directions chop (rejected direction)'),
 ]
 LEGACY_NOTE = 'baseline: current dharmatiles water (noise + segment ripples) + tide'
 
