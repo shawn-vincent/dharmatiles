@@ -300,3 +300,40 @@ on the type of object.
   train.
 - **v6a** used land 2.6–9, rock 1.8–4.2 and λ^0.8.  It was too busy and
   fine; shore lines read like wood grain.
+
+## 10. Round 7 (2026-10-28): swell-chaos and the painted preview
+
+Prompted by Shawn sharing ChatGPT's acrylic painting of spectral-chaos.
+What the painting showed: deeper relief, a few broad rolling swells off the
+shore with smaller waves riding on them, and finer, busier chop behind the
+rock.
+
+- **swell-chaos** (`_swell_train`):
+  - **Long components stay round** (sharpen 0.15).  Components shorter
+    than the band's geometric midpoint are crest-sharpened (0.9).
+    Amplitude ∝ λ^1.4, so the swells dominate.
+  - **Bands**: land 5–16 mm, rock 2.0–4.5 mm (≥ 2 mm, so it prints),
+    corners 5–14 mm.
+  - **Relief**: ≈ 2× spectral-chaos.  Relief range is −0.74…+2.2 mm.
+  - **Rock**: weight × 1.15, plus a downstream **wake**.
+    - The weight gains ×(1 + 0.9·down·e^(−d/2.5·decay)).
+    - down = ∇d_land · ∇d_rock: the side of the rock facing away from the
+      shore, the direction land waves travel.
+  - **Soft trough floor**: a softplus at −1.1 mm.
+- **Geometry fixes found on the way**:
+  - **Terraces**: deep troughs were clipped flat by max(land, water)
+    against the underwater bed (WL − 1 mm).  The bed is now WL − 2.2 mm
+    (`BED_DEPTH_MM`, all options), and the troughs are softly floored.
+  - **Faceted swells**: the adaptive Laplacian mesher dropped vertices
+    on broad smooth swells, so they rendered faceted even though the
+    heightmap was smooth (checked by hillshading the raw grid).  The top
+    is now a uniform 0.2 mm mesh (`MESH_SUBSAMPLE = 2`), which is also
+    smaller than the adaptive mesh was.
+- **Painted preview**: the first column on the sheet.
+  - Water is coloured by drybrush affordance:
+    t = 0.65·(z − blur₂ₘₘ)/0.5 + 0.35·(z − blur₆ₘₘ)/0.9, mapped onto
+    navy → cobalt → turquoise → pale crest → near-white tip.
+  - Land is tan, rock grey, and tile walls (|n_z| < 0.35) dark.
+  - Faces are quantised to the palette and rendered through
+    `dharmatiles.render` (direct pyrender vertex colours came out blank).
+  - The renderer boosts saturation, so treat colours as indicative.

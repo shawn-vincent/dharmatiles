@@ -38,6 +38,8 @@ ROCK_D_MM      = 15.0
 ROCK_SINK_MM   = 1.4          # rock base below water level
 RIM_FADE_MM    = 4.0
 DIST_SMOOTH_MM = 1.0
+BED_DEPTH_MM   = 2.2           # underwater bed below calm water (troughs + tide must stay above it)
+MESH_SUBSAMPLE = 2            # uniform 0.2 mm top mesh (adaptive mesh faceted the broad swells)
 
 # ── tide: large-scale swell shared by every option ──────────────────────────
 TIDE_SIGMA_MM   = 9.0         # interior swell scale
@@ -136,6 +138,20 @@ BAND_AMP_EXP = 1.0            # a ∝ λ^e within a band (longer waves taller)
 BAND_SHARPEN = 0.85
 BAND_AMP_MM  = 0.42           # per unit-RMS train
 
+# ── swell-chaos (round 7) ────────────────────────────────────────────────────
+SWELL_BANDS = {
+    'land':   ((5.0, 16.0, 0.012), 4),  # broad rolling swells + medium riders
+    'rock':   ((2.0, 4.5, 0.035), 3),   # short chop (≥ 2 mm: printable)
+    'corner': ((5.0, 14.0, 0.0), 3),
+}
+SWELL_AMP_EXP      = 1.4      # long waves dominate
+SWELL_LONG_SHARPEN = 0.15     # swells stay round
+SWELL_SHORT_SHARPEN = 0.9     # riders get crisp crests
+SWELL_AMP_MM       = 0.8      # ≈ 2× spectral-chaos relief
+SWELL_ROCK_GAIN    = 1.15
+SWELL_WAKE         = 0.9      # extra rock chop on the downstream side
+SWELL_TROUGH_MM    = 1.1      # deepest trough below calm water (bed is at −BED_DEPTH)
+
 # ── lapped (rings near obstacles + strokes beyond) ──────────────────────────
 LAPPED_NEAR_MM = 8.0
 LAPPED_BREAK_BIAS = 0.45       # contact rings mostly continuous here
@@ -186,7 +202,7 @@ class Scene:
         wob /= np.abs(wob).max() + 1e-9
         xs = SHORE_X_MM + SHORE_WOBBLE_MM * wob[:, None]
         s = xs - X                                  # > 0 inside land
-        self.land = (WL_MM - 1.0) + (LAND_TOP_MM - WL_MM + 1.0) * smooth01(s / BANK_W_MM)
+        self.land = (WL_MM - BED_DEPTH_MM) + (LAND_TOP_MM - WL_MM + BED_DEPTH_MM) * smooth01(s / BANK_W_MM)
         self.land += 0.25 * noise(rng, X.shape, 6.0 / CELL_MM) * smooth01(s / BANK_W_MM)
         # Rock.
         self.rock, info = rl.make_rock(np.random.default_rng(seed + 77), ROCK_D_MM)
@@ -670,6 +686,82 @@ def gen_spectral_chaos(rng, sc):
     return z * BAND_AMP_MM * sc.water + lip(sc)
 
 
+def _swell_train(rng, d, band, wobble_grow, n_comp):
+    """Like _band_train, but scale-aware: the long components stay ROUND
+    (broad rolling swells), only the short ones are crest-sharpened, and the
+    long ones dominate (amplitude ∝ λ^SWELL_AMP_EXP)."""
+    lo, hi, g = band
+    lams = np.exp(np.linspace(np.log(lo), np.log(hi), n_comp))
+    lams *= np.exp(rng.uniform(-0.1, 0.1, n_comp))
+    split = np.sqrt(lo * hi)
+    long_, short_ = np.zeros(d.shape), np.zeros(d.shape)
+    for L in lams:
+        wob = EMIT_WOBBLE_MM + wobble_grow * np.minimum(d, 80.0) * (L / hi) ** -0.3
+        dw = np.maximum(d + wob * noise(rng, d.shape, max(1.2 * L, 2.5) / CELL_MM), 0)
+        phase = np.log1p(g * dw) / (g * L) if g > 0 else dw / L
+        a = (L / hi) ** SWELL_AMP_EXP
+        comp = a * np.cos(2 * np.pi * phase + rng.uniform(0, 2 * np.pi))
+        if L >= split:
+            long_ += comp
+        else:
+            short_ += comp
+    def sharp(u, k):
+        sd = u.std() + 1e-12
+        u = u / sd
+        u = 2.5 * np.tanh(u / 2.5)
+        return (u + k * 0.5 * (u * u - 1.0)) * sd
+    out = sharp(long_, SWELL_LONG_SHARPEN) + sharp(short_, SWELL_SHORT_SHARPEN)
+    return (out - out.mean()) / (out.std() + 1e-12)
+
+
+def gen_swell_chaos(rng, sc):
+    """spectral-chaos, round 7: longer land band dominated by broad round
+    swells with sharper short waves riding on them; ~2× relief; stronger rock
+    chop with a downstream wake; same order→chaos hand-over and corners."""
+    n = sc.X.shape[0]
+    srcs = _emit_sources(rng, sc)
+    kinds = []
+    for src in srcs:
+        if src[1] >= 1e3 or src[0] <= 0.4:
+            continue
+        kinds.append((src, 'land' if (sc.land_mask.any() and src[0] >= 0.99) else 'rock'))
+    corners = [(src, 'corner') for src in _corner_sources(rng, sc)]
+    # Downstream of the rock = away from the land (land waves travel outward).
+    land_src = [s_ for s_, k in kinds if k == 'land']
+    num = np.zeros(sc.X.shape); den = np.zeros(sc.X.shape)
+    lin = np.zeros(sc.X.shape); w2 = np.zeros(sc.X.shape)
+    order = np.zeros(sc.X.shape)
+    for (st, dec, _lam, _g, d, ny_, nx_), kind in kinds + corners:
+        band, ncomp = SWELL_BANDS[kind]
+        w = st * np.exp(-d / dec)
+        if kind == 'rock':
+            w = w * SWELL_ROCK_GAIN
+            if land_src:
+                dl = land_src[0][4]
+                gy, gx = np.gradient(dl, CELL_MM)          # direction of land-wave travel
+                ry, rx = np.gradient(d, CELL_MM)           # away from the rock
+                down = np.clip(gx * rx + gy * ry, 0, 1)     # 1 = downstream side
+                w = w * (1 + SWELL_WAKE * down * np.exp(-d / (2.5 * dec)))
+        tr = _swell_train(rng, d, band, CHAOS_WOBBLE_GROW * (0.5 if kind == 'corner' else 1.0), ncomp)
+        num += w ** EMIT_SHARP * tr
+        den += w ** EMIT_SHARP
+        lin += w * tr
+        w2 += w * w
+        if kind != 'corner':
+            order = np.maximum(order, np.minimum(w, 1.0))
+    dominant = num / np.maximum(den, 1e-12)
+    chaos = lin / np.maximum(np.sqrt(w2), 1e-9)
+    c = smooth01((order - CHAOS_ORDER_LO) / (CHAOS_ORDER_HI - CHAOS_ORDER_LO))
+    z = (c * dominant + (1 - c) * chaos) * (CHAOS_FAR_AMP + (1 - CHAOS_FAR_AMP) * c)
+    z = z - z[sc.water].mean()
+    z = z * SWELL_AMP_MM
+    # Soft floor: troughs deeper than the underwater bed (WL − 1 mm) would be
+    # clipped flat by max(land, water) → terraces.  Compress them smoothly.
+    fl, k = -SWELL_TROUGH_MM, 0.25
+    z = fl + k * np.log1p(np.exp((z - fl) / k))
+    return z * sc.water + lip(sc)
+
+
 def gen_emitted(rng, sc, mode='blend'):
     """Waves radiate from sources.  'blend': a partition of unity by source
     influence, so each region is ruled by its dominant source and only a few
@@ -748,7 +840,7 @@ def gen_emitted_sum(rng, sc):
     return gen_emitted(rng, sc, mode='sum') * 0.8
 
 
-GENERATORS = {'spectral-chaos': gen_spectral_chaos, 'emitted-chaos': gen_emitted_chaos, 'emitted': gen_emitted, 'emitted-sum': gen_emitted_sum,
+GENERATORS = {'swell-chaos': gen_swell_chaos, 'spectral-chaos': gen_spectral_chaos, 'emitted-chaos': gen_emitted_chaos, 'emitted': gen_emitted, 'emitted-sum': gen_emitted_sum,
               'sim-rings': gen_sim_rings, 'sim': gen_sim, 'sim-wind': gen_sim_wind, 'spectrum': gen_spectrum,
               'combed': gen_combed, 'lapped': gen_lapped, 'rings': gen_rings,
               'legacy': gen_legacy}
@@ -766,7 +858,7 @@ def build(sc, relief, tide=None):
         water_z = water_z + tide
     z = np.maximum(sc.land, water_z)
     z = ndimage.gaussian_filter(z, 0.6)          # remove grid-scale kinks (≤0.1 mm)
-    top = make_heightmap_solid(z, sc.W, sc.H, base_h=0.0, error_threshold=0.004)
+    top = make_heightmap_solid(z, sc.W, sc.H, base_h=0.0, subsample=MESH_SUBSAMPLE)
     solid = rl.to_manifold(top) + sc.rock if sc.rock is not None else rl.to_manifold(top)
     zmax = solid.bounding_box()[5]
     surface = SurfaceConfig(cols=COLS, rows=ROWS, square_mm=SQUARE_MM)

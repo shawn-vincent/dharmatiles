@@ -27,15 +27,13 @@ import waterlab as wl  # noqa: E402
 
 # Best first.  (option, rank note) — legacy is appended last automatically.
 RANKING = [
-    ('spectral-chaos', 'emitted-chaos + a wavelength BAND per emitter: land long+medium, rock short wavelets, corners long swell'),
-    ('spectral-chaos@open', 'same, all-water tile: four corner emitters, long swell bands'),
-    ('emitted-chaos', 'prev #1: one wavelength per emitter'),
-    ('emitted-chaos@open', 'prev #2: all-water, one wavelength per corner'),
-    ('rings', 'clearest rock reaction; open water only the tide'),
+    ('swell-chaos', 'round 7: ~2x relief, broad round swells off the shore with sharper riders, stronger rock chop + wake'),
+    ('swell-chaos@open', 'same, all-water tile'),
+    ('spectral-chaos', 'prev #1: a wavelength band per emitter, ~1 mm relief'),
 ]
 LEGACY_NOTE = 'baseline: current dharmatiles water (noise + segment ripples) + tide'
 
-VIEWS = [('oblique', 40, -120), ('top', 89, -90), ('low', 18, -150)]
+VIEWS = [('painted', 40, -120), ('oblique', 40, -120), ('top', 89, -90), ('low', 18, -150)]
 CELL = (760, 600)
 CAPTION_H = 54
 ROW_HEAD_H = 56
@@ -50,7 +48,59 @@ def font(size):
     return ImageFont.load_default()
 
 
-def render_views(mesh, tmp, tag):
+# Simulated cheap-acrylic paint job (dark basecoat, drybrushed crests).
+PAINT = dict(trough=(18, 38, 92), mid=(28, 86, 156), upper=(58, 160, 178),
+             crest=(150, 220, 214), tip=(225, 245, 240),
+             land=(118, 110, 98), rock=(120, 124, 132), side=(42, 42, 46))
+
+
+def paint_colors(mesh, sc, z):
+    """Per-vertex paint: water coloured by local relief (z − blur(z, 2 mm)) —
+    what a drybrush catches — plus a little absolute height; land, rock and
+    tile sides flat colours."""
+    from scipy import ndimage
+    v = mesh.vertices
+    cell = wl.CELL_MM
+    rel = z - ndimage.gaussian_filter(z, 2.0 / cell)
+    hi = z - ndimage.gaussian_filter(z, 6.0 / cell)
+    ix = np.clip(np.round(v[:, 0] / cell).astype(int), 0, z.shape[1] - 1)
+    iy = np.clip(np.round(v[:, 1] / cell).astype(int), 0, z.shape[0] - 1)
+    zs = z[iy, ix]
+    t = 0.65 * rel[iy, ix] / 0.5 + 0.35 * hi[iy, ix] / 0.9       # ~[-1, 1]
+    t = np.clip(0.5 + 0.5 * t, 0, 1)
+    stops = np.array([0.0, 0.45, 0.72, 0.9, 1.04])
+    cols = np.array([PAINT[k] for k in ('trough', 'mid', 'upper', 'crest', 'tip')], float)
+    water = np.stack([np.interp(t, stops, cols[:, c]) for c in range(3)], 1)
+    out = water
+    onland = sc.land[iy, ix] >= zs - 0.02
+    out = np.where(onland[:, None], np.array(PAINT['land'], float), out)
+    if sc.rock is not None:
+        above = v[:, 2] > zs + 0.08
+        out = np.where(above[:, None], np.array(PAINT['rock'], float), out)
+    side = (v[:, 2] < zs - 0.3) | (v[:, 2] < 0.2)
+    out = np.where(side[:, None], np.array(PAINT['side'], float), out)
+    return np.concatenate([out, np.full((len(out), 1), 255.0)], 1).astype(np.uint8)
+
+
+def render_painted(mesh, sc, z, path, elev, azim, res=(1200, 950)):
+    """Painted preview through the standard dharmatiles renderer: per-face
+    paint quantised to the palette (one sub-mesh per colour, as a real
+    drybrush job is banded anyway)."""
+    import trimesh
+    from dharmatiles.render import render
+    m = trimesh.Trimesh(mesh.vertices, mesh.faces, process=False)
+    vc = paint_colors(m, sc, z).astype(float)
+    fc = vc[m.faces].mean(1)
+    pal = np.array([PAINT[k] for k in PAINT], float)
+    k = ((fc[:, None, :3] - pal[None]) ** 2).sum(2).argmin(1)
+    side = np.abs(m.face_normals[:, 2]) < 0.35          # tile walls / base
+    k = np.where(side, list(PAINT).index('side'), k)
+    cols = np.concatenate([pal[k], np.full((len(k), 1), 255.0)], 1).astype(np.uint8)
+    m.visual.face_colors = cols
+    render([m], path, elev=elev, azim=azim, resolution=res, quiet=True, smooth=False)
+
+
+def render_views(mesh, tmp, tag, sc=None, z=None):
     from dharmatiles.render import render
     m = mesh.copy()
     m.visual.face_colors = np.tile([150, 150, 150, 255], (len(m.faces), 1))
@@ -58,8 +108,11 @@ def render_views(mesh, tmp, tag):
     out = []
     for name, elev, azim in VIEWS:
         p = tmp / f'{tag}-{name}.png'
-        render([m if name == 'oblique' else top], p, elev=elev, azim=azim,
-               resolution=(1200, 950), quiet=True)
+        if name == 'painted':
+            render_painted(mesh, sc, z, p, elev, azim)
+        else:
+            render([m if name == 'oblique' else top], p, elev=elev, azim=azim,
+                   resolution=(1200, 950), quiet=True)
         im = Image.open(p).convert('RGB')
         im.thumbnail((CELL[0] - 20, CELL[1] - 20))
         out.append(im)
@@ -84,12 +137,12 @@ def main():
             gen, _, scn = mode.partition('@')
             sc = scenes[scn]
             relief = wl.GENERATORS[gen](wl.mode_rng(args.seed, gen), sc)
-            mesh, _ = wl.build(sc, relief, sc.tide)
+            mesh, z = wl.build(sc, relief, sc.tide)
             y = i * row_h
             rank = f'#{i + 1}' if mode != 'legacy' else 'baseline'
             dr.rectangle([0, y, W, y + ROW_HEAD_H - 6], fill=(225, 228, 235))
             dr.text((16, y + 8), f'{rank}  {mode} — {note}', fill=(25, 25, 25), font=f_big)
-            for j, im in enumerate(render_views(mesh, tmp, mode)):
+            for j, im in enumerate(render_views(mesh, tmp, mode.replace('@', '_'), sc, z)):
                 x = j * CELL[0]
                 sheet.paste(im, (x + (CELL[0] - im.width) // 2,
                                  y + ROW_HEAD_H + (CELL[1] - im.height) // 2))
