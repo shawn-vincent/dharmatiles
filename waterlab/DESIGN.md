@@ -273,3 +273,30 @@ should get less clear the further you go.  He suggested:
   - z = (c·dominant + (1 − c)·chaos) × (0.7 + 0.3c).
 - **Open scene** (`--open`): no land and no rock, so only the four corner
   emitters.  This is the all-water tile case.
+
+## 9. Round 6 (2026-10-28): spectral-chaos (a wavelength band per emitter)
+
+Shawn: emitted-chaos is "the best I've seen so far".  Next: each emitter
+should emit a range of frequencies, not one, and the range should depend
+on the type of object.
+
+- **`_band_train`**: each emitter sums n crest trains at log-spaced,
+  jittered wavelengths across its band.
+  - Amplitude ∝ λ^1.0, so longer waves are taller.
+  - Each component has its own phase and its own coherence wobble.
+    Shorter waves decohere faster: (λ/λ_hi)^−0.3.
+  - The sum is tanh-tamed and Stokes-sharpened (0.85), giving crisp
+    crests over broad troughs.  The interference forms **wave groups**.
+- **Bands** (λ_lo–λ_hi mm, spacing growth, components):
+
+  | Emitter | Band | Growth | Components | Character |
+  |---|---|---|---|---|
+  | land | 3.2–11 | 0.015 | 4 | long and medium waves |
+  | rock | 2.2–4.8 | 0.04 | 3 | short choppy wavelets |
+  | corner | 4–12 | 0 | 3 | weak long swell |
+
+- Otherwise the same as emitted-chaos (§8): order-to-chaos hand-over,
+  corner emitters, the open scene.  Amplitude is 0.42 mm per unit-RMS
+  train.
+- **v6a** used land 2.6–9, rock 1.8–4.2 and λ^0.8.  It was too busy and
+  fine; shore lines read like wood grain.

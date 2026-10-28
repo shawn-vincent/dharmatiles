@@ -27,9 +27,10 @@ import waterlab as wl  # noqa: E402
 
 # Best first.  (option, rank note) — legacy is appended last automatically.
 RANKING = [
-    ('emitted-chaos', 'land strong, rock medium emit crisp crests that lose coherence with distance; weak corner emitters, chaos far away'),
-    ('emitted-chaos@open', 'same, on an all-water tile: four weak corner emitters only'),
-    ('emitted', 'prev #1: dominant source rules everywhere; too regular far out'),
+    ('spectral-chaos', 'emitted-chaos + a wavelength BAND per emitter: land long+medium, rock short wavelets, corners long swell'),
+    ('spectral-chaos@open', 'same, all-water tile: four corner emitters, long swell bands'),
+    ('emitted-chaos', 'prev #1: one wavelength per emitter'),
+    ('emitted-chaos@open', 'prev #2: all-water, one wavelength per corner'),
     ('rings', 'clearest rock reaction; open water only the tide'),
 ]
 LEGACY_NOTE = 'baseline: current dharmatiles water (noise + segment ripples) + tide'

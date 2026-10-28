@@ -126,6 +126,16 @@ CHAOS_ORDER_HI   = 0.45       # above this → the physical source rules
 CHAOS_FAR_AMP    = 0.7        # amplitude far from physical emitters
 CHAOS_BREAK_BIAS = 0.9        # physical crests rarely break (coherence loss does the work)
 
+# ── spectral-chaos: a wavelength band per emitter type ──────────────────────
+BANDS = {                     # (λ_lo mm, λ_hi mm, spacing growth /mm), components
+    'land':   ((3.2, 11.0, 0.015), 4),   # long + medium waves from the shore
+    'rock':   ((2.2, 4.8, 0.04), 3),    # short choppy wavelets off the rock
+    'corner': ((4.0, 12.0, 0.0), 3),    # weak long swell from open water
+}
+BAND_AMP_EXP = 1.0            # a ∝ λ^e within a band (longer waves taller)
+BAND_SHARPEN = 0.85
+BAND_AMP_MM  = 0.42           # per unit-RMS train
+
 # ── lapped (rings near obstacles + strokes beyond) ──────────────────────────
 LAPPED_NEAR_MM = 8.0
 LAPPED_BREAK_BIAS = 0.45       # contact rings mostly continuous here
@@ -609,6 +619,57 @@ def _train(rng, d, ny_, nx_, lam0, g, n, gated=True, wobble_grow=0.0, break_bias
     return out
 
 
+def _band_train(rng, d, band, wobble_grow, n_comp):
+    """A source's wave packet: n_comp crest trains at wavelengths spread over the
+    source's band (log-spaced, jittered), amplitude ∝ λ^BAND_AMP_EXP, each with
+    its own phase and its own coherence wobble; summed, then crest-sharpened
+    so the interference forms crisp crests over broad troughs (not blobs)."""
+    lo, hi, g = band
+    lams = np.exp(np.linspace(np.log(lo), np.log(hi), n_comp))
+    lams *= np.exp(rng.uniform(-0.12, 0.12, n_comp))
+    out = np.zeros(d.shape)
+    for L in lams:
+        wob = EMIT_WOBBLE_MM + wobble_grow * np.minimum(d, 80.0) * (L / hi) ** -0.3
+        dw = np.maximum(d + wob * noise(rng, d.shape, max(1.2 * L, 2.5) / CELL_MM), 0)
+        phase = np.log1p(g * dw) / (g * L) if g > 0 else dw / L
+        a = (L / hi) ** BAND_AMP_EXP
+        out += a * np.cos(2 * np.pi * phase + rng.uniform(0, 2 * np.pi))
+    u = out / (out.std() + 1e-12)
+    u = 2.5 * np.tanh(u / 2.5)
+    v = u + BAND_SHARPEN * 0.5 * (u * u - 1.0)       # Stokes-like crests
+    return (v - v.mean()) / (v.std() + 1e-12)
+
+
+def gen_spectral_chaos(rng, sc):
+    """emitted-chaos with a frequency BAND per emitter type: land emits long
+    and medium waves, rocks short choppy wavelets, corners long weak swell."""
+    n = sc.X.shape[0]
+    phys = [(src, kind) for src, kind in zip(_emit_sources(rng, sc), ('land', 'rock', 'e', 'e'))
+            if src[1] < 1e3 and src[0] > 0.4]
+    if not sc.land_mask.any():                      # map kinds when land is absent
+        phys = [(src, 'rock') for src, _ in phys]
+    corners = [(src, 'corner') for src in _corner_sources(rng, sc)]
+    num = np.zeros(sc.X.shape); den = np.zeros(sc.X.shape)
+    lin = np.zeros(sc.X.shape); w2 = np.zeros(sc.X.shape)
+    order = np.zeros(sc.X.shape)
+    for (st, dec, _lam, _g, d, ny_, nx_), kind in phys + corners:
+        band, ncomp = BANDS[kind]
+        w = st * np.exp(-d / dec)
+        tr = _band_train(rng, d, band, CHAOS_WOBBLE_GROW * (0.5 if kind == 'corner' else 1.0), ncomp)
+        num += w ** EMIT_SHARP * tr
+        den += w ** EMIT_SHARP
+        lin += w * tr
+        w2 += w * w
+        if kind != 'corner':
+            order = np.maximum(order, w)
+    dominant = num / np.maximum(den, 1e-12)
+    chaos = lin / np.maximum(np.sqrt(w2), 1e-9)
+    c = smooth01((order - CHAOS_ORDER_LO) / (CHAOS_ORDER_HI - CHAOS_ORDER_LO))
+    z = (c * dominant + (1 - c) * chaos) * (CHAOS_FAR_AMP + (1 - CHAOS_FAR_AMP) * c)
+    z = z - z[sc.water].mean()
+    return z * BAND_AMP_MM * sc.water + lip(sc)
+
+
 def gen_emitted(rng, sc, mode='blend'):
     """Waves radiate from sources.  'blend': a partition of unity by source
     influence, so each region is ruled by its dominant source and only a few
@@ -687,7 +748,7 @@ def gen_emitted_sum(rng, sc):
     return gen_emitted(rng, sc, mode='sum') * 0.8
 
 
-GENERATORS = {'emitted-chaos': gen_emitted_chaos, 'emitted': gen_emitted, 'emitted-sum': gen_emitted_sum,
+GENERATORS = {'spectral-chaos': gen_spectral_chaos, 'emitted-chaos': gen_emitted_chaos, 'emitted': gen_emitted, 'emitted-sum': gen_emitted_sum,
               'sim-rings': gen_sim_rings, 'sim': gen_sim, 'sim-wind': gen_sim_wind, 'spectrum': gen_spectrum,
               'combed': gen_combed, 'lapped': gen_lapped, 'rings': gen_rings,
               'legacy': gen_legacy}
