@@ -27,10 +27,10 @@ import waterlab as wl  # noqa: E402
 
 # Best first.  (option, rank note) — legacy is appended last automatically.
 RANKING = [
-    ('emitted', 'waves radiate from sources: land strong, rock weak, 2 edges fallback; dominant source rules'),
+    ('emitted-chaos', 'land strong, rock medium emit crisp crests that lose coherence with distance; weak corner emitters, chaos far away'),
+    ('emitted-chaos@open', 'same, on an all-water tile: four weak corner emitters only'),
+    ('emitted', 'prev #1: dominant source rules everywhere; too regular far out'),
     ('rings', 'clearest rock reaction; open water only the tide'),
-    ('emitted-sum', 'same sources, trains summed: more crossing, busier'),
-    ('sim-rings', 'prev #1: wave sim + rings; all-directions chop (rejected direction)'),
 ]
 LEGACY_NOTE = 'baseline: current dharmatiles water (noise + segment ripples) + tide'
 
@@ -69,9 +69,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--seed', type=int, default=1)
     args = ap.parse_args()
-    rows = [(m, n) for m, n in RANKING if m in wl.GENERATORS and m != 'legacy']
+    rows = [(m, n) for m, n in RANKING if m.split('@')[0] in wl.GENERATORS and m != 'legacy']
     rows.append(('legacy', LEGACY_NOTE))
-    sc = wl.Scene(args.seed)
+    scenes = {'': wl.Scene(args.seed), 'open': wl.Scene(args.seed, open_water=True)}
     f_big, f_cap = font(36), font(30)
     row_h = ROW_HEAD_H + CELL[1] + CAPTION_H
     W = CELL[0] * len(VIEWS)
@@ -80,7 +80,9 @@ def main():
     with tempfile.TemporaryDirectory() as td:
         tmp = pathlib.Path(td)
         for i, (mode, note) in enumerate(rows):
-            relief = wl.GENERATORS[mode](wl.mode_rng(args.seed, mode), sc)
+            gen, _, scn = mode.partition('@')
+            sc = scenes[scn]
+            relief = wl.GENERATORS[gen](wl.mode_rng(args.seed, gen), sc)
             mesh, _ = wl.build(sc, relief, sc.tide)
             y = i * row_h
             rank = f'#{i + 1}' if mode != 'legacy' else 'baseline'

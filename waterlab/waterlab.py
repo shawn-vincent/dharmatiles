@@ -118,6 +118,14 @@ EMIT_BREAK_SIGMA_MM = 7.0
 EMIT_N_EDGES    = 2
 EMIT_SHARP      = 8.0         # blend exponent: higher → crisper source territories
 
+# ── emitted-chaos ────────────────────────────────────────────────────────────
+CHAOS_CORNER     = (0.30, 70.0, 4.0, 0.012)   # weak radial corner emitters
+CHAOS_WOBBLE_GROW = 0.06      # extra phase wobble (mm) per mm from a source
+CHAOS_ORDER_LO   = 0.12       # physical influence below this → full chaos
+CHAOS_ORDER_HI   = 0.45       # above this → the physical source rules
+CHAOS_FAR_AMP    = 0.7        # amplitude far from physical emitters
+CHAOS_BREAK_BIAS = 0.9        # physical crests rarely break (coherence loss does the work)
+
 # ── lapped (rings near obstacles + strokes beyond) ──────────────────────────
 LAPPED_NEAR_MM = 8.0
 LAPPED_BREAK_BIAS = 0.45       # contact rings mostly continuous here
@@ -153,7 +161,8 @@ def poisson(rng, x0, y0, x1, y1, r):
 
 # ── Scene ────────────────────────────────────────────────────────────────────
 class Scene:
-    def __init__(self, seed):
+    def __init__(self, seed, open_water=False):
+        self.open = open_water
         rng = np.random.default_rng(seed)
         self.W = COLS * SQUARE_MM
         self.H = ROWS * SQUARE_MM
@@ -175,10 +184,17 @@ class Scene:
         z0 = WL_MM - ROCK_SINK_MM
         self.rock = self.rock.translate([ROCK_XY[0], ROCK_XY[1], z0])
         self.rock_mask = self._footprint(self.rock, WL_MM)
+        if open_water:                       # all-water tile: no land, no rock
+            self.land = np.full(X.shape, WL_MM - 1.2)
+            self.rock = None
+            self.rock_mask = np.zeros(X.shape, bool)
         # Obstacles and distance.
         self.land_mask = self.land > WL_MM
         obst = self.land_mask | self.rock_mask
-        d, (iy, ix) = ndimage.distance_transform_edt(~obst, return_indices=True)
+        if not obst.any():                   # distance from nothing: treat as far
+            d = np.full(X.shape, 1e3); iy, ix = np.indices(X.shape)
+        else:
+            d, (iy, ix) = ndimage.distance_transform_edt(~obst, return_indices=True)
         d = d * CELL_MM
         w = (~obst).astype(float)
         sg = DIST_SMOOTH_MM / CELL_MM
@@ -566,11 +582,14 @@ def _emit_sources(rng, sc):
     return out
 
 
-def _train(rng, d, ny_, nx_, lam0, g, n, gated=True):
+def _train(rng, d, ny_, nx_, lam0, g, n, gated=True, wobble_grow=0.0, break_bias=None):
     """Crest train on a distance field: wobbled phase, sharpened crests, breaks
     gated per crest by noise at the crest's source point; plus a shorter
     riding wave (related scale)."""
-    dw = np.maximum(d + EMIT_WOBBLE_MM * noise(rng, d.shape, 3.0 / CELL_MM), 0)
+    # Coherence loss: phase wobble grows with distance from the source, so a
+    # source's crests are crisp near it and dissolve into chaos far away.
+    wob = EMIT_WOBBLE_MM + wobble_grow * np.minimum(d, 80.0)
+    dw = np.maximum(d + wob * noise(rng, d.shape, 4.0 / CELL_MM), 0)
     if g > 0:
         phase = np.log1p(g * dw) / (g * lam0)
     else:
@@ -584,7 +603,8 @@ def _train(rng, d, ny_, nx_, lam0, g, n, gated=True):
         gf = noise(rng, d.shape, EMIT_BREAK_SIGMA_MM / CELL_MM)
         gy = np.clip((ny_ + k * 37).astype(int), 0, n - 1)
         gx = np.clip((nx_ + k * 53).astype(int) % n, 0, n - 1)
-        gate = smooth01((gf[gy, gx] + EMIT_BREAK_BIAS) / 0.5 + 0.5) if (mult >= 1 and gated) else 1.0
+        bb = EMIT_BREAK_BIAS if break_bias is None else break_bias
+        gate = smooth01((gf[gy, gx] + bb) / 0.5 + 0.5) if (mult >= 1 and gated) else 1.0
         out += amp * crest * gate
     return out
 
@@ -615,11 +635,59 @@ def gen_emitted(rng, sc, mode='blend'):
     return z * EMIT_AMP_MM * sc.water + lip(sc)
 
 
+def _corner_sources(rng, sc):
+    """Weak radial emitters at the open-water tile corners (corners not on land).
+    On an all-water tile that's all four → non-directional interference."""
+    out = []
+    st, dec, lam, g = CHAOS_CORNER
+    for cx, cy in ((0, 0), (sc.W, 0), (0, sc.H), (sc.W, sc.H)):
+        iy = int(min(cy / CELL_MM, sc.X.shape[0] - 1))
+        ix = int(min(cx / CELL_MM, sc.X.shape[1] - 1))
+        if not sc.water[max(iy - 20, 0):iy + 20, max(ix - 20, 0):ix + 20].mean() > 0.5:
+            continue
+        d = np.hypot(sc.X - cx, sc.Y - cy)
+        out.append((st * rng.uniform(0.8, 1.2), dec, lam * rng.uniform(0.8, 1.25), g, d,
+                    np.full(d.shape, iy), np.full(d.shape, ix)))
+    return out
+
+
+def gen_emitted_chaos(rng, sc):
+    """Physical emitters (land strong, rock medium) rule near themselves with
+    crisp crests; their coherence decays with distance (phase wobble grows),
+    and weak open-water corner emitters take over, summing into
+    non-directional interference far from anything physical."""
+    n = sc.X.shape[0]
+    phys = [src for src in _emit_sources(rng, sc) if src[1] < 1e3 and src[0] > 0.4]
+    srcs = [(s_, True) for s_ in phys] + [(s_, False) for s_ in _corner_sources(rng, sc)]
+    num = np.zeros(sc.X.shape); den = np.zeros(sc.X.shape)
+    lin = np.zeros(sc.X.shape); w2 = np.zeros(sc.X.shape)
+    order = np.zeros(sc.X.shape)
+    for (st, dec, lam, g, d, ny_, nx_), physical in srcs:
+        w = st * np.exp(-d / dec)
+        tr = _train(rng, d, ny_, nx_, lam, g, n, gated=physical,
+                    wobble_grow=CHAOS_WOBBLE_GROW if physical else CHAOS_WOBBLE_GROW * 0.5,
+                    break_bias=CHAOS_BREAK_BIAS)
+        tr = tr - tr.mean()
+        num += w ** EMIT_SHARP * tr
+        den += w ** EMIT_SHARP
+        lin += w * tr
+        w2 += w * w
+        if physical:
+            order = np.maximum(order, w)
+    dominant = num / np.maximum(den, 1e-12)
+    chaos = lin / np.maximum(np.sqrt(w2), 1e-9)          # interference, amplitude-preserving
+    c = smooth01((order - CHAOS_ORDER_LO) / (CHAOS_ORDER_HI - CHAOS_ORDER_LO))
+    amp = CHAOS_FAR_AMP + (1 - CHAOS_FAR_AMP) * c        # physical sources louder
+    z = (c * dominant + (1 - c) * chaos) * amp
+    z = z - z[sc.water].mean()
+    return z * EMIT_AMP_MM * sc.water + lip(sc)
+
+
 def gen_emitted_sum(rng, sc):
     return gen_emitted(rng, sc, mode='sum') * 0.8
 
 
-GENERATORS = {'emitted': gen_emitted, 'emitted-sum': gen_emitted_sum,
+GENERATORS = {'emitted-chaos': gen_emitted_chaos, 'emitted': gen_emitted, 'emitted-sum': gen_emitted_sum,
               'sim-rings': gen_sim_rings, 'sim': gen_sim, 'sim-wind': gen_sim_wind, 'spectrum': gen_spectrum,
               'combed': gen_combed, 'lapped': gen_lapped, 'rings': gen_rings,
               'legacy': gen_legacy}
@@ -638,7 +706,7 @@ def build(sc, relief, tide=None):
     z = np.maximum(sc.land, water_z)
     z = ndimage.gaussian_filter(z, 0.6)          # remove grid-scale kinks (≤0.1 mm)
     top = make_heightmap_solid(z, sc.W, sc.H, base_h=0.0, error_threshold=0.004)
-    solid = rl.to_manifold(top) + sc.rock
+    solid = rl.to_manifold(top) + sc.rock if sc.rock is not None else rl.to_manifold(top)
     zmax = solid.bounding_box()[5]
     surface = SurfaceConfig(cols=COLS, rows=ROWS, square_mm=SQUARE_MM)
     base_cfg = BaseConfig()
@@ -686,16 +754,17 @@ def main():
     ap.add_argument('--mode', default='lapping', choices=list(GENERATORS) + ['all'])
     ap.add_argument('--seed', type=int, default=1)
     ap.add_argument('--check', type=pathlib.Path, default=None)
+    ap.add_argument('--open', action='store_true', help='all-water tile (no land, no rock)')
     args = ap.parse_args()
     modes = list(GENERATORS) if args.mode == 'all' else [args.mode]
-    sc = Scene(args.seed)
+    sc = Scene(args.seed, open_water=args.open)
     out = pathlib.Path(__file__).parent / 'out'
     out.mkdir(exist_ok=True)
     for mode in modes:
         t0 = time.perf_counter()
         relief = GENERATORS[mode](mode_rng(args.seed, mode), sc)
         mesh, z = build(sc, relief, sc.tide)
-        path = out / f"2x2-water-{mode}-s{args.seed}.stl"
+        path = out / f"2x2-water-{mode}{'-open' if args.open else ''}-s{args.seed}.stl"
         mesh.export(path)
         st = stats(sc, relief, z)
         print(f"→ {path}  ({path.stat().st_size / 1e6:.1f} MB) {len(mesh.faces):,} faces, "

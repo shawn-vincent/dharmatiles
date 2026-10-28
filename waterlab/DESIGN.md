@@ -244,3 +244,32 @@ All-directions chop "ends up with a whole bunch of spiky shit".
   far corner.  Risks to watch:
   - wood-grain or directional rows where land dominates;
   - small dots and dashes near the shore at break gates.
+
+## 8. Round 5 (2026-10-28): emitted-chaos (coherence decays with distance)
+
+Shawn: emitted is liked but still too regular.  A source's influence
+should get less clear the further you go.  He suggested:
+- physical emitters strong (land, rock);
+- the open-water corners as very low-intensity emitters;
+- a pure water tile gets all four corners, so it becomes chaotic and
+  non-directional, and so does any water far from the physical emitters.
+
+- **Emitters**:
+  - land: 1.0 strength, 34 mm decay;
+  - rock: 0.55, 10 mm;
+  - each open-water **corner**, a weak radial emitter: 0.3 strength,
+    70 mm decay, λ 4 mm.  A corner counts as open water if the water
+    fraction around it is above 0.5.
+  - The edge fallback of `emitted` isn't used here.
+- **Coherence loss**: the phase wobble grows with distance from the
+  source, 1 mm + 0.06·d.  Corners grow at half that rate.  Crests are crisp
+  near a source and wander and break up far away.  Physical crests
+  rarely break (bias 0.9); the wobble does that work.
+- **Order versus chaos**: order = the max physical weight, and
+  c = smoothstep over 0.12…0.45.
+  - **Dominant**: w⁸ partition of unity; the nearest source rules.
+  - **Chaos**: Σ w·train / √Σ w², an amplitude-preserving interference
+    sum.
+  - z = (c·dominant + (1 − c)·chaos) × (0.7 + 0.3c).
+- **Open scene** (`--open`): no land and no rock, so only the four corner
+  emitters.  This is the all-water tile case.
