@@ -186,9 +186,42 @@ def poisson(rng, x0, y0, x1, y1, r):
 
 
 # ── Scene ────────────────────────────────────────────────────────────────────
+# Scenarios: which tile sides are land, and which obstacles stand in the water
+# (kind, x, y, size mm).  'bank-rock' is the original scene.
+SCENARIOS = {
+    'bank-rock':    dict(land='W',    obstacles=[('rock', 46, 38, 15)]),
+    'open':         dict(land='',     obstacles=[]),
+    'open-rock':    dict(land='',     obstacles=[('rock', 35, 35, 15)]),
+    'open-2rocks':  dict(land='',     obstacles=[('rock', 24, 45, 13), ('rock', 47, 23, 11)]),
+    'shore-shapes': dict(land='W',    obstacles=[('cube', 42, 49, 10), ('pyramid', 50, 21, 13)]),
+    'land-2':       dict(land='WE',   obstacles=[('rock', 35, 37, 13)]),
+    'land-3':       dict(land='WES',  obstacles=[('rock', 35, 42, 13)]),
+    'land-4':       dict(land='WESN', obstacles=[('rock', 35, 35, 12)]),
+}
+MULTI_SHORE_MM = 14.0          # shoreline inset when land is on several sides
+
+
+def make_obstacle(kind, size, rng):
+    """A solid standing in the water, base at z = 0 (sunk later)."""
+    if kind == 'rock':
+        return rl.make_rock(rng, size)[0]
+    if kind == 'cube':
+        h = size * 0.8
+        return m3d.Manifold.cube([size, size, h], center=True).translate([0, 0, h / 2])
+    if kind == 'pyramid':
+        h = size * 0.75
+        b = size / 2
+        pts = np.array([[-b, -b, 0], [b, -b, 0], [b, b, 0], [-b, b, 0], [0, 0, h]], np.float32)
+        return m3d.Manifold.hull_points(pts)
+    raise ValueError(kind)
+
+
 class Scene:
-    def __init__(self, seed, open_water=False):
-        self.open = open_water
+    def __init__(self, seed, open_water=False, scenario=None):
+        scenario = scenario or ('open' if open_water else 'bank-rock')
+        self.scenario = scenario
+        spec = SCENARIOS[scenario]
+        self.open = not spec['land'] and not spec['obstacles']
         rng = np.random.default_rng(seed)
         self.W = COLS * SQUARE_MM
         self.H = ROWS * SQUARE_MM
@@ -197,23 +230,28 @@ class Scene:
         self.y = np.linspace(0, self.H, n)
         X, Y = np.meshgrid(self.x, self.y)          # rows = y, cols = x
         self.X, self.Y = X, Y
-        # Land rise on the left.
-        wob = SHORE_WOBBLE_MM * ndimage.gaussian_filter1d(rng.standard_normal(n), 9.0 / CELL_MM, mode='wrap')
-        wob /= np.abs(wob).max() + 1e-9
-        xs = SHORE_X_MM + SHORE_WOBBLE_MM * wob[:, None]
-        s = xs - X                                  # > 0 inside land
-        self.land = (WL_MM - BED_DEPTH_MM) + (LAND_TOP_MM - WL_MM + BED_DEPTH_MM) * smooth01(s / BANK_W_MM)
-        self.land += 0.25 * noise(rng, X.shape, 6.0 / CELL_MM) * smooth01(s / BANK_W_MM)
-        # Rock.
-        self.rock, info = rl.make_rock(np.random.default_rng(seed + 77), ROCK_D_MM)
-        self.rock = self.rock.rotate([0, 0, float(rng.uniform(0, 360))])
-        z0 = WL_MM - ROCK_SINK_MM
-        self.rock = self.rock.translate([ROCK_XY[0], ROCK_XY[1], z0])
-        self.rock_mask = self._footprint(self.rock, WL_MM)
-        if open_water:                       # all-water tile: no land, no rock
-            self.land = np.full(X.shape, WL_MM - 1.2)
-            self.rock = None
-            self.rock_mask = np.zeros(X.shape, bool)
+        # Land rising from the listed sides (union of per-side banks).
+        inset = SHORE_X_MM if len(spec['land']) <= 1 else MULTI_SHORE_MM
+        s = np.full(X.shape, -1e3)
+        for side in spec['land']:
+            dist, along = {'W': (X, Y), 'E': (self.W - X, Y),
+                           'S': (Y, X), 'N': (self.H - Y, X)}[side]
+            wob = ndimage.gaussian_filter1d(rng.standard_normal(n), 9.0 / CELL_MM, mode='wrap')
+            wob /= np.abs(wob).max() + 1e-9
+            pos = inset + SHORE_WOBBLE_MM * np.interp(along, self.x, wob)
+            s = np.maximum(s, pos - dist)               # > 0 inside land
+        bank = smooth01(s / BANK_W_MM)
+        self.land = (WL_MM - BED_DEPTH_MM) + (LAND_TOP_MM - WL_MM + BED_DEPTH_MM) * bank
+        self.land += 0.25 * noise(rng, X.shape, 6.0 / CELL_MM) * bank
+        # Obstacles standing in the water.
+        solids = []
+        for i, (kind, ox, oy, size) in enumerate(spec['obstacles']):
+            ob = make_obstacle(kind, size, np.random.default_rng(seed + 77 + i))
+            ob = ob.rotate([0, 0, float(rng.uniform(0, 360))])
+            solids.append(ob.translate([ox, oy, WL_MM - ROCK_SINK_MM]))
+        self.rock = (m3d.Manifold.batch_boolean(solids, m3d.OpType.Add) if solids else None)
+        self.rock_mask = (self._footprint(self.rock, WL_MM) if self.rock is not None
+                          else np.zeros(X.shape, bool))
         # Obstacles and distance.
         self.land_mask = self.land > WL_MM
         obst = self.land_mask | self.rock_mask
@@ -908,16 +946,17 @@ def main():
     ap.add_argument('--seed', type=int, default=1)
     ap.add_argument('--check', type=pathlib.Path, default=None)
     ap.add_argument('--open', action='store_true', help='all-water tile (no land, no rock)')
+    ap.add_argument('--scene', default=None, choices=list(SCENARIOS))
     args = ap.parse_args()
     modes = list(GENERATORS) if args.mode == 'all' else [args.mode]
-    sc = Scene(args.seed, open_water=args.open)
+    sc = Scene(args.seed, open_water=args.open, scenario=args.scene)
     out = pathlib.Path(__file__).parent / 'out'
     out.mkdir(exist_ok=True)
     for mode in modes:
         t0 = time.perf_counter()
         relief = GENERATORS[mode](mode_rng(args.seed, mode), sc)
         mesh, z = build(sc, relief, sc.tide)
-        path = out / f"2x2-water-{mode}{'-open' if args.open else ''}-s{args.seed}.stl"
+        path = out / f"2x2-water-{mode}{'' if sc.scenario == 'bank-rock' else '-' + sc.scenario}-s{args.seed}.stl"
         mesh.export(path)
         st = stats(sc, relief, z)
         print(f"→ {path}  ({path.stat().st_size / 1e6:.1f} MB) {len(mesh.faces):,} faces, "

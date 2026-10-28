@@ -337,3 +337,39 @@ rock.
   - Faces are quantised to the palette and rendered through
     `dharmatiles.render` (direct pyrender vertex colours came out blank).
   - The renderer boosts saturation, so treat colours as indicative.
+
+## 11. Scenarios (2026-10-28)
+
+Shawn: the seed sweep is good.  He wanted to see how swell-chaos handles
+other situations.  `SCENARIOS` in waterlab.py lists, for each one, the land
+sides and the obstacles (rock / cube / pyramid):
+
+- bank-rock
+- open
+- open-rock
+- open-2rocks
+- shore-shapes
+- land-2
+- land-3
+- land-4
+
+The land is the union of per-side banks, with a 14 mm inset when it is on
+more than one side.  Select one with `--scene`; render all with
+`contact_sheet.py --sheet scenarios`.  bank-rock output is byte-for-byte
+unchanged.
+
+**Observations (seed 1):**
+- **Open sea, one and two rocks:** good.  Each rock organises its own
+  rings, and they merge into the corner chaos between rocks.
+- **Cube and pyramid:** the rings take on the obstacle's shape (squarish
+  around the cube), which is plausible.
+- **land-3 / land-4 are the weak point.**  Land waves dominate a shrinking
+  pool, so iso-distance crests nest into concentric U and square
+  contours: topographic loops (W2 targets).  The rock barely registers.
+  Square land corners come through as mitred crest corners.
+
+  Likely fixes:
+  - cap land influence by pool size (decay ∝ pool width);
+  - add more wobble, or rounder distance, at concave corners;
+  - give enclosed water its own weak interior emitters, so the centre of
+    a pond goes to chaos.

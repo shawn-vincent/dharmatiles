@@ -31,12 +31,26 @@ RANKING = [
     ('swell-chaos@open', 'same, all-water tile'),
     ('spectral-chaos', 'prev #1: a wavelength band per emitter, ~1 mm relief'),
 ]
+SCENARIO_SHEET = [
+    ('swell-chaos@bank-rock', 'reference: bank on one side, one rock'),
+    ('swell-chaos@open-rock', 'open sea, one rock'),
+    ('swell-chaos@open-2rocks', 'open sea, two rocks'),
+    ('swell-chaos@shore-shapes', 'shoreline + cube + pyramid'),
+    ('swell-chaos@land-2', 'land on two (opposite) sides + rock'),
+    ('swell-chaos@land-3', 'land on three sides (bay) + rock'),
+    ('swell-chaos@land-4', 'land on all four sides (pond) + rock'),
+    ('swell-chaos@open', 'open sea, nothing'),
+]
 LEGACY_NOTE = 'baseline: current dharmatiles water (noise + segment ripples) + tide'
 
+SHEETS = None  # filled below
 VIEWS = [('painted', 40, -120), ('oblique', 40, -120), ('top', 89, -90), ('low', 18, -150)]
 CELL = (760, 600)
 CAPTION_H = 54
 ROW_HEAD_H = 56
+
+
+SHEETS = {'ranking': RANKING, 'scenarios': SCENARIO_SHEET}
 
 
 def font(size):
@@ -122,10 +136,15 @@ def render_views(mesh, tmp, tag, sc=None, z=None):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--seed', type=int, default=1)
+    ap.add_argument('--sheet', default='ranking', choices=list(SHEETS))
+    ap.add_argument('--no-legacy', action='store_true')
     args = ap.parse_args()
-    rows = [(m, n) for m, n in RANKING if m.split('@')[0] in wl.GENERATORS and m != 'legacy']
-    rows.append(('legacy', LEGACY_NOTE))
-    scenes = {'': wl.Scene(args.seed), 'open': wl.Scene(args.seed, open_water=True)}
+    rows = [(m, n) for m, n in SHEETS[args.sheet] if m.split('@')[0] in wl.GENERATORS and m != 'legacy']
+    if args.sheet != 'ranking':
+        args.no_legacy = True
+    if not args.no_legacy:
+        rows.append(('legacy', LEGACY_NOTE))
+    scenes = {}
     f_big, f_cap = font(36), font(30)
     row_h = ROW_HEAD_H + CELL[1] + CAPTION_H
     W = CELL[0] * len(VIEWS)
@@ -135,6 +154,9 @@ def main():
         tmp = pathlib.Path(td)
         for i, (mode, note) in enumerate(rows):
             gen, _, scn = mode.partition('@')
+            scn = scn or 'bank-rock'
+            if scn not in scenes:
+                scenes[scn] = wl.Scene(args.seed, scenario=scn)
             sc = scenes[scn]
             relief = wl.GENERATORS[gen](wl.mode_rng(args.seed, gen), sc)
             mesh, z = wl.build(sc, relief, sc.tide)
@@ -150,7 +172,8 @@ def main():
                         f'{rank} {mode} · {VIEWS[j][0]}', fill=(40, 40, 40), font=f_cap)
             print(f'  rendered {mode}')
     stamp = datetime.datetime.now().strftime('%Y-%m-%d-%H%M%S')
-    out = pathlib.Path(__file__).parent / 'out' / f'{stamp}-contact-sheet-s{args.seed}.png'
+    tag = '' if args.sheet == 'ranking' else f'-{args.sheet}'
+    out = pathlib.Path(__file__).parent / 'out' / f'{stamp}-contact-sheet{tag}-s{args.seed}.png'
     out.parent.mkdir(exist_ok=True)
     sheet.save(out)
     print(f'→ {out}')
