@@ -92,7 +92,11 @@ sampled onto this lab's grid.
   texture.
 
 - **Reed tips (2026-10-29)**: Shawn wanted tips sharp, not flat, but
-  fairly blunt.  Each blade now ends in a short cone, the hull of its top
-  ring and an apex, of length 1.6 × the top half-width (about a 64°
-  point).  The body is shortened by the cone, so the overall reed height
-  is unchanged.
+  fairly blunt, blending smoothly into the blade.
+  - Each blade is one continuous taper (a `warp_batch` of a 48-division
+    extrusion).  Its scale falls linearly from 1 to the tip scale up the
+    body, then follows an ogive s·√(1 − u²) over the last 2.2 × the top
+    half-width, closing to a point (minimum scale 0.03).
+  - There is no seam and no flat top, and the overall height is
+    unchanged.
+  - The first try, a hull cone on a flat top, left a visible crease.

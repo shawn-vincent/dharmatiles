@@ -69,7 +69,8 @@ REED_H_MM       = (8.0, 13.0)
 REED_HALF_W_MM  = (1.7, 2.3)   # blade half-width at the base (chunky)
 REED_THICK      = (0.5, 0.65) # half-thickness / half-width (lemon section)
 REED_TIP_SCALE  = (0.25, 0.35) # section scale where the tip cone starts
-REED_TIP_CAP    = 1.6           # tip cone length × top half-width (≈ 64° point: sharp but blunt)
+REED_TIP_CAP    = 2.2           # rounded-point length × top half-width (fairly blunt)
+REED_TIP_MIN    = 0.03          # section scale at the very tip (closes to a point)
 REED_LEAN_DEG   = 8.0          # extra lean of the whole clump toward the water
 
 WATER_BURY_MM   = 0.3
@@ -212,15 +213,18 @@ def make_reeds(rng, ground, W, H):
             t_ = np.linspace(0, 2 * np.pi, 24, endpoint=False)
             sec = np.c_[hw * np.cos(t_), ht * np.sign(np.sin(t_)) * np.abs(np.sin(t_)) ** 1.4]
             ts = rng.uniform(*REED_TIP_SCALE)
-            cap = REED_TIP_CAP * hw * ts                 # tip cone length
-            hb = h + 0.8 - cap                           # body: overall height unchanged
-            stem = m3d.Manifold.extrude(m3d.CrossSection([sec.tolist()]), hb,
-                                        n_divisions=16, scale_top=(ts, ts))
-            # Pointed, fairly blunt tip: a short cone (hull of the top ring and
-            # an apex) instead of a flat top.
-            ring = np.c_[sec * ts, np.full(len(sec), hb - 1e-3)]
-            apex = [0.0, 0.0, h + 0.8]
-            stem = stem + m3d.Manifold.hull_points(np.vstack([ring, apex]).astype(np.float32))
+            Ht = h + 0.8
+            cap = REED_TIP_CAP * hw * ts                 # length of the rounded point
+            zb = Ht - cap
+            # One continuous taper: linear 1 → ts up the body, then an ogive
+            # that closes smoothly to a (fairly blunt) point — no seam, no flat top.
+            def taper(z, Ht=Ht, zb=zb, ts=ts, cap=cap):
+                lin = 1 + (ts - 1) * np.clip(z / zb, 0, 1)
+                u = np.clip((z - zb) / cap, 0, 1)
+                return np.maximum(lin * np.sqrt(np.clip(1 - u ** 2, 0, 1)), REED_TIP_MIN)
+            stem = m3d.Manifold.extrude(m3d.CrossSection([sec.tolist()]), Ht, n_divisions=48)
+            stem = stem.warp_batch(lambda v, f=taper: np.c_[v[:, 0] * f(v[:, 2]),
+                                                             v[:, 1] * f(v[:, 2]), v[:, 2]])
             # Flat face toward the clump centre (wide axis tangential).
             stem = stem.rotate([0.0, 0.0, float(np.degrees(fan_a) + 90 + rng.normal(0, 15))])
             fan = rng.uniform(*REED_FAN_DEG)
