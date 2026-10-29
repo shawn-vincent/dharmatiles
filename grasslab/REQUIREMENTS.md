@@ -1,7 +1,7 @@
 # grasslab — Sculpted Grass Tile: Requirements
 
-*Revision 3, 2026-10-27 (matches code v2f).  Supersedes revisions 1–2; their
-retired requirements and the reasons are kept in §7.*
+*Revision 4, 2026-10-29 (matches code v3: stroke blades).  Supersedes
+revisions 1–3; their retired requirements and the reasons are kept in §7.*
 
 *Visual targets: `reference/approved-reference.png` ("Sculpted Grassy
 Terrain Tile Showcase", from the procedural sculpted-grass spec Shawn
@@ -28,15 +28,19 @@ covered in sculpted grass, with a few bare-earth clearings**.
 |---|---|---|
 | **Flow / ribbon** | strands 15–30 mm long, 2–3 mm apart; meanders ≈ 15 mm wavelength | Combed ribbons of blades following one smooth direction field; the "flowing grass" read. |
 | **Swath** | cells ≈ 11 mm apart | A height wave only: low upstream and at the sides, cresting downstream, so ribbons rise and lap over each other. |
-| **Frond** | 4.4–10.5 mm long, 1.1–1.8 mm wide | Pointed, domed blades shingled along each strand; their tips are the shadow-casting lips. |
-| **Groove** | ≥ 0.6 mm wide, 0.4–1.0 mm deep | Dark channels between fronds and under tips, where the base coat survives a drybrush. |
+| **Blade** | 2.8–7.2 mm long, 0.9–1.8 mm wide, 1.5–2.0 mm tall | Separate pointed blades standing on the dirt, shingled along each strand; each tip overhangs open air. |
+| **Gap** | the dirt between blades, the air under each tip | Dark ground and shadows, where the base coat survives a drybrush. |
 | *Leaf point* | < 1 mm | **Paint and lighting, not geometry.** |
 
-### 1.2 Geometry is true 3D, undercuts only where designed
+### 1.2 Geometry is defined in the printer's units
 
-Undercuts exist only under frond tips (lips) and under the soil-facing
-edges of bank fronds (side ledges), each with a 45° underside.  Everywhere
-else the grass is a solid height field down to the ground.
+*(Shawn, 2026-10-29: "make it more honest about the shape, so that we can
+refine THAT rather than a theoretical ideal.")*  A blade is a stack of
+0.2 mm layers, each a stroke a whole number of 0.45 mm lines wide; what is
+modelled is what an FDM slicer draws.  For resin the same shape is
+smoothed (the layer steps melted); its outline, keel and points are kept.
+Undercuts are part of every blade: its upper layers reach further toward
+the tip than the keel below.
 
 ### 1.3 Scope
 
@@ -60,9 +64,9 @@ script or statistic (**[S]**).
 - **REQ-OUT-1 [S]** A run writes one binary STL,
   `grasslab/out/<cols>x<rows>-sculpted-grass[-flat]-s<seed>.stl`.
 - **REQ-OUT-2 [S]** The mesh is one closed manifold body: watertight,
-  consistent normals, no self-intersections, no internal voids.  Crumbs
-  (disconnected slivers) are dropped and reported with vertex and face
-  counts.
+  consistent normals, no self-intersections, no internal voids (voids
+  sealed under overlapping blades are filled).  Crumbs are dropped and
+  reported.
 - **REQ-OUT-3 [S]** Standard DB socket-peg base
   (`dharmatiles.bases.dungeonblocks`).  The *mean* grass-top height lies in
   the official DB grass band, **15.3–16.8 mm above the piece bottom**
@@ -70,28 +74,34 @@ script or statistic (**[S]**).
 - **REQ-OUT-4 [S]** Footprint cols × rows DB squares, default 2 × 2.
 - **REQ-OUT-5 [S]** Deterministic: the same seed and parameters give a
   byte-identical STL.
-- **REQ-OUT-6 [S]** The STL is under 50 MB at 2 × 2, and the build takes
-  under 60 s.
+- **REQ-OUT-6 [S]** Resin resolution: blade surfaces within ≈ 20 µm of
+  their smooth definition.  The 2 × 2 STL stays under 100 MB and the build
+  under 2 minutes.
 
-### 2.2 FDM rules (hard constraints; 0.4 mm nozzle, base-down print)
+### 2.2 Blade construction (print-native, then smoothed)
 
-- **REQ-FDM-1 [S]** No downward-facing surface is steeper than **45°**
-  from vertical, beyond micro-lips of 0.5 mm or less.
-- **REQ-FDM-2 [S]** No islands: every layer is supported by the layer
-  below within 45°.
-- **REQ-FDM-3 [S] Gaps are wedges, never slots.**  An undercut opens from
-  its root at 45° or wider.  Parallel-walled air gaps thinner than 0.6 mm
-  are forbidden (slicers fuse them; paint can't reach them).
-- **REQ-FDM-4 [S]** Free features (lips, ledges) are ≥ 0.9 mm in XY and
-  ≥ 0.6 mm thick in z.  No needles.
-- **REQ-FDM-5 [S]** Every feature is fused to the mass: no hinges, no
-  pinches.
-- **REQ-FDM-6 [S]** Tile edges are solid; how grass *ends* at the rim is
-  REQ-EDGE-3.
-- **REQ-FDM-7 [S]** Grass stays ≤ 3.5 mm above the local ground, budgeted
-  on the inputs, never clamped afterwards.
-- **REQ-FDM-8 [S]** An automated audit (overhang area, crumbs, backstop
-  changes) runs on every output and reports any violation.
+- **REQ-B-1 [S] Whole layers and lines.**  Before smoothing, every blade
+  is a stack of `LAYER_MM` (0.2) layers, each a stroke whose width is a
+  whole number of `LINE_W_MM` (0.45) lines; nothing narrower than one
+  line.  Opening each layer by just under half a line keeps ≥ 99% of it.
+- **REQ-B-2 [R] Cross-section.**  A keel at the bottom (≥ 2 lines), widest
+  in the middle, a single-line ridge on top.  Width grows ≤ 1 line per
+  layer going up (≈ 45°).
+- **REQ-B-3 [R] Profile.**  A convex arch: the blade rises from the ground
+  at its root and levels out toward the tip; no straight ramp, no pad.
+- **REQ-B-4 [R] Raked bow.**  Only the top layer reaches the tip; each
+  layer below ends `RAKE_MM` (0.2) shorter, so the tip overhangs open air
+  to the last layer.
+- **REQ-B-5 [R] Points.**  Every horizontal section of a blade ends in a
+  point at both ends (strokes step down a line at a time to one line's
+  round end).  No blunt front face.
+- **REQ-B-6 [R] Smooth.**  The STL blade is the stroke stack smoothed: no
+  layer steps or ribs, outline, keel and points kept.
+- **REQ-B-7 [S]** Every blade is fused to the ground (embedded 0.3 mm);
+  no islands, no hinges.  Grass stays ≤ 3.5 mm above the local ground.
+- **REQ-B-8 [S]** An audit (overhang area, crumbs) runs on every output;
+  `blades_demo.py` writes single blades, smoothed or as the raw stroke
+  stack, for inspection.
 
 ### 2.3 Hills
 
@@ -130,53 +140,42 @@ script or statistic (**[S]**).
 - **REQ-FL-6 [R] Banks read as piles of blades.**  *(Shawn: "a big pile of
   grass leans up right against [a clearing]… undercuts at the bottom of
   the grass blade so there's clear ridges down the side.")*
-  - Where grass faces a clearing, each blade's soil-facing edge overhangs
-    the body below as a ledge with a **45° chamfered undercut**, so a stack
-    of blades shows ridge lines with dark shadows down the bank face.  A
-    vertical bank is fine; a smooth featureless one is not (F25).
+  - Where grass faces a clearing, the last blades stand separately on the
+    dirt, each with its own keel, raked bow and undercut tip (REQ-B-*), so
+    the bank is a pile of blades with shadows between them, never a smooth
+    wall (F25).
   - Bank grass varies: fronds wander in heading, height and spill, some
     cross at an angle, and how strongly the flow hugs each clearing
     varies, so the bank line meanders.
-  - Every ledge obeys REQ-FDM-1…4 by construction.
 
-### 2.5 Swath height wave
+### 2.5 Swaths
 
 - **REQ-SW-1 [S] Total coverage.**  Every point belongs to exactly one
-  swath cell, so the height wave has no gaps.
-- **REQ-SW-2 [R] Wave profile.**  A swath is low upstream and at its
-  sides and crests downstream; lateral neighbours meet low, so there are
-  **no cliffs or terraces between side-by-side ribbons**.
-- **REQ-SW-3 [R] Shingled leading edge.**  Fronds crossing from a high
-  swath end into the next swath's low start stay high, casting the
-  tile's dominant shadow lines.
-- **REQ-SW-4 [R]** Swath borders are never straight lines, polygons or
-  repeated shapes, and never visible as steps (REQ-EDGE-4).
+  swath cell.  Swaths group strands and lengthen fronds toward each cell's
+  downstream end; they no longer carry a height wave (there is no turf
+  mass to carry it).
 
-### 2.6 Fronds
+### 2.6 Blades in the field
 
-- **REQ-FR-1 [R]** Fronds are elongated along the flow, 4.4–10.5 mm,
-  longer toward each swath's crest.  Planform is widest about one third
-  along and tapers to a blunt point (tip half-width ≥ 0.45 mm).
-- **REQ-FR-2 [R] Shingling.**  Each tip lies over the next frond's base
-  downstream; overlap always reads in that direction.
-- **REQ-FR-3 [R] Domed bodies.**  Rounded-dome cross-section that catches
-  a drybrush; no fins, ropes or tubes.  A frond emerges flush at its base
-  and arches down toward its tip; no frond is a pod sitting on top.
-- **REQ-FR-4 [R] Lifted tips.**  The last part of each frond (≤ 2 mm) is a
-  lip with a 45° chamfered underside, casting a small shadow downstream
-  and fusing where the surface below is high.
-- **REQ-FR-5 [R] Variation without repetition.**  Length, width, height
-  and small heading offsets vary; no two neighbours are identical copies
-  (F7).
+- **REQ-FR-1 [R]** Blades are elongated along the flow, 2.8–7.2 mm,
+  longer toward each swath's downstream end.
+- **REQ-FR-2 [R] Shingling.**  Each tip lies over or beside the next
+  blade's base downstream; overlap always reads in that direction.
+- **REQ-FR-3 [R] Blades on dirt.**  *(Shawn, 2026-10-29: "no turf
+  mass.")*  Every bit of grass is a blade; the dirt shows between them.
+  No pad, skirt or filler under or between blades.
+- **REQ-FR-5 [R] Variation without repetition.**  Length, width (in
+  lines), height and small heading offsets vary; no two neighbours are
+  identical copies (F7).
 
 ### 2.7 Edges: grass ends as grass
 
 *From Shawn's review of v1e: "the grass is just being uniformly chopped
 down like it was all made of clay."*
 
-- **REQ-EDGE-1 The grass volume is made of fronds.**  No grass height
-  exists except as part of some frond's body: no free-standing envelope
-  or mass layer, no mask or scale applied to the grass as a whole.
+- **REQ-EDGE-1 The grass is made of blades.**  No grass height exists
+  except as part of some blade: no free-standing envelope or mass layer,
+  no mask or scale applied to the grass as a whole.
 - **REQ-EDGE-2 [R] Soil banks** are the outlines of the last fronds (tips
   and sides at varied heights, dark gaps between, lapping slightly onto
   the soil), never carved walls or a hole in a volume (F19).
@@ -187,9 +186,6 @@ down like it was all made of clay."*
   lobes, never steps.
 - **REQ-EDGE-5 [R]** Fronds cut short are also lower, so a fringe steps
   down instead of ending in tall stubs.
-- **REQ-EDGE-6 [R]** Fronds stopped by soil end softly (no "sawn log"
-  faces at a cut tip, no cliff at a base facing soil).  This applies to
-  bank fronds only: rounding every frond's ends made fish scales (F7).
 - **REQ-EDGE-7 [R] Grass flows to the rim, not away from it.**  Near the
   edge, the flow points *at* or runs *alongside* the wall, never away
   (F21).  The steering fades in over 9–15 mm and blends into the interior
@@ -213,27 +209,25 @@ down like it was all made of clay."*
 - **REQ-SOIL-3 [R] Banks, not ramps.**  The soil mask decides only *where
   fronds may root*; it never cuts the grass.  Each frond laps 0.8–3.2 mm
   into the soil (skewed short); about 4% are wisps reaching 4 mm.
-- **REQ-SOIL-4 [R] Subordinate texture.**  The soil sits about 0.4 mm
-  below the surrounding ground with no outlining step, low roughness
-  (about 0.08 mm), and **sparse, angular pebbles** (0.45–1.2 mm radius;
-  low domes cut by 7–10 facets; no flat tops, prism walls, bubbles or
-  clusters; F17, F20).  A few grass sprigs grow in the soil.  All of it is
-  height field, printable by construction.
+- **REQ-SOIL-4 [R] Dirt everywhere exposed.**  Bare patches and the
+  ground between blades carry the shared dirt texture
+  (`dirtlab.dirt_relief`).  Patches sit about 0.4 mm below the
+  surrounding ground with no outlining step.  A few sprigs grow in the
+  soil.
 
-### 2.9 Grooves and surface quality
+### 2.9 Surface quality
 
-- **REQ-GR-1 [R]** Dark grooves between adjacent fronds along the flow
-  and under every lip, ≥ 0.6 mm wide at half depth, 0.4–1.0 mm deep.
-- **REQ-GR-2 [R]** No voxel terracing or stair-stepping on any surface.
-- **REQ-GR-3 [R]** Groove edges are crisp, not blurred into soft hills
-  (F10).
+- **REQ-GR-1 [R]** Dark gaps between neighbouring blades and air under
+  every tip.
+- **REQ-GR-2 [R]** No voxel terracing, layer steps or ribs on any blade
+  (REQ-B-6).
 
 ### 2.10 Parameters and diagnostics
 
 - **REQ-PAR-1** Knobs are named, bounded module constants grouped by
   stage, with a seed.
 - **REQ-DIAG-1 [S]** Each run prints mesh, hills, soil, grass-height, DB
-  band, FDM audit and timing statistics.
+  band, overhang audit and timing statistics.
 - **REQ-DIAG-2** Before any STL is handed over, Claude checks it with
   quick monochrome renders (`--check`), as an internal filter only.
   Shawn's eye in a viewer is the judge.
@@ -280,7 +274,7 @@ down like it was all made of clay."*
 | Scene | Content | Passes when |
 |---|---|---|
 | **S0: hills only** | 2 × 2, grass off | Reads as natural ground; REQ-HILL-3/4 hold. |
-| **S1: flat study** | 1 × 1, flat ground (`--flat`) | Ribbons, fronds, lips and grooves read clearly.  Judged first, before hill or full-tile tuning. |
+| **S1: flat study** | 1 × 1, flat ground (`--flat`) | Ribbons, blades, undercut tips and gaps read clearly.  Judged first, before hill or full-tile tuning. |
 | **S2: approved tile** | 2 × 2 with hills, seed 1 | All of §2 holds, no F-mode is visible. |
 | **S3: seed sweep** | S2 at seeds 1–6 | At least 5 of 6 pass; none looks stamped. |
 | **S4: print** | S2 printed, primed, drybrushed | Tip and bank shadows survive, grooves stay dark, nothing breaks. |
@@ -295,16 +289,17 @@ down like it was all made of clay."*
 
 ---
 
-## 6. Measured on the current code (v2g; seed 1 / seed 2, 2 × 2)
+## 6. Measured on the current code (v3; seed 1, 2 × 2)
 
-| Check | Seed 1 | Seed 2 |
-|---|---|---|
-| Ground (REQ-HILL) | 3.40–6.58 mm, max slope 34.0°, 78% ≤ 12° | 3.40–6.56 mm, 34.0°, 90% |
-| Soil (REQ-SOIL-2) | 6 lenses, 9.6%, 26 pebbles | 6 lenses, 10.0%, 30 pebbles |
-| Grass above ground (REQ-FDM-7) | mean 1.36, p95 2.44, max 3.20 mm | 1.43 / 2.37 / 3.44 mm |
-| Mean grass top (REQ-OUT-3) | 5.32 mm (OK) | 5.19 mm (OK) |
-| FDM backstop / overhang | +1,436 / −935 voxels; 5.2 mm² (0.07%) | +817 / −1,242; 6.7 mm² (0.09%) |
-| Mesh, size, time | 244k verts, watertight, ≈ 15 s | 250k verts, watertight, ≈ 15 s |
+| Check | Seed 1 |
+|---|---|
+| Ground (REQ-HILL) | 3.40–6.58 mm, max slope 34.0°, 78% ≤ 12° |
+| Soil (REQ-SOIL-2) | 6 lenses, 9.6% of the tile; dirt showing between blades 9.1% |
+| Blades | 3,288; ≥ 99.9% of every stroke layer wider than a line (REQ-B-1) |
+| Grass above ground (REQ-B-7) | mean 1.28, p95 2.00, max 2.20 mm |
+| Mean grass top (REQ-OUT-3) | 5.24 mm (OK) |
+| Overhang audit | 15.4 mm² (0.14%) |
+| Mesh, size, time | 1.74M faces, watertight, 87 MB, ≈ 100 s |
 
 ---
 
@@ -350,3 +345,12 @@ volume.  It was printable and watertight, and read as crumpled foil.
 | Hard sign(b) side choice for lens partings | Long herringbone seam upstream of every lens | tanh side push |
 | Hills with a soft floor that could dip below the edge | Shawn: hills should rise from a consistent perimeter | Rises only (REQ-HILL-3) |
 | A single sweeping flow (θ σ 25 mm, ±35°) | "Not just one big sweep" | σ 15 mm, ±60° plus meanders |
+- **REQ-FDM-1…8 (rev 3) → REQ-B-1…8 (rev 4).**  The voxel FDM rules
+  (45° downward faces, wedges not slots, ≥ 0.6 mm free features, a voxel
+  backstop) described a height field with carved lips.  They never gave a
+  visible undercut, and the slicer still dropped everything narrower than
+  a line.  Replaced by defining blades in layers and lines.
+- **REQ-SW-2…4 (swath height wave, shingled leading edges), REQ-FR-3/4
+  (domed bodies, 45° lips), REQ-EDGE-6 (soft bank ends), REQ-SOIL-4
+  pebbles.**  All belonged to the turf mass (skirts) or the height-field
+  frond, both removed 2026-10-29.

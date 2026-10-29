@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""grasslab — flow-ribbon sculpted grass on hilly ground, on a DungeonBlocks tile.
+"""grasslab — flow-ribbon grass blades on hilly dirt, on a DungeonBlocks tile.
 
 Implements grasslab/DESIGN.md:
 
   1 hills H0 (rises only) ─► 2 flow field θ (regional angle + in-phase
-  meanders + downhill pull) ─► 3 swath envelope (warped anisotropic Voronoi,
-  height only) ─► 4 soil lenses; flow wraps them, then rim steering ─►
-  5 fronds: strands of streamline-traced blades, each a skirt + domed blade
-  + 45° tip lip (+ side ledges on banks), soft-maxed into a mass map T ─►
-  6 field F = max(T − z, lip intervals) ─► FDM backstop ─► marching cubes
-  ─► 7 ∪ DB base ─► simplify ─► STL
+  meanders + downhill pull) ─► 3 swaths (strand lengths) ─► 4 soil lenses;
+  flow wraps them, then rim steering ─► 5 fronds: strands of streamline-
+  traced spines, drawn and shortened ─► 5c blades: print-native strokes
+  (0.2 mm layers × whole 0.45 mm lines) smoothed by a loft, seated on H0
+  ─► 6 dirt ground ∪ blades ─► 7 ∪ DB base ─► simplify ─► STL
 
 Usage:
     python grasslab/grasslab.py                            # 2x2 with hills, seed 1
@@ -88,11 +87,6 @@ PARTING_PUSH         = 0.6         # sideways push at a lens's upstream tip
 PARTING_SOFT_MM      = 0.8         # tanh width of the parting side choice
 SOIL_DIP_MM          = 0.4         # soil sits this far below the ground
 SOIL_DIP_SOFT_MM     = 0.8         # blur of the dip/roughness mask
-SOIL_ROUGH_MM        = 0.08
-SOIL_ROUGH_SIGMA_MM  = 0.4
-PEBBLE_DENSITY       = 0.06        # per mm² of bare soil
-PEBBLE_R_MM          = (0.45, 1.2) # skewed small (U²)
-PEBBLE_GAP_MM        = 1.2
 
 # 4b rim steering of the flow
 RIM_NOISE_SIGMA_MM   = 8.0         # smoothness of the per-point rim knobs below
@@ -110,7 +104,7 @@ PULL_SOFT_RAD        = 0.35        # pull fades from outward to inward headings 
 STEER_CORNER_MM      = 2.0         # softness of the nearest-edge split at corners
 STEER_SMOOTH_MM      = 1.5         # smoothing of the rotation field
 
-# 5 strands and fronds
+# 5 strands and fronds (where blades go and how long they are)
 STRAND_SPACING_MM    = 2.65
 STRAND_LEN_MM        = (15.0, 30.0)
 STRAND_BACK_FRAC     = (0.2, 0.6)  # strand starts this × its length upstream of its seed
@@ -118,38 +112,36 @@ STRAND_MARGIN_MM     = 8.0
 STRAND_GAP_FRAC      = 0.5         # roots every this × frond length along a strand
 STRAND_LATERAL_MM    = 0.3
 TRACE_STEP_MM        = 0.25
-FROND_LEN_MM         = (5.5, 9.5)  # × (0.8 + 0.3 s) along the swath
-FROND_HALF_W_MM      = (0.55, 0.9)
-FROND_H_MM           = (0.65, 1.0)
-FROND_TIP_HALF_W_MM  = 0.45
+FROND_LEN_MM         = (3.5, 6.5)  # × (0.8 + 0.3 s) along the swath
+FROND_HALF_W_MM      = (0.8, 1.25) # nominal: sets the blade's width in lines
+FROND_H_MM           = (1.5, 2.0)  # crest (tip) height above the ground
 FROND_MIN_LEN_MM     = 1.5
 FROND_DELTA_DEG      = 4.0         # heading jitter off the streamline
 STRAY_FRAC           = 0.05
 STRAY_DELTA_DEG      = (20.0, 35.0)
-SPINE_PAD_MM         = 0.3         # spine runs this far past both ends
 SPRIG_PROB           = 0.10        # chance a soil-rooted frond becomes a sprig
 SPRIG_LEN_MM         = (1.8, 3.0)
 SPRIG_HALF_W_MM      = 0.5
-SPRIG_H_MM           = 0.5
+SPRIG_H_MM           = 0.6
 
-# 5a frond body: blade, skirt, tip lip
-DOME_EXP             = 0.9
-DROOP                = 0.35        # tip sinks to (1 − DROOP) of the frond crest
-SKIRT_FACTOR         = 2.2         # skirt half-width × blade half-width
-SKIRT_BASE_CAP       = 0.6         # skirt extends this × skirt width behind the root
-SKIRT_TIP_DROP       = 0.45        # skirt height falls by this toward the tip
-LIP_MAX_MM           = 2.0
-LIP_FRAC             = 0.35        # lip length ≤ this × frond length
-LIP_MIN_T_MM         = 0.6
-TIP_CARVE            = False       # carve under visible frond tips (shorelab turns this on)
-TIP_GAP_MM           = 0.0         # with TIP_CARVE: open air gap under tips (≥ 0.6 printable)
-TIP_VIS_TOL_MM       = 0.45        # tips buried this little by neighbours are exposed
-SIDE_CARVE_ALL       = False       # side ledges on every blade, not just bank fronds
-SIDE_BASE_FRAC       = 0.3         # …except over the first this × length (the base)
-SIDE_GAP_MM          = 0.0         # air gap under those side ledges
-OPEN_AIR_MM          = 0.0         # >0: fill air not reachable through a passage this wide
-SLICER_LAYER_MM      = 0.0         # >0: also remove islands as seen at this layer height
-SOFTMAX_K_MM         = 0.12
+# 5a blade body: print-native strokes (DESIGN.md §5a).  A blade is a stack of
+# LAYER_MM layers, each a round-ended stroke along its spine a whole number
+# of LINE_W_MM lines wide; then smoothed (a loft through the layer outlines).
+LINE_W_MM            = 0.45        # extrusion line width (0.4 nozzle)
+LAYER_MM             = 0.2         # print layer height
+KEEL_LINES           = 2           # bottom layer width, in lines
+TOP_LINES            = 1           # top layer width (the ridge), in lines
+MAX_LINES            = (2, 4)      # blade body width range, in lines
+LENS_EXP             = 0.6         # cross-section fullness (< 1 = fuller lens)
+RAKE_MM              = 0.2         # each layer's front reaches this past the one below (≤ ½ line)
+TIP_STEP_MM          = 0.45        # a layer's stroke loses one line every this toward each end
+RISE_EXP             = 2.0         # crest 1 − (1 − u/L)^RISE_EXP: convex rise from the root
+BLADE_VOX_MM         = 0.05        # blade distance-field voxel (resin resolution)
+SMOOTH_CLOSE_MM      = 0.3         # layer outlines closed by this (fills line-step notches)
+SMOOTH_SIG_MM        = 0.05        # final blur in plan…
+SMOOTH_SIG_Z_MM      = 0.15        # …and across layers (rounds the loft's creases)
+EMBED_MM             = 0.3         # blades reach this far below the ground
+BLADE_FACES          = 1500        # quadric-decimated to this (≤ ~20 µm off: below resin XY)
 
 # 5b rim and soil endings, banks
 RIM_TIP_INSET_MM     = (0.2, 1.5)  # per-frond tip inset from the wall (U²)
@@ -157,17 +149,13 @@ SIDE_INNER_MM        = 0.8         # obstacles (meadowlab): frond height falls t
 SOIL_SPILL_MM        = (0.8, 3.2)  # per-frond spill into soil (U²)
 WISP_FRAC            = 0.04        # fronds allowed WISP_SPILL_MM over soil
 WISP_SPILL_MM        = 4.0
-SOIL_BASE_SOFT_MM    = 2.5         # fronds rooted this close to soil get a ramped base
-SKIRT_END_MM         = 2.2         # soil-stopped fronds: skirt descends to ~0 over this
 BANK_REACH_MM        = 4.0         # fronds rooted this close to soil are bank fronds
-BANK_FACE_MM         = 6.0         # columns this close to soil can be soil-facing
 BANK_WANDER_DEG      = 15.0        # extra heading wander for bank fronds
 BANK_STRAY_FRAC      = 0.12
 BANK_H_SCALE         = (0.65, 1.15)
-SIDE_LIP_W_MM        = 0.7         # side ledge width (blade edge overhang)
 
 # 6–7 mesh, base, audit
-SIMPLIFY_TOL_MM      = 0.015
+SIMPLIFY_TOL_MM      = 0.005       # resin resolution
 SLAB_BOX_MM          = 1.0         # exact box under the grass solid (ground ≥ edge level)
 OVERHANG_DEG         = 45.0
 DB_GRASS_BAND        = (4.4, 5.9)  # mean grass top above datum
@@ -349,7 +337,7 @@ class Swaths:
     """Warped anisotropic Voronoi cells, each with a wave height envelope.
 
     Every point has exactly one owner → total coverage by construction.
-    Swaths supply only the skirt HEIGHT; frond directions come from the flow.
+    Swaths group frond roots (strand lengths); frond directions come from the flow.
     """
 
     def __init__(self, rng, W, H, flow, res=FIELD_RES_MM):
@@ -616,51 +604,6 @@ def steer_rim(rng, th, X, Y, W, H, res):
     return th + delta
 
 
-def soil_relief(rng, m, X, Y, vox):
-    """Soil sits lower than the grass, slightly rough, with sparse angular pebbles."""
-    # Soft-edged trough: the dip and roughness use a blurred mask so no step
-    # outlines the patch (the bank itself is drawn by frond outlines).
-    ms = ndimage.gaussian_filter(m, SOIL_DIP_SOFT_MM / vox)
-    relief = -SOIL_DIP_MM * ms + SOIL_ROUGH_MM * _smooth_noise(rng, X.shape, SOIL_ROUGH_SIGMA_MM / vox) * ms
-    area = float((m > 0.5).sum()) * vox * vox
-    n = int(rng.poisson(PEBBLE_DENSITY * area))
-    cand = np.argwhere(m > 0.8)
-    if n == 0 or len(cand) == 0:
-        return relief, 0
-    peb = np.zeros(X.shape)
-    placed = []
-    for idx in cand[rng.permutation(len(cand))[:n * 20]]:
-        c = np.array([X[tuple(idx)], Y[tuple(idx)]])
-        r = _skewed(rng, PEBBLE_R_MM)
-        if any(np.hypot(*(c - q)) < PEBBLE_GAP_MM + r + rq for q, rq in placed):
-            continue
-        placed.append((c, r))
-        # Rounded faceted pebble: a low dome (0.5–0.7 r, elongated 1–1.5×)
-        # cut by 7–10 planes at 30–42°, so facets read as stone without flat
-        # tops or prism walls.
-        K = int(rng.integers(7, 11))
-        th = np.sort(rng.uniform(0, 2 * np.pi, K))
-        off = r * rng.uniform(0.75, 1.0, K)
-        el = rng.uniform(1.0, 1.5)
-        ang = rng.uniform(0, np.pi)
-        hp = r * rng.uniform(0.5, 0.7)
-        slope = np.tan(np.radians(rng.uniform(30, 42)))
-        rr = int(np.ceil(1.7 * r / vox)) + 1
-        i, j = idx
-        ia, ib = max(i - rr, 0), min(i + rr + 1, X.shape[0])
-        ja, jb = max(j - rr, 0), min(j + rr + 1, X.shape[1])
-        px, py = X[ia:ib, ja:jb] - c[0], Y[ia:ib, ja:jb] - c[1]
-        qa = (px * np.cos(ang) + py * np.sin(ang)) / el
-        qb = -px * np.sin(ang) + py * np.cos(ang)
-        h = hp * np.sqrt(np.clip(1 - (qa ** 2 + qb ** 2) / r ** 2, 0, None))
-        for t_, o_ in zip(th, off):
-            h = np.minimum(h, slope * (o_ - (qa * np.cos(t_) + qb * np.sin(t_))))
-        peb[ia:ib, ja:jb] = np.maximum(peb[ia:ib, ja:jb], np.clip(h, 0, None))
-        if len(placed) >= n:
-            break
-    return relief + peb * m, len(placed)
-
-
 _POOL = None
 
 
@@ -697,45 +640,6 @@ def trace_batch(P, length, flow, delta=None, sign=1.0, step=TRACE_STEP_MM):
         q = pts[:, k]
         pts[:, k + 1] = q + step * d(q + 0.5 * step * d(q))
     return pts
-
-
-def project_spine(P, pts, us):
-    """Arc length u and signed lateral offset v of points P on a polyline.
-
-    Written per component on (points × segments) planes instead of
-    (points × segments × 2) stacks summed over the last axis: the same
-    floating-point operations in the same order (a two-term sum is a + b),
-    so the results are bit-identical, at a fraction of the cost."""
-    Ax, Ay = pts[:-1, 0], pts[:-1, 1]
-    Dx, Dy = pts[1:, 0] - Ax, pts[1:, 1] - Ay
-    dd = np.maximum(Dx * Dx + Dy * Dy, 1e-12)
-    Rx = P[:, 0, None] - Ax
-    Ry = P[:, 1, None] - Ay
-    t = Rx * Dx
-    t += Ry * Dy
-    t /= dd
-    np.clip(t, 0, 1, out=t)
-    Cx = t * Dx
-    np.subtract(Rx, Cx, out=Cx)
-    Cy = t * Dy
-    np.subtract(Ry, Cy, out=Cy)
-    Cx *= Cx
-    Cy *= Cy
-    dist2 = Cx
-    dist2 += Cy
-    k = dist2.argmin(1)
-    r = np.arange(len(P))
-    u = us[k] + t[r, k] * (us[k + 1] - us[k])
-    cross = Dx[k] * Ry[r, k] - Dy[k] * Rx[r, k]
-    v = np.sign(cross) * np.sqrt(dist2[r, k])
-    return u, v
-
-
-def _rise(u, L, Lt):
-    """Frond crest profile: flush at the base, full by 0.45 L, drooping to the tip."""
-    up = _smooth01(np.asarray(u) / (0.45 * L))
-    td = np.clip((np.asarray(u) - 0.55 * L) / (Lt - 0.55 * L), 0, 1)
-    return up * (1 - DROOP * td * td * (3 - 2 * td))    # (operand order is load-bearing)
 
 
 def make_strand_roots(rng, flow, W, H):
@@ -776,19 +680,14 @@ class Surface:
         X, Y = np.meshgrid(grid.xc, grid.yc, indexing='ij')
         H0 = ground(X, Y)
         self.soil = lenses.mask(X, Y)
-        # Old mud texture (roughness + pebbles) is retired in favour of the
-        # shared dirt texture; soil_relief is still called so the RNG stream —
-        # and so the grass layout — is unchanged.  Only its soft dip is kept.
-        _, self.n_pebbles = soil_relief(rng, self.soil, X, Y, vox)
         ms = ndimage.gaussian_filter(self.soil, SOIL_DIP_SOFT_MM / vox)
-        self.H0 = H0 - SOIL_DIP_MM * ms                  # frond seating (no texture)
-        # Exposed ground everywhere = dirt: shows on bare patches and in the
-        # gaps between fronds; fronds themselves still seat on plain H0 so the
-        # grass look is unchanged.  Seed from the ground (no RNG draw).
+        self.H0 = H0 - SOIL_DIP_MM * ms                  # blade seating (no texture)
+        # Exposed ground everywhere = dirt (bare patches and between blades);
+        # blades seat on plain H0, EMBED_MM deep.  Seed from the ground (no RNG).
         dseed = int(np.abs(ground.data).sum() * 1000) % (1 << 31)
         self.dirt = _dirt.dirt_relief(dseed, grid.nx * vox, grid.ny * vox)
         self.H0_dirt = self.H0 + self.dirt(X, Y)
-        self.n_pebbles = 0
+        self.seat = Field2D(self.H0, grid.xc[0], grid.yc[0], vox)
         self.grid = grid
         self.soil_depth = ndimage.distance_transform_edt(self.soil > 0.5) * vox
         self.soil_dist = ndimage.distance_transform_edt(self.soil <= 0.5) * vox  # grass → soil
@@ -799,15 +698,15 @@ class Surface:
         self.blocker, self.tuck_mm = blocker, tuck_mm
         self.blk_depth = (ndimage.distance_transform_edt(blocker) * vox
                           if blocker is not None else None)
-        # Grass beside an obstacle is lower: frond height × side_low at the
-        # face, back to full height side_mm out, so fronds passing a rock lap
+        # Grass beside an obstacle is lower: blade height × side_low at the
+        # face, back to full height side_mm out, so blades passing a rock lap
         # against its foot instead of swallowing it.  1.0 = no change.
         self.near = None
         if blocker is not None and side_low < 1.0:
             out = ndimage.distance_transform_edt(~blocker) * vox
             self.near = side_low + (1 - side_low) * _smooth01(out / side_mm)
             # Inside the face (under the rock) it falls to bare ground, so
-            # skirts of passing fronds cannot fill over a low rock.
+            # passing blades cannot cover a low rock.
             self.near *= 1 - _smooth01(self.blk_depth / SIDE_INNER_MM)
 
     def cell(self, px, py):
@@ -847,7 +746,7 @@ def plan_fronds(rng, surf, sw, flow, W, H):
     delta = np.radians(np.where(stray, rng.choice([-1, 1], N) * rng.uniform(*STRAY_DELTA_DEG, N),
                                 rng.uniform(-FROND_DELTA_DEG, FROND_DELTA_DEG, N))
                        + np.where(bank, rng.uniform(-BANK_WANDER_DEG, BANK_WANDER_DEG, N), 0.0))
-    Lmax = FROND_LEN_MM[1] * 1.1 + FROND_TIP_HALF_W_MM + 0.5
+    Lmax = FROND_LEN_MM[1] * 1.1 + 0.5
     paths = trace_batch(roots, Lmax, flow, delta=delta)
     return FrondPlan(roots, L0, own, s, l, ri, rj, bank, paths, n_strands)
 
@@ -858,15 +757,9 @@ class Frond:
     f: int                 # index into the plan
     sprig: bool
     bank: bool
-    L: float               # blade length (the tip cap adds FROND_TIP_HALF_W_MM)
-    Lt: float              # total length
-    wmax: float            # blade half-width
-    wsk: float             # skirt half-width (0 for sprigs)
-    hf: float              # blade height, × h_scale × k_h
-    h_scale: float         # bank height scale
-    k_h: float             # shortening height factor
-    tip_soft: bool         # spine stopped by soil
-    base_soft: bool        # rooted close to soil
+    L: float               # blade length along its spine
+    half_w: float          # nominal half-width (→ width in lines)
+    hf: float              # crest height (bank- and shortening-scaled)
 
 
 def draw_frond(rng, plan, f, surf, W, H):
@@ -875,7 +768,7 @@ def draw_frond(rng, plan, f, surf, W, H):
     Returns None when the frond is not built: rooted under an obstacle, a
     soil root that did not become a sprig, or shortened below FROND_MIN_LEN_MM.
     """
-    vox, step, wt = surf.grid.vox, TRACE_STEP_MM, FROND_TIP_HALF_W_MM
+    vox, step = surf.grid.vox, TRACE_STEP_MM
     ri, rj, path = plan.ri[f], plan.rj[f], plan.paths[f]
     if surf.blocker is not None and surf.blocker[ri, rj]:
         return None
@@ -884,12 +777,11 @@ def draw_frond(rng, plan, f, surf, W, H):
         return None
     if sprig:
         L = rng.uniform(*SPRIG_LEN_MM)
-        wmax, hf, wsk = SPRIG_HALF_W_MM, SPRIG_H_MM, 0.0
+        wmax, hf = SPRIG_HALF_W_MM, SPRIG_H_MM
     else:
         L = plan.L0[f] * (0.8 + 0.3 * plan.s[f])
         wmax = rng.uniform(*FROND_HALF_W_MM)
         hf = rng.uniform(*FROND_H_MM)
-        wsk = SKIRT_FACTOR * wmax
     bank = bool(plan.bank[f]) and not sprig
     h_scale = rng.uniform(*BANK_H_SCALE) if bank else 1.0
     hf *= h_scale
@@ -898,7 +790,7 @@ def draw_frond(rng, plan, f, surf, W, H):
 
     # Shorten (never slice) so the tip ends inside the tile, at most `spill`
     # into bare soil, and at most tuck_mm into an obstacle.
-    nL = min(int(np.ceil((L + wt) / step)) + 1, path.shape[0])
+    nL = min(int(np.ceil(L / step)) + 1, path.shape[0])
     cx, cy = path[:nL, 0], path[:nL, 1]
     uu = np.arange(nL) * step
     out = (cx < inset) | (cx > W - inset) | (cy < inset) | (cy > H - inset)
@@ -908,391 +800,186 @@ def draw_frond(rng, plan, f, surf, W, H):
     if surf.blk_depth is not None:
         out = out | (surf.blk_depth[ci, cj] > surf.tuck_mm)
     stop = np.nonzero(out | deep)[0]
-    k_h = 1.0
-    tip_soft = bool(len(stop)) and bool(deep[stop[0]])
-    base_soft = (not sprig) and surf.soil_dist[ri, rj] < SOIL_BASE_SOFT_MM
     if len(stop):
-        L0, L = L, uu[stop[0]] - wt
+        L0, L = L, uu[stop[0]]
         if L < FROND_MIN_LEN_MM:
             return None
-        k_h = float(np.clip(L / L0, 0.3, 1.0)) ** 0.8
-        hf *= k_h
-    return Frond(f, bool(sprig), bank, L, L + wt, wmax, wsk, hf, h_scale, k_h,
-                 tip_soft, bool(base_soft))
+        hf *= float(np.clip(L / L0, 0.3, 1.0)) ** 0.8
+    return Frond(f, bool(sprig), bank, L, wmax, hf)
 
 
-def frond_spine(plan, fr):
-    """Traced streamline to Lt + pad, plus a straight cap behind the root."""
-    step, path, p0 = TRACE_STEP_MM, plan.paths[fr.f], plan.roots[fr.f]
-    cb = SKIRT_BASE_CAP * fr.wsk
-    nf = min(int(np.ceil((fr.Lt + SPINE_PAD_MM) / step)) + 1, path.shape[0])
-    fwd = path[:nf:2]
-    uf = np.arange(0, nf, 2) * step
-    t0 = path[1] - path[0]
-    t0 = t0 / max(np.linalg.norm(t0), 1e-9)
-    ub = np.linspace(-cb - SPINE_PAD_MM, 0, 4)[:-1]
-    return np.concatenate([p0 + ub[:, None] * t0, fwd]), np.concatenate([ub, uf])
+# ── 5c Blades: print-native strokes, smoothed ───────────────────────────────
+def blade_layers(path, L, half_w, height):
+    """One blade as [(layer k, shapely polygon)]: spine `path` (sampled every
+    TRACE_STEP_MM from the root), length L, nominal half-width, crest height.
+
+    Each layer is a stroke along the spine, a whole number of LINE_W_MM lines
+    wide (REQ-B-1):
+      * cross-section: a lens of line counts — KEEL_LINES at the bottom,
+        widest in the middle, TOP_LINES on top — growing ≤ 1 line per layer;
+      * profile: a convex rise — each layer starts where the crest
+        1 − (1 − u/L)^RISE_EXP reaches it;
+      * tip: only the top layer reaches the tip; each layer below ends
+        RAKE_MM shorter (the raked bow / undercut, to the last layer);
+      * ends: within a layer the stroke loses one line every TIP_STEP_MM
+        toward each end (points made of line ends).
+    """
+    from shapely.geometry import LineString
+    from shapely.ops import unary_union
+    N = max(int(round(height / LAYER_MM)), 2)
+    n_max = int(np.clip(round(2 * half_w / LINE_W_MM), *MAX_LINES))
+    n = [max(1, int(round(n_max * np.sin(np.pi * (k + 0.5) / N) ** LENS_EXP)))
+         for k in range(N)]
+    n[0] = max(n[0], KEEL_LINES)
+    n[-1] = TOP_LINES
+    for k in range(1, N):
+        n[k] = min(n[k], n[k - 1] + 1)
+    us = np.arange(len(path)) * TRACE_STEP_MM
+
+    def seg(u0, u1):
+        m = (us > u0) & (us < u1)
+        a = [np.interp(u0, us, path[:, 0]), np.interp(u0, us, path[:, 1])]
+        b = [np.interp(u1, us, path[:, 0]), np.interp(u1, us, path[:, 1])]
+        return LineString(np.vstack([a, path[m], b]))
+
+    out = []
+    for k in range(N):
+        u_back = L * (1 - (1 - (k + 0.5) / N) ** (1 / RISE_EXP))
+        u_front = L - (N - 1 - k) * RAKE_MM
+        parts = []
+        for j in range(n[k]):                       # n[k] lines → 1 line
+            u0 = u_back + (n[k] - 1 - j) * TIP_STEP_MM
+            u1 = u_front - (n[k] - 1 - j) * TIP_STEP_MM
+            if u1 - u0 > 1e-3:
+                parts.append(seg(u0, u1).buffer((n[k] - j) * LINE_W_MM / 2, quad_segs=8))
+        if parts:
+            out.append((k, unary_union(parts)))
+    return out
 
 
-def frond_columns(fr, plan, surf):
-    """The grass columns in frond fr's box and their spine coordinates:
-    (I, J, u, v), or None if the box is empty.  Reads only the plan and the
-    surface (never T), so build_grass computes it ahead on worker threads."""
-    grid = surf.grid
-    vox = grid.vox
-    sp, su_ = frond_spine(plan, fr)
-    reach = max(fr.wmax, fr.wsk)
-    i0 = max(int((sp[:, 0].min() - reach) / vox), 0)
-    i1 = min(int((sp[:, 0].max() + reach) / vox) + 2, grid.nx)
-    j0 = max(int((sp[:, 1].min() - reach) / vox), 0)
-    j1 = min(int((sp[:, 1].max() + reach) / vox) + 2, grid.ny)
-    if i0 >= i1 or j0 >= j1:
+def blade_mesh(layers, seat):
+    """Smooth closed mesh of one blade, seated on the ground `seat`(x, y).
+
+    A loft through the layer outlines in height-above-ground h (REQ-B-2): each
+    outline, closed by SMOOTH_CLOSE_MM, becomes a 2-D signed distance field;
+    between layer centres the field blends linearly, so the surface runs
+    straight from one outline to the next (no layer steps) while the plan
+    shape — outline, keel, point — is kept.  Above the top layer it closes
+    over half a layer (a rounded ridge); below the bottom layer it continues
+    EMBED_MM into the ground.  A light blur rounds the loft's creases, then
+    marching cubes; vertices are lifted by the ground height under them;
+    quadric decimation to BLADE_FACES.  Returns a trimesh, or None.
+    """
+    import shapely
+    from shapely.ops import unary_union
+    from skimage.measure import marching_cubes
+    if not layers:
         return None
-    I, J = np.meshgrid(np.arange(i0, i1), np.arange(j0, j1), indexing='ij')
-    I, J = I.ravel(), J.ravel()
-    u, v = project_spine(np.stack([grid.xc[I], grid.yc[J]], 1), sp, su_)
-    return I, J, u, v
-
-
-def frond_ops(fr, plan, surf, sw, cols=None):
-    """Rasterise one frond: skirt + blade heights, tip lip and bank side
-    ledges as column intervals — returned as an ordered list of operations
-    on (T, lips, ledges) for apply_frond, or None if it covers no column.
-    Reads only plan, surface and swaths (never T).  `cols` =
-    frond_columns(fr, plan, surf) if already computed."""
-    grid, step, wt = surf.grid, TRACE_STEP_MM, FROND_TIP_HALF_W_MM
-    vox, f, path = grid.vox, fr.f, plan.paths[fr.f]
-    i, sb, lb = plan.own[f], plan.s[f], plan.l[f]
-    L, Lt, wmax, wsk, hf = fr.L, fr.Lt, fr.wmax, fr.wsk, fr.hf
-    cb = SKIRT_BASE_CAP * wsk              # skirt extends behind the root
-    u_c, u_h = (Lt - cb) / 2, (Lt + cb) / 2
-    if cols is None:
-        cols = frond_columns(fr, plan, surf)
-    if cols is None:
-        return None
-    I, J, u, v = cols
-    ops = []
-    # Blade planform (pointed lens, round tip cap).
-    w = wt + (wmax - wt) * np.sin(np.pi * (0.25 + 0.75 * np.clip(u / L, 0, 1)))
-    w = np.where(u > L, np.sqrt(np.clip(wt ** 2 - (u - L) ** 2, 0, None)), w)
-    in_blade = (u >= 0) & (u <= Lt) & (np.abs(v) < w)
-    # Skirt planform: a lens from −cb to Lt (rounded base, tapering tip).
-    ws = wsk * np.clip(1 - ((u - u_c) / u_h) ** 2, 0, 1) ** 0.6
-    in_skirt = (np.abs(v) < ws) & (u >= -cb) & (u <= Lt)
-    # Bank fronds: which columns are on the soil-facing side (REQ-FL-6).
-    facing = np.zeros(len(u), bool)
-    if fr.bank:
-        tans = np.diff(path, axis=0)
-        tans = tans / np.maximum(np.linalg.norm(tans, axis=1, keepdims=True), 1e-9)
-        kk = np.clip((u / step).astype(int), 0, len(tans) - 1)
-        sv = np.sign(v)
-        ox, oy = -tans[kk, 1] * sv, tans[kk, 0] * sv
-        facing = (((ox * -surf.gsx[I, J] + oy * -surf.gsy[I, J]) > 0.3)
-                  & (surf.soil_dist[I, J] < BANK_FACE_MM))
-        in_skirt &= ~(facing & (np.abs(v) >= w))   # nothing fills under the ledge
-    side_all = SIDE_CARVE_ALL and not fr.sprig
-    if side_all:
-        # Every blade gets side ledges along both edges, except near its base,
-        # so the whole blade is defined all round (shorelab).
-        facing = facing | (u > SIDE_BASE_FRAC * L)
-    inside = in_blade | in_skirt
-    if not inside.any():
-        return None
-    I, J, u, v, w, ws, in_blade, facing = (I[inside], J[inside], u[inside], v[inside],
-                                           w[inside], ws[inside], in_blade[inside],
-                                           facing[inside])
-    # Skirt: carries this swath's envelope (continued past its border),
-    # falling off with the frond's own outline and dropping toward the tip.
-    su = np.minimum(sb + np.clip(u, 0, None) / sw.length[i], 1.0)
-    env = 0.0 if fr.sprig else fr.k_h * fr.h_scale * sw.env(np.full(len(u), i), su,
-                                                             np.full(len(u), lb))
-    # Height: plateau across the lens, falling off at the sides; along the
-    # frond it ramps up over the rounded base cap and drops toward the tip
-    # (soil-stopped fronds: to ~0 over the last SKIRT_END_MM) — a pointed,
-    # lowering tip, never a "sawn log" face and never a rounded scallop.
-    qs = np.clip(np.abs(v) / np.maximum(ws, 1e-6), 0, 1)
-    taper = 1 - SKIRT_TIP_DROP * _smooth01((u - 0.5 * L) / (Lt - 0.5 * L))
-    if fr.tip_soft:
-        t_end = min(SKIRT_END_MM, 0.4 * Lt)
-        taper = taper * (1 - _smooth01((u - (Lt - t_end)) / t_end))
-    if fr.base_soft:
-        taper = taper * _smooth01((u + cb) / max(1.5 * cb, 1e-6))
-    hs = env * taper * (1 - qs ** 3) ** 1.5
-    # Blade on top.
-    q = np.clip(np.abs(v) / np.maximum(w, 1e-6), 0, 1)
-    blade = np.where(in_blade, hf * _rise(u, L, Lt) * (1 - q ** 2) ** DOME_EXP, 0.0)
-    if surf.near is not None:
-        k = surf.near[I, J]
-        hs, blade = hs * k, blade * k
-    top = surf.H0[I, J] + hs + blade
-
-    lip_len = min(LIP_MAX_MM, LIP_FRAC * L)
-    lp = in_blade & (u >= Lt - lip_len)
-    # Side ledge on the soil-facing edge of bank fronds: the outer
-    # SIDE_LIP_W of the blade overhangs a recessed body with a 45°
-    # underside, so stacked blades show undercut ridges (REQ-FL-6).
-    e = w - np.abs(v)
-    ledge = facing & in_blade & (e < SIDE_LIP_W_MM) & ~lp
-    mass = ~lp & ~ledge
-    ops.append(('T', I[mass], J[mass], top[mass]))
-    if ledge.any():
-        # Underside: LIP_MIN_T below the ledge's own top at the edge,
-        # descending inward at 45° — a shallow wedge just under the blade.
-        entry = (I[ledge], J[ledge], top[ledge] - LIP_MIN_T_MM - e[ledge], top[ledge])
-        ops.append(('ledge', entry + ((SIDE_GAP_MM,) if side_all else ())))
-    if lp.any():
-        # 45° underside measured back from the drooped tip crest.
-        s_tip = min(sb + Lt / sw.length[i], 1.0)
-        env_t = 0.0 if fr.sprig else \
-            fr.k_h * sw.env(np.array([i]), np.array([s_tip]), np.array([lb]))[0]
-        tp = path[min(int(Lt / step), path.shape[0] - 1)]
-        g_t = float(surf.H0[surf.cell(tp[0], tp[1])])
-        tip = g_t + (0.0 if fr.tip_soft else env_t * (1 - SKIRT_TIP_DROP)) \
-            + hf * float(_rise(Lt, L, Lt))
-        bot = tip - LIP_MIN_T_MM - (Lt - u[lp])
-        keep = (top[lp] - bot) >= LIP_MIN_T_MM
-        if keep.any():
-            # TIP_CARVE: like bank ledges, carve the mass that neighbouring
-            # skirts left under a visible tip, so every tip casts a shadow.
-            if TIP_CARVE:
-                ops.append(('ledge', (I[lp][keep], J[lp][keep], bot[keep], top[lp][keep], TIP_GAP_MM)))
-            else:
-                ops.append(('lip', (I[lp][keep], J[lp][keep], bot[keep], top[lp][keep])))
-        # Lip side columns too thin to undercut stay solid (fused blade
-        # edge) instead of being dropped — dropping them sawtoothed tips.
-        thin = np.nonzero(lp)[0][~keep]
-        ops.append(('T', I[thin], J[thin], top[thin]))
-    return ops
-
-
-def apply_frond(ops, T, lips, ledges):
-    """Apply frond_ops' operations in order: soft-max heights into T, append
-    ledge / lip intervals.  Returns False if there were none (no column)."""
-    if ops is None:
-        return False
-    for op in ops:
-        if op[0] == 'T':
-            _, I, J, top = op
-            T[I, J] = smoothmax(T[I, J], top, SOFTMAX_K_MM)
+    v = BLADE_VOX_MM
+    P = int(np.ceil(4 * SMOOTH_SIG_Z_MM / v)) + 3
+    polys = {k: unary_union([p]).buffer(SMOOTH_CLOSE_MM, quad_segs=16)
+             .buffer(-SMOOTH_CLOSE_MM, quad_segs=16) for k, p in layers}
+    x0, y0, x1, y1 = unary_union(list(polys.values())).bounds
+    pad = LINE_W_MM
+    xs = np.arange(x0 - pad, x1 + pad, v) + v / 2
+    ys = np.arange(y0 - pad, y1 + pad, v) + v / 2
+    N = max(polys) + 1
+    hs = np.arange(-EMBED_MM - 2 * v, (N + 1) * LAYER_MM, v) + v / 2
+    X, Y = np.meshgrid(xs, ys, indexing='ij')
+    D = []
+    for k in range(N):
+        m = shapely.contains_xy(polys[k], X, Y) if k in polys else np.zeros(X.shape, bool)
+        D.append((ndimage.distance_transform_edt(m) - ndimage.distance_transform_edt(~m)) * v)
+    close = LINE_W_MM / LAYER_MM              # field closes ½ line over ½ layer above the top
+    sd = np.empty((len(xs), len(ys), len(hs)), np.float32)
+    for iz, h in enumerate(hs):
+        t = h / LAYER_MM - 0.5                  # in layer-centre units
+        if t <= 0:
+            f = np.minimum(D[0], h + EMBED_MM)
+        elif t >= N - 1:
+            f = D[-1] - close * (t - (N - 1)) * LAYER_MM
         else:
-            (ledges if op[0] == 'ledge' else lips).append(op[1])
-    return True
+            k0 = int(t)
+            f = D[k0] + (t - k0) * (D[k0 + 1] - D[k0])
+        sd[:, :, iz] = f
+    sd = np.pad(sd, P, constant_values=-1.0)
+    sd = ndimage.gaussian_filter(sd, (SMOOTH_SIG_MM / v, SMOOTH_SIG_MM / v, SMOOTH_SIG_Z_MM / v))
+    if sd.max() <= 0:
+        return None
+    verts, faces, _, _ = marching_cubes(sd, 0.0, spacing=(v, v, v))
+    verts += [xs[0] - P * v, ys[0] - P * v, hs[0] - P * v]
+    verts[:, 2] += seat(verts[:, 0], verts[:, 1])
+    mesh = trimesh.Trimesh(verts, faces, process=True)
+    if mesh.volume < 0:
+        mesh.invert()
+    if len(mesh.faces) > BLADE_FACES:
+        mesh = mesh.simplify_quadric_decimation(face_count=BLADE_FACES)
+    return mesh
 
 
-def sculpt_frond(fr, plan, surf, sw, T, lips, ledges):
-    """Rasterise one frond into T / lips / ledges.  Returns False if it covers
-    no column."""
-    return apply_frond(frond_ops(fr, plan, surf, sw), T, lips, ledges)
-
-
-def open_ledges(T, ledges, lips):
-    """Neighbouring skirts fill in under every ledge, so after all fronds are
-    built, cut the mass beneath each VISIBLE ledge column (its top is the
-    surface there) down to its 45° underside — a wedge under the blade
-    edge, never a slot (REQ-FL-6, REQ-FDM-3)."""
-    for I, J, bot, top, *gap in ledges:
-        # Tips (gap given) count as visible even when a neighbour's skirt
-        # covers them by up to TIP_VIS_TOL_MM — that skirt is cut back, so
-        # the tip is exposed and stands on its own.
-        tol = TIP_VIS_TOL_MM if gap else 0.05
-        vis = top >= T[I, J] - tol
-        if not vis.any():
-            continue
-        # Optional air gap under the ledge (tips): the floor is cut `gap`
-        # below the 45° underside, so the tip stands as separate geometry.
-        g_ = gap[0] if gap else 0.0
-        T[I[vis], J[vis]] = np.minimum(T[I[vis], J[vis]], bot[vis] - g_)
-        if gap:
-            # the tip's own column top wins over the cut-back neighbour
-            T[I[vis], J[vis]] = np.minimum(T[I[vis], J[vis]], bot[vis] - g_)
-        lips.append((I[vis], J[vis], bot[vis], top[vis]))
+def build_blade(fr, plan, surf):
+    """Frond → (blade trimesh or None, its layers).  Height × the obstacle
+    side factor (meadowlab) at its tip, where it presses against a rock."""
+    path = plan.paths[fr.f]
+    h = fr.hf
+    if surf.near is not None:
+        tip = path[min(int(fr.L / TRACE_STEP_MM), len(path) - 1)]
+        h *= float(surf.near[surf.cell(tip[0], tip[1])])
+    if h < 2 * LAYER_MM:
+        return None, []
+    layers = blade_layers(path, fr.L, fr.half_w, h)
+    return blade_mesh(layers, surf.seat), layers
 
 
 @dataclass
 class Grass:
-    H0: np.ndarray         # ground incl. soil relief, on the grass grid
-    T: np.ndarray          # mass map (height field)
-    lips: list             # column intervals [(I, J, bottom, top), …]
+    H0: np.ndarray         # blade seating ground, on the grass grid
+    T: np.ndarray          # grass top height map (ground where no blade)
+    solid: object          # Manifold: dirt ground (from z = 0) ∪ every blade
     soil: np.ndarray       # soil mask
     n_fronds: int
     n_strands: int
-    n_pebbles: int
-    n_ledges: int          # bank fronds with side ledges
-    gaps: float            # off-soil share with < 0.3 mm grass
+    gaps: float            # off-soil share of ground with no blade over it
+
+
+def ground_solid(surf, W, H):
+    """The dirt ground as a watertight heightfield solid from z = 0."""
+    from dharmatiles.core.mesh import make_heightmap_solid
+    return to_manifold(make_heightmap_solid(surf.H0_dirt.T, W, H, base_h=0.0))
 
 
 def build_grass(rng, grid, ground, sw, lenses, flow, W, H, blocker=None, tuck_mm=0.5,
                 side_low=1.0, side_mm=1.0):
-    """The grass volume is MADE OF FRONDS (REQ-EDGE-1): T starts at the bare
-    ground and every bit of grass height comes from some frond's own body —
-    a broad skirt carrying its swath's envelope plus the domed blade on top.
-    Fronds are streamlines of the flow (REQ-FL-1), gathered into strands.
-    """
+    """Grass = separate blades standing on the dirt (REQ-EDGE-1, REQ-B-*).
+    Blades follow streamlines of the flow (REQ-FL-1), gathered into strands;
+    each is built from print-native strokes and smoothed (blade_layers,
+    blade_mesh).  Drawing uses the RNG; meshing does not, so blades are
+    meshed on worker threads."""
+    import shapely
     surf = Surface(rng, grid, ground, lenses, blocker, tuck_mm, side_low, side_mm)
     plan = plan_fronds(rng, surf, sw, flow, W, H)
-    T = surf.H0_dirt.copy()                # exposed ground = dirt; no free grass layer
-    lips, ledges = [], []
-    n_built = 0
-    # Drawing a frond uses the RNG but never T, and sculpting uses T but never
-    # the RNG, so all fronds are drawn first (same RNG sequence), and their
-    # column projections (the bulk of the cost: big numpy arrays, which
-    # release the GIL) run ahead on threads.  The rest — many small numpy
-    # calls that would only fight over the GIL — and the sculpting into T stay
-    # sequential, in the original order.
     frs = [draw_frond(rng, plan, f, surf, W, H) for f in range(len(plan.roots))]
     frs = [fr for fr in frs if fr is not None]
-    pool = _pool()
-    ahead = 4 * pool._max_workers
-    jobs = {}
-    for n in range(len(frs)):
-        for m in range(n, min(n + ahead, len(frs))):
-            if m not in jobs:
-                jobs[m] = pool.submit(frond_columns, frs[m], plan, surf)
-        ops = frond_ops(frs[n], plan, surf, sw, cols=jobs.pop(n).result())
-        if apply_frond(ops, T, lips, ledges):
-            n_built += 1
-    T_pre = T.copy()
-    open_ledges(T, ledges, lips)
-    carved = T < T_pre - 1e-6               # columns opened under ledges / tips
-    # Floor: dirt everywhere, except under carved ledges and tips, where the
-    # plain ground keeps the air gap open (dirt bumps would fill it).
-    T = np.maximum(T, np.where(carved, surf.H0, surf.H0_dirt))
-    gaps = float(((T - surf.H0) < 0.3)[surf.soil < 0.5].mean())
-    return Grass(surf.H0, T, lips, surf.soil, n_built, plan.n_strands, surf.n_pebbles,
-                 len(ledges), gaps)
-
-
-# ── 6 Field, FDM backstop, mesh ─────────────────────────────────────────────
-def make_field(grid, T, lips):
-    """Continuous field: vertical signed distance, clamped to a narrow band."""
-    vox = grid.vox
-    top_z = max(T.max(), max((tp.max() for *_, tp in lips), default=0)) + 0.3
-    nz = int(np.ceil(top_z / vox)) + 2
-    zc = ((np.arange(nz) + 0.5) * vox).astype(np.float32)
-    cl = 2.0 * vox
-    F = np.clip(T[:, :, None].astype(np.float32) - zc[None, None, :], -cl, cl)
-    for I, J, bot, top in lips:
-        z0 = max(int(bot.min() / vox) - 1, 0)
-        z1 = min(int(top.max() / vox) + 2, nz)
-        if z1 <= z0:
-            continue
-        zi = np.arange(z0, z1)[None, :]
-        z = zc[z0:z1][None, :]
-        f = np.clip(np.minimum(z - bot[:, None], top[:, None] - z), -cl, cl)
-        F[I[:, None], J[:, None], zi] = np.maximum(F[I[:, None], J[:, None], zi], f)
-    return F
-
-
-def _fill_holes(a):
-    """== ndimage.binary_fill_holes(a) (default 6-connectivity), via one
-    labelling pass instead of an iterate-to-convergence dilation: background
-    components that touch the array border are outside, the rest are holes."""
-    lab, n = ndimage.label(~a)
-    faces = [lab[0], lab[-1], lab[:, 0], lab[:, -1], lab[:, :, 0], lab[:, :, -1]]
-    outside = np.zeros(n + 1, bool)
-    for f_ in faces:
-        outside[np.unique(f_)] = True
-    outside[0] = False
-    return ~outside[lab]
-
-
-def fdm_backstop(F, vox):
-    """Support filter + hole fill + bed connectivity on occupancy (should be ~no-op)."""
-    before = F > 0
-    M = _fill_holes(np.pad(before, ((0, 0), (0, 0), (0, 1))))[:, :, :-1]
-    # Work z-major (each layer contiguous); every step is boolean, so the
-    # result is identical to the per-layer loop on the (x, y, z) array.
-    Mz = np.ascontiguousarray(M.transpose(2, 0, 1))
-    for _ in range(4):
-        for z in range(1, Mz.shape[0]):
-            b = Mz[z - 1]
-            sup = b.copy()
-            sup[1:, :] |= b[:-1, :]
-            sup[:-1, :] |= b[1:, :]
-            sup[:, 1:] |= b[:, :-1]
-            sup[:, :-1] |= b[:, 1:]
-            Mz[z] &= sup
-        lab, n = ndimage.label(Mz)
-        keep = np.zeros(n + 1, bool)
-        keep[np.unique(lab[0])] = True
-        keep[0] = False
-        conn = keep[lab]
-        if (conn == Mz).all():
-            break
-        Mz &= conn
-    if OPEN_AIR_MM:
-        _seal_pockets(Mz, vox)
-    if SLICER_LAYER_MM:
-        _slicer_islands(Mz, vox)
-    M = Mz.transpose(1, 2, 0)
-    added, removed = M & ~before, before & ~M
-    F[added] = vox
-    F[removed] = -vox
-    return int(added.sum()), int(removed.sum())
-
-
-def _seal_pockets(Mz, vox):
-    """Fill air that isn't open to the outside through a ≥ OPEN_AIR_MM passage.
-
-    Carved undercuts under blades that other blades then cover become sealed
-    (or nearly sealed) air pockets inside the solid — invisible and useless.
-    Open the air with a ball of diameter OPEN_AIR_MM, keep only the opened air
-    connected to the space above the tile, and fill everything else.  What
-    survives is an undercut you can actually see into.
-    """
-    r = max(int(round(OPEN_AIR_MM / 2 / vox)), 1)
-    zz, yy, xx = np.mgrid[-r:r + 1, -r:r + 1, -r:r + 1]
-    ball = (xx * xx + yy * yy + zz * zz) <= r * r
-    air = np.pad(~Mz, ((0, r + 1), (0, 0), (0, 0)), constant_values=True)   # open sky on top
-    opened = ndimage.binary_opening(air, structure=ball)
-    lab, _ = ndimage.label(opened)
-    sky = np.unique(lab[-1])
-    keep = np.isin(lab, sky[sky > 0])[:Mz.shape[0]]
-    # air within one ball radius of kept air also stays (opening shrinks it)
-    keep = ndimage.binary_dilation(keep, structure=ball) & ~Mz
-    Mz |= ~keep
-
-
-def _slicer_islands(Mz, vox):
-    """Remove material a slicer would see as floating at SLICER_LAYER_MM layers.
-
-    The voxel filter allows diagonal (edge-adjacent) support at voxel pitch;
-    sampled at real layer heights, a carved ledge's lowest edge can then start
-    a layer with nothing beneath it within the slicer's reach.  Per layer
-    (the voxel row nearest each layer's mid-height), drop 2-D components that
-    don't directly overlap the previous layer's footprint, clear
-    them from every voxel row up to that layer, then re-run support so
-    nothing above them survives.  Repeats until stable.
-    """
-    nz = Mz.shape[0]
-    # Every voxel row against the row one layer-height below: catches islands
-    # at any layer phase (the slicer's layers need not align with voxel rows).
-    step = max(int(np.ceil(SLICER_LAYER_MM / vox)), 1)
-    rows_b = np.arange(step, nz)
-    for _ in range(6):
-        changed = False
-        for b in rows_b:
-            a = b - step
-            below = Mz[a]                     # direct overlap only (slicers are strict)
-            lab, n = ndimage.label(Mz[b])
-            if n == 0:
+    built = list(_pool().map(lambda fr: build_blade(fr, plan, surf), frs))
+    # Grass top map (for seating rocks, the DB band check and gap stats).
+    T = surf.H0_dirt.copy()
+    covered = np.zeros(T.shape, bool)
+    X, Y = np.meshgrid(grid.xc, grid.yc, indexing='ij')
+    for _, layers in built:
+        for k, poly in layers:
+            x0, y0, x1, y1 = poly.bounds
+            i0, i1 = max(int(x0 / grid.vox), 0), min(int(x1 / grid.vox) + 2, grid.nx)
+            j0, j1 = max(int(y0 / grid.vox), 0), min(int(y1 / grid.vox) + 2, grid.ny)
+            if i0 >= i1 or j0 >= j1:
                 continue
-            hit = np.zeros(n + 1, bool)
-            hit[np.unique(lab[below & (lab > 0)])] = True
-            drop = (~hit[lab]) & (lab > 0)
-            if drop.any():
-                Mz[a + 1:b + 1] &= ~drop
-                changed = True
-        if not changed:
-            break
-        for z in range(1, nz):                       # re-propagate support upward
-            b_ = Mz[z - 1]
-            sup = b_.copy()
-            sup[1:, :] |= b_[:-1, :]
-            sup[:-1, :] |= b_[1:, :]
-            sup[:, 1:] |= b_[:, :-1]
-            sup[:, :-1] |= b_[:, 1:]
-            Mz[z] &= sup
+            m = shapely.contains_xy(poly, X[i0:i1, j0:j1], Y[i0:i1, j0:j1])
+            sub = T[i0:i1, j0:j1]
+            sub[m] = np.maximum(sub[m], surf.H0[i0:i1, j0:j1][m] + (k + 1) * LAYER_MM)
+            covered[i0:i1, j0:j1] |= m
+    meshes = [to_manifold(m) for m, _ in built if m is not None]
+    solid = m3d.Manifold.batch_boolean([ground_solid(surf, W, H)] + meshes, m3d.OpType.Add)
+    gaps = float((~covered)[surf.soil < 0.5].mean())
+    return Grass(surf.H0, T, solid, surf.soil, len(meshes), plan.n_strands, gaps)
 
 
 def to_manifold(mesh, original_id=None):
@@ -1306,42 +993,6 @@ def to_manifold(mesh, original_id=None):
         run_original_id=np.array([original_id], np.uint32))
     return m3d.Manifold(mesh=m3d.Mesh(
         vert_properties=np.asarray(mesh.vertices, dtype=np.float32), tri_verts=tv, **kw))
-
-
-def _signed_volume(mesh):
-    """mesh.volume for the orientation test only: trimesh computes the full
-    mass properties (~0.7 s on the grass mesh); the sign needs one triple
-    product sum.  Falls back to trimesh when the volume is near zero."""
-    V, f = mesh.vertices.view(np.ndarray), mesh.faces.view(np.ndarray)
-    a, b, c = V[f[:, 0]], V[f[:, 1]], V[f[:, 2]]
-    vol = float(np.einsum('ij,ij->', a, np.cross(b, c))) / 6.0
-    return vol if abs(vol) > 1.0 else float(mesh.volume)
-
-
-def mesh_field(F, vox, original_id=None):
-    """Marching cubes on F → (grass Manifold, its max z).
-
-    Field values ≈ 0 at grid nodes can make marching-cubes vertices
-    coincide; trimesh's vertex merge then pinches edges and manifold3d
-    rejects the mesh (an empty union downstream).  On that failure only,
-    near-zero values are nudged off the level set and the field re-meshed,
-    so meshes that were already valid are unchanged.
-    """
-    from skimage.measure import marching_cubes
-    for _ in range(2):
-        p = 2
-        V = np.pad(F, p, mode='constant', constant_values=-2.0 * vox)
-        verts, faces, _, _ = marching_cubes(V, 0.0, spacing=(vox, vox, vox))
-        verts -= (p - 0.5) * vox
-        mesh = trimesh.Trimesh(verts, faces, process=True)
-        if _signed_volume(mesh) < 0:
-            mesh.invert()
-        solid = to_manifold(mesh, original_id)
-        if solid.status() == m3d.Error.NoError:
-            return solid, float(mesh.vertices[:, 2].max())
-        eps = 1e-3 * vox
-        F = np.where(np.abs(F) < eps, np.where(F < 0, -eps, eps), F).astype(F.dtype)
-    raise RuntimeError(f"grass mesh is not manifold: {solid.status()}")
 
 
 # ── 7 Base, audit, self-check ───────────────────────────────────────────────
@@ -1491,23 +1142,13 @@ def main():
 
     t = time.perf_counter()
     g = build_grass(rng, grid, ground, sw, lenses, flow, W, H)
-    tm['fronds'] = time.perf_counter() - t
+    tm['blades'] = time.perf_counter() - t
 
     t = time.perf_counter()
-    F = make_field(grid, g.T, g.lips)
-    added, removed = fdm_backstop(F, vox)
-    tm['field+fdm'] = time.perf_counter() - t
-
-    t = time.perf_counter()
-    solid, zmax = mesh_field(F, vox)
-    tm['mc'] = time.perf_counter() - t
-
-    t = time.perf_counter()
-    mesh, peg_h, crumbs = attach_base(solid, args.cols, args.rows, zmax)
+    mesh, peg_h, crumbs = attach_base(g.solid, args.cols, args.rows, g.solid.bounding_box()[5])
     tm['base'] = time.perf_counter() - t
 
-    occ = F > 0
-    topz = (occ.shape[2] - np.argmax(occ[:, :, ::-1], axis=2)) * vox
+    topz = g.T
     gh = topz - g.H0
     ov_area, ov_frac = audit_overhang(mesh)
 
@@ -1524,20 +1165,19 @@ def main():
     print(f"  mesh: {len(mesh.vertices):,} verts, {len(mesh.faces):,} faces, "
           f"watertight={mesh.is_watertight}, peg={peg_h} mm, "
           f"crumbs dropped {crumbs[0]} ({crumbs[1]:.3f} mm³)")
-    print(f"  vox {vox:.4f} mm; {len(sw.sites)} swath sites, {g.n_fronds} fronds, "
-          f"{len(g.lips)} lips")
+    print(f"  grid {vox:.4f} mm, blade voxel {BLADE_VOX_MM} mm; {len(sw.sites)} swath sites, "
+          f"{g.n_fronds} blades")
     if gstats:
         print(f"  ground {gstats['ground_min']:.2f}–{gstats['ground_max']:.2f} mm, "
               f"max slope {gstats['max_slope_deg']:.1f}°, usable {gstats['usable']:.0%}")
     print(f"  {g.n_strands} strands; bare soil: {len(lenses.centre)} lenses, "
-          f"{(g.soil > 0.5).mean():.1%} of the tile, {g.n_pebbles} pebbles; gaps between "
-          f"fronds (grass <0.3 mm, off-soil) {g.gaps:.1%}; {g.n_ledges} bank fronds with side ledges")
+          f"{(g.soil > 0.5).mean():.1%} of the tile; dirt showing between blades "
+          f"(off-soil) {g.gaps:.1%}")
     print(f"  grass above ground: mean {gh.mean():.2f}, p95 {np.percentile(gh, 95):.2f}, "
           f"max {gh.max():.2f} mm")
     print(f"  mean grass top {mean_top:.2f} mm above datum "
           f"(DB band {DB_GRASS_BAND[0]}–{DB_GRASS_BAND[1]}: {'OK' if band else 'OUT'})")
-    print(f"  FDM backstop: +{added:,} / −{removed:,} voxels; "
-          f">{OVERHANG_DEG:.0f}°(+3) overhang {ov_area:.1f} mm² ({ov_frac:.2%})")
+    print(f"  >{OVERHANG_DEG:.0f}°(+3) overhang {ov_area:.1f} mm² ({ov_frac:.2%})")
     print("  timing: " + ", ".join(f"{k} {v:.1f}s" for k, v in tm.items())
           + f"; total {time.perf_counter() - t0:.1f}s")
     if args.check:

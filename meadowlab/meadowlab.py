@@ -232,9 +232,7 @@ def main():
 
     g = gl.build_grass(rng, grid, ground, sw, soil_l, flow, W, H, blocker=foot, tuck_mm=TUCK_MM,
                        side_low=SIDE_LOW, side_mm=SIDE_MM)
-    F = gl.make_field(grid, g.T, g.lips)
-    added, removed = gl.fdm_backstop(F, grid.vox)
-    grass, _ = gl.mesh_field(F, grid.vox)
+    grass = g.solid
     rocks, seats = seat_rocks(posed, masks, g.H0, g.T, grid)
     mesh, peg_h, crumbs, zmax = attach_base(grass, rocks, args.cols, args.rows)
     bare = float(((g.soil > 0.5) | foot).mean())
@@ -258,8 +256,7 @@ def main():
           f"visible {float(((g.soil > 0.5) & ~foot).mean()):.1%}; {n_free} free lenses")
     print(f"  {g.n_fronds} fronds in {g.n_strands} strands; ground {gstats['ground_min']:.2f}–"
           f"{gstats['ground_max']:.2f} mm; top z {zmax:.2f} mm")
-    print(f"  FDM backstop +{added:,}/−{removed:,}; overhang {gl.audit_overhang(mesh)[0]:.1f} mm²; "
-          f"total {time.perf_counter() - t0:.1f}s")
+    print(f"  overhang {gl.audit_overhang(mesh)[0]:.1f} mm²; total {time.perf_counter() - t0:.1f}s")
     if args.check:
         gl.self_check(mesh, args.check, W, H)
         print(f"  self-check → {args.check}")

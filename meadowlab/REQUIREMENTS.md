@@ -44,8 +44,8 @@ inherits all of their requirements, and defines only the interactions.*
   underneath rocks too.")*
 - **REQ-M-7 [S] A handful of rocks.**  6–9 placements asked for on a 2 × 2
   tile.  Grass stays dominant.
-- **REQ-M-8 [S]** The grass and rock FDM rules still hold, and the audit
-  reports them.
+- **REQ-M-8 [S]** The grass (grasslab REQ-B-*) and rock rules still
+  hold, and the audit reports them.
 
 ## Failure modes
 

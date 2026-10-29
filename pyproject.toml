@@ -25,6 +25,9 @@ dependencies = [
                      # path, which Taubin smoothing folds into sliver pleats
     "pyyaml",
     "manifold3d",
+    "fast-simplification",  # quadric decimation (trimesh.simplify_quadric_decimation)
+                            # of grasslab's smoothed blades: ~19k → 1.5k faces each
+    "shapely",  # grasslab blade strokes (layer outlines)
     "rich",
     "Pillow",
 ]

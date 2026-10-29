@@ -44,9 +44,9 @@ A 2 × 2 DB tile:
     band;
   - bed about 0.4 mm.
 
-- **REQ-S-8 [R] Shore grass is short and deeply grooved.**  It has shorter
-  blades and deeper crevasses than the meadow default, as a shore-only
-  override.
+- **REQ-S-8 [R] Shore grass is grasslab's stroke blades on dirt**
+  (grasslab REQ-B-*): short separate blades with undercut tips.  Since
+  2026-10-29 that is every lab's grass; there is no shore-only override.
 
 ## Failure modes
 

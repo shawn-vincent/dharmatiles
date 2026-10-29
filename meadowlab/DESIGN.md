@@ -41,8 +41,9 @@ constants.*
    side_mm=1.2)`: no rooting inside a footprint; spines stop 0.5 mm inside
    it, with the usual k_h lowering.  Frond height is ×0.5 at a rock's face,
    back to full 1.2 mm out, and falls to 0 within 0.8 mm inside the face, so
-   grass laps against the rock's foot instead of swallowing it.  Then
-   grasslab `make_field`, `fdm_backstop`, `mesh_field`.
+   grass laps against the rock's foot instead of swallowing it (each
+   blade's height is scaled at its tip).  The result's `solid` is the dirt
+   ground ∪ blades.
 8. **Seat rocks** (`seat_rocks`, per rock):
    - **Seat**: z₀ = q₀.₃₅(H₀ over the footprint) − 0.3 mm.  The v1d minimum
      buried the uphill side of rocks on slopes (meadow seed 3: one rock
@@ -76,12 +77,9 @@ constants.*
 
 ## Differences from the parent labs (kept: changing them changes output)
 
-- The grass voxel is always 0.12 mm (grasslab uses 0.1 mm at 1 × 1).
+- The grass grid is always 0.12 mm (grasslab uses 0.1 mm at 1 × 1).
 - The grass is simplified *before* the union with rocks and base
   (grasslab simplifies after its base union).
-- Seed 1 is the case that exposed grasslab's non-manifold marching-cubes
-  failure (previously a silent empty STL); grasslab's `mesh_field` now
-  retries, and the tile is fine.
 
 ## Iteration log
 
@@ -101,3 +99,11 @@ This uses grasslab's exact slab box and `stl_safe`; see grasslab
 DESIGN, "Export guarantees".  Meadow seed 2 had a zero-volume fin from
 the rock/grass union, which `stl_safe` drops.  Seeds 1–6 reload as one
 watertight body (re-verified at v1e).
+
+## Stroke blades (2026-10-29)
+
+The grass is grasslab v3: separate stroke-built, smoothed blades on dirt
+(grasslab DESIGN "v3: stroke blades").  Seed 1 now: 2,905 blades,
+1.58M faces, 79 MB, ≈ 85 s; bare earth 20.8% (15.7% visible); overhang
+audit 13.0 mm².  The FDM-backstop figures in the measured table are from
+the retired height-field grass.

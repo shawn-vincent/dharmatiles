@@ -20,15 +20,16 @@
    - The strip covers land within w of the waterline, where w is smooth
      noise mapped to 0–4 mm.  It is zero over part of the shore, so there
      grass reaches the water.
-   - Water (G < WL) is a grass **blocker**: no rooting, and fronds stop
+   - Water (G < WL) is a grass **blocker**: no rooting, and blades stop
      0.5 mm in, lapping over the waterline.
 4. **Grass flow**: grasslab flow, wrapped around lenses and rock circles
    (meadow), plus **shore steering**.
    - Within 9 mm of the waterline, headings that point away from the
      water are compressed toward along-shore, and others lean toward the
      water.  It is applied as a smoothed rotation (same as `steer_rim`).
-5. **Grass**: `grasslab.build_grass(blocker = water ∪ rock footprints)`,
-   then field, backstop and mesh.
+5. **Grass**: `grasslab.build_grass(blocker = water ∪ rock footprints)`:
+   grasslab's stroke blades on dirt (its own defaults; the shore no longer
+   overrides the grass).
 6. **Water**: `waterlab.Scene.from_fields(G sampled on the water grid,
    wet rocks)`, then `gen_swell_chaos`.
    - Water surface z_w = WL + relief·rim·smoothstep(d/0.4) + tide.
@@ -115,3 +116,15 @@ sampled onto this lab's grid.
   visible undercut, with 0 slicer islands.  A wider neighbour cut-back
   beside tips (`TIP_MARGIN`) was tried and reverted: it enlarged the voids
   and left post-like remnants.
+
+## Stroke blades (2026-10-29)
+
+The shore was where the grass was reworked, blade by blade
+(`grasslab/blades_demo.py`; grasslab DESIGN "v3: stroke blades").  The
+outcome replaced grasslab's grass everywhere, so the shore-only
+`GRASS_OVERRIDES` (`TIP_CARVE`, `SIDE_CARVE_ALL`, gaps, `OPEN_AIR_MM`,
+`SLICER_LAYER_MM`, `DROOP`, `RISE_EXP`, blade sizes) are gone: those
+options no longer exist, and the shore blade sizes are grasslab's
+defaults.  The v0h–v0k carve, gap, pocket and island fixes above are
+history.  s3 now builds in ≈ 40 s, 0.95M faces, 48 MB; its top
+(15.01 mm) crossed the 15 mm peg threshold, so it takes the tall peg.

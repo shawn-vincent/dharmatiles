@@ -75,34 +75,12 @@ REED_LEAN_DEG   = 8.0          # extra lean of the whole clump toward the water
 
 WATER_BURY_MM   = 0.3
 
-# ── Grass look for the shore (overrides grasslab's module constants here only;
-#    grasslab/meadowlab keep their own) ─────────────────────────────────────
-GRASS_OVERRIDES = dict(
-    FROND_LEN_MM=(3.5, 6.5),     # shorter blades (grasslab: 5.5–9.5)
-    FROND_H_MM=(1.1, 1.5),       # blades stand prouder of the skirt…
-    SKIRT_FACTOR=1.55,           # …and the skirt fills less between them
-    DOME_EXP=1.5,                # steeper blade flanks → deeper crevasses
-    TIP_CARVE=True,              # undercut every visible blade tip…
-    TIP_GAP_MM=0.6,              # …and a clear air gap under its 45° underside
-    SIDE_CARVE_ALL=True,         # undercut both blade edges too…
-    SLICER_LAYER_MM=0.2,         # no floating islands at 0.2 mm layers (Bambu warning)
-    OPEN_AIR_MM=0.6,             # fill sealed/near-sealed pockets; keep visible undercuts
-    SIDE_GAP_MM=0.6,             # …with the same clear gap, except at the base
-    FROND_HALF_W_MM=(0.8, 1.25), # wider blades: little tufts at this scale
-    SIDE_LIP_W_MM=0.8,
-    LIP_FRAC=0.5,                # …over the last half of the blade…
-    DROOP=-0.35,                 # …whose tip LIFTS (curls up) instead of drooping,
-    LIP_MIN_T_MM=0.6,            # …a sturdy tip (≥ 3 layers)…
-)
 # Smoother (less sharp) ripples on the shore tile; waterlab keeps its own.
 WATER_OVERRIDES = dict(SWELL_SHORT_SHARPEN=0.45)
 WATER_SOFTEN_MM = 0.3            # extra light blur of the wave relief
 for _k, _v in WATER_OVERRIDES.items():
     assert hasattr(wl, _k), _k
     setattr(wl, _k, _v)
-for _k, _v in GRASS_OVERRIDES.items():
-    assert hasattr(gl, _k), _k
-    setattr(gl, _k, _v)
 
 
 def smooth01(t):
@@ -315,19 +293,6 @@ def build(seed, cols=2, rows=2):
     blocker = water_g | foot
     g = gl.build_grass(rng, grid, ground, sw, soil, flow, W, H, blocker=blocker,
                        tuck_mm=ml.TUCK_MM, side_low=ml.SIDE_LOW, side_mm=ml.SIDE_MM)
-    # Meshing the grass (field, FDM backstop, marching cubes) depends only on
-    # g, so it runs on a worker thread while rocks, reeds and water are built
-    # (numpy / scipy / skimage / manifold release the GIL; no shared RNG).
-    # The grass Manifold's ID is reserved here, in sequence, so the union's
-    # triangle order (sorted by mesh ID) is the same as a serial build.
-    gid = m3d.Manifold.reserve_ids(1)
-
-    def mesh_grass():
-        F = gl.make_field(grid, g.T, g.lips)
-        gl.fdm_backstop(F, grid.vox)
-        return gl.mesh_field(F, grid.vox, original_id=gid)[0]
-    grass_job = _executor().submit(mesh_grass)
-
     T_eff = np.where(water_g, wl.WL_MM + WET_SURFACE_MM, g.T)
     wet = [water_g[min(int(p.x / grid.vox), grid.nx - 1), min(int(p.y / grid.vox), grid.ny - 1)]
            for p in posed]
@@ -337,7 +302,7 @@ def build(seed, cols=2, rows=2):
                                g.H0, T_eff, grid)[0] if wet_posed else None)
     reeds, n_clumps, n_stems, reed_bases = make_reeds(rng, ground, W, H)
     water, wsc, zw = build_water(seed, ground, wet_rocks, reed_bases)
-    grass = grass_job.result()
+    grass = g.solid
 
     P.grass, P.water, P.rocks, P.reeds = grass, water, rocks_all, reeds
     P.ground, P.soil, P.wsc, P.zw, P.g = ground, soil, wsc, zw, g
