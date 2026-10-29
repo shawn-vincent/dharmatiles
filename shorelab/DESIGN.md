@@ -90,3 +90,9 @@ sampled onto this lab's grid.
 - The mud strip now carries the dirt texture through grasslab; it is
   still a strip of bare earth by the water, just not a separate "mud"
   texture.
+
+- **Reed tips (2026-10-29)**: Shawn wanted tips sharp, not flat, but
+  fairly blunt.  Each blade now ends in a short cone, the hull of its top
+  ring and an apex, of length 1.6 × the top half-width (about a 64°
+  point).  The body is shortened by the cone, so the overall reed height
+  is unchanged.

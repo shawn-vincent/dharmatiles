@@ -68,7 +68,8 @@ REED_FAN_DEG    = (14.0, 34.0) # …and curve outward from it (tip angle)
 REED_H_MM       = (8.0, 13.0)
 REED_HALF_W_MM  = (1.7, 2.3)   # blade half-width at the base (chunky)
 REED_THICK      = (0.5, 0.65) # half-thickness / half-width (lemon section)
-REED_TIP_SCALE  = (0.25, 0.35) # section scale at the tip: a blunt point
+REED_TIP_SCALE  = (0.25, 0.35) # section scale where the tip cone starts
+REED_TIP_CAP    = 1.6           # tip cone length × top half-width (≈ 64° point: sharp but blunt)
 REED_LEAN_DEG   = 8.0          # extra lean of the whole clump toward the water
 
 WATER_BURY_MM   = 0.3
@@ -210,8 +211,16 @@ def make_reeds(rng, ground, W, H):
             # moderately to a blunt point: chunky so it won't snap off.
             t_ = np.linspace(0, 2 * np.pi, 24, endpoint=False)
             sec = np.c_[hw * np.cos(t_), ht * np.sign(np.sin(t_)) * np.abs(np.sin(t_)) ** 1.4]
-            stem = m3d.Manifold.extrude(m3d.CrossSection([sec.tolist()]), h + 0.8,
-                                        n_divisions=16, scale_top=REED_TIP_SCALE)
+            ts = rng.uniform(*REED_TIP_SCALE)
+            cap = REED_TIP_CAP * hw * ts                 # tip cone length
+            hb = h + 0.8 - cap                           # body: overall height unchanged
+            stem = m3d.Manifold.extrude(m3d.CrossSection([sec.tolist()]), hb,
+                                        n_divisions=16, scale_top=(ts, ts))
+            # Pointed, fairly blunt tip: a short cone (hull of the top ring and
+            # an apex) instead of a flat top.
+            ring = np.c_[sec * ts, np.full(len(sec), hb - 1e-3)]
+            apex = [0.0, 0.0, h + 0.8]
+            stem = stem + m3d.Manifold.hull_points(np.vstack([ring, apex]).astype(np.float32))
             # Flat face toward the clump centre (wide axis tangential).
             stem = stem.rotate([0.0, 0.0, float(np.degrees(fan_a) + 90 + rng.normal(0, 15))])
             fan = rng.uniform(*REED_FAN_DEG)
