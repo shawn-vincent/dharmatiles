@@ -138,6 +138,8 @@ LIP_MAX_MM           = 2.0
 LIP_FRAC             = 0.35        # lip length ≤ this × frond length
 LIP_MIN_T_MM         = 0.6
 TIP_CARVE            = False       # carve under visible frond tips (shorelab turns this on)
+TIP_GAP_MM           = 0.0         # with TIP_CARVE: open air gap under tips (≥ 0.6 printable)
+TIP_VIS_TOL_MM       = 0.45        # tips buried this little by neighbours are exposed
 SOFTMAX_K_MM         = 0.12
 
 # 5b rim and soil endings, banks
@@ -981,8 +983,10 @@ def sculpt_frond(fr, plan, surf, sw, T, lips, ledges):
         if keep.any():
             # TIP_CARVE: like bank ledges, carve the mass that neighbouring
             # skirts left under a visible tip, so every tip casts a shadow.
-            (ledges if TIP_CARVE else lips).append(
-                (I[lp][keep], J[lp][keep], bot[keep], top[lp][keep]))
+            if TIP_CARVE:
+                ledges.append((I[lp][keep], J[lp][keep], bot[keep], top[lp][keep], TIP_GAP_MM))
+            else:
+                lips.append((I[lp][keep], J[lp][keep], bot[keep], top[lp][keep]))
         # Lip side columns too thin to undercut stay solid (fused blade
         # edge) instead of being dropped — dropping them sawtoothed tips.
         thin = np.nonzero(lp)[0][~keep]
@@ -995,11 +999,21 @@ def open_ledges(T, ledges, lips):
     built, cut the mass beneath each VISIBLE ledge column (its top is the
     surface there) down to its 45° underside — a wedge under the blade
     edge, never a slot (REQ-FL-6, REQ-FDM-3)."""
-    for I, J, bot, top in ledges:
-        vis = top >= T[I, J] - 0.05
+    for I, J, bot, top, *gap in ledges:
+        # Tips (gap given) count as visible even when a neighbour's skirt
+        # covers them by up to TIP_VIS_TOL_MM — that skirt is cut back, so
+        # the tip is exposed and stands on its own.
+        tol = TIP_VIS_TOL_MM if gap else 0.05
+        vis = top >= T[I, J] - tol
         if not vis.any():
             continue
-        T[I[vis], J[vis]] = np.minimum(T[I[vis], J[vis]], bot[vis])
+        # Optional air gap under the ledge (tips): the floor is cut `gap`
+        # below the 45° underside, so the tip stands as separate geometry.
+        g_ = gap[0] if gap else 0.0
+        T[I[vis], J[vis]] = np.minimum(T[I[vis], J[vis]], bot[vis] - g_)
+        if gap:
+            # the tip's own column top wins over the cut-back neighbour
+            T[I[vis], J[vis]] = np.minimum(T[I[vis], J[vis]], bot[vis] - g_)
         lips.append((I[vis], J[vis], bot[vis], top[vis]))
 
 

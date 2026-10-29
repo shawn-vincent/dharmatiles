@@ -77,12 +77,14 @@ WATER_BURY_MM   = 0.3
 #    grasslab/meadowlab keep their own) ─────────────────────────────────────
 GRASS_OVERRIDES = dict(
     FROND_LEN_MM=(3.5, 6.5),     # shorter blades (grasslab: 5.5–9.5)
-    FROND_H_MM=(0.95, 1.35),     # blades stand prouder of the skirt…
+    FROND_H_MM=(1.1, 1.5),       # blades stand prouder of the skirt…
     SKIRT_FACTOR=1.55,           # …and the skirt fills less between them
     DOME_EXP=1.5,                # steeper blade flanks → deeper crevasses
     TIP_CARVE=True,              # undercut every visible blade tip…
+    TIP_GAP_MM=0.6,              # …and a clear air gap under its 45° underside
     LIP_FRAC=0.5,                # …over the last half of the blade…
-    DROOP=0.15,                  # …which droops less, so it stands proud
+    DROOP=-0.35,                 # …whose tip LIFTS (curls up) instead of drooping,
+    LIP_MIN_T_MM=0.6,            # …a sturdy tip (≥ 3 layers)…
 )
 # Smoother (less sharp) ripples on the shore tile; waterlab keeps its own.
 WATER_OVERRIDES = dict(SWELL_SHORT_SHARPEN=0.45)
