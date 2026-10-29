@@ -176,13 +176,63 @@ LEG_OFFSET_MM      = (0.0, 20.0)
 LEG_ARC_SMOOTH_MM  = 2.5
 
 
+# ── Fast exact Gaussian blur ─────────────────────────────────────────────────
+# scipy's separable Gaussian is one 1-D correlation per axis, and every output
+# line depends only on its own input line; so splitting the array into strips
+# ACROSS the filtered axis and filtering the strips on threads (scipy releases
+# the GIL) gives bit-identical results, several times faster on big kernels.
+_POOL = None
+
+
+def _pool():
+    global _POOL
+    if _POOL is None:
+        import os
+        from concurrent.futures import ThreadPoolExecutor
+        _POOL = ThreadPoolExecutor(max_workers=min(os.cpu_count() or 1, 16))
+    return _POOL
+
+
+def _gauss_kernel(sigma, truncate):
+    lw = int(truncate * float(sigma) + 0.5)              # == ndimage.gaussian_filter1d
+    x = np.arange(-lw, lw + 1)
+    phi = np.exp(-0.5 / (sigma * sigma) * x ** 2)
+    return (phi / phi.sum())[::-1]
+
+
+def gaussian(a, sigma, mode='reflect', truncate=4.0):
+    """Drop-in for ndimage.gaussian_filter(a, sigma, mode=mode) (scalar sigma),
+    bit-identical, parallel over strips for large 2-D float64 arrays."""
+    a = np.asarray(a)
+    if a.ndim != 2 or a.dtype != np.float64 or a.size < 65536 or not np.isscalar(sigma) \
+            or sigma <= 1e-15:
+        return ndimage.gaussian_filter(a, sigma, mode=mode, truncate=truncate)
+    w = _gauss_kernel(sigma, truncate)
+    pool = _pool()
+    nt = pool._max_workers
+    tmp = np.empty_like(a)
+    out = np.empty_like(a)
+
+    def run(src, dst, axis):
+        n = src.shape[1 - axis]
+        cuts = np.linspace(0, n, nt + 1).astype(int)
+        def job(k):
+            sl = (slice(None), slice(cuts[k], cuts[k + 1])) if axis == 0 else \
+                 (slice(cuts[k], cuts[k + 1]), slice(None))
+            ndimage.correlate1d(src[sl], w, axis, dst[sl], mode, 0.0, 0)
+        list(pool.map(job, [k for k in range(nt) if cuts[k + 1] > cuts[k]]))
+    run(a, tmp, 0)
+    run(tmp, out, 1)
+    return out
+
+
 def smooth01(t):
     t = np.clip(t, 0, 1)
     return t * t * (3 - 2 * t)
 
 
 def noise(rng, shape, sigma_px):
-    n = ndimage.gaussian_filter(rng.standard_normal(shape), sigma_px, mode='wrap')
+    n = gaussian(rng.standard_normal(shape), sigma_px, mode='wrap')
     return (n - n.mean()) / (n.std() + 1e-12)
 
 
@@ -294,8 +344,8 @@ class Scene:
         d = d * CELL_MM
         w = (~obst).astype(float)
         sg = DIST_SMOOTH_MM / CELL_MM
-        self.d = np.where(~obst, ndimage.gaussian_filter(d * w, sg)
-                          / np.maximum(ndimage.gaussian_filter(w, sg), 1e-6), 0.0)
+        self.d = np.where(~obst, gaussian(d * w, sg)
+                          / np.maximum(gaussian(w, sg), 1e-6), 0.0)
         self.near_iy, self.near_ix = iy, ix
         self.near_rock = self.rock_mask[iy, ix]
         rim = np.minimum.reduce([X, self.W - X, Y, self.H - Y])
@@ -312,7 +362,12 @@ class Scene:
         for poly in sl.to_polygons():
             poly = np.asarray(poly)
             if len(poly) >= 3:
-                mask.ravel()[Path(poly).contains_points(pts)] = True
+                # only grid points inside the polygon's bounding box (+ margin)
+                # can be inside it: test just those (same mask, far fewer points)
+                lo, hi = poly.min(0) - 1.0, poly.max(0) + 1.0
+                idx = np.nonzero((pts[:, 0] >= lo[0]) & (pts[:, 0] <= hi[0])
+                                 & (pts[:, 1] >= lo[1]) & (pts[:, 1] <= hi[1]))[0]
+                mask.ravel()[idx[Path(poly).contains_points(pts[idx])]] = True
         return mask
 
 
@@ -352,8 +407,8 @@ def direction_field(rng, sc):
     ux = vx - w * dot * nx + 1e-3 * sgn * tx          # tangent fallback at partings
     uy = vy - w * dot * ny + 1e-3 * sgn * ty
     a = np.arctan2(uy, ux)
-    c2 = ndimage.gaussian_filter(np.cos(2 * a), 0.8 / CELL_MM)
-    s2 = ndimage.gaussian_filter(np.sin(2 * a), 0.8 / CELL_MM)
+    c2 = gaussian(np.cos(2 * a), 0.8 / CELL_MM)
+    s2 = gaussian(np.sin(2 * a), 0.8 / CELL_MM)
     return 0.5 * np.arctan2(s2, c2)
 
 
@@ -437,8 +492,8 @@ def ring_field(rng, sc, break_bias=LAP_BREAK_BIAS):
     n = d.shape[0]
     sg = 2.5 / CELL_MM
     w = sc.water.astype(float)
-    ny = ndimage.gaussian_filter(sc.near_iy * w, sg) / np.maximum(ndimage.gaussian_filter(w, sg), 1e-6)
-    nx = ndimage.gaussian_filter(sc.near_ix * w, sg) / np.maximum(ndimage.gaussian_filter(w, sg), 1e-6)
+    ny = gaussian(sc.near_iy * w, sg) / np.maximum(gaussian(w, sg), 1e-6)
+    nx = gaussian(sc.near_ix * w, sg) / np.maximum(gaussian(w, sg), 1e-6)
     gy = np.clip((ny + k * 37).astype(int), 0, n - 1)
     gx = np.clip((nx + k * 53).astype(int) % n, 0, n - 1)
     gate = smooth01((gate_field[gy, gx] + break_bias) / 0.5 + 0.5)
@@ -472,9 +527,9 @@ def gen_legacy(rng, sc):
     z = LEG_NOISE_RMS_MM * noise(rng, sc.X.shape, LEG_NOISE_SIGMA_MM / CELL_MM)
     sg = LEG_ARC_SMOOTH_MM / CELL_MM
     w = sc.water.astype(float)
-    ds = ndimage.gaussian_filter(sc.d * w, sg) / np.maximum(ndimage.gaussian_filter(w, sg), 1e-6)
-    nr = ndimage.gaussian_filter(sc.near_iy.astype(float), sg) * CELL_MM
-    nc = ndimage.gaussian_filter(sc.near_ix.astype(float), sg) * CELL_MM
+    ds = gaussian(sc.d * w, sg) / np.maximum(gaussian(w, sg), 1e-6)
+    nr = gaussian(sc.near_iy.astype(float), sg) * CELL_MM
+    nc = gaussian(sc.near_ix.astype(float), sg) * CELL_MM
     src = np.argwhere(ndimage.binary_dilation(~sc.water) & sc.water)
     n_seg = max(4, int(len(src) * CELL_MM / 6.0))
     for i in rng.integers(0, len(src), n_seg):
@@ -679,6 +734,8 @@ def _emit_sources(rng, sc):
         return out[:sc.X.shape[0], :sc.X.shape[1]]
 
     out = []
+    wm = sc.water.astype(float)
+    wm_blur = {}
     for name, src in (('land', land), ('rock', rock)):
         if not src.any():
             continue
@@ -688,11 +745,11 @@ def _emit_sources(rng, sc):
         st, dec, lam, g = EMIT_SOURCES[name]
         # Smooth: 8-connected geodesic distance is faceted (octagonal), which
         # shows as stepped crests; smoothing also rounds crests around bumps.
-        wm = sc.water.astype(float)
-
         def wsmooth(a, sigma_mm):          # normalised convolution inside water only
             sg = sigma_mm / CELL_MM
-            return ndimage.gaussian_filter(a * wm, sg) / np.maximum(ndimage.gaussian_filter(wm, sg), 1e-6)
+            if sg not in wm_blur:          # the mask's own blur is shared by every call
+                wm_blur[sg] = np.maximum(gaussian(wm, sg), 1e-6)
+            return gaussian(a * wm, sg) / wm_blur[sg]
         dd = wsmooth(np.minimum(up(d), 200.0), 1.2)
         if name == 'land':
             dd = _round_offsets(dd, wsmooth)
@@ -982,7 +1039,7 @@ def build(sc, relief, tide=None):
     if tide is not None:
         water_z = water_z + tide
     z = np.maximum(sc.land, water_z)
-    z = ndimage.gaussian_filter(z, 0.6)          # remove grid-scale kinks (≤0.1 mm)
+    z = gaussian(z, 0.6)          # remove grid-scale kinks (≤0.1 mm)
     top = make_heightmap_solid(z, sc.W, sc.H, base_h=0.0, subsample=MESH_SUBSAMPLE)
     solid = rl.to_manifold(top) + sc.rock if sc.rock is not None else rl.to_manifold(top)
     zmax = solid.bounding_box()[5]

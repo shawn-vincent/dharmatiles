@@ -261,6 +261,17 @@ class Parts:
     pass
 
 
+_EXEC = None
+
+
+def _executor():
+    global _EXEC
+    if _EXEC is None:
+        from concurrent.futures import ThreadPoolExecutor
+        _EXEC = ThreadPoolExecutor(max_workers=2)
+    return _EXEC
+
+
 def build(seed, cols=2, rows=2):
     t0 = time.perf_counter()
     P = Parts()
@@ -270,10 +281,13 @@ def build(seed, cols=2, rows=2):
     grid = gl.Grid(W, H, W / round(W / gl.VOX_MM))
     P.W, P.H, P.grid = W, H, grid
 
+    # Rocks use their own RNG stream and are the only Manifolds made before
+    # the grass, so they are built on a worker thread meanwhile.
+    rocks_job = _executor().submit(lambda: rl.pose(rrng, rl.scatter(rrng, W, H, ROCK_PLACEMENTS)))
     ground, gstats = make_shore_ground(rng, W, H)
     flow0 = gl.make_direction(rng, ground)
     sw = gl.Swaths(rng, W, H, flow0)
-    posed = rl.pose(rrng, rl.scatter(rrng, W, H, ROCK_PLACEMENTS))
+    posed = rocks_job.result()
     masks = ml.footprint_masks(posed, grid)
     foot = ml.footprint_mask(masks, (grid.nx, grid.ny))
     free = gl.place_lenses(rng, land_only(ground), flow0, W, H, FREE_LENSES_PER_SQ)
@@ -286,9 +300,18 @@ def build(seed, cols=2, rows=2):
     blocker = water_g | foot
     g = gl.build_grass(rng, grid, ground, sw, soil, flow, W, H, blocker=blocker,
                        tuck_mm=ml.TUCK_MM, side_low=ml.SIDE_LOW, side_mm=ml.SIDE_MM)
-    F = gl.make_field(grid, g.T, g.lips)
-    gl.fdm_backstop(F, grid.vox)
-    grass, _ = gl.mesh_field(F, grid.vox)
+    # Meshing the grass (field, FDM backstop, marching cubes) depends only on
+    # g, so it runs on a worker thread while rocks, reeds and water are built
+    # (numpy / scipy / skimage / manifold release the GIL; no shared RNG).
+    # The grass Manifold's ID is reserved here, in sequence, so the union's
+    # triangle order (sorted by mesh ID) is the same as a serial build.
+    gid = m3d.Manifold.reserve_ids(1)
+
+    def mesh_grass():
+        F = gl.make_field(grid, g.T, g.lips)
+        gl.fdm_backstop(F, grid.vox)
+        return gl.mesh_field(F, grid.vox, original_id=gid)[0]
+    grass_job = _executor().submit(mesh_grass)
 
     T_eff = np.where(water_g, wl.WL_MM + WET_SURFACE_MM, g.T)
     wet = [water_g[min(int(p.x / grid.vox), grid.nx - 1), min(int(p.y / grid.vox), grid.ny - 1)]
@@ -299,6 +322,7 @@ def build(seed, cols=2, rows=2):
                                g.H0, T_eff, grid)[0] if wet_posed else None)
     reeds, n_clumps, n_stems, reed_bases = make_reeds(rng, ground, W, H)
     water, wsc, zw = build_water(seed, ground, wet_rocks, reed_bases)
+    grass = grass_job.result()
 
     P.grass, P.water, P.rocks, P.reeds = grass, water, rocks_all, reeds
     P.ground, P.soil, P.wsc, P.zw, P.g = ground, soil, wsc, zw, g

@@ -655,6 +655,19 @@ def soil_relief(rng, m, X, Y, vox):
     return relief + peb * m, len(placed)
 
 
+_POOL = None
+
+
+def _pool():
+    """Shared worker threads (numpy releases the GIL in its array loops)."""
+    global _POOL
+    if _POOL is None:
+        import os
+        from concurrent.futures import ThreadPoolExecutor
+        _POOL = ThreadPoolExecutor(max_workers=min(os.cpu_count() or 1, 4))
+    return _POOL
+
+
 # ── 5 Fronds ────────────────────────────────────────────────────────────────
 def trace_batch(P, length, flow, delta=None, sign=1.0, step=TRACE_STEP_MM):
     """RK2 streamlines of the flow from many starts at once → (N, n+1, 2).
@@ -681,18 +694,33 @@ def trace_batch(P, length, flow, delta=None, sign=1.0, step=TRACE_STEP_MM):
 
 
 def project_spine(P, pts, us):
-    """Arc length u and signed lateral offset v of points P on a polyline."""
-    A = pts[:-1]
-    D = pts[1:] - pts[:-1]
-    dd = np.maximum((D * D).sum(1), 1e-12)
-    R = P[:, None, :] - A[None, :, :]
-    t = np.clip((R * D[None]).sum(2) / dd[None], 0, 1)
-    C = R - t[..., None] * D[None]
-    dist2 = (C * C).sum(2)
+    """Arc length u and signed lateral offset v of points P on a polyline.
+
+    Written per component on (points × segments) planes instead of
+    (points × segments × 2) stacks summed over the last axis: the same
+    floating-point operations in the same order (a two-term sum is a + b),
+    so the results are bit-identical, at a fraction of the cost."""
+    Ax, Ay = pts[:-1, 0], pts[:-1, 1]
+    Dx, Dy = pts[1:, 0] - Ax, pts[1:, 1] - Ay
+    dd = np.maximum(Dx * Dx + Dy * Dy, 1e-12)
+    Rx = P[:, 0, None] - Ax
+    Ry = P[:, 1, None] - Ay
+    t = Rx * Dx
+    t += Ry * Dy
+    t /= dd
+    np.clip(t, 0, 1, out=t)
+    Cx = t * Dx
+    np.subtract(Rx, Cx, out=Cx)
+    Cy = t * Dy
+    np.subtract(Ry, Cy, out=Cy)
+    Cx *= Cx
+    Cy *= Cy
+    dist2 = Cx
+    dist2 += Cy
     k = dist2.argmin(1)
     r = np.arange(len(P))
     u = us[k] + t[r, k] * (us[k + 1] - us[k])
-    cross = D[k, 0] * R[r, k, 1] - D[k, 1] * R[r, k, 0]
+    cross = Dx[k] * Ry[r, k] - Dy[k] * Rx[r, k]
     v = np.sign(cross) * np.sqrt(dist2[r, k])
     return u, v
 
@@ -889,27 +917,44 @@ def frond_spine(plan, fr):
     return np.concatenate([p0 + ub[:, None] * t0, fwd]), np.concatenate([ub, uf])
 
 
-def sculpt_frond(fr, plan, surf, sw, T, lips, ledges):
-    """Rasterise one frond: skirt + blade into T; tip lip and bank side
-    ledges as column intervals.  Returns False if it covers no column."""
+def frond_columns(fr, plan, surf):
+    """The grass columns in frond fr's box and their spine coordinates:
+    (I, J, u, v), or None if the box is empty.  Reads only the plan and the
+    surface (never T), so build_grass computes it ahead on worker threads."""
+    grid = surf.grid
+    vox = grid.vox
+    sp, su_ = frond_spine(plan, fr)
+    reach = max(fr.wmax, fr.wsk)
+    i0 = max(int((sp[:, 0].min() - reach) / vox), 0)
+    i1 = min(int((sp[:, 0].max() + reach) / vox) + 2, grid.nx)
+    j0 = max(int((sp[:, 1].min() - reach) / vox), 0)
+    j1 = min(int((sp[:, 1].max() + reach) / vox) + 2, grid.ny)
+    if i0 >= i1 or j0 >= j1:
+        return None
+    I, J = np.meshgrid(np.arange(i0, i1), np.arange(j0, j1), indexing='ij')
+    I, J = I.ravel(), J.ravel()
+    u, v = project_spine(np.stack([grid.xc[I], grid.yc[J]], 1), sp, su_)
+    return I, J, u, v
+
+
+def frond_ops(fr, plan, surf, sw, cols=None):
+    """Rasterise one frond: skirt + blade heights, tip lip and bank side
+    ledges as column intervals — returned as an ordered list of operations
+    on (T, lips, ledges) for apply_frond, or None if it covers no column.
+    Reads only plan, surface and swaths (never T).  `cols` =
+    frond_columns(fr, plan, surf) if already computed."""
     grid, step, wt = surf.grid, TRACE_STEP_MM, FROND_TIP_HALF_W_MM
     vox, f, path = grid.vox, fr.f, plan.paths[fr.f]
     i, sb, lb = plan.own[f], plan.s[f], plan.l[f]
     L, Lt, wmax, wsk, hf = fr.L, fr.Lt, fr.wmax, fr.wsk, fr.hf
     cb = SKIRT_BASE_CAP * wsk              # skirt extends behind the root
     u_c, u_h = (Lt - cb) / 2, (Lt + cb) / 2
-    sp, su_ = frond_spine(plan, fr)
-
-    reach = max(wmax, wsk)
-    i0 = max(int((sp[:, 0].min() - reach) / vox), 0)
-    i1 = min(int((sp[:, 0].max() + reach) / vox) + 2, grid.nx)
-    j0 = max(int((sp[:, 1].min() - reach) / vox), 0)
-    j1 = min(int((sp[:, 1].max() + reach) / vox) + 2, grid.ny)
-    if i0 >= i1 or j0 >= j1:
-        return False
-    I, J = np.meshgrid(np.arange(i0, i1), np.arange(j0, j1), indexing='ij')
-    I, J = I.ravel(), J.ravel()
-    u, v = project_spine(np.stack([grid.xc[I], grid.yc[J]], 1), sp, su_)
+    if cols is None:
+        cols = frond_columns(fr, plan, surf)
+    if cols is None:
+        return None
+    I, J, u, v = cols
+    ops = []
     # Blade planform (pointed lens, round tip cap).
     w = wt + (wmax - wt) * np.sin(np.pi * (0.25 + 0.75 * np.clip(u / L, 0, 1)))
     w = np.where(u > L, np.sqrt(np.clip(wt ** 2 - (u - L) ** 2, 0, None)), w)
@@ -935,7 +980,7 @@ def sculpt_frond(fr, plan, surf, sw, T, lips, ledges):
         facing = facing | (u > SIDE_BASE_FRAC * L)
     inside = in_blade | in_skirt
     if not inside.any():
-        return False
+        return None
     I, J, u, v, w, ws, in_blade, facing = (I[inside], J[inside], u[inside], v[inside],
                                            w[inside], ws[inside], in_blade[inside],
                                            facing[inside])
@@ -972,12 +1017,12 @@ def sculpt_frond(fr, plan, surf, sw, T, lips, ledges):
     e = w - np.abs(v)
     ledge = facing & in_blade & (e < SIDE_LIP_W_MM) & ~lp
     mass = ~lp & ~ledge
-    T[I[mass], J[mass]] = smoothmax(T[I[mass], J[mass]], top[mass], SOFTMAX_K_MM)
+    ops.append(('T', I[mass], J[mass], top[mass]))
     if ledge.any():
         # Underside: LIP_MIN_T below the ledge's own top at the edge,
         # descending inward at 45° — a shallow wedge just under the blade.
         entry = (I[ledge], J[ledge], top[ledge] - LIP_MIN_T_MM - e[ledge], top[ledge])
-        ledges.append(entry + ((SIDE_GAP_MM,) if side_all else ()))
+        ops.append(('ledge', entry + ((SIDE_GAP_MM,) if side_all else ())))
     if lp.any():
         # 45° underside measured back from the drooped tip crest.
         s_tip = min(sb + Lt / sw.length[i], 1.0)
@@ -993,14 +1038,34 @@ def sculpt_frond(fr, plan, surf, sw, T, lips, ledges):
             # TIP_CARVE: like bank ledges, carve the mass that neighbouring
             # skirts left under a visible tip, so every tip casts a shadow.
             if TIP_CARVE:
-                ledges.append((I[lp][keep], J[lp][keep], bot[keep], top[lp][keep], TIP_GAP_MM))
+                ops.append(('ledge', (I[lp][keep], J[lp][keep], bot[keep], top[lp][keep], TIP_GAP_MM)))
             else:
-                lips.append((I[lp][keep], J[lp][keep], bot[keep], top[lp][keep]))
+                ops.append(('lip', (I[lp][keep], J[lp][keep], bot[keep], top[lp][keep])))
         # Lip side columns too thin to undercut stay solid (fused blade
         # edge) instead of being dropped — dropping them sawtoothed tips.
         thin = np.nonzero(lp)[0][~keep]
-        T[I[thin], J[thin]] = smoothmax(T[I[thin], J[thin]], top[thin], SOFTMAX_K_MM)
+        ops.append(('T', I[thin], J[thin], top[thin]))
+    return ops
+
+
+def apply_frond(ops, T, lips, ledges):
+    """Apply frond_ops' operations in order: soft-max heights into T, append
+    ledge / lip intervals.  Returns False if there were none (no column)."""
+    if ops is None:
+        return False
+    for op in ops:
+        if op[0] == 'T':
+            _, I, J, top = op
+            T[I, J] = smoothmax(T[I, J], top, SOFTMAX_K_MM)
+        else:
+            (ledges if op[0] == 'ledge' else lips).append(op[1])
     return True
+
+
+def sculpt_frond(fr, plan, surf, sw, T, lips, ledges):
+    """Rasterise one frond into T / lips / ledges.  Returns False if it covers
+    no column."""
+    return apply_frond(frond_ops(fr, plan, surf, sw), T, lips, ledges)
 
 
 def open_ledges(T, ledges, lips):
@@ -1051,9 +1116,23 @@ def build_grass(rng, grid, ground, sw, lenses, flow, W, H, blocker=None, tuck_mm
     T = surf.H0.copy()                     # no free-standing grass layer
     lips, ledges = [], []
     n_built = 0
-    for f in range(len(plan.roots)):
-        fr = draw_frond(rng, plan, f, surf, W, H)
-        if fr is not None and sculpt_frond(fr, plan, surf, sw, T, lips, ledges):
+    # Drawing a frond uses the RNG but never T, and sculpting uses T but never
+    # the RNG, so all fronds are drawn first (same RNG sequence), and their
+    # column projections (the bulk of the cost: big numpy arrays, which
+    # release the GIL) run ahead on threads.  The rest — many small numpy
+    # calls that would only fight over the GIL — and the sculpting into T stay
+    # sequential, in the original order.
+    frs = [draw_frond(rng, plan, f, surf, W, H) for f in range(len(plan.roots))]
+    frs = [fr for fr in frs if fr is not None]
+    pool = _pool()
+    ahead = 4 * pool._max_workers
+    jobs = {}
+    for n in range(len(frs)):
+        for m in range(n, min(n + ahead, len(frs))):
+            if m not in jobs:
+                jobs[m] = pool.submit(frond_columns, frs[m], plan, surf)
+        ops = frond_ops(frs[n], plan, surf, sw, cols=jobs.pop(n).result())
+        if apply_frond(ops, T, lips, ledges):
             n_built += 1
     open_ledges(T, ledges, lips)
     T = np.maximum(T, surf.H0)
@@ -1083,38 +1162,74 @@ def make_field(grid, T, lips):
     return F
 
 
+def _fill_holes(a):
+    """== ndimage.binary_fill_holes(a) (default 6-connectivity), via one
+    labelling pass instead of an iterate-to-convergence dilation: background
+    components that touch the array border are outside, the rest are holes."""
+    lab, n = ndimage.label(~a)
+    faces = [lab[0], lab[-1], lab[:, 0], lab[:, -1], lab[:, :, 0], lab[:, :, -1]]
+    outside = np.zeros(n + 1, bool)
+    for f_ in faces:
+        outside[np.unique(f_)] = True
+    outside[0] = False
+    return ~outside[lab]
+
+
 def fdm_backstop(F, vox):
     """Support filter + hole fill + bed connectivity on occupancy (should be ~no-op)."""
     before = F > 0
-    M = ndimage.binary_fill_holes(np.pad(before, ((0, 0), (0, 0), (0, 1))))[:, :, :-1]
+    M = _fill_holes(np.pad(before, ((0, 0), (0, 0), (0, 1))))[:, :, :-1]
+    # Work z-major (each layer contiguous); every step is boolean, so the
+    # result is identical to the per-layer loop on the (x, y, z) array.
+    Mz = np.ascontiguousarray(M.transpose(2, 0, 1))
     for _ in range(4):
-        for z in range(1, M.shape[2]):
-            b = M[:, :, z - 1]
+        for z in range(1, Mz.shape[0]):
+            b = Mz[z - 1]
             sup = b.copy()
             sup[1:, :] |= b[:-1, :]
             sup[:-1, :] |= b[1:, :]
             sup[:, 1:] |= b[:, :-1]
             sup[:, :-1] |= b[:, 1:]
-            M[:, :, z] &= sup
-        lab, _ = ndimage.label(M)
-        keep = np.unique(lab[:, :, 0])
-        conn = np.isin(lab, keep[keep > 0])
-        if (conn == M).all():
+            Mz[z] &= sup
+        lab, n = ndimage.label(Mz)
+        keep = np.zeros(n + 1, bool)
+        keep[np.unique(lab[0])] = True
+        keep[0] = False
+        conn = keep[lab]
+        if (conn == Mz).all():
             break
-        M &= conn
+        Mz &= conn
+    M = Mz.transpose(1, 2, 0)
     added, removed = M & ~before, before & ~M
     F[added] = vox
     F[removed] = -vox
     return int(added.sum()), int(removed.sum())
 
 
-def to_manifold(mesh):
+def to_manifold(mesh, original_id=None):
+    """trimesh → Manifold.  `original_id` (from Manifold.reserve_ids) tags the
+    mesh with a pre-reserved ID instead of the next free one, so a mesh built
+    on a worker thread keeps the ID — hence the triangle order of every later
+    boolean — that it would have had if built in sequence."""
+    tv = np.asarray(mesh.faces, dtype=np.uint32)
+    kw = {} if original_id is None else dict(
+        run_index=np.array([0, tv.size], np.uint32),
+        run_original_id=np.array([original_id], np.uint32))
     return m3d.Manifold(mesh=m3d.Mesh(
-        vert_properties=np.asarray(mesh.vertices, dtype=np.float32),
-        tri_verts=np.asarray(mesh.faces, dtype=np.uint32)))
+        vert_properties=np.asarray(mesh.vertices, dtype=np.float32), tri_verts=tv, **kw))
 
 
-def mesh_field(F, vox):
+def _signed_volume(mesh):
+    """mesh.volume for the orientation test only: trimesh computes the full
+    mass properties (~0.7 s on the grass mesh); the sign needs one triple
+    product sum.  Falls back to trimesh when the volume is near zero."""
+    V, f = mesh.vertices.view(np.ndarray), mesh.faces.view(np.ndarray)
+    a, b, c = V[f[:, 0]], V[f[:, 1]], V[f[:, 2]]
+    vol = float(np.einsum('ij,ij->', a, np.cross(b, c))) / 6.0
+    return vol if abs(vol) > 1.0 else float(mesh.volume)
+
+
+def mesh_field(F, vox, original_id=None):
     """Marching cubes on F → (grass Manifold, its max z).
 
     Field values ≈ 0 at grid nodes can make marching-cubes vertices
@@ -1130,9 +1245,9 @@ def mesh_field(F, vox):
         verts, faces, _, _ = marching_cubes(V, 0.0, spacing=(vox, vox, vox))
         verts -= (p - 0.5) * vox
         mesh = trimesh.Trimesh(verts, faces, process=True)
-        if mesh.volume < 0:
+        if _signed_volume(mesh) < 0:
             mesh.invert()
-        solid = to_manifold(mesh)
+        solid = to_manifold(mesh, original_id)
         if solid.status() == m3d.Error.NoError:
             return solid, float(mesh.vertices[:, 2].max())
         eps = 1e-3 * vox
@@ -1168,23 +1283,59 @@ def attach_base(grass, cols, rows, tile_max_z):
     return mesh, peg_h, crumbs
 
 
+def _separate_pinches(mesh):
+    """Same result as dharmatiles.stone.solidify.separate_pinches (see there),
+    but fast on big meshes: the close pairs are found first and only they are
+    checked for adjacency (the reference builds a Python set of every edge,
+    ~1 s on a tile), and vertex normals are computed only if a pair exists.
+    Same pairs, same order, same nudges → identical vertices."""
+    from scipy.spatial import cKDTree
+    v = mesh.vertices.view(np.ndarray)
+    n = len(v)
+    vn = edge_keys = None
+    for _ in range(4):
+        pairs = cKDTree(v).query_pairs(2e-4, output_type='ndarray')
+        if not len(pairs):
+            break
+        if vn is None:
+            vn = np.asarray(mesh.vertex_normals)
+            f = mesh.faces.view(np.ndarray).astype(np.int64)
+            e = np.sort(f[:, [0, 1, 1, 2, 2, 0]].reshape(-1, 2), axis=1)   # every face edge
+            edge_keys = np.sort(e[:, 0] * n + e[:, 1])
+        q = pairs.min(1).astype(np.int64) * n + pairs.max(1).astype(np.int64)
+        k = np.minimum(np.searchsorted(edge_keys, q), len(edge_keys) - 1)
+        adj = edge_keys[k] == q
+        moved = False
+        for (i, j), a in zip(pairs, adj):
+            if a and float(np.linalg.norm(v[i] - v[j])) > 2e-5:
+                continue                     # connected and not a sliver: leave it
+            v[i] -= vn[i] * 1.5e-4
+            v[j] -= vn[j] * 3.0e-4
+            moved = True
+        if not moved:
+            break
+    mesh.vertices = v
+
+
 def stl_safe(mesh):
     """Export guarantee: the mesh as a slicer will see it.
 
     STL stores float32 positions and readers merge vertices by position, so
     a mesh that is manifold in memory can open up on reload (e.g. zero-volume
     back-to-back "fins" a union leaves at a tangency, or two sheets pinched
-    along an edge).  Separate pinches (dharmatiles.stone.solidify), apply
+    along an edge).  Separate pinches (as dharmatiles.stone.solidify), apply
     that merge here, drop zero-volume components, and refuse to export
     anything that is not then a single watertight body.
     """
-    from dharmatiles.stone.solidify import separate_pinches
     mesh = trimesh.Trimesh(mesh.vertices.copy(), np.asarray(mesh.faces), process=False)
-    separate_pinches(mesh)              # coincident-but-unconnected vertices → apart
+    _separate_pinches(mesh)             # coincident-but-unconnected vertices → apart
     v32 = np.asarray(mesh.vertices, dtype=np.float32).astype(np.float64)
     m = trimesh.Trimesh(v32, np.asarray(mesh.faces), process=True)
-    parts = m.split(only_watertight=False)
-    if len(parts) > 1:
+    # Count components first (what Trimesh.split does); only split if > 1.
+    comps = trimesh.graph.connected_components(
+        edges=m.face_adjacency, nodes=np.arange(len(m.faces)), min_len=1)
+    if len(comps) > 1:
+        parts = m.split(only_watertight=False)
         m = max(parts, key=lambda q: len(q.faces))
         m = trimesh.Trimesh(m.vertices, m.faces, process=True)
     if not m.is_watertight:

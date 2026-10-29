@@ -194,13 +194,19 @@ def cut_facets(rng, body, D):
     # Seeded from rng: trimesh's own sampler defaults to the unseeded global RNG.
     cand, fi = trimesh.sample.sample_surface(bm, FACET_SAMPLES, seed=rng)
     nrm = bm.face_normals[fi]
-    seeds, radii, normals = [], [], []
+    seeds, normals = [], []
+    S = np.empty((len(cand), 3))              # accepted seeds / radii so far (vectorised test)
+    R = np.empty(len(cand))
+    m = 0
     for p_, n_ in zip(cand, nrm):
         if n_[2] < -0.3:                     # base region: the flat base is the facet
             continue
         r_ = rmin + (rmax - rmin) * rng.random() ** FACET_R_EXP
-        if all(np.linalg.norm(p_ - q) >= 0.5 * (r_ + rq) for q, rq in zip(seeds, radii)):
-            seeds.append(p_); radii.append(r_); normals.append(n_)
+        dv = p_ - S[:m]
+        if (np.sqrt((dv * dv).sum(1)) >= 0.5 * (r_ + R[:m])).all():
+            S[m], R[m] = p_, r_
+            m += 1
+            seeds.append(p_); normals.append(n_)
     lo, hi = body.bounding_box()[:3], body.bounding_box()[3:]
     pad = 1.0
     rock = m3d.Manifold.cube([hi[0] - lo[0] + 2 * pad, hi[1] - lo[1] + 2 * pad,
