@@ -63,8 +63,8 @@ REED_CLUMPS     = (3, 5)
 REED_SEP_MM     = 12.0
 REED_BAND_MM    = (-1.1, 0.2)  # ground height relative to WL where reeds root
 REED_STEMS      = (5, 12)
-REED_SPREAD_MM  = 0.6          # blades rise from a tight common base…
-REED_FAN_DEG    = (10.0, 32.0) # …and fan outward from it
+REED_SPREAD_MM  = 0.35         # blades rise from a near-common base…
+REED_FAN_DEG    = (14.0, 34.0) # …and curve outward from it (tip angle)
 REED_H_MM       = (8.0, 13.0)
 REED_HALF_W_MM  = (1.3, 1.8)   # blade half-width at the base (chunky)
 REED_THICK      = (0.35, 0.45) # half-thickness / half-width (lemon section)
@@ -81,6 +81,12 @@ GRASS_OVERRIDES = dict(
     SKIRT_FACTOR=1.55,           # …and the skirt fills less between them
     DOME_EXP=1.5,                # steeper blade flanks → deeper crevasses
 )
+# Smoother (less sharp) ripples on the shore tile; waterlab keeps its own.
+WATER_OVERRIDES = dict(SWELL_SHORT_SHARPEN=0.45)
+WATER_SOFTEN_MM = 0.3            # extra light blur of the wave relief
+for _k, _v in WATER_OVERRIDES.items():
+    assert hasattr(wl, _k), _k
+    setattr(wl, _k, _v)
 for _k, _v in GRASS_OVERRIDES.items():
     assert hasattr(gl, _k), _k
     setattr(gl, _k, _v)
@@ -195,13 +201,19 @@ def make_reeds(rng, ground, W, H):
             t_ = np.linspace(0, 2 * np.pi, 24, endpoint=False)
             sec = np.c_[hw * np.cos(t_), ht * np.sign(np.sin(t_)) * np.abs(np.sin(t_)) ** 1.4]
             stem = m3d.Manifold.extrude(m3d.CrossSection([sec.tolist()]), h + 0.8,
-                                        n_divisions=8, scale_top=REED_TIP_SCALE)
+                                        n_divisions=16, scale_top=REED_TIP_SCALE)
             # Flat face toward the clump centre (wide axis tangential).
             stem = stem.rotate([0.0, 0.0, float(np.degrees(fan_a) + 90 + rng.normal(0, 15))])
             fan = rng.uniform(*REED_FAN_DEG)
             ux = fan * np.cos(fan_a) + REED_LEAN_DEG * dx / nw
             uy = fan * np.sin(fan_a) + REED_LEAN_DEG * dy / nw
-            stem = stem.rotate([float(-uy), float(ux), 0.0])          # lean (deg) toward (ux, uy)
+            # Gentle bend: vertical at the base (blades rise together), curving
+            # out to the fan angle at the tip — offset ∝ z², tip slope = tan(fan).
+            tip = np.radians(np.hypot(ux, uy))
+            dirx, diry = ux / (np.hypot(ux, uy) + 1e-9), uy / (np.hypot(ux, uy) + 1e-9)
+            kk = np.tan(tip) / (2 * (h + 0.8))
+            stem = stem.warp_batch(lambda v, kk=kk, dx_=dirx, dy_=diry: np.c_[
+                v[:, 0] + dx_ * kk * v[:, 2] ** 2, v[:, 1] + dy_ * kk * v[:, 2] ** 2, v[:, 2]])
             z0 = float(ground(*p)) - 0.8
             stems.append(stem.translate([float(p[0]), float(p[1]), z0]))
             bases.append((float(p[0]), float(p[1]), hw))
@@ -224,6 +236,7 @@ def build_water(seed, ground, wet_rocks, reed_bases=None):
             rm |= (Xw - bx) ** 2 + (Yw - by) ** 2 <= (br + 0.15) ** 2
         sc.reed_mask = rm
     relief = wl.gen_swell_chaos(wl.mode_rng(seed, 'swell-chaos'), sc)
+    relief = ndimage.gaussian_filter(relief, WATER_SOFTEN_MM / wl.CELL_MM)
     zw = wl.WL_MM + relief * sc.rim * sc.water * wl.smooth01(sc.d / 0.4) + sc.tide
     # Water only in the basin (+ a thin margin up the bank): the tide must not
     # flood low spots on land into puddles.
