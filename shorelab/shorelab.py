@@ -83,6 +83,7 @@ GRASS_OVERRIDES = dict(
     TIP_CARVE=True,              # undercut every visible blade tip…
     TIP_GAP_MM=0.6,              # …and a clear air gap under its 45° underside
     SIDE_CARVE_ALL=True,         # undercut both blade edges too…
+    SLICER_LAYER_MM=0.2,         # no floating islands at 0.2 mm layers (Bambu warning)
     SIDE_GAP_MM=0.6,             # …with the same clear gap, except at the base
     FROND_HALF_W_MM=(0.8, 1.25), # wider blades: little tufts at this scale
     SIDE_LIP_W_MM=0.8,

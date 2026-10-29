@@ -101,3 +101,11 @@ texture and pebbles.  No footprints, grass, water or (by default) cracks.
 
 Footprints, tracks, puddles, grass, colour in the STL, integration as a
 dharmatiles layer.
+
+## Added 2026-10-29 (Shawn, after slicing)
+
+- **REQ-D-TEX [S] Texture survives 0.2 mm layers everywhere.**  Within any
+  1.5 mm window, local relief (max − min) is at least 0.2 mm, which is one
+  layer, over at least 97% of the interior.  Measured by
+  `scratchpad/texcheck.py`.  v1g failed this on 33% of the tile: flat
+  "tamped" areas printed as smooth plains.

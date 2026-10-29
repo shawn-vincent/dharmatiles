@@ -45,25 +45,27 @@ CELL_MM          = 0.15          # height-field / mesh resolution (uniform mesh)
 EDGE_MM          = 4.0           # tile-edge ground level above the datum (DB dirt band)
 LIFT_MM          = 0.3           # interior base lift, so texture never dips below the edge
 SLAB_BOX_MM      = 1.0           # exact box under the height-field solid
-RIM_FLAT_MM      = 0.4           # flat band at the very edge (tiles butt cleanly)
-RIM_TEX_MM       = 2.0           # texture / lift ramps in over this width
+RIM_FLAT_MM      = 0.0           # flat band at the very edge (tiles butt cleanly)
+RIM_TEX_MM       = 1.0           # texture / lift ramps in over this width
 
 # 1 ground undulation (rises only)
-UND_SIGMA_MM     = (10.0, 4.0)   # broad + mid noise scales
-UND_MID_WEIGHT   = 0.35
+UND_SIGMA_MM     = (14.0, 5.0)   # broad + mid noise scales
+UND_MID_WEIGHT   = 0.15
 UND_PLAIN_FRAC   = 0.35          # share of the interior left at base level
-UND_RELIEF_MM    = (0.9, 1.6)    # peak rise, drawn per tile
-UND_EDGE_MM      = 6.0           # undulation fades to zero over this rim width
-UND_MAX_SLOPE_DEG = 14.0
+UND_RELIEF_MM    = (2.2, 3.2)    # peak rise, drawn per tile
+UND_EDGE_MM      = 9.0           # undulation fades to zero over this rim width
+UND_MAX_SLOPE_DEG = 24.0
 
 # 2 clods
 CLOD_PATCH_SIGMA_MM = 6.0        # patchiness field scale
 CLOD_PATCH_BIAS  = 0.15          # >0: more cloddy area
+CLOD_PATCH_CONTRAST = 1.0       # sharper cloddy / tamped contrast
+CLOD_DENS_FLOOR  = 0.3           # tamped ground still carries some clods (texture everywhere)
 CLOD_DENSITY     = 0.7           # attempts per mm² at full patch density
-CLOD_R_MM        = (0.35, 1.5)   # radius, skewed small
+CLOD_R_MM        = (0.45, 2.4)   # radius, skewed small
 CLOD_R_EXP       = 2.2
-CLOD_H_RATIO     = (0.12, 0.3)   # height / radius
-CLOD_H_MAX_MM    = 0.45
+CLOD_H_RATIO     = (0.16, 0.35)   # height / radius
+CLOD_H_MAX_MM    = 0.75
 CLOD_ASPECT      = (1.0, 1.7)
 CLOD_LUMP        = 0.22          # angular radius harmonics (irregular outline)
 CLOD_OVERLAP     = 0.6           # min centre distance = this × (r1 + r2)
@@ -72,12 +74,12 @@ CLOD_SUNK        = (0.0, 0.5)    # each clod's dome starts this × h below the g
 CLOD_LOBES       = (1, 3)
 CLOD_FLAT        = 2.6           # profile exponent: 2 = dome, higher = flatter top
 CLOD_TILT        = 0.05          # σ of the top tilt (mm/mm)
-SOIL_MID_MM      = 2.2           # low, broad soil roughness under the clods
-SOIL_MID_AMP_MM  = 0.07
+SOIL_MID_MM      = 1.6           # low, broad soil roughness under the clods
+SOIL_MID_AMP_MM  = 0.22
 
 # 3 grit
 GRIT_MM          = 0.45
-GRIT_AMP_MM      = 0.045
+GRIT_AMP_MM      = 0.08
 GRAIN_DENSITY    = 0.12          # sand grains per mm²
 GRAIN_R_MM       = (0.15, 0.3)
 GRAIN_H_MM       = (0.05, 0.12)
@@ -85,12 +87,12 @@ GRAIN_H_MM       = (0.05, 0.12)
 # 4 pebbles (height field)
 PEB_CLUSTERS_2X2 = (4, 7)        # loose clusters on a 2×2 tile
 PEB_CLUSTER_SIGMA_MM = (3.0, 7.0)
-PEB_BACKGROUND   = 0.25          # cluster field floor (some pebbles anywhere)
+PEB_BACKGROUND   = 0.12          # cluster field floor (some pebbles anywhere)
 PEB_LOW_BIAS     = 0.8           # pebbles prefer low ground (washed into hollows)
 SMALL_PER_SQ     = (45, 75)      # 0.5–1.5 mm pebbles per square
 SMALL_D_MM       = (0.5, 1.5)
-MED_PER_SQ       = (5, 9)        # 2–4 mm pebbles per square
-MED_D_MM         = (2.0, 4.0)
+MED_PER_SQ       = (8, 13)        # 2–4 mm pebbles per square
+MED_D_MM         = (2.2, 4.5)
 PEB_D_EXP        = 1.8           # skew toward small
 PEB_ASPECT       = (1.0, 1.9)
 PEB_H_RATIO      = (0.25, 0.45)  # standing height / width (before sinking)
@@ -110,7 +112,7 @@ PEB_SOFT_MM      = (0.08, 0.22)  # soil fillet at the foot (soft max), small →
 PEB_MOUND        = 0.2           # medium pebbles: soil heaped round the foot (× height)
 
 # 5 stones (rocklab rocks)
-STONES_2X2       = (2, 4)
+STONES_2X2       = (4, 7)
 STONE_D_MM       = (4.5, 7.5)
 STONE_SINK       = 0.4           # share of height buried (plus 0.25 mm below the lowest ground)
 STONE_Z_SCALE    = 0.65          # rocklab rocks are boulders; flatten to bedded stones
@@ -204,7 +206,8 @@ def clod_layer(rng, f, base):
     """Irregular rounded soil lumps, patchy, soft-maxed onto *base*.
     Returns (new surface, clod count)."""
     patch = noise(rng, f.X.shape, CLOD_PATCH_SIGMA_MM / CELL_MM)
-    dens = smooth01(0.5 + 0.6 * (patch + CLOD_PATCH_BIAS))      # 0 = tamped, 1 = cloddy
+    dens = CLOD_DENS_FLOOR + (1 - CLOD_DENS_FLOOR) * smooth01(
+        0.5 + CLOD_PATCH_CONTRAST * (patch + CLOD_PATCH_BIAS))   # tamped … cloddy
     area = f.W * f.H
     n_try = int(rng.poisson(CLOD_DENSITY * area))
     xs = rng.uniform(0, f.W, n_try)
@@ -449,7 +452,7 @@ def build_field(seed, cols=2, rows=2, cracks=False):
     f = make_field(W, H)
     t0 = time.perf_counter()
     und = ground_undulation(rng, f)
-    w_tex = smooth01((f.dist - RIM_FLAT_MM) / (RIM_TEX_MM - RIM_FLAT_MM))
+    w_tex = smooth01((f.dist - RIM_FLAT_MM) / max(RIM_TEX_MM - RIM_FLAT_MM, 1e-6))
     seed_mid = int(rng.integers(1 << 30))
     pts = np.c_[f.X.ravel(), f.Y.ravel(), np.zeros(f.X.size)]
     mid = SOIL_MID_AMP_MM * fbm(pts, seed_mid, SOIL_MID_MM, octaves=3).reshape(f.X.shape)

@@ -143,6 +143,7 @@ TIP_VIS_TOL_MM       = 0.45        # tips buried this little by neighbours are e
 SIDE_CARVE_ALL       = False       # side ledges on every blade, not just bank fronds
 SIDE_BASE_FRAC       = 0.3         # …except over the first this × length (the base)
 SIDE_GAP_MM          = 0.0         # air gap under those side ledges
+SLICER_LAYER_MM      = 0.0         # >0: also remove islands as seen at this layer height
 SOFTMAX_K_MM         = 0.12
 
 # 5b rim and soil endings, banks
@@ -1199,11 +1200,55 @@ def fdm_backstop(F, vox):
         if (conn == Mz).all():
             break
         Mz &= conn
+    if SLICER_LAYER_MM:
+        _slicer_islands(Mz, vox)
     M = Mz.transpose(1, 2, 0)
     added, removed = M & ~before, before & ~M
     F[added] = vox
     F[removed] = -vox
     return int(added.sum()), int(removed.sum())
+
+
+def _slicer_islands(Mz, vox):
+    """Remove material a slicer would see as floating at SLICER_LAYER_MM layers.
+
+    The voxel filter allows diagonal (edge-adjacent) support at voxel pitch;
+    sampled at real layer heights, a carved ledge's lowest edge can then start
+    a layer with nothing beneath it within the slicer's reach.  Per layer
+    (the voxel row nearest each layer's mid-height), drop 2-D components that
+    don't directly overlap the previous layer's footprint, clear
+    them from every voxel row up to that layer, then re-run support so
+    nothing above them survives.  Repeats until stable.
+    """
+    nz = Mz.shape[0]
+    # Every voxel row against the row one layer-height below: catches islands
+    # at any layer phase (the slicer's layers need not align with voxel rows).
+    step = max(int(np.ceil(SLICER_LAYER_MM / vox)), 1)
+    rows_b = np.arange(step, nz)
+    for _ in range(6):
+        changed = False
+        for b in rows_b:
+            a = b - step
+            below = Mz[a]                     # direct overlap only (slicers are strict)
+            lab, n = ndimage.label(Mz[b])
+            if n == 0:
+                continue
+            hit = np.zeros(n + 1, bool)
+            hit[np.unique(lab[below & (lab > 0)])] = True
+            drop = (~hit[lab]) & (lab > 0)
+            if drop.any():
+                Mz[a + 1:b + 1] &= ~drop
+                changed = True
+        if not changed:
+            break
+        for z in range(1, nz):                       # re-propagate support upward
+            b_ = Mz[z - 1]
+            sup = b_.copy()
+            sup[1:, :] |= b_[:-1, :]
+            sup[:-1, :] |= b_[1:, :]
+            sup[:, 1:] |= b_[:, :-1]
+            sup[:, :-1] |= b_[:, 1:]
+            Mz[z] &= sup
 
 
 def to_manifold(mesh, original_id=None):

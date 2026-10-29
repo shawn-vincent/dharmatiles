@@ -156,3 +156,25 @@ STL across runs.
 v1a–v1d were judged on pyrender renders; from v1e the macOS session was
 locked (pyrender: no screen), so v1e–v1g were judged on the matplotlib
 fallback, which is coarser (every 3rd sample on full-tile views).
+
+## Round 2 (2026-10-29)
+
+Shawn's feedback:
+- more relief;
+- no frame at the rim;
+- pebbles that register at tabletop distance;
+- stronger cloddy/smooth contrast;
+- texture visible everywhere at 0.2 mm layers.  His slice of v1g showed
+  large smooth plains.
+
+| Change | Before → after |
+|---|---|
+| Rises (undulation) | σ (10, 4) → (14, 5), mid weight 0.35 → 0.15, edge fade 6 → 9 mm, slope cap 14 → 24°.  The rises were slope-capped to about 1.1 mm; now about 2.2–2.5 mm (ground up to about 7.5 mm). |
+| Rim frame | flat band 0.4 → 0, texture ramp 2 → 1 mm |
+| Clods | radius 0.35–1.5 → 0.45–2.4, height up to 0.75, h/r 0.16–0.35; patch contrast 1.0, with a **density floor of 0.3** so tamped ground still carries clods |
+| Soil roughness | 0.07 mm @ 2.2 → 0.22 mm @ 1.6; grit 0.045 → 0.08 |
+| Pebbles | medium 5–9 → 8–13 per square at 2.2–4.5 mm; stones 2–4 → 4–7; background 0.25 → 0.12 (sparser outside clusters) |
+
+Texture metric (windows of 1.5 mm with relief < 0.2 mm): **32.8% → 1.9%**
+(seed 1); seeds 2 and 3 about 2–2.6%.  Build about 3 s; overhang about
+0 mm².
