@@ -62,12 +62,12 @@ WET_SURFACE_MM  = 0.6          # wet rocks must show above WL + this
 REED_CLUMPS     = (3, 5)
 REED_SEP_MM     = 12.0
 REED_BAND_MM    = (-1.1, 0.2)  # ground height relative to WL where reeds root
-REED_STEMS      = (5, 12)
+REED_STEMS      = (5, 9)
 REED_SPREAD_MM  = 0.35         # blades rise from a near-common base…
 REED_FAN_DEG    = (14.0, 34.0) # …and curve outward from it (tip angle)
 REED_H_MM       = (8.0, 13.0)
-REED_HALF_W_MM  = (1.3, 1.8)   # blade half-width at the base (chunky)
-REED_THICK      = (0.35, 0.45) # half-thickness / half-width (lemon section)
+REED_HALF_W_MM  = (1.7, 2.3)   # blade half-width at the base (chunky)
+REED_THICK      = (0.5, 0.65) # half-thickness / half-width (lemon section)
 REED_TIP_SCALE  = (0.25, 0.35) # section scale at the tip: a blunt point
 REED_LEAN_DEG   = 8.0          # extra lean of the whole clump toward the water
 
@@ -80,6 +80,9 @@ GRASS_OVERRIDES = dict(
     FROND_H_MM=(0.95, 1.35),     # blades stand prouder of the skirt…
     SKIRT_FACTOR=1.55,           # …and the skirt fills less between them
     DOME_EXP=1.5,                # steeper blade flanks → deeper crevasses
+    TIP_CARVE=True,              # undercut every visible blade tip…
+    LIP_FRAC=0.5,                # …over the last half of the blade…
+    DROOP=0.15,                  # …which droops less, so it stands proud
 )
 # Smoother (less sharp) ripples on the shore tile; waterlab keeps its own.
 WATER_OVERRIDES = dict(SWELL_SHORT_SHARPEN=0.45)

@@ -137,6 +137,7 @@ SKIRT_TIP_DROP       = 0.45        # skirt height falls by this toward the tip
 LIP_MAX_MM           = 2.0
 LIP_FRAC             = 0.35        # lip length ≤ this × frond length
 LIP_MIN_T_MM         = 0.6
+TIP_CARVE            = False       # carve under visible frond tips (shorelab turns this on)
 SOFTMAX_K_MM         = 0.12
 
 # 5b rim and soil endings, banks
@@ -978,7 +979,10 @@ def sculpt_frond(fr, plan, surf, sw, T, lips, ledges):
         bot = tip - LIP_MIN_T_MM - (Lt - u[lp])
         keep = (top[lp] - bot) >= LIP_MIN_T_MM
         if keep.any():
-            lips.append((I[lp][keep], J[lp][keep], bot[keep], top[lp][keep]))
+            # TIP_CARVE: like bank ledges, carve the mass that neighbouring
+            # skirts left under a visible tip, so every tip casts a shadow.
+            (ledges if TIP_CARVE else lips).append(
+                (I[lp][keep], J[lp][keep], bot[keep], top[lp][keep]))
         # Lip side columns too thin to undercut stay solid (fused blade
         # edge) instead of being dropped — dropping them sawtoothed tips.
         thin = np.nonzero(lp)[0][~keep]
