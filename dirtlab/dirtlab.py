@@ -478,6 +478,54 @@ def build_field(seed, cols=2, rows=2, cracks=False):
     return f, posed
 
 
+# ── Reusable dirt texture (used by every lab for exposed ground) ─────────────
+@dataclass
+class DirtTexture:
+    """Dirt relief (mm, ≥ ~0, ~0 at the tile rim) on a CELL_MM grid, rows = y.
+    Soil roughness + clods + grit + pebbles — no hills, no big stones: those
+    belong to the host lab.  Sample it onto any grid with __call__."""
+    x: np.ndarray
+    y: np.ndarray
+    relief: np.ndarray
+    pebble: np.ndarray
+
+    def __call__(self, X, Y):
+        ix = np.clip(np.asarray(X, float) / CELL_MM, 0, len(self.x) - 1)
+        iy = np.clip(np.asarray(Y, float) / CELL_MM, 0, len(self.y) - 1)
+        return ndimage.map_coordinates(self.relief, [iy.ravel(), ix.ravel()],
+                                       order=1, mode='nearest').reshape(np.shape(X))
+
+    def pebbles(self, X, Y):
+        ix = np.clip(np.round(np.asarray(X, float) / CELL_MM).astype(int), 0, len(self.x) - 1)
+        iy = np.clip(np.round(np.asarray(Y, float) / CELL_MM).astype(int), 0, len(self.y) - 1)
+        return self.pebble[iy, ix]
+
+
+_DIRT_CACHE = {}
+
+
+def dirt_relief(seed, W=2 * SQUARE_MM, H=2 * SQUARE_MM):
+    """The dirtlab texture on flat ground, as a relief offset for other labs.
+    Deterministic per (seed, W, H); cached."""
+    key = (int(seed), float(W), float(H))
+    if key in _DIRT_CACHE:
+        return _DIRT_CACHE[key]
+    rng = np.random.default_rng([int(seed), 0xD1127])
+    f = make_field(W, H)
+    w_tex = smooth01((f.dist - RIM_FLAT_MM) / max(RIM_TEX_MM - RIM_FLAT_MM, 1e-6))
+    pts = np.c_[f.X.ravel(), f.Y.ravel(), np.zeros(f.X.size)]
+    mid = SOIL_MID_AMP_MM * fbm(pts, int(rng.integers(1 << 30)), SOIL_MID_MM, octaves=3).reshape(f.X.shape)
+    ground = EDGE_MM + w_tex * mid
+    soil, _ = clod_layer(rng, f, ground)
+    soil = ground + w_tex * (soil - ground)
+    z = soil + w_tex * grit(rng, f)
+    z, mask, _ = place_pebbles(rng, f, z, ground, [])
+    rel = np.maximum(z - EDGE_MM, -SOIL_MID_AMP_MM) * w_tex
+    t = DirtTexture(f.x, f.y, rel, mask)
+    _DIRT_CACHE[key] = t
+    return t
+
+
 def stl_safe(mesh):
     """Export guarantee (as grasslab.stl_safe): the mesh as a slicer sees it."""
     from dharmatiles.stone.solidify import separate_pinches

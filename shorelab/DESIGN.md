@@ -78,3 +78,15 @@
 waterlab gained `Scene.from_fields` (scene from an external ground plus
 obstacle solids) for this lab.  Its `ENCLOSE_FREE` went 0.3 → 0.4, so a
 single bank stays exactly un-enclosed.
+
+
+## Exposed ground = dirt (2026-10-29)
+
+Shawn: dirt should be the texture wherever ground is exposed, across all
+labs, and mud and other dirt textures are eliminated.  This lab now
+uses `dirtlab.dirt_relief(seed, W, H)`: dirtlab's soil roughness, clods,
+grit and pebbles, without its hills or big stones, as a relief offset
+sampled onto this lab's grid.
+- The mud strip now carries the dirt texture through grasslab; it is
+  still a strip of bare earth by the water, just not a separate "mud"
+  texture.

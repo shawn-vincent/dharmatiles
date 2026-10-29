@@ -402,3 +402,15 @@ land surrounds "look a bit odd".
 - **Result**: land-3 and land-4 show rounded shore waves along the
   banks, clear rock rings in the middle, and calm crossing water
   between.  The other scenarios are visually unchanged.
+
+
+## Exposed ground = dirt (2026-10-29)
+
+Shawn: dirt should be the texture wherever ground is exposed, across all
+labs, and mud and other dirt textures are eliminated.  This lab now
+uses `dirtlab.dirt_relief(seed, W, H)`: dirtlab's soil roughness, clods,
+grit and pebbles, without its hills or big stones, as a relief offset
+sampled onto this lab's grid.
+- Exposed land (above WL, fading in over 0.1–0.6 mm) gets dirt in the
+  final surface only.  `sc.land` stays plain, so distances and waves are
+  unchanged.

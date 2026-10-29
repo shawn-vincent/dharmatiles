@@ -28,6 +28,10 @@ import numpy as np
 import trimesh
 from scipy import ndimage
 
+import sys as _sys
+_sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / 'dirtlab'))
+import dirtlab as _dirt   # noqa: E402  — the shared exposed-ground texture
+
 # ── Parameters (DESIGN.md §3), grouped by stage ─────────────────────────────
 # tile and grids
 SQUARE_MM            = 35.0
@@ -771,8 +775,19 @@ class Surface:
         X, Y = np.meshgrid(grid.xc, grid.yc, indexing='ij')
         H0 = ground(X, Y)
         self.soil = lenses.mask(X, Y)
-        rel, self.n_pebbles = soil_relief(rng, self.soil, X, Y, vox)
-        self.H0 = H0 + rel
+        # Old mud texture (roughness + pebbles) is retired in favour of the
+        # shared dirt texture; soil_relief is still called so the RNG stream —
+        # and so the grass layout — is unchanged.  Only its soft dip is kept.
+        _, self.n_pebbles = soil_relief(rng, self.soil, X, Y, vox)
+        ms = ndimage.gaussian_filter(self.soil, SOIL_DIP_SOFT_MM / vox)
+        self.H0 = H0 - SOIL_DIP_MM * ms                  # frond seating (no texture)
+        # Exposed ground everywhere = dirt: shows on bare patches and in the
+        # gaps between fronds; fronds themselves still seat on plain H0 so the
+        # grass look is unchanged.  Seed from the ground (no RNG draw).
+        dseed = int(np.abs(ground.data).sum() * 1000) % (1 << 31)
+        self.dirt = _dirt.dirt_relief(dseed, grid.nx * vox, grid.ny * vox)
+        self.H0_dirt = self.H0 + self.dirt(X, Y)
+        self.n_pebbles = 0
         self.grid = grid
         self.soil_depth = ndimage.distance_transform_edt(self.soil > 0.5) * vox
         self.soil_dist = ndimage.distance_transform_edt(self.soil <= 0.5) * vox  # grass → soil
@@ -1114,7 +1129,7 @@ def build_grass(rng, grid, ground, sw, lenses, flow, W, H, blocker=None, tuck_mm
     """
     surf = Surface(rng, grid, ground, lenses, blocker, tuck_mm, side_low, side_mm)
     plan = plan_fronds(rng, surf, sw, flow, W, H)
-    T = surf.H0.copy()                     # no free-standing grass layer
+    T = surf.H0_dirt.copy()                # exposed ground = dirt; no free grass layer
     lips, ledges = [], []
     n_built = 0
     # Drawing a frond uses the RNG but never T, and sculpting uses T but never
@@ -1136,7 +1151,7 @@ def build_grass(rng, grid, ground, sw, lenses, flow, W, H, blocker=None, tuck_mm
         if apply_frond(ops, T, lips, ledges):
             n_built += 1
     open_ledges(T, ledges, lips)
-    T = np.maximum(T, surf.H0)
+    T = np.maximum(T, surf.H0_dirt)
     gaps = float(((T - surf.H0) < 0.3)[surf.soil < 0.5].mean())
     return Grass(surf.H0, T, lips, surf.soil, n_built, plan.n_strands, surf.n_pebbles,
                  len(ledges), gaps)

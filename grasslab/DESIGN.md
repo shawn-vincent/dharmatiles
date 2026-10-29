@@ -348,3 +348,21 @@ swallowing it.
   
   Verified on seeds 1–4.  Before this, grass seed 3 would have exported
   a non-watertight file without any warning.
+
+
+## Exposed ground = dirt (2026-10-29)
+
+Shawn: dirt should be the texture wherever ground is exposed, across all
+labs, and mud and other dirt textures are eliminated.  This lab now
+uses `dirtlab.dirt_relief(seed, W, H)`: dirtlab's soil roughness, clods,
+grit and pebbles, without its hills or big stones, as a relief offset
+sampled onto this lab's grid.
+- `Surface`: fronds still seat on plain H0 (the old soft soil dip is
+  kept), so the grass look is unchanged.  T starts at, and is floored to,
+  **H0 + dirt**, so dirt shows on bare patches and in the gaps between
+  fronds.
+- The old soil roughness and pebbles are retired.  `soil_relief` is still
+  called, and its output discarded, only to keep the RNG stream and so
+  the grass layout identical.
+- The dirt seed is derived from the ground field, with no RNG draw.
+- Meadowlab and shorelab inherit all of this.

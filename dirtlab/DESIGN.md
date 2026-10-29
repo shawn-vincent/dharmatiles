@@ -178,3 +178,12 @@ Shawn's feedback:
 Texture metric (windows of 1.5 mm with relief < 0.2 mm): **32.8% → 1.9%**
 (seed 1); seeds 2 and 3 about 2–2.6%.  Build about 3 s; overhang about
 0 mm².
+
+
+## Shared texture (2026-10-29)
+
+`dirt_relief(seed, W, H)` returns a `DirtTexture`: soil roughness, clods,
+grit and pebbles on flat ground, as a ≥ 0 relief offset, 0 at the rim, on
+the 0.15 mm grid.  It can be sampled onto any grid and is cached.  It is
+used by grasslab (and so meadowlab and shorelab), waterlab and rocklab
+as **the** texture for exposed ground.

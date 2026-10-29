@@ -1038,7 +1038,16 @@ def build(sc, relief, tide=None):
     water_z = WL_MM + relief * sc.rim * np.where(sc.water, 1.0, 0.0) * shore_fade
     if tide is not None:
         water_z = water_z + tide
-    z = np.maximum(sc.land, water_z)
+    # Exposed land carries the shared dirt texture (fading in above the
+    # waterline).  sc.land itself stays plain, so the waves are unchanged.
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / 'dirtlab'))
+    import dirtlab as _dirt
+    land = sc.land
+    if (land > WL_MM).any():
+        dirt = _dirt.dirt_relief(int(np.abs(land).sum() * 1000) % (1 << 31), sc.W, sc.H)
+        land = land + dirt(sc.X, sc.Y) * smooth01((land - WL_MM - 0.1) / 0.5)
+    z = np.maximum(land, water_z)
     z = gaussian(z, 0.6)          # remove grid-scale kinks (≤0.1 mm)
     top = make_heightmap_solid(z, sc.W, sc.H, base_h=0.0, subsample=MESH_SUBSAMPLE)
     solid = rl.to_manifold(top) + sc.rock if sc.rock is not None else rl.to_manifold(top)

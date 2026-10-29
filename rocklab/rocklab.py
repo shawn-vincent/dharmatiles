@@ -31,6 +31,7 @@ import trimesh
 SQUARE_MM        = 35.0
 SURFACE_MM       = 4.0            # flat floor, above terrain datum (DB dirt band)
 SINK_MM          = 0.3            # rocks sink this far into the floor
+DIRT_SINK_MM     = 0.25           # extra sink so dirt dips never expose a rock's base
 
 # rock mass
 WIDTH_MM         = (6.0, 15.0)
@@ -386,8 +387,15 @@ def build_tile(rng, cols, rows):
     from dharmatiles.bases import dungeonblocks as db
     W, H = cols * SQUARE_MM, rows * SQUARE_MM
     placed = pose(rng, scatter(rng, W, H))
-    slab = m3d.Manifold.cube([W, H, SURFACE_MM])
-    rocks = [p.solid.translate([p.x, p.y, SURFACE_MM - SINK_MM]) for p in placed]
+    # Floor = the shared dirt texture (exposed ground everywhere), not a flat slab.
+    import sys as _sys
+    _sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / 'dirtlab'))
+    import dirtlab as _dirt                      # lazy: dirtlab imports rocklab
+    from dharmatiles.core.mesh import make_heightmap_solid
+    dirt = _dirt.dirt_relief(int(rng.integers(1 << 30)), W, H)
+    floor = to_manifold(make_heightmap_solid(SURFACE_MM + dirt.relief, W, H, base_h=0.0))
+    slab = floor + m3d.Manifold.cube([W, H, 1.0])         # exact box: clean face for the base
+    rocks = [p.solid.translate([p.x, p.y, SURFACE_MM - SINK_MM - DIRT_SINK_MM]) for p in placed]
     top = m3d.Manifold.batch_boolean([slab] + rocks, m3d.OpType.Add)
     zmax = top.bounding_box()[5]
     surface = SurfaceConfig(cols=cols, rows=rows, square_mm=SQUARE_MM)

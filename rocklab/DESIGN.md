@@ -163,3 +163,15 @@ Seed 2: 10 placements, 13 stones, 51–151 facets, overhang 0.02 mm².
 Before export, the mesh is merged exactly as a slicer does (float32
 positions, merge by position) and the run raises unless it is
 watertight.  Seeds 1–4 pass with no repair needed.
+
+
+## Exposed ground = dirt (2026-10-29)
+
+Shawn: dirt should be the texture wherever ground is exposed, across all
+labs, and mud and other dirt textures are eliminated.  This lab now
+uses `dirtlab.dirt_relief(seed, W, H)`: dirtlab's soil roughness, clods,
+grit and pebbles, without its hills or big stones, as a relief offset
+sampled onto this lab's grid.
+- The flat 4.0 mm slab is replaced by a dirt heightfield (4.0 mm + dirt)
+  plus an exact 1 mm box.  Rocks sink an extra 0.25 mm (`DIRT_SINK_MM`),
+  so dirt dips never expose a rock's base.
