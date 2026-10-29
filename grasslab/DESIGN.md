@@ -366,3 +366,9 @@ sampled onto this lab's grid.
   the grass layout identical.
 - The dirt seed is derived from the ground field, with no RNG draw.
 - Meadowlab and shorelab inherit all of this.
+- **Carved gaps stay open (2026-10-29)**: the dirt floor was re-applied
+  after `open_ledges`, and dirt bumps refilled the 0.6 mm air gaps under
+  tips and side ledges.  On shore s1, gapped tip columns fell from 40% to
+  20%.  Carved columns now floor to plain H0 (shadowed ground under a
+  ledge); everywhere else floors to H0 + dirt.  Restored to 40% (s1) and
+  33% (s3), with 0 slicer islands.

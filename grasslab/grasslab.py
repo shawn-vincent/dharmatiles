@@ -1150,8 +1150,12 @@ def build_grass(rng, grid, ground, sw, lenses, flow, W, H, blocker=None, tuck_mm
         ops = frond_ops(frs[n], plan, surf, sw, cols=jobs.pop(n).result())
         if apply_frond(ops, T, lips, ledges):
             n_built += 1
+    T_pre = T.copy()
     open_ledges(T, ledges, lips)
-    T = np.maximum(T, surf.H0_dirt)
+    carved = T < T_pre - 1e-6               # columns opened under ledges / tips
+    # Floor: dirt everywhere, except under carved ledges and tips, where the
+    # plain ground keeps the air gap open (dirt bumps would fill it).
+    T = np.maximum(T, np.where(carved, surf.H0, surf.H0_dirt))
     gaps = float(((T - surf.H0) < 0.3)[surf.soil < 0.5].mean())
     return Grass(surf.H0, T, lips, surf.soil, n_built, plan.n_strands, surf.n_pebbles,
                  len(ledges), gaps)
