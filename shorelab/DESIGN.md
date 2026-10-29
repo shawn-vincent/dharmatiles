@@ -100,3 +100,18 @@ sampled onto this lab's grid.
   - There is no seam and no flat top, and the overall height is
     unchanged.
   - The first try, a hull cone on a flat top, left a visible crease.
+
+- **Undercut audit (2026-10-29)**.  Shawn spotted tips standing on
+  vertical walls.  Cross-sections showed two things:
+  - neighbouring blades' skirts stand as walls under visible tips;
+  - many carved gaps were sealed **internal voids**, because a covering
+    blade buried them: 22 holes across 16 sections on s3.  Half the
+    "undercut" area (139 mm² of downward faces) was hidden inside the
+    solid.
+  
+  New grasslab `OPEN_AIR_MM` (shore sets 0.6): air is morphologically
+  opened with a 0.6 mm ball, only air connected to the sky is kept, and
+  the rest is filled.  The result on s3 is 4 holes and 68 mm² of genuinely
+  visible undercut, with 0 slicer islands.  A wider neighbour cut-back
+  beside tips (`TIP_MARGIN`) was tried and reverted: it enlarged the voids
+  and left post-like remnants.

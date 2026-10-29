@@ -147,6 +147,7 @@ TIP_VIS_TOL_MM       = 0.45        # tips buried this little by neighbours are e
 SIDE_CARVE_ALL       = False       # side ledges on every blade, not just bank fronds
 SIDE_BASE_FRAC       = 0.3         # …except over the first this × length (the base)
 SIDE_GAP_MM          = 0.0         # air gap under those side ledges
+OPEN_AIR_MM          = 0.0         # >0: fill air not reachable through a passage this wide
 SLICER_LAYER_MM      = 0.0         # >0: also remove islands as seen at this layer height
 SOFTMAX_K_MM         = 0.12
 
@@ -1219,6 +1220,8 @@ def fdm_backstop(F, vox):
         if (conn == Mz).all():
             break
         Mz &= conn
+    if OPEN_AIR_MM:
+        _seal_pockets(Mz, vox)
     if SLICER_LAYER_MM:
         _slicer_islands(Mz, vox)
     M = Mz.transpose(1, 2, 0)
@@ -1226,6 +1229,28 @@ def fdm_backstop(F, vox):
     F[added] = vox
     F[removed] = -vox
     return int(added.sum()), int(removed.sum())
+
+
+def _seal_pockets(Mz, vox):
+    """Fill air that isn't open to the outside through a ≥ OPEN_AIR_MM passage.
+
+    Carved undercuts under blades that other blades then cover become sealed
+    (or nearly sealed) air pockets inside the solid — invisible and useless.
+    Open the air with a ball of diameter OPEN_AIR_MM, keep only the opened air
+    connected to the space above the tile, and fill everything else.  What
+    survives is an undercut you can actually see into.
+    """
+    r = max(int(round(OPEN_AIR_MM / 2 / vox)), 1)
+    zz, yy, xx = np.mgrid[-r:r + 1, -r:r + 1, -r:r + 1]
+    ball = (xx * xx + yy * yy + zz * zz) <= r * r
+    air = np.pad(~Mz, ((0, r + 1), (0, 0), (0, 0)), constant_values=True)   # open sky on top
+    opened = ndimage.binary_opening(air, structure=ball)
+    lab, _ = ndimage.label(opened)
+    sky = np.unique(lab[-1])
+    keep = np.isin(lab, sky[sky > 0])[:Mz.shape[0]]
+    # air within one ball radius of kept air also stays (opening shrinks it)
+    keep = ndimage.binary_dilation(keep, structure=ball) & ~Mz
+    Mz |= ~keep
 
 
 def _slicer_islands(Mz, vox):
