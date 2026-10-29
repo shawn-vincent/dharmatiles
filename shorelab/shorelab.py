@@ -63,14 +63,27 @@ REED_CLUMPS     = (3, 5)
 REED_SEP_MM     = 12.0
 REED_BAND_MM    = (-1.1, 0.2)  # ground height relative to WL where reeds root
 REED_STEMS      = (5, 12)
-REED_SPREAD_MM  = 2.2
-REED_H_MM       = (5.0, 9.0)
-REED_HALF_W_MM  = (0.9, 1.3)   # blade half-width at the base (chunky)
+REED_SPREAD_MM  = 0.6          # blades rise from a tight common base…
+REED_FAN_DEG    = (10.0, 32.0) # …and fan outward from it
+REED_H_MM       = (8.0, 13.0)
+REED_HALF_W_MM  = (1.3, 1.8)   # blade half-width at the base (chunky)
 REED_THICK      = (0.35, 0.45) # half-thickness / half-width (lemon section)
-REED_TIP_SCALE  = (0.08, 0.15) # section scale at the tip: tapers to a point
-REED_LEAN_DEG   = 18.0
+REED_TIP_SCALE  = (0.25, 0.35) # section scale at the tip: a blunt point
+REED_LEAN_DEG   = 8.0          # extra lean of the whole clump toward the water
 
 WATER_BURY_MM   = 0.3
+
+# ── Grass look for the shore (overrides grasslab's module constants here only;
+#    grasslab/meadowlab keep their own) ─────────────────────────────────────
+GRASS_OVERRIDES = dict(
+    FROND_LEN_MM=(3.5, 6.5),     # shorter blades (grasslab: 5.5–9.5)
+    FROND_H_MM=(0.95, 1.35),     # blades stand prouder of the skirt…
+    SKIRT_FACTOR=1.55,           # …and the skirt fills less between them
+    DOME_EXP=1.5,                # steeper blade flanks → deeper crevasses
+)
+for _k, _v in GRASS_OVERRIDES.items():
+    assert hasattr(gl, _k), _k
+    setattr(gl, _k, _v)
 
 
 def smooth01(t):
@@ -167,29 +180,31 @@ def make_reeds(rng, ground, W, H):
     gy_f = lambda x, y, e=0.3: (ground(x, y + e) - ground(x, y - e)) / (2 * e)
     stems, bases = [], []
     for c in centres:
-        for _ in range(int(rng.integers(REED_STEMS[0], REED_STEMS[1] + 1))):
-            p = c + rng.normal(0, REED_SPREAD_MM / 2, 2)
+        k = int(rng.integers(REED_STEMS[0], REED_STEMS[1] + 1))
+        dx, dy = -float(gx_f(*c)), -float(gy_f(*c))                    # downhill = to water
+        nw = np.hypot(dx, dy) + 1e-9
+        ang0 = rng.uniform(0, 2 * np.pi)
+        for j in range(k):
+            fan_a = ang0 + 2 * np.pi * j / k + rng.normal(0, 0.35)   # fan direction
+            p = c + REED_SPREAD_MM * np.array([np.cos(fan_a), np.sin(fan_a)]) * rng.random()
             h = rng.uniform(*REED_H_MM)
             hw = rng.uniform(*REED_HALF_W_MM)                       # blade half-width
             ht = hw * rng.uniform(*REED_THICK)                      # half-thickness
-            # Lemon cross-section (pointed at the two edges), tapering to a
-            # blunt point: chunky at the base so it won't snap off.
+            # Lemon cross-section (pointed at the two edges), tapering only
+            # moderately to a blunt point: chunky so it won't snap off.
             t_ = np.linspace(0, 2 * np.pi, 24, endpoint=False)
             sec = np.c_[hw * np.cos(t_), ht * np.sign(np.sin(t_)) * np.abs(np.sin(t_)) ** 1.4]
             stem = m3d.Manifold.extrude(m3d.CrossSection([sec.tolist()]), h + 0.8,
                                         n_divisions=8, scale_top=REED_TIP_SCALE)
-            stem = stem.rotate([0.0, 0.0, float(rng.uniform(0, 180))])
-            rb = hw
-            dx, dy = -float(gx_f(*p)), -float(gy_f(*p))                # downhill = to water
-            nrm = np.hypot(dx, dy) + 1e-9
-            lean = rng.uniform(0, REED_LEAN_DEG)
-            jit = rng.normal(0, 0.35, 2)
-            ux, uy = dx / nrm + jit[0], dy / nrm + jit[1]
-            un = np.hypot(ux, uy) + 1e-9
-            stem = stem.rotate([float(-lean * uy / un), float(lean * ux / un), 0.0])
+            # Flat face toward the clump centre (wide axis tangential).
+            stem = stem.rotate([0.0, 0.0, float(np.degrees(fan_a) + 90 + rng.normal(0, 15))])
+            fan = rng.uniform(*REED_FAN_DEG)
+            ux = fan * np.cos(fan_a) + REED_LEAN_DEG * dx / nw
+            uy = fan * np.sin(fan_a) + REED_LEAN_DEG * dy / nw
+            stem = stem.rotate([float(-uy), float(ux), 0.0])          # lean (deg) toward (ux, uy)
             z0 = float(ground(*p)) - 0.8
             stems.append(stem.translate([float(p[0]), float(p[1]), z0]))
-            bases.append((float(p[0]), float(p[1]), rb))
+            bases.append((float(p[0]), float(p[1]), hw))
     reeds = m3d.Manifold.batch_boolean(stems, m3d.OpType.Add) if stems else None
     return reeds, len(centres), len(stems), np.array(bases).reshape(-1, 3)
 

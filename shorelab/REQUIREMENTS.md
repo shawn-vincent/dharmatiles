@@ -33,9 +33,9 @@ A 2 × 2 DB tile:
   is a strong emitter.  Rocks standing in the water emit their own
   rings.  Rocks on dry land are only meadow rocks.
 - **REQ-S-6 [S] Reeds are simple, chunky blades.**  Each clump has 5–12
-  blades with a lemon or diamond cross-section, tapering from a chunky
-  base (about 2 mm wide) to a point.  They are short (5–9 mm) and lean
-  20° or less.  There are no heads and no extra sophistication.  Every
+  blades with a lemon or diamond cross-section, tapering moderately from a
+  chunky base (about 3 mm wide) to a blunt point, 8–13 mm tall.  They fan
+  out from a common base, leaning 40° or less from vertical.  There are no heads and no extra sophistication.  Every
   blade roots below the ground or water surface and is fused.
   *(Shawn, 2026-10-28.)*
 - **REQ-S-7 [S]** The heights stay coherent:
@@ -43,6 +43,10 @@ A 2 × 2 DB tile:
   - meadow ground at least 3.4 mm (grasslab), with mean grass in the DB
     band;
   - bed about 0.4 mm.
+
+- **REQ-S-8 [R] Shore grass is short and deeply grooved.**  It has shorter
+  blades and deeper crevasses than the meadow default, as a shore-only
+  override.
 
 ## Failure modes
 
