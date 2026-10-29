@@ -639,6 +639,12 @@ VIEWS = [('painted', 40, -120), ('oblique', 40, -120), ('top', 89, -90), ('low',
          ('close (painted, 20 mm)', 38, -125)]
 
 
+def stl_path(seed, cracks=False, cols=2, rows=2):
+    out = pathlib.Path(__file__).parent / 'out'
+    out.mkdir(exist_ok=True)
+    return out / f"{cols}x{rows}-dirt-s{seed}{'-cracks' if cracks else ''}.stl"
+
+
 def contact_sheet(seeds, cracks=False):
     from PIL import Image, ImageDraw, ImageFont
     from dharmatiles.render import render
@@ -656,6 +662,7 @@ def contact_sheet(seeds, cracks=False):
         tmp = pathlib.Path(td)
         for r, seed in enumerate(seeds):
             f, mesh = build(seed, cracks=cracks)
+            mesh.export(stl_path(seed, cracks))           # the sheet's tiles as STLs too
             st = f.stats
             y = r * row_h
             dr.rectangle([0, y, sheet.width, y + head - 6], fill=(225, 228, 235))
@@ -723,9 +730,7 @@ def main():
         contact_sheet(args.seeds, cracks=args.cracks)
         return
     f, mesh = build(args.seed, args.cols, args.rows, args.cracks)
-    out = pathlib.Path(__file__).parent / 'out'
-    out.mkdir(exist_ok=True)
-    path = out / f"{args.cols}x{args.rows}-dirt-s{args.seed}{'-cracks' if args.cracks else ''}.stl"
+    path = stl_path(args.seed, args.cracks, args.cols, args.rows)
     mesh.export(path)
     st = f.stats
     print(f"→ {path}  ({path.stat().st_size / 1e6:.1f} MB) {len(mesh.vertices):,} verts, "
