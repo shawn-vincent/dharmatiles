@@ -140,6 +140,9 @@ LIP_MIN_T_MM         = 0.6
 TIP_CARVE            = False       # carve under visible frond tips (shorelab turns this on)
 TIP_GAP_MM           = 0.0         # with TIP_CARVE: open air gap under tips (≥ 0.6 printable)
 TIP_VIS_TOL_MM       = 0.45        # tips buried this little by neighbours are exposed
+SIDE_CARVE_ALL       = False       # side ledges on every blade, not just bank fronds
+SIDE_BASE_FRAC       = 0.3         # …except over the first this × length (the base)
+SIDE_GAP_MM          = 0.0         # air gap under those side ledges
 SOFTMAX_K_MM         = 0.12
 
 # 5b rim and soil endings, banks
@@ -925,6 +928,11 @@ def sculpt_frond(fr, plan, surf, sw, T, lips, ledges):
         facing = (((ox * -surf.gsx[I, J] + oy * -surf.gsy[I, J]) > 0.3)
                   & (surf.soil_dist[I, J] < BANK_FACE_MM))
         in_skirt &= ~(facing & (np.abs(v) >= w))   # nothing fills under the ledge
+    side_all = SIDE_CARVE_ALL and not fr.sprig
+    if side_all:
+        # Every blade gets side ledges along both edges, except near its base,
+        # so the whole blade is defined all round (shorelab).
+        facing = facing | (u > SIDE_BASE_FRAC * L)
     inside = in_blade | in_skirt
     if not inside.any():
         return False
@@ -968,7 +976,8 @@ def sculpt_frond(fr, plan, surf, sw, T, lips, ledges):
     if ledge.any():
         # Underside: LIP_MIN_T below the ledge's own top at the edge,
         # descending inward at 45° — a shallow wedge just under the blade.
-        ledges.append((I[ledge], J[ledge], top[ledge] - LIP_MIN_T_MM - e[ledge], top[ledge]))
+        entry = (I[ledge], J[ledge], top[ledge] - LIP_MIN_T_MM - e[ledge], top[ledge])
+        ledges.append(entry + ((SIDE_GAP_MM,) if side_all else ()))
     if lp.any():
         # 45° underside measured back from the drooped tip crest.
         s_tip = min(sb + Lt / sw.length[i], 1.0)
