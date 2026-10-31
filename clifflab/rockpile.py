@@ -24,8 +24,11 @@ whole masses stand forward or back.  So:
     gets rocklab's chips and grain.  Detail gathers in shattered zones.  A
     rock resting on rock carries a 45° keel sunk into the one below, so
     nothing the finishing takes off leaves a ceiling.
-  4 ASSEMBLY: rocks, minus V-wedge fissures cut across the assembled face
-    (bending, branching, running on across joints) ∪ dirt over the top ∪
+  4 ASSEMBLY: rocks ∪ a core under them (so a gap between stones is a
+    recess, never a hole), minus V-wedge fissures cut across the assembled
+    face (bending, branching, running on across joints) and cracks splitting
+    single stones into plates (near-vertical, joint to joint, never crossing),
+    their walls grained like the faces ∪ dirt resting on the rock tops ∪
     dirt ground banked up against the face ∪ scree (angular rocklab
     stones, 1–8 mm, densest at the face, in the shattered zones and under
     fissure mouths; grit half-buried in the bank) ∪ DB base.  Rock size
@@ -70,7 +73,8 @@ MASS_W_MM        = (6.0, 15.0)   # along-run segments with their own profile
 FULL_P           = 0.35          # a segment is full height all the way out
 TIER_Z           = (0.3, 0.7)    # lower tier top, × cliff height
 GULLIES_PER_SQUARE = 0.5         # masses cut deep back into the band (re-entrants)…
-GULLY_DEPTH_MM   = (5.0, 7.0)    # …reaching only this far out
+GULLY_DEPTH_MM   = (5.0, 7.0)    # …reaching only this far out, on masses at least this
+GULLY_MIN_W_MM   = 10.0          # wide (a narrower one is a chimney: a pit from above)
 BUTTRESSES_PER_SQUARE = 0.5      # masses standing far out, full height…
 BUTTRESS_DEPTH_MM = (20.0, 25.0)
 END_MM           = 4.0           # standard end section (REQ-RUN-3, S4): every seed's
@@ -100,13 +104,19 @@ OVERSHOOT_MM     = (0.0, 2.5)  # tier rocks may stand above T (rough ledges)
 TOP_TILT_DEG     = 6.0         # extra random tilt of each rock's top
 SINK_MM          = 0.8         # resting rocks sink this far into their support (grain,
                                # chips and trims take that much off the rock below)
-MIN_AREA_MM2     = 8.0         # smaller pockets are bridged by a rock over them
+MIN_AREA_MM2     = 8.0         # smaller pockets are bridged by a rock over them, or
+CRUMB_RETRY      = 3           # (none fitting yet) in the top band come back this many
+CRUMB_RETRY_MM   = 6.0         # times, each after the pile has grown this much more round
+                               # them, before they are left as a notch (left at once: a pit
+                               # in the plateau)
 SNAP_MM          = 3.5         # footprints this close to a contact plane reach it
 PUSH_P           = 0.3         # share of plane-touching rocks set back…
 PUSH_MM          = (0.25, 0.6) # …by this much (≤ BEVEL_MM: the rock above steps back at 45°)
 MAX_ROCKS        = 400
 JUT_P            = 0.5        # a rock at the cliff front juts out past it…
-JUT_MM           = (1.5, 5.0)  # …this far (a column or block standing proud)
+JUT_MM           = (1.5, 5.0)  # …this far (a column or block standing proud), only into
+JUT_CLEAR_MM     = 6.0         # open ground clear this far beyond it (a jut into a gully
+                               # leaves a pit behind it)
 BLOCK_ASPECT     = {           # a stone stands at most (drawn from) this × its narrow side:
     'column': (2.0, 3.2), 'block': (1.2, 2.0), 'slab': (0.5, 1.0),   # varied, so no courses
     'odd': (1.0, 1.8), 'monolith': (3.0, 4.0)}
@@ -126,11 +136,14 @@ FACE_GRAIN_MM    = 0.4         # grain amplitude on cliff stones: deep enough to
 FIT_GAP_MM       = 0.02        # stones stop this short of the tile boundary (not cut)
 FACE_GRAIN_LEN_MM = 2.0        # …a drybrush, this coarse (≈ 5 lines) so it survives printing
 EXPORT_RETRY_TOL_MM = (None, 0.03, 0.06)  # export: simplify the top this much if needed
+CHIP_MAX_MM3     = 3.0         # a chip (rocklab's) takes at most this: a plane through a
+                               # corner of a non-convex stone would take a whole arm
 MIN_FACET_MM     = 2.5         # a break leaves no facet narrower than this (no strips)
 SUBFACETS_PER_100MM2 = 1.5     # broad low facets per exposed face (each face 2–4 planes)…
-SUBFACETS_MAX    = 3
+SUBFACET_AREA_MM2 = 150.0      # …at most 2 + one per this much face…
 SUBFACET_TILT_DEG = (5.0, 12.0)  # …turned this far…
-SUBFACET_MM      = 0.7         # …taking at most this
+SUBFACET_MM      = (0.7, 0.06) # …taking this much off the face as it stands, or this × √area
+                               # (a big face breaks into big planes, not edge bevels)
 BEVEL_MM         = 0.6         # bevel (at the overhang limit) under rocks resting on rocks
 OVERHANG_DEG     = 55.0        # FDM: no downward face leans further than this from vertical
 SEAT_GRID_MM     = 0.2         # resting rocks' underside is shaped on this grid…
@@ -166,12 +179,37 @@ BREAK_SHELF_DEG  = (10.0, 40.0)
 CLEAVE_MAX_LOSS  = 0.15        # one cut takes at most this share of the rock…
 CLEAVE_MIN_KEEP  = 0.6         # …and all of them together leave at least this
 CLEAVE_SUPPORT_MM3 = 1.0      # a cut may take this much from under a rock resting here
+                               # (or from the core)
+CORE_SET_MM      = 2.5         # a solid core under the pile: in this far from open faces…
+CORE_RIM_MM      = 2.0         # …this far from the tile boundary…
+CORE_DROP_MM     = 0.5         # …and this far under every top: where rounded corners meet,
+                               # the gap is a dark recess, never a hole
 #   fissures: V wedges cut across the assembled face (REQ-ROCK-2, FDM-3)
-FISSURES_PER_SQUARE = (2.0, 4.0)   # (major, minor) at full intensity
+MAJORS_PER_SQUARE = 2.0            # major fissures at full intensity…
 MAJOR_DEPTH_MM   = (1.8, 3.5)
 MAJOR_LEN_MM     = (9.0, 24.0)
-MINOR_DEPTH_MM   = (0.8, 1.6)
-MINOR_LEN_MM     = (3.0, 9.0)
+CRACKS_PER_100MM2 = 0.7            # …minor ones (cracks) across every open face, × zone: each
+                                   # splits ONE stone into plates, near-vertical from its top
+                                   # joint to its bed (or the stone in front of it)…
+CRACK_DEPTH_MM   = (1.2, 2.0)      # …this deep, the mouth at least this wide (it survives a
+CRACK_MOUTH_MM   = 0.9             # 0.4 mm nozzle and a drybrush)…
+CRACK_LEAN_DEG   = 4.0             # …leaning this little off vertical (σ, clipped ±10°)
+CRACK_FACE_MM    = 6.0             # only on stone faces this wide, this far in from their
+CRACK_EDGE_MM    = 2.0             # corners (a crack in a narrow stone is an eye slot)
+CRACK_OFF_FACE_MM = 1.5           # its whole line on the site's face, within this of its plane
+CRACK_CAP_MM     = 0.8             # cut only where the face is within this of the crack's
+                                   # own surface line (they fade out over bulges)
+CRACK_JOG_P      = 0.3             # a crack steps sideways once along the bedding this often…
+CRACK_JOG_MM     = (2.0, 4.5)      # …this far (its upper wall opened to the overhang limit)
+CRACK_END_DEG    = (45.0, 20.0)    # top / bottom end walls slope back this far from the crack
+                                   # line: it ends on its joint, not tapering out mid-face
+CRACK_INTO_MM    = 0.6             # …running this far on into its bed joint (at the top it
+                                   # stops at the joint: further, it bares the seat of the
+                                   # stone above, a ceiling)
+CRACK_MIN_MM     = 6.0             # no crack or branch shorter than this (a stub is an eye slot)
+CRACK_CLEAR_MM   = 4.0             # cracks keep this far apart: they never cross…
+CRACKS_PER_STONE = 2               # …and no stone takes more (parallel ones read as fluting)
+BRANCH_LEN_MM    = (6.0, 12.0)
 DEEP_FISSURES    = (1, 2)          # per square, the first majors go deep and dark…
 DEEP_DEPTH_MM    = (3.5, 5.0)
 DEEP_HALF_DEG    = (12.0, 16.0)
@@ -191,7 +229,7 @@ JOINT_SNAP_MM    = 1.5             # fissures prefer stone joints: sites this cl
 JOINT_WEIGHT     = 3.0             # joint are this much likelier and run down it…
 JOINT_LEAN_DEG   = 5.0             # …leaning this little (σ)
 FISSURE_TOP_GAP_MM = 2.0           # fissures stop this far under the top plane
-FISSURE_GAP_MM   = (6.0, 3.5)      # sites at least this far from earlier ones (major, minor)
+MAJOR_GAP_MM     = 6.0             # major sites at least this far apart
 
 # 4 assembly
 APRON_H_MM       = (1.5, 3.5)  # a dirt bank in the angle of cliff and ground (between
@@ -215,14 +253,12 @@ SCREE_GAP        = 0.38        # centres at least this × (Di + Dj) apart
 SCREE_TILT_DEG   = 8.0
 SCREE_FAMILIES   = {'block': 0.45, 'wedge': 0.35, 'slab': 0.2}  # angular fragments, no domes
 SCREE_SINK_MM    = 0.3         # into the dirt (plus whatever the tilt lifts)
-CAP_DROP_MM      = 1.0         # dirt top sits this far under the top plane…
-CAP_EDGE_MM      = 3.0         # …held back this far from the cliff edge
-LEDGE_FLAT_MM    = 1.5         # ledge dirt: rock tops varying less than this over…
-LEDGE_WIN_MM     = 2.5         # …this window are ledges…
-LEDGE_EDGE_MM    = 2.5         # …their dirt held back this far from the edge…
-LEDGE_DROP_MM    = 0.45        # …its mean surface this far under the rock top (patchy)…
-DIRT_ON_ROCK_MM  = 2.5         # dirt (top, ledges) only this close above rock
-LEDGE_MIN_MM2    = 6.0         # …on ledges at least this big
+DIRT_MM          = (0.15, 0.6) # dirt on the rock tops: this over the rock's local low
+                               # (ledges, plateau), plus the dirtlab relief…
+DIRT_STEP_MM     = 0.5         # …on each terrace (rock tops stepping less than this per
+DIRT_SLOPE       = 0.6         # cell), thinning from its edges at this slope…
+DIRT_REACH_MM    = 3.0         # …over at most this
+DIRT_SINK_MM     = 0.3         # its underside the rock top sunk this far
 
 
 def to_mesh(man):
@@ -249,6 +285,8 @@ class Form:
     ztop: float | None       # the top contact plane, if any
     round: bool = False      # free-standing outline: stones face its tangent
     mass: float = 1.0        # stone size × this (massive blocks vs. broken rubble)
+    along_y: np.ndarray = None  # band forms: cells whose band runs along y (left/right walls)
+    kind_p: dict = None      # stone kind probabilities overriding KINDS'
 
 
 def _segments(rng, length):
@@ -268,12 +306,15 @@ def _segments(rng, length):
 #   height     : top of the highest tier above the foot (mm); a pair = a ramp
 #                along the band (low end → high end, either way round)
 #   cap        : dirt on the flat top (needs one top height)
+#   kinds      : stone kind probabilities overriding KINDS'
 #   rings      : ((outer radius range mm), (height × range)) outer → inner;
 #                radii scale with the tile (× min(W, H) / 70)
+CORNER_KINDS = {'column': 0.5, 'block': 0.24, 'slab': 0.08, 'odd': 0.06, 'monolith': 0.12}
+#   (two outer faces on show: tall stones, or they read as coursed walling)
 FORMS = {
     'run':        dict(kind='band', walls=('back',), height=35.0, cap=True, mass=1.35),  # B H N
     'corner':     dict(kind='band', walls=('back', 'left'), height=35.0, cap=True,     # C
-                       mass=1.35),
+                       mass=1.35, kinds=CORNER_KINDS),
     'canyon':     dict(kind='band', walls=('left', 'right'), height=35.0, cap=True,  # I K
                        mass=1.3,
                        depth=(8.0, 14.0), top_depth=(5.0, 9.0), buttress=(14.0, 17.0)),
@@ -315,11 +356,15 @@ def make_form(rng, form, W, H):
     y = (np.arange(ny) + 0.5) * GRID_MM
     X, Y = np.meshgrid(x, y, indexing='ij')
     T = np.full((nx, ny), FOOT_Z_MM)
+    along_y = None
     if spec['kind'] == 'band':
         walls = {'back': (X, H - Y, W), 'front': (X, Y, W),
                  'left': (Y, X, H), 'right': (Y, W - X, H)}
+        along_y = np.zeros((nx, ny), bool)
         for wall in spec['walls']:
-            T = np.maximum(T, _band(rng, spec, *walls[wall]))
+            Tw = _band(rng, spec, *walls[wall])
+            along_y = np.where(Tw > T, wall in ('left', 'right'), along_y)
+            T = np.maximum(T, Tw)
     else:
         T = _rings(rng, spec, X, Y, W, H)
     h = spec['height']
@@ -331,7 +376,7 @@ def make_form(rng, form, W, H):
     if zt is not None:
         planes.append(Plane(np.array([0, 0, zt]), np.array([0, 0, 1.])))
     return Form(W, H, T, planes, zt, round=spec['kind'] == 'rings',
-                mass=spec.get('mass', 1.0))
+                mass=spec.get('mass', 1.0), along_y=along_y, kind_p=spec.get('kinds', {}))
 
 
 def _band(rng, spec, A, Dp, L):
@@ -356,8 +401,9 @@ def _band(rng, spec, A, Dp, L):
     inner = list(rng.permutation(np.arange(1, len(xs) - 2))) if len(xs) > 3 else []
     n_g = int(rng.poisson(GULLIES_PER_SQUARE * L / SQUARE_MM) or 1)
     n_b = int(rng.poisson(BUTTRESSES_PER_SQUARE * L / SQUARE_MM) or 1)
-    role = {k: 'gully' for k in inner[:n_g]}
-    role.update({k: 'buttress' for k in inner[n_g:n_g + n_b]})
+    gul = [k for k in inner if xs[k + 1] - xs[k] >= GULLY_MIN_W_MM][:n_g]
+    role = {k: 'gully' for k in gul}
+    role.update({k: 'buttress' for k in [k for k in inner if k not in gul][:n_b]})
     for si_, (a, b) in enumerate(zip(xs[:-1], xs[1:])):
         zt = float(top_at(0.5 * (a + b)))
         d_all = rng.uniform(*depth)
@@ -472,9 +518,10 @@ def stack(rng, form, zone=None):
     want = T > FOOT_Z_MM
     rocks = []
     kinds = list(KINDS)
-    probs = np.array([KINDS[k][0] for k in kinds])
+    probs = np.array([form.kind_p.get(k, KINDS[k][0]) for k in kinds])
     probs /= probs.sum()
     noise = rng.random(T.shape) * 1.5
+    retry = np.zeros(T.shape, int)
     if form.round:          # the outline's outward normal everywhere inside it
         edt = ndimage.distance_transform_edt(want) * GRID_MM
         sm = ndimage.gaussian_filter(edt, ROUND_SMOOTH_MM / GRID_MM)
@@ -501,6 +548,8 @@ def stack(rng, form, zone=None):
             u = (float(zone(site[0])[0]) - ZONE_FLOOR) / (1 - ZONE_FLOOR)
             sz = ZONE_SIZE[0] + (ZONE_SIZE[1] - ZONE_SIZE[0]) * u
             w *= sz
+        if form.along_y is not None and form.along_y[si, sj]:
+            w, d = d, w                               # the stone's long side along its band
         cells = None
         if form.round:
             yaw = phi[si, sj] + np.radians(ROUND_YAW_DEG) * rng.standard_normal()
@@ -520,7 +569,10 @@ def stack(rng, form, zone=None):
             continue
         if (cells.sum() * GRID_MM ** 2 < MIN_AREA_MM2 or _min_side(cells) < MIN_SIDE_MM) and rocks:
             S, ok = _merge_crumb(rocks, cells, S, X, Y, form)   # no slivers: a neighbour takes it
-            if not ok:                    # left as a notch: nothing to fill, no dirt
+            if not ok and is_top and retry[cells].max() < CRUMB_RETRY:
+                retry[cells] += 1             # neighbours not up yet: later
+                noise[cells] += CRUMB_RETRY_MM
+            elif not ok:                  # left as a notch: nothing to fill, no dirt
                 want = want & ~cells
             continue
         if not form.round and rng.random() < JUT_P:
@@ -683,19 +735,20 @@ def _jut(rng, cells, want, S):
     jj = np.nonzero(cells.any(0))[0]
     i0, i1, j0, j1 = ii.min(), ii.max() + 1, jj.min(), jj.max() + 1
     k = int(round(rng.uniform(*JUT_MM) / GRID_MM))
+    c = k + int(round(JUT_CLEAR_MM / GRID_MM))          # the jut and the ground beyond it
     nx, ny = cells.shape
     for side in rng.permutation(4):
-        if side == 0 and j0 - k >= 0:
-            sl = np.s_[i0:i1, j0 - k:j0]
-        elif side == 1 and j1 + k <= ny:
-            sl = np.s_[i0:i1, j1:j1 + k]
-        elif side == 2 and i0 - k >= 0:
-            sl = np.s_[i0 - k:i0, j0:j1]
-        elif side == 3 and i1 + k <= nx:
-            sl = np.s_[i1:i1 + k, j0:j1]
+        if side == 0 and j0 - c >= 0:
+            sl, cl = np.s_[i0:i1, j0 - k:j0], np.s_[i0:i1, j0 - c:j0]
+        elif side == 1 and j1 + c <= ny:
+            sl, cl = np.s_[i0:i1, j1:j1 + k], np.s_[i0:i1, j1:j1 + c]
+        elif side == 2 and i0 - c >= 0:
+            sl, cl = np.s_[i0 - k:i0, j0:j1], np.s_[i0 - c:i0, j0:j1]
+        elif side == 3 and i1 + c <= nx:
+            sl, cl = np.s_[i1:i1 + k, j0:j1], np.s_[i1:i1 + c, j0:j1]
         else:
             continue
-        if want[sl].any() or (S[sl] > FOOT_Z_MM).any():
+        if want[cl].any() or (S[cl] > FOOT_Z_MM).any():
             continue
         out = cells.copy()
         out[sl] = True
@@ -764,13 +817,14 @@ def rock_manifold(rng, r, form, S, support, zone=1.0):
     rock = round_edges(rng, rock, EDGE_ROUND_MM)
     rock = rock.translate([0, 0, -zb])
     D = max(r.D, 4.0)
-    saved = _rl.FACET_MIN_NZ, _rl.GRAIN_AMP_MM, _rl.GRAIN_MM
+    saved = _rl.CHIP_MAX_LOSS, _rl.GRAIN_AMP_MM, _rl.GRAIN_MM
     try:
         _rl.GRAIN_AMP_MM, _rl.GRAIN_MM = FACE_GRAIN_MM, FACE_GRAIN_LEN_MM
+        _rl.CHIP_MAX_LOSS = min(saved[0], CHIP_MAX_MM3 / max(rock.volume(), 1e-6))
         rock, _ = _rl.chip_corners_edges(rng, rock, D)    # (none below the seat)
         rock = _grain(rng, rock)
     finally:
-        _rl.FACET_MIN_NZ, _rl.GRAIN_AMP_MM, _rl.GRAIN_MM = saved
+        _rl.CHIP_MAX_LOSS, _rl.GRAIN_AMP_MM, _rl.GRAIN_MM = saved
     rock = rock.translate([0, 0, zb])
     return _fit_tile(rock, form, setback)
 
@@ -912,10 +966,13 @@ def _seat(rock, r):
     return rock if out.is_empty() else out
 
 
-def _grain(rng, rock):
+def _grain(rng, rock, cut=False):
     """rocklab's grain (texture) for a rock seated at z = 0 with its roof
     below: faded in above the seat, nothing below it (the roof faces down
-    anyway), and not trimmed there."""
+    anyway), and not trimmed there.  `cut`: a body cut out of the rock (a
+    fissure wedge), grained so its walls match the faces round them — it
+    only grows (the gap never narrows) and not where the rock's wall faces
+    down."""
     from dharmatiles.stone.noise import fbm
     base_tm = _rl.to_trimesh(rock)
     sharp = base_tm.face_adjacency_angles > np.radians(_rl.SHARP_EDGE_DEG)
@@ -935,11 +992,44 @@ def _grain(rng, rock):
             t = np.clip(((Q - A) * AB).sum(2) / L2, 0, 1)
             dmin[c0:c0 + 4000] = np.linalg.norm(Q - (A + t[..., None] * AB), axis=2).min(1)
         we = _rl._smooth01(dmin / _rl.EDGE_KEEP_MM)
-    w = _rl._smooth01((P[:, 2] - 0.15) / _rl.TEX_BASE_FADE_MM) * (N[:, 2] > -0.3)
+    if cut:                                   # still on every face the rock's wall
+        nz = np.full(len(P), -1.0)            # turns down at (so that stays planar)
+        for k in range(3):
+            np.maximum.at(nz, tm.faces[:, k], tm.face_normals[:, 2])
+        gr, w = np.clip(0.5 + 0.5 * gr, 0.0, 1.0), _rl._smooth01((0.3 - nz) / 0.3)
+    else:
+        w = _rl._smooth01((P[:, 2] - 0.15) / _rl.TEX_BASE_FADE_MM) * (N[:, 2] > -0.3)
     V = P + (_rl.GRAIN_AMP_MM * gr * (0.5 + 0.5 * we) * w)[:, None] * N
     out = m3d.Manifold(mesh=m3d.Mesh(vert_properties=np.asarray(V, dtype=np.float32),
                                      tri_verts=np.asarray(tm.faces, dtype=np.uint32)))
     return rock if out.is_empty() else out
+
+
+def _core(f, S):
+    """The core: the pile's height field S set in CORE_SET_MM from every
+    open face (a flat-disc erosion), CORE_DROP_MM under every top and
+    CORE_RIM_MM in from the tile boundary.  Cleaving never cuts into it (it
+    joins the support) and fissures are cut before it joins the pile, so it
+    shows only where neighbours' rounded corners leave a gap (or a fissure
+    runs deep) — as the gap's floor, never a hole through the pile."""
+    k = int(round(CORE_SET_MM / GRID_MM))
+    disc = np.hypot(*np.mgrid[-k:k + 1, -k:k + 1]) <= k
+    C = ndimage.grey_erosion(S, footprint=disc, mode='nearest') - CORE_DROP_MM
+    zb = FOOT_Z_MM - 1.5                          # under the ground
+    rim = int(round(CORE_RIM_MM / GRID_MM))
+    C = np.maximum(C[rim:-rim, rim:-rim], zb + 0.05)
+    return _height_solid(C, zb, tol=0.01).translate([rim * GRID_MM, rim * GRID_MM, 0.0])
+
+
+def _height_solid(Z, z0, tol=None):
+    """The solid z0 ≤ z ≤ Z over grid cell centres (Z indexed (x, y), the
+    first centre at GRID_MM / 2); `tol`: adaptive triangulation (planes and
+    terraces in few triangles)."""
+    from dharmatiles.core.mesh import make_heightmap_solid
+    nx, ny = Z.shape
+    hm = make_heightmap_solid(Z.T - z0, (nx - 1) * GRID_MM, (ny - 1) * GRID_MM, base_h=0.0,
+                              error_threshold=tol)
+    return _gl.to_manifold(hm).translate([0.5 * GRID_MM, 0.5 * GRID_MM, z0])
 
 
 def _support_cone(r):
@@ -961,19 +1051,27 @@ def _support_cone(r):
 
 
 def _chamfer_corners(rng, rock, poly):
-    """Each vertical corner of the footprint cut by a vertical plane along
-    its bisector — where four rocks meet the seam opens into a V."""
+    """Each convex vertical corner of the footprint cut off by a vertical
+    plane across its bisector — where four rocks meet the seam opens into a
+    V.  Only the corner goes (a prism), so a non-convex footprint keeps its
+    arms."""
     xy = np.asarray(shapely.geometry.polygon.orient(poly, 1.0).exterior.coords)[:-1]
+    bb = rock.bounding_box()
     for k in range(len(xy)):
         a, b, c = xy[k - 1], xy[k], xy[(k + 1) % len(xy)]
         e1, e2 = b - a, c - b
-        if np.cross(e1, e2) <= 0 or min(np.hypot(*e1), np.hypot(*e2)) < 2.0:
+        l1, l2 = np.hypot(*e1), np.hypot(*e2)
+        if e1[0] * e2[1] - e1[1] * e2[0] <= 0 or min(l1, l2) < 2.0:
             continue                                     # reflex or tiny: leave it
-        m = np.array([e1[1], -e1[0]]) / np.hypot(*e1) + np.array([e2[1], -e2[0]]) / np.hypot(*e2)
+        u1, u2 = e1 / l1, e2 / l2
+        m = np.array([u1[1], -u1[0]]) + np.array([u2[1], -u2[0]])
         m /= np.linalg.norm(m)                          # outward bisector
-        n = np.array([m[0], m[1], 0.0])
-        d = float(m @ b) - rng.uniform(*CORNER_MM)
-        cut = rock.trim_by_plane((-n).tolist(), -d)
+        d = rng.uniform(*CORNER_MM)
+        p1 = b - u1 * min(d / max(m @ u1, 1e-6), l1)
+        p2 = b + u2 * min(d / max(-(m @ u2), 1e-6), l2)
+        tri = np.array([p1, p2, b + 2.0 * m])
+        pts = [[*q, z] for q in tri for z in (bb[2] - 1.0, bb[5] + 1.0)]
+        cut = rock - m3d.Manifold.hull_points(np.asarray(pts, dtype=np.float32))
         if not cut.is_empty():
             rock = cut
     return rock
@@ -1093,18 +1191,21 @@ def _cleave(rng, rock, poly, r, form, S, support, zone):
         if rim:
             continue
         h = np.cross(m, z)
-        lam = SUBFACETS_PER_100MM2 * L * hgt / 100.0
-        for _ in range(min(int(rng.poisson(lam)), SUBFACETS_MAX)):
+        area = L * hgt
+        lim = max(SUBFACET_MM[0], SUBFACET_MM[1] * np.sqrt(area))
+        for _ in range(min(int(rng.poisson(SUBFACETS_PER_100MM2 * area / 100.0)),
+                           2 + int(area / SUBFACET_AREA_MM2))):
             ps = rng.uniform(0, 2 * np.pi)
             al = np.radians(rng.uniform(*SUBFACET_TILT_DEG))
             n = m * np.cos(al) + (np.cos(ps) * h + np.sin(ps) * z) * np.sin(al)
-            pxy = p0 + rng.uniform(0.15, 0.85) * (p1 - p0)
-            P = np.array([pxy[0], pxy[1], zlo + hgt * rng.uniform(0.15, 0.85)])
-            sub.append((n, P, SUBFACET_MM, [], (p0, p1, zlo, zhi)))
+            sub.append((n, None, lim, [], (p0, p1, zlo, zhi)))   # (placed on the rock)
     vol0 = rock.volume()
     for n, p, lim, ends, face in (dress + [cuts[i] for i in rng.permutation(len(cuts))]
                                   + sub):
-        depth = (to_mesh(rock).vertices @ n).max() - n @ p
+        top_n = (to_mesh(rock).vertices @ n).max()
+        if p is None:                                 # a sub-facet: `lim` off the face as
+            p = n * (top_n - lim)                     # dressed and broken so far
+        depth = top_n - n @ p
         if depth < 0.3:
             continue
         if depth > lim:                               # shallower, same angle
@@ -1166,31 +1267,25 @@ def build(seed=1, form='run', cols=1, rows=1):
     placed, S = stack(rng, f, zone)
     tm['stack'] = time.perf_counter() - t0
     t1 = time.perf_counter()
+    core = _core(f, S)
     cones = [_support_cone(r) for r in placed if r.z0 > FOOT_Z_MM]
-    support = m3d.Manifold.batch_boolean(cones, m3d.OpType.Add) if cones else m3d.Manifold()
+    support = m3d.Manifold.batch_boolean(cones + [core], m3d.OpType.Add)
     rocks = [m for m in (rock_manifold(rng, r, f, S, support,
                                        float(zone(footprint_polygon(r.cells).centroid.x)[0]))
                          for r in placed) if m is not None]
     tm['rocks'] = time.perf_counter() - t1
     t2 = time.perf_counter()
     pile = m3d.Manifold.batch_boolean(rocks, m3d.OpType.Add)
-    wedges, mouths = fissures(rng, pile, f, zone, placed)
+    wedges, mouths = fissures(rng, pile, f, S, zone, placed)
     if not wedges.is_empty():
         pile = pile - wedges
+    pile = pile + core                      # (after: no fissure cuts through it)
     tm['fissures'] = time.perf_counter() - t2
     t2 = time.perf_counter()
     ground, gz = foot_ground(f, S, zone, seed)
     parts = [pile, ground, *scree(rng, f, S, zone, mouths, gz)]
     tm['scree'] = time.perf_counter() - t2
-    dirt = [_ledges(f, S, seed)]
-    if f.ztop is not None:
-        dirt.append(_cap(rng, f, S, seed))
-    dirt = m3d.Manifold.batch_boolean(dirt, m3d.OpType.Add)
-    if not wedges.is_empty():               # fissures run on through the dirt
-        dirt = dirt - wedges
-    # dirt only where rock lies under it (within DIRT_ON_ROCK_MM): no dirt
-    # wall stands over a dressed-back face, a notch or a crack
-    parts.append(dirt ^ pile.translate([0, 0, DIRT_ON_ROCK_MM]))
+    parts.append(_dirt_layer(f, pile, seed))
     top_ = m3d.Manifold.batch_boolean(parts, m3d.OpType.Add)
     top_ = top_ ^ m3d.Manifold.cube([W, H, 200.0])
     import clifflab as cl
@@ -1338,16 +1433,21 @@ def make_zones(rng, W):
     return zone
 
 
-def fissures(rng, pile, f, zone, placed=()):
+def fissures(rng, pile, f, S, zone, placed=()):
     """V-wedge fissures across the assembled face: major ones 2–5 mm deep
-    (some sending off a branch), minor ones ≈ 1 mm, sited on the open faces
-    and mostly in the shattered zones.  Each is a convex wedge cut through
-    whatever rocks it crosses, so one fracture runs on across a joint."""
+    (bending, some sending off a branch), sited on the open faces and mostly
+    in the shattered zones, each a convex wedge per segment cut through
+    whatever rocks it crosses, so one fracture runs on across a joint; and
+    minor cracks, each splitting one stone into plates: near-vertical from
+    its top joint to its bed, sometimes stepping sideways once along the
+    bedding.  No two cracks cross.  Only faces looking out into the open
+    (not across a joint gap at the core)."""
     t = to_mesh(pile)
     pts, fi = trimesh.sample.sample_surface(t, 6000, seed=rng)
     nrm = t.face_normals[fi]
     hz = np.hypot(nrm[:, 0], nrm[:, 1])
-    ok = ((hz > 0.9) & (pts[:, 2] > FOOT_Z_MM + 2.0)
+    out = pts + CORE_SET_MM * np.c_[nrm[:, :2] / np.maximum(hz, 1e-9)[:, None], np.zeros(len(pts))]
+    ok = ((hz > 0.9) & (pts[:, 2] > FOOT_Z_MM + 2.0) & ~occupied(f, S, out)
           & (pts[:, 2] < (f.ztop or np.inf) - FISSURE_TOP_GAP_MM - 2.0))
     rim = ((pts[:, 0] < 0.5) | (pts[:, 0] > f.W - 0.5)
            | (pts[:, 1] < 0.5) | (pts[:, 1] > f.H - 0.5))
@@ -1357,8 +1457,9 @@ def fissures(rng, pile, f, zone, placed=()):
     # a fracture opens most readily along a joint
     jd, jv = np.full(len(pts), np.inf), np.zeros((len(pts), 2))
     J = []
+    outline = {id(r): np.asarray(footprint_polygon(r.cells).exterior.coords)[:-1] for r in placed}
     for r in placed:
-        xy = np.asarray(footprint_polygon(r.cells).exterior.coords)[:-1]
+        xy = outline[id(r)]
         c, a, b = r.top
         for k in range(len(xy)):
             e1, e2 = xy[k] - xy[k - 1], xy[(k + 1) % len(xy)] - xy[k]
@@ -1378,23 +1479,30 @@ def fissures(rng, pile, f, zone, placed=()):
     if w.sum() == 0:
         return m3d.Manifold(), []
     sq = f.W / SQUARE_MM
-    n_maj, n_min = (int(round(k * sq)) for k in FISSURES_PER_SQUARE)
+    n_maj = int(round(MAJORS_PER_SQUARE * sq))
     n_deep = min(int(round(rng.uniform(*DEEP_FISSURES) * sq)), n_maj)
-    pool = rng.choice(len(pts), size=min(300, int((w > 0).sum())), replace=False,
-                      p=w / w.sum())
-    idx = []                              # spaced out: overlapping wedges shatter into shards
-    for want, gap in ((n_maj, FISSURE_GAP_MM[0]), (n_min, FISSURE_GAP_MM[1])):
-        got = 0
-        for i in pool:
-            if got == want:
-                break
-            if all(np.linalg.norm(pts[i] - pts[j]) >= gap for j in idx):
-                idx.append(i)
-                got += 1
-        if want == n_maj:
-            n_maj = got
+    wc = ~rim * ok * zone(pts[:, 0])              # cracks: every open face (the tile-edge
+                                                  # faces stay low relief), more in the zones
+    n_min = int(rng.poisson(CRACKS_PER_100MM2 * t.area * wc.mean() / 100.0))
+    pools = [rng.choice(len(pts), size=min(n, int((v > 0).sum())), replace=False, p=v / v.sum())
+             for n, v in ((300, w), (900, wc))]
+    majors = []                           # spaced out: overlapping wedges shatter into shards
+    for i in pools[0]:
+        if len(majors) == n_maj:
+            break
+        if all(np.linalg.norm(pts[i] - pts[j]) >= MAJOR_GAP_MM for j in majors):
+            majors.append(i)
     top = (f.ztop or np.inf) - FISSURE_TOP_GAP_MM
     wedges, mouths = [], []
+    drawn = []                            # (crack id, points along it): none may cross
+
+    def clear(a, b, own=None):
+        P = [p_ for k_, p_ in drawn if k_ != own]
+        if not P:
+            return True
+        P = np.vstack(P)
+        q = a + np.linspace(0.0, 1.0, max(2, int(np.linalg.norm(b - a) / 0.5) + 1))[:, None] * (b - a)
+        return bool(np.linalg.norm(q[:, None] - P[None], axis=2).min() >= CRACK_CLEAR_MM)
 
     def lean():
         if rng.random() < FISSURE_DIAG_P:
@@ -1409,42 +1517,134 @@ def fissures(rng, pile, f, zone, placed=()):
                                              multiple_hits=False)
         return hit[0] if len(hit) else None
 
-    for k, i in enumerate(idx):
+    def cut(a, b, m, dep, own, **kw):
+        drawn.append((own, a + np.linspace(0.0, 1.0, max(2, int(np.linalg.norm(b - a) / 0.5)
+                                                          + 1))[:, None] * (b - a)))
+        wedges.append(_wedge(rng, a, b, m, dep, **kw))
+
+    for k, i in enumerate(majors):
         m = np.array([nrm[i, 0], nrm[i, 1], 0.0]) / hz[i]
         p = pts[i]
-        major = k < n_maj
-        deep = k < min(n_deep, n_maj)
-        dep = rng.uniform(*(DEEP_DEPTH_MM if deep else MAJOR_DEPTH_MM if major
-                            else MINOR_DEPTH_MM))
+        deep = k < n_deep
+        dep = rng.uniform(*(DEEP_DEPTH_MM if deep else MAJOR_DEPTH_MM))
         th = lean()
         if jd[i] < JOINT_SNAP_MM:                      # down the joint
             q = onto_surface(np.array([jv[i][0], jv[i][1], p[2]]), m)
             if q is not None and np.hypot(*(q[:2] - p[:2])) < 2 * JOINT_SNAP_MM:
                 p = q
                 th = float(np.clip(rng.normal(0.0, JOINT_LEAN_DEG), -15.0, 15.0))
-        if not major:
-            L = rng.uniform(*MINOR_LEN_MM)
-            up = rng.uniform(0.3, 0.7) * L
-            wedges.append(_wedge(rng, p, m, th, dep, up, L - up, top))
-            continue
-        # a major fissure runs down in bending segments, each on the surface
+        # a fissure runs down in bending segments, each on the surface; it
+        # stops where it would come near another crack (ends against it)
         nseg = int(rng.integers(MAJOR_SEGMENTS[0], MAJOR_SEGMENTS[1] + 1))
         L = rng.uniform(*MAJOR_LEN_MM) / nseg
         for sgi in range(nseg):
-            wedges.append(_wedge(rng, p, m, th, dep, 0.4 if sgi else 0.5 * L,
-                                 L, top, DEEP_HALF_DEG if deep else FISSURE_HALF_DEG))
-            if sgi == 0 and rng.random() < BRANCH_P:      # a branch leaves it
+            d = _fissure_dir(m, th)
+            l_up = 0.4 if sgi else 0.5 * L
+            if (p + d * l_up)[2] > top:                # stop under the top plane
+                l_up = max((top - p[2]) / max(d[2], 1e-6), 0.0)
+            a, b = p + d * l_up, p - d * L
+            if not clear(a, b, own=k):
+                break
+            cut(a, b, m, dep, k, half_deg=DEEP_HALF_DEG if deep else FISSURE_HALF_DEG)
+            if sgi == 0 and rng.random() < BRANCH_P:   # a branch leaves it
                 thb = float(np.clip(th + rng.choice((-1, 1)) * rng.uniform(20, 35), -40, 40))
-                wedges.append(_wedge(rng, p, m, thb, rng.uniform(*MINOR_DEPTH_MM), 0.3,
-                                     rng.uniform(*MINOR_LEN_MM), top))
-            q = onto_surface(p - _fissure_dir(m, th) * L, m)
+                db = _fissure_dir(m, thb)
+                lb = rng.uniform(*BRANCH_LEN_MM)
+                ab = p + db * min(0.3, max((top - p[2]) / max(db[2], 1e-6), 0.0))
+                bb = p - db * lb
+                if np.linalg.norm(ab - bb) >= CRACK_MIN_MM and clear(ab, bb, own=k):
+                    cut(ab, bb, m, rng.uniform(*CRACK_DEPTH_MM), k, cap=CRACK_CAP_MM,
+                        mouth=CRACK_MOUTH_MM)
+            q = onto_surface(b, m)
             if q is None or q[2] < FOOT_Z_MM + 1.0 or sgi == nseg - 1:
-                mouths.append(p - _fissure_dir(m, th) * L)
+                mouths.append(b)
                 break
             p = q
-            dep = float(np.clip(dep * rng.uniform(0.7, 1.1), MINOR_DEPTH_MM[1], MAJOR_DEPTH_MM[1]))
-            th = float(np.clip(th + rng.choice((-1, 1)) * rng.uniform(*BEND_DEG), -40, 40))
-    wedges = [w_ for w_ in wedges if not w_.is_empty()]
+            dep = float(np.clip(dep * rng.uniform(0.7, 1.1), CRACK_DEPTH_MM[1], MAJOR_DEPTH_MM[1]))
+            th = th + rng.choice((-1, 1)) * rng.uniform(*BEND_DEG)
+            th = float(np.clip(th, -40, 40))
+
+    def stone_at(q):
+        """The placed stone holding point q: (rock, bed z, top z) or None."""
+        i_, j_ = int(q[0] // GRID_MM), int(q[1] // GRID_MM)
+        if not (0 <= i_ < S.shape[0] and 0 <= j_ < S.shape[1]):
+            return None
+        for r in placed:
+            if not r.cells[i_, j_]:
+                continue
+            c, a, b = r.top
+            zt = min(c + a * q[0] + b * q[1], f.ztop or np.inf)
+            zb = r.z0 if np.isnan(r.bed[i_, j_]) else float(r.bed[i_, j_])
+            if zb - 0.5 <= q[2] <= zt + 0.5:
+                return r, zb, zt
+        return None
+
+    def crack_plan(i):
+        """A minor crack at site i: its segments [(top point, bottom point)]
+        on the surface, near-vertical over the whole open height of the
+        stone there, with at most one short sideways step; None if the
+        stone's face is too narrow or the crack too short."""
+        m = np.array([nrm[i, 0], nrm[i, 1], 0.0]) / hz[i]
+        h = np.cross(m, [0.0, 0.0, 1.0])
+        p = pts[i]
+        hit = stone_at(p - 0.6 * m)
+        if hit is None or per_stone.get(id(hit[0]), 0) >= CRACKS_PER_STONE:
+            return None
+        r, zb, zt = hit
+        sx = (outline[id(r)] - p[:2]) @ h[:2]
+        lo, hi = sx.min() + CRACK_EDGE_MM, sx.max() - CRACK_EDGE_MM
+        if sx.max() - sx.min() < CRACK_FACE_MM or not lo <= 0.0 <= hi:
+            return None
+        fq = p[:2] + 1.0 * m[:2]                     # whatever stands in front of the face
+        fi_, fj_ = int(fq[0] // GRID_MM), int(fq[1] // GRID_MM)
+        if 0 <= fi_ < S.shape[0] and 0 <= fj_ < S.shape[1]:
+            zb = max(zb, float(S[fi_, fj_]))
+        z0, z1 = zb - CRACK_INTO_MM, min(zt, (f.ztop or np.inf) - 0.3)
+        if z1 - z0 < CRACK_MIN_MM:
+            return None
+        tl = np.tan(np.radians(np.clip(rng.normal(0.0, CRACK_LEAN_DEG), -10.0, 10.0)))
+        zc = p[2]
+        line = [(tl * (z1 - zc), z1), (tl * (z0 - zc), z0)]
+        if rng.random() < CRACK_JOG_P and z1 - z0 > 2 * CRACK_MIN_MM:
+            zj = z0 + (z1 - z0) * rng.uniform(0.35, 0.65)
+            g = rng.choice((-1, 1)) * rng.uniform(*CRACK_JOG_MM)
+            sj = tl * (zj - zc)
+            zj2 = zj + rng.uniform(-0.4, 0.4)
+            line = [(line[0][0], z1), (sj, zj), (sj + g, zj2), (sj + g + tl * (z0 - zj2), z0)]
+        if not all(lo <= s_ <= hi for s_, _ in line):
+            return None
+        Q = []
+        for s_, z_ in line:
+            q = onto_surface(np.array([p[0] + h[0] * s_, p[1] + h[1] * s_, z_]), m)
+            if q is None or abs((q - p) @ m) > CRACK_OFF_FACE_MM:
+                return None               # off this face (round a corner, into a recess)
+            Q.append(q)
+        return r, m, list(zip(Q[:-1], Q[1:]))
+
+    got, per_stone = 0, {}
+    for i in pools[1]:
+        if got == n_min:
+            break
+        plan = crack_plan(i)
+        if plan is None:
+            continue
+        r, m, segs = plan
+        if not all(clear(a, b) for a, b in segs):
+            continue
+        per_stone[id(r)] = per_stone.get(id(r), 0) + 1
+        dep = rng.uniform(*CRACK_DEPTH_MM)
+        for a, b in segs:
+            jog = abs((a - b)[2]) < 0.5 * np.linalg.norm(a - b)
+            cut(a, b, m, dep * (0.8 if jog else 1.0), ('c', got), cap=CRACK_CAP_MM,
+                mouth=CRACK_MOUTH_MM, end_deg=CRACK_END_DEG,
+                min_len=0.0 if len(segs) > 1 else CRACK_MIN_MM)
+        got += 1
+    saved = _rl.GRAIN_AMP_MM, _rl.GRAIN_MM
+    try:                                  # walls grained like the faces they cut
+        _rl.GRAIN_AMP_MM, _rl.GRAIN_MM = FACE_GRAIN_MM, FACE_GRAIN_LEN_MM
+        wedges = [_grain(rng, w_, cut=True) for w_ in wedges if not w_.is_empty()]
+    finally:
+        _rl.GRAIN_AMP_MM, _rl.GRAIN_MM = saved
     return (m3d.Manifold.batch_boolean(wedges, m3d.OpType.Add) if wedges
             else m3d.Manifold()), mouths
 
@@ -1454,114 +1654,102 @@ def _fissure_dir(m, th_deg):
     return np.cos(th) * np.array([0, 0, 1.0]) + np.sin(th) * np.cross(m, [0, 0, 1.0])
 
 
-def _wedge(rng, p, m, th_deg, dep, l_up, l_down, ztop, half_deg=FISSURE_HALF_DEG):
-    """One fissure: the V between two planes meeting along a line `dep`
-    behind the face point p (running along the fissure direction d), opening
-    outward at a half-angle that keeps the mouth ≥ FISSURE_MOUTH_MM.  Its
-    ends slope back into the rock (FISSURE_END_DEG), so the rock over the
-    top end is a printable roof, not a ceiling."""
-    d = _fissure_dir(m, th_deg)
+def _wedge(rng, a, b, m, dep, half_deg=FISSURE_HALF_DEG, cap=FISSURE_CAP_MM,
+           mouth=FISSURE_MOUTH_MM, end_deg=(FISSURE_END_DEG, FISSURE_END_DEG),
+           min_len=CRACK_MIN_MM):
+    """One fissure from a (its upper end, on the face) to b: the V between
+    two planes meeting along a line `dep` behind a→b, opening outward (m)
+    at a half-angle that keeps the mouth ≥ `mouth` (a wall the rock would
+    face down past the overhang limit with opens up to it, so a fissure may
+    run any way, along the bedding too).  Its ends slope back into the rock
+    `end_deg` (upper, lower) from the fissure line, so the rock over the
+    upper end is a printable roof, not a ceiling; `cap` bounds it in front
+    of the face.  Shorter than `min_len`: nothing (a stub reads as a slot)."""
+    if a[2] < b[2]:
+        a, b = b, a
+    L = float(np.linalg.norm(a - b))
+    if L < max(min_len, 1e-3):
+        return m3d.Manifold()
+    d = (a - b) / L
+    m = m - (m @ d) * d
+    m = m / np.linalg.norm(m)
     e = np.cross(d, m)
-    half = max(np.radians(rng.uniform(*half_deg)),
-               np.arctan(0.5 * FISSURE_MOUTH_MM / dep))
-    top = p + d * l_up
-    if top[2] > ztop:                                  # stop under the top plane
-        l_up = max((ztop - p[2]) / max(d[2], 1e-6), 0.0)
-        top = p + d * l_up
-    bot = p - d * l_down
-    ph = np.radians(FISSURE_END_DEG)
-    a = p - m * dep
-    planes = [(m * np.sin(half) - e * np.cos(half), a),
-              (m * np.sin(half) + e * np.cos(half), a),
-              (-d * np.cos(ph) + m * np.sin(ph), top),
-              (d * np.cos(ph) + m * np.sin(ph), bot),
-              (-m, p + m * FISSURE_CAP_MM)]               # no further out than this
+    half = max(np.radians(rng.uniform(*half_deg)), np.arctan(0.5 * mouth / dep))
+    p = 0.5 * (a + b)
+    apex = p - m * dep
+    lim = np.sin(np.radians(OVERHANG_DEG - 3.0))
+    planes = []
+    for s_ in (-1.0, 1.0):          # (the rock's wall normal); a wall that would face
+        h_ = half                   # down past the limit is opened up to it
+        if -s_ * e[2] * np.cos(h_) > lim:
+            h_ = np.arccos(lim / abs(e[2]))
+        planes.append((m * np.sin(h_) + s_ * e * np.cos(h_), apex))
+    p0, p1 = np.radians(end_deg)
+    planes += [(-d * np.cos(p0) + m * np.sin(p0), a),
+               (d * np.cos(p1) + m * np.sin(p1), b),
+               (-m, p + m * cap)]                          # no further out than this
     # big enough that only the five planes bound it (a cube face left inside
     # a rock standing proud of the face would be a flat ceiling)
-    size = 2 * (l_up + l_down + dep) + 6 * FISSURE_CAP_MM + 4.0
+    size = 2 * (L + dep) + 6 * cap + 4.0
     w = m3d.Manifold.cube([size, size, size], center=True).translate(p.tolist())
     for n, q in planes:
         w = w.trim_by_plane(n.tolist(), float(n @ q))
     return w
 
 
-def _cap(rng, f, S, seed):
-    """Dirt over the rock tops at the top plane, held back from the edge."""
-    from dharmatiles.core.mesh import make_heightmap_solid
-    full = S >= f.ztop - 2.5
-    k = int(round(CAP_EDGE_MM / GRID_MM))
-    mask = ndimage.binary_erosion(full, iterations=k, border_value=0)
-    if not mask.any():
+def _dirt_layer(f, pile, seed):
+    """Dirt lodged on the rock tops (the plateau and the ledges), a layer
+    resting ON the rock.  Its surface is the dirtlab relief a little over
+    the rock's local low, then held under a cone (DIRT_SLOPE) that spreads
+    over each terrace — rock whose top steps less than DIRT_STEP_MM from
+    cell to cell — from the terrace's edges, where it is held under the
+    rock: so it thins to nothing at every edge and joint, never stands
+    above the rock across a step, and is continuous wherever it shows (no
+    walls).  Its underside is the rock top sunk DIRT_SINK_MM (nothing
+    hangs)."""
+    nx, ny = int(round(f.W / GRID_MM)), int(round(f.H / GRID_MM))
+    X, Y = np.meshgrid((np.arange(nx) + 0.5) * GRID_MM, (np.arange(ny) + 0.5) * GRID_MM,
+                       indexing='ij')
+    O = np.c_[X.ravel(), Y.ravel(), np.full(X.size, 1000.0)]
+    hit, ri, _ = to_mesh(pile).ray.intersects_location(
+        O, np.tile([0.0, 0.0, -1.0], (len(O), 1)), multiple_hits=False)
+    Z = np.full(X.size, FOOT_Z_MM - 1.0)
+    Z[ri] = hit[:, 2]
+    Z = Z.reshape(X.shape)                       # the rock top (x, y)
+    B = ndimage.grey_erosion(Z, size=3) - DIRT_SINK_MM
+    top = 0.0
+    if f.ztop is not None:                       # thicker on the plateau
+        top = ndimage.gaussian_filter((Z >= f.ztop - 2.5).astype(float), 1.0 / GRID_MM)
+    rel = _resample(_dirt.dirt_relief(seed + 7, f.W, f.H).relief, (ny, nx)).T
+    D = ndimage.grey_erosion(Z, size=3) + DIRT_MM[0] + (DIRT_MM[1] - DIRT_MM[0]) * top + rel
+    Zp = np.pad(Z, 1, mode='edge')
+    nb = [(di, dj) for di in (-1, 0, 1) for dj in (-1, 0, 1) if di or dj]
+    edge = np.zeros(Z.shape, bool)
+    for di, dj in nb:                            # a terrace's edge: under the rock
+        Zq = Zp[1 + di:1 + di + nx, 1 + dj:1 + dj + ny]
+        edge |= Zq < Z - DIRT_STEP_MM
+        D = np.where(Zq > Z + DIRT_STEP_MM, np.minimum(D, Zq - DIRT_SINK_MM), D)
+    D = np.where(edge, np.minimum(D, Z - DIRT_SINK_MM), D)
+    for _ in range(int(DIRT_REACH_MM / GRID_MM)):  # the cone, within each terrace
+        Dp = np.pad(D, 1, mode='edge')
+        for di, dj in nb:
+            Zq = Zp[1 + di:1 + di + nx, 1 + dj:1 + dj + ny]
+            Dq = Dp[1 + di:1 + di + nx, 1 + dj:1 + dj + ny] + DIRT_SLOPE * GRID_MM * np.hypot(di, dj)
+            D = np.where(np.abs(Zq - Z) < DIRT_STEP_MM, np.minimum(D, Dq), D)
+    # none on an edge cell or off the rock (the grid triangles across a step
+    # would stand a sliver of dirt in front of its face)
+    D = np.where(edge | (Z <= FOOT_Z_MM + 1.0), B - 0.05, D)
+    if not (D > Z).any():
         return m3d.Manifold()
-    poly = footprint_polygon_all(mask)
-    dirt = _dirt.dirt_relief(seed + 7, f.W, f.H)
-    # thins out toward the edge: CAP_EDGE_MM in from it, it is under the rock tops
-    dist = ndimage.distance_transform_edt(full) * GRID_MM
-    fade = np.clip((dist - CAP_EDGE_MM) / CAP_EDGE_MM, 0, 1)
-    base = f.ztop - CAP_DROP_MM - 2.5 * (1 - fade)          # (x, y) grid
-    zi = _resample(base.T, dirt.relief.shape) + dirt.relief  # heightmaps are (y, x)
-    hf = _gl.to_manifold(make_heightmap_solid(zi - 4.0, f.W, f.H,
-                                              base_h=0.0)).translate([0, 0, 4.0])
-    parts = []
-    for g in getattr(poly, 'geoms', [poly]):
-        cs = m3d.CrossSection([np.asarray(shapely.geometry.polygon.orient(g, 1.0)
-                                          .exterior.coords)[:-1]])
-        # down to the foot: hidden in the pile, and where chips opened the
-        # rock tops under it, a straight wall instead of a flat ceiling
-        parts.append(m3d.Manifold.extrude(cs, f.ztop + 1.0 - FOOT_Z_MM)
-                     .translate([0, 0, FOOT_Z_MM]))
-    return hf ^ m3d.Manifold.batch_boolean(parts, m3d.OpType.Add)
-
-
-def _ledges(f, S, seed):
-    """Dirt lodged on the open ledges (below any dirt top): patchy, its
-    mean surface a little under the rock tops so the relief shows through in
-    pockets, held back from the ledge edges."""
-    from dharmatiles.core.mesh import make_heightmap_solid
-    k = max(3, int(round(LEDGE_WIN_MM / GRID_MM)))
-    rock = S > FOOT_Z_MM + 1.0
-    flat = rock & (ndimage.maximum_filter(S, k) - ndimage.minimum_filter(S, k) < LEDGE_FLAT_MM)
-    if f.ztop is not None:
-        flat &= S < f.ztop - 2.5
-    mask = ndimage.binary_erosion(flat, iterations=int(round(LEDGE_EDGE_MM / GRID_MM)),
-                                  border_value=0)
-    lab, nl = ndimage.label(mask)
-    if nl:
-        area = ndimage.sum(mask, lab, np.arange(1, nl + 1)) * GRID_MM ** 2
-        mask = np.isin(lab, 1 + np.nonzero(area >= LEDGE_MIN_MM2)[0])
-    if not mask.any():
-        return m3d.Manifold()
-    poly = footprint_polygon_all(mask)
-    dirt = _dirt.dirt_relief(seed + 11, f.W, f.H)
-    zi = _resample((S - LEDGE_DROP_MM).T, dirt.relief.shape) + dirt.relief
-    hf = _gl.to_manifold(make_heightmap_solid(zi - 4.0, f.W, f.H,
-                                              base_h=0.0)).translate([0, 0, 4.0])
-    parts = []
-    for g in getattr(poly, 'geoms', [poly]):
-        if g.area < LEDGE_MIN_MM2:
-            continue
-        cs = m3d.CrossSection([np.asarray(shapely.geometry.polygon.orient(g, 1.0)
-                                          .exterior.coords)[:-1]])
-        parts.append(m3d.Manifold.extrude(cs, float(S.max()) + 2.0 - FOOT_Z_MM)
-                     .translate([0, 0, FOOT_Z_MM]))
-    if not parts:
-        return m3d.Manifold()
-    return hf ^ m3d.Manifold.batch_boolean(parts, m3d.OpType.Add)
+    zb = FOOT_Z_MM - 2.0
+    under = _height_solid(np.pad(B, 1, mode='edge'), zb - 1.0).translate([-GRID_MM, -GRID_MM, 0])
+    return _height_solid(np.maximum(D, zb + 0.05), zb) - under
 
 
 def _resample(a, shape):
     if a.shape == tuple(shape):
         return a
     return ndimage.zoom(a, (shape[0] / a.shape[0], shape[1] / a.shape[1]), order=1)
-
-
-def footprint_polygon_all(mask):
-    ii, jj = np.nonzero(mask)
-    sq = [box(i * GRID_MM, j * GRID_MM, (i + 1) * GRID_MM, (j + 1) * GRID_MM)
-          for i, j in zip(ii, jj)]
-    poly = shapely.union_all(sq).buffer(0.3).buffer(-0.3).simplify(0.2)
-    return shapely.geometry.MultiPolygon(
-        [shapely.geometry.Polygon(g.exterior) for g in getattr(poly, 'geoms', [poly])])
 
 
 def audit_overhang(mesh):
