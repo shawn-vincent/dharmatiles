@@ -107,13 +107,24 @@ PUSH_MM          = (0.25, 0.6) # …by this much (≤ BEVEL_MM: the rock above s
 MAX_ROCKS        = 400
 JUT_P            = 0.5        # a rock at the cliff front juts out past it…
 JUT_MM           = (1.5, 5.0)  # …this far (a column or block standing proud)
+BLOCK_ASPECT     = 1.8         # a stone stands at most this × its narrow side (blocks, not pipes)
 ROUND_YAW_DEG    = 8.0         # round forms: stones face the outline's tangent, ± this (σ)
 ROUND_SMOOTH_MM  = 3.0         # …the tangent read off the outline smoothed this much
 
 # 3 finish
 JOINT_OVERLAP_MM = 0.03        # rock footprints overlap their neighbours this much
+FOOTPRINT_SIMPLIFY_MM = 0.45   # footprint outline straightened to this tolerance
+EDGE_ROUND_MM    = (0.5, 0.9)  # every exposed edge rounded (3 planes) this radius:
+ROUND_MIN_DEG    = 20.0        # …edges sharper than this; joints open into grooves
+ROCK_GRAIN_MM    = 0.05        # grain amplitude on cliff stones (quiet planes, not stucco)
+MIN_FACET_MM     = 2.5         # a break leaves no facet narrower than this (no strips)
+SUBFACETS_PER_100MM2 = 1.5     # broad low facets per exposed face (each face 2–4 planes)…
+SUBFACETS_MAX    = 3
+SUBFACET_TILT_DEG = (5.0, 12.0)  # …turned this far…
+SUBFACET_MM      = 0.7         # …taking at most this
 BEVEL_MM         = 0.6         # 45° bevel under rocks resting on rocks
 UNDERFILL_SLICES_MM = (0.05, 0.3, 0.7)  # the keel under a resting rock follows its base outline at these heights
+UNDERFILL_GROW_MM = 0.15       # …grown this much, so no sliver of rounded base shows past it
 CORNER_MM        = (0.8, 1.6)  # vertical corner chamfers: neighbours meet in a V seam
 ZONES_PER_SQUARE = 1.5         # shattered zones (REQ-ROCK-3: detail comes in clusters)…
 ZONE_SIGMA_MM    = (5.0, 10.0) # …this wide along the run
@@ -123,7 +134,7 @@ ZONE_FLOOR       = 0.25        # intensity between zones
 BREAKS_PER_100MM2 = 1.2        # mean face breaks per 100 mm² of exposed face (full zone)…
 BREAKS_MAX       = 5           # …at most this many per face
 JOINT_MM         = (0.8, 1.4)  # a loaded rock's exposed top edge: 45° chamfer (horizontal V joint)
-BREAK_TILT_DEG   = (12.0, 28.0)  # a face break turns the face this far about its crease…
+BREAK_TILT_DEG   = (10.0, 24.0)  # a face break turns the face this far about its crease…
 BREAK_DEPTH_MM   = (1.0, 3.2)  # …taking a wedge at most this deep (between zones → full zone)
 RIM_DEPTH_MM     = 0.8         # faces on the tile boundary: shallow breaks only
 CREASE_LEAN_DEG  = 12.0        # crease lean off vertical (σ)…
@@ -164,7 +175,11 @@ MAJOR_SEGMENTS   = (2, 3)          # a major fissure bends this many times…
 BEND_DEG         = (10.0, 25.0)    # …by this much each
 FISSURE_CAP_MM   = 2.0             # wedges reach no further than this in front of the face
 FISSURE_RAY_MM   = 8.0             # bends are found on the surface within this of the face
-FISSURE_END_DEG  = 55.0            # end walls slope back this far from the fissure line
+FISSURE_END_DEG  = 72.0            # end walls slope back this far from the fissure line
+                                   # (a long taper to nothing, not a stab)
+JOINT_SNAP_MM    = 1.5             # fissures prefer stone joints: sites this close to a
+JOINT_WEIGHT     = 3.0             # joint are this much likelier and run down it…
+JOINT_LEAN_DEG   = 5.0             # …leaning this little (σ)
 FISSURE_TOP_GAP_MM = 2.0           # fissures stop this far under the top plane
 FISSURE_GAP_MM   = (6.0, 3.5)      # sites at least this far from earlier ones (major, minor)
 
@@ -178,13 +193,14 @@ GRIT_PER_SQUARE  = 45          # small stones half-buried in the bank…
 GRIT_D_MM        = (1.0, 2.2)
 GRIT_BURY        = (0.2, 0.5)  # …sunk this × D
 SCREE_PER_SQUARE = 55          # fallen stones along each square of cliff foot…
-SCREE_D_MM       = (1.2, 8.0)  # …sizes mixed, skewed small (no scale-marker carpet)…
-SCREE_D_EXP      = 1.5
+SCREE_D_MM       = (1.0, 6.0)  # …sizes mixed, skewed small (no scale-marker carpet)…
+SCREE_D_EXP      = 2.0
 SCREE_REACH_MM   = 4.0         # …lying mostly this close to the face (exponential mean)…
 SCREE_LEAN       = 0.35        # …the nearest leaning in, up to this × D into the face
 SCREE_MOUTH      = (3, 6)      # extra stones under each major fissure's mouth
 SCREE_BLOCKS     = 2.5         # big fallen blocks per square, against the face…
-SCREE_BLOCK_MM   = (5.0, 8.0)  # …this size
+SCREE_BLOCK_MM   = (4.5, 8.0)  # …this size, cut like the cliff's blocks
+SCREE_BLOCK_CUTS = (2, 4)      # …broken by this many planes
 SCREE_GAP        = 0.38        # centres at least this × (Di + Dj) apart
 SCREE_TILT_DEG   = 8.0
 SCREE_FAMILIES   = {'block': 0.45, 'wedge': 0.35, 'slab': 0.2}  # angular fragments, no domes
@@ -515,6 +531,9 @@ def stack(rng, form, zone=None):
             if (np.abs(top_ring - S[ring]) < STAGGER_MM).mean() <= STAGGER_SHARE:
                 break
             h = finish(h + rng.choice((-1.0, 1.0)) * rng.uniform(STAGGER_MM, 2.5 * STAGGER_MM))
+        hc = min(BLOCK_ASPECT * _min_side(cells), tgt - MIN_H_MM)
+        if MIN_H_MM <= hc < h:                        # a block; the rest stacks on it
+            h = hc
         c_top = c + h - a * Xv.mean() - b * Yv.mean()
         topz = c_top + a * X + b * Y
         if form.ztop is not None:
@@ -582,6 +601,12 @@ def _grow(rng, X, Y, S, T, want, site, ij, w, d, zmax, form):
     cells = np.zeros_like(ok)
     cells[i0:i1, j0:j1] = True
     return cells
+
+
+def _min_side(cells):
+    rr = footprint_polygon(cells).minimum_rotated_rectangle
+    xy = np.asarray(rr.exterior.coords)
+    return float(np.hypot(*np.diff(xy[:3], axis=0).T).min())
 
 
 def _grow_turned(X, Y, S, T, want, site, ij, w, d, zmax, yaw, e):
@@ -655,7 +680,9 @@ def footprint_polygon(cells):
     ii, jj = np.nonzero(cells)
     sq = [box(i * GRID_MM, j * GRID_MM, (i + 1) * GRID_MM, (j + 1) * GRID_MM)
           for i, j in zip(ii, jj)]
-    poly = shapely.union_all(sq).buffer(0.01).simplify(0.2)
+    # 0.45: straightens the grid staircase of a turned stone's sides (each
+    # step would extrude into a narrow facet — fluting)
+    poly = shapely.union_all(sq).buffer(0.01).simplify(FOOTPRINT_SIMPLIFY_MM)
     if poly.geom_type == 'MultiPolygon':
         poly = max(poly.geoms, key=lambda g: g.area)
     return shapely.geometry.Polygon(poly.exterior)
@@ -706,17 +733,69 @@ def rock_manifold(rng, r, form, S, support, zone=1.0):
     if zb > FOOT_Z_MM:                       # sits on rock: 45° bevel under it
         rock = _bevel_bottom(rock, poly, zb, lambda P: occupied(form, S, P))
     rock = _cleave(rng, rock, poly, r, form, S, support, zone)
+
+    def rim(n, a):                           # tile-boundary faces stay flush
+        return ((abs(n[0]) > 0.99 and min(abs(a[0]), abs(a[0] - form.W)) < 0.05)
+                or (abs(n[1]) > 0.99 and min(abs(a[1]), abs(a[1] - form.H)) < 0.05))
+    rock = round_edges(rng, rock, EDGE_ROUND_MM, rim)
     rock = rock.translate([0, 0, -zb])
     D = max(r.D, 4.0)
-    saved = _rl.FACET_MIN_NZ
+    saved = _rl.FACET_MIN_NZ, _rl.GRAIN_AMP_MM
     try:
+        _rl.GRAIN_AMP_MM = ROCK_GRAIN_MM
         rock, _ = _rl.chip_corners_edges(rng, rock, D)
         rock = _rl.texture(rng, rock)
     finally:
-        _rl.FACET_MIN_NZ = saved
+        _rl.FACET_MIN_NZ, _rl.GRAIN_AMP_MM = saved
     rock = rock.translate([0, 0, zb])
     if zb > FOOT_Z_MM:                       # sits on rock: embed a 45° keel in it
         rock = rock + _underfill(rock, zb)
+    return rock
+
+
+def round_edges(rng, rock, R_mm, keep=lambda n, a: False):
+    """Round every edge sharper than ROUND_MIN_DEG (but the base's and those
+    `keep` names) with three tangent planes of a cylinder of radius R: the
+    stone's edges soften and the seam to a neighbour opens into a groove.
+    A cut that would take more than an edge's worth (non-convex rock) is
+    skipped."""
+    t = to_mesh(rock)
+    if not len(t.faces):
+        return rock
+    t = trimesh.Trimesh(t.vertices, t.faces)
+    fn = t.face_normals
+    planes, seen = [], set()
+    for e in np.nonzero(t.face_adjacency_angles > np.radians(ROUND_MIN_DEG))[0]:
+        n1, n2 = fn[t.face_adjacency[e]]
+        if min(n1[2], n2[2]) < -0.5:
+            continue                                   # base edges: bevels and keels
+        a = t.vertices[t.face_adjacency_edges[e][0]]
+        if keep(n1, a) or keep(n2, a):
+            continue
+        key = (*np.round(n1, 2), *np.round(n2, 2), round(float(n1 @ a), 1), round(float(n2 @ a), 1))
+        if key in seen:
+            continue
+        seen.add(key)
+        R = rng.uniform(*R_mm)
+        c = a - R / (1.0 + float(n1 @ n2)) * (n1 + n2)  # the cylinder's axis
+        for s_ in (0.25, 0.5, 0.75):
+            u = (1 - s_) * n1 + s_ * n2
+            if np.linalg.norm(u) < 1e-3:
+                continue
+            u /= np.linalg.norm(u)
+            if u[2] >= -0.5:
+                planes.append((u, float(u @ c) + R, R))
+    bb = np.array(rock.bounding_box())
+    diag = float(np.linalg.norm(bb[3:] - bb[:3]))
+    vol = rock.volume()
+    for u, off, R in planes:
+        cut = rock.trim_by_plane((-u).tolist(), -off)
+        if cut.is_empty():
+            continue
+        v = cut.volume()
+        if vol - v > 0.5 * R * R * diag + 0.2:
+            continue
+        rock, vol = cut, v
     return rock
 
 
@@ -731,7 +810,8 @@ def _underfill(rock, zb):
            if (pp := rock.slice(zb + dz).to_polygons())]
     if not pts:
         return m3d.Manifold()
-    poly = shapely.MultiPoint(np.vstack(pts)).convex_hull.simplify(0.05)
+    poly = shapely.MultiPoint(np.vstack(pts)).convex_hull.buffer(
+        UNDERFILL_GROW_MM, join_style=2).simplify(0.05)
     if poly.geom_type != 'Polygon':
         return m3d.Manifold()
     poly = shapely.geometry.polygon.orient(poly, 1.0)
@@ -870,7 +950,7 @@ def _cleave(rng, rock, poly, r, form, S, support, zone):
             elif not rim and u < sum(BREAK_END_P):
                 ph = np.radians(rng.uniform(*BREAK_SHELF_DEG))
                 ends = [(d * np.cos(ph) + m * np.sin(ph), q)]
-            cuts.append((n, p, lim, ends))
+            cuts.append((n, p, lim, ends, (p0, p1, zlo, zhi)))
     for (a0, a1, ma, ra), (b0, b1, mb, rb) in zip(faces, faces[1:] + faces[:1]):
         if ra or rb or np.hypot(*(a1 - b0)) > 1e-6 or rng.random() > CORNER_BREAK_P * zone:
             continue                                  # broken-off vertical corners
@@ -881,7 +961,7 @@ def _cleave(rng, rock, poly, r, form, S, support, zone):
                       n[0] * np.sin(sp) + n[1] * np.cos(sp), rng.uniform(-0.25, 0.35)])
         n /= np.linalg.norm(n)
         dep = rng.uniform(*CORNER_BREAK_MM)
-        cuts.append((n, np.array([a1[0], a1[1], zlo + 0.5 * hgt]) - n * dep, dep + 1.0, []))
+        cuts.append((n, np.array([a1[0], a1[1], zlo + 0.5 * hgt]) - n * dep, dep + 1.0, [], None))
     cx, cy = poly.centroid.coords[0]
     loaded = occupied(form, S, [[cx, cy, zhi + 0.4]])[0]
     if loaded and (form.ztop is None or zhi < form.ztop - 0.5):
@@ -893,7 +973,7 @@ def _cleave(rng, rock, poly, r, form, S, support, zone):
             q = 0.5 * (p0 + p1)
             dep = rng.uniform(*JOINT_MM)
             cuts.append((n, np.array([q[0], q[1], c + a * q[0] + b * q[1]]) - n * dep,
-                         dep + 0.5, []))
+                         dep + 0.5, [], None))
     if (form.ztop is None or zhi < form.ztop - 0.5) and not loaded:
         c, a, b = r.top                               # an open ledge top: broken shoulders
         for p0, p1, m, rim in faces:
@@ -904,7 +984,7 @@ def _cleave(rng, rock, poly, r, form, S, support, zone):
             q = 0.5 * (p0 + p1)
             dep = rng.uniform(*SHOULDER_MM)
             cuts.append((n, np.array([q[0], q[1], c + a * q[0] + b * q[1]]) - n * dep,
-                         dep + 1.0, []))
+                         dep + 1.0, [], None))
     dress = []                       # faces turned off true in plan, battered back
     for p0, p1, m, rim in faces:
         L = np.hypot(*(p1 - p0))
@@ -918,14 +998,31 @@ def _cleave(rng, rock, poly, r, form, S, support, zone):
         be = np.radians(rng.uniform(*DRESS_BATTER_DEG))
         n = nh * np.cos(be) + z * np.sin(be)
         P = np.array([piv[0], piv[1], zlo + hgt * rng.uniform(0.0, 0.3)])
-        dress.append((n, P, DRESS_MAX_MM, []))
+        dress.append((n, P, DRESS_MAX_MM, [], None))
+    sub = []                         # broad low facets: each face a few planes
+    for p0, p1, m, rim in faces:
+        L = np.hypot(*(p1 - p0))
+        if rim:
+            continue
+        h = np.cross(m, z)
+        lam = SUBFACETS_PER_100MM2 * L * hgt / 100.0
+        for _ in range(min(int(rng.poisson(lam)), SUBFACETS_MAX)):
+            ps = rng.uniform(0, 2 * np.pi)
+            al = np.radians(rng.uniform(*SUBFACET_TILT_DEG))
+            n = m * np.cos(al) + (np.cos(ps) * h + np.sin(ps) * z) * np.sin(al)
+            pxy = p0 + rng.uniform(0.15, 0.85) * (p1 - p0)
+            P = np.array([pxy[0], pxy[1], zlo + hgt * rng.uniform(0.15, 0.85)])
+            sub.append((n, P, SUBFACET_MM, [], (p0, p1, zlo, zhi)))
     vol0 = rock.volume()
-    for n, p, lim, ends in dress + [cuts[i] for i in rng.permutation(len(cuts))]:
+    for n, p, lim, ends, face in (dress + [cuts[i] for i in rng.permutation(len(cuts))]
+                                  + sub):
         depth = (to_mesh(rock).vertices @ n).max() - n @ p
         if depth < 0.3:
             continue
         if depth > lim:                               # shallower, same angle
             p = p + n * (depth - lim)
+        if face is not None and not _facet_ok(n, p, face):
+            continue                                  # would leave a strip
         if ends:                                      # a convex piece out of the face
             bb = np.array(rock.bounding_box())
             piece = m3d.Manifold.cube((bb[3:] - bb[:3] + 2).tolist()).translate(
@@ -944,6 +1041,20 @@ def _cleave(rng, rock, poly, r, form, S, support, zone):
             continue                                  # would undercut a rock resting here
         rock = cut
     return rock
+
+
+def _facet_ok(n, p, face):
+    """Does the plane (n, p) cross the face (p0→p1, zlo..zhi) leaving at
+    least MIN_FACET_MM of it on either side?"""
+    p0, p1, zlo, zhi = face
+    L = np.hypot(*(p1 - p0))
+    t = np.r_[(p1 - p0) / L, 0.0]
+    g = np.hypot(n @ t, n[2])
+    if g < 1e-6:
+        return False
+    C = np.array([[*(p0 + s_ * (p1 - p0)), z_] for s_ in (0, 1) for z_ in (zlo, zhi)])
+    f = (C @ n - n @ p) / g
+    return f.max() >= MIN_FACET_MM and (-f).max() >= MIN_FACET_MM
 
 
 # ── 4 Assembly ──────────────────────────────────────────────────────────────
@@ -975,7 +1086,7 @@ def build(seed=1, form='run', cols=1, rows=1):
     tm['rocks'] = time.perf_counter() - t1
     t2 = time.perf_counter()
     pile = m3d.Manifold.batch_boolean(rocks, m3d.OpType.Add)
-    wedges, mouths = fissures(rng, pile, f, zone)
+    wedges, mouths = fissures(rng, pile, f, zone, placed)
     if not wedges.is_empty():
         pile = pile - wedges
     tm['fissures'] = time.perf_counter() - t2
@@ -1053,22 +1164,25 @@ def scree(rng, f, S, zone, mouths, gz):
     for i in pick(SCREE_PER_SQUARE * per):
         D = SCREE_D_MM[0] + (SCREE_D_MM[1] - SCREE_D_MM[0]) * rng.random() ** SCREE_D_EXP
         sites.append((i, D, rng.exponential(SCREE_REACH_MM)))
+    blocks = set()
     for i in pick(SCREE_BLOCKS * per):            # big fallen blocks
+        blocks.add(len(sites))
         sites.append((i, rng.uniform(*SCREE_BLOCK_MM), rng.exponential(0.3 * SCREE_REACH_MM)))
+    sites = [(i, D, reach, n in blocks) for n, (i, D, reach) in enumerate(sites)]
     for mo in mouths:                             # fallen out of the fissures
         near = np.argsort(np.hypot(*(P - mo[:2]).T))[:40]
         for _ in range(int(rng.integers(SCREE_MOUTH[0], SCREE_MOUTH[1] + 1))):
             D = SCREE_D_MM[0] + 4.0 * rng.random() ** SCREE_D_EXP
-            sites.append((int(rng.choice(near)), D, rng.exponential(0.5 * SCREE_REACH_MM)))
+            sites.append((int(rng.choice(near)), D, rng.exponential(0.5 * SCREE_REACH_MM), False))
     for i in pick(GRIT_PER_SQUARE * per):
-        sites.append((i, -rng.uniform(*GRIT_D_MM), rng.uniform(0, APRON_R_MM[0])))
+        sites.append((i, -rng.uniform(*GRIT_D_MM), rng.uniform(0, APRON_R_MM[0]), False))
     rng.shuffle(sites)
     sites.sort(key=lambda s_: -abs(s_[1]))        # big ones first, small ones fill in
     placed, stones = [], []
-    saved, fams = _rl.HEIGHT_MIN_MM, _rl.FAMILIES
-    _rl.FAMILIES = SCREE_FAMILIES
+    saved, fams, grain = _rl.HEIGHT_MIN_MM, _rl.FAMILIES, _rl.GRAIN_AMP_MM
+    _rl.FAMILIES, _rl.GRAIN_AMP_MM = SCREE_FAMILIES, ROCK_GRAIN_MM
     try:
-        for i, D, reach in sites:
+        for i, D, reach, block in sites:
             grit, D = D < 0, abs(D)
             x, y = P[i] + O[i] * (D * (0.5 - SCREE_LEAN) + reach)
             if not (D / 2 + 0.3 < x < f.W - D / 2 - 0.3 and D / 2 + 0.3 < y < f.H - D / 2 - 0.3):
@@ -1076,7 +1190,7 @@ def scree(rng, f, S, zone, mouths, gz):
             if any(np.hypot(x - a, y - b) < SCREE_GAP * (D + d) for a, b, d in placed):
                 continue
             _rl.HEIGHT_MIN_MM = min(saved, 0.55 * D)
-            st, _ = _rl.make_rock(rng, D)
+            st = _block_stone(rng, D) if block else _rl.make_rock(rng, D)[0]
             st = st.rotate([0.0, 0.0, float(rng.uniform(0, 360))])
             tilt, ax = rng.uniform(0, SCREE_TILT_DEG), rng.uniform(0, 2 * np.pi)
             st = st.rotate([float(tilt * np.cos(ax)), float(tilt * np.sin(ax)), 0.0])
@@ -1088,8 +1202,26 @@ def scree(rng, f, S, zone, mouths, gz):
             stones.append(st.translate([x, y, z0 - b[2]]))
             placed.append((x, y, D))
     finally:
-        _rl.HEIGHT_MIN_MM, _rl.FAMILIES = saved, fams
+        _rl.HEIGHT_MIN_MM, _rl.FAMILIES, _rl.GRAIN_AMP_MM = saved, fams, grain
     return stones
+
+
+def _block_stone(rng, D):
+    """A fallen block of the cliff: a box broken by a few planes, its edges
+    rounded like the stones it fell from.  Base at z = 0."""
+    dims = np.array([D, D * rng.uniform(0.55, 0.9), D * rng.uniform(0.45, 0.75)])
+    st = m3d.Manifold.cube(dims.tolist()).translate([-dims[0] / 2, -dims[1] / 2, 0.0])
+    for _ in range(int(rng.integers(SCREE_BLOCK_CUTS[0], SCREE_BLOCK_CUTS[1] + 1))):
+        n = rng.standard_normal(3)
+        n[2] = abs(n[2]) * 0.8
+        n /= np.linalg.norm(n)
+        reach = 0.5 * float(np.abs(dims * n).sum())
+        cut = st.trim_by_plane((-n).tolist(), -(reach - rng.uniform(0.12, 0.3) * D))
+        if not cut.is_empty() and cut.volume() > 0.6 * st.volume():
+            st = cut
+    st = round_edges(rng, st, (0.08 * D, 0.14 * D))
+    st, _ = _rl.chip_corners_edges(rng, st, D)
+    return _rl.texture(rng, st)
 
 
 def make_zones(rng, W):
@@ -1104,7 +1236,7 @@ def make_zones(rng, W):
     return zone
 
 
-def fissures(rng, pile, f, zone):
+def fissures(rng, pile, f, zone, placed=()):
     """V-wedge fissures across the assembled face: major ones 2–5 mm deep
     (some sending off a branch), minor ones ≈ 1 mm, sited on the open faces
     and mostly in the shattered zones.  Each is a convex wedge cut through
@@ -1119,6 +1251,28 @@ def fissures(rng, pile, f, zone):
            | (pts[:, 1] < 0.5) | (pts[:, 1] > f.H - 0.5))
     face_w = np.where(rim, 0.3, 1.0)              # open faces; tile-edge faces less
     w = face_w * zone(pts[:, 0]) ** 2 * ok
+    # stone joints: the corners of each stone's footprint over its height —
+    # a fracture opens most readily along a joint
+    jd, jv = np.full(len(pts), np.inf), np.zeros((len(pts), 2))
+    J = []
+    for r in placed:
+        xy = np.asarray(footprint_polygon(r.cells).exterior.coords)[:-1]
+        c, a, b = r.top
+        for k in range(len(xy)):
+            e1, e2 = xy[k] - xy[k - 1], xy[(k + 1) % len(xy)] - xy[k]
+            cs = (e1 @ e2) / max(np.hypot(*e1) * np.hypot(*e2), 1e-9)
+            if cs < np.cos(np.radians(30.0)):           # a real corner
+                J.append((*xy[k], r.z0, c + a * xy[k][0] + b * xy[k][1]))
+    if J:
+        J = np.array(J)
+        for c0 in range(0, len(pts), 2000):
+            Q = pts[c0:c0 + 2000]
+            d = np.hypot(Q[:, None, 0] - J[None, :, 0], Q[:, None, 1] - J[None, :, 1])
+            d[(Q[:, None, 2] < J[None, :, 2] - 0.5) | (Q[:, None, 2] > J[None, :, 3] + 0.5)] = np.inf
+            k = d.argmin(1)
+            jd[c0:c0 + 2000] = d[np.arange(len(Q)), k]
+            jv[c0:c0 + 2000] = J[k, :2]
+        w = w * (1.0 + JOINT_WEIGHT * np.exp(-(jd / JOINT_SNAP_MM) ** 2))
     if w.sum() == 0:
         return m3d.Manifold(), []
     sq = f.W / SQUARE_MM
@@ -1161,6 +1315,11 @@ def fissures(rng, pile, f, zone):
         dep = rng.uniform(*(DEEP_DEPTH_MM if deep else MAJOR_DEPTH_MM if major
                             else MINOR_DEPTH_MM))
         th = lean()
+        if jd[i] < JOINT_SNAP_MM:                      # down the joint
+            q = onto_surface(np.array([jv[i][0], jv[i][1], p[2]]), m)
+            if q is not None and np.hypot(*(q[:2] - p[:2])) < 2 * JOINT_SNAP_MM:
+                p = q
+                th = float(np.clip(rng.normal(0.0, JOINT_LEAN_DEG), -15.0, 15.0))
         if not major:
             L = rng.uniform(*MINOR_LEN_MM)
             up = rng.uniform(0.3, 0.7) * L
