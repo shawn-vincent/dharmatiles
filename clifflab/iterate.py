@@ -57,7 +57,8 @@ def paint(mesh):
         t = L @ t
     k = np.digitize(t, [0.18, 0.36, 0.56, 0.74, 0.9])
     zmax = v[:, 2].max()
-    dirt = (n[:, 2] > 0.55) & ((v[:, 2] < rm.FOOT_Z_MM + 1.6) | (v[:, 2] > zmax - 3.0))
+    dirt = (((n[:, 2] > 0.55) & ((v[:, 2] < rm.FOOT_Z_MM + 1.6) | (v[:, 2] > zmax - 3.0)))
+            | (n[:, 2] > 0.88))                      # ledges and up-facing tops: dusty
     kd = 6 + np.digitize(0.5 + 0.3 * cs / (cs.std() + 1e-9), [0.3, 0.8])
     k = np.where(dirt, kd, k)
     k = np.where(v[:, 2] < rm.FOOT_Z_MM - 0.8, 9, k)

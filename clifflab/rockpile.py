@@ -107,14 +107,19 @@ PUSH_MM          = (0.25, 0.6) # …by this much (≤ BEVEL_MM: the rock above s
 MAX_ROCKS        = 400
 JUT_P            = 0.5        # a rock at the cliff front juts out past it…
 JUT_MM           = (1.5, 5.0)  # …this far (a column or block standing proud)
-BLOCK_ASPECT     = 1.8         # a stone stands at most this × its narrow side (blocks, not pipes)
+BLOCK_ASPECT     = {           # a stone stands at most (drawn from) this × its narrow side:
+    'column': (2.0, 3.2), 'block': (1.2, 2.0), 'slab': (0.5, 1.0),   # varied, so no courses
+    'odd': (1.0, 1.8), 'monolith': (3.0, 4.0)}
+SIZE_LOW_GAIN    = 0.5         # stones low in the mass × (1 + this/2), high × (1 − this/2)
 ROUND_YAW_DEG    = 8.0         # round forms: stones face the outline's tangent, ± this (σ)
 ROUND_SMOOTH_MM  = 3.0         # …the tangent read off the outline smoothed this much
 
 # 3 finish
 JOINT_OVERLAP_MM = 0.03        # rock footprints overlap their neighbours this much
 FOOTPRINT_SIMPLIFY_MM = 0.45   # footprint outline straightened to this tolerance
-EDGE_ROUND_MM    = (0.5, 0.9)  # every exposed edge rounded (3 planes) this radius:
+EDGE_ROUND_MM    = (0.3, 0.7)  # every exposed edge rounded (3 planes) this radius…
+EDGE_CRISP_P     = 0.3         # …or, this often, only × EDGE_CRISP (a fresh break)
+EDGE_CRISP       = 0.35
 ROUND_MIN_DEG    = 20.0        # …edges sharper than this; joints open into grooves
 ROCK_GRAIN_MM    = 0.05        # grain amplitude on cliff stones (quiet planes, not stucco)
 MIN_FACET_MM     = 2.5         # a break leaves no facet narrower than this (no strips)
@@ -207,6 +212,12 @@ SCREE_FAMILIES   = {'block': 0.45, 'wedge': 0.35, 'slab': 0.2}  # angular fragme
 SCREE_SINK_MM    = 0.3         # into the dirt (plus whatever the tilt lifts)
 CAP_DROP_MM      = 1.0         # dirt top sits this far under the top plane…
 CAP_EDGE_MM      = 3.0         # …held back this far from the cliff edge
+LEDGE_FLAT_MM    = 1.5         # ledge dirt: rock tops varying less than this over…
+LEDGE_WIN_MM     = 2.5         # …this window are ledges…
+LEDGE_EDGE_MM    = 2.5         # …their dirt held back this far from the edge…
+LEDGE_DROP_MM    = 0.45        # …its mean surface this far under the rock top (patchy)…
+DIRT_ON_ROCK_MM  = 2.5         # dirt (top, ledges) only this close above rock
+LEDGE_MIN_MM2    = 6.0         # …on ledges at least this big
 
 
 def to_mesh(man):
@@ -232,6 +243,7 @@ class Form:
     planes: list
     ztop: float | None       # the top contact plane, if any
     round: bool = False      # free-standing outline: stones face its tangent
+    mass: float = 1.0        # stone size × this (massive blocks vs. broken rubble)
 
 
 def _segments(rng, length):
@@ -254,22 +266,25 @@ def _segments(rng, length):
 #   rings      : ((outer radius range mm), (height × range)) outer → inner;
 #                radii scale with the tile (× min(W, H) / 70)
 FORMS = {
-    'run':        dict(kind='band', walls=('back',), height=35.0, cap=True),       # B H N
-    'corner':     dict(kind='band', walls=('back', 'left'), height=35.0, cap=True),  # C
+    'run':        dict(kind='band', walls=('back',), height=35.0, cap=True, mass=1.35),  # B H N
+    'corner':     dict(kind='band', walls=('back', 'left'), height=35.0, cap=True,     # C
+                       mass=1.35),
     'canyon':     dict(kind='band', walls=('left', 'right'), height=35.0, cap=True,  # I K
+                       mass=1.3,
                        depth=(8.0, 14.0), top_depth=(5.0, 9.0), buttress=(14.0, 17.0)),
-    'escarpment': dict(kind='band', walls=('back',), height=(10.0, 40.0), cap=False),  # D O
-    'plateau':    dict(kind='rings', height=14.0, cap=True,                         # A
+    'escarpment': dict(kind='band', walls=('back',), height=(10.0, 40.0), cap=False,  # D O
+                       mass=1.2),
+    'plateau':    dict(kind='rings', height=14.0, cap=True, mass=1.3,               # A
                        rings=(((22.0, 28.0), (1.0, 1.0)),)),
-    'massif':     dict(kind='rings', height=35.0, cap=True,                         # M
+    'massif':     dict(kind='rings', height=35.0, cap=True, mass=1.4,               # M
                        rings=(((24.0, 29.0), (0.4, 0.6)), ((13.0, 17.0), (1.0, 1.0)))),
-    'mound':      dict(kind='rings', height=38.0, cap=False,                        # F
-                       rings=(((24.0, 28.0), (0.12, 0.22)), ((18.0, 21.0), (0.3, 0.42)),
-                              ((13.0, 15.0), (0.5, 0.62)), ((8.0, 10.0), (0.7, 0.82)),
-                              ((4.0, 5.5), (1.0, 1.0)))),
+    'mound':      dict(kind='rings', height=34.0, cap=False, mass=1.15,             # F
+                       rings=(((25.0, 29.0), (0.12, 0.22)), ((19.0, 22.0), (0.32, 0.45)),
+                              ((13.0, 16.0), (0.52, 0.66)), ((8.0, 10.0), (0.74, 0.86)),
+                              ((5.0, 7.0), (1.0, 1.0)))),
     'spire':      dict(kind='rings', height=58.0, cap=False,                        # E P
-                       rings=(((20.0, 23.0), (0.08, 0.14)), ((14.0, 17.0), (0.25, 0.4)),
-                              ((10.0, 12.0), (0.55, 0.7)), ((6.0, 7.5), (1.0, 1.0)))),
+                       rings=(((24.0, 28.0), (0.08, 0.14)), ((17.0, 20.0), (0.25, 0.4)),
+                              ((11.0, 13.0), (0.5, 0.68)), ((6.5, 8.0), (1.0, 1.0)))),
     'needles':    dict(kind='rings', height=55.0, cap=False, centres=(2, 3),         # J
                        base=((1.2, 1.4), (0.12, 0.2)),
                        rings=(((14.0, 17.0), (0.1, 0.18)), ((9.0, 11.0), (0.35, 0.5)),
@@ -310,7 +325,8 @@ def make_form(rng, form, W, H):
               Plane(np.array([0, 0, 0.]), np.array([0, -1, 0.]))]
     if zt is not None:
         planes.append(Plane(np.array([0, 0, zt]), np.array([0, 0, 1.])))
-    return Form(W, H, T, planes, zt, round=spec['kind'] == 'rings')
+    return Form(W, H, T, planes, zt, round=spec['kind'] == 'rings',
+                mass=spec.get('mass', 1.0))
 
 
 def _band(rng, spec, A, Dp, L):
@@ -471,7 +487,9 @@ def stack(rng, form, zone=None):
         if kind == 'monolith' and not (is_top and S[si, sj] <= FOOT_Z_MM):
             kind = 'column'                           # monoliths stand on the ground
         _, al, dp, hr, bridge, tilt = KINDS[kind]
-        w, d = rng.uniform(*al), rng.uniform(*dp)
+        lo = 1.0 + SIZE_LOW_GAIN * (0.5 - np.clip((S[si, sj] - FOOT_Z_MM)
+                                                  / max(T.max() - FOOT_Z_MM, 1.0), 0, 1))
+        w, d = (rng.uniform(*al) * form.mass * lo, rng.uniform(*dp) * form.mass * lo)
         sz = 1.0
         if zone is not None:              # big quiet masses, small shattered blocks
             u = (float(zone(site[0])[0]) - ZONE_FLOOR) / (1 - ZONE_FLOOR)
@@ -495,7 +513,9 @@ def stack(rng, form, zone=None):
             S[si, sj] = T[si, sj]
             continue
         if form.round and cells.sum() * GRID_MM ** 2 < MIN_AREA_MM2 and rocks:
-            S = _merge_crumb(rocks, cells, S, X, Y, form)
+            S, ok = _merge_crumb(rocks, cells, S, X, Y, form)
+            if not ok:                    # left as a notch: nothing to fill, no dirt
+                want = want & ~cells
             continue
         if not form.round and rng.random() < JUT_P:
             cells = _jut(rng, cells, want, S)
@@ -519,7 +539,8 @@ def stack(rng, form, zone=None):
 
         # height follows size too (more gently): wide masses stay masses, not
         # squat slabs stacked like masonry
-        h = finish(tgt + 1.0 if hr is None else rng.uniform(*hr) * sz ** ZONE_SIZE_H_EXP)
+        h = finish(tgt + 1.0 if hr is None
+                   else rng.uniform(*hr) * (sz * form.mass * lo) ** ZONE_SIZE_H_EXP)
         # stagger: a rock stopping short of T must not end level with its
         # neighbours along their shared edge — that is how courses appear
         ring = (ndimage.binary_dilation(cells, iterations=2) & ~cells
@@ -531,7 +552,7 @@ def stack(rng, form, zone=None):
             if (np.abs(top_ring - S[ring]) < STAGGER_MM).mean() <= STAGGER_SHARE:
                 break
             h = finish(h + rng.choice((-1.0, 1.0)) * rng.uniform(STAGGER_MM, 2.5 * STAGGER_MM))
-        hc = min(BLOCK_ASPECT * _min_side(cells), tgt - MIN_H_MM)
+        hc = min(rng.uniform(*BLOCK_ASPECT[kind]) * _min_side(cells), tgt - MIN_H_MM)
         if MIN_H_MM <= hc < h:                        # a block; the rest stacks on it
             h = hc
         c_top = c + h - a * Xv.mean() - b * Yv.mean()
@@ -637,15 +658,13 @@ def _merge_crumb(rocks, cells, S, X, Y, form):
         if z.min() > S[cells].max() + MIN_H_MM * 0.5 and abs(z.mean() - S[cells].mean()) < bz:
             best, bz = (r, z), abs(z.mean() - S[cells].mean())
     if best is None:                       # nothing fits: leave it as a notch
-        S = S.copy()
-        S[cells] = np.maximum(S[cells], form.T[cells])
-        return S
+        return S, False
     r, z = best
     r.cells = r.cells | cells
     r.z0 = min(r.z0, float(S[cells].min()) - (SINK_MM if S[cells].min() > FOOT_Z_MM else 0.0))
     S = S.copy()
     S[cells] = np.maximum(S[cells], z)
-    return S
+    return S, True
 
 
 def _jut(rng, cells, want, S):
@@ -776,7 +795,7 @@ def round_edges(rng, rock, R_mm, keep=lambda n, a: False):
         if key in seen:
             continue
         seen.add(key)
-        R = rng.uniform(*R_mm)
+        R = rng.uniform(*R_mm) * (EDGE_CRISP if rng.random() < EDGE_CRISP_P else 1.0)
         c = a - R / (1.0 + float(n1 @ n2)) * (n1 + n2)  # the cylinder's axis
         for s_ in (0.25, 0.5, 0.75):
             u = (1 - s_) * n1 + s_ * n2
@@ -1094,8 +1113,15 @@ def build(seed=1, form='run', cols=1, rows=1):
     ground, gz = foot_ground(f, S, zone, seed)
     parts = [pile, ground, *scree(rng, f, S, zone, mouths, gz)]
     tm['scree'] = time.perf_counter() - t2
+    dirt = [_ledges(f, S, seed)]
     if f.ztop is not None:
-        parts.append(_cap(rng, f, S, seed))
+        dirt.append(_cap(rng, f, S, seed))
+    dirt = m3d.Manifold.batch_boolean(dirt, m3d.OpType.Add)
+    if not wedges.is_empty():               # fissures run on through the dirt
+        dirt = dirt - wedges
+    # dirt only where rock lies under it (within DIRT_ON_ROCK_MM): no dirt
+    # wall stands over a dressed-back face, a notch or a crack
+    parts.append(dirt ^ pile.translate([0, 0, DIRT_ON_ROCK_MM]))
     top_ = m3d.Manifold.batch_boolean(parts, m3d.OpType.Add)
     top_ = top_ ^ m3d.Manifold.cube([W, H, 200.0])
     import clifflab as cl
@@ -1408,6 +1434,42 @@ def _cap(rng, f, S, seed):
         # rock tops under it, a straight wall instead of a flat ceiling
         parts.append(m3d.Manifold.extrude(cs, f.ztop + 1.0 - FOOT_Z_MM)
                      .translate([0, 0, FOOT_Z_MM]))
+    return hf ^ m3d.Manifold.batch_boolean(parts, m3d.OpType.Add)
+
+
+def _ledges(f, S, seed):
+    """Dirt lodged on the open ledges (below any dirt top): patchy, its
+    mean surface a little under the rock tops so the relief shows through in
+    pockets, held back from the ledge edges."""
+    from dharmatiles.core.mesh import make_heightmap_solid
+    k = max(3, int(round(LEDGE_WIN_MM / GRID_MM)))
+    rock = S > FOOT_Z_MM + 1.0
+    flat = rock & (ndimage.maximum_filter(S, k) - ndimage.minimum_filter(S, k) < LEDGE_FLAT_MM)
+    if f.ztop is not None:
+        flat &= S < f.ztop - 2.5
+    mask = ndimage.binary_erosion(flat, iterations=int(round(LEDGE_EDGE_MM / GRID_MM)),
+                                  border_value=0)
+    lab, nl = ndimage.label(mask)
+    if nl:
+        area = ndimage.sum(mask, lab, np.arange(1, nl + 1)) * GRID_MM ** 2
+        mask = np.isin(lab, 1 + np.nonzero(area >= LEDGE_MIN_MM2)[0])
+    if not mask.any():
+        return m3d.Manifold()
+    poly = footprint_polygon_all(mask)
+    dirt = _dirt.dirt_relief(seed + 11, f.W, f.H)
+    zi = _resample((S - LEDGE_DROP_MM).T, dirt.relief.shape) + dirt.relief
+    hf = _gl.to_manifold(make_heightmap_solid(zi - 4.0, f.W, f.H,
+                                              base_h=0.0)).translate([0, 0, 4.0])
+    parts = []
+    for g in getattr(poly, 'geoms', [poly]):
+        if g.area < LEDGE_MIN_MM2:
+            continue
+        cs = m3d.CrossSection([np.asarray(shapely.geometry.polygon.orient(g, 1.0)
+                                          .exterior.coords)[:-1]])
+        parts.append(m3d.Manifold.extrude(cs, float(S.max()) + 2.0 - FOOT_Z_MM)
+                     .translate([0, 0, FOOT_Z_MM]))
+    if not parts:
+        return m3d.Manifold()
     return hf ^ m3d.Manifold.batch_boolean(parts, m3d.OpType.Add)
 
 
