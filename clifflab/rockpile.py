@@ -41,6 +41,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
+import functools
 import pathlib
 import sys
 import time
@@ -59,11 +61,12 @@ for _lab in ('dirtlab', 'grasslab', 'rocklab', 'clifflab'):
 import dirtlab as _dirt     # noqa: E402
 import grasslab as _gl      # noqa: E402
 import rocklab as _rl       # noqa: E402
+from dharmatiles.core.mesh import make_heightmap_solid   # noqa: E402
+from dharmatiles.stone.noise import fbm                  # noqa: E402
 
 # ── Parameters ──────────────────────────────────────────────────────────────
 SQUARE_MM        = 35.0
 FOOT_Z_MM        = 4.0         # foot ground (DB dirt band)
-CLIFF_H_MM       = 35.0
 GRID_MM          = 0.25
 
 # 1 form (run)
@@ -133,8 +136,8 @@ EDGE_CRISP       = 0.35
 ROUND_MIN_DEG    = 20.0        # …edges sharper than this; joints open into grooves
 ROCK_GRAIN_MM    = 0.05        # grain amplitude on scree stones
 FACE_GRAIN_MM    = 0.4         # grain amplitude on cliff stones: deep enough to catch
-FIT_GAP_MM       = 0.02        # stones stop this short of the tile boundary (not cut)
 FACE_GRAIN_LEN_MM = 2.0        # …a drybrush, this coarse (≈ 5 lines) so it survives printing
+FIT_GAP_MM       = 0.02        # stones stop this short of the tile boundary (not cut)
 EXPORT_RETRY_TOL_MM = (None, 0.03, 0.06)  # export: simplify the top this much if needed
 CHIP_MAX_MM3     = 3.0         # a chip (rocklab's) takes at most this: a plane through a
                                # corner of a non-convex stone would take a whole arm
@@ -261,27 +264,42 @@ DIRT_REACH_MM    = 3.0         # …over at most this
 DIRT_SINK_MM     = 0.3         # its underside the rock top sunk this far
 
 
+def _grid(nx, ny):
+    """Cell-centre coordinates X, Y of an (nx, ny) GRID_MM grid."""
+    return np.meshgrid((np.arange(nx) + 0.5) * GRID_MM, (np.arange(ny) + 0.5) * GRID_MM,
+                       indexing='ij')
+
+
 def to_mesh(man):
     o = man.to_mesh()
     return trimesh.Trimesh(np.asarray(o.vert_properties)[:, :3], np.asarray(o.tri_verts),
                            process=False)
 
 
+def _signed(rng, lo_hi):
+    """± U(lo, hi), the sign drawn first."""
+    return rng.choice((-1, 1)) * rng.uniform(*lo_hi)
+
+
+@contextlib.contextmanager
+def _rl_params(**kw):
+    """rocklab's module parameters set to `kw` for the duration."""
+    saved = {k: getattr(_rl, k) for k in kw}
+    try:
+        for k, v in kw.items():
+            setattr(_rl, k, v)
+        yield
+    finally:
+        for k, v in saved.items():
+            setattr(_rl, k, v)
+
+
 # ── 1 Form ──────────────────────────────────────────────────────────────────
-@dataclass
-class Plane:
-    """A contact plane: rocks touch it but never cross it.  `n` points out
-    of the volume."""
-    p: np.ndarray
-    n: np.ndarray
-
-
 @dataclass
 class Form:
     W: float
     H: float
     T: np.ndarray            # target height per grid cell (FOOT_Z_MM = nothing)
-    planes: list
     ztop: float | None       # the top contact plane, if any
     round: bool = False      # free-standing outline: stones face its tangent
     mass: float = 1.0        # stone size × this (massive blocks vs. broken rubble)
@@ -351,16 +369,13 @@ def make_form(rng, form, W, H):
     if form not in FORMS:
         raise ValueError(f"form {form!r}: one of {', '.join(FORMS)}")
     spec = FORMS[form]
-    nx, ny = int(round(W / GRID_MM)), int(round(H / GRID_MM))
-    x = (np.arange(nx) + 0.5) * GRID_MM
-    y = (np.arange(ny) + 0.5) * GRID_MM
-    X, Y = np.meshgrid(x, y, indexing='ij')
-    T = np.full((nx, ny), FOOT_Z_MM)
+    X, Y = _grid(int(round(W / GRID_MM)), int(round(H / GRID_MM)))
+    T = np.full(X.shape, FOOT_Z_MM)
     along_y = None
     if spec['kind'] == 'band':
         walls = {'back': (X, H - Y, W), 'front': (X, Y, W),
                  'left': (Y, X, H), 'right': (Y, W - X, H)}
-        along_y = np.zeros((nx, ny), bool)
+        along_y = np.zeros(X.shape, bool)
         for wall in spec['walls']:
             Tw = _band(rng, spec, *walls[wall])
             along_y = np.where(Tw > T, wall in ('left', 'right'), along_y)
@@ -369,13 +384,7 @@ def make_form(rng, form, W, H):
         T = _rings(rng, spec, X, Y, W, H)
     h = spec['height']
     zt = FOOT_Z_MM + h if spec['cap'] and np.isscalar(h) else None
-    planes = [Plane(np.array([0, 0, 0.]), np.array([-1, 0, 0.])),
-              Plane(np.array([W, 0, 0.]), np.array([1, 0, 0.])),
-              Plane(np.array([0, H, 0.]), np.array([0, 1, 0.])),
-              Plane(np.array([0, 0, 0.]), np.array([0, -1, 0.]))]
-    if zt is not None:
-        planes.append(Plane(np.array([0, 0, zt]), np.array([0, 0, 1.])))
-    return Form(W, H, T, planes, zt, round=spec['kind'] == 'rings',
+    return Form(W, H, T, zt, round=spec['kind'] == 'rings',
                 mass=spec.get('mass', 1.0), along_y=along_y, kind_p=spec.get('kinds', {}))
 
 
@@ -432,8 +441,7 @@ def _band(rng, spec, A, Dp, L):
                              FOOT_Z_MM + MIN_H_MM + 1.0, zt - MIN_H_MM - 1.0)
                 d2 = d_all
                 if d_top < d_all and rng.random() < 0.5:
-                    d2 = d_all + rng.choice((-1.0, 1.0)) * rng.uniform(MIN_STRIP_MM,
-                                                                       1.5 * MIN_STRIP_MM)
+                    d2 = d_all + _signed(rng, (MIN_STRIP_MM, 1.5 * MIN_STRIP_MM))
                     if d2 < d_top + MIN_STRIP_MM:
                         d2 = d_all + abs(d2 - d_all)
                 T[sel & (Dp <= d2)] = z2
@@ -457,9 +465,7 @@ def _rings(rng, spec, X, Y, W, H):
         size, hgt = (1.0, 1.0) if i == 0 else (rng.uniform(*NEEDLE_SCALE),) * 2
         r_out = spec['rings'][0][0][1] * sc * size
         c = np.array([W / 2, H / 2]) + rng.uniform(-2, 2, 2)
-        for _ in range(50):              # a cluster round the first, clear of the edge
-            if i == 0:
-                break
+        for _ in range(50 if i else 0):  # a cluster round the first, clear of the edge
             c0, r0 = centres[0]
             t = rng.uniform(0, 2 * np.pi)
             c = c0 + rng.uniform(*NEEDLE_SPREAD) * (r0 + r_out) * np.array([np.cos(t), np.sin(t)])
@@ -508,12 +514,18 @@ class Placed:
     D: float                  # size, for the finishing passes
     bed: np.ndarray = None    # the support's height under each footprint cell (NaN off it)
 
+    def top_z(self, x, y):
+        c, a, b = self.top
+        return c + a * x + b * y
 
-def stack(rng, form, zone=None):
+    @functools.cached_property
+    def poly(self):           # (read only once the stack is done: cells may still grow)
+        return footprint_polygon(self.cells)
+
+
+def stack(rng, form, zone):
     T = form.T
-    nx, ny = T.shape
-    X, Y = np.meshgrid((np.arange(nx) + 0.5) * GRID_MM, (np.arange(ny) + 0.5) * GRID_MM,
-                       indexing='ij')
+    X, Y = _grid(*T.shape)
     S = np.full_like(T, FOOT_Z_MM - 1.0)
     want = T > FOOT_Z_MM
     rocks = []
@@ -543,11 +555,9 @@ def stack(rng, form, zone=None):
         lo = 1.0 + SIZE_LOW_GAIN * (0.5 - np.clip((S[si, sj] - FOOT_Z_MM)
                                                   / max(T.max() - FOOT_Z_MM, 1.0), 0, 1))
         w, d = (rng.uniform(*al) * form.mass * lo, rng.uniform(*dp) * form.mass * lo)
-        sz = 1.0
-        if zone is not None:              # big quiet masses, small shattered blocks
-            u = (float(zone(site[0])[0]) - ZONE_FLOOR) / (1 - ZONE_FLOOR)
-            sz = ZONE_SIZE[0] + (ZONE_SIZE[1] - ZONE_SIZE[0]) * u
-            w *= sz
+        u = (float(zone(site[0])[0]) - ZONE_FLOOR) / (1 - ZONE_FLOOR)
+        sz = ZONE_SIZE[0] + (ZONE_SIZE[1] - ZONE_SIZE[0]) * u   # big quiet masses, small
+        w *= sz                                                 # shattered blocks
         if form.along_y is not None and form.along_y[si, sj]:
             w, d = d, w                               # the stone's long side along its band
         cells = None
@@ -609,7 +619,7 @@ def stack(rng, form, zone=None):
             top_ring = c + h + a * (X[ring] - Xv.mean()) + b * (Y[ring] - Yv.mean())
             if (np.abs(top_ring - S[ring]) < STAGGER_MM).mean() <= STAGGER_SHARE:
                 break
-            h = finish(h + rng.choice((-1.0, 1.0)) * rng.uniform(STAGGER_MM, 2.5 * STAGGER_MM))
+            h = finish(h + _signed(rng, (STAGGER_MM, 2.5 * STAGGER_MM)))
         hc = min(rng.uniform(*BLOCK_ASPECT[kind]) * _min_side(cells), tgt - MIN_H_MM)
         if MIN_H_MM <= hc < h:                        # a block; the rest stacks on it
             h = hc
@@ -618,12 +628,17 @@ def stack(rng, form, zone=None):
         if form.ztop is not None:
             topz = np.minimum(topz, form.ztop)
         S = np.where(cells, np.maximum(S, topz), S)
-        z0 = float(Sv.min()) - (SINK_MM if Sv.min() > FOOT_Z_MM else 0.0)
+        z0 = _sunk(Sv)
         bed = np.full(S.shape, np.nan)
         bed[cells] = Sv
         rocks.append(Placed(cells, z0, (c_top, a, b), kind,
                             float(np.median([w, d, h])), bed))
     return rocks, S
+
+
+def _sunk(Sv):
+    """A rock's underside on supports Sv: sunk SINK_MM into rock, not into the ground."""
+    return float(Sv.min()) - (SINK_MM if Sv.min() > FOOT_Z_MM else 0.0)
 
 
 def _grow(rng, X, Y, S, T, want, site, ij, w, d, zmax, form):
@@ -634,53 +649,35 @@ def _grow(rng, X, Y, S, T, want, site, ij, w, d, zmax, form):
     leftover pockets stay rectangular and never become slivers."""
     ok = want & (S <= zmax) & (T - S > 0.3)
     nx, ny = ok.shape
-    i0, i1, j0, j1 = ij[0], ij[0] + 1, ij[1], ij[1] + 1
-    goal = {'x': w / GRID_MM, 'y': d / GRID_MM}
+    bd = [ij[0], ij[0] + 1, ij[1], ij[1] + 1]       # i0, i1, j0, j1; side k moves bd[k]
+    goal = (w / GRID_MM, d / GRID_MM)
     snap = SNAP_MM / GRID_MM
+
+    def free(side, k=0):                            # the k-th row beyond `side` all ok
+        i0, i1, j0, j1 = bd
+        if side == 0:
+            return i0 - 1 - k >= 0 and ok[i0 - 1 - k, j0:j1].all()
+        if side == 1:
+            return i1 + k < nx and ok[i1 + k, j0:j1].all()
+        if side == 2:
+            return j0 - 1 - k >= 0 and ok[i0:i1, j0 - 1 - k].all()
+        return j1 + k < ny and ok[i0:i1, j1 + k].all()
+
     for limit in ('goal', 'snap'):
         for side in rng.permutation(4):
-            while True:
-                if side == 0 and i0 > 0 and ok[i0 - 1, j0:j1].all():
-                    pass
-                elif side == 1 and i1 < nx and ok[i1, j0:j1].all():
-                    pass
-                elif side == 2 and j0 > 0 and ok[i0:i1, j0 - 1].all():
-                    pass
-                elif side == 3 and j1 < ny and ok[i0:i1, j1].all():
-                    pass
-                else:
-                    break
-                span = (i1 - i0) if side < 2 else (j1 - j0)
-                cap = goal['x' if side < 2 else 'y']
+            while free(side):
                 if limit == 'snap':
                     # run on only if the pocket ends within the snap distance
                     k = 0
-                    while k <= snap:
-                        if side == 0:
-                            free = i0 - 1 - k >= 0 and ok[i0 - 1 - k, j0:j1].all()
-                        elif side == 1:
-                            free = i1 + k < nx and ok[i1 + k, j0:j1].all()
-                        elif side == 2:
-                            free = j0 - 1 - k >= 0 and ok[i0:i1, j0 - 1 - k].all()
-                        else:
-                            free = j1 + k < ny and ok[i0:i1, j1 + k].all()
-                        if not free:
-                            break
+                    while k <= snap and free(side, k):
                         k += 1
                     if k > snap:
                         break
-                elif span >= cap:
+                elif bd[2 * (side // 2) + 1] - bd[2 * (side // 2)] >= goal[side // 2]:
                     break
-                if side == 0:
-                    i0 -= 1
-                elif side == 1:
-                    i1 += 1
-                elif side == 2:
-                    j0 -= 1
-                else:
-                    j1 += 1
+                bd[side] += 1 if side % 2 else -1
     cells = np.zeros_like(ok)
-    cells[i0:i1, j0:j1] = True
+    cells[bd[0]:bd[1], bd[2]:bd[3]] = True
     return cells
 
 
@@ -711,8 +708,7 @@ def _merge_crumb(rocks, cells, S, X, Y, form):
     for r in rocks[::-1]:
         if not (r.cells & ring).any():
             continue
-        c, a, b = r.top
-        z = c + a * X[cells] + b * Y[cells]
+        z = r.top_z(X[cells], Y[cells])
         if form.ztop is not None:
             z = np.minimum(z, form.ztop)
         if z.min() > S[cells].max() + MIN_H_MM * 0.5 and abs(z.mean() - S[cells].mean()) < bz:
@@ -722,7 +718,7 @@ def _merge_crumb(rocks, cells, S, X, Y, form):
     r, z = best
     r.cells = r.cells | cells
     r.bed[cells] = S[cells]
-    r.z0 = min(r.z0, float(S[cells].min()) - (SINK_MM if S[cells].min() > FOOT_Z_MM else 0.0))
+    r.z0 = min(r.z0, _sunk(S[cells]))
     S = S.copy()
     S[cells] = np.maximum(S[cells], z)
     return S, True
@@ -769,6 +765,11 @@ def footprint_polygon(cells):
     return shapely.geometry.Polygon(poly.exterior)
 
 
+def _ccw(poly):
+    """The polygon's outline, counter-clockwise (closed)."""
+    return np.asarray(shapely.geometry.polygon.orient(poly, 1.0).exterior.coords)
+
+
 def occupied(form, S, P):
     """Is each point inside the finished pile (or below the ground)?"""
     P = np.atleast_2d(P)
@@ -782,15 +783,14 @@ def occupied(form, S, P):
     return out
 
 
-def rock_manifold(rng, r, form, S, support, zone=1.0):
+def rock_manifold(rng, r, form, S, support, zone):
     # neighbours overlap by a hair instead of touching face to face: exact
     # tangent faces survive the union but pinch on float32 STL reload
-    poly = footprint_polygon(r.cells).buffer(JOINT_OVERLAP_MM, join_style=2)
-    cs = m3d.CrossSection([np.asarray(shapely.geometry.polygon.orient(poly, 1.0)
-                                      .exterior.coords)[:-1]])
+    poly = r.poly.buffer(JOINT_OVERLAP_MM, join_style=2)
+    cs = m3d.CrossSection([_ccw(poly)[:-1]])
     c, a, b = r.top
     xb = np.array(poly.bounds)
-    zhi = max(c + a * x + b * y for x in xb[[0, 2]] for y in xb[[1, 3]]) + 1.0
+    zhi = max(r.top_z(x, y) for x in xb[[0, 2]] for y in xb[[1, 3]]) + 1.0
     rock = m3d.Manifold.extrude(cs, zhi - r.z0).translate([0, 0, r.z0])
     an = np.array([-a, -b, 1.0])
     na = np.linalg.norm(an)
@@ -802,12 +802,10 @@ def rock_manifold(rng, r, form, S, support, zone=1.0):
     # some rocks touching a side plane sit back from it a little (shrunk
     # back once finished, never cut: see _fit_tile)
     setback = {}
-    for pl in form.planes:
-        if abs(pl.n[2]) > 0.5 or abs(pl.n[0]) > 0.5:   # ends stay flush (S4)
-            continue
-        reach = max((np.array(v) - pl.p[:2]) @ pl.n[:2] for v in poly.exterior.coords)
+    ys = np.asarray(poly.exterior.coords)[:, 1]
+    for hi, reach in ((True, ys.max() - form.H), (False, -ys.min())):   # ends stay flush (S4)
         if reach > -0.1 and rng.random() < PUSH_P:
-            setback[(1, pl.p[1] > 1)] = rng.uniform(*PUSH_MM)
+            setback[(1, hi)] = rng.uniform(*PUSH_MM)
     rock = _chamfer_corners(rng, rock, poly)
     zb = rock.bounding_box()[2]
     rock = _cleave(rng, rock, poly, r, form, S, support, zone)
@@ -817,24 +815,19 @@ def rock_manifold(rng, r, form, S, support, zone=1.0):
     rock = round_edges(rng, rock, EDGE_ROUND_MM)
     rock = rock.translate([0, 0, -zb])
     D = max(r.D, 4.0)
-    saved = _rl.CHIP_MAX_LOSS, _rl.GRAIN_AMP_MM, _rl.GRAIN_MM
-    try:
-        _rl.GRAIN_AMP_MM, _rl.GRAIN_MM = FACE_GRAIN_MM, FACE_GRAIN_LEN_MM
-        _rl.CHIP_MAX_LOSS = min(saved[0], CHIP_MAX_MM3 / max(rock.volume(), 1e-6))
+    with _rl_params(GRAIN_AMP_MM=FACE_GRAIN_MM, GRAIN_MM=FACE_GRAIN_LEN_MM,
+                    CHIP_MAX_LOSS=min(_rl.CHIP_MAX_LOSS, CHIP_MAX_MM3 / max(rock.volume(), 1e-6))):
         rock, _ = _rl.chip_corners_edges(rng, rock, D)    # (none below the seat)
         rock = _grain(rng, rock)
-    finally:
-        _rl.CHIP_MAX_LOSS, _rl.GRAIN_AMP_MM, _rl.GRAIN_MM = saved
     rock = rock.translate([0, 0, zb])
     return _fit_tile(rock, form, setback)
 
 
-def _fit_tile(rock, form, setback=None):
+def _fit_tile(rock, form, setback):
     """Never cut a finished stone at the tile boundary: one that reaches
     past it is shrunk along that axis (about its far side) until its outermost
     point just touches it, so its rounded, grained face meets the plane at a
     few high points.  `setback` {(axis, high side): mm} holds a side further in."""
-    setback = setback or {}
     lo, hi = np.array(rock.bounding_box()[:3]), np.array(rock.bounding_box()[3:])
     for ax, L in ((0, form.W), (1, form.H)):
         a = 0.0 + FIT_GAP_MM + setback.get((ax, False), 0.0)
@@ -850,9 +843,8 @@ def _fit_tile(rock, form, setback=None):
     return rock
 
 
-def round_edges(rng, rock, R_mm, keep=lambda n, a: False):
-    """Round every edge sharper than ROUND_MIN_DEG (but the base's and those
-    `keep` names) with three tangent planes of a cylinder of radius R: the
+def round_edges(rng, rock, R_mm):
+    """Round every edge sharper than ROUND_MIN_DEG (but the base's) with three tangent planes of a cylinder of radius R: the
     stone's edges soften and the seam to a neighbour opens into a groove.
     A cut that would take more than an edge's worth (non-convex rock) is
     skipped."""
@@ -867,8 +859,6 @@ def round_edges(rng, rock, R_mm, keep=lambda n, a: False):
         if min(n1[2], n2[2]) < -0.5 or n1 @ n2 < -0.98:
             continue                                   # base edges (bevels, roof), knife edges
         a = t.vertices[t.face_adjacency_edges[e][0]]
-        if keep(n1, a) or keep(n2, a):
-            continue
         key = (*np.round(n1, 2), *np.round(n2, 2), round(float(n1 @ a), 1), round(float(n2 @ a), 1))
         if key in seen:
             continue
@@ -921,6 +911,12 @@ def _seat(rock, r):
         outline = max(outline.geoms, key=lambda g: g.area)
     # the bed under every point (nearest footprint cell)
     _, (ii, jj) = ndimage.distance_transform_edt(np.isnan(bed), return_indices=True)
+
+    def bed_at(P):
+        i = np.clip((P[:, 0] / GRID_MM).astype(int), 0, bed.shape[0] - 1)
+        j = np.clip((P[:, 1] / GRID_MM).astype(int), 0, bed.shape[1] - 1)
+        return bed[ii[i, j], jj[i, j]]
+
     x0, y0, x1, y1 = np.array(outline.bounds) + [-0.6, -0.6, 0.6, 0.6]
     xs = np.arange(x0, x1 + SEAT_GRID_MM, SEAT_GRID_MM)
     ys = np.arange(y0, y1 + SEAT_GRID_MM, SEAT_GRID_MM)
@@ -932,9 +928,7 @@ def _seat(rock, r):
     ring = outline.exterior
     B = np.asarray([ring.interpolate(t).coords[0]
                     for t in np.arange(0.0, ring.length, SEAT_GRID_MM)])
-    bi = np.clip((B[:, 0] / GRID_MM).astype(int), 0, bed.shape[0] - 1)
-    bj = np.clip((B[:, 1] / GRID_MM).astype(int), 0, bed.shape[1] - 1)
-    hb = bed[ii[bi, bj], jj[bi, bj]] + BEVEL_MM
+    hb = bed_at(B) + BEVEL_MM
     # (outside the outline it keeps rising: a crest at the outline would be
     # flattened by every grid triangle across it into a ceiling strip)
     # …but never above the local bed + bevel sloping in from the outline:
@@ -942,9 +936,7 @@ def _seat(rock, r):
     # cones from that taller part would carve the rock away above the low bed
     Q = np.c_[PX.ravel(), PY.ravel()]
     inside = shapely.contains_xy(outline, Q[:, 0], Q[:, 1])
-    ci = np.clip((Q[:, 0] / GRID_MM).astype(int), 0, bed.shape[0] - 1)
-    cj = np.clip((Q[:, 1] / GRID_MM).astype(int), 0, bed.shape[1] - 1)
-    local = bed[ii[ci, cj], jj[ci, cj]] + BEVEL_MM
+    local = bed_at(Q) + BEVEL_MM
     d = SEAT_SLOPE * shapely.distance(shapely.points(Q), ring)
     under = np.empty(len(Q))
     for c0 in range(0, len(Q), 2000):
@@ -954,7 +946,6 @@ def _seat(rock, r):
                              np.minimum((hb[None] + dd).min(1), local[sl] + d[sl]))
     under = under.reshape(PX.shape)
     zh = hi + 1.0
-    from dharmatiles.core.mesh import make_heightmap_solid
     keep = _gl.to_manifold(make_heightmap_solid(zh - under, xs[-1] - xs[0], ys[-1] - ys[0],
                                                 base_h=0.0))
     keep = keep.mirror([0, 0, 1]).translate([xs[0], ys[0], zh])        # z ∈ [under, zh]
@@ -973,13 +964,10 @@ def _grain(rng, rock, cut=False):
     fissure wedge), grained so its walls match the faces round them — it
     only grows (the gap never narrows) and not where the rock's wall faces
     down."""
-    from dharmatiles.stone.noise import fbm
     base_tm = _rl.to_trimesh(rock)
     sharp = base_tm.face_adjacency_angles > np.radians(_rl.SHARP_EDGE_DEG)
     E = base_tm.vertices[base_tm.face_adjacency_edges[sharp]]
-    out0 = rock.refine_to_length(_rl.TEX_EDGE_MM).to_mesh()
-    tm = trimesh.Trimesh(np.asarray(out0.vert_properties)[:, :3],
-                         np.asarray(out0.tri_verts), process=False)
+    tm = to_mesh(rock.refine_to_length(_rl.TEX_EDGE_MM))
     P, N = tm.vertices.copy(), tm.vertex_normals
     gr = fbm(P, int(rng.integers(1 << 30)) ^ 0x5A5A, _rl.GRAIN_MM, octaves=4)
     we = np.ones(len(P))
@@ -1025,7 +1013,6 @@ def _height_solid(Z, z0, tol=None):
     """The solid z0 ≤ z ≤ Z over grid cell centres (Z indexed (x, y), the
     first centre at GRID_MM / 2); `tol`: adaptive triangulation (planes and
     terraces in few triangles)."""
-    from dharmatiles.core.mesh import make_heightmap_solid
     nx, ny = Z.shape
     hm = make_heightmap_solid(Z.T - z0, (nx - 1) * GRID_MM, (ny - 1) * GRID_MM, base_h=0.0,
                               error_threshold=tol)
@@ -1036,7 +1023,7 @@ def _support_cone(r):
     """The wedge under a resting rock: its footprint at its underside,
     narrowing at the seat slope all the way to a ridge — no flat bottom, so whatever
     the facets leave beneath a rock is a printable slope."""
-    poly = footprint_polygon(r.cells)
+    poly = r.poly
     lo, hi = 0.0, 0.5 * min(poly.bounds[2] - poly.bounds[0], poly.bounds[3] - poly.bounds[1])
     for _ in range(12):                                    # deepest non-empty inset
         mid = 0.5 * (lo + hi)
@@ -1055,7 +1042,7 @@ def _chamfer_corners(rng, rock, poly):
     plane across its bisector — where four rocks meet the seam opens into a
     V.  Only the corner goes (a prism), so a non-convex footprint keeps its
     arms."""
-    xy = np.asarray(shapely.geometry.polygon.orient(poly, 1.0).exterior.coords)[:-1]
+    xy = _ccw(poly)[:-1]
     bb = rock.bounding_box()
     for k in range(len(xy)):
         a, b, c = xy[k - 1], xy[k], xy[(k + 1) % len(xy)]
@@ -1092,7 +1079,7 @@ def _cleave(rng, rock, poly, r, form, S, support, zone):
     if hgt < 2.0:
         return rock
     z = np.array([0, 0, 1.0])
-    xy = np.asarray(shapely.geometry.polygon.orient(poly, 1.0).exterior.coords)
+    xy = _ccw(poly)
     zs = zlo + hgt * np.array([0.2, 0.5, 0.8])
     faces = []
     for p0, p1 in zip(xy[:-1], xy[1:]):
@@ -1106,18 +1093,16 @@ def _cleave(rng, rock, poly, r, form, S, support, zone):
             faces.append((p0, p1, np.array([m2[0], m2[1], 0.0]), rim))
     cuts = []                                       # (normal, point on plane, max depth)
     for p0, p1, m, rim in faces:                    # face breaks
-        h = np.cross(m, z)
         area = np.hypot(*(p1 - p0)) * hgt
         lam = BREAKS_PER_100MM2 * (0.4 + 0.6 * zone) * area / 100.0
         for _ in range(min(int(rng.poisson(lam)), BREAKS_MAX)):
             if not rim and hgt > 1.5 * np.hypot(*(p1 - p0)) and rng.random() < CREASE_FLAT_P:
-                th = rng.choice((-1, 1)) * rng.uniform(*CREASE_FLAT_DEG)
+                th = _signed(rng, CREASE_FLAT_DEG)
             elif not rim and rng.random() < CREASE_DIAG_P:
-                th = rng.choice((-1, 1)) * rng.uniform(*CREASE_DIAG_DEG)
+                th = _signed(rng, CREASE_DIAG_DEG)
             else:
                 th = np.clip(rng.normal(0.0, CREASE_LEAN_DEG), -25.0, 25.0)
-            th = np.radians(th)
-            d = np.cos(th) * z + np.sin(th) * h               # the crease
+            d = _fissure_dir(m, th)                           # the crease
             e = np.cross(d, m)
             al = np.radians(rng.uniform(*BREAK_TILT_DEG))
             n = m * np.cos(al) + e * np.sin(al) * rng.choice((-1, 1))
@@ -1150,27 +1135,19 @@ def _cleave(rng, rock, poly, r, form, S, support, zone):
         cuts.append((n, np.array([a1[0], a1[1], zlo + 0.5 * hgt]) - n * dep, dep + 1.0, [], None))
     cx, cy = poly.centroid.coords[0]
     loaded = occupied(form, S, [[cx, cy, zhi + 0.4]])[0]
-    if loaded and (form.ztop is None or zhi < form.ztop - 0.5):
-        c, a, b = r.top                               # horizontal V joint under the next rock
-        for p0, p1, m, rim in faces:
-            if rim:
-                continue
-            n = (m + z) / np.sqrt(2.0)
-            q = 0.5 * (p0 + p1)
-            dep = rng.uniform(*JOINT_MM)
-            cuts.append((n, np.array([q[0], q[1], c + a * q[0] + b * q[1]]) - n * dep,
-                         dep + 0.5, [], None))
-    if (form.ztop is None or zhi < form.ztop - 0.5) and not loaded:
-        c, a, b = r.top                               # an open ledge top: broken shoulders
-        for p0, p1, m, rim in faces:
-            if rim or rng.random() > SHOULDER_P * zone:
-                continue
+    for p0, p1, m, rim in faces:                      # the top's front edge (none under
+        if rim or not (form.ztop is None or zhi < form.ztop - 0.5):           # the plateau)
+            continue
+        if loaded:                                    # horizontal V joint under the next rock
+            n, dep, extra = (m + z) / np.sqrt(2.0), rng.uniform(*JOINT_MM), 0.5
+        elif rng.random() > SHOULDER_P * zone:
+            continue
+        else:                                         # an open ledge top: broken shoulders
             n = m + z * rng.uniform(0.6, 1.6)
-            n /= np.linalg.norm(n)
-            q = 0.5 * (p0 + p1)
-            dep = rng.uniform(*SHOULDER_MM)
-            cuts.append((n, np.array([q[0], q[1], c + a * q[0] + b * q[1]]) - n * dep,
-                         dep + 1.0, [], None))
+            n, dep, extra = n / np.linalg.norm(n), rng.uniform(*SHOULDER_MM), 1.0
+        q = 0.5 * (p0 + p1)
+        cuts.append((n, np.array([q[0], q[1], r.top_z(q[0], q[1])]) - n * dep,
+                     dep + extra, [], None))
     dress = []                       # faces turned off true in plan, battered back
     for p0, p1, m, rim in faces:
         L = np.hypot(*(p1 - p0))
@@ -1271,7 +1248,7 @@ def build(seed=1, form='run', cols=1, rows=1):
     cones = [_support_cone(r) for r in placed if r.z0 > FOOT_Z_MM]
     support = m3d.Manifold.batch_boolean(cones + [core], m3d.OpType.Add)
     rocks = [m for m in (rock_manifold(rng, r, f, S, support,
-                                       float(zone(footprint_polygon(r.cells).centroid.x)[0]))
+                                       float(zone(r.poly.centroid.x)[0]))
                          for r in placed) if m is not None]
     tm['rocks'] = time.perf_counter() - t1
     t2 = time.perf_counter()
@@ -1307,22 +1284,23 @@ def foot_ground(f, S, zone, seed):
     against the face, falling away concave, higher and wider in the
     shattered zones; the same at the tile ends for every seed (S4).
     Returns (solid, absolute height grid (y, x))."""
-    from dharmatiles.core.mesh import make_heightmap_solid
     relief = _dirt.dirt_relief(seed, f.W, f.H).relief           # (y, x)
-    rocky = S > FOOT_Z_MM + 0.5                                  # (x, y)
-    dist = ndimage.distance_transform_edt(~rocky) * GRID_MM
+    dist = _foot_dist(S)
     xs = (np.arange(S.shape[0]) + 0.5) * GRID_MM
     u = (zone(xs) - ZONE_FLOOR) / (1 - ZONE_FLOOR)
-    e = np.clip(np.minimum(xs, f.W - xs) / (2 * END_MM), 0, 1)   # 0 at the ends
-    e = e * e * (3 - 2 * e)
+    e = _rl._smooth01(np.minimum(xs, f.W - xs) / (2 * END_MM))   # 0 at the ends
     hh = APRON_END[0] + e * (APRON_H_MM[0] + (APRON_H_MM[1] - APRON_H_MM[0]) * u - APRON_END[0])
     rr = APRON_END[1] + e * (APRON_R_MM[0] + (APRON_R_MM[1] - APRON_R_MM[0]) * u - APRON_END[1])
     bank = hh[:, None] * np.clip(1 - dist / rr[:, None], 0, 1) ** APRON_EXP
     xr = (np.arange(relief.shape[1]) + 0.5) * f.W / relief.shape[1]
-    fade = np.clip(np.minimum(xr, f.W - xr) / GROUND_END_MM, 0, 1)
-    fade = fade * fade * (3 - 2 * fade)               # dirt meets the next tile level
+    fade = _rl._smooth01(np.minimum(xr, f.W - xr) / GROUND_END_MM)   # dirt meets the next tile
     gz = FOOT_Z_MM + relief * fade[None, :] + _resample(bank.T, relief.shape)
     return _gl.to_manifold(make_heightmap_solid(gz, f.W, f.H, base_h=0.0)), gz
+
+
+def _foot_dist(S):
+    """Distance (mm) of every grid cell out from the rock (x, y)."""
+    return ndimage.distance_transform_edt(~(S > FOOT_Z_MM + 0.5)) * GRID_MM
 
 
 def scree(rng, f, S, zone, mouths, gz):
@@ -1341,8 +1319,7 @@ def scree(rng, f, S, zone, mouths, gz):
 
     # the foot of every open face, whatever way it looks: ground cells
     # touching rock, each with its outward direction (away from the rock)
-    rocky = S > FOOT_Z_MM + 0.5
-    dist = ndimage.distance_transform_edt(~rocky) * GRID_MM
+    dist = _foot_dist(S)
     gx, gy = np.gradient(dist)
     foot = np.argwhere((dist > 0) & (dist <= 0.5))
     if not len(foot):
@@ -1353,19 +1330,17 @@ def scree(rng, f, S, zone, mouths, gz):
     w = 0.5 + zone(P[:, 0])
     w /= w.sum()
     per = len(foot) * GRID_MM / SQUARE_MM          # squares' worth of cliff foot
-    sites = []                                    # (foot index, D, reach); D < 0: grit
+    sites = []                                    # (foot index, D, reach, block); D < 0: grit
 
     def pick(n):
         return rng.choice(len(foot), size=max(int(round(n)), 0), p=w)
 
     for i in pick(SCREE_PER_SQUARE * per):
         D = SCREE_D_MM[0] + (SCREE_D_MM[1] - SCREE_D_MM[0]) * rng.random() ** SCREE_D_EXP
-        sites.append((i, D, rng.exponential(SCREE_REACH_MM)))
-    blocks = set()
+        sites.append((i, D, rng.exponential(SCREE_REACH_MM), False))
     for i in pick(SCREE_BLOCKS * per):            # big fallen blocks
-        blocks.add(len(sites))
-        sites.append((i, rng.uniform(*SCREE_BLOCK_MM), rng.exponential(0.3 * SCREE_REACH_MM)))
-    sites = [(i, D, reach, n in blocks) for n, (i, D, reach) in enumerate(sites)]
+        sites.append((i, rng.uniform(*SCREE_BLOCK_MM), rng.exponential(0.3 * SCREE_REACH_MM),
+                      True))
     for mo in mouths:                             # fallen out of the fissures
         near = np.argsort(np.hypot(*(P - mo[:2]).T))[:40]
         for _ in range(int(rng.integers(SCREE_MOUTH[0], SCREE_MOUTH[1] + 1))):
@@ -1376,9 +1351,8 @@ def scree(rng, f, S, zone, mouths, gz):
     rng.shuffle(sites)
     sites.sort(key=lambda s_: -abs(s_[1]))        # big ones first, small ones fill in
     placed, stones = [], []
-    saved, fams, grain = _rl.HEIGHT_MIN_MM, _rl.FAMILIES, _rl.GRAIN_AMP_MM
-    _rl.FAMILIES, _rl.GRAIN_AMP_MM = SCREE_FAMILIES, ROCK_GRAIN_MM
-    try:
+    hmin = _rl.HEIGHT_MIN_MM
+    with _rl_params(FAMILIES=SCREE_FAMILIES, GRAIN_AMP_MM=ROCK_GRAIN_MM, HEIGHT_MIN_MM=hmin):
         for i, D, reach, block in sites:
             grit, D = D < 0, abs(D)
             x, y = P[i] + O[i] * (D * (0.5 - SCREE_LEAN) + reach)
@@ -1386,7 +1360,7 @@ def scree(rng, f, S, zone, mouths, gz):
                 continue
             if any(np.hypot(x - a, y - b) < SCREE_GAP * (D + d) for a, b, d in placed):
                 continue
-            _rl.HEIGHT_MIN_MM = min(saved, 0.55 * D)
+            _rl.HEIGHT_MIN_MM = min(hmin, 0.55 * D)
             st = _block_stone(rng, D) if block else _rl.make_rock(rng, D)[0]
             st = st.rotate([0.0, 0.0, float(rng.uniform(0, 360))])
             tilt, ax = rng.uniform(0, SCREE_TILT_DEG), rng.uniform(0, 2 * np.pi)
@@ -1398,8 +1372,6 @@ def scree(rng, f, S, zone, mouths, gz):
                 z0 -= rng.uniform(*GRIT_BURY) * D
             stones.append(st.translate([x, y, z0 - b[2]]))
             placed.append((x, y, D))
-    finally:
-        _rl.HEIGHT_MIN_MM, _rl.FAMILIES, _rl.GRAIN_AMP_MM = saved, fams, grain
     return stones
 
 
@@ -1457,15 +1429,14 @@ def fissures(rng, pile, f, S, zone, placed=()):
     # a fracture opens most readily along a joint
     jd, jv = np.full(len(pts), np.inf), np.zeros((len(pts), 2))
     J = []
-    outline = {id(r): np.asarray(footprint_polygon(r.cells).exterior.coords)[:-1] for r in placed}
+    outline = {id(r): np.asarray(r.poly.exterior.coords)[:-1] for r in placed}
     for r in placed:
         xy = outline[id(r)]
-        c, a, b = r.top
         for k in range(len(xy)):
             e1, e2 = xy[k] - xy[k - 1], xy[(k + 1) % len(xy)] - xy[k]
             cs = (e1 @ e2) / max(np.hypot(*e1) * np.hypot(*e2), 1e-9)
             if cs < np.cos(np.radians(30.0)):           # a real corner
-                J.append((*xy[k], r.z0, c + a * xy[k][0] + b * xy[k][1]))
+                J.append((*xy[k], r.z0, r.top_z(*xy[k])))
     if J:
         J = np.array(J)
         for c0 in range(0, len(pts), 2000):
@@ -1501,12 +1472,12 @@ def fissures(rng, pile, f, S, zone, placed=()):
         if not P:
             return True
         P = np.vstack(P)
-        q = a + np.linspace(0.0, 1.0, max(2, int(np.linalg.norm(b - a) / 0.5) + 1))[:, None] * (b - a)
+        q = along(a, b)
         return bool(np.linalg.norm(q[:, None] - P[None], axis=2).min() >= CRACK_CLEAR_MM)
 
     def lean():
         if rng.random() < FISSURE_DIAG_P:
-            return rng.choice((-1, 1)) * rng.uniform(*FISSURE_DIAG_DEG)
+            return _signed(rng, FISSURE_DIAG_DEG)
         return float(np.clip(rng.normal(0.0, FISSURE_LEAN_DEG), -25.0, 25.0))
 
     rays = t.ray
@@ -1517,9 +1488,11 @@ def fissures(rng, pile, f, S, zone, placed=()):
                                              multiple_hits=False)
         return hit[0] if len(hit) else None
 
+    def along(a, b):                      # points every ≤ 0.5 mm from a to b
+        return a + np.linspace(0.0, 1.0, max(2, int(np.linalg.norm(b - a) / 0.5) + 1))[:, None] * (b - a)
+
     def cut(a, b, m, dep, own, **kw):
-        drawn.append((own, a + np.linspace(0.0, 1.0, max(2, int(np.linalg.norm(b - a) / 0.5)
-                                                          + 1))[:, None] * (b - a)))
+        drawn.append((own, along(a, b)))
         wedges.append(_wedge(rng, a, b, m, dep, **kw))
 
     for k, i in enumerate(majors):
@@ -1547,7 +1520,7 @@ def fissures(rng, pile, f, S, zone, placed=()):
                 break
             cut(a, b, m, dep, k, half_deg=DEEP_HALF_DEG if deep else FISSURE_HALF_DEG)
             if sgi == 0 and rng.random() < BRANCH_P:   # a branch leaves it
-                thb = float(np.clip(th + rng.choice((-1, 1)) * rng.uniform(20, 35), -40, 40))
+                thb = float(np.clip(th + _signed(rng, (20, 35)), -40, 40))
                 db = _fissure_dir(m, thb)
                 lb = rng.uniform(*BRANCH_LEN_MM)
                 ab = p + db * min(0.3, max((top - p[2]) / max(db[2], 1e-6), 0.0))
@@ -1561,19 +1534,22 @@ def fissures(rng, pile, f, S, zone, placed=()):
                 break
             p = q
             dep = float(np.clip(dep * rng.uniform(0.7, 1.1), CRACK_DEPTH_MM[1], MAJOR_DEPTH_MM[1]))
-            th = th + rng.choice((-1, 1)) * rng.uniform(*BEND_DEG)
+            th = th + _signed(rng, BEND_DEG)
             th = float(np.clip(th, -40, 40))
+
+    def cell(q):                          # the grid cell under q, or None off the tile
+        i_, j_ = int(q[0] // GRID_MM), int(q[1] // GRID_MM)
+        return (i_, j_) if 0 <= i_ < S.shape[0] and 0 <= j_ < S.shape[1] else None
 
     def stone_at(q):
         """The placed stone holding point q: (rock, bed z, top z) or None."""
-        i_, j_ = int(q[0] // GRID_MM), int(q[1] // GRID_MM)
-        if not (0 <= i_ < S.shape[0] and 0 <= j_ < S.shape[1]):
+        if (ij_ := cell(q)) is None:
             return None
+        i_, j_ = ij_
         for r in placed:
             if not r.cells[i_, j_]:
                 continue
-            c, a, b = r.top
-            zt = min(c + a * q[0] + b * q[1], f.ztop or np.inf)
+            zt = min(r.top_z(q[0], q[1]), f.ztop or np.inf)
             zb = r.z0 if np.isnan(r.bed[i_, j_]) else float(r.bed[i_, j_])
             if zb - 0.5 <= q[2] <= zt + 0.5:
                 return r, zb, zt
@@ -1595,10 +1571,9 @@ def fissures(rng, pile, f, S, zone, placed=()):
         lo, hi = sx.min() + CRACK_EDGE_MM, sx.max() - CRACK_EDGE_MM
         if sx.max() - sx.min() < CRACK_FACE_MM or not lo <= 0.0 <= hi:
             return None
-        fq = p[:2] + 1.0 * m[:2]                     # whatever stands in front of the face
-        fi_, fj_ = int(fq[0] // GRID_MM), int(fq[1] // GRID_MM)
-        if 0 <= fi_ < S.shape[0] and 0 <= fj_ < S.shape[1]:
-            zb = max(zb, float(S[fi_, fj_]))
+        fc = cell(p[:2] + 1.0 * m[:2])               # whatever stands in front of the face
+        if fc is not None:
+            zb = max(zb, float(S[fc]))
         z0, z1 = zb - CRACK_INTO_MM, min(zt, (f.ztop or np.inf) - 0.3)
         if z1 - z0 < CRACK_MIN_MM:
             return None
@@ -1607,7 +1582,7 @@ def fissures(rng, pile, f, S, zone, placed=()):
         line = [(tl * (z1 - zc), z1), (tl * (z0 - zc), z0)]
         if rng.random() < CRACK_JOG_P and z1 - z0 > 2 * CRACK_MIN_MM:
             zj = z0 + (z1 - z0) * rng.uniform(0.35, 0.65)
-            g = rng.choice((-1, 1)) * rng.uniform(*CRACK_JOG_MM)
+            g = _signed(rng, CRACK_JOG_MM)
             sj = tl * (zj - zc)
             zj2 = zj + rng.uniform(-0.4, 0.4)
             line = [(line[0][0], z1), (sj, zj), (sj + g, zj2), (sj + g + tl * (z0 - zj2), z0)]
@@ -1639,12 +1614,9 @@ def fissures(rng, pile, f, S, zone, placed=()):
                 mouth=CRACK_MOUTH_MM, end_deg=CRACK_END_DEG,
                 min_len=0.0 if len(segs) > 1 else CRACK_MIN_MM)
         got += 1
-    saved = _rl.GRAIN_AMP_MM, _rl.GRAIN_MM
-    try:                                  # walls grained like the faces they cut
-        _rl.GRAIN_AMP_MM, _rl.GRAIN_MM = FACE_GRAIN_MM, FACE_GRAIN_LEN_MM
-        wedges = [_grain(rng, w_, cut=True) for w_ in wedges if not w_.is_empty()]
-    finally:
-        _rl.GRAIN_AMP_MM, _rl.GRAIN_MM = saved
+    with _rl_params(GRAIN_AMP_MM=FACE_GRAIN_MM, GRAIN_MM=FACE_GRAIN_LEN_MM):
+        wedges = [_grain(rng, w_, cut=True) for w_ in wedges if not w_.is_empty()]   # walls
+                                                        # grained like the faces they cut
     return (m3d.Manifold.batch_boolean(wedges, m3d.OpType.Add) if wedges
             else m3d.Manifold()), mouths
 
@@ -1707,9 +1679,8 @@ def _dirt_layer(f, pile, seed):
     above the rock across a step, and is continuous wherever it shows (no
     walls).  Its underside is the rock top sunk DIRT_SINK_MM (nothing
     hangs)."""
-    nx, ny = int(round(f.W / GRID_MM)), int(round(f.H / GRID_MM))
-    X, Y = np.meshgrid((np.arange(nx) + 0.5) * GRID_MM, (np.arange(ny) + 0.5) * GRID_MM,
-                       indexing='ij')
+    nx, ny = f.T.shape
+    X, Y = _grid(nx, ny)
     O = np.c_[X.ravel(), Y.ravel(), np.full(X.size, 1000.0)]
     hit, ri, _ = to_mesh(pile).ray.intersects_location(
         O, np.tile([0.0, 0.0, -1.0], (len(O), 1)), multiple_hits=False)
@@ -1724,17 +1695,21 @@ def _dirt_layer(f, pile, seed):
     D = ndimage.grey_erosion(Z, size=3) + DIRT_MM[0] + (DIRT_MM[1] - DIRT_MM[0]) * top + rel
     Zp = np.pad(Z, 1, mode='edge')
     nb = [(di, dj) for di in (-1, 0, 1) for dj in (-1, 0, 1) if di or dj]
+
+    def shifted(Ap, di, dj):                     # each cell's (di, dj) neighbour
+        return Ap[1 + di:1 + di + nx, 1 + dj:1 + dj + ny]
+
     edge = np.zeros(Z.shape, bool)
     for di, dj in nb:                            # a terrace's edge: under the rock
-        Zq = Zp[1 + di:1 + di + nx, 1 + dj:1 + dj + ny]
+        Zq = shifted(Zp, di, dj)
         edge |= Zq < Z - DIRT_STEP_MM
         D = np.where(Zq > Z + DIRT_STEP_MM, np.minimum(D, Zq - DIRT_SINK_MM), D)
     D = np.where(edge, np.minimum(D, Z - DIRT_SINK_MM), D)
     for _ in range(int(DIRT_REACH_MM / GRID_MM)):  # the cone, within each terrace
         Dp = np.pad(D, 1, mode='edge')
         for di, dj in nb:
-            Zq = Zp[1 + di:1 + di + nx, 1 + dj:1 + dj + ny]
-            Dq = Dp[1 + di:1 + di + nx, 1 + dj:1 + dj + ny] + DIRT_SLOPE * GRID_MM * np.hypot(di, dj)
+            Zq = shifted(Zp, di, dj)
+            Dq = shifted(Dp, di, dj) + DIRT_SLOPE * GRID_MM * np.hypot(di, dj)
             D = np.where(np.abs(Zq - Z) < DIRT_STEP_MM, np.minimum(D, Dq), D)
     # none on an edge cell or off the rock (the grid triangles across a step
     # would stand a sliver of dirt in front of its face)
