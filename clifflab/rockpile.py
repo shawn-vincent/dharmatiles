@@ -240,20 +240,22 @@ def _segments(rng, length):
 FORMS = {
     'run':        dict(kind='band', walls=('back',), height=35.0, cap=True),       # B H N
     'corner':     dict(kind='band', walls=('back', 'left'), height=35.0, cap=True),  # C
-    'canyon':     dict(kind='band', walls=('back', 'front'), height=35.0, cap=True,  # I K
+    'canyon':     dict(kind='band', walls=('left', 'right'), height=35.0, cap=True,  # I K
                        depth=(8.0, 14.0), top_depth=(5.0, 9.0), buttress=(14.0, 17.0)),
     'escarpment': dict(kind='band', walls=('back',), height=(10.0, 40.0), cap=False),  # D O
     'plateau':    dict(kind='rings', height=14.0, cap=True,                         # A
                        rings=(((22.0, 28.0), (1.0, 1.0)),)),
     'massif':     dict(kind='rings', height=35.0, cap=True,                         # M
                        rings=(((24.0, 29.0), (0.4, 0.6)), ((13.0, 17.0), (1.0, 1.0)))),
-    'mound':      dict(kind='rings', height=32.0, cap=False,                        # F
-                       rings=(((24.0, 28.0), (0.12, 0.22)), ((17.0, 21.0), (0.3, 0.45)),
-                              ((10.0, 13.0), (0.6, 0.75)), ((4.0, 6.5), (1.0, 1.0)))),
+    'mound':      dict(kind='rings', height=38.0, cap=False,                        # F
+                       rings=(((24.0, 28.0), (0.12, 0.22)), ((18.0, 21.0), (0.3, 0.42)),
+                              ((13.0, 15.0), (0.5, 0.62)), ((8.0, 10.0), (0.7, 0.82)),
+                              ((4.0, 5.5), (1.0, 1.0)))),
     'spire':      dict(kind='rings', height=58.0, cap=False,                        # E P
                        rings=(((20.0, 23.0), (0.08, 0.14)), ((14.0, 17.0), (0.25, 0.4)),
                               ((10.0, 12.0), (0.55, 0.7)), ((6.0, 7.5), (1.0, 1.0)))),
     'needles':    dict(kind='rings', height=55.0, cap=False, centres=(2, 3),         # J
+                       base=((1.2, 1.4), (0.12, 0.2)),
                        rings=(((14.0, 17.0), (0.1, 0.18)), ((9.0, 11.0), (0.35, 0.5)),
                               ((5.0, 6.5), (1.0, 1.0)))),
 }
@@ -261,7 +263,11 @@ RING_JITTER      = 0.15        # ring radii vary ± this share between angular m
 RING_NOTCH_P     = 0.12        # …a mass is notched back (a gully) this often…
 RING_LOBE_P      = 0.12        # …or stands out as a lobe (a buttress)
 RING_STEP_MM     = 3.0         # a ring's height steps ± this between masses
-NEEDLE_SCALE     = (0.45, 0.8) # secondary needles: rings × this, height × this
+NEEDLE_SCALE     = (0.45, 0.8) # secondary needles: rings × this, height × this…
+NEEDLE_SPREAD    = (0.45, 0.7) # …standing this × (sum of outer radii) from the first
+#   base: ((radius × outer radius), (height × range)) — one low tier round all
+#   the centres, so a cluster stands on a shared footing
+BASE_RAGGED      = 0.15        # its outline wanders ± this share (σ)
 
 
 def make_form(rng, form, W, H):
@@ -367,12 +373,16 @@ def _rings(rng, spec, X, Y, W, H):
     for i in range(k):
         size, hgt = (1.0, 1.0) if i == 0 else (rng.uniform(*NEEDLE_SCALE),) * 2
         r_out = spec['rings'][0][0][1] * sc * size
-        for _ in range(50):                          # keep clear of the tile edge
-            c = np.array([rng.uniform(r_out + 2, W - r_out - 2) if W > 2 * r_out + 4 else W / 2,
-                          rng.uniform(r_out + 2, H - r_out - 2) if H > 2 * r_out + 4 else H / 2])
-            if i == 0 and k == 1:
-                c = np.array([W / 2, H / 2]) + rng.uniform(-2, 2, 2)
-            if all(np.hypot(*(c - c2)) > 0.8 * (r_out + r2) for c2, r2 in centres):
+        c = np.array([W / 2, H / 2]) + rng.uniform(-2, 2, 2)
+        for _ in range(50):              # a cluster round the first, clear of the edge
+            if i == 0:
+                break
+            c0, r0 = centres[0]
+            t = rng.uniform(0, 2 * np.pi)
+            c = c0 + rng.uniform(*NEEDLE_SPREAD) * (r0 + r_out) * np.array([np.cos(t), np.sin(t)])
+            if (r_out + 2 < c[0] < W - r_out - 2 and r_out + 2 < c[1] < H - r_out - 2
+                    and all(np.hypot(*(c - c2)) > NEEDLE_SPREAD[0] * (r_out + r2)
+                            for c2, r2 in centres)):
                 break
         centres.append((c, r_out))
         R = np.hypot(X - c[0], Y - c[1])
@@ -390,6 +400,18 @@ def _rings(rng, spec, X, Y, W, H):
                     z += rng.uniform(-RING_STEP_MM, RING_STEP_MM)
                 z = max(z, FOOT_Z_MM + MIN_H_MM)
                 T[sel & (R <= r)] = np.maximum(T[sel & (R <= r)], z)
+    if 'base' in spec:                              # a shared footing round them all
+        (rs, hs) = spec['base']
+        Rb = np.min([np.hypot(X - c[0], Y - c[1]) / (r * rng.uniform(*rs))
+                     for c, r in centres], axis=0)
+        def wobble(sigma_mm):                     # smooth noise, σ ≈ 1
+            g = ndimage.gaussian_filter(rng.standard_normal(X.shape), sigma_mm / GRID_MM)
+            return g / (g.std() + 1e-12)
+        Rb *= 1 + BASE_RAGGED * wobble(6.0)
+        z = FOOT_Z_MM + max(rng.uniform(*hs) * spec['height'], MIN_H_MM)
+        z = z + RING_STEP_MM * np.round(wobble(8.0))          # stepped, not a drum
+        z = np.maximum(z, FOOT_Z_MM + MIN_H_MM)
+        T = np.where(Rb <= 1.0, np.maximum(T, z), T)
     return T
 
 
