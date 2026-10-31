@@ -121,15 +121,20 @@ EDGE_ROUND_MM    = (0.3, 0.7)  # every exposed edge rounded (3 planes) this radi
 EDGE_CRISP_P     = 0.3         # …or, this often, only × EDGE_CRISP (a fresh break)
 EDGE_CRISP       = 0.35
 ROUND_MIN_DEG    = 20.0        # …edges sharper than this; joints open into grooves
-ROCK_GRAIN_MM    = 0.05        # grain amplitude on cliff stones (quiet planes, not stucco)
+ROCK_GRAIN_MM    = 0.05        # grain amplitude on scree stones
+FACE_GRAIN_MM    = 0.4         # grain amplitude on cliff stones: deep enough to catch
+FIT_GAP_MM       = 0.02        # stones stop this short of the tile boundary (not cut)
+FACE_GRAIN_LEN_MM = 2.0        # …a drybrush, this coarse (≈ 5 lines) so it survives printing
+EXPORT_RETRY_TOL_MM = (None, 0.03, 0.06)  # export: simplify the top this much if needed
 MIN_FACET_MM     = 2.5         # a break leaves no facet narrower than this (no strips)
 SUBFACETS_PER_100MM2 = 1.5     # broad low facets per exposed face (each face 2–4 planes)…
 SUBFACETS_MAX    = 3
 SUBFACET_TILT_DEG = (5.0, 12.0)  # …turned this far…
 SUBFACET_MM      = 0.7         # …taking at most this
-BEVEL_MM         = 0.6         # 45° bevel under rocks resting on rocks
-UNDERFILL_SLICES_MM = (0.05, 0.3, 0.7)  # the keel under a resting rock follows its base outline at these heights
-UNDERFILL_GROW_MM = 0.15       # …grown this much, so no sliver of rounded base shows past it
+BEVEL_MM         = 0.6         # bevel (at the overhang limit) under rocks resting on rocks
+OVERHANG_DEG     = 55.0        # FDM: no downward face leans further than this from vertical
+SEAT_GRID_MM     = 0.2         # resting rocks' underside is shaped on this grid…
+SEAT_SLOPE       = float(np.tan(np.radians(90.0 - OVERHANG_DEG + 3.0)))  # …3° inside the limit
 CORNER_MM        = (0.8, 1.6)  # vertical corner chamfers: neighbours meet in a V seam
 ZONES_PER_SQUARE = 1.5         # shattered zones (REQ-ROCK-3: detail comes in clusters)…
 ZONE_SIGMA_MM    = (5.0, 10.0) # …this wide along the run
@@ -455,6 +460,7 @@ class Placed:
     top: tuple                # top plane z = c + a·x + b·y
     kind: str
     D: float                  # size, for the finishing passes
+    bed: np.ndarray = None    # the support's height under each footprint cell (NaN off it)
 
 
 def stack(rng, form, zone=None):
@@ -512,8 +518,8 @@ def stack(rng, form, zone=None):
         if cells.sum() == 0:
             S[si, sj] = T[si, sj]
             continue
-        if form.round and cells.sum() * GRID_MM ** 2 < MIN_AREA_MM2 and rocks:
-            S, ok = _merge_crumb(rocks, cells, S, X, Y, form)
+        if (cells.sum() * GRID_MM ** 2 < MIN_AREA_MM2 or _min_side(cells) < MIN_SIDE_MM) and rocks:
+            S, ok = _merge_crumb(rocks, cells, S, X, Y, form)   # no slivers: a neighbour takes it
             if not ok:                    # left as a notch: nothing to fill, no dirt
                 want = want & ~cells
             continue
@@ -561,8 +567,10 @@ def stack(rng, form, zone=None):
             topz = np.minimum(topz, form.ztop)
         S = np.where(cells, np.maximum(S, topz), S)
         z0 = float(Sv.min()) - (SINK_MM if Sv.min() > FOOT_Z_MM else 0.0)
+        bed = np.full(S.shape, np.nan)
+        bed[cells] = Sv
         rocks.append(Placed(cells, z0, (c_top, a, b), kind,
-                            float(np.median([w, d, h]))))
+                            float(np.median([w, d, h])), bed))
     return rocks, S
 
 
@@ -661,6 +669,7 @@ def _merge_crumb(rocks, cells, S, X, Y, form):
         return S, False
     r, z = best
     r.cells = r.cells | cells
+    r.bed[cells] = S[cells]
     r.z0 = min(r.z0, float(S[cells].min()) - (SINK_MM if S[cells].min() > FOOT_Z_MM else 0.0))
     S = S.copy()
     S[cells] = np.maximum(S[cells], z)
@@ -737,38 +746,53 @@ def rock_manifold(rng, r, form, S, support, zone=1.0):
         rock = rock.trim_by_plane([0, 0, -1], -form.ztop)
     if rock.is_empty():
         return None
-    # some rocks touching a side plane sit back from it a little
+    # some rocks touching a side plane sit back from it a little (shrunk
+    # back once finished, never cut: see _fit_tile)
+    setback = {}
     for pl in form.planes:
         if abs(pl.n[2]) > 0.5 or abs(pl.n[0]) > 0.5:   # ends stay flush (S4)
             continue
         reach = max((np.array(v) - pl.p[:2]) @ pl.n[:2] for v in poly.exterior.coords)
         if reach > -0.1 and rng.random() < PUSH_P:
-            off = rng.uniform(*PUSH_MM)
-            cut = rock.trim_by_plane((-pl.n).tolist(), -(pl.p @ pl.n - off))
-            if not cut.is_empty():
-                rock = cut
+            setback[(1, pl.p[1] > 1)] = rng.uniform(*PUSH_MM)
     rock = _chamfer_corners(rng, rock, poly)
     zb = rock.bounding_box()[2]
-    if zb > FOOT_Z_MM:                       # sits on rock: 45° bevel under it
-        rock = _bevel_bottom(rock, poly, zb, lambda P: occupied(form, S, P))
     rock = _cleave(rng, rock, poly, r, form, S, support, zone)
-
-    def rim(n, a):                           # tile-boundary faces stay flush
-        return ((abs(n[0]) > 0.99 and min(abs(a[0]), abs(a[0] - form.W)) < 0.05)
-                or (abs(n[1]) > 0.99 and min(abs(a[1]), abs(a[1] - form.H)) < 0.05))
-    rock = round_edges(rng, rock, EDGE_ROUND_MM, rim)
+    if zb > FOOT_Z_MM:                       # sits on rock: seated on the bed
+        rock = _seat(rock, r)                # under it, bevel and sloped underside
+        zb = float(np.nanmin(r.bed))
+    rock = round_edges(rng, rock, EDGE_ROUND_MM)
     rock = rock.translate([0, 0, -zb])
     D = max(r.D, 4.0)
-    saved = _rl.FACET_MIN_NZ, _rl.GRAIN_AMP_MM
+    saved = _rl.FACET_MIN_NZ, _rl.GRAIN_AMP_MM, _rl.GRAIN_MM
     try:
-        _rl.GRAIN_AMP_MM = ROCK_GRAIN_MM
-        rock, _ = _rl.chip_corners_edges(rng, rock, D)
-        rock = _rl.texture(rng, rock)
+        _rl.GRAIN_AMP_MM, _rl.GRAIN_MM = FACE_GRAIN_MM, FACE_GRAIN_LEN_MM
+        rock, _ = _rl.chip_corners_edges(rng, rock, D)    # (none below the seat)
+        rock = _grain(rng, rock)
     finally:
-        _rl.FACET_MIN_NZ, _rl.GRAIN_AMP_MM = saved
+        _rl.FACET_MIN_NZ, _rl.GRAIN_AMP_MM, _rl.GRAIN_MM = saved
     rock = rock.translate([0, 0, zb])
-    if zb > FOOT_Z_MM:                       # sits on rock: embed a 45° keel in it
-        rock = rock + _underfill(rock, zb)
+    return _fit_tile(rock, form, setback)
+
+
+def _fit_tile(rock, form, setback=None):
+    """Never cut a finished stone at the tile boundary: one that reaches
+    past it is shrunk along that axis (about its far side) until its outermost
+    point just touches it, so its rounded, grained face meets the plane at a
+    few high points.  `setback` {(axis, high side): mm} holds a side further in."""
+    setback = setback or {}
+    lo, hi = np.array(rock.bounding_box()[:3]), np.array(rock.bounding_box()[3:])
+    for ax, L in ((0, form.W), (1, form.H)):
+        a = 0.0 + FIT_GAP_MM + setback.get((ax, False), 0.0)
+        b = L - FIT_GAP_MM - setback.get((ax, True), 0.0)
+        l, h = lo[ax], hi[ax]
+        nl, nh = max(l, a), min(h, b)
+        if (nl, nh) == (l, h) or nh - nl < 0.5 * (h - l):   # inside, or too far to shrink
+            continue
+        k = (nh - nl) / (h - l)
+        sc, tr = [1.0, 1.0, 1.0], [0.0, 0.0, 0.0]
+        sc[ax], tr[ax] = k, nl - k * l
+        rock = rock.scale(sc).translate(tr)
     return rock
 
 
@@ -786,8 +810,8 @@ def round_edges(rng, rock, R_mm, keep=lambda n, a: False):
     planes, seen = [], set()
     for e in np.nonzero(t.face_adjacency_angles > np.radians(ROUND_MIN_DEG))[0]:
         n1, n2 = fn[t.face_adjacency[e]]
-        if min(n1[2], n2[2]) < -0.5:
-            continue                                   # base edges: bevels and keels
+        if min(n1[2], n2[2]) < -0.5 or n1 @ n2 < -0.98:
+            continue                                   # base edges (bevels, roof), knife edges
         a = t.vertices[t.face_adjacency_edges[e][0]]
         if keep(n1, a) or keep(n2, a):
             continue
@@ -818,42 +842,109 @@ def round_edges(rng, rock, R_mm, keep=lambda n, a: False):
     return rock
 
 
-def _underfill(rock, zb):
-    """A 45° keel under a resting rock, sunk into the rock below: whatever
-    the finishing took off that rock's top edge (chips, grain) opens as a V
-    seam under this one instead of a flat ceiling.  Its outline is the hull
-    of the rock's base (sliced at a few heights: chips and bevels make the
-    base narrower than the rock in places); every side is a 45° plane
-    through an outline edge, so the keel is a roof with no flatter face."""
-    pts = [np.vstack(pp) for dz in UNDERFILL_SLICES_MM
-           if (pp := rock.slice(zb + dz).to_polygons())]
-    if not pts:
-        return m3d.Manifold()
-    poly = shapely.MultiPoint(np.vstack(pts)).convex_hull.buffer(
-        UNDERFILL_GROW_MM, join_style=2).simplify(0.05)
-    if poly.geom_type != 'Polygon':
-        return m3d.Manifold()
-    poly = shapely.geometry.polygon.orient(poly, 1.0)
-    zk = zb + UNDERFILL_SLICES_MM[0]
-    x0, y0, x1, y1 = poly.bounds
-    depth = 0.5 * min(x1 - x0, y1 - y0) + 1.0
-    keel = m3d.Manifold.cube([x1 - x0 + 2, y1 - y0 + 2, depth]).translate(
-        [x0 - 1, y0 - 1, zk - depth])
-    s = np.sqrt(0.5)
-    xy = np.asarray(poly.exterior.coords)
-    for p0, p1 in zip(xy[:-1], xy[1:]):
-        e = p1 - p0
-        if np.hypot(*e) < 1e-6:
-            continue
-        m = np.array([e[1], -e[0]]) / np.hypot(*e)          # outward (ccw ring)
-        n = np.array([m[0] * s, m[1] * s, -s])              # 45° plane through the edge
-        keel = keel.trim_by_plane((-n).tolist(), -float(n @ [p0[0], p0[1], zk]))
-    return keel
+def _seat(rock, r):
+    """Seat a resting rock on the stones under it, each part on the support
+    actually beneath it (its bed): its underside is one surface at the
+    overhang limit (OVERHANG_DEG, less a margin) that starts BEVEL_MM up its side at the outline — the upper
+    half of the V seam, the stone below rounds the lower half — crosses the
+    bed BEVEL_MM in, and sinks on into the stone below further in.  Never a
+    flat ceiling, and nowhere does a straight side run down into the stone
+    below to fill its rounded edge (which a flat bottom at the lowest
+    support did wherever the rock bridged a taller one).  Built before the
+    finishing passes, which can only carve into it."""
+    lo, hi = rock.bounding_box()[2], rock.bounding_box()[5]
+    bed = r.bed
+    seat_mid = float(np.nanmedian(bed[r.cells]))
+    # the outline the bevel starts from: the rock at the bevel's top, and
+    # wherever its sides flare out below that (else a flat ceiling there)
+    rings = [shapely.Polygon(q).buffer(0) for z in (seat_mid + BEVEL_MM, lo + 0.05)
+             for q in rock.slice(float(np.clip(z, lo + 0.05, hi - 0.05))).to_polygons()
+             if len(q) > 2]
+    if not rings:
+        return rock
+    outline = shapely.union_all(rings)
+    if outline.geom_type != 'Polygon':
+        outline = max(outline.geoms, key=lambda g: g.area)
+    # the bed under every point (nearest footprint cell)
+    _, (ii, jj) = ndimage.distance_transform_edt(np.isnan(bed), return_indices=True)
+    x0, y0, x1, y1 = np.array(outline.bounds) + [-0.6, -0.6, 0.6, 0.6]
+    xs = np.arange(x0, x1 + SEAT_GRID_MM, SEAT_GRID_MM)
+    ys = np.arange(y0, y1 + SEAT_GRID_MM, SEAT_GRID_MM)
+    PX, PY = np.meshgrid(xs, ys)                                       # (y, x)
+    # the underside is the highest of the cones (at the seat slope) hung
+    # from each outline point's own seat + bevel: exactly that slope
+    # everywhere (the bed's own tilt can't flatten it into a ceiling), and
+    # at the outline on the local bed, where the seam shows
+    ring = outline.exterior
+    B = np.asarray([ring.interpolate(t).coords[0]
+                    for t in np.arange(0.0, ring.length, SEAT_GRID_MM)])
+    bi = np.clip((B[:, 0] / GRID_MM).astype(int), 0, bed.shape[0] - 1)
+    bj = np.clip((B[:, 1] / GRID_MM).astype(int), 0, bed.shape[1] - 1)
+    hb = bed[ii[bi, bj], jj[bi, bj]] + BEVEL_MM
+    # (outside the outline it keeps rising: a crest at the outline would be
+    # flattened by every grid triangle across it into a ceiling strip)
+    # …but never above the local bed + bevel sloping in from the outline:
+    # where the bed drops inward (part of the rock over a taller stone) the
+    # cones from that taller part would carve the rock away above the low bed
+    Q = np.c_[PX.ravel(), PY.ravel()]
+    inside = shapely.contains_xy(outline, Q[:, 0], Q[:, 1])
+    ci = np.clip((Q[:, 0] / GRID_MM).astype(int), 0, bed.shape[0] - 1)
+    cj = np.clip((Q[:, 1] / GRID_MM).astype(int), 0, bed.shape[1] - 1)
+    local = bed[ii[ci, cj], jj[ci, cj]] + BEVEL_MM
+    d = SEAT_SLOPE * shapely.distance(shapely.points(Q), ring)
+    under = np.empty(len(Q))
+    for c0 in range(0, len(Q), 2000):
+        sl = slice(c0, c0 + 2000)
+        dd = SEAT_SLOPE * np.linalg.norm(Q[sl, None, :] - B[None], axis=2)
+        under[sl] = np.where(inside[sl], np.minimum((hb[None] - dd).max(1), local[sl] - d[sl]),
+                             np.minimum((hb[None] + dd).min(1), local[sl] + d[sl]))
+    under = under.reshape(PX.shape)
+    zh = hi + 1.0
+    from dharmatiles.core.mesh import make_heightmap_solid
+    keep = _gl.to_manifold(make_heightmap_solid(zh - under, xs[-1] - xs[0], ys[-1] - ys[0],
+                                                base_h=0.0))
+    keep = keep.mirror([0, 0, 1]).translate([xs[0], ys[0], zh])        # z ∈ [under, zh]
+    deep = float(under.min()) - 0.1
+    if deep < lo:                                                      # room to sink into
+        cs = rock.slice(lo + 0.05)
+        rock = rock + m3d.Manifold.extrude(cs, lo + 0.06 - deep).translate([0, 0, deep])
+    out = rock ^ keep
+    return rock if out.is_empty() else out
+
+
+def _grain(rng, rock):
+    """rocklab's grain (texture) for a rock seated at z = 0 with its roof
+    below: faded in above the seat, nothing below it (the roof faces down
+    anyway), and not trimmed there."""
+    from dharmatiles.stone.noise import fbm
+    base_tm = _rl.to_trimesh(rock)
+    sharp = base_tm.face_adjacency_angles > np.radians(_rl.SHARP_EDGE_DEG)
+    E = base_tm.vertices[base_tm.face_adjacency_edges[sharp]]
+    out0 = rock.refine_to_length(_rl.TEX_EDGE_MM).to_mesh()
+    tm = trimesh.Trimesh(np.asarray(out0.vert_properties)[:, :3],
+                         np.asarray(out0.tri_verts), process=False)
+    P, N = tm.vertices.copy(), tm.vertex_normals
+    gr = fbm(P, int(rng.integers(1 << 30)) ^ 0x5A5A, _rl.GRAIN_MM, octaves=4)
+    we = np.ones(len(P))
+    if len(E):
+        A, AB = E[:, 0], E[:, 1] - E[:, 0]
+        L2 = np.maximum((AB * AB).sum(1), 1e-12)
+        dmin = np.full(len(P), np.inf)
+        for c0 in range(0, len(P), 4000):
+            Q = P[c0:c0 + 4000, None, :]
+            t = np.clip(((Q - A) * AB).sum(2) / L2, 0, 1)
+            dmin[c0:c0 + 4000] = np.linalg.norm(Q - (A + t[..., None] * AB), axis=2).min(1)
+        we = _rl._smooth01(dmin / _rl.EDGE_KEEP_MM)
+    w = _rl._smooth01((P[:, 2] - 0.15) / _rl.TEX_BASE_FADE_MM) * (N[:, 2] > -0.3)
+    V = P + (_rl.GRAIN_AMP_MM * gr * (0.5 + 0.5 * we) * w)[:, None] * N
+    out = m3d.Manifold(mesh=m3d.Mesh(vert_properties=np.asarray(V, dtype=np.float32),
+                                     tri_verts=np.asarray(tm.faces, dtype=np.uint32)))
+    return rock if out.is_empty() else out
 
 
 def _support_cone(r):
-    """The 45° wedge under a resting rock: its footprint at its underside,
-    narrowing at 45° all the way to a ridge — no flat bottom, so whatever
+    """The wedge under a resting rock: its footprint at its underside,
+    narrowing at the seat slope all the way to a ridge — no flat bottom, so whatever
     the facets leave beneath a rock is a printable slope."""
     poly = footprint_polygon(r.cells)
     lo, hi = 0.0, 0.5 * min(poly.bounds[2] - poly.bounds[0], poly.bounds[3] - poly.bounds[1])
@@ -865,7 +956,7 @@ def _support_cone(r):
     rings = [np.c_[np.asarray(poly.exterior.coords), np.full(len(poly.exterior.coords), r.z0)]]
     for g in getattr(inner, 'geoms', [inner]):
         c = np.asarray(g.exterior.coords)
-        rings.append(np.c_[c, np.full(len(c), r.z0 - lo)])
+        rings.append(np.c_[c, np.full(len(c), r.z0 - SEAT_SLOPE * lo)])
     return m3d.Manifold.hull_points(np.vstack(rings).astype(np.float32))
 
 
@@ -883,28 +974,6 @@ def _chamfer_corners(rng, rock, poly):
         n = np.array([m[0], m[1], 0.0])
         d = float(m @ b) - rng.uniform(*CORNER_MM)
         cut = rock.trim_by_plane((-n).tolist(), -d)
-        if not cut.is_empty():
-            rock = cut
-    return rock
-
-
-def _bevel_bottom(rock, poly, zb, occ):
-    """Each exposed bottom edge cut back at 45° (a printable half of the V
-    joint the rock beneath completes with its own top bevel).  Edges against
-    another rock stay square, so no hidden voids."""
-    s = np.sqrt(0.5)
-    xy = np.asarray(shapely.geometry.polygon.orient(poly, 1.0).exterior.coords)
-    for p0, p1 in zip(xy[:-1], xy[1:]):
-        e = p1 - p0
-        if np.hypot(*e) < 1.0:
-            continue
-        m = np.array([e[1], -e[0]]) / np.hypot(*e)          # outward (ccw ring)
-        mid = 0.5 * (p0 + p1) + m * 0.4
-        if occ([[mid[0], mid[1], zb + 0.4]])[0]:
-            continue
-        n = np.array([m[0] * s, m[1] * s, -s])
-        q = np.array([p0[0] - m[0] * BEVEL_MM, p0[1] - m[1] * BEVEL_MM, zb])
-        cut = rock.trim_by_plane((-n).tolist(), -float(n @ q))
         if not cut.is_empty():
             rock = cut
     return rock
@@ -1125,7 +1194,14 @@ def build(seed=1, form='run', cols=1, rows=1):
     top_ = m3d.Manifold.batch_boolean(parts, m3d.OpType.Add)
     top_ = top_ ^ m3d.Manifold.cube([W, H, 200.0])
     import clifflab as cl
-    mesh, peg, zmax, _ = cl.attach_base(top_, cols, rows)
+    for tol in EXPORT_RETRY_TOL_MM:          # a near-tangency can open up in float32:
+        try:                                # merge it away a little coarser and retry
+            mesh, peg, zmax, _ = cl.attach_base(top_ if tol is None else top_.simplify(tol),
+                                                cols, rows)
+            break
+        except RuntimeError:
+            if tol == EXPORT_RETRY_TOL_MM[-1]:
+                raise
     tm['assemble'] = time.perf_counter() - t2
     tm['total'] = time.perf_counter() - t0
     return Built(mesh, len(rocks), len(placed), peg, zmax, tm)
@@ -1488,6 +1564,14 @@ def footprint_polygon_all(mask):
         [shapely.geometry.Polygon(g.exterior) for g in getattr(poly, 'geoms', [poly])])
 
 
+def audit_overhang(mesh):
+    """Area (mm²) of faces overhanging past OVERHANG_DEG + 3° (grasslab's
+    audit, at this lab's limit)."""
+    n, cz = mesh.face_normals, mesh.triangles_center[:, 2]
+    bad = (n[:, 2] < -np.sin(np.radians(OVERHANG_DEG + 3.0))) & (cz > 0.05)
+    return float(mesh.area_faces[bad].sum())
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1500,7 +1584,7 @@ def main():
     out.mkdir(exist_ok=True)
     path = out / f"{args.cols}x{args.cols}-pile-{args.form}-s{args.seed}.stl"
     r.mesh.export(path)
-    ov, _ = _gl.audit_overhang(r.mesh)
+    ov = audit_overhang(r.mesh)
     print(f"→ {path}  {len(r.mesh.faces):,} faces, watertight={r.mesh.is_watertight}; "
           f"{r.rocks} rocks; overhang {ov:.1f} mm²; "
           + ", ".join(f"{k} {v:.1f}s" for k, v in r.tm.items()))
