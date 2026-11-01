@@ -44,7 +44,7 @@ def font(n):
 def paint(mesh):
     """Drybrush-style paint: dark wash in recesses, light on convex edges and
     up-faces; dirt on up-facing ground and caps; slab sides dark.  Faces
-    past the overhang limit (rockpile's audit) are painted red."""
+    past what a printer lays (rockpile's overhang_faces) are painted red."""
     v, f = trimesh.remesh.subdivide_to_size(mesh.vertices, mesh.faces, max_edge=0.6)
     m = trimesh.Trimesh(v, f, process=False)
     n = m.vertex_normals
@@ -67,8 +67,7 @@ def paint(mesh):
     k = np.where(dirt, kd, k)
     k = np.where(v[:, 2] < rm.FOOT_Z_MM - 0.8, 9, k)
     kf = np.round(np.median(k[f], 1)).astype(int)
-    fn, fz = m.face_normals, m.triangles_center[:, 2]
-    kf[(fn[:, 2] < -np.sin(np.radians(rp.OVERHANG_DEG + 3.0))) & (fz > 0.05)] = 10
+    kf[rp.overhang_faces(m)] = 10
     m.visual.face_colors = np.c_[PAL[kf], np.full(len(kf), 255)].astype(np.uint8)
     return m
 

@@ -22,11 +22,12 @@ whole masses stand forward or back.  So:
     stone in it — open faces dressed off true (turned a few degrees in plan
     and battered back, so it reads wedge-shaped, not boxed); then each
     stone gets its own shoulders, 45° V joints under the rock it carries,
-    rounded edges and rocklab's chips, and its open faces are carved as
-    blocks (N): V-grooved cracks of a joined network (random walks ending
-    on an edge, a joint or another crack, planned once per face of the pile
-    so they run on across stones, H) between sub-faces each leaning back
-    off it, faintly convex in facets; then grain.  Detail gathers in
+    rounded edges and rocklab's chips, and its open faces (the boundary's
+    too) are carved as blocks (N): flat sub-faces, each tilted its own way,
+    split by a joined network of cracks (random walks ending on an edge, a
+    joint or another crack, planned once per face of the pile so they run
+    on across stones, H), each a narrow slot slanting down into the rock;
+    then grain riding on them.  Detail gathers in
     shattered zones.  A rock resting on rock is seated on its bed at the
     overhang limit, so nothing the finishing takes off leaves a ceiling.
   4 ASSEMBLY: rocks ∪ a core under them (so a gap between stones is a
@@ -151,7 +152,7 @@ ROUND_MIN_DEG    = 20.0        # …edges sharper than this; joints open into gr
 JOINT_ROUND_MM   = (0.15, 0.3) # a joint inside a column only this (a groove, not a cushion)
 ROCK_GRAIN_MM    = 0.05        # grain amplitude on scree stones
 FACE_GRAIN_MM    = 0.25        # grain amplitude on cliff stones: deep enough to catch
-FACE_GRAIN_LEN_MM = 1.4        # …a drybrush, this coarse across (≈ 3 lines) so it prints
+FACE_GRAIN_LEN_MM = 1.0        # …a drybrush, ≈ 2 lines across so it prints (rides on the planes)
                                # (isotropic: stretched down the column it hangs as folds)
 FIT_GAP_MM       = 0.02        # stones stop this short of the tile boundary (not cut)
 EXPORT_RETRY_TOL_MM = (None, 0.015, 0.02, 0.03, 0.06, 0.1)  # export: simplify the top this much if needed
@@ -159,7 +160,11 @@ CHIP_MAX_MM3     = 3.0         # a chip (rocklab's) takes at most this: a plane 
                                # corner of a non-convex stone would take a whole arm
 Z_UP             = np.array([0.0, 0.0, 1.0])
 BEVEL_MM         = 0.6         # bevel (at the overhang limit) under rocks resting on rocks
-OVERHANG_DEG     = 55.0        # FDM: no downward face leans further than this from vertical
+OVERHANG_DEG     = 55.0        # FDM: no downward face leans further than this from vertical…
+LAYER_MM         = 0.2         # …but what a printer minds is each layer (this thick) reaching
+REACH_MM         = 0.6         # out over the one below: past this (≈ a 0.4 mm nozzle's line),
+                               # beyond the OVERHANG_DEG cone of any layer up to 3 mm below, it
+                               # droops (a thin crack's ceiling is fine; a long overhang is not)
 SEAT_GRID_MM     = 0.2         # resting rocks' underside is shaped on this grid…
 SEAT_SLOPE       = float(np.tan(np.radians(90.0 - OVERHANG_DEG + 3.0)))  # …3° inside the limit
 SEAT_SPAN_MM     = 1.5         # …bridging every low strip in its bed narrower than this
@@ -188,44 +193,46 @@ MIN_WALL_MM      = 1.2         # more than this much more of its plan
 CLEAVE_SUPPORT_MM3 = 1.0      # a cut may take this much from under a rock resting here
                                # (or from the core)
 CORE_SET_MM      = 2.0         # a solid core under the pile: in this far from open faces…
-CORE_RIM_MM      = 1.2         # …this far from the tile boundary…
+CORE_RIM_MM      = 2.8         # …this far from a boundary wall (behind its deepest sub-face)…
 CORE_END_RIM_MM  = 0.5         # …(from a band's end planes only this: the joints there
                                # are backed, never see-through)…
 CORE_DROP_MM     = 0.5         # …and this far under every top: where rounded corners meet,
                                # the gap is a dark recess, never a hole
-CORE_RELIEF_MM   = 0.8         # its sides on the boundary grained this much deeper again…
-CORE_RELIEF_LEN_MM = 1.2       # …at this scale (never a flat panel down a gap)
-#   block faces: one crack network per open column face, in its plane, and
-#   every stone of the column (and the core behind it) displaced along it (N:
-#   worn blocks, a dark network of kinked, mostly diagonal cracks splitting
-#   each face into 3–6 sub-faces, a step and a gap between them)
-CRACK_PER_MM2    = 0.35        # crack length (mm) per mm² of face (× 0.6–1 by zone)…
+#   block faces: one crack network per open column face (the boundary's too),
+#   every stone of the column (and the core behind it) cut back along it (N:
+#   massive blocks, each face broken into 3–6 crisp, flat, tilted sub-faces
+#   by a thin dark network of kinked, mostly diagonal cracks)
+CRACK_PER_MM2    = 0.2         # crack length (mm) per mm² of face (× 0.6–1 by zone)…
 CRACK_STEP_MM    = (2.0, 3.5)  # …random walks: straight runs this long, kinked…
-CRACK_BEND_DEG   = 30.0        # …by this much (σ), within this of their heading…
-CRACK_WANDER_DEG = 40.0
+CRACK_BEND_DEG   = 25.0        # …by this much (σ), within this of their heading…
+CRACK_WANDER_DEG = 35.0
 CRACK_STEEP_DEG  = 20.0        # …and never closer than this to level (rungs)
 CRACK_LEAN_DEG   = 30.0        # mostly near vertical (σ), this often diagonal
-CRACK_DIAG_P     = 0.75
+CRACK_DIAG_P     = 0.6 
 CRACK_DIAG_DEG   = (25.0, 50.0)
-CRACK_GAP_MM     = 1.5         # none along an edge, joint or crack closer than this…
+CRACK_GAP_MM     = 2.0         # none along an edge, joint or crack closer than this…
 CRACK_ALONG      = (25.0, 3.0)  # …nor running within this (°) of an edge or joint closer
                                # than this (mm): a raised welt between them, upholstery
                                # (it turns into it instead; started this far from all)
 CRACK_MIN_MM     = 3.0         # …nor shorter than this…
 CRACK_MEET_DEG   = 35.0        # …nor meeting another under this (a lens)
 CRACK_CROSS_P    = 0.45        # one runs on across a bed joint this often
-CRACK_MOUTH_MM   = (0.8, 1.2)  # V grooves this wide (≥ 0.6: a 0.4 mm nozzle)…
-CRACK_DEPTH_MM   = (1.2, 1.8)  # …this deep…
-CRACK_PINCH      = (0.55, 1.4)  # …each pinching and swelling along it within this (× ;
-                               # narrower, the cut's blur would fill it)…
-CRACK_TAPER_MM   = 1.0         # …eased to nothing over this into a joint or a crack…
-CRACK_FADE       = (0.4, 0.33)  # …this often dying out over this much of it, in the face…
-CRACK_LIP        = (0.5, (0.5, 1.0), 1.5)  # …this often its upper side sunk this much at it,
-                               # eased back over this (mm): a step and a gap, N
-CRACK_WALL_MM    = 1.0         # …never closer than this to the stone's back
-LIP_END_MM       = 1.5         # (no lip at the face's ends: a joint there would open)
-RELIEF_GRID_MM   = 0.1         # (the face's raster, and the stone's cut on this grid)
-CUT_BLUR_MM      = (0.08, 0.3)  # (crisp; where the overhang guard or the outline moved it)
+CRACK_SLOT_MM    = (0.4, 0.5)  # grooves this wide across (what a 0.4 mm nozzle leaves open)…
+CRACK_DEPTH_MM   = (0.6, 0.9)  # …this deep, cut straight in (≥ 20° off level: its ceiling
+                               # reaches under REACH_MM per layer)…
+CRACK_PINCH      = (0.7, 1.2)   # …each pinching and swelling along it within this (×)…
+CRACK_WALL_MM    = 1.6         # …never closer than this to the stone's back
+FACET_TILT_DEG   = (8.0, 18.0)  # sub-faces: flat planes tilted off the face this much, any way…
+FACET_MM         = (0.0, 0.4, 1.6)  # …high edge set back this, the low at most this
+RELIEF_OFF_MM    = 4.0         # (none on the core further than this off the face's plane)
+FACET_SEAM_MM    = 0.15        # (where two meet: eased over this, no jaggies down a crack)
+FACET_END_MM     = 1.5         # (both eased out to the face's ends: a joint there would open)
+SHEAR_DEG        = 45.0        # the planes cut down-and-in, this far below level: a step is
+                               # a bevel slanting down, never past the overhang limit
+RELIEF_GRID_MM   = 0.1         # (the face's raster, and the stone's cut on this grid…
+CRACK_GRID_MM    = 0.05        # …the cracks' on this: a 0.4 mm groove's diagonal walls clean)
+CUT_BLUR_MM      = (0.08, 0.3)  # (crisp; by its outline more: no hooks at its joints)
+CUT_SHORT_MM     = 0.1         # (stopping this short of what it leaves: no coplanar slivers)
 
 # 4 assembly
 APRON_H_MM       = (1.5, 3.5)  # a dirt bank in the angle of cliff and ground (between
@@ -1052,9 +1059,9 @@ def _plan_column(rng, c, form):
 @dataclass
 class Face:
     """One open face of a column, in its own plane: u along it from p0 (unit
-    t), z up; outward m.  G is the crack grooves' depth (≤ 0) over a
-    RELIEF_GRID_MM raster from (0, z0), F the lips' setback (≤ 0);
-    `cracks` the crack lengths."""
+    t), z up; outward m.  G is the crack slots' depth (≤ 0) over a
+    RELIEF_GRID_MM raster from (0, z0), F the sub-faces' setback (≤ 0);
+    `cracks` the crack lengths; `rim`: on the tile boundary."""
     p0: np.ndarray
     t: np.ndarray
     m: np.ndarray
@@ -1063,6 +1070,7 @@ class Face:
     G: np.ndarray
     F: np.ndarray
     cracks: list
+    rim: bool = False
 
 
 def _crack_net(rng, L, z0, z1, joints, want):
@@ -1166,12 +1174,13 @@ def _chord(line, s):
 
 
 def _plan_faces(rng, cols):
-    """The block faces: the columns' open faces (but the rim's), neighbours
+    """The block faces: the columns' open faces (the boundary's too), neighbours
     in one plane (turned under 25°, within 3 mm of it, meeting end to end:
     a column's outline facets, or the next column's face) as one face, so
     its crack network runs on across the joints between them; each column
     keeps the faces it lies on."""
-    F = [(c, p0, p1) for c in cols for p0, p1, _, rim in c.open if not rim]
+    F = [(c, p0, p1) for c in cols for p0, p1, _, _ in c.open]
+    rims = [rim for c in cols for *_, rim in c.open]
     t_ = [(b - a) / np.hypot(*(b - a)) for _, a, b in F]
     m_ = [np.array([t[1], -t[0]]) for t in t_]
     lab = _components(len(F), (
@@ -1200,6 +1209,7 @@ def _plan_faces(rng, cols):
             joints += [np.array([[u, c.zlo], [u, c.zhi]]) for u in (ua, ub)
                        if 0.5 < u < u1 - u0 - 0.5]
         fc = _plan_face(rng, p0, t, u1 - u0, z0, z1, joints, CRACK_PER_MM2 * area)
+        fc.rim = any(rims[i] for i in range(len(F)) if lab[i] == g)
         for c in on:
             c.faces.append(fc)
 
@@ -1207,129 +1217,131 @@ def _plan_faces(rng, cols):
 def _plan_face(rng, p0, t, L, z0, z1, joints, want):
     """One block face (from p0 along t, L long, outward on its right, z0
     to z1; bed joints and column sides `joints`): its crack network, `want`
-    mm of it, each crack a V groove CRACK_DEPTH_MM deep, CRACK_MOUTH_MM
-    wide, pinching and swelling along it (CRACK_PINCH), eased to nothing
-    where it meets a joint or a crack (no router-bit ends) and some dying
-    out in the face (CRACK_FADE); along some the upper side sunk (CRACK_LIP:
-    a step and a gap: the sub-faces either side at different depths, N).
-    The overhang is _relief's to keep."""
+    mm of it, splitting it (with the joints) into sub-faces, each a plane
+    tilted FACET_TILT_DEG its own way and set back (F: neighbours across a
+    crack at different depths, N); each crack a groove CRACK_SLOT_MM across,
+    CRACK_DEPTH_MM deep (G), pinching and swelling (CRACK_PINCH), at full
+    depth to both its ends."""
     m = np.array([t[1], -t[0]])
     cracks = _crack_net(rng, L, z0, z1, joints, want)
     g = RELIEF_GRID_MM
     U, Z = np.meshgrid(np.arange(int(L / g) + 2) * g, z0 + np.arange(int((z1 - z0) / g) + 2) * g,
                        indexing='ij')
     Q = shapely.points(U.ravel(), Z.ravel())
-    edge = box(0.0, z0, L, z1).boundary
-    G, F = np.zeros(U.size), np.zeros(U.size)
-    for c_ in cracks:                                 # (exact distances: a raster's steps would
-        if c_.coords[-1][0] < c_.coords[0][0]:        # show as rungs down a groove)
-            c_ = shapely.reverse(c_)                  # (run on +u: its left side the upper)
-        lip = rng.uniform(*CRACK_LIP[1]) if rng.random() < CRACK_LIP[0] else 0.0
-        dc = shapely.distance(Q, c_)
-        i = np.nonzero(dc < (3.0 * CRACK_LIP[2] if lip else CRACK_MOUTH_MM[1]))[0]
-        s = shapely.line_locate_point(c_, Q[i])
-        n_ = c_.length
+    G, cut = np.zeros(U.size), np.zeros(U.size, bool)
+    for cs in cracks:                                 # (exact distances: a raster's steps would
+        dc = shapely.distance(Q, cs)                  # show as rungs down a groove)
+        cut |= dc < g
+        i = np.nonzero(dc < CRACK_SLOT_MM[1])[0]
+        s = shapely.line_locate_point(cs, Q[i])
         f = np.clip(0.75 + 0.2 * sum(np.sin(2 * np.pi * rng.uniform(1.0, 3.0) * s / 6.0
                                             + rng.uniform(0, 2 * np.pi)) for _ in range(3)),
                     *CRACK_PINCH)                     # (pinch and swell: 2–6 mm waves)
-        if rng.random() < CRACK_FADE[0]:              # (dying out in the face)
-            e = s if rng.random() < 0.5 else n_ - s
-            f *= _rl._smooth01(e / (CRACK_FADE[1] * n_))
-        for e, end in ((s, c_.coords[0]), (n_ - s, c_.coords[-1])):
-            if edge.distance(shapely.Point(end)) > 0.1:  # (eased into a joint or a crack)
-                f *= _rl._smooth01(e / CRACK_TAPER_MM)
-        w = 0.5 * rng.uniform(*CRACK_MOUTH_MM) * f
-        G[i] = np.minimum(G[i], -rng.uniform(*CRACK_DEPTH_MM) * f
-                          * (1.0 - np.clip(dc[i] / np.maximum(w, 1e-3), 0.0, 1.0)))
-        if lip:                                       # (the upper side sunk at it, eased back)
-            P0, Pa, Pb = (shapely.get_coordinates(shapely.line_interpolate_point(c_, s + o))
-                          for o in (0.0, -0.3, 0.3))
-            q = shapely.get_coordinates(Q[i]) - P0
-            up = (Pb - Pa)[:, 0] * q[:, 1] - (Pb - Pa)[:, 1] * q[:, 0] > 0.0
-            F[i] = np.minimum(F[i], -lip * up * np.exp(-np.maximum(dc[i] - w, 0.0) / CRACK_LIP[2])
-                              * _rl._smooth01(np.minimum(s, n_ - s) / CRACK_LIP[2]))
-    G, F = G.reshape(U.shape), F.reshape(U.shape)
-    return Face(p0, t, m, L, z0, G, F, [float(c_.length) for c_ in cracks])
+        w = 0.5 * rng.uniform(*CRACK_SLOT_MM) * f      # (walls anti-aliased over a cell)
+        D = rng.uniform(*CRACK_DEPTH_MM) * np.minimum(f, 1.0)
+        G[i] = np.minimum(G[i], -D * np.clip((w - dc[i]) / g + 0.5, 0.0, 1.0))
+    if joints:
+        cut |= shapely.distance(Q, shapely.MultiLineString([j.tolist() for j in joints])) < g
+    # the sub-faces: each a plane, its high edge FACET_MM[0:2] back, falling
+    # away at its tilt, never further than FACET_MM[2] (a big one tilts less)
+    lab, n = ndimage.label(~cut.reshape(U.shape))
+    _, (ii, jj) = ndimage.distance_transform_edt(lab == 0, return_indices=True)
+    lab, ix = lab[ii, jj], np.arange(n + 1)
+    th = rng.uniform(0.0, 2 * np.pi, n + 1)
+    P = np.cos(th)[lab] * U + np.sin(th)[lab] * Z
+    lo, hi = ndimage.minimum(P, lab, ix), ndimage.maximum(P, lab, ix)
+    k = np.minimum(np.tan(np.radians(rng.uniform(*FACET_TILT_DEG, n + 1))),
+                   FACET_MM[2] / np.maximum(hi - lo, 1e-3))
+    F = -(rng.uniform(*FACET_MM[:2], n + 1)[lab] + k[lab] * (P - lo[lab]))
+    F = ndimage.gaussian_filter(F, FACET_SEAM_MM / g)   # (no raster stairs where they meet)
+    return Face(p0, t, m, L, z0, G.reshape(U.shape), F, [float(c_.length) for c_ in cracks])
 
 
-def _relief(rock, faces, pad=np.inf):
-    """The stone (or the core) cut back on its column's open faces (N:
-    worn blocks split by a dark crack network): its face found by
-    rays along −m over a RELIEF_GRID_MM grid of the face plane (on `pad` mm
-    past the face's ends at most), and everything in front of it moved back
-    h ≤ 0 taken off — the lips set back whole (over its edges too), the
-    crack grooves eased to nothing where the face turns away (its rounded
-    edges, the seat); never closer than CRACK_WALL_MM to its back."""
-    g = RELIEF_GRID_MM
-    for fc in faces:
+def _relief(rock, faces, pad=np.inf, flat=True):
+    """The stone (or the core) cut back on its column's open faces (N), in
+    two passes: its surface found by rays along d from a RELIEF_GRID_MM grid
+    of the face plane through its front (on `pad` mm past the face's ends
+    at most), first cut to the sub-faces' planes down the shear (d SHEAR_DEG
+    below the face's inward normal: a height field along it leans nowhere
+    past the overhang limit), then the cracks sunk in straight along the
+    normal (thin: their ceilings reach under REACH_MM); eased out where the
+    face turns away; never closer than CRACK_WALL_MM to its back.  The core
+    takes only the cracks on the tile boundary (there it backs the joints:
+    set back further, they would open)."""
+    for fc, a in ((fc, a) for a in (np.radians(SHEAR_DEG), 0.0) for fc in faces
+                  if not (a and fc.rim and not flat)):
+        g = RELIEF_GRID_MM if a else CRACK_GRID_MM
         t = to_mesh(rock)
         q = t.vertices[:, :2] - fc.p0
         u, s_ = q @ fc.t, q @ fc.m
         if min(u.max(), fc.L) - max(u.min(), 0.0) < 2.0:
             continue
         u0, u1 = max(u.min(), -pad), min(u.max(), fc.L + pad)
-        us = np.arange(u0 - 1.0, u1 + 1.0 + g, g)              # (past its ends: no flags)
-        zs = np.arange(t.vertices[:, 2].min(), t.vertices[:, 2].max() + g, g)
-        U, Z = np.meshgrid(us, zs)                              # (z, u)
+        on = (u > u0 - 1.0) & (u < u1 + 1.0)
         m3, t3 = np.r_[fc.m, 0.0], np.r_[fc.t, 0.0]
-        sf = s_.max() + 1.0
-        O = np.r_[fc.p0, 0.0] + U.reshape(-1, 1) * t3 + Z.reshape(-1, 1) * Z_UP + sf * m3
-        loc, ri, ti = t.ray.intersects_location(O, np.tile(-m3, (len(O), 1)), multiple_hits=True)
-        d = sf - (loc - np.r_[fc.p0, 0.0]) @ m3                # depth of each hit
+        d3 = -np.cos(a) * m3 - np.sin(a) * Z_UP
+        sm = s_[on].max()
+        P0 = np.r_[fc.p0, 0.0] + sm * m3                        # (its plane, through its front)
+        zp = t.vertices[on, 2] + (sm - s_[on]) * np.tan(a)   # (where each ray crosses it)
+        us = np.arange(u0 - 1.0, u1 + 1.0 + g, g)              # (past its ends: no flags)
+        zs = np.arange(zp.min(), min(zp.max(), t.vertices[:, 2].max() + 1.5) + g, g)
+        U, Z = np.meshgrid(us, zs)                              # (z, u)
+        O = P0 + U.reshape(-1, 1) * t3 + Z.reshape(-1, 1) * Z_UP - d3   # (1 mm out)
+        loc, ri, ti = t.ray.intersects_location(O, np.tile(d3, (len(O), 1)), multiple_hits=True)
+        d = np.einsum('ij,j->i', loc - O[ri], d3)               # depth of each hit
         o = np.lexsort((d, ri))
         ri, d, ti = ri[o], d[o], ti[o]
         first = np.r_[True, ri[1:] != ri[:-1]]
-        front = np.full(len(O), np.nan)
-        back = np.full(len(O), np.nan)
-        al, nz = np.zeros(len(O)), np.zeros(len(O))
+        front, back = np.full((2, len(O)), np.nan)
+        al, nz = np.zeros((2, len(O)))
         front[ri[first]], al[ri[first]] = d[first], t.face_normals[ti[first]] @ m3
         nz[ri[first]] = t.face_normals[ti[first], 2]
         nxt = np.nonzero(first)[0] + 1
         nxt = nxt[(nxt < len(ri)) & ~first[np.minimum(nxt, len(ri) - 1)]]
+        nxt = nxt[t.face_normals[ti[nxt], 2] > -0.5]        # (out through its seat: no back)
         back[ri[nxt]] = d[nxt]
-        front, back, al, nz = (a.reshape(U.shape) for a in (front, back, al, nz))
+        front, back, al, nz = (a_.reshape(U.shape) for a_ in (front, back, al, nz))
         hit = ~np.isnan(front)
-        # (grooves on its face, and on over the chamfers and rounded edges
-        # into the joints; not on its underside: the seat bevel, at the limit
-        # already, is only moved back whole)
-        up = hit & (nz > -0.5)
-        w = np.where(up, _rl._smooth01((al - 0.35) / 0.3), 0.0)
+        # (slots on its face, and on over the chamfers and rounded edges
+        # into the joints; not on its underside)
+        w = np.where(hit & (nz > -0.5), _rl._smooth01((al - 0.35) / 0.3), 0.0)
         M = ndimage.binary_fill_holes(w > 0.5)
         if M.sum() < 50:
             continue
         E = _inset(M, g)
-        c_ = np.array([U / g, (Z - fc.z0) / g])
-        G = ndimage.map_coordinates(fc.G, c_, order=1, mode='nearest')
+        c_ = np.array([U, Z - fc.z0]) / RELIEF_GRID_MM
+        G = ndimage.map_coordinates(fc.G, c_, order=1, mode='constant')   # (none off the face)
         F = ndimage.map_coordinates(fc.F, c_, order=1, mode='nearest')
-        F *= _rl._smooth01(np.minimum(U, fc.L - U) / LIP_END_MM)   # (eased out to its ends:
-                                                # the stone's other faces and its joints stay put)
-        # (a lip moves the whole front back, over its edges and the seat
-        # bevel too: left there they would stand as a frame, a welt or a fin)
-        h = np.maximum(F + w * G * _rl._smooth01(E / 0.3),
-                       -np.clip(np.nan_to_num(back - front, nan=0.0) - CRACK_WALL_MM, 0.0, None))
-        # (past its outline the cut runs on as at the outline: a step there
-        # would leave a flat ceiling under the stone's edge)
-        cut = front - h
-        # nowhere coming forward going up faster than the overhang limit, less
-        # a margin for the grid (a sub-face's step, a groove's upper wall, a
-        # seat bevel bared): less taken off below there
-        k = np.tan(np.radians(OVERHANG_DEG - 8.0)) * g
-        kept = cut.copy()
-        for r in range(len(zs) - 2, -1, -1):
-            kept[r] = np.fmax(front[r], np.fmin(kept[r], kept[r + 1] + k))
-        # blurred only a little (crisp lips), more where that moved it (no
-        # row-by-row terraces) and by its outline (no hooks at its joints)
-        wide = (np.abs(kept - cut) > 0.02) | (E < 1.0)
-        wide = np.clip(2.0 * ndimage.gaussian_filter(wide.astype(float), CUT_BLUR_MM[1] / g), 0, 1)
+        # (the sub-faces eased out to its ends: no fin on a corner between
+        # two faces; the cracks run on off them; on the core, neither on
+        # whatever lies far off its plane: its far side is no face)
+        F = F * _rl._smooth01(np.minimum(U, fc.L - U) / FACET_END_MM)
+        if not flat:
+            off = _rl._smooth01(RELIEF_OFF_MM - np.abs(sm + np.cos(a) * (1.0 - front)))
+            F, G = F * off, G * off
+        # the sub-faces: planes behind the stone's face (a plane fitted to it;
+        # the core's front smoothed) — all in front of one cut away flat, over
+        # its edges too (no frame), all behind it (its top, a chip) left be
         _, (ii, jj) = ndimage.distance_transform_edt(~hit, return_indices=True)
-        cut = kept[ii, jj]
-        fine = ndimage.gaussian_filter(cut, CUT_BLUR_MM[0] / g)
-        cut = fine + wide * (ndimage.gaussian_filter(cut, CUT_BLUR_MM[1] / g) - fine)
-        cut = np.maximum(cut, 0.02)
+        X, k = np.stack([np.ones_like(U), U, Z], -1), M & (E > 1.0)
+        base = X @ np.linalg.lstsq(X[k], front[k], rcond=None)[0] if flat and k.sum() > 50 \
+            else ndimage.gaussian_filter(front[ii, jj], 0.4 / g)
+        room = np.clip(np.nan_to_num(back - front, nan=np.inf) - CRACK_WALL_MM, 0.0, None)
+        if a:
+            # (past its outline the cut runs on as at the outline: a step
+            # there would leave a ledge under the stone's edge) blurred only
+            # a little (crisp planes), more by its outline (no hooks at its joints)
+            cut = (front - np.maximum(np.minimum(front - base + F, 0.0), -room) - CUT_SHORT_MM)[ii, jj]
+            wide = np.clip(2.0 * ndimage.gaussian_filter((E < 1.0).astype(float), CUT_BLUR_MM[1] / g), 0, 1)
+            fine = ndimage.gaussian_filter(cut, CUT_BLUR_MM[0] / g)
+            cut = np.maximum(fine + wide * (ndimage.gaussian_filter(cut, CUT_BLUR_MM[1] / g) - fine), 0.02)
+        else:                                 # (only along the cracks: nothing else touched)
+            crack = np.minimum(ndimage.gaussian_filter(-w * G, CUT_BLUR_MM[0] / g), room)[ii, jj]
+            cut = np.where(crack > 0.01, front[ii, jj] + crack       # (full depth: short
+                           - CUT_SHORT_MM * (1.0 - _rl._smooth01(crack / 0.2)), 0.02)   # only at its rim)
         hm = _gl.to_manifold(make_heightmap_solid(cut, us[-1] - us[0], zs[-1] - zs[0], base_h=0.0))
-        hm = hm.mirror([0, 0, 1]).translate([us[0], zs[0], sf])     # (u, z, s) ∈ … × [sf − cut, sf]
-        R = np.c_[t3, Z_UP, m3, np.r_[fc.p0, 0.0]]
-        out = rock - hm.transform(R)
+        hm = hm.mirror([0, 0, 1]).translate([us[0], zs[0], 1.0])    # (u, z, −d) ∈ … × [1 − cut, 1]
+        out = rock - hm.transform(np.c_[t3, Z_UP, -d3, P0])
         if not out.is_empty():
             rock = out
     return rock
@@ -1581,7 +1593,7 @@ def _grain(rock, seed, z0):
     """The face grain: value-noise fBm FACE_GRAIN_MM deep, one field over
     the whole tile (`seed`), so it runs on across the joints.  Faded in
     above the seat at z0, nothing below it, nor on a face turned down (its
-    underside, a groove's upper wall), halved at sharp edges."""
+    underside) or facing rock across a slot, halved at sharp edges."""
     base_tm = _rl.to_trimesh(rock)
     sharp = base_tm.face_adjacency_angles > np.radians(_rl.SHARP_EDGE_DEG)
     E = base_tm.vertices[base_tm.face_adjacency_edges[sharp]]
@@ -1600,51 +1612,30 @@ def _grain(rock, seed, z0):
         we = _rl._smooth01(cKDTree(Q).query(P, distance_upper_bound=_rl.EDGE_KEEP_MM)[0]
                            / _rl.EDGE_KEEP_MM)
     w = _rl._smooth01((P[:, 2] - z0 - 0.15) / _rl.TEX_BASE_FADE_MM) * _rl._smooth01((N[:, 2] + 0.5) / 0.4)
+    loc, ri, _ = base_tm.ray.intersects_location(P + 0.02 * N, N, multiple_hits=False)
+    gap = np.full(len(P), np.inf)             # (none facing the rock across a slot: it
+    gap[ri] = np.linalg.norm(loc - P[ri], axis=1)   # would close it, or hang a hook in it)
+    w *= _rl._smooth01((gap - 0.8) / 0.8)
     V = P + (FACE_GRAIN_MM * gr * (0.5 + 0.5 * we) * w)[:, None] * N
     out = m3d.Manifold(mesh=m3d.Mesh(vert_properties=np.asarray(V, dtype=np.float32),
                                      tri_verts=np.asarray(tm.faces, dtype=np.uint32)))
     return rock if out.is_empty() else out
 
 
-def _core(f, S, seed):
+def _core(f, S):
     """The core: the pile's height field S set in CORE_SET_MM from every
     open face (a flat-disc erosion) and CORE_DROP_MM under every top, its
     sides on the tile boundary CORE_RIM_MM in (CORE_END_RIM_MM from a band's
-    ends) less a grained relief up to CORE_RELIEF_MM more (_rim_relief), so
-    where it shows it is rough rock, never a flat panel.  Cleaving never
-    cuts into it (it joins the support), so it shows only where neighbours'
-    rounded corners leave a gap — as the gap's floor, never a hole through the
-    pile."""
+    ends).  Cleaving never cuts into it (it joins the support), so it shows
+    only where neighbours' rounded corners leave a gap — as the gap's floor,
+    never a hole through the pile — carved like the faces it lies behind."""
     C = ndimage.grey_erosion(S, footprint=_disc(CORE_SET_MM), mode='nearest') - CORE_DROP_MM
     zb = FOOT_Z_MM - 1.5                          # under the ground
     core = _height_solid(np.maximum(C, zb + 0.05), zb, tol=0.01)
-    zt = float(C.max()) + 1.0
-    for ax in (0, 1):
-        for hi in (False, True):
-            rim = CORE_RIM_MM if not f.rims or (ax, hi) in f.rims else CORE_END_RIM_MM
-            core = core - _rim_relief(f, ax, hi, rim, zb - 1.0, zt, seed + 31 * ax + 7 * hi)
-    return core
-
-
-def _rim_relief(f, ax, hi, rim, z0, z1, seed):
-    """A slab along one tile side (axis `ax`, high side `hi`), `rim` plus a
-    grained 0–CORE_RELIEF_MM thick, from z0 to z1."""
-    L = f.H if ax == 0 else f.W
-    g = 0.3
-    u = np.arange(0.0, L + g, g)
-    v = np.arange(z0, z1 + g, g)
-    U, Vz = np.meshgrid(u, v)                            # rows: z, columns: along the side
-    gr = fbm(np.c_[U.ravel(), Vz.ravel(), np.zeros(U.size)], seed,
-             CORE_RELIEF_LEN_MM, octaves=2).reshape(U.shape)
-    t = rim + CORE_RELIEF_MM * np.clip(0.5 + 0.7 * gr, 0.0, 1.0)
-    slab = _gl.to_manifold(make_heightmap_solid(t + 1.0, u[-1], v[-1] - v[0], base_h=0.0))
-    slab = slab.translate([0.0, z0, -1.0])               # (u, z, inward depth)
-    W, H = f.W, f.H
-    M = {(1, True): [[1, 0, 0, 0], [0, 0, -1, H], [0, 1, 0, 0]],
-         (1, False): [[-1, 0, 0, W], [0, 0, 1, 0], [0, 1, 0, 0]],
-         (0, False): [[0, 0, 1, 0], [1, 0, 0, 0], [0, 1, 0, 0]],
-         (0, True): [[0, 0, -1, W], [-1, 0, 0, H], [0, 1, 0, 0]]}[(ax, hi)]
-    return slab.transform(np.array(M, float))
+    rim = [CORE_RIM_MM if not f.rims or (ax, hi) in f.rims else CORE_END_RIM_MM
+           for hi in (False, True) for ax in (0, 1)]
+    return core ^ m3d.Manifold.cube([f.W - rim[0] - rim[2], f.H - rim[1] - rim[3], 200.0]).translate(
+        [rim[0], rim[1], zb - 1.0])
 
 
 def _height_solid(Z, z0, tol=None):
@@ -1724,7 +1715,7 @@ def build(seed=1, form='run', cols=1, rows=1):
     tm['stack'] = time.perf_counter() - t0
     t1 = time.perf_counter()
     cols_ = columns(rng, placed, f, S, zone)
-    core = _core(f, S, seed)
+    core = _core(f, S)
     cones = {id(r): (_support_cone(r), r.poly.bounds) for r in placed if r.z0 > FOOT_Z_MM}
     rocks = []
     for c in cols_:
@@ -1740,10 +1731,11 @@ def build(seed=1, form='run', cols=1, rows=1):
         support = m3d.Manifold.batch_boolean(near + [core], m3d.OpType.Add)
         rocks += [m for m in (rock_manifold(rng, r, c, f, S, support, seed) for r in c.stones)
                   if m is not None]
-    # the core where it shows (a gully's back, behind a dressed stone) carved
-    # like the faces it lies behind: never a flat panel
+    # the core where it shows (a gully's back, behind a dressed stone, in a
+    # crack: on the tile boundary it lies just behind the stones) carved like
+    # the faces it lies behind, and grained: never a flat panel
     faces = list({id(fc): fc for c in cols_ for fc in c.faces}.values())
-    core = _relief(core, faces, pad=0.0)
+    core = _grain(_relief(core, faces, pad=0.0, flat=False), seed, FOOT_Z_MM)
     tm['rocks'] = time.perf_counter() - t1
     t2 = time.perf_counter()
     pile = m3d.Manifold.batch_boolean(rocks + [core], m3d.OpType.Add)
@@ -1758,9 +1750,9 @@ def build(seed=1, form='run', cols=1, rows=1):
     top_ = top_ ^ m3d.Manifold.cube([W, H, 200.0])
     import clifflab as cl
     for tol in EXPORT_RETRY_TOL_MM:          # a near-tangency can open up in float32:
-        try:                                # merge it away a little coarser and retry
-            mesh, peg, zmax, _ = cl.attach_base(top_ if tol is None else top_.simplify(tol),
-                                                cols, rows)
+        try:                                # snapped to it, merged a little coarser, retried
+            mesh, peg, zmax, _ = cl.attach_base(top_ if tol is None else m3d.Manifold(
+                top_.simplify(tol).to_mesh()), cols, rows)
             break
         except RuntimeError:
             if tol == EXPORT_RETRY_TOL_MM[-1]:
@@ -1957,12 +1949,42 @@ def _resample(a, shape):
     return ndimage.zoom(a, (shape[0] / a.shape[0], shape[1] / a.shape[1]), order=1)
 
 
+def overhang_faces(mesh, g=0.1, span_mm=3.0):
+    """The faces a printer can't lay, as a slicer sees them: the mesh above
+    the base sliced every LAYER_MM (vertical rays on a g mm grid), each
+    layer's material farther than REACH_MM + (k − 1) × LAYER_MM × tan
+    OVERHANG_DEG from the layer k below (any k up to `span_mm`): one layer
+    may reach a line width out, a run of them only as far as the cone.
+    Flagged: the downward faces under such material."""
+    lo, hi = mesh.bounds
+    X, Y = np.meshgrid(np.arange(lo[0] + 0.0137, hi[0], g), np.arange(lo[1] + 0.0091, hi[1], g),
+                       indexing='ij')                 # (off the mesh's own grids: no grazing hits)
+    O = np.c_[X.ravel(), Y.ravel(), np.full(X.size, lo[2] - 1.0)]
+    loc, ri, _ = mesh.ray.intersects_location(O, np.tile(Z_UP, (len(O), 1)), multiple_hits=True)
+    nl = int(np.ceil(hi[2] / LAYER_MM)) + 1           # (layer k: the plane (k + ½) LAYER_MM up)
+    k = np.clip(np.floor(loc[:, 2] / LAYER_MM + 0.5).astype(int), 0, nl)
+    occ = np.zeros((nl + 1, X.size), np.uint8)
+    np.add.at(occ, (k, ri), 1)                        # (inside: an odd count of hits below)
+    occ = (np.cumsum(occ, 0, dtype=np.uint8) & 1).astype(bool).reshape(nl + 1, *X.shape)[:nl]
+    c = LAYER_MM * np.tan(np.radians(OVERHANG_DEG))
+    far, bad = [], np.zeros_like(occ)
+    for i in range(nl):
+        bad[i] = occ[i] & np.any([D > REACH_MM + j * c for j, D in enumerate(far[::-1])], axis=0) \
+            if far else False
+        far = (far + [g * ndimage.distance_transform_edt(~occ[i])])[-int(span_mm / LAYER_MM):]
+    bad = ndimage.binary_dilation(bad, np.ones((1, 3, 3), bool))
+    bad[:-1] |= bad[1:]                               # (a face: under layer k or k + 1)
+    P, n = mesh.triangles_center, mesh.face_normals
+    ix = np.clip(((P[:, :2] - n[:, :2] * 0.5 * g - [lo[0] + 0.0137, lo[1] + 0.0091]) / g).round()
+                 .astype(int), 0, np.array(X.shape) - 1)
+    kz = np.clip(np.floor(P[:, 2] / LAYER_MM + 0.5).astype(int), 0, nl - 1)
+    return (n[:, 2] < 0.0) & (P[:, 2] > 0.05) & bad[kz, ix[:, 0], ix[:, 1]]
+
+
 def audit_overhang(mesh):
-    """Area (mm²) of faces overhanging past OVERHANG_DEG + 3° (grasslab's
-    audit, at this lab's limit)."""
-    n, cz = mesh.face_normals, mesh.triangles_center[:, 2]
-    bad = (n[:, 2] < -np.sin(np.radians(OVERHANG_DEG + 3.0))) & (cz > 0.05)
-    return float(mesh.area_faces[bad].sum())
+    """Area (mm²) of the faces a printer can't lay (overhang_faces)."""
+    return float(mesh.area_faces[overhang_faces(mesh)].sum())
+
 
 
 def main():
