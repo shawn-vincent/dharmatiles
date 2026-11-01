@@ -10,5 +10,5 @@ pub mod rays;
 pub mod seed;
 
 pub use mesh::{Mesh, MeshError, TriMesh};
-pub use rays::{Hit, Ray, Rays};
+pub use rays::{Hit, ObvhsRays, ParryRays, Ray, Rays};
 pub use seed::Seed;

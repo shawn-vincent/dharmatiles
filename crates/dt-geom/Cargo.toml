@@ -19,6 +19,11 @@ manifold-ffi = []
 manifold-rust = []
 
 [dependencies]
+bytemuck.workspace = true
+glam.workspace = true
+obvhs.workspace = true
+parry3d.workspace = true
+rayon.workspace = true
 
 [lints]
 workspace = true

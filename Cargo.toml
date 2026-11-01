@@ -19,6 +19,11 @@ dt-doc = { path = "crates/dt-doc" }
 # KDL v2 only: `kdlv1`/`v1-fallback` stay off, and serde is not needed.
 kdl = { version = "6.7.1", default-features = false, features = ["span"] }
 miette = { version = "7.6.0", default-features = false }
+bytemuck = "1.23.0"
+glam = "0.34.2"
+obvhs = { version = "0.4.0", features = ["parallel"] }
+parry3d = "0.31.1"
+rayon = "1.12.0"
 
 [workspace.lints.rust]
 # FFI lives inside the binding crates, not ours.
