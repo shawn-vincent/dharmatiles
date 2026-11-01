@@ -29,8 +29,12 @@ jobs:
       - uses: actions/checkout@v4
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
+      - run: cmake --version
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+  # manifold-ffi (the default backend) builds Manifold's C++ from source:
+  # it needs git, cmake and a C++ compiler. All three GitHub images ship
+  # cmake; the version is printed so a missing one fails loudly here.
   test:
     name: test (${{ matrix.os }})
     strategy:
@@ -42,7 +46,11 @@ jobs:
       - uses: actions/checkout@v4
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
+      - run: cmake --version
       - run: cargo test --workspace --all-targets
+      # R2: print every stage hash on each OS, on both backends, so platforms
+      # can be compared (the test itself asserts 1/4/16-thread identity).
+      - run: cargo test -p dt-geom --features manifold-rust --test determinism -- --nocapture --test-threads 1
       - run: cargo xtask parity
 
   wasm:

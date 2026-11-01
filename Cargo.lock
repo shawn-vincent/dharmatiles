@@ -188,6 +188,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
 
 [[package]]
+name = "clipper2-rust"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "210e9ea90a5f6c731c23bf642383ad7c006d8b24803c5c33afd5aaeae5a33f66"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
+name = "cmake"
+version = "0.1.58"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0f78a02292a74a88ac736019ab962ece0bc380e3f977bf72e376c5d78ff0678"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "criterion"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -255,6 +273,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
+name = "dashu-base"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a64b04cdfc4c8533100fe00304eb9687173bda47b1f1dac8af12ba13712ed49d"
+
+[[package]]
+name = "dashu-int"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6ee98721d5d223e5b64b642dd9588b79d9ef415554b13720308b77d628c3be6"
+dependencies = [
+ "cfg-if",
+ "dashu-base",
+ "num-modular",
+ "num-traits",
+ "rustversion",
+ "static_assertions",
+]
+
+[[package]]
+name = "dashu-ratio"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "727613e0312d442301147d9e45eb2e7c2797230fc6d223a2c51ecf0e98dfeb5e"
+dependencies = [
+ "dashu-base",
+ "dashu-int",
+ "num-traits",
+ "rustversion",
+]
+
+[[package]]
 name = "displaydoc"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -285,9 +335,12 @@ version = "0.0.0"
 dependencies = [
  "bytemuck",
  "glam 0.34.2",
+ "manifold-csg",
+ "manifold-rust",
  "obvhs",
  "parry3d",
  "rayon",
+ "serde_json",
 ]
 
 [[package]]
@@ -617,6 +670,40 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
+name = "manifold-csg"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ba4dd58c980405d5a23657a59106e2844a36d3c25b745ee7a0a3e0524e6bc4d"
+dependencies = [
+ "log",
+ "manifold-csg-sys",
+ "thiserror",
+]
+
+[[package]]
+name = "manifold-csg-sys"
+version = "3.5.105"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58f034b8af43be927e7651da0c18a0205e8942acf275550acc4a8300042dee51"
+dependencies = [
+ "cmake",
+]
+
+[[package]]
+name = "manifold-rust"
+version = "0.19.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddad329fd20646de626e339ea1146de838464060824cb3edd5593d8d061a3f95"
+dependencies = [
+ "clipper2-rust",
+ "dashu-int",
+ "dashu-ratio",
+ "num-traits",
+ "rayon",
+ "rustc-hash",
+]
+
+[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -663,6 +750,12 @@ dependencies = [
  "quote",
  "syn 3.0.9",
 ]
+
+[[package]]
+name = "num-modular"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd8e500409e6cd603b03e477c26a6caecdc27ac58979a53e881c75eafc079f44"
 
 [[package]]
 name = "num-traits"
@@ -894,6 +987,12 @@ dependencies = [
  "num-traits",
  "smallvec",
 ]
+
+[[package]]
+name = "rustc-hash"
+version = "2.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b1e7f9a428571be2dc5bc0505c13fb6bf936822b894ec87abf8a08a4e51742d"
 
 [[package]]
 name = "rustix"

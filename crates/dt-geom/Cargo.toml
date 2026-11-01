@@ -10,13 +10,15 @@ publish.workspace = true
 
 [features]
 default = ["manifold-ffi"]
-# Mesh backend: Manifold's C++ library through manifold-csg (native only).
-# TODO(R1): add `dep:manifold-csg` (0.4.1). It needs cmake and compiles the
-# Manifold C++ sources (several minutes cold), so the R1 spike wires it.
-manifold-ffi = []
+# Mesh backend: Manifold's C++ library (v3.5.3) through manifold-csg (native
+# only). Needs cmake and a C++ compiler; the first build compiles Manifold.
+manifold-ffi = ["dep:manifold-csg"]
 # Mesh backend: the pure-Rust Manifold port (wasm-capable).
-# TODO(R1): add `dep:manifold-rust` once the spike has chosen a version.
-manifold-rust = []
+manifold-rust = ["dep:manifold-rust"]
+# Manifold's internal parallelism (TBB in C++, rayon in the port). Off by
+# default: R2 found per-boolean parallelism is the one thing that can break
+# run-to-run identity, so dt-geom parallelises across booleans instead.
+manifold-parallel = ["manifold-csg?/parallel", "manifold-rust?/parallel"]
 
 [dependencies]
 bytemuck.workspace = true
@@ -24,6 +26,11 @@ glam.workspace = true
 obvhs.workspace = true
 parry3d.workspace = true
 rayon.workspace = true
+manifold-csg = { workspace = true, optional = true }
+manifold-rust = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json.workspace = true
 
 [lints]
 workspace = true
