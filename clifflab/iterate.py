@@ -26,6 +26,8 @@ PAL = np.array([(20, 19, 20), (38, 37, 38), (58, 56, 55), (84, 78, 68), (118, 10
                 (168, 158, 140), (68, 52, 38), (102, 80, 58), (146, 124, 96), (40, 40, 42),
                 (230, 30, 30)], float)           # last: faces past the overhang limit
 REF_CELLS = {c: (i % 4, i // 4) for i, c in enumerate('ABCDEFGHIJKLMNOP')}
+REF_COLS = ((0, 307), (318, 623), (634, 939), (950, 1254))   # the sheet's cells (px),
+REF_ROWS = ((0, 278), (289, 587), (597, 896), (906, 1254))   # between its gutters
 VIEWS = [('oblique', 24, -118), ('front', 6, -90), ('raking', 14, -40), ('end', 6, 180)]
 
 
@@ -54,7 +56,7 @@ def paint(mesh):
             s6 = s40.copy()
     cs = -np.einsum('ij,ij->i', s6 - v, n)
     cl = -np.einsum('ij,ij->i', s40 - v, n)
-    t = 0.36 + 0.22 * cs / (cs.std() + 1e-9) + 0.22 * cl / (cl.std() + 1e-9) + 0.1 * np.clip(n[:, 2], 0, 1)
+    t = 0.36 + 0.22 * cs / (cs.std() + 1e-9) + 0.08 * cl / (cl.std() + 1e-9) + 0.1 * np.clip(n[:, 2], 0, 1)
     for _ in range(2):
         t = L @ t
     k = np.digitize(t, [0.18, 0.36, 0.56, 0.74, 0.9])
@@ -74,8 +76,8 @@ def paint(mesh):
 def ref_crop(letter, h):
     im = Image.open(ROOT / 'clifflab' / 'reference' / 'reference-sheet.png').convert('RGB')
     cx, cy = REF_CELLS[letter]
-    w, hh = im.width / 4, im.height / 4
-    c = im.crop((int(cx * w), int(cy * hh), int((cx + 1) * w), int((cy + 1) * hh)))
+    (x0, x1), (y0, y1) = REF_COLS[cx], REF_ROWS[cy]
+    c = im.crop((x0, y0, x1, y1))
     c.thumbnail((h, h))
     return c
 
