@@ -51,6 +51,17 @@ jobs:
       # R2: print every stage hash on each OS, on both backends, so platforms
       # can be compared (the test itself asserts 1/4/16-thread identity).
       - run: cargo test -p dt-geom --features manifold-rust --test determinism -- --nocapture --test-threads 1
+      # R2: TBB sizes its thread pool from the CPU affinity mask on Linux, so
+      # re-run the test on 1, 2 and 4 CPUs. Every run's hashes must agree
+      # (one distinct line per backend once thread and run are stripped).
+      - if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          for cpus in 0 0-1 0-3; do
+            taskset -c "$cpus" cargo test -p dt-geom --features manifold-rust --test determinism -- --nocapture --test-threads 1 \
+              | grep -o 'R2 .*' | sed -E 's/ threads= *[0-9]+ run=[0-9]+//'
+          done | sort | uniq -c | tee r2-tbb.txt
+          test "$(wc -l < r2-tbb.txt)" -eq 2
       - run: cargo xtask parity
 
   wasm:

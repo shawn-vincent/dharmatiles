@@ -28,6 +28,11 @@ pub struct TriMesh {
     pub run_original_id: Vec<u32>,
     /// Per-triangle face ID (coplanar faces share one). Empty if unknown.
     pub face_id: Vec<u32>,
+    /// The solid's tolerance in mm (`MeshGL::tolerance`); 0 means the
+    /// kernel's default for the mesh's size. R1 found the replay must carry
+    /// it: Python's operands were float32 imports with ~1e-7 x size, and
+    /// re-importing them at the default ~1e-12 x size changes some results.
+    pub tolerance: f64,
 }
 
 impl TriMesh {
@@ -100,6 +105,7 @@ impl TriMesh {
             t.iter().for_each(|&i| h.u64(u64::from(i)));
         }
         self.extra.iter().for_each(|x| h.u64(x.to_bits()));
+        h.u64(self.tolerance.to_bits());
         for v in [
             &self.merge_from,
             &self.merge_to,
@@ -175,6 +181,77 @@ pub enum BoolOp {
     Intersection,
 }
 
+/// A closed box covering `b` on the side `n̂ · x ≥ offset` of the plane
+/// (`n̂` = `normal` normalised, as Manifold's plane ops take it), one face on
+/// the plane, every triangle carrying original ID `id`.
+///
+/// # Errors
+/// [`MeshError::Backend`] if `normal` is zero or not finite.
+pub fn half_space(b: Bounds, normal: [f64; 3], offset: f64, id: u32) -> Result<TriMesh, MeshError> {
+    let len = normal.iter().map(|x| x * x).sum::<f64>().sqrt();
+    if !(len.is_finite() && len > 0.0) {
+        return Err(MeshError::Backend("half-space normal is zero".into()));
+    }
+    let n = normal.map(|x| x / len);
+    let dot = |a: [f64; 3], c: [f64; 3]| a[0] * c[0] + a[1] * c[1] + a[2] * c[2];
+    let cross = |a: [f64; 3], c: [f64; 3]| {
+        [
+            a[1] * c[2] - a[2] * c[1],
+            a[2] * c[0] - a[0] * c[2],
+            a[0] * c[1] - a[1] * c[0],
+        ]
+    };
+    // u, v, n right-handed, so the unit cube's winding stays outward
+    let seed = if n[0].abs() < 0.9 {
+        [1.0, 0.0, 0.0]
+    } else {
+        [0.0, 1.0, 0.0]
+    };
+    let u0 = cross(seed, n);
+    let ul = dot(u0, u0).sqrt();
+    let u = u0.map(|x| x / ul);
+    let v = cross(n, u);
+    let c = [0, 1, 2].map(|k| 0.5 * (b.min[k] + b.max[k]));
+    let half = 0.5
+        * (0..3)
+            .map(|k| (b.max[k] - b.min[k]).powi(2))
+            .sum::<f64>()
+            .sqrt();
+    let r = 2.0 * half + 1.0;
+    let h = r + (dot(n, c) - offset).abs();
+    let o = [0, 1, 2].map(|k| c[k] - (dot(n, c) - offset) * n[k]);
+    let corner = |i: usize| {
+        let a = if i & 1 == 0 { -r } else { r };
+        let bb = if i & 2 == 0 { -r } else { r };
+        let t = if i & 4 == 0 { 0.0 } else { h };
+        [0, 1, 2].map(|k| o[k] + a * u[k] + bb * v[k] + t * n[k])
+    };
+    Ok(TriMesh {
+        positions: (0..8).map(corner).collect(),
+        triangles: BOX_TRIANGLES.to_vec(),
+        run_index: vec![0, 36],
+        run_original_id: vec![id],
+        ..TriMesh::default()
+    })
+}
+
+/// The 12 outward triangles of a box whose corner `i` has bit 0 = +x,
+/// bit 1 = +y, bit 2 = +z.
+pub const BOX_TRIANGLES: [[u32; 3]; 12] = [
+    [0, 2, 1],
+    [1, 2, 3],
+    [4, 5, 6],
+    [5, 7, 6],
+    [0, 1, 4],
+    [1, 5, 4],
+    [2, 6, 3],
+    [3, 6, 7],
+    [0, 4, 2],
+    [2, 4, 6],
+    [1, 3, 5],
+    [3, 7, 5],
+];
+
 /// Axis-aligned bounds of a level set, in mm.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Bounds {
@@ -185,7 +262,13 @@ pub struct Bounds {
 }
 
 /// A solid mesh with exact booleans. Implemented once per backend feature.
-pub trait Mesh: Sized + Send + Sync {
+///
+/// Source IDs follow the rule in [`crate::source`]: a pipeline gives every
+/// leaf solid and every cut an ID from an [`crate::source::IdBlock`]
+/// ([`Mesh::with_original_id`], [`Mesh::trim_by_plane_with_id`]) instead of
+/// the IDs the kernel mints from its process-wide counter, and never calls
+/// [`Mesh::as_original`] on a solid with more than one source.
+pub trait Mesh: Sized + Send + Sync + Clone {
     /// Build a solid from an indexed triangle mesh.
     ///
     /// # Errors
@@ -238,9 +321,70 @@ pub trait Mesh: Sized + Send + Sync {
     #[must_use]
     fn level_set(sdf: &(dyn Fn([f64; 3]) -> f64 + Sync), bounds: Bounds, edge_length: f64) -> Self;
 
-    /// This solid as a new original with a fresh original ID (R9).
+    /// This solid as a new original with a fresh original ID from the
+    /// kernel's process-wide counter. It collapses every source ID into one
+    /// and recomputes face IDs, so it cuts the link R9's material tracing
+    /// needs; pipelines use [`Mesh::with_original_id`] on leaves instead.
     #[must_use]
     fn as_original(&self) -> Self;
+
+    /// Reserve `n` consecutive original IDs from the kernel's counter and
+    /// return the first. Call it once, in sequence, before parallel work.
+    fn reserve_ids(n: u32) -> u32;
+
+    /// Axis-aligned bounds, or `None` if empty.
+    fn bounds(&self) -> Option<Bounds>;
+
+    /// A leaf solid relabelled so every triangle carries original ID `id`,
+    /// and triangle `t` face ID `face_base + t`.
+    ///
+    /// This is the one allowed round trip through [`TriMesh`]: it re-imports
+    /// the mesh with a single run. Use it on a single-source leaf (a level
+    /// set, an imported mesh) before any material is recorded for it, and
+    /// record materials from the result. Face IDs must not repeat across
+    /// the leaves of one combine: the port (manifold-rust 0.19.2) renumbers
+    /// some face IDs in a large batch union when two sources share them.
+    /// manifold-csg's C API cannot import face IDs, so on the ffi backend
+    /// Manifold recomputes them (coplanar groups) and `face_base` is unused;
+    /// the C++ kernel keeps them apart by source on its own.
+    ///
+    /// # Errors
+    /// [`MeshError::Backend`] if `face_base + t` overflows `u32`, or if the
+    /// kernel refuses its own export (it should not).
+    fn with_original_id(&self, id: u32, face_base: u32) -> Result<Self, MeshError> {
+        let mut m = self.to_tri_mesh();
+        if m.triangles.is_empty() {
+            return Ok(self.clone());
+        }
+        let too_big = || MeshError::Backend("leaf too large for its face-ID range".into());
+        let n = u32::try_from(m.triangles.len()).map_err(|_| too_big())?;
+        face_base.checked_add(n).ok_or_else(too_big)?;
+        m.run_index = vec![0, n * 3];
+        m.run_original_id = vec![id];
+        m.face_id = (0..n).map(|t| face_base + t).collect();
+        Self::from_tri_mesh(&m)
+    }
+
+    /// Keep the part where `normal · x ≥ offset` (as [`Mesh::trim_by_plane`]),
+    /// with the new cut face carrying original ID `cut_id` instead of an ID
+    /// minted by the kernel. The cut is an intersection with a half-space
+    /// box imported under `cut_id`, so its result does not depend on which
+    /// thread ran first.
+    ///
+    /// # Errors
+    /// [`MeshError`] if the half-space box cannot be built (zero normal).
+    fn trim_by_plane_with_id(
+        &self,
+        normal: [f64; 3],
+        offset: f64,
+        cut_id: u32,
+    ) -> Result<Self, MeshError> {
+        let Some(b) = self.bounds() else {
+            return Ok(self.clone());
+        };
+        let hs = Self::from_tri_mesh(&half_space(b, normal, offset, cut_id)?)?;
+        Ok(self.intersection(&hs))
+    }
 
     /// The original ID, or -1 if this solid is the result of an operation.
     fn original_id(&self) -> i32;

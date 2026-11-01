@@ -39,6 +39,7 @@ impl Mesh for PortSolid {
             run_index: mesh.run_index.clone(),
             run_original_id: mesh.run_original_id.clone(),
             face_id: mesh.face_id.clone(),
+            tolerance: mesh.tolerance,
             ..Default::default()
         };
         let m = Manifold::from_mesh_glp(&gl);
@@ -63,6 +64,7 @@ impl Mesh for PortSolid {
             run_index: gl.run_index,
             run_original_id: gl.run_original_id,
             face_id: gl.face_id,
+            tolerance: gl.tolerance,
         }
     }
 
@@ -139,6 +141,21 @@ impl Mesh for PortSolid {
 
     fn original_id(&self) -> i32 {
         self.0.original_id()
+    }
+
+    fn reserve_ids(n: u32) -> u32 {
+        Manifold::reserve_ids(n)
+    }
+
+    fn bounds(&self) -> Option<Bounds> {
+        if self.0.is_empty() {
+            return None;
+        }
+        let b = self.0.bounding_box();
+        Some(Bounds {
+            min: [b.min.x, b.min.y, b.min.z],
+            max: [b.max.x, b.max.y, b.max.z],
+        })
     }
 
     fn status(&self) -> Result<(), MeshError> {

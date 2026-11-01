@@ -1,8 +1,11 @@
 //! Manifold's C++ kernel through `manifold-csg` (FFI).
 //!
 //! Gap found in R1: the C API's `MeshGL64` constructor takes runs, merge
-//! vectors and tangents but not `faceID` or run transforms, so face IDs of
-//! an imported mesh are recomputed by Manifold rather than carried in.
+//! vectors and tangents but not `faceID`, run transforms or `tolerance`, so
+//! face IDs of an imported mesh are recomputed by Manifold rather than
+//! carried in, and a tolerance is applied after import with
+//! `set_tolerance`, which re-simplifies the mesh at it (a `MeshGL` import
+//! with the tolerance set, as Python and the port do, does not).
 
 use manifold_csg::{Manifold, MeshGL64, MeshGL64Options, OpType};
 
@@ -46,6 +49,9 @@ impl Mesh for FfiSolid {
         let gl = MeshGL64::new_with_options(&props, np, &tris, opts)
             .map_err(|e| MeshError::Backend(e.to_string()))?;
         let m = Manifold::from_meshgl64(&gl).map_err(|_| MeshError::NotManifold)?;
+        if mesh.tolerance > m.get_tolerance() {
+            return Ok(Self(m.set_tolerance(mesh.tolerance)));
+        }
         Ok(Self(m))
     }
 
@@ -64,6 +70,7 @@ impl Mesh for FfiSolid {
             run_index: narrow(gl.run_index()),
             run_original_id: gl.run_original_id(),
             face_id: narrow(gl.face_id()),
+            tolerance: gl.tolerance(),
         }
     }
 
@@ -106,6 +113,17 @@ impl Mesh for FfiSolid {
 
     fn original_id(&self) -> i32 {
         self.0.original_id()
+    }
+
+    fn reserve_ids(n: u32) -> u32 {
+        manifold_csg::reserve_ids(n)
+    }
+
+    fn bounds(&self) -> Option<Bounds> {
+        self.0.bounding_box().map(|b| Bounds {
+            min: b.min(),
+            max: b.max(),
+        })
     }
 
     fn status(&self) -> Result<(), MeshError> {

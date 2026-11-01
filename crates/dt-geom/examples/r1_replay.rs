@@ -4,8 +4,14 @@
 //!
 //! ```text
 //! cargo run --release -p dt-geom --features manifold-rust --example r1_replay -- \
-//!     CAPTURE_DIR CASE [--backend ffi|port] [--limit N] [--csv OUT.csv]
+//!     CAPTURE_DIR CASE [--backend ffi|port] [--limit N] [--csv OUT.csv] [--tolerance]
 //! ```
+//!
+//! `--tolerance` carries each operand's saved tolerance into the import
+//! (the port takes it in `MeshGL`; manifold-csg's C API cannot, so the ffi
+//! backend applies it afterwards with `set_tolerance`). Without it, every
+//! operand gets the kernel's default tolerance for its size, as in the
+//! first R1 runs.
 //!
 //! Add `--features manifold-parallel` for Manifold's internal parallelism
 //! (TBB / rayon). Each op's time covers the op plus forcing its result
@@ -27,7 +33,7 @@ use std::time::Instant;
 
 use dt_geom::{BoolOp, Mesh, TriMesh};
 
-fn read_dtm(path: &Path) -> TriMesh {
+fn read_dtm(path: &Path, tolerance: bool) -> TriMesh {
     let b = std::fs::read(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
     assert_eq!(&b[..8], b"DTMESH01", "{}", path.display());
     let mut o = 8;
@@ -43,7 +49,8 @@ fn read_dtm(path: &Path) -> TriMesh {
         *x = u64::from_le_bytes(b[o..o + 8].try_into().unwrap()) as usize;
         o += 8;
     }
-    o += 8; // tolerance (neither backend's import takes it)
+    let tol = f64::from_le_bytes(b[o..o + 8].try_into().unwrap());
+    o += 8;
     let [n_vert, n_tri, n_merge, n_ri, n_ro, n_rt, n_fi, _n_rf] = n;
     let f64s = |o: &mut usize, k: usize| -> Vec<f64> {
         let v = b[*o..*o + 8 * k]
@@ -89,12 +96,14 @@ fn read_dtm(path: &Path) -> TriMesh {
         run_index,
         run_original_id,
         face_id,
+        tolerance: if tolerance { tol } else { 0.0 },
     }
 }
 
 /// A small LRU of imported meshes keyed by content hash.
 struct Store {
     dir: PathBuf,
+    tolerance: bool,
     cache: HashMap<String, TriMesh>,
     order: VecDeque<String>,
 }
@@ -104,7 +113,10 @@ impl Store {
         if let Some(m) = self.cache.get(h) {
             return m.clone();
         }
-        let m = read_dtm(&self.dir.join("meshes").join(format!("{h}.dtm")));
+        let m = read_dtm(
+            &self.dir.join("meshes").join(format!("{h}.dtm")),
+            self.tolerance,
+        );
         self.cache.insert(h.to_owned(), m.clone());
         self.order.push_back(h.to_owned());
         if self.order.len() > 48 {
@@ -262,7 +274,7 @@ fn run<S: Mesh>(name: &str, store: &mut Store, recs: &[Rec], csv: &mut dyn Write
             t.identical += usize::from(same);
             writeln!(
                 csv,
-                "{name},{},{},{k},{ms:.4},{:.4},{},{},{vol:.9e},{pv:.9e},{rel:.3e},{wt},{ok},{ids_ok},{props_ok},{same}",
+                "{name},{},{},{k},{ms:.4},{:.4},{},{},{vol:e},{pv:e},{rel:.3e},{wt},{ok},{ids_ok},{props_ok},{same}",
                 r.id, r.op, r.py_ms, tris[k], r.result_tris[k]
             )
             .unwrap();
@@ -291,6 +303,7 @@ fn main() {
         .collect();
     let mut store = Store {
         dir: dir.clone(),
+        tolerance: args.iter().any(|a| a == "--tolerance"),
         cache: HashMap::new(),
         order: VecDeque::new(),
     };
