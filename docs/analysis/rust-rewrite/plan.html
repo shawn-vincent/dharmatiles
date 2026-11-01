@@ -65,13 +65,14 @@
 
 <div class="wrap">
 <header class="hero">
-  <div class="eyebrow">Page 9 of 11 · revision 5 · 1 Nov 2026 · Phase 0 under way</div>
+  <div class="eyebrow">Page 9 of 11 · revision 6 · 1 Nov 2026 · Phase 0 spikes measured, go/no-go pending</div>
   <h1>From spikes to cutover</h1>
   <p class="lede">A phased plan for the Rust rewrite, built mostly by Claude agents and directed by Shawn. Nine phases, three work streams, and about 32 weeks on the critical path (25 to 40 is the honest range). Every phase ends with something Shawn can print, and no look counts as ported until he judges its renders equal to the lab's, side by side, over four seeds.</p>
 </header>
 
 <div class="rev">
   <p><b>Starting point.</b> Shawn accepted the revision 3 recommendations ("i like the recommendations"). Where a page still listed an open question, this plan used the recommended default. On 1 Nov 2026 Shawn reviewed all fifteen ("They look good. Let's proceed with phase zero."), so each is now marked <span class="confirm">confirmed 2026-11-01</span>. The list is under <a href="#defaults">Confirmed defaults</a>. Phase 0 started the same day on branch <code>rust/p0</code>.</p>
+  <p><b>Phase 0 results (revision 6).</b> The spikes ran on 1 Nov 2026. R1 booleans, R2 determinism (on one machine), R3 rays and R9 materials are a measured go; R6, the document format, is a go from the agents' side and waits on Shawn's read and eight syntax questions. No fallback is needed. The backends are chosen (manifold-csg with Manifold's parallelism on; obvhs for rays), four kernel rules are added, and the harness now compares against a Python replay. Verdicts, evidence and the decisions left to Shawn are on the <a href="spikes/go-no-go.html">go/no-go page</a>; this page's spike table, P0, P1 and the harness section carry the results.</p>
   <p><b>What changed from the feasibility page's migration order.</b> Four refinements, each with its reason under <a href="#refine">Why the order changed</a>. The skeleton gets its own phase, together with the parity harness, ahead of dirt. Walls, floors, OpenLOCK and trees run as a second stream beside grass. The library cutover comes before the cliff, because no library tile uses the cliff. The front ends arrive across the phases instead of all at the end.</p>
 </div>
 
@@ -80,8 +81,8 @@
 <div class="tbl"><table class="glance">
 <thead><tr><th>Phase</th><th>Goal</th><th>Size</th><th>Exit gate</th></tr></thead>
 <tbody>
-<tr class="crit"><td>P0</td><td>Spikes and decisions: answer R1, R2, R3 and R6, and lay the workspace</td><td class="sz">M · 2–3 wk</td><td>Each spike is go, or its fallback is chosen. CI is green on macOS, Linux, Windows and wasm.</td></tr>
-<tr class="crit"><td>P1</td><td>Walking skeleton and parity harness: one KDL tile to a printable STL with a DungeonBlocks base</td><td class="sz">M · 3–4 wk</td><td>Watertight flat tile that Shawn test-prints into a socket. Identical stage hashes at 1, 4 and 16 threads. A first Python-beside-Rust contact sheet.</td></tr>
+<tr class="crit"><td>P0</td><td>Spikes and decisions: answer R1, R2, R3 and R6, and lay the workspace</td><td class="sz">M · 2–3 wk</td><td>Each spike is go, or its fallback is chosen. CI is green on macOS, Linux, Windows and wasm. <span class="small">(R1, R2, R3, R9 go and CI green on 1 Nov 2026; R6 waits on Shawn.)</span></td></tr>
+<tr class="crit"><td>P1</td><td>Walking skeleton and parity harness: one KDL tile to a printable STL with a DungeonBlocks base</td><td class="sz">M · 3–4 wk</td><td>Watertight flat tile that Shawn test-prints into a socket. Identical stage hashes at 1, 4 and 16 threads, and golden hashes at the level Shawn chose. A first Python-beside-Rust contact sheet.</td></tr>
 <tr class="crit"><td>P2</td><td>Dirt and hills: the first look at parity</td><td class="sz">M · 2–4 wk</td><td>Printable-texture rule ≥ 97%, metrics within tolerance, ≤ 1 s, Shawn's sign-off over 4 seeds</td></tr>
 <tr class="crit"><td>P3</td><td>Rocks and water, with the edge contract</td><td class="sz">L · 5–8 wk</td><td>Two printed water tiles butt with no step. Material ids survive the union. Sign-off on rocks and on water.</td></tr>
 <tr class="crit"><td>P4</td><td>Grass, meadow, shore and reeds, the first real test of plan-then-build</td><td class="sz">L · 6–9 wk</td><td>Blades watertight at about 1,500 faces. Bare earth at 20% ± 3 points. Meadow builds in ≤ 15 s, down from 85 s. Sign-off and a test print.</td></tr>
@@ -182,14 +183,14 @@
 <dt>Goal</dt><dd>Answer the four risks that could change the design (R1 booleans, R2 determinism, R3 rays, R6 format), and lay down the workspace that everything else builds on.</dd>
 <dt>Scope</dt><dd><ul>
 <li>Workspace root: <code>Cargo.toml</code> (virtual manifest, <code>resolver = "3"</code>, edition 2024, <code>[workspace.package]</code>, <code>[workspace.dependencies]</code>, <code>[workspace.lints]</code>), <code>Cargo.lock</code>, <code>rust-toolchain.toml</code>, <code>.cargo/config.toml</code> (xtask alias), <code>deny.toml</code>, <code>xtask/</code>, and <code>out/</code> plus <code>target/</code> in <code>.gitignore</code>.</li>
-<li><code>dt-geom</code>: mesh trait with two backends behind features (<code>manifold-ffi</code> on by default using manifold-csg 0.4.1, and <code>manifold-rust</code>), a ray trait (obvhs, parry3d, embree3 as candidates), keyed seeds (splitmix/xxhash).</li>
-<li><code>dt-doc</code>: only the KDL decoding needed for spike R6.</li>
+<li><code>dt-geom</code>: mesh trait with two backends behind features (<code>manifold-ffi</code> on by default using manifold-csg 0.4.1, and <code>manifold-rust</code>), a ray trait (obvhs, parry3d, embree3 as candidates), keyed seeds (splitmix/xxhash). Result: manifold-csg with <code>manifold-parallel</code> on by default, manifold-rust for wasm only; obvhs 0.4 for rays with parry3d as the spare; embree3 not needed.</li>
+<li><code>dt-doc</code>: only the KDL decoding needed for spike R6. Result: kdl 6.7.1, hand decoding with spans and miette errors, 40 tests, builds for wasm.</li>
 <li>Spike programs in <code>crates/dt-geom/examples/</code> and <code>crates/dt-doc/examples/</code>.</li>
 <li>Python-side capture scripts in <code>tests/parity/capture/</code>. They wrap manifold3d and embreex calls from outside the module, so <code>clifflab/</code> and <code>src/</code> are not edited.</li>
-<li>Nothing is ported yet. Booleans are replayed from <code>clifflab/rockpile.py</code> (a 1×1 tile at seed 1 and the 2×2 massif) and from <code>trees/mesh.py</code> on <code>2x2-grass-tree</code>. Rays are replayed from <code>trees/placement_leaf.py</code> and <code>trees/placement_organic.py</code>.</li>
+<li>Nothing is ported yet. Booleans are replayed from <code>clifflab/rockpile.py</code> (a 1×1 tile at seed 1 and the 2×2 massif) and from <code>trees/mesh.py</code> on <code>2x2-grass-tree</code>. Rays are replayed from <code>trees/placement_leaf.py</code> and <code>trees/placement_organic.py</code>, and also, as an extra check, from rockpile's relief, grain and dirt passes.</li>
 </ul></dd>
 <dt>Deliverables</dt><dd><ul>
-<li>A one-paragraph decision for each spike, added to this page and the feasibility page.</li>
+<li>A one-paragraph decision for each spike, added to this page and the feasibility page. Done in revision 6: see the <a href="#spikes">spike table</a> and the <a href="spikes/go-no-go.html">go/no-go page</a>.</li>
 <li>CI on GitHub Actions: <code>fmt --check</code>, <code>clippy -D warnings</code>, tests on macOS, Linux and Windows, the wasm check on <code>dt-geom</code>, and <code>cargo deny</code>.</li>
 <li>The toolchain pinned to the current stable: 1.99.1 (released 13 Oct 2026), pinned in <code>rust-toolchain.toml</code> on 1 Nov 2026.</li>
 <li>Three tiles written in KDL: <code>2x2-grass-tree</code>, <code>1x1-wall-fieldstone-corner</code> and a cliff run.</li>
@@ -197,9 +198,9 @@
 <dt>Exit criteria</dt><dd><ul>
 <li>Each of R1, R2, R3 and R6 has a written go, or a chosen fallback (see the <a href="#spikes">spike table</a>).</li>
 <li>CI is green on all three operating systems and on the wasm check.</li>
-<li>Shawn has confirmed or changed the <a href="#defaults">defaults</a> (done: all fifteen confirmed on 1 Nov 2026), and has chosen a determinism level.</li>
+<li>Shawn has confirmed or changed the <a href="#defaults">defaults</a> (done: all fifteen confirmed on 1 Nov 2026), and has chosen a determinism level (the recommendation is on the <a href="spikes/go-no-go.html#d1">go/no-go page</a>).</li>
 </ul></dd>
-<dt>Risks</dt><dd>R1, R2, R3 and R6 are spiked. R9 gets a desk check: carry Manifold original IDs through one union during R1. R10 is mitigated: every young crate sits behind a trait from the first day.</dd>
+<dt>Risks</dt><dd>R1, R2, R3 and R6 are spiked. R9 gets a desk check: carry Manifold original IDs through one union during R1 (it got a union and a level set, both passing). R10 is mitigated: every young crate sits behind a trait from the first day.</dd>
 <dt>Depends on</dt><dd>Nothing.</dd>
 <dt>Shawn does</dt><dd>A 30-minute session on the defaults on day 1. Reads the three KDL tiles (about 30 minutes): "could I write this?". A 45-minute go/no-go on day 9 or 10. In total, about 2 to 3 hours.</dd>
 </dl>
@@ -214,23 +215,23 @@
 <li>Creates <code>dt-looks</code> with a minimal <code>hills</code> (a flat or constant field) and <code>connector</code> (DungeonBlocks).</li>
 <li>Creates <code>dt-eval</code>: project discovery, <code>lib:</code> imports, the plan-then-build scheduler, which rejects reads it cannot satisfy, seeds by path, and the source trait.</li>
 <li>Creates the <code>dharmatiles</code> program with <code>build</code>, <code>check</code>, <code>--json</code> and exit codes 0, 1, 2 and 3.</li>
-<li>Kernels: grid (lift), 2D (line rasterising and the paint bucket), and mesh (union with the connector).</li>
+<li>Kernels: grid (lift), 2D (line rasterising and the paint bucket), and mesh (union with the connector). The mesh kernel follows the R1 and R2 rules from the start: solids stay inside Manifold between operations (no round trip through a plain triangle mesh, which drops face IDs), and parts built in parallel get their original IDs reassigned in index order before they are combined. Seeded code uses the <code>libm</code> crate for <code>sin</code>, <code>exp</code> and <code>powf</code>.</li>
 <li>Ports from: <code>core/region.py</code> (paint bucket), <code>bases/dungeonblocks.py</code> (the peg height depends on content max Z, :20–37), <code>core/logo.py</code>, <code>stone/solidify.py</code>, the three <code>audit_overhang</code> copies (rockpile's 55° rule wins), and <code>build_info.py</code>.</li>
 </ul></dd>
 <dt>Deliverables</dt><dd><ul>
 <li><code>library/printers/default.kdl</code>, <code>library/parts/edges.kdl</code> and <code>library/tiles/test/flat-1x1.kdl</code>.</li>
-<li>The <a href="#harness">parity harness</a>. On the Python side, <code>tests/parity/</code> runs a lab at seeds 1 to 4 and writes STL, <code>metrics.json</code> and painted renders through <code>dharmatiles/render.py</code>. On the Rust side, <code>cargo xtask parity &lt;look&gt;</code> builds the same seeds and writes a side-by-side contact sheet to <code>out/parity/&lt;look&gt;/</code>.</li>
+<li>The <a href="#harness">parity harness</a>. On the Python side, <code>tests/parity/</code> runs a lab at seeds 1 to 4 and writes STL, <code>metrics.json</code> and painted renders through <code>dharmatiles/render.py</code> (built early, in P0, as <code>tests/parity/run_lab.py</code> for dirtlab). On the Rust side, <code>cargo xtask parity &lt;look&gt;</code> builds the same seeds and writes a side-by-side contact sheet to <code>out/parity/&lt;look&gt;/</code>.</li>
 <li>insta summaries in <code>crates/dt-eval/tests/</code>.</li>
 </ul></dd>
 <dt>Exit criteria</dt><dd><ul>
 <li><code>dharmatiles build lib:tiles/test/flat-1x1.kdl</code> writes a watertight STL that passes float32 reload, with 0 mm² of overhang and 0 bodies dropped, in ≤ 2 s.</li>
-<li>Stage hashes are identical across two runs and at 1, 4 and 16 threads, enforced in CI.</li>
+<li>Stage hashes are identical across two runs and at 1, 4 and 16 threads, enforced in CI. Across platforms, at the level Shawn chose at the go/no-go; the recommendation is golden hashes shared by the macOS and Linux jobs, with Windows gated on metrics and renders.</li>
 <li>A deliberately wrong document gives a miette error with its line and a hint.</li>
 <li>The harness produces a Python-beside-Rust contact sheet, with overhangs painted red, for the flat tile, and a Python-only sheet for dirtlab at seeds 1 to 4.</li>
 <li>Shawn's test print seats in a DungeonBlocks socket.</li>
 </ul></dd>
 <dt>Risks</dt><dd>Retires R2 (the CI hash check) and R6 (a real document end to end). Covers half of R5 (the harness) and part of R8 (the scheduler rejects unsatisfiable reads).</dd>
-<dt>Depends on</dt><dd>P0.</dd>
+<dt>Depends on</dt><dd>P0, including Shawn's answers to R6 questions 1, 2, 3, 4 and 8, which shape the decoder.</dd>
 <dt>Shawn does</dt><dd>One test print. Approves the layout of the contact sheet. About 2 to 3 hours.</dd>
 </dl>
 </details>
@@ -335,11 +336,11 @@
 <dt>Deliverables</dt><dd><code>wall</code>, <code>floor</code>, <code>tree</code>, the OpenLOCK connector, an OpenLOCK build of every tile converted so far, and 11 tile twins.</dd>
 <dt>Exit criteria</dt><dd><ul>
 <li>Walls: exact plane-SDF blocks, near-touching joints, DungeonBlocks-compatible.</li>
-<li>Trees: no branch edge below the 26° strict angle, leaf count within ±5%, and a tree tile in ≤ 10 s (Python: about 25 to 28 s).</li>
-<li>The ray placer is within 3× of Embree and gives the same leaf layout.</li>
+<li>Trees: no branch edge below the 26° strict angle, leaf count within ±5%, and a tree tile in ≤ 10 s (Python: about 25 to 28 s). Leaf placement itself is now about 4 s of that in Python (R3), so the gain has to come mostly from the rest of the tree build.</li>
+<li>The ray placer is within 3× of Embree and gives the same leaf layout. R3 measured obvhs at 2.46× single-threaded, with 100% of the placer's hits identical.</li>
 <li>Shawn signs off. Printed wall corners butt-join, an OpenLOCK clip fits, and a printed tree survives.</li>
 </ul></dd>
-<dt>Risks</dt><dd>Retires R3 in production. R10: obvhs stays behind its trait.</dd>
+<dt>Risks</dt><dd>Retires R3 in production. R10: obvhs stays behind its trait, every ray goes through the <code>Rays</code> wrapper (it holds the fix for obvhs's <code>-0.0</code> direction bug), and parry3d is the spare.</dd>
 <dt>Depends on</dt><dd>P2 (kit basics) and the P0 ray choice. The tree tiles also depend on P4.</dd>
 <dt>Shawn does</dt><dd>Three families of looks and three test prints. About 6 hours.</dd>
 </dl>
@@ -375,7 +376,7 @@
 <dl class="defs">
 <dt>Goal</dt><dd>Port clifflab's rockpile from a frozen commit, with an audit gate stricter than the lab's.</dd>
 <dt>Scope</dt><dd><ul>
-<li><code>dt-kit</code>: <code>partition</code> (gravity), <code>relief</code> (depth raster, clamp, lift, subtract), <code>grooves</code>, <code>trace</code> (random-walk crack network), <code>seat</code> (cones at the overhang limit), fit to tile, the depth-raster query, <code>fill</code> by closing (dirt on tops), and carve guards (volume, and fin area measured on 5 plan slices).</li>
+<li><code>dt-kit</code>: <code>partition</code> (gravity), <code>relief</code> (depth raster, clamp, lift, subtract; its sample grid is offset from the mesh's own lattice, because R3 found that rockpile's exactly grazing rays give rounding noise in Embree too), <code>grooves</code>, <code>trace</code> (random-walk crack network), <code>seat</code> (cones at the overhang limit), fit to tile, the depth-raster query, <code>fill</code> by closing (dirt on tops), and carve guards (volume, and fin area measured on 5 plan slices).</li>
 <li>Looks: <code>cliff</code> (forms: run, corner, canyon, escarpment, plateau, massif, mound, spire, needles) and <code>scree</code>.</li>
 <li>Ports from <code>clifflab/rockpile.py</code> at the frozen commit: <code>stack</code> :554, <code>_Cutter</code> :989, <code>_crack_net</code> :1068, relief :1255–1332, <code>_fit_tile</code> :1415, <code>_seat</code> :1488, <code>_core</code> :1609, <code>build</code> :1716, <code>_dirt_layer</code> :1897. Line numbers will move by the freeze.</li>
 <li>The review method follows <code>clifflab/iterate.py</code> and <code>contact_sheet.py</code>. <code>clifflab.py</code>, the older depth-map generator, is not ported.</li>
@@ -388,7 +389,7 @@
 <li>A 1×1 builds in ≤ 15 s (Python: 23 to 34 s) and the massif in ≤ 60 s (Python: 116 s; the cap is 120 s).</li>
 <li>Shawn signs off over 4 seeds and the main forms, and a printed cliff run survives.</li>
 </ul></dd>
-<dt>Risks</dt><dd>Retires R1 at full scale and R7.</dd>
+<dt>Risks</dt><dd>Retires R1 at full scale and R7. R1 already replayed the massif's 202-part, 13.2M-triangle union at Python's speed; booleans are only 11–20% of the cliff's build time, so P7's speed targets depend on the rest of the port.</dd>
 <dt>Depends on</dt><dd>P3 (carve, grain, seat), P5 (rays), P2 (fill), and a frozen <code>rockpile.py</code>.</dd>
 <dt>Shawn does</dt><dd>Names the freeze commit. Two or three review rounds and one test print. About 6 hours. Then decides where new looks get invented from now on (<a href="#defaults">default 4</a>).</dd>
 </dl>
@@ -404,7 +405,7 @@
 <li>A 3MF writer (lib3mf or threemf2). Bambu projects as a separate target.</li>
 <li>MCP over Streamable HTTP.</li>
 <li><code>dharmatiles lsp</code>.</li>
-<li><code>dt-wasm</code>, once manifold-rust passes R1 parity.</li>
+<li><code>dt-wasm</code>, once manifold-rust passes R1 parity. In P0 it built for the browser and was watertight with matching IDs, but differed from Python's triangle counts on 24 ops and took 2.0–3.7× the time.</li>
 <li>Tauri mobile: view and edit first.</li>
 </ul></dd>
 <dt>Exit criteria</dt><dd><ul>
@@ -422,13 +423,13 @@
 <h2 id="spikes">Phase 0: spikes and decisions</h2>
 <p>A <b>spike</b> is a short, time-boxed experiment that answers one question and is then thrown away or kept as an example. Each has a <b>go</b> criterion, which keeps the plan as written, and a fallback for <b>no-go</b>.</p>
 <div class="tbl"><table>
-<thead><tr><th>Spike</th><th>Time box</th><th>What runs</th><th>Go when</th><th>Fallback if no-go</th></tr></thead>
+<thead><tr><th>Spike</th><th>Time box</th><th>What runs</th><th>Go when</th><th>Fallback if no-go</th><th>Result, 1 Nov 2026</th></tr></thead>
 <tbody>
-<tr><td><b>R1</b> booleans</td><td>4 days</td><td>Capture every boolean from rockpile (1×1 at seed 1, and the 2×2 massif, with meshes up to about 1.7M triangles) and from the 2×2 tree tile. Replay them in manifold-csg (parallel on and off) and in manifold-rust.</td><td>manifold-csg: every result watertight, volume within 1e-6 relative, the same triangle count, and time ≤ 1.2× Python. manifold-rust becomes the default only if it also matches original IDs and properties at ≤ 1.5× the time.</td><td>Ship manifold-csg only and defer the browser build. If manifold-csg fails to build on a CI OS, vendor a prebuilt static library for it. If both fail at cliff scale, keep the cliff in Python longer (P7 moves out) and port everything else.</td></tr>
-<tr><td><b>R2</b> determinism</td><td>3 days</td><td>A test pipeline (noise, scatter, EDT, a boolean batch) run twice on one Mac, at 1, 4 and 16 threads, and once on Linux x86 in CI. Hash every stage.</td><td>Byte-identical on one machine at every thread count. Cross-platform results are measured and reported, and Shawn chooses the level.</td><td>If one machine can't be made identical cheaply, the gate becomes metrics plus render review, with per-platform insta snapshots.</td></tr>
-<tr><td><b>R3</b> rays</td><td>3 days</td><td>Capture the leaf placer's ray batches from the 2×2 tree tile and replay them through obvhs and parry3d.</td><td>Within 3× of Embree, at least 99.9% of hits identical and the rest within 1e-4 mm, and a deterministic BVH build.</td><td><code>embree3</code> over FFI as a native-only feature of <code>dt-geom</code>. The browser build then uses the slower pure-Rust path.</td></tr>
-<tr><td><b>R6</b> format</td><td>3 days</td><td>Write <code>2x2-grass-tree</code>, <code>1x1-wall-fieldstone-corner</code> and a cliff run in KDL. Decode them into a draft model. Edit one control with the <code>kdl</code> crate.</td><td>Nothing in the tile is lost. Comments and layout survive the edit byte for byte outside the edited node. Shawn says he could write them.</td><td>Change the syntax (more definitions, different node shapes) before P1. As a last resort, use TOML with toml_edit.</td></tr>
-<tr><td><b>R9</b> materials</td><td>1 day, inside R1</td><td>Carry original IDs through one union and one level set.</td><td>Every output triangle maps to its source.</td><td>Co-sample a material field for level-set paths. This is decided again in P3.</td></tr>
+<tr><td><b>R1</b> booleans</td><td>4 days</td><td>Capture every boolean from rockpile (1×1 at seed 1, and the 2×2 massif, with meshes up to about 1.7M triangles) and from the 2×2 tree tile. Replay them in manifold-csg (parallel on and off) and in manifold-rust.</td><td>manifold-csg: every result watertight, volume within 1e-6 relative, the same triangle count, and time ≤ 1.2× Python. manifold-rust becomes the default only if it also matches original IDs and properties at ≤ 1.5× the time.</td><td>Ship manifold-csg only and defer the browser build. If manifold-csg fails to build on a CI OS, vendor a prebuilt static library for it. If both fail at cliff scale, keep the cliff in Python longer (P7 moves out) and port everything else.</td><td><span class="verdict v-keep">go</span> manifold-csg with Manifold's parallelism on: 21,570 booleans watertight, triangle counts equal to a Python replay on all, worst volume error 4.9e-10, 1.01–1.09× Python's time. Meshes reached 7.1M triangles and a 13.2M-triangle union, not 1.7M. manifold-rust: 2.0–3.7× and 24 ops with different counts, so it stays the wasm backend. <a href="spikes/r1-r2-r9.html">Report</a></td></tr>
+<tr><td><b>R2</b> determinism</td><td>3 days</td><td>A test pipeline (noise, scatter, EDT, a boolean batch) run twice on one Mac, at 1, 4 and 16 threads, and once on Linux x86 in CI. Hash every stage.</td><td>Byte-identical on one machine at every thread count. Cross-platform results are measured and reported, and Shawn chooses the level.</td><td>If one machine can't be made identical cheaply, the gate becomes metrics plus render review, with per-platform insta snapshots.</td><td><span class="verdict v-keep">go</span> Identical at 1, 4 and 16 threads, given two rules: keyed seeds, and original IDs assigned in index order. macOS-arm64 and Linux-x86_64 also match byte for byte; Windows differs in libm and inside Manifold. Shawn chooses the level. <a href="spikes/r1-r2-r9.html">Report</a></td></tr>
+<tr><td><b>R3</b> rays</td><td>3 days</td><td>Capture the leaf placer's ray batches from the 2×2 tree tile and replay them through obvhs and parry3d.</td><td>Within 3× of Embree, at least 99.9% of hits identical and the rest within 1e-4 mm, and a deterministic BVH build.</td><td><code>embree3</code> over FFI as a native-only feature of <code>dt-geom</code>. The browser build then uses the slower pure-Rust path.</td><td><span class="verdict v-keep">go</span> obvhs 0.4, <code>medium_build</code>: 465,164 rays, 100% identical, within 9.1e-5 mm, 2.46× Embree's single-thread time, deterministic. parry3d also passes and is the spare. The fallback is dropped. <a href="spikes/r3-rays.html">Report</a></td></tr>
+<tr><td><b>R6</b> format</td><td>3 days</td><td>Write <code>2x2-grass-tree</code>, <code>1x1-wall-fieldstone-corner</code> and a cliff run in KDL. Decode them into a draft model. Edit one control with the <code>kdl</code> crate.</td><td>Nothing in the tile is lost. Comments and layout survive the edit byte for byte outside the edited node. Shawn says he could write them.</td><td>Change the syntax (more definitions, different node shapes) before P1. As a last resort, use TOML with toml_edit.</td><td><span class="verdict v-fix">pending</span> Nothing lost and edits byte-exact (40 tests). Waiting on Shawn's read and eight syntax questions. <a href="spikes/r6-kdl.html">Report</a></td></tr>
+<tr><td><b>R9</b> materials</td><td>1 day, inside R1</td><td>Carry original IDs through one union and one level set.</td><td>Every output triangle maps to its source.</td><td>Co-sample a material field for level-set paths. This is decided again in P3.</td><td><span class="verdict v-keep">go</span> Union 36/36; level set then union 28,016 triangles traced to a source, 0 unmapped, on both backends. The co-sampled field is now simply the method. <a href="spikes/r1-r2-r9.html">Report</a></td></tr>
 </tbody></table></div>
 
 <h3>Workspace skeleton, CI, toolchain and lints</h3>
@@ -436,14 +437,14 @@
 <li><b>Manifest:</b> a virtual manifest with <code>members = ["crates/*", "xtask"]</code> (<code>app/src-tauri</code> is added in P8), <code>resolver = "3"</code> and edition 2024. One version, edition, licence and <code>rust-version</code> sit in <code>[workspace.package]</code>, and every external version is stated once in <code>[workspace.dependencies]</code>. Dependencies get <code>opt-level = 3</code> in dev builds.</li>
 <li><b>Toolchain:</b> <code>rust-toolchain.toml</code> pins the exact current stable, with rustfmt, clippy and the <code>wasm32-unknown-unknown</code> target. Bump it on purpose, with the golden hashes as the check.</li>
 <li><b>Lints:</b> in <code>[workspace.lints]</code>, <code>unsafe_code = "forbid"</code> (FFI lives inside the binding crates, not ours), plus a short Clippy list (<code>dbg_macro</code>, <code>todo</code>, <code>unwrap_used</code> outside tests, <code>float_cmp</code>, <code>cast_possible_truncation</code> as warnings). There is no <code>rustfmt.toml</code>. Every crate opts in with <code>lints.workspace = true</code>.</li>
-<li><b>CI:</b> on every push, <code>fmt --check</code>, <code>clippy -D warnings</code>, and tests on macOS arm64, Linux x86 and Windows. Also <code>cargo check -p dt-geom --target wasm32-unknown-unknown --no-default-features --features manifold-rust</code> (moved to <code>dt-eval</code> in P1), and <code>cargo deny</code> for licences, advisories and duplicate versions.</li>
+<li><b>CI:</b> on every push, <code>fmt --check</code>, <code>clippy -D warnings</code>, and tests on macOS arm64, Linux x86 and Windows. Also <code>cargo build -p dt-geom --target wasm32-unknown-unknown --no-default-features --features manifold-rust</code> (a full build since R1; moved to <code>dt-eval</code> in P1) and <code>cargo check -p dt-doc</code> for the same target, and <code>cargo deny</code> for licences, advisories and duplicate versions. The C++ Manifold build makes a cold run about 5 minutes (Windows is slowest) and a cached run about 1 minute; all three runner images ship cmake.</li>
 </ul>
 
 <h3>The KDL parsing approach</h3>
-<p>Use the <code>kdl</code> crate (KDL v2, format-preserving; confirm the current version at start) to parse into a node tree. Then decode by hand in <code>dt-doc</code>, with about one function per node type (<code>tile</code>, <code>define</code>, <code>line</code>, <code>region</code>, <code>stack</code>, and each look). Keep source spans so miette can point at the mistake. There is no derive crate: knus needs co-maintainers and facet-kdl is young. Values go through one small hand-written expression parser covering arithmetic on parameters, distributions (<code>"a..b^k"</code>), named heights and field constructors. It has no loops, assignments or call chains. JSON Schema comes from the typed model through schemars, printed by <code>dharmatiles schema</code> and never committed.</p>
+<p>Use the <code>kdl</code> crate (KDL v2, format-preserving; 6.7.1 since R6, with its v1 features off) to parse into a node tree. Then decode by hand in <code>dt-doc</code>, with about one function per node type (<code>tile</code>, <code>define</code>, <code>line</code>, <code>region</code>, <code>stack</code>, and each look). Keep source spans so miette can point at the mistake. There is no derive crate: knus needs co-maintainers and facet-kdl is young. Values go through one small hand-written expression parser covering arithmetic on parameters, distributions (<code>"a..b^k"</code>), named heights and field constructors. It has no loops, assignments or call chains. JSON Schema comes from the typed model through schemars, printed by <code>dharmatiles schema</code> and never committed.</p>
 
 <h2 id="harness">The parity harness</h2>
-<p>It is built in P1, before any look is ported, and every look phase uses it. The harness never compares meshes byte for byte, because Python and Rust can't match that way (different RNGs, EDT tie-breaks and kd-tree order). It compares what Shawn judges: numbers that describe the look, and painted renders side by side.</p>
+<p>It is built in P1, before any look is ported, and every look phase uses it. The harness never compares meshes byte for byte, because Python and Rust can't match that way (different RNGs, EDT tie-breaks and kd-tree order). R1 confirmed this even for the same engine on the same inputs: Python's Manifold (3.5.1) and manifold-csg's (3.5.3) agree byte for byte on only 74–92% of boolean results, and Python replaying its own saved operands changes about 9% of them, while triangle counts and volumes match. So where a kernel is compared directly, the baseline is a Python <em>replay</em> of the same saved inputs, and the comparison is on metrics. The harness compares what Shawn judges: numbers that describe the look, and painted renders side by side.</p>
 <figure class="diagram">
 <svg viewBox="0 0 900 200" role="img" aria-label="Parity harness flow: the same seeds go to the Python lab and the Rust look; both write STL and metrics; xtask parity compares them into a contact sheet and a verdict; Shawn signs off">
   <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
@@ -466,7 +467,7 @@
 </figure>
 <ul>
 <li><b>Same seeds:</b> 1, 2, 3 and 4 for every look. These are lab seeds. Rust's path-derived seeds won't reproduce Python's random streams, so a seed means "the same test case", not "the same random tile".</li>
-<li><b>Metrics:</b> one set per look, computed by the same code from either STL: bare fraction, blade count and height range, rock count and size histogram, facet count, relief spectrum, wave amplitude, overhang mm², see-through holes, dropped bodies and time. <b>Tolerance:</b> within ±10% or within Python's own spread across the four seeds, whichever is wider.</li>
+<li><b>Metrics:</b> one set per look, computed by the same code from either STL (P0's <code>run_lab.py</code> already computes them from the STL alone): bare fraction, blade count and height range, rock count and size histogram, facet count, relief spectrum, wave amplitude, overhang mm², see-through holes, dropped bodies and time. <b>Tolerance:</b> within ±10% or within Python's own spread across the four seeds, whichever is wider.</li>
 <li><b>Golden summaries</b> (insta) per tile: stage hashes, triangle count, volume, overhang mm² and holes. <code>cargo insta review</code> shows what changed. STLs are never committed.</li>
 <li><b>dt-py is not needed</b> for this. The harness compares files, so it works with the labs exactly as they are. <code>dt-py</code> is built only if a kernel test needs Rust and Python on the same arrays <span class="assume">assumed</span>.</li>
 </ul>
@@ -487,7 +488,7 @@
 <tr><td>R9 materials through booleans</td><td class="m-s">S</td><td></td><td></td><td class="m-r">✓</td><td></td><td></td><td></td><td></td><td class="m-w">·</td></tr>
 <tr><td>R10 young single-maintainer crates</td><td class="m-p">◐</td><td class="m-w">·</td><td class="m-w">·</td><td class="m-w">·</td><td class="m-w">·</td><td class="m-w">·</td><td class="m-w">·</td><td class="m-w">·</td><td class="m-w">·</td></tr>
 </tbody></table></div>
-<p class="small muted">R10 is never fully retired: manifold-rust, obvhs and lib3mf each stay behind a trait, and any of them can be vendored.</p>
+<p class="small muted">R10 is never fully retired: manifold-rust, obvhs and lib3mf each stay behind a trait, and any of them can be vendored. After the P0 spikes, R1, R2 (on one machine), R3 (for the leaf placer) and R9 are go on measurement, and R6 waits on Shawn's read; the later columns still mark where each is retired in production (<a href="spikes/go-no-go.html">go/no-go page</a>).</p>
 
 <h2 id="frontends">When each front end arrives</h2>
 <div class="tbl"><table>
@@ -573,7 +574,7 @@
 <div class="tbl"><table>
 <thead><tr><th>Signal</th><th>Threshold</th><th>Response</th></tr></thead>
 <tbody>
-<tr><td>Booleans fail at cliff scale (R1)</td><td>Neither backend replays the cliff batch watertight within 2× Python's time</td><td><b>Pivot:</b> port everything except the cliff, which stays in the Python lab. Revisit when manifold-rust matures.</td></tr>
+<tr><td>Booleans fail at cliff scale (R1)</td><td>Neither backend replays the cliff batch watertight within 2× Python's time (not triggered: manifold-csg replayed the massif at 1.01–1.09×)</td><td><b>Pivot:</b> port everything except the cliff, which stays in the Python lab. Revisit when manifold-rust matures.</td></tr>
 <tr><td>The format can't carry real tiles (R6)</td><td>One of the three spike tiles loses meaning in KDL</td><td><b>Pivot</b> the syntax before P1. Do not start P1 on a format that has failed.</td></tr>
 <tr><td>Parity is unreachable</td><td>Dirt (P2) misses Shawn's sign-off after 3 review rounds</td><td><b>Stop</b> and diagnose. Either the harness misleads, or porting by re-implementation is wrong for this code. The alternative is a <code>dt-py</code> hybrid: a Rust core with Python looks.</td></tr>
 <tr><td>Velocity</td><td>Any phase reaches 2× its upper estimate</td><td><b>Re-plan</b> at that point. If P3 or P4 does it, consider shipping only the Rust core, front ends and the looks that are done.</td></tr>
@@ -591,22 +592,22 @@
 <li class="done"><input type="checkbox" id="c2" checked disabled><span class="who">Agent</span><span>Create branch <code>rust/p0</code>. Write the root <code>Cargo.toml</code> (virtual manifest), <code>rust-toolchain.toml</code> (check the current stable first), <code>.cargo/config.toml</code>, <code>deny.toml</code>, and the <code>.gitignore</code> entries for <code>out/</code> and <code>target/</code>.</span></li>
 <li class="done"><input type="checkbox" id="c3" checked disabled><span class="who">Agent</span><span>Create <code>crates/dt-geom</code> with the <code>Mesh</code> and <code>Rays</code> traits, the <code>manifold-ffi</code> and <code>manifold-rust</code> features, and keyed seeds. Create <code>xtask/</code> with an empty <code>parity</code> command.</span></li>
 <li class="done"><input type="checkbox" id="c4" checked disabled><span class="who">Agent</span><span>CI workflow: fmt, clippy, tests on 3 operating systems, the wasm check and cargo deny. Get it green on the empty crates.</span></li>
-<li><input type="checkbox" id="c5"><span class="who">Agent</span><span>R1 capture: write <code>tests/parity/capture/booleans.py</code>. It wraps manifold3d from outside and records the operands of every boolean for rockpile 1×1 at seed 1, the 2×2 massif, and <code>2x2-grass-tree</code>. Save them as binary mesh files in the scratch area, not in git.</span></li>
-<li><input type="checkbox" id="c6"><span class="who">Agent</span><span>R1 replay in <code>dt-geom/examples/r1_replay.rs</code> on both backends: watertightness, volume, triangle count, time and memory. Include the R9 original-ID check.</span></li>
-<li><input type="checkbox" id="c7"><span class="who">Agent</span><span>R6: write the three KDL tiles. Write the <code>dt-doc</code> decode spike with spans, and the edit round trip.</span></li>
+<li class="done"><input type="checkbox" id="c5" checked disabled><span class="who">Agent</span><span>R1 capture: write <code>tests/parity/capture/booleans.py</code>. It wraps manifold3d from outside and records the operands of every boolean for rockpile 1×1 at seed 1, the 2×2 massif, and <code>2x2-grass-tree</code>. Save them as binary mesh files in the scratch area, not in git.</span></li>
+<li class="done"><input type="checkbox" id="c6" checked disabled><span class="who">Agent</span><span>R1 replay in <code>dt-geom/examples/r1_replay.rs</code> on both backends: watertightness, volume, triangle count, time and memory. Include the R9 original-ID check.</span></li>
+<li class="done"><input type="checkbox" id="c7" checked disabled><span class="who">Agent</span><span>R6: write the three KDL tiles. Write the <code>dt-doc</code> decode spike with spans, and the edit round trip.</span></li>
 <li><input type="checkbox" id="c8"><span class="who own">Shawn</span><span>Day 5, 30 minutes: read the three KDL tiles. Could you write them? Is anything missing?</span></li>
 </ul>
 <h3>Week 2 (9 to 13 Nov)</h3>
 <ul class="check" id="wk2">
-<li><input type="checkbox" id="c9"><span class="who">Agent</span><span>R2: a determinism test pipeline (noise, scatter, EDT, a boolean batch). Hash every stage at 1, 4 and 16 threads, twice, on the Mac and on Linux in CI.</span></li>
-<li><input type="checkbox" id="c10"><span class="who">Agent</span><span>R3 capture: write <code>tests/parity/capture/rays.py</code> to record the leaf placer's ray batches. Replay them through obvhs and parry3d in <code>dt-geom/examples/r3_rays.rs</code>: time, hit agreement and build determinism.</span></li>
-<li><input type="checkbox" id="c11"><span class="who">Agent</span><span>Harness, Python half: <code>tests/parity/run_lab.py</code> runs dirtlab at seeds 1 to 4, writes <code>metrics.json</code>, and renders through <code>dharmatiles/render.py</code> with overhangs red.</span></li>
-<li><input type="checkbox" id="c12"><span class="who">Agent</span><span>Write the spike decisions (go, or the fallback) into this page and the feasibility page. Add a revision entry to the change log.</span></li>
+<li class="done"><input type="checkbox" id="c9" checked disabled><span class="who">Agent</span><span>R2: a determinism test pipeline (noise, scatter, EDT, a boolean batch). Hash every stage at 1, 4 and 16 threads, twice, on the Mac and on Linux in CI.</span></li>
+<li class="done"><input type="checkbox" id="c10" checked disabled><span class="who">Agent</span><span>R3 capture: write <code>tests/parity/capture/rays.py</code> to record the leaf placer's ray batches. Replay them through obvhs and parry3d in <code>dt-geom/examples/r3_rays.rs</code>: time, hit agreement and build determinism.</span></li>
+<li class="done"><input type="checkbox" id="c11" checked disabled><span class="who">Agent</span><span>Harness, Python half: <code>tests/parity/run_lab.py</code> runs dirtlab at seeds 1 to 4, writes <code>metrics.json</code>, and renders through <code>dharmatiles/render.py</code> with overhangs red.</span></li>
+<li class="done"><input type="checkbox" id="c12" checked disabled><span class="who">Agent</span><span>Write the spike decisions (go, or the fallback) into this page and the feasibility page. Add a revision entry to the change log. Done in revision 6, with the <a href="spikes/go-no-go.html">go/no-go page</a>.</span></li>
 <li><input type="checkbox" id="c13"><span class="who">Agent</span><span>Adversarial review of the spike results by a fresh agent. Resolve its findings.</span></li>
-<li><input type="checkbox" id="c14"><span class="who own">Shawn</span><span>Day 9 or 10, 45 minutes: go/no-go on R1, R2, R3 and R6. Choose the determinism level. Approve the draft of the contact sheet.</span></li>
+<li><input type="checkbox" id="c14"><span class="who own">Shawn</span><span>Day 9 or 10, 45 minutes: go/no-go on R1, R2, R3 and R6. Choose the determinism level. Approve the draft of the contact sheet. Everything for this sitting, with a recommendation on each decision, is on the <a href="spikes/go-no-go.html">go/no-go page</a>.</span></li>
 <li><input type="checkbox" id="c15"><span class="who">Agent</span><span>If all go: open P1. Create <code>dt-kit</code>, <code>dt-looks</code>, <code>dt-eval</code> and the <code>dharmatiles</code> crate, and write <code>flat-1x1.kdl</code>.</span></li>
 </ul>
-<p class="small muted">Shawn's time in the first two weeks is about 2 hours, in three sittings.</p>
+<p class="small muted">Shawn's time in the first two weeks is about 2 hours, in three sittings. The agent tasks for the spikes and the Python half of the harness were all done on 1 Nov 2026, ahead of the week-2 schedule; the adversarial review (item 13) has not run yet.</p>
 
 <h2 id="defaults">Confirmed defaults</h2>
 <p>Each one is the default recommended on the overview, architecture or layout page. Shawn confirmed all fifteen on 1 Nov 2026 ("They look good. Let's proceed with phase zero."). Changing one later moves work but does not block it.</p>
