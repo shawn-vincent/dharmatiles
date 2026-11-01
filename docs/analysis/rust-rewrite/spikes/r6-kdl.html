@@ -1,0 +1,563 @@
+<title>R6 KDL Tiles</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../dt.css">
+<style>
+  /* Layout: each tile is a wide code column beside a narrow notes column; Python collapsed beneath. */
+  :root { --hl-node: var(--accent); --hl-prop: var(--water); --hl-str: var(--earth); --hl-num: var(--gold); --hl-com: var(--muted); --hl-kw: var(--c-compose); }
+  .pair { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+  @media (max-width: 860px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+  .pair > * { min-width: 0; }
+  figure.src { margin: 12px 0 0; }
+  .path { font-size: 13px; margin: 0 0 6px; color: var(--fg); }
+  pre.kdl { background: var(--card); border: 1px solid var(--rule); font-size: 13px; line-height: 1.6; }
+  pre .nd { color: var(--hl-node); font-weight: 600; }
+  pre .p { color: var(--hl-prop); }
+  pre .s { color: var(--hl-str); }
+  pre .n { color: var(--hl-num); }
+  pre .u { color: var(--hl-num); font-style: italic; }
+  pre .k { color: var(--hl-kw); font-weight: 600; }
+  pre .c { color: var(--hl-com); font-style: italic; }
+  pre .sd { color: var(--hl-com); text-decoration: line-through; }
+  aside.fit h3 { margin-top: 12px; font-size: 16px; }
+  aside.fit ul { padding-left: 18px; display: grid; gap: 8px; font-size: 14px; margin: 0; }
+  details.py { margin: 14px 0 0; border-top: 1px solid var(--rule); padding-top: 8px; }
+  details.py summary { cursor: pointer; font-size: 14px; color: var(--muted); }
+  details.py summary:hover { color: var(--fg); }
+  details.py pre { margin-top: 10px; font-size: 12.5px; }
+  pre.term { font-size: 12.5px; line-height: 1.45; background: var(--panel); }
+  pre.diff .del { color: var(--alert); }
+  pre.diff .add { color: var(--accent); }
+  .errgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 8px 24px; }
+  .errgrid > * { min-width: 0; }
+  .errcase h3 { margin-top: 18px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; margin: 8px 0 0; }
+  .legend span { font-family: var(--mono); }
+  ol.qs { padding-left: 22px; display: grid; gap: 12px; }
+  ol.qs li { max-width: 76ch; }
+  ol.qs strong { font-family: var(--display); font-stretch: 105%; }
+  .tests { columns: 2 260px; font-size: 12.5px; font-family: var(--mono); padding-left: 18px; color: var(--muted); }
+</style>
+
+<nav class="top"><div class="wrap">
+  <span class="brand">dharmatiles → Rust</span>
+  <a href="https://claude.ai/artifact/GBiwhTV3inCuS3cRiWnTeQ">Overview</a>
+  <a href="https://claude.ai/artifact/PL6bEs3ypyDCqmfRLAG77g">Target architecture</a>
+  <a href="https://claude.ai/artifact/CV72ayvAdd45791Jo3JZrP">Project layout</a>
+  <a href="https://claude.ai/artifact/CTFfwg21B8MWe5oEaX61pD">Project plan</a>
+  <a href="#grass-tree">Grass and tree</a>
+  <a href="#wall-corner">Wall corner</a>
+  <a href="#cliff-run">Cliff run</a>
+  <a href="#parts">Parts</a>
+  <a href="#errors">Errors</a>
+  <a href="#roundtrip">Round trip</a>
+  <a href="#questions">Questions</a>
+</div></nav>
+
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">Phase 0 · spike R6 · document format · branch rust/p0-r6</div>
+  <h1>Three tiles in KDL</h1>
+  <p class="lede">The grass-and-tree tile, the fieldstone wall corner and a rockpile cliff run, written as KDL v2 documents and decoded by the new <code>dt-doc</code> crate. The question for your 30 minutes: could you write these? Is anything missing?</p>
+</header>
+
+<div class="tbl"><table>
+  <thead><tr><th>R6 exit criterion</th><th>Result</th><th>Evidence</th></tr></thead>
+  <tbody>
+  <tr><td>Nothing in the tile is lost</td><td><span class="verdict v-keep">go</span></td><td class="small">Every value the Python sources set, and every rockpile constant the twin exposes, is asserted in <code>tests/library.rs</code> after decoding. The things that changed are look decisions (listed per tile), not values the syntax couldn&rsquo;t carry.</td></tr><tr><td>Comments and layout survive the edit byte for byte outside the edited node</td><td><span class="verdict v-keep">go</span></td><td class="small">Every library file prints back identical after parsing, and edits change only the value&rsquo;s own text (five tests in <code>tests/roundtrip.rs</code>).</td></tr><tr><td>Shawn says he could write them</td><td><span class="verdict v-fix">day 5</span></td><td class="small">Your read.</td></tr>
+  </tbody>
+</table></div>
+<p class="small muted">Agent recommendation: go, pending your read. Parser: the <code>kdl</code> crate 6.7.1, which reads KDL v2 by default and keeps every byte of formatting; its optional v1 features are off, so <code>true</code>, <code>false</code> and <code>null</code> without <code>#</code> are errors.</p>
+
+<h2>How to read them</h2>
+<dl class="defs">
+  <dt>across</dt><dd>Squares. <code>through 1 1  0 1  0 0</code> is the north-west corner of a 1&times;1, with y running north.</dd>
+  <dt>up</dt><dd>h, where 1 is the 33.1&nbsp;mm wall top. Named heights (<code>ground</code>, <code>wall</code>, a tile&rsquo;s own <code>foot</code>) stand in for numbers.</dd>
+  <dt>details</dt><dd>True millimetres: blades, leaves, stones, scree. Angles are degrees. Each control knows its own unit, so none is written.</dd>
+  <dt>shape</dt><dd><code>tile</code> or <code>define</code>, then <code>param</code>, <code>line</code>, <code>region</code> and <code>stack</code>. A stack entry is a look or a definition, with <code>name=value</code> controls and group lines such as <code>leaf length=4.5</code>.</dd>
+  <dt>KDL v2</dt><dd><code>#true</code>/<code>#false</code>; bare words such as <code>form=run</code>; <code>/-</code> switches off the next node; <code>"""</code> opens a multi-line string.</dd>
+</dl>
+<div class="legend"><span class="small muted">Colours:</span>
+  <span style="color:var(--hl-node)">node</span><span style="color:var(--hl-prop)">control=</span><span style="color:var(--hl-str)">"string"</span><span style="color:var(--hl-num)">number</span><span style="color:var(--hl-kw)">#true</span><span style="color:var(--hl-com)">// comment</span>
+</div>
+
+
+<section id="grass-tree">
+<h2>2x2-grass-tree</h2>
+<div class="pair">
+  <figure class="src">
+    <figcaption class="path"><span class="mono">library/tiles/ground/2x2-grass-tree.kdl</span><span class="muted"> · 25 lines</span></figcaption>
+    <pre class="kdl"><code><span class="c">// A 2×2 grass meadow with one tree.</span>
+<span class="c">// Twin of src/tiles/ground/2x2-grass-tree.tile.py.</span>
+<span class="c">//</span>
+<span class="c">// Across is in squares, up is in h (1 = the 33.1 mm wall top), and</span>
+<span class="c">// print-scale details such as blades and leaves are in mm.</span>
+
+<span class="nd">use</span> <span class="s">"lib:parts/grass"</span>           <span class="c">// long-grass</span>
+
+<span class="nd">tile</span> <span class="w">grass-tree</span> <span class="p">cols</span>=<span class="n">2</span> <span class="p">rows</span>=<span class="n">2</span> <span class="p">seed</span>=<span class="n">84</span> {
+
+    <span class="c">// No lines are named, so the paint bucket fills the whole tile.</span>
+    <span class="nd">region</span> <span class="w">meadow</span> { <span class="w">fill</span> <span class="n">0.5</span> <span class="n">0.5</span> }
+
+    <span class="nd">stack</span> {
+        <span class="nd">hills</span> <span class="p">self</span>=<span class="w">meadow</span> <span class="p">height</span>=<span class="w">ground</span>        <span class="c">// flat ground, 5 mm</span>
+
+        <span class="nd">tree</span> <span class="p">self</span>=<span class="w">meadow</span> <span class="p">per-square</span>=<span class="n">0.25</span> <span class="p">tips</span>=<span class="n">32</span> <span class="p">foliage</span>=<span class="k">#true</span> {
+            <span class="nd">leaf</span> <span class="p">length</span>=<span class="n">4.5</span> <span class="p">width</span>=<span class="n">3.0</span>           <span class="c">// mm</span>
+            <span class="sd">/- debug attractors=#true</span>           <span class="c">// slashdash: switched off</span>
+        }
+
+        <span class="c">// After the tree, so the blades steer round its trunk.</span>
+        <span class="nd">long-grass</span> <span class="p">self</span>=<span class="w">meadow</span>
+    }
+}
+</code></pre>
+  </figure>
+  <aside class="fit">
+    <h3>Where the design didn&rsquo;t fit</h3>
+    <ul><li><strong>There is no grass-carpet look.</strong> <code>GrassCarpet</code> (embossed 2D stamps) is not one of the twelve looks; <code>meadow</code> replaces both the carpet and the 3D blades. The species values arrive as <code>meadow</code> controls (<code>blade length curl clearance</code>, <code>clumps per-square</code>), but grasslab v3&rsquo;s meadow has fixed 4-line stroke blades of 3.5&ndash;6.5&nbsp;mm and no curl control today. P4 must add these controls to meadow or decide they go.</li>
+<li>The grass moves from first to last in the stack, so the blades steer round the trunk. The Python carpet was stamped under the tree.</li>
+<li>The 5&nbsp;mm ground height was implicit in Python (the region took its first layer&rsquo;s <code>height_default_mm</code>). The twin says it: <code>hills height=ground</code>.</li>
+<li>Blade curl was a fraction of &pi; (0.35&ndash;0.65). Documents use real angles, so it is 63&ndash;117&deg;.</li>
+<li>The Python <code>SpeciesConfig</code> object shared between two layers becomes <code>define long-grass</code> in <code>parts/grass.kdl</code>, which itself calls <code>define lawn</code>.</li></ul>
+  </aside>
+</div>
+<details class="py">
+  <summary>Python it replaces: <span class="mono">2x2-grass-tree.tile.py</span></summary>
+  <pre><code><span class="s">""</span><span class="s">"2x2 grass meadow with one Tree (space-colonisation growth, Bezier tubes)."</span><span class="s">""</span>
+
+from dharmatiles.spec import Tile, Region, FloodFill, SurfaceConfig, SpeciesConfig, D
+from dharmatiles.layers import GrassCarpet
+from dharmatiles.scatter import Tree, Grouped, Uniform
+
+_species = SpeciesConfig(
+    blade_length=D[8:14],
+    blade_curl=D[0.35:0.65],
+    blade_clearance=0.2,
+)
+
+tile = Tile(
+    surface=SurfaceConfig(cols=2, rows=2, seed=84),
+    areas=[
+        Region(
+            id=<span class="s">'meadow'</span>,
+            selector=FloodFill(0.5, 0.5),
+            layers=[
+                GrassCarpet(
+                    species=_species,
+                    placement=Grouped(groups_per_square=3),
+                ),
+                Tree(
+                    placement=Uniform(count_per_square=0.25),
+                    debug_attractors=False,
+                    foliage_clusters=True,
+                    n_attractors=32,
+                    leaf_length_mm=4.5,
+                    leaf_width_mm=3.0,
+                ),
+            ],
+        ),
+    ],
+)
+</code></pre>
+</details>
+</section>
+<section id="wall-corner">
+<h2>1x1-wall-fieldstone-corner</h2>
+<div class="pair">
+  <figure class="src">
+    <figcaption class="path"><span class="mono">library/tiles/walls/1x1-wall-fieldstone-corner.kdl</span><span class="muted"> · 33 lines</span></figcaption>
+    <pre class="kdl"><code><span class="c">// A drystone fieldstone wall turning the north-west corner of a</span>
+<span class="c">// grassy 1×1.</span>
+<span class="c">// Twin of src/tiles/walls/1x1-wall-fieldstone-corner.tile.py.</span>
+
+<span class="nd">use</span> <span class="s">"lib:parts/grass"</span>           <span class="c">// lawn</span>
+
+<span class="nd">tile</span> <span class="w">wall-fieldstone-corner</span> <span class="p">seed</span>=<span class="n">64</span> {      <span class="c">// cols and rows default to 1</span>
+
+    <span class="c">// Walked from the north-east corner, west along the north edge,</span>
+    <span class="c">// then south down the west edge.  A wall stands on the left of</span>
+    <span class="c">// its line as you walk it: inside the tile, its outer face flush</span>
+    <span class="c">// with the edge (the DungeonBlocks slab standard).</span>
+    <span class="nd">line</span> <span class="w">spine</span> { <span class="w">through</span> <span class="n">1</span> <span class="n">1</span>  <span class="n">0</span> <span class="n">1</span>  <span class="n">0</span> <span class="n">0</span> }
+
+    <span class="c">// The region names no lines, so the wall's line doesn't divide it.</span>
+    <span class="nd">region</span> <span class="w">meadow</span> { <span class="w">fill</span> <span class="n">0.5</span> <span class="n">0.35</span> }
+
+    <span class="nd">stack</span> {
+        <span class="nd">dirt</span> <span class="p">self</span>=<span class="w">meadow</span> <span class="p">height</span>=<span class="w">ground</span>     <span class="c">// 5 mm</span>
+
+        <span class="nd">wall</span> <span class="p">along</span>=<span class="w">spine</span> <span class="p">family</span>=<span class="w">fieldstone</span> <span class="p">seed</span>=<span class="n">14</span> {
+            <span class="nd">top</span> <span class="w">wall</span>                       <span class="c">// the official 33.1 mm wall top</span>
+            <span class="nd">thickness</span> <span class="n">0.2</span>                  <span class="c">// squares: 7 mm</span>
+            <span class="nd">coping</span> <span class="w">perched</span>                 <span class="c">// loose stones on top (or: vertical)</span>
+
+            <span class="c">// fieldstone's own defaults, written out to show them (mm)</span>
+            <span class="nd">stones</span> <span class="p">course</span>=<span class="s">"2.2..5.2"</span> <span class="p">bay</span>=<span class="s">"5..16"</span> <span class="p">joint</span>=<span class="n">0</span> <span class="p">reveal</span>=<span class="n">2.8</span> <span class="p">roundover</span>=<span class="s">"1.3..2.6"</span>
+        }
+
+        <span class="c">// After the wall, so the blades steer round it.</span>
+        <span class="nd">lawn</span> <span class="p">self</span>=<span class="w">meadow</span>
+    }
+}
+</code></pre>
+  </figure>
+  <aside class="fit">
+    <h3>Where the design didn&rsquo;t fit</h3>
+    <ul><li><strong>Which side of the line.</strong> Python puts the wall body on the left of the spine as you walk it, silently. The twin keeps that rule and says it in a comment. Left and right were ruled out for regions, not for things built along a line.</li>
+<li>Python&rsquo;s two grass layers (carpet before the wall, blades after it) become one <code>lawn</code> after the wall.</li>
+<li><code>SoilCarpet</code> becomes <code>dirt</code> (dirtlab), which is a different look; the ruling &ldquo;exposed ground = dirt everywhere&rdquo; makes that the intended change.</li>
+<li>The wall&rsquo;s own <code>seed=14</code> fits the design directly: any entry may pin its seed.</li>
+<li>Thickness 7&nbsp;mm is written as layout, 0.2 squares, so an OpenLOCK build makes it 5.1&nbsp;mm. See question 5.</li>
+<li>The fieldstone defaults (courses, bays, reveal, roundover, coping) are written out to show what the look takes; the Python spec set none of them.</li></ul>
+  </aside>
+</div>
+<details class="py">
+  <summary>Python it replaces: <span class="mono">1x1-wall-fieldstone-corner.tile.py</span></summary>
+  <pre><code><span class="c"># 1x1-wall-fieldstone-corner.tile.py</span>
+<span class="c">#</span>
+<span class="c"># Drystone fieldstone wall turning the NW corner of a grassy 1x1.</span>
+<span class="c"># Wall body extends to the LEFT of the spine walk (into the tile);</span>
+<span class="c"># outer face flush to the tile edge — the DungeonBlocks slab standard.</span>
+
+from dharmatiles.spec import Tile, Region, FloodFill, SurfaceConfig, \
+    SpeciesConfig
+from dharmatiles.layers import SoilCarpet, GrassCarpet
+from dharmatiles.scatter import Grass
+from dharmatiles.walls import FieldstoneWall
+
+_species = SpeciesConfig()
+
+tile = Tile(
+    surface=SurfaceConfig(seed=64),
+    areas=[
+        Region(id=<span class="s">'meadow'</span>, selector=FloodFill(0.5, 0.35), layers=[
+            SoilCarpet(),
+            GrassCarpet(species=_species),
+            FieldstoneWall(spine=[(1.0, 1.0), (0.0, 1.0), (0.0, 0.0)], seed=14),
+            Grass(species=_species),
+        ]),
+    ],
+)
+</code></pre>
+</details>
+</section>
+<section id="cliff-run">
+<h2>2x1-cliff-run</h2>
+<div class="pair">
+  <figure class="src">
+    <figcaption class="path"><span class="mono">library/tiles/cliffs/2x1-cliff-run.kdl</span><span class="muted"> · 47 lines</span></figcaption>
+    <pre class="kdl"><code><span class="c">// A 2×1 cliff run: a band of stacked rock standing against the north</span>
+<span class="c">// edge, with dirt on its tops and scree at its foot.</span>
+<span class="c">// Twin of clifflab/rockpile.py's `run` form (round 15, commit 3b56ae0),</span>
+<span class="c">// which the lab builds with `rockpile.py --form run --seed 1`.</span>
+
+<span class="nd">tile</span> <span class="w">cliff-run</span> <span class="p">cols</span>=<span class="n">2</span> <span class="p">rows</span>=<span class="n">1</span> <span class="p">seed</span>=<span class="n">1</span> {
+    <span class="nd">about</span> <span class="s">"""
+        Rock band against the north edge. Both ends finish in the
+        standard end section, so runs butt end to end.
+        """</span>
+
+    <span class="c">// Rockpile's foot ground sits at 4.0 mm, not at the 3.4 mm edge.</span>
+    <span class="nd">heights</span> <span class="p">foot</span>=<span class="n">0.121</span>
+
+    <span class="c">// The north edge, walked east to west.  The cliff grows on the</span>
+    <span class="c">// left of its line, into the tile, like a wall.</span>
+    <span class="nd">line</span> <span class="w">back</span> { <span class="w">through</span> <span class="n">2</span> <span class="n">1</span>  <span class="n">0</span> <span class="n">1</span> }
+
+    <span class="nd">stack</span> {
+        <span class="c">// Bare earth at the foot, banked up in the angle with the</span>
+        <span class="c">// cliff face: higher and wider in the shattered zones.</span>
+        <span class="nd">dirt</span> <span class="p">height</span>=<span class="w">foot</span> {
+            <span class="nd">bank</span> <span class="p">near</span>=<span class="w">cliff</span> <span class="p">height</span>=<span class="s">"1.5..3.5"</span> <span class="p">reach</span>=<span class="s">"3..6.5"</span>   <span class="c">// mm</span>
+        }
+
+        <span class="nd">cliff</span> <span class="p">along</span>=<span class="w">back</span> <span class="p">form</span>=<span class="w">run</span> {
+            <span class="nd">height</span> <span class="n">1.057</span>            <span class="c">// 35 mm above the foot: the run form's cap</span>
+            <span class="nd">mass</span> <span class="n">1.35</span>               <span class="c">// stone size ×; 1 is broken rubble</span>
+            <span class="nd">dirt-on-tops</span> <span class="k">#true</span>      <span class="c">// dirt lodged in the joints of the flat top</span>
+
+            <span class="c">// What the stack is built from (each a share of the stones).</span>
+            <span class="nd">stones</span> <span class="p">column</span>=<span class="s">"38%"</span> <span class="p">block</span>=<span class="s">"38%"</span> <span class="p">slab</span>=<span class="s">"12%"</span> <span class="p">odd</span>=<span class="s">"6%"</span> <span class="p">monolith</span>=<span class="s">"6%"</span>
+
+            <span class="c">// Shattered zones: small broken blocks, more cracks, more</span>
+            <span class="c">// scree.  Between them, big quiet masses.</span>
+            <span class="nd">shatter</span> <span class="p">zones</span>=<span class="n">1.5</span> <span class="p">width</span>=<span class="s">"5..10"</span>     <span class="c">// per square of run; mm wide</span>
+        }
+
+        <span class="c">// Fallen stones along the foot, densest against the face.</span>
+        <span class="nd">scree</span> <span class="p">near</span>=<span class="w">cliff</span> {
+            <span class="nd">stones</span> <span class="p">per-square</span>=<span class="n">55</span> <span class="p">size</span>=<span class="s">"1..6^2"</span> <span class="p">reach</span>=<span class="n">4</span>    <span class="c">// mm; skewed small</span>
+            <span class="nd">blocks</span> <span class="p">per-square</span>=<span class="n">2.5</span> <span class="p">size</span>=<span class="s">"4.5..8"</span>           <span class="c">// big ones, cut like the cliff's</span>
+            <span class="nd">grit</span> <span class="p">per-square</span>=<span class="n">45</span> <span class="p">size</span>=<span class="s">"1..2.2"</span> <span class="p">sink</span>=<span class="s">"20%..50%"</span>
+            <span class="nd">kinds</span> <span class="p">block</span>=<span class="s">"45%"</span> <span class="p">wedge</span>=<span class="s">"35%"</span> <span class="p">slab</span>=<span class="s">"20%"</span>      <span class="c">// angular, no domes</span>
+        }
+    }
+}
+</code></pre>
+  </figure>
+  <aside class="fit">
+    <h3>Where the design didn&rsquo;t fit</h3>
+    <ul><li><strong>The architecture sketch didn&rsquo;t fit.</strong> It drew a <code>line foot</code>, a <code>region shelf</code> and <code>cliff self=shelf</code>. Rockpile takes no foot line: a run grows from a tile edge (its &ldquo;back&rdquo; plane) out to a generated depth of 8&ndash;20&nbsp;mm with gullies and buttresses. The twin names that edge as a line, <code>cliff along=back</code>, the same rule as walls. A corner is then a two-segment line and a canyon two lines. P7 must either restrict <code>along</code> to tile edges or generalise rockpile&rsquo;s band forms to any line.</li>
+<li>Rockpile builds the foot bank, the scree, the dirt on the tops and the cliff in one function, all sharing the shattered zones. The twin splits them into <code>dirt</code> (with a <code>bank</code>), <code>cliff</code> and <code>scree</code>. That works only because builds see every plan: <code>dirt</code> is below the cliff in the stack but banks against the cliff&rsquo;s planned footprint, and the cliff must publish its zones in its plan.</li>
+<li>Rockpile&rsquo;s foot ground is 4.0&nbsp;mm; the confirmed edge level is 3.4&nbsp;mm. The tile keeps 4.0 with <code>heights foot=0.121</code>. See question 6.</li>
+<li>Of rockpile&rsquo;s 169 constants the twin carries 24 as controls. The <code>form</code> preset fixes the plan (depth, tiers, gullies, buttresses, the 4&nbsp;mm end section), and stacking, dressing, cracks, relief, grain, seats and the core stay inside the look, as the architecture intends.</li>
+<li>The lab&rsquo;s command line builds N&times;N only; <code>build()</code> takes any cols and rows, and 2&times;1 is the natural run piece.</li>
+<li>Forms whose height is a pair (escarpment&rsquo;s 10&ndash;40&nbsp;mm ramp along the run) are not distributions: <code>"10..40"</code> would mean a random height. A ramp needs its own form. See question 7.</li></ul>
+  </aside>
+</div>
+<details class="py">
+  <summary>Python it replaces: <span class="mono">rockpile.py (excerpt)</span></summary>
+  <pre><code><span class="c"># clifflab/rockpile.py at 3b56ae0 (round 15): the run form and the</span>
+<span class="c"># constants the twin exposes.  169 module constants in all; the</span>
+<span class="c"># rest stay inside the cliff look.</span>
+
+SQUARE_MM        = 35.0
+FOOT_Z_MM        = 4.0         <span class="c"># foot ground (DB dirt band)</span>
+
+<span class="c"># 1 form (run)</span>
+DEPTH_MM         = (8.0, 20.0)  <span class="c"># how far the cliff reaches out from the back plane…</span>
+TOP_DEPTH_MM     = (5.0, 10.0)   <span class="c"># …and the full-height part of it</span>
+MASS_W_MM        = (6.0, 15.0)   <span class="c"># along-run segments with their own profile</span>
+FULL_P           = 0.35          <span class="c"># a segment is full height all the way out</span>
+TIER_Z           = (0.3, 0.7)    <span class="c"># lower tier top, × cliff height</span>
+GULLIES_PER_SQUARE = 0.5         <span class="c"># masses cut deep back into the band (re-entrants)…</span>
+GULLY_DEPTH_MM   = (5.0, 7.0)    <span class="c"># …reaching only this far out, on masses at least this</span>
+GULLY_MIN_W_MM   = 10.0          <span class="c"># wide (a narrower one is a chimney: a pit from above)</span>
+BUTTRESSES_PER_SQUARE = 0.5      <span class="c"># masses standing far out, full height…</span>
+BUTTRESS_DEPTH_MM = (20.0, 25.0)
+END_MM           = 4.0           <span class="c"># standard end section (REQ-RUN-3, S4): every seed's</span>
+END_DEPTH_MM     = 11.0          <span class="c"># cliff ends as a full-height band this deep, so tiles</span>
+                                 <span class="c"># meet end to end without a step</span>
+
+<span class="c"># 2 stack</span>
+KINDS = {  <span class="c">#        p     along (mm)     depth (mm)    height (mm)   bridge  tilt°</span>
+    <span class="s">'column'</span>: (0.38, (8.0, 14.0), (7.0, 12.0), (15.0, 24.0), 1.2, 8.0),
+    <span class="s">'block'</span>:  (0.38, (10.0, 18.0), (8.0, 14.0), (11.0, 18.0), 1.2, 10.0),
+    <span class="s">'slab'</span>:   (0.12, (14.0, 24.0), (8.0, 14.0), (5.0, 8.0), 5.0, 8.0),
+    <span class="s">'odd'</span>:    (0.06, (6.0, 10.0), (6.0, 10.0), (6.0, 11.0), 2.0, 14.0),
+    <span class="s">'monolith'</span>: (0.06, (8.0, 16.0), (7.0, 12.0), None, 1.2, 3.0),  <span class="c"># ground to top</span>
+}
+
+ZONES_PER_SQUARE = 1.5         <span class="c"># shattered zones (REQ-ROCK-3: detail comes in clusters)…</span>
+ZONE_SIGMA_MM    = (5.0, 10.0) <span class="c"># …this wide along the run</span>
+ZONE_FLOOR       = 0.25        <span class="c"># intensity between zones</span>
+
+<span class="c"># 4 assembly</span>
+APRON_H_MM       = (1.5, 3.5)  <span class="c"># a dirt bank in the angle of cliff and ground (between</span>
+APRON_R_MM       = (3.0, 6.5)  <span class="c"># zones → shattered zone): this high at the face, this far out</span>
+APRON_END        = (2.5, 4.5)  <span class="c"># (height, reach) at the tile ends, same for every seed (S4)</span>
+GROUND_END_MM    = 3.0         <span class="c"># the dirt texture fades flat this close to the tile ends</span>
+APRON_EXP        = 1.6         <span class="c"># profile: concave, like a talus foot</span>
+APRON_SHARE      = 0.25        <span class="c"># never higher than this × the rock beside it</span>
+GRIT_PER_SQUARE  = 45          <span class="c"># small stones half-buried in the bank…</span>
+GRIT_D_MM        = (1.0, 2.2)
+GRIT_BURY        = (0.2, 0.5)  <span class="c"># …sunk this × D</span>
+SCREE_PER_SQUARE = 55          <span class="c"># fallen stones along each square of cliff foot…</span>
+SCREE_D_MM       = (1.0, 6.0)  <span class="c"># …sizes mixed, skewed small (no scale-marker carpet)…</span>
+SCREE_D_EXP      = 2.0
+SCREE_REACH_MM   = 4.0         <span class="c"># …lying mostly this close to the face (exponential mean)…</span>
+SCREE_LEAN       = 0.35        <span class="c"># …the nearest leaning in, up to this × D into the face</span>
+SCREE_BLOCKS     = 2.5         <span class="c"># big fallen blocks per square, against the face…</span>
+SCREE_BLOCK_MM   = (4.5, 8.0)  <span class="c"># …this size, cut like the cliff's blocks</span>
+SCREE_BLOCK_CUTS = (2, 4)      <span class="c"># …broken by this many planes</span>
+SCREE_GAP        = 0.38        <span class="c"># centres at least this × (Di + Dj) apart</span>
+SCREE_TILT_DEG   = 8.0
+SCREE_FAMILIES   = {<span class="s">'block'</span>: 0.45, <span class="s">'wedge'</span>: 0.35, <span class="s">'slab'</span>: 0.2}  <span class="c"># angular fragments, no domes</span>
+SCREE_SINK_MM    = 0.3         <span class="c"># into the dirt (plus whatever the tilt lifts)</span>
+
+FORMS = {
+    <span class="s">'run'</span>:        dict(kind=<span class="s">'band'</span>, walls=(<span class="s">'back'</span>,), height=35.0, cap=True, mass=1.35),  <span class="c"># B H N</span>
+    <span class="c"># … corner, canyon, escarpment, plateau, massif, mound, spire, needles</span>
+}
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument(<span class="s">'--form'</span>, default=<span class="s">'run'</span>)
+    ap.add_argument(<span class="s">'--seed'</span>, type=int, default=1)
+    ap.add_argument(<span class="s">'--cols'</span>, type=int, default=1)
+    args = ap.parse_args()
+    r = build(args.seed, args.form, args.cols, args.cols)
+    out = ROOT / <span class="s">'clifflab'</span> / <span class="s">'out'</span>
+    <span class="c"># …</span></code></pre>
+</details>
+</section>
+
+<section id="parts">
+<h2>Shared parts</h2>
+<p>Two files in <code>library/parts/</code> show the definition and import mechanism. <code>lawn</code> holds Python&rsquo;s default species; <code>long-grass</code> calls <code>lawn</code> with three overrides, a definition nested in a definition. Tiles bring them in with <code>use "lib:parts/grass"</code>.</p>
+<div class="grid2">
+  <figure class="src"><figcaption class="path"><span class="mono">library/parts/grass.kdl</span></figcaption><pre class="kdl"><code><span class="c">// Grass presets shared by tiles: `use "lib:parts/grass"`.</span>
+<span class="c">//</span>
+<span class="c">// Each is a definition: parameters with defaults, then a stack.  A tile</span>
+<span class="c">// calls one like a look (`lawn self=meadow`) and may override any</span>
+<span class="c">// parameter (`lawn length=12`).</span>
+<span class="c">//</span>
+<span class="c">// Today's .tile.py files share a SpeciesConfig object between the grass</span>
+<span class="c">// carpet and the 3D blades.  Here one meadow does both, so the shared</span>
+<span class="c">// thing is simply a definition.</span>
+
+<span class="c">// Python's default SpeciesConfig.</span>
+<span class="nd">define</span> <span class="w">lawn</span> {
+    <span class="nd">param</span> <span class="w">length</span> <span class="n">10</span>          <span class="c">// blade length, mm</span>
+    <span class="nd">param</span> <span class="w">curl</span> <span class="s">"36..81"</span>      <span class="c">// degrees the blade turns along its length</span>
+    <span class="nd">param</span> <span class="w">clearance</span> <span class="n">0.1</span>      <span class="c">// blades float this far above what they lie on, mm</span>
+    <span class="nd">param</span> <span class="w">clumps</span> <span class="n">3</span>           <span class="c">// clumps per square</span>
+
+    <span class="nd">stack</span> {
+        <span class="nd">meadow</span> {
+            <span class="nd">blade</span> <span class="p">length</span>=<span class="w">length</span> <span class="p">curl</span>=<span class="w">curl</span> <span class="p">clearance</span>=<span class="w">clearance</span>
+            <span class="nd">clumps</span> <span class="p">per-square</span>=<span class="w">clumps</span>
+        }
+    }
+}
+
+<span class="c">// Long, curly blades: the species of 2x2-grass-tree.</span>
+<span class="nd">define</span> <span class="w">long-grass</span> {
+    <span class="nd">stack</span> {
+        <span class="nd">lawn</span> <span class="p">length</span>=<span class="s">"8..14"</span> <span class="p">curl</span>=<span class="s">"63..117"</span> <span class="p">clearance</span>=<span class="n">0.2</span>
+    }
+}
+</code></pre></figure>
+  <figure class="src"><figcaption class="path"><span class="mono">library/parts/heights.kdl</span></figcaption><pre class="kdl"><code><span class="c">// Standard named heights, in h: fractions of the wall, so 1 is the top</span>
+<span class="c">// of a standard wall.  At DungeonBlocks scale h is 33.1 mm, the official</span>
+<span class="c">// wall top above the datum (walls/masonry.py), so wall = 1.</span>
+<span class="c">//</span>
+<span class="c">// Every tile can use these names without a `use` line.  A tile's own</span>
+<span class="c">// `heights` line adds names or overrides these for that tile only.</span>
+
+<span class="nd">heights</span> {
+    <span class="nd">edge</span>   <span class="n">0.103</span>    <span class="c">// 3.4 mm: ground meets the tile edge here (confirmed default 12)</span>
+    <span class="nd">ground</span> <span class="n">0.151</span>    <span class="c">// 5.0 mm: today's grass and soil regions</span>
+    <span class="nd">water</span>  <span class="n">0.079</span>    <span class="c">// 2.6 mm: shorelab's water level</span>
+    <span class="nd">wall</span>   <span class="n">1</span>        <span class="c">// 33.1 mm: the official wall top</span>
+}
+</code></pre></figure>
+</div>
+</section>
+
+<section id="errors">
+<h2>When a document is wrong</h2>
+<p>Each case breaks one real tile on purpose. The text is exactly what <code>cargo run -p dt-doc --example errors</code> prints (miette, without colour). Every error points at the text that caused it and says what to write instead.</p>
+<div class="errgrid">
+<div class="errcase">
+  <h3>A typo'd control name</h3>
+  <p class="small muted">In <code>2x2-grass-tree.kdl</code>, <code>per-square=0.25</code> changed to <code>per-sqare=0.25</code>.</p>
+  <pre class="term">dt::unknown-control
+
+  × `tree` has no control `per-sqare`
+    ╭─[library/tiles/ground/2x2-grass-tree.kdl:17:26]
+ 16 │ 
+ 17 │         tree self=meadow per-sqare=0.25 tips=32 foliage=#true {
+    ·                          ────┬────
+    ·                              ╰── unknown control
+ 18 │             leaf length=4.5 width=3.0           // mm
+    ╰────
+  help: did you mean `per-square`?</pre>
+</div>
+<div class="errcase">
+  <h3>A wrong unit</h3>
+  <p class="small muted">In <code>2x1-cliff-run.kdl</code>, <code>height 1.057</code> changed to <code>height (mm)35</code>.</p>
+  <pre class="term">dt::wrong-unit
+
+  × `cliff height` can't be in mm
+    ╭─[library/tiles/cliffs/2x1-cliff-run.kdl:27:20]
+ 26 │         cliff along=back form=run {
+ 27 │             height (mm)35            // 35 mm above the foot: the run form's cap
+    ·                    ───┬──
+    ·                       ╰── height is a height, in h (fractions of the wall) or a named height
+ 28 │             mass 1.35               // stone size ×; 1 is broken rubble
+    ╰────
+  help: layout heights are in h, where 1 h is the 33.1 mm wall top: 35 mm is about
+        1.057</pre>
+</div>
+<div class="errcase">
+  <h3>KDL v1 syntax</h3>
+  <p class="small muted">In <code>2x2-grass-tree.kdl</code>, <code>foliage=#true</code> changed to <code>foliage=true</code>.</p>
+  <pre class="term">dt::syntax
+
+  × bare `true` is KDL v1; dharmatiles documents are KDL v2
+    ╭─[library/tiles/ground/2x2-grass-tree.kdl:17:58]
+ 16 │ 
+ 17 │         tree self=meadow per-square=0.25 tips=32 foliage=true {
+    ·                                                          ──┬─
+    ·                                                            ╰── KDL v1 keyword
+ 18 │             leaf length=4.5 width=3.0           // mm
+    ╰────
+  help: write #true</pre>
+</div>
+<div class="errcase">
+  <h3>A missing required control</h3>
+  <p class="small muted">In <code>1x1-wall-fieldstone-corner.kdl</code>, <code>wall along=spine family</code> changed to <code>wall family</code>.</p>
+  <pre class="term">dt::missing-control
+
+  × `wall` needs `along`
+    ╭─[library/tiles/walls/1x1-wall-fieldstone-corner.kdl:21:9]
+ 20 │ 
+ 21 │         wall family=fieldstone seed=14 {
+    ·         ──┬─
+    ·           ╰── this wall has no `along`
+ 22 │             top wall                       // the official 33.1 mm wall top
+    ╰────
+  help: add `along=…`: the line the wall stands on</pre>
+</div>
+<div class="errcase">
+  <h3>A bad distribution</h3>
+  <p class="small muted">In <code>2x1-cliff-run.kdl</code>, <code>size="1..6^2"</code> changed to <code>size="1..6^x"</code>.</p>
+  <pre class="term">dt::expr
+
+  × can't read `size`: a skew `^k` needs a plain positive number, as in "1..6^2"
+    ╭─[library/tiles/cliffs/2x1-cliff-run.kdl:41:45]
+ 40 │         scree near=cliff {
+ 41 │             stones per-square=55 size="1..6^x" reach=4    // mm; skewed small
+    ·                                             ┬
+    ·                                             ╰── here
+ 42 │             blocks per-square=2.5 size="4.5..8"           // big ones, cut like the cliff's
+    ╰────
+  help: `size` is a print-scale size, in true millimetres</pre>
+</div>
+</div>
+<p class="small muted">Also tested: an unknown look (&ldquo;did you mean <code>meadow</code>?&rdquo;), an unknown region, a control written outside its group (&ldquo;<code>length</code> belongs in the <code>leaf</code> group&rdquo;), a misspelt choice, a leaf size in squares, an unknown named height, an unquoted <code>20%</code> and a region with no fill point.</p>
+</section>
+
+<section id="roundtrip">
+<h2>Editing one control</h2>
+<p>The GUI and agents will change a value through the kdl crate&rsquo;s document API. Three edits, one per file, printed by <code>cargo run -p dt-doc --example roundtrip</code>:</p>
+<p class="small mono">library/parts/grass.kdl: define long-grass &gt; stack &gt; lawn &gt; Prop("length")</p>
+<pre class="term diff"><span class="del"> 29 -         lawn length="8..14" curl="63..117" clearance=0.2</span>
+<span class="add"> 29 +         lawn length="9..15" curl="63..117" clearance=0.2</span>
+<span class="c">    the other 30 lines are byte-identical</span></pre>
+<p class="small mono">library/tiles/ground/2x2-grass-tree.kdl: tile grass-tree &gt; stack &gt; tree &gt; leaf &gt; Prop("length")</p>
+<pre class="term diff"><span class="del"> 18 -             leaf length=4.5 width=3.0           // mm</span>
+<span class="add"> 18 +             leaf length=5.5 width=3.0           // mm</span>
+<span class="c">    the other 24 lines are byte-identical</span></pre>
+<p class="small mono">library/tiles/cliffs/2x1-cliff-run.kdl: tile cliff-run &gt; stack &gt; cliff &gt; height &gt; Arg(0)</p>
+<pre class="term diff"><span class="del"> 27 -             height 1.057            // 35 mm above the foot: the run form's cap</span>
+<span class="add"> 27 +             height 1.2            // 35 mm above the foot: the run form's cap</span>
+<span class="c">    the other 46 lines are byte-identical</span></pre>
+<p>The tests check more than the line diff: the bytes before and after the changed value are identical, every library file prints back unchanged after a parse, the slashdashed node and the multi-line <code>about</code> survive, and two successive edits compose. One limit: when the new value is shorter or longer, a comment later on that line moves with it. Nothing re-aligns comment columns.</p>
+</section>
+
+<section id="questions">
+<h2>Questions where the syntax could go either way</h2>
+<ol class="qs">
+<li><strong>What is h in millimetres?</strong> The tiles use h = 33.1&nbsp;mm, the official wall top, so <code>wall</code> is exactly 1 as you described. Everything else then gets awkward decimals: ground 0.151, the cliff 1.057. The architecture sketches used h = 40&nbsp;mm. Named heights hide most of it.</li><li><strong>Scalar controls on the line, or as children?</strong> Both work today: <code>cliff … mass=1.35</code> and, inside its block, <code>mass 1.35</code>. The cliff tile uses children (room for a comment each); the tree uses properties. Keep both, or pick one?</li><li><strong>Units: never, annotation, or suffix?</strong> The axis supplies the unit, so the tiles write none. A unit can still be written as <code>(mm)4.5</code> or inside a string, <code>"4.5mm"</code>, and a wrong one is an error. Allow one form, both, or forbid units?</li><li><strong>Ranges must be quoted.</strong> KDL numbers can&rsquo;t contain <code>..</code> or <code>%</code>, so it is <code>size="1..6^2"</code> and <code>column="38%"</code>. The error for a forgotten quote says so. Acceptable?</li><li><strong>Is wall thickness or tree size layout or detail?</strong> Layout (squares, h) scales with OpenLOCK&rsquo;s 25.4&nbsp;mm square; detail (mm) doesn&rsquo;t. The twins put wall thickness and tree height in layout units and stones, blades and leaves in mm.</li><li><strong>The cliff foot level.</strong> Keep rockpile&rsquo;s 4.0&nbsp;mm foot as a tile override, or move the cliff onto the 3.4&nbsp;mm edge level now?</li><li><strong>How is a ramp written?</strong> For escarpment heights that change along the run: <code>height from=0.3 to=1.2</code>, or a field value, or leave it inside the form preset?</li><li><strong>Standard heights: implicit or imported?</strong> Every tile sees <code>ground</code>, <code>edge</code>, <code>water</code> and <code>wall</code> without a <code>use</code> line. Or should a tile write <code>use "lib:parts/heights"</code>?</li>
+</ol>
+</section>
+
+<h2>The dt-doc crate</h2>
+<ul>
+  <li>Parse with <code>kdl</code> 6.7.1, then decode by hand: one function per node type (tile, define, param, line, region, stack entry, group), with one control table per look in <code>schema.rs</code>. No derive crate.</li>
+  <li>Every name and value keeps its byte span. Errors are miette diagnostics with a code, a label at the span and a help line. Decoding continues past the first error, so a file&rsquo;s mistakes come together.</li>
+  <li>Values go through a small expression parser: arithmetic on parameters and named heights, ranges <code>"a..b"</code> with an optional skew <code>^k</code> (a draw is <code>a + (b − a)·u^k</code>, rockpile&rsquo;s rule), percents. No calls, loops or assignments.</li>
+  <li>Dependencies: <code>kdl</code> and <code>miette</code> only (no default features). It builds for <code>wasm32-unknown-unknown</code>, which CI now checks.</li>
+  <li>Two things learned about KDL v2: two nodes on one line need a <code>;</code> after a closing brace, and the crate&rsquo;s own messages are generic (&ldquo;Expected identifier string&rdquo;), so dt-doc rewrites the common ones (v1 keywords, unquoted ranges).</li>
+</ul>
+<details class="py"><summary>The 40 tests</summary>
+<ul class="tests"><li>expr::tests::arithmetic_and_precedence</li><li>expr::tests::decimal_ranges</li><li>expr::tests::names_resolve_through_env</li><li>expr::tests::dashed_names</li><li>edit::tests::edits_a_property_in_place</li><li>edit::tests::edits_a_child_argument_in_place</li><li>expr::tests::display_round_trips_meaning</li><li>edit::tests::strings_come_out_quoted</li><li>expr::tests::number_with_unit</li><li>expr::tests::percent_divides</li><li>edit::tests::missing_things_are_errors</li><li>expr::tests::errors_point_inside_the_text</li><li>expr::tests::plain_number</li><li>expr::tests::range_is_not_a_decimal</li><li>expr::tests::skewed_range_favours_low_end</li><li>schema::tests::every_look_has_unique_control_names</li><li>schema::tests::suggestions</li><li>result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s</li><li>v1_true_says_write_hash_true</li><li>typo_suggests_the_control</li><li>more_mistakes</li><li>missing_along_is_reported_on_the_wall</li><li>wrong_unit_explains_h</li><li>bad_skew_points_inside_the_string</li><li>result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s</li><li>standard_heights</li><li>grass_tree_keeps_every_control</li><li>wall_corner_keeps_every_control</li><li>grass_parts_nest</li><li>cliff_run_keeps_every_control</li><li>spans_point_at_the_text</li><li>every_library_file_decodes</li><li>result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s</li><li>leaf_length_edit_in_a_group</li><li>grass_length_edit_touches_only_the_value</li><li>two_edits_compose</li><li>every_file_prints_back_unchanged</li><li>cliff_height_edit_in_child_form</li><li>result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s</li><li>result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s</li></ul>
+</details>
+<p class="small muted">Generated on 1 Nov 2026 from the library files, the Python sources and the dt-doc example output. Not edited by hand.</p>
+</div>
