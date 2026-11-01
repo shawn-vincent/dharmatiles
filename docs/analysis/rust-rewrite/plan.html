@@ -41,6 +41,7 @@
   .check .who { font: 600 11px/1.6 var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
   .check .who.own { color: var(--gold); }
   .check li.done span:last-child { color: var(--muted); text-decoration: line-through; }
+  .confirm { font: 600 10.5px/1 var(--mono); text-transform: uppercase; letter-spacing: .06em; padding: 3px 6px; border-radius: 3px; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); white-space: nowrap; }
   .assume { font: 600 10.5px/1 var(--mono); text-transform: uppercase; letter-spacing: .06em; padding: 3px 6px; border-radius: 3px; background: color-mix(in srgb, var(--gold) 22%, transparent); color: var(--gold); white-space: nowrap; }
   .gloss { columns: 2 320px; column-gap: 28px; }
   .gloss div { break-inside: avoid; margin: 0 0 10px; font-size: 14px; }
@@ -64,13 +65,13 @@
 
 <div class="wrap">
 <header class="hero">
-  <div class="eyebrow">Page 9 of 11 · revision 4 · 1 Nov 2026 · plan only, no code</div>
+  <div class="eyebrow">Page 9 of 11 · revision 5 · 1 Nov 2026 · Phase 0 under way</div>
   <h1>From spikes to cutover</h1>
   <p class="lede">A phased plan for the Rust rewrite, built mostly by Claude agents and directed by Shawn. Nine phases, three work streams, and about 32 weeks on the critical path (25 to 40 is the honest range). Every phase ends with something Shawn can print, and no look counts as ported until he judges its renders equal to the lab's, side by side, over four seeds.</p>
 </header>
 
 <div class="rev">
-  <p><b>Starting point.</b> Shawn accepted the revision 3 recommendations ("i like the recommendations"). Where a page still lists an open question, this plan uses the recommended default and marks it <span class="assume">assumed</span>. The list is under <a href="#defaults">Assumed defaults</a>, and nothing in the plan waits on them.</p>
+  <p><b>Starting point.</b> Shawn accepted the revision 3 recommendations ("i like the recommendations"). Where a page still listed an open question, this plan used the recommended default. On 1 Nov 2026 Shawn reviewed all fifteen ("They look good. Let's proceed with phase zero."), so each is now marked <span class="confirm">confirmed 2026-11-01</span>. The list is under <a href="#defaults">Confirmed defaults</a>. Phase 0 started the same day on branch <code>rust/p0</code>.</p>
   <p><b>What changed from the feasibility page's migration order.</b> Four refinements, each with its reason under <a href="#refine">Why the order changed</a>. The skeleton gets its own phase, together with the parity harness, ahead of dirt. Walls, floors, OpenLOCK and trees run as a second stream beside grass. The library cutover comes before the cliff, because no library tile uses the cliff. The front ends arrive across the phases instead of all at the end.</p>
 </div>
 
@@ -190,13 +191,13 @@
 <dt>Deliverables</dt><dd><ul>
 <li>A one-paragraph decision for each spike, added to this page and the feasibility page.</li>
 <li>CI on GitHub Actions: <code>fmt --check</code>, <code>clippy -D warnings</code>, tests on macOS, Linux and Windows, the wasm check on <code>dt-geom</code>, and <code>cargo deny</code>.</li>
-<li>The toolchain pinned to the current stable. Check whether it is 1.99 or later; 1.98.1 was current on 3 Sep 2026.</li>
+<li>The toolchain pinned to the current stable: 1.99.1 (released 13 Oct 2026), pinned in <code>rust-toolchain.toml</code> on 1 Nov 2026.</li>
 <li>Three tiles written in KDL: <code>2x2-grass-tree</code>, <code>1x1-wall-fieldstone-corner</code> and a cliff run.</li>
 </ul></dd>
 <dt>Exit criteria</dt><dd><ul>
 <li>Each of R1, R2, R3 and R6 has a written go, or a chosen fallback (see the <a href="#spikes">spike table</a>).</li>
 <li>CI is green on all three operating systems and on the wasm check.</li>
-<li>Shawn has confirmed or changed the <a href="#defaults">assumed defaults</a>, and has chosen a determinism level.</li>
+<li>Shawn has confirmed or changed the <a href="#defaults">defaults</a> (done: all fifteen confirmed on 1 Nov 2026), and has chosen a determinism level.</li>
 </ul></dd>
 <dt>Risks</dt><dd>R1, R2, R3 and R6 are spiked. R9 gets a desk check: carry Manifold original IDs through one union during R1. R10 is mitigated: every young crate sits behind a trait from the first day.</dd>
 <dt>Depends on</dt><dd>Nothing.</dd>
@@ -382,7 +383,7 @@
 <dt>Deliverables</dt><dd><code>cliff</code>, <code>scree</code>, and cliff tiles in <code>library/tiles/cliffs/</code>.</dd>
 <dt>Exit criteria</dt><dd><ul>
 <li>Zero see-through holes on every form. Python has 5 at seed 3, 1 at seed 4 and 262 on the massif.</li>
-<li>Overhang at or below Python's for each seed (1.1–12.6 mm²), with a target of ≤ 2 mm² per tile <span class="assume">assumed</span>.</li>
+<li>Overhang at or below Python's for each seed (1.1–12.6 mm²), with a target of ≤ 2 mm² per tile <span class="confirm">confirmed 2026-11-01</span>.</li>
 <li>No stone clipped at the tile edge.</li>
 <li>A 1×1 builds in ≤ 15 s (Python: 23 to 34 s) and the massif in ≤ 60 s (Python: 116 s; the cap is 120 s).</li>
 <li>Shawn signs off over 4 seeds and the main forms, and a printed cliff run survives.</li>
@@ -501,7 +502,7 @@
 <tr><td>3MF, colour, Bambu project</td><td>P8</td><td>later</td><td>Material ids are carried from P3, so this adds a writer.</td></tr>
 <tr><td>MCP over Streamable HTTP; <code>lsp</code></td><td>P8</td><td>later, optional</td><td>stdio and <code>check</code> with miette errors cover v1.</td></tr>
 <tr><td><code>dt-wasm</code>, browser build</td><td>P8</td><td>optional</td><td>Gated on manifold-rust parity (R1).</td></tr>
-<tr><td>Phones (Tauri mobile)</td><td>after the app</td><td>optional</td><td>View and edit first <span class="assume">assumed</span>. Building on the phone waits for the pure-Rust Manifold.</td></tr>
+<tr><td>Phones (Tauri mobile)</td><td>after the app</td><td>optional</td><td>View and edit first <span class="confirm">confirmed 2026-11-01</span>. Building on the phone waits for the pure-Rust Manifold.</td></tr>
 </tbody></table></div>
 
 <h2 id="cutover">Cutover</h2>
@@ -514,13 +515,13 @@
 <tr><td>P3</td><td class="num">11</td><td><code>water/1x1-water</code>, <code>3x3-water</code>, <code>water+soil</code> (plain, angle, corner), <code>water-u+soil</code>, five <code>water-corridor*+soil</code></td></tr>
 <tr><td>P4</td><td class="num">19</td><td><code>ground/1x1-grass</code>, <code>soil+grass</code> (plain, angle, corner), <code>soil-u+grass</code>, five <code>soil-corridor*+grass</code>; <code>water+grass</code> (plain, angle, corner), <code>water-u+grass</code>, five <code>water-corridor*+grass</code></td></tr>
 <tr><td>P5</td><td class="num">11</td><td>six <code>walls/*</code>, two <code>floors/*</code>, <code>1x1-grass-tree</code>, <code>2x2-grass-tree</code>, <code>1x1-grass-tree+water</code></td></tr>
-<tr><td>—</td><td class="num">1</td><td><code>1x1-grass-flowers</code>: <code>Flowers</code> is not one of the twelve looks. It is kept in Python and decided at P6 <span class="assume">assumed</span></td></tr>
+<tr><td>—</td><td class="num">1</td><td><code>1x1-grass-flowers</code>: <code>Flowers</code> is not one of the twelve looks. It is kept in Python and decided at P6 <span class="confirm">confirmed 2026-11-01</span></td></tr>
 </tbody></table></div>
 <h3>Output, the Python library and the labs</h3>
 <ul>
 <li><b><code>stl/</code> → <code>out/</code>:</b> Rust writes <code>out/&lt;system&gt;/&lt;path&gt;/&lt;name&gt;-&lt;system&gt;.stl</code> from P1, and Python keeps writing <code>stl/</code>, so a comparison is two folders. At P6, <code>stl/</code> and <code>dharmatiles-gen</code> are retired.</li>
 <li><b>The Python library</b> is frozen at P6, not deleted, because six of the seven labs import from it. It is tagged <code>python-library-final</code>. Its tile-only parts (<code>layers/</code>, <code>grass/</code>, <code>scatter/</code>, <code>terrains/</code>) are dead from then on and can be deleted in the same step if nothing in the labs imports them.</li>
-<li><b>The labs</b> keep working unchanged throughout. They stay the design bench for new looks until Shawn decides otherwise after P7 <span class="assume">assumed</span>. A new look approved in a lab gets its own small port phase, using the same harness and definition of done.</li>
+<li><b>The labs</b> keep working unchanged throughout. They stay the design bench for new looks until Shawn decides otherwise after P7 <span class="confirm">confirmed 2026-11-01</span>. A new look approved in a lab gets its own small port phase, using the same harness and definition of done.</li>
 <li><b>Final Python retirement</b> is a decision at the end of P7, not a date. When Shawn moves look development to Rust (using kit examples and hot reload), tag <code>python-final</code> and delete <code>src/</code>, <code>tests/</code>, the labs and <code>pyproject.toml</code>. Nothing else moves, because Rust already sits at the root.</li>
 </ul>
 
@@ -566,7 +567,7 @@
 <p>Each phase exit gets one adversarial review by a fresh agent that has the code, the exit criteria and Shawn's rulings, but not the implementers' conclusions. It tries to break the claims: rerun the determinism checks, feed malformed documents, look for silently dropped bodies, check every "equal" metric against the raw numbers, and compare the look against the rulings (for example "no Voronoi flake chips" and "never clip at the tile edge"). Its findings go into the change log as entries with evidence, as revision 2's did. A phase does not exit with an open finding of "wrong fact" severity.</p>
 
 <h3>The change log</h3>
-<p>The analysis and plan keep their change log in <code>changelog.html</code>, with one revision section per change of plan, and each entry giving before, now and why. All Claude-written documents are HTML under <code>docs/</code>, generated and never edited by hand. For the code, a release log is generated from commit messages at P6 <span class="assume">assumed</span>, which replaces the layout page's hand-written root <code>CHANGELOG.md</code> to follow the HTML-only rule.</p>
+<p>The analysis and plan keep their change log in <code>changelog.html</code>, with one revision section per change of plan, and each entry giving before, now and why. All Claude-written documents are HTML under <code>docs/</code>, generated and never edited by hand. For the code, a release log is generated from commit messages at P6 <span class="confirm">confirmed 2026-11-01</span>, which replaces the layout page's hand-written root <code>CHANGELOG.md</code> to follow the HTML-only rule.</p>
 
 <h2 id="kill">Kill and pivot criteria</h2>
 <div class="tbl"><table>
@@ -583,13 +584,13 @@
 </tbody></table></div>
 
 <h2 id="first">The first two weeks</h2>
-<p>A task-level checklist for P0. Ticks are saved only in your browser. "Agent" tasks are done by Claude agents; "Shawn" tasks need Shawn in person.</p>
+<p>A task-level checklist for P0. Ticks recorded by the plan itself are fixed; other ticks are saved only in your browser. "Agent" tasks are done by Claude agents; "Shawn" tasks need Shawn in person.</p>
 <h3>Week 1 (2 to 6 Nov)</h3>
 <ul class="check" id="wk1">
-<li><input type="checkbox" id="c1"><span class="who own">Shawn</span><span>Day 1, 30 minutes: confirm or change the <a href="#defaults">assumed defaults</a>, especially 1 (print-scale details), 2 (determinism) and 4 (where new looks are invented).</span></li>
-<li><input type="checkbox" id="c2"><span class="who">Agent</span><span>Create branch <code>rust/p0</code>. Write the root <code>Cargo.toml</code> (virtual manifest), <code>rust-toolchain.toml</code> (check the current stable first), <code>.cargo/config.toml</code>, <code>deny.toml</code>, and the <code>.gitignore</code> entries for <code>out/</code> and <code>target/</code>.</span></li>
-<li><input type="checkbox" id="c3"><span class="who">Agent</span><span>Create <code>crates/dt-geom</code> with the <code>Mesh</code> and <code>Rays</code> traits, the <code>manifold-ffi</code> and <code>manifold-rust</code> features, and keyed seeds. Create <code>xtask/</code> with an empty <code>parity</code> command.</span></li>
-<li><input type="checkbox" id="c4"><span class="who">Agent</span><span>CI workflow: fmt, clippy, tests on 3 operating systems, the wasm check and cargo deny. Get it green on the empty crates.</span></li>
+<li class="done"><input type="checkbox" id="c1" checked disabled><span class="who own">Shawn</span><span>Day 1, 30 minutes: confirm or change the <a href="#defaults">defaults</a>, especially 1 (print-scale details), 2 (determinism) and 4 (where new looks are invented). Done 1 Nov 2026: all fifteen confirmed.</span></li>
+<li class="done"><input type="checkbox" id="c2" checked disabled><span class="who">Agent</span><span>Create branch <code>rust/p0</code>. Write the root <code>Cargo.toml</code> (virtual manifest), <code>rust-toolchain.toml</code> (check the current stable first), <code>.cargo/config.toml</code>, <code>deny.toml</code>, and the <code>.gitignore</code> entries for <code>out/</code> and <code>target/</code>.</span></li>
+<li class="done"><input type="checkbox" id="c3" checked disabled><span class="who">Agent</span><span>Create <code>crates/dt-geom</code> with the <code>Mesh</code> and <code>Rays</code> traits, the <code>manifold-ffi</code> and <code>manifold-rust</code> features, and keyed seeds. Create <code>xtask/</code> with an empty <code>parity</code> command.</span></li>
+<li class="done"><input type="checkbox" id="c4" checked disabled><span class="who">Agent</span><span>CI workflow: fmt, clippy, tests on 3 operating systems, the wasm check and cargo deny. Get it green on the empty crates.</span></li>
 <li><input type="checkbox" id="c5"><span class="who">Agent</span><span>R1 capture: write <code>tests/parity/capture/booleans.py</code>. It wraps manifold3d from outside and records the operands of every boolean for rockpile 1×1 at seed 1, the 2×2 massif, and <code>2x2-grass-tree</code>. Save them as binary mesh files in the scratch area, not in git.</span></li>
 <li><input type="checkbox" id="c6"><span class="who">Agent</span><span>R1 replay in <code>dt-geom/examples/r1_replay.rs</code> on both backends: watertightness, volume, triangle count, time and memory. Include the R9 original-ID check.</span></li>
 <li><input type="checkbox" id="c7"><span class="who">Agent</span><span>R6: write the three KDL tiles. Write the <code>dt-doc</code> decode spike with spans, and the edit round trip.</span></li>
@@ -607,26 +608,26 @@
 </ul>
 <p class="small muted">Shawn's time in the first two weeks is about 2 hours, in three sittings.</p>
 
-<h2 id="defaults">Assumed defaults (please confirm)</h2>
-<p>Each one is the default recommended on the overview, architecture or layout page. The plan proceeds on these. Changing one later moves work but does not block it.</p>
+<h2 id="defaults">Confirmed defaults</h2>
+<p>Each one is the default recommended on the overview, architecture or layout page. Shawn confirmed all fifteen on 1 Nov 2026 ("They look good. Let's proceed with phase zero."). Changing one later moves work but does not block it.</p>
 <div class="tbl"><table>
-<thead><tr><th>#</th><th>Question</th><th>Assumed</th><th>Affects</th></tr></thead>
+<thead><tr><th>#</th><th>Question</th><th>Decision</th><th>Affects</th></tr></thead>
 <tbody>
-<tr><td>1</td><td>Do print-scale details scale with the square?</td><td>No. Layout is in squares and h. Rocks, blades and grain are built in true mm and printed lines, so an OpenLOCK build keeps their size. <span class="assume">assumed</span></td><td>P2 onwards, P5 (OpenLOCK)</td></tr>
-<tr><td>2</td><td>How identical must two builds be?</td><td>Byte-identical on one machine; visually identical across machines. <span class="assume">assumed</span></td><td>P0 R2, CI</td></tr>
-<tr><td>3</td><td>The acceptance test</td><td>Side-by-side render review over 4 seeds, plus the numbers in each phase's exit. <span class="assume">assumed</span></td><td>All look phases</td></tr>
-<tr><td>4</td><td>Where are new looks invented?</td><td>In the Python labs until after P7, then decided again. <span class="assume">assumed</span></td><td>P6, P7, Python retirement</td></tr>
-<tr><td>5</td><td>Is plan-then-build the answer to the lazy model?</td><td>Yes. <span class="assume">assumed</span></td><td>P1</td></tr>
-<tr><td>6</td><td>Add anywhere, remove only inside <code>self</code>; the OpenLOCK z = 0</td><td>Yes. z = 0 is the top of the connector for both systems, and the connector owns everything below it. <span class="assume">assumed</span></td><td>P1, P5</td></tr>
-<tr><td>7</td><td>Labs first, cliff last</td><td>Yes, refined so the library cutover comes before the cliff. <span class="assume">assumed</span></td><td>Order</td></tr>
-<tr><td>8</td><td>KDL instead of YAML-like</td><td>Yes. <span class="assume">assumed</span></td><td>P0 R6</td></tr>
-<tr><td>9</td><td>Repository layout</td><td>Rust at the repo root; no crates.io (<code>dt-</code> names, <code>publish = false</code>); <code>out/</code>; <code>~/Documents/dharmatiles</code>; config in <code>~/.config</code>; <code>lib:</code>; the one name <code>dharmatiles</code> with no alias. <span class="assume">assumed</span></td><td>P0, P6</td></tr>
-<tr><td>10</td><td>Licence</td><td>Code MIT OR Apache-2.0. The tile library and renders are undecided, and must be decided before the first public release (P6). <span class="assume">assumed</span></td><td>P6</td></tr>
-<tr><td>11</td><td>Phones</td><td>View and edit first; building on the phone later. <span class="assume">assumed</span></td><td>P8</td></tr>
-<tr><td>12</td><td>Ground edge level (the labs disagree: 3.4 mm or 4.0 mm)</td><td>3.4 mm, as in grasslab and shorelab, checked with a test print in P3. <span class="assume">assumed</span></td><td>P2, P3</td></tr>
-<tr><td>13</td><td><code>Flowers</code> (one tile, not one of the twelve looks)</td><td>Not ported in v1. The tile stays in Python until decided at P6. <span class="assume">assumed</span></td><td>P6</td></tr>
-<tr><td>14</td><td>Cliff overhang budget</td><td>≤ 2 mm² per tile and 0 see-through holes. <span class="assume">assumed</span></td><td>P7</td></tr>
-<tr><td>15</td><td>The code's change log</td><td>Generated from commits; no hand-edited markdown. <span class="assume">assumed</span></td><td>P6</td></tr>
+<tr><td>1</td><td>Do print-scale details scale with the square?</td><td>No. Layout is in squares and h. Rocks, blades and grain are built in true mm and printed lines, so an OpenLOCK build keeps their size. <span class="confirm">confirmed 2026-11-01</span></td><td>P2 onwards, P5 (OpenLOCK)</td></tr>
+<tr><td>2</td><td>How identical must two builds be?</td><td>Byte-identical on one machine; visually identical across machines. <span class="confirm">confirmed 2026-11-01</span></td><td>P0 R2, CI</td></tr>
+<tr><td>3</td><td>The acceptance test</td><td>Side-by-side render review over 4 seeds, plus the numbers in each phase's exit. <span class="confirm">confirmed 2026-11-01</span></td><td>All look phases</td></tr>
+<tr><td>4</td><td>Where are new looks invented?</td><td>In the Python labs until after P7, then decided again. <span class="confirm">confirmed 2026-11-01</span></td><td>P6, P7, Python retirement</td></tr>
+<tr><td>5</td><td>Is plan-then-build the answer to the lazy model?</td><td>Yes. <span class="confirm">confirmed 2026-11-01</span></td><td>P1</td></tr>
+<tr><td>6</td><td>Add anywhere, remove only inside <code>self</code>; the OpenLOCK z = 0</td><td>Yes. z = 0 is the top of the connector for both systems, and the connector owns everything below it. <span class="confirm">confirmed 2026-11-01</span></td><td>P1, P5</td></tr>
+<tr><td>7</td><td>Labs first, cliff last</td><td>Yes, refined so the library cutover comes before the cliff. <span class="confirm">confirmed 2026-11-01</span></td><td>Order</td></tr>
+<tr><td>8</td><td>KDL instead of YAML-like</td><td>Yes. <span class="confirm">confirmed 2026-11-01</span></td><td>P0 R6</td></tr>
+<tr><td>9</td><td>Repository layout</td><td>Rust at the repo root; no crates.io (<code>dt-</code> names, <code>publish = false</code>); <code>out/</code>; <code>~/Documents/dharmatiles</code>; config in <code>~/.config</code>; <code>lib:</code>; the one name <code>dharmatiles</code> with no alias. <span class="confirm">confirmed 2026-11-01</span></td><td>P0, P6</td></tr>
+<tr><td>10</td><td>Licence</td><td>Code MIT OR Apache-2.0. The tile library and renders are undecided, and must be decided before the first public release (P6). <span class="confirm">confirmed 2026-11-01</span></td><td>P6</td></tr>
+<tr><td>11</td><td>Phones</td><td>View and edit first; building on the phone later. <span class="confirm">confirmed 2026-11-01</span></td><td>P8</td></tr>
+<tr><td>12</td><td>Ground edge level (the labs disagree: 3.4 mm or 4.0 mm)</td><td>3.4 mm, as in grasslab and shorelab, checked with a test print in P3. <span class="confirm">confirmed 2026-11-01</span></td><td>P2, P3</td></tr>
+<tr><td>13</td><td><code>Flowers</code> (one tile, not one of the twelve looks)</td><td>Not ported in v1. The tile stays in Python until decided at P6. <span class="confirm">confirmed 2026-11-01</span></td><td>P6</td></tr>
+<tr><td>14</td><td>Cliff overhang budget</td><td>≤ 2 mm² per tile and 0 see-through holes. <span class="confirm">confirmed 2026-11-01</span></td><td>P7</td></tr>
+<tr><td>15</td><td>The code's change log</td><td>Generated from commits; no hand-edited markdown. <span class="confirm">confirmed 2026-11-01</span></td><td>P6</td></tr>
 </tbody></table></div>
 
 <h2>Words used on this page</h2>
@@ -731,7 +732,7 @@
   // Checklist, saved per viewer only.
   const KEY = "dt-plan-checks";
   let st = {}; try { st = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { st = {}; }
-  document.querySelectorAll(".check input").forEach(c => {
+  document.querySelectorAll(".check input:not([disabled])").forEach(c => {
     c.checked = !!st[c.id]; c.closest("li").classList.toggle("done", c.checked);
     c.addEventListener("change", () => { st[c.id] = c.checked; c.closest("li").classList.toggle("done", c.checked); try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} });
   });
