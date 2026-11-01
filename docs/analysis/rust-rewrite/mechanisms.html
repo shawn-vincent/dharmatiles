@@ -1,0 +1,208 @@
+<title>Few Mechanisms, Many Outcomes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="dt.css">
+<style>
+  #flow text { font: 11.5px var(--body); fill: currentColor; }
+  #flow .prim text { font: 600 12.5px var(--mono); }
+  #flow .dim { opacity: .14; }
+  #flow .node { cursor: pointer; }
+  .prims { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .prims .card { min-width: 0; }
+  .prims .sig { font: 12.5px/1.5 var(--mono); background: var(--panel); padding: 8px 10px; border-radius: 3px; margin: 8px 0; overflow-x: auto; white-space: pre; }
+  .prims .card h3 { display: flex; gap: 8px; align-items: baseline; }
+  .om td, .om th { text-align: center; padding: 5px 4px; }
+  .om td:first-child, .om th:first-child { text-align: left; white-space: nowrap; }
+  .om th.rot { height: 110px; vertical-align: bottom; }
+  .om th.rot span { writing-mode: vertical-rl; transform: rotate(180deg); font-family: var(--mono); text-transform: none; letter-spacing: 0; }
+  .om .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+  .before-after text { font: 12px var(--mono); fill: currentColor; }
+</style>
+
+<nav class="top"><div class="wrap">
+  <span class="brand">dharmatiles → Rust</span>
+  <a href="https://claude.ai/artifact/GBiwhTV3inCuS3cRiWnTeQ">Overview</a>
+  <a href="https://claude.ai/artifact/2jNLv6TLfXb9KDGe1P9Qpq">The library</a>
+  <a href="https://claude.ai/artifact/TqPP2AdFA6myvCtajfsoJT">The labs</a>
+  <a href="https://claude.ai/artifact/L6b4xLyS5jvvCiv4qCMbiG">Surface variants</a>
+  <a href="https://claude.ai/artifact/UDN1YXkRKN6ALB5CT2oBSf" aria-current="page">Mechanisms</a>
+  <a href="https://claude.ai/artifact/PL6bEs3ypyDCqmfRLAG77g">Target architecture</a>
+  <a href="https://claude.ai/artifact/Faqo5xnsCW9MHe6F2UNDtW">Rust feasibility</a>
+  <a href="https://claude.ai/artifact/CV72ayvAdd45791Jo3JZrP">Project layout</a>
+  <a href="https://claude.ai/artifact/CTFfwg21B8MWe5oEaX61pD">Project plan</a>
+  <a href="https://claude.ai/artifact/B2iunR3sEpTndvL2MhFBdt">Changes</a>
+  <a href="https://claude.ai/artifact/4qGq8BTBfjJYrv4NnrBgxz">Notes</a>
+</div></nav>
+
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">Page 5 of 11 · consolidation · revision 2</div>
+  <h1>Few mechanisms, many outcomes</h1>
+  <p class="lede">The library and the seven labs contain about seventy separately written mechanisms. In the engine they reduce to five kinds of value, ten operations and three contracts. Each approved look becomes one built-in that combines a handful of these. Tile documents name the built-ins; they don't call the operations directly.</p>
+</header>
+
+<div class="rev"><p><strong>Revised.</strong> The first draft claimed seven verbs (<code>scatter, trace, build, relieve, seat, fill, pack</code>) and that every approved surface was a short composition of them "with no special mechanism". Walking each lab through them disproved that. <code>relieve</code> merged face relief (a depth raster subtracted from the stone) with grain (refine and displace). <code>pack</code> merged the cliff's gravity stack with wall courses, which have no gravity at all. Stroke blades are a stack of 2D layers, not a sweep. The set below is the corrected one. See the <a href="https://claude.ai/artifact/B2iunR3sEpTndvL2MhFBdt">change log</a>.</p></div>
+<h2>The engine set</h2>
+<figure class="diagram">
+<svg viewBox="0 0 1080 300" role="img" aria-label="Five values, ten kit operations and three cross-cutting contracts; operations take values and produce values.">
+  <g font-family="IBM Plex Mono, monospace" font-size="13" fill="currentColor">
+    <text x="0" y="20" font-family="IBM Plex Sans, sans-serif" font-weight="700">Values (nouns)</text>
+    <g id="vals"></g>
+    <text x="0" y="120" font-family="IBM Plex Sans, sans-serif" font-weight="700">Operations (used inside built-ins; field operations such as noise, distance and flow sit under Field)</text>
+    <g id="verbs"></g>
+    <text x="0" y="222" font-family="IBM Plex Sans, sans-serif" font-weight="700">Contracts (apply to every value and verb)</text>
+    <g id="contracts"></g>
+  </g>
+</svg>
+<figcaption>Values are what operations pass to each other. Operations are what built-ins are written with. Contracts hold everywhere without being asked: each call has a derived seed, each result is printable, each solid carries a material.</figcaption>
+</figure>
+
+<h2>Where every mechanism goes</h2>
+<p>Each line on the left is a mechanism found in the code. Each line on the right is an outcome Shawn approved. Click a primitive in the middle to isolate it. Some mechanisms map to two primitives; the fieldstone wall, for example, is both <code>partition</code> (cracks first) and <code>loft</code> (each unit morphed from its outline).</p>
+<div class="controls" id="flow-ctl"><button data-k="all" aria-pressed="true">Show all</button></div>
+<figure class="diagram">
+<svg id="flow" viewBox="0 0 1080 1180" role="img" aria-label="Sankey-like map from about seventy implementations in the library and labs, through eighteen primitives, to the outcomes they produce."></svg>
+<figcaption>Left: implementations, each tagged with its source (<em>lib</em> = <code>src/dharmatiles</code>, otherwise a lab name). Middle: the primitive it becomes. Right: the outcomes that primitive takes part in. Line thickness is uniform; the number of lines is what matters.</figcaption>
+</figure>
+
+<h2>Before and after</h2>
+<figure class="diagram before-after">
+<svg viewBox="0 0 1000 380" role="img" aria-label="Count of separate implementations per concept today versus one primitive after consolidation.">
+  <g id="ba"></g>
+</svg>
+<figcaption>Separate implementations of each concept today (grey) compared with the single primitive that replaces them (green). Counts cover the library and the labs together unless a row says otherwise; "≈" marks counts that depend on grouping. Revision 2 re-counted the library: noise has about 15 sites using 5 algorithms, and only 2 of the library's overhang checks are real audits.</figcaption>
+</figure>
+
+<h2>The primitives in detail</h2>
+<p class="muted small">Signatures are sketches of the Rust kit API, not document syntax. Each card lists the outcomes the primitive takes part in and the code it replaces.</p>
+<div class="prims" id="prims"></div>
+
+<h2>Which operations each look uses</h2>
+<p>Each approved look uses between one and ten primitives. The composition happens inside the look's built-in, in Rust, together with the look's own tuned constants (the meadow has fifteen rim-steering constants; the cliff has dozens of guard and seat rules). That is why the first draft's claim that "no row needs a special mechanism" was wrong: the primitives are shared, but each look is still its own solver.</p>
+<div class="tbl"><table class="om" id="om"></table></div>
+
+<h2>Mechanisms that looked the same but are not</h2>
+<p>Each card is a merge the first draft made on paper that the code does not support, and what replaced it.</p>
+<div class="grid3">
+  <div class="card"><h3>Stroke blades are layers, not a sweep</h3><p class="small">Each 0.2 mm layer is its own 2D stroke over a different span of the spine, a whole number of 0.45 mm lines wide. The layers are lofted through 2D distance fields, then sheared onto the hills (grasslab.py:812–911). A sweep moves one profile along a curve. Now: <code>loft</code> with a layer-stack mode, plus drape.</p></div>
+  <div class="card"><h3>Gravity stack and wall courses</h3><p class="small">The cliff stack picks the lowest unfilled cell, grows a footprint, fits a bed and may merge crumbs into earlier stones (rockpile.py:554–782). Wall courses are a deterministic split of a known rectangle with no gravity (masonry.py:286–365). Fieldstone draws cracks first. Now: <code>partition</code> with three methods.</p></div>
+  <div class="card"><h3>Face relief and grain</h3><p class="small">Cliff face relief ray-casts each stone into a depth grid, clamps it, lifts it and subtracts it, one-sided and crisp (rockpile.py:1255–1332). Grain refines the mesh and pushes vertices along normals (rocklab.py:283). Dirt relief is plain grid arithmetic before lift. Now: <code>relief</code>, <code>grain</code>, and field operations.</p></div>
+  <div class="card"><h3>Seat has several bed rules</h3><p class="small">Meadow rocks use a 35th-percentile bed and a plinth. Cliff stones get an underside of cones at the overhang limit. Scree sits at the lowest ground minus a sink. rocklab uses a fixed sink. Now: one <code>seat</code> with a named bed rule.</p></div>
+  <div class="card"><h3>Swell is a solver, not relief</h3><p class="small">Geodesic distance through water, a per-kind band table, coherence growth, a wake that couples rock to land, enclosure, corner and far sources, then global normalisation (waterlab.py:719–944). Only the last step displaces a surface. Now: a native water built-in that uses field operations and <code>fill</code>.</p></div>
+  <div class="card"><h3>Space colonisation returns a graph</h3><p class="small">Attractor-ownership growth with a whole-graph radius pass afterwards (skeleton.py:529). The tubes need C1 tangents at forks and bark lines threaded across edges. Now: <code>trace</code> returns an attributed graph and <code>loft</code> can follow a graph.</p></div>
+</div>
+</div>
+
+<script>
+const NS="http://www.w3.org/2000/svg";
+const P = {
+  region:{k:"region",n:"Region",color:"var(--c-compose)",sig:"region { lines: [shore], fill: [(1.8, 1.0)] }\noffset(line, d) · contour(field, level)",does:"Paint-bucket areas bounded by named lines and the perimeter. Derived lines feed the same bucket. Soft areas are fields, not regions.",out:["regions, shores, strips"]},
+  field:{k:"field",n:"Field",color:"var(--c-field)",sig:"noise(seed, scale, octaves)  // position-keyed\ndistance(mask | tag, metric: euclid | geodesic)\nerode · close · blur(mask) · smax · quantile · slope_cap\nflow(swing, meander).wrap(shapes).steer(line)\ngrooves(curves, profile, pinch, lip)",does:"Grids of values over the plane (or a face frame): noise, distance, morphology, remaps, flow, fields drawn from curves. Fields that need the whole grid (quantiles, slope cap, normalisation) are allowed.",out:["hills, dirt, swell, variability","flow fields","wave trains","zones, densities"]},
+  points:{k:"points",n:"Points",color:"var(--c-place)",sig:"points { pos, radius, attrs }",does:"Placements carrying a radius and attributes such as size class or kind.",out:["instances"]},
+  curves:{k:"curves",n:"Curves",color:"var(--c-place)",sig:"bezier · polyline · graph { nodes, edges, radius }",does:"Lines, paths, networks and attributed graphs.",out:["lines","skeletons","crack nets"]},
+  solid:{k:"solid",n:"Solid",color:"var(--c-solid)",sig:"solid { mesh, material, kind, owner_path }",does:"A manifold mesh carrying a user-named material, a kind (rock, reed, wall…) and the path of the entry that made it.",out:["everything printed"]},
+  scatter:{k:"scatter",n:"scatter",color:"var(--c-place)",sig:"scatter(density, spacing, order: largest|lowest,\n        until: coverage(20%),\n        on: plane | along(curves) | surface(solid))",does:"Places points from a density and a spacing rule against what exists, in a chosen order, until a target. Replaces uniform, Voronoi-grouped, jitter, Poisson, darts, farthest-point, k-means, coverage fill and satellite placement.",out:["rocks, scree, pebbles","clods","grass strands","leaves","clearings"]},
+  partition:{k:"partition",n:"partition",color:"var(--c-compose)",sig:"partition(target, method: gravity | courses | tessellate,\n          kinds, bond, min_piece)",does:"Splits a target into units. Gravity fills a target heightfield from the lowest pocket (cliff). Courses split a wall rectangle with a bond. Tessellate draws the crack network first (fieldstone).",out:["cliffs","walls","floors"]},
+  trace:{k:"trace",n:"trace",color:"var(--c-place)",sig:"trace(field, from: points, length, stop: [predicates])\ntrace(walk, network: true, stop: [edges, curves])\ntrace(colonise, attractors) -> graph",does:"Curves from fields (streamlines, with per-curve stop rules), random-walk networks that stop at earlier curves, and space colonisation that returns an attributed graph.",out:["grass strands and fronds","crack networks","tree skeletons"]},
+  carve:{k:"carve",n:"carve",color:"var(--c-solid)",sig:"carve(hull | prism, planes, guard: [loss, fin, undercut])\nround(r) · boolean(union | difference | intersection)",does:"Builds a solid by intersecting half-spaces with a hull or prism, with guards that reject a cut that loses too much, thins a fin or undercuts a neighbour. Also holds rounding and general booleans.",out:["rocks, pebbles, cliff stones","wall units","chips"]},
+  loft:{k:"loft",n:"loft",color:"var(--c-solid)",sig:"loft(curve | graph, profile, morph)\nloft(layers: [outline_k], blur, drape: ground)",does:"A profile along a curve or a graph (C1 at forks), a morphing profile, or a stack of 2D layer outlines blended into one solid (stroke blades).",out:["blades, reeds, branches","fieldstone units","bases"]},
+  lift:{k:"lift",n:"lift",color:"var(--c-solid)",sig:"lift(heightfield, frame: world | face, adaptive: tol)",does:"Turns a heightfield into a watertight solid with adaptive triangulation. One grid convention.",out:["ground","water","dirt on tops","relief solids"]},
+  relief:{k:"relief",n:"relief",color:"var(--c-finish)",sig:"relief(solid, frames, field, clamp: overhang - 8°, wall)",does:"Depth raster of a solid in a face frame, plus a field, clamped for overhang, lifted and subtracted. One-sided and crisp.",out:["cliff faces","cliff core"]},
+  grain:{k:"grain",n:"grain",color:"var(--c-finish)",sig:"grain(solid, field3d, refine: 0.25mm,\n      weight: [edges, base, facing])",does:"Refines a mesh and pushes vertices along smoothed normals by a 3D field, with masks. No overhang guarantee beyond the masks, so amplitudes stay small.",out:["rock grain","stone texture"]},
+  seat:{k:"seat",n:"seat",color:"var(--c-compose)",sig:"seat(solid, bed: quantile | plane | cones(overhang) | min_ground,\n     sink, plinth, clear_above)",does:"Puts a planned solid onto what is below, with a named bed rule, a sink or plinth, and clearance above neighbours.",out:["rocks in meadow","wet rocks","stones in dirt","cliff stones","wall bases"]},
+  fill:{k:"fill",n:"fill",color:"var(--c-compose)",sig:"fill(surface: level + field, where: top < level,\n     margin: 0.6mm, else: bury(0.3mm), material)",does:"Per column, raises the top to a surface wherever the ground is below it, with a margin, burying it elsewhere. Water over the whole tile; dirt collecting on rock tops.",out:["water","dirt on rock tops"]},
+  seed:{k:"seed",n:"seed tree",color:"var(--c-rand)",sig:"seed(node) = H(seed(parent), node.name)\nitem seed = H(entry seed, item index)",does:"Every call gets a seed derived from its stable name, never from its position or from a shared stream, so inserting an entry doesn't reroll its neighbours and threads can't change results.",out:["determinism","variety"]},
+  printer:{k:"printer",n:"printer profile",color:"var(--c-guard)",sig:"printer { line: 0.45mm, layer: 0.2mm, overhang: 55° }",does:"Built-ins read the profile to guarantee printability by construction. One audit at the end gates the build and paints violations red.",out:["printability","export safety"]},
+  material:{k:"material",n:"material → colour",color:"var(--c-finish)",sig:"material: user-named (heroic_rock, mud, …)\ncolour: base + convexity + AO + elevation",does:"Material names survive booleans through Manifold's original IDs. Procedural colour uses the same code as the lab paint previews.",out:["previews","painted 3MF"]}
+};
+const order=["region","field","points","curves","solid","scatter","partition","trace","carve","loft","lift","relief","grain","seat","fill","seed","printer","material"];
+
+// minimal-set svg
+(() => {
+  const mk=(g,ids,y)=>{ let x=0; ids.forEach(id=>{ const p=P[id]; const w=p.n.length*7.9+24; const r=document.createElementNS(NS,"rect"); r.setAttribute("x",x); r.setAttribute("y",y); r.setAttribute("width",w); r.setAttribute("height",40); r.setAttribute("rx",20); r.setAttribute("fill","none"); r.setAttribute("stroke",p.color); r.setAttribute("stroke-width",2); g.appendChild(r);
+    const t=document.createElementNS(NS,"text"); t.setAttribute("x",x+w/2); t.setAttribute("y",y+25); t.setAttribute("text-anchor","middle"); t.setAttribute("fill",p.color); t.textContent=p.n; g.appendChild(t); x+=w+10; }); };
+  mk(document.getElementById("vals"),["region","field","points","curves","solid"],34);
+  mk(document.getElementById("verbs"),["scatter","partition","trace","carve","loft","lift","relief","grain","seat","fill"],134);
+  mk(document.getElementById("contracts"),["seed","printer","material"],236);
+})();
+
+// implementations: [label, source, primitives[]]
+const IMPL=[
+ ["blurred white noise ×6","lib",["field"]],["value noise ×2","lib",["field"]],["sums of sines ×5","lib",["field"]],["_smooth01 / fades ×16","lib + 7 labs",["field"]],
+ ["scipy EDT (7 files)","lib",["field"]],["geodesic Dijkstra","waterlab",["field"]],["blur within mask","waterlab",["field"]],["wᵖ partition / chaos sum","waterlab",["field"]],
+ ["smax layering","dirtlab",["field"]],["angle field + meander","grasslab",["field"]],["steer_rim / steer_shore","grasslab, shorelab",["field"]],["rock wrap eyes","meadowlab",["field"]],
+ ["zone field","clifflab",["field"]],["tide edge sine","lib, waterlab",["field","printer"]],["region flood fill","lib",["region"]],["Boundary strip","lib",["region"]],
+ ["mud band (no-grass mask)","shorelab",["field"]],["soil lenses / aprons","grasslab, meadowlab",["scatter","field"]],["distribute.py uniform/voronoi","lib",["scatter"]],
+ ["soil / thatch placement","lib",["scatter"]],["StoneField farthest-pt","lib",["scatter"]],["tree k-means","lib",["scatter"]],["leaf Poisson (organic)","lib",["scatter"]],
+ ["dart throw largest-first","rocklab",["scatter"]],["poisson_sites ×2","grasslab, waterlab",["scatter"]],["clods / pebble stamps","dirtlab",["scatter","field"]],["coverage filler 20%","meadowlab",["scatter"]],
+ ["scree placement","clifflab",["scatter","seat"]],["RK2 streamlines","grasslab",["trace"]],["_crack_net walk","clifflab",["trace","field"]],["engrave_cracks","lib",["trace","relief"]],
+ ["fieldstone tessellation","lib",["partition","loft"]],["space colonisation","lib",["trace"]],["boundary splines","lib",["curves","trace"]],
+ ["facet planes + chips","rocklab",["carve"]],["_Cutter dressing","clifflab",["carve","printer"]],["smooth-max block kernel","lib",["carve"]],
+ ["Bézier tubes","lib",["loft"]],["reeds extrude+warp","shorelab",["loft"]],["stroke layer loft","grasslab",["loft","printer"]],["heightmap solid ×3","lib, waterlab",["lift"]],
+ ["round_edges ×2 · blur_remesh · Taubin · buffers","lib, clifflab",["carve"]],["stone_relief","lib",["grain"]],["rock texture fBm","rocklab",["grain"]],
+ ["_relief (face depth raster)","clifflab",["relief"]],["_grain isotropic","clifflab",["grain"]],["dirt_relief","dirtlab",["field","lift"]],["swell solver","waterlab",["field","fill"]],
+ ["stamp routines ×6","lib",["seat"]],["80th-pct seat ×2","lib",["seat"]],["seat_rocks + plinth","meadowlab",["seat"]],["_seat cones at 55°","clifflab",["seat","printer"]],
+ ["sink + footprint slice","waterlab, dirtlab",["seat"]],["flood z=max(land,water)","waterlab",["fill"]],["water slab − soil","lib",["fill"]],["_dirt_layer closing","clifflab",["fill","field"]],
+ ["gravity stack","clifflab",["partition"]],["masonry courses / bond","lib",["partition"]],["9 seed schemes","lib",["seed"]],["crc32 salts, +1000003","labs",["seed"]],["D[a:b].power(k)","lib",["seed"]],
+ ["overhang audit (lib 2 + labs 3)","lib + labs",["printer"]],["stl_safe ×3 · separate_pinches","lib + labs",["printer"]],["0.2 mm / 1.5 mm rule","dirtlab",["printer"]],["fit to tile","clifflab",["printer"]],
+ ["vertex paint ×3","labs",["material"]],["RGB15 STL · 3MF","lib",["material"]],["mesh-type tags","lib",["solid"]]];
+const OUT=[["Hills / undulation",["field","lift"]],["Dirt + clods",["field","scatter","lift"]],["Pebbles & scree",["scatter","carve","grain","seat"]],["Faceted rocks",["scatter","carve","grain","solid"]],
+ ["Heroic cliff",["field","partition","carve","trace","relief","grain","seat","fill","lift","printer"]],["Flowing grass",["field","scatter","trace","loft","printer"]],["Meadow interplay",["seat","scatter","field","solid"]],
+ ["Swell-chaos water",["field","fill","lift","solid"]],["Shore",["region","field","fill","scatter","loft"]],["Reeds",["scatter","loft"]],["Walls",["partition","carve","loft","grain","seat"]],
+ ["Floors (walls laid flat)",["partition","carve","grain"]],["Trees + leaves",["trace","loft","scatter","seat","points"]],["Bases / connector",["loft","printer"]],["Tile edge matching",["field","printer"]],
+ ["Painted 3MF / previews",["material"]],["Determinism",["seed"]]];
+
+// flow svg
+(() => {
+  const svg=document.getElementById("flow"); const rowH=16.4, x1=290, x2=420, x3=740;
+  const pY={}; order.forEach((id,i)=>pY[id]=40+i*((IMPL.length*rowH-40)/(order.length-1)));
+  const g=document.createElementNS(NS,"g"); svg.appendChild(g);
+  const el=(t,a)=>{ const e=document.createElementNS(NS,t); for(const k in a) e.setAttribute(k,a[k]); return e; };
+  const links=[], nodes=[];
+  IMPL.forEach((r,i)=>{ const y=20+i*rowH; r.prims=r[2]; r.y=y;
+    r[2].forEach(p=>{ const l=el("path",{d:`M${x1} ${y} C ${x1+70} ${y}, ${x2-70} ${pY[p]}, ${x2-6} ${pY[p]}`,fill:"none",stroke:P[p].color,"stroke-opacity":".55","stroke-width":"1.2"}); l.dataset.p=p; g.appendChild(l); links.push(l); });
+    const t=el("text",{x:x1-6,y:y+4,"text-anchor":"end"}); t.textContent=r[0]; const s=el("tspan",{fill:"var(--muted)"}); s.textContent="  "+r[1]; t.appendChild(s); t.dataset.ps=r[2].join(" "); g.appendChild(t); nodes.push(t); });
+  const outY=OUT.map((o,i)=>40+i*((IMPL.length*rowH-40)/(OUT.length-1)));
+  OUT.forEach((o,i)=>{ o[1].forEach(p=>{ const l=el("path",{d:`M${x2+120} ${pY[p]} C ${x2+220} ${pY[p]}, ${x3-120} ${outY[i]}, ${x3-6} ${outY[i]}`,fill:"none",stroke:P[p].color,"stroke-opacity":".45","stroke-width":"1.2"}); l.dataset.p=p; g.appendChild(l); links.push(l); });
+    const t=el("text",{x:x3,y:outY[i]+4}); t.textContent=o[0]; t.dataset.ps=o[1].join(" "); t.setAttribute("font-weight","600"); g.appendChild(t); nodes.push(t); });
+  const pg=el("g",{class:"prim"}); svg.appendChild(pg);
+  order.forEach(id=>{ const y=pY[id]; const gg=el("g",{class:"node",tabindex:"0",role:"button","aria-label":"Isolate "+P[id].n});
+    gg.appendChild(el("rect",{x:x2-4,y:y-13,width:128,height:26,rx:13,fill:"var(--bg)",stroke:P[id].color,"stroke-width":"2"}));
+    const t=el("text",{x:x2+60,y:y+4,"text-anchor":"middle",fill:P[id].color}); t.textContent=P[id].n; gg.appendChild(t);
+    gg.addEventListener("click",()=>iso(id)); gg.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); iso(id);} }); pg.appendChild(gg); gg.dataset.id=id; });
+  svg.setAttribute("viewBox",`0 0 1080 ${IMPL.length*rowH+30}`);
+  function iso(id){ links.forEach(l=>l.classList.toggle("dim", id!=="all" && l.dataset.p!==id)); nodes.forEach(n=>n.classList.toggle("dim", id!=="all" && !n.dataset.ps.split(" ").includes(id)));
+    pg.querySelectorAll(".node").forEach(n=>n.classList.toggle("dim", id!=="all" && n.dataset.id!==id));
+    document.querySelectorAll("#flow-ctl button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.k===id)); }
+  const ctl=document.getElementById("flow-ctl"); order.forEach(id=>{ const b=document.createElement("button"); b.dataset.k=id; b.textContent=P[id].n; b.setAttribute("aria-pressed","false"); b.addEventListener("click",()=>iso(id)); ctl.appendChild(b); });
+  ctl.querySelector('[data-k="all"]').addEventListener("click",()=>iso("all"));
+})();
+
+// before/after
+(() => {
+  const d=[["noise sites (lib)","≈15"],["seed schemes","9"],["fades (lib)","16"],["placement samplers","12"],["grid stamping routines","6"],["edge rounding","6"],["heightfield meshers","3"],["overhang audits (lib 2 + labs 3)","5"],["crack generators","3"],["export-safety checks","3"],["paint simulators","3"],["rock front-ends","3"],["grass front-ends","4"]];
+  const g=document.getElementById("ba"); const x0=230, sc=36;
+  d.forEach(([n,v],i)=>{ const y=10+i*28; const num=parseInt(v.replace("≈",""));
+    const t=document.createElementNS(NS,"text"); t.setAttribute("x",x0-10); t.setAttribute("y",y+15); t.setAttribute("text-anchor","end"); t.textContent=n; g.appendChild(t);
+    const r=document.createElementNS(NS,"rect"); r.setAttribute("x",x0); r.setAttribute("y",y+3); r.setAttribute("width",num*sc); r.setAttribute("height",16); r.setAttribute("fill","var(--stone)"); r.setAttribute("rx",2); g.appendChild(r);
+    const r2=document.createElementNS(NS,"rect"); r2.setAttribute("x",x0); r2.setAttribute("y",y+3); r2.setAttribute("width",sc); r2.setAttribute("height",16); r2.setAttribute("fill","var(--accent)"); r2.setAttribute("rx",2); g.appendChild(r2);
+    const l=document.createElementNS(NS,"text"); l.setAttribute("x",x0+num*sc+8); l.setAttribute("y",y+15); l.textContent=v+" → 1"; g.appendChild(l); });
+})();
+
+// cards
+(() => {
+  const c=document.getElementById("prims");
+  order.forEach(id=>{ const p=P[id]; const used=IMPL.filter(r=>r[2].includes(id)).map(r=>r[0]); const outs=OUT.filter(o=>o[1].includes(id)).map(o=>o[0]);
+    const d=document.createElement("div"); d.className="card";
+    d.innerHTML=`<h3><span class="swatch" style="background:${p.color}"></span>${p.n}</h3><div class="sig"></div><p class="small"></p><p class="small"><strong>Produces:</strong> ${outs.join(", ")||p.out.join(", ")}</p><p class="small muted"><strong>Replaces:</strong> ${used.join("; ")}</p>`;
+    d.querySelector(".sig").textContent=p.sig; d.querySelector("p").textContent=p.does; c.appendChild(d); });
+})();
+
+// outcome matrix
+(() => {
+  const t=document.getElementById("om"); let h="<thead><tr><th>Outcome</th>"+order.map(id=>`<th class="rot"><span>${P[id].n}</span></th>`).join("")+'<th class="num">#</th></tr></thead><tbody>';
+  OUT.forEach(o=>{ const all=new Set([...o[1],"seed","printer","material"]); h+=`<tr><td>${o[0]}</td>`+order.map(id=>`<td>${o[1].includes(id)?`<span class="dot" style="background:${P[id].color}"></span>`:(all.has(id)?'<span class="dot" style="background:var(--rule)"></span>':"")}</td>`).join("")+`<td class="num">${o[1].length}</td></tr>`; });
+  t.innerHTML=h+"</tbody>";
+})();
+</script>

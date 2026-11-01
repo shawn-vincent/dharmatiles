@@ -1,0 +1,400 @@
+<title>dharmatiles Surface Variants</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="dt.css">
+<style>
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 0 8px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 44px); background: var(--bg); padding-block: 8px; z-index: 4; }
+  .tabs button { font: 600 13px var(--body); }
+  .lane { margin: 10px 0 4px; }
+  .lane-name { font: 600 11.5px var(--mono); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 6px; }
+  .chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 0; }
+  .chain .arrow { color: var(--muted); padding: 0 6px; font: 14px var(--mono); }
+  .vnode { font: 500 12.5px var(--mono); padding: 6px 9px; border-radius: 4px; border: 1.5px solid; background: var(--card); cursor: pointer; color: var(--fg); }
+  .vnode[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .s-loved { border-color: var(--accent); } .s-current { border-color: var(--water); }
+  .s-superseded { border-color: var(--rule); } .s-rejected { border-color: var(--alert); border-style: dashed; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--muted); margin: 6px 0 14px; }
+  .legend span::before { content: ""; display: inline-block; width: 14px; height: 10px; border: 1.5px solid; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  .legend .l-loved::before { border-color: var(--accent); } .legend .l-current::before { border-color: var(--water); }
+  .legend .l-superseded::before { border-color: var(--rule); } .legend .l-rejected::before { border-color: var(--alert); border-style: dashed; }
+  .detail { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 24px; align-items: start; margin-top: 14px; padding: 18px; background: var(--card); border: 1px solid var(--rule); border-radius: 4px; }
+  @media (max-width: 860px) { .detail { grid-template-columns: minmax(0, 1fr); } }
+  .detail img { width: 100%; border-radius: 4px; display: block; }
+  .noimg { aspect-ratio: 4/3; display: grid; place-items: center; background: var(--panel); border-radius: 4px; color: var(--muted); font-size: 13px; text-align: center; padding: 20px; }
+  .pipe { display: flex; flex-wrap: wrap; gap: 6px 0; align-items: stretch; margin: 10px 0; }
+  .pipe .st { font-size: 12.5px; line-height: 1.35; padding: 7px 9px; background: var(--panel); border-radius: 3px; max-width: 220px; }
+  .pipe .st b { display: block; font: 600 10.5px var(--mono); color: var(--muted); margin-bottom: 2px; }
+  .pipe .ar { align-self: center; padding: 0 5px; color: var(--muted); }
+  .status { display: inline-block; font: 600 11px/1 var(--mono); text-transform: uppercase; letter-spacing: .08em; padding: 4px 6px; border-radius: 3px; }
+  .st-loved { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+  .st-current { background: color-mix(in srgb, var(--water) 18%, transparent); color: var(--water); }
+  .st-superseded { background: var(--panel); color: var(--muted); }
+  .st-rejected { background: color-mix(in srgb, var(--alert) 16%, transparent); color: var(--alert); }
+  .verdict-q { border-left: 3px solid var(--gold); padding-left: 12px; font-style: italic; margin: 10px 0; }
+  .strip img { width: 100%; border-radius: 4px; }
+  .kind-sec[hidden] { display: none; }
+  .newest { border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; margin: 18px 0; }
+</style>
+
+<nav class="top"><div class="wrap">
+  <span class="brand">dharmatiles → Rust</span>
+  <a href="https://claude.ai/artifact/GBiwhTV3inCuS3cRiWnTeQ">Overview</a>
+  <a href="https://claude.ai/artifact/2jNLv6TLfXb9KDGe1P9Qpq">The library</a>
+  <a href="https://claude.ai/artifact/TqPP2AdFA6myvCtajfsoJT">The labs</a>
+  <a href="https://claude.ai/artifact/L6b4xLyS5jvvCiv4qCMbiG" aria-current="page">Surface variants</a>
+  <a href="https://claude.ai/artifact/UDN1YXkRKN6ALB5CT2oBSf">Mechanisms</a>
+  <a href="https://claude.ai/artifact/PL6bEs3ypyDCqmfRLAG77g">Target architecture</a>
+  <a href="https://claude.ai/artifact/Faqo5xnsCW9MHe6F2UNDtW">Rust feasibility</a>
+  <a href="https://claude.ai/artifact/CV72ayvAdd45791Jo3JZrP">Project layout</a>
+  <a href="https://claude.ai/artifact/CTFfwg21B8MWe5oEaX61pD">Project plan</a>
+  <a href="https://claude.ai/artifact/B2iunR3sEpTndvL2MhFBdt">Changes</a>
+  <a href="https://claude.ai/artifact/4qGq8BTBfjJYrv4NnrBgxz">Notes</a>
+</div></nav>
+
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">Page 4 of 11 · every surface ever generated</div>
+  <h1>Surface variants, old to new</h1>
+  <p class="lede">Shawn asked: "I like the look of the last one, but I'm curious what the other ones, how they worked, and what's different about the new ones." This page answers that for each kind of surface. Each kind has a family tree, a pipeline for every variant, renders recovered from git history or rebuilt from existing STLs, a comparison table, an explanation of what changed in the version he likes, and the one parameterized definition the variants reduce to.</p>
+  <p class="small muted">Click any node in a family tree to see how that variant worked. Most images are renders committed at the time and recovered with <code>git show</code>. Some were rendered for this analysis from STLs already on disk, with over-limit faces in red; their captions say so. Variants with no surviving output are marked.</p>
+</header>
+
+<div class="tabs" id="tabs" role="tablist"></div>
+<div class="legend"><span class="l-loved">current, loved</span><span class="l-current">current</span><span class="l-superseded">superseded</span><span class="l-rejected">rejected</span></div>
+<div id="kinds"></div>
+</div>
+
+<script>
+const IMG = "img/variants/";
+const KINDS = {};
+
+KINDS.rocks = {
+  title: "Rocks and stones", lede: "Six generations in five months. The library chain grew from domes into weathered boulders. rocklab started again from scratch with plane-carved facets, and that is the look Shawn calls \"spectacular\".",
+  lanes: [["Rocks", ["R0","R1","R2","R3","R4","R5"]]],
+  strip: [["rock-cmp-scene-strip.jpg","Same scene (docs/rocks/rocks-judgment.tile.py) rebuilt from the library at a731abd^, 5b5e193, 4ec9fb8 and HEAD, plus rocklab: R1 → R5, left to right."],["rock-cmp-hero-strip.jpg","The tallest stone in each version, close up, R1 → R5."]],
+  v: {
+    R0:{n:"Gravel half-ellipsoids", d:"May 29 – Jun 1 · fea523e", s:"superseded", img:null, steps:["6000 pebbles, r 0.05–0.42 mm, power-law sizes","Half-ellipsoid ring mesh on the terrain","Per-vertex jitter (dropped the same day)","5 random cut planes, vertices projected onto them","Rasterised into support_z"], look:"Pebble gravel, chunked gumdrops.", why:"Grew into the dome kernel."},
+    R1:{n:"Dome kernel", d:"Jun 2 – Jul 4 · layers/rocks.py, 326 lines", s:"rejected", img:"rock-1-dome-kernel-hero.jpg", steps:["RocksConfig samples r, flat, cut, sink","Half-ellipsoid of 20 × 8 rings, vectorised","n_cuts planes; vertices projected","Uniform jitter for roughness","Rotate to the terrain normal; sink","Box-stamp support_z + obstacle_mask"], look:"Smooth domes with a few flat chops: melted gumdrops. Rocks perched on the ground rather than bedded in it, with no edges for paint to catch.", q:"the current domes suck", why:"The ellipsoid always showed through. Rocks also had to be hand-sized to stand above the thatch grass."},
+    R2:{n:"Faceted hull gen-1 (E1–E5)", d:"Jul 3 · scatter/stones.py", s:"superseded", img:"rock-2-faceted-hull-E5-hero.jpg", steps:["StoneSpec: footprint, class, facets, lean","Hull of M jittered Fibonacci directions","Seat on a stable face; bury to the widest slice","Overhang audit loop: n_z ≥ −0.72 or chord < 1.6 mm","Floor slice + 3 mm soil skirt","Random-walk V-cracks, subtracted with manifold"], look:"Crisp low-poly asteroids with big flat triangles. They read as cut, not cleaved.", q:"don't look like cracks AT ALL", why:"The 1.3 mm crack slots read as router pockets. The next step was to iterate until the stones looked natural, which became weathering."},
+    R3:{n:"Aged boulders (E6–E15)", d:"Jul 4 · shipped 4ec9fb8 · 1,337 lines", s:"superseded", img:"rock-3-aged-E15-shipped-hero.jpg", steps:["Hull + seat rotation, egg / crown_flat profile","Weather bites: face dishes + spall scars","Rolling-ball fillet with wobbling radius","Injective domain warp (cannot fold)","blur_remesh: marching cubes on blurred occupancy, then Taubin","Broadband 1/f relief, calm faces, one scar","Crack lofts, floor clip, float32 gate"], look:"Weathered river boulders: pillowy, soft edges, calm faces with one incident.", q:"this is amazing", why:"Approved when it shipped. It was later overtaken as the lab look by rocklab's crisp facets. The two are different regimes rather than better and worse: worn boulder against fresh fracture."},
+    R4:{n:"Common stone relief (E36/E37)", d:"Jul 5–6 · stone/ refactor · current library", s:"current", img:"rock-4-common-relief-E37-hero.jpg", steps:["Same hull and aging chain, moved into stone/","Isotropic value-noise fBm (no plane waves)","stone_relief: carve downward at about 7 mm, 55% plateau","Dish at footprint scale, curvature damping","Amplitudes per family; stats match the official floors"], look:"Almost the same silhouette as R3, with calmer plateaus and worn recesses. Walls and floors share it.", q:"it doesn't look good (plane-wave relief: choppy water, wrinkled fabric)", why:"Still the library's stone. For rocks, the labs now use rocklab."},
+    R5:{n:"rocklab facets", d:"Oct 27 · rocklab.py, 469 lines · current lab", s:"loved", img:"rock-5-rocklab-v1f-hero.jpg", steps:["Size D = 6 + 9·U^1.4 mm; a quarter are clusters","Dense lumpy body that never widens going up","Blue-noise facet planes, mixed radii, tilt ≤ 14°","Corner and edge chips, ≤ 3% loss each","Grain 0.12 mm at 0.45 mm, faded at the edges","Placed largest first, sunk into dirtlab dirt"], look:"Sharp mosaic of mixed-size facets with chipped corners and tooth. Measured overhang 0.00–0.02 mm². About 3 s per 2×2 tile.", q:"spectacular… I love your work", why:"Rejected along the way: dice chips, fracture scallops (\"horrible… just turn up the fine grain\"), harder tilt, flake scars."}
+  },
+  table: [["Variant","Look","Printability","Controls","Lines","Speed"],
+    ["R0 gravel","pebble domes","implicit","r, size_power, n_cuts","~150","trivial"],
+    ["R1 dome kernel","gumdrops, perched","half-ellipsoid","r, flat, cut, sink, roughness","326","~0.2 s / scene"],
+    ["R2 faceted hull","crisp low-poly, cracks","audit loop + bed-to-widest","StoneSpec (17 fields)","613–660","≪1 s"],
+    ["R3 aged","soft boulders","convex audit, float32, genus gates","+ roundover, scars, crown, micro","1,337","~1 s / scene"],
+    ["R4 common relief","R3 + carved plateaus","same","+ carve, scale, threshold (shared)","893 + 726","1.2 s / scene"],
+    ["R5 rocklab ★","mosaic facets, chips, grain","by construction: convex, n_z ≥ −0.5","~45 module constants","469","~3 s / 2×2"]],
+  newest: "The library starts from a sparse convex hull and spends eight stages softening it: fillet, bites, warp, voxel remesh, smoothing, relief. Every one of those stages blurs. rocklab starts from a dense lumpy body and only <em>removes</em> material, with planes at three scales: facets of 2–7 mm, chips of 0.2–0.9 mm, then a tiny grain. Variable-radius blue noise makes the facet sizes a mosaic by construction. Every edge stays a crisp intersection of two planes that catches drybrush. Convexity plus n<sub>z</sub> ≥ −0.5 makes it printable without an audit loop. It is also about a third of the code.",
+  shared: ["convex body from points","half-space carve with guards","seat / bed / sink","edge rounding","crack walks","masked fBm relief","dart-throw placement","overhang audit","float32 export"],
+  def: `define stone:
+  body:   hull(profile: dome | slab | block | wedge, lumps: angle_only(k: 2..5))
+  carve:  facets(spacing: 0.9mm..2.5mm * sqrt(size/15mm), tilt: 0°..14°)
+        + chips(at: edges > 18°, max_loss: 3%)
+  age:    none | weathered(roundover, bites, warp)     # R3/R4 regime
+  relief: grain(0.12mm @ 0.45mm) | carve_down(stone_relief)
+  rest:   sink(0.55mm) | seat(bed, plinth)
+# R1 dome    = body(dome), no carve
+# R2 hull    = few facets, no chips, cracks
+# R3/R4 aged = age: weathered, relief: carve_down
+# R5 rocklab = dense facets + chips + grain   (default)`
+};
+
+KINDS.cliffs = {
+  title: "Cliffs", lede: "Two whole approaches in two days. First, carving one surface (a depth map). Then building real stones under gravity. Within the second approach, rounds 1 to 11 added seating, column dressing and a joined crack network.",
+  lanes: [["Cliffs", ["C1","C2","C3","C4","C5","C6","C7"]]],
+  strip: [["cliff-cmp-1x1-run-strip.jpg","Same 1×1 run from existing clifflab/out STLs: rev 3 depth map · rev 6 depth-map blocks · rockmass · rockpile round 11."],["cliff-0-reference-sheet.jpg","The reference sheet of 16 painted cliff miniatures. B, H and N are the lab's target form."]],
+  v: {
+    C1:{n:"Depth map, revs 1–5", d:"Oct 30 · clifflab.py", s:"superseded", img:"cliff-1-depthmap-rev3.jpg", steps:["Bodies = plan footprints with face lines","Activity field: quiet / active / shattered 60/30/10","Face depth D(s,z): Voronoi masses, plates, ledges, V-fissures","Weathering F ← max(F, blur F)","Upward clamp at 42°: no overhang, no islands","Implicit field on 0.18 mm voxels → marching cubes"], look:"A carved wall of prismatic Voronoi masses with a V-crack network.", q:"spectacular… the best cliffs I've ever seen (rev 3)", why:"By rev 5 the limits had flattened the masses into a crack network on a flat wall. A depth map can't make stacked blocks with flat chipped tops."},
+    C2:{n:"Depth-map blocks, rev 6", d:"Oct 30", s:"rejected", img:"cliff-2-depthmap-rev6-blocks.jpg", steps:["Columns 3–12 mm along the face line","Blocks every 7–24 mm, snapped to strata","Masses step forward, blocks step back","Front plane + 4 chisel facets + 1 mm chamfer","Rest of C1: clamp, marching cubes, ends"], look:"Vertical columns of crisp blocks, but still relief on a single surface. Blocks have no backs and are not really stacked.", q:"the aesthetics have regressed… the sense of big piled-up slabs doesn't fit", why:"Replaced within the hour by approaches that build actual objects."},
+    C3:{n:"rockmass", d:"Oct 30 afternoon · abandoned", s:"rejected", img:"cliff-3-rockmass.jpg", steps:["Volume = union of footprint prisms","Recursive splits by tilted planes","Each surface cell becomes a rock, stepped out","45° support cut, chisel facets, chips, grain","Core = the volume shrunk back"], look:"A mosaic of tilted tiles stuck on a flat wall, with 132–324 mm² of overhang.", why:"Splitting space gives no gravity or support logic. It was abandoned within about an hour, with no recorded ruling; this reason is inferred from the renders."},
+    C4:{n:"rockpile gen-1 + forms", d:"Oct 30–31 · 58e8105 → 5b69555", s:"superseded", img:"cliff-4-rockpile-gen1-sweep.jpg", steps:["Form: target heightfield T (9 reference forms)","Stack: lowest pocket → stone kind → footprint → rest","Whole-plane cleaves while the stone is convex","45° keel under resting stones","Rocks − V-wedge fissures ∪ dirt ∪ ground ∪ scree"], look:"Tall stacked columns and blocks. For the first time it reads as a pile of real masses. About 54 s per 2×2.", why:"Next: seating, no clipping, and stronger grain."},
+    C5:{n:"Seated stones", d:"Oct 31 · 48af9ea, 34572d4", s:"superseded", img:"cliff-5-rockpile-seat-core-1x1.jpg", steps:["_seat: underside cones at 55° + 3° from the bed","_fit_tile: scale back at the edge, never clip","Grain ±0.4 mm at about 2 mm","Hidden core: support eroded 2 mm","Dirt film on tops; export retry"], look:"Gravity-stacked stones with no flat ceilings, a dark core in the joints and strong grain.", q:"45 is too conservative · clipping is bad", why:"Voronoi flake chips on every face were tried here and hated (reverted). After the s4 print, the fine texture didn't read and the back wall looked too flat."},
+    C6:{n:"Column dressing + plates", d:"Oct 31 · a1df7be · rounds 3–7 · 2,531 lines", s:"superseded", img:"cliff-6-rockpile-plates-r7.jpg", steps:["Union-find columns (≥ 60% shared footprint)","Dress each column: yaw 3–12°, batter −3…+10°","Split open faces into 2–6 tilted plates","Hairline cracks follow the creases","Guards against slivers, fans and fins"], look:"Faceted plates with crease cracks. Scored about 5/10 against reference N.", why:"Read as crumpled. Replaced by relief on each face with a joined network."},
+    C7:{n:"Face relief + joined crack network", d:"Oct 31 · 803ba4f · rounds 8–11 · current", s:"loved", img:"cliff-7-rockpile-relief-r11.jpg", steps:["Merge coplanar open faces across stones","Cracks start at the barest spot; walk until both ends hit something","V-groove (1.2–1.8 mm) + lip on the upper side, 50%","Ray-cast face depth; row clamp at 47°; blur","Heightfield solid subtracted in the face frame","One isotropic grain field across the whole tile"], look:"Crisp blocks whose faces carry a joined fracture network with lips. This is \"the last one\". About 30–35 s per 1×1 run.", why:"Still about 5/10 against reference N (\"ours read crumpled\"). Round 12 is in progress."}
+  },
+  table: [["Variant","Look","Printability","Controls","Lines","Speed"],
+    ["C1 depth map","carved Voronoi wall","42° upward clamp, voxel backstop","activity split, mass sizes","1,162 (C1+C2)","tens of s"],
+    ["C2 rev 6","blocks on one surface","same","columns, strata, chisels","(same file)","same"],
+    ["C3 rockmass","tiles on a wall","45° cut; 132–324 mm² overhang","cell W/H/D","423","~1 min"],
+    ["C4 gen-1","stacked masses, fissures","keels at 45°","FORMS, KINDS, zones, mass","1,090–1,510","~54 s / 2×2"],
+    ["C5 seated","+ seat, core, grain","seat cones at 55°, fit-not-clip","OVERHANG_DEG …","1,594–1,782","similar"],
+    ["C6 plates","plates + creases","+ fin and sliver guards","plates, creases","2,531","slower"],
+    ["C7 relief ★","joined fractures with lips","+ 47° row clamp, wall guard","walk, groove, lip","1,987","23–34 s / 1×1"]],
+  newest: "clifflab.py carved <em>one surface</em>, so blocks had no backs and no beds, and every structural cue had to be painted into relief. rockpile builds <strong>objects with a history</strong>. Stones are placed lowest-first under gravity toward a target silhouette, so joints, tiers, stand-backs and the staggered courses come out of the process rather than being drawn. Each stone is a real solid, dressed per column (so faces run across joints) and seated on its bed (so there are no ceilings by construction). Only then is each face given relief, with a crack network that ends on real edges. Each round could add detail without breaking printability, because the guarantees live in the construction.",
+  shared: ["target form (heightfield)","gravity partition","plane dressing with guards","seat at 55°","crack walk (joined)","face-frame relief","isotropic grain","fit to tile","dirt by closing"],
+  def: `define cliff:
+  form:    run | corner | canyon | escarpment | plateau | massif | mound | spire | needles
+  fill:    partition.gravity(kinds: {column 38%, block 38%, slab 12%, odd 6%, monolith 6%}, mass: per-form preset)
+        |  carve_surface(depth_map)        # C1/C2 regime, kept only as a value
+  dress:   per_column(yaw: 3°..12°, batter: -3°..10°)
+  faces:   relief(cracks: walk(joined, lip: 50%), clamp: 47°)
+  grain:   fbm(0.25mm @ 1.4mm, isotropic)
+  ground:  scree(apply: stone) + fill(close, film)
+  # C4 = partition + keel;  C5 = + seat;  C6 = + plates;  C7 = + joined face relief (default)`
+};
+
+KINDS.walls = {
+  title: "Walls and floors", lede: "One chassis (CutStoneWall) and four families. Fieldstone went through a complete reset: from one hull per stone to a crack network drawn first. Floors stopped being a separate system once \"a floor is a wall lying on its side\".",
+  lanes: [["Cut stone", ["W1","W2","W3","W4","W5","W6"]], ["Fieldstone", ["F1","F2","F3","F4","F5"]], ["Brick", ["B1","B2"]], ["Floors", ["FL1","FL3","FL4"]]],
+  strip: [["wall-variants-demo-render.jpg","Fieldstone range rendered from stl/test/demo-wall-variants-db.stl: slab, default, cobble, dressed."],["wall-openings-overview.jpg","Openings (doors, windows, hatches) across the families."]],
+  v: {
+    W1:{n:"Gen-1 hull + blur (E1–E4)", d:"Jul 4 · ad24cd0", s:"superseded", img:"wall-cut-e1-hull-blurremesh.jpg", steps:["Spine → face segments","Courses 5.5–8.5 mm, bays 11–20 mm, quoins alternate","Recessed core slab","Hull of a jittered box + 45° bottom chamfer","Round, blur-remesh σ 0.7, plane-wave relief","Union; flush cuts at tile seams"], look:"Chunky soft blocks with wide mortar and a plateau in the middle of each face.", q:"I should be able to see the ends of the bricks, and the mortar should be inset there as well.", why:"Ends were cut flush, joints were too wide, and there was a diagonal crease."},
+    W2:{n:"Round 2 + texture presets", d:"Jul 4 · 1aa7884", s:"superseded", img:"wall-cut-r2-texture-presets.jpg", steps:["Ends always textured","Joint 1.2 → 0.45 mm","Face centres pulled in","Presets: chipped, worn, hewn, dressed"], look:"The look that was approved. Later changes were all to the finish.", q:"incredible… beautiful"},
+    W3:{n:"Plane-wave aged relief", d:"stone refactor · 65f212c", s:"rejected", img:"wall-cut-e28-planewave-relief.jpg", steps:["aged_relief as the single texture pass","Sum of plane waves: broad 6 + grain 16"], look:"Directional corduroy on large flat faces.", q:"chop / wrinkled fabric"},
+    W4:{n:"Common stone relief (E36)", d:"Jul 6 · 9929d22, ff1a538", s:"superseded", img:"wall-cut-e36-stone-relief.jpg", steps:["Isotropic value-noise fBm","Carve down: −carve·smoothstep(fbm)","Dish + curvature damping","Hull jitter per ring × side (fixed the crease)"], look:"Calm plateaus with worn pits, matched to measured official pieces (RMS 0.32, skew −0.99).", q:"The floor was nice, the walls sucked. Undo that and fix the walls to look like the floor", why:"The finish was kept. Edge-weighted wear was rejected."},
+    W5:{n:"Rotated-frame remesh", d:"c85026e", s:"rejected", img:null, steps:["blur_remesh in a frame rotated about 35°"], look:"Horizontal banding, then washboard.", why:"Marching cubes artefacts. Reverted in the next commit."},
+    W6:{n:"Exact SDF blocks", d:"48f2704 · current kernel", s:"loved", img:"wall-cut-48f2704-exact-sdf-blocks.jpg", steps:["Two planar rings (no bottom chamfer)","Deduplicate hull face planes","Log-sum-exp smooth max of the planes = roundover","Marching cubes on that SDF","stone_relief + 0.10 mm grain","Union with the core, separate pinches, clip"], look:"Crisp planar faces, evenly rounded edges, worn pits. Face ripple 0.07 µm (was 17 µm).", q:"All should be sharp? These are bricks?"},
+    F1:{n:"Hull per cell (E6–E10)", d:"Jul 4–5 · 97b8f09 → 4e75d3a", s:"rejected", img:"wall-field-e6-hull-per-cell.jpg", steps:["Chassis layout, wider ranges","Hull of Fibonacci points on an ellipsoid↔box blend","Blur-remesh σ 0.9","Compensate the shave: oversize, pins, overlap","Rubble hearting behind"], look:"Lumpy pebbles in mortar.", q:"terrible · not enough · rocks can't overlap — fused rocks · still not the reference", why:"Neighbouring stones never share an edge, so they can never look fitted."},
+    F2:{n:"Crack network (E12)", d:"Jul 5 · a7152cb", s:"superseded", img:"wall-field-e12-crack-network.jpg", steps:["Courses and bays define crack topology","Bed and head curves cached: both neighbours read the same curve","Outline = polygon bounded by those curves","Buffer in/out to round corners","Loft with a gentle belly; relief; Taubin"], look:"Stones that fit together, with tight cracks.", q:"that's great. I love it", why:"The approach reset. Every later version builds on it."},
+    F3:{n:"Prism + roundover (E15–16)", d:"f816f53", s:"superseded", img:"wall-field-e15-prism-roundover.jpg", steps:["Straight prism of the crack outline","Arc inset on face–side edges","Per-stone random roundover"], look:"Cut tiles with rounded edges."},
+    F4:{n:"Pebble morph (E17–19)", d:"ae6246a → 8517d19", s:"superseded", img:"wall-field-e17-pebble-morph.jpg", steps:["Sphere topology; equator = crack outline","Superellipse meridian per pole","Joint 0: cracks are where curvatures meet","Flat beds via z-scale s^p"], look:"Rounded cobbles with V cracks.", q:"melted dough (the true-ellipse meridian, rejected)"},
+    F5:{n:"Drystone + chip hearting (E27)", d:"Jul 6 · 1f7cdd1 · current", s:"loved", img:"wall-field-e27-approved.jpg", steps:["Crack network as in E12","Superellipse morph, flat beds","Pressed head/bed overlaps fuse contacts","Proud faces 0.1–0.7 mm; perched top stones","No mortar core: about 990 rough chips","stone_relief, separate pinches"], look:"A stacked drystone wall: pressed contacts, chip-packed gaps, no mortar.", q:"that is a thing of beauty"},
+    B1:{n:"BrickWall (E28)", d:"7127517", s:"current", img:"wall-brick-now.jpg", steps:["Chassis config: small courses and bays","Worn kernel","missing_prob 0.04, spall_prob 0.10"], look:"Worn bond with missing and spalled bricks."},
+    B2:{n:"RegularBrickWall", d:"Jul 15 · a725978", s:"current", img:"wall-regular-brick-a725978.jpg", steps:["bond='running': uniform courses","Half-brick stagger","Near-zero yaw and tilt"], look:"Dead-level running bond.", q:"another variant within the same engine"},
+    FL1:{n:"Grid stamper (E32)", d:"820b7f4", s:"rejected", img:"floor-e32-grid-stamper.jpg", steps:["One slab per DB square","Each seated on its own terrain patch","Soil in the joints"], look:"Slabs sitting on soil.", q:"The floor IS the terrain, replaces the soil."},
+    FL3:{n:"Full-depth slabs + relief (E33–36)", d:"192d7b0 → 9929d22", s:"superseded", img:"floor-e36-cracked-stone-relief.jpg", steps:["Slabs full depth from z = 0","Cracked slabs (engrave_cracks)","Official height; common stone relief"], look:"Cracked flagstones. The floors were liked first."},
+    FL4:{n:"A wall laid flat (E57)", d:"55ae16d · current", s:"loved", img:"floor-now-laid-flat.jpg", steps:["CutStoneWall(laid_flat=True)","Height axis becomes the second plan axis","Courses and bays pinned to the grid pitch","Core becomes a sheet; hearting becomes chinking","FieldstoneWall(laid_flat) = drystone floor"], look:"Full-depth slabs or drystone flags from about 90 lines on top of the chassis.", q:"the floor should just be a wall laying on its side … with different sized bricks."}
+  },
+  table: [["Variant","Look","Printability","Controls","Complexity","Speed"],
+    ["W1 hull + blur","soft, wide mortar","chamfer guard","course, bay, joint, chip","hull + voxel MC","~8 s / wall"],
+    ["W6 exact SDF ★","crisp, even roundover","square bottoms","+ grain","plane SDF + MC","similar"],
+    ["F1 hull per cell","pebbles in mortar","needs a core","blockiness, pins, overlap","high","~24 s"],
+    ["F2 crack network","fitted, tight","ok","wobble, drift, joint","shapely + loft","~5 s"],
+    ["F5 drystone ★","pressed, chip-packed","overlaps + pinch split","overlaps, proud, coping","highest (990 chips)","5–8 s"],
+    ["B1/B2 brick","worn / regular bond","ok","missing, spall, bond","configuration only","—"],
+    ["FL1 stamper","slabs on soil","separate code","slabs_per_square","160 lines","—"],
+    ["FL4 laid flat ★","slabs or flags","one bottom clip","any wall parameter","~90 lines","—"]],
+  newest: "<strong>Fieldstone reversed the order of construction.</strong> Older versions made stones first and then tried to fill the gaps with packing compensation, pins and overlaps. E12 onward draws the cracks first and derives each stone from them. Both faces of a crack read the same cached curve, so a bulge always meets a notch, which no hull per cell can achieve. <strong>Cut stone</strong> moved from marching-cubes artefacts to an exact plane SDF, and from plane-wave corduroy to noise carved downward. <strong>Floors</strong> stopped being a separate system: any wall family can be laid flat.",
+  shared: ["masonry layout (courses, bays, bond)","crack curves (straight or shared)","unit kernel (box SDF or outline morph)","stone_relief","core / hearting","openings","union + pinch split"],
+  def: `define masonry:
+  orientation: wall | laid_flat
+  layout:  { courses: range | exact, bays: range | exact,
+             bond: irregular | running | none }
+  cracks:  straight | shared_curves(wobble, drift)
+  unit:    exact_box(roundover) | outline_morph(superellipse(a, b), bed_flat)
+  defects: { missing: 0, spall: 0, crack: 0 }
+  finish:  stone_relief(carve, dish, grain)
+  core:    recessed(reveal) | none
+  hearting: none | chips(foot, spacing)
+cut_stone    = masonry(unit: exact_box, cracks: straight, core: recessed)
+brick        = cut_stone(courses: 2.5..3mm, missing: 4%, spall: 10%)
+regular_brick= brick(bond: running)
+fieldstone   = masonry(cracks: shared_curves, unit: outline_morph, core: none, hearting: chips)
+floor(f)     = f(orientation: laid_flat, layout: exact grid)`
+};
+
+KINDS.trees = {
+  title: "Trees and leaves", lede: "The skeleton settled quickly, on CloudTree after four tries in a week. Leaves took a month and nine placers. The organic placer won after Shawn stopped tuning and restarted from requirements.",
+  lanes: [["Skeleton", ["T1","T2","T5"]], ["Foliage and leaves", ["L0","L2","L3","L6","L7","L8","L9","L10"]]],
+  strip: [["tree-leaf-organic-two-cluster.jpg","Organic placer on the two-cluster test scene, mid-iteration. Compare with the greedy and shoots nodes, which use the same scene."]],
+  v: {
+    T1:{n:"ScaTree", d:"Jun 13 · 1570e63", s:"rejected", img:"tree-scatree-sca-0613.jpg", steps:["Bent trunk spine, bark ridges, flare","Attractors in a crown ellipsoid","Runions space colonisation","Pipe-model radii","Frustum mesh"], look:"A tangled, wiry bush.", why:"Chaotic branches that double back, with no guarantee of printability. Replaced within a day."},
+    T2:{n:"Constructive / surface / envelope SCA (T2–T4)", d:"Jun 14–15", s:"rejected", img:null, steps:["Deterministic forks on a Fibonacci disc","or SCA on the canopy surface","or SCA inside an envelope with a minimum elevation"], look:"No render survives.", why:"Deleted in favour of CloudTree."},
+    T5:{n:"CloudTree → Tree", d:"Jun 14–18 · d7b608f · current", s:"loved", img:"tree-organic-now-2x2.jpg", steps:["Attractors on the canopy side, weighted by area","Optional Voronoi attractor groups + bulge","Each branch owns attractors; lookahead finds strays","Strays spawn sub-branches; at most 3 per step","Terminal landing exactly on the attractor","Pipe radii (e = 3), Bézier tubes, 26° audit"], look:"Clean architectural forks with a clustered crown."},
+    L0:{n:"Radius-profile foliage", d:"Jun 16 · 9e25ebc", s:"superseded", img:"tree-cloudtree-radius-profile-foliage.jpg", steps:["Terminal tubes swell over their last 10.5 mm","Dome caps, all in one array"], look:"Tan cauliflower blobs.", why:"Became noised clumps per branch, which are still the substrate today."},
+    L2:{n:"Tiled grid", d:"Jun 17 · 7be6cee", s:"rejected", img:"tree-cloudtree-tiled-leaf-grid.jpg", steps:["Rows by arc length along the branch","Columns by circumference","Droop toward gravity + an apex fan"], look:"Scaly rows with polar spikes and apex gaps."},
+    L3:{n:"Branchlets", d:"Jun 20 · ~24 commits", s:"rejected", img:"tree-branchlet-era.jpg", steps:["Anchor on the clump","Loft a stem tube to the leaf","Blade faces down-gravity","Solve undercuts per vertex"], look:"Leaves on stalks.", why:"A stem that bends down is an FDM undercut. The fixes produced \"infinite complexity\"."},
+    L6:{n:"Z-slice rows", d:"Jun 24 · afbe43e", s:"rejected", img:"tree-zslice-placer.jpg", steps:["Slice the cluster at Z planes","Perimeter → n columns","Outward normal; contact-angle seat"], look:"Stacked rings; bald near the apex.", why:"The apex cap was patched six times."},
+    L7:{n:"Meridian rows", d:"Jun 25 · 4a866f3", s:"rejected", img:"tree-meridian-placer.jpg", steps:["6 azimuthal meridians","Rows by surface arc","Belly-dip contact seat","Imbrication via a layer map","Cull + solidify (embree)"], look:"Neat shingled rows. Performance went from 222 s to 28 s per tile.", q:"read as rows", why:"It forces a chart onto unioned noisy blobs. About 66% of builds were wasted."},
+    L8:{n:"Greedy accretion", d:"Jul 1 · 1ac09ab", s:"rejected", img:"tree-leaf-greedy-two-cluster.jpg", steps:["Candidates sorted by z","One upward sweep through a cheap-reject ladder","Equal-depth oval seat, skew, graze"], look:"Pods and holes. Uniform blue noise that \"screams procedural\".", why:"Its per-leaf primitives survived."},
+    L9:{n:"Shoots", d:"Jul 2 · 96f77d1", s:"rejected", img:"tree-leaf-shoots-two-cluster.jpg", steps:["Spine marches up-slope","3–7 leaves in a herringbone","Adaptive belly-dip seat"], look:"Herringbone sprigs.", q:"iterating placement parameters is not converging", why:"This led to the requirements interview (7c5821b)."},
+    L10:{n:"Organic union-surface", d:"Jul 2–3 · 66d85e3 → 43a2d51 · current", s:"loved", img:"tree-organic-fulltree.jpg", steps:["Boolean-union all clusters into one surface","Maximal Poisson dart throw, normal-aware grid","Down-slope direction + smooth angle field ±15°","Height-sorted standoffs (shingling)","Zone blend: curled on top, flush arch underneath","Batched embree seat; cull leaves skewering branches"], look:"Total coverage in a continuous shingled mass with coherent down-slope flow. About 13 s per tile.", q:"the placement is really nice... wow. That's amazing! · they suck, this one is good (on the other placers)"}
+  },
+  table: [["Variant","Look","Printability","Controls","Complexity","Speed"],
+    ["T1 ScaTree","wiry tangle","elevation clamp","sca_*, crown_r","trunk + SCA","—"],
+    ["T5 CloudTree ★","clean forks","target 35° / strict 26° audit","~15 parameters","BFS ownership","fast"],
+    ["L7 meridian","neat rows","contact angle + culls","lift, overlaps, jitter","very high","222 → 28 s / tile"],
+    ["L8 greedy","pods, holes","skew + graze","embed, protrusion","medium","~3× meridian"],
+    ["L10 organic ★","continuous shingle","by construction (arch, tuck, cull)","spacing, zones, curl, field","union + Poisson + embree","~13 s / tile"]],
+  newest: "The losing placers imposed a chart (rows) or an order, then culled whatever went wrong. The organic placer makes each requirement structurally true. Unioning the clusters removes seams. Maximal Poisson saturation guarantees coverage: no bare patch is wider than twice the spacing. A smooth angle field gives coherent directions without rows. Sorting by height ensures a higher leaf never sits under a lower one. The flush arch keeps undersides printable without supports. This is \"the leaf method\" that Shawn now wants applied to everything.",
+  shared: ["scatter on a surface (maximal Poisson)","direction field","height-ordered layering","seat (equal-depth oval)","sweep (Bézier tubes)","trace (space colonisation)"],
+  def: `define tree:
+  canopy:   envelope(height, radius) ; attractors(n: 200, groups: 20mm, bulge: 6mm)
+  skeleton: trace(colonise, split: 30°, eagerness: 0.8, target: 0.33, fdm: 35°/26°)
+  wood:     sweep(bezier_tubes, radii: pipe(e: 3, tip: 1mm), flare)
+  foliage:  clusters(radius: 5.5mm, length: 10.5mm, noise)
+  leaves:   scatter(on: union(foliage), spacing: 0.45 * leaf_w, maximal)
+            direction(downslope + field(±15°)), layer(height_sorted),
+            shape(length: 4.5mm, width: 3mm, curl ≤ 32°)
+# the old placers are not options; their seat/skew/graze survive as internals`
+};
+</script>
+<script id="more-kinds">
+KINDS.grass = {
+  title: "Grass", lede: "Two lineages that share no grass code. The library ran from embossed heightmaps through growth simulations to the bushy thatch, which is still its default. grasslab started from scratch and ended with stroke blades built in printer units.",
+  lanes: [["Library (src/, May–July)", ["E0","E1","E2","E4","E5","E6","E8"]], ["grasslab (Oct 27–29)", ["G0","G1","G2","G3"]]],
+  strip: [["grass-lineage-sheet.jpg","All 18 views on one sheet, oldest to newest."],["grass-gl-v3-strokes.jpg","grasslab v3 stroke blades, 2×2 tile: the current look."]],
+  v: {
+    E0:{n:"Heightmap embossed by OpenSCAD", d:"May 26–27 · src/scripts/archived", s:"superseded", img:"grass-e0-heightmap-flowfield.jpg", steps:["Low-frequency ground noise","Quadratic Bézier blade spines with ridges","Tip-priority max: the pixel nearer a tip wins","Flow-field streamlines with side shoots","Blur + resize → OpenSCAD surface()"], look:"An embossed relief at most 2 mm deep, with ridged strokes.", why:"Died of a dark border, uneven density, and the move to real 3D. This is the first appearance of the higher-blade-wins rule, which was reinvented six times."},
+    E1:{n:"Painter's-algorithm scene", d:"May 28 · generate-grass-scene.py", s:"superseded", img:"grass-e1-scene-swirl.jpg", steps:["Swirl flow field","Blade bend from flow curvature","Jittered grid: 125 tall + 300 fill blades","Painter's sort by base y → heightmap","OpenSCAD emboss"], look:"A crisp graphic whirlpool of lens-shaped blades, but still a texture.", q:"geometry is completely broken (at steep tilt)"},
+    E2:{n:"First 3D blades on a support field", d:"May 28–30 · 1,065 lines", s:"rejected", img:"grass-e2-single-blade.jpg", steps:["Swirl flow on a sinusoidal terrain","Seeds sorted downstream-first","Arc in XY; Z from an envelope solve over support_z","Möller–Trumbore intersection repair","V-keel cross-section; rasterise top into support"], look:"Blades arched over each other. No full tile survives.", why:"Blade heights blew up, the Z solver was rewritten twice in three days, and there were about 30 one-line tuning commits. E3 then tried a day of layout patterns, none of which was kept."},
+    E4:{n:"GrownGrass", d:"Jun 1–5 · 322 lines", s:"rejected", img:"grass-e4-grown.jpg", steps:["Seeds from zone-weighted placement","All blades grow one segment per round","z = max(terrain, occupancy) + clearance","Steer ±15/30/45° when the rise is too steep","Support posts under bridging spans"], look:"Spiky crossing tubes over soil.", why:"The support-post saga (posts reshaped four times in one day) and bald spots."},
+    E5:{n:"FloppyGrassLayer", d:"Jun 6 → Jul 3", s:"rejected", img:"grass-e5-floppy-carpet.jpg", steps:["Voronoi groups, 20–30 blades each","Sort upstream-first","Grow 0.8 mm steps; stop past a 2 mm rise","Lie flat; rise only over obstacles","Stamp each step into occupancy","Ring sweep with a V-keel"], look:"Total coverage of near-flat ribbons. About 3.6 s per 1×1.", q:"current grass renders flat with grass flat across a surface", why:"It minimises relief, so it is flat by construction and no parameter could fix it. Shawn did say \"blade shape is fine\", which is why its mesher survived."},
+    E6:{n:"GrassCarpet underlay", d:"Jun 9 → · still in use", s:"current", img:"grass-e6-carpet-only.jpg", steps:["Blurred noise σ 3 mm into terrain_z","Seeds from the same Voronoi groups","Trace 2D curl paths (no growth)","Flat tube meshes (originally heightmap stamps)"], look:"Fine blade texture under other grass.", why:"It \"papered over the flat-mat problem rather than solving it\", but survives as the fine scale under E8."},
+    E8:{n:"ThatchGrass, the bushy one", d:"Jul 3 · grass/thatch.py · library default", s:"current", img:"grass-e8-thatch-bushy.jpg", steps:["Mound substrate (super-Gaussian blobs, 40° cap)","GrassCarpet under-layer","Sheaf sites on a 3 mm jittered grid","Direction: 0.6 downslope + 0.4 angle field","Sheaves of 4–9 blades; lowest root first, lifted over support","Rock rules: skirt, climb ≤ 1.3 mm, crown rule"], look:"A lumpy mat of plump curled locks. 2.4–3.5 s per 1×1.", q:"The bushy one is great. Good as default grass.", why:"The rock interaction took six rounds to get right. The root cause was a rock footprint stamped larger than the actual stone. Work then moved to grasslab."},
+    G0:{n:"Voxel lens blades", d:"Oct 27 · never committed", s:"rejected", img:null, steps:["About 1,800 small lens blades","Random order inside a binary voxel volume","Blur + marching cubes"], look:"Read as crumpled foil.", why:"Lessons kept: specify by visual scale, design the undercuts, never stack in random order, never use binary voxels plus blur."},
+    G1:{n:"Swath fronds → sickle (v1a–v1k)", d:"Oct 27 · 64572fb → 1613bc1", s:"rejected", img:"grass-gl-v1k-sickle.jpg", steps:["Hills: σ 10 + σ 5 mm noise, 34° cap","Singularity-free angle field","Swaths: warped anisotropic Voronoi, 11–13 mm","Fronds fanned off each swath; later sickle-bent","Skirt + domed blade soft-maxed into a height map","Voxel backstop → marching cubes"], look:"Swaths of fronds; later clumps of commas. 5–13 s per 2×2. Fails the float32 reload check.", q:"chopped down like it was all made of clay · more curves… not just one big sweep"},
+    G2:{n:"Flow ribbons, heightfield blades (v2)", d:"Oct 27–29 · up to 1,549 lines", s:"superseded", img:"grass-gl-v2-close.jpg", steps:["Rises-only hills","Regional angle + in-phase meander + downhill pull","Soil lenses that the flow wraps","Strands: 15–30 mm streamlines at 2.65 mm spacing","Heightfield fronds: skirt + dome + lip + ledges","Voxel backstop, pocket fill, island removal, MC"], look:"Meandering combed ribbons, soft and slightly clay-like up close.", q:"go with the flow-following ribbons · there is no undercut · the top of the blade doesn't fill the volume we define", why:"Half the \"undercuts\" turned out to be hidden internal voids."},
+    G3:{n:"Stroke blades on dirt (v3)", d:"Oct 29 · 0616212 · 1,189 lines (−360)", s:"loved", img:"grass-gl-v3-close.jpg", steps:["Same field stages as v2 (hills, flow, lenses, strands)","Blade = N layers of 0.2 mm, each n_k whole 0.45 mm lines","Keel ≥ 2 lines, ridge = 1, growth ≤ 1 line per layer","Each lower layer stops 0.2 mm short: the tip overhangs air","2D SDF per layer → loft → blur → marching cubes (1,500 faces)","Dirt ∪ blades ∪ base; keep largest body; stl_safe"], look:"Crisp grooves and shadowed tips that survive slicing. About 100 s and 1.7 M faces per 2×2, roughly 30× slower than the library grass.", q:"make that the … only way to generate grass blades"}
+  },
+  table: [["Variant","Look","Printability","Controls","Lines","Speed"],
+    ["E0/E1 emboss","relief texture ≤ 2 mm","trivial","stroke params, flow kind","~300–600","fast"],
+    ["E2/E4 grown 3D","arched or spiky tubes","support posts, repairs","clearance, rise cap, steer","322–1,065","218 → 6.6 s"],
+    ["E5 floppy","flat mat","flat by construction","groups, segment, rise cap","~1,000","3.6 s / 1×1"],
+    ["E8 thatch","plump bushy locks","stack cap, rock rules","species, spacing, mounds","509 + carpet","2.4–3.5 s / 1×1"],
+    ["G1 v1","fronds, then commas","voxel backstop; fails float32","swath, fan, sickle","778–877","5–13 s / 2×2"],
+    ["G2 v2","flow ribbons, clay-soft","backstop + pocket fill; hidden voids","flow, lenses, strands","988–1,549","—"],
+    ["G3 v3 ★","crisp combed blades, undercut tips","printer units by construction","lines, layers, rake, rise","1,189","~100 s / 2×2"]],
+  newest: "Every grass before v3 drew an ideal shape and hoped the printer would reproduce it, or carved shadows into it afterwards. v3 builds each blade <strong>the way the printer draws it</strong>: whole 0.2 mm layers, each a whole number of 0.45 mm lines. A 2-line keel sits at the bottom and a 1-line ridge on top. Each lower layer stops 0.2 mm short of the one above, so every tip overhangs open air. The stepped stack is smoothed only slightly. The blades stand on dirt with no grass mass filled in between them. It is the first variant whose model matches what Bambu prints, so its undercuts survive, and that is where the crisp grooves and shadowed tips come from. It keeps v2's meandering flow ribbons, which part around bare patches. The cost is about 100 s per 2×2, roughly 80 s of which is per-blade marching cubes that split cleanly across threads: the obvious first target for Rust.",
+  shared: ["flow / direction field","scatter (Voronoi groups, Poisson)","trace (streamlines, curl arcs)","higher blade sits on lower (×6, library lineage only; v3 blades are independent and unioned)","blade body (sweep, or v3 layer-stack loft)","obstacle footprint","clearings"],
+  def: `define grass:
+  substrate: hills(rises_only, slope ≤ 34°) | mounds | flat
+  flow:      angle(regional(60°) + meander(15mm, 10°..30°) + downhill(0.3))
+  clearings: lenses(aligned: flow, coverage: 20%) | none
+  placement: strands(spacing: 2.65mm, length: 15mm..30mm) | sheaves(4..9) | groups
+  body:      stroke_stack(lines: 4, layers: auto, rake: 0.2mm, rise: convex)  # v3 (default)
+           | tube(keel: 0.6, facets: 4)                                    # E5/E8 body
+  order:     upstream_first | lowest_root_first
+  obstacles: wrap + tuck(0.5mm) + lower_beside(1.2mm)
+# E8 = substrate: mounds, placement: sheaves, body: tube
+# v3 = substrate: hills, placement: strands, body: stroke_stack
+# placement and body are independent: sheaves of stroke blades is a legal combination`
+};
+
+KINDS.water = {
+  title: "Water", lede: "The library tried rings, point sources and structured wind waves in June, then retreated to a gentle noise. waterlab tried fourteen generators on one fixed scene in a single day. Waves emitted by the objects in the scene won.",
+  lanes: [["Library (layers/water.py, June)", ["L1","L2","L3","L5"]], ["waterlab (Oct 28)", ["W_rings","W_comb","W_sim","W_spec","W_emit","W_echaos","W_schaos","W_swell"]]],
+  strip: [["water-lab-swell-chaos-scenarios.jpg","Swell-chaos across eight scenarios: bays, ponds, rocks, enclosed water."],["water-lab-swell-chaos-open.jpg","Swell-chaos in open water, with the far emitters filling in."]],
+  v: {
+    L1:{n:"Distance rings", d:"Jun 2 · 8bd4bfd", s:"rejected", img:"water-lib-8bd4bfd-edt-rings.jpg", steps:["Euclidean distance from the shore","Damped cosine of the distance","Second harmonic"], look:"Perfect offsets of the shoreline, squared off at the edges. Image re-run from git on a synthetic scene.", q:"wavefronts mirror the shore shape"},
+    L2:{n:"Point sources", d:"Jun 2–3 · a4a8e78", s:"rejected", img:"water-lib-a4a8e78-point-sources.jpg", steps:["Point sources on the boundary","Sum of circular waves","Phase jitter"], look:"Raindrop circles and moiré. Re-run from git."},
+    L3:{n:"Structured waves", d:"Jun 4 · 91c14bb", s:"rejected", img:"water-lib-91c14bb-structured-waves.jpg", steps:["3 wind-direction trains + 10 ripples","Shoaling near obstacles","Bow wave, wake, contact ring"], look:"Diagonal corduroy with a collar around the rock.", why:"The mesh grew past 14k faces and went non-manifold. Deleted the next day in favour of flat water."},
+    L5:{n:"Noise + shore ripples (current library)", d:"be4b1bb, 2d56d40", s:"current", img:"water-lib-legacy-3x3-water.jpg", steps:["Blurred noise tide","Scattered ripple arcs along the shore","Tile edges blended to a shared sine (λ 17.5, 0.6 mm)"], look:"Low lumps, a few stripe arcs and a ring that looks pasted on.", why:"The shared edge sine survives in waterlab as the tide."},
+    W_rings:{n:"rings", d:"round 2", s:"rejected", img:"water-lab-rings.jpg", steps:["Per-kind rings from land and rock","Wobble and break gates"], look:"The clearest reaction around the rock, but the open water is empty."},
+    W_comb:{n:"combed", d:"round 2", s:"rejected", img:"water-lab-combed.jpg", steps:["Trace wind strokes","Smooth-union stroke profiles"], look:"Feathered wind strokes.", q:"too short and too uniform · scales unrelated"},
+    W_sim:{n:"sim (wave equation)", d:"round 3", s:"rejected", img:"water-lab-sim.jpg", steps:["1,400-step wave PDE on the grid","Depth-dependent speed","Wind and ring variants"], look:"Realistic chop from every direction.", q:"a whole bunch of spiky shit"},
+    W_spec:{n:"spectrum", d:"round 3", s:"rejected", img:"water-lab-spectrum.jpg", steps:["N plane waves over a λ range","Directional spread","Stokes sharpening"], look:"Lumpy, with an odd calm zone around the rock."},
+    W_emit:{n:"emitted", d:"round 4", s:"superseded", img:"water-lab-emitted.jpg", steps:["Land and rock are emitters","Geodesic distance through the water","Single λ + rider per source","Dominant blend (w⁸)"], look:"Crisp trains parallel to the shore that wrap around obstacles. Too regular far out."},
+    W_echaos:{n:"emitted-chaos", d:"round 5", s:"superseded", img:"water-lab-emitted-chaos.jpg", steps:["As emitted","Phase wobble grows with distance","Weak corner emitters","Order near sources → chaos far away"], look:"Order dissolving into interference.", q:"the best I've seen so far"},
+    W_schaos:{n:"spectral-chaos", d:"round 6", s:"superseded", img:"water-lab-spectral-chaos.jpg", steps:["A wavelength band per emitter type","Amplitude exponent 1.0","Uniform sharpening 0.85"], look:"Wave groups at about 1 mm relief."},
+    W_swell:{n:"swell-chaos", d:"round 7 · current", s:"loved", img:"water-lab-swell-chaos.jpg", steps:["Bands per type: land 5–16, rock 2–4.5, reed 1.8–3 mm","Amplitude ∝ λ^1.4: long swells dominate","Long components round, short ones sharp","Coherence decays with distance","Rock wake; far emitters fill open water","Scale ~2× (−0.74 to +2.2 mm); soft trough floor"], look:"Broad round swells off the shore with sharper riders, plus chop and a wake at the rock. About 2.3 s for the whole tile.", q:"holy crap, that's amazing"}
+  },
+  table: [["Variant","Look","Printability","Controls","Complexity","Speed"],
+    ["L1 rings / L2 points","shore offsets / raindrops","fine","A, λ, decay","trivial","instant"],
+    ["L3 structured","corduroy + collar","mesh blew up","18 config fields","moderate","fast"],
+    ["L5 current library","lumps + arcs","±0.5 mm, safe","noise, λ, segments, edge sine","moderate","fast"],
+    ["combed","wind strokes","crest ≥ 1 mm","stroke spacing, length","high","slower"],
+    ["sim","spiky chop","marginal (spikes)","λ band, damping","1,400-step PDE","slowest"],
+    ["emitted","regular trains","good","per-source λ, decay","Dijkstra","fast"],
+    ["swell-chaos ★","swells + riders + wake","rock band ≥ 2 mm, soft floor","band, coherence, combine","moderate","~2.3 s"]],
+  newest: "Every older water put one texture over the whole tile. Swell-chaos builds the water from <strong>emitters</strong>. Every wave train belongs to an object, and the object's type sets its wavelength band: long swells from land, short chop from rocks, tiny rings from reeds. Trains are crisp near their source and dissolve into chaos far away. Crest sharpness depends on wavelength, so long waves stay round and short ones are sharp. Amplitude ∝ λ<sup>1.4</sup> lets the long waves dominate. Print guards keep it safe. \"Rows\", \"chop\", \"rings\" and \"chaos\" all turn out to be settings of distance, band, coherence and combine.",
+  shared: ["distance (euclid / geodesic)","wave train per source","weighted partition (wᵖ)","interference sum","tide edge contract","flood to level"],
+  def: `define water:
+  fill:     flood(level: 2.6mm, connected: self)
+  tide:     noise(9mm) + edge(sine(17.5mm, 0.6mm))
+  emitters: from_tags(land: band(5mm..16mm), rock: band(2mm..4.5mm) + wake,
+                      reed: band(1.8mm..3mm), corner: weak, far: if_open)
+  distance: geodesic | euclid
+  coherence: wobble(1mm + 0.06·d)          # 0 = rows forever
+  combine:  dominant(p: 8) → chaos at influence 0.12..0.45
+  relief:   0.8mm, sharpen(long: 0.15, short: 0.9), floor: softplus(-1.1mm)
+# rings    = euclid + single λ + no coherence growth
+# emitted  = geodesic + single λ, combine: dominant only
+# swell-chaos = all of the above (default);  sim and strokes are not points in this space`
+};
+
+KINDS.shore = {
+  title: "Shore", lede: "shorelab composes meadow, rocks and swell-chaos water. Its own variants are mostly about the strip at the waterline and the grass that meets it. The water has been stable since v0g.",
+  lanes: [["shorelab (Oct 28–29)", ["S_a","S_d","S_e","S_g","S_h","S_last"]]],
+  strip: [["shore-v0j.jpg","v0j: grass with carved tips and sides, before stroke blades."]],
+  v: {
+    S_a:{n:"v0a–c bank + mud strip", d:"Oct 28", s:"superseded", img:"shore-v0a.jpg", steps:["Grasslab hills ramped to a 0.4 mm bed","Two-scale wobbly shoreline","Mud strip 0–4 mm (noise width)","Swell-chaos water, basin-limited"], look:"A real bank. Puddles on land until the water was limited to the basin."},
+    S_d:{n:"v0d reed rings", d:"Oct 28", s:"superseded", img:"shore-v0d.jpg", steps:["Reed clumps at the waterline","Reeds register as ripple emitters"], look:"Small ripple rings around reed clumps."},
+    S_e:{n:"v0e lemon-section reeds", d:"Oct 28", s:"superseded", img:"shore-v0e.jpg", steps:["Manifold.extrude of a lemon section","Linear + ogive taper","k·z² bend"], look:"Simple tapered reed blades.", q:"nothing more sophisticated"},
+    S_g:{n:"v0g softened shore water", d:"Oct 28", s:"superseded", img:"shore-v0g.jpg", steps:["Short-wave sharpening 0.9 → 0.45","0.3 mm blur near the shore"], look:"Calmer water near the bank. The water has not changed since."},
+    S_h:{n:"v0h–k grass undercuts", d:"Oct 28–29", s:"rejected", img:"shore-v0h.jpg", steps:["Carve undercuts into tips and sides","Gaps under tips","Remove slicer islands"], look:"Grooved grass at the water's edge.", why:"Made obsolete by the stroke blades."},
+    S_last:{n:"Latest: stroke blades at the shore", d:"Oct 29 · 0616212", s:"loved", img:"shore-latest-stroke-blades.jpg", steps:["Mud strip uses the shared dirt texture","grasslab v3 stroke blades replace all shore-only grass hacks","Grass steered toward the water","Wet rocks emit chop; reeds emit rings"], look:"Watertight, no slicer islands, about 40 s. Rendered for this analysis from the existing STL, with faces past 48° in red."}
+  },
+  table: [["Aspect","v0a–c","v0d–g","v0h–k","latest ★"],
+    ["Bank / waterline","hill-following, 2-scale wobble","same","same","same"],
+    ["Strip","mud 0–4 mm","same","same","dirtlab texture"],
+    ["Water","swell-chaos, basin-limited","+ reed rings, softened","same","same"],
+    ["Grass","meadow ribbons, steered","shorter, grooved","carved tips and sides","v3 stroke blades"],
+    ["Printability","watertight","watertight","islands and voids patched","watertight, no islands"]],
+  newest: "The shore is not a surface algorithm of its own. It is a <strong>boundary with parameters</strong> that edits its neighbours: bank geometry, a strip that uses the ground's texture, local water overrides, an emitter set (reeds), and a steering field the grass consumes. Its latest improvement came from elsewhere, when stroke blades replaced every shore-specific grass hack.",
+  shared: ["band along a line","flood (connected only)","steer toward a boundary","emitter registration","seat wet/dry"],
+  def: `define shore(line):
+  bank:    smoothstep(width: 8mm) from ground → water.bed
+  strip:   band(line, width: noise(0mm..4mm)) → dirt      # 0 width = grass to the water
+  water:   local(sharpen_short: 0.45, blur: 0.3mm)
+  steer:   toward(line, reach: 9mm)                        # read by grass
+  reeds:   scatter(near: contour(level, -1.1..+0.2mm), clumps: 3..5) → emitter(reed)`
+};
+
+KINDS.dirt = {
+  title: "Dirt and soil", lede: "The library's SoilCarpet is a carpet of blobs. dirtlab rebuilt bare earth as a stack of scales joined by a smooth maximum, then tuned it against the printer's 0.2 mm layers, not just against renders.",
+  lanes: [["Library", ["D_L0","D_soil","D_mud"]], ["dirtlab (Oct 29)", ["D_v1a","D_v1d","D_v1g","D_r2"]]],
+  strip: [["dirt-round2-draft.jpg","Round 2 draft, before the final tuning."]],
+  v: {
+    D_L0:{n:"Noise soil", d:"165fc04", s:"superseded", img:null, steps:["Roughness at three scales"], look:"Porridge."},
+    D_soil:{n:"SoilCarpet", d:"52c2a3a → c53c1de · current library", s:"current", img:"dirt-lib-soilcarpet-1x1-soil.jpg", steps:["Two tiers of super-Gaussian blobs","Clustering","Draped onto slopes","Feathered at mask edges"], look:"An even carpet of blisters. About 20 SoilConfig fields."},
+    D_mud:{n:"grasslab bare-soil mud", d:"Oct 27", s:"rejected", img:null, steps:["Negative dip in the lens","Roughness","Dome pebbles"], look:"Survives only as the brown strip in the shore v0 images.", q:"bare patches are terrible · weird artifacts"},
+    D_v1a:{n:"dirtlab v1a", d:"Oct 29", s:"superseded", img:"dirt-v1a.jpg", steps:["Undulation","Roughness","Clods","Pebbles"], look:"First pass at clods and pebbles."},
+    D_v1d:{n:"dirtlab v1d", d:"Oct 29", s:"superseded", img:"dirt-v1d.jpg", steps:["Smooth max instead of a sum","Lumpy clods with radius harmonics","Faceted pebbles"], look:"Distinct crumbs sitting on the ground."},
+    D_v1g:{n:"dirtlab v1g", d:"Oct 29 · ed438c8", s:"superseded", img:"dirt-v1g.jpg", steps:["Rises-only undulation","Clods in patches","Grit","Faceted pebbles with a 58° skirt","Bedded rocklab stones"], look:"Crumbly clods, faceted pebbles and bedded stones. Looked right in renders, but 33% of the tile sliced as flat plains.", why:"The texture didn't survive 0.2 mm layers."},
+    D_r2:{n:"dirtlab round 2", d:"Oct 29 · 897430c · current", s:"loved", img:"dirt-round2.jpg", steps:["Bigger rises, no frame at the rim","Clod density floor of 0.3","Larger pebbles","Acceptance test: ≥ 0.2 mm relief in any 1.5 mm window over 97% of the tile"], look:"Flat windows went from 32.8% to 1.9%. About 3 s per tile. Exported as dirt_relief, now the one exposed-ground texture in every lab."}
+  },
+  table: [["Variant","Look","Printability","Controls","Complexity","Speed"],
+    ["Noise","porridge","trivial","3 σ/amp","trivial","instant"],
+    ["SoilCarpet","even blisters","sub-layer detail","~20 fields","per-blob loop","moderate"],
+    ["grasslab mud","dip + domes","ok","lens/dip","low","—"],
+    ["dirtlab v1g","crumbly clods, flat plains","0 overhang; 33% windows < 1 layer","~60 constants","5 stages, soft max","2.8 s"],
+    ["dirtlab R2 ★","contrast, visible pebbles","98% windows ≥ 1 layer","+ density floor","same","~3 s"]],
+  newest: "Two changes made it work. First, <strong>smooth max instead of sum</strong>: every clod and pebble stays a distinct object on the ground instead of dissolving into porridge. Second, <strong>an acceptance metric in printer terms</strong>: at least 0.2 mm of relief in any 1.5 mm window over 97% of the tile. Round 2 is the first texture in the project tuned against the slicer rather than the renderer.",
+  shared: ["noise bands","smooth max","density-field scatter","faceted caps","seat (bedded stones)","printable-texture rule"],
+  def: `define dirt:
+  landform:  noise(14mm, 5mm), rises_only, relief: ≤ 2.4mm, slope ≤ 24°
+  roughness: fbm(1.6mm, 0.22mm)
+  clods:     scatter(density: patch(6mm, floor: 0.3), r: 0.45..2.4mm) ⊕smax
+  grit:      fbm(0.45mm, 0.08mm) + grains
+  pebbles:   scatter(clustered, low_bias: 0.8) → facet_cap(skirt: 58°) ⊕smax
+  stones:    apply rock(z_scale: 0.65), seat(bank)
+  accept:    texture(window: 1.5mm, min: 0.2mm, ≥ 97%)
+# SoilCarpet = clods only;  dirt_relief = all but landform and stones`
+};
+</script>
+<script>
+/* ---------- render ---------- */
+(() => {
+  const order=["grass","rocks","cliffs","water","shore","dirt","walls","trees"].filter(k=>KINDS[k]);
+  const tabs=document.getElementById("tabs"), host=document.getElementById("kinds");
+  const esc=s=>String(s).replace(/&(?!\w+;|#)/g,"&amp;");
+  order.forEach(k=>{ const K=KINDS[k];
+    const b=document.createElement("button"); b.textContent=K.title; b.dataset.k=k; b.setAttribute("role","tab"); b.addEventListener("click",()=>{ show(k); try{ history.replaceState(null,"","#"+k);}catch(e){} }); tabs.appendChild(b);
+    const sec=document.createElement("section"); sec.className="kind-sec"; sec.id="sec-"+k; sec.hidden=true;
+    let h=`<h2>${K.title}</h2><p class="lede">${K.lede}</p><h3>Family tree</h3>`;
+    K.lanes.forEach(([name,ids])=>{ h+=`<div class="lane"><div class="lane-name">${name}</div><div class="chain">`+ids.map((id,i)=>`${i?'<span class="arrow" aria-hidden="true">→</span>':""}<button class="vnode s-${K.v[id].s}" data-v="${id}" aria-pressed="false">${id.includes("_")?"":id+" · "}${K.v[id].n}</button>`).join("")+`</div></div>`; });
+    h+=`<div class="detail" id="det-${k}"></div>`;
+    if(K.strip&&K.strip.length){ h+=`<h3>Side by side</h3><div class="grid2 strip">`+K.strip.map(([f,c])=>`<figure class="shot"><img src="${IMG+f}" alt="${esc(c)}" loading="lazy"><figcaption>${c}</figcaption></figure>`).join("")+`</div>`; }
+    h+=`<h3>Comparison</h3><div class="tbl"><table><thead><tr>`+K.table[0].map(c=>`<th>${c}</th>`).join("")+`</tr></thead><tbody>`+K.table.slice(1).map(r=>`<tr>`+r.map((c,i)=>i?`<td class="small">${c}</td>`:`<td><strong>${c}</strong></td>`).join("")+`</tr>`).join("")+`</tbody></table></div>`;
+    h+=`<h3>What is different about the one Shawn likes</h3><div class="newest"><p>${K.newest}</p></div>`;
+    h+=`<h3>One definition instead of many variants</h3><p class="small">Mechanisms the variants share: `+K.shared.map(s=>`<span class="chip" style="color:var(--muted)">${s}</span>`).join(" ")+`</p><pre><code></code></pre>`;
+    sec.innerHTML=h; sec.querySelector("pre code").textContent=K.def; host.appendChild(sec);
+    sec.querySelectorAll(".vnode").forEach(n=>n.addEventListener("click",()=>pick(k,n.dataset.v)));
+    const allIds=K.lanes.flatMap(l=>l[1]); const last=[...allIds].reverse().find(id=>K.v[id].s==="loved")||allIds[allIds.length-1]; pick(k,last);
+  });
+  function pick(k,id){ const K=KINDS[k], V=K.v[id]; const sec=document.getElementById("sec-"+k);
+    sec.querySelectorAll(".vnode").forEach(n=>n.setAttribute("aria-pressed",n.dataset.v===id));
+    const labels={loved:"current · loved",current:"current",superseded:"superseded",rejected:"rejected"};
+    const img=V.img?`<figure class="shot"><img src="${IMG+V.img}" alt="${esc(V.n)} render"><figcaption>${V.img}</figcaption></figure>`:`<div class="noimg">No output survives for this variant.</div>`;
+    const pipe=`<div class="pipe" role="list" aria-label="pipeline">`+V.steps.map((s,i)=>`${i?'<span class="ar" aria-hidden="true">→</span>':""}<div class="st" role="listitem"><b>${i+1}</b>${s}</div>`).join("")+`</div>`;
+    document.getElementById("det-"+k).innerHTML=`<div>${img}</div><div><div class="eyebrow">${id.includes("_")?"":id+" · "}${V.d}</div><h3 style="margin-top:6px">${V.n} <span class="status st-${V.s}">${labels[V.s]}</span></h3><p class="small muted" style="margin-bottom:0">How it worked</p>${pipe}<p><strong>Look.</strong> ${V.look}</p>${V.q?`<p class="verdict-q">“${V.q}”</p>`:""}${V.why?`<p class="small">${V.why}</p>`:""}</div>`; }
+  function show(k){ order.forEach(o=>{ document.getElementById("sec-"+o).hidden=o!==k; }); tabs.querySelectorAll("button").forEach(b=>{ b.setAttribute("aria-pressed",b.dataset.k===k); b.setAttribute("aria-selected",b.dataset.k===k); }); }
+  const start=(location.hash||"").slice(1); show(order.includes(start)?start:order[0]);
+  window.addEventListener("hashchange",()=>{ const h=location.hash.slice(1); if(order.includes(h)) show(h); });
+})();
+</script>
