@@ -27,3 +27,7 @@ waterlab/out/
 shorelab/out/
 dirtlab/out/
 clifflab/out/
+
+# Rust workspace build output
+/target/
+/out/

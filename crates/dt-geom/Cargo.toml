@@ -1,0 +1,24 @@
+[package]
+name = "dt-geom"
+description = "dharmatiles kernels: grids, 2D, meshes, rays and keyed seeds"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[features]
+default = ["manifold-ffi"]
+# Mesh backend: Manifold's C++ library through manifold-csg (native only).
+# TODO(R1): add `dep:manifold-csg` (0.4.1). It needs cmake and compiles the
+# Manifold C++ sources (several minutes cold), so the R1 spike wires it.
+manifold-ffi = []
+# Mesh backend: the pure-Rust Manifold port (wasm-capable).
+# TODO(R1): add `dep:manifold-rust` once the spike has chosen a version.
+manifold-rust = []
+
+[dependencies]
+
+[lints]
+workspace = true

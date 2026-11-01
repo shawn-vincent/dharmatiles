@@ -1,0 +1,8 @@
+# Exact stable pin (dharmatiles Rust rewrite, plan.html P0). The compiler
+# version is part of the output for byte-identical builds: bump on purpose,
+# with the golden hashes as the check.
+[toolchain]
+channel = "1.99.1"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]
+profile = "minimal"

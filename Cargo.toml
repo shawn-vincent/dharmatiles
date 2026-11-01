@@ -1,0 +1,32 @@
+# dharmatiles Rust workspace (virtual manifest).
+# Plan and layout: docs/analysis/rust-rewrite/plan.html, layout.html.
+[workspace]
+members = ["crates/*", "xtask"]
+resolver = "3"
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.99"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/shawn-vincent/dharmatiles"
+publish = false
+
+# Every external version is stated once, here.
+[workspace.dependencies]
+dt-geom = { path = "crates/dt-geom" }
+
+[workspace.lints.rust]
+# FFI lives inside the binding crates, not ours.
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"
+float_cmp = "warn"
+cast_possible_truncation = "warn"
+
+# Geometry at opt-level 0 is too slow to judge by eye.
+[profile.dev.package."*"]
+opt-level = 3
