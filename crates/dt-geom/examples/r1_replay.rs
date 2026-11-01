@@ -180,6 +180,9 @@ struct Totals {
     identical: usize,
     ms: f64,
     py_ms: f64,
+    /// Hash of every result's bytes (absolute original IDs excluded), to
+    /// compare runs of the same build for determinism (R2).
+    hash: dt_geom::Fnv,
 }
 
 fn run<S: Mesh>(name: &str, store: &mut Store, recs: &[Rec], csv: &mut dyn Write) -> Totals {
@@ -227,6 +230,7 @@ fn run<S: Mesh>(name: &str, store: &mut Store, recs: &[Rec], csv: &mut dyn Write
         for (k, o) in outs.iter().enumerate() {
             let ok = o.status().is_ok();
             let tm = o.to_tri_mesh();
+            t.hash.u64(tm.content_hash());
             let wt = tm.is_watertight();
             let vol = o.volume();
             let pv = r.result_vol[k];
@@ -304,7 +308,7 @@ fn main() {
     println!(
         "{case} backend={backend} parallel={par} ops={} import_fail={} status_err={} not_watertight={} \
          tri_mismatch={} vol>1e-6={} max_rel_vol={:.2e} ids_mismatch={} props_mismatch={} identical={} \
-         op_s={:.3} py_op_s={:.3} ratio={:.3} wall_s={:.1}",
+         op_s={:.3} py_op_s={:.3} ratio={:.3} wall_s={:.1} results_hash={:016x}",
         t.ops,
         t.failed_import,
         t.status_err,
@@ -318,6 +322,7 @@ fn main() {
         t.ms / 1e3,
         t.py_ms / 1e3,
         t.ms / t.py_ms,
-        wall.elapsed().as_secs_f64()
+        wall.elapsed().as_secs_f64(),
+        t.hash.finish()
     );
 }

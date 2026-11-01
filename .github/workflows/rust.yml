@@ -60,7 +60,8 @@ jobs:
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
       # Moves to dt-eval in P1.
-      - run: cargo check -p dt-geom --target wasm32-unknown-unknown --no-default-features --features manifold-rust
+      # A real build (codegen), not just a check: R1 showed manifold-rust compiles for wasm32.
+      - run: cargo build -p dt-geom --target wasm32-unknown-unknown --no-default-features --features manifold-rust
       # The document model must stay wasm-safe (no geometry, no std::fs use).
       - run: cargo check -p dt-doc --target wasm32-unknown-unknown
 

@@ -1,8 +1,8 @@
 //! The pure-Rust Manifold port (`manifold-rust`).
 //!
 //! Note from R1: its `batch_boolean` folds left to right, where the C++
-//! kernel unions by size with a priority queue, so large batches differ in
-//! time and triangulation.
+//! kernel unions by size with a priority queue. `batch` here does the
+//! size-ordered union itself, so large batches stay tractable.
 
 use manifold_rust::linalg::Vec3;
 use manifold_rust::manifold::Manifold;
@@ -71,8 +71,40 @@ impl Mesh for PortSolid {
     }
 
     fn batch(parts: &[Self], o: BoolOp) -> Self {
-        let ms: Vec<Manifold> = parts.iter().map(|p| p.0.clone()).collect();
-        Self(Manifold::batch_boolean(&ms, op(o)))
+        if o != BoolOp::Union || parts.len() < 3 {
+            let ms: Vec<Manifold> = parts.iter().map(|p| p.0.clone()).collect();
+            return Self(Manifold::batch_boolean(&ms, op(o)));
+        }
+        // The port's batch_boolean folds left to right, so every step
+        // re-processes the growing result. Union the two smallest parts
+        // first instead, as the C++ kernel's batch union does (R1).
+        let mut heap: std::collections::BinaryHeap<std::cmp::Reverse<(usize, usize)>> =
+            std::collections::BinaryHeap::new();
+        let mut slots: Vec<Option<Manifold>> = Vec::with_capacity(parts.len() * 2);
+        for p in parts {
+            heap.push(std::cmp::Reverse((p.0.num_tri(), slots.len())));
+            slots.push(Some(p.0.clone()));
+        }
+        while heap.len() > 1 {
+            let (Some(std::cmp::Reverse((_, a))), Some(std::cmp::Reverse((_, b)))) =
+                (heap.pop(), heap.pop())
+            else {
+                break;
+            };
+            let (Some(ma), Some(mb)) = (slots[a].take(), slots[b].take()) else {
+                break;
+            };
+            let u = ma.union(&mb);
+            heap.push(std::cmp::Reverse((u.num_tri(), slots.len())));
+            slots.push(Some(u));
+        }
+        Self(
+            slots
+                .into_iter()
+                .flatten()
+                .next()
+                .unwrap_or_else(Manifold::empty),
+        )
     }
 
     fn trim_by_plane(&self, normal: [f64; 3], offset: f64) -> Self {
