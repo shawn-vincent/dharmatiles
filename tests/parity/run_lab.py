@@ -84,7 +84,12 @@ def relief_spectrum(Z: np.ndarray) -> dict:
 
 def rocks(Z: np.ndarray) -> tuple[np.ndarray, list[float]]:
     """Rocks seen from above: connected areas standing TOPHAT_RISE_MM over a
-    TOPHAT_MM-wide grey opening of the surface.  Returns (mask, diameters)."""
+    TOPHAT_MM-wide grey opening of the surface.  Returns (mask, diameters).
+
+    An estimator, not the lab's truth: it also counts tall soil clods as
+    cover and merges touching pebbles (dirt s1–s4: bare 0.77–0.79 against
+    dirtlab's own 0.92–0.93; see ``lab`` in metrics.json).  It is the same
+    function for Python and Rust STLs, which is what parity needs."""
     r = int(round(TOPHAT_MM / 2 / GRID_MM))
     yy, xx = np.mgrid[-r:r + 1, -r:r + 1]
     disc = xx ** 2 + yy ** 2 <= r * r
