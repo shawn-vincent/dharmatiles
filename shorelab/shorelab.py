@@ -4,7 +4,7 @@
 Composes grasslab (hills, grass), rocklab (rocks), meadowlab (rock/grass
 interaction) and waterlab (swell-chaos water) around a real bank, plus
 shore-only features: a variable wet-mud strip, shore-steered grass, reeds.
-Design: shorelab/DESIGN.md.
+Design: docs/labs/shorelab/design.html.
 
 Usage:
     python shorelab/shorelab.py [--seed N]

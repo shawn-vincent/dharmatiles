@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Leaf Solidification — Design Specification</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles docs</a><a href="../index.html#design" aria-current="page">Library design</a><a href="../index.html#guides">Guides</a><a href="../index.html#labs">Labs</a><a href="../index.html#reference">Reference</a><a href="../index.html#historic">Historic</a><a href="https://claude.ai/artifact/GBiwhTV3inCuS3cRiWnTeQ">Rust study</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Library design</div>
+  <h1>Leaf Solidification — Design Specification</h1>
+  <p class="srcnote">Converted from <code>docs/design/leaf-solidification.md</code> on 2026-11-01; the markdown file was removed (see git history). Relative paths in the text are relative to <code>docs/design/</code>.</p>
+  
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol><li><a href="#overview">Overview</a></li><li><a href="#stage-1-leaf-surface-buildleafsurface">Stage 1 — Leaf Surface (<code>build_leaf_surface</code>)</a></li><li><a href="#stage-2-root-oval-buildleafovaloffsets">Stage 2 — Root Oval (<code>build_leaf_oval_offsets</code>)</a></li><li><a href="#stage-3-solidification-solidifyleaf">Stage 3 — Solidification (<code>solidify_leaf</code>)</a></li><li><a href="#constants-summary">Constants Summary</a></li><li><a href="#historical-designs-retired">Historical designs (retired)</a></li></ol></nav>
+<article class="doc">
+<p>
+<em>Rewritten 2026-07-03.  <code>solidify_leaf</code> is now a pure index-stitch closure
+against a pre-computed root oval — no raycasts, no per-leaf <code>fix_normals</code>.
+The original raycast-wall design (boundary-loop walk, per-vertex ray
+directions, cone framework, tip bulk vertex) was retired during the
+2026-07-01 performance crisis and the greedy/organic placement work; see
+&quot;Historical designs&quot; at the end for pointers.</em></p>
+<p>
+<em>Placement — where a leaf goes and how its frame is seated — is covered in
+<a href="leaf-placement.html"><code>docs/design/leaf-placement.html</code></a>.  This document covers the leaf solid itself.</em></p>
+<hr />
+<h2 id="overview">
+Overview</h2>
+<p>
+A leaf solid is built from three pieces, all sharing one vertex layout:</p>
+<ol>
+<li>
+<strong><code>build_leaf_surface</code></strong> — an open trimesh (disk topology) for the visible
+top surface of the blade: ovate outline, V-crease midrib, arch/curl/lift
+longitudinal profile, dome-shaped lobes.</li>
+<li>
+<strong><code>build_leaf_oval_offsets</code></strong> — the root oval: a flat embedded copy of the
+same vertex layout, positioned inside the parent cluster.</li>
+<li>
+<strong><code>solidify_leaf</code></strong> — stitches surface + oval + perimeter walls into a
+watertight solid, by index, with no geometric queries.</li>
+</ol>
+<p>
+The caller (<code>placement_leaf._attempt_leaf</code>) builds the blade and the oval in
+the SAME rigid frame — shared origin, growth direction, and length by
+construction — so the 1:1 stitch produces a short tapered neck everywhere.
+Seating that frame against the real mesh (equal-depth oval tilt, belly-dip
+drop, skew, tucks) happens before solidification and is placement's job.</p>
+<p>
+Implementation: <code>src/dharmatiles/trees/leaf.py</code>.</p>
+<hr />
+<h2 id="stage-1-leaf-surface-buildleafsurface">
+Stage 1 — Leaf Surface (<code>build_leaf_surface</code>)</h2>
+<p>
+<code>build_leaf_surface</code> calls <code>compute_leaf_geometry</code> to get all vertex arrays,
+then assembles them into a single open <code>trimesh.Trimesh</code>.</p>
+<h3 id="vertex-layout">
+Vertex layout</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Block</th>
+<th>
+Count</th>
+<th>
+What</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>upper_grid</code> (flattened)</td>
+<td>
+<code>(N_LONG−1) × (N_LAT+1)</code></td>
+<td>
+Top face vertex grid, ring-major</td>
+</tr>
+<tr>
+<td>
+<code>base_pt</code></td>
+<td>
+1</td>
+<td>
+Attachment point (s=0)</td>
+</tr>
+<tr>
+<td>
+<code>tip_pt</code></td>
+<td>
+1</td>
+<td>
+Pointed tip (s=1)</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+<code>_LEAF_N_LONG = 12</code>, <code>_LEAF_N_LAT = 10</code>.  There are 11 interior rings
+(<code>N_LONG − 1</code>) each with 11 vertices (<code>N_LAT + 1</code>), plus 2 pole vertices =
+<strong>123 vertices</strong> total.  <code>base_pt</code> is at index <code>ring_count × ring_stride</code>
+(= 121) and <code>tip_pt</code> at 122.</p>
+<p>
+This layout is load-bearing: the oval mirrors it index-for-index, and
+placement code addresses canonical vertices (belly dip = tip-half midrib
+column, tip = last index) directly through it.</p>
+<h3 id="face-connectivity">
+Face connectivity</h3>
+<ul>
+<li>
+<strong>Base fan</strong> (<code>N_LAT</code> triangles): <code>[base_pt, ring0[j], ring0[j+1]]</code>.</li>
+<li>
+<strong>Body quads</strong> (<code>(N_LONG−2) × N_LAT × 2</code> triangles): two triangles per quad
+cell between adjacent rings.</li>
+<li>
+<strong>Tip fan</strong> (<code>N_LAT</code> triangles): <code>[tip_pt, last_ring[j+1], last_ring[j]]</code>.</li>
+</ul>
+<p>
+Face normals point outward from the top surface (the crease/dome side).</p>
+<h3 id="winding-cache">
+Winding cache</h3>
+<p>
+<code>fix_normals()</code> is called once per topology key and the corrected face array
+is cached (<code>_FACE_CACHE</code>).  All subsequent leaves of the same topology reuse
+the cached winding — this saves ~12k <code>fix_normals()</code> calls per tile and is
+the dominant leaf-generation performance optimisation.  The cache key
+includes <code>curl_deg</code> (winding differs between flat-tip and curled-tip
+geometry) but NOT <code>lift_mm</code> (lift rotates all vertices uniformly).</p>
+<h3 id="shape-parameters">
+Shape parameters</h3>
+<p>
+<code>length_mm</code>, <code>width_mm</code>, <code>thickness_mm</code>, <code>fold_angle_deg</code>, <code>inner_curve</code>,
+<code>outer_curve</code>, <code>arch_deg</code>, <code>curl_deg</code>, <code>lift_mm</code>, <code>seed</code>.  The organic placer
+zone-blends <code>curl_deg</code> and <code>lift_mm</code> per leaf and applies its underside
+end-to-end arch as a post-build vertex offset (see the placement spec).</p>
+<hr />
+<h2 id="stage-2-root-oval-buildleafovaloffsets">
+Stage 2 — Root Oval (<code>build_leaf_oval_offsets</code>)</h2>
+<p>
+The root oval is the embedded anchor the blade stitches down to.  It is
+returned as <strong>offsets relative to the leaf frame origin</strong> — an
+<code>(n_outer, 3)</code> array with <code>n_outer = 123</code>, the exact vertex count and index
+layout of the open surface — and translated to world space by the caller.</p>
+<p>
+Geometry (in the leaf frame: <code>n_hat</code> outward normal, <code>T_along</code> growth
+direction, <code>across</code> lateral):</p>
+<ul>
+<li>
+<strong>Half-size, bottom-aligned</strong>: the oval spans <code>[L/2, L]</code> along <code>T_along</code> —
+the tip half of the leaf's footprint — so it is half the leaf length and
+aligned with the leaf at the TIP.  The blade's base half tapers inward to
+the oval's near end; the tip ends coincide (in s).</li>
+<li>
+<strong>Width</strong>: <code>(W/4)·sin(π·s)</code> per ring — half the blade's width scale.</li>
+<li>
+<strong>Depth</strong>: every vertex is displaced <code>−embed_mm · n_hat</code>
+(<code>embed_mm = _ROOT_EMBED_MM = 0.75</code>), putting the whole oval a fixed
+shallow depth below the surface point it was seated against.</li>
+<li>
+The two pole slots (base/tip) sit at <code>L/2</code> and <code>L</code> along <code>T_along</code>, same
+depth.</li>
+</ul>
+<p>
+Because the oval has the surface's exact index layout, ring <code>i</code> / column <code>j</code>
+of the blade connects to ring <code>i</code> / column <code>j</code> of the oval — there is no
+correspondence search and no possibility of crossed walls.</p>
+<p>
+The oval is <em>flat</em> in its own frame; conforming it to the curved, noised
+cluster surface is done rigidly by placement (<code>_seat_oval_tilt</code> pitches the
+whole frame about the oval center until both ends sit equally deep).</p>
+<hr />
+<h2 id="stage-3-solidification-solidifyleaf">
+Stage 3 — Solidification (<code>solidify_leaf</code>)</h2>
+<pre><code class="language-python">solidify_leaf(surface, inner_v) -&gt; (solid, range(0, 0))
+</code></pre>
+<p>
+<code>inner_v</code> is the world-space oval (123 vertices).  The solid is assembled
+purely by index:</p>
+<ol>
+<li>
+<strong>Vertices</strong>: <code>[outer 123 | inner 123]</code> — the blade surface then the oval.
+(Downstream code relies on this: the organic placer's branch-collision
+cull tests <code>solid.vertices[:len//2]</code>, the blade half.)</li>
+<li>
+<strong>Outer faces</strong>: the surface's own faces.</li>
+<li>
+<strong>Inner faces</strong>: the same face array <code>+ n_outer</code>, winding reversed — the
+oval reuses the blade's topology as its underside.</li>
+<li>
+<strong>Wall faces</strong>: the perimeter loop (base_pt → left lateral edge → tip_pt →
+right lateral edge → back; <code>NP = 24</code> vertices) is stitched 1:1 to the
+corresponding oval perimeter — two triangles per perimeter edge, 48 wall
+triangles.</li>
+</ol>
+<p>
+No raycasts, no <code>fix_normals</code>, no proximity queries — the result is
+watertight by construction (<code>process=False</code>).  The returned face range is
+empty, kept for API compatibility.</p>
+<h3 id="why-the-walls-are-safe-without-any-geometric-query">
+Why the walls are safe without any geometric query</h3>
+<p>
+Everything the raycast machinery used to establish per-leaf is now
+guaranteed upstream, once, by placement:</p>
+<ul>
+<li>
+<strong>Walls reach real material</strong> — the oval is embedded <code>_ROOT_EMBED_MM</code>
+below the <em>real noised</em> surface at a seated frame (equal-depth solve), and
+the oval-containment guard culls any leaf whose oval ends poke out.</li>
+<li>
+<strong>Walls stay short</strong> — blade and oval share a frame, so wall length is the
+analytic taper value plus whatever the skew/standoff added; the neck gate
+culls leaves whose stitch would stretch past 1.8 mm.</li>
+<li>
+<strong>Walls print</strong> — the printability skew slides the blade until its tip
+clears the oval tip in world z, so tip-end walls always climb upward.</li>
+</ul>
+<hr />
+<h2 id="constants-summary">
+Constants Summary</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Constant</th>
+<th>
+Value</th>
+<th>
+Location</th>
+<th>
+Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>_LEAF_N_LONG</code></td>
+<td>
+12</td>
+<td>
+<code>leaf.py</code></td>
+<td>
+Longitudinal sections (base→tip)</td>
+</tr>
+<tr>
+<td>
+<code>_LEAF_N_LAT</code></td>
+<td>
+10</td>
+<td>
+<code>leaf.py</code></td>
+<td>
+Lateral sections (must be even)</td>
+</tr>
+<tr>
+<td>
+<code>_ROOT_EMBED_MM</code></td>
+<td>
+0.75 mm</td>
+<td>
+<code>placement_leaf.py</code></td>
+<td>
+Oval depth below the real surface</td>
+</tr>
+<tr>
+<td>
+<code>_PROTRUSION_MM</code></td>
+<td>
+0.3 mm</td>
+<td>
+<code>placement_leaf.py</code></td>
+<td>
+Blade closest-vertex standoff</td>
+</tr>
+<tr>
+<td>
+<code>_SKEW_TIP_MARGIN_MM</code></td>
+<td>
+0.05 mm</td>
+<td>
+<code>placement_leaf.py</code></td>
+<td>
+Tip-over-oval z margin</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="historical-designs-retired">
+Historical designs (retired)</h2>
+<p>
+The 2026-06-29 version of this document specified a raycast-wall closure:
+walk the open surface's boundary loop, fire a ray from each perimeter vertex
+into the parent mesh (direction chosen inside a three-cone constraint
+framework), and place each root vertex <code>embed_mm</code> past its hit, with a &quot;tip
+bulk vertex&quot; special case for the tip-pole ray that never hit.  That design
+solidified each leaf against the parent mesh <em>at solidification time</em> —
+thousands of per-leaf raycasts, per-leaf <code>fix_normals</code>, and a family of
+miss/fallback artifacts (stub walls, spike vertices, the tip-pole universal
+miss).</p>
+<p>
+It was replaced in two steps: the 2026-07-01 perf crisis removed
+deconfliction and <code>fix_normals</code> from <code>solidify_leaf</code> (commit c828c2d), and
+the greedy-placement work moved all mesh interrogation into the seating of a
+rigid blade+oval frame (commits 7f9e3ce, 95d43d8), leaving solidification
+purely combinatorial.</p>
+<p>
+The full raycast-era spec is preserved in git history
+(<code>git log -- docs/design/leaf-solidification.html</code>, versions ≤ 2026-06-29) and
+its diagnostic story in
+<code>docs/meta/history/2026-06-29-leaf-jitter-and-placement-fixes.md</code> and
+<code>docs/meta/history/2026-07-01-leaf-deconfliction-and-performance-crisis.md</code>.</p>
+
+</article>
+</div>
+</body>
+</html>

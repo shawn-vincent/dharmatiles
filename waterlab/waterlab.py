@@ -2,7 +2,7 @@
 """waterlab v0 — fantasy water around a rock and a bank on a DB tile.
 
 One fixed scene (2x2 tile, land rise on the left, one rocklab rock in the
-water); several interchangeable water generators.  See waterlab/DESIGN.md.
+water); several interchangeable water generators.  See docs/labs/waterlab/design.html.
 
 Usage:
     python waterlab/waterlab.py --mode lapping            # lapping | crescents | legacy

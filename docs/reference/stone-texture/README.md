@@ -2,7 +2,7 @@
 
 Close-up stone surfaces for the common relief pass
 (`stone/finish.py: stone_relief`, design:
-`docs/design/stone-surface-texture.md`).  Source: Wikimedia Commons.
+`docs/design/stone-surface-texture.html`).  Source: Wikimedia Commons.
 
 | File | Commons page | What it shows |
 |---|---|---|

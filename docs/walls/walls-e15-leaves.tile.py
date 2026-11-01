@@ -1,7 +1,7 @@
 # walls-e15-leaves.tile.py — walls campaign: integrated leaves (O5).
 #
 # Door leaf / window leaf / gate across the families (design:
-# docs/design/walls-doors.md, "Leaves"):
+# docs/design/walls-doors.html, "Leaves"):
 #   south: cut stone — arched doorway with CLOSED arch-top planks
 #          door + round OCULUS window with BARS (round grille)
 #   mid:   brick — segmental-arch doorway with planks door OPEN at

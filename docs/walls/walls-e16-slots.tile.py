@@ -5,7 +5,7 @@
 # (a boolean, not a per-brick split); the leaf is modelled to tuck
 # into that groove with clearance, so it sits in the slot as a
 # separate, removable object in the same STL, "separated by space" —
-# print it, drop it in, swap it.  Design: docs/design/walls-doors.md.
+# print it, drop it in, swap it.  Design: docs/design/walls-doors.html.
 #
 #   south: cut stone — a slotted PORTCULLIS (iron grid) in the arch.
 #          A precision slot wants a dressed surround, so the ROCK gate

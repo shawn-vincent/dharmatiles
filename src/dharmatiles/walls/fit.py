@@ -1,7 +1,7 @@
 """
 Bond-to-surround fit — the mason's cut pieces around an opening.
 
-Design: docs/design/walls-doors.md ("Bond-to-surround fit").  A pure,
+Design: docs/design/walls-doors.html ("Bond-to-surround fit").  A pure,
 deterministic solver (no randomness anywhere): given the wall's block
 cells and one opening's forbidden REGION — the surround units dilated
 by the joint/press rule plus the passage dilated by the reveal — decide

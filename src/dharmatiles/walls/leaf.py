@@ -1,7 +1,7 @@
 """
 Leaves — door leaf / window leaf (shutter) / hatch leaf (trapdoor).
 
-Design: docs/design/walls-doors.md (rev 2), stage O5.  A leaf is a
+Design: docs/design/walls-doors.html (rev 2), stage O5.  A leaf is a
 separate solid fitted to the opening's PROFILE: the same closed
 polygon that shapes the surround also shapes the leaf, so an arched
 doorway gets an arch-top door, an oculus gets a round grille, a well

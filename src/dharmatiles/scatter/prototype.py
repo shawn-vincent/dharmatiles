@@ -54,7 +54,7 @@ class Rocks:
         return mesh parts.
 
         Since 2026-07-03 ``Rocks`` is an adapter over the faceted-stone
-        primitive (``scatter/stones.py``, docs/design/rocks-faceted-stones.md):
+        primitive (``scatter/stones.py``, docs/design/rocks-faceted-stones.html):
         legacy ``RocksConfig`` size params map onto ``StoneSpec``s, so every
         existing tile gets bedded faceted stones with no spec edits.  The
         old dome kernel (``layers/rocks.py``) was deleted 2026-07-04.
@@ -141,7 +141,7 @@ class Grass(_ThatchGrass):
 class FloppyGrass:
     """The pre-2026-07-03 field-simulation grass (superseded by Grass /
     ThatchGrass; kept until the mound-thatch system is fully accepted —
-    see docs/design/grass-mound-thatch.md keep/delete inventory).
+    see docs/design/grass-mound-thatch.html keep/delete inventory).
 
     Unlike ``Rocks``, ``FloppyGrass`` is a *field simulation*: each blade's
     growth path depends on prior blades' shared occupancy grid.  Place

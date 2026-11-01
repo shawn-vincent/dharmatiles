@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rocks — Faceted Stones Design</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles docs</a><a href="../index.html#design" aria-current="page">Library design</a><a href="../index.html#guides">Guides</a><a href="../index.html#labs">Labs</a><a href="../index.html#reference">Reference</a><a href="../index.html#historic">Historic</a><a href="https://claude.ai/artifact/GBiwhTV3inCuS3cRiWnTeQ">Rust study</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Library design</div>
+  <h1>Rocks — Faceted Stones Design</h1>
+  <p class="srcnote">Converted from <code>docs/design/rocks-faceted-stones.md</code> on 2026-11-01; the markdown file was removed (see git history). Relative paths in the text are relative to <code>docs/design/</code>.</p>
+  <aside class="stale" role="note"><span class="stale-tag">Out of date</span> <span>The status line (“no code yet, 2026-07-03”) is out of date. The design shipped: <code>src/dharmatiles/scatter/stones.py</code> holds <code>StoneSpec</code>, <code>build_stone()</code>, <code>FacetedStones</code> and <code>StoneField</code>; <code>scatter/prototype.py</code> <code>Rocks</code> maps legacy settings onto <code>StoneSpec</code>. All tiles were regenerated on 2026-07-04 and the dome kernel (<code>layers/rocks.py</code>) is gone. <span class="stale-src">Checked against the code on 2026-11-01.</span></span></aside>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol><li><a href="#problem">Problem</a></li><li><a href="#requirements-guarantee-mechanisms">Requirements → guarantee mechanisms</a></li><li><a href="#the-stone-primitive">The stone primitive</a></li><li><a href="#bedding">Bedding</a></li><li><a href="#cracks-r11">Cracks (R11)</a></li><li><a href="#rocks-adapter-integration-2026-07-03-evening">Rocks adapter (integration, 2026-07-03 evening)</a></li><li><a href="#placement">Placement</a></li><li><a href="#weathering-2026-07-04-iterate-until-natural-round">Weathering (2026-07-04, &quot;iterate until natural&quot; round)</a></li><li><a href="#e9-hero-self-comparison-2026-07-04-vs-docs-reference-big-bou">E9 hero self-comparison (2026-07-04, vs docs/reference/big-boulders)</a></li><li><a href="#e11-calm-2026-07-04-essence-contrast-not-texture">E11 calm (2026-07-04): essence = contrast, not texture</a></li><li><a href="#keep-delete">Keep / delete</a></li><li><a href="#acceptance-scenes-iteration-protocol">Acceptance scenes &amp; iteration protocol</a></li></ol></nav>
+<article class="doc">
+<p>
+<strong>Status: design accepted-for-prototyping; no code yet (2026-07-03).</strong>
+Interview record and reference analysis:
+<code>docs/meta/history/2026-07-03-rocks-greenfield-requirements.md</code>.
+Reference images and the baseline judgment scene: <code>docs/rocks/</code>.
+Third run of the leaf/grass development method: this doc restates the
+interview requirements as by-construction guarantees and picks the
+mechanisms; iteration happens on named render artifacts afterwards.</p>
+<h2 id="problem">
+Problem</h2>
+<p>
+Replace the half-ellipsoid dome rocks (&quot;melted gumdrops&quot;) with stones
+that read <strong>faceted and bedded</strong> — planar faces meeting at paint-catching
+edges, buried to varying depth with soil lapping the base, scattered in
+groups with a dominant stone and companions — matching the reference set,
+under hard supportless FDM, at DB (35 mm/sq) and OL (25.4 mm/sq) scales.
+Gen-1 ships <strong>scatter stones only</strong>; the primitive must extend to piles,
+outcrops, and cliff faces without a rewrite.  Pebble-scale output (shore
+bands) is already liked and must not regress.</p>
+<h2 id="requirements-guarantee-mechanisms">
+Requirements → guarantee mechanisms</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+#</th>
+<th>
+Requirement</th>
+<th>
+Mechanism (by construction)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+R1</td>
+<td>
+Faceted read, no ellipsoid patches</td>
+<td>
+Stone IS a convex hull of M sampled support points — every face is planar with a distinct normal; there is no smooth surface anywhere to leak through</td>
+</tr>
+<tr>
+<td>
+R2</td>
+<td>
+Slab / lump / shard variety, shards up to ~2× footprint, lean</td>
+<td>
+Semi-axis triple + up-axis choice + lean angle are sampled shape params of the primitive</td>
+</tr>
+<tr>
+<td>
+R3</td>
+<td>
+Edges catch drybrush; faces read at print scale</td>
+<td>
+Support points sampled with a minimum angular separation → facet size is bounded from below; M (facet budget) is bounded from above</td>
+</tr>
+<tr>
+<td>
+R4</td>
+<td>
+Supportless FDM at all scales</td>
+<td>
+Post-sample overhang audit with corrective loop: reduce lean / deepen burial until every above-ground downward face is within the printable cone or under the small-chord allowance (tree-style target/strict two-tier)</td>
+</tr>
+<tr>
+<td>
+R5</td>
+<td>
+Bedded, not perched</td>
+<td>
+<strong>Bed-to-widest rule</strong> (2026-07-03, from Shawn's &quot;kind of perched&quot; judgment): burial is measured against the stone's widest horizontal cross-section — burial ≥ 1.0 buries to/past the widest line, so every visible flank slopes outward into the soil by construction; terrain is sealed to the underside (no waterline gap) and a smoothstep skirt annulus laps the base; deep-bedded bodies are sliced at a floor plane so they never punch through the tile</td>
+</tr>
+<tr>
+<td>
+R6</td>
+<td>
+Clustered scatter</td>
+<td>
+Group-first sampling on the existing Voronoi/Grouped machinery: dominant stone at the group seat, 0–3 companions placed adjacent at touching distance with decaying size, coherent yaw; loners are 1-member groups</td>
+</tr>
+<tr>
+<td>
+R7</td>
+<td>
+Pebble bands stay good</td>
+<td>
+Same primitive at small M — verified on the shoreline acceptance scene before the old kernel is deleted</td>
+</tr>
+<tr>
+<td>
+R8</td>
+<td>
+Crown above thatch without per-tile hand-sizing</td>
+<td>
+<code>min_crown_mm</code> param drives the size/burial solver in grass regions; the manual crown-rule sizing in the two tree tiles is deleted once accepted</td>
+</tr>
+<tr>
+<td>
+R9</td>
+<td>
+Extends to piles / outcrops / cliffs</td>
+<td>
+Composition is separate from the stone primitive: piles = stacked seats, outcrops = leaning shard groups, cliffs = stratified courses — all arrangements of the same StoneSeed; nothing in the primitive assumes ground contact</td>
+</tr>
+<tr>
+<td>
+R10</td>
+<td>
+Perf parity (rocks ≪ 1 s/tile)</td>
+<td>
+Tens of stones/tile; per-stone <code>scipy.spatial.ConvexHull</code> on ≤ ~24 points is ~0.1 ms; support_z rasterisation stays the batched box scheme of the current kernel</td>
+</tr>
+<tr>
+<td>
+R11</td>
+<td>
+Crack engraving on large stones (gen-1)</td>
+<td>
+Only faces above an area threshold are engraved → pebbles/mediums untouched by construction; grooves are boolean-subtracted wedge prisms (manifold3d, robust on convex bodies)</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="the-stone-primitive">
+The stone primitive</h2>
+<aside class="stale" role="note"><span class="stale-tag">Out of date</span> <span>There is no <code>StoneSeed</code> or <code>RockSeed</code> class and no <code>scatter/seed.py</code>; the fully resolved per-stone record is <code>StoneSpec</code> in <code>scatter/stones.py</code>. Step 3 (“no smoothing anywhere”) no longer holds: <code>build_stone</code> runs <code>blur_remesh</code> (stone/surface.py), Taubin smoothing and the common <code>stone_relief</code> pass (stone/finish.py, see stone-surface-texture) after the hull. <span class="stale-src">Checked against the code on 2026-11-01.</span></span></aside>
+<ol>
+<li>
+Sample M support directions quasi-uniformly on the sphere with a
+minimum angular separation (R3).  M is the <strong>weathering knob</strong>:
+M ≈ 8–12 → angular shard/slab read (monolith trio);
+M ≈ 16–24 with milder anisotropy → weathered cobble read
+(dirt-path pebbles).  One system, two settings (interview decision 2).</li>
+<li>
+Radius per direction = semi-axis triple (a, b, c) × lumpiness jitter.
+Class mix sampled per stone: <strong>slab</strong> (short axis up), <strong>lump</strong>
+(equant), <strong>shard</strong> (long axis up, height to ~2× footprint, lean).</li>
+<li>
+Convex hull → watertight faceted polyhedron.  Flat-shaded faces are
+the paint feature; no smoothing anywhere.</li>
+<li>
+Yaw (group-coherent ± jitter), lean, burial applied as a rigid
+transform; then the R4 corrective loop clamps lean/burial until the
+overhang audit passes.  Bounded and deterministic per seed.</li>
+</ol>
+<p>
+<code>StoneSeed</code> (new, <code>scatter/</code> alongside <code>RockSeed</code>) carries the fully
+resolved sample: centre, semi-axes, up-axis, yaw, lean, M, jitter seed,
+burial fraction.  Sorting stays big→small for stamping.</p>
+<h2 id="bedding">
+Bedding</h2>
+<ul>
+<li>
+Seat height = MAX terrain over the footprint disk (a soil-carpet mound
+can never entomb a stone).</li>
+<li>
+<code>burial</code> is relative to the widest horizontal cross-section (searched
+in the bottom 65 % of the stone so a leaning shard's tip doesn't win):
+1.0 = bedded exactly to the widest line.  Bodies below the tile floor
+plane are sliced off (convex ∩ half-space, still watertight).</li>
+<li>
+<code>terrain_support_z</code>: for a convex body, the top surface at (x, y) is
+the minimum over upward-facing face planes — rasterised per stone into
+the same batched bounding-box scheme the current kernel uses;
+<code>obstacle_mask</code> stamped identically (grass/tree contracts unchanged).</li>
+<li>
+Soil skirt: an annulus (~1–1.5 mm) around the footprint raises
+terrain_z with smooth falloff (~0.3–0.5 mm), only upward — soil laps
+the stone, killing the waterline gap.  Runs inside the Rocks layer, so
+layer ordering contracts are unchanged.</li>
+</ul>
+<h2 id="cracks-r11">
+Cracks (R11)</h2>
+<p>
+Implemented 2026-07-03 (E5), landed after six render-judged iterations —
+the naive version carved invisible or artifact-reading grooves.  What
+survived:</p>
+<ul>
+<li>
+<strong>Per-stone cap, not per-face</strong>: candidate faces (hull triangles are
+never coplanar, so a &quot;facet&quot; is a triangle) above ~8 mm² are ranked by
+<code>area × (0.4 + n_z)</code> — up-facing preferred, because tabletop stones
+are viewed from above and low cracks land at the soil line where the
+skirt swallows them.  Top 3 get ONE crack each; per-face swarms chewed
+big faces into slivers.</li>
+<li>
+<strong>Ground filter</strong>: faces whose centroid is below terrain + 0.5 mm are
+skipped (buried cracks wasted booleans and chewed the soil contact).</li>
+<li>
+<strong>Horizontal bias</strong>: cracks start within ±30° of the horizontal
+in-plane direction (stratification read).  Vertical cracks on tall
+faces read as mesh artifacts, not geology.</li>
+<li>
+<strong>Proportions are the crack read</strong> (Shawn's MeshLab verdict killed the
+first landed version: 1.3 mm-wide kinked slots &quot;don't look like cracks
+AT ALL&quot; — they read as router pockets).  A crack must be LONG and
+THIN: width 0.5 mm, depth 0.55 mm, total length ~7–11 mm.</li>
+<li>
+<strong>Surface-projected random walk</strong>: ~6 segments stepping 1.1–1.9 mm in
+the local tangent plane with ±24° heading jitter, each point
+reprojected onto the hull (<code>trimesh.proximity.closest_point</code>), walking
+both directions from the seed so the crack straddles it and crosses
+arrises naturally.</li>
+<li>
+<strong>Tapered chain</strong>: each segment is a triangular frustum; width/depth
+follow a sin^0.6 profile over the polyline — the groove fades in and
+out like a real crack instead of ending in a square notch.</li>
+<li>
+Boolean: <code>trimesh.boolean.difference(engine='manifold')</code>, one call per
+stone with all wedge segments; falls back to the uncracked stone on
+failure.</li>
+<li>
+<strong>Corner rules</strong> (MeshLab judgment, 2026-07-03 evening): the walk
+STOPS at strong arrises (normal dot &lt; 0.6) — wrapping a sharp corner
+leaves uncut stone slivers standing in the groove, and real cracks
+terminate at hard edges anyway.  Proud height (0.55 mm) must exceed
+the worst chord dip across an arris or the groove tunnels under the
+corner leaving a stone flap.  Taper floor 0.4 — needle tips can't
+swallow the slivers they graze.  Generous joint overlap (0.45 mm).</li>
+<li>
+<strong>Branching</strong>: the primary crack always forks once mid-path at 35–60°,
+2–3 fading segments.  The primary crack is unconditional — per-crack
+probability once rolled the trio shard bald at 2 % odds; only
+secondary cracks roll dice.</li>
+</ul>
+<h2 id="rocks-adapter-integration-2026-07-03-evening">
+Rocks adapter (integration, 2026-07-03 evening)</h2>
+<p>
+<code>scatter.prototype.Rocks</code> no longer calls the dome kernel: it maps
+legacy <code>RocksConfig</code> samples onto <code>StoneSpec</code>s (footprint = 2r, height =
+mean-radius × flat × 1.45 compensation for bed-to-widest, facet count
+from footprint, burial 0.85–1.05) and shares <code>_build_and_stamp</code>.  Every
+existing tile gets faceted bedded stones with <strong>zero spec edits</strong>;
+<code>n_cuts</code>/<code>cut</code>/<code>roughness</code>/<code>sink</code> are accepted and ignored.  S3 (meadow
+crowns above thatch) and S4 (shore pebble bands + water boulder) verified
+by render.  The full tile set needs one regeneration after acceptance;
+the dome kernel in <code>layers/rocks.py</code> is now unreferenced and awaits the
+delete-the-losers step.</p>
+<ul>
+<li>
+Stamping happens BEFORE engraving — the stamp math assumes convexity,
+and grooves are too small to matter for support/obstacle fields.</li>
+</ul>
+<p>
+Displacement-map engraving was rejected: it needs dense tessellation,
+which destroys the flat-facet read.</p>
+<h2 id="placement">
+Placement</h2>
+<aside class="stale" role="note"><span class="stale-tag">Out of date</span> <span>The <code>min_crown_mm</code> size/burial solver (R8) was never added; no such parameter exists in the code. <span class="stale-src">Checked against the code on 2026-11-01.</span></span></aside>
+<p>
+Public API unchanged: <code>Rocks(..., placement=…)</code> stays the layer.  A new
+composition step between position sampling and seed building:</p>
+<ul>
+<li>
+Group seats from the existing <code>Grouped</code>/<code>scatter_positions</code> machinery
+(<code>Uniform</code> still works for plain scatter like shore pebbles).</li>
+<li>
+Per group: dominant stone at the seat; 0–3 companions at distance
+≈ (r_dom + r_comp) × 0.9–1.1 (touching or near-touching), size decay
+~ D[0.4:0.75]; shared yaw ± jitter.  Optional debris halo of pebbles.</li>
+<li>
+Grass-region stones get the <code>min_crown_mm</code> solver (R8).</li>
+</ul>
+<h2 id="weathering-2026-07-04-iterate-until-natural-round">
+Weathering (2026-07-04, &quot;iterate until natural&quot; round)</h2>
+<aside class="stale" role="note"><span class="stale-tag">Out of date</span> <span>The relief term here was later replaced for every stone family by the common relief <code>stone_relief()</code> in <code>src/dharmatiles/stone/finish.py</code> (design: stone-surface-texture), which <code>scatter/stones.py</code> now calls. <span class="stale-src">Checked against the code on 2026-11-01.</span></span></aside>
+<p>
+Grounded in spheroidal-weathering morphology (edges/corners weather
+faster than faces; exfoliation spalls leave curved concave scars with
+crisp rims; corestones go &quot;blobby&quot;):</p>
+<ul>
+<li>
+<strong>Roundover</strong> (<code>roundover_mm</code>): rolling-ball fillet whose radius is
+re-rolled at every corner AND at ~1.2 mm steps along every edge — the
+fillet wobbles along an edge (constant radii read as rounded dice;
+facet-count sweeps read as nothing).  Same silhouette, aging knob.</li>
+<li>
+<strong>Concave bites</strong> (a convex hull can never show a hollow — the root
+of the &quot;generic&quot; read): face dishing (large sphere pressed shallowly
+into each big face; scaled by roundover so FRESH rock keeps flat
+joint faces) + spall scars (<code>spall_scars</code>, oblate bites at corners in
+the upper band — low bites carve arches at the soil line, apex bites
+truncate monoliths).  Budgets scale with EXPOSED height, or a
+mostly-buried stone's crest gets Swiss-cheesed.</li>
+<li>
+The FDM audit runs on the CONVEX body (bites self-support; auditing
+scar ceilings force-buried the trio monolith).  Stamping uses the
+convex hull of the bitten stone (over-estimate = safe direction).</li>
+<li>
+Cracks are ONE lofted V-channel solid per crack (+ one per branch) —
+chains of overlapping frusta made manifold emit sliver triangles that
+collapsed under STL float32 quantization and opened the export; the
+acceptance gate requires surviving the float32 round-trip.</li>
+<li>
+Seat rotation is capped at 32° (fix tipping, never lay a monolith on
+its flank); the skirt may bank higher than the rim seal
+(<code>_MAX_SKIRT_LIFT_MM</code>) so ridge-adjacent stones don't show voids.</li>
+</ul>
+<h2 id="e9-hero-self-comparison-2026-07-04-vs-docs-reference-big-bou">
+E9 hero self-comparison (2026-07-04, vs docs/reference/big-boulders)</h2>
+<p>
+Four authored heroes (<code>docs/rocks/hero-quartet.tile.py</code>, HERO env var:
+letipea / sylt / yeager / doane), each tuned to its reference photo and
+rendered at 1600 px.  Verdicts and gaps:</p>
+<ul>
+<li>
+<strong>Stance</strong>: burial ≥ 1.0 sinks a hero into a turtle-shell mound; the
+references sit PROUD with a buried contact line (~55–65 % of mass
+visible).  Heroes want burial 0.75–0.9; scatter stones keep ≥ 1.0.
+First letipea attempt pancaked on exactly this.</li>
+<li>
+<strong>Undulation is invisible at hero scale</strong>: amplitude = 0.35 ×
+roundover ≈ 0.4 mm on a 19 mm stone (2 %).  Reference pillowing is
+~5 % of diameter.  → amplitude should also scale with footprint.</li>
+<li>
+<strong>Long straight silhouette lines survive</strong> on big stones: the adapter
+facet cap (14) gives a 20 mm hero the same facet count as an 8 mm
+stone, and 1 mm roundover can't kill a 10 mm straight arris.  → facet
+count and roundover should scale with footprint for hero sizes.</li>
+<li>
+<strong>No micro-texture</strong>: post-Taubin surfaces are glass-smooth; the
+references show granular roughness (~1–2 % of size).  A fine
+high-frequency displacement (0.1–0.2 mm) post-aging would give
+drybrush tooth and prints fine.  Likely the single biggest detail gap.</li>
+<li>
+<strong>Seam too faint at hero scale</strong>: fixed-mm width/depth is
+proportionally thin on a 19 mm stone; should scale with footprint.</li>
+<li>
+Two-tone lichen/moss crown = paint concern (out of geometry scope);
+crown/base split maps to face normals if colour ever lands.</li>
+<li>
+Floor clip is a manifold boolean intersection, NOT slice_mesh_plane —
+the plane cap fails on aged/undulated boundary loops and ships an
+open mesh (letipea caught it; no gate existed on that stage).</li>
+</ul>
+<h2 id="e11-calm-2026-07-04-essence-contrast-not-texture">
+E11 calm (2026-07-04): essence = contrast, not texture</h2>
+<p>
+Aesthetic re-read of the E10 heroes vs the references: E10 was an
+excellent <em>generic</em> boulder but uniformly eventful — grain and
+undulation everywhere.  The references' essence is CALM: vast quiet
+fields punctuated by sparse countable incidents (one seam, one scar).
+Uniform texture is its own monotony and drybrushes as even speckle.
+Three mechanisms:</p>
+<ul>
+<li>
+<strong>Patchy envelope</strong>: undulation + grain amplitude modulated by a
+footprint-scale low-frequency field (quiet zones ×0.2, shoulders ×1.0).</li>
+<li>
+<strong>Protected hero face</strong>: the largest non-bottom facet of the crisp
+hull gets displacement damped ×0.15 near its plane — one calm facet
+survives aging and catches light as a single tone (Syltstenen's
+identity).</li>
+<li>
+<strong>One crisp post-aging spall</strong>: aging rounds every pre-cut scar into
+a background dent, so each aged stone reserves one scar from its
+budget and cuts it AFTER aging (same gates: watertight + genus +
+float32 round-trip), keeping one legible-rimmed incident per stone.</li>
+</ul>
+<h2 id="keep-delete">
+Keep / delete</h2>
+<aside class="stale" role="note"><span class="stale-tag">Out of date</span> <span>Done: <code>layers/rocks.py</code> and its dome kernel were deleted (all tiles regenerated 2026-07-04). <span class="stale-src">Checked against the code on 2026-11-01.</span></span></aside>
+<ul>
+<li>
+Keep: placement machinery (<code>scatter/distribute.py</code>), layer ordering
+contracts, support_z/obstacle stamping semantics, the <code>Rocks</code> public
+API surface.</li>
+<li>
+Old dome kernel (<code>layers/rocks.py</code> ellipsoid path) is kept until all
+four acceptance scenes are accepted, then <strong>deleted</strong> (method step 7)
+and the crown-rule hand-sizing in the two tree tiles removed.</li>
+</ul>
+<h2 id="acceptance-scenes-iteration-protocol">
+Acceptance scenes &amp; iteration protocol</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Scene</th>
+<th>
+Content</th>
+<th>
+Proves</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+S1 monolith-trio</td>
+<td>
+bare soil, one shard+companions group, close-up</td>
+<td>
+R1 R2 R3 R6 vs <code>rocks-reference-monolith-trio.png</code></td>
+</tr>
+<tr>
+<td>
+S2 scatter-field</td>
+<td>
+<code>docs/rocks/rocks-judgment.tile.py</code> with new stones</td>
+<td>
+R1 R2 R5 R6 vs <code>rocks-current-2026-07-03.png</code></td>
+</tr>
+<tr>
+<td>
+S3 meadow-stones</td>
+<td>
+<code>1x1-grass-tree</code></td>
+<td>
+R8 crowns above thatch, no hand-sizing</td>
+</tr>
+<tr>
+<td>
+S4 shoreline</td>
+<td>
+<code>1x1-water+soil</code></td>
+<td>
+R7 pebbles no worse; water boulder not a melted tent</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+Experiments E1 (single-stone shape classes) → E2 (trio) → E3
+(bedding/skirt) → E4 (cluster field) → E5 (cracks) → E6 (meadow crown)
+→ E7 (shoreline), one render-judged artifact at a time, renders named
+<code>docs/rocks/experiment-YYYY-MM-DD-stones-*.png</code>, knobs as module
+constants until acceptance.  Perf budget: rocks layer ≪ 1 s at typical
+densities, both scales.</p>
+
+</article>
+</div>
+</body>
+</html>

@@ -21,6 +21,6 @@ OpenLOCK output from `src/dharmatiles/bases/openlock.py` — updated status as o
 
 **How to apply:** See `meta/history/2026-06-04-openlock-regen-review.md` for post-fix analysis.
 Full initial review: `meta/history/2026-06-03-openlock-spec-compliance-review.md`.
-Spec: `docs/openlock-spec.md`.
+Spec: `docs/guides/openlock-spec.html`.
 
 [[terminology-tile-square-cell]]

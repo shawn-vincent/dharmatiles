@@ -8,7 +8,7 @@ and must not be committed to source control.  In development (editable
 install, no generated file) this module falls back to querying git live so
 the header always shows meaningful information.
 
-Canonical display format (from build-provenance-spec.md):
+Canonical display format (from docs/guides/build-provenance-spec.html):
 
     Ver: <version> · <buildTimestamp>
 
@@ -59,7 +59,7 @@ class BuildInfo:
         return self.tag[:tag_budget] + "..." + suffix
 
     def version_line(self, width: int | None = None) -> str:
-        """Canonical display string per build-provenance-spec.md.
+        """Canonical display string per docs/guides/build-provenance-spec.html.
 
         If width is given, the tag is trimmed only as much as needed so the
         full line fits within width — leaving as much tag visible as possible.

@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Terrain Generator Architecture Specification</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles docs</a><a href="../index.html#design" aria-current="page">Library design</a><a href="../index.html#guides">Guides</a><a href="../index.html#labs">Labs</a><a href="../index.html#reference">Reference</a><a href="../index.html#historic">Historic</a><a href="https://claude.ai/artifact/GBiwhTV3inCuS3cRiWnTeQ">Rust study</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Library design</div>
+  <h1>Terrain Generator Architecture Specification</h1>
+  <p class="srcnote">Converted from <code>docs/design/terrain-architecture.md</code> on 2026-11-01; the markdown file was removed (see git history). Relative paths in the text are relative to <code>docs/design/</code>.</p>
+  
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol><li><a href="#1-tile-model">1. Tile Model</a></li><li><a href="#2-base-mesh-generation">2. Base Mesh Generation</a></li><li><a href="#3-height-model">3. Height Model</a></li><li><a href="#4-terrain-transitions">4. Terrain Transitions</a></li><li><a href="#5-xy-boundary-shape-planar-domain">5. XY Boundary Shape (Planar Domain)</a></li><li><a href="#6-terrain-authoring-model">6. Terrain Authoring Model</a></li><li><a href="#7-generation-pipeline">7. Generation Pipeline</a></li><li><a href="#8-plant-system-current-scope-grass-only">8. Plant System (Current Scope: Grass Only)</a></li><li><a href="#9-future-systems-out-of-current-scope">9. Future Systems (Out of Current Scope)</a></li><li><a href="#10-core-principles">10. Core Principles</a></li></ol></nav>
+<article class="doc">
+<p>
+<strong>Version:</strong> 0.2<br />
+<strong>Status:</strong> Active — current implementation scope</p>
+<hr />
+<h2 id="1-tile-model">
+1. Tile Model</h2>
+<h3 id="1-1-base-tile-unit">
+1.1 Base Tile Unit</h3>
+<aside class="stale" role="note"><span class="stale-tag">Out of date</span> <span>The 35 mm unit called a “tile unit” here is now called a <strong>square</strong> (<code>cols</code> × <code>rows</code> squares make a tile; see CLAUDE.md terminology). The 128 cells per square grid still holds (<code>SurfaceConfig.cells_per_square = 128</code>). <span class="stale-src">Checked against the code on 2026-11-01.</span></span></aside>
+<ul>
+<li>
+One tile unit: <strong>35 mm × 35 mm</strong></li>
+<li>
+The working surface is specified as an input: <strong>T_cols × T_rows tile units</strong></li>
+<li>
+Example: a 2 × 2 surface = 4 tile units = 70 mm × 70 mm physical</li>
+</ul>
+<h3 id="1-2-logical-grid">
+1.2 Logical Grid</h3>
+<p>
+The grid is <strong>128 × 128 cells per tile unit</strong>, uniform in both axes.</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Surface</th>
+<th>
+Grid dimensions</th>
+<th>
+Cell size</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+1 × 1 tile</td>
+<td>
+128 × 128</td>
+<td>
+0.273 mm</td>
+</tr>
+<tr>
+<td>
+2 × 2 tiles</td>
+<td>
+256 × 256</td>
+<td>
+0.273 mm</td>
+</tr>
+<tr>
+<td>
+T × T tiles</td>
+<td>
+128T × 128T</td>
+<td>
+0.273 mm</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+Cell size is always <strong>35 / 128 ≈ 0.273 mm</strong> regardless of surface size.<br />
+Total grid dimensions scale with the number of tile units.</p>
+<h3 id="1-3-grid-cell-properties">
+1.3 Grid Cell Properties</h3>
+<pre><code class="language-ts">interface Cell {
+  terrainType: TerrainType;
+  surfaceHeight: number;   // always defined
+}
+</code></pre>
+<h3 id="1-4-terrain-types-current-scope">
+1.4 Terrain Types (Current Scope)</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Type</th>
+<th>
+Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>water</code></td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>ground</code></td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>grass</code></td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>constructed_floor</code></td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>wall</code></td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>high_wall</code></td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>highest_wall</code></td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>embedded_stl</code></td>
+<td>
+future use</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+No additional types are defined at this stage.</p>
+<hr />
+<h2 id="2-base-mesh-generation">
+2. Base Mesh Generation</h2>
+<h3 id="2-1-purpose">
+2.1 Purpose</h3>
+<p>
+The base mesh represents the <strong>undisturbed terrain surface</strong> before any:</p>
+<ul>
+<li>
+plants</li>
+<li>
+decorative elements</li>
+<li>
+scatter</li>
+<li>
+water effects</li>
+</ul>
+<h3 id="2-2-inputs">
+2.2 Inputs</h3>
+<ul>
+<li>
+Grid of terrain types</li>
+<li>
+Per-cell surface height</li>
+</ul>
+<h3 id="2-3-outputs">
+2.3 Outputs</h3>
+<ul>
+<li>
+Continuous surface mesh</li>
+<li>
+Derived entirely from terrain type, height, and transition rules</li>
+</ul>
+<hr />
+<h2 id="3-height-model">
+3. Height Model</h2>
+<h3 id="3-1-surface-height-invariant">
+3.1 Surface Height Invariant</h3>
+<p>
+Every grid cell has a defined surface height. This height is used by all
+subsequent systems.</p>
+<h3 id="3-2-height-resolution">
+3.2 Height Resolution</h3>
+<p>
+Heights are resolved during base mesh generation. Terrain transitions
+determine how heights blend between adjacent cells.</p>
+<hr />
+<h2 id="4-terrain-transitions">
+4. Terrain Transitions</h2>
+<p>
+Transitions between adjacent cells determine vertical shape.</p>
+<h3 id="4-1-hard-transitions-vertical-edges">
+4.1 Hard Transitions (Vertical Edges)</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Transition</th>
+<th>
+Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+wall → lower terrain</td>
+<td>
+vertical drop, sharp edge, no smoothing</td>
+</tr>
+<tr>
+<td>
+ground edge (where appropriate)</td>
+<td>
+same</td>
+</tr>
+<tr>
+<td>
+constructed floor edge (where appropriate)</td>
+<td>
+same</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="4-2-soft-transitions-sloped-edges">
+4.2 Soft Transitions (Sloped Edges)</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Transition</th>
+<th>
+Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+ground → water</td>
+<td>
+smooth S-shaped slope (shoreline)</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+No other soft transitions are defined at this stage.</p>
+<h3 id="4-3-slope-normal-placement">
+4.3 Slope-Normal Placement</h3>
+<p>
+The base terrain heightmap stores true world-Z heights, so soft transitions
+are already geometrically sloped. Detail systems currently treat local terrain
+as world-horizontal unless documented otherwise.</p>
+<p>
+Future systems that place oriented features on a slope must use a terrain
+normal derived from the heightmap gradient. See
+<a href="slope-normal-requirements.html"><code>docs/design/slope-normal-requirements.html</code></a> for the current contract and the
+list of layer changes required before grass, stones, vegetation, support
+cones, or normal-displaced soil detail are placed in transition zones.</p>
+<hr />
+<h2 id="5-xy-boundary-shape-planar-domain">
+5. XY Boundary Shape (Planar Domain)</h2>
+<p>
+Terrain boundaries define geometry in the XY plane independently of height.</p>
+<h3 id="5-1-wall-boundaries">
+5.1 Wall Boundaries</h3>
+<ul>
+<li>
+Prefer straight edges and square corners</li>
+<li>
+Diagonals are allowed</li>
+<li>
+Smooth curves are possible but not a focus</li>
+<li>
+Current behavior: determined directly from grid layout; limited to straight
+or diagonal geometry</li>
+</ul>
+<h3 id="5-2-ground-boundaries">
+5.2 Ground Boundaries</h3>
+<ul>
+<li>
+Organic, curved</li>
+<li>
+Smooth transitions in XY</li>
+<li>
+Coastline variability achieved by assigning terrain types across cells to
+form organic shapes</li>
+</ul>
+<h3 id="5-3-floor-boundaries">
+5.3 Floor Boundaries</h3>
+<ul>
+<li>
+Smooth curves allowed</li>
+<li>
+More structured than ground but still curved</li>
+</ul>
+<hr />
+<h2 id="6-terrain-authoring-model">
+6. Terrain Authoring Model</h2>
+<p>
+Terrain shape is <strong>not sculpted directly</strong>. Instead:</p>
+<ul>
+<li>
+The grid is populated with terrain types</li>
+<li>
+Geometry emerges from terrain type, height, and transition rules</li>
+</ul>
+<hr />
+<h2 id="7-generation-pipeline">
+7. Generation Pipeline</h2>
+<pre><code>semantic terrain grid
+  → base mesh (height + transitions)
+  → (future layers — see §9)
+</code></pre>
+<hr />
+<h2 id="8-plant-system-current-scope-grass-only">
+8. Plant System (Current Scope: Grass Only)</h2>
+<aside class="stale" role="note"><span class="stale-tag">Out of date</span> <span>The seed-driven flat grass described in §8.2 is the superseded field simulation (<code>FloppyGrass</code>). Library <code>Grass</code> is now the mound-thatch <code>ThatchGrass</code> (design: grass-mound-thatch); trees (<code>Tree</code>) and flowers (<code>Flowers</code>) also exist. <span class="stale-src">Checked against the code on 2026-11-01.</span></span></aside>
+<h3 id="8-1-general-model">
+8.1 General Model</h3>
+<ul>
+<li>
+Plants are seeded onto terrain</li>
+<li>
+Growth occurs after base mesh generation</li>
+</ul>
+<h3 id="8-2-grass">
+8.2 Grass</h3>
+<p>
+Grass is the only defined plant type.</p>
+<h4 id="8-2-1-seed-self-containment">
+8.2.1 Seed Self-Containment</h4>
+<p>
+<strong>Each seed carries everything it needs to grow.</strong> The growth algorithm takes
+a single seed as input and produces geometry — it requires no external lookup,
+no shared mutable state, no reference to other seeds.</p>
+<p>
+This means all variability is baked into the seed at seeding time:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Parameter</th>
+<th>
+Per-seed</th>
+<th>
+Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+position</td>
+<td>
+✓</td>
+<td>
+world-space location on terrain</td>
+</tr>
+<tr>
+<td>
+direction</td>
+<td>
+✓</td>
+<td>
+initial growth direction angle</td>
+</tr>
+<tr>
+<td>
+curve</td>
+<td>
+✓</td>
+<td>
+lateral curvature (sign + magnitude)</td>
+</tr>
+<tr>
+<td>
+length</td>
+<td>
+✓</td>
+<td>
+total blade arc-length</td>
+</tr>
+<tr>
+<td>
+base_diameter</td>
+<td>
+✓</td>
+<td>
+width at base</td>
+</tr>
+<tr>
+<td>
+tip_length</td>
+<td>
+✓</td>
+<td>
+length of tapering tip section</td>
+</tr>
+<tr>
+<td>
+curve_start</td>
+<td>
+✓</td>
+<td>
+fraction of length before bend begins</td>
+</tr>
+<tr>
+<td>
+power</td>
+<td>
+✓</td>
+<td>
+cross-section falloff exponent</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="8-2-2-config-and-variability">
+8.2.2 Config and Variability</h4>
+<p>
+A <strong>grass config</strong> defines ranges for all seed parameters. At seeding time,
+each seed samples from those ranges independently, producing a fully-specified
+seed struct. The config is not retained after seeding — the seed is the
+authoritative record.</p>
+<p>
+Prefer <strong>copying config into each seed</strong> over shared references. Per-seed
+copies are simpler to reason about, trivially serializable, and eliminate
+any risk of shared-state mutation during growth. The memory cost (a few dozen
+floats per seed) is negligible.</p>
+<p>
+Multiple seeds may be generated from the same config (e.g. a clump), but each
+resulting seed is independent.</p>
+<h4 id="8-2-3-growth-behavior">
+8.2.3 Growth Behavior</h4>
+<p>
+Given a fully-specified seed, grass:</p>
+<ul>
+<li>
+grows along a directional curve</li>
+<li>
+generates points along its growth path</li>
+<li>
+avoids obstacles and other grass</li>
+<li>
+may spread slightly or grow onto adjacent levels</li>
+<li>
+final output is reduced to smooth curves consistent with the existing blade
+algorithm (see <code>scripts/BLADE_DESIGN.md</code> and <code>scripts/blade.py</code>)</li>
+</ul>
+<hr />
+<h2 id="9-future-systems-out-of-current-scope">
+9. Future Systems (Out of Current Scope)</h2>
+<aside class="stale" role="note"><span class="stale-tag">Out of date</span> <span>Some of these exist now: water (<code>layers/water.py</code> <code>Water</code>), walls and floors (<code>dharmatiles.walls</code>), trees, flowers and stones. <span class="stale-src">Checked against the code on 2026-11-01.</span></span></aside>
+<p>
+The following are acknowledged but <strong>not part of the current implementation</strong>.
+They must not be assumed when building present systems.</p>
+<h3 id="9-1-additional-plants">
+9.1 Additional Plants</h3>
+<ul>
+<li>
+Examples: vines, broadleaf plants</li>
+<li>
+Each uses a distinct growth algorithm</li>
+<li>
+Interaction and ordering rules exist conceptually but are unspecified</li>
+</ul>
+<h3 id="9-2-water-system">
+9.2 Water System</h3>
+<p>
+Current implementation — see <code>docs/design/water-surface-model.md</code> for the full
+displacement model.</p>
+<ul>
+<li>
+<strong>Volume solid:</strong> the water region is a closed mesh (flat/wavy top at
+<code>water_height</code>, textured riverbed bottom, perimeter walls) rather than a
+thin surface sheet. Unioning with the terrain solid gives correct depth.</li>
+<li>
+<strong>Riverbed:</strong> sloped via smoothstep from <code>water_height</code> at the shore down to
+z = 0 at the pool floor. SoilLayer textures the bed naturally.</li>
+<li>
+<strong>Surface displacement:</strong> structured wave model — primary sinusoidal wave
+trains with shore compression (shoaling), capillary ripples, rock bow waves,
+wake amplitude suppression, and meniscus contact rings. See
+<code>WaterSurfaceConfig</code> in <code>core/config.py</code>.</li>
+</ul>
+<h3 id="9-3-object-stl-placement">
+9.3 Object / STL Placement</h3>
+<ul>
+<li>
+Includes embedded STL objects and rocks</li>
+<li>
+Planned behaviors: occupy space, protrude from terrain, influence nearby
+systems</li>
+<li>
+Current rocks/stones are opt-in in <code>.tile</code> specs. A region must include an
+explicit <code>rock</code>, <code>rocks</code>, <code>stone</code>, or <code>stones</code> layer for stone scatter to run
+there. Boundary strips can also declare those layer types. The placement
+region constrains rock centres only; rock geometry may extend across region
+edges, but not off the tile.</li>
+</ul>
+<h3 id="9-4-gravel">
+9.4 Gravel</h3>
+<ul>
+<li>
+Defined conceptually: surface texture on ground, optional individual rocks</li>
+<li>
+No implementation details included</li>
+</ul>
+<hr />
+<h2 id="10-core-principles">
+10. Core Principles</h2>
+<h3 id="semantic-first">
+Semantic First</h3>
+<p>
+The grid defines <em>what exists</em>. Geometry is derived, not authored.</p>
+<h3 id="deterministic-emergence">
+Deterministic Emergence</h3>
+<p>
+The mesh is a pure function of terrain types, heights, and transition rules.
+Same input → same output.</p>
+<h3 id="universal-height-field">
+Universal Height Field</h3>
+<p>
+Surface height is defined everywhere. All systems depend on it.</p>
+<h3 id="layer-separation">
+Layer Separation</h3>
+<p>
+Strict boundaries between:</p>
+<ol>
+<li>
+Terrain definition (grid)</li>
+<li>
+Mesh generation (base mesh)</li>
+<li>
+Growth systems (current: grass)</li>
+<li>
+Future detail systems (§9)</li>
+</ol>
+<p>
+Nothing in layer N may depend on implementation details of layer N+1 or later.</p>
+
+</article>
+</div>
+</body>
+</html>

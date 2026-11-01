@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Walls — Openings: doors, windows, hatches (design, rev 2)</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles docs</a><a href="../index.html#design" aria-current="page">Library design</a><a href="../index.html#guides">Guides</a><a href="../index.html#labs">Labs</a><a href="../index.html#reference">Reference</a><a href="../index.html#historic">Historic</a><a href="https://claude.ai/artifact/GBiwhTV3inCuS3cRiWnTeQ">Rust study</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Library design</div>
+  <h1>Walls — Openings: doors, windows, hatches (design, rev 2)</h1>
+  <p class="srcnote">Converted from <code>docs/design/walls-doors.md</code> on 2026-11-01; the markdown file was removed (see git history). Relative paths in the text are relative to <code>docs/design/</code>.</p>
+  
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol><li><a href="#evidence-recap">Evidence recap</a></li><li><a href="#the-model">The model</a></li><li><a href="#mechanism-unchanged-in-essence-approved-rev-1">Mechanism (unchanged in essence, approved rev 1)</a></li><li><a href="#low-walls-the-surround-rises-above-the-top-new-shawn">Low walls: the surround rises ABOVE the top (new, Shawn)</a></li><li><a href="#leaves-the-word-is-leaf">Leaves (the word is &quot;leaf&quot;)</a></li><li><a href="#compatibility-defaults">Compatibility defaults</a></li><li><a href="#implementation-stages-each-shippable-per-the-campaign-method">Implementation stages (each shippable, per the campaign method)</a></li><li><a href="#remaining-questions-for-shawn">Remaining questions for Shawn</a></li></ol></nav>
+<article class="doc">
+<p>
+<strong>Rev 2, 2026-07-07.</strong>  Rev 1 approved by Shawn (&quot;All of your thoughts
+here sound good&quot;) with major additions folded in below: openings of
+arbitrary size and position; doors/windows unified; surrounds allowed
+to rise ABOVE low wall tops; arch AND lintel for fieldstone AND
+brick; a leaf taxonomy including open-at-angle and SLOT-LOADED
+swappable leaves.  References: <code>docs/reference/walls/doors/</code> (10
+photos + truths) and the official DungeonBlocks pieces.</p>
+<h2 id="evidence-recap">
+Evidence recap</h2>
+<p>
+Official pieces: a doorway occupies a full square between jamb
+columns (clear width 19–27 mm); RR-102 builds its arch from
+individual voussoirs off quoin-stacked jambs; <strong>RR-069/070 &quot;Double
+Door Left/Right&quot; are SEPARATE LEAF pieces</strong> (85 mm tall) that pair
+with the Tall Arch walls — the officials already play the
+swappable-leaf game.</p>
+<p>
+Photo truths: doorway = opening + structurally distinct SURROUND +
+optional leaf; the bond flows AROUND the surround; voussoirs are
+radial (thin slabs in rubble work, ref-03/05; dressed wedges in 1–3
+orders, ref-05/06; bricks-on-end rowlock/segmental, ref-10); leaves
+are planked rectangles or arch-tops; sill slabs at window bases;
+<strong>portcullis grooves are vertical channels cut into the jamb faces</strong>
+(ref-08/09) — the medieval precedent for slot-loaded leaves.</p>
+<h2 id="the-model">
+The model</h2>
+<p>
+One concept covers doors, windows, and floor hatches:</p>
+<pre><code class="language-python">Opening(at,                  # centre along the spine, in SQUARES (float)
+        width_mm  = 22.0,    # clear width — arbitrary
+        sill_mm   = 0.0,     # 0 = door; &gt; 0 = window sill height
+        head_mm   = 36.0,    # clear opening top above the seat — arbitrary;
+                             # MAY exceed the wall height (see low walls)
+        head      = 'arch',  # 'arch' | 'lintel' — both, for EVERY family
+        rise_mm   = None,    # None = semicircular; less = segmental arch
+        profile   = 'auto',  # 'auto' (rect + head) | 'circle' |
+                             # [(t, z), …] custom polygon — the ARCH IS A
+                             # SPECIAL CASE of one boundary-lining rule:
+                             # near-vertical boundary → jamb stacks,
+                             # curved/horizontal → radial voussoirs.  A
+                             # circle has no verticals → a full voussoir
+                             # ring: an OCULUS in a wall, a WELL on a
+                             # floor (Shawn: round holes in the floor;
+                             # arbitrary shaped holes)
+        leaf      = None,    # None | Leaf(...) — see taxonomy
+        slot      = False)   # portcullis-style channel for swap-in leaves
+
+CutStoneWall(spine=…, openings=[Opening(at=0.5), Opening(at=1.5,
+             sill_mm=14, head_mm=26, width_mm=12, head='lintel')])
+</code></pre>
+<p>
+On a <code>laid_flat</code> wall (i.e. a floor) the same <code>Opening</code> is a HATCH: a
+rectangular gap in the pavement with an optional trapdoor leaf.</p>
+<p>
+<strong>Surround style</strong> (<code>surround=</code>, 2026-07-07 Shawn): <code>'jambs'</code> is
+the classic door construction (quoin-style jamb stacks + arch/lintel
+head + sill slab); <code>'ring'</code> cuts the rectangle out and lines it
+with a FRAME of small units — the circle's voussoir ring generalized
+to a square (a row of small bricks per edge + square corner blocks).
+<code>'auto'</code>: hatches in a pavement take <code>'ring'</code> (the jambs+lintel
+construction chopped the floor into weird slabs); standing walls
+take <code>'jambs'</code>.  Not floor-specific — a single wall slab with a
+door in it takes the same frame via <code>surround='ring'</code>.  <code>'ring'</code>
+requires <code>profile='auto'</code> with <code>head='lintel'</code> (a circle/custom
+profile already gets a full voussoir ring); other combinations raise
+in <code>Opening.__post_init__</code> rather than silently falling back to
+jambs.</p>
+<h2 id="mechanism-unchanged-in-essence-approved-rev-1">
+Mechanism (unchanged in essence, approved rev 1)</h2>
+<p>
+Openings live at the LAYOUT level — the crenellation/quoin/
+throughstone machinery generalized.  Every VISIBLE part is a placed
+unit (the surround and the fitted bond blocks — no boolean carves the
+faces).  The only boolean is on the hidden recessed CORE: the passage
+prism (dilated by the reveal) is differenced out of the mortar core,
+so the core edge stays behind the surround ring and jamb reveals are
+real masonry, never a bare core plane.</p>
+<ol>
+<li>
+<strong>Exclusion</strong> in (t, z): drop cells inside, trim straddlers —
+trimmed ends become textured 'face'.</li>
+<li>
+<strong>Jambs</strong>: forced quoin-style stacks flanking the opening from
+sill to springing.  Fieldstone: larger squared stones (ref-05);
+brick: closer bricks; cut: dressed quoins.</li>
+<li>
+<strong>Head</strong>, per family × style (all six combinations supported):<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+</th>
+<th>
+<code>arch</code></th>
+<th>
+<code>lintel</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+cut stone</td>
+<td>
+dressed voussoir wedges, keystone</td>
+<td>
+single dressed lintel block</td>
+</tr>
+<tr>
+<td>
+fieldstone</td>
+<td>
+thin SLAB voussoirs radiating (ref-03/05)</td>
+<td>
+one big rough lintel slab</td>
+</tr>
+<tr>
+<td>
+brick</td>
+<td>
+rowlock bricks-on-end, segmental via <code>rise_mm</code> (ref-10)</td>
+<td>
+timber lintel beam (WOOD) or stone lintel</td>
+</tr>
+<tr>
+<td>
+Voussoirs are ordinary unit cells with a per-cell ROTATION angle —</td>
+<td>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+the only new geometry in the whole campaign.</td>
+<td>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table></div>
+</li>
+<li>
+<strong>Sill</strong> (windows): one projecting slab cell under the opening.</li>
+<li>
+<strong>Bond flows around</strong> by construction (surround cells are
+pre-claimed intervals in the layout solver).</li>
+</ol>
+<h2 id="low-walls-the-surround-rises-above-the-top-new-shawn">
+Low walls: the surround rises ABOVE the top (new, Shawn)</h2>
+<p>
+The point of low walls is to imply tall walls while keeping miniature
+access.  So an <code>Opening</code> whose <code>head_mm</code> exceeds the wall height is
+LEGAL and default-friendly: the jamb stacks and the arch/lintel are
+built to the opening's own height, proud of the wall top — a low wall
+with a full-height arch rising out of it (the walled-garden-gate
+read, ref-06/07).  Consequences by construction:</p>
+<ul>
+<li>
+surround cells are exempt from the wall-height clip and from the
+ruin envelope (a ruined wall keeps its surviving arch — the classic
+ruin picture, and exactly what RR-126 &quot;Tall Arch Broken&quot; sells);</li>
+<li>
+the exposed back/top of the above-wall surround is textured like
+any face (real modeled surfaces, R2);</li>
+<li>
+no auto-tall promotion needed (rev 1's proposal is DEAD): the
+default wall stays at the official 33.1 top and the doorway rises
+to its own head height.  Tall walls remain available for enclosed
+doorways with masonry above (TS-015/MT1-042 style).</li>
+</ul>
+<h2 id="leaves-the-word-is-leaf">
+Leaves (the word is &quot;leaf&quot;)</h2>
+<p>
+Door leaf / window leaf (shutter) / hatch leaf (trapdoor).  A leaf is
+a separate solid fitted to the opening's PROFILE (Shawn, 2026-07-07:
+arched doorways get arch-top doors; round openings take leaves too —
+a round grille in an oculus, a round lid on a well.  Supersedes rev
+2's leaves-stay-rectangular/tympanum idea).  Construction reuses the
+WALL strategy at leaf scale: <code>union(core, planks)</code> — a thin profile
+prism recessed behind both faces + full-thickness planks with reveal
+gaps, so the board grooves read identically on BOTH faces; plank
+faces carry carved wood grain (ridged, gently wavy, along the board).</p>
+<p>
+<strong>Types</strong> (each a small parametric generator, WOOD-tagged unless
+noted):</p>
+<p>
+Implemented (<code>kind=</code>): <code>planks</code>, <code>shutters</code>, <code>bars</code>, <code>trapdoor</code>
+(O5), <code>portcullis</code> (O6).  The rest are later stages — <code>build_leaf</code>
+raises on them.</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Type</th>
+<th>
+Read</th>
+<th>
+Use</th>
+<th>
+Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>planks</code></td>
+<td>
+vertical planks + 2–3 ledges (battens) + stud grid + ring</td>
+<td>
+the default door</td>
+<td>
+O5 ✅</td>
+</tr>
+<tr>
+<td>
+<code>shutters</code></td>
+<td>
+pair of small side-hinged plank leaves</td>
+<td>
+windows</td>
+<td>
+O5 ✅</td>
+</tr>
+<tr>
+<td>
+<code>bars</code></td>
+<td>
+vertical round bars + frame (ROCK/metal tone)</td>
+<td>
+prisons, window grilles</td>
+<td>
+O5 ✅</td>
+</tr>
+<tr>
+<td>
+<code>trapdoor</code></td>
+<td>
+planked square + ring, flush</td>
+<td>
+floor hatches</td>
+<td>
+O5 ✅</td>
+</tr>
+<tr>
+<td>
+<code>portcullis</code></td>
+<td>
+vertical bars + horizontal rails (ROCK/metal)</td>
+<td>
+slot gates</td>
+<td>
+O6 ✅</td>
+</tr>
+<tr>
+<td>
+<code>double</code></td>
+<td>
+two <code>planks</code> leaves meeting at centre</td>
+<td>
+gates (2-square openings)</td>
+<td>
+later</td>
+</tr>
+<tr>
+<td>
+<code>broken</code></td>
+<td>
+<code>planks</code> with a ragged missing corner</td>
+<td>
+ruins</td>
+<td>
+later</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+<strong>States</strong>: <code>open_deg=0</code> (closed) or an angle — the leaf solid is
+rotated about its hinge EDGE and unioned standing open at any angle
+(ref-06's red door).  <code>hinge='left'</code>/<code>'right'</code> swings the free
+vertical edge inward through the wall; <code>'foot'</code>/<code>'head'</code> tips about a
+horizontal edge (a trapdoor lifts about its foot, a shutter awning
+tips out about its head).  <code>leaf=None</code> = empty opening.</p>
+<p>
+<strong>Slot system</strong> (Shawn's swap idea; portcullis precedent ref-08/09;
+O6 ✅ shipped — <code>walls-e16-slots</code>): <code>slot=True</code> changes the game.</p>
+<p>
+The model is dead simple (Shawn: &quot;don't make this more complex than
+(a) build the normal geometry, (b) slice the slot out of it&quot;):</p>
+<ul>
+<li>
+(a) the wall — surround included — is built NORMALLY.  There is no
+per-brick split; a slotted opening's masonry is identical to an
+unslotted one's.</li>
+<li>
+(b) one smooth SLOT is sliced out of the finished wall
+(<code>_cut_slots</code>, a single boolean difference): a STRAIGHT VERTICAL
+CHANNEL — the opening width plus <code>_SLOT_GROOVE_MM</code> into each jamb, a
+thin slab (leaf thickness + clearance) at the leaf plane — run from
+below the sill up and OUT THE TOP of the wall.  That is a real
+portcullis housing: the gate drops straight down into it and the
+open channel mouth reads from above the door.  Smooth walls, because
+it is a slice, not masonry.</li>
+<li>
+the leaf is a matching RECTANGLE modelled to FIT the slice:
+<code>build_leaf(outline_buffer=groove − clearance/2)</code> on the opening's
+width×height rectangle, so it tucks into the groove with the
+clearance gap, sitting in the channel without touching the
+surround.  It keeps its own material group, so it is a distinct,
+removable object in the same STL, separated by the gap (Shawn: &quot;&gt;1
+object in the same STL, separated by space&quot;).  Print it, drop it in;
+swap it for a <code>portcullis</code>, a <code>planks</code> door, or nothing.  The
+official RR Double-Door-and-Tall-Arch pairing, done parametrically.</li>
+</ul>
+<p>
+A slot leaf slides rather than swings, so <code>open_deg</code> is ignored.
+The marquee slot leaf is <code>Leaf('portcullis')</code> — a grid of vertical
+bars + horizontal rails, ROCK/metal tone.  Two practical notes from
+the demo: a ROCK slot leaf (portcullis/bars) needs a DRESSED surround
+(cut stone / brick) so the smooth slot clears it — drystone's lumpy
+stones close the gap and fuse it; a WOOD leaf (its own material
+group) never fuses, so a plank door slots into any family.  Keep the
+head under the wall top unless the arch is a fully connected ring, or
+the crown voussoirs above the top come away as loose pieces.</p>
+<h2 id="compatibility-defaults">
+Compatibility defaults</h2>
+<p>
+Clear width 22 mm (officials 19–27); door head 36 mm above seat;
+window default sill 14, head 26, width 12; slot clearance 0.5 mm
+total (tune on first print); leaf thickness 2.6 mm.</p>
+<h2 id="implementation-stages-each-shippable-per-the-campaign-method">
+Implementation stages (each shippable, per the campaign method)</h2>
+<ul>
+<li>
+<strong>O1</strong> ✅ layout exclusion + jambs + LINTEL heads, all three
+families, open passage (no leaf) (<code>walls/openings.py</code> +
+<code>_apply_openings</code>/<code>_surround_cells</code>/<code>_place_posed</code> on the chassis).</li>
+<li>
+<strong>O2</strong> ✅ arch heads (voussoir cells with rotation + wedge taper),
+all families; circle profile = full voussoir ring (oculus/well).</li>
+<li>
+<strong>O3</strong> ✅ above-wall surrounds + ruin exemption (surrounds live in
+<code>posed</code>, which <code>_ruin_cells</code> never sees).</li>
+<li>
+<strong>O4</strong> ✅ windows (sills) + floor hatches/wells via laid_flat
+(demos: <code>walls-e13-openings</code>, <code>walls-e14-hatch</code>).</li>
+<li>
+<strong>O5</strong> ✅ integrated leaves (<code>walls/leaf.py</code>): planks/shutters/
+bars/trapdoor, closed and open-at-angle about any hinge edge; WOOD
+group (bars ROCK); fused to the jambs by construction (demo:
+<code>walls-e15-leaves</code>).</li>
+<li>
+<strong>O6</strong> ✅ slot system (<code>Opening(slot=True)</code>): build the wall
+normally, then slice ONE smooth slot out of it (<code>_cut_slots</code>, a
+boolean difference — the profile grown by <code>_SLOT_GROOVE_MM</code>, a
+slab <code>leaf.thickness + _SLOT_CLEAR_MM</code> thick at the leaf plane).
+The leaf is buffered to tuck into that groove (<code>build_leaf( outline_buffer=…)</code>) and keeps its own material group, so it is a
+separate, removable object in the same STL, separated by the
+clearance gap (Shawn: &quot;&gt;1 object per STL, separated by space&quot; — no
+separate-file plumbing / <code>Leaf.standalone()</code> needed).  <code>portcullis</code>
+leaf kind; demo <code>walls-e16-slots</code>.</li>
+</ul>
+<p>
+<strong>Surround finish note (2026-07-07)</strong>: surround units get their own
+per-family finish knobs on the chassis — <code>surround_chip</code>/
+<code>surround_ro</code> (the body texture's chip budget and roundover ate the
+2–5 mm units: the E13 bead-chain arch), <code>surround_frac</code> (unit width ÷
+pitch; fieldstone 1.10 = pressed drystone contact, the union fuses),
+<code>surround_proud_mm</code> (surrounds stand proud of both faces — the
+distinct-order read, and the well curb on floors).</p>
+<p>
+<strong>Bond-to-surround fit (2026-07-07, Shawn; solver in <code>walls/fit.py</code>)</strong>:
+opening-adjacent wall units are RESHAPED to fill the space against a
+curved surround.  Per course band the bond is trimmed against the
+actual surround unit rectangles (toothing into the quoin alternation);
+too-narrow remnants are never dropped — the fallback chain absorbs
+them into a course neighbour (a mason's cut unit, never a column of
+exposed core), else a thin end unit at a wall end, else a short brick
+in the wide sub-band of a bimodal blocker.  Each cut side gets a
+SINGLE LINEAR ANGLED CUT (least-squares support line of the surround
+region — units dilated by <code>joint − surround_bond_press</code> — within the
+band), not a literal curve trace.  The cut is one extra plane in the
+block kernel's smooth-max, so the cut arris gets the same roundover as
+every other edge; fieldstone applies the same line to its crack
+outline and the sphere-morph rounds it natively.  Scaled keystones
+grow outward only: nothing hangs below the arch soffit (FDM).</p>
+<p>
+Known constraint: the fit decides which cells to reshape from the
+surround UNIT extents per band, not the passage profile — correct for
+the jambs/ring/arch recipes (which flank every band the passage
+touches), but a custom concave <code>profile</code> could expose bare core in a
+band with no surround unit.  Custom profiles are not yet a supported
+surround recipe.</p>
+<h2 id="remaining-questions-for-shawn">
+Remaining questions for Shawn</h2>
+<ol>
+<li>
+Gates (2-square double doors) — in scope after O5?</li>
+<li>
+(resolved 2026-07-07 — Shawn: WOOD colour group for leaves is fine.)</li>
+<li>
+(resolved — the &quot;images&quot; were harness artifacts, none were sent.)</li>
+</ol>
+
+</article>
+</div>
+</body>
+</html>

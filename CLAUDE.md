@@ -271,7 +271,7 @@ layered by height-sorted standoffs; blade shape blends continuously from
 curled/lifted on upward faces to a flush end-to-end arch on undersides
 (supportless FDM). Leaves whose blades skewer an exposed branch tube are
 culled. Per-leaf seat/build/cull machinery lives in
-`trees/placement_leaf.py`. Spec: `docs/design/leaf-placement.md`; history:
+`trees/placement_leaf.py`. Spec: `docs/design/leaf-placement.html`; history:
 `docs/meta/history/2026-07-03-leaf-placement-complete-history.md`. Leaf
 shape params on `Tree`: `leaves` (True), `leaf_length_mm` (4.5),
 `leaf_width_mm` (3.0), `leaf_thickness_mm` (0.24), `leaf_fold_angle_deg`,

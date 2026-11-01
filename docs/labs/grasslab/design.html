@@ -1,0 +1,835 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>grasslab — Sculpted Grass Tile: Design</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../../assets/docs.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../../index.html">dharmatiles docs</a><a href="../../index.html#design">Library design</a><a href="../../index.html#guides">Guides</a><a href="../../index.html#labs" aria-current="page">Labs</a><a href="../../index.html#reference">Reference</a><a href="../../index.html#historic">Historic</a><a href="https://claude.ai/artifact/GBiwhTV3inCuS3cRiWnTeQ">Rust study</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Lab · grasslab</div>
+  <h1>grasslab — Sculpted Grass Tile: Design</h1>
+  <p class="srcnote">Converted from <code>grasslab/DESIGN.md</code> on 2026-11-01; the markdown file was removed (see git history). Relative paths in the text are relative to <code>grasslab/</code>.</p>
+  
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol><li><a href="#1-core-idea-separate-blades-on-dirt-each-built-the-way-a-pri">1. Core idea: separate blades on dirt, each built the way a printer draws</a></li><li><a href="#2-stages">2. Stages</a></li><li><a href="#3-parameters-module-constants-grasslab-py">3. Parameters (module constants, <code>grasslab.py</code>)</a></li><li><a href="#4-known-quirks">4. Known quirks</a></li><li><a href="#5-superseded-designs-lessons-kept">5. Superseded designs (lessons kept)</a></li><li><a href="#6-iteration-log-2026-10-27-chronological">6. Iteration log (2026-10-27, chronological)</a></li><li><a href="#exposed-ground-dirt-2026-10-29-written-for-the-v2-height-fie">Exposed ground = dirt (2026-10-29; written for the v2 height-field grass)</a></li><li><a href="#v3-stroke-blades-2026-10-29">v3: stroke blades (2026-10-29)</a></li></ol></nav>
+<article class="doc">
+<p>
+<em>Revision 5, 2026-10-29 (code v3: stroke blades).  Implements
+<a href="requirements.html"><code>requirements.html</code></a> rev 4.  Code: <code>grasslab/grasslab.py</code>; section numbers
+below match its stage banners.  Superseded designs and their lessons: §5;
+iteration log: §6.</em></p>
+<hr />
+<h2 id="1-core-idea-separate-blades-on-dirt-each-built-the-way-a-pri">
+1. Core idea: separate blades on dirt, each built the way a printer draws</h2>
+<pre><code> 1 H₀ hills (rises only) ──► 2 flow θ: regional angle + in-phase meanders + downhill pull
+                                   │
+          3 SWATH cells (warped anisotropic Voronoi) → strand lengths along each cell
+                                   │
+ 4 soil LENSES (flow-aligned eyes) → flow wraps each lens → rim steering → final flow
+                                   │
+ 5 STRANDS of roots on long streamlines → each FROND traced along the flow,
+       drawn and shortened (rim, soil, obstacles)
+                                   │
+ 5c each BLADE: a stack of 0.2 mm layers, each a stroke along its spine a whole
+       number of 0.45 mm lines wide (blade_layers) → smoothed: a loft through
+       the layer outlines in height-above-ground, marching cubes at 0.05 mm,
+       seated on H₀, quadric-decimated (blade_mesh)
+                                   │
+ 6 dirt ground solid (H₀ + dirt relief, from z = 0) ∪ every blade (batch union)
+                                   │
+ 7 ∪ DB socket base (manifold3d) → simplify 0.005 mm → keep largest body → STL
+</code></pre>
+<p>
+Three guarantees drive the layout:</p>
+<ul>
+<li>
+<strong>The model is what prints.</strong>  A blade is defined in the printer's own
+units: whole 0.2 mm layers and whole 0.45 mm extrusion lines.  Nothing
+is narrower than one line, so nothing the slicer would drop or mangle
+(&quot;detect thin walls&quot;) is ever modelled.  Overhangs are counted in
+layers: a layer reaches at most ½ line past the one below (≈ 45°).  The
+smooth version (for resin) keeps that shape and only melts the steps.</li>
+<li>
+<strong>Blades on dirt, no turf mass.</strong>  <em>(Shawn, 2026-10-29.)</em>  Every bit of
+grass is a blade; between blades is the dirt ground.  No pad, skirt or
+envelope layer fills between them (that mass is what buried the
+undercuts).</li>
+<li>
+<strong>Undercuts by construction.</strong>  Each blade stands on a keel (its bottom
+layer) and its upper layers reach further toward the tip, so every tip
+overhangs open air, to the last layer.</li>
+</ul>
+<p>
+Grids: ground, flow and swaths on a 0.25 mm grid extended 12 mm (ground)
+or 10 mm (swaths) past the tile; the ground solid and the grass-top map on
+a 0.12 mm grid (0.1 mm at 1 × 1); each blade's distance field on its own
+0.05 mm grid.</p>
+<h2 id="2-stages">
+2. Stages</h2>
+<h3 id="2-1-hills-h-makeground">
+2.1 Hills H₀ (<code>make_ground</code>)</h3>
+<ul>
+<li>
+Noise: unit-variance Gaussian-filtered noise at σ 10 mm plus 0.35 × σ
+5 mm.</li>
+<li>
+<strong>Rises only</strong>: shift so the interior's 40th percentile is 0, soft-floor
+at 0 with smoothmax (k = 0.25·std, offset so smoothmax(0, 0) = 0), clamp
+≥ 0, and scale so the interior max is 7 mm.</li>
+<li>
+Cosine feather over 9 mm to the 3.4 mm edge level: h = 3.4 + w(dist)·raw.</li>
+<li>
+<strong>Slope cap</strong>: if any slope exceeds 34°, the relief above the edge level
+is scaled down uniformly.  On seed 1 the cap binds, leaving 3.40–6.58 mm
+(≈ 3.2 mm of rise); 78% of the area is ≤ 12° (90% on seed 2).</li>
+<li>
+<code>--flat</code> returns the constant edge level; the hill noise is still drawn
+so the rest of the RNG stream is unchanged.</li>
+</ul>
+<h3 id="2-2-flow-field-makedirection-finishflow-steerrim">
+2.2 Flow field (<code>make_direction</code>, <code>finish_flow</code>, <code>steer_rim</code>)</h3>
+<p>
+All steps before 4 operate on a scalar angle, which cannot form
+singularities (REQ-FL-5).</p>
+<ol>
+<li>
+<strong>Regional angle</strong>: θ_r = θ₀ + 60°·n(σ 15 mm), θ₀ uniform.</li>
+<li>
+<strong>Meander</strong>: θ = θ_r + A·sin(2π·s/15 mm + φ).<ul>
+<li>
+s is the <strong>least-squares along-flow coordinate</strong>, ∇s ≈ (cos θ_r,
+sin θ_r), solved by FFT Poisson on a mirror-extended grid.  Lines of
+constant s cross the flow, so neighbouring streamlines wave in phase.</li>
+<li>
+A = 10°–30° from smoothstep(0.5 + 0.35·n(σ 12 mm)); φ = π·n(σ 14 mm).</li>
+</ul>
+</li>
+<li>
+<strong>Downhill pull</strong>: vector blend toward −∇H₀ with weight
+0.3·clip(slope / tan 34°, 0, 1).</li>
+<li>
+<strong>Lens wrap</strong> (on the vector field), per lens with its own band
+U(1.5, 4.5) mm and strength U(0.55, 1.0):<ul>
+<li>
+d = lens-metric distance (§2.4), n̂ = normalised metric gradient,
+w = strength·(1 − smoothstep(d / band)).</li>
+<li>
+Remove the inward component: v ← v − w·min(v·n̂, 0)·n̂.</li>
+<li>
+<strong>Parting</strong> at the upstream tip: v ← v − 0.6·w·min(v·n̂, 0)·tanh(b / 0.8 mm)·p̂,
+with b the across-lens coordinate and p̂ the lens perpendicular.  The
+smooth tanh side choice avoids a herringbone seam upstream.</li>
+<li>
+Renormalise.  Lens partings and rejoins are the only singularities.</li>
+</ul>
+</li>
+<li>
+<strong>Rim steering</strong> (<code>steer_rim</code>, rev v2g).  Three smooth knob maps
+(smoothstep(0.5 + 0.35·n(σ 8 mm))): ramp distance 9–15 mm, allowed angle
+φ_ok 70–88°, pull 0.15–0.45.  φ is the heading measured from an edge's
+outward normal, w = smoothstep(1 − dist/ramp).<ul>
+<li>
+<strong>Turn side, once per stretch of rim</strong> (<code>_rim_sides</code>).  Per perimeter
+sample, the w-weighted mean tangential lean sin φ across the steering
+band, laid out as one counter-clockwise loop (side +1 = turning CCW on
+every edge), smoothed at σ 20 mm <em>along the loop, across corners</em>.
+Its sign is the side: one per long stretch, and a corner continues the
+adjacent edge.  <code>hard</code> = that sign smoothed at 2.5 mm (which way
+inward headings turn), <code>soft</code> = smoothed at 8 mm (≈ 0 around a flip).</li>
+<li>
+<strong>Per edge</strong>, a rotation Δ_e of the input angle:<ul>
+<li>
+Inward headings (|φ| &gt; φ_ok) are compressed toward ±φ_ok on the rim
+side; the two candidate rotations (turn +, turn −) are blended by
+λ = ½(1 + hard), except that headings within 30° of parallel keep
+their own side (this also masks each candidate's unwrap cut at 90°).</li>
+<li>
+<strong>Pull outward</strong> (|φ| ← |φ|·(1 − pull·w)) only for headings already
+going outward, faded over ±0.35 rad about 90°.  Pulling turned-in
+headings too gave an S-bend that read as a herringbone spine
+parallel to the wall.</li>
+<li>
+<strong>Square up around a flip</strong>: there the pull rises to 0.85·(1 − |soft|)
+and its ramp reaches up to 2× further, so where two stretches meet the
+flow comes square to the wall and ends there.</li>
+<li>
+<strong>Run alongside</strong> within 3 mm: blend toward sign(soft)·φ_ok with
+smoothstep(1 − dist/3 mm)·|soft|, i.e. faded out around a flip.
+(Without this every rim frond pointed into the wall and was cut
+short, leaving a bare &quot;picture frame&quot;.)</li>
+</ul>
+</li>
+<li>
+<strong>Corners</strong>: Δ = Σ P_e Δ_e with a nearest-edge partition of unity
+P_e ∝ exp(−(d_e − d_min)/2 mm) (far edges have Δ_e = 0).</li>
+<li>
+Applied as a <strong>smoothed scalar rotation</strong>: θ + G_σ1.5mm(Δ).  A
+continuous Δ cannot create a singularity.</li>
+<li>
+Before v2g the side came from a pointwise smoothed preference
+(σ 14 mm, 2-D) and edges were applied in a fixed order.  Where the
+preference flipped, the run-alongside band forced opposite headings
+side by side: long feathered V seams and corner starbursts (meadow
+seeds 2, 4, 5).</li>
+</ul>
+</li>
+</ol>
+<h3 id="2-3-swaths-swaths">
+2.3 Swaths (<code>Swaths</code>)</h3>
+<p>
+Swaths no longer carry height (there is no turf mass); they group strand
+roots and scale frond length along each cell.</p>
+<ul>
+<li>
+<strong>Sites</strong>: Poisson-disk at 11 mm over the tile + 10 mm margin.  Axis dᵢ =
+the pre-wrap flow (step 3) at the site.</li>
+<li>
+<strong>Ownership</strong>: argmin of ‖(Δ·dᵢ), (Δ·d⊥ᵢ)/0.65‖ + 2.5 mm·warp(x, y)·φᵢ,
+with warp smooth noise at σ 3 mm and a per-site phase φᵢ ∈ U(−1, 1).</li>
+<li>
+<strong>Cell coordinates</strong> s = (a − a_min)/(a_max − a_min) ∈ [0, 1],
+l = b/|b|_max ∈ [−1, 1], normalised per cell on the 0.25 mm grid; s at a
+root lengthens fronds toward the cell's downstream crest (§2.6).</li>
+</ul>
+<h3 id="2-4-soil-lenses-and-soil-relief-placelenses-lenses">
+2.4 Soil lenses and soil relief (<code>place_lenses</code>, <code>Lenses</code>)</h3>
+<ul>
+<li>
+<strong>Placement</strong>: N = round(U(1.3, 1.8) × squares), at least 1.  80
+candidates inside a 7 mm rim inset, scored by −z-score(ground height) +
+N(0, 0.8), accepted best-first ≥ 13 mm apart.  Typical coverage ≈ 10%.</li>
+<li>
+<strong>Shape</strong>: axis = pre-wrap flow at the centre; half-length U(5, 9) mm,
+half-width × U(0.45, 0.65).  Lens metric f = |a|/ℓ + (b/w)², which gives
+pointed ends (an eye); approximate distance d = (f − 1)·w/2 plus a shared
+±0.8 mm border warp (σ 1.2 mm).  Mask = smoothstep(0.5 − d/0.5 mm).</li>
+<li>
+<strong>Grass response</strong>: the mask decides only where fronds root and how far
+they spill (§2.6); it never cuts a blade.</li>
+<li>
+<strong>Ground texture</strong>: a soft trough −0.4 mm·m_s (m_s = the mask blurred at
+σ 0.8 mm, so no step outlines the patch) in H₀, plus the shared dirt
+texture <code>dirtlab.dirt_relief</code> (roughness, clods, grit, pebbles) over all
+exposed ground: bare patches and between blades.</li>
+</ul>
+<h3 id="2-5-strands-and-spines-makestrandroots-planfronds">
+2.5 Strands and spines (<code>make_strand_roots</code>, <code>plan_fronds</code>)</h3>
+<ul>
+<li>
+<strong>Strands</strong>: Poisson seeds at 2.65 mm over the tile + 8 mm margin.  Each
+strand is U(15, 30) mm long and starts U(0.2, 0.6) of its length
+upstream of its seed (traced backward), then is traced forward.</li>
+<li>
+<strong>Roots</strong> every 0.5·L·U(0.8, 1.2) along the strand, jittered ±0.3 mm
+laterally, with L = U(3.5, 6.5) mm; only roots inside the tile are kept.</li>
+<li>
+<strong>Per root</strong>: swath owner and (s_b, l_b); <strong>bank</strong> = within 4 mm of soil
+and not in it.  Heading offset: strays (5%, or 12% for bank roots) get
+±U(20°, 35°), others U(±4°); bank roots add U(±15°) wander.</li>
+<li>
+<strong>Spines</strong>: one batched RK2 trace per root along the final flow, at
+0.25 mm unit-speed steps, rotated by the root's offset, to 6.5·1.1 +
+0.5 mm.  Neighbouring strands 2.65 mm apart against blades 0.9–1.8 mm
+wide leave dirt showing between ribbons (≈ 9% of the grass area).</li>
+</ul>
+<h3 id="2-6-frond-draw-and-shortening-drawfrond">
+2.6 Frond draw and shortening (<code>draw_frond</code>)</h3>
+<ul>
+<li>
+<strong>Skips</strong>: roots under an obstacle (meadowlab's rocks, shorelab's
+water); roots in soil become <strong>sprigs</strong> with 10% probability (L
+U(1.8, 3.0), half-width 0.5, crest 0.6 mm), otherwise are dropped.</li>
+<li>
+<strong>Dimensions</strong>: L = L_strand·(0.8 + 0.3·s_b) (2.8–7.2 mm, longer toward
+the swath crest); nominal half-width U(0.8, 1.25) (→ width in lines);
+crest height h_f U(1.5, 2.0) mm.  Bank fronds: h_f × U(0.65, 1.15).</li>
+<li>
+<strong>Per-frond endings</strong>: rim tip inset 0.2 + 1.3·U² mm; soil spill
+0.8 + 2.4·U² mm, or 4 mm for wisps (4%).</li>
+<li>
+<strong>Shortening</strong> (never slicing): the spine stops at the first sample
+inside the rim inset, deeper than the spill into soil (EDT), or deeper
+than <code>tuck_mm</code> into an obstacle; L becomes that arc length.  Fronds
+shorter than 1.5 mm are dropped.  Shortened fronds are lower: h_f ×
+clip(L/L₀, 0.3, 1)^0.8 (REQ-EDGE-5).</li>
+</ul>
+<h3 id="2-7-blade-strokes-bladelayers">
+2.7 Blade strokes (<code>blade_layers</code>)</h3>
+<p>
+A blade of crest height h has N = round(h / 0.2) layers.  Layer k is a
+stroke along the traced spine (the frond's streamline), a whole number of
+lines wide, built as nested round-capped buffers of the spine segment:</p>
+<ul>
+<li>
+<strong>Cross-section (line counts per layer)</strong>: n_k = round(n_max·sin(π(k +
+½)/N)^0.6), n_max = clip(round(2·half-width / 0.45), 2, 4); the bottom
+layer ≥ 2 lines (the keel), the top layer exactly 1 line (the sharpest
+ridge FDM can make), and n_k ≤ n_{k−1} + 1 (growth ≤ ½ line a side per
+layer ≈ 45°).  Example, 10 layers, 4-line body: 2 3 4 4 4 4 4 3 2 1.</li>
+<li>
+<strong>Profile (where a layer starts)</strong>: u_back = L·(1 − (1 − (k + ½)/N)^{1/2}),
+the root-side end of the crest 1 − (1 − u/L)²: a convex arch rising
+from the ground at the root and levelling out at the tip.</li>
+<li>
+<strong>Tip (where a layer ends)</strong>: u_front = L − (N − 1 − k)·0.2 mm.  Only the
+top layer reaches the tip; each layer below stops 0.2 mm shorter, so
+the bow is raked and overhangs open air to the last layer, with the
+keel underneath.</li>
+<li>
+<strong>Points</strong>: within a layer the stroke loses one line every 0.45 mm
+toward each end, so both ends close to a single line's round end: in
+plan, every horizontal section ends in a point.</li>
+<li>
+<strong>Height map</strong>: each layer's footprint raises the grass-top map T to
+H₀ + (k + 1)·0.2 on the 0.12 mm grid (used to seat rocks, for the DB
+band check and the gap statistic).</li>
+</ul>
+<p>
+The stroke stack is exactly what an FDM slicer would draw: opening each
+layer by just under half a line keeps 99.9% of its area
+(<code>blades_demo.py --strokes</code> writes it unsmoothed).</p>
+<h3 id="2-8-smoothing-and-seating-blademesh-buildblade-groundsolid">
+2.8 Smoothing and seating (<code>blade_mesh</code>, <code>build_blade</code>, <code>ground_solid</code>)</h3>
+<ul>
+<li>
+<strong>Loft</strong>: each layer outline is closed by 0.3 mm (fills the notches where
+a stroke steps down a line) and becomes a 2-D signed distance field on a
+0.05 mm grid.  In height above ground h, the 3-D field blends linearly
+between layer centres, so the surface runs straight from one outline to
+the next: the layer steps vanish but the plan shape (outline, keel,
+point) is kept.  Above the top centre the field closes ½ line over ½
+layer (a rounded ridge); below the bottom centre it continues 0.3 mm
+into the ground (<code>EMBED_MM</code>).</li>
+<li>
+<strong>Blur</strong> σ 0.05 mm in plan and 0.15 mm in h rounds the loft's creases at
+each layer centre.  (A vertical blur alone could not remove the steps:
+a layer's back end moves ≈ 0.5 mm along the blade per 0.2 mm up.
+Catmull-Rom interpolation between layers overshot the whole-line
+jumps and made the blade lumpy.)</li>
+<li>
+<strong>Mesh</strong>: marching cubes; each vertex is lifted by the bilinear H₀
+under it, so blades follow the hills; quadric decimation to 1,500 faces
+(≤ ≈ 20 µm off the field, below resin XY resolution; 800 faces read
+faceted in a viewer).</li>
+<li>
+<strong>Obstacles</strong>: with <code>side_low &lt; 1</code> (meadowlab), a blade's height is
+scaled by the side factor at its tip, where it presses against a rock.</li>
+<li>
+<strong>Ground</strong>: H₀ + dirt relief as a heightfield solid from z = 0
+(<code>make_heightmap_solid</code>); blades are meshed on worker threads and
+batch-unioned with it.  Internal voids (sealed under overlapping
+blades) are separate negative-volume bodies and are dropped with the
+crumbs, i.e. filled.</li>
+<li>
+<strong>Base</strong>: ∪ exact 1 mm slab box ∪ DB base (peg height from the tallest
+point), <code>simplify(0.005 mm)</code>, keep the largest body, <code>stl_safe</code>, export.</li>
+</ul>
+<h2 id="3-parameters-module-constants-grasslab-py">
+3. Parameters (module constants, <code>grasslab.py</code>)</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Stage</th>
+<th>
+Constants (value)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+grids</td>
+<td>
+<code>SQUARE_MM</code> 35, <code>FIELD_RES_MM</code> 0.25, <code>VOX_MM</code> 0.12, <code>VOX_1X1_MM</code> 0.10, <code>MARGIN_MM</code> 10</td>
+</tr>
+<tr>
+<td>
+1 hills</td>
+<td>
+<code>HILL_RELIEF_MM</code> 7.0, <code>GROUND_EDGE_MM</code> 3.4, <code>HILL_SIGMA_LARGE_MM</code> 10, <code>HILL_SIGMA_MID_MM</code> 5, <code>HILL_MID_WEIGHT</code> 0.35, <code>HILL_PLAIN_FRAC</code> 0.4, <code>HILL_PLAIN_SOFT</code> 0.25, <code>EDGE_MARGIN_MM</code> 9, <code>MAX_GROUND_SLOPE_DEG</code> 34, <code>USABLE_SLOPE_DEG</code> 12</td>
+</tr>
+<tr>
+<td>
+2 flow</td>
+<td>
+<code>COHERENCE_MM</code> 15, <code>THETA_STD_DEG</code> 60, <code>TERRAIN_FOLLOW</code> 0.3, <code>MEANDER_WAVELENGTH_MM</code> 15, <code>MEANDER_AMP_DEG</code> 10–30, <code>MEANDER_AMP_SIGMA_MM</code> 12, <code>MEANDER_PHASE_SIGMA_MM</code> 14</td>
+</tr>
+<tr>
+<td>
+3 swaths</td>
+<td>
+<code>SWATH_SPACING_MM</code> 11, <code>SWATH_LATERAL_ASPECT</code> 0.65, <code>SWATH_WARP_MM</code> 2.5, <code>SWATH_WARP_SIGMA_MM</code> 3, <code>SWATH_AMP_MM</code> 1.2–2.2, <code>ENV_FLOOR</code> 0.25, <code>ENV_EXP</code> 1.6, <code>ENV_LATERAL_EXP</code> 0.6</td>
+</tr>
+<tr>
+<td>
+4 lenses</td>
+<td>
+<code>SOIL_LENSES_PER_SQ</code> 1.3–1.8, <code>SOIL_LENS_CANDIDATES</code> 80, <code>SOIL_LENS_SCORE_NOISE</code> 0.8, <code>SOIL_LENS_HALF_LEN_MM</code> 5–9, <code>SOIL_LENS_ASPECT</code> 0.45–0.65, <code>SOIL_LENS_SEP_MM</code> 13, <code>SOIL_RIM_KEEP_MM</code> 7, <code>SOIL_LENS_WARP_MM</code> 0.8, <code>SOIL_LENS_WARP_SIGMA_MM</code> 1.2, <code>SOIL_EDGE_MM</code> 0.5</td>
+</tr>
+<tr>
+<td>
+4 wrap</td>
+<td>
+<code>DEFLECT_BAND_MM</code> 1.5–4.5, <code>DEFLECT_STRENGTH</code> 0.55–1.0, <code>PARTING_PUSH</code> 0.6, <code>PARTING_SOFT_MM</code> 0.8</td>
+</tr>
+<tr>
+<td>
+4 dip</td>
+<td>
+<code>SOIL_DIP_MM</code> 0.4, <code>SOIL_DIP_SOFT_MM</code> 0.8 (texture: <code>dirtlab.dirt_relief</code>)</td>
+</tr>
+<tr>
+<td>
+4b rim</td>
+<td>
+<code>RIM_NOISE_SIGMA_MM</code> 8, <code>EDGE_FLOW_MM</code> 9–15, <code>EDGE_OK_DEG</code> 70–88, <code>EDGE_PULL</code> 0.15–0.45, <code>RIM_ALONG_MM</code> 3, <code>STEER_SIDE_SIGMA_MM</code> 20, <code>STEER_SIDE_HARD_MM</code> 2.5, <code>STEER_SIDE_SOFT_MM</code> 8, <code>STEER_NATURAL_DEG</code> 30, <code>RIM_SQUARE_PULL</code> 0.85, <code>RIM_SQUARE_REACH</code> 1.0, <code>PULL_SOFT_RAD</code> 0.35, <code>STEER_CORNER_MM</code> 2, <code>STEER_SMOOTH_MM</code> 1.5</td>
+</tr>
+<tr>
+<td>
+5 strands</td>
+<td>
+<code>STRAND_SPACING_MM</code> 2.65, <code>STRAND_LEN_MM</code> 15–30, <code>STRAND_BACK_FRAC</code> 0.2–0.6, <code>STRAND_MARGIN_MM</code> 8, <code>STRAND_GAP_FRAC</code> 0.5, <code>STRAND_LATERAL_MM</code> 0.3, <code>TRACE_STEP_MM</code> 0.25</td>
+</tr>
+<tr>
+<td>
+5 fronds</td>
+<td>
+<code>FROND_LEN_MM</code> 3.5–6.5, <code>FROND_HALF_W_MM</code> 0.8–1.25, <code>FROND_H_MM</code> 1.5–2.0, <code>FROND_MIN_LEN_MM</code> 1.5, <code>FROND_DELTA_DEG</code> 4, <code>STRAY_FRAC</code> 0.05, <code>STRAY_DELTA_DEG</code> 20–35, <code>SPRIG_PROB</code> 0.10, <code>SPRIG_LEN_MM</code> 1.8–3.0, <code>SPRIG_HALF_W_MM</code> 0.5, <code>SPRIG_H_MM</code> 0.6</td>
+</tr>
+<tr>
+<td>
+5a strokes</td>
+<td>
+<code>LINE_W_MM</code> 0.45, <code>LAYER_MM</code> 0.2, <code>KEEL_LINES</code> 2, <code>TOP_LINES</code> 1, <code>MAX_LINES</code> 2–4, <code>LENS_EXP</code> 0.6, <code>RAKE_MM</code> 0.2, <code>TIP_STEP_MM</code> 0.45, <code>RISE_EXP</code> 2.0</td>
+</tr>
+<tr>
+<td>
+5a smoothing</td>
+<td>
+<code>BLADE_VOX_MM</code> 0.05, <code>SMOOTH_CLOSE_MM</code> 0.3, <code>SMOOTH_SIG_MM</code> 0.05, <code>SMOOTH_SIG_Z_MM</code> 0.15, <code>EMBED_MM</code> 0.3, <code>BLADE_FACES</code> 1500</td>
+</tr>
+<tr>
+<td>
+5b endings, banks</td>
+<td>
+<code>RIM_TIP_INSET_MM</code> 0.2–1.5, <code>SIDE_INNER_MM</code> 0.8, <code>SOIL_SPILL_MM</code> 0.8–3.2, <code>WISP_FRAC</code> 0.04, <code>WISP_SPILL_MM</code> 4.0, <code>BANK_REACH_MM</code> 4, <code>BANK_WANDER_DEG</code> 15, <code>BANK_STRAY_FRAC</code> 0.12, <code>BANK_H_SCALE</code> 0.65–1.15</td>
+</tr>
+<tr>
+<td>
+6–7 mesh</td>
+<td>
+<code>SIMPLIFY_TOL_MM</code> 0.005, <code>SLAB_BOX_MM</code> 1.0, <code>OVERHANG_DEG</code> 45 (audit counts n_z &lt; −sin 48°), <code>DB_GRASS_BAND</code> 4.4–5.9</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+<code>build_grass(…, blocker=None, tuck_mm=0.5, side_low=1.0, side_mm=1.0)</code> is
+the hook meadowlab and shorelab use for rock footprints (and water); with
+<code>blocker=None</code> it is grasslab's own behaviour.  With <code>side_low &lt; 1</code>, the
+side factor side_low + (1 − side_low)·smoothstep(d_out/side_mm) at
+distance d_out outside the blocker, falling to 0 over <code>SIDE_INNER_MM</code>
+(0.8 mm) inside it, scales each blade's height at its tip, so grass laps
+against an obstacle's foot instead of swallowing it.  It returns <code>Grass</code>
+with <code>solid</code> (dirt ground ∪ blades, a Manifold), <code>T</code> (grass-top map) and
+<code>H0</code> (seating ground).</p>
+<h2 id="4-known-quirks">
+4. Known quirks</h2>
+<ul>
+<li>
+<code>WISP_FRAC</code> is drawn for every frond; it only matters where a spine
+reaches soil.</li>
+<li>
+Swaths no longer carry height (no turf mass), only the strand length
+scaling through s_b; their envelope code is unused but kept for the RNG
+stream and as the hook for a future turf base layer.</li>
+<li>
+Meshing ≈ 80 s of the ≈ 100 s build (3,300 blades, ≈ 24 ms each on 4
+threads); a 2 × 2 STL is ≈ 85 MB at 1.7M faces.</li>
+</ul>
+<h2 id="5-superseded-designs-lessons-kept">
+5. Superseded designs (lessons kept)</h2>
+<ul>
+<li>
+<strong>Height-field fronds with lips, ledges and a voxel backstop (rev 1–4,
+v1–v2g, retired 2026-10-29)</strong>: each frond was a skirt (carrying the
+swath envelope) plus a domed blade soft-maxed into a mass map T, with
+column intervals for 45° tip lips and side ledges, a field F = max(T −
+z, intervals), an FDM voxel backstop (support filter, hole fill, sealed
+pocket fill, slicer-island removal) and marching cubes at 0.12 mm.
+Lessons:<ul>
+<li>
+A height field plus carved intervals never gave a visible undercut:
+neighbouring skirts walled the air under every tip, the walls sealed
+it, and the pocket fill then filled it (cross-sections showed it).
+Undercuts must be part of the blade's own construction.</li>
+<li>
+A shape defined as a &quot;theoretical ideal&quot; (domes, knife edges, needle
+points) is not what prints: everything narrower than a line was
+dropped by the slicer, or mangled by &quot;detect thin walls&quot;.  Define
+the blade in layers and lines instead.</li>
+<li>
+The turf mass (skirts) existed only to hide the ground between
+blades; on a lone blade it read as a stair-stepped pad, and between
+blades it buried the undercuts.  Removed; blades stand on dirt.</li>
+<li>
+Tried on the way and dropped: a 45° cone from the blade core (blunt
+front face; round sections at low heights), a hull of nested pointed
+sections (vertical keel post until the sections grew from the keel),
+a J-curve (concave) rise.</li>
+</ul>
+</li>
+<li>
+<strong>Free-standing envelope layer (rev 2, v1–v1e)</strong>: T was seeded with the
+swath envelope, eased to 0.5× at the rim and cut at soil.  Result:
+rim bevel, carved holes, border steps (&quot;clay&quot;, F19).  Lesson: no grass
+height outside a blade.</li>
+<li>
+<strong>Swath-axis fronds with fan</strong> (l_b·12° fan, ±4° jitter, κ ± 0.03/mm):
+superseded by streamline fronds; the flow, not the cell, carries
+direction.</li>
+<li>
+<strong>Seam soil (v1e–v1k)</strong>: lanes along swath seams (triple-junction
+chains, width from noise at the nearest seam pixel, slits &lt; 2.2 mm
+closed).  Better than puddles, but unrelated to the flow; replaced by
+lenses the flow wraps.</li>
+<li>
+<strong>Curvature field and sickle spines (v1j–v1k)</strong>: κ = 0.24·tanh(1.6·n)
+/mm at σ 5.5 mm, bend concentrated toward the tip.  Coherent but still
+per frond: &quot;commas&quot; (F24) beside the lodged-grass photo.</li>
+<li>
+<strong>Per-frond edge steering (v1i–v1j)</strong>: steering each frond at its root.
+Superseded by steering the field; per-point side flips had created a
+starburst.</li>
+<li>
+<strong>Global soft frond ends (v1h-a/b)</strong>: fish scales everywhere.</li>
+<li>
+<strong>Soil roughness and faceted pebbles</strong>: retired for the shared dirt
+texture (2026-10-29).</li>
+<li>
+<strong>v0</strong>: random lens blades in a binary voxel volume; see REQUIREMENTS §7.2.</li>
+</ul>
+<h2 id="6-iteration-log-2026-10-27-chronological">
+6. Iteration log (2026-10-27, chronological)</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Iter</th>
+<th>
+Trigger</th>
+<th>
+Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+v1a</td>
+<td>
+self-check: <strong>shark fins</strong> (tips at the crest, vertical fronts), <strong>roof shingles</strong> (wide flat domes), mean top 4.26 mm (below the band)</td>
+<td>
+tip droop, lip underside measured from the tip; narrower, denser fronds; dome exponent 0.55 → 0.9; edge level 3.0 → 3.3</td>
+</tr>
+<tr>
+<td>
+v1b</td>
+<td>
+handed to Shawn</td>
+<td>
+—</td>
+</tr>
+<tr>
+<td>
+v1c</td>
+<td>
+Shawn: &quot;increase the hills a bit… a few patches of bare ground&quot;</td>
+<td>
+hills ≈ 4 mm; first bare-soil patches</td>
+</tr>
+<tr>
+<td>
+v1d</td>
+<td>
+Shawn: &quot;slightly more hills, slightly more bare patches&quot;</td>
+<td>
+relief ≈ 5 mm, 30° cap, edge 4.0 mm; 4 patches (8.6%)</td>
+</tr>
+<tr>
+<td>
+v1e</td>
+<td>
+Shawn: &quot;bare patches are terrible&quot; (puddles, trench rims, bubble pebbles)</td>
+<td>
+seam-lane soil, sharp banks with limited spill, trough, faceted pebbles, sprigs</td>
+</tr>
+<tr>
+<td>
+v1f</td>
+<td>
+Shawn: grass &quot;chopped down like it was all made of clay&quot; (rim bevel, soil walls, border steps)</td>
+<td>
+grass made of fronds: skirts carry the envelope, T starts at H₀, boundaries by shortening, shortened fronds lower</td>
+</tr>
+<tr>
+<td>
+v1g</td>
+<td>
+Shawn: &quot;more hills and bigger bare patches&quot;</td>
+<td>
+landforms σ 10/5 mm, 34° cap, 9 mm feather; wider lanes (12.8%)</td>
+</tr>
+<tr>
+<td>
+v1h</td>
+<td>
+Shawn: &quot;bare patches have some weird artifacts&quot;</td>
+<td>
+bank-only soft ends (global version scalloped the tile, reverted), dome-faceted pebbles, blurred dip mask</td>
+</tr>
+<tr>
+<td>
+v1i</td>
+<td>
+Shawn: rim grass &quot;shouldn't point in the other direction&quot;</td>
+<td>
+per-frond edge-flow steering</td>
+</tr>
+<tr>
+<td>
+v1j</td>
+<td>
+Shawn: &quot;our grass is very straight… should be more curved, but not randomly&quot;; rim too regular</td>
+<td>
+curvature field + curved spines; per-frond steering and tip inset variation</td>
+</tr>
+<tr>
+<td>
+v1k</td>
+<td>
+Shawn: &quot;more curves… not just one big sweep&quot;</td>
+<td>
+K_MAX 0.16 → 0.24; θ swing 35° → 60° at σ 25 → 15 mm; swaths 13 → 11 mm</td>
+</tr>
+<tr>
+<td>
+v2a</td>
+<td>
+Shawn: lodged-grass photo → &quot;go with the flow-following ribbons&quot;</td>
+<td>
+in-phase meandering field, soil lenses that deflect the flow, rim steering on the field, strands of streamline fronds</td>
+</tr>
+<tr>
+<td>
+v2b</td>
+<td>
+self-check: rim starburst, herringbone upstream of lenses, soil 5%</td>
+<td>
+smoothed scalar rim rotation with smoothed turn side; tanh parting; lenses ≈ 10%; edge 4.2 → 3.9 mm</td>
+</tr>
+<tr>
+<td>
+v2c</td>
+<td>
+Shawn: &quot;at miniature scale the blades should be shorter… still like that meandering look&quot;</td>
+<td>
+fronds 7–12 → 4–7 mm, narrower and lower; strands 3.0 → 2.3 mm</td>
+</tr>
+<tr>
+<td>
+v2d</td>
+<td>
+Shawn: &quot;split the difference&quot;</td>
+<td>
+fronds 5.5–9.5 mm, half-width 0.55–0.9, h_f 0.65–1.0; strands 2.65 mm</td>
+</tr>
+<tr>
+<td>
+v2e</td>
+<td>
+Shawn: bank &quot;vertical wall&quot; should be a pile of blades</td>
+<td>
+side ledges with 45° undercuts, opened under visible ledges; bank wander/stray/height scale; per-lens deflection band and strength</td>
+</tr>
+<tr>
+<td>
+v2f</td>
+<td>
+Shawn: hills should rise from a consistent perimeter</td>
+<td>
+rises only; edge 3.9 → 3.4 mm (mean top 5.34 mm); usable 88% → 78%</td>
+</tr>
+<tr>
+<td>
+v2g</td>
+<td>
+meadow seed sweep: long feathered V seams and a corner starburst at the rim (meadow s2/4/5)</td>
+<td>
+rim turn side chosen once per stretch of the rim loop (σ 20 mm, across corners) instead of pointwise; square-up and no run-alongside around a flip; pull for outward headings only; nearest-edge corners (§2.2.5)</td>
+</tr>
+<tr>
+<td>
+—</td>
+<td>
+refactor (no geometry change; all outputs byte-identical)</td>
+<td>
+stages split (<code>Surface</code>, <code>plan_fronds</code>, <code>draw_frond</code>, <code>sculpt_frond</code>, <code>open_ledges</code>); constants grouped by stage; meshing retry on non-manifold marching cubes (previously a silent empty STL, seen in meadowlab)</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="export-guarantees-2026-10-27">
+Export guarantees (2026-10-27)</h3>
+<ul>
+<li>
+<p>
+<strong>Exact slab box</strong>: the marching-cubes solid is unioned with an exact
+box ([0, W] × [0, H] × [0, 1 mm], inside the ground, which sits at the
+3.4 mm edge level or higher) before the DB base.  The base must meet a
+clean planar face.  Meeting the MC bottom directly left 4 sliver edges
+at the peg-groove apexes under the tile seams, and they collapsed on
+STL reload.</p>
+</li>
+<li>
+<p>
+<strong><code>stl_safe</code></strong>, run before every export:</p>
+<ol>
+<li>
+<code>dharmatiles.stone.solidify.separate_pinches</code> nudges coincident but
+unconnected vertices apart.</li>
+<li>
+The mesh is merged exactly as a slicer does (float32 positions,
+merge by position).</li>
+<li>
+Zero-volume components (back-to-back union &quot;fins&quot;) are dropped.</li>
+<li>
+It <strong>raises</strong> unless the result is one watertight body.</li>
+</ol>
+<p>
+Verified on seeds 1–4.  Before this, grass seed 3 would have exported
+a non-watertight file without any warning.</p>
+</li>
+</ul>
+<h2 id="exposed-ground-dirt-2026-10-29-written-for-the-v2-height-fie">
+Exposed ground = dirt (2026-10-29; written for the v2 height-field grass)</h2>
+<p>
+Shawn: dirt should be the texture wherever ground is exposed, across all
+labs, and mud and other dirt textures are eliminated.  This lab now
+uses <code>dirtlab.dirt_relief(seed, W, H)</code>: dirtlab's soil roughness, clods,
+grit and pebbles, without its hills or big stones, as a relief offset
+sampled onto this lab's grid.</p>
+<ul>
+<li>
+<code>Surface</code>: fronds still seat on plain H0 (the old soft soil dip is
+kept), so the grass look is unchanged.  T starts at, and is floored to,
+<strong>H0 + dirt</strong>, so dirt shows on bare patches and in the gaps between
+fronds.</li>
+<li>
+The old soil roughness and pebbles are retired.  <code>soil_relief</code> is still
+called, and its output discarded, only to keep the RNG stream and so
+the grass layout identical.</li>
+<li>
+The dirt seed is derived from the ground field, with no RNG draw.</li>
+<li>
+Meadowlab and shorelab inherit all of this.</li>
+<li>
+<strong>Carved gaps stay open (2026-10-29)</strong>: the dirt floor was re-applied
+after <code>open_ledges</code>, and dirt bumps refilled the 0.6 mm air gaps under
+tips and side ledges.  On shore s1, gapped tip columns fell from 40% to
+20%.  Carved columns now floor to plain H0 (shadowed ground under a
+ledge); everywhere else floors to H0 + dirt.  Restored to 40% (s1) and
+33% (s3), with 0 slicer islands.</li>
+</ul>
+<h2 id="v3-stroke-blades-2026-10-29">
+v3: stroke blades (2026-10-29)</h2>
+<p>
+Driven by Shawn inspecting single blades (<code>blades_demo.py</code>) in MeshLab and
+Bambu Studio:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Step</th>
+<th>
+Trigger (Shawn)</th>
+<th>
+Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+1</td>
+<td>
+&quot;there is no undercut&quot; (vertical wall under the tip)</td>
+<td>
+sections showed the 45° wedge built, then sealed by the blade's own solid dome edges + pocket fill; a 45° cone underside from the blade core</td>
+</tr>
+<tr>
+<td>
+2</td>
+<td>
+&quot;same pointiness as the tip… like a keel&quot;; &quot;every cross section… ends in a point&quot;</td>
+<td>
+pointed planform (ogive tip); a keel strip; hull of nested pointed sections grown from the keel</td>
+</tr>
+<tr>
+<td>
+3</td>
+<td>
+&quot;base rise… more of a curve&quot; → &quot;convex&quot;</td>
+<td>
+crest 1 − (1 − u/L)²</td>
+</tr>
+<tr>
+<td>
+4</td>
+<td>
+&quot;what is going on at the base&quot; → &quot;why do we ever want the pad?&quot; → &quot;blades on dirt, no turf mass&quot;</td>
+<td>
+skirts removed everywhere</td>
+</tr>
+<tr>
+<td>
+5</td>
+<td>
+Bambu: &quot;the top of the blade doesn't fill the volume we define&quot;; thin-wall detection worse</td>
+<td>
+blades defined in the printer's units: layers × whole lines (§2.7)</td>
+</tr>
+<tr>
+<td>
+6</td>
+<td>
+&quot;sharper on top&quot;; &quot;overhangs right to the last layer&quot;</td>
+<td>
+1-line top layer; rake every layer</td>
+</tr>
+<tr>
+<td>
+7</td>
+<td>
+&quot;resin printable… SMOOTH the resulting blade&quot;</td>
+<td>
+loft through the layer outlines (§2.8)</td>
+</tr>
+<tr>
+<td>
+8</td>
+<td>
+&quot;make that the … only way to generate grass blades&quot;</td>
+<td>
+the height-field renderer, lips/ledges, voxel backstop and shorelab's grass overrides deleted; shore blade sizes are the defaults for every lab</td>
+</tr>
+</tbody>
+</table></div>
+
+</article>
+</div>
+</body>
+</html>

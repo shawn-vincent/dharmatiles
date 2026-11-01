@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>dirtlab — Plain Bare Earth: Design</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../../assets/docs.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../../index.html">dharmatiles docs</a><a href="../../index.html#design">Library design</a><a href="../../index.html#guides">Guides</a><a href="../../index.html#labs" aria-current="page">Labs</a><a href="../../index.html#reference">Reference</a><a href="../../index.html#historic">Historic</a><a href="https://claude.ai/artifact/GBiwhTV3inCuS3cRiWnTeQ">Rust study</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Lab · dirtlab</div>
+  <h1>dirtlab — Plain Bare Earth: Design</h1>
+  <p class="srcnote">Converted from <code>dirtlab/DESIGN.md</code> on 2026-11-01; the markdown file was removed (see git history). Relative paths in the text are relative to <code>dirtlab/</code>.</p>
+  
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol><li><a href="#1-core-idea-one-height-field-built-in-scale-order">1. Core idea: one height field, built in scale order</a></li><li><a href="#2-stages">2. Stages</a></li><li><a href="#3-parameters-module-constants-dirtlab-py">3. Parameters (module constants, <code>dirtlab.py</code>)</a></li><li><a href="#4-iteration-log">4. Iteration log</a></li><li><a href="#round-2-2026-10-29">Round 2 (2026-10-29)</a></li><li><a href="#shared-texture-2026-10-29">Shared texture (2026-10-29)</a></li></ol></nav>
+<article class="doc">
+<p>
+<em>Revision 1, 2026-10-29 (code v1g).  Implements <a href="requirements.html"><code>requirements.html</code></a> rev 1.
+Code: <code>dirtlab/dirtlab.py</code>; section numbers match its stage banners.</em></p>
+<hr />
+<h2 id="1-core-idea-one-height-field-built-in-scale-order">
+1. Core idea: one height field, built in scale order</h2>
+<p>
+Everything except the few larger stones is <strong>one height field</strong> z(x, y)
+on a 0.15 mm grid (467 × 467 for 2 × 2).  A height field cannot
+overhang, so the earth and the small/medium pebbles are supportless
+by construction (REQ-FDM-1).  Each scale is a separate stage, and stages
+combine by <strong>soft max</strong> (polynomial smooth max, width k), not by summing:
+a lump on the ground is a new surface that wins where it is higher, with
+a fillet of width k where it meets.  Summed bumps give porridge (D1);
+soft-maxed shapes keep their identity and get soil-like creases.</p>
+<pre><code>ground  = EDGE + lift·w_tex + undulation + w_tex·soil_mid
+soil    = smax(ground, clods)              (§2.2)
+z       = soil + w_tex·grit  [+ cracks]    (§2.3, §2.6)
+z      += stone soil banks; stones seated  (§2.5)
+z       = smax(z, pebbles) + foot mounds   (§2.4)
+z       = max(z, EDGE); z(rim) = EDGE      (rises only)
+mesh    = uniform heightfield solid ∪ 1 mm slab box ∪ stones ∪ DB base
+</code></pre>
+<p>
+<code>w_tex</code> ramps 0 → 1 between 0.4 and 2.0 mm from the edge, so the
+outermost 0.4 mm is exactly at <code>EDGE_MM</code> (REQ-H-1).</p>
+<h2 id="2-stages">
+2. Stages</h2>
+<h3 id="2-1-ground-groundundulation">
+2.1 Ground (<code>ground_undulation</code>)</h3>
+<p>
+Two Gaussian-filtered white noises (σ 10 mm + 0.35 × σ 4 mm).  As grasslab
+<code>make_ground</code>: subtract the 35% quantile, soft-floor at 0 (plains), scale
+the peak to U(0.9, 1.6) mm, fade with a cosine ramp over 6 mm from the
+rim, cap the slope at 14°.  A low fBm (2.2 mm, ±0.07 mm) adds broad soil
+roughness so tamped ground isn't glassy.</p>
+<h3 id="2-2-clods-clodlayer">
+2.2 Clods (<code>clod_layer</code>)</h3>
+<ul>
+<li>
+<strong>Patchiness</strong>: a σ 6 mm noise field → density 0…1 (smoothstep).
+Candidate clods are rejected with probability 1 − density: cloddy
+patches and tamped patches (REQ-E-3).</li>
+<li>
+<strong>Placement</strong>: Poisson(0.7/mm² × area) candidates, largest first,
+accepted when ≥ 0.6 × (r₁ + r₂) from placed ones (a spatial hash).
+Radius 0.35–1.5 mm skewed small (U^2.2).  Mixed sizes plus partial
+overlap avoid a packed cell pattern (D3).</li>
+<li>
+<strong>Shape</strong> (crumbs, not blisters, REQ-E-2): 1–3 lobes (main + satellites
+at 45–80% size, 0.4–0.9 r away), each an ellipse (aspect 1–1.7) with
+angular radius harmonics k = 2, 3, 5 (σ 0.22/√k) and profile
+h·(1 − ρ^2.6)^0.8 (flattish top, soft shoulder).  Height 0.12–0.3 r,
+≤ 0.45 mm; the whole clod is tilted (σ 0.05 mm/mm) and starts
+U(0, 0.5)·h below the ground (partly sunk).  Lobes and clods soft-max
+with k = 0.06 mm.</li>
+</ul>
+<h3 id="2-3-grit-grit">
+2.3 Grit (<code>grit</code>)</h3>
+<p>
+<code>dharmatiles.stone.noise.fbm</code>, 2 octaves at 0.45 mm, ±0.045 mm, plus
+0.12/mm² sand grains (radius 0.15–0.3 mm, 0.05–0.12 mm high, max-combined).</p>
+<h3 id="2-4-pebbles-placepebbles-pebbleshape">
+2.4 Pebbles (<code>place_pebbles</code>, <code>pebble_shape</code>)</h3>
+<ul>
+<li>
+<strong>Clusters</strong>: 4–7 Gaussian blobs (σ 3–7 mm) on a 0.25 floor, × (1 +
+0.8 × lowness of the 3 mm-blurred ground), normalised; darts are
+accepted with that probability (REQ-P-3).</li>
+<li>
+<strong>Counts and sizes</strong>: 5–9 medium (2–4 mm) and 45–75 small (0.5–1.5 mm)
+per square, skewed small (U^1.8); medium placed first; 60 darts each,
+≥ 0.25 mm gap; no pebble inside a stone's footprint.</li>
+<li>
+<strong>Shape</strong>: a flattened cap hp·√(1 − ρ^p), p ∈ U(2, 3.5) (2 = ellipsoid,
+higher = slab-like); height 0.25–0.45 D, footprint aspect 1–1.9.<ul>
+<li>
+<em>Faceted</em> (75%): the min of K tangent planes of the cap (6–11 medium,
+4–7 small) at stratified random points, each tilted (σ 12°), lowered
+by 0.03–0.18 hp and capped at 65°.  rocklab's one-facet-per-seed idea
+in 2.5D: crisp ridges, mixed facet sizes.</li>
+<li>
+<em>Worn</em> (25%): the cap itself with K/3 shallow flats.</li>
+<li>
+<em>Polygonal skirt</em>: 5–8 side planes at 58°, 0.82–1.05 a out, so the
+outline is angular, not a disc (D2), and no side is a vertical,
+grid-aliased wall.</li>
+</ul>
+</li>
+<li>
+<strong>Seating</strong> (REQ-P-4): base = the 0.5 mm-blurred surface at the centre
+minus U(0.25, 0.45)·hp; soft max into the soil with k = 0.08 mm (small)
+/ 0.22 mm (medium), so soil fillets the foot.  Medium pebbles first get
+a soil heap (0.2 hp Gaussian, 1.25 × radius).  <code>Field.pebble</code> marks the
+cells where a stone won (used for paint).</li>
+</ul>
+<h3 id="2-5-stones-makestones-bedstones">
+2.5 Stones (<code>make_stones</code>, <code>bed_stones</code>)</h3>
+<p>
+2–4 rocklab rocks (<code>rl.make_rock</code>, D 4.5–7.5 mm skewed small), scaled to
+0.65 in z (D5: rocklab's boulders read as upright teeth on dirt), random
+yaw, dart-thrown ≥ 2 mm from the rim and ≥ 4 mm apart.  A 0.3 mm soil bank
+(Gaussian beyond 0.7 R) is added to z; the rock's base goes to
+min(lowest ground under 0.85 R − 0.25 mm, median − 0.4 h).  The z-scale
+steepens downward facets, but they lie below the soil; measured overhang
+is 0.00 mm².</p>
+<h3 id="2-6-cracks-cracklayer-cracks-off-by-default">
+2.6 Cracks (<code>crack_layer</code>, <code>--cracks</code>, off by default)</h3>
+<p>
+5 random-walk polylines per 2 × 2 (0.3 mm steps, heading σ 0.35 rad,
+20–60 steps), carved as a 0.35 mm-wide, 0.25 mm-deep rounded V (from a
+distance transform).  They stay within the 0.3 mm lift.</p>
+<h3 id="2-7-tile-assemble">
+2.7 Tile (<code>assemble</code>)</h3>
+<p>
+<code>make_heightmap_solid(z, W, H, base_h=0, subsample=1)</code> (a uniform mesh:
+waterlab found the adaptive mesher faceted smooth surfaces) ∪ an exact
+1 mm slab box ∪ the stones (<code>batch_boolean</code>), then ∪ the DB base
+(<code>make_base</code>, peg from <code>select_peg_height</code> on the top).  <code>stl_safe</code>
+(grasslab's export guarantee, copied: separate pinches, float32 + merge,
+keep the largest body, raise unless watertight).</p>
+<h3 id="2-8-preview-painted-contactsheet">
+2.8 Preview (<code>painted</code>, <code>contact_sheet</code>)</h3>
+<ul>
+<li>
+Paint per face: earth ramp (5 browns) by 0.7 × relief over a 0.8 mm
+blur + 0.3 × relief over 4 mm (what a drybrush catches); stones and
+pebbles grey by facing and relief; walls dark.</li>
+<li>
+Views: painted, oblique (clay), top, low, close (20 mm, painted).</li>
+<li>
+<code>dharmatiles.render.render</code> (pyrender).  When it has no screen (a
+locked macOS session: pyglet sees zero screens), the sheet falls back to
+a matplotlib renderer of the finished tile's top surface (ray-cast from
+the mesh, so stones are included), Lambert-lit, surface only; captions
+then say &quot;(fallback renderer)&quot;.</li>
+</ul>
+<h2 id="3-parameters-module-constants-dirtlab-py">
+3. Parameters (module constants, <code>dirtlab.py</code>)</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Stage</th>
+<th>
+Constants (value)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+tile</td>
+<td>
+<code>CELL_MM</code> 0.15, <code>EDGE_MM</code> 4.0, <code>LIFT_MM</code> 0.3, <code>SLAB_BOX_MM</code> 1.0, <code>RIM_FLAT_MM</code> 0.4, <code>RIM_TEX_MM</code> 2.0</td>
+</tr>
+<tr>
+<td>
+ground</td>
+<td>
+<code>UND_SIGMA_MM</code> 10 / 4, <code>UND_MID_WEIGHT</code> 0.35, <code>UND_PLAIN_FRAC</code> 0.35, <code>UND_RELIEF_MM</code> 0.9–1.6, <code>UND_EDGE_MM</code> 6, <code>UND_MAX_SLOPE_DEG</code> 14, <code>SOIL_MID_MM</code> 2.2, <code>SOIL_MID_AMP_MM</code> 0.07</td>
+</tr>
+<tr>
+<td>
+clods</td>
+<td>
+<code>CLOD_PATCH_SIGMA_MM</code> 6, <code>CLOD_PATCH_BIAS</code> 0.15, <code>CLOD_DENSITY</code> 0.7, <code>CLOD_R_MM</code> 0.35–1.5, <code>CLOD_R_EXP</code> 2.2, <code>CLOD_H_RATIO</code> 0.12–0.3, <code>CLOD_H_MAX_MM</code> 0.45, <code>CLOD_ASPECT</code> 1–1.7, <code>CLOD_LUMP</code> 0.22, <code>CLOD_OVERLAP</code> 0.6, <code>CLOD_SOFT_MM</code> 0.06, <code>CLOD_SUNK</code> 0–0.5, <code>CLOD_LOBES</code> 1–3, <code>CLOD_FLAT</code> 2.6, <code>CLOD_TILT</code> 0.05</td>
+</tr>
+<tr>
+<td>
+grit</td>
+<td>
+<code>GRIT_MM</code> 0.45, <code>GRIT_AMP_MM</code> 0.045, <code>GRAIN_DENSITY</code> 0.12, <code>GRAIN_R_MM</code> 0.15–0.3, <code>GRAIN_H_MM</code> 0.05–0.12</td>
+</tr>
+<tr>
+<td>
+pebbles</td>
+<td>
+<code>PEB_CLUSTERS_2X2</code> 4–7, <code>PEB_CLUSTER_SIGMA_MM</code> 3–7, <code>PEB_BACKGROUND</code> 0.25, <code>PEB_LOW_BIAS</code> 0.8, <code>SMALL_PER_SQ</code> 45–75, <code>SMALL_D_MM</code> 0.5–1.5, <code>MED_PER_SQ</code> 5–9, <code>MED_D_MM</code> 2–4, <code>PEB_D_EXP</code> 1.8, <code>PEB_ASPECT</code> 1–1.9, <code>PEB_H_RATIO</code> 0.25–0.45, <code>PEB_SINK</code> 0.25–0.45, <code>PEB_ROUND_PROB</code> 0.25, <code>PEB_FACETS</code> 6–11, <code>PEB_FACETS_SMALL</code> 4–7, <code>PEB_FACET_DROP</code> 0.03–0.18, <code>PEB_ROUND_DROP</code> 0.06–0.15, <code>PEB_MAX_FACET_DEG</code> 65, <code>PEB_FACET_TILT_DEG</code> 12, <code>PEB_FLAT</code> 2–3.5, <code>PEB_SKIRT_DEG</code> 58, <code>PEB_SKIRT_SIDES</code> 5–8, <code>PEB_GAP_MM</code> 0.25, <code>PEB_SOFT_MM</code> 0.08 / 0.22, <code>PEB_MOUND</code> 0.2</td>
+</tr>
+<tr>
+<td>
+stones</td>
+<td>
+<code>STONES_2X2</code> 2–4, <code>STONE_D_MM</code> 4.5–7.5, <code>STONE_Z_SCALE</code> 0.65, <code>STONE_SINK</code> 0.4, <code>STONE_MOUND_MM</code> 0.3, <code>STONE_RIM_MM</code> 2, <code>STONE_GAP_MM</code> 4</td>
+</tr>
+<tr>
+<td>
+cracks</td>
+<td>
+<code>CRACKS_2X2</code> 5, <code>CRACK_W_MM</code> 0.35, <code>CRACK_DEPTH_MM</code> 0.25</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+Measured (2 × 2, v1g): seed 1: 997 clods, 280 small + 28 medium pebbles
+(79 worn), 3 stones; ground 4.00–5.81 mm (median 4.51); top 7.28 mm;
+444,910 faces, 22.2 MB, one watertight body, overhang 0.00 mm², peg
+5.7 mm, build 2.8 s (field ≈ 0.7 s, rest is meshing, CSG and the export
+check).  Seeds 2 and 3 are similar (2.8–3.1 s, 0.00 mm²).  Byte-identical
+STL across runs.</p>
+<h2 id="4-iteration-log">
+4. Iteration log</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Iter</th>
+<th>
+Artifact / trigger</th>
+<th>
+Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+v1a</td>
+<td>
+first build: clods were isolated round blisters on smooth ground (D2); small pebbles were sharp pyramids</td>
+<td>
+—</td>
+</tr>
+<tr>
+<td>
+v1b</td>
+<td>
+</td>
+<td>
+clods became 1–3 lumpy lobes with flat tilted tops (profile exponent 2.6), density 0.33 → 0.7/mm², overlap 0.75 → 0.6, height 0.18–0.4 → 0.12–0.3 r; pebble height 0.35–0.65 → 0.3–0.5 D.  Now reads as crumbly soil with tamped patches</td>
+</tr>
+<tr>
+<td>
+v1c</td>
+<td>
+medium pebbles were square &quot;tent&quot; pyramids</td>
+<td>
+pebble = min of tangent planes of a cap (rocklab facet idea in 2.5D)</td>
+</tr>
+<tr>
+<td>
+v1d</td>
+<td>
+too many tiny planes: smooth round domes, clustered bubbles (D2)</td>
+<td>
+6–11 facets, tilt σ 12°, drop 0.03–0.18 hp, slab-like cap exponent 2–3.5, worn share 0.35 → 0.25</td>
+</tr>
+<tr>
+<td>
+v1e</td>
+<td>
+slab caps ended in vertical aliased walls; pebbles looked pasted on</td>
+<td>
+58° skirt; foot mound 0.12 → 0.2 hp, medium fillet 0.18 → 0.22 mm</td>
+</tr>
+<tr>
+<td>
+v1f</td>
+<td>
+rocklab stones stood up like teeth (D5); pebbles still a bit round</td>
+<td>
+stones × 0.65 in z, sink 0.3 → 0.4 h; pebble height 0.25–0.45 D, aspect up to 1.9</td>
+</tr>
+<tr>
+<td>
+v1g</td>
+<td>
+circular skirt left disc outlines on worn pebbles (D2); sand grains a regular sprinkle in tamped areas (D7)</td>
+<td>
+polygonal 5–8-sided skirt; grain density 0.25 → 0.12/mm²</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+v1a–v1d were judged on pyrender renders; from v1e the macOS session was
+locked (pyrender: no screen), so v1e–v1g were judged on the matplotlib
+fallback, which is coarser (every 3rd sample on full-tile views).</p>
+<h2 id="round-2-2026-10-29">
+Round 2 (2026-10-29)</h2>
+<p>
+Shawn's feedback:</p>
+<ul>
+<li>
+more relief;</li>
+<li>
+no frame at the rim;</li>
+<li>
+pebbles that register at tabletop distance;</li>
+<li>
+stronger cloddy/smooth contrast;</li>
+<li>
+texture visible everywhere at 0.2 mm layers.  His slice of v1g showed
+large smooth plains.</li>
+</ul>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Change</th>
+<th>
+Before → after</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Rises (undulation)</td>
+<td>
+σ (10, 4) → (14, 5), mid weight 0.35 → 0.15, edge fade 6 → 9 mm, slope cap 14 → 24°.  The rises were slope-capped to about 1.1 mm; now about 2.2–2.5 mm (ground up to about 7.5 mm).</td>
+</tr>
+<tr>
+<td>
+Rim frame</td>
+<td>
+flat band 0.4 → 0, texture ramp 2 → 1 mm</td>
+</tr>
+<tr>
+<td>
+Clods</td>
+<td>
+radius 0.35–1.5 → 0.45–2.4, height up to 0.75, h/r 0.16–0.35; patch contrast 1.0, with a <strong>density floor of 0.3</strong> so tamped ground still carries clods</td>
+</tr>
+<tr>
+<td>
+Soil roughness</td>
+<td>
+0.07 mm @ 2.2 → 0.22 mm @ 1.6; grit 0.045 → 0.08</td>
+</tr>
+<tr>
+<td>
+Pebbles</td>
+<td>
+medium 5–9 → 8–13 per square at 2.2–4.5 mm; stones 2–4 → 4–7; background 0.25 → 0.12 (sparser outside clusters)</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+Texture metric (windows of 1.5 mm with relief &lt; 0.2 mm): <strong>32.8% → 1.9%</strong>
+(seed 1); seeds 2 and 3 about 2–2.6%.  Build about 3 s; overhang about
+0 mm².</p>
+<h2 id="shared-texture-2026-10-29">
+Shared texture (2026-10-29)</h2>
+<p>
+<code>dirt_relief(seed, W, H)</code> returns a <code>DirtTexture</code>: soil roughness, clods,
+grit and pebbles on flat ground, as a ≥ 0 relief offset, 0 at the rim, on
+the 0.15 mm grid.  It can be sampled onto any grid and is cached.  It is
+used by grasslab (and so meadowlab and shorelab), waterlab and rocklab
+as <strong>the</strong> texture for exposed ground.</p>
+
+</article>
+</div>
+</body>
+</html>

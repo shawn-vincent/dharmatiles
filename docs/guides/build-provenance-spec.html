@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Build Provenance Capture Specification</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/docs.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles docs</a><a href="../index.html#design">Library design</a><a href="../index.html#guides" aria-current="page">Guides</a><a href="../index.html#labs">Labs</a><a href="../index.html#reference">Reference</a><a href="../index.html#historic">Historic</a><a href="https://claude.ai/artifact/GBiwhTV3inCuS3cRiWnTeQ">Rust study</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Guide</div>
+  <h1>Build Provenance Capture Specification</h1>
+  <p class="srcnote">Converted from <code>docs/build-provenance-spec.md</code> on 2026-11-01; the markdown file was removed (see git history). Relative paths in the text are relative to <code>docs/</code>.</p>
+  
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol><li><a href="#purpose">Purpose</a></li><li><a href="#goals">Goals</a></li><li><a href="#non-goals">Non-Goals</a></li><li><a href="#architecture">Architecture</a></li><li><a href="#build-time-capture">Build-Time Capture</a></li><li><a href="#runtime-consumption">Runtime Consumption</a></li><li><a href="#metadata-model">Metadata Model</a></li><li><a href="#buildinfo">BuildInfo</a></li><li><a href="#field-definitions">Field Definitions</a></li><li><a href="#version-string-format">Version String Format</a></li><li><a href="#tagged-release">Tagged Release</a></li><li><a href="#tagged-release-with-local-modifications">Tagged Release With Local Modifications</a></li><li><a href="#commits-beyond-release">Commits Beyond Release</a></li><li><a href="#commits-beyond-release-with-local-modifications">Commits Beyond Release With Local Modifications</a></li><li><a href="#untagged-commit">Untagged Commit</a></li><li><a href="#untagged-commit-with-local-modifications">Untagged Commit With Local Modifications</a></li><li><a href="#metadata-unavailable">Metadata Unavailable</a></li><li><a href="#deployment-surface-integration">Deployment Surface Integration</a></li><li><a href="#recommended-uses">Recommended Uses</a></li><li><a href="#about-screens">About Screens</a></li><li><a href="#support-diagnostics">Support Diagnostics</a></li><li><a href="#error-tracking">Error Tracking</a></li><li><a href="#health-endpoints">Health Endpoints</a></li><li><a href="#release-notes">Release Notes</a></li><li><a href="#deployment-verification">Deployment Verification</a></li><li><a href="#failure-handling">Failure Handling</a></li><li><a href="#design-principles">Design Principles</a></li></ol></nav>
+<article class="doc">
+<h2 id="purpose">
+Purpose</h2>
+<p>
+Applications should be able to identify precisely which source revision produced a running artifact, when that artifact was built, and whether it originated from a clean or modified source tree.</p>
+<p>
+This information should be available at runtime without requiring access to source control systems, build servers, shell commands, local filesystems, or deployment infrastructure.</p>
+<p>
+The goal is to capture provenance once during the build process and embed it permanently into the produced artifact.</p>
+<hr />
+<h2 id="goals">
+Goals</h2>
+<p>
+The system must allow any running artifact to answer:</p>
+<ul>
+<li>
+What version am I?</li>
+<li>
+Which source revision produced me?</li>
+<li>
+How far am I from the most recent release?</li>
+<li>
+Was the source tree modified when I was built?</li>
+<li>
+When was I built?</li>
+<li>
+What changes are included in this build?</li>
+</ul>
+<p>
+The system should work consistently across:</p>
+<ul>
+<li>
+Web applications</li>
+<li>
+Backend services</li>
+<li>
+Serverless functions</li>
+<li>
+Mobile applications</li>
+<li>
+Desktop applications</li>
+<li>
+Command-line tools</li>
+</ul>
+<hr />
+<h2 id="non-goals">
+Non-Goals</h2>
+<p>
+The system is not intended to:</p>
+<ul>
+<li>
+Query source control systems at runtime</li>
+<li>
+Determine deployment timestamps</li>
+<li>
+Replace release management processes</li>
+<li>
+Depend on access to Git, Mercurial, SVN, or any specific source control tool after build completion</li>
+</ul>
+<hr />
+<h2 id="architecture">
+Architecture</h2>
+<h2 id="build-time-capture">
+Build-Time Capture</h2>
+<p>
+A build step executes before compilation.</p>
+<p>
+The build step gathers metadata from:</p>
+<ul>
+<li>
+Source control</li>
+<li>
+Build environment</li>
+<li>
+Release tagging system</li>
+</ul>
+<p>
+The metadata is written into a generated source file.</p>
+<p>
+Example flow:</p>
+<pre><code class="language-text">Source Control
+       ↓
+Metadata Generator
+       ↓
+Generated Source File
+       ↓
+Compiler / Bundler
+       ↓
+Application Artifact
+</code></pre>
+<p>
+The generated file is considered a build artifact and should not be committed to source control.</p>
+<p>
+A fresh copy is produced for every build.</p>
+<hr />
+<h2 id="runtime-consumption">
+Runtime Consumption</h2>
+<p>
+Application code accesses build metadata through a stable interface.</p>
+<p>
+Consumers should not depend on:</p>
+<ul>
+<li>
+Generated file locations</li>
+<li>
+Source control commands</li>
+<li>
+Build tooling implementation details</li>
+</ul>
+<p>
+All runtime access occurs through a single exported object or service.</p>
+<hr />
+<h2 id="metadata-model">
+Metadata Model</h2>
+<h2 id="buildinfo">
+BuildInfo</h2>
+<pre><code class="language-ts">interface BuildInfo {
+  version: string;
+  commit: string;
+  commitShort: string;
+
+  branch: string;
+
+  tag: string;
+  commitsSinceTag: number;
+
+  buildTimestamp: string;
+
+  isDirty: boolean;
+
+  commits: CommitInfo[];
+}
+</code></pre>
+<hr />
+<h2 id="field-definitions">
+Field Definitions</h2>
+<h3 id="version">
+version</h3>
+<p>
+Human-readable build identifier.</p>
+<p>
+Derived from source-control metadata.</p>
+<p>
+Examples:</p>
+<pre><code class="language-text">v1.0.0
+v1.0.0-12-gabc1234
+v1.0.0-12-gabc1234-dirty
+gabc1234
+</code></pre>
+<p>
+This field is the primary identifier displayed to users and support staff.</p>
+<hr />
+<h3 id="commit">
+commit</h3>
+<p>
+Full source revision identifier.</p>
+<p>
+Example:</p>
+<pre><code class="language-text">74a4597b31d8e53d03c7f1e8b8d65d77d15f53e
+</code></pre>
+<hr />
+<h3 id="commitshort">
+commitShort</h3>
+<p>
+Abbreviated commit identifier.</p>
+<p>
+Example:</p>
+<pre><code class="language-text">74a4597
+</code></pre>
+<hr />
+<h3 id="branch">
+branch</h3>
+<p>
+Source-control branch used during the build.</p>
+<p>
+Examples:</p>
+<pre><code class="language-text">main
+develop
+feature/new-search
+</code></pre>
+<p>
+May be unavailable in detached-head environments.</p>
+<hr />
+<h3 id="tag">
+tag</h3>
+<p>
+Most recent reachable release tag.</p>
+<p>
+Examples:</p>
+<pre><code class="language-text">v1.0.0
+v2.4.3
+</code></pre>
+<p>
+May be empty or unknown if no tag is reachable.</p>
+<hr />
+<h3 id="commitssincetag">
+commitsSinceTag</h3>
+<p>
+Number of commits beyond the most recent reachable tag.</p>
+<p>
+Examples:</p>
+<pre><code class="language-text">0
+12
+147
+</code></pre>
+<hr />
+<h3 id="buildtimestamp">
+buildTimestamp</h3>
+<p>
+UTC timestamp indicating when the artifact was produced.</p>
+<p>
+Format:</p>
+<pre><code class="language-text">2026-06-11T09:34:12Z
+</code></pre>
+<p>
+This timestamp represents build time, not commit time.</p>
+<p>
+This field is mandatory.</p>
+<p>
+It is frequently one of the most valuable diagnostic fields because it allows operators to determine:</p>
+<ul>
+<li>
+Whether a deployment is stale</li>
+<li>
+Whether two systems are running the same build</li>
+<li>
+When a specific artifact was created</li>
+</ul>
+<hr />
+<h3 id="isdirty">
+isDirty</h3>
+<p>
+Indicates whether uncommitted changes were present during the build.</p>
+<p>
+Values:</p>
+<pre><code class="language-text">true
+false
+</code></pre>
+<p>
+A dirty build may not be reproducible from source control alone.</p>
+<hr />
+<h3 id="commits">
+commits</h3>
+<p>
+Optional collection of commit metadata since the previous release.</p>
+<p>
+Can be used for:</p>
+<ul>
+<li>
+Release notes</li>
+<li>
+&quot;What's New&quot; screens</li>
+<li>
+Support diagnostics</li>
+</ul>
+<hr />
+<h2 id="version-string-format">
+Version String Format</h2>
+<p>
+The canonical runtime display format shall be:</p>
+<pre><code class="language-text">Ver: &lt;version&gt; · &lt;buildTimestamp&gt;
+</code></pre>
+<p>
+Examples:</p>
+<h2 id="tagged-release">
+Tagged Release</h2>
+<pre><code class="language-text">Ver: v1.0.0 · 2026-06-11T09:34:12Z
+</code></pre>
+<h2 id="tagged-release-with-local-modifications">
+Tagged Release With Local Modifications</h2>
+<pre><code class="language-text">Ver: v1.0.0-dirty · 2026-06-11T09:34:12Z
+</code></pre>
+<h2 id="commits-beyond-release">
+Commits Beyond Release</h2>
+<pre><code class="language-text">Ver: v1.0.0-12-gabc1234 · 2026-06-11T09:34:12Z
+</code></pre>
+<h2 id="commits-beyond-release-with-local-modifications">
+Commits Beyond Release With Local Modifications</h2>
+<pre><code class="language-text">Ver: v1.0.0-12-gabc1234-dirty · 2026-06-11T09:34:12Z
+</code></pre>
+<h2 id="untagged-commit">
+Untagged Commit</h2>
+<pre><code class="language-text">Ver: gabc1234 · 2026-06-11T09:34:12Z
+</code></pre>
+<h2 id="untagged-commit-with-local-modifications">
+Untagged Commit With Local Modifications</h2>
+<pre><code class="language-text">Ver: gabc1234-dirty · 2026-06-11T09:34:12Z
+</code></pre>
+<h2 id="metadata-unavailable">
+Metadata Unavailable</h2>
+<pre><code class="language-text">Ver: unknown · 2026-06-11T09:34:12Z
+</code></pre>
+<hr />
+<h2 id="deployment-surface-integration">
+Deployment Surface Integration</h2>
+<p>
+The same metadata model should be available to all deployment targets.</p>
+<p>
+Implementation details may vary.</p>
+<p>
+Examples include:</p>
+<ul>
+<li>
+Bundled source constants</li>
+<li>
+Compile-time environment variable injection</li>
+<li>
+Native application metadata generation</li>
+<li>
+Resource files</li>
+<li>
+Embedded manifests</li>
+</ul>
+<p>
+All deployment targets should expose the same logical BuildInfo structure.</p>
+<hr />
+<h2 id="recommended-uses">
+Recommended Uses</h2>
+<h2 id="about-screens">
+About Screens</h2>
+<pre><code class="language-text">Ver: v1.0.0-12-gabc1234 · 2026-06-11T09:34:12Z
+</code></pre>
+<hr />
+<h2 id="support-diagnostics">
+Support Diagnostics</h2>
+<p>
+Include the complete BuildInfo payload.</p>
+<hr />
+<h2 id="error-tracking">
+Error Tracking</h2>
+<p>
+Attach BuildInfo to telemetry events.</p>
+<p>
+Examples:</p>
+<ul>
+<li>
+Sentry</li>
+<li>
+Application Insights</li>
+<li>
+Datadog</li>
+<li>
+Honeycomb</li>
+</ul>
+<hr />
+<h2 id="health-endpoints">
+Health Endpoints</h2>
+<p>
+Expose BuildInfo through administrative APIs.</p>
+<p>
+Examples:</p>
+<pre><code class="language-text">GET /version
+GET /health
+</code></pre>
+<hr />
+<h2 id="release-notes">
+Release Notes</h2>
+<p>
+Generate release summaries from captured commit history.</p>
+<hr />
+<h2 id="deployment-verification">
+Deployment Verification</h2>
+<p>
+Validate that an environment is running the intended artifact.</p>
+<hr />
+<h2 id="failure-handling">
+Failure Handling</h2>
+<p>
+Failure to retrieve source-control metadata must not fail the build.</p>
+<p>
+Unknown values should be populated when metadata cannot be determined.</p>
+<p>
+Example:</p>
+<pre><code class="language-json">{
+  &quot;version&quot;: &quot;unknown&quot;,
+  &quot;commit&quot;: &quot;unknown&quot;,
+  &quot;tag&quot;: &quot;unknown&quot;
+}
+</code></pre>
+<p>
+Producing a runnable artifact is preferred over aborting the build.</p>
+<hr />
+<h2 id="design-principles">
+Design Principles</h2>
+<ul>
+<li>
+Build-time generation, runtime consumption</li>
+<li>
+Immutable provenance after build completion</li>
+<li>
+Zero runtime source-control dependency</li>
+<li>
+Consistent across deployment targets</li>
+<li>
+Reproducible and deterministic</li>
+<li>
+Graceful degradation when metadata is unavailable</li>
+<li>
+Single source of truth for build identity</li>
+</ul>
+<p>
+The system exists to ensure that every artifact can always identify exactly what it is and where it came from.</p>
+
+</article>
+</div>
+</body>
+</html>

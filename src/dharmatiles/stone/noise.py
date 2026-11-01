@@ -6,7 +6,7 @@ chop (Shawn's MeshLab find on the floor slabs, 2026-07-05).  Value
 noise has no global phase — random lattice values smoothly
 interpolated — so it is isotropic and non-repeating by construction,
 and evaluating it in 3D object space makes it identical on flat slabs
-and curved pebbles.  Design: docs/design/stone-surface-texture.md.
+and curved pebbles.  Design: docs/design/stone-surface-texture.html.
 """
 from __future__ import annotations
 

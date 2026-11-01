@@ -1,7 +1,7 @@
 # walls-e13-openings.tile.py — walls campaign: openings (O1-O3).
 #
 # Three walls, three families, every opening kind (design:
-# docs/design/walls-doors.md):
+# docs/design/walls-doors.html):
 #   south: cut stone — arched doorway + round OCULUS window
 #   mid:   brick — segmental-arch doorway + flat-lintel window
 #   north: fieldstone LOW wall (16mm) with a full-height arch rising

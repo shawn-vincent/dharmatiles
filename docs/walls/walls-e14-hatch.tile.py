@@ -2,7 +2,7 @@
 # wall (O4).  The same Opening on a floor is a HATCH: a gap in the
 # pavement with a slab surround.  The circle profile becomes a WELL —
 # a full voussoir ring in the pavement (design: docs/design/
-# walls-doors.md; "round holes in the floor").
+# docs/design/walls-doors.html; "round holes in the floor").
 #
 # Floor plan: spine walks the south edge +x, so `at` is the x position
 # in squares and (sill, head) span the plan depth northward.

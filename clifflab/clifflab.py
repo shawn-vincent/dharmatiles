@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """clifflab — heroic cliffs on a DungeonBlocks tile.
 
-Implements clifflab/DESIGN.md.  A cliff is a set of rock BODIES; each has a
+Implements docs/labs/clifflab/design.html.  A cliff is a set of rock BODIES; each has a
 plan footprint (a polygon), a FACE LINE along its edge, a height and an
 inset profile.  The face texture is a depth map D(s, z) over (arc length
 along the face line, height):
@@ -42,7 +42,7 @@ import dirtlab as _dirt     # noqa: E402  shared exposed-ground texture
 import grasslab as _gl      # noqa: E402  to_manifold, stl_safe, audit_overhang
 import rocklab as _rl       # noqa: E402  faceted rocks for the scree
 
-# ── Parameters (DESIGN.md §2), grouped by stage ─────────────────────────────
+# ── Parameters (docs/labs/clifflab/design.html §2), grouped by stage ─────────────────────────────
 # 1 frame
 SQUARE_MM        = 35.0
 FOOT_Z_MM        = 4.0         # foot ground (DB dirt band)

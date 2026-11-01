@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """dirtlab — plain bare earth (dirt texture and pebbles) on a DungeonBlocks tile.
 
-Implements dirtlab/DESIGN.md.  One height field, built in scale order:
+Implements docs/labs/dirtlab/design.html.  One height field, built in scale order:
 
   1 ground   rises-only broad undulation from a fixed edge level
   2 clods    patchy, irregular rounded soil lumps (soft max onto the ground)
@@ -38,7 +38,7 @@ import rocklab as rl     # noqa: E402
 
 from dharmatiles.stone.noise import fbm   # noqa: E402
 
-# ── Parameters (DESIGN.md §3) ────────────────────────────────────────────────
+# ── Parameters (docs/labs/dirtlab/design.html §3) ────────────────────────────────────────────────
 # tile
 SQUARE_MM        = 35.0
 CELL_MM          = 0.15          # height-field / mesh resolution (uniform mesh)

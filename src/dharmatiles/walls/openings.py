@@ -1,7 +1,7 @@
 """
 Openings — doors, windows, oculi, floor hatches and wells.
 
-Design: docs/design/walls-doors.md (rev 2).  One concept: an
+Design: docs/design/walls-doors.html (rev 2).  One concept: an
 ``Opening`` is a closed 2D profile in the wall's (t, z) plane —
 (run-position, height) on a standing wall, (run, plan-depth) on a
 ``laid_flat`` one.  The layout EXCLUDES cells inside the profile
@@ -85,7 +85,7 @@ class Opening:
             raise ValueError(
                 'Opening(slot=True) needs a leaf — the slot exists to '
                 'hold a removable leaf, whose thickness sets the '
-                'channel width (design: docs/design/walls-doors.md)')
+                'channel width (design: docs/design/walls-doors.html)')
 
 
 def springing(op: Opening) -> tuple[float, float]:

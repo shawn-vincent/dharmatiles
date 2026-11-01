@@ -1,7 +1,7 @@
 # Reference: Doors in walls
 
 For the doorway campaign (design:
-`docs/design/walls-doors.md`).  Sources: Wikimedia Commons
+`docs/design/walls-doors.html`).  Sources: Wikimedia Commons
 (geograph.org.uk CC-BY-SA contributors) + the official DungeonBlocks
 pieces measured/rendered in the design doc.
 

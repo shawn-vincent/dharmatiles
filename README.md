@@ -250,8 +250,14 @@ src/tiles/
 
 stl/             generated STL output (not in git — see stl/README.md)
 png/             rendered previews
-docs/            design notes and architecture reviews
+docs/            design docs (HTML, start at docs/index.html) and historic notes
 ```
+
+---
+
+## Documentation
+
+Design docs, guides and lab requirements are HTML pages under `docs/`; start at [`docs/index.html`](docs/index.html).
 
 ---
 
