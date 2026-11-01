@@ -46,6 +46,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import functools
+import itertools
 import pathlib
 import sys
 import time
@@ -176,7 +177,7 @@ ZONE_SIGMA_MM    = (5.0, 10.0) # …this wide along the run
 ZONE_FLOOR       = 0.25        # intensity between zones
 #   cleaving: whole-plane cuts of each (still convex) rock — faces turn into
 #   planes meeting at creases, never steps (REQ-ROCK-4)
-JOINT_MM         = (0.3, 0.55) # a loaded rock's exposed top edge: 45° chamfer (the joint's
+JOINT_MM         = (0.4, 0.65) # a loaded rock's exposed top edge: 45° chamfer (the joint's
                                # narrow groove, with the seat bevel above), one plane per
 JOINT_MIN_MM     = 4.0         # edge, on edges no shorter than this
 SHOULDER_P       = 0.6         # an exposed ledge top's front edge is broken…
@@ -200,32 +201,40 @@ CORE_DROP_MM     = 0.5         # …and this far under every top: where rounded 
                                # the gap is a dark recess, never a hole
 #   block faces: one crack network per open column face (the boundary's too),
 #   every stone of the column (and the core behind it) cut back along it (N:
-#   massive blocks, each face broken into 3–6 crisp, flat, tilted sub-faces
-#   by a thin dark network of kinked, mostly diagonal cracks)
-CRACK_PER_MM2    = 0.2         # crack length (mm) per mm² of face (× 0.6–1 by zone)…
-CRACK_STEP_MM    = (2.0, 3.5)  # …random walks: straight runs this long, kinked…
-CRACK_BEND_DEG   = 25.0        # …by this much (σ), within this of their heading…
-CRACK_WANDER_DEG = 35.0
-CRACK_STEEP_DEG  = 20.0        # …and never closer than this to level (rungs)
-CRACK_LEAN_DEG   = 30.0        # mostly near vertical (σ), this often diagonal
-CRACK_DIAG_P     = 0.6 
-CRACK_DIAG_DEG   = (25.0, 50.0)
+#   massive blocks, calm flat faces, the joints the strongest lines; now and
+#   then a block split in two by a long straight crack, one side standing
+#   proud of the other)
+CRACK_PER_MM2    = 0.06        # crack length (mm) per mm² of face (× 0.6–1 by zone)…
+CRACK_STEP_MM    = (4.0, 8.0)  # …random walks: straight runs this long, kinked…
+CRACK_BEND_DEG   = 6.0         # …by this much (σ), within this of their heading…
+CRACK_WANDER_DEG = 12.0
+CRACK_LEVEL_P    = 0.35        # …near level this often, this often diagonal, else near
+CRACK_DIAG_P     = 0.15        # vertical (lean: N(0, CRACK_LEAN_DEG))
+CRACK_DIAG_DEG   = (30.0, 50.0)
+CRACK_LEAN_DEG   = 8.0
 CRACK_GAP_MM     = 2.0         # none along an edge, joint or crack closer than this…
 CRACK_ALONG      = (25.0, 3.0)  # …nor running within this (°) of an edge or joint closer
                                # than this (mm): a raised welt between them, upholstery
                                # (it turns into it instead; started this far from all)
 CRACK_MIN_MM     = 3.0         # …nor shorter than this…
 CRACK_MEET_DEG   = 35.0        # …nor meeting another under this (a lens)
-CRACK_CROSS_P    = 0.45        # one runs on across a bed joint this often
+CRACK_CORNER_MM  = 2.0         # face ends this close meet at a corner (a crack runs on round it)
 CRACK_SLOT_MM    = (0.4, 0.5)  # grooves this wide across (what a 0.4 mm nozzle leaves open)…
-CRACK_DEPTH_MM   = (0.6, 0.9)  # …this deep, cut straight in (≥ 20° off level: its ceiling
-                               # reaches under REACH_MM per layer)…
-CRACK_PINCH      = (0.7, 1.2)   # …each pinching and swelling along it within this (×)…
+CRACK_DEPTH_MM   = (0.5, 0.65)  # …this deep, cut straight in (a step lighter than a joint)…
+CRACK_PINCH      = (0.7, 1.2)  # …pinching and swelling across along it within this (×)…
 CRACK_WALL_MM    = 1.6         # …never closer than this to the stone's back
-FACET_TILT_DEG   = (8.0, 18.0)  # sub-faces: flat planes tilted off the face this much, any way…
-FACET_MM         = (0.0, 0.4, 1.6)  # …high edge set back this, the low at most this
+CRACK_SHIFT_MM   = (0.3, 0.7)  # a split's far side set back this much more all along it:
+CRACK_LEVEL_DEG  = 30.0        # within this of level the upper one (a shelf; the groove's
+                               # ceiling then reaches under REACH_MM)
+CRACK_FINE_MM    = 5.0         # a crack shorter than this a hairline: no step, depth ×
+CRACK_FINE       = 0.8
+FACET_TILT_DEG   = (3.0, 8.0)   # sub-faces: flat planes tilted off the face this much, any way…
+FACET_MM         = (0.0, 0.3, 0.6)  # …high edge set back this, the low at most this…
+JOINT_PROUD_MM   = 0.3         # …a stone's no further than this proud of the one under it…
+FACET_DEEP_MM    = (1.4, 0.7)  # …the high edge, across splits, at most this (on the tile
+                               # boundary this: the next tile's band meets it)
 RELIEF_OFF_MM    = 4.0         # (none on the core further than this off the face's plane)
-FACET_SEAM_MM    = 0.15        # (where two meet: eased over this, no jaggies down a crack)
+FACET_SEAM_MM    = 0.1         # (where two meet: eased over this, no jaggies down a crack)
 FACET_END_MM     = 1.5         # (both eased out to the face's ends: a joint there would open)
 SHEAR_DEG        = 45.0        # the planes cut down-and-in, this far below level: a step is
                                # a bevel slanting down, never past the overhang limit
@@ -1061,55 +1070,50 @@ class Face:
     """One open face of a column, in its own plane: u along it from p0 (unit
     t), z up; outward m.  G is the crack slots' depth (≤ 0) over a
     RELIEF_GRID_MM raster from (0, z0), F the sub-faces' setback (≤ 0);
-    `cracks` the crack lengths; `rim`: on the tile boundary."""
+    `cracks` the crack lines (u, z); `rim`: on the tile boundary."""
     p0: np.ndarray
     t: np.ndarray
     m: np.ndarray
     L: float
     z0: float
+    z1: float
     G: np.ndarray
     F: np.ndarray
     cracks: list
     rim: bool = False
 
 
-def _crack_net(rng, L, z0, z1, joints, want):
-    """A crack network over the face [0, L] × [z0, z1] (u, z), `want` mm of
-    it: each crack started in the barest spot (a random pick, the barer the
-    likelier: no stone left blank) and grown up and down from it by random
-    walks bending every CRACK_STEP_MM until each end meets an edge, a bed
-    joint (`joints`, polylines) or another crack (a T or Y) — never a free
-    end, so no lens or eye slot.  At a joint it runs on into the next stone
-    CRACK_CROSS_P of the time.  Coming closer than CRACK_GAP_MM to an edge,
-    joint or crack (a sliver), or along an edge or joint (CRACK_ALONG: the
-    strip between would stand as a welt), it turns into it and ends there.
+def _crack_net(rng, L, z0, z1, joints, want, cracks=(), starts=()):
+    """A crack network over the face [0, L] × [z0, z1] (u, z), `want` mm
+    more of it on `cracks`: first one from each of `starts` (a point on the
+    face's end, a heading in: a crack come round the corner), then each
+    started in the barest spot (a random pick, the barer the likelier) and
+    grown both ways from it, mostly near vertical or near level, by random
+    walks bending a little every CRACK_STEP_MM until each end meets an
+    edge, a bed joint (`joints`, polylines) or another crack (a T or Y) —
+    never a free end: each splits one block.  Coming closer than
+    CRACK_GAP_MM to an edge, joint or crack (a sliver), or along an edge or
+    joint (CRACK_ALONG: the strip between would stand as a welt), it turns
+    into it and ends there.
     Refused: shorter than CRACK_MIN_MM, or meeting a crack at under
     CRACK_MEET_DEG (a lens)."""
     edge = box(0.0, z0, L, z1).boundary
     joints = [shapely.LineString(j) for j in joints]
-    cracks, total = [], 0.0
+    cracks, total = list(cracks), 0.0
     B = shapely.points(np.mgrid[0.25:L:0.5, z0 + 0.25:z1:0.5].reshape(2, -1).T)   # (bare spots)
-    bare = shapely.distance(B, shapely.union_all([edge] + joints))
 
     def walk(p, th0, up):                             # (pts from p, what it ends on)
-        pts, crossed, th = [p], [], th0
+        pts, th = [p], th0
         for _ in range(60):
-            th = np.clip(th0 + np.clip(th - th0 + np.radians(rng.normal(0.0, CRACK_BEND_DEG)),
-                                       -np.radians(CRACK_WANDER_DEG), np.radians(CRACK_WANDER_DEG)),
-                         np.radians(CRACK_STEEP_DEG), np.radians(180.0 - CRACK_STEEP_DEG))
+            th = th0 + np.clip(th - th0 + np.radians(rng.normal(0.0, CRACK_BEND_DEG)),
+                               -np.radians(CRACK_WANDER_DEG), np.radians(CRACK_WANDER_DEG))
             q = pts[-1] + (1 if up else -1) * rng.uniform(*CRACK_STEP_MM) * _heading(th)
-            seg, lines, best = shapely.LineString([pts[-1], q]), [edge] + cracks + [
-                j for j in joints if j not in crossed], None
-            for g in lines:
-                x = seg.intersection(g)
-                for c_ in getattr(x, 'geoms', [x]):
-                    if c_.is_empty or c_.geom_type != 'Point':
-                        continue
-                    if best is None or (c_.distance(shapely.Point(pts[-1]))
-                                        < best[0].distance(shapely.Point(pts[-1]))):
-                        best = (c_, g)
+            seg, lines = shapely.LineString([pts[-1], q]), [edge] + cracks + joints
+            best = min(((c_, g) for g in lines for c_ in shapely.get_parts(seg.intersection(g))
+                        if c_.geom_type == 'Point'), default=None,
+                       key=lambda h: h[0].distance(shapely.Point(pts[-1])))
             if best is None:                          # (coming closer than CRACK_GAP_MM, or
-                near = [g for g in lines + crossed    # along an edge or joint: on into it,
+                near = [g for g in lines              # along an edge or joint: on into it,
                         if g.distance(shapely.Point(pts[-1])) > CRACK_GAP_MM   # never a sliver)
                         and (g.distance(seg) < CRACK_GAP_MM
                              or g not in cracks and _along(pts[-1], q, g))]
@@ -1120,21 +1124,22 @@ def _crack_net(rng, L, z0, z1, joints, want):
                 a, b = shapely.shortest_line(seg, g).coords
                 pts.append(np.asarray(a))
                 best = (shapely.Point(b), g)
-            pts.append(np.asarray(best[0].coords[0]))
-            if best[1] in joints and rng.random() < CRACK_CROSS_P:
-                crossed.append(best[1])               # on into the next stone
-                pts.append(pts[-1] + 0.05 * (1 if up else -1) * _heading(th))
-                continue
-            return pts, best[1]
+            return pts + [np.asarray(best[0].coords[0])], best[1]
         return pts, None
 
-    for _ in range(3 * int(want) + 60):
+    for p, th in starts:
+        pts, hit = walk(p + 0.05 * _heading(th), th, True)
+        if hit is not None:
+            cracks.append(shapely.LineString([p] + pts))
+    bare = shapely.distance(B, shapely.union_all([edge] + joints + cracks))
+    for _ in range(3 * int(want) + 60 if want else 0):
         w = np.where(bare > CRACK_GAP_MM, bare ** 4, 0.0)
         if total >= want or not w.any():
             break
         p = shapely.get_coordinates(B[rng.choice(len(B), p=w / w.sum())])[0]
-        th = np.radians(90.0 + (_signed(rng, CRACK_DIAG_DEG) if rng.random() < CRACK_DIAG_P
-                                else _lean(rng, CRACK_LEAN_DEG, 25.0)))
+        r = rng.random()
+        th = np.radians(_lean(rng, CRACK_LEAN_DEG, 15.0) + (0.0 if r < CRACK_LEVEL_P else 90.0)
+                        + (_signed(rng, CRACK_DIAG_DEG) if r > 1.0 - CRACK_DIAG_P else 0.0))
         (dn, hit0), (pts, hit) = walk(p, th, False), walk(p, th, True)
         if hit is None or hit0 is None:
             continue
@@ -1179,7 +1184,7 @@ def _plan_faces(rng, cols):
     a column's outline facets, or the next column's face) as one face, so
     its crack network runs on across the joints between them; each column
     keeps the faces it lies on."""
-    F = [(c, p0, p1) for c in cols for p0, p1, _, _ in c.open]
+    F, specs = [(c, p0, p1) for c in cols for p0, p1, _, _ in c.open], []
     rims = [rim for c in cols for *_, rim in c.open]
     t_ = [(b - a) / np.hypot(*(b - a)) for _, a, b in F]
     m_ = [np.array([t[1], -t[0]]) for t in t_]
@@ -1208,22 +1213,54 @@ def _plan_faces(rng, cols):
                        if z0 + 1 < j[:, 1].min() and j[:, 1].max() < z1 - 1]
             joints += [np.array([[u, c.zlo], [u, c.zhi]]) for u in (ua, ub)
                        if 0.5 < u < u1 - u0 - 0.5]
-        fc = _plan_face(rng, p0, t, u1 - u0, z0, z1, joints, CRACK_PER_MM2 * area)
-        fc.rim = any(rims[i] for i in range(len(F)) if lab[i] == g)
+        specs.append((p0, t, u1 - u0, z0, z1, joints, CRACK_PER_MM2 * area,
+                      any(rims[i] for i in range(len(F)) if lab[i] == g), on))
+    nets = [_crack_net(rng, *sp[2:7]) for sp in specs]
+    for _ in range(4):          # a crack reaching a convex corner runs on round it
+        starts = _corner_starts(specs, nets)
+        for i, st in starts.items():
+            nets[i] = _crack_net(rng, *specs[i][2:6], 0.0, nets[i], st)
+        if not starts:
+            break
+    for (p0, t, L, z0, z1, joints, _, rim, on), net in zip(specs, nets):
+        fc = _plan_face(rng, p0, t, L, z0, z1, joints, net, rim)
         for c in on:
             c.faces.append(fc)
 
 
-def _plan_face(rng, p0, t, L, z0, z1, joints, want):
+def _corner_starts(specs, nets):
+    """Where each crack ending on a face's end at a convex corner (the next
+    face's end within CRACK_CORNER_MM, turning away behind this one's plane)
+    should run on round it and nothing there meets it yet (within 0.6 mm):
+    {face: [(start (u, z), heading)]}, as level as it came, turned in."""
+    E, out = [(i, e, sp[0] + e * sp[2] * sp[1]) for i, sp in enumerate(specs) for e in (0, 1)], {}
+    for (i, ei, P), (j, ej, Q) in itertools.product(E, E):
+        Lj, z0, z1 = specs[j][2:5]
+        if j == i or np.hypot(*(P - Q)) > CRACK_CORNER_MM \
+                or np.array([specs[i][1][1], -specs[i][1][0]]) @ ((1 - 2 * ej) * specs[j][1]) > -0.05:
+            continue
+        have = [q[1] for c_ in nets[j] for q in (c_.coords[0], c_.coords[-1])
+                if abs(q[0] - ej * Lj) < 0.02] + [q[1] for q, _ in out.get(j, [])]
+        for c_ in nets[i]:
+            for a, b in ((c_.coords[-1], c_.coords[-2]), (c_.coords[0], c_.coords[1])):
+                if abs(a[0] - ei * specs[i][2]) < 0.02 and z0 + 0.3 < a[1] < z1 - 0.3 \
+                        and not any(abs(a[1] - h) < 0.6 for h in have):
+                    d = np.subtract(a, b)
+                    out.setdefault(j, []).append((np.array([ej * Lj, a[1]]),
+                                                  np.arctan2(d[1], (1 - 2 * ej) * abs(d[0]))))
+                    have.append(a[1])
+    return out
+
+
+def _plan_face(rng, p0, t, L, z0, z1, joints, cracks, rim):
     """One block face (from p0 along t, L long, outward on its right, z0
-    to z1; bed joints and column sides `joints`): its crack network, `want`
-    mm of it, splitting it (with the joints) into sub-faces, each a plane
-    tilted FACET_TILT_DEG its own way and set back (F: neighbours across a
-    crack at different depths, N); each crack a groove CRACK_SLOT_MM across,
-    CRACK_DEPTH_MM deep (G), pinching and swelling (CRACK_PINCH), at full
-    depth to both its ends."""
+    to z1; bed joints and column sides `joints`) split by its `cracks` (with
+    the joints) into sub-faces, each a plane tilted FACET_TILT_DEG its own
+    way, set back (F) so that across every crack its far side lies
+    CRACK_SHIFT_MM deeper all along it (near level: the upper side, a
+    shelf), N; each crack a groove CRACK_SLOT_MM across, CRACK_DEPTH_MM
+    deep (G) all along it, pinching and swelling (CRACK_PINCH) across; one shorter than CRACK_FINE_MM a hairline (shallower, no step)."""
     m = np.array([t[1], -t[0]])
-    cracks = _crack_net(rng, L, z0, z1, joints, want)
     g = RELIEF_GRID_MM
     U, Z = np.meshgrid(np.arange(int(L / g) + 2) * g, z0 + np.arange(int((z1 - z0) / g) + 2) * g,
                        indexing='ij')
@@ -1238,12 +1275,12 @@ def _plan_face(rng, p0, t, L, z0, z1, joints, want):
                                             + rng.uniform(0, 2 * np.pi)) for _ in range(3)),
                     *CRACK_PINCH)                     # (pinch and swell: 2–6 mm waves)
         w = 0.5 * rng.uniform(*CRACK_SLOT_MM) * f      # (walls anti-aliased over a cell)
-        D = rng.uniform(*CRACK_DEPTH_MM) * np.minimum(f, 1.0)
+        D = rng.uniform(*CRACK_DEPTH_MM) * (CRACK_FINE if cs.length < CRACK_FINE_MM else 1.0)
         G[i] = np.minimum(G[i], -D * np.clip((w - dc[i]) / g + 0.5, 0.0, 1.0))
     if joints:
         cut |= shapely.distance(Q, shapely.MultiLineString([j.tolist() for j in joints])) < g
-    # the sub-faces: each a plane, its high edge FACET_MM[0:2] back, falling
-    # away at its tilt, never further than FACET_MM[2] (a big one tilts less)
+    # the sub-faces: each a plane, its high edge falling away at its tilt,
+    # never further than FACET_MM[2] (a big one tilts less)…
     lab, n = ndimage.label(~cut.reshape(U.shape))
     _, (ii, jj) = ndimage.distance_transform_edt(lab == 0, return_indices=True)
     lab, ix = lab[ii, jj], np.arange(n + 1)
@@ -1252,9 +1289,36 @@ def _plan_face(rng, p0, t, L, z0, z1, joints, want):
     lo, hi = ndimage.minimum(P, lab, ix), ndimage.maximum(P, lab, ix)
     k = np.minimum(np.tan(np.radians(rng.uniform(*FACET_TILT_DEG, n + 1))),
                    FACET_MM[2] / np.maximum(hi - lo, 1e-3))
-    F = -(rng.uniform(*FACET_MM[:2], n + 1)[lab] + k[lab] * (P - lo[lab]))
-    F = ndimage.gaussian_filter(F, FACET_SEAM_MM / g)   # (no raster stairs where they meet)
-    return Face(p0, t, m, L, z0, G.reshape(U.shape), F, [float(c_.length) for c_ in cracks])
+    T = k[lab] * (P - lo[lab])
+    # …and set back FACET_MM[0:2], further across each split: its far side
+    # (front, back: sub-faces either side at each point along it)
+    def level(c_):
+        e = np.subtract(c_.coords[-1], c_.coords[0])
+        return abs(e[1]) < np.tan(np.radians(CRACK_LEVEL_DEG)) * abs(e[0])
+    # (and across a bed joint the stone above at most JOINT_PROUD_MM proud)
+    lines = [(c_, rng.uniform(*CRACK_SHIFT_MM)) for c_ in cracks if c_.length >= CRACK_FINE_MM] \
+        + [(j, -JOINT_PROUD_MM) for j in map(shapely.LineString, joints) if level(j)]
+    E = {}                                  # (level ones first: two sub-faces meeting along two
+    for cs, shift in sorted(lines, key=lambda l_: level(l_[0]), reverse=True):
+        s = np.arange(0.6, cs.length - 0.5, 0.5)            # (clear of what it ends on)
+        x, a, b = (shapely.get_coordinates(cs.interpolate(np.clip(s + d, 0.0, cs.length)))
+                   for d in (0.0, -0.2, 0.2))
+        nrm = np.c_[a[:, 1] - b[:, 1], b[:, 0] - a[:, 0]]
+        nrm /= np.linalg.norm(nrm, axis=1, keepdims=True)       # (its left)
+        left = nrm[:, 1] > 0 if level(cs) else np.full(len(s), rng.random() < 0.5)
+        side = [tuple(np.clip(np.round([(q[:, 0]) / g, (q[:, 1] - z0) / g]).astype(int).T,
+                              0, np.array(U.shape) - 1).T) for q in (x - 0.35 * nrm, x + 0.35 * nrm)]
+        fr, bk = np.where(left, lab[side[0]], lab[side[1]]), np.where(left, lab[side[1]], lab[side[0]])
+        dT = np.where(left, T[side[0]] - T[side[1]], T[side[1]] - T[side[0]])
+        for p, q in sorted(set(zip(fr, bk))):    # lines keep the first one's way)
+            if p != q and (q, p) not in E:
+                E[p, q] = max(E.get((p, q), -np.inf), dT[(fr == p) & (bk == q)].max() + shift)
+    b = rng.uniform(*FACET_MM[:2], n + 1)
+    for _ in range(3):
+        for (p, q), d in E.items():
+            b[q] = min(max(b[q], b[p] + d), FACET_DEEP_MM[rim])
+    F = ndimage.gaussian_filter(-(b[lab] + T), FACET_SEAM_MM / g)   # (no raster stairs)
+    return Face(p0, t, m, L, z0, z1, G.reshape(U.shape), F, list(cracks), rim)
 
 
 def _relief(rock, faces, pad=np.inf, flat=True):
@@ -1759,7 +1823,7 @@ def build(seed=1, form='run', cols=1, rows=1):
                 raise
     tm['assemble'] = time.perf_counter() - t4
     tm['total'] = time.perf_counter() - t0
-    return Built(mesh, len(rocks), len(placed), peg, zmax, tm, [x for fc in faces for x in fc.cracks])
+    return Built(mesh, len(rocks), len(placed), peg, zmax, tm, [c_.length for fc in faces for c_ in fc.cracks])
 
 
 def foot_ground(f, S, zone, seed):
