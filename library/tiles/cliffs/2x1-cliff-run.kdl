@@ -1,0 +1,47 @@
+// A 2×1 cliff run: a band of stacked rock standing against the north
+// edge, with dirt on its tops and scree at its foot.
+// Twin of clifflab/rockpile.py's `run` form (round 15, commit 3b56ae0),
+// which the lab builds with `rockpile.py --form run --seed 1`.
+
+tile cliff-run cols=2 rows=1 seed=1 {
+    about """
+        Rock band against the north edge. Both ends finish in the
+        standard end section, so runs butt end to end.
+        """
+
+    // Rockpile's foot ground sits at 4.0 mm, not at the 3.4 mm edge.
+    heights foot=0.121
+
+    // The north edge, walked east to west.  The cliff grows on the
+    // left of its line, into the tile, like a wall.
+    line back { through 2 1  0 1 }
+
+    stack {
+        // Bare earth at the foot, banked up in the angle with the
+        // cliff face: higher and wider in the shattered zones.
+        dirt height=foot {
+            bank near=cliff height="1.5..3.5" reach="3..6.5"   // mm
+        }
+
+        cliff along=back form=run {
+            height 1.057            // 35 mm above the foot: the run form's cap
+            mass 1.35               // stone size ×; 1 is broken rubble
+            dirt-on-tops #true      // dirt lodged in the joints of the flat top
+
+            // What the stack is built from (each a share of the stones).
+            stones column="38%" block="38%" slab="12%" odd="6%" monolith="6%"
+
+            // Shattered zones: small broken blocks, more cracks, more
+            // scree.  Between them, big quiet masses.
+            shatter zones=1.5 width="5..10"     // per square of run; mm wide
+        }
+
+        // Fallen stones along the foot, densest against the face.
+        scree near=cliff {
+            stones per-square=55 size="1..6^2" reach=4    // mm; skewed small
+            blocks per-square=2.5 size="4.5..8"           // big ones, cut like the cliff's
+            grit per-square=45 size="1..2.2" sink="20%..50%"
+            kinds block="45%" wedge="35%" slab="20%"      // angular, no domes
+        }
+    }
+}

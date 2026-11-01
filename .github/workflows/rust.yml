@@ -53,6 +53,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # Moves to dt-eval in P1.
       - run: cargo check -p dt-geom --target wasm32-unknown-unknown --no-default-features --features manifold-rust
+      # The document model must stay wasm-safe (no geometry, no std::fs use).
+      - run: cargo check -p dt-doc --target wasm32-unknown-unknown
 
   deny:
     runs-on: ubuntu-latest

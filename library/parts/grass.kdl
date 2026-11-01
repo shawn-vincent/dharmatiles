@@ -1,0 +1,31 @@
+// Grass presets shared by tiles: `use "lib:parts/grass"`.
+//
+// Each is a definition: parameters with defaults, then a stack.  A tile
+// calls one like a look (`lawn self=meadow`) and may override any
+// parameter (`lawn length=12`).
+//
+// Today's .tile.py files share a SpeciesConfig object between the grass
+// carpet and the 3D blades.  Here one meadow does both, so the shared
+// thing is simply a definition.
+
+// Python's default SpeciesConfig.
+define lawn {
+    param length 10          // blade length, mm
+    param curl "36..81"      // degrees the blade turns along its length
+    param clearance 0.1      // blades float this far above what they lie on, mm
+    param clumps 3           // clumps per square
+
+    stack {
+        meadow {
+            blade length=length curl=curl clearance=clearance
+            clumps per-square=clumps
+        }
+    }
+}
+
+// Long, curly blades: the species of 2x2-grass-tree.
+define long-grass {
+    stack {
+        lawn length="8..14" curl="63..117" clearance=0.2
+    }
+}

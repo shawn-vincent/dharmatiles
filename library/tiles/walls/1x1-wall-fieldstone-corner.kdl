@@ -1,0 +1,33 @@
+// A drystone fieldstone wall turning the north-west corner of a
+// grassy 1×1.
+// Twin of src/tiles/walls/1x1-wall-fieldstone-corner.tile.py.
+
+use "lib:parts/grass"           // lawn
+
+tile wall-fieldstone-corner seed=64 {      // cols and rows default to 1
+
+    // Walked from the north-east corner, west along the north edge,
+    // then south down the west edge.  A wall stands on the left of
+    // its line as you walk it: inside the tile, its outer face flush
+    // with the edge (the DungeonBlocks slab standard).
+    line spine { through 1 1  0 1  0 0 }
+
+    // The region names no lines, so the wall's line doesn't divide it.
+    region meadow { fill 0.5 0.35 }
+
+    stack {
+        dirt self=meadow height=ground     // 5 mm
+
+        wall along=spine family=fieldstone seed=14 {
+            top wall                       // the official 33.1 mm wall top
+            thickness 0.2                  // squares: 7 mm
+            coping perched                 // loose stones on top (or: vertical)
+
+            // fieldstone's own defaults, written out to show them (mm)
+            stones course="2.2..5.2" bay="5..16" joint=0 reveal=2.8 roundover="1.3..2.6"
+        }
+
+        // After the wall, so the blades steer round it.
+        lawn self=meadow
+    }
+}

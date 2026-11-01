@@ -1,0 +1,13 @@
+// Standard named heights, in h: fractions of the wall, so 1 is the top
+// of a standard wall.  At DungeonBlocks scale h is 33.1 mm, the official
+// wall top above the datum (walls/masonry.py), so wall = 1.
+//
+// Every tile can use these names without a `use` line.  A tile's own
+// `heights` line adds names or overrides these for that tile only.
+
+heights {
+    edge   0.103    // 3.4 mm: ground meets the tile edge here (confirmed default 12)
+    ground 0.151    // 5.0 mm: today's grass and soil regions
+    water  0.079    // 2.6 mm: shorelab's water level
+    wall   1        // 33.1 mm: the official wall top
+}

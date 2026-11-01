@@ -1,0 +1,2 @@
+# KDL documents are compared byte for byte (dt-doc round-trip tests).
+*.kdl text eol=lf

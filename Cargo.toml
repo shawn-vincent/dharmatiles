@@ -15,6 +15,10 @@ publish = false
 # Every external version is stated once, here.
 [workspace.dependencies]
 dt-geom = { path = "crates/dt-geom" }
+dt-doc = { path = "crates/dt-doc" }
+# KDL v2 only: `kdlv1`/`v1-fallback` stay off, and serde is not needed.
+kdl = { version = "6.7.1", default-features = false, features = ["span"] }
+miette = { version = "7.6.0", default-features = false }
 
 [workspace.lints.rust]
 # FFI lives inside the binding crates, not ours.
