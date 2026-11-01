@@ -1,0 +1,145 @@
+<title>Spikes R1, R2, R9</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../dt.css">
+<style>
+  /* Page additions on top of dt.css: a verdict strip, then one section per spike. */
+  .verdicts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-block: 8px 28px; }
+  .verdicts > div { border: 1px solid var(--rule); background: var(--card); border-radius: 6px; padding: 14px 16px; min-width: 0; }
+  .verdicts b { display: block; font: 700 17px/1.2 var(--display); font-stretch: 108%; margin-block: 8px 4px; }
+  .verdicts p { margin: 0; font-size: 13.5px; }
+  td.num, th.num { font-variant-numeric: tabular-nums; }
+  td.h { font: 12px var(--mono); white-space: nowrap; }
+  td.diff { color: var(--alert); font-weight: 600; }
+  .tbl { overflow-x: auto; }
+</style>
+
+<nav class="top"><div class="wrap">
+  <span class="brand">dharmatiles → Rust</span>
+  <a href="https://claude.ai/artifact/GBiwhTV3inCuS3cRiWnTeQ">Overview</a>
+  <a href="https://claude.ai/artifact/Faqo5xnsCW9MHe6F2UNDtW">Rust feasibility</a>
+  <a href="https://claude.ai/artifact/CTFfwg21B8MWe5oEaX61pD">Project plan</a>
+  <a href="https://claude.ai/artifact/B2iunR3sEpTndvL2MhFBdt">Changes</a>
+</div></nav>
+
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">Phase 0 spikes · R1 booleans, R9 materials, R2 determinism · measured 1 Nov 2026 on an M2 Max</div>
+  <h1>Booleans, materials and determinism</h1>
+  <p class="lede">manifold-csg replays every boolean from the cliff and tree tiles watertight, with Python's triangle counts and volumes, at Python's speed. Source IDs survive a union and a level set. The test pipeline is byte-identical at 1, 4 and 16 threads, and also identical between macOS-arm64 and Linux-x86_64 for everything except calls into the platform maths library.</p>
+</header>
+
+<div class="verdicts">
+  <div><span class="verdict v-keep">R1 go</span><b>manifold-csg, parallel on</b><p>21,570 results across 3 tiles: all watertight, triangle counts equal to Python on all of them, worst volume error 4.9e-10, time 1.01–1.09× Python on paired runs.</p></div>
+  <div><span class="verdict v-cut">R1 port: not default</span><b>manifold-rust stays the wasm backend</b><p id="port-verdict">Every result watertight, carried IDs and properties match, but triangle counts differ from Python on 14 rockpile and 10 massif ops, and it takes 2.0× (rockpile) to about 3× (massif) Python's time with rayon on. Gate was ≤1.5×.</p></div>
+  <div><span class="verdict v-keep">R9 go</span><b>Every triangle maps to a source</b><p>Union: 36/36 triangles carry one of the two source IDs and lie on that source. Level set + union: 28,016 triangles traced back to their source triangle and its co-sampled material, 0 unmapped. Both backends.</p></div>
+  <div><span class="verdict v-keep">R2 go</span><b>Byte-identical on one machine</b><p>Every stage hash equal at 1, 4 and 16 threads, twice each, on both backends, with Manifold's own parallelism on and off. Two needed rules: keyed seeds, and original IDs assigned in index order.</p></div>
+</div>
+
+<h2>R1: booleans at scale</h2>
+<p>A wrapper around <code>manifold3d</code> (<code>tests/parity/capture/booleans.py</code>) recorded every boolean the labs perform, with operands and results saved as meshes: <code>+</code>, <code>-</code>, <code>^</code>, <code>batch_boolean</code>, <code>trim_by_plane</code>, <code>split</code> and <code>split_by_plane</code>. <code>crates/dt-geom/examples/r1_replay.rs</code> replays each one through the <code>Mesh</code> trait on either backend.</p>
+<div class="tbl"><table>
+  <thead><tr><th>Capture</th><th class="num">Booleans</th><th class="num">Largest op (all operands / largest mesh)</th><th class="num">Saved meshes</th><th class="num">Python build, uninstrumented</th></tr></thead>
+  <tbody>
+    <tr><td>rockpile 1×1, seed 1</td><td class="num">4,800</td><td class="num">4.1M / 2.6M tris</td><td class="num">1.4 GB</td><td class="num">61.9 s</td></tr>
+    <tr><td>rockpile 2×2 massif, seed 1</td><td class="num">16,676</td><td class="num">13.2M / 7.1M tris (a 202-part union)</td><td class="num">5.2 GB</td><td class="num">240.7 s</td></tr>
+    <tr><td><code>2x2-grass-tree.tile.py</code></td><td class="num">94</td><td class="num">31k / 17k tris</td><td class="num">12 MB</td><td class="num">15.2 s</td></tr>
+  </tbody>
+</table></div>
+<p class="small muted">Booleans are about 11% of the rockpile build and 14–20% of the massif (replayed op time over uninstrumented build time). The rest is Python and numpy, which is where the port's speedups have to come from.</p>
+
+<h3>The baseline is a Python replay, not the in-situ time</h3>
+<p>Two things made the in-situ numbers unusable as the yardstick. First, the three captures ran at the same time, so their timings are inflated. Second, a re-imported operand is not the same object as the in-memory one: replaying the captures in Python itself changes the triangle count on 448 of 4,800 rockpile results and 1,461 of 16,676 massif results. So the comparison is Rust against <code>replay_py.py</code>: the same <code>.dtm</code> inputs, re-imported the same way, timed the same way (the op plus forcing <code>num_tri()</code>). manifold-csg's C API cannot pass face IDs in, so its baseline drops them too.</p>
+
+<h3>Results</h3>
+<div class="tbl"><table>
+  <thead><tr><th>Tile</th><th>Backend</th><th class="num">Watertight</th><th class="num">Tris = Python</th><th class="num">Max vol. error</th><th class="num">Byte-identical to Python</th><th class="num">Op time Rust / Python</th><th class="num">Ratio</th><th class="num">Peak RSS</th></tr></thead>
+  <tbody id="r1rows">
+    <tr><td>tree 2×2</td><td>csg, parallel</td><td class="num">94/94</td><td class="num">94/94</td><td class="num">3.7e-10</td><td class="num">86</td><td class="num">0.15 / 0.15 s</td><td class="num">1.01×</td><td class="num">0.1 GB</td></tr>
+    <tr><td></td><td>csg, sequential</td><td class="num">94/94</td><td class="num">94/94</td><td class="num">3.7e-10</td><td class="num">86</td><td class="num">0.25 / 0.15 s</td><td class="num">1.7×</td><td class="num">0.1 GB</td></tr>
+    <tr><td></td><td>port, parallel</td><td class="num">94/94</td><td class="num">94/94</td><td class="num">3.7e-10</td><td class="num">86</td><td class="num">0.18 / 0.15 s</td><td class="num">1.2×</td><td class="num">0.1 GB</td></tr>
+    <tr><td>rockpile 1×1</td><td>csg, parallel</td><td class="num">4,800/4,800</td><td class="num">4,800/4,800</td><td class="num">4.8e-10</td><td class="num">3,559</td><td class="num">7.07 / 6.88 s</td><td class="num">1.03× (1.04×)</td><td class="num">5.6 GB</td></tr>
+    <tr><td></td><td>csg, sequential</td><td class="num">4,800/4,800</td><td class="num diff">4,798</td><td class="num">4.8e-10</td><td class="num">3,559</td><td class="num">22.9 / 6.88 s</td><td class="num diff">3.3×</td><td class="num">5.9 GB</td></tr>
+    <tr><td></td><td>port, parallel</td><td class="num">4,800/4,800</td><td class="num diff">4,786</td><td class="num">4.8e-10</td><td class="num">754</td><td class="num">13.8 / 6.88 s</td><td class="num diff">2.0×</td><td class="num">6.4 GB</td></tr>
+    <tr><td></td><td>port, sequential</td><td class="num">4,800/4,800</td><td class="num diff">4,786</td><td class="num">4.8e-10</td><td class="num">754</td><td class="num">24.3 / 6.88 s</td><td class="num diff">3.5×</td><td class="num">6.1 GB</td></tr>
+    <tr><td>massif 2×2</td><td>csg, parallel</td><td class="num">16,676/16,676</td><td class="num">16,676/16,676</td><td class="num">4.9e-10</td><td class="num">12,453</td><td class="num">34.1 / 33.7 s</td><td class="num">1.01× (1.09×)</td><td class="num">12.2 GB</td></tr>
+    <tr><td></td><td>csg, sequential</td><td class="num">16,676/16,676</td><td class="num diff">16,675</td><td class="num">4.8e-09</td><td class="num">12,453</td><td class="num">141 / 33.7 s</td><td class="num diff">4.2×</td><td class="num">12.1 GB</td></tr>
+    <tr><td></td><td>port, parallel</td><td class="num">16,676/16,676</td><td class="num diff">16,666</td><td class="num">4.9e-10</td><td class="num">2,553</td><td class="num">125 / 33.7–47.2 s</td><td class="num diff">2.6–3.7×</td><td class="num">13.9 GB</td></tr>
+    <tr><td></td><td>port, sequential</td><td class="num">16,676/16,676</td><td class="num diff">16,666</td><td class="num">4.9e-10</td><td class="num">2,553</td><td class="num">213 / 33.7–47.2 s</td><td class="num diff">4.5–6.3×</td><td class="num">13.9 GB</td></tr>
+  </tbody>
+</table></div>
+<p class="small muted">"Tris = Python" compares with the Python replay of the same inputs (no face IDs for csg; with face IDs for the port). Byte-identical counts compare with the in-situ Python result. Times are summed per-op seconds; Python ran with its wheel's TBB parallelism. Paired runs ran back to back on an idle machine; the M2 Max varies by up to 30% between passes, so each ratio is taken within one pass. Peak RSS includes a 48-mesh operand cache in both replays (Python's replay peaked at 7.8–8.2 GB on rockpile and 12–16 GB on the massif).</p>
+
+<h3>What R1 turned up</h3>
+<ol class="findings">
+  <li><strong>Parallel must be on.</strong> With Manifold built without TBB, manifold-csg takes 3.1–3.3× Python's time on rockpile and 3–5× on the massif. With TBB it matches. It is now on by default (<code>manifold-parallel</code>). Sequential and parallel builds also give different triangles on a handful of ops (2 of 4,800; 1 of 16,676), and the parallel build is the one that matches Python.</li>
+  <li><strong>manifold-csg cannot import face IDs or run transforms.</strong> The C API's <code>MeshGL64</code> options carry runs, merge vectors and tangents only. For the replay this made no difference (counts still match Python given the same inputs), but it means a mesh that leaves Manifold and comes back loses its coplanar-face grouping. Keep solids inside the kernel between ops; do not round-trip through <code>TriMesh</code>.</li>
+  <li><strong>Original IDs come from a process-wide counter.</strong> Plane ops mint a new ID for their half-space, and parts made in parallel get IDs in scheduling order. The replay compares only IDs carried from operands; R2 shows the consequence for determinism.</li>
+  <li><strong>Original-ID mismatches are all edge cases.</strong> 11 of 21,570 results: 8 intersections whose result is a zero-volume sliver on one side and empty on the other (largest 1.2e-4 mm³), and 3 plane trims where one side kept the half-space's minted ID and the other did not. Harmless, but the audit should count zero-volume slivers.</li>
+  <li><strong>The parity harness must compare metrics, not bytes.</strong> Even same-engine, same-input results are byte-identical to Python only 74–92% of the time (version 3.5.3 against 3.5.1 and re-import order). Triangle counts and volumes match.</li>
+  <li><strong>The port is close but not there.</strong> Sequentially it matches the C++ kernel's speed (24.3 s against 22.9 s on rockpile), and its rayon build gave the same whole-run hash as its sequential build on both cliffs, confirming the bit-identical claim. But its parallelism buys 1.7× where TBB buys 3×; its <code>batch_boolean</code> folds left to right (101 s on rockpile until <code>PortSolid::batch</code> was changed to union smallest-first); and it tracks Manifold 3.5.4, so its triangulation differs from Python's 3.5.1 on 24 ops and is byte-identical to it on only about 15% of results.</li>
+  <li><strong>A toolchain trap on this Mac.</strong> rustup here is the x86_64 build running under Rosetta. Through it, the cmake build of Manifold compiled x86_64 objects into an arm64 binary and failed to link. Calling the arm64 toolchain directly (<code>~/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin</code> first in <code>PATH</code>) fixed it. Reinstalling rustup natively would fix it for good.</li>
+</ol>
+
+<h2>R9: materials through booleans</h2>
+<p><code>crates/dt-geom/examples/r9_materials.rs</code>, both backends, identical results.</p>
+<div class="tbl"><table>
+  <thead><tr><th>Path</th><th>What it checks</th><th class="num">Result</th></tr></thead>
+  <tbody>
+    <tr><td>Union of two boxes</td><td class="small">Each output triangle's run original ID is one of the two sources, and its centroid lies on that source's surface (within 1e-9 mm).</td><td class="num">36/36 · <span class="verdict v-keep">pass</span></td></tr>
+    <tr><td>Level set, then union with a box</td><td class="small">A two-blob SDF (0.25 mm grid) is meshed; its material field is co-sampled per triangle. After the union, each output triangle is traced through (original ID, face ID) to its level-set source triangle: the piece lies within 0.25 mm of the source and the source's material equals a fresh sample at the piece.</td><td class="num">28,016 traced, 28,016 same material, 88 from the box, 0 unmapped · <span class="verdict v-keep">pass</span></td></tr>
+  </tbody>
+</table></div>
+<p>So colour can ride on original IDs for solids and on (original ID, face ID) back to a co-sampled field for level sets. Both rely on face IDs surviving inside the kernel, which they do on both backends; finding 2 above is why that chain must not pass through <code>TriMesh</code> mid-pipeline.</p>
+
+<h2>R2: determinism</h2>
+<p><code>crates/dt-geom/tests/determinism.rs</code>: value-noise fBm on a 384² grid, keyed-seed scatter, an exact EDT (Felzenszwalb, rows and columns in parallel), then 24 level-set rocks trimmed by the ground in parallel and one batch union with the slab. A further hash covers a <code>sin</code>/<code>exp</code> stage to measure the platform maths library. Each stage is hashed at 1, 4 and 16 rayon threads, twice each.</p>
+
+<h3>One machine</h3>
+<p>The first run failed: the final union differed between 1 and 4 threads on <em>both</em> backends while every rock was identical. The cause is Manifold's process-wide original-ID counter. Rocks built in parallel get IDs in scheduling order, and a boolean orders its output triangles by original ID. Re-assigning IDs in index order (<code>as_original()</code>) before the batch fixed it. With that rule, every hash is identical at every thread count, debug and release, with Manifold's parallelism on and off. The R1 replay adds a larger check: two runs of all 4,800 rockpile and all 16,676 massif ops with TBB on gave the same whole-run hash (<code>692c31a3…</code> and <code>f99638b2…</code>).</p>
+
+<h3>Across platforms (CI, same commit)</h3>
+<div class="tbl"><table>
+  <thead><tr><th>Stage</th><th>macOS arm64</th><th>Linux x86_64</th><th>Windows x86_64</th></tr></thead>
+  <tbody>
+    <tr><td>noise (+, ×, floor only)</td><td class="h">17289d9e…</td><td class="h">17289d9e…</td><td class="h">17289d9e…</td></tr>
+    <tr><td>scatter</td><td class="h">89c0b281…</td><td class="h">89c0b281…</td><td class="h">89c0b281…</td></tr>
+    <tr><td>EDT</td><td class="h">a90ec3ee…</td><td class="h">a90ec3ee…</td><td class="h">a90ec3ee…</td></tr>
+    <tr><td>libm (<code>sin</code>, <code>exp</code>)</td><td class="h">fd58314c…</td><td class="h diff">4418d923…</td><td class="h diff">5a73ca1a…</td></tr>
+    <tr><td>rocks: level set + trim, C++</td><td class="h">f15a7f91…</td><td class="h">f15a7f91…</td><td class="h diff">adaae7be…</td></tr>
+    <tr><td>rocks: level set + trim, port</td><td class="h">b9a4eff3…</td><td class="h">b9a4eff3…</td><td class="h diff">22652430…</td></tr>
+    <tr><td>batch union, C++ (32,288 tris)</td><td class="h">5a0c8aec…</td><td class="h">5a0c8aec…</td><td class="h diff">4ddd7e0f…</td></tr>
+    <tr><td>batch union, port (32,262 tris)</td><td class="h">81bc67df…</td><td class="h">81bc67df…</td><td class="h diff">d1bfdbfb…</td></tr>
+  </tbody>
+</table></div>
+<p class="small muted">Commit 89bf704, Manifold parallelism on. The first CI run (parallelism off, the port's left fold) showed the same pattern: identical on macOS and Linux, different on Windows for libm, rocks and union.</p>
+<p>Our own code is identical everywhere as long as it avoids libm. Manifold, in both its C++ and Rust forms, is byte-identical between macOS-arm64 and Linux-x86_64 on this pipeline, and differs on Windows with the same triangle counts; the likely source is MSVC's <code>sin</code>/<code>cos</code> in the plane and level-set paths. The C++ kernel and the port never agree byte for byte with each other (different rocks and 32,288 against 32,262 triangles), because the port tracks Manifold 3.5.4 and manifold-csg ships 3.5.3.</p>
+<p><strong>Level for Shawn to choose:</strong> byte-identical golden hashes are achievable for macOS and Linux together; Windows needs its own hashes or a metrics-plus-render gate. Seeded code paths should use the <code>libm</code> crate rather than <code>std</code> transcendental functions.</p>
+
+<h2>CI cost</h2>
+<div class="tbl"><table>
+  <thead><tr><th>Job</th><th class="num">Before (skeleton)</th><th class="num">Cold, with Manifold</th><th class="num">Cached</th></tr></thead>
+  <tbody id="cirows">
+    <tr><td>test (macOS)</td><td class="num">33 s</td><td class="num">2 min 47 s</td><td class="num">1 min 01 s</td></tr>
+    <tr><td>test (Linux)</td><td class="num">17 s</td><td class="num">2 min 04 s</td><td class="num">32 s</td></tr>
+    <tr><td>test (Windows)</td><td class="num">44 s</td><td class="num">4 min 57 s</td><td class="num">1 min 01 s</td></tr>
+    <tr><td>clippy, all features</td><td class="num">23 s</td><td class="num">2 min 13 s</td><td class="num">18 s</td></tr>
+    <tr><td>wasm (now a full build)</td><td class="num">21 s</td><td class="num">40 s</td><td class="num">18 s</td></tr>
+    <tr><td>deny</td><td class="num">33 s</td><td class="num">34 s</td><td class="num">34 s</td></tr>
+  </tbody>
+</table></div>
+<p class="small muted">Job wall times from runs 41336895533 (skeleton), 41340182964 and 41344103590 (cold: Manifold and TBB compiled from source), and 41344559011 (cached). The wall clock is the slowest job: about 5 minutes cold (Windows), about 1 minute cached.</p>
+<p>All three runner images ship cmake (3.31 on Linux, 4.4 on macOS and Windows), so no install step was needed; the jobs print <code>cmake --version</code> so a missing one fails loudly. The wasm job now really builds manifold-rust for <code>wasm32-unknown-unknown</code> (a full build, not just a check) and passes, so it needs no <code>continue-on-error</code>. Locally, a cold arm64 build of Manifold without TBB took 40 s and with TBB 1 min 19 s.</p>
+
+<h2>What changes in the plan</h2>
+<ol class="findings">
+  <li>Ship manifold-csg with Manifold's parallelism on. The design note "run each boolean single-threaded and many in parallel" is not needed for identity on one machine, and costs 3–4× on the cliff's big unions.</li>
+  <li>Add a kernel rule: <em>assign original IDs in index order before combining parts made in parallel</em>. Without it, output depends on thread scheduling.</li>
+  <li>Keep solids inside the kernel between ops; a <code>TriMesh</code> round trip through manifold-csg drops face IDs.</li>
+  <li>The parity harness compares triangle counts, volumes and renders, not bytes, against a Python <em>replay</em>.</li>
+  <li>R1 ran at a larger scale than planned: single meshes up to 7.1M triangles and a 202-part, 13.2M-triangle union on the massif, not 1.7M. The kill criterion (cliff batch within 2× Python) is met with room to spare.</li>
+  <li>R2's cross-platform level: macOS and Linux can share golden hashes; Windows cannot without replacing libm calls inside Manifold.</li>
+  <li>manifold-rust stays behind the trait as the wasm backend (the browser build compiles), and is re-measured when Python moves to Manifold 3.5.4 and the port's parallel speed improves. The R1 replay is the re-test: <code>r1_replay --backend port</code>.</li>
+</ol>
+</div>
