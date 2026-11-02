@@ -86,9 +86,9 @@
    "body": "rust",
    "area": "Rust P5",
    "state": "running",
-   "title": "Phase 5 started: walls, floors, bases, trees",
-   "detail": "Branch rust/p5 (stream B, beside P3). Ports the library walls, floors, OpenLOCK base and trees; tree tiles wait on grass (P4).",
-   "updated": "2026-11-02T23:00:00Z"
+   "title": "P5: overhang audit of the Python walls; Rust wall skeleton",
+   "detail": "Layer-reach audit of Python walls alone: 7–100 mm² above ground (face-angle test: 200–525), all on bed-joint lips. Building the Rust wall, floor and OpenLOCK skeleton on rust/p5.",
+   "updated": "2026-11-02T21:25:10Z"
   }
  ]
 }
