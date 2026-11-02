@@ -1,0 +1,17 @@
+// Tree presets: `use "parts/trees" oak`.
+//
+// The `branch` group holds the generator's six branching knobs.  They
+// are expert controls, accepted in parts files only; a tile says
+// `crown branching=open|normal|dense` instead.
+
+define oak {
+    param height 50           // ground to the top of the crown, mm
+
+    stack {
+        tree height=height {
+            trunk height=18
+            crown width=44 clumps=60 shape=wide
+            branch split=34 eagerness=0.6 target=0.25 balance=0.8 exponent=3 min-radius=0.9
+        }
+    }
+}

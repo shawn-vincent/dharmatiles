@@ -1,117 +1,88 @@
-//! Deliberate mistakes in the real tiles, and what the author sees.
+//! Deliberate mistakes in the real tiles, and what the author sees: a
+//! miette report with the line and a hint.  Each report is compared with
+//! its snapshot in tests/snapshots/; run with `UPDATE_SNAPSHOTS=1` to
+//! rewrite them after a deliberate change, and review the diff.
 //! `cargo run -p dt-doc --example errors` prints the same reports.
 #![allow(clippy::unwrap_used)] // test helpers outside #[test] fns
 
 mod common;
 
+use std::path::PathBuf;
+
 use common::*;
+use miette::Diagnostic;
 
-fn report(case: &Case) -> (Vec<dt_doc::DocError>, String) {
-    let (name, text) = case.tile;
-    assert!(
-        text.contains(case.from),
-        "{}: `{}` not in {name}",
-        case.title,
-        case.from
+fn snapshot(slug: &str, shown: &str) {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/snapshots")
+        .join(format!("{slug}.txt"));
+    if std::env::var_os("UPDATE_SNAPSHOTS").is_some() {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, shown).unwrap();
+        return;
+    }
+    let want = std::fs::read_to_string(&path).unwrap_or_else(|_| {
+        panic!(
+            "no snapshot {}; run with UPDATE_SNAPSHOTS=1",
+            path.display()
+        )
+    });
+    assert_eq!(
+        shown, want,
+        "snapshot {slug} changed; UPDATE_SNAPSHOTS=1 rewrites it"
     );
-    let broken = text.replacen(case.from, case.to, 1);
-    let errors = dt_doc::decode(name, &broken, &known()).expect_err("should fail");
-    let shown = render(&errors);
-    (errors, shown)
 }
 
 #[test]
-fn typo_suggests_the_control() {
-    let (e, shown) = report(&CASES[0]);
-    assert_eq!(e.len(), 1, "{shown}");
-    assert_eq!(e[0].code, "dt::unknown-control");
-    assert_eq!(e[0].help.as_deref(), Some("did you mean `per-square`?"));
-    assert!(shown.contains("per-sqare"), "{shown}");
+fn every_case_matches_its_snapshot() {
+    for case in &CASES {
+        let (_, shown) = case.report();
+        snapshot(case.slug, &shown);
+    }
 }
 
 #[test]
-fn wrong_unit_explains_h() {
-    let (e, shown) = report(&CASES[1]);
-    assert_eq!(e.len(), 1, "{shown}");
-    assert_eq!(e[0].code, "dt::wrong-unit");
+fn every_error_has_a_line_and_a_hint() {
+    for case in &CASES {
+        let (errors, shown) = case.report();
+        for e in &errors {
+            assert!(e.help().is_some(), "{}: no hint\n{shown}", case.title);
+            assert!(e.labels().is_some(), "{}", case.title);
+            assert!(!e.span.is_empty(), "{}", case.title);
+        }
+        // The report shows the file name, a line and a column.
+        assert!(shown.contains(&format!("[{}:", case.tile.0)), "{shown}");
+    }
+}
+
+#[test]
+fn spans_point_at_the_mistake() {
+    let at = |case: &Case, i: usize| {
+        let (e, _) = case.report();
+        let b = case.broken();
+        let s = e[i].span;
+        b[s.offset()..s.offset() + s.len()].to_owned()
+    };
+    let case = |slug: &str| CASES.iter().find(|c| c.slug == slug).unwrap();
+    assert_eq!(at(case("typo"), 0), "clumsp");
+    assert_eq!(at(case("unit-suffix"), 0), "mm");
+    assert_eq!(at(case("kdl-v1"), 0), "true");
+    assert_eq!(at(case("missing-along"), 0), "wall");
+    assert_eq!(at(case("unquoted-range"), 0), "1..6");
+    assert_eq!(at(case("old-vocabulary"), 0), "hills");
+    assert_eq!(at(case("thing-count"), 0), "count");
+    assert_eq!(at(case("expert-in-tile"), 0), "branch");
+    assert_eq!(at(case("side-on-edge"), 0), "left");
+}
+
+#[test]
+fn decoding_goes_on_past_the_first_mistake() {
+    let case = CASES.iter().find(|c| c.slug == "several").unwrap();
+    let (e, shown) = case.report();
+    assert_eq!(e.len(), 2, "{shown}");
+    assert_eq!(e[0].help.as_deref(), Some("did you mean `mixed`?"));
     assert!(
-        e[0].help
-            .as_deref()
-            .unwrap()
-            .contains("35 mm is about 1.057"),
+        e[1].help.as_deref().unwrap().contains("\"135%\""),
         "{shown}"
     );
-}
-
-#[test]
-fn v1_true_says_write_hash_true() {
-    let (e, shown) = report(&CASES[2]);
-    assert_eq!(e[0].code, "dt::syntax");
-    assert!(e[0].message.contains("KDL v1"), "{shown}");
-    assert_eq!(e[0].help.as_deref(), Some("write #true"));
-}
-
-#[test]
-fn missing_along_is_reported_on_the_wall() {
-    let (e, shown) = report(&CASES[3]);
-    assert_eq!(e.len(), 1, "{shown}");
-    assert_eq!(e[0].code, "dt::missing-control");
-    assert_eq!(e[0].message, "`wall` needs `along`");
-    let (name, text) = CASES[3].tile;
-    let broken = text.replacen(CASES[3].from, CASES[3].to, 1);
-    let s = e[0].span;
-    assert_eq!(&broken[s.offset()..s.offset() + s.len()], "wall", "{name}");
-}
-
-#[test]
-fn bad_skew_points_inside_the_string() {
-    let (e, shown) = report(&CASES[4]);
-    assert_eq!(e[0].code, "dt::expr");
-    let (_, text) = CASES[4].tile;
-    let broken = text.replacen(CASES[4].from, CASES[4].to, 1);
-    let s = e[0].span;
-    assert_eq!(&broken[s.offset()..s.offset() + s.len()], "x", "{shown}");
-}
-
-#[test]
-fn more_mistakes() {
-    let k = known();
-    let cases = [
-        // an unknown look
-        ("tile t { stack { medow } }", "did you mean `meadow`?"),
-        // a region that doesn't exist
-        (
-            "tile t { region yard { fill 0.5 0.5 }; stack { dirt self=yrd } }",
-            "did you mean `yard`?",
-        ),
-        // a control in the wrong group
-        (
-            "tile t { stack { tree length=4.5 } }",
-            "belongs in the `leaf` group",
-        ),
-        // a bad choice
-        (
-            "tile t { line l { through 0 0 1 1 }; stack { wall along=l family=feildstone } }",
-            "did you mean `fieldstone`?",
-        ),
-        // a print-scale size written in squares
-        (
-            "tile t { stack { tree { leaf length=(sq)0.1 } } }",
-            "OpenLOCK build keeps",
-        ),
-        // a named height that doesn't exist
-        (
-            "tile t { stack { hills height=grund } }",
-            "did you mean `ground`?",
-        ),
-        // an unquoted range
-        ("tile t { stack { meadow bare=20% } }", "written as strings"),
-        // a missing fill point
-        ("tile t { region r { } }", "paint bucket"),
-    ];
-    for (text, want) in cases {
-        let e = dt_doc::decode("t.kdl", text, &k).expect_err(text);
-        let shown = render(&e);
-        assert!(shown.contains(want), "{text}\n{shown}");
-    }
 }

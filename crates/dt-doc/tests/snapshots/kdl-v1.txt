@@ -1,0 +1,11 @@
+dt::syntax
+
+  × bare `true` is KDL v1; dharmatiles documents are KDL v2
+    ╭─[library/tiles/cliffs/2x1-cliff-run.kdl:22:17]
+ 21 │             stone-size massive          // or: rubble, broken
+ 22 │             top true                    // or: bare
+    ·                 ──┬─
+    ·                   ╰── KDL v1 keyword
+ 23 │             shattered patches=3 width="5..10"
+    ╰────
+  help: write #true

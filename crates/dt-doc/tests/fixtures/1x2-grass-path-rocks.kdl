@@ -1,0 +1,25 @@
+// A 1×2 strip of grass with a worn dirt path winding up its length
+// and a cluster of rocks beside it.  Written from scratch.
+
+use "parts/grass" lawn
+
+tile grass-path-rocks size="1x2" seed=7 {
+
+    // From the middle of the south edge to the middle of the north edge,
+    // 9 mm wide, wandering up to 3 mm off its points.
+    line trail width=9 wobble=3 { through south "0.65,1" north }
+
+    // Everything beside the path: one fill point on each side of it.
+    region verge { bounded-by trail; fill "0.15,1"; fill "0.85,1" }
+
+    stack {
+        dirt                                    // the whole tile, at the ground level
+        dirt along=trail level="ground - 1"     // the path, trodden 1 mm lower
+
+        scatter in=verge at="0.2,1.4" spread=6 count=5 {   // a cluster
+            rock size="4..10" shape=rounded buried="30%"   // shape: or angular, flat
+        }
+
+        lawn in=verge cover="85%"
+    }
+}

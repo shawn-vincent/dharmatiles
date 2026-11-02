@@ -1,61 +1,54 @@
-//! The small expression language used for parameter values.
+//! The small expression language used inside quoted values.
 //!
 //! ```text
-//! value  := sum ( ".." sum ( "^" number )? )?     a distribution "lo..hi^skew"
+//! value  := sum ( ".." sum )?        a range "lo..hi", drawn afresh per thing
 //! sum    := prod ( ("+" | "-") prod )*
 //! prod   := unary ( ("*" | "/") unary )*
 //! unary  := "-" unary | atom
-//! atom   := number unit? | name | "(" sum ")"
-//! unit   := "mm" | "sq" | "h" | "deg" | "%"
+//! atom   := number "%"? | name | "(" sum ")"
 //! ```
 //!
-//! A name is a parameter of the enclosing definition or a named height
-//! (`ground`, `wall`, a tile's own `heights`).  There are no calls, loops
-//! or assignments.  A distribution draws `lo + (hi - lo) * u^skew` for a
-//! uniform `u` in 0..1, so a skew above 1 favours the low end, the way
-//! rockpile's `SCREE_D_EXP` does.
+//! Units are never written (R6.3): every control knows its own unit, and
+//! sizes are millimetres at the DungeonBlocks reference.  `%` is the one
+//! suffix, because a share is a percent (`cover="85%"`).  The spike's
+//! `"4.5mm"` suffix and the `"1..6^2"` skew are gone; both give an error
+//! that says what to write instead (`4.5`, and `mostly=small`).
+//!
+//! A name is a parameter of the enclosing definition or, where a level is
+//! expected, a named level (`ground`, `wall-top`, a tile's own `levels`).
+//! There are no calls, loops or assignments.
 
 use std::fmt;
 
-/// A unit written after a number (`4.5mm`) or as a KDL type annotation
-/// (`(mm)4.5`).  Usually omitted: the control's axis supplies it.
+/// A type annotation written before a plain value: `(mm)4.5` or `(h)1.2`.
+///
+/// `(mm)` is only a check: the value is millimetres either way.  `(h)`
+/// is the opt-in wall-relative scale, where 1 is the 33.1 mm wall top.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Unit {
-    /// True millimetres: print-scale details.
+    /// `(mm)`: millimetres at the DungeonBlocks reference (a check only).
     Mm,
-    /// Squares: layout across.
-    Sq,
-    /// Fractions of the wall height: layout up.
+    /// `(h)`: fractions of the 33.1 mm wall top.
     H,
-    /// Degrees.
-    Deg,
-    /// Percent; the value is divided by 100.
-    Percent,
 }
 
 impl Unit {
-    /// Parse a unit word.
+    /// Parse an annotation word.
     #[must_use]
     pub fn parse(s: &str) -> Option<Self> {
-        Some(match s {
-            "mm" => Self::Mm,
-            "sq" => Self::Sq,
-            "h" => Self::H,
-            "deg" => Self::Deg,
-            "%" => Self::Percent,
-            _ => return None,
-        })
+        match s {
+            "mm" => Some(Self::Mm),
+            "h" => Some(Self::H),
+            _ => None,
+        }
     }
 
-    /// The unit as written.
+    /// The annotation as written, without parentheses.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Mm => "mm",
-            Self::Sq => "sq",
             Self::H => "h",
-            Self::Deg => "deg",
-            Self::Percent => "%",
         }
     }
 }
@@ -76,14 +69,14 @@ pub enum BinOp {
 /// A parsed value expression.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
-    /// A literal number, with the unit if one was written.
+    /// A literal number.
     Num {
-        /// The number as written (percent not yet divided).
+        /// The number as written (a percent not yet divided).
         value: f64,
-        /// The written unit.
-        unit: Option<Unit>,
+        /// Written with `%`: the value is divided by 100 when sampled.
+        percent: bool,
     },
-    /// A parameter or a named height.
+    /// A parameter or a named level.
     Name(String),
     /// Unary minus.
     Neg(Box<Expr>),
@@ -96,14 +89,13 @@ pub enum Expr {
         /// Right operand.
         rhs: Box<Expr>,
     },
-    /// A distribution `lo..hi^skew`.
+    /// A range `lo..hi`, drawn afresh for each thing.  A scatter's or a
+    /// thing's `mostly=` skews the draw; the range itself is uniform.
     Range {
         /// Low end.
         lo: Box<Expr>,
         /// High end.
         hi: Box<Expr>,
-        /// Power applied to the uniform draw; `None` is uniform.
-        skew: Option<f64>,
     },
 }
 
@@ -120,7 +112,7 @@ pub struct ExprError {
 
 #[derive(Debug, Clone, PartialEq)]
 enum Tok {
-    Num(f64, Option<Unit>),
+    Num(f64, bool),
     Name(String),
     Op(char),
     DotDot,
@@ -150,31 +142,31 @@ fn lex(src: &str) -> Result<Vec<(Tok, usize, usize)>, ExprError> {
                     i += 1;
                 }
             }
-            let value: f64 = src[start..i].parse().map_err(|_| ExprError {
-                message: format!("`{}` is not a number", &src[start..i]),
+            let text = &src[start..i];
+            let value: f64 = text.parse().map_err(|_| ExprError {
+                message: format!("`{text}` is not a number"),
                 start,
                 end: i,
             })?;
-            // An optional unit glued to the number.
-            let unit_start = i;
-            if i < b.len() && b[i] == b'%' {
+            let percent = b.get(i) == Some(&b'%');
+            if percent {
                 i += 1;
-            } else {
+            } else if b.get(i).is_some_and(u8::is_ascii_alphabetic) {
+                // A unit glued on: "4.5mm".  Units are not written.
+                let unit_start = i;
                 while i < b.len() && b[i].is_ascii_alphabetic() {
                     i += 1;
                 }
-            }
-            let unit = if i > unit_start {
-                let word = &src[unit_start..i];
-                Some(Unit::parse(word).ok_or_else(|| ExprError {
-                    message: format!("unknown unit `{word}`; units are mm, sq, h, deg and %"),
+                let unit = &src[unit_start..i];
+                return Err(ExprError {
+                    message: format!(
+                        "units are not written: `{text}{unit}` is just `{text}`; every control knows its unit (sizes are mm)"
+                    ),
                     start: unit_start,
                     end: i,
-                })?)
-            } else {
-                None
-            };
-            out.push((Tok::Num(value, unit), start, i));
+                });
+            }
+            out.push((Tok::Num(value, percent), start, i));
             continue;
         }
         if c.is_ascii_alphabetic() || c == b'_' {
@@ -225,6 +217,9 @@ struct Parser<'a> {
     len: usize,
 }
 
+const SKEW_HELP: &str =
+    "a range is skewed with `mostly=small`, `even` or `large` beside it, not with `^`";
+
 impl Parser<'_> {
     fn peek(&self) -> Option<&Tok> {
         self.toks.get(self.pos).map(|t| &t.0)
@@ -252,23 +247,9 @@ impl Parser<'_> {
         }
         self.pos += 1;
         let hi = self.sum()?;
-        let mut skew = None;
-        if self.peek() == Some(&Tok::Op('^')) {
-            self.pos += 1;
-            match self.peek() {
-                Some(&Tok::Num(k, None)) if k > 0.0 => {
-                    self.pos += 1;
-                    skew = Some(k);
-                }
-                _ => {
-                    return self.err("a skew `^k` needs a plain positive number, as in \"1..6^2\"");
-                }
-            }
-        }
         Ok(Expr::Range {
             lo: Box::new(lo),
             hi: Box::new(hi),
-            skew,
         })
     }
 
@@ -312,9 +293,9 @@ impl Parser<'_> {
 
     fn atom(&mut self) -> Result<Expr, ExprError> {
         match self.peek().cloned() {
-            Some(Tok::Num(value, unit)) => {
+            Some(Tok::Num(value, percent)) => {
                 self.pos += 1;
-                Ok(Expr::Num { value, unit })
+                Ok(Expr::Num { value, percent })
             }
             Some(Tok::Name(n)) => {
                 self.pos += 1;
@@ -330,6 +311,7 @@ impl Parser<'_> {
                 Ok(e)
             }
             Some(Tok::DotDot) => self.err("a range needs a low end, as in \"8..14\""),
+            Some(Tok::Op('^')) => self.err(SKEW_HELP),
             Some(_) => self.err("expected a number or a name"),
             None => self.err("expected a value"),
         }
@@ -351,7 +333,7 @@ pub fn parse(src: &str) -> Result<Expr, ExprError> {
     if p.pos < toks.len() {
         return match p.peek() {
             Some(Tok::DotDot) => p.err("only one `..` is allowed: a range has two ends"),
-            Some(Tok::Op('^')) => p.err("`^` only skews a range, as in \"1..6^2\""),
+            Some(Tok::Op('^')) => p.err(SKEW_HELP),
             _ => p.err("unexpected text after the value"),
         };
     }
@@ -359,67 +341,79 @@ pub fn parse(src: &str) -> Result<Expr, ExprError> {
 }
 
 impl Expr {
-    /// Every unit written anywhere in the expression.
+    /// A plain number, as a literal.
     #[must_use]
-    pub fn units(&self) -> Vec<Unit> {
-        let mut out = Vec::new();
-        self.visit(&mut |e| {
-            if let Expr::Num { unit: Some(u), .. } = e {
-                out.push(*u);
-            }
-        });
-        out
+    pub fn num(value: f64) -> Self {
+        Self::Num {
+            value,
+            percent: false,
+        }
     }
 
     /// Every name the expression refers to.
     #[must_use]
     pub fn names(&self) -> Vec<&str> {
         let mut out = Vec::new();
-        self.visit_ref(&mut out);
+        self.visit(&mut |e| {
+            if let Expr::Name(n) = e {
+                out.push(n.as_str());
+            }
+        });
         out
     }
 
-    fn visit_ref<'a>(&'a self, out: &mut Vec<&'a str>) {
-        match self {
-            Expr::Name(n) => out.push(n),
-            Expr::Num { .. } => {}
-            Expr::Neg(e) => e.visit_ref(out),
-            Expr::Bin { lhs, rhs, .. } => {
-                lhs.visit_ref(out);
-                rhs.visit_ref(out);
-            }
-            Expr::Range { lo, hi, .. } => {
-                lo.visit_ref(out);
-                hi.visit_ref(out);
-            }
-        }
+    /// True when any literal is written with `%`.
+    #[must_use]
+    pub fn has_percent(&self) -> bool {
+        let mut any = false;
+        self.visit(&mut |e| any |= matches!(e, Expr::Num { percent: true, .. }));
+        any
     }
 
-    fn visit(&self, f: &mut impl FnMut(&Expr)) {
+    /// True when every literal is written with `%` (and there is one).
+    #[must_use]
+    pub fn all_percent(&self) -> bool {
+        let (mut all, mut seen) = (true, false);
+        self.visit(&mut |e| {
+            if let Expr::Num { percent, .. } = e {
+                seen = true;
+                all &= *percent;
+            }
+        });
+        all && seen
+    }
+
+    /// True when the expression is (or contains) a range.
+    #[must_use]
+    pub fn is_range(&self) -> bool {
+        let mut any = false;
+        self.visit(&mut |e| any |= matches!(e, Expr::Range { .. }));
+        any
+    }
+
+    fn visit<'a>(&'a self, f: &mut impl FnMut(&'a Expr)) {
         f(self);
         match self {
             Expr::Num { .. } | Expr::Name(_) => {}
             Expr::Neg(e) => e.visit(f),
-            Expr::Bin { lhs, rhs, .. } => {
+            Expr::Bin { lhs, rhs, .. } | Expr::Range { lo: lhs, hi: rhs } => {
                 lhs.visit(f);
                 rhs.visit(f);
-            }
-            Expr::Range { lo, hi, .. } => {
-                lo.visit(f);
-                hi.visit(f);
             }
         }
     }
 
     /// Evaluate with `u` as the uniform draw for every range (0 gives the
-    /// low end, 1 the high end).  Names resolve through `env`.
+    /// low end, 1 the high end).  A percent is divided by 100.  Names
+    /// resolve through `env`.  Only `+ - * /` are used, so the result is
+    /// bit-identical on every platform.
     ///
     /// # Errors
     /// Returns the first name `env` does not know.
     pub fn sample(&self, env: &dyn Fn(&str) -> Option<f64>, u: f64) -> Result<f64, String> {
         Ok(match self {
-            Expr::Num { value, unit } => {
-                if *unit == Some(Unit::Percent) {
+            Expr::Num { value, percent } => {
+                if *percent {
                     value / 100.0
                 } else {
                     *value
@@ -436,21 +430,29 @@ impl Expr {
                     BinOp::Div => a / b,
                 }
             }
-            Expr::Range { lo, hi, skew } => {
+            Expr::Range { lo, hi } => {
                 let (a, b) = (lo.sample(env, u)?, hi.sample(env, u)?);
-                a + (b - a) * u.powf(skew.unwrap_or(1.0))
+                a + (b - a) * u
             }
         })
+    }
+
+    /// The low and high ends (`sample` at 0 and 1).
+    ///
+    /// # Errors
+    /// As [`Expr::sample`].
+    pub fn bounds(&self, env: &dyn Fn(&str) -> Option<f64>) -> Result<(f64, f64), String> {
+        Ok((self.sample(env, 0.0)?, self.sample(env, 1.0)?))
     }
 }
 
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Expr::Num { value, unit } => {
+            Expr::Num { value, percent } => {
                 write!(f, "{value}")?;
-                if let Some(u) = unit {
-                    write!(f, "{}", u.as_str())?;
+                if *percent {
+                    f.write_str("%")?;
                 }
                 Ok(())
             }
@@ -465,13 +467,7 @@ impl fmt::Display for Expr {
                 };
                 write!(f, "({lhs} {c} {rhs})")
             }
-            Expr::Range { lo, hi, skew } => {
-                write!(f, "{lo}..{hi}")?;
-                if let Some(k) = skew {
-                    write!(f, "^{k}")?;
-                }
-                Ok(())
-            }
+            Expr::Range { lo, hi } => write!(f, "{lo}..{hi}"),
         }
     }
 }
@@ -490,50 +486,48 @@ mod tests {
 
     #[test]
     fn plain_number() {
-        assert_eq!(
-            parse("4.5").unwrap(),
-            Expr::Num {
-                value: 4.5,
-                unit: None
-            }
-        );
+        assert_eq!(parse("4.5").unwrap(), Expr::num(4.5));
     }
 
     #[test]
-    fn number_with_unit() {
-        let e = parse("4.5mm").unwrap();
-        assert_eq!(e.units(), vec![Unit::Mm]);
-        assert!(close(e.sample(&none, 0.0).unwrap(), 4.5));
+    fn units_are_not_written() {
+        let err = parse("4.5mm").unwrap_err();
+        assert_eq!((err.start, err.end), (3, 5));
+        assert!(err.message.contains("units are not written"), "{err:?}");
+        assert!(err.message.contains("just `4.5`"), "{err:?}");
+        assert!(parse("1..6deg").is_err());
     }
 
     #[test]
     fn percent_divides() {
         let e = parse("20%").unwrap();
         assert!(close(e.sample(&none, 0.0).unwrap(), 0.2));
+        assert!(e.all_percent());
+        assert!(!parse("20").unwrap().has_percent());
     }
 
     #[test]
     fn range_is_not_a_decimal() {
         let e = parse("8..14").unwrap();
-        assert!(matches!(e, Expr::Range { skew: None, .. }));
-        assert!(close(e.sample(&none, 0.0).unwrap(), 8.0));
-        assert!(close(e.sample(&none, 1.0).unwrap(), 14.0));
+        assert!(e.is_range());
+        assert_eq!(e.bounds(&none).unwrap(), (8.0, 14.0));
         assert!(close(e.sample(&none, 0.5).unwrap(), 11.0));
     }
 
     #[test]
-    fn skewed_range_favours_low_end() {
-        // rockpile: D = lerp(1..6, u ** 2)
-        let e = parse("1..6^2").unwrap();
-        assert!(close(e.sample(&none, 0.5).unwrap(), 1.0 + 5.0 * 0.25));
+    fn skew_points_at_mostly() {
+        let err = parse("1..6^2").unwrap_err();
+        assert!(err.message.contains("mostly=small"), "{err:?}");
+        assert_eq!((err.start, err.end), (4, 5));
     }
 
     #[test]
-    fn decimal_ranges() {
-        let e = parse("0.2..0.4^1.4").unwrap();
+    fn decimal_and_percent_ranges() {
+        let e = parse("0.2..0.4").unwrap();
         assert!(close(e.sample(&none, 1.0).unwrap(), 0.4));
         let e = parse("20%..50%").unwrap();
         assert!(close(e.sample(&none, 0.0).unwrap(), 0.2));
+        assert!(e.all_percent());
     }
 
     #[test]
@@ -547,12 +541,12 @@ mod tests {
     #[test]
     fn names_resolve_through_env() {
         let env = |n: &str| match n {
-            "ground" => Some(0.151),
+            "ground" => Some(5.0),
             "rocks" => Some(3.0),
             _ => None,
         };
-        let e = parse("ground + 0.02").unwrap();
-        assert!(close(e.sample(&env, 0.0).unwrap(), 0.171));
+        let e = parse("ground - 1").unwrap();
+        assert!(close(e.sample(&env, 0.0).unwrap(), 4.0));
         let e = parse("rocks..rocks*2").unwrap();
         assert!(close(e.sample(&env, 1.0).unwrap(), 6.0));
         assert_eq!(e.names(), vec!["rocks", "rocks"]);
@@ -561,7 +555,7 @@ mod tests {
 
     #[test]
     fn dashed_names() {
-        let e = parse("wall-top - 0.1").unwrap();
+        let e = parse("wall-top - 1").unwrap();
         assert_eq!(e.names(), vec!["wall-top"]);
     }
 
@@ -571,18 +565,11 @@ mod tests {
         assert_eq!((err.start, err.end), (5, 7));
         assert!(err.message.contains("only one"));
 
-        let err = parse("4.5cm").unwrap_err();
-        assert_eq!((err.start, err.end), (3, 5));
-        assert!(err.message.contains("unknown unit"));
-
-        let err = parse("1..6^x").unwrap_err();
-        assert!(err.message.contains("skew"));
-
         let err = parse("(1 + 2").unwrap_err();
-        assert!(err.message.contains(")"));
+        assert!(err.message.contains(')'));
 
         let err = parse("2 ^ 3").unwrap_err();
-        assert!(err.message.contains("only skews"));
+        assert!(err.message.contains("mostly"));
 
         let err = parse("").unwrap_err();
         assert!(err.message.contains("expected a value"));
@@ -590,8 +577,9 @@ mod tests {
 
     #[test]
     fn display_round_trips_meaning() {
-        let e = parse("1..6^2").unwrap();
-        assert_eq!(e.to_string(), "1..6^2");
-        assert_eq!(parse(&e.to_string()).unwrap(), e);
+        for s in ["1..6", "20%..50%", "ground - 1"] {
+            let e = parse(s).unwrap();
+            assert_eq!(parse(&e.to_string()).unwrap(), e, "{s}");
+        }
     }
 }
