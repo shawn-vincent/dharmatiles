@@ -104,7 +104,7 @@ pub(crate) enum Bond {
 }
 
 /// Bays shorter than this × the least bay are merged away.
-const MIN_BAY_FRAC: f64 = 0.45;
+pub(crate) const MIN_BAY_FRAC: f64 = 0.45;
 /// Running bond: the least end closer, mm.
 const CLOSER_MIN: f64 = 1.5;
 

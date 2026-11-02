@@ -91,7 +91,23 @@ pub fn hull(points: &[[f64; 3]]) -> Result<TriMesh, KitError> {
         triangles: t,
         ..TriMesh::default()
     };
-    if crate::signed_volume(&mesh) < 0.0 {
+    // parry can close a flat set into a zero-volume shell (four triangles
+    // on one plane); that is no solid. "Near zero" is relative to the
+    // set's size, well above f32 rounding.
+    let volume = crate::signed_volume(&mesh);
+    let d = points
+        .iter()
+        .map(|p| {
+            [0, 1, 2]
+                .map(|k| libm::fabs(p[k] - c[k]))
+                .into_iter()
+                .fold(0.0, f64::max)
+        })
+        .fold(0.0, f64::max);
+    if libm::fabs(volume) <= 1e-7 * (2.0 * d) * (2.0 * d) * (2.0 * d) {
+        return Err(KitError::Shape("hull: the points are flat".into()));
+    }
+    if volume < 0.0 {
         mesh.triangles.iter_mut().for_each(|t| t.swap(1, 2));
     }
     Ok(mesh)
@@ -481,6 +497,11 @@ mod tests {
         let m = hull(&pts).unwrap();
         assert!(m.is_watertight());
         assert!((crate::signed_volume(&m) - 8.0).abs() < 1e-4);
+        // a flat set is refused, not closed into a zero-volume shell
+        let flat: Vec<[f64; 3]> = (0..8)
+            .map(|i| [f64::from(i % 3), f64::from(i / 3), 1.0])
+            .collect();
+        assert!(hull(&flat).is_err());
     }
 
     #[test]

@@ -60,6 +60,10 @@ const LOW_TOP_MM: f64 = 16.55;
 const SEAT_PERCENTILE: f64 = 80.0;
 /// Mortar core edge fillet, mm.
 const CORE_ROUND_MM: f64 = 0.6;
+/// The thinnest mortar core a wall keeps between its joints' depths, mm
+/// at the 35 mm square: past the core's rounding on both faces, with
+/// room for a line of plastic.
+const MIN_CORE_MM: f64 = 2.0 * CORE_ROUND_MM + 0.45;
 /// Rubble hearting (E10/E27): spacing, chip foot and height, setback.
 const RUBBLE_SPACING_MM: f64 = 2.8;
 const RUBBLE_FOOT: (f64, f64) = (3.5, 5.5);
@@ -286,6 +290,7 @@ impl Wall {
             None => Family::CutStone,
         };
         let mut m = Mason::new(family);
+        let mut depth_set = false;
         for c in controls {
             match c.name.as_str() {
                 "height" => {
@@ -311,7 +316,10 @@ impl Wall {
                     }
                 }
                 "joints/width" => m.joint = number(c, 0.0, 3.0, "joint width (mm)")?,
-                "joints/depth" => m.reveal = number(c, 0.0, 5.0, "joint depth (mm)")?,
+                "joints/depth" => {
+                    m.reveal = number(c, 0.0, 5.0, "joint depth (mm)")?;
+                    depth_set = true;
+                }
                 "edges/rounding" => m.rounding = span(c, 0.0, 5.0, "rounding")?,
                 "coping" => m.coping_on_edge = word(c, &["loose", "on-edge"])? == "on-edge",
                 "bond" => {
@@ -322,15 +330,22 @@ impl Wall {
                     }
                 }
                 "ruin" => {
+                    // a share: dt-doc takes it only as a percent and the
+                    // evaluator hands it on divided by 100, so the look
+                    // reads 0..1 and nothing else (no bare-number guess:
+                    // `150%` is refused, not read as 1.5%)
                     let v = match c.value {
-                        Value::Number(v) if v > 1.0 => v / 100.0,
-                        Value::Number(v) => v,
+                        Value::Number(v) if v.is_finite() => v,
                         _ => -1.0,
                     };
                     if !(0.0..=1.0).contains(&v) {
+                        let shown = match c.value {
+                            Value::Number(v) => format!("{}%", v * 100.0),
+                            ref other => other.to_string(),
+                        };
                         return Err(LookError::control(
                             "ruin",
-                            format!("ruin must be 0 to 100%, not {}", c.value),
+                            format!("ruin must be 0 to 100%, not {shown}"),
                             "write how much has fallen, such as ruin=\"40%\"".into(),
                         ));
                     }
@@ -338,6 +353,33 @@ impl Wall {
                 }
                 "top" => m.battlements = word(c, &["flat", "battlements"])? == "battlements",
                 _ => {}
+            }
+        }
+        // the mortar core sits a joint's depth in from both faces; the
+        // units are bedded on it. A core thinner than MIN_CORE_MM (or none)
+        // leaves the units floating, so the joints may be no deeper than
+        // half of what the wall's thickness leaves past it. A depth the
+        // author wrote is refused (they asked for something the wall
+        // cannot have); a family's default depth is made shallower to fit
+        // (they asked for a thin wall, and its joints follow).
+        if family != Family::Fieldstone {
+            let deepest = 0.5 * (m.thickness - MIN_CORE_MM);
+            if m.reveal > deepest {
+                if depth_set {
+                    return Err(LookError::control(
+                        "joints/depth",
+                        format!(
+                            "joints {} mm deep leave no mortar core in a wall {} mm thick, so the stones would float",
+                            m.reveal, m.thickness
+                        ),
+                        format!(
+                            "make joints depth at most {:.2} mm, or the wall thicker than {:.2} mm",
+                            deepest.max(0.0),
+                            2.0 * m.reveal + MIN_CORE_MM
+                        ),
+                    ));
+                }
+                m.reveal = deepest.max(0.0);
             }
         }
         if m.bond == Bond::Running && family != Family::RegularBrick {
@@ -654,6 +696,16 @@ pub(crate) fn run(
         ..Counts::default()
     };
     let rv = m.reveal * s;
+    // at a run's ends and top the core is set in by the joint depth too,
+    // but never by half or more of the shortest unit there (a closer can
+    // be MIN_BAY_FRAC of the shortest stone, a course as low as the
+    // drawn heights make it), or that unit would miss the core and float
+    let end_in = rv.min(0.5 * layout::MIN_BAY_FRAC * m.bay.0 * s);
+    let low_course = cells
+        .iter()
+        .map(|c| c.z1 - c.z0)
+        .fold(f64::INFINITY, f64::min);
+    let top_in = rv.min(0.5 * low_course);
     let round = CORE_ROUND_MM * s;
     if m.family != Family::Fieldstone && !m.laid {
         for (k, g) in run.segs.iter().enumerate() {
@@ -666,19 +718,19 @@ pub(crate) fn run(
                 Ok(())
             };
             if let Some(e) = &env {
-                core(rv, g.len - rv, base, e[k].min(g.len) - rv)?;
+                core(end_in, g.len - end_in, base, e[k].min(g.len) - top_in)?;
             } else if let Some(b) = &crenels {
-                core(rv, g.len - rv, base, b.floor_z - rv)?;
+                core(end_in, g.len - end_in, base, b.floor_z - top_in)?;
                 for &(m0, m1) in &b.merlons[k] {
                     core(
-                        (m0 + rv).max(rv),
-                        (m1 - rv).min(g.len - rv),
+                        (m0 + end_in).max(end_in),
+                        (m1 - end_in).min(g.len - end_in),
                         b.floor_z - 2.0 * s,
-                        height - rv,
+                        height - top_in,
                     )?;
                 }
             } else {
-                core(rv, g.len - rv, base, height - rv)?;
+                core(end_in, g.len - end_in, base, height - top_in)?;
             }
         }
     }
@@ -724,6 +776,9 @@ pub(crate) fn run(
         units.extend(feet.into_iter().map(Unit::Mesh));
     }
     let solid = solidify(scene, &units, &run, m.laid)?;
+    // crumbs the union leaves (a sliver where a tiny closer meets the
+    // core's rounding) would be dropped by the gate as lost parts
+    let (solid, _) = crate::tree::drop_crumbs(scene, solid, Material::Masonry, true)?;
     let top = if m.laid { thickness } else { seat + height };
     Ok((solid, counts, fp, top))
 }
@@ -1130,12 +1185,36 @@ mod tests {
         let w = Wall::new(&[
             c("style", Value::Word("cut-stone".into())),
             c("stones/texture", Value::Word("hewn".into())),
-            c("ruin", Value::Number(40.0)),
+            // `ruin="40%"`, as the evaluator hands it on
+            c("ruin", Value::Number(0.4)),
         ])
         .unwrap();
         assert!((w.mason.chip - 0.80).abs() < 1e-12);
         assert!((w.mason.ruin - 0.4).abs() < 1e-12);
         assert!(Wall::new(&[c("bond", Value::Word("herringbone".into()))]).is_err());
+        // a share is 0..1: `150%` is refused, not read as 1.5 %
+        assert!(Wall::new(&[c("ruin", Value::Number(1.5))]).is_err());
+    }
+
+    #[test]
+    fn joints_never_leave_the_core_too_thin() {
+        // a thin brick wall: the default joint depth is made to fit
+        let w = Wall::new(&[
+            c("style", Value::Word("brick".into())),
+            c("thickness", Value::Number(2.0)),
+        ])
+        .unwrap();
+        assert!(w.mason.thickness - 2.0 * w.mason.reveal >= MIN_CORE_MM - 1e-12);
+        // a depth the author wrote that leaves no core is refused
+        let e = Wall::new(&[
+            c("thickness", Value::Number(7.0)),
+            c("joints/depth", Value::Number(3.5)),
+        ])
+        .unwrap_err();
+        assert_eq!(e.control.as_deref(), Some("joints/depth"));
+        // the default walls keep their depth
+        let w = Wall::new(&[]).unwrap();
+        assert!((w.mason.reveal - 1.3).abs() < 1e-12);
     }
 
     #[test]
