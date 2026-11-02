@@ -2,7 +2,7 @@
 //! and (from the leaf placer) separate leaves. Port of `trees/` (the
 //! approved look; trees have no lab): envelope, skeleton, wood and clumps
 //! here and in dt-kit's [`graph`](dt_kit::graph); leaves through the
-//! seam [`leaves`].
+//! placer [`leaves`].
 //!
 //! 1. The crown envelope and its attractors ([`crown`]): sampled over its
 //!    side surface by area, grouped about 20 mm across and bulged out.
@@ -14,7 +14,7 @@
 //!    unioned into one closed volume.
 //! 4. The clumps ([`clump`]): the swept rounded cones at the branch ends,
 //!    noised, each cut to stand on its own branch (no hanging underside).
-//! 5. Leaves on the clumps ([`leaves`]: the other half of P5).
+//! 5. Leaves on the clumps ([`leaves`]: the organic union-surface placer).
 //!
 //! Sizes follow the system like a photocopy (D2): every length here is
 //! mm at the 35 mm square, times the frame's scale; bark and clump grain
@@ -25,6 +25,9 @@
 pub mod bark;
 pub mod clump;
 pub mod crown;
+
+mod leaf;
+pub mod leaves;
 
 use dt_kit::graph::{self, Colonise, TubeStyle};
 use dt_kit::{Material, Rng, Scene, Seed, Solid, Tag, TriMesh, form, union};
@@ -261,7 +264,7 @@ fn draw(v: &Value, rng: &mut Rng) -> f64 {
     }
 }
 
-/// A leaf's size, world mm, for the leaf placer.
+/// A leaf's size, world mm (already scaled), for the leaf placer.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LeafSize {
     /// The largest leaf's length.
@@ -270,18 +273,8 @@ pub struct LeafSize {
     pub width_mm: f64,
 }
 
-/// **The leaf placer's seam** (P5, the other half: `tree/leaves.rs`,
-/// `crate::tree::leaves::place`). Given the tree's foliage clumps as one
-/// closed surface (`crown`, world mm, outward wound, already unioned and
-/// cut printable) and its wood (`wood`, to cull leaves that would pierce
-/// a branch), returns one closed, outward-wound mesh per leaf; each
-/// becomes a leaf solid under its own slot, reserved in sequence by the
-/// caller. Until the placer lands it places none.
-#[must_use]
-pub fn leaves(crown: &TriMesh, wood: &TriMesh, leaf: LeafSize, seed: Seed) -> Vec<TriMesh> {
-    let _ = (crown, wood, leaf, seed);
-    Vec::new()
-}
+/// The printer line the leaf placer floors leaf size at (four lines).
+const LINE_MM: f64 = 0.45;
 
 /// What one tree came to, for the build record and the tests.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -296,6 +289,8 @@ pub struct Grown {
     pub trunk_radius_mm: f64,
     pub clumps: usize,
     pub clump_cuts: usize,
+    pub wood_cut_mm3: f64,
+    pub slivers: usize,
     pub clump_cut_mm3: f64,
     pub leaves: usize,
 }
@@ -457,6 +452,23 @@ impl Tree {
             .collect::<Result<_, _>>()
             .map_err(LookError::build)?;
         let wood = union(&tube_solids).map_err(LookError::build)?;
+        let (wood, slivers) = crumbs(scene, wood, Material::Wood)?;
+        grown.slivers += slivers;
+        // the landings dip to the strict floor inside their clumps; where a
+        // landing's underside shows below its clump it would hang, so the
+        // wood too stands on the ground (a slab under the root)
+        let footing = ground_box(scene, at, r0 * 4.0, ground - 40.0, ground)?;
+        let (wood, stood_wood) = dt_kit::stand(
+            scene,
+            &wood,
+            &footing,
+            Material::Wood,
+            &dt_kit::Stand::default(),
+        )
+        .map_err(LookError::build)?;
+        grown.wood_cut_mm3 = stood_wood.cut_mm3;
+        let (wood, slivers) = crumbs(scene, wood, Material::Wood)?;
+        grown.slivers += slivers;
         let mut parts = vec![wood.clone()];
 
         if p.clumps_on {
@@ -490,6 +502,8 @@ impl Tree {
                 .map_err(LookError::build)?;
             grown.clumps = solids.len();
             let blobs = union(&solids).map_err(LookError::build)?;
+            let (blobs, slivers) = crumbs(scene, blobs, Material::Leaf)?;
+            grown.slivers += slivers;
             // printable by construction: what hangs is bevelled away
             let (crown_solid, stood) = dt_kit::stand(
                 scene,
@@ -500,9 +514,22 @@ impl Tree {
             )
             .map_err(LookError::build)?;
             grown.clump_cut_mm3 = stood.cut_mm3;
+            let (crown_solid, slivers) = crumbs(scene, crown_solid, Material::Leaf)?;
+            grown.slivers += slivers;
             grown.clump_cuts = stood.pieces;
             if p.leaves {
-                let placed = leaves(&crown_solid.mesh(), &wood.mesh(), leaf, seed.key("leaves"));
+                let shape = leaves::LeafShape {
+                    length_mm: leaf.length_mm / s,
+                    width_mm: leaf.width_mm / s,
+                    ..leaves::LeafShape::default()
+                }
+                .scaled(s, LINE_MM);
+                let (placed, _) = leaves::place(
+                    &crown_solid.mesh(),
+                    &wood.mesh(),
+                    &shape,
+                    seed.key("leaves"),
+                )?;
                 let n = u32::try_from(placed.len()).map_err(LookError::build)?;
                 if n > 0 {
                     let lslots = scene.slots(n, Material::Leaf).map_err(LookError::build)?;
@@ -519,6 +546,8 @@ impl Tree {
             parts.push(crown_solid);
         }
         let solid = union(&parts).map_err(LookError::build)?;
+        let (solid, pockets) = fill_pockets(scene, solid)?;
+        grown.slivers += pockets;
         let top_mm = solid.top().unwrap_or(at[2] + height);
         Ok(Built {
             solid,
@@ -528,6 +557,117 @@ impl Tree {
             stamp_r_mm: (r0 * STAMP_RADII).max(STAMP_MIN_MM * s),
         })
     }
+}
+
+/// The smallest body [`crumbs`] keeps, mm³ (a printed line's bead,
+/// 0.45 × 0.45 × 0.2 mm, is 0.04).
+const CRUMB_MM3: f64 = 0.05;
+
+/// `solid` less its crumbs: the slivers and sealed pockets a union or a
+/// cut leaves (between noisy clumps, between bark-grooved tubes, at a
+/// bevel's edge) are bodies under [`CRUMB_MM3`] or inside out. A sealed
+/// pocket cannot print and the audit would drop it. The rebuilt solid
+/// takes one fresh slot of `material`. Returns how many were dropped.
+fn crumbs(
+    scene: &mut Scene,
+    solid: Solid,
+    material: Material,
+) -> Result<(Solid, usize), LookError> {
+    let bodies = leaves::split_bodies(&solid.mesh());
+    if bodies.len() <= 1 {
+        return Ok((solid, 0));
+    }
+    let keep: Vec<&TriMesh> = bodies
+        .iter()
+        .filter(|b| dt_kit::signed_volume(b) >= CRUMB_MM3)
+        .collect();
+    if keep.len() == bodies.len() {
+        return Ok((solid, 0));
+    }
+    let mut m = TriMesh::default();
+    for b in &keep {
+        let base = u32::try_from(m.positions.len()).map_err(LookError::build)?;
+        m.positions.extend_from_slice(&b.positions);
+        m.triangles
+            .extend(b.triangles.iter().map(|t| t.map(|v| v + base)));
+    }
+    let slot = scene.slots(1, material).map_err(LookError::build)?;
+    let out = form::solid(slot.get(0), &m).map_err(LookError::build)?;
+    Ok((out, bodies.len() - keep.len()))
+}
+
+/// `solid` with the sealed air pockets its last union closed in (where a
+/// bevelled clump meets a branch) filled: each pocket's convex hull, a
+/// tenth larger, is unioned back as a plug (it is inside the wood and the
+/// clump, so nothing shows). Returns how many were filled.
+fn fill_pockets(scene: &mut Scene, solid: Solid) -> Result<(Solid, usize), LookError> {
+    let plugs: Vec<TriMesh> = leaves::split_bodies(&solid.mesh())
+        .into_iter()
+        .filter(|b| dt_kit::signed_volume(b) < 0.0)
+        .filter_map(|b| {
+            #[allow(clippy::cast_precision_loss)]
+            let n = b.positions.len() as f64;
+            let c = [0, 1, 2].map(|k| b.positions.iter().map(|p| p[k]).sum::<f64>() / n);
+            let pts: Vec<[f64; 3]> = b
+                .positions
+                .iter()
+                .map(|p| graph::add(c, graph::scale(graph::sub(*p, c), 1.1)))
+                .collect();
+            form::hull(&pts).ok()
+        })
+        .collect();
+    if plugs.is_empty() {
+        return Ok((solid, 0));
+    }
+    let n = u32::try_from(plugs.len()).map_err(LookError::build)?;
+    let slots = scene.slots(n, Material::Leaf).map_err(LookError::build)?;
+    let mut parts = vec![solid];
+    for (k, m) in plugs.iter().enumerate() {
+        parts.push(
+            form::solid(slots.get(u32::try_from(k).unwrap_or(0)), m).map_err(LookError::build)?,
+        );
+    }
+    Ok((union(&parts).map_err(LookError::build)?, plugs.len()))
+}
+
+/// A box of half-width `r` round `at`, from `z0` to `z1`: the footing
+/// [`dt_kit::stand`] stands the wood on.
+fn ground_box(
+    scene: &mut Scene,
+    at: [f64; 3],
+    r: f64,
+    z0: f64,
+    z1: f64,
+) -> Result<Solid, LookError> {
+    let positions = (0..8)
+        .map(|i| {
+            [
+                at[0] + if i & 1 == 1 { r } else { -r },
+                at[1] + if i & 2 == 2 { r } else { -r },
+                if i & 4 == 4 { z1 } else { z0 },
+            ]
+        })
+        .collect();
+    let m = TriMesh {
+        positions,
+        triangles: vec![
+            [0, 2, 1],
+            [1, 2, 3],
+            [4, 5, 6],
+            [5, 7, 6],
+            [0, 1, 4],
+            [1, 5, 4],
+            [2, 6, 3],
+            [3, 6, 7],
+            [0, 4, 2],
+            [2, 4, 6],
+            [1, 3, 5],
+            [3, 7, 5],
+        ],
+        ..TriMesh::default()
+    };
+    let slot = scene.slots(1, Material::Wood).map_err(LookError::build)?;
+    form::solid(slot.get(0), &m).map_err(LookError::build)
 }
 
 /// How far the ground under a disc of `r` round `at` falls below `at`.
@@ -675,6 +815,8 @@ impl Look for Tree {
             ("tree.clumps", gr.clumps as f64),
             ("tree.clump_cuts", gr.clump_cuts as f64),
             ("tree.clump_cut_mm3", gr.clump_cut_mm3),
+            ("tree.wood_cut_mm3", gr.wood_cut_mm3),
+            ("tree.slivers_dropped", gr.slivers as f64),
             ("tree.leaves", gr.leaves as f64),
             ("tree.x_mm", b.at[0]),
             ("tree.y_mm", b.at[1]),

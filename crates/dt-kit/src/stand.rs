@@ -8,11 +8,19 @@
 //! level set of the removed voxels, so the rest of the surface is
 //! untouched (P5: foliage clumps standing on their branches).
 
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss
+)]
+
 use dt_geom::TriMesh;
 use rayon::prelude::*;
 
 use crate::scene::{Material, Scene, Solid};
 use crate::{KitError, carve, form};
+use std::collections::HashMap;
 
 /// How [`stand`] slices.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -37,8 +45,8 @@ impl Default for Stand {
         Self {
             layer_mm: 0.2,
             grid_mm: 0.1,
-            angle_deg: 37.0,
-            reach_mm: 0.45,
+            angle_deg: 40.0,
+            reach_mm: 0.35,
             span_mm: 3.0,
         }
     }
@@ -139,16 +147,6 @@ pub fn stand(
     // pieces: 26-connected components of removed voxels, each cut by its
     // own small level set
     let comps = merge(components(&removed, nx, ny, nz), 3);
-    if std::env::var_os("DT_STAND_DEBUG").is_some() {
-        for (a, b) in &comps {
-            eprintln!(
-                "stand: {:?}..{:?} z {:.2}",
-                a,
-                b,
-                centre(a[0], a[1], a[2])[2]
-            );
-        }
-    }
     // the cutter field: + in removed voxels and in the air round them
     // (never in kept voxels or the support), − elsewhere
     let near = 3usize;
@@ -204,48 +202,7 @@ pub fn stand(
             let sz = b[2] - a[2] + 1;
             let vals = soften(vals, [sx, sy, sz]);
             let c0 = centre(a[0], a[1], a[2]);
-            let c1 = centre(b[0], b[1], b[2]);
-            let sample = |p: [f64; 3]| -> f64 {
-                // trilinear over voxel centres, −1 outside the block
-                let fx = (p[0] - c0[0]) / g;
-                let fy = (p[1] - c0[1]) / g;
-                let fz = (p[2] - c0[2]) / lay;
-                #[allow(clippy::cast_precision_loss)]
-                let inb = fx >= 0.0
-                    && fy >= 0.0
-                    && fz >= 0.0
-                    && fx <= (sx - 1) as f64
-                    && fy <= (sy - 1) as f64
-                    && fz <= (b[2] - a[2]) as f64;
-                if !inb {
-                    return -1.0;
-                }
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let (i, j, k) = (
-                    (fx.floor() as usize).min(sx.saturating_sub(2)),
-                    (fy.floor() as usize).min(sy.saturating_sub(2)),
-                    (fz.floor() as usize).min((b[2] - a[2]).saturating_sub(1)),
-                );
-                #[allow(clippy::cast_precision_loss)]
-                let (u, v, wv) = (fx - i as f64, fy - j as f64, fz - k as f64);
-                let at = |di: usize, dj: usize, dk: usize| {
-                    let (ii, jj, kk) = ((i + di).min(sx - 1), (j + dj).min(sy - 1), k + dk);
-                    vals.get((kk * sy + jj) * sx + ii).copied().unwrap_or(-1.0)
-                };
-                let l = |x: f64, y: f64, t: f64| x + (y - x) * t;
-                let x00 = l(at(0, 0, 0), at(1, 0, 0), u);
-                let x10 = l(at(0, 1, 0), at(1, 1, 0), u);
-                let x01 = l(at(0, 0, 1), at(1, 0, 1), u);
-                let x11 = l(at(0, 1, 1), at(1, 1, 1), u);
-                l(l(x00, x10, v), l(x01, x11, v), wv)
-            };
-            let m = [g, g, lay];
-            form::level_set(
-                &sample,
-                [c0[0] - m[0], c0[1] - m[1], c0[2] - m[2]],
-                [c1[0] + m[0], c1[1] + m[1], c1[2] + m[2]],
-                g.max(lay) * 0.75,
-            )
+            Ok::<TriMesh, KitError>(tetra_mesh(&vals, [sx, sy, sz], c0, [g, g, lay]))
         })
         .collect::<Result<_, _>>()?;
     let cutters: Vec<TriMesh> = cutters
@@ -472,4 +429,138 @@ fn soften(mut v: Vec<f64>, dims: [usize; 3]) -> Vec<f64> {
         }
     }
     v
+}
+
+/// The iso level the cutter is drawn at: off the dyadic values the
+/// [`soften`]ed ±1 field takes, so no surface passes through a sample.
+const ISO: f64 = 0.0123;
+
+/// The six tetrahedra of a cube along its 0–7 diagonal (corner bits:
+/// 1 = +x, 2 = +y, 4 = +z); neighbouring cubes split their shared faces
+/// alike, so the surface closes.
+const TETS: [[usize; 4]; 6] = [
+    [0, 1, 3, 7],
+    [0, 3, 2, 7],
+    [0, 2, 6, 7],
+    [0, 6, 4, 7],
+    [0, 4, 5, 7],
+    [0, 5, 1, 7],
+];
+
+/// The closed surface `v > ISO` of a sampled block by marching
+/// tetrahedra (`dims` x fastest, sample `(i, j, k)` at `origin + (i, j,
+/// k) · step`, everything outside the block outside). Ours, not the
+/// kernel's level set: that one numbers, and even places, its vertices
+/// by thread, and a stand must be the same at any thread count.
+fn tetra_mesh(v: &[f64], dims: [usize; 3], origin: [f64; 3], step: [f64; 3]) -> TriMesh {
+    let [sx, sy, sz] = dims;
+    // padded by one outside sample all round
+    let (px, py, pz) = (sx + 2, sy + 2, sz + 2);
+    let at = |i: usize, j: usize, k: usize| -> f64 {
+        if i == 0 || j == 0 || k == 0 || i > sx || j > sy || k > sz {
+            return -1.0 - ISO;
+        }
+        v[((k - 1) * sy + (j - 1)) * sx + (i - 1)] - ISO
+    };
+    let pos = |i: usize, j: usize, k: usize| -> [f64; 3] {
+        [
+            origin[0] + (i as f64 - 1.0) * step[0],
+            origin[1] + (j as f64 - 1.0) * step[1],
+            origin[2] + (k as f64 - 1.0) * step[2],
+        ]
+    };
+    let id = |i: usize, j: usize, k: usize| ((k * py + j) * px + i) as u64;
+    let mut out = TriMesh::default();
+    let mut edges: HashMap<(u64, u64), u32> = HashMap::new();
+    for k in 0..pz - 1 {
+        for j in 0..py - 1 {
+            for i in 0..px - 1 {
+                let corner = |c: usize| (i + (c & 1), j + ((c >> 1) & 1), k + ((c >> 2) & 1));
+                let vals: [f64; 8] = std::array::from_fn(|c| {
+                    let (a, b, d) = corner(c);
+                    at(a, b, d)
+                });
+                if vals.iter().all(|&x| x > 0.0) || vals.iter().all(|&x| x <= 0.0) {
+                    continue;
+                }
+                for tet in TETS {
+                    let ins: Vec<usize> = tet.iter().copied().filter(|&c| vals[c] > 0.0).collect();
+                    let outs: Vec<usize> =
+                        tet.iter().copied().filter(|&c| vals[c] <= 0.0).collect();
+                    if ins.is_empty() || outs.is_empty() {
+                        continue;
+                    }
+                    let mut vert = |a: usize, b: usize, out: &mut TriMesh| -> u32 {
+                        let (ca, cb) = (corner(a), corner(b));
+                        let (ka, kb) = (id(ca.0, ca.1, ca.2), id(cb.0, cb.1, cb.2));
+                        let key = (ka.min(kb), ka.max(kb));
+                        *edges.entry(key).or_insert_with(|| {
+                            let t = vals[a] / (vals[a] - vals[b]);
+                            let (pa, pb) = (pos(ca.0, ca.1, ca.2), pos(cb.0, cb.1, cb.2));
+                            out.positions
+                                .push([0, 1, 2].map(|q| pa[q] + (pb[q] - pa[q]) * t));
+                            u32::try_from(out.positions.len() - 1).unwrap_or(u32::MAX)
+                        })
+                    };
+                    let mut polygon: Vec<u32> = Vec::with_capacity(4);
+                    match (ins.len(), outs.len()) {
+                        (1, 3) => {
+                            for &o in &outs {
+                                polygon.push(vert(ins[0], o, &mut out));
+                            }
+                        }
+                        (3, 1) => {
+                            for &n in &ins {
+                                polygon.push(vert(n, outs[0], &mut out));
+                            }
+                        }
+                        _ => {
+                            let (a, b, c, d) = (ins[0], ins[1], outs[0], outs[1]);
+                            polygon.push(vert(a, c, &mut out));
+                            polygon.push(vert(a, d, &mut out));
+                            polygon.push(vert(b, d, &mut out));
+                            polygon.push(vert(b, c, &mut out));
+                        }
+                    }
+                    // outward: from the inside corners toward the outside ones
+                    let mean = |cs: &[usize]| {
+                        let mut m = [0.0; 3];
+                        for &c in cs {
+                            let (a, b, d) = corner(c);
+                            let p = pos(a, b, d);
+                            for q in 0..3 {
+                                m[q] += p[q] / cs.len() as f64;
+                            }
+                        }
+                        m
+                    };
+                    let (mi, mo) = (mean(&ins), mean(&outs));
+                    let dir = [mo[0] - mi[0], mo[1] - mi[1], mo[2] - mi[2]];
+                    for tri in [
+                        [polygon[0], polygon[1], polygon[2]],
+                        [polygon[0], polygon[2], *polygon.get(3).unwrap_or(&u32::MAX)],
+                    ] {
+                        if tri[2] == u32::MAX {
+                            continue;
+                        }
+                        let [p, q, r] = tri.map(|x| out.positions[x as usize]);
+                        let e1 = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
+                        let e2 = [r[0] - p[0], r[1] - p[1], r[2] - p[2]];
+                        let n = [
+                            e1[1] * e2[2] - e1[2] * e2[1],
+                            e1[2] * e2[0] - e1[0] * e2[2],
+                            e1[0] * e2[1] - e1[1] * e2[0],
+                        ];
+                        let dot = n[0] * dir[0] + n[1] * dir[1] + n[2] * dir[2];
+                        out.triangles.push(if dot >= 0.0 {
+                            tri
+                        } else {
+                            [tri[0], tri[2], tri[1]]
+                        });
+                    }
+                }
+            }
+        }
+    }
+    out
 }

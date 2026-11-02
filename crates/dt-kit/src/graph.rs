@@ -517,15 +517,15 @@ fn principal_axis(mut a: [[f64; 3]; 3]) -> [f64; 3] {
             let tt = theta.signum() / (theta.abs() + libm::sqrt(theta * theta + 1.0));
             let cs = 1.0 / libm::sqrt(tt * tt + 1.0);
             let sn = tt * cs;
-            for k in 0..3 {
-                let (akp, akq) = (a[k][p], a[k][q]);
-                a[k][p] = cs * akp - sn * akq;
-                a[k][q] = sn * akp + cs * akq;
+            for row in &mut a {
+                let (akp, akq) = (row[p], row[q]);
+                row[p] = cs * akp - sn * akq;
+                row[q] = sn * akp + cs * akq;
             }
+            let (rp, rq) = (a[p], a[q]);
             for k in 0..3 {
-                let (apk, aqk) = (a[p][k], a[q][k]);
-                a[p][k] = cs * apk - sn * aqk;
-                a[q][k] = sn * apk + cs * aqk;
+                a[p][k] = cs * rp[k] - sn * rq[k];
+                a[q][k] = sn * rp[k] + cs * rq[k];
             }
             for row in &mut v {
                 let (vp, vq) = (row[p], row[q]);
@@ -740,6 +740,9 @@ pub fn curves(g: &Graph, handle: f64, floor_deg: f64) -> (Vec<Option<Curve>>, us
     (out, shortened)
 }
 
+/// Sets each side's radius of a ring: `(ring, angles, radii)`.
+pub type Surface<'a> = dyn Fn(&Ring, &[f64], &mut [f64]) + 'a;
+
 /// How [`tubes`] lofts.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TubeStyle {
@@ -781,7 +784,7 @@ pub fn tubes(
     curves: &[Option<Curve>],
     style: &TubeStyle,
     sides: &dyn Fn(usize) -> usize,
-    surface: &dyn Fn(&Ring, &[f64], &mut [f64]),
+    surface: &Surface<'_>,
 ) -> Vec<TriMesh> {
     let n = g.nodes.len();
     let ch = g.children();
@@ -825,7 +828,7 @@ fn tube(
     end: bool,
     style: &TubeStyle,
     n_sides: usize,
-    surface: &dyn Fn(&Ring, &[f64], &mut [f64]),
+    surface: &Surface<'_>,
 ) -> (TriMesh, ([f64; 3], [f64; 3])) {
     let r_start = g.radii[p].max(style.min_radius_mm);
     let r_end = g.radii[i].max(style.min_radius_mm);
@@ -1041,7 +1044,7 @@ pub fn unit(a: [f64; 3]) -> Option<[f64; 3]> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
+    #![allow(clippy::unwrap_used, clippy::needless_range_loop)]
     use super::*;
 
     fn cloud(seed: u64, n: usize) -> Vec<[f64; 3]> {

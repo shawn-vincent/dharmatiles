@@ -10,7 +10,9 @@ tile tree-dirt size="2x2" seed=84 {
         tree height=40 {
             trunk height=30
             crown width=30 clumps=32 shape=round branching=normal
-            leaf length=4.5 width=3
+            // Leaves off until the leaf placer's blades pass the overhang
+            // gate (they add 105–170 mm² per tree): clumps only.
+            leaves clumps-only
         }
     }
 }

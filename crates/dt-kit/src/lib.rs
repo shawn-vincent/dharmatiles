@@ -31,10 +31,11 @@
 //!
 //! P5 adds the forms ([`form`]: level sets, hulls, solids from meshes,
 //! box clips, the common stone relief and 3D noise) that walls, floors
-//! and trees are made of, and graphs ([`graph`]: trace by space
-//! colonisation, loft tubes along a graph with C1 forks) and [`stand`]
-//! (cut away what cannot print standing on what is below it: the audit's
-//! layer-reach rule as a construction).
+//! and trees are made of; graphs ([`graph`]: trace by space
+//! colonisation, loft tubes along a graph with C1 forks); [`stand`] (cut
+//! away what cannot print standing on what is below it: the audit's
+//! layer-reach rule as a construction); and [`rays`] (first hits and
+//! containment over dt-geom's ray trait, for the leaf placer).
 //!
 //! Kernel rules (R1, R2, R9, from `dt_geom::source`): every leaf solid takes
 //! a [`Slot`] reserved in sequence from the scene's block, so its source ID
@@ -48,6 +49,7 @@ mod field;
 pub mod form;
 pub mod graph;
 mod outline;
+pub mod rays;
 mod render;
 mod scene;
 mod shape;
