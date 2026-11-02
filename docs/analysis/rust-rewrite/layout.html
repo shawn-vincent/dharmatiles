@@ -1,5 +1,9 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>dharmatiles Project Layout</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="dt.css">
@@ -64,17 +68,17 @@
 
 <nav class="top"><div class="wrap">
   <span class="brand">dharmatiles → Rust</span>
-  <a href="https://claude.ai/artifact/RowGQy7yrFHtD16YAA3gDi">Overview</a>
-  <a href="https://claude.ai/artifact/H9pvikhVxwCPDtx7kMUDrM">The library</a>
-  <a href="https://claude.ai/artifact/C1FVwwwvfhnvhoEjNLcKED">The labs</a>
-  <a href="https://claude.ai/artifact/5p4Hqcta6ym615dSPJ9u6V">Surface variants</a>
-  <a href="https://claude.ai/artifact/CAoDRjGEFcwvxCJEGJQ4BY">Mechanisms</a>
-  <a href="https://claude.ai/artifact/9aQf5yzrSPvyzd6HLoLU4J">Target architecture</a>
-  <a href="https://claude.ai/artifact/SMKxXEeHGb7jps5nfFaQfw">Rust feasibility</a>
-  <a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux" aria-current="page">Project layout</a>
-  <a href="https://claude.ai/artifact/SMHZGZ9KkG8rpvKeqbvxdj">Project plan</a>
-  <a href="https://claude.ai/artifact/GSS8KXJCQofDrkFUVHHVsM">Changes</a>
-  <a href="https://claude.ai/artifact/LyeG2qZejv69yK1UUgTXaZ">Notes</a>
+  <a href="index.html">Overview</a>
+  <a href="library.html">The library</a>
+  <a href="labs.html">The labs</a>
+  <a href="variants.html">Surface variants</a>
+  <a href="mechanisms.html">Mechanisms</a>
+  <a href="architecture.html">Target architecture</a>
+  <a href="feasibility.html">Rust feasibility</a>
+  <a href="layout.html" aria-current="page">Project layout</a>
+  <a href="plan.html">Project plan</a>
+  <a href="changelog.html">Changes</a>
+  <a href="notes.html">Notes</a>
 </div></nav>
 
 <div class="wrap">
@@ -84,7 +88,7 @@
   <p class="lede">A file layout for the Rust version that a Rust developer would recognise on sight: one Cargo workspace at the repo root, six crates, one command-line program, and the tile library as plain KDL files that ship inside the program. Each choice below is ranked as standard, common or progressive, and each crate boundary has to earn its place.</p>
 </header>
 
-<div class="rev"><p><strong>New in revision 3.</strong> This page replaces the fifteen crates sketched on the <a href="https://claude.ai/artifact/9aQf5yzrSPvyzd6HLoLU4J">architecture page</a> with six, and adds the parts revision 2 left open: binaries, installs, GUI, mobile, MCP, data folders, user paths and how the Rust code sits beside the Python during the port. Every edit to other pages is in the <a href="https://claude.ai/artifact/GSS8KXJCQofDrkFUVHHVsM">change log</a>.</p></div>
+<div class="rev"><p><strong>New in revision 3.</strong> This page replaces the fifteen crates sketched on the <a href="architecture.html">architecture page</a> with six, and adds the parts revision 2 left open: binaries, installs, GUI, mobile, MCP, data folders, user paths and how the Rust code sits beside the Python during the port. Every edit to other pages is in the <a href="changelog.html">change log</a>.</p></div>
 
 <h2>The short version</h2>
 <div class="tldr">
@@ -425,7 +429,7 @@
 <div class="q"><h3>8. What should phones do first?</h3><p class="small">View and edit while builds run on a desktop, or build on the phone too? The second depends on the pure-Rust Manifold proving out.</p></div>
 <div class="q"><h3>9. Is the program name <code>dharmatiles</code> too long to type?</h3><p class="small">A short alias such as <code>dtiles</code> could ship as well. One name is simpler.</p></div>
 
-<p class="small muted">Sources and dates are in the <a href="https://claude.ai/artifact/LyeG2qZejv69yK1UUgTXaZ#notes-layout">research notes</a> (project layout sources). Checked 1 Nov 2026: rmcp 3.x and the 2026-07-28 MCP spec; Rust 1.98.1 (3 Sep 2026); manifold-csg-sys 3.5.100's wasm notes; Tauri 2 changelog to Jul 2026; Bevy 0.18 (Jan 2026) and 0.19; Dioxus 0.7.3; PyO3 0.28.3; etcetera 0.11; tower-lsp-server 0.23; knus 3.3.1 and facet-kdl 0.42; lib3mf 0.1.6 and threemf2 0.3; dist 0.31.0.</p>
+<p class="small muted">Sources and dates are in the <a href="notes.html#notes-layout">research notes</a> (project layout sources). Checked 1 Nov 2026: rmcp 3.x and the 2026-07-28 MCP spec; Rust 1.98.1 (3 Sep 2026); manifold-csg-sys 3.5.100's wasm notes; Tauri 2 changelog to Jul 2026; Bevy 0.18 (Jan 2026) and 0.19; Dioxus 0.7.3; PyO3 0.28.3; etcetera 0.11; tower-lsp-server 0.23; knus 3.3.1 and facet-kdl 0.42; lib3mf 0.1.6 and threemf2 0.3; dist 0.31.0.</p>
 </div>
 
 <script>
