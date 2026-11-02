@@ -119,6 +119,11 @@ fn parity(args: &[String]) -> Result<(), String> {
         println!("parity: Rust builds in {}", rust.display());
     }
     if flag("--no-python") {
+        if tile.is_some() {
+            let sheet = out.join("contact-sheet.png");
+            rust_sheet(&rust, &seeds, &sheet)?;
+            println!("parity: contact sheet (Rust only) {}", sheet.display());
+        }
         return Ok(());
     }
     let python = std::env::var("PYTHON").unwrap_or_else(|_| "python3".into());
@@ -148,4 +153,100 @@ fn parity(args: &[String]) -> Result<(), String> {
         out.join("contact-sheet.png").display()
     );
     Ok(())
+}
+
+/// The four views each build writes, in contact-sheet column order.
+const VIEWS: [&str; 4] = ["painted", "top", "low", "close"];
+
+/// A Rust-only contact sheet for runs without Python (CI): one row per
+/// seed, one column per view, on a white ground with a 12 px gutter.
+fn rust_sheet(rust: &Path, seeds: &[String], sheet: &Path) -> Result<(), String> {
+    const GAP: usize = 12;
+    let mut rows = Vec::new();
+    for s in seeds {
+        let pngs = find_pngs(&rust.join(format!("s{s}")));
+        let row = VIEWS
+            .iter()
+            .map(|v| {
+                let p = pngs
+                    .iter()
+                    .find(|p| p.to_string_lossy().ends_with(&format!("-{v}.png")))
+                    .ok_or_else(|| format!("seed {s}: no `{v}` view under {}", rust.display()))?;
+                read_rgb(p)
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        rows.push(row);
+    }
+    // Layout in usize; read_rgb returns usize sizes, so only the header converts.
+    let cw = rows.iter().flatten().map(|i| i.0).max().unwrap_or(0);
+    let ch = rows.iter().flatten().map(|i| i.1).max().unwrap_or(0);
+    let (w, h) = (
+        GAP + VIEWS.len() * (cw + GAP),
+        GAP + rows.len() * (ch + GAP),
+    );
+    let mut buf = vec![255u8; w * h * 3];
+    for (r, row) in rows.iter().enumerate() {
+        for (c, (iw, ih, px)) in row.iter().enumerate() {
+            let (x0, y0) = (GAP + c * (cw + GAP), GAP + r * (ch + GAP));
+            for y in 0..*ih {
+                let dst = ((y0 + y) * w + x0) * 3;
+                buf[dst..dst + iw * 3].copy_from_slice(&px[y * iw * 3..(y + 1) * iw * 3]);
+            }
+        }
+    }
+    let too_big = |_| format!("{}: contact sheet too large", sheet.display());
+    let (w, h) = (
+        u32::try_from(w).map_err(too_big)?,
+        u32::try_from(h).map_err(too_big)?,
+    );
+    if let Some(dir) = sheet.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    }
+    let file = std::fs::File::create(sheet).map_err(|e| format!("{}: {e}", sheet.display()))?;
+    let mut enc = png::Encoder::new(std::io::BufWriter::new(file), w, h);
+    enc.set_color(png::ColorType::Rgb);
+    enc.set_depth(png::BitDepth::Eight);
+    enc.write_header()
+        .and_then(|mut wr| wr.write_image_data(&buf))
+        .map_err(|e| format!("{}: {e}", sheet.display()))
+}
+
+fn find_pngs(dir: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return found;
+    };
+    for e in entries.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            found.extend(find_pngs(&p));
+        } else if p.extension().is_some_and(|x| x == "png") {
+            found.push(p);
+        }
+    }
+    found.sort();
+    found
+}
+
+/// Decode one of the renderer's 8-bit RGB PNGs.
+fn read_rgb(path: &Path) -> Result<(usize, usize, Vec<u8>), String> {
+    let err = |e: &dyn std::fmt::Display| format!("{}: {e}", path.display());
+    let file = std::fs::File::open(path).map_err(|e| err(&e))?;
+    let mut reader = png::Decoder::new(std::io::BufReader::new(file))
+        .read_info()
+        .map_err(|e| err(&e))?;
+    let size = reader
+        .output_buffer_size()
+        .ok_or_else(|| err(&"image too large"))?;
+    let mut px = vec![0; size];
+    let info = reader.next_frame(&mut px).map_err(|e| err(&e))?;
+    if info.bit_depth != png::BitDepth::Eight {
+        return Err(err(&"not an 8-bit PNG"));
+    }
+    if info.color_type != png::ColorType::Rgb {
+        return Err(err(&"not an RGB PNG (dharmatiles renders are RGB)"));
+    }
+    px.truncate(info.buffer_size());
+    let dim = |v: u32| usize::try_from(v).map_err(|e| err(&e));
+    Ok((dim(info.width)?, dim(info.height)?, px))
 }
