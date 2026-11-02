@@ -65,10 +65,10 @@
    "order": 60,
    "body": "other",
    "area": "Docs",
-   "state": "done",
-   "title": "Docs site consolidated",
-   "detail": "Home with three bodies of work, Rust study 16 → 4 pages, standards, archive, and the cliffs look page as the pilot template. Live status now lives in docs/status.json.",
-   "updated": "2026-11-02T14:40:15Z"
+   "state": "running",
+   "title": "Look pages, audience-first",
+   "detail": "Reworking cliffs per Shawn's review (look first, design record lower), reordering home and standards for tile users, then writing the other seven look pages (ground, grass, rocks, water, walls, trees, composition).",
+   "updated": "2026-11-02T14:49:01Z"
   },
   {
    "id": "shawn",
