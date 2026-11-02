@@ -76,9 +76,9 @@
    "body": "rust",
    "area": "Rust P3",
    "state": "running",
-   "title": "P3: kernels in, porting rocks and water",
-   "detail": "Branch rust/p3. Mesh kernel hull/refine/transform/slice, convex half-space carve, geodesic distance and 3D fBm landed; porting rocklab rocks, then waterlab swell-chaos and the water edge contract.",
-   "updated": "2026-11-02T21:30:33Z"
+   "title": "P3: rocks and water pass parity; tile twins next",
+   "detail": "Rocks, water and dirt stones built and within tolerance at seeds 1–4 (water tile 0.9 s, edge error 0.016 mm). Next: the 11 water tile twins, CI, docs, reviews.",
+   "updated": "2026-11-02T16:54:36-05:00"
   },
   {
    "id": "p5",
