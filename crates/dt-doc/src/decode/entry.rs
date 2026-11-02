@@ -65,11 +65,36 @@ impl Decoder<'_> {
             return Vec::new();
         };
         let steps = step_names(kids.nodes());
-        kids.nodes()
+        let out: Vec<Entry> = kids
+            .nodes()
             .iter()
             .zip(steps)
             .filter_map(|(n, step)| self.entry(n, ctx, Parent::Stack, path, step))
-            .collect()
+            .collect();
+        // `id=` names an entry among its same-named siblings (its seed
+        // path): two alike would share a seed.
+        for (k, e) in out.iter().enumerate() {
+            let Some(id) = &e.place.id else { continue };
+            if out[..k].iter().any(|o| {
+                o.what.value == e.what.value
+                    && o.place.id.as_ref().is_some_and(|i| i.value == id.value)
+            }) {
+                self.err(
+                    "dt::id",
+                    id.span,
+                    format!(
+                        "another `{}` here already has `id={}`",
+                        e.what.value, id.value
+                    ),
+                    "a second time",
+                )
+                .help = Some(
+                    "give each its own id; an id names one entry among same-named siblings"
+                        .to_owned(),
+                );
+            }
+        }
+        out
     }
 
     /// True when an entry is one thing: a thing look, or a definition of one.
@@ -337,6 +362,22 @@ impl Decoder<'_> {
             }
             "id" => {
                 match e.value().as_string() {
+                    Some(s)
+                        if s.is_empty()
+                            || s.contains(['/', '\\'])
+                            || s.bytes().all(|b| b.is_ascii_digit()) =>
+                    {
+                        self.err(
+                            "dt::id",
+                            span,
+                            format!("`id` is a plain name, not `{s}`"),
+                            "not a plain name",
+                        )
+                        .help = Some(
+                            "write a name without slashes that is not just a number, such as `id=old-oak`: ids become parts of seed paths, beside entry counts"
+                                .to_owned(),
+                        );
+                    }
                     Some(s) => {
                         entry.place.id = Some(Spanned {
                             value: s.to_owned(),

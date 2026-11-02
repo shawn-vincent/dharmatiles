@@ -110,3 +110,30 @@ fn ten_thousand_entries_are_allowed() {
         .unwrap();
     assert_eq!(t.stack.len(), 9900);
 }
+
+#[test]
+fn entries_inside_an_id_or_seed_call_get_their_own_seed_paths() {
+    // was: both grounds got tile/a/ground/x, and seed=5 pinned both to 5
+    let src = mem(&[(
+        "t.kdl",
+        "define two { stack { ground; ground level=6 } }\ntile a { stack { two id=x; two seed=5 } }\n",
+    )]);
+    let t = check(&src, "t.kdl", &Options::default())
+        .unwrap()
+        .tile
+        .unwrap();
+    let ids: Vec<_> = t.stack.iter().map(|e| e.id.clone()).collect();
+    assert_eq!(
+        ids,
+        [
+            Some("x/ground/0".into()),
+            Some("x/ground/1".into()),
+            None,
+            None
+        ]
+    );
+    let seeds: Vec<_> = t.stack.iter().map(|e| e.seed).collect();
+    assert_eq!(seeds[..2], [None, None]);
+    let (a, b) = (seeds[2].unwrap(), seeds[3].unwrap());
+    assert!(a != b && a != 5 && b != 5, "{seeds:?}");
+}

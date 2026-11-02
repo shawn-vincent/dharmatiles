@@ -400,8 +400,7 @@ fn a_tile_is_at_most_64_squares_a_side() {
         .tile()
         .unwrap()
         .header()
-        .unwrap()
-        .clone();
+        .unwrap();
     assert_eq!((h.cols, h.rows), (64, 64));
     assert_fails("tile t size=\"65x1\" { }", "dt::tile", "at most 64 squares");
     assert_fails(
@@ -716,4 +715,31 @@ fn the_r6_snippets_decode() {
         (12.0, 24.0)
     );
     assert_eq!(e.value("rock").unwrap().word().unwrap().word, "blocks");
+}
+
+#[test]
+fn ids_are_plain_names_and_unique_among_same_named_siblings() {
+    let e = first("tile t { stack { ground id=low } }");
+    assert_eq!(e.place.id.unwrap().value, "low");
+    snippet("tile t { stack { ground id=a; tree id=a } }");
+    assert_fails(
+        "tile t { stack { ground id=x; ground id=x } }",
+        "dt::id",
+        "already has `id=x`",
+    );
+    assert_fails(
+        "tile t { stack { ground id=\"a/b\" } }",
+        "dt::id",
+        "plain name",
+    );
+    assert_fails(
+        "tile t { stack { ground id=\"0\" } }",
+        "dt::id",
+        "plain name",
+    );
+    assert_fails(
+        "tile t { stack { ground id=\"\" } }",
+        "dt::id",
+        "plain name",
+    );
 }

@@ -29,6 +29,7 @@ use std::sync::Arc;
 use dt_doc::Known;
 use dt_doc::model::{self, Callee, Definition, Document, Spanned, Use, Value};
 use dt_doc::schema::{Control, Look};
+use dt_kit::Seed;
 use miette::{NamedSource, SourceSpan};
 
 use crate::diag::{Diag, Src};
@@ -493,6 +494,7 @@ impl Reader<'_> {
         pending: &mut Vec<Diag>,
     ) {
         let src = &scope.file.src;
+        let mut seen: BTreeMap<String, usize> = BTreeMap::new();
         for e in entries {
             if scope.depth == 0 {
                 self.top = Some((Arc::clone(src), e.span));
@@ -516,6 +518,17 @@ impl Reader<'_> {
             }
             self.entries += 1;
             let area = e.place.region.clone().or_else(|| scope.area.clone());
+            // this entry's path under an enclosing definition call: its
+            // name, then its id or its count among same-named siblings
+            // (an id is never all digits, so the two cannot meet)
+            let own = match &e.place.id {
+                Some(i) => format!("{}/id:{}", e.what.value, i.value),
+                None => {
+                    let k = seen.entry(e.what.value.clone()).or_default();
+                    *k += 1;
+                    format!("{}/{}", e.what.value, *k - 1)
+                }
+            };
             let seed = match &e.place.seed {
                 Some(s) => {
                     if let Ok(v) = u64::try_from(s.value) {
@@ -531,14 +544,15 @@ impl Reader<'_> {
                         None
                     }
                 }
-                None => scope.seed,
+                // inherited from a definition call: one seed per inner
+                // entry, keyed by its path under the call
+                None => scope.seed.map(|s| Seed::new(s).path(&own).value()),
             };
-            let id = e
-                .place
-                .id
-                .as_ref()
-                .map(|i| i.value.clone())
-                .or_else(|| scope.id.clone());
+            let id = match (&e.place.id, &scope.id) {
+                (_, Some(base)) => Some(format!("{base}/{own}")),
+                (Some(i), None) => Some(i.value.clone()),
+                (None, None) => None,
+            };
             match &e.callee {
                 Callee::Look(look) => {
                     let Some(takes) = dt_looks::takes(look.name) else {
