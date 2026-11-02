@@ -86,9 +86,9 @@
    "body": "rust",
    "area": "Rust P5",
    "state": "running",
-   "title": "P5: overhang audit of the Python walls; Rust wall skeleton",
-   "detail": "Layer-reach audit of Python walls alone: 7–100 mm² above ground (face-angle test: 200–525), all on bed-joint lips. Building the Rust wall, floor and OpenLOCK skeleton on rust/p5.",
-   "updated": "2026-11-02T21:25:10Z"
+   "title": "P5: OpenLOCK connector in; walls, trees and leaves being ported",
+   "detail": "OpenLOCK base ported (matches Python's volume within 0.2%); every buildable tile builds for ol. Three ports running in parallel: walls and floors, tree skeleton and wood, the organic leaf placer on the Rays wrapper. Overhang: Python walls alone measure 7–100 mm² with the layer-reach audit (face-angle test 200–525); the audit now fills sub-gap bed joints.",
+   "updated": "2026-11-02T21:37:46Z"
   }
  ]
 }
