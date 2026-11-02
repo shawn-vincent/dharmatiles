@@ -2,6 +2,9 @@
 
 use dt_kit::Scene;
 
+mod leaf;
+pub mod leaves;
+
 use crate::{Control, Ctx, Look, LookError, Plan, Read, Write, only};
 
 /// The controls `tree` takes (dt-doc's vocabulary, sub-controls as
