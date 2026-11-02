@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Grass — Mound-Thatch Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../../index.html">dharmatiles</a><a href="../../index.html#status">Status</a><a href="../../index.html#looks">Looks</a><a href="../../rust/plan.html">Rust plan</a><a href="../../rust/architecture.html">Architecture</a><a href="../../rust/language.html">Language</a><a href="../../rust/spikes.html">Spikes</a><a href="../../standards/tile-system.html">Tile system</a><a href="../../standards/printing.html">Printing</a><a href="../../archive/index.html" aria-current="page">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Library design</div>
+  <h1>Grass — Mound-Thatch Design</h1>
+  <p class="srcnote">Converted from <code>docs/design/grass-mound-thatch.md</code> on 2026-11-01; the markdown file was removed (see git history). Relative paths in the text are relative to <code>docs/design/</code>.</p>
+  <aside class="stale" role="note"><span class="stale-tag">Out of date</span> <span>The status line (“first working prototype”) is out of date. Library <code>Grass</code> (<code>scatter/prototype.py</code>) is now a compatibility shim over <code>ThatchGrass</code> (<code>grass/thatch.py</code>) and ignores its <code>species</code> and <code>placement</code> arguments, so every tile gets this grass. <span class="stale-src">Checked against the code on 2026-11-01.</span></span></aside>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol><li><a href="#problem">Problem</a></li><li><a href="#requirements-testable-each-with-its-by-construction-guarante">Requirements (testable; each with its by-construction guarantee)</a></li><li><a href="#architecture-three-layers">Architecture — three layers</a></li><li><a href="#experiments-render-judged-one-at-a-time-on-s1-s2-scenes">Experiments (render-judged, one at a time, on S1/S2 scenes)</a></li><li><a href="#keep-delete-inventory">Keep / delete inventory</a></li><li><a href="#risks-open-questions">Risks &amp; open questions</a></li></ol></nav>
+<article class="doc">
+<p>
+<strong>Status: first working prototype (2026-07-03 afternoon).</strong>
+<code>ThatchGrass</code> lives in <code>src/dharmatiles/grass/thatch.py</code>; experiment log +
+iteration table in the history entry; renders in
+<code>docs/grass/experiment-2026-07-03-thatch-s{1,2}.png</code>.  E1–E4 validated:
+substrate relief, sheaf bundles, lift-clearance layering, stack cap.
+Full tile builds in ~3.5 s (parity with old grass, unoptimised).
+Supersedes <code>docs/grass/requirements.md</code>, <code>docs/grass/design.md</code>,
+<code>docs/grass/grass-behavior.md</code>, <code>docs/floppy-grass-algorithm.md</code> (all of
+which describe the flat field-simulation grass and mix requirements with
+implementation).  Interview record and rationale:
+<code>docs/meta/history/2026-07-03-grass-greenfield-requirements.md</code>.
+Reference images: <code>docs/grass/grass-reference.png</code> (target look),
+<code>docs/grass/grass-reference-printed.png</code> (FDM print proof),
+<code>docs/grass/grass-current-2026-07-03.png</code> (baseline &quot;before&quot;).</p>
+<h2 id="problem">
+Problem</h2>
+<p>
+Replace the flat field-simulation grass with grass that reads <strong>lumpy and
+organic</strong> — mounded relief, swirled sheaves of plump blades — matching the
+reference, under hard supportless FDM (0.4 mm nozzle, ≤ ~45° overhang) and
+a 5 mm height ceiling, at DB (35 mm/sq) and OL (25.4 mm/sq) scales.
+Blade <em>shape</em> is fine and is kept; arrangement, coverage structure, and
+3-D relief are rebuilt.  Key priorities from the interview: <strong>aesthetics
+and speed</strong>.</p>
+<h2 id="requirements-testable-each-with-its-by-construction-guarante">
+Requirements (testable; each with its by-construction guarantee)</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+#</th>
+<th>
+Requirement</th>
+<th>
+Guarantee mechanism</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+R1</td>
+<td>
+Mounded relief: surface undulates at clump wavelength with configured amplitude (~2.5–3 mm p-t-v)</td>
+<td>
+Relief is an <strong>input</strong>: a mound field added into <code>terrain_z</code> before any blade exists. Cannot fail to appear.</td>
+</tr>
+<tr>
+<td>
+R2</td>
+<td>
+Total coverage: no raw terrain visible in the grass region</td>
+<td>
+The mound substrate <strong>is</strong> the terrain surface, textured by the carpet; blades are decoration on top. Vacuously total.</td>
+</tr>
+<tr>
+<td>
+R3</td>
+<td>
+Organic, non-gridded arrangement; visible sheaves; adjacent sheaves differ in direction</td>
+<td>
+Maximal Poisson-disk sheaf placement (no rows possible); direction from a smooth low-frequency field (no i.i.d. salt) blended with down-slope.</td>
+</tr>
+<tr>
+<td>
+R4</td>
+<td>
+Overlapping blades read layered, each proud of the one below</td>
+<td>
+Root-z-sorted standoff <strong>accumulation</strong> (leaf iter-4 mechanism): a higher-rooted blade can never sit under a lower-rooted one, structurally.</td>
+</tr>
+<tr>
+<td>
+R5</td>
+<td>
+Supportless FDM everywhere</td>
+<td>
+Substrate is a heightmap (no undersides exist) with generation-time slope cap ≤ 40°; blades are draped near-surface-parallel with capped curl and no tip lift. Violations are unproducible, not culled.</td>
+</tr>
+<tr>
+<td>
+R6</td>
+<td>
+Total height ≤ 5 mm above region base</td>
+<td>
+Budget partition enforced on inputs: mound amplitude + blade thickness × max stack depth ≤ 5 mm.</td>
+</tr>
+<tr>
+<td>
+R7</td>
+<td>
+Blades stay inside tile XY and grass mask; don't pierce rocks/trees</td>
+<td>
+Roots rejected outside mask / inside <code>obstacle_mask</code>; paths clipped at mask/obstacle boundary (shorten, don't steer).</td>
+</tr>
+<tr>
+<td>
+R8</td>
+<td>
+Downstream stacking still works</td>
+<td>
+Final blade tops rasterised into <code>vegetation_support_z</code> (existing machinery kept).</td>
+</tr>
+<tr>
+<td>
+R9</td>
+<td>
+Perf: at least parity with today — current <code>1x1-grass</code> full build measured at <strong>3.6 s</strong> (2026-07-03); target grass layer ≤ 3 s, tile ≤ 5 s, linear in area</td>
+<td>
+No growth simulation, no rays, no boolean: z-seating is bilinear heightmap sampling; blades batch-built and concatenated. Dense dressing raises blade count — watch this in E5.</td>
+</tr>
+<tr>
+<td>
+R10</td>
+<td>
+Deterministic under fixed seed; correct at DB and OL scales</td>
+<td>
+All dimensions in mm; RNG threaded from <code>SurfaceConfig.seed</code> as today.</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+Non-goals: lifted tips (dispensable per interview); blade-level obstacle
+<em>steering</em>; cross-tile mound continuity (tiles are separate objects; the
+current grass has the same property); colour; multi-species in V1 — <strong>one
+great default grass first</strong> (interview round 3), the species framework is
+re-generalised after acceptance, not carried live through the rebuild.</p>
+<p>
+<strong>Aesthetic bias: drybrush-optimized</strong> (interview round 3).  Tiles are
+painted; the tabletop read depends on drybrush catching positive relief.
+Design consequences: preserve <strong>crisp blade edges and inter-blade
+grooves</strong> (don't over-smooth seams between blades — the grooves are where
+the base coat stays dark); substrate super-Gaussian exponent tuned toward
+defined shoulders rather than soft domes; the S3 print acceptance is
+judged <strong>after priming + drybrush</strong>, not on raw plastic.</p>
+<h2 id="architecture-three-layers">
+Architecture — three layers</h2>
+<pre><code>(rocks/trees have stamped obstacle_mask, terrain_support_z as today)
+        │
+        ▼
+ 1. MOUND SUBSTRATE   mound field += terrain_z   (heightmap op, ~ms)
+        │
+        ▼
+ 2. UNDER-CARPET      existing GrassCarpet embossing, now following relief
+        │
+        ▼
+ 3. BLADE DRESSING    sheaves placed to Poisson saturation, blades draped
+                      on the substrate, standoff-accumulated, batch-meshed
+</code></pre>
+<h3 id="1-mound-substrate">
+1. Mound substrate</h3>
+<p>
+A low-frequency lumpy field added into <code>terrain_z</code> inside the grass mask
+(mechanically a sibling of <code>SoilCarpet</code>'s super-Gaussian blob sum — reuse
+that kernel at clump wavelength, amplitude ~2.5 mm, exponent tuned for
+soft domes).</p>
+<p>
+<strong>Rock lapping</strong> (interview round 3): after <code>Rocks</code>/<code>Tree</code> stamp, the
+mound field gains a feathered <em>skirt</em> term rising against obstacle
+footprints (within the slope cap), so grass laps the stones and they read
+nestled rather than ringed by a bare moat.  Blade roots stay out of
+<code>obstacle_mask</code> but may sit close, on the skirt.</p>
+<p>
+Interview round 2 (2026-07-03) pinned three knobs:</p>
+<ul>
+<li>
+<p>
+<strong>Wavelength: 4–5 mounds per 35 mm square</strong> (~7–9 mm blob spacing) —
+distinct countable lumps, clearly undulating silhouette.</p>
+</li>
+<li>
+<p>
+<strong>Narrow regions scale down</strong>: where the local grass-region width can't
+fit a full mound, wavelength <em>and</em> amplitude shrink proportionally with
+local region width (corridor margins stay lumpy in miniature, never
+clipped slices of full-size mounds).</p>
+</li>
+<li>
+<p>
+<strong>Feather flat at tile edges</strong>: relief eases to the region's base level
+near the tile boundary so adjacent tiles meet cleanly at butt joints.
+Also feathered to zero at interior mask edges (~2 mm) so region
+boundaries stay clean.  (Explicit interview decision — the reference's
+full-relief edge was considered and rejected in favour of tileability.)</p>
+</li>
+<li>
+<p>
+<strong>Slope cap by construction</strong>: amplitude/spacing chosen so max gradient
+≤ tan(40°); verified by an every-run slope histogram (must report 0
+cells over 45°).</p>
+</li>
+<li>
+<p>
+<strong>Clump sites are shared</strong> with layer 3: the same site list drives blob
+centres and the sheaf direction field, so mounds read as <em>piles of
+grass</em>, not noise under grass.</p>
+</li>
+</ul>
+<h3 id="2-under-carpet">
+2. Under-carpet</h3>
+<p>
+<code>GrassCarpet</code> unchanged, ordered after the mound so its blade stamps
+follow the relief.  Provides the reference's fine second scale in hollows
+and between sheaves.  (Possible later knob: slightly denser stamps in
+hollows; not V1.)</p>
+<h3 id="3-blade-dressing">
+3. Blade dressing</h3>
+<aside class="stale" role="note"><span class="stale-tag">Out of date</span> <span><code>grass/growers/flat.py</code> no longer exists; <code>FlatGrassGrower</code> now lives in <code>src/dharmatiles/grass/grower.py</code>. <span class="stale-src">Checked against the code on 2026-11-01.</span></span></aside>
+<p>
+<strong>Density: dense — the blades ARE the surface</strong> (interview round 2): big
+blades cover nearly everything; the carpet texture only peeks through in
+hollows.  The substrate under a dense dressing is mostly hidden, so its
+job is <em>shape</em>, not surface detail.</p>
+<p>
+<strong>Placement unit = sheaf</strong> (tuft of 3–9 blades; the reference's visible
+bundles).  Sheaf roots dart-thrown to <strong>maximal Poisson-disk saturation</strong>
+over the grass mask using the exact-distance grid from
+<code>scatter/distribute.py</code> / the leaf placer — coverage saturation by
+construction, no rows.  Roots rejected in <code>obstacle_mask</code>.</p>
+<p>
+<strong>Direction</strong> per sheaf: <code>blend(w · downslope(mound field at root), (1−w) · coherent positional angle field)</code> — the leaf placer's field,
+2-D-simplified.  Down-slope combing off a sheaf's own mound is the
+swirl-around-lumps read; <code>w</code> is a module constant to tune (start 0.6).
+Within a sheaf: shared direction + curl, per-blade jitter (small), blades
+fanned as <strong>parallel offset paths → non-crossing by construction</strong>.</p>
+<p>
+<strong>Draping</strong>: each blade spine is a 2-D path (length/width/curl sampled
+from <code>SpeciesConfig</code> as today, ±20 % downward size jitter — leaf iter-3
+lesson).  <code>z(s) = max(substrate over the local footprint) + clearance + standoff</code>, sampled bilinearly; root embedded below the surface as today.
+No rise cap needed — the substrate is slope-capped.</p>
+<p>
+<strong>Layering</strong>: process sheaves sorted by root z (low first); each blade's
+standoff accumulates over already-placed overlapping blades' recorded
+tops (cheap 2-D grid of placed-top z, written per blade after seating —
+one vectorised rasterise per blade, no simulation loop).  Stack depth
+capped (~2 blade thicknesses) to hold R6; a blade that would exceed the
+cap shortens or skips rather than climbing.</p>
+<p>
+<strong>Mesh</strong>: existing blade grower/mesh machinery (<code>grass/mesh.py</code>,
+<code>growers/flat.py</code>) fed with draped spine paths; all blades batch-built
+and concatenated (never unioned per-blade); tops rasterised into
+<code>vegetation_support_z</code>.</p>
+<h2 id="experiments-render-judged-one-at-a-time-on-s1-s2-scenes">
+Experiments (render-judged, one at a time, on S1/S2 scenes)</h2>
+<p>
+Acceptance scenes and budgets (fixed up front): <strong>S1</strong> full-tile render
+elev 40/azim −135 (exact match to the baseline PNG); <strong>S2</strong> close-up
+elev ~15 quarter-tile for silhouette; <strong>S3</strong> physical print at
+acceptance.  Perf measured every run.</p>
+<ul>
+<li>
+<strong>E1 — substrate only.</strong>  Mound field + existing carpet + existing
+<em>current</em> 3-D grass untouched on top.  Zero new blade code.  Judge: does
+the tile already read &quot;lumpy and organic&quot; in S2's silhouette?  Knobs:
+amplitude, blob spacing, super-Gaussian exponent, feather width.
+Also the FDM derisk: print-slope histogram.  <em>Hypothesis: E1 buys the
+majority of the look.</em></li>
+<li>
+<strong>E2 — draped blades, no sheaves.</strong>  Replace the simulation with drape:
+uniform Poisson singles, direction field only, no standoff accumulation
+(constant clearance).  Judge coverage rhythm and direction coherence vs
+the mat look; measure speed floor.</li>
+<li>
+<strong>E3 — sheaves + shared clump sites + down-slope blend.</strong>  The full
+aesthetic bet (mound=pile correlation).  Judge: do sheaves comb over
+their own mounds; do adjacent sheaves differentiate; artichoke/rows
+smells.</li>
+<li>
+<strong>E4 — standoff accumulation + stack cap.</strong>  Judge layered-overlap read
+(R4) at S2; check height histogram against the 5 mm budget (R6).</li>
+<li>
+<strong>E5 — perf pass.</strong>  Vectorise the drape sampling; verify R9 on a 2×2
+(linear scaling).  Only after the look settles (leaf-era ordering:
+constraints carried throughout, deep optimisation last).</li>
+</ul>
+<p>
+Iteration protocol (from the leaf history): name artifacts in plain
+language, instrument before fixing, fix constructively (change what <em>can</em>
+happen), judge on the same scenes, one iteration at a time.  Failure
+smells that trigger a stop-and-reinterview instead of a parameter nudge:
+fixes that relocate artifacts; any special case patched more than twice.</p>
+<h2 id="keep-delete-inventory">
+Keep / delete inventory</h2>
+<aside class="stale" role="note"><span class="stale-tag">Out of date</span> <span>The deletions listed here have not happened: <code>grass/grow.py</code> is still in the tree and the old field-simulation grass survives as <code>FloppyGrass</code> in <code>scatter/prototype.py</code> (there is no <code>FloppyGrassLayer</code> class any more). <span class="stale-src">Checked against the code on 2026-11-01.</span></span></aside>
+<p>
+Keep: blade mesh construction + growers (shape approved), <code>SpeciesConfig</code>,
+<code>GrassCarpet</code>, <code>scatter/distribute.py</code>, vegetation-support rasterisation,
+layer-ordering contract (<code>Rocks</code>/<code>Tree</code> before <code>Grass</code>).
+Delete <strong>at acceptance, not before</strong>: <code>grass/grow.py</code> simulation loop,
+per-step occupancy stamping, <code>GrassSeed.sort_key()</code> upstream ordering,
+<code>FloppyGrassLayer</code> growth internals — organs harvested, one generator
+left standing (leaf-era lesson 8).  Old grass docs in <code>docs/grass/</code> and
+<code>docs/floppy-grass-algorithm.md</code> are superseded by this file.</p>
+<h2 id="risks-open-questions">
+Risks &amp; open questions</h2>
+<ul>
+<li>
+<strong>Mound=pile correlation could look samey</strong> (every mound combed the same
+way).  Mitigation: <code>w</code> blend knob; per-clump angle field already varies.
+E3 decides.</li>
+<li>
+<strong>Draped blades without simulation may visibly interpenetrate</strong> where
+sheaves cross.  Mitigation: R4 accumulation handles vertical order; if
+side-by-side shear still offends, add a cheap root-spacing rule —
+do NOT reintroduce per-step simulation.</li>
+<li>
+<strong>Plumpness</strong>: current cross-section approved, but sparse placement may
+read thin; width/thickness scale is a species knob, not new geometry.</li>
+<li>
+<strong>Boundary drape</strong> (reference blades overhang the soil rim) conflicts
+with the tile-footprint invariant; V1 keeps the hard clip, feathered
+mound keeps edges clean.  Revisit only if S3 print looks shaved.</li>
+<li>
+<strong>Knobs stay module constants</strong> until the look settles; config promotion
+is an open item.</li>
+</ul>
+
+</article>
+</div>
+</body>
+</html>

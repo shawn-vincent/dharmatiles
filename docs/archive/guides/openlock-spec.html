@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OpenLOCK Technical Specification</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../../index.html">dharmatiles</a><a href="../../index.html#status">Status</a><a href="../../index.html#looks">Looks</a><a href="../../rust/plan.html">Rust plan</a><a href="../../rust/architecture.html">Architecture</a><a href="../../rust/language.html">Language</a><a href="../../rust/spikes.html">Spikes</a><a href="../../standards/tile-system.html">Tile system</a><a href="../../standards/printing.html">Printing</a><a href="../../archive/index.html" aria-current="page">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Guide</div>
+  <h1>OpenLOCK Technical Specification</h1>
+  <p class="srcnote">Converted from <code>docs/openlock-spec.md</code> on 2026-11-01; the markdown file was removed (see git history). Relative paths in the text are relative to <code>docs/</code>.</p>
+  
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol><li><a href="#1-grid-and-tile-footprint">1. Grid and Tile Footprint</a></li><li><a href="#2-wall-heights">2. Wall Heights</a></li><li><a href="#3-clip-socket-geometry">3. Clip Socket Geometry</a></li><li><a href="#4-clip-socket-positions">4. Clip Socket Positions</a></li><li><a href="#5-tessellation-requirement">5. Tessellation Requirement</a></li><li><a href="#6-floor-tile-top-surface">6. Floor Tile Top Surface</a></li><li><a href="#7-compatibility-notes">7. Compatibility Notes</a></li><li><a href="#8-summary-key-dimensions-at-a-glance">8. Summary: Key Dimensions at a Glance</a></li></ol></nav>
+<article class="doc">
+<p>
+<strong>System</strong>: OpenLOCK by Printable Scenery<br />
+<strong>Current version</strong>: OpenLOCK 8.6 (Clip 5.4 as of 2025)<br />
+<strong>License</strong>: Creative Commons Attribution–NonCommercial (CC BY-NC); commercial BSD licence available from Printable Scenery<br />
+<strong>Official page</strong>: https://www.printablescenery.com/2017/04/26/openlock-developer-information/<br />
+<strong>Template source used for this document</strong>: OpenSCAD-OpenLock by Caitlyn Byrne<br />
+  https://github.com/caitlynb/OpenSCAD-OpenLock (OpenLock.scad, master branch)</p>
+<hr />
+<h2 id="1-grid-and-tile-footprint">
+1. Grid and Tile Footprint</h2>
+<p>
+OpenLOCK tiles are based on the <strong>1-inch dungeon tile</strong> standard, allowing a 25 mm miniature base to fit within one grid square.</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Variant</th>
+<th>
+Unit width</th>
+<th>
+Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Imperial (canonical)</td>
+<td>
+<strong>25.4 mm</strong> (exactly 1 inch)</td>
+<td>
+Official standard</td>
+</tr>
+<tr>
+<td>
+Metric</td>
+<td>
+<strong>25.0 mm</strong></td>
+<td>
+Widely used &quot;close enough&quot; variant</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+A single 1×1 tile = 1 unit × 1 unit = 25.4 mm × 25.4 mm (imperial) or 25 mm × 25 mm (metric).<br />
+Tiles can be any NxM multiple (Part A = 1×1, Part E = 2×2, Part R = 4×2, etc.).</p>
+<h3 id="tile-letter-codes-from-openscad-templates">
+Tile Letter Codes (from OpenSCAD templates)</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Part</th>
+<th>
+Size (units)</th>
+<th>
+Clip positions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+A</td>
+<td>
+0.5 × 2</td>
+<td>
+Wall section, clips on long sides</td>
+</tr>
+<tr>
+<td>
+B</td>
+<td>
+0.5 × 2</td>
+<td>
+Wall section (alternate)</td>
+</tr>
+<tr>
+<td>
+C</td>
+<td>
+0.5 × 2.5</td>
+<td>
+Wall corner</td>
+</tr>
+<tr>
+<td>
+D</td>
+<td>
+0.5 × 3</td>
+<td>
+Wall extension</td>
+</tr>
+<tr>
+<td>
+E</td>
+<td>
+2 × 2</td>
+<td>
+Standard 2×2 floor</td>
+</tr>
+<tr>
+<td>
+F</td>
+<td>
+2 × 2</td>
+<td>
+Round/circular variant</td>
+</tr>
+<tr>
+<td>
+G</td>
+<td>
+2.5 × 2.5</td>
+<td>
+Floor + circular recess</td>
+</tr>
+<tr>
+<td>
+R</td>
+<td>
+4 × 2</td>
+<td>
+Long floor</td>
+</tr>
+<tr>
+<td>
+S</td>
+<td>
+1 × 2</td>
+<td>
+Half floor</td>
+</tr>
+<tr>
+<td>
+SA</td>
+<td>
+1 × 3</td>
+<td>
+Medium floor</td>
+</tr>
+<tr>
+<td>
+SB</td>
+<td>
+1 × 4</td>
+<td>
+Long half floor</td>
+</tr>
+<tr>
+<td>
+U</td>
+<td>
+4 × 4</td>
+<td>
+Large floor</td>
+</tr>
+<tr>
+<td>
+V</td>
+<td>
+4 × 4</td>
+<td>
+Large round floor</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+<strong>Critical rule</strong>: <em>&quot;The footprint tessellation of each piece must never change, and the location of the OpenLOCK ports must never alter.&quot;</em> Tiles of the same letter code from any manufacturer must mate perfectly.</p>
+<hr />
+<h2 id="2-wall-heights">
+2. Wall Heights</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Height name</th>
+<th>
+mm</th>
+<th>
+Inches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Mini / floor</td>
+<td>
+7.0–9.2</td>
+<td>
+~¼&quot;</td>
+</tr>
+<tr>
+<td>
+Default floor base</td>
+<td>
+<strong>8.0 mm</strong></td>
+<td>
+—</td>
+</tr>
+<tr>
+<td>
+Half-height wall</td>
+<td>
+25.4 mm</td>
+<td>
+1&quot;</td>
+</tr>
+<tr>
+<td>
+Full-height wall</td>
+<td>
+<strong>50.8 mm</strong></td>
+<td>
+2&quot;</td>
+</tr>
+<tr>
+<td>
+Tall wall</td>
+<td>
+76.2 mm</td>
+<td>
+3&quot;</td>
+</tr>
+<tr>
+<td>
+Extra-tall wall</td>
+<td>
+101.6 mm</td>
+<td>
+4&quot;</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+The <strong>floor tile base</strong> (the underside box with clip sockets) is <strong>8.0 mm</strong> tall by the OpenSCAD reference implementation (<code>WallHeight = 8</code>).</p>
+<p>
+Some sources quote a total floor assembly of <strong>9.2 mm</strong> (7 mm base + 2.2 mm floor deck), which includes an additional floor-surface layer not part of the base itself.</p>
+<hr />
+<h2 id="3-clip-socket-geometry">
+3. Clip Socket Geometry</h2>
+<p>
+This is the most critical compatibility dimension. Clip sockets are cut into the side walls of the base box. The socket void is a stepped T-shape in plan view (looking down) and a rectangle in elevation.</p>
+<h3 id="3a-elevation-height-in-z">
+3a. Elevation (height in Z)</h3>
+<pre><code>Z = 0          ← top of base (terrain attachment face)
+Z = -1.4       ← top edge of clip slot    (= -WALL_HEIGHT + CUTOUT_START_Z)
+Z = -5.6       ← bottom edge of clip slot (= -1.4 - CUTOUT_HEIGHT)
+Z = -8.0       ← bottom face of base      (= -WALL_HEIGHT)
+</code></pre>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Parameter</th>
+<th>
+Value (mm)</th>
+<th>
+Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>WALL_HEIGHT</code></td>
+<td>
+8.0</td>
+<td>
+Total height of base box</td>
+</tr>
+<tr>
+<td>
+<code>CUTOUT_START_Z</code></td>
+<td>
+1.4</td>
+<td>
+Gap from base bottom to slot bottom edge</td>
+</tr>
+<tr>
+<td>
+<code>CUTOUT_HEIGHT</code></td>
+<td>
+4.2</td>
+<td>
+Slot height (Z span)</td>
+</tr>
+<tr>
+<td>
+Slot centre Z</td>
+<td>
+−3.7</td>
+<td>
+= −1.4 − 4.2/2 from top of base</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="3b-plan-shape-looking-down-from-above">
+3b. Plan (shape looking down from above)</h3>
+<p>
+The slot is a stepped/tapered T-shape. Dimensions are measured inward from the tile edge face:</p>
+<pre><code>Edge face
+│
+│  ←—— 14mm (CUTOUT_WIDE_1) ——→    depth = 0 … 2mm
+│    ←— 12mm (CUTOUT_WIDE_2) —→    depth = 2mm
+│      ←- 10mm (CUTOUT_WIDE_3) -→  depth = 2 … 5mm
+│      ←- 10mm ——————————————→    depth = 5 … 7mm  (safety relief)
+</code></pre>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Parameter</th>
+<th>
+Value (mm)</th>
+<th>
+Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>CUTOUT_WIDE_1</code></td>
+<td>
+14</td>
+<td>
+Opening width at tile face</td>
+</tr>
+<tr>
+<td>
+<code>CUTOUT_DEEP_1</code></td>
+<td>
+2</td>
+<td>
+Depth at which width narrows from 14 → 12</td>
+</tr>
+<tr>
+<td>
+<code>CUTOUT_WIDE_2</code></td>
+<td>
+12</td>
+<td>
+Intermediate step width</td>
+</tr>
+<tr>
+<td>
+<code>CUTOUT_DEEP_2</code></td>
+<td>
+2</td>
+<td>
+Depth step (same as DEEP_1; both = 2 mm)</td>
+</tr>
+<tr>
+<td>
+<code>CUTOUT_WIDE_3</code></td>
+<td>
+10</td>
+<td>
+Inner/deepest width</td>
+</tr>
+<tr>
+<td>
+<code>CUTOUT_DEEP_3</code></td>
+<td>
+5</td>
+<td>
+Depth of inner cavity</td>
+</tr>
+<tr>
+<td>
+Total void depth</td>
+<td>
+7</td>
+<td>
+= CUTOUT_DEEP_3 + 2 (polygon relief)</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+<strong>OpenSCAD polygon</strong> (cross-section, u = lateral, v = depth into tile):</p>
+<pre><code class="language-scad">polygon([
+  [-7, -2], [-7,  2],   // left side of 14mm mouth, entry
+  [-6,  2], [-5,  5],   // step to 12mm then 10mm
+  [-5,  7], [ 5,  7],   // back wall at 10mm wide
+  [ 5,  5], [ 6,  2],   // mirror
+  [ 7,  2], [ 7, -2]    // right side of 14mm mouth
+]);
+</code></pre>
+<h3 id="3c-clip-retention-side-cut">
+3c. Clip Retention Side Cut</h3>
+<p>
+In addition to the main T-slot, a side cut is milled for clip retention:</p>
+<pre><code>translate([-8.35, 0, (h+z)/2-1])  cube([4.7, 18, h+z+2], center=true)
+translate([-8.35, 0, (h+z+lh)/2]) cube([4.7, 14, h+z+lh], center=true)
+</code></pre>
+<p>
+Where <code>h = CUTOUT_HEIGHT</code>, <code>z = CUTOUT_START_Z</code>, <code>lh = layer_height</code>.<br />
+This creates a 4.7 mm × 18 mm cutout at x offset −8.35 mm from the slot centre (to the left of the socket when viewed from outside), spanning the full clip slot height. This is what the clip's locking tab engages.</p>
+<hr />
+<h2 id="4-clip-socket-positions">
+4. Clip Socket Positions</h2>
+<p>
+Clip sockets are centred on each 1-unit (25.4 mm) segment along each edge.</p>
+<p>
+For a 1×1 floor tile (Part A equivalent): <strong>one socket per edge, centred at 0.5 × unit_width = 12.7 mm from the corner</strong>.</p>
+<p>
+For an N-unit edge: N sockets, at positions <code>(i + 0.5) × unit_width</code> for <code>i = 0…N-1</code>.</p>
+<p>
+<strong>Position note</strong>: The SCAD reference places clips at <code>unitwidth/4</code> for wall pieces (which are 0.5 units wide in that axis). For floor tiles the pattern is one clip per square, centred.</p>
+<hr />
+<h2 id="5-tessellation-requirement">
+5. Tessellation Requirement</h2>
+<p>
+All tiles must use the same unit grid (all 25.4 mm or all 25 mm — do not mix). Tile edges must align exactly at:</p>
+<ul>
+<li>
+<strong>Straight edges</strong>: flush faces at multiples of the unit width</li>
+<li>
+<strong>Corner cuts</strong>: 45° chamfers at corner intersections where specified by letter code</li>
+</ul>
+<hr />
+<h2 id="6-floor-tile-top-surface">
+6. Floor Tile Top Surface</h2>
+<p>
+The tile can be of any height above the base. The standard floor deck height is:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Element</th>
+<th>
+Height above base top (z = 0 reference)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Flat bare floor</td>
+<td>
+0 mm (base top = floor)</td>
+</tr>
+<tr>
+<td>
+Textured floor</td>
+<td>
+0…2 mm above base top</td>
+</tr>
+<tr>
+<td>
+Grass/terrain</td>
+<td>
+5–10 mm typical</td>
+</tr>
+<tr>
+<td>
+Half walls</td>
+<td>
+25.4 mm</td>
+</tr>
+<tr>
+<td>
+Full walls</td>
+<td>
+50.8 mm</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+The tile top surface (terrain, floor texture, etc.) is entirely freeform. Only the base footprint and clip socket locations are constrained by the standard.</p>
+<hr />
+<h2 id="7-compatibility-notes">
+7. Compatibility Notes</h2>
+<h3 id="metric-vs-imperial">
+Metric vs. Imperial</h3>
+<p>
+Most published OpenLOCK content is designed for the 25.4 mm (1&quot;) imperial grid. Tiles designed to a 25 mm metric grid will <strong>not tessellate</strong> with standard 25.4 mm tiles; they form a parallel, incompatible ecosystem. Both variants exist in the community; choose one and be consistent.</p>
+<h3 id="clip-version">
+Clip Version</h3>
+<p>
+The OpenLOCK clip has evolved through several versions. <strong>Clip 5.4</strong> is current as of the OpenSCAD reference used here. Older clips (v1–v4) may require slightly different socket depths; Clip 5.4 sockets are backward-compatible with the 4.x clip series.</p>
+<h3 id="minimum-wall-thickness">
+Minimum Wall Thickness</h3>
+<p>
+The base box walls (between clip sockets) should be at least 2–3 mm thick to avoid delamination during printing. For a 25.4 mm square with a 14 mm wide socket, the remaining wall on each side is (25.4 − 14) / 2 = 5.7 mm — adequate.</p>
+<hr />
+<h2 id="8-summary-key-dimensions-at-a-glance">
+8. Summary: Key Dimensions at a Glance</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Dimension</th>
+<th>
+Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Square size (imperial)</td>
+<td>
+25.4 mm</td>
+</tr>
+<tr>
+<td>
+Square size (metric variant)</td>
+<td>
+25.0 mm</td>
+</tr>
+<tr>
+<td>
+Base height</td>
+<td>
+8.0 mm</td>
+</tr>
+<tr>
+<td>
+Clip slot Z: bottom edge</td>
+<td>
+1.4 mm from base bottom</td>
+</tr>
+<tr>
+<td>
+Clip slot Z: top edge</td>
+<td>
+5.6 mm from base bottom</td>
+</tr>
+<tr>
+<td>
+Clip slot Z: height</td>
+<td>
+4.2 mm</td>
+</tr>
+<tr>
+<td>
+Clip slot entry width</td>
+<td>
+14 mm</td>
+</tr>
+<tr>
+<td>
+Clip slot depth (inner)</td>
+<td>
+5 mm (+ 2 mm relief = 7 mm total)</td>
+</tr>
+<tr>
+<td>
+Clip slot inner width</td>
+<td>
+10 mm</td>
+</tr>
+<tr>
+<td>
+Clip retention cut width</td>
+<td>
+4.7 mm</td>
+</tr>
+<tr>
+<td>
+Clip retention cut offset</td>
+<td>
+8.35 mm to one side of centre</td>
+</tr>
+<tr>
+<td>
+Clips per edge segment</td>
+<td>
+1 per 1-unit (25.4 mm) square</td>
+</tr>
+<tr>
+<td>
+Full-height wall</td>
+<td>
+50.8 mm</td>
+</tr>
+<tr>
+<td>
+Half-height wall</td>
+<td>
+25.4 mm</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<p>
+<em>Sources: OpenSCAD-OpenLock (github.com/caitlynb/OpenSCAD-OpenLock), Printable Scenery developer page (printablescenery.com), TerrainTinker knowledge base.</em></p>
+
+</article>
+</div>
+</body>
+</html>

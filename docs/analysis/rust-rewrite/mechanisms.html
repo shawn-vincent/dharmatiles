@@ -24,20 +24,7 @@
   .before-after text { font: 12px var(--mono); fill: currentColor; }
 </style>
 
-<nav class="top"><div class="wrap">
-  <span class="brand">dharmatiles → Rust</span>
-  <a href="index.html">Overview</a>
-  <a href="library.html">The library</a>
-  <a href="labs.html">The labs</a>
-  <a href="variants.html">Surface variants</a>
-  <a href="mechanisms.html" aria-current="page">Mechanisms</a>
-  <a href="architecture.html">Target architecture</a>
-  <a href="feasibility.html">Rust feasibility</a>
-  <a href="layout.html">Project layout</a>
-  <a href="plan.html">Project plan</a>
-  <a href="changelog.html">Changes</a>
-  <a href="notes.html">Notes</a>
-</div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="../../index.html">dharmatiles</a><a href="../../index.html#status">Status</a><a href="../../index.html#looks">Looks</a><a href="../../rust/plan.html">Rust plan</a><a href="../../rust/architecture.html">Architecture</a><a href="../../rust/language.html">Language</a><a href="../../rust/spikes.html">Spikes</a><a href="../../standards/tile-system.html">Tile system</a><a href="../../standards/printing.html">Printing</a><a href="../../archive/index.html">Archive</a></div></nav>
 
 <div class="wrap">
 <header class="hero">
@@ -46,7 +33,7 @@
   <p class="lede">The library and the seven labs contain about seventy separately written mechanisms. In the engine they reduce to five kinds of value, ten operations and three contracts. Each approved look becomes one built-in that combines a handful of these. Tile documents name the built-ins; they don't call the operations directly.</p>
 </header>
 
-<div class="rev"><p><strong>Revised.</strong> The first draft claimed seven verbs (<code>scatter, trace, build, relieve, seat, fill, pack</code>) and that every approved surface was a short composition of them "with no special mechanism". Walking each lab through them disproved that. <code>relieve</code> merged face relief (a depth raster subtracted from the stone) with grain (refine and displace). <code>pack</code> merged the cliff's gravity stack with wall courses, which have no gravity at all. Stroke blades are a stack of 2D layers, not a sweep. The set below is the corrected one. See the <a href="changelog.html">change log</a>.</p></div>
+<div class="rev"><p><strong>Revised.</strong> The first draft claimed seven verbs (<code>scatter, trace, build, relieve, seat, fill, pack</code>) and that every approved surface was a short composition of them "with no special mechanism". Walking each lab through them disproved that. <code>relieve</code> merged face relief (a depth raster subtracted from the stone) with grain (refine and displace). <code>pack</code> merged the cliff's gravity stack with wall courses, which have no gravity at all. Stroke blades are a stack of 2D layers, not a sweep. The set below is the corrected one. See the <a href="../../archive/rust-study/changelog.html">change log</a>.</p></div>
 <h2>The engine set</h2>
 <figure class="diagram">
 <svg viewBox="0 0 1080 300" role="img" aria-label="Five values, ten kit operations and three cross-cutting contracts; operations take values and produce values.">

@@ -3,104 +3,181 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>dharmatiles Docs</title>
+<title>dharmatiles docs</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
 <link rel="stylesheet" href="assets/site.css">
-
-<nav class="top"><div class="wrap">
-  <a class="brand" href="index.html" aria-current="page">dharmatiles docs</a>
-  <a href="#design">Library design</a>
-  <a href="#guides">Guides</a>
-  <a href="#labs">Labs</a>
-  <a href="#reference">Reference</a>
-  <a href="#historic">Historic</a>
-  <a href="analysis/rust-rewrite/index.html">Rust study</a>
-</div></nav>
+<style>
+  .reel { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 22px 0 4px; }
+  @media (max-width: 760px) { .reel { grid-template-columns: repeat(3, minmax(0, 1fr)); } .reel figure:nth-child(n+4) { display: none; } }
+  .reel figure { margin: 0; }
+  .reel img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 3px; display: block; }
+  .reel figcaption { font: 500 11.5px var(--mono); margin-top: 4px; color: var(--muted); }
+  .bodies { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px; margin: 18px 0; }
+  .bodies > * { min-width: 0; }
+  .bodies .card { display: flex; flex-direction: column; gap: 6px; border-top: 4px solid var(--b); }
+  .bodies .card h3 { margin: 0; font-size: 20px; }
+  .bodies .card p { margin: 0; font-size: 14.5px; }
+  .bodies dl { margin: 4px 0 0; display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 4px 10px; font-size: 13.5px; }
+  .bodies dt { font: 600 11px/1.7 var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .bodies dd { margin: 0; }
+  .b-python { --b: var(--stone); } .b-labs { --b: var(--accent); } .b-rust { --b: var(--earth); }
+  .status { margin: 14px 0 8px; }
+  .status .meta { font: 500 12px var(--mono); color: var(--muted); margin-bottom: 6px; }
+  .status h3 { margin: 22px 0 6px; font-size: 16px; display: flex; gap: 8px; align-items: center; }
+  .status h3::before { content: ""; width: 10px; height: 10px; border-radius: 2px; background: var(--b); }
+  .status ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .status li { max-width: none; display: grid; grid-template-columns: 82px 96px minmax(0, 1fr); gap: 4px 12px; align-items: baseline; padding-top: 8px; border-top: 1px solid var(--rule); }
+  .status .s { font: 600 11.5px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .status .s.running { color: var(--water); } .status .s.done { color: var(--accent); }
+  .status .s.waiting { color: var(--gold); } .status .s.blocked { color: var(--alert); }
+  .status .area { font: 500 12px var(--mono); color: var(--muted); }
+  .status .what strong { font-weight: 600; } .status .what p { margin: 2px 0 0; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+  .status .when { font: 400 11.5px var(--mono); color: var(--muted); }
+  .status .you { border: 1px solid var(--gold); border-radius: 4px; padding: 10px 14px; background: color-mix(in srgb, var(--gold) 8%, var(--bg)); }
+  .status .you li { border-top: 0; padding-top: 0; }
+  @media (max-width: 560px) { .status li { grid-template-columns: 76px minmax(0, 1fr); } .status .area { grid-column: 2; grid-row: 1; } .status .what { grid-column: 1 / -1; } }
+  .looks td:first-child a { font-weight: 600; }
+  .looks .ready { color: var(--accent); font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+  .looks .coming { color: var(--muted); font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+</style>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="index.html" aria-current="page">dharmatiles</a><a href="index.html#status">Status</a><a href="index.html#looks">Looks</a><a href="rust/plan.html">Rust plan</a><a href="rust/architecture.html">Architecture</a><a href="rust/language.html">Language</a><a href="rust/spikes.html">Spikes</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="archive/index.html">Archive</a></div></nav>
 
 <div class="wrap">
 <header class="hero">
   <div class="eyebrow">Procedural 3D-printable terrain tiles · 35 mm DungeonBlocks squares · 25.4 mm OpenLOCK</div>
-  <h1>dharmatiles docs</h1>
-  <p class="lede">The design documents the project relies on today: library design, guides and specs, and the requirements and design of each lab. Every page was converted from markdown on 1 November 2026 and checked against the code. Where the code has moved on, the page carries a red <span class="flag" style="margin-left:0">Out of date</span> note that says what the code does now. The original text is kept as written.</p>
+  <h1>dharmatiles</h1>
+  <p class="lede">dharmatiles makes terrain tiles for tabletop games as STL files: ground, grass, rocks, cliffs, water, walls and trees, printable on a home FDM printer without supports. The work is in three bodies, each with its own code and its own docs.</p>
+  <div class="reel">
+    <figure><img src="img/cliff-run-s1.jpg" alt="A cliff run of stacked rock columns"><figcaption>cliffs</figcaption></figure>
+    <figure><img src="img/grass-iso.jpg" alt="Stroke-blade grass tile"><figcaption>grass</figcaption></figure>
+    <figure><img src="img/meadow-iso.jpg" alt="Meadow tile with rocks, grass and bare earth"><figcaption>meadow</figcaption></figure>
+    <figure><img src="img/water-swell-chaos.jpg" alt="Swell-chaos water surface"><figcaption>water</figcaption></figure>
+    <figure><img src="img/dirt-close.jpg" alt="Bare earth close up"><figcaption>dirt</figcaption></figure>
+  </div>
 </header>
 
-<h2 id="design">Library design</h2>
-<p class="muted small">Design notes for code in <code>src/dharmatiles/</code>. Pages marked “partly stale” have out-of-date notes inline.</p>
-
-<h3>Trees and leaves</h3>
-<ul class="doclist">
-  <li><a href="design/leaf-placement.html">Leaf placement</a><span class="sum">The organic union-surface placer, now the only leaf generator: maximal Poisson-disk coverage, a down-slope direction field, height-sorted shingle standoffs and the branch-collision cull.</span><span class="meta">trees/placement_organic.py · trees/placement_leaf.py</span></li>
-  <li><a href="design/leaf-solidification.html">Leaf solidification</a><span class="sum">How one leaf becomes a watertight solid: top surface, root oval and perimeter walls stitched by index, with no raycasts.</span><span class="meta">trees/leaf.py</span></li>
-  <li><a href="design/space-colonization-envelope-tree.html">Space colonization envelope tree</a><span class="flag">partly stale</span><span class="sum">The crown envelope (pointiness and curve profiles) that bounds a tree's attractors. The growth, branching and radius sections predate the current skeleton.</span><span class="meta">trees/envelope.py · trees/skeleton.py</span></li>
-  <li><a href="design/cloud-tree-bark.html">Tree bark</a><span class="flag">partly stale</span><span class="sum">Wavy V-groove bark lines that start at the root, continue through every fork and stop before the foliage. Written when the tree was called CloudTree.</span><span class="meta">trees/bark.py · trees/mesh.py</span></li>
-  <li><a href="design/cloud-tree-closed-solid-branches.html">Closed solid branches</a><span class="flag">partly stale</span><span class="sum">Each branch edge as a closed swept solid, overlapped at joints and unioned into one watertight wood volume.</span><span class="meta">trees/mesh.py</span></li>
-</ul>
-
-<h3>Stones and walls</h3>
-<ul class="doclist">
-  <li><a href="design/rocks-faceted-stones.html">Faceted stones</a><span class="flag">partly stale</span><span class="sum">Faceted, bedded scatter stones: the convex-hull primitive, bedding, cracks, weathering and the <code>Rocks</code> adapter.</span><span class="meta">scatter/stones.py · scatter/prototype.py</span></li>
-  <li><a href="design/stone-surface-texture.html">Stone surface texture</a><span class="sum">The common stone relief for every rock and block: a calm plateau carved downward, matched to measured DungeonBlocks floors.</span><span class="meta">stone/finish.py · stone/noise.py</span></li>
-  <li><a href="design/walls-coursed-masonry.html">Coursed masonry walls</a><span class="flag">partly stale</span><span class="sum">Gen-1 walls: the masonry chassis, cut-stone, fieldstone and brick families, floors, and the experiment log from E1 to E60.</span><span class="meta">walls/masonry.py · walls/fieldstone.py · walls/brick.py · walls/floor.py</span></li>
-  <li><a href="design/walls-doors.html">Wall openings</a><span class="sum">Doors, windows and hatches: arbitrary openings, surrounds, arches and lintels, and a leaf taxonomy that includes slot-loaded swappable leaves.</span><span class="meta">walls/openings.py · walls/fit.py · walls/leaf.py</span></li>
-</ul>
-
-<h3>Grass</h3>
-<ul class="doclist">
-  <li><a href="design/grass-mound-thatch.html">Mound-thatch grass</a><span class="flag">partly stale</span><span class="sum">The library grass (<code>ThatchGrass</code>): mound substrate, under-carpet and draped sheaf blades under supportless FDM rules.</span><span class="meta">grass/thatch.py</span></li>
-  <li><a href="design/grass-underlay.html">Grass underlay</a><span class="flag">partly stale</span><span class="sum">The original design of the embossed blade carpet under 3D grass, implemented as <code>GrassCarpet</code>.</span><span class="meta">layers/grass_carpet.py</span></li>
-</ul>
-
-<h3>Terrain and tiles</h3>
-<ul class="doclist">
-  <li><a href="design/terrain-architecture.html">Terrain architecture</a><span class="flag">partly stale</span><span class="sum">The grid, height model, transitions, boundary shapes and core principles of the terrain generator.</span><span class="meta">core/tile.py · core/config.py · core/mesh.py</span></li>
-  <li><a href="design/tile-segmentation.html">Tile segmentation</a><span class="flag">partly stale</span><span class="sum">Dividing a tile into regions and boundaries: the height model, path types and transitions between terrains.</span><span class="meta">spec.py · core/region.py</span></li>
-  <li><a href="design/tile-naming-convention.html">Tile naming convention</a><span class="flag">partly stale</span><span class="sum">Terrain order (low to high) and shape suffixes in tile names.</span><span class="meta">src/tiles/</span></li>
-  <li><a href="design/slope-normal-requirements.html">Slope-normal requirements</a><span class="sum">A future requirement: a <code>terrain_normal</code> helper and what each layer must do on slopes.</span><span class="meta">core/tile.py</span></li>
-</ul>
-
-<h3>Extras</h3>
-<ul class="doclist">
-  <li><a href="design/dharmatiles-paint-organizer-magnets.html">Paint organizer magnets</a><span class="flag">partly stale</span><span class="sum">Disc-magnet pockets in the hex paint organizer's walls so copies clip together.</span><span class="meta">src/extras/dharmatiles-paint-organizer.py</span></li>
-</ul>
-
-<h2 id="guides">Guides and specs</h2>
-<ul class="doclist">
-  <li><a href="guides/tile-design-guide.html">Tile design guide</a><span class="sum">Conventions that keep independently generated tiles compatible: filenames, terrain order, edge coordinates, canonical orientation, shapes and boundaries.</span><span class="meta">src/tiles/</span></li>
-  <li><a href="guides/openlock-spec.html">OpenLOCK specification</a><span class="sum">The OpenLOCK system's grid, wall heights, clip socket geometry and positions, as used by the OpenLOCK base.</span><span class="meta">bases/openlock.py</span></li>
-  <li><a href="guides/build-provenance-spec.html">Build provenance</a><span class="sum">How a build captures its version, source revision, dirty state and build time once and carries them at runtime.</span><span class="meta">build_info.py · src/scripts/generate_build_info.py</span></li>
-</ul>
-
-<h2 id="labs">Labs</h2>
-<p class="muted small">Standalone experiments at the repo root. Each may import dharmatiles primitives and the other labs, never modifies <code>src/dharmatiles/</code>, and writes to its own <code>out/</code>.</p>
-<div class="labgrid">
-  <div class="card"><h3>grasslab</h3><p>Sculpted grass tile with stroke blades: long combed ribbons in S-curves around bare patches. Requirements rev 4, design rev 5.</p><ul><li><a href="labs/grasslab/requirements.html">Requirements</a></li><li><a href="labs/grasslab/design.html">Design</a></li></ul></div>
-  <div class="card"><h3>rocklab</h3><p>Faceted rock scatter: a lumpy convex body cut by planes, after a sheet of about 60 painted rocks. Rev 2.</p><ul><li><a href="labs/rocklab/requirements.html">Requirements</a></li><li><a href="labs/rocklab/design.html">Design</a></li></ul></div>
-  <div class="card"><h3>meadowlab</h3><p>Rocks, grass and bare earth on one tile, and how they interact. Rev 3.</p><ul><li><a href="labs/meadowlab/requirements.html">Requirements</a></li><li><a href="labs/meadowlab/design.html">Design</a></li></ul></div>
-  <div class="card"><h3>waterlab</h3><p>Fantasy water: several generators compared on one scene; swell-chaos is the liked one. v0.</p><ul><li><a href="labs/waterlab/requirements.html">Requirements</a></li><li><a href="labs/waterlab/design.html">Design</a></li></ul></div>
-  <div class="card"><h3>shorelab</h3><p>Meadow meets water: meadowlab's ground with waterlab's swell-chaos water across a bank. v0.</p><ul><li><a href="labs/shorelab/requirements.html">Requirements</a></li><li><a href="labs/shorelab/design.html">Design</a></li></ul></div>
-  <div class="card"><h3>dirtlab</h3><p>Plain bare earth: one height field built in scale order, with pebbles. Rev 1.</p><ul><li><a href="labs/dirtlab/requirements.html">Requirements</a></li><li><a href="labs/dirtlab/design.html">Design</a></li></ul></div>
-  <div class="card"><h3>clifflab</h3><p>Heroic cliff run, about one storey, supportless FDM. The design page covers the depth-map generator; the live generator is <code>rockpile.py</code>.</p><ul><li><a href="labs/clifflab/requirements.html">Requirements</a> <span class="flag">partly stale</span></li><li><a href="labs/clifflab/design.html">Design</a> <span class="flag">partly stale</span></li><li><a href="labs/clifflab/heroic-cliff-spec.html">Heroic cliff visual spec</a></li></ul></div>
+<h2 id="bodies">Three bodies of work</h2>
+<div class="bodies">
+  <section class="card b-python">
+    <h3>The original Python library</h3>
+    <p>The <code>dharmatiles-gen</code> generator and its library of tile specs. It is the shipping code until the Rust cutover. Trees and walls are still developed here.</p>
+    <dl>
+      <dt>Code</dt><dd><code>src/dharmatiles/</code>, <code>src/tiles/</code>, <code>stl/</code></dd>
+      <dt>Docs</dt><dd><a href="archive/index.html#python-library">Library design pages</a> (archived) and the History section of each look page</dd>
+      <dt>Status</dt><dd><a href="#status-python">below</a></dd>
+    </dl>
+  </section>
+  <section class="card b-labs">
+    <h3>The labs</h3>
+    <p>Seven standalone experiments where the approved looks are made: grass, rocks, cliffs, water, shore, dirt and meadow. Each lab writes to its own <code>out/</code> and never changes the library.</p>
+    <dl>
+      <dt>Code</dt><dd><code>*lab/</code> at the repo root</dd>
+      <dt>Docs</dt><dd>The <a href="#looks">look pages</a>: each lab's spec, rulings and mechanism</dd>
+      <dt>Status</dt><dd><a href="#status-labs">below</a></dd>
+    </dl>
+  </section>
+  <section class="card b-rust">
+    <h3>The Rust rewrite</h3>
+    <p>The port of the labs and the library into one Rust engine. A tile is a short KDL document that names built-in looks. Phase 1 is under way.</p>
+    <dl>
+      <dt>Code</dt><dd><code>crates/</code>, <code>library/</code> (branch <code>rust/p1</code>)</dd>
+      <dt>Docs</dt><dd><a href="rust/plan.html">Plan</a> · <a href="rust/architecture.html">Architecture</a> · <a href="rust/language.html">Language</a> · <a href="rust/spikes.html">Spikes</a></dd>
+      <dt>Status</dt><dd><a href="#status-rust">below</a></dd>
+    </dl>
+  </section>
 </div>
+
+<h2 id="status">Status</h2>
+<div class="status">
+  <div class="meta" id="status-meta">Loading status…</div>
+  <div id="status-you"></div>
+  <h3 class="b-python" id="status-python">Python library</h3><ul data-body="python"></ul>
+  <h3 class="b-labs" id="status-labs">Labs</h3><ul data-body="labs"></ul>
+  <h3 class="b-rust" id="status-rust">Rust rewrite</h3><ul data-body="rust"></ul>
+</div>
+<p class="muted small">Rows come from <a href="status.json">status.json</a>, which Claude commits as work moves.</p>
+
+<h2 id="looks">Looks</h2>
+<p>A look is one kind of terrain surface, such as grass or cliffs. Each look gets one page: its target and Shawn's rulings, its requirements, how the approved version works, its printability guarantees, its variant history, its references, and its Rust port. That page is also what the Rust port is judged against. This is where the three bodies of work meet.</p>
+<div class="tbl"><table class="looks">
+  <thead><tr><th>Look</th><th>Owned by</th><th>Rust port</th><th>Page</th></tr></thead>
+  <tbody>
+    <tr><td><a href="looks/cliffs.html">Cliffs</a></td><td>Labs: clifflab (rockpile)</td><td>P7</td><td><span class="ready">ready</span> · pilot for the look template</td></tr>
+    <tr><td>Ground</td><td>Labs: dirtlab</td><td>P1 flat, P2 dirt and hills</td><td><span class="coming">coming</span> · <a href="labs/dirtlab/requirements.html">requirements</a> · <a href="labs/dirtlab/design.html">design</a> · <a href="archive/rust-study/labs.html#dirtlab">summary</a></td></tr>
+    <tr><td>Grass</td><td>Labs: grasslab</td><td>P4</td><td><span class="coming">coming</span> · <a href="labs/grasslab/requirements.html">requirements</a> · <a href="labs/grasslab/design.html">design</a> · <a href="archive/rust-study/labs.html#grasslab">summary</a></td></tr>
+    <tr><td>Rocks</td><td>Labs: rocklab</td><td>P3</td><td><span class="coming">coming</span> · <a href="labs/rocklab/requirements.html">requirements</a> · <a href="labs/rocklab/design.html">design</a> · <a href="archive/rust-study/labs.html#rocklab">summary</a></td></tr>
+    <tr><td>Water and shore</td><td>Labs: waterlab, shorelab</td><td>P3 water, P4 shore</td><td><span class="coming">coming</span> · <a href="labs/waterlab/requirements.html">water</a> · <a href="labs/waterlab/design.html">design</a> · <a href="labs/shorelab/requirements.html">shore</a> · <a href="labs/shorelab/design.html">design</a></td></tr>
+    <tr><td>Walls and floors</td><td>Python library: <code>walls/</code></td><td>P5</td><td><span class="coming">coming</span> · <a href="archive/python-library/walls-coursed-masonry.html">masonry</a> · <a href="archive/python-library/walls-doors.html">openings</a> · <a href="archive/python-library/stone-surface-texture.html">stone finish</a></td></tr>
+    <tr><td>Trees</td><td>Python library: <code>trees/</code></td><td>P5</td><td><span class="coming">coming</span> · <a href="archive/python-library/leaf-placement.html">leaves</a> · <a href="archive/python-library/space-colonization-envelope-tree.html">skeleton</a> · <a href="archive/python-library/cloud-tree-bark.html">bark</a></td></tr>
+    <tr><td>Composition</td><td>Labs: meadowlab</td><td>P4</td><td><span class="coming">coming</span> · <a href="labs/meadowlab/requirements.html">requirements</a> · <a href="labs/meadowlab/design.html">design</a> · <a href="archive/rust-study/labs.html#meadowlab">summary</a></td></tr>
+  </tbody>
+</table></div>
+<p class="muted small">Until each look page lands, the lab summaries and the surface-variant family trees are in the archive: <a href="archive/rust-study/labs.html">labs analysis</a> and <a href="archive/rust-study/variants.html">surface variants</a>.</p>
+
+<h2 id="standards">Standards</h2>
+<ul class="doclist">
+  <li><a href="standards/tile-system.html">Tile system</a><span class="sum">Tile, square and cell; DungeonBlocks and OpenLOCK geometry; file names; edge coordinates.</span></li>
+  <li><a href="standards/printing.html">Printing</a><span class="sum">Printer profile, the 55° overhang limit, the printable-texture rule, red overhangs in renders, and the watertight and float32 reload audit.</span></li>
+</ul>
 
 <h2 id="reference">Reference</h2>
 <ul class="doclist">
-  <li><a href="reference/walls/commercial-sets-analysis.html">Walls: commercial sets analysis</a><span class="sum">Measured DungeonBlocks wall standards, compared with Hirst Arts, Fat Dragon Games and The Dragon's Rest.</span><span class="meta">docs/reference/walls/</span></li>
-  <li><a href="analysis/rust-rewrite/index.html">Rust rewrite study</a><span class="sum">Analysis of the library, the labs and every surface variant as groundwork for a Rust rewrite.</span><span class="meta">docs/analysis/rust-rewrite/</span></li>
+  <li><a href="reference/walls/commercial-sets-analysis.html">Walls: commercial sets analysis</a><span class="sum">Measured DungeonBlocks wall standards, compared with Hirst Arts, Fat Dragon Games and The Dragon's Rest.</span><span class="meta">reference/walls/</span></li>
+  <li><a href="reference/rocks/rocks-reference-monolith-trio.png">Rock reference sheets</a><span class="sum">Painted commercial rock, cliff and outcrop tiles used as targets.</span><span class="meta">reference/rocks/</span></li>
+  <li><a href="reference/big-boulders/README.md">Big boulders</a> · <a href="reference/stone-texture/README.md">stone texture</a> · <a href="reference/walls/README.md">walls</a> · <a href="reference/walls/fieldstone/README.md">fieldstone</a> · <a href="reference/walls/doors/README.md">doors</a><span class="sum">Photo sets, each with a README of sources and notes.</span></li>
+  <li><a href="extras/paint-organizer.html">Paint organizer magnets</a><span class="sum">Not terrain: disc-magnet pockets in the hex paint organizer so copies clip together.</span><span class="meta">src/extras/dharmatiles-paint-organizer.py</span></li>
 </ul>
-<p class="muted small">The photo-set folder notes stay as markdown beside their images: <code>docs/reference/walls/README.md</code>, <code>docs/reference/walls/fieldstone/README.md</code>, <code>docs/reference/walls/doors/README.md</code>, <code>docs/reference/big-boulders/README.md</code> and <code>docs/reference/stone-texture/README.md</code>.</p>
 
-<h2 id="historic">Historic docs (markdown, not maintained)</h2>
-<p class="muted small">These describe code that no longer exists or a design that was replaced. They stay where they are, unconverted.</p>
-<ul class="historic">
-  <li><code>docs/meta/history/</code>: dated reviews, interviews and development histories.</li>
-  <li><code>docs/floppy-grass-algorithm.md</code>, <code>docs/grass/requirements.md</code>, <code>docs/grass/design.md</code>, <code>docs/grass/grass-behavior.md</code>: the flat field-simulation grass, superseded by mound-thatch grass.</li>
-  <li><code>docs/grass-scene-v1.md</code> and <code>docs/design/grass-heightmap.md</code>: the early heightmap-PNG grass pipeline (scripts now in <code>src/scripts/archived/</code>).</li>
-  <li><code>src/scripts/BLADE_DESIGN.md</code>: the 2D blade image renderer used by that pipeline.</li>
-  <li><code>docs/design-point-cloud-tree.md</code> and <code>docs/cloud-mesh-design.md</code>: the CloudTree skeleton and shared-ring mesh, replaced by the current skeleton and closed solid branches.</li>
-  <li><code>docs/design/tile-spec-redesign.md</code>: the <code>ScatterLayer</code> spec proposal, replaced by direct tile layers.</li>
-  <li><code>docs/design/water-surface-model.md</code>: the wave-train water displacement model, no longer in <code>layers/water.py</code>.</li>
-  <li><code>docs/browser-python-viability.md</code>: a 2026-06-24 exploration of running the generator in the browser with Pyodide.</li>
-</ul>
-<p class="muted small">Kept as markdown by convention: <code>CLAUDE.md</code> (Claude Code instructions), the root <code>README.md</code>, <code>docs/memory/</code> (session memory) and the <code>stl/</code> folder READMEs.</p>
+<h2 id="archive">Archive</h2>
+<p>Everything that records how we got here: the Python library design pages, the Rust study's change log and notes, lab iteration logs, and the dated session history. It is frozen. <a href="archive/index.html">Open the archive index</a>, which says what each item was and what replaced it.</p>
 </div>
+
+<script>
+(() => {
+  // Live status: rows in status.json, committed by Claude as work moves.
+  const meta = document.getElementById('status-meta');
+  const you = document.getElementById('status-you');
+  const ago = iso => {
+    const s = (Date.now() - Date.parse(iso)) / 1000;
+    if (!isFinite(s)) return '';
+    if (s < 90) return 'just now';
+    if (s < 5400) return Math.round(s / 60) + ' min ago';
+    if (s < 129600) return Math.round(s / 3600) + ' h ago';
+    return Math.round(s / 86400) + ' d ago';
+  };
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const row = r => {
+    const li = el('li');
+    li.append(el('span', 's ' + (r.state || 'next'), r.state || ''), el('span', 'area', r.area || ''));
+    const what = el('div', 'what');
+    what.append(el('strong', null, r.title || ''));
+    if (r.detail) what.append(el('p', null, r.detail));
+    if (r.updated) what.append(el('div', 'when', 'updated ' + ago(r.updated)));
+    li.append(what);
+    return li;
+  };
+  fetch('status.json', { cache: 'no-store' })
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(d => {
+      const rows = d.rows.slice().sort((a, b) => a.order - b.order);
+      let latest = '';
+      for (const r of rows) {
+        if (r.updated > latest) latest = r.updated;
+        if (r.area === 'Shawn') {
+          const box = el('div', 'you'); const ul = el('ul'); ul.append(row(r)); box.append(ul); you.append(box);
+          continue;
+        }
+        const ul = document.querySelector('.status ul[data-body="' + (r.body || 'rust') + '"]');
+        if (ul) ul.append(row(r));
+      }
+      document.querySelectorAll('.status ul[data-body]').forEach(ul => { if (!ul.children.length) ul.append(el('li', 'muted', 'No active work.')); });
+      meta.textContent = rows.length ? 'Last change ' + ago(latest) + ' · refresh to update' : 'No status yet.';
+    })
+    .catch(() => { meta.textContent = 'Status unavailable.'; });
+})();
+</script>
+</body>
+</html>

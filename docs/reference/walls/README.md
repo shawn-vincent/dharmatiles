@@ -3,7 +3,7 @@
 Reference photos for the **walls campaign** (a wall = a region whose
 footprint is the wall's plan, with a texture family applied to its faces
 and top).  Source: Wikimedia Commons (public/permissive).  See also the
-commercial-tile cliff idiom already in `docs/rocks/`:
+commercial-tile cliff idiom already in `docs/reference/rocks/`:
 `rocks-reference-stairs-grotto.png` (stratified cliff faces),
 `rocks-reference-high-waterfall-cliff.png` (cliff columns + boulder
 caps), `rocks-reference-big-rock-outcrop.png` (fluted sides, plateau).

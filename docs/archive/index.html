@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>dharmatiles archive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html" aria-current="page">Archive</a></div></nav>
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">Archive · frozen · never edited</div>
+  <h1>Archive</h1>
+  <p class="lede">Pages that record how dharmatiles got here. Nothing in this folder is kept up to date. Each entry says what it was and which page replaced it. Markdown files open as plain text.</p>
+</header>
+
+<h2 id="python-library">Python library design</h2>
+<p>Design notes for the modules in <code>src/dharmatiles/</code>. The Python library is still the shipping code, but new looks are developed in the labs and ported to Rust, so these pages are no longer maintained. Trees and walls have no lab: until their look pages land, these pages are the best description of those looks.</p>
+<div class="tbl"><table>
+  <thead><tr><th>Page</th><th>What it was</th><th>Replaced by</th></tr></thead>
+  <tbody>
+    <tr><td><a href="python-library/leaf-placement.html">Leaf placement</a></td><td>The organic union-surface leaf placer (<code>trees/placement_organic.py</code>).</td><td>Trees look page (coming)</td></tr>
+    <tr><td><a href="python-library/leaf-solidification.html">Leaf solidification</a></td><td>How one leaf becomes a watertight solid (<code>trees/leaf.py</code>).</td><td>Trees look page (coming)</td></tr>
+    <tr><td><a href="python-library/space-colonization-envelope-tree.html">Space colonization envelope tree</a></td><td>The crown envelope that bounds a tree's attractors.</td><td>Trees look page (coming)</td></tr>
+    <tr><td><a href="python-library/cloud-tree-bark.html">Tree bark</a></td><td>V-groove bark lines through every fork (<code>trees/bark.py</code>).</td><td>Trees look page (coming)</td></tr>
+    <tr><td><a href="python-library/cloud-tree-closed-solid-branches.html">Closed solid branches</a></td><td>Each branch edge as a closed swept solid, unioned into one wood volume.</td><td>Trees look page (coming)</td></tr>
+    <tr><td><a href="python-library/rocks-faceted-stones.html">Faceted stones</a></td><td>The library's faceted, bedded scatter stones (<code>scatter/stones.py</code>).</td><td>rocklab; Rocks look page (coming)</td></tr>
+    <tr><td><a href="python-library/stone-surface-texture.html">Stone surface texture</a></td><td>The shared stone relief for rocks and wall blocks (<code>stone/finish.py</code>).</td><td>Rocks and walls look pages (coming)</td></tr>
+    <tr><td><a href="python-library/walls-coursed-masonry.html">Coursed masonry walls</a></td><td>The masonry chassis, cut-stone, fieldstone and brick families, floors, and the E1–E60 experiment log.</td><td>Walls look page (coming)</td></tr>
+    <tr><td><a href="python-library/walls-doors.html">Wall openings</a></td><td>Doors, windows and hatches (<code>walls/openings.py</code>, <code>walls/fit.py</code>).</td><td>Walls look page (coming)</td></tr>
+    <tr><td><a href="python-library/grass-mound-thatch.html">Mound-thatch grass</a></td><td>The library grass (<code>grass/thatch.py</code>).</td><td>grasslab stroke blades; Grass look page (coming)</td></tr>
+    <tr><td><a href="python-library/grass-underlay.html">Grass underlay</a></td><td>The embossed blade carpet under 3D grass (<code>GrassCarpet</code>).</td><td>grasslab; Grass look page (coming)</td></tr>
+    <tr><td><a href="python-library/terrain-architecture.html">Terrain architecture</a></td><td>The grid, height model, transitions and boundaries of the Python generator.</td><td><a href="../rust/architecture.html">Rust architecture</a></td></tr>
+    <tr><td><a href="python-library/tile-segmentation.html">Tile segmentation</a></td><td>Regions and boundaries, path types and transitions.</td><td><a href="../rust/language.html">Tile language</a></td></tr>
+    <tr><td><a href="python-library/tile-naming-convention.html">Tile naming convention</a></td><td>Terrain order and shape suffixes in tile names.</td><td><a href="../standards/tile-system.html">Tile system</a></td></tr>
+    <tr><td><a href="python-library/slope-normal-requirements.html">Slope-normal requirements</a></td><td>A planned <code>terrain_normal</code> helper for slope-aware layers. Never built.</td><td>—</td></tr>
+    <tr><td><a href="python-library/grass-heightmap.md">grass-heightmap.md</a></td><td>The early heightmap-PNG grass pipeline.</td><td>Mound-thatch grass, then grasslab</td></tr>
+    <tr><td><a href="python-library/tile-spec-redesign.md">tile-spec-redesign.md</a></td><td>The <code>ScatterLayer</code> spec proposal.</td><td>Direct tile layers in <code>spec.py</code></td></tr>
+    <tr><td><a href="python-library/water-surface-model.md">water-surface-model.md</a></td><td>The wave-train water displacement model.</td><td>waterlab swell-chaos</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="guides">Guides</h2>
+<div class="tbl"><table>
+  <thead><tr><th>Page</th><th>What it was</th><th>Replaced by</th></tr></thead>
+  <tbody>
+    <tr><td><a href="guides/tile-design-guide.html">Tile design guide</a></td><td>File names, terrain order, edge coordinates, orientation, shapes and boundaries.</td><td><a href="../standards/tile-system.html">Tile system</a></td></tr>
+    <tr><td><a href="guides/openlock-spec.html">OpenLOCK specification</a></td><td>OpenLOCK grid, wall heights and clip geometry, as used by <code>bases/openlock.py</code>.</td><td><a href="../standards/tile-system.html">Tile system</a></td></tr>
+    <tr><td><a href="guides/build-provenance-spec.html">Build provenance</a></td><td>How the Python build records its version and source revision (<code>build_info.py</code>).</td><td><a href="../rust/architecture.html">Rust architecture</a>, appendix</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="rust-study">Rust study</h2>
+<p>The analysis that led to the Rust rewrite, 1–2 November 2026. The current plan, architecture, language and spike results are on the four <a href="../rust/plan.html">Rust pages</a>.</p>
+<div class="tbl"><table>
+  <thead><tr><th>Page</th><th>What it was</th><th>Replaced by</th></tr></thead>
+  <tbody>
+    <tr><td><a href="rust-study/changelog.html">Change log</a></td><td>Every revision of the study, with its evidence (147 entries).</td><td>The <a href="../rust/plan.html#decisions">decisions log</a> on the plan, and git</td></tr>
+    <tr><td><a href="rust-study/notes.html">Notes</a></td><td>Working notes behind the study: code reads, measurements, quotes.</td><td>The Rust pages and look pages</td></tr>
+    <tr><td><a href="rust-study/input-language-design-conversation.md">Input-language conversation</a></td><td>The pasted conversation in which the tile language was first designed.</td><td><a href="../rust/language.html">Tile language</a></td></tr>
+    <tr><td><a href="rust-study/library.html">The library</a></td><td>Analysis of the Python library: what it does, what carries over.</td><td><a href="../rust/architecture.html">Rust architecture</a></td></tr>
+    <tr><td><a href="rust-study/labs.html">The labs</a></td><td>Analysis of the seven labs, with interactive diagrams.</td><td>The look pages (cliffs now; the rest coming)</td></tr>
+    <tr><td><a href="rust-study/variants.html">Surface variants</a></td><td>Every surface variant in git history, as family trees with renders.</td><td>Section 5 of each look page</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="history">Session history</h2>
+<p>Dated reviews, requirement interviews and session logs, 30 May – 5 July 2026, plus the loose markdown notes from the early library. All markdown.</p>
+<ul class="historic">
+  <li><a href="history/2026-07-03-leaf-placement-complete-history.md">Leaf placement: the complete history</a> (3 Jul) — the method later reused for every look: requirements interview, guarantees by construction, render-judged iterations.</li>
+  <li><a href="history/2026-07-03-grass-greenfield-requirements.md">Grass greenfield requirements</a> (3 Jul), <a href="history/2026-07-03-rocks-greenfield-requirements.md">rocks greenfield</a> (3 Jul), <a href="history/2026-07-04-walls-greenfield-requirements.md">walls greenfield</a> (4 Jul), <a href="history/2026-07-02-foliage-greenfield-requirements.md">foliage greenfield</a> (2 Jul).</li>
+  <li><a href="history/2026-07-05-walls-rocks-refactor-review.md">Walls and rocks refactor review</a> (5 Jul) — the plan behind <code>src/dharmatiles/stone/</code>.</li>
+  <li>Leaf placement sessions, 19 Jun – 3 Jul: <a href="history/2026-06-19-leaf-placement-fdm-design-space.md">FDM design space</a>, <a href="history/2026-06-22-leaf-placement-debug-pipeline-review.md">debug pipeline</a>, <a href="history/2026-06-24-foliage-cluster-baldness.md">cluster baldness</a>, <a href="history/2026-06-24-leaf-rendering-deep-history.md">rendering history</a>, <a href="history/2026-06-24-leaf-wall-contact-angle-optimization.md">contact angle</a>, <a href="history/2026-06-24-systematic-algorithm-development.md">systematic development protocol</a>, <a href="history/2026-06-25-floating-leaf-check-session.md">floating-leaf check</a>, <a href="history/2026-06-25-meridian-arc-placement-design-review.md">meridian arcs</a>, <a href="history/2026-06-27-leaf-placement-code-review.md">code review</a>, <a href="history/2026-06-28-leaf-placement-phi-distribution.md">phi distribution</a>, <a href="history/2026-06-29-leaf-jitter-and-placement-fixes.md">jitter fixes</a>, <a href="history/2026-07-01-greedy-lowest-first-leaf-placement-experiment.md">greedy lowest-first</a>, <a href="history/2026-07-01-leaf-deconfliction-and-performance-crisis.md">deconfliction</a>, <a href="history/2026-07-02-fable-leaf-placement-design-review.md">greedy vs meridian</a>, <a href="history/2026-07-03-organic-leaf-placer-performance-analysis.md">organic placer performance</a>.</li>
+  <li>Architecture and code reviews, 30 May – 18 Jun: <a href="history/2026-05-30-15-30-grass-tile-code-review.md">grass tile</a>, <a href="history/2026-06-01-architecture-review.md">architecture</a>, <a href="history/2026-06-03-openlock-spec-compliance-review.md">OpenLOCK compliance</a>, <a href="history/2026-06-04-openlock-regen-review.md">OpenLOCK regeneration</a>, <a href="history/2026-06-04-performance-review.md">performance</a>, <a href="history/2026-06-06-gamer-perspective-review.md">gamer perspective</a>, <a href="history/2026-06-06-grass-requirements-review.md">grass requirements</a>, <a href="history/2026-06-08-deep-dry-performance-review.md">DRY and performance</a>, <a href="history/2026-06-08-full-code-review.md">full review (8 Jun)</a>, <a href="history/2026-06-09-full-code-review.md">full review (9 Jun)</a>, <a href="history/2026-06-10-performance-and-cli-review.md">performance and CLI</a>, <a href="history/2026-06-10-tile-spec-architecture-review.md">tile spec</a>, <a href="history/2026-06-13-dry-code-review.md">DRY</a>, <a href="history/2026-06-18-design-session-architecture-direction.md">architecture direction</a>, <a href="history/2026-06-18-orin-elegance-review.md">elegance</a>, <a href="history/2026-06-18-orin-strategic-review.md">strategic</a>, <a href="history/2026-06-18-orin-technical-review.md">technical</a>, <a href="history/2026-06-18-tree-terminology-rename-plan.md">tree terminology rename</a>.</li>
+  <li>Early library notes: <a href="history/floppy-grass-algorithm.md">floppy grass algorithm</a> and <a href="history/grass/requirements.md">grass requirements</a>, <a href="history/grass/design.md">design</a>, <a href="history/grass/grass-behavior.md">behaviour</a> (the field-simulation grass, replaced by mound-thatch); <a href="history/grass-scene-v1.md">grass scene v1</a> (the heightmap-PNG pipeline); <a href="history/design-point-cloud-tree.md">point-cloud tree</a> and <a href="history/cloud-mesh-design.md">CloudTree mesh</a> (replaced by the current skeleton and closed solid branches); <a href="history/browser-python-viability.md">browser Python viability</a> (a Pyodide exploration, 24 Jun).</li>
+</ul>
+
+<h2 id="this-site">This site</h2>
+<ul class="historic">
+  <li><a href="docs-consolidation.html">Docs consolidation</a> (2 Nov 2026) — the analysis that produced this layout: one page per look, four Rust pages, two standards pages and this archive. Shawn approved all five recommendations.</li>
+</ul>
+</div>
+</body>
+</html>

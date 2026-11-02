@@ -24,23 +24,13 @@
   .overall p:last-child { margin-bottom: 0; }
 </style>
 
-<nav class="top"><div class="wrap">
-  <span class="brand">dharmatiles → Rust</span>
-  <a href="../index.html">Overview</a>
-  <a href="../feasibility.html">Rust feasibility</a>
-  <a href="../plan.html">Project plan</a>
-  <a href="../changelog.html">Changes</a>
-  <a href="r1-r2-r9.html">Spikes R1, R2, R9</a>
-  <a href="r3-rays.html">Spike R3</a>
-  <a href="r6-kdl.html">Spike R6</a>
-  <a href="go-no-go.html" aria-current="page">Go/no-go</a>
-</div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="../../../index.html">dharmatiles</a><a href="../../../index.html#status">Status</a><a href="../../../index.html#looks">Looks</a><a href="../../../rust/plan.html">Rust plan</a><a href="../../../rust/architecture.html">Architecture</a><a href="../../../rust/language.html">Language</a><a href="../../../rust/spikes.html">Spikes</a><a href="../../../standards/tile-system.html">Tile system</a><a href="../../../standards/printing.html">Printing</a><a href="../../../archive/index.html">Archive</a></div></nav>
 
 <div class="wrap">
 <header class="hero">
   <div class="eyebrow">Phase 0 · go/no-go · for Shawn's day 9–10 decision · results of 1 Nov 2026 · branch rust/p0 · revision 8 · decided 2 Nov 2026: go to Phase 1</div>
   <h1>Phase 0: go or no-go</h1>
-  <p class="lede">Four of the five spikes are a <strong>go</strong>: booleans (R1), determinism on one machine (R2), rays (R3) and materials (R9), two of them with a gate clause that did not fully pass. R1's ≤ 1.2× time gate passes on the median of interleaved runs (1.05× and 1.06×) but not on every run (two massif pairs at 1.36× and 1.43×); R3's 1e-4 mm distance clause passes on one capture of three (float32 noise up to 1.8e-4 mm on identical hits). Neither is near a kill criterion. The document format (R6) has its syntax and vocabulary decided; <code>dt-doc</code> and the library tiles are to be reworked to them. No fallback is needed for booleans or rays. Revision 7 corrects revision 6 after an adversarial review (plan checklist item 13); the corrections are in the <a href="../changelog.html">change log</a>.</p>
+  <p class="lede">Four of the five spikes are a <strong>go</strong>: booleans (R1), determinism on one machine (R2), rays (R3) and materials (R9), two of them with a gate clause that did not fully pass. R1's ≤ 1.2× time gate passes on the median of interleaved runs (1.05× and 1.06×) but not on every run (two massif pairs at 1.36× and 1.43×); R3's 1e-4 mm distance clause passes on one capture of three (float32 noise up to 1.8e-4 mm on identical hits). Neither is near a kill criterion. The document format (R6) has its syntax and vocabulary decided; <code>dt-doc</code> and the library tiles are to be reworked to them. No fallback is needed for booleans or rays. Revision 7 corrects revision 6 after an adversarial review (plan checklist item 13); the corrections are in the <a href="../../../archive/rust-study/changelog.html">change log</a>.</p>
 </header>
 
 <div class="verdicts">
@@ -71,7 +61,7 @@
 <p class="small muted">Measured on Shawn's M2 Max (12 cores) and in GitHub Actions. CI is green on macOS, Linux, Windows, the wasm build, clippy and cargo deny; with Manifold compiled from source a cold run takes about 5 minutes (Windows is slowest) and a cached run about 1 minute. Revision 7's code commit acb1697 passed in run 41364160189 (revision 6 cited 89bf704, which is not on this branch; the run for bf30c10 was 41361211550).</p>
 
 <h2>What each result changes in the plan</h2>
-<p>These changes are made in revisions 6 and 7 on the <a href="../plan.html">plan</a> and <a href="../feasibility.html">feasibility</a> pages. Each is listed in the <a href="../changelog.html">change log</a> under revision 6 or 7.</p>
+<p>These changes are made in revisions 6 and 7 on the <a href="../plan.html">plan</a> and <a href="../feasibility.html">feasibility</a> pages. Each is listed in the <a href="../../../archive/rust-study/changelog.html">change log</a> under revision 6 or 7.</p>
 <h3>R1 booleans</h3>
 <ol class="findings">
   <li><strong>The mesh backend is manifold-csg 0.4.1, with Manifold's parallelism on.</strong> Without TBB it takes 3–5× Python's time on the cliff; with TBB the median of interleaved pairs is 1.05–1.06×, close to but not reliably under the 1.2× gate. The old design note "run each boolean single-threaded and many in parallel" is dropped: it is not needed for identity on one machine and it costs 3–4× on the cliff's big unions.</li>

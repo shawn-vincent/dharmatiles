@@ -1,0 +1,74 @@
+{
+ "rows": [
+  {
+   "id": "python-lib",
+   "order": 5,
+   "body": "python",
+   "area": "Python",
+   "state": "done",
+   "title": "Shipping generator; no active work",
+   "detail": "dharmatiles-gen builds the library tiles from src/tiles/. It stays the shipping code until the Rust cutover (P6).",
+   "updated": "2026-11-02T14:00:00Z"
+  },
+  {
+   "id": "p0",
+   "order": 10,
+   "body": "rust",
+   "area": "Rust P0",
+   "state": "done",
+   "title": "Phase 0 spikes: decided GO (2 Nov 2026)",
+   "detail": "R1, R2, R3, R6 and R9 passed. Determinism level B chosen, contact sheet approved, no vetoes. Branch rust/p0, revision 8 of the study.",
+   "updated": "2026-11-02T14:00:00Z"
+  },
+  {
+   "id": "p1-doc",
+   "order": 20,
+   "body": "rust",
+   "area": "Rust P1",
+   "state": "done",
+   "title": "Stream A done: dt-doc on the R6 vocabulary + library tiles",
+   "detail": "rust/p1-doc 6fb2205: 88 dt-doc tests pass, wasm build OK; library tiles match the R6 page byte for byte; edit API inserts properties. Waiting to merge with stream B.",
+   "updated": "2026-11-02T14:40:00Z"
+  },
+  {
+   "id": "p1-skel",
+   "order": 30,
+   "body": "rust",
+   "area": "Rust P1",
+   "state": "done",
+   "title": "Stream B done: dt-kit, ground look, DB connector, dt-eval, binary, parity harness",
+   "detail": "rust/p1-skel cfdc85e. Flat 1×1 builds in 0.09 s, watertight, 0 overhang, deterministic at 1/4/16 threads, volume matches Python exactly. CI finishing.",
+   "updated": "2026-11-02T14:25:00Z"
+  },
+  {
+   "id": "p1-merge",
+   "order": 40,
+   "body": "rust",
+   "area": "Rust P1",
+   "state": "running",
+   "title": "Merging both streams into rust/p1",
+   "detail": "Re-point dt-eval at the reworked dt-doc API, then simplify and adversarial reviews at phase exit.",
+   "updated": "2026-11-02T14:25:00Z"
+  },
+  {
+   "id": "cliff-r17",
+   "order": 50,
+   "body": "labs",
+   "area": "Cliff",
+   "state": "done",
+   "title": "Round 17 accepted",
+   "detail": "Crisp sparse chips, bold column setbacks, closed core holes (31f7c5d on main).",
+   "updated": "2026-11-02T14:00:00Z"
+  },
+  {
+   "id": "shawn",
+   "order": 90,
+   "body": "rust",
+   "area": "Shawn",
+   "state": "waiting",
+   "title": "Your next checkpoint",
+   "detail": "Test print of the flat 1×1 DungeonBlocks tile built by the Rust binary: /Users/svincent/projects/dharmatiles-p1-skel/out/parity/flat/rust/s1/db/test/flat-1x1-db.stl.",
+   "updated": "2026-11-02T14:25:00Z"
+  }
+ ]
+}

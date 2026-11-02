@@ -271,8 +271,8 @@ layered by height-sorted standoffs; blade shape blends continuously from
 curled/lifted on upward faces to a flush end-to-end arch on undersides
 (supportless FDM). Leaves whose blades skewer an exposed branch tube are
 culled. Per-leaf seat/build/cull machinery lives in
-`trees/placement_leaf.py`. Spec: `docs/design/leaf-placement.html`; history:
-`docs/meta/history/2026-07-03-leaf-placement-complete-history.md`. Leaf
+`trees/placement_leaf.py`. Spec: `docs/archive/python-library/leaf-placement.html`; history:
+`docs/archive/history/2026-07-03-leaf-placement-complete-history.md`. Leaf
 shape params on `Tree`: `leaves` (True), `leaf_length_mm` (4.5),
 `leaf_width_mm` (3.0), `leaf_thickness_mm` (0.24), `leaf_fold_angle_deg`,
 `leaf_inner_curve`, `leaf_outer_curve`, `leaf_curl_deg` (placer caps the
@@ -387,6 +387,7 @@ src/scad/        OpenSCAD files and experiments
 stl/
   db/            generated STL output — DungeonBlocks base system (db)
   ol/            generated STL output — OpenLOCK base system (ol)
-docs/            design notes, architecture review transcripts, session memory
-docs/meta/history/  architecture review transcripts
+docs/            GitHub Pages site (HTML): index.html (home + live status.json), looks/, rust/, standards/, reference/
+docs/archive/    frozen history: Python library design pages, Rust study logs, review transcripts
+src/experiments/tiles/  experiment .tile.py specs (outside src/tiles/, so batch mode skips them)
 ```

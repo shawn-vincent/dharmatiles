@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stone Surface Texture — the common relief pass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../../index.html">dharmatiles</a><a href="../../index.html#status">Status</a><a href="../../index.html#looks">Looks</a><a href="../../rust/plan.html">Rust plan</a><a href="../../rust/architecture.html">Architecture</a><a href="../../rust/language.html">Language</a><a href="../../rust/spikes.html">Spikes</a><a href="../../standards/tile-system.html">Tile system</a><a href="../../standards/printing.html">Printing</a><a href="../../archive/index.html" aria-current="page">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Library design</div>
+  <h1>Stone Surface Texture — the common relief pass</h1>
+  <p class="srcnote">Converted from <code>docs/design/stone-surface-texture.md</code> on 2026-11-01; the markdown file was removed (see git history). Relative paths in the text are relative to <code>docs/design/</code>.</p>
+  
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol><li><a href="#reference-truths">Reference truths</a></li><li><a href="#mechanism-by-construction">Mechanism (by construction)</a></li><li><a href="#rollout">Rollout</a></li></ol></nav>
+<article class="doc">
+<p>
+<strong>2026-07-05, after Shawn rejected the plane-wave relief on floor
+slabs</strong> (&quot;it doesn't look good&quot; — MeshLab close-up read as choppy
+water / wrinkled fabric).  Fifth run of the design-first method.</p>
+<h2 id="reference-truths">
+Reference truths</h2>
+<p>
+Photo references (<code>docs/reference/stone-texture/</code>, Wikimedia Commons):</p>
+<ol>
+<li>
+Worked stone faces (sawn sandstone ashlar, ref-01) are NEARLY FLAT
+— colour does most of the work; physical relief is sparse: edge
+chips, faint strata, occasional pits.</li>
+<li>
+Weathered rough stone (limestone, ref-04) = granular field
+punctuated by DISCRETE oval pits of varied size — one-sided
+(material removed), never symmetric waves.</li>
+<li>
+Granite (ref-03) reads as uniform fine grain — at miniature scale
+this is effectively flat with micro-tooth.</li>
+</ol>
+<p>
+Official DungeonBlocks floors, MEASURED (ray-cast height grids over
+the walking surface; <a href="../../reference/walls/commercial-sets-analysis.html"><code>docs/reference/walls/commercial-sets-analysis.html</code></a>
+scratch analysis 2026-07-05):</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Piece</th>
+<th>
+RMS</th>
+<th>
+p5..p95</th>
+<th>
+skew</th>
+<th>
+spectrum</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+TS-019 basic floor</td>
+<td>
+0.32 mm</td>
+<td>
+−0.80..+0.24</td>
+<td>
+<strong>−0.99</strong></td>
+<td>
+peak ≈ 3 mm, long tail</td>
+</tr>
+<tr>
+<td>
+UD-057 prison floor</td>
+<td>
+0.21 mm</td>
+<td>
+−0.31..+0.37</td>
+<td>
++0.19</td>
+<td>
+peak ≈ 14 mm (broad dish)</td>
+</tr>
+<tr>
+<td>
+RR-015 grass ground</td>
+<td>
+0.36 mm</td>
+<td>
+−0.41..+0.69</td>
+<td>
++0.66</td>
+<td>
+mounds bulge UP</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+<strong>The stone read is a CALM PLATEAU CARVED DOWNWARD</strong> (negative skew ≈
+−1): recesses, worn channels, dished patches — with almost NO relief
+power below 2 mm wavelength (0.03–0.09 of peak).  Grass is the mirror
+image (mounds up).  Sum-of-plane-waves noise fails all three ways:
+symmetric (skew 0), everywhere-active (no plateaus), and on flat faces
+its phase coherence reads as directional corduroy / chop.</p>
+<h2 id="mechanism-by-construction">
+Mechanism (by construction)</h2>
+<p>
+<code>stone/noise.py: fbm(p, seed, scale_mm, octaves)</code> — isotropic VALUE
+NOISE (hashed integer lattice, smoothstep-interpolated, octave sum).
+No plane waves anywhere: value noise has no global phase to cohere
+into stripes, and it is evaluated in 3D object space so it works
+identically on flat slabs and curved pebbles.</p>
+<p>
+<code>stone/finish.py: stone_relief(body, rng, ...)</code>:</p>
+<ol>
+<li>
+<strong>carve</strong> (the signature term): <code>−carve_mm · max(0, n − t)^shape</code>
+where <code>n</code> = fbm at <code>scale_mm</code> (default ≈ 7).  Threshold <code>t</code> keeps
+~55 % of the surface an untouched plateau; the carved level sets of
+fbm read as connected worn recesses, not dents.  One-sided by
+construction → skew ≈ −1.</li>
+<li>
+<strong>dish</strong>: low-amplitude two-sided fbm at footprint scale — the
+broad wear that keeps big faces from being dead planes (UD-057's
+14 mm peak).</li>
+<li>
+curvature damping along Taubin-smoothed normals (unchanged from
+the aged pass — protects crack roots and tight features).</li>
+</ol>
+<p>
+Discrete features stay separate mechanisms: chips (hull corner pulls),
+cracks (stone/cracks.py), spalls (weather bites).  Together with the
+carve field they supply the &quot;incident&quot; against the calm.</p>
+<p>
+Acceptance: measured slab stats within the official floor band
+(RMS 0.2–0.4, skew ≤ −0.6, ≤ 0.1 relative power at 2 mm), plus the
+render/MeshLab read.</p>
+<h2 id="rollout">
+Rollout</h2>
+<p>
+Floors and cut-stone/brick blocks first (this round); fieldstone and
+scatter rocks migrate next with side-by-side renders (their approved
+looks must survive re-parameterization — amplitude/scale per family,
+same mechanism).</p>
+
+</article>
+</div>
+</body>
+</html>

@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Design: CloudTree Closed Solid Branches</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../../index.html">dharmatiles</a><a href="../../index.html#status">Status</a><a href="../../index.html#looks">Looks</a><a href="../../rust/plan.html">Rust plan</a><a href="../../rust/architecture.html">Architecture</a><a href="../../rust/language.html">Language</a><a href="../../rust/spikes.html">Spikes</a><a href="../../standards/tile-system.html">Tile system</a><a href="../../standards/printing.html">Printing</a><a href="../../archive/index.html" aria-current="page">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Library design</div>
+  <h1>Design: CloudTree Closed Solid Branches</h1>
+  <p class="srcnote">Converted from <code>docs/design/cloud-tree-closed-solid-branches.md</code> on 2026-11-01; the markdown file was removed (see git history). Relative paths in the text are relative to <code>docs/design/</code>.</p>
+  <aside class="stale" role="note"><span class="stale-tag">Out of date</span> <span><code>CloudTree</code> was renamed <code>Tree</code>. This design is implemented in <code>src/dharmatiles/trees/mesh.py</code>: <code>_build_closed_edge_solid()</code> and <code>_union_edge_solids()</code>, called from <code>build_branch_mesh()</code> (there is no <code>build_cloud_tree_mesh</code>). <span class="stale-src">Checked against the code on 2026-11-01.</span></span></aside>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol><li><a href="#goal">Goal</a></li><li><a href="#problem">Problem</a></li><li><a href="#design-rule">Design Rule</a></li><li><a href="#branch-overlap">Branch Overlap</a></li><li><a href="#closed-edge-solid">Closed Edge Solid</a></li><li><a href="#continuing-branches">Continuing Branches</a></li><li><a href="#boolean-union">Boolean Union</a></li><li><a href="#optional-junction-stabilizer">Optional Junction Stabilizer</a></li><li><a href="#edge-cases">Edge Cases</a></li><li><a href="#validation">Validation</a></li><li><a href="#implementation-notes">Implementation Notes</a></li></ol></nav>
+<article class="doc">
+<h2 id="goal">
+Goal</h2>
+<p>
+Generate tree branch geometry that is valid for slicers by construction:</p>
+<ul>
+<li>
+each branch edge is a closed swept solid,</li>
+<li>
+branch solids overlap volumetrically at joints,</li>
+<li>
+a boolean union removes all internal caps and coincident surfaces,</li>
+<li>
+the final tree mesh is a single watertight wood volume.</li>
+</ul>
+<p>
+This replaces the previous assumption that branch-joint repair can be left to
+the slicer.</p>
+<h2 id="problem">
+Problem</h2>
+<p>
+The current CloudTree mesh path builds all branches into one flat triangle array.
+At a fork, each child starts from a copied version of the parent's end ring.
+Those rings occupy the same world coordinates, but they are separate vertices
+and separate surface sheets.</p>
+<p>
+That creates ambiguous branch joints:</p>
+<ul>
+<li>
+coincident faces or nearly coincident faces can appear around forks,</li>
+<li>
+internal open boundaries can remain at multi-child nodes,</li>
+<li>
+slicers may interpret the joint as non-manifold or produce unstable toolpaths.</li>
+</ul>
+<p>
+The visual mesh may look acceptable, but it is not a robust solid model.</p>
+<h2 id="design-rule">
+Design Rule</h2>
+<p>
+Every skeleton edge <code>parent -&gt; child</code> is meshed as its own closed volume.</p>
+<p>
+The edge volume is allowed, and expected, to overlap the parent volume slightly.
+The overlap must be volumetric. Merely touching at the same ring or plane is not
+enough.</p>
+<p>
+After all edge solids are generated, union them with <code>manifold3d</code>.</p>
+<h2 id="branch-overlap">
+Branch Overlap</h2>
+<p>
+For a non-root edge, move the child branch's geometric start point slightly
+backward along the direction of the parent branch:</p>
+<pre><code class="language-text">overlap_mm = max(0.15, 0.25 * start_radius)
+start      = fork_node - parent_tangent * overlap_mm
+end        = child_node
+</code></pre>
+<p>
+<code>parent_tangent</code> is the tangent of the branch as it arrives at <code>fork_node</code>. In
+the current skeleton data this is <code>in_dirs[parent]</code>, normalized.</p>
+<p>
+The branch radius profile should not be shrunk at the joint. Use the same start
+radius the child would have used at the fork. Shrinking the radius risks visible
+necks and can turn the intended intersection into a tangent contact.</p>
+<p>
+Root edges do not need backward overlap at the terrain root unless there is a
+separate trunk/base solid to union with. They still need a closed start cap.</p>
+<h2 id="closed-edge-solid">
+Closed Edge Solid</h2>
+<p>
+For each edge:</p>
+<ol>
+<li>
+Build the cubic Bezier path from the possibly-overlapped start point to the
+child node.</li>
+<li>
+Sweep circular rings along the path using the existing Bishop frame transport.</li>
+<li>
+Connect adjacent rings with quad strips.</li>
+<li>
+Add a cap at the start ring.</li>
+<li>
+Add a cap at the end ring, unless the edge uses a dome tip.</li>
+<li>
+For leaf tips, use the existing rounded dome as the distal closure.</li>
+</ol>
+<p>
+Internal caps are acceptable before the boolean union. They are deliberately
+inside overlapping solids, so the union removes them from the final exterior.</p>
+<h2 id="continuing-branches">
+Continuing Branches</h2>
+<p>
+At a fork where the base branch continues and a side branch diverges, no special
+join shape is required.</p>
+<p>
+Each outgoing edge is still built as a closed solid. Each non-root outgoing edge
+starts slightly behind the fork node, inside the incoming parent branch. The
+continuing branch therefore overlaps the previous segment, and the diverging
+branch also penetrates the previous segment before curving away.</p>
+<p>
+Because both children have real volume inside the parent, the boolean kernel has
+a proper intersection curve to resolve. There should be no gap or sliver as long
+as the overlap is larger than numerical tolerance and smaller than the local
+branch length.</p>
+<h2 id="boolean-union">
+Boolean Union</h2>
+<p>
+Collect all closed branch solids for one tree and union them:</p>
+<pre><code class="language-text">tree_mesh = boolean_union(edge_solids, engine=&quot;manifold&quot;)
+</code></pre>
+<p>
+The project already depends on <code>manifold3d</code>, and other mesh paths already use
+the <code>trimesh</code> manifold engine. The tree builder should perform this union
+internally so the material grouping phase can still treat each tree as one wood
+mesh.</p>
+<p>
+The later terrain material grouping may continue to skip union for <code>WOOD</code> if
+each individual tree has already been unioned internally.</p>
+<h2 id="optional-junction-stabilizer">
+Optional Junction Stabilizer</h2>
+<p>
+A separate sphere or ellipsoid at each branch node is not part of the primary
+design. It changes the branch silhouette and should not be necessary when edge
+solids overlap correctly.</p>
+<p>
+However, it is a reasonable fallback if boolean reliability is poor at dense
+forks:</p>
+<pre><code class="language-text">node_radius = 1.02 * radii[node]
+</code></pre>
+<p>
+Use node stabilizers only when needed by test results, not as the default join
+model.</p>
+<h2 id="edge-cases">
+Edge Cases</h2>
+<p>
+Clamp overlap for short edges:</p>
+<pre><code class="language-text">overlap_mm &lt;= 0.35 * edge_length
+</code></pre>
+<p>
+If the edge is too short to support a useful overlap, either skip the synthetic
+edge during skeleton simplification or use a smaller overlap. Avoid creating
+zero-length or reversed Bezier handles.</p>
+<p>
+For very small terminal branches, the minimum printable radius still applies.
+The boolean-union design fixes topology; it does not make sub-nozzle features
+printable.</p>
+<h2 id="validation">
+Validation</h2>
+<p>
+A generated tree mesh should satisfy:</p>
+<ul>
+<li>
+<code>mesh.is_watertight</code> is true,</li>
+<li>
+<code>mesh.is_volume</code> is true,</li>
+<li>
+no duplicate coincident faces remain at branch joints,</li>
+<li>
+slicer preview shows one continuous wood body at every fork,</li>
+<li>
+final face count remains acceptable for tile generation.</li>
+</ul>
+<p>
+Tests should include:</p>
+<ul>
+<li>
+a straight trunk with one continuing branch and one diverging branch,</li>
+<li>
+a three-child fork,</li>
+<li>
+a dense generated CloudTree using the normal tile parameters,</li>
+<li>
+a leaf-clump tree where distal dome caps replace flat end caps.</li>
+</ul>
+<h2 id="implementation-notes">
+Implementation Notes</h2>
+<p>
+The current <code>build_cloud_tree_mesh</code> can be refactored by extracting an
+edge-solid builder:</p>
+<pre><code class="language-text">build_closed_edge_solid(parent, child, start_point, end_point, radius_profile)
+</code></pre>
+<p>
+That helper should return a <code>trimesh.Trimesh</code> with caps and consistent normals.
+The existing Bezier evaluation, tangent evaluation, ring generation, and frame
+transport helpers can be reused.</p>
+<p>
+Once edge solids are closed, the final flat vertex accumulator in the tree
+builder becomes an intermediate detail of each edge, not the final tree assembly
+strategy.</p>
+
+</article>
+</div>
+</body>
+</html>

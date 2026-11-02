@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The dharmatiles Labs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../../assets/site.css">
+<style>
+  .lab { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+  @media (max-width: 860px) { .lab { grid-template-columns: minmax(0,1fr); } }
+  .labhead { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
+  .labhead .mono { color: var(--muted); font-size: 12.5px; }
+  .demo canvas { width: 100%; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .ruling { font-size: 13.5px; }
+  .ruling b { font-weight: 600; }
+  .loved { color: var(--accent); } .rejected { color: var(--alert); }
+  .matrix td, .matrix th { text-align: center; padding: 6px 6px; }
+  .matrix td:first-child, .matrix th:first-child { text-align: left; }
+  .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: currentColor; }
+  .dot.half { background: transparent; border: 2px solid currentColor; width: 9px; height: 9px; }
+  .toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+  .toc a { text-decoration: none; font: 500 13px var(--mono); padding: 6px 10px; border: 1px solid var(--rule); border-radius: 999px; color: var(--fg); }
+  .toc a:hover { border-color: var(--fg); }
+</style>
+
+<nav class="top"><div class="wrap"><a class="brand" href="../../index.html">dharmatiles</a><a href="../../index.html#status">Status</a><a href="../../index.html#looks">Looks</a><a href="../../rust/plan.html">Rust plan</a><a href="../../rust/architecture.html">Architecture</a><a href="../../rust/language.html">Language</a><a href="../../rust/spikes.html">Spikes</a><a href="../../standards/tile-system.html">Tile system</a><a href="../../standards/printing.html">Printing</a><a href="../../archive/index.html" aria-current="page">Archive</a></div></nav>
+
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">Page 3 of 11 · seven standalone experiments · 8,570 lines</div>
+  <h1>How the labs make their looks</h1>
+  <p class="lede">The labs produced Shawn's best results. Each is a single Python file that writes one STL, judged by eye. This page takes each one apart: its pipeline, the tricks that make it read at tabletop distance, how it guarantees printability, and which parts are general mechanisms written as lab-specific code.</p>
+  <p class="small muted">The canvas demos are simplified JavaScript re-implementations of each lab's main idea, written for this page. They are not lab output. Real renders appear beside them. Line numbers refer to HEAD, except <code>clifflab/rockpile.py</code>, which refers to commit <code>803ba4f</code>.</p>
+  <div class="toc"><a href="#rocklab">rocklab</a><a href="#clifflab">clifflab</a><a href="#grasslab">grasslab</a><a href="#meadowlab">meadowlab</a><a href="#waterlab">waterlab</a><a href="#shorelab">shorelab</a><a href="#dirtlab">dirtlab</a><a href="#cross">cross-lab map</a></div>
+</header>
+
+<h2>One recipe, three scales</h2>
+<p>Every approved look is built the same way: a large form, then a mid-scale structure that gives it character, then fine grain. Printability is guaranteed at each scale as it is built, and checked once at the end.</p>
+<figure class="diagram">
+<svg viewBox="0 0 1080 250" role="img" aria-label="Each lab: large form, then mid-scale structure, then fine grain, with by-construction guarantees and a final audit.">
+  <defs><marker id="m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+  <g font-family="IBM Plex Sans, sans-serif" font-size="12" fill="currentColor">
+    <text x="0" y="22" font-weight="700" font-size="13">Lab</text>
+    <text x="110" y="22" font-weight="700" font-size="13">Form (cm scale)</text>
+    <text x="400" y="22" font-weight="700" font-size="13">Structure (mm scale)</text>
+    <text x="700" y="22" font-weight="700" font-size="13">Grain (sub-mm)</text>
+    <text x="930" y="22" font-weight="700" font-size="13">Guarantee</text>
+    <g font-family="IBM Plex Mono, monospace" font-size="11.5">
+      <text x="0" y="52">rocklab</text><text x="110" y="52">profile hull, never widens upward</text><text x="400" y="52">blue-noise facet planes + chips</text><text x="700" y="52">fBm on normals, 0.45 mm</text><text x="930" y="52">no face n_z &lt; −0.5</text>
+      <text x="0" y="80">clifflab</text><text x="110" y="80">target heightfield T, tiers</text><text x="400" y="80">gravity-stacked blocks + cracks</text><text x="700" y="80">isotropic fBm, 1.4 mm</text><text x="930" y="80">seat cones at 55°, 47° relief clamp</text>
+      <text x="0" y="108">grasslab</text><text x="110" y="108">rises-only hills, 34° cap</text><text x="400" y="108">flow field, ribbons, lenses</text><text x="700" y="108">stroke blades (0.45 × 0.2)</text><text x="930" y="108">≤1 line growth/layer</text>
+      <text x="0" y="136">waterlab</text><text x="110" y="136">flood to 2.6 mm + tide</text><text x="400" y="136">emitters by object type</text><text x="700" y="136">short riders, sharpened</text><text x="930" y="136">single-valued, ≥1 mm crest</text>
+      <text x="0" y="164">dirtlab</text><text x="110" y="164">rises-only swell ≤1.6 mm</text><text x="400" y="164">clods in patches, pebbles</text><text x="700" y="164">grit ±0.05 mm</text><text x="930" y="164">≥0.2 mm in 1.5 mm window</text>
+      <text x="0" y="192">meadow / shore</text><text x="110" y="192">inherited</text><text x="400" y="192">obstacle interplay</text><text x="700" y="192">inherited</text><text x="930" y="192">inherited + seat</text>
+    </g>
+    <line x1="0" y1="212" x2="1080" y2="212" stroke="currentColor" stroke-opacity=".3"/>
+    <text x="0" y="236">All: build parts (booleans inside each part) → union → DungeonBlocks base → keep largest body → float32 reload check → overhang audit → painted sheet</text>
+  </g>
+</svg>
+</figure>
+
+<h3>Lineage: who imports whom</h3>
+<figure class="diagram">
+<svg viewBox="0 0 1080 300" role="img" aria-label="Import graph between labs and the library; rocklab and dirtlab are foundations, meadowlab and shorelab are compositions, rockpile mutates rocklab globals.">
+  <defs>
+    <marker id="m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+    <marker id="m3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--alert)"/></marker>
+  </defs>
+  <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="currentColor">
+    <g stroke="currentColor" fill="var(--card)" stroke-width="1.3">
+      <rect x="20" y="230" width="300" height="46" rx="4" fill="var(--panel)"/>
+      <rect x="380" y="140" width="120" height="36" rx="4"/>
+      <rect x="560" y="140" width="120" height="36" rx="4"/>
+      <rect x="200" y="140" width="120" height="36" rx="4"/>
+      <rect x="740" y="140" width="120" height="36" rx="4"/>
+      <rect x="290" y="40" width="130" height="36" rx="4"/>
+      <rect x="560" y="40" width="130" height="36" rx="4"/>
+      <rect x="900" y="40" width="160" height="36" rx="4"/>
+    </g>
+    <text x="170" y="250" text-anchor="middle">src/dharmatiles</text>
+    <text x="170" y="267" text-anchor="middle" font-size="11" opacity=".75">make_heightmap_solid · DB base · fbm · render</text>
+    <text x="440" y="163" text-anchor="middle">rocklab</text>
+    <text x="620" y="163" text-anchor="middle">dirtlab</text>
+    <text x="260" y="163" text-anchor="middle">grasslab</text>
+    <text x="800" y="163" text-anchor="middle">waterlab</text>
+    <text x="355" y="63" text-anchor="middle">meadowlab</text>
+    <text x="625" y="63" text-anchor="middle">shorelab</text>
+    <text x="980" y="63" text-anchor="middle">clifflab/rockpile</text>
+    <g stroke="currentColor" fill="none" stroke-width="1.2">
+      <line x1="440" y1="176" x2="250" y2="228" marker-end="url(#m2)"/>
+      <line x1="260" y1="176" x2="200" y2="228" marker-end="url(#m2)"/>
+      <line x1="800" y1="176" x2="300" y2="232" marker-end="url(#m2)"/>
+      <line x1="500" y1="152" x2="558" y2="152" marker-end="url(#m2)"/>
+      <line x1="558" y1="164" x2="500" y2="164" marker-end="url(#m2)"/>
+      <line x1="320" y1="158" x2="378" y2="158" stroke-opacity="0"/>
+      <path d="M300 140 C 330 110, 520 110, 600 138" marker-end="url(#m2)"/>
+      <line x1="740" y1="152" x2="682" y2="152" marker-end="url(#m2)"/>
+      <line x1="770" y1="140" x2="480" y2="140" stroke-opacity="0"/>
+      <path d="M760 140 C 700 115, 520 118, 470 138" marker-end="url(#m2)"/>
+      <line x1="330" y1="76" x2="270" y2="138" marker-end="url(#m2)"/>
+      <line x1="380" y1="76" x2="430" y2="138" marker-end="url(#m2)"/>
+      <line x1="560" y1="64" x2="422" y2="60" marker-end="url(#m2)"/>
+      <line x1="600" y1="76" x2="300" y2="138" marker-end="url(#m2)"/>
+      <line x1="660" y1="76" x2="780" y2="138" marker-end="url(#m2)"/>
+      <line x1="940" y1="76" x2="650" y2="138" marker-end="url(#m2)"/>
+      <line x1="960" y1="76" x2="320" y2="150" marker-end="url(#m2)"/>
+    </g>
+    <path d="M910 76 C 800 110, 560 100, 470 140" fill="none" stroke="var(--alert)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#m3)"/>
+    <text x="700" y="100" font-size="11.5" fill="var(--alert)">sets _rl.HEIGHT_MIN_MM at runtime</text>
+    <path d="M640 40 C 700 10, 780 10, 800 138" fill="none" stroke="var(--alert)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#m3)"/>
+    <text x="700" y="16" font-size="11.5" fill="var(--alert)">monkeypatches SWELL_SHORT_SHARPEN</text>
+  </g>
+</svg>
+<figcaption>rocklab and dirtlab are the foundations, and they import each other lazily. grasslab takes <code>dirt_relief</code>, and clifflab takes grasslab's <code>stl_safe</code> and <code>audit_overhang</code>. meadowlab and shorelab are almost pure composition. The red dashed edges are where one lab changes another's module globals instead of passing parameters. The language must make that unnecessary.</figcaption>
+</figure>
+
+<!-- ================= ROCKLAB ================= -->
+<h2 id="rocklab">rocklab: faceted rocks</h2>
+<div class="labhead"><span class="mono">rocklab/rocklab.py · 469 lines · imported by 5 labs (dirtlab, meadowlab, waterlab, shorelab, clifflab)</span></div>
+<div class="lab">
+  <div>
+    <p>A rock here is a convex body cut by planes. The facets come from intersecting half-spaces, not from displacement. That is why the edges stay crisp and the facets come in mixed sizes.</p>
+    <div class="demo" id="d-rock">
+      <canvas width="480" height="360" aria-label="Rock built as a heightfield: profile dome, then tangent facet planes, chips, grain, and seating in dirt"></canvas>
+      <div class="controls"><button data-play>Play</button><span class="small muted">Click a step to jump to it. This is a 2.5D heightfield stand-in for the 3D hull.</span></div>
+      <ol class="steps"></ol>
+    </div>
+  </div>
+  <div>
+    <figure class="shot"><img src="img/rock-reference.jpg" alt="Grid of painted faceted miniature rocks used as the approved visual target"><figcaption>The approved visual target (<code>rocklab/reference/approved-reference.png</code>), not lab output. <code>rocklab/out/</code> holds only STLs.</figcaption></figure>
+    <h3>Pipeline</h3>
+    <ol class="small">
+      <li><code>scatter</code> (:360): builds N = U(9,12)·squares/4 items, then places the largest first by dart throwing (400 tries each, 1.5 mm plus the radii apart).</li>
+      <li><code>make_item</code> (:339): diameter D = 6 + 9·U<sup>1.4</sup> mm. One in four is a cluster of 2–4 fused stones.</li>
+      <li><code>make_body</code> (:146): the hull of a profile that never widens going up (dome, slab, block or wedge) on an elliptical footprint (blocks use a superellipse, p = 3), with ±8% lumps that depend only on angle.</li>
+      <li><code>cut_facets</code> (:187): blue-noise seeds with radii 0.9–2.5 mm × √(D/15). Each seed contributes a tangent plane tilted up to 14°. No plane may have n<sub>z</sub> &lt; −0.5. Each rock gets 30–165 facets.</li>
+      <li><code>chip_corners_edges</code> (:231): extra planes at corners and at edges sharper than 18°. Each chip removes at most 3% of the volume.</li>
+      <li><code>texture</code> (:283): refine to 0.25 mm, then fBm grain at 0.45 mm scale and ±0.12 mm along the normals, halved near edges and zero at the base.</li>
+    </ol>
+    <p class="ruling"><b class="loved">Loved:</b> crisp plane edges and mixed facet sizes. <b class="rejected">Rejected:</b> fracture scallops ("horrible"), shaving vertices into dice, flake scars, uncapped chips, harder facet tilt.</p>
+    <div class="chips"><span class="chip k-solid">carve (box ∩ half-spaces + guards)</span><span class="chip k-place">scatter (largest first)</span><span class="chip k-finish">grain (refine + masked fBm)</span><span class="chip k-compose">fixed sink 0.55 mm (no seat)</span></div>
+  </div>
+</div>
+
+<!-- ================= CLIFFLAB ================= -->
+<h2 id="clifflab">clifflab: a heroic cliff from stacked stones</h2>
+<div class="labhead"><span class="mono">clifflab/rockpile.py @803ba4f · `build` :1716 · 3,977 lines in the lab</span></div>
+<div class="lab">
+  <div>
+    <p>The live generator stacks blocks under gravity into a target height field. Each block is then dressed, seated, cracked and grained. The older <code>clifflab.py</code> carved a depth map instead; Shawn called its rev 3 "the best cliffs I've ever seen", but the stacked version is the one under active development.</p>
+    <div class="demo" id="d-cliff">
+      <canvas width="560" height="340" aria-label="Front elevation of a cliff: target form, gravity stacking, columns, hidden core, dressing, crack network, grain and scree"></canvas>
+      <div class="controls"><button data-play>Play</button><span class="small muted">Front elevation, 70 mm run. The stacking step animates.</span></div>
+      <ol class="steps"></ol>
+    </div>
+  </div>
+  <div>
+    <figure class="shot"><img src="../../img/cliff-run-s1.jpg" alt="Painted render of a 2x2 cliff run of stacked columnar stone blocks with scree at the foot"><figcaption><code>clifflab/out/sweep-2x2-s1-4.png</code>, seed 1. This render predates rounds 8–11 of the crack relief.</figcaption></figure>
+    <h3>Key tricks</h3>
+    <ul class="small">
+      <li><strong>Gravity stack</strong> (<code>stack</code> :554): take the lowest unfilled cell, grow a rectangular footprint that snaps to the edges of the pocket, rest it on a least-squares bed plane, and redraw heights so neighbouring tops never line up. That is how courses appear.</li>
+      <li><strong>The seat</strong> (<code>_seat</code> :1488): a stone resting on another stone gets an underside built from the actual bed, sloped at the overhang limit (55° plus a 3° margin). Flat ceilings are impossible by construction (flat metric 0.0). Some overhang remains: 1.1–12.6 mm² per tile in round 11, which is why the audit stays a gate.</li>
+      <li><strong>Hidden core</strong> (<code>_core</code> :1609): the support eroded by 2 mm. Gaps between stones are meant to show a dark recess. It is not yet a guarantee: round 11 still had see-through ray holes (seed 3: 5, seed 4: 1, 2×2 massif: 262).</li>
+      <li><strong>The cut guard</strong> (<code>_Cutter</code> :989) accepts a dressing plane only if it stays within loss limits, undercuts nothing resting on it (a boolean volume test against the support solid, at most 1 mm³), and lets thin-fin area grow by no more than 0.4 mm², measured on 5 plan slices.</li>
+      <li><strong>Crack network</strong> (<code>_crack_net</code> :1068): coplanar faces are merged so cracks cross joints. Each crack grows by random walk until both ends hit something, and is cut as a V-groove 1.2–1.8 mm deep.</li>
+      <li><strong>Fit to tile</strong> (<code>_fit_tile</code> :1415): a stone crossing the tile edge is scaled back to meet it, never clipped.</li>
+      <li><strong>Dirt on top</strong> (<code>_dirt_layer</code> :1897): ray-cast the rock tops, then fill lows and slits by morphological closing.</li>
+    </ul>
+    <p class="ruling"><b class="loved">Rulings:</b> the straight top is intended, massive blocks are wanted, the limit is 55° ("45 is too conservative"), never clip at the tile edge, seams must read as grooves, grain must be isotropic. <b class="rejected">Hated:</b> Voronoi flake chips (reverted). Still open: the crack relief scores about 5/10 against reference N.</p>
+    <div class="chips"><span class="chip k-compose">partition (gravity)</span><span class="chip k-compose">seat (bed at 55°)</span><span class="chip k-solid">carve + guards</span><span class="chip k-field">trace (crack walk)</span><span class="chip k-finish">relief carve (face depth raster → lift → subtract)</span><span class="chip k-finish">grain (refine + displace)</span><span class="chip k-compose">fill (closing)</span><span class="chip k-guard">fit to tile</span></div>
+  </div>
+</div>
+
+<!-- ================= GRASSLAB ================= -->
+<h2 id="grasslab">grasslab: combed ribbons of stroke blades</h2>
+<div class="labhead"><span class="mono">grasslab/grasslab.py · v3 stroke blades · 1,297 lines</span></div>
+<div class="lab">
+  <div>
+    <p>Grass reads at tabletop distance because of how it is organised at mid scale: ribbons that flow, meander and part around obstacles. The blades themselves are built in printer units, as stacks of 0.2 mm layers, each a whole number of 0.45 mm lines wide.</p>
+    <div class="demo" id="d-grass">
+      <canvas width="520" height="520" aria-label="Plan view of grass: hills, a direction field, in-phase meander, clearings that part the flow, strands traced along the flow, and blades"></canvas>
+      <div class="controls"><button data-play>Play</button><span class="small muted">Plan view, 70 × 70 mm.</span></div>
+      <ol class="steps"></ol>
+    </div>
+  </div>
+  <div>
+    <figure class="shot"><img src="img/grass-close.jpg" alt="Close render of shingled pointed grass blades with raked tips above a bare bank"><figcaption>grasslab seed 1, close view. Rendered from the existing STL for this analysis, with over-limit faces painted red per policy.</figcaption></figure>
+    <h3>The signature trick: in-phase meander</h3>
+    <p class="small"><code>make_direction</code> (:311) computes an along-flow coordinate <em>s</em> by least squares, solving a Poisson equation with an FFT (<code>_along_flow_coord</code> :291). It then adds A·sin(2π<em>s</em>/15 mm + φ) to the angle. Neighbouring streamlines therefore wave in phase, like combed hair. Because the field is a scalar angle, it cannot contain vortices.</p>
+    <h3>Blade cross-section in printer units</h3>
+    <figure class="diagram" style="margin:8px 0">
+      <svg viewBox="0 0 520 190" role="img" aria-label="A blade cross-section: six 0.2 mm layers of 2,3,4,4,3,1 lines, and a side view where each lower layer ends 0.2 mm short so the tip overhangs air.">
+        <g font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">
+          <g id="xsec"></g>
+          <text x="10" y="180">n_k = round(n_max·sin(π(k+½)/N)^0.6)</text>
+          <g id="side"></g>
+          <text x="300" y="180">side: lower layers 0.2 mm shorter</text>
+        </g>
+      </svg>
+    </figure>
+    <p class="ruling"><b class="loved">Loved:</b> "make that the … only way to generate grass blades"; combed ribbons; blades standing on dirt with undercut tips. <b class="rejected">Rejected:</b> turf mass, skirts and pads; a voxel FDM backstop; height-field carving; Catmull-Rom interpolation between layers; per-frond sickle bends; under 1,500 faces per blade.</p>
+    <div class="chips"><span class="chip k-field">Field (angle) + meander</span><span class="chip k-field">trace (RK2)</span><span class="chip k-place">scatter (Poisson)</span><span class="chip k-solid">layer-stack loft (stroke blades)</span><span class="chip k-solid">drape onto hills</span><span class="chip k-guard">printer units</span></div>
+  </div>
+</div>
+
+<!-- ================= MEADOWLAB ================= -->
+<h2 id="meadowlab">meadowlab: rocks, grass and bare earth together</h2>
+<div class="labhead"><span class="mono">meadowlab/meadowlab.py · 266 lines, about 150 of its own</span></div>
+<div class="lab">
+  <div>
+    <p>meadowlab writes almost no geometry of its own. It wires grasslab and rocklab together through what is in effect an <strong>obstacle interface</strong>: footprint, wrap, blocker, seat. That interface is the most useful thing it found.</p>
+    <figure class="diagram">
+      <svg viewBox="0 0 660 330" role="img" aria-label="Seat cross-section: the rock rests at the 0.35 quantile of the ground under it minus 0.3 mm, a plinth extends to below the lowest ground, and it is lifted until its top clears the surrounding grass by at least max(1.5 mm, 0.45 h).">
+        <g font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="currentColor">
+          <path d="M0 250 C 80 230, 160 205, 240 215 S 400 255, 660 240 L660 330 L0 330 Z" fill="var(--earth)" fill-opacity=".35" stroke="var(--earth)"/>
+          <path d="M0 238 C 80 218, 160 192, 240 202 S 400 242, 660 228" fill="none" stroke="var(--accent)" stroke-width="7" stroke-opacity=".55"/>
+          <path d="M190 228 L 200 150 L 250 112 L 310 118 L 345 160 L 352 228 Z" fill="var(--stone)" fill-opacity=".55" stroke="currentColor"/>
+          <path d="M190 228 L 192 262 L 350 262 L 352 228" fill="var(--stone)" fill-opacity=".3" stroke="currentColor" stroke-dasharray="4 3"/>
+          <line x1="150" y1="228" x2="390" y2="228" stroke="var(--water)" stroke-dasharray="6 4"/>
+          <text x="392" y="226" fill="var(--water)">bed = q0.35(ground) − 0.3 mm</text>
+          <line x1="150" y1="262" x2="390" y2="262" stroke="currentColor" stroke-dasharray="2 3"/>
+          <text x="392" y="266">plinth to lowest ground − 0.3</text>
+          <line x1="370" y1="112" x2="370" y2="200" stroke="var(--alert)"/>
+          <text x="376" y="150" fill="var(--alert)">top ≥ q0.75(grass ring)</text>
+          <text x="376" y="165" fill="var(--alert)">+ max(1.5, 0.45h); lift ≤ 1.5</text>
+          <text x="10" y="200" fill="var(--accent)">grass lapping the foot</text>
+          <text x="210" y="300">rock seated as part of the ground (REQ-M-2)</text>
+        </g>
+      </svg>
+    </figure>
+    <ol class="small">
+      <li>Two RNG streams: grass uses <code>seed</code>, rocks use <code>seed+1000003</code>.</li>
+      <li>Ground, flow and swaths come from grasslab unchanged. Rocks are placed first.</li>
+      <li><code>footprint_masks</code> (:62): slice each rock 0.45 mm above its base.</li>
+      <li><code>apron_shapes</code> (:86): 35% of rocks get a one-sided bare lens, a downstream wake 60% of the time. <code>fill_bare_earth</code> (:115) adds free lenses until 20% of the ground is bare.</li>
+      <li>The flow wraps around the lenses plus an eye shape (<code>|a|/R + (b/R)²</code>, axis along the base flow) of radius R + 0.6 mm around each rock, where R is the clearance radius rather than the real footprint. Blades are tucked at the rocks and lowered beside them.</li>
+      <li><code>seat_rocks</code> (:138): the seat shown in the cross-section.</li>
+    </ol>
+  </div>
+  <div>
+    <figure class="shot"><img src="../../img/meadow-iso.jpg" alt="Grey render of a meadow tile with flowing grass parting around several faceted rocks and bare patches"><figcaption>meadowlab seed 1, rendered from the existing STL for this analysis.</figcaption></figure>
+    <p class="ruling"><b class="loved">Loved:</b> rocks as hard obstacles that grass presses against; one-sided aprons; about 20% bare earth in patches of natural size. <b class="rejected">Rejected:</b> "having each rock in a big bare area is kind of weird"; bare patches scaled to the rock.</p>
+    <div class="callout small"><strong>General mechanism in disguise:</strong> each rock answers four questions for the layers after it. Where is my footprint? Which way should flow bend around me? Where must nothing root? How do I sit in the ground? Waterlab adds a fifth: what waves do I emit? In the language these should be <em>tags plus lenses</em>, not a mask threaded through by hand.</div>
+    <div class="chips"><span class="chip k-compose">object roles</span><span class="chip k-compose">seat</span><span class="chip k-place">coverage-target scatter</span><span class="chip k-field">Field.wrap</span></div>
+  </div>
+</div>
+
+<!-- ================= WATERLAB ================= -->
+<h2 id="waterlab">waterlab: swell-chaos water</h2>
+<div class="labhead"><span class="mono">waterlab/waterlab.py · <code>gen_swell_chaos</code> :877 · 0.1 mm heightfield</span></div>
+<div class="lab">
+  <div>
+    <p>Waves are emitted by the objects in the scene. Each object type has its own wavelength band. Near a source its waves are orderly; further out they decay into interference chaos. Try the modes: the rejected options are there for contrast.</p>
+    <div class="demo" id="d-water">
+      <canvas width="440" height="440" aria-label="Water heightfield with a shore on the left and a rock in the middle; emitters produce wave trains that blend from dominant to chaos"></canvas>
+      <div class="controls" id="water-modes">
+        <button data-mode="single">Single wavelength (rejected)</button>
+        <button data-mode="land">Land emitter only</button>
+        <button data-mode="rock">Rock emitter only</button>
+        <button data-mode="dom">Dominant (w⁸)</button>
+        <button data-mode="chaos">Chaos (Σw·t/√Σw²)</button>
+        <button data-mode="sc" aria-pressed="true">Swell-chaos</button>
+      </div>
+      <div class="controls"><label for="wob">Coherence decay</label><input id="wob" type="range" min="0" max="2.5" step="0.1" value="1"><span id="wobv" class="mono small">1.0</span></div>
+      <p class="small muted">Shading exaggerates relief about 2×. Simplification: distance to land is Euclidean here. The lab uses geodesic distance through the water (Dijkstra, <code>_geodesic</code> :660), so waves wrap around obstacles.</p>
+    </div>
+  </div>
+  <div>
+    <figure class="shot"><img src="../../img/water-swell-chaos.jpg" alt="Painted render of swell-chaos water: broad swells off the shore, rings and a wake around a rock"><figcaption>Swell-chaos, round 7, ranked first (<code>waterlab/out/2026-10-28-124356-contact-sheet-s1.png</code>). "Holy crap, that's amazing."</figcaption></figure>
+    <h3>Pipeline</h3>
+    <ol class="small">
+      <li>Scene (:279): land banks rise with a smoothstep from the bed (2.2 mm below water level) to 6 mm. Obstacles are rocklab rocks, sunk 1.4 mm; their footprints come from <code>Manifold.slice</code> at water level.</li>
+      <li><code>_derive</code> (:335): distances with nearest-point indices, a blur restricted to the water, a 4 mm rim fade, and a tide whose edges are forced to the library's shared sine (λ 17.5 mm, amplitude 0.6) so adjacent tiles butt.</li>
+      <li><code>_emit_sources</code> (:719): land and rock emitters use geodesic distance. Weak radial emitters sit at open corners; far emitters 220 mm out are added if fewer than two corners are open.</li>
+      <li><code>_swell_train</code> (:849): log-spaced components with amplitude ∝ λ<sup>1.4</sup>, phase wobble that grows with distance, and Stokes-like sharpening on the short components.</li>
+      <li>Combine: dominant blend (w<sup>8</sup>) near sources, chaos sum farther out, crossing over at influence 0.12–0.45. Add the rock wake and reed rings, scale to 0.8 mm, and floor the troughs with a softplus at −1.1 mm.</li>
+    </ol>
+    <p class="ruling"><b class="rejected">Rejected:</b> all-directions chop ("spiky shit"), targets, rows, cells, porridge, single-wavelength emitters, strokes that read as worms.</p>
+    <div class="chips"><span class="chip k-field">Field.distance (geodesic)</span><span class="chip k-field">Field.blend (wᵖ / Σ)</span><span class="chip k-compose">fill (per column, whole tile)</span><span class="chip k-field">swell solver (native)</span><span class="chip k-compose">kinds by tag → wave bands</span><span class="chip k-guard">edge contract</span></div>
+  </div>
+</div>
+
+<!-- ================= SHORELAB ================= -->
+<h2 id="shorelab">shorelab: meadow meets water</h2>
+<div class="labhead"><span class="mono">shorelab/shorelab.py · 462 lines · imports four labs</span></div>
+<div class="lab">
+  <div>
+    <p>shorelab is the best test of a composition language. Written as ordered operations, it is about fifteen lines: bank, flood, mud band, grass steered toward the water, rocks split into wet and dry, reeds in a height band at the waterline, then swell-chaos water with reeds and wet rocks as emitters.</p>
+    <figure class="diagram">
+      <svg viewBox="0 0 520 300" role="img" aria-label="shorelab as a stack: bank heightfield, flood to water level, mud band along the shoreline, grass steered toward water, wet and dry rocks, reeds, water relief from emitters.">
+        <defs><marker id="m4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+        <g font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor">
+          <g id="shore-stack"></g>
+        </g>
+      </svg>
+    </figure>
+    <p class="small">Lessons: the water must be confined to the water mask dilated by 0.6 mm, because otherwise the tide floods low spots on land into puddles. That is a margin rule on a per-column wet mask (<code>top &lt; level</code>, dilated 0.6 mm, shorelab.py:245), not connectivity: an isolated hollow below the water level still floods. The mud strip is a band along the shoreline whose width is noise from 0 to 4 mm.</p>
+  </div>
+  <div>
+    <figure class="shot"><img src="img/shore.jpg" alt="Painted render of a shore tile: grass and reeds on the left, water with rock rings on the right"><figcaption>shorelab seed 1 (<code>shorelab/out/2026-10-28-234544-contact-sheet.png</code>), with grass from before v3.</figcaption></figure>
+    <div class="chips"><span class="chip k-region">band(line, width field)</span><span class="chip k-field">Field.steer toward boundary</span><span class="chip k-compose">role: wet / dry</span><span class="chip k-solid">loft (reeds)</span></div>
+  </div>
+</div>
+
+<!-- ================= DIRTLAB ================= -->
+<h2 id="dirtlab">dirtlab: plain bare earth</h2>
+<div class="labhead"><span class="mono">dirtlab/dirtlab.py · 791 lines · <code>dirt_relief</code> :507 is used by 5 labs</span></div>
+<div class="lab">
+  <div>
+    <p>One 0.15 mm heightfield built up in order of scale. The layers are combined with a smooth maximum, not summed. Summing read as porridge; smooth max keeps every clod and pebble a distinct object sitting on the ground.</p>
+    <div class="demo" id="d-dirt">
+      <canvas width="440" height="440" aria-label="Dirt heightfield built in layers: undulation, soil roughness, clods in patches, grit, pebbles and stones"></canvas>
+      <div class="controls"><button data-play>Play</button><span class="small muted">A 35 × 35 mm patch.</span></div>
+      <ol class="steps"></ol>
+    </div>
+  </div>
+  <div>
+    <figure class="shot"><img src="../../img/dirt-close.jpg" alt="Painted close-up of dirt with clods and faceted pebbles"><figcaption>dirtlab round 2, painted close-up at 20 mm.</figcaption></figure>
+    <ul class="small">
+      <li><strong>Smooth max</strong> (<code>smax</code> :137) is a polynomial soft maximum that leaves a fillet at the foot of every clod.</li>
+      <li><strong>Clods</strong> (:205): lumpy crumbs with radius harmonics k = 2, 3, 5 and profile (1−ρ<sup>2.6</sup>)<sup>0.8</sup>. They are placed largest first in patches whose density never drops below 0.3.</li>
+      <li><strong>Pebbles</strong> (:300, :351): the minimum of tilted tangent planes over a flattened cap, with a 58° polygonal skirt so outlines aren't round. Half-sunk, biased into low ground.</li>
+      <li><strong>Stones</strong> (:395): 4–7 rocklab rocks squashed to 0.65 in z and seated below the lowest ground under them.</li>
+      <li><strong>Printable texture rule:</strong> at least 0.2 mm of relief in any 1.5 mm window over 97% of the tile. The failing area went from 32.8% to 1.9%.</li>
+    </ul>
+    <div class="chips"><span class="chip k-field">Field.noise</span><span class="chip k-field">Field.smax</span><span class="chip k-place">scatter (density, largest first)</span><span class="chip k-solid">facet cap (half-spaces)</span><span class="chip k-guard">printable-texture rule</span></div>
+  </div>
+</div>
+
+<!-- ================= CROSS ================= -->
+<h2 id="cross">Cross-lab map of recurring mechanisms</h2>
+<p>A filled dot means the lab implements the mechanism itself. A ring means it borrows another lab's implementation. Almost every row has several filled dots. That is the duplication the rewrite collapses.</p>
+<div class="tbl"><table class="matrix" id="matrix"></table></div>
+<p class="small muted">The copies are named. <code>_smooth01</code> appears in 7 labs. <code>audit_overhang</code> exists in 3 lab copies: rocklab and grasslab at 45°, rockpile at 55° (<code>n_z &lt; −sin 58°</code>). Note that <code>iterate.py:122</code> paints red at 55° but prints the header number with grasslab's 45° audit. <code>stl_safe</code> exists in 3 versions (inline in rocklab, <code>grasslab.stl_safe</code>, <code>stone/solidify</code>); grasslab's <code>_separate_pinches</code> is a byte-identical copy of the library's. Mesh converters <code>to_trimesh</code>/<code>to_manifold</code>/<code>to_mesh</code> appear in 3 labs. Paint simulation exists twice (<code>iterate.paint</code>, <code>contact_sheet.vertex_paint</code>). There are three crack generators (<code>_crack_net</code>, <code>stone/cracks.engrave_cracks</code>, the fieldstone tessellation). The two <code>round_edges</code> functions are incompatible (plane-based and vertex-based).</p>
+</div>
+
+<script>
+/* ---------- shared helpers ---------- */
+const NS = "http://www.w3.org/2000/svg";
+function rng(s){ return function(){ s|=0; s=(s+0x6D2B79F5)|0; let t=Math.imul(s^(s>>>15),1|s); t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; }; }
+function h2(i,j,s){ let h=Math.imul(i,374761393)+Math.imul(j,668265263)+Math.imul(s,1442695041)|0; h=Math.imul(h^(h>>>13),1274126177); h^=h>>>16; return (h>>>0)/4294967296; }
+function vn(x,y,s){ const i=Math.floor(x), j=Math.floor(y), fx=x-i, fy=y-j, u=fx*fx*(3-2*fx), v=fy*fy*(3-2*fy);
+  const a=h2(i,j,s), b=h2(i+1,j,s), c=h2(i,j+1,s), d=h2(i+1,j+1,s); return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v; }
+function fbm(x,y,s,o=4){ let a=0,amp=1,f=1,n=0; for(let k=0;k<o;k++){ a+=amp*vn(x*f,y*f,s+k*17); n+=amp; amp*=.5; f*=2.03; } return a/n; }
+const smooth=(e0,e1,x)=>{ const t=Math.min(1,Math.max(0,(x-e0)/(e1-e0))); return t*t*(3-2*t); };
+function smax(a,b,k){ const h=Math.max(k-Math.abs(a-b),0)/k; return Math.max(a,b)+h*h*k*.25; }
+/* shade a heightfield H (n x n, mm) with cell size c (mm) into canvas using colour fn */
+function shade(cv, H, n, c, colAt){
+  const off=document.createElement("canvas"); off.width=n; off.height=n; const ox=off.getContext("2d"); const img=ox.createImageData(n,n);
+  const L=[-.55,-.6,.58]; const ln=Math.hypot(...L); L[0]/=ln; L[1]/=ln; L[2]/=ln;
+  for(let j=0;j<n;j++) for(let i=0;i<n;i++){
+    const k=j*n+i; const il=i>0?k-1:k, ir=i<n-1?k+1:k, ju=j>0?k-n:k, jd=j<n-1?k+n:k;
+    const dx=(H[ir]-H[il])/(c*(ir-il||1)), dy=(H[jd]-H[ju])/(c*((jd-ju)/n||1));
+    let nx=-dx, ny=-dy, nz=1; const m=Math.hypot(nx,ny,nz); nx/=m; ny/=m; nz/=m;
+    const lam=Math.max(0,nx*L[0]+ny*L[1]+nz*L[2]); const col=colAt(i,j,k); const f=.28+.85*lam;
+    img.data[k*4]=Math.min(255,col[0]*f); img.data[k*4+1]=Math.min(255,col[1]*f); img.data[k*4+2]=Math.min(255,col[2]*f); img.data[k*4+3]=255;
+  }
+  ox.putImageData(img,0,0); const ctx=cv.getContext("2d"); ctx.imageSmoothingEnabled=true; ctx.drawImage(off,0,0,cv.width,cv.height);
+}
+/* generic stepper */
+function stepper(root, steps, draw){
+  const ol=root.querySelector("ol.steps"); const btn=root.querySelector("[data-play]"); let cur=steps.length-1, timer=null;
+  steps.forEach((s,i)=>{ const li=document.createElement("li"); li.textContent=s; li.tabIndex=0; li.addEventListener("click",()=>{stop(); go(i);}); li.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); stop(); go(i);} }); ol.appendChild(li); });
+  function go(i){ cur=i; [...ol.children].forEach((li,k)=>li.classList.toggle("on",k===i)); draw(i); }
+  function stop(){ if(timer){ clearInterval(timer); timer=null; btn.textContent="Play"; } }
+  btn.addEventListener("click",()=>{ if(timer){ stop(); return; } btn.textContent="Pause"; go(0); timer=setInterval(()=>{ if(cur>=steps.length-1){ stop(); return; } go(cur+1); },2200); });
+  go(cur);
+}
+
+/* ---------- ROCK demo ---------- */
+(() => {
+  const root=document.getElementById("d-rock"), cv=root.querySelector("canvas");
+  const n=240, mm=40/n; // 40 mm field
+  const R=rng(11); const cx=20, cy=20, rx=12.5, ry=9.5, ht=9;
+  // dome profile (never widens upward)
+  const dome=new Float32Array(n*n), grad=[];
+  const domeAt=(x,y)=>{ const ux=(x-cx)/rx, uy=(y-cy)/ry; const ang=Math.atan2(uy,ux); const lump=1+.06*Math.cos(2*ang+1)+.05*Math.cos(3*ang+2)+.03*Math.cos(5*ang);
+    const r=Math.pow(Math.pow(Math.abs(ux),2.6)+Math.pow(Math.abs(uy),2.6),1/2.6)/lump; return r>=1?-1:ht*Math.pow(1-Math.pow(r,2.2),.55); };
+  for(let j=0;j<n;j++) for(let i=0;i<n;i++) dome[j*n+i]=domeAt(i*mm,j*mm);
+  // facet seeds: blue noise with mixed radii on dome
+  const seeds=[]; for(let t=0;t<3000 && seeds.length<46;t++){ const x=cx+(R()*2-1)*rx, y=cy+(R()*2-1)*ry; const z=domeAt(x,y); if(z<.3) continue;
+    const r=.9+R()*1.6; if(seeds.every(s=>Math.hypot(s.x-x,s.y-y)>(s.r+r)*1.25)) seeds.push({x,y,r,z}); }
+  seeds.sort((a,b)=>b.r-a.r);
+  const planes=seeds.map(s=>{ const e=.05; let gx=(domeAt(s.x+e,s.y)-domeAt(s.x-e,s.y))/(2*e), gy=(domeAt(s.x,s.y+e)-domeAt(s.x,s.y-e))/(2*e);
+    const tilt=.25; gx+= (R()*2-1)*tilt; gy+=(R()*2-1)*tilt; return {x:s.x,y:s.y,z:s.z+.15,gx,gy}; });
+  const chips=[]; for(let k=0;k<9;k++){ const a=R()*Math.PI*2; const x=cx+Math.cos(a)*rx*.82, y=cy+Math.sin(a)*ry*.82; const z=domeAt(x,y);
+    if(z<=0) continue; chips.push({x,y,z:z-.35,gx:-Math.cos(a)*2.4,gy:-Math.sin(a)*2.4}); }
+  const steps=["Profile body: a hull that never widens going up, with lumps that depend only on angle","Facet planes: blue-noise seeds with mixed radii, each a tilted tangent plane","Chips: small steep planes at sharp corners and edges, capped volume","Grain: fBm along the normal, faded toward the base","Seat: sunk 0.55 mm into dirtlab dirt"];
+  function build(step, count){
+    const H=new Float32Array(n*n), mat=new Uint8Array(n*n);
+    for(let j=0;j<n;j++) for(let i=0;i<n;i++){ const k=j*n+i, x=i*mm, y=j*mm; let z=dome[k];
+      if(step>=1 && z>0){ let m=Infinity; const N=Math.min(planes.length,count); for(let p=0;p<N;p++){ const P=planes[p]; const v=P.z+P.gx*(x-P.x)+P.gy*(y-P.y); if(v<m) m=v; } if(N>0) z=Math.min(Math.max(z, 0), m); z=Math.max(z, dome[k]>0?Math.min(dome[k],.0):-1); if(m<z) z=m; }
+      if(step>=2 && z>0){ for(const C of chips){ const v=C.z+C.gx*(x-C.x)+C.gy*(y-C.y); if(v<z) z=v; } }
+      if(step>=3 && z>0){ z+= (fbm(x/.9,y/.9,5,3)-.5)*.35*smooth(0,1.5,z); }
+      let g = step>=4 ? 1.1+ (fbm(x/1.2,y/1.2,9,4)-.5)*.5 + Math.max(0,fbm(x/.5,y/.5,3,2)-.6)*.8 : 0;
+      if(z>g-(step>=4?.55:0) && z>0){ H[k]=z; mat[k]=1; } else { H[k]=step>=4?g:0; mat[k]=0; }
+    }
+    return {H,mat};
+  }
+  let anim=null;
+  function draw(step){
+    if(anim) cancelAnimationFrame(anim);
+    const paint=(count)=>{ const {H,mat}=build(step,count); const cv2=cv; cv2.width=480; cv2.height=480*0.75;
+      const tmp=document.createElement("canvas"); tmp.width=n; tmp.height=n;
+      shade(tmp,H,n,mm,(i,j,k)=>mat[k]?[168,172,182]:(step>=4?[150,116,80]:[205,208,200]));
+      const ctx=cv.getContext("2d"); ctx.drawImage(tmp,0,n*.125,n,n*.75,0,0,cv.width,cv.height); };
+    if(step===1){ let c=0; const tick=()=>{ c+=2; paint(c); if(c<planes.length) anim=requestAnimationFrame(tick); }; tick(); } else paint(planes.length);
+  }
+  stepper(root,steps,draw);
+})();
+
+/* ---------- CLIFF demo ---------- */
+(() => {
+  const root=document.getElementById("d-cliff"), cv=root.querySelector("canvas"), ctx=cv.getContext("2d");
+  const W=70, Hh=40, s=8; const R=rng(7);
+  // target T(x): tiers + gully
+  const T=[]; let x=0; const tiers=[]; while(x<W){ const w=8+R()*9; const h=[27,31,34,37][Math.floor(R()*4)]; tiers.push([x,Math.min(W,x+w),h]); x+=w; }
+  for(let i=0;i<W;i++){ const t=tiers.find(t=>i>=t[0]&&i<t[1]); let h=t[2]; if(i>=40&&i<44) h-=7; T.push(h); }
+  const zone=i=>Math.exp(-((i-22)**2)/(2*36)); // shattered zone near x=22
+  // gravity stack
+  const S=new Array(W).fill(0); const stones=[];
+  for(let guard=0;guard<400;guard++){
+    let best=-1,bz=1e9; for(let i=0;i<W;i++) if(S[i]<T[i]-.5 && S[i]<bz){ bz=S[i]; best=i; } if(best<0) break;
+    const kind=R(); const sc=1-.45*zone(best);
+    let w=Math.round((kind<.4? 4+R()*3 : kind<.75? 7+R()*6 : 9+R()*6)*sc); let h=(kind<.4? 12+R()*10 : kind<.75? 6+R()*6 : 3+R()*2.5)*sc;
+    let a=best,b=best; while(b-a+1<w && b+1<W && Math.abs(S[b+1]-bz)<.6 && T[b+1]>bz+1) b++; while(b-a+1<w && a-1>=0 && Math.abs(S[a-1]-bz)<.6 && T[a-1]>bz+1) a--;
+    let tmin=Infinity; for(let i=a;i<=b;i++) tmin=Math.min(tmin,T[i]);
+    let top=bz+h; if(tmin-top<3.5) top=tmin; // merge crumb into top
+    for(const st of stones){ if(st.x1>=a-1&&st.x0<=b+1 && Math.abs(st.z1-top)<1 && top<tmin) top=Math.min(tmin,top+1.6); }
+    stones.push({x0:a,x1:b+1,z0:bz,z1:top,k:stones.length}); for(let i=a;i<=b;i++) S[i]=top;
+  }
+  // columns: union stones whose footprints overlap >=60%
+  const par=stones.map((_,i)=>i); const f=i=>par[i]===i?i:(par[i]=f(par[i]));
+  stones.forEach((A,i)=>stones.forEach((B,j)=>{ if(j<=i) return; if(Math.abs(B.z0-A.z1)<.01||Math.abs(A.z0-B.z1)<.01){ const ov=Math.min(A.x1,B.x1)-Math.max(A.x0,B.x0); if(ov>=.6*Math.min(A.x1-A.x0,B.x1-B.x0)) par[f(i)]=f(j); } }));
+  stones.forEach(st=>{ st.col=f(st.k); st.d=[R()*.7,R()*.7,R()*.5,R()*.5]; });
+  // cracks: random walks inside stones, mostly steep
+  const cracks=[]; stones.forEach(st=>{ if((st.x1-st.x0)*(st.z1-st.z0)<30 || R()<.35) return; let px=st.x0+(st.x1-st.x0)*(.3+R()*.4), pz=st.z0+(st.z1-st.z0)*(.4+R()*.3); const pts=[[px,pz]]; let ang=Math.PI/2+(R()-.5)*.9;
+    for(let k=0;k<60;k++){ ang+= (R()-.5)*.5; px+=Math.cos(ang)*.8; pz+=Math.sin(ang)*.8; pts.push([px,pz]); if(px<=st.x0+.2||px>=st.x1-.2||pz>=st.z1-.1||pz<=st.z0+.1) break; }
+    cracks.push({pts,lip:R()<.5}); });
+  const scree=[]; for(let k=0;k<60;k++){ const xx=R()*W, r=.4+R()*R()*2.2; scree.push({x:xx,r,a:R()*6}); }
+  const steps=["Form: a target heightfield T with tiers and a gully; shattered zones shrink stone size","Gravity stack: fill the lowest pocket, snap footprints, redraw heights so tops never align","Columns: union-find over stones sharing at least 60% of a footprint","Hidden core: support eroded by 2 mm, so joints show a dark recess, not daylight","Dress: battered planes and chamfers, accepted only under the cut guard (no fins under 1.2 mm)","Crack network: random walks grow until both ends meet an edge, cut as V-grooves with optional lips","Grain, scree and dirt: isotropic fBm, rocklab scree at the foot, dirt filled by closing on the tops"];
+  const Y=z=>cv.height-14-z*s*.75, X=i=>i*s;
+  let anim=null;
+  function draw(step, upto){
+    const css=getComputedStyle(document.documentElement); const fg=css.getPropertyValue("--fg").trim(), muted=css.getPropertyValue("--muted").trim(), alert=css.getPropertyValue("--alert").trim();
+    ctx.clearRect(0,0,cv.width,cv.height);
+    ctx.fillStyle="#9fc3dd"; ctx.globalAlpha=.25; ctx.fillRect(0,0,cv.width,cv.height); ctx.globalAlpha=1;
+    // zone shading
+    if(step===0){ for(let i=0;i<W;i++){ ctx.fillStyle=`rgba(181,61,44,${.35*zone(i)})`; ctx.fillRect(X(i),0,s,cv.height); } }
+    // core
+    if(step>=3){ ctx.fillStyle="#2b2f33"; ctx.beginPath(); ctx.moveTo(X(0),Y(0)); for(let i=0;i<W;i++){ ctx.lineTo(X(i),Y(Math.max(0,T[i]-2))); ctx.lineTo(X(i+1),Y(Math.max(0,T[i]-2))); } ctx.lineTo(X(W),Y(0)); ctx.fill(); }
+    const N= step===1 && upto!=null ? upto : stones.length;
+    if(step>=1){ const hues={}; for(let q=0;q<N;q++){ const st=stones[q]; const g=step>=4?.35:.12; const d=step>=4?st.d:[0,0,0,0];
+      let base=[176,178,182]; if(step===2){ const h=(st.col*47)%7; base=[150+h*12,160+((h*3)%7)*8,175-h*6]; }
+      ctx.fillStyle=`rgb(${base})`; ctx.strokeStyle=step>=3?"#2b2f33":"#555";
+      ctx.lineWidth=step>=3?2.2:1; ctx.beginPath();
+      ctx.moveTo(X(st.x0)+g*s,Y(st.z0)-g); ctx.lineTo(X(st.x0)+g*s+d[0]*s,Y(st.z1)+g*s+d[2]*s); ctx.lineTo(X(st.x0)+(.8+d[0])*s,Y(st.z1)+g); ctx.lineTo(X(st.x1)-(.8+d[1])*s,Y(st.z1)+g); ctx.lineTo(X(st.x1)-g*s-d[1]*s,Y(st.z1)+g*s+d[3]*s); ctx.lineTo(X(st.x1)-g*s,Y(st.z0)-g); ctx.closePath(); ctx.fill(); ctx.stroke();
+      if(step>=4){ ctx.fillStyle="rgba(255,255,255,.25)"; ctx.fillRect(X(st.x0)+(.8+d[0])*s,Y(st.z1)+g,Math.max(0,X(st.x1)-X(st.x0)-(1.6+d[0]+d[1])*s),3); } } }
+    if(step===0||step===1){ ctx.strokeStyle=alert; ctx.setLineDash([5,4]); ctx.lineWidth=1.5; ctx.beginPath(); for(let i=0;i<W;i++){ ctx.lineTo(X(i),Y(T[i])); ctx.lineTo(X(i+1),Y(T[i])); } ctx.stroke(); ctx.setLineDash([]); }
+    if(step>=5){ for(const c of cracks){ ctx.strokeStyle="#2b2f33"; ctx.lineWidth=2.4; ctx.beginPath(); c.pts.forEach((p,i)=>i?ctx.lineTo(X(p[0]),Y(p[1])):ctx.moveTo(X(p[0]),Y(p[1]))); ctx.stroke();
+      if(c.lip){ ctx.strokeStyle="rgba(255,255,255,.5)"; ctx.lineWidth=1; ctx.beginPath(); c.pts.forEach((p,i)=>i?ctx.lineTo(X(p[0])+2.5,Y(p[1])-1):ctx.moveTo(X(p[0])+2.5,Y(p[1])-1)); ctx.stroke(); } } }
+    if(step>=6){ const R2=rng(3); for(let k=0;k<1800;k++){ const xx=R2()*cv.width, yy=R2()*cv.height; ctx.fillStyle=R2()<.5?"rgba(0,0,0,.08)":"rgba(255,255,255,.1)"; ctx.fillRect(xx,yy,2,2); }
+      ctx.fillStyle="#8a6640"; ctx.fillRect(0,Y(0)-2,cv.width,16);
+      for(const p of scree){ ctx.fillStyle="#b9bbbf"; ctx.strokeStyle="#555"; ctx.lineWidth=.8; ctx.beginPath(); for(let k=0;k<5;k++){ const a=p.a+k*1.26; ctx.lineTo(X(p.x)+Math.cos(a)*p.r*s, Y(0)-2-Math.abs(Math.sin(a))*p.r*s*.8); } ctx.closePath(); ctx.fill(); ctx.stroke(); }
+      for(let i=0;i<W;i++){ ctx.fillStyle="#8a6640"; ctx.fillRect(X(i),Y(S[i])-2,s,3); } }
+    ctx.fillStyle=fg; ctx.font="12px IBM Plex Mono, monospace"; ctx.fillText(step===0?"T(x), shattered zone shaded":step===1?`${N}/${stones.length} stones`:"",8,16);
+  }
+  function go(step){ if(anim) cancelAnimationFrame(anim); if(step===1){ let c=0; const tick=()=>{ c+=1; draw(1,c); if(c<stones.length) anim=requestAnimationFrame(()=>setTimeout(tick,22)); }; tick(); } else draw(step); }
+  stepper(root,steps,go);
+})();
+
+/* ---------- GRASS demo ---------- */
+(() => {
+  const root=document.getElementById("d-grass"), cv=root.querySelector("canvas"), ctx=cv.getContext("2d");
+  const W=70, px=cv.width/W; const th0=-.45; const R=rng(21);
+  const lenses=[{x:22,y:46,a:7,b:3.2},{x:50,y:22,a:6,b:2.8}];
+  const lensM=(L,x,y)=>{ const c=Math.cos(th0), s=Math.sin(th0); const dx=x-L.x, dy=y-L.y; const u=dx*c+dy*s, v=-dx*s+dy*c; return {m:Math.abs(u)/L.a+(v/L.b)**2, u, v}; };
+  function theta(x,y,mode){ let t=th0+(fbm(x/22,y/22,4,3)-.5)*1.4; if(mode>=1){ const sAlong=x*Math.cos(th0)+y*Math.sin(th0); t+=.36*Math.sin(2*Math.PI*sAlong/15+.7); } return t; }
+  function dir(x,y,mode){ let t=theta(x,y,mode); let vx=Math.cos(t), vy=Math.sin(t);
+    if(mode>=2){ for(const L of lenses){ const q=lensM(L,x,y); if(q.m<3.2){ const f=Math.exp(-(q.m-1)*1.3); const px_=-Math.sin(th0), py_=Math.cos(th0); const side=Math.tanh(q.v/L.b*1.5)||1; vx+=px_*side*f*1.4; vy+=py_*side*f*1.4; } } const m=Math.hypot(vx,vy); vx/=m; vy/=m; }
+    return [vx,vy]; }
+  const inLens=(x,y)=>lenses.some(L=>lensM(L,x,y).m<1);
+  function hills(){ const n=140, H=new Float32Array(n*n); for(let j=0;j<n;j++) for(let i=0;i<n;i++){ const x=i/n*W,y=j/n*W; H[j*n+i]=7*Math.max(0,fbm(x/12,y/12,8,3)-.4); }
+    const tmp=document.createElement("canvas"); tmp.width=cv.width; tmp.height=cv.height; shade(tmp,H,n,W/n,()=>[150,120,86]); ctx.drawImage(tmp,0,0); }
+  function arrows(mode){ ctx.strokeStyle="rgba(20,30,25,.8)"; ctx.lineWidth=1.2; for(let y=2;y<W;y+=3.5) for(let x=2;x<W;x+=3.5){ if(mode>=2&&inLens(x,y)) continue; const [vx,vy]=dir(x,y,mode); const L=1.4;
+      ctx.beginPath(); ctx.moveTo((x-vx*L)*px,(y-vy*L)*px); ctx.lineTo((x+vx*L)*px,(y+vy*L)*px); ctx.stroke(); ctx.beginPath(); ctx.arc((x+vx*L)*px,(y+vy*L)*px,1.6,0,7); ctx.fillStyle="rgba(20,30,25,.9)"; ctx.fill(); } }
+  function lensDraw(){ for(const L of lenses){ ctx.save(); ctx.translate(L.x*px,L.y*px); ctx.rotate(th0); ctx.beginPath(); for(let k=0;k<=60;k++){ const u=-L.a+2*L.a*k/60; const v=L.b*Math.sqrt(Math.max(0,1-Math.abs(u)/L.a)); ctx.lineTo(u*px,v*px); } for(let k=60;k>=0;k--){ const u=-L.a+2*L.a*k/60; const v=-L.b*Math.sqrt(Math.max(0,1-Math.abs(u)/L.a)); ctx.lineTo(u*px,v*px); } ctx.closePath(); ctx.fillStyle="rgba(120,86,52,.85)"; ctx.fill(); ctx.restore(); } }
+  // strands
+  const seeds=[]; const sp=2.65; for(let y=0;y<W;y+=sp) for(let x=0;x<W;x+=sp) seeds.push([x+R()*sp, y+R()*sp, 15+R()*15]);
+  function trace(x,y,len){ const pts=[[x,y]]; const h=.5; for(let d=0; d<len; d+=h){ const [a,b]=dir(x,y,2); const [c,e]=dir(x+a*h/2,y+b*h/2,2); x+=c*h; y+=e*h; if(x<1||y<1||x>W-1||y>W-1||inLens(x,y)) break; pts.push([x,y]); } return pts; }
+  let strands=null;
+  function getStrands(){ if(!strands) strands=seeds.map(s=>trace(s[0],s[1],s[2])); return strands; }
+  function blades(){ const st=getStrands(); const Rb=rng(5); const all=[];
+    st.forEach(p=>{ for(let r=0;r<p.length-3;r+=Math.round(3.4+Rb()*1.5)){ const L=Math.min(p.length-1-r, Math.round(8+Rb()*4)); if(L<3) continue; all.push({pts:p.slice(r,r+L+1),key:p[r][0]*Math.cos(th0)+p[r][1]*Math.sin(th0)}); } });
+    all.sort((a,b)=>a.key-b.key);
+    for(const b of all){ const q=b.pts, n=q.length; const left=[],right=[];
+      for(let k=0;k<n;k++){ const a=q[Math.max(0,k-1)], c=q[Math.min(n-1,k+1)]; let tx=c[0]-a[0], ty=c[1]-a[1]; const m=Math.hypot(tx,ty)||1; tx/=m; ty/=m; const u=k/(n-1); const w=.5*Math.sin(Math.PI*Math.min(1,u*1.15))*(1-u*.4);
+        left.push([(q[k][0]-ty*w)*px,(q[k][1]+tx*w)*px]); right.push([(q[k][0]+ty*w)*px,(q[k][1]-tx*w)*px]); }
+      ctx.beginPath(); left.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); right.reverse().forEach(p=>ctx.lineTo(p[0],p[1])); ctx.closePath();
+      ctx.fillStyle="#7f9a4c"; ctx.fill(); ctx.strokeStyle="rgba(30,45,20,.75)"; ctx.lineWidth=.9; ctx.stroke();
+      ctx.strokeStyle="rgba(230,240,190,.55)"; ctx.lineWidth=.8; ctx.beginPath(); q.slice(0,n-1).forEach((p,i)=>i?ctx.lineTo(p[0]*px,p[1]*px):ctx.moveTo(p[0]*px,p[1]*px)); ctx.stroke(); } }
+  const steps=["Hills: rises-only noise, slope capped at 34°, feathered to the 3.4 mm edge level","Direction field: one angle per point (regional noise), so no vortices are possible","In-phase meander: A·sin(2πs/15 mm) along the flow coordinate s","Clearings: eye-shaped lenses aligned to the flow, which parts upstream and rejoins","Strands: Poisson seeds 2.65 mm apart, traced 15–30 mm with RK2","Blades: fronds along each strand, shingled upstream first, shortened (never sliced) at clearings"];
+  function draw(step){ ctx.clearRect(0,0,cv.width,cv.height); hills(); if(step>=3) lensDraw();
+    if(step===1) arrows(0); else if(step===2) arrows(1); else if(step===3) arrows(2);
+    if(step===4){ ctx.strokeStyle="rgba(25,40,20,.75)"; ctx.lineWidth=1; for(const p of getStrands()){ ctx.beginPath(); p.forEach((q,i)=>i?ctx.lineTo(q[0]*px,q[1]*px):ctx.moveTo(q[0]*px,q[1]*px)); ctx.stroke(); } }
+    if(step>=5) blades(); }
+  stepper(root,steps,draw);
+  // blade cross-section svg
+  const xs=document.getElementById("xsec"), sd=document.getElementById("side"); const layers=[2,3,4,4,3,1]; const lw=24, lh=20;
+  layers.forEach((nl,k)=>{ const y=150-k*(lh+2); const w=nl*lw; const x0=130-w/2; for(let q=0;q<nl;q++){ const r=document.createElementNS(NS,"rect"); r.setAttribute("x",x0+q*lw+1); r.setAttribute("y",y-lh); r.setAttribute("width",lw-2); r.setAttribute("height",lh); r.setAttribute("rx",9); r.setAttribute("fill","var(--accent)"); r.setAttribute("fill-opacity",".55"); r.setAttribute("stroke","currentColor"); r.setAttribute("stroke-width",".8"); xs.appendChild(r);} const t=document.createElementNS(NS,"text"); t.setAttribute("x",x0-8); t.setAttribute("y",y-6); t.setAttribute("text-anchor","end"); t.textContent=nl; xs.appendChild(t); });
+  const t1=document.createElementNS(NS,"text"); t1.setAttribute("x",200); t1.setAttribute("y",40); t1.textContent="0.45 mm line"; xs.appendChild(t1);
+  const t2=document.createElementNS(NS,"text"); t2.setAttribute("x",200); t2.setAttribute("y",56); t2.textContent="× 0.2 mm layer"; xs.appendChild(t2);
+  for(let k=0;k<6;k++){ const y=150-k*(lh+2); const L=200-k*14 - (k<5?0:0); const rake=(5-k)*8; const r=document.createElementNS(NS,"rect"); r.setAttribute("x",300+k*12); r.setAttribute("y",y-lh); r.setAttribute("width",Math.max(30,L-rake-k*6)); r.setAttribute("height",lh); r.setAttribute("rx",9); r.setAttribute("fill","var(--accent)"); r.setAttribute("fill-opacity",".45"); r.setAttribute("stroke","currentColor"); r.setAttribute("stroke-width",".8"); sd.appendChild(r); }
+})();
+
+/* ---------- WATER demo ---------- */
+(() => {
+  const root=document.getElementById("d-water"), cv=root.querySelector("canvas");
+  const n=200, W=70, c=W/n; let mode="sc", wob=1;
+  const xs=y=>22+3*Math.sin(y/9)+4*(fbm(3,y/14,2,3)-.5)*2;
+  const rc={x:44,y:34}; const rr=a=>5*(1+.12*Math.cos(3*a+1)+.08*Math.cos(5*a));
+  function train(d,lo,hi,nc,p,x,y,sharpLong){ let s=0, n2=0; for(let k=0;k<nc;k++){ const lam= nc===1?lo: lo*Math.pow(hi/lo,k/(nc-1)); const a=Math.pow(lam,1.4);
+      const D=30*Math.log(1+d/30); const wobA= wob*.06*d*Math.pow(lam/hi,-.3)*(fbm(x/9,y/9,p+k,2)-.5)*2;
+      let ph=2*Math.PI*D/lam + wobA + k*1.7 + p; let cc=Math.cos(ph); const sh = lam<(lo+hi)/2 ? .9 : (sharpLong??.15); cc = cc + sh*.45*(cc*cc-.5); s+=a*cc; n2+=a; } return s/n2; }
+  function compute(){ const H=new Float32Array(n*n), mat=new Uint8Array(n*n);
+    for(let j=0;j<n;j++) for(let i=0;i<n;i++){ const k=j*n+i, x=i*c, y=j*c; const sx=xs(y); const dl=x-sx;
+      const a=Math.atan2(y-rc.y,x-rc.x); const dr=Math.hypot(x-rc.x,y-rc.y)-rr(a);
+      const land= 2.6-2.2+ 6*smooth(4,-6,dl);
+      if(dr<0){ H[k]=2.6+4*Math.sqrt(Math.min(1,-dr/3)); mat[k]=2; continue; }
+      if(dl<0 && land>2.6){ H[k]=land; mat[k]=1; continue; }
+      let rel;
+      if(mode==="single"){ rel=Math.cos(2*Math.PI*Math.max(0,dl)/9)*.5+Math.cos(2*Math.PI*dr/9)*.5; }
+      else { const tl=train(Math.max(0,dl),5,16,4,1,x,y), tr=train(dr,2,4.5,3,2,x,y), tf=train(Math.hypot(x-250,y+150)-200,5,14,3,3,x,y);
+        const wl=Math.exp(-Math.max(0,dl)/25), wr=1.15*Math.exp(-dr/8), wf=.22;
+        if(mode==="land") rel=tl; else if(mode==="rock") rel=tr;
+        else { const dom=(Math.pow(wl,8)*tl+Math.pow(wr,8)*tr+Math.pow(wf,8)*tf)/(Math.pow(wl,8)+Math.pow(wr,8)+Math.pow(wf,8));
+          const ch=(wl*tl+wr*tr+wf*tf)/Math.sqrt(wl*wl+wr*wr+wf*wf);
+          if(mode==="dom") rel=dom; else if(mode==="chaos") rel=ch; else { const t=smooth(.12,.45,Math.max(wl,wr)); rel=t*dom+(1-t)*ch; }
+          const wake=Math.max(0,(x-rc.x))*Math.exp(-Math.abs(y-rc.y)/4)*Math.exp(-dr/14)*.03; rel+=wake*Math.sin(dr*1.4); } }
+      const rim=smooth(0,4,Math.min(x,y,W-x,W-y));
+      let z=2.6+rel*.8*(.4+.6*rim); z=Math.max(z, 2.6-1.1+Math.log1p(Math.exp((z-1.5)*4))/4-.0); H[k]=Math.max(land,z); mat[k]= H[k]>land+1e-6?0:1; }
+    shade(cv,H,n,c*0.45,(i,j,k)=>mat[k]===2?[170,172,178]:mat[k]===1?[170,140,100]:[60,150,165]); }
+  root.querySelectorAll("[data-mode]").forEach(b=>b.addEventListener("click",()=>{ mode=b.dataset.mode; root.querySelectorAll("[data-mode]").forEach(x=>x.setAttribute("aria-pressed",x===b)); compute(); }));
+  const sl=document.getElementById("wob"), sv=document.getElementById("wobv"); sl.addEventListener("input",()=>{ wob=+sl.value; sv.textContent=wob.toFixed(1); compute(); });
+  compute();
+})();
+
+/* ---------- DIRT demo ---------- */
+(() => {
+  const root=document.getElementById("d-dirt"), cv=root.querySelector("canvas");
+  const n=220, W=35, c=W/n; const R=rng(9);
+  const U=new Float32Array(n*n); for(let j=0;j<n;j++) for(let i=0;i<n;i++){ const x=i*c,y=j*c; U[j*n+i]=1.6*smooth(.45,.85,fbm(x/9,y/9,2,3)); }
+  const clods=[]; for(let t=0;t<4000&&clods.length<520;t++){ const x=R()*W,y=R()*W; const P=Math.max(.3,smooth(.35,.7,fbm(x/7,y/7,6,3))); if(R()>P) continue; const r=.35+1.15*Math.pow(R(),2); clods.push({x,y,r,h:Math.min(.45,.32*r),a:R()*6,b:R()*6,cc:R()*6}); }
+  clods.sort((a,b)=>b.r-a.r);
+  const pebs=[]; for(let t=0;t<3000&&pebs.length<70;t++){ const x=R()*W,y=R()*W; const low=1-U[Math.floor(y/c)*n+Math.floor(x/c)]/1.6; if(R()>.25+low*.75) continue; const big=pebs.length<3; const r=big?2+R()*1.6:.5+R()*1.1; const K=5+Math.floor(R()*4); const u=[]; for(let k=0;k<K;k++) u.push(2*Math.PI*k/K+R()*.5); pebs.push({x,y,r,K,u,s:u.map(()=>1+.35*R()),hp:r*(big?.42:.55)}); }
+  const steps=["Undulation: rises-only swell, at most 1.6 mm, flat plains between","Soil roughness: library fBm at a fine scale","Clods: lumpy crumbs in patches (density never below 0.3), largest first, joined by smooth max","Grit: fine roughness of about 0.45 mm and sparse sand grains","Pebbles and stones: faceted caps from tilted tangent planes, half-sunk in low ground, filleted with smooth max"];
+  function draw(step){ const H=new Float32Array(n*n), mat=new Uint8Array(n*n);
+    for(let k=0;k<n*n;k++){ const i=k%n,j=(k/n)|0, x=i*c,y=j*c; H[k]=U[k]+(step>=1?(fbm(x/1.1,y/1.1,3,3)-.5)*.22:0); }
+    if(step>=2){ for(const q of clods){ const i0=Math.max(0,Math.floor((q.x-q.r*1.3)/c)), i1=Math.min(n-1,Math.ceil((q.x+q.r*1.3)/c)), j0=Math.max(0,Math.floor((q.y-q.r*1.3)/c)), j1=Math.min(n-1,Math.ceil((q.y+q.r*1.3)/c)); const base=H[Math.min(n-1,Math.floor(q.y/c))*n+Math.min(n-1,Math.floor(q.x/c))];
+      for(let j=j0;j<=j1;j++) for(let i=i0;i<=i1;i++){ const dx=i*c-q.x, dy=j*c-q.y, a=Math.atan2(dy,dx); const lob=1+.15*Math.cos(2*a+q.a)+.1*Math.cos(3*a+q.b)+.06*Math.cos(5*a+q.cc); const rho=Math.hypot(dx,dy)/(q.r*lob); if(rho>=1) continue; const z=base+q.h*Math.pow(1-Math.pow(rho,2.6),.8); const k=j*n+i; H[k]=smax(H[k],z,.12); } } }
+    if(step>=3){ for(let k=0;k<n*n;k++){ const i=k%n,j=(k/n)|0; H[k]+=(h2(i,j,77)-.5)*.05 + (h2(i,j,78)>.985?.09:0); } }
+    if(step>=4){ for(const p of pebs){ const ext=p.r*1.2, i0=Math.max(0,Math.floor((p.x-ext)/c)), i1=Math.min(n-1,Math.ceil((p.x+ext)/c)), j0=Math.max(0,Math.floor((p.y-ext)/c)), j1=Math.min(n-1,Math.ceil((p.y+ext)/c)); const base=H[Math.min(n-1,Math.floor(p.y/c))*n+Math.min(n-1,Math.floor(p.x/c))]-p.hp*.35;
+      for(let j=j0;j<=j1;j++) for(let i=i0;i<=i1;i++){ const dx=i*c-p.x, dy=j*c-p.y; let m=p.hp*.92; for(let q=0;q<p.K;q++){ const v=p.hp - p.s[q]*(p.hp/p.r)*(dx*Math.cos(p.u[q])+dy*Math.sin(p.u[q])); if(v<m) m=v; } const z=base+m; const k=j*n+i; if(z>H[k]-.02){ const nz=smax(H[k],z,.08); if(z>H[k]) mat[k]=1; H[k]=nz; } } } }
+    shade(cv,H,n,c,(i,j,k)=>mat[k]?[160,162,168]:(()=>{ const t=Math.min(1,Math.max(0,H[k]/2)); return [128+40*t,96+30*t,64+20*t]; })()); }
+  stepper(root,steps,draw);
+})();
+
+/* ---------- shore stack svg ---------- */
+(() => {
+  const g=document.getElementById("shore-stack"); const ops=[["bank","grasslab hills ramped to a 0.4 mm bed across a wobbly shore"],["flood(2.6 mm)","water level; connected water only"],["band(shore, 0–4 mm)","wet mud strip with soil texture"],["grass(steer → water)","clone of steer_rim, aimed at the water"],["rocks: wet | dry","role decided by the seat height vs. water"],["reeds(at waterline)","lemon-section sweeps, register emitters"],["water relief","swell-chaos; reeds + wet rocks emit"]];
+  ops.forEach((o,i)=>{ const y=260-i*38; const r=document.createElementNS(NS,"rect"); r.setAttribute("x",10); r.setAttribute("y",y); r.setAttribute("width",190); r.setAttribute("height",30); r.setAttribute("rx",3); r.setAttribute("fill", i===1||i===6?"var(--water)":i===3||i===5?"var(--accent)":"var(--earth)"); r.setAttribute("fill-opacity",".25"); r.setAttribute("stroke","currentColor"); g.appendChild(r);
+    const t=document.createElementNS(NS,"text"); t.setAttribute("x",20); t.setAttribute("y",y+19); t.textContent=o[0]; g.appendChild(t);
+    const d=document.createElementNS(NS,"text"); d.setAttribute("x",212); d.setAttribute("y",y+19); d.setAttribute("font-family","IBM Plex Sans, sans-serif"); d.textContent=o[1]; g.appendChild(d); });
+  const t=document.createElementNS(NS,"text"); t.setAttribute("x",10); t.setAttribute("y",14); t.setAttribute("font-family","IBM Plex Sans, sans-serif"); t.textContent="stack, read bottom → top"; g.appendChild(t);
+})();
+
+/* ---------- matrix ---------- */
+(() => {
+  const cols=["library","rocklab","clifflab","grasslab","meadow","waterlab","shorelab","dirtlab"];
+  const rows=[
+    ["Band-limited noise / fBm", "11111101"],["Smoothstep / fades", "11111111"],["Distance transform (EDT / geodesic)","10111110"],
+    ["Point placement (Poisson, darts, density)","11112101"],["Plane carving with guards","11100001"],["Edge rounding","11100000"],
+    ["Displacement relief + weight masks","11100101"],["Crack / line networks","10100000"],["Direction / flow fields","00010220"],
+    ["Gravity stacking / pack","10100000"],["Seat (bed + plinth)","11102221"],["Fill: flood / closing","10100110"],
+    ["Heightfield → solid","11111111"],["Float32 / watertight export","11212221"],["Overhang audit","11110000"],
+    ["Paint / render evaluation","11111111"],["Tile edge contract","10100100"]];
+  const t=document.getElementById("matrix"); let h="<thead><tr><th>Mechanism</th>"+cols.map(c=>`<th>${c}</th>`).join("")+"</tr></thead><tbody>";
+  rows.forEach(([n,v])=>{ h+=`<tr><td>${n}</td>`+[...v].map(ch=>`<td>${ch==="1"?'<span class="dot" style="color:var(--fg)" title="own implementation"></span>':ch==="2"?'<span class="dot half" style="color:var(--muted)" title="borrowed"></span>':""}</td>`).join("")+"</tr>"; });
+  t.innerHTML=h+"</tbody>";
+})();
+</script>

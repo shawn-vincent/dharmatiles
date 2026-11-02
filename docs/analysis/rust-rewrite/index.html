@@ -36,20 +36,7 @@
   @media (max-width: 560px) { .status li { grid-template-columns: 90px minmax(0, 1fr); } .status .area { grid-column: 2; grid-row: 1; } .status .what { grid-column: 1 / -1; } }
 </style>
 
-<nav class="top"><div class="wrap">
-  <span class="brand">dharmatiles → Rust</span>
-  <a href="index.html" aria-current="page">Overview</a>
-  <a href="library.html">The library</a>
-  <a href="labs.html">The labs</a>
-  <a href="variants.html">Surface variants</a>
-  <a href="mechanisms.html">Mechanisms</a>
-  <a href="architecture.html">Target architecture</a>
-  <a href="feasibility.html">Rust feasibility</a>
-  <a href="layout.html">Project layout</a>
-  <a href="plan.html">Project plan</a>
-  <a href="changelog.html">Changes</a>
-  <a href="notes.html">Notes</a>
-</div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="../../index.html">dharmatiles</a><a href="../../index.html#status">Status</a><a href="../../index.html#looks">Looks</a><a href="../../rust/plan.html">Rust plan</a><a href="../../rust/architecture.html">Architecture</a><a href="../../rust/language.html">Language</a><a href="../../rust/spikes.html">Spikes</a><a href="../../standards/tile-system.html">Tile system</a><a href="../../standards/printing.html">Printing</a><a href="../../archive/index.html">Archive</a></div></nav>
 
 <div class="wrap">
 <header class="hero">
@@ -57,11 +44,11 @@
   <h1>Few mechanisms, many tiles</h1>
   <p class="lede">I read the dharmatiles library (20.6k lines), all seven labs (8.6k lines), every surface variant in git history, the language design conversation and the memory notes of Shawn's rulings, then had each claim checked against the code. Everything that looks good is built from about twenty shared operations, which today are written about seventy different ways. The proposal: tiles are short declarative documents that name built-in looks, and a Rust engine implements each look once, on those shared operations.</p>
   <div class="reel">
-    <figure><img src="img/cliff-run-s1.jpg" alt="Gravity-stacked cliff run"><figcaption>clifflab</figcaption></figure>
-    <figure><img src="img/grass-iso.jpg" alt="Stroke-blade grass with flowing ribbons"><figcaption>grasslab</figcaption></figure>
-    <figure><img src="img/water-swell-chaos.jpg" alt="Swell-chaos water"><figcaption>waterlab</figcaption></figure>
-    <figure><img src="img/shore.jpg" alt="Shore tile with reeds and water"><figcaption>shorelab</figcaption></figure>
-    <figure><img src="img/dirt-close.jpg" alt="Dirt with clods and pebbles"><figcaption>dirtlab</figcaption></figure>
+    <figure><img src="../../img/cliff-run-s1.jpg" alt="Gravity-stacked cliff run"><figcaption>clifflab</figcaption></figure>
+    <figure><img src="../../img/grass-iso.jpg" alt="Stroke-blade grass with flowing ribbons"><figcaption>grasslab</figcaption></figure>
+    <figure><img src="../../img/water-swell-chaos.jpg" alt="Swell-chaos water"><figcaption>waterlab</figcaption></figure>
+    <figure><img src="../../archive/rust-study/img/shore.jpg" alt="Shore tile with reeds and water"><figcaption>shorelab</figcaption></figure>
+    <figure><img src="../../img/dirt-close.jpg" alt="Dirt with clods and pebbles"><figcaption>dirtlab</figcaption></figure>
   </div>
 </header>
 
@@ -108,7 +95,7 @@
 })();
 </script>
 
-<div class="rev"><p><strong>Revision 2.</strong> An adversarial review checked this analysis against the code and the conversation. It changed the architecture: documents no longer call engine verbs, the verb set was corrected, water now covers the whole tile, units follow Shawn's ruling, and a <a href="feasibility.html">Rust feasibility page</a> was added. Every change, with its evidence, is in the <a href="changelog.html">change log</a>.</p></div>
+<div class="rev"><p><strong>Revision 2.</strong> An adversarial review checked this analysis against the code and the conversation. It changed the architecture: documents no longer call engine verbs, the verb set was corrected, water now covers the whole tile, units follow Shawn's ruling, and a <a href="feasibility.html">Rust feasibility page</a> was added. Every change, with its evidence, is in the <a href="../../archive/rust-study/changelog.html">change log</a>.</p></div>
 
 <div class="rev"><p><strong>Revision 3: project layout.</strong> A <a href="layout.html">new page</a> lays out the Rust repository: one Cargo workspace at the repo root beside the untouched Python, six crates instead of the fifteen sketched in revision 2, one <code>dharmatiles</code> program with subcommands (including the MCP server), a Tauri GUI that shares its web front end with a browser preview, the tile library as KDL files embedded in the program, and output in <code>out/</code>.</p></div>
 <div class="rev"><p><strong>Revision 4: project plan.</strong> Shawn accepted the revision 3 recommendations. A <a href="plan.html">new page</a> turns them into a phased plan: spikes, a walking skeleton with a parity harness, look-by-look ports judged against the labs over four seeds, a library cutover before the cliff, three work streams, about 32 weeks on the critical path, kill criteria and the first two weeks task by task. The research notes are now one HTML page, and every Claude-written document here is HTML.</p></div>
@@ -162,17 +149,17 @@
 
 <h2>The pages</h2>
 <div class="pages">
-  <a class="card" href="library.html"><span class="n">2</span><h3>The original library</h3><p class="small">The pipeline as implemented, which grid each layer writes, the bugs that come from shared state, the duplicated mechanisms, and a keep/merge/cut verdict for each subsystem.</p></a>
-  <a class="card" href="labs.html"><span class="n">3</span><h3>The labs</h3><p class="small">How rocklab, clifflab, grasslab, meadowlab, waterlab, shorelab and dirtlab produce their results. Five step-through canvas demos, real renders, and a cross-lab mechanism map.</p></a>
-  <a class="card" href="variants.html"><span class="n">4</span><h3>Surface variants</h3><p class="small">Every grass, rock, cliff, water, shore, dirt, wall, floor and tree variant ever generated, old to new: how each worked, renders, pros and cons, and what is new in the one Shawn likes.</p></a>
+  <a class="card" href="../../archive/rust-study/library.html"><span class="n">2</span><h3>The original library</h3><p class="small">The pipeline as implemented, which grid each layer writes, the bugs that come from shared state, the duplicated mechanisms, and a keep/merge/cut verdict for each subsystem.</p></a>
+  <a class="card" href="../../archive/rust-study/labs.html"><span class="n">3</span><h3>The labs</h3><p class="small">How rocklab, clifflab, grasslab, meadowlab, waterlab, shorelab and dirtlab produce their results. Five step-through canvas demos, real renders, and a cross-lab mechanism map.</p></a>
+  <a class="card" href="../../archive/rust-study/variants.html"><span class="n">4</span><h3>Surface variants</h3><p class="small">Every grass, rock, cliff, water, shore, dirt, wall, floor and tree variant ever generated, old to new: how each worked, renders, pros and cons, and what is new in the one Shawn likes.</p></a>
   <a class="card" href="mechanisms.html"><span class="n">5</span><h3>Mechanisms</h3><p class="small">About seventy implementations mapped onto the engine set, the outcomes each primitive feeds, before/after counts, and six merges the code does not support.</p></a>
   <a class="card" href="architecture.html"><span class="n">6</span><h3>Target architecture</h3><p class="small">Two layers (documents and engine), a plan-then-build stepper, the paint-bucket and seed demos, example KDL documents checked against the labs, the engine kit, language decisions, crates, Orin ranking, and questions for Shawn.</p></a>
   <a class="card" href="feasibility.html"><span class="n">7</span><h3>Rust feasibility</h3><p class="small">Where the time goes today, the geometry kernel and crate choices, determinism across threads, how documents are hosted, live preview, testing, migration order, and ten risks with the spike that retires each.</p></a>
   <a class="card" href="layout.html"><span class="n">8</span><h3>Project layout</h3><p class="small">Where everything goes in the Rust repo: six crates and what each boundary buys, one <code>dharmatiles</code> program, Tauri GUI, MCP server, mobile and wasm limits, the bundled library, user paths on macOS, Linux and Windows, and how Rust sits beside the Python during the port.</p></a>
   <a class="card" href="plan.html"><span class="n">9</span><h3>Project plan</h3><p class="small">Nine phases from spikes to cutover: goals, scope by crate and Python module, measurable exit gates, risks retired, an interactive timeline, the critical path, kill criteria and the first two weeks.</p></a>
   <a class="card" href="spikes/go-no-go.html"><span class="n">P0</span><h3>Phase 0 go/no-go</h3><p class="small">The spike results in one place: a verdict on booleans, determinism, rays, the KDL format and materials, with evidence, what each changes in the plan, and the decisions for Shawn with a recommendation on each.</p></a>
-  <a class="card" href="changelog.html"><span class="n">10</span><h3>Change log</h3><p class="small">Every edit in revisions 2, 3 and 4: what each page said before, what it says now, and the evidence from the code, the conversation or the ecosystem.</p></a>
-  <a class="card" href="notes.html"><span class="n">11</span><h3>Research notes</h3><p class="small">The notes every page was built from: the library, each lab, every surface variant, the language rulings, the synthesis and the layout sources, with citations and dates.</p></a>
+  <a class="card" href="../../archive/rust-study/changelog.html"><span class="n">10</span><h3>Change log</h3><p class="small">Every edit in revisions 2, 3 and 4: what each page said before, what it says now, and the evidence from the code, the conversation or the ecosystem.</p></a>
+  <a class="card" href="../../archive/rust-study/notes.html"><span class="n">11</span><h3>Research notes</h3><p class="small">The notes every page was built from: the library, each lab, every surface variant, the language rulings, the synthesis and the layout sources, with citations and dates.</p></a>
 </div>
 
 <h2>The proposal in one table</h2>
@@ -200,5 +187,5 @@
 </ol>
 
 <h2>Source notes</h2>
-<p class="small">The notes behind these pages are on the <a href="notes.html">research notes</a> page, with their source citations and dates. Everything is in <code>docs/analysis/rust-rewrite/</code> as HTML, with images under <code>img/</code>. The one markdown file left is <code>input-language-design-conversation.md</code>, Shawn's pasted design conversation.</p>
+<p class="small">The notes behind these pages are on the <a href="../../archive/rust-study/notes.html">research notes</a> page, with their source citations and dates. Everything is in <code>docs/analysis/rust-rewrite/</code> as HTML, with images under <code>img/</code>. The one markdown file left is <code>input-language-design-conversation.md</code>, Shawn's pasted design conversation.</p>
 </div>
