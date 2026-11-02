@@ -76,19 +76,19 @@
    "body": "rust",
    "area": "Shawn",
    "state": "waiting",
-   "title": "Shawn: test print of flat 1×1 under way",
-   "detail": "Printing flat-1x1-db.stl from the Rust engine (out/parity/flat/rust/s1/db/test/).",
-   "updated": "2026-11-02T17:45:34Z"
+   "title": "Shawn: test print + contact-sheet OK close Phase 1",
+   "detail": "Does flat-1x1-db.stl seat in a DungeonBlocks socket? Is the parity contact-sheet layout right?",
+   "updated": "2026-11-02T18:23:51Z"
   },
   {
    "id": "p1-exit",
    "body": "rust",
    "order": 45,
    "area": "Rust P1",
-   "state": "running",
-   "title": "Phase 1 exit: fixing review findings",
-   "detail": "Every measurable P1 exit criterion is met except the test print. Simplify pass done (1ad8119). Fixing the bug-hunt findings: use-path .. resolution, size and expansion limits, output paths escaping out/, empty regions, duplicate seed ids, TBB thread variation in CI, polish.",
-   "updated": "2026-11-02T17:54:47Z"
+   "state": "done",
+   "title": "Phase 1 exit reviews done; findings fixed",
+   "detail": "Simplify pass (1ad8119) and all 8 bug-hunt findings fixed with regression tests (→ 50c35da). CI run 41496927801 green on macOS, Linux, Windows; flat export hash unchanged. Phase 1 closes on Shawn's test print + contact-sheet OK.",
+   "updated": "2026-11-02T18:23:51Z"
   },
   {
    "id": "docs-fixes",
