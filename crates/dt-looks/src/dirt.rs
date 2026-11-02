@@ -161,7 +161,7 @@ fn between(rng: &mut Rng, (lo, hi): (f64, f64)) -> f64 {
 }
 
 /// What the dirt look counted, for the build record and the parity harness.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Counts {
     /// Clods placed.
     pub clods: usize,
@@ -171,6 +171,8 @@ pub struct Counts {
     pub medium: usize,
     /// Worn (rounded) pebbles among them.
     pub rounded: usize,
+    /// The share of the interior meeting the printable-texture rule.
+    pub texture_ok: f64,
 }
 
 /// The dirt surface over the whole tile (world mm), the pebble mask and
@@ -189,25 +191,24 @@ pub fn surface(dirt: &Dirt, scene: &Scene, seed: Seed) -> (Field, Vec<bool>, Cou
         },
         Scale::Print,
     );
-    let ground = Field {
-        z: (0..base.z.len())
+    let ground = base.with_z(
+        (0..base.z.len())
             .map(|k| base.z[k] + w_tex.z[k] * SOIL_MID_AMP_MM * mid.z[k])
             .collect(),
-        ..base.clone()
-    };
+    );
     let (clodded, clods) = clod_layer(dirt, &frame, seed, &ground);
     let g = grit(&frame, seed);
-    let mut z = Field {
-        z: (0..ground.z.len())
+    let mut z = ground.with_z(
+        (0..ground.z.len())
             .map(|k| {
                 let soil = ground.z[k] + w_tex.z[k] * (clodded.z[k] - ground.z[k]);
                 soil + w_tex.z[k] * g.z[k]
             })
             .collect(),
-        ..ground.clone()
-    };
+    );
     let (mask, mut counts) = place_pebbles(&frame, seed, &mut z, &ground);
     counts.clods = clods;
+    counts.texture_ok = texture_ok(&z, &rim);
     (z, mask, counts)
 }
 
@@ -627,7 +628,7 @@ impl Look for Dirt {
         ] {
             scene.note(k, v as f64);
         }
-        scene.note("texture_ok", texture_ok(&z, &dt_kit::rim(scene.frame())));
+        scene.note("texture_ok", counts.texture_ok);
         Ok(())
     }
 }

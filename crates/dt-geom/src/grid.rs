@@ -229,7 +229,7 @@ fn edt_1d_arg(f: &[f64], out: &mut [f64], arg: &mut [usize]) {
             let p = v[k] as f64;
             s = ((f[q] + qf * qf) - (f[v[k]] + p * p)) / (2.0 * qf - 2.0 * p);
             if s <= z[k] {
-                k -= 1;
+                k -= 1; // z[0] is -inf, so this stops at k = 0
             } else {
                 break;
             }

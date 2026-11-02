@@ -269,10 +269,10 @@ fn separate_pinches(m: &mut TriMesh) -> usize {
             .filter(|&(i, j, d)| !edges.contains(&(i, j)) || d <= 2e-5)
             .map(|(i, j, _)| (i as usize, j as usize))
             .collect();
-        let normals = normals.get_or_insert_with(|| vertex_normals(m));
         if pairs.is_empty() {
             break;
         }
+        let normals = normals.get_or_insert_with(|| vertex_normals(m));
         pairs.sort_unstable();
         for (i, j) in pairs {
             let (ni, nj) = (normals[i], normals[j]);

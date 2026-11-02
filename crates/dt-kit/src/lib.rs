@@ -45,7 +45,7 @@ mod shape;
 mod stl;
 
 pub use audit::{Audit, Dropped, Export, Printer, audit};
-pub use dt_geom::{Mask, Rng, Seed, TriMesh};
+pub use dt_geom::{Grid, Mask, Rng, Seed, TriMesh};
 pub use field::{
     Field, Noise, Placed, Plane, Scale, Spread, cap, distance, noise, rim, scatter, smax, smooth01,
 };

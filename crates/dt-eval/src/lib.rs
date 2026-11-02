@@ -114,7 +114,7 @@ pub struct Built {
     /// Numbers the looks noted (counts), in build order.
     pub notes: Vec<(String, f64)>,
     /// The ground surface as built, for painted previews.
-    pub surface: Option<dt_kit::SurfacePaint>,
+    pub surface: Option<(dt_kit::Grid, dt_kit::Mask)>,
 }
 
 impl Built {
@@ -122,11 +122,15 @@ impl Built {
     /// (dirtlab's drybrush, pebbles grey), overhangs red.
     #[must_use]
     pub fn colours(&self) -> Vec<[f32; 3]> {
+        let surface = self
+            .surface
+            .as_ref()
+            .map(|(g, stone)| dt_kit::SurfacePaint::new(g, stone));
         dt_kit::paint_surface(
             &self.export.mesh,
             &self.materials,
             &self.audit.overhang,
-            self.surface.as_ref(),
+            surface.as_ref(),
         )
     }
 }
@@ -439,7 +443,7 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
         footprint,
         edge_mm,
         notes: scene.notes().to_vec(),
-        surface: scene.surface_paint(),
+        surface: scene.surface(),
     })
 }
 

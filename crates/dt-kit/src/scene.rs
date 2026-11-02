@@ -304,10 +304,11 @@ impl Scene {
         &self.notes
     }
 
-    /// The finished ground surface and its stone marks, for paint.
+    /// The finished ground surface and its stone marks, for paint
+    /// ([`crate::SurfacePaint::new`]); `None` when nothing painted it.
     #[must_use]
-    pub fn surface_paint(&self) -> Option<crate::SurfacePaint> {
-        (self.painted.count() > 0).then(|| crate::SurfacePaint::new(&self.field, &self.stone))
+    pub fn surface(&self) -> Option<(dt_geom::Grid, Mask)> {
+        (self.painted.count() > 0).then(|| (self.field.clone(), self.stone.clone()))
     }
 
     /// Reserve `n` slots of one material, in sequence.

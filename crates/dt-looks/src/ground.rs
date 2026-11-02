@@ -308,6 +308,34 @@ mod tests {
     }
 
     #[test]
+    fn hills_are_a_photocopy_at_openlock_scale() {
+        // the same hills at the same relative positions, scaled by
+        // 25.4 / 35 in height too (layout-scale noise, R7)
+        let shape = Shape::new(
+            "ground",
+            &controls(&[("level", Value::Number(5.0)), ("bumps", Value::Number(3.0))]),
+        )
+        .unwrap();
+        let at = |square: f64| {
+            let f = Frame {
+                cols: 2,
+                rows: 2,
+                square_mm: square,
+                cells_per_square: 70,
+            };
+            shape.surface(&Scene::new(f, Seed::new(1)), Seed::new(9)).0
+        };
+        let (db, ol) = (at(35.0), at(25.4));
+        let k = 25.4 / 35.0;
+        let worst =
+            db.z.iter()
+                .zip(&ol.z)
+                .map(|(a, b)| (a * k - b).abs())
+                .fold(0.0, f64::max);
+        assert!(worst < 1e-4, "worst {worst}"); // float rounding of keyed positions
+    }
+
+    #[test]
     fn out_of_range_bumps_are_refused() {
         let e = Ground::new(&controls(&[
             ("level", Value::Number(5.0)),

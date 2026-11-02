@@ -68,7 +68,7 @@ impl Field {
     pub fn map(&self, f: impl Fn(f64) -> f64) -> Self {
         Self {
             z: self.z.iter().map(|&v| f(v)).collect(),
-            ..*self.shape()
+            ..*self
         }
     }
 
@@ -82,12 +82,20 @@ impl Field {
                 .zip(&other.z)
                 .map(|(&a, &b)| f(a, b))
                 .collect(),
-            ..*self.shape()
+            ..*self
         }
     }
 
-    fn shape(&self) -> &Self {
-        self
+    /// A field on the same lattice with values `z`.
+    #[must_use]
+    pub fn with_z(&self, z: Vec<f64>) -> Self {
+        debug_assert_eq!(z.len(), self.z.len());
+        Self {
+            nx: self.nx,
+            ny: self.ny,
+            step: self.step,
+            z,
+        }
     }
 
     /// The x of column `i`, mm.
@@ -178,7 +186,7 @@ impl Field {
         } else {
             dt_geom::blur(&self.z, self.nx, self.ny, s)
         };
-        Self { z, ..*self.shape() }
+        Self { z, ..*self }
     }
 
     /// **morphology**: grey dilation over a disc of `r` mm.
@@ -186,7 +194,7 @@ impl Field {
     pub fn dilate(&self, r_mm: f64) -> Self {
         Self {
             z: dt_geom::dilate(&self.z, self.nx, self.ny, Footprint::Disc(r_mm / self.step)),
-            ..*self.shape()
+            ..*self
         }
     }
 
@@ -195,7 +203,7 @@ impl Field {
     pub fn erode(&self, r_mm: f64) -> Self {
         Self {
             z: dt_geom::erode(&self.z, self.nx, self.ny, Footprint::Disc(r_mm / self.step)),
-            ..*self.shape()
+            ..*self
         }
     }
 
@@ -209,7 +217,7 @@ impl Field {
         let lo = dt_geom::erode(&self.z, self.nx, self.ny, Footprint::Square(r));
         Self {
             z: hi.iter().zip(&lo).map(|(a, b)| a - b).collect(),
-            ..*self.shape()
+            ..*self
         }
     }
 
