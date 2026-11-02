@@ -10,13 +10,28 @@ commands:
            build the look's Rust tile at each seed and write the contact
            sheet to out/parity/<look>/: Python beside Rust where the look
            has a Rust tile, Python only where it does not yet
-           (looks: flat, dirt)
+           (looks: flat, dirt, wall-cut-stone, wall-brick,
+           wall-regular-brick, wall-fieldstone, floor-stone)
   help     show this message";
 
 /// Each look the harness knows: its Rust tile, if it has been ported.
 const LOOKS: &[(&str, Option<&str>)] = &[
     ("flat", Some("lib:tiles/test/flat-1x1.kdl")),
     ("dirt", Some("lib:tiles/test/dirt-2x2.kdl")),
+    (
+        "wall-cut-stone",
+        Some("lib:tiles/test/wall-cut-stone-1x1.kdl"),
+    ),
+    ("wall-brick", Some("lib:tiles/test/wall-brick-1x1.kdl")),
+    (
+        "wall-regular-brick",
+        Some("lib:tiles/test/wall-regular-brick-1x1.kdl"),
+    ),
+    (
+        "wall-fieldstone",
+        Some("lib:tiles/test/wall-fieldstone-1x1.kdl"),
+    ),
+    ("floor-stone", Some("lib:tiles/test/floor-stone-1x1.kdl")),
 ];
 
 fn main() -> ExitCode {
@@ -72,7 +87,12 @@ fn parity(args: &[String]) -> Result<(), String> {
     let tile = LOOKS
         .iter()
         .find(|(l, _)| *l == look)
-        .ok_or_else(|| format!("unknown look `{look}` (looks: flat, dirt)"))?
+        .ok_or_else(|| {
+            format!(
+                "unknown look `{look}` (looks: {})",
+                LOOKS.iter().map(|l| l.0).collect::<Vec<_>>().join(", ")
+            )
+        })?
         .1;
     let flag = |f: &str| args.iter().any(|a| a == f);
     let seeds: Vec<String> = match args.iter().position(|a| a == "--seeds") {

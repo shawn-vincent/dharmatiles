@@ -17,6 +17,8 @@
 //! | [`solid`] | a closed mesh → a leaf solid | every form |
 //! | [`clip`] | a solid ∩ an axis-aligned box | tile-edge butt joins, floor bottoms |
 //! | [`relief`] | the common stone relief, displaced along smoothed normals | wall blocks, floor slabs, fieldstone |
+//! | [`relief_weighted`] | the relief, scaled per vertex (faded edges, patchy calm) | wall blocks, fieldstone |
+//! | [`subdivide`] | split every triangle in four (midpoints) | fieldstone (relief needs the density) |
 //! | [`fbm3`] | isotropic 3D value-noise fBm | relief, foliage noise, bark |
 
 use dt_geom::{Bounds, Mesh, TriMesh};
@@ -179,6 +181,21 @@ impl Default for Relief {
 /// noise domain is rotated at random so faces do not trace the lattice.
 /// `seed` drives every draw. Port of `stone/finish.py:stone_relief`.
 pub fn relief(mesh: &mut TriMesh, seed: u64, r: &Relief) {
+    relief_weighted(mesh, seed, r, &|_, _| 1.0);
+}
+
+/// **relief weighted**: [`relief`] with the displacement of each vertex
+/// scaled by `weight(position, smoothed normal)` (positions as given,
+/// before any displacement). Walls use it to keep the relief off the
+/// faces another stone covers (a carved recess under a joint is a void
+/// whose roof cannot print) and for fieldstone's patchy calm/active
+/// envelope.
+pub fn relief_weighted(
+    mesh: &mut TriMesh,
+    seed: u64,
+    r: &Relief,
+    weight: &(dyn Fn([f64; 3], [f64; 3]) -> f64 + Sync),
+) {
     if mesh.positions.is_empty() {
         return;
     }
@@ -215,8 +232,38 @@ pub fn relief(mesh: &mut TriMesh, seed: u64, r: &Relief) {
         }
         let cd = dist(*q, relaxed[i]);
         let damp = 1.0 / (1.0 + (cd / 0.35) * (cd / 0.35));
-        let d = carve * damp;
+        let d = carve * damp * weight(*q, vn[i]);
         mesh.positions[i] = [0, 1, 2].map(|k| q[k] + vn[i][k] * d);
+    }
+}
+
+/// **subdivide**: every triangle split in four at its edge midpoints
+/// (shared midpoints, so a closed mesh stays closed). Port of trimesh's
+/// `subdivide`, which `stone_relief(refine=1)` runs first.
+#[must_use]
+pub fn subdivide(mesh: &TriMesh) -> TriMesh {
+    let mut positions = mesh.positions.clone();
+    let mut mid: std::collections::HashMap<(u32, u32), u32> = std::collections::HashMap::new();
+    let mut triangles = Vec::with_capacity(4 * mesh.triangles.len());
+    let mut midpoint = |a: u32, b: u32, positions: &mut Vec<[f64; 3]>| -> u32 {
+        let key = (a.min(b), a.max(b));
+        *mid.entry(key).or_insert_with(|| {
+            let (p, q) = (positions[a as usize], positions[b as usize]);
+            positions.push([0, 1, 2].map(|k| 0.5 * (p[k] + q[k])));
+            u32::try_from(positions.len() - 1).unwrap_or(u32::MAX)
+        })
+    };
+    for t in &mesh.triangles {
+        let [a, b, c] = *t;
+        let ab = midpoint(a, b, &mut positions);
+        let bc = midpoint(b, c, &mut positions);
+        let ca = midpoint(c, a, &mut positions);
+        triangles.extend([[a, ab, ca], [ab, b, bc], [ca, bc, c], [ab, bc, ca]]);
+    }
+    TriMesh {
+        positions,
+        triangles,
+        ..TriMesh::default()
     }
 }
 
