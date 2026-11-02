@@ -247,11 +247,98 @@ def build_flat(seed: int):
     return mesh, painted, (surf.tile_w, surf.tile_h), 5.0, {"peg_mm": peg}, dt
 
 
+LEAF_RGB = (84, 140, 62)
+
+
+def build_tree(seed: int):
+    """The Python twin of lib:tiles/test/tree-1x1.kdl: the 1×1 grass-tree
+    tile's Tree layer (src/tiles/ground/1x1-grass-tree.tile.py: height 35,
+    canopy radius 12, base radius 11; n_attractors 32 as the Rust default)
+    grown at the tile centre on a flat 5 mm slab with the DungeonBlocks
+    base, unioned in Manifold.  Leaves OFF on both sides (the Rust test
+    tile runs ``leaves clumps-only`` until its leaves pass the gate), so
+    this is wood + foliage clumps."""
+    import warnings
+    import manifold3d as m3d
+    from dharmatiles.bases import dungeonblocks as db
+    from dharmatiles.core.config import BaseConfig, SurfaceConfig
+    from dharmatiles.core.mesh import make_heightmap_solid
+    from dharmatiles.trees.layer import Tree
+    from dharmatiles.trees.mesh import build_branch_mesh
+    from dharmatiles.trees.skeleton import grow_skeleton
+    ground = 5.0
+    t = Tree(height_mm=35.0, canopy_radius_mm=12.0, canopy_base_radius_mm=11.0,
+             n_attractors=32, leaf_length_mm=4.5, leaf_width_mm=3.0)
+    t0 = time.perf_counter()
+    surf = SurfaceConfig(cols=1, rows=1, seed=seed)
+    rng = np.random.default_rng(seed)
+    env = t._sample_envelope(surf.tile_w / 2, surf.tile_h / 2, ground, rng)
+    nodes, parents, radii, ind, outd, att, _ = grow_skeleton(
+        env, rng, n_attractors=t.n_attractors, segment_length_mm=t.segment_length_mm,
+        min_radius_mm=t.min_radius_mm, branch_split_angle_deg=t.branch_split_angle_deg,
+        target_fdm_angle_deg=t.target_fdm_angle_deg, max_branches_per_step=t.max_branches_per_step,
+        branch_exponent=t.branch_exponent, smoothing_alpha=t.smoothing_alpha,
+        group_width_mm=t.group_width_mm, group_height_mm=t.group_height_mm,
+        foliage_bulge_mm=t.foliage_bulge_mm, branch_split_eagerness=t.branch_split_eagerness,
+        branch_target=t.branch_target, branch_fork_balance=t.branch_fork_balance)
+    with warnings.catch_warnings(record=True):
+        wood, fol, _, _ = build_branch_mesh(
+            nodes, parents, radii, ind, outd, terrain_z=ground,
+            strict_fdm_angle_deg=t.strict_fdm_angle_deg,
+            foliage_cluster_radius_mm=t.foliage_cluster_radius_mm,
+            foliage_cluster_length_mm=t.foliage_cluster_length_mm, bark=t.bark, bark_seed=seed,
+            leaves=False)
+    z = np.full((surf.grid_h, surf.grid_w), ground)
+    slab = make_heightmap_solid(z, surf.tile_w, surf.tile_h, 0.0)
+    cfg = BaseConfig()
+    base = db.make_base(surf, db.select_peg_height(z, cfg, float(slab.bounds[1, 2])), cfg)
+
+    def solid(m):
+        return m3d.Manifold(mesh=m3d.Mesh(vert_properties=np.asarray(m.vertices, np.float32),
+                                          tri_verts=np.asarray(m.faces, np.uint32)))
+    acc = solid(slab) + solid(base)
+    for part in (wood, fol):        # concatenations of closed shells
+        if len(part.vertices):
+            for b in part.split(only_watertight=False):
+                acc = acc + solid(b)
+    u = acc.to_mesh()
+    mesh = trimesh.Trimesh(np.asarray(u.vert_properties)[:, :3], np.asarray(u.tri_verts))
+    dt = time.perf_counter() - t0
+    el = [np.degrees(np.arcsin(np.clip((nodes[i] - nodes[parents[i]])[2]
+                                       / np.linalg.norm(nodes[i] - nodes[parents[i]]), -1, 1)))
+          for i in range(1, len(nodes)) if np.linalg.norm(nodes[i] - nodes[parents[i]]) > 1e-9]
+    ch = np.bincount(parents[1:], minlength=len(nodes))
+    painted = mesh.copy()
+    fc = np.tile([*CONNECTOR_RGB, 255], (len(mesh.faces), 1))
+    fc[mesh.triangles_center[:, 2] > 0.0, :3] = EARTH_RGB
+    fc[mesh.triangles_center[:, 2] > ground + 0.05, :3] = LEAF_RGB
+    painted.visual.face_colors = fc
+    lab = {"tree.attractors": len(att), "tree.terminals": int((ch == 0).sum()),
+           "tree.nodes": len(nodes), "tree.min_branch_elevation_deg": float(min(el)),
+           "tree.trunk_radius_mm": float(radii[0])}
+    return mesh, painted, (surf.tile_w, surf.tile_h), ground, lab, dt
+
+
+def tree_metrics(mesh: trimesh.Trimesh, ground: float) -> dict:
+    """What stands on the ground: height, crown width (the widest of the
+    x and y extents above the trunk's lower third) and volume above it."""
+    v = mesh.vertices
+    above = v[v[:, 2] > ground + 0.05]
+    h = float(above[:, 2].max() - ground) if len(above) else 0.0
+    crown = above[above[:, 2] > ground + h / 3] if len(above) else above
+    w = float(max(np.ptp(crown[:, 0]), np.ptp(crown[:, 1]))) if len(crown) else 0.0
+    try:
+        vol = float(mesh.slice_plane([0, 0, ground + 0.05], [0, 0, 1], cap=True).volume)
+    except Exception:  # noqa: BLE001
+        vol = float("nan")
+    return {"tree_height_mm": h, "crown_width_mm": w, "tree_volume_mm3": vol}
+
+
 LABS = {"dirt": build_dirt, "dirt-stones": lambda seed: build_dirt(seed, stones=True),
-        "flat": build_flat}
+        "flat": build_flat, "tree": build_tree}
 # What the Python column is, in the captions.
 LAB_NOTE = {"dirt": "dirtlab, stones off (P3)", "dirt-stones": "dirtlab with stones",
-            "flat": "flat 1×1 twin"}
+            "flat": "flat 1×1 twin", "tree": "library Tree, 1×1 tile params, leaves off"}
 
 
 # ── Parity verdict (plan.html, "The parity harness") ────────────────────────
@@ -272,6 +359,21 @@ PARITY = [
 ]
 
 
+# The tree's rows: same look and statistics, not RNG-identical (P5).
+TREE_PARITY = [
+    ("terminals", ("lab", "tree.terminals"), "rel", 0.15),
+    ("skeleton nodes", ("lab", "tree.nodes"), "info", None),
+    ("min branch elevation (deg)", ("lab", "tree.min_branch_elevation_deg"), "min", 26.0),
+    ("trunk radius (mm)", ("lab", "tree.trunk_radius_mm"), "rel", 0.25),
+    ("height (mm)", ("tree_height_mm",), "rel", 0.15),
+    ("crown width (mm)", ("crown_width_mm",), "rel", 0.20),
+    ("volume (mm3)", ("tree_volume_mm3",), "rel", 0.30),
+    ("overhang (mm2)", ("overhang_mm2",), "info", None),
+    ("build (s)", ("build_s",), "info", None),
+]
+PARITY_OF = {"tree": TREE_PARITY}
+
+
 def _dig(d, path):
     for k in path:
         if not isinstance(d, dict) or d.get(k) is None:
@@ -283,7 +385,7 @@ def _dig(d, path):
 def parity_verdict(look: str, py: dict, rs: dict) -> dict:
     """Python vs Rust means over the seeds, per PARITY row; writes nothing."""
     rows = []
-    for name, path, test, tol in PARITY:
+    for name, path, test, tol in PARITY_OF.get(look, PARITY):
         pv = [v for v in (_dig(py[s], path) for s in py) if v is not None]
         rv = [v for v in (_dig(rs[s], path) for s in rs) if v is not None]
         pm = float(np.mean(pv)) if pv else None
@@ -423,6 +525,8 @@ def run(look: str, seeds: list[int], out: pathlib.Path, beside: pathlib.Path | N
         met, ov = stl_metrics(mesh, fp, edge)
         met.update(build_s=build_s, metrics_s=time.perf_counter() - t0, edge_mm=edge, lab=lab, look=look,
                    seed=seed)
+        if look == "tree":
+            met.update(tree_metrics(mesh, edge))
         (sd / "metrics.json").write_text(json.dumps(met, indent=2))
         summary[seed] = py_all[seed] = met
         pm = paint_overhang(painted, ov)
@@ -440,6 +544,8 @@ def run(look: str, seeds: list[int], out: pathlib.Path, beside: pathlib.Path | N
             rmet, _ = stl_metrics(rmesh, fp, redge)
             rmet.update(build_s=rec["build_s"], edge_mm=redge, lab=rec.get("stats", {}), look=look,
                         seed=seed, rust_audit=rec["audit"])
+            if look == "tree":
+                rmet.update(tree_metrics(rmesh, redge))
             (sd / "rust-metrics.json").write_text(json.dumps(rmet, indent=2))
             summary[seed] = {"python": met, "rust": rmet}
             rs_all[seed] = rmet
