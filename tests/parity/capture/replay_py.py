@@ -5,8 +5,18 @@ The same inputs the Rust replay sees (``.dtm`` operands re-imported), timed
 the same way (op + ``num_tri()``), so Rust and Python compare like for like.
 ``--no-face-id`` drops face IDs on import, as manifold-csg's C API must.
 
+``--tolerance mesh`` passes each operand's saved tolerance into the import
+(``Mesh64(tolerance=…)``, as the port's ``MeshGL`` import does; R1 found
+manifold3d 3.5.1 ignores it: ``get_tolerance()`` stays at the default);
+``--tolerance set`` imports at the default and then calls
+``set_tolerance`` (all manifold-csg's C API allows). The default, ``none``,
+imports every operand at the default tolerance for its size, as the first
+R1 runs did. Python's in-situ operands were float32 imports, whose
+tolerance is about 1.2e-7 x size, not the default ~1e-12 x size.
+
 Usage:
     python tests/parity/capture/replay_py.py CAPTURE_DIR CASE [--no-face-id]
+        [--tolerance none|mesh|set]
 """
 from __future__ import annotations
 
@@ -22,7 +32,7 @@ import manifold3d as m3d
 import numpy as np
 
 
-def read_dtm(path: pathlib.Path, face_id: bool) -> m3d.Manifold:
+def read_dtm(path: pathlib.Path, face_id: bool, tolerance: str = 'none') -> m3d.Manifold:
     b = path.read_bytes()
     assert b[:8] == b'DTMESH01'
     num_prop, _, n_vert, n_tri, n_merge, n_ri, n_ro, n_rt, n_fi, n_rf, tol = struct.unpack_from(
@@ -46,8 +56,12 @@ def read_dtm(path: pathlib.Path, face_id: bool) -> m3d.Manifold:
     kw = dict(merge_from_vert=mf, merge_to_vert=mt, run_index=ri, run_original_id=ro)
     if face_id and n_fi:
         kw['face_id'] = fi
-    return m3d.Manifold(mesh=m3d.Mesh64(vert_properties=vp,
-                                        tri_verts=tv, **kw))
+    if tolerance == 'mesh':
+        kw['tolerance'] = tol
+    m = m3d.Manifold(mesh=m3d.Mesh64(vert_properties=vp, tri_verts=tv, **kw))
+    if tolerance == 'set' and tol > m.get_tolerance():
+        m = m.set_tolerance(tol)
+    return m
 
 
 def main() -> None:
@@ -55,6 +69,7 @@ def main() -> None:
     ap.add_argument('dir', type=pathlib.Path)
     ap.add_argument('case')
     ap.add_argument('--no-face-id', action='store_true')
+    ap.add_argument('--tolerance', choices=('none', 'mesh', 'set'), default='none')
     ap.add_argument('--out', type=pathlib.Path, help='per-op JSON lines (ms, tris, vol)')
     args = ap.parse_args()
     per_op = open(args.out, 'w') if args.out else None
@@ -62,7 +77,8 @@ def main() -> None:
 
     def get(h):
         if h not in cache:
-            cache[h] = read_dtm(args.dir / 'meshes' / f'{h}.dtm', not args.no_face_id)
+            cache[h] = read_dtm(args.dir / 'meshes' / f'{h}.dtm', not args.no_face_id,
+                                args.tolerance)
             if len(cache) > 48:
                 cache.popitem(last=False)
         return cache[h]
@@ -108,7 +124,8 @@ def main() -> None:
             tot['vol_over_1e6'] += rel > 1e-6
     if per_op:
         per_op.close()
-    tot.update(case=args.case, face_id=not args.no_face_id, op_s=tot.pop('ms') / 1e3)
+    tot.update(case=args.case, face_id=not args.no_face_id, tolerance=args.tolerance,
+               op_s=tot.pop('ms') / 1e3)
     print(json.dumps(tot), flush=True)
     os._exit(0)
 
