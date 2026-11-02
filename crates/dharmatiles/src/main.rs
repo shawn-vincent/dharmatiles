@@ -13,6 +13,7 @@
 //! errors go to stderr, errors with miette: the line, a caret under the
 //! mistake, and a hint.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
@@ -67,6 +68,28 @@ enum Command {
     },
 }
 
+/// One line to stdout; see [`emit`].
+macro_rules! say {
+    ($($t:tt)*) => { emit(&mut std::io::stdout().lock(), format_args!($($t)*)) };
+}
+
+/// One line to stderr; see [`emit`].
+macro_rules! tell {
+    ($($t:tt)*) => { emit(&mut std::io::stderr().lock(), format_args!($($t)*)) };
+}
+
+/// Write one line.  When the reader has gone (`dharmatiles check … | head`)
+/// the pipe is closed: stop quietly with 0, as `cat` does, instead of
+/// panicking (101).  Any other write error is ignored, as there is
+/// nowhere left to report it.
+fn emit(w: &mut dyn Write, args: std::fmt::Arguments) {
+    if let Err(e) = w.write_fmt(args).and_then(|()| w.write_all(b"\n"))
+        && e.kind() == std::io::ErrorKind::BrokenPipe
+    {
+        std::process::exit(0);
+    }
+}
+
 const OK: u8 = 0;
 const ERROR: u8 = 1;
 const AUDIT_FAILED: u8 = 3;
@@ -109,10 +132,10 @@ fn check(paths: &[String], json: bool) -> u8 {
                 if !json {
                     match &c.tile {
                         Some(t) if pending.is_empty() => {
-                            eprintln!("ok {p}: tile `{}`, {} stack entries", t.name, t.stack.len());
+                            tell!("ok {p}: tile `{}`, {} stack entries", t.name, t.stack.len());
                         }
                         Some(t) => {
-                            eprintln!(
+                            tell!(
                                 "ok {p}: tile `{}`; {} part(s) need looks not built yet, so `build` refuses it:",
                                 t.name,
                                 pending.len()
@@ -122,10 +145,10 @@ fn check(paths: &[String], json: bool) -> u8 {
                                     .location()
                                     .map(|(f, l, c)| format!("{f}:{l}:{c}: "))
                                     .unwrap_or_default();
-                                eprintln!("  {at}{}", d.message);
+                                tell!("  {at}{}", d.message);
                             }
                         }
-                        None => eprintln!(
+                        None => tell!(
                             "ok {p}: {} definitions, no tile",
                             c.file.doc.definitions.len()
                         ),
@@ -148,7 +171,7 @@ fn check(paths: &[String], json: bool) -> u8 {
         }
     }
     if json {
-        println!("{}", json!({"ok": code == OK, "tiles": reports}));
+        say!("{}", json!({"ok": code == OK, "tiles": reports}));
     }
     code
 }
@@ -175,8 +198,8 @@ fn build(paths: &[String], opts: &Options, out: &Path, png: bool, json: bool) ->
             Ok(f) => f,
             Err(e) => {
                 code = ERROR;
-                eprintln!("error: {p}: {e}");
-                reports.push(json!({"path": p, "ok": false, "errors": [{"code": "dt::write", "message": e}]}));
+                tell!("error: {p}: {e}");
+                reports.push(json!({"path": p, "ok": false, "errors": errors_json(&[Diag::plain("dt::write", e)])}));
                 continue;
             }
         };
@@ -186,7 +209,7 @@ fn build(paths: &[String], opts: &Options, out: &Path, png: bool, json: bool) ->
         }
         let a = &b.audit;
         if !json {
-            eprintln!(
+            tell!(
                 "built {p} → {}\n  {} triangles · watertight {} · overhang {:.2} mm² · {} dropped · {} holes · build {:.2} s, written {:.2} s",
                 files[0].display(),
                 a.triangles,
@@ -198,7 +221,7 @@ fn build(paths: &[String], opts: &Options, out: &Path, png: bool, json: bool) ->
                 total_s
             );
             for f in &failures {
-                eprintln!("  audit failed: {f}");
+                tell!("  audit failed: {f}");
             }
         }
         let mut r = tile_json(&b, &failures, built_s);
@@ -212,7 +235,7 @@ fn build(paths: &[String], opts: &Options, out: &Path, png: bool, json: bool) ->
         reports.push(r);
     }
     if json {
-        println!("{}", json!({"ok": code == OK, "tiles": reports}));
+        say!("{}", json!({"ok": code == OK, "tiles": reports}));
     }
     code
 }
@@ -301,6 +324,6 @@ fn errors_json(errs: &[Diag]) -> Vec<Value> {
 
 fn report(errs: &[Diag]) {
     for e in errs {
-        eprintln!("{:?}", miette::Report::new(e.clone()));
+        tell!("{:?}", miette::Report::new(e.clone()));
     }
 }

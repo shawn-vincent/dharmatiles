@@ -288,8 +288,14 @@ impl Reader<'_> {
         let text = match self.sources.read(path) {
             Ok(t) => t,
             Err(e) => {
+                // the document asked for itself, or a file a `use` names
+                let code = if from.is_some() {
+                    "dt::use"
+                } else {
+                    "dt::source"
+                };
                 self.errors.push(at(
-                    "dt::use",
+                    code,
                     e,
                     "used here",
                     from.map(|_| {
