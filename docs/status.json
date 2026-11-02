@@ -76,9 +76,9 @@
    "body": "rust",
    "area": "Rust P3",
    "state": "running",
-   "title": "Phase 3 started: rocks and water",
-   "detail": "Branch rust/p3. rocklab faceted rocks, waterlab swell-chaos water, the water edge contract, dirt gains stones, 11 water tile twins, preview.",
-   "updated": "2026-11-02T23:00:00Z"
+   "title": "P3: kernels in, porting rocks and water",
+   "detail": "Branch rust/p3. Mesh kernel hull/refine/transform/slice, convex half-space carve, geodesic distance and 3D fBm landed; porting rocklab rocks, then waterlab swell-chaos and the water edge contract.",
+   "updated": "2026-11-02T21:30:33Z"
   },
   {
    "id": "p5",
