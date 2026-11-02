@@ -89,6 +89,16 @@
    "title": "Phase 1 exit reviews running",
    "detail": "Adversarial review + exit-criteria check (read-only) and a simplify pass (applies cleanups, hash and snapshots must not move) on rust/p1.",
    "updated": "2026-11-02T17:45:34Z"
+  },
+  {
+   "id": "docs-fixes",
+   "order": 100,
+   "body": "other",
+   "area": "Docs",
+   "state": "running",
+   "title": "Docs follow-ups: 55° audits, dead paths, red-painted renders",
+   "detail": "Low-hanging fixes from the docs consolidation.",
+   "updated": "2026-11-02T17:45:33Z"
   }
  ]
 }
