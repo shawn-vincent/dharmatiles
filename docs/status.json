@@ -76,19 +76,19 @@
    "body": "rust",
    "area": "Shawn",
    "state": "waiting",
-   "title": "Your next checkpoint",
-   "detail": "Test print of the flat 1×1 DungeonBlocks tile built by the Rust binary: /Users/svincent/projects/dharmatiles-p1-skel/out/parity/flat/rust/s1/db/test/flat-1x1-db.stl. Also: review the eight look pages (home page, Looks).",
-   "updated": "2026-11-02T15:04:37Z"
+   "title": "Shawn: test print of flat 1×1 under way",
+   "detail": "Printing flat-1x1-db.stl from the Rust engine (out/parity/flat/rust/s1/db/test/).",
+   "updated": "2026-11-02T17:45:34Z"
   },
   {
    "id": "p1-exit",
    "body": "rust",
    "order": 45,
    "area": "Rust P1",
-   "state": "next",
-   "title": "Phase 1 exit reviews",
-   "detail": "Simplify and adversarial reviews of rust/p1, then the P1 exit criteria in the plan.",
-   "updated": "2026-11-02T14:41:00Z"
+   "state": "running",
+   "title": "Phase 1 exit reviews running",
+   "detail": "Adversarial review + exit-criteria check (read-only) and a simplify pass (applies cleanups, hash and snapshots must not move) on rust/p1.",
+   "updated": "2026-11-02T17:45:34Z"
   }
  ]
 }
