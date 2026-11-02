@@ -1,25 +1,17 @@
 // A 2×2 grass meadow with one tree.
 // Twin of src/tiles/ground/2x2-grass-tree.tile.py.
-//
-// Across is in squares, up is in h (1 = the 33.1 mm wall top), and
-// print-scale details such as blades and leaves are in mm.
 
-use "lib:parts/grass"           // long-grass
+use "parts/grass" long-grass
 
-tile grass-tree cols=2 rows=2 seed=84 {
-
-    // No lines are named, so the paint bucket fills the whole tile.
-    region meadow { fill 0.5 0.5 }
-
+tile grass-tree size="2x2" seed=84 {
     stack {
-        hills self=meadow height=ground        // flat ground, 5 mm
+        ground                          // flat, at the ground level (5 mm)
+        long-grass                      // grows round the trunk, wherever it is listed
 
-        tree self=meadow per-square=0.25 tips=32 foliage=#true {
-            leaf length=4.5 width=3.0           // mm
-            /- debug attractors=#true           // slashdash: switched off
+        tree height=40 {               // anywhere on the tile; or at="1,1"
+            trunk height=30             // bare trunk below the crown
+            crown width=30 clumps=32 shape=round branching=normal
+            leaf length=4.5 width=3
         }
-
-        // After the tree, so the blades steer round its trunk.
-        long-grass self=meadow
     }
 }

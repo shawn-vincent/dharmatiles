@@ -2,23 +2,33 @@
 //!
 //! KDL v2 text is parsed by the `kdl` crate into a node tree, then decoded
 //! by hand into the typed model in [`model`], keeping source spans so
-//! every mistake is reported through miette at the text that caused it.
-//! Parameter values go through the small expression language in [`expr`].
-//! [`edit`] changes one value without disturbing anything else in the
-//! file.
+//! every mistake is reported through miette at the text that caused it,
+//! with a hint.  The vocabulary is R6's, decided 1 Nov 2026
+//! (docs/analysis/rust-rewrite/spikes/r6-kdl.html): authors write mm at
+//! the DungeonBlocks reference and named levels, name tile edges, give
+//! points as quoted pairs, use words for character, and say how many with
+//! a `scatter`.
+//!
+//! - [`decode`] reads one file; [`uses`] reads only its `use` lines.
+//! - [`Known`] holds what a file can see: the standard levels (the
+//!   prelude, [`known::PRELUDE`]) and the files it `use`s.
+//! - [`schema`] and [`looks`] hold every look's controls and words.
+//! - [`edit`] changes, inserts and removes controls without disturbing
+//!   anything else in the file.
 //!
 //! This crate has no geometry dependency, so `dharmatiles check`, an
 //! editor or the browser can use it without building Manifold.
-//!
-//! Status: Phase 0 spike R6 (plan.html).  The model and the look tables
-//! in [`schema`] are drafts for the three spike tiles.
 
 pub mod decode;
 pub mod edit;
 pub mod error;
 pub mod expr;
+pub mod known;
+pub mod looks;
 pub mod model;
+pub mod place;
 pub mod schema;
 
-pub use decode::{Known, decode};
+pub use decode::{decode, uses};
 pub use error::DocError;
+pub use known::Known;

@@ -1,115 +1,265 @@
-//! The controls each built-in look accepts.
+//! What a document may say: the controls each built-in look accepts, the
+//! words that stand for numbers, and how each kind of value scales.
 //!
-//! This is the draft for the looks the three R6 tiles use.  In P1 each
-//! look's table moves next to its Rust type in dt-looks' public model and
-//! also feeds the JSON Schema, `dharmatiles looks <name>` and the MCP
-//! `describe_look` tool.
+//! This is the R6 vocabulary decided on 1 Nov 2026 (plan.html, R6
+//! decisions; spikes/r6-kdl.html, "Vocabulary, per look").  The tables
+//! live in [`crate::looks`]; this module holds their types.
+//!
+//! The tables are the single source for `dharmatiles looks <name>`, the
+//! MCP `describe_look` tool and, later, the JSON Schema: dt-doc owns them
+//! so that validation never needs geometry.
 
-use crate::expr::Unit;
+/// The DungeonBlocks reference square, mm.  Authors write every size at
+/// this scale; other systems scale the written sizes like a photocopy.
+pub const SQUARE_MM: f64 = 35.0;
 
-/// What a control measures, which fixes the unit a document may write.
+/// h: the official 33.1 mm wall top at the DungeonBlocks reference.  It is
+/// the engine's vertical scale (levels are kept as fractions of it), and
+/// an author may opt in to it with `(h)1.2`.
+pub const H_MM: f64 = 33.1;
+
+/// What a value measures, which fixes what may be written for it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Axis {
-    /// Layout across, in squares.
-    Across,
-    /// Layout up, in h (fractions of the wall), or a named height.
-    Up,
-    /// A print-scale detail, in true millimetres.
+    /// A size in mm at the DungeonBlocks reference.  `(mm)` checks it and
+    /// `(h)` writes it in wall tops.  Scales with the system.
     Mm,
-    /// An angle, in degrees.
+    /// Where a surface sits: a named level, mm above the tile base, or an
+    /// expression of levels (`"ground - 1"`).  Scales with the system.
+    Level,
+    /// An angle in degrees.  Never scales.
     Deg,
-    /// A share: a plain fraction or a percent.
+    /// A share, written as a percent (`"85%"`).  Never scales.
     Share,
-    /// A plain number: a count or a multiplier.
-    Number,
-    /// A density, per square.
+    /// A count of things.  Never scales.
+    Count,
+    /// A density per square (or per square of length along a line).
     PerSquare,
+    /// A plain number: a weight, a fraction, an exponent.
+    Number,
     /// `#true` or `#false`.
     Bool,
-    /// One of a fixed set of words.
-    Choice(&'static [&'static str]),
-    /// The name of a line in this definition.
-    Line,
-    /// The name of a region in this definition.
-    Region,
-    /// A kind tag that solids carry (`cliff`, `rock`, `wall`, …).
+    /// Only the control's words.
+    Word,
+    /// A kind of thing solids carry: `cliff`, `wall`, `rock`, `tree`.
     Tag,
-    /// Free text.
-    Text,
+}
+
+/// How a written value changes when a tile is built for another system
+/// (R6.5: "every size the author writes scales with the system like a
+/// photocopy").  The evaluator applies this; dt-doc only records it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scaling {
+    /// Multiply by the system's square / 35 mm.  Hidden printability
+    /// floors (see [`crate::model::Printer`]) are applied by the looks
+    /// after scaling, so a scaled leaf or blade never gets thinner than
+    /// what prints.
+    Photocopy,
+    /// Positions and densities in squares: they follow the square itself.
+    Squares,
+    /// Angles, shares, counts and words: unchanged.
+    Fixed,
 }
 
 impl Axis {
-    /// Units a document may write for this axis.  The first is the default.
+    /// How values on this axis scale with the system.
     #[must_use]
-    pub fn units(self) -> &'static [Unit] {
+    pub fn scaling(self) -> Scaling {
         match self {
-            Axis::Across => &[Unit::Sq],
-            Axis::Up => &[Unit::H],
-            Axis::Mm => &[Unit::Mm],
-            Axis::Deg => &[Unit::Deg],
-            Axis::Share => &[Unit::Percent],
-            _ => &[],
+            Axis::Mm | Axis::Level => Scaling::Photocopy,
+            Axis::PerSquare => Scaling::Squares,
+            _ => Scaling::Fixed,
         }
+    }
+
+    /// True when values are numbers or expressions.
+    #[must_use]
+    pub fn is_numeric(self) -> bool {
+        matches!(
+            self,
+            Axis::Mm
+                | Axis::Level
+                | Axis::Deg
+                | Axis::Share
+                | Axis::Count
+                | Axis::PerSquare
+                | Axis::Number
+        )
     }
 
     /// How the axis reads in an error message.
     #[must_use]
     pub fn describe(self) -> &'static str {
         match self {
-            Axis::Across => "a length across, in squares",
-            Axis::Up => "a height, in h (fractions of the wall) or a named height",
-            Axis::Mm => "a print-scale size, in true millimetres",
-            Axis::Deg => "an angle, in degrees",
-            Axis::Share => "a share, as a fraction or a percent",
+            Axis::Mm => "a size in mm",
+            Axis::Level => "a level: a named level, mm, or an expression like \"ground - 1\"",
+            Axis::Deg => "an angle in degrees",
+            Axis::Share => "a share, written as a percent such as \"30%\"",
+            Axis::Count => "a count",
+            Axis::PerSquare => "a number per square",
             Axis::Number => "a plain number",
-            Axis::PerSquare => "a count per square",
             Axis::Bool => "#true or #false",
-            Axis::Choice(_) => "one of a fixed set of words",
-            Axis::Line => "the name of a line",
-            Axis::Region => "the name of a region",
-            Axis::Tag => "a kind tag",
-            Axis::Text => "text",
+            Axis::Word => "one of a fixed set of words",
+            Axis::Tag => "a kind of thing: cliff, wall, rock or tree",
+        }
+    }
+}
+
+/// A word that stands for documented numbers (R6 V2): `rock mixed`,
+/// `crown branching=normal`, `mostly=small`.  The decoded model keeps
+/// the word and these numbers, so a GUI can show both.
+#[derive(Debug, PartialEq)]
+pub struct Word {
+    /// The word as written.
+    pub word: &'static str,
+    /// What it gives you, in one line.
+    pub about: &'static str,
+    /// The generator numbers it stands for, by name.  Empty for a plain
+    /// choice whose meaning is the look's own code path.
+    pub sets: &'static [(&'static str, f64)],
+    /// A named level it stands for (`height full` is the `wall-top`
+    /// level), resolved through the tile's levels.
+    pub level: Option<&'static str>,
+}
+
+/// One control: a value, sub-controls written as properties on its own
+/// line, or both (`ledges 1 height="40%"`).
+#[derive(Debug, PartialEq)]
+pub struct Control {
+    /// Name as written.
+    pub name: &'static str,
+    /// What its value measures; `None` for a group, whose controls are
+    /// all properties on its own line (`leaf length=4.5 width=3`).
+    pub value: Option<Axis>,
+    /// Words its value may also be (or, with [`Axis::Word`], must be).
+    pub words: &'static [Word],
+    /// Sub-controls, written as properties on the control's own line.
+    pub subs: &'static [Control],
+    /// Whether it must be given.
+    pub required: bool,
+    /// Expert controls are accepted in `define`s (parts files) and
+    /// refused in tiles (R6 V7).
+    pub expert: bool,
+    /// The sensible range for a number, used to catch slips.
+    pub limits: Option<(f64, f64)>,
+    /// The default, as an author would write it; empty if none.
+    pub default: &'static str,
+    /// One line of help.
+    pub about: &'static str,
+}
+
+impl Control {
+    /// A sub-control by name.
+    #[must_use]
+    pub fn sub(&'static self, name: &str) -> Option<&'static Control> {
+        self.subs.iter().find(|c| c.name == name)
+    }
+
+    /// A word by name.
+    #[must_use]
+    pub fn word(&'static self, word: &str) -> Option<&'static Word> {
+        self.words.iter().find(|w| w.word == word)
+    }
+
+    /// True for a group: sub-controls only, no value of its own.
+    #[must_use]
+    pub fn is_group(&self) -> bool {
+        self.value.is_none()
+    }
+
+    /// How its value scales with the system (a group: `Fixed`).
+    #[must_use]
+    pub fn scaling(&self) -> Scaling {
+        self.value.map_or(Scaling::Fixed, Axis::scaling)
+    }
+}
+
+/// The place words (R6 "Place words"): one meaning each, shared by every
+/// look.  Which a look takes is in [`Look::place`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlaceWord {
+    /// `in=` a region; default the whole tile.
+    In,
+    /// `along=` a line, an edge or an edge path.
+    Along,
+    /// `side=left|right|centre` of a drawn line.
+    Side,
+    /// `at=` a point; ranges allowed.
+    At,
+    /// `against=` a kind of thing: gathers at its foot.
+    Against,
+}
+
+impl PlaceWord {
+    /// The word as written.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PlaceWord::In => "in",
+            PlaceWord::Along => "along",
+            PlaceWord::Side => "side",
+            PlaceWord::At => "at",
+            PlaceWord::Against => "against",
         }
     }
 
-    /// True when values are expressions (numbers, ranges, arithmetic).
+    /// Parse a place word.
     #[must_use]
-    pub fn is_numeric(self) -> bool {
-        matches!(
-            self,
-            Axis::Across
-                | Axis::Up
-                | Axis::Mm
-                | Axis::Deg
-                | Axis::Share
-                | Axis::Number
-                | Axis::PerSquare
-        )
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match s {
+            "in" => PlaceWord::In,
+            "along" => PlaceWord::Along,
+            "side" => PlaceWord::Side,
+            "at" => PlaceWord::At,
+            "against" => PlaceWord::Against,
+            _ => return None,
+        })
     }
 }
 
-/// One control.
-#[derive(Debug)]
-pub struct Control {
-    /// Name as written in documents.
-    pub name: &'static str,
-    /// What it measures.
-    pub axis: Axis,
-    /// Whether a call must give it.
-    pub required: bool,
-    /// One line of help.
-    pub about: &'static str,
+/// What kind of stack entry a look is, which decides how the evaluator
+/// plans it (R6 V1: stack order is free for solids).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Role {
+    /// Paints or shapes a surface (`ground`, `dirt`, `grass`).  Order
+    /// among surfaces decides which paints over which.
+    Surface,
+    /// One solid thing placed with `at=` (`tree`, `rock`, …).  It can be
+    /// a child of a `scatter`.
+    Thing,
+    /// A solid built along an edge or line (`wall`, `cliff`).
+    Run,
+    /// More than one thing (`scatter`): its kind is its children's.
+    Scatter,
 }
 
-/// A named group of controls written as a child node (`leaf length=4.5`).
-#[derive(Debug)]
-pub struct Group {
-    /// Name as written.
-    pub name: &'static str,
-    /// One line of help.
-    pub about: &'static str,
-    /// Its controls.
-    pub controls: &'static [Control],
+/// Solid or surface, for planning (R6 V1): every solid is planned before
+/// anything grows, and surfaces grow round every solid wherever they are
+/// listed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    /// Paints or shapes a surface; grows round solids.
+    Surface,
+    /// Builds solids, planned first.
+    Solid,
+    /// A definition or scatter holding both.
+    Mixed,
+}
+
+impl Kind {
+    /// The kind of a list of entries' kinds (`Surface` when empty).
+    #[must_use]
+    pub fn of(kinds: impl IntoIterator<Item = Kind>) -> Kind {
+        let mut out: Option<Kind> = None;
+        for k in kinds {
+            out = Some(match out {
+                None => k,
+                Some(o) if o == k => o,
+                Some(_) => Kind::Mixed,
+            });
+        }
+        out.unwrap_or(Kind::Surface)
+    }
 }
 
 /// A built-in look.
@@ -119,330 +269,42 @@ pub struct Look {
     pub name: &'static str,
     /// One line of help.
     pub about: &'static str,
-    /// Its top-level controls.
+    /// How the evaluator plans it.
+    pub role: Role,
+    /// The place words it takes, besides `seed` and `id` (which every
+    /// entry takes) and `weight` (which every scatter child takes).
+    pub place: &'static [PlaceWord],
+    /// Place words it must have.
+    pub needs: &'static [PlaceWord],
+    /// True when a `scatter` may sit inside it (`dirt { scatter … }`).
+    pub holds_scatter: bool,
+    /// Its controls.
     pub controls: &'static [Control],
-    /// Its groups.
-    pub groups: &'static [Group],
 }
 
-const fn c(name: &'static str, axis: Axis, about: &'static str) -> Control {
-    Control {
-        name,
-        axis,
-        required: false,
-        about,
+impl Look {
+    /// A control by name.
+    #[must_use]
+    pub fn control(&'static self, name: &str) -> Option<&'static Control> {
+        self.controls.iter().find(|c| c.name == name)
+    }
+
+    /// Solid or surface; `Mixed` for a scatter, whose kind is its
+    /// children's.
+    #[must_use]
+    pub fn kind(&self) -> Kind {
+        match self.role {
+            Role::Surface => Kind::Surface,
+            Role::Thing | Role::Run => Kind::Solid,
+            Role::Scatter => Kind::Mixed,
+        }
     }
 }
-
-const fn req(name: &'static str, axis: Axis, about: &'static str) -> Control {
-    Control {
-        name,
-        axis,
-        required: true,
-        about,
-    }
-}
-
-/// Controls every stack entry accepts, look or definition.
-pub static ENTRY: &[Control] = &[
-    c(
-        "self",
-        Axis::Region,
-        "the region this entry acts on; default: the caller's",
-    ),
-    c(
-        "seed",
-        Axis::Number,
-        "pin this entry's seed instead of deriving it from its path",
-    ),
-    c(
-        "id",
-        Axis::Text,
-        "a stable name among same-named siblings, for seeds",
-    ),
-];
-
-/// Kind tags built-ins put on their solids.
-pub static TAGS: &[&str] = &[
-    "ground", "dirt", "rock", "scree", "cliff", "grass", "reed", "tree", "wall", "floor", "water",
-];
-
-const WALL_FAMILIES: &[&str] = &["cut-stone", "fieldstone", "brick", "regular-brick"];
-const CLIFF_FORMS: &[&str] = &[
-    "run",
-    "corner",
-    "canyon",
-    "escarpment",
-    "plateau",
-    "massif",
-    "mound",
-    "spire",
-    "needles",
-];
-
-/// The built-in looks used by the R6 tiles.
-pub static LOOKS: &[Look] = &[
-    Look {
-        name: "hills",
-        about: "the ground itself: a height, with variability up and down",
-        controls: &[
-            c("height", Axis::Up, "the ground's mean height"),
-            c("up", Axis::Up, "how far it may rise above that"),
-            c("down", Axis::Up, "how far it may fall below that"),
-        ],
-        groups: &[],
-    },
-    Look {
-        name: "dirt",
-        about: "bare earth: dirtlab's clods, pebbles and relief",
-        controls: &[c("height", Axis::Up, "where the earth's surface sits")],
-        groups: &[Group {
-            name: "bank",
-            about: "earth banked up against something tall",
-            controls: &[
-                req("near", Axis::Tag, "what the bank leans on"),
-                c("height", Axis::Mm, "height at the face"),
-                c("reach", Axis::Mm, "how far out it runs"),
-            ],
-        }],
-    },
-    Look {
-        name: "meadow",
-        about: "grass: stroke blades in flowing clumps (grasslab v3)",
-        controls: &[c("bare", Axis::Share, "share of ground left bare")],
-        groups: &[
-            Group {
-                name: "blade",
-                about: "one blade",
-                controls: &[
-                    c("length", Axis::Mm, "blade length"),
-                    c("curl", Axis::Deg, "how far a blade turns along its length"),
-                    c(
-                        "clearance",
-                        Axis::Mm,
-                        "gap between a blade and what it lies on",
-                    ),
-                ],
-            },
-            Group {
-                name: "clumps",
-                about: "how blades gather",
-                controls: &[c("per-square", Axis::PerSquare, "clumps per square")],
-            },
-            Group {
-                name: "flow",
-                about: "how the blades lean across the tile",
-                controls: &[
-                    c("swing", Axis::Deg, "how far the flow direction swings"),
-                    c("meander", Axis::Deg, "in-phase meander"),
-                    c("downhill", Axis::Share, "pull toward downhill"),
-                ],
-            },
-        ],
-    },
-    Look {
-        name: "tree",
-        about: "a space-colonisation tree with foliage clusters and organic leaves",
-        controls: &[
-            c(
-                "per-square",
-                Axis::PerSquare,
-                "trees per square of the region",
-            ),
-            c("count", Axis::Number, "trees in the region"),
-            c(
-                "tips",
-                Axis::Number,
-                "branch tips (attractors); each branch ends on one",
-            ),
-            c("height", Axis::Up, "overall height"),
-            c("trunk", Axis::Up, "height of the bare trunk"),
-            c("canopy", Axis::Across, "canopy radius"),
-            c("foliage", Axis::Bool, "a leafy cluster on every tip"),
-            c("leaves", Axis::Bool, "separate leaves over the foliage"),
-        ],
-        groups: &[
-            Group {
-                name: "leaf",
-                about: "one leaf",
-                controls: &[
-                    c("length", Axis::Mm, "leaf length"),
-                    c("width", Axis::Mm, "leaf width"),
-                    c("thickness", Axis::Mm, "leaf thickness"),
-                    c("fold", Axis::Deg, "fold along the midrib"),
-                    c("curl", Axis::Deg, "curl toward the tip; capped at 32"),
-                ],
-            },
-            Group {
-                name: "branch",
-                about: "how the skeleton branches",
-                controls: &[
-                    c("split", Axis::Deg, "half-angle of the cone a branch keeps"),
-                    c(
-                        "eagerness",
-                        Axis::Share,
-                        "1 splits early, 0 only near the tips",
-                    ),
-                    c(
-                        "target",
-                        Axis::Share,
-                        "aim point in the attractor cloud, low to high",
-                    ),
-                    c(
-                        "balance",
-                        Axis::Share,
-                        "how evenly a fork shares attractors",
-                    ),
-                    c("exponent", Axis::Number, "pipe-model exponent"),
-                    c("min-radius", Axis::Mm, "radius at a tip"),
-                ],
-            },
-            Group {
-                name: "debug",
-                about: "diagnostic output",
-                controls: &[c("attractors", Axis::Bool, "show attractors as markers")],
-            },
-        ],
-    },
-    Look {
-        name: "wall",
-        about: "a masonry wall standing on the left of a line",
-        controls: &[
-            req("along", Axis::Line, "the line the wall stands on"),
-            c(
-                "family",
-                Axis::Choice(WALL_FAMILIES),
-                "how the stones are made and laid",
-            ),
-            c("top", Axis::Up, "height of the wall top above the datum"),
-            c(
-                "height",
-                Axis::Up,
-                "height above what it stands on; overrides top",
-            ),
-            c("thickness", Axis::Across, "wall thickness"),
-            c(
-                "coping",
-                Axis::Choice(&["perched", "vertical"]),
-                "fieldstone: what tops it",
-            ),
-            c(
-                "bond",
-                Axis::Choice(&["irregular", "running"]),
-                "how courses and bays line up",
-            ),
-            c("ruin", Axis::Share, "how much has fallen"),
-            c(
-                "crenellated",
-                Axis::Bool,
-                "merlons and crenels along the top",
-            ),
-        ],
-        groups: &[Group {
-            name: "stones",
-            about: "the size and finish of each stone",
-            controls: &[
-                c("course", Axis::Mm, "course height"),
-                c("bay", Axis::Mm, "stone length along the wall"),
-                c("joint", Axis::Mm, "gap between stones"),
-                c("reveal", Axis::Mm, "how far stones stand out of the core"),
-                c("roundover", Axis::Mm, "edge rounding radius"),
-                c("relief", Axis::Mm, "face relief depth"),
-            ],
-        }],
-    },
-    Look {
-        name: "cliff",
-        about: "a cliff stacked from rock masses under gravity (clifflab rockpile)",
-        controls: &[
-            req("along", Axis::Line, "the line the cliff stands against"),
-            c("form", Axis::Choice(CLIFF_FORMS), "the preset plan form"),
-            c("height", Axis::Up, "top of the highest tier above the foot"),
-            c(
-                "mass",
-                Axis::Number,
-                "stone size multiplier: 1 is rubble, 1.4 massive",
-            ),
-            c("dirt-on-tops", Axis::Bool, "dirt lodged on the flat top"),
-        ],
-        groups: &[
-            Group {
-                name: "stones",
-                about: "the mix of stone kinds",
-                controls: &[
-                    c("column", Axis::Share, "tall upright stones"),
-                    c("block", Axis::Share, "chunky blocks"),
-                    c("slab", Axis::Share, "thin slabs lying tilted"),
-                    c("odd", Axis::Share, "irregular lumps"),
-                    c("monolith", Axis::Share, "ground-to-top stones"),
-                ],
-            },
-            Group {
-                name: "shatter",
-                about: "zones where detail gathers",
-                controls: &[
-                    c(
-                        "zones",
-                        Axis::PerSquare,
-                        "shattered zones per square of run",
-                    ),
-                    c("width", Axis::Mm, "how wide each zone is along the run"),
-                ],
-            },
-        ],
-    },
-    Look {
-        name: "scree",
-        about: "fallen stones gathered at the foot of something",
-        controls: &[req("near", Axis::Tag, "what the scree falls from")],
-        groups: &[
-            Group {
-                name: "stones",
-                about: "loose stones",
-                controls: &[
-                    c("per-square", Axis::PerSquare, "stones per square of foot"),
-                    c("size", Axis::Mm, "stone size"),
-                    c("reach", Axis::Mm, "mean distance out from the face"),
-                ],
-            },
-            Group {
-                name: "blocks",
-                about: "big fallen blocks against the face",
-                controls: &[
-                    c("per-square", Axis::PerSquare, "blocks per square of foot"),
-                    c("size", Axis::Mm, "block size"),
-                ],
-            },
-            Group {
-                name: "grit",
-                about: "small stones half-buried in the bank",
-                controls: &[
-                    c("per-square", Axis::PerSquare, "grit per square"),
-                    c("size", Axis::Mm, "grit size"),
-                    c(
-                        "sink",
-                        Axis::Share,
-                        "how deep each is buried, as a share of its size",
-                    ),
-                ],
-            },
-            Group {
-                name: "kinds",
-                about: "the mix of fragment shapes",
-                controls: &[
-                    c("block", Axis::Share, "blocky fragments"),
-                    c("wedge", Axis::Share, "wedges"),
-                    c("slab", Axis::Share, "flat slabs"),
-                ],
-            },
-        ],
-    },
-];
 
 /// Look up a built-in look by name.
 #[must_use]
 pub fn look(name: &str) -> Option<&'static Look> {
-    LOOKS.iter().find(|l| l.name == name)
+    crate::looks::LOOKS.iter().find(|l| l.name == name)
 }
 
 /// The closest candidate to `word`, if one is close enough to suggest.
@@ -491,21 +353,24 @@ mod tests {
 
     #[test]
     fn suggestions() {
-        let names = ["per-square", "tips", "height", "foliage"];
+        let names = ["per-square", "clumps", "height", "branching"];
         assert_eq!(did_you_mean("per-sqare", names), Some("per-square"));
         assert_eq!(did_you_mean("hieght", names), Some("height"));
         assert_eq!(did_you_mean("wobble", names), None);
     }
 
     #[test]
-    fn every_look_has_unique_control_names() {
-        for l in LOOKS {
-            let mut names: Vec<_> = l.controls.iter().map(|c| c.name).collect();
-            names.extend(l.groups.iter().map(|g| g.name));
-            let n = names.len();
-            names.sort_unstable();
-            names.dedup();
-            assert_eq!(names.len(), n, "{}", l.name);
-        }
+    fn kinds_combine() {
+        assert_eq!(Kind::of([Kind::Solid, Kind::Solid]), Kind::Solid);
+        assert_eq!(Kind::of([Kind::Solid, Kind::Surface]), Kind::Mixed);
+        assert_eq!(Kind::of([]), Kind::Surface);
+    }
+
+    #[test]
+    fn scaling_follows_the_axis() {
+        assert_eq!(Axis::Mm.scaling(), Scaling::Photocopy);
+        assert_eq!(Axis::Level.scaling(), Scaling::Photocopy);
+        assert_eq!(Axis::Deg.scaling(), Scaling::Fixed);
+        assert_eq!(Axis::PerSquare.scaling(), Scaling::Squares);
     }
 }

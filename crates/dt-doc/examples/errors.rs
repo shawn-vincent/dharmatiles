@@ -5,18 +5,13 @@
 mod common;
 
 fn main() {
-    let known = common::known();
-    for case in common::CASES {
-        let (name, text) = case.tile;
-        let broken = text.replacen(case.from, case.to, 1);
+    for case in &common::CASES {
         println!(
-            "=== {} ({name}: `{}` -> `{}`)",
-            case.title, case.from, case.to
+            "=== {} ({}: `{}` -> `{}`)",
+            case.title, case.tile.0, case.from, case.to
         );
-        match dt_doc::decode(name, &broken, &known) {
-            Ok(_) => println!("(decoded without error)"),
-            Err(e) => print!("{}", common::render(&e)),
-        }
+        let (_, shown) = case.report();
+        print!("{shown}");
         println!();
     }
 }

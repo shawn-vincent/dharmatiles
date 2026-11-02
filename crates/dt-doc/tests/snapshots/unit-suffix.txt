@@ -1,0 +1,12 @@
+dt::expr
+
+  × can't read `tree leaf length`: units are not written: `4.5mm` is just `4.5`; every
+  │ control knows its unit (sizes are mm)
+    ╭─[library/tiles/ground/2x2-grass-tree.kdl:14:29]
+ 13 │             crown width=30 clumps=32 shape=round branching=normal
+ 14 │             leaf length="4.5mm" width=3
+    ·                             ─┬
+    ·                              ╰── here
+ 15 │         }
+    ╰────
+  help: `length` is a size in mm

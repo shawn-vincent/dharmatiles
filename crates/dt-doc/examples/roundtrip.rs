@@ -1,44 +1,49 @@
-//! Edit one control in each library file and print the line diff.
-//! `cargo run -p dt-doc --example roundtrip`
+//! Change, insert and remove one control in library files and print the
+//! line diff.  `cargo run -p dt-doc --example roundtrip`
 
 #[path = "../tests/common/mod.rs"]
 mod common;
 
-use dt_doc::edit::{Key, set_value};
+use dt_doc::edit::{remove_control, set_control};
+
+fn show(name: &str, what: &str, old: &str, new: &str) {
+    println!("=== {name}: {what}");
+    let (a, b): (Vec<_>, Vec<_>) = (old.lines().collect(), new.lines().collect());
+    let (mut i, mut j) = (0, 0);
+    while i < a.len() || j < b.len() {
+        match (a.get(i), b.get(j)) {
+            (Some(x), Some(y)) if x == y => (i, j) = (i + 1, j + 1),
+            (Some(x), Some(y)) if a.len() == b.len() => {
+                println!("{:>3} - {x}\n{:>3} + {y}", i + 1, j + 1);
+                (i, j) = (i + 1, j + 1);
+            }
+            (Some(x), _) => {
+                println!("{:>3} - {x}", i + 1);
+                i += 1;
+            }
+            (None, Some(y)) => {
+                println!("{:>3} + {y}", j + 1);
+                j += 1;
+            }
+            (None, None) => break,
+        }
+    }
+    println!("    every other line is byte-identical\n");
+}
 
 fn main() {
-    let edits: [(&str, &str, &[&str], Key<'_>, kdl::KdlValue); 3] = [
-        (
-            common::GRASS.0,
-            common::GRASS.1,
-            &["define long-grass", "stack", "lawn"],
-            Key::Prop("length"),
-            "9..15".into(),
-        ),
-        (
-            common::GRASS_TREE.0,
-            common::GRASS_TREE.1,
-            &["tile grass-tree", "stack", "tree", "leaf"],
-            Key::Prop("length"),
-            5.5.into(),
-        ),
-        (
-            common::CLIFF_RUN.0,
-            common::CLIFF_RUN.1,
-            &["tile cliff-run", "stack", "cliff", "height"],
-            Key::Arg(0),
-            1.2.into(),
-        ),
-    ];
-    for (name, text, path, key, value) in edits {
-        let new = set_value(text, path, key, value).expect("edit");
-        println!("=== {name}: {} > {key:?}", path.join(" > "));
-        for (i, (a, b)) in text.lines().zip(new.lines()).enumerate() {
-            if a != b {
-                println!("{:>3} - {a}\n{:>3} + {b}", i + 1, i + 1);
-            }
-        }
-        let lines = text.lines().count();
-        println!("    the other {} lines are byte-identical\n", lines - 1);
-    }
+    let (name, text) = common::GRASS_TREE;
+    let tree = ["tile grass-tree", "stack", "tree"];
+    let new = set_control(text, &tree, "at", "1,1").expect("insert");
+    show(name, "insert at=\"1,1\" on the tree", text, &new);
+    let leaf = ["tile grass-tree", "stack", "tree", "leaf"];
+    let new = set_control(text, &leaf, "length", 5.5).expect("set");
+    show(name, "leaf length 4.5 -> 5.5", text, &new);
+
+    let (name, text) = common::WALL_CORNER;
+    let wall = ["tile wall-fieldstone-corner", "stack", "wall"];
+    let new = set_control(text, &wall, "thickness", 6.5).expect("set");
+    show(name, "thickness 7 -> 6.5 (child form)", text, &new);
+    let new = remove_control(text, &wall, "coping").expect("remove");
+    show(name, "remove coping", text, &new);
 }
