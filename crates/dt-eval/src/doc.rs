@@ -92,6 +92,8 @@ pub struct Region {
     pub bounded_by: Vec<Spanned<String>>,
     /// Fill points, in squares from the south-west corner.
     pub fills: Vec<[f64; 2]>,
+    /// Where its name is written (in the tile's text).
+    pub span: SourceSpan,
 }
 
 /// What the evaluator needs from a tile document.
@@ -121,6 +123,8 @@ pub struct Tile {
     pub pending: Vec<Diag>,
     /// The tile's own text.
     pub src: Src,
+    /// Where its name is written.
+    pub span: SourceSpan,
 }
 
 /// A document as read: the file, and its tile if it has one.
@@ -378,6 +382,7 @@ impl Reader<'_> {
             stack: Vec::new(),
             pending: Vec::new(),
             src: Arc::clone(src),
+            span: def.name.span,
         };
         let (cols, rows) = (f64::from(t.cols), f64::from(t.rows));
         for l in &def.lines {
@@ -418,6 +423,7 @@ impl Reader<'_> {
                 name: r.name.value.clone(),
                 bounded_by: r.bounded_by.clone(),
                 fills,
+                span: r.name.span,
             });
         }
         let scope = Scope {

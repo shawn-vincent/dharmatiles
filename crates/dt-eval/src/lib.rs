@@ -121,7 +121,10 @@ pub struct Checked {
     /// The tile's build order.
     pub steps: Vec<Step>,
     looks: Vec<Box<dyn Look>>,
-    areas: Vec<Mask>,
+    /// Each step's area: `None` for the whole tile, else a region index.
+    /// Masks are only made by `build` (one per distinct area), so `check`
+    /// holds no grid however long the stack.
+    areas: Vec<Option<usize>>,
     frame: Frame,
     seed: u64,
 }
@@ -156,7 +159,6 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
     let mut errors = Vec::new();
     let mut looks: Vec<Box<dyn Look>> = Vec::new();
     let mut areas = Vec::new();
-    let (nx, ny) = frame.nodes();
     for e in &tile.stack {
         let controls: Vec<Control> = e
             .controls
@@ -181,12 +183,25 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
                 continue;
             }
         }
-        areas.push(area(&tile, &frame, e, &mut errors));
+        areas.push(region_of(&tile, e, &mut errors));
     }
+    if tile.stack.is_empty() && tile.pending.is_empty() {
+        errors.push(
+            Diag::at(
+                &tile.src,
+                tile.span,
+                "dt::empty",
+                format!("the tile `{}` has nothing in its stack", tile.name),
+                "nothing to build",
+            )
+            .help("add a look to its stack, such as `stack { ground }`"),
+        );
+    }
+    errors.extend(empty_regions(&tile, &frame, &areas));
     match dt_looks::connector(&opts.system) {
         Ok(c) => {
             looks.push(c);
-            areas.push(Mask::new(nx, ny, true));
+            areas.push(None);
         }
         Err(le) => errors.push(Diag::plain("dt::system", le.message).maybe_help(le.help)),
     }
@@ -226,13 +241,11 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
     })
 }
 
-/// An entry's area: the whole tile, or its `in=` region by paint bucket.
-fn area(tile: &Tile, frame: &Frame, e: &doc::Entry, errors: &mut Vec<Diag>) -> Mask {
-    let (nx, ny) = frame.nodes();
-    let Some(name) = &e.area else {
-        return Mask::new(nx, ny, true);
-    };
-    let Some(r) = tile.regions.iter().find(|r| r.name == name.value) else {
+/// An entry's area: `None` for the whole tile, or its `in=` region.
+fn region_of(tile: &Tile, e: &doc::Entry, errors: &mut Vec<Diag>) -> Option<usize> {
+    let name = e.area.as_ref()?;
+    let found = tile.regions.iter().position(|r| r.name == name.value);
+    if found.is_none() {
         errors.push(
             Diag::at(
                 &e.src,
@@ -247,14 +260,64 @@ fn area(tile: &Tile, frame: &Frame, e: &doc::Entry, errors: &mut Vec<Diag>) -> M
                     .or_else(|| Some("without in=, a look covers the whole tile".into())),
             ),
         );
-        return Mask::new(nx, ny, false);
-    };
+    }
+    found
+}
+
+/// A region's nodes, by paint bucket from its fill points.
+fn region_mask(tile: &Tile, frame: &Frame, r: &doc::Region) -> Mask {
     let lines: Vec<Vec<[f64; 2]>> = r
         .bounded_by
         .iter()
         .filter_map(|l| tile.lines.get(&l.value).cloned())
         .collect();
     dt_kit::area(frame, &lines, &r.fills)
+}
+
+/// One error for each region a look acts in that covers no ground: its
+/// fill points all lie on its lines.  One mask at a time, then dropped.
+fn empty_regions(tile: &Tile, frame: &Frame, areas: &[Option<usize>]) -> Vec<Diag> {
+    let used: std::collections::BTreeSet<usize> = areas.iter().flatten().copied().collect();
+    used.into_iter()
+        .filter_map(|i| {
+            let r = &tile.regions[i];
+            if r.fills.is_empty() || region_mask(tile, frame, r).bits.iter().any(|&b| b) {
+                return None;
+            }
+            Some(
+                Diag::at(
+                    &tile.src,
+                    r.span,
+                    "dt::empty-region",
+                    format!("the region `{}` covers nothing", r.name),
+                    "empty",
+                )
+                .help("its fill points lie on its lines: move each one off the line, into the area it should fill"),
+            )
+        })
+        .collect()
+}
+
+/// The masks a build needs, one per distinct area, and each step's index
+/// into them.
+fn masks(tile: &Tile, frame: &Frame, areas: &[Option<usize>]) -> (Vec<Mask>, Vec<usize>) {
+    let (nx, ny) = frame.nodes();
+    let mut keys: Vec<Option<usize>> = Vec::new();
+    let mut out = Vec::new();
+    let index = areas
+        .iter()
+        .map(|a| {
+            keys.iter().position(|k| k == a).unwrap_or_else(|| {
+                keys.push(*a);
+                out.push(match a {
+                    None => Mask::new(nx, ny, true),
+                    Some(i) => region_mask(tile, frame, &tile.regions[*i]),
+                });
+                out.len() - 1
+            })
+        })
+        .collect();
+    (out, index)
 }
 
 fn fnv(h: u64, v: u64) -> u64 {
@@ -292,7 +355,9 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
             },
         )
     });
-    h = c.areas.iter().fold(h, |h, a| fnv(h, a.content_hash()));
+    let (masks, mask_of) = masks(tile, &c.frame, &c.areas);
+    let hashes: Vec<u64> = masks.iter().map(Mask::content_hash).collect();
+    h = mask_of.iter().fold(h, |h, &m| fnv(h, hashes[m]));
     scene.record("plan", h);
     let paths = entry_paths(tile);
     for step in &c.steps {
@@ -303,7 +368,7 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
             Step::Entry(i) => {
                 let pinned = tile.stack.get(i).and_then(|e| e.seed);
                 let ctx = Ctx {
-                    area: &c.areas[i],
+                    area: &masks[mask_of[i]],
                     path: &paths[i],
                     seed: pinned.map_or_else(|| root.path(&paths[i]), Seed::new),
                 };
