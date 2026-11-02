@@ -118,9 +118,8 @@ impl Look for Floor {
         let s = f.scale();
         let [w, h] = f.size_mm();
         let mut m = self.mason.clone();
-        // the level is a height in the tile, not an author size: it does
-        // not scale (Run scales the thickness, so undo that here)
-        m.thickness /= s;
+        // the level scales with everything else (D2: a photocopy, every
+        // level included): Run scales the thickness
         if m.family == Family::Slab {
             let pitch = f.square_mm / f64::from(self.slabs) / s;
             m.course = (pitch, pitch);
