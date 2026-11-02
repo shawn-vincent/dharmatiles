@@ -15,28 +15,12 @@
 use std::collections::BTreeMap;
 
 use crate::TriMesh;
+use crate::vec3::{cross, dot, norm, sub};
 
 /// Points this close to a plane (mm) count as on it.
 const EPS: f64 = 1e-9;
 
 type V3 = [f64; 3];
-
-fn sub(a: V3, b: V3) -> V3 {
-    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-fn dot(a: V3, b: V3) -> f64 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-fn cross(a: V3, b: V3) -> V3 {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-fn norm(a: V3) -> f64 {
-    dot(a, a).sqrt()
-}
 
 /// One planar face: its vertex loop and outward plane `normal · x = offset`.
 #[derive(Clone, Debug, PartialEq)]
@@ -173,7 +157,8 @@ impl Convex {
                     [0.0, 1.0, 0.0]
                 };
                 let c = cross(n, seed);
-                c.map(|x| x / norm(c))
+                let l = norm(c);
+                c.map(|x| x / l)
             };
             let w = cross(n, u);
             #[allow(clippy::cast_precision_loss)]
@@ -220,7 +205,11 @@ impl Convex {
     /// The vertex indices any face uses, ascending.
     #[must_use]
     pub fn used(&self) -> Vec<u32> {
-        let mut v: Vec<u32> = self.faces.iter().flat_map(|f| f.loop_.clone()).collect();
+        let mut v: Vec<u32> = self
+            .faces
+            .iter()
+            .flat_map(|f| f.loop_.iter().copied())
+            .collect();
         v.sort_unstable();
         v.dedup();
         v

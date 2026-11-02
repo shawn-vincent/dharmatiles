@@ -26,6 +26,7 @@
 //! node within 0.85 of its radius, and at least 0.55 mm under the median
 //! there (rocklab's 0.3 + 0.25 mm below its flat 4 mm floor).
 
+use dt_kit::vec3::{cross, dot, norm, sub};
 use dt_kit::{
     Convex, Field, Grain, Material, Placed, Rng, Scene, Seed, Spread, Tag, TriMesh, grain, hull,
     scatter, seat, solid,
@@ -129,10 +130,9 @@ impl Stone {
         }
         for f in &mut c.faces {
             let n = [f.normal[0] / s, f.normal[1] / s, f.normal[2] / (s * z)];
-            let l = libm::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+            let l = norm(n);
             f.normal = n.map(|x| x / l);
-            let p = c.vertices[f.loop_[0] as usize];
-            f.offset = f.normal[0] * p[0] + f.normal[1] * p[1] + f.normal[2] * p[2];
+            f.offset = dot(f.normal, c.vertices[f.loop_[0] as usize]);
         }
         Self {
             convex: c,
@@ -142,13 +142,11 @@ impl Stone {
     }
 }
 
+/// `a` at unit length; left alone when shorter than 1e-9 (rocklab's
+/// guard, unlike `vec3::unit`).
 fn unit(a: [f64; 3]) -> [f64; 3] {
-    let l = libm::sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+    let l = norm(a);
     if l > 1e-9 { a.map(|x| x / l) } else { a }
-}
-
-fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
 /// `n` tilted by up to `max_deg` about a random tangent axis (`_tilted`).
@@ -282,15 +280,9 @@ fn sample_surface(rng: &mut Rng, m: &TriMesh, n: usize) -> Vec<([f64; 3], [f64; 
     let mut cum = Vec::with_capacity(tris.len());
     let mut total = 0.0;
     let mut normals = Vec::with_capacity(tris.len());
-    for (a, b, c) in &tris {
-        let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-        let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-        let x = [
-            u[1] * v[2] - u[2] * v[1],
-            u[2] * v[0] - u[0] * v[2],
-            u[0] * v[1] - u[1] * v[0],
-        ];
-        total += 0.5 * libm::sqrt(dot(x, x));
+    for &(a, b, c) in &tris {
+        let x = cross(sub(b, a), sub(c, a));
+        total += 0.5 * norm(x);
         cum.push(total);
         normals.push(unit(x));
     }
@@ -339,10 +331,9 @@ pub fn make_stone(rng: &mut Rng, d: f64, mix: [f64; 4]) -> Result<Stone, LookErr
             continue;
         }
         let r = rmin + (rmax - rmin) * libm::pow(rng.random(), FACET_R_EXP);
-        let far = seeds.iter().all(|(q, _, rq)| {
-            let dv = [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
-            libm::sqrt(dot(dv, dv)) >= 0.5 * (r + rq)
-        });
+        let far = seeds
+            .iter()
+            .all(|(q, _, rq)| norm(sub(p, *q)) >= 0.5 * (r + rq));
         if far {
             seeds.push((p, n, r));
         }
@@ -557,8 +548,7 @@ fn add_items(
     scene: &mut Scene,
     owner: &str,
     seed: Seed,
-    items: &[(Item, [f64; 2], f64)],
-    z_scale: f64,
+    items: &[(&Item, [f64; 2], f64)],
     tally: &mut Tally,
 ) -> Result<(), LookError> {
     let s = scene.frame().scale();
@@ -575,7 +565,7 @@ fn add_items(
         tally.clusters += usize::from(item.stones.len() > 1);
         let (sn, cs) = (libm::sin(yaw.to_radians()), libm::cos(yaw.to_radians()));
         for (off, stone) in &item.stones {
-            let st = stone.scaled(s, z_scale);
+            let st = stone.scaled(s, 1.0);
             let o = [off[0] * s, off[1] * s];
             let p = [at[0] + cs * o[0] - sn * o[1], at[1] + sn * o[0] + cs * o[1]];
             let r = st.radius();
@@ -691,7 +681,7 @@ impl Look for Single {
             }
         };
         let mut t = Tally::default();
-        add_items(scene, ctx.path, ctx.seed, &[(item, at, yaw)], 1.0, &mut t)?;
+        add_items(scene, ctx.path, ctx.seed, &[(&item, at, yaw)], &mut t)?;
         note(scene, &t);
         Ok(())
     }
@@ -846,12 +836,12 @@ impl Look for Scatter {
         }
         let radii: Vec<f64> = items.iter().map(|it| it.r * s).collect();
         let placed = place(scene, ctx, &mut rng, &radii, self.gap * s);
-        let posed: Vec<(Item, [f64; 2], f64)> = placed
+        let posed: Vec<(&Item, [f64; 2], f64)> = placed
             .iter()
-            .map(|p| (items[p.index].clone(), p.at, rng.uniform(0.0, 360.0)))
+            .map(|p| (&items[p.index], p.at, rng.uniform(0.0, 360.0)))
             .collect();
         let mut t = Tally::default();
-        add_items(scene, ctx.path, ctx.seed, &posed, 1.0, &mut t)?;
+        add_items(scene, ctx.path, ctx.seed, &posed, &mut t)?;
         note(scene, &t);
         Ok(())
     }

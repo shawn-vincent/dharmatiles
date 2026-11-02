@@ -9,7 +9,7 @@
 //! half-spaces: rock facets and chips), [`geodesic`] (multi-source
 //! distance through a mask), [`noise::fbm3`], polygon rasterising
 //! ([`fill_polygons`]) and the mesh trait's hull, refine, transform and
-//! slice.
+//! slice, and [`vec3`] (the 3-vector helpers they share).
 //!
 //! Phase 0: the [`mesh::Mesh`] and [`rays::Rays`] traits that every backend
 //! sits behind, and [`seed::Seed`], the deterministic path-keyed seed
@@ -31,6 +31,7 @@ pub mod raster;
 pub mod rays;
 pub mod seed;
 pub mod source;
+pub mod vec3;
 
 pub use convex::Convex;
 pub use filter::{Footprint, blur, blur_recursive, dilate, erode, quantile};

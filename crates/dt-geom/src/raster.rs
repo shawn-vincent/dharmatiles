@@ -124,6 +124,8 @@ pub fn fill(walls: &Mask, seed: (usize, usize)) -> Mask {
 pub fn fill_polygons(nx: usize, ny: usize, step: f64, polygons: &[Vec<[f64; 2]>]) -> Mask {
     let mut m = Mask::new(nx, ny, false);
     let mut xs: Vec<f64> = Vec::new();
+    #[allow(clippy::cast_precision_loss)]
+    let last = nx.saturating_sub(1) as f64;
     for j in 0..ny {
         #[allow(clippy::cast_precision_loss)]
         let y = j as f64 * step;
@@ -140,8 +142,6 @@ pub fn fill_polygons(nx: usize, ny: usize, step: f64, polygons: &[Vec<[f64; 2]>]
         }
         xs.sort_by(f64::total_cmp);
         for pair in xs.as_chunks::<2>().0 {
-            #[allow(clippy::cast_precision_loss)]
-            let last = (nx - 1) as f64;
             let lo = libm::ceil(pair[0] / step).max(0.0);
             let hi = libm::floor(pair[1] / step).min(last);
             if hi >= lo {

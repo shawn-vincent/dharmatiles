@@ -141,17 +141,9 @@ pub fn signed_volume(m: &TriMesh) -> f64 {
 /// The unit normal of triangle `a b c` (zero for a degenerate one).
 #[must_use]
 pub(crate) fn normal(a: [f64; 3], b: [f64; 3], c: [f64; 3]) -> [f64; 3] {
-    let (u, v) = (
-        [b[0] - a[0], b[1] - a[1], b[2] - a[2]],
-        [c[0] - a[0], c[1] - a[1], c[2] - a[2]],
-    );
-    let n = [
-        u[1] * v[2] - u[2] * v[1],
-        u[2] * v[0] - u[0] * v[2],
-        u[0] * v[1] - u[1] * v[0],
-    ];
-    let l = libm::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
-    if l > 0.0 { n.map(|x| x / l) } else { [0.0; 3] }
+    use dt_geom::vec3::{cross, sub, unit};
+    // a zero cross product is already [0; 3]
+    unit(cross(sub(b, a), sub(c, a)))
 }
 
 /// **wobble**: a polyline (mm) resampled every `step` mm and pushed

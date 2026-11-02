@@ -7,6 +7,7 @@
 //! moves vertices only, along their normals, so the result is the same
 //! closed mesh with the same triangles.
 
+use dt_geom::vec3::{cross, dot, norm, sub, unit};
 use dt_geom::{Convex, Mesh, TriMesh};
 
 use crate::scene::{Slot, Solid, leaf};
@@ -63,24 +64,6 @@ impl Default for Grain {
             down_nz: -0.3,
         }
     }
-}
-
-fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-fn unit(a: [f64; 3]) -> [f64; 3] {
-    let l = libm::sqrt(dot(a, a));
-    if l > 0.0 { a.map(|x| x / l) } else { a }
 }
 
 /// The mesh with split vertices merged: one position per point of the
@@ -151,8 +134,7 @@ pub fn grain(stone: &Convex, g: &Grain, seed: u64) -> Result<TriMesh, KitError> 
                     let ab = sub(*b, *a);
                     let t = (dot(sub(q, *a), ab) / dot(ab, ab).max(1e-12)).clamp(0.0, 1.0);
                     let c = [a[0] + t * ab[0], a[1] + t * ab[1], a[2] + t * ab[2]];
-                    let d = sub(q, c);
-                    libm::sqrt(dot(d, d))
+                    norm(sub(q, c))
                 })
                 .fold(f64::INFINITY, f64::min);
             let we = if sharp.is_empty() {

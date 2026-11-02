@@ -332,9 +332,9 @@ impl Scene {
     }
 
     /// The ground surface (world mm): every paint, spread to the nodes no
-    /// area painted (and banked, once [`Scene::bank`] has run). Read it after the surfaces are painted (the
-    /// scheduler paints every surface before any solid); `None` when
-    /// nothing painted it.
+    /// area painted (and banked, once [`Scene::bank`] has run). Read it
+    /// after the surfaces are painted (the scheduler paints every surface
+    /// before any solid); `None` when nothing painted it.
     pub fn ground(&mut self) -> Option<crate::Field> {
         if self.painted.count() == 0 {
             return None;

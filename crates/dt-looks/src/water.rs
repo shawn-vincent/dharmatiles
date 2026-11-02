@@ -149,17 +149,20 @@ struct Smoother<'a> {
 
 impl Smoother<'_> {
     fn smooth(&mut self, a: &Field, sigma: f64) -> Field {
-        let wb = if let Some((_, f)) = self.cache.iter().find(|(s, _)| s.total_cmp(&sigma).is_eq())
+        let at = if let Some(i) = self
+            .cache
+            .iter()
+            .position(|(s, _)| s.total_cmp(&sigma).is_eq())
         {
-            f.clone()
+            i
         } else {
             let f = self.wm.blur(sigma).map(|v| v.max(1e-6));
-            self.cache.push((sigma, f.clone()));
-            f
+            self.cache.push((sigma, f));
+            self.cache.len() - 1
         };
         a.zip(self.wm, |x, w| x * w)
             .blur(sigma)
-            .zip(&wb, |x, w| x / w)
+            .zip(&self.cache[at].1, |x, w| x / w)
     }
 }
 
@@ -250,29 +253,36 @@ fn swell_train(
     d.with_z(out.iter().map(|x| (x - m) / (sd + 1e-12)).collect())
 }
 
-/// Central-difference gradient (per mm).
-fn gradient(f: &Field) -> (Vec<f64>, Vec<f64>) {
-    let (nx, ny) = (f.nx, f.ny);
-    let mut gx = vec![0.0; nx * ny];
-    let mut gy = vec![0.0; nx * ny];
-    for j in 0..ny {
-        for i in 0..nx {
-            let (i0, i1) = (i.saturating_sub(1), (i + 1).min(nx - 1));
-            let (j0, j1) = (j.saturating_sub(1), (j + 1).min(ny - 1));
-            #[allow(clippy::cast_precision_loss)]
-            let k = j * nx + i;
-            #[allow(clippy::cast_precision_loss)]
-            {
-                gx[k] = (f.z[j * nx + i1] - f.z[j * nx + i0]) / ((i1 - i0).max(1) as f64 * f.step);
-                gy[k] = (f.z[j1 * nx + i] - f.z[j0 * nx + i]) / ((j1 - j0).max(1) as f64 * f.step);
-            }
-        }
+/// Whether node `k` is on the tile's perimeter.
+const fn on_edge(k: usize, nx: usize, ny: usize) -> bool {
+    let (i, j) = (k % nx, k / nx);
+    i == 0 || j == 0 || i == nx - 1 || j == ny - 1
+}
+
+/// Where perimeter node `k` lies along its edge (mm): x on the south and
+/// north edges, y on the west and east.
+fn along_edge(f: &Field, k: usize) -> f64 {
+    let (i, j) = (k % f.nx, k / f.nx);
+    if j == 0 || j == f.ny - 1 {
+        f.x(i)
+    } else {
+        f.y(j)
     }
-    (gx, gy)
+}
+
+/// Nodes within one node (8-connected) of a `m` node.
+fn dilate8(m: &[bool], nx: usize, ny: usize) -> Vec<bool> {
+    (0..nx * ny)
+        .map(|k| {
+            let (i, j) = (k % nx, k / nx);
+            (j.saturating_sub(1)..=(j + 1).min(ny - 1))
+                .any(|jj| (i.saturating_sub(1)..=(i + 1).min(nx - 1)).any(|ii| m[jj * nx + ii]))
+        })
+        .collect()
 }
 
 /// The tide: interior swell noise, forced to the edge profile at the
-/// tile edges (`tide_field` :375). Also the profile alone.
+/// tile edges (`tide_field` :375).
 fn tide(frame: &dt_kit::Frame, seed: Seed) -> Field {
     let s = frame.scale();
     let [w, h] = frame.size_mm();
@@ -301,7 +311,7 @@ pub fn profile(frame: &dt_kit::Frame, t: f64) -> f64 {
     TIDE_EDGE_AMP_MM * frame.scale() * libm::sin(std::f64::consts::TAU * (t - org) / lam)
 }
 
-/// What [`relief`] measured.
+/// What the build measured (its notes).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Stats {
     /// Relief over open water (rim > 0.99): min, max, rms.
@@ -323,7 +333,6 @@ impl Look for Water {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
         let frame = *scene.frame();
         let s = frame.scale();
@@ -334,9 +343,8 @@ impl Look for Water {
         let land = scene
             .ground()
             .unwrap_or_else(|| Field::new(&frame, wl - 2.2 * s));
-        let rocky = scene.footprint("rock", wl);
+        let rock_mask = scene.footprint("rock", wl).bits;
         let soft = land.blur(LAND_BLUR_MM);
-        let rock_mask: Vec<bool> = rocky.bits.clone();
         let land_mask: Vec<bool> = (0..nn)
             .map(|k| (soft.z[k] > wl || !ctx.area.bits[k]) && !rock_mask[k])
             .collect();
@@ -346,7 +354,6 @@ impl Look for Water {
                 "the water has nowhere to go: the ground is above its level everywhere in its area",
             ));
         }
-        let obst: Vec<bool> = water.iter().map(|w| !w).collect();
         let wm =
             Field::new(&frame, 0.0).with_z(water.iter().map(|&w| f64::from(u8::from(w))).collect());
         let mut sm = Smoother {
@@ -354,221 +361,41 @@ impl Look for Water {
             cache: Vec::new(),
         };
         // distance to the shore: true (for the shore fade) and smoothed
-        let raw_d = if obst.iter().any(|&b| b) {
-            distance(&frame, &obst).0
-        } else {
-            Field::new(&frame, 1e3)
-        };
-        let d = if obst.iter().any(|&b| b) {
-            let raw = raw_d.zip(&wm, |v, w| v * w);
-            let sg = DIST_SMOOTH_MM * s;
-            let num = raw.blur(sg);
-            let den = wm.blur(sg);
-            Field::new(&frame, 0.0).with_z(
+        let obst: Vec<bool> = water.iter().map(|w| !w).collect();
+        let (raw_d, d) = if obst.iter().any(|&b| b) {
+            let raw = distance(&frame, &obst).0;
+            let smoothed = sm.smooth(&raw, DIST_SMOOTH_MM * s);
+            let d = smoothed.with_z(
                 (0..nn)
-                    .map(|k| {
-                        if water[k] {
-                            num.z[k] / den.z[k].max(1e-6)
-                        } else {
-                            0.0
-                        }
-                    })
+                    .map(|k| if water[k] { smoothed.z[k] } else { 0.0 })
                     .collect(),
-            )
+            );
+            (raw, d)
         } else {
-            Field::new(&frame, 1e3)
+            (Field::new(&frame, 1e3), Field::new(&frame, 1e3))
         };
         let rim_f = rim(&frame).map(|r| smooth01(r / (RIM_FADE_MM * s)));
         let seed = ctx.seed;
         let mut rng = Rng::new(seed.key("swell"));
-        // emitters
-        let mut sources: Vec<Source> = Vec::new();
-        let dil = |m: &[bool]| -> Vec<bool> {
-            (0..nn)
-                .map(|k| {
-                    let (i, j) = (k % nx, k / nx);
-                    (j.saturating_sub(1)..=(j + 1).min(ny - 1)).any(|jj| {
-                        (i.saturating_sub(1)..=(i + 1).min(nx - 1)).any(|ii| m[jj * nx + ii])
-                    })
-                })
-                .collect()
+        let masks = Masks {
+            land: &land_mask,
+            rock: &rock_mask,
+            water: &water,
         };
-        let wdil = dil(&water);
-        for (kind, src, (st, dec)) in [
-            (Kind::Land, &land_mask, LAND),
-            (Kind::Rock, &rock_mask, ROCK),
-        ] {
-            if !src.iter().any(|&b| b) {
-                continue;
-            }
-            let border: Vec<bool> = (0..nn).map(|k| src[k] && wdil[k]).collect();
-            if !border.iter().any(|&b| b) {
-                continue;
-            }
-            let g = geodesic(&frame, &border, &water, BANK_GRID_WEIGHT).map(|v| v.min(200.0 * s));
-            let mut dd = sm.smooth(&g, 1.2 * s);
-            if kind == Kind::Land {
-                dd = round_offsets(&dd, &mut sm, s);
-            }
-            sources.push(Source {
-                strength: st,
-                decay: dec * s,
-                d: dd,
-                kind,
-            });
-        }
-        // open corners
-        let [w, h] = frame.size_mm();
-        let mut corners = Vec::new();
-        let r4 = 4.0 * s;
-        for (cx, cy) in [(0.0, 0.0), (w, 0.0), (0.0, h), (w, h)] {
-            let (mut wet, mut all) = (0usize, 0usize);
-            for (k, &wk) in water.iter().enumerate() {
-                let (x, y) = (land.x(k % nx), land.y(k / nx));
-                if (x - cx).abs() < r4 && (y - cy).abs() < r4 {
-                    all += 1;
-                    wet += usize::from(wk);
-                }
-            }
-            #[allow(clippy::cast_precision_loss)]
-            if wet as f64 > 0.5 * all as f64 {
-                let st = CORNER.0 * rng.uniform(0.8, 1.2);
-                corners.push(Source {
-                    strength: st,
-                    decay: CORNER.1 * s,
-                    d: Field::from_fn(&frame, |x, y| libm::hypot(x - cx, y - cy)),
-                    kind: Kind::Corner,
-                });
-            }
-        }
-        // enclosure: the share of the tile's perimeter that is land
-        let perim: Vec<bool> = (0..nn)
-            .filter(|&k| {
-                let (i, j) = (k % nx, k / nx);
-                i == 0 || j == 0 || i == nx - 1 || j == ny - 1
-            })
-            .map(|k| land_mask[k])
-            .collect();
-        #[allow(clippy::cast_precision_loss)]
-        let f_enc = ((perim.iter().filter(|&&b| b).count() as f64 / perim.len().max(1) as f64
-            - ENCLOSE_FREE)
-            / (1.0 - ENCLOSE_FREE))
-            .clamp(0.0, 1.0);
-        for src in &mut sources {
-            if src.kind == Kind::Land {
-                src.decay *= 1.0 - ENCLOSE_CUT * f_enc;
-            }
-        }
-        if corners.len() < 2 {
-            for _ in 0..FAR_SRC_N {
-                let th = rng.uniform(0.0, std::f64::consts::TAU);
-                let (cx, cy) = (
-                    w / 2.0 + FAR_SRC_MM * s * libm::cos(th),
-                    h / 2.0 + FAR_SRC_MM * s * libm::sin(th),
-                );
-                let st = CORNER.0 * rng.uniform(0.8, 1.2);
-                corners.push(Source {
-                    strength: st,
-                    decay: 1e9,
-                    d: Field::from_fn(&frame, |x, y| {
-                        (libm::hypot(x - cx, y - cy) - (FAR_SRC_MM - 45.0) * s).max(0.0)
-                    }),
-                    kind: Kind::Corner,
-                });
-            }
-        }
-        let land_grad = sources
-            .iter()
-            .find(|q| q.kind == Kind::Land)
-            .map(|q| gradient(&q.d));
-        let mut num = vec![0.0; nn];
-        let mut den = vec![0.0; nn];
-        let mut lin = vec![0.0; nn];
-        let mut w2 = vec![0.0; nn];
-        let mut order = vec![0.0f64; nn];
-        for (si, src) in sources.iter().chain(&corners).enumerate() {
-            let (band, grow) = match src.kind {
-                Kind::Land => (BAND_LAND, CHAOS_WOBBLE_GROW),
-                Kind::Rock => (BAND_ROCK, CHAOS_WOBBLE_GROW),
-                Kind::Corner => (BAND_CORNER, 0.5 * CHAOS_WOBBLE_GROW),
-            };
-            let mut wt: Vec<f64> = src
-                .d
-                .z
-                .iter()
-                .map(|&dk| src.strength * libm::exp(-dk / src.decay))
-                .collect();
-            if src.kind == Kind::Rock {
-                for v in &mut wt {
-                    *v *= SWELL_ROCK_GAIN;
-                }
-                if let Some((lx, ly)) = &land_grad {
-                    let (rx, ry) = gradient(&src.d);
-                    for k in 0..nn {
-                        let down = (lx[k] * rx[k] + ly[k] * ry[k]).clamp(0.0, 1.0);
-                        wt[k] *=
-                            1.0 + SWELL_WAKE * down * libm::exp(-src.d.z[k] / (2.5 * src.decay));
-                    }
-                }
-            }
-            let tr = swell_train(
-                &frame,
-                seed.key("train").index(si as u64),
-                &mut rng,
-                &src.d,
-                band,
-                grow,
-                s,
-            );
-            for k in 0..nn {
-                let wk = wt[k];
-                let p = libm::pow(wk, EMIT_SHARP);
-                num[k] += p * tr.z[k];
-                den[k] += p;
-                lin[k] += wk * tr.z[k];
-                w2[k] += wk * wk;
-                if src.kind != Kind::Corner {
-                    order[k] = order[k].max(wk.min(1.0));
-                }
-            }
-        }
-        let mut z: Vec<f64> = (0..nn)
-            .map(|k| {
-                let dom = num[k] / den[k].max(1e-12);
-                let chaos = lin[k] / libm::sqrt(w2[k]).max(1e-9);
-                let c = smooth01((order[k] - CHAOS_ORDER.0) / (CHAOS_ORDER.1 - CHAOS_ORDER.0));
-                (c * dom + (1.0 - c) * chaos) * (CHAOS_FAR_AMP + (1.0 - CHAOS_FAR_AMP) * c)
-            })
-            .collect();
-        let wet_vals: Vec<f64> = (0..nn).filter(|&k| water[k]).map(|k| z[k]).collect();
-        let (m, _) = mean_std(&wet_vals);
-        let (fl, kk) = (-SWELL_TROUGH_MM * s, 0.25 * s);
-        for (k, v) in z.iter_mut().enumerate() {
-            let a = (*v - m) * SWELL_AMP_MM * s;
-            let soft = fl + kk * libm::log1p(libm::exp((a - fl) / kk));
-            let lip = LIP_MM * s * libm::exp(-((d.z[k] - LIP_D_MM * s) / (0.5 * s)).powi(2));
-            *v = if water[k] { soft } else { 0.0 } + lip;
-        }
+        let sources = emitters(&frame, &land, &masks, &mut sm, &mut rng);
+        let z = relief(&frame, seed, &mut rng, &sources, &water, &d);
         // the surface: water over the ground where it is higher
         let tide = tide(&frame, seed.key("tide"));
         let edge_wl = scene.water_edge().unwrap_or(wl);
         let mut top = vec![0.0; nn];
         let mut wet = vec![false; nn];
         for k in 0..nn {
-            let fade = smooth01(raw_d.z[k] / (SHORE_FADE_MM * s));
-            let wz = wl + z[k] * rim_f.z[k] * f64::from(u8::from(water[k])) * fade + tide.z[k];
-            let (i, j) = (k % nx, k / nx);
-            let on_edge = i == 0 || j == 0 || i == nx - 1 || j == ny - 1;
-            let wz = if on_edge && water[k] {
+            let wz = if on_edge(k, nx, ny) && water[k] {
                 // the contract, exactly
-                let along = if j == 0 || j == ny - 1 {
-                    land.x(i)
-                } else {
-                    land.y(j)
-                };
-                edge_wl + profile(&frame, along)
+                edge_wl + profile(&frame, along_edge(&land, k))
             } else {
-                wz
+                let fade = smooth01(raw_d.z[k] / (SHORE_FADE_MM * s));
+                wl + z[k] * rim_f.z[k] * f64::from(u8::from(water[k])) * fade + tide.z[k]
             };
             wet[k] = water[k] && wz >= land.z[k];
             top[k] = if ctx.area.bits[k] {
@@ -582,44 +409,7 @@ impl Look for Water {
         let bank = dt_kit::BANK_MM * s;
         let no_edge: Vec<bool> = (0..nn).map(|k| wet[k] || dw.z[k] < bank).collect();
         let top_f = land.with_z(top);
-        // stats
-        let open: Vec<f64> = (0..nn)
-            .filter(|&k| water[k] && rim_f.z[k] > 0.99)
-            .map(|k| z[k])
-            .collect();
-        let (_, rs) = mean_std(&open);
-        let mut st = Stats {
-            relief: (
-                open.iter().copied().fold(f64::INFINITY, f64::min),
-                open.iter().copied().fold(f64::NEG_INFINITY, f64::max),
-                rs,
-            ),
-            ..Stats::default()
-        };
-        let (gx, gy) = gradient(&top_f);
-        st.max_slope_deg = (0..nn)
-            .filter(|&k| wet[k])
-            .map(|k| libm::atan(libm::hypot(gx[k], gy[k])).to_degrees())
-            .fold(0.0, f64::max);
-        st.edge_err_mm = (0..nn)
-            .filter(|&k| {
-                let (i, j) = (k % nx, k / nx);
-                wet[k] && (i == 0 || j == 0 || i == nx - 1 || j == ny - 1)
-            })
-            .map(|k| {
-                let (i, j) = (k % nx, k / nx);
-                let along = if j == 0 || j == ny - 1 {
-                    land.x(i)
-                } else {
-                    land.y(j)
-                };
-                (top_f.z[k] - edge_wl - profile(&frame, along)).abs()
-            })
-            .fold(0.0, f64::max);
-        #[allow(clippy::cast_precision_loss)]
-        {
-            st.wet = wet.iter().filter(|&&b| b).count() as f64 / nn as f64;
-        }
+        let st = stats(&frame, &top_f, &z, &water, &wet, &rim_f, edge_wl);
         scene.fill(&top_f, &wet, &no_edge);
         for (k, v) in [
             ("relief_min", st.relief.0),
@@ -632,5 +422,237 @@ impl Look for Water {
             scene.note(k, v);
         }
         Ok(())
+    }
+}
+
+/// The water's masks: land (higher ground and outside its area), rocks
+/// standing in it, and the water itself.
+struct Masks<'a> {
+    land: &'a [bool],
+    rock: &'a [bool],
+    water: &'a [bool],
+}
+
+/// The emitters: the land and the rocks (geodesic through the water), the
+/// open corners, and far sources when fewer than two corners are open.
+/// Physical emitters first, then the corners and far sources.
+fn emitters(
+    frame: &dt_kit::Frame,
+    land: &Field,
+    m: &Masks<'_>,
+    sm: &mut Smoother<'_>,
+    rng: &mut Rng,
+) -> Vec<Source> {
+    let s = frame.scale();
+    let (nx, ny) = frame.nodes();
+    let nn = nx * ny;
+    let mut sources: Vec<Source> = Vec::new();
+    let wdil = dilate8(m.water, nx, ny);
+    for (kind, src, (st, dec)) in [(Kind::Land, m.land, LAND), (Kind::Rock, m.rock, ROCK)] {
+        if !src.iter().any(|&b| b) {
+            continue;
+        }
+        let border: Vec<bool> = (0..nn).map(|k| src[k] && wdil[k]).collect();
+        if !border.iter().any(|&b| b) {
+            continue;
+        }
+        let g = geodesic(frame, &border, m.water, BANK_GRID_WEIGHT).map(|v| v.min(200.0 * s));
+        let mut dd = sm.smooth(&g, 1.2 * s);
+        if kind == Kind::Land {
+            dd = round_offsets(&dd, sm, s);
+        }
+        sources.push(Source {
+            strength: st,
+            decay: dec * s,
+            d: dd,
+            kind,
+        });
+    }
+    // open corners
+    let [w, h] = frame.size_mm();
+    let mut corners = Vec::new();
+    let r4 = 4.0 * s;
+    for (cx, cy) in [(0.0, 0.0), (w, 0.0), (0.0, h), (w, h)] {
+        let (mut wet, mut all) = (0usize, 0usize);
+        for (k, &wk) in m.water.iter().enumerate() {
+            let (x, y) = (land.x(k % nx), land.y(k / nx));
+            if (x - cx).abs() < r4 && (y - cy).abs() < r4 {
+                all += 1;
+                wet += usize::from(wk);
+            }
+        }
+        #[allow(clippy::cast_precision_loss)]
+        if wet as f64 > 0.5 * all as f64 {
+            let st = CORNER.0 * rng.uniform(0.8, 1.2);
+            corners.push(Source {
+                strength: st,
+                decay: CORNER.1 * s,
+                d: Field::from_fn(frame, |x, y| libm::hypot(x - cx, y - cy)),
+                kind: Kind::Corner,
+            });
+        }
+    }
+    // enclosure: the share of the tile's perimeter that is land
+    let perim: Vec<bool> = (0..nn)
+        .filter(|&k| on_edge(k, nx, ny))
+        .map(|k| m.land[k])
+        .collect();
+    #[allow(clippy::cast_precision_loss)]
+    let f_enc = ((perim.iter().filter(|&&b| b).count() as f64 / perim.len().max(1) as f64
+        - ENCLOSE_FREE)
+        / (1.0 - ENCLOSE_FREE))
+        .clamp(0.0, 1.0);
+    for src in &mut sources {
+        if src.kind == Kind::Land {
+            src.decay *= 1.0 - ENCLOSE_CUT * f_enc;
+        }
+    }
+    if corners.len() < 2 {
+        for _ in 0..FAR_SRC_N {
+            let th = rng.uniform(0.0, std::f64::consts::TAU);
+            let (cx, cy) = (
+                w / 2.0 + FAR_SRC_MM * s * libm::cos(th),
+                h / 2.0 + FAR_SRC_MM * s * libm::sin(th),
+            );
+            let st = CORNER.0 * rng.uniform(0.8, 1.2);
+            corners.push(Source {
+                strength: st,
+                decay: 1e9,
+                d: Field::from_fn(frame, |x, y| {
+                    (libm::hypot(x - cx, y - cy) - (FAR_SRC_MM - 45.0) * s).max(0.0)
+                }),
+                kind: Kind::Corner,
+            });
+        }
+    }
+    sources.extend(corners);
+    sources
+}
+
+/// The relief (world mm about calm water): each emitter's swell train,
+/// blended so its own waves rule near it and hand over to chaos far from
+/// every physical emitter, troughs soft-floored, plus the shore lip
+/// (`d`: smoothed distance to the shore).
+fn relief(
+    frame: &dt_kit::Frame,
+    seed: Seed,
+    rng: &mut Rng,
+    sources: &[Source],
+    water: &[bool],
+    d: &Field,
+) -> Vec<f64> {
+    let s = frame.scale();
+    let nn = d.z.len();
+    let land_grad = sources
+        .iter()
+        .find(|q| q.kind == Kind::Land)
+        .map(|q| q.d.gradient());
+    let mut num = vec![0.0; nn];
+    let mut den = vec![0.0; nn];
+    let mut lin = vec![0.0; nn];
+    let mut w2 = vec![0.0; nn];
+    let mut order = vec![0.0f64; nn];
+    for (si, src) in sources.iter().enumerate() {
+        let (band, grow) = match src.kind {
+            Kind::Land => (BAND_LAND, CHAOS_WOBBLE_GROW),
+            Kind::Rock => (BAND_ROCK, CHAOS_WOBBLE_GROW),
+            Kind::Corner => (BAND_CORNER, 0.5 * CHAOS_WOBBLE_GROW),
+        };
+        let mut wt: Vec<f64> = src
+            .d
+            .z
+            .iter()
+            .map(|&dk| src.strength * libm::exp(-dk / src.decay))
+            .collect();
+        if src.kind == Kind::Rock {
+            for v in &mut wt {
+                *v *= SWELL_ROCK_GAIN;
+            }
+            if let Some((lx, ly)) = &land_grad {
+                let (rx, ry) = src.d.gradient();
+                for (k, w) in wt.iter_mut().enumerate() {
+                    let down = (lx.z[k] * rx.z[k] + ly.z[k] * ry.z[k]).clamp(0.0, 1.0);
+                    *w *= 1.0 + SWELL_WAKE * down * libm::exp(-src.d.z[k] / (2.5 * src.decay));
+                }
+            }
+        }
+        let tr = swell_train(
+            frame,
+            seed.key("train").index(si as u64),
+            rng,
+            &src.d,
+            band,
+            grow,
+            s,
+        );
+        for k in 0..nn {
+            let wk = wt[k];
+            let p = libm::pow(wk, EMIT_SHARP);
+            num[k] += p * tr.z[k];
+            den[k] += p;
+            lin[k] += wk * tr.z[k];
+            w2[k] += wk * wk;
+            if src.kind != Kind::Corner {
+                order[k] = order[k].max(wk.min(1.0));
+            }
+        }
+    }
+    let mut z: Vec<f64> = (0..nn)
+        .map(|k| {
+            let dom = num[k] / den[k].max(1e-12);
+            let chaos = lin[k] / libm::sqrt(w2[k]).max(1e-9);
+            let c = smooth01((order[k] - CHAOS_ORDER.0) / (CHAOS_ORDER.1 - CHAOS_ORDER.0));
+            (c * dom + (1.0 - c) * chaos) * (CHAOS_FAR_AMP + (1.0 - CHAOS_FAR_AMP) * c)
+        })
+        .collect();
+    let wet_vals: Vec<f64> = (0..nn).filter(|&k| water[k]).map(|k| z[k]).collect();
+    let (m, _) = mean_std(&wet_vals);
+    let (fl, kk) = (-SWELL_TROUGH_MM * s, 0.25 * s);
+    for (k, v) in z.iter_mut().enumerate() {
+        let a = (*v - m) * SWELL_AMP_MM * s;
+        let soft = fl + kk * libm::log1p(libm::exp((a - fl) / kk));
+        let lip = LIP_MM * s * libm::exp(-((d.z[k] - LIP_D_MM * s) / (0.5 * s)).powi(2));
+        *v = if water[k] { soft } else { 0.0 } + lip;
+    }
+    z
+}
+
+/// The build's measures: relief over open water, the steepest wet slope
+/// of `top`, the worst wet edge node's miss from the contract, and the
+/// wet share.
+fn stats(
+    frame: &dt_kit::Frame,
+    top: &Field,
+    z: &[f64],
+    water: &[bool],
+    wet: &[bool],
+    rim_f: &Field,
+    edge_wl: f64,
+) -> Stats {
+    let (nx, ny) = (top.nx, top.ny);
+    let nn = nx * ny;
+    let open: Vec<f64> = (0..nn)
+        .filter(|&k| water[k] && rim_f.z[k] > 0.99)
+        .map(|k| z[k])
+        .collect();
+    let (_, rs) = mean_std(&open);
+    let (gx, gy) = top.gradient();
+    #[allow(clippy::cast_precision_loss)]
+    let wet_share = wet.iter().filter(|&&b| b).count() as f64 / nn as f64;
+    Stats {
+        relief: (
+            open.iter().copied().fold(f64::INFINITY, f64::min),
+            open.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+            rs,
+        ),
+        max_slope_deg: (0..nn)
+            .filter(|&k| wet[k])
+            .map(|k| libm::atan(libm::hypot(gx.z[k], gy.z[k])).to_degrees())
+            .fold(0.0, f64::max),
+        edge_err_mm: (0..nn)
+            .filter(|&k| wet[k] && on_edge(k, nx, ny))
+            .map(|k| (top.z[k] - edge_wl - profile(frame, along_edge(top, k))).abs())
+            .fold(0.0, f64::max),
+        wet: wet_share,
     }
 }

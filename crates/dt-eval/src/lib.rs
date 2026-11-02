@@ -184,27 +184,22 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
     let mut looks: Vec<Box<dyn Look>> = Vec::new();
     let mut areas = Vec::new();
     for e in &tile.stack {
-        let controls: Vec<Control> = e
-            .controls
-            .iter()
-            .map(|c| Control {
-                name: c.name.clone(),
-                value: c.value.clone(),
-            })
-            .collect();
+        let as_controls = |settings: &[doc::Setting]| -> Vec<Control> {
+            settings
+                .iter()
+                .map(|c| Control {
+                    name: c.name.clone(),
+                    value: c.value.clone(),
+                })
+                .collect()
+        };
+        let controls = as_controls(&e.controls);
         let children: Vec<dt_looks::Child> = e
             .children
             .iter()
             .map(|c| dt_looks::Child {
                 name: c.what.value.clone(),
-                controls: c
-                    .controls
-                    .iter()
-                    .map(|s| Control {
-                        name: s.name.clone(),
-                        value: s.value.clone(),
-                    })
-                    .collect(),
+                controls: as_controls(&c.controls),
                 weight: c.weight,
             })
             .collect();
@@ -420,14 +415,11 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
     let paths = entry_paths(tile);
     // with water, the ground's areas are banked down to each other once the
     // surfaces are painted, before any solid reads the ground
-    let fills = c
-        .looks
-        .iter()
-        .any(|l| l.plan().writes == dt_looks::Write::Fill);
+    let writes: Vec<dt_looks::Write> = c.looks.iter().map(|l| l.plan().writes).collect();
+    let fills = writes.contains(&dt_looks::Write::Fill);
     let mut painted = false;
     for step in &c.steps {
-        let surface =
-            matches!(*step, Step::Entry(i) if c.looks[i].plan().writes == dt_looks::Write::Surface);
+        let surface = matches!(*step, Step::Entry(i) if writes[i] == dt_looks::Write::Surface);
         if fills && !painted && !surface {
             painted = true;
             scene.bank();

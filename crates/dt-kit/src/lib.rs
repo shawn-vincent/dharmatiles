@@ -16,7 +16,7 @@
 //! | [`Scene::lift`] | the painted surface → a solid (adaptive lift, error-bounded, edge contract held) |
 //! | [`noise`] | position-keyed noise over the tile (one lattice) |
 //! | [`distance`] | distance transform with nearest nodes |
-//! | [`Field`] morphology | blur, dilate, erode, range, quantile, slope; [`smax`] |
+//! | [`Field`] morphology | blur, dilate, erode, range, quantile, slope, gradient; [`smax`] |
 //! | [`scatter`] | things by density, largest first, with spacing |
 //! | [`cap`] | carve as a half-space cap over the ground (pebbles) |
 //! | [`loft`] | a closed solid through rings |
@@ -47,7 +47,7 @@ mod stone;
 
 pub use audit::{Audit, Dropped, Export, Printer, audit};
 pub use dt_geom::Convex;
-pub use dt_geom::{Grid, Mask, Rng, Seed, TriMesh};
+pub use dt_geom::{Grid, Mask, Rng, Seed, TriMesh, vec3};
 pub use field::{
     Field, Noise, Placed, Plane, Scale, Spread, cap, distance, geodesic, noise, rim, scatter, smax,
     smooth01,
