@@ -740,15 +740,10 @@ impl<'k> Decoder<'k> {
                         }
                     }
                 }
-                "seed" => match e.value().as_integer().and_then(|i| i64::try_from(i).ok()) {
-                    Some(i) => h.seed = Some(i),
-                    None => {
-                        self.err(
-                            "dt::tile",
-                            value_span(e),
-                            "`seed` is a whole number",
-                            "not a whole number",
-                        );
+                "seed" => match seed_value(e) {
+                    Ok(i) => h.seed = Some(i),
+                    Err((msg, label)) => {
+                        self.err("dt::seed", value_span(e), msg, label);
                     }
                 },
                 other => {
@@ -1189,5 +1184,19 @@ impl<'k> Decoder<'k> {
             rules,
             span: n.span(),
         })
+    }
+}
+
+/// A `seed=` value: a whole number from 0 to `i64::MAX`, or why not (the
+/// message and its label).
+pub(crate) fn seed_value(e: &KdlEntry) -> Result<i64, (String, &'static str)> {
+    match e.value().as_integer() {
+        Some(i) => i64::try_from(i).ok().filter(|i| *i >= 0).ok_or_else(|| {
+            (
+                format!("a seed is a whole number from 0 to {}, not {i}", i64::MAX),
+                "out of range",
+            )
+        }),
+        None => Err(("`seed` is a whole number".to_owned(), "not a whole number")),
     }
 }

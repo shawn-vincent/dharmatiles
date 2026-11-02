@@ -137,3 +137,13 @@ fn entries_inside_an_id_or_seed_call_get_their_own_seed_paths() {
     let (a, b) = (seeds[2].unwrap(), seeds[3].unwrap());
     assert!(a != b && a != 5 && b != 5, "{seeds:?}");
 }
+
+#[test]
+fn level_messages_show_numbers_as_written() {
+    // was "not Number(inf)"
+    for (level, shown) in [("#inf", "not ∞"), ("#nan", "not NaN"), ("-50", "not -50")] {
+        let e = errors(&format!("tile a {{ stack {{ ground level={level} }} }}\n"));
+        assert!(e[0].message.ends_with(shown), "{}", e[0].message);
+        assert!(!e[0].message.contains("Number("), "{}", e[0].message);
+    }
+}

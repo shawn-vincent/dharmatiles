@@ -64,6 +64,11 @@ pub(super) fn syntax_errors(src: &Src, text: &str, e: &kdl::KdlError) -> Vec<Doc
             out.push(err);
         }
     }
+    // An unclosed `{` is reported twice: at the `{` and again at the end
+    // of the nodes; the first says it all.
+    if out.iter().any(|e| e.message.starts_with("No closing '}'")) {
+        out.retain(|e| !e.message.starts_with("Closing '}' was not found"));
+    }
     // A recognised mistake explains the generic reports around it.
     let known = |e: &DocError| {
         e.help

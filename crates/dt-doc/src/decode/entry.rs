@@ -348,15 +348,13 @@ impl Decoder<'_> {
             "seed" => {
                 if entry.place.seed.is_some() {
                     dup(self);
-                } else if let Some(i) = e.value().as_integer().and_then(|i| i64::try_from(i).ok()) {
-                    entry.place.seed = Some(Spanned { value: i, span });
                 } else {
-                    self.err(
-                        "dt::seed",
-                        span,
-                        "`seed` is a whole number",
-                        "not a whole number",
-                    );
+                    match super::seed_value(e) {
+                        Ok(i) => entry.place.seed = Some(Spanned { value: i, span }),
+                        Err((msg, label)) => {
+                            self.err("dt::seed", span, msg, label);
+                        }
+                    }
                 }
                 return true;
             }

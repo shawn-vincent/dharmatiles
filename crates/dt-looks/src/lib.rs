@@ -23,6 +23,20 @@ pub enum Value {
     Word(String),
 }
 
+/// As an author would write it, for messages: `-50`, `∞`, `NaN`, `` `wet` ``.
+impl std::fmt::Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Number(n) if n.is_nan() => f.write_str("NaN"),
+            Self::Number(n) if n.is_infinite() => {
+                f.write_str(if *n > 0.0 { "∞" } else { "-∞" })
+            }
+            Self::Number(n) => write!(f, "{n}"),
+            Self::Word(w) => write!(f, "`{w}`"),
+        }
+    }
+}
+
 /// One control set on a stack entry.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Control {

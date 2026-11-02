@@ -743,3 +743,32 @@ fn ids_are_plain_names_and_unique_among_same_named_siblings() {
         "plain name",
     );
 }
+
+#[test]
+fn seeds_run_from_0_to_i64_max() {
+    let h = snippet("tile t seed=9223372036854775807 { }")
+        .tile()
+        .unwrap()
+        .header()
+        .unwrap();
+    assert_eq!(h.seed, Some(i64::MAX));
+    // was "`seed` is a whole number" for a whole number too big
+    assert_fails(
+        "tile t seed=18446744073709551615 { }",
+        "dt::seed",
+        "from 0 to 9223372036854775807, not 18446744073709551615",
+    );
+    // was reported at the tile's name, by dt-eval
+    let (e, _) = fails("tile t seed=-5 { }");
+    assert_eq!(e[0].code, "dt::seed");
+    assert_eq!(e[0].span.offset(), "tile t seed=".len());
+    assert_fails("tile t { stack { ground seed=-1 } }", "dt::seed", "not -1");
+    assert_fails("tile t seed=1.5 { }", "dt::seed", "is a whole number");
+}
+
+#[test]
+fn an_unclosed_brace_is_one_error() {
+    let (e, shown) = fails("tile a size=\"1x1\" {\n stack {\n  ground\n }\n");
+    assert_eq!(e.len(), 1, "{shown}");
+    assert!(shown.contains("No closing '}'"), "{shown}");
+}

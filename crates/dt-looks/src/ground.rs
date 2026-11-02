@@ -33,7 +33,9 @@ impl Ground {
         };
         match controls.last().map(|c| &c.value) {
             Some(Value::Number(v)) if *v > 0.0 && v.is_finite() => Ok(Self { level_mm: *v }),
-            Some(v) => Err(bad(format!("ground level must be above 0 mm, not {v:?}"))),
+            Some(v) => Err(bad(format!(
+                "ground level must be a finite height above 0 mm, not {v}"
+            ))),
             None => Err(bad("ground needs a level".to_owned())),
         }
     }
