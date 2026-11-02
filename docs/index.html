@@ -50,7 +50,7 @@
 <header class="hero">
   <div class="eyebrow">Procedural 3D-printable terrain tiles · 35 mm DungeonBlocks squares · 25.4 mm OpenLOCK</div>
   <h1>dharmatiles</h1>
-  <p class="lede">dharmatiles makes terrain tiles for tabletop games as STL files: ground, grass, rocks, cliffs, water, walls and trees, printable on a home FDM printer without supports. The work is in three bodies, each with its own code and its own docs.</p>
+  <p class="lede">dharmatiles makes terrain tiles for tabletop games as STL files: ground, grass, rocks, cliffs, water, walls and trees, printable on a home FDM printer without supports. Each look below has a page that shows it, says how to use it in a tile, and gives its exact specification. Behind the site are three bodies of work: the original Python library, the labs where the looks are made, and a Rust rewrite.</p>
   <div class="reel">
     <figure><img src="img/cliff-run-s1.jpg" alt="A cliff run of stacked rock columns"><figcaption>cliffs</figcaption></figure>
     <figure><img src="img/grass-iso.jpg" alt="Stroke-blade grass tile"><figcaption>grass</figcaption></figure>
@@ -59,6 +59,35 @@
     <figure><img src="img/dirt-close.jpg" alt="Bare earth close up"><figcaption>dirt</figcaption></figure>
   </div>
 </header>
+
+<h2 id="get">Get and use the tiles</h2>
+<p>There are no prebuilt downloads yet: you build the STLs yourself from the repository, <a href="https://github.com/shawn-vincent/dharmatiles">github.com/shawn-vincent/dharmatiles</a>. Each tile comes with a DungeonBlocks socket-peg base (35 mm squares) or an OpenLOCK clip base (25.4 mm squares); see the <a href="standards/tile-system.html">tile system</a>. Every tile prints base down with no supports; see <a href="standards/printing.html">printing</a>.</p>
+<div class="tbl"><table>
+  <thead><tr><th>To get</th><th>Run</th><th>You get</th></tr></thead>
+  <tbody>
+    <tr><td>The library tiles</td><td><code>pip install -e .</code> then <code>dharmatiles-gen</code></td><td>Every tile in <code>src/tiles/</code> as STL in <code>stl/db/</code> and <code>stl/ol/</code>. One tile: <code>dharmatiles-gen --tile src/tiles/ground/2x2-grass-tree.tile.py</code>.</td></tr>
+    <tr><td>An approved look</td><td>the look's lab, e.g. <code>python clifflab/rockpile.py --form run --seed 1</code></td><td>A test tile of that look in the lab's <code>out/</code>, with a DungeonBlocks base. Each look page says how.</td></tr>
+    <tr><td>A tile from a KDL document</td><td><code>dharmatiles build library/tiles/test/flat-1x1.kdl</code> (branch <code>rust/p1</code>)</td><td>The Rust engine. Today it builds flat ground only; more looks arrive phase by phase (<a href="rust/plan.html">plan</a>).</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="looks">Looks</h2>
+<p>A look is one kind of terrain surface, such as grass or cliffs. Each look gets one page: its target and Shawn's rulings, its requirements, how the approved version works, its printability guarantees, its variant history, its references, and its Rust port. That page is also what the Rust port is judged against. This is where the three bodies of work meet.</p>
+<div class="tbl"><table class="looks">
+  <thead><tr><th>Look</th><th>Owned by</th><th>Rust port</th><th>Page</th></tr></thead>
+  <tbody>
+    <tr><td><a href="looks/cliffs.html">Cliffs</a></td><td>Labs: clifflab (rockpile)</td><td>P7</td><td><span class="ready">ready</span> · pilot for the look template</td></tr>
+    <tr><td>Ground</td><td>Labs: dirtlab</td><td>P1 flat, P2 dirt and hills</td><td><span class="coming">coming</span> · <a href="labs/dirtlab/requirements.html">requirements</a> · <a href="labs/dirtlab/design.html">design</a> · <a href="archive/rust-study/labs.html#dirtlab">summary</a></td></tr>
+    <tr><td>Grass</td><td>Labs: grasslab</td><td>P4</td><td><span class="coming">coming</span> · <a href="labs/grasslab/requirements.html">requirements</a> · <a href="labs/grasslab/design.html">design</a> · <a href="archive/rust-study/labs.html#grasslab">summary</a></td></tr>
+    <tr><td>Rocks</td><td>Labs: rocklab</td><td>P3</td><td><span class="coming">coming</span> · <a href="labs/rocklab/requirements.html">requirements</a> · <a href="labs/rocklab/design.html">design</a> · <a href="archive/rust-study/labs.html#rocklab">summary</a></td></tr>
+    <tr><td>Water and shore</td><td>Labs: waterlab, shorelab</td><td>P3 water, P4 shore</td><td><span class="coming">coming</span> · <a href="labs/waterlab/requirements.html">water</a> · <a href="labs/waterlab/design.html">design</a> · <a href="labs/shorelab/requirements.html">shore</a> · <a href="labs/shorelab/design.html">design</a></td></tr>
+    <tr><td>Walls and floors</td><td>Python library: <code>walls/</code></td><td>P5</td><td><span class="coming">coming</span> · <a href="archive/python-library/walls-coursed-masonry.html">masonry</a> · <a href="archive/python-library/walls-doors.html">openings</a> · <a href="archive/python-library/stone-surface-texture.html">stone finish</a></td></tr>
+    <tr><td>Trees</td><td>Python library: <code>trees/</code></td><td>P5</td><td><span class="coming">coming</span> · <a href="archive/python-library/leaf-placement.html">leaves</a> · <a href="archive/python-library/space-colonization-envelope-tree.html">skeleton</a> · <a href="archive/python-library/cloud-tree-bark.html">bark</a></td></tr>
+    <tr><td>Composition</td><td>Labs: meadowlab</td><td>P4</td><td><span class="coming">coming</span> · <a href="labs/meadowlab/requirements.html">requirements</a> · <a href="labs/meadowlab/design.html">design</a> · <a href="archive/rust-study/labs.html#meadowlab">summary</a></td></tr>
+  </tbody>
+</table></div>
+<p class="muted small">Until each look page lands, the lab summaries and the surface-variant family trees are in the archive: <a href="archive/rust-study/labs.html">labs analysis</a> and <a href="archive/rust-study/variants.html">surface variants</a>.</p>
+
 
 <h2 id="bodies">Three bodies of work</h2>
 <div class="bodies">
@@ -91,6 +120,14 @@
   </section>
 </div>
 
+
+<h2 id="standards">Standards</h2>
+<ul class="doclist">
+  <li><a href="standards/tile-system.html">Tile system</a><span class="sum">Tile, square and cell; DungeonBlocks and OpenLOCK geometry; file names; edge coordinates.</span></li>
+  <li><a href="standards/printing.html">Printing</a><span class="sum">Printer profile, the 55° overhang limit, the printable-texture rule, red overhangs in renders, and the watertight and float32 reload audit.</span></li>
+</ul>
+
+
 <h2 id="status">Status</h2>
 <div class="status">
   <div class="meta" id="status-meta">Loading status…</div>
@@ -102,28 +139,6 @@
 </div>
 <p class="muted small">Rows come from <a href="status.json">status.json</a>, which Claude commits as work moves.</p>
 
-<h2 id="looks">Looks</h2>
-<p>A look is one kind of terrain surface, such as grass or cliffs. Each look gets one page: its target and Shawn's rulings, its requirements, how the approved version works, its printability guarantees, its variant history, its references, and its Rust port. That page is also what the Rust port is judged against. This is where the three bodies of work meet.</p>
-<div class="tbl"><table class="looks">
-  <thead><tr><th>Look</th><th>Owned by</th><th>Rust port</th><th>Page</th></tr></thead>
-  <tbody>
-    <tr><td><a href="looks/cliffs.html">Cliffs</a></td><td>Labs: clifflab (rockpile)</td><td>P7</td><td><span class="ready">ready</span> · pilot for the look template</td></tr>
-    <tr><td>Ground</td><td>Labs: dirtlab</td><td>P1 flat, P2 dirt and hills</td><td><span class="coming">coming</span> · <a href="labs/dirtlab/requirements.html">requirements</a> · <a href="labs/dirtlab/design.html">design</a> · <a href="archive/rust-study/labs.html#dirtlab">summary</a></td></tr>
-    <tr><td>Grass</td><td>Labs: grasslab</td><td>P4</td><td><span class="coming">coming</span> · <a href="labs/grasslab/requirements.html">requirements</a> · <a href="labs/grasslab/design.html">design</a> · <a href="archive/rust-study/labs.html#grasslab">summary</a></td></tr>
-    <tr><td>Rocks</td><td>Labs: rocklab</td><td>P3</td><td><span class="coming">coming</span> · <a href="labs/rocklab/requirements.html">requirements</a> · <a href="labs/rocklab/design.html">design</a> · <a href="archive/rust-study/labs.html#rocklab">summary</a></td></tr>
-    <tr><td>Water and shore</td><td>Labs: waterlab, shorelab</td><td>P3 water, P4 shore</td><td><span class="coming">coming</span> · <a href="labs/waterlab/requirements.html">water</a> · <a href="labs/waterlab/design.html">design</a> · <a href="labs/shorelab/requirements.html">shore</a> · <a href="labs/shorelab/design.html">design</a></td></tr>
-    <tr><td>Walls and floors</td><td>Python library: <code>walls/</code></td><td>P5</td><td><span class="coming">coming</span> · <a href="archive/python-library/walls-coursed-masonry.html">masonry</a> · <a href="archive/python-library/walls-doors.html">openings</a> · <a href="archive/python-library/stone-surface-texture.html">stone finish</a></td></tr>
-    <tr><td>Trees</td><td>Python library: <code>trees/</code></td><td>P5</td><td><span class="coming">coming</span> · <a href="archive/python-library/leaf-placement.html">leaves</a> · <a href="archive/python-library/space-colonization-envelope-tree.html">skeleton</a> · <a href="archive/python-library/cloud-tree-bark.html">bark</a></td></tr>
-    <tr><td>Composition</td><td>Labs: meadowlab</td><td>P4</td><td><span class="coming">coming</span> · <a href="labs/meadowlab/requirements.html">requirements</a> · <a href="labs/meadowlab/design.html">design</a> · <a href="archive/rust-study/labs.html#meadowlab">summary</a></td></tr>
-  </tbody>
-</table></div>
-<p class="muted small">Until each look page lands, the lab summaries and the surface-variant family trees are in the archive: <a href="archive/rust-study/labs.html">labs analysis</a> and <a href="archive/rust-study/variants.html">surface variants</a>.</p>
-
-<h2 id="standards">Standards</h2>
-<ul class="doclist">
-  <li><a href="standards/tile-system.html">Tile system</a><span class="sum">Tile, square and cell; DungeonBlocks and OpenLOCK geometry; file names; edge coordinates.</span></li>
-  <li><a href="standards/printing.html">Printing</a><span class="sum">Printer profile, the 55° overhang limit, the printable-texture rule, red overhangs in renders, and the watertight and float32 reload audit.</span></li>
-</ul>
 
 <h2 id="reference">Reference</h2>
 <ul class="doclist">
@@ -131,6 +146,7 @@
   <li><a href="reference/index.html">Reference photos</a><span class="sum">Browse every photo set the looks are modelled on: big boulders, commercial rock tiles, stone texture, walls, fieldstone and doors.</span><span class="meta">reference/</span></li>
   <li><a href="extras/paint-organizer.html">Paint organizer magnets</a><span class="sum">Not terrain: disc-magnet pockets in the hex paint organizer so copies clip together.</span><span class="meta">src/extras/dharmatiles-paint-organizer.py</span></li>
 </ul>
+
 
 <h2 id="archive">Archive</h2>
 <p>Everything that records how we got here: the Python library design pages, the Rust study's change log and notes, lab iteration logs, and the dated session history. It is frozen. <a href="archive/index.html">Open the archive index</a>, which says what each item was and what replaced it.</p>
