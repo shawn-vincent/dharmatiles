@@ -17,6 +17,7 @@ manifold-parallel = ["dt-kit/manifold-parallel"]
 # Only the kit: a look cannot reach into the kernels or another look.
 [dependencies]
 dt-kit.workspace = true
+libm.workspace = true
 rayon.workspace = true
 
 [lints]

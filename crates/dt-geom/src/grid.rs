@@ -159,40 +159,58 @@ fn node(g: &Grid, i: usize, j: usize, z: f64) -> [f64; 3] {
 /// algorithm, so the result is exact and independent of thread count.
 #[must_use]
 pub fn distance(mask: &[bool], nx: usize, ny: usize) -> Vec<f64> {
-    let mut d: Vec<f64> = mask
-        .iter()
-        .map(|&m| if m { 0.0 } else { f64::INFINITY })
-        .collect();
+    distance_nearest(mask, nx, ny).0
+}
+
+/// The exact Euclidean distance, in nodes, from every node to the nearest
+/// `true` node, and that node's index (row-major), as scipy's
+/// `distance_transform_edt(..., return_indices=True)` on the inverted
+/// mask. Ties go to the lowest row, then the lowest column. `None` where
+/// the mask has no `true` node.
+#[must_use]
+pub fn distance_nearest(mask: &[bool], nx: usize, ny: usize) -> (Vec<f64>, Vec<Option<usize>>) {
+    let mut d2: Vec<f64> = vec![f64::INFINITY; nx * ny];
+    let mut col: Vec<usize> = vec![0; nx * ny];
     if !mask.iter().any(|&m| m) {
-        return d;
+        return (d2, vec![None; nx * ny]);
     }
     let mut f = vec![0.0; nx.max(ny)];
     let mut out = vec![0.0; nx.max(ny)];
+    let mut arg = vec![0usize; nx.max(ny)];
     for j in 0..ny {
-        let row = &mut d[j * nx..(j + 1) * nx];
-        f[..nx].copy_from_slice(row);
-        edt_1d(&f[..nx], &mut out[..nx]);
-        row.copy_from_slice(&out[..nx]);
+        for i in 0..nx {
+            f[i] = if mask[j * nx + i] { 0.0 } else { f64::INFINITY };
+        }
+        edt_1d_arg(&f[..nx], &mut out[..nx], &mut arg[..nx]);
+        d2[j * nx..(j + 1) * nx].copy_from_slice(&out[..nx]);
+        col[j * nx..(j + 1) * nx].copy_from_slice(&arg[..nx]);
     }
+    let mut near = vec![None; nx * ny];
+    let mut dist = vec![f64::INFINITY; nx * ny];
     for i in 0..nx {
         for j in 0..ny {
-            f[j] = d[j * nx + i];
+            f[j] = d2[j * nx + i];
         }
-        edt_1d(&f[..ny], &mut out[..ny]);
+        edt_1d_arg(&f[..ny], &mut out[..ny], &mut arg[..ny]);
         for j in 0..ny {
-            d[j * nx + i] = out[j];
+            if out[j].is_finite() {
+                let jj = arg[j];
+                near[j * nx + i] = Some(jj * nx + col[jj * nx + i]);
+                dist[j * nx + i] = out[j].sqrt();
+            }
         }
     }
-    d.iter_mut().for_each(|x| *x = x.sqrt());
-    d
+    (dist, near)
 }
 
 /// 1D squared distance transform of a sampled function `f` (0 or ∞ on
-/// the first pass, squared distances on the second).
-fn edt_1d(f: &[f64], out: &mut [f64]) {
+/// the first pass, squared distances on the second), recording for each
+/// sample the sample whose parabola is lowest there.
+fn edt_1d_arg(f: &[f64], out: &mut [f64], arg: &mut [usize]) {
     let n = f.len();
     let Some(first) = f.iter().position(|x| x.is_finite()) else {
         out.iter_mut().for_each(|x| *x = f64::INFINITY);
+        arg.iter_mut().for_each(|a| *a = 0);
         return;
     };
     let mut v = vec![0usize; n];
@@ -210,9 +228,8 @@ fn edt_1d(f: &[f64], out: &mut [f64]) {
         loop {
             let p = v[k] as f64;
             s = ((f[q] + qf * qf) - (f[v[k]] + p * p)) / (2.0 * qf - 2.0 * p);
-            // z[0] is -inf, so this stops at k = 0
             if s <= z[k] {
-                k -= 1;
+                k -= 1; // z[0] is -inf, so this stops at k = 0
             } else {
                 break;
             }
@@ -223,13 +240,14 @@ fn edt_1d(f: &[f64], out: &mut [f64]) {
         z[k + 1] = f64::INFINITY;
     }
     k = 0;
-    for (q, o) in out.iter_mut().enumerate().take(n) {
+    for q in 0..n {
         let qf = q as f64;
         while z[k + 1] < qf {
             k += 1;
         }
         let p = v[k] as f64;
-        *o = (qf - p) * (qf - p) + f[v[k]];
+        out[q] = (qf - p) * (qf - p) + f[v[k]];
+        arg[q] = v[k];
     }
 }
 
@@ -272,5 +290,29 @@ mod tests {
             }
         }
         assert!(distance(&[false; 4], 2, 2).iter().all(|x| x.is_infinite()));
+    }
+
+    #[test]
+    fn nearest_is_a_nearest_true_node() {
+        let (nx, ny) = (13, 9);
+        let mask: Vec<bool> = (0..nx * ny).map(|k| k % 17 == 3 || k == 50).collect();
+        let d = distance(&mask, nx, ny);
+        let (dn, near) = distance_nearest(&mask, nx, ny);
+        for k in 0..nx * ny {
+            let n = near[k].unwrap();
+            assert!(mask[n]);
+            let (a, b) = (
+                (k % nx) as f64 - (n % nx) as f64,
+                (k / nx) as f64 - (n / nx) as f64,
+            );
+            assert!(((a * a + b * b).sqrt() - d[k]).abs() < 1e-12);
+            assert!((dn[k] - d[k]).abs() < 1e-12);
+        }
+        assert!(
+            distance_nearest(&[false; 4], 2, 2)
+                .1
+                .iter()
+                .all(Option::is_none)
+        );
     }
 }

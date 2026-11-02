@@ -25,7 +25,7 @@
     <div><div class="k">Variants</div><div class="v">flat ground; dirt (clods, pebbles, stones); rises (bumps); optional cracks</div></div>
     <div><div class="k">Printing</div><div class="v">no supports; one height field, so it cannot overhang</div></div>
     <div><div class="k">Bases</div><div class="v">DungeonBlocks today; OpenLOCK with the Rust port</div></div>
-    <div><div class="k">Available</div><div class="v">flat ground in the Rust engine now (P1); dirt and rises in P2; dirtlab builds dirt today</div></div>
+    <div><div class="k">Available</div><div class="v">flat ground, dirt and rises in the Rust engine (<code>dharmatiles build lib:tiles/ground/soil-1x1.kdl</code>)</div></div>
   </div>
   <details class="words">
     <summary>Words used on this page</summary>
@@ -74,7 +74,7 @@
         ground          // flat, at the ground level (5 mm)
     }
 }</code></pre>
-<p>Dirt and rises arrive in phase P2, which turns <code>src/tiles/ground/1x1-soil.tile.py</code> into <code>library/tiles/ground/soil-1x1.kdl</code>. The vocabulary is already decided (<code>crates/dt-doc/src/looks.rs</code>); a dirt tile will read like this:</p>
+<p>Dirt and rises are in the Rust engine (P2, signed off 2 Nov 2026). <code>library/tiles/ground/soil-1x1.kdl</code> replaced the Python <code>1x1-soil.tile.py</code>; <code>dharmatiles looks dirt</code> lists every control. A dirt tile reads like this:</p>
 <pre><code>tile soil size="1x1" seed=13 {
     stack {
         dirt bumps=2.5 bump-size=14 {   // rises up to 2.5 mm, about 14 mm across
@@ -83,7 +83,7 @@
     }
 }</code></pre>
 <p>Change <code>seed</code> for different clods and pebbles with the same character. The language as a whole is on the <a href="../rust/language.html">language page</a>.</p>
-<p><strong>Today.</strong> The lab builds dirt: <code>python dirtlab/dirtlab.py --seed 1</code> writes <code>dirtlab/out/2x2-dirt-s1.stl</code> with a DungeonBlocks base (<code>--cols</code>/<code>--rows</code> set the size, <code>--cracks</code> adds fine cracks). The Python library's plain soil tile is <code>dharmatiles-gen --tile "src/tiles/ground/1x1-soil.tile.py"</code>, which uses the older <code>SoilCarpet</code> texture.</p>
+<p><strong>Build it.</strong> <code>dharmatiles build lib:tiles/ground/soil-1x1.kdl</code> writes <code>out/db/ground/soil-1x1-db.stl</code>; <code>dharmatiles watch</code> rebuilds on every save. The lab still builds dirt with stones: <code>python dirtlab/dirtlab.py --seed 1</code> writes <code>dirtlab/out/2x2-dirt-s1.stl</code> with a DungeonBlocks base (<code>--cols</code>/<code>--rows</code> set the size, <code>--cracks</code> adds fine cracks).</p>
 
 <h2 id="spec">Specification</h2>
 <h3 id="controls">Controls</h3>
@@ -92,8 +92,8 @@
 <thead><tr><th>Control</th><th>On</th><th>Values</th><th>Default</th><th>Effect</th></tr></thead>
 <tbody>
 <tr><td><code>level</code></td><td>ground, dirt</td><td>a named level (<code>ground</code>, <code>edge</code>, <code>water</code>, <code>wall-top</code>) or mm</td><td><code>ground</code> (5 mm)</td><td>Where the surface sits above the tile base.</td></tr>
-<tr><td><code>bumps</code></td><td>ground, dirt</td><td>0–15 mm, or <code>up</code>/<code>down</code></td><td>0</td><td>How far the ground rises and falls. Arrives in P2.</td></tr>
-<tr><td><code>bump-size</code></td><td>ground, dirt</td><td>5–70 mm</td><td>—</td><td>How wide the rises are: broad and rolling, or choppy. Arrives in P2.</td></tr>
+<tr><td><code>bumps</code></td><td>ground, dirt</td><td>0–15 mm, or <code>up</code>/<code>down</code></td><td>0</td><td>How far the ground rises and falls.</td></tr>
+<tr><td><code>bump-size</code></td><td>ground, dirt</td><td>5–70 mm</td><td>—</td><td>How wide the rises are: broad and rolling, or choppy.</td></tr>
 <tr><td><code>clods</code></td><td>dirt</td><td><code>few</code>, <code>some</code>, <code>many</code></td><td><code>some</code></td><td>Lumps of earth on the surface. <code>some</code> is dirtlab's density; <code>few</code> and <code>many</code> are provisional.</td></tr>
 <tr><td><code>bank</code></td><td>dirt</td><td><code>against</code>, <code>height</code>, <code>reach</code> (mm)</td><td>—</td><td>Earth heaped against a cliff or wall.</td></tr>
 </tbody></table></div>
@@ -101,7 +101,7 @@
 <h3 id="sizes">Sizes and levels</h3>
 <ul>
   <li><strong>Tile.</strong> Any size in 35 mm squares. The lab's default is 2×2.</li>
-  <li><strong>Edge level.</strong> Ground meets every tile edge at the edge level: 3.4 mm above the base in the Rust engine (<code>library/parts/edges.kdl</code>). dirtlab uses 4.0 mm, the DungeonBlocks dirt band; P2 settles the dirt look on 3.4 mm.</li>
+  <li><strong>Edge level.</strong> Ground meets every tile edge at the edge level: 3.4 mm above the base in the Rust engine (<code>library/parts/edges.kdl</code>). dirtlab uses 4.0 mm, the DungeonBlocks dirt band; the Rust dirt look sits on 3.4 mm (Default 12).</li>
   <li><strong>Rises only.</strong> Inside the tile the ground only goes up from the edge level. dirtlab's ground runs from the edge level to about 7.6 mm, with a median near 4.5 mm; the rises fade out over the 9 mm next to the rim, and no slope is steeper than 24°.</li>
   <li><strong>Pebbles and stones.</strong> Per square: 45–75 small pebbles (0.5–1.5 mm) and 8–13 medium (2.2–4.5 mm). On a 2×2 tile: 4–7 larger stones (4.5–7.5 mm) in 4–7 loose clusters.</li>
   <li><strong>Flat ground.</strong> Without <code>bumps</code> the ground is flat at its level: 5 mm by default.</li>
@@ -133,7 +133,7 @@
   <li><strong>Tile.</strong> <code>assemble</code> (line 545): the height field becomes a solid, unioned with a 1 mm slab, the stones and the DungeonBlocks base, and checked by <code>stl_safe</code> (line 529).</li>
 </ol>
 <p>The texture without the rises and stones is exported as <code>dirt_relief</code> (line 507). Every other lab uses it for exposed ground.</p>
-<p>The Rust <code>ground</code> look (<code>crates/dt-looks/src/ground.rs</code> on <code>rust/p1</code>) paints a constant level over the tile today; P2 ports the stages above.</p>
+<p>The Rust <code>ground</code> look (<code>crates/dt-looks/src/ground.rs</code> and <code>dirt.rs</code>) ports the stages above (P2); dirtlab's stones come with rocks in P3.</p>
 <details>
   <summary>Key constants</summary>
   <div class="tbl"><table>

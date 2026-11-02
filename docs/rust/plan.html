@@ -69,9 +69,9 @@
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks">Looks</a><a href="../rust/plan.html" aria-current="page">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
-  <div class="eyebrow">Rust rewrite · plan · Phase 1 done (2 Nov 2026) · Phase 2 under way</div>
+  <div class="eyebrow">Rust rewrite · plan · Phase 2 done (2 Nov 2026) · Phases 3 and 5 under way</div>
   <h1>The Rust plan</h1>
-  <p class="lede">How the Python library and the seven labs become one Rust engine with a KDL tile language. Nine phases, three work streams, and about 32 weeks on the critical path (25 to 40 is the honest range). Every phase ends with something Shawn can print, and no look counts as ported until Shawn judges its renders equal to the lab's, side by side, over four seeds. Phases 0 and 1 are done (2 Nov 2026): the Rust engine builds a flat tile that seats in a DungeonBlocks socket. Phase 2, dirt and hills, is under way; live status is on the <a href="../index.html#status-rust">home page</a>.</p>
+  <p class="lede">How the Python library and the seven labs become one Rust engine with a KDL tile language. Nine phases, three work streams, and about 32 weeks on the critical path (25 to 40 is the honest range). Every phase ends with something Shawn can print, and no look counts as ported until Shawn judges its renders equal to the lab's, side by side, over four seeds. Phases 0 to 2 are done (2 Nov 2026): the Rust engine prints a flat tile and builds dirt that Shawn judged equal to the lab. Phase 3 (rocks and water) and Phase 5 (walls, floors, bases and trees) are under way; live status is on the <a href="../index.html#status-rust">home page</a>.</p>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#now">Where it stands</a></li>
@@ -95,13 +95,13 @@
 </ol></nav>
 <article class="doc">
 <h2 id="now">Where it stands</h2>
-<p>Phases 0 and 1 are done. Phase 0 (spikes and decisions) ended with GO on 2 Nov 2026, with determinism level B. Phase 1 (walking skeleton and parity harness) was merged into <code>main</code> the same day (84056d8): the Rust program builds the flat 1×1 DungeonBlocks tile watertight with 0 mm² of overhang in 0.1 s, with the same hashes on macOS and Linux; Shawn's test print seated in a DungeonBlocks socket and Shawn approved the contact-sheet layout. Phase 2 (dirt and hills, the first look at parity) started on branch <code>rust/p2</code>. The live status of every piece of work, Rust and labs alike, is on the <a href="../index.html#status">home page</a>.</p>
+<p>Phases 0, 1 and 2 are done. Phase 0 (spikes and decisions) ended with GO on 2 Nov 2026, with determinism level B. Phase 1 (walking skeleton and parity harness) was merged into <code>main</code> the same day: the Rust program builds a flat DungeonBlocks tile that Shawn's test print seated. Phase 2 (dirt and hills) was merged on 2 Nov 2026 after Shawn signed off Rust dirt beside dirtlab over four seeds; its Python twin <code>src/tiles/ground/1x1-soil.tile.py</code> is deleted, and <code>library/tiles/ground/soil-1x1.kdl</code> replaces it. Phase 3 (rocks and water) and Phase 5 (walls, floors, bases and trees, stream B) start next. The live status of every piece of work, Rust and labs alike, is on the <a href="../index.html#status">home page</a>.</p>
 <h3 id="p2-checklist">Phase 2 checklist</h3>
 <p>The <a href="#P2">P2 detail</a> below has the full scope and exit criteria.</p>
 <ul class="now">
-<li><span class="st st-proposed">running</span><span><b>Kernels and operations.</b> Position-keyed noise, distance transform, morphology, blur, spatial hash; the noise, distance, scatter, carve and adaptive-lift operations; one grid convention.</span></li>
-<li><span class="st st-next">next</span><span><b>Looks: ground (full) and dirt</b>, ported from <code>dirtlab</code>, with <code>library/tiles/ground/soil-1x1.kdl</code> and the <code>watch</code> command.</span></li>
-<li><span class="st st-owner">Shawn</span><span><b>Side-by-side sign-off</b> of Rust dirt beside dirtlab over seeds 1 to 4. The ground edge level is already settled at 3.4 mm (Default 12).</span></li>
+<li><span class="st st-settled">done</span><span><b>Kernels and operations.</b> Position-keyed noise, distance transform, morphology, blur, spatial hash; the noise, distance, scatter, carve and adaptive-lift operations; one grid convention.</span></li>
+<li><span class="st st-settled">done</span><span><b>Looks: ground (full) and dirt</b>, ported from <code>dirtlab</code>, with <code>library/tiles/ground/soil-1x1.kdl</code>, <code>dharmatiles looks</code> and the <code>watch</code> command. At seeds 1 to 4 every parity metric is within tolerance; the printable-texture rule holds on 97.8% (dirtlab 97.7%); a 2×2 tile builds in about 0.8 s, watertight, with 0 mm² of overhang. Dirtlab's stones come in P3.</span></li>
+<li><span class="st st-settled">done</span><span><b>Shawn's sign-off.</b> Shawn signed off Rust dirt beside dirtlab over seeds 1 to 4 on 2 Nov 2026 (&ldquo;dirt is beautiful&rdquo;). The ground edge level stays 3.4 mm (Default 12), and the flat test tile now sits at it.</span></li>
 </ul>
 
 <h2 id="why">Why this plan</h2>

@@ -5,10 +5,12 @@
 //! scheduler in dt-eval can order the stack and refuse reads nothing can
 //! satisfy; then it builds into the scene ([`Look::build`]).
 //!
-//! P1: [`ground`] (a flat surface at a level) and [`connector`]
-//! (DungeonBlocks).
+//! P1: [`ground`] (then a flat surface at a level) and [`connector`]
+//! (DungeonBlocks). P2: [`ground`] in full (levels, hills, the edge
+//! contract) and [`dirt`] (dirtlab's textured earth on it).
 
 pub mod connector;
+pub mod dirt;
 pub mod ground;
 
 use dt_kit::{Mask, Scene, Seed};
@@ -21,6 +23,8 @@ pub enum Value {
     Number(f64),
     /// A word: a choice.
     Word(String),
+    /// A range `lo..hi`, drawn by the look (once per tile, or per thing).
+    Range(f64, f64),
 }
 
 /// As an author would write it, for messages: `-50`, `∞`, `NaN`, `` `wet` ``.
@@ -32,6 +36,7 @@ impl std::fmt::Display for Value {
                 f.write_str(if *n > 0.0 { "∞" } else { "-∞" })
             }
             Self::Number(n) => write!(f, "{n}"),
+            Self::Range(a, b) => write!(f, "\"{a}..{b}\""),
             Self::Word(w) => write!(f, "`{w}`"),
         }
     }
@@ -100,6 +105,29 @@ pub struct Plan {
     pub writes: Write,
     /// What it reads.
     pub reads: Vec<Read>,
+    /// The surface cell it needs, true mm (`None`: the default 128 per
+    /// square). The tile is built at the finest any entry asks for.
+    pub cell_mm: Option<CellMm>,
+}
+
+/// A cell size in mm, comparable (never NaN).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CellMm(u32);
+
+impl CellMm {
+    /// From mm, in whole micrometres.
+    #[must_use]
+    pub fn mm(v: f64) -> Self {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let um = (v * 1000.0).round().clamp(1.0, 1e6) as u32;
+        Self(um)
+    }
+
+    /// In mm.
+    #[must_use]
+    pub fn get(self) -> f64 {
+        f64::from(self.0) / 1000.0
+    }
 }
 
 /// Where and as what a look is built.
@@ -131,6 +159,7 @@ pub trait Look: Send + Sync {
 pub fn takes(name: &str) -> Option<&'static [&'static str]> {
     match name {
         "ground" => Some(ground::CONTROLS),
+        "dirt" => Some(dirt::CONTROLS),
         _ => None,
     }
 }
@@ -142,6 +171,7 @@ pub fn takes(name: &str) -> Option<&'static [&'static str]> {
 pub fn look(name: &str, controls: &[Control]) -> Result<Box<dyn Look>, LookError> {
     match name {
         "ground" => Ok(Box::new(ground::Ground::new(controls)?)),
+        "dirt" => Ok(Box::new(dirt::Dirt::new(controls)?)),
         _ => Err(LookError {
             control: None,
             message: format!("unknown look `{name}`"),
@@ -165,10 +195,12 @@ pub fn connector(system: &str) -> Result<Box<dyn Look>, LookError> {
     }
 }
 
-/// Refuse any control not in `known`.
+/// Refuse any control not in `known` (a word's numbers, `clods.density`,
+/// come with their control).
 fn only(look: &str, controls: &[Control], known: &[&str]) -> Result<(), LookError> {
     for c in controls {
-        if !known.contains(&c.name.as_str()) {
+        let base = c.name.split('.').next().unwrap_or(&c.name);
+        if !known.contains(&base) {
             return Err(LookError::control(
                 &c.name,
                 format!("`{look}` has no control `{}`", c.name),

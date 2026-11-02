@@ -10,9 +10,13 @@
 #![allow(clippy::unwrap_used)]
 
 use dt_eval::{Built, Library, Options, build};
-use dt_kit::{VIEWS, paint, render};
+use dt_kit::{VIEWS, render};
 
-const TILES: &[&str] = &["lib:tiles/test/flat-1x1.kdl"];
+const TILES: &[&str] = &[
+    "lib:tiles/test/flat-1x1.kdl",
+    "lib:tiles/ground/soil-1x1.kdl",
+    "lib:tiles/test/dirt-2x2.kdl",
+];
 
 fn build_at(path: &str, threads: usize) -> Built {
     let pool = rayon::ThreadPoolBuilder::new()
@@ -35,7 +39,7 @@ fn metrics(b: &Built) -> String {
     let a = &b.audit;
     let img = render(
         &b.export.mesh,
-        &paint(&b.materials, &a.overhang),
+        &b.colours(),
         &VIEWS[0],
         b.footprint,
         (600, 475),
@@ -98,7 +102,7 @@ fn the_flat_tile_meets_the_exit_criteria() {
     assert!(a.dropped.is_empty(), "{:?}", a.dropped);
     assert_eq!(a.holes, 0);
     assert!(a.failures(&Options::default().printer).is_empty());
-    // the DungeonBlocks envelope: 35 × 35 mm, 5 mm ground, short peg
+    // the DungeonBlocks envelope: 35 × 35 mm, ground at the 3.4 mm edge level, short peg
     let (lo, hi) = b.export.mesh.positions.iter().fold(
         ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]),
         |(lo, hi), p| {
@@ -110,6 +114,38 @@ fn the_flat_tile_meets_the_exit_criteria() {
     );
     let close = |a: f64, b: f64| (a - b).abs() < 1e-5;
     assert!(close(lo[0], 0.0) && close(hi[0], 35.0) && close(lo[1], 0.0) && close(hi[1], 35.0));
-    assert!(close(hi[2], 5.0), "top {}", hi[2]);
+    assert!(close(hi[2], 3.4), "top {}", hi[2]);
     assert!(close(lo[2], -(5.7 + 5.2) - 0.0), "peg tip {}", lo[2]);
+}
+
+#[test]
+fn the_dirt_tiles_meet_the_exit_criteria() {
+    for path in [
+        "lib:tiles/ground/soil-1x1.kdl",
+        "lib:tiles/test/dirt-2x2.kdl",
+    ] {
+        let b = build_at(path, 4);
+        let a = &b.audit;
+        assert!(a.watertight, "{path}: watertight after the float32 reload");
+        assert_eq!(a.overhang_mm2, 0.0, "{path}");
+        assert!(a.dropped.is_empty(), "{path}: {:?}", a.dropped);
+        assert_eq!(a.holes, 0, "{path}");
+        let note = |k: &str| b.notes.iter().find(|(n, _)| n == k).map(|(_, v)| *v);
+        let tex = note("texture_ok").unwrap();
+        assert!(tex >= 0.97, "{path}: printable texture {tex}");
+        assert!(note("clods").unwrap() > 0.0 && note("pebbles_small").unwrap() > 0.0);
+        // the edge contract: every top vertex on the tile edge at the
+        // edge level, and nothing of the ground below it
+        let edge = b.edge_mm.unwrap();
+        let [w, h] = b.footprint;
+        for p in &b.export.mesh.positions {
+            let on_edge = p[0].abs() < 1e-6
+                || p[1].abs() < 1e-6
+                || (p[0] - w).abs() < 1e-4
+                || (p[1] - h).abs() < 1e-4;
+            if on_edge && p[2] > 0.0 {
+                assert!((p[2] - edge).abs() < 1e-5, "{path}: edge vertex {p:?}");
+            }
+        }
+    }
 }

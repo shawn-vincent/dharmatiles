@@ -68,25 +68,20 @@ fn an_unknown_control_names_the_ones_there_are() {
 
 #[test]
 fn a_control_not_built_yet_is_checked_but_not_built() {
-    let text = "tile flat {\n  stack {\n    ground bumps=3\n  }\n}\n";
+    let text =
+        "tile flat {\n  stack {\n    dirt {\n      bank against=cliff height=2\n    }\n  }\n}\n";
     let src = mem(&[("t.kdl", text)]);
     let c = check(&src, "t.kdl", &Options::default()).unwrap();
-    assert_eq!(c.pending().len(), 1);
+    assert_eq!(c.pending().len(), 2); // `against` and `height`
     let Err(e) = build(&src, "t.kdl", &Options::default()) else {
         panic!("built a control that is not built yet");
     };
     assert_eq!(e[0].code, "dt::not-yet");
     assert_eq!(
         e[0].message,
-        "`ground`'s `bumps` is not available yet (Phase 2)"
+        "sub-controls of `bank` are not available yet (Phase 5)"
     );
-    assert_eq!(e[0].location().unwrap().1, 3);
-    // written at its default, it changes nothing and builds
-    let flat = mem(&[(
-        "t.kdl",
-        "tile flat {\n  stack {\n    ground bumps=0\n  }\n}\n",
-    )]);
-    assert!(build(&flat, "t.kdl", &Options::default()).is_ok());
+    assert_eq!(e[0].location().unwrap().1, 4);
 }
 
 #[test]
@@ -98,7 +93,7 @@ fn library_tiles_check_and_say_which_look_is_missing_when_built() {
         ),
         (
             "lib:tiles/walls/1x1-wall-fieldstone-corner.kdl",
-            "look `dirt` not available yet (Phase 2)",
+            "look `wall` not available yet (Phase 5)",
         ),
         (
             "lib:tiles/cliffs/2x1-cliff-run.kdl",
@@ -272,11 +267,15 @@ fn a_line_and_two_regions_make_a_step() {
             .mesh
             .positions
             .iter()
-            .filter(|p| (p[1] - y).abs() < 0.2 && p[2] > 0.0)
+            .filter(|p| (p[1] - y).abs() < 0.5 && p[2] > 0.0)
             .map(|p| p[2])
             .fold(f64::MIN, f64::max)
     };
-    assert!((z_at(5.0) - 5.0).abs() < 1e-5 && (z_at(30.0) - 8.0).abs() < 1e-5);
+    // each level holds inside its region; both meet the tile edge at the
+    // edge level (3.4 mm), ramping in no steeper than a hill
+    assert!((z_at(8.75) - 5.0).abs() < 1e-5, "low {}", z_at(8.75));
+    assert!((z_at(18.5) - 8.0).abs() < 1e-3, "high {}", z_at(18.5));
+    assert!((z_at(0.0) - 3.4).abs() < 0.05, "edge {}", z_at(0.0));
 }
 
 #[test]

@@ -109,6 +109,30 @@ pub struct Built {
     pub out: PathBuf,
     /// Tile width and height in mm.
     pub footprint: [f64; 2],
+    /// The edge level the ground meets every tile edge at, mm.
+    pub edge_mm: Option<f64>,
+    /// Numbers the looks noted (counts), in build order.
+    pub notes: Vec<(String, f64)>,
+    /// The ground surface as built, for painted previews.
+    pub surface: Option<(dt_kit::Grid, dt_kit::Mask)>,
+}
+
+impl Built {
+    /// Per-face paint for previews: materials, earth from the surface
+    /// (dirtlab's drybrush, pebbles grey), overhangs red.
+    #[must_use]
+    pub fn colours(&self) -> Vec<[f32; 3]> {
+        let surface = self
+            .surface
+            .as_ref()
+            .map(|(g, stone)| dt_kit::SurfacePaint::new(g, stone));
+        dt_kit::paint_surface(
+            &self.export.mesh,
+            &self.materials,
+            &self.audit.overhang,
+            surface.as_ref(),
+        )
+    }
 }
 
 /// The plan of a document, without geometry.
@@ -197,6 +221,12 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
             .help("add a look to its stack, such as `stack { ground }`"),
         );
     }
+    // the tile is built at the finest cell any entry needs
+    let frame = looks
+        .iter()
+        .filter_map(|l| l.plan().cell_mm)
+        .min()
+        .map_or(frame, |c| frame.with_cell(c.get()));
     errors.extend(empty_regions(&tile, &frame, &areas));
     match dt_looks::connector(&opts.system) {
         Ok(c) => {
@@ -346,6 +376,12 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
     let fail = |e: String| vec![Diag::plain("dt::build", e)];
     let root = Seed::new(c.seed);
     let mut scene = Scene::new(c.frame, root);
+    let edge_mm = tile
+        .edges
+        .iter()
+        .find(|(surface, _)| surface == "ground")
+        .map(|(_, mm)| mm * c.frame.scale());
+    scene.set_edge(edge_mm);
     let mut h = c.steps.iter().fold(0xcbf2_9ce4_8422_2325, |h, s| {
         fnv(
             h,
@@ -405,6 +441,9 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
         record,
         out: out_path(path, &tile.name, &opts.system),
         footprint,
+        edge_mm,
+        notes: scene.notes().to_vec(),
+        surface: scene.surface(),
     })
 }
 

@@ -122,6 +122,7 @@ impl Look for DungeonBlocks {
         Plan {
             writes: Write::Solid("connector"),
             reads: vec![Read::AllSolids],
+            cell_mm: None,
         }
     }
 

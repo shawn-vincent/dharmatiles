@@ -203,52 +203,76 @@ fn canonical(m: &TriMesh) -> TriMesh {
 /// float32 merge on reload cannot fuse them. Returns how many moved.
 fn separate_pinches(m: &mut TriMesh) -> usize {
     const NEAR: f64 = 2e-4;
-    let mut edges = std::collections::HashSet::new();
-    for t in &m.triangles {
-        for k in 0..3 {
-            let (a, b) = (t[k], t[(k + 1) % 3]);
-            edges.insert((a.min(b), a.max(b)));
-        }
-    }
-    let normals = vertex_normals(m);
+    const CELL: f64 = 2.0 * NEAR;
+    let mut edges: Option<std::collections::HashSet<(u32, u32), Fx>> = None;
+    let mut normals: Option<Vec<[f64; 3]>> = None;
     let mut moved = 0;
     for _ in 0..4 {
-        let mut cells: HashMap<[i64; 3], Vec<u32>> = HashMap::new();
+        let mut cells: HashMap<[i64; 3], Vec<u32>, Fx> =
+            HashMap::with_capacity_and_hasher(m.positions.len(), Fx::default());
         #[allow(clippy::cast_possible_truncation)]
-        let key = |p: [f64; 3]| p.map(|x| (x / NEAR).floor() as i64);
+        let key = |p: [f64; 3]| p.map(|x| (x / CELL).floor() as i64);
         for (i, p) in m.positions.iter().enumerate() {
             cells
                 .entry(key(*p))
                 .or_default()
                 .push(u32::try_from(i).unwrap_or(u32::MAX));
         }
-        let mut pairs = Vec::new();
+        // pairs closer than NEAR (rare: found by cell, edges checked after)
+        let mut near = Vec::new();
         for (i, p) in m.positions.iter().enumerate() {
             let k = key(*p);
-            for dx in -1..=1 {
-                for dy in -1..=1 {
-                    for dz in -1..=1 {
-                        let Some(c) = cells.get(&[k[0] + dx, k[1] + dy, k[2] + dz]) else {
-                            continue;
-                        };
-                        for &j in c {
-                            let (i32_, j) = (u32::try_from(i).unwrap_or(u32::MAX), j);
-                            if j <= i32_ {
-                                continue;
-                            }
-                            let q = m.positions[j as usize];
-                            let d = dist(*p, q);
-                            if d < NEAR && (!edges.contains(&(i32_, j)) || d <= 2e-5) {
-                                pairs.push((i32_ as usize, j as usize));
-                            }
+            // cells are 2 NEAR wide, so a point within NEAR lies in this
+            // cell or the one on the side of the cell this point is nearer
+            #[allow(clippy::cast_precision_loss)]
+            let side = [0, 1, 2].map(|a| {
+                if p[a] / CELL - k[a] as f64 >= 0.5 {
+                    1
+                } else {
+                    -1
+                }
+            });
+            let i = u32::try_from(i).unwrap_or(u32::MAX);
+            for c in 0..8 {
+                let cell = [0, 1, 2].map(|a| k[a] + if c >> a & 1 == 1 { side[a] } else { 0 });
+                let Some(list) = cells.get(&cell) else {
+                    continue;
+                };
+                for &j in list {
+                    if j > i {
+                        let d = dist(*p, m.positions[j as usize]);
+                        if d < NEAR {
+                            near.push((i, j, d));
                         }
                     }
                 }
             }
         }
+        if near.is_empty() {
+            break;
+        }
+        let edges = edges.get_or_insert_with(|| {
+            let mut e = std::collections::HashSet::with_capacity_and_hasher(
+                3 * m.triangles.len(),
+                Fx::default(),
+            );
+            for t in &m.triangles {
+                for k in 0..3 {
+                    let (a, b) = (t[k], t[(k + 1) % 3]);
+                    e.insert((a.min(b), a.max(b)));
+                }
+            }
+            e
+        });
+        let mut pairs: Vec<(usize, usize)> = near
+            .into_iter()
+            .filter(|&(i, j, d)| !edges.contains(&(i, j)) || d <= 2e-5)
+            .map(|(i, j, _)| (i as usize, j as usize))
+            .collect();
         if pairs.is_empty() {
             break;
         }
+        let normals = normals.get_or_insert_with(|| vertex_normals(m));
         pairs.sort_unstable();
         for (i, j) in pairs {
             let (ni, nj) = (normals[i], normals[j]);
@@ -261,6 +285,38 @@ fn separate_pinches(m: &mut TriMesh) -> usize {
     }
     moved
 }
+
+/// A fast, fixed (unseeded) hasher for the audit's integer keys: no
+/// result depends on iteration order, so any hasher is deterministic here.
+#[derive(Clone, Copy, Default)]
+struct FxHasher(u64);
+
+impl std::hash::Hasher for FxHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        let (chunks, rest) = bytes.as_chunks::<8>();
+        for c in chunks {
+            self.write_u64(u64::from_le_bytes(*c));
+        }
+        for &b in rest {
+            self.write_u64(u64::from(b));
+        }
+    }
+    fn write_u64(&mut self, v: u64) {
+        self.0 = (self.0.rotate_left(5) ^ v).wrapping_mul(0x517c_c1b7_2722_0a95);
+    }
+    fn write_u32(&mut self, v: u32) {
+        self.write_u64(u64::from(v));
+    }
+    #[allow(clippy::cast_sign_loss)]
+    fn write_i64(&mut self, v: i64) {
+        self.write_u64(v as u64);
+    }
+}
+
+type Fx = std::hash::BuildHasherDefault<FxHasher>;
 
 fn dist(a: [f64; 3], b: [f64; 3]) -> f64 {
     ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
@@ -615,6 +671,22 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
     use dt_geom::{BOX_TRIANGLES, Grid, lift};
+
+    #[test]
+    fn pinches_are_found_across_cell_borders() {
+        // two cubes touching at a corner, the corners 0.1 µm apart, placed
+        // so the pair straddles a hash cell border in every axis
+        for off in [0.0, 1.5e-4, 3.9e-4] {
+            let a = cube([0.0, 0.0, 0.0], [1.0 + off, 1.0 + off, 1.0 + off]);
+            let b = cube([1.0 + off + 1e-4; 3], [2.0 + off, 2.0 + off, 2.0 + off]);
+            let mut m = a.clone();
+            let n = u32::try_from(a.positions.len()).unwrap();
+            m.positions.extend(b.positions);
+            m.triangles
+                .extend(b.triangles.iter().map(|t| t.map(|v| v + n)));
+            assert_eq!(separate_pinches(&mut m), 2, "offset {off}");
+        }
+    }
 
     fn cube(lo: [f64; 3], hi: [f64; 3]) -> TriMesh {
         TriMesh {

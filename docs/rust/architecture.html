@@ -45,9 +45,9 @@
 <p>Why two layers and not one: the approved looks are solvers with dozens of tuned internal constants. The meadow has fifteen rim-steering constants; the cliff has dozens of guard and seat rules. Putting those in documents would make every tile a program. Keeping them inside a look, behind a control such as <code>cover="80%"</code>, keeps documents declarative, which is what Shawn asked for: <q>a static definition file… declarative</q>.</p>
 <p>The smallest real tile, <code>library/tiles/test/flat-1x1.kdl</code>, is the one Phase 1 builds end to end:</p>
 <pre><code>tile flat size="1x1" seed=1 {
-    about "Flat ground at 5 mm on one square: the first tile built end to end."
+    about "Flat ground at the edge level (3.4 mm) on one square: the first tile built end to end."
     stack {
-        ground          // flat, at the ground level (5 mm)
+        ground level=edge   // flat, at the edge level (3.4 mm)
     }
 }</code></pre>
 <p>Rules that hold for every tile without being written:</p>

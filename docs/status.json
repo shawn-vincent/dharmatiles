@@ -65,10 +65,30 @@
    "order": 30,
    "body": "rust",
    "area": "Rust P2",
-   "state": "waiting",
-   "title": "Waiting on Shawn: dirt side-by-side sign-off",
-   "detail": "rust/p2 bb2a006, CI green (run 41523520608). dirt parity passes at seeds 1–4: texture 97.8% (dirtlab 97.7%), clods/pebbles/spectrum within tolerance, 2×2 in ~0.8 s, watertight, 0 mm² overhang. Edge level stays 3.4 mm (Default 12).",
-   "updated": "2026-11-02T21:30:00Z"
+   "state": "done",
+   "title": "Phase 2 done: dirt signed off and merged",
+   "detail": "Shawn: “dirt is beautiful”. Rust dirt matches dirtlab at seeds 1–4 (texture 97.8%, clods/pebbles/spectrum within tolerance, 0.8 s, 0 overhang). soil-1x1.kdl replaces 1x1-soil.tile.py; flat test tile now a 3.4 mm slab.",
+   "updated": "2026-11-02T23:00:00Z"
+  },
+  {
+   "id": "p3",
+   "order": 40,
+   "body": "rust",
+   "area": "Rust P3",
+   "state": "running",
+   "title": "Phase 3 started: rocks and water",
+   "detail": "Branch rust/p3. rocklab faceted rocks, waterlab swell-chaos water, the water edge contract, dirt gains stones, 11 water tile twins, preview.",
+   "updated": "2026-11-02T23:00:00Z"
+  },
+  {
+   "id": "p5",
+   "order": 45,
+   "body": "rust",
+   "area": "Rust P5",
+   "state": "running",
+   "title": "Phase 5 started: walls, floors, bases, trees",
+   "detail": "Branch rust/p5 (stream B, beside P3). Ports the library walls, floors, OpenLOCK base and trees; tree tiles wait on grass (P4).",
+   "updated": "2026-11-02T23:00:00Z"
   }
  ]
 }

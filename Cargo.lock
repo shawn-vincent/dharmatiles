@@ -400,8 +400,10 @@ name = "dharmatiles"
 version = "0.0.0"
 dependencies = [
  "clap",
+ "dt-doc",
  "dt-eval",
  "dt-kit",
+ "dt-looks",
  "miette",
  "serde_json",
 ]
@@ -450,6 +452,7 @@ version = "0.0.0"
 dependencies = [
  "bytemuck",
  "glam 0.34.2",
+ "libm",
  "manifold-csg",
  "manifold-rust",
  "obvhs",
@@ -473,6 +476,7 @@ name = "dt-looks"
 version = "0.0.0"
 dependencies = [
  "dt-kit",
+ "libm",
  "rayon",
 ]
 

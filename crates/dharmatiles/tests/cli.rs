@@ -76,3 +76,175 @@ fn the_engine_version_is_the_workspace_version_and_commit() {
         "{v}"
     );
 }
+
+#[test]
+fn looks_lists_every_look() {
+    let o = Command::new(EXE).arg("looks").output().unwrap();
+    assert_eq!(o.status.code(), Some(0));
+    let text = String::from_utf8(o.stdout).unwrap();
+    for name in [
+        "ground", "dirt", "grass", "tree", "wall", "cliff", "scatter",
+    ] {
+        assert!(
+            text.lines().any(|l| l.starts_with(name)),
+            "no `{name}` in\n{text}"
+        );
+    }
+    assert!(
+        text.lines()
+            .any(|l| l.starts_with("ground") && l.contains("built")),
+        "{text}"
+    );
+}
+
+#[test]
+fn looks_ground_lists_its_controls() {
+    let o = Command::new(EXE)
+        .args(["looks", "ground"])
+        .output()
+        .unwrap();
+    assert_eq!(o.status.code(), Some(0));
+    let text = String::from_utf8(o.stdout).unwrap();
+    assert!(text.starts_with("ground: "), "{text}");
+    let level = text
+        .lines()
+        .find(|l| l.trim_start().starts_with("level "))
+        .unwrap();
+    assert!(level.contains("ground"), "{level}");
+    let bumps = text
+        .lines()
+        .find(|l| l.trim_start().starts_with("bumps "))
+        .unwrap();
+    assert!(bumps.contains("mm 0..15"), "{bumps}");
+    assert!(text.contains("up="), "{text}");
+}
+
+#[test]
+fn an_unknown_look_is_an_error_with_a_hint() {
+    let o = Command::new(EXE).args(["looks", "grond"]).output().unwrap();
+    assert_eq!(o.status.code(), Some(1));
+    let err = String::from_utf8(o.stderr).unwrap();
+    assert!(err.contains("did you mean `ground`?"), "{err}");
+
+    let o = Command::new(EXE)
+        .args(["looks", "nope", "--json"])
+        .output()
+        .unwrap();
+    assert_eq!(o.status.code(), Some(1));
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(v["ok"], false);
+    assert_eq!(v["errors"][0]["code"], "dt::unknown-look");
+}
+
+#[test]
+fn looks_dirt_json_has_units_limits_defaults_and_subs() {
+    let o = Command::new(EXE)
+        .args(["looks", "dirt", "--json"])
+        .output()
+        .unwrap();
+    assert_eq!(o.status.code(), Some(0));
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(v["name"], "dirt");
+    assert_eq!(v["role"], "surface");
+    assert!(v["built"].is_boolean());
+    let controls = v["controls"].as_array().unwrap();
+    let find = |n: &str| controls.iter().find(|c| c["name"] == n).unwrap();
+    let bumps = find("bumps");
+    assert_eq!(bumps["unit"], "mm");
+    assert_eq!(bumps["limits"], serde_json::json!([0.0, 15.0]));
+    assert_eq!(bumps["default"], "0");
+    let subs: Vec<_> = bumps["subs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(subs, ["up", "down"]);
+    let clods = find("clods");
+    assert_eq!(clods["unit"], "word");
+    assert_eq!(clods["default"], "some");
+    assert_eq!(clods["words"][1]["word"], "some");
+    assert!(clods["words"][1]["sets"]["density"].is_number());
+    assert!(find("bank")["unit"].is_null());
+    for c in controls {
+        assert!(c["taken"].is_boolean(), "{c}");
+    }
+}
+
+#[test]
+fn watch_rebuilds_when_a_used_file_changes() {
+    use std::io::BufRead;
+    let d = scratch("watch");
+    let parts = d.join("p.kdl");
+    let tile = d.join("t.kdl");
+    std::fs::write(&parts, "define raised { stack { ground level=6 } }\n").unwrap();
+    std::fs::write(
+        &tile,
+        "use \"./p\" raised\ntile t size=\"1x1\" seed=1 {\n    stack {\n        raised\n    }\n}\n",
+    )
+    .unwrap();
+    let mut child = Command::new(EXE)
+        .arg("watch")
+        .arg(&tile)
+        .arg("--out")
+        .arg(d.join("out"))
+        .args(["--max-builds", "2"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let stderr = child.stderr.take().unwrap();
+    std::thread::spawn(move || {
+        for line in std::io::BufReader::new(stderr).lines() {
+            if tx.send(line.unwrap_or_default()).is_err() {
+                break;
+            }
+        }
+    });
+    let timeout = std::time::Duration::from_secs(120);
+    let mut seen = Vec::new();
+    let mut wait_for = |what: &str, seen: &mut Vec<String>| loop {
+        match rx.recv_timeout(timeout) {
+            Ok(l) => {
+                let hit = l.contains(what);
+                seen.push(l);
+                if hit {
+                    return;
+                }
+            }
+            Err(e) => {
+                let _ = child.kill();
+                panic!("no `{what}` ({e}); stderr:\n{}", seen.join("\n"));
+            }
+        }
+    };
+    wait_for("watching 2 file(s)", &mut seen);
+    // a coarse file clock (1 s) still sees the edit
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    std::fs::write(&parts, "define raised { stack { ground level=7 } }\n").unwrap();
+    wait_for("changed:", &mut seen);
+    wait_for("built ", &mut seen);
+    let status = child.wait().unwrap();
+    assert_eq!(status.code(), Some(0), "{}", seen.join("\n"));
+    assert_eq!(
+        seen.iter().filter(|l| l.starts_with("built ")).count(),
+        2,
+        "{}",
+        seen.join("\n")
+    );
+}
+
+#[test]
+fn watch_of_a_library_tile_builds_once() {
+    let d = scratch("watch-lib");
+    let o = Command::new(EXE)
+        .args(["watch", "lib:tiles/test/flat-1x1.kdl", "--out"])
+        .arg(&d)
+        .output()
+        .unwrap();
+    assert_eq!(o.status.code(), Some(0));
+    let err = String::from_utf8(o.stderr).unwrap();
+    assert!(err.contains("nothing to watch"), "{err}");
+    assert!(d.join("db/test/flat-1x1-db.stl").exists());
+}

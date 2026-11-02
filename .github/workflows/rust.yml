@@ -86,17 +86,18 @@ jobs:
           cat golden-tbb-0.txt
       # The parity harness's Rust half (no Python on CI runners).
       - run: cargo xtask parity flat --no-python --dev
+      - run: cargo xtask parity dirt --no-python --dev
       # The parity renders and build records, per OS (no STLs).  With
       # --no-python the Python half doesn't run, so there is no
       # contact-sheet.png; it is listed for when there is one.
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: parity-flat-${{ matrix.os }}
+          name: parity-${{ matrix.os }}
           path: |
-            out/parity/flat/contact-sheet.png
-            out/parity/flat/rust/**/*.png
-            out/parity/flat/rust/**/*.build.json
+            out/parity/*/contact-sheet.png
+            out/parity/*/rust/**/*.png
+            out/parity/*/rust/**/*.build.json
           retention-days: 14
           if-no-files-found: error
 
