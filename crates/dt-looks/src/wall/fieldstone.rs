@@ -375,13 +375,7 @@ pub(crate) struct Stone {
 /// The outline polygon (t, z), counter-clockwise, bounded by the cell's
 /// cracks (`_outline`).
 #[allow(clippy::too_many_lines)]
-fn outline(
-    m: &Mason,
-    run: &Run,
-    c: &Cell,
-    seed: Seed,
-    r: &mut Rng,
-) -> Vec<[f64; 2]> {
+fn outline(m: &Mason, run: &Run, c: &Cell, seed: Seed, r: &mut Rng) -> Vec<[f64; 2]> {
     let s = run.scale;
     let g = &run.segs[c.seg];
     let bands = c
@@ -630,7 +624,11 @@ fn round_corners(
                 continue;
             }
             // the corner angle over a stretch ~r
-            let r = if p[i][1] < chamfer_below { chamfer_r } else { r };
+            let r = if p[i][1] < chamfer_below {
+                chamfer_r
+            } else {
+                r
+            };
             let (pa, _) = walk(p, i, -1, r);
             let (pb, _) = walk(p, i, 1, r);
             let (u, v) = (sub(p[i], pa), sub(pb, p[i]));
@@ -724,13 +722,7 @@ fn segmentize(p: &[[f64; 2]], step: f64) -> Vec<[f64; 2]> {
 /// Draw the stone for a cell (`_place_block`, up to the mesh), or `None`
 /// for a cell the rounding swallows.
 #[allow(clippy::too_many_lines)]
-pub(crate) fn stone(
-    m: &Mason,
-    run: &Run,
-    f: &Field,
-    c: &Cell,
-    seed: Seed,
-) -> Option<Stone> {
+pub(crate) fn stone(m: &Mason, run: &Run, f: &Field, c: &Cell, seed: Seed) -> Option<Stone> {
     let _ = f;
     let s = run.scale;
     let bs = super::cell_seed(seed, "stone", &c.key);
@@ -896,9 +888,7 @@ pub(crate) fn hold_proud(stones: &mut [Stone]) {
         let mut lo = f64::NEG_INFINITY;
         let mut hi = f64::INFINITY;
         for b in stones.iter() {
-            if b.seg == seg
-                && libm::fabs(b.z[1] - z0) < 0.6
-                && b.t[0].max(t[0]) < b.t[1].min(t[1])
+            if b.seg == seg && libm::fabs(b.z[1] - z0) < 0.6 && b.t[0].max(t[0]) < b.t[1].min(t[1])
             {
                 lo = lo.max(b.y0 - HOLD_PROUD_MM);
                 hi = hi.min(b.y1 + HOLD_PROUD_MM);
@@ -1068,75 +1058,5 @@ mod tests {
         assert!(a < 60.0 && a > 55.0, "{a}");
         let seg = segmentize(&r, 1.2);
         assert!(seg.len() > r.len());
-    }
-}
-
-#[cfg(test)]
-mod underside {
-    #![allow(clippy::unwrap_used)]
-    use super::*;
-    use crate::wall::{Family, Mason};
-
-    /// A resting stone's underside, away from its bed, is never a shelf
-    /// shallower than the overhang limit (by construction).
-    #[test]
-    fn resting_undersides_are_printable() {
-        let segs = layout::segments(&[[35.0, 35.0], [0.0, 35.0]]).unwrap();
-        let run = Run {
-            segs,
-            seat: 5.0,
-            base: -2.5,
-            height: 28.0,
-            thickness: 7.0,
-            laid: false,
-            tile: [35.0, 35.0],
-            scale: 1.0,
-        };
-        let m = Mason::new(Family::Fieldstone);
-        let f = Field { cap_z0: 28.0 };
-        let mut worst: f64 = 0.0;
-        let mut bad_area = 0.0;
-        for k in 0..40 {
-            let c = Cell {
-                seg: 0,
-                t0: 5.0,
-                t1: 5.0 + 6.0 + f64::from(k % 7),
-                end0: End::Joint,
-                end1: End::Joint,
-                z0: 8.0,
-                z1: 8.0 + 2.4 + 0.3 * f64::from(k % 9),
-                is_top: false,
-                is_bottom: false,
-                is_quoin: false,
-                key: vec![2, 0, i64::from(k)],
-                side_bands: None,
-                coping: false,
-            };
-            let mut st = stone(&m, &run, &f, &c, Seed::new(9)).unwrap();
-            st.relief = None;
-            let mesh = st.mesh().unwrap();
-            let zb = c.z0 - 1.2; // under the bed press
-            for t in &mesh.triangles {
-                let p = t.map(|i| mesh.positions[i as usize]);
-                let u = [0, 1, 2].map(|k| p[1][k] - p[0][k]);
-                let v = [0, 1, 2].map(|k| p[2][k] - p[0][k]);
-                let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-                let a = libm::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
-                let nz = n[2] / a;
-                let zc = (p[0][2] + p[1][2] + p[2][2]) / 3.0;
-                let bed = st.ring.iter().map(|q| q[1]).fold(f64::INFINITY, f64::min);
-                // shallower than 55° from vertical, and lifted off the bed
-                if nz < -libm::cos(35f64.to_radians()) && zc > bed + 0.3 && zc > zb {
-                    bad_area += a / 2.0;
-                    worst = worst.max(zc - bed);
-                    if k == 3 {
-                        let yc = (p[0][1] + p[1][1] + p[2][1]) / 3.0;
-                        let tc = (p[0][0] + p[1][0] + p[2][0]) / 3.0;
-                        eprintln!("t {tc:.2} y {yc:.2} (y0 {:.2} y1 {:.2}) lift {:.2} nz {nz:.2} area {:.3}", st.y0, st.y1, zc - bed, a / 2.0);
-                    }
-                }
-            }
-        }
-        eprintln!("shelf area {bad_area:.2} mm², worst lift {worst:.2}");
     }
 }

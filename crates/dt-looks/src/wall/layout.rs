@@ -485,10 +485,13 @@ mod tests {
         // per course and segment the cells tile [t0, t1] without gaps
         for a in &cells {
             for b in &cells {
-                if a.seg == b.seg && a.key[0] + 1 == b.key[0] && a.end1 == End::Joint {
-                    if b.end1 == End::Joint && b.t1 < a.t1 + 20.0 {
-                        assert!((a.t1 - b.t1).abs() > 1.0 || a.t1 > segs[a.seg].len - 8.0);
-                    }
+                if a.seg == b.seg
+                    && a.key[0] + 1 == b.key[0]
+                    && a.end1 == End::Joint
+                    && b.end1 == End::Joint
+                    && b.t1 < a.t1 + 20.0
+                {
+                    assert!((a.t1 - b.t1).abs() > 1.0 || a.t1 > segs[a.seg].len - 8.0);
                 }
             }
         }

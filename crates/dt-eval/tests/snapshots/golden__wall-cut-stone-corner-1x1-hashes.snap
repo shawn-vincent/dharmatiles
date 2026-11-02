@@ -1,0 +1,11 @@
+---
+source: crates/dt-eval/tests/golden.rs
+expression: hashes(&b)
+---
+04252fa73e78247e  plan
+715bb6e0cc7ad1c4  surface
+5377525dd18df831  ground:tile/wall-cut-stone-corner/ground
+704b81bf0d6b36c2  wall:tile/wall-cut-stone-corner/wall/0
+9ad7b1454c0b8fad  connector:tile/wall-cut-stone-corner/connector
+6ac05ed7c9d7d9db  union
+941b14a7058e8177  export

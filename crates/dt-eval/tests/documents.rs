@@ -287,3 +287,44 @@ fn an_unknown_region_is_refused() {
     assert_eq!(e[0].location().unwrap().1, 5);
     assert_eq!(e[0].help.as_deref(), Some("did you mean `a`?"));
 }
+
+#[test]
+fn the_floor_tiles_build_and_the_wall_tiles_wait_only_for_grass() {
+    for path in [
+        "lib:tiles/floors/1x1-floor-stone.kdl",
+        "lib:tiles/floors/1x1-floor-stone-wall.kdl",
+    ] {
+        let b =
+            build(&Library, path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
+        assert_eq!(b.audit.overhang_mm2, 0.0, "{path}");
+    }
+    for name in [
+        "1x1-wall-stone",
+        "1x1-wall-stone-corner",
+        "1x1-wall-brick",
+        "1x1-wall-brick-corner",
+        "1x1-wall-fieldstone",
+        "1x1-wall-fieldstone-corner",
+    ] {
+        let path = format!("lib:tiles/walls/{name}.kdl");
+        let Err(e) = build(&Library, &path, &Options::default()) else {
+            panic!("{path} built");
+        };
+        assert!(
+            e.iter()
+                .all(|d| d.message == "look `grass` not available yet (Phase 4)"),
+            "{path}: {e:?}"
+        );
+    }
+}
+
+#[test]
+fn a_wall_off_its_area_is_refused() {
+    let text = "tile t size=\"1x1\" {\n  line across { through west east }\n  region south { bounded-by across; fill \"0.5,0.25\" }\n  stack {\n    dirt\n    wall in=south along=north style=cut-stone\n  }\n}\n";
+    let src = mem(&[("t.kdl", text)]);
+    let Err(e) = build(&src, "t.kdl", &Options::default()) else {
+        panic!("built a wall off its area");
+    };
+    assert!(e[0].message.contains("wall"), "{e:?}");
+    assert_eq!(e[0].location().unwrap().1, 6, "{e:?}");
+}

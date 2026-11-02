@@ -1,0 +1,11 @@
+---
+source: crates/dt-eval/tests/golden.rs
+expression: hashes(&b)
+---
+04252fa73e78247e  plan
+b2b418707ffb4d3c  surface
+729c3724de436cae  ground:tile/wall-fieldstone/ground
+6dfbd8e00bf030fd  wall:tile/wall-fieldstone/wall/0
+9ad7b1454c0b8fad  connector:tile/wall-fieldstone/connector
+aa2873e1b231964d  union
+6e99d23baf4c9be8  export

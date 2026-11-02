@@ -16,6 +16,9 @@ const TILES: &[&str] = &[
     "lib:tiles/test/flat-1x1.kdl",
     "lib:tiles/ground/soil-1x1.kdl",
     "lib:tiles/test/dirt-2x2.kdl",
+    "lib:tiles/test/wall-cut-stone-corner-1x1.kdl",
+    "lib:tiles/test/wall-fieldstone-1x1.kdl",
+    "lib:tiles/test/floor-stone-1x1.kdl",
 ];
 
 fn build_at(path: &str, threads: usize) -> Built {
@@ -147,5 +150,27 @@ fn the_dirt_tiles_meet_the_exit_criteria() {
                 assert!((p[2] - edge).abs() < 1e-5, "{path}: edge vertex {p:?}");
             }
         }
+    }
+}
+
+#[test]
+fn the_wall_and_floor_tiles_meet_the_exit_criteria() {
+    for path in [
+        "lib:tiles/test/wall-cut-stone-corner-1x1.kdl",
+        "lib:tiles/test/wall-fieldstone-1x1.kdl",
+        "lib:tiles/test/floor-stone-1x1.kdl",
+    ] {
+        let b = build_at(path, 4);
+        let a = &b.audit;
+        assert!(a.watertight, "{path}: watertight after the float32 reload");
+        assert_eq!(a.overhang_mm2, 0.0, "{path}");
+        assert_eq!(a.holes, 0, "{path}");
+        let note = |k: &str| {
+            b.notes
+                .iter()
+                .find(|(n, _)| n.ends_with(k))
+                .map(|(_, v)| *v)
+        };
+        assert!(note("units").unwrap_or(0.0) > 0.0, "{path}: {:?}", b.notes);
     }
 }
