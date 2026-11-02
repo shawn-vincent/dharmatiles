@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rust Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+  /* The crate graph is wide; on a phone it scrolls inside its frame, not the page. */
+  .diagram svg.wide { min-width: 640px; }
+</style>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html" aria-current="page">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Rust rewrite · architecture · current design</div>
+  <h1>How the Rust engine is built</h1>
+  <p class="lede">A tile is a short KDL document that names built-in looks. A Rust engine builds each look once, from about twenty shared operations, and writes one audited, printable mesh. This page describes that engine: its six crates, its operations and kernels, how a build runs, and the risks still open.</p>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#engine">1. What the engine does</a></li>
+  <li><a href="#crates">2. Six crates</a></li>
+  <li><a href="#kit">3. The kit: values, operations, contracts</a></li>
+  <li><a href="#kernels">4. Kernels</a></li>
+  <li><a href="#pipeline">5. A build, step by step</a></li>
+  <li><a href="#determinism">6. Determinism</a></li>
+  <li><a href="#testing">7. Testing and the audit gate</a></li>
+  <li><a href="#front-ends">8. Front ends</a></li>
+  <li><a href="#layout">9. Repository layout and paths</a></li>
+  <li><a href="#risks">10. Open risks</a></li>
+  <li><a href="#provenance">Appendix: build provenance</a></li>
+  <li><a href="#history">History</a></li>
+</ol></nav>
+<article class="doc">
+
+<h2 id="engine">1. What the engine does</h2>
+<p>There are two layers.</p>
+<ul>
+  <li><strong>Documents.</strong> A tile is a KDL file. It names built-in <em>looks</em> (ground, dirt, grass, rocks, cliff, wall, tree, …) and tunes them with plain controls. It has no loops and no code. The language is on the <a href="language.html">language page</a>.</li>
+  <li><strong>The engine.</strong> Each look is a few hundred lines of Rust written against a shared <em>kit</em> of operations. The kit is where the old code's duplication collapses: about seventy separate mechanisms in the Python library and the labs become about twenty operations.</li>
+</ul>
+<p>Why two layers and not one: the approved looks are solvers with dozens of tuned internal constants. The meadow has fifteen rim-steering constants; the cliff has dozens of guard and seat rules. Putting those in documents would make every tile a program. Keeping them inside a look, behind a control such as <code>cover="80%"</code>, keeps documents declarative, which is what Shawn asked for: <q>a static definition file… declarative</q>.</p>
+<p>The smallest real tile, <code>library/tiles/test/flat-1x1.kdl</code>, is the one Phase 1 builds end to end:</p>
+<pre><code>tile flat size="1x1" seed=1 {
+    about "Flat ground at 5 mm on one square: the first tile built end to end."
+    stack {
+        ground          // flat, at the ground level (5 mm)
+    }
+}</code></pre>
+<p>Rules that hold for every tile without being written:</p>
+<ul>
+  <li><strong>The printer profile</strong> (<code>library/printers/default.kdl</code>): 0.45 mm lines, 0.2 mm layers, 55° overhang, 0.2 mm gaps. Looks read it and build printable shapes by construction. See <a href="../standards/printing.html">Printing</a>.</li>
+  <li><strong>The edge contract</strong>, so that neighbouring tiles butt: one ground edge level, a water tide that is calm at the edges, line anchors at fixed edge positions, a standard cliff end section.</li>
+  <li><strong>The connector</strong>: the DungeonBlocks or OpenLOCK underside, built last. See <a href="../standards/tile-system.html">Tile system</a>.</li>
+  <li><strong>Materials</strong>: every solid carries a material name that survives booleans, so colour can be added later without redesign.</li>
+</ul>
+
+<h2 id="crates">2. Six crates</h2>
+<p>A <em>crate</em> is Rust's unit of compilation: one library or one program, with its own <code>Cargo.toml</code>. The workspace has six, under <code>crates/</code>. Each boundary is there because it buys something specific.</p>
+<figure class="diagram">
+<svg class="wide" viewBox="0 0 1040 560" role="img" aria-label="Crate dependency graph. The dharmatiles program depends on dt-eval and dt-kit. Later front ends (the Tauri app, dt-wasm, dt-py) depend on dt-eval. dt-eval depends on dt-doc, dt-looks and dt-kit. dt-looks depends on dt-kit. dt-kit depends on dt-geom. dt-doc has no geometry dependency. dt-geom picks a Manifold backend by feature: C++ by default, pure Rust for wasm.">
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+  <g font-family="IBM Plex Sans, sans-serif" font-size="12" fill="currentColor">
+    <rect x="20" y="132" width="660" height="410" rx="6" fill="var(--water)" fill-opacity=".06" stroke="var(--water)" stroke-dasharray="5 4"/>
+    <text x="34" y="532" fill="var(--water)" font-size="11.5">compiles to the browser (wasm32-unknown-unknown) when dt-geom uses the pure-Rust Manifold</text>
+    <rect x="720" y="232" width="300" height="140" rx="6" fill="var(--accent)" fill-opacity=".07" stroke="var(--accent)" stroke-dasharray="5 4"/>
+    <text x="734" y="364" fill="var(--accent)" font-size="11.5">no geometry: builds in seconds, runs anywhere</text>
+    <g stroke="currentColor" stroke-width="1.3" fill="var(--card)">
+      <rect x="40" y="20" width="220" height="60" rx="4"/>
+      <rect x="290" y="20" width="220" height="60" rx="4" stroke-dasharray="4 3"/>
+      <rect x="540" y="20" width="220" height="60" rx="4" stroke-dasharray="4 3"/>
+      <rect x="790" y="20" width="220" height="60" rx="4" stroke-dasharray="4 3"/>
+    </g>
+    <text x="54" y="44" font-family="IBM Plex Mono, monospace" font-weight="600">dharmatiles</text><text x="54" y="64" font-size="11" opacity=".8">the program: build · check · (mcp · preview)</text>
+    <text x="304" y="44" font-family="IBM Plex Mono, monospace" font-weight="600">app/src-tauri</text><text x="304" y="64" font-size="11" opacity=".8">GUI, desktop + mobile · later</text>
+    <text x="554" y="44" font-family="IBM Plex Mono, monospace" font-weight="600">dt-wasm</text><text x="554" y="64" font-size="11" opacity=".8">browser build · later</text>
+    <text x="804" y="44" font-family="IBM Plex Mono, monospace" font-weight="600">dt-py</text><text x="804" y="64" font-size="11" opacity=".8">PyO3, parity tests · optional</text>
+    <rect x="240" y="150" width="240" height="60" rx="4" fill="var(--panel)" stroke="currentColor" stroke-width="1.3"/>
+    <text x="254" y="174" font-family="IBM Plex Mono, monospace" font-weight="600">dt-eval</text><text x="254" y="194" font-size="11" opacity=".8">project · sources · plan → build · record</text>
+    <rect x="240" y="260" width="240" height="60" rx="4" fill="var(--card)" stroke="currentColor" stroke-width="1.3"/>
+    <text x="254" y="284" font-family="IBM Plex Mono, monospace" font-weight="600">dt-looks</text><text x="254" y="304" font-size="11" opacity=".8">ground · dirt · grass · cliff · wall …</text>
+    <rect x="750" y="260" width="240" height="60" rx="4" fill="var(--card)" stroke="currentColor" stroke-width="1.3"/>
+    <text x="764" y="284" font-family="IBM Plex Mono, monospace" font-weight="600">dt-doc</text><text x="764" y="304" font-size="11" opacity=".8">KDL · model · look tables · errors</text>
+    <rect x="240" y="370" width="240" height="60" rx="4" fill="var(--card)" stroke="currentColor" stroke-width="1.3"/>
+    <text x="254" y="394" font-family="IBM Plex Mono, monospace" font-weight="600">dt-kit</text><text x="254" y="414" font-size="11" opacity=".8">scene · ops · audit · STL · render</text>
+    <rect x="240" y="460" width="240" height="56" rx="4" fill="var(--card)" stroke="currentColor" stroke-width="1.3"/>
+    <text x="254" y="482" font-family="IBM Plex Mono, monospace" font-weight="600">dt-geom</text><text x="254" y="502" font-size="11" opacity=".8">grid · raster · mesh · rays · seeds</text>
+    <g font-size="11.5">
+      <rect x="520" y="452" width="140" height="30" rx="4" fill="none" stroke="currentColor" stroke-dasharray="3 3"/><text x="530" y="471">manifold-csg (C++)</text>
+      <rect x="520" y="490" width="140" height="30" rx="4" fill="none" stroke="var(--water)" stroke-dasharray="3 3"/><text x="530" y="509" fill="var(--water)">manifold-rust</text>
+    </g>
+    <g stroke="currentColor" fill="none" stroke-width="1.3">
+      <path d="M150 80 C 150 120, 300 120, 320 148" marker-end="url(#ah)"/>
+      <path d="M400 80 L 380 148" marker-end="url(#ah)" stroke-dasharray="4 3"/>
+      <path d="M650 80 C 650 120, 470 120, 440 148" marker-end="url(#ah)" stroke-dasharray="4 3"/>
+      <path d="M900 80 C 900 130, 520 120, 476 158" marker-end="url(#ah)" stroke-dasharray="4 3"/>
+      <path d="M60 80 C 40 200, 120 380, 238 396" marker-end="url(#ah)"/>
+      <line x1="360" y1="210" x2="360" y2="258" marker-end="url(#ah)"/>
+      <path d="M480 190 C 640 190, 760 210, 820 258" marker-end="url(#ah)"/>
+      <path d="M470 210 C 520 280, 520 340, 482 390" marker-end="url(#ah)"/>
+      <line x1="360" y1="320" x2="360" y2="368" marker-end="url(#ah)"/>
+      <line x1="360" y1="430" x2="360" y2="458" marker-end="url(#ah)"/>
+      <line x1="480" y1="476" x2="518" y2="468" marker-end="url(#ah)" stroke-dasharray="3 3"/>
+      <line x1="480" y1="496" x2="518" y2="504" marker-end="url(#ah)" stroke-dasharray="3 3"/>
+    </g>
+    <g font-size="11" fill="currentColor" opacity=".85">
+      <text x="200" y="118">build(doc)</text>
+      <text x="368" y="240">runs looks</text>
+      <text x="640" y="208">parses, checks</text>
+      <text x="368" y="350">calls ops</text>
+      <text x="368" y="448">kernels</text>
+      <text x="486" y="446">feature</text>
+      <text x="62" y="260">writes STL, renders</text>
+    </g>
+  </g>
+</svg>
+<figcaption>Arrows point from a crate to what it depends on. Solid boxes exist now; dashed boxes come later. The green band is the geometry-free document crate. The blue band is everything that can reach the browser once the mesh kernel uses the pure-Rust Manifold.</figcaption>
+</figure>
+
+<div class="tbl"><table>
+<thead><tr><th>Crate</th><th>Holds</th><th>The boundary pays because</th></tr></thead>
+<tbody>
+<tr><td><code>dt-geom</code></td><td>The kernels: f32 grids (lift, distance transform), rasterising and the paint bucket, meshes behind one <code>Mesh</code> trait, rays behind one <code>Rays</code> trait, path-keyed seeds, and the source-ID rule (<code>crates/dt-geom/src/lib.rs</code>).</td><td>It holds every native or swappable dependency. The Manifold backend is a feature here and nowhere else. It changes rarely, so edits above it do not rebuild it.</td></tr>
+<tr><td><code>dt-kit</code></td><td>The scene of tagged solids and its queries, the shared operations, the audit gate, the STL writer with its build record, and a CPU preview renderer (<code>crates/dt-kit/src/lib.rs</code>).</td><td>It is the vocabulary looks are written in. Looks see only its public API, so the compiler stops a look reaching into the kernels or into another look. That reaching is how the seventy duplicates happened.</td></tr>
+<tr><td><code>dt-doc</code></td><td>KDL parsing, the typed document model, the expression language for values, the table of every look and its controls, the format-preserving edit API, and error messages with source spans (<code>crates/dt-doc/src/lib.rs</code>).</td><td>No geometry dependency. <code>dharmatiles check</code>, an editor, the MCP server and the browser can use it in milliseconds without compiling C++. The look tables live here so that validation never needs geometry.</td></tr>
+<tr><td><code>dt-looks</code></td><td>The built-in looks, one module each. Each look says what it reads and writes (<code>Look::plan</code>), then builds into the scene (<code>Look::build</code>), <code>crates/dt-looks/src/lib.rs:102</code>. The connector (DungeonBlocks today) is a look too.</td><td>This is where most edits happen. A separate crate keeps those rebuilds small.</td></tr>
+<tr><td><code>dt-eval</code></td><td>Finding the project, reading documents through a <code>Source</code> trait (disk, the embedded <code>lib:</code> library, or an in-memory map), the plan-then-build scheduler, seeds by path, and the one public call: <code>build</code> this document for this system (<code>crates/dt-eval/src/lib.rs:322</code>). <code>check</code> runs the plan only (<code>:121</code>).</td><td>Every front end needs exactly this: the CLI, the GUI, the wasm build and the Python bridge. The source trait keeps <code>std::fs</code> out of the core.</td></tr>
+<tr><td><code>dharmatiles</code></td><td>The one program: argument parsing, progress, JSON output, file writing. Later the MCP server, the preview server and the language server, each a module behind a default-on feature.</td><td>One install and one name. The servers are thin wrappers over dt-eval, so separate crates would add boundaries that buy nothing.</td></tr>
+</tbody></table></div>
+<p>Later members: <code>app/src-tauri</code> (the Tauri GUI; a workspace member but not a default member, so <code>cargo build</code> never compiles a webview), <code>dt-wasm</code> (wasm-bindgen exports: check, plan, build, render) and, only if a parity test needs it, <code>dt-py</code> (a PyO3 module exposing kernels to the Python labs).</p>
+<p>Two places where the code differs from the first sketch. dt-looks does not depend on dt-doc: a look takes plain controls, and dt-eval translates the document into them. And in Phase 1, dt-eval still reads documents through a thin adapter (<code>crates/dt-eval/src/doc.rs</code>) that decodes the decided vocabulary directly; re-pointing it at dt-doc's model changes nothing downstream.</p>
+<p class="small muted">Rejected: one crate with modules (the document model would need Manifold to compile, and every edit rebuilds everything); a crate per kernel (four crates that always change together); separate crates for MCP and the language server (they only call dt-eval and dt-doc).</p>
+
+<h2 id="kit">3. The kit: values, operations, contracts</h2>
+<p>The kit has three parts. <em>Values</em> are what operations pass to each other. <em>Operations</em> are what looks are written with. <em>Contracts</em> hold everywhere without being asked for.</p>
+<div class="grid3">
+  <div class="card"><h3>Values</h3>
+  <dl class="defs">
+    <dt>region</dt><dd>A paint-bucket area: named lines plus the tile edge, filled from one or more points.</dd>
+    <dt>field</dt><dd>A grid of values over the plane or a face frame: noise, distance, flow.</dd>
+    <dt>points</dt><dd>Placements with a radius and attributes such as size or kind.</dd>
+    <dt>curves</dt><dd>Lines, paths, networks and attributed graphs.</dd>
+    <dt>solid</dt><dd>A manifold mesh with a material, a kind (rock, wall…) and the path of the entry that made it.</dd>
+  </dl></div>
+  <div class="card"><h3>Contracts</h3>
+  <dl class="defs">
+    <dt>seed tree</dt><dd>Every call's seed comes from its stable name, never its position or a shared stream.</dd>
+    <dt>printer</dt><dd>Looks read the profile and build printable shapes; one audit gates the result.</dd>
+    <dt>material</dt><dd>Material names survive booleans through Manifold's original IDs.</dd>
+  </dl></div>
+</div>
+<p>The operations. The budget is about 22 over the whole project. Phase 1 has 12 of them (marked <span class="chip k-finish">P1</span>); the rest arrive with the first look that needs them.</p>
+<div class="tbl"><table>
+<thead><tr><th>Operation</th><th>What it does</th><th>Used by</th><th>Replaces</th></tr></thead>
+<tbody>
+<tr><td><code>area</code> <span class="chip k-finish">P1</span></td><td>Paint bucket: drawn lines and fill points become an area.</td><td>every tile</td><td><code>core/region.py</code> flood fill</td></tr>
+<tr><td><code>paint</code> · <code>lift</code> <span class="chip k-finish">P1</span></td><td>Set the ground surface over an area; turn a height field into a watertight solid (top, walls, bottom). Adaptive triangulation replaces the uniform lift later.</td><td>ground, water, dirt, relief, seats</td><td>3 meshers on 3 grid conventions</td></tr>
+<tr><td><code>noise</code></td><td>One position-keyed value/fBm lattice, so a 35 mm and a 25.4 mm build, or a preview and a final, see the same pattern.</td><td>all</td><td>about 15 noise sites using 5 algorithms</td></tr>
+<tr><td><code>distance</code></td><td>Distance transform with nearest indices; geodesic distance through a mask.</td><td>water, grass, dirt, cliff</td><td>scipy EDT in 7 files; Dijkstra</td></tr>
+<tr><td>morphology</td><td>Erode, dilate, close; masked blur; quantile normalise; slope cap.</td><td>ground, dirt, cliff core</td><td>grey ops, 16 inline fades</td></tr>
+<tr><td><code>flow</code></td><td>Angle fields with in-phase meander, wrap around shapes, steer toward a line or rim.</td><td>grass, shore</td><td>grasslab flow, <code>steer_rim</code>, <code>steer_shore</code></td></tr>
+<tr><td><code>grooves</code></td><td>A field drawn from curves: V profile, pinch along the curve, one-sided lip.</td><td>cliff, dirt cracks</td><td>3 crack generators</td></tr>
+<tr><td><code>scatter</code></td><td>Points from a density and a spacing, in an order (largest first, lowest first), until a coverage target; on the plane, along curves or on a surface.</td><td>rocks, scree, clods, pebbles, strands, leaves, clearings</td><td>12 samplers</td></tr>
+<tr><td><code>partition</code></td><td>Split a target into units: gravity (cliff), courses (wall bond), tessellate (fieldstone: cracks first).</td><td>cliff, wall, floor</td><td>rockpile stack, masonry layout, fieldstone cells</td></tr>
+<tr><td><code>trace</code></td><td>Curves from a field (streamlines), a random-walk network that stops at earlier curves, or space colonisation returning an attributed graph.</td><td>grass, cliff, tree</td><td>RK2, <code>_crack_net</code>, the tree skeleton</td></tr>
+<tr><td><code>carve</code> <span class="chip k-finish">P1</span></td><td>A solid less cutters; convex hull or prism cut by half-spaces, with guards that reject a cut that loses too much, thins a fin or undercuts a neighbour.</td><td>rocks, cliff stones, chips</td><td>rocklab facets, <code>_Cutter</code></td></tr>
+<tr><td><code>loft</code> · <code>extrude</code> <span class="chip k-finish">P1</span></td><td>A closed solid through rings; a profile along a curve or graph (C1 at forks); a stack of 2D layer outlines (stroke blades); an outline to a prism.</td><td>grass, reeds, tree, fieldstone units, connector</td><td>Bézier tubes, blade loft, sphere morph, DB rings</td></tr>
+<tr><td><code>relief</code></td><td>Depth raster of a solid in a face frame, clamped for overhang, lifted and subtracted. One-sided and crisp.</td><td>cliff faces, core</td><td>rockpile <code>_relief</code></td></tr>
+<tr><td><code>grain</code></td><td>Refine, then push vertices along smoothed normals by a 3D field, masked at edges, base and down faces.</td><td>rocks, cliff stones</td><td>rocklab texture, <code>_grain</code>, <code>stone_relief</code></td></tr>
+<tr><td><code>union</code> · round <span class="chip k-finish">P1</span></td><td>Booleans, batched and combined in slot order; rounding by plane trims or an SDF level set.</td><td>inside every solid look</td><td>6 rounding methods; 5 mesh converters</td></tr>
+<tr><td><code>seat</code></td><td>Put a solid on what is below with a named bed rule (quantile, plane fit, cones at the overhang limit, lowest ground), a sink or plinth, and clearance above.</td><td>rocks, scree, cliff stones, walls</td><td>6 stamp routines, 4 seat variants</td></tr>
+<tr><td><code>fill</code></td><td>Per column, raise the top to a surface (a level, or a level plus a field) where the ground is below it, with a margin; bury elsewhere.</td><td>water, dirt on tops</td><td>water z = max(land, water), shorelab basin, <code>_dirt_layer</code></td></tr>
+<tr><td><code>top</code> and queries <span class="chip k-finish">P1</span></td><td><code>top(x, y)</code> with owner and material, footprint by tag, distance to a tag, depth raster, support.</td><td>everything that reads the scene</td><td><code>TileScene</code> grids, <code>obstacle_mask</code></td></tr>
+<tr><td><code>Scene::union</code> · <code>audit</code> · <code>stl</code> · <code>render</code> <span class="chip k-finish">P1</span></td><td>Combine the scene once, with materials; the printability gate; binary STL with the build record; a painted preview with overhangs red.</td><td>every tile</td><td>3 audit copies, 3 <code>stl_safe</code> versions</td></tr>
+</tbody></table></div>
+<p>Each look combines between one and ten operations, together with its own tuned constants. The operations are shared; each look is still its own solver. Four pairs looked alike on paper and are not, which is why the list has more than seven entries:</p>
+<ul>
+  <li><strong>Stroke blades are layers, not a sweep.</strong> Each 0.2 mm layer is its own 2D stroke over a different span of the spine, a whole number of 0.45 mm lines wide (<code>grasslab/grasslab.py:812–911</code>). Hence loft has a layer-stack mode.</li>
+  <li><strong>A gravity stack is not wall courses.</strong> The cliff picks the lowest unfilled cell and grows a stone into it (<code>clifflab/rockpile.py</code>); wall courses split a known rectangle with no gravity (<code>src/dharmatiles/walls/masonry.py:286–365</code>). Hence partition has three methods.</li>
+  <li><strong>Face relief is not grain.</strong> Relief rasterises a face, clamps it and subtracts it; grain refines a mesh and moves vertices (<code>rocklab/rocklab.py:283</code>).</li>
+  <li><strong>Swell is a solver, not relief.</strong> Water is a look built from field operations and fill; only its last step displaces a surface (<code>waterlab/waterlab.py:719–944</code>).</li>
+</ul>
+<p>Kept from the Python library because it already works: paint-bucket regions, an ordered stack, distributions such as <code>"6..8"</code> on any number, a floor as a wall laid flat, the smooth-max block kernel, the crack network drawn first, the opening fit solver, the organic leaf placer, and guarantees by construction.</p>
+
+<h2 id="kernels">4. Kernels</h2>
+<p>A <em>kernel</em> is the low-level geometry code the kit sits on. There are four, all in dt-geom. Each external crate sits behind a trait so it can be swapped or vendored.</p>
+<div class="tbl"><table>
+<thead><tr><th>Kernel</th><th>What it is</th><th>Built on</th></tr></thead>
+<tbody>
+<tr><td>Grid</td><td>f32 fields on one grid convention: lift, distance transform, morphology, blur. Ground, water, dirt, cliff support, seats and face relief all stay grids until the last moment.</td><td>Our own code (<code>crates/dt-geom/src/grid.rs</code>: <code>lift</code> at :94, <code>distance</code> at :161). EDT, labels, blur and Poisson sampling are 50–150 lines each, and owning them keeps them deterministic.</td></tr>
+<tr><td>Plan (2D)</td><td>Line rasterising and the paint bucket now; polygons, offsets and Voronoi as looks need them.</td><td><code>crates/dt-geom/src/raster.rs</code> (<code>fill</code> at :86); Manifold CrossSection for anything extruded; i_overlay or geo, spade (Delaunay, Voronoi), kiddo (kd-trees) later.</td></tr>
+<tr><td>Mesh</td><td>Booleans, hull, extrude, slice, refine, simplify, level sets. One <code>Mesh</code> trait (<code>crates/dt-geom/src/mesh.rs:271</code>).</td><td><code>manifold-csg</code> 0.4.1 (Manifold 3.5.3 in C++) by default, with Manifold's parallelism on. <code>manifold-rust</code> 0.19.2 (a pure-Rust port) is the wasm backend.</td></tr>
+<tr><td>Rays</td><td>A BVH for leaf seats and cliff tops. One <code>Rays</code> trait (<code>crates/dt-geom/src/rays.rs:50</code>).</td><td><code>obvhs</code> 0.4 with Embree's triangle test; <code>parry3d</code> 0.31 as the spare. Every ray goes through our wrapper, which fixes obvhs's −0.0 direction bug.</td></tr>
+</tbody></table></div>
+<p>Kernel rules that came out of the Phase 0 spikes:</p>
+<ul>
+  <li><strong>Keep solids inside the kernel between operations.</strong> A round trip through a plain triangle mesh loses face IDs (manifold-csg cannot pass them back in), and with them the material chain.</li>
+  <li><strong>Carry tolerance as Python does.</strong> A solid gets its tolerance when it is created and keeps it, because a mesh round trip resets it and changes near-degenerate intersections.</li>
+  <li><strong>One source-ID rule</strong> for determinism and materials; see <a href="#determinism">Determinism</a>.</li>
+  <li><strong>For cliff face depth, use a depth-peel raster</strong> or offset the relief grid off the mesh lattice, rather than exactly grazing rays, whose answers are rounding noise.</li>
+</ul>
+<p>Watertightness comes in three layers. By construction: lift, loft and convex carving make closed solids without booleans. By kernel: Manifold returns a manifold result for manifold inputs. At export: the audit gate (<a href="#testing">section 7</a>).</p>
+
+<h2 id="pipeline">5. A build, step by step</h2>
+<p>The labs exposed an ordering puzzle a single bottom-to-top pass cannot solve. Rocks in a meadow must claim their footprints before the grass grows, so blades steer around them. They must also be seated after the grass, so each rock rises above the grass top (<code>meadowlab/meadowlab.py:224</code> then <code>:236</code>). So a build has two passes: first everything says what it writes and reads, then everything is built.</p>
+<ol>
+  <li><strong>Read.</strong> dt-eval finds the project (the nearest folder with a <code>dharmatiles.kdl</code>, as Cargo finds <code>Cargo.toml</code>), reads the document and its <code>use</code> imports through the source trait, and checks every name and value.</li>
+  <li><strong>Plan.</strong> Each stack entry says what it writes and what it reads (<code>Look::plan</code>). The scheduler orders the steps from that, not from where they are listed (<code>crates/dt-eval/src/plan.rs</code>):
+    <ol>
+      <li>surfaces, painted in stack order (order decides which surface paints over which);</li>
+      <li>the lift of the painted surface into the ground solid;</li>
+      <li>solids, each after every writer of what it reads; the connector, which reads every solid, comes last.</li>
+    </ol>
+    A read that nothing writes, a cycle, or a surface that reads a solid is refused here, before anything is built, with an error at the text that caused it.</li>
+  <li><strong>Build.</strong> Each step builds into the scene. Each entry gets its area (the whole tile unless <code>in=</code> names a region), its path, and a seed keyed by that path.</li>
+  <li><strong>Combine.</strong> The scene's solids are unioned once, keeping each triangle's material.</li>
+  <li><strong>Audit.</strong> The gate checks the mesh as a slicer sees it (<code>crates/dt-kit/src/audit.rs:122</code>).</li>
+  <li><strong>Write.</strong> The STL, a <code>.build.json</code> beside it, and painted preview PNGs on request.</li>
+</ol>
+<p>The plan pass is cheap: 2D work and fields, well under a second. That makes it the live preview while editing. Plans are computed for everything up front; solids are built once and cached by (path, seed, hash of inputs). Most real operations are global (Poisson saturation, gravity stacking, geodesic distance), so building on demand point by point would recompute the world.</p>
+<p>Two engine rules that are not syntax:</p>
+<ul>
+  <li><strong>Below zero belongs to the connector.</strong> Carves may go below 0 (pits, stairs down). They are recorded and applied to the connector, which is built last because the DungeonBlocks peg height depends on the content's height.</li>
+  <li><strong>OpenLOCK is a second evaluation, not a parameter.</strong> A 25.4 mm build changes footprints and densities. With position-keyed noise and path seeds, both builds share one layout.</li>
+</ul>
+
+<h2 id="determinism">6. Determinism</h2>
+<p>The level is <strong>B</strong>, decided 2 Nov 2026: one set of golden byte hashes, shared by the macOS and Linux CI jobs. Windows runs the thread-identity test, the golden summaries' metrics (triangle count, volume, overhang, holes) and the render gate, but not the byte hashes, because Manifold's output differs on Windows for a cause not yet found. See <a href="plan.html">the plan</a> for the decision.</p>
+<ul>
+  <li><strong>Seeds by path, not by stream.</strong> Each key is hashed with 64-bit FNV-1a, xored into the parent seed and mixed with SplitMix64 (<code>crates/dt-geom/src/seed.rs:23</code>). An entry's path is <code>tile/&lt;name&gt;/&lt;look&gt;/&lt;k&gt;</code>, where <code>k</code> counts same-named entries (<code>crates/dt-eval/src/lib.rs:392</code>), so adding an entry of another look rerolls nothing else. Any entry may pin <code>seed=</code>. Nothing uses <code>rand::StdRng</code>, whose stream is not stable across versions.</li>
+  <li><strong>The source-ID rule</strong> (<code>crates/dt-geom/src/source.rs:46</code>). Manifold numbers parts with a process-wide counter, so parts built in parallel would get IDs in scheduling order. Instead, reserve a block of original IDs and assign them by part index: each leaf solid takes a slot and its own face-ID range, plane cuts take IDs from the block, cut faces take the material of the solid cut, materials live in a table keyed by (original ID, face ID), and parts combine with <code>batch_in_order</code> (:206).</li>
+  <li><strong><code>libm</code>, not <code>std</code>, for sin, exp and powf in seeded code.</strong> The platform maths library gave three different hashes on three platforms.</li>
+  <li><strong>Order-dependent solvers run in sequence</strong> within their entry (the gravity partition, the crack network, the coverage filler, the leaf standoff stack). Independent items (blades, stones, rocks) run in parallel. Reductions combine in fixed chunks in index order.</li>
+  <li><strong>Manifold's parallelism stays on.</strong> It is 3–5× faster on the cliff, and its output was identical run to run on one machine.</li>
+  <li><strong>Pin versions.</strong> The Rust toolchain (<code>rust-toolchain.toml</code>: 1.99.1) and the Manifold version are part of the output. Bump them on purpose, with the golden hashes as the check.</li>
+  <li><strong>Position-keyed noise.</strong> The Python library draws noise per grid cell, so the same seed gives a different tile at a different resolution. The kit keys noise by position.</li>
+</ul>
+
+<h2 id="testing">7. Testing and the audit gate</h2>
+<p><strong>The audit gate</strong> runs on every build (<code>crates/dt-kit/src/audit.rs</code>). In order: separate pinches; quantise to float32 and merge vertices by position (what the STL reload will see); split into bodies and keep the largest, <em>reporting</em> what was dropped; then check watertightness, overhang area (the layer-reach rule at 55°, from rockpile) and see-through holes on what is written. A failed gate still writes the STL, exits with code 3, and paints overhang faces red in the preview. The policy is on <a href="../standards/printing.html">Printing</a>.</p>
+<div class="tbl"><table>
+<thead><tr><th>Layer</th><th>What it checks</th><th>When</th></tr></thead>
+<tbody>
+<tr><td>Kernel tests</td><td>EDT against brute force; lift and loft watertight; booleans manifold; seeds identical at 1, 4 and 16 threads.</td><td>CI</td></tr>
+<tr><td>Stage hashes</td><td>A hash of each stage (plan, each entry, export) at fixed seeds, kept as golden summaries (<code>cargo test -p dt-eval --test golden</code>). A refactor that should not change output must keep them.</td><td>CI, macOS and Linux</td></tr>
+<tr><td>Printability</td><td>The audit gate above.</td><td>every build</td></tr>
+<tr><td>Look metrics</td><td>Per-look numbers (bare-earth fraction, blade count and height range, rock sizes, relief spectrum, wave amplitude) within tolerance of the Python reference over four seeds. Never bytes: Python's own boolean results match manifold-csg's byte for byte on only 74–92% of operations.</td><td>per port</td></tr>
+<tr><td>Render review</td><td>Painted contact sheets, Python beside Rust, four seeds: <code>cargo xtask parity &lt;look&gt;</code> writes them to <code>out/parity/&lt;look&gt;/</code>. Shawn's eye is the judge.</td><td>per look</td></tr>
+</tbody></table></div>
+<p>CI (<code>.github/workflows/rust.yml</code>) runs on every push: <code>cargo fmt --check</code>, Clippy with warnings as errors, tests on macOS, Linux and Windows, the thread-determinism test on both backends, the golden hashes, the parity harness on the flat tile, <code>cargo deny</code>, and three wasm checks: dt-geom built with <code>manifold-rust</code>, dt-doc checked, and dt-eval checked with <code>--no-default-features --features manifold-rust</code>. The last fails the moment someone adds <code>std::fs</code> or a native-only dependency to the core.</p>
+
+<h2 id="front-ends">8. Front ends</h2>
+<p>All front ends call dt-eval. None shells out to another.</p>
+<h3>The command line</h3>
+<p>One program, <code>dharmatiles</code>, with subcommands, in the shape of cargo or gh. Shawn asked for <q>a real command line, but using all the cool kid stuff like colors and… progress bars</q>, not a full-screen text UI.</p>
+<ul>
+  <li><strong>Now:</strong> <code>build</code> (with <code>--png</code> for painted previews and <code>--json</code>) and <code>check</code> (validate and plan, no geometry).</li>
+  <li><strong>Later:</strong> <code>watch</code>, <code>preview</code>, <code>audit file.stl</code>, <code>looks [name]</code>, <code>init</code>, <code>paths</code>, <code>cache clean</code>, <code>completions</code>, <code>mcp</code>, and eventually <code>lsp</code>.</li>
+  <li>Results go to stdout; progress, colour and errors go to stderr. <code>--json</code> prints one JSON report. Errors show the line, a caret under the mistake, and a hint (miette).</li>
+  <li>Exit codes: 0 success; 1 a bad document or failed build; 2 usage error; 3 built, but the audit gate failed (<code>crates/dharmatiles/src/main.rs</code>).</li>
+</ul>
+<h3>MCP server</h3>
+<p><code>dharmatiles mcp</code> over stdio, using the official Rust SDK (rmcp); Streamable HTTP later. The agent edits KDL with its own file tools and calls ours: <code>check_document</code>, <code>list_looks</code>, <code>describe_look</code>, <code>list_tiles</code>, <code>build_tile</code>, <code>render_preview</code> (a PNG with overhangs red, from dt-kit's renderer) and <code>audit_mesh</code>. Tool inputs use the same schema dt-doc derives for the GUI, so there is one contract.</p>
+<h3>GUI and live preview</h3>
+<p>A Tauri 2 app with a web front end and three.js for the viewport. The same front end runs on desktop, on phones, and in any browser through <code>dharmatiles preview</code>: one UI for three hosts. Live preview: the <code>notify</code> crate watches files, dt-eval rebuilds only the entries whose inputs changed, pushes the plan pass first (under a second), then each entry's mesh as a binary buffer.</p>
+<h3>Browser and phones</h3>
+<p>Everything except the C++ mesh kernel is pure Rust and compiles for <code>wasm32-unknown-unknown</code>. The browser build uses <code>manifold-rust</code>; CI already builds dt-geom that way. Phones start as a viewer and editor through Tauri mobile; builds on the phone can follow once the pure-Rust Manifold is proven there.</p>
+
+<h2 id="layout">9. Repository layout and paths</h2>
+<p>One Cargo workspace at the repo root, beside the Python. The root <code>Cargo.toml</code> is a <em>virtual manifest</em>: it lists the crates and shared settings but is not a crate itself. Cargo ignores folders that are not members, and Python ignores <code>crates/</code>.</p>
+<pre><code>dharmatiles/
+├─ Cargo.toml          workspace: members, versions, lints (edition 2024, resolver 3)
+├─ rust-toolchain.toml exact Rust version (1.99.1)
+├─ deny.toml           licences, advisories, duplicate versions
+├─ dharmatiles.kdl     project file for the bundled library (out "out")
+├─ crates/
+│  ├─ dt-geom/         grid · raster · mesh · rays · seeds · source IDs
+│  ├─ dt-kit/          scene · ops · audit · STL · render
+│  ├─ dt-doc/          KDL → typed model, look tables, edits (no geometry)
+│  ├─ dt-looks/        ground, connector, … one module per look
+│  ├─ dt-eval/         project · sources · plan → build · embedded library
+│  └─ dharmatiles/     the one program
+├─ library/            the lib: library, KDL, compiled into the program
+│  ├─ tiles/           by family: test/, ground/, walls/, cliffs/
+│  ├─ parts/           shared definitions: levels, edges, grass, trees
+│  └─ printers/        printer profiles (default.kdl)
+├─ xtask/              repo chores in Rust: cargo xtask parity &lt;look&gt;
+├─ app/                Tauri GUI (later)
+└─ out/                build output, git-ignored: out/db/…, out/ol/…
+
+src/, src/tiles/, *lab/, stl/, pyproject.toml   the Python, untouched until cutover</code></pre>
+<ul>
+  <li><strong>The library ships inside the program.</strong> <code>crates/dt-eval/build.rs</code> walks <code>library/</code> and embeds every <code>.kdl</code> file, so one binary carries the library and works in wasm and mobile sandboxes. Documents address it with an explicit <code>lib:</code> prefix; relative paths mean your project. Nothing is resolved by search order.</li>
+  <li><strong>Project file.</strong> <code>dharmatiles.kdl</code> is optional. It marks the project root and names the output folder. Without one, <code>dharmatiles build file.kdl</code> works with defaults.</li>
+  <li><strong>Output.</strong> <code>out/</code> beside the project file, mirrored by system and path below <code>tiles/</code>: <code>lib:tiles/test/flat-1x1.kdl</code> builds to <code>out/db/test/flat-1x1-db.stl</code>. Python keeps writing <code>stl/</code>, so a side-by-side comparison is two folders.</li>
+  <li><strong>Porting the tiles.</strong> Each <code>src/tiles/**/*.tile.py</code> is rewritten by hand as <code>library/tiles/&lt;family&gt;/&lt;name&gt;.kdl</code> in the phase that ports its looks, and deleted once its KDL twin passes review. At cutover the Python is removed and kept in git history under a tag.</li>
+  <li><strong>Settings.</strong> <code>[workspace.dependencies]</code> states every external version once. <code>[workspace.lints]</code> forbids <code>unsafe</code> in our code. Dependencies build at <code>opt-level = 3</code> even in debug, because geometry at opt-level 0 is too slow to judge by eye.</li>
+</ul>
+<p>User-level paths (computed in dt-eval with the <code>etcetera</code> crate, so the CLI and the GUI agree; <code>dharmatiles paths</code> will print them):</p>
+<div class="tbl"><table>
+<thead><tr><th>What</th><th>macOS</th><th>Linux</th><th>Windows</th></tr></thead>
+<tbody>
+<tr><td>Config</td><td><code>~/.config/dharmatiles/config.kdl</code></td><td><code>$XDG_CONFIG_HOME/dharmatiles/</code></td><td><code>%APPDATA%\dharmatiles\config\</code></td></tr>
+<tr><td>Your tiles</td><td><code>~/Documents/dharmatiles/</code></td><td><code>$XDG_DOCUMENTS_DIR/dharmatiles/</code></td><td><code>%USERPROFILE%\Documents\dharmatiles\</code></td></tr>
+<tr><td>Cache</td><td><code>~/Library/Caches/dharmatiles/</code></td><td><code>$XDG_CACHE_HOME/dharmatiles/</code></td><td><code>%LOCALAPPDATA%\dharmatiles\cache\</code></td></tr>
+<tr><td>GUI state</td><td><code>~/Library/Application Support/dharmatiles/</code></td><td><code>$XDG_DATA_HOME/dharmatiles/</code></td><td><code>%APPDATA%\dharmatiles\data\</code></td></tr>
+</tbody></table></div>
+<p>Your tiles live in Documents, not a hidden folder, because they are your work: you open them, back them up and share them.</p>
+
+<h2 id="risks">10. Open risks</h2>
+<p>The Phase 0 spikes retired the five risks that could have changed the design: booleans at scale (R1), determinism (R2), rays without Embree (R3), the KDL format (R6) and materials through booleans (R9). Their results are on the <a href="spikes.html">spikes page</a>. What is still open:</p>
+<div class="tbl"><table>
+<thead><tr><th>Risk</th><th>Why it is open</th><th>Retired when</th></tr></thead>
+<tbody>
+<tr><td>R4 · Missing mesh tools</td><td>Decimating blades to about 1,500 faces while staying watertight, smoothed normals, refine. <code>meshopt</code> is fast but not watertight-safe; Manifold simplify needs checking per blade.</td><td>One blade and one rock ported end to end, same face budget, watertight, judged equal in a render (P3–P4).</td></tr>
+<tr><td>R5 · Fidelity and review cost</td><td>RNG, EDT tie-breaks and kd-tree order all differ from Python, so every tile looks slightly different. The parity harness exists; each look still has to pass it.</td><td>Per look: metrics within tolerance over four seeds and Shawn's sign-off on the side-by-side.</td></tr>
+<tr><td>R7 · Moving target</td><td>clifflab is still iterating, and new looks keep arriving.</td><td>Each look is frozen in Python before it is ported; the cliff is ported last (P7).</td></tr>
+<tr><td>R8 · Plan-then-build misses a case</td><td>On paper every lab's tile orders cleanly. Real tiles may not.</td><td>Ongoing: the scheduler refuses reads it cannot satisfy, with a clear error.</td></tr>
+<tr><td>R10 · Young crates, one maintainer</td><td><code>manifold-rust</code>, <code>obvhs</code>, later <code>lib3mf</code>.</td><td>Mitigated: each sits behind a trait and can be vendored or swapped without touching looks.</td></tr>
+<tr><td>Cliff speed</td><td>Booleans are only about 11% of the rockpile build and 14–20% of the massif, and manifold-csg runs them at Python's speed (median 1.05–1.06×). The P7 targets (1×1 in ≤ 15 s, massif in ≤ 60 s) rest on porting the rest well: adaptive height fields and stones built in parallel. Re-time on an idle machine.</td><td>P7.</td></tr>
+<tr><td>Windows bytes</td><td>Manifold differs on Windows (same triangle counts), in both backends, for an unknown cause. Level B gates Windows on metrics and renders, so this blocks nothing.</td><td>Only if level C is ever wanted.</td></tr>
+<tr><td>Unverified kernel calls</td><td><code>manifold-rust</code>'s refine, refine_to_length, smooth_out, hull, simplify and extrude were never replayed. Tolerance carrying is a requirement, not yet exercised on real rocks.</td><td>When P3 (rocks) and P7 (cliff) port their first user.</td></tr>
+<tr><td>Unmeasured estimates</td><td>The 10× speedup for blade meshing comes from a per-blade profile and the core count. Manifold through CMake on iOS and Android is untried.</td><td>P4 (grass); phone builds, when wanted.</td></tr>
+</tbody></table></div>
+
+<h2 id="provenance">Appendix: build provenance</h2>
+<p>Every build can say exactly where it came from, without access to git at run time. The engine captures its version once, at compile time, and every output carries it.</p>
+<h3>Capture</h3>
+<p><code>crates/dharmatiles/build.rs</code> runs before compilation. It calls <code>git describe --tags --long --always</code> and <code>git status --porcelain</code>, and sets the <code>DT_ENGINE_VERSION</code> environment variable for the compiler. It reruns whenever <code>HEAD</code> or the index changes. The format matches the Python library's <code>src/dharmatiles/build_info.py</code>:</p>
+<div class="tbl"><table>
+<thead><tr><th>Source tree</th><th>Version</th></tr></thead>
+<tbody>
+<tr><td>On a tag</td><td><code>v1.0.0</code></td></tr>
+<tr><td>Commits past a tag</td><td><code>v1.0.0-12-gabc1234</code></td></tr>
+<tr><td>No tag reachable</td><td><code>gabc1234</code></td></tr>
+<tr><td>Any of these with uncommitted changes</td><td>the same, plus <code>-dirty</code></td></tr>
+<tr><td>Built without git</td><td><code>unknown</code></td></tr>
+</tbody></table></div>
+<p><code>dharmatiles --version</code> prints it.</p>
+<h3>The build record</h3>
+<p>Each build makes a <code>BuildRecord</code> (<code>crates/dt-kit/src/stl.rs:9</code>): the engine version, the document path (such as <code>lib:tiles/test/flat-1x1.kdl</code>), a 64-bit FNV-1a hash of the document's text, the root seed, and the system (<code>db</code> or <code>ol</code>). It goes to two places:</p>
+<ul>
+  <li><strong>The STL header.</strong> The 80-byte header holds one line: <code>dharmatiles &lt;engine&gt; &lt;system&gt; seed=&lt;n&gt; doc=&lt;hash&gt; &lt;path&gt;</code>, padded with spaces. It never starts with <code>solid</code>, which would mark an ASCII STL (<code>stl.rs:27</code>).</li>
+  <li><strong>A <code>.build.json</code> beside the STL.</strong> The full record, the audit (triangles, vertices, volume, watertight, bodies, what was dropped, pinches moved, overhang mm², holes, failures), every stage hash, and the build time in seconds.</li>
+</ul>
+<p>Two builds with the same record and the same stage hashes are the same build. A <code>-dirty</code> version means the source tree had uncommitted changes, so the build may not be reproducible from git alone. A wall-clock build timestamp is deliberately left out of the STL, because it would break byte-identical output; the <code>.build.json</code> carries the time a build took, not when it ran.</p>
+
+<h2 id="history">History</h2>
+<p>This design came out of the Rust rewrite study of 1–2 November 2026. A first draft had documents written directly in seven verbs; walking each lab through them showed that every lab needed extra constructs and two verbs merged mechanisms that really differ, so the verbs moved inside the engine and documents name looks instead. A fifteen-crate sketch was cut to the six above. The Phase 0 spikes then replaced assumptions with measurements: the backend choices, the source-ID rule, the libm rule, and determinism level B.</p>
+<p>The full analysis is archived: <a href="../archive/rust-study/library.html">the Python library</a>, <a href="../archive/rust-study/labs.html">the labs</a>, <a href="../archive/rust-study/variants.html">surface variants</a>, <a href="../archive/rust-study/mechanisms.html">mechanisms</a>, the <a href="../archive/rust-study/notes.html">research notes</a> (sources and dates for every crate version) and the <a href="../archive/rust-study/changelog.html">change log</a>. The phases and decisions are on the <a href="plan.html">plan</a>.</p>
+</article>
+</div>
+</body>
+</html>

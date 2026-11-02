@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rust Spikes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+  .verdicts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-block: 8px 28px; }
+  .verdicts > div { border: 1px solid var(--rule); background: var(--card); border-radius: 6px; padding: 14px 16px; min-width: 0; }
+  .verdicts b { display: block; font: 700 17px/1.2 var(--display); font-stretch: 108%; margin-block: 8px 4px; }
+  .verdicts p { margin: 0; font-size: 13.5px; }
+  td.h { font: 12px var(--mono); white-space: nowrap; }
+  td.diff { color: var(--alert); font-weight: 600; }
+  td.crate { font: 600 12.5px var(--mono); white-space: nowrap; }
+  td.pass { color: var(--accent); font-weight: 600; }
+  td.fail { color: var(--alert); font-weight: 600; }
+  tr.pick td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  .gate { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 18px 0; }
+  .gate > div { min-width: 0; border-top: 2px solid var(--rule); padding-top: 8px; }
+  .gate b { display: block; font: 700 22px/1.2 var(--display); font-stretch: 110%; font-variant-numeric: tabular-nums; }
+  .gate .small { color: var(--muted); }
+</style>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html" aria-current="page">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Rust rewrite · Phase 0 results · measured 1 Nov 2026 · frozen</div>
+  <h1>Phase 0 spikes</h1>
+  <p class="lede">Five experiments that could have changed the Rust design: booleans at cliff scale, materials through booleans, determinism, rays without Embree, and the KDL tile format. All five are a go. This page records how each was measured and what it found. It is frozen: later measurements belong to the phase that makes them.</p>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#summary">The five spikes</a></li>
+  <li><a href="#r1">R1 booleans</a></li>
+  <li><a href="#r9">R9 materials</a></li>
+  <li><a href="#r2">R2 determinism</a></li>
+  <li><a href="#r3">R3 rays</a></li>
+  <li><a href="#r6">R6 format</a></li>
+  <li><a href="#harness-py">Parity harness, Python half</a></li>
+  <li><a href="#history">History</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="summary">The five spikes</h2>
+<p>A <b>spike</b> is a short, time-boxed experiment that answers one risk question. Each had a <b>go</b> criterion, which keeps the plan as written, and a fallback for <b>no-go</b>. All five ran on 1 Nov 2026 on Shawn's M2 Max (12 cores) and in GitHub Actions on branch <code>rust/p0</code>. A fresh agent reviewed the results adversarially the same day; its 14 findings were re-measured and are folded into the numbers below. Shawn decided GO on 2 Nov 2026 (<a href="plan.html#decisions">decisions log</a>).</p>
+<div class="tbl"><table>
+<thead><tr><th>Spike</th><th>Question</th><th>Verdict</th><th>Chosen</th></tr></thead>
+<tbody>
+<tr><td><a href="#r1"><b>R1</b></a> booleans</td><td>Manifold from Rust at cliff scale</td><td><span class="verdict v-keep">go</span></td><td>manifold-csg 0.4.1, parallel on; manifold-rust for wasm only</td></tr>
+<tr><td><a href="#r9"><b>R9</b></a> materials</td><td>Materials through booleans</td><td><span class="verdict v-keep">go</span></td><td>co-sampled material table keyed by (original ID, face ID)</td></tr>
+<tr><td><a href="#r2"><b>R2</b></a> determinism</td><td>Byte-identical builds</td><td><span class="verdict v-keep">go</span></td><td>source-ID rule, <code>libm</code>; level B</td></tr>
+<tr><td><a href="#r3"><b>R3</b></a> rays</td><td>Rays without Embree</td><td><span class="verdict v-keep">go</span></td><td>obvhs 0.4 <code>medium_build</code>; parry3d spare</td></tr>
+<tr><td><a href="#r6"><b>R6</b></a> format</td><td>KDL tiles</td><td><span class="verdict v-keep">go</span></td><td>KDL v2, <code>kdl</code> 6.7.1, hand-decoded <code>dt-doc</code></td></tr>
+</tbody></table></div>
+<div class="verdicts">
+  <div><span class="verdict v-keep">R1 go, time gate close</span><b>manifold-csg, parallel on</b><p>21,570 results across 3 tiles: all watertight; triangle counts equal to a Python replay of the same inputs on all of them; volumes equal to about 5e-14 relative. Time on interleaved pairs: median 1.05× (rockpile) and 1.06× (massif), but 2 of 8 massif pairs over the 1.2× gate (1.36×, 1.43×).</p></div>
+  <div><span class="verdict v-cut">R1 port: not default</span><b>manifold-rust stays the wasm backend</b><p id="port-verdict">Every result watertight, carried IDs and properties match, but triangle counts differ from Python on 14 rockpile and 10 massif ops, and it takes 2.0× (rockpile) to about 3× (massif) Python's time with rayon on. Gate was ≤1.5×.</p></div>
+  <div><span class="verdict v-keep">R9 go</span><b>Every triangle maps to a source</b><p>Union: 36/36. Level set + union: 28,016 traced, 0 unmapped. Under the source-ID rule, level-set parts built in parallel, cut by planes and batch-unioned: every output triangle traced to a material, at every thread count, both backends.</p></div>
+  <div><span class="verdict v-keep">R2 go</span><b>Byte-identical on one machine</b><p>Every stage hash equal at 1, 4 and 16 threads, twice each, on both backends, with Manifold's parallelism on, and on Linux with TBB on 1, 2 and 4 CPUs. One source-ID rule in the API gives both determinism and materials.</p></div>
+</div>
+
+<h2 id="r1">R1: booleans at scale</h2>
+<dl class="defs">
+<dt>Question</dt><dd>Can a Rust Manifold binding replay the cliff's and the tree's booleans watertight, with Python's results, at Python's speed?</dd>
+<dt>Method</dt><dd>Capture every boolean from rockpile (1×1 at seed 1, and the 2×2 massif) and from the 2×2 tree tile. Replay them in manifold-csg (parallel on and off) and in manifold-rust. Time box 4 days.</dd>
+<dt>Go when</dt><dd>manifold-csg: every result watertight, volume within 1e-6 relative, the same triangle count, and time ≤ 1.2× Python. manifold-rust becomes the default only if it also matches original IDs and properties at ≤ 1.5× the time.</dd>
+<dt>Fallback</dt><dd>Ship manifold-csg only and defer the browser build. If manifold-csg fails to build on a CI OS, vendor a prebuilt static library. If both fail at cliff scale, keep the cliff in Python longer and port everything else.</dd>
+<dt>Verdict</dt><dd><span class="verdict v-keep">go</span> manifold-csg with Manifold's parallelism on. The time gate passes on the median, not on every run; P7 re-times the booleans on an idle machine. manifold-rust stays the browser backend.</dd>
+</dl>
+
+<p>A wrapper around <code>manifold3d</code> (<code>tests/parity/capture/booleans.py</code>) recorded every boolean the labs perform, with operands and results saved as meshes: <code>+</code>, <code>-</code>, <code>^</code>, <code>batch_boolean</code>, <code>trim_by_plane</code>, <code>split</code> and <code>split_by_plane</code>. <code>crates/dt-geom/examples/r1_replay.rs</code> replays each one through the <code>Mesh</code> trait on either backend.</p>
+<div class="tbl"><table>
+  <thead><tr><th>Capture</th><th class="num">Booleans</th><th class="num">Largest op (all operands / largest mesh)</th><th class="num">Saved meshes</th><th class="num">Python build, uninstrumented</th></tr></thead>
+  <tbody>
+    <tr><td>rockpile 1×1, seed 1</td><td class="num">4,800</td><td class="num">4.1M / 2.6M tris</td><td class="num">1.4 GB</td><td class="num">61.9 s</td></tr>
+    <tr><td>rockpile 2×2 massif, seed 1</td><td class="num">16,676</td><td class="num">13.2M / 7.1M tris (a 58-part union)</td><td class="num">5.2 GB</td><td class="num">240.7 s</td></tr>
+    <tr><td><code>2x2-grass-tree.tile.py</code></td><td class="num">94</td><td class="num">31k / 17k tris</td><td class="num">12 MB</td><td class="num">15.2 s</td></tr>
+  </tbody>
+</table></div>
+<p class="small muted">Booleans are about 11% of the rockpile build and 14–20% of the massif (replayed op time over uninstrumented build time). The rest is Python and numpy, which is where the port's speedups have to come from. The massif's largest op by input is a 58-part batch union of 13.23M triangles (largest operand 7.14M); its largest by part count is a 202-part batch union of 7.62M triangles.</p>
+<p class="small"><strong>What the capture does not cover.</strong> It records the seven boolean and plane calls above, and nothing else Manifold does. rockpile also calls <code>refine_to_length</code>, <code>hull_points</code>, <code>simplify</code> and <code>extrude</code>, and rocklab also uses <code>refine_to_length</code>; none of those were replayed (nor <code>smooth_out</code>, which feasibility listed), so R1 says nothing about their parity or speed in Rust. The cliff captures are from clifflab round 15 (3b56ae0); round 16 (ee42cb8, after the capture) added <code>hull_points</code> chips and a <code>batch_boolean</code> subtract, so the frozen P7 rockpile will do booleans R1 has not seen. No recapture was made.</p>
+
+<h3>The baseline is a Python replay, not the in-situ time</h3>
+<p>Two things made the in-situ numbers unusable as the yardstick. First, the three captures ran at the same time, so their timings are inflated. Second, a re-imported operand is not the same object as the in-memory one: replaying the captures in Python itself changes the triangle count on 448 of 4,800 rockpile results and 1,461 of 16,676 massif results. So the comparison is Rust against <code>replay_py.py</code>: the same <code>.dtm</code> inputs, re-imported the same way, timed the same way (the op plus forcing <code>num_tri()</code>). manifold-csg's C API cannot pass face IDs in, so its baseline drops them too.</p>
+<h3 id="tolerance">What the replay does not carry: tolerance</h3>
+<p>Each <code>.dtm</code> file stores the operand's tolerance, but the first replays ignored it on both sides, so every operand came back at Manifold's default for its size (about 1e-12 × size; 3.9e-11 mm on a 35 mm part). In situ, many cliff operands carried about 1.2e-7 × size (4.29e-6 mm and 8.31e-6 mm on the largest): float32's epsilon, from meshes Python built in float32, kept by every later boolean (a result takes the larger of its operands' tolerances). That is why 16 intersections replay with a different volume from the in-situ result (4 on rockpile, 12 on the massif; massif op 878: 13.44 mm³ in situ, 3.62 mm³ replayed). The re-measurement tried to carry it (<code>replay_py.py --tolerance</code>, <code>r1_replay --tolerance</code>):</p>
+<div class="tbl"><table>
+  <thead><tr><th>Replay against the in-situ result</th><th class="num">rockpile: tris differ</th><th class="num">vol. differ</th><th class="num">massif: tris differ</th><th class="num">vol. differ</th></tr></thead>
+  <tbody>
+    <tr><td>Python, face IDs, default tolerance (first replay)</td><td class="num">389</td><td class="num">4</td><td class="num">1,250</td><td class="num">12</td></tr>
+    <tr><td>Python, tolerance passed into <code>Mesh64(tolerance=…)</code></td><td class="num">389</td><td class="num">4</td><td class="num">—</td><td class="num">—</td></tr>
+    <tr><td>Python, <code>set_tolerance</code> after import</td><td class="num">1,763</td><td class="num">3</td><td class="num">6,260</td><td class="num">12</td></tr>
+    <tr><td>manifold-csg, no face IDs, default tolerance</td><td class="num">448</td><td class="num">4</td><td class="num">1,461</td><td class="num">12</td></tr>
+    <tr><td>manifold-csg, <code>set_tolerance</code> after import (all its C API allows)</td><td class="num">1,763</td><td class="num">3</td><td class="num">6,264</td><td class="num">13</td></tr>
+    <tr><td>port, tolerance in the <code>MeshGL</code> import</td><td class="num">1,632</td><td class="num">5</td><td class="num">not run</td><td class="num"></td></tr>
+  </tbody>
+</table></div>
+<p class="small muted">Out of 4,800 and 16,676 results. The <code>Mesh64(tolerance=…)</code> row is identical to the default row because manifold3d 3.5.1 ignores that argument (<code>get_tolerance()</code> stays at the default); the massif run of it gave the same as default and is not listed. The port's default-tolerance replay differs from in-situ on 392 rockpile counts and the same 4 volumes.</p>
+<p><strong>Cause and requirement.</strong> A <code>MeshGL</code> round trip cannot restore an in-memory solid's state: Python's import ignores the tolerance, <code>set_tolerance</code> re-simplifies the mesh at it (so triangle counts drift on a third of the massif results, and massif op 351 even comes back with a negative volume, −11.9 mm³, in Python and in manifold-csg alike), and the port's import sets epsilon as well as tolerance. It fixes one of the 16 volumes (rockpile op 462) and not the rest. So the replay shows what it was built to show, the two kernels agreeing on the same inputs, and not that a re-imported operand behaves like the in-situ one. The requirement on the Rust kernel is to <em>carry tolerance through the pipeline as Python's history does</em>: where Python builds a solid from float32 data, Rust must give it the same tolerance at creation (<code>TriMesh::tolerance</code>; manifold-csg can only apply it with <code>set_tolerance</code>), and from then on keep solids inside the kernel. Parity on near-degenerate intersections is then judged by P3 and P7's metrics, not by this replay.</p>
+
+<h3>Results</h3>
+<div class="tbl"><table>
+  <thead><tr><th>Tile</th><th>Backend</th><th class="num">Watertight</th><th class="num">Tris = Python</th><th class="num">Max vol. diff (most values print-limited)</th><th class="num">Byte-identical to Python</th><th class="num">Op time Rust / Python</th><th class="num">Ratio</th><th class="num">Peak RSS</th></tr></thead>
+  <tbody id="r1rows">
+    <tr><td>tree 2×2</td><td>csg, parallel</td><td class="num">94/94</td><td class="num">94/94</td><td class="num">3.7e-10</td><td class="num">86</td><td class="num">0.15 / 0.15 s</td><td class="num">1.01×</td><td class="num">0.1 GB</td></tr>
+    <tr><td></td><td>csg, sequential</td><td class="num">94/94</td><td class="num">94/94</td><td class="num">3.7e-10</td><td class="num">86</td><td class="num">0.25 / 0.15 s</td><td class="num">1.7×</td><td class="num">0.1 GB</td></tr>
+    <tr><td></td><td>port, parallel</td><td class="num">94/94</td><td class="num">94/94</td><td class="num">3.7e-10</td><td class="num">86</td><td class="num">0.18 / 0.15 s</td><td class="num">1.2×</td><td class="num">0.1 GB</td></tr>
+    <tr><td>rockpile 1×1</td><td>csg, parallel</td><td class="num">4,800/4,800</td><td class="num">4,800/4,800</td><td class="num">3.3e-14 (full precision)</td><td class="num">3,559</td><td class="num">7.07 / 6.88 s</td><td class="num">1.03× (1.04×); interleaved median 1.05×</td><td class="num">5.6 GB</td></tr>
+    <tr><td></td><td>csg, sequential</td><td class="num">4,800/4,800</td><td class="num diff">4,798</td><td class="num">4.8e-10</td><td class="num">3,559</td><td class="num">22.9 / 6.88 s</td><td class="num diff">3.3×</td><td class="num">5.9 GB</td></tr>
+    <tr><td></td><td>port, parallel</td><td class="num">4,800/4,800</td><td class="num diff">4,786</td><td class="num">4.8e-10</td><td class="num">754</td><td class="num">13.8 / 6.88 s</td><td class="num diff">2.0×</td><td class="num">6.4 GB</td></tr>
+    <tr><td></td><td>port, sequential</td><td class="num">4,800/4,800</td><td class="num diff">4,786</td><td class="num">4.8e-10</td><td class="num">754</td><td class="num">24.3 / 6.88 s</td><td class="num diff">3.5×</td><td class="num">6.1 GB</td></tr>
+    <tr><td>massif 2×2</td><td>csg, parallel</td><td class="num">16,676/16,676</td><td class="num">16,676/16,676</td><td class="num">5.4e-14 (full precision)</td><td class="num">12,453</td><td class="num">34.1 / 33.7 s</td><td class="num">1.01× (1.09×); interleaved median 1.06×, range 1.04–1.36×</td><td class="num">12.2 GB</td></tr>
+    <tr><td></td><td>csg, sequential</td><td class="num">16,676/16,676</td><td class="num diff">16,675</td><td class="num">4.8e-09</td><td class="num">12,453</td><td class="num">141 / 33.7 s</td><td class="num diff">4.2×</td><td class="num">12.1 GB</td></tr>
+    <tr><td></td><td>port, parallel</td><td class="num">16,676/16,676</td><td class="num diff">16,666</td><td class="num">4.9e-10</td><td class="num">2,553</td><td class="num">125 / 33.7–47.2 s</td><td class="num diff">2.6–3.7×</td><td class="num">13.9 GB</td></tr>
+    <tr><td></td><td>port, sequential</td><td class="num">16,676/16,676</td><td class="num diff">16,666</td><td class="num">4.9e-10</td><td class="num">2,553</td><td class="num">213 / 33.7–47.2 s</td><td class="num diff">4.5–6.3×</td><td class="num">13.9 GB</td></tr>
+  </tbody>
+</table></div>
+<p class="small muted">"Tris = Python" compares with the Python replay of the same inputs (no face IDs for csg; with face IDs for the port). Byte-identical counts compare with the in-situ Python result. <b>Volumes:</b> the 3.7e-10 to 4.9e-09 values are the CSV's print precision (10 significant digits), not measured errors, and the metric is relative only where |V| &gt; 1e-9 mm³ and absolute below. Re-run with full-precision output, manifold-csg against the Python replay: largest relative difference 3.3e-14 (rockpile) and 5.4e-14 (massif); the 34 and 87 results with |V| ≤ 1e-9 are equal exactly. <b>Times:</b> the "Op time" and "Ratio" columns are an early pass in which Python always ran first; see <a href="#timing">Timing, measured again</a> for the interleaved design, which supersedes them. Peak RSS includes a 48-mesh operand cache in both replays (Python's replay peaked at 7.8–8.2 GB on rockpile and 12–16 GB on the massif).</p>
+
+<h3 id="timing">Timing, measured again</h3>
+<p>The adversarial review found that the first report used only the second of three timing passes, in which Python always ran first. The first pass (one run each, sequential) had the massif at 51.39 s for manifold-csg against 36.05 s for Python, <b>1.43×</b>, over the gate, and rockpile at 1.15×. The re-measurement used an interleaved, counterbalanced design (<code>scratchpad/p0fix/timing/run.sh</code>): four rounds, Python first in rounds 1 and 3 and Rust first in rounds 2 and 4, the same inputs on both sides (no face IDs, default tolerance), the same build of <code>r1_replay</code> as the first passes, each run started only once named heavy jobs had finished.</p>
+<div class="tbl"><table>
+  <thead><tr><th>Case</th><th>Round 1 (Py first)</th><th>Round 2 (Rust first)</th><th>Round 3 (Py first)</th><th>Round 4 (Rust first)</th><th class="num">Median ratio</th><th class="num">All 8 paired runs to date</th></tr></thead>
+  <tbody>
+    <tr><td>rockpile 1×1</td><td class="num">6.93 / 6.72 s = 1.03×</td><td class="num">6.85 / 6.47 s = 1.06×</td><td class="num">7.11 / 6.72 s = 1.06×</td><td class="num">6.78 / 8.15 s = 0.83×</td><td class="num">1.05×</td><td class="num">median 1.05×, range 0.83–1.15×; none over 1.2×</td></tr>
+    <tr><td>massif 2×2</td><td class="num">37.65 / 36.08 s = 1.04×</td><td class="num diff">56.49 / 41.65 s = 1.36×</td><td class="num">42.16 / 40.12 s = 1.05×</td><td class="num">67.84 / 63.66 s = 1.07×</td><td class="num">1.06×</td><td class="num">median 1.06×, range 1.01–1.43×; <b>2 of 8 over 1.2×</b> (1.36×, 1.43×)</td></tr>
+  </tbody>
+</table></div>
+<p class="small muted">Rust / Python summed op seconds (the op plus forcing <code>num_tri()</code>; imports untimed). "All 8 paired runs" adds the three earlier passes and one aborted round of this one. <b>The machine was not idle:</b> other agents' clifflab jobs ran through rounds 2–4, using 4–10 cores at times (a 5-second CPU sampler logged them), and rounds 2 and 4 show it (massif 56 and 68 s; rockpile's 0.83× is Python slowed, not Rust fast). The M2 Max also varies by up to 30% between passes when quiet.</p>
+<p><strong>Verdict on the ≤ 1.2× time gate: passes on the median, not on every run.</strong> The paired median is 1.05× on rockpile and 1.06× on the massif, but the massif's C++ replay is the noisier of the two and went over 1.2× in two of eight pairs, one of them (1.43×, the first pass) with no record of what else was running. What it means: the gate is a plan target for P7, and it is close, not comfortable; the <b>kill criterion (cliff batch within 2× Python) is separate and is not near</b>, at worst 1.43×. Booleans are 11–20% of the cliff's build time, so even the worst pair is under 9% of a build. P7 re-times the booleans on an idle machine with the frozen rockpile.</p>
+
+<h3>What R1 turned up</h3>
+<ol class="findings">
+  <li><strong>Parallel must be on.</strong> With Manifold built without TBB, manifold-csg takes 3.1–3.3× Python's time on rockpile and 3–5× on the massif. With TBB it matches. It is now on by default (<code>manifold-parallel</code>). Sequential and parallel builds also give different triangles on a handful of ops (2 of 4,800; 1 of 16,676), and the parallel build is the one that matches Python.</li>
+  <li><strong>manifold-csg cannot import face IDs or run transforms.</strong> The C API's <code>MeshGL64</code> options carry runs, merge vectors and tangents only. For the replay this made no difference (counts still match Python given the same inputs), but it means a mesh that leaves Manifold and comes back loses its coplanar-face grouping. Keep solids inside the kernel between ops; do not round-trip through <code>TriMesh</code>.</li>
+  <li><strong>Original IDs come from a process-wide counter.</strong> Plane ops mint a new ID for their half-space, and parts made in parallel get IDs in scheduling order. The replay compares only IDs carried from operands; R2 shows the consequence for determinism.</li>
+  <li><strong>Original-ID mismatches are all edge cases.</strong> 11 of 21,570 results: 8 intersections whose result is a zero-volume sliver on one side and empty on the other (largest 1.2e-4 mm³), and 3 plane trims where one side kept the half-space's minted ID and the other did not. Harmless, but the audit should count zero-volume slivers.</li>
+  <li><strong>The parity harness must compare metrics, not bytes.</strong> Even same-engine, same-input results are byte-identical to Python only 74–92% of the time (version 3.5.3 against 3.5.1 and re-import order). Triangle counts and volumes match.</li>
+  <li><strong>The port is close but not there.</strong> Sequentially it matches the C++ kernel's speed (24.3 s against 22.9 s on rockpile), and its rayon build gave the same whole-run hash as its sequential build on both cliffs, confirming the bit-identical claim. But its parallelism buys 1.7× where TBB buys 3×; its <code>batch_boolean</code> folds left to right (101 s on rockpile until <code>PortSolid::batch</code> was changed to union smallest-first); and it tracks Manifold 3.5.4, so its triangulation differs from Python's 3.5.1 on 24 ops and is byte-identical to it on only about 15% of results.</li>
+  <li><strong>Tolerance is not carried by a mesh round trip</strong> (<a href="#tolerance">details</a>). The Rust kernel must give solids the tolerance Python's history gives them, at creation, and keep them inside the kernel.</li>
+  <li><strong>A toolchain trap on this Mac</strong> (history: rustup was reinstalled natively on 1 Nov 2026). rustup here is the x86_64 build running under Rosetta. Through it, the cmake build of Manifold compiled x86_64 objects into an arm64 binary and failed to link. Calling the arm64 toolchain directly (<code>~/.rustup/toolchains/1.99.1-aarch64-apple-darwin/bin</code> first in <code>PATH</code>) fixed it. Reinstalling rustup natively would fix it for good.</li>
+</ol>
+
+<h2 id="r9">R9: materials through booleans</h2>
+<dl class="defs">
+<dt>Question</dt><dd>Can a material (and later a colour) follow each triangle through booleans?</dd>
+<dt>Method</dt><dd>Carry original IDs through one union and one level set, inside R1. Time box 1 day.</dd>
+<dt>Go when</dt><dd>Every output triangle maps to its source.</dd>
+<dt>Fallback</dt><dd>Co-sample a material field for level-set paths.</dd>
+<dt>Verdict</dt><dd><span class="verdict v-keep">go</span> The co-sampled field is the method, under the source-ID rule below. P3 retires R9 in production on real rocks and water.</dd>
+</dl>
+
+<p><code>crates/dt-geom/examples/r9_materials.rs</code>, both backends, identical results.</p>
+<div class="tbl"><table>
+  <thead><tr><th>Path</th><th>What it checks</th><th class="num">Result</th></tr></thead>
+  <tbody>
+    <tr><td>Union of two boxes</td><td class="small">Each output triangle's run original ID is one of the two sources, and its centroid lies on that source's surface (within 1e-9 mm).</td><td class="num">36/36 · <span class="verdict v-keep">pass</span></td></tr>
+    <tr><td>Level set, then union with a box</td><td class="small">A two-blob SDF (0.25 mm grid) is meshed; its material field is co-sampled per triangle. After the union, each output triangle is traced through (original ID, face ID) to its level-set source triangle: the piece lies within 0.25 mm of the source and the source's material equals a fresh sample at the piece.</td><td class="num">28,016 traced, 28,016 same material, 88 from the box, 0 unmapped · <span class="verdict v-keep">pass</span></td></tr>
+  </tbody>
+</table></div>
+<p>So colour can ride on original IDs for solids and on (original ID, face ID) back to a co-sampled field for level sets. Both rely on face IDs surviving inside the kernel, which they do on both backends; finding 2 above is why that chain must not pass through <code>TriMesh</code> mid-pipeline.</p>
+
+<h3 id="r2r9">R2 and R9 together: one source-ID rule</h3>
+<p>The adversarial review found that the two spikes' rules conflicted and that neither was in the API. R2's pipeline called <code>as_original()</code> on each trimmed rock before the batch, and <code>as_original()</code> on a part with more than one source collapses its original IDs into one and recomputes its face IDs (a manifold3d check: a union's run IDs [2, 5] became [8], face IDs changed), which cuts the (original ID, face ID) link R9 traces materials through. <code>trim_by_plane</code> also mints a new ID for its cut face from the process-wide counter, and nothing said what material a cut face gets. <code>Mesh::batch</code> did no re-IDing.</p>
+<p>The fix is one rule in <code>dt-geom</code> (<code>crates/dt-geom/src/source.rs</code>):</p>
+<ol class="findings">
+  <li><strong>Reserve, then assign by index.</strong> Before parallel work, reserve one <code>IdBlock</code> (<code>Mesh::reserve_ids</code>) in sequence. Part <i>i</i>'s IDs are fixed slots of it, so their order is the index order whichever thread builds the part.</li>
+  <li><strong>Relabel leaves, not combinations.</strong> A leaf the kernel made (a level set, an import) takes its slot with <code>Mesh::with_original_id(id, face_base)</code>, the one allowed <code>TriMesh</code> round trip, before any material is recorded for it. Each slot has its own face-ID range. <code>as_original</code> is not used in pipelines.</li>
+  <li><strong>Cuts carry an ID we give them.</strong> <code>Mesh::trim_by_plane_with_id</code> intersects with a half-space box imported under the cut's slot, so the cut face never gets a counter ID.</li>
+  <li><strong>Materials live in a table</strong> (<code>Materials</code>), keyed by (original ID, face ID), filled from each leaf right after step 2 and merged in index order. <strong>Rule for cut faces: a cut face takes the material of the solid being cut</strong> (its base material), registered under the cut's ID.</li>
+  <li><strong>Combine in index order.</strong> <code>batch_in_order</code> checks in debug builds that the parts' source IDs are disjoint and ascend with the part index, then runs <code>Mesh::batch</code>.</li>
+</ol>
+<p><code>crates/dt-geom/tests/determinism.rs</code> now runs exactly that: 24 level-set rocks built in parallel, each relabelled, cut flat underneath (into the ground) and on top (a sawn face that stays visible), then batch-unioned with the ground slab, at 1, 4 and 16 rayon threads, twice each, with the kernel's ID counter shifted by a different amount before every run (so only the order of IDs can matter, not their values). Each rock's material field is moss above a line and stone below.</p>
+<div class="tbl"><table>
+  <thead><tr><th>Backend</th><th class="num">Output triangles</th><th class="num">Traced to a material</th><th class="num">Rock-body triangles agreeing with a fresh sample</th><th class="num">Visible cut-face triangles (on their plane, stone)</th><th>Hashes at 1, 4, 16 threads</th></tr></thead>
+  <tbody>
+    <tr><td>C++ (manifold-csg)</td><td class="num">24,970</td><td class="num">24,970</td><td class="num">20,766 / 20,766</td><td class="num">2,382</td><td class="pass">identical (union, materials)</td></tr>
+    <tr><td>port (manifold-rust)</td><td class="num">25,214</td><td class="num">25,214</td><td class="num">20,925 / 20,925</td><td class="num">2,462</td><td class="pass">identical (union, materials)</td></tr>
+  </tbody>
+</table></div>
+<p class="small muted">"Agreeing" allows a triangle within 0.3 mm (one grid cell) of the moss line to differ, as a source triangle's material was sampled at its own centroid. Debug and release give the same hashes. CI run 41364160189 (commit acb1697) on macOS, Linux and Windows: green; see the cross-platform table below.</p>
+<p><strong>Found on the way: a port bug.</strong> With the first version of the rule (face IDs left as the import computed them), the port's batch union renumbered the face IDs of 8,141 of its 24,954 output triangles, so they no longer traced: when two sources share face ID values, some survive a large batch union with another face's number. Single unions and small batches were fine; the C++ kernel never did it. Giving each leaf its own face-ID range (<code>IdBlock::face_base</code>, 2<sup>20</sup> IDs per slot) fixed it. manifold-csg's C API cannot import face IDs, so on the C++ backend the ranges are ignored and the C++ kernel keeps sources apart itself. Limits for P1: about a million triangles per leaf and 4,096 slots per block, lifted by widening face IDs to 64 bits as <code>MeshGL64</code> has them. Worth reporting upstream with the R3 <code>-0.0</code> bug.</p>
+
+<h2 id="r2">R2: determinism</h2>
+<dl class="defs">
+<dt>Question</dt><dd>Can two builds of the same tile be byte-identical, across thread counts and machines?</dd>
+<dt>Method</dt><dd>A test pipeline (noise, scatter, EDT, a boolean batch) run twice on one Mac at 1, 4 and 16 threads, and in CI on Linux and Windows. Every stage is hashed. Time box 3 days.</dd>
+<dt>Go when</dt><dd>Byte-identical on one machine at every thread count. Cross-platform results are measured, and Shawn chooses the level.</dd>
+<dt>Fallback</dt><dd>If one machine can't be made identical cheaply, the gate becomes metrics plus render review, with per-platform snapshots.</dd>
+<dt>Verdict</dt><dd><span class="verdict v-keep">go</span> Identical at every thread count under the source-ID rule and with <code>libm</code> in seeded code. macOS and Linux match; Windows differs. Shawn chose level B on 2 Nov 2026: one golden hash set for macOS and Linux, Windows gated on metrics and renders.</dd>
+</dl>
+
+<p><code>crates/dt-geom/tests/determinism.rs</code>: value-noise fBm on a 384² grid, keyed-seed scatter, an exact EDT (Felzenszwalb, rows and columns in parallel), then 24 level-set rocks built and cut in parallel and one batch union with the slab (under the source-ID rule <a href="#r2r9">above</a>, with every output triangle traced to a material). A further hash covers a <code>sin</code>/<code>exp</code> stage to measure the platform maths library. Each stage is hashed at 1, 4 and 16 rayon threads, twice each.</p>
+<p><strong>What this pipeline is, and is not.</strong> It is a toy: 24 rocks and about 25,000 output triangles, chosen to exercise the stages a tile has, not a tile. Manifold's own parallelism is whatever the build has (on by default): the port's rayon follows the test's thread pool, so its internal parallelism varies with it; TBB (the C++ kernel) cannot be sized from the test, so on Linux CI the test is re-run under <code>taskset</code> on 1, 2 and 4 CPUs, from which oneTBB sizes its default pool. All 18 runs per backend gave one set of hashes (run 41364160189). TBB's actual thread count was not read back.</p>
+
+<h3>One machine</h3>
+<p>The first run failed: the final union differed between 1 and 4 threads on <em>both</em> backends while every rock was identical. The cause is Manifold's process-wide original-ID counter. Rocks built in parallel get IDs in scheduling order, and a boolean orders its output triangles by original ID. A first fix, <code>as_original()</code> in index order, broke material tracing (see <a href="#r2r9">R2 and R9 together</a>); the source-ID rule replaces it. With it, every hash is identical at every thread count, debug and release, on both backends, with the ID counter shifted between runs.</p>
+<p>The R1 replay adds a larger, weaker check: two runs each of all 4,800 rockpile and all 16,676 massif ops with TBB on gave the same whole-run hash (<code>692c31a3…</code> and <code>f99638b2…</code>). That is two runs of one build on one machine, with each op replayed alone from saved inputs; it is consistent with Manifold's parallel booleans being run-to-run stable here, but it does not test the scheduling Manifold issue #1177 describes in general.</p>
+
+<h3>Across platforms (CI, same commit)</h3>
+<div class="tbl"><table>
+  <thead><tr><th>Stage</th><th>macOS arm64</th><th>Linux x86_64</th><th>Windows x86_64</th></tr></thead>
+  <tbody>
+    <tr><td>noise (+, ×, floor only)</td><td class="h">17289d9e…</td><td class="h">17289d9e…</td><td class="h">17289d9e…</td></tr>
+    <tr><td>scatter</td><td class="h">89c0b281…</td><td class="h">89c0b281…</td><td class="h">89c0b281…</td></tr>
+    <tr><td>EDT</td><td class="h">a90ec3ee…</td><td class="h">a90ec3ee…</td><td class="h">a90ec3ee…</td></tr>
+    <tr><td>libm (<code>sin</code>, <code>exp</code>)</td><td class="h">fd58314c…</td><td class="h diff">4418d923…</td><td class="h diff">5a73ca1a…</td></tr>
+    <tr><td>rocks: level set + relabel + two cuts, C++</td><td class="h">04d567e8…</td><td class="h">04d567e8…</td><td class="h diff">4f76b7c9…</td></tr>
+    <tr><td>rocks: level set + relabel + two cuts, port</td><td class="h">0144db9f…</td><td class="h">0144db9f…</td><td class="h diff">429ba38a…</td></tr>
+    <tr><td>batch union, C++ (24,970 tris, all traced)</td><td class="h">b7ba0109…</td><td class="h">b7ba0109…</td><td class="h diff">efef73c7…</td></tr>
+    <tr><td>batch union, port (25,214 tris, all traced)</td><td class="h">f61eacd0…</td><td class="h">f61eacd0…</td><td class="h diff">337c3b4b…</td></tr>
+    <tr><td>per-triangle materials, C++</td><td class="h">44576417…</td><td class="h">44576417…</td><td class="h diff">7b0f3699…</td></tr>
+    <tr><td>per-triangle materials, port</td><td class="h">fc185381…</td><td class="h">fc185381…</td><td class="h diff">8cea0280…</td></tr>
+  </tbody>
+</table></div>
+<p class="small muted">This table is CI run 41364160189 on acb1697, with Manifold parallelism on. Earlier runs (41361211550 on bf30c10, and 89bf704 on <code>rust/p0-r1</code>) showed the same pattern. Every run before this one showed the same pattern: identical on macOS and Linux, different on Windows for libm, rocks and union.</p>
+<p>Our own code is identical everywhere as long as it avoids the platform maths library; note that this includes macOS against Linux: R2's own <code>sin</code>/<code>exp</code> stage differs between Apple's libm and glibc, not only on Windows. Manifold, in both its C++ and Rust forms, is byte-identical between macOS-arm64 and Linux-x86_64 <em>on this pipeline</em>, and differs on Windows with the same triangle counts and full material tracing. The cause on Windows was not found; MSVC's <code>sin</code>/<code>cos</code> in the plane and level-set paths is a guess, not a measurement. The port also differs on Windows, so it is not only a C++ compiler matter. The C++ kernel and the port never agree byte for byte with each other (24,970 against 25,214 triangles), because the port tracks Manifold 3.5.4 and manifold-csg ships 3.5.3.</p>
+<p><strong>Level chosen: B</strong> (Shawn, 2 Nov 2026). On this evidence, byte-identical golden hashes look achievable for macOS and Linux together; Windows needs its own hashes or a metrics-plus-render gate. Because the evidence is one toy pipeline, the P1 hash gate is the real test: if real tiles split macOS from Linux, option B falls back to A. Seeded code paths should use the <code>libm</code> crate rather than <code>std</code> transcendental functions.</p>
+
+<h3 id="ci">CI cost</h3>
+<div class="tbl"><table>
+  <thead><tr><th>Job</th><th class="num">Before (skeleton)</th><th class="num">Cold, with Manifold</th><th class="num">Cached</th></tr></thead>
+  <tbody id="cirows">
+    <tr><td>test (macOS)</td><td class="num">33 s</td><td class="num">2 min 47 s</td><td class="num">1 min 01 s</td></tr>
+    <tr><td>test (Linux)</td><td class="num">17 s</td><td class="num">2 min 04 s</td><td class="num">32 s</td></tr>
+    <tr><td>test (Windows)</td><td class="num">44 s</td><td class="num">4 min 57 s</td><td class="num">1 min 01 s</td></tr>
+    <tr><td>clippy, all features</td><td class="num">23 s</td><td class="num">2 min 13 s</td><td class="num">18 s</td></tr>
+    <tr><td>wasm (now a full build)</td><td class="num">21 s</td><td class="num">40 s</td><td class="num">18 s</td></tr>
+    <tr><td>deny</td><td class="num">33 s</td><td class="num">34 s</td><td class="num">34 s</td></tr>
+  </tbody>
+</table></div>
+<p class="small muted">Job wall times from runs 41336895533 (skeleton), 41340182964 and 41344103590 (cold: Manifold and TBB compiled from source), and 41344559011 (cached). The wall clock is the slowest job: about 5 minutes cold (Windows), about 1 minute cached.</p>
+<p>All three runner images ship cmake (3.31 on Linux, 4.4 on macOS and Windows), so no install step was needed; the jobs print <code>cmake --version</code> so a missing one fails loudly. The wasm job now really builds manifold-rust for <code>wasm32-unknown-unknown</code> (a full build, not just a check) and passes, so it needs no <code>continue-on-error</code>. Locally, a cold arm64 build of Manifold without TBB took 40 s and with TBB 1 min 19 s.</p>
+
+<h3>What R1, R2 and R9 changed in the plan</h3>
+<ol class="findings">
+  <li>Ship manifold-csg with Manifold's parallelism on. The design note "run each boolean single-threaded and many in parallel" is not needed for identity on one machine, and costs 3–4× on the cliff's big unions.</li>
+  <li>Add a kernel rule: <em>source IDs follow <code>dt-geom::source</code></em>: a reserved ID block assigned by part index, leaves relabelled with their own face-ID range, plane cuts with given IDs, materials in a table, index-order batches. Without it, output depends on thread scheduling (R2) or material tracing breaks (R9).</li>
+  <li>Keep solids inside the kernel between ops; a <code>TriMesh</code> round trip through manifold-csg drops face IDs.</li>
+  <li>The parity harness compares triangle counts, volumes and renders, not bytes, against a Python <em>replay</em>.</li>
+  <li>R1 ran at a larger scale than planned: single meshes up to 7.1M triangles, a 58-part batch union of 13.2M triangles and a 202-part one of 7.6M on the massif, not 1.7M. The kill criterion (cliff batch within 2× Python) is met (worst pair 1.43×); the ≤ 1.2× time gate passes on the median and not on every pair.</li>
+  <li>Carry tolerance as Python does (<code>TriMesh::tolerance</code>); parity on near-degenerate intersections is judged on metrics in P3 and P7.</li>
+  <li>R2's cross-platform level: on the toy pipeline, macOS and Linux can share golden hashes; Windows cannot until the cause of its difference inside Manifold is found. The P1 hash gate on real tiles is the real test.</li>
+  <li>manifold-rust stays behind the trait as the wasm backend (the browser build compiles), and is re-measured when Python moves to Manifold 3.5.4 and the port's parallel speed improves. The R1 replay is the re-test: <code>r1_replay --backend port</code>.</li>
+</ol>
+<h2 id="r3">R3: rays without Embree</h2>
+<dl class="defs">
+<dt>Question</dt><dd>Can a pure-Rust BVH replace Embree for the leaf placer's rays?</dd>
+<dt>Method</dt><dd>Capture the leaf placer's ray batches from the 2×2 tree tile (and, as an extra, the cliff's relief, grain and dirt rays) and replay them through obvhs and parry3d. Time box 3 days.</dd>
+<dt>Go when</dt><dd>Within 3× of Embree, at least 99.9% of hits identical and the rest within 1e-4 mm, and a deterministic BVH build.</dd>
+<dt>Fallback</dt><dd>embree3 over FFI as a native-only feature of <code>dt-geom</code>.</dd>
+<dt>Verdict</dt><dd><span class="verdict v-keep">go</span> obvhs 0.4 with Embree's triangle test and <code>medium_build</code>; parry3d is the spare. The distance clause is relaxed to 1e-3 mm, because 1e-4 mm is tighter than float32 data allows. The fallback is dropped.</dd>
+</dl>
+<div class="gate">
+  <div><b>≥ 99.9995%</b><span class="small">identical hits, leaf placer, 3 captures (gate ≥ 99.9%)</span></div>
+  <div><b>9.1e-5 – 1.8e-4 mm</b><span class="small">largest distance difference; the 1e-4 mm clause fails on 2 of 3</span></div>
+  <div><b>2.46–2.84×</b><span class="small">obvhs query time vs Embree, 1 thread (gate ≤ 3×)</span></div>
+  <div><b>0.85×</b><span class="small">obvhs build time vs Embree (both multi-threaded)</span></div>
+  <div><b>identical</b><span class="small">BVH hash at 1, 4, 16 threads; query results at 1 vs 12</span></div>
+</div>
+
+<h3>What was measured</h3>
+<p><code>tests/parity/capture/rays.py</code> wraps trimesh's embreex layer (<code>_EmbreeWrap</code>) from outside and records every scene and ray batch exactly as Embree saw them: float32 vertices in trimesh's scaled frame, float32 origins and directions, and Embree's primID and tfar. It captured two builds:</p>
+<ul>
+  <li><strong>Leaf placer</strong>: <code>2x2-grass-tree.tile.py</code> at DungeonBlocks scale, built in memory (no STL written). 1,875 leaves placed; 80 scenes, 138,670 triangles, 465,164 rays, all from <code>placement_leaf</code> and <code>placement_organic</code>.</li>
+  <li><strong>Cliff</strong>: <code>clifflab/rockpile.py</code> 1×1 seed 1, from this branch's copy. 175 scenes up to 2.6 M triangles, 11.4 M triangles in all, 18.4 M rays: <code>_relief</code> 16.3 M, <code>_grain</code> 2.1 M, <code>_dirt_layer</code> 19.6 k.</li>
+</ul>
+<p><code>crates/dt-geom/examples/r3_rays.rs</code> replays them in the same frame. Embree's times come from the same capture replayed through embreex 4.4. Embree builds with TBB on all cores, and embreex queries on one thread, so the build ratio compares multi-threaded builds and the query ratio compares single threads. Timings are the best of 5 runs for the tree and of 1 for the cliff.</p>
+
+<h3>Leaf placer: the gate</h3>
+<div class="tbl"><table>
+  <thead><tr><th>Backend</th><th class="num">Build 1 thr, ms</th><th class="num">Build 12 thr, ms</th><th class="num">Query 1 thr, ms</th><th class="num">Query 12 thr, ms</th><th class="num">Build vs Embree</th><th class="num">Query vs Embree</th><th class="num">Identical</th><th class="num">Max Δt, mm</th><th>Deterministic</th></tr></thead>
+  <tbody>
+    <tr><td class="crate">Embree (embreex)</td><td class="num">—</td><td class="num">85.0</td><td class="num">85.4</td><td class="num">—</td><td class="num">1</td><td class="num">1</td><td class="num">ref</td><td class="num">—</td><td>reruns identical</td></tr>
+    <tr><td class="crate">obvhs very_fast</td><td class="num">37.5</td><td class="num">49.9</td><td class="num">221.1</td><td class="num">36.9</td><td class="num">0.59</td><td class="num">2.59</td><td class="num pass">100.0000%</td><td class="num">9.07e-5</td><td class="pass">yes</td></tr>
+    <tr><td class="crate">obvhs fast</td><td class="num">41.7</td><td class="num">57.9</td><td class="num">207.0</td><td class="num">37.8</td><td class="num">0.68</td><td class="num">2.42</td><td class="num pass">100.0000%</td><td class="num">9.07e-5</td><td class="pass">yes</td></tr>
+    <tr class="pick"><td class="crate">obvhs medium ✓</td><td class="num">47.4</td><td class="num">71.9</td><td class="num">210.1</td><td class="num">35.3</td><td class="num">0.85</td><td class="num">2.46</td><td class="num pass">100.0000%</td><td class="num">9.07e-5</td><td class="pass">yes</td></tr>
+    <tr><td class="crate">parry3d 0.31</td><td class="num">25.6</td><td class="num">25.6</td><td class="num">186.6</td><td class="num">36.7</td><td class="num">0.30</td><td class="num">2.18</td><td class="num pass">100.0000%</td><td class="num">8.92e-5</td><td class="pass">yes</td></tr>
+  </tbody>
+</table></div>
+<h4 id="three">Three captures</h4>
+<p>The table above is one capture. The adversarial review captured two more trees (<code>scratchpad/p0review/r3s7</code>: 2×2-grass-tree at seed 7; <code>r3t1</code>: 1×1-grass-tree), and obvhs medium was re-run on both (5 repetitions):</p>
+<div class="tbl"><table>
+  <thead><tr><th>Capture</th><th class="num">Rays</th><th class="num">Identical</th><th class="num">Far / hit vs miss</th><th class="num">Max Δt, identical hits</th><th class="num">Query vs Embree, 1 thr</th><th>Gate</th></tr></thead>
+  <tbody>
+    <tr><td>2×2-grass-tree, seed 42 (above)</td><td class="num">465,164</td><td class="num pass">100.0000%</td><td class="num">0 / 0</td><td class="num">9.07e-5 mm</td><td class="num">2.46×</td><td class="pass">pass</td></tr>
+    <tr><td>2×2-grass-tree, seed 7</td><td class="num">401,793</td><td class="num">99.9995%</td><td class="num">1 / 1</td><td class="num diff">1.45e-4 mm</td><td class="num">2.84×</td><td>hits pass; 1e-4 mm fails</td></tr>
+    <tr><td>1×1-grass-tree</td><td class="num">335,928</td><td class="num pass">100.0000%</td><td class="num">0 / 0</td><td class="num diff">1.79e-4 mm</td><td class="num">2.80×</td><td>hits pass; 1e-4 mm fails</td></tr>
+  </tbody>
+</table></div>
+<p>The two seed-7 disagreements are one far ray (0.080 mm) and one hit-vs-miss, both in <code>_drive_batched</code>; the brute-force re-cast sides with obvhs on both, and both flip under a 1e-4 mm nudge, so they are grazing rays like the cliff's. The distance differences are on identical hits and are float32 rounding of the hit parameter: Embree and obvhs order the same arithmetic differently, and at the tree's 70 mm frame one float32 ulp is about 8e-6 mm. <b>The gate's 1e-4 mm clause was set too tight for float32 data;</b> it passes on one capture of three. What the leaf placer needs is the same triangle (it is) and distances well inside its own tolerances (its smallest is the 0.24 mm leaf thickness, about 1,300× larger). P5 judges trees on metrics and renders, and the plan's ray gate is restated as ≥ 99.9% identical hits with max Δt ≤ 1e-3 mm.</p>
+
+<p class="small">"Identical" means the same triangle, or both miss. "Max Δt" is the largest distance difference on identical hits, converted to mm. Deterministic means the structure hash is equal at 1, 4 and 16 threads and across runs, and the 12-thread query returns exactly the 1-thread answers. On 12 threads, the queries run in 0.41–0.44× Embree's single-threaded time.</p>
+
+<h3>Cliff relief: a harder case</h3>
+<p>The cliff is not part of the gate. It was cheap to capture, and it found two things.</p>
+<div class="tbl"><table>
+  <thead><tr><th>Backend</th><th class="num">Build 12 thr, ms</th><th class="num">Query 1 thr, ms</th><th class="num">Query 12 thr, ms</th><th class="num">Build vs Embree</th><th class="num">Query vs Embree</th><th class="num">Identical</th><th class="num">Tie ≤ 1e-4 mm</th><th class="num">Far</th><th class="num">Hit vs miss</th></tr></thead>
+  <tbody>
+    <tr><td class="crate">Embree (embreex)</td><td class="num">6,429</td><td class="num">4,167</td><td class="num">—</td><td class="num">1</td><td class="num">1</td><td class="num">ref</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+    <tr><td class="crate">obvhs fast, unpatched</td><td class="num">4,105</td><td class="num">2,307</td><td class="num">571</td><td class="num">0.64</td><td class="num">0.55</td><td class="num fail">52.97%</td><td class="num">0.004%</td><td class="num">30</td><td class="num fail">8,646,303</td></tr>
+    <tr><td class="crate">obvhs very_fast</td><td class="num">3,501</td><td class="num">10,504</td><td class="num">1,498</td><td class="num">0.54</td><td class="num">2.52</td><td class="num">99.160%</td><td class="num">0.727%</td><td class="num">2,942</td><td class="num">17,811</td></tr>
+    <tr><td class="crate">obvhs fast</td><td class="num">4,718</td><td class="num">10,411</td><td class="num">1,717</td><td class="num">0.73</td><td class="num">2.50</td><td class="num">99.160%</td><td class="num">0.727%</td><td class="num">2,933</td><td class="num">17,829</td></tr>
+    <tr class="pick"><td class="crate">obvhs medium ✓</td><td class="num">4,025</td><td class="num">9,391</td><td class="num">1,390</td><td class="num">0.63</td><td class="num">2.25</td><td class="num">99.158%</td><td class="num">0.729%</td><td class="num">2,934</td><td class="num">17,828</td></tr>
+    <tr><td class="crate">parry3d 0.31</td><td class="num">2,922</td><td class="num">10,739</td><td class="num">1,741</td><td class="num">0.45</td><td class="num">2.58</td><td class="num">98.400%</td><td class="num">1.056%</td><td class="num">39,404</td><td class="num">60,631</td></tr>
+  </tbody>
+</table></div>
+<p class="small">By label, for obvhs medium: <code>_grain</code> is 99.9998% identical (2 hit-vs-miss rays in 2.05 M); <code>_dirt_layer</code> is 98.46% identical plus 1.53% ties; <code>_relief</code> is 99.05% identical. Every backend is deterministic on the cliff too.</p>
+
+<h4>1. An obvhs bug, worked around</h4>
+<p>Unpatched obvhs lost 8.6 M of the relief rays. Those rays are horizontal, built as <code>-cos(a)·m − sin(a)·z</code> with <code>a = 0</code>, so their z component is <code>-0.0</code>. obvhs 0.4's <code>safe_inverse(-0.0)</code> returns <code>-1/ε</code>, but its octant test reads <code>-0.0 &lt; 0</code> as false. The slab bounds swap, and the ray misses every node. <code>ObvhsRays</code> adds <code>+0.0</code> to each direction component, which turns <code>-0.0</code> into <code>+0.0</code> and changes nothing else. A unit test covers it. The bug should go upstream.</p>
+
+<h4>2. What is left is rounding on grazing rays</h4>
+<p>A referee in <code>r3_rays.rs</code> re-casts a sample of the disagreeing rays by brute force (every triangle, a Rust port of Embree's triangle test, no BVH), then nudges each origin by 1e-4 mm in six directions and re-casts the nudged rays the same way, to see whether the answer changes. Embree itself was not re-run on the nudged rays. The sample is 385 of the 20,762 far and hit-vs-miss disagreements for obvhs medium (about 1.9%); the 0.73% of rays that are ties within 1e-4 mm were not refereed.</p>
+<div class="tbl"><table>
+  <thead><tr><th>Backend · kind</th><th class="num">Sampled</th><th class="num">Brute force sides with Embree</th><th class="num">… with backend</th><th class="num">Has a zero direction component</th><th class="num">Answer flips under a 1e-4 mm nudge</th></tr></thead>
+  <tbody>
+    <tr><td>obvhs medium · hit vs miss</td><td class="num">185</td><td class="num">8</td><td class="num">177</td><td class="num">177</td><td class="num">184</td></tr>
+    <tr><td>obvhs medium · far</td><td class="num">200</td><td class="num">41</td><td class="num">157</td><td class="num">200</td><td class="num">197</td></tr>
+    <tr><td>parry3d · hit vs miss</td><td class="num">200</td><td class="num">168</td><td class="num">30</td><td class="num">193</td><td class="num">199</td></tr>
+    <tr><td>parry3d · far</td><td class="num">200</td><td class="num">162</td><td class="num">38</td><td class="num">198</td><td class="num">160</td></tr>
+  </tbody>
+</table></div>
+<p>Almost every disagreement is an axis-aligned ray from rockpile's relief grid, grazing faces that sit on the same grid. In the brute-force re-cast (a Rust port of Embree's triangle test over every triangle; Embree itself was not re-run), the answer changes when the origin moves by 1e-4 mm, so on the sampled rays neither Embree's answer nor ours is a stable one. On these rays the re-cast agrees with obvhs, which uses the same port of the test, so the re-cast shows instability, not which answer is right; ties were not refereed. parry's own triangle test rounds differently, which is why it disagrees about four times as often.</p>
+
+<h3>Recommendation</h3>
+<div class="tbl"><table>
+  <thead><tr><th>Option</th><th>For</th><th>Against</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr><td class="crate">obvhs 0.4.0</td><td class="small">Takes the triangle test as a closure, so Embree's Möller–Trumbore runs unchanged, and hits match Embree's most closely. Fastest 12-thread query on the cliff. Small dependency tree (glam, bytemuck, rayon).</td><td class="small">One maintainer, and the <code>-0.0</code> bug (worked around). Its parallel build gives no gain at these mesh sizes: 12 threads take about the same time as 1.</td><td><span class="st st-settled">use</span></td></tr>
+    <tr><td class="crate">parry3d 0.31.1</td><td class="small">Team-maintained, 958 k recent downloads. Fastest build, and also passes the leaf gate.</td><td class="small">Its own triangle test rounds differently on grazing rays. Brings glamx, simba and a second glam version (0.33 next to obvhs's 0.34). No direct node access, so the structure hash streams its Debug output.</td><td><span class="st st-proposed">spare</span></td></tr>
+    <tr><td class="crate">embree3 0.4.1</td><td class="small">Binds the real Embree.</td><td class="small">Binds Embree 3.13.5, now end of life. Two releases on 8–9 June 2026 and nothing since; 3.3 k downloads; needs a system Embree. <code>embree4-rs</code> and <code>embree4-sys</code> have been stale since 2023 and 2024.</td><td><span class="st st-risk">not needed</span></td></tr>
+  </tbody>
+</table></div>
+<p>No maintained Embree binding exists. If the fallback were ever needed, it would mean writing our own thin binding to Embree 4's C API.</p>
+
+<h4>wasm</h4>
+<p><code>cargo check -p dt-geom --target wasm32-unknown-unknown --no-default-features --features manifold-rust</code> passes with obvhs (with its <code>parallel</code> feature), parry3d and rayon. On that target rayon runs on the calling thread.</p>
+
+<h3>What R3 changed in the plan</h3>
+<ol class="findings">
+  <li><strong>R3 is retired for the leaf placer, with the distance clause relaxed to 1e-3 mm</strong> (see <a href="#three">three captures</a>). The trees phase can rely on obvhs behind <code>Rays</code>. Measured again on 1 Nov 2026 (2×2-grass-tree, both systems, 3 runs): leaf placement takes 3.4–4.0 s per scale, 7.1–7.7 s of a 17.2–18.3 s tile build (median 17.6 s), not the 11.3 s of Embree time quoted in feasibility.</li>
+  <li><strong>The cliff port should not cast exactly grazing rays.</strong> rockpile's <code>_relief</code> grid lines up with the mesh it casts at, so about 0.8% of its answers are rounding noise (their answers flip under a 1e-4 mm nudge in a brute-force re-cast with a port of Embree's test). In Rust, offset the grid off the mesh's own lattice (as <code>overhang_faces</code> already does) or use the depth-peel raster suggested in feasibility. Cliff parity is then judged on metrics and renders, not on ray-for-ray agreement.</li>
+  <li><strong>Every direction vector goes through <code>Rays</code>.</strong> The <code>-0.0</code> workaround lives in <code>ObvhsRays</code>. No caller should use obvhs directly.</li>
+  <li><strong>Parallel speed comes from queries, not builds.</strong> Batch queries scale 6–7× on 12 threads. obvhs builds don't scale at these sizes, and they are already faster than Embree's.</li>
+</ol>
+
+<h2 id="r6">R6: the tile format</h2>
+<dl class="defs">
+<dt>Question</dt><dd>Can KDL carry real tiles without losing anything, survive machine edits, and read well to Shawn?</dd>
+<dt>Method</dt><dd>Write <code>2x2-grass-tree</code>, <code>1x1-wall-fieldstone-corner</code> and a rockpile <code>2x1-cliff-run</code> in KDL v2 under <code>library/tiles/</code>, with shared parts in <code>library/parts/</code>. Decode them into a draft model in a new <code>dt-doc</code> crate. Edit one control with the <code>kdl</code> crate. Time box 3 days.</dd>
+<dt>Go when</dt><dd>Nothing in the tile is lost. Comments and layout survive the edit byte for byte outside the edited node. Shawn says he could write them.</dd>
+<dt>Fallback</dt><dd>Change the syntax before P1. As a last resort, use TOML with toml_edit.</dd>
+<dt>Verdict</dt><dd><span class="verdict v-keep">go</span> The format holds. Shawn found the approach right but the first parameters unintuitive, so the syntax and vocabulary were decided on 1 Nov 2026 (eight syntax questions, then ten vocabulary recommendations) and <code>dt-doc</code> was reworked to them as P1 stream A.</dd>
+</dl>
+<h3>Results</h3>
+<ul>
+<li><b>Parsing and printing.</b> The <code>kdl</code> crate 6.7.1 (KDL v2, its v1 features off) parsed every file and printed each back byte-identical.</li>
+<li><b>Edits.</b> An edit to one control changed only that value's own text. The spike's edit API could only replace values already written; insertion was P1 work and is now done.</li>
+<li><b>Nothing lost.</b> <code>dt-doc</code>, decoded by hand with byte spans on every name and value, asserted every value the Python tiles set. 35 tests passed, and the crate built for <code>wasm32-unknown-unknown</code>.</li>
+<li><b>Errors.</b> miette errors point at the text with a hint and keep going past the first mistake. Generic KDL parse messages are rewritten to say what to write (a forgotten quote, a misspelt control).</li>
+<li><b>Two KDL v2 lessons.</b> Ranges and percents must be quoted, because KDL numbers cannot contain <code>..</code> or <code>%</code>. Switches are <code>#true</code> and <code>#false</code>.</li>
+<li><b>Look decisions surfaced by the rewrite.</b> No grass-carpet look (3D blades instead), grass moved last in the stack, which side of a line a wall sits on, and the cliff grown from a tile edge.</li>
+<li><b>Gaps left for later phases.</b> Meadow needs the species controls the tiles set (length, curl, clearance, clumps) or a ruling that they go (P4). <code>cliff along=…</code> must either be limited to tile edges or rockpile's band forms generalised to any line (P7).</li>
+</ul>
+<p>The results above were measured on the draft vocabulary; the parts that do not depend on the words carry over. The decided vocabulary, the example tiles and every decision are on the <a href="language.html">language</a> page (<a href="language.html#decisions">decisions</a>).</p>
+<h2 id="harness-py">The parity harness, Python half</h2>
+<p>Built during Phase 0 so the first look port could be judged from day one.</p>
+<p><code>tests/parity/run_lab.py</code> builds dirtlab 2×2 at seeds 1–4. For each seed it writes the STL, a <code>metrics.json</code>, and four renders (painted, top, low, 20 mm close-up) with overhang faces painted red, using clifflab's layer-reach audit at 55°. It finishes with one contact sheet. Output goes to <code>out/parity/dirt/</code>, which is gitignored. It renders through <code>dharmatiles.render</code> and falls back to a CPU Embree renderer with the same camera and lights when pyrender has no screen; this run used the fallback. A full run takes 95 s.</p>
+<p>The metrics are computed from the STL alone, so the Rust half can run the same function. These are the plan's metrics that apply to dirt:</p>
+<div class="tbl"><table>
+  <thead><tr><th>Seed</th><th class="num">Bare fraction</th><th class="num">Lab truth</th><th class="num">Rocks</th><th>0.5–1.5 / 1.5–4 / 4–8 / 8+ mm</th><th class="num">Faces</th><th class="num">Bodies</th><th class="num">See-through</th><th class="num">Overhang, mm²</th><th class="num">Build, s</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td class="num">0.787</td><td class="num">0.915</td><td class="num">175</td><td class="mono">83 / 65 / 26 / 1</td><td class="num">447,632</td><td class="num">1</td><td class="num">0</td><td class="num">0.00</td><td class="num">3.2</td></tr>
+    <tr><td>2</td><td class="num">0.771</td><td class="num">0.930</td><td class="num">174</td><td class="mono">78 / 73 / 20 / 3</td><td class="num">444,060</td><td class="num">1</td><td class="num">0</td><td class="num">0.00</td><td class="num">3.0</td></tr>
+    <tr><td>3</td><td class="num">0.792</td><td class="num">0.920</td><td class="num">177</td><td class="mono">72 / 81 / 24 / 0</td><td class="num">443,614</td><td class="num">1</td><td class="num">0</td><td class="num">0.00</td><td class="num">2.9</td></tr>
+    <tr><td>4</td><td class="num">0.784</td><td class="num">0.915</td><td class="num">219</td><td class="mono">113 / 82 / 22 / 2</td><td class="num">446,468</td><td class="num">1</td><td class="num">0</td><td class="num">0.00</td><td class="num">3.2</td></tr>
+  </tbody>
+</table></div>
+<p class="small">Also in <code>metrics.json</code>: watertightness, volume, relief percentiles above the edge level, and the RMS relief spectrum in 0.3–1, 1–3, 3–10 and 10–40 mm bands. The bare fraction uses a top-hat estimator (a 6 mm grey opening, with cover where the surface stands 0.35 mm above it). It counts tall clods as cover, so it reads lower than dirtlab's own pebble mask, shown as "lab truth". It is stable across seeds (0.771–0.792), and it is the same function on both sides, which is what parity needs.</p>
+
+<h3>Reproduce R3 and the harness</h3>
+<pre><code>D=$SCRATCH/p0/r3                                       # never inside the repo
+python tests/parity/capture/rays.py tree  $D/tree      # 6 s
+python tests/parity/capture/rays.py cliff $D/cliff     # 63 s, 0.8 GB
+python tests/parity/capture/rays.py bench $D/tree      # Embree reference times
+cargo run --release -p dt-geom --example r3_rays -- $D/tree --reps 5
+python tests/parity/run_lab.py                         # out/parity/dirt/</code></pre>
+<h2 id="history">History</h2>
+<p>The spikes ran on branch <code>rust/p0</code> (commits 95e2093, 56abb84, ae11265, 50c08f4, 5c1a125, 3795598 and 156bd1c). The adversarial review's re-measurements are in code commit acb1697 (CI run 41364160189). The first reports, the go/no-go sitting's page and every correction are in the archived <a href="../archive/rust-study/changelog.html">change log</a> and in git history.</p>
+</article>
+</div>
+</body>
+</html>
