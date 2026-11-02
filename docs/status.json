@@ -66,9 +66,9 @@
    "body": "rust",
    "area": "Rust P2",
    "state": "running",
-   "title": "dirt ported; parity passes at seeds 1\u20134",
-   "detail": "Kernels done (noise, distance, morphology, blur, spatial hash, adaptive lift). dirt + ground ported; the parity harness passes every metric at seeds 1\u20134 (texture 97.8% vs Python 97.7%). 2\u00d72 builds in ~0.8 s, watertight, 0 mm\u00b2 overhang. Now: tests, CI, reviews.",
-   "updated": "2026-11-02T20:26:31Z"
+   "title": "waiting on Shawn: dirt sign-off + edge level",
+   "detail": "rust/p2 bb2a006, CI green (run 41523520608). dirt parity passes at seeds 1\u20134: texture 97.8% (dirtlab 97.7%), clods/pebbles/spectrum within tolerance, 2\u00d72 in ~0.8 s, watertight, 0 mm\u00b2 overhang. Shawn: judge out/parity/dirt/contact-sheet.png; choose the ground edge level (3.4 recommended, or 4.0).",
+   "updated": "2026-11-02T21:00:26Z"
   }
  ]
 }
