@@ -1,74 +1,83 @@
-//! The document adapter: KDL text → the few facts the evaluator needs.
+//! Documents through dt-doc: KDL text → the few facts the evaluator needs.
 //!
-//! **Thin on purpose.** dt-doc is being reworked to the decided R6
-//! vocabulary on its own branch (rust/p1-doc); until it lands, today's
-//! dt-doc decodes the old words (`hills`, `self=`, `cols=`, heights in h)
-//! and cannot read the new ones. This module decodes the minimal subset
-//! P1 needs, in the new vocabulary, straight from the `kdl` node tree:
+//! dt-doc does the reading: [`dt_doc::uses`] finds a file's `use` lines,
+//! the files they name are decoded first (depth first, each once) and
+//! registered in a [`Known`] under their [`dt_doc::model::Use::key`], then
+//! [`dt_doc::decode`] reads the file itself.  Every dt-doc error becomes a
+//! [`Diag`] at its text.
 //!
-//! - `use "path" name…` (top level; `lib:` or relative), and `define name
-//!   { stack { … } }` in imported files (no `param`s yet);
-//! - `tile name size="CxR" seed=N { … }` with `about`, `levels name=mm…`,
-//!   `line name { through P P… }` (straight; points are `"x,y"` in squares
-//!   or edge and corner words), `region name { bounded-by L…; fill P }`,
-//!   and one `stack`;
-//! - stack entries: a look or definition, `in=region`, `seed=N`, controls
-//!   as properties or as child lines (`level 5`).
+//! What this module adds is the evaluator's side of the model:
 //!
-//! The evaluator only sees [`Tile`]. Re-pointing at the reworked dt-doc
-//! means filling [`Tile`] from `dt_doc::model` instead of here; nothing
-//! downstream changes.
+//! - `use` keys resolve through the [`Source`]: a bare path or `lib:` is
+//!   the bundled library, `./` and `../` are the project, relative to the
+//!   using file;
+//! - levels resolve to mm: dt-doc's standard levels (the prelude,
+//!   library/parts/levels.kdl), the file's, the tile's, a definition's;
+//! - definitions are inlined, with their parameters bound to the caller's
+//!   arguments or their defaults;
+//! - every control a built look takes is filled in: as written, or its
+//!   schema default ([`dt_doc::schema::Control::default`]);
+//! - the edge contract (library/parts/edges.kdl) is read for every tile;
+//! - anything that needs a look not built yet is set aside in
+//!   [`Tile::pending`]: `check` accepts it, `build` refuses it.
+//!
+//! The evaluator only sees [`Tile`].
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use kdl::{KdlDocument, KdlEntry, KdlNode, KdlValue};
+use dt_doc::known::{PRELUDE, PRELUDE_NAME};
+use dt_doc::model::{self, Callee, Definition, Document, Num, Spanned, Use, Value};
+use dt_doc::schema::{Control, Look};
+use dt_doc::{DocError, Known};
 use miette::{NamedSource, SourceSpan};
 
-use crate::diag::{Diag, Src, did_you_mean};
-use crate::source::{Source, resolve};
+use crate::diag::{Diag, Src};
+use crate::source::{LIB, Source, resolve};
 
-/// The standard levels, mm at the DungeonBlocks reference: the prelude
-/// every tile sees (R6 Q8). The reworked dt-doc loads them from
-/// `library/parts/levels.kdl`.
-pub const STANDARD_LEVELS: &[(&str, f64)] = &[
-    ("edge", 3.4),
-    ("ground", 5.0),
-    ("water", 2.6),
-    ("wall-top", 33.1),
-];
+/// The edge contract every tile applies at its root.
+pub const EDGES: &str = "lib:parts/edges.kdl";
 
-/// A value with its span.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Spanned<T> {
-    /// The value.
-    pub value: T,
-    /// Where it was written.
+/// The printer profile builds are checked against by default.
+pub const PRINTER: &str = "lib:printers/default.kdl";
+
+/// One decoded file and its text.
+#[derive(Debug)]
+pub struct File {
+    /// Its path, as the [`Source`] knows it.
+    pub path: String,
+    /// Its text, for diagnostics.
+    pub src: Src,
+    /// What dt-doc made of it.
+    pub doc: Document,
+}
+
+/// A control a look is given, resolved to mm or a word.
+#[derive(Clone, Debug)]
+pub struct Setting {
+    /// The control's name.
+    pub name: String,
+    /// Its value.
+    pub value: dt_looks::Value,
+    /// Where it was written (the entry's name for a default).
     pub span: SourceSpan,
+    /// The text it was written in.
+    pub src: Src,
 }
 
-/// A control value as written.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Raw {
-    /// A number.
-    Number(f64),
-    /// A string or bare word.
-    Text(String),
-    /// `#true` / `#false`.
-    Bool(bool),
-}
-
-/// One stack entry.
+/// One stack entry that calls a built look, definitions inlined.
 #[derive(Clone, Debug)]
 pub struct Entry {
-    /// The look or definition named.
+    /// The look named.
     pub what: Spanned<String>,
     /// `in=`: the region it acts in (default the whole tile).
     pub area: Option<Spanned<String>>,
     /// `seed=`: pins its look.
     pub seed: Option<u64>,
-    /// Controls, in the order written.
-    pub controls: Vec<(Spanned<String>, Spanned<Raw>)>,
+    /// `id=`: its name among same-named siblings in seed paths.
+    pub id: Option<String>,
+    /// The controls the look takes: written, or their defaults.
+    pub controls: Vec<Setting>,
     /// The text it came from.
     pub src: Src,
     /// The whole node.
@@ -82,8 +91,8 @@ pub struct Region {
     pub name: String,
     /// The lines that bound it.
     pub bounded_by: Vec<Spanned<String>>,
-    /// Fill points.
-    pub fills: Vec<At>,
+    /// Fill points, in squares from the south-west corner.
+    pub fills: Vec<[f64; 2]>,
 }
 
 /// What the evaluator needs from a tile document.
@@ -97,16 +106,31 @@ pub struct Tile {
     pub rows: u32,
     /// The root seed (1 if none is written).
     pub seed: u64,
-    /// Levels: the standard ones, then the tile's own.
+    /// Levels in mm: the standard ones, the file's, then the tile's own.
     pub levels: Vec<(String, f64)>,
+    /// The edge contract: the level, mm, each surface meets every tile
+    /// edge at.
+    pub edges: Vec<(String, f64)>,
     /// Straight lines, by name, as points in squares.
-    pub lines: BTreeMap<String, Vec<At>>,
+    pub lines: BTreeMap<String, Vec<[f64; 2]>>,
     /// Regions.
     pub regions: Vec<Region>,
-    /// The stack, with definitions inlined.
+    /// The entries that call built looks, definitions inlined.
     pub stack: Vec<Entry>,
+    /// What the document asks for that is not built yet: one error each,
+    /// at its text.  `check` accepts these; `build` refuses them.
+    pub pending: Vec<Diag>,
     /// The tile's own text.
     pub src: Src,
+}
+
+/// A document as read: the file, and its tile if it has one.
+#[derive(Debug)]
+pub struct Read {
+    /// The file.
+    pub file: Arc<File>,
+    /// Its tile, if it has one (a parts or printer file has none).
+    pub tile: Option<Tile>,
 }
 
 /// FNV-1a of a document's text (the build record's document hash).
@@ -120,705 +144,700 @@ pub fn text_hash(text: &str) -> u64 {
     h
 }
 
-/// Read the tile at `path` and its imports.
+/// The path a `use` line in `from` names: the library for a bare or
+/// `lib:` path, the project (relative to `from`) for `./` or `../`.
+#[must_use]
+pub fn use_path(from: &str, u: &Use) -> String {
+    match &u.source {
+        model::Source::Library(p) => format!("{LIB}{p}.kdl"),
+        model::Source::Project(p) => resolve(from, p),
+    }
+}
+
+/// A dt-doc error as a [`Diag`] at its text.  An unknown level with no
+/// near miss also lists the standard levels, in mm.
+#[must_use]
+pub fn diag(src: &Src, e: &DocError) -> Diag {
+    let mut help = e.help.clone();
+    if e.code == "dt::unknown-name"
+        && e.message.starts_with("no level")
+        && !help.as_deref().is_some_and(|h| h.contains("did you mean"))
+    {
+        let mut levels: Vec<(String, f64)> = Vec::new();
+        for (n, v) in Known::standard().levels() {
+            if let Ok(mm) = number(&levels, v) {
+                levels.push((n.clone(), mm));
+            }
+        }
+        let names: Vec<String> = levels
+            .iter()
+            .map(|(n, v)| format!("{n} ({v} mm)"))
+            .collect();
+        help = Some(format!(
+            "{}standard levels: {}; a tile adds its own with `levels name=mm`",
+            help.map(|h| format!("{h}; ")).unwrap_or_default(),
+            names.join(", ")
+        ));
+    }
+    Diag::at(src, e.span, e.code, e.message.clone(), e.label.clone()).maybe_help(help)
+}
+
+/// Read the document at `path` and its imports.  A tile is flattened
+/// into a [`Tile`]; any other file (parts, printers, levels, edges) is
+/// only decoded.
 ///
 /// # Errors
 /// Every problem found, each at its text.
-pub fn read(sources: &dyn Source, path: &str) -> Result<Tile, Vec<Diag>> {
-    let text = sources
-        .read(path)
-        .map_err(|e| vec![Diag::plain("dt::source", e)])?;
-    let src: Src = Arc::new(NamedSource::new(path, text.clone()));
-    let kdl = parse(&src, &text)?;
-    let mut d = Decoder::default();
-    let mut defs: BTreeMap<String, Vec<Entry>> = BTreeMap::new();
-    for node in kdl.nodes() {
-        if node.name().value() == "use" {
-            d.import(sources, path, &src, node, &mut defs);
-        }
-    }
-    let tiles: Vec<&KdlNode> = kdl
-        .nodes()
-        .iter()
-        .filter(|n| n.name().value() == "tile")
-        .collect();
-    for node in kdl.nodes() {
-        match node.name().value() {
-            "use" | "tile" | "define" => {}
-            other => d.errors.push(
-                Diag::at(
-                    &src,
-                    node.name().span(),
-                    "dt::unknown-node",
-                    format!("unknown top-level node `{other}`"),
-                    "not a tile, use or define",
-                )
-                .maybe_help(
-                    did_you_mean(other, ["tile", "use", "define"])
-                        .map(|w| format!("did you mean `{w}`?")),
-                ),
-            ),
-        }
-    }
-    let tile = match tiles.as_slice() {
-        [one] => Some(d.tile(&src, one, &defs)),
-        [] => {
-            d.errors.push(
-                Diag::plain("dt::no-tile", format!("`{path}` has no `tile` node"))
-                    .help("a tile document has one `tile name size=\"1x1\" { stack { … } }`"),
-            );
-            None
-        }
-        [_, second, ..] => {
-            d.errors.push(Diag::at(
-                &src,
-                second.span(),
-                "dt::two-tiles",
-                "a document holds one tile",
-                "second tile",
-            ));
-            None
-        }
+pub fn read(sources: &dyn Source, path: &str) -> Result<Read, Vec<Diag>> {
+    let mut r = Reader {
+        sources,
+        files: BTreeMap::new(),
+        loading: Vec::new(),
+        errors: Vec::new(),
     };
-    match tile {
-        Some(t) if d.errors.is_empty() => Ok(t),
-        _ => Err(d.errors),
+    let Some(file) = r.load(path, None) else {
+        return Err(r.errors);
+    };
+    let tile = r.tile(&file);
+    if r.errors.is_empty() {
+        Ok(Read { file, tile })
+    } else {
+        Err(r.errors)
     }
 }
 
-fn parse(src: &Src, text: &str) -> Result<KdlDocument, Vec<Diag>> {
-    KdlDocument::parse(text).map_err(|e| {
-        let mut out: Vec<Diag> = Vec::new();
-        for g in &e.diagnostics {
-            // kdl spans run from the node's start to the mistake: point at
-            // the word the mistake ends in.
-            let end = (g.span.offset() + g.span.len()).min(text.len());
-            let (at, word) = word_before(text, end);
-            let d = if numberish(word) {
-                Diag::at(src, SourceSpan::new(at.into(), word.len()), "dt::syntax", format!("`{word}` must be quoted"), "not a KDL number")
-                    .help(if word.ends_with(|c: char| c.is_ascii_alphabetic()) {
-                        format!("sizes are mm and units are not written: write {}", word.trim_end_matches(|c: char| c.is_ascii_alphabetic()))
-                    } else {
-                        format!("ranges and percents are quoted: write \"{word}\"")
-                    })
-            } else {
-                Diag::at(
-                    src,
-                    SourceSpan::new(at.into(), word.len().max(1)),
-                    "dt::syntax",
-                    g.message.clone().unwrap_or_else(|| "this is not valid KDL v2".to_owned()),
-                    g.label.clone().unwrap_or_else(|| "here".to_owned()),
-                )
-                .maybe_help(g.help.clone().or_else(|| Some("tiles are KDL v2: switches are #true/#false, and ranges and percents are quoted".to_owned())))
-            };
-            if !out.iter().any(|o| o.message == d.message && o.at.as_ref().map(|a| a.1) == d.at.as_ref().map(|a| a.1)) {
-                out.push(d);
-            }
-        }
-        out
+/// The printer profile at `path`, for the audit gate.
+///
+/// # Errors
+/// Every problem found; a file with no `printer` is one.
+pub fn printer(sources: &dyn Source, path: &str) -> Result<dt_kit::Printer, Vec<Diag>> {
+    let r = read(sources, path)?;
+    let Some(p) = &r.file.doc.printer else {
+        return Err(vec![
+            Diag::plain("dt::printer", format!("`{path}` has no `printer`"))
+                .help("a printer file holds `printer name { line …; layer …; overhang …; gap … }`"),
+        ]);
+    };
+    Ok(dt_kit::Printer::new(
+        p.line.value,
+        p.layer.value,
+        p.overhang.value,
+        p.gap.value,
+    ))
+}
+
+/// The phase a look not built yet arrives in (plan.html).
+fn phase(look: &str) -> Option<u8> {
+    Some(match look {
+        "dirt" => 2,
+        "rock" | "stone" | "boulder" | "pebble" | "scatter" => 3,
+        "grass" => 4,
+        "wall" | "tree" => 5,
+        "cliff" => 7,
+        _ => return None,
     })
 }
 
-/// The word (no spaces, `=`, braces or quotes) that ends at `end`, and
-/// where it starts.
-fn word_before(text: &str, end: usize) -> (usize, &str) {
-    let stop = |c: char| c.is_whitespace() || "{};=()\"".contains(c);
-    let mut end = end;
-    while end > 0 && !text.is_char_boundary(end) {
-        end -= 1;
-    }
-    let tail_end = text[end..].find(stop).map_or(text.len(), |i| end + i);
-    let start = text[..end].rfind(stop).map_or(0, |i| i + 1);
-    (start, &text[start..tail_end])
+/// "`what` not available yet (Phase N)", at `span`.
+fn not_yet(src: &Src, span: SourceSpan, what: &str, phase: Option<u8>) -> Diag {
+    let when = phase.map_or_else(|| "a later phase".to_owned(), |p| format!("Phase {p}"));
+    Diag::at(
+        src,
+        span,
+        "dt::not-yet",
+        format!("{what} not available yet ({when})"),
+        "not built yet",
+    )
+    .help(format!(
+        "`check` accepts this; `build` needs it, which comes in {when}"
+    ))
 }
 
-/// A number with a unit, `..` or `%` glued on.
-fn numberish(w: &str) -> bool {
-    let body = w.trim_start_matches(['-', '+']);
-    body.starts_with(|c: char| c.is_ascii_digit() || c == '.')
-        && (w.contains("..") || w.ends_with('%') || w.ends_with(|c: char| c.is_ascii_alphabetic()))
+/// A parameter's value and the text it was written in.
+#[derive(Clone)]
+struct Bound {
+    value: Spanned<Value>,
+    src: Src,
 }
 
-#[derive(Default)]
-struct Decoder {
+/// What an inlined definition's entries see.
+#[derive(Clone)]
+struct Scope {
+    file: Arc<File>,
+    params: BTreeMap<String, Bound>,
+    levels: Vec<(String, f64)>,
+    area: Option<Spanned<String>>,
+    seed: Option<u64>,
+    id: Option<String>,
+    depth: usize,
+}
+
+struct Reader<'s> {
+    sources: &'s dyn Source,
+    files: BTreeMap<String, Arc<File>>,
+    loading: Vec<String>,
     errors: Vec<Diag>,
 }
 
-fn value_span(e: &KdlEntry) -> SourceSpan {
-    let s = e.span();
-    let n = e.format().map_or(0, |f| f.value_repr.len()).min(s.len());
-    if n == 0 {
-        return s;
-    }
-    SourceSpan::new((s.offset() + s.len() - n).into(), n)
-}
-
-fn raw(v: &KdlValue) -> Raw {
-    match v {
-        KdlValue::String(s) => Raw::Text(s.clone()),
-        #[allow(clippy::cast_precision_loss)]
-        KdlValue::Integer(i) => Raw::Number(*i as f64),
-        KdlValue::Float(f) => Raw::Number(*f),
-        KdlValue::Bool(b) => Raw::Bool(*b),
-        KdlValue::Null => Raw::Text(String::new()),
-    }
-}
-
-impl Decoder {
-    fn err(
-        &mut self,
-        src: &Src,
-        span: SourceSpan,
-        code: &'static str,
-        msg: impl Into<String>,
-        label: &str,
-        help: Option<String>,
-    ) {
-        self.errors
-            .push(Diag::at(src, span, code, msg, label).maybe_help(help));
-    }
-
-    fn import(
-        &mut self,
-        sources: &dyn Source,
-        from: &str,
-        src: &Src,
-        node: &KdlNode,
-        defs: &mut BTreeMap<String, Vec<Entry>>,
-    ) {
-        let mut args = node.entries().iter().filter(|e| e.name().is_none());
-        let Some(target) = args.next() else {
-            self.err(
-                src,
-                node.span(),
-                "dt::use",
-                "`use` needs a path",
-                "here",
-                Some("use \"lib:parts/grass\" lawn".into()),
-            );
-            return;
+impl Reader<'_> {
+    /// Decode `path` after the files it uses; each file once.
+    fn load(&mut self, path: &str, from: Option<(&Src, SourceSpan)>) -> Option<Arc<File>> {
+        if let Some(f) = self.files.get(path) {
+            return Some(Arc::clone(f));
+        }
+        let at = |code, msg: String, label: &str, help: Option<String>| match from {
+            Some((src, span)) => Diag::at(src, span, code, msg, label).maybe_help(help),
+            None => Diag::plain(code, msg).maybe_help(help),
         };
-        let Some(t) = target.value().as_string() else {
-            self.err(
-                src,
-                value_span(target),
+        if self.loading.iter().any(|p| p == path) {
+            self.errors.push(at(
                 "dt::use",
-                "the path is a string",
-                "not a string",
-                None,
-            );
-            return;
-        };
-        let path = resolve(from, t);
-        let text = match sources.read(&path) {
+                format!("`{path}` uses itself, through {}", self.loading.join(" → ")),
+                "a loop of files",
+                Some("files may use each other, but never round to themselves".into()),
+            ));
+            return None;
+        }
+        let text = match self.sources.read(path) {
             Ok(t) => t,
             Err(e) => {
-                self.err(
-                    src,
-                    value_span(target),
+                self.errors.push(at(
                     "dt::use",
                     e,
-                    "imported here",
-                    Some(
-                        "library paths start with `lib:`; others are relative to this file".into(),
-                    ),
-                );
-                return;
+                    "used here",
+                    from.map(|_| {
+                        "a bare path or `lib:` is the bundled library; `./` and `../` are your project, relative to this file".into()
+                    }),
+                ));
+                return None;
             }
         };
-        let isrc: Src = Arc::new(NamedSource::new(path.clone(), text.clone()));
-        let doc = match parse(&isrc, &text) {
-            Ok(d) => d,
-            Err(e) => {
-                self.errors.extend(e);
-                return;
+        let src: Src = Arc::new(NamedSource::new(path, text.clone()));
+        let uses = match dt_doc::uses(path, &text) {
+            Ok(u) => u,
+            Err(es) => {
+                self.errors.extend(es.iter().map(|e| diag(&src, e)));
+                return None;
             }
         };
-        let mut here: BTreeMap<String, Vec<Entry>> = BTreeMap::new();
-        for d in doc.nodes().iter().filter(|n| n.name().value() == "define") {
-            let Some(name) = d.entries().first().and_then(|e| e.value().as_string()) else {
-                self.err(
-                    &isrc,
-                    d.span(),
-                    "dt::define",
-                    "a definition needs a name",
-                    "here",
-                    None,
-                );
-                continue;
-            };
-            let mut stack = Vec::new();
-            for c in d.children().map(KdlDocument::nodes).unwrap_or_default() {
-                match c.name().value() {
-                    "stack" => stack = self.stack(&isrc, c),
-                    "param" | "about" => self.err(
-                        &isrc,
-                        c.name().span(),
-                        "dt::not-yet",
-                        format!(
-                            "`{}` in definitions comes with the dt-doc rework",
-                            c.name().value()
-                        ),
-                        "not read yet",
-                        None,
-                    ),
-                    other => self.err(
-                        &isrc,
-                        c.name().span(),
-                        "dt::unknown-node",
-                        format!("unknown node `{other}` in a definition"),
+        let mut known = Known::standard();
+        let mut ok = true;
+        self.loading.push(path.to_owned());
+        for u in &uses {
+            match self.load(&use_path(path, u), Some((&src, u.path.span))) {
+                Some(f) => known.add(u.key(), &f.doc),
+                None => ok = false,
+            }
+        }
+        self.loading.pop();
+        if !ok {
+            return None;
+        }
+        match dt_doc::decode(path, &text, &known) {
+            Ok(doc) => {
+                let f = Arc::new(File {
+                    path: path.to_owned(),
+                    src,
+                    doc,
+                });
+                self.files.insert(path.to_owned(), Arc::clone(&f));
+                Some(f)
+            }
+            Err(es) => {
+                self.errors.extend(es.iter().map(|e| diag(&src, e)));
+                None
+            }
+        }
+    }
+
+    /// dt-doc's standard levels (the prelude) in mm.
+    fn standard(&mut self) -> Vec<(String, f64)> {
+        let mut out: Vec<(String, f64)> = Vec::new();
+        for (name, v) in Known::standard().levels() {
+            match number(&out, v) {
+                Ok(mm) => {
+                    out.retain(|(n, _)| n != name);
+                    out.push((name.clone(), mm));
+                }
+                Err(msg) => {
+                    let prelude: Src = Arc::new(NamedSource::new(PRELUDE_NAME, PRELUDE.to_owned()));
+                    self.errors.push(Diag::at(
+                        &prelude,
+                        SourceSpan::new(0.into(), 0),
+                        "dt::levels",
+                        format!("standard level `{name}`: {msg}"),
                         "here",
-                        None,
-                    ),
+                    ));
                 }
             }
-            here.insert(name.to_owned(), stack);
-        }
-        for want in args {
-            let Some(n) = want.value().as_string() else {
-                continue;
-            };
-            match here.remove(n) {
-                Some(stack) => {
-                    defs.insert(n.to_owned(), stack);
-                }
-                None => self.err(
-                    src,
-                    value_span(want),
-                    "dt::use",
-                    format!("`{path}` defines no `{n}`"),
-                    "not defined there",
-                    did_you_mean(n, here.keys().map(String::as_str))
-                        .map(|w| format!("did you mean `{w}`?")),
-                ),
-            }
-        }
-    }
-
-    fn tile(&mut self, src: &Src, node: &KdlNode, defs: &BTreeMap<String, Vec<Entry>>) -> Tile {
-        let mut t = Tile {
-            name: String::new(),
-            cols: 1,
-            rows: 1,
-            seed: 1,
-            levels: STANDARD_LEVELS
-                .iter()
-                .map(|(n, v)| ((*n).to_owned(), *v))
-                .collect(),
-            lines: BTreeMap::new(),
-            regions: Vec::new(),
-            stack: Vec::new(),
-            src: Arc::clone(src),
-        };
-        for e in node.entries() {
-            match (e.name().map(kdl::KdlIdentifier::value), e.value()) {
-                (None, KdlValue::String(s)) if t.name.is_empty() => t.name.clone_from(s),
-                (Some("size"), KdlValue::String(s)) => match s
-                    .split_once('x')
-                    .and_then(|(a, b)| Some((a.trim().parse().ok()?, b.trim().parse().ok()?)))
-                {
-                    Some((c, r)) if c > 0 && r > 0 => (t.cols, t.rows) = (c, r),
-                    _ => self.err(
-                        src,
-                        value_span(e),
-                        "dt::size",
-                        format!("`{s}` is not a size"),
-                        "columns x rows",
-                        Some("write size=\"2x1\": columns first".into()),
-                    ),
-                },
-                (Some("seed"), KdlValue::Integer(i)) if *i >= 0 => {
-                    t.seed = u64::try_from(*i).unwrap_or(u64::MAX)
-                }
-                (Some(k), _) => self.err(
-                    src,
-                    e.span(),
-                    "dt::tile",
-                    format!("a tile has no `{k}`"),
-                    "not a tile property",
-                    did_you_mean(k, ["size", "seed"])
-                        .map(|w| format!("did you mean `{w}`?"))
-                        .or_else(|| Some("a tile takes size=\"CxR\" and seed=N".into())),
-                ),
-                _ => self.err(
-                    src,
-                    e.span(),
-                    "dt::tile",
-                    "unexpected value on the tile line",
-                    "here",
-                    Some("tile name size=\"1x1\" seed=1 { … }".into()),
-                ),
-            }
-        }
-        if t.name.is_empty() {
-            self.err(
-                src,
-                node.name().span(),
-                "dt::tile",
-                "a tile needs a name",
-                "here",
-                Some("tile flat size=\"1x1\" { … }".into()),
-            );
-        }
-        let mut stacks = 0;
-        for c in node.children().map(KdlDocument::nodes).unwrap_or_default() {
-            match c.name().value() {
-                "about" => {}
-                "levels" => {
-                    for e in c.entries() {
-                        match (e.name(), raw(e.value())) {
-                            (Some(n), Raw::Number(v)) => {
-                                t.levels.retain(|(k, _)| k != n.value());
-                                t.levels.push((n.value().to_owned(), v));
-                            }
-                            _ => self.err(
-                                src,
-                                e.span(),
-                                "dt::levels",
-                                "a level is name=mm",
-                                "here",
-                                Some("levels foot=4".into()),
-                            ),
-                        }
-                    }
-                }
-                "line" => {
-                    if let Some((name, pts)) = self.line(src, c) {
-                        t.lines.insert(name, pts);
-                    }
-                }
-                "region" => {
-                    if let Some(r) = self.region(src, c) {
-                        t.regions.push(r);
-                    }
-                }
-                "stack" => {
-                    stacks += 1;
-                    for e in self.stack(src, c) {
-                        match defs.get(&e.what.value) {
-                            Some(def) if e.controls.is_empty() => {
-                                t.stack.extend(def.iter().cloned().map(|mut d| {
-                                    if d.area.is_none() {
-                                        d.area.clone_from(&e.area);
-                                    }
-                                    d
-                                }))
-                            }
-                            Some(_) => self.err(
-                                src,
-                                e.span,
-                                "dt::not-yet",
-                                "setting a definition's params comes with the dt-doc rework",
-                                "params given",
-                                None,
-                            ),
-                            None => t.stack.push(e),
-                        }
-                    }
-                }
-                other => self.err(
-                    src,
-                    c.name().span(),
-                    "dt::unknown-node",
-                    format!("a tile has no `{other}` node"),
-                    "not part of a tile",
-                    did_you_mean(other, ["about", "levels", "line", "region", "stack"])
-                        .map(|w| format!("did you mean `{w}`?"))
-                        .or_else(|| {
-                            Some("a tile holds about, levels, line, region and one stack".into())
-                        }),
-                ),
-            }
-        }
-        if stacks != 1 {
-            self.err(
-                src,
-                node.span(),
-                "dt::stack",
-                "a tile has exactly one `stack`",
-                "this tile",
-                Some("tile flat { stack { ground } }".into()),
-            );
-        }
-        for r in &t.regions {
-            for l in &r.bounded_by {
-                if !t.lines.contains_key(&l.value) {
-                    self.errors.push(
-                        Diag::at(
-                            src,
-                            l.span,
-                            "dt::unknown-line",
-                            format!("no line named `{}`", l.value),
-                            "not drawn",
-                        )
-                        .maybe_help(
-                            did_you_mean(&l.value, t.lines.keys().map(String::as_str))
-                                .map(|w| format!("did you mean `{w}`?")),
-                        ),
-                    );
-                }
-            }
-        }
-        t
-    }
-
-    fn stack(&mut self, src: &Src, node: &KdlNode) -> Vec<Entry> {
-        let mut out = Vec::new();
-        for c in node.children().map(KdlDocument::nodes).unwrap_or_default() {
-            let mut e = Entry {
-                what: Spanned {
-                    value: c.name().value().to_owned(),
-                    span: c.name().span(),
-                },
-                area: None,
-                seed: None,
-                controls: Vec::new(),
-                src: Arc::clone(src),
-                span: c.span(),
-            };
-            for p in c.entries() {
-                let Some(name) = p.name() else {
-                    self.err(
-                        src,
-                        p.span(),
-                        "dt::control",
-                        "a control is name=value",
-                        "a bare value",
-                        Some(format!(
-                            "write {} level=5, or a child line `level 5`",
-                            e.what.value
-                        )),
-                    );
-                    continue;
-                };
-                let value = Spanned {
-                    value: raw(p.value()),
-                    span: value_span(p),
-                };
-                self.control(
-                    &mut e,
-                    Spanned {
-                        value: name.value().to_owned(),
-                        span: name.span(),
-                    },
-                    value,
-                );
-            }
-            for g in c.children().map(KdlDocument::nodes).unwrap_or_default() {
-                let args: Vec<&KdlEntry> = g.entries().iter().collect();
-                match args.as_slice() {
-                    [a] if a.name().is_none() => {
-                        let value = Spanned {
-                            value: raw(a.value()),
-                            span: value_span(a),
-                        };
-                        self.control(
-                            &mut e,
-                            Spanned {
-                                value: g.name().value().to_owned(),
-                                span: g.name().span(),
-                            },
-                            value,
-                        );
-                    }
-                    _ => self.err(
-                        src,
-                        g.span(),
-                        "dt::not-yet",
-                        format!(
-                            "the group `{}` comes with the looks that take it",
-                            g.name().value()
-                        ),
-                        "not read yet",
-                        None,
-                    ),
-                }
-            }
-            out.push(e);
         }
         out
     }
 
-    fn control(&mut self, e: &mut Entry, name: Spanned<String>, value: Spanned<Raw>) {
-        match (name.value.as_str(), &value.value) {
-            ("in", Raw::Text(r)) => {
-                e.area = Some(Spanned {
-                    value: r.clone(),
-                    span: value.span,
-                })
+    /// `levels` on top of `base`, each resolved against those before it.
+    fn levels<'a>(
+        &mut self,
+        src: &Src,
+        base: &[(String, f64)],
+        levels: impl IntoIterator<Item = &'a model::Level>,
+    ) -> Vec<(String, f64)> {
+        let mut out = base.to_vec();
+        for l in levels {
+            match number(&out, &l.value.value) {
+                Ok(mm) => {
+                    out.retain(|(n, _)| *n != l.name.value);
+                    out.push((l.name.value.clone(), mm));
+                }
+                Err(msg) => self.errors.push(Diag::at(
+                    src,
+                    l.value.span,
+                    "dt::levels",
+                    msg,
+                    "not one number",
+                )),
             }
-            ("seed", Raw::Number(n)) if *n >= 0.0 && n.fract() == 0.0 => {
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let s = *n as u64;
-                e.seed = Some(s);
+        }
+        out
+    }
+
+    fn tile(&mut self, file: &Arc<File>) -> Option<Tile> {
+        let def = file.doc.tile()?;
+        let header = def.header()?;
+        let src = &file.src;
+        let standard = self.standard();
+        let levels = self.levels(src, &standard, file.doc.levels.iter().chain(&def.levels));
+        let seed = match header.seed {
+            None => 1,
+            Some(s) => u64::try_from(s).unwrap_or_else(|_| {
+                self.errors.push(Diag::at(
+                    src,
+                    def.name.span,
+                    "dt::seed",
+                    format!("a tile seed is a whole number from 0, not {s}"),
+                    "this tile",
+                ));
+                1
+            }),
+        };
+        let mut t = Tile {
+            name: def.name.value.clone(),
+            cols: header.cols,
+            rows: header.rows,
+            seed,
+            edges: self.edges(&standard),
+            levels,
+            lines: BTreeMap::new(),
+            regions: Vec::new(),
+            stack: Vec::new(),
+            pending: Vec::new(),
+            src: Arc::clone(src),
+        };
+        let (cols, rows) = (f64::from(t.cols), f64::from(t.rows));
+        for l in &def.lines {
+            if let Some(w) = l.width.as_ref().or(l.wobble.as_ref()) {
+                t.pending.push(not_yet(
+                    src,
+                    w.span,
+                    "a line's width and wobble are",
+                    Some(4),
+                ));
             }
-            ("in" | "seed", _) => self.err(
-                &e.src,
-                value.span,
-                "dt::place",
-                format!(
-                    "`{}` takes a {}",
-                    name.value,
-                    if name.value == "in" {
-                        "region name"
-                    } else {
-                        "whole number"
+            let mut pts = Vec::new();
+            for p in &l.through {
+                match fixed_point(&p.value, cols, rows) {
+                    Some(xy) => pts.push(xy),
+                    None => {
+                        t.pending
+                            .push(not_yet(src, p.span, "a point drawn from a range is", None))
                     }
-                ),
-                "here",
-                None,
-            ),
-            _ => e.controls.push((name, value)),
+                }
+            }
+            t.lines.insert(l.name.value.clone(), pts);
+        }
+        for r in &def.regions {
+            let mut fills = Vec::new();
+            for p in &r.fills {
+                match fixed_point(&p.value, cols, rows) {
+                    Some(xy) => fills.push(xy),
+                    None => t.pending.push(not_yet(
+                        src,
+                        p.span,
+                        "a fill point drawn from a range is",
+                        None,
+                    )),
+                }
+            }
+            t.regions.push(Region {
+                name: r.name.value.clone(),
+                bounded_by: r.bounded_by.clone(),
+                fills,
+            });
+        }
+        let scope = Scope {
+            file: Arc::clone(file),
+            params: BTreeMap::new(),
+            levels: t.levels.clone(),
+            area: None,
+            seed: None,
+            id: None,
+            depth: 0,
+        };
+        let mut stack = Vec::new();
+        let mut pending = Vec::new();
+        self.expand(&def.stack, &scope, &mut stack, &mut pending);
+        t.stack = stack;
+        t.pending.extend(pending);
+        Some(t)
+    }
+
+    /// The edge contract, levels in mm.
+    fn edges(&mut self, standard: &[(String, f64)]) -> Vec<(String, f64)> {
+        let Some(f) = self.load(EDGES, None) else {
+            return Vec::new();
+        };
+        let Some(edges) = &f.doc.edges else {
+            self.errors.push(Diag::plain(
+                "dt::edges",
+                format!("`{EDGES}` holds no `edges` contract"),
+            ));
+            return Vec::new();
+        };
+        let levels = self.levels(&f.src, standard, &f.doc.levels);
+        let mut out = Vec::new();
+        for r in &edges.rules {
+            match number(&levels, &r.level.value) {
+                Ok(mm) => out.push((r.surface.value.clone(), mm)),
+                Err(msg) => self.errors.push(Diag::at(
+                    &f.src,
+                    r.level.span,
+                    "dt::edges",
+                    msg,
+                    "not one level",
+                )),
+            }
+        }
+        out
+    }
+
+    /// Inline `entries` into `out`: built looks become [`Entry`]s, what
+    /// is not built yet goes to `pending`.
+    fn expand(
+        &mut self,
+        entries: &[model::Entry],
+        scope: &Scope,
+        out: &mut Vec<Entry>,
+        pending: &mut Vec<Diag>,
+    ) {
+        let src = &scope.file.src;
+        for e in entries {
+            let area = e.place.region.clone().or_else(|| scope.area.clone());
+            let seed = match &e.place.seed {
+                Some(s) => {
+                    if let Ok(v) = u64::try_from(s.value) {
+                        Some(v)
+                    } else {
+                        self.errors.push(Diag::at(
+                            src,
+                            s.span,
+                            "dt::seed",
+                            "a seed is a whole number from 0",
+                            "negative",
+                        ));
+                        None
+                    }
+                }
+                None => scope.seed,
+            };
+            let id = e
+                .place
+                .id
+                .as_ref()
+                .map(|i| i.value.clone())
+                .or_else(|| scope.id.clone());
+            match &e.callee {
+                Callee::Look(look) => {
+                    let Some(takes) = dt_looks::takes(look.name) else {
+                        pending.push(not_yet(
+                            src,
+                            e.what.span,
+                            &format!("look `{}`", look.name),
+                            phase(look.name),
+                        ));
+                        continue;
+                    };
+                    let mut ok = true;
+                    for (word, span) in [
+                        ("along=", e.place.along.as_ref().map(|s| s.span)),
+                        ("side=", e.place.side.as_ref().map(|s| s.span)),
+                        ("at=", e.place.at.as_ref().map(|s| s.span)),
+                        ("against=", e.place.against.as_ref().map(|s| s.span)),
+                    ] {
+                        if let Some(span) = span {
+                            ok = false;
+                            pending.push(not_yet(
+                                src,
+                                span,
+                                &format!("`{word}` on `{}` is", look.name),
+                                None,
+                            ));
+                        }
+                    }
+                    for c in &e.children {
+                        ok = false;
+                        pending.push(not_yet(
+                            src,
+                            c.what.span,
+                            &format!("`{}` inside `{}` is", c.what.value, look.name),
+                            phase(&c.what.value).or(Some(3)),
+                        ));
+                    }
+                    let controls = self.controls(e, look, takes, scope, pending);
+                    if ok && let Some(controls) = controls {
+                        out.push(Entry {
+                            what: e.what.clone(),
+                            area,
+                            seed,
+                            id,
+                            controls,
+                            src: Arc::clone(src),
+                            span: e.span,
+                        });
+                    }
+                }
+                Callee::Definition(name) => {
+                    let Some((file, def)) = self.definition(&scope.file, name) else {
+                        self.errors.push(Diag::at(
+                            src,
+                            e.what.span,
+                            "dt::unknown-name",
+                            format!("cannot find the definition `{name}`"),
+                            "not loaded",
+                        ));
+                        continue;
+                    };
+                    if scope.depth > 64 {
+                        self.errors.push(Diag::at(
+                            src,
+                            e.what.span,
+                            "dt::loop",
+                            "definitions call each other too deeply",
+                            "here",
+                        ));
+                        continue;
+                    }
+                    let mut params = BTreeMap::new();
+                    for p in &def.params {
+                        let arg = e
+                            .control(&p.name.value)
+                            .and_then(|s| s.value.as_ref())
+                            .map(|v| bind(v, src, scope))
+                            .or_else(|| {
+                                p.default.as_ref().map(|v| Bound {
+                                    value: v.clone(),
+                                    src: Arc::clone(&file.src),
+                                })
+                            });
+                        if let Some(a) = arg {
+                            params.insert(p.name.value.clone(), a);
+                        }
+                    }
+                    let levels = self.levels(
+                        &file.src,
+                        &scope.levels,
+                        file.doc.levels.iter().chain(&def.levels),
+                    );
+                    let inner = Scope {
+                        file: Arc::clone(&file),
+                        params,
+                        levels,
+                        area,
+                        seed,
+                        id,
+                        depth: scope.depth + 1,
+                    };
+                    self.expand(&def.stack, &inner, out, pending);
+                }
+            }
         }
     }
 
-    fn line(&mut self, src: &Src, node: &KdlNode) -> Option<(String, Vec<At>)> {
-        let name = node
-            .entries()
-            .first()
-            .and_then(|e| e.value().as_string())?
-            .to_owned();
-        if let Some(p) = node.entries().iter().find(|e| e.name().is_some()) {
-            self.err(
-                src,
-                p.span(),
-                "dt::not-yet",
-                "line width, wobble and side come with the looks that use them",
-                "not read yet",
-                None,
-            );
+    /// The definition `name` as `file` sees it: its own, or one it uses.
+    fn definition(&self, file: &Arc<File>, name: &str) -> Option<(Arc<File>, Definition)> {
+        if let Some(d) = file.doc.definition(name)
+            && d.header().is_none()
+        {
+            return Some((Arc::clone(file), d.clone()));
         }
-        let mut pts = Vec::new();
-        for c in node.children().map(KdlDocument::nodes).unwrap_or_default() {
-            if c.name().value() != "through" {
-                self.err(
+        file.doc
+            .uses
+            .iter()
+            .filter(|u| u.names.iter().any(|n| n.value == name))
+            .find_map(|u| {
+                let f = self.files.get(&use_path(&file.path, u))?;
+                let d = f.doc.definition(name)?.clone();
+                Some((Arc::clone(f), d))
+            })
+    }
+
+    /// The controls a built look takes, as written or by default; `None`
+    /// when one cannot be given yet (it is in `pending`).
+    fn controls(
+        &mut self,
+        e: &model::Entry,
+        look: &'static Look,
+        takes: &[&str],
+        scope: &Scope,
+        pending: &mut Vec<Diag>,
+    ) -> Option<Vec<Setting>> {
+        let src = &scope.file.src;
+        let mut out = Vec::new();
+        let mut ok = true;
+        for s in &e.controls {
+            let Some(v) = &s.value else {
+                ok = false;
+                pending.push(not_yet(
                     src,
-                    c.name().span(),
-                    "dt::line",
-                    format!("a line holds `through`, not `{}`", c.name().value()),
-                    "here",
+                    s.name.span,
+                    &format!("the group `{}` on `{}` is", s.name.value, look.name),
                     None,
-                );
+                ));
+                continue;
+            };
+            if let Some(sub) = s.subs.first() {
+                ok = false;
+                pending.push(not_yet(
+                    src,
+                    sub.name.span,
+                    &format!("sub-controls of `{}` are", s.name.value),
+                    phase_of_control(look.name, &s.name.value),
+                ));
                 continue;
             }
-            for e in c.entries() {
-                match e.value().as_string().and_then(point) {
-                    Some(p) => pts.push(p),
-                    None => self.err(src, value_span(e), "dt::point", "not a point", "here",
-                        Some("a point is \"x,y\" in squares from the south-west corner, or north, south-east, …".into())),
-                }
-            }
-        }
-        if pts.len() < 2 {
-            self.err(
-                src,
-                node.span(),
-                "dt::line",
-                "a line goes through at least two points",
-                "this line",
-                Some("line edge { through west east }".into()),
-            );
-            return None;
-        }
-        Some((name, pts))
-    }
-
-    fn region(&mut self, src: &Src, node: &KdlNode) -> Option<Region> {
-        let name = node
-            .entries()
-            .first()
-            .and_then(|e| e.value().as_string())?
-            .to_owned();
-        let mut r = Region {
-            name,
-            bounded_by: Vec::new(),
-            fills: Vec::new(),
-        };
-        for c in node.children().map(KdlDocument::nodes).unwrap_or_default() {
-            for e in c.entries() {
-                let Some(s) = e.value().as_string() else {
+            let b = bind(v, src, scope);
+            let value = match value(&b, &scope.levels) {
+                Ok(v) => v,
+                Err(why) => {
+                    ok = false;
+                    pending.push(*why);
                     continue;
-                };
-                match c.name().value() {
-                    "bounded-by" => r.bounded_by.push(Spanned {
-                        value: s.to_owned(),
-                        span: value_span(e),
-                    }),
-                    "fill" => match point(s) {
-                        Some(p) => r.fills.push(p),
-                        None => self.err(
-                            src,
-                            value_span(e),
-                            "dt::point",
-                            "not a point",
-                            "here",
-                            Some("fill \"0.25,0.5\"".into()),
-                        ),
-                    },
-                    other => self.err(
-                        src,
-                        c.name().span(),
-                        "dt::region",
-                        format!("a region holds bounded-by and fill, not `{other}`"),
-                        "here",
-                        None,
-                    ),
                 }
+            };
+            if !takes.contains(&s.name.value.as_str()) {
+                // a control written at its default changes nothing
+                let default = s.control.and_then(|c| default_value(c, &scope.levels));
+                if default.as_ref() != Some(&value) {
+                    ok = false;
+                    pending.push(not_yet(
+                        src,
+                        s.span,
+                        &format!("`{}`'s `{}` is", look.name, s.name.value),
+                        phase_of_control(look.name, &s.name.value),
+                    ));
+                }
+                continue;
+            }
+            out.push(Setting {
+                name: s.name.value.clone(),
+                value,
+                span: b.value.span,
+                src: Arc::clone(&b.src),
+            });
+        }
+        for c in look.controls {
+            if takes.contains(&c.name)
+                && e.control(c.name).is_none()
+                && let Some(value) = default_value(c, &scope.levels)
+            {
+                out.push(Setting {
+                    name: c.name.to_owned(),
+                    value,
+                    span: e.what.span,
+                    src: Arc::clone(src),
+                });
             }
         }
-        if r.fills.is_empty() {
-            self.err(
-                src,
-                node.span(),
-                "dt::region",
-                "a region needs a fill point",
-                "this region",
-                Some("fill \"0.5,0.25\"".into()),
-            );
-        }
-        Some(r)
+        ok.then_some(out)
     }
 }
 
-/// A point as written.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum At {
-    /// `"x,y"`: squares from the south-west corner, y north.
-    Squares([f64; 2]),
-    /// An edge or corner word: a fraction of the tile (`north` is the
-    /// middle of the north edge).
-    OfTile([f64; 2]),
-}
-
-impl At {
-    /// In squares on a `cols` × `rows` tile.
-    #[must_use]
-    pub fn squares(self, cols: u32, rows: u32) -> [f64; 2] {
-        match self {
-            Self::Squares(p) => p,
-            Self::OfTile(f) => [f[0] * f64::from(cols), f[1] * f64::from(rows)],
-        }
+/// The phase a control of a built look arrives in.
+fn phase_of_control(look: &str, control: &str) -> Option<u8> {
+    match (look, control) {
+        ("ground", "bumps" | "bump-size") => Some(2),
+        _ => None,
     }
 }
 
-/// `"x,y"` in squares, or an edge or corner word.
-fn point(s: &str) -> Option<At> {
-    let word = match s {
-        "south-west" => [0.0, 0.0],
-        "south" => [0.5, 0.0],
-        "south-east" => [1.0, 0.0],
-        "east" => [1.0, 0.5],
-        "north-east" => [1.0, 1.0],
-        "north" => [0.5, 1.0],
-        "north-west" => [0.0, 1.0],
-        "west" => [0.0, 0.5],
-        _ => {
-            let (a, b) = s.split_once(',')?;
-            return Some(At::Squares([
-                a.trim().parse().ok()?,
-                b.trim().parse().ok()?,
-            ]));
-        }
+/// A written value for a built look: one number in mm, or a word.
+fn value(b: &Bound, levels: &[(String, f64)]) -> Result<dt_looks::Value, Box<Diag>> {
+    let at = |msg: String| Box::new(Diag::at(&b.src, b.value.span, "dt::value", msg, "here"));
+    match &b.value.value {
+        Value::Num(n) if n.expr.is_range() => Err(Box::new(not_yet(
+            &b.src,
+            b.value.span,
+            "a range here is",
+            Some(2),
+        ))),
+        Value::Num(n) => number(levels, n).map(dt_looks::Value::Number).map_err(at),
+        Value::Word(w) => Ok(dt_looks::Value::Word(w.word.to_owned())),
+        Value::Bool(v) => Ok(dt_looks::Value::Word(
+            if *v { "#true" } else { "#false" }.to_owned(),
+        )),
+        Value::Tag(t) | Value::Text(t) => Ok(dt_looks::Value::Word(t.clone())),
+        Value::Param(p) => Err(at(format!("the parameter `{p}` has no value here"))),
+    }
+}
+
+/// `v` with a parameter replaced by what the caller bound to it.
+fn bind(v: &Spanned<Value>, src: &Src, scope: &Scope) -> Bound {
+    if let Value::Param(p) = &v.value
+        && let Some(b) = scope.params.get(p)
+    {
+        return b.clone();
+    }
+    Bound {
+        value: v.clone(),
+        src: Arc::clone(src),
+    }
+}
+
+/// One number, mm at the reference; names are levels (the last wins).
+fn number(levels: &[(String, f64)], n: &Num) -> Result<f64, String> {
+    if n.expr.is_range() {
+        return Err(format!(
+            "`{}` is a range; one number is needed here",
+            n.expr
+        ));
+    }
+    let env = |name: &str| {
+        levels
+            .iter()
+            .rev()
+            .find(|(k, _)| k == name)
+            .map(|(_, v)| *v)
     };
-    Some(At::OfTile(word))
+    n.sample(&env, 0.0)
+}
+
+/// A control's schema default, resolved; `None` without one (or for a
+/// range, which no built look takes yet).
+fn default_value(c: &'static Control, levels: &[(String, f64)]) -> Option<dt_looks::Value> {
+    if c.default.is_empty() {
+        return None;
+    }
+    if let Some(w) = c.word(c.default) {
+        return Some(dt_looks::Value::Word(w.word.to_owned()));
+    }
+    let expr = dt_doc::expr::parse(c.default).ok()?;
+    let n = Num { expr, unit: None };
+    number(levels, &n).ok().map(dt_looks::Value::Number)
+}
+
+/// A point in squares, if it is not drawn from a range.
+fn fixed_point(p: &dt_doc::place::Point, cols: f64, rows: f64) -> Option<[f64; 2]> {
+    if p.is_range() {
+        return None;
+    }
+    let ((x, _), (y, _)) = p.bounds(cols, rows).ok()?;
+    Some([x, y])
 }

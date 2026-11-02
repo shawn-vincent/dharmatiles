@@ -15,29 +15,41 @@ use rayon::prelude::*;
 
 use crate::shape::signed_volume;
 
-/// The printer profile the gate checks against (library/printers/default
-/// will carry these; P1 uses the defaults).
+/// The printer profile the gate checks against: the numbers of a
+/// `printer` in library/printers/*.kdl (dt-eval decodes it with dt-doc
+/// and calls [`Printer::new`]), plus the gate's own tuning, which no
+/// profile sets.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Printer {
-    /// No layer may reach past this cone from vertical (rockpile `OVERHANG_DEG`).
+    /// No layer may reach past this cone from vertical (the profile's
+    /// `overhang`; rockpile `OVERHANG_DEG`).
     pub overhang_deg: f64,
-    /// Layer height, mm.
+    /// Layer height, mm (the profile's `layer`).
     pub layer_mm: f64,
-    /// One layer may reach this far out over the one below (≈ a line), mm.
+    /// One extruded line, mm (the profile's `line`).
+    pub line_mm: f64,
+    /// The narrowest gap that stays open, mm (the profile's `gap`).
+    pub gap_mm: f64,
+    /// Gate tuning: one layer may reach this far out over the one below,
+    /// mm (rockpile's 0.6).
     pub reach_mm: f64,
-    /// How many mm of layers below are compared.
+    /// Gate tuning: how many mm of layers below are compared.
     pub span_mm: f64,
-    /// Vertical-ray spacing for the slice, mm.
+    /// Gate tuning: vertical-ray spacing for the slice, mm.
     pub grid_mm: f64,
-    /// Overhang the gate accepts, mm².
+    /// Gate tuning: overhang the gate accepts, mm².
     pub overhang_budget_mm2: f64,
 }
 
-impl Default for Printer {
-    fn default() -> Self {
+impl Printer {
+    /// A printer profile's four numbers, with the gate's fixed tuning.
+    #[must_use]
+    pub fn new(line_mm: f64, layer_mm: f64, overhang_deg: f64, gap_mm: f64) -> Self {
         Self {
-            overhang_deg: 55.0,
-            layer_mm: 0.2,
+            overhang_deg,
+            layer_mm,
+            line_mm,
+            gap_mm,
             reach_mm: 0.6,
             span_mm: 3.0,
             grid_mm: 0.1,
@@ -620,15 +632,20 @@ mod tests {
         }
     }
 
+    /// library/printers/default.kdl's numbers.
+    fn fdm() -> Printer {
+        Printer::new(0.45, 0.2, 55.0, 0.2)
+    }
+
     #[test]
     fn a_flat_slab_passes() {
         let m = lift(&Grid::new(21, 21, 0.5, 2.0)).unwrap();
-        let (e, a) = audit(&m, [10.0, 10.0], &Printer::default());
+        let (e, a) = audit(&m, [10.0, 10.0], &fdm());
         assert!(a.watertight);
         assert_eq!((a.bodies, a.holes), (1, 0));
         assert!(a.overhang_mm2 == 0.0, "{}", a.overhang_mm2);
         assert_eq!(e.mesh.triangles.len(), m.triangles.len());
-        assert!(a.failures(&Printer::default()).is_empty());
+        assert!(a.failures(&fdm()).is_empty());
     }
 
     #[test]
@@ -643,11 +660,11 @@ mod tests {
             m.triangles
                 .extend(extra.triangles.iter().map(|t| t.map(|i| i + base)));
         }
-        let (_, a) = audit(&m, [10.0, 10.0], &Printer::default());
+        let (_, a) = audit(&m, [10.0, 10.0], &fdm());
         // post and shelf touch only face to face, so they are two bodies here
         assert_eq!(a.bodies, 3);
         assert_eq!(a.dropped.len(), 2);
-        let (_, b) = audit(&shelf_on_post(), [10.0, 10.0], &Printer::default());
+        let (_, b) = audit(&shelf_on_post(), [10.0, 10.0], &fdm());
         // rockpile.audit_overhang gives 8.0 mm² on this shelf (4 × 2 mm underside)
         assert!(
             (b.overhang_mm2 - 8.0).abs() < 1e-9,

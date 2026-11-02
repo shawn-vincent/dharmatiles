@@ -16,6 +16,7 @@ manifold-rust = ["dt-kit/manifold-rust", "dt-looks/manifold-rust"]
 manifold-parallel = ["dt-kit/manifold-parallel", "dt-looks/manifold-parallel"]
 
 [dependencies]
+dt-doc.workspace = true
 dt-kit.workspace = true
 dt-looks.workspace = true
 kdl.workspace = true

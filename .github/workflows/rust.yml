@@ -71,6 +71,19 @@ jobs:
       - run: cargo test -p dt-eval --test golden -- --nocapture --test-threads 1
       # The parity harness's Rust half (no Python on CI runners).
       - run: cargo xtask parity flat --no-python --dev
+      # The parity renders and build records, per OS (no STLs).  With
+      # --no-python the Python half doesn't run, so there is no
+      # contact-sheet.png; it is listed for when there is one.
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-flat-${{ matrix.os }}
+          path: |
+            out/parity/flat/contact-sheet.png
+            out/parity/flat/rust/**/*.png
+            out/parity/flat/rust/**/*.build.json
+          retention-days: 14
+          if-no-files-found: error
 
   wasm:
     runs-on: ubuntu-latest

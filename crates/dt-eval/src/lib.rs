@@ -6,8 +6,9 @@
 //! one public call every front end uses: [`build`] this document for this
 //! system. [`check`] does the plan pass only (no geometry).
 //!
-//! The document is read through [`doc`], a thin adapter (see its module
-//! docs) until the reworked dt-doc lands.
+//! Documents are read by dt-doc, through [`doc`]: imports, levels,
+//! definitions and defaults resolved, the edge contract read, and what
+//! needs a look not built yet set aside (see its module docs).
 
 pub mod diag;
 pub mod doc;
@@ -17,12 +18,12 @@ pub mod source;
 use std::path::{Path, PathBuf};
 
 use dt_kit::{Audit, BuildRecord, Export, Frame, Mask, Material, Printer, Scene, Seed, Stage};
-use dt_looks::{Control, Ctx, Look, Value};
+use dt_looks::{Control, Ctx, Look};
 
 pub use diag::Diag;
 pub use source::{Files, LIB, Library, Memory, Source};
 
-use crate::doc::{Raw, Tile};
+use crate::doc::Tile;
 use crate::plan::{Refusal, Step};
 
 /// A project: the folder holding `dharmatiles.kdl` (or the start folder
@@ -73,11 +74,18 @@ pub struct Options {
 }
 
 impl Default for Options {
+    /// DungeonBlocks, the tile's seed, and the library's default printer
+    /// (library/printers/default.kdl).
+    ///
+    /// # Panics
+    /// If the bundled printer profile doesn't decode (a test guards this).
     fn default() -> Self {
+        let printer = doc::printer(&Library, doc::PRINTER)
+            .unwrap_or_else(|e| panic!("the bundled printer must decode: {e:?}"));
         Self {
             system: "db".to_owned(),
             seed: None,
-            printer: Printer::default(),
+            printer,
             engine: concat!("dt-eval-", env!("CARGO_PKG_VERSION")).to_owned(),
         }
     }
@@ -104,9 +112,12 @@ pub struct Built {
 
 /// The plan of a document, without geometry.
 pub struct Checked {
-    /// The tile as read.
-    pub tile: Tile,
-    /// Its build order.
+    /// The file as dt-doc decoded it.
+    pub file: std::sync::Arc<doc::File>,
+    /// Its tile as read, if it has one (a parts, printer or levels file
+    /// has none: it is only decoded).
+    pub tile: Option<Tile>,
+    /// The tile's build order.
     pub steps: Vec<Step>,
     looks: Vec<Box<dyn Look>>,
     areas: Vec<Mask>,
@@ -114,40 +125,58 @@ pub struct Checked {
     seed: u64,
 }
 
+impl Checked {
+    /// What the tile asks for that is not built yet (check accepts it,
+    /// build refuses it).
+    #[must_use]
+    pub fn pending(&self) -> &[Diag] {
+        self.tile.as_ref().map_or(&[], |t| t.pending.as_slice())
+    }
+}
+
 /// **check**: read `path` and plan it (no geometry).
 ///
 /// # Errors
 /// Every problem found, each at its text.
 pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked, Vec<Diag>> {
-    let tile = doc::read(sources, path)?;
+    let read = doc::read(sources, path)?;
+    let Some(tile) = read.tile else {
+        return Ok(Checked {
+            file: read.file,
+            tile: None,
+            steps: Vec::new(),
+            looks: Vec::new(),
+            areas: Vec::new(),
+            frame: Frame::dungeonblocks(1, 1),
+            seed: 0,
+        });
+    };
     let frame = Frame::dungeonblocks(tile.cols, tile.rows);
     let mut errors = Vec::new();
     let mut looks: Vec<Box<dyn Look>> = Vec::new();
     let mut areas = Vec::new();
     let (nx, ny) = frame.nodes();
     for e in &tile.stack {
-        let controls = controls(&tile, e, &mut errors);
+        let controls: Vec<Control> = e
+            .controls
+            .iter()
+            .map(|c| Control {
+                name: c.name.clone(),
+                value: c.value.clone(),
+            })
+            .collect();
         match dt_looks::look(&e.what.value, &controls) {
             Ok(l) => looks.push(l),
             Err(le) => {
-                let (span, label) = match &le.control {
-                    Some(c) => (
-                        e.controls
-                            .iter()
-                            .find(|(n, _)| &n.value == c)
-                            .map_or(e.what.span, |(n, _)| n.span),
-                        "here",
-                    ),
-                    None => (e.what.span, "not a look"),
+                let at = le
+                    .control
+                    .as_ref()
+                    .and_then(|c| e.controls.iter().find(|s| &s.name == c));
+                let d = match at {
+                    Some(s) => Diag::at(&s.src, s.span, "dt::look", le.message, "here"),
+                    None => Diag::at(&e.src, e.what.span, "dt::look", le.message, "here"),
                 };
-                let help = le.help.clone().or_else(|| {
-                    diag::did_you_mean(&e.what.value, dt_looks::LOOKS.iter().copied())
-                        .map(|w| format!("did you mean `{w}`?"))
-                        .or_else(|| {
-                            Some(format!("the looks so far: {}", dt_looks::LOOKS.join(", ")))
-                        })
-                });
-                errors.push(Diag::at(&e.src, span, "dt::look", le.message, label).maybe_help(help));
+                errors.push(d.maybe_help(le.help));
                 continue;
             }
         }
@@ -186,7 +215,8 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
     })?;
     let seed = opts.seed.unwrap_or(tile.seed);
     Ok(Checked {
-        tile,
+        file: read.file,
+        tile: Some(tile),
         steps,
         looks,
         areas,
@@ -221,93 +251,9 @@ fn area(tile: &Tile, frame: &Frame, e: &doc::Entry, errors: &mut Vec<Diag>) -> M
     let lines: Vec<Vec<[f64; 2]>> = r
         .bounded_by
         .iter()
-        .filter_map(|l| tile.lines.get(&l.value))
-        .map(|pts| {
-            pts.iter()
-                .map(|p| p.squares(tile.cols, tile.rows))
-                .collect()
-        })
+        .filter_map(|l| tile.lines.get(&l.value).cloned())
         .collect();
-    let fills: Vec<[f64; 2]> = r
-        .fills
-        .iter()
-        .map(|p| p.squares(tile.cols, tile.rows))
-        .collect();
-    dt_kit::area(frame, &lines, &fills)
-}
-
-/// Controls for a look: numbers as they are, `level` words resolved
-/// against the tile's levels (`ground`, `"ground - 1"`).
-fn controls(tile: &Tile, e: &doc::Entry, errors: &mut Vec<Diag>) -> Vec<Control> {
-    let mut out = Vec::new();
-    for (name, value) in &e.controls {
-        let v = match (&value.value, name.value.as_str()) {
-            (Raw::Number(n), _) => Value::Number(*n),
-            (Raw::Text(t), "level") => {
-                if let Some(v) = level(tile, t) {
-                    Value::Number(v)
-                } else {
-                    let word = t.split(" + ").next().unwrap_or(t);
-                    let word = word.split(" - ").next().unwrap_or(word).trim();
-                    let help =
-                        diag::did_you_mean(word, tile.levels.iter().map(|(n, _)| n.as_str()))
-                            .map(|w| format!("did you mean `{w}`?"))
-                            .unwrap_or_else(|| {
-                                let names: Vec<String> = tile
-                                    .levels
-                                    .iter()
-                                    .map(|(n, v)| format!("{n} ({v} mm)"))
-                                    .collect();
-                                format!("levels: {}; or mm, such as level=5", names.join(", "))
-                            });
-                    errors.push(
-                        Diag::at(
-                            &e.src,
-                            value.span,
-                            "dt::level",
-                            format!("no level named `{word}`"),
-                            "not a level",
-                        )
-                        .help(help),
-                    );
-                    continue;
-                }
-            }
-            (Raw::Text(t), _) => Value::Word(t.clone()),
-            (Raw::Bool(_), _) => {
-                errors.push(Diag::at(
-                    &e.src,
-                    value.span,
-                    "dt::control",
-                    "no P1 control takes a switch",
-                    "here",
-                ));
-                continue;
-            }
-        };
-        out.push(Control {
-            name: name.value.clone(),
-            value: v,
-        });
-    }
-    out
-}
-
-/// `name`, `name + n` or `name - n` against the tile's levels, in mm.
-fn level(tile: &Tile, text: &str) -> Option<f64> {
-    let find = |n: &str| {
-        tile.levels
-            .iter()
-            .find(|(k, _)| k == n.trim())
-            .map(|(_, v)| *v)
-    };
-    // level names may contain '-', so the operator is spaced
-    for (op, sign) in [(" + ", 1.0), (" - ", -1.0)] {
-        if let Some((a, b)) = text.split_once(op) {
-            return Some(find(a)? + sign * b.trim().parse::<f64>().ok()?);
-        }
-    }
-    find(text)
+    dt_kit::area(frame, &lines, &r.fills)
 }
 
 fn fnv(h: u64, v: u64) -> u64 {
@@ -324,6 +270,15 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
         .read(path)
         .map_err(|e| vec![Diag::plain("dt::source", e)])?;
     let c = check(sources, path, opts)?;
+    let Some(tile) = &c.tile else {
+        return Err(vec![
+            Diag::plain("dt::no-tile", format!("`{path}` has no tile to build"))
+                .help("a tile document holds one `tile name size=\"1x1\" { stack { … } }`; parts, printer and level files are only checked"),
+        ]);
+    };
+    if !tile.pending.is_empty() {
+        return Err(tile.pending.clone());
+    }
     let fail = |e: String| vec![Diag::plain("dt::build", e)];
     let root = Seed::new(c.seed);
     let mut scene = Scene::new(c.frame, root);
@@ -338,14 +293,14 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
     });
     h = c.areas.iter().fold(h, |h, a| fnv(h, a.content_hash()));
     scene.record("plan", h);
-    let paths = entry_paths(&c);
+    let paths = entry_paths(tile);
     for step in &c.steps {
         match *step {
             Step::Lift => scene
-                .lift(&format!("tile/{}/ground", c.tile.name))
+                .lift(&format!("tile/{}/ground", tile.name))
                 .map_err(|e| fail(e.to_string()))?,
             Step::Entry(i) => {
-                let pinned = c.tile.stack.get(i).and_then(|e| e.seed);
+                let pinned = tile.stack.get(i).and_then(|e| e.seed);
                 let ctx = Ctx {
                     area: &c.areas[i],
                     path: &paths[i],
@@ -353,7 +308,7 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
                 };
                 c.looks[i].build(&mut scene, &ctx).map_err(|e| {
                     let msg = format!("{}: {}", paths[i], e.message);
-                    match c.tile.stack.get(i) {
+                    match tile.stack.get(i) {
                         Some(en) => vec![
                             Diag::at(&en.src, en.span, "dt::build", msg, "while building this")
                                 .maybe_help(e.help),
@@ -382,26 +337,28 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
         audit,
         stages: scene.stages().to_vec(),
         record,
-        out: out_path(path, &c.tile.name, &opts.system),
+        out: out_path(path, &tile.name, &opts.system),
         footprint,
     })
 }
 
 /// Seeds by path: `tile/<name>/<look>/<k>`, `k` counting same-named
 /// entries, so adding an entry of another look changes no other seed.
-fn entry_paths(c: &Checked) -> Vec<String> {
+fn entry_paths(tile: &Tile) -> Vec<String> {
     let mut seen: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
-    let mut out: Vec<String> = c
-        .tile
+    let mut out: Vec<String> = tile
         .stack
         .iter()
         .map(|e| {
             let k = seen.entry(e.what.value.as_str()).or_default();
             *k += 1;
-            format!("tile/{}/{}/{}", c.tile.name, e.what.value, *k - 1)
+            match &e.id {
+                Some(id) => format!("tile/{}/{}/{id}", tile.name, e.what.value),
+                None => format!("tile/{}/{}/{}", tile.name, e.what.value, *k - 1),
+            }
         })
         .collect();
-    out.push(format!("tile/{}/connector", c.tile.name));
+    out.push(format!("tile/{}/connector", tile.name));
     out
 }
 

@@ -105,10 +105,38 @@ fn check(paths: &[String], json: bool) -> u8 {
     for p in paths {
         match dt_eval::check(&Files, p, &Options::default()) {
             Ok(c) => {
+                let pending = c.pending();
                 if !json {
-                    eprintln!("ok {p}: {} stack entries", c.tile.stack.len());
+                    match &c.tile {
+                        Some(t) if pending.is_empty() => {
+                            eprintln!("ok {p}: tile `{}`, {} stack entries", t.name, t.stack.len());
+                        }
+                        Some(t) => {
+                            eprintln!(
+                                "ok {p}: tile `{}`; {} part(s) need looks not built yet, so `build` refuses it:",
+                                t.name,
+                                pending.len()
+                            );
+                            for d in pending {
+                                let at = d
+                                    .location()
+                                    .map(|(f, l, c)| format!("{f}:{l}:{c}: "))
+                                    .unwrap_or_default();
+                                eprintln!("  {at}{}", d.message);
+                            }
+                        }
+                        None => eprintln!(
+                            "ok {p}: {} definitions, no tile",
+                            c.file.doc.definitions.len()
+                        ),
+                    }
                 }
-                reports.push(json!({"path": p, "ok": true}));
+                reports.push(json!({
+                    "path": p,
+                    "ok": true,
+                    "tile": c.tile.as_ref().map(|t| t.name.clone()),
+                    "pending": errors_json(pending),
+                }));
             }
             Err(errs) => {
                 code = ERROR;

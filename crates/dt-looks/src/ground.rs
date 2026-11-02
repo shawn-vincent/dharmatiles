@@ -8,6 +8,9 @@ use crate::{Control, Ctx, Look, LookError, Plan, Value, Write, only};
 /// The standard `ground` level, mm at the DungeonBlocks reference.
 pub const GROUND_LEVEL_MM: f64 = 5.0;
 
+/// The controls `ground` takes so far (`bumps` and `bump-size` come in P2).
+pub const CONTROLS: &[&str] = &["level"];
+
 /// A flat ground surface.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Ground {
@@ -21,7 +24,7 @@ impl Ground {
     /// # Errors
     /// [`LookError`] for an unknown control or a level not above 0.
     pub fn new(controls: &[Control]) -> Result<Self, LookError> {
-        only("ground", controls, &["level"])?;
+        only("ground", controls, CONTROLS)?;
         let mut level_mm = GROUND_LEVEL_MM;
         for c in controls {
             match &c.value {

@@ -435,6 +435,7 @@ dependencies = [
 name = "dt-eval"
 version = "0.0.0"
 dependencies = [
+ "dt-doc",
  "dt-kit",
  "dt-looks",
  "insta",

@@ -113,6 +113,17 @@ pub trait Look: Send + Sync {
 /// The looks a document may name in its stack.
 pub const LOOKS: &[&str] = &["ground"];
 
+/// The controls a built look takes so far, or `None` for a look not built
+/// yet.  The evaluator passes a look only these (written, or their
+/// defaults from dt-doc's schema).
+#[must_use]
+pub fn takes(name: &str) -> Option<&'static [&'static str]> {
+    match name {
+        "ground" => Some(ground::CONTROLS),
+        _ => None,
+    }
+}
+
 /// The look `name` with its controls.
 ///
 /// # Errors
