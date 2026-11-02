@@ -47,7 +47,11 @@ pub const TIDE_EDGE_AMP_MM: f64 = 0.6;
 const TIDE_EDGE_FADE_MM: f64 = 9.0;
 const LIP_MM: f64 = 0.3;
 const LIP_D_MM: f64 = 0.6;
-const SHORE_FADE_MM: f64 = 0.4;
+/// The relief fades to calm over this much true distance from the shore.
+/// The lab fades over 0.4 mm of its smoothed distance, which is already
+/// about 0.6 mm at the first water cell, so a crest could meet the bank
+/// as a step; over true distance the water runs up to the bank.
+const SHORE_FADE_MM: f64 = 1.0;
 // emitters: strength, decay mm
 const LAND: (f64, f64) = (1.0, 34.0);
 const ROCK: (f64, f64) = (0.55, 10.0);
@@ -349,10 +353,14 @@ impl Look for Water {
             wm: &wm,
             cache: Vec::new(),
         };
-        // distance to the shore, smoothed
+        // distance to the shore: true (for the shore fade) and smoothed
+        let raw_d = if obst.iter().any(|&b| b) {
+            distance(&frame, &obst).0
+        } else {
+            Field::new(&frame, 1e3)
+        };
         let d = if obst.iter().any(|&b| b) {
-            let (raw, _) = distance(&frame, &obst);
-            let raw = raw.zip(&wm, |v, w| v * w);
+            let raw = raw_d.zip(&wm, |v, w| v * w);
             let sg = DIST_SMOOTH_MM * s;
             let num = raw.blur(sg);
             let den = wm.blur(sg);
@@ -547,7 +555,7 @@ impl Look for Water {
         let mut top = vec![0.0; nn];
         let mut wet = vec![false; nn];
         for k in 0..nn {
-            let fade = smooth01(d.z[k] / (SHORE_FADE_MM * s));
+            let fade = smooth01(raw_d.z[k] / (SHORE_FADE_MM * s));
             let wz = wl + z[k] * rim_f.z[k] * f64::from(u8::from(water[k])) * fade + tide.z[k];
             let (i, j) = (k % nx, k / nx);
             let on_edge = i == 0 || j == 0 || i == nx - 1 || j == ny - 1;

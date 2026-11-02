@@ -178,12 +178,13 @@ pub fn grain(stone: &Convex, g: &Grain, seed: u64) -> Result<TriMesh, KitError> 
 
 /// **seat**: the height to set a stone's base at, centred at `at` with
 /// footprint radius `r` (mm), so that it sits in `ground`: `below_min`
-/// under the lowest node within 0.85 r (so no dip exposes its base), and
-/// at least `below_median` under their median (the bed). Never below 0,
-/// the tile's base.
+/// under the lowest node within `r` (so no dip or slope exposes its flat
+/// base: dirtlab took 0.85 r, which leaves the base's rim showing on a
+/// bank), and at least `below_median` under their median (the bed).
+/// Never below 0, the tile's base.
 #[must_use]
 pub fn seat(ground: &Field, at: [f64; 2], r: f64, below_min: f64, below_median: f64) -> f64 {
-    let reach = 0.85 * r;
+    let reach = r;
     let mut under = Vec::new();
     let (i0, j0) = ground.node(at[0] - reach, at[1] - reach);
     let (i1, j1) = ground.node(at[0] + reach, at[1] + reach);
@@ -250,6 +251,9 @@ mod tests {
         let g = Field::from_fn(&f, |x, _| 4.0 + 0.01 * x);
         let z = seat(&g, [17.5, 17.5], 5.0, 0.25, 0.55);
         assert!((z - (4.175 - 0.55)).abs() < 0.02, "{z}");
+        let steep = Field::from_fn(&f, |x, _| 4.0 + 0.5 * x);
+        let z = seat(&steep, [17.5, 17.5], 5.0, 0.25, 0.55);
+        assert!(z <= 4.0 + 0.5 * 12.5 - 0.25 + 0.15, "{z}");
         let flat = Field::new(&f, 0.2);
         assert!(seat(&flat, [17.5, 17.5], 5.0, 0.25, 0.55).abs() < 1e-12);
     }

@@ -906,9 +906,20 @@ pub fn dirt_stones(
         gap: GAP,
         factor: 1.0,
     };
+    // clear of the area's border by a bank's width and a stone: a lower
+    // neighbour banks this ground down after the stones are bedded
+    let outside: Vec<bool> = area.bits.iter().map(|b| !b).collect();
+    let clear = if outside.iter().any(|&b| b) {
+        Some(dt_kit::distance(&frame, &outside).0)
+    } else {
+        None
+    };
+    let keep = dt_kit::BANK_MM * frame.scale() + D_MM.1 / 2.0;
     let inside = |x: f64, y: f64| {
         let (i, j) = z.node(x, y);
-        if area.bits[j * area.nx + i] { 1.0 } else { 0.0 }
+        let k = j * area.nx + i;
+        let ok = area.bits[k] && clear.as_ref().is_none_or(|c| c.z[k] >= keep);
+        if ok { 1.0 } else { 0.0 }
     };
     let placed = scatter(&frame, &mut rng, &radii, &spread, &inside, &[]);
     #[allow(clippy::cast_possible_truncation)]

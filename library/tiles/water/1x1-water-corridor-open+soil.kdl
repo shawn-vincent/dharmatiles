@@ -1,0 +1,23 @@
+// The twin of src/tiles/water/1x1-water-corridor-open+soil.tile.py (the Python library tile, kept).
+// A channel from the west edge opening into broad water to the east.
+// Port notes: the pool bed sits 2.2 mm under the water level (waterlab's
+// bed), the water is waterlab's swell-chaos at the standard water level
+// (2.6 mm; the Python pool was 3 mm), and the bank is dirtlab's dirt,
+// banked down to the bed over 7 mm.  The bank is all on the land side
+// (waterlab's), so each shore line is drawn 0.1 square (3.5 mm) toward
+// the water from the Python anchor: the waterline lands where it was.  The Python shoreline strip (soil
+// plus 40–60 shore pebbles a square) is the dirt's own pebbles here.
+
+tile water-corridor-open+soil size="1x1" seed=58 {
+    about "A channel from the west edge opening into broad water to the east."
+    line shore-south wobble=1.5 { through "0,0.43" "0.6,0" }
+    line shore-north wobble=1.5 { through "0,0.57" "0.6,1" }
+    region channel { bounded-by shore-north shore-south; fill "0.75,0.5" }
+    region bank { bounded-by shore-north shore-south; fill "0.08,0.08"; fill "0.08,0.92" }
+    stack {
+        dirt in=bank
+        ground in=channel level="water - 2.2"
+        rock in=channel size="6..10"
+        water
+    }
+}

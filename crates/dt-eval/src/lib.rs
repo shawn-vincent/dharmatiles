@@ -418,7 +418,20 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
     h = mask_of.iter().fold(h, |h, &m| fnv(h, hashes[m]));
     scene.record("plan", h);
     let paths = entry_paths(tile);
+    // with water, the ground's areas are banked down to each other once the
+    // surfaces are painted, before any solid reads the ground
+    let fills = c
+        .looks
+        .iter()
+        .any(|l| l.plan().writes == dt_looks::Write::Fill);
+    let mut painted = false;
     for step in &c.steps {
+        let surface =
+            matches!(*step, Step::Entry(i) if c.looks[i].plan().writes == dt_looks::Write::Surface);
+        if fills && !painted && !surface {
+            painted = true;
+            scene.bank();
+        }
         match *step {
             Step::Lift => scene
                 .lift(&format!("tile/{}/ground", tile.name))
