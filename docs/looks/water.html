@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Water</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks" aria-current="page">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Look · water</div>
+  <h1>Water</h1>
+  <p class="lede">Fantasy water sculpted into the tile: broad, rounded swells roll off the shore, short sharp chop rings every rock, and far from anything the waves cross into a calm, directionless chop. It is one solid surface, so it prints with no supports and paints with a drybrush. The shore look adds a grassy bank, a strip of bare earth and clumps of reeds where meadow meets the water.</p>
+  <div class="hero-shots">
+    <figure><img src="img/water-swell-chaos-painted-s1.jpg" alt="Painted render of water with long swells off a bank on the left and rings around a rock" width="448" height="340"></figure>
+    <figure><img src="img/water-shore-painted-s1.jpg" alt="Painted render of a shore tile: grass and reeds on the left, water with rock rings on the right" width="740" height="558"></figure>
+  </div>
+  <p class="muted small">Left: water with a bank and one rock, 2×2, seed 1. Right: the shore, 2×2, seed 1, with the grass from before the current stroke blades. Both are painted previews from 28 Oct 2026, before the red-overhang rule; the water surface is a height field and cannot overhang.</p>
+  <div class="facts">
+    <div><div class="k">Sizes</div><div class="v">2×2 (70 × 70 mm) today</div></div>
+    <div><div class="k">Variants</div><div class="v">open water, bank, bays and ponds, rocks and other obstacles, shore with reeds</div></div>
+    <div><div class="k">Printing</div><div class="v">no supports; the water surface never overhangs</div></div>
+    <div><div class="k">Bases</div><div class="v">DungeonBlocks today; OpenLOCK with the Rust port</div></div>
+    <div><div class="k">Available</div><div class="v">approved look (waterlab, shorelab); in the Rust engine from P3 (water) and P4 (shore)</div></div>
+  </div>
+  <details class="words">
+    <summary>Words used on this page</summary>
+    <dl class="defs">
+      <dt>water level</dt><dd>The calm surface height, 2.6 mm above the base's top. Waves rise and fall around it.</dd>
+      <dt>swell</dt><dd>A long, low, rounded wave, 5–16 mm from crest to crest.</dd>
+      <dt>chop</dt><dd>Short, sharper waves, 2–4.5 mm apart, mostly around rocks.</dd>
+      <dt>emitter</dt><dd>Anything the waves come from: the land, a rock, a reed, or a faint source at an open-water corner.</dd>
+      <dt>bank</dt><dd>The slope where land runs down into the water.</dd>
+      <dt>edge profile</dt><dd>The fixed wave shape every water tile has along its edges, so two tiles meet with no step.</dd>
+    </dl>
+  </details>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#look">What it looks like</a></li>
+  <li><a href="#shore">The shore</a></li>
+  <li><a href="#use">Using it in a tile</a></li>
+  <li><a href="#spec">Specification</a></li>
+  <li><a href="#printing">Printing and painting</a></li>
+  <li><a href="#how">How it is made</a></li>
+  <li><a href="#record">Design record</a></li>
+</ol></nav>
+<article class="doc">
+
+<h2 id="look">What it looks like</h2>
+<p>The waves come from things. Land sends out the biggest waves: long rounded swells that follow the shoreline, with smaller, sharper waves riding on them. Each rock sends out short chop that hugs its outline, with a little extra wake on the side away from the shore. The further a wave travels from its source, the more it loses its shape, so the water is orderly near the shore and rocks and becomes a soft, crossing chop out in the open.</p>
+<p>The relief is exaggerated, about 2 mm from trough to crest, so the waves cast shadows and catch a drybrush. Crests are rounded and at least about 1 mm wide; troughs are broad and smooth. There are no perfect rings, no rows of parallel waves, and no pattern that repeats.</p>
+
+<figure class="shot">
+  <img src="img/water-swell-chaos-s1.jpg" alt="Painted and grey top views of the water tile with a bank on the left and a rock" width="900" height="388" loading="lazy">
+  <figcaption>The same tile painted and in grey from above: swells off the bank on the left, rings and a wake around the rock. 2×2, seed 1, 28 Oct 2026. This contact sheet predates the red-overhang rule.</figcaption>
+</figure>
+
+<h3 id="situations">Open water, bays and obstacles</h3>
+<p>The same water works whatever is in the tile. In open water with nothing in it, faint sources at the corners give a calm, directionless chop. A rock in open water makes its own rings, and two rocks make two sets that merge between them. Square obstacles get squarish rings. When land surrounds the water on two, three or four sides, the shore waves stay close to the banks and the middle of the pond goes calm.</p>
+<div class="grid2">
+  <figure class="shot">
+    <img src="img/water-open.jpg" alt="Painted and grey views of an all-water tile with no land or rocks" width="900" height="388" loading="lazy">
+    <figcaption>Open water: no land and no rocks. 2×2, seed 1. Predates the red-overhang rule.</figcaption>
+  </figure>
+  <figure class="shot">
+    <img src="img/water-scenarios.jpg" alt="Eight grey top views of water: bank with rock, open, open with rock, two rocks, cube and pyramid, land on two, three and four sides" width="900" height="388" loading="lazy">
+    <figcaption>Eight situations, seed 1. Top row: bank and rock, open, one rock, two rocks. Bottom row: cube and pyramid, land on two, three and four sides. Predates the red-overhang rule.</figcaption>
+  </figure>
+</div>
+
+<h2 id="shore">The shore</h2>
+<p>The shore is where a meadow meets the water. The land runs down a real bank, never a cliff or a cut, and the shoreline wanders in bays, headlands and small coves. Along some stretches the grass grows right to the water and laps over its edge; along others a strip of bare earth up to 4 mm wide lies between. Grass near the water leans toward it or runs along the shore, never away. Three to five clumps of reeds stand in the shallows, each sending out its own small ripple rings. Rocks sit on the land, in the shallows and in the water; the ones in the water ring it with chop.</p>
+<figure class="shot">
+  <img src="img/water-shore-s3-overhang.jpg" alt="Grey renders of a shore tile from an angle and from above: grass, reeds, rocks, water rings" width="900" height="359" loading="lazy">
+  <figcaption>The current shore with stroke-blade grass, 2×2, seed 3. Faces past 48° are painted red.</figcaption>
+</figure>
+<p>Reeds are deliberately simple: 5–9 chunky blades per clump with a pointed-oval cross-section, 8–13 mm tall, rising from one base and curving gently outward to a fairly blunt point. They stand no more than about 40° from vertical.</p>
+
+<h2 id="use">Using it in a tile</h2>
+<p>The water and shore looks reach the Rust tile language in phases P3 and P4 (see the <a href="../rust/plan.html">plan</a>). The language already names the water level: <code>library/parts/levels.kdl</code> sets <code>water 2.6</code>, so a tile can write <code>level=water</code>. The look's own controls arrive with P3, and the water edge profile joins the edge contract in <code>library/parts/edges.kdl</code> at the same time. The <a href="../rust/language.html">language page</a> lists what exists today.</p>
+<p>Until then the labs build the approved look, each as a 2×2 tile with a DungeonBlocks base:</p>
+<pre><code>python waterlab/waterlab.py --mode swell-chaos --seed 1             # bank and rock
+python waterlab/waterlab.py --mode swell-chaos --scene open-rock    # any scene below
+python waterlab/waterlab.py --mode swell-chaos --open               # all water
+python shorelab/shorelab.py --seed 1                                # the shore</code></pre>
+<p>They write <code>waterlab/out/2x2-water-swell-chaos[-&lt;scene&gt;]-s&lt;seed&gt;.stl</code> and <code>shorelab/out/2x2-shore-s&lt;seed&gt;.stl</code>. The Python library's water tiles (<code>src/tiles/water/</code>, built with <code>dharmatiles-gen</code>) use an older, flatter water (the <code>Water</code> layer), not this look.</p>
+
+<h2 id="spec">Specification</h2>
+<h3 id="controls">Settings</h3>
+<p>What can be chosen today, in the labs. Everything else is fixed at the approved values.</p>
+<div class="tbl"><table>
+<thead><tr><th>Setting</th><th>Values</th><th>Default</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><code>--seed</code></td><td>any integer</td><td>1</td><td>A different sea with the same character.</td></tr>
+<tr><td><code>--scene</code></td><td><code>bank-rock</code>, <code>open</code>, <code>open-rock</code>, <code>open-2rocks</code>, <code>shore-shapes</code>, <code>land-2</code>, <code>land-3</code>, <code>land-4</code></td><td><code>bank-rock</code></td><td>Where the land is (west; west and east; three sides; all four) and what stands in the water (rocks, a cube, a pyramid).</td></tr>
+<tr><td><code>--open</code></td><td>flag</td><td>off</td><td>All water: no land, no rock.</td></tr>
+</tbody></table></div>
+
+<h3 id="sizes">Sizes and levels</h3>
+<div class="tbl"><table>
+<thead><tr><th>Height above the base top</th><th class="num">mm</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>Calm water level</td><td class="num">2.6</td><td>The named level <code>water</code> in the Rust library.</td></tr>
+<tr><td>Wave relief</td><td class="num">−0.74 to +2.2</td><td>About the water level; troughs are softly floored at −1.1.</td></tr>
+<tr><td>Tide at the tile edge</td><td class="num">±0.6</td><td>The shared edge profile (below).</td></tr>
+<tr><td>Water bed</td><td class="num">0.4</td><td>2.2 below the water level, where the bank ends.</td></tr>
+<tr><td>Land top (waterlab)</td><td class="num">6.0</td><td>The DungeonBlocks grass band.</td></tr>
+<tr><td>Meadow ground (shore)</td><td class="num">≥ 3.4</td><td>grasslab's hills; grass on top.</td></tr>
+<tr><td>Reeds</td><td class="num">8–13 tall</td><td>A tall reed can push the tile onto the tall base peg.</td></tr>
+</tbody></table></div>
+<p>Wave spacing depends on what sends them: land 5–16 mm, rocks 2–4.5 mm, open-water corners 5–14 mm, reeds 1.8–3 mm.</p>
+
+<h3 id="edges">Edges and joining tiles</h3>
+<ul>
+  <li>Every water tile has the same wave shape along its edges: a sine of 0.6 mm amplitude and 17.5 mm wavelength (half a square), with crests at the square corners and edge centres. Inside 9 mm of the edge the water blends into this profile, and the ripples fade out within 4 mm. Two water tiles of any seed meet with no step.</li>
+  <li>The Rust port keeps this profile as part of the edge contract and checks it to within 0.05 mm on all four edges.</li>
+  <li>Land meets the tile edge at the ground's edge level. Tile sizes and the edge contract are on the <a href="../standards/tile-system.html#edges">tile system</a> page.</li>
+</ul>
+
+<h2 id="printing">Printing and painting</h2>
+<ul>
+  <li><strong>No supports.</strong> The water is one surface with exactly one height at every point, so nothing on it overhangs. Print base down at 0.2 mm layers.</li>
+  <li><strong>Nothing too fine.</strong> Crests are at least about 1 mm wide, the shortest waves are 2 mm apart, and there is no detail under 0.3 mm.</li>
+  <li><strong>Reeds stand up.</strong> Each reed is chunky at the base (about 3.4–4.6 mm wide) and leans no more than about 40° from vertical.</li>
+  <li><strong>Painting.</strong> Prime dark blue and drybrush lighter blues, then a near-white on the crest tips; the broad crests catch the brush and the troughs stay dark. The painted previews above follow this scheme.</li>
+  <li><strong>Checked on every build.</strong> Each STL is one watertight body that survives a float32 reload.</li>
+</ul>
+<p>The full printing rules are on the <a href="../standards/printing.html">printing</a> page.</p>
+
+<h2 id="how">How it is made</h2>
+<p>The generator is <code>gen_swell_chaos</code> in <code>waterlab/waterlab.py</code> (line numbers at e0bcb77). It works on a 0.1 mm grid over the tile.</p>
+<ol>
+  <li><strong>Scene.</strong> <code>Scene</code> (line 278) builds the land (a bank that rises from the bed with a smoothstep) and the obstacles (rocklab rocks, sunk 1.4 mm). <code>_derive</code> (line 335) finds where the water is and how far each point is from land and rocks.</li>
+  <li><strong>Distances through the water.</strong> <code>_emit_sources</code> (line 719) measures distance from land and from each rock along paths that stay in the water (<code>_geodesic</code>, line 660), so waves bend round a rock instead of passing through it. Distances from land are rounded off with distance (<code>_round_offsets</code>, line 688), so square shores give rounded waves.</li>
+  <li><strong>Wave trains.</strong> Each emitter sums three or four trains of waves across its wavelength band (<code>_swell_train</code>, line 849). Longer waves are taller (amplitude ∝ λ<sup>1.4</sup>) and stay round; shorter ones get sharp crests. Each train's phase wanders more the further it is from its source, so crests are crisp close in and break up far out.</li>
+  <li><strong>Order and chaos.</strong> Near a strong source, that source rules its area. Far from land and rocks, the trains from every source, including faint ones at open corners (<code>_corner_sources</code>, line 973), are summed into a crossing chop. A smooth hand-over joins the two (<code>gen_swell_chaos</code>, line 877). Rocks get a wake on the side away from the land.</li>
+  <li><strong>Finish.</strong> Troughs are softly floored, a small lip climbs each obstacle, the tide and edge profile (<code>tide_field</code>, line 375) are added, and the relief fades out at the shore and the rim. Exposed land gets dirtlab's dirt texture. <code>build</code> (line 1032) turns the height field into a solid on a uniform 0.2 mm mesh, adds the rock and the base, and checks it.</li>
+</ol>
+<p>The shore (<code>shorelab/shorelab.py</code>) uses the same water. <code>make_shore_ground</code> (line 92) ramps grasslab's hills down a wobbly bank to the bed. Rocks are scattered and split into wet and dry. A bare strip of varying width follows the waterline. <code>steer_shore</code> (line 143) turns grass near the water toward it. <code>make_reeds</code> (line 164) plants the clumps. <code>build_water</code> (line 227) runs the water over this ground, with slightly softened chop and reed rings, and keeps it inside the basin so the tide never floods land into puddles.</p>
+<details>
+  <summary>Key constants (waterlab.py)</summary>
+  <div class="tbl"><table>
+  <thead><tr><th>Constant</th><th>Line</th><th>Value</th><th>Meaning</th></tr></thead>
+  <tbody>
+  <tr><td><code>WL_MM</code></td><td class="num">31</td><td>2.6</td><td>Calm water level (mm).</td></tr>
+  <tr><td><code>BED_DEPTH_MM</code></td><td class="num">41</td><td>2.2</td><td>Bed below the water level.</td></tr>
+  <tr><td><code>MESH_SUBSAMPLE</code></td><td class="num">42</td><td>2</td><td>Uniform 0.2 mm top mesh.</td></tr>
+  <tr><td><code>TIDE_EDGE_AMP_MM</code>, <code>TIDE_EDGE_LAMBDA_MM</code></td><td class="num">47–48</td><td>0.6; 17.5</td><td>The shared edge profile.</td></tr>
+  <tr><td><code>TIDE_EDGE_FADE_MM</code></td><td class="num">49</td><td>9</td><td>Width of the blend into the edge profile.</td></tr>
+  <tr><td><code>RIM_FADE_MM</code></td><td class="num">39</td><td>4</td><td>Ripples fade out this close to the rim.</td></tr>
+  <tr><td><code>CHAOS_CORNER</code></td><td class="num">124</td><td>0.3, 70 mm</td><td>Strength and reach of the faint corner emitters.</td></tr>
+  <tr><td><code>CHAOS_WOBBLE_GROW</code></td><td class="num">125</td><td>0.06</td><td>Extra phase wander per mm from a source.</td></tr>
+  <tr><td><code>SWELL_BANDS</code></td><td class="num">142</td><td>land 5–16, rock 2–4.5, corner 5–14, reed 1.8–3</td><td>Wavelength band per emitter (mm).</td></tr>
+  <tr><td><code>SWELL_AMP_EXP</code></td><td class="num">150</td><td>1.4</td><td>Long waves dominate.</td></tr>
+  <tr><td><code>SWELL_AMP_MM</code></td><td class="num">153</td><td>0.8</td><td>Overall relief scale.</td></tr>
+  <tr><td><code>SWELL_WAKE</code></td><td class="num">155</td><td>0.9</td><td>Extra chop on a rock's downstream side.</td></tr>
+  <tr><td><code>SWELL_TROUGH_MM</code></td><td class="num">156</td><td>1.1</td><td>Soft floor under the troughs.</td></tr>
+  </tbody></table></div>
+</details>
+
+<section class="record" id="record">
+<h2>Design record</h2>
+<p>For the people developing the look: Shawn's rulings, the requirements, audit numbers, the variant history and open issues. Owned by the labs (waterlab and shorelab). Approved: swell-chaos, round 7, 28 Oct 2026; the shore as of 29 Oct 2026 (0616212).</p>
+
+<details id="rulings">
+<summary>Rulings (14)</summary>
+<p>Shawn's decisions, oldest first. Each holds unless a later line replaces it. “—” means the decision is recorded only in Claude's words.</p>
+<div class="tbl"><table>
+<thead><tr><th class="d">Date</th><th>Ruling</th><th>Shawn's words</th></tr></thead>
+<tbody>
+<tr><td class="d">28 Oct</td><td>Bigger relief is good. Stroke ends should fade gradually, like ripples, not worms. Add a larger-scale motion under the ripples, like the library's shared edge profile.</td><td class="q">—</td></tr>
+<tr><td class="d">28 Oct</td><td>Strokes were too short and too uniform; ripples near obstacles should differ in size from those further out; the scales must be related.</td><td class="q">—</td></tr>
+<tr><td class="d">28 Oct</td><td>Fewer crossing directions. Waves come from the obstacles: land strong, rocks weak. All-directions chop is rejected.</td><td class="q">“ends up with a whole bunch of spiky shit”</td></tr>
+<tr><td class="d">28 Oct</td><td>Emitted-chaos: a source's influence gets less clear with distance; open corners are very faint emitters.</td><td class="q">“the best I've seen so far”</td></tr>
+<tr><td class="d">28 Oct</td><td>Each emitter sends a range of wavelengths, set by the kind of object.</td><td class="q">—</td></tr>
+<tr><td class="d">28 Oct</td><td>Swell-chaos is the water.</td><td class="q">“holy crap, that's amazing”</td></tr>
+<tr><td class="d">28 Oct</td><td>Rings that take the shape of a cube or pyramid are right.</td><td class="q">“perfect”</td></tr>
+<tr><td class="d">28 Oct</td><td>Water surrounded by square land needed fixing.</td><td class="q">“look a bit odd”</td></tr>
+<tr><td class="d">28 Oct</td><td>Reeds in the water send out small rings.</td><td class="q">“small ripples circling out from them”</td></tr>
+<tr><td class="d">28 Oct</td><td>Reeds are simple chunky blades; cattails dropped.</td><td class="q">“nothing more sophisticated”</td></tr>
+<tr><td class="d">28 Oct</td><td>Smoother ripples at the shore and rocks; reeds rise from one base and curve out gently.</td><td class="q">—</td></tr>
+<tr><td class="d">28 Oct</td><td>Shore grass: separate tips and wider tufts. (Superseded on 29 Oct by stroke blades everywhere.)</td><td class="q">“little tufts at this scale”</td></tr>
+<tr><td class="d">29 Oct</td><td>Exposed ground is dirt in every lab; separate mud textures are retired.</td><td class="q">—</td></tr>
+<tr><td class="d">29 Oct</td><td>Reed tips are sharp but fairly blunt, blending smoothly into the blade.</td><td class="q">—</td></tr>
+</tbody></table></div>
+</details>
+
+<details id="requirements">
+<summary>Requirements</summary>
+<p>The labs' requirement IDs, as written on 28 Oct 2026, with later amendments marked inline. [S] is checked by a script or statistic, [R] by eye. The originals are in the archive: <a href="../archive/lab-logs/waterlab/requirements.html">waterlab</a>, <a href="../archive/lab-logs/shorelab/requirements.html">shorelab</a>.</p>
+<h3>Water</h3>
+<ul>
+  <li><strong>REQ-W-1 [S]</strong> One STL per option; one watertight body that survives the float32 reload, with the DungeonBlocks base. Deterministic per seed.</li>
+  <li><strong>REQ-W-2 [S]</strong> Single-material sculpture: a single-valued height field, printable without supports. Crests at least about 1 mm wide; no needles, no detail under 0.3 mm.</li>
+  <li><strong>REQ-W-3 [S]</strong> Calm water about 2.6 mm above the datum; relief within about −0.8…+1.2 mm; land up to about 6 mm. <em>Amended 28 Oct (round 7): relief about doubled, now −0.74…+2.2 mm, with troughs softly floored.</em></li>
+  <li><strong>REQ-W-4 [R]</strong> Reads as fantasy water before paint, even in a monochrome render.</li>
+  <li><strong>REQ-W-5 [R]</strong> Obstacles organise the water; the strongest relief is near them. <em>Amended 28 Oct (round 4): waves are emitted by obstacles, land strong and rocks weak.</em></li>
+  <li><strong>REQ-W-6 [R]</strong> Open water is quieter but still sculptural, and direction-neutral.</li>
+  <li><strong>REQ-W-7 [R]</strong> One vocabulary: open water, rock contact and shore contact are one continuous surface.</li>
+  <li><strong>REQ-W-8 [R]</strong> Broad rounded crests over smoother, wider troughs.</li>
+  <li><strong>REQ-W-9 [S]</strong> The water meets the tile edge at a consistent calm level. <em>Amended 28 Oct (round 2): the edge follows the shared edge profile, a 0.6 mm sine of 17.5 mm wavelength.</em></li>
+</ul>
+<h3>Shore</h3>
+<ul>
+  <li><strong>REQ-S-1 [S]</strong> One watertight STL per seed that survives the reload check, with the base.</li>
+  <li><strong>REQ-S-2 [R]</strong> A real bank, and an irregular shoreline that follows the hills.</li>
+  <li><strong>REQ-S-3 [R]</strong> The shore varies: grass to the water in places, a 0–3 mm strip of wet mud elsewhere, reeds in a few clumps. <em>Amended 28 Oct: the strip is 0–4 mm. Amended 29 Oct: the strip carries the shared dirt texture, not a mud texture.</em></li>
+  <li><strong>REQ-S-4 [R]</strong> Grass near water leans toward it or runs along the shore.</li>
+  <li><strong>REQ-S-5 [R]</strong> The water reacts to the shore: land is a strong emitter, wet rocks ring, dry rocks are meadow rocks.</li>
+  <li><strong>REQ-S-6 [S]</strong> Reeds: 5–12 lemon- or diamond-section blades per clump, about 3 mm wide at the base, 8–13 mm tall, leaning ≤ 40°, fused below the surface. <em>Amended 28 Oct (v0h): 5–9 stockier blades, base half-width 1.7–2.3 mm. Amended 29 Oct: tips taper to a fairly blunt point.</em></li>
+  <li><strong>REQ-S-7 [S]</strong> Heights: water 2.6 mm, meadow ground ≥ 3.4 mm, bed about 0.4 mm.</li>
+  <li><strong>REQ-S-8 [R]</strong> Shore grass is grasslab's stroke blades on dirt. <em>Amended 29 Oct: this is every lab's grass; there is no shore-only override.</em></li>
+</ul>
+<h3>Named failure modes</h3>
+<div class="tbl"><table>
+<thead><tr><th>#</th><th>Name</th><th>Looks like</th></tr></thead>
+<tbody>
+<tr><td>W1</td><td>Cells / bowls</td><td>A honeycomb of rounded dips with bright rims.</td></tr>
+<tr><td>W2</td><td>Targets</td><td>Perfect concentric rings; raindrop rings in open water.</td></tr>
+<tr><td>W3</td><td>Wave rows</td><td>Parallel swells, corduroy.</td></tr>
+<tr><td>W4</td><td>Swirls</td><td>Spirals or whirlpools.</td></tr>
+<tr><td>W5</td><td>Busy lines</td><td>Thin ridges everywhere, like stormy foam.</td></tr>
+<tr><td>W6</td><td>Lumpy porridge</td><td>Plain noise with no structure.</td></tr>
+<tr><td>W7</td><td>Pasted decal</td><td>A ripple zone stuck onto a different background.</td></tr>
+<tr><td>W8</td><td>Clones</td><td>Options that are only scale variants of each other.</td></tr>
+<tr><td>S1</td><td>Pasted water</td><td>A flat sheet meeting grass at a vertical cut.</td></tr>
+<tr><td>S2</td><td>Lawn edge</td><td>Grass ending in a clean line at the water everywhere.</td></tr>
+<tr><td>S3</td><td>Moat</td><td>A uniform mud strip along the whole shore.</td></tr>
+<tr><td>S4</td><td>Reed fence</td><td>Reeds in a regular row, or too many.</td></tr>
+<tr><td>S5</td><td>Drowned meadow</td><td>Grass growing under water.</td></tr>
+</tbody></table></div>
+</details>
+
+<details id="audit">
+<summary>Audit numbers</summary>
+<p><strong>By construction:</strong> the water is a single-valued height field, so it cannot overhang. The shortest band is 2 mm, wide enough to print. Troughs are softly floored above the bed, so they never clip into flat terraces. The top is a uniform 0.2 mm mesh, so broad swells stay smooth. Shore water is confined to the basin, so the tide cannot flood land.</p>
+<p><strong>Checked:</strong> <code>build</code> (<code>waterlab/waterlab.py:1032</code>) rounds the mesh to float32, merges vertices and refuses a mesh that is not watertight; <code>stats</code> (line 1075) reports the relief range and the steepest water slope. The shore runs through grasslab's <code>stl_safe</code>.</p>
+<div class="tbl"><table>
+<thead><tr><th>Tile</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>Water, bank and rock, seed 1</td><td>Watertight; relief −0.74…+2.2 mm; builds in about 2.3 s.</td></tr>
+<tr><td>Shore, seed 3 (stroke blades)</td><td>Watertight, no slicer islands; about 0.95 M faces, 48 MB, 40 s. Top 15.01 mm, so it takes the tall base peg.</td></tr>
+</tbody></table></div>
+</details>
+
+<details id="variants">
+<summary>Variant history</summary>
+<p>One line per variant, oldest first. All are in git (<code>git log -- waterlab shorelab src/dharmatiles/layers/water.py</code>).</p>
+<div class="tbl"><table>
+<thead><tr><th class="d">Date</th><th>Variant</th><th>What changed, and why</th></tr></thead>
+<tbody>
+<tr><td class="d">2 Jun</td><td>Library: distance rings (8bd4bfd)</td><td>Damped cosine of the distance from the shore. Perfect offsets of the shoreline. Rejected.</td></tr>
+<tr><td class="d">2–3 Jun</td><td>Library: point sources (a4a8e78)</td><td>Circular waves from points on the boundary. Raindrop circles and moiré. Rejected.</td></tr>
+<tr><td class="d">4 Jun</td><td>Library: structured waves (91c14bb)</td><td>Wind trains, shoaling, bow wave and wake. Diagonal corduroy; the mesh went non-manifold. Deleted.</td></tr>
+<tr><td class="d">5–13 Jun</td><td>Library: noise and shore ripples (be4b1bb, 2d56d40)</td><td>Today's <code>Water</code> layer. Low lumps and pasted-on arcs; its shared edge sine survives as the tide.</td></tr>
+<tr><td class="d">28 Oct</td><td>waterlab v0–v3: legacy, lapping, crescents, strokes, hybrid</td><td>Targets, raindrop commas, worms; strokes best of the set.</td></tr>
+<tr><td class="d">28 Oct</td><td>Round 2: combed, lapped, rings, shared tide</td><td>Strokes too short and uniform; scales unrelated.</td></tr>
+<tr><td class="d">28 Oct</td><td>Round 3: sim, sim-wind, sim-rings, spectrum</td><td>A wave-equation simulation. Realistic chop from every direction; rejected as spiky.</td></tr>
+<tr><td class="d">28 Oct</td><td>Round 4: emitted (7379807)</td><td>Waves from land and rocks, geodesic distance. Crisp but too regular far out.</td></tr>
+<tr><td class="d">28 Oct</td><td>Round 5: emitted-chaos (64f6c36)</td><td>Coherence decays with distance; faint corner emitters. “the best I've seen so far”.</td></tr>
+<tr><td class="d">28 Oct</td><td>Round 6: spectral-chaos (6d3d8b4)</td><td>A wavelength band per emitter type.</td></tr>
+<tr><td class="d">28 Oct</td><td><strong>Round 7: swell-chaos (e9f7aa7)</strong></td><td>Round swells with sharp riders, 2× relief, rock wake, deeper bed, uniform mesh. Approved.</td></tr>
+<tr><td class="d">28 Oct</td><td>Scenarios and enclosed water (35ca871, f72e410)</td><td>Eight scenes; rounded land offsets, shorter land reach in bays and ponds, far emitters.</td></tr>
+<tr><td class="d">28 Oct</td><td>shorelab v0a–v0c (f66984e)</td><td>Bank, variable mud strip, shore-steered grass, wet and dry rocks, cattails.</td></tr>
+<tr><td class="d">28 Oct</td><td>shorelab v0d–v0g (94cc078 … c918c4f)</td><td>Reed rings; lemon-section reed blades; fanned clumps; softer shore water.</td></tr>
+<tr><td class="d">28–29 Oct</td><td>shorelab v0h–v0k</td><td>Carved grass tips and sides, slicer-island fixes. Made obsolete by stroke blades.</td></tr>
+<tr><td class="d">29 Oct</td><td>Dirt everywhere (20c51e8); reed tips (c108b9c)</td><td>Exposed land uses dirtlab's texture; reed tips taper to a blunt point.</td></tr>
+<tr><td class="d">29 Oct</td><td><strong>Stroke blades at the shore (0616212)</strong></td><td>grasslab v3 replaces every shore-only grass option. Current.</td></tr>
+</tbody></table></div>
+<div class="grid2">
+  <figure class="shot">
+    <img src="img/water-history-library.jpg" alt="Painted render of the Python library's 3x3 water tile" width="900" height="750" loading="lazy">
+    <figcaption>The Python library's water, 3×3. Predates the red-overhang rule.</figcaption>
+  </figure>
+  <figure class="shot">
+    <img src="img/water-history-emitted-chaos.jpg" alt="Painted and grey views of emitted-chaos water" width="900" height="388" loading="lazy">
+    <figcaption>Round 5, emitted-chaos: order near the sources dissolving into interference. Predates the red-overhang rule.</figcaption>
+  </figure>
+</div>
+</details>
+
+<details id="rust">
+<summary>Rust port</summary>
+<p><strong>Water: phase P3</strong>, “Rocks and water, with the edge contract”. It ports <code>_derive</code>, <code>_geodesic</code>, <code>_emit_sources</code>, <code>_swell_train</code> and <code>gen_swell_chaos</code>; from the library's <code>layers/water.py</code> only the edge sine is kept. Exit: amplitude and trough floor within tolerance, the edge profile within 0.05 mm on all four edges, the waterlab tile in ≤ 1 s (Python 2.3 s), Shawn's sign-off, and two printed water tiles that butt with no visible step. Eleven library water tiles get KDL twins.</p>
+<p><strong>Shore and reeds: phase P4</strong>, with grass and the meadow. It ports the wet mask, rock order and reeds from <code>shorelab/shorelab.py</code>; nine water+grass library tiles get twins.</p>
+<p><strong>Status:</strong> not started. The level <code>water 2.6</code> exists; the look and its vocabulary do not yet. No parity contact sheet.</p>
+</details>
+
+<h3 id="open">Open issues</h3>
+<ul>
+  <li>The labs build only a 2×2 tile; other sizes are untested.</li>
+  <li>There is no KDL vocabulary for water, shore or reeds yet; it arrives in P3 and P4.</li>
+  <li>The Python library's water sits at 3.0 mm (<code>layers/water.py</code>), above the labs' and Rust's 2.6 mm, and uses the older look.</li>
+  <li>Still open from the waterlab work: open-water riders, the printability of the collar round rocks, and a seed sweep.</li>
+  <li>The water renders on this page predate the red-overhang rule. The water itself cannot overhang, but rocks and reeds in those renders were not audited.</li>
+  <li>A tall reed can push a shore tile past 15 mm, onto the tall base peg.</li>
+</ul>
+
+<h3 id="references">References</h3>
+<ul>
+  <li>The library's design note on wave-train water, <a href="../archive/python-library/water-surface-model.md">water-surface-model.md</a>, and the Rust study's <a href="../archive/rust-study/labs.html#waterlab">waterlab</a> and <a href="../archive/rust-study/labs.html#shorelab">shorelab</a> analyses.</li>
+  <li>Painted commercial water tiles: <a href="../reference/rocks/rocks-reference-waterfall-piles.png">waterfall and piles</a>, <a href="../reference/rocks/rocks-reference-high-waterfall-cliff.png">high waterfall cliff</a>.</li>
+</ul>
+
+<h3 id="history">History</h3>
+<p>The Python library tried four waters in June 2026; the one that stayed is low noise with scattered ripple arcs, and its shared edge sine became the tide every lab water uses. waterlab started on 28 Oct 2026 with a fixed bank-and-rock scene and compared generators side by side; seven rounds that day ended at swell-chaos, and the scenarios and enclosed-water fixes followed the same evening. shorelab put meadowlab's ground and waterlab's water across a real bank the same day, and was tuned over 28–29 Oct; its grass work became grasslab's stroke blades. The full texts are archived: waterlab's <a href="../archive/lab-logs/waterlab/requirements.html">requirements</a> and <a href="../archive/lab-logs/waterlab/design.html">design and iteration log</a>, shorelab's <a href="../archive/lab-logs/shorelab/requirements.html">requirements</a> and <a href="../archive/lab-logs/shorelab/design.html">design and iteration log</a>, and the Rust study's <a href="../archive/rust-study/variants.html">variants</a> and <a href="../archive/rust-study/notes.html">notes</a>.</p>
+</section>
+
+</article>
+</div>
+</body>
+</html>

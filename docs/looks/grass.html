@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Grass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks" aria-current="page">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Look · vegetation</div>
+  <h1>Grass</h1>
+  <p class="lede">Grass is a field of separate sculpted blades on gently rolling ground, combed into ribbons that meander in S-curves and part around a few eye-shaped patches of bare earth. Every blade is built the way a printer draws it, in whole 0.2 mm layers and 0.45 mm lines, so what you see in the model is what prints, with no supports. The tips overhang open air and the dirt shows between blades, so a dark prime and a drybrush give lit crests and dark gaps.</p>
+  <div class="hero-shots">
+    <figure><img src="img/grass-v3-2x2.jpg" alt="Grey 2x2 grass tile with meandering ribbons of blades and bare patches" width="900" height="616"></figure>
+    <figure><img src="img/grass-v3-close.jpg" alt="Close view of grass blades shingled along the flow, with a bare bank" width="900" height="584"></figure>
+  </div>
+  <p class="muted small">Left: a 2×2 tile, seed 1. Right: close up, blades shingled along the flow beside a bare bank. Both renders date from 29 Oct 2026 and predate the red-overhang render rule, so overhang faces are not painted.</p>
+  <div class="facts">
+    <div><div class="k">Sizes</div><div class="v">1×1 and up; 2×2 by default; blades 2.8–7.2 mm long</div></div>
+    <div><div class="k">Variants</div><div class="v">hills or flat; flow combed, wavy or wild (Rust)</div></div>
+    <div><div class="k">Printing</div><div class="v">no supports; FDM at 0.2 mm × 0.45 mm, or resin</div></div>
+    <div><div class="k">Bases</div><div class="v">DungeonBlocks today; OpenLOCK with the Rust port</div></div>
+    <div><div class="k">Available</div><div class="v">approved look (grasslab); in the Rust engine from phase P4</div></div>
+  </div>
+  <details class="words">
+    <summary>Words used on this page</summary>
+    <dl class="defs">
+      <dt>blade</dt><dd>One sculpted grass leaf: a stack of printed layers with a pointed tip.</dd>
+      <dt>flow</dt><dd>The smooth direction the grass leans, field-wide, like combed hair.</dd>
+      <dt>ribbon</dt><dd>A strand of blades shingled one after another along the flow, 15–30 mm long.</dd>
+      <dt>clearing</dt><dd>An eye-shaped patch of bare earth that the flow parts around.</dd>
+      <dt>bank</dt><dd>The edge of the grass where it meets a clearing: a pile of separate blades, not a wall.</dd>
+      <dt>undercut</dt><dd>The air under a blade's tip, which casts the shadow that makes grass read.</dd>
+    </dl>
+  </details>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#look">What it looks like</a></li>
+  <li><a href="#use">Using it in a tile</a></li>
+  <li><a href="#spec">Specification</a></li>
+  <li><a href="#printing">Printing and painting</a></li>
+  <li><a href="#how">How it is made</a></li>
+  <li><a href="#record">Design record</a></li>
+</ol></nav>
+<article class="doc">
+
+<h2 id="look">What it looks like</h2>
+<p>At tabletop distance grass reads because of its middle-scale order, not its fine detail. Blades gather into ribbons that follow one smooth flow. The flow meanders in gentle S-curves about 15 mm long, and neighbouring ribbons wave together, the way wind lays long grass flat. A 2×2 tile has at least three main directions, never one sweep across the board.</p>
+<p>Each blade stands on the dirt by itself: a keel at the bottom, a single-line ridge on top, pointed at both ends, rising from its root and levelling off toward a tip that overhangs open air. Blades overlap downstream like shingles. Between ribbons the dirt shows as dark seams.</p>
+<p>A few bare clearings, about one and a half per square and about a tenth of the tile, sit in low ground. They are eye-shaped, stretched along the flow. The grass parts at their upstream end and closes again downstream, like water round a stone, and their banks are piles of separate blades. The ground under everything rolls gently: hills rise from flat plains at the tile edge and never dip below it.</p>
+
+<figure class="shot">
+  <img src="img/grass-reference.jpg" alt="Painted sculpted grass tile with combed ribbons, bare patches and rocks, with close-ups" width="900" height="600" loading="lazy">
+  <figcaption>The target: the “Sculpted Grassy Terrain Tile Showcase” image Shawn supplied as the visual spec (<code>grasslab/reference/approved-reference.png</code>). The rocks in it come from the <a href="rocks.html">rocks</a> look; grass and rocks together are the <a href="composition.html">composition</a> look.</figcaption>
+</figure>
+
+<h2 id="use">Using it in a tile</h2>
+<p>In the Rust engine grass is a surface named on one line. The library keeps two presets in <code>library/parts/grass.kdl</code> (branch <code>rust/p1</code>), and <code>library/tiles/ground/2x2-grass-tree.kdl</code> uses one under a tree:</p>
+<pre><code>use "parts/grass" long-grass
+
+tile grass-tree size="2x2" seed=84 {
+    stack {
+        ground                          // flat, at the ground level (5 mm)
+        long-grass                      // grows round the trunk, wherever it is listed
+        tree height=40 { … }
+    }
+}</code></pre>
+<p>Or write the line yourself:</p>
+<pre><code>grass length=10 curl="36..81" tufts=3 cover="100%" flow=wavy</code></pre>
+<p>Change the tile's <code>seed</code> for different grass with the same character. The grass look reaches the Rust engine in phase P4 (see the <a href="../rust/plan.html">plan</a>). Until then the lab builds it:</p>
+<pre><code>python grasslab/grasslab.py --seed 1 --cols 2 --rows 2    # → grasslab/out/2x2-sculpted-grass-s1.stl
+python grasslab/grasslab.py --seed 1 --cols 1 --rows 1 --flat   # flat ground, for studying blades</code></pre>
+<p>The Python library's own grass (<code>ThatchGrass</code>, built by <code>dharmatiles-gen</code> from <code>src/tiles/</code>) is an older look; see the History below.</p>
+
+<h2 id="spec">Specification</h2>
+<h3 id="controls">Controls</h3>
+<p>The controls of the <code>grass</code> line in the tile language (<code>crates/dt-doc/src/looks.rs</code>). Everything else (hills, clearings, banks, rim steering, blade cross-section) is fixed at the approved values.</p>
+<div class="tbl"><table>
+<thead><tr><th>Control</th><th>Values</th><th>Default</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><code>length</code></td><td>mm, or a range</td><td>10</td><td>Blade length.</td></tr>
+<tr><td><code>curl</code></td><td>degrees, or a range</td><td>36–81</td><td>How far a blade bends over.</td></tr>
+<tr><td><code>tufts</code></td><td>per square</td><td>3</td><td>Clumps the blades gather into.</td></tr>
+<tr><td><code>cover</code></td><td>share, %</td><td>100%</td><td>Share of the ground grassed over.</td></tr>
+<tr><td><code>flow</code></td><td><code>combed</code>, <code>wavy</code>, <code>wild</code></td><td><code>wavy</code></td><td>How tidily the blades lean together. <code>wavy</code> is the approved meander (±10–30°); <code>combed</code> and <code>wild</code> are provisional.</td></tr>
+</tbody></table></div>
+<p class="muted small">The lab has no controls beyond <code>--seed</code>, <code>--cols</code>, <code>--rows</code> and <code>--flat</code>. The Rust defaults above come from the Python library and are retuned to the lab's blades in P4 (see Open issues).</p>
+
+<h3 id="sizes">Sizes and levels</h3>
+<ul>
+  <li><strong>Tile.</strong> Any size in 35 mm squares; 2×2 by default.</li>
+  <li><strong>Blades.</strong> 2.8–7.2 mm long (longer toward the downstream end of each swath), 2–4 lines (0.9–1.8 mm) wide, 1.5–2.0 mm tall. No grass stands more than 3.5 mm above the local ground.</li>
+  <li><strong>Grass top.</strong> The mean grass top sits in the DungeonBlocks grass band: 4.4–5.9 mm above the terrain datum (15.3–16.8 mm above the bottom of the piece). Seed 1 measures 5.24 mm.</li>
+  <li><strong>Ground.</strong> The tile edge is at 3.4 mm, the lowest ground on the tile. Hills rise from it to about 6.6 mm; at least 60% of the tile slopes 12° or less and nothing passes 34°.</li>
+  <li><strong>Clearings.</strong> 1.3–1.8 per square, at least 13 mm apart and 7 mm from the rim, covering about 10% of the tile, sunk 0.4 mm below the grass ground.</li>
+</ul>
+
+<h3 id="edges">Edges and joining tiles</h3>
+<ul>
+  <li>The ground feathers to the 3.4 mm edge level over the last 9 mm, so any two grass tiles meet flush at the ground.</li>
+  <li>Grass is never sliced at the edge. Blades are shortened so their tips stop just inside the wall, by a varying amount, so the rim is never a ruled line.</li>
+  <li>Near the rim the flow points at the wall or runs along it, never away from it, so the grass reads as running off the tile into the next one. The blades themselves do not line up across a seam.</li>
+  <li>Tile sizes, edge names and the edge contract are on the <a href="../standards/tile-system.html">tile system</a> page.</li>
+</ul>
+
+<h2 id="printing">Printing and painting</h2>
+<ul>
+  <li><strong>No supports, by construction.</strong> Each blade is a stack of 0.2 mm layers, each a whole number of 0.45 mm lines wide; nothing is narrower than one line, so the slicer drops nothing. Each layer reaches at most half a line past the one below.</li>
+  <li><strong>Undercut tips.</strong> Only the top layer reaches the tip; each layer below stops 0.2 mm short. The tip therefore overhangs air by design, in steps a printer can bridge.</li>
+  <li><strong>No islands.</strong> Every blade is sunk 0.3 mm into the ground. The STL is one watertight body that survives a float32 reload.</li>
+  <li><strong>FDM or resin.</strong> The STL is the stroke stack smoothed: the layer steps are melted, but the outline, keel and points are kept, so it also prints cleanly on resin.</li>
+  <li><strong>Painting.</strong> Prime dark and drybrush. Crests catch the highlight; the gaps between blades, the air under each tip and the seams between ribbons stay dark.</li>
+  <li><strong>File size.</strong> A 2×2 tile is about 1.7 million faces and 87 MB, and takes about 100 s to build.</li>
+</ul>
+<p>The full printing rules are on the <a href="../standards/printing.html">printing</a> page.</p>
+
+<h2 id="how">How it is made</h2>
+<p>The generator is <code>grasslab/grasslab.py</code> (line numbers at commit e0bcb77; the code last changed in 0616212). It builds the field first, then each blade, in seven stages:</p>
+<ol>
+  <li><strong>Hills.</strong> <code>make_ground</code> (line 238) draws smooth noise, keeps about 40% of the interior flat at the edge level, lets hills rise from it, caps the slope at 34° and feathers to the 3.4 mm edge.</li>
+  <li><strong>Flow.</strong> <code>make_direction</code> (line 311) sets a regional angle that drifts over about 15 mm, adds an S-curve meander in phase across neighbouring streamlines, and pulls slightly downhill. Working on one angle per point means the flow can never form a whorl.</li>
+  <li><strong>Swaths.</strong> Warped cells about 11 mm apart group the ribbons and make blades longer toward each cell's downstream end.</li>
+  <li><strong>Clearings and rim.</strong> <code>place_lenses</code> (line 442) puts eye-shaped clearings in low ground; <code>finish_flow</code> (line 467) bends the flow round each one; <code>steer_rim</code> (line 527) turns the flow toward or along the tile edge, choosing one turn direction per stretch of rim so it never meets itself head-on.</li>
+  <li><strong>Ribbons.</strong> <code>make_strand_roots</code> (line 645) seeds strands 2.65 mm apart and traces each 15–30 mm along the flow; blades root every half blade length along it. <code>draw_frond</code> (line 765) shortens blades at the rim, at clearings and at obstacles (never slicing), and makes shortened blades lower.</li>
+  <li><strong>Blades.</strong> <code>blade_layers</code> (line 812) builds the stroke stack: line counts per layer such as 2 3 4 4 4 4 4 3 2 1, a convex rise, the raked tip and pointed ends. <code>blade_mesh</code> (line 860) lofts through the layer outlines, blurs lightly, meshes at 0.05 mm, seats the blade on the hills and reduces it to 1,500 faces.</li>
+  <li><strong>Assembly.</strong> The dirt ground (with the shared dirt texture from <a href="ground.html">ground</a>) and every blade are unioned, then <code>attach_base</code> (line 999) adds the DungeonBlocks base, keeps the largest body and exports through <code>stl_safe</code> (line 1060).</li>
+</ol>
+<details>
+  <summary>Key constants</summary>
+  <div class="tbl"><table>
+  <thead><tr><th>Constant</th><th>Line</th><th>Value</th><th>Meaning</th></tr></thead>
+  <tbody>
+  <tr><td><code>GROUND_EDGE_MM</code></td><td class="num">44</td><td>3.4</td><td>Edge level, the lowest ground.</td></tr>
+  <tr><td><code>HILL_PLAIN_FRAC</code></td><td class="num">48</td><td>0.4</td><td>Share of the interior left flat.</td></tr>
+  <tr><td><code>MAX_GROUND_SLOPE_DEG</code></td><td class="num">51</td><td>34</td><td>Steepest ground.</td></tr>
+  <tr><td><code>MEANDER_WAVELENGTH_MM</code>, <code>MEANDER_AMP_DEG</code></td><td class="num">58</td><td>15; 10–30°</td><td>The S-curve of the flow.</td></tr>
+  <tr><td><code>SOIL_LENSES_PER_SQ</code></td><td class="num">74</td><td>1.3–1.8</td><td>Clearings per square.</td></tr>
+  <tr><td><code>STRAND_SPACING_MM</code>, <code>STRAND_LEN_MM</code></td><td class="num">108</td><td>2.65; 15–30</td><td>Ribbon spacing and length.</td></tr>
+  <tr><td><code>FROND_LEN_MM</code>, <code>FROND_H_MM</code></td><td class="num">115</td><td>3.5–6.5; 1.5–2.0</td><td>Blade length (before the swath scaling) and height.</td></tr>
+  <tr><td><code>LINE_W_MM</code>, <code>LAYER_MM</code></td><td class="num">130</td><td>0.45; 0.2</td><td>The printer's line and layer.</td></tr>
+  <tr><td><code>KEEL_LINES</code>, <code>TOP_LINES</code>, <code>MAX_LINES</code></td><td class="num">132</td><td>2; 1; 2–4</td><td>Blade width in lines: keel, ridge, body.</td></tr>
+  <tr><td><code>RAKE_MM</code></td><td class="num">136</td><td>0.2</td><td>How much shorter each lower layer stops: the undercut.</td></tr>
+  <tr><td><code>EMBED_MM</code></td><td class="num">143</td><td>0.3</td><td>How deep blades sink into the ground.</td></tr>
+  <tr><td><code>BLADE_FACES</code></td><td class="num">144</td><td>1,500</td><td>Faces per smoothed blade.</td></tr>
+  <tr><td><code>DB_GRASS_BAND</code></td><td class="num">161</td><td>4.4–5.9</td><td>DungeonBlocks band for the mean grass top.</td></tr>
+  </tbody></table></div>
+  <p class="small">Single blades can be inspected with <code>python grasslab/blades_demo.py</code> (add <code>--strokes</code> for the raw FDM stroke stack).</p>
+</details>
+
+<section class="record" id="record">
+<h2>Design record</h2>
+<p>For the people developing the look: Shawn's rulings, the requirements, audit numbers, the variant history and open issues. Owned by the labs (grasslab, used by meadowlab and shorelab). Approved: grasslab v3, stroke blades, 29 Oct 2026.</p>
+
+<details id="rulings">
+<summary>Rulings (20)</summary>
+<p>Shawn's decisions, oldest first. Each holds unless a later line replaces it. The 27 Oct rulings come from the lab's iteration log (v1c–v2f).</p>
+<div class="tbl"><table>
+<thead><tr><th class="d">Date</th><th>Ruling</th><th>Shawn's words</th></tr></thead>
+<tbody>
+<tr><td class="d">3 Jul</td><td>Library field-simulation grass is flat by construction; its blade shape is kept, its arrangement and relief rebuilt.</td><td class="q">“blade shape is fine.” · “the reference ends up being lumpy and organic, current grass renders flat with grass flat across a surface.”</td></tr>
+<tr><td class="d">3 Jul</td><td>ThatchGrass (bushy) becomes the library's default grass.</td><td class="q">“The bushy one is great. Good as defaults. Good as default grass.”</td></tr>
+<tr><td class="d">27 Oct</td><td>More relief and a few bare patches.</td><td class="q">“increase the hills a bit… a few patches of bare ground”</td></tr>
+<tr><td class="d">27 Oct</td><td>Slightly more of both.</td><td class="q">“slightly more hills, slightly more bare patches”</td></tr>
+<tr><td class="d">27 Oct</td><td>Puddle-shaped patches with trench rims and bubble pebbles are rejected.</td><td class="q">“bare patches are terrible”</td></tr>
+<tr><td class="d">27 Oct</td><td>Grass must end as grass: no bevels, carved walls or border steps. Grass height exists only as blades.</td><td class="q">“the grass is just being uniformly chopped down like it was all made of clay.”</td></tr>
+<tr><td class="d">27 Oct</td><td>More hills and bigger bare patches.</td><td class="q">“more hills and bigger bare patches”</td></tr>
+<tr><td class="d">27 Oct</td><td>Clean up artefacts in the bare patches.</td><td class="q">“bare patches have some weird artifacts”</td></tr>
+<tr><td class="d">27 Oct</td><td>Grass at the rim must not point away from the edge.</td><td class="q">“shouldn't point in the other direction”</td></tr>
+<tr><td class="d">27 Oct</td><td>Curve the grass, coherently.</td><td class="q">“our grass is very straight… should be more curved, but not randomly”</td></tr>
+<tr><td class="d">27 Oct</td><td>More curves and several directions.</td><td class="q">“more curves… not just one big sweep”</td></tr>
+<tr><td class="d">27 Oct</td><td>After the lodged-grass photo: the flow carries direction; ribbons follow it.</td><td class="q">“go with the flow-following ribbons”</td></tr>
+<tr><td class="d">27 Oct</td><td>Shorter blades at miniature scale, keeping the meander.</td><td class="q">“at miniature scale the blades should be shorter… still like that meandering look”</td></tr>
+<tr><td class="d">27 Oct</td><td>Blade length: halfway between the two tries.</td><td class="q">“split the difference”</td></tr>
+<tr><td class="d">27 Oct</td><td>Banks are piles of blades, not walls.</td><td class="q">“a big pile of grass leans up right against [a clearing]… undercuts at the bottom of the grass blade so there's clear ridges down the side.”</td></tr>
+<tr><td class="d">27 Oct</td><td>Hills rise from a constant perimeter; nothing dips below the edge.</td><td>—</td></tr>
+<tr><td class="d">28 Oct</td><td>grasslab and rocklab approved; keep the labs standalone.</td><td class="q">“spectacular job on both grass and rocks… I love your work.”</td></tr>
+<tr><td class="d">28–29 Oct</td><td>Undercuts were not real: the heightfield blades never left air under the tips.</td><td class="q">“there is no undercut” · “the top of the blade doesn't fill the volume we define”</td></tr>
+<tr><td class="d">29 Oct</td><td>Model the blade in printer units, and stand blades on dirt with no turf mass.</td><td class="q">“make it more honest about the shape, so that we can refine THAT rather than a theoretical ideal.” · “no turf mass.”</td></tr>
+<tr><td class="d">29 Oct</td><td>Stroke blades become the only grass method.</td><td class="q">“make that the … only way to generate grass blades”</td></tr>
+</tbody></table></div>
+</details>
+
+<details id="requirements">
+<summary>Requirements</summary>
+<p>The lab's requirement IDs from revision 4 (29 Oct 2026), with when each arrived. [S] is checked by a script or statistic, [R] by eye. The full text, with every failure mode and the retired requirements, is in the <a href="../archive/lab-logs/grasslab/requirements.html">archive</a>.</p>
+<ul>
+  <li><strong>REQ-OUT-1…6 [S]</strong> One binary STL per run; one closed watertight body; DungeonBlocks base with the mean grass top in the 4.4–5.9 mm band; deterministic per seed; under 100 MB and 2 minutes at 2×2.</li>
+  <li><strong>REQ-B-1 [S]</strong> Whole 0.2 mm layers and whole 0.45 mm lines; nothing narrower than a line. <em>Added 29 Oct (replaces the voxel rules REQ-FDM-1…8).</em></li>
+  <li><strong>REQ-B-2…5 [R]</strong> Keel of at least 2 lines, single-line ridge, width growing at most one line per layer; a convex arch; a raked bow (each lower layer 0.2 mm shorter); every section pointed at both ends. <em>Added 29 Oct.</em></li>
+  <li><strong>REQ-B-6 [R]</strong> The STL blade is the stroke stack smoothed: no layer steps. <em>Added 29 Oct.</em></li>
+  <li><strong>REQ-B-7 [S]</strong> Every blade fused 0.3 mm into the ground; grass at most 3.5 mm above the ground. <em>Added 29 Oct.</em></li>
+  <li><strong>REQ-B-8 [S]</strong> An overhang and crumb audit on every output. <em>Added 29 Oct.</em></li>
+  <li><strong>REQ-HILL-1…6</strong> Independent rolling ground, 15–40 mm landforms, at least 60% at ≤ 12°, none over 34°, feathered to a constant edge. <em>REQ-HILL-3 amended 27 Oct: rises only; the perimeter is the lowest ground.</em></li>
+  <li><strong>REQ-FL-1…5 [R]</strong> Blades follow streamlines of one field; meandering, in-phase flow with at least three directions per 2×2; ribbons 2–3 mm apart; flow wraps round clearings; no whorls. <em>Added 27 Oct (v2a), replacing swath fans and sickle bends.</em></li>
+  <li><strong>REQ-FL-6 [R]</strong> Banks read as piles of blades. <em>Added 27 Oct (v2e).</em></li>
+  <li><strong>REQ-SW-1 [S]</strong> Swaths cover everything. <em>Amended 29 Oct: they no longer carry a height wave.</em></li>
+  <li><strong>REQ-FR-1, 2, 5 [R]</strong> Blades 2.8–7.2 mm along the flow, shingled downstream, varied with no repeats.</li>
+  <li><strong>REQ-FR-3 [R]</strong> Blades on dirt; no pad, skirt or filler. <em>Amended 29 Oct: “no turf mass.”</em></li>
+  <li><strong>REQ-EDGE-1…5 [R]</strong> Grass is only blades; banks and the rim are blade outlines; blades shortened, never sliced; shortened blades lower. <em>Added 27 Oct (v1f) after the “clay” ruling.</em></li>
+  <li><strong>REQ-EDGE-7, 8 [R]</strong> Flow runs to or along the rim, one turn side per stretch; irregular rim endings. <em>Amended 27 Oct (v2g) after the meadow seed sweep.</em></li>
+  <li><strong>REQ-SOIL-1…4</strong> Eye-shaped clearings along the flow, 1.3–1.8 per square, about 10% of the tile; blades lap 0.8–3.2 mm into them; shared dirt texture, 0.4 mm dip, no outlining step. <em>REQ-SOIL-4 amended 29 Oct: the shared dirt texture replaces pebbles.</em></li>
+  <li><strong>REQ-GR-1, 2 [R]</strong> Dark gaps and air under every tip; no terracing or ribs.</li>
+</ul>
+<h3>Named failure modes</h3>
+<p>Hair, moss, tufts and crowns, shag carpet, wood grain, worms, stamped repetition (fish scales), fingerprints, crumpled foil, flat or melted, fragile literal grass, tent peaks, Z-jitter, terracing, ragged rim, puddles, bubbles, cracks, clay cut, soil debris, wall sprouts, rigid sticks, ruled rim, commas, smooth bank wall, rim seam. Pre-paint test: the bare grey print must read as grass.</p>
+<h3>Acceptance scenes</h3>
+<div class="tbl"><table>
+<thead><tr><th>Scene</th><th>Content</th><th>Passes when</th></tr></thead>
+<tbody>
+<tr><td>S0 hills only</td><td>2×2, grass off</td><td>Reads as natural ground.</td></tr>
+<tr><td>S1 flat study</td><td>1×1, <code>--flat</code></td><td>Ribbons, blades, undercut tips and gaps read clearly. Judged first.</td></tr>
+<tr><td>S2 approved tile</td><td>2×2 with hills, seed 1</td><td>Every requirement holds; no failure mode visible.</td></tr>
+<tr><td>S3 seed sweep</td><td>S2 at seeds 1–6</td><td>At least 5 of 6 pass; none looks stamped.</td></tr>
+<tr><td>S4 print</td><td>S2 printed, primed, drybrushed</td><td>Tip and bank shadows survive, grooves stay dark, nothing breaks.</td></tr>
+</tbody></table></div>
+</details>
+
+<details id="audit">
+<summary>Audit numbers (v3, seed 1, 2×2)</summary>
+<p><strong>By construction:</strong> whole layers and lines (opening each layer by just under half a line keeps at least 99.9% of it); growth of at most half a line per side per layer; the tip rake; blades sunk 0.3 mm; one scalar flow angle, so no whorls; blades shortened, never sliced.</p>
+<p><strong>Checked:</strong> <code>audit_overhang</code> (line 1086) sums faces steeper than 48° below horizontal; <code>stl_safe</code> (line 1060) rounds to float32, merges vertices and refuses anything that is not one watertight body; the run prints the DB band check.</p>
+<div class="tbl"><table>
+<thead><tr><th>Check</th><th>Seed 1</th></tr></thead>
+<tbody>
+<tr><td>Ground</td><td>3.40–6.58 mm, max slope 34.0°, 78% ≤ 12°</td></tr>
+<tr><td>Clearings</td><td>6 lenses, 9.6% of the tile; dirt between blades 9.1%</td></tr>
+<tr><td>Blades</td><td>3,288; ≥ 99.9% of every stroke layer wider than a line</td></tr>
+<tr><td>Grass above ground</td><td>mean 1.28, p95 2.00, max 2.20 mm</td></tr>
+<tr><td>Mean grass top</td><td>5.24 mm (in band)</td></tr>
+<tr><td>Overhang audit</td><td>15.4 mm² (0.14%)</td></tr>
+<tr><td>Mesh, size, time</td><td>1.74 M faces, watertight, 87 MB, about 100 s</td></tr>
+</tbody></table></div>
+</details>
+
+<details id="variants">
+<summary>Variant history</summary>
+<p>One line per variant, oldest first. Grass was rebuilt more often than any other look; the full family tree with every pipeline is on the archived <a href="../archive/rust-study/variants.html">variants page</a>.</p>
+<div class="tbl"><table>
+<thead><tr><th class="d">Date</th><th>Variant</th><th>What changed, and why</th></tr></thead>
+<tbody>
+<tr><td class="d">26–27 May</td><td>E0 heightmap emboss</td><td>2D blade strokes embossed by OpenSCAD, at most 2 mm deep. A texture, not grass.</td></tr>
+<tr><td class="d">28 May</td><td>E1 painter's-algorithm scene</td><td>A crisp swirl of lens blades, still a texture. “geometry is completely broken (at steep tilt)”.</td></tr>
+<tr><td class="d">28–30 May</td><td>E2 first 3D blades</td><td>Arched blades over a support field; heights blew up.</td></tr>
+<tr><td class="d">1–5 Jun</td><td>E4 GrownGrass</td><td>Spiky crossing tubes with support posts; bald spots.</td></tr>
+<tr><td class="d">6 Jun – 3 Jul</td><td>E5 FloppyGrassLayer</td><td>Total coverage of near-flat ribbons: flat by construction.</td></tr>
+<tr><td class="d">9 Jun →</td><td>E6 GrassCarpet</td><td>An embossed blade carpet; still under the library grass.</td></tr>
+<tr><td class="d">3 Jul</td><td>E8 ThatchGrass (library default)</td><td>Mound substrate with sheaves of curled blades. “The bushy one is great.”</td></tr>
+<tr><td class="d">27 Oct</td><td>grasslab v0</td><td>Random lens blades in a voxel volume: crumpled foil. Never committed.</td></tr>
+<tr><td class="d">27 Oct</td><td>grasslab v1a–v1k (64572fb, 1613bc1)</td><td>Swath fronds, then sickle bends: “clumps of commas”, and clay-cut edges.</td></tr>
+<tr><td class="d">27–29 Oct</td><td>grasslab v2 (3429f18, 144b46b)</td><td>Flow ribbons, clearings and rises-only hills; heightfield blades whose undercuts were hidden voids.</td></tr>
+<tr><td class="d">29 Oct</td><td><strong>grasslab v3 (0616212), approved</strong></td><td>Stroke blades in printer units, smoothed, standing on dirt. The only grass method.</td></tr>
+</tbody></table></div>
+<figure class="shot">
+  <img src="img/grass-lineage.jpg" alt="Eighteen renders of grass variants, oldest to newest" width="900" height="393" loading="lazy">
+  <figcaption>All eighteen grass variants, oldest (top left) to newest (bottom right). Renders recovered from git history; they predate the red-overhang rule.</figcaption>
+</figure>
+<figure class="shot narrow">
+  <img src="img/grass-thatch-library.jpg" alt="Grey 1x1 tile of bushy library grass" width="900" height="651" loading="lazy">
+  <figcaption>ThatchGrass, the Python library's default grass since 3 Jul (E8). Predates the red-overhang rule.</figcaption>
+</figure>
+</details>
+
+<details id="rust">
+<summary>Rust port</summary>
+<p><strong>Phase P4</strong>, “Grass, meadow, shore and reeds, the first real test of plan-then-build”. Exit gate: blades watertight at about 1,500 faces, bare earth at 20% ± 3 points (meadow), meadow builds in 15 s or less (from 85 s), Shawn's sign-off and a test print. The <code>grass</code> line exists in the vocabulary (<code>crates/dt-doc/src/looks.rs</code>) and two presets are in the library, but nothing builds grass yet. No parity contact sheet yet.</p>
+</details>
+
+<h3 id="open">Open issues</h3>
+<ul>
+  <li>The Rust <code>grass</code> controls (length 10 mm, curl 36–81°, tufts 3 per square) come from the Python library's grass, not grasslab: lab blades are 2.8–7.2 mm long, have no curl control and do not gather in tufts. P4 must map them to the lab or change the vocabulary.</li>
+  <li>The lab audits overhangs at 45° (+3°), stricter than the 55° ruling made for cliffs on 31 Oct.</li>
+  <li>The approved renders predate the red-overhang render rule; new renders should paint overhang faces red.</li>
+  <li>A 2×2 tile is 87 MB and about 100 s to build, roughly 30 times slower than the library grass; most of the time is meshing blades.</li>
+  <li>Grass does not tile seamlessly: neighbouring tiles meet at the edge level, but ribbons do not continue across the seam (out of scope for the lab).</li>
+  <li>No S4 test print of v3 is recorded.</li>
+</ul>
+
+<h3 id="references">References</h3>
+<ul>
+  <li>The target image (above), <code>grasslab/reference/approved-reference.png</code>, and Shawn's wind-lodged grass photo (long combed ribbons in S-curves parting round bare patches), shared in the session on 27 Oct and not kept in the repo.</li>
+  <li>The Python library's grass photos and renders from July: <a href="../archive/history/grass/grass-reference.png">reference</a>, <a href="../archive/history/grass/grass-reference-printed.png">printed reference</a>, <a href="../archive/history/grass/grass-current-2026-07-03.png">library grass on 3 Jul</a>.</li>
+</ul>
+
+<h3 id="history">History</h3>
+<p>Grass started in May as embossed 2D textures, became 3D blades grown over a support field in June, and settled in the library as ThatchGrass on 3 Jul 2026, which <code>dharmatiles-gen</code> still uses. grasslab started again from a requirements interview on 27 Oct, went through two generations of heightfield blades in two days, and on 29 Oct rebuilt every blade in printer units: that is the approved look, also used by meadowlab and shorelab.</p>
+<p>The full texts are archived: grasslab's <a href="../archive/lab-logs/grasslab/requirements.html">requirements</a> and <a href="../archive/lab-logs/grasslab/design.html">design and iteration log</a>; the library pages for <a href="../archive/python-library/grass-mound-thatch.html">mound-thatch grass</a> and the <a href="../archive/python-library/grass-underlay.html">grass underlay</a>; the July <a href="../archive/history/2026-07-03-grass-greenfield-requirements.md">greenfield requirements interview</a>; the older field-simulation grass (<a href="../archive/history/floppy-grass-algorithm.md">algorithm</a>, <a href="../archive/history/grass/requirements.md">requirements</a>, <a href="../archive/history/grass/design.md">design</a>); and the Rust study's <a href="../archive/rust-study/labs.html#grasslab">lab analysis</a> and <a href="../archive/rust-study/variants.html">variants</a>.</p>
+</section>
+
+</article>
+</div>
+</body>
+</html>

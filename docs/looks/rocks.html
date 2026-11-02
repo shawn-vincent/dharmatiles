@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rocks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks" aria-current="page">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Look · rock and earth</div>
+  <h1>Rocks</h1>
+  <p class="lede">Rocks are loose, chiselled stones scattered over the ground: a handful per square, 6–15 mm across, some alone and some in small fused clusters. Every rock is cut into flat facets of mixed sizes with crisp edges, chipped corners and a fine grain, so a drybrush picks out every edge. They print on an FDM printer with no supports.</p>
+  <div class="hero-shots">
+    <figure><img src="img/rocks-tile-2x2-s1.jpg" alt="Grey 2x2 tile of dirt with a dozen faceted rocks and small clusters" width="900" height="611"></figure>
+    <figure><img src="img/rocks-hero-close.jpg" alt="Close-up of one faceted rock with a small stone fused to its side" width="900" height="609"></figure>
+  </div>
+  <p class="muted small">Left: a 2×2 tile, seed 1. Right: one rock close up. Both are grey renders from 27 Oct 2026; they predate the red-overhang rule. The measured overhang on these tiles is 0.00–0.02 mm², so a red paint would show almost nothing.</p>
+  <div class="facts">
+    <div><div class="k">Sizes</div><div class="v">rocks 6–15 mm wide, 2.5–9 mm tall; 9–12 per 2×2 tile</div></div>
+    <div><div class="k">Shapes</div><div class="v">dome, slab, wedge, block; a quarter are clusters of 2–4</div></div>
+    <div><div class="k">Printing</div><div class="v">no supports; no face leans past 30° from vertical</div></div>
+    <div><div class="k">Bases</div><div class="v">DungeonBlocks today; OpenLOCK with the Rust port</div></div>
+    <div><div class="k">Available</div><div class="v">approved look (rocklab); in the Rust engine from phase P3</div></div>
+  </div>
+  <details class="words">
+    <summary>Words used on this page</summary>
+    <dl class="defs">
+      <dt>facet</dt><dd>One flat face of a rock, 2–7 mm across.</dd>
+      <dt>chip</dt><dd>A small flat cut off a corner or edge, 0.2–0.9 mm deep.</dd>
+      <dt>grain</dt><dd>The fine roughness over every face, about 0.1 mm high, that catches a drybrush.</dd>
+      <dt>cluster</dt><dd>Two to four stones of different sizes leaning together, fused into one piece.</dd>
+      <dt>scatter</dt><dd>How rocks are spread over a tile: how many, how far apart.</dd>
+    </dl>
+  </details>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#look">What it looks like</a></li>
+  <li><a href="#use">Using it in a tile</a></li>
+  <li><a href="#spec">Specification</a></li>
+  <li><a href="#printing">Printing and painting</a></li>
+  <li><a href="#how">How it is made</a></li>
+  <li><a href="#stone-finish">Stone finish</a></li>
+  <li><a href="#record">Design record</a></li>
+</ol></nav>
+<article class="doc">
+
+<h2 id="look">What it looks like</h2>
+<p>Each rock is broad and flat at the bottom and never wider above the ground than at it, so it sits on the earth rather than perching. A few large facets give it its mass; many small ones break up the corners, like a stone that has been knapped. No two rocks on a tile are copies: each draws its own footprint (round to twice as long as wide), height, profile and facets. About one placement in four is a cluster of two to four stones of different sizes leaning together. The ground between them is bare dirt, with open floor left for miniature bases.</p>
+<p>The target is a sheet of about sixty painted miniature rocks:</p>
+<figure class="shot">
+  <img src="img/rocks-reference-sheet.jpg" alt="About sixty painted blue-grey faceted miniature rocks in rows on a white background" width="900" height="600" loading="lazy">
+  <figcaption>The approved visual target (<code>rocklab/reference/approved-reference.png</code>): chiselled, blue-grey rocks with lighter edge highlights. Colour is paint and out of scope; the shapes are the spec.</figcaption>
+</figure>
+<div class="tbl"><table>
+<thead><tr><th>Shape</th><th>What it is</th><th>Share</th></tr></thead>
+<tbody>
+<tr><td>dome</td><td>A rounded mound, widest at the ground</td><td>35%</td></tr>
+<tr><td>wedge</td><td>A ridge or pyramid whose peak leans to one side</td><td>25%</td></tr>
+<tr><td>slab</td><td>A low, flat-topped stone, about 60% of the usual height</td><td>20%</td></tr>
+<tr><td>block</td><td>A blocky stone on a squarish footprint</td><td>20%</td></tr>
+</tbody></table></div>
+
+<h2 id="use">Using it in a tile</h2>
+<p>In the Rust engine a tile is a short KDL document that names looks. Rocks are things (<code>rock</code>, <code>stone</code>, <code>boulder</code>, <code>pebble</code>: one look with different default sizes), and more than one of them is a <code>scatter</code>. A 2×2 tile of dirt with rocks at rocklab's sizes and density reads:</p>
+<pre><code>tile rocks size="2x2" seed=1 {
+    stack {
+        dirt
+        scatter per-square=2.6 gap=1.5 {
+            rock size="6..15" mostly=small shape=angular
+        }
+    }
+}</code></pre>
+<p>This example is written for this page against the vocabulary in <code>crates/dt-doc/src/looks.rs</code> (branch <code>rust/p1</code>); the library has no rock-only tile yet. Rocks also appear inside other looks: scree at the foot of a <a href="cliffs.html">cliff</a> is stones and boulders scattered <code>against=cliff</code>. The rock look reaches the Rust engine in phase P3 (see the <a href="../rust/plan.html">plan</a>). Until then the lab builds it: <code>python rocklab/rocklab.py --seed 1 --cols 2 --rows 2</code> writes <code>rocklab/out/2x2-rocks-s1.stl</code> with a DungeonBlocks base. The language as a whole is on the <a href="../rust/language.html">language page</a>.</p>
+
+<h2 id="spec">Specification</h2>
+<h3 id="controls">Controls</h3>
+<p>The controls of a <code>rock</code> (and of <code>stone</code>, <code>boulder</code> and <code>pebble</code>), and of the <code>scatter</code> that places them. Facets, chips, grain and the cluster rule are fixed at the approved values.</p>
+<div class="tbl"><table>
+<thead><tr><th>Control</th><th>Values</th><th>Default</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><code>size</code></td><td>mm range</td><td>rock <code>2..10</code>; stone <code>1..6</code>; boulder <code>4.5..8</code>; pebble <code>1..2.2</code></td><td>Rock width. rocklab's approved range is 6–15 mm.</td></tr>
+<tr><td><code>mostly</code></td><td><code>small</code>, <code>even</code>, <code>large</code></td><td><code>even</code></td><td>Skews the size range. rocklab is skewed small.</td></tr>
+<tr><td><code>shape</code></td><td><code>rounded</code>, <code>angular</code>, <code>flat</code></td><td>—</td><td>River stones, broken rock, or flat slabs.</td></tr>
+<tr><td><code>wear</code></td><td><code>crisp</code>, <code>worn</code></td><td>—</td><td>Sharp edges, or chipped and rounded edges.</td></tr>
+<tr><td><code>buried</code></td><td>%</td><td>—</td><td>How much of each rock is under the ground.</td></tr>
+<tr><td>scatter <code>count</code> / <code>per-square</code></td><td>number</td><td>—</td><td>How many: in total, or per 35 mm square. rocklab places 9–12 per 2×2 tile.</td></tr>
+<tr><td>scatter <code>gap</code></td><td>mm</td><td>—</td><td>Least space between rocks. rocklab keeps 1.5 mm.</td></tr>
+<tr><td>scatter <code>clumps</code></td><td>per square</td><td>spread evenly</td><td>Gathers rocks into clumps.</td></tr>
+</tbody></table></div>
+
+<h3 id="sizes">Sizes and levels</h3>
+<ul>
+  <li><strong>Rocks.</strong> 6–15 mm wide, skewed small; 2.5–9 mm tall (height 0.45–0.85 of the width, slabs lower). Stones in a cluster are at least 4 mm wide.</li>
+  <li><strong>Density.</strong> 9–12 placements on a 2×2 tile, at least 1.5 mm apart. A placement that finds no free spot is dropped.</li>
+  <li><strong>Ground.</strong> The dirt surface sits 4.0 mm above the base datum, inside the DungeonBlocks dirt band. Rocks sink 0.55 mm into it, so no gap shows under them.</li>
+</ul>
+
+<h3 id="edges">Edges and joining tiles</h3>
+<ul>
+  <li>Every rock lies inside the tile, at least 1 mm from its edge. Nothing is cut by the tile boundary, so any rock tile butts against any other.</li>
+  <li>The ground between rocks is the shared dirt surface, so a rock tile meets a plain dirt tile with the same texture. Edge levels and the edge contract are on the <a href="../standards/tile-system.html#edges">tile system</a> page.</li>
+</ul>
+
+<h2 id="printing">Printing and painting</h2>
+<ul>
+  <li><strong>No supports.</strong> Print base down with a 0.4 mm nozzle. No face points down more than 30° past vertical, well inside the project's 55° limit.</li>
+  <li><strong>No floating pieces.</strong> Each rock and cluster is fused into the ground; the tile is one watertight body that survives a float32 reload.</li>
+  <li><strong>Small rocks stay printable.</strong> Chip depth scales with the rock's size, and the grain is only about 0.12 mm high and fades to nothing at the base.</li>
+  <li><strong>Painting.</strong> Prime dark and drybrush: the crisp facet edges catch the highlight and the grain gives the brush something to grip.</li>
+</ul>
+<p>The full printing rules are on the <a href="../standards/printing.html">printing</a> page.</p>
+
+<h2 id="how">How it is made</h2>
+<p>The generator is <code>rocklab/rocklab.py</code>. Every rock is a convex solid cut by flat planes, so its facets come from planes rather than from bumping a surface. That is why the edges stay crisp and the facets come in mixed sizes. Five stages:</p>
+<ol>
+  <li><strong>Body.</strong> <code>make_body</code> (line 146) takes the convex hull of 75–145 points on a profile that never widens going up (dome, slab, block or wedge), on an elliptical footprint, with ±8% lumps that depend only on the angle round the rock.</li>
+  <li><strong>Facets.</strong> <code>cut_facets</code> (line 187) scatters seeds over the body with mixed spacing (0.9–2.5 mm, scaled by rock size). Each seed gives one plane, tilted up to 14° off the surface. The rock is the intersection of those planes: 30–165 facets.</li>
+  <li><strong>Chips.</strong> <code>chip_corners_edges</code> (line 231) cuts smaller planes off corners and sharp edges. Each chip removes at most 3% of the rock, and a rock gets 8–16 chips.</li>
+  <li><strong>Grain.</strong> <code>texture</code> (line 283) refines the mesh to 0.25 mm and pushes each point in or out by a fine noise (0.45 mm scale, ±0.12 mm), halved near sharp edges and zero at the base.</li>
+  <li><strong>Scatter.</strong> <code>make_item</code> (line 339) makes a rock or a cluster; <code>scatter</code> (line 360) places the items largest first, at random, keeping them apart and inside the rim. <code>build_tile</code> (line 384) sinks them into the dirt and fuses everything to the base.</li>
+</ol>
+<p>Every cut is a flat plane through a convex solid, so the rock stays convex, grounded and printable at every step. Clusters are unions of convex rocks, so the same holds for them.</p>
+<details>
+  <summary>Key constants</summary>
+  <div class="tbl"><table>
+  <thead><tr><th>Constant</th><th>Line</th><th>Value</th><th>Meaning</th></tr></thead>
+  <tbody>
+  <tr><td><code>SURFACE_MM</code>, <code>SINK_MM</code>, <code>DIRT_SINK_MM</code></td><td class="num">32</td><td>4.0; 0.3 + 0.25</td><td>Ground level; how far rocks sink into it.</td></tr>
+  <tr><td><code>WIDTH_MM</code>, <code>WIDTH_EXP</code></td><td class="num">37</td><td>6–15; 1.4</td><td>Rock width, skewed small.</td></tr>
+  <tr><td><code>HEIGHT_RATIO</code>, <code>HEIGHT_CAP_MM</code></td><td class="num">40</td><td>0.45–0.85; 9</td><td>Height as a share of width; tallest rock.</td></tr>
+  <tr><td><code>FAMILIES</code></td><td class="num">44</td><td>dome 35 / slab 20 / block 20 / wedge 25 %</td><td>Profile shares.</td></tr>
+  <tr><td><code>FACET_R_MM</code>, <code>FACET_TILT_DEG</code></td><td class="num">53</td><td>0.9–2.5; 14°</td><td>Facet spacing; facet tilt.</td></tr>
+  <tr><td><code>FACET_MIN_NZ</code></td><td class="num">57</td><td>−0.5</td><td>No facet or chip points down past 30°.</td></tr>
+  <tr><td><code>MAX_CHIPS</code>, <code>CHIP_MAX_LOSS</code></td><td class="num">67</td><td>8–16; 3%</td><td>Chips per rock; most a chip may remove.</td></tr>
+  <tr><td><code>GRAIN_MM</code>, <code>GRAIN_AMP_MM</code></td><td class="num">72</td><td>0.45; 0.12</td><td>Grain scale and height.</td></tr>
+  <tr><td><code>CLUSTER_PROB</code>, <code>CLUSTER_STONES</code></td><td class="num">78</td><td>0.25; 2–4</td><td>Cluster share and size.</td></tr>
+  <tr><td><code>CLEARANCE_MM</code>, <code>RIM_MM</code></td><td class="num">86</td><td>1.5; 1.0</td><td>Gap between rocks; gap to the tile edge.</td></tr>
+  </tbody></table></div>
+</details>
+
+<h3 id="stone-finish">Stone finish</h3>
+<p>Rocks, cliffs and walls share one idea of what worked stone looks like at miniature scale. Photos and measured DungeonBlocks floors show the same thing: stone reads as a <em>calm plateau carved downward</em>. Most of a face is flat; the relief is recesses, worn channels and shallow dished patches, with almost nothing finer than 2 mm. Even waves of noise, which go up as much as down, read as choppy water or wrinkled cloth instead.</p>
+<ul>
+  <li><strong>The relief pass.</strong> <code>stone_relief</code> (<code>src/dharmatiles/stone/finish.py:31</code>) carves a noise field downward where it passes a threshold, so about half the surface stays untouched, then adds a gentle dish so big faces are not dead planes. The noise is isotropic value noise (<code>stone/noise.py</code>), with no stripes to line up on a flat face. At its defaults it matches the measured DungeonBlocks floor: about 0.35 mm RMS, skewed downward.</li>
+  <li><strong>Who uses it.</strong> Library wall blocks, floor slabs, fieldstone and scatter stones use <code>stone_relief</code> directly (<code>walls/masonry.py</code>, <code>walls/fieldstone.py</code>, <code>scatter/stones.py</code>). rocklab rocks get their texture from facets and chips instead, with only a fine grain from the same noise module. Cliffs use their own sub-face cuts and grain.</li>
+  <li><strong>Discrete marks stay separate.</strong> Chips, cracks and spalls are their own steps; the relief only supplies the calm between them.</li>
+</ul>
+<p>The design and the floor measurements are in the archived <a href="../archive/python-library/stone-surface-texture.html">stone surface texture</a> page; the photos are in <a href="../reference/stone-texture/README.md">reference/stone-texture</a>.</p>
+
+<section class="record" id="record">
+<h2>Design record</h2>
+<p>For the people developing the look: Shawn's rulings, the requirements, audit numbers, the variant history and open issues. Owned by the labs (rocklab). Approved: version v1f, 27 Oct 2026, with the dirt floor of 29 Oct.</p>
+
+<details id="rulings">
+<summary>Rulings (8)</summary>
+<p>Shawn's decisions, oldest first. Each holds unless a later line replaces it.</p>
+<div class="tbl"><table>
+<thead><tr><th class="d">Date</th><th>Ruling</th><th>Shawn's words</th></tr></thead>
+<tbody>
+<tr><td class="d">3 Jul</td><td>Large stones carry engraved cracks a wash can pool in (library faceted stones).</td><td>—</td></tr>
+<tr><td class="d">4 Jul</td><td>Library faceted stones ship in every library tile; the dome kernel is deleted.</td><td class="q">“this is amazing.”</td></tr>
+<tr><td class="d">27 Oct</td><td>rocklab v1c needs three scales of texture: rough faces and chipped corners.</td><td class="q">“different degrees of texture… the surfaces should be rough and the corners of these big things should be chipped.”</td></tr>
+<tr><td class="d">27 Oct</td><td>Fracture scallops (v1d) are rejected; turn up the fine grain instead.</td><td class="q">“the fracture scallops are horrible… just turn up the fine grain”</td></tr>
+<tr><td class="d">27 Oct</td><td>The texture is not enough and the faces too big; make the largest faces smaller (v1f).</td><td class="q">“make the largest faces smaller”</td></tr>
+<tr><td class="d">27 Oct</td><td>Flake scars: proposed and declined.</td><td>—</td></tr>
+<tr><td class="d">28 Oct</td><td>rocklab and grasslab are loved; keep them standalone for now.</td><td class="q">“spectacular job on both grass and rocks… I love your work.”</td></tr>
+<tr><td class="d">29 Oct</td><td>Exposed ground is dirt everywhere, in every lab; the rocks stand on dirtlab's texture.</td><td>—</td></tr>
+</tbody></table></div>
+</details>
+
+<details id="requirements">
+<summary>Requirements</summary>
+<p>The lab's requirement IDs as written on 27 Oct 2026 (revision 2), with later amendments marked inline. [S] is checked by a script or statistic, [R] by eye. The original page is in the <a href="../archive/lab-logs/rocklab/requirements.html">archive</a>.</p>
+<ul>
+  <li><strong>REQ-OUT-1 [S]</strong> A run writes <code>rocklab/out/&lt;cols&gt;x&lt;rows&gt;-rocks-s&lt;seed&gt;.stl</code>, 2×2 by default.</li>
+  <li><strong>REQ-OUT-2 [S]</strong> One watertight body: rocks fused to the slab, slab fused to the DungeonBlocks socket base.</li>
+  <li><strong>REQ-OUT-3 [S]</strong> The surface is flat at 4.0 mm above the terrain datum, inside the DungeonBlocks dirt band. <em>Amended 29 Oct: the floor is dirtlab's dirt relief on a 4.0 mm level, not a flat slab.</em></li>
+  <li><strong>REQ-OUT-4 [S]</strong> Deterministic per seed (byte-identical STL), under 30 s, STL under 25 MB. <em>Amended 28 Oct: the export must also stay watertight after a float32 reload.</em></li>
+  <li><strong>REQ-ROCK-1 [R]</strong> Faceted: 30–165 planar facets per rock, from about 40% of its width down to about 8%.</li>
+  <li><strong>REQ-ROCK-2 [R]</strong> Crisp edges, never blurred away.</li>
+  <li><strong>REQ-ROCK-3 [R]</strong> Grounded: widest at the base; cross-sections never grow going up.</li>
+  <li><strong>REQ-ROCK-4 [R]</strong> Variety: own footprint (aspect 1–2), height ratio (0.45–0.85; slabs × 0.6), profile family, lumpiness, facets and chips.</li>
+  <li><strong>REQ-ROCK-5 [R]</strong> About 25% of placements are clusters of 2–4 fused stones, each 45–90% of the main stone's width.</li>
+  <li><strong>REQ-ROCK-6 [S]</strong> Width 6–15 mm skewed small; cluster stones ≥ 4 mm; height 2.5–9 mm.</li>
+  <li><strong>REQ-ROCK-7 [R]</strong> Three scales of texture: facets 2–7 mm, chips 0.2–0.9 mm deep, grain about 0.45 mm at ±0.12 mm. Facet and chip ridges stay crisp.</li>
+  <li><strong>REQ-SC-1 [S]</strong> A 2×2 tile asks for 9–12 placements; one that finds no spot is dropped.</li>
+  <li><strong>REQ-SC-2 [R]</strong> Natural spacing, ≥ 1.5 mm clearance, open floor for miniature bases.</li>
+  <li><strong>REQ-SC-3 [S]</strong> Every rock inside the tile, ≥ 1 mm from the wall.</li>
+  <li><strong>REQ-SC-4 [S]</strong> Rocks sink 0.3 mm into the slab. <em>Amended 29 Oct: 0.55 mm, so dirt dips never expose a rock's base.</em></li>
+  <li><strong>REQ-FDM-1 [S]</strong> No downward face steeper than 45°, guaranteed by grounded bodies and planes that never point down past 30°.</li>
+  <li><strong>REQ-FDM-2 [S]</strong> Chip depth scales with √(D/15); grain is small and fades to zero at the base and on downward faces.</li>
+  <li><strong>REQ-FDM-3 [S]</strong> An audit reports watertightness, body count and overhang area.</li>
+</ul>
+<h3>Named failure modes</h3>
+<div class="tbl"><table>
+<thead><tr><th>#</th><th>Name</th><th>Looks like</th></tr></thead>
+<tbody>
+<tr><td>R1</td><td>Potato</td><td>A smooth, rounded blob with no facets.</td></tr>
+<tr><td>R2</td><td>Gem / dice</td><td>Regular, symmetric or uniformly sized faceting.</td></tr>
+<tr><td>R3</td><td>Crumpled foil</td><td>Noisy micro-facets everywhere, no large faces.</td></tr>
+<tr><td>R4</td><td>Clones</td><td>Rocks of the same shape at different scales.</td></tr>
+<tr><td>R5</td><td>Mushroom</td><td>Wider above the ground than at it.</td></tr>
+<tr><td>R6</td><td>Pebble dust</td><td>Rocks too small to read at tabletop distance.</td></tr>
+<tr><td>R7</td><td>Floating</td><td>A visible gap between a rock and the floor.</td></tr>
+<tr><td>R8</td><td>Scallops</td><td>Mid-scale fracture bowls: “horrible”.</td></tr>
+<tr><td>R9</td><td>Big flat faces</td><td>A few oversized facets instead of a mosaic.</td></tr>
+</tbody></table></div>
+<h3>Acceptance</h3>
+<ul>
+  <li><strong>S1.</strong> The 2×2 tile at seed 1 reads as the reference's chiselled stones; none of R1–R9 is visible.</li>
+  <li><strong>S2.</strong> Seeds 1–6 each look different.</li>
+  <li><strong>S3.</strong> A print, primed and drybrushed: facet edges catch highlights.</li>
+</ul>
+</details>
+
+<details id="audit">
+<summary>Audit numbers</summary>
+<p><strong>By construction:</strong> every rock is an intersection of half-spaces cut from a body that never widens going up, so it is convex and grounded; no plane points down past 30° (<code>FACET_MIN_NZ</code>); grain is zero on downward faces and at the base; clusters are unions of convex rocks.</p>
+<p><strong>Checked:</strong> <code>audit_overhang</code> (<code>rocklab.py:408</code>) reports the area of faces past 48° from vertical (45° plus 3°). Before export the mesh is rounded to float32 and merged as a slicer would, and the run stops unless it is still one watertight body (<code>rocklab.py:445</code>).</p>
+<div class="tbl"><table>
+<thead><tr><th>Tile</th><th>Placements</th><th>Stones</th><th class="num">Facets</th><th class="num">Overhang (mm²)</th></tr></thead>
+<tbody>
+<tr><td>2×2, seed 1</td><td>11 (4 clusters)</td><td>18, 4.2–15.0 mm</td><td class="num">30–163</td><td class="num">0.00</td></tr>
+<tr><td>2×2, seed 2</td><td>10</td><td>13</td><td class="num">51–151</td><td class="num">0.02</td></tr>
+</tbody></table></div>
+<p class="note">Seed 1: top 12.28 mm above the datum, 4.9 MB, about 3 s. Measured on the flat floor of 27 Oct; seeds 1–4 pass the float32 reload check with no repair.</p>
+</details>
+
+<details id="variants">
+<summary>Variant history</summary>
+<p>One line per variant, oldest first. All are in git.</p>
+<div class="tbl"><table>
+<thead><tr><th class="d">Date</th><th>Variant</th><th>What changed, and why</th></tr></thead>
+<tbody>
+<tr><td class="d">2 Jun – 4 Jul</td><td>R1 dome kernel (<code>layers/rocks.py</code>)</td><td>Half-ellipsoids with a few plane cuts and jitter. Rejected: smooth domes.</td></tr>
+<tr><td class="d">3 Jul</td><td>R2 faceted hull, E1–E5 (<code>scatter/stones.py</code>)</td><td>Hull of jittered directions, seated on a stable face, with engraved cracks.</td></tr>
+<tr><td class="d">4 Jul</td><td>R3 aged boulders, E6–E15 (4ec9fb8)</td><td>Weathering bites, roundover, blur-remesh and broadband relief. Shipped in every library tile: “this is amazing.”</td></tr>
+<tr><td class="d">5–6 Jul</td><td>R4 common stone relief, E36/E37</td><td>The shared <a href="#stone-finish">stone finish</a>; the current library stone.</td></tr>
+<tr><td class="d">27 Oct</td><td>rocklab v1a–v1b</td><td>Small smooth gems, then shaved vertices that made uniform dice. Replaced by one facet per seed.</td></tr>
+<tr><td class="d">27 Oct</td><td>rocklab v1c–v1e</td><td>Corner and edge chips; fracture scallops tried and rejected; grain turned up to 0.12 mm.</td></tr>
+<tr><td class="d">27 Oct</td><td><strong>rocklab v1f</strong> (7947bec)</td><td>Smaller facet spacing, rounded block and slab profiles, angle-only lumps, chips capped. Loved.</td></tr>
+<tr><td class="d">27–29 Oct</td><td>Refactor, export guarantee, dirt floor (6d553a5, 7e60498, 20c51e8)</td><td>Seeded facet sampling (runs were not repeatable); float32 reload check; dirtlab's dirt replaces the flat slab.</td></tr>
+</tbody></table></div>
+<figure class="shot">
+  <img src="img/rocks-history-scene-strip.jpg" alt="Five grey tiles of the same rock scene, one per generator" width="900" height="141" loading="lazy">
+  <figcaption>The same scene from each generator, R1 → R5 (dome kernel, faceted hull, aged boulders, common relief, rocklab). Grey renders that predate the red-overhang rule.</figcaption>
+</figure>
+<figure class="shot">
+  <img src="img/rocks-history-hero-strip.jpg" alt="Five close-ups of the tallest stone in each generator" width="900" height="150" loading="lazy">
+  <figcaption>The tallest stone in each version, close up, R1 → R5. Predates the red-overhang rule.</figcaption>
+</figure>
+</details>
+
+<details id="rust">
+<summary>Rust port</summary>
+<p><strong>Phase P3</strong>, “Rocks and water, with the edge contract”. Exit gate includes Shawn's sign-off on rocks over four seeds. The vocabulary exists (<code>rock</code>, <code>stone</code>, <code>boulder</code>, <code>pebble</code> and <code>scatter</code> in <code>crates/dt-doc/src/looks.rs</code>); the engine has no rock look yet. No parity contact sheet yet.</p>
+</details>
+
+<h3 id="open">Open issues</h3>
+<ul>
+  <li>The Rust vocabulary's hidden settings for rocks (blur-remesh radius, relief bands, seat quantile) describe the library's aged stones, not rocklab's facets. P3 has to choose which one the <code>rock</code> look ports; rocklab is the approved one.</li>
+  <li>The Rust default <code>rock</code> size is <code>2..10</code> mm; rocklab's approved range is 6–15 mm.</li>
+  <li>rocklab audits overhangs at 45° (+3°), stricter than the project's 55° ruling of 31 Oct. Harmless, but the numbers are not comparable with cliffs.</li>
+  <li>The ground sits at 4.0 mm; the standard edge level is 3.4 mm.</li>
+  <li>The renders on this page predate the red-overhang rule; a fresh painted contact sheet is due with the P3 parity work.</li>
+  <li>The library (<code>scatter/stones.py</code>, used by the 35 library tiles) and rocklab are still two different rocks.</li>
+</ul>
+
+<h3 id="references">References</h3>
+<ul>
+  <li>Commercial rock tiles: <a href="../reference/rocks/rocks-reference-monolith-trio.png">monolith trio</a>, <a href="../reference/rocks/rocks-reference-outcrops-and-scatter.png">outcrops and scatter</a>, <a href="../reference/rocks/rocks-reference-dirtpath-pebbles.png">dirt path pebbles</a>, <a href="../reference/rocks/rocks-reference-waterfall-piles.png">waterfall piles</a>.</li>
+  <li>Large boulders: <a href="../reference/big-boulders/README.md">reference/big-boulders</a>. Stone surface photos: <a href="../reference/stone-texture/README.md">reference/stone-texture</a>.</li>
+</ul>
+
+<h3 id="history">History</h3>
+<p>Rocks began in the Python library as smooth domes (June 2026), became faceted, aged stones in a design-first rework on 3–4 July, and got the shared stone finish on 5–6 July. rocklab started on 27 Oct 2026 from a sheet of painted chiselled rocks and reached its loved version, v1f, the same day; on 29 Oct its flat floor became dirt. meadowlab, dirtlab, waterlab, shorelab and clifflab all import its rocks. The full texts are archived: rocklab's <a href="../archive/lab-logs/rocklab/requirements.html">requirements</a> and <a href="../archive/lab-logs/rocklab/design.html">design and iteration log</a>, the library's <a href="../archive/python-library/rocks-faceted-stones.html">faceted stones</a> page, the <a href="../archive/history/2026-07-03-rocks-greenfield-requirements.md">rocks greenfield interview</a> (3 Jul), and the Rust study's <a href="../archive/rust-study/labs.html#rocklab">labs</a> and <a href="../archive/rust-study/variants.html">variants</a> pages.</p>
+</section>
+
+</article>
+</div>
+</body>
+</html>
