@@ -65,6 +65,7 @@ const RUBBLE_SPACING_MM: f64 = 2.8;
 const RUBBLE_FOOT: (f64, f64) = (3.5, 5.5);
 const RUBBLE_H: (f64, f64) = (3.0, 4.5);
 const RUBBLE_SETBACK_MM: f64 = 1.3;
+const RUBBLE_SETBACK_DRY_MM: f64 = 1.3;
 /// Shed rubble at a ruin's foot.
 const FOOT_RUBBLE_EVERY_MM: f64 = 5.5;
 const FOOT_RUBBLE_OFF: (f64, f64) = (0.8, 6.5);
@@ -979,10 +980,15 @@ fn hearting(
 ) -> Result<Vec<TriMesh>, LookError> {
     let s = run.scale;
     let (t, h) = (run.thickness, run.height);
-    let sb = RUBBLE_SETBACK_MM * s;
+    // drystone sets the chips deeper: its stones' faces curl back toward
+    // the cracks, and a chip must never show past them
+    let sb = if m.family == Family::Fieldstone {
+        RUBBLE_SETBACK_DRY_MM * s
+    } else {
+        RUBBLE_SETBACK_MM * s
+    };
     let sp = RUBBLE_SPACING_MM * s;
     let bands = [(sb, 0.55 * t), (0.45 * t, t - sb)];
-    let _ = m;
     let mut rng = Rng::new(seed.key("hearting"));
     let mut out = Vec::new();
     for (k, g) in run.segs.iter().enumerate() {

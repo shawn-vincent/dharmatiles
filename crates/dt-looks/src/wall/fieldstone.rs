@@ -31,6 +31,10 @@ const DRIFT: f64 = 2.2;
 const BOW: f64 = 1.1;
 const BED_OVERLAP: (f64, f64) = (0.35, 0.80);
 const END_MARGIN: f64 = 0.7;
+/// The press into the seat (Python drew it from `BED_OVERLAP`, capped at
+/// 0.22 × the height).
+const SEAT_PRESS: (f64, f64) = (0.6, 1.0);
+const SEAT_PRESS_CAP: f64 = 0.32;
 const HEAD_OVERLAP: (f64, f64) = (0.45, 0.95);
 const RING_NOISE: (f64, f64) = (0.04, 0.16);
 // the pebble
@@ -62,10 +66,9 @@ const K_SPLIT_B: i64 = 1;
 const K_SPLIT_T: i64 = 2;
 const K_REST: i64 = 3;
 const K_COPING: i64 = 5;
-/// The steepest a stone's underside may lean out from the face (from
-/// vertical), degrees: the overhang limit less a margin for relief.
-const UNDER_DEG: f64 = 45.0;
-const UNDER_ON: bool = false;
+/// A resting stone's underside bevels up at 45° from this far in from
+/// each face, mm at the reference.
+const UNDER_FROM: f64 = 1.6;
 
 /// What the fieldstone layout leaves the chassis.
 pub(crate) struct Field {
@@ -241,8 +244,22 @@ fn merge_throughstones(mut cells: Vec<Cell>, s: f64, rng: &mut Rng) -> Vec<Cell>
                 seg,
                 t0: lo,
                 t1: hi,
-                end0: End::Joint,
-                end1: End::Joint,
+                // a wall end stays a face (Python made both ends joints,
+                // so an end throughstone ran past the end margin)
+                end0: if (c.t0 >= lo - 1e-9 && c.end0 == End::Face)
+                    || (o.t0 >= lo - 1e-9 && o.end0 == End::Face)
+                {
+                    End::Face
+                } else {
+                    End::Joint
+                },
+                end1: if (c.t1 <= hi + 1e-9 && c.end1 == End::Face)
+                    || (o.t1 <= hi + 1e-9 && o.end1 == End::Face)
+                {
+                    End::Face
+                } else {
+                    End::Joint
+                },
                 z0: c.z0,
                 z1: o.z1,
                 is_top: o.is_top,
@@ -327,7 +344,7 @@ fn split_cells(cells: Vec<Cell>, s: f64, rng: &mut Rng) -> Vec<Cell> {
 /// One fieldstone, drawn: its outline ring (t, z) and its pebble.
 pub(crate) struct Stone {
     pub seg: usize,
-    /// The cell: along the wall and up.
+    /// The outline along the wall; the cell up the wall.
     t: [f64; 2],
     z: [f64; 2],
     ring: Vec<[f64; 2]>,
@@ -342,6 +359,7 @@ pub(crate) struct Stone {
     /// The bed the stone sits on (wall-local z under its bottom), for
     /// the underside rule; `None` for a bottom stone or laid flat.
     under: Option<f64>,
+    under_from: f64,
     relief: Option<Relief>,
     seed: u64,
 }
@@ -349,7 +367,13 @@ pub(crate) struct Stone {
 /// The outline polygon (t, z), counter-clockwise, bounded by the cell's
 /// cracks (`_outline`).
 #[allow(clippy::too_many_lines)]
-fn outline(m: &Mason, run: &Run, c: &Cell, seed: Seed, r: &mut Rng) -> Vec<[f64; 2]> {
+fn outline(
+    m: &Mason,
+    run: &Run,
+    c: &Cell,
+    seed: Seed,
+    r: &mut Rng,
+) -> Vec<[f64; 2]> {
     let s = run.scale;
     let g = &run.segs[c.seg];
     let bands = c
@@ -464,7 +488,9 @@ fn outline(m: &Mason, run: &Run, c: &Cell, seed: Seed, r: &mut Rng) -> Vec<[f64;
         let ovb = if c.is_bottom {
             0.0
         } else {
-            (r.uniform(BED_OVERLAP.0, BED_OVERLAP.1) * s).min(cap)
+            // a stone presses into its seat deeper than it rises into the
+            // stone above: the V crack under it closes before it can roof
+            (r.uniform(SEAT_PRESS.0, SEAT_PRESS.1) * s).min(SEAT_PRESS_CAP * (c.z1 - c.z0))
         };
         for p in &mut pts {
             let u = (p[1] - zlo) / span;
@@ -549,7 +575,13 @@ fn walk(p: &[[f64; 2]], i: usize, dir: isize, d: f64) -> ([f64; 2], usize) {
 /// Corners below `chamfer_below` are cut straight instead (a 45° chamfer
 /// on a square corner): the underside of a rounded corner turns flat and
 /// roofs the notch under it; a chamfer the printer lays.
-fn round_corners(p: &[[f64; 2]], r: f64, inset: f64, chamfer_below: f64) -> Vec<[f64; 2]> {
+fn round_corners(
+    p: &[[f64; 2]],
+    r: f64,
+    inset: f64,
+    chamfer_below: f64,
+    chamfer_r: f64,
+) -> Vec<[f64; 2]> {
     let n = p.len();
     let mut corner = vec![false; n];
     for i in 0..n {
@@ -574,6 +606,7 @@ fn round_corners(p: &[[f64; 2]], r: f64, inset: f64, chamfer_below: f64) -> Vec<
                 continue;
             }
             // the corner angle over a stretch ~r
+            let r = if p[i][1] < chamfer_below { chamfer_r } else { r };
             let (pa, _) = walk(p, i, -1, r);
             let (pb, _) = walk(p, i, 1, r);
             let (u, v) = (sub(p[i], pa), sub(pb, p[i]));
@@ -667,7 +700,13 @@ fn segmentize(p: &[[f64; 2]], step: f64) -> Vec<[f64; 2]> {
 /// Draw the stone for a cell (`_place_block`, up to the mesh), or `None`
 /// for a cell the rounding swallows.
 #[allow(clippy::too_many_lines)]
-pub(crate) fn stone(m: &Mason, run: &Run, f: &Field, c: &Cell, seed: Seed) -> Option<Stone> {
+pub(crate) fn stone(
+    m: &Mason,
+    run: &Run,
+    f: &Field,
+    c: &Cell,
+    seed: Seed,
+) -> Option<Stone> {
     let _ = f;
     let s = run.scale;
     let bs = super::cell_seed(seed, "stone", &c.key);
@@ -697,7 +736,12 @@ pub(crate) fn stone(m: &Mason, run: &Run, f: &Field, c: &Cell, seed: Seed) -> Op
     } else {
         centroid(&poly)[1]
     };
-    let rounded = round_corners(&poly, rr, m.joint / 2.0, below);
+    // the chamfer at least as big as any rounding the stone below may
+    // have, so the corner under it never roofs a rounded notch
+    let ch = (m.rounding.1 * s)
+        .min(ROUND_SIZE_CAP * span[0].min(span[1]))
+        .max(rr);
+    let rounded = round_corners(&poly, rr, m.joint / 2.0, below, ch);
     if rounded.len() < 3 || signed_area(&rounded) < 0.25 * s * s {
         return None;
     }
@@ -769,6 +813,18 @@ pub(crate) fn stone(m: &Mason, run: &Run, f: &Field, c: &Cell, seed: Seed) -> Op
             })
         }
     };
+    // a face on the tile boundary sits back past the relief's outward
+    // swell, so the boundary cut never planes a stone into a shelf
+    let (mut y0, mut y1) = (y0, y1);
+    if !run.laid {
+        let swell = relief.as_ref().map_or(0.0, |r| r.dish_mm + r.grain_mm) + 0.05;
+        if run.on_edge(c.seg, [c.t0, 0.0], [c.t1, 0.0]) {
+            y0 = y0.max(swell);
+        }
+        if run.on_edge(c.seg, [c.t0, run.thickness], [c.t1, run.thickness]) {
+            y1 = y1.min(run.thickness - swell);
+        }
+    }
     let under = if c.is_bottom || run.laid || c.coping {
         None
     } else {
@@ -776,7 +832,9 @@ pub(crate) fn stone(m: &Mason, run: &Run, f: &Field, c: &Cell, seed: Seed) -> Op
     };
     Some(Stone {
         seg: c.seg,
-        t: [c.t0, c.t1],
+        // the outline's own reach along the wall (drift and head overlap
+        // carry it past the cell)
+        t: [lo[0], hi[0]],
         z: [c.z0, c.z1],
         ring,
         y0,
@@ -788,6 +846,7 @@ pub(crate) fn stone(m: &Mason, run: &Run, f: &Field, c: &Cell, seed: Seed) -> Op
         pz,
         coping: c.coping,
         under,
+        under_from: UNDER_FROM * s,
         relief,
         seed: bs.key("relief").value(),
     })
@@ -801,7 +860,7 @@ const HOLD_PROUD_MM: f64 = 0.2;
 
 /// Hold every stone's faces within [`HOLD_PROUD_MM`] of the faces of the
 /// stones it rests on (bottom up, so a held stone holds the next): its
-/// underside then never roofs an open crack.
+/// underside then never roofs the crack under a stone sunk deeper.
 pub(crate) fn hold_proud(stones: &mut [Stone]) {
     let mut order: Vec<usize> = (0..stones.len()).collect();
     order.sort_by(|&a, &b| stones[a].z[0].total_cmp(&stones[b].z[0]).then(a.cmp(&b)));
@@ -837,7 +896,8 @@ impl Stone {
         let h = 0.5 * (self.y1 - self.y0);
         let ym = 0.5 * (self.y0 + self.y1);
         let zlo = self.ring.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
-        let under_k = libm::tan(UNDER_DEG.to_radians());
+        let half_h = 0.5
+            * (self.ring.iter().map(|p| p[1]).fold(f64::NEG_INFINITY, f64::max) - zlo).max(1e-6);
         let mut pos: Vec<[f64; 3]> = Vec::with_capacity(k_lat * n + 2);
         for j in 0..k_lat {
             #[allow(clippy::cast_precision_loss)]
@@ -850,23 +910,25 @@ impl Stone {
             let szk = libm::pow(sk, self.pz);
             let (st, sz) = if self.coping { (szk, sk) } else { (sk, szk) };
             let y = ym + h * libm::sin(lat);
-            // how far this ring stands in from the face it belongs to
-            let depth = if lat < 0.0 { y - self.y0 } else { self.y1 - y };
             for p in &self.ring {
                 let t =
                     self.ctr[0] + (pole[0] - self.ctr[0]) * (1.0 - st) + (p[0] - self.ctr[0]) * st;
                 let mut z =
                     self.ctr[1] + (pole[1] - self.ctr[1]) * (1.0 - sz) + (p[1] - self.ctr[1]) * sz;
-                if UNDER_ON && self.under.is_some() && p[1] < self.ctr[1] {
-                    // the underside: the outline's bottom edge at the
-                    // equator rises toward each face no faster than the
-                    // overhang limit allows, so the pebble's bottom is a
-                    // slope the printer lays, never a shelf
-                    let lift = z - p[1];
-                    let allowed = depth / under_k;
-                    if lift > allowed {
-                        z = p[1] + allowed;
-                    }
+                if self.under.is_some() && !self.coping && p[1] < self.ctr[1] {
+                    // a resting stone's underside leaves its bed no
+                    // shallower than 45°: from `UNDER_FROM` in from the face
+                    // it rises at least as fast as a 45° bevel, and where
+                    // the dome is steeper the dome stays (a convex dome,
+                    // past the crossing, only steepens), so the crack under
+                    // it is never roofed by a shallow shelf
+                    let d = if lat < 0.0 { y - self.y0 } else { self.y1 - y };
+                    let w = ((self.ctr[1] - p[1]) / (0.5 * half_h)).clamp(0.0, 1.0);
+                    // (the bevel starts low enough on a short stone to
+                    // stay under its middle: never a flat shelf there)
+                    let from = self.under_from.min(0.95 * (self.ctr[1] - p[1]).max(0.0));
+                    let bevel = p[1] + w * (from - d).max(0.0);
+                    z = z.max(bevel);
                 }
                 pos.push([t, y, z.max(zlo - 1.0)]);
             }
@@ -908,8 +970,8 @@ impl Stone {
             // carved pocket there is a roof the printer cannot lay)
             let under = self.under.is_some();
             relief_weighted(&mut mesh, self.seed, r, &|_, nv| {
-                if under && nv[2] < -0.3 {
-                    ((nv[2] + 0.7) / 0.4).clamp(0.0, 1.0)
+                if under && nv[2] < -0.05 {
+                    ((nv[2] + 0.45) / 0.4).clamp(0.0, 1.0)
                 } else {
                     1.0
                 }
@@ -927,11 +989,81 @@ mod tests {
     #[test]
     fn corners_round_and_rings_close() {
         let sq = vec![[0.0, 0.0], [10.0, 0.0], [10.0, 6.0], [0.0, 6.0]];
-        let r = round_corners(&sq, 1.5, 0.0, f64::NEG_INFINITY);
+        let r = round_corners(&sq, 1.5, 0.0, f64::NEG_INFINITY, 1.5);
         assert!(r.len() >= 4 * 7);
         let a = signed_area(&r);
         assert!(a < 60.0 && a > 55.0, "{a}");
         let seg = segmentize(&r, 1.2);
         assert!(seg.len() > r.len());
+    }
+}
+
+#[cfg(test)]
+mod underside {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+    use crate::wall::{Family, Mason};
+
+    /// A resting stone's underside, away from its bed, is never a shelf
+    /// shallower than the overhang limit (by construction).
+    #[test]
+    fn resting_undersides_are_printable() {
+        let segs = layout::segments(&[[35.0, 35.0], [0.0, 35.0]]).unwrap();
+        let run = Run {
+            segs,
+            seat: 5.0,
+            base: -2.5,
+            height: 28.0,
+            thickness: 7.0,
+            laid: false,
+            tile: [35.0, 35.0],
+            scale: 1.0,
+        };
+        let m = Mason::new(Family::Fieldstone);
+        let f = Field { cap_z0: 28.0 };
+        let mut worst: f64 = 0.0;
+        let mut bad_area = 0.0;
+        for k in 0..40 {
+            let c = Cell {
+                seg: 0,
+                t0: 5.0,
+                t1: 5.0 + 6.0 + f64::from(k % 7),
+                end0: End::Joint,
+                end1: End::Joint,
+                z0: 8.0,
+                z1: 8.0 + 2.4 + 0.3 * f64::from(k % 9),
+                is_top: false,
+                is_bottom: false,
+                is_quoin: false,
+                key: vec![2, 0, i64::from(k)],
+                side_bands: None,
+                coping: false,
+            };
+            let mut st = stone(&m, &run, &f, &c, Seed::new(9)).unwrap();
+            st.relief = None;
+            let mesh = st.mesh().unwrap();
+            let zb = c.z0 - 1.2; // under the bed press
+            for t in &mesh.triangles {
+                let p = t.map(|i| mesh.positions[i as usize]);
+                let u = [0, 1, 2].map(|k| p[1][k] - p[0][k]);
+                let v = [0, 1, 2].map(|k| p[2][k] - p[0][k]);
+                let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+                let a = libm::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+                let nz = n[2] / a;
+                let zc = (p[0][2] + p[1][2] + p[2][2]) / 3.0;
+                let bed = st.ring.iter().map(|q| q[1]).fold(f64::INFINITY, f64::min);
+                // shallower than 55° from vertical, and lifted off the bed
+                if nz < -libm::cos(35f64.to_radians()) && zc > bed + 0.3 && zc > zb {
+                    bad_area += a / 2.0;
+                    worst = worst.max(zc - bed);
+                    if k == 3 {
+                        let yc = (p[0][1] + p[1][1] + p[2][1]) / 3.0;
+                        let tc = (p[0][0] + p[1][0] + p[2][0]) / 3.0;
+                        eprintln!("t {tc:.2} y {yc:.2} (y0 {:.2} y1 {:.2}) lift {:.2} nz {nz:.2} area {:.3}", st.y0, st.y1, zc - bed, a / 2.0);
+                    }
+                }
+            }
+        }
+        eprintln!("shelf area {bad_area:.2} mm², worst lift {worst:.2}");
     }
 }
