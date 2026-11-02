@@ -1,9 +1,10 @@
 //! What a document may say: the controls each built-in look accepts, the
 //! words that stand for numbers, and how each kind of value scales.
 //!
-//! This is the R6 vocabulary decided on 1 Nov 2026 (plan.html, R6
-//! decisions; spikes/r6-kdl.html, "Vocabulary, per look").  The tables
-//! live in [`crate::looks`]; this module holds their types.
+//! This is the R6 vocabulary decided on 1 Nov 2026
+//! (docs/rust/language.html, "Decisions D1–D12" and "Looks and their
+//! vocabulary").  The tables live in [`crate::looks`]; this module holds
+//! their types.
 //!
 //! The tables are the single source for `dharmatiles looks <name>`, the
 //! MCP `describe_look` tool and, later, the JSON Schema: dt-doc owns them

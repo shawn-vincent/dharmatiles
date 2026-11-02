@@ -4,10 +4,9 @@
 //! by hand into the typed model in [`model`], keeping source spans so
 //! every mistake is reported through miette at the text that caused it,
 //! with a hint.  The vocabulary is R6's, decided 1 Nov 2026
-//! (docs/analysis/rust-rewrite/spikes/r6-kdl.html): authors write mm at
-//! the DungeonBlocks reference and named levels, name tile edges, give
-//! points as quoted pairs, use words for character, and say how many with
-//! a `scatter`.
+//! (docs/rust/language.html): authors write mm at the DungeonBlocks
+//! reference and named levels, name tile edges, give points as quoted
+//! pairs, use words for character, and say how many with a `scatter`.
 //!
 //! - [`decode`] reads one file; [`uses`] reads only its `use` lines.
 //! - [`Known`] holds what a file can see: the standard levels (the

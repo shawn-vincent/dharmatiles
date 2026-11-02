@@ -1,5 +1,5 @@
 # dharmatiles Rust workspace (virtual manifest).
-# Plan and layout: docs/analysis/rust-rewrite/plan.html, layout.html.
+# Plan and architecture: docs/rust/plan.html, docs/rust/architecture.html.
 [workspace]
 members = ["crates/*", "xtask"]
 resolver = "3"

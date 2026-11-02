@@ -1,6 +1,6 @@
 //! `dharmatiles`: the command-line program.
 //!
-//! Exit codes (layout.html, "The command line"):
+//! Exit codes (docs/rust/architecture.html, "The command line"):
 //!
 //! | code | meaning |
 //! |---|---|

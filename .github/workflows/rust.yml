@@ -1,4 +1,4 @@
-# Rust workspace CI (docs/analysis/rust-rewrite/plan.html, P0).
+# Rust workspace CI (docs/rust/plan.html, P0).
 # The toolchain comes from rust-toolchain.toml.
 name: rust
 

@@ -2,8 +2,8 @@
 //!
 //! The scene of tagged solids ([`Scene`]), the operations, the audit gate,
 //! the STL writer with its build record, and the CPU preview renderer.
-//! Looks see only this crate's public API (layout.html, crate table), so a
-//! look cannot reach into the kernels or into another look.
+//! Looks see only this crate's public API (docs/rust/architecture.html,
+//! "Six crates"), so a look cannot reach into the kernels or into another look.
 //!
 //! Public operations (budget: about 22 over the whole project; P1 has 12):
 //!

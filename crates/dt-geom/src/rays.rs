@@ -1,6 +1,6 @@
 //! The ray trait and its pure-Rust backends.
 //!
-//! The R3 spike (docs/analysis/rust-rewrite/spikes/r3-rays.html) compared
+//! The R3 spike (docs/rust/spikes.html, "R3: rays without Embree") compared
 //! two backends against Embree on the leaf placer's captured ray batches:
 //! [`ObvhsRays`] (obvhs CWBVH, with Embree's triangle test) and
 //! [`ParryRays`] (parry3d `TriMesh`). Both sit behind [`Rays`], so the

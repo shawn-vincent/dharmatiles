@@ -1,5 +1,5 @@
 //! The built-in looks and their controls: the R6 vocabulary tables
-//! (spikes/r6-kdl.html, "Vocabulary, per look"), as data.
+//! (docs/rust/language.html, "Looks and their vocabulary"), as data.
 //!
 //! Numbers behind words are documented here, next to the word.  Words
 //! marked *provisional* have numbers chosen for this table that the look's
