@@ -1,6 +1,6 @@
 # hero-boulder.tile.py — the "that's clearly a big rock" archetype.
 # One glacial-erratic loaf on plain ground, per
-# docs/reference/big-boulders/README.md: rounded but not spherical,
+# docs/looks/rocks.html#reference-photos: rounded but not spherical,
 # widest near the base with a buried contact line, a few LARGE soft
 # facets meeting at rounded arrises, gently domed top.
 

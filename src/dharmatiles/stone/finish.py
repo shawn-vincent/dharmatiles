@@ -2,7 +2,7 @@
 
 ONE surface pass for every rock/block type (floor slabs, cut-stone and
 brick blocks, fieldstone pebbles, scatter rocks), design:
-docs/design/stone-surface-texture.html.  A calm plateau carved DOWNWARD
+docs/archive/python-library/stone-surface-texture.html.  A calm plateau carved DOWNWARD
 into saturating worn recesses (matching the measured official
 DungeonBlocks floors: RMS ≈ 0.3 mm, skew ≈ −1, no sub-2 mm power),
 plus a gentle dish, an optional patchy calm/incident envelope, and an
@@ -43,7 +43,7 @@ def stone_relief(body, rng, *,
                  base_fade_mm: float | None = None,
                  grain_mm: float = 0.10,
                  grain_scale_mm: float = 1.5) -> trimesh.Trimesh:
-    """The common stone relief (docs/design/stone-surface-texture.html):
+    """The common stone relief (docs/archive/python-library/stone-surface-texture.html):
     a CALM PLATEAU CARVED DOWNWARD, statistically matched to the
     official DungeonBlocks floors (TS-019: RMS 0.32 mm, p5 −0.80,
     p95 +0.24, skew −0.99 — ours at defaults: 0.35 / −0.82 / +0.20 /

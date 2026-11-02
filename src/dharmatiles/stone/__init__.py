@@ -6,7 +6,7 @@ and the fieldstone wall (``walls/``) all build on these.  A family is a
 SHAPE source (faceted hull, jittered box, crack-outline sphere-morph)
 plus this shared finishing/guarantee machinery.
 
-Review + plan: docs/meta/history/2026-07-05-walls-rocks-refactor-review.md.
+Review + plan: docs/archive/history/2026-07-05-walls-rocks-refactor-review.md.
 """
 from .finish import stone_relief
 from .noise import fbm, value_noise

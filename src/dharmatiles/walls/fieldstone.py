@@ -3,7 +3,7 @@ Fieldstone / drystone wall — walls campaign family 3.
 
 E12 rework (Shawn round-8: "Distinct natural stones, fitting together
 with tight cracks between … stones fitting into all the space").
-Reference set: ``docs/reference/walls/fieldstone/`` — every image
+Reference set: ``docs/looks/ref/walls/fieldstone/`` — every image
 agrees on the same geometric truths (see the README there):
 
 - adjacent stones SHARE edge geometry (edges run parallel, a bulge in

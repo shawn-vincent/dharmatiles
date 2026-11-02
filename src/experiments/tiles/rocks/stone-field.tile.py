@@ -1,6 +1,6 @@
 # stone-field.tile.py — acceptance scene S2 for the rocks rework (E4).
 # Bare soil, sampled clusters: dominant stones + companions, no hand
-# authoring.  Compare against docs/rocks/rocks-current-2026-07-03.png.
+# authoring.  Compare against docs/archive/history/img/rocks-current-2026-07-03.png.
 
 from dharmatiles.spec import Tile, Region, FloodFill, SurfaceConfig
 from dharmatiles.layers import SoilCarpet

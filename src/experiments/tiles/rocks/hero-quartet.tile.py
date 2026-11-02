@@ -1,5 +1,5 @@
 # hero-quartet.tile.py — self-comparison scene (E9): one stone per
-# reference archetype in docs/reference/big-boulders/, selected by the
+# reference archetype in docs/looks/rocks.html#reference-photos, selected by the
 # HERO env var so each can be rendered alone at high resolution.
 #
 #   letipea — rounded loaf, broad flattish top, one wrap seam, sits low

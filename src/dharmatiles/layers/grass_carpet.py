@@ -20,7 +20,7 @@ Two components are produced:
 Seeds are planted with the same Voronoi-group logic as the 3-D grass layer
 using the blade geometry parameters on ``_GrassUnderlayConfig``.
 
-See docs/design/grass-underlay.html for the original design rationale.
+See docs/archive/python-library/grass-underlay.html for the original design rationale.
 """
 from __future__ import annotations
 

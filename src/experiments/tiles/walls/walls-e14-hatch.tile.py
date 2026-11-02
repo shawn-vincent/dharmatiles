@@ -1,8 +1,8 @@
 # walls-e14-hatch.tile.py — walls campaign: openings on a laid_flat
 # wall (O4).  The same Opening on a floor is a HATCH: a gap in the
 # pavement with a slab surround.  The circle profile becomes a WELL —
-# a full voussoir ring in the pavement (design: docs/design/
-# docs/design/walls-doors.html; "round holes in the floor").
+# a full voussoir ring in the pavement (design:
+# docs/archive/python-library/walls-doors.html; "round holes in the floor").
 #
 # Floor plan: spine walks the south edge +x, so `at` is the x position
 # in squares and (sill, head) span the plan depth northward.

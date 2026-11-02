@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """grasslab — flow-ribbon grass blades on hilly dirt, on a DungeonBlocks tile.
 
-Implements docs/labs/grasslab/design.html:
+Implements docs/looks/grass.html#how:
 
   1 hills H0 (rises only) ─► 2 flow field θ (regional angle + in-phase
   meanders + downhill pull) ─► 3 swaths (strand lengths) ─► 4 soil lenses;
@@ -31,7 +31,7 @@ import sys as _sys
 _sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / 'dirtlab'))
 import dirtlab as _dirt   # noqa: E402  — the shared exposed-ground texture
 
-# ── Parameters (docs/labs/grasslab/design.html §3), grouped by stage ─────────────────────────────
+# ── Parameters (docs/looks/grass.html#how), grouped by stage ─────────────────────────────
 # tile and grids
 SQUARE_MM            = 35.0
 FIELD_RES_MM         = 0.25        # ground / flow / swath grids
@@ -124,7 +124,7 @@ SPRIG_LEN_MM         = (1.8, 3.0)
 SPRIG_HALF_W_MM      = 0.5
 SPRIG_H_MM           = 0.6
 
-# 5a blade body: print-native strokes (docs/labs/grasslab/design.html §5a).  A blade is a stack of
+# 5a blade body: print-native strokes (docs/looks/grass.html#how).  A blade is a stack of
 # LAYER_MM layers, each a round-ended stroke along its spine a whole number
 # of LINE_W_MM lines wide; then smoothed (a loft through the layer outlines).
 LINE_W_MM            = 0.45        # extrusion line width (0.4 nozzle)

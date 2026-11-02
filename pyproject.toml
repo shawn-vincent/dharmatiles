@@ -16,7 +16,7 @@ dependencies = [
     "xxhash",   # fast hash backend for trimesh's mesh-cache validation — without
                 # it trimesh falls back to blake2b, run on every geometry-property
                 # access. Roughly halves embree per-call overhead in leaf
-                # placement (~14% off a tree tile). See docs/meta/history/
+                # placement (~14% off a tree tile). See docs/archive/history/
                 # 2026-07-03-organic-leaf-placer-performance-analysis.md.
     "scipy",
     "scikit-image",  # marching cubes for the stone voxel remesh — without it

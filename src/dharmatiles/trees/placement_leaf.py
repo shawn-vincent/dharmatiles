@@ -124,7 +124,7 @@ def _rotate_about(v: np.ndarray, axis: np.ndarray, angle_rad: float) -> np.ndarr
 # call.  ``contains`` (ray-parity per point) and first-hit ray queries are
 # per-point/per-ray independent, so batching returns identical results — it
 # only amortises the ~85 µs fixed per-call overhead that dominated placement
-# (~26 one-or-two-point calls per leaf; see docs/meta/history/
+# (~26 one-or-two-point calls per leaf; see docs/archive/history/
 # 2026-07-03-organic-leaf-placer-performance-analysis.md).
 
 def _exec_request(req):

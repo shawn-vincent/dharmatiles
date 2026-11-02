@@ -2,7 +2,7 @@
 """meadowlab — rocks + grass + bare earth on one DungeonBlocks tile.
 
 Combines grasslab (hills, flow ribbons, soil lenses, banks) with rocklab
-(faceted rocks).  Interaction design: docs/labs/meadowlab/design.html.
+(faceted rocks).  Interaction design: docs/looks/composition.html#how.
 
   ground, flow, swaths (grasslab) ─► rocks scattered and posed first
   (rocklab) → real footprints become hard obstacles ─► one-sided aprons

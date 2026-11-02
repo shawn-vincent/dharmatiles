@@ -66,7 +66,7 @@ on the surface.  All rotations are performed around this point.
     N (up_hint)    = surface_normal * cos(ca) + T0 * sin(ca)
 
 The seat pitch is solved against the real clump surface by
-``placement_leaf._seat_oval_tilt``.  See ``docs/design/leaf-placement.html``
+``placement_leaf._seat_oval_tilt``.  See ``docs/archive/python-library/leaf-placement.html``
 for the full algorithm specification.
 """
 from __future__ import annotations

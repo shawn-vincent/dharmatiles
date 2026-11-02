@@ -1,6 +1,6 @@
 """Walls — coursed masonry wall + pavement layers.
 
-Design: docs/design/walls-coursed-masonry.html.  ``masonry.py`` is the
+Design: docs/archive/python-library/walls-coursed-masonry.html.  ``masonry.py`` is the
 family-independent chassis; each wall family is a unit kernel on it,
 and ``StoneFloor`` is the same unit kernel laid horizontal.
 """

@@ -2,7 +2,7 @@
 """clifflab contact sheet: forms × seeds × presets, painted (simulated
 drybrush) and grey.
 
-Paint (docs/labs/clifflab/design.html §3), per vertex then quantised to a palette:
+Paint (docs/looks/cliffs.html#how), per vertex then quantised to a palette:
   stone — dark base coat; a black-brown wash in recesses (cavity = how far
   the vertex sits below its Laplacian-smoothed position after many
   iterations); drybrush layers by edge convexity (a few iterations) plus a

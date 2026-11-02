@@ -1,7 +1,7 @@
 """
 Coursed cut-stone wall — gen-1 prototype (walls campaign E1).
 
-Design: docs/design/walls-coursed-masonry.html.  The wall is
+Design: docs/archive/python-library/walls-coursed-masonry.html.  The wall is
 ``union(core slab, blocks)``: joints are REVEALS over a recessed core
 (watertight, no see-through gaps — R3); every block spans the full wall
 thickness so faces, ends, and top are real modeled surfaces (R2).  Each
@@ -141,7 +141,7 @@ class _Cell:
     is_bottom: bool
     is_quoin:  bool = False   # bay runs through a corner cell
     key:   tuple = field(default=())
-    # Opening-fit cuts (docs/design/walls-doors.html "bond-to-surround fit"): each is
+    # Opening-fit cuts (docs/archive/python-library/walls-doors.html "bond-to-surround fit"): each is
     # one straight line as an endpoint pair, or None.  cut0/cut1 give t
     # at (z0, z1) — side cuts against a jamb/ring; cut_z0/cut_z1 give z
     # at (t0, t1) — a horizontal cut over a keystone / under a ring.
@@ -893,7 +893,7 @@ class CutStoneWall:
     def _apply_openings(self, cells: list[_Cell], segs: list[_Seg],
                         rng: np.random.Generator):
         """Exclude wall cells inside each opening profile and build the
-        posed SURROUND cells (docs/design/walls-doors.html): jamb stacks
+        posed SURROUND cells (docs/archive/python-library/walls-doors.html): jamb stacks
         on near-vertical boundary, radial voussoirs elsewhere, lintel /
         sill slabs for 'auto' profiles.  Surrounds may rise above the
         wall top (low walls imply tall walls).  Returns

@@ -1,7 +1,7 @@
 """ThatchGrass — draped-blade grass dressing (mound-thatch design, E2/E3).
 
 Experimental greenfield replacement for the FloppyGrass field simulation
-(design: docs/design/grass-mound-thatch.html).  No growth simulation: blade
+(design: docs/archive/python-library/grass-mound-thatch.html).  No growth simulation: blade
 spine paths are *synthesized* — a curled 2-D arc draped on a smoothed copy
 of the current terrain (the mound substrate) — then handed to the existing
 ``grass.mesh.build_meshes``, which lifts each blade over previously placed

@@ -1,7 +1,7 @@
 """
 Worn brick / small-block wall — walls campaign family 2.
 
-Reference: ``docs/reference/walls/brick-worn.jpg`` — running bond of
+Reference: ``docs/looks/ref/walls/brick-worn.jpg`` — running bond of
 small near-uniform units, ERODED mortar joints (deep dark recesses —
 negative relief is the whole read), spalled bricks with rounded worn
 arrises breaking the grid, and the occasional missing brick showing

@@ -1,7 +1,7 @@
 """Organic union-surface leaf placement (greenfield, fourth placer).
 
 Requirements source:
-``docs/meta/history/2026-07-02-foliage-greenfield-requirements.md`` —
+``docs/archive/history/2026-07-02-foliage-greenfield-requirements.md`` —
 Animal Crossing-style chunky discrete leaves; TOTAL coverage with no
 visible order; configurable overlap with per-leaf height layering; seams
 handled by tiling the union canopy surface; down-slope direction with

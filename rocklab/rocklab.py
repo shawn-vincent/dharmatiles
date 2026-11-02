@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """rocklab — chiselled faceted rocks scattered on a flat DungeonBlocks tile.
 
-Implements docs/labs/rocklab/design.html:
+Implements docs/looks/rocks.html#how:
 
   per rock: lumpy convex body on a non-increasing profile → blue-noise
             facet seeds (mixed radii) → intersection of tilted tangent
@@ -26,7 +26,7 @@ import manifold3d as m3d
 import numpy as np
 import trimesh
 
-# ── Parameters (docs/labs/rocklab/design.html §7), grouped by stage ─────────────────────────────
+# ── Parameters (docs/looks/rocks.html#how), grouped by stage ─────────────────────────────
 # tile
 SQUARE_MM        = 35.0
 SURFACE_MM       = 4.0            # flat floor, above terrain datum (DB dirt band)

@@ -1,7 +1,7 @@
 """
 Faceted stone primitive — gen-1 prototype (E1/E2 of the rocks rework).
 
-Design: docs/design/rocks-faceted-stones.html.  Each stone is the convex
+Design: docs/archive/python-library/rocks-faceted-stones.html.  Each stone is the convex
 hull of M support points sampled on an anisotropic lumpy ellipsoid, so
 every face is planar with a distinct normal — faceted by construction
 (R1).  Fibonacci-sphere direction sampling bounds facet size from below

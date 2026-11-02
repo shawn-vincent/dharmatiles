@@ -2,7 +2,7 @@
 """Build the stone/walls demo set: STLs + renders + watertight report.
 
 The acceptance harness for the 2026-07-05 walls/rocks DRY refactor
-(docs/meta/history/2026-07-05-walls-rocks-refactor-review.md): seven
+(docs/archive/history/2026-07-05-walls-rocks-refactor-review.md): seven
 scenes spanning the range of configurability of scatter rocks, the
 cut-stone wall, and the fieldstone wall.  Run it after every refactor
 stage; compare the renders against the previous stage / the
