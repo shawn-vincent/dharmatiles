@@ -46,8 +46,8 @@
    "body": "other",
    "area": "Docs",
    "state": "done",
-   "title": "Docs follow-ups done: 55° audits, live doc paths, red-painted renders",
-   "detail": "rocklab/grasslab/dirtlab audit at 55° (clifflab face report reads the constant); ~40 dead docs/ paths in code repointed; red-overhang heroes on trees, walls and composition; variants page images fixed; 0 broken links.",
+   "title": "Docs follow-ups done: 55\u00b0 audits, live doc paths, red-painted renders",
+   "detail": "rocklab/grasslab/dirtlab audit at 55\u00b0 (clifflab face report reads the constant); ~40 dead docs/ paths in code repointed; red-overhang heroes on trees, walls and composition; variants page images fixed; 0 broken links.",
    "updated": "2026-11-02T17:52:30Z"
   },
   {
@@ -57,7 +57,7 @@
    "area": "Rust P1",
    "state": "done",
    "title": "Phase 1 done: flat tile prints from Rust",
-   "detail": "Merged into main (84056d8). Flat 1×1 DB tile: watertight, 0 overhang, 0.1 s, same hashes on macOS and Linux; review findings fixed; Shawn's test print seated and the contact-sheet layout is approved.",
+   "detail": "Merged into main (84056d8). Flat 1\u00d71 DB tile: watertight, 0 overhang, 0.1 s, same hashes on macOS and Linux; review findings fixed; Shawn's test print seated and the contact-sheet layout is approved.",
    "updated": "2026-11-02T16:00:00Z"
   },
   {
@@ -66,9 +66,9 @@
    "body": "rust",
    "area": "Rust P2",
    "state": "running",
-   "title": "Phase 2 started: dirt and hills",
-   "detail": "Branch rust/p2. Kernels (noise, distance, morphology, blur), operations, the ground and dirt looks ported from dirtlab, soil-1x1.kdl, watch. Ends with Shawn signing off Rust beside dirtlab over seeds 1–4.",
-   "updated": "2026-11-02T16:00:00Z"
+   "title": "dirt ported; parity passes at seeds 1\u20134",
+   "detail": "Kernels done (noise, distance, morphology, blur, spatial hash, adaptive lift). dirt + ground ported; the parity harness passes every metric at seeds 1\u20134 (texture 97.8% vs Python 97.7%). 2\u00d72 builds in ~0.8 s, watertight, 0 mm\u00b2 overhang. Now: tests, CI, reviews.",
+   "updated": "2026-11-02T20:26:31Z"
   }
  ]
 }
