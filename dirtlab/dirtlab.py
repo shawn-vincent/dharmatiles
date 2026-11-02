@@ -125,7 +125,7 @@ CRACKS_2X2       = 5
 CRACK_W_MM       = 0.35
 CRACK_DEPTH_MM   = 0.25
 
-OVERHANG_DEG     = 45.0
+OVERHANG_DEG     = 55.0
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────

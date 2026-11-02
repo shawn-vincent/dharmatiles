@@ -192,7 +192,7 @@
   <li><strong>REQ-P-2 [R]</strong> Stone-like: faceted or worn, flattish; never round domes or discs.</li>
   <li><strong>REQ-P-3 [R]</strong> Loosely clustered, biased into low ground; never on a grid.</li>
   <li><strong>REQ-P-4 [S]</strong> Sunk 25–45% with a soil fillet; nothing floats.</li>
-  <li><strong>REQ-FDM-1 [S]</strong> No overhang past 45°. <em>The project limit is now 55° (31 Oct); dirtlab still audits at 45°.</em></li>
+  <li><strong>REQ-FDM-1 [S]</strong> No overhang past 45°. <em>Amended 31 Oct: the project limit is 55°; dirtlab audits at 55° since 2 Nov.</em></li>
   <li><em>Added 29 Oct.</em> <strong>REQ-D-TEX [S]</strong> Within any 1.5 mm window, relief is at least 0.2 mm over at least 97% of the interior.</li>
 </ul>
 <h3>Named failure modes</h3>
@@ -218,7 +218,7 @@
 <details id="audit">
 <summary>Audit numbers (round 2)</summary>
 <p><strong>By construction:</strong> the earth, clods and pebbles are one height field, which cannot overhang; the ground never dips below the edge level and sits exactly at it on the rim; stones are sunk below the lowest ground under them.</p>
-<p><strong>Checked:</strong> <code>audit_overhang</code> (line 561) sums the area of faces facing down more steeply than 48°; <code>stl_safe</code> (line 529) rounds to float32, merges vertices and refuses anything that is not one watertight body. The texture rule is measured by <code>texcheck.py</code>, which lived in a session scratchpad and is not in the repo.</p>
+<p><strong>Checked:</strong> <code>audit_overhang</code> (line 561) sums the area of faces past 58° from vertical (the 55° limit plus 3°); <code>stl_safe</code> (line 529) rounds to float32, merges vertices and refuses anything that is not one watertight body. The texture rule is measured by <code>texcheck.py</code>, which lived in a session scratchpad and is not in the repo.</p>
 <div class="tbl"><table>
 <thead><tr><th>Tile</th><th>Watertight</th><th class="num">Overhang (mm²)</th><th class="num">Ground (mm)</th><th class="num">Windows under one layer</th><th class="num">Build</th></tr></thead>
 <tbody>
@@ -266,7 +266,6 @@
 <h3 id="open">Open issues</h3>
 <ul>
   <li>Edge level: dirtlab uses 4.0 mm; the Rust edge contract and grasslab use 3.4 mm. P2 settles dirt on 3.4 mm, checked with a test print in P3.</li>
-  <li>dirtlab audits overhang at 45° (<code>OVERHANG_DEG</code>, line 128), stricter than the 55° project limit. It reports 0.00 mm² either way.</li>
   <li><code>texcheck.py</code>, the printable-texture measure, is not in the repo; P2's harness needs it in code.</li>
   <li>The Python library's <code>SoilCarpet</code> is still the soil in <code>src/tiles/</code>; it is replaced at cutover (P6), not before.</li>
   <li><code>clods few</code> and <code>clods many</code> have provisional numbers; P2 tunes them.</li>

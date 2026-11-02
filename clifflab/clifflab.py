@@ -1131,7 +1131,7 @@ def report(r, audit=True):
     print(f"  split quiet / fracture / detail: {q:.0%} / {f_:.0%} / {d:.0%}; "
           f"{sum(len(fm.major_s) for fm in r.fms)} major-fissure columns; {r.n_scree} scree rocks")
     ov, ovf = _gl.audit_overhang(r.mesh)
-    msg = f"  >45°(+3) overhang {ov:.1f} mm² ({ovf:.2%})"
+    msg = f"  >{_gl.OVERHANG_DEG:.0f}°(+3) overhang {ov:.1f} mm² ({ovf:.2%})"
     if audit:
         msg += f"; slicer islands at 0.2 mm: {islands(r.mesh)}"
     print(msg)

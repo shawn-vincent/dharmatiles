@@ -86,7 +86,7 @@ PLACEMENTS_2X2   = (9, 12)
 CLEARANCE_MM     = 1.5
 RIM_MM           = 1.0
 DART_TRIES       = 400
-OVERHANG_DEG     = 45.0
+OVERHANG_DEG     = 55.0
 
 
 class Placement(NamedTuple):

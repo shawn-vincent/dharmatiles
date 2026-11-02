@@ -173,13 +173,12 @@
 
 <h3>Open conflicts</h3>
 <ul>
-<li>rocklab (<code>rocklab/rocklab.py:89</code>), grasslab (<code>grasslab/grasslab.py:160</code>) and dirtlab (<code>dirtlab/dirtlab.py:128</code>) still audit at 45° with the face-angle test, and clifflab's original REQ-FDM-1 says 45°. The ruling is 55°; those audits are stricter, never looser.</li>
 <li>The Python library is weaker at export. Stones and crack engraving reject results that fail <code>survives_stl32</code> (<code>src/dharmatiles/scatter/stones.py:490</code>, <code>src/dharmatiles/stone/cracks.py:270</code>), walls separate pinches (<code>src/dharmatiles/walls/masonry.py:197</code>), and the exporter separates pinches on the whole tile (<code>src/dharmatiles/systems.py:47</code>). But a library STL is the base and every layer's parts concatenated, not one unioned body, so its export does not check watertightness (<code>src/dharmatiles/terrains/tile.py:583</code>). Watertight status is reported when library STLs are regenerated.</li>
 <li>The texture check (<code>texcheck.py</code>) lived in a session scratchpad and is not in the repository. The Rust parity harness is where it becomes a committed check.</li>
 </ul>
 
 <h3 id="history">History</h3>
-<p>The labs started with a 45° overhang limit and voxel FDM rules. On 29 Oct 2026 grass moved to blades built in printer units, and dirt gained the printable-texture rule after a slicing test. On 31 Oct 2026 Shawn raised the limit to 55° (“45 is too conservative”) and made red overhang faces the policy for every render. On 1 Nov 2026 clifflab replaced the face-angle audit with the layer-reach audit so that thin cracks pass, and the Rust plan confirmed the 2 mm² cliff budget. The float32 export guarantees come from the July 2026 stone and wall work (fieldstone experiments E23 and E25). Earlier notes are in the <a href="../archive/index.html">archive</a>.</p>
+<p>The labs started with a 45° overhang limit and voxel FDM rules. On 29 Oct 2026 grass moved to blades built in printer units, and dirt gained the printable-texture rule after a slicing test. On 31 Oct 2026 Shawn raised the limit to 55° (“45 is too conservative”) and made red overhang faces the policy for every render. On 1 Nov 2026 clifflab replaced the face-angle audit with the layer-reach audit so that thin cracks pass, and the Rust plan confirmed the 2 mm² cliff budget. On 2 Nov 2026 the rocklab, grasslab and dirtlab face-angle audits moved from 45° to 55° (<code>OVERHANG_DEG</code>). The float32 export guarantees come from the July 2026 stone and wall work (fieldstone experiments E23 and E25). Earlier notes are in the <a href="../archive/index.html">archive</a>.</p>
 </section>
 </article>
 </div>

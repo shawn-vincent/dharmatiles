@@ -157,7 +157,7 @@ BANK_H_SCALE         = (0.65, 1.15)
 # 6–7 mesh, base, audit
 SIMPLIFY_TOL_MM      = 0.005       # resin resolution
 SLAB_BOX_MM          = 1.0         # exact box under the grass solid (ground ≥ edge level)
-OVERHANG_DEG         = 45.0
+OVERHANG_DEG         = 55.0
 DB_GRASS_BAND        = (4.4, 5.9)  # mean grass top above datum
 
 

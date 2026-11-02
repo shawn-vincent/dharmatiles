@@ -224,7 +224,7 @@ python grasslab/grasslab.py --seed 1 --cols 1 --rows 1 --flat   # flat ground, f
 <details id="audit">
 <summary>Audit numbers (v3, seed 1, 2×2)</summary>
 <p><strong>By construction:</strong> whole layers and lines (opening each layer by just under half a line keeps at least 99.9% of it); growth of at most half a line per side per layer; the tip rake; blades sunk 0.3 mm; one scalar flow angle, so no whorls; blades shortened, never sliced.</p>
-<p><strong>Checked:</strong> <code>audit_overhang</code> (line 1086) sums faces steeper than 48° below horizontal; <code>stl_safe</code> (line 1060) rounds to float32, merges vertices and refuses anything that is not one watertight body; the run prints the DB band check.</p>
+<p><strong>Checked:</strong> <code>audit_overhang</code> (line 1086) sums faces past 58° from vertical (the 55° limit plus 3°); <code>stl_safe</code> (line 1060) rounds to float32, merges vertices and refuses anything that is not one watertight body; the run prints the DB band check.</p>
 <div class="tbl"><table>
 <thead><tr><th>Check</th><th>Seed 1</th></tr></thead>
 <tbody>
@@ -280,7 +280,6 @@ python grasslab/grasslab.py --seed 1 --cols 1 --rows 1 --flat   # flat ground, f
 <h3 id="open">Open issues</h3>
 <ul>
   <li>The Rust <code>grass</code> controls (length 10 mm, curl 36–81°, tufts 3 per square) come from the Python library's grass, not grasslab: lab blades are 2.8–7.2 mm long, have no curl control and do not gather in tufts. P4 must map them to the lab or change the vocabulary.</li>
-  <li>The lab audits overhangs at 45° (+3°), stricter than the 55° ruling made for cliffs on 31 Oct.</li>
   <li>The approved renders predate the red-overhang render rule; new renders should paint overhang faces red.</li>
   <li>A 2×2 tile is 87 MB and about 100 s to build, roughly 30 times slower than the library grass; most of the time is meshing blades.</li>
   <li>Grass does not tile seamlessly: neighbouring tiles meet at the edge level, but ribbons do not continue across the seam (out of scope for the lab).</li>

@@ -193,7 +193,7 @@
   <li><strong>REQ-SC-2 [R]</strong> Natural spacing, ≥ 1.5 mm clearance, open floor for miniature bases.</li>
   <li><strong>REQ-SC-3 [S]</strong> Every rock inside the tile, ≥ 1 mm from the wall.</li>
   <li><strong>REQ-SC-4 [S]</strong> Rocks sink 0.3 mm into the slab. <em>Amended 29 Oct: 0.55 mm, so dirt dips never expose a rock's base.</em></li>
-  <li><strong>REQ-FDM-1 [S]</strong> No downward face steeper than 45°, guaranteed by grounded bodies and planes that never point down past 30°.</li>
+  <li><strong>REQ-FDM-1 [S]</strong> No downward face steeper than 45°, guaranteed by grounded bodies and planes that never point down past 30°. <em>Amended 31 Oct: the project limit is 55°; the audit checks 55° since 2 Nov.</em></li>
   <li><strong>REQ-FDM-2 [S]</strong> Chip depth scales with √(D/15); grain is small and fades to zero at the base and on downward faces.</li>
   <li><strong>REQ-FDM-3 [S]</strong> An audit reports watertightness, body count and overhang area.</li>
 </ul>
@@ -222,7 +222,7 @@
 <details id="audit">
 <summary>Audit numbers</summary>
 <p><strong>By construction:</strong> every rock is an intersection of half-spaces cut from a body that never widens going up, so it is convex and grounded; no plane points down past 30° (<code>FACET_MIN_NZ</code>); grain is zero on downward faces and at the base; clusters are unions of convex rocks.</p>
-<p><strong>Checked:</strong> <code>audit_overhang</code> (<code>rocklab.py:408</code>) reports the area of faces past 48° from vertical (45° plus 3°). Before export the mesh is rounded to float32 and merged as a slicer would, and the run stops unless it is still one watertight body (<code>rocklab.py:445</code>).</p>
+<p><strong>Checked:</strong> <code>audit_overhang</code> (<code>rocklab.py:408</code>) reports the area of faces past 58° from vertical (55° plus 3°). Before export the mesh is rounded to float32 and merged as a slicer would, and the run stops unless it is still one watertight body (<code>rocklab.py:445</code>).</p>
 <div class="tbl"><table>
 <thead><tr><th>Tile</th><th>Placements</th><th>Stones</th><th class="num">Facets</th><th class="num">Overhang (mm²)</th></tr></thead>
 <tbody>
@@ -283,7 +283,6 @@
 <ul>
   <li>The Rust vocabulary's hidden settings for rocks (blur-remesh radius, relief bands, seat quantile) describe the library's aged stones, not rocklab's facets. P3 has to choose which one the <code>rock</code> look ports; rocklab is the approved one.</li>
   <li>The Rust default <code>rock</code> size is <code>2..10</code> mm; rocklab's approved range is 6–15 mm.</li>
-  <li>rocklab audits overhangs at 45° (+3°), stricter than the project's 55° ruling of 31 Oct. Harmless, but the numbers are not comparable with cliffs.</li>
   <li>The ground sits at 4.0 mm; the standard edge level is 3.4 mm.</li>
   <li>The renders on this page predate the red-overhang rule; a fresh painted contact sheet is due with the P3 parity work.</li>
   <li>The library (<code>scatter/stones.py</code>, used by the 35 library tiles) and rocklab are still two different rocks.</li>
