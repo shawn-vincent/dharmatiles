@@ -13,10 +13,10 @@
    "id": "p1-doc",
    "order": 20,
    "area": "Rust P1",
-   "state": "running",
-   "title": "Stream A: dt-doc on the R6 vocabulary + library tiles",
-   "detail": "Reworking dt-doc to the D1–D12 decisions (mm and named levels, renames, scatter node, levels.kdl prelude); rewriting the library tiles; flat-1x1, printers/default, parts/edges. Branch rust/p1-doc.",
-   "updated": "2026-11-02T14:00:00Z"
+   "state": "done",
+   "title": "Stream A done: dt-doc on the R6 vocabulary + library tiles",
+   "detail": "rust/p1-doc 6fb2205: 88 dt-doc tests pass, wasm build OK; library tiles match the R6 page byte for byte; edit API inserts properties. Waiting to merge with stream B.",
+   "updated": "2026-11-02T14:40:00Z"
   },
   {
    "id": "p1-skel",
