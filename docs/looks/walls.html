@@ -330,7 +330,20 @@ tile wall-fieldstone-corner size="1x1" seed=64 {
 
 <details id="rust">
 <summary>Rust port</summary>
-<p><strong>Phase P5</strong>, “Walls, floors, OpenLOCK and trees”. Exit gate: no branch below 26°, rays within 3× of Embree, printed wall corners butt, and an OpenLOCK clip fits; Shawn's sign-off. The <code>wall</code> vocabulary exists in <code>crates/dt-doc/src/looks.rs</code> on <code>rust/p1</code>, and the library has one wall tile. Floors and openings have no words yet. No parity contact sheet yet.</p>
+<p><strong>Phase P5</strong>, “Walls, floors, OpenLOCK and trees”, branch <code>rust/p5</code> (2 Nov 2026). Ported: the masonry chassis (courses and bays, quoins, recessed core, seat, clip), cut stone, brick, regular brick and fieldstone, ruin and battlements, and floors (a wall laid flat; <code>floor style=cut-stone|fieldstone texture=… slabs=…</code>). Not yet: openings, fit and leaf, floor crack engraving, and the mortar sheet under laid cut-stone floors.</p>
+<p><strong>Rust beside Python</strong>, seeds 1–4, on a flat 5 mm slab with the DungeonBlocks base (<code>cargo xtask parity wall-cut-stone</code> and the others; sheets in <code>out/parity/&lt;look&gt;/contact-sheet.png</code>). Every judged row passes.</p>
+<div class="tbl"><table>
+<thead><tr><th></th><th>cut stone</th><th>brick</th><th>regular brick</th><th>fieldstone</th><th>floor stone</th></tr></thead>
+<tbody>
+<tr><td>units, Python / Rust</td><td>8 / 8</td><td>56.75 / 58.5</td><td>40 / 40</td><td>24.25 / 24.75</td><td>1 / 1</td></tr>
+<tr><td>courses</td><td>4 / 4</td><td>10 / 10</td><td>9 / 9</td><td>8 / 8</td><td>1 / 1</td></tr>
+<tr><td>overhang mm², Python / Rust (harness measure)</td><td>37.5 / 4.1</td><td>9.7 / 1.25</td><td>286.9 / 0</td><td>33.0 / 0.04</td><td>0 / 0</td></tr>
+<tr><td>overhang mm², Rust, the gate's audit</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><td>build s, Python / Rust</td><td>0.50 / 0.68</td><td>1.99 / 1.46</td><td>1.99 / 1.35</td><td>1.10 / 0.75</td><td>0.38 / 0.47</td></tr>
+</tbody></table></div>
+<p>The harness measure has no printer gap, so it still counts a few sub-0.2 mm joints; the gate's audit (55°, 0.2 mm layer and gap) is 0 on block walls and floors over seeds 1–8 at both scales, and on fieldstone over seeds 1–12 with two exceptions: the fieldstone test tile at seed 8 (0.16 mm², under a stepped stone) and the fieldstone corner twin at OpenLOCK scale, default seed (0.25 mm², under a coping head joint). Corner tiles build in 1.1–2.2 s; brick corners are the slowest (about 94 units, 700k triangles). Builds are identical at 1, 4 and 16 threads.</p>
+<p><strong>Printable by construction.</strong> Python's walls overhang mostly at bed-joint lips: a stone's bottom edge standing proud of the stone below by 0.3–1.5 mm. Walls ruling R10 says the lip over a sub-millimetre joint prints, so the audit now treats a gap thinner than the printer's 0.2 mm as solid, and the Rust walls hold each block no more than 0.05 mm proud of the one it sits on (mortar wedges 0.45 mm). Head-joint tops are chipped back at most 0.25 mm. Fieldstone undersides are bevelled at 45°, inside-corner stones press into the other run, its relief moves along rays from each stone's centre (normal relief folded tight rings into 0.1 mm fins), and pinning wedges fill head joints a stone above bridges. Sealed voids the union leaves are filled, not counted as lost parts.</p>
+<p><strong>KDL twins</strong>: <code>library/tiles/walls/1x1-wall-{stone,stone-corner,brick,brick-corner,fieldstone,fieldstone-corner}.kdl</code> and <code>library/tiles/floors/1x1-floor-stone{,-wall}.kdl</code>. The floors build now; the walls wait for grass (P4). Each twin pins the Python wall's seed so it stays comparable.</p>
 </details>
 
 <details id="reference-photos">
