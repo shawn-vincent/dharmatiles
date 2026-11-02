@@ -17,6 +17,11 @@
   <h1>Walls and floors</h1>
   <p class="lede">Masonry walls that stand on a tile edge, and stone pavements that replace the ground. Walls come in four families: cut stone, drystone fieldstone, worn brick and regular brick. Every stone is modelled on all its visible sides, so the front, back, ends and top all read as masonry. Walls match the DungeonBlocks wall height and thickness, take doors, windows and swappable portcullises, and print with no supports.</p>
   <div class="hero-shots">
+    <figure><img src="img/walls-fieldstone-corner-red.jpg" alt="Drystone fieldstone corner wall on a grassy 1x1 tile, overhang faces painted red" width="896" height="1084"></figure>
+    <figure><img src="img/walls-fieldstone-corner-red-under.jpg" alt="The same wall from low down: red strips along the bottoms of the stones" width="902" height="1065"></figure>
+  </div>
+  <p class="muted small">Library tile <code>walls/1x1-wall-fieldstone-corner</code>, built in memory on 2 Nov 2026. Faces past the overhang limit (55°, audited at 58° like the labs) are painted red. Left: from above, only thin lines show. Right: from low down, the red is the flat stone bottoms over the bed joints (the square bottoms of the R10 amendment): about 210 mm² not buried in another part (460 mm² counting faces inside other parts).</p>
+  <div class="hero-shots">
     <figure><img src="img/walls-fieldstone-corner.jpg" alt="Drystone fieldstone wall turning a corner on a 1x1 tile" width="700" height="561"></figure>
     <figure><img src="img/walls-brick-1x1.jpg" alt="Worn brick wall along one edge of a grassy 1x1 tile" width="900" height="750"></figure>
   </div>
@@ -353,7 +358,7 @@ tile wall-fieldstone-corner size="1x1" seed=64 {
 
 <h3 id="open">Open issues</h3>
 <ul>
-  <li>No overhang audit runs on walls, and every wall render predates the red-overhang rule. The square block bottoms (R10 amendment) rely on the official pieces' precedent, not a measurement.</li>
+  <li>No overhang audit runs on walls. The red-painted render (2 Nov) shows about 210 mm² of exposed stone bottoms past the face-angle limit on the fieldstone corner; whether they print is the R10 question (square bottoms bridge sub-mm joints, by the official pieces' precedent), and a layer-reach audit like clifflab's would measure it. The other wall renders predate the red-overhang rule.</li>
   <li>Build time: about 8 s per cut-stone wall against a target well under 1 s.</li>
   <li>Several steps are marked “pending Shawn” in the experiment log: brick (E28), coping and crenellations (E29–E30), ruins (E31), the common relief (E36), floors laid flat (E57) and regular brick (E60).</li>
   <li>Not built: double gates, broken leaves, walls that follow a slope, custom concave opening profiles.</li>

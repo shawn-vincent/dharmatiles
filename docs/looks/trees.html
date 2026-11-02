@@ -16,6 +16,11 @@
   <h1>Trees</h1>
   <p class="lede">A tree is a single deciduous tree standing on a tile: a twisting barked trunk that forks into branches, each branch ending in a clump of foliage covered in thousands of separate, chunky leaves. The look is slightly cartoonish, in the spirit of an Animal Crossing tree. It grows on ground and grass tiles, and prints on an FDM printer with no supports.</p>
   <div class="hero-shots">
+    <figure><img src="img/trees-1x1-grass-tree-red.jpg" alt="A 1x1 grass tile with one tree, overhang faces painted red" width="709" height="1027"></figure>
+    <figure><img src="img/trees-1x1-grass-tree-red-under.jpg" alt="The same tree from below the crown: red bands along the undersides of the foliage clumps and leaves" width="720" height="984"></figure>
+  </div>
+  <p class="muted small">Library tile <code>ground/1x1-grass-tree</code>, built in memory on 2 Nov 2026. Faces past the overhang limit (55°, audited at 58° like the labs) are painted red. Left: from above, the red barely shows. Right: from below the crown, it sits along the undersides of the foliage clumps and their leaves: about 1,230 mm² not buried in another part (2,370 mm² counting faces inside other parts).</p>
+  <div class="hero-shots">
     <figure><img src="img/trees-1x1-grass-tree.jpg" alt="A 1x1 grass tile with one tree, painted green and brown" width="900" height="750"></figure>
     <figure><img src="img/trees-2x2-grass-tree.jpg" alt="A 2x2 grass tile with one tree near a corner" width="900" height="750"></figure>
   </div>
@@ -266,7 +271,7 @@ tile grass-tree size="2x2" seed=84 {
 
 <h3 id="open">Open issues</h3>
 <ul>
-  <li>No current render shows the red overhang paint; the look needs a painted contact sheet under the present render policy.</li>
+  <li>The red-painted render (2 Nov) shows about 1,230 mm² of exposed faces past the limit, along the undersides of the foliage clumps and their leaves. The tree has no face-angle audit of its own; only branch angles are checked (<code>strict_fdm_angle_deg</code>).</li>
   <li>The organic placer's knobs are still module constants, not <code>Tree(...)</code> arguments (requirement 13).</li>
   <li>About 5% of leaf builds fail at crown fringes and undersides.</li>
   <li>The deep underside (below a normal of −0.75) is bare clump; a leaf-shaped relief there was proposed and not built.</li>

@@ -16,6 +16,10 @@
   <h1>Composition</h1>
   <p class="lede">Composition is how looks share one tile. Rocks sit bedded in the ground, grass grows right up to them and parts around them, bare earth shows between, and every tile meets its neighbour at the same edge level. The approved example is the meadow: rocks, grass and bare earth on one tile, printed as one piece with no supports.</p>
   <div class="hero-shots">
+    <figure><img src="img/composition-meadow-s1-red.jpg" alt="A 2x2 meadow tile: grass flowing around grey rocks and patches of bare earth" width="1100" height="822"></figure>
+  </div>
+  <p class="muted small">meadowlab, 2×2, seed 1, painted, built in memory on 2 Nov 2026: rocks, grass and bare earth on one tile. Faces past the overhang limit are painted red; the audit finds 1.0 mm² over 635 tiny faces, too small to see at this size.</p>
+  <div class="hero-shots">
     <figure><img src="img/water-shore-s3-overhang.jpg" alt="Grey renders of a shore tile from an angle and from above: grass, reeds and rocks meeting water" width="900" height="359"></figure>
   </div>
   <p class="muted small">shorelab, 2×2, seed 3, grey, from an angle and from above: grass, rocks, reeds, bare earth and water on one tile. Faces past the overhang limit are painted red.</p>
@@ -241,7 +245,6 @@ tile meadow size="2x2" seed=1 {
   <li>Aprons, clearings and spill appeared in the plan's P4 scope under the old look name <code>meadow</code> (renamed <code>grass</code> by decision D8). The as-built vocabulary has none of them; they stay hidden at the approved values unless P4 exposes them.</li>
   <li>The meadow builds in about 85 s and writes a 79 MB STL. P4 targets 15 s.</li>
   <li>The rock-interaction numbers were measured with the retired height-field grass; only seed 1 has been measured with stroke blades.</li>
-  <li>There is no red-painted render of a meadow tile yet; the page shows the shore tile, which composes the same looks. A painted meadow render is needed.</li>
   <li>The Python library depends on layer order (<code>Rocks</code> before <code>Grass</code>); the Rust engine does not. Tile twins converted in P4 must not rely on order for solids.</li>
   <li>Where meadow meets water is the shore, part of the <a href="water.html">water</a> look (shorelab).</li>
 </ul>
