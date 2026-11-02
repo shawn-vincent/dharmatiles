@@ -321,6 +321,12 @@ pub trait Mesh: Sized + Send + Sync + Clone {
     #[must_use]
     fn level_set(sdf: &(dyn Fn([f64; 3]) -> f64 + Sync), bounds: Bounds, edge_length: f64) -> Self;
 
+    /// The even-odd region of `contours` (closed polygons in mm, x and y),
+    /// shrunk by `inset` mm with mitred corners when `inset > 0`, as a prism
+    /// from `z0` up to `z1`.
+    #[must_use]
+    fn extrude(contours: &[Vec<[f64; 2]>], inset: f64, z0: f64, z1: f64) -> Self;
+
     /// This solid as a new original with a fresh original ID from the
     /// kernel's process-wide counter. It collapses every source ID into one
     /// and recomputes face IDs, so it cuts the link R9's material tracing

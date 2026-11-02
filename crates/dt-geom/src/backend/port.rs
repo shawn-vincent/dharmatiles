@@ -4,7 +4,8 @@
 //! kernel unions by size with a priority queue. `batch` here does the
 //! size-ordered union itself, so large batches stay tractable.
 
-use manifold_rust::linalg::Vec3;
+use manifold_rust::cross_section::CrossSection;
+use manifold_rust::linalg::{Vec2, Vec3};
 use manifold_rust::manifold::Manifold;
 use manifold_rust::types::{Box as BBox, Error, MeshGLP, OpType};
 
@@ -133,6 +134,32 @@ impl Mesh for PortSolid {
             b,
             edge_length,
         ))
+    }
+
+    fn extrude(contours: &[Vec<[f64; 2]>], inset: f64, z0: f64, z1: f64) -> Self {
+        // The port has no multi-contour even-odd constructor: fold each
+        // contour in with a symmetric difference, which is even-odd.
+        let mut cs: Option<CrossSection> = None;
+        for c in contours {
+            let one = CrossSection::from_polygon_with_fill_rule(
+                c.iter().map(|p| Vec2::new(p[0], p[1])).collect(),
+                0,
+            );
+            cs = Some(match cs {
+                None => one,
+                Some(acc) => acc.union(&one).difference(&acc.intersection(&one)),
+            });
+        }
+        let Some(mut cs) = cs else {
+            return Self(Manifold::empty());
+        };
+        if inset > 0.0 {
+            cs = cs.offset_with_params(-inset, 2, 2.0, 0); // mitred, limit 2
+        }
+        Self(
+            Manifold::extrude(&cs.to_polygons(), z1 - z0, 0, 0.0, Vec2::new(1.0, 1.0))
+                .translate(Vec3::new(0.0, 0.0, z0)),
+        )
     }
 
     fn as_original(&self) -> Self {

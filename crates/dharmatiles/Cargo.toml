@@ -1,0 +1,25 @@
+[package]
+name = "dharmatiles"
+description = "dharmatiles: build printable terrain tiles from KDL documents"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+build = "build.rs"
+
+[features]
+default = ["manifold-ffi"]
+manifold-ffi = ["dt-eval/manifold-ffi", "dt-eval/manifold-parallel", "dt-kit/manifold-ffi"]
+manifold-rust = ["dt-eval/manifold-rust", "dt-kit/manifold-rust"]
+
+[dependencies]
+clap.workspace = true
+dt-eval.workspace = true
+dt-kit.workspace = true
+miette = { workspace = true, features = ["fancy-no-backtrace"] }
+serde_json.workspace = true
+
+[lints]
+workspace = true

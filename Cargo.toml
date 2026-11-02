@@ -14,8 +14,13 @@ publish = false
 
 # Every external version is stated once, here.
 [workspace.dependencies]
-dt-geom = { path = "crates/dt-geom" }
+# Internal crates. dt-geom's backend is chosen by the crate at the top
+# (dt-eval's features), so it is pulled in without default features.
+dt-geom = { path = "crates/dt-geom", default-features = false }
 dt-doc = { path = "crates/dt-doc" }
+dt-kit = { path = "crates/dt-kit", default-features = false }
+dt-looks = { path = "crates/dt-looks", default-features = false }
+dt-eval = { path = "crates/dt-eval", default-features = false }
 # KDL v2 only: `kdlv1`/`v1-fallback` stay off, and serde is not needed.
 kdl = { version = "6.7.1", default-features = false, features = ["span"] }
 miette = { version = "7.6.0", default-features = false }
@@ -30,6 +35,11 @@ rayon = "1.12.0"
 manifold-csg = { version = "=0.4.1", default-features = false }
 manifold-rust = { version = "=0.19.2", default-features = false }
 serde_json = "1"
+clap = { version = "4.6.7", features = ["derive"] }
+insta = "1.49.0"
+# Seeded code uses libm, not std's platform maths (R2: sin/exp differ by OS).
+libm = "0.2.16"
+png = "0.18.1"
 
 [workspace.lints.rust]
 # FFI lives inside the binding crates, not ours.

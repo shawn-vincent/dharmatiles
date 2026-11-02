@@ -7,7 +7,7 @@
 //! `set_tolerance`, which re-simplifies the mesh at it (a `MeshGL` import
 //! with the tolerance set, as Python and the port do, does not).
 
-use manifold_csg::{Manifold, MeshGL64, MeshGL64Options, OpType};
+use manifold_csg::{CrossSection, FillRule, JoinType, Manifold, MeshGL64, MeshGL64Options, OpType};
 
 use super::{deinterleave, interleave, narrow};
 use crate::mesh::{BoolOp, Bounds, Mesh, MeshError, TriMesh};
@@ -105,6 +105,15 @@ impl Mesh for FfiSolid {
             0.0,
             -1.0,
         ))
+    }
+
+    fn extrude(contours: &[Vec<[f64; 2]>], inset: f64, z0: f64, z1: f64) -> Self {
+        let mut cs = CrossSection::from_polygons_with_fill_rule(contours, FillRule::EvenOdd);
+        if inset > 0.0 {
+            // Python's `CrossSection.offset(-d, JoinType.Miter)` defaults.
+            cs = cs.offset(-inset, JoinType::Miter, 2.0, 0);
+        }
+        Self(Manifold::extrude(&cs, z1 - z0).translate(0.0, 0.0, z0))
     }
 
     fn as_original(&self) -> Self {

@@ -1,0 +1,5 @@
+// The project file for the bundled library (layout.html, "Data and file
+// locations"). It marks the project root, as Cargo.toml does: builds go
+// to `out` beside it. P1 reads only `out`.
+name "dharmatiles"
+out "out"
