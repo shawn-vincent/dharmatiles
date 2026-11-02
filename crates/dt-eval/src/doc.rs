@@ -169,6 +169,8 @@ pub fn read(sources: &dyn Source, path: &str) -> Result<Read, Vec<Diag>> {
         files: BTreeMap::new(),
         loading: Vec::new(),
         errors: Vec::new(),
+        entries: 0,
+        top: None,
     };
     let Some(file) = r.load(path, None) else {
         return Err(r.errors);
@@ -252,7 +254,16 @@ struct Reader<'s> {
     files: BTreeMap<String, Arc<File>>,
     loading: Vec<String>,
     errors: Vec<Diag>,
+    /// Stack entries met so far while inlining, definitions included.
+    entries: usize,
+    /// The tile's own entry being inlined (where a blow-up is reported).
+    top: Option<(Src, SourceSpan)>,
 }
+
+/// The most stack entries a tile may expand to, definitions inlined.  A
+/// definition calling another eight times, six deep, is 262 144 entries
+/// from seven short lines; this stops it with one error.
+pub const MAX_ENTRIES: usize = 10_000;
 
 impl Reader<'_> {
     /// Decode `path` after the files it uses; each file once.
@@ -483,6 +494,27 @@ impl Reader<'_> {
     ) {
         let src = &scope.file.src;
         for e in entries {
+            if scope.depth == 0 {
+                self.top = Some((Arc::clone(src), e.span));
+            }
+            if self.entries >= MAX_ENTRIES {
+                if self.entries == MAX_ENTRIES {
+                    self.entries += 1;
+                    let (at, span) = self.top.clone().unwrap_or((Arc::clone(src), e.span));
+                    self.errors.push(
+                        Diag::at(
+                            &at,
+                            span,
+                            "dt::too-many",
+                            format!("this expands to more than {MAX_ENTRIES} stack entries"),
+                            "expands too far",
+                        )
+                        .help("a definition that calls others several times each multiplies at every level; use `scatter` or fewer calls"),
+                    );
+                }
+                return;
+            }
+            self.entries += 1;
             let area = e.place.region.clone().or_else(|| scope.area.clone());
             let seed = match &e.place.seed {
                 Some(s) => {

@@ -74,3 +74,39 @@ fn a_tile_with_nothing_in_it_is_an_error() {
         assert_eq!(e[0].location().unwrap().1, 1);
     }
 }
+
+#[test]
+fn definitions_that_multiply_stop_at_the_entry_cap() {
+    // was: 262 144 entries and 4.6 GB in `check` from seven lines
+    let mut text = String::from(
+        "define f1 { stack { ground; ground; ground; ground; ground; ground; ground; ground } }\n",
+    );
+    for k in 2..=6 {
+        let p = k - 1;
+        text += &format!(
+            "define f{k} {{ stack {{ f{p}; f{p}; f{p}; f{p}; f{p}; f{p}; f{p}; f{p} }} }}\n"
+        );
+    }
+    text += "tile a { stack {\n  f6\n} }\n";
+    let e = errors(&text);
+    assert_eq!(e.len(), 1, "{e:?}");
+    assert_eq!(e[0].code, "dt::too-many");
+    assert_eq!(e[0].location().unwrap().1, 8);
+}
+
+#[test]
+fn ten_thousand_entries_are_allowed() {
+    let src = mem(&[(
+        "t.kdl",
+        &format!(
+            "define d {{ stack {{ {} }} }}\ntile a {{ stack {{ {} }} }}\n",
+            vec!["ground"; 100].join("; "),
+            vec!["d"; 99].join("; ")
+        ),
+    )]);
+    let t = check(&src, "t.kdl", &Options::default())
+        .unwrap()
+        .tile
+        .unwrap();
+    assert_eq!(t.stack.len(), 9900);
+}
