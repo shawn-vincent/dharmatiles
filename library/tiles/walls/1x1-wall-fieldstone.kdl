@@ -1,0 +1,19 @@
+// A drystone fieldstone wall along the north edge of a grassy 1×1.
+// Twin of src/tiles/walls/1x1-wall-fieldstone.tile.py.
+
+use "parts/grass" lawn
+
+tile wall-fieldstone size="1x1" seed=63 {
+    stack {
+        dirt                                // bare earth at the ground level
+
+        // On a tile edge a wall always stands inside, its outer face
+        // flush with the edge.
+        wall along="north" style=fieldstone seed=13 {
+            height full                     // up to the wall-top level (33.1 mm)
+            thickness 7
+        }
+
+        lawn
+    }
+}

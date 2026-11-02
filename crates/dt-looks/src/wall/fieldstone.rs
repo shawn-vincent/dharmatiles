@@ -442,6 +442,22 @@ fn outline(
         }
         pts
     };
+    // at an inside corner a stone butts the other run's inner face, which
+    // sits back by its proudness: run on into it, so the corner crack
+    // never opens wider than the stone above can bridge
+    let corner = (PROUD_DEEP.1 + 0.1) * s;
+    let (mut ov0, mut ov1) = (ov0, ov1);
+    if !run.laid && !c.coping {
+        if c.seg > 0 && c.end0 == End::Joint && libm::fabs(c.t0 - run.thickness) < 1e-6 {
+            ov0 += corner;
+        }
+        if c.seg + 1 < run.segs.len()
+            && c.end1 == End::Joint
+            && libm::fabs(c.t1 - (g.len - run.thickness)) < 1e-6
+        {
+            ov1 += corner;
+        }
+    }
     let left = side(c.t0, c.end0, -ov0, 1.0);
     let right = side(c.t1, c.end1, ov1, -1.0);
     let bedline = |z: f64, ta: f64, tb: f64| -> Vec<[f64; 2]> {
