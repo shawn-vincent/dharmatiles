@@ -1,10 +1,10 @@
-// A flat 1×1: the walking-skeleton tile (plan.html, P1).
-// Bare ground at the ground level on one square.  Like every tile it
-// names no base: `dharmatiles build lib:tiles/test/flat-1x1.kdl` builds
-// it for DungeonBlocks, the default system, and adds that base.
+// The walking skeleton (plan.html, P1): a flat 1×1 tile, bare ground at
+// the ground level, on the system's connector (DungeonBlocks for db).
+// No region: the whole tile is the default area.
 
-tile flat size="1x1" {
+tile flat size="1x1" seed=1 {
+    about "Flat ground at 5 mm on one square: the first tile built end to end."
     stack {
-        ground                          // flat, at the ground level (5 mm)
+        ground          // flat, at the ground level (5 mm)
     }
 }
