@@ -95,13 +95,25 @@
 </ol></nav>
 <article class="doc">
 <h2 id="now">Where it stands</h2>
-<p>Phases 0, 1 and 2 are done. Phase 0 (spikes and decisions) ended with GO on 2 Nov 2026, with determinism level B. Phase 1 (walking skeleton and parity harness) was merged into <code>main</code> the same day: the Rust program builds a flat DungeonBlocks tile that Shawn's test print seated. Phase 2 (dirt and hills) was merged on 2 Nov 2026 after Shawn signed off Rust dirt beside dirtlab over four seeds; its Python twin <code>src/tiles/ground/1x1-soil.tile.py</code> is deleted, and <code>library/tiles/ground/soil-1x1.kdl</code> replaces it. Phase 3 (rocks and water) and Phase 5 (walls, floors, bases and trees, stream B) start next. The live status of every piece of work, Rust and labs alike, is on the <a href="../index.html#status">home page</a>.</p>
+<p>Phases 0, 1 and 2 are done. Phase 0 (spikes and decisions) ended with GO on 2 Nov 2026, with determinism level B. Phase 1 (walking skeleton and parity harness) was merged into <code>main</code> the same day: the Rust program builds a flat DungeonBlocks tile that Shawn's test print seated. Phase 2 (dirt and hills) was merged on 2 Nov 2026 after Shawn signed off Rust dirt beside dirtlab over four seeds; its Python twin <code>src/tiles/ground/1x1-soil.tile.py</code> is deleted, and <code>library/tiles/ground/soil-1x1.kdl</code> replaces it. Phase 3 (rocks and water) is built on branch <code>rust/p3</code> and waits for Shawn's sign-offs and a test print; Phase 5 (walls, floors, bases and trees, stream B) is under way. The live status of every piece of work, Rust and labs alike, is on the <a href="../index.html#status">home page</a>.</p>
 <h3 id="p2-checklist">Phase 2 checklist</h3>
 <p>The <a href="#P2">P2 detail</a> below has the full scope and exit criteria.</p>
 <ul class="now">
 <li><span class="st st-settled">done</span><span><b>Kernels and operations.</b> Position-keyed noise, distance transform, morphology, blur, spatial hash; the noise, distance, scatter, carve and adaptive-lift operations; one grid convention.</span></li>
 <li><span class="st st-settled">done</span><span><b>Looks: ground (full) and dirt</b>, ported from <code>dirtlab</code>, with <code>library/tiles/ground/soil-1x1.kdl</code>, <code>dharmatiles looks</code> and the <code>watch</code> command. At seeds 1 to 4 every parity metric is within tolerance; the printable-texture rule holds on 97.8% (dirtlab 97.7%); a 2×2 tile builds in about 0.8 s, watertight, with 0 mm² of overhang. Dirtlab's stones come in P3.</span></li>
 <li><span class="st st-settled">done</span><span><b>Shawn's sign-off.</b> Shawn signed off Rust dirt beside dirtlab over seeds 1 to 4 on 2 Nov 2026 (&ldquo;dirt is beautiful&rdquo;). The ground edge level stays 3.4 mm (Default 12), and the flat test tile now sits at it.</span></li>
+</ul>
+
+<h3 id="p3-checklist">Phase 3 checklist</h3>
+<p>The <a href="#P3">P3 detail</a> below has the full scope and exit criteria. Python-beside-Rust contact sheets for seeds 1 to 4 are written by <code>cargo xtask parity rocks</code>, <code>water</code> and <code>dirt-stones</code> to <code>out/parity/&lt;look&gt;/contact-sheet.png</code>.</p>
+<ul class="now">
+<li><span class="st st-settled">done</span><span><b>Rocks</b> (<code>rock</code>, <code>stone</code>, <code>boulder</code>, <code>pebble</code> and <code>scatter</code>), ported from <code>rocklab</code>. At seeds 1 to 4: 11 placements a 2×2 tile (rocklab 10.5), 18.3 stones (16.3), 74.6 facets per rock on average (79.6), facets from 36 to 137 (39 to 139), the worst chip 2.97% of a rock's volume (limit 3%). Watertight, 0 mm² of overhang, about 1.1 s a tile.</span></li>
+<li><span class="st st-settled">done</span><span><b>Water</b>, ported from waterlab's swell-chaos. At seeds 1 to 4 the relief runs −1.05 to +2.14 mm with an RMS of 0.69 mm (lab: −1.08 to +2.34, 0.72), and the trough floor holds at −1.1 mm. On the printed mesh, the water edge misses the contract by 0.016 mm at most (limit 0.05) on every edge of the all-water tiles. The waterlab tile builds in 0.9 s (Python 2.4 s; limit 1 s).</span></li>
+<li><span class="st st-settled">done</span><span><b>Dirt stones.</b> <code>dirt</code> now beds dirtlab's few rocklab stones (<code>stones some</code>, the default; <code>none</code> and <code>many</code>). <code>soil-1x1</code>'s golden changed with them.</span></li>
+<li><span class="st st-settled">done</span><span><b>Materials (R9).</b> Every output triangle traces to earth, rock, water or connector; the top over the water is water, face by face.</span></li>
+<li><span class="st st-settled">done</span><span><b>Eleven water twins</b> in <code>library/tiles/water/</code>; the <code>.tile.py</code> files stay until cutover.</span></li>
+<li><span class="st st-active">open</span><span><b>Shawn's sign-offs</b> on rocks and on water over four seeds, and a print of two butted water tiles.</span></li>
+<li><span class="st st-active">open</span><span><b><code>dharmatiles preview</code></b> (stream C) was not built in P3.</span></li>
 </ul>
 
 <h2 id="why">Why this plan</h2>
@@ -309,7 +321,7 @@
 <dt>Goal</dt><dd>rocklab's faceted rocks and waterlab's swell-chaos water, with one edge contract so neighbouring tiles butt.</dd>
 <dt>Scope</dt><dd><ul>
 <li>Mesh kernel: hull, half-space cuts, refine, batched union.</li>
-<li>Grid kernel: geodesic distance (Dijkstra), and FFT (realfft) for wrap-mode noise.</li>
+<li>Grid kernel: geodesic distance (Dijkstra), and FFT (realfft) for wrap-mode noise. <i>Built: the geodesic. Skipped: the FFT, because position-keyed Gaussian noise already matches waterlab's wrap-mode noise in the metrics.</i></li>
 <li><code>dt-kit</code>: <code>carve</code> with guards, <code>grain</code>, <code>seat</code> (fixed sink and quantile beds), <code>fill</code> (per column), field blend, the queries (footprint by tag, distance to tag), and material ids through the union.</li>
 <li>Looks: <code>rocks</code> and <code>water</code> (the swell solver is internal); <code>dirt</code> gains stones.</li>
 <li>Ports from: <code>rocklab/rocklab.py</code> (<code>make_body</code> :146, <code>cut_facets</code> :187, <code>chip_corners_edges</code> :231, <code>texture</code> :283, <code>scatter</code> :360) and <code>waterlab/waterlab.py</code> (<code>_derive</code> :335, <code>_geodesic</code> :660, <code>_emit_sources</code> :719, <code>_swell_train</code> :849, <code>gen_swell_chaos</code> :877).</li>
