@@ -78,6 +78,9 @@ const CRENEL_DEPTH_MM: f64 = 11.0;
 /// The printer's gap (a joint thinner than this closes in print and
 /// needs no pointing), mm.
 const GAP_MM: f64 = 0.2;
+/// The most a head joint's end is chipped back at its top, mm (a
+/// printability floor: two such ends and the joint stay bridgeable).
+const HEAD_PULL_MM: f64 = 0.25;
 
 /// The texture presets (`masonry.py:_TEXTURES`): chip, rounding, relief.
 pub(crate) fn texture(word: &str) -> Option<(f64, f64, f64)> {
@@ -636,7 +639,7 @@ pub(crate) fn run(
     }
     let mut env: Option<Vec<Envelope>> = None;
     if m.ruin > 0.0 && !m.laid {
-        let (c, e) = layout::ruin_cells(cells, &run.segs, height, m.ruin, s, &mut lrng);
+        let (c, e) = layout::ruin_cells(cells, &run.segs, thickness, height, m.ruin, s, &mut lrng);
         cells = c;
         env = Some(e);
     }
@@ -834,8 +837,21 @@ pub(crate) fn blocks(
         let mut rng = Rng::new(bs.key("draw"));
         let face0 = c.end0 == End::Face;
         let face1 = c.end1 == End::Face;
-        let x0 = c.t0 + if face0 { rng.uniform(0.0, fr) } else { j2 };
-        let x1 = c.t1 - if face1 { rng.uniform(0.0, fr) } else { j2 };
+        let mut x0 = c.t0 + if face0 { rng.uniform(0.0, fr) } else { j2 };
+        let mut x1 = c.t1 - if face1 { rng.uniform(0.0, fr) } else { j2 };
+        // at an inside corner a block butts the other run's inner face,
+        // which sits back by its face recess: run on into it, so the
+        // corner joint never opens wider than the block above can bridge
+        if !run.laid {
+            let n = run.segs.len();
+            let reach = fr + 0.1 * s;
+            if c.seg > 0 && !face0 && (c.t0 - t).abs() < 1e-6 {
+                x0 -= reach;
+            }
+            if c.seg + 1 < n && !face1 && (c.t1 - (run.segs[c.seg].len - t)).abs() < 1e-6 {
+                x1 += reach;
+            }
+        }
         let q0 = rng.uniform(0.0, fr);
         let q1 = t - rng.uniform(0.0, fr);
         let mut f = *finish;
@@ -869,6 +885,14 @@ pub(crate) fn blocks(
             b.exposed = [false; 4];
         } else {
             b.exposed = [face0, face1, true, true];
+            // a head joint opens no wider at its top than the unit above
+            // can bridge (its two chipped ends lean apart)
+            if !face0 {
+                b.top[0] = b.top[0].min(HEAD_PULL_MM);
+            }
+            if !face1 {
+                b.top[1] = b.top[1].min(HEAD_PULL_MM);
+            }
             // a face on the tile boundary keeps its relief and its yaw
             // inside the tile (no stone planed at the boundary)
             let tooth = if b.carve > 0.0 { 0.1 } else { 0.0 };

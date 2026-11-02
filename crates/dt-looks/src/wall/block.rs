@@ -26,6 +26,7 @@ use super::layout::Seg;
 /// The most a block's bottom may stand proud of the face under it, mm
 /// (true mm: a printability floor, under the printer's 0.6 mm layer reach).
 pub(crate) const MAX_PROUD_MM: f64 = 0.45;
+const HOLD_MM: f64 = 0.05;
 
 /// One block, in its segment's frame: `x` along the run from the
 /// segment start, `y` along the inward normal, `z` world up.
@@ -320,7 +321,7 @@ pub(crate) fn hold_proud(blocks: &mut [Block], segs: &[Seg]) {
                     if (theirs - mine).abs() > 2.0 {
                         continue;
                     }
-                    need = need.max(mine - (theirs + MAX_PROUD_MM));
+                    need = need.max(mine - (theirs + HOLD_MM));
                 }
             }
             if need > 0.0 {

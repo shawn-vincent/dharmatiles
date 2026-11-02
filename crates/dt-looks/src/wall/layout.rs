@@ -399,12 +399,25 @@ impl Envelope {
     }
 }
 
+/// A cell's plan rectangle `[x0, y0, x1, y1]`.
+fn plan(segs: &[Seg], c: &Cell, thickness: f64) -> [f64; 4] {
+    let g = &segs[c.seg];
+    let p = [g.at(c.t0, 0.0), g.at(c.t1, thickness)];
+    [
+        p[0][0].min(p[1][0]),
+        p[0][1].min(p[1][1]),
+        p[0][0].max(p[1][0]),
+        p[0][1].max(p[1][1]),
+    ]
+}
+
 /// `_ruin_cells`: blocks above the break go; blocks straddling it
 /// survive at random. A block stays only if every block under it stayed
 /// (a ruin never leaves a stone hanging over a fallen one).
 pub(crate) fn ruin_cells(
     cells: Vec<Cell>,
     segs: &[Seg],
+    thickness: f64,
     height: f64,
     ruin: f64,
     scale: f64,
@@ -426,10 +439,14 @@ pub(crate) fn ruin_cells(
     for mut c in order {
         let e = env[c.seg].at(0.5 * (c.t0 + c.t1));
         let drop = c.z0 >= e || (c.z1 > e && rng.random() > RUIN_KEEP_P);
-        // a fallen block under this one (same segment, overlapping in t,
+        // a fallen block under this one (overlapping in plan, on either
+        // segment: corner blocks of one segment stand on the other's;
         // its top at this one's bottom)
         let unsupported = gone.iter().any(|g| {
-            g.seg == c.seg && (g.z1 - c.z0).abs() < 0.6 && g.t0.max(c.t0) < g.t1.min(c.t1) - 0.5
+            let (a, b) = (plan(segs, g, thickness), plan(segs, &c, thickness));
+            (g.z1 - c.z0).abs() < 0.6
+                && a[0].max(b[0]) < a[2].min(b[2]) - 0.5
+                && a[1].max(b[1]) < a[3].min(b[3]) - 0.5
         });
         if drop || unsupported {
             gone.push(c);
