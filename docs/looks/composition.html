@@ -16,10 +16,9 @@
   <h1>Composition</h1>
   <p class="lede">Composition is how looks share one tile. Rocks sit bedded in the ground, grass grows right up to them and parts around them, bare earth shows between, and every tile meets its neighbour at the same edge level. The approved example is the meadow: rocks, grass and bare earth on one tile, printed as one piece with no supports.</p>
   <div class="hero-shots">
-    <figure><img src="img/composition-meadow-iso.jpg" alt="A 2x2 meadow tile with seven rocks in flowing grass, three-quarter view" width="900" height="621"></figure>
-    <figure><img src="img/composition-meadow-top.jpg" alt="The same meadow tile from above, grass flowing around rocks and bare patches" width="809" height="805"></figure>
+    <figure><img src="img/water-shore-s3-overhang.jpg" alt="Grey renders of a shore tile from an angle and from above: grass, reeds and rocks meeting water" width="900" height="359"></figure>
   </div>
-  <p class="muted small">meadowlab, 2×2, seed 1, grey: three-quarter view and top view. These renders do not paint overhang faces red; the tile's overhang audit is 13.0 mm².</p>
+  <p class="muted small">shorelab, 2×2, seed 3, grey, from an angle and from above: grass, rocks, reeds, bare earth and water on one tile. Faces past the overhang limit are painted red.</p>
   <div class="facts">
     <div><div class="k">Sizes</div><div class="v">any; the meadow is built at 2×2 by default</div></div>
     <div><div class="k">Mix</div><div class="v">about 80% grass, 20% bare earth counting ground under rocks; 6–9 rocks per 2×2</div></div>
@@ -242,7 +241,7 @@ tile meadow size="2x2" seed=1 {
   <li>Aprons, clearings and spill appeared in the plan's P4 scope under the old look name <code>meadow</code> (renamed <code>grass</code> by decision D8). The as-built vocabulary has none of them; they stay hidden at the approved values unless P4 exposes them.</li>
   <li>The meadow builds in about 85 s and writes a 79 MB STL. P4 targets 15 s.</li>
   <li>The rock-interaction numbers were measured with the retired height-field grass; only seed 1 has been measured with stroke blades.</li>
-  <li>The renders on this page do not paint overhang faces red. New renders should.</li>
+  <li>There is no red-painted render of a meadow tile yet; the page shows the shore tile, which composes the same looks. A painted meadow render is needed.</li>
   <li>The Python library depends on layer order (<code>Rocks</code> before <code>Grass</code>); the Rust engine does not. Tile twins converted in P4 must not rely on order for solids.</li>
   <li>Where meadow meets water is the shore, part of the <a href="water.html">water</a> look (shorelab).</li>
 </ul>

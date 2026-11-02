@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>rocklab — Faceted Rock Scatter: Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../../../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../../../index.html">dharmatiles</a><a href="../../../index.html#status">Status</a><a href="../../../index.html#looks">Looks</a><a href="../../../rust/plan.html">Rust plan</a><a href="../../../rust/architecture.html">Architecture</a><a href="../../../rust/language.html">Language</a><a href="../../../rust/spikes.html">Spikes</a><a href="../../../standards/tile-system.html">Tile system</a><a href="../../../standards/printing.html">Printing</a><a href="../../../archive/index.html" aria-current="page">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Lab · rocklab</div>
+  <h1>rocklab — Faceted Rock Scatter: Design</h1>
+  <p class="srcnote">Converted from <code>rocklab/DESIGN.md</code> on 2026-11-01; the markdown file was removed (see git history). Relative paths in the text are relative to <code>rocklab/</code>.</p>
+  
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol><li><a href="#1-core-idea-lumpy-convex-body-then-planes">1. Core idea: lumpy convex body, then planes</a></li><li><a href="#2-stages">2. Stages</a></li><li><a href="#3-parameters-module-constants-rocklab-py">3. Parameters (module constants, <code>rocklab.py</code>)</a></li><li><a href="#4-iteration-log">4. Iteration log</a></li><li><a href="#exposed-ground-dirt-2026-10-29">Exposed ground = dirt (2026-10-29)</a></li></ol></nav>
+<article class="doc">
+<p>
+<em>Revision 2, 2026-10-27 (code v1f).  Implements <a href="requirements.html"><code>requirements.html</code></a> rev 2.
+Code: <code>rocklab/rocklab.py</code>; section numbers match its stage banners.</em></p>
+<hr />
+<h2 id="1-core-idea-lumpy-convex-body-then-planes">
+1. Core idea: lumpy convex body, then planes</h2>
+<p>
+Every rock is built in <code>manifold3d</code> from half-space cuts of a convex
+body, so it stays convex, grounded and printable at every step:</p>
+<ol>
+<li>
+<strong>Body</strong> (<code>make_body</code>): convex hull of 75–145 points on a
+<em>non-increasing profile</em> above a flat base, with angle-only lumpiness.</li>
+<li>
+<strong>Facets</strong> (<code>cut_facets</code>, scale 1): blue-noise seeds with mixed radii
+on the body; each seed's tilted tangent plane is one facet; the rock is
+the intersection of those half-spaces with a box on z = 0.</li>
+<li>
+<strong>Chips</strong> (<code>chip_corners_edges</code>, scale 2): more, smaller half-space
+cuts at corners and along sharp edges.</li>
+<li>
+<strong>Grain</strong> (<code>texture</code>, scale 3): fine displacement along vertex normals,
+faded at the base and halved at sharp edges.</li>
+</ol>
+<p>
+Guarantees:</p>
+<ul>
+<li>
+<strong>Convex, so grounded (REQ-ROCK-3)</strong>: an intersection of half-spaces is
+convex; the planes come from a body whose cross-sections never grow
+upward, and no plane with n_z &lt; −0.5 is used, so there is no mushroom.</li>
+<li>
+<strong>Printable (REQ-FDM-1)</strong>: no face points down past 30°; grain is zero
+on downward faces.  Measured overhang 0.00–0.02 mm².</li>
+<li>
+<strong>Crisp edges (REQ-ROCK-2)</strong>: planes meet at sharp edges; grain is halved
+within 0.5 mm of them.</li>
+<li>
+<strong>Mixed facet sizes by construction</strong>: one facet per seed, size from the
+seed spacing.</li>
+<li>
+Clusters are unions of convex rocks; a union's surface is a subset of
+its parts', so the guarantees carry over.</li>
+</ul>
+<h2 id="2-stages">
+2. Stages</h2>
+<h3 id="2-1-rock-mass-makebody">
+2.1 Rock mass (<code>make_body</code>)</h3>
+<ul>
+<li>
+<p>
+<strong>Width</strong> D = 6 + 9·U^1.4 mm (skewed small); footprint semi-axes a = D/2,
+b = a / U(1, 2), random yaw.</p>
+</li>
+<li>
+<p>
+<strong>Height</strong> h = min(D·U(0.45, 0.85), 9 mm); slabs × 0.6; at least 2.5 mm.</p>
+</li>
+<li>
+<p>
+<strong>Profile family</strong> (<code>profile</code>, radius scale r(t), t = z/h, always
+non-increasing):</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Family</th>
+<th>
+r(t)</th>
+<th>
+Weight</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+dome</td>
+<td>
+(1 − t^2.2)^0.5</td>
+<td>
+0.35</td>
+</tr>
+<tr>
+<td>
+slab</td>
+<td>
+(1 − t^2.8)^0.45, h × 0.6</td>
+<td>
+0.2</td>
+</tr>
+<tr>
+<td>
+block</td>
+<td>
+(1 − t^3.5)^0.4, superellipse (p = 3) footprint</td>
+<td>
+0.2</td>
+</tr>
+<tr>
+<td>
+wedge</td>
+<td>
+(1 − t)^0.8, centre shifts by U(0.2, 0.45) of the footprint toward a random side as t grows</td>
+<td>
+0.25</td>
+</tr>
+</tbody>
+</table></div>
+</li>
+<li>
+<p>
+<strong>Points</strong>: base ring of 14–22 at z = 0 (radius × U(0.94, 1.0)); 60–120
+body points at t ∈ U(0.05, 0.97) (× U(0.93, 1.0)); 1–3 top points at
+t ∈ U(0.95, 1.0) (× U(0, 0.4)).  Jitter only shrinks, so the profile stays
+non-increasing.</p>
+</li>
+<li>
+<p>
+<strong>Lumpiness</strong>: radius × (1 + Σ_{k=2..5} a_k cos(kφ + φ_k)), a_k ~ N(0, 1)·
+0.08/2.  It depends on <strong>angle only</strong>, so every vertical line is scaled
+by a constant and the profile stays non-increasing.  Why: flat body
+regions (old block sides, slab tops) gave all their seeds the same
+tangent plane, which merged them into one oversized face (R9).</p>
+</li>
+<li>
+<p>
+<strong>Hull</strong>: <code>Manifold.hull_points</code>.</p>
+</li>
+</ul>
+<h3 id="2-2-facets-cutfacets-scale-1">
+2.2 Facets (<code>cut_facets</code>, scale 1)</h3>
+<ul>
+<li>
+<strong>Seeds</strong>: dart-throw over 4,000 area-weighted surface samples of the
+body (seeded from the rock RNG; trimesh's own sampler would use the
+unseeded global RNG).  Each candidate draws r = r_min + (r_max − r_min)·
+U^1.6 and is accepted when ≥ (r + r_j)/2 from every accepted seed.
+Radii 0.9–2.5 mm × √(D/15): small rocks get fewer, proportionally
+coarser facets.  Base samples (n_z &lt; −0.3) are skipped: the flat base is
+its own facet.</li>
+<li>
+<strong>Plane</strong>: the sample normal tilted by U(0, 14°) about a random tangent
+axis; planes with n_z &lt; −0.5 are skipped; offset jitter U(−0.15, +0.1) mm
+along the normal.</li>
+<li>
+<strong>Result</strong>: 30–165 facets per rock; the facetted rock keeps about
+70–90% of the body's volume.</li>
+</ul>
+<h3 id="2-3-chips-chipcornersedges-scale-2">
+2.3 Chips (<code>chip_corners_edges</code>, scale 2)</h3>
+<ul>
+<li>
+<strong>Corners</strong>: every polytope vertex above z = 0.6 mm, with probability
+0.45.  Normal = sum of incident face normals; depth U(0.3, 0.9)·√(D/15).</li>
+<li>
+<strong>Edges</strong>: every sharp edge (dihedral &gt; 18°) with both ends above 0.6 mm,
+with probability 0.35, at a random point 20–80% along it.  Normal = the
+two faces' normal sum; depth U(0.2, 0.55)·√(D/15).</li>
+<li>
+Candidates are shuffled; each plane is tilted by U(0, 25°).  A cut is
+skipped if n_z &lt; −0.5 or it would remove more than 3% of the volume.  At
+most U{8…16} chips per rock.  After chips the rock keeps about 60–80% of
+the body volume.</li>
+</ul>
+<h3 id="2-4-grain-texture-scale-3">
+2.4 Grain (<code>texture</code>, scale 3)</h3>
+<ul>
+<li>
+<strong>Remesh</strong>: <code>Manifold.refine_to_length(0.25 mm)</code> (trimesh's
+<code>subdivide_to_size</code> left T-junctions, which made the mesh non-manifold).</li>
+<li>
+<strong>Grain</strong>: <code>dharmatiles.stone.noise.fbm</code>, 4 octaves at 0.45 mm, amplitude
+0.12 mm, along vertex normals.</li>
+<li>
+<strong>Edge keep</strong>: × (0.5 + 0.5·smoothstep(dist to the nearest sharp edge /
+0.5 mm)).</li>
+<li>
+<strong>Base fade</strong>: × smoothstep((z − 0.15)/0.8 mm), and zero where the vertex
+normal has n_z &lt; −0.3.  The result is trimmed at z = 0.</li>
+</ul>
+<h3 id="2-5-clusters-makeitem">
+2.5 Clusters (<code>make_item</code>)</h3>
+<ul>
+<li>
+Probability 0.25 per placement; k = 2–4 stones.</li>
+<li>
+Satellite widths max(D·U(0.45, 0.9), 4 mm), at evenly spaced angles
+(± 0.5 rad jitter) around the main stone, at (D/2 + d/2)·U(0.35, 0.6) from
+its centre so they overlap.  Each stone gets its own family and texture.</li>
+<li>
+Boolean union; the placement radius R covers the whole cluster.</li>
+</ul>
+<h3 id="2-6-scatter-scatter-pose">
+2.6 Scatter (<code>scatter</code>, <code>pose</code>)</h3>
+<ul>
+<li>
+N = round(U(9, 12) × area / 4 squares) items are <strong>built first</strong>, then
+placed largest first by dart throwing: ≤ 400 darts each, accepted when
+≥ 1 mm + R from the rim and ≥ 1.5 mm + R_i + R_j from every placed item.
+An item that finds no spot is dropped.</li>
+<li>
+<code>pose</code> gives each placement a random yaw.  (meadowlab reuses
+<code>scatter(…, placements)</code> and <code>pose</code>.)</li>
+</ul>
+<h3 id="2-7-tile-buildtile">
+2.7 Tile (<code>build_tile</code>)</h3>
+<ul>
+<li>
+Slab [0, W] × [0, H] × [0, 4.0] (z = 0 is the terrain datum, as in
+dharmatiles); rocks translated to z₀ = 4.0 − 0.3 mm.</li>
+<li>
+Slab ∪ rocks ∪ DB base (<code>make_base</code>, peg height from <code>select_peg_height</code>
+on the tallest point), exported via trimesh.</li>
+<li>
+<strong>Audit</strong>: watertight, body count, overhang area (n_z &lt; −sin 48°,
+z &gt; 0.05), per-rock facet and chip ranges, timing.</li>
+<li>
+Each rock is evaluated (<code>num_tri</code>) as soon as it is made.  manifold3d is
+lazy; deferring rocks into the tile union gives the same geometry with
+a different triangle order, so this keeps STLs byte-stable.</li>
+</ul>
+<h2 id="3-parameters-module-constants-rocklab-py">
+3. Parameters (module constants, <code>rocklab.py</code>)</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Stage</th>
+<th>
+Constants (value)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+tile</td>
+<td>
+<code>SQUARE_MM</code> 35, <code>SURFACE_MM</code> 4.0, <code>SINK_MM</code> 0.3</td>
+</tr>
+<tr>
+<td>
+mass</td>
+<td>
+<code>WIDTH_MM</code> 6–15, <code>WIDTH_EXP</code> 1.4, <code>ASPECT</code> 1–2, <code>HEIGHT_RATIO</code> 0.45–0.85, <code>HEIGHT_CAP_MM</code> 9, <code>HEIGHT_MIN_MM</code> 2.5, <code>SLAB_HEIGHT</code> 0.6, <code>FAMILIES</code> dome 0.35 / slab 0.2 / block 0.2 / wedge 0.25, <code>WEDGE_OFFSET</code> 0.2–0.45, <code>BASE_PTS</code> 14–22, <code>BODY_PTS</code> 60–120, <code>TOP_PTS</code> 1–3, <code>LUMP_AMP</code> 0.08</td>
+</tr>
+<tr>
+<td>
+facets</td>
+<td>
+<code>FACET_SAMPLES</code> 4000, <code>FACET_R_MM</code> 0.9–2.5, <code>FACET_R_EXP</code> 1.6, <code>FACET_TILT_DEG</code> 14, <code>FACET_OFFSET_MM</code> −0.15…+0.1, <code>FACET_MIN_NZ</code> −0.5</td>
+</tr>
+<tr>
+<td>
+chips</td>
+<td>
+<code>SHARP_EDGE_DEG</code> 18, <code>CHIP_MIN_Z_MM</code> 0.6, <code>CORNER_CHIP_FRAC</code> 0.45, <code>CORNER_CHIP_MM</code> 0.3–0.9, <code>EDGE_CHIP_FRAC</code> 0.35, <code>EDGE_CHIP_MM</code> 0.2–0.55, <code>CHIP_TILT_DEG</code> 25, <code>MAX_CHIPS</code> 8–16, <code>CHIP_MAX_LOSS</code> 0.03</td>
+</tr>
+<tr>
+<td>
+grain</td>
+<td>
+<code>TEX_EDGE_MM</code> 0.25, <code>GRAIN_MM</code> 0.45, <code>GRAIN_AMP_MM</code> 0.12, <code>TEX_BASE_FADE_MM</code> 0.8, <code>EDGE_KEEP_MM</code> 0.5</td>
+</tr>
+<tr>
+<td>
+clusters</td>
+<td>
+<code>CLUSTER_PROB</code> 0.25, <code>CLUSTER_STONES</code> 2–4, <code>CLUSTER_SIZE</code> 0.45–0.9, <code>MIN_STONE_MM</code> 4, <code>CLUSTER_DIST</code> 0.35–0.6</td>
+</tr>
+<tr>
+<td>
+scatter</td>
+<td>
+<code>PLACEMENTS_2X2</code> 9–12, <code>CLEARANCE_MM</code> 1.5, <code>RIM_MM</code> 1.0, <code>DART_TRIES</code> 400, <code>OVERHANG_DEG</code> 45</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+Measured (2 × 2): seed 1: 11 placements (4 clusters), 18 stones, width
+4.2–15.0 mm, 30–163 facets, top 12.28 mm, overhang 0.00 mm², 4.9 MB, ≈ 3 s.
+Seed 2: 10 placements, 13 stones, 51–151 facets, overhang 0.02 mm².</p>
+<h2 id="4-iteration-log">
+4. Iteration log</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Iter</th>
+<th>
+Artifact / trigger</th>
+<th>
+Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+v1a</td>
+<td>
+first build: small, smooth gems (R2); 1.7 mm cluster pebbles (R6)</td>
+<td>
+bigger (6–15 mm), cluster stones ≥ 4 mm, more chips</td>
+</tr>
+<tr>
+<td>
+v1b</td>
+<td>
+chips converge to uniform &quot;dice&quot; facets and remove half the volume</td>
+<td>
+facet-seed construction (§2.2)</td>
+</tr>
+<tr>
+<td>
+v1c</td>
+<td>
+handed to Shawn</td>
+<td>
+—</td>
+</tr>
+<tr>
+<td>
+v1d</td>
+<td>
+Shawn: needs &quot;different degrees of texture… rough surfaces… chipped corners&quot;</td>
+<td>
+corner/edge chips, fracture scallops + grain; first try rounded every edge, fixed by the edge-keep weight</td>
+</tr>
+<tr>
+<td>
+v1e</td>
+<td>
+Shawn: &quot;the fracture scallops are horrible… just turn up the fine grain&quot;</td>
+<td>
+scallops deleted; grain 0.05 → 0.12 mm at 0.45 mm, 4 octaves, halved on edges</td>
+</tr>
+<tr>
+<td>
+v1f</td>
+<td>
+Shawn: texture &quot;isn't doing it&quot;; big flat faces vs. the reference's mosaic → &quot;make the largest faces smaller&quot;</td>
+<td>
+facet spacing 1.0–3.6 → 0.9–2.5 mm; rounded block/slab profiles; ±8% angle-only lumpiness; chips capped at 8–16.  Harder tilt (22–28°) tried and rejected</td>
+</tr>
+<tr>
+<td>
+—</td>
+<td>
+refactor (2026-10-27)</td>
+<td>
+facet sampling seeded from the rock RNG (it used the unseeded global RNG, so every run differed: REQ-OUT-4 was violated); <code>make_body</code> / <code>cut_facets</code> split out of <code>make_rock</code>; <code>chips</code> info field renamed <code>facets</code> (it counted facets), real chip count reported; <code>Placement</code> record and <code>pose</code> shared with meadowlab; dead <code>family=</code> parameter and unused stats dropped</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="export-guarantee-2026-10-27">
+Export guarantee (2026-10-27)</h3>
+<p>
+Before export, the mesh is merged exactly as a slicer does (float32
+positions, merge by position) and the run raises unless it is
+watertight.  Seeds 1–4 pass with no repair needed.</p>
+<h2 id="exposed-ground-dirt-2026-10-29">
+Exposed ground = dirt (2026-10-29)</h2>
+<p>
+Shawn: dirt should be the texture wherever ground is exposed, across all
+labs, and mud and other dirt textures are eliminated.  This lab now
+uses <code>dirtlab.dirt_relief(seed, W, H)</code>: dirtlab's soil roughness, clods,
+grit and pebbles, without its hills or big stones, as a relief offset
+sampled onto this lab's grid.</p>
+<ul>
+<li>
+The flat 4.0 mm slab is replaced by a dirt heightfield (4.0 mm + dirt)
+plus an exact 1 mm box.  Rocks sink an extra 0.25 mm (<code>DIRT_SINK_MM</code>),
+so dirt dips never expose a rock's base.</li>
+</ul>
+
+</article>
+</div>
+</body>
+</html>

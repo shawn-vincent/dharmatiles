@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>waterlab — Fantasy Water Scene: Requirements</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../../../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../../../index.html">dharmatiles</a><a href="../../../index.html#status">Status</a><a href="../../../index.html#looks">Looks</a><a href="../../../rust/plan.html">Rust plan</a><a href="../../../rust/architecture.html">Architecture</a><a href="../../../rust/language.html">Language</a><a href="../../../rust/spikes.html">Spikes</a><a href="../../../standards/tile-system.html">Tile system</a><a href="../../../standards/printing.html">Printing</a><a href="../../../archive/index.html" aria-current="page">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Lab · waterlab</div>
+  <h1>waterlab — Fantasy Water Scene: Requirements</h1>
+  <p class="srcnote">Converted from <code>waterlab/REQUIREMENTS.md</code> on 2026-11-01; the markdown file was removed (see git history). Relative paths in the text are relative to <code>waterlab/</code>.</p>
+  
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol><li><a href="#1-scene-fixed-across-all-options">1. Scene (fixed across all options)</a></li><li><a href="#2-requirements">2. Requirements</a></li><li><a href="#3-options-to-compare-v0">3. Options to compare (v0)</a></li><li><a href="#4-failure-modes-negative-design-space-inherited">4. Failure modes (negative design space, inherited)</a></li><li><a href="#5-process">5. Process</a></li></ol></nav>
+<article class="doc">
+<p>
+*v0, 2026-10-28.  Exploratory: Shawn hasn't found a water he likes yet,
+so this lab compares several generators on one fixed scene.  Inputs:</p>
+<ul>
+<li>
+dharmatiles' current water (<code>src/dharmatiles/layers/water.py</code>,
+<code>docs/design/water-surface-model.md</code>), the closest to liked so far;</li>
+<li>
+the ChatGPT design-space handoff (2026-10-28), whose negative design
+space is summarised in §4.*</li>
+</ul>
+<h2 id="1-scene-fixed-across-all-options">
+1. Scene (fixed across all options)</h2>
+<ul>
+<li>
+<strong>Tile</strong>: a 2 × 2 DungeonBlocks tile (70 × 70 mm) on the standard socket base.</li>
+<li>
+<strong>Land</strong>: a rise along one side, with an irregular shoreline and a
+sloped bank into the water.  The land is plain ground; it is context,
+not the subject.</li>
+<li>
+<strong>Rock</strong>: one faceted rock (from rocklab) standing in the water.</li>
+<li>
+<strong>Water</strong>: everything else.  The water surface is the subject.</li>
+</ul>
+<h2 id="2-requirements">
+2. Requirements</h2>
+<ul>
+<li>
+<strong>REQ-W-1 [S] One STL per option.</strong>  Each is one watertight body that
+survives the STL reload check (float32, merge by position), with the DB
+base.  Deterministic per seed.</li>
+<li>
+<strong>REQ-W-2 [S] Single-material sculpture.</strong>  The water is sculpted
+relief on the solid top surface, a single-valued height field with no
+overhangs, printable supportless with a 0.4 mm nozzle.<ul>
+<li>
+Crests are at least about 1 mm wide.</li>
+<li>
+No needles and no sub-0.3 mm detail.</li>
+</ul>
+</li>
+<li>
+<strong>REQ-W-3 [S] Heights.</strong>  The calm water level is about 2.6 mm above the
+terrain datum.  Relief stays within about −0.8…+1.2 mm of it.  The land
+rises to about 6 mm (the DB grass band).</li>
+<li>
+<strong>REQ-W-4 [R] Reads as fantasy water before paint.</strong>  It is exaggerated
+and sculptural, but recognisably water.  A monochrome render must
+already read as water.</li>
+<li>
+<strong>REQ-W-5 [R] Obstacles organise the water.</strong>  The rock and the shore
+generate structure: wavelets that hug the contact, fade outward and
+break irregularly.  The strongest relief is near obstacles.</li>
+<li>
+<strong>REQ-W-6 [R] Open water is quieter, but still sculptural.</strong>  There is
+enough relief to drybrush.  It is statistically direction-neutral: no
+global orientation, and acceptable after rotating 90°.</li>
+<li>
+<strong>REQ-W-7 [R] One vocabulary.</strong>  Open water, rock contact and shore
+contact are one continuous surface.  There are no pasted-on decals and
+no seams between treatments, and where the rock and shore fields meet,
+they merge without spikes.</li>
+<li>
+<strong>REQ-W-8 [R] Drybrush affordance.</strong>  Broad, rounded crests with
+smoother, wider troughs: brush-catching forms, not engraved lines.</li>
+<li>
+<strong>REQ-W-9 [S] Rim.</strong>  The water meets the tile edge at a consistent
+calm level, so adjacent water tiles butt cleanly.</li>
+</ul>
+<h2 id="3-options-to-compare-v0">
+3. Options to compare (v0)</h2>
+<p>
+Each option is one water generator applied to the identical scene:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Option</th>
+<th>
+Idea</th>
+<th>
+Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<strong>legacy</strong></td>
+<td>
+Current dharmatiles water: band-limited noise plus scattered-segment sine ripples on a smoothed distance-from-obstacle field</td>
+<td>
+the closest-to-liked baseline</td>
+</tr>
+<tr>
+<td>
+<strong>lapping</strong></td>
+<td>
+A few broad, rounded, <em>broken</em> crests following the distance from rock ∪ shore, with spacing that widens and height that decays outward, over quiet, low, broad swell</td>
+<td>
+ChatGPT's best untested idea plus the dharmatiles ripple lineage</td>
+</tr>
+<tr>
+<td>
+<strong>crescents</strong></td>
+<td>
+The lapping crests near obstacles, plus sparse finite crescent crests scattered at random orientations in open water</td>
+<td>
+the ChatGPT B/D families</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+More options are added as iteration suggests.</p>
+<h2 id="4-failure-modes-negative-design-space-inherited">
+4. Failure modes (negative design space, inherited)</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+#</th>
+<th>
+Failure</th>
+<th>
+Looks like</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+W1</td>
+<td>
+<strong>Cells / bowls</strong></td>
+<td>
+a honeycomb or Voronoi network of rounded depressions with bright rims</td>
+</tr>
+<tr>
+<td>
+W2</td>
+<td>
+<strong>Targets</strong></td>
+<td>
+perfect concentric rings; raindrop rings in open water</td>
+</tr>
+<tr>
+<td>
+W3</td>
+<td>
+<strong>Wave rows</strong></td>
+<td>
+parallel directional swells or corduroy (seen in dharmatiles' wave-train model)</td>
+</tr>
+<tr>
+<td>
+W4</td>
+<td>
+<strong>Swirls</strong></td>
+<td>
+spiral or whirlpool ornament</td>
+</tr>
+<tr>
+<td>
+W5</td>
+<td>
+<strong>Busy lines</strong></td>
+<td>
+many thin ridges everywhere; reads as stormy foam</td>
+</tr>
+<tr>
+<td>
+W6</td>
+<td>
+<strong>Lumpy porridge</strong></td>
+<td>
+isotropic noise as the main generator, with no structure</td>
+</tr>
+<tr>
+<td>
+W7</td>
+<td>
+<strong>Pasted decal</strong></td>
+<td>
+the ripple zone visibly bounded and stuck onto a different background</td>
+</tr>
+<tr>
+<td>
+W8</td>
+<td>
+<strong>Clones</strong></td>
+<td>
+options that are only scale variants of each other</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="5-process">
+5. Process</h2>
+<p>
+Exploratory, with Shawn's eye as the judge:</p>
+<ol>
+<li>
+Claude generates the options and self-checks them with monochrome
+renders, rejecting obvious failures.</li>
+<li>
+Shawn looks at a shortlist.</li>
+<li>
+Together we choose a direction, then iterate.</li>
+</ol>
+
+</article>
+</div>
+</body>
+</html>

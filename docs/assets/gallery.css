@@ -1,4 +1,4 @@
-/* Reference photo galleries (docs/reference/**/index.html); colours come from site.css tokens. */
+/* Reference photo galleries (the Reference photos blocks on the look pages); colours come from site.css tokens. */
 .gal-sec { margin-block: 28px; }
 .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
 .ph { margin: 0; background: var(--card); border: 1px solid var(--rule); display: flex; flex-direction: column; min-width: 0; }

@@ -132,7 +132,7 @@
 <details>
 <summary>The printer profile in code</summary>
 <p>Line width <code>grasslab/grasslab.py:130</code>; layer <code>grasslab/grasslab.py:131</code>, <code>clifflab/rockpile.py:172</code>; 55° <code>clifflab/rockpile.py:171</code>; reach <code>clifflab/rockpile.py:173</code>. Nozzle and process are in the clifflab, dirtlab, rocklab and waterlab requirements. Resin smoothing keeps surfaces within about 20 µm of the stepped shape (grasslab REQ-OUT-6). In the Rust port the profile is the <code>Printer</code> struct: 55°, 0.2 mm layers, 0.6 mm reach over a 3 mm span, a 0.1 mm ray grid and an overhang budget of 0 mm² (<code>crates/dt-kit/src/audit.rs:20</code> on branch <code>rust/p1-skel</code>), moving into <code>library/printers/default</code>. Looks read it; tiles do not write printer numbers.</p>
-<p>The rule behind the profile is “model only what prints”. Shawn, 29 Oct 2026, on grass blades: “make it more honest about the shape, so that we can refine THAT rather than a theoretical ideal.” A grass blade is built directly as a stack of 0.2 mm layers, each a whole number of 0.45 mm lines wide, and only then smoothed (<a href="../labs/grasslab/requirements.html">grasslab requirements §1.2</a>).</p>
+<p>The rule behind the profile is “model only what prints”. Shawn, 29 Oct 2026, on grass blades: “make it more honest about the shape, so that we can refine THAT rather than a theoretical ideal.” A grass blade is built directly as a stack of 0.2 mm layers, each a whole number of 0.45 mm lines wide, and only then smoothed (<a href="../archive/lab-logs/grasslab/requirements.html">grasslab requirements §1.2</a>).</p>
 </details>
 
 <details>
@@ -150,7 +150,7 @@
 
 <details>
 <summary>The printable-texture rule</summary>
-<p>Added to dirtlab on 29 Oct 2026 after Shawn sliced a test tile: version v1g failed it on 33% of the tile, and its flat, “tamped” areas printed as smooth plains (<a href="../labs/dirtlab/requirements.html#added-2026-10-29-shawn-after-slicing">dirtlab REQ-D-TEX</a>). The failing area fell from 32.8% to 1.9%; the Python dirt now passes on 98.1% of the tile. It applies to every ground texture and is the first exit criterion of Rust phase P2 (<a href="../rust/plan.html">Rust plan</a>).</p>
+<p>Added to dirtlab on 29 Oct 2026 after Shawn sliced a test tile: version v1g failed it on 33% of the tile, and its flat, “tamped” areas printed as smooth plains (<a href="../archive/lab-logs/dirtlab/requirements.html#added-2026-10-29-shawn-after-slicing">dirtlab REQ-D-TEX</a>). The failing area fell from 32.8% to 1.9%; the Python dirt now passes on 98.1% of the tile. It applies to every ground texture and is the first exit criterion of Rust phase P2 (<a href="../rust/plan.html">Rust plan</a>).</p>
 </details>
 
 <details>

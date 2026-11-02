@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Walls: Commercial Sets Analysis (2026-07-04)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Reference</div>
+  <h1>Walls: Commercial Sets Analysis (2026-07-04)</h1>
+  <p class="srcnote">Converted from <code>docs/reference/walls/commercial-sets-analysis.md</code> on 2026-11-01; the markdown file was removed (see git history). Relative paths in the text are relative to <code>docs/reference/walls/</code>.</p>
+  
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol><li><a href="#1-dungeonblocks-measured-compatibility-standards">1. DungeonBlocks — measured compatibility standards</a></li><li><a href="#1b-ground-surface-heights-measured-2026-07-05">1b. Ground surface heights (measured 2026-07-05)</a></li><li><a href="#2-dungeonblocks-per-set-findings">2. DungeonBlocks — per-set findings</a></li><li><a href="#3-hirst-arts-the-casting-block-decomposition">3. Hirst Arts — the casting-block decomposition</a></li><li><a href="#4-fat-dragon-dragonlock">4. Fat Dragon DRAGONLOCK</a></li><li><a href="#5-the-dragon-s-rest">5. The Dragon's Rest</a></li><li><a href="#6-consolidated-texture-family-taxonomy">6. Consolidated texture-family taxonomy</a></li><li><a href="#7-interview-answers-gen-1-constraints-shawn-2026-07-04">7. Interview answers → gen-1 constraints (Shawn, 2026-07-04)</a></li><li><a href="#8-design-implications-carried-forward">8. Design implications carried forward</a></li></ol></nav>
+<article class="doc">
+<p>
+Detailed analysis of every wall-bearing reference system for the walls
+campaign, requested by Shawn (&quot;Can you make a detailed analysis of all
+these different sets?&quot;).  Sources:</p>
+<ul>
+<li>
+<strong>DungeonBlocks</strong> — the full 15-set commercial library at
+<code>~/projects/dungeonblocks/</code> (the compatibility target).  Measured with
+trimesh; rendered with <code>src/extras/stl_render.py</code>.</li>
+<li>
+<strong>Hirst Arts</strong> — mold PDFs (m50, m40, m24 cryptstone, m70 fieldstone)
+saved in <code>hirst-arts/</code>, plus the painting tutorial.</li>
+<li>
+<strong>Fat Dragon Games</strong> — DRAGONLOCK dungeon (fdg0160) and caverns
+(fdg0170) starter-set pages.</li>
+<li>
+<strong>The Dragon's Rest</strong> — &quot;HQ01 TDRQ Modular Board Foundation&quot; and
+&quot;AP006 High Ground 01&quot; catalog PDFs (<code>~/Downloads/</code>).</li>
+</ul>
+<p>
+Companion docs: <code>README.md</code> (photo references + wall vocabulary),
+<code>../../meta/history/2026-07-04-walls-greenfield-requirements.md</code>
+(baseline + interview).</p>
+<hr />
+<h2 id="1-dungeonblocks-measured-compatibility-standards">
+1. DungeonBlocks — measured compatibility standards</h2>
+<p>
+These numbers are measured from the commercial STLs and are the
+hard targets (&quot;compatible by default, configurable for freedom&quot;):</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Quantity</th>
+<th>
+Value</th>
+<th>
+Source piece</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Square grid</td>
+<td>
+35 × 35 mm</td>
+<td>
+everywhere</td>
+</tr>
+<tr>
+<td>
+Standard wall height</td>
+<td>
+≈ 49.7 mm total piece bbox; the slab rises <strong>≈ 24.4 mm above the piece's own floor</strong> (floor plateau ≈ 25.3, tall socket base)</td>
+<td>
+<code>RR-095-Wall</code>, <code>UD-001-Wall</code></td>
+</tr>
+<tr>
+<td>
+Tall wall height</td>
+<td>
+≈ 89 mm bbox; slab ≈ 62 mm above its floor</td>
+<td>
+<code>RR-103-Tall Wall</code></td>
+</tr>
+<tr>
+<td>
+Wall slab thickness</td>
+<td>
+≈ 7 mm, aligned flush to one tile edge</td>
+<td>
+<code>RR-095-Wall</code></td>
+</tr>
+<tr>
+<td>
+Rampart walkway level</td>
+<td>
+≈ 35 mm</td>
+<td>
+<code>RR-086-Rampart Straight</code></td>
+</tr>
+<tr>
+<td>
+XL block plan</td>
+<td>
+105 × 105 mm (3×3 squares)</td>
+<td>
+sets 11, 14, 15</td>
+</tr>
+<tr>
+<td>
+XL height system</td>
+<td>
+Low / Medium (≈67 mm) / High folders</td>
+<td>
+sets 11, 14, 15</td>
+</tr>
+<tr>
+<td>
+Mesh budget</td>
+<td>
+320–660k faces per piece</td>
+<td>
+across sets</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="1b-ground-surface-heights-measured-2026-07-05">
+1b. Ground surface heights (measured 2026-07-05)</h2>
+<p>
+Upward-face area histograms over representative pieces, heights above
+the piece bottom.  Ground pieces use the short socket base (≈ 10.9 mm
+= 5.7 peg + 5.2 flare, matching our <code>BaseConfig</code>), so the dharmatiles
+equivalent is <em>(official − 10.9)</em> above our terrain datum:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Surface</th>
+<th>
+Official (above piece bottom)</th>
+<th>
+Above our datum</th>
+<th>
+Source pieces</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+Water surface</td>
+<td>
+12.8 – 13.3</td>
+<td>
+1.9 – 2.4</td>
+<td>
+UD-074, LC-092, PS-187</td>
+</tr>
+<tr>
+<td>
+Outdoor dirt</td>
+<td>
+14.8 – 15.3</td>
+<td>
+3.9 – 4.4</td>
+<td>
+RR-011/012</td>
+</tr>
+<tr>
+<td>
+Grass</td>
+<td>
+15.3 – 16.8</td>
+<td>
+4.4 – 5.9</td>
+<td>
+RR-015/016</td>
+</tr>
+<tr>
+<td>
+Outdoor stone path</td>
+<td>
+16.3 – 17.3</td>
+<td>
+5.4 – 6.4</td>
+<td>
+MN-009/010</td>
+</tr>
+<tr>
+<td>
+<strong>Interior stone floor</strong></td>
+<td>
+<strong>17.8 – 18.8</strong></td>
+<td>
+<strong>6.9 – 7.9</strong></td>
+<td>
+UD-057, TS-019</td>
+</tr>
+<tr>
+<td>
+Themed grounds (graveyard, swamp)</td>
+<td>
+18.3 – 19.8</td>
+<td>
+7.4 – 8.9</td>
+<td>
+HG-003, CS-102</td>
+</tr>
+<tr>
+<td>
+Rock ground (outcrop)</td>
+<td>
+≈ 20.3</td>
+<td>
+≈ 9.4</td>
+<td>
+RR-078</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+dharmatiles calibration: grass (~5.6) and soil (~4.9) already sit in
+the official bands; water (~3.0) is close; <code>StoneFloor</code> was raised to
+<code>top_mm = 7.4</code> (dead-centre interior floor) — use <code>top_mm ≈ 6.0</code> for
+an outdoor path.  Wall pieces use the TALL socket base (16.6; cavity
+ceiling measured at 16.75 on UD-001) and their integrated floor sits
+at ≈ 25.3; the wall slab itself rises only ≈ 24.4 mm above that floor
+— our old <code>height_mm = 49.7</code> default (measured from the seat) was
+roughly 2× the official VISIBLE wall height; fixed 2026-07-05:
+default is now 29.6 (top ≈ 33 above datum, matching the official wall
+top), tall ≈ 68.8.</p>
+<p>
+Structural idiom: a DungeonBlocks &quot;wall&quot; is a <strong>floor square with a
+wall slab rising from one edge</strong> — wall and floor are one printed
+piece.  Corners are the same square with two adjacent edge slabs.  The
+face count matters: these are <em>heavily sculpted</em> surfaces, not flat
+plates with a bump map.  That is the quality bar.</p>
+<h2 id="2-dungeonblocks-per-set-findings">
+2. DungeonBlocks — per-set findings</h2>
+<p>
+Rendered representatives are in the session scratchpad (<code>db-*.png</code>);
+family assignments below.</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+#</th>
+<th>
+Set</th>
+<th>
+Wall treatment</th>
+<th>
+Family</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+01</td>
+<td>
+Ultimate Dungeon</td>
+<td>
+Large irregular cut-stone blocks, uneven course heights, chipped/rounded arrises. The core &quot;dungeon&quot; read.</td>
+<td>
+irregular cut stone</td>
+</tr>
+<tr>
+<td>
+02</td>
+<td>
+Toxic Sewer</td>
+<td>
+Small coursed bricks, regular bond, eroded joints; pipes and grates punctuate runs.</td>
+<td>
+coursed brick</td>
+</tr>
+<tr>
+<td>
+03</td>
+<td>
+Lost Cave</td>
+<td>
+Fully organic stratified rock; horizontal bedding reads as &quot;courses&quot;; stalagmites at the foot; wall mass ≈16 mm, no flat faces anywhere.</td>
+<td>
+organic cave rock</td>
+</tr>
+<tr>
+<td>
+04/07</td>
+<td>
+Medieval Town 1+2</td>
+<td>
+Timber-frame panels over a coursed stone base course; plaster infill between timbers. Composite of two families.</td>
+<td>
+timber-frame + stone</td>
+</tr>
+<tr>
+<td>
+05</td>
+<td>
+Haunted Graveyard</td>
+<td>
+<strong>Low ruin walls</strong>: 1–2 courses of large rounded blocks, ragged top line made of <em>missing blocks</em> (crenellation-by-decay), cracked flagstone floor.</td>
+<td>
+ruin / low wall</td>
+</tr>
+<tr>
+<td>
+06</td>
+<td>
+Infinite Spaceship</td>
+<td>
+Smooth panel walls with greebles — out of masonry scope, but proves the slab-on-edge idiom is texture-agnostic.</td>
+<td>
+(panels)</td>
+</tr>
+<tr>
+<td>
+08</td>
+<td>
+Rampart &amp; Ruins</td>
+<td>
+The wall-standard set: standard + tall walls, crenellated parapets, 35 mm walkway, ruin variants. Same irregular cut stone as set 01.</td>
+<td>
+irregular cut stone</td>
+</tr>
+<tr>
+<td>
+09</td>
+<td>
+Egyptian Temple</td>
+<td>
+Smooth dressed ashlar, tight joints, engraved glyph band as a mid-wall frieze. Relief is <em>engraved into</em> flat faces rather than per-block.</td>
+<td>
+smooth ashlar + engraving</td>
+</tr>
+<tr>
+<td>
+10</td>
+<td>
+Creepy Swamp</td>
+<td>
+Stone walls being eaten by vegetation — moss clumps and creepers overriding the block grid.</td>
+<td>
+cut stone + vegetation</td>
+</tr>
+<tr>
+<td>
+11</td>
+<td>
+Majestic Highlands (XL)</td>
+<td>
+Natural cliff faces: multi-thickness bedding strata + vertical joint fractures, grassy vegetated tops. 105 mm blocks.</td>
+<td>
+natural cliff</td>
+</tr>
+<tr>
+<td>
+12</td>
+<td>
+Pirate Ship</td>
+<td>
+Wood plank construction, plank runs + framing.</td>
+<td>
+wood plank</td>
+</tr>
+<tr>
+<td>
+13</td>
+<td>
+Dungeon Extension 1</td>
+<td>
+Tall irregular block wall; <strong>crack network runs <em>across</em> block boundaries</strong> — cracks are an independent overlay on the block grid, exactly like our stone crack lofts.</td>
+<td>
+irregular cut stone</td>
+</tr>
+<tr>
+<td>
+14</td>
+<td>
+Colossal Dungeon (XL)</td>
+<td>
+Hybrid: cut-block masonry transitioning into raw rock within one piece — masonry &quot;built into&quot; the mountain.</td>
+<td>
+cut stone / cliff hybrid</td>
+</tr>
+<tr>
+<td>
+15</td>
+<td>
+Mythic Northlands</td>
+<td>
+XL cliff family under snow/ice treatment; same strata skeleton as set 11.</td>
+<td>
+natural cliff (snow)</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+<strong>Cross-set observations:</strong></p>
+<ol>
+<li>
+Every masonry set models <strong>individual stones as proud volumes</strong> with
+deep joints; nothing is a flat face with shallow displacement.</li>
+<li>
+Course lines are horizontal in every family, but course <em>height</em>
+varies within a wall (sets 01, 13) — the grid is broken by height
+variety, spalls, and missing blocks (set 05).</li>
+<li>
+Ornament rides on top of structure as an independent layer: cracks
+crossing blocks (13), glyph friezes (09), vegetation (10), snow (15).</li>
+<li>
+Tops are always designed: flat cap course, crenellation, walkway, or
+ragged ruin — never a raw extrusion cut.</li>
+</ol>
+<h2 id="3-hirst-arts-the-casting-block-decomposition">
+3. Hirst Arts — the casting-block decomposition</h2>
+<p>
+Hirst's whole system is a <strong>½&quot; (12.7 mm) module</strong>: every block is ½&quot;
+tall; lengths are 1&quot;, ¾&quot;, ½&quot;; walls are usually ½&quot; thick.  Wall = blocks
+stacked in running bond, so joints land on a strict grid — the texture
+variety lives <em>inside each block face</em>.</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Mold</th>
+<th>
+Family</th>
+<th>
+Texture mechanism</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+m50 &quot;chipped stone&quot; (Shawn's callout)</td>
+<td>
+irregular cut stone</td>
+<td>
+Dense small angular <strong>chip facets</strong> at random orientations covering each face; every block cast is unique; edges slightly irregular. Reads as tool-worked stone. Accessories: arrow slits, arches, demon-face sconces.</td>
+</tr>
+<tr>
+<td>
+m40 basic blocks</td>
+<td>
+rough-hewn block</td>
+<td>
+All-over rough tumbled texture, milder than m50; the &quot;plain&quot; wall filler.</td>
+</tr>
+<tr>
+<td>
+m24 cryptstone</td>
+<td>
+small-block coursed</td>
+<td>
+Two mini-courses per ½&quot; strip; worn faces, occasional crack. The sheet's assembled+painted wall photo is a <strong>perfect target read</strong>: horizontal courses, deep dark joints, per-block tone variety, cracked blocks breaking the grid.</td>
+</tr>
+<tr>
+<td>
+m70 fieldstone</td>
+<td>
+fieldstone/drystone</td>
+<td>
+Cast <strong>strips</strong> of random rounded stones with very deep joints; stone sizes vary inside a strip; corners get dedicated quoin pieces; arches built of fieldstone voussoirs. Coursing is weak (strip boundaries only).</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+<strong>Painting page (painting1.html):</strong> dark grey base &quot;slopped&quot; on so it
+runs into every crevice, then medium and light drybrush passes with
+short strokes.  The technique <em>depends on</em> negative-relief joints and
+per-block micro-relief — flat faces get nothing from it.  This
+converts our &quot;paint-catching relief&quot; requirement into a mechanism:
+joints must be deep enough to hold the dark base, and block faces must
+have enough micro-relief to catch two drybrush tones.</p>
+<h2 id="4-fat-dragon-dragonlock">
+4. Fat Dragon DRAGONLOCK</h2>
+<p>
+28 mm scale, 2&quot;×2&quot; (50.8 mm) floor tiles, <strong>walls as separate pieces</strong>
+that attach to floor edges with proprietary &quot;Dragonbite&quot; clips —
+opposite decomposition from DungeonBlocks' integrated wall+floor
+squares.  Dungeon starter (fdg0160): 6 straight walls, 2 corners,
+pillar, doorway with movable door, stairs.  Caverns starter (fdg0170):
+38 organic cave/stalagmite pieces — the same &quot;cave walls are geology,
+not masonry&quot; statement as DungeonBlocks set 03.  Design takeaway: the
+wall/floor split is a real alternative, but our region-footprint model
+already subsumes it (the wall body is a separate solid; whether it
+prints attached to a tile is our choice, and DB-compat says attached).</p>
+<h2 id="5-the-dragon-s-rest">
+5. The Dragon's Rest</h2>
+<p>
+<strong>HQ01 (Dragon's Rest Quest foundation):</strong> HeroQuest-idiom board.
+Floors are 1×4 / 1×5 flagstone strips (cracks, drains, grates breaking
+the grid) on pallet-style bases; <strong>walls are fully loose low pieces</strong>
+placed on the floor plan: 2–3 courses of chunky, strongly rounded,
+individually modeled blocks; ragged stepped top course; occasional
+crack; corner pieces interlock like quoins; window arches and
+door-frame arches built block-by-block (printed with supports).  This
+is the strongest available example of &quot;the wall is a stack of discrete
+stone volumes&quot; — literally what our faceted-stone primitive produces.</p>
+<p>
+<strong>AP006 High Ground:</strong> Shawn's founding sketch as a commercial
+product.  Each &quot;chunk&quot; (A–O) is a <strong>cliff wall on a modular floor
+strip</strong>: organic rock face rising from the base, ragged vegetated top,
+integrated props (trees, bushes, ladders, wooden stairs, mine-shaft
+timbering).  Also: ragged edge-grass strips, a rock-rimmed 2×2 hole,
+a 60 mm pit and slope-rubble pieces for terraced height, and plank
+bridges to span between high ground.  Height terracing at 60 mm is
+their &quot;level&quot; unit.  Design takeaways: (a) the wall-as-region-footprint
+model handles cliffs and masonry identically; (b) ragged silhouette +
+vegetated top is what sells the natural-cliff family; (c) props are a
+separate later layer, not part of the wall body.</p>
+<h2 id="6-consolidated-texture-family-taxonomy">
+6. Consolidated texture-family taxonomy</h2>
+<p>
+All families found across all sources, per Shawn's answer 2 (&quot;do
+analyses of all of the different texture families that you've found&quot;).
+Ordered by how central they are to the DB-compatible dungeon table:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Family</th>
+<th>
+Seen in</th>
+<th>
+Construction read</th>
+<th>
+Key by-construction features</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<strong>1. Irregular cut stone</strong> (&quot;chipped block&quot;)</td>
+<td>
+DB 01/08/13, Hirst m50/m40, Dragon's Rest walls</td>
+<td>
+Quarried blocks, hand-dressed, laid in uneven courses</td>
+<td>
+Per-block proud volumes; varied course heights &amp; block lengths; chip-facet face texture; rounded arrises; crack overlay crossing blocks; flat-cap top showing block tops</td>
+</tr>
+<tr>
+<td>
+<strong>2. Small-block coursed / brick</strong></td>
+<td>
+DB 02, Hirst m24, brick photo ref</td>
+<td>
+Regular bond of small units, mortar joints</td>
+<td>
+Strict horizontal courses; running bond; eroded mortar = negative relief; spalled/missing units break the grid; visible brick tops on the cap</td>
+</tr>
+<tr>
+<td>
+<strong>3. Fieldstone / drystone</strong></td>
+<td>
+Hirst m70, drystone photo ref</td>
+<td>
+Uncut stones packed with deep voids, no mortar</td>
+<td>
+Rounded/angular stone mix, big size variety, deep shadow joints, throughstones, pinning stones; weak coursing; cap = larger flat-topped stones</td>
+</tr>
+<tr>
+<td>
+<strong>4. Smooth ashlar + engraving</strong></td>
+<td>
+DB 09, Krak photo ref</td>
+<td>
+Sawn dressed stone, tight joints</td>
+<td>
+Near-flat faces, thin joint lines, engraved ornament bands; battered (sloped) bases on fortress massing</td>
+</tr>
+<tr>
+<td>
+<strong>5. Organic cave rock</strong></td>
+<td>
+DB 03, Fat Dragon caverns</td>
+<td>
+Geology, not construction</td>
+<td>
+Horizontal bedding strata as pseudo-courses; no flat faces; stalagmites/flowstone at the foot; wall mass thick (~16 mm)</td>
+</tr>
+<tr>
+<td>
+<strong>6. Natural cliff / high ground</strong></td>
+<td>
+DB 11/14/15, AP006, quarry photo ref</td>
+<td>
+Exposed bedrock face</td>
+<td>
+Multi-thickness strata + vertical joint fractures; ragged vegetated top (grass system!); rubble benches; terraced heights</td>
+</tr>
+<tr>
+<td>
+<strong>7. Timber-frame + stone base</strong></td>
+<td>
+DB 04/07</td>
+<td>
+Framed building wall</td>
+<td>
+Composite: stone base course + timber grid + plaster infill. Later gen.</td>
+</tr>
+<tr>
+<td>
+<strong>8. Wood plank / palisade</strong></td>
+<td>
+DB 12, Dragon's Rest planks</td>
+<td>
+Carpentry</td>
+<td>
+Plank runs, framing, rope lashings. Later gen.</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+Families 1–3 are pure per-unit masonry and map directly onto the
+shipped faceted-stone pipeline (hull stones, blur-remesh, broadband
+relief, crack lofts).  Family 6 additionally reuses the grass system
+for tops.  Families 4/5 need face-level rather than unit-level
+texture.  7/8 are explicitly out of gen-1 scope.</p>
+<h2 id="7-interview-answers-gen-1-constraints-shawn-2026-07-04">
+7. Interview answers → gen-1 constraints (Shawn, 2026-07-04)</h2>
+<ol>
+<li>
+<strong>Compatibility:</strong> DungeonBlocks-compatible <strong>by default</strong>
+(35 mm grid, ≈50/89 mm heights, ≈7 mm edge-aligned slab), every
+dimension configurable for freedom.</li>
+<li>
+<strong>Texture families:</strong> analyze all (done above); gen-1 build order
+to be decided in the requirements doc.</li>
+<li>
+<strong>Tops:</strong> flat cap, but <strong>textured as the top of the wall texture</strong>
+— you see the tops of bricks/blocks/stones, not a smooth plate and
+not soil.</li>
+<li>
+<strong>Tile seams:</strong> plain <strong>butt-join</strong> — no seamless course matching
+across tiles; a clean vertical cut at the tile edge is correct
+(matches how DungeonBlocks pieces butt anyway).</li>
+<li>
+<strong>Gen-1 scope:</strong> <strong>straight runs and corners on flat ground.</strong>
+Ruins, gates/doors/windows/arches, towers, slope-following, and
+interior rooms are later.</li>
+</ol>
+<h2 id="8-design-implications-carried-forward">
+8. Design implications carried forward</h2>
+<ul>
+<li>
+The wall body is a <strong>separate solid</strong> keyed to a region/boundary
+footprint (heightmap faces are untexturable — baseline probe).</li>
+<li>
+Per-unit stone modeling is non-negotiable for families 1–3; the
+faceted-stone primitive is the unit generator, walls add <em>coursed
+placement</em> (a masonry layout solver: courses → blocks → joints).</li>
+<li>
+Joint depth and per-block micro-relief are requirements with a
+painting-derived acceptance test (dark wash must pool, two drybrush
+tones must catch).</li>
+<li>
+The block grid must be broken by construction: course-height
+variety, block-length variety, spalls/missing units, crack overlay
+crossing blocks, ragged-but-capped top course.</li>
+<li>
+Corners are first-class (quoin interlock reads at every corner in
+every reference), and gen-1 scope includes them.</li>
+<li>
+Mesh budget: DB pieces run 320–660k faces; our walls can afford
+real per-stone geometry.</li>
+</ul>
+
+</article>
+</div>
+</body>
+</html>

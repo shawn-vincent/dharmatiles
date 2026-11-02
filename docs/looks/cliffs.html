@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
 <link rel="stylesheet" href="../assets/site.css">
+<link rel="stylesheet" href="../assets/gallery.css">
 </head>
 <body>
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks" aria-current="page">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
@@ -327,6 +328,13 @@
 <p><strong>Phase P7</strong>, “Cliff and scree, once rockpile is frozen”: the last look to port. Exit gate: zero see-through holes, overhang at or below Python's, a massif in 60 s or less, Shawn's sign-off and a test print. The vocabulary exists (<code>crates/dt-doc/src/looks.rs</code>) and the library has one cliff tile. No parity contact sheet yet.</p>
 </details>
 
+<details id="reference-photos">
+<summary>Reference photos</summary>
+<p>The photos and target images this look is judged against. Click a photo to view it large; arrow keys step through. Wikimedia Commons photos keep their file names and licences as given on their Commons pages.</p>
+<div class="gallery"><figure class="ph"><a href="img/cliffs-reference-sheet.jpg" data-cap="The approved target sheet: sixteen cliff forms, A to P. Run: B, H, N; corner C; canyon I, K; escarpment D, O; plateau A; massif M; mound F; spire E, P; needles J."><img src="img/cliffs-reference-sheet.jpg" alt="The approved target sheet: sixteen cliff forms, A to P. Run: B, H, N; corner C; canyon I, K; escarpment D, O; plateau A; massif M; mound F; spire E, P; needles J." loading="lazy"></a><figcaption><span class="cap">The approved target sheet: sixteen cliff forms, A to P. Run: B, H, N; corner C; canyon I, K; escarpment D, O; plateau A; massif M; mound F; spire E, P; needles J.</span><span class="fn">clifflab/reference/reference-sheet.png</span></figcaption></figure></div>
+<div class="gallery"><figure class="ph"><a href="ref/walls/quarry-rock-face.jpg" data-cap="Quarry rock face: broad planar masses broken by steep joints. Source: Wikimedia Commons."><img src="ref/walls/quarry-rock-face.jpg" alt="Quarry rock face: broad planar masses broken by steep joints. Source: Wikimedia Commons." loading="lazy"></a><figcaption><span class="cap">Quarry rock face: broad planar masses broken by steep joints. Source: Wikimedia Commons.</span><span class="fn">quarry-rock-face.jpg</span></figcaption></figure></div>
+</details>
+
 <h3 id="open">Open issues</h3>
 <ul>
   <li>Thin-wall area is still about twice what it should be, mostly where cracks meet sharp edges.</li>
@@ -339,7 +347,7 @@
 
 <h3 id="references">References</h3>
 <ul>
-  <li>Rock texture photos: <a href="../reference/walls/README.md">reference/walls</a> and <a href="../reference/stone-texture/README.md">reference/stone-texture</a>.</li>
+  <li>Reference photos and target images: the <a href="#reference-photos">gallery above</a>.</li>
 </ul>
 
 <h3 id="history">History</h3>
@@ -348,5 +356,10 @@
 
 </article>
 </div>
+<dialog class="lightbox" aria-label="Photo viewer">
+  <figure><img alt=""><figcaption></figcaption></figure>
+  <div class="lb-bar"><button type="button" data-step="-1" aria-label="Previous photo">&larr;</button><span class="lb-n"></span><a class="lb-open" target="_blank" rel="noopener">Full size</a><button type="button" data-step="1" aria-label="Next photo">&rarr;</button><button type="button" class="lb-close" aria-label="Close">&times;</button></div>
+</dialog>
+<script src="../assets/gallery.js"></script>
 </body>
 </html>

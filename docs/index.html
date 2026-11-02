@@ -8,11 +8,6 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
 <link rel="stylesheet" href="assets/site.css">
 <style>
-  .reel { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 22px 0 4px; }
-  @media (max-width: 760px) { .reel { grid-template-columns: repeat(3, minmax(0, 1fr)); } .reel figure:nth-child(n+4) { display: none; } }
-  .reel figure { margin: 0; }
-  .reel img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 3px; display: block; }
-  .reel figcaption { font: 500 11.5px var(--mono); margin-top: 4px; color: var(--muted); }
   .bodies { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px; margin: 18px 0; }
   .bodies > * { min-width: 0; }
   .bodies .card { display: flex; flex-direction: column; gap: 6px; border-top: 4px solid var(--b); }
@@ -38,9 +33,14 @@
   .status .you { border: 1px solid var(--gold); border-radius: 4px; padding: 10px 14px; background: color-mix(in srgb, var(--gold) 8%, var(--bg)); }
   .status .you li { border-top: 0; padding-top: 0; }
   @media (max-width: 560px) { .status li { grid-template-columns: 76px minmax(0, 1fr); } .status .area { grid-column: 2; grid-row: 1; } .status .what { grid-column: 1 / -1; } }
-  .looks td:first-child a { font-weight: 600; }
-  .looks .ready { color: var(--accent); font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
-  .looks .coming { color: var(--muted); font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+  .lookgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin: 16px 0; }
+  .lookgrid > * { min-width: 0; }
+  a.lookcard { display: flex; flex-direction: column; gap: 4px; background: var(--card); border: 1px solid var(--rule); border-radius: 4px; padding: 0 0 12px; color: var(--fg); text-decoration: none; overflow: hidden; }
+  a.lookcard:hover, a.lookcard:focus-visible { border-color: var(--accent); }
+  a.lookcard img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: var(--panel); margin-bottom: 6px; }
+  .lookcard .lc-t { font: 700 18px/1.2 var(--display); padding: 0 12px; }
+  .lookcard .lc-d { font-size: 14px; padding: 0 12px; }
+  .lookcard .lc-r { font: 500 11.5px/1.4 var(--mono); color: var(--muted); padding: 0 12px; }
 </style>
 </head>
 <body>
@@ -51,13 +51,6 @@
   <div class="eyebrow">Procedural 3D-printable terrain tiles · 35 mm DungeonBlocks squares · 25.4 mm OpenLOCK</div>
   <h1>dharmatiles</h1>
   <p class="lede">dharmatiles makes terrain tiles for tabletop games as STL files: ground, grass, rocks, cliffs, water, walls and trees, printable on a home FDM printer without supports. Each look below has a page that shows it, says how to use it in a tile, and gives its exact specification. Behind the site are three bodies of work: the original Python library, the labs where the looks are made, and a Rust rewrite.</p>
-  <div class="reel">
-    <figure><img src="img/cliff-run-s1.jpg" alt="A cliff run of stacked rock columns"><figcaption>cliffs</figcaption></figure>
-    <figure><img src="img/grass-iso.jpg" alt="Stroke-blade grass tile"><figcaption>grass</figcaption></figure>
-    <figure><img src="img/meadow-iso.jpg" alt="Meadow tile with rocks, grass and bare earth"><figcaption>meadow</figcaption></figure>
-    <figure><img src="img/water-swell-chaos.jpg" alt="Swell-chaos water surface"><figcaption>water</figcaption></figure>
-    <figure><img src="img/dirt-close.jpg" alt="Bare earth close up"><figcaption>dirt</figcaption></figure>
-  </div>
 </header>
 
 <h2 id="get">Get and use the tiles</h2>
@@ -72,22 +65,18 @@
 </table></div>
 
 <h2 id="looks">Looks</h2>
-<p>A look is one kind of terrain surface, such as grass or cliffs. Each look gets one page: its target and Shawn's rulings, its requirements, how the approved version works, its printability guarantees, its variant history, its references, and its Rust port. That page is also what the Rust port is judged against. This is where the three bodies of work meet.</p>
-<div class="tbl"><table class="looks">
-  <thead><tr><th>Look</th><th>Owned by</th><th>Rust port</th><th>Page</th></tr></thead>
-  <tbody>
-    <tr><td><a href="looks/cliffs.html">Cliffs</a></td><td>Labs: clifflab (rockpile)</td><td>P7</td><td><span class="ready">ready</span> · pilot for the look template</td></tr>
-    <tr><td>Ground</td><td>Labs: dirtlab</td><td>P1 flat, P2 dirt and hills</td><td><span class="coming">coming</span> · <a href="labs/dirtlab/requirements.html">requirements</a> · <a href="labs/dirtlab/design.html">design</a> · <a href="archive/rust-study/labs.html#dirtlab">summary</a></td></tr>
-    <tr><td>Grass</td><td>Labs: grasslab</td><td>P4</td><td><span class="coming">coming</span> · <a href="labs/grasslab/requirements.html">requirements</a> · <a href="labs/grasslab/design.html">design</a> · <a href="archive/rust-study/labs.html#grasslab">summary</a></td></tr>
-    <tr><td>Rocks</td><td>Labs: rocklab</td><td>P3</td><td><span class="coming">coming</span> · <a href="labs/rocklab/requirements.html">requirements</a> · <a href="labs/rocklab/design.html">design</a> · <a href="archive/rust-study/labs.html#rocklab">summary</a></td></tr>
-    <tr><td>Water and shore</td><td>Labs: waterlab, shorelab</td><td>P3 water, P4 shore</td><td><span class="coming">coming</span> · <a href="labs/waterlab/requirements.html">water</a> · <a href="labs/waterlab/design.html">design</a> · <a href="labs/shorelab/requirements.html">shore</a> · <a href="labs/shorelab/design.html">design</a></td></tr>
-    <tr><td>Walls and floors</td><td>Python library: <code>walls/</code></td><td>P5</td><td><span class="coming">coming</span> · <a href="archive/python-library/walls-coursed-masonry.html">masonry</a> · <a href="archive/python-library/walls-doors.html">openings</a> · <a href="archive/python-library/stone-surface-texture.html">stone finish</a></td></tr>
-    <tr><td>Trees</td><td>Python library: <code>trees/</code></td><td>P5</td><td><span class="coming">coming</span> · <a href="archive/python-library/leaf-placement.html">leaves</a> · <a href="archive/python-library/space-colonization-envelope-tree.html">skeleton</a> · <a href="archive/python-library/cloud-tree-bark.html">bark</a></td></tr>
-    <tr><td>Composition</td><td>Labs: meadowlab</td><td>P4</td><td><span class="coming">coming</span> · <a href="labs/meadowlab/requirements.html">requirements</a> · <a href="labs/meadowlab/design.html">design</a> · <a href="archive/rust-study/labs.html#meadowlab">summary</a></td></tr>
-  </tbody>
-</table></div>
-<p class="muted small">Until each look page lands, the lab summaries and the surface-variant family trees are in the archive: <a href="archive/rust-study/labs.html">labs analysis</a> and <a href="archive/rust-study/variants.html">surface variants</a>.</p>
-
+<p>A look is one kind of terrain surface. Each look page shows the look, says how to use it in a tile, and gives its exact specification and printing notes. Further down each page is its design record: Shawn's rulings, the requirements, reference photos and history.</p>
+<div class="lookgrid">
+  <a class="lookcard" href="looks/ground.html"><img src="looks/img/ground-r2-painted-s1.jpg" alt="" loading="lazy"><span class="lc-t">Ground</span><span class="lc-d">Bare earth with clods, grit and half-sunk pebbles over gentle rises. Every other look stands on it.</span><span class="lc-r">Rust port: P1 flat; P2 dirt and hills</span></a>
+  <a class="lookcard" href="looks/grass.html"><img src="looks/img/grass-v3-2x2.jpg" alt="" loading="lazy"><span class="lc-t">Grass</span><span class="lc-d">Separate sculpted blades combed into meandering ribbons, parting round patches of bare earth.</span><span class="lc-r">Rust port: P4</span></a>
+  <a class="lookcard" href="looks/rocks.html"><img src="looks/img/rocks-tile-2x2-s1.jpg" alt="" loading="lazy"><span class="lc-t">Rocks</span><span class="lc-d">Loose, chiselled stones scattered over the ground, alone or in small fused clusters.</span><span class="lc-r">Rust port: P3</span></a>
+  <a class="lookcard" href="looks/cliffs.html"><img src="looks/img/cliffs-r17-run-s4-painted.jpg" alt="" loading="lazy"><span class="lc-t">Cliffs</span><span class="lc-d">A storey-high band of big, broken rock along a tile edge, with dirt on top and scree at its foot.</span><span class="lc-r">Rust port: P7</span></a>
+  <a class="lookcard" href="looks/water.html"><img src="looks/img/water-swell-chaos-painted-s1.jpg" alt="" loading="lazy"><span class="lc-t">Water and shore</span><span class="lc-d">Sculpted fantasy water: swells off the shore, chop round rocks, and a reedy bank where meadow meets water.</span><span class="lc-r">Rust port: P3 water; P4 shore</span></a>
+  <a class="lookcard" href="looks/walls.html"><img src="looks/img/walls-fieldstone-corner.jpg" alt="" loading="lazy"><span class="lc-t">Walls and floors</span><span class="lc-d">Cut stone, fieldstone and brick walls on a tile edge, with doors, windows and hatches, and stone floors.</span><span class="lc-r">Rust port: P5</span></a>
+  <a class="lookcard" href="looks/trees.html"><img src="looks/img/trees-1x1-grass-tree.jpg" alt="" loading="lazy"><span class="lc-t">Trees</span><span class="lc-d">A single tree with a barked, forking trunk and clumps of foliage covered in separate leaves.</span><span class="lc-r">Rust port: P5</span></a>
+  <a class="lookcard" href="looks/composition.html"><img src="looks/img/water-shore-s3-overhang.jpg" alt="" loading="lazy"><span class="lc-t">Composition</span><span class="lc-d">How looks share a tile: rocks bedded in the ground, grass growing up to them, and tiles that meet their neighbours.</span><span class="lc-r">Rust port: P4</span></a>
+</div>
+<p class="muted small">Thumbnails come from each look page, where every render is captioned; most predate the rule that paints overhang faces red.</p>
 
 <h2 id="bodies">Three bodies of work</h2>
 <div class="bodies">
@@ -105,7 +94,7 @@
     <p>Seven standalone experiments where the approved looks are made: grass, rocks, cliffs, water, shore, dirt and meadow. Each lab writes to its own <code>out/</code> and never changes the library.</p>
     <dl>
       <dt>Code</dt><dd><code>*lab/</code> at the repo root</dd>
-      <dt>Docs</dt><dd>The <a href="#looks">look pages</a>: each lab's spec, rulings and mechanism</dd>
+      <dt>Docs</dt><dd>The <a href="#looks">look pages</a>; the original lab pages are in the <a href="archive/index.html#lab-logs">archive</a></dd>
       <dt>Status</dt><dd><a href="#status-labs">below</a></dd>
     </dl>
   </section>
@@ -125,6 +114,7 @@
 <ul class="doclist">
   <li><a href="standards/tile-system.html">Tile system</a><span class="sum">Tile, square and cell; DungeonBlocks and OpenLOCK geometry; file names; edge coordinates.</span></li>
   <li><a href="standards/printing.html">Printing</a><span class="sum">Printer profile, the 55° overhang limit, the printable-texture rule, red overhangs in renders, and the watertight and float32 reload audit.</span></li>
+  <li><a href="standards/commercial-sets-analysis.html">Commercial sets analysis</a><span class="sum">Measured DungeonBlocks wall and ground heights, compared with Hirst Arts, Fat Dragon Games and The Dragon's Rest. The source of the tile-system numbers.</span></li>
 </ul>
 
 
@@ -140,10 +130,8 @@
 <p class="muted small">Rows come from <a href="status.json">status.json</a>, which Claude commits as work moves.</p>
 
 
-<h2 id="reference">Reference</h2>
+<h2 id="extras">Extras</h2>
 <ul class="doclist">
-  <li><a href="reference/walls/commercial-sets-analysis.html">Walls: commercial sets analysis</a><span class="sum">Measured DungeonBlocks wall standards, compared with Hirst Arts, Fat Dragon Games and The Dragon's Rest.</span><span class="meta">reference/walls/</span></li>
-  <li><a href="reference/index.html">Reference photos</a><span class="sum">Browse every photo set the looks are modelled on: big boulders, commercial rock tiles, stone texture, walls, fieldstone and doors.</span><span class="meta">reference/</span></li>
   <li><a href="extras/paint-organizer.html">Paint organizer magnets</a><span class="sum">Not terrain: disc-magnet pockets in the hex paint organizer so copies clip together.</span><span class="meta">src/extras/dharmatiles-paint-organizer.py</span></li>
 </ul>
 

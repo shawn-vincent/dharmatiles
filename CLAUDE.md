@@ -387,7 +387,7 @@ src/scad/        OpenSCAD files and experiments
 stl/
   db/            generated STL output — DungeonBlocks base system (db)
   ol/            generated STL output — OpenLOCK base system (ol)
-docs/            GitHub Pages site (HTML): index.html (home + live status.json), looks/, rust/, standards/, reference/
+docs/            GitHub Pages site (HTML): index.html (home + live status.json), looks/ (one page per look, with its renders and reference photos), rust/, standards/
 docs/archive/    frozen history: Python library design pages, Rust study logs, review transcripts
 src/experiments/tiles/  experiment .tile.py specs (outside src/tiles/, so batch mode skips them)
 ```
