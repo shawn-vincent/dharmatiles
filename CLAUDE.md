@@ -12,10 +12,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install in editable mode (required before running anything)
 pip install -e .
 
-# Batch mode: process every src/tiles/**/*.tile.py → stl/{db,ol}/…
+# Batch mode: process every src/tiles/**/*.tile.py → stl/{db,ol}/<group>/…
 dharmatiles-gen
 
-# Single tile (writes to canonical stl/{db|ol}/{NxM}-{name}-{db|ol}.stl)
+# Single tile (writes to canonical stl/{db|ol}/<group>/{NxM}-{name}-{db|ol}.stl, where <group> mirrors the tile's folder under src/tiles/, e.g. ground/)
 dharmatiles-gen --tile "src/tiles/ground/1x1-soil+grass.tile.py"
 dharmatiles-gen --tile "src/tiles/ground/2x2-grass-tree.tile.py"
 dharmatiles-gen --quiet   # suppress progress output
@@ -97,7 +97,7 @@ Tile (.tile.py) ──► build_tile_from_spec()
          union all parts + base attach (dungeonblocks / openlock)
                 │
                 ▼
-         stl/{system}/{NxM}-{name}-{db|ol}.stl
+         stl/{system}/<group>/{NxM}-{name}-{db|ol}.stl
 ```
 
 `TileScene` is the mutable accumulator threaded through the pipeline. It holds:
