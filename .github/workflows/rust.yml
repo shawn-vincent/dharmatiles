@@ -69,6 +69,21 @@ jobs:
       # Windows checks the metrics snapshot and the render gate only.
       # (cargo test above already ran it; this prints the hashes per OS.)
       - run: cargo test -p dt-eval --test golden -- --nocapture --test-threads 1
+      # The rayon pool sizes above don't touch Manifold's TBB pool, which
+      # sizes itself from the CPU affinity mask: rebuild the golden tiles
+      # on 1, 2 and 4 CPUs.  Each run must pass the shared hash snapshot,
+      # and every run must print the same hashes.
+      - if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -o pipefail
+          for cpus in 0 0-1 0-3; do
+            taskset -c "$cpus" cargo test -p dt-eval --test golden -- --nocapture --test-threads 1 \
+              | grep -E '^[0-9a-f]{16}  ' > "golden-tbb-$cpus.txt"
+          done
+          cmp golden-tbb-0.txt golden-tbb-0-1.txt
+          cmp golden-tbb-0.txt golden-tbb-0-3.txt
+          cat golden-tbb-0.txt
       # The parity harness's Rust half (no Python on CI runners).
       - run: cargo xtask parity flat --no-python --dev
       # The parity renders and build records, per OS (no STLs).  With
