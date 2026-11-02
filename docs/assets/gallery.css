@@ -1,0 +1,27 @@
+/* Reference photo galleries (docs/reference/**/index.html); colours come from site.css tokens. */
+.gal-sec { margin-block: 28px; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+.ph { margin: 0; background: var(--card); border: 1px solid var(--rule); display: flex; flex-direction: column; min-width: 0; }
+.ph a { display: block; aspect-ratio: 4 / 3; overflow: hidden; background: var(--panel); }
+.ph img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .2s; }
+.ph a:hover img { transform: scale(1.03); }
+.ph a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ph figcaption { padding: 10px 12px 12px; font-size: 14px; line-height: 1.45; display: flex; flex-direction: column; gap: 4px; }
+.ph .src, .ph .fn { font: 12px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.hub { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-block: 20px; }
+.hubcard { display: flex; flex-direction: column; gap: 4px; padding: 10px 10px 14px; background: var(--card); border: 1px solid var(--rule); color: var(--fg); text-decoration: none; }
+.hubcard:hover { border-color: var(--accent); }
+.hubcard .strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin-bottom: 6px; }
+.hubcard .strip img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: var(--panel); }
+.hubcard .hc-t { font: 700 17px var(--display); }
+.notes { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 14.5px; max-width: 72ch; }
+.notes h2 { font-size: 17px; color: var(--fg); } .notes h3 { font-size: 15px; color: var(--fg); margin-top: 18px; }
+ul.files { padding-left: 20px; }
+.lightbox { border: 0; padding: 0; max-width: 96vw; max-height: 96vh; background: var(--card); color: var(--fg); }
+.lightbox::backdrop { background: rgb(0 0 0 / .82); }
+.lightbox figure { margin: 0; }
+.lightbox img { display: block; max-width: 96vw; max-height: calc(96vh - 110px); margin: 0 auto; object-fit: contain; }
+.lightbox figcaption { padding: 8px 14px 0; font-size: 14px; max-width: 80ch; }
+.lb-bar { display: flex; gap: 10px; align-items: center; padding: 8px 14px 12px; }
+.lb-bar button { font: 600 18px var(--body); color: var(--fg); background: var(--panel); border: 1px solid var(--rule); padding: 4px 12px; cursor: pointer; }
+.lb-n { font: 13px var(--mono); color: var(--muted); } .lb-open { margin-left: auto; font-size: 14px; } .lb-close { margin-left: 4px; }
