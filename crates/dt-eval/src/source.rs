@@ -110,16 +110,20 @@ pub fn resolve(from: &str, target: &str) -> String {
     let (prefix, rest) = dir
         .strip_prefix(LIB)
         .map_or(("", dir.as_str()), |r| (LIB, r));
+    let absolute = rest.starts_with('/');
     for p in rest.split('/').chain(target.split('/')) {
         match p {
             "" | "." => {}
-            ".." => {
+            // a relative path keeps the `..` it cannot cancel (`../a`);
+            // above `/` there is nothing, so an absolute one drops it
+            ".." if parts.last().is_some_and(|l| *l != "..") => {
                 parts.pop();
             }
+            ".." if absolute => {}
             p => parts.push(p),
         }
     }
-    let lead = if rest.starts_with('/') { "/" } else { "" };
+    let lead = if absolute { "/" } else { "" };
     format!("{prefix}{lead}{}", parts.join("/"))
 }
 
@@ -139,6 +143,16 @@ mod tests {
         );
         assert_eq!(resolve("tiles/a.kdl", "parts.kdl"), "tiles/parts.kdl");
         assert_eq!(resolve("a.kdl", "b"), "b.kdl");
+    }
+
+    #[test]
+    fn leading_dot_dots_are_kept() {
+        assert_eq!(resolve("../u/sub/t.kdl", "./p"), "../u/sub/p.kdl");
+        assert_eq!(resolve("a.kdl", "../shared/x"), "../shared/x.kdl");
+        assert_eq!(resolve("../a.kdl", "../../x"), "../../../x.kdl");
+        assert_eq!(resolve("t/a.kdl", "../../x"), "../x.kdl");
+        assert_eq!(resolve("/p/a.kdl", "../../../x"), "/x.kdl");
+        assert_eq!(resolve("lib:a.kdl", "../x"), "lib:../x.kdl");
     }
 
     #[test]
