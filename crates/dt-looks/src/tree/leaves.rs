@@ -87,6 +87,8 @@ const ROOT_EMBED_MM: f64 = 0.75;
 const PROTRUSION_MM: f64 = 0.3;
 /// Printability skew margin: blade tip over oval tip, in z.
 const SKEW_TIP_MARGIN_MM: f64 = 0.05;
+/// Margin under the printer's overhang limit for underside blades.
+const HANG_MARGIN_DEG: f64 = 3.0;
 /// Surface re-projection lift.
 const PROJECT_LIFT_MM: f64 = 1.0;
 
@@ -108,6 +110,10 @@ pub struct LeafShape {
     pub outer_curve: f64,
     /// Tip curl, degrees (capped at 32° on the crown).
     pub curl_deg: f64,
+    /// The printer's overhang limit, degrees from vertical: underside
+    /// blades are flattened so no blade face hangs past it (see
+    /// [`place`]). `None` builds Python's blades exactly (parity runs).
+    pub overhang_deg: Option<f64>,
 }
 
 impl Default for LeafShape {
@@ -120,6 +126,7 @@ impl Default for LeafShape {
             inner_curve: 1.5,
             outer_curve: 0.72,
             curl_deg: 40.0,
+            overhang_deg: Some(55.0),
         }
     }
 }
@@ -137,6 +144,20 @@ impl LeafShape {
             ..self
         }
     }
+}
+
+/// One placed leaf.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Placed {
+    /// Its root on the crown, mm.
+    pub root: [f64; 3],
+    /// The crown's smooth normal there.
+    pub normal: [f64; 3],
+    /// The blade's seated direction (Python's `base_tangents`).
+    pub tangent: [f64; 3],
+    /// The zone blend: 1 = pitched (curled, lifted) on upward faces, 0 =
+    /// flush arch on undersides.
+    pub zone: f64,
 }
 
 /// Wall time of each stage, seconds (0 on wasm).
@@ -181,9 +202,8 @@ pub struct LeafStats {
     pub test_points: usize,
     /// Test points with no root within one spacing on a like-facing surface.
     pub uncovered: usize,
-    /// Each returned leaf's root and blade direction (its seated tangent,
-    /// Python's `base_tangents`), in output order.
-    pub roots_placed: Vec<([f64; 3], [f64; 3])>,
+    /// Each returned leaf, in output order.
+    pub leaves: Vec<Placed>,
     /// Stage times.
     pub times: LeafTimes,
 }
@@ -326,11 +346,20 @@ pub fn place_with(
         Draws::Python { candidates, .. } => candidates.clone(),
     };
     stats.candidates = cand.points.len();
+    let tau = 2.0 * std::f64::consts::PI;
+    let phase = [1, 2, 3].map(|k| draws.h01("org-dir", k) * tau);
+    let reach = Reach {
+        crown: &crown,
+        phase,
+        len,
+        limit_deg: shape.overhang_deg,
+    };
+    let ok_cand = reach.placeable(&cand);
     let mut grid = PoissonGrid::new(spacing);
     let mut roots: Vec<V> = Vec::new();
     let mut root_n: Vec<V> = Vec::new();
-    for (p, n) in cand.points.iter().zip(&cand.normals) {
-        if n[2] < PLACEABLE_NORMAL_Z {
+    for ((p, n), ok) in cand.points.iter().zip(&cand.normals).zip(ok_cand) {
+        if !ok {
             continue;
         }
         let n = safe_norm(*n);
@@ -357,27 +386,24 @@ pub fn place_with(
         }
         Draws::Python { tests, .. } => tests.clone(),
     };
+    let ok_test = reach.placeable(&tests);
     let checked: Vec<bool> = tests
         .points
         .par_iter()
         .zip(&tests.normals)
-        .filter(|(_, n)| n[2] >= PLACEABLE_NORMAL_Z)
-        .map(|(p, n)| grid.blocked(*p, safe_norm(*n)))
+        .zip(&ok_test)
+        .filter(|(_, ok)| **ok)
+        .map(|((p, n), _)| grid.blocked(*p, safe_norm(*n)))
         .collect();
     stats.test_points = checked.len();
     stats.uncovered = checked.iter().filter(|c| !**c).count();
     stats.times.coverage = clock.lap();
 
     // ── directions and standoffs ──────────────────────────────────────────
-    let tau = 2.0 * std::f64::consts::PI;
-    let phase = [1, 2, 3].map(|k| draws.h01("org-dir", k) * tau);
     let dirs: Vec<V> = roots
         .par_iter()
         .zip(&root_n)
-        .map(|(b, n)| {
-            let t0 = growth_tangent(*n, *b, crown.centroid);
-            safe_norm(rotate_about(t0, *n, field_angle(*b, phase)))
-        })
+        .map(|(b, n)| reach.direction(*b, *n))
         .collect();
     let standoffs = shingle_standoffs(&roots, &dirs, len, draws);
     stats.times.layout = clock.lap();
@@ -406,7 +432,14 @@ pub fn place_with(
     for (i, o) in outcomes.into_iter().enumerate() {
         match o {
             Outcome::Placed(m, tangent) => {
-                stats.roots_placed.push((roots[i], tangent));
+                let n = root_n[i];
+                let tz = ((n[2] - ZONE_LO) / (ZONE_HI - ZONE_LO)).clamp(0.0, 1.0);
+                stats.leaves.push(Placed {
+                    root: roots[i],
+                    normal: n,
+                    tangent,
+                    zone: tz * tz * (3.0 - 2.0 * tz),
+                });
                 solids.push(m);
             }
             Outcome::Branch => stats.branch_culled += 1,
@@ -806,6 +839,82 @@ fn shingle_standoffs(bases: &[V], dirs: &[V], len: f64, draws: &Draws) -> Vec<f6
     out
 }
 
+/// Printable undersides: on a face whose normal points down (overhang
+/// `α = asin(−nz)` from vertical), the blade may tilt at most
+/// `limit − α − HANG_MARGIN_DEG` further. The steepest tilt of a blade
+/// against its seat is at its tip, where both arches (the full-length
+/// one and the flush one) slope, `atan(tan(arch) + 4·arch_mm / L)`, and
+/// the curl and the lift turn it further. Returns the factor (0..1) all
+/// four are scaled by to fit.
+fn hang_scale(nz: f64, limit_deg: f64, b: &Blade, arch_mm: f64) -> f64 {
+    if nz >= 0.0 {
+        return 1.0;
+    }
+    let alpha = libm::asin((-nz).min(1.0)).to_degrees();
+    let budget = (limit_deg - alpha - HANG_MARGIN_DEG).max(0.0).to_radians();
+    let tilt = |k: f64| {
+        libm::atan(libm::tan((k * b.arch_deg).to_radians()) + 4.0 * k * arch_mm / b.length_mm)
+            + (k * b.curl_deg).to_radians()
+            + libm::atan(k * b.lift_mm / b.length_mm)
+    };
+    if tilt(1.0) <= budget {
+        return 1.0;
+    }
+    let (mut lo, mut hi) = (0.0, 1.0);
+    for _ in 0..40 {
+        let m = 0.5 * (lo + hi);
+        if tilt(m) <= budget { lo = m } else { hi = m }
+    }
+    lo
+}
+
+/// Where a leaf may root, and which way it points.
+struct Reach<'a> {
+    crown: &'a Crown,
+    phase: [f64; 3],
+    len: f64,
+    limit_deg: Option<f64>,
+}
+
+impl Reach<'_> {
+    /// Down-slope, turned by the smooth field.
+    fn direction(&self, b: V, n: V) -> V {
+        let t0 = growth_tangent(n, b, self.crown.centroid);
+        safe_norm(rotate_about(t0, n, field_angle(b, self.phase)))
+    }
+
+    /// Placeable: normal z ≥ −0.75 (Python). With a printer limit, an
+    /// underside root also needs the surface half a leaf down-slope (under
+    /// its tip, where it lies flush) to be within the limit less the
+    /// margin: there a flush blade inherits the clump's slope, and past
+    /// the limit nothing makes it printable.
+    fn placeable(&self, s: &Samples) -> Vec<bool> {
+        s.points
+            .par_iter()
+            .zip(&s.normals)
+            .map(|(p, n)| {
+                if n[2] < PLACEABLE_NORMAL_Z {
+                    return false;
+                }
+                let Some(limit) = self.limit_deg else {
+                    return true;
+                };
+                if n[2] >= 0.0 {
+                    return true;
+                }
+                let n = safe_norm(*n);
+                let t = self.direction(*p, n);
+                let q = add(*p, scale(t, 0.5 * self.len));
+                self.crown
+                    .project(q, n, 1.0 + 0.5 * self.len + 1.0)
+                    .is_none_or(|(_, tn)| {
+                        tn[2] >= -libm::sin((limit - HANG_MARGIN_DEG).to_radians())
+                    })
+            })
+            .collect()
+    }
+}
+
 // ── one leaf ──────────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -844,7 +953,9 @@ impl Job<'_> {
         ws: f64,
     ) -> Outcome {
         let flush = st < 0.5;
-        let blade = Blade {
+        let mut arch_mm = (1.0 - st) * FLUSH_ARCH_MM;
+        let mut blade = Blade {
+            arch_deg: leaf::ARCH_DEG,
             length_mm: ls,
             width_mm: ws,
             thickness_mm: self.shape.thickness_mm,
@@ -854,6 +965,13 @@ impl Job<'_> {
             curl_deg: st * self.shape.curl_deg.min(PITCH_CURL_DEG),
             lift_mm: st * TIP_LIFT_MM,
         };
+        if let Some(limit) = self.shape.overhang_deg {
+            let k = hang_scale(nrm[2], limit, &blade, arch_mm);
+            blade.arch_deg *= k;
+            blade.curl_deg *= k;
+            blade.lift_mm *= k;
+            arch_mm *= k;
+        }
         // Centre the blade on its root: the build anchors the oval's centre,
         // which sits a quarter length down-slope of the blade's middle.
         let (anchor, anchor_n) = self
@@ -872,7 +990,7 @@ impl Job<'_> {
             st * standoff,
             flush,
             0.02 + st * TIP_CEIL_RANGE_MM,
-            (1.0 - st) * FLUSH_ARCH_MM,
+            arch_mm,
         );
         let (surf, inner, tangent) = match built {
             Ok(x) => x,

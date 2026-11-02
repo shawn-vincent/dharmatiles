@@ -31,7 +31,7 @@ pub(super) const NV: usize = TIP + 1;
 /// `_LEAF_CREASE_SHARPNESS`.
 const CREASE_SHARPNESS: f64 = 10.0;
 /// The full-length arch at the base (`build_leaf_surface`'s default).
-const ARCH_DEG: f64 = 30.0;
+pub(super) const ARCH_DEG: f64 = 30.0;
 
 /// The blade's shape for one leaf.
 #[derive(Clone, Copy, Debug)]
@@ -44,6 +44,8 @@ pub(super) struct Blade {
     pub outer_curve: f64,
     pub curl_deg: f64,
     pub lift_mm: f64,
+    /// The full-length arch's slope at the base ([`ARCH_DEG`] as built).
+    pub arch_deg: f64,
 }
 
 /// Interior station `k` (0-based) as numpy's `linspace(0, 1, 13)[1:-1]`.
@@ -96,7 +98,7 @@ pub(super) fn surface(base: V, tangent: V, up_hint: V, b: &Blade) -> Vec<V> {
     let len = b.length_mm;
     let fold_slope = libm::tan(b.fold_angle_deg.to_radians());
     let long_t_peak = libm::pow(0.25, 0.5) * libm::pow(0.75, 1.5);
-    let arch_slope = libm::tan(ARCH_DEG.abs().to_radians());
+    let arch_slope = libm::tan(b.arch_deg.abs().to_radians());
     let curl_tip_slope = libm::tan(b.curl_deg.abs().to_radians());
     let curl_start = 2.0 / 3.0;
     let curl_zone = (1.0 - curl_start) * len;
@@ -321,6 +323,7 @@ mod tests {
             outer_curve: 0.72,
             curl_deg: 32.0,
             lift_mm: 1.2,
+            arch_deg: ARCH_DEG,
         }
     }
 

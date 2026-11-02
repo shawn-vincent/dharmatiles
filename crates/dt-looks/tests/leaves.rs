@@ -6,7 +6,7 @@
 mod fixture;
 
 use dt_kit::{Seed, TriMesh};
-use dt_looks::tree::leaves::{LeafStats, place, place_with};
+use dt_looks::tree::leaves::{LeafShape, LeafStats, place, place_with};
 
 fn capture() -> fixture::Capture {
     let bytes = include_bytes!("fixtures/leaves-small.bin");
@@ -56,8 +56,9 @@ fn parity_with_python() {
         .zip(c.points("py/dir"))
         .collect();
     let matched = stats
-        .roots_placed
+        .leaves
         .iter()
+        .map(|l| (l.root, l.tangent))
         .filter(|(b, d)| {
             py.iter().any(|(pb, pd)| {
                 (0..3).all(|k| (b[k] - pb[k]).abs() < 1e-5)
@@ -111,7 +112,7 @@ fn complete_coverage() {
     );
     // No root closer than the spacing to a like-facing one (no rows, no
     // piling up): spot-check the nearest neighbour distance.
-    let r = &stats.roots_placed;
+    let r: Vec<([f64; 3], [f64; 3])> = stats.leaves.iter().map(|l| (l.root, l.tangent)).collect();
     for (i, (a, _)) in r.iter().enumerate().take(60) {
         let nearest = r
             .iter()
@@ -129,7 +130,10 @@ fn complete_coverage() {
 fn same_at_1_4_16_threads() {
     let c = capture();
     let foliage = c.mesh("foliage");
-    let shape = c.shape();
+    let shape = LeafShape {
+        overhang_deg: Some(55.0),
+        ..c.shape()
+    };
     let run = |threads: usize| {
         rayon::ThreadPoolBuilder::new()
             .num_threads(threads)
@@ -144,4 +148,26 @@ fn same_at_1_4_16_threads() {
     let h1 = run(1);
     assert_eq!(h1, run(4));
     assert_eq!(h1, run(16));
+}
+
+#[test]
+fn printable_undersides() {
+    let c = capture();
+    let foliage = c.mesh("foliage");
+    let exact = c.shape();
+    let printable = LeafShape {
+        overhang_deg: Some(55.0),
+        ..exact
+    };
+    let (_, e) = place_with(&foliage, &TriMesh::default(), &exact, &c.draws()).expect("places");
+    let (leaves, p) =
+        place_with(&foliage, &TriMesh::default(), &printable, &c.draws()).expect("places");
+    // The printer limit only takes leaves away (deep undersides whose tips
+    // would lie past the limit) and flattens the rest.
+    assert!(p.placed <= e.placed && p.placed * 10 >= e.placed * 8);
+    assert!(p.leaves.iter().all(|l| l.normal[2] >= -0.75));
+    for m in &leaves {
+        assert!(m.is_watertight());
+    }
+    assert_eq!(LeafShape::default().overhang_deg, Some(55.0));
 }

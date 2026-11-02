@@ -110,6 +110,7 @@ impl Capture {
             inner_curve: s[4],
             outer_curve: s[5],
             curl_deg: s[6],
+            overhang_deg: None,
         }
     }
 
