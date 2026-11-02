@@ -221,6 +221,12 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
             .help("add a look to its stack, such as `stack { ground }`"),
         );
     }
+    // the tile is built at the finest cell any entry needs
+    let frame = looks
+        .iter()
+        .filter_map(|l| l.plan().cell_mm)
+        .min()
+        .map_or(frame, |c| frame.with_cell(c.get()));
     errors.extend(empty_regions(&tile, &frame, &areas));
     match dt_looks::connector(&opts.system) {
         Ok(c) => {
@@ -233,12 +239,6 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
         return Err(errors);
     }
     let plans: Vec<_> = looks.iter().map(|l| l.plan()).collect();
-    // the tile is built at the finest cell any entry needs
-    let frame = plans
-        .iter()
-        .filter_map(|p| p.cell_mm)
-        .min()
-        .map_or(frame, |c| frame.with_cell(c.get()));
     let steps = plan::schedule(&plans).map_err(|r| {
         let (msg, entry) = match &r {
             Refusal::NoWriter { entry, kind } => (

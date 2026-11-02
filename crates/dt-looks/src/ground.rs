@@ -107,7 +107,16 @@ impl Shape {
                 },
                 "bumps" | "bumps/up" => s.up = number(look, c, 0.0, 15.0)?,
                 "bumps/down" => s.down = number(look, c, 0.0, 15.0)?,
-                "bump-size" => s.size_mm = number(look, c, 5.0, 70.0)?.0,
+                "bump-size" => match (&c.value, number(look, c, 5.0, 70.0)?) {
+                    (Value::Number(_), Amount(a, _)) => s.size_mm = a,
+                    _ => {
+                        return Err(LookError::control(
+                            "bump-size",
+                            format!("`{look}`'s bump-size is one width, not a range"),
+                            "write mm from 5 to 70, such as bump-size=14".into(),
+                        ));
+                    }
+                },
                 _ => {}
             }
         }
@@ -343,5 +352,11 @@ mod tests {
         ]))
         .unwrap_err();
         assert_eq!(e.control.as_deref(), Some("bumps"));
+        let e = Ground::new(&controls(&[
+            ("level", Value::Number(5.0)),
+            ("bump-size", Value::Range(10.0, 20.0)),
+        ]))
+        .unwrap_err();
+        assert_eq!(e.control.as_deref(), Some("bump-size"));
     }
 }

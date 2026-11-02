@@ -303,7 +303,13 @@ fn stamp_clod(out: &mut Field, base: &Field, seed: Seed, p: &Placed) {
             }
         })
         .collect();
-    let (is, js) = out.window(cx, cy, 2.0 * r + out.step);
+    // the window holds every lobe whatever its lumps (2r does not:
+    // dirtlab's own window cuts about 1 clod in 140 straight)
+    let reach = shapes
+        .iter()
+        .map(|l| libm::hypot(l.ox, l.oy) + l.reach * l.el.max(1.0))
+        .fold(0.0, f64::max);
+    let (is, js) = out.window(cx, cy, reach + out.step);
     for j in js {
         for i in is.clone() {
             let (px, py) = (out.x(i) - cx, out.y(j) - cy);
