@@ -134,6 +134,9 @@ pub struct Tile {
     pub edges: Vec<(String, f64)>,
     /// Straight lines, by name, as points in squares.
     pub lines: BTreeMap<String, Vec<[f64; 2]>>,
+    /// The wobbled lines as drawn (points in squares) and their wobble,
+    /// mm, so [`Tile::reseed`] can wobble them again.
+    pub wobbles: BTreeMap<String, (Vec<[f64; 2]>, f64)>,
     /// Regions.
     pub regions: Vec<Region>,
     /// The entries that call built looks, definitions inlined.
@@ -145,6 +148,30 @@ pub struct Tile {
     pub src: Src,
     /// Where its name is written.
     pub span: SourceSpan,
+}
+
+impl Tile {
+    /// Replace the root seed, wobbling the wobbled lines again from it
+    /// (a `--seed` reaches the lines as well as the looks).
+    pub fn reseed(&mut self, seed: u64) {
+        self.seed = seed;
+        for (name, (pts, wobble)) in &self.wobbles {
+            self.lines
+                .insert(name.clone(), wobbled(pts, *wobble, seed, name));
+        }
+    }
+}
+
+/// A line's points (in squares) wobbled `wobble` mm, at the reference
+/// square, keyed by the tile seed and the line's name.
+fn wobbled(pts: &[[f64; 2]], wobble: f64, seed: u64, name: &str) -> Vec<[f64; 2]> {
+    let sq = dt_kit::REFERENCE_SQUARE_MM;
+    let mm: Vec<[f64; 2]> = pts.iter().map(|p| [p[0] * sq, p[1] * sq]).collect();
+    let seed = Seed::new(seed).key("line").key(name);
+    dt_kit::wobble(&mm, wobble, LINE_WOBBLE_SIGMA_MM, 0.25, seed)
+        .into_iter()
+        .map(|p| [p[0] / sq, p[1] / sq])
+        .collect()
 }
 
 /// A document as read: the file, and its tile if it has one.
@@ -418,6 +445,7 @@ impl Reader<'_> {
             edges: self.edges(&standard),
             levels,
             lines: BTreeMap::new(),
+            wobbles: BTreeMap::new(),
             regions: Vec::new(),
             stack: Vec::new(),
             pending: Vec::new(),
@@ -456,14 +484,9 @@ impl Reader<'_> {
                 }
             }
             if wobble > 0.0 {
-                // at the reference square, keyed by the line's name
-                let sq = dt_kit::REFERENCE_SQUARE_MM;
-                let mm: Vec<[f64; 2]> = pts.iter().map(|p| [p[0] * sq, p[1] * sq]).collect();
-                let seed = Seed::new(t.seed).key("line").key(&l.name.value);
-                pts = dt_kit::wobble(&mm, wobble, LINE_WOBBLE_SIGMA_MM, 0.25, seed)
-                    .into_iter()
-                    .map(|p| [p[0] / sq, p[1] / sq])
-                    .collect();
+                t.wobbles
+                    .insert(l.name.value.clone(), (pts.clone(), wobble));
+                pts = wobbled(&pts, wobble, t.seed, &l.name.value);
             }
             t.lines.insert(l.name.value.clone(), pts);
         }

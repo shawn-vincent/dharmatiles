@@ -668,7 +668,26 @@ impl Look for Single {
         let yaw = rng.uniform(0.0, 360.0);
         let s = scene.frame().scale();
         let at = match ctx.at {
-            Some(a) => a,
+            Some(a) => {
+                // a stone never stands past the tile's edge: it is
+                // clipped by no one, so it would print past its neighbour
+                let [w, h] = scene.frame().size_mm();
+                let m = item.r * s + RIM_MM * s;
+                if a[0] < m || a[1] < m || a[0] > w - m || a[1] > h - m {
+                    return Err(LookError {
+                        control: None,
+                        message: format!(
+                            "a {} {d:.1} mm wide at this point stands past the tile's edge",
+                            self.thing.kind
+                        ),
+                        help: Some(format!(
+                            "keep it {:.2} squares from every edge",
+                            m / scene.frame().square_mm
+                        )),
+                    });
+                }
+                a
+            }
             None => {
                 let placed = place(scene, ctx, &mut rng, &[item.r * s], 1.5 * s);
                 let Some(p) = placed.first() else {

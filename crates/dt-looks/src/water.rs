@@ -37,6 +37,10 @@ pub const CONTROLS: &[&str] = &["level"];
 
 const CELL_MM: f64 = 0.2;
 const BANK_GRID_WEIGHT: f64 = 1.25;
+/// Deviation from the lab (which thresholds the raw ground): the land
+/// mask is taken from the ground blurred this much, so pebbles and grain
+/// on a bank near the water line don't speckle the shore with one-node
+/// islands and pools.
 const LAND_BLUR_MM: f64 = 0.3;
 const RIM_FADE_MM: f64 = 4.0;
 const DIST_SMOOTH_MM: f64 = 1.0;
@@ -270,13 +274,15 @@ fn along_edge(f: &Field, k: usize) -> f64 {
     }
 }
 
-/// Nodes within one node (8-connected) of a `m` node.
-fn dilate8(m: &[bool], nx: usize, ny: usize) -> Vec<bool> {
+/// Nodes within one node (4-connected, the lab's `binary_dilation`) of a `m` node.
+fn dilate4(m: &[bool], nx: usize, ny: usize) -> Vec<bool> {
     (0..nx * ny)
         .map(|k| {
             let (i, j) = (k % nx, k / nx);
-            (j.saturating_sub(1)..=(j + 1).min(ny - 1))
-                .any(|jj| (i.saturating_sub(1)..=(i + 1).min(nx - 1)).any(|ii| m[jj * nx + ii]))
+            m[k] || (i > 0 && m[k - 1])
+                || (i + 1 < nx && m[k + 1])
+                || (j > 0 && m[k - nx])
+                || (j + 1 < ny && m[k + nx])
         })
         .collect()
 }
@@ -298,9 +304,15 @@ fn tide(frame: &dt_kit::Frame, seed: Seed) -> Field {
         let (dx, dy) = (x.min(w - x), y.min(h - y));
         let (wy, wx) = (1.0 / dy.max(1e-6), 1.0 / dx.max(1e-6));
         let edge = (wy * profile(frame, x) + wx * profile(frame, y)) / (wy + wx);
-        let b = smooth01(1.0 - dx.min(dy) / (TIDE_EDGE_FADE_MM * s));
+        let b = edge_fade(s, dx.min(dy));
         (1.0 - b) * TIDE_RMS_MM * s * inner.sample(x, y) + b * edge
     })
+}
+
+/// How far the edge contract holds at `d` mm from the nearest tile edge:
+/// 1 at the edge, fading to 0 over the tide's edge fade.
+fn edge_fade(s: f64, d: f64) -> f64 {
+    smooth01(1.0 - d / (TIDE_EDGE_FADE_MM * s))
 }
 
 /// The edge contract's tide profile at position `t` (mm) along an edge.
@@ -387,6 +399,12 @@ impl Look for Water {
         // the surface: water over the ground where it is higher
         let tide = tide(&frame, seed.key("tide"));
         let edge_wl = scene.water_edge().unwrap_or(wl);
+        // a water level off the edge contract's eases to it near the edges
+        let [tw, th] = frame.size_mm();
+        let level = Field::from_fn(&frame, |x, y| {
+            let d = x.min(tw - x).min(y).min(th - y);
+            wl + edge_fade(s, d) * (edge_wl - wl)
+        });
         let mut top = vec![0.0; nn];
         let mut wet = vec![false; nn];
         for k in 0..nn {
@@ -395,7 +413,7 @@ impl Look for Water {
                 edge_wl + profile(&frame, along_edge(&land, k))
             } else {
                 let fade = smooth01(raw_d.z[k] / (SHORE_FADE_MM * s));
-                wl + z[k] * rim_f.z[k] * f64::from(u8::from(water[k])) * fade + tide.z[k]
+                level.z[k] + z[k] * rim_f.z[k] * f64::from(u8::from(water[k])) * fade + tide.z[k]
             };
             wet[k] = water[k] && wz >= land.z[k];
             top[k] = if ctx.area.bits[k] {
@@ -447,7 +465,7 @@ fn emitters(
     let (nx, ny) = frame.nodes();
     let nn = nx * ny;
     let mut sources: Vec<Source> = Vec::new();
-    let wdil = dilate8(m.water, nx, ny);
+    let wdil = dilate4(m.water, nx, ny);
     for (kind, src, (st, dec)) in [(Kind::Land, m.land, LAND), (Kind::Rock, m.rock, ROCK)] {
         if !src.iter().any(|&b| b) {
             continue;
@@ -471,7 +489,7 @@ fn emitters(
     // open corners
     let [w, h] = frame.size_mm();
     let mut corners = Vec::new();
-    let r4 = 4.0 * s;
+    let r4 = 2.0 * s; // the lab's ±20 cells at 0.1 mm
     for (cx, cy) in [(0.0, 0.0), (w, 0.0), (0.0, h), (w, h)] {
         let (mut wet, mut all) = (0usize, 0usize);
         for (k, &wk) in m.water.iter().enumerate() {

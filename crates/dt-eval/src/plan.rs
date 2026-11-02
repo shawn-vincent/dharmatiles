@@ -87,10 +87,6 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
                     if writers.is_empty() && !ground && matches!(r, Read::Solids(_)) {
                         return Err(Refusal::NoWriter { entry: i, kind });
                     }
-                    if ground && plans[i].writes == Write::Fill {
-                        // a fill comes before the lift that makes the ground
-                        return Err(Refusal::Cycle { entries: vec![i] });
-                    }
                     must[i].extend(writers);
                 }
                 Read::AllSolids => must[i].extend(
@@ -114,6 +110,24 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
             early[i] = true;
             todo.extend(&must[i]);
         }
+    }
+    // a fill and what it waits for come before the lift that makes the
+    // ground, so none of them can read the ground
+    let reads_ground = |i: usize| {
+        plans[i].reads.iter().any(|r| {
+            matches!(
+                r,
+                Read::Solids("ground") | Read::AnySolids("ground") | Read::AllSolids
+            )
+        })
+    };
+    let early_ground: Vec<usize> = (0..plans.len())
+        .filter(|&i| early[i] && reads_ground(i))
+        .collect();
+    if lifted && !early_ground.is_empty() {
+        return Err(Refusal::Cycle {
+            entries: early_ground,
+        });
     }
     let mut done = vec![false; plans.len()];
     for pass in [true, false] {
@@ -204,6 +218,16 @@ mod tests {
             p(Write::Fill, &[Read::Solids("ground")]),
         ];
         assert!(schedule(&fill_on_ground).is_err());
+        // a fill's prerequisite cannot read the ground either
+        let rock_on_ground = [
+            p(Write::Surface, &[]),
+            p(Write::Fill, &[Read::AnySolids("rock")]),
+            p(Write::Solid("rock"), &[Read::Solids("ground")]),
+        ];
+        assert_eq!(
+            schedule(&rock_on_ground),
+            Err(Refusal::Cycle { entries: vec![2] })
+        );
     }
 
     #[test]

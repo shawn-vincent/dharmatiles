@@ -252,6 +252,11 @@ pub struct Scene {
     edge_mm: Option<f64>,
     notes: Vec<(String, f64)>,
     parts: Vec<Part>,
+    /// For each part, how many paints came before it. A surface places its
+    /// own solids (dirt's stones) and then paints, so a part belongs to the
+    /// paint after it; a paint after that one over it removes it
+    /// ([`Scene::cull_covered`]).
+    placed_at: Vec<usize>,
     block: IdBlock,
     next_slot: u32,
     materials: Materials,
@@ -279,6 +284,7 @@ impl Scene {
             edge_mm: None,
             notes: Vec::new(),
             parts: Vec::new(),
+            placed_at: Vec::new(),
             block: IdBlock::reserve::<dt_geom::Solid>(SLOTS),
             next_slot: 0,
             materials: Materials::default(),
@@ -358,7 +364,8 @@ impl Scene {
             #[allow(clippy::cast_possible_truncation)]
             let z = top.z[k] as f32;
             self.field.z[k] = z;
-            self.wet.bits[k] = wet[k];
+            self.wet.bits[k] |= wet[k];
+            self.painted.bits[k] |= wet[k];
             self.no_edge.bits[k] |= no_edge[k];
         }
     }
@@ -388,6 +395,7 @@ impl Scene {
     /// once. The water calls it before it reads the land, so a shore is a
     /// bank; plain ground keeps its steps (Phase 2).
     pub fn bank(&mut self) {
+        self.cull_covered();
         self.settle();
         if !self.banked {
             self.banked = true;
@@ -559,6 +567,7 @@ impl Scene {
         if self.painted.count() == 0 {
             return Ok(());
         }
+        self.cull_covered();
         self.settle();
         if let Some(edge) = self.edge_mm {
             self.hold_edge(edge);
@@ -589,7 +598,15 @@ impl Scene {
                     Material::Earth as u32
                 }
             };
+            let before = self.materials.conflicts;
             self.materials.set_faces(&out, face);
+            let conflicts = self.materials.conflicts - before;
+            if conflicts > 0 {
+                // faces that straddle the water line: the first triangle's
+                // material holds for the whole face (R9 stays whole)
+                #[allow(clippy::cast_precision_loss)]
+                self.note("material_conflicts", conflicts as f64);
+            }
         }
         self.add(
             Tag {
@@ -652,11 +669,51 @@ impl Scene {
         }
     }
 
+    /// Remove each solid a surface placed (before a later paint) that a
+    /// later paint covers within the solid's reach plus a bank's width:
+    /// the ground it sat on is gone, so it would float or bury. Solids
+    /// placed after every paint are never removed.
+    fn cull_covered(&mut self) {
+        let n = self.layers.len();
+        if self.placed_at.iter().all(|&p| p + 1 >= n) {
+            return;
+        }
+        let (nx, ny) = self.frame.nodes();
+        let step = self.frame.step_mm();
+        let margin = BANK_MM * self.frame.scale();
+        let mut keep = Vec::with_capacity(self.parts.len());
+        for (part, &at) in self.parts.iter().zip(&self.placed_at) {
+            let covered = at + 1 < n
+                && part.solid.bounds().is_some_and(|(lo, hi)| {
+                    let reach = |a: f64, b: f64| {
+                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                        let idx = |v: f64| libm::round(v / step).max(0.0) as usize;
+                        (idx(a - margin), idx(b + margin))
+                    };
+                    let (i0, i1) = reach(lo[0], hi[0]);
+                    let (j0, j1) = reach(lo[1], hi[1]);
+                    (j0..=j1.min(ny - 1)).any(|j| {
+                        (i0..=i1.min(nx - 1)).any(|i| {
+                            self.layers[at + 1..]
+                                .iter()
+                                .any(|(m, _)| m.bits[j * nx + i])
+                        })
+                    })
+                });
+            keep.push(!covered);
+        }
+        let mut it = keep.iter();
+        self.parts.retain(|_| *it.next().unwrap_or(&true));
+        let mut it = keep.iter();
+        self.placed_at.retain(|_| *it.next().unwrap_or(&true));
+    }
+
     /// Add a solid a look built, and record its stage hash.
     pub fn add(&mut self, tag: Tag, solid: Solid) {
         let hash = solid.0.to_tri_mesh().content_hash();
         self.record(&format!("{}:{}", tag.kind, tag.owner), hash);
         self.parts.push(Part { tag, solid });
+        self.placed_at.push(self.layers.len());
     }
 
     /// **top**: the highest z of every solid so far (0 if none).

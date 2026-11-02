@@ -168,7 +168,7 @@ impl Checked {
 /// Every problem found, each at its text.
 pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked, Vec<Diag>> {
     let read = doc::read(sources, path)?;
-    let Some(tile) = read.tile else {
+    let Some(mut tile) = read.tile else {
         return Ok(Checked {
             file: read.file,
             tile: None,
@@ -179,6 +179,9 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
             seed: 0,
         });
     };
+    if let Some(seed) = opts.seed {
+        tile.reseed(seed);
+    }
     let frame = Frame::dungeonblocks(tile.cols, tile.rows);
     let mut errors = Vec::new();
     let mut looks: Vec<Box<dyn Look>> = Vec::new();

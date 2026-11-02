@@ -290,3 +290,97 @@ fn an_unknown_region_is_refused() {
     assert_eq!(e[0].location().unwrap().1, 5);
     assert_eq!(e[0].help.as_deref(), Some("did you mean `a`?"));
 }
+
+#[test]
+fn a_later_paint_removes_the_stones_it_covers() {
+    let src = mem(&[(
+        "t.kdl",
+        r#"tile pool size="2x2" seed=2 {
+    line across { through west east }
+    region low { bounded-by across; fill "1,0.5" }
+    region high { bounded-by across; fill "1,1.5" }
+    stack {
+        dirt level=8 { stones many }
+        ground in=low level=5
+    }
+}
+"#,
+    )]);
+    let b = build(&src, "t.kdl", &Options::default()).unwrap();
+    let m = &b.export.mesh;
+    let rock_ys: Vec<f64> = m
+        .triangles
+        .iter()
+        .zip(&b.materials)
+        .filter(|(_, mat)| **mat == dt_kit::Material::Rock)
+        .map(|(t, _)| t.iter().map(|&v| m.positions[v as usize][1]).sum::<f64>() / 3.0)
+        .collect();
+    assert!(!rock_ys.is_empty(), "the high dirt keeps its stones");
+    // the line is at y = 35 mm; the low paint covers every stone below it
+    assert!(
+        rock_ys.iter().all(|&y| y > 35.0),
+        "a stone left on the lowered ground: min y {}",
+        rock_ys.iter().copied().fold(f64::MAX, f64::min)
+    );
+}
+
+#[test]
+fn a_rock_placed_past_the_edge_is_refused() {
+    let src = mem(&[(
+        "t.kdl",
+        r#"tile r size="1x1" seed=1 {
+    stack {
+        ground
+        rock at="0.05,0.5" size=10
+    }
+}
+"#,
+    )]);
+    let Err(e) = build(&src, "t.kdl", &Options::default()) else {
+        panic!("built a rock standing past the tile's edge");
+    };
+    assert!(
+        rendered(&e[0]).contains("past the tile's edge"),
+        "{}",
+        rendered(&e[0])
+    );
+}
+
+#[test]
+fn water_alone_builds_a_tile() {
+    let src = mem(&[(
+        "t.kdl",
+        r#"tile w size="1x1" seed=1 {
+    stack { water }
+}
+"#,
+    )]);
+    let b = build(&src, "t.kdl", &Options::default()).unwrap();
+    assert!(b.materials.contains(&dt_kit::Material::Water));
+}
+
+#[test]
+fn a_seed_wobbles_the_lines_again() {
+    let text = r#"tile step size="1x1" seed=3 {
+    line across wobble=4 { through west east }
+    region low { bounded-by across; fill "0.5,0.1" }
+    region high { bounded-by across; fill "0.5,0.9" }
+    stack {
+        ground in=high level=8
+        ground in=low
+    }
+}
+"#;
+    let src = mem(&[("t.kdl", text)]);
+    let hash = |seed| {
+        let o = Options {
+            seed: Some(seed),
+            ..Options::default()
+        };
+        build(&src, "t.kdl", &o).unwrap().stages
+    };
+    let plain = build(&src, "t.kdl", &Options::default()).unwrap().stages;
+    // the tile's own seed again changes nothing; another moves the line
+    assert_eq!(hash(3), plain);
+    assert_ne!(hash(4), plain);
+}
