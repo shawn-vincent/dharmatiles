@@ -199,7 +199,7 @@ atom   := number "%"? | name | "(" sum ")"</code></pre>
 
 <h2 id="looks">6. Looks and their vocabulary</h2>
 <p>Each look leads with a few controls named for what you see. Sizes are mm at the reference scale. A word in a choice expands to the generator's numbers, which are documented next to the word in <code>crates/dt-doc/src/looks.rs</code>; a number is always accepted instead. Words marked <em>provisional</em> below have numbers chosen for the table, which that look's phase (P2–P7) tunes against its lab; the words themselves are decided. These tables are the single source for the planned <code>dharmatiles looks &lt;name&gt;</code> command, the MCP <code>describe_look</code> tool and the JSON Schema (<code>schema.rs:8</code>).</p>
-<p>Water, reeds and floors are not in the table yet. They join in their phases (P3–P5).</p>
+<p>Water and reeds are not in the table yet. They join in their phases (P3, P4). Floors joined in P5.</p>
 
 <h3 id="look-ground">ground, dirt, grass (surfaces)</h3>
 <div class="tbl"><table>
@@ -254,7 +254,8 @@ atom   := number "%"? | name | "(" sum ")"</code></pre>
 <tr><td><code>style</code></td><td><code>fieldstone</code> / <code>cut-stone</code> / <code>brick</code> / <code>regular-brick</code></td><td><code>cut-stone</code></td><td>How stones are made and laid.</td></tr>
 <tr><td><code>height</code></td><td><code>full</code> / <code>low</code> / mm</td><td><code>full</code></td><td><code>full</code> is up to the wall-top level; <code>low</code> (16.55 mm) is provisional.</td></tr>
 <tr><td><code>thickness</code></td><td>mm</td><td>7</td><td>Wall thickness.</td></tr>
-<tr><td><code>stones height</code>, <code>length</code>, <code>texture</code></td><td>mm ranges</td><td></td><td>Course height, stone length along the wall, face roughness.</td></tr>
+<tr><td><code>stones height</code>, <code>length</code></td><td>mm ranges</td><td></td><td>Course height and stone length along the wall. Each style has its own: cut stone 5.5–8.5 and 11–20, fieldstone 2.2–5.2 and 5–16, brick 2.5–3 and 5–6.6, regular brick 3.2 and 8.5.</td></tr>
+<tr><td><code>stones texture</code></td><td><code>chipped</code> / <code>worn</code> / <code>hewn</code> / <code>dressed</code></td><td>by style</td><td>The surface finish of each stone: chip size, rounding and relief together (the Python <code>texture=</code> presets). Cut stone is <code>chipped</code>, brick <code>worn</code>, regular brick <code>dressed</code>.</td></tr>
 <tr><td><code>joints width</code>, <code>depth</code></td><td>mm</td><td></td><td>Mortar gap, and how deep the gaps between stones look.</td></tr>
 <tr><td><code>edges rounding</code></td><td>mm</td><td></td><td>How worn the stone corners are.</td></tr>
 <tr><td><code>coping</code></td><td><code>loose</code> / <code>on-edge</code></td><td></td><td>What tops a drystone wall.</td></tr>
@@ -263,6 +264,19 @@ atom   := number "%"? | name | "(" sum ")"</code></pre>
 <tr><td><code>top</code></td><td><code>flat</code> / <code>battlements</code></td><td></td><td>Castle crenellations.</td></tr>
 </tbody></table></div>
 <p>A wall must have <code>along=</code>. Hidden: the SDF kernel, quoins, hearting, seat percentile.</p>
+
+<h3 id="look-floor">floor (surface)</h3>
+<p>A stone pavement that replaces the ground in its area: a wall laid on its side, one slab per square by default, some missing, spalled or cracked. Walls stand on it.</p>
+<div class="tbl"><table>
+<thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What you get</th></tr></thead>
+<tbody>
+<tr><td><code>style</code></td><td><code>cut-stone</code> / <code>fieldstone</code></td><td><code>cut-stone</code></td><td>Dressed slabs on the square grid, or drystone flagstones.</td></tr>
+<tr><td><code>texture</code></td><td><code>chipped</code> / <code>worn</code> / <code>hewn</code> / <code>dressed</code></td><td><code>dressed</code></td><td>The surface finish of each slab, as for walls.</td></tr>
+<tr><td><code>slabs</code></td><td>count, 1–6</td><td>1</td><td>Slabs across one square.</td></tr>
+<tr><td><code>level</code></td><td>mm or a level</td><td>7.4</td><td>The pavement top: 7.4 mm is the official interior floor.</td></tr>
+</tbody></table></div>
+<pre><code>floor texture=chipped seed=22      // the court of 1x1-floor-stone-wall
+wall along="north" seed=23          // stands on the slabs, its top still at the wall-top level</code></pre>
 
 <h3 id="look-cliff">cliff (run)</h3>
 <div class="tbl"><table>
