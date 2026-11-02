@@ -68,7 +68,7 @@ const K_REST: i64 = 3;
 const K_COPING: i64 = 5;
 /// A resting stone's underside bevels up at 45° from this far in from
 /// each face, mm at the reference.
-const UNDER_FROM: f64 = 1.6;
+const UNDER_FROM: f64 = 2.0;
 
 /// What the fieldstone layout leaves the chassis.
 pub(crate) struct Field {
@@ -896,8 +896,6 @@ impl Stone {
         let h = 0.5 * (self.y1 - self.y0);
         let ym = 0.5 * (self.y0 + self.y1);
         let zlo = self.ring.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
-        let half_h = 0.5
-            * (self.ring.iter().map(|p| p[1]).fold(f64::NEG_INFINITY, f64::max) - zlo).max(1e-6);
         let mut pos: Vec<[f64; 3]> = Vec::with_capacity(k_lat * n + 2);
         for j in 0..k_lat {
             #[allow(clippy::cast_precision_loss)]
@@ -915,20 +913,17 @@ impl Stone {
                     self.ctr[0] + (pole[0] - self.ctr[0]) * (1.0 - st) + (p[0] - self.ctr[0]) * st;
                 let mut z =
                     self.ctr[1] + (pole[1] - self.ctr[1]) * (1.0 - sz) + (p[1] - self.ctr[1]) * sz;
-                if self.under.is_some() && !self.coping && p[1] < self.ctr[1] {
+                if self.under.is_some() && !self.coping {
                     // a resting stone's underside leaves its bed no
-                    // shallower than 45°: from `UNDER_FROM` in from the face
-                    // it rises at least as fast as a 45° bevel, and where
-                    // the dome is steeper the dome stays (a convex dome,
-                    // past the crossing, only steepens), so the crack under
-                    // it is never roofed by a shallow shelf
+                    // shallower than 45°: a floor rising from the bed at
+                    // 45° toward each face from `under_from` in lifts
+                    // every point under it (one plane for the whole ring,
+                    // so nothing folds); where the dome is steeper the
+                    // dome stays (a convex dome, past the crossing, only
+                    // steepens). The floor stays under the middle.
                     let d = if lat < 0.0 { y - self.y0 } else { self.y1 - y };
-                    let w = ((self.ctr[1] - p[1]) / (0.5 * half_h)).clamp(0.0, 1.0);
-                    // (the bevel starts low enough on a short stone to
-                    // stay under its middle: never a flat shelf there)
-                    let from = self.under_from.min(0.95 * (self.ctr[1] - p[1]).max(0.0));
-                    let bevel = p[1] + w * (from - d).max(0.0);
-                    z = z.max(bevel);
+                    let from = self.under_from.min(0.9 * (self.ctr[1] - zlo));
+                    z = z.max(zlo + (from - d).max(0.0));
                 }
                 pos.push([t, y, z.max(zlo - 1.0)]);
             }
