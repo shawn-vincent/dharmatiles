@@ -428,19 +428,33 @@ fn entry_paths(tile: &Tile) -> Vec<String> {
     out
 }
 
-/// `lib:tiles/test/flat-1x1.kdl` → `db/test/flat-1x1-db.stl`; a disk path
-/// keeps its folders below `tiles/`, if it has one.
+/// `lib:tiles/test/flat-1x1.kdl` → `db/test/flat-1x1-db.stl`; a relative
+/// disk path keeps its folders below `tiles/` (all of them if it has
+/// none), resolved so the result always stays inside `<system>/`: a `..`
+/// that would leave it is dropped, and an absolute path keeps none.
 fn out_path(path: &str, name: &str, system: &str) -> PathBuf {
     let p = path.strip_prefix(LIB).unwrap_or(path).replace('\\', "/");
     let rel = p.rsplit_once("tiles/").map_or(p.as_str(), |(_, r)| r);
-    let dir = rel.rsplit_once('/').map_or("", |(d, _)| d);
-    let stem = Path::new(rel)
-        .file_stem()
-        .map_or_else(|| name.to_owned(), |s| s.to_string_lossy().into_owned());
-    let mut out = PathBuf::from(system);
-    if !dir.is_empty() && !dir.starts_with('/') && !dir.contains(':') {
-        out.push(dir);
+    let (dir, file) = rel.rsplit_once('/').unwrap_or(("", rel));
+    let mut folders: Vec<&str> = Vec::new();
+    if !dir.starts_with('/') && !dir.contains(':') {
+        for f in dir.split('/') {
+            match f {
+                "" | "." => {}
+                ".." => {
+                    folders.pop();
+                }
+                f => folders.push(f),
+            }
+        }
     }
+    let stem = Path::new(file)
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .filter(|s| !s.is_empty() && s != "." && s != "..")
+        .unwrap_or_else(|| name.replace(['/', '\\', ':'], "-"));
+    let mut out = PathBuf::from(system);
+    out.extend(folders);
     out.push(format!("{stem}-{system}.stl"));
     out
 }
@@ -456,5 +470,42 @@ mod tests {
             PathBuf::from("db/test/flat-1x1-db.stl")
         );
         assert_eq!(out_path("my.kdl", "x", "db"), PathBuf::from("db/my-db.stl"));
+    }
+
+    #[test]
+    fn out_paths_stay_inside_the_system_folder() {
+        // was: db/../../t/evil/f-db.stl, outside out/
+        assert_eq!(
+            out_path("tiles/../../t/evil/f.kdl", "a", "db"),
+            PathBuf::from("db/t/evil/f-db.stl")
+        );
+        assert_eq!(
+            out_path("../t/evil/f.kdl", "a", "db"),
+            PathBuf::from("db/t/evil/f-db.stl")
+        );
+        assert_eq!(
+            out_path("a/../../../f.kdl", "a", "db"),
+            PathBuf::from("db/f-db.stl")
+        );
+        assert_eq!(
+            out_path("/abs/proj/f.kdl", "a", "db"),
+            PathBuf::from("db/f-db.stl")
+        );
+        assert_eq!(
+            out_path("C:\\proj\\f.kdl", "a", "db"),
+            PathBuf::from("db/f-db.stl")
+        );
+        assert_eq!(
+            out_path("dir/", "ü/../../x", "db"),
+            PathBuf::from("db/dir/ü-..-..-x-db.stl")
+        );
+        for p in ["tiles/../../t/evil/f.kdl", "../../x.kdl", "/x/../../y.kdl"] {
+            let o = out_path(p, "a", "db");
+            assert!(
+                o.components()
+                    .all(|c| matches!(c, std::path::Component::Normal(_))),
+                "{p} → {o:?}"
+            );
+        }
     }
 }
