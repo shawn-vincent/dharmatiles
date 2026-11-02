@@ -291,6 +291,9 @@ pub struct Grown {
     pub clump_cuts: usize,
     pub wood_cut_mm3: f64,
     pub slivers: usize,
+    pub leaves_placed: usize,
+    pub leaves_culled: usize,
+    pub leaves_cull_rounds: usize,
     pub clump_cut_mm3: f64,
     pub leaves: usize,
 }
@@ -539,8 +542,16 @@ impl Tree {
                         .map(|(k, m)| form::solid(lslots.get(u32::try_from(k).unwrap_or(0)), m))
                         .collect::<Result<_, _>>()
                         .map_err(LookError::build)?;
-                    grown.leaves = ls.len();
-                    parts.push(union(&ls).map_err(LookError::build)?);
+                    let ids: Vec<u32> = (0..n).map(|k| lslots.get(k).id()).collect();
+                    let base = [wood.clone(), crown_solid.clone(), footing.clone()];
+                    let (kept, cull) = cull_leaves(&base, ls, &ids)?;
+                    grown.leaves_placed = placed.len();
+                    grown.leaves_culled = cull.culled;
+                    grown.leaves_cull_rounds = cull.rounds;
+                    grown.leaves = kept.len();
+                    if !kept.is_empty() {
+                        parts.push(union(&kept).map_err(LookError::build)?);
+                    }
                 }
             }
             parts.push(crown_solid);
@@ -628,6 +639,80 @@ fn fill_pockets(scene: &mut Scene, solid: Solid) -> Result<(Solid, usize), LookE
         );
     }
     Ok((union(&parts).map_err(LookError::build)?, plugs.len()))
+}
+
+/// A leaf may hang this much of its own surface, mm², before it is culled.
+const LEAF_OVERHANG_MM2: f64 = 0.05;
+
+/// What [`cull_leaves`] did.
+struct Cull {
+    culled: usize,
+    rounds: usize,
+}
+
+/// The leaves (with their slot IDs) that print: the tree (`base`: wood,
+/// clumps and the footing they stand on, plus every leaf) goes through
+/// the gate's audit, and a leaf goes if more than [`LEAF_OVERHANG_MM2`]
+/// of its own surface hangs past the layer-reach rule, or if none of it
+/// is left in the written body (a blade that does not join the crown).
+/// Repeated until a round culls nothing (a leaf may have stood on one
+/// that went). Kept leaves stay in placement order.
+fn cull_leaves(
+    base: &[Solid],
+    mut leaves: Vec<Solid>,
+    ids: &[u32],
+) -> Result<(Vec<Solid>, Cull), LookError> {
+    const MAX_ROUNDS: usize = 4;
+    let printer = dt_kit::Printer::new(0.45, 0.2, 55.0, 0.2);
+    let mut ids: Vec<u32> = ids.to_vec();
+    let mut cull = Cull {
+        culled: 0,
+        rounds: 0,
+    };
+    while cull.rounds < MAX_ROUNDS && !leaves.is_empty() {
+        cull.rounds += 1;
+        let mut all = base.to_vec();
+        all.extend(leaves.iter().cloned());
+        let m = union(&all).map_err(LookError::build)?.mesh();
+        // original ID of each input triangle
+        let mut tri_id = vec![u32::MAX; m.triangles.len()];
+        for r in 0..m.run_original_id.len() {
+            let (a, b) = (m.run_index[r] as usize / 3, m.run_index[r + 1] as usize / 3);
+            for t in &mut tri_id[a..b.min(m.triangles.len())] {
+                *t = m.run_original_id[r];
+            }
+        }
+        let (ex, au) = dt_kit::audit(&m, [1e4, 1e4], &printer);
+        let mut hang = vec![0.0; ids.len()];
+        let mut seen = vec![false; ids.len()];
+        let mut by_id: std::collections::HashMap<u32, usize> = std::collections::HashMap::new();
+        for (k, &id) in ids.iter().enumerate() {
+            by_id.insert(id, k);
+        }
+        for (t, &src) in ex.source.iter().enumerate() {
+            let Some(&k) = tri_id.get(src as usize).and_then(|id| by_id.get(id)) else {
+                continue;
+            };
+            seen[k] = true;
+            if au.overhang[t] {
+                let [p, q, r] = ex.mesh.triangles[t].map(|i| ex.mesh.positions[i as usize]);
+                hang[k] += 0.5 * graph::norm(graph::cross(graph::sub(q, p), graph::sub(r, p)));
+            }
+        }
+        let keep: Vec<bool> = (0..ids.len())
+            .map(|k| seen[k] && hang[k] <= LEAF_OVERHANG_MM2)
+            .collect();
+        let gone = keep.iter().filter(|&&k| !k).count();
+        if gone == 0 {
+            break;
+        }
+        cull.culled += gone;
+        let mut it = keep.iter();
+        leaves.retain(|_| *it.next().unwrap_or(&false));
+        let mut it = keep.iter();
+        ids.retain(|_| *it.next().unwrap_or(&false));
+    }
+    Ok((leaves, cull))
 }
 
 /// A box of half-width `r` round `at`, from `z0` to `z1`: the footing
@@ -817,6 +902,9 @@ impl Look for Tree {
             ("tree.clump_cut_mm3", gr.clump_cut_mm3),
             ("tree.wood_cut_mm3", gr.wood_cut_mm3),
             ("tree.slivers_dropped", gr.slivers as f64),
+            ("tree.leaves_placed", gr.leaves_placed as f64),
+            ("tree.leaves_culled", gr.leaves_culled as f64),
+            ("tree.leaves_cull_rounds", gr.leaves_cull_rounds as f64),
             ("tree.leaves", gr.leaves as f64),
             ("tree.x_mm", b.at[0]),
             ("tree.y_mm", b.at[1]),

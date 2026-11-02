@@ -192,6 +192,15 @@ pub struct Slots {
     len: u32,
 }
 
+impl Slot {
+    /// Its original (source) ID: the `run_original_id` of the triangles
+    /// it made, in any mesh built from it.
+    #[must_use]
+    pub fn id(&self) -> u32 {
+        self.id
+    }
+}
+
 impl Slots {
     /// The `i`-th slot.
     ///
