@@ -123,9 +123,11 @@ CRUMB_RETRY_MM   = 6.0         # times, each after the pile has grown this much 
                                # them, before they are left as a notch (left at once: a pit
                                # in the plateau)
 SNAP_MM          = 3.5         # footprints this close to a contact plane reach it
-COLUMN_STEP_MM   = (0.0, 1.6)  # each column stands back from its outline this much (N: they
-STONE_STEP_MM    = (0.0, 0.8)  # jut and recede), each stone this much more than the one under it
-RIM_SETBACK_MM   = (0.0, 1.0)  # a column on a tile-boundary wall stands back from it this
+COLUMN_STEP_MM   = ((0.0, 0.6), (2.5, 4.5))  # each column stands back from its outline about
+COLUMN_STEP_MAX  = 0.3         # flush or well back, half and half (N: they jut and recede
+STONE_STEP_MM    = (0.2, 1.0)  # boldly), at most this × its depth less 4 mm, each stone this much more
+                               # than the one under it (each course reads as a block)
+RIM_SETBACK_MM   = (0.0, 0.6)  # a column on a tile-boundary wall stands back from it this
                                # much (shrunk, not cut): the face steps in and out (more
                                # bares the core, CORE_RIM_MM in, down the joints)
 MAX_ROCKS        = 400
@@ -148,12 +150,14 @@ COLUMN_SHARE     = 0.6         # stones sharing this share of each one's footpri
                                # one column: its face planes are chosen once, for all of them
 JOINT_OVERLAP_MM = 0.03        # rock footprints overlap their neighbours this much
 FOOTPRINT_SIMPLIFY_MM = 0.45   # footprint outline straightened to this tolerance
-CHIP_DEG         = 40.0        # every arris sharper than this (but the underside's) broken (N):
-CHIP_MM          = (0.25, 0.9) # a row of flat chips knocked this deep off it…
-CHIP_LEN_MM      = (1.5, 5.0)  # …each this long, running out at its ends over CHIP_RUN × its
-CHIP_RUN         = 2.5         # depth (a flake scar; at the upper end of a steep edge at 45°:
-                               # no ceiling), overlapping the last…
-CHIP_SKIP_P      = 0.1         # …now and then a stretch left sharp
+CHIP_DEG         = (60.0, 40.0)  # an arris sharper than this (but the underside's) broken (N):
+CHIP_MM          = (0.5, 1.1)  # now and then a chip knocked this deep off it, one clean
+CHIP_LEN_MM      = (3.0, 7.0)  # plane this long (its ends at 45°: at the upper end of a steep
+CHIP_GAP_MM      = (1.5, 6.0)  # arris a slope, never a ceiling), the next this far on; none
+                               # overlapping another (fewer, decisive: a conchoidal break)…
+CHIP_LIP_NZ      = -0.1        # …but an arris over a face turned down more than this (a lip,
+CHIP_LIP_MM      = (0.25, 0.9)  # sharper than CHIP_DEG[1]: the printer would hang it) worn all
+                               # along by a row of overlapping chips this deep (as long, by half)
 ROCK_GRAIN_MM    = 0.05        # grain amplitude on scree stones
 FACE_GRAIN_MM    = 0.25        # grain amplitude on cliff stones: deep enough to catch
 FACE_GRAIN_LEN_MM = 1.0        # …a drybrush, ≈ 2 lines across so it prints (rides on the planes)
@@ -200,6 +204,7 @@ CORE_SET_MM      = 2.0         # a solid core under the pile: in this far from o
 CORE_RIM_MM      = 2.8         # …this far from a boundary wall (behind its deepest sub-face)…
 CORE_END_RIM_MM  = 0.5         # …(from a band's end planes only this: the joints there
                                # are backed, never see-through)…
+CORE_DEEP_MM     = 12.0        # (behind a column standing back, as far back again, if it is this deep)
 CORE_DROP_MM     = 0.5         # …and this far under every top: where rounded corners meet,
                                # the gap is a dark recess, never a hole
 #   block faces: one crack network per open column face (the boundary's too),
@@ -874,7 +879,8 @@ class Column:
     cuts: list = field(default_factory=list)   # (n, off, face direction): n·x ≥ off taken
     setback: dict = field(default_factory=dict)
     corner_mm: float = 1.0
-    step: float = 0.0        # its faces stand back this much (COLUMN_STEP_MM)…
+    step: float = 0.0        # its faces stand back this much (COLUMN_STEP_MM; once planned,
+                             # as far as any did)…
     back: dict = field(default_factory=dict)     # …each stone's this much more {id: mm}
     tops: int = 0            # cracks run on across its stones' bare tops
     refused: set = field(default_factory=set)    # its planes a stone refused (rock_manifold)
@@ -926,7 +932,7 @@ def columns(rng, placed, form, S, zone):
         cols.append(Column(g, poly, zlo, zhi, float(zone(poly.centroid.x)[0]),
                            _open_faces(poly, form, S, zlo, zhi), corner_mm=rng.uniform(*CORNER_MM),
                            setback={rim: rng.uniform(*RIM_SETBACK_MM) for rim in form.rims},
-                           step=rng.uniform(*COLUMN_STEP_MM), back=back))
+                           step=np.interp(rng.random(), (0.0, 0.5, 0.5, 1.0), np.ravel(COLUMN_STEP_MM)), back=back))
     return cols
 
 
@@ -1022,7 +1028,8 @@ class _Cutter:
         depth = (to_mesh(self.solid).vertices @ n).max() - n @ p
         if depth >= 0.3:
             k = np.linalg.norm(n)
-            self.take(n / k, float(n @ (p + n * max(depth - lim - extra, 0.0))) / k, d)
+            return self.take(n / k, float(n @ (p + n * max(depth - lim - extra, 0.0))) / k, d)
+        return False
 
 
 def _plan_column(rng, c, form):
@@ -1042,6 +1049,9 @@ def _plan_column(rng, c, form):
     if hull.is_empty():
         return
     c.reach = to_mesh(hull).vertices
+    step, c.step = c.step, 0.0
+    if form.round:                  # (none round a free-standing mass: its columns meet
+        c.back = {}                 # askew, a step bares a neighbour's side as a ceiling)
     if c.carries:
         return
     hull = _Cutter(hull)
@@ -1049,8 +1059,10 @@ def _plan_column(rng, c, form):
         L = np.hypot(*(p1 - p0))
         if rim:
             continue
-        sb = min(c.step, 0.12 * np.ptp(c.reach @ m))   # (stood back: one plane, the face's own)
-        hull.take_back(m, np.r_[p0, c.zlo] - 10.0 * m, 0.0, sb, d=m)
+        sb = 0.0 if form.round else \
+            max(min(step, COLUMN_STEP_MAX * (np.ptp(c.reach @ m) - 4.0)), 0.0)   # (stood back: one plane)
+        if hull.take_back(m, np.r_[p0, c.zlo] - 10.0 * m, 0.0, sb, d=m):
+            c.step = max(c.step, sb)
         p0, p1 = p0 - sb * m[:2], p1 - sb * m[:2]
         if L < 3.0 or rng.random() > DRESS_P:
             continue
@@ -1326,7 +1338,7 @@ def _plan_face(rng, p0, t, L, z0, z1, joints, cracks, rim):
     return Face(p0, t, m, L, z0, G.reshape(U.shape), F, list(cracks), rim)
 
 
-def _relief(rock, faces, core=False):
+def _relief(rock, faces, core=None):
     """The stone (or the core) cut back on its column's open faces (N), in
     two passes: its surface found by rays along d from a grid of the face
     plane through its front (RELIEF_GRID_MM; the cracks' CRACK_GRID_MM),
@@ -1337,7 +1349,9 @@ def _relief(rock, faces, core=False):
     face turns away; never closer than CRACK_WALL_MM to its back.  The
     `core` takes only the cracks on the tile boundary (there it backs the
     joints: set back further, they would open), none past the faces' ends
-    nor far off their planes, and its front smoothed, not fitted a plane."""
+    nor far off their planes nor (another face's) by the tile boundary
+    (`core` = the tile's (W, H): a face running out there would bare the
+    joints behind), and its front smoothed, not fitted a plane."""
     for fc, a in ((fc, a) for a in (np.radians(SHEAR_DEG), 0.0) for fc in faces
                   if not (a and fc.rim and core)):
         g = RELIEF_GRID_MM if a else CRACK_GRID_MM
@@ -1372,9 +1386,9 @@ def _relief(rock, faces, core=False):
         back[ri[nxt]] = d[nxt]
         front, back, al, nz = (a_.reshape(U.shape) for a_ in (front, back, al, nz))
         hit = ~np.isnan(front)
-        # (slots on its face, and on over the chamfers and rounded edges
-        # into the joints; not on its underside)
-        w = np.where(hit & (nz > -0.5), _rl._smooth01((al - 0.35) / 0.3), 0.0)
+        # (slots on its face, and on over the chamfers and the seat bevels
+        # into the joints, full depth: no shallow end; not on its underside)
+        w = np.where(hit & (nz > -0.85), _rl._smooth01((al - 0.35) / 0.3), 0.0)
         M = ndimage.binary_fill_holes(w > 0.5)
         if M.sum() < 50:
             continue
@@ -1388,6 +1402,10 @@ def _relief(rock, faces, core=False):
         F = F * _rl._smooth01(np.minimum(U, fc.L - U) / FACET_END_MM)
         if core:
             off = _rl._smooth01(RELIEF_OFF_MM - np.abs(sm + np.cos(a) * (1.0 - front)))
+            if not fc.rim:
+                xy = (O + np.nan_to_num(front).reshape(-1, 1) * d3)[:, :2]
+                bd = np.minimum(xy, np.array(core) - xy).min(1).reshape(U.shape)
+                off = off * _rl._smooth01(bd - 1.0)
             F, G = F * off, G * off
         # the sub-faces: planes behind the stone's face (a plane fitted to it;
         # the core's front smoothed) — all in front of one cut away flat, over
@@ -1434,7 +1452,8 @@ def rock_manifold(rng, r, c, form, S, support, seed, crng):
               (r.cells[:, -1] if hi else r.cells[:, 0])
         if row.sum() >= 0.95 * r.cells.any(axis=ax).sum() > 0:
             setback[(ax, hi)] = sb
-    rock = _chamfer_corners(rock, poly, c.corner_mm)
+    rock = _chamfer_corners(rock, poly, c.corner_mm,     # (none under a stone resting on it)
+                            lambda q: occupied(form, S, [[*q, r.top_z(*q) + 0.4]])[0])
     zb = rock.bounding_box()[2]
     V = to_mesh(rock).vertices
     zlo, ztop_r = V[:, 2].min(), V[:, 2].max()
@@ -1451,16 +1470,23 @@ def rock_manifold(rng, r, c, form, S, support, seed, crng):
             sh = d * min(0.0, (V @ d).max() - (c.reach @ d).max())
             if np.linalg.norm(sh) <= 0.3:
                 sh = 0.0 * d
-            if not cutter.take(n, off + float(n @ (sh - d * c.back.get(id(r), 0.0))), strict=False):
+            bk = min(c.back.get(id(r), 0.0), max(COLUMN_STEP_MAX * (np.ptp(c.reach @ d) - 4.0), 0.0))
+            if not cutter.take(n, off + float(n @ (sh - d * bk)), strict=False):   # (a thin one: less)
                 c.refused.add(k)
     # its own top front edge: a 45° V under the stone it carries (the joint's
-    # groove) or, on an open ledge top, a broken shoulder
+    # groove: anywhere along the edge, a shoulder there would hang it; none
+    # where that stone reaches on across the edge: a void under it) or, on
+    # an open ledge top, a broken shoulder
     loaded = occupied(form, S, [[*r.poly.centroid.coords[0], ztop_r + 0.4]])[0]   # (a stone on it)
     if form.ztop is None or ztop_r < form.ztop - 0.5:
         for p0, p1, m, rim in faces:
             if rim:
                 continue
-            if loaded:                        # (one flat plane along the edge; none on
+            Q = p0 + np.linspace(0.05, 0.95, 7)[:, None] * (p1 - p0) - m[:2]
+            if occupied(form, S, np.c_[Q + 2.0 * m[:2], r.top_z(*Q.T) + 0.4]).any():
+                continue                      # (a stone resting across it: no groove under it)
+            if loaded or occupied(form, S, np.c_[Q, r.top_z(*Q.T) + 0.4]).any():
+                # (one flat plane along the edge; none on
                 if np.hypot(*(p1 - p0)) < JOINT_MIN_MM:   # a short one: a scoop)
                     continue
                 dep = rng.uniform(*JOINT_MM)
@@ -1486,16 +1512,17 @@ def rock_manifold(rng, r, c, form, S, support, seed, crng):
                     EDGE_CHIP_FRAC=0.0):
         rock, _ = _rl.chip_corners_edges(rng, rock.translate([0, 0, -zb]), max(r.D, 4.0))
     # (none on the tile boundary: the next tile meets it there; nor along a
-    # joint under a stone: it would undercut the seat bevel resting there)
-    ctr = np.array(r.poly.centroid.coords[0])
-
+    # joint under a stone, anywhere over it: it would undercut the stone resting there)
     def keep(n1, n2, P):
-        q = P[:2] + (ctr - P[:2]) / max(np.hypot(*(ctr - P[:2])), 1e-6)    # (1 mm in)
+        h = (n1 + n2)[:2]
+        Q = [P[:2] - k * h / max(np.hypot(*h), 1e-6) for k in (0.0, 1.0)]    # (on it, 1 mm in)
         return (any(abs(n[ax]) > 0.9 and min(P[ax], (form.W, form.H)[ax] - P[ax]) < 1.5
                     for n in (n1, n2) for ax in (0, 1))
                 or abs(np.cross(n1, n2)[2]) < 0.6 * np.linalg.norm(np.cross(n1, n2))
-                and P[2] > r.top_z(*P[:2]) - 1.6 and occupied(form, S, [[*q, r.top_z(*q) + 0.4]])[0])
-    rock = chip_edges(crng, rock.translate([0, 0, zb]), CHIP_MM, keep)   # (seated: none below)
+                and P[2] > r.top_z(*P[:2]) - 1.6
+                and occupied(form, S, [[*q, r.top_z(*q) + 0.4] for q in Q]).any())
+    rock = rock.translate([0, 0, zb])
+    rock = _chipped(rock, chip_edges(crng, rock, CHIP_MM, keep))     # (seated: none below)
     rock = _relief(rock, c.faces)
     rock, k = _top_cracks(rng, rock, r, c.faces, form, S)
     c.tops += k
@@ -1571,19 +1598,22 @@ def _fit_tile(rock, form, setback):
 
 
 def chip_edges(rng, rock, dep_mm, keep=None):
-    """Break every arris sharper than CHIP_DEG (but the underside's) as N's
-    are broken: along it a row of flat chips, each a facet knocked dep_mm
-    deep (drawn per chip, its plane tilted a little either way) CHIP_LEN_MM
-    long, its ends running out along the edge over CHIP_RUN × its depth
-    (the upper end of a steep arris's chip at 45°: a slope, never a
-    ceiling), each overlapping the last, the odd stretch left sharp.  Only
-    the arris: a chip reaches no further over the faces than its own facet.
-    None on an arris `keep`(n1, n2, a point) holds.  Taken off at once."""
+    """The chips that break the arrises sharper than CHIP_DEG (but the
+    underside's) as N's are broken: along each, now and then, one flat
+    facet knocked dep_mm deep (drawn per chip, its plane tilted a little
+    either way) CHIP_LEN_MM long, its ends running out along the edge at 45°
+    (no ceiling), CHIP_GAP_MM to the next and clear of every other chip (the
+    longest arrises first): a few crisp scars, not a crumpled row.  Only the
+    arris: a chip reaches no further over the faces than its own facet.  None
+    on an arris `keep`(n1, n2, a point) holds.  An arris whose lower face
+    leans out (an underside lip) gets instead a close run of small
+    overlapping chips that trim the lip back.  Returns their union (None:
+    no chip), taken off before the relief: flat facets, sharp edges."""
     t = _rl.to_trimesh(rock)
     if not len(t.faces):
-        return rock
+        return None
     fn, arris = t.face_normals, {}
-    for e in np.nonzero(t.face_adjacency_angles > np.radians(CHIP_DEG))[0]:
+    for e in np.nonzero(t.face_adjacency_angles > np.radians(min(CHIP_DEG)))[0]:
         n1, n2 = fn[t.face_adjacency[e]]
         if min(n1[2], n2[2]) < -0.5 or n1 @ n2 < -0.98:
             continue                                   # base edges (seat, roof), knife edges
@@ -1592,35 +1622,46 @@ def chip_edges(rng, rock, dep_mm, keep=None):
             continue
         key = (*np.round(n1, 2), *np.round(n2, 2), round(float(n1 @ a[0]), 1), round(float(n2 @ a[0]), 1))
         arris.setdefault(key, (n1, n2, []))[2].extend(a)
-    chips = []
-    for n1, n2, P in arris.values():
+    chips, done = [], []                               # (done: each chip's centre, half length)
+    for n1, n2, P in sorted(arris.values(), key=lambda v: -np.ptp(np.asarray(v[2]), 0).max()):
         e = np.cross(n1, n2)
         if np.linalg.norm(e) < 1e-6:
             continue
         e /= np.linalg.norm(e)
         P = np.asarray(P)
         sv = P @ e
-        o, s, s1 = P[0] - e * sv[0], sv.min() - rng.uniform(0.0, 1.0), sv.max()
+        o, s, s1 = P[0] - e * sv[0], sv.min() + rng.uniform(0.0, CHIP_GAP_MM[1]), sv.max()
         nb = (n1 + n2) / np.linalg.norm(n1 + n2)
         U = [-u * np.sign(u @ (nb - n)) for n, u in ((n1, np.cross(n1, e)), (n2, np.cross(n2, e)))]
-        k0, k1 = (1.0 if z_ > 0.3 else CHIP_RUN for z_ in (-e[2], e[2]))   # (its ends' run)
+        lip = min(n1[2], n2[2]) < CHIP_LIP_NZ
+        if lip:
+            s = sv.min() - rng.uniform(0.0, 1.0)
+        elif n1 @ n2 > np.cos(np.radians(CHIP_DEG[0])):
+            continue
         while s < s1:
-            ln, d = rng.uniform(*CHIP_LEN_MM), rng.uniform(*dep_mm)
-            ln = max(ln, (k0 + k1) * d + 0.3)
+            ln, d = (0.5 * rng.uniform(*CHIP_LEN_MM), rng.uniform(*CHIP_LIP_MM)) if lip \
+                else (rng.uniform(*CHIP_LEN_MM), rng.uniform(*dep_mm))
+            ln = min(max(ln, 2.0 * d + 0.5), s1 - s + d)
             nc = _rl._tilted(rng, nb, 12.0)
             nc /= np.linalg.norm(nc)
             w = np.cross(e, nc)
             # (how far over each face its facet reaches: the chip's width)
             T = max(d * abs(w @ u) / max(-(nc @ u), 0.05) for u in U) + 0.3
-            if rng.random() > CHIP_SKIP_P and nc[2] >= -0.3 and nc[2] - abs(e[2]) >= -1.1 and T < 4.0:
+            c = o + e * (s + 0.5 * ln)
+            if (ln > 2.0 * d + 0.3 and nc[2] >= -0.3 and nc[2] - abs(e[2]) >= -1.1 and T < 4.0
+                    and (lip or all(np.linalg.norm(c - c2) > 0.5 * ln + h2 + 0.5 for c2, h2 in done))):
                 pts = [o + e * (s + sa) + nc * r_ + w * tt for r_, lo, hi in
-                       ((-d, k0 * d, ln - k1 * d), (0.0, 0.0, ln), (1.0, -k0, ln + k1))
+                       ((-d, d, ln - d), (0.0, 0.0, ln), (1.0, -1.0, ln + 1.0))
                        for sa in (lo, hi) for tt in (-T, T)]
                 chips.append(m3d.Manifold.hull_points(np.asarray(pts, dtype=np.float32)))
-            s += ln * rng.uniform(0.4, 0.8)
-    if not chips:
-        return rock
-    out = rock - m3d.Manifold.batch_boolean(chips, m3d.OpType.Add)
+                done.append((c, 0.5 * ln))
+            s += ln * rng.uniform(0.4, 0.8) if lip else ln + rng.uniform(*CHIP_GAP_MM)
+    return m3d.Manifold.batch_boolean(chips, m3d.OpType.Add) if chips else None
+
+
+def _chipped(rock, chips):
+    """The rock less its chips (as it was if that would leave nothing)."""
+    out = rock if chips is None else rock - chips
     return rock if out.is_empty() else out
 
 
@@ -1756,14 +1797,27 @@ def _grain(rock, seed, z0):
     return rock if out.is_empty() else out
 
 
-def _core(f, S):
+def _core(f, S, cols):
     """The core: the pile's height field S set in CORE_SET_MM from every
-    open face (a flat-disc erosion) and CORE_DROP_MM under every top, its
+    open face (a flat-disc erosion; under a column standing back, that much
+    more) and CORE_DROP_MM under every top, its
     sides on the tile boundary CORE_RIM_MM in (CORE_END_RIM_MM from a band's
     ends).  Cleaving never cuts into it (it joins the support), so it shows
     only where neighbours' rounded corners leave a gap — as the gap's floor,
     never a hole through the pile — carved like the faces it lies behind."""
-    C = ndimage.grey_erosion(S, footprint=_disc(CORE_SET_MM), mode='nearest') - CORE_DROP_MM
+    C = ndimage.grey_erosion(S, footprint=_disc(CORE_SET_MM), mode='nearest')
+    for c in cols:
+        x0, y0, x1, y1 = c.poly.bounds        # (a thin column keeps its core: its joints
+        r = c.step + 0.5 * max(c.back.values(), default=0.0)     # would open through it)
+        if r > 0.5 and min(x1 - x0, y1 - y0) >= CORE_DEEP_MM:
+            cells = functools.reduce(np.logical_or, [s_.cells for s_ in c.stones])
+            ii, jj = np.nonzero(cells)
+            k = int(np.ceil((CORE_SET_MM + r) / GRID_MM))
+            w = np.s_[max(ii.min() - k, 0):ii.max() + k + 1, max(jj.min() - k, 0):jj.max() + k + 1]
+            Cw = C[w]
+            Cw[cells[w]] = np.minimum(Cw, ndimage.grey_erosion(
+                S[w], footprint=_disc(CORE_SET_MM + r), mode='nearest'))[cells[w]]
+    C = C - CORE_DROP_MM
     zb = FOOT_Z_MM - 1.5                          # under the ground
     core = _height_solid(np.maximum(C, zb + 0.05), zb, tol=0.01)
     rim = [CORE_RIM_MM if not f.rims or (ax, hi) in f.rims else CORE_END_RIM_MM
@@ -1806,11 +1860,12 @@ def _support_cone(r):
     return m3d.Manifold.hull_points(np.vstack(rings).astype(np.float32))
 
 
-def _chamfer_corners(rock, poly, d):
+def _chamfer_corners(rock, poly, d, loaded=lambda q: False):
     """Each convex vertical corner of the footprint cut off by a vertical
     plane across its bisector — where four rocks meet the seam opens into a
-    V.  Only the corner goes (a prism), so a non-convex footprint keeps its
-    arms."""
+    V — but one `loaded`(a point just in from it) holds: a stone resting
+    over it would hang a ceiling over the notch.  Only the corner goes (a
+    prism), so a non-convex footprint keeps its arms."""
     xy = _ccw(poly)[:-1]
     bb = rock.bounding_box()
     for k in range(len(xy)):
@@ -1822,6 +1877,8 @@ def _chamfer_corners(rock, poly, d):
         u1, u2 = e1 / l1, e2 / l2
         m = np.array([u1[1], -u1[0]]) + np.array([u2[1], -u2[0]])
         m /= np.linalg.norm(m)                          # outward bisector
+        if loaded(b - 0.6 * m):
+            continue
         p1 = b - u1 * min(d / max(m @ u1, 1e-6), l1)
         p2 = b + u2 * min(d / max(-(m @ u2), 1e-6), l2)
         tri = np.array([p1, p2, b + 2.0 * m])
@@ -1856,7 +1913,6 @@ def build(seed=1, form='run', cols=1, rows=1):
     tm['stack'] = time.perf_counter() - t0
     t1 = time.perf_counter()
     cols_ = columns(rng, placed, f, S, zone)
-    core = _core(f, S)
     cones = {id(r): (_support_cone(r), r.poly.bounds) for r in placed if r.z0 > FOOT_Z_MM}
     rocks, crng = [], np.random.default_rng([seed, 13])   # (chips: their own stream)
     for c in cols_:
@@ -1865,6 +1921,7 @@ def build(seed=1, form='run', cols=1, rows=1):
                for r in placed if all(r is not s_ for s_ in c.stones)):
             c.carries, c.back = True, {}
         _plan_column(rng, c, f)
+    core = _core(f, S, cols_)
     _plan_faces(np.random.default_rng([seed, 11]), cols_)   # (its own stream: the stones stay put)
     for c in cols_:
         # what a cut must not undercut: the stones resting on this column
@@ -1880,7 +1937,7 @@ def build(seed=1, form='run', cols=1, rows=1):
     # crack: on the tile boundary it lies just behind the stones) carved like
     # the faces it lies behind, and grained: never a flat panel
     faces = list({id(fc): fc for c in cols_ for fc in c.faces}.values())
-    core = _grain(_relief(core, faces, core=True), seed, FOOT_Z_MM)
+    core = _grain(_relief(core, faces, core=(W, H)), seed, FOOT_Z_MM)
     tm['rocks'] = time.perf_counter() - t1
     t2 = time.perf_counter()
     pile = m3d.Manifold.batch_boolean(rocks + [core], m3d.OpType.Add)
@@ -2015,7 +2072,7 @@ def _block_stone(rng, D):
         cut = st.trim_by_plane((-n).tolist(), -(reach - rng.uniform(0.12, 0.3) * D))
         if not cut.is_empty() and cut.volume() > 0.6 * st.volume():
             st = cut
-    st = chip_edges(rng, st, (0.05 * D, 0.12 * D))
+    st = _chipped(st, chip_edges(rng, st, (0.05 * D, 0.12 * D)))
     st, _ = _rl.chip_corners_edges(rng, st, D)
     return _rl.texture(rng, st)
 
