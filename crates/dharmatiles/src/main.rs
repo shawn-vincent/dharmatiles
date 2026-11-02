@@ -381,7 +381,7 @@ fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
             "volume_mm3": a.volume_mm3,
             "watertight": a.watertight,
             "bodies": a.bodies,
-            "dropped": a.dropped.iter().map(|d| json!({"triangles": d.triangles, "volume_mm3": d.volume_mm3})).collect::<Vec<_>>(),
+            "dropped": a.dropped.iter().map(|d| json!({"triangles": d.triangles, "volume_mm3": d.volume_mm3, "bounds": d.bounds})).collect::<Vec<_>>(),
             "voids_filled": a.voids.len(),
             "pinches_moved": a.pinches_moved,
             "collapsed": a.collapsed,
@@ -392,7 +392,7 @@ fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
         "stages": b.stages.iter().map(|s| json!({"name": s.name, "hash": format!("{:016x}", s.hash)})).collect::<Vec<_>>(),
         "build_s": built_s,
         "edge_mm": b.edge_mm,
-        "stats": b.notes.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<serde_json::Map<String, Value>>(),
+        "stats": stats(&b.notes),
     })
 }
 
@@ -412,4 +412,24 @@ fn report(errs: &[Diag]) {
     for e in errs {
         tell!("{:?}", miette::Report::new(e.clone()));
     }
+}
+
+/// The looks' notes as one JSON object. A look used twice notes the same
+/// names twice: the second is keyed `name#2`, the third `name#3`, so no
+/// entry's numbers overwrite another's.
+fn stats(notes: &[(String, f64)]) -> serde_json::Map<String, Value> {
+    let mut seen: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    notes
+        .iter()
+        .map(|(k, v)| {
+            let n = seen.entry(k.as_str()).or_default();
+            *n += 1;
+            let key = if *n == 1 {
+                k.clone()
+            } else {
+                format!("{k}#{n}")
+            };
+            (key, json!(v))
+        })
+        .collect()
 }
