@@ -31,7 +31,8 @@
 //!
 //! P5 adds the forms ([`form`]: level sets, hulls, solids from meshes,
 //! box clips, the common stone relief and 3D noise) that walls, floors
-//! and trees are made of.
+//! and trees are made of, and graphs ([`graph`]: trace by space
+//! colonisation, loft tubes along a graph with C1 forks).
 //!
 //! Kernel rules (R1, R2, R9, from `dt_geom::source`): every leaf solid takes
 //! a [`Slot`] reserved in sequence from the scene's block, so its source ID
@@ -43,6 +44,7 @@
 mod audit;
 mod field;
 pub mod form;
+pub mod graph;
 mod outline;
 mod render;
 mod scene;
