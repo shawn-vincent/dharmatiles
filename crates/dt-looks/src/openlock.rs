@@ -180,6 +180,7 @@ impl Look for OpenLock {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
     use super::*;
 
     #[test]
@@ -193,6 +194,33 @@ mod tests {
                 p.iter()
                     .any(|q| q[0] < 0.0 || q[1] < 0.0 || q[0] > 25.4 || q[1] > 25.4)
             );
+        }
+    }
+
+    /// The base alone, as built into an empty scene.
+    fn base_volume(cols: u32, rows: u32) -> f64 {
+        let frame = dt_kit::Frame::openlock(cols, rows);
+        let mut scene = Scene::new(frame, dt_kit::Seed::new(1));
+        let area = scene.whole();
+        let ctx = Ctx {
+            area: &area,
+            path: "tile/t/connector",
+            seed: dt_kit::Seed::new(1),
+            along: None,
+            at: None,
+        };
+        OpenLock::default().build(&mut scene, &ctx).unwrap();
+        scene.parts()[0].solid.volume()
+    }
+
+    #[test]
+    fn the_base_matches_the_python_library() {
+        // bases/openlock.py make_base at 25.4 mm: 3018.506 mm³ (1×1) and
+        // 15769.212 mm³ (2×2); the logo's curves are flattened a little
+        // differently, so within 0.2%
+        for (c, r, py) in [(1, 1, 3018.506), (2, 2, 15769.212)] {
+            let v = base_volume(c, r);
+            assert!((v - py).abs() / py < 0.002, "{c}x{r}: {v} vs {py}");
         }
     }
 
