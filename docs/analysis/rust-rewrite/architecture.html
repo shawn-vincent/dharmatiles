@@ -47,17 +47,17 @@
 
 <nav class="top"><div class="wrap">
   <span class="brand">dharmatiles → Rust</span>
-  <a href="https://claude.ai/artifact/GBiwhTV3inCuS3cRiWnTeQ">Overview</a>
-  <a href="https://claude.ai/artifact/2jNLv6TLfXb9KDGe1P9Qpq">The library</a>
-  <a href="https://claude.ai/artifact/TqPP2AdFA6myvCtajfsoJT">The labs</a>
-  <a href="https://claude.ai/artifact/L6b4xLyS5jvvCiv4qCMbiG">Surface variants</a>
-  <a href="https://claude.ai/artifact/UDN1YXkRKN6ALB5CT2oBSf">Mechanisms</a>
-  <a href="https://claude.ai/artifact/PL6bEs3ypyDCqmfRLAG77g" aria-current="page">Target architecture</a>
-  <a href="https://claude.ai/artifact/Faqo5xnsCW9MHe6F2UNDtW">Rust feasibility</a>
-  <a href="https://claude.ai/artifact/CV72ayvAdd45791Jo3JZrP">Project layout</a>
-  <a href="https://claude.ai/artifact/CTFfwg21B8MWe5oEaX61pD">Project plan</a>
-  <a href="https://claude.ai/artifact/B2iunR3sEpTndvL2MhFBdt">Changes</a>
-  <a href="https://claude.ai/artifact/4qGq8BTBfjJYrv4NnrBgxz">Notes</a>
+  <a href="https://claude.ai/artifact/RowGQy7yrFHtD16YAA3gDi">Overview</a>
+  <a href="https://claude.ai/artifact/H9pvikhVxwCPDtx7kMUDrM">The library</a>
+  <a href="https://claude.ai/artifact/C1FVwwwvfhnvhoEjNLcKED">The labs</a>
+  <a href="https://claude.ai/artifact/5p4Hqcta6ym615dSPJ9u6V">Surface variants</a>
+  <a href="https://claude.ai/artifact/CAoDRjGEFcwvxCJEGJQ4BY">Mechanisms</a>
+  <a href="https://claude.ai/artifact/9aQf5yzrSPvyzd6HLoLU4J" aria-current="page">Target architecture</a>
+  <a href="https://claude.ai/artifact/SMKxXEeHGb7jps5nfFaQfw">Rust feasibility</a>
+  <a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux">Project layout</a>
+  <a href="https://claude.ai/artifact/SMHZGZ9KkG8rpvKeqbvxdj">Project plan</a>
+  <a href="https://claude.ai/artifact/GSS8KXJCQofDrkFUVHHVsM">Changes</a>
+  <a href="https://claude.ai/artifact/LyeG2qZejv69yK1UUgTXaZ">Notes</a>
 </div></nav>
 
 <div class="wrap">
@@ -68,7 +68,7 @@
 </header>
 
 <div class="rev">
-  <p><strong>What changed in revision 2.</strong> The first draft proposed that documents be written directly in seven verbs (<code>scatter</code>, <code>trace</code>, <code>build</code>, <code>relieve</code>, <code>seat</code>, <code>fill</code>, <code>pack</code>). Walking each lab's approved result through those verbs showed that every lab needed 7 to 11 extra constructs to reproduce, and two verbs merged mechanisms that really differ. The verbs now live one layer down, inside the engine. Documents compose looks. The <a href="https://claude.ai/artifact/B2iunR3sEpTndvL2MhFBdt">change log</a> lists every edit with its evidence.</p>
+  <p><strong>What changed in revision 2.</strong> The first draft proposed that documents be written directly in seven verbs (<code>scatter</code>, <code>trace</code>, <code>build</code>, <code>relieve</code>, <code>seat</code>, <code>fill</code>, <code>pack</code>). Walking each lab's approved result through those verbs showed that every lab needed 7 to 11 extra constructs to reproduce, and two verbs merged mechanisms that really differ. The verbs now live one layer down, inside the engine. Documents compose looks. The <a href="https://claude.ai/artifact/GSS8KXJCQofDrkFUVHHVsM">change log</a> lists every edit with its evidence.</p>
 </div>
 
 <h2>Two layers</h2>
@@ -161,7 +161,7 @@
   </div>
   <div class="pbpanel" id="pbs-panel" aria-live="polite"></div>
 </div>
-<p class="small">The plan pass is cheap: 2D work and fields, typically well under a second. That makes it the natural live preview while editing (see <a href="https://claude.ai/artifact/Faqo5xnsCW9MHe6F2UNDtW">feasibility</a>). It also gives Shawn's lazy-model question a concrete answer. Plans are computed for everything up front, solids are built eagerly once, and both are cached by path, seed and inputs.</p>
+<p class="small">The plan pass is cheap: 2D work and fields, typically well under a second. That makes it the natural live preview while editing (see <a href="https://claude.ai/artifact/SMKxXEeHGb7jps5nfFaQfw">feasibility</a>). It also gives Shawn's lazy-model question a concrete answer. Plans are computed for everything up front, solids are built eagerly once, and both are cached by path, seed and inputs.</p>
 
 <h2>Regions: the paint bucket</h2>
 <p>This demo uses the conversation's checkerboard example: four lines and five fill points. Click the tile to add or remove fill points, and toggle which lines the region names. The last button shows that a band needs no new concept: it is two offset lines and one fill point.</p>
@@ -192,7 +192,7 @@
 </div>
 
 <h2>Example documents</h2>
-<p>These use <a href="https://kdl.dev">KDL</a>, a small node-based document format with a Rust parser that preserves comments and layout when a program edits the file. That matters for the GUI and for agents (<a href="https://claude.ai/artifact/Faqo5xnsCW9MHe6F2UNDtW#hosting">why KDL</a>). Numbers across are in squares and numbers up in h, with h = 40 mm here. Each document was checked against the lab it reproduces; the comments give the lab's value where it helps.</p>
+<p>These use <a href="https://kdl.dev">KDL</a>, a small node-based document format with a Rust parser that preserves comments and layout when a program edits the file. That matters for the GUI and for agents (<a href="https://claude.ai/artifact/SMKxXEeHGb7jps5nfFaQfw#hosting">why KDL</a>). Numbers across are in squares and numbers up in h, with h = 40 mm here. Each document was checked against the lab it reproduces; the comments give the lab's value where it helps.</p>
 <div class="grid2">
 <div><h3>A shore tile (shorelab)</h3>
 <pre class="kdl"><code><span class="kw">tile</span> shore cols=2 rows=2 {
@@ -308,7 +308,7 @@
 <div class="grid3">
   <div class="card"><span class="verdict v-keep">recommend</span><h3>A list of tagged solids</h3><p class="small">The scene is an ordered list of solids, each with a material, a kind and an owner path. The mesh is the common format. Queries such as <code>top(x,y)</code> are cached per snapshot, and a lifted heightfield answers them directly without rasterising its mesh. Combining solids into one mesh happens once, at export. Inside a built-in, booleans are used freely; the cliff does hundreds.</p></div>
   <div class="card"><span class="verdict v-keep">recommend</span><h3>Plan lazily, build eagerly</h3><p class="small">Plans and fields are cheap and computed on demand. Solids are built once, in stack order, and cached by (path, seed, hash of inputs). Most real operations are global (Poisson saturation, gravity stacking, geodesic distance), so building on demand point by point would recompute the world.</p></div>
-  <div class="card"><span class="verdict v-keep">recommend</span><h3>Four kernels</h3><p class="small"><strong>Grid</strong>: f32 fields, EDT, morphology, blur. <strong>Plan</strong>: 2D polygons, offsets, Voronoi. <strong>Mesh</strong>: Manifold for booleans, hull, extrude, slice, refine, simplify, level sets. <strong>Rays</strong>: a BVH. Crate choices are on the <a href="https://claude.ai/artifact/Faqo5xnsCW9MHe6F2UNDtW">feasibility page</a>.</p></div>
+  <div class="card"><span class="verdict v-keep">recommend</span><h3>Four kernels</h3><p class="small"><strong>Grid</strong>: f32 fields, EDT, morphology, blur. <strong>Plan</strong>: 2D polygons, offsets, Voronoi. <strong>Mesh</strong>: Manifold for booleans, hull, extrude, slice, refine, simplify, level sets. <strong>Rays</strong>: a BVH. Crate choices are on the <a href="https://claude.ai/artifact/SMKxXEeHGb7jps5nfFaQfw">feasibility page</a>.</p></div>
 </div>
 
 <h2>Language decisions</h2>
@@ -328,7 +328,7 @@
 </ol>
 
 <h2>Rust crate layering</h2>
-<div class="rev"><p><strong>Revision 3.</strong> Revision 2 sketched fifteen crates. The <a href="https://claude.ai/artifact/CV72ayvAdd45791Jo3JZrP">project layout page</a> cuts that to six, keeping only the boundaries that pay: the document model builds without geometry, looks can only use the kit's public operations, every native dependency sits in the kernel crate, and evaluation is shared by every front end. The CLI and MCP server are one program; the GUI is a Tauri app in <code>app/</code>.</p></div>
+<div class="rev"><p><strong>Revision 3.</strong> Revision 2 sketched fifteen crates. The <a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux">project layout page</a> cuts that to six, keeping only the boundaries that pay: the document model builds without geometry, looks can only use the kit's public operations, every native dependency sits in the kernel crate, and evaluation is shared by every front end. The CLI and MCP server are one program; the GUI is a Tauri app in <code>app/</code>.</p></div>
 <figure class="diagram">
 <svg viewBox="0 0 1080 310" role="img" aria-label="Crate layers from foundation to front ends: dt-geom; dt-kit; dt-looks and dt-doc; dt-eval; front ends dharmatiles (CLI, MCP, preview), the Tauri app, dt-wasm and dt-py.">
   <g font-family="IBM Plex Sans, sans-serif" font-size="12" fill="currentColor" id="crates"></g>

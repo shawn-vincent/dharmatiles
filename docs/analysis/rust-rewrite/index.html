@@ -17,21 +17,34 @@
   .set dt { font: 600 12px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding-top: 3px; }
   .set dd { margin: 0; }
   @media (max-width: 560px) { .set { grid-template-columns: minmax(0,1fr); } }
+  .status { margin: 22px 0 8px; border: 1px solid var(--rule); border-radius: 6px; background: var(--card); padding: 14px 16px; }
+  .status h2 { margin: 0 0 2px; font-size: 18px; }
+  .status .meta { font: 500 12px var(--mono); color: var(--muted); margin-bottom: 10px; }
+  .status ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .status li { display: grid; grid-template-columns: 96px 110px minmax(0, 1fr); gap: 4px 12px; align-items: baseline; padding-top: 8px; border-top: 1px solid var(--rule); }
+  .status li:first-child { border-top: 0; padding-top: 0; }
+  .status .st { font: 600 11.5px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+  .status .st.running { color: var(--water); } .status .st.done { color: var(--accent); }
+  .status .st.waiting { color: var(--gold); } .status .st.blocked { color: var(--alert); } .status .st.next { color: var(--muted); }
+  .status .area { font: 500 12px var(--mono); color: var(--muted); }
+  .status .what strong { font-weight: 600; } .status .what p { margin: 2px 0 0; font-size: 14px; color: var(--muted); }
+  .status .when { font: 400 11.5px var(--mono); color: var(--muted); }
+  @media (max-width: 560px) { .status li { grid-template-columns: 90px minmax(0, 1fr); } .status .area { grid-column: 2; grid-row: 1; } .status .what { grid-column: 1 / -1; } }
 </style>
 
 <nav class="top"><div class="wrap">
   <span class="brand">dharmatiles → Rust</span>
-  <a href="https://claude.ai/artifact/GBiwhTV3inCuS3cRiWnTeQ" aria-current="page">Overview</a>
-  <a href="https://claude.ai/artifact/2jNLv6TLfXb9KDGe1P9Qpq">The library</a>
-  <a href="https://claude.ai/artifact/TqPP2AdFA6myvCtajfsoJT">The labs</a>
-  <a href="https://claude.ai/artifact/L6b4xLyS5jvvCiv4qCMbiG">Surface variants</a>
-  <a href="https://claude.ai/artifact/UDN1YXkRKN6ALB5CT2oBSf">Mechanisms</a>
-  <a href="https://claude.ai/artifact/PL6bEs3ypyDCqmfRLAG77g">Target architecture</a>
-  <a href="https://claude.ai/artifact/Faqo5xnsCW9MHe6F2UNDtW">Rust feasibility</a>
-  <a href="https://claude.ai/artifact/CV72ayvAdd45791Jo3JZrP">Project layout</a>
-  <a href="https://claude.ai/artifact/CTFfwg21B8MWe5oEaX61pD">Project plan</a>
-  <a href="https://claude.ai/artifact/B2iunR3sEpTndvL2MhFBdt">Changes</a>
-  <a href="https://claude.ai/artifact/4qGq8BTBfjJYrv4NnrBgxz">Notes</a>
+  <a href="https://claude.ai/artifact/RowGQy7yrFHtD16YAA3gDi" aria-current="page">Overview</a>
+  <a href="https://claude.ai/artifact/H9pvikhVxwCPDtx7kMUDrM">The library</a>
+  <a href="https://claude.ai/artifact/C1FVwwwvfhnvhoEjNLcKED">The labs</a>
+  <a href="https://claude.ai/artifact/5p4Hqcta6ym615dSPJ9u6V">Surface variants</a>
+  <a href="https://claude.ai/artifact/CAoDRjGEFcwvxCJEGJQ4BY">Mechanisms</a>
+  <a href="https://claude.ai/artifact/9aQf5yzrSPvyzd6HLoLU4J">Target architecture</a>
+  <a href="https://claude.ai/artifact/SMKxXEeHGb7jps5nfFaQfw">Rust feasibility</a>
+  <a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux">Project layout</a>
+  <a href="https://claude.ai/artifact/SMHZGZ9KkG8rpvKeqbvxdj">Project plan</a>
+  <a href="https://claude.ai/artifact/GSS8KXJCQofDrkFUVHHVsM">Changes</a>
+  <a href="https://claude.ai/artifact/LyeG2qZejv69yK1UUgTXaZ">Notes</a>
 </div></nav>
 
 <div class="wrap">
@@ -48,10 +61,61 @@
   </div>
 </header>
 
-<div class="rev"><p><strong>Revision 2.</strong> An adversarial review checked this analysis against the code and the conversation. It changed the architecture: documents no longer call engine verbs, the verb set was corrected, water now covers the whole tile, units follow Shawn's ruling, and a <a href="https://claude.ai/artifact/Faqo5xnsCW9MHe6F2UNDtW">Rust feasibility page</a> was added. Every change, with its evidence, is in the <a href="https://claude.ai/artifact/B2iunR3sEpTndvL2MhFBdt">change log</a>.</p></div>
+<section class="status" id="status" aria-live="polite">
+  <h2>Where things stand</h2>
+  <div class="meta" id="status-meta">Loading live status…</div>
+  <ul id="status-list"></ul>
+</section>
+<script>
+(() => {
+  // Live status: rows in this artifact's database (collection "status"),
+  // written by Claude as work moves. FALLBACK is the snapshot at publish
+  // time, shown when the database can't be reached.
+  const FALLBACK = { rows: [{"id": "p0", "order": 10, "area": "Rust P0", "state": "done", "title": "Phase 0 spikes: decided GO (2 Nov 2026)", "detail": "R1, R2, R3, R6 and R9 passed. Determinism level B chosen, contact sheet approved, no vetoes. Branch rust/p0, revision 8 of the study.", "updated": "2026-11-02T15:00:00Z"}, {"id": "p1-doc", "order": 20, "area": "Rust P1", "state": "running", "title": "Stream A: dt-doc on the R6 vocabulary + library tiles", "detail": "Reworking dt-doc to the D1–D12 decisions (mm and named levels, renames, scatter node, levels.kdl prelude); rewriting the library tiles; flat-1x1, printers/default, parts/edges. Branch rust/p1-doc.", "updated": "2026-11-02T15:00:00Z"}, {"id": "p1-skel", "order": 30, "area": "Rust P1", "state": "running", "title": "Stream B: dt-kit, dt-looks, dt-eval and the dharmatiles binary", "detail": "Ground look + DungeonBlocks connector, build/check/--json with exit codes 0–3, level-B hash gate in CI, cargo xtask parity contact sheets. Branch rust/p1-skel.", "updated": "2026-11-02T15:00:00Z"}, {"id": "p1-merge", "order": 40, "area": "Rust P1", "state": "next", "title": "Merge both streams into rust/p1", "detail": "Re-point dt-eval at the reworked dt-doc API, then simplify and adversarial reviews at phase exit.", "updated": "2026-11-02T15:00:00Z"}, {"id": "cliff-r17", "order": 50, "area": "Cliff", "state": "done", "title": "Round 17 accepted", "detail": "Crisp sparse chips, bold column setbacks, closed core holes (31f7c5d on main).", "updated": "2026-11-02T15:00:00Z"}, {"id": "shawn", "order": 90, "area": "Shawn", "state": "waiting", "title": "Your next checkpoint", "detail": "When the P1 skeleton lands: test print of the flat 1×1 DungeonBlocks tile built by the Rust binary (path will be posted here).", "updated": "2026-11-02T15:00:00Z"}] };
+  const list = document.getElementById('status-list');
+  const meta = document.getElementById('status-meta');
+  const ago = iso => {
+    const s = (Date.now() - Date.parse(iso)) / 1000;
+    if (!isFinite(s)) return '';
+    if (s < 90) return 'just now';
+    if (s < 5400) return Math.round(s / 60) + ' min ago';
+    if (s < 129600) return Math.round(s / 3600) + ' h ago';
+    return Math.round(s / 86400) + ' d ago';
+  };
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  function render(rows, note) {
+    list.replaceChildren();
+    let latest = '';
+    for (const r of rows) {
+      const li = el('li');
+      li.append(el('span', 'st ' + (r.state || 'next'), r.state || ''), el('span', 'area', r.area || ''));
+      const what = el('div', 'what');
+      const t = el('strong', null, r.title || '');
+      what.append(t);
+      if (r.detail) what.append(el('p', null, r.detail));
+      if (r.updated) { what.append(el('div', 'when', 'updated ' + ago(r.updated))); if (r.updated > latest) latest = r.updated; }
+      li.append(what);
+      list.append(li);
+    }
+    meta.textContent = rows.length ? (note || ('Live · last change ' + ago(latest) + ' · refresh to update')) : (note || 'No status yet.');
+  }
+  render(FALLBACK.rows, 'Snapshot from publish time · loading live status…');
+  (async () => {
+    const db = window.claude && await window.claude.use('db');
+    if (!db) return;
+    const timer = setTimeout(() => { meta.textContent = 'Live status not reachable yet; showing what was last loaded.'; }, 10000);
+    db.collection('status').orderBy('order').onSnapshot(snap => {
+      if (!snap.metadata.fromCache) clearTimeout(timer);
+      render(snap.docs.map(d => d.data()));
+    }, () => { clearTimeout(timer); meta.textContent = 'Live status unavailable; showing the publish-time snapshot.'; });
+  })();
+})();
+</script>
 
-<div class="rev"><p><strong>Revision 3: project layout.</strong> A <a href="https://claude.ai/artifact/CV72ayvAdd45791Jo3JZrP">new page</a> lays out the Rust repository: one Cargo workspace at the repo root beside the untouched Python, six crates instead of the fifteen sketched in revision 2, one <code>dharmatiles</code> program with subcommands (including the MCP server), a Tauri GUI that shares its web front end with a browser preview, the tile library as KDL files embedded in the program, and output in <code>out/</code>.</p></div>
-<div class="rev"><p><strong>Revision 4: project plan.</strong> Shawn accepted the revision 3 recommendations. A <a href="https://claude.ai/artifact/CTFfwg21B8MWe5oEaX61pD">new page</a> turns them into a phased plan: spikes, a walking skeleton with a parity harness, look-by-look ports judged against the labs over four seeds, a library cutover before the cliff, three work streams, about 32 weeks on the critical path, kill criteria and the first two weeks task by task. The research notes are now one HTML page, and every Claude-written document here is HTML.</p></div>
+<div class="rev"><p><strong>Revision 2.</strong> An adversarial review checked this analysis against the code and the conversation. It changed the architecture: documents no longer call engine verbs, the verb set was corrected, water now covers the whole tile, units follow Shawn's ruling, and a <a href="https://claude.ai/artifact/SMKxXEeHGb7jps5nfFaQfw">Rust feasibility page</a> was added. Every change, with its evidence, is in the <a href="https://claude.ai/artifact/GSS8KXJCQofDrkFUVHHVsM">change log</a>.</p></div>
+
+<div class="rev"><p><strong>Revision 3: project layout.</strong> A <a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux">new page</a> lays out the Rust repository: one Cargo workspace at the repo root beside the untouched Python, six crates instead of the fifteen sketched in revision 2, one <code>dharmatiles</code> program with subcommands (including the MCP server), a Tauri GUI that shares its web front end with a browser preview, the tile library as KDL files embedded in the program, and output in <code>out/</code>.</p></div>
+<div class="rev"><p><strong>Revision 4: project plan.</strong> Shawn accepted the revision 3 recommendations. A <a href="https://claude.ai/artifact/SMHZGZ9KkG8rpvKeqbvxdj">new page</a> turns them into a phased plan: spikes, a walking skeleton with a parity harness, look-by-look ports judged against the labs over four seeds, a library cutover before the cliff, three work streams, about 32 weeks on the critical path, kill criteria and the first two weeks task by task. The research notes are now one HTML page, and every Claude-written document here is HTML.</p></div>
 
 <h2>Top findings</h2>
 <ol class="findings">
@@ -102,17 +166,17 @@
 
 <h2>The pages</h2>
 <div class="pages">
-  <a class="card" href="https://claude.ai/artifact/2jNLv6TLfXb9KDGe1P9Qpq"><span class="n">2</span><h3>The original library</h3><p class="small">The pipeline as implemented, which grid each layer writes, the bugs that come from shared state, the duplicated mechanisms, and a keep/merge/cut verdict for each subsystem.</p></a>
-  <a class="card" href="https://claude.ai/artifact/TqPP2AdFA6myvCtajfsoJT"><span class="n">3</span><h3>The labs</h3><p class="small">How rocklab, clifflab, grasslab, meadowlab, waterlab, shorelab and dirtlab produce their results. Five step-through canvas demos, real renders, and a cross-lab mechanism map.</p></a>
-  <a class="card" href="https://claude.ai/artifact/L6b4xLyS5jvvCiv4qCMbiG"><span class="n">4</span><h3>Surface variants</h3><p class="small">Every grass, rock, cliff, water, shore, dirt, wall, floor and tree variant ever generated, old to new: how each worked, renders, pros and cons, and what is new in the one Shawn likes.</p></a>
-  <a class="card" href="https://claude.ai/artifact/UDN1YXkRKN6ALB5CT2oBSf"><span class="n">5</span><h3>Mechanisms</h3><p class="small">About seventy implementations mapped onto the engine set, the outcomes each primitive feeds, before/after counts, and six merges the code does not support.</p></a>
-  <a class="card" href="https://claude.ai/artifact/PL6bEs3ypyDCqmfRLAG77g"><span class="n">6</span><h3>Target architecture</h3><p class="small">Two layers (documents and engine), a plan-then-build stepper, the paint-bucket and seed demos, example KDL documents checked against the labs, the engine kit, language decisions, crates, Orin ranking, and questions for Shawn.</p></a>
-  <a class="card" href="https://claude.ai/artifact/Faqo5xnsCW9MHe6F2UNDtW"><span class="n">7</span><h3>Rust feasibility</h3><p class="small">Where the time goes today, the geometry kernel and crate choices, determinism across threads, how documents are hosted, live preview, testing, migration order, and ten risks with the spike that retires each.</p></a>
-  <a class="card" href="https://claude.ai/artifact/CV72ayvAdd45791Jo3JZrP"><span class="n">8</span><h3>Project layout</h3><p class="small">Where everything goes in the Rust repo: six crates and what each boundary buys, one <code>dharmatiles</code> program, Tauri GUI, MCP server, mobile and wasm limits, the bundled library, user paths on macOS, Linux and Windows, and how Rust sits beside the Python during the port.</p></a>
-  <a class="card" href="https://claude.ai/artifact/CTFfwg21B8MWe5oEaX61pD"><span class="n">9</span><h3>Project plan</h3><p class="small">Nine phases from spikes to cutover: goals, scope by crate and Python module, measurable exit gates, risks retired, an interactive timeline, the critical path, kill criteria and the first two weeks.</p></a>
-  <a class="card" href="spikes/go-no-go.html"><span class="n">P0</span><h3>Phase 0 go/no-go</h3><p class="small">The spike results in one place: a verdict on booleans, determinism, rays, the KDL format and materials, with evidence, what each changes in the plan, and the decisions for Shawn with a recommendation on each.</p></a>
-  <a class="card" href="https://claude.ai/artifact/B2iunR3sEpTndvL2MhFBdt"><span class="n">10</span><h3>Change log</h3><p class="small">Every edit in revisions 2, 3 and 4: what each page said before, what it says now, and the evidence from the code, the conversation or the ecosystem.</p></a>
-  <a class="card" href="https://claude.ai/artifact/4qGq8BTBfjJYrv4NnrBgxz"><span class="n">11</span><h3>Research notes</h3><p class="small">The notes every page was built from: the library, each lab, every surface variant, the language rulings, the synthesis and the layout sources, with citations and dates.</p></a>
+  <a class="card" href="https://claude.ai/artifact/H9pvikhVxwCPDtx7kMUDrM"><span class="n">2</span><h3>The original library</h3><p class="small">The pipeline as implemented, which grid each layer writes, the bugs that come from shared state, the duplicated mechanisms, and a keep/merge/cut verdict for each subsystem.</p></a>
+  <a class="card" href="https://claude.ai/artifact/C1FVwwwvfhnvhoEjNLcKED"><span class="n">3</span><h3>The labs</h3><p class="small">How rocklab, clifflab, grasslab, meadowlab, waterlab, shorelab and dirtlab produce their results. Five step-through canvas demos, real renders, and a cross-lab mechanism map.</p></a>
+  <a class="card" href="https://claude.ai/artifact/5p4Hqcta6ym615dSPJ9u6V"><span class="n">4</span><h3>Surface variants</h3><p class="small">Every grass, rock, cliff, water, shore, dirt, wall, floor and tree variant ever generated, old to new: how each worked, renders, pros and cons, and what is new in the one Shawn likes.</p></a>
+  <a class="card" href="https://claude.ai/artifact/CAoDRjGEFcwvxCJEGJQ4BY"><span class="n">5</span><h3>Mechanisms</h3><p class="small">About seventy implementations mapped onto the engine set, the outcomes each primitive feeds, before/after counts, and six merges the code does not support.</p></a>
+  <a class="card" href="https://claude.ai/artifact/9aQf5yzrSPvyzd6HLoLU4J"><span class="n">6</span><h3>Target architecture</h3><p class="small">Two layers (documents and engine), a plan-then-build stepper, the paint-bucket and seed demos, example KDL documents checked against the labs, the engine kit, language decisions, crates, Orin ranking, and questions for Shawn.</p></a>
+  <a class="card" href="https://claude.ai/artifact/SMKxXEeHGb7jps5nfFaQfw"><span class="n">7</span><h3>Rust feasibility</h3><p class="small">Where the time goes today, the geometry kernel and crate choices, determinism across threads, how documents are hosted, live preview, testing, migration order, and ten risks with the spike that retires each.</p></a>
+  <a class="card" href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux"><span class="n">8</span><h3>Project layout</h3><p class="small">Where everything goes in the Rust repo: six crates and what each boundary buys, one <code>dharmatiles</code> program, Tauri GUI, MCP server, mobile and wasm limits, the bundled library, user paths on macOS, Linux and Windows, and how Rust sits beside the Python during the port.</p></a>
+  <a class="card" href="https://claude.ai/artifact/SMHZGZ9KkG8rpvKeqbvxdj"><span class="n">9</span><h3>Project plan</h3><p class="small">Nine phases from spikes to cutover: goals, scope by crate and Python module, measurable exit gates, risks retired, an interactive timeline, the critical path, kill criteria and the first two weeks.</p></a>
+  <a class="card" href="https://claude.ai/artifact/X1FaHhcqfEvn2ahmgazy5n"><span class="n">P0</span><h3>Phase 0 go/no-go</h3><p class="small">The spike results in one place: a verdict on booleans, determinism, rays, the KDL format and materials, with evidence, what each changes in the plan, and the decisions for Shawn with a recommendation on each.</p></a>
+  <a class="card" href="https://claude.ai/artifact/GSS8KXJCQofDrkFUVHHVsM"><span class="n">10</span><h3>Change log</h3><p class="small">Every edit in revisions 2, 3 and 4: what each page said before, what it says now, and the evidence from the code, the conversation or the ecosystem.</p></a>
+  <a class="card" href="https://claude.ai/artifact/LyeG2qZejv69yK1UUgTXaZ"><span class="n">11</span><h3>Research notes</h3><p class="small">The notes every page was built from: the library, each lab, every surface variant, the language rulings, the synthesis and the layout sources, with citations and dates.</p></a>
 </div>
 
 <h2>The proposal in one table</h2>
@@ -122,7 +186,7 @@
   <dt>Built-ins</dt><dd class="small">hills · dirt · rocks · scree · cliff · meadow · reeds · water · wall · floor · tree · connector, each with natural controls.</dd>
   <dt>Engine values</dt><dd><span class="chip k-region">Region</span> <span class="chip k-field">Field</span> <span class="chip k-place">Points</span> <span class="chip k-place">Curves</span> <span class="chip k-solid">Solid (tagged)</span></dd>
   <dt>Engine ops</dt><dd><span class="chip k-place">scatter</span> <span class="chip k-compose">partition</span> <span class="chip k-place">trace</span> <span class="chip k-solid">carve</span> <span class="chip k-solid">loft</span> <span class="chip k-solid">lift</span> <span class="chip k-finish">relief</span> <span class="chip k-finish">grain</span> <span class="chip k-compose">seat</span> <span class="chip k-compose">fill</span> <span class="small muted">plus field ops: noise, distance, morphology, flow, grooves</span></dd>
-  <dt>Layout</dt><dd class="small">One workspace, crates <code>dt-geom</code> · <code>dt-kit</code> · <code>dt-doc</code> · <code>dt-looks</code> · <code>dt-eval</code> · <code>dharmatiles</code>; data in <code>library/</code>; output in <code>out/</code>. Details on the <a href="https://claude.ai/artifact/CV72ayvAdd45791Jo3JZrP">layout page</a>.</dd>
+  <dt>Layout</dt><dd class="small">One workspace, crates <code>dt-geom</code> · <code>dt-kit</code> · <code>dt-doc</code> · <code>dt-looks</code> · <code>dt-eval</code> · <code>dharmatiles</code>; data in <code>library/</code>; output in <code>out/</code>. Details on the <a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux">layout page</a>.</dd>
   <dt>Contracts</dt><dd><span class="chip k-rand">seed tree + distributions</span> <span class="chip k-guard">printer profile + audit gate</span> <span class="chip k-guard">edge contract</span> <span class="chip k-finish">material → colour</span></dd>
 </dl>
 
@@ -136,9 +200,9 @@
   <li><strong>May a definition add outside its region but remove only inside it?</strong> And where does z = 0 sit for OpenLOCK?</li>
   <li><strong>Labs first and the cliff last?</strong> Without the library's soil, grass carpet, thatch and water.</li>
   <li><strong>KDL instead of the YAML-like sketches?</strong> It keeps comments when the GUI or an agent edits a file.</li>
-  <li><strong>Repository layout:</strong> Rust at the repo root beside the Python, <code>out/</code> instead of <code>stl/</code>, your tiles in <code>~/Documents/dharmatiles</code>, licence, crates.io or not. Nine short questions are on the <a href="https://claude.ai/artifact/CV72ayvAdd45791Jo3JZrP#questions">layout page</a>.</li>
+  <li><strong>Repository layout:</strong> Rust at the repo root beside the Python, <code>out/</code> instead of <code>stl/</code>, your tiles in <code>~/Documents/dharmatiles</code>, licence, crates.io or not. Nine short questions are on the <a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux#questions">layout page</a>.</li>
 </ol>
 
 <h2>Source notes</h2>
-<p class="small">The notes behind these pages are on the <a href="https://claude.ai/artifact/4qGq8BTBfjJYrv4NnrBgxz">research notes</a> page, with their source citations and dates. Everything is in <code>docs/analysis/rust-rewrite/</code> as HTML, with images under <code>img/</code>. The one markdown file left is <code>input-language-design-conversation.md</code>, Shawn's pasted design conversation.</p>
+<p class="small">The notes behind these pages are on the <a href="https://claude.ai/artifact/LyeG2qZejv69yK1UUgTXaZ">research notes</a> page, with their source citations and dates. Everything is in <code>docs/analysis/rust-rewrite/</code> as HTML, with images under <code>img/</code>. The one markdown file left is <code>input-language-design-conversation.md</code>, Shawn's pasted design conversation.</p>
 </div>
