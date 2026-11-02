@@ -259,6 +259,8 @@ docs/            design docs (HTML, start at docs/index.html) and historic notes
 
 Design docs, guides and lab requirements are HTML pages under `docs/`; start at [`docs/index.html`](docs/index.html).
 
+A Rust rewrite is under way in the Cargo workspace at the repo root (`crates/`, `xtask/`); see [`docs/analysis/rust-rewrite/plan.html`](docs/analysis/rust-rewrite/plan.html).
+
 ---
 
 ## Status

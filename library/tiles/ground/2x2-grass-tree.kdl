@@ -1,0 +1,17 @@
+// A 2×2 grass meadow with one tree.
+// Twin of src/tiles/ground/2x2-grass-tree.tile.py.
+
+use "parts/grass" long-grass
+
+tile grass-tree size="2x2" seed=84 {
+    stack {
+        ground                          // flat, at the ground level (5 mm)
+        long-grass                      // grows round the trunk, wherever it is listed
+
+        tree height=40 {               // anywhere on the tile; or at="1,1"
+            trunk height=30             // bare trunk below the crown
+            crown width=30 clumps=32 shape=round branching=normal
+            leaf length=4.5 width=3
+        }
+    }
+}

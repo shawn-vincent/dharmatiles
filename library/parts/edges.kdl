@@ -1,0 +1,10 @@
+// The edge contract: what every tile does at its edges, so that
+// neighbouring tiles butt with no step.  Every tile uses it at the root
+// of its document, without a `use` line.
+//
+// P1 holds the ground's edge level; P2 confirms it against dirtlab and
+// P3 adds the water's edge profile.
+
+edges {
+    ground level=edge           // ground meets every tile edge at the edge level (3.4 mm)
+}

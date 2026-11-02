@@ -1,0 +1,30 @@
+// A 2×1 cliff run: a band of stacked rock against the north edge,
+// with dirt on its top and scree at its foot.
+// Twin of clifflab/rockpile.py's `run` form (round 15, commit 3b56ae0).
+
+tile cliff-run size="2x1" seed=1 {
+    about """
+        Rock band against the north edge. Both ends finish in the
+        standard end section, so runs butt end to end.
+        """
+
+    levels foot=4                   // rockpile's foot; the standard edge level is 3.4
+
+    stack {
+        dirt level=foot {
+            bank against=cliff height="1.5..3.5" reach="3..6.5"
+            scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
+        }
+
+        cliff along=north height=35 {   // 35 mm above its foot
+            rock mixed                  // or: columns, blocks, slabs
+            stone-size massive          // or: rubble, broken
+            top dirt                    // or: bare
+            shattered patches=3 width="5..10"
+        }
+
+        // scree: fallen stones gathered at the cliff's foot
+        scatter against=cliff per-square=55 reach=4 { stone size="1..6" mostly=small }
+        scatter against=cliff per-square=2.5 { boulder size="4.5..8" }
+    }
+}

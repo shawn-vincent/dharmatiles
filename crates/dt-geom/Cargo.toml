@@ -1,0 +1,38 @@
+[package]
+name = "dt-geom"
+description = "dharmatiles kernels: grids, 2D, meshes, rays and keyed seeds"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[features]
+default = ["manifold-ffi", "manifold-parallel"]
+# Mesh backend: Manifold's C++ library (v3.5.3) through manifold-csg (native
+# only). Needs git, cmake and a C++ compiler; the first build compiles
+# Manifold (and TBB, with manifold-parallel).
+manifold-ffi = ["dep:manifold-csg"]
+# Mesh backend: the pure-Rust Manifold port (wasm-capable).
+manifold-rust = ["dep:manifold-rust"]
+# Manifold's internal parallelism (TBB in C++, rayon in the port). On by
+# default: R1 found the C++ kernel 3x slower without it, and Python's
+# manifold3d wheel runs with it, so it is also what matches Python. R2 found
+# its output identical run to run on one machine (docs/rust/spikes.html).
+manifold-parallel = ["manifold-csg?/parallel", "manifold-rust?/parallel"]
+
+[dependencies]
+bytemuck.workspace = true
+glam.workspace = true
+obvhs.workspace = true
+parry3d.workspace = true
+rayon.workspace = true
+manifold-csg = { workspace = true, optional = true }
+manifold-rust = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

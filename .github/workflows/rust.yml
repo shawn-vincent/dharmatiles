@@ -1,0 +1,123 @@
+# Rust workspace CI (docs/rust/plan.html, P0).
+# The toolchain comes from rust-toolchain.toml.
+name: rust
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: rust-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install
+      - run: cargo fmt --all --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: cmake --version
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+  # manifold-ffi (the default backend) builds Manifold's C++ from source:
+  # it needs git, cmake and a C++ compiler. All three GitHub images ship
+  # cmake; the version is printed so a missing one fails loudly here.
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: cmake --version
+      - run: cargo test --workspace --all-targets
+      # R2: print every stage hash on each OS, on both backends, so platforms
+      # can be compared (the test itself asserts 1/4/16-thread identity).
+      - run: cargo test -p dt-geom --features manifold-rust --test determinism -- --nocapture --test-threads 1
+      # R2: TBB sizes its thread pool from the CPU affinity mask on Linux, so
+      # re-run the test on 1, 2 and 4 CPUs. Every run's hashes must agree
+      # (one distinct line per backend once thread and run are stripped).
+      - if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          for cpus in 0 0-1 0-3; do
+            taskset -c "$cpus" cargo test -p dt-geom --features manifold-rust --test determinism -- --nocapture --test-threads 1 \
+              | grep -o 'R2 .*' | sed -E 's/ threads= *[0-9]+ run=[0-9]+//'
+          done | sort | uniq -c | tee r2-tbb.txt
+          test "$(wc -l < r2-tbb.txt)" -eq 2
+      # P1 hash gate, determinism level B (Shawn, 2 Nov 2026): every tile
+      # in crates/dt-eval/tests/golden.rs is built twice at 1, 4 and 16
+      # threads with identical stage hashes on every OS; the golden hash
+      # snapshot is shared by macOS and Linux (cfg(not(windows))), and
+      # Windows checks the metrics snapshot and the render gate only.
+      # (cargo test above already ran it; this prints the hashes per OS.)
+      - run: cargo test -p dt-eval --test golden -- --nocapture --test-threads 1
+      # The rayon pool sizes above don't touch Manifold's TBB pool, which
+      # sizes itself from the CPU affinity mask: rebuild the golden tiles
+      # on 1, 2 and 4 CPUs.  Each run must pass the shared hash snapshot,
+      # and every run must print the same hashes.
+      - if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -o pipefail
+          for cpus in 0 0-1 0-3; do
+            taskset -c "$cpus" cargo test -p dt-eval --test golden -- --nocapture --test-threads 1 \
+              | grep -E '^[0-9a-f]{16}  ' > "golden-tbb-$cpus.txt"
+          done
+          cmp golden-tbb-0.txt golden-tbb-0-1.txt
+          cmp golden-tbb-0.txt golden-tbb-0-3.txt
+          cat golden-tbb-0.txt
+      # The parity harness's Rust half (no Python on CI runners).
+      - run: cargo xtask parity flat --no-python --dev
+      # The parity renders and build records, per OS (no STLs).  With
+      # --no-python the Python half doesn't run, so there is no
+      # contact-sheet.png; it is listed for when there is one.
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-flat-${{ matrix.os }}
+          path: |
+            out/parity/flat/contact-sheet.png
+            out/parity/flat/rust/**/*.png
+            out/parity/flat/rust/**/*.build.json
+          retention-days: 14
+          if-no-files-found: error
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      # A real build (codegen), not just a check: R1 showed manifold-rust compiles for wasm32.
+      - run: cargo build -p dt-geom --target wasm32-unknown-unknown --no-default-features --features manifold-rust
+      # The document model must stay wasm-safe (no geometry, no std::fs use).
+      - run: cargo check -p dt-doc --target wasm32-unknown-unknown
+      # Everything up to the build call stays wasm-safe on the pure-Rust backend.
+      - run: cargo check -p dt-eval --target wasm32-unknown-unknown --no-default-features --features manifold-rust
+
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --all-features

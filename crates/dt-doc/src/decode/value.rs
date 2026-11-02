@@ -1,0 +1,427 @@
+//! Values: one entry's value, typed by the control it sets.
+
+use kdl::{KdlEntry, KdlValue};
+
+use super::{Ctx, Decoder, sub_span, value_span};
+use crate::expr::{self, Expr, Unit};
+use crate::looks::TAGS;
+use crate::model::{Num, Spanned, Value};
+use crate::schema::{Axis, Control, Word, did_you_mean};
+
+fn as_f64(v: &KdlValue) -> Option<f64> {
+    match v {
+        KdlValue::Integer(i) => i.to_string().parse().ok(),
+        KdlValue::Float(f) => Some(*f),
+        _ => None,
+    }
+}
+
+fn fmt_num(v: f64) -> String {
+    let s = format!("{v:.4}");
+    s.trim_end_matches('0').trim_end_matches('.').to_owned()
+}
+
+impl Decoder<'_> {
+    /// A control's value: a word, a parameter, or a value of its axis.
+    pub(crate) fn value(
+        &mut self,
+        e: &KdlEntry,
+        k: &'static Control,
+        owner: &str,
+        name: &str,
+        ctx: &Ctx,
+    ) -> Option<Spanned<Value>> {
+        let axis = k.value?;
+        let span = value_span(e);
+        if let Some(s) = e.value().as_string() {
+            if ctx.params.iter().any(|p| p == s) {
+                self.param_controls.entry(s.to_owned()).or_insert(k);
+                return Some(Spanned {
+                    value: Value::Param(s.to_owned()),
+                    span,
+                });
+            }
+            if let Some(w) = k.words.iter().find(|w| w.word == s) {
+                if e.ty().is_some() {
+                    self.err(
+                        "dt::unit",
+                        span,
+                        format!("`{s}` is a word, so it takes no annotation"),
+                        "annotated word",
+                    );
+                    return None;
+                }
+                return Some(Spanned {
+                    value: Value::Word(w),
+                    span,
+                });
+            }
+            match axis {
+                Axis::Word => {
+                    self.bad_word(span, s, k.words, owner, name);
+                    return None;
+                }
+                Axis::Tag => {
+                    if TAGS.contains(&s) {
+                        return Some(Spanned {
+                            value: Value::Tag(s.to_owned()),
+                            span,
+                        });
+                    }
+                    self.err(
+                        "dt::unknown-name",
+                        span,
+                        format!("`{s}` is not a kind of thing"),
+                        "unknown kind",
+                    )
+                    .help = Some(hint_or(
+                        did_you_mean(s, TAGS.iter().copied()),
+                        format!("things gather against: {}", TAGS.join(", ")),
+                    ));
+                    return None;
+                }
+                Axis::Bool => {
+                    self.err(
+                        "dt::value",
+                        span,
+                        format!("`{name}` is #true or #false"),
+                        "a string",
+                    )
+                    .help = Some(format!("write {name}=#{s}"));
+                    return None;
+                }
+                _ => {}
+            }
+        }
+        if let KdlValue::Bool(b) = e.value() {
+            if axis == Axis::Bool {
+                return Some(Spanned {
+                    value: Value::Bool(*b),
+                    span,
+                });
+            }
+            self.err(
+                "dt::value",
+                span,
+                format!("`{owner} {name}` is not a switch"),
+                "a switch",
+            )
+            .help = Some(describe(k));
+            return None;
+        }
+        if axis.is_numeric() {
+            let n = self.num(e, axis, Some(k), owner, name, ctx)?;
+            return Some(Spanned {
+                value: Value::Num(n.value),
+                span: n.span,
+            });
+        }
+        self.err(
+            "dt::value",
+            span,
+            format!("`{owner} {name}` is {}", axis.describe()),
+            "wrong kind of value",
+        )
+        .help = Some(describe(k));
+        None
+    }
+
+    fn bad_word(
+        &mut self,
+        span: miette::SourceSpan,
+        s: &str,
+        words: &'static [Word],
+        owner: &str,
+        name: &str,
+    ) {
+        let list: Vec<&str> = words.iter().map(|w| w.word).collect();
+        self.err(
+            "dt::choice",
+            span,
+            format!("`{owner} {name}` can't be `{s}`"),
+            "not one of its words",
+        )
+        .help = Some(hint_or(
+            did_you_mean(s, list.iter().copied()),
+            format!("`{name}` is one of: {}", list.join(", ")),
+        ));
+    }
+
+    /// A number on `axis`: a KDL number, or a quoted expression, range or
+    /// percent.  `k` supplies words for hints and limits.
+    pub(crate) fn num(
+        &mut self,
+        e: &KdlEntry,
+        axis: Axis,
+        k: Option<&'static Control>,
+        owner: &str,
+        name: &str,
+        ctx: &Ctx,
+    ) -> Option<Spanned<Num>> {
+        let span = value_span(e);
+        let unit = match e.ty() {
+            None => None,
+            Some(t) => match Unit::parse(t.value()) {
+                Some(u) if matches!(axis, Axis::Mm | Axis::Level) => Some(u),
+                Some(u) => {
+                    self.err(
+                        "dt::unit",
+                        span,
+                        format!("`({})` doesn't fit `{owner} {name}`", u.as_str()),
+                        format!("{name} is {}", axis.describe()),
+                    )
+                    .help = Some(format!(
+                        "(mm) and (h) are for sizes and levels; write `{name}` without it"
+                    ));
+                    return None;
+                }
+                None => {
+                    self.err(
+                        "dt::unit",
+                        t.span(),
+                        format!("`({})` is not an annotation", t.value()),
+                        "not (mm) or (h)",
+                    )
+                    .help = Some(
+                        "units are not written; (mm)4.5 checks a size, and (h)1.2 is in wall tops of 33.1 mm"
+                            .to_owned(),
+                    );
+                    return None;
+                }
+            },
+        };
+        let (x, inner) = match e.value() {
+            KdlValue::Null => {
+                self.err(
+                    "dt::value",
+                    span,
+                    format!("`{name}` can't be #null"),
+                    "null",
+                )
+                .help = Some(format!("leave `{name}` out to use its default"));
+                return None;
+            }
+            KdlValue::Bool(_) => {
+                self.err(
+                    "dt::value",
+                    span,
+                    format!("`{owner} {name}` is {}", axis.describe()),
+                    "a switch",
+                );
+                return None;
+            }
+            v @ (KdlValue::Integer(_) | KdlValue::Float(_)) => {
+                (Expr::num(as_f64(v).unwrap_or(f64::NAN)), span)
+            }
+            KdlValue::String(s) => {
+                let at = self.inner_at(e, s);
+                match expr::parse(s) {
+                    Ok(x) => (x, sub_span(span, at, at + s.len())),
+                    Err(err) => {
+                        self.err(
+                            "dt::expr",
+                            sub_span(span, at + err.start, at + err.end),
+                            format!("can't read `{owner} {name}`: {}", err.message),
+                            "here",
+                        )
+                        .help = Some(
+                            k.map_or_else(|| format!("`{name}` is {}", axis.describe()), describe),
+                        );
+                        return None;
+                    }
+                }
+            }
+        };
+        // Percent: required for a share, refused elsewhere.
+        if axis == Axis::Share && !x.all_percent() && x.names().is_empty() {
+            let help = match x.bounds(&|_| None) {
+                // 0.3 is a fraction (30%); 135 already means 135%.
+                Ok((lo, hi)) if (lo - hi).abs() < 1e-12 => {
+                    let pct = if lo.abs() <= 1.0 { lo * 100.0 } else { lo };
+                    format!("write `{name}=\"{}%\"`", fmt_num(pct))
+                }
+                _ => "write each end with %: \"20%..50%\"".to_owned(),
+            };
+            self.err(
+                "dt::percent",
+                span,
+                format!("`{owner} {name}` is a share, written as a percent"),
+                "no %",
+            )
+            .help = Some(help);
+            return None;
+        }
+        if axis != Axis::Share && x.has_percent() {
+            self.err(
+                "dt::percent",
+                span,
+                format!("`{owner} {name}` is {}, not a percent", axis.describe()),
+                "a percent",
+            )
+            .help = Some(k.map_or_else(|| format!("write `{name}` as a plain number"), describe));
+            return None;
+        }
+        // Names: parameters, and levels where a level is expected.
+        for n in x.names() {
+            let ok = ctx.params.iter().any(|p| p == n)
+                || (axis == Axis::Level && ctx.levels.iter().any(|l| l == n));
+            if ok {
+                continue;
+            }
+            let mut cands: Vec<&str> = ctx.params.iter().map(String::as_str).collect();
+            if axis == Axis::Level {
+                cands.extend(ctx.levels.iter().map(String::as_str));
+            }
+            if let Some(k) = k {
+                cands.extend(k.words.iter().map(|w| w.word));
+            }
+            let what = if axis == Axis::Level {
+                "level or parameter"
+            } else if k.is_some_and(|k| !k.words.is_empty()) {
+                "word or parameter"
+            } else {
+                "parameter"
+            };
+            let near = did_you_mean(n, cands.iter().copied());
+            let mut help = hint_or(
+                near,
+                k.map_or_else(|| format!("`{name}` is {}", axis.describe()), describe),
+            );
+            let standard = self.known.levels();
+            if axis == Axis::Level && near.is_none() && !standard.is_empty() {
+                let list: Vec<String> = standard
+                    .iter()
+                    .map(|(l, mm)| format!("{l} ({mm} mm)"))
+                    .collect();
+                help = format!(
+                    "{help}; standard levels: {}; a tile adds its own with `levels name=mm`",
+                    list.join(", ")
+                );
+            }
+            let text = &self.text()[inner.offset()..inner.offset() + inner.len()];
+            let at = text.find(n).map_or(inner, |i| {
+                miette::SourceSpan::new((inner.offset() + i).into(), n.len())
+            });
+            self.err(
+                "dt::unknown-name",
+                at,
+                format!("no {what} is called `{n}`"),
+                "unknown name",
+            )
+            .help = Some(help);
+            return None;
+        }
+        // Counts are whole; sensible limits catch slips.
+        if x.names().is_empty()
+            && let Ok((lo, hi)) = x.bounds(&|_| None)
+        {
+            let mult = if unit == Some(Unit::H) {
+                crate::schema::H_MM
+            } else {
+                1.0
+            };
+            let (lo, hi) = (lo * mult, hi * mult);
+            if lo > hi {
+                self.err(
+                    "dt::range",
+                    span,
+                    "a range is written low end first",
+                    "high..low",
+                )
+                .help = Some(format!("write \"{}..{}\"", fmt_num(hi), fmt_num(lo)));
+                return None;
+            }
+            if matches!(axis, Axis::Mm | Axis::Count | Axis::PerSquare) && lo < 0.0 {
+                self.err(
+                    "dt::range",
+                    span,
+                    format!("`{owner} {name}` can't be negative"),
+                    "below zero",
+                );
+                return None;
+            }
+            if axis == Axis::Count && (lo.fract() != 0.0 || hi.fract() != 0.0) {
+                self.err(
+                    "dt::range",
+                    span,
+                    format!("`{owner} {name}` is a count of whole things"),
+                    "not whole",
+                )
+                .help = Some("per-square densities may be fractions; counts can't".to_owned());
+                return None;
+            }
+            if let Some((min, max)) = k.and_then(|k| k.limits)
+                && (lo < min || hi > max)
+            {
+                self.err(
+                    "dt::range",
+                    span,
+                    format!(
+                        "`{owner} {name}` is outside {}–{}",
+                        fmt_num(min),
+                        fmt_num(max)
+                    ),
+                    "out of range",
+                )
+                .help = Some(format!(
+                    "`{name}` takes {} to {}{}",
+                    fmt_num(min),
+                    fmt_num(max),
+                    if matches!(axis, Axis::Mm) { " mm" } else { "" }
+                ));
+                return None;
+            }
+        }
+        Some(Spanned {
+            value: Num { expr: x, unit },
+            span,
+        })
+    }
+
+    /// A value nothing types: a parameter default whose parameter fills
+    /// no known control, or an argument to such a parameter.
+    pub(crate) fn untyped(&mut self, e: &KdlEntry) -> Option<Spanned<Value>> {
+        let span = value_span(e);
+        let unit = e.ty().and_then(|t| Unit::parse(t.value()));
+        let value = match e.value() {
+            KdlValue::Bool(b) => Value::Bool(*b),
+            v @ (KdlValue::Integer(_) | KdlValue::Float(_)) => Value::Num(Num {
+                expr: Expr::num(as_f64(v).unwrap_or(f64::NAN)),
+                unit,
+            }),
+            KdlValue::String(s) => match expr::parse(s) {
+                Ok(x) if x.names().is_empty() => Value::Num(Num { expr: x, unit }),
+                _ => Value::Text(s.clone()),
+            },
+            KdlValue::Null => {
+                self.err("dt::value", span, "a value can't be #null", "null");
+                return None;
+            }
+        };
+        Some(Spanned { value, span })
+    }
+}
+
+fn hint_or(m: Option<&str>, otherwise: String) -> String {
+    m.map_or(otherwise, |m| format!("did you mean `{m}`?"))
+}
+
+/// One line describing what a control takes, for help text.
+pub(crate) fn describe(k: &'static Control) -> String {
+    let words: Vec<&str> = k.words.iter().map(|w| w.word).collect();
+    match (k.value, words.is_empty()) {
+        (Some(Axis::Word), _) => format!("`{}` is one of: {}", k.name, words.join(", ")),
+        (Some(a), true) => format!("`{}` is {}", k.name, a.describe()),
+        (Some(a), false) => format!(
+            "`{}` is {}, or one of: {}",
+            k.name,
+            a.describe(),
+            words.join(", ")
+        ),
+        (None, _) => format!(
+            "`{}` is a group: {}",
+            k.name,
+            k.subs.iter().map(|s| s.name).collect::<Vec<_>>().join(", ")
+        ),
+    }
+}

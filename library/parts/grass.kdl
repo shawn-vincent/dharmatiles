@@ -1,0 +1,20 @@
+// Grass presets shared by tiles: `use "parts/grass" lawn long-grass`.
+
+// Short, tidy grass: Python's default SpeciesConfig.
+define lawn {
+    param length 10           // blade length, mm
+    param curl "36..81"       // how far a blade bends over, degrees
+    param tufts 3             // tufts per square
+    param cover "100%"        // share of the ground grassed over
+
+    stack {
+        grass length=length curl=curl tufts=tufts cover=cover
+    }
+}
+
+// Long, curly blades: the species of 2x2-grass-tree.
+define long-grass {
+    stack {
+        lawn length="8..14" curl="63..117"
+    }
+}

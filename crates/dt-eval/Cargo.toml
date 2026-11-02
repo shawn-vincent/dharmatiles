@@ -1,0 +1,31 @@
+[package]
+name = "dt-eval"
+description = "dharmatiles evaluation: project discovery, imports, the plan-then-build scheduler, seeds by path, and the one build call"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+build = "build.rs"
+
+[features]
+default = ["manifold-ffi", "manifold-parallel"]
+manifold-ffi = ["dt-kit/manifold-ffi", "dt-looks/manifold-ffi"]
+manifold-rust = ["dt-kit/manifold-rust", "dt-looks/manifold-rust"]
+manifold-parallel = ["dt-kit/manifold-parallel", "dt-looks/manifold-parallel"]
+
+[dependencies]
+dt-doc.workspace = true
+dt-kit.workspace = true
+dt-looks.workspace = true
+kdl.workspace = true
+miette.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+rayon.workspace = true
+miette = { workspace = true, features = ["fancy-no-backtrace"] }
+
+[lints]
+workspace = true
