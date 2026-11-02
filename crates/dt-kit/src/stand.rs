@@ -53,6 +53,20 @@ impl Default for Stand {
     }
 }
 
+impl Stand {
+    /// The default slicing for `printer`: its layer, and undersides held
+    /// 5° steeper than its overhang limit (40° above horizontal for the
+    /// 55° default, so the default printer gives [`Stand::default`]).
+    #[must_use]
+    pub fn for_printer(printer: &crate::Printer) -> Self {
+        Self {
+            layer_mm: printer.layer_mm,
+            angle_deg: 90.0 - printer.overhang_deg + 5.0,
+            ..Self::default()
+        }
+    }
+}
+
 /// What [`stand`] did.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Stood {

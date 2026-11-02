@@ -1142,7 +1142,7 @@ impl Job<'_> {
 
         // Neck gate.
         let net = (standoff - drop).max(0.0);
-        if skew.hypot(net) > MAX_NECK_MM {
+        if libm::hypot(skew, net) > MAX_NECK_MM {
             return Err(Fail::Neck);
         }
 

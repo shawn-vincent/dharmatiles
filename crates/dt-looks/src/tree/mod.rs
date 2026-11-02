@@ -126,7 +126,9 @@ impl Default for Params {
             balance: 1.0,
             exponent: 3.0,
             min_radius: 1.0,
-            leaves: true,
+            // `leaves clumps-only` (dt-doc's default): leaves on does not
+            // yet pass the gate
+            leaves: false,
             clumps_on: true,
             leaf_length: Value::Number(4.5),
             leaf_width: Value::Number(3.0),
@@ -294,6 +296,9 @@ pub struct Grown {
     pub leaves_placed: usize,
     pub leaves_culled: usize,
     pub leaves_cull_rounds: usize,
+    /// Leaves the placer could not build (a degenerate frame): a warning,
+    /// noted in the build record, never swallowed.
+    pub leaves_failed_error: usize,
     pub clump_cut_mm3: f64,
     pub leaves: usize,
 }
@@ -313,8 +318,15 @@ impl Tree {
     /// # Errors
     /// [`LookError`] when the crown is empty or the kernel fails.
     #[allow(clippy::too_many_lines)]
-    pub fn grow(&self, scene: &mut Scene, seed: Seed, at: [f64; 3]) -> Result<Built, LookError> {
+    pub fn grow(
+        &self,
+        scene: &mut Scene,
+        seed: Seed,
+        at: [f64; 3],
+        printer: &dt_kit::Printer,
+    ) -> Result<Built, LookError> {
         let p = &self.p;
+        let stand_rule = dt_kit::Stand::for_printer(printer);
         let s = scene.frame().scale();
         let mut rng = Rng::new(seed.key("sizes"));
         let height = draw(&p.height, &mut rng) * s;
@@ -380,10 +392,7 @@ impl Tree {
         let tip = (p.min_radius * s).max(TIP_FLOOR_MM);
         graph::pipe_radii(&mut g, p.exponent, tip);
         if let Some(w) = trunk_width {
-            let k = 0.5 * w / g.radii[0].max(1e-9);
-            g.radii
-                .iter_mut()
-                .for_each(|r| *r = (*r * k).max(TIP_FLOOR_MM));
+            set_trunk_width(&mut g, w);
         }
         let ends: Vec<usize> = g
             .target
@@ -461,14 +470,8 @@ impl Tree {
         // landing's underside shows below its clump it would hang, so the
         // wood too stands on the ground (a slab under the root)
         let footing = ground_box(scene, at, r0 * 4.0, ground - 40.0, ground)?;
-        let (wood, stood_wood) = dt_kit::stand(
-            scene,
-            &wood,
-            &footing,
-            Material::Wood,
-            &dt_kit::Stand::default(),
-        )
-        .map_err(LookError::build)?;
+        let (wood, stood_wood) = dt_kit::stand(scene, &wood, &footing, Material::Wood, &stand_rule)
+            .map_err(LookError::build)?;
         grown.wood_cut_mm3 = stood_wood.cut_mm3;
         let (wood, slivers) = crumbs(scene, wood, Material::Wood)?;
         grown.slivers += slivers;
@@ -508,14 +511,9 @@ impl Tree {
             let (blobs, slivers) = crumbs(scene, blobs, Material::Leaf)?;
             grown.slivers += slivers;
             // printable by construction: what hangs is bevelled away
-            let (crown_solid, stood) = dt_kit::stand(
-                scene,
-                &blobs,
-                &wood,
-                Material::Leaf,
-                &dt_kit::Stand::default(),
-            )
-            .map_err(LookError::build)?;
+            let (crown_solid, stood) =
+                dt_kit::stand(scene, &blobs, &wood, Material::Leaf, &stand_rule)
+                    .map_err(LookError::build)?;
             grown.clump_cut_mm3 = stood.cut_mm3;
             let (crown_solid, slivers) = crumbs(scene, crown_solid, Material::Leaf)?;
             grown.slivers += slivers;
@@ -527,12 +525,13 @@ impl Tree {
                     ..leaves::LeafShape::default()
                 }
                 .scaled(s, LINE_MM);
-                let (placed, _) = leaves::place(
+                let (placed, lstats) = leaves::place(
                     &crown_solid.mesh(),
                     &wood.mesh(),
                     &shape,
                     seed.key("leaves"),
                 )?;
+                grown.leaves_failed_error = lstats.failed_error;
                 let n = u32::try_from(placed.len()).map_err(LookError::build)?;
                 if n > 0 {
                     let lslots = scene.slots(n, Material::Leaf).map_err(LookError::build)?;
@@ -544,7 +543,7 @@ impl Tree {
                         .map_err(LookError::build)?;
                     let ids: Vec<u32> = (0..n).map(|k| lslots.get(k).id()).collect();
                     let base = [wood.clone(), crown_solid.clone(), footing.clone()];
-                    let (kept, cull) = cull_leaves(&base, ls, &ids)?;
+                    let (kept, cull) = cull_leaves(&base, ls, &ids, printer)?;
                     grown.leaves_placed = placed.len();
                     grown.leaves_culled = cull.culled;
                     grown.leaves_cull_rounds = cull.rounds;
@@ -570,6 +569,30 @@ impl Tree {
     }
 }
 
+/// `trunk width`: the trunk is `w` across at the ground and tapers
+/// (by height) to its pipe-model radius at the first fork; the branches
+/// keep theirs. Scaling every radius instead fattened each branch by the
+/// same factor, so a wide trunk hung slabs of wood off the crown.
+fn set_trunk_width(g: &mut graph::Graph, w: f64) {
+    let ch = g.children();
+    let mut chain = vec![0];
+    while let [only] = ch[*chain.last().unwrap_or(&0)].as_slice() {
+        chain.push(*only);
+    }
+    let fork = *chain.last().unwrap_or(&0);
+    let (z0, z1) = (g.nodes[0][2], g.nodes[fork][2]);
+    let r_fork = g.radii[fork];
+    let r0 = (0.5 * w).max(TIP_FLOOR_MM);
+    for &i in &chain {
+        let t = if z1 - z0 > 1e-9 {
+            ((g.nodes[i][2] - z0) / (z1 - z0)).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        g.radii[i] = if i == 0 { r0 } else { r0 + (r_fork - r0) * t };
+    }
+}
+
 /// The smallest body [`crumbs`] keeps, mm³ (a printed line's bead,
 /// 0.45 × 0.45 × 0.2 mm, is 0.04).
 const CRUMB_MM3: f64 = 0.05;
@@ -584,13 +607,28 @@ fn crumbs(
     solid: Solid,
     material: Material,
 ) -> Result<(Solid, usize), LookError> {
+    drop_crumbs(scene, solid, material, false)
+}
+
+/// [`crumbs`], keeping sealed pockets (inside-out bodies) when
+/// `keep_voids`: only loose bodies under [`CRUMB_MM3`] go (what a wall's
+/// union leaves where a tiny closer meets the core's rounding).
+pub(crate) fn drop_crumbs(
+    scene: &mut Scene,
+    solid: Solid,
+    material: Material,
+    keep_voids: bool,
+) -> Result<(Solid, usize), LookError> {
     let bodies = leaves::split_bodies(&solid.mesh());
     if bodies.len() <= 1 {
         return Ok((solid, 0));
     }
     let keep: Vec<&TriMesh> = bodies
         .iter()
-        .filter(|b| dt_kit::signed_volume(b) >= CRUMB_MM3)
+        .filter(|b| {
+            let v = dt_kit::signed_volume(b);
+            v >= CRUMB_MM3 || (keep_voids && v < 0.0)
+        })
         .collect();
     if keep.len() == bodies.len() {
         return Ok((solid, 0));
@@ -661,9 +699,9 @@ fn cull_leaves(
     base: &[Solid],
     mut leaves: Vec<Solid>,
     ids: &[u32],
+    printer: &dt_kit::Printer,
 ) -> Result<(Vec<Solid>, Cull), LookError> {
     const MAX_ROUNDS: usize = 4;
-    let printer = dt_kit::Printer::new(0.45, 0.2, 55.0, 0.2);
     let mut ids: Vec<u32> = ids.to_vec();
     let mut cull = Cull {
         culled: 0,
@@ -682,7 +720,7 @@ fn cull_leaves(
                 *t = m.run_original_id[r];
             }
         }
-        let (ex, au) = dt_kit::audit(&m, [1e4, 1e4], &printer);
+        let (ex, au) = dt_kit::audit(&m, [1e4, 1e4], printer);
         let mut hang = vec![0.0; ids.len()];
         let mut seen = vec![false; ids.len()];
         let mut by_id: std::collections::HashMap<u32, usize> = std::collections::HashMap::new();
@@ -780,13 +818,64 @@ fn place(scene: &Scene, ctx: &Ctx<'_>, margin: f64, clear: f64) -> Result<[f64; 
     let sq = frame.square_mm;
     let [w, h] = frame.size_mm();
     let mut rng = Rng::new(ctx.seed.key("place"));
+    let a = ctx.area;
+    let step = frame.step_mm();
+    #[allow(clippy::cast_precision_loss)]
+    let xy = |k: usize| ((k % a.nx) as f64 * step, (k / a.nx) as f64 * step);
+    // the trunk a crown radius from the tile edge (all of the tile's
+    // middle when the crown is wider than the tile)
+    let m = margin.min(0.5 * w.min(h));
+    let inside =
+        |x: f64, y: f64| x >= m - 1e-9 && x <= w - m + 1e-9 && y >= m - 1e-9 && y <= h - m + 1e-9;
+    // the area's node nearest the tile's middle
+    let middle = || {
+        (0..a.bits.len())
+            .filter(|&k| a.bits[k])
+            .min_by(|&p, &q| {
+                let d = |k: usize| {
+                    let (x, y) = xy(k);
+                    libm::hypot(x - 0.5 * w, y - 0.5 * h)
+                };
+                d(p).total_cmp(&d(q))
+            })
+            .ok_or_else(|| LookError::build("the tree's area is empty"))
+    };
     let (x, y) = if let Some([[x0, x1], [y0, y1]]) = ctx.at {
         let u = rng.random();
         let v = rng.random();
-        ((x0 + u * (x1 - x0)) * sq, (y0 + v * (y1 - y0)) * sq)
+        // nudged in so the crown stays on the tile (D12: never clipped)
+        let x = ((x0 + u * (x1 - x0)) * sq).clamp(m, w - m);
+        let y = ((y0 + v * (y1 - y0)) * sq).clamp(m, h - m);
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let node = |x: f64, y: f64| {
+            let i = libm::round(x / step).clamp(0.0, (a.nx - 1) as f64) as usize;
+            let j = libm::round(y / step).clamp(0.0, (a.ny - 1) as f64) as usize;
+            j * a.nx + i
+        };
+        if a.bits[node(x, y)] {
+            (x, y)
+        } else {
+            // outside its area (`in=`): nudged to the nearest area node
+            // that keeps the crown on the tile, as the automatic path
+            // keeps to its area
+            let near = |k: usize| {
+                let (px, py) = xy(k);
+                libm::hypot(px - x, py - y)
+            };
+            let best = (0..a.bits.len())
+                .filter(|&k| {
+                    a.bits[k] && {
+                        let (px, py) = xy(k);
+                        inside(px, py)
+                    }
+                })
+                .min_by(|&p, &q| near(p).total_cmp(&near(q)).then(p.cmp(&q)));
+            xy(match best {
+                Some(k) => k,
+                None => middle()?,
+            })
+        }
     } else {
-        let a = ctx.area;
-        let step = frame.step_mm();
         let support = scene.support();
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let rr = libm::ceil(clear / step) as usize;
@@ -805,30 +894,18 @@ fn place(scene: &Scene, ctx: &Ctx<'_>, margin: f64, clear: f64) -> Result<[f64; 
             }
             true
         };
-        #[allow(clippy::cast_precision_loss)]
-        let xy = |k: usize| ((k % a.nx) as f64 * step, (k / a.nx) as f64 * step);
-        let m = margin.min(0.5 * w.min(h));
         let cands: Vec<usize> = (0..a.bits.len())
             .filter(|&k| a.bits[k])
             .filter(|&k| {
                 let (x, y) = xy(k);
-                x >= m - 1e-9 && x <= w - m + 1e-9 && y >= m - 1e-9 && y <= h - m + 1e-9
+                inside(x, y)
             })
             .collect();
         let free: Vec<usize> = cands.iter().copied().filter(|&k| clear_of(k)).collect();
         let pick = if free.is_empty() { &cands } else { &free };
         let k = if pick.is_empty() {
             // nudged: the area's node nearest the tile's middle
-            (0..a.bits.len())
-                .filter(|&k| a.bits[k])
-                .min_by(|&p, &q| {
-                    let d = |k: usize| {
-                        let (x, y) = xy(k);
-                        libm::hypot(x - 0.5 * w, y - 0.5 * h)
-                    };
-                    d(p).total_cmp(&d(q))
-                })
-                .ok_or_else(|| LookError::build("the tree's area is empty"))?
+            middle()?
         } else {
             #[allow(
                 clippy::cast_possible_truncation,
@@ -883,9 +960,33 @@ impl Look for Tree {
         let mut rng = Rng::new(ctx.seed.key("sizes"));
         let _ = draw(&self.p.height, &mut rng);
         let _ = draw(&self.p.trunk, &mut rng);
-        let margin = 0.5 * draw(&self.p.width, &mut rng) * s;
+        let mut margin = 0.5 * draw(&self.p.width, &mut rng) * s;
+        let _ = draw(&self.p.clump_size, &mut rng);
+        let _ = draw(&self.p.leaf_length, &mut rng);
+        let _ = draw(&self.p.leaf_width, &mut rng);
+        if let Some(v) = &self.p.trunk_width {
+            // a set trunk width: its flared foot must stand on the tile
+            // too (it would hang past the edge), and must fit on it
+            let foot = 0.5 * draw(v, &mut rng) * s * (1.0 + FLARE);
+            let [w, h] = scene.frame().size_mm();
+            if 2.0 * foot > w.min(h) {
+                return Err(LookError::control(
+                    "trunk/width",
+                    format!(
+                        "a trunk {:.1} mm wide flares to {:.1} mm at the ground, wider than the tile",
+                        2.0 * foot / s / (1.0 + FLARE),
+                        2.0 * foot / s
+                    ),
+                    format!(
+                        "make trunk width at most {:.1} mm on this tile",
+                        w.min(h) / s / (1.0 + FLARE)
+                    ),
+                ));
+            }
+            margin = margin.max(foot);
+        }
         let at = place(scene, ctx, margin, 3.0 * s)?;
-        let b = self.grow(scene, ctx.seed, at)?;
+        let b = self.grow(scene, ctx.seed, at, &ctx.printer)?;
         let gr = &b.grown;
         #[allow(clippy::cast_precision_loss)]
         for (k, v) in [
@@ -906,6 +1007,7 @@ impl Look for Tree {
             ("tree.leaves_culled", gr.leaves_culled as f64),
             ("tree.leaves_cull_rounds", gr.leaves_cull_rounds as f64),
             ("tree.leaves", gr.leaves as f64),
+            ("tree.leaves_failed_error", gr.leaves_failed_error as f64),
             ("tree.x_mm", b.at[0]),
             ("tree.y_mm", b.at[1]),
             ("tree.height_mm", b.top_mm - b.at[2]),
@@ -922,7 +1024,10 @@ impl Look for Tree {
             let (x, y) = ((k % nx) as f64 * step, (k / nx) as f64 * step);
             *bit = libm::hypot(x - b.at[0], y - b.at[1]) <= b.stamp_r_mm;
         }
-        scene.stamp(&mask, b.top_mm);
+        // stamped at its foot, not its crown top: the support is what
+        // later things stand on, and nothing stands on a tree (a second
+        // tree there would be planted in this one's crown)
+        scene.stamp(&mask, b.at[2]);
         scene.add(
             Tag {
                 kind: "tree",

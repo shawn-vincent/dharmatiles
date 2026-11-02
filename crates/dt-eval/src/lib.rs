@@ -409,6 +409,7 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
                     seed: pinned.map_or_else(|| root.path(&paths[i]), Seed::new),
                     along: tile.stack.get(i).and_then(|e| e.along.as_deref()),
                     at: tile.stack.get(i).and_then(|e| e.at),
+                    printer: opts.printer,
                 };
                 c.looks[i].build(&mut scene, &ctx).map_err(|e| {
                     let msg = format!("{}: {}", paths[i], e.message);

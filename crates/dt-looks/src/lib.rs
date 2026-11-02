@@ -154,6 +154,10 @@ pub struct Ctx<'a> {
     /// `[y_lo, y_hi]` (equal ends for a fixed point; a range is drawn
     /// from the entry's seed). `None` without `at=`.
     pub at: Option<[[f64; 2]; 2]>,
+    /// The printer the build is checked against: looks that cut or cull
+    /// to the gate's rule (a tree's [`dt_kit::stand`], its leaf cull) use
+    /// its numbers.
+    pub printer: dt_kit::Printer,
 }
 
 /// A built-in look.
