@@ -239,7 +239,7 @@ atom   := number "%"? | name | "(" sum ")"</code></pre>
 <tr><td><code>trunk width</code></td><td>mm</td><td></td><td>Trunk thickness at the ground.</td></tr>
 <tr><td><code>crown width</code></td><td>mm</td><td>30</td><td>Crown width.</td></tr>
 <tr><td><code>crown shape</code></td><td><code>round</code> / <code>cone</code> / <code>wide</code> / <code>tall</code></td><td><code>round</code></td><td>Silhouette. <code>round</code> is the Python tree's envelope; the others are provisional.</td></tr>
-<tr><td><code>crown clumps</code></td><td>count, 8–200</td><td>200</td><td>Foliage clumps, one per branch end.</td></tr>
+<tr><td><code>crown clumps</code></td><td>count, 8–200</td><td>32</td><td>Foliage clumps, one per branch end. 32 is what the library tiles use.</td></tr>
 <tr><td><code>crown clump-size</code></td><td>mm</td><td></td><td>Size of each clump.</td></tr>
 <tr><td><code>crown branching</code></td><td><code>open</code> / <code>normal</code> / <code>dense</code></td><td><code>normal</code></td><td>Few long limbs or many forks. The only branching control in a tile. <code>normal</code> is the Python tree's defaults; the others are provisional.</td></tr>
 <tr><td><code>leaves</code></td><td><code>on</code> / <code>clumps-only</code> / <code>bare</code></td><td><code>on</code></td><td>Separate leaves, just clumps, or a winter tree.</td></tr>
@@ -539,7 +539,7 @@ cliff along=north height=55 {
   <li>Two more top-level nodes: <code>printer</code> (<code>library/printers/default.kdl</code>, the printability floors) and <code>edges</code> (<code>library/parts/edges.kdl</code>, the edge contract, applied to every tile without a <code>use</code> line).</li>
   <li><code>use</code> paths: a bare path is the bundled library; <code>lib:</code> is optional; <code>./</code> and <code>../</code> are project files. The review's examples wrote <code>lib:</code> always.</li>
   <li>Every stack entry takes <code>id=</code>, besides <code>seed=</code>.</li>
-  <li>Defaults the R6 page did not state are now fixed in the table: <code>crown clumps</code> 200, rock size <code>"2..10"</code>, wall <code>style</code> <code>cut-stone</code>, cliff <code>stone-size</code> <code>rubble</code> and <code>top</code> <code>bare</code>, grass <code>flow</code> <code>wavy</code>, dirt <code>clods</code> <code>some</code>.</li>
+  <li>Defaults the R6 page did not state are now fixed in the table: <code>crown clumps</code> 200 (32 from P5, the library tiles' value), rock size <code>"2..10"</code>, wall <code>style</code> <code>cut-stone</code>, cliff <code>stone-size</code> <code>rubble</code> and <code>top</code> <code>bare</code>, grass <code>flow</code> <code>wavy</code>, dirt <code>clods</code> <code>some</code>.</li>
   <li>Many word values have provisional numbers (crown <code>cone</code>/<code>wide</code>/<code>tall</code>, branching <code>open</code>/<code>dense</code>, rock <code>columns</code>/<code>blocks</code>/<code>slabs</code>, stone-size <code>broken</code>, clods <code>few</code>/<code>many</code>, flow <code>combed</code>/<code>wild</code>, wall height <code>low</code>), to be tuned in each look's phase.</li>
   <li>The <code>"1..6^2"</code> skew is gone entirely, with an error pointing at <code>mostly=</code>. The review had proposed keeping it as an expert form.</li>
   <li>The cliff's <code>rock</code> takes explicit weights as sub-controls: <code>rock columns=… blocks=… slabs=… odd=… monoliths=…</code>.</li>
