@@ -394,6 +394,28 @@ fn a_tile_is_1x1_unless_it_says() {
     assert_fails("tile t size=2x2 { }", "dt::syntax", "\"2x2\"");
 }
 
+#[test]
+fn a_tile_is_at_most_64_squares_a_side() {
+    let h = snippet("tile t size=\"64x64\" { }")
+        .tile()
+        .unwrap()
+        .header()
+        .unwrap()
+        .clone();
+    assert_eq!((h.cols, h.rows), (64, 64));
+    assert_fails("tile t size=\"65x1\" { }", "dt::tile", "at most 64 squares");
+    assert_fails(
+        "tile t size=\"1x100000\" { }",
+        "dt::tile",
+        "at most 64 squares",
+    );
+    assert_fails(
+        "tile t size=\"33554432x1\" { }",
+        "dt::tile",
+        "several tiles",
+    );
+}
+
 // ---- D6 / V4: edges, edge paths, side= -----------------------------------
 
 #[test]

@@ -19,6 +19,11 @@ pub const SQUARE_MM: f64 = 35.0;
 /// an author may opt in to it with `(h)1.2`.
 pub const H_MM: f64 = 33.1;
 
+/// The most squares a tile has across or up.  Bigger boards are several
+/// tiles; the cap also keeps `check` from planning a grid that cannot fit
+/// in memory (a 64×64 tile is 8193 × 8193 height nodes).
+pub const MAX_SQUARES: u32 = 64;
+
 /// What a value measures, which fixes what may be written for it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Axis {

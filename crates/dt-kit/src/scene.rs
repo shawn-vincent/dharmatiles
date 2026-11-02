@@ -45,12 +45,15 @@ impl Frame {
         ]
     }
 
-    /// Surface nodes across and up.
+    /// Surface nodes across and up.  Computed in `usize` and saturating,
+    /// so a huge frame asks for an impossible grid instead of wrapping to
+    /// a tiny one (documents cap tiles at 64 squares a side).
     #[must_use]
     pub const fn nodes(&self) -> (usize, usize) {
+        let per = self.cells_per_square as usize;
         (
-            (self.cols * self.cells_per_square + 1) as usize,
-            (self.rows * self.cells_per_square + 1) as usize,
+            (self.cols as usize).saturating_mul(per).saturating_add(1),
+            (self.rows as usize).saturating_mul(per).saturating_add(1),
         )
     }
 
@@ -381,4 +384,18 @@ pub(crate) fn relabel(slot: Slot, s: &dt_geom::Solid) -> Result<Solid, KitError>
         s.with_original_id(slot.id, slot.face_base)
             .map_err(KitError::Mesh)?,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Frame;
+
+    #[test]
+    #[cfg(target_pointer_width = "64")]
+    fn nodes_do_not_wrap() {
+        assert_eq!(Frame::dungeonblocks(1, 1).nodes(), (129, 129));
+        // 2^25 × 128 = 2^32: wrapped to 1 node in u32
+        let (nx, _) = Frame::dungeonblocks(1 << 25, 1).nodes();
+        assert_eq!(nx as u64, (1u64 << 32) + 1);
+    }
 }

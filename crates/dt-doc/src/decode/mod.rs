@@ -19,7 +19,7 @@ use crate::model::{
     Spanned, TileHeader, Use,
 };
 use crate::place::{Corner, Edge, Point};
-use crate::schema::{self, Axis, Control, Kind, did_you_mean};
+use crate::schema::{self, Axis, Control, Kind, MAX_SQUARES, did_you_mean};
 
 /// Decode one KDL v2 file.  `name` labels the source in diagnostics.
 ///
@@ -713,6 +713,20 @@ impl<'k> Decoder<'k> {
                         (c > 0 && r > 0).then_some((c, r))
                     });
                     match parsed {
+                        Some((c, r)) if c > MAX_SQUARES || r > MAX_SQUARES => {
+                            self.err(
+                                "dt::tile",
+                                value_span(e),
+                                format!(
+                                    "a tile is at most {MAX_SQUARES} squares each way, not {c}x{r}"
+                                ),
+                                "too big",
+                            )
+                            .help = Some(
+                                "build a large board as several tiles that butt at their edges"
+                                    .to_owned(),
+                            );
+                        }
                         Some((c, r)) => (h.cols, h.rows) = (c, r),
                         None => {
                             self.err(
