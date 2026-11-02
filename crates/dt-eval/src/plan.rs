@@ -113,6 +113,7 @@ mod tests {
         Plan {
             writes,
             reads: reads.to_vec(),
+            cell_mm: None,
         }
     }
 

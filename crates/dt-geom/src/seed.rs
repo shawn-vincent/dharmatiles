@@ -46,6 +46,82 @@ impl Seed {
     }
 }
 
+/// A seeded random stream (SplitMix64), for draws that must follow one
+/// another, such as dart throwing. Make one per keyed seed; never share
+/// one across threads. Seeded maths uses `libm` (R2).
+#[derive(Clone, Debug)]
+pub struct Rng(u64);
+
+impl Rng {
+    /// The stream for a seed.
+    #[must_use]
+    pub const fn new(seed: Seed) -> Self {
+        Self(seed.0)
+    }
+
+    /// The next 64 random bits.
+    pub const fn next_u64(&mut self) -> u64 {
+        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = self.0;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+
+    /// Uniform in [0, 1).
+    pub fn random(&mut self) -> f64 {
+        #[allow(clippy::cast_precision_loss)]
+        let u = (self.next_u64() >> 11) as f64 * (1.0 / (1u64 << 53) as f64);
+        u
+    }
+
+    /// Uniform in [lo, hi).
+    pub fn uniform(&mut self, lo: f64, hi: f64) -> f64 {
+        lo + (hi - lo) * self.random()
+    }
+
+    /// A whole number from `lo` to `hi`, both included.
+    pub fn int(&mut self, lo: i64, hi: i64) -> i64 {
+        if hi <= lo {
+            return lo;
+        }
+        #[allow(clippy::cast_sign_loss)]
+        let span = (hi - lo) as u64 + 1;
+        #[allow(clippy::cast_possible_wrap)]
+        let k = (self.next_u64() % span) as i64;
+        lo + k
+    }
+
+    /// Normal with mean `mu` and standard deviation `sigma` (Box–Muller).
+    pub fn normal(&mut self, mu: f64, sigma: f64) -> f64 {
+        let u1 = 1.0 - self.random(); // (0, 1]
+        let u2 = self.random();
+        mu + sigma * libm::sqrt(-2.0 * libm::log(u1)) * libm::cos(2.0 * core::f64::consts::PI * u2)
+    }
+
+    /// Poisson with mean `lambda`: Knuth's product method up to 30, the
+    /// rounded normal approximation above.
+    pub fn poisson(&mut self, lambda: f64) -> u64 {
+        if lambda.is_nan() || lambda <= 0.0 {
+            return 0;
+        }
+        if lambda > 30.0 {
+            let v = libm::round(self.normal(lambda, libm::sqrt(lambda)));
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            return v.max(0.0) as u64;
+        }
+        let limit = libm::exp(-lambda);
+        let (mut k, mut p) = (0u64, 1.0);
+        loop {
+            p *= self.random();
+            if p <= limit {
+                return k;
+            }
+            k += 1;
+        }
+    }
+}
+
 /// Domain tag keeping `index(i)` apart from `key(..)`.
 const INDEX_TAG: u64 = 0x6474_2d69_6e64_6578; // "dt-index"
 
@@ -101,6 +177,28 @@ mod tests {
             Seed::new(1).path("tile/meadow").value(),
             Seed::new(1).key("tile").key("meadow").value()
         );
+    }
+
+    #[test]
+    fn rng_draws_are_in_range_and_keyed() {
+        let mut r = Rng::new(Seed::new(9).key("a"));
+        let mut s = Rng::new(Seed::new(9).key("a"));
+        for _ in 0..1000 {
+            let u = r.random();
+            assert!((0.0..1.0).contains(&u));
+            assert_eq!(u.to_bits(), s.random().to_bits());
+            let k = r.int(4, 7);
+            s.int(4, 7);
+            assert!((4..=7).contains(&k));
+        }
+        let n: Vec<f64> = (0..20_000).map(|_| r.normal(1.0, 2.0)).collect();
+        #[allow(clippy::cast_precision_loss)]
+        let m = n.iter().sum::<f64>() / n.len() as f64;
+        assert!((m - 1.0).abs() < 0.05);
+        #[allow(clippy::cast_precision_loss)]
+        let p = (0..4000).map(|_| r.poisson(3.5)).sum::<u64>() as f64 / 4000.0;
+        assert!((p - 3.5).abs() < 0.1, "{p}");
+        assert_eq!(r.poisson(0.0), 0);
     }
 
     #[test]

@@ -25,6 +25,7 @@ manifold-parallel = ["manifold-csg?/parallel", "manifold-rust?/parallel"]
 [dependencies]
 bytemuck.workspace = true
 glam.workspace = true
+libm.workspace = true
 obvhs.workspace = true
 parry3d.workspace = true
 rayon.workspace = true

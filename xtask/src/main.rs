@@ -16,7 +16,7 @@ commands:
 /// Each look the harness knows: its Rust tile, if it has been ported.
 const LOOKS: &[(&str, Option<&str>)] = &[
     ("flat", Some("lib:tiles/test/flat-1x1.kdl")),
-    ("dirt", None),
+    ("dirt", Some("lib:tiles/test/dirt-2x2.kdl")),
 ];
 
 fn main() -> ExitCode {

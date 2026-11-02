@@ -14,11 +14,19 @@ Usage::
     python tests/parity/run_lab.py                 # dirt, seeds 1 2 3 4
     python tests/parity/run_lab.py --seeds 1 --out /tmp/x
     python tests/parity/run_lab.py --look flat --beside out/parity/flat/rust
+    python tests/parity/run_lab.py --look dirt-stones   # dirtlab as shipped, for reference
+
+Looks: ``dirt`` is dirtlab with its stones off (stones are Phase 3, so the
+Rust dirt has none); ``dirt-stones`` is dirtlab as approved, with stones;
+``flat`` is the P1 flat 1×1.
 
 ``--beside DIR`` puts the Rust build of the same seeds next to each Python
 view: DIR/s<seed>/ holds the Rust STL and its four ``--png`` views (as
 ``cargo xtask parity <look>`` writes them).  Rust metrics come from the
-same ``stl_metrics`` run on the Rust STL.
+same ``stl_metrics`` run on the Rust STL, with the Rust build's own edge
+level (``edge_mm`` in its build record).  The Rust ``"stats"`` go under
+``"lab"`` in rust-metrics.json, and ``parity.json`` gives the verdict over
+all seeds (``PARITY``).
 
 Output: ``out/parity/<look>/`` (gitignored) unless ``--out`` is given.
 """
@@ -47,6 +55,10 @@ BANDS_MM = ((0.3, 1.0), (1.0, 3.0), (3.0, 10.0), (10.0, 40.0))
 # Rock sizes (equivalent diameter, mm): dirtlab's small and medium pebbles, stones.
 ROCK_BINS_MM = (0.5, 1.5, 4.0, 8.0, 1e9)
 TOPHAT_MM, TOPHAT_RISE_MM = 6.0, 0.35   # a "rock" stands this far above its 6 mm surroundings
+# The printable-texture rule (docs/standards/printing.html#texture).
+TEX_WINDOW_MM, TEX_LAYER_MM, TEX_MIN_OK = 1.5, 0.2, 0.97
+TEX_GRID_MM = 0.05                 # dense, so the measure does not depend on the mesh grid
+TEX_RIM_MM = 1.0                   # dirtlab RIM_TEX_MM: the texture ramps in over the outer 1 mm
 VIEWS = (("painted", 40, -120), ("top", 89, -90), ("low", 14, -150), ("close 20 mm", 38, -125))
 
 
@@ -72,6 +84,48 @@ def top_surface(mesh: trimesh.Trimesh, footprint) -> tuple[np.ndarray, np.ndarra
     z[ri] = loc[:, 2]
     z = z.reshape(X.shape)
     return z, np.isnan(z)
+
+
+def texture_ok_fraction(mesh: trimesh.Trimesh, footprint) -> float:
+    """The printable-texture rule, measured: the share of 1.5 mm windows with
+    at least one layer (0.2 mm) of relief.  The rule holds at >= 0.97.
+
+    Definition: the top surface is sampled by vertical rays on a dense
+    TEX_GRID_MM (0.05 mm) lattice that includes the tile edges.  Every
+    sample is the centre of a sliding square window spanning exactly
+    TEX_WINDOW_MM (31 × 31 samples; clipped at the tile edge); its relief is
+    max − min of Z inside it.  The interior is the window centres at least
+    TEX_RIM_MM (1 mm, where dirtlab's texture ramps in) from the tile edge.
+    Stones and pebbles count like any other relief: the STL cannot tell them
+    apart.
+
+    Calibration (the original texcheck.py is lost): dirtlab round 2 with
+    stones, seeds 1–3, documented as 1.9% and "about 2–2.6%" of windows
+    under one layer; this measure gives 2.10%, 1.92%, 2.66%.  Sampling on
+    the 0.15 mm mesh vertices with node-aligned windows gives 1.83%, 1.65%,
+    2.24% (and 1.90% for seed 1 on dirtlab's height field without the
+    stones, likely texcheck's own definition) but depends on the mesh grid
+    lining up with the samples, so the dense lattice is the shared one.
+    Cell-centred 0.15 mm samples lose relief to interpolation (2.75% for
+    seed 1) and are not used."""
+    W, H = footprint
+    nx, ny = int(round(W / TEX_GRID_MM)) + 1, int(round(H / TEX_GRID_MM)) + 1
+    eps = 1e-3
+    xs = np.clip(np.linspace(0.0, W, nx), eps, W - eps)
+    ys = np.clip(np.linspace(0.0, H, ny), eps, H - eps)
+    X, Y = np.meshgrid(xs, ys)
+    o = np.c_[X.ravel(), Y.ravel(), np.full(X.size, mesh.bounds[1, 2] + 5.0)]
+    loc, ri, _ = mesh.ray.intersects_location(o, np.tile([0.0, 0.0, -1.0], (len(o), 1)),
+                                              multiple_hits=False)
+    z = np.full(X.size, np.nan)
+    z[ri] = loc[:, 2]
+    Z = z.reshape(X.shape)
+    Z = np.where(np.isnan(Z), np.nanmin(Z), Z)
+    k = int(round(TEX_WINDOW_MM / (W / (nx - 1)))) + 1
+    relief = ndimage.maximum_filter(Z, k, mode="nearest") - ndimage.minimum_filter(Z, k, mode="nearest")
+    gx, gy = np.meshgrid(np.linspace(0.0, W, nx), np.linspace(0.0, H, ny))
+    inner = np.minimum.reduce([gx, gy, W - gx, H - gy]) >= TEX_RIM_MM
+    return float((relief[inner] >= TEX_LAYER_MM).mean())
 
 
 def relief_spectrum(Z: np.ndarray) -> dict:
@@ -131,22 +185,31 @@ def stl_metrics(mesh: trimesh.Trimesh, footprint, edge_mm: float) -> dict:
         "relief_mm": {"p05": float(np.percentile(rel, 5)), "median": float(np.median(rel)),
                       "p95": float(np.percentile(rel, 95)), "max": float(rel.max())},
         "relief_spectrum_rms_mm": relief_spectrum(Z),
+        "texture_ok_fraction": texture_ok_fraction(mesh, footprint),
         "overhang_mm2": float(mesh.area_faces[ov].sum()),
         "overhang_normal_mm2": float(mesh.area_faces[nrm].sum()),
     }, ov
 
 
 # ── Labs ────────────────────────────────────────────────────────────────────
-def build_dirt(seed: int):
-    """dirtlab 2×2 at `seed`: (mesh, painted mesh, footprint, edge, lab stats)."""
+def build_dirt(seed: int, stones: bool = False):
+    """dirtlab 2×2 at `seed`: (mesh, painted mesh, footprint, edge, lab stats).
+    Stones off by default (``STONES_2X2 = (0, 0)`` for this build only):
+    they come with rocks in Phase 3, so the Rust dirt has none."""
     import dirtlab as dl
-    t0 = time.perf_counter()
-    f, mesh = dl.build(seed)
-    dt = time.perf_counter() - t0
+    saved = dl.STONES_2X2
+    if not stones:
+        dl.STONES_2X2 = (0, 0)
+    try:
+        t0 = time.perf_counter()
+        f, mesh = dl.build(seed)
+        dt = time.perf_counter() - t0
+    finally:
+        dl.STONES_2X2 = saved
     st = f.stats
     lab = {"clods": st["clods"], "pebbles_small": st["small"], "pebbles_medium": st["medium"],
            "stones": st["stones"], "bodies": st["bodies"], "overhang_mm2_45deg": st["overhang"],
-           "pebble_cover": float(f.pebble.mean())}
+           "pebbles_rounded": st["rounded"], "pebble_cover": float(f.pebble.mean())}
     return mesh, dl.painted(f, mesh), (f.W, f.H), dl.EDGE_MM, lab, dt
 
 
@@ -184,7 +247,75 @@ def build_flat(seed: int):
     return mesh, painted, (surf.tile_w, surf.tile_h), 5.0, {"peg_mm": peg}, dt
 
 
-LABS = {"dirt": build_dirt, "flat": build_flat}
+LABS = {"dirt": build_dirt, "dirt-stones": lambda seed: build_dirt(seed, stones=True),
+        "flat": build_flat}
+# What the Python column is, in the captions.
+LAB_NOTE = {"dirt": "dirtlab, stones off (P3)", "dirt-stones": "dirtlab with stones",
+            "flat": "flat 1×1 twin"}
+
+
+# ── Parity verdict (plan.html, "The parity harness") ────────────────────────
+# (name, where in the metrics, test, tolerance).  "rel": |Rust − Py| ≤ tol ×
+# Python mean; "abs": |Rust − Py| ≤ tol (mm); "min": Rust mean ≥ tol;
+# "info": reported, not judged.
+PARITY = [
+    ("clods", ("lab", "clods"), "rel", 0.15),
+    ("pebbles_small", ("lab", "pebbles_small"), "rel", 0.15),
+    ("pebbles_medium", ("lab", "pebbles_medium"), "rel", 0.15),
+    ("rock_count", ("rock_count",), "rel", 0.15),
+    *[(f"spectrum {lo:g}-{hi:g}mm", ("relief_spectrum_rms_mm", f"{lo:g}-{hi:g}mm"), "rel", 0.20)
+      for lo, hi in BANDS_MM],
+    ("texture_ok_fraction", ("texture_ok_fraction",), "min", TEX_MIN_OK),
+    ("relief p05 (mm over edge)", ("relief_mm", "p05"), "info", None),
+    ("relief median (mm over edge)", ("relief_mm", "median"), "abs", 0.3),
+    ("relief p95 (mm over edge)", ("relief_mm", "p95"), "abs", 0.3),
+]
+
+
+def _dig(d, path):
+    for k in path:
+        if not isinstance(d, dict) or d.get(k) is None:
+            return None
+        d = d[k]
+    return float(d)
+
+
+def parity_verdict(look: str, py: dict, rs: dict) -> dict:
+    """Python vs Rust means over the seeds, per PARITY row; writes nothing."""
+    rows = []
+    for name, path, test, tol in PARITY:
+        pv = [v for v in (_dig(py[s], path) for s in py) if v is not None]
+        rv = [v for v in (_dig(rs[s], path) for s in rs) if v is not None]
+        pm = float(np.mean(pv)) if pv else None
+        rm = float(np.mean(rv)) if len(rv) == len(rs) else None   # every seed, or missing
+        ratio = rm / pm if (pm and rm is not None) else None
+        if test == "info":
+            ok = None
+        elif rm is None or (pm is None and test != "min"):
+            ok = False
+        elif test == "rel":
+            ok = abs(rm - pm) <= tol * abs(pm)
+        elif test == "abs":
+            ok = abs(rm - pm) <= tol
+        else:
+            ok = rm >= tol
+        rows.append({"metric": name, "python_mean": pm, "rust_mean": rm, "ratio": ratio,
+                     "test": test, "tolerance": tol, "pass": ok,
+                     **({} if rm is not None else {"note": "missing from the Rust side"})})
+    judged = [r["pass"] for r in rows if r["pass"] is not None]
+    return {"look": look, "seeds": sorted(py), "pass": all(judged), "metrics": rows}
+
+
+def print_verdict(v: dict) -> None:
+    f = lambda x: "—" if x is None else f"{x:.4g}"  # noqa: E731
+    tol = {"rel": lambda t: f"±{t:.0%}", "abs": lambda t: f"±{t:g} mm",
+           "min": lambda t: f"≥ {t:g}", "info": lambda t: "info"}
+    print(f"parity {v['look']} seeds {v['seeds']}: {'PASS' if v['pass'] else 'FAIL'}")
+    print(f"  {'metric':30} {'python':>10} {'rust':>10} {'ratio':>7}  {'tolerance':>10}  verdict")
+    for r in v["metrics"]:
+        verdict = {True: "pass", False: "FAIL", None: ""}[r["pass"]]
+        print(f"  {r['metric']:30} {f(r['python_mean']):>10} {f(r['rust_mean']):>10} "
+              f"{f(r['ratio']):>7}  {tol[r['test']](r['tolerance']):>10}  {verdict}")
 
 
 # ── Rendering ───────────────────────────────────────────────────────────────
@@ -271,8 +402,8 @@ def caption(who, met, build_s):
     return (f"{who}: bare {met['bare_fraction']:.3f} · rocks {met['rock_count']} "
             f"{list(met['rock_hist'].values())} · {met['faces']:,} faces · bodies {met['bodies']} · "
             f"watertight {met['watertight']} · vol {met['volume_mm3']:.1f} mm³ · "
-            f"see-through {met['see_through_cells']} · overhang {met['overhang_mm2']:.2f} mm² (red) · "
-            f"build {build_s:.2f}s")
+            f"see-through {met['see_through_cells']} · texture ok {met['texture_ok_fraction']:.1%} · "
+            f"overhang {met['overhang_mm2']:.2f} mm² (red) · build {build_s:.2f}s")
 
 
 def run(look: str, seeds: list[int], out: pathlib.Path, beside: pathlib.Path | None = None) -> pathlib.Path:
@@ -281,7 +412,8 @@ def run(look: str, seeds: list[int], out: pathlib.Path, beside: pathlib.Path | N
     cell, head, cap = (620, 500), (70 if beside else 44), 34
     sheet = Image.new("RGB", (cell[0] * cols, (head + cell[1] + cap) * len(seeds)), (245, 245, 242))
     dr = ImageDraw.Draw(sheet)
-    summary = {}
+    summary, py_all, rs_all = {}, {}, {}
+    note = LAB_NOTE.get(look, look)
     for r, seed in enumerate(seeds):
         sd = out / f"s{seed}"
         sd.mkdir(exist_ok=True)
@@ -289,24 +421,28 @@ def run(look: str, seeds: list[int], out: pathlib.Path, beside: pathlib.Path | N
         mesh.export(sd / f"{look}-s{seed}.stl")
         t0 = time.perf_counter()
         met, ov = stl_metrics(mesh, fp, edge)
-        met.update(build_s=build_s, metrics_s=time.perf_counter() - t0, lab=lab, look=look, seed=seed)
+        met.update(build_s=build_s, metrics_s=time.perf_counter() - t0, edge_mm=edge, lab=lab, look=look,
+                   seed=seed)
         (sd / "metrics.json").write_text(json.dumps(met, indent=2))
-        summary[seed] = met
+        summary[seed] = py_all[seed] = met
         pm = paint_overhang(painted, ov)
         c0 = fp[0] / 2 - 10
         y = r * (head + cell[1] + cap)
         dr.rectangle([0, y, sheet.width, y + head - 6], fill=(225, 228, 235))
-        dr.text((12, y + 9), caption(f"{look} s{seed} Python", met, build_s), fill=(25, 25, 25), font=font(19))
+        dr.text((12, y + 9), caption(f"{look} s{seed} Python ({note})", met, build_s), fill=(25, 25, 25), font=font(19))
         rust = None
         if beside:
             rd = beside / f"s{seed}"
             stl = next(iter(sorted(rd.rglob("*.stl"))))
             rmesh = trimesh.load(stl)
-            rmet, _ = stl_metrics(rmesh, fp, edge)
             rec = json.loads(stl.with_suffix(".build.json").read_text())
-            rmet.update(build_s=rec["build_s"], look=look, seed=seed, rust_audit=rec["audit"])
+            redge = float(rec.get("edge_mm", edge))   # Rust dirt sits at 3.4 mm, dirtlab at 4.0
+            rmet, _ = stl_metrics(rmesh, fp, redge)
+            rmet.update(build_s=rec["build_s"], edge_mm=redge, lab=rec.get("stats", {}), look=look,
+                        seed=seed, rust_audit=rec["audit"])
             (sd / "rust-metrics.json").write_text(json.dumps(rmet, indent=2))
             summary[seed] = {"python": met, "rust": rmet}
+            rs_all[seed] = rmet
             dr.text((12, y + 36), caption(f"{look} s{seed} Rust  ", rmet, rec["build_s"]), fill=(25, 25, 25), font=font(19))
             rust = {p.stem.rsplit("-", 1)[-1]: p for p in rd.rglob("*.png")}
         for k, (name, elev, azim) in enumerate(VIEWS):
@@ -330,8 +466,13 @@ def run(look: str, seeds: list[int], out: pathlib.Path, beside: pathlib.Path | N
                 dr.text((x + 14, y + head + cell[1] + 6), f"s{seed} · {name} · Rust",
                         fill=(140, 40, 20), font=font(20))
         print(f"  {look} s{seed}: bare {met['bare_fraction']:.3f}, rocks {met['rock_count']}, "
+              f"texture ok {met['texture_ok_fraction']:.1%}, "
               f"overhang {met['overhang_mm2']:.2f} mm², build {build_s:.1f}s")
     (out / "summary.json").write_text(json.dumps(summary, indent=2))
+    if beside:
+        v = parity_verdict(look, py_all, rs_all)
+        (out / "parity.json").write_text(json.dumps(v, indent=2))
+        print_verdict(v)
     path = out / "contact-sheet.png"
     sheet.save(path)
     print(f"→ {path}")

@@ -19,8 +19,8 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use clap::{Parser, Subcommand};
-use dt_eval::{Built, Diag, Files, Options};
-use dt_kit::{VIEWS, paint, render, stl};
+use dt_eval::{Built, Diag, Files, Options, Source};
+use dt_kit::{VIEWS, render, stl};
 use serde_json::{Value, json};
 
 #[derive(Parser)]
@@ -66,16 +66,47 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// List the built-in looks, or one look's controls.
+    Looks {
+        /// A look's name: list its controls with units, ranges and defaults.
+        name: Option<String>,
+        /// One JSON object on stdout.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Build tiles, then rebuild each whenever it or a file it uses changes.
+    /// Ctrl-C stops.
+    Watch {
+        /// Tile documents: files, or `lib:tiles/…` (built once; the library
+        /// is inside the program).
+        #[arg(required = true)]
+        paths: Vec<String>,
+        /// Connector system.
+        #[arg(long, default_value = "db")]
+        system: String,
+        /// Replace each tile's seed.
+        #[arg(long)]
+        seed: Option<u64>,
+        /// Output folder (default: `out/` beside `dharmatiles.kdl`, else here).
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Also write the four preview views as PNG, overhangs red.
+        #[arg(long)]
+        png: bool,
+        /// Stop after this many builds (for tests).
+        #[arg(long, hide = true)]
+        max_builds: Option<usize>,
+    },
 }
 
 /// One line to stdout; see [`emit`].
 macro_rules! say {
-    ($($t:tt)*) => { emit(&mut std::io::stdout().lock(), format_args!($($t)*)) };
+    ($($t:tt)*) => { $crate::emit(&mut std::io::stdout().lock(), format_args!($($t)*)) };
 }
 
 /// One line to stderr; see [`emit`].
 macro_rules! tell {
-    ($($t:tt)*) => { emit(&mut std::io::stderr().lock(), format_args!($($t)*)) };
+    ($($t:tt)*) => { $crate::emit(&mut std::io::stderr().lock(), format_args!($($t)*)) };
 }
 
 /// Write one line.  When the reader has gone (`dharmatiles check … | head`)
@@ -89,6 +120,9 @@ fn emit(w: &mut dyn Write, args: std::fmt::Arguments) {
         std::process::exit(0);
     }
 }
+
+mod looks;
+mod watch;
 
 const OK: u8 = 0;
 const ERROR: u8 = 1;
@@ -105,21 +139,41 @@ fn main() -> ExitCode {
             out,
             png,
             json,
-        } => {
-            let opts = Options {
-                system,
-                seed,
-                engine: env!("DT_ENGINE_VERSION").to_owned(),
-                ..Options::default()
-            };
-            let out = out.unwrap_or_else(|| {
-                let cwd = std::env::current_dir().unwrap_or_default();
-                dt_eval::discover(&cwd).out
-            });
-            build(&paths, &opts, &out, png, json)
-        }
+        } => build(&paths, &options(system, seed), &out_dir(out), png, json),
+        Command::Looks { name, json } => looks::run(name.as_deref(), json),
+        Command::Watch {
+            paths,
+            system,
+            seed,
+            out,
+            png,
+            max_builds,
+        } => watch::run(
+            &paths,
+            &options(system, seed),
+            &out_dir(out),
+            png,
+            max_builds,
+        ),
     };
     ExitCode::from(code)
+}
+
+fn options(system: String, seed: Option<u64>) -> Options {
+    Options {
+        system,
+        seed,
+        engine: env!("DT_ENGINE_VERSION").to_owned(),
+        ..Options::default()
+    }
+}
+
+/// `--out`, or `out/` beside `dharmatiles.kdl`, else here.
+fn out_dir(out: Option<PathBuf>) -> PathBuf {
+    out.unwrap_or_else(|| {
+        let cwd = std::env::current_dir().unwrap_or_default();
+        dt_eval::discover(&cwd).out
+    })
 }
 
 fn check(paths: &[String], json: bool) -> u8 {
@@ -180,64 +234,92 @@ fn build(paths: &[String], opts: &Options, out: &Path, png: bool, json: bool) ->
     let mut code = OK;
     let mut reports = Vec::new();
     for p in paths {
-        let t0 = Instant::now();
-        let b = match dt_eval::build(&Files, p, opts) {
-            Ok(b) => b,
-            Err(errs) => {
-                code = ERROR;
-                reports.push(json!({"path": p, "ok": false, "errors": errors_json(&errs)}));
-                if !json {
-                    report(&errs);
-                }
-                continue;
-            }
-        };
-        let built_s = t0.elapsed().as_secs_f64();
-        let failures = b.audit.failures(&opts.printer);
-        let files = match write(&b, &failures, built_s, out, png) {
-            Ok(f) => f,
-            Err(e) => {
-                code = ERROR;
-                tell!("error: {p}: {e}");
-                reports.push(json!({"path": p, "ok": false, "errors": errors_json(&[Diag::plain("dt::write", e)])}));
-                continue;
-            }
-        };
-        let total_s = t0.elapsed().as_secs_f64();
-        if !failures.is_empty() && code == OK {
-            code = AUDIT_FAILED;
-        }
-        let a = &b.audit;
-        if !json {
-            tell!(
-                "built {p} → {}\n  {} triangles · watertight {} · overhang {:.2} mm² · {} dropped · {} holes · build {:.2} s, written {:.2} s",
-                files[0].display(),
-                a.triangles,
-                a.watertight,
-                a.overhang_mm2,
-                a.dropped.len(),
-                a.holes,
-                built_s,
-                total_s
-            );
-            for f in &failures {
-                tell!("  audit failed: {f}");
-            }
-        }
-        let mut r = tile_json(&b, &failures, built_s);
-        r["files"] = json!(
-            files
-                .iter()
-                .map(|f| f.display().to_string())
-                .collect::<Vec<_>>()
-        );
-        r["total_s"] = json!(total_s);
+        let (c, r) = build_one(&Files, p, opts, out, png, json);
+        code = worse(code, c);
         reports.push(r);
     }
     if json {
         say!("{}", json!({"ok": code == OK, "tiles": reports}));
     }
     code
+}
+
+/// The worse of two exit codes: an error beats a failed audit beats success.
+fn worse(a: u8, b: u8) -> u8 {
+    if a == ERROR || b == ERROR {
+        ERROR
+    } else {
+        a.max(b)
+    }
+}
+
+/// Build one tile and write its files; report it on stderr unless `json`.
+/// Returns its exit code and its JSON report.
+fn build_one(
+    sources: &dyn Source,
+    p: &str,
+    opts: &Options,
+    out: &Path,
+    png: bool,
+    json: bool,
+) -> (u8, Value) {
+    let t0 = Instant::now();
+    let b = match dt_eval::build(sources, p, opts) {
+        Ok(b) => b,
+        Err(errs) => {
+            if !json {
+                report(&errs);
+            }
+            return (
+                ERROR,
+                json!({"path": p, "ok": false, "errors": errors_json(&errs)}),
+            );
+        }
+    };
+    let built_s = t0.elapsed().as_secs_f64();
+    let failures = b.audit.failures(&opts.printer);
+    let files = match write(&b, &failures, built_s, out, png) {
+        Ok(f) => f,
+        Err(e) => {
+            tell!("error: {p}: {e}");
+            return (
+                ERROR,
+                json!({"path": p, "ok": false, "errors": errors_json(&[Diag::plain("dt::write", e)])}),
+            );
+        }
+    };
+    let total_s = t0.elapsed().as_secs_f64();
+    let a = &b.audit;
+    if !json {
+        tell!(
+            "built {p} → {}\n  {} triangles · watertight {} · overhang {:.2} mm² · {} dropped · {} holes · build {:.2} s, written {:.2} s",
+            files[0].display(),
+            a.triangles,
+            a.watertight,
+            a.overhang_mm2,
+            a.dropped.len(),
+            a.holes,
+            built_s,
+            total_s
+        );
+        for f in &failures {
+            tell!("  audit failed: {f}");
+        }
+    }
+    let mut r = tile_json(&b, &failures, built_s);
+    r["files"] = json!(
+        files
+            .iter()
+            .map(|f| f.display().to_string())
+            .collect::<Vec<_>>()
+    );
+    r["total_s"] = json!(total_s);
+    let code = if failures.is_empty() {
+        OK
+    } else {
+        AUDIT_FAILED
+    };
+    (code, r)
 }
 
 /// Write the STL, its build record (`.build.json`) and, with `png`, the
@@ -265,7 +347,7 @@ fn write(
     w(&record, text.as_bytes())?;
     files.push(record);
     if png {
-        let colours = paint(&b.materials, &b.audit.overhang);
+        let colours = b.colours();
         let stem = path
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
@@ -307,6 +389,8 @@ fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
         },
         "stages": b.stages.iter().map(|s| json!({"name": s.name, "hash": format!("{:016x}", s.hash)})).collect::<Vec<_>>(),
         "build_s": built_s,
+        "edge_mm": b.edge_mm,
+        "stats": b.notes.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<serde_json::Map<String, Value>>(),
     })
 }
 

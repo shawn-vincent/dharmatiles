@@ -5,13 +5,20 @@
 //! Looks see only this crate's public API (docs/rust/architecture.html,
 //! "Six crates"), so a look cannot reach into the kernels or into another look.
 //!
-//! Public operations (budget: about 22 over the whole project; P1 has 12):
+//! Public operations (budget: about 22 over the whole project; P1 had 12,
+//! P2 adds 5: noise, distance, morphology, scatter and the cap, and makes
+//! paint take fields and lift adaptive):
 //!
 //! | op | what it does |
 //! |---|---|
 //! | [`area`] | paint bucket: drawn lines and fill points → an area |
 //! | [`Scene::paint`] | set the ground surface over an area |
-//! | [`Scene::lift`] | the painted surface → a solid (uniform lift) |
+//! | [`Scene::lift`] | the painted surface → a solid (adaptive lift, error-bounded, edge contract held) |
+//! | [`noise`] | position-keyed noise over the tile (one lattice) |
+//! | [`distance`] | distance transform with nearest nodes |
+//! | [`Field`] morphology | blur, dilate, erode, range, quantile, slope; [`smax`] |
+//! | [`scatter`] | things by density, largest first, with spacing |
+//! | [`cap`] | carve as a half-space cap over the ground (pebbles) |
 //! | [`loft`] | a closed solid through rings |
 //! | [`extrude`] | an outline → a prism |
 //! | [`carve`] | a solid less cutters |
@@ -30,6 +37,7 @@
 //! [`Scene::union`].
 
 mod audit;
+mod field;
 mod outline;
 mod render;
 mod scene;
@@ -37,11 +45,14 @@ mod shape;
 mod stl;
 
 pub use audit::{Audit, Dropped, Export, Printer, audit};
-pub use dt_geom::{Mask, Seed, TriMesh};
+pub use dt_geom::{Mask, Rng, Seed, TriMesh};
+pub use field::{
+    Field, Noise, Placed, Plane, Scale, Spread, cap, distance, noise, rim, scatter, smax, smooth01,
+};
 pub use outline::Outline;
-pub use render::{Image, RED, VIEWS, View, paint, render};
+pub use render::{Image, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};
 pub use scene::{
-    Frame, Material, Part, REFERENCE_SQUARE_MM, Scene, Slot, Slots, Solid, Stage, Tag,
+    Frame, LIFT_TOL_MM, Material, Part, REFERENCE_SQUARE_MM, Scene, Slot, Slots, Solid, Stage, Tag,
 };
 pub use shape::{area, carve, extrude, loft, signed_volume, union};
 pub use stl::{BuildRecord, stl};

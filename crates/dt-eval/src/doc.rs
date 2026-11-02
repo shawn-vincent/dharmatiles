@@ -698,93 +698,121 @@ impl Reader<'_> {
         let mut out = Vec::new();
         let mut ok = true;
         for s in &e.controls {
-            let Some(v) = &s.value else {
+            // the control's own value, then its sub-controls as `control/sub`
+            let mut items: Vec<(
+                String,
+                &Spanned<Value>,
+                SourceSpan,
+                Option<&'static Control>,
+            )> = Vec::new();
+            if let Some(v) = &s.value {
+                items.push((s.name.value.clone(), v, s.span, s.control));
+            }
+            for sub in &s.subs {
+                let name = format!("{}/{}", s.name.value, sub.name.value);
+                match &sub.value {
+                    Some(v) if takes.contains(&name.as_str()) => {
+                        items.push((name, v, sub.span, sub.control));
+                    }
+                    _ => {
+                        ok = false;
+                        pending.push(not_yet(
+                            src,
+                            sub.name.span,
+                            &format!("sub-controls of `{}` are", s.name.value),
+                            phase_of_control(look.name, &s.name.value),
+                        ));
+                    }
+                }
+            }
+            if s.value.is_none() && s.subs.is_empty() {
                 ok = false;
                 pending.push(not_yet(
                     src,
                     s.name.span,
                     &format!("the group `{}` on `{}` is", s.name.value, look.name),
-                    None,
-                ));
-                continue;
-            };
-            if let Some(sub) = s.subs.first() {
-                ok = false;
-                pending.push(not_yet(
-                    src,
-                    sub.name.span,
-                    &format!("sub-controls of `{}` are", s.name.value),
                     phase_of_control(look.name, &s.name.value),
                 ));
-                continue;
             }
-            let b = bind(v, src, scope);
-            let value = match value(&b, &scope.levels) {
-                Ok(v) => v,
-                Err(why) => {
-                    ok = false;
-                    pending.push(*why);
+            for (name, v, span, control) in items {
+                let b = bind(v, src, scope);
+                let value = match value(&b, &scope.levels) {
+                    Ok(v) => v,
+                    Err(why) => {
+                        ok = false;
+                        pending.push(*why);
+                        continue;
+                    }
+                };
+                if !takes.contains(&name.as_str()) {
+                    // a control written at its default changes nothing
+                    let default = control.and_then(|c| default_value(c, &scope.levels));
+                    if default.as_ref() != Some(&value) {
+                        ok = false;
+                        pending.push(not_yet(
+                            src,
+                            span,
+                            &format!("`{}`'s `{}` is", look.name, s.name.value),
+                            phase_of_control(look.name, &s.name.value),
+                        ));
+                    }
                     continue;
                 }
-            };
-            if !takes.contains(&s.name.value.as_str()) {
-                // a control written at its default changes nothing
-                let default = s.control.and_then(|c| default_value(c, &scope.levels));
-                if default.as_ref() != Some(&value) {
-                    ok = false;
-                    pending.push(not_yet(
-                        src,
-                        s.span,
-                        &format!("`{}`'s `{}` is", look.name, s.name.value),
-                        phase_of_control(look.name, &s.name.value),
-                    ));
-                }
-                continue;
+                push_setting(&mut out, &name, &b.value.value, value, b.value.span, &b.src);
             }
-            out.push(Setting {
-                name: s.name.value.clone(),
-                value,
-                span: b.value.span,
-                src: Arc::clone(&b.src),
-            });
         }
         for c in look.controls {
             if takes.contains(&c.name)
                 && e.control(c.name).is_none()
-                && let Some(value) = default_value(c, &scope.levels)
+                && let Some(raw) = c.default_value()
+                && let Ok(value) = look_value(&raw, &scope.levels)
             {
-                out.push(Setting {
-                    name: c.name.to_owned(),
-                    value,
-                    span: e.what.span,
-                    src: Arc::clone(src),
-                });
+                push_setting(&mut out, c.name, &raw, value, e.what.span, src);
             }
         }
         ok.then_some(out)
     }
 }
 
+/// One setting for a look, and, for a word that stands for numbers
+/// (`clods some`), each number as `control.name` (`clods.density`).
+fn push_setting(
+    out: &mut Vec<Setting>,
+    name: &str,
+    raw: &Value,
+    value: dt_looks::Value,
+    span: SourceSpan,
+    src: &Src,
+) {
+    if let Value::Word(w) = raw {
+        for (k, v) in w.sets {
+            out.push(Setting {
+                name: format!("{name}.{k}"),
+                value: dt_looks::Value::Number(*v),
+                span,
+                src: Arc::clone(src),
+            });
+        }
+    }
+    out.push(Setting {
+        name: name.to_owned(),
+        value,
+        span,
+        src: Arc::clone(src),
+    });
+}
+
 /// The phase a control of a built look arrives in.
 fn phase_of_control(look: &str, control: &str) -> Option<u8> {
     match (look, control) {
-        ("ground", "bumps" | "bump-size") => Some(2),
+        ("dirt", "bank") => Some(5),
         _ => None,
     }
 }
 
-/// A written value for a built look; a range is not built yet.
+/// A written value for a built look: a range stays a range (the look
+/// draws from it).
 fn value(b: &Bound, levels: &[(String, f64)]) -> Result<dt_looks::Value, Box<Diag>> {
-    if let Value::Num(n) = &b.value.value
-        && n.expr.is_range()
-    {
-        return Err(Box::new(not_yet(
-            &b.src,
-            b.value.span,
-            "a range here is",
-            Some(2),
-        )));
-    }
     look_value(&b.value.value, levels)
         .map_err(|msg| Box::new(Diag::at(&b.src, b.value.span, "dt::value", msg, "here")))
 }
@@ -792,6 +820,16 @@ fn value(b: &Bound, levels: &[(String, f64)]) -> Result<dt_looks::Value, Box<Dia
 /// A value as a built look takes it: one number in mm, or a word.
 fn look_value(v: &Value, levels: &[(String, f64)]) -> Result<dt_looks::Value, String> {
     match v {
+        Value::Num(n) if n.expr.is_range() => {
+            let env = |name: &str| {
+                levels
+                    .iter()
+                    .rev()
+                    .find(|(k, _)| k == name)
+                    .map(|(_, v)| *v)
+            };
+            n.bounds(&env).map(|(a, b)| dt_looks::Value::Range(a, b))
+        }
         Value::Num(n) => n.mm(levels).map(dt_looks::Value::Number),
         Value::Word(w) => Ok(dt_looks::Value::Word(w.word.to_owned())),
         Value::Bool(v) => Ok(dt_looks::Value::Word(

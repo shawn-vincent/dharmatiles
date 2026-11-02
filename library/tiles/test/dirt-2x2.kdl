@@ -1,0 +1,16 @@
+// The parity twin of dirtlab (dirtlab/dirtlab.py, round 2, approved
+// 29 Oct 2026): a 2×2 dirt tile, built by `cargo xtask parity dirt` at
+// seeds 1–4 beside the lab.  dirtlab's ground sits 0.3 mm above its edge
+// level and rises 2.2–3.2 mm in hills about 14 mm across; dirtlab's edge
+// is 4.0 mm, the engine's is the edge contract's (library/parts/edges.kdl),
+// so this tile sits at the same height above its own edge.  Stones come
+// in P3.
+
+tile dirt size="2x2" seed=1 {
+    about "dirtlab's bare earth on a 2×2 tile, for the parity harness."
+    stack {
+        dirt level="edge + 0.3" bumps="2.2..3.2" bump-size=14 {
+            clods some
+        }
+    }
+}

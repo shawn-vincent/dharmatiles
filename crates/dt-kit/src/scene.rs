@@ -63,6 +63,18 @@ impl Frame {
         self.square_mm / f64::from(self.cells_per_square)
     }
 
+    /// The frame with enough cells per square for features of `cell_mm`
+    /// (world mm), never fewer than it has.
+    #[must_use]
+    pub fn with_cell(mut self, cell_mm: f64) -> Self {
+        if cell_mm > 0.0 {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let n = libm::ceil(self.square_mm / cell_mm - 1e-9).min(4096.0) as u32;
+            self.cells_per_square = self.cells_per_square.max(n);
+        }
+        self
+    }
+
     /// How much an author's mm grow or shrink on this system.
     #[must_use]
     pub fn scale(&self) -> f64 {
@@ -171,6 +183,12 @@ pub struct Stage {
     pub hash: u64,
 }
 
+/// The lift's error bound, mm: no surface node is further than this from
+/// the triangulated top (a tenth of a 0.2 mm layer).
+pub const LIFT_TOL_MM: f64 = 0.02;
+/// The widest leaf of the adaptive lift, in cells.
+const LIFT_MAX_CELLS: usize = 32;
+
 /// Slots per build. A leaf's face IDs come from its slot's range, so this
 /// is also `dt_geom::source::MAX_SLOTS`.
 const SLOTS: u32 = dt_geom::source::MAX_SLOTS;
@@ -181,6 +199,9 @@ pub struct Scene {
     seed: Seed,
     field: Grid,
     painted: Mask,
+    stone: Mask,
+    edge_mm: Option<f64>,
+    notes: Vec<(String, f64)>,
     parts: Vec<Part>,
     block: IdBlock,
     next_slot: u32,
@@ -199,6 +220,9 @@ impl Scene {
             seed,
             field: Grid::new(nx, ny, frame.step_mm(), 0.0),
             painted: Mask::new(nx, ny, false),
+            stone: Mask::new(nx, ny, false),
+            edge_mm: None,
+            notes: Vec::new(),
             parts: Vec::new(),
             block: IdBlock::reserve::<dt_geom::Solid>(SLOTS),
             next_slot: 0,
@@ -238,6 +262,54 @@ impl Scene {
         }
     }
 
+    /// **paint** a field: set the ground surface to `field` (world mm) over
+    /// `area`. Later paints win.
+    pub fn paint_field(&mut self, area: &Mask, field: &crate::Field) {
+        for (k, _) in area.bits.iter().enumerate().filter(|(_, b)| **b) {
+            #[allow(clippy::cast_possible_truncation)]
+            let z = field.z[k] as f32;
+            self.field.z[k] = z;
+            self.painted.bits[k] = true;
+        }
+    }
+
+    /// Mark surface nodes as stone (pebbles) for the painted preview;
+    /// unmark the rest of `area`.
+    pub fn mark_stone(&mut self, area: &Mask, stone: &[bool]) {
+        for (k, _) in area.bits.iter().enumerate().filter(|(_, b)| **b) {
+            self.stone.bits[k] = stone[k];
+        }
+    }
+
+    /// The edge contract: the level (world mm) every ground surface meets
+    /// the tile edge at, and never dips below. `None`: no contract.
+    pub const fn set_edge(&mut self, level_mm: Option<f64>) {
+        self.edge_mm = level_mm;
+    }
+
+    /// The edge level, world mm, if the tile has an edge contract.
+    #[must_use]
+    pub const fn edge(&self) -> Option<f64> {
+        self.edge_mm
+    }
+
+    /// Record a look's number for the build record (counts and the like).
+    pub fn note(&mut self, name: &str, value: f64) {
+        self.notes.push((name.to_owned(), value));
+    }
+
+    /// The numbers looks noted, in order.
+    #[must_use]
+    pub fn notes(&self) -> &[(String, f64)] {
+        &self.notes
+    }
+
+    /// The finished ground surface and its stone marks, for paint.
+    #[must_use]
+    pub fn surface_paint(&self) -> Option<crate::SurfacePaint> {
+        (self.painted.count() > 0).then(|| crate::SurfacePaint::new(&self.field, &self.stone))
+    }
+
     /// Reserve `n` slots of one material, in sequence.
     ///
     /// # Errors
@@ -270,8 +342,12 @@ impl Scene {
             return Ok(());
         }
         self.spread_paint();
+        if let Some(edge) = self.edge_mm {
+            self.hold_edge(edge);
+        }
         self.record("surface", self.field.content_hash());
-        let mesh = dt_geom::lift(&self.field).map_err(|e| KitError::Surface(e.to_string()))?;
+        let mesh = dt_geom::lift_adaptive(&self.field, LIFT_TOL_MM, LIFT_MAX_CELLS)
+            .map_err(|e| KitError::Surface(e.to_string()))?;
         let slot = self.slots(1, Material::Earth)?.get(0);
         let solid = leaf(slot, &mesh)?;
         self.add(
@@ -282,6 +358,24 @@ impl Scene {
             solid,
         );
         Ok(())
+    }
+
+    /// The edge contract, by construction: perimeter nodes exactly at the
+    /// edge level, and nothing below it (rises only).
+    fn hold_edge(&mut self, edge: f64) {
+        #[allow(clippy::cast_possible_truncation)]
+        let e = edge as f32;
+        let (nx, ny) = (self.field.nx, self.field.ny);
+        for j in 0..ny {
+            for i in 0..nx {
+                let z = &mut self.field.z[j * nx + i];
+                if i == 0 || j == 0 || i == nx - 1 || j == ny - 1 {
+                    *z = e;
+                } else {
+                    *z = z.max(e);
+                }
+            }
+        }
     }
 
     fn spread_paint(&mut self) {
