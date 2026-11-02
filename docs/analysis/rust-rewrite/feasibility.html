@@ -25,17 +25,17 @@
 
 <nav class="top"><div class="wrap">
   <span class="brand">dharmatiles → Rust</span>
-  <a href="https://claude.ai/artifact/GBiwhTV3inCuS3cRiWnTeQ">Overview</a>
-  <a href="https://claude.ai/artifact/2jNLv6TLfXb9KDGe1P9Qpq">The library</a>
-  <a href="https://claude.ai/artifact/TqPP2AdFA6myvCtajfsoJT">The labs</a>
-  <a href="https://claude.ai/artifact/L6b4xLyS5jvvCiv4qCMbiG">Surface variants</a>
-  <a href="https://claude.ai/artifact/UDN1YXkRKN6ALB5CT2oBSf">Mechanisms</a>
-  <a href="https://claude.ai/artifact/PL6bEs3ypyDCqmfRLAG77g">Target architecture</a>
-  <a href="https://claude.ai/artifact/Faqo5xnsCW9MHe6F2UNDtW" aria-current="page">Rust feasibility</a>
-  <a href="https://claude.ai/artifact/CV72ayvAdd45791Jo3JZrP">Project layout</a>
-  <a href="https://claude.ai/artifact/CTFfwg21B8MWe5oEaX61pD">Project plan</a>
-  <a href="https://claude.ai/artifact/B2iunR3sEpTndvL2MhFBdt">Changes</a>
-  <a href="https://claude.ai/artifact/4qGq8BTBfjJYrv4NnrBgxz">Notes</a>
+  <a href="https://claude.ai/artifact/RowGQy7yrFHtD16YAA3gDi">Overview</a>
+  <a href="https://claude.ai/artifact/H9pvikhVxwCPDtx7kMUDrM">The library</a>
+  <a href="https://claude.ai/artifact/C1FVwwwvfhnvhoEjNLcKED">The labs</a>
+  <a href="https://claude.ai/artifact/5p4Hqcta6ym615dSPJ9u6V">Surface variants</a>
+  <a href="https://claude.ai/artifact/CAoDRjGEFcwvxCJEGJQ4BY">Mechanisms</a>
+  <a href="https://claude.ai/artifact/9aQf5yzrSPvyzd6HLoLU4J">Target architecture</a>
+  <a href="https://claude.ai/artifact/SMKxXEeHGb7jps5nfFaQfw" aria-current="page">Rust feasibility</a>
+  <a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux">Project layout</a>
+  <a href="https://claude.ai/artifact/SMHZGZ9KkG8rpvKeqbvxdj">Project plan</a>
+  <a href="https://claude.ai/artifact/GSS8KXJCQofDrkFUVHHVsM">Changes</a>
+  <a href="https://claude.ai/artifact/LyeG2qZejv69yK1UUgTXaZ">Notes</a>
 </div></nav>
 
 <div class="wrap">
@@ -160,7 +160,7 @@
 <ul class="small">
   <li><strong>Cache by entry.</strong> Key each entry's plan and solids by (path, seed, hash of what it read). An edit rebuilds the entry and whatever reads it; everything else is a cache hit. Typst's <code>comemo</code> crate does this kind of tracked memoisation; <code>salsa</code> is heavier.</li>
   <li><strong>The plan pass is the live view.</strong> Regions, footprints, flow lines, clearings and height fields draw instantly. Solids follow per entry, and the final union happens only on export.</li>
-  <li><strong>Viewer.</strong> A Tauri webview with three.js matches the GUI Shawn leaned toward. The same web front end (<code>app/ui</code>) is also served to any browser by <code>dharmatiles preview</code>, so there is one viewer for the desktop app, the phone app and the browser (<a href="https://claude.ai/artifact/CV72ayvAdd45791Jo3JZrP#t4">layout page</a>). <code>notify</code> watches files for hot reload; <code>rerun</code> is a ready-made viewer for debugging stages during the port.</li>
+  <li><strong>Viewer.</strong> A Tauri webview with three.js matches the GUI Shawn leaned toward. The same web front end (<code>app/ui</code>) is also served to any browser by <code>dharmatiles preview</code>, so there is one viewer for the desktop app, the phone app and the browser (<a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux#t4">layout page</a>). <code>notify</code> watches files for hot reload; <code>rerun</code> is a ready-made viewer for debugging stages during the port.</li>
   <li><strong>Limit:</strong> changing the tile seed or an entry at the bottom of the stack invalidates everything above it that reads it. Hills are read by almost everything.</li>
 </ul>
 
@@ -181,7 +181,7 @@
 
 <h2>Migration path</h2>
 <p>Python stays the reference throughout, and each phase ends with a tile Shawn can print.</p>
-<p class="small"><strong>Where the code goes</strong> (<a href="https://claude.ai/artifact/CV72ayvAdd45791Jo3JZrP#t9">layout page</a>): the Cargo workspace sits at the repo root from phase 0, beside the Python, which stays exactly where it is (<code>src/</code>, <code>tests/</code>, the labs, <code>stl/</code>). Rust writes to <code>out/</code>, so a side-by-side comparison is two folders. Each <code>.tile.py</code> in <code>src/tiles/</code> is rewritten by hand as <code>library/tiles/&lt;family&gt;/&lt;name&gt;.kdl</code> in the phase that ports its looks, and deleted once its KDL twin passes review. At cutover the Python is removed and kept in history under a tag.</p>
+<p class="small"><strong>Where the code goes</strong> (<a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux#t9">layout page</a>): the Cargo workspace sits at the repo root from phase 0, beside the Python, which stays exactly where it is (<code>src/</code>, <code>tests/</code>, the labs, <code>stl/</code>). Rust writes to <code>out/</code>, so a side-by-side comparison is two folders. Each <code>.tile.py</code> in <code>src/tiles/</code> is rewritten by hand as <code>library/tiles/&lt;family&gt;/&lt;name&gt;.kdl</code> in the phase that ports its looks, and deleted once its KDL twin passes review. At cutover the Python is removed and kept in history under a tag.</p>
 <div class="phase"><b>Phase 0</b><div class="small"><strong>Spikes R1–R6</strong> (below), about 2–3 weeks. Nothing else starts until R1, R2 and R6 have answers. The workspace skeleton goes in now: root <code>Cargo.toml</code>, <code>rust-toolchain.toml</code>, <code>dt-geom</code> with both Manifold backends behind a feature, CI with the wasm check. Spike code lives in <code>crates/dt-geom/examples/</code>.</div></div>
 <div class="phase"><b>Phase 1</b><div class="small"><strong>Skeleton, end to end:</strong> KDL documents, lines and regions, seeds, the plan and build scheduler, <code>hills</code>, <code>dirt</code>, lift, the DungeonBlocks connector, STL export and the audit. First tile: dirtlab's. It is first because it exercises every layer with almost no booleans. Creates <code>dt-doc</code>, <code>dt-kit</code>, <code>dt-looks</code>, <code>dt-eval</code> and the <code>dharmatiles</code> program with <code>build</code>, <code>check</code> and <code>watch</code>, plus <code>library/printers</code> and the first <code>library/tiles</code>.</div></div>
 <div class="phase"><b>Phase 2</b><div class="small"><strong>Rocks and water</strong>: carve, grain, scatter, seat; distance, geodesic, fill, swell. Tiles: rocklab and waterlab.</div></div>

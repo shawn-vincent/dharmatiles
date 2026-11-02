@@ -16,39 +16,39 @@
 
 <nav class="top"><div class="wrap">
   <span class="brand">dharmatiles → Rust</span>
-  <a href="https://claude.ai/artifact/GBiwhTV3inCuS3cRiWnTeQ">Overview</a>
-  <a href="https://claude.ai/artifact/2jNLv6TLfXb9KDGe1P9Qpq">The library</a>
-  <a href="https://claude.ai/artifact/TqPP2AdFA6myvCtajfsoJT">The labs</a>
-  <a href="https://claude.ai/artifact/L6b4xLyS5jvvCiv4qCMbiG">Surface variants</a>
-  <a href="https://claude.ai/artifact/UDN1YXkRKN6ALB5CT2oBSf">Mechanisms</a>
-  <a href="https://claude.ai/artifact/PL6bEs3ypyDCqmfRLAG77g">Target architecture</a>
-  <a href="https://claude.ai/artifact/Faqo5xnsCW9MHe6F2UNDtW">Rust feasibility</a>
-  <a href="https://claude.ai/artifact/CV72ayvAdd45791Jo3JZrP">Project layout</a>
-  <a href="https://claude.ai/artifact/CTFfwg21B8MWe5oEaX61pD">Project plan</a>
-  <a href="https://claude.ai/artifact/B2iunR3sEpTndvL2MhFBdt" aria-current="page">Changes</a>
-  <a href="https://claude.ai/artifact/4qGq8BTBfjJYrv4NnrBgxz">Notes</a>
+  <a href="https://claude.ai/artifact/RowGQy7yrFHtD16YAA3gDi">Overview</a>
+  <a href="https://claude.ai/artifact/H9pvikhVxwCPDtx7kMUDrM">The library</a>
+  <a href="https://claude.ai/artifact/C1FVwwwvfhnvhoEjNLcKED">The labs</a>
+  <a href="https://claude.ai/artifact/5p4Hqcta6ym615dSPJ9u6V">Surface variants</a>
+  <a href="https://claude.ai/artifact/CAoDRjGEFcwvxCJEGJQ4BY">Mechanisms</a>
+  <a href="https://claude.ai/artifact/9aQf5yzrSPvyzd6HLoLU4J">Target architecture</a>
+  <a href="https://claude.ai/artifact/SMKxXEeHGb7jps5nfFaQfw">Rust feasibility</a>
+  <a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux">Project layout</a>
+  <a href="https://claude.ai/artifact/SMHZGZ9KkG8rpvKeqbvxdj">Project plan</a>
+  <a href="https://claude.ai/artifact/GSS8KXJCQofDrkFUVHHVsM" aria-current="page">Changes</a>
+  <a href="https://claude.ai/artifact/LyeG2qZejv69yK1UUgTXaZ">Notes</a>
 </div></nav>
 
 <div class="wrap">
 <header class="hero">
   <div class="eyebrow">Page 10 of 11 · revisions 2, 3 and 4 · 1 Nov 2026</div>
   <h1>What changed, and why</h1>
-  <p class="lede">An adversarial review of the first version of this analysis. Each claim was checked against the code at commit 803ba4f, against Shawn's own words in the language conversation (cited as L and a line number), and against crate status on 1 Nov 2026. 68 entries: 26 corrections · 23 design · 10 feasibility · 9 readability. Revision 3 adds 12 layout entries, and revision 4 adds 12 plan entries, for the new <a href="https://claude.ai/artifact/CV72ayvAdd45791Jo3JZrP">project layout page</a>. Revision 4 adds the <a href="https://claude.ai/artifact/CTFfwg21B8MWe5oEaX61pD">project plan</a> and makes this page the only copy of the log: the markdown <code>CHANGELOG.md</code> was folded in and deleted.</p>
+  <p class="lede">An adversarial review of the first version of this analysis. Each claim was checked against the code at commit 803ba4f, against Shawn's own words in the language conversation (cited as L and a line number), and against crate status on 1 Nov 2026. 68 entries: 26 corrections · 23 design · 10 feasibility · 9 readability. Revision 3 adds 12 layout entries, and revision 4 adds 12 plan entries, for the new <a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux">project layout page</a>. Revision 4 adds the <a href="https://claude.ai/artifact/SMHZGZ9KkG8rpvKeqbvxdj">project plan</a> and makes this page the only copy of the log: the markdown <code>CHANGELOG.md</code> was folded in and deleted.</p>
 </header>
 <p class="small muted">How entries cite their evidence: labs as <code>&lt;lab&gt;.py:line</code> at HEAD 803ba4f; library paths relative to <code>src/dharmatiles/</code>; the language conversation (<code>input-language-design-conversation.md</code>) as L and a line number; crate status as checked on 1 Nov 2026.</p>
 
 <h2>Revision 4: project plan</h2>
 <ol class="sum">
-<li>Shawn accepted the revision 3 recommendations ("i like the recommendations. can we put together a phased project plan for the rust rewrite?"). A new <a href="https://claude.ai/artifact/CTFfwg21B8MWe5oEaX61pD">project plan</a> page turns them into nine phases (P0–P8), each with a goal, scope by crate and Python module, measurable exit gates, risks retired, dependencies, size and Shawn's own tasks.</li>
+<li>Shawn accepted the revision 3 recommendations ("i like the recommendations. can we put together a phased project plan for the rust rewrite?"). A new <a href="https://claude.ai/artifact/SMHZGZ9KkG8rpvKeqbvxdj">project plan</a> page turns them into nine phases (P0–P8), each with a goal, scope by crate and Python module, measurable exit gates, risks retired, dependencies, size and Shawn's own tasks.</li>
 <li>The migration order is refined in four places: the walking skeleton and parity harness come before dirt; walls, floors, OpenLOCK and trees run as a parallel stream; the library cutover comes before the cliff (no library tile uses one); front ends arrive across the phases instead of last.</li>
 <li>Open questions get the recommended default, marked "assumed" on the plan page (15 of them), so nothing blocks on them.</li>
-<li>Shawn's new rule: HTML is preferred, Claude documents are never hand-edited, and all artifacts live under <code>docs/</code>. <code>CHANGELOG.md</code> and the eleven <code>notes-*.md</code> files were converted (to this page and a new <a href="https://claude.ai/artifact/4qGq8BTBfjJYrv4NnrBgxz">research notes</a> page) and deleted.</li>
+<li>Shawn's new rule: HTML is preferred, Claude documents are never hand-edited, and all artifacts live under <code>docs/</code>. <code>CHANGELOG.md</code> and the eleven <code>notes-*.md</code> files were converted (to this page and a new <a href="https://claude.ai/artifact/LyeG2qZejv69yK1UUgTXaZ">research notes</a> page) and deleted.</li>
 </ol>
 
 <h2>Revision 3: project layout</h2>
-<p class="small">A layout pass on the Rust repository, checked against crate and tool status on 1 Nov 2026 (sources and dates in the <a href="https://claude.ai/artifact/4qGq8BTBfjJYrv4NnrBgxz#notes-layout">research notes</a>) and against the language conversation for the GUI, mobile, MCP and plugin rulings. 12 entries, L1–L12.</p>
+<p class="small">A layout pass on the Rust repository, checked against crate and tool status on 1 Nov 2026 (sources and dates in the <a href="https://claude.ai/artifact/LyeG2qZejv69yK1UUgTXaZ#notes-layout">research notes</a>) and against the language conversation for the GUI, mobile, MCP and plugin rulings. 12 entries, L1–L12.</p>
 <ol class="sum">
-<li>A new <a href="https://claude.ai/artifact/CV72ayvAdd45791Jo3JZrP">project layout page</a> places every part of the Rust version: one Cargo workspace at the repo root beside the untouched Python, the tile library as KDL in <code>library/</code> embedded in the program, output in <code>out/</code>, user files in standard per-platform folders.</li>
+<li>A new <a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux">project layout page</a> places every part of the Rust version: one Cargo workspace at the repo root beside the untouched Python, the tile library as KDL in <code>library/</code> embedded in the program, output in <code>out/</code>, user files in standard per-platform folders.</li>
 <li>Fifteen crates became six (<code>dt-geom</code>, <code>dt-kit</code>, <code>dt-doc</code>, <code>dt-looks</code>, <code>dt-eval</code>, <code>dharmatiles</code>). The language crate split so the document model builds without geometry.</li>
 <li>CLI and MCP are one program with subcommands; the GUI is a Tauri app whose web front end is also the browser preview.</li>
 <li>The feasibility page now says plainly what reaches the browser and phones: everything but the C++ Manifold, which needs the pure-Rust port for a browser build.</li>
