@@ -86,9 +86,9 @@
    "order": 45,
    "area": "Rust P1",
    "state": "running",
-   "title": "Phase 1 exit reviews running",
-   "detail": "Adversarial review + exit-criteria check (read-only) and a simplify pass (applies cleanups, hash and snapshots must not move) on rust/p1.",
-   "updated": "2026-11-02T17:45:34Z"
+   "title": "Phase 1 exit: fixing review findings",
+   "detail": "Every measurable P1 exit criterion is met except the test print. Simplify pass done (1ad8119). Fixing the bug-hunt findings: use-path .. resolution, size and expansion limits, output paths escaping out/, empty regions, duplicate seed ids, TBB thread variation in CI, polish.",
+   "updated": "2026-11-02T17:54:47Z"
   },
   {
    "id": "docs-fixes",
