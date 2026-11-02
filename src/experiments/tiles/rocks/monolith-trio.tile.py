@@ -1,6 +1,6 @@
 # monolith-trio.tile.py — acceptance scene S1 for the rocks rework.
 # One composed group on bare soil: tall leaning shard + lump + slab,
-# matching docs/rocks/rocks-reference-monolith-trio.png.
+# matching a commercial "monolith trio" tile (reference image removed 2026-11-02).
 
 from dharmatiles.spec import Tile, Region, FloodFill, SurfaceConfig
 from dharmatiles.layers import SoilCarpet
