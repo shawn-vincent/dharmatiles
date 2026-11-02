@@ -41,6 +41,9 @@ pub struct Colonise {
     pub aim_sin: f64,
     /// The floor: no edge rises less than this many degrees (S4).
     pub floor_deg: f64,
+    /// In-between steps (all but the landing on a target) rise at least
+    /// this many degrees (at or above the floor): the printable climb.
+    pub climb_deg: f64,
     /// At most this many branches leave one node at a step.
     pub max_branches: usize,
     /// Heading inertia: 0 steers straight at the target, 1 keeps going.
@@ -137,7 +140,8 @@ fn step(t: &mut Traced, queue: &mut VecDeque<Branch>, b: Branch, c: &Colonise, f
         }
         None => heading,
     };
-    let main = lift(main, heading, floor);
+    let climb = (c.climb_deg.max(c.floor_deg) + FLOOR_MARGIN_DEG).to_radians();
+    let main = lift(main, heading, climb);
 
     let mut primary = b.owned.clone();
     let mut primary_labels = b.labels.clone();
@@ -1057,6 +1061,7 @@ mod tests {
             split_cos: 0.8 * libm::cos(30f64.to_radians()),
             aim_sin: libm::sin(35f64.to_radians()),
             floor_deg: 26.0,
+            climb_deg: 26.0,
             max_branches: 3,
             alpha: 0.1,
             max_steps: 160,

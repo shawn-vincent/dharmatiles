@@ -32,7 +32,9 @@
 //! P5 adds the forms ([`form`]: level sets, hulls, solids from meshes,
 //! box clips, the common stone relief and 3D noise) that walls, floors
 //! and trees are made of, and graphs ([`graph`]: trace by space
-//! colonisation, loft tubes along a graph with C1 forks).
+//! colonisation, loft tubes along a graph with C1 forks) and [`stand`]
+//! (cut away what cannot print standing on what is below it: the audit's
+//! layer-reach rule as a construction).
 //!
 //! Kernel rules (R1, R2, R9, from `dt_geom::source`): every leaf solid takes
 //! a [`Slot`] reserved in sequence from the scene's block, so its source ID
@@ -49,6 +51,7 @@ mod outline;
 mod render;
 mod scene;
 mod shape;
+mod stand;
 mod stl;
 
 pub use audit::{Audit, Dropped, Export, Printer, audit};
@@ -62,6 +65,7 @@ pub use scene::{
     Frame, LIFT_TOL_MM, Material, Part, REFERENCE_SQUARE_MM, Scene, Slot, Slots, Solid, Stage, Tag,
 };
 pub use shape::{area, carve, extrude, loft, signed_volume, union};
+pub use stand::{Stand, Stood, stand};
 pub use stl::{BuildRecord, stl};
 
 /// Why a kit operation failed.

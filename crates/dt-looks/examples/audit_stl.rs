@@ -94,6 +94,15 @@ fn main() -> Result<(), String> {
             line += &format!(" (below {z}: {lo:.1}, above: {hi:.1})");
         }
         println!("{line}");
+        if args.iter().any(|a| a == "--red") {
+            for (t, bad) in ex.mesh.triangles.iter().zip(&a.overhang) {
+                if *bad {
+                    let p = t.map(|i| ex.mesh.positions[i as usize]);
+                    let c = [0, 1, 2].map(|k| (p[0][k] + p[1][k] + p[2][k]) / 3.0);
+                    println!("red {:.2} {:.2} {:.2}", c[0], c[1], c[2]);
+                }
+            }
+        }
         if args.iter().any(|a| a == "--png") {
             let mats = vec![Material::Leaf; ex.mesh.triangles.len()];
             let colours = paint(&mats, &a.overhang);
