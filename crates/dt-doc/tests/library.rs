@@ -105,7 +105,7 @@ fn flat_tile_is_one_ground() {
         Some(TileHeader {
             cols: 1,
             rows: 1,
-            seed: None
+            seed: Some(1)
         })
     );
     assert!(t.regions.is_empty() && t.lines.is_empty());
