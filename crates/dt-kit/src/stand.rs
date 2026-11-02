@@ -18,6 +18,7 @@
 use dt_geom::TriMesh;
 use rayon::prelude::*;
 
+use crate::audit::bounds;
 use crate::scene::{Material, Scene, Solid};
 use crate::{KitError, carve, form};
 use std::collections::HashMap;
@@ -224,21 +225,6 @@ pub fn stand(
         pieces: comps.len(),
     };
     Ok((carve(part, &solids)?, stood))
-}
-
-fn bounds(m: &TriMesh) -> Option<([f64; 3], [f64; 3])> {
-    if m.positions.is_empty() {
-        return None;
-    }
-    let mut lo = [f64::INFINITY; 3];
-    let mut hi = [f64::NEG_INFINITY; 3];
-    for p in &m.positions {
-        for a in 0..3 {
-            lo[a] = lo[a].min(p[a]);
-            hi[a] = hi[a].max(p[a]);
-        }
-    }
-    Some((lo, hi))
 }
 
 /// Inside flags of every voxel (layer-major), by the parity of vertical

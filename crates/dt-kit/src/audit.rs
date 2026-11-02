@@ -13,6 +13,8 @@ use std::collections::HashMap;
 use dt_geom::TriMesh;
 use rayon::prelude::*;
 
+use crate::form::vertex_normals;
+use crate::graph::{cross, dist, sub};
 use crate::shape::signed_volume;
 
 /// The printer profile the gate checks against: the numbers of a
@@ -277,7 +279,7 @@ fn separate_pinches(m: &mut TriMesh) -> usize {
         if pairs.is_empty() {
             break;
         }
-        let normals = normals.get_or_insert_with(|| vertex_normals(m));
+        let normals = normals.get_or_insert_with(|| vertex_normals(&m.positions, &m.triangles));
         pairs.sort_unstable();
         for (i, j) in pairs {
             let (ni, nj) = (normals[i], normals[j]);
@@ -322,43 +324,6 @@ impl std::hash::Hasher for FxHasher {
 }
 
 type Fx = std::hash::BuildHasherDefault<FxHasher>;
-
-fn dist(a: [f64; 3], b: [f64; 3]) -> f64 {
-    ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
-}
-
-fn cross(u: [f64; 3], v: [f64; 3]) -> [f64; 3] {
-    [
-        u[1] * v[2] - u[2] * v[1],
-        u[2] * v[0] - u[0] * v[2],
-        u[0] * v[1] - u[1] * v[0],
-    ]
-}
-
-fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-
-/// Area-weighted vertex normals, unit length (zero where undefined).
-fn vertex_normals(m: &TriMesh) -> Vec<[f64; 3]> {
-    let mut n = vec![[0.0; 3]; m.positions.len()];
-    for t in &m.triangles {
-        let [a, b, c] = t.map(|i| m.positions[i as usize]);
-        let f = cross(sub(b, a), sub(c, a));
-        for &v in t {
-            for k in 0..3 {
-                n[v as usize][k] += f[k];
-            }
-        }
-    }
-    for v in &mut n {
-        let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-        if l > 0.0 {
-            *v = v.map(|x| x / l);
-        }
-    }
-    n
-}
 
 /// Positions rounded to float32 and merged by position (as an STL reader
 /// does); triangles that collapse are dropped and counted.
@@ -633,7 +598,7 @@ fn overhang_faces(m: &TriMesh, footprint: [f64; 2], p: &Printer) -> (Vec<bool>, 
     (flagged, holes)
 }
 
-fn bounds(m: &TriMesh) -> Option<([f64; 3], [f64; 3])> {
+pub(crate) fn bounds(m: &TriMesh) -> Option<([f64; 3], [f64; 3])> {
     let first = *m.positions.first()?;
     Some(m.positions.iter().fold((first, first), |(lo, hi), p| {
         (

@@ -24,6 +24,7 @@
 use dt_geom::{Bounds, Mesh, TriMesh};
 
 use crate::KitError;
+use crate::graph::dist;
 use crate::scene::{Slot, Solid, leaf};
 
 /// **level set**: the closed surface where `sdf(p) > 0` (positive inside)
@@ -331,10 +332,6 @@ fn random_rotation(rng: &mut dt_geom::Rng) -> [[f64; 3]; 3] {
 
 fn mat3(m: &[[f64; 3]; 3], p: [f64; 3]) -> [f64; 3] {
     [0, 1, 2].map(|r| m[r][0] * p[0] + m[r][1] * p[1] + m[r][2] * p[2])
-}
-
-fn dist(a: [f64; 3], b: [f64; 3]) -> f64 {
-    ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
 }
 
 /// Area-weighted vertex normals (unit; zero for an isolated vertex).

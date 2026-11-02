@@ -70,7 +70,7 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
     for &i in &solids {
         for r in &plans[i].reads {
             match *r {
-                Read::Solids(kind) => {
+                Read::Solids(kind) | Read::IfAny(kind) => {
                     let writers: Vec<usize> = solids
                         .iter()
                         .copied()
@@ -78,17 +78,11 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
                         .collect();
                     // the lifted ground is a solid every tile with a surface has
                     let ground = kind == "ground" && steps.len() > 1;
-                    if writers.is_empty() && !ground {
+                    if matches!(r, Read::Solids(_)) && writers.is_empty() && !ground {
                         return Err(Refusal::NoWriter { entry: i, kind });
                     }
                     must[i].extend(writers);
                 }
-                Read::IfAny(kind) => must[i].extend(
-                    solids
-                        .iter()
-                        .copied()
-                        .filter(|&j| j != i && plans[j].writes == Write::Solid(kind)),
-                ),
                 Read::AllSolids => must[i].extend(
                     solids
                         .iter()

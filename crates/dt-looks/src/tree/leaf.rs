@@ -266,33 +266,7 @@ pub(super) fn solidify(outer: &[V], inner: &[V], tris: &[[u32; 3]]) -> TriMesh {
 
 pub(super) type V = [f64; 3];
 
-pub(super) fn add(a: V, b: V) -> V {
-    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
-}
-
-pub(super) fn sub(a: V, b: V) -> V {
-    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-
-pub(super) fn scale(a: V, s: f64) -> V {
-    [a[0] * s, a[1] * s, a[2] * s]
-}
-
-pub(super) fn dot(a: V, b: V) -> f64 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-
-pub(super) fn cross(a: V, b: V) -> V {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-
-pub(super) fn norm(a: V) -> f64 {
-    dot(a, a).sqrt()
-}
+pub(super) use dt_kit::graph::{add, cross, dot, norm, scale, sub};
 
 /// `_safe_norm`: unit, or unchanged when near zero.
 pub(super) fn safe_norm(v: V) -> V {

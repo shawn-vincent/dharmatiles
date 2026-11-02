@@ -27,6 +27,8 @@
 
 use dt_geom::{ObvhsRays, Ray, Rays, TriMesh};
 
+use crate::graph::{add, cross, dot, norm, scale, sub};
+
 /// trimesh's `contains_points` default direction.
 const CONTAINS_DIR: [f64; 3] = [0.439_506_445_5, 0.617_598_629_942, 0.652_231_566_745];
 /// The tie-break direction (fixed; Python's is random).
@@ -123,12 +125,6 @@ impl<R: Rays> RayMesh<R> {
     #[must_use]
     pub fn bounds(&self) -> ([f64; 3], [f64; 3]) {
         (self.lo, self.hi)
-    }
-
-    /// The unit normal of a triangle (zero if degenerate).
-    #[must_use]
-    pub fn face_normal(&self, triangle: u32) -> [f64; 3] {
-        self.face_normals[triangle as usize]
     }
 
     /// The first hit of each ray (`dirs` need not be unit), in input order.
@@ -256,34 +252,6 @@ impl<R: Rays> RayMesh<R> {
 fn unit(v: [f64; 3]) -> [f64; 3] {
     let l = norm(v);
     if l > 0.0 { v.map(|x| x / l) } else { v }
-}
-
-fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-
-fn add(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
-}
-
-fn scale(a: [f64; 3], s: f64) -> [f64; 3] {
-    a.map(|x| x * s)
-}
-
-fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-
-fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-
-fn norm(a: [f64; 3]) -> f64 {
-    dot(a, a).sqrt()
 }
 
 #[cfg(test)]
