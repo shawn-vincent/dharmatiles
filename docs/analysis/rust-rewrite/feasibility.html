@@ -1,5 +1,9 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>dharmatiles Rust Feasibility</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="dt.css">
@@ -25,17 +29,17 @@
 
 <nav class="top"><div class="wrap">
   <span class="brand">dharmatiles → Rust</span>
-  <a href="https://claude.ai/artifact/RowGQy7yrFHtD16YAA3gDi">Overview</a>
-  <a href="https://claude.ai/artifact/H9pvikhVxwCPDtx7kMUDrM">The library</a>
-  <a href="https://claude.ai/artifact/C1FVwwwvfhnvhoEjNLcKED">The labs</a>
-  <a href="https://claude.ai/artifact/5p4Hqcta6ym615dSPJ9u6V">Surface variants</a>
-  <a href="https://claude.ai/artifact/CAoDRjGEFcwvxCJEGJQ4BY">Mechanisms</a>
-  <a href="https://claude.ai/artifact/9aQf5yzrSPvyzd6HLoLU4J">Target architecture</a>
-  <a href="https://claude.ai/artifact/SMKxXEeHGb7jps5nfFaQfw" aria-current="page">Rust feasibility</a>
-  <a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux">Project layout</a>
-  <a href="https://claude.ai/artifact/SMHZGZ9KkG8rpvKeqbvxdj">Project plan</a>
-  <a href="https://claude.ai/artifact/GSS8KXJCQofDrkFUVHHVsM">Changes</a>
-  <a href="https://claude.ai/artifact/LyeG2qZejv69yK1UUgTXaZ">Notes</a>
+  <a href="index.html">Overview</a>
+  <a href="library.html">The library</a>
+  <a href="labs.html">The labs</a>
+  <a href="variants.html">Surface variants</a>
+  <a href="mechanisms.html">Mechanisms</a>
+  <a href="architecture.html">Target architecture</a>
+  <a href="feasibility.html" aria-current="page">Rust feasibility</a>
+  <a href="layout.html">Project layout</a>
+  <a href="plan.html">Project plan</a>
+  <a href="changelog.html">Changes</a>
+  <a href="notes.html">Notes</a>
 </div></nav>
 
 <div class="wrap">
@@ -155,7 +159,7 @@
   </tbody>
 </table></div>
 <p class="small"><strong>Recommendation:</strong> KDL documents decoded into a typed Rust model. From that model, generate a JSON Schema (for example with <code>schemars</code>), which becomes the single contract for CLI validation, GUI forms and MCP tool inputs. Values use one small hand-written expression grammar: arithmetic on parameters, distributions (<code>"a..b^k"</code>), named heights and field constructors. No loops, assignments or nested call chains. Write a build record (document hash, seed, engine version) into each STL and 3MF so CLI, GUI and agent builds can be compared. <strong>The cost:</strong> today's <code>.tile.py</code> files use Python helpers and shared constants. Definitions and the library directory have to replace them, which spike R6 tests on three real tiles.</p>
-<p class="small"><strong>Result (R6, <a href="spikes/r6-kdl.html">report</a>):</strong> the three tiles are written in KDL v2 and decoded by the new <code>dt-doc</code> crate with <code>kdl</code> 6.7.1 (v1 features off) and miette, by hand, with no derive crate. Every value the Python sets survives, every file prints back byte-identical, and an edit changes only the value's own text. Two things learned about KDL v2: ranges and percents must be quoted (<code>size="1..6^2"</code>), and the crate's own parse messages are generic, so <code>dt-doc</code> rewrites the common ones. <strong>Revision 7:</strong> the syntax and vocabulary are decided (1 Nov 2026). Shawn answered the eight syntax questions as recommended; his read of the tiles then found the parameters unintuitive, and he took all ten recommendations of an <a href="https://claude.ai/artifact/LRBJX86dQyiLMEy4RywJRj">intuitiveness review</a>. Authors write mm at the DungeonBlocks reference plus named levels (h stays the engine scale, <code>(h)</code> opt-in); every written size scales with the system, with hidden printability floors; stack order is free for solids; character controls are words expanding to documented numbers; the whole tile is the default area; edges have names and drawn lines take <code>side=</code>; points are quoted pairs; looks and controls are renamed (hills → ground, meadow → grass, blocks → boulders, family → style, self → in, near → against); trees expose only <code>crown branching</code>; <code>ledges</code> arrives in P7. From the syntax answers: both control forms, with insertion added to the edit API (it only replaces values today); no written units (<code>(mm)4.5</code> as an optional check, the <code>"4.5mm"</code> suffix removed); quoted ranges; rockpile's foot moved to 3.4 mm before the P7 freeze; ramps inside the escarpment form; standard heights as an implicit prelude. <code>dt-doc</code> and the library tiles are to be reworked to the new vocabulary in P1.</p>
+<p class="small"><strong>Result (R6, <a href="spikes/r6-kdl.html">report</a>):</strong> the three tiles are written in KDL v2 and decoded by the new <code>dt-doc</code> crate with <code>kdl</code> 6.7.1 (v1 features off) and miette, by hand, with no derive crate. Every value the Python sets survives, every file prints back byte-identical, and an edit changes only the value's own text. Two things learned about KDL v2: ranges and percents must be quoted (<code>size="1..6^2"</code>), and the crate's own parse messages are generic, so <code>dt-doc</code> rewrites the common ones. <strong>Revision 7:</strong> the syntax and vocabulary are decided (1 Nov 2026). Shawn answered the eight syntax questions as recommended; his read of the tiles then found the parameters unintuitive, and he took all ten recommendations of an <a href="spikes/kdl-intuitiveness.html">intuitiveness review</a>. Authors write mm at the DungeonBlocks reference plus named levels (h stays the engine scale, <code>(h)</code> opt-in); every written size scales with the system, with hidden printability floors; stack order is free for solids; character controls are words expanding to documented numbers; the whole tile is the default area; edges have names and drawn lines take <code>side=</code>; points are quoted pairs; looks and controls are renamed (hills → ground, meadow → grass, blocks → boulders, family → style, self → in, near → against); trees expose only <code>crown branching</code>; <code>ledges</code> arrives in P7. From the syntax answers: both control forms, with insertion added to the edit API (it only replaces values today); no written units (<code>(mm)4.5</code> as an optional check, the <code>"4.5mm"</code> suffix removed); quoted ranges; rockpile's foot moved to 3.4 mm before the P7 freeze; ramps inside the escarpment form; standard heights as an implicit prelude. <code>dt-doc</code> and the library tiles are to be reworked to the new vocabulary in P1.</p>
 
 <h2>Live preview</h2>
 <div class="lane" aria-label="Edit pipeline: edit, parse in milliseconds, plan pass under a second, plan preview, build changed entries, mesh preview, union and export on demand">
@@ -164,7 +168,7 @@
 <ul class="small">
   <li><strong>Cache by entry.</strong> Key each entry's plan and solids by (path, seed, hash of what it read). An edit rebuilds the entry and whatever reads it; everything else is a cache hit. Typst's <code>comemo</code> crate does this kind of tracked memoisation; <code>salsa</code> is heavier.</li>
   <li><strong>The plan pass is the live view.</strong> Regions, footprints, flow lines, clearings and height fields draw instantly. Solids follow per entry, and the final union happens only on export.</li>
-  <li><strong>Viewer.</strong> A Tauri webview with three.js matches the GUI Shawn leaned toward. The same web front end (<code>app/ui</code>) is also served to any browser by <code>dharmatiles preview</code>, so there is one viewer for the desktop app, the phone app and the browser (<a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux#t4">layout page</a>). <code>notify</code> watches files for hot reload; <code>rerun</code> is a ready-made viewer for debugging stages during the port.</li>
+  <li><strong>Viewer.</strong> A Tauri webview with three.js matches the GUI Shawn leaned toward. The same web front end (<code>app/ui</code>) is also served to any browser by <code>dharmatiles preview</code>, so there is one viewer for the desktop app, the phone app and the browser (<a href="layout.html#t4">layout page</a>). <code>notify</code> watches files for hot reload; <code>rerun</code> is a ready-made viewer for debugging stages during the port.</li>
   <li><strong>Limit:</strong> changing the tile seed or an entry at the bottom of the stack invalidates everything above it that reads it. Hills are read by almost everything.</li>
 </ul>
 
@@ -185,7 +189,7 @@
 
 <h2>Migration path</h2>
 <p>Python stays the reference throughout, and each phase ends with a tile Shawn can print.</p>
-<p class="small"><strong>Where the code goes</strong> (<a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux#t9">layout page</a>): the Cargo workspace sits at the repo root from phase 0, beside the Python, which stays exactly where it is (<code>src/</code>, <code>tests/</code>, the labs, <code>stl/</code>). Rust writes to <code>out/</code>, so a side-by-side comparison is two folders. Each <code>.tile.py</code> in <code>src/tiles/</code> is rewritten by hand as <code>library/tiles/&lt;family&gt;/&lt;name&gt;.kdl</code> in the phase that ports its looks, and deleted once its KDL twin passes review. At cutover the Python is removed and kept in history under a tag.</p>
+<p class="small"><strong>Where the code goes</strong> (<a href="layout.html#t9">layout page</a>): the Cargo workspace sits at the repo root from phase 0, beside the Python, which stays exactly where it is (<code>src/</code>, <code>tests/</code>, the labs, <code>stl/</code>). Rust writes to <code>out/</code>, so a side-by-side comparison is two folders. Each <code>.tile.py</code> in <code>src/tiles/</code> is rewritten by hand as <code>library/tiles/&lt;family&gt;/&lt;name&gt;.kdl</code> in the phase that ports its looks, and deleted once its KDL twin passes review. At cutover the Python is removed and kept in history under a tag.</p>
 <div class="phase"><b>Phase 0</b><div class="small"><strong>Spikes R1–R6</strong> (below), about 2–3 weeks. Nothing else starts until R1, R2 and R6 have answers. The workspace skeleton goes in now: root <code>Cargo.toml</code>, <code>rust-toolchain.toml</code>, <code>dt-geom</code> with both Manifold backends behind a feature, CI with the wasm check. Spike code lives in <code>crates/dt-geom/examples/</code>. <strong>Done on 1 Nov 2026</strong> except Shawn's R6 read and his go/no-go (<a href="spikes/go-no-go.html">go/no-go page</a>).</div></div>
 <div class="phase"><b>Phase 1</b><div class="small"><strong>Skeleton, end to end:</strong> KDL documents, lines and regions, seeds, the plan and build scheduler, <code>hills</code>, <code>dirt</code>, lift, the DungeonBlocks connector, STL export and the audit. First tile: dirtlab's. It is first because it exercises every layer with almost no booleans. Creates <code>dt-doc</code>, <code>dt-kit</code>, <code>dt-looks</code>, <code>dt-eval</code> and the <code>dharmatiles</code> program with <code>build</code>, <code>check</code> and <code>watch</code>, plus <code>library/printers</code> and the first <code>library/tiles</code>.</div></div>
 <div class="phase"><b>Phase 2</b><div class="small"><strong>Rocks and water</strong>: carve, grain, scatter, seat; distance, geodesic, fill, swell. Tiles: rocklab and waterlab.</div></div>

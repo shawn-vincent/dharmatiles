@@ -1,5 +1,9 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>dharmatiles Analysis Changes</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="dt.css">
@@ -16,24 +20,24 @@
 
 <nav class="top"><div class="wrap">
   <span class="brand">dharmatiles → Rust</span>
-  <a href="https://claude.ai/artifact/RowGQy7yrFHtD16YAA3gDi">Overview</a>
-  <a href="https://claude.ai/artifact/H9pvikhVxwCPDtx7kMUDrM">The library</a>
-  <a href="https://claude.ai/artifact/C1FVwwwvfhnvhoEjNLcKED">The labs</a>
-  <a href="https://claude.ai/artifact/5p4Hqcta6ym615dSPJ9u6V">Surface variants</a>
-  <a href="https://claude.ai/artifact/CAoDRjGEFcwvxCJEGJQ4BY">Mechanisms</a>
-  <a href="https://claude.ai/artifact/9aQf5yzrSPvyzd6HLoLU4J">Target architecture</a>
-  <a href="https://claude.ai/artifact/SMKxXEeHGb7jps5nfFaQfw">Rust feasibility</a>
-  <a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux">Project layout</a>
-  <a href="https://claude.ai/artifact/SMHZGZ9KkG8rpvKeqbvxdj">Project plan</a>
-  <a href="https://claude.ai/artifact/GSS8KXJCQofDrkFUVHHVsM" aria-current="page">Changes</a>
-  <a href="https://claude.ai/artifact/LyeG2qZejv69yK1UUgTXaZ">Notes</a>
+  <a href="index.html">Overview</a>
+  <a href="library.html">The library</a>
+  <a href="labs.html">The labs</a>
+  <a href="variants.html">Surface variants</a>
+  <a href="mechanisms.html">Mechanisms</a>
+  <a href="architecture.html">Target architecture</a>
+  <a href="feasibility.html">Rust feasibility</a>
+  <a href="layout.html">Project layout</a>
+  <a href="plan.html">Project plan</a>
+  <a href="changelog.html" aria-current="page">Changes</a>
+  <a href="notes.html">Notes</a>
 </div></nav>
 
 <div class="wrap">
 <header class="hero">
   <div class="eyebrow">Page 10 of 11 · revisions 2 to 8 · 2 Nov 2026</div>
   <h1>What changed, and why</h1>
-  <p class="lede">An adversarial review of the first version of this analysis. Each claim was checked against the code at commit 803ba4f, against Shawn's own words in the language conversation (cited as L and a line number), and against crate status on 1 Nov 2026. 68 entries: 26 corrections · 23 design · 10 feasibility · 9 readability. Revision 3 adds 12 layout entries, and revision 4 adds 12 plan entries, for the new <a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux">project layout page</a>. Revision 4 adds the <a href="https://claude.ai/artifact/SMHZGZ9KkG8rpvKeqbvxdj">project plan</a> and makes this page the only copy of the log: the markdown <code>CHANGELOG.md</code> was folded in and deleted. Revision 5 records the confirmed defaults and the start of Phase 0 (6 entries, P01–P06). Revision 6 records the Phase 0 spike results and the <a href="spikes/go-no-go.html">go/no-go page</a> (22 entries, G01–G22).</p>
+  <p class="lede">An adversarial review of the first version of this analysis. Each claim was checked against the code at commit 803ba4f, against Shawn's own words in the language conversation (cited as L and a line number), and against crate status on 1 Nov 2026. 68 entries: 26 corrections · 23 design · 10 feasibility · 9 readability. Revision 3 adds 12 layout entries, and revision 4 adds 12 plan entries, for the new <a href="layout.html">project layout page</a>. Revision 4 adds the <a href="plan.html">project plan</a> and makes this page the only copy of the log: the markdown <code>CHANGELOG.md</code> was folded in and deleted. Revision 5 records the confirmed defaults and the start of Phase 0 (6 entries, P01–P06). Revision 6 records the Phase 0 spike results and the <a href="spikes/go-no-go.html">go/no-go page</a> (22 entries, G01–G22).</p>
 </header>
 <p class="small muted">How entries cite their evidence: labs as <code>&lt;lab&gt;.py:line</code> at HEAD 803ba4f; library paths relative to <code>src/dharmatiles/</code>; the language conversation (<code>input-language-design-conversation.md</code>) as L and a line number; crate status as checked on 1 Nov 2026.</p>
 
@@ -41,6 +45,7 @@
 <ol class="sum">
 <li>On 2 Nov 2026 Shawn gave the go: "We are a GO for Phase 1. Accept all remaining recommendations." Determinism is level B, the contact sheet is approved as drafted, and none of the agents' choices is vetoed (I01–I04). Phase 1 opened the same day.</li>
 <li>The same day, every page was republished under Shawn's current claude.ai account, with links and the overview's live status moved over (I05).</li>
+<li>Later that day the pages moved to GitHub Pages, served from <code>docs/</code> on <code>main</code>, so access follows the repository (I06).</li>
 </ol>
 
 <h2>Revision 7: adversarial review of the Phase 0 results</h2>
@@ -63,7 +68,7 @@
 
 <h2>Revision 5: Phase 0 started</h2>
 <ol class="sum">
-<li>Shawn confirmed all fifteen defaults ("They look good. Let's proceed with phase zero."). The <a href="https://claude.ai/artifact/SMHZGZ9KkG8rpvKeqbvxdj#defaults">plan page</a> now marks each one "confirmed 2026-11-01" instead of "assumed", and its day-1 checklist item is ticked.</li>
+<li>Shawn confirmed all fifteen defaults ("They look good. Let's proceed with phase zero."). The <a href="plan.html#defaults">plan page</a> now marks each one "confirmed 2026-11-01" instead of "assumed", and its day-1 checklist item is ticked.</li>
 <li>The toolchain is pinned to Rust 1.99.1, the current stable (released 13 Oct 2026), with rustfmt, clippy and the <code>wasm32-unknown-unknown</code> target.</li>
 <li>The workspace skeleton exists on branch <code>rust/p0</code>: a virtual Cargo manifest at the repo root, <code>crates/dt-geom</code> with the mesh and ray traits and keyed seeds, <code>xtask</code> with an empty <code>parity</code> command, <code>deny.toml</code>, and CI that is green on macOS, Linux, Windows, the wasm check and cargo deny.</li>
 <li>The Manifold backends are features with no dependency yet; the R1 spike wires them. <code>manifold-csg</code> 0.4.1 was test-built locally: it needs cmake and takes 3½ minutes cold.</li>
@@ -71,16 +76,16 @@
 
 <h2>Revision 4: project plan</h2>
 <ol class="sum">
-<li>Shawn accepted the revision 3 recommendations ("i like the recommendations. can we put together a phased project plan for the rust rewrite?"). A new <a href="https://claude.ai/artifact/SMHZGZ9KkG8rpvKeqbvxdj">project plan</a> page turns them into nine phases (P0–P8), each with a goal, scope by crate and Python module, measurable exit gates, risks retired, dependencies, size and Shawn's own tasks.</li>
+<li>Shawn accepted the revision 3 recommendations ("i like the recommendations. can we put together a phased project plan for the rust rewrite?"). A new <a href="plan.html">project plan</a> page turns them into nine phases (P0–P8), each with a goal, scope by crate and Python module, measurable exit gates, risks retired, dependencies, size and Shawn's own tasks.</li>
 <li>The migration order is refined in four places: the walking skeleton and parity harness come before dirt; walls, floors, OpenLOCK and trees run as a parallel stream; the library cutover comes before the cliff (no library tile uses one); front ends arrive across the phases instead of last.</li>
 <li>Open questions get the recommended default, marked "assumed" on the plan page (15 of them), so nothing blocks on them.</li>
-<li>Shawn's new rule: HTML is preferred, Claude documents are never hand-edited, and all artifacts live under <code>docs/</code>. <code>CHANGELOG.md</code> and the eleven <code>notes-*.md</code> files were converted (to this page and a new <a href="https://claude.ai/artifact/LyeG2qZejv69yK1UUgTXaZ">research notes</a> page) and deleted.</li>
+<li>Shawn's new rule: HTML is preferred, Claude documents are never hand-edited, and all artifacts live under <code>docs/</code>. <code>CHANGELOG.md</code> and the eleven <code>notes-*.md</code> files were converted (to this page and a new <a href="notes.html">research notes</a> page) and deleted.</li>
 </ol>
 
 <h2>Revision 3: project layout</h2>
-<p class="small">A layout pass on the Rust repository, checked against crate and tool status on 1 Nov 2026 (sources and dates in the <a href="https://claude.ai/artifact/LyeG2qZejv69yK1UUgTXaZ#notes-layout">research notes</a>) and against the language conversation for the GUI, mobile, MCP and plugin rulings. 12 entries, L1–L12.</p>
+<p class="small">A layout pass on the Rust repository, checked against crate and tool status on 1 Nov 2026 (sources and dates in the <a href="notes.html#notes-layout">research notes</a>) and against the language conversation for the GUI, mobile, MCP and plugin rulings. 12 entries, L1–L12.</p>
 <ol class="sum">
-<li>A new <a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux">project layout page</a> places every part of the Rust version: one Cargo workspace at the repo root beside the untouched Python, the tile library as KDL in <code>library/</code> embedded in the program, output in <code>out/</code>, user files in standard per-platform folders.</li>
+<li>A new <a href="layout.html">project layout page</a> places every part of the Rust version: one Cargo workspace at the repo root beside the untouched Python, the tile library as KDL in <code>library/</code> embedded in the program, output in <code>out/</code>, user files in standard per-platform folders.</li>
 <li>Fifteen crates became six (<code>dt-geom</code>, <code>dt-kit</code>, <code>dt-doc</code>, <code>dt-looks</code>, <code>dt-eval</code>, <code>dharmatiles</code>). The language crate split so the document model builds without geometry.</li>
 <li>CLI and MCP are one program with subcommands; the GUI is a Tauri app whose web front end is also the browser preview.</li>
 <li>The feasibility page now says plainly what reaches the browser and phones: everything but the C++ Manifold, which needs the pure-Rust port for a browser build.</li>
@@ -96,7 +101,7 @@
 </ol>
 
 <h2>Every change</h2>
-<div class="controls"><button data-f="all" aria-pressed="true">All (146)</button><button data-f="go" aria-pressed="false">Revision 8: go (5)</button><button data-f="p0rev" aria-pressed="false">Revision 7: review (21)</button><button data-f="p0r" aria-pressed="false">Revision 6: spike results (22)</button><button data-f="p0" aria-pressed="false">Revision 5: Phase 0 (6)</button><button data-f="plan" aria-pressed="false">Revision 4: plan (12)</button><button data-f="layout" aria-pressed="false">Revision 3: layout (12)</button><button data-f="corrections" aria-pressed="false">Corrections (26)</button><button data-f="design" aria-pressed="false">Design changes (23)</button><button data-f="feasibility" aria-pressed="false">Feasibility additions (10)</button><button data-f="readability" aria-pressed="false">Readability edits (9)</button><label class="small" for="q">Search</label><input id="q" type="search" placeholder="e.g. water, rockpile.py, L1987"></div>
+<div class="controls"><button data-f="all" aria-pressed="true">All (147)</button><button data-f="go" aria-pressed="false">Revision 8: go (6)</button><button data-f="p0rev" aria-pressed="false">Revision 7: review (21)</button><button data-f="p0r" aria-pressed="false">Revision 6: spike results (22)</button><button data-f="p0" aria-pressed="false">Revision 5: Phase 0 (6)</button><button data-f="plan" aria-pressed="false">Revision 4: plan (12)</button><button data-f="layout" aria-pressed="false">Revision 3: layout (12)</button><button data-f="corrections" aria-pressed="false">Corrections (26)</button><button data-f="design" aria-pressed="false">Design changes (23)</button><button data-f="feasibility" aria-pressed="false">Feasibility additions (10)</button><button data-f="readability" aria-pressed="false">Readability edits (9)</button><label class="small" for="q">Search</label><input id="q" type="search" placeholder="e.g. water, rockpile.py, L1987"></div>
 <p class="small muted" id="shown"></p>
 <div id="ents">
 <article class="ent" data-g="go" id="I01"><header><span class="eid">I01</span><span class="st st-settled">decision</span><span class="where">go-no-go.html, decision 1; plan.html, P1 exit</span></header><dl class="defs"><dt>Before</dt><dd>Determinism level: Shawn's call between A, B and C; B recommended.</dd><dt>Now</dt><dd>Level B: one golden hash set shared by the macOS and Linux CI jobs; Windows gated on thread identity, metrics and renders.</dd><dt>Why</dt><dd class="why">"We are a GO for Phase 1. Accept all remaining recommendations." (Shawn, 2 Nov 2026)</dd><dt>Evidence</dt><dd>This conversation, 2 Nov 2026.</dd></dl></article>
@@ -104,6 +109,7 @@
 <article class="ent" data-g="go" id="I03"><header><span class="eid">I03</span><span class="st st-settled">decision</span><span class="where">go-no-go.html, choices for veto</span></header><dl class="defs"><dt>Before</dt><dd>Six agent choices (manifold-csg default, manifold-rust browser-only, obvhs rays, kernel rules, 1e-3 mm ray clause, metrics-not-bytes harness) open for veto.</dd><dt>Now</dt><dd>None vetoed; all stand.</dd><dt>Why</dt><dd class="why">"We are a GO for Phase 1. Accept all remaining recommendations." (Shawn, 2 Nov 2026)</dd><dt>Evidence</dt><dd>This conversation, 2 Nov 2026.</dd></dl></article>
 <article class="ent" data-g="go" id="I04"><header><span class="eid">I04</span><span class="st st-settled">decision</span><span class="where">go-no-go.html, overall; plan.html, header, P0 row, checklist items 14 and 15</span></header><dl class="defs"><dt>Before</dt><dd>Go/no-go pending; Phase 1 not started.</dd><dt>Now</dt><dd>Go. Checklist item 14 done; item 15 (open P1) started 2 Nov 2026.</dd><dt>Why</dt><dd class="why">"We are a GO for Phase 1. Accept all remaining recommendations." (Shawn, 2 Nov 2026)</dd><dt>Evidence</dt><dd>This conversation, 2 Nov 2026.</dd></dl></article>
 <article class="ent" data-g="go" id="I05"><header><span class="eid">I05</span><span class="st st-settled">housekeeping</span><span class="where">every page; index.html live status</span></header><dl class="defs"><dt>Before</dt><dd>Pages published under the previous claude.ai account; the overview's live status could not be read from the new one.</dd><dt>Now</dt><dd>All 16 pages republished under the current account, with every cross-link moved to the new addresses. The overview's status database was re-created and reseeded with the Phase 1 rows.</dd><dt>Why</dt><dd class="why">"republish all artefacts under this account." (Shawn, 2 Nov 2026)</dd><dt>Evidence</dt><dd>This conversation, 2 Nov 2026.</dd></dl></article>
+<article class="ent" data-g="go" id="I06"><header><span class="eid">I06</span><span class="st st-settled">housekeeping</span><span class="where">every page; index.html live status</span></header><dl class="defs"><dt>Before</dt><dd>Pages published as claude.ai artifacts, linked to each other by artifact address; live status in the overview's artifact database.</dd><dt>Now</dt><dd>The whole <code>docs/</code> folder is served by GitHub Pages from <code>main</code>. Pages link to each other by relative path, so links also work when the files are opened locally. Live status comes from <code>status.json</code> beside the overview.</dd><dt>Why</dt><dd class="why">"Let's change the artifacts to be github pages for the dharmatiles repository. Easier to manage permissions." (Shawn, 2 Nov 2026)</dd><dt>Evidence</dt><dd>This conversation, 2 Nov 2026.</dd></dl></article>
 <article class="ent" data-g="p0rev" id="H01"><header><span class="eid">H01</span><span class="st st-settled">review</span><span class="where">spikes/r1-r2-r9.html, R2 and R9 together; go-no-go.html, R2 and R9; plan.html, P1 kernel rule; crates/dt-geom/src/source.rs</span></header><dl class="defs"><dt>Before</dt><dd>Two rules that conflicted and were never tested together: R2 'assign original IDs in index order' (which relabels with as_original, collapsing a part's sources into one ID) and R9 'trace every triangle through its source IDs' (and trim mints a new ID for each cut face).</dd><dt>Now</dt><dd>One source-ID rule in dt-geom's API (dt-geom::source): reserve an ID block before parallel work and assign by part index; relabel leaves (never combinations) with with_original_id and a per-slot face-ID range; give plane cuts an ID with trim_by_plane_with_id; keep materials in a Materials table keyed by (original ID, face ID), where a cut face takes the material of the solid being cut; batch in index order (batch_in_order). The combined test (24 level-set rocks built in parallel, each cut by two planes, batch-unioned with a slab) gives identical hashes at 1, 4 and 16 threads, twice each, on both backends, with every triangle traced: C++ 24,970 of 24,970, port 25,214 of 25,214.</dd><dt>Why</dt><dd class="why">Review finding 1: the two rules contradict each other, and neither test exercised both.</dd><dt>Evidence</dt><dd>commit acb1697: crates/dt-geom/src/source.rs, mesh.rs (with_original_id, trim_by_plane_with_id, half_space, reserve_ids), tests/determinism.rs; CI run 41364160189.</dd></dl></article>
 <article class="ent" data-g="p0rev" id="H02"><header><span class="eid">H02</span><span class="st st-settled">review</span><span class="where">spikes/r1-r2-r9.html, Timing measured again; go-no-go.html, R1; plan.html and feasibility.html, R1</span></header><dl class="defs"><dt>Before</dt><dd>manifold-csg at 1.01–1.09× Python's time, from the second of three passes, in which Python always ran first; the first pass (massif 1.43×) was not reported. The gate was said to pass 'with room to spare'.</dd><dt>Now</dt><dd>Four interleaved, counterbalanced rounds (Python first in rounds 1 and 3, Rust first in 2 and 4): rockpile 1.03, 1.06, 1.06, 0.83× (median 1.05×); massif 1.04, 1.36, 1.05, 1.07× (median 1.06×). Over all eight paired runs to date the massif ranges 1.01–1.43×, two over 1.2×. Verdict: the ≤ 1.2× gate passes on the median, not on every run; the 2× kill criterion is separate and not near. Other agents' jobs loaded the machine during rounds 2–4, recorded by a CPU sampler.</dd><dt>Why</dt><dd class="why">Review finding 2: the reported timing was the most favourable of three passes.</dd><dt>Evidence</dt><dd>scratchpad/p0fix/timing/run.sh and log.tsv; spikes/r1-r2-r9.html#timing.</dd></dl></article>
 <article class="ent" data-g="p0rev" id="H03"><header><span class="eid">H03</span><span class="st st-settled">review</span><span class="where">spikes/r1-r2-r9.html, What the replay does not carry: tolerance; go-no-go.html, R1 finding 3; feasibility.html, booleans</span></header><dl class="defs"><dt>Before</dt><dd>The replay was described as reproducing the in-situ booleans; its tolerance handling was not mentioned.</dd><dt>Now</dt><dd>Both replays reset every operand to the default tolerance (about 1e-12 × size), while in situ many cliff operands carry float32-scale tolerance (about 1.2e-7 × size) from meshes built in float32. That explains the 16 intersections whose volume differs from in situ. Carrying it was tried: manifold3d 3.5.1 ignores Mesh64(tolerance=…); set_tolerance after import (all manifold-csg's C API allows) re-simplifies (rockpile 1,763 and massif 6,264 triangle counts differ from in situ, against 448 and 1,461) and fixes 1 of the 16 volumes; the port's MeshGL import gives 1,632 and 5. Requirement: Rust gives each solid its tolerance at creation (TriMesh::tolerance, added) and keeps solids inside the kernel; near-degenerate parity is judged on metrics in P3 and P7.</dd><dt>Why</dt><dd class="why">Review finding 3: the replay silently dropped the tolerance stored in every .dtm file.</dd><dt>Evidence</dt><dd>commit acb1697 (TriMesh::tolerance, r1_replay --tolerance); tests/parity/capture/replay_py.py --tolerance; scratchpad/p0fix/tol/.</dd></dl></article>

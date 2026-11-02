@@ -1,0 +1,58 @@
+{
+ "rows": [
+  {
+   "id": "p0",
+   "order": 10,
+   "area": "Rust P0",
+   "state": "done",
+   "title": "Phase 0 spikes: decided GO (2 Nov 2026)",
+   "detail": "R1, R2, R3, R6 and R9 passed. Determinism level B chosen, contact sheet approved, no vetoes. Branch rust/p0, revision 8 of the study.",
+   "updated": "2026-11-02T14:00:00Z"
+  },
+  {
+   "id": "p1-doc",
+   "order": 20,
+   "area": "Rust P1",
+   "state": "running",
+   "title": "Stream A: dt-doc on the R6 vocabulary + library tiles",
+   "detail": "Reworking dt-doc to the D1–D12 decisions (mm and named levels, renames, scatter node, levels.kdl prelude); rewriting the library tiles; flat-1x1, printers/default, parts/edges. Branch rust/p1-doc.",
+   "updated": "2026-11-02T14:00:00Z"
+  },
+  {
+   "id": "p1-skel",
+   "order": 30,
+   "area": "Rust P1",
+   "state": "running",
+   "title": "Stream B: dt-kit, dt-looks, dt-eval and the dharmatiles binary",
+   "detail": "Ground look + DungeonBlocks connector, build/check/--json with exit codes 0–3, level-B hash gate in CI, cargo xtask parity contact sheets. Branch rust/p1-skel.",
+   "updated": "2026-11-02T14:00:00Z"
+  },
+  {
+   "id": "p1-merge",
+   "order": 40,
+   "area": "Rust P1",
+   "state": "next",
+   "title": "Merge both streams into rust/p1",
+   "detail": "Re-point dt-eval at the reworked dt-doc API, then simplify and adversarial reviews at phase exit.",
+   "updated": "2026-11-02T14:00:00Z"
+  },
+  {
+   "id": "cliff-r17",
+   "order": 50,
+   "area": "Cliff",
+   "state": "done",
+   "title": "Round 17 accepted",
+   "detail": "Crisp sparse chips, bold column setbacks, closed core holes (31f7c5d on main).",
+   "updated": "2026-11-02T14:00:00Z"
+  },
+  {
+   "id": "shawn",
+   "order": 90,
+   "area": "Shawn",
+   "state": "waiting",
+   "title": "Your next checkpoint",
+   "detail": "When the P1 skeleton lands: test print of the flat 1×1 DungeonBlocks tile built by the Rust binary (path will be posted here).",
+   "updated": "2026-11-02T14:00:00Z"
+  }
+ ]
+}

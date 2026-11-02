@@ -1,5 +1,9 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>dharmatiles Project Plan</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="dt.css">
@@ -50,17 +54,17 @@
 
 <nav class="top"><div class="wrap">
   <span class="brand">dharmatiles → Rust</span>
-  <a href="https://claude.ai/artifact/RowGQy7yrFHtD16YAA3gDi">Overview</a>
-  <a href="https://claude.ai/artifact/H9pvikhVxwCPDtx7kMUDrM">The library</a>
-  <a href="https://claude.ai/artifact/C1FVwwwvfhnvhoEjNLcKED">The labs</a>
-  <a href="https://claude.ai/artifact/5p4Hqcta6ym615dSPJ9u6V">Surface variants</a>
-  <a href="https://claude.ai/artifact/CAoDRjGEFcwvxCJEGJQ4BY">Mechanisms</a>
-  <a href="https://claude.ai/artifact/9aQf5yzrSPvyzd6HLoLU4J">Target architecture</a>
-  <a href="https://claude.ai/artifact/SMKxXEeHGb7jps5nfFaQfw">Rust feasibility</a>
-  <a href="https://claude.ai/artifact/UooPqGDhE9bTZ584EaZ6ux">Project layout</a>
-  <a href="https://claude.ai/artifact/SMHZGZ9KkG8rpvKeqbvxdj" aria-current="page">Project plan</a>
-  <a href="https://claude.ai/artifact/GSS8KXJCQofDrkFUVHHVsM">Changes</a>
-  <a href="https://claude.ai/artifact/LyeG2qZejv69yK1UUgTXaZ">Notes</a>
+  <a href="index.html">Overview</a>
+  <a href="library.html">The library</a>
+  <a href="labs.html">The labs</a>
+  <a href="variants.html">Surface variants</a>
+  <a href="mechanisms.html">Mechanisms</a>
+  <a href="architecture.html">Target architecture</a>
+  <a href="feasibility.html">Rust feasibility</a>
+  <a href="layout.html">Project layout</a>
+  <a href="plan.html" aria-current="page">Project plan</a>
+  <a href="changelog.html">Changes</a>
+  <a href="notes.html">Notes</a>
 </div></nav>
 
 <div class="wrap">
@@ -232,7 +236,7 @@
 <li>Shawn's test print seats in a DungeonBlocks socket.</li>
 </ul></dd>
 <dt>Risks</dt><dd>Retires R2 (the CI hash check) and R6 (a real document end to end). Covers half of R5 (the harness) and part of R8 (the scheduler rejects unsatisfiable reads).</dd>
-<dt>Depends on</dt><dd>P0. The R6 syntax and vocabulary were decided on 1 Nov 2026: Shawn answered the eight syntax questions, then took all ten recommendations of the <a href="https://claude.ai/artifact/LRBJX86dQyiLMEy4RywJRj">intuitiveness review</a>, which revised answers 1 and 5. The <code>dt-doc</code> rework is P1's first task.</dd>
+<dt>Depends on</dt><dd>P0. The R6 syntax and vocabulary were decided on 1 Nov 2026: Shawn answered the eight syntax questions, then took all ten recommendations of the <a href="spikes/kdl-intuitiveness.html">intuitiveness review</a>, which revised answers 1 and 5. The <code>dt-doc</code> rework is P1's first task.</dd>
 <dt>Shawn does</dt><dd>One test print. Approves the layout of the contact sheet. About 2 to 3 hours.</dd>
 </dl>
 </details>
@@ -632,7 +636,7 @@
 <tr><td>15</td><td>The code's change log</td><td>Generated from commits; no hand-edited markdown. <span class="confirm">confirmed 2026-11-01</span></td><td>P6</td></tr>
 </tbody></table></div>
 <h3 id="r6dec">R6 syntax and vocabulary decisions</h3>
-<p>Decided 1 Nov 2026 (revision 7). Shawn answered the eight R6 syntax questions as recommended. His read of the three tiles then found their parameters unintuitive, and he took all ten recommendations of the <a href="https://claude.ai/artifact/LRBJX86dQyiLMEy4RywJRj">intuitiveness review</a>; two of them revise syntax answers 1 and 5. R6 status: syntax and vocabulary decided; <code>dt-doc</code> and the library tiles to be reworked to the new vocabulary (P1).</p>
+<p>Decided 1 Nov 2026 (revision 7). Shawn answered the eight R6 syntax questions as recommended. His read of the three tiles then found their parameters unintuitive, and he took all ten recommendations of the <a href="spikes/kdl-intuitiveness.html">intuitiveness review</a>; two of them revise syntax answers 1 and 5. R6 status: syntax and vocabulary decided; <code>dt-doc</code> and the library tiles to be reworked to the new vocabulary (P1).</p>
 <div class="tbl"><table>
 <thead><tr><th>#</th><th>Question</th><th>Decision</th><th>Affects</th></tr></thead>
 <tbody>
