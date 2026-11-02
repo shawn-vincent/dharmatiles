@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tile System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html" aria-current="page">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Standard · applies to every tile, every look, Python and Rust</div>
+  <h1>Tile system</h1>
+  <p class="lede">The facts every dharmatiles tile must obey so that it fits the other tiles and the commercial pieces it sits beside: the words we use for sizes, the two base systems, the standard heights, file names, and where boundaries meet the tile edge.</p>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#terms">1. Tile, square, cell</a></li>
+  <li><a href="#datum">2. The datum and the two systems</a></li>
+  <li><a href="#dungeonblocks">3. DungeonBlocks base</a></li>
+  <li><a href="#openlock">4. OpenLOCK base</a></li>
+  <li><a href="#heights">5. Standard heights</a></li>
+  <li><a href="#naming">6. Names and output paths</a></li>
+  <li><a href="#edges">7. Edges, anchors and orientation</a></li>
+  <li><a href="#edge-contract">8. The edge contract</a></li>
+  <li><a href="#history">History</a></li>
+</ol></nav>
+<article class="doc">
+
+<h2 id="terms">1. Tile, square, cell</h2>
+<p>Three sizes, three names. These names are used everywhere: in code, in docs and in conversation.</p>
+<div class="tbl"><table>
+<thead><tr><th>Name</th><th>What it is</th><th>Size</th><th>Key symbols</th></tr></thead>
+<tbody>
+<tr><td><strong>tile</strong></td><td>The whole printed piece.</td><td>cols × rows squares</td><td><code>TileScene</code>, <code>build_tile_from_spec()</code>, <code>stl/</code></td></tr>
+<tr><td><strong>square</strong></td><td>One grid unit of the game board.</td><td>35 × 35 mm (DungeonBlocks); 25.4 × 25.4 mm (OpenLOCK)</td><td><code>cols</code>, <code>rows</code>, <code>square_mm</code>, <code>cells_per_square</code></td></tr>
+<tr><td><strong>cell</strong></td><td>One subdivision of the height grid.</td><td>square_mm / cells_per_square</td><td><code>cell_w</code>, <code>grid_w</code>, <code>grid_h</code></td></tr>
+</tbody></table></div>
+<div class="callout"><p><strong>Never call a 35 mm unit a “tile”.</strong> A 2×2 tile has four squares. Density parameters always end in <code>_per_square</code> (<code>rocks_per_square</code>, <code>groups_per_square</code>), so a density means the same thing on a 1×1 and a 3×3 tile.</p></div>
+<p>The Python defaults are in <code>src/dharmatiles/core/config.py:103</code>: <code>square_mm = 35.0</code> and <code>cells_per_square = 128</code>, so a cell is 35 / 128 ≈ 0.27 mm. (The docstring above it still says 256; the code says 128.) An OpenLOCK build caps the grid at 64 cells per square, about 0.40 mm, close to one printed line (<code>src/dharmatiles/systems.py:107</code>).</p>
+<p>The Rust port keeps the same three words. Its <code>Frame</code> holds <code>cols</code>, <code>rows</code>, <code>square_mm</code> and <code>cells_per_square</code>, defaulting to 35 mm and 128 cells (<code>crates/dt-kit/src/scene.rs:11</code> on branch <code>rust/p1-skel</code>). In the KDL tile language, positions are written in squares and sizes in millimetres at the 35 mm reference square; an OpenLOCK build scales every written size like a photocopy (decision R6.5, see <a href="../rust/plan.html">the Rust plan</a>).</p>
+
+<h2 id="datum">2. The datum and the two systems</h2>
+<p>A <strong>system</strong> is the underside a tile clips into: DungeonBlocks or OpenLOCK. Every tile is built for both by default (<code>src/dharmatiles/spec.py:243</code>). The OpenLOCK build is not a shrunk copy of the DungeonBlocks mesh. It is a second build of the same tile at 25.4 mm per square, so the layout, measured in squares, is the same and the grid resolution suits the smaller square.</p>
+<p>The <strong>datum</strong> is z = 0. It is the top of the base (the <em>connector</em>) and the bottom of the terrain. The connector owns everything below z = 0; looks own everything above it. This holds for both systems (confirmed default 6, 1 Nov 2026). All heights on this page are above the datum unless they say otherwise.</p>
+<figure class="diagram">
+<svg viewBox="0 0 640 230" role="img" aria-label="Side views of the DungeonBlocks peg base and the OpenLOCK box base, both ending at the datum z = 0">
+  <style>
+    .ln{fill:none;stroke:currentColor;stroke-width:1.5}
+    .fl{fill:var(--panel);stroke:currentColor;stroke-width:1.5}
+    .gr{fill:color-mix(in srgb, var(--accent) 30%, transparent);stroke:var(--accent);stroke-width:1.5}
+    .dt{stroke:var(--alert);stroke-width:1.5;stroke-dasharray:5 4}
+    .tx{fill:currentColor;font:12px var(--mono)}
+    .tm{fill:var(--muted);font:11px var(--mono)}
+  </style>
+  <line class="dt" x1="10" y1="80" x2="630" y2="80"/>
+  <text class="tx" x="12" y="72" style="fill:var(--alert)">datum z = 0</text>
+  <!-- DB: square 35 mm => 210 px (6 px/mm) -->
+  <path class="gr" d="M40,80 L40,50 C80,40 120,58 160,46 C200,36 230,52 250,48 L250,80 Z"/>
+  <path class="fl" d="M40,80 L250,80 L223,111 L223,155 L214,164 L76,164 L67,155 L67,111 Z"/>
+  <text class="tx" x="100" y="190">DungeonBlocks</text>
+  <text class="tm" x="260" y="100">flare 5.2</text>
+  <text class="tm" x="260" y="140">peg 5.7 / 11.4</text>
+  <text class="tm" x="98" y="212">35 mm square · 26 mm column</text>
+  <!-- OL: square 25.4 mm => 152 px -->
+  <path class="gr" d="M420,80 L420,52 C460,44 500,58 540,48 L572,50 L572,80 Z"/>
+  <path class="fl" d="M420,80 L572,80 L572,128 L420,128 Z"/>
+  <rect x="420" y="94" width="14" height="25" style="fill:var(--bg);stroke:currentColor;stroke-width:1"/>
+  <rect x="558" y="94" width="14" height="25" style="fill:var(--bg);stroke:currentColor;stroke-width:1"/>
+  <text class="tx" x="452" y="190">OpenLOCK</text>
+  <text class="tm" x="582" y="108">box 8.0</text>
+  <text class="tm" x="420" y="212">25.4 mm square · clip slots</text>
+</svg>
+<figcaption>Both bases end at the datum; the terrain (green) starts there. Drawn to scale, 6 px per mm; the OpenLOCK clip slots are shown in section.</figcaption>
+</figure>
+
+<h2 id="dungeonblocks">3. DungeonBlocks base</h2>
+<p>DungeonBlocks is a commercial terrain system on a 35 mm grid. Each square gets one <strong>peg</strong>: a column that drops into the socket of the piece below. The geometry follows the published DungeonBlocks blank floor tile and is built in <code>src/dharmatiles/bases/dungeonblocks.py:80</code> (<code>make_base</code>) from the constants in <code>src/dharmatiles/core/config.py:321</code> (<code>BaseConfig</code>).</p>
+<div class="tbl"><table>
+<thead><tr><th>Part</th><th class="num">mm</th><th>Where</th></tr></thead>
+<tbody>
+<tr><td>Square</td><td class="num">35.0</td><td><code>core/config.py:103</code></td></tr>
+<tr><td>Flare: the full square narrows to the column over this height</td><td class="num">5.2</td><td><code>core/config.py:341</code></td></tr>
+<tr><td>Column cross-section</td><td class="num">26.0</td><td><code>core/config.py:342</code></td></tr>
+<tr><td>Chamfer at the peg tip</td><td class="num">1.5</td><td><code>core/config.py:343</code></td></tr>
+<tr><td>Short peg (below the flare)</td><td class="num">5.7</td><td><code>core/config.py:337</code></td></tr>
+<tr><td>Tall peg</td><td class="num">11.4</td><td><code>core/config.py:338</code></td></tr>
+<tr><td>Tall peg is chosen when the tallest point on the tile is above</td><td class="num">15.0</td><td><code>core/config.py:339</code>, <code>bases/dungeonblocks.py:20</code></td></tr>
+</tbody></table></div>
+<p>So the base is 10.9 mm deep with the short peg (5.7 + 5.2) and 16.6 mm with the tall one. These match the measured commercial pieces: ground pieces use the short base, wall pieces the tall one (<a href="../reference/walls/commercial-sets-analysis.html#1b-ground-surface-heights-measured-2026-07-05">commercial sets analysis, §1b</a>). The peg choice looks at every mesh on the tile, trees and walls included, not just the terrain. The lotus logo is inset into each peg tip at 80% of the chamfered column width (<code>bases/dungeonblocks.py:103</code>).</p>
+<p>The Rust connector carries the same numbers (<code>crates/dt-looks/src/connector.rs:43</code> on <code>rust/p1-skel</code>) and is checked against the Python volume.</p>
+
+<h2 id="openlock">4. OpenLOCK base</h2>
+<p>OpenLOCK, by Printable Scenery, is a 1-inch grid (25.4 mm). Tiles join side by side with separate clips that slide into T-shaped slots in the base walls. The base is a solid box with the slots cut out by boolean CSG (<code>src/dharmatiles/bases/openlock.py:60</code>). Dimensions are ported from Caitlyn Byrne's OpenSCAD-OpenLock; the rule from the OpenLOCK developer page is that “the footprint tessellation of each piece must never change, and the location of the OpenLOCK ports must never alter.”</p>
+<div class="tbl"><table>
+<thead><tr><th>Part</th><th class="num">mm</th><th>Where</th></tr></thead>
+<tbody>
+<tr><td>Square (imperial, canonical)</td><td class="num">25.4</td><td><code>bases/openlock.py:20</code></td></tr>
+<tr><td>Base box height (datum down to −8.0)</td><td class="num">8.0</td><td><code>bases/openlock.py:23</code></td></tr>
+<tr><td>Clip slot: bottom edge above the base bottom</td><td class="num">1.4</td><td><code>bases/openlock.py:25</code></td></tr>
+<tr><td>Clip slot height (z −6.6 to −2.4)</td><td class="num">4.2</td><td><code>bases/openlock.py:24</code>, <code>:88</code></td></tr>
+<tr><td>Slot mouth width, at the tile face</td><td class="num">14</td><td><code>bases/openlock.py:27</code></td></tr>
+<tr><td>Slot width after the first 2 mm step</td><td class="num">12</td><td><code>bases/openlock.py:30</code></td></tr>
+<tr><td>Slot inner width, from 5 mm deep to the back wall at 7 mm</td><td class="num">10</td><td><code>bases/openlock.py:31</code>, <code>:48</code></td></tr>
+<tr><td>Retention slots: one each side, centred this far from the socket</td><td class="num">8.35</td><td><code>bases/openlock.py:34</code></td></tr>
+<tr><td>Retention slot width × depth</td><td class="num">4.7 × 9.0</td><td><code>bases/openlock.py:35</code></td></tr>
+<tr><td>Logo inset depth on the bottom face</td><td class="num">0.4</td><td><code>bases/openlock.py:137</code></td></tr>
+</tbody></table></div>
+<p>There is one clip slot per square on every edge, centred at (i + 0.5) × 25.4 mm (<code>bases/openlock.py:96</code> and <code>:115</code>). A 25.0 mm metric variant exists in the community; it does not tessellate with 25.4 mm tiles, and dharmatiles builds only 25.4 mm. Standard OpenLOCK wall heights are 25.4 mm (half) and 50.8 mm (full).</p>
+<p>The OpenLOCK base is built and exported today but has not yet been test-printed against a real clip; the Rust plan makes “an OpenLOCK clip fits” part of the P5 exit.</p>
+
+<h2 id="heights">5. Standard heights</h2>
+<p>Commercial DungeonBlocks pieces put each kind of surface in a known height band. Shawn's ruling for walls (4 Jul 2026) is DungeonBlocks-compatible by default, with every dimension configurable. The bands below were measured on 5 Jul 2026 from the commercial STLs, as upward-face area histograms, and converted to heights above our datum by subtracting the 10.9 mm short base.</p>
+<div class="tbl"><table>
+<thead><tr><th>Surface</th><th class="num">Official band above datum</th><th>dharmatiles today</th></tr></thead>
+<tbody>
+<tr><td>Water surface</td><td class="num">1.9–2.4</td><td>3.0 library default (<code>layers/water.py:49</code>); 2.6 in shorelab and the Rust <code>water</code> level</td></tr>
+<tr><td>Ground at the tile edge</td><td class="num">—</td><td><strong>3.4</strong> (confirmed default 12, 1 Nov 2026; the Rust <code>edge</code> level)</td></tr>
+<tr><td>Outdoor dirt</td><td class="num">3.9–4.4</td><td>dirtlab interior ≈ 4.3–5.9, median ≈ 4.5</td></tr>
+<tr><td>Grass</td><td class="num">4.4–5.9</td><td>5.0 (<code>layers/grass_carpet.py:71</code>); grasslab's mean grass top must sit in this band</td></tr>
+<tr><td>Outdoor stone path</td><td class="num">5.4–6.4</td><td>use <code>StoneFloor(top_mm≈6.0)</code></td></tr>
+<tr><td>Interior stone floor</td><td class="num">6.9–7.9</td><td>7.4 (<code>walls/floor.py:56</code>)</td></tr>
+<tr><td>Themed ground (graveyard, swamp)</td><td class="num">7.4–8.9</td><td>—</td></tr>
+<tr><td>Rock ground (outcrop)</td><td class="num">≈ 9.4</td><td>—</td></tr>
+<tr><td>Standard wall top</td><td class="num">≈ 33.1</td><td>33.1 (<code>walls/masonry.py:550</code>); tall ≈ 72.3</td></tr>
+</tbody></table></div>
+<p>In the Rust library these are named levels in <code>library/parts/heights.kdl</code>: <code>edge</code> 3.4, <code>ground</code> 5.0, <code>water</code> 2.6 and <code>wall</code> 33.1 mm. Tiles use the names, so a level changes in one place.</p>
+<p>Two places still disagree with the 3.4 mm edge level: dirtlab's REQ-H-1 puts the dirt edge at 4.0 mm, and clifflab's rockpile puts the cliff foot at 4.0 mm. Both are to move to 3.4 mm (rockpile before the P7 freeze, decision R6.6). The 3.4 mm level is to be confirmed with a test print in P3.</p>
+
+<h2 id="naming">6. Names and output paths</h2>
+<p>A Python tile lives at <code>src/tiles/&lt;group&gt;/&lt;NxM&gt;-&lt;name&gt;.tile.py</code>, where the group is <code>ground</code>, <code>water</code>, <code>walls</code> or <code>floors</code> and NxM is cols × rows (<code>1x1</code>, <code>2x2</code>, <code>3x3</code>). <code>dharmatiles-gen</code> builds every <code>*.tile.py</code> under <code>src/tiles/</code> (<code>src/dharmatiles/terrains/tile.py:1289</code>) and writes</p>
+<pre><code>stl/&lt;db|ol&gt;/&lt;group&gt;/&lt;NxM&gt;-&lt;name&gt;-&lt;db|ol&gt;.stl</code></pre>
+<p>(<code>terrains/tile.py:1083</code>). The group folder is part of the path; the shorter form <code>stl/db/1x1-…-db.stl</code> found in older notes is out of step with the code. Experiment tiles that are not part of the set live in <code>src/experiments/tiles/</code>, outside the batch glob.</p>
+<h3 id="terrain-order">Terrain order</h3>
+<p>A mixed tile names its terrains from low to high:</p>
+<pre><code>water &lt; soil &lt; grass &lt; floors &lt; walls / cliffs</code></pre>
+<p>A <code>+</code> separates the terrains: <code>1x1-soil+grass</code> is soil and grass on one tile. A single-terrain tile has no <code>+</code>: <code>1x1-grass</code>, <code>1x1-water</code>. Rotations are not separate files; each shape has one canonical orientation and the printed tile is turned by hand.</p>
+<h3 id="shapes">Shape suffixes</h3>
+<p>A shape suffix says which terrain has the shape, by where it sits: before the <code>+</code> for the lower terrain (<code>water-corridor+grass</code>, a water corridor through grass), after it for the higher one (<code>soil+grass-corner</code>, a grass corner on soil).</p>
+<div class="tbl"><table>
+<thead><tr><th>Suffix</th><th>The named terrain…</th><th>Edge points</th><th>Canonical orientation</th></tr></thead>
+<tbody>
+<tr><td>(none)</td><td>fills one broad side (half the tile)</td><td>0.50 (organic paths use 0.48 / 0.52)</td><td>left/right boundary</td></tr>
+<tr><td><code>corner</code></td><td>occupies one corner</td><td>0.50 on two adjacent sides</td><td>bottom-left</td></tr>
+<tr><td><code>angle</code></td><td>occupies two adjacent sides (an L)</td><td>0.50 on two adjacent sides</td><td>L around a bottom-left cut-out</td></tr>
+<tr><td><code>corridor</code></td><td>connects opposite sides</td><td>0.33 and 0.67 on two opposite sides</td><td>left to right</td></tr>
+<tr><td><code>u</code></td><td>enters and leaves by the same side</td><td>0.33 and 0.67 on one side</td><td>right side</td></tr>
+<tr><td><code>corridor-turn</code></td><td>connects two adjacent sides</td><td>0.33 and 0.67 on both</td><td>left to top</td></tr>
+<tr><td><code>corridor-t</code></td><td>connects three sides</td><td>0.33 and 0.67 on each</td><td>left, right and top</td></tr>
+<tr><td><code>corridor-x</code></td><td>connects all four sides</td><td>0.33 and 0.67 on each</td><td>all four</td></tr>
+<tr><td><code>corridor-open</code></td><td>widens from a corridor to a half-tile opening</td><td>0.33 and 0.67 on one side; 0.50 on the two adjacent sides</td><td>enters left, opens right: left 0.33 → bottom 0.50, left 0.67 → top 0.50</td></tr>
+</tbody></table></div>
+<p>Other words after the terrain name describe content, not shape: <code>1x1-grass-tree</code>, <code>1x1-grass-flowers</code>, <code>1x1-wall-brick-corner</code>, <code>1x1-floor-stone</code>. One file breaks the terrain order: <code>src/tiles/water/1x1-grass-tree+water.tile.py</code> names grass before water.</p>
+
+<h2 id="edges">7. Edges, anchors and orientation</h2>
+<p>A boundary between two terrains starts and ends on the tile edge. Its end points are <strong>anchors</strong>: an edge plus a position t from 0 to 1 along it. t = 0 and t = 1 are corners; 0.5 is the middle. t runs from the south-west end of each edge: left to right along the bottom and top edges, bottom to top along the left and right edges (<code>src/dharmatiles/core/region.py:23</code>, <code>_anchor_to_mm</code>).</p>
+<figure class="diagram">
+<svg viewBox="0 0 420 300" role="img" aria-label="A square tile with its four edges named in Python and Rust words and the standard anchor positions 0.33, 0.5 and 0.67 marked">
+  <style>
+    .e{fill:var(--card);stroke:currentColor;stroke-width:2}
+    .a{fill:var(--accent)}
+    .b{fill:var(--water)}
+    .t{fill:currentColor;font:12px var(--mono)}
+    .m{fill:var(--muted);font:11px var(--mono)}
+  </style>
+  <rect class="e" x="110" y="50" width="200" height="200"/>
+  <text class="t" x="175" y="40">top · north</text>
+  <text class="t" x="160" y="275">bottom · south</text>
+  <text class="t" x="18" y="154">left · west</text>
+  <text class="t" x="318" y="154">right · east</text>
+  <circle class="a" cx="176" cy="250" r="5"/><circle class="b" cx="210" cy="250" r="5"/><circle class="a" cx="244" cy="250" r="5"/>
+  <circle class="a" cx="176" cy="50" r="5"/><circle class="b" cx="210" cy="50" r="5"/><circle class="a" cx="244" cy="50" r="5"/>
+  <circle class="a" cx="110" cy="184" r="5"/><circle class="b" cx="110" cy="150" r="5"/><circle class="a" cx="110" cy="116" r="5"/>
+  <circle class="a" cx="310" cy="184" r="5"/><circle class="b" cx="310" cy="150" r="5"/><circle class="a" cx="310" cy="116" r="5"/>
+  <text class="m" x="166" y="242">.33</text><text class="m" x="200" y="242">.5</text><text class="m" x="234" y="242">.67</text>
+  <text class="m" x="118" y="188">.33</text><text class="m" x="118" y="120">.67</text>
+  <text class="m" x="72" y="268">t = 0</text>
+  <path d="M125 235 L170 235" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+  <path d="M125 235 L125 195" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="currentColor"/></marker></defs>
+  <text class="m" x="132" y="228">x, t</text>
+</svg>
+<figcaption>Anchor positions. Green: corridor points at 0.33 and 0.67. Blue: half-tile and corner points at 0.5. The origin is the bottom-left (south-west) corner.</figcaption>
+</figure>
+<p>The anchors are the compatibility points between neighbouring tiles. An organic boundary may wander inside the tile, but it must pass exactly through its anchors. Waypoints route a path through the tile without moving its anchors. A water-to-land boundary is a strip, not a line: the corridor water tiles use <code>width_mm=2.5</code>, <code>amplitude_mm=4.0</code> and <code>wavelength_mm=12.0</code>, and new shorelines use these unless a shape needs a tighter turn.</p>
+<p>Coordinates: x runs east (right), y runs north (up), z runs up from the datum. <code>FloodFill(x, y)</code> takes 0–1 coordinates with (0, 0) at the bottom-left (<code>src/dharmatiles/spec.py:131</code>). Python names the edges <code>Edge.TOP</code>, <code>BOTTOM</code>, <code>LEFT</code>, <code>RIGHT</code> (<code>spec.py:108</code>). The Rust tile language uses compass words for the same edges (<code>north</code>, <code>south</code>, <code>east</code>, <code>west</code>, and corners like <code>north-west</code>) and writes positions in squares from the south-west corner (<code>crates/dt-doc/src/place.rs:1</code> on <code>rust/p1-doc</code>; decisions V4 and V5).</p>
+<p>The canonical orientation in the table above is only a convention for writing specs. Printed tiles can be turned freely.</p>
+
+<h2 id="edge-contract">8. The edge contract</h2>
+<p>The <strong>edge contract</strong> is what every tile does at its border so that two tiles placed side by side meet with no step. It has four parts.</p>
+<ul>
+<li><strong>Ground.</strong> Ground meets the tile edge at one level, 3.4 mm, all round, and rises from there; nothing inside dips below the edge (grasslab REQ-HILL-8, dirtlab REQ-H-3). dirtlab adds a 0.4 mm flat band at the edge.</li>
+<li><strong>Water.</strong> Water meets the edge at a calm, consistent level (waterlab REQ-W-9). The library's water already lays a sine along the tile edge with a wavelength of half a square, fading over 5 mm (<code>src/dharmatiles/layers/water.py:153</code>). The Rust contract keeps that sine: crests at corners and square midpoints, 0.6 mm amplitude, calm within 4 mm of the edge.</li>
+<li><strong>Lines.</strong> Boundaries leave the tile only at the anchor positions in <a href="#edges">§7</a>.</li>
+<li><strong>Cliffs.</strong> A cliff that runs off the tile ends in the standard end section, so runs of different seeds join. Shawn, 30 Oct 2026: a standard end section is enough; a few millimetres of mismatch reads as just another joint. Stones are never clipped at the tile edge; they are shrunk back to touch it.</li>
+</ul>
+<p>Walls butt without matching courses: a clean vertical cut at the tile edge is correct, the same way DungeonBlocks pieces butt (Shawn, walls interview, 4 Jul 2026).</p>
+<p>In the Rust port the contract is one file, <code>library/parts/edges.kdl</code>, delivered in P3, whose exit criterion is that the edge profile matches within 0.05 mm on all four edges and two printed water tiles butt with no step.</p>
+
+<h2 id="history">History</h2>
+<p>This page replaces three earlier documents: the tile design guide (filenames, terrain order, edge coordinates, shapes), the tile naming convention, and the OpenLOCK specification. Where they disagreed with the code, the code won: the output path includes the group folder; the OpenLOCK retention slot is cut on both sides of each socket, 9.0 mm deep, and the clip slot spans z −6.6 to −2.4 mm. The ground heights were measured on 5 Jul 2026, and the wall default was lowered from 49.7 mm (a whole-piece height) to the official visible wall top the same day. The 3.4 mm edge level was confirmed on 1 Nov 2026. The originals are in the archive: <a href="../archive/guides/tile-design-guide.html">tile design guide</a>, <a href="../archive/python-library/tile-naming-convention.html">tile naming convention</a>, <a href="../archive/guides/openlock-spec.html">OpenLOCK specification</a>.</p>
+</article>
+</div>
+</body>
+</html>
