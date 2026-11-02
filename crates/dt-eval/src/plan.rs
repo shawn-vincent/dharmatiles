@@ -83,6 +83,12 @@ pub fn schedule(plans: &[Plan]) -> Result<Vec<Step>, Refusal> {
                     }
                     must[i].extend(writers);
                 }
+                Read::IfAny(kind) => must[i].extend(
+                    solids
+                        .iter()
+                        .copied()
+                        .filter(|&j| j != i && plans[j].writes == Write::Solid(kind)),
+                ),
                 Read::AllSolids => must[i].extend(
                     solids
                         .iter()
@@ -138,6 +144,24 @@ mod tests {
     }
 
     #[test]
+    fn a_wall_waits_for_the_floor_it_stands_on() {
+        let plans = [
+            p(Write::Solid("wall"), &[Read::IfAny("floor")]),
+            p(Write::Surface, &[]),
+            p(Write::Solid("floor"), &[Read::Solids("ground")]),
+        ];
+        assert_eq!(
+            schedule(&plans),
+            Ok(vec![
+                Step::Entry(1),
+                Step::Lift,
+                Step::Entry(2),
+                Step::Entry(0)
+            ])
+        );
+    }
+
+    #[test]
     fn refuses_what_it_cannot_satisfy() {
         let none = [
             p(Write::Surface, &[]),
@@ -165,6 +189,11 @@ mod tests {
             schedule(&early),
             Err(Refusal::SurfaceReadsSolid { entry: 0 })
         );
+        let optional = [
+            p(Write::Surface, &[]),
+            p(Write::Solid("wall"), &[Read::IfAny("floor")]),
+        ];
+        assert!(schedule(&optional).is_ok());
         let no_ground = [p(Write::Solid("rock"), &[Read::Solids("ground")])];
         assert!(schedule(&no_ground).is_err());
     }

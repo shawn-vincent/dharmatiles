@@ -7,11 +7,16 @@
 //!
 //! P1: [`ground`] (then a flat surface at a level) and [`connector`]
 //! (DungeonBlocks). P2: [`ground`] in full (levels, hills, the edge
-//! contract) and [`dirt`] (dirtlab's textured earth on it).
+//! contract) and [`dirt`] (dirtlab's textured earth on it). P5:
+//! [`openlock`] (the OpenLOCK connector).
 
 pub mod connector;
 pub mod dirt;
+pub mod floor;
 pub mod ground;
+pub mod openlock;
+pub mod tree;
+pub mod wall;
 
 use dt_kit::{Mask, Scene, Seed};
 
@@ -96,6 +101,9 @@ pub enum Read {
     Solids(&'static str),
     /// Every other solid in the tile, the lifted ground included.
     AllSolids,
+    /// Every solid of this kind if the tile has any (what a thing may
+    /// stand on, such as a wall on a floor); nothing to wait for if not.
+    IfAny(&'static str),
 }
 
 /// A look's plan.
@@ -138,6 +146,14 @@ pub struct Ctx<'a> {
     pub path: &'a str,
     /// Its seed, keyed by its path.
     pub seed: Seed,
+    /// `along=`: the path it follows, in squares from the south-west
+    /// corner, walked with the tile inside on the left (a run's outer
+    /// face). `None` without `along=`.
+    pub along: Option<&'a [[f64; 2]]>,
+    /// `at=`: where it stands, in squares, as `[x_lo, x_hi]` and
+    /// `[y_lo, y_hi]` (equal ends for a fixed point; a range is drawn
+    /// from the entry's seed). `None` without `at=`.
+    pub at: Option<[[f64; 2]; 2]>,
 }
 
 /// A built-in look.
@@ -160,7 +176,21 @@ pub fn takes(name: &str) -> Option<&'static [&'static str]> {
     match name {
         "ground" => Some(ground::CONTROLS),
         "dirt" => Some(dirt::CONTROLS),
+        "wall" => Some(wall::CONTROLS),
+        "floor" => Some(floor::CONTROLS),
+        "tree" => Some(tree::CONTROLS),
         _ => None,
+    }
+}
+
+/// The place words a built look honours (`along`, `at`); the evaluator
+/// sets every other one aside as not built yet.
+#[must_use]
+pub fn places(name: &str) -> &'static [&'static str] {
+    match name {
+        "wall" => &["along"],
+        "tree" => &["at"],
+        _ => &[],
     }
 }
 
@@ -172,6 +202,9 @@ pub fn look(name: &str, controls: &[Control]) -> Result<Box<dyn Look>, LookError
     match name {
         "ground" => Ok(Box::new(ground::Ground::new(controls)?)),
         "dirt" => Ok(Box::new(dirt::Dirt::new(controls)?)),
+        "wall" => Ok(Box::new(wall::Wall::new(controls)?)),
+        "floor" => Ok(Box::new(floor::Floor::new(controls)?)),
+        "tree" => Ok(Box::new(tree::Tree::new(controls)?)),
         _ => Err(LookError {
             control: None,
             message: format!("unknown look `{name}`"),
@@ -180,17 +213,18 @@ pub fn look(name: &str, controls: &[Control]) -> Result<Box<dyn Look>, LookError
     }
 }
 
-/// The connector for a system: `db` (DungeonBlocks). OpenLOCK comes in P5.
+/// The connector for a system: `db` (DungeonBlocks) or `ol` (OpenLOCK).
 ///
 /// # Errors
-/// [`LookError`] for a system without a connector yet.
+/// [`LookError`] for an unknown system.
 pub fn connector(system: &str) -> Result<Box<dyn Look>, LookError> {
     match system {
         "db" => Ok(Box::new(connector::DungeonBlocks::default())),
+        "ol" => Ok(Box::new(openlock::OpenLock::default())),
         _ => Err(LookError {
             control: None,
-            message: format!("no connector for system `{system}` yet"),
-            help: Some("P1 builds DungeonBlocks only: --system db".to_owned()),
+            message: format!("no connector for system `{system}`"),
+            help: Some("the systems are db (DungeonBlocks) and ol (OpenLOCK)".to_owned()),
         }),
     }
 }

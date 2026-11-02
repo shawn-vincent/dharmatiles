@@ -93,7 +93,7 @@ fn library_tiles_check_and_say_which_look_is_missing_when_built() {
         ),
         (
             "lib:tiles/walls/1x1-wall-fieldstone-corner.kdl",
-            "look `wall` not available yet (Phase 5)",
+            "look `grass` not available yet (Phase 4)",
         ),
         (
             "lib:tiles/cliffs/2x1-cliff-run.kdl",

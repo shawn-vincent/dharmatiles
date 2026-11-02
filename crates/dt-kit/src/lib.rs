@@ -29,6 +29,10 @@
 //! | [`stl`] | binary STL with the build record |
 //! | [`render`] | a painted preview |
 //!
+//! P5 adds the forms ([`form`]: level sets, hulls, solids from meshes,
+//! box clips, the common stone relief and 3D noise) that walls, floors
+//! and trees are made of.
+//!
 //! Kernel rules (R1, R2, R9, from `dt_geom::source`): every leaf solid takes
 //! a [`Slot`] reserved in sequence from the scene's block, so its source ID
 //! is fixed by index whatever thread builds it; cut faces take the
@@ -38,6 +42,7 @@
 
 mod audit;
 mod field;
+pub mod form;
 mod outline;
 mod render;
 mod scene;

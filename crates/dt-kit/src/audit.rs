@@ -468,6 +468,14 @@ fn face_areas(m: &TriMesh) -> Vec<f64> {
 /// (k − 1) × layer × tan(overhang)` from layer k below it (any k within
 /// `span_mm`) droops. Flagged: the downward faces above z = 0.05 under such
 /// material. Also returns the rays inside `footprint` that hit nothing.
+///
+/// A void thinner than the printer's `gap` (measured exactly along each
+/// ray, not at layer resolution) is filled before the layers are cut: such
+/// a gap cannot stay open in print, the layer above lands on the one
+/// below, so its roof is not an overhang. This is what a bed joint of
+/// 0.11 mm under a wall stone is (walls R10: "the lip over the sub-mm
+/// joint prints"); rockpile's rule, written for stacked rock with real
+/// gaps, counted every such roof as a drooping shelf.
 fn overhang_faces(m: &TriMesh, footprint: [f64; 2], p: &Printer) -> (Vec<bool>, usize) {
     let none = (vec![false; m.triangles.len()], 0);
     let Some((lo, hi)) = bounds(m) else {
@@ -487,18 +495,42 @@ fn overhang_faces(m: &TriMesh, footprint: [f64; 2], p: &Printer) -> (Vec<bool>, 
     #[allow(clippy::cast_possible_truncation)]
     let layer_of = |z: f64| ((z / lay + 0.5).floor() as i64).clamp(0, nl as i64) as usize;
 
-    // Every (column, layer) hit, one list per triangle, gathered in order.
-    let hits: Vec<Vec<(usize, usize)>> = m
+    // Every (column, z) hit, one list per triangle, gathered in order.
+    let hits: Vec<Vec<(usize, f64)>> = m
         .triangles
         .par_iter()
-        .map(|t| column_hits(m, t, [x0, y0], g, nx, ny, &layer_of))
+        .map(|t| column_hits(m, t, [x0, y0], g, nx, ny))
         .collect();
+    let mut per_col: Vec<Vec<f64>> = vec![Vec::new(); nx * ny];
+    for list in &hits {
+        for &(col, z) in list {
+            per_col[col].push(z);
+        }
+    }
     let mut occ = vec![0u8; (nl + 1) * nx * ny];
     let mut hit_any = vec![false; nx * ny];
-    for list in &hits {
-        for &(col, k) in list {
-            occ[k * nx * ny + col] ^= 1;
-            hit_any[col] = true;
+    for (col, zs) in per_col.iter_mut().enumerate() {
+        if zs.is_empty() {
+            continue;
+        }
+        hit_any[col] = true;
+        zs.sort_by(f64::total_cmp);
+        // hits alternate in, out, in, …: drop an out and the next in when
+        // the void between them is thinner than the printer's gap
+        let mut kept: Vec<f64> = Vec::with_capacity(zs.len());
+        for (k, &z) in zs.iter().enumerate() {
+            if k.is_multiple_of(2)
+                && k > 0
+                && kept.len().is_multiple_of(2)
+                && z - zs[k - 1] < p.gap_mm
+            {
+                kept.pop();
+                continue;
+            }
+            kept.push(z);
+        }
+        for z in kept {
+            occ[layer_of(z) * nx * ny + col] ^= 1;
         }
     }
     // inside at layer k: an odd count of hits at layers ≤ k
@@ -606,7 +638,7 @@ fn bounds(m: &TriMesh) -> Option<([f64; 3], [f64; 3])> {
     }))
 }
 
-/// Vertical-ray hits of one triangle: `(column, layer)` for every lattice
+/// Vertical-ray hits of one triangle: `(column, z)` for every lattice
 /// column strictly inside its projection, or on an edge by the top-left
 /// rule, so a ray through a shared edge counts once.
 fn column_hits(
@@ -616,8 +648,7 @@ fn column_hits(
     g: f64,
     nx: usize,
     ny: usize,
-    layer_of: &(dyn Fn(f64) -> usize + Sync),
-) -> Vec<(usize, usize)> {
+) -> Vec<(usize, f64)> {
     let mut v = t.map(|i| m.positions[i as usize]);
     let area =
         (v[1][0] - v[0][0]) * (v[2][1] - v[0][1]) - (v[2][0] - v[0][0]) * (v[1][1] - v[0][1]);
@@ -659,7 +690,7 @@ fn column_hits(
             if (0..3).all(|k| w[k] > 0.0 || (w[k] == 0.0 && tl[k])) {
                 let z = (w[0] * v[0][2] + w[1] * v[1][2] + w[2] * v[2][2]) / area;
                 #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                out.push((j as usize * nx + i as usize, layer_of(z)));
+                out.push((j as usize * nx + i as usize, z));
             }
         }
     }
@@ -747,7 +778,6 @@ mod tests {
 
     /// One closed L-shaped body: a post with a shelf at the top.
     fn shelf_on_post() -> TriMesh {
-        // L profile in x–z, extruded 2 mm in y
         let prof = [
             [0.0, 0.0],
             [2.0, 0.0],
@@ -756,21 +786,25 @@ mod tests {
             [6.0, 6.0],
             [0.0, 6.0],
         ];
+        prism(&prof, &[[0, 1, 2], [0, 2, 5], [2, 3, 4], [2, 4, 5]])
+    }
+
+    /// A profile in x–z, extruded 2 mm in y; `fan` triangulates it.
+    fn prism(prof: &[[f64; 2]], fan: &[[u32; 3]]) -> TriMesh {
+        let n = u32::try_from(prof.len()).unwrap();
         let mut positions = Vec::new();
         for y in [0.0, 2.0] {
             positions.extend(prof.iter().map(|p| [p[0], y, p[1]]));
         }
-        // front (y = 0) faces −y: CCW seen from −y; fan split into convex parts
-        let front = [[0, 1, 2], [0, 2, 5], [2, 3, 4], [2, 4, 5]];
         let mut triangles: Vec<[u32; 3]> = Vec::new();
-        for f in front {
+        for f in fan {
             triangles.push([f[0], f[2], f[1]]);
-            triangles.push([f[0] + 6, f[1] + 6, f[2] + 6]);
+            triangles.push([f[0] + n, f[1] + n, f[2] + n]);
         }
-        for k in 0..6u32 {
-            let k1 = (k + 1) % 6;
-            triangles.push([k, k1, k1 + 6]);
-            triangles.push([k, k1 + 6, k + 6]);
+        for k in 0..n {
+            let k1 = (k + 1) % n;
+            triangles.push([k, k1, k1 + n]);
+            triangles.push([k, k1 + n, k + n]);
         }
         let mut m = TriMesh {
             positions,
@@ -782,5 +816,49 @@ mod tests {
         }
         assert!(m.is_watertight());
         m
+    }
+
+    /// A block on a slab, held by a post at one end, with a bed joint of
+    /// `gap` mm between them: a C in profile.
+    fn block_on_joint(gap: f64) -> TriMesh {
+        let g = 2.0 + gap;
+        let prof = [
+            [0.0, 0.0],
+            [6.0, 0.0],
+            [6.0, 2.0],
+            [1.0, 2.0],
+            [1.0, g],
+            [6.0, g],
+            [6.0, 4.0],
+            [0.0, 4.0],
+        ];
+        prism(
+            &prof,
+            &[
+                [0, 1, 2],
+                [0, 2, 3],
+                [0, 3, 4],
+                [0, 4, 7],
+                [4, 5, 6],
+                [4, 6, 7],
+            ],
+        )
+    }
+
+    #[test]
+    fn a_bed_joint_thinner_than_the_gap_is_no_overhang() {
+        // 0.11 mm: the wall's bed joint; the layer above lands on the stone below
+        let (_, a) = audit(&block_on_joint(0.11), [10.0, 10.0], &fdm());
+        assert!(a.overhang_mm2 == 0.0, "{}", a.overhang_mm2);
+        // rockpile's rule as it was (every void open) flags its roof
+        let open = Printer {
+            gap_mm: 0.0,
+            ..fdm()
+        };
+        let (_, was) = audit(&block_on_joint(0.11), [10.0, 10.0], &open);
+        assert!(was.overhang_mm2 > 1.0, "{}", was.overhang_mm2);
+        // 1 mm: a real slot, whose roof is a 5 mm shelf
+        let (_, b) = audit(&block_on_joint(1.0), [10.0, 10.0], &fdm());
+        assert!(b.overhang_mm2 > 5.0, "{}", b.overhang_mm2);
     }
 }

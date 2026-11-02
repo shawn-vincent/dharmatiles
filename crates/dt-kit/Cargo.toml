@@ -17,6 +17,7 @@ manifold-parallel = ["dt-geom/manifold-parallel"]
 [dependencies]
 dt-geom.workspace = true
 libm.workspace = true
+parry3d.workspace = true
 png.workspace = true
 rayon.workspace = true
 
