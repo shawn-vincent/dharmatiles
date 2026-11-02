@@ -161,6 +161,47 @@ pub fn fbm(seed: u64, scale: f64, octaves: u32, x: f64, y: f64) -> f64 {
     if norm > 0.0 { total / norm } else { 0.0 }
 }
 
+/// The 3D lattice value at `(ix, iy, iz)`, in [-1, 1).
+#[must_use]
+pub fn lattice3(seed: u64, ix: i64, iy: i64, iz: i64) -> f64 {
+    #[allow(clippy::cast_sign_loss)]
+    let c = iz as u64;
+    lattice(mix(seed ^ mix(c ^ 0x6c61_7474_3364_2121)), ix, iy) // "latt3d!!"
+}
+
+/// Smoothstep-interpolated 3D value noise at `scale`, in about [-1, 1].
+#[must_use]
+pub fn value3(seed: u64, scale: f64, p: [f64; 3]) -> f64 {
+    let q = p.map(|v| v / scale);
+    let f = q.map(libm::floor);
+    let i = q.map(floor_i64);
+    let u = [0, 1, 2].map(|k| {
+        let t = q[k] - f[k];
+        t * t * (3.0 - 2.0 * t)
+    });
+    let c = |dx: i64, dy: i64, dz: i64| lattice3(seed, i[0] + dx, i[1] + dy, i[2] + dz);
+    let lerp = |a: f64, b: f64, t: f64| a + (b - a) * t;
+    let x00 = lerp(c(0, 0, 0), c(1, 0, 0), u[0]);
+    let x10 = lerp(c(0, 1, 0), c(1, 1, 0), u[0]);
+    let x01 = lerp(c(0, 0, 1), c(1, 0, 1), u[0]);
+    let x11 = lerp(c(0, 1, 1), c(1, 1, 1), u[0]);
+    lerp(lerp(x00, x10, u[1]), lerp(x01, x11, u[1]), u[2])
+}
+
+/// 3D fBm of [`value3`]: `dharmatiles.stone.noise.fbm` in object space
+/// (rocklab's grain, :283), gain 0.5, lacunarity 2, about [-1, 1].
+#[must_use]
+pub fn fbm3(seed: u64, scale: f64, octaves: u32, p: [f64; 3]) -> f64 {
+    let (mut total, mut amp, mut sc, mut norm) = (0.0, 1.0, scale, 0.0);
+    for o in 0..octaves {
+        total += amp * value3(mix(seed ^ u64::from(o)), sc, p);
+        norm += amp;
+        amp *= 0.5;
+        sc *= 0.5;
+    }
+    if norm > 0.0 { total / norm } else { 0.0 }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::float_cmp, clippy::cast_precision_loss)]

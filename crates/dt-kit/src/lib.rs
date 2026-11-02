@@ -43,19 +43,24 @@ mod render;
 mod scene;
 mod shape;
 mod stl;
+mod stone;
 
 pub use audit::{Audit, Dropped, Export, Printer, audit};
+pub use dt_geom::Convex;
 pub use dt_geom::{Grid, Mask, Rng, Seed, TriMesh};
 pub use field::{
-    Field, Noise, Placed, Plane, Scale, Spread, cap, distance, noise, rim, scatter, smax, smooth01,
+    Field, Noise, Placed, Plane, Scale, Spread, cap, distance, geodesic, noise, rim, scatter, smax,
+    smooth01,
 };
 pub use outline::Outline;
 pub use render::{Image, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};
 pub use scene::{
-    Frame, LIFT_TOL_MM, Material, Part, REFERENCE_SQUARE_MM, Scene, Slot, Slots, Solid, Stage, Tag,
+    BANK_MM, Frame, LIFT_TOL_MM, Material, Part, REFERENCE_SQUARE_MM, Scene, Slot, Slots, Solid,
+    Stage, Tag,
 };
-pub use shape::{area, carve, extrude, loft, signed_volume, union};
+pub use shape::{area, carve, extrude, loft, signed_volume, union, wobble};
 pub use stl::{BuildRecord, stl};
+pub use stone::{Grain, grain, hull, seat, solid};
 
 /// Why a kit operation failed.
 #[derive(Clone, Debug, PartialEq)]

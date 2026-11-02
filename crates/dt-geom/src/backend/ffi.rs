@@ -116,6 +116,22 @@ impl Mesh for FfiSolid {
         Self(Manifold::extrude(&cs, z1 - z0).translate(0.0, 0.0, z0))
     }
 
+    fn hull(points: &[[f64; 3]]) -> Self {
+        Self(Manifold::hull_pts(points))
+    }
+
+    fn refine_to_length(&self, length: f64) -> Self {
+        Self(self.0.refine_to_length(length))
+    }
+
+    fn transform(&self, m: &[f64; 12]) -> Self {
+        Self(self.0.transform(m))
+    }
+
+    fn slice(&self, z: f64) -> Vec<Vec<[f64; 2]>> {
+        self.0.slice_at_z(z)
+    }
+
     fn as_original(&self) -> Self {
         Self(self.0.as_original())
     }

@@ -105,6 +105,25 @@ const BUMP_SIZE: Control = c(
 .limits(5.0, 70.0);
 const LEVEL: Control = c("level", Axis::Level, "where the surface sits").default("ground");
 
+static STONES: &[Word] = &[
+    // dirtlab STONES_2X2 (4, 7) per 2×2 is `some`; `many` is provisional.
+    w(
+        "none",
+        "bare dirt, no stones",
+        &[("min", 0.0), ("max", 0.0)],
+    ),
+    w(
+        "some",
+        "dirtlab's few bedded stones",
+        &[("min", 4.0), ("max", 7.0)],
+    ),
+    w(
+        "many",
+        "a stony patch (provisional)",
+        &[("min", 8.0), ("max", 12.0)],
+    ),
+];
+
 static CLODS: &[Word] = &[
     // dirtlab CLOD_DENSITY 0.7 is `some`; few and many are provisional.
     w(
@@ -165,7 +184,8 @@ const fn rock_controls(size: &'static str) -> [Control; 5] {
     ]
 }
 
-static ROCK: [Control; 5] = rock_controls("2..10");
+// rocklab WIDTH_MM (6, 15): "port the labs first" (P3 alignment; was 2..10)
+static ROCK: [Control; 5] = rock_controls("6..15");
 static STONE: [Control; 5] = rock_controls("1..6");
 static BOULDER: [Control; 5] = rock_controls("4.5..8");
 static PEBBLE: [Control; 5] = rock_controls("1..2.2");
@@ -576,8 +596,8 @@ const fn thing(name: &'static str, about: &'static str, controls: &'static [Cont
     }
 }
 
-/// Every built-in look the R6 vocabulary names.  Water, reeds and floors
-/// join in their phases (P3–P5).
+/// Every built-in look the R6 vocabulary names.  Reeds and floors join
+/// in their phases (P4–P5).
 pub static LOOKS: &[Look] = &[
     Look {
         name: "ground",
@@ -602,6 +622,13 @@ pub static LOOKS: &[Look] = &[
             c("clods", Axis::Word, "lumps of earth on the surface")
                 .words(CLODS)
                 .default("some"),
+            c(
+                "stones",
+                Axis::Word,
+                "a few rocklab stones bedded in the dirt",
+            )
+            .words(STONES)
+            .default("some"),
             group(
                 "bank",
                 &[
@@ -629,6 +656,15 @@ pub static LOOKS: &[Look] = &[
                 .words(FLOW)
                 .default("wavy"),
         ],
+    },
+    Look {
+        name: "water",
+        about: "still water with waterlab's swells: fills its area up to its level",
+        role: Role::Surface,
+        place: &[PlaceWord::In],
+        needs: &[],
+        holds_scatter: false,
+        controls: &[c("level", Axis::Level, "the calm water level").default("water")],
     },
     thing("rock", "one rock", &ROCK),
     thing("stone", "a rock with stone sizes, about 1–6 mm", &STONE),

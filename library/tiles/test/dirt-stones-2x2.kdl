@@ -1,0 +1,14 @@
+// The parity twin of dirtlab as approved (dirtlab/dirtlab.py, round 2):
+// dirt-2x2.kdl with dirtlab's few bedded rocklab stones, 4 to 7 per 2×2
+// (`stones some`, the dirt default since P3).  Built by
+// `cargo xtask parity dirt-stones` at seeds 1–4 beside the lab.
+
+tile dirt-stones size="2x2" seed=1 {
+    about "dirtlab's earth with its bedded stones on a 2×2 tile, for the parity harness."
+    stack {
+        dirt level="edge + 0.3" bumps="2.2..3.2" bump-size=14 {
+            clods some
+            stones some
+        }
+    }
+}

@@ -90,6 +90,10 @@ pub enum Material {
     Earth = 1,
     /// The connector underneath.
     Connector = 2,
+    /// Rocks and stones.
+    Rock = 3,
+    /// Water.
+    Water = 4,
 }
 
 impl Material {
@@ -99,6 +103,8 @@ impl Material {
         match id {
             1 => Some(Self::Earth),
             2 => Some(Self::Connector),
+            3 => Some(Self::Rock),
+            4 => Some(Self::Water),
             _ => None,
         }
     }
@@ -130,6 +136,37 @@ impl Solid {
     #[must_use]
     pub fn volume(&self) -> f64 {
         self.0.volume()
+    }
+
+    /// Axis-aligned bounds `(min, max)`, or `None` if empty.
+    #[must_use]
+    pub fn bounds(&self) -> Option<([f64; 3], [f64; 3])> {
+        self.0.bounds().map(|b| (b.min, b.max))
+    }
+
+    /// Moved by `d` mm. Source IDs are kept.
+    #[must_use]
+    pub fn translate(&self, d: [f64; 3]) -> Self {
+        Self(self.0.transform(&[
+            1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, d[0], d[1], d[2],
+        ]))
+    }
+
+    /// Turned `deg` degrees about the z axis through the origin (counter-
+    /// clockwise seen from above), then scaled by `scale` along z.
+    #[must_use]
+    pub fn turn(&self, deg: f64, scale_z: f64) -> Self {
+        let (s, c) = (libm::sin(deg.to_radians()), libm::cos(deg.to_radians()));
+        Self(
+            self.0
+                .transform(&[c, s, 0.0, -s, c, 0.0, 0.0, 0.0, scale_z, 0.0, 0.0, 0.0]),
+        )
+    }
+
+    /// Its cross-section at height `z`: closed polygons (mm).
+    #[must_use]
+    pub fn slice(&self, z: f64) -> Vec<Vec<[f64; 2]>> {
+        self.0.slice(z)
     }
 }
 
@@ -188,6 +225,9 @@ pub struct Stage {
 pub const LIFT_TOL_MM: f64 = 0.02;
 /// The widest leaf of the adaptive lift, in cells.
 const LIFT_MAX_CELLS: usize = 32;
+/// The widest bank between areas painted at different levels, mm at the
+/// reference square (waterlab's `BANK_W_MM`).
+pub const BANK_MM: f64 = 7.0;
 
 /// Slots per build. A leaf's face IDs come from its slot's range, so this
 /// is also `dt_geom::source::MAX_SLOTS`.
@@ -199,6 +239,15 @@ pub struct Scene {
     seed: Seed,
     field: Grid,
     painted: Mask,
+    /// Each paint, in order: its area and the full field it painted from.
+    layers: Vec<(Mask, Vec<f64>)>,
+    settled: bool,
+    banked: bool,
+    /// Nodes the water covers (lifted as water).
+    wet: Mask,
+    water_edge_mm: Option<f64>,
+    /// Nodes the ground's edge rule leaves alone (water and its banks).
+    no_edge: Mask,
     stone: Mask,
     edge_mm: Option<f64>,
     notes: Vec<(String, f64)>,
@@ -220,6 +269,12 @@ impl Scene {
             seed,
             field: Grid::new(nx, ny, frame.step_mm(), 0.0),
             painted: Mask::new(nx, ny, false),
+            layers: Vec::new(),
+            settled: false,
+            banked: false,
+            wet: Mask::new(nx, ny, false),
+            water_edge_mm: None,
+            no_edge: Mask::new(nx, ny, false),
             stone: Mask::new(nx, ny, false),
             edge_mm: None,
             notes: Vec::new(),
@@ -260,6 +315,8 @@ impl Scene {
             self.field.z[k] = z;
             self.painted.bits[k] = true;
         }
+        self.layers
+            .push((area.clone(), vec![level_mm; self.field.z.len()]));
     }
 
     /// **paint** a field: set the ground surface to `field` (world mm) over
@@ -270,6 +327,154 @@ impl Scene {
             let z = field.z[k] as f32;
             self.field.z[k] = z;
             self.painted.bits[k] = true;
+        }
+        self.layers.push((area.clone(), field.z.clone()));
+    }
+
+    /// The ground surface (world mm): every paint, spread to the nodes no
+    /// area painted (and banked, once [`Scene::bank`] has run). Read it after the surfaces are painted (the
+    /// scheduler paints every surface before any solid); `None` when
+    /// nothing painted it.
+    pub fn ground(&mut self) -> Option<crate::Field> {
+        if self.painted.count() == 0 {
+            return None;
+        }
+        self.settle();
+        Some(crate::Field {
+            nx: self.field.nx,
+            ny: self.field.ny,
+            step: self.field.step,
+            z: self.field.z.iter().map(|&v| f64::from(v)).collect(),
+        })
+    }
+
+    /// **fill**: set the surface to `top` (world mm) where `wet` (the
+    /// water's own solid top, lifted as water), and leave the nodes in
+    /// `no_edge` out of the ground's edge rule (the water and its banks
+    /// meet the edge on their own contract).
+    pub fn fill(&mut self, top: &crate::Field, wet: &[bool], no_edge: &[bool]) {
+        self.settle();
+        for k in 0..self.field.z.len() {
+            #[allow(clippy::cast_possible_truncation)]
+            let z = top.z[k] as f32;
+            self.field.z[k] = z;
+            self.wet.bits[k] = wet[k];
+            self.no_edge.bits[k] |= no_edge[k];
+        }
+    }
+
+    /// The nodes inside every solid of `kind` at height `z`: their
+    /// footprint, from a slice of each (the query "footprint by tag").
+    #[must_use]
+    pub fn footprint(&self, kind: &str, z: f64) -> Mask {
+        let (nx, ny) = self.frame.nodes();
+        let mut out = Mask::new(nx, ny, false);
+        for p in self.parts.iter().filter(|p| p.tag.kind == kind) {
+            let m = dt_geom::fill_polygons(nx, ny, self.frame.step_mm(), &p.solid.slice(z));
+            out.bits.iter_mut().zip(m.bits).for_each(|(o, b)| *o |= b);
+        }
+        out
+    }
+
+    /// Spread the paint, once.
+    fn settle(&mut self) {
+        if !self.settled {
+            self.settled = true;
+            self.spread_paint();
+        }
+    }
+
+    /// **bank** (field blend): run the higher areas down to the lower ones,
+    /// once. The water calls it before it reads the land, so a shore is a
+    /// bank; plain ground keeps its steps (Phase 2).
+    pub fn bank(&mut self) {
+        self.settle();
+        if !self.banked {
+            self.banked = true;
+            self.banks();
+        }
+    }
+
+    /// Banks: where an area painted higher meets one painted lower, the
+    /// higher ground runs down to the lower over a bank as wide as the
+    /// step needs (no steeper than the ground's hills, 24° from 1.5 times
+    /// the step, between 1 mm and [`BANK_MM`] at the reference square),
+    /// cross-fading the two surfaces with a smoothstep. The lower side is
+    /// untouched, so a pool keeps its bed and the bank is all on the land
+    /// (waterlab's bank, `Scene` :278). Fields are the full ones each
+    /// paint was given, so texture fades across the bank.
+    fn banks(&mut self) {
+        let n = self.layers.len();
+        if n < 2 {
+            return;
+        }
+        let k_all = self.field.z.len();
+        // the last paint owning each node
+        let mut owner = vec![usize::MAX; k_all];
+        for (li, (area, _)) in self.layers.iter().enumerate() {
+            for (k, _) in area.bits.iter().enumerate().filter(|(_, b)| **b) {
+                owner[k] = li;
+            }
+        }
+        // nodes no area painted (a line's own) belong to the area whose
+        // paint spread to them, as in `spread_paint`
+        let (nx, ny) = (self.field.nx, self.field.ny);
+        let mut queue: std::collections::VecDeque<usize> =
+            (0..k_all).filter(|&k| owner[k] != usize::MAX).collect();
+        while let Some(k) = queue.pop_front() {
+            let (i, j) = (k % nx, k / nx);
+            for m in [
+                (i > 0).then(|| k - 1),
+                (i + 1 < nx).then(|| k + 1),
+                (j > 0).then(|| k - nx),
+                (j + 1 < ny).then(|| k + nx),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                if owner[m] == usize::MAX {
+                    owner[m] = owner[k];
+                    queue.push_back(m);
+                }
+            }
+        }
+        let s = self.frame.scale();
+        let (lo_w, hi_w) = (1.0 * s, BANK_MM * s);
+        let tan = libm::tan(24f64.to_radians());
+        let mut z: Vec<f64> = self.field.z.iter().map(|&v| f64::from(v)).collect();
+        for q in 0..n {
+            let mine: Vec<bool> = owner.iter().map(|&o| o == q).collect();
+            if !mine.iter().any(|&b| b) || mine.iter().all(|&b| b) {
+                continue;
+            }
+            let (d, _) = crate::distance(&self.frame, &mine);
+            let fq = &self.layers[q].1;
+            for k in 0..k_all {
+                let p = owner[k];
+                if p == q || p == usize::MAX || d.z[k] >= hi_w {
+                    continue;
+                }
+                // a spread node's own height is the field's, not its paint's
+                let fp = if self.layers[p].0.bits[k] {
+                    self.layers[p].1[k]
+                } else {
+                    z[k]
+                };
+                let step = fp - fq[k];
+                if step <= 0.0 {
+                    continue;
+                }
+                let w = (1.5 * step / tan).clamp(lo_w, hi_w);
+                if d.z[k] < w {
+                    let t = crate::smooth01(d.z[k] / w);
+                    z[k] = z[k].min(fq[k] + step * t);
+                }
+            }
+        }
+        for (o, v) in self.field.z.iter_mut().zip(z) {
+            #[allow(clippy::cast_possible_truncation)]
+            let f = v as f32;
+            *o = f;
         }
     }
 
@@ -291,6 +496,18 @@ impl Scene {
     #[must_use]
     pub const fn edge(&self) -> Option<f64> {
         self.edge_mm
+    }
+
+    /// The level (world mm) the water meets every tile edge at, before
+    /// its tide profile (the edge contract's `water` rule).
+    pub const fn set_water_edge(&mut self, level_mm: Option<f64>) {
+        self.water_edge_mm = level_mm;
+    }
+
+    /// See [`Scene::set_water_edge`].
+    #[must_use]
+    pub const fn water_edge(&self) -> Option<f64> {
+        self.water_edge_mm
     }
 
     /// Record a look's number for the build record (counts and the like).
@@ -342,7 +559,7 @@ impl Scene {
         if self.painted.count() == 0 {
             return Ok(());
         }
-        self.spread_paint();
+        self.settle();
         if let Some(edge) = self.edge_mm {
             self.hold_edge(edge);
         }
@@ -351,6 +568,29 @@ impl Scene {
             .map_err(|e| KitError::Surface(e.to_string()))?;
         let slot = self.slots(1, Material::Earth)?.get(0);
         let solid = leaf(slot, &mesh)?;
+        if self.wet.count() > 0 {
+            // R9: the top over the water is water, face by face
+            let out = solid.0.to_tri_mesh();
+            let (nx, step) = (self.field.nx, self.field.step);
+            let wet = &self.wet;
+            let face = |t: usize| {
+                let [a, b, c] = out.triangles[t].map(|i| out.positions[i as usize]);
+                let n = crate::shape::normal(a, b, c);
+                let (x, y) = ((a[0] + b[0] + c[0]) / 3.0, (a[1] + b[1] + c[1]) / 3.0);
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let (i, j) = (
+                    libm::round(x / step).max(0.0) as usize,
+                    libm::round(y / step).max(0.0) as usize,
+                );
+                let k = j.min(wet.ny - 1) * nx + i.min(nx - 1);
+                if n[2] > 0.05 && wet.bits[k] {
+                    Material::Water as u32
+                } else {
+                    Material::Earth as u32
+                }
+            };
+            self.materials.set_faces(&out, face);
+        }
         self.add(
             Tag {
                 kind: "ground",
@@ -362,13 +602,17 @@ impl Scene {
     }
 
     /// The edge contract, by construction: perimeter nodes exactly at the
-    /// edge level, and nothing below it (rises only).
+    /// edge level, and nothing below it (rises only), except where the
+    /// water and its banks meet the edge on their own contract.
     fn hold_edge(&mut self, edge: f64) {
         #[allow(clippy::cast_possible_truncation)]
         let e = edge as f32;
         let (nx, ny) = (self.field.nx, self.field.ny);
         for j in 0..ny {
             for i in 0..nx {
+                if self.no_edge.bits[j * nx + i] {
+                    continue;
+                }
                 let z = &mut self.field.z[j * nx + i];
                 if i == 0 || j == 0 || i == nx - 1 || j == ny - 1 {
                     *z = e;

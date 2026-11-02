@@ -26,7 +26,7 @@ view: DIR/s<seed>/ holds the Rust STL and its four ``--png`` views (as
 same ``stl_metrics`` run on the Rust STL, with the Rust build's own edge
 level (``edge_mm`` in its build record).  The Rust ``"stats"`` go under
 ``"lab"`` in rust-metrics.json, and ``parity.json`` gives the verdict over
-all seeds (``PARITY``).
+all seeds (``PARITY_BY_LOOK``).
 
 Output: ``out/parity/<look>/`` (gitignored) unless ``--out`` is given.
 """
@@ -44,7 +44,7 @@ from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-for p in ("src", "dirtlab", "clifflab"):
+for p in ("src", "dirtlab", "clifflab", "rocklab", "waterlab"):
     sys.path.insert(0, str(ROOT / p))
 
 GRID_MM = 0.15                     # top-surface sampling (dirtlab's CELL_MM)
@@ -191,6 +191,120 @@ def stl_metrics(mesh: trimesh.Trimesh, footprint, edge_mm: float) -> dict:
     }, ov
 
 
+ROCK_DIAM_BINS_MM = (0.0, 6.0, 9.0, 12.0, 16.0, 1e9)
+ROCK_OPEN_MM, ROCK_RISE_MM = 20.0, 1.0   # a rock stands 1 mm over a 20 mm grey opening
+
+
+def rock_metrics(mesh: trimesh.Trimesh, footprint, edge_mm: float) -> dict:
+    """Rocks seen from above, from the STL alone: connected areas standing
+    ROCK_RISE_MM over a ROCK_OPEN_MM-wide grey opening of the top surface.
+    Clusters that touch count as one; pebbles and clods are under the rise."""
+    Z, miss = top_surface(mesh, footprint)
+    z = np.nan_to_num(Z, nan=np.nanmin(Z))
+    r = int(round(ROCK_OPEN_MM / 2 / GRID_MM))
+    # a disc opening of radius r is slow at this size: open with a square of
+    # the same area as a fast stand-in (the same function for both sides)
+    k = int(round(np.sqrt(np.pi) * r))
+    opened = ndimage.grey_opening(z, size=(k, k))
+    mask = (z - opened) > ROCK_RISE_MM
+    lab, n = ndimage.label(mask)
+    areas = ndimage.sum_labels(np.ones_like(z), lab, range(1, n + 1)) * GRID_MM ** 2
+    keep = [i for i, a in enumerate(areas) if a >= np.pi * 1.0 ** 2]
+    diam = [float(2 * np.sqrt(areas[i] / np.pi)) for i in keep]
+    tops = ndimage.maximum(z, lab, [i + 1 for i in keep]) if keep else []
+    hist = np.histogram(diam, bins=ROCK_DIAM_BINS_MM)[0]
+    return {"count": len(diam),
+            "hist": {f"{lo:g}-{hi:g}mm": int(c) for lo, hi, c in
+                     zip(ROCK_DIAM_BINS_MM[:-1], ROCK_DIAM_BINS_MM[1:], hist)},
+            "diam_mean_mm": float(np.mean(diam)) if diam else 0.0,
+            "top_mm": float(np.max(tops) - edge_mm) if len(tops) else 0.0}
+
+
+WATER_SAMPLE_MM, WATER_INSET_MM, WATER_WET_MM = 0.1, 0.02, 3.3
+WATER_RIM_MM, WATER_BAND_MM = 4.0, 2.4
+WATER_EDGE_TRIM_MM = 2.0   # edge samples this close (along the edge) to a dry one are shore
+WATER_BAND_TRIM_MM = 4.0   # amplitude cells this close to land above the band are bank
+TIDE_AMP_MM = 0.6
+
+
+def wet_run(z: np.ndarray, step_mm: float) -> np.ndarray:
+    """Edge samples (1-D, `step_mm` apart) that are open water: below the wet
+    level and WATER_EDGE_TRIM_MM from any sample that is not.  At the shore
+    the land rises through the troughs of the edge profile, so the samples
+    next to it are bank, not water.  Used on the STL and on the lab grid."""
+    dry = ~(np.isfinite(z) & (z < WATER_WET_MM))
+    if not dry.any():
+        return ~dry
+    return ndimage.distance_transform_edt(~dry) * step_mm > WATER_EDGE_TRIM_MM
+
+
+def _first_hits(mesh, xy):
+    o = np.c_[xy, np.full(len(xy), mesh.bounds[1, 2] + 5.0)]
+    loc, ri, _ = mesh.ray.intersects_location(o, np.tile([0.0, 0.0, -1.0], (len(o), 1)),
+                                              multiple_hits=False)
+    z = np.full(len(xy), np.nan)
+    z[ri] = loc[:, 2]
+    return z
+
+
+def water_metrics(mesh: trimesh.Trimesh, footprint, wl_mm: float = 2.6,
+                  square_mm: float = 35.0) -> dict:
+    """The water's edge profile and amplitude, from the STL alone.
+
+    Edge profile: the top surface sampled on each edge (inset 0.02 mm,
+    every 0.1 mm); where it is wet (z < 3.3 mm) it is compared with the
+    contract wl + 0.6·sin(2π(s − org)/λ), λ = square/2, org = λ − λ/4,
+    s the tile coordinate along the edge, ``wet_run`` trimming the shore.
+    Amplitude: percentiles of z − wl over top-surface cells ≥ 4 mm from the
+    rim in the water band (z < wl + 2.4), 4 mm clear of anything above it
+    (the bank and the rock)."""
+    W, H = footprint
+    lam = square_mm / 2
+    org = square_mm * 0.5 - lam * 0.25
+    s_x = np.arange(0.0, W + 1e-9, WATER_SAMPLE_MM).clip(WATER_INSET_MM, W - WATER_INSET_MM)
+    s_y = np.arange(0.0, H + 1e-9, WATER_SAMPLE_MM).clip(WATER_INSET_MM, H - WATER_INSET_MM)
+    edges = {"south": (np.c_[s_x, np.full_like(s_x, WATER_INSET_MM)], s_x),
+             "north": (np.c_[s_x, np.full_like(s_x, H - WATER_INSET_MM)], s_x),
+             "west": (np.c_[np.full_like(s_y, WATER_INSET_MM), s_y], s_y),
+             "east": (np.c_[np.full_like(s_y, W - WATER_INSET_MM), s_y], s_y)}
+    out_e, errs = {}, []
+    for name, (xy, s) in edges.items():
+        z = _first_hits(mesh, xy)
+        wet = wet_run(z, WATER_SAMPLE_MM)
+        want = wl_mm + TIDE_AMP_MM * np.sin(2 * np.pi * (s - org) / lam)
+        e = np.abs(z[wet] - want[wet])
+        errs.append(e)
+        out_e[name] = {"wet": int(wet.sum()), "max_mm": float(e.max()) if len(e) else 0.0,
+                       "mean_mm": float(e.mean()) if len(e) else 0.0}
+    alle = np.concatenate(errs)
+    Z, miss = top_surface(mesh, footprint)
+    xs = np.arange(GRID_MM / 2, W, GRID_MM)
+    ys = np.arange(GRID_MM / 2, H, GRID_MM)
+    X, Y = np.meshgrid(xs, ys)
+    rim = np.minimum.reduce([X, W - X, Y, H - Y])
+    above = miss | (Z >= wl_mm + WATER_BAND_MM)
+    bank = ndimage.distance_transform_edt(~above) * GRID_MM <= WATER_BAND_TRIM_MM
+    band = (~above) & (~bank) & (rim >= WATER_RIM_MM)
+    rel = Z[band] - wl_mm
+    pct = (lambda q: float(np.percentile(rel, q))) if len(rel) else (lambda q: None)
+    return {"edge_max_mm": float(alle.max()) if len(alle) else 0.0,
+            "edge_mean_mm": float(alle.mean()) if len(alle) else 0.0,
+            "edges": out_e,
+            "p01": pct(1), "p05": pct(5), "p50": pct(50), "p95": pct(95), "p99": pct(99),
+            "min": float(rel.min()) if len(rel) else None,
+            "max": float(rel.max()) if len(rel) else None,
+            "cells": int(band.sum())}
+
+
+def look_metrics(look: str, mesh, footprint, edge_mm: float) -> dict:
+    """The look-specific STL metrics, added to stl_metrics' dict."""
+    if look == "rocks":
+        return {"rocks": rock_metrics(mesh, footprint, edge_mm)}
+    if look == "water":
+        return {"water": water_metrics(mesh, footprint)}   # the water level, not the ground edge
+    return {}
+
+
 # ── Labs ────────────────────────────────────────────────────────────────────
 def build_dirt(seed: int, stones: bool = False):
     """dirtlab 2×2 at `seed`: (mesh, painted mesh, footprint, edge, lab stats).
@@ -247,18 +361,95 @@ def build_flat(seed: int):
     return mesh, painted, (surf.tile_w, surf.tile_h), 5.0, {"peg_mm": peg}, dt
 
 
+ROCK_RGB = (150, 150, 155)
+WATER_RGB = (60, 95, 140)
+
+
+def build_rocks(seed: int):
+    """rocklab 2×2 at `seed` (its own main, without the export)."""
+    import rocklab as rl
+    t0 = time.perf_counter()
+    rng = np.random.default_rng(seed)
+    solid, placed, peg, zmax = rl.build_tile(rng, 2, 2)
+    mesh = rl.to_trimesh(solid)
+    dt = time.perf_counter() - t0
+    stones = [st for p in placed for st in p.stones]
+    fac = [st["facets"] for st in stones]
+    chips = [st["chips"] for st in stones]
+    widths = [st["D"] for st in stones]
+    lab = {"placements": len(placed), "clusters": sum(len(p.stones) > 1 for p in placed),
+           "stones": len(stones), "facets_min": min(fac), "facets_max": max(fac),
+           "facets_mean": float(np.mean(fac)), "chips_min": min(chips), "chips_max": max(chips),
+           "width_min": float(min(widths)), "width_max": float(max(widths)),
+           "chip_loss_max": rl.CHIP_MAX_LOSS, "peg_mm": peg, "zmax_mm": float(zmax)}
+    painted = mesh.copy()
+    c = mesh.triangles_center
+    nz = mesh.face_normals[:, 2]
+    fc = np.tile([*CONNECTOR_RGB, 255], (len(mesh.faces), 1))
+    fc[c[:, 2] > 0.0, :3] = EARTH_RGB
+    rock = (c[:, 2] > rl.SURFACE_MM + 0.45) | ((np.abs(nz) < 0.6) & (c[:, 2] > rl.SURFACE_MM - 0.3)
+                                             & (c[:, 0] > 0.3) & (c[:, 0] < 69.7)
+                                             & (c[:, 1] > 0.3) & (c[:, 1] < 69.7))
+    fc[rock, :3] = ROCK_RGB
+    painted.visual.face_colors = fc
+    return mesh, painted, (70.0, 70.0), rl.SURFACE_MM, lab, dt
+
+
+def build_water(seed: int):
+    """waterlab swell-chaos, bank-rock scene, at `seed` (as its main)."""
+    import waterlab as wl
+    t0 = time.perf_counter()
+    sc = wl.Scene(seed)
+    relief = wl.gen_swell_chaos(wl.mode_rng(seed, "swell-chaos"), sc)
+    mesh, z = wl.build(sc, relief, sc.tide)
+    dt = time.perf_counter() - t0
+    st = wl.stats(sc, relief, z)
+    # the edge contract on the final height grid: open-water perimeter nodes
+    lam = wl.TIDE_EDGE_LAMBDA_MM
+    org = wl.SQUARE_MM * 0.5 - lam * 0.25
+    X, Y = sc.X, sc.Y
+    px = wl.TIDE_EDGE_AMP_MM * np.sin(2 * np.pi * (X - org) / lam)
+    py = wl.TIDE_EDGE_AMP_MM * np.sin(2 * np.pi * (Y - org) / lam)
+    dy, dx = np.minimum(Y, sc.H - Y), np.minimum(X, sc.W - X)
+    wy, wx = 1 / np.maximum(dy, 1e-6), 1 / np.maximum(dx, 1e-6)
+    edge = wl.WL_MM + (wy * px + wx * py) / (wy + wx)
+    errs = [np.abs(z[sl] - edge[sl])[wet_run(z[sl], wl.CELL_MM)]
+            for sl in ((0, slice(None)), (-1, slice(None)), (slice(None), 0), (slice(None), -1))]
+    errs = np.concatenate(errs)
+    err = float(errs.max()) if len(errs) else 0.0
+    lab = {"relief_min": st["relief_min"], "relief_max": st["relief_max"],
+           "relief_rms": st["relief_rms"], "max_slope_deg": st["max_slope"],
+           "edge_err_mm": err}
+    painted = mesh.copy()
+    c = mesh.triangles_center
+    nz = mesh.face_normals[:, 2]
+    fc = np.tile([*CONNECTOR_RGB, 255], (len(mesh.faces), 1))
+    top = c[:, 2] > 0.0
+    fc[top, :3] = EARTH_RGB
+    # land: the bank, by the scene's own land mask at the face's xy
+    ix = np.clip(np.round(c[:, 0] / wl.CELL_MM).astype(int), 0, X.shape[1] - 1)
+    iy = np.clip(np.round(c[:, 1] / wl.CELL_MM).astype(int), 0, X.shape[0] - 1)
+    water = top & sc.water[iy, ix] & (c[:, 2] < wl.WL_MM + WATER_BAND_MM) \
+        & ((nz > 0.3) | (c[:, 2] < wl.WL_MM + 0.5))
+    fc[water, :3] = WATER_RGB
+    rock = top & sc.rock_mask[iy, ix] & ~water
+    fc[rock, :3] = ROCK_RGB
+    painted.visual.face_colors = fc
+    return mesh, painted, (sc.W, sc.H), wl.WL_MM, lab, dt
+
+
 LABS = {"dirt": build_dirt, "dirt-stones": lambda seed: build_dirt(seed, stones=True),
-        "flat": build_flat}
+        "flat": build_flat, "rocks": build_rocks, "water": build_water}
 # What the Python column is, in the captions.
 LAB_NOTE = {"dirt": "dirtlab, stones off (P3)", "dirt-stones": "dirtlab with stones",
-            "flat": "flat 1×1 twin"}
+            "flat": "flat 1×1 twin", "rocks": "rocklab", "water": "waterlab swell-chaos, bank-rock"}
 
 
 # ── Parity verdict (plan.html, "The parity harness") ────────────────────────
 # (name, where in the metrics, test, tolerance).  "rel": |Rust − Py| ≤ tol ×
 # Python mean; "abs": |Rust − Py| ≤ tol (mm); "min": Rust mean ≥ tol;
-# "info": reported, not judged.
-PARITY = [
+# "max": every Rust seed ≤ tol; "info": reported, not judged.
+_DIRT_ROWS = [
     ("clods", ("lab", "clods"), "rel", 0.15),
     ("pebbles_small", ("lab", "pebbles_small"), "rel", 0.15),
     ("pebbles_medium", ("lab", "pebbles_medium"), "rel", 0.15),
@@ -270,6 +461,35 @@ PARITY = [
     ("relief median (mm over edge)", ("relief_mm", "median"), "abs", 0.3),
     ("relief p95 (mm over edge)", ("relief_mm", "p95"), "abs", 0.3),
 ]
+
+PARITY_BY_LOOK = {
+    "dirt": _DIRT_ROWS,
+    "flat": _DIRT_ROWS,
+    "dirt-stones": _DIRT_ROWS + [
+        ("stones", ("lab", "stones"), "rel", 0.3),
+    ],
+    "rocks": [
+        ("placements", ("lab", "placements"), "rel", 0.15),
+        ("stones", ("lab", "stones"), "rel", 0.2),
+        ("facets_mean", ("lab", "facets_mean"), "rel", 0.15),
+        ("facets_min", ("lab", "facets_min"), "info", None),
+        ("facets_max", ("lab", "facets_max"), "info", None),
+        ("chip_loss_max", ("lab", "chip_loss_max"), "max", 0.03),
+        ("STL rocks count", ("rocks", "count"), "rel", 0.2),
+        *[(f"STL rocks {k}", ("rocks", "hist", k), "info", None)
+          for k in (f"{lo:g}-{hi:g}mm" for lo, hi in zip(ROCK_DIAM_BINS_MM[:-1], ROCK_DIAM_BINS_MM[1:]))],
+        ("STL rock top (mm over edge)", ("rocks", "top_mm"), "abs", 1.5),
+    ],
+    "water": [
+        ("relief_min", ("lab", "relief_min"), "abs", 0.15),
+        ("relief_max", ("lab", "relief_max"), "abs", 0.3),
+        ("relief_rms", ("lab", "relief_rms"), "rel", 0.15),
+        ("STL water p05 (mm over wl)", ("water", "p05"), "abs", 0.2),
+        ("STL water p95 (mm over wl)", ("water", "p95"), "abs", 0.2),
+        ("STL edge max error (mm)", ("water", "edge_max_mm"), "max", 0.05),
+        ("edge_err_mm", ("lab", "edge_err_mm"), "max", 0.05),
+    ],
+}
 
 
 def _dig(d, path):
@@ -283,7 +503,7 @@ def _dig(d, path):
 def parity_verdict(look: str, py: dict, rs: dict) -> dict:
     """Python vs Rust means over the seeds, per PARITY row; writes nothing."""
     rows = []
-    for name, path, test, tol in PARITY:
+    for name, path, test, tol in PARITY_BY_LOOK[look]:
         pv = [v for v in (_dig(py[s], path) for s in py) if v is not None]
         rv = [v for v in (_dig(rs[s], path) for s in rs) if v is not None]
         pm = float(np.mean(pv)) if pv else None
@@ -291,12 +511,14 @@ def parity_verdict(look: str, py: dict, rs: dict) -> dict:
         ratio = rm / pm if (pm and rm is not None) else None
         if test == "info":
             ok = None
-        elif rm is None or (pm is None and test != "min"):
+        elif rm is None or (pm is None and test not in ("min", "max")):
             ok = False
         elif test == "rel":
             ok = abs(rm - pm) <= tol * abs(pm)
         elif test == "abs":
             ok = abs(rm - pm) <= tol
+        elif test == "max":
+            ok = max(rv) <= tol            # a ceiling: the worst seed, not the mean
         else:
             ok = rm >= tol
         rows.append({"metric": name, "python_mean": pm, "rust_mean": rm, "ratio": ratio,
@@ -309,7 +531,8 @@ def parity_verdict(look: str, py: dict, rs: dict) -> dict:
 def print_verdict(v: dict) -> None:
     f = lambda x: "—" if x is None else f"{x:.4g}"  # noqa: E731
     tol = {"rel": lambda t: f"±{t:.0%}", "abs": lambda t: f"±{t:g} mm",
-           "min": lambda t: f"≥ {t:g}", "info": lambda t: "info"}
+           "min": lambda t: f"≥ {t:g}", "max": lambda t: f"≤ {t:g}",
+           "info": lambda t: "info"}
     print(f"parity {v['look']} seeds {v['seeds']}: {'PASS' if v['pass'] else 'FAIL'}")
     print(f"  {'metric':30} {'python':>10} {'rust':>10} {'ratio':>7}  {'tolerance':>10}  verdict")
     for r in v["metrics"]:
@@ -399,6 +622,23 @@ def font(n):
 
 
 def caption(who, met, build_s):
+    return (_caption_base(met, who, build_s) + _caption_look(met))
+
+
+def _caption_look(met):
+    """The look's own numbers, after the shared ones."""
+    if "rocks" in met:
+        r = met["rocks"]
+        return (f" · STL rocks {r['count']} {list(r['hist'].values())} "
+                f"top {r['top_mm']:+.2f} mm")
+    if "water" in met:
+        w = met["water"]
+        return (f" · water p05 {w['p05']:+.2f} p95 {w['p95']:+.2f} mm · "
+                f"edge err {w['edge_max_mm']:.3f} mm")
+    return ""
+
+
+def _caption_base(met, who, build_s):
     return (f"{who}: bare {met['bare_fraction']:.3f} · rocks {met['rock_count']} "
             f"{list(met['rock_hist'].values())} · {met['faces']:,} faces · bodies {met['bodies']} · "
             f"watertight {met['watertight']} · vol {met['volume_mm3']:.1f} mm³ · "
@@ -421,6 +661,7 @@ def run(look: str, seeds: list[int], out: pathlib.Path, beside: pathlib.Path | N
         mesh.export(sd / f"{look}-s{seed}.stl")
         t0 = time.perf_counter()
         met, ov = stl_metrics(mesh, fp, edge)
+        met.update(look_metrics(look, mesh, fp, edge))
         met.update(build_s=build_s, metrics_s=time.perf_counter() - t0, edge_mm=edge, lab=lab, look=look,
                    seed=seed)
         (sd / "metrics.json").write_text(json.dumps(met, indent=2))
@@ -438,6 +679,7 @@ def run(look: str, seeds: list[int], out: pathlib.Path, beside: pathlib.Path | N
             rec = json.loads(stl.with_suffix(".build.json").read_text())
             redge = float(rec.get("edge_mm", edge))   # Rust dirt sits at 3.4 mm, dirtlab at 4.0
             rmet, _ = stl_metrics(rmesh, fp, redge)
+            rmet.update(look_metrics(look, rmesh, fp, redge))
             rmet.update(build_s=rec["build_s"], edge_mm=redge, lab=rec.get("stats", {}), look=look,
                         seed=seed, rust_audit=rec["audit"])
             (sd / "rust-metrics.json").write_text(json.dumps(rmet, indent=2))

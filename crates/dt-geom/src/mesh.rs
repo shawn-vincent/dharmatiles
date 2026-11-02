@@ -327,6 +327,25 @@ pub trait Mesh: Sized + Send + Sync + Clone {
     #[must_use]
     fn extrude(contours: &[Vec<[f64; 2]>], inset: f64, z0: f64, z1: f64) -> Self;
 
+    /// The convex hull of `points` (P3: rocklab's body).
+    #[must_use]
+    fn hull(points: &[[f64; 3]]) -> Self;
+
+    /// Split edges until none is longer than `length` mm (P3: the grain
+    /// pass refines before it moves vertices).
+    #[must_use]
+    fn refine_to_length(&self, length: f64) -> Self;
+
+    /// An affine map: `m` is column-major 3 × 4 (the x, y and z columns of
+    /// the linear part, then the translation), as Manifold takes it.
+    #[must_use]
+    fn transform(&self, m: &[f64; 12]) -> Self;
+
+    /// The cross-section at height `z`: closed polygons in x and y, holes
+    /// wound the other way (P3: footprints by tag).
+    #[must_use]
+    fn slice(&self, z: f64) -> Vec<Vec<[f64; 2]>>;
+
     /// This solid as a new original with a fresh original ID from the
     /// kernel's process-wide counter. It collapses every source ID into one
     /// and recomputes face IDs, so it cuts the link R9's material tracing

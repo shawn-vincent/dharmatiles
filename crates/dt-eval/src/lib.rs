@@ -192,7 +192,23 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
                 value: c.value.clone(),
             })
             .collect();
-        match dt_looks::look(&e.what.value, &controls) {
+        let children: Vec<dt_looks::Child> = e
+            .children
+            .iter()
+            .map(|c| dt_looks::Child {
+                name: c.what.value.clone(),
+                controls: c
+                    .controls
+                    .iter()
+                    .map(|s| Control {
+                        name: s.name.clone(),
+                        value: s.value.clone(),
+                    })
+                    .collect(),
+                weight: c.weight,
+            })
+            .collect();
+        match dt_looks::look_with(&e.what.value, &controls, &children) {
             Ok(l) => looks.push(l),
             Err(le) => {
                 let at = le
@@ -382,6 +398,12 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
         .find(|(surface, _)| surface == "ground")
         .map(|(_, mm)| mm * c.frame.scale());
     scene.set_edge(edge_mm);
+    scene.set_water_edge(
+        tile.edges
+            .iter()
+            .find(|(surface, _)| surface == "water")
+            .map(|(_, mm)| mm * c.frame.scale()),
+    );
     let mut h = c.steps.iter().fold(0xcbf2_9ce4_8422_2325, |h, s| {
         fnv(
             h,
@@ -407,6 +429,11 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
                     area: &masks[mask_of[i]],
                     path: &paths[i],
                     seed: pinned.map_or_else(|| root.path(&paths[i]), Seed::new),
+                    at: tile
+                        .stack
+                        .get(i)
+                        .and_then(|e| e.at)
+                        .map(|[x, y]| [x * c.frame.square_mm, y * c.frame.square_mm]),
                 };
                 c.looks[i].build(&mut scene, &ctx).map_err(|e| {
                     let msg = format!("{}: {}", paths[i], e.message);

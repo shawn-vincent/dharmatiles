@@ -137,3 +137,75 @@ pub fn signed_volume(m: &TriMesh) -> f64 {
         })
         .sum()
 }
+
+/// The unit normal of triangle `a b c` (zero for a degenerate one).
+#[must_use]
+pub(crate) fn normal(a: [f64; 3], b: [f64; 3], c: [f64; 3]) -> [f64; 3] {
+    let (u, v) = (
+        [b[0] - a[0], b[1] - a[1], b[2] - a[2]],
+        [c[0] - a[0], c[1] - a[1], c[2] - a[2]],
+    );
+    let n = [
+        u[1] * v[2] - u[2] * v[1],
+        u[2] * v[0] - u[0] * v[2],
+        u[0] * v[1] - u[1] * v[0],
+    ];
+    let l = libm::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+    if l > 0.0 { n.map(|x| x / l) } else { [0.0; 3] }
+}
+
+/// **wobble**: a polyline (mm) resampled every `step` mm and pushed
+/// sideways by smooth noise of `sigma` mm along its length, scaled so the
+/// largest push is `amount` mm, and tapered to nothing within `sigma` of
+/// each end so its end points stay where they are (a shore's wander).
+#[must_use]
+pub fn wobble(
+    points: &[[f64; 2]],
+    amount: f64,
+    sigma: f64,
+    step: f64,
+    seed: dt_geom::Seed,
+) -> Vec<[f64; 2]> {
+    let positive = |v: f64| v.is_finite() && v > 0.0;
+    if points.len() < 2 || !positive(amount) || !positive(sigma) || !positive(step) {
+        return points.to_vec();
+    }
+    // resample, with each sample's arc length and unit normal
+    let mut pts: Vec<([f64; 2], f64, [f64; 2])> = Vec::new();
+    let mut s0 = 0.0;
+    for w in points.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        let len = libm::hypot(b[0] - a[0], b[1] - a[1]);
+        if len <= 0.0 {
+            continue;
+        }
+        let n = [-(b[1] - a[1]) / len, (b[0] - a[0]) / len];
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let k = (libm::ceil(len / step) as usize).max(1);
+        for i in 0..k {
+            #[allow(clippy::cast_precision_loss)]
+            let t = i as f64 / k as f64;
+            pts.push((
+                [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])],
+                s0 + t * len,
+                n,
+            ));
+        }
+        s0 += len;
+    }
+    let last = points[points.len() - 1];
+    let n_last = pts.last().map_or([0.0, 0.0], |p| p.2);
+    pts.push((last, s0, n_last));
+    let xs: Vec<f64> = pts.iter().map(|p| p.1).collect();
+    let v = dt_geom::noise::smooth(seed.value(), sigma, &xs, &[0.0]);
+    let peak = v.iter().fold(0.0f64, |m, x| m.max(x.abs())).max(1e-9);
+    let total = s0;
+    pts.iter()
+        .zip(&v)
+        .map(|((p, s, n), x)| {
+            let taper = crate::smooth01(s / sigma) * crate::smooth01((total - s) / sigma);
+            let o = amount * x / peak * taper;
+            [p[0] + o * n[0], p[1] + o * n[1]]
+        })
+        .collect()
+}

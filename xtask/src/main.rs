@@ -10,13 +10,16 @@ commands:
            build the look's Rust tile at each seed and write the contact
            sheet to out/parity/<look>/: Python beside Rust where the look
            has a Rust tile, Python only where it does not yet
-           (looks: flat, dirt)
+           (looks: flat, dirt, dirt-stones, rocks, water)
   help     show this message";
 
 /// Each look the harness knows: its Rust tile, if it has been ported.
 const LOOKS: &[(&str, Option<&str>)] = &[
     ("flat", Some("lib:tiles/test/flat-1x1.kdl")),
     ("dirt", Some("lib:tiles/test/dirt-2x2.kdl")),
+    ("dirt-stones", Some("lib:tiles/test/dirt-stones-2x2.kdl")),
+    ("rocks", Some("lib:tiles/test/rocks-2x2.kdl")),
+    ("water", Some("lib:tiles/test/water-2x2.kdl")),
 ];
 
 fn main() -> ExitCode {
@@ -72,7 +75,9 @@ fn parity(args: &[String]) -> Result<(), String> {
     let tile = LOOKS
         .iter()
         .find(|(l, _)| *l == look)
-        .ok_or_else(|| format!("unknown look `{look}` (looks: flat, dirt)"))?
+        .ok_or_else(|| {
+            format!("unknown look `{look}` (looks: flat, dirt, dirt-stones, rocks, water)")
+        })?
         .1;
     let flag = |f: &str| args.iter().any(|a| a == f);
     let seeds: Vec<String> = match args.iter().position(|a| a == "--seeds") {

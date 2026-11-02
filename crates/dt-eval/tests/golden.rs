@@ -16,6 +16,9 @@ const TILES: &[&str] = &[
     "lib:tiles/test/flat-1x1.kdl",
     "lib:tiles/ground/soil-1x1.kdl",
     "lib:tiles/test/dirt-2x2.kdl",
+    "lib:tiles/test/rocks-2x2.kdl",
+    "lib:tiles/test/water-2x2.kdl",
+    "lib:tiles/test/dirt-stones-2x2.kdl",
 ];
 
 fn build_at(path: &str, threads: usize) -> Built {

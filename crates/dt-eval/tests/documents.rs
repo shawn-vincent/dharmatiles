@@ -123,7 +123,10 @@ fn levels_edges_and_printer_come_from_the_library() {
     assert_eq!(level("ground"), Some(5.0));
     assert_eq!(level("water"), Some(2.6));
     assert_eq!(level("wall-top"), Some(33.1));
-    assert_eq!(t.edges, vec![("ground".to_owned(), 3.4)]);
+    assert_eq!(
+        t.edges,
+        vec![("ground".to_owned(), 3.4), ("water".to_owned(), 2.6)]
+    );
     let p = Options::default().printer;
     assert_eq!(
         (p.line_mm, p.layer_mm, p.overhang_deg, p.gap_mm),

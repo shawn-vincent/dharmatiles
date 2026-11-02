@@ -378,6 +378,17 @@ pub fn distance(frame: &Frame, mask: &[bool]) -> (Field, Vec<Option<usize>>) {
     )
 }
 
+/// **geodesic distance**: mm from the nearest `source` node to every node
+/// along 8-connected paths through `passable` nodes (Dijkstra), each step
+/// weighing `weight` times its length; unreached nodes are infinite.
+#[must_use]
+pub fn geodesic(frame: &Frame, source: &[bool], passable: &[bool], weight: f64) -> Field {
+    let (nx, ny) = frame.nodes();
+    let step = frame.step_mm();
+    let (d, _) = dt_geom::geodesic(source, passable, nx, ny, step * weight);
+    Field { nx, ny, step, z: d }
+}
+
 // ---- scatter ---------------------------------------------------------------
 
 /// How [`scatter`] spreads things.

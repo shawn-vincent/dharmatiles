@@ -136,10 +136,16 @@ fn printer_profile() {
 fn edge_contract() {
     let doc = decode_ok(EDGES);
     let e = doc.edges.as_ref().unwrap();
-    assert_eq!(e.rules.len(), 1);
+    assert_eq!(e.rules.len(), 2);
     assert_eq!(e.rules[0].surface.value, "ground");
-    let env = |n: &str| (n == "edge").then_some(3.4);
+    assert_eq!(e.rules[1].surface.value, "water");
+    let env = |n: &str| match n {
+        "edge" => Some(3.4),
+        "water" => Some(2.6),
+        _ => None,
+    };
     assert_eq!(e.rules[0].level.value.bounds(&env).unwrap(), (3.4, 3.4));
+    assert_eq!(e.rules[1].level.value.bounds(&env).unwrap(), (2.6, 2.6));
 }
 
 #[test]
