@@ -899,7 +899,11 @@ impl Decoder<'_> {
         let span = entry.what.span;
         let look = entry.look();
         if let Some(l) = look {
-            for need in l.needs {
+            // inside a definition a place word may come from the call
+            // (`ruin-corner along=north`): the evaluator passes it down,
+            // and the look refuses at build if it never arrives
+            let needs = if ctx.in_tile { l.needs } else { &[] };
+            for need in needs {
                 let has = match need {
                     PlaceWord::Along => entry.place.along.is_some(),
                     PlaceWord::At => entry.place.at.is_some(),

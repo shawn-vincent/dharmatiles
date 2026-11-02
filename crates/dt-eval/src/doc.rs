@@ -603,8 +603,12 @@ impl Reader<'_> {
                             Along::Edges(edges) => path = Some(edge_path(edges, self.dims)),
                             Along::Line(_) => unplaced.push(("along= a drawn line", Some(a.span))),
                         },
-                        Some(a) => unplaced.push(("along=", Some(a.span))),
-                        None => {}
+                        // inherited from a definition call: for the looks
+                        // that place by it only, the others ignore it
+                        Some(a) if e.place.along.is_some() => {
+                            unplaced.push(("along=", Some(a.span)));
+                        }
+                        _ => {}
                     }
                     match &at {
                         Some(p) if honours.contains(&"at") => {
@@ -615,8 +619,8 @@ impl Reader<'_> {
                                     .push(Diag::at(src, p.span, "dt::at", msg, "here")),
                             }
                         }
-                        Some(p) => unplaced.push(("at=", Some(p.span))),
-                        None => {}
+                        Some(p) if e.place.at.is_some() => unplaced.push(("at=", Some(p.span))),
+                        _ => {}
                     }
                     for (word, span) in unplaced {
                         if let Some(span) = span {
