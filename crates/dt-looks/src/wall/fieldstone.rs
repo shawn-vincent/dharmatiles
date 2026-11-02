@@ -17,7 +17,7 @@
 //! back toward the face so the rounded bottom is a chamfer-like curve the
 //! printer can lay, and proudness is held to the stone below.
 
-use dt_kit::form::{Relief, relief_weighted, subdivide};
+use dt_kit::form::{Relief, relief_radial, subdivide};
 use dt_kit::{KitError, Rng, Seed, TriMesh};
 
 use super::layout::{self, Cell, Courses, End, Seg};
@@ -69,6 +69,14 @@ const K_COPING: i64 = 5;
 /// A resting stone's underside bevels up at 45° from this far in from
 /// each face, mm at the reference.
 const UNDER_FROM: f64 = 2.0;
+/// Joint pins (see [`joint_pins`]), mm at the reference: the wedge's
+/// half-width at the joint's mouth, how far back from the faces it sits,
+/// how far it reaches up into the stone above, and the widest head joint
+/// it fills.
+const PIN_HALF_MM: f64 = 1.6;
+const PIN_SETBACK_MM: f64 = 0.6;
+const PIN_EMBED_MM: f64 = 0.3;
+const PIN_GAP_MM: f64 = 2.0;
 
 /// What the fieldstone layout leaves the chassis.
 pub(crate) struct Field {
@@ -902,6 +910,56 @@ pub(crate) fn hold_proud(stones: &mut [Stone]) {
     }
 }
 
+/// Pinning stones: a wedge driven into the top of each head joint that a
+/// stone above bridges. Two pebbles' rounded top corners open a V there,
+/// and the stone above roofs it wider than a layer can reach; the wedge
+/// fills the V's mouth and points down at 45° (its flanks print), set
+/// back [`PIN_SETBACK_MM`] from the faces. Returns (segment, wall-local
+/// mesh) pairs.
+pub(crate) fn joint_pins(stones: &[Stone], s: f64) -> Result<Vec<(usize, TriMesh)>, KitError> {
+    let mut out = Vec::new();
+    for a in stones.iter().filter(|a| !a.coping) {
+        for b in stones.iter().filter(|b| !b.coping && b.seg == a.seg) {
+            // b the right-hand neighbour of a in the same course
+            if b.t[0] <= a.t[0]
+                || b.t[0] > a.t[1] + PIN_GAP_MM * s
+                || libm::fabs(a.z[1] - b.z[1]) > 0.6 * s
+            {
+                continue;
+            }
+            let top = a.z[1].min(b.z[1]);
+            // a stone above spanning the joint
+            let tm = 0.5 * (a.t[1] + b.t[0]);
+            let bridged = stones.iter().any(|u| {
+                u.seg == a.seg
+                    && libm::fabs(u.z[0] - top) < 0.6 * s
+                    && u.t[0] < tm - 0.5 * s
+                    && u.t[1] > tm + 0.5 * s
+            });
+            if !bridged {
+                continue;
+            }
+            let w = PIN_HALF_MM * s;
+            let (y0, y1) = (
+                a.y0.max(b.y0) + PIN_SETBACK_MM * s,
+                a.y1.min(b.y1) - PIN_SETBACK_MM * s,
+            );
+            if y1 - y0 < s {
+                continue;
+            }
+            let zt = top + PIN_EMBED_MM * s;
+            let mut pts = Vec::with_capacity(6);
+            for y in [y0, y1] {
+                pts.push([tm - w, y, zt]);
+                pts.push([tm + w, y, zt]);
+                pts.push([tm, y, top - w]);
+            }
+            out.push((a.seg, dt_kit::form::hull(&pts)?));
+        }
+    }
+    Ok(out)
+}
+
 impl Stone {
     /// The pebble in wall-local (t, q, z): latitude rings from the front
     /// pole (q = y0) to the back (q = y1), each the outline scaled about
@@ -980,7 +1038,11 @@ impl Stone {
             // the underside keeps the relief off its downward faces (a
             // carved pocket there is a roof the printer cannot lay)
             let under = self.under.is_some();
-            relief_weighted(&mut mesh, self.seed, r, &|_, nv| {
+            // along rays from the centre: the pole caps pack their rings
+            // closer than the relief is deep, and normal relief folds
+            // there into fins
+            let centre = [self.ctr[0], 0.5 * (self.y0 + self.y1), self.ctr[1]];
+            relief_radial(&mut mesh, self.seed, r, centre, &|_, nv| {
                 if under && nv[2] < -0.05 {
                     ((nv[2] + 0.45) / 0.4).clamp(0.0, 1.0)
                 } else {

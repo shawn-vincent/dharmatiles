@@ -196,6 +196,31 @@ pub fn relief_weighted(
     r: &Relief,
     weight: &(dyn Fn([f64; 3], [f64; 3]) -> f64 + Sync),
 ) {
+    relief_along(mesh, seed, r, weight, None);
+}
+
+/// **relief radial**: [`relief_weighted`], but every vertex moves along
+/// the ray from `centre` instead of its normal. On a body star-shaped
+/// about `centre` the skin cannot fold (each ray still meets it once),
+/// however thin its triangles. Fieldstone's pebbles use it (their pole
+/// caps pack latitude rings closer than the relief is deep).
+pub fn relief_radial(
+    mesh: &mut TriMesh,
+    seed: u64,
+    r: &Relief,
+    centre: [f64; 3],
+    weight: &(dyn Fn([f64; 3], [f64; 3]) -> f64 + Sync),
+) {
+    relief_along(mesh, seed, r, weight, Some(centre));
+}
+
+fn relief_along(
+    mesh: &mut TriMesh,
+    seed: u64,
+    r: &Relief,
+    weight: &(dyn Fn([f64; 3], [f64; 3]) -> f64 + Sync),
+    centre: Option<[f64; 3]>,
+) {
     if mesh.positions.is_empty() {
         return;
     }
@@ -232,8 +257,18 @@ pub fn relief_weighted(
         }
         let cd = dist(*q, relaxed[i]);
         let damp = 1.0 / (1.0 + (cd / 0.35) * (cd / 0.35));
-        let d = carve * damp * weight(*q, vn[i]);
-        mesh.positions[i] = [0, 1, 2].map(|k| q[k] + vn[i][k] * d);
+        let mut d = carve * damp * weight(*q, vn[i]);
+        let dir = match centre {
+            Some(c) => {
+                let v = [0, 1, 2].map(|k| q[k] - c[k]);
+                let l = dist(*q, c).max(1e-9);
+                // never through the centre
+                d = d.max(-0.5 * l);
+                v.map(|x| x / l)
+            }
+            None => vn[i],
+        };
+        mesh.positions[i] = [0, 1, 2].map(|k| q[k] + dir[k] * d);
     }
 }
 

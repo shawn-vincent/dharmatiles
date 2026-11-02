@@ -698,6 +698,9 @@ pub(crate) fn run(
             .collect();
         if !run.laid {
             fieldstone::hold_proud(&mut stones);
+            for (k, pin) in fieldstone::joint_pins(&stones, s).map_err(LookError::build)? {
+                units.push(Unit::Mesh(run.place(k, pin)));
+            }
         }
         counts.units = stones.len();
         units.extend(stones.into_iter().map(|st| Unit::Stone(Box::new(st))));
