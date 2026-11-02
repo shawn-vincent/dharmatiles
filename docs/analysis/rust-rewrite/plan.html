@@ -65,7 +65,7 @@
 
 <div class="wrap">
 <header class="hero">
-  <div class="eyebrow">Page 9 of 11 · revision 7 · 1 Nov 2026 · Phase 0 spikes measured and reviewed, go/no-go pending</div>
+  <div class="eyebrow">Page 9 of 11 · revision 8 · 2 Nov 2026 · Phase 0 go; Phase 1 started</div>
   <h1>From spikes to cutover</h1>
   <p class="lede">A phased plan for the Rust rewrite, built mostly by Claude agents and directed by Shawn. Nine phases, three work streams, and about 32 weeks on the critical path (25 to 40 is the honest range). Every phase ends with something Shawn can print, and no look counts as ported until he judges its renders equal to the lab's, side by side, over four seeds.</p>
 </header>
@@ -81,7 +81,7 @@
 <div class="tbl"><table class="glance">
 <thead><tr><th>Phase</th><th>Goal</th><th>Size</th><th>Exit gate</th></tr></thead>
 <tbody>
-<tr class="crit"><td>P0</td><td>Spikes and decisions: answer R1, R2, R3 and R6, and lay the workspace</td><td class="sz">M · 2–3 wk</td><td>Each spike is go, or its fallback is chosen. CI is green on macOS, Linux, Windows and wasm. <span class="small">(R1, R2, R3, R9 go and CI green on 1 Nov 2026; R6 waits on Shawn.)</span></td></tr>
+<tr class="crit"><td>P0</td><td>Spikes and decisions: answer R1, R2, R3 and R6, and lay the workspace</td><td class="sz">M · 2–3 wk</td><td>Each spike is go, or its fallback is chosen. CI is green on macOS, Linux, Windows and wasm. <span class="small">(R1, R2, R3, R9 go and CI green on 1 Nov 2026; R6 syntax and vocabulary decided; go to P1 on 2 Nov 2026.)</span></td></tr>
 <tr class="crit"><td>P1</td><td>Walking skeleton and parity harness: one KDL tile to a printable STL with a DungeonBlocks base</td><td class="sz">M · 3–4 wk</td><td>Watertight flat tile that Shawn test-prints into a socket. Identical stage hashes at 1, 4 and 16 threads, and golden hashes at the level Shawn chose. A first Python-beside-Rust contact sheet.</td></tr>
 <tr class="crit"><td>P2</td><td>Dirt and hills: the first look at parity</td><td class="sz">M · 2–4 wk</td><td>Printable-texture rule ≥ 97%, metrics within tolerance, ≤ 1 s, Shawn's sign-off over 4 seeds</td></tr>
 <tr class="crit"><td>P3</td><td>Rocks and water, with the edge contract</td><td class="sz">L · 5–8 wk</td><td>Two printed water tiles butt with no step. Material ids survive the union. Sign-off on rocks and on water.</td></tr>
@@ -226,7 +226,7 @@
 </ul></dd>
 <dt>Exit criteria</dt><dd><ul>
 <li><code>dharmatiles build lib:tiles/test/flat-1x1.kdl</code> writes a watertight STL that passes float32 reload, with 0 mm² of overhang and 0 bodies dropped, in ≤ 2 s.</li>
-<li>Stage hashes are identical across two runs and at 1, 4 and 16 threads, enforced in CI. Across platforms, at the level Shawn chose at the go/no-go; the recommendation is golden hashes shared by the macOS and Linux jobs, with Windows gated on metrics and renders.</li>
+<li>Stage hashes are identical across two runs and at 1, 4 and 16 threads, enforced in CI. Across platforms, level B (chosen 2 Nov 2026): golden hashes shared by the macOS and Linux jobs, with Windows gated on metrics and renders.</li>
 <li>A deliberately wrong document gives a miette error with its line and a hint.</li>
 <li>The harness produces a Python-beside-Rust contact sheet, with overhangs painted red, for the flat tile, and a Python-only sheet for dirtlab at seeds 1 to 4.</li>
 <li>Shawn's test print seats in a DungeonBlocks socket.</li>
@@ -605,8 +605,8 @@
 <li class="done"><input type="checkbox" id="c11" checked disabled><span class="who">Agent</span><span>Harness, Python half: <code>tests/parity/run_lab.py</code> runs dirtlab at seeds 1 to 4, writes <code>metrics.json</code>, and renders through <code>dharmatiles/render.py</code> with overhangs red.</span></li>
 <li class="done"><input type="checkbox" id="c12" checked disabled><span class="who">Agent</span><span>Write the spike decisions (go, or the fallback) into this page and the feasibility page. Add a revision entry to the change log. Done in revision 6, with the <a href="spikes/go-no-go.html">go/no-go page</a>.</span></li>
 <li class="done"><input type="checkbox" id="c13" checked disabled><span class="who">Agent</span><span>Adversarial review of the spike results by a fresh agent. Resolve its findings. Done 1 Nov 2026: 14 findings, all acted on in revision 7 (re-measured R1 timing, tolerance, leaf time and R3 captures; a source-ID rule tested for R2 and R9 together; wording corrected). Follow-ups: report the obvhs <code>-0.0</code> bug and manifold-rust's batch-union face-ID renumbering upstream; re-time the booleans on an idle machine in P7; carry tolerance in P3; rework <code>dt-doc</code> and the library tiles to the R6 vocabulary (P1); move rockpile's foot to 3.4 mm (clifflab).</span></li>
-<li><input type="checkbox" id="c14"><span class="who own">Shawn</span><span>Day 9 or 10, 45 minutes: go/no-go on R1, R2, R3 and R6. Choose the determinism level. Approve the draft of the contact sheet. Everything for this sitting, with a recommendation on each decision, is on the <a href="spikes/go-no-go.html">go/no-go page</a>.</span></li>
-<li><input type="checkbox" id="c15"><span class="who">Agent</span><span>If all go: open P1. Create <code>dt-kit</code>, <code>dt-looks</code>, <code>dt-eval</code> and the <code>dharmatiles</code> crate, and write <code>flat-1x1.kdl</code>.</span></li>
+<li class="done"><input type="checkbox" id="c14" checked disabled><span class="who own">Shawn</span><span>Day 9 or 10, 45 minutes: go/no-go on R1, R2, R3 and R6. Choose the determinism level. Approve the draft of the contact sheet. Done 2 Nov 2026: go, determinism level B, contact sheet approved, no vetoes. Everything for this sitting, with a recommendation on each decision, is on the <a href="spikes/go-no-go.html">go/no-go page</a>.</span></li>
+<li class="done"><input type="checkbox" id="c15" checked disabled><span class="who">Agent</span><span>Started 2 Nov 2026. If all go: open P1. Create <code>dt-kit</code>, <code>dt-looks</code>, <code>dt-eval</code> and the <code>dharmatiles</code> crate, and write <code>flat-1x1.kdl</code>.</span></li>
 </ul>
 <p class="small muted">Shawn's time in the first two weeks is about 2 hours, in three sittings. The agent tasks for the spikes and the Python half of the harness were all done on 1 Nov 2026, ahead of the week-2 schedule; the adversarial review (item 13) ran the same day and revision 7 acts on it.</p>
 

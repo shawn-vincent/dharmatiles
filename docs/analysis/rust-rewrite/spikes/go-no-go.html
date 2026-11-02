@@ -34,7 +34,7 @@
 
 <div class="wrap">
 <header class="hero">
-  <div class="eyebrow">Phase 0 · go/no-go · for Shawn's day 9–10 decision · results of 1 Nov 2026 · branch rust/p0 · revision 7, after the adversarial review</div>
+  <div class="eyebrow">Phase 0 · go/no-go · for Shawn's day 9–10 decision · results of 1 Nov 2026 · branch rust/p0 · revision 8 · decided 2 Nov 2026: go to Phase 1</div>
   <h1>Phase 0: go or no-go</h1>
   <p class="lede">Four of the five spikes are a <strong>go</strong>: booleans (R1), determinism on one machine (R2), rays (R3) and materials (R9), two of them with a gate clause that did not fully pass. R1's ≤ 1.2× time gate passes on the median of interleaved runs (1.05× and 1.06×) but not on every run (two massif pairs at 1.36× and 1.43×); R3's 1e-4 mm distance clause passes on one capture of three (float32 noise up to 1.8e-4 mm on identical hits). Neither is near a kill criterion. The document format (R6) has its syntax and vocabulary decided; <code>dt-doc</code> and the library tiles are to be reworked to them. No fallback is needed for booleans or rays. Revision 7 corrects revision 6 after an adversarial review (plan checklist item 13); the corrections are in the <a href="https://claude.ai/artifact/B2iunR3sEpTndvL2MhFBdt">change log</a>.</p>
 </header>
@@ -49,6 +49,7 @@
 
 <div class="overall">
   <p><b>Overall recommendation: go to Phase 1.</b> The two risks that could have changed the design, booleans at cliff scale and the ray engine, both passed on the engine Python uses, though neither as cleanly as revision 6 said: the boolean time gate is close (a plan target for P7 to re-time on an idle machine), and the ray distance clause was set tighter than float32 data allows. Nothing measured calls for a fallback. Of the four decisions Phase 1 needed from you, two are made (R6 syntax and vocabulary, rustup); the determinism level and the contact sheet remain.</p>
+  <p><b>Decided 2 Nov 2026: go.</b> Shawn: "We are a GO for Phase 1. Accept all remaining recommendations." Determinism is level B, the contact sheet layout is approved, and none of the agents' choices is vetoed. Phase 1 opened the same day.</p>
   <p>The agents' Phase 0 work finished on day 1 of the three-week box, and the adversarial review (plan checklist item 13) has run; revision 7 acts on its findings. Remaining agent tasks: reporting the obvhs <code>-0.0</code> bug and the port's face-ID renumbering upstream, and reworking <code>dt-doc</code> and the library tiles to the decided vocabulary. The plan's dates are not moved in this revision; if you decide early, Phase 1 can start early.</p>
 </div>
 
@@ -107,7 +108,7 @@
 <p>Each decision has a recommendation. "Blocks" says which phase needs the answer.</p>
 
 <div class="dec" id="d1">
-  <h3>1. Determinism level (R2) · blocks P1</h3>
+  <h3>1. Determinism level (R2) · decided 2 Nov 2026: B</h3>
   <p>The confirmed default 2 is "byte-identical on one machine; visually identical across machines". R2 shows more is possible for free on two of the three platforms. The options:</p>
   <ul class="small">
     <li><b>A. One machine only.</b> Golden hashes per platform, each checked only against itself. Cheapest, but three sets of hashes to keep.</li>
@@ -115,6 +116,7 @@
     <li><b>C. All three platforms byte-identical.</b> Would first need the cause of Windows' difference inside Manifold found (both the C++ kernel and the port differ there; its maths library is the likely cause, not yet shown). Not worth it now.</li>
   </ul>
   <div class="rec"><b>Recommendation: B.</b> It costs nothing beyond the <code>libm</code> rule, catches a whole class of accidental changes on two platforms, and asks nothing of Windows that R2 showed it cannot give. The evidence for B is one toy pipeline; the P1 hash gate on real tiles confirms or withdraws it. You print from the Mac, and CI runs Linux on every push.</div>
+  <p><b>Decided 2 Nov 2026: B</b>, as recommended. One golden hash set, checked by the macOS and Linux CI jobs; Windows runs thread identity, metrics and renders.</p>
 </div>
 
 <div class="dec" id="d2">
@@ -153,12 +155,13 @@
 </div>
 
 <div class="dec" id="d4">
-  <h3>4. The contact sheet draft · blocks P1's harness work</h3>
+  <h3>4. The contact sheet draft · decided 2 Nov 2026: approved</h3>
   <p>The Python half of the parity harness exists: <code>python tests/parity/run_lab.py</code> builds dirtlab 2×2 at seeds 1–4 in about 95 s and writes, per seed, the STL, a <code>metrics.json</code> and four renders (painted, top, low, 20 mm close-up) with overhangs painted red, then one contact sheet into <code>out/parity/dirt/</code> (not in git). Its bare-fraction estimator reads lower than dirtlab's own pebble mask (0.77–0.79 against 0.92–0.93) because it counts tall clods as cover; it is stable across seeds, and both sides will run the same function.</p>
   <div class="rec"><b>Recommendation: approve the layout</b> (four views per seed, overhangs red, one sheet per look), or say what you want to see side by side. P1 adds the Rust column next to it.</div>
+  <p><b>Decided 2 Nov 2026: approved</b> as drafted: four views per seed, overhangs red, one sheet per look.</p>
 </div>
 
-<h3>Choices the agents made, for your veto</h3>
+<h3>Choices the agents made, for your veto · none vetoed (2 Nov 2026)</h3>
 <p>These follow directly from the measurements. They need no action unless you disagree.</p>
 <ul>
   <li>manifold-csg 0.4.1 is the default mesh backend, with Manifold's parallelism on (the <code>manifold-parallel</code> feature).</li>
