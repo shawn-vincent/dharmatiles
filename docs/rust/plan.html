@@ -112,6 +112,7 @@
 <li><span class="st st-settled">done</span><span><b>Dirt stones.</b> <code>dirt</code> now beds dirtlab's few rocklab stones (<code>stones some</code>, the default; <code>none</code> and <code>many</code>). <code>soil-1x1</code>'s golden changed with them.</span></li>
 <li><span class="st st-settled">done</span><span><b>Materials (R9).</b> Every output triangle traces to earth, rock, water or connector; the top over the water is water, face by face.</span></li>
 <li><span class="st st-settled">done</span><span><b>Eleven water twins</b> in <code>library/tiles/water/</code>; the <code>.tile.py</code> files stay until cutover.</span></li>
+<li><span class="st st-settled">done</span><span><b>Review fixes.</b> A bug hunt found, and P3 fixed: water on a tile with no ground built nothing; <code>--seed</code> did not move wobbled lines; dirt stones stayed floating where a later paint lowered the ground (a later paint now removes the stones it covers); a rock placed with <code>at=</code> could stand past the tile edge (now refused); water at a level other than the edge contract's left a wall at the edge (it now eases to the contract near the edges); waterlab's corner window and border test were matched exactly.</span></li>
 <li><span class="st st-active">open</span><span><b>Shawn's sign-offs</b> on rocks and on water over four seeds, and a print of two butted water tiles.</span></li>
 <li><span class="st st-active">open</span><span><b><code>dharmatiles preview</code></b> (stream C) was not built in P3.</span></li>
 </ul>
