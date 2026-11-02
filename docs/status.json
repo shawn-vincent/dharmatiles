@@ -21,36 +21,6 @@
    "updated": "2026-11-02T14:00:00Z"
   },
   {
-   "id": "p1-doc",
-   "order": 20,
-   "body": "rust",
-   "area": "Rust P1",
-   "state": "done",
-   "title": "Stream A done: dt-doc on the R6 vocabulary + library tiles",
-   "detail": "rust/p1-doc 6fb2205: 88 dt-doc tests pass, wasm build OK; library tiles match the R6 page byte for byte; edit API inserts properties. Waiting to merge with stream B.",
-   "updated": "2026-11-02T14:40:00Z"
-  },
-  {
-   "id": "p1-skel",
-   "order": 30,
-   "body": "rust",
-   "area": "Rust P1",
-   "state": "done",
-   "title": "Stream B done: dt-kit, ground look, DB connector, dt-eval, binary, parity harness",
-   "detail": "rust/p1-skel cfdc85e. Flat 1×1 builds in 0.09 s, watertight, 0 overhang, deterministic at 1/4/16 threads, volume matches Python exactly. CI finishing.",
-   "updated": "2026-11-02T14:25:00Z"
-  },
-  {
-   "id": "p1-merge",
-   "order": 40,
-   "body": "rust",
-   "area": "Rust P1",
-   "state": "done",
-   "title": "Phase 1 code complete on rust/p1",
-   "detail": "dt-eval reads every document through dt-doc (11b01af); flat 1×1 output byte-identical (export hash 332ee29ccaf20f6e); `check` passes on all 9 library files and names the phase each missing look arrives in. CI uploads a contact sheet per OS (6a16135).",
-   "updated": "2026-11-02T14:41:00Z"
-  },
-  {
    "id": "cliff-r17",
    "order": 50,
    "body": "labs",
@@ -71,26 +41,6 @@
    "updated": "2026-11-02T15:04:37Z"
   },
   {
-   "id": "shawn",
-   "order": 90,
-   "body": "rust",
-   "area": "Shawn",
-   "state": "waiting",
-   "title": "Shawn: test print + contact-sheet OK close Phase 1",
-   "detail": "Does flat-1x1-db.stl seat in a DungeonBlocks socket? Is the parity contact-sheet layout right?",
-   "updated": "2026-11-02T18:23:51Z"
-  },
-  {
-   "id": "p1-exit",
-   "body": "rust",
-   "order": 45,
-   "area": "Rust P1",
-   "state": "done",
-   "title": "Phase 1 exit reviews done; findings fixed",
-   "detail": "Simplify pass (1ad8119) and all 8 bug-hunt findings fixed with regression tests (→ 50c35da). CI run 41496927801 green on macOS, Linux, Windows; flat export hash unchanged. Phase 1 closes on Shawn's test print + contact-sheet OK.",
-   "updated": "2026-11-02T18:23:51Z"
-  },
-  {
    "id": "docs-fixes",
    "order": 100,
    "body": "other",
@@ -99,6 +49,26 @@
    "title": "Docs follow-ups done: 55° audits, live doc paths, red-painted renders",
    "detail": "rocklab/grasslab/dirtlab audit at 55° (clifflab face report reads the constant); ~40 dead docs/ paths in code repointed; red-overhang heroes on trees, walls and composition; variants page images fixed; 0 broken links.",
    "updated": "2026-11-02T17:52:30Z"
+  },
+  {
+   "id": "p1",
+   "order": 20,
+   "body": "rust",
+   "area": "Rust P1",
+   "state": "done",
+   "title": "Phase 1 done: flat tile prints from Rust",
+   "detail": "Merged into main (84056d8). Flat 1×1 DB tile: watertight, 0 overhang, 0.1 s, same hashes on macOS and Linux; review findings fixed; Shawn's test print seated and the contact-sheet layout is approved.",
+   "updated": "2026-11-02T16:00:00Z"
+  },
+  {
+   "id": "p2",
+   "order": 30,
+   "body": "rust",
+   "area": "Rust P2",
+   "state": "running",
+   "title": "Phase 2 started: dirt and hills",
+   "detail": "Branch rust/p2. Kernels (noise, distance, morphology, blur), operations, the ground and dirt looks ported from dirtlab, soil-1x1.kdl, watch. Ends with Shawn signing off Rust beside dirtlab over seeds 1–4.",
+   "updated": "2026-11-02T16:00:00Z"
   }
  ]
 }

@@ -69,9 +69,9 @@
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks">Looks</a><a href="../rust/plan.html" aria-current="page">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
-  <div class="eyebrow">Rust rewrite · plan · Phase 0 done (GO, 2 Nov 2026) · Phase 1 under way</div>
+  <div class="eyebrow">Rust rewrite · plan · Phase 1 done (2 Nov 2026) · Phase 2 under way</div>
   <h1>The Rust plan</h1>
-  <p class="lede">How the Python library and the seven labs become one Rust engine with a KDL tile language. Nine phases, three work streams, and about 32 weeks on the critical path (25 to 40 is the honest range). Every phase ends with something Shawn can print, and no look counts as ported until Shawn judges its renders equal to the lab's, side by side, over four seeds. Phase 0 is done (GO on 2 Nov 2026) and Phase 1, the walking skeleton, is under way; live status is on the <a href="../index.html#status-rust">home page</a>.</p>
+  <p class="lede">How the Python library and the seven labs become one Rust engine with a KDL tile language. Nine phases, three work streams, and about 32 weeks on the critical path (25 to 40 is the honest range). Every phase ends with something Shawn can print, and no look counts as ported until Shawn judges its renders equal to the lab's, side by side, over four seeds. Phases 0 and 1 are done (2 Nov 2026): the Rust engine builds a flat tile that seats in a DungeonBlocks socket. Phase 2, dirt and hills, is under way; live status is on the <a href="../index.html#status-rust">home page</a>.</p>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#now">Where it stands</a></li>
@@ -95,15 +95,13 @@
 </ol></nav>
 <article class="doc">
 <h2 id="now">Where it stands</h2>
-<p>Phase 0 (spikes and decisions) is done. On 2 Nov 2026 Shawn decided GO for Phase 1, with determinism level B, the contact sheet approved and no vetoes. Phase 1 (walking skeleton and parity harness) started the same day on branch <code>rust/p1</code>. The live status of every piece of work, Rust and labs alike, is on the <a href="../index.html#status">home page</a>.</p>
-<h3 id="p1-checklist">Phase 1 checklist</h3>
-<p>Phase 1 runs as two streams that merge into <code>rust/p1</code>. Stream A reworks the document crate; stream B builds everything else. The <a href="#P1">P1 detail</a> below has the full scope and exit criteria.</p>
+<p>Phases 0 and 1 are done. Phase 0 (spikes and decisions) ended with GO on 2 Nov 2026, with determinism level B. Phase 1 (walking skeleton and parity harness) was merged into <code>main</code> the same day (84056d8): the Rust program builds the flat 1×1 DungeonBlocks tile watertight with 0 mm² of overhang in 0.1 s, with the same hashes on macOS and Linux; Shawn's test print seated in a DungeonBlocks socket and Shawn approved the contact-sheet layout. Phase 2 (dirt and hills, the first look at parity) started on branch <code>rust/p2</code>. The live status of every piece of work, Rust and labs alike, is on the <a href="../index.html#status">home page</a>.</p>
+<h3 id="p2-checklist">Phase 2 checklist</h3>
+<p>The <a href="#P2">P2 detail</a> below has the full scope and exit criteria.</p>
 <ul class="now">
-<li><span class="st st-settled">done</span><span><b>Stream A: <code>dt-doc</code> on the decided vocabulary.</b> The document crate reads the R6 syntax and vocabulary (<a href="language.html">language</a>): mm at the DungeonBlocks reference plus named levels, the standard levels as an implicit prelude from <code>library/parts/levels.kdl</code>, words for character controls, edges, quoted points, <code>scatter</code> as its own node. The <code>"4.5mm"</code> suffix and the old <code>^k</code> skew are refused with a hint. The edit API inserts new controls on the line as properties. The library tiles and parts match the language page byte for byte. 88 tests; the wasm build passes. (<code>rust/p1-doc</code>, 6fb2205.)</span></li>
-<li><span class="st st-settled">done</span><span><b>Stream B: the walking skeleton.</b> <code>dt-kit</code>, the ground look, the DungeonBlocks connector, <code>dt-eval</code>, the <code>dharmatiles</code> program and the Rust half of the parity harness (<code>cargo xtask parity &lt;look&gt;</code>, with <code>run_lab.py --beside</code> laying out the Python-beside-Rust sheet). The flat 1×1 tile builds in 0.09 s, watertight, with 0 mm² of overhang, identical at 1, 4 and 16 threads, and its volume matches Python's exactly. CI prints a golden hash gate per OS. (<code>rust/p1-skel</code>, cfdc85e.)</span></li>
-<li><span class="st st-proposed">running</span><span><b>Merge into <code>rust/p1</code>.</b> Both branches are merged (ed8233c) and all workspace tests pass. <code>dt-eval</code>'s interim KDL reader is being replaced by <code>dt-doc</code>; the flat tile must stay byte-identical.</span></li>
-<li><span class="st st-next">next</span><span><b>Phase-exit reviews.</b> A simplify review and an adversarial review by fresh agents (<a href="#practices">practices</a>).</span></li>
-<li><span class="st st-owner">Shawn</span><span><b>Test print.</b> The flat 1×1 DungeonBlocks tile built by the Rust binary must seat in a DungeonBlocks socket. This is the last P1 exit criterion that needs Shawn.</span></li>
+<li><span class="st st-proposed">running</span><span><b>Kernels and operations.</b> Position-keyed noise, distance transform, morphology, blur, spatial hash; the noise, distance, scatter, carve and adaptive-lift operations; one grid convention.</span></li>
+<li><span class="st st-next">next</span><span><b>Looks: ground (full) and dirt</b>, ported from <code>dirtlab</code>, with <code>library/tiles/ground/soil-1x1.kdl</code> and the <code>watch</code> command.</span></li>
+<li><span class="st st-owner">Shawn</span><span><b>Side-by-side sign-off</b> of Rust dirt beside dirtlab over seeds 1 to 4, and the ground edge level (4.0 or 3.4 mm).</span></li>
 </ul>
 
 <h2 id="why">Why this plan</h2>

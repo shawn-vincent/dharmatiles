@@ -390,4 +390,7 @@ stl/
 docs/            GitHub Pages site (HTML): index.html (home + live status.json), looks/ (one page per look, with its renders and reference photos), rust/, standards/
 docs/archive/    frozen history: Python library design pages, Rust study logs, review transcripts
 src/experiments/tiles/  experiment .tile.py specs (outside src/tiles/, so batch mode skips them)
+
+Cargo.toml, crates/, xtask/   Rust rewrite workspace (plan: docs/rust/plan.html). crates: dt-geom (kernels), dt-kit (scene, audit, STL), dt-doc (KDL v2 documents), dt-looks, dt-eval (scheduler), dharmatiles (CLI). `cargo test --workspace`; `cargo xtask parity <look>` writes out/parity/<look>/
+library/      KDL documents for the Rust engine: printers/, parts/, tiles/
 ```
