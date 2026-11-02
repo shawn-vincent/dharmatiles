@@ -12,41 +12,43 @@
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html" aria-current="page">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
-  <div class="eyebrow">Standard · applies to every tile, every look, Python and Rust</div>
-  <h1>Printing rules</h1>
-  <p class="lede">Every tile must print on a home FDM printer, base down, with no supports. This page says what printer we design for, which shapes it can lay, how texture must be sized to survive, how renders show failures, and how an STL is checked before anyone slices it.</p>
+  <div class="eyebrow">Standard · every tile, every look</div>
+  <h1>Printing</h1>
+  <p class="lede">Every dharmatiles tile prints on a home FDM printer, base down, with no supports. This page gives the settings the tiles are designed for, what you can expect from a print, and how to paint one. Below that, the design record explains how printability is guaranteed and checked.</p>
+  <div class="facts">
+    <div><div class="k">Nozzle</div><div class="v">0.4 mm</div></div>
+    <div><div class="k">Layer height</div><div class="v">0.2 mm</div></div>
+    <div><div class="k">Supports</div><div class="v">none, base down</div></div>
+    <div><div class="k">Overhangs</div><div class="v">within 55° of vertical</div></div>
+  </div>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
-  <li><a href="#profile">1. The printer profile</a></li>
-  <li><a href="#overhang">2. The 55° overhang limit</a></li>
-  <li><a href="#features">3. Feature sizes</a></li>
-  <li><a href="#texture">4. The printable-texture rule</a></li>
-  <li><a href="#red">5. Red overhang in every render</a></li>
-  <li><a href="#export">6. The export audit: float32 reload and watertight</a></li>
-  <li><a href="#construction">7. By construction, or by audit</a></li>
-  <li><a href="#history">History</a></li>
+  <li><a href="#profile">Printer settings</a></li>
+  <li><a href="#overhang">No supports: the 55° limit</a></li>
+  <li><a href="#features">What prints, and what to expect</a></li>
+  <li><a href="#texture">Texture you can paint</a></li>
+  <li><a href="#painting">Painting</a></li>
+  <li><a href="#red">Red in renders</a></li>
+  <li><a href="#export">Every file is checked</a></li>
+  <li><a href="#record">Design record</a></li>
 </ol></nav>
 <article class="doc">
 
-<h2 id="profile">1. The printer profile</h2>
-<p>A <strong>printer profile</strong> is the small set of numbers that every look reads in order to make printable geometry. There is one profile today:</p>
+<h2 id="profile">Printer settings</h2>
+<p>The tiles are designed for one printer profile. Any FDM printer that can hold these settings will do.</p>
 <div class="tbl"><table>
-<thead><tr><th>Setting</th><th class="num">Value</th><th>Where it is written</th></tr></thead>
+<thead><tr><th>Setting</th><th>Value</th></tr></thead>
 <tbody>
-<tr><td>Process</td><td class="num">FDM, base down, no supports</td><td>clifflab and dirtlab requirements</td></tr>
-<tr><td>Nozzle</td><td class="num">0.4 mm</td><td>clifflab, dirtlab, rocklab, waterlab requirements</td></tr>
-<tr><td>Line width (one extrusion line)</td><td class="num">0.45 mm</td><td><code>grasslab/grasslab.py:130</code></td></tr>
-<tr><td>Layer height</td><td class="num">0.2 mm</td><td><code>grasslab/grasslab.py:131</code>, <code>clifflab/rockpile.py:172</code></td></tr>
-<tr><td>Overhang limit, from vertical</td><td class="num">55°</td><td><code>clifflab/rockpile.py:171</code></td></tr>
-<tr><td>Reach of one layer past the layer below</td><td class="num">0.6 mm</td><td><code>clifflab/rockpile.py:173</code></td></tr>
+<tr><td>Process</td><td>FDM, base down, <strong>no supports</strong></td></tr>
+<tr><td>Nozzle</td><td>0.4 mm</td></tr>
+<tr><td>Line width</td><td>0.45 mm</td></tr>
+<tr><td>Layer height</td><td>0.2 mm</td></tr>
+<tr><td>Overhang the tiles stay within</td><td>55° from vertical</td></tr>
 </tbody></table></div>
-<p>Shawn slices in Bambu Studio and inspects meshes in MeshLab. Resin is a second target for grass: the same blade shape is smoothed so the layer steps melt, with surfaces within about 20 µm of the stepped shape (grasslab REQ-OUT-6).</p>
-<p>The rule behind the profile is “model only what prints”. Shawn, 29 Oct 2026, on grass blades: “make it more honest about the shape, so that we can refine THAT rather than a theoretical ideal.” A grass blade is built directly as a stack of 0.2 mm layers, each a whole number of 0.45 mm lines wide, and only then smoothed (<a href="../labs/grasslab/requirements.html">grasslab requirements §1.2</a>).</p>
-<p>In the Rust port the profile is the <code>Printer</code> struct: 55°, 0.2 mm layers, 0.6 mm reach over a 3 mm span, a 0.1 mm ray grid and an overhang budget of 0 mm² (<code>crates/dt-kit/src/audit.rs:20</code> on branch <code>rust/p1-skel</code>). It is meant to move into a library file, <code>library/printers/default</code>. Looks read it; tiles do not write printer numbers.</p>
+<p>Shawn slices in Bambu Studio. Grass can also be printed in resin: the same blade shapes are smoothed so the layer steps melt away.</p>
 
-<h2 id="overhang">2. The 55° overhang limit</h2>
-<p>An <strong>overhang</strong> is material printed over air: a downward-facing surface. The printer can lay a layer slightly wider than the one below, and a run of layers can lean out gradually. Past a certain lean the plastic droops.</p>
-<p><strong>The limit is 55° from vertical.</strong> No downward face may lean further from vertical than that. Shawn raised it from 45° on 31 Oct 2026: “45 is too conservative.”</p>
+<h2 id="overhang">No supports: the 55° limit</h2>
+<p>An <strong>overhang</strong> is material printed over air. A printer can lay each layer slightly wider than the one below, so a surface can lean out gradually, but past a certain lean the plastic droops. Every dharmatiles tile keeps every downward-facing surface within <strong>55° of vertical</strong>, and no layer reaches more than 0.6 mm past the layer below. That is why no supports are needed. Thin cracks have short ceilings that bridge cleanly.</p>
 <figure class="diagram">
 <svg viewBox="0 0 520 210" role="img" aria-label="Overhang angle: a face leaning up to 55 degrees from vertical prints; past that it droops. Each 0.2 mm layer may reach 0.6 mm past the one below.">
   <style>
@@ -82,51 +84,39 @@
 </svg>
 <figcaption>Left: the face-angle limit. Right: the layer-reach rule that the cliff audit uses, which lets thin crack ceilings pass while long shelves still fail.</figcaption>
 </figure>
-<h3 id="reach">How overhang is measured</h3>
-<p>Two tests exist. The <strong>face-angle test</strong> flags a face whose normal points within the limit of straight down: <code>n_z &lt; −sin(OVERHANG_DEG + 3°)</code>, above 0.05 mm (for example <code>dirtlab/dirtlab.py:561</code>). The <strong>layer-reach test</strong> slices the mesh every 0.2 mm with vertical rays and flags material that reaches more than 0.6 mm past the layer below, or past the 55° cone of any layer up to 3 mm below (<code>clifflab/rockpile.py:2155</code>, <code>overhang_faces</code>). It is closer to what a slicer does: a 0.4–0.5 mm crack with a short ceiling passes, a long shelf does not. clifflab has used the layer-reach test since 1 Nov 2026 (commit 049038d), and the Rust audit ports it as the one rule.</p>
-<p>Not every lab has moved to 55° yet. rocklab (<code>rocklab/rocklab.py:89</code>), grasslab (<code>grasslab/grasslab.py:160</code>) and dirtlab (<code>dirtlab/dirtlab.py:128</code>) still audit at 45° with the face-angle test, and clifflab's own requirements page still says 45° in REQ-FDM-1. The ruling is 55°; those numbers are stricter than it, never looser.</p>
-<h3 id="budget">How much overhang is allowed</h3>
+
+<h2 id="features">What prints, and what to expect</h2>
 <ul>
-<li><strong>Cliffs:</strong> at most 2 mm² per tile, and no see-through holes (confirmed default 14, 1 Nov 2026).</li>
-<li><strong>Rust gate:</strong> the default budget is 0 mm²; a look that needs more must say so.</li>
-<li><strong>Trees</strong> measure branch angle the other way round, as elevation above the horizon. The skeleton tries to keep every branch above 35° (<code>target_fdm_angle_deg</code>), which is the same 55°-from-vertical limit. A branch below 26° (<code>strict_fdm_angle_deg</code>) is a print failure and raises a <code>RuntimeWarning</code> (<code>src/dharmatiles/trees/layer.py:51</code>, <code>src/dharmatiles/trees/mesh.py:1264</code>). Between 26° and 35° is tolerated: round tubes bridge better than flat shelves.</li>
+<li><strong>Nothing too thin.</strong> Ridges, chips, plates and grass blades are at least one line (0.45 mm) wide, so the slicer keeps them.</li>
+<li><strong>Nothing floating.</strong> Every layer rests on the one below; every stone sits on what is under it.</li>
+<li><strong>Cracks stay open.</strong> Cracks are 0.4–0.5 mm wide, wide enough to hold a dark wash and not fuse in the slicer.</li>
+<li><strong>No flat ceilings.</strong> Stones resting on other stones have sloped undersides, not flat shelves.</li>
+<li><strong>Reads before paint.</strong> A bare grey print already reads as grass, rock or water before any paint goes on.</li>
 </ul>
 
-<h2 id="features">3. Feature sizes</h2>
+<h2 id="texture">Texture you can paint</h2>
+<p>Fine surface texture is cut at least one layer deep, or the printer would smooth it away. The rule: within any 1.5 mm window, the surface rises and falls by at least 0.2 mm over at least 97% of the tile. That is what gives a drybrush something to catch.</p>
+
+<h2 id="painting">Painting</h2>
 <ul>
-<li><strong>No sub-line features.</strong> Free ridges, chips, plates and blades are at least one line (0.45 mm) wide. A slicer drops anything thinner, or its thin-wall detection mangles it.</li>
-<li><strong>No hidden relief.</strong> Relief smaller than about 0.15 mm is not modelled: it would not print, so it would only mislead the viewer (clifflab REQ-FDM-4).</li>
-<li><strong>No islands.</strong> Every 0.2 mm layer is supported by the one below. Nothing floats; a crumb that separates from the main body is dropped at export and reported (<a href="#export">§6</a>).</li>
-<li><strong>Cracks open to the paint brush.</strong> A crack must be wide enough to keep a dark wash and not fuse in the slicer. Since 1 Nov 2026 clifflab's cracks are 0.4–0.5 mm wide and 0.6–0.9 mm deep, straight in; the layer-reach audit allows their short ceilings.</li>
-<li><strong>Ceilings by construction.</strong> A stone resting on another is seated with its underside shaped to its bed, 3° inside the overhang limit (<code>clifflab/rockpile.py:177</code>), so there are no flat ceilings to audit away.</li>
+<li>Prime dark, then drybrush light. Raised texture catches the brush; cracks, joints and the gaps between blades stay dark.</li>
+<li>On rock, joints between stones are cut deeper than cracks, so they read darker.</li>
+<li>A dark wash settles in the 0.4–0.5 mm cracks without filling them.</li>
 </ul>
 
-<h2 id="texture">4. The printable-texture rule</h2>
-<p>Fine surface texture must be at least one layer deep, or the printer turns it into a smooth plain.</p>
-<div class="callout"><p><strong>Within any 1.5 mm window, local relief (highest minus lowest point) is at least 0.2 mm, over at least 97% of the tile's interior.</strong></p></div>
-<p>The rule was added to dirtlab on 29 Oct 2026 after Shawn sliced a test tile: version v1g failed it on 33% of the tile, and its flat, “tamped” areas printed as smooth plains (<a href="../labs/dirtlab/requirements.html#added-2026-10-29-shawn-after-slicing">dirtlab REQ-D-TEX</a>). The failing area fell from 32.8% to 1.9%; the Python dirt now passes on 98.1% of the tile. It applies to every ground texture and is the first exit criterion of Rust phase P2 (<a href="../rust/plan.html">Rust plan</a>).</p>
-<p>The rule is measured by a check script that lived in a session scratchpad (<code>texcheck.py</code>) and is not in the repository. The Rust parity harness is where it becomes a committed check.</p>
+<h2 id="red">Red in renders</h2>
+<p>In every render on this site, faces past the overhang limit are painted red. A render with no red needs no supports. A small red spot is a small overhang that a printer usually bridges.</p>
 
-<h2 id="red">5. Red overhang in every render</h2>
-<p>Every render paints the faces that fail the overhang audit red: diagnostic close-ups <em>and</em> the final painted contact sheets.</p>
-<blockquote><p>“painting the flagged faces as red — that's a good idea in general. let's use that as our policy in the future, including on the final painted renders.”</p><p>Shawn, 31 Oct 2026</p></blockquote>
-<p>An overhang number in mm² says nothing about <em>where</em>. Red faces show it at a glance: the first time, they showed that the remaining overhang was thin strips along the bottom edge of every stone, which pointed straight at the cause.</p>
-<p>The red uses the same test as the audit, so the picture and the number agree. In clifflab that is the layer-reach test: <code>paint()</code> in <code>clifflab/iterate.py:44</code> colours the faces <code>overhang_faces</code> flags. The Rust renderer does the same per face (<code>crates/dt-kit/src/render.rs:97</code> on <code>rust/p1-skel</code>) and counts red pixels so a test can fail on them. Any new render script must do this too.</p>
+<h2 id="export">Every file is checked</h2>
+<p>An STL file stores positions as 32-bit numbers, and a mesh that is closed in memory can open up when it is saved and reloaded. Before a tile is written, it is rounded exactly as an STL reader would round it, checked to be one closed, <strong>watertight</strong> solid (it has a well-defined inside), and refused if it is not. Loose crumbs are dropped and reported. The final check is always a test print.</p>
 
-<h2 id="export">6. The export audit: float32 reload and watertight</h2>
-<p>An STL file stores each vertex as three 32-bit floats, and programs that read STL merge vertices that land at the same position. A mesh that is a clean closed solid in 64-bit memory can therefore open up when it is reloaded: a sliver triangle collapses, or two surfaces that nearly touch fuse into a non-manifold pinch. The slicer then sees holes. <strong>Watertight</strong> means the mesh is closed with consistent normals, so it has a well-defined inside.</p>
-<p>The shared answers live in <code>src/dharmatiles/stone/solidify.py</code>:</p>
-<ul>
-<li><code>separate_pinches</code> (<code>:42</code>) nudges apart vertex pairs that are within 0.2 µm of each other without being connected, by 0.15 and 0.30 µm along their own normals: well past the float32 grid, invisible in print.</li>
-<li><code>survives_stl32</code> (<code>:30</code>) rounds the vertices to float32, merges by position, and reports whether the result is still watertight.</li>
-<li><code>clip_to_box</code> (<code>:18</code>) clips with a real boolean, never a plane cap, and leaves the mesh unclipped with a warning if the clip would open it.</li>
-</ul>
-<p>Every lab export goes through <code>stl_safe</code> (<code>grasslab/grasslab.py:1060</code>, <code>dirtlab/dirtlab.py:529</code>): separate pinches, round to float32 and merge, keep the largest body and drop the crumbs, and refuse to write anything that is not then a single watertight body. The Rust audit gate does the same steps in the same order, then measures overhang and see-through holes on exactly what is written (<code>crates/dt-kit/src/audit.rs:122</code> on <code>rust/p1-skel</code>).</p>
-<p>The Python library is weaker. Stones and crack engraving reject any result that fails <code>survives_stl32</code> (<code>src/dharmatiles/scatter/stones.py:490</code>, <code>src/dharmatiles/stone/cracks.py:270</code>), walls separate pinches (<code>src/dharmatiles/walls/masonry.py:197</code>), and the exporter separates pinches on the whole tile before writing (<code>src/dharmatiles/systems.py:47</code>). But a library STL is the base and every layer's parts concatenated, not one unioned body, so the export does not check watertightness (<code>src/dharmatiles/terrains/tile.py:583</code>). When library STLs are regenerated, the vertex and face counts and the watertight status of each file are reported.</p>
-<p>For stones there is one more check, <code>src/extras/stone_audit.py</code>, run by hand on an STL. It finds two faults that pass a watertight test: <em>knife edges</em>, convex edges folding back by more than 100°; and <em>layered skin</em>, unconnected vertices closer than 0.08 mm, which means the surface has folded over itself.</p>
+<section class="record" id="record">
+<h2>Design record</h2>
+<p>How the rules are enforced in code, the numbers behind them, Shawn's rulings, open conflicts and history.</p>
 
-<h2 id="construction">7. By construction, or by audit</h2>
-<p>The aim is printability <strong>by construction</strong>: each look builds only shapes that print, so the audit should find nothing. The audit is the gate that catches what construction missed.</p>
+<details open>
+<summary>By construction, or by audit</summary>
+<p id="construction">The aim is printability <strong>by construction</strong>: each look builds only shapes that print, so the audit should find nothing. The audit is the gate that catches what construction missed.</p>
 <div class="tbl"><table>
 <thead><tr><th>Rule</th><th>Guaranteed by construction</th><th>Checked by</th></tr></thead>
 <tbody>
@@ -135,12 +125,62 @@
 <tr><td>Texture ≥ 0.2 mm per 1.5 mm</td><td>dirt relief sized to the layer</td><td>the texture check (P2 exit)</td></tr>
 <tr><td>Watertight after reload</td><td>boolean clips, pinch separation, float32-safe stones</td><td><code>stl_safe</code> in the labs; the Rust audit gate; reported on library regeneration</td></tr>
 <tr><td>No islands</td><td>every solid seated on what is below it</td><td>keep-largest at export, with the dropped bodies reported</td></tr>
-<tr><td>Edge fit</td><td>the edge contract (<a href="tile-system.html#edge-contract">tile system §8</a>)</td><td>a test print of two tiles side by side</td></tr>
+<tr><td>Edge fit</td><td>the edge contract (<a href="tile-system.html#edge-contract">tile system: how tiles meet</a>)</td><td>a test print of two tiles side by side</td></tr>
 </tbody></table></div>
-<p>The final check is always a print. Each look's requirements include a pre-paint test: the bare grey print must read as the thing it is before any paint goes on.</p>
+</details>
 
-<h2 id="history">History</h2>
-<p>The labs started with a 45° overhang limit and voxel FDM rules. On 29 Oct 2026 grass moved to blades built in printer units, and dirt gained the printable-texture rule after a slicing test. On 31 Oct 2026 Shawn raised the limit to 55° and made red overhang faces the policy for every render. On 1 Nov 2026 clifflab replaced the face-angle audit with the layer-reach audit so that thin cracks pass, and the Rust plan confirmed the 2 mm² cliff budget. The float32 export guarantees come from the July 2026 stone and wall work (fieldstone experiments E23 and E25). Earlier notes are in the <a href="../archive/index.html">archive</a>.</p>
+<details>
+<summary>The printer profile in code</summary>
+<p>Line width <code>grasslab/grasslab.py:130</code>; layer <code>grasslab/grasslab.py:131</code>, <code>clifflab/rockpile.py:172</code>; 55° <code>clifflab/rockpile.py:171</code>; reach <code>clifflab/rockpile.py:173</code>. Nozzle and process are in the clifflab, dirtlab, rocklab and waterlab requirements. Resin smoothing keeps surfaces within about 20 µm of the stepped shape (grasslab REQ-OUT-6). In the Rust port the profile is the <code>Printer</code> struct: 55°, 0.2 mm layers, 0.6 mm reach over a 3 mm span, a 0.1 mm ray grid and an overhang budget of 0 mm² (<code>crates/dt-kit/src/audit.rs:20</code> on branch <code>rust/p1-skel</code>), moving into <code>library/printers/default</code>. Looks read it; tiles do not write printer numbers.</p>
+<p>The rule behind the profile is “model only what prints”. Shawn, 29 Oct 2026, on grass blades: “make it more honest about the shape, so that we can refine THAT rather than a theoretical ideal.” A grass blade is built directly as a stack of 0.2 mm layers, each a whole number of 0.45 mm lines wide, and only then smoothed (<a href="../labs/grasslab/requirements.html">grasslab requirements §1.2</a>).</p>
+</details>
+
+<details>
+<summary>How overhang is measured</summary>
+<h3 id="reach">Face angle and layer reach</h3>
+<p>Two tests exist. The <strong>face-angle test</strong> flags a face whose normal points within the limit of straight down: <code>n_z &lt; −sin(OVERHANG_DEG + 3°)</code>, above 0.05 mm (for example <code>dirtlab/dirtlab.py:561</code>). The <strong>layer-reach test</strong> slices the mesh every 0.2 mm with vertical rays and flags material that reaches more than 0.6 mm past the layer below, or past the 55° cone of any layer up to 3 mm below (<code>clifflab/rockpile.py:2155</code>, <code>overhang_faces</code>). It is closer to what a slicer does: a 0.4–0.5 mm crack with a short ceiling passes, a long shelf does not. clifflab has used it since 1 Nov 2026 (commit 049038d), and the Rust audit ports it as the one rule.</p>
+<h3 id="budget">How much overhang is allowed</h3>
+<ul>
+<li><strong>Cliffs:</strong> at most 2 mm² per tile, and no see-through holes (confirmed default 14, 1 Nov 2026).</li>
+<li><strong>Rust gate:</strong> the default budget is 0 mm²; a look that needs more must say so.</li>
+<li><strong>Trees</strong> measure branch angle as elevation above the horizon. The skeleton tries to keep every branch above 35° (<code>target_fdm_angle_deg</code>), the same 55°-from-vertical limit. A branch below 26° (<code>strict_fdm_angle_deg</code>) is a print failure and raises a <code>RuntimeWarning</code> (<code>src/dharmatiles/trees/layer.py:51</code>, <code>src/dharmatiles/trees/mesh.py:1264</code>). Between 26° and 35° is tolerated: round tubes bridge better than flat shelves.</li>
+</ul>
+<p>Other feature rules: relief under about 0.15 mm is not modelled (clifflab REQ-FDM-4); cliff cracks are 0.4–0.5 mm wide and 0.6–0.9 mm deep since 1 Nov 2026; cliff seats sit 3° inside the overhang limit (<code>clifflab/rockpile.py:177</code>).</p>
+</details>
+
+<details>
+<summary>The printable-texture rule</summary>
+<p>Added to dirtlab on 29 Oct 2026 after Shawn sliced a test tile: version v1g failed it on 33% of the tile, and its flat, “tamped” areas printed as smooth plains (<a href="../labs/dirtlab/requirements.html#added-2026-10-29-shawn-after-slicing">dirtlab REQ-D-TEX</a>). The failing area fell from 32.8% to 1.9%; the Python dirt now passes on 98.1% of the tile. It applies to every ground texture and is the first exit criterion of Rust phase P2 (<a href="../rust/plan.html">Rust plan</a>).</p>
+</details>
+
+<details>
+<summary>Red overhang: the policy and the code</summary>
+<blockquote><p>“painting the flagged faces as red — that's a good idea in general. let's use that as our policy in the future, including on the final painted renders.”</p><p>Shawn, 31 Oct 2026</p></blockquote>
+<p>An overhang number in mm² says nothing about where. The first red render showed the remaining overhang was thin strips along the bottom of every stone, which pointed straight at the cause. The red uses the same test as the audit, so picture and number agree: <code>paint()</code> in <code>clifflab/iterate.py:44</code> colours the faces <code>overhang_faces</code> flags. The Rust renderer does the same per face (<code>crates/dt-kit/src/render.rs:97</code> on <code>rust/p1-skel</code>) and counts red pixels so a test can fail on them. Any new render script must do this too.</p>
+</details>
+
+<details>
+<summary>The export audit in code</summary>
+<p>The shared answers live in <code>src/dharmatiles/stone/solidify.py</code>:</p>
+<ul>
+<li><code>separate_pinches</code> (<code>:42</code>) nudges apart vertex pairs within 0.2 µm of each other that are not connected, by 0.15 and 0.30 µm along their normals: past the float32 grid, invisible in print.</li>
+<li><code>survives_stl32</code> (<code>:30</code>) rounds to float32, merges by position, and reports whether the result is still watertight.</li>
+<li><code>clip_to_box</code> (<code>:18</code>) clips with a real boolean, never a plane cap, and leaves the mesh unclipped with a warning if the clip would open it.</li>
+</ul>
+<p>Every lab export goes through <code>stl_safe</code> (<code>grasslab/grasslab.py:1060</code>, <code>dirtlab/dirtlab.py:529</code>): separate pinches, round to float32 and merge, keep the largest body, and refuse anything that is not then a single watertight body. The Rust audit gate does the same steps in the same order, then measures overhang and see-through holes on exactly what is written (<code>crates/dt-kit/src/audit.rs:122</code> on <code>rust/p1-skel</code>).</p>
+<p>For stones there is one more check, <code>src/extras/stone_audit.py</code>, run by hand. It finds two faults that pass a watertight test: <em>knife edges</em>, convex edges folding back by more than 100°; and <em>layered skin</em>, unconnected vertices closer than 0.08 mm.</p>
+</details>
+
+<h3>Open conflicts</h3>
+<ul>
+<li>rocklab (<code>rocklab/rocklab.py:89</code>), grasslab (<code>grasslab/grasslab.py:160</code>) and dirtlab (<code>dirtlab/dirtlab.py:128</code>) still audit at 45° with the face-angle test, and clifflab's original REQ-FDM-1 says 45°. The ruling is 55°; those audits are stricter, never looser.</li>
+<li>The Python library is weaker at export. Stones and crack engraving reject results that fail <code>survives_stl32</code> (<code>src/dharmatiles/scatter/stones.py:490</code>, <code>src/dharmatiles/stone/cracks.py:270</code>), walls separate pinches (<code>src/dharmatiles/walls/masonry.py:197</code>), and the exporter separates pinches on the whole tile (<code>src/dharmatiles/systems.py:47</code>). But a library STL is the base and every layer's parts concatenated, not one unioned body, so its export does not check watertightness (<code>src/dharmatiles/terrains/tile.py:583</code>). Watertight status is reported when library STLs are regenerated.</li>
+<li>The texture check (<code>texcheck.py</code>) lived in a session scratchpad and is not in the repository. The Rust parity harness is where it becomes a committed check.</li>
+</ul>
+
+<h3 id="history">History</h3>
+<p>The labs started with a 45° overhang limit and voxel FDM rules. On 29 Oct 2026 grass moved to blades built in printer units, and dirt gained the printable-texture rule after a slicing test. On 31 Oct 2026 Shawn raised the limit to 55° (“45 is too conservative”) and made red overhang faces the policy for every render. On 1 Nov 2026 clifflab replaced the face-angle audit with the layer-reach audit so that thin cracks pass, and the Rust plan confirmed the 2 mm² cliff budget. The float32 export guarantees come from the July 2026 stone and wall work (fieldstone experiments E23 and E25). Earlier notes are in the <a href="../archive/index.html">archive</a>.</p>
+</section>
 </article>
 </div>
 </body>
