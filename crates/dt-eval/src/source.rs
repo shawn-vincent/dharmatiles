@@ -96,6 +96,12 @@ pub fn resolve(from: &str, target: &str) -> String {
     if target.starts_with(LIB) || target.starts_with('/') {
         return target;
     }
+    // Windows paths from the command line use `\`; uses are written `/`
+    let from = if cfg!(windows) {
+        from.replace('\\', "/")
+    } else {
+        from.to_owned()
+    };
     let dir = from.rfind('/').map_or_else(
         || {
             if from.starts_with(LIB) {
