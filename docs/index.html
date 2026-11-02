@@ -21,8 +21,9 @@
   .bodies dl { margin: 4px 0 0; display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 4px 10px; font-size: 13.5px; }
   .bodies dt { font: 600 11px/1.7 var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
   .bodies dd { margin: 0; }
-  .b-python { --b: var(--stone); } .b-labs { --b: var(--accent); } .b-rust { --b: var(--earth); }
+  .b-python { --b: var(--stone); } .b-other { --b: var(--muted); } .b-labs { --b: var(--accent); } .b-rust { --b: var(--earth); }
   .status { margin: 14px 0 8px; }
+  .status [hidden] { display: none; }
   .status .meta { font: 500 12px var(--mono); color: var(--muted); margin-bottom: 6px; }
   .status h3 { margin: 22px 0 6px; font-size: 16px; display: flex; gap: 8px; align-items: center; }
   .status h3::before { content: ""; width: 10px; height: 10px; border-radius: 2px; background: var(--b); }
@@ -97,6 +98,7 @@
   <h3 class="b-python" id="status-python">Python library</h3><ul data-body="python"></ul>
   <h3 class="b-labs" id="status-labs">Labs</h3><ul data-body="labs"></ul>
   <h3 class="b-rust" id="status-rust">Rust rewrite</h3><ul data-body="rust"></ul>
+  <h3 class="b-other" id="status-other" hidden>Site and other</h3><ul data-body="other" hidden></ul>
 </div>
 <p class="muted small">Rows come from <a href="status.json">status.json</a>, which Claude commits as work moves.</p>
 
@@ -170,10 +172,12 @@
           const box = el('div', 'you'); const ul = el('ul'); ul.append(row(r)); box.append(ul); you.append(box);
           continue;
         }
-        const ul = document.querySelector('.status ul[data-body="' + (r.body || 'rust') + '"]');
-        if (ul) ul.append(row(r));
+        const known = ['python', 'labs', 'rust'].includes(r.body);
+        const ul = document.querySelector('.status ul[data-body="' + (known ? r.body : 'other') + '"]');
+        if (!known) { ul.hidden = false; ul.previousElementSibling.hidden = false; }
+        ul.append(row(r));
       }
-      document.querySelectorAll('.status ul[data-body]').forEach(ul => { if (!ul.children.length) ul.append(el('li', 'muted', 'No active work.')); });
+      document.querySelectorAll('.status ul[data-body]:not([hidden])').forEach(ul => { if (!ul.children.length) ul.append(el('li', 'muted', 'No active work.')); });
       meta.textContent = rows.length ? 'Last change ' + ago(latest) + ' · refresh to update' : 'No status yet.';
     })
     .catch(() => { meta.textContent = 'Status unavailable.'; });

@@ -46,9 +46,9 @@
    "body": "rust",
    "area": "Rust P1",
    "state": "running",
-   "title": "Merging both streams into rust/p1",
-   "detail": "Re-point dt-eval at the reworked dt-doc API, then simplify and adversarial reviews at phase exit.",
-   "updated": "2026-11-02T14:25:00Z"
+   "title": "Streams merged into rust/p1; dt-eval moving onto dt-doc",
+   "detail": "Both branches merged (ed8233c), all workspace tests pass. Now replacing dt-eval's interim KDL reader with dt-doc; the flat tile must stay byte-identical. Then the phase-exit reviews.",
+   "updated": "2026-11-02T14:28:14Z"
   },
   {
    "id": "cliff-r17",
@@ -61,14 +61,24 @@
    "updated": "2026-11-02T14:00:00Z"
   },
   {
+   "id": "docs",
+   "order": 60,
+   "body": "other",
+   "area": "Docs",
+   "state": "done",
+   "title": "Docs site consolidated",
+   "detail": "Home with three bodies of work, Rust study 16 → 4 pages, standards, archive, and the cliffs look page as the pilot template. Live status now lives in docs/status.json.",
+   "updated": "2026-11-02T14:40:15Z"
+  },
+  {
    "id": "shawn",
    "order": 90,
    "body": "rust",
    "area": "Shawn",
    "state": "waiting",
    "title": "Your next checkpoint",
-   "detail": "Test print of the flat 1×1 DungeonBlocks tile built by the Rust binary: /Users/svincent/projects/dharmatiles-p1-skel/out/parity/flat/rust/s1/db/test/flat-1x1-db.stl.",
-   "updated": "2026-11-02T14:25:00Z"
+   "detail": "Test print of the flat 1×1 DungeonBlocks tile built by the Rust binary: /Users/svincent/projects/dharmatiles-p1-skel/out/parity/flat/rust/s1/db/test/flat-1x1-db.stl. Also: review the cliffs look page (docs/looks/cliffs.html), the template for the other seven looks.",
+   "updated": "2026-11-02T14:40:15Z"
   }
  ]
 }
