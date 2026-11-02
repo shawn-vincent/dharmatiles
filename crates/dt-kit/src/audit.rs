@@ -648,9 +648,10 @@ mod tests {
         assert_eq!(a.bodies, 3);
         assert_eq!(a.dropped.len(), 2);
         let (_, b) = audit(&shelf_on_post(), [10.0, 10.0], &Printer::default());
+        // rockpile.audit_overhang gives 8.0 mm² on this shelf (4 × 2 mm underside)
         assert!(
-            b.overhang_mm2 > 6.0,
-            "shelf underside flagged: {}",
+            (b.overhang_mm2 - 8.0).abs() < 1e-9,
+            "shelf underside: {}",
             b.overhang_mm2
         );
     }

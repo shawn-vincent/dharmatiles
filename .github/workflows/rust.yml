@@ -62,7 +62,15 @@ jobs:
               | grep -o 'R2 .*' | sed -E 's/ threads= *[0-9]+ run=[0-9]+//'
           done | sort | uniq -c | tee r2-tbb.txt
           test "$(wc -l < r2-tbb.txt)" -eq 2
-      - run: cargo xtask parity
+      # P1 hash gate, determinism level B (Shawn, 2 Nov 2026): every tile
+      # in crates/dt-eval/tests/golden.rs is built twice at 1, 4 and 16
+      # threads with identical stage hashes on every OS; the golden hash
+      # snapshot is shared by macOS and Linux (cfg(not(windows))), and
+      # Windows checks the metrics snapshot and the render gate only.
+      # (cargo test above already ran it; this prints the hashes per OS.)
+      - run: cargo test -p dt-eval --test golden -- --nocapture --test-threads 1
+      # The parity harness's Rust half (no Python on CI runners).
+      - run: cargo xtask parity flat --no-python --dev
 
   wasm:
     runs-on: ubuntu-latest
@@ -70,11 +78,12 @@ jobs:
       - uses: actions/checkout@v4
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
-      # Moves to dt-eval in P1.
       # A real build (codegen), not just a check: R1 showed manifold-rust compiles for wasm32.
       - run: cargo build -p dt-geom --target wasm32-unknown-unknown --no-default-features --features manifold-rust
       # The document model must stay wasm-safe (no geometry, no std::fs use).
       - run: cargo check -p dt-doc --target wasm32-unknown-unknown
+      # Everything up to the build call stays wasm-safe on the pure-Rust backend.
+      - run: cargo check -p dt-eval --target wasm32-unknown-unknown --no-default-features --features manifold-rust
 
   deny:
     runs-on: ubuntu-latest

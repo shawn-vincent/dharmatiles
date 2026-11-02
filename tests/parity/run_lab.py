@@ -13,6 +13,12 @@ Usage::
 
     python tests/parity/run_lab.py                 # dirt, seeds 1 2 3 4
     python tests/parity/run_lab.py --seeds 1 --out /tmp/x
+    python tests/parity/run_lab.py --look flat --beside out/parity/flat/rust
+
+``--beside DIR`` puts the Rust build of the same seeds next to each Python
+view: DIR/s<seed>/ holds the Rust STL and its four ``--png`` views (as
+``cargo xtask parity <look>`` writes them).  Rust metrics come from the
+same ``stl_metrics`` run on the Rust STL.
 
 Output: ``out/parity/<look>/`` (gitignored) unless ``--out`` is given.
 """
@@ -144,7 +150,41 @@ def build_dirt(seed: int):
     return mesh, dl.painted(f, mesh), (f.W, f.H), dl.EDGE_MM, lab, dt
 
 
-LABS = {"dirt": build_dirt}
+EARTH_RGB = (128, 97, 64)        # the Rust renderer's paint (dt_kit::paint)
+CONNECTOR_RGB = (158, 158, 163)
+
+
+def build_flat(seed: int):
+    """The Python twin of lib:tiles/test/flat-1x1.kdl: a flat 5 mm ground
+    slab (core/mesh.make_heightmap_solid at 128 cells per square) on the
+    DungeonBlocks base (bases/dungeonblocks, peg height from the content's
+    top), unioned in Manifold.  The seed changes nothing on a flat tile."""
+    import manifold3d as m3d
+    from dharmatiles.bases import dungeonblocks as db
+    from dharmatiles.core.config import BaseConfig, SurfaceConfig
+    from dharmatiles.core.mesh import make_heightmap_solid
+    t0 = time.perf_counter()
+    surf = SurfaceConfig(cols=1, rows=1, seed=seed)
+    z = np.full((surf.grid_h, surf.grid_w), 5.0)
+    slab = make_heightmap_solid(z, surf.tile_w, surf.tile_h, 0.0)
+    cfg = BaseConfig()
+    peg = db.select_peg_height(z, cfg, float(slab.bounds[1, 2]))
+    base = db.make_base(surf, peg, cfg)
+
+    def solid(m):
+        return m3d.Manifold(mesh=m3d.Mesh(vert_properties=np.asarray(m.vertices, np.float32),
+                                          tri_verts=np.asarray(m.faces, np.uint32)))
+    u = (solid(slab) + solid(base)).to_mesh()
+    mesh = trimesh.Trimesh(np.asarray(u.vert_properties)[:, :3], np.asarray(u.tri_verts))
+    dt = time.perf_counter() - t0
+    painted = mesh.copy()
+    fc = np.tile([*CONNECTOR_RGB, 255], (len(mesh.faces), 1))
+    fc[mesh.triangles_center[:, 2] > 0.0, :3] = EARTH_RGB
+    painted.visual.face_colors = fc
+    return mesh, painted, (surf.tile_w, surf.tile_h), 5.0, {"peg_mm": peg}, dt
+
+
+LABS = {"dirt": build_dirt, "flat": build_flat}
 
 
 # ── Rendering ───────────────────────────────────────────────────────────────
@@ -227,10 +267,19 @@ def font(n):
     return ImageFont.load_default()
 
 
-def run(look: str, seeds: list[int], out: pathlib.Path) -> pathlib.Path:
+def caption(who, met, build_s):
+    return (f"{who}: bare {met['bare_fraction']:.3f} · rocks {met['rock_count']} "
+            f"{list(met['rock_hist'].values())} · {met['faces']:,} faces · bodies {met['bodies']} · "
+            f"watertight {met['watertight']} · vol {met['volume_mm3']:.1f} mm³ · "
+            f"see-through {met['see_through_cells']} · overhang {met['overhang_mm2']:.2f} mm² (red) · "
+            f"build {build_s:.2f}s")
+
+
+def run(look: str, seeds: list[int], out: pathlib.Path, beside: pathlib.Path | None = None) -> pathlib.Path:
     out.mkdir(parents=True, exist_ok=True)
-    cell, head, cap = (620, 500), 44, 34
-    sheet = Image.new("RGB", (cell[0] * len(VIEWS), (head + cell[1] + cap) * len(seeds)), (245, 245, 242))
+    cols = len(VIEWS) * (2 if beside else 1)
+    cell, head, cap = (620, 500), (70 if beside else 44), 34
+    sheet = Image.new("RGB", (cell[0] * cols, (head + cell[1] + cap) * len(seeds)), (245, 245, 242))
     dr = ImageDraw.Draw(sheet)
     summary = {}
     for r, seed in enumerate(seeds):
@@ -247,22 +296,39 @@ def run(look: str, seeds: list[int], out: pathlib.Path) -> pathlib.Path:
         c0 = fp[0] / 2 - 10
         y = r * (head + cell[1] + cap)
         dr.rectangle([0, y, sheet.width, y + head - 6], fill=(225, 228, 235))
-        dr.text((12, y + 9),
-                f"{look} s{seed}: bare {met['bare_fraction']:.3f} · rocks {met['rock_count']} "
-                f"{list(met['rock_hist'].values())} · {met['faces']:,} faces · bodies {met['bodies']} · "
-                f"watertight {met['watertight']} · see-through {met['see_through_cells']} · "
-                f"overhang {met['overhang_mm2']:.2f} mm² (red) · build {build_s:.1f}s",
-                fill=(25, 25, 25), font=font(19))
+        dr.text((12, y + 9), caption(f"{look} s{seed} Python", met, build_s), fill=(25, 25, 25), font=font(19))
+        rust = None
+        if beside:
+            rd = beside / f"s{seed}"
+            stl = next(iter(sorted(rd.rglob("*.stl"))))
+            rmesh = trimesh.load(stl)
+            rmet, _ = stl_metrics(rmesh, fp, edge)
+            rec = json.loads(stl.with_suffix(".build.json").read_text())
+            rmet.update(build_s=rec["build_s"], look=look, seed=seed, rust_audit=rec["audit"])
+            (sd / "rust-metrics.json").write_text(json.dumps(rmet, indent=2))
+            summary[seed] = {"python": met, "rust": rmet}
+            dr.text((12, y + 36), caption(f"{look} s{seed} Rust  ", rmet, rec["build_s"]), fill=(25, 25, 25), font=font(19))
+            rust = {p.stem.rsplit("-", 1)[-1]: p for p in rd.rglob("*.png")}
         for k, (name, elev, azim) in enumerate(VIEWS):
             p = sd / f"{k}-{name.split()[0]}.png"
             meshes = [crop(pm, (c0, c0 + 20, c0, c0 + 20))] if name.startswith("close") else [pm]
             how = render(meshes, p, elev, azim)
             im = Image.open(p).convert("RGB")
             im.thumbnail((cell[0] - 16, cell[1] - 16))
-            x = k * cell[0]
+            x = k * cell[0] * (2 if beside else 1)
             sheet.paste(im, (x + (cell[0] - im.width) // 2, y + head + (cell[1] - im.height) // 2))
-            dr.text((x + 14, y + head + cell[1] + 6), f"s{seed} · {name}" + (" (cpu)" if how == "cpu" else ""),
+            dr.text((x + 14, y + head + cell[1] + 6),
+                    f"s{seed} · {name} · Python" + (" (cpu)" if how == "cpu" else ""),
                     fill=(40, 40, 40), font=font(20))
+            if rust is not None:
+                rp = rust.get(name.split()[0])
+                x += cell[0]
+                if rp is not None:
+                    rim = Image.open(rp).convert("RGB")
+                    rim.thumbnail((cell[0] - 16, cell[1] - 16))
+                    sheet.paste(rim, (x + (cell[0] - rim.width) // 2, y + head + (cell[1] - rim.height) // 2))
+                dr.text((x + 14, y + head + cell[1] + 6), f"s{seed} · {name} · Rust",
+                        fill=(140, 40, 20), font=font(20))
         print(f"  {look} s{seed}: bare {met['bare_fraction']:.3f}, rocks {met['rock_count']}, "
               f"overhang {met['overhang_mm2']:.2f} mm², build {build_s:.1f}s")
     (out / "summary.json").write_text(json.dumps(summary, indent=2))
@@ -277,8 +343,9 @@ def main():
     ap.add_argument("--look", default="dirt", choices=sorted(LABS))
     ap.add_argument("--seeds", type=int, nargs="*", default=[1, 2, 3, 4])
     ap.add_argument("--out", type=pathlib.Path)
+    ap.add_argument("--beside", type=pathlib.Path, help="Rust build of the same seeds (xtask parity)")
     a = ap.parse_args()
-    run(a.look, a.seeds, a.out or ROOT / "out" / "parity" / a.look)
+    run(a.look, a.seeds, a.out or ROOT / "out" / "parity" / a.look, a.beside)
 
 
 if __name__ == "__main__":
