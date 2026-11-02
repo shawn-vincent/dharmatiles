@@ -113,7 +113,8 @@ fn flat_tile_is_one_ground() {
     let g = &t.stack[0];
     assert_eq!(g.what.value, "ground");
     assert_eq!(g.kind, Kind::Surface);
-    assert!(g.controls.is_empty(), "flat: every control at its default");
+    // Flat at the edge level, the lowest the ground may sit.
+    assert_eq!(g.controls.len(), 1, "flat: only its level is written");
     // Its documented default level is `ground`.
     let level = g.look().unwrap().control("level").unwrap();
     assert_eq!(level.default, "ground");

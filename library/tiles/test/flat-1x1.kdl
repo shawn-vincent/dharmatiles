@@ -1,10 +1,12 @@
 // The walking skeleton (plan.html, P1): a flat 1×1 tile, bare ground at
-// the ground level, on the system's connector (DungeonBlocks for db).
+// the edge level, on the system's connector (DungeonBlocks for db).  The
+// edge level is the lowest the ground may sit, so the tile is a plain
+// slab with no rim ramp.
 // No region: the whole tile is the default area.
 
 tile flat size="1x1" seed=1 {
-    about "Flat ground at 5 mm on one square: the first tile built end to end."
+    about "Flat ground at the edge level (3.4 mm) on one square: the first tile built end to end."
     stack {
-        ground          // flat, at the ground level (5 mm)
+        ground level=edge   // flat, at the edge level (3.4 mm)
     }
 }

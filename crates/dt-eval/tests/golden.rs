@@ -102,7 +102,7 @@ fn the_flat_tile_meets_the_exit_criteria() {
     assert!(a.dropped.is_empty(), "{:?}", a.dropped);
     assert_eq!(a.holes, 0);
     assert!(a.failures(&Options::default().printer).is_empty());
-    // the DungeonBlocks envelope: 35 × 35 mm, 5 mm ground, short peg
+    // the DungeonBlocks envelope: 35 × 35 mm, ground at the 3.4 mm edge level, short peg
     let (lo, hi) = b.export.mesh.positions.iter().fold(
         ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]),
         |(lo, hi), p| {
@@ -114,7 +114,7 @@ fn the_flat_tile_meets_the_exit_criteria() {
     );
     let close = |a: f64, b: f64| (a - b).abs() < 1e-5;
     assert!(close(lo[0], 0.0) && close(hi[0], 35.0) && close(lo[1], 0.0) && close(hi[1], 35.0));
-    assert!(close(hi[2], 5.0), "top {}", hi[2]);
+    assert!(close(hi[2], 3.4), "top {}", hi[2]);
     assert!(close(lo[2], -(5.7 + 5.2) - 0.0), "peg tip {}", lo[2]);
 }
 
