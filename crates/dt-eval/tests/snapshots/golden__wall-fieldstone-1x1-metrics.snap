@@ -6,7 +6,8 @@ triangles: 183154
 volume_mm3: 22695.527
 watertight: true
 bodies: 4
-dropped: 3
+dropped: 0
+voids_filled: 3
 overhang_mm2: 0.000
 holes: 0
 render_red_pixels: 0

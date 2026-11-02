@@ -78,8 +78,11 @@ pub struct Audit {
     pub volume_mm3: f64,
     /// Bodies before keep-largest.
     pub bodies: usize,
-    /// What keep-largest dropped, largest first.
+    /// Loose bodies keep-largest dropped, largest first.
     pub dropped: Vec<Dropped>,
+    /// Sealed voids keep-largest left out (inward-wound shells, negative
+    /// volume), so they print solid: a fill, not a lost part.
+    pub voids: Vec<Dropped>,
     /// Vertices pinch separation moved.
     pub pinches_moved: usize,
     /// Triangles that collapsed in the float32 merge (dropped).
@@ -135,7 +138,8 @@ pub fn audit(input: &TriMesh, footprint: [f64; 2], printer: &Printer) -> (Export
     let mut m = canonical(input);
     let pinches_moved = separate_pinches(&mut m);
     let (m, source, collapsed) = quantise(&m);
-    let (m, source, bodies, dropped) = keep_largest(&m, &source);
+    let (m, source, bodies, left_out) = keep_largest(&m, &source);
+    let (voids, dropped) = left_out.into_iter().partition(|d| d.volume_mm3 < 0.0);
     let watertight = m.is_watertight();
     let (overhang, holes) = overhang_faces(&m, footprint, printer);
     let areas = face_areas(&m);
@@ -153,6 +157,7 @@ pub fn audit(input: &TriMesh, footprint: [f64; 2], printer: &Printer) -> (Export
         volume_mm3: signed_volume(&m),
         bodies,
         dropped,
+        voids,
         pinches_moved,
         collapsed,
         watertight,
@@ -749,6 +754,26 @@ mod tests {
         assert!(a.overhang_mm2 == 0.0, "{}", a.overhang_mm2);
         assert_eq!(e.mesh.triangles.len(), m.triangles.len());
         assert!(a.failures(&fdm()).is_empty());
+    }
+
+    #[test]
+    fn a_sealed_void_is_filled_not_dropped() {
+        // a 6 mm block with a 1 mm cavity inside: an inward-wound shell
+        let mut m = cube([0.0, 0.0, 0.0], [6.0, 6.0, 6.0]);
+        let cavity = cube([2.0, 2.0, 2.0], [3.0, 3.0, 3.0]);
+        let base = u32::try_from(m.positions.len()).unwrap();
+        m.positions.extend(cavity.positions);
+        m.triangles.extend(
+            cavity
+                .triangles
+                .iter()
+                .map(|t| [t[0] + base, t[2] + base, t[1] + base]),
+        );
+        let (_, a) = audit(&m, [10.0, 10.0], &fdm());
+        assert_eq!(a.bodies, 2);
+        assert!(a.dropped.is_empty(), "{:?}", a.dropped);
+        assert_eq!(a.voids.len(), 1);
+        assert!((a.voids[0].volume_mm3 + 1.0).abs() < 1e-9);
     }
 
     #[test]

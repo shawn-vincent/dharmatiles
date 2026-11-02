@@ -49,12 +49,13 @@ fn metrics(b: &Built) -> String {
         (600, 475),
     );
     format!(
-        "triangles: {}\nvolume_mm3: {:.3}\nwatertight: {}\nbodies: {}\ndropped: {}\noverhang_mm2: {:.3}\nholes: {}\nrender_red_pixels: {}\n",
+        "triangles: {}\nvolume_mm3: {:.3}\nwatertight: {}\nbodies: {}\ndropped: {}\nvoids_filled: {}\noverhang_mm2: {:.3}\nholes: {}\nrender_red_pixels: {}\n",
         a.triangles,
         a.volume_mm3,
         a.watertight,
         a.bodies,
         a.dropped.len(),
+        a.voids.len(),
         a.overhang_mm2,
         a.holes,
         img.red_pixels(),

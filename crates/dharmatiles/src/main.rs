@@ -292,12 +292,13 @@ fn build_one(
     let a = &b.audit;
     if !json {
         tell!(
-            "built {p} → {}\n  {} triangles · watertight {} · overhang {:.2} mm² · {} dropped · {} holes · build {:.2} s, written {:.2} s",
+            "built {p} → {}\n  {} triangles · watertight {} · overhang {:.2} mm² · {} dropped · {} voids filled · {} holes · build {:.2} s, written {:.2} s",
             files[0].display(),
             a.triangles,
             a.watertight,
             a.overhang_mm2,
             a.dropped.len(),
+            a.voids.len(),
             a.holes,
             built_s,
             total_s
@@ -381,6 +382,7 @@ fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
             "watertight": a.watertight,
             "bodies": a.bodies,
             "dropped": a.dropped.iter().map(|d| json!({"triangles": d.triangles, "volume_mm3": d.volume_mm3})).collect::<Vec<_>>(),
+            "voids_filled": a.voids.len(),
             "pinches_moved": a.pinches_moved,
             "collapsed": a.collapsed,
             "overhang_mm2": a.overhang_mm2,
