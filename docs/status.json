@@ -95,10 +95,10 @@
    "order": 100,
    "body": "other",
    "area": "Docs",
-   "state": "running",
-   "title": "Docs follow-ups: 55° audits, dead paths, red-painted renders",
-   "detail": "Low-hanging fixes from the docs consolidation.",
-   "updated": "2026-11-02T17:45:33Z"
+   "state": "done",
+   "title": "Docs follow-ups done: 55° audits, live doc paths, red-painted renders",
+   "detail": "rocklab/grasslab/dirtlab audit at 55° (clifflab face report reads the constant); ~40 dead docs/ paths in code repointed; red-overhang heroes on trees, walls and composition; variants page images fixed; 0 broken links.",
+   "updated": "2026-11-02T17:52:30Z"
   }
  ]
 }
