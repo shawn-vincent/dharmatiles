@@ -110,9 +110,6 @@ pub trait Look: Send + Sync {
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError>;
 }
 
-/// The looks a document may name in its stack.
-pub const LOOKS: &[&str] = &["ground"];
-
 /// The controls a built look takes so far, or `None` for a look not built
 /// yet.  The evaluator passes a look only these (written, or their
 /// defaults from dt-doc's schema).
