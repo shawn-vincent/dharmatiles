@@ -25,7 +25,7 @@
    "state": "done",
    "title": "Stream B done: dt-kit, ground look, DB connector, dt-eval, binary, parity harness",
    "detail": "rust/p1-skel cfdc85e. Flat 1×1 builds in 0.09 s, watertight, 0 overhang, deterministic at 1/4/16 threads, volume matches Python exactly. CI finishing.",
-   "updated": "2026-11-02T18:30:00Z"
+   "updated": "2026-11-02T14:25:00Z"
   },
   {
    "id": "p1-merge",
@@ -34,7 +34,7 @@
    "state": "running",
    "title": "Merging both streams into rust/p1",
    "detail": "Re-point dt-eval at the reworked dt-doc API, then simplify and adversarial reviews at phase exit.",
-   "updated": "2026-11-02T18:30:00Z"
+   "updated": "2026-11-02T14:25:00Z"
   },
   {
    "id": "cliff-r17",
@@ -52,7 +52,7 @@
    "state": "waiting",
    "title": "Your next checkpoint",
    "detail": "Test print of the flat 1×1 DungeonBlocks tile built by the Rust binary: /Users/svincent/projects/dharmatiles-p1-skel/out/parity/flat/rust/s1/db/test/flat-1x1-db.stl. Also: answer the five questions on docs/analysis/docs-consolidation.html (local).",
-   "updated": "2026-11-02T18:30:00Z"
+   "updated": "2026-11-02T14:25:00Z"
   }
  ]
 }
