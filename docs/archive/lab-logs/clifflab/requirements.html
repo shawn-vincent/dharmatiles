@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>clifflab — Heroic Cliff Run: Requirements</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../../../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../../../index.html">dharmatiles</a><a href="../../../index.html#status">Status</a><a href="../../../index.html#looks">Looks</a><a href="../../../rust/plan.html">Rust plan</a><a href="../../../rust/architecture.html">Architecture</a><a href="../../../rust/language.html">Language</a><a href="../../../rust/spikes.html">Spikes</a><a href="../../../standards/tile-system.html">Tile system</a><a href="../../../standards/printing.html">Printing</a><a href="../../../archive/index.html" aria-current="page">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Lab · clifflab</div>
+  <h1>clifflab — Heroic Cliff Run: Requirements</h1>
+  <p class="srcnote">Converted from <code>clifflab/REQUIREMENTS.md</code> on 2026-11-01; the markdown file was removed (see git history). Relative paths in the text are relative to <code>clifflab/</code>.</p>
+  <aside class="stale" role="note"><span class="stale-tag">Out of date</span> <span>“No code yet” in the status line is out of date: see <code>clifflab/clifflab.py</code> and the current generator <code>clifflab/rockpile.py</code>. <span class="stale-src">Checked against the code on 2026-11-01.</span></span></aside>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol><li><a href="#1-what-this-is">1. What this is</a></li><li><a href="#2-requirements">2. Requirements</a></li><li><a href="#3-failure-modes-named-anti-goals">3. Failure modes (named anti-goals)</a></li><li><a href="#4-acceptance-scenes">4. Acceptance scenes</a></li><li><a href="#5-open-questions">5. Open questions</a></li></ol></nav>
+<article class="doc">
+<p>
+<em>Revision 1, 2026-10-30 (no code yet).  Visual targets:
+<a href="heroic-cliff-spec.html"><code>docs/labs/clifflab/heroic-cliff-spec.html</code></a> (Shawn's &quot;Universal Heroic Cliff Face&quot;
+spec, the authority on surface character) and <code>reference/reference-sheet.png</code>
+(16 painted cliff miniatures; <strong>B, H and N</strong> are this lab's form).  A
+standalone experiment built like the other labs: it may import dharmatiles
+primitives and the other labs, never modifies <code>src/dharmatiles/</code>, and
+writes to <code>clifflab/out/</code>.</em></p>
+<p>
+<em>Shawn's choices for gen-1 (2026-10-30): a <strong>straight cliff run</strong>, <strong>FDM
+without supports</strong>, <strong>about one storey (30–40 mm)</strong>, <strong>dirt top and scree
+foot</strong>, no vegetation.</em></p>
+<hr />
+<h2 id="1-what-this-is">
+1. What this is</h2>
+<p>
+One STL: <strong>a standard 2 × 2 DungeonBlocks tile crossed by a cliff.</strong>  Low
+ground (the foot) runs along the front, a plateau (the top) along the
+back, and between them a monumental, weathered, fractured rock face about
+one storey high.</p>
+<blockquote>
+<p>
+<strong>Heroic without being eccentric.</strong>  Broad, powerful, quiet stone faces
+interrupted by deep, expressive fractures, mostly vertical and steeply
+diagonal, with broken ledges.  The face must read as a big cliff and as
+a low ledge alike: <strong>no scale markers</strong>.</p>
+</blockquote>
+<h3 id="1-1-visual-scales-nested-self-similar">
+1.1 Visual scales (nested, self-similar)</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Scale</th>
+<th>
+Size on the tile</th>
+<th>
+What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<strong>Large forms</strong></td>
+<td>
+masses 8–35 mm wide; major fissures 2–5 mm deep</td>
+<td>
+Buttresses, recesses and broad faces changing plane; the silhouette and the big shadows.</td>
+</tr>
+<tr>
+<td>
+<strong>Medium forms</strong></td>
+<td>
+3–10 mm</td>
+<td>
+Broken plates, shallow shelves, overlapping faces, chipped corners, secondary fractures.</td>
+</tr>
+<tr>
+<td>
+<strong>Fine detail</strong></td>
+<td>
+0.5–3 mm</td>
+<td>
+Chips, hairline cracks, pits, grain, erosion channels.  Printable sizes only (§2.2).</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+A small crack and a major fissure belong to the same family: the same
+directions, the same wedge profile, the same branching, at different sizes.</p>
+<h3 id="1-2-what-it-is-not-gen-1-scope">
+1.2 What it is not (gen-1 scope)</h3>
+<p>
+Out of scope for acceptance: corners, spires, outcrops, escarpments,
+canyons (later forms from the sheet); grass and other vegetation
+(grasslab can add them later); colour and paint; resin-specific detail;
+OpenLOCK.</p>
+<ul>
+<li>
+<strong>REQ-RANGE-1</strong> <em>(Shawn, 2026-10-30: &quot;I love those photos, especially the
+range.  We should not build something that can't meet those needs.&quot;)</em>
+The design must be able to reach every form on the reference sheet
+(subject to the FDM rules): nothing in it may assume a single flat face.
+Corner, canyon, outcrop and spire previews are built alongside the run.</li>
+</ul>
+<hr />
+<h2 id="2-requirements">
+2. Requirements</h2>
+<p>
+Each requirement is checkable from a viewer or render (<strong>[R]</strong>) or from a
+script or statistic (<strong>[S]</strong>).</p>
+<h3 id="2-1-output-and-tile">
+2.1 Output and tile</h3>
+<ul>
+<li>
+<strong>REQ-OUT-1 [S]</strong> A run writes <code>clifflab/out/2x2-cliff-s&lt;seed&gt;.stl</code>.</li>
+<li>
+<strong>REQ-OUT-2 [S]</strong> One watertight manifold body (passes the slicer-style
+reload check <code>stl_safe</code>), fused to the standard DB socket-peg base
+(<code>dharmatiles.bases.dungeonblocks</code>).</li>
+<li>
+<strong>REQ-OUT-3 [S]</strong> The foot ground sits in the DB dirt band (4.0 mm above
+the terrain datum, as rocklab and dirtlab).  The plateau top is <strong>30–40
+mm above the foot</strong>.</li>
+<li>
+<strong>REQ-OUT-4 [S]</strong> Deterministic per seed; builds in under 2 minutes;
+STL under 100 MB.</li>
+</ul>
+<h3 id="2-2-fdm-rules-hard-0-4-mm-nozzle-0-2-mm-layers-base-down-no-">
+2.2 FDM rules (hard; 0.4 mm nozzle, 0.2 mm layers, base-down, no supports)</h3>
+<p>
+<em>Lesson from grasslab v3: model only what prints.</em></p>
+<ul>
+<li>
+<strong>REQ-FDM-1 [S]</strong> No downward-facing surface steeper than <strong>45° from
+vertical</strong>.  Overhanging shelves and undercuts are wedges with 45°
+undersides.</li>
+<li>
+<strong>REQ-FDM-2 [S]</strong> No islands at 0.2 mm layers: every layer is supported
+by the one below.</li>
+<li>
+<strong>REQ-FDM-3 [S] Fissures are wedges, never slots.</strong>  Every fracture
+opens outward; its mouth is ≥ 0.6 mm wide wherever it is deeper than
+0.5 mm, so paint can reach and slicers don't fuse it.</li>
+<li>
+<strong>REQ-FDM-4 [S] No sub-line features.</strong>  Free ridges, chips and plates
+are ≥ 0.45 mm (one line) wide; relief smaller than ≈ 0.15 mm is not
+modelled (it would not print, so it would only mislead the viewer).</li>
+<li>
+<strong>REQ-FDM-5 [S]</strong> The plateau and the foot are solid ground to the base.</li>
+</ul>
+<h3 id="2-3-layout-of-the-run">
+2.3 Layout of the run</h3>
+<ul>
+<li>
+<strong>REQ-RUN-1 [R]</strong> The cliff crosses the tile from the left edge to the
+right edge, its face toward the front.  The face line wanders in plan
+by about ±5 mm: buttresses stand out, recesses and gullies cut in.  It
+is never a straight wall.</li>
+<li>
+<strong>REQ-RUN-2 [R]</strong> The face is near-vertical overall (mean batter 0–10°
+back from vertical), steeper and overhanging locally (within
+REQ-FDM-1).</li>
+<li>
+<strong>REQ-RUN-3 [R] Rock all round; contact rims seal.</strong>  <em>(Shawn,
+2026-10-30, rev 3 of this requirement: &quot;a big wall made of rock, textured
+on all four sides with dirt on the top… the edge of the face that is
+against the tile edge needs to be low relief… the middle can have big
+cuts and rocky construction.&quot;)</em>  A cliff is a rock body textured on every
+side (front, ends and back), the texture continuous round its corners
+(a front mass and the crevice above it curl round onto the end).  Faces
+lying along the tile boundary may cut inward freely in their middle but
+never cross the boundary, and at their rims (top, bottom) they come
+flush with it, so the piece fits tight against neighbouring cliffs and
+the ground beside it.  No matching profiles, nothing repeating.</li>
+<li>
+<strong>REQ-WALL-1 [R]</strong> A free-standing rock wall (<code>wall</code> form) across the
+tile, both faces fully textured: both sides of it are useful.</li>
+<li>
+<strong>REQ-EDGE-1 [S] Edge cliffs are thin bands.</strong>  <em>(Shawn, 2026-10-30.)</em>
+Cliffs that run to the tile edges (run, corner, canyon) hug the back
+edge(s) as a band ≈ 8 mm deep, a small share of a 1 × 1 tile (they must
+work on 1 × 1), with lots of depth projecting forward from it and a
+little lean out.  The top is ground (dirt), at plateau level at the back
+edge, so raised ground set behind the cliff merges with it; it need not
+be wide enough to stand a miniature on.  Free-standing forms (outcrops,
+spires) have no such limit.</li>
+<li>
+<strong>REQ-RUN-4 [R]</strong> The top edge is broken and irregular: blocks standing
+proud, notches, and a few step-backs, never a ruled line.</li>
+</ul>
+<h3 id="2-4-rock-masses-and-fractures-the-face">
+2.4 Rock masses and fractures (the face)</h3>
+<ul>
+<li>
+<strong>REQ-ROCK-1 [R] Interlocking masses, not stacked boulders.</strong>  Broad,
+angular, somewhat flattened masses that appear naturally joined.  Some
+faces are flat and imposing, others project as chunky broken shoulders.
+Mass widths vary by at least 4×.</li>
+<li>
+<strong>REQ-ROCK-2 [R] Vertical character, broken horizontals.</strong>  Joints run
+mostly vertical and steeply diagonal (most within ±25° of vertical, a
+minority at 30–60°).  They are interrupted by short irregular
+horizontal ledges, diagonal fractures that cross several faces,
+occasional projecting shelves and undercuts, and subtle discontinuous
+layering.  Joints bend, branch, stop and reappear.</li>
+<li>
+<strong>REQ-ROCK-3 [S] Controlled irregularity.</strong>  By face area: about 60%
+broad quiet faces, 30% substantial fractures, offsets, ridges and broken
+edges, 10% intensely detailed crevices and shattered zones, in clusters
+rather than spread evenly.</li>
+<li>
+<strong>REQ-ROCK-4 [R] Planes, not noise.</strong>  Faces are planar or gently
+curved facets meeting at edges; the rock is never a noise blob or a
+melted surface.  Fine detail decorates the planes; it doesn't replace
+them.</li>
+<li>
+<strong>REQ-ROCK-5 [R] Age.</strong>  Exposed convex edges are softened by weathering
+(rounded about 0.3–0.8 mm) with small missing chips and shallow erosion
+channels.  Deep recesses stay sharp.</li>
+<li>
+<strong>REQ-ROCK-6 [R] Heroic depth.</strong>  A little deeper than realistic: major
+fissures 2–5 mm deep, pronounced changes of plane, strong projecting
+edges, so the face carries dramatic shadow.  Not cartoonish.</li>
+<li>
+<strong>REQ-ROCK-7 [R] No pattern, no repetition.</strong>  No regular blocks or
+courses, no repeated column widths, no regular joint spacing.  Two seeds
+look like the same stone, never the same cliff.</li>
+</ul>
+<h3 id="2-5-top-and-foot">
+2.5 Top and foot</h3>
+<ul>
+<li>
+<strong>REQ-TOP-1 [R]</strong> The plateau is ground with the shared dirt texture
+(<code>dirtlab.dirt_relief</code>).  It meets the cliff edge as rock: the tops of
+the cliff's masses show through near the edge.</li>
+<li>
+<strong>REQ-FOOT-1 [R]</strong> The foot is dirt ground with <strong>scree</strong>: fallen blocks
+of the same stone (rocklab-style faceted rocks, 1–8 mm, mixed sizes),
+denser at the cliff base and below fissure mouths, thinning out toward
+the front edge.  The scree never forms a uniform carpet of same-size
+pebbles (a scale marker).</li>
+<li>
+<strong>REQ-FOOT-2 [R]</strong> No vegetation anywhere.</li>
+</ul>
+<h3 id="2-6-parameters-and-diagnostics">
+2.6 Parameters and diagnostics</h3>
+<ul>
+<li>
+<strong>REQ-PAR-1</strong> Named, bounded module constants grouped by stage, with a
+seed.</li>
+<li>
+<strong>REQ-DIAG-1 [S]</strong> Each run prints mesh, heights, overhang and island
+audits, the quiet/fracture/detail area split (REQ-ROCK-3) and timing.</li>
+<li>
+<strong>REQ-DIAG-2</strong> Before handing over an STL, Claude checks it with quick
+renders (oblique, face-on and raking light) as an internal filter only.
+Shawn's eye in a viewer and slicer is the judge.</li>
+</ul>
+<hr />
+<h2 id="3-failure-modes-named-anti-goals">
+3. Failure modes (named anti-goals)</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+#</th>
+<th>
+Failure</th>
+<th>
+Looks like</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+C1</td>
+<td>
+<strong>Stacked boulders</strong></td>
+<td>
+rounded lumps piled on each other; no structural masses</td>
+</tr>
+<tr>
+<td>
+C2</td>
+<td>
+<strong>Organ pipes</strong></td>
+<td>
+regular vertical columns (basalt)</td>
+</tr>
+<tr>
+<td>
+C3</td>
+<td>
+<strong>Layer cake</strong></td>
+<td>
+continuous even horizontal bedding (sandstone)</td>
+</tr>
+<tr>
+<td>
+C4</td>
+<td>
+<strong>Masonry</strong></td>
+<td>
+blocks in courses, right angles everywhere: a wall, not a cliff</td>
+</tr>
+<tr>
+<td>
+C5</td>
+<td>
+<strong>Gravel</strong></td>
+<td>
+every square millimetre fractured; no quiet faces; no sense of scale</td>
+</tr>
+<tr>
+<td>
+C6</td>
+<td>
+<strong>Noise blob</strong></td>
+<td>
+a melted, lumpy surface with no planes or edges</td>
+</tr>
+<tr>
+<td>
+C7</td>
+<td>
+<strong>Wallpaper</strong></td>
+<td>
+a visible repeat or a tiled texture</td>
+</tr>
+<tr>
+<td>
+C8</td>
+<td>
+<strong>Paint-on</strong></td>
+<td>
+relief too shallow to cast shadow; a flat wall with scratches</td>
+</tr>
+<tr>
+<td>
+C9</td>
+<td>
+<strong>Cartoon</strong></td>
+<td>
+absurdly deep, jagged or spiky</td>
+</tr>
+<tr>
+<td>
+C10</td>
+<td>
+<strong>Scale marker</strong></td>
+<td>
+uniform pebbles, regular bedding or same-size blocks that announce a size</td>
+</tr>
+<tr>
+<td>
+C11</td>
+<td>
+<strong>Ruled edge</strong></td>
+<td>
+a straight top edge or a straight foot line</td>
+</tr>
+<tr>
+<td>
+C12</td>
+<td>
+<strong>Sawn end</strong></td>
+<td>
+a flat cut face at the tile edge</td>
+</tr>
+<tr>
+<td>
+C13</td>
+<td>
+<strong>Unprintable</strong></td>
+<td>
+shelves overhanging past 45°, slot cracks, needles, islands</td>
+</tr>
+</tbody>
+</table></div>
+<p>
+<strong>Pre-paint test:</strong> the bare grey print reads as a heroic cliff.</p>
+<hr />
+<h2 id="4-acceptance-scenes">
+4. Acceptance scenes</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>
+Scene</th>
+<th>
+Content</th>
+<th>
+Passes when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<strong>S1: face study</strong></td>
+<td>
+the cliff face only, on a flat base</td>
+<td>
+§2.4 holds; judged first, before top, foot or sweeps.</td>
+</tr>
+<tr>
+<td>
+<strong>S2: full tile</strong></td>
+<td>
+2 × 2, seed 1, with top and foot</td>
+<td>
+All of §2 holds; no C-mode is visible.</td>
+</tr>
+<tr>
+<td>
+<strong>S3: seed sweep</strong></td>
+<td>
+S2 at seeds 1–6</td>
+<td>
+At least 5 of 6 pass; none looks like another.</td>
+</tr>
+<tr>
+<td>
+<strong>S4: long run</strong></td>
+<td>
+3 tiles of different seeds side by side</td>
+<td>
+One continuous cliff; no visible joints (REQ-RUN-3).</td>
+</tr>
+<tr>
+<td>
+<strong>S5: print</strong></td>
+<td>
+S2 on FDM, primed, drybrushed</td>
+<td>
+Fissures stay dark, faces catch the highlight, nothing broke or needed support.</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="5-open-questions">
+5. Open questions</h2>
+<ol>
+<li>
+<strong>Where the face stands on the tile.</strong>  Proposed: the face line at about
+40% of the depth from the front, giving a foot strip of ≈ 25 mm and a
+plateau of ≈ 40 mm.  A narrower foot reads more like a wall section;
+a wider one gives more room for scree.</li>
+<li>
+<strong>Plateau shape.</strong>  Flat with the dirt texture, or gently rolling (a
+little of grasslab's hills)?</li>
+<li>
+<strong>Standard end section (REQ-RUN-3).</strong>  A fixed section for every seed
+means the ends always match; the price is that every tile's ends look
+alike for the last ≈ 5 mm.</li>
+<li>
+<strong>Reuse.</strong>  The face could be built from the shared stone primitives
+(<code>src/dharmatiles/stone/</code>, as the fieldstone walls do) or from scratch.
+That is a design decision, settled in design.html.</li>
+</ol>
+
+</article>
+</div>
+</body>
+</html>
