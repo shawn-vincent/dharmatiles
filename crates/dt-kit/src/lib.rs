@@ -31,7 +31,8 @@
 //!
 //! P5 adds the forms ([`form`]: level sets, hulls, solids from meshes,
 //! box clips, the common stone relief and 3D noise) that walls, floors
-//! and trees are made of.
+//! and trees are made of, and [`rays`] (first hits and containment over
+//! dt-geom's ray trait, for the leaf placer).
 //!
 //! Kernel rules (R1, R2, R9, from `dt_geom::source`): every leaf solid takes
 //! a [`Slot`] reserved in sequence from the scene's block, so its source ID
@@ -44,6 +45,7 @@ mod audit;
 mod field;
 pub mod form;
 mod outline;
+pub mod rays;
 mod render;
 mod scene;
 mod shape;
