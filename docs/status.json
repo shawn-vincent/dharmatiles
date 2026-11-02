@@ -75,10 +75,10 @@
    "order": 40,
    "body": "rust",
    "area": "Rust P3",
-   "state": "running",
-   "title": "P3: rocks and water pass parity; tile twins next",
-   "detail": "Rocks, water and dirt stones built and within tolerance at seeds 1–4 (water tile 0.9 s, edge error 0.016 mm). Next: the 11 water tile twins, CI, docs, reviews.",
-   "updated": "2026-11-02T16:54:36-05:00"
+   "state": "waiting",
+   "title": "P3 rocks and water: built, waiting for Shawn",
+   "detail": "Rocks and water pass parity at seeds 1–4; edge within 0.016 mm; water tile 0.9 s. 11 water twins, review fixes in, CI green. Dirt stones miss one metric by a hair (1.203 vs ±20%). Waiting for Shawn's sign-offs and a print of two butted water tiles. Preview not built.",
+   "updated": "2026-11-02T22:37:46Z"
   },
   {
    "id": "p5",
