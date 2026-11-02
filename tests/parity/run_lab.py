@@ -247,6 +247,73 @@ def build_flat(seed: int):
     return mesh, painted, (surf.tile_w, surf.tile_h), 5.0, {"peg_mm": peg}, dt
 
 
+STONE_RGB = (186, 184, 176)
+
+
+def build_masonry(family: str, seed: int):
+    """A wall or floor layer (walls/) at `seed` on a flat 5 mm ground slab
+    on the DungeonBlocks base, in memory, like the P5 lead's wall_py.py.
+    Walls stand along the north edge (the Rust test tiles'
+    ``along="north"``); the floor covers the tile.  Lab stats: units laid
+    (``wall.units`` / ``floor.units``) and courses, as the Rust notes."""
+    import manifold3d as m3d
+    from dharmatiles.bases import dungeonblocks as db
+    from dharmatiles.core.config import BaseConfig, SurfaceConfig
+    from dharmatiles.core.mesh import make_heightmap_solid
+    from dharmatiles.core.tile import TileScene
+    from dharmatiles import walls as W
+    surf = SurfaceConfig(cols=1, rows=1, seed=seed)
+    z = np.full((surf.grid_h, surf.grid_w), 5.0)
+    scene = TileScene(surface=surf, terrain_z=z, terrain_support_z=z.copy(),
+                      obstacle_mask=np.zeros(z.shape, bool))
+    north = [(1.0, 1.0), (0.0, 1.0)]
+    cls, kw, kind = {
+        "wall-cut-stone": (W.CutStoneWall, {"spine": north}, "wall"),
+        "wall-brick": (W.BrickWall, {"spine": north}, "wall"),
+        "wall-regular-brick": (W.RegularBrickWall, {"spine": north}, "wall"),
+        "wall-fieldstone": (W.FieldstoneWall, {"spine": north}, "wall"),
+        "floor-stone": (W.StoneFloor, {"texture": "dressed"}, "floor"),
+    }[family]
+    count = {"units": 0, "courses": set()}
+
+    class Counted(cls):
+        def _cells(self, *a, **k):
+            cells = super()._cells(*a, **k)
+            count["courses"] = {c.key[0] for c in cells}
+            return cells
+
+        def _place_block(self, *a, **k):
+            b = super()._place_block(*a, **k)
+            count["units"] += b is not None
+            return b
+
+    t0 = time.perf_counter()
+    parts = Counted(seed=seed, **kw).apply(scene)
+    dt = time.perf_counter() - t0
+    slab = make_heightmap_solid(z, surf.tile_w, surf.tile_h, 0.0)
+    cfg = BaseConfig()
+    peg = db.select_peg_height(z, cfg, float(slab.bounds[1, 2]))
+    base = db.make_base(surf, peg, cfg)
+
+    def solid(m):
+        return m3d.Manifold(mesh=m3d.Mesh(vert_properties=np.asarray(m.vertices, np.float32),
+                                          tri_verts=np.asarray(m.faces, np.uint32)))
+    u = solid(slab) + solid(base)
+    for p in parts:
+        u = u + solid(p)
+    u = u.to_mesh()
+    mesh = trimesh.Trimesh(np.asarray(u.vert_properties)[:, :3], np.asarray(u.tri_verts))
+    painted = mesh.copy()     # the ground is flat at 5 mm: above it is masonry
+    zc = mesh.triangles_center[:, 2]
+    fc = np.tile([*CONNECTOR_RGB, 255], (len(mesh.faces), 1))
+    fc[zc > 0.0, :3] = EARTH_RGB
+    fc[zc > 5.05, :3] = STONE_RGB
+    painted.visual.face_colors = fc
+    lab = {f"{kind}.units": count["units"], f"{kind}.courses": len(count["courses"]),
+           f"{kind}.overhang_reach_mm2": float(mesh.area_faces[overhang_mask(mesh)].sum())}
+    return mesh, painted, (surf.tile_w, surf.tile_h), 5.0, lab, dt
+
+
 LEAF_RGB = (84, 140, 62)
 
 
@@ -334,11 +401,14 @@ def tree_metrics(mesh: trimesh.Trimesh, ground: float) -> dict:
     return {"tree_height_mm": h, "crown_width_mm": w, "tree_volume_mm3": vol}
 
 
+MASONRY = ("wall-cut-stone", "wall-brick", "wall-regular-brick", "wall-fieldstone", "floor-stone")
 LABS = {"dirt": build_dirt, "dirt-stones": lambda seed: build_dirt(seed, stones=True),
-        "flat": build_flat, "tree": build_tree}
+        "flat": build_flat, "tree": build_tree,
+        **{m: (lambda seed, m=m: build_masonry(m, seed)) for m in MASONRY}}
 # What the Python column is, in the captions.
 LAB_NOTE = {"dirt": "dirtlab, stones off (P3)", "dirt-stones": "dirtlab with stones",
-            "flat": "flat 1×1 twin", "tree": "library Tree, 1×1 tile params, leaves off"}
+            "flat": "flat 1×1 twin", "tree": "library Tree, 1×1 tile params, leaves off",
+            **{m: f"walls/ {m} on a flat 5 mm slab" for m in MASONRY}}
 
 
 # ── Parity verdict (plan.html, "The parity harness") ────────────────────────
@@ -382,10 +452,26 @@ def _dig(d, path):
     return float(d)
 
 
+def _masonry_parity(kind: str) -> list:
+    """Walls and floors: the masonry statistics (the Rust tile stands on
+    dirt, the Python one on a flat slab, so whole-tile volume and faces
+    are reported, not judged).  Rust must pass its own audit (0 mm²)."""
+    return [
+        ("units laid", ("lab", f"{kind}.units"), "rel", 0.25),
+        ("courses", ("lab", f"{kind}.courses"), "rel", 0.25),
+        ("faces (whole tile)", ("faces",), "info", None),
+        ("volume mm³ (whole tile)", ("volume_mm3",), "info", None),
+        ("overhang mm² (layer reach)", ("overhang_mm2",), "info", None),
+        ("build s", ("build_s",), "info", None),
+    ]
+
+
 def parity_verdict(look: str, py: dict, rs: dict) -> dict:
     """Python vs Rust means over the seeds, per PARITY row; writes nothing."""
     rows = []
-    for name, path, test, tol in PARITY_OF.get(look, PARITY):
+    table = (_masonry_parity(look.split("-")[0]) if look in MASONRY
+             else PARITY_OF.get(look, PARITY))
+    for name, path, test, tol in table:
         pv = [v for v in (_dig(py[s], path) for s in py) if v is not None]
         rv = [v for v in (_dig(rs[s], path) for s in rs) if v is not None]
         pm = float(np.mean(pv)) if pv else None
@@ -501,8 +587,12 @@ def font(n):
 
 
 def caption(who, met, build_s):
-    return (f"{who}: bare {met['bare_fraction']:.3f} · rocks {met['rock_count']} "
-            f"{list(met['rock_hist'].values())} · {met['faces']:,} faces · bodies {met['bodies']} · "
+    lab = met.get("lab") or {}
+    units = next((k for k in lab if k.endswith(".units")), None)
+    what = (f"units {lab[units]:g} · courses {lab.get(units.replace('units', 'courses'), 0):g}"
+            if units else
+            f"bare {met['bare_fraction']:.3f} · rocks {met['rock_count']} {list(met['rock_hist'].values())}")
+    return (f"{who}: {what} · {met['faces']:,} faces · bodies {met['bodies']} · "
             f"watertight {met['watertight']} · vol {met['volume_mm3']:.1f} mm³ · "
             f"see-through {met['see_through_cells']} · texture ok {met['texture_ok_fraction']:.1%} · "
             f"overhang {met['overhang_mm2']:.2f} mm² (red) · build {build_s:.2f}s")
