@@ -389,5 +389,4 @@ stl/
   ol/            generated STL output — OpenLOCK base system (ol)
 docs/            design notes, architecture review transcripts, session memory
 docs/meta/history/  architecture review transcripts
-docs/memory/     persistent session memory (MEMORY.md index)
 ```

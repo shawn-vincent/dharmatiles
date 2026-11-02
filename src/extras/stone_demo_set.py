@@ -24,22 +24,22 @@ import time
 sys.path.insert(0, 'src')
 
 SCENES = {
-    'rocks-weathering':  ('docs/rocks/weathering-sweep.tile.py',   (45, -135)),
-    'rocks-showcase':    ('docs/rocks/stone-showcase.tile.py',     (45, -135)),
-    'rocks-field':       ('docs/rocks/stone-field.tile.py',        (45, -135)),
-    'wall-cut-textures': ('docs/walls/walls-e5-textures.tile.py',  (30, -160)),
-    'wall-cut-corner':   ('docs/walls/walls-e2-corner.tile.py',    (20, 135)),
-    'wall-fieldstone':   ('docs/walls/walls-e6-fieldstone.tile.py', (20, 135)),
-    'wall-brick':        ('docs/walls/walls-e8-brick.tile.py',     (20, 135)),
-    'wall-tops':         ('docs/walls/walls-e9-tops.tile.py',      (25, -155)),
-    'wall-ruins':        ('docs/walls/walls-e10-ruins.tile.py',    (25, -155)),
-    'floor-stone':       ('docs/walls/walls-e11-floor.tile.py',    (40, -140)),
-    'floor-drystone':    ('docs/walls/walls-e12-drystone-floor.tile.py', (40, -140)),
-    'wall-openings':     ('docs/walls/walls-e13-openings.tile.py', (18, -155)),
-    'floor-hatch':       ('docs/walls/walls-e14-hatch.tile.py',    (50, -140)),
-    'wall-leaves':       ('docs/walls/walls-e15-leaves.tile.py',   (18, -155)),
-    'wall-variants':     ('docs/walls/walls-e7-variants.tile.py',  (30, -160)),
-    'wall-meadow':       ('docs/walls/walls-e4-meadow.tile.py',    (35, -155)),
+    'rocks-weathering':  ('src/experiments/tiles/rocks/weathering-sweep.tile.py',   (45, -135)),
+    'rocks-showcase':    ('src/experiments/tiles/rocks/stone-showcase.tile.py',     (45, -135)),
+    'rocks-field':       ('src/experiments/tiles/rocks/stone-field.tile.py',        (45, -135)),
+    'wall-cut-textures': ('src/experiments/tiles/walls/walls-e5-textures.tile.py',  (30, -160)),
+    'wall-cut-corner':   ('src/experiments/tiles/walls/walls-e2-corner.tile.py',    (20, 135)),
+    'wall-fieldstone':   ('src/experiments/tiles/walls/walls-e6-fieldstone.tile.py', (20, 135)),
+    'wall-brick':        ('src/experiments/tiles/walls/walls-e8-brick.tile.py',     (20, 135)),
+    'wall-tops':         ('src/experiments/tiles/walls/walls-e9-tops.tile.py',      (25, -155)),
+    'wall-ruins':        ('src/experiments/tiles/walls/walls-e10-ruins.tile.py',    (25, -155)),
+    'floor-stone':       ('src/experiments/tiles/walls/walls-e11-floor.tile.py',    (40, -140)),
+    'floor-drystone':    ('src/experiments/tiles/walls/walls-e12-drystone-floor.tile.py', (40, -140)),
+    'wall-openings':     ('src/experiments/tiles/walls/walls-e13-openings.tile.py', (18, -155)),
+    'floor-hatch':       ('src/experiments/tiles/walls/walls-e14-hatch.tile.py',    (50, -140)),
+    'wall-leaves':       ('src/experiments/tiles/walls/walls-e15-leaves.tile.py',   (18, -155)),
+    'wall-variants':     ('src/experiments/tiles/walls/walls-e7-variants.tile.py',  (30, -160)),
+    'wall-meadow':       ('src/experiments/tiles/walls/walls-e4-meadow.tile.py',    (35, -155)),
 }
 
 
