@@ -166,6 +166,14 @@ impl Solid {
     pub fn volume(&self) -> f64 {
         self.0.volume()
     }
+
+    /// Its surface as a triangle mesh, to place things on (leaves on a
+    /// crown). A query: what is placed is built as its own form and
+    /// combined with kit operations; the mesh is never re-imported.
+    #[must_use]
+    pub fn mesh(&self) -> TriMesh {
+        self.0.to_tri_mesh()
+    }
 }
 
 /// One source slot: an original ID and its own face-ID range
@@ -182,6 +190,15 @@ pub struct Slots {
     block: IdBlock,
     first: u32,
     len: u32,
+}
+
+impl Slot {
+    /// Its original (source) ID: the `run_original_id` of the triangles
+    /// it made, in any mesh built from it.
+    #[must_use]
+    pub fn id(&self) -> u32 {
+        self.id
+    }
 }
 
 impl Slots {

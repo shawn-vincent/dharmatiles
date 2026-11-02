@@ -295,8 +295,8 @@ static TREE: &[Control] = &[
                 "clumps of foliage, one per branch end",
             )
             .limits(8.0, 200.0)
-            .default("200"),
-            c("clump-size", Axis::Mm, "size of each clump"),
+            .default("32"),
+            c("clump-size", Axis::Mm, "size of each clump").default("5.5"),
             c(
                 "branching",
                 Axis::Word,

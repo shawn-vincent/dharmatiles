@@ -650,7 +650,7 @@ impl Body {
 /// The connected bodies of a mesh (by shared, welded vertices), in order
 /// of their first triangle.
 #[allow(clippy::cast_possible_truncation, reason = "vertex indices fit u32")]
-fn split_bodies(m: &TriMesh) -> Vec<TriMesh> {
+pub(super) fn split_bodies(m: &TriMesh) -> Vec<TriMesh> {
     let rep = weld(m);
     let mut parent: Vec<usize> = (0..m.positions.len()).collect();
     fn find(p: &mut [usize], mut i: usize) -> usize {

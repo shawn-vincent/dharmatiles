@@ -1,0 +1,18 @@
+// The tree's parity tile: the 1×1 grass-tree tile's tree
+// (src/tiles/ground/1x1-grass-tree.tile.py) alone on flat ground, built
+// by `cargo xtask parity tree` at seeds 1–4 beside the Python Tree layer
+// run in memory on a flat 5 mm slab.  Grass comes in P4.
+
+tile tree size="1x1" seed=42 {
+    about "One tree on flat ground: the 1×1 grass-tree tile without its grass and rocks."
+    stack {
+        ground
+        tree height=35 {
+            trunk height=30
+            crown width=24 clumps=32 shape=round branching=normal
+            // Leaves off until the leaf placer's blades pass the overhang
+            // gate (they add 105–170 mm² per tree): clumps only.
+            leaves clumps-only
+        }
+    }
+}

@@ -1,0 +1,18 @@
+// The 2×2 grass-tree tile's tree (src/tiles/ground/2x2-grass-tree.tile.py)
+// on bare earth instead of grass (P4), anywhere on the tile.
+
+tile tree-dirt size="2x2" seed=84 {
+    about "One 40 mm tree on bare earth, anywhere on a 2×2 tile."
+    stack {
+        dirt bumps=2 bump-size=14 {
+            clods some
+        }
+        tree height=40 {
+            trunk height=30
+            crown width=30 clumps=32 shape=round branching=normal
+            // Leaves off until the leaf placer's blades pass the overhang
+            // gate (they add 105–170 mm² per tree): clumps only.
+            leaves clumps-only
+        }
+    }
+}
