@@ -370,7 +370,7 @@ KINDS.dirt = {
     let h=`<h2>${K.title}</h2><p class="lede">${K.lede}</p><h3>Family tree</h3>`;
     K.lanes.forEach(([name,ids])=>{ h+=`<div class="lane"><div class="lane-name">${name}</div><div class="chain">`+ids.map((id,i)=>`${i?'<span class="arrow" aria-hidden="true">→</span>':""}<button class="vnode s-${K.v[id].s}" data-v="${id}" aria-pressed="false">${id.includes("_")?"":id+" · "}${K.v[id].n}</button>`).join("")+`</div></div>`; });
     h+=`<div class="detail" id="det-${k}"></div>`;
-    if(K.strip&&K.strip.length){ h+=`<h3>Side by side</h3><div class="grid2 strip">`+K.strip.map(([f,c])=>`<figure class="shot"><img src="../../analysis/rust-rewrite/${IMG+f}" alt="${esc(c)}" loading="lazy"><figcaption>${c}</figcaption></figure>`).join("")+`</div>`; }
+    if(K.strip&&K.strip.length){ h+=`<h3>Side by side</h3><div class="grid2 strip">`+K.strip.map(([f,c])=>`<figure class="shot"><img src="${IMG+f}" alt="${esc(c)}" loading="lazy"><figcaption>${c}</figcaption></figure>`).join("")+`</div>`; }
     h+=`<h3>Comparison</h3><div class="tbl"><table><thead><tr>`+K.table[0].map(c=>`<th>${c}</th>`).join("")+`</tr></thead><tbody>`+K.table.slice(1).map(r=>`<tr>`+r.map((c,i)=>i?`<td class="small">${c}</td>`:`<td><strong>${c}</strong></td>`).join("")+`</tr>`).join("")+`</tbody></table></div>`;
     h+=`<h3>What is different about the one Shawn likes</h3><div class="newest"><p>${K.newest}</p></div>`;
     h+=`<h3>One definition instead of many variants</h3><p class="small">Mechanisms the variants share: `+K.shared.map(s=>`<span class="chip" style="color:var(--muted)">${s}</span>`).join(" ")+`</p><pre><code></code></pre>`;
@@ -381,7 +381,7 @@ KINDS.dirt = {
   function pick(k,id){ const K=KINDS[k], V=K.v[id]; const sec=document.getElementById("sec-"+k);
     sec.querySelectorAll(".vnode").forEach(n=>n.setAttribute("aria-pressed",n.dataset.v===id));
     const labels={loved:"current · loved",current:"current",superseded:"superseded",rejected:"rejected"};
-    const img=V.img?`<figure class="shot"><img src="../../analysis/rust-rewrite/${IMG+V.img}" alt="${esc(V.n)} render"><figcaption>${V.img}</figcaption></figure>`:`<div class="noimg">No output survives for this variant.</div>`;
+    const img=V.img?`<figure class="shot"><img src="${IMG+V.img}" alt="${esc(V.n)} render"><figcaption>${V.img}</figcaption></figure>`:`<div class="noimg">No output survives for this variant.</div>`;
     const pipe=`<div class="pipe" role="list" aria-label="pipeline">`+V.steps.map((s,i)=>`${i?'<span class="ar" aria-hidden="true">→</span>':""}<div class="st" role="listitem"><b>${i+1}</b>${s}</div>`).join("")+`</div>`;
     document.getElementById("det-"+k).innerHTML=`<div>${img}</div><div><div class="eyebrow">${id.includes("_")?"":id+" · "}${V.d}</div><h3 style="margin-top:6px">${V.n} <span class="status st-${V.s}">${labels[V.s]}</span></h3><p class="small muted" style="margin-bottom:0">How it worked</p>${pipe}<p><strong>Look.</strong> ${V.look}</p>${V.q?`<p class="verdict-q">“${V.q}”</p>`:""}${V.why?`<p class="small">${V.why}</p>`:""}</div>`; }
   function show(k){ order.forEach(o=>{ document.getElementById("sec-"+o).hidden=o!==k; }); tabs.querySelectorAll("button").forEach(b=>{ b.setAttribute("aria-pressed",b.dataset.k===k); b.setAttribute("aria-selected",b.dataset.k===k); }); }
