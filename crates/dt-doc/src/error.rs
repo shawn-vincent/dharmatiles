@@ -5,6 +5,9 @@ use std::sync::Arc;
 
 use miette::{Diagnostic, LabeledSpan, NamedSource, SourceCode, SourceSpan};
 
+/// A named document text, shared by its diagnostics.
+pub type Src = Arc<NamedSource<String>>;
+
 /// One problem in a document, pointing at the text that caused it.
 #[derive(Debug, Clone)]
 pub struct DocError {
@@ -18,12 +21,12 @@ pub struct DocError {
     pub label: String,
     /// What to do about it.
     pub help: Option<String>,
-    src: Arc<NamedSource<String>>,
+    src: Src,
 }
 
 impl DocError {
     pub(crate) fn new(
-        src: &Arc<NamedSource<String>>,
+        src: &Src,
         code: &'static str,
         span: SourceSpan,
         message: impl Into<String>,
@@ -37,6 +40,12 @@ impl DocError {
             help: None,
             src: Arc::clone(src),
         }
+    }
+
+    /// The text it points into, named as decoded.
+    #[must_use]
+    pub fn src(&self) -> &Src {
+        &self.src
     }
 
     pub(crate) fn maybe_help(mut self, help: Option<String>) -> Self {

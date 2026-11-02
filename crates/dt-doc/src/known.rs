@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::model::{Document, Num};
+use crate::model::{Definition, Document};
 use crate::schema::{Control, Kind};
 
 /// The text of library/parts/levels.kdl, compiled in.
@@ -40,11 +40,29 @@ pub struct ParamInfo {
     pub control: Option<&'static Control>,
 }
 
+impl From<&Definition> for DefInfo {
+    fn from(d: &Definition) -> Self {
+        Self {
+            params: d
+                .params
+                .iter()
+                .map(|p| ParamInfo {
+                    name: p.name.value.clone(),
+                    has_default: p.default.is_some(),
+                    control: p.control,
+                })
+                .collect(),
+            kind: d.summary,
+            thing: d.thing,
+        }
+    }
+}
+
 /// Definitions and levels visible to a file.
 #[derive(Debug, Default, Clone)]
 pub struct Known {
     files: BTreeMap<String, BTreeMap<String, DefInfo>>,
-    levels: Vec<(String, Num)>,
+    levels: Vec<(String, f64)>,
 }
 
 impl Known {
@@ -63,17 +81,27 @@ impl Known {
         let mut k = Self::new();
         let doc = crate::decode(PRELUDE_NAME, PRELUDE, &k)
             .unwrap_or_else(|e| panic!("the prelude must decode: {e:?}"));
-        k.add_levels(&doc);
+        k.add_levels(&doc)
+            .unwrap_or_else(|e| panic!("the prelude's levels must resolve: {e}"));
         k
     }
 
-    /// Make a file's file-level levels visible to every file (the prelude).
-    pub fn add_levels(&mut self, doc: &Document) {
+    /// Make a file's file-level levels visible to every file (the
+    /// prelude), each resolved to mm against those before it.
+    ///
+    /// # Errors
+    /// The first level that is not one number (a range), naming it.
+    pub fn add_levels(&mut self, doc: &Document) -> Result<(), String> {
         for l in &doc.levels {
+            let mm = l
+                .value
+                .value
+                .mm(&self.levels)
+                .map_err(|e| format!("level `{}`: {e}", l.name.value))?;
             self.levels.retain(|(n, _)| *n != l.name.value);
-            self.levels
-                .push((l.name.value.clone(), l.value.value.clone()));
+            self.levels.push((l.name.value.clone(), mm));
         }
+        Ok(())
     }
 
     /// Register a decoded file under `key` (a [`crate::model::Use::key`]).
@@ -81,29 +109,14 @@ impl Known {
         let defs = doc
             .definitions
             .iter()
-            .map(|d| {
-                let info = DefInfo {
-                    params: d
-                        .params
-                        .iter()
-                        .map(|p| ParamInfo {
-                            name: p.name.value.clone(),
-                            has_default: p.default.is_some(),
-                            control: p.control,
-                        })
-                        .collect(),
-                    kind: d.summary,
-                    thing: d.thing,
-                };
-                (d.name.value.clone(), info)
-            })
+            .map(|d| (d.name.value.clone(), DefInfo::from(d)))
             .collect();
         self.files.insert(key.to_owned(), defs);
     }
 
-    /// The standard levels, with their values as written.
+    /// The standard levels, in mm at the reference, in the order written.
     #[must_use]
-    pub fn levels(&self) -> &[(String, Num)] {
+    pub fn levels(&self) -> &[(String, f64)] {
         &self.levels
     }
 

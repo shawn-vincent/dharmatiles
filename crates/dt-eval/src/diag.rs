@@ -4,10 +4,10 @@
 use std::fmt;
 use std::sync::Arc;
 
-use miette::{Diagnostic, LabeledSpan, NamedSource, SourceCode, SourceSpan};
+use dt_doc::DocError;
+use miette::{Diagnostic, LabeledSpan, SourceCode, SourceSpan};
 
-/// A named document text, shared by its diagnostics.
-pub type Src = Arc<NamedSource<String>>;
+pub use dt_doc::error::Src;
 
 /// One problem, pointing at the text that caused it.
 #[derive(Debug, Clone)]
@@ -80,6 +80,14 @@ impl Diag {
     }
 }
 
+impl From<&DocError> for Diag {
+    /// A dt-doc error, at the text it was decoded from.
+    fn from(e: &DocError) -> Self {
+        Self::at(e.src(), e.span, e.code, e.message.clone(), e.label.clone())
+            .maybe_help(e.help.clone())
+    }
+}
+
 impl fmt::Display for Diag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.message)
@@ -110,29 +118,4 @@ impl Diagnostic for Diag {
             *span,
         ))))
     }
-}
-
-/// The closest of `options` to `word`, if it is close enough to be a typo.
-#[must_use]
-pub fn did_you_mean<'a>(word: &str, options: impl IntoIterator<Item = &'a str>) -> Option<String> {
-    let lev = |a: &str, b: &str| {
-        let b: Vec<char> = b.chars().collect();
-        let mut row: Vec<usize> = (0..=b.len()).collect();
-        for (i, ca) in a.chars().enumerate() {
-            let mut prev = row[0];
-            row[0] = i + 1;
-            for (j, cb) in b.iter().enumerate() {
-                let cur = row[j + 1];
-                row[j + 1] = (prev + usize::from(ca != *cb)).min(row[j] + 1).min(cur + 1);
-                prev = cur;
-            }
-        }
-        row[b.len()]
-    };
-    options
-        .into_iter()
-        .map(|o| (lev(word, o), o))
-        .filter(|(d, o)| *d <= (o.len() / 3).max(1))
-        .min()
-        .map(|(_, o)| o.to_owned())
 }

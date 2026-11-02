@@ -161,6 +161,21 @@ impl Control {
         self.words.iter().find(|w| w.word == word)
     }
 
+    /// The default as a decoded value: one of its words, or a number (a
+    /// range for some); `None` without a default.
+    #[must_use]
+    pub fn default_value(&'static self) -> Option<crate::model::Value> {
+        use crate::model::{Num, Value};
+        if self.default.is_empty() {
+            return None;
+        }
+        if let Some(w) = self.word(self.default) {
+            return Some(Value::Word(w));
+        }
+        let expr = crate::expr::parse(self.default).ok()?;
+        Some(Value::Num(Num { expr, unit: None }))
+    }
+
     /// True for a group: sub-controls only, no value of its own.
     #[must_use]
     pub fn is_group(&self) -> bool {
@@ -357,6 +372,18 @@ mod tests {
         assert_eq!(did_you_mean("per-sqare", names), Some("per-square"));
         assert_eq!(did_you_mean("hieght", names), Some("height"));
         assert_eq!(did_you_mean("wobble", names), None);
+    }
+
+    #[test]
+    fn defaults_decode_as_values() {
+        use crate::model::Value;
+        let tree = look("tree").unwrap();
+        let shape = tree.control("crown").unwrap().sub("shape").unwrap();
+        assert!(matches!(shape.default_value(), Some(Value::Word(w)) if w.word == "round"));
+        let height = tree.control("height").unwrap();
+        assert!(matches!(height.default_value(), Some(Value::Num(_))));
+        let level = look("ground").unwrap().control("level").unwrap();
+        assert!(matches!(level.default_value(), Some(Value::Num(_))));
     }
 
     #[test]

@@ -12,8 +12,8 @@ use std::sync::Arc;
 use kdl::{KdlDocument, KdlEntry, KdlNode};
 use miette::{NamedSource, SourceSpan};
 
-use crate::error::DocError;
-use crate::known::{DefInfo, Known, ParamInfo};
+use crate::error::{DocError, Src};
+use crate::known::{DefInfo, Known};
 use crate::model::{
     DefKind, Definition, Document, EdgeRule, Edges, Level, Line, Param, Printer, Region, Source,
     Spanned, TileHeader, Use,
@@ -83,7 +83,7 @@ pub(crate) struct Ctx {
 }
 
 pub(crate) struct Decoder<'k> {
-    pub src: Arc<NamedSource<String>>,
+    pub src: Src,
     pub errors: Vec<DocError>,
     pub known: &'k Known,
     /// Every `define` in this file, decoded or not yet.
@@ -147,7 +147,7 @@ fn refs(node: &KdlNode, names: &HashSet<String>, out: &mut Vec<String>) {
 }
 
 impl<'k> Decoder<'k> {
-    fn new(src: Arc<NamedSource<String>>, known: &'k Known) -> Self {
+    fn new(src: Src, known: &'k Known) -> Self {
         Self {
             src,
             errors: Vec::new(),
@@ -251,7 +251,7 @@ impl<'k> Decoder<'k> {
             };
             if let Some(d) = self.definition(node, &file_levels) {
                 if matches!(d.kind, DefKind::Define) {
-                    self.local.insert(d.name.value.clone(), info(&d));
+                    self.local.insert(d.name.value.clone(), DefInfo::from(&d));
                 }
                 decoded.push((i, d));
             }
@@ -1175,22 +1175,5 @@ impl<'k> Decoder<'k> {
             rules,
             span: n.span(),
         })
-    }
-}
-
-/// What a call needs to know about a decoded definition.
-fn info(d: &Definition) -> DefInfo {
-    DefInfo {
-        params: d
-            .params
-            .iter()
-            .map(|p| ParamInfo {
-                name: p.name.value.clone(),
-                has_default: p.default.is_some(),
-                control: p.control,
-            })
-            .collect(),
-        kind: d.summary,
-        thing: d.thing,
     }
 }

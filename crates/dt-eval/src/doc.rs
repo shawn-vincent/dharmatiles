@@ -4,19 +4,19 @@
 //! the files they name are decoded first (depth first, each once) and
 //! registered in a [`Known`] under their [`dt_doc::model::Use::key`], then
 //! [`dt_doc::decode`] reads the file itself.  Every dt-doc error becomes a
-//! [`Diag`] at its text.
+//! [`Diag`] at its text, hint and all.
 //!
 //! What this module adds is the evaluator's side of the model:
 //!
 //! - `use` keys resolve through the [`Source`]: a bare path or `lib:` is
 //!   the bundled library, `./` and `../` are the project, relative to the
 //!   using file;
-//! - levels resolve to mm: dt-doc's standard levels (the prelude,
-//!   library/parts/levels.kdl), the file's, the tile's, a definition's;
+//! - levels resolve to mm: on top of dt-doc's standard levels (the
+//!   prelude, already in mm), the file's, the tile's, a definition's;
 //! - definitions are inlined, with their parameters bound to the caller's
 //!   arguments or their defaults;
 //! - every control a built look takes is filled in: as written, or its
-//!   schema default ([`dt_doc::schema::Control::default`]);
+//!   schema default ([`dt_doc::schema::Control::default_value`]);
 //! - the edge contract (library/parts/edges.kdl) is read for every tile;
 //! - anything that needs a look not built yet is set aside in
 //!   [`Tile::pending`]: `check` accepts it, `build` refuses it.
@@ -26,10 +26,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use dt_doc::known::{PRELUDE, PRELUDE_NAME};
-use dt_doc::model::{self, Callee, Definition, Document, Num, Spanned, Use, Value};
+use dt_doc::Known;
+use dt_doc::model::{self, Callee, Definition, Document, Spanned, Use, Value};
 use dt_doc::schema::{Control, Look};
-use dt_doc::{DocError, Known};
 use miette::{NamedSource, SourceSpan};
 
 use crate::diag::{Diag, Src};
@@ -152,34 +151,6 @@ pub fn use_path(from: &str, u: &Use) -> String {
         model::Source::Library(p) => format!("{LIB}{p}.kdl"),
         model::Source::Project(p) => resolve(from, p),
     }
-}
-
-/// A dt-doc error as a [`Diag`] at its text.  An unknown level with no
-/// near miss also lists the standard levels, in mm.
-#[must_use]
-pub fn diag(src: &Src, e: &DocError) -> Diag {
-    let mut help = e.help.clone();
-    if e.code == "dt::unknown-name"
-        && e.message.starts_with("no level")
-        && !help.as_deref().is_some_and(|h| h.contains("did you mean"))
-    {
-        let mut levels: Vec<(String, f64)> = Vec::new();
-        for (n, v) in Known::standard().levels() {
-            if let Ok(mm) = number(&levels, v) {
-                levels.push((n.clone(), mm));
-            }
-        }
-        let names: Vec<String> = levels
-            .iter()
-            .map(|(n, v)| format!("{n} ({v} mm)"))
-            .collect();
-        help = Some(format!(
-            "{}standard levels: {}; a tile adds its own with `levels name=mm`",
-            help.map(|h| format!("{h}; ")).unwrap_or_default(),
-            names.join(", ")
-        ));
-    }
-    Diag::at(src, e.span, e.code, e.message.clone(), e.label.clone()).maybe_help(help)
 }
 
 /// Read the document at `path` and its imports.  A tile is flattened
@@ -316,7 +287,7 @@ impl Reader<'_> {
         let uses = match dt_doc::uses(path, &text) {
             Ok(u) => u,
             Err(es) => {
-                self.errors.extend(es.iter().map(|e| diag(&src, e)));
+                self.errors.extend(es.iter().map(Diag::from));
                 return None;
             }
         };
@@ -344,34 +315,10 @@ impl Reader<'_> {
                 Some(f)
             }
             Err(es) => {
-                self.errors.extend(es.iter().map(|e| diag(&src, e)));
+                self.errors.extend(es.iter().map(Diag::from));
                 None
             }
         }
-    }
-
-    /// dt-doc's standard levels (the prelude) in mm.
-    fn standard(&mut self) -> Vec<(String, f64)> {
-        let mut out: Vec<(String, f64)> = Vec::new();
-        for (name, v) in Known::standard().levels() {
-            match number(&out, v) {
-                Ok(mm) => {
-                    out.retain(|(n, _)| n != name);
-                    out.push((name.clone(), mm));
-                }
-                Err(msg) => {
-                    let prelude: Src = Arc::new(NamedSource::new(PRELUDE_NAME, PRELUDE.to_owned()));
-                    self.errors.push(Diag::at(
-                        &prelude,
-                        SourceSpan::new(0.into(), 0),
-                        "dt::levels",
-                        format!("standard level `{name}`: {msg}"),
-                        "here",
-                    ));
-                }
-            }
-        }
-        out
     }
 
     /// `levels` on top of `base`, each resolved against those before it.
@@ -383,7 +330,7 @@ impl Reader<'_> {
     ) -> Vec<(String, f64)> {
         let mut out = base.to_vec();
         for l in levels {
-            match number(&out, &l.value.value) {
+            match l.value.value.mm(&out) {
                 Ok(mm) => {
                     out.retain(|(n, _)| *n != l.name.value);
                     out.push((l.name.value.clone(), mm));
@@ -404,7 +351,7 @@ impl Reader<'_> {
         let def = file.doc.tile()?;
         let header = def.header()?;
         let src = &file.src;
-        let standard = self.standard();
+        let standard = Known::standard().levels().to_vec();
         let levels = self.levels(src, &standard, file.doc.levels.iter().chain(&def.levels));
         let seed = match header.seed {
             None => 1,
@@ -505,7 +452,7 @@ impl Reader<'_> {
         let levels = self.levels(&f.src, standard, &f.doc.levels);
         let mut out = Vec::new();
         for r in &edges.rules {
-            match number(&levels, &r.level.value) {
+            match r.level.value.mm(&levels) {
                 Ok(mm) => out.push((r.surface.value.clone(), mm)),
                 Err(msg) => self.errors.push(Diag::at(
                     &f.src,
@@ -768,23 +715,32 @@ fn phase_of_control(look: &str, control: &str) -> Option<u8> {
     }
 }
 
-/// A written value for a built look: one number in mm, or a word.
+/// A written value for a built look; a range is not built yet.
 fn value(b: &Bound, levels: &[(String, f64)]) -> Result<dt_looks::Value, Box<Diag>> {
-    let at = |msg: String| Box::new(Diag::at(&b.src, b.value.span, "dt::value", msg, "here"));
-    match &b.value.value {
-        Value::Num(n) if n.expr.is_range() => Err(Box::new(not_yet(
+    if let Value::Num(n) = &b.value.value
+        && n.expr.is_range()
+    {
+        return Err(Box::new(not_yet(
             &b.src,
             b.value.span,
             "a range here is",
             Some(2),
-        ))),
-        Value::Num(n) => number(levels, n).map(dt_looks::Value::Number).map_err(at),
+        )));
+    }
+    look_value(&b.value.value, levels)
+        .map_err(|msg| Box::new(Diag::at(&b.src, b.value.span, "dt::value", msg, "here")))
+}
+
+/// A value as a built look takes it: one number in mm, or a word.
+fn look_value(v: &Value, levels: &[(String, f64)]) -> Result<dt_looks::Value, String> {
+    match v {
+        Value::Num(n) => n.mm(levels).map(dt_looks::Value::Number),
         Value::Word(w) => Ok(dt_looks::Value::Word(w.word.to_owned())),
         Value::Bool(v) => Ok(dt_looks::Value::Word(
             if *v { "#true" } else { "#false" }.to_owned(),
         )),
         Value::Tag(t) | Value::Text(t) => Ok(dt_looks::Value::Word(t.clone())),
-        Value::Param(p) => Err(at(format!("the parameter `{p}` has no value here"))),
+        Value::Param(p) => Err(format!("the parameter `{p}` has no value here")),
     }
 }
 
@@ -801,36 +757,10 @@ fn bind(v: &Spanned<Value>, src: &Src, scope: &Scope) -> Bound {
     }
 }
 
-/// One number, mm at the reference; names are levels (the last wins).
-fn number(levels: &[(String, f64)], n: &Num) -> Result<f64, String> {
-    if n.expr.is_range() {
-        return Err(format!(
-            "`{}` is a range; one number is needed here",
-            n.expr
-        ));
-    }
-    let env = |name: &str| {
-        levels
-            .iter()
-            .rev()
-            .find(|(k, _)| k == name)
-            .map(|(_, v)| *v)
-    };
-    n.sample(&env, 0.0)
-}
-
 /// A control's schema default, resolved; `None` without one (or for a
 /// range, which no built look takes yet).
 fn default_value(c: &'static Control, levels: &[(String, f64)]) -> Option<dt_looks::Value> {
-    if c.default.is_empty() {
-        return None;
-    }
-    if let Some(w) = c.word(c.default) {
-        return Some(dt_looks::Value::Word(w.word.to_owned()));
-    }
-    let expr = dt_doc::expr::parse(c.default).ok()?;
-    let n = Num { expr, unit: None };
-    number(levels, &n).ok().map(dt_looks::Value::Number)
+    look_value(&c.default_value()?, levels).ok()
 }
 
 /// A point in squares, if it is not drawn from a range.

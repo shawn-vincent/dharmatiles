@@ -17,6 +17,7 @@ pub mod source;
 
 use std::path::{Path, PathBuf};
 
+use dt_doc::schema::did_you_mean;
 use dt_kit::{Audit, BuildRecord, Export, Frame, Mask, Material, Printer, Scene, Seed, Stage};
 use dt_looks::{Control, Ctx, Look};
 
@@ -241,7 +242,7 @@ fn area(tile: &Tile, frame: &Frame, e: &doc::Entry, errors: &mut Vec<Diag>) -> M
                 "not a region",
             )
             .maybe_help(
-                diag::did_you_mean(&name.value, tile.regions.iter().map(|r| r.name.as_str()))
+                did_you_mean(&name.value, tile.regions.iter().map(|r| r.name.as_str()))
                     .map(|w| format!("did you mean `{w}`?"))
                     .or_else(|| Some("without in=, a look covers the whole tile".into())),
             ),

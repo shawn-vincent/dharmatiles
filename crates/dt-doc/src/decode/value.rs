@@ -282,10 +282,22 @@ impl Decoder<'_> {
             } else {
                 "parameter"
             };
-            let help = hint_or(
-                did_you_mean(n, cands.iter().copied()),
+            let near = did_you_mean(n, cands.iter().copied());
+            let mut help = hint_or(
+                near,
                 k.map_or_else(|| format!("`{name}` is {}", axis.describe()), describe),
             );
+            let standard = self.known.levels();
+            if axis == Axis::Level && near.is_none() && !standard.is_empty() {
+                let list: Vec<String> = standard
+                    .iter()
+                    .map(|(l, mm)| format!("{l} ({mm} mm)"))
+                    .collect();
+                help = format!(
+                    "{help}; standard levels: {}; a tile adds its own with `levels name=mm`",
+                    list.join(", ")
+                );
+            }
             let text = &self.text()[inner.offset()..inner.offset() + inner.len()];
             let at = text.find(n).map_or(inner, |i| {
                 miette::SourceSpan::new((inner.offset() + i).into(), n.len())

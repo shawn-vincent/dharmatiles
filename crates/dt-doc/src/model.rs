@@ -372,6 +372,28 @@ impl Num {
         })
     }
 
+    /// One number in mm at the reference, its names resolved as levels
+    /// (the last of a name in `levels` wins).
+    ///
+    /// # Errors
+    /// A range (one number is needed), or a name `levels` lacks.
+    pub fn mm(&self, levels: &[(String, f64)]) -> Result<f64, String> {
+        if self.expr.is_range() {
+            return Err(format!(
+                "`{}` is a range; one number is needed here",
+                self.expr
+            ));
+        }
+        let env = |name: &str| {
+            levels
+                .iter()
+                .rev()
+                .find(|(k, _)| k == name)
+                .map(|(_, v)| *v)
+        };
+        self.sample(&env, 0.0)
+    }
+
     /// Low and high ends at the reference.
     ///
     /// # Errors

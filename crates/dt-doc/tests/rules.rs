@@ -74,6 +74,20 @@ fn standard_levels_need_no_use_line() {
 }
 
 #[test]
+fn standard_levels_are_in_mm_and_listed_for_an_unknown_name() {
+    let k = dt_doc::Known::standard();
+    let mm = |n: &str| k.levels().iter().find(|(k, _)| k == n).map(|(_, v)| *v);
+    assert_eq!(mm("ground"), Some(5.0));
+    assert_eq!(mm("wall-top"), Some(33.1));
+    let e = dt_doc::decode("t.kdl", "tile t { stack { dirt level=lava } }", &k).unwrap_err();
+    let help = e[0].help.as_deref().unwrap();
+    assert!(help.contains("wall-top (33.1 mm)"), "{help}");
+    // a near miss is suggested on its own
+    let e = dt_doc::decode("t.kdl", "tile t { stack { dirt level=grund } }", &k).unwrap_err();
+    assert_eq!(e[0].help.as_deref(), Some("did you mean `ground`?"));
+}
+
+#[test]
 fn a_tile_may_override_a_standard_level() {
     snippet("tile t { levels ground=6; stack { dirt level=ground } }");
 }

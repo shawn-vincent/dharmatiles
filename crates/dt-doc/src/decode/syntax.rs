@@ -2,19 +2,13 @@
 //! mistake is one an author makes: KDL v1 keywords, and numbers with a
 //! range, percent, size or unit glued on.
 
-use std::sync::Arc;
+use miette::SourceSpan;
 
-use miette::{NamedSource, SourceSpan};
-
-use crate::error::DocError;
+use crate::error::{DocError, Src};
 
 const KNOWN: [&str; 3] = ["write #", "ranges, percents", "units are not"];
 
-pub(super) fn syntax_errors(
-    src: &Arc<NamedSource<String>>,
-    text: &str,
-    e: &kdl::KdlError,
-) -> Vec<DocError> {
+pub(super) fn syntax_errors(src: &Src, text: &str, e: &kdl::KdlError) -> Vec<DocError> {
     let mut out: Vec<DocError> = Vec::new();
     for diag in &e.diagnostics {
         let from = diag.span.offset().min(text.len());
