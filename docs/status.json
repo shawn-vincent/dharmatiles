@@ -1,94 +1,94 @@
 {
- "rows": [
-  {
-   "id": "python-lib",
-   "order": 5,
-   "body": "python",
-   "area": "Python",
-   "state": "done",
-   "title": "Shipping generator; no active work",
-   "detail": "dharmatiles-gen builds the library tiles from src/tiles/. It stays the shipping code until the Rust cutover (P6).",
-   "updated": "2026-11-02T14:00:00Z"
-  },
-  {
-   "id": "p0",
-   "order": 10,
-   "body": "rust",
-   "area": "Rust P0",
-   "state": "done",
-   "title": "Phase 0 spikes: decided GO (2 Nov 2026)",
-   "detail": "R1, R2, R3, R6 and R9 passed. Determinism level B chosen, contact sheet approved, no vetoes. Branch rust/p0, revision 8 of the study.",
-   "updated": "2026-11-02T14:00:00Z"
-  },
-  {
-   "id": "cliff-r17",
-   "order": 50,
-   "body": "labs",
-   "area": "Cliff",
-   "state": "done",
-   "title": "Round 17 accepted",
-   "detail": "Crisp sparse chips, bold column setbacks, closed core holes (31f7c5d on main).",
-   "updated": "2026-11-02T14:00:00Z"
-  },
-  {
-   "id": "docs",
-   "order": 60,
-   "body": "other",
-   "area": "Docs",
-   "state": "done",
-   "title": "Look pages done, audience first",
-   "detail": "All eight look pages (ground, grass, rocks, cliffs, water, walls, trees, composition) open with the look, its use in a tile and its specification; rulings, requirements, reference photos and history sit lower in a design record. Home and standards pages lead with what a tile user needs.",
-   "updated": "2026-11-02T15:04:37Z"
-  },
-  {
-   "id": "docs-fixes",
-   "order": 100,
-   "body": "other",
-   "area": "Docs",
-   "state": "done",
-   "title": "Docs follow-ups done: 55° audits, live doc paths, red-painted renders",
-   "detail": "rocklab/grasslab/dirtlab audit at 55° (clifflab face report reads the constant); ~40 dead docs/ paths in code repointed; red-overhang heroes on trees, walls and composition; variants page images fixed; 0 broken links.",
-   "updated": "2026-11-02T17:52:30Z"
-  },
-  {
-   "id": "p1",
-   "order": 20,
-   "body": "rust",
-   "area": "Rust P1",
-   "state": "done",
-   "title": "Phase 1 done: flat tile prints from Rust",
-   "detail": "Merged into main (84056d8). Flat 1×1 DB tile: watertight, 0 overhang, 0.1 s, same hashes on macOS and Linux; review findings fixed; Shawn's test print seated and the contact-sheet layout is approved.",
-   "updated": "2026-11-02T16:00:00Z"
-  },
-  {
-   "id": "p2",
-   "order": 30,
-   "body": "rust",
-   "area": "Rust P2",
-   "state": "done",
-   "title": "Phase 2 done: dirt signed off and merged",
-   "detail": "Shawn: “dirt is beautiful”. Rust dirt matches dirtlab at seeds 1–4 (texture 97.8%, clods/pebbles/spectrum within tolerance, 0.8 s, 0 overhang). soil-1x1.kdl replaces 1x1-soil.tile.py; flat test tile now a 3.4 mm slab.",
-   "updated": "2026-11-02T23:00:00Z"
-  },
-  {
-   "id": "p3",
-   "order": 40,
-   "body": "rust",
-   "area": "Rust P3",
-   "state": "waiting",
-   "title": "P3 rocks and water: built, waiting for Shawn",
-   "detail": "Rocks and water pass parity at seeds 1–4; edge within 0.016 mm; water tile 0.9 s. 11 water twins, review fixes in, CI green. Dirt stones miss one metric by a hair (1.203 vs ±20%). Waiting for Shawn's sign-offs and a print of two butted water tiles. Preview not built.",
-   "updated": "2026-11-02T22:37:46Z"
-  },
-  {
-   "id": "p5",
-   "order": 45,
-   "body": "rust",
-   "area": "Rust P5",
-   "state": "in progress",
-   "title": "P5: walls, floors, OpenLOCK, trees",
-   "detail": "Walls, floors, OpenLOCK, tree and leaf placer merged on rust/p5; walls/floors/wood/clumps pass the overhang gate by construction; leaves still overhang; review pass under way",
-   "updated": "2026-11-02T23:17:12Z"
-  }
- ]
+  "rows": [
+    {
+      "id": "python-lib",
+      "order": 5,
+      "body": "python",
+      "area": "Python",
+      "state": "done",
+      "title": "Shipping generator; no active work",
+      "detail": "dharmatiles-gen builds the library tiles from src/tiles/. It stays the shipping code until the Rust cutover (P6).",
+      "updated": "2026-11-02T14:00:00Z"
+    },
+    {
+      "id": "p0",
+      "order": 10,
+      "body": "rust",
+      "area": "Rust P0",
+      "state": "done",
+      "title": "Phase 0 spikes: decided GO (2 Nov 2026)",
+      "detail": "R1, R2, R3, R6 and R9 passed. Determinism level B chosen, contact sheet approved, no vetoes. Branch rust/p0, revision 8 of the study.",
+      "updated": "2026-11-02T14:00:00Z"
+    },
+    {
+      "id": "cliff-r17",
+      "order": 50,
+      "body": "labs",
+      "area": "Cliff",
+      "state": "done",
+      "title": "Round 17 accepted",
+      "detail": "Crisp sparse chips, bold column setbacks, closed core holes (31f7c5d on main).",
+      "updated": "2026-11-02T14:00:00Z"
+    },
+    {
+      "id": "docs",
+      "order": 60,
+      "body": "other",
+      "area": "Docs",
+      "state": "done",
+      "title": "Look pages done, audience first",
+      "detail": "All eight look pages (ground, grass, rocks, cliffs, water, walls, trees, composition) open with the look, its use in a tile and its specification; rulings, requirements, reference photos and history sit lower in a design record. Home and standards pages lead with what a tile user needs.",
+      "updated": "2026-11-02T15:04:37Z"
+    },
+    {
+      "id": "docs-fixes",
+      "order": 100,
+      "body": "other",
+      "area": "Docs",
+      "state": "done",
+      "title": "Docs follow-ups done: 55° audits, live doc paths, red-painted renders",
+      "detail": "rocklab/grasslab/dirtlab audit at 55° (clifflab face report reads the constant); ~40 dead docs/ paths in code repointed; red-overhang heroes on trees, walls and composition; variants page images fixed; 0 broken links.",
+      "updated": "2026-11-02T17:52:30Z"
+    },
+    {
+      "id": "p1",
+      "order": 20,
+      "body": "rust",
+      "area": "Rust P1",
+      "state": "done",
+      "title": "Phase 1 done: flat tile prints from Rust",
+      "detail": "Merged into main (84056d8). Flat 1×1 DB tile: watertight, 0 overhang, 0.1 s, same hashes on macOS and Linux; review findings fixed; Shawn's test print seated and the contact-sheet layout is approved.",
+      "updated": "2026-11-02T16:00:00Z"
+    },
+    {
+      "id": "p2",
+      "order": 30,
+      "body": "rust",
+      "area": "Rust P2",
+      "state": "done",
+      "title": "Phase 2 done: dirt signed off and merged",
+      "detail": "Shawn: “dirt is beautiful”. Rust dirt matches dirtlab at seeds 1–4 (texture 97.8%, clods/pebbles/spectrum within tolerance, 0.8 s, 0 overhang). soil-1x1.kdl replaces 1x1-soil.tile.py; flat test tile now a 3.4 mm slab.",
+      "updated": "2026-11-02T23:00:00Z"
+    },
+    {
+      "id": "p3",
+      "order": 40,
+      "body": "rust",
+      "area": "Rust P3",
+      "state": "waiting",
+      "title": "P3 rocks and water: built, waiting for Shawn",
+      "detail": "Rocks and water pass parity at seeds 1–4; edge within 0.016 mm; water tile 0.9 s. 11 water twins, review fixes in, CI green. Dirt stones miss one metric by a hair (1.203 vs ±20%). Waiting for Shawn's sign-offs and a print of two butted water tiles. Preview not built.",
+      "updated": "2026-11-02T22:37:46Z"
+    },
+    {
+      "id": "p5",
+      "order": 45,
+      "body": "rust",
+      "area": "Rust P5",
+      "state": "review",
+      "title": "Phase 5 built: walls, floors, OpenLOCK and leafy trees; waiting for Shawn",
+      "detail": "rust/p5. Floor sides now a straight stone-on-earth band. Trees build with leaves on by default: all 28 test builds have 0 overhang past 65°, are watertight and drop nothing; 2×2 DB tree 7.1 s (limit 10 s); rays 2.56× Embree (limit 3×). Local tests pass. Waiting on Shawn: floor and tree sheets, the tree print, the sliver rule.",
+      "updated": "2026-11-03T21:30:00Z"
+    }
+  ]
 }
