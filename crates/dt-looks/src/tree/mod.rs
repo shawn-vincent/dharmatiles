@@ -554,7 +554,10 @@ impl Tree {
                         .map_err(LookError::build)?;
                     grown.leaves_placed = placed.len();
                     grown.leaves = ls.len();
-                    parts.push(union(&ls).map_err(LookError::build)?);
+                    // the leaves go into the tree's one union with the wood
+                    // and the crown (a union of their own first costs a
+                    // second pass over every leaf)
+                    parts.extend(ls);
                 }
             }
             parts.push(crown_solid);
