@@ -56,6 +56,7 @@ mod shape;
 mod stand;
 mod stl;
 mod stone;
+mod threemf;
 
 pub use audit::{Audit, Band, Dropped, Export, Printer, audit, audit_banded};
 pub use dt_geom::Convex;
@@ -74,6 +75,7 @@ pub use shape::{area, carve, extrude, loft, signed_volume, union, wobble};
 pub use stand::{Stand, Stood, stand};
 pub use stl::{BuildRecord, stl};
 pub use stone::{Grain, grain, hull, seat, solid};
+pub use threemf::threemf;
 
 /// Why a kit operation failed.
 #[derive(Clone, Debug, PartialEq)]

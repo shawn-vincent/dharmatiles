@@ -95,10 +95,10 @@
       "order": 50,
       "body": "rust",
       "area": "Rust P4",
-      "state": "active",
-      "title": "Phase 4 grass, meadow, shore and reeds: started",
-      "detail": "Branch rust/p4. Porting grasslab v3 stroke blades, then meadowlab and shorelab.",
-      "updated": "2026-11-03T22:33:58Z"
+      "state": "review",
+      "title": "Phase 4 built: grass, meadow, shore, reeds; waiting for Shawn",
+      "detail": "rust/p4 on main. Grass (grasslab's stroke blades as a direct loft), meadow rule (bare=, rocks/trees/walls), reeds; 19 twins + wall/floor/tree tiles build with grass; 114 builds pass the gate at 3 seeds, both systems. 2×2 grass builds in ~5 s (lab 100 s). Waiting on Shawn: the grass, meadow and shore contact sheets and a test print.",
+      "updated": "2026-11-03T23:25:29Z"
     },
     {
       "id": "waiting",
@@ -106,9 +106,39 @@
       "body": "rust",
       "area": "Waiting for Shawn",
       "state": "waiting",
-      "title": "Items that need Shawn's eye (not blocking)",
-      "detail": "Nothing yet.",
-      "updated": "2026-11-03T22:33:58Z"
+      "title": "Items that need Shawn's eye or decision (not blocking the rest)",
+      "detail": "1. P4 grass/meadow/shore contact sheets: out/parity/grass/contact-sheet.png (regenerate: cargo xtask parity grass; meadow/shore tiles library/tiles/test/{meadow,shore}-2x2.kdl, build with --png). 2. A test print of a meadow tile (library/tiles/test/meadow-2x2.kdl). 3. P6 full library sheet: out/sheet/library-db.png (dharmatiles build --all --system both --png; python tests/parity/library_sheet.py). 4. P6 approvals: delete the 19 grass twins' Python specs, dharmatiles-gen and stl/; 1x1-grass-flowers (default: stays Python). 5. P7: name the rockpile freeze commit. 6. P8: open a 3MF (out/db/**/*.3mf) in Bambu Studio to confirm the materials.",
+      "updated": "2026-11-03T23:25:29Z"
+    },
+    {
+      "id": "p6",
+      "order": 55,
+      "body": "rust",
+      "area": "Rust P6",
+      "state": "review",
+      "title": "Phase 6 cutover prepared; deletions wait for Shawn",
+      "detail": "dharmatiles build --all --system both builds the library; library sheet script; CLAUDE.md rewritten for the Rust workflow. Waiting on Shawn: the full contact sheet, approval to delete the remaining Python tile specs, dharmatiles-gen and stl/, and the 1x1-grass-flowers decision. Release (dist, Homebrew tap) not made.",
+      "updated": "2026-11-03T23:25:29Z"
+    },
+    {
+      "id": "p7",
+      "order": 60,
+      "body": "rust",
+      "area": "Rust P7",
+      "state": "waiting",
+      "title": "Phase 7 cliff: waiting for Shawn to name the rockpile freeze commit",
+      "detail": "The freeze commit (at or after round 16, ee42cb8; round 17 is 31f7c5d) and the foot move from 4.0 to 3.4 mm in clifflab are Shawn's to name; the port starts from the frozen commit. Not started.",
+      "updated": "2026-11-03T23:25:29Z"
+    },
+    {
+      "id": "p8",
+      "order": 65,
+      "body": "rust",
+      "area": "Rust P8",
+      "state": "active",
+      "title": "Phase 8: 3MF writer and MCP server in; app, LSP, wasm, mobile later",
+      "detail": "--3mf writes each triangle's material as a 3MF base material (Python zipfile reads it; Bambu Studio not yet tried); dharmatiles mcp serves check_document, list_looks, describe_look, list_tiles, build_tile, render_preview, audit_mesh over stdio; dharmatiles audit runs the gate on an STL. Not started: the Tauri app, procedural colour, MCP over HTTP, LSP, wasm, mobile.",
+      "updated": "2026-11-03T23:25:29Z"
     }
   ]
 }

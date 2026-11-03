@@ -71,7 +71,17 @@ fn build<'a>(path: &'a str, opts: &Options, out: &Path, png: bool) -> (u8, Tile<
             .unwrap_or_else(PoisonError::into_inner)
             .insert(path.to_owned(), mtime(path));
     }
-    let (code, _) = build_one(&rec, path, opts, out, png, false);
+    let (code, _) = build_one(
+        &rec,
+        path,
+        opts,
+        out,
+        crate::Extras {
+            png,
+            threemf: false,
+        },
+        false,
+    );
     let files = rec
         .read
         .into_inner()

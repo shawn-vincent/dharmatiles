@@ -131,6 +131,38 @@ pub enum Material {
 }
 
 impl Material {
+    /// Its name, as a 3MF material or a legend names it.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Earth => "earth",
+            Self::Connector => "connector",
+            Self::Rock => "rock",
+            Self::Water => "water",
+            Self::Grass => "grass",
+            Self::Masonry => "masonry",
+            Self::Wood => "wood",
+            Self::Leaf => "leaf",
+        }
+    }
+
+    /// Its default colour (sRGB, 0 to 1): the preview's paint. The
+    /// material-to-colour step (a user's own palette) comes later; this is
+    /// what a first 3MF is painted with.
+    #[must_use]
+    pub const fn colour(self) -> [f64; 3] {
+        match self {
+            Self::Earth => [0.50, 0.38, 0.25],
+            Self::Connector => [0.62, 0.62, 0.64],
+            Self::Rock => [0.58, 0.58, 0.61],
+            Self::Water => [0.24, 0.38, 0.56],
+            Self::Grass => [0.36, 0.56, 0.24],
+            Self::Masonry => [0.66, 0.64, 0.60],
+            Self::Wood => [0.42, 0.29, 0.18],
+            Self::Leaf => [0.33, 0.52, 0.24],
+        }
+    }
+
     /// From the material table's number.
     #[must_use]
     pub const fn from_id(id: u32) -> Option<Self> {

@@ -39,9 +39,12 @@ enum Command {
     /// Build tiles to STL, through the printability gate.
     Build {
         /// Tile documents: files, or `lib:tiles/…` in the bundled library.
-        #[arg(required = true)]
+        #[arg(required_unless_present = "all")]
         paths: Vec<String>,
-        /// Connector system.
+        /// Build every tile of the bundled library (not the test tiles).
+        #[arg(long)]
+        all: bool,
+        /// Connector system: `db`, `ol`, or `both`.
         #[arg(long, default_value = "db")]
         system: String,
         /// Replace each tile's seed.
@@ -53,6 +56,10 @@ enum Command {
         /// Also write the four preview views as PNG, overhangs red.
         #[arg(long)]
         png: bool,
+        /// Also write a 3MF with each triangle's material (earth, rock,
+        /// water, grass, …) assigned as a 3MF base material.
+        #[arg(long = "3mf")]
+        threemf: bool,
         /// One JSON report on stdout.
         #[arg(long)]
         json: bool,
@@ -71,6 +78,23 @@ enum Command {
         /// A look's name: list its controls with units, ranges and defaults.
         name: Option<String>,
         /// One JSON object on stdout.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Serve the Model Context Protocol on stdio (check, build, preview and
+    /// audit tiles for an agent).
+    Mcp,
+    /// Run the printability gate on a binary STL file.
+    Audit {
+        /// The STL file.
+        path: String,
+        /// The tile's width in mm, for see-through holes (default: the mesh's).
+        #[arg(long)]
+        width: Option<f64>,
+        /// The tile's height in mm (default: the mesh's).
+        #[arg(long)]
+        height: Option<f64>,
+        /// One JSON report on stdout.
         #[arg(long)]
         json: bool,
     },
@@ -122,6 +146,7 @@ fn emit(w: &mut dyn Write, args: std::fmt::Arguments) {
 }
 
 mod looks;
+mod mcp;
 mod watch;
 
 const OK: u8 = 0;
@@ -134,13 +159,42 @@ fn main() -> ExitCode {
         Command::Check { paths, json } => check(&paths, json),
         Command::Build {
             paths,
+            all,
             system,
             seed,
             out,
             png,
+            threemf,
             json,
-        } => build(&paths, &options(system, seed), &out_dir(out), png, json),
+        } => {
+            let paths = if all { library_tiles() } else { paths };
+            let out = out_dir(out);
+            let systems: Vec<&str> = if system == "both" {
+                vec!["db", "ol"]
+            } else {
+                vec![system.as_str()]
+            };
+            systems.iter().fold(OK, |code, sys| {
+                worse(
+                    code,
+                    build(
+                        &paths,
+                        &options((*sys).to_owned(), seed),
+                        &out,
+                        Extras { png, threemf },
+                        json,
+                    ),
+                )
+            })
+        }
         Command::Looks { name, json } => looks::run(name.as_deref(), json),
+        Command::Mcp => mcp::run(),
+        Command::Audit {
+            path,
+            width,
+            height,
+            json,
+        } => audit_stl(&path, width, height, json),
         Command::Watch {
             paths,
             system,
@@ -157,6 +211,16 @@ fn main() -> ExitCode {
         ),
     };
     ExitCode::from(code)
+}
+
+/// Every tile of the bundled library, as `lib:` paths, tests aside.
+pub(crate) fn library_tiles() -> Vec<String> {
+    let mut v: Vec<String> = dt_eval::Library::paths()
+        .into_iter()
+        .filter(|p| p.contains("tiles/") && !p.contains("tiles/test/"))
+        .collect();
+    v.sort();
+    v
 }
 
 fn options(system: String, seed: Option<u64>) -> Options {
@@ -230,11 +294,18 @@ fn check(paths: &[String], json: bool) -> u8 {
     code
 }
 
-fn build(paths: &[String], opts: &Options, out: &Path, png: bool, json: bool) -> u8 {
+/// What else a build writes beside the STL.
+#[derive(Clone, Copy)]
+struct Extras {
+    png: bool,
+    threemf: bool,
+}
+
+fn build(paths: &[String], opts: &Options, out: &Path, extras: Extras, json: bool) -> u8 {
     let mut code = OK;
     let mut reports = Vec::new();
     for p in paths {
-        let (c, r) = build_one(&Files, p, opts, out, png, json);
+        let (c, r) = build_one(&Files, p, opts, out, extras, json);
         code = worse(code, c);
         reports.push(r);
     }
@@ -260,7 +331,7 @@ fn build_one(
     p: &str,
     opts: &Options,
     out: &Path,
-    png: bool,
+    extras: Extras,
     json: bool,
 ) -> (u8, Value) {
     let t0 = Instant::now();
@@ -278,7 +349,7 @@ fn build_one(
     };
     let built_s = t0.elapsed().as_secs_f64();
     let failures = b.audit.failures(&opts.printer);
-    let files = match write(&b, &failures, built_s, out, png) {
+    let files = match write(&b, &failures, built_s, out, extras) {
         Ok(f) => f,
         Err(e) => {
             tell!("error: {p}: {e}");
@@ -332,7 +403,7 @@ fn write(
     failures: &[String],
     built_s: f64,
     out: &Path,
-    png: bool,
+    extras: Extras,
 ) -> Result<Vec<PathBuf>, String> {
     let path = out.join(&b.out);
     if let Some(dir) = path.parent() {
@@ -349,7 +420,15 @@ fn write(
         .map_err(|e| e.to_string())?;
     w(&record, text.as_bytes())?;
     files.push(record);
-    if png {
+    if extras.threemf {
+        let p = path.with_extension("3mf");
+        w(
+            &p,
+            &dt_kit::threemf(&b.export.mesh, &b.materials, &b.record),
+        )?;
+        files.push(p);
+    }
+    if extras.png {
         let colours = b.colours();
         let stem = path
             .file_stem()
@@ -437,4 +516,98 @@ fn stats(notes: &[(String, f64)]) -> serde_json::Map<String, Value> {
             (key, json!(v))
         })
         .collect()
+}
+
+/// `audit FILE.stl`: the gate on a binary STL as a slicer would read it.
+fn audit_stl(path: &str, width: Option<f64>, height: Option<f64>, json: bool) -> u8 {
+    let bytes = match std::fs::read(path) {
+        Ok(b) => b,
+        Err(e) => {
+            tell!("error: cannot read {path}: {e}");
+            return ERROR;
+        }
+    };
+    let Some(mesh) = read_stl(&bytes) else {
+        tell!("error: {path} is not a binary STL");
+        return ERROR;
+    };
+    let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+    for p in &mesh.positions {
+        for k in 0..2 {
+            lo[k] = lo[k].min(p[k]);
+            hi[k] = hi[k].max(p[k]);
+        }
+    }
+    // the tile's size: whole squares (DungeonBlocks 35 mm, OpenLOCK 25.4 mm)
+    // nearest the mesh's extent, which the base's flare overshoots a little
+    let tile = |extent: f64| -> f64 {
+        [35.0, 25.4]
+            .iter()
+            .filter_map(|sq| {
+                let n = libm::round(extent / sq).max(1.0);
+                let err = (extent - n * sq).abs();
+                (err < 1.5).then_some((err, n * sq))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map_or(extent, |(_, v)| v)
+    };
+    let footprint = [
+        width.unwrap_or_else(|| tile(hi[0] - lo[0])),
+        height.unwrap_or_else(|| tile(hi[1] - lo[1])),
+    ];
+    let printer = Options::default().printer;
+    let (_, a) = dt_kit::audit(&mesh, footprint, &printer);
+    let failures = a.failures(&printer);
+    if json {
+        say!(
+            "{}",
+            json!({"ok": failures.is_empty(), "path": path, "triangles": a.triangles,
+                "volume_mm3": a.volume_mm3, "watertight": a.watertight, "bodies": a.bodies,
+                "overhang_mm2": a.overhang_mm2, "holes": a.holes,
+                "dropped": a.dropped.len(), "failures": failures})
+        );
+    } else {
+        tell!(
+            "{path}: {} triangles, watertight {}, overhang {:.2} mm², {} holes, {} loose bodies dropped",
+            a.triangles,
+            a.watertight,
+            a.overhang_mm2,
+            a.holes,
+            a.dropped.len()
+        );
+        for f in &failures {
+            tell!("  audit failed: {f}");
+        }
+    }
+    if failures.is_empty() {
+        OK
+    } else {
+        AUDIT_FAILED
+    }
+}
+
+/// A binary STL's triangles, vertices merged by position (as a slicer
+/// reads it).
+fn read_stl(b: &[u8]) -> Option<dt_kit::TriMesh> {
+    let n = usize::try_from(u32::from_le_bytes(b.get(80..84)?.try_into().ok()?)).ok()?;
+    if b.len() < 84 + 50 * n {
+        return None;
+    }
+    let f = |o: usize| f32::from_le_bytes([b[o], b[o + 1], b[o + 2], b[o + 3]]);
+    let mut index: std::collections::HashMap<[u32; 3], u32> = std::collections::HashMap::new();
+    let mut m = dt_kit::TriMesh::default();
+    for t in 0..n {
+        let base = 84 + 50 * t + 12;
+        let mut tri = [0u32; 3];
+        for (v, slot) in tri.iter_mut().enumerate() {
+            let o = base + 12 * v;
+            let p = [f(o), f(o + 4), f(o + 8)];
+            *slot = *index.entry(p.map(f32::to_bits)).or_insert_with(|| {
+                m.positions.push(p.map(f64::from));
+                u32::try_from(m.positions.len() - 1).unwrap_or(u32::MAX)
+            });
+        }
+        m.triangles.push(tri);
+    }
+    Some(m)
 }

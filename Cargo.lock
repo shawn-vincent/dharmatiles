@@ -404,6 +404,7 @@ dependencies = [
  "dt-eval",
  "dt-kit",
  "dt-looks",
+ "libm",
  "miette",
  "serde_json",
 ]
@@ -465,7 +466,9 @@ dependencies = [
 name = "dt-kit"
 version = "0.0.0"
 dependencies = [
+ "crc32fast",
  "dt-geom",
+ "flate2",
  "libm",
  "parry3d",
  "png",

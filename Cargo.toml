@@ -40,6 +40,8 @@ insta = "1.49.0"
 # Seeded code uses libm, not std's platform maths (R2: sin/exp differ by OS).
 libm = "0.2.16"
 png = "0.18.1"
+flate2 = "1.1.10"
+crc32fast = "1.5.4"
 
 [workspace.lints.rust]
 # FFI lives inside the binding crates, not ours.
