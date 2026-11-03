@@ -107,6 +107,20 @@ impl Mesh for FfiSolid {
         ))
     }
 
+    fn level_set_seq(
+        sdf: &(dyn Fn([f64; 3]) -> f64 + Sync),
+        bounds: Bounds,
+        edge_length: f64,
+    ) -> Self {
+        Self(Manifold::from_sdf_seq(
+            |x, y, z| sdf([x, y, z]),
+            (bounds.min, bounds.max),
+            edge_length,
+            0.0,
+            -1.0,
+        ))
+    }
+
     fn extrude(contours: &[Vec<[f64; 2]>], inset: f64, z0: f64, z1: f64) -> Self {
         let mut cs = CrossSection::from_polygons_with_fill_rule(contours, FillRule::EvenOdd);
         if inset > 0.0 {

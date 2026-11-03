@@ -321,6 +321,20 @@ pub trait Mesh: Sized + Send + Sync + Clone {
     #[must_use]
     fn level_set(sdf: &(dyn Fn([f64; 3]) -> f64 + Sync), bounds: Bounds, edge_length: f64) -> Self;
 
+    /// [`Mesh::level_set`] meshed in one thread. The kernel's parallel
+    /// level set is not reproducible: its vertex count can change from run
+    /// to run on one input (a 2 mm brick: 1109 or 1110 vertices), which
+    /// breaks determinism level B. Backends without a parallel level set
+    /// keep the default.
+    #[must_use]
+    fn level_set_seq(
+        sdf: &(dyn Fn([f64; 3]) -> f64 + Sync),
+        bounds: Bounds,
+        edge_length: f64,
+    ) -> Self {
+        Self::level_set(sdf, bounds, edge_length)
+    }
+
     /// The even-odd region of `contours` (closed polygons in mm, x and y),
     /// shrunk by `inset` mm with mitred corners when `inset > 0`, as a prism
     /// from `z0` up to `z1`.

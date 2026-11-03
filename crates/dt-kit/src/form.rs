@@ -29,7 +29,8 @@ use crate::scene::{Slot, Solid, leaf};
 
 /// **level set**: the closed surface where `sdf(p) > 0` (positive inside)
 /// within `[lo, hi]`, on a grid of `edge_mm`, as a triangle mesh in the
-/// SDF's own frame. Manifold's marching tetrahedra: a plane field is met
+/// SDF's own frame. Manifold's marching tetrahedra, in one thread (its
+/// parallel level set is not reproducible): a plane field is met
 /// exactly where it is linear, so flat faces stay flat.
 ///
 /// # Errors
@@ -45,7 +46,7 @@ pub fn level_set(
     if !ok {
         return Err(KitError::Shape("level set: empty bounds or grid".into()));
     }
-    let s = dt_geom::Solid::level_set(sdf, Bounds { min: lo, max: hi }, edge_mm);
+    let s = dt_geom::Solid::level_set_seq(sdf, Bounds { min: lo, max: hi }, edge_mm);
     s.status().map_err(KitError::Mesh)?;
     Ok(s.to_tri_mesh())
 }
