@@ -87,6 +87,39 @@ const ROOT_EMBED_MM: f64 = 0.75;
 const PROTRUSION_MM: f64 = 0.3;
 /// Printability skew margin: blade tip over oval tip, in z.
 const SKEW_TIP_MARGIN_MM: f64 = 0.05;
+/// A flattened blade may not fold more than this (cosine of the angle
+/// between the crown's normals a step apart): past it the crown has a
+/// crease between clumps, and the blade is turned to lie elsewhere.
+const DRAPE_FOLD_COS: f64 = 0.34;
+/// A blade's lowest point needs the crown this close under it, mm.
+const HANG_REACH_MM: f64 = 0.3;
+/// Headings a flattened blade tries, degrees off its own, in order.
+const DRAPE_TURNS: [f64; 10] = [
+    0.0, 30.0, -30.0, 60.0, -60.0, 90.0, -90.0, 135.0, -135.0, 180.0,
+];
+/// A flattened blade's rim and ends sit this far inside the crown.
+const DRAPE_EMBED_MM: f64 = 0.02;
+/// A flattened blade's dome fades out over this many degrees under the
+/// printer's limit (by the crown's slope under it).
+const DRAPE_DOME_FADE_DEG: f64 = 25.0;
+/// A flattened blade is a slab down to this far inside the crown, mm.
+const DRAPE_ROOT_MM: f64 = 0.4;
+/// Each shingle step lifts a flattened blade this much more off the
+/// crown, mm: overlapping flattened blades lie on surfaces a whole step
+/// apart (near-coincident faces leave slivers in the union and break at
+/// the float32 export).
+const DRAPE_STEP_MM: f64 = 0.03;
+
+/// A flattened blade's lift off the crown for its shingle standoff.
+fn drape_embed(standoff: f64) -> f64 {
+    let step = libm::round(standoff / SHINGLE_STEP_MM).clamp(0.0, SHINGLE_CAP_MM / SHINGLE_STEP_MM);
+    DRAPE_EMBED_MM + DRAPE_STEP_MM * step
+}
+/// A flattened blade finds the crown within this of its flat plane, mm.
+const DRAPE_REACH_MM: f64 = 1.5;
+/// Where a leaf's tip lies, as a fraction of its length down-slope of its
+/// root (the blade spans ±½ L round the root).
+const TIP_STEPS: usize = leaf::N_LONG / 2;
 /// Margin under the printer's overhang limit for underside blades.
 const HANG_MARGIN_DEG: f64 = 3.0;
 /// Surface re-projection lift.
@@ -196,6 +229,9 @@ pub struct LeafStats {
     pub failed_neck: usize,
     /// Builds that failed: degenerate frame.
     pub failed_error: usize,
+    /// Builds that failed: a flattened blade could not find the crown under
+    /// part of it.
+    pub failed_drape: usize,
     /// Leaves dropped for skewering an exposed branch.
     pub branch_culled: usize,
     /// Coverage test points (placeable ones).
@@ -212,7 +248,11 @@ impl LeafStats {
     /// All failed builds.
     #[must_use]
     pub fn failed(&self) -> usize {
-        self.failed_oval + self.failed_skew + self.failed_neck + self.failed_error
+        self.failed_oval
+            + self.failed_skew
+            + self.failed_neck
+            + self.failed_error
+            + self.failed_drape
     }
 }
 
@@ -416,29 +456,27 @@ pub fn place_with(
         shape,
         tris: &tris,
     };
-    let outcomes: Vec<Outcome> = (0..roots.len())
+    let outcomes: Vec<(f64, Outcome)> = (0..roots.len())
         .into_par_iter()
         .map(|i| {
             let n = root_n[i];
-            let tz = ((n[2] - ZONE_LO) / (ZONE_HI - ZONE_LO)).clamp(0.0, 1.0);
-            let st = tz * tz * (3.0 - 2.0 * tz);
+            let lying = reach.lying_nz(roots[i], n, dirs[i]);
             let k = 1.0 - SIZE_JITTER * draws.h01("org-size", i);
-            job.leaf(roots[i], n, dirs[i], st, standoffs[i], len * k, wid * k)
+            let o = job.leaf(roots[i], n, dirs[i], lying, standoffs[i], len * k, wid * k);
+            (zone(lying), o)
         })
         .collect();
     stats.times.build = clock.lap();
 
     let mut solids = Vec::new();
-    for (i, o) in outcomes.into_iter().enumerate() {
+    for (i, (st, o)) in outcomes.into_iter().enumerate() {
         match o {
             Outcome::Placed(m, tangent) => {
-                let n = root_n[i];
-                let tz = ((n[2] - ZONE_LO) / (ZONE_HI - ZONE_LO)).clamp(0.0, 1.0);
                 stats.leaves.push(Placed {
                     root: roots[i],
-                    normal: n,
+                    normal: root_n[i],
                     tangent,
-                    zone: tz * tz * (3.0 - 2.0 * tz),
+                    zone: st,
                 });
                 solids.push(m);
             }
@@ -447,6 +485,7 @@ pub fn place_with(
             Outcome::Failed(Fail::Skew) => stats.failed_skew += 1,
             Outcome::Failed(Fail::Neck) => stats.failed_neck += 1,
             Outcome::Failed(Fail::Error) => stats.failed_error += 1,
+            Outcome::Failed(Fail::Drape) => stats.failed_drape += 1,
         }
     }
     stats.placed = solids.len();
@@ -615,6 +654,47 @@ impl Crown {
     }
 }
 
+impl Crown {
+    /// Drop `q` onto the crown along `−n`: from [`DRAPE_REACH_MM`] above
+    /// it, or nearer when that start is inside another lobe (the hit then
+    /// faces away). The hit and its smooth normal.
+    fn drop_on(&self, q: V, n: V) -> Option<(RayHit, V)> {
+        for reach in [DRAPE_REACH_MM, 0.6, 0.25] {
+            let start = add(q, scale(n, reach));
+            let Some(hit) = self.hit(start, scale(n, -1.0)) else {
+                continue;
+            };
+            if norm(sub(hit.point, start)) > reach + DRAPE_REACH_MM {
+                continue;
+            }
+            let ns = self.smooth_normal(hit.triangle as usize, hit.point);
+            if dot(ns, n) > DRAPE_FOLD_COS {
+                return Some((hit, ns));
+            }
+        }
+        None
+    }
+
+    /// Walk `steps` steps of `ds` along the crown from `p` heading `t`:
+    /// each step goes `ds` along the local tangent and drops back onto the
+    /// crown along the local normal.
+    fn walk(&self, p: V, n: V, t: V, ds: f64, steps: usize) -> Result<Vec<Frame>, Fail> {
+        let (mut p, mut n, mut t) = (p, n, t);
+        let mut out = Vec::with_capacity(steps);
+        for _ in 0..steps {
+            let guess = add(p, scale(t, ds));
+            let (hit, nn) = self.drop_on(guess, n).ok_or(Fail::Drape)?;
+            let step = sub(hit.point, p);
+            let tt = safe_norm(sub(step, scale(nn, dot(step, nn))));
+            p = hit.point;
+            n = nn;
+            t = tt;
+            out.push(Frame { p, n, t });
+        }
+        Ok(out)
+    }
+}
+
 /// `rep[i]`: the vertex `i` is welded to (`merge_from` → `merge_to`).
 fn weld(m: &TriMesh) -> Vec<usize> {
     let mut rep: Vec<usize> = (0..m.positions.len()).collect();
@@ -649,17 +729,9 @@ impl Body {
 
 /// The connected bodies of a mesh (by shared, welded vertices), in order
 /// of their first triangle.
-#[allow(clippy::cast_possible_truncation, reason = "vertex indices fit u32")]
 pub(super) fn split_bodies(m: &TriMesh) -> Vec<TriMesh> {
     let rep = weld(m);
     let mut parent: Vec<usize> = (0..m.positions.len()).collect();
-    fn find(p: &mut [usize], mut i: usize) -> usize {
-        while p[i] != i {
-            p[i] = p[p[i]];
-            i = p[i];
-        }
-        i
-    }
     for t in &m.triangles {
         let a = find(&mut parent, rep[t[0] as usize]);
         for &v in &t[1..] {
@@ -669,13 +741,61 @@ pub(super) fn split_bodies(m: &TriMesh) -> Vec<TriMesh> {
             }
         }
     }
-    let mut order: Vec<usize> = Vec::new();
+    let groups: Vec<usize> = m
+        .triangles
+        .iter()
+        .map(|t| find(&mut parent, rep[t[0] as usize]))
+        .collect();
+    gather(m, &groups)
+}
+
+/// Union-find root of `i`, halving the path.
+fn find(p: &mut [usize], mut i: usize) -> usize {
+    while p[i] != i {
+        p[i] = p[p[i]];
+        i = p[i];
+    }
+    i
+}
+
+/// [`split_bodies`], but joined only across shared edges: a piece that
+/// touches the rest at a single (pinch) vertex is its own body, as the
+/// gate's export separates it.
+pub(super) fn split_sheets(m: &TriMesh) -> Vec<TriMesh> {
+    let rep = weld(m);
+    let mut parent: Vec<usize> = (0..m.triangles.len()).collect();
+    let mut edge: HashMap<(usize, usize), usize> = HashMap::new();
+    for (ti, t) in m.triangles.iter().enumerate() {
+        for k in 0..3 {
+            let (a, b) = (rep[t[k] as usize], rep[t[(k + 1) % 3] as usize]);
+            let key = (a.min(b), a.max(b));
+            match edge.get(&key) {
+                Some(&o) => {
+                    let (x, y) = (find(&mut parent, o), find(&mut parent, ti));
+                    if x != y {
+                        parent[y] = x;
+                    }
+                }
+                None => {
+                    edge.insert(key, ti);
+                }
+            }
+        }
+    }
+    let groups: Vec<usize> = (0..m.triangles.len())
+        .map(|i| find(&mut parent, i))
+        .collect();
+    gather(m, &groups)
+}
+
+/// The triangles of `m` grouped by `groups[t]` (first-seen order), each
+/// group its own compact mesh.
+#[allow(clippy::cast_possible_truncation, reason = "vertex indices fit u32")]
+fn gather(m: &TriMesh, groups: &[usize]) -> Vec<TriMesh> {
     let mut of: HashMap<usize, usize> = HashMap::new();
     let mut tris: Vec<Vec<[u32; 3]>> = Vec::new();
-    for t in &m.triangles {
-        let r = find(&mut parent, rep[t[0] as usize]);
-        let k = *of.entry(r).or_insert_with(|| {
-            order.push(r);
+    for (t, g) in m.triangles.iter().zip(groups) {
+        let k = *of.entry(*g).or_insert_with(|| {
             tris.push(Vec::new());
             tris.len() - 1
         });
@@ -883,36 +1003,48 @@ impl Reach<'_> {
         safe_norm(rotate_about(t0, n, field_angle(b, self.phase)))
     }
 
-    /// Placeable: normal z ≥ −0.75 (Python). With a printer limit, an
-    /// underside root also needs the surface half a leaf down-slope (under
-    /// its tip, where it lies flush) to be within the limit less the
-    /// margin: there a flush blade inherits the clump's slope, and past
-    /// the limit nothing makes it printable.
+    /// Placeable: normal z ≥ −0.75 (Python). With a printer limit the
+    /// steep band under the crown is placeable too: its blades are laid
+    /// flat on the crown ([`Job::drape`]).
     fn placeable(&self, s: &Samples) -> Vec<bool> {
-        s.points
-            .par_iter()
-            .zip(&s.normals)
-            .map(|(p, n)| {
-                if n[2] < PLACEABLE_NORMAL_Z {
-                    return false;
-                }
-                let Some(limit) = self.limit_deg else {
-                    return true;
-                };
-                if n[2] >= 0.0 {
-                    return true;
-                }
-                let n = safe_norm(*n);
-                let t = self.direction(*p, n);
-                let q = add(*p, scale(t, 0.5 * self.len));
-                self.crown
-                    .project(q, n, 1.0 + 0.5 * self.len + 1.0)
-                    .is_none_or(|(_, tn)| {
-                        tn[2] >= -libm::sin((limit - HANG_MARGIN_DEG).to_radians())
-                    })
-            })
+        s.normals
+            .iter()
+            .map(|n| n[2] >= PLACEABLE_NORMAL_Z)
             .collect()
     }
+
+    /// The normal z a leaf's blade lies on: its root's, or, with a printer
+    /// limit, the lower of its root's and the surface's under its tip
+    /// (half a leaf down-slope, walked in [`TIP_STEPS`] steps). A blade rooted on an upward face
+    /// whose tip reaches over the crown's underside is built for the
+    /// underside.
+    fn lying_nz(&self, root: V, n: V, dir: V) -> f64 {
+        if self.limit_deg.is_none() {
+            return n[2];
+        }
+        match self
+            .crown
+            .walk(root, n, dir, self.len / leaf::N_LONG as f64, TIP_STEPS)
+        {
+            Ok(frames) => frames.iter().fold(n[2], |m, f| m.min(f.n[2])),
+            Err(_) => -1.0,
+        }
+    }
+}
+
+/// A point on the crown with its normal and heading.
+#[derive(Clone, Copy)]
+struct Frame {
+    p: V,
+    n: V,
+    t: V,
+}
+
+/// The zone blend: 1 on upward faces (pitched blade), 0 on undersides
+/// (flush), smoothstep between.
+fn zone(nz: f64) -> f64 {
+    let tz = ((nz - ZONE_LO) / (ZONE_HI - ZONE_LO)).clamp(0.0, 1.0);
+    tz * tz * (3.0 - 2.0 * tz)
 }
 
 // ── one leaf ──────────────────────────────────────────────────────────────────
@@ -923,6 +1055,7 @@ enum Fail {
     Skew,
     Neck,
     Error,
+    Drape,
 }
 
 #[allow(clippy::large_enum_variant, reason = "short-lived, one per root")]
@@ -947,11 +1080,12 @@ impl Job<'_> {
         base: V,
         nrm: V,
         t_leaf: V,
-        st: f64,
+        lying_nz: f64,
         standoff: f64,
         ls: f64,
         ws: f64,
     ) -> Outcome {
+        let st = zone(lying_nz);
         let flush = st < 0.5;
         let mut arch_mm = (1.0 - st) * FLUSH_ARCH_MM;
         let mut blade = Blade {
@@ -966,7 +1100,7 @@ impl Job<'_> {
             lift_mm: st * TIP_LIFT_MM,
         };
         if let Some(limit) = self.shape.overhang_deg {
-            let k = hang_scale(nrm[2], limit, &blade, arch_mm);
+            let k = hang_scale(lying_nz, limit, &blade, arch_mm);
             blade.arch_deg *= k;
             blade.curl_deg *= k;
             blade.lift_mm *= k;
@@ -982,16 +1116,29 @@ impl Job<'_> {
                 1.0 + 0.25 * ls + 1.0,
             )
             .unwrap_or((base, nrm));
-        let built = self.attempt(
-            anchor,
-            anchor_n,
-            t_leaf,
-            &blade,
-            st * standoff,
-            flush,
-            0.02 + st * TIP_CEIL_RANGE_MM,
-            arch_mm,
-        );
+        let built = if flush && self.shape.overhang_deg.is_some() {
+            self.drape_turning(base, nrm, t_leaf, &blade, drape_embed(standoff))
+        } else {
+            self.attempt(
+                anchor,
+                anchor_n,
+                t_leaf,
+                &blade,
+                st * standoff,
+                flush,
+                0.02 + st * TIP_CEIL_RANGE_MM,
+                arch_mm,
+            )
+        };
+        // A pitched blade whose tip is its lowest point and hangs free of
+        // the crown below it would start a layer in air: lay it flat
+        // instead.
+        let built = match built {
+            Ok((surf, _, _)) if self.shape.overhang_deg.is_some() && self.hangs(&surf) => {
+                self.drape_turning(base, nrm, t_leaf, &blade, drape_embed(standoff))
+            }
+            b => b,
+        };
         let (surf, inner, tangent) = match built {
             Ok(x) => x,
             Err(f) => return Outcome::Failed(f),
@@ -1017,6 +1164,170 @@ impl Job<'_> {
             return Outcome::Branch;
         }
         Outcome::Placed(leaf::solidify(&surf, &inner, self.tris), tangent)
+    }
+
+    /// Whether a built blade's lowest point hangs: the crown is not
+    /// within [`HANG_REACH_MM`] under it, so its first layer would be laid
+    /// in air.
+    fn hangs(&self, surf: &[V]) -> bool {
+        let low =
+            surf.iter().copied().fold(
+                [0.0, 0.0, f64::INFINITY],
+                |m, v| if v[2] < m[2] { v } else { m },
+            );
+        let start = add(low, [0.0, 0.0, 0.05]);
+        self.crown
+            .hit(start, [0.0, 0.0, -1.0])
+            .is_none_or(|h| start[2] - h.point[2] > 0.05 + HANG_REACH_MM)
+    }
+
+    /// [`Self::drape`] the blade rooted at `base` heading `t`; where the
+    /// crown under it is too broken to lay it on (a crease between lobes,
+    /// a cut), turn it about the root normal by [`DRAPE_TURNS`] until it
+    /// lies. The leaf keeps its root; only a turned leaf's heading changes.
+    fn drape_turning(
+        &self,
+        base: V,
+        n: V,
+        t: V,
+        blade: &Blade,
+        embed: f64,
+    ) -> Result<(Vec<V>, Vec<V>, V), Fail> {
+        let mut first = Fail::Drape;
+        for (i, turn) in DRAPE_TURNS.iter().enumerate() {
+            let tt = leaf::rotate_about(t, safe_norm(n), turn.to_radians());
+            let ls = blade.length_mm;
+            let (anchor, an) = self
+                .crown
+                .project(add(base, scale(tt, 0.25 * ls)), n, 1.0 + 0.25 * ls + 1.0)
+                .unwrap_or((base, n));
+            let r = self.drape(anchor, an, tt, blade, embed);
+            if r.is_ok() {
+                return r;
+            }
+            if let (0, Err(f)) = (i, r) {
+                first = f;
+            }
+        }
+        Err(first)
+    }
+
+    /// A flattened underside blade, laid on the crown: the midrib is
+    /// walked along the crown from the seat in twelfth-of-a-leaf steps
+    /// (each step re-dropped onto the crown along the local normal, so it
+    /// follows the clump round its bevel), then each ring's lateral
+    /// vertices are dropped onto the crown across the walked frame and set
+    /// their own dome and crease height off it, along the crown's normal
+    /// there, less its embed (`drape_embed`). The blade is the crown's surface
+    /// raised by at most its 0.24 mm dome and crease, so it cannot hang
+    /// past the crown it lies on; its rim and both ends are tucked just
+    /// inside. The root oval follows the walked midrib, 0.75 mm in.
+    fn drape(
+        &self,
+        anchor: V,
+        n: V,
+        t0: V,
+        blade: &Blade,
+        embed: f64,
+    ) -> Result<(Vec<V>, Vec<V>, V), Fail> {
+        let len = blade.length_mm;
+        let t = safe_norm(sub(t0, scale(n, dot(t0, n))));
+        let lat = cross(n, t);
+        if norm(lat) < 1e-6 {
+            return Err(Fail::Error);
+        }
+        let lat = scale(lat, 1.0 / norm(lat));
+        let ds = len / leaf::N_LONG as f64;
+        // the anchor is three quarters along the blade (station 9 of 12)
+        let fwd = self.crown.walk(anchor, n, t, ds, 3)?;
+        let back = self.crown.walk(anchor, n, scale(t, -1.0), ds, 9)?;
+        let mut frames: Vec<Frame> = back
+            .into_iter()
+            .rev()
+            .map(|f| Frame {
+                t: scale(f.t, -1.0),
+                ..f
+            })
+            .collect();
+        frames.push(Frame { p: anchor, n, t });
+        frames.extend(fwd);
+
+        // the flat blade's lateral offsets and heights, ring by ring
+        let origin = sub(anchor, scale(t, 0.75 * len));
+        let flat = Blade {
+            arch_deg: 0.0,
+            curl_deg: 0.0,
+            lift_mm: 0.0,
+            ..*blade
+        };
+        let surf = leaf::surface(origin, t, n, &flat);
+        // each ring walks out from its midrib, both ways, a lateral step
+        // at a time (a lateral jump would fall off a lobe's edge)
+        let mut out = vec![[0.0; 3]; surf.len()];
+        let mut inner = vec![[0.0; 3]; surf.len()];
+        let flat_below = self
+            .shape
+            .overhang_deg
+            .map_or(-1.0, |l| -libm::sin(l.to_radians()));
+        let full_above = self
+            .shape
+            .overhang_deg
+            .map_or(-1.0, |l| -libm::sin((l - DRAPE_DOME_FADE_DEG).to_radians()));
+        let mut lay = |hit: V, ns: V, k: usize| {
+            // the dome and crease fade out where the crown is near the
+            // printer's limit: their side slopes would tip it past
+            let u = ((ns[2] - flat_below) / (full_above - flat_below)).clamp(0.0, 1.0);
+            let h = dot(sub(surf[k], origin), n) * u * u * (3.0 - 2.0 * u);
+            out[k] = add(hit, scale(ns, h + embed));
+            inner[k] = sub(hit, scale(ns, DRAPE_ROOT_MM));
+        };
+        for (k, st) in [(BASE, 0), (TIP, leaf::N_LONG)] {
+            let f = &frames[st];
+            lay(f.p, f.n, k);
+        }
+        let mid = N_LAT / 2;
+        for r in 0..RINGS {
+            let f = frames[r + 1];
+            let k0 = r * STRIDE + mid;
+            lay(f.p, f.n, k0);
+            let right: Vec<usize> = (mid + 1..=N_LAT).collect();
+            let left: Vec<usize> = (0..mid).rev().collect();
+            for side_js in [right, left] {
+                let (mut p, mut nn) = (f.p, f.n);
+                let mut side = safe_norm(cross(f.n, f.t));
+                let mut x_prev = dot(sub(surf[k0], origin), lat);
+                for j in side_js {
+                    let k = r * STRIDE + j;
+                    let x = dot(sub(surf[k], origin), lat);
+                    let guess = add(p, scale(side, x - x_prev));
+                    let (hit, ns) = self.crown.drop_on(guess, nn).ok_or(Fail::Drape)?;
+                    let step = sub(hit.point, p);
+                    let sgn = if x - x_prev >= 0.0 { 1.0 } else { -1.0 };
+                    let along = sub(step, scale(ns, dot(step, ns)));
+                    if norm(along) > 1e-9 {
+                        side = scale(safe_norm(along), sgn);
+                    }
+                    p = hit.point;
+                    nn = ns;
+                    x_prev = x;
+                    lay(p, nn, k);
+                }
+            }
+        }
+
+        // the slab's floor: the crown's surface under every blade vertex,
+        // DRAPE_ROOT_MM in, so its walls cross the crown square
+        let mid = inner[(RINGS / 2) * STRIDE + N_LAT / 2];
+        if !self
+            .crown
+            .rays
+            .contains(&[inner[BASE], mid, inner[TIP]])
+            .iter()
+            .all(|x| *x)
+        {
+            return Err(Fail::Oval);
+        }
+        Ok((out, inner, t))
     }
 
     /// `_attempt_leaf_gen` as the organic placer calls it (flat-seat

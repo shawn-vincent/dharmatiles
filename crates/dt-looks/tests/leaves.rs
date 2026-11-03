@@ -162,9 +162,9 @@ fn printable_undersides() {
     let (_, e) = place_with(&foliage, &TriMesh::default(), &exact, &c.draws()).expect("places");
     let (leaves, p) =
         place_with(&foliage, &TriMesh::default(), &printable, &c.draws()).expect("places");
-    // The printer limit only takes leaves away (deep undersides whose tips
-    // would lie past the limit) and flattens the rest.
-    assert!(p.placed <= e.placed && p.placed * 10 >= e.placed * 8);
+    // The printer limit lays the underside blades flat on the crown
+    // (turning the few a crease would fold): the count stays within 5%.
+    assert!(p.placed * 100 >= e.placed * 95 && p.placed * 100 <= e.placed * 105);
     assert!(p.leaves.iter().all(|l| l.normal[2] >= -0.75));
     for m in &leaves {
         assert!(m.is_watertight());

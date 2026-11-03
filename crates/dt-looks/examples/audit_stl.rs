@@ -70,6 +70,19 @@ fn main() -> Result<(), String> {
             "{path}: {} tris, watertight {}, bodies {}, overhang {:.1} mm²",
             a.triangles, a.watertight, a.bodies, a.overhang_mm2
         );
+        if args.iter().any(|a| a == "--where") {
+            let p65 = Printer {
+                overhang_deg: 65.0,
+                ..Printer::new(0.45, 0.2, 55.0, 0.2)
+            };
+            let (e65, a65) = audit(&m, fp, &p65);
+            for (t, bad) in e65.mesh.triangles.iter().zip(&a65.overhang) {
+                if *bad {
+                    let p = t.map(|i| e65.mesh.positions[i as usize]);
+                    println!("  >65 at {:.2?}", p[0]);
+                }
+            }
+        }
         if let Some(z) = split {
             let (mut lo, mut hi) = (0.0, 0.0);
             for (t, bad) in ex.mesh.triangles.iter().zip(&a.overhang) {

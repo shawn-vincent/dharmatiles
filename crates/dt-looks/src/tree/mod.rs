@@ -58,6 +58,20 @@ pub const CONTROLS: &[&str] = &[
 ];
 
 // The Python Tree's fixed numbers (trees/layer.py), mm at the 35 mm square.
+/// The tree's overhang band (Shawn, 3 Nov 2026: "could we say 65 in rare
+/// circumstances?"): wood and leaf faces between the printer's 55° and
+/// 65° are tolerated in small patches, a share of the tree's
+/// downward-facing area; past 65° they fail. Everything still aims for
+/// 55° by construction. Share: with the leaves laid flat under the crown
+/// the band measures 0–0.36 mm² per tree (≤ 0.015% of the downward area,
+/// tree-1x1 and tree-2x2, db and ol, seeds 1–6); 0.1% leaves a sixfold
+/// margin.
+pub const TREE_BAND: dt_kit::Band = dt_kit::Band {
+    materials: &[Material::Wood, Material::Leaf],
+    max_deg: 65.0,
+    share: 0.001,
+};
+
 const SEGMENT_MM: f64 = 1.0;
 const TARGET_FDM_DEG: f64 = 35.0;
 /// S4: no branch edge below this, by construction.
@@ -294,8 +308,6 @@ pub struct Grown {
     pub wood_cut_mm3: f64,
     pub slivers: usize,
     pub leaves_placed: usize,
-    pub leaves_culled: usize,
-    pub leaves_cull_rounds: usize,
     /// Leaves the placer could not build (a degenerate frame): a warning,
     /// noted in the build record, never swallowed.
     pub leaves_failed_error: usize,
@@ -541,16 +553,9 @@ impl Tree {
                         .map(|(k, m)| form::solid(lslots.get(u32::try_from(k).unwrap_or(0)), m))
                         .collect::<Result<_, _>>()
                         .map_err(LookError::build)?;
-                    let ids: Vec<u32> = (0..n).map(|k| lslots.get(k).id()).collect();
-                    let base = [wood.clone(), crown_solid.clone(), footing.clone()];
-                    let (kept, cull) = cull_leaves(&base, ls, &ids, printer)?;
                     grown.leaves_placed = placed.len();
-                    grown.leaves_culled = cull.culled;
-                    grown.leaves_cull_rounds = cull.rounds;
-                    grown.leaves = kept.len();
-                    if !kept.is_empty() {
-                        parts.push(union(&kept).map_err(LookError::build)?);
-                    }
+                    grown.leaves = ls.len();
+                    parts.push(union(&ls).map_err(LookError::build)?);
                 }
             }
             parts.push(crown_solid);
@@ -646,112 +651,81 @@ pub(crate) fn drop_crumbs(
 }
 
 /// `solid` with the sealed air pockets its last union closed in (where a
-/// bevelled clump meets a branch) filled: each pocket's convex hull, a
-/// tenth larger, is unioned back as a plug (it is inside the wood and the
-/// clump, so nothing shows). Returns how many were filled.
+/// bevelled clump meets a branch, where a laid-flat leaf meets a bump in
+/// the crown) filled, and its loose crumbs (slivers under [`CRUMB_MM3`]
+/// where leaves cross) carved away, so the tree is one body. Each pocket
+/// or crumb is covered by the hull of its corners, each grown by
+/// [`CRUMB_PAD_MM`] (a flat sliver's hull is not flat), and the pocket's
+/// hull a tenth larger: a plug lies inside the wood and clumps and a
+/// carve outside everything but within the pad, so nothing shows.
+/// Repeated (the plugs and carves can leave their own) until the solid is
+/// one body, at most [`CRUMB_PASSES`] times. Returns how many it mended.
 fn fill_pockets(scene: &mut Scene, solid: Solid) -> Result<(Solid, usize), LookError> {
-    let plugs: Vec<TriMesh> = leaves::split_bodies(&solid.mesh())
-        .into_iter()
-        .filter(|b| dt_kit::signed_volume(b) < 0.0)
-        .filter_map(|b| {
+    let mut solid = solid;
+    let mut mended = 0;
+    for _ in 0..CRUMB_PASSES {
+        let bodies = leaves::split_sheets(&solid.mesh());
+        if bodies.len() <= 1 {
+            break;
+        }
+        let cover = |b: &TriMesh| {
             #[allow(clippy::cast_precision_loss)]
             let n = b.positions.len() as f64;
             let c = [0, 1, 2].map(|k| b.positions.iter().map(|p| p[k]).sum::<f64>() / n);
-            let pts: Vec<[f64; 3]> = b
-                .positions
-                .iter()
-                .map(|p| graph::add(c, graph::scale(graph::sub(*p, c), 1.1)))
-                .collect();
+            let mut pts: Vec<[f64; 3]> = Vec::with_capacity(9 * b.positions.len());
+            for p in &b.positions {
+                pts.push(graph::add(c, graph::scale(graph::sub(*p, c), 1.1)));
+                for i in 0..8 {
+                    pts.push([0, 1, 2].map(|k| {
+                        p[k] + if i >> k & 1 == 1 {
+                            CRUMB_PAD_MM
+                        } else {
+                            -CRUMB_PAD_MM
+                        }
+                    }));
+                }
+            }
             form::hull(&pts).ok()
-        })
-        .collect();
-    if plugs.is_empty() {
-        return Ok((solid, 0));
-    }
-    let n = u32::try_from(plugs.len()).map_err(LookError::build)?;
-    let slots = scene.slots(n, Material::Leaf).map_err(LookError::build)?;
-    let mut parts = vec![solid];
-    for (k, m) in plugs.iter().enumerate() {
-        parts.push(
-            form::solid(slots.get(u32::try_from(k).unwrap_or(0)), m).map_err(LookError::build)?,
-        );
-    }
-    Ok((union(&parts).map_err(LookError::build)?, plugs.len()))
-}
-
-/// A leaf may hang this much of its own surface, mm², before it is culled.
-const LEAF_OVERHANG_MM2: f64 = 0.05;
-
-/// What [`cull_leaves`] did.
-struct Cull {
-    culled: usize,
-    rounds: usize,
-}
-
-/// The leaves (with their slot IDs) that print: the tree (`base`: wood,
-/// clumps and the footing they stand on, plus every leaf) goes through
-/// the gate's audit, and a leaf goes if more than [`LEAF_OVERHANG_MM2`]
-/// of its own surface hangs past the layer-reach rule, or if none of it
-/// is left in the written body (a blade that does not join the crown).
-/// Repeated until a round culls nothing (a leaf may have stood on one
-/// that went). Kept leaves stay in placement order.
-fn cull_leaves(
-    base: &[Solid],
-    mut leaves: Vec<Solid>,
-    ids: &[u32],
-    printer: &dt_kit::Printer,
-) -> Result<(Vec<Solid>, Cull), LookError> {
-    const MAX_ROUNDS: usize = 4;
-    let mut ids: Vec<u32> = ids.to_vec();
-    let mut cull = Cull {
-        culled: 0,
-        rounds: 0,
-    };
-    while cull.rounds < MAX_ROUNDS && !leaves.is_empty() {
-        cull.rounds += 1;
-        let mut all = base.to_vec();
-        all.extend(leaves.iter().cloned());
-        let m = union(&all).map_err(LookError::build)?.mesh();
-        // original ID of each input triangle
-        let mut tri_id = vec![u32::MAX; m.triangles.len()];
-        for r in 0..m.run_original_id.len() {
-            let (a, b) = (m.run_index[r] as usize / 3, m.run_index[r + 1] as usize / 3);
-            for t in &mut tri_id[a..b.min(m.triangles.len())] {
-                *t = m.run_original_id[r];
+        };
+        let (mut plugs, mut cuts) = (Vec::new(), Vec::new());
+        for b in &bodies {
+            let v = dt_kit::signed_volume(b);
+            if v < 0.0 {
+                plugs.extend(cover(b));
+            } else if v < CRUMB_MM3 {
+                cuts.extend(cover(b));
             }
         }
-        let (ex, au) = dt_kit::audit(&m, [1e4, 1e4], printer);
-        let mut hang = vec![0.0; ids.len()];
-        let mut seen = vec![false; ids.len()];
-        let mut by_id: std::collections::HashMap<u32, usize> = std::collections::HashMap::new();
-        for (k, &id) in ids.iter().enumerate() {
-            by_id.insert(id, k);
-        }
-        for (t, &src) in ex.source.iter().enumerate() {
-            let Some(&k) = tri_id.get(src as usize).and_then(|id| by_id.get(id)) else {
-                continue;
-            };
-            seen[k] = true;
-            if au.overhang[t] {
-                let [p, q, r] = ex.mesh.triangles[t].map(|i| ex.mesh.positions[i as usize]);
-                hang[k] += 0.5 * graph::norm(graph::cross(graph::sub(q, p), graph::sub(r, p)));
-            }
-        }
-        let keep: Vec<bool> = (0..ids.len())
-            .map(|k| seen[k] && hang[k] <= LEAF_OVERHANG_MM2)
-            .collect();
-        let gone = keep.iter().filter(|&&k| !k).count();
-        if gone == 0 {
+        if plugs.is_empty() && cuts.is_empty() {
             break;
         }
-        cull.culled += gone;
-        let mut it = keep.iter();
-        leaves.retain(|_| *it.next().unwrap_or(&false));
-        let mut it = keep.iter();
-        ids.retain(|_| *it.next().unwrap_or(&false));
+        mended += plugs.len() + cuts.len();
+        let n = u32::try_from(plugs.len() + cuts.len()).map_err(LookError::build)?;
+        let slots = scene.slots(n, Material::Leaf).map_err(LookError::build)?;
+        let mut k = 0;
+        let mut next = |m: &TriMesh| {
+            let s = form::solid(slots.get(k), m).map_err(LookError::build);
+            k += 1;
+            s
+        };
+        let plugs: Vec<Solid> = plugs.iter().map(&mut next).collect::<Result<_, _>>()?;
+        let cuts: Vec<Solid> = cuts.iter().map(&mut next).collect::<Result<_, _>>()?;
+        if !plugs.is_empty() {
+            let mut parts = vec![solid];
+            parts.extend(plugs);
+            solid = union(&parts).map_err(LookError::build)?;
+        }
+        if !cuts.is_empty() {
+            solid = dt_kit::carve(&solid, &cuts).map_err(LookError::build)?;
+        }
     }
-    Ok((leaves, cull))
+    Ok((solid, mended))
 }
+
+/// How far [`fill_pockets`] grows each corner of a pocket or crumb, mm.
+const CRUMB_PAD_MM: f64 = 0.03;
+/// At most this many [`fill_pockets`] passes.
+const CRUMB_PASSES: usize = 3;
 
 /// A box of half-width `r` round `at`, from `z0` to `z1`: the footing
 /// [`dt_kit::stand`] stands the wood on.
@@ -942,6 +916,10 @@ fn ground_at(scene: &Scene, x: f64, y: f64) -> f64 {
 }
 
 impl Look for Tree {
+    fn band(&self) -> Option<dt_kit::Band> {
+        Some(TREE_BAND)
+    }
+
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid("tree"),
@@ -1004,8 +982,6 @@ impl Look for Tree {
             ("tree.wood_cut_mm3", gr.wood_cut_mm3),
             ("tree.slivers_dropped", gr.slivers as f64),
             ("tree.leaves_placed", gr.leaves_placed as f64),
-            ("tree.leaves_culled", gr.leaves_culled as f64),
-            ("tree.leaves_cull_rounds", gr.leaves_cull_rounds as f64),
             ("tree.leaves", gr.leaves as f64),
             ("tree.leaves_failed_error", gr.leaves_failed_error as f64),
             ("tree.x_mm", b.at[0]),
