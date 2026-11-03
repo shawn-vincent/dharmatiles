@@ -29,6 +29,14 @@
 //! | [`stl`] | binary STL with the build record |
 //! | [`render`] | a painted preview |
 //!
+//! P5 adds the forms ([`form`]: level sets, hulls, solids from meshes,
+//! box clips, the common stone relief and 3D noise) that walls, floors
+//! and trees are made of; graphs ([`graph`]: trace by space
+//! colonisation, loft tubes along a graph with C1 forks); [`stand`] (cut
+//! away what cannot print standing on what is below it: the audit's
+//! layer-reach rule as a construction); and [`rays`] (first hits and
+//! containment over dt-geom's ray trait, for the leaf placer).
+//!
 //! Kernel rules (R1, R2, R9, from `dt_geom::source`): every leaf solid takes
 //! a [`Slot`] reserved in sequence from the scene's block, so its source ID
 //! is fixed by index whatever thread builds it; cut faces take the
@@ -38,14 +46,18 @@
 
 mod audit;
 mod field;
+pub mod form;
+pub mod graph;
 mod outline;
+pub mod rays;
 mod render;
 mod scene;
 mod shape;
+mod stand;
 mod stl;
 mod stone;
 
-pub use audit::{Audit, Dropped, Export, Printer, audit};
+pub use audit::{Audit, Band, Dropped, Export, Printer, audit, audit_banded};
 pub use dt_geom::Convex;
 pub use dt_geom::{Grid, Mask, Rng, Seed, TriMesh, vec3};
 pub use field::{
@@ -53,12 +65,13 @@ pub use field::{
     smooth01,
 };
 pub use outline::Outline;
-pub use render::{Image, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};
+pub use render::{Image, ORANGE, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};
 pub use scene::{
     BANK_MM, Frame, LIFT_TOL_MM, Material, Part, REFERENCE_SQUARE_MM, Scene, Slot, Slots, Solid,
     Stage, Tag,
 };
 pub use shape::{area, carve, extrude, loft, signed_volume, union, wobble};
+pub use stand::{Stand, Stood, stand};
 pub use stl::{BuildRecord, stl};
 pub use stone::{Grain, grain, hull, seat, solid};
 

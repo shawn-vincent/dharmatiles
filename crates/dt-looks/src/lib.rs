@@ -9,12 +9,17 @@
 //! (DungeonBlocks). P2: [`ground`] in full (levels, hills, the edge
 //! contract) and [`dirt`] (dirtlab's textured earth on it). P3: [`rock`]
 //! (rocklab's rocks, alone or scattered; dirt's stones) and [`water`]
-//! (waterlab's swell-chaos).
+//! (waterlab's swell-chaos). P5: [`wall`], [`floor`], [`tree`] and
+//! [`openlock`] (the OpenLOCK connector).
 
 pub mod connector;
 pub mod dirt;
+pub mod floor;
 pub mod ground;
+pub mod openlock;
 pub mod rock;
+pub mod tree;
+pub mod wall;
 pub mod water;
 
 use dt_kit::{Mask, Scene, Seed};
@@ -101,10 +106,12 @@ pub enum Write {
 pub enum Read {
     /// Every solid of this kind (`rock`, `tree`, …).
     Solids(&'static str),
-    /// Every solid of this kind if the tile has any (water's rocks).
-    AnySolids(&'static str),
     /// Every other solid in the tile, the lifted ground included.
     AllSolids,
+    /// Every solid of this kind if the tile has any (water's rocks, what a
+    /// thing may stand on such as a wall on a floor); nothing to wait for
+    /// if not.
+    IfAny(&'static str),
 }
 
 /// A look's plan.
@@ -147,8 +154,18 @@ pub struct Ctx<'a> {
     pub path: &'a str,
     /// Its seed, keyed by its path.
     pub seed: Seed,
-    /// `at=`: where a thing stands, world mm (`None`: anywhere in its area).
-    pub at: Option<[f64; 2]>,
+    /// `along=`: the path it follows, in squares from the south-west
+    /// corner, walked with the tile inside on the left (a run's outer
+    /// face). `None` without `along=`.
+    pub along: Option<&'a [[f64; 2]]>,
+    /// `at=`: where it stands, in squares, as `[x_lo, x_hi]` and
+    /// `[y_lo, y_hi]` (equal ends for a fixed point; a range is drawn
+    /// from the entry's seed). `None` without `at=`.
+    pub at: Option<[[f64; 2]; 2]>,
+    /// The printer the build is checked against: looks that cut or cull
+    /// to the gate's rule (a tree's [`dt_kit::stand`], its leaf cull) use
+    /// its numbers.
+    pub printer: dt_kit::Printer,
 }
 
 /// A child of a scatter: the thing it scatters, its controls, and its
@@ -173,6 +190,12 @@ pub trait Look: Send + Sync {
     /// # Errors
     /// [`LookError`] when the build fails.
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError>;
+
+    /// The audit's tolerance band for this look's materials, if it has
+    /// one (trees); `None`: the printer's overhang is a hard limit.
+    fn band(&self) -> Option<dt_kit::Band> {
+        None
+    }
 }
 
 /// The controls a built look takes so far, or `None` for a look not built
@@ -186,6 +209,9 @@ pub fn takes(name: &str) -> Option<&'static [&'static str]> {
         "water" => Some(water::CONTROLS),
         "scatter" => Some(rock::SCATTER_CONTROLS),
         n if rock::is_thing(n) => Some(rock::CONTROLS),
+        "wall" => Some(wall::CONTROLS),
+        "floor" => Some(floor::CONTROLS),
+        "tree" => Some(tree::CONTROLS),
         _ => None,
     }
 }
@@ -194,6 +220,18 @@ pub fn takes(name: &str) -> Option<&'static [&'static str]> {
 #[must_use]
 pub fn holds(name: &str, child: &str) -> bool {
     name == "scatter" && rock::is_thing(child)
+}
+
+/// The place words a built look honours (`along`, `at`); the evaluator
+/// sets every other one aside as not built yet.
+#[must_use]
+pub fn places(name: &str) -> &'static [&'static str] {
+    match name {
+        "wall" => &["along"],
+        "tree" => &["at"],
+        n if rock::is_thing(n) => &["at"],
+        _ => &[],
+    }
 }
 
 /// The look `name` with its controls.
@@ -220,6 +258,9 @@ pub fn look_with(
         "water" => Ok(Box::new(water::Water::new(controls)?)),
         "scatter" => Ok(Box::new(rock::Scatter::new(controls, children)?)),
         n if rock::is_thing(n) => Ok(Box::new(rock::Single::new(n, controls)?)),
+        "wall" => Ok(Box::new(wall::Wall::new(controls)?)),
+        "floor" => Ok(Box::new(floor::Floor::new(controls)?)),
+        "tree" => Ok(Box::new(tree::Tree::new(controls)?)),
         _ => Err(LookError {
             control: None,
             message: format!("unknown look `{name}`"),
@@ -228,17 +269,18 @@ pub fn look_with(
     }
 }
 
-/// The connector for a system: `db` (DungeonBlocks). OpenLOCK comes in P5.
+/// The connector for a system: `db` (DungeonBlocks) or `ol` (OpenLOCK).
 ///
 /// # Errors
-/// [`LookError`] for a system without a connector yet.
+/// [`LookError`] for an unknown system.
 pub fn connector(system: &str) -> Result<Box<dyn Look>, LookError> {
     match system {
         "db" => Ok(Box::new(connector::DungeonBlocks::default())),
+        "ol" => Ok(Box::new(openlock::OpenLock::default())),
         _ => Err(LookError {
             control: None,
-            message: format!("no connector for system `{system}` yet"),
-            help: Some("P1 builds DungeonBlocks only: --system db".to_owned()),
+            message: format!("no connector for system `{system}`"),
+            help: Some("the systems are db (DungeonBlocks) and ol (OpenLOCK)".to_owned()),
         }),
     }
 }

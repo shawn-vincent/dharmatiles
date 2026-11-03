@@ -315,8 +315,8 @@ static TREE: &[Control] = &[
                 "clumps of foliage, one per branch end",
             )
             .limits(8.0, 200.0)
-            .default("200"),
-            c("clump-size", Axis::Mm, "size of each clump"),
+            .default("32"),
+            c("clump-size", Axis::Mm, "size of each clump").default("5.5"),
             c(
                 "branching",
                 Axis::Word,
@@ -391,6 +391,31 @@ static WALL_HEIGHT: &[Word] = &[
     ),
 ];
 
+/// The masonry surface presets (`walls/masonry.py:_TEXTURES`): chip size,
+/// roundover and relief together.  Numbers in mm.
+static TEXTURE: &[Word] = &[
+    w(
+        "chipped",
+        "chipped cut stone (Hirst Arts m50)",
+        &[("chip", 0.55), ("rounding", 0.22), ("relief", 0.07)],
+    ),
+    w(
+        "worn",
+        "soft, weathered",
+        &[("chip", 0.30), ("rounding", 0.60), ("relief", 0.10)],
+    ),
+    w(
+        "hewn",
+        "rough-hewn all over",
+        &[("chip", 0.80), ("rounding", 0.15), ("relief", 0.16)],
+    ),
+    w(
+        "dressed",
+        "near-smooth ashlar, crisp edges",
+        &[("chip", 0.15), ("rounding", 0.12), ("relief", 0.03)],
+    ),
+];
+
 static WALL: &[Control] = &[
     c("style", Axis::Word, "how stones are made and laid")
         .words(WALL_STYLE)
@@ -404,7 +429,7 @@ static WALL: &[Control] = &[
         &[
             c("height", Axis::Mm, "course height"),
             c("length", Axis::Mm, "stone length along the wall"),
-            c("texture", Axis::Mm, "roughness of each face"),
+            c("texture", Axis::Word, "surface finish of each stone").words(TEXTURE),
         ],
         "stone size",
     ),
@@ -434,6 +459,33 @@ static WALL: &[Control] = &[
         w("flat", "a flat top", &[]),
         w("battlements", "merlons and crenels", &[]),
     ]),
+];
+
+// ---- floor --------------------------------------------------------------
+
+static FLOOR: &[Control] = &[
+    c("style", Axis::Word, "cut slabs, or drystone flagstones")
+        .words(&[
+            w("cut-stone", "dressed slabs on the square grid", &[]),
+            w(
+                "fieldstone",
+                "drystone flags: a fieldstone wall laid flat",
+                &[],
+            ),
+        ])
+        .default("cut-stone"),
+    c("texture", Axis::Word, "surface finish of each slab")
+        .words(TEXTURE)
+        .default("dressed"),
+    c("slabs", Axis::Count, "slabs across one square")
+        .limits(1.0, 6.0)
+        .default("1"),
+    c(
+        "level",
+        Axis::Level,
+        "the pavement top: 7.4 is the official interior floor",
+    )
+    .default("7.4"),
 ];
 
 // ---- cliff --------------------------------------------------------------
@@ -596,8 +648,8 @@ const fn thing(name: &'static str, about: &'static str, controls: &'static [Cont
     }
 }
 
-/// Every built-in look the R6 vocabulary names.  Reeds and floors join
-/// in their phases (P4–P5).
+/// Every built-in look the R6 vocabulary names.  Reeds join in their
+/// phase (P4); water joined in P3, floors in P5.
 pub static LOOKS: &[Look] = &[
     Look {
         name: "ground",
@@ -691,6 +743,15 @@ pub static LOOKS: &[Look] = &[
         needs: &[PlaceWord::Along],
         holds_scatter: false,
         controls: WALL,
+    },
+    Look {
+        name: "floor",
+        about: "a stone pavement that replaces the ground: a wall laid on its side",
+        role: Role::Surface,
+        place: &[PlaceWord::In],
+        needs: &[],
+        holds_scatter: false,
+        controls: FLOOR,
     },
     Look {
         name: "cliff",

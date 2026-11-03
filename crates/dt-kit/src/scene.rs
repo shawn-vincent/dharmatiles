@@ -23,6 +23,9 @@ pub struct Frame {
 /// at this square, and scales with the system (R6 decision D2).
 pub const REFERENCE_SQUARE_MM: f64 = 35.0;
 
+/// The OpenLOCK square (one inch).
+pub const OPENLOCK_SQUARE_MM: f64 = 25.4;
+
 impl Frame {
     /// A DungeonBlocks frame at the default resolution (128 cells per
     /// square, Python's `SurfaceConfig.cells_per_square`).
@@ -33,6 +36,29 @@ impl Frame {
             rows,
             square_mm: REFERENCE_SQUARE_MM,
             cells_per_square: 128,
+        }
+    }
+
+    /// An OpenLOCK frame: 25.4 mm (one inch) squares, at the same 128
+    /// cells per square.
+    #[must_use]
+    pub const fn openlock(cols: u32, rows: u32) -> Self {
+        Self {
+            cols,
+            rows,
+            square_mm: OPENLOCK_SQUARE_MM,
+            cells_per_square: 128,
+        }
+    }
+
+    /// The frame for a connector system: `ol` is OpenLOCK, anything else
+    /// DungeonBlocks.
+    #[must_use]
+    pub fn for_system(system: &str, cols: u32, rows: u32) -> Self {
+        if system == "ol" {
+            Self::openlock(cols, rows)
+        } else {
+            Self::dungeonblocks(cols, rows)
         }
     }
 
@@ -94,6 +120,12 @@ pub enum Material {
     Rock = 3,
     /// Water.
     Water = 4,
+    /// Wall and floor stone (P5).
+    Masonry = 10,
+    /// Branches and trunks (P5).
+    Wood = 11,
+    /// Foliage clumps and leaves (P5).
+    Leaf = 12,
 }
 
 impl Material {
@@ -105,6 +137,9 @@ impl Material {
             2 => Some(Self::Connector),
             3 => Some(Self::Rock),
             4 => Some(Self::Water),
+            10 => Some(Self::Masonry),
+            11 => Some(Self::Wood),
+            12 => Some(Self::Leaf),
             _ => None,
         }
     }
@@ -168,6 +203,14 @@ impl Solid {
     pub fn slice(&self, z: f64) -> Vec<Vec<[f64; 2]>> {
         self.0.slice(z)
     }
+
+    /// Its surface as a triangle mesh, to place things on (leaves on a
+    /// crown). A query: what is placed is built as its own form and
+    /// combined with kit operations; the mesh is never re-imported.
+    #[must_use]
+    pub fn mesh(&self) -> TriMesh {
+        self.0.to_tri_mesh()
+    }
 }
 
 /// One source slot: an original ID and its own face-ID range
@@ -184,6 +227,15 @@ pub struct Slots {
     block: IdBlock,
     first: u32,
     len: u32,
+}
+
+impl Slot {
+    /// Its original (source) ID: the `run_original_id` of the triangles
+    /// it made, in any mesh built from it.
+    #[must_use]
+    pub fn id(&self) -> u32 {
+        self.id
+    }
 }
 
 impl Slots {
@@ -261,6 +313,7 @@ pub struct Scene {
     next_slot: u32,
     materials: Materials,
     stages: Vec<Stage>,
+    support: Option<Grid>,
 }
 
 impl Scene {
@@ -289,7 +342,39 @@ impl Scene {
             next_slot: 0,
             materials: Materials::default(),
             stages: Vec::new(),
+            support: None,
         }
+    }
+
+    /// **stamp**: a solid's footprint and top (world mm): the support
+    /// under it rises to `top_mm` (never falls). Things that stand on
+    /// others (a wall on a floor) and things that grow round them read
+    /// it through [`Scene::support`].
+    pub fn stamp(&mut self, footprint: &Mask, top_mm: f64) {
+        let (nx, ny) = self.frame.nodes();
+        let step = self.frame.step_mm();
+        let s = self
+            .support
+            .get_or_insert_with(|| Grid::new(nx, ny, step, f32::NEG_INFINITY));
+        #[allow(clippy::cast_possible_truncation)]
+        let z = top_mm as f32;
+        for (k, _) in footprint.bits.iter().enumerate().filter(|(_, b)| **b) {
+            s.z[k] = s.z[k].max(z);
+        }
+    }
+
+    /// The highest stamped top at each node (world mm, `-∞` where nothing
+    /// is stamped), or `None` before any stamp.
+    #[must_use]
+    pub fn support(&self) -> Option<&Grid> {
+        self.support.as_ref()
+    }
+
+    /// The ground surface as painted (world mm at every node), before the
+    /// lift spreads paint to unpainted nodes; `None` before any paint.
+    #[must_use]
+    pub fn surface_field(&self) -> Option<&Grid> {
+        (self.painted.count() > 0).then_some(&self.field)
     }
 
     /// The frame.

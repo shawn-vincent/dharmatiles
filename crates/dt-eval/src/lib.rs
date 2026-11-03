@@ -115,6 +115,9 @@ pub struct Built {
     pub notes: Vec<(String, f64)>,
     /// The ground surface as built, for painted previews.
     pub surface: Option<(dt_kit::Grid, dt_kit::Mask)>,
+    /// The nodes a stamped solid (floor, wall, tree) covers, for painted
+    /// previews: the earth's side under them is bedding.
+    pub covered: Option<dt_kit::Mask>,
 }
 
 impl Built {
@@ -122,16 +125,23 @@ impl Built {
     /// (dirtlab's drybrush, pebbles grey), overhangs red.
     #[must_use]
     pub fn colours(&self) -> Vec<[f32; 3]> {
-        let surface = self
-            .surface
-            .as_ref()
-            .map(|(g, stone)| dt_kit::SurfacePaint::new(g, stone));
-        dt_kit::paint_surface(
+        let surface = self.surface.as_ref().map(|(g, stone)| {
+            let p = dt_kit::SurfacePaint::new(g, stone);
+            match &self.covered {
+                Some(c) => p.covered(c),
+                None => p,
+            }
+        });
+        let mut c = dt_kit::paint_surface(
             &self.export.mesh,
             &self.materials,
             &self.audit.overhang,
             surface.as_ref(),
-        )
+        );
+        for (c, _) in c.iter_mut().zip(&self.audit.band).filter(|(_, b)| **b) {
+            *c = dt_kit::ORANGE;
+        }
+        c
     }
 }
 
@@ -182,7 +192,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
     if let Some(seed) = opts.seed {
         tile.reseed(seed);
     }
-    let frame = Frame::dungeonblocks(tile.cols, tile.rows);
+    let frame = Frame::for_system(&opts.system, tile.cols, tile.rows);
     let mut errors = Vec::new();
     let mut looks: Vec<Box<dyn Look>> = Vec::new();
     let mut areas = Vec::new();
@@ -437,11 +447,9 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
                     area: &masks[mask_of[i]],
                     path: &paths[i],
                     seed: pinned.map_or_else(|| root.path(&paths[i]), Seed::new),
-                    at: tile
-                        .stack
-                        .get(i)
-                        .and_then(|e| e.at)
-                        .map(|[x, y]| [x * c.frame.square_mm, y * c.frame.square_mm]),
+                    along: tile.stack.get(i).and_then(|e| e.along.as_deref()),
+                    at: tile.stack.get(i).and_then(|e| e.at),
+                    printer: opts.printer,
                 };
                 c.looks[i].build(&mut scene, &ctx).map_err(|e| {
                     let msg = format!("{}: {}", paths[i], e.message);
@@ -458,7 +466,10 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
     }
     let (mesh, mats) = scene.union().map_err(|e| fail(e.to_string()))?;
     let footprint = c.frame.size_mm();
-    let (export, audit) = dt_kit::audit(&mesh, footprint, &opts.printer);
+    // one band per tile: the first built look that declares one (trees)
+    let band = c.looks.iter().find_map(|l| l.band());
+    let (export, audit) =
+        dt_kit::audit_banded(&mesh, footprint, &opts.printer, &mats, band.as_ref());
     let materials = export.source.iter().map(|&t| mats[t as usize]).collect();
     scene.record("export", export.mesh.content_hash());
     let record = BuildRecord {
@@ -479,6 +490,11 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
         edge_mm,
         notes: scene.notes().to_vec(),
         surface: scene.surface(),
+        covered: scene.support().map(|g| dt_kit::Mask {
+            nx: g.nx,
+            ny: g.ny,
+            bits: g.z.iter().map(|z| z.is_finite()).collect(),
+        }),
     })
 }
 

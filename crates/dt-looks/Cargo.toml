@@ -20,5 +20,8 @@ dt-kit.workspace = true
 libm.workspace = true
 rayon.workspace = true
 
+[dev-dependencies]
+rayon.workspace = true
+
 [lints]
 workspace = true

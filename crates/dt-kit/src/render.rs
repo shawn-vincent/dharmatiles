@@ -52,6 +52,9 @@ pub const VIEWS: [View; 4] = [
 
 /// The overhang paint.
 pub const RED: [f32; 3] = [230.0 / 255.0, 30.0 / 255.0, 30.0 / 255.0];
+/// Faces in a look's overhang band (past the printer's limit, within the
+/// look's cap: trees' 55–65°).
+pub const ORANGE: [f32; 3] = [1.0, 0.55, 0.1];
 
 /// An RGB image.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -107,6 +110,9 @@ pub fn paint(materials: &[Material], overhang: &[bool]) -> Vec<[f32; 3]> {
                     Material::Connector => [0.62, 0.62, 0.64],
                     Material::Rock => [0.58, 0.58, 0.61],
                     Material::Water => [0.24, 0.38, 0.56],
+                    Material::Masonry => [0.66, 0.64, 0.60],
+                    Material::Wood => [0.42, 0.29, 0.18],
+                    Material::Leaf => [0.33, 0.52, 0.24],
                 }
             }
         })
@@ -128,6 +134,9 @@ const PEBBLE: [[f32; 3]; 3] = [
     [168.0, 164.0, 158.0],
 ];
 const SIDE: [f32; 3] = [42.0, 42.0, 46.0];
+/// Earth bedding under a floor or wall, seen on the tile's side: the
+/// parity harness's flat earth brown (`run_lab.py` `EARTH_RGB`).
+const BED: [f32; 3] = [128.0, 97.0, 64.0];
 
 fn ramp(t: f32, stops: &[[f32; 3]]) -> [f32; 3] {
     #[allow(clippy::cast_precision_loss)]
@@ -151,6 +160,7 @@ pub struct SurfacePaint {
     rel: Vec<f64>,
     rel2: Vec<f64>,
     stone: Vec<bool>,
+    covered: Vec<bool>,
     low: f64,
 }
 
@@ -170,8 +180,18 @@ impl SurfacePaint {
             rel2: z.iter().zip(&b2).map(|(a, b)| a - b).collect(),
             z,
             stone: stone.bits.clone(),
+            covered: Vec::new(),
             low,
         }
+    }
+
+    /// Mark the nodes a solid covers (a floor's or wall's footprint):
+    /// earth under them is painted as bedding, flat brown, not as
+    /// dirtlab's drybrush or its dark tile wall.
+    #[must_use]
+    pub fn covered(mut self, covered: &dt_geom::Mask) -> Self {
+        self.covered.clone_from(&covered.bits);
+        self
     }
 
     /// dirtlab's paint for one face (centre `c`, unit normal z `nz`), or
@@ -188,6 +208,11 @@ impl SurfacePaint {
         let node = |v: f64, n: usize| (libm::round(v / self.step).max(0.0) as usize).min(n - 1);
         let k = node(c[1], self.ny) * self.nx + node(c[0], self.nx);
         let (zs, rel) = (self.z[k], self.rel[k]);
+        // under a floor or wall the earth only shows as bedding: on the
+        // tile's side and on the sliver of bed beside a stone
+        if self.covered.get(k).copied().unwrap_or(false) {
+            return Some(BED.map(|v| v / 255.0));
+        }
         if (nz.abs() < 0.35 && c[2] < zs - 0.3) || c[2] < self.low - 0.3 {
             return Some(SIDE.map(|v| v / 255.0));
         }

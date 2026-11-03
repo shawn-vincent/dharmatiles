@@ -28,7 +28,8 @@ use std::sync::Arc;
 
 use dt_doc::Known;
 use dt_doc::model::{self, Callee, Definition, Document, Spanned, Use, Value};
-use dt_doc::schema::{Control, Look};
+use dt_doc::place::{Along, Edge, Point};
+use dt_doc::schema::{Control, Look, PlaceWord};
 use dt_kit::Seed;
 use miette::{NamedSource, SourceSpan};
 
@@ -82,8 +83,12 @@ pub struct Entry {
     pub id: Option<String>,
     /// The controls the look takes: written, or their defaults.
     pub controls: Vec<Setting>,
-    /// `at=`: where a thing stands, in squares from the south-west corner.
-    pub at: Option<[f64; 2]>,
+    /// `along=` a path of tile edges, as the path in squares walked with
+    /// the tile inside on the left (see [`edge_path`]).
+    pub along: Option<Vec<[f64; 2]>>,
+    /// `at=`: where it may stand, `[x_lo, x_hi]` and `[y_lo, y_hi]` in
+    /// squares.
+    pub at: Option<[[f64; 2]; 2]>,
     /// A scatter's children: each thing, its controls and its weight.
     pub children: Vec<Child>,
     /// The text it came from.
@@ -218,7 +223,7 @@ pub fn read(sources: &dyn Source, path: &str) -> Result<Read, Vec<Diag>> {
         errors: Vec::new(),
         entries: 0,
         top: None,
-        size: (1, 1),
+        dims: (1.0, 1.0),
     };
     let Some(file) = r.load(path, None) else {
         return Err(r.errors);
@@ -257,7 +262,7 @@ fn phase(look: &str) -> Option<u8> {
         "dirt" => 2,
         "rock" | "stone" | "boulder" | "pebble" | "scatter" => 3,
         "grass" => 4,
-        "wall" | "tree" => 5,
+        "wall" | "floor" | "tree" => 5,
         "cliff" => 7,
         _ => return None,
     })
@@ -292,6 +297,9 @@ struct Scope {
     params: BTreeMap<String, Bound>,
     levels: Vec<(String, f64)>,
     area: Option<Spanned<String>>,
+    /// Place words a definition call passes to the looks inside it.
+    at: Option<Spanned<Point>>,
+    along: Option<Spanned<Along>>,
     seed: Option<u64>,
     id: Option<String>,
     depth: usize,
@@ -306,8 +314,8 @@ struct Reader<'s> {
     entries: usize,
     /// The tile's own entry being inlined (where a blow-up is reported).
     top: Option<(Src, SourceSpan)>,
-    /// The tile's size in squares, for `at=` points.
-    size: (u32, u32),
+    /// The tile's squares across and up, for edge paths and points.
+    dims: (f64, f64),
 }
 
 /// The most stack entries a tile may expand to, definitions inlined.  A
@@ -453,7 +461,7 @@ impl Reader<'_> {
             span: def.name.span,
         };
         let (cols, rows) = (f64::from(t.cols), f64::from(t.rows));
-        self.size = (t.cols, t.rows);
+        self.dims = (cols, rows);
         for l in &def.lines {
             if let Some(w) = l.width.as_ref() {
                 t.pending
@@ -515,6 +523,8 @@ impl Reader<'_> {
             params: BTreeMap::new(),
             levels: t.levels.clone(),
             area: None,
+            at: None,
+            along: None,
             seed: None,
             id: None,
             depth: 0,
@@ -590,6 +600,8 @@ impl Reader<'_> {
             }
             self.entries += 1;
             let area = e.place.region.clone().or_else(|| scope.area.clone());
+            let at = e.place.at.clone().or_else(|| scope.at.clone());
+            let along = e.place.along.clone().or_else(|| scope.along.clone());
             // this entry's path under an enclosing definition call: its
             // name, then its id or its count among same-named siblings
             // (an id is never all digits, so the two cannot meet)
@@ -637,33 +649,67 @@ impl Reader<'_> {
                         continue;
                     };
                     let mut ok = true;
-                    // `at=` on a built thing: a fixed point in squares
-                    let thing = matches!(look.role, dt_doc::schema::Role::Thing);
-                    let mut at = None;
-                    if thing && let Some(p) = &e.place.at {
-                        let (cols, rows) = (f64::from(self.size.0), f64::from(self.size.1));
-                        match fixed_point(&p.value, cols, rows) {
-                            Some(xy) => at = Some(xy),
-                            None => {
-                                ok = false;
-                                pending.push(not_yet(
-                                    src,
-                                    p.span,
-                                    "a thing at a point drawn from a range is",
-                                    None,
-                                ));
-                            }
+                    // inside a definition the decoder leaves a required
+                    // place word to the call; it must arrive from there
+                    for need in look.needs {
+                        let has = match need {
+                            PlaceWord::Along => along.is_some(),
+                            PlaceWord::At => at.is_some(),
+                            _ => true,
+                        };
+                        if !has {
+                            ok = false;
+                            let w = need.as_str();
+                            let mut d = Diag::at(
+                                src,
+                                e.what.span,
+                                "dt::missing-control",
+                                format!(
+                                    "`{}` needs `{w}=`, and the definition call gives none",
+                                    look.name
+                                ),
+                                format!("no `{w}=` here or at the call"),
+                            );
+                            d.help = Some(format!(
+                                "write it here, or pass it at the call: `name {w}=…`"
+                            ));
+                            self.errors.push(d);
                         }
                     }
-                    for (word, span) in [
-                        ("along=", e.place.along.as_ref().map(|s| s.span)),
+                    let honours = dt_looks::places(look.name);
+                    // along= a path of edges and at= a point, for the looks
+                    // that place by them; the rest is not built yet
+                    let mut path = None;
+                    let mut point = None;
+                    let mut unplaced = vec![
                         ("side=", e.place.side.as_ref().map(|s| s.span)),
-                        (
-                            "at=",
-                            e.place.at.as_ref().filter(|_| !thing).map(|s| s.span),
-                        ),
                         ("against=", e.place.against.as_ref().map(|s| s.span)),
-                    ] {
+                    ];
+                    match &along {
+                        Some(a) if honours.contains(&"along") => match &a.value {
+                            Along::Edges(edges) => path = Some(edge_path(edges, self.dims)),
+                            Along::Line(_) => unplaced.push(("along= a drawn line", Some(a.span))),
+                        },
+                        // inherited from a definition call: for the looks
+                        // that place by it only, the others ignore it
+                        Some(a) if e.place.along.is_some() => {
+                            unplaced.push(("along=", Some(a.span)));
+                        }
+                        _ => {}
+                    }
+                    match &at {
+                        Some(p) if honours.contains(&"at") => {
+                            match p.value.bounds(self.dims.0, self.dims.1) {
+                                Ok(((x0, x1), (y0, y1))) => point = Some([[x0, x1], [y0, y1]]),
+                                Err(msg) => self
+                                    .errors
+                                    .push(Diag::at(src, p.span, "dt::at", msg, "here")),
+                            }
+                        }
+                        Some(p) if e.place.at.is_some() => unplaced.push(("at=", Some(p.span))),
+                        _ => {}
+                    }
+                    for (word, span) in unplaced {
                         if let Some(span) = span {
                             ok = false;
                             pending.push(not_yet(
@@ -726,7 +772,8 @@ impl Reader<'_> {
                             seed,
                             id,
                             controls,
-                            at,
+                            along: path,
+                            at: point,
                             children,
                             src: Arc::clone(src),
                             span: e.span,
@@ -780,6 +827,8 @@ impl Reader<'_> {
                         params,
                         levels,
                         area,
+                        at,
+                        along,
                         seed,
                         id,
                         depth: scope.depth + 1,
@@ -990,4 +1039,32 @@ fn fixed_point(p: &dt_doc::place::Point, cols: f64, rows: f64) -> Option<[f64; 2
     }
     let ((x, _), (y, _)) = p.bounds(cols, rows).ok()?;
     Some([x, y])
+}
+
+/// A path of tile edges (each meeting the next at a corner) as one
+/// polyline in squares, walked with the tile inside on the left: the
+/// path a run's outer face follows (`north west` on a 1×1 is
+/// `(1,1) → (0,1) → (0,0)`, the Python spine of a north-west corner
+/// wall). A path written clockwise is walked the other way round.
+#[must_use]
+pub fn edge_path(edges: &[Edge], (cols, rows): (f64, f64)) -> Vec<[f64; 2]> {
+    // each edge anticlockwise round the tile: the inside on the left
+    let walk = |e: Edge| match e {
+        Edge::South => ([0.0, 0.0], [cols, 0.0]),
+        Edge::East => ([cols, 0.0], [cols, rows]),
+        Edge::North => ([cols, rows], [0.0, rows]),
+        Edge::West => ([0.0, rows], [0.0, 0.0]),
+    };
+    let mut order: Vec<Edge> = edges.to_vec();
+    #[allow(clippy::float_cmp)]
+    let follows = |a: Edge, b: Edge| walk(a).1 == walk(b).0;
+    if order.len() > 1 && !follows(order[0], order[1]) {
+        order.reverse();
+    }
+    let mut out = Vec::with_capacity(order.len() + 1);
+    if let Some(&first) = order.first() {
+        out.push(walk(first).0);
+    }
+    out.extend(order.iter().map(|&e| walk(e).1));
+    out
 }

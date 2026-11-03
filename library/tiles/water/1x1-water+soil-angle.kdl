@@ -11,7 +11,7 @@
 tile water+soil-angle size="1x1" seed=52 {
     about "A shallow pool tucked into the south-west corner of a dirt bank."
     line shore wobble=2.5 { through "0,0.4" "0.4,0" }
-    region pool { bounded-by shore; fill "0.15,0.15" }
+    region pool { bounded-by shore; fill "0.1,0.1" }
     region bank { bounded-by shore; fill "0.75,0.75" }
     stack {
         dirt in=bank

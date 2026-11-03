@@ -105,7 +105,7 @@ tile grass-tree size="2x2" seed=84 {
 <tr><td><code>trunk height</code></td><td>mm</td><td>30</td><td>Bare trunk below the crown.</td><td><code>trunk_height_mm</code></td></tr>
 <tr><td><code>crown width</code></td><td>mm</td><td>30</td><td>Crown diameter.</td><td><code>canopy_radius_mm</code> × 2</td></tr>
 <tr><td><code>crown shape</code></td><td><code>round</code>, <code>cone</code>, <code>wide</code>, <code>tall</code></td><td><code>round</code></td><td>Silhouette. Only <code>round</code> is the approved crown; the others are provisional.</td><td><code>top_/bottom_pointiness</code>, <code>_curve</code></td></tr>
-<tr><td><code>crown clumps</code></td><td>8–200</td><td>200</td><td>Foliage clumps, one per branch end. The library tiles use 32.</td><td><code>n_attractors</code></td></tr>
+<tr><td><code>crown clumps</code></td><td>8–200</td><td>32</td><td>Foliage clumps, one per branch end, as in the library tiles.</td><td><code>n_attractors</code></td></tr>
 <tr><td><code>crown clump-size</code></td><td>mm</td><td>5.5 radius</td><td>Size of each clump.</td><td><code>foliage_cluster_radius_mm</code></td></tr>
 <tr><td><code>crown branching</code></td><td><code>open</code>, <code>normal</code>, <code>dense</code></td><td><code>normal</code></td><td>A few long limbs, or many forks. <code>open</code> and <code>dense</code> are provisional.</td><td><code>branch_*</code></td></tr>
 <tr><td><code>leaves</code></td><td><code>on</code>, <code>clumps-only</code>, <code>bare</code></td><td><code>on</code></td><td>Separate leaves, just foliage clumps, or a winter tree.</td><td><code>leaves</code>, <code>foliage_clusters</code></td></tr>
@@ -186,6 +186,8 @@ tile grass-tree size="2x2" seed=84 {
 <tr><td class="d">2 Jul</td><td>Iteration 5 of the organic placer accepted.</td><td class="q">“I really like the density and surface of the leaves — the placement is really nice... wow. That's amazing!”</td></tr>
 <tr><td class="d">2 Jul</td><td>Underside leaves become a pure end-to-end arch; base-to-base nestling must not raise a leaf.</td><td>—</td></tr>
 <tr><td class="d">3 Jul</td><td>Organic is the only leaf placer; the others are deleted.</td><td class="q">“they suck, this one is good”</td></tr>
+<tr><td class="d">3 Nov</td><td>Leaves on the crown's underside are flattened until they print at 55°, rather than culled or pointed up-slope. This settles the clash between requirement 7 (leaves down to a normal of −0.75) and down-slope pointing at the 55° overhang gate: coverage and direction both hold, and the underside blades lie flush.</td><td class="q">“flatten the leaves under the crown”</td></tr>
+<tr><td class="d">3 Nov</td><td>Trees may lean between 55° and 65° in rare small patches, accepting some texture on the underside; 65° is the hard cap. Everything still aims for 55°; the patches are reported apart from overhang, held to a small share of the tree's underside, and painted orange.</td><td class="q">“for trees, just because they so much want overhangs... could we say 65 in rare circumstances? If we really want to push the envelope and are willing to deal with a little bit of surface texture issues?”</td></tr>
 </tbody></table></div>
 </details>
 
@@ -266,12 +268,15 @@ tile grass-tree size="2x2" seed=84 {
 
 <details id="rust">
 <summary>Rust port</summary>
-<p><strong>Phase P5</strong>, “Walls, floors, OpenLOCK and trees”. Exit gate includes no branch below 26°, ray queries within 3× of Embree, and Shawn's sign-off (see the <a href="../rust/plan.html">plan</a>). The vocabulary exists (<code>tree</code> in <code>crates/dt-doc/src/looks.rs</code>), with a library twin of the 2×2 grass-tree tile and an oak preset. Not started; no parity contact sheet yet.</p>
+<p><strong>Phase P5</strong>, branch <code>rust/p5</code> (2 Nov 2026). Ported: the crown envelope, the skeleton (space colonisation with the four invariants by construction), barked C1 wood, foliage clumps, and the organic leaf placer on the obvhs ray wrapper. Sheet: <code>cargo xtask parity tree</code> → <code>out/parity/tree/contact-sheet.png</code>.</p>
+<p><strong>Rust beside Python</strong> (the 1×1 tile's tree on flat ground, leaves off, seeds 1–4): height 46.8 / 48.6 mm, crown width 41.1 / 41.0 mm, volume 12,370 / 13,060 mm³, 32 terminals each, lowest branch 30.9–34.7° (never below 26°). Every judged row passes. A 1×1 tree tile builds in 2.9–3.8 s (DungeonBlocks) and 1.6–1.8 s (OpenLOCK); 2×2 in 5.6 and 2.6 s.</p>
+<p><strong>Leaves match Python exactly</strong> on the same inputs: on seeds 1–4 every Rust leaf sits at Python's root with Python's direction, with the same counts, failures and uncovered points. Placement takes 0.05–0.3 s per scale against Python's 2 s. Ray queries agree with Embree on 99.9997% of 315,033 rays, at 2.6–3.1× Embree's single-threaded time on a loaded machine (R3 measured 2.46× quiet).</p>
+<p><strong>Overhang.</strong> Most of the 1,230 mm² was leaves: Python's wood and clumps alone are 136–223 mm², all on clump undersides. Rust bevels whatever would hang (the <code>stand</code> op, 40° up from what holds it), so wood and clumps are 0 mm² at every seed and scale; the bevel planes show from low angles. Leaves are still the open problem: the printable leaf mode (tip tilt capped on undersides) cuts leaf overhang by about 75%, and a per-leaf audit cull then reaches 0.1–2 mm² but drops 15–17% of leaves and takes the DungeonBlocks build to 11–14 s. Until that is settled the tree test tiles run <code>leaves clumps-only</code>.</p>
 </details>
 
 <h3 id="open">Open issues</h3>
 <ul>
-  <li>The red-painted render (2 Nov) shows about 1,230 mm² of exposed faces past the limit, along the undersides of the foliage clumps and their leaves. The tree has no face-angle audit of its own; only branch angles are checked (<code>strict_fdm_angle_deg</code>).</li>
+  <li>The red-painted render (2 Nov) shows about 1,230 mm² of exposed faces past the limit, mostly leaves on the crown's underside. The Rust port makes wood and clumps 0 mm² by construction; leaves still overhang (see Rust port).</li>
   <li>The organic placer's knobs are still module constants, not <code>Tree(...)</code> arguments (requirement 13).</li>
   <li>About 5% of leaf builds fail at crown fringes and undersides.</li>
   <li>The deep underside (below a normal of −0.75) is bare clump; a leaf-shaped relief there was proposed and not built.</li>

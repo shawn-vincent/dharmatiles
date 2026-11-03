@@ -1,0 +1,19 @@
+// A 1×1 grass meadow with one tree and a few big rocks.
+// Twin of src/tiles/ground/1x1-grass-tree.tile.py.
+
+use "parts/grass" long-grass
+
+tile grass-tree size="1x1" seed=42 {
+    stack {
+        ground                          // flat, at the ground level (5 mm)
+        scatter per-square=3 gap=7 {    // rocks first: grass grows round them
+            boulder size="7..9" shape=angular
+        }
+        tree height=35 {               // anywhere on the tile
+            trunk height=30
+            crown width=24 clumps=32 shape=round branching=normal
+            leaf length=4.5 width=3
+        }
+        long-grass                      // grows round the trunk and rocks
+    }
+}

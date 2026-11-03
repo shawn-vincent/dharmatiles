@@ -340,7 +340,7 @@ impl Look for Water {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Fill,
-            reads: vec![Read::AnySolids("rock")],
+            reads: vec![Read::IfAny("rock")],
             cell_mm: Some(crate::CellMm::mm(CELL_MM)),
         }
     }

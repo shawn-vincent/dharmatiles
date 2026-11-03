@@ -19,6 +19,10 @@ const TILES: &[&str] = &[
     "lib:tiles/test/rocks-2x2.kdl",
     "lib:tiles/test/water-2x2.kdl",
     "lib:tiles/test/dirt-stones-2x2.kdl",
+    "lib:tiles/test/tree-1x1.kdl",
+    "lib:tiles/test/wall-cut-stone-corner-1x1.kdl",
+    "lib:tiles/test/wall-fieldstone-1x1.kdl",
+    "lib:tiles/test/floor-stone-1x1.kdl",
 ];
 
 fn build_at(path: &str, threads: usize) -> Built {
@@ -48,12 +52,13 @@ fn metrics(b: &Built) -> String {
         (600, 475),
     );
     format!(
-        "triangles: {}\nvolume_mm3: {:.3}\nwatertight: {}\nbodies: {}\ndropped: {}\noverhang_mm2: {:.3}\nholes: {}\nrender_red_pixels: {}\n",
+        "triangles: {}\nvolume_mm3: {:.3}\nwatertight: {}\nbodies: {}\ndropped: {}\nvoids_filled: {}\noverhang_mm2: {:.3}\nholes: {}\nrender_red_pixels: {}\n",
         a.triangles,
         a.volume_mm3,
         a.watertight,
         a.bodies,
         a.dropped.len(),
+        a.voids.len(),
         a.overhang_mm2,
         a.holes,
         img.red_pixels(),
@@ -188,5 +193,27 @@ fn the_rocks_and_water_tiles_meet_the_exit_criteria() {
             let rms = note("relief_rms").unwrap();
             assert!((0.55..0.85).contains(&rms), "{path}: rms {rms}");
         }
+    }
+}
+
+#[test]
+fn the_wall_and_floor_tiles_meet_the_exit_criteria() {
+    for path in [
+        "lib:tiles/test/wall-cut-stone-corner-1x1.kdl",
+        "lib:tiles/test/wall-fieldstone-1x1.kdl",
+        "lib:tiles/test/floor-stone-1x1.kdl",
+    ] {
+        let b = build_at(path, 4);
+        let a = &b.audit;
+        assert!(a.watertight, "{path}: watertight after the float32 reload");
+        assert_eq!(a.overhang_mm2, 0.0, "{path}");
+        assert_eq!(a.holes, 0, "{path}");
+        let note = |k: &str| {
+            b.notes
+                .iter()
+                .find(|(n, _)| n.ends_with(k))
+                .map(|(_, v)| *v)
+        };
+        assert!(note("units").unwrap_or(0.0) > 0.0, "{path}: {:?}", b.notes);
     }
 }

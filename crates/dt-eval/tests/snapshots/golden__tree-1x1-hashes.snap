@@ -1,0 +1,11 @@
+---
+source: crates/dt-eval/tests/golden.rs
+expression: hashes(&b)
+---
+b794272489d6027d  plan
+ee19f3441aa27051  surface
+5c9c1e67ae66a217  ground:tile/tree/ground
+5b2f97cdebac5d17  tree:tile/tree/tree/0
+9ad7b1454c0b8fad  connector:tile/tree/connector
+4e601cf77171a4bd  union
+a9822d298e3e6952  export

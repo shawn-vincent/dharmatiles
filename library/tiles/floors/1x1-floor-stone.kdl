@@ -1,0 +1,13 @@
+// A dressed stone-slab floor over the whole 1×1: the pavement is the
+// ground (slabs run from the datum to the interior floor level).
+// Twin of src/tiles/floors/1x1-floor-stone.tile.py.
+
+tile floor-stone size="1x1" seed=71 {
+    stack {
+        dirt                                // under the slabs; the floor replaces it
+        floor texture=dressed seed=21 {
+            slabs 1                         // slabs across one square
+            level 7.4                       // the official interior floor
+        }
+    }
+}

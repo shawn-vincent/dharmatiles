@@ -667,7 +667,13 @@ impl Look for Single {
         let item = make_item(&mut rng, d, self.thing.mix, false)?;
         let yaw = rng.uniform(0.0, 360.0);
         let s = scene.frame().scale();
-        let at = match ctx.at {
+        let sq = scene.frame().square_mm;
+        let at = match ctx.at.map(|[[x0, x1], [y0, y1]]| {
+            // a range is drawn from the entry's seed
+            let x = if x1 > x0 { rng.uniform(x0, x1) } else { x0 };
+            let y = if y1 > y0 { rng.uniform(y0, y1) } else { y0 };
+            [x * sq, y * sq]
+        }) {
             Some(a) => {
                 // a stone never stands past the tile's edge: it is
                 // clipped by no one, so it would print past its neighbour

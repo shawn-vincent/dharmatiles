@@ -75,20 +75,40 @@
       "order": 40,
       "body": "rust",
       "area": "Rust P3",
-      "state": "waiting",
-      "title": "P3 rocks and water: built, waiting for Shawn",
-      "detail": "Rocks and water pass parity at seeds 1–4; edge within 0.016 mm; water tile 0.9 s. 11 water twins, review fixes in, CI green. Dirt stones miss one metric by a hair (1.203 vs ±20%). Waiting for Shawn's sign-offs and a print of two butted water tiles. Preview not built.",
-      "updated": "2026-11-02T22:37:46Z"
+      "state": "done",
+      "title": "Phase 3 done: rocks and water signed off and merged",
+      "detail": "Shawn, 3 Nov: 'let's just keep going'. Rocks and water pass parity at seeds 1–4; eleven water twins are in library/tiles/water and their .tile.py files are deleted. Later: dirt-stones 10–40 mm spectrum 1.203 vs ±20%; rocks texture 88–93% vs the lab's 95–97%.",
+      "updated": "2026-11-03T22:33:58Z"
     },
     {
       "id": "p5",
       "order": 45,
       "body": "rust",
       "area": "Rust P5",
-      "state": "review",
-      "title": "Phase 5 built: walls, floors, OpenLOCK and leafy trees; waiting for Shawn",
-      "detail": "rust/p5. Floor sides now a straight stone-on-earth band. Trees build with leaves on by default: all 28 test builds have 0 overhang past 65°, are watertight and drop nothing; 2×2 DB tree 7.1 s (limit 10 s); rays 2.56× Embree (limit 3×). Local tests pass. Waiting on Shawn: floor and tree sheets, the tree print, the sliver rule.",
-      "updated": "2026-11-03T21:30:00Z"
+      "state": "done",
+      "title": "Phase 5 done: walls, floors, OpenLOCK and trees merged",
+      "detail": "Shawn, 3 Nov: 'yeah, trees suck. But they're really hard. So let's just keep going.' Trees accepted for now. Floors twins in; floor .tile.py deleted. Later: wall openings, floor crack engraving, the mortar sheet, tree quality.",
+      "updated": "2026-11-03T22:33:58Z"
+    },
+    {
+      "id": "p4",
+      "order": 50,
+      "body": "rust",
+      "area": "Rust P4",
+      "state": "active",
+      "title": "Phase 4 grass, meadow, shore and reeds: started",
+      "detail": "Branch rust/p4. Porting grasslab v3 stroke blades, then meadowlab and shorelab.",
+      "updated": "2026-11-03T22:33:58Z"
+    },
+    {
+      "id": "waiting",
+      "order": 90,
+      "body": "rust",
+      "area": "Waiting for Shawn",
+      "state": "waiting",
+      "title": "Items that need Shawn's eye (not blocking)",
+      "detail": "Nothing yet.",
+      "updated": "2026-11-03T22:33:58Z"
     }
   ]
 }

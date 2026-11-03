@@ -13,7 +13,28 @@ use std::collections::HashMap;
 use dt_geom::TriMesh;
 use rayon::prelude::*;
 
+use crate::form::vertex_normals;
+use crate::graph::{cross, dist, sub};
+use crate::scene::Material;
 use crate::shape::signed_volume;
+
+/// A tolerance band for some materials (a look's audit setting, not the
+/// printer's): their faces past the printer's overhang but within
+/// `max_deg` are reported as band, not overhang, up to `share` of those
+/// materials' downward-facing area. Past `max_deg` they fail as any face
+/// does. Trees (Shawn, 3 Nov 2026): 55–65° in rare small patches, 65° the
+/// hard cap (a 0.2 mm layer steps 0.2·tan 65° = 0.43 mm, under a 0.45 mm
+/// line).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Band {
+    /// The materials the band covers.
+    pub materials: &'static [Material],
+    /// The hard cap, degrees from vertical.
+    pub max_deg: f64,
+    /// Band area allowed, as a share of those materials' downward-facing
+    /// area.
+    pub share: f64,
+}
 
 /// The printer profile the gate checks against: the numbers of a
 /// `printer` in library/printers/*.kdl (dt-eval decodes it with dt-doc
@@ -58,6 +79,12 @@ impl Printer {
     }
 }
 
+/// A left-out body smaller than this, mm³, is a boolean's sliver, not a
+/// part (a printed bead, 0.45 × 0.45 × 0.2 mm, is 0.04; a slicer prints
+/// nothing of it): an inward-wound one counts as a void wherever it lies,
+/// an outward one is reported in `slivers`, not as a lost part.
+const VOID_SLIVER_MM3: f64 = 1e-3;
+
 /// A body keep-largest dropped.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Dropped {
@@ -65,6 +92,8 @@ pub struct Dropped {
     pub triangles: usize,
     /// Its volume, mm³.
     pub volume_mm3: f64,
+    /// Its bounding box, mm (low corner, high corner): where to look.
+    pub bounds: [[f64; 3]; 2],
 }
 
 /// What the gate found.
@@ -78,8 +107,14 @@ pub struct Audit {
     pub volume_mm3: f64,
     /// Bodies before keep-largest.
     pub bodies: usize,
-    /// What keep-largest dropped, largest first.
+    /// Loose bodies keep-largest dropped, largest first.
     pub dropped: Vec<Dropped>,
+    /// Sealed voids keep-largest left out (inward-wound shells, negative
+    /// volume), so they print solid: a fill, not a lost part.
+    pub voids: Vec<Dropped>,
+    /// Loose boolean slivers keep-largest left out: outward bodies under
+    /// a thousandth of a mm³, far below one printed bead. Not a lost part.
+    pub slivers: Vec<Dropped>,
     /// Vertices pinch separation moved.
     pub pinches_moved: usize,
     /// Triangles that collapsed in the float32 merge (dropped).
@@ -90,6 +125,13 @@ pub struct Audit {
     pub overhang_mm2: f64,
     /// Per written triangle: past the overhang rule (painted red).
     pub overhang: Vec<bool>,
+    /// Area of the faces in a look's tolerance band, mm² (past the
+    /// printer's overhang, within the band's cap; not in `overhang_mm2`).
+    pub band_mm2: f64,
+    /// The band area allowed, mm² (0 without a band).
+    pub band_budget_mm2: f64,
+    /// Per written triangle: in the band (painted orange).
+    pub band: Vec<bool>,
     /// Vertical rays inside the footprint that miss the mesh.
     pub holes: usize,
 }
@@ -108,11 +150,28 @@ impl Audit {
                 self.overhang_mm2, printer.overhang_deg, printer.overhang_budget_mm2
             ));
         }
+        if self.band_mm2 > self.band_budget_mm2 {
+            f.push(format!(
+                "{:.2} mm² in the overhang band (budget {:.2} mm²)",
+                self.band_mm2, self.band_budget_mm2
+            ));
+        }
         if self.holes > 0 {
             f.push(format!("{} see-through holes", self.holes));
         }
         if self.triangles == 0 {
             f.push("nothing to print".to_owned());
+        }
+        // A dropped body is a part of the tile the print would lose (a
+        // floating brick, a crumb): no library tile drops any, so there is
+        // no volume floor.
+        if let Some(big) = self.dropped.first() {
+            let total: f64 = self.dropped.iter().map(|d| d.volume_mm3.abs()).sum();
+            f.push(format!(
+                "{} loose bodies dropped ({total:.2} mm³ in all, largest {} triangles)",
+                self.dropped.len(),
+                big.triangles
+            ));
         }
         f
     }
@@ -132,13 +191,93 @@ pub struct Export {
 /// height in mm (for see-through holes).
 #[must_use]
 pub fn audit(input: &TriMesh, footprint: [f64; 2], printer: &Printer) -> (Export, Audit) {
+    audit_banded(input, footprint, printer, &[], None)
+}
+
+/// [`audit`] with a look's tolerance [`Band`]; `materials` holds each
+/// input triangle's material.
+#[must_use]
+pub fn audit_banded(
+    input: &TriMesh,
+    footprint: [f64; 2],
+    printer: &Printer,
+    materials: &[Material],
+    band: Option<&Band>,
+) -> (Export, Audit) {
     let mut m = canonical(input);
     let pinches_moved = separate_pinches(&mut m);
     let (m, source, collapsed) = quantise(&m);
-    let (m, source, bodies, dropped) = keep_largest(&m, &source);
+    let (m, source, bodies, left_out) = keep_largest(&m, &source);
+    // a void is an inward-wound shell sealed inside the kept body; an
+    // inward-wound shell anywhere else is a lost part like any other.
+    // Under VOID_SLIVER_MM3 an inward shell is a boolean's sliver lying
+    // on the kept surface (its inside is ambiguous, and it holds no
+    // material): filled, not lost.
+    let inside: Vec<bool> = left_out
+        .par_iter()
+        .map(|(d, probe)| {
+            d.volume_mm3 < 0.0 && (d.volume_mm3 > -VOID_SLIVER_MM3 || contains(&m, *probe))
+        })
+        .collect();
+    let (voids, dropped): (Vec<_>, Vec<_>) = left_out
+        .into_iter()
+        .zip(inside)
+        .map(|((d, _), i)| (d, i))
+        .partition(|(_, i)| *i);
+    let voids = voids.into_iter().map(|(d, _)| d).collect();
+    let (slivers, dropped): (Vec<_>, Vec<_>) = dropped
+        .into_iter()
+        .map(|(d, _)| d)
+        .partition(|d| d.volume_mm3.abs() < VOID_SLIVER_MM3);
     let watertight = m.is_watertight();
-    let (overhang, holes) = overhang_faces(&m, footprint, printer);
+    let (mut overhang, holes) = overhang_faces(&m, footprint, printer);
     let areas = face_areas(&m);
+    let mut in_band = vec![false; overhang.len()];
+    let mut band_budget_mm2 = 0.0;
+    if let Some(b) = band {
+        let tolerant: Vec<bool> = source
+            .iter()
+            .map(|&t| {
+                materials
+                    .get(t as usize)
+                    .is_some_and(|mat| b.materials.contains(mat))
+            })
+            .collect();
+        if overhang.iter().zip(&tolerant).any(|(o, t)| *o && *t) {
+            let cap = Printer {
+                overhang_deg: b.max_deg,
+                ..*printer
+            };
+            let (hard, _) = overhang_faces(&m, footprint, &cap);
+            for k in 0..overhang.len() {
+                if overhang[k] && tolerant[k] && !hard[k] {
+                    overhang[k] = false;
+                    in_band[k] = true;
+                }
+            }
+        }
+        let down: f64 = m
+            .triangles
+            .iter()
+            .zip(&tolerant)
+            .zip(&areas)
+            .filter(|((t, tol), _)| {
+                **tol && {
+                    let [a, b2, c] = t.map(|i| m.positions[i as usize]);
+                    cross(sub(b2, a), sub(c, a))[2] < 0.0
+                }
+            })
+            .map(|(_, a)| a)
+            .sum();
+        band_budget_mm2 = b.share * down;
+    }
+    let band_mm2 = 0.0
+        + in_band
+            .iter()
+            .zip(&areas)
+            .filter(|(o, _)| **o)
+            .map(|(_, a)| a)
+            .sum::<f64>();
     // (an empty f64 sum is -0.0)
     let overhang_mm2 = 0.0
         + overhang
@@ -153,11 +292,16 @@ pub fn audit(input: &TriMesh, footprint: [f64; 2], printer: &Printer) -> (Export
         volume_mm3: signed_volume(&m),
         bodies,
         dropped,
+        voids,
+        slivers,
         pinches_moved,
         collapsed,
         watertight,
         overhang_mm2,
         overhang,
+        band_mm2,
+        band_budget_mm2,
+        band: in_band,
         holes,
     };
     (Export { mesh: m, source }, a)
@@ -272,7 +416,7 @@ fn separate_pinches(m: &mut TriMesh) -> usize {
         if pairs.is_empty() {
             break;
         }
-        let normals = normals.get_or_insert_with(|| vertex_normals(m));
+        let normals = normals.get_or_insert_with(|| vertex_normals(&m.positions, &m.triangles));
         pairs.sort_unstable();
         for (i, j) in pairs {
             let (ni, nj) = (normals[i], normals[j]);
@@ -318,43 +462,6 @@ impl std::hash::Hasher for FxHasher {
 
 type Fx = std::hash::BuildHasherDefault<FxHasher>;
 
-fn dist(a: [f64; 3], b: [f64; 3]) -> f64 {
-    ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
-}
-
-fn cross(u: [f64; 3], v: [f64; 3]) -> [f64; 3] {
-    [
-        u[1] * v[2] - u[2] * v[1],
-        u[2] * v[0] - u[0] * v[2],
-        u[0] * v[1] - u[1] * v[0],
-    ]
-}
-
-fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-
-/// Area-weighted vertex normals, unit length (zero where undefined).
-fn vertex_normals(m: &TriMesh) -> Vec<[f64; 3]> {
-    let mut n = vec![[0.0; 3]; m.positions.len()];
-    for t in &m.triangles {
-        let [a, b, c] = t.map(|i| m.positions[i as usize]);
-        let f = cross(sub(b, a), sub(c, a));
-        for &v in t {
-            for k in 0..3 {
-                n[v as usize][k] += f[k];
-            }
-        }
-    }
-    for v in &mut n {
-        let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-        if l > 0.0 {
-            *v = v.map(|x| x / l);
-        }
-    }
-    n
-}
-
 /// Positions rounded to float32 and merged by position (as an STL reader
 /// does); triangles that collapse are dropped and counted.
 fn quantise(m: &TriMesh) -> (TriMesh, Vec<u32>, usize) {
@@ -396,7 +503,14 @@ fn quantise(m: &TriMesh) -> (TriMesh, Vec<u32>, usize) {
 
 /// Split into bodies (triangles sharing vertices) and keep the one with the
 /// most triangles, as `stl_safe` does; report the rest.
-fn keep_largest(m: &TriMesh, source: &[u32]) -> (TriMesh, Vec<u32>, usize, Vec<Dropped>) {
+/// Each left-out body comes with the mean of its vertices, the probe for
+/// [`contains`] (inside a small void even where its surface lies within
+/// rounding of the kept body's).
+#[allow(clippy::type_complexity)]
+fn keep_largest(
+    m: &TriMesh,
+    source: &[u32],
+) -> (TriMesh, Vec<u32>, usize, Vec<(Dropped, [f64; 3])>) {
     let mut parent: Vec<usize> = (0..m.positions.len()).collect();
     fn root(p: &mut [usize], mut x: usize) -> usize {
         while p[x] != x {
@@ -433,9 +547,34 @@ fn keep_largest(m: &TriMesh, source: &[u32]) -> (TriMesh, Vec<u32>, usize, Vec<D
     let dropped = bodies
         .iter()
         .skip(1)
-        .map(|b| Dropped {
-            triangles: b.len(),
-            volume_mm3: signed_volume(&sub_mesh(b)),
+        .map(|b| {
+            (
+                Dropped {
+                    triangles: b.len(),
+                    volume_mm3: signed_volume(&sub_mesh(b)),
+                    bounds: b.iter().flat_map(|&k| m.triangles[k]).fold(
+                        [[f64::INFINITY; 3], [f64::NEG_INFINITY; 3]],
+                        |[lo, hi], v| {
+                            let p = m.positions[v as usize];
+                            [
+                                [0, 1, 2].map(|k| lo[k].min(p[k])),
+                                [0, 1, 2].map(|k| hi[k].max(p[k])),
+                            ]
+                        },
+                    ),
+                },
+                {
+                    let (mut sum, mut n) = ([0.0; 3], 0.0);
+                    for &k in b {
+                        for v in m.triangles[k] {
+                            let p = m.positions[v as usize];
+                            sum = [0, 1, 2].map(|i| sum[i] + p[i]);
+                            n += 1.0;
+                        }
+                    }
+                    sum.map(|x| x / n)
+                },
+            )
         })
         .collect();
     let Some(keep) = bodies.first() else {
@@ -449,6 +588,47 @@ fn keep_largest(m: &TriMesh, source: &[u32]) -> (TriMesh, Vec<u32>, usize, Vec<D
     let kept = canonical(&sub_mesh(&keep));
     let src = keep.iter().map(|&k| source[k]).collect();
     (kept, src, n, dropped)
+}
+
+/// Is `p` inside the closed mesh `m`? Parity of the crossings of a
+/// vertical ray up from `p`, nudged off the lattice by a fixed offset so
+/// it misses `p`'s own shell's edges; a crossing on a shared edge is
+/// counted once by the top-left rule. Deterministic: no sampling.
+fn contains(m: &TriMesh, p: [f64; 3]) -> bool {
+    let (px, py) = (p[0] + 1.37e-4, p[1] + 0.91e-4);
+    #[allow(clippy::float_cmp)]
+    let top_left = |a: [f64; 3], b: [f64; 3]| (a[1] == b[1] && b[0] < a[0]) || b[1] < a[1];
+    let mut odd = false;
+    for t in &m.triangles {
+        let mut v = t.map(|i| m.positions[i as usize]);
+        if v.iter().all(|q| q[2] <= p[2])
+            || v.iter().all(|q| q[0] < px)
+            || v.iter().all(|q| q[0] > px)
+            || v.iter().all(|q| q[1] < py)
+            || v.iter().all(|q| q[1] > py)
+        {
+            continue;
+        }
+        let area =
+            (v[1][0] - v[0][0]) * (v[2][1] - v[0][1]) - (v[2][0] - v[0][0]) * (v[1][1] - v[0][1]);
+        if area == 0.0 {
+            continue;
+        }
+        if area < 0.0 {
+            v.swap(1, 2);
+        }
+        let edges = [(v[1], v[2]), (v[2], v[0]), (v[0], v[1])];
+        let w = edges.map(|(a, b)| (b[0] - a[0]) * (py - a[1]) - (b[1] - a[1]) * (px - a[0]));
+        #[allow(clippy::float_cmp)]
+        let hit = (0..3).all(|k| w[k] > 0.0 || (w[k] == 0.0 && top_left(edges[k].0, edges[k].1)));
+        if hit {
+            let z = (w[0] * v[0][2] + w[1] * v[1][2] + w[2] * v[2][2]) / area.abs();
+            if z > p[2] {
+                odd = !odd;
+            }
+        }
+    }
+    odd
 }
 
 fn face_areas(m: &TriMesh) -> Vec<f64> {
@@ -468,6 +648,14 @@ fn face_areas(m: &TriMesh) -> Vec<f64> {
 /// (k − 1) × layer × tan(overhang)` from layer k below it (any k within
 /// `span_mm`) droops. Flagged: the downward faces above z = 0.05 under such
 /// material. Also returns the rays inside `footprint` that hit nothing.
+///
+/// A void thinner than the printer's `gap` (measured exactly along each
+/// ray, not at layer resolution) is filled before the layers are cut: such
+/// a gap cannot stay open in print, the layer above lands on the one
+/// below, so its roof is not an overhang. This is what a bed joint of
+/// 0.11 mm under a wall stone is (walls R10: "the lip over the sub-mm
+/// joint prints"); rockpile's rule, written for stacked rock with real
+/// gaps, counted every such roof as a drooping shelf.
 fn overhang_faces(m: &TriMesh, footprint: [f64; 2], p: &Printer) -> (Vec<bool>, usize) {
     let none = (vec![false; m.triangles.len()], 0);
     let Some((lo, hi)) = bounds(m) else {
@@ -487,18 +675,46 @@ fn overhang_faces(m: &TriMesh, footprint: [f64; 2], p: &Printer) -> (Vec<bool>, 
     #[allow(clippy::cast_possible_truncation)]
     let layer_of = |z: f64| ((z / lay + 0.5).floor() as i64).clamp(0, nl as i64) as usize;
 
-    // Every (column, layer) hit, one list per triangle, gathered in order.
-    let hits: Vec<Vec<(usize, usize)>> = m
+    // Every (column, z) hit, one list per triangle, gathered in order.
+    let hits: Vec<Vec<(usize, f64)>> = m
         .triangles
         .par_iter()
-        .map(|t| column_hits(m, t, [x0, y0], g, nx, ny, &layer_of))
+        .map(|t| column_hits(m, t, [x0, y0], g, nx, ny))
         .collect();
+    let mut per_col: Vec<Vec<f64>> = vec![Vec::new(); nx * ny];
+    for list in &hits {
+        for &(col, z) in list {
+            per_col[col].push(z);
+        }
+    }
     let mut occ = vec![0u8; (nl + 1) * nx * ny];
     let mut hit_any = vec![false; nx * ny];
-    for list in &hits {
-        for &(col, k) in list {
-            occ[k * nx * ny + col] ^= 1;
-            hit_any[col] = true;
+    for (col, zs) in per_col.iter_mut().enumerate() {
+        if zs.is_empty() {
+            continue;
+        }
+        hit_any[col] = true;
+        zs.sort_by(f64::total_cmp);
+        // hits alternate in, out, in, …: drop an out and the next in when
+        // the void between them is thinner than the printer's gap. An odd
+        // count means the column does not alternate (a grazing ray, an
+        // open seam): no gap-fill there, the hits are cut as they are.
+        let fill = zs.len().is_multiple_of(2);
+        let mut kept: Vec<f64> = Vec::with_capacity(zs.len());
+        for (k, &z) in zs.iter().enumerate() {
+            if fill
+                && k.is_multiple_of(2)
+                && k > 0
+                && kept.len().is_multiple_of(2)
+                && z - zs[k - 1] < p.gap_mm
+            {
+                kept.pop();
+                continue;
+            }
+            kept.push(z);
+        }
+        for z in kept {
+            occ[layer_of(z) * nx * ny + col] ^= 1;
         }
     }
     // inside at layer k: an odd count of hits at layers ≤ k
@@ -596,7 +812,7 @@ fn overhang_faces(m: &TriMesh, footprint: [f64; 2], p: &Printer) -> (Vec<bool>, 
     (flagged, holes)
 }
 
-fn bounds(m: &TriMesh) -> Option<([f64; 3], [f64; 3])> {
+pub(crate) fn bounds(m: &TriMesh) -> Option<([f64; 3], [f64; 3])> {
     let first = *m.positions.first()?;
     Some(m.positions.iter().fold((first, first), |(lo, hi), p| {
         (
@@ -606,7 +822,7 @@ fn bounds(m: &TriMesh) -> Option<([f64; 3], [f64; 3])> {
     }))
 }
 
-/// Vertical-ray hits of one triangle: `(column, layer)` for every lattice
+/// Vertical-ray hits of one triangle: `(column, z)` for every lattice
 /// column strictly inside its projection, or on an edge by the top-left
 /// rule, so a ray through a shared edge counts once.
 fn column_hits(
@@ -616,8 +832,7 @@ fn column_hits(
     g: f64,
     nx: usize,
     ny: usize,
-    layer_of: &(dyn Fn(f64) -> usize + Sync),
-) -> Vec<(usize, usize)> {
+) -> Vec<(usize, f64)> {
     let mut v = t.map(|i| m.positions[i as usize]);
     let area =
         (v[1][0] - v[0][0]) * (v[2][1] - v[0][1]) - (v[2][0] - v[0][0]) * (v[1][1] - v[0][1]);
@@ -659,7 +874,7 @@ fn column_hits(
             if (0..3).all(|k| w[k] > 0.0 || (w[k] == 0.0 && tl[k])) {
                 let z = (w[0] * v[0][2] + w[1] * v[1][2] + w[2] * v[2][2]) / area;
                 #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                out.push((j as usize * nx + i as usize, layer_of(z)));
+                out.push((j as usize * nx + i as usize, z));
             }
         }
     }
@@ -721,6 +936,57 @@ mod tests {
     }
 
     #[test]
+    fn a_sealed_void_is_filled_not_dropped() {
+        // a 6 mm block with a 1 mm cavity inside: an inward-wound shell
+        let mut m = cube([0.0, 0.0, 0.0], [6.0, 6.0, 6.0]);
+        let cavity = cube([2.0, 2.0, 2.0], [3.0, 3.0, 3.0]);
+        let base = u32::try_from(m.positions.len()).unwrap();
+        m.positions.extend(cavity.positions);
+        m.triangles.extend(
+            cavity
+                .triangles
+                .iter()
+                .map(|t| [t[0] + base, t[2] + base, t[1] + base]),
+        );
+        let (_, a) = audit(&m, [10.0, 10.0], &fdm());
+        assert_eq!(a.bodies, 2);
+        assert!(a.dropped.is_empty(), "{:?}", a.dropped);
+        assert_eq!(a.voids.len(), 1);
+        assert!((a.voids[0].volume_mm3 + 1.0).abs() < 1e-9);
+        assert!(a.failures(&fdm()).is_empty());
+        // the same inward shell outside the block is a lost part, not a fill
+        let mut m = cube([0.0, 0.0, 0.0], [6.0, 6.0, 6.0]);
+        let stray = cube([7.0, 7.0, 2.0], [8.0, 8.0, 3.0]);
+        let base = u32::try_from(m.positions.len()).unwrap();
+        m.positions.extend(stray.positions);
+        m.triangles.extend(
+            stray
+                .triangles
+                .iter()
+                .map(|t| [t[0] + base, t[2] + base, t[1] + base]),
+        );
+        let (_, a) = audit(&m, [10.0, 10.0], &fdm());
+        assert!(a.voids.is_empty(), "{:?}", a.voids);
+        assert_eq!(a.dropped.len(), 1);
+        assert!(!a.failures(&fdm()).is_empty());
+    }
+
+    #[test]
+    fn a_loose_sliver_is_not_a_lost_part() {
+        // a block and, apart from it, a 0.05 mm speck (1.25e-4 mm³)
+        let mut m = cube([0.0, 0.0, 0.0], [6.0, 6.0, 6.0]);
+        let speck = cube([8.0, 8.0, 1.0], [8.05, 8.05, 1.05]);
+        let base = u32::try_from(m.positions.len()).unwrap();
+        m.positions.extend(speck.positions);
+        m.triangles
+            .extend(speck.triangles.iter().map(|t| t.map(|i| i + base)));
+        let (_, a) = audit(&m, [10.0, 10.0], &fdm());
+        assert!(a.dropped.is_empty(), "{:?}", a.dropped);
+        assert_eq!(a.slivers.len(), 1);
+        assert!(a.failures(&fdm()).is_empty());
+    }
+
+    #[test]
     fn a_floating_shelf_is_red_and_a_stray_body_is_dropped() {
         // a post with a 4 mm shelf sticking out at the top, plus a far crumb
         let mut m = cube([0.0, 0.0, 0.0], [2.0, 2.0, 6.0]);
@@ -736,6 +1002,11 @@ mod tests {
         // post and shelf touch only face to face, so they are two bodies here
         assert_eq!(a.bodies, 3);
         assert_eq!(a.dropped.len(), 2);
+        let fails = a.failures(&fdm());
+        assert!(
+            fails.iter().any(|f| f.contains("2 loose bodies")),
+            "{fails:?}"
+        );
         let (_, b) = audit(&shelf_on_post(), [10.0, 10.0], &fdm());
         // rockpile.audit_overhang gives 8.0 mm² on this shelf (4 × 2 mm underside)
         assert!(
@@ -747,7 +1018,6 @@ mod tests {
 
     /// One closed L-shaped body: a post with a shelf at the top.
     fn shelf_on_post() -> TriMesh {
-        // L profile in x–z, extruded 2 mm in y
         let prof = [
             [0.0, 0.0],
             [2.0, 0.0],
@@ -756,21 +1026,60 @@ mod tests {
             [6.0, 6.0],
             [0.0, 6.0],
         ];
+        prism(&prof, &[[0, 1, 2], [0, 2, 5], [2, 3, 4], [2, 4, 5]])
+    }
+
+    /// A post whose underside leans out at `deg` from vertical.
+    fn leaning(deg: f64) -> TriMesh {
+        let rise = 4.0 / deg.to_radians().tan();
+        let prof = [[0.0, 0.0], [2.0, 0.0], [6.0, rise], [6.0, 5.0], [0.0, 5.0]];
+        prism(&prof, &[[0, 1, 2], [0, 2, 3], [0, 3, 4]])
+    }
+
+    #[test]
+    fn a_band_tolerates_its_materials_up_to_its_cap() {
+        use crate::scene::Material;
+        let band = Band {
+            materials: &[Material::Leaf],
+            max_deg: 65.0,
+            share: 1.0,
+        };
+        let at = |deg: f64, mat: Material, band: Option<&Band>| {
+            let m = leaning(deg);
+            let mats = vec![mat; m.triangles.len()];
+            audit_banded(&m, [10.0, 10.0], &fdm(), &mats, band).1
+        };
+        // 60°: past 55, within 65: band for leaves, overhang for anything else
+        let a = at(60.0, Material::Leaf, Some(&band));
+        assert!(a.overhang_mm2 == 0.0 && a.band_mm2 > 1.0, "{a:?}");
+        assert!(a.failures(&fdm()).is_empty(), "{:?}", a.failures(&fdm()));
+        assert!(at(60.0, Material::Masonry, Some(&band)).overhang_mm2 > 1.0);
+        assert!(at(60.0, Material::Leaf, None).overhang_mm2 > 1.0);
+        // 70°: past the cap fails whatever the material
+        let b = at(70.0, Material::Leaf, Some(&band));
+        assert!(b.overhang_mm2 > 1.0 && b.band_mm2 == 0.0, "{b:?}");
+        // over the budget fails
+        let tight = Band { share: 0.0, ..band };
+        let c = at(60.0, Material::Leaf, Some(&tight));
+        assert!(!c.failures(&fdm()).is_empty());
+    }
+
+    /// A profile in x–z, extruded 2 mm in y; `fan` triangulates it.
+    fn prism(prof: &[[f64; 2]], fan: &[[u32; 3]]) -> TriMesh {
+        let n = u32::try_from(prof.len()).unwrap();
         let mut positions = Vec::new();
         for y in [0.0, 2.0] {
             positions.extend(prof.iter().map(|p| [p[0], y, p[1]]));
         }
-        // front (y = 0) faces −y: CCW seen from −y; fan split into convex parts
-        let front = [[0, 1, 2], [0, 2, 5], [2, 3, 4], [2, 4, 5]];
         let mut triangles: Vec<[u32; 3]> = Vec::new();
-        for f in front {
+        for f in fan {
             triangles.push([f[0], f[2], f[1]]);
-            triangles.push([f[0] + 6, f[1] + 6, f[2] + 6]);
+            triangles.push([f[0] + n, f[1] + n, f[2] + n]);
         }
-        for k in 0..6u32 {
-            let k1 = (k + 1) % 6;
-            triangles.push([k, k1, k1 + 6]);
-            triangles.push([k, k1 + 6, k + 6]);
+        for k in 0..n {
+            let k1 = (k + 1) % n;
+            triangles.push([k, k1, k1 + n]);
+            triangles.push([k, k1 + n, k + n]);
         }
         let mut m = TriMesh {
             positions,
@@ -782,5 +1091,49 @@ mod tests {
         }
         assert!(m.is_watertight());
         m
+    }
+
+    /// A block on a slab, held by a post at one end, with a bed joint of
+    /// `gap` mm between them: a C in profile.
+    fn block_on_joint(gap: f64) -> TriMesh {
+        let g = 2.0 + gap;
+        let prof = [
+            [0.0, 0.0],
+            [6.0, 0.0],
+            [6.0, 2.0],
+            [1.0, 2.0],
+            [1.0, g],
+            [6.0, g],
+            [6.0, 4.0],
+            [0.0, 4.0],
+        ];
+        prism(
+            &prof,
+            &[
+                [0, 1, 2],
+                [0, 2, 3],
+                [0, 3, 4],
+                [0, 4, 7],
+                [4, 5, 6],
+                [4, 6, 7],
+            ],
+        )
+    }
+
+    #[test]
+    fn a_bed_joint_thinner_than_the_gap_is_no_overhang() {
+        // 0.11 mm: the wall's bed joint; the layer above lands on the stone below
+        let (_, a) = audit(&block_on_joint(0.11), [10.0, 10.0], &fdm());
+        assert!(a.overhang_mm2 == 0.0, "{}", a.overhang_mm2);
+        // rockpile's rule as it was (every void open) flags its roof
+        let open = Printer {
+            gap_mm: 0.0,
+            ..fdm()
+        };
+        let (_, was) = audit(&block_on_joint(0.11), [10.0, 10.0], &open);
+        assert!(was.overhang_mm2 > 1.0, "{}", was.overhang_mm2);
+        // 1 mm: a real slot, whose roof is a 5 mm shelf
+        let (_, b) = audit(&block_on_joint(1.0), [10.0, 10.0], &fdm());
+        assert!(b.overhang_mm2 > 5.0, "{}", b.overhang_mm2);
     }
 }

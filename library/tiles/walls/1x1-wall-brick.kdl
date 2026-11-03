@@ -1,0 +1,19 @@
+// A worn running-bond brick wall along the north edge of a grassy 1×1.
+// Twin of src/tiles/walls/1x1-wall-brick.tile.py.
+
+use "parts/grass" lawn
+
+tile wall-brick size="1x1" seed=65 {
+    stack {
+        dirt                                // bare earth at the ground level
+
+        // On a tile edge a wall always stands inside, its outer face
+        // flush with the edge.
+        wall along="north" style=brick seed=15 {
+            height full                     // up to the wall-top level (33.1 mm)
+            thickness 7
+        }
+
+        lawn
+    }
+}

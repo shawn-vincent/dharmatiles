@@ -438,11 +438,172 @@ def build_water(seed: int):
     return mesh, painted, (sc.W, sc.H), wl.WL_MM, lab, dt
 
 
+STONE_RGB = (186, 184, 176)
+
+
+def build_masonry(family: str, seed: int):
+    """A wall or floor layer (walls/) at `seed` on a flat 5 mm ground slab
+    on the DungeonBlocks base, in memory, like the P5 lead's wall_py.py.
+    Walls stand along the north edge (the Rust test tiles'
+    ``along="north"``); the floor covers the tile.  Lab stats: units laid
+    (``wall.units`` / ``floor.units``) and courses, as the Rust notes."""
+    import manifold3d as m3d
+    from dharmatiles.bases import dungeonblocks as db
+    from dharmatiles.core.config import BaseConfig, SurfaceConfig
+    from dharmatiles.core.mesh import make_heightmap_solid
+    from dharmatiles.core.tile import TileScene
+    from dharmatiles import walls as W
+    surf = SurfaceConfig(cols=1, rows=1, seed=seed)
+    z = np.full((surf.grid_h, surf.grid_w), 5.0)
+    scene = TileScene(surface=surf, terrain_z=z, terrain_support_z=z.copy(),
+                      obstacle_mask=np.zeros(z.shape, bool))
+    north = [(1.0, 1.0), (0.0, 1.0)]
+    cls, kw, kind = {
+        "wall-cut-stone": (W.CutStoneWall, {"spine": north}, "wall"),
+        "wall-brick": (W.BrickWall, {"spine": north}, "wall"),
+        "wall-regular-brick": (W.RegularBrickWall, {"spine": north}, "wall"),
+        "wall-fieldstone": (W.FieldstoneWall, {"spine": north}, "wall"),
+        "floor-stone": (W.StoneFloor, {"texture": "dressed"}, "floor"),
+        "floor-fieldstone": (W.FieldstoneWall, {"spine": [(0.0, 0.0), (1.0, 0.0)], "laid_flat": True,
+                              "height_mm": 35.0, "thickness_mm": 7.4}, "floor"),
+    }[family]
+    count = {"units": 0, "courses": set()}
+
+    class Counted(cls):
+        def _cells(self, *a, **k):
+            cells = super()._cells(*a, **k)
+            count["courses"] = {c.key[0] for c in cells}
+            return cells
+
+        def _place_block(self, *a, **k):
+            b = super()._place_block(*a, **k)
+            count["units"] += b is not None
+            return b
+
+    t0 = time.perf_counter()
+    parts = Counted(seed=seed, **kw).apply(scene)
+    dt = time.perf_counter() - t0
+    slab = make_heightmap_solid(z, surf.tile_w, surf.tile_h, 0.0)
+    cfg = BaseConfig()
+    peg = db.select_peg_height(z, cfg, float(slab.bounds[1, 2]))
+    base = db.make_base(surf, peg, cfg)
+
+    def solid(m):
+        return m3d.Manifold(mesh=m3d.Mesh(vert_properties=np.asarray(m.vertices, np.float32),
+                                          tri_verts=np.asarray(m.faces, np.uint32)))
+    u = solid(slab) + solid(base)
+    for p in parts:
+        u = u + solid(p)
+    u = u.to_mesh()
+    mesh = trimesh.Trimesh(np.asarray(u.vert_properties)[:, :3], np.asarray(u.tri_verts))
+    painted = mesh.copy()     # the ground is flat at 5 mm: above it is masonry
+    zc = mesh.triangles_center[:, 2]
+    fc = np.tile([*CONNECTOR_RGB, 255], (len(mesh.faces), 1))
+    fc[zc > 0.0, :3] = EARTH_RGB
+    fc[zc > 5.05, :3] = STONE_RGB
+    painted.visual.face_colors = fc
+    lab = {f"{kind}.units": count["units"], f"{kind}.courses": len(count["courses"]),
+           f"{kind}.overhang_reach_mm2": float(mesh.area_faces[overhang_mask(mesh)].sum())}
+    return mesh, painted, (surf.tile_w, surf.tile_h), 5.0, lab, dt
+
+
+LEAF_RGB = (84, 140, 62)
+
+
+def build_tree(seed: int):
+    """The Python twin of lib:tiles/test/tree-1x1.kdl: the 1×1 grass-tree
+    tile's Tree layer (src/tiles/ground/1x1-grass-tree.tile.py: height 35,
+    canopy radius 12, base radius 11; n_attractors 32 as the Rust default)
+    grown at the tile centre on a flat 5 mm slab with the DungeonBlocks
+    base, unioned in Manifold.  Leaves OFF on both sides (the Rust test
+    tile runs ``leaves clumps-only`` until its leaves pass the gate), so
+    this is wood + foliage clumps."""
+    import warnings
+    import manifold3d as m3d
+    from dharmatiles.bases import dungeonblocks as db
+    from dharmatiles.core.config import BaseConfig, SurfaceConfig
+    from dharmatiles.core.mesh import make_heightmap_solid
+    from dharmatiles.trees.layer import Tree
+    from dharmatiles.trees.mesh import build_branch_mesh
+    from dharmatiles.trees.skeleton import grow_skeleton
+    ground = 5.0
+    t = Tree(height_mm=35.0, canopy_radius_mm=12.0, canopy_base_radius_mm=11.0,
+             n_attractors=32, leaf_length_mm=4.5, leaf_width_mm=3.0)
+    t0 = time.perf_counter()
+    surf = SurfaceConfig(cols=1, rows=1, seed=seed)
+    rng = np.random.default_rng(seed)
+    env = t._sample_envelope(surf.tile_w / 2, surf.tile_h / 2, ground, rng)
+    nodes, parents, radii, ind, outd, att, _ = grow_skeleton(
+        env, rng, n_attractors=t.n_attractors, segment_length_mm=t.segment_length_mm,
+        min_radius_mm=t.min_radius_mm, branch_split_angle_deg=t.branch_split_angle_deg,
+        target_fdm_angle_deg=t.target_fdm_angle_deg, max_branches_per_step=t.max_branches_per_step,
+        branch_exponent=t.branch_exponent, smoothing_alpha=t.smoothing_alpha,
+        group_width_mm=t.group_width_mm, group_height_mm=t.group_height_mm,
+        foliage_bulge_mm=t.foliage_bulge_mm, branch_split_eagerness=t.branch_split_eagerness,
+        branch_target=t.branch_target, branch_fork_balance=t.branch_fork_balance)
+    with warnings.catch_warnings(record=True):
+        wood, fol, _, _ = build_branch_mesh(
+            nodes, parents, radii, ind, outd, terrain_z=ground,
+            strict_fdm_angle_deg=t.strict_fdm_angle_deg,
+            foliage_cluster_radius_mm=t.foliage_cluster_radius_mm,
+            foliage_cluster_length_mm=t.foliage_cluster_length_mm, bark=t.bark, bark_seed=seed,
+            leaves=False)
+    z = np.full((surf.grid_h, surf.grid_w), ground)
+    slab = make_heightmap_solid(z, surf.tile_w, surf.tile_h, 0.0)
+    cfg = BaseConfig()
+    base = db.make_base(surf, db.select_peg_height(z, cfg, float(slab.bounds[1, 2])), cfg)
+
+    def solid(m):
+        return m3d.Manifold(mesh=m3d.Mesh(vert_properties=np.asarray(m.vertices, np.float32),
+                                          tri_verts=np.asarray(m.faces, np.uint32)))
+    acc = solid(slab) + solid(base)
+    for part in (wood, fol):        # concatenations of closed shells
+        if len(part.vertices):
+            for b in part.split(only_watertight=False):
+                acc = acc + solid(b)
+    u = acc.to_mesh()
+    mesh = trimesh.Trimesh(np.asarray(u.vert_properties)[:, :3], np.asarray(u.tri_verts))
+    dt = time.perf_counter() - t0
+    el = [np.degrees(np.arcsin(np.clip((nodes[i] - nodes[parents[i]])[2]
+                                       / np.linalg.norm(nodes[i] - nodes[parents[i]]), -1, 1)))
+          for i in range(1, len(nodes)) if np.linalg.norm(nodes[i] - nodes[parents[i]]) > 1e-9]
+    ch = np.bincount(parents[1:], minlength=len(nodes))
+    painted = mesh.copy()
+    fc = np.tile([*CONNECTOR_RGB, 255], (len(mesh.faces), 1))
+    fc[mesh.triangles_center[:, 2] > 0.0, :3] = EARTH_RGB
+    fc[mesh.triangles_center[:, 2] > ground + 0.05, :3] = LEAF_RGB
+    painted.visual.face_colors = fc
+    lab = {"tree.attractors": len(att), "tree.terminals": int((ch == 0).sum()),
+           "tree.nodes": len(nodes), "tree.min_branch_elevation_deg": float(min(el)),
+           "tree.trunk_radius_mm": float(radii[0])}
+    return mesh, painted, (surf.tile_w, surf.tile_h), ground, lab, dt
+
+
+def tree_metrics(mesh: trimesh.Trimesh, ground: float) -> dict:
+    """What stands on the ground: height, crown width (the widest of the
+    x and y extents above the trunk's lower third) and volume above it."""
+    v = mesh.vertices
+    above = v[v[:, 2] > ground + 0.05]
+    h = float(above[:, 2].max() - ground) if len(above) else 0.0
+    crown = above[above[:, 2] > ground + h / 3] if len(above) else above
+    w = float(max(np.ptp(crown[:, 0]), np.ptp(crown[:, 1]))) if len(crown) else 0.0
+    try:
+        vol = float(mesh.slice_plane([0, 0, ground + 0.05], [0, 0, 1], cap=True).volume)
+    except Exception:  # noqa: BLE001
+        vol = float("nan")
+    return {"tree_height_mm": h, "crown_width_mm": w, "tree_volume_mm3": vol}
+
+
+MASONRY = ("wall-cut-stone", "wall-brick", "wall-regular-brick", "wall-fieldstone", "floor-stone",
+           "floor-fieldstone")
 LABS = {"dirt": build_dirt, "dirt-stones": lambda seed: build_dirt(seed, stones=True),
-        "flat": build_flat, "rocks": build_rocks, "water": build_water}
+        "flat": build_flat, "rocks": build_rocks, "water": build_water, "tree": build_tree,
+        **{m: (lambda seed, m=m: build_masonry(m, seed)) for m in MASONRY}}
 # What the Python column is, in the captions.
 LAB_NOTE = {"dirt": "dirtlab, stones off (P3)", "dirt-stones": "dirtlab with stones",
-            "flat": "flat 1×1 twin", "rocks": "rocklab", "water": "waterlab swell-chaos, bank-rock"}
+            "flat": "flat 1×1 twin", "rocks": "rocklab",
+            "water": "waterlab swell-chaos, bank-rock", "tree": "library Tree, 1×1 tile params, leaves off",
+            **{m: f"walls/ {m} on a flat 5 mm slab" for m in MASONRY}}
 
 
 # ── Parity verdict (plan.html, "The parity harness") ────────────────────────
@@ -492,6 +653,21 @@ PARITY_BY_LOOK = {
 }
 
 
+# The tree's rows: same look and statistics, not RNG-identical (P5).
+TREE_PARITY = [
+    ("terminals", ("lab", "tree.terminals"), "rel", 0.15),
+    ("skeleton nodes", ("lab", "tree.nodes"), "info", None),
+    ("min branch elevation (deg)", ("lab", "tree.min_branch_elevation_deg"), "min", 26.0),
+    ("trunk radius (mm)", ("lab", "tree.trunk_radius_mm"), "rel", 0.25),
+    ("height (mm)", ("tree_height_mm",), "rel", 0.15),
+    ("crown width (mm)", ("crown_width_mm",), "rel", 0.20),
+    ("volume (mm3)", ("tree_volume_mm3",), "rel", 0.30),
+    ("overhang (mm2)", ("overhang_mm2",), "info", None),
+    ("build (s)", ("build_s",), "info", None),
+]
+PARITY_OF = {"tree": TREE_PARITY}
+
+
 def _dig(d, path):
     for k in path:
         if not isinstance(d, dict) or d.get(k) is None:
@@ -500,10 +676,26 @@ def _dig(d, path):
     return float(d)
 
 
+def _masonry_parity(kind: str) -> list:
+    """Walls and floors: the masonry statistics (the Rust tile stands on
+    dirt, the Python one on a flat slab, so whole-tile volume and faces
+    are reported, not judged).  Rust must pass its own audit (0 mm²)."""
+    return [
+        ("units laid", ("lab", f"{kind}.units"), "rel", 0.25),
+        ("courses", ("lab", f"{kind}.courses"), "rel", 0.25),
+        ("faces (whole tile)", ("faces",), "info", None),
+        ("volume mm³ (whole tile)", ("volume_mm3",), "info", None),
+        ("overhang mm² (layer reach)", ("overhang_mm2",), "info", None),
+        ("build s", ("build_s",), "info", None),
+    ]
+
+
 def parity_verdict(look: str, py: dict, rs: dict) -> dict:
     """Python vs Rust means over the seeds, per PARITY row; writes nothing."""
     rows = []
-    for name, path, test, tol in PARITY_BY_LOOK[look]:
+    table = (_masonry_parity(look.split("-")[0]) if look in MASONRY
+             else PARITY_OF.get(look) or PARITY_BY_LOOK[look])
+    for name, path, test, tol in table:
         pv = [v for v in (_dig(py[s], path) for s in py) if v is not None]
         rv = [v for v in (_dig(rs[s], path) for s in rs) if v is not None]
         pm = float(np.mean(pv)) if pv else None
@@ -639,8 +831,12 @@ def _caption_look(met):
 
 
 def _caption_base(met, who, build_s):
-    return (f"{who}: bare {met['bare_fraction']:.3f} · rocks {met['rock_count']} "
-            f"{list(met['rock_hist'].values())} · {met['faces']:,} faces · bodies {met['bodies']} · "
+    lab = met.get("lab") or {}
+    units = next((k for k in lab if k.endswith(".units")), None)
+    what = (f"units {lab[units]:g} · courses {lab.get(units.replace('units', 'courses'), 0):g}"
+            if units else
+            f"bare {met['bare_fraction']:.3f} · rocks {met['rock_count']} {list(met['rock_hist'].values())}")
+    return (f"{who}: {what} · {met['faces']:,} faces · bodies {met['bodies']} · "
             f"watertight {met['watertight']} · vol {met['volume_mm3']:.1f} mm³ · "
             f"see-through {met['see_through_cells']} · texture ok {met['texture_ok_fraction']:.1%} · "
             f"overhang {met['overhang_mm2']:.2f} mm² (red) · build {build_s:.2f}s")
@@ -664,6 +860,8 @@ def run(look: str, seeds: list[int], out: pathlib.Path, beside: pathlib.Path | N
         met.update(look_metrics(look, mesh, fp, edge))
         met.update(build_s=build_s, metrics_s=time.perf_counter() - t0, edge_mm=edge, lab=lab, look=look,
                    seed=seed)
+        if look == "tree":
+            met.update(tree_metrics(mesh, edge))
         (sd / "metrics.json").write_text(json.dumps(met, indent=2))
         summary[seed] = py_all[seed] = met
         pm = paint_overhang(painted, ov)
@@ -682,6 +880,11 @@ def run(look: str, seeds: list[int], out: pathlib.Path, beside: pathlib.Path | N
             rmet.update(look_metrics(look, rmesh, fp, redge))
             rmet.update(build_s=rec["build_s"], edge_mm=redge, lab=rec.get("stats", {}), look=look,
                         seed=seed, rust_audit=rec["audit"])
+            if look == "tree":
+                rmet.update(tree_metrics(rmesh, redge))
+            if look == "rocks" and "stones#2" in rmet["lab"]:
+                # the tile's bare dirt notes `stones` (0) first; the rocks' own is the second
+                rmet["lab"]["stones"] = rmet["lab"]["stones#2"]
             (sd / "rust-metrics.json").write_text(json.dumps(rmet, indent=2))
             summary[seed] = {"python": met, "rust": rmet}
             rs_all[seed] = rmet
