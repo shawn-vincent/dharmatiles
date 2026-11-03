@@ -16,6 +16,9 @@ const TILES: &[&str] = &[
     "lib:tiles/test/flat-1x1.kdl",
     "lib:tiles/ground/soil-1x1.kdl",
     "lib:tiles/test/dirt-2x2.kdl",
+    "lib:tiles/test/rocks-2x2.kdl",
+    "lib:tiles/test/water-2x2.kdl",
+    "lib:tiles/test/dirt-stones-2x2.kdl",
 ];
 
 fn build_at(path: &str, threads: usize) -> Built {
@@ -146,6 +149,44 @@ fn the_dirt_tiles_meet_the_exit_criteria() {
             if on_edge && p[2] > 0.0 {
                 assert!((p[2] - edge).abs() < 1e-5, "{path}: edge vertex {p:?}");
             }
+        }
+    }
+}
+
+#[test]
+fn the_rocks_and_water_tiles_meet_the_exit_criteria() {
+    use dt_kit::Material;
+    for path in [
+        "lib:tiles/test/rocks-2x2.kdl",
+        "lib:tiles/test/water-2x2.kdl",
+        "lib:tiles/test/dirt-stones-2x2.kdl",
+    ] {
+        let b = build_at(path, 4);
+        let a = &b.audit;
+        assert!(a.watertight, "{path}: watertight after the float32 reload");
+        assert_eq!(a.overhang_mm2, 0.0, "{path}");
+        assert!(a.failures(&Options::default().printer).is_empty(), "{path}");
+        // R9: every triangle traced to a material, and rock present
+        assert_eq!(b.materials.len(), b.export.mesh.triangles.len(), "{path}");
+        assert!(b.materials.contains(&Material::Rock), "{path}: no rock");
+        let note = |k: &str| b.notes.iter().find(|(n, _)| n == k).map(|(_, v)| *v);
+        if path.contains("rocks") {
+            assert!(note("chip_loss_max").unwrap() <= 0.03, "{path}: chip loss");
+            assert!(note("facets_min").unwrap() >= 25.0, "{path}");
+            assert!(note("facets_max").unwrap() <= 170.0, "{path}");
+            assert!(note("width_min").unwrap() >= 4.0 - 1e-9, "{path}");
+            assert!(note("width_max").unwrap() <= 15.0 + 1e-9, "{path}");
+        }
+        if path.contains("water") {
+            assert!(b.materials.contains(&Material::Water), "{path}: no water");
+            assert!(note("edge_err_mm").unwrap() <= 0.05, "{path}: edge");
+            let lo = note("relief_min").unwrap();
+            assert!(
+                (-1.1 - 1e-9..-0.8).contains(&lo),
+                "{path}: trough floor {lo}"
+            );
+            let rms = note("relief_rms").unwrap();
+            assert!((0.55..0.85).contains(&rms), "{path}: rms {rms}");
         }
     }
 }

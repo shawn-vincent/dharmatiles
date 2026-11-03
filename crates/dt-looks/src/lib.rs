@@ -7,11 +7,15 @@
 //!
 //! P1: [`ground`] (then a flat surface at a level) and [`connector`]
 //! (DungeonBlocks). P2: [`ground`] in full (levels, hills, the edge
-//! contract) and [`dirt`] (dirtlab's textured earth on it).
+//! contract) and [`dirt`] (dirtlab's textured earth on it). P3: [`rock`]
+//! (rocklab's rocks, alone or scattered; dirt's stones) and [`water`]
+//! (waterlab's swell-chaos).
 
 pub mod connector;
 pub mod dirt;
 pub mod ground;
+pub mod rock;
+pub mod water;
 
 use dt_kit::{Mask, Scene, Seed};
 
@@ -87,6 +91,9 @@ pub enum Write {
     Surface,
     /// A solid of this kind.
     Solid(&'static str),
+    /// The surface again, filled over what it reads (water): after the
+    /// solids it reads and before the lift, which lifts it with the ground.
+    Fill,
 }
 
 /// What a stack entry reads before it can build.
@@ -94,6 +101,8 @@ pub enum Write {
 pub enum Read {
     /// Every solid of this kind (`rock`, `tree`, …).
     Solids(&'static str),
+    /// Every solid of this kind if the tile has any (water's rocks).
+    AnySolids(&'static str),
     /// Every other solid in the tile, the lifted ground included.
     AllSolids,
 }
@@ -138,6 +147,20 @@ pub struct Ctx<'a> {
     pub path: &'a str,
     /// Its seed, keyed by its path.
     pub seed: Seed,
+    /// `at=`: where a thing stands, world mm (`None`: anywhere in its area).
+    pub at: Option<[f64; 2]>,
+}
+
+/// A child of a scatter: the thing it scatters, its controls, and its
+/// share of the mix (`weight=`, default 1).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Child {
+    /// The thing's look.
+    pub name: String,
+    /// Its controls.
+    pub controls: Vec<Control>,
+    /// Its weight.
+    pub weight: f64,
 }
 
 /// A built-in look.
@@ -160,8 +183,17 @@ pub fn takes(name: &str) -> Option<&'static [&'static str]> {
     match name {
         "ground" => Some(ground::CONTROLS),
         "dirt" => Some(dirt::CONTROLS),
+        "water" => Some(water::CONTROLS),
+        "scatter" => Some(rock::SCATTER_CONTROLS),
+        n if rock::is_thing(n) => Some(rock::CONTROLS),
         _ => None,
     }
+}
+
+/// Whether a look `name` can hold the child `child` yet.
+#[must_use]
+pub fn holds(name: &str, child: &str) -> bool {
+    name == "scatter" && rock::is_thing(child)
 }
 
 /// The look `name` with its controls.
@@ -169,9 +201,25 @@ pub fn takes(name: &str) -> Option<&'static [&'static str]> {
 /// # Errors
 /// [`LookError`] for an unknown look or a control it does not take.
 pub fn look(name: &str, controls: &[Control]) -> Result<Box<dyn Look>, LookError> {
+    look_with(name, controls, &[])
+}
+
+/// The look `name` with its controls and children (a scatter's things).
+///
+/// # Errors
+/// [`LookError`] for an unknown look, a control it does not take, or a
+/// child it cannot hold.
+pub fn look_with(
+    name: &str,
+    controls: &[Control],
+    children: &[Child],
+) -> Result<Box<dyn Look>, LookError> {
     match name {
         "ground" => Ok(Box::new(ground::Ground::new(controls)?)),
         "dirt" => Ok(Box::new(dirt::Dirt::new(controls)?)),
+        "water" => Ok(Box::new(water::Water::new(controls)?)),
+        "scatter" => Ok(Box::new(rock::Scatter::new(controls, children)?)),
+        n if rock::is_thing(n) => Ok(Box::new(rock::Single::new(n, controls)?)),
         _ => Err(LookError {
             control: None,
             message: format!("unknown look `{name}`"),

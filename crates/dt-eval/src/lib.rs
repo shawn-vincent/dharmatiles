@@ -168,7 +168,7 @@ impl Checked {
 /// Every problem found, each at its text.
 pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked, Vec<Diag>> {
     let read = doc::read(sources, path)?;
-    let Some(tile) = read.tile else {
+    let Some(mut tile) = read.tile else {
         return Ok(Checked {
             file: read.file,
             tile: None,
@@ -179,20 +179,34 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
             seed: 0,
         });
     };
+    if let Some(seed) = opts.seed {
+        tile.reseed(seed);
+    }
     let frame = Frame::dungeonblocks(tile.cols, tile.rows);
     let mut errors = Vec::new();
     let mut looks: Vec<Box<dyn Look>> = Vec::new();
     let mut areas = Vec::new();
     for e in &tile.stack {
-        let controls: Vec<Control> = e
-            .controls
+        let as_controls = |settings: &[doc::Setting]| -> Vec<Control> {
+            settings
+                .iter()
+                .map(|c| Control {
+                    name: c.name.clone(),
+                    value: c.value.clone(),
+                })
+                .collect()
+        };
+        let controls = as_controls(&e.controls);
+        let children: Vec<dt_looks::Child> = e
+            .children
             .iter()
-            .map(|c| Control {
-                name: c.name.clone(),
-                value: c.value.clone(),
+            .map(|c| dt_looks::Child {
+                name: c.what.value.clone(),
+                controls: as_controls(&c.controls),
+                weight: c.weight,
             })
             .collect();
-        match dt_looks::look(&e.what.value, &controls) {
+        match dt_looks::look_with(&e.what.value, &controls, &children) {
             Ok(l) => looks.push(l),
             Err(le) => {
                 let at = le
@@ -382,6 +396,12 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
         .find(|(surface, _)| surface == "ground")
         .map(|(_, mm)| mm * c.frame.scale());
     scene.set_edge(edge_mm);
+    scene.set_water_edge(
+        tile.edges
+            .iter()
+            .find(|(surface, _)| surface == "water")
+            .map(|(_, mm)| mm * c.frame.scale()),
+    );
     let mut h = c.steps.iter().fold(0xcbf2_9ce4_8422_2325, |h, s| {
         fnv(
             h,
@@ -396,7 +416,17 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
     h = mask_of.iter().fold(h, |h, &m| fnv(h, hashes[m]));
     scene.record("plan", h);
     let paths = entry_paths(tile);
+    // with water, the ground's areas are banked down to each other once the
+    // surfaces are painted, before any solid reads the ground
+    let writes: Vec<dt_looks::Write> = c.looks.iter().map(|l| l.plan().writes).collect();
+    let fills = writes.contains(&dt_looks::Write::Fill);
+    let mut painted = false;
     for step in &c.steps {
+        let surface = matches!(*step, Step::Entry(i) if writes[i] == dt_looks::Write::Surface);
+        if fills && !painted && !surface {
+            painted = true;
+            scene.bank();
+        }
         match *step {
             Step::Lift => scene
                 .lift(&format!("tile/{}/ground", tile.name))
@@ -407,6 +437,11 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
                     area: &masks[mask_of[i]],
                     path: &paths[i],
                     seed: pinned.map_or_else(|| root.path(&paths[i]), Seed::new),
+                    at: tile
+                        .stack
+                        .get(i)
+                        .and_then(|e| e.at)
+                        .map(|[x, y]| [x * c.frame.square_mm, y * c.frame.square_mm]),
                 };
                 c.looks[i].build(&mut scene, &ctx).map_err(|e| {
                     let msg = format!("{}: {}", paths[i], e.message);

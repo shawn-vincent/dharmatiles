@@ -240,37 +240,37 @@ impl Field {
         }
     }
 
-    /// **morphology**: the steepest slope (rise per mm), with numpy's
-    /// `gradient` (central differences inside, one-sided at the ends).
+    /// **morphology**: the slope along x and along y (rise per mm) at
+    /// every node, with numpy's `gradient` (central differences inside,
+    /// one-sided at the ends; 0 across a single node).
     #[must_use]
-    pub fn max_slope(&self) -> f64 {
+    pub fn gradient(&self) -> (Self, Self) {
         let (nx, ny, h) = (self.nx, self.ny, self.step);
-        let d = |a: f64, b: f64, n: f64| (a - b) / (n * h);
-        let mut m: f64 = 0.0;
+        let mut gx = vec![0.0; nx * ny];
+        let mut gy = vec![0.0; nx * ny];
         for j in 0..ny {
+            let (j0, j1) = (j.saturating_sub(1), (j + 1).min(ny - 1));
             for i in 0..nx {
-                let gx = if nx < 2 {
-                    0.0
-                } else if i == 0 {
-                    d(self.at(1, j), self.at(0, j), 1.0)
-                } else if i == nx - 1 {
-                    d(self.at(i, j), self.at(i - 1, j), 1.0)
-                } else {
-                    d(self.at(i + 1, j), self.at(i - 1, j), 2.0)
-                };
-                let gy = if ny < 2 {
-                    0.0
-                } else if j == 0 {
-                    d(self.at(i, 1), self.at(i, 0), 1.0)
-                } else if j == ny - 1 {
-                    d(self.at(i, j), self.at(i, j - 1), 1.0)
-                } else {
-                    d(self.at(i, j + 1), self.at(i, j - 1), 2.0)
-                };
-                m = m.max(libm::sqrt(gx * gx + gy * gy));
+                let (i0, i1) = (i.saturating_sub(1), (i + 1).min(nx - 1));
+                let k = j * nx + i;
+                #[allow(clippy::cast_precision_loss)]
+                {
+                    gx[k] = (self.at(i1, j) - self.at(i0, j)) / ((i1 - i0).max(1) as f64 * h);
+                    gy[k] = (self.at(i, j1) - self.at(i, j0)) / ((j1 - j0).max(1) as f64 * h);
+                }
             }
         }
-        m
+        (self.with_z(gx), self.with_z(gy))
+    }
+
+    /// **morphology**: the steepest slope (rise per mm), from
+    /// [`Field::gradient`].
+    #[must_use]
+    pub fn max_slope(&self) -> f64 {
+        let (gx, gy) = self.gradient();
+        gx.z.iter()
+            .zip(&gy.z)
+            .fold(0.0, |m: f64, (x, y)| m.max(libm::sqrt(x * x + y * y)))
     }
 }
 
@@ -376,6 +376,17 @@ pub fn distance(frame: &Frame, mask: &[bool]) -> (Field, Vec<Option<usize>>) {
         },
         near,
     )
+}
+
+/// **geodesic distance**: mm from the nearest `source` node to every node
+/// along 8-connected paths through `passable` nodes (Dijkstra), each step
+/// weighing `weight` times its length; unreached nodes are infinite.
+#[must_use]
+pub fn geodesic(frame: &Frame, source: &[bool], passable: &[bool], weight: f64) -> Field {
+    let (nx, ny) = frame.nodes();
+    let step = frame.step_mm();
+    let (d, _) = dt_geom::geodesic(source, passable, nx, ny, step * weight);
+    Field { nx, ny, step, z: d }
 }
 
 // ---- scatter ---------------------------------------------------------------

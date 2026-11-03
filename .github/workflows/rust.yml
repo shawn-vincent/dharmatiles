@@ -87,6 +87,9 @@ jobs:
       # The parity harness's Rust half (no Python on CI runners).
       - run: cargo xtask parity flat --no-python --dev
       - run: cargo xtask parity dirt --no-python --dev
+      - run: cargo xtask parity dirt-stones --no-python --dev
+      - run: cargo xtask parity rocks --no-python --dev
+      - run: cargo xtask parity water --no-python --dev
       # The parity renders and build records, per OS (no STLs).  With
       # --no-python the Python half doesn't run, so there is no
       # contact-sheet.png; it is listed for when there is one.

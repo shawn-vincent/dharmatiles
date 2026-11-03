@@ -287,13 +287,16 @@ python shorelab/shorelab.py --seed 1                                # the shore<
 <summary>Rust port</summary>
 <p><strong>Water: phase P3</strong>, “Rocks and water, with the edge contract”. It ports <code>_derive</code>, <code>_geodesic</code>, <code>_emit_sources</code>, <code>_swell_train</code> and <code>gen_swell_chaos</code>; from the library's <code>layers/water.py</code> only the edge sine is kept. Exit: amplitude and trough floor within tolerance, the edge profile within 0.05 mm on all four edges, the waterlab tile in ≤ 1 s (Python 2.3 s), Shawn's sign-off, and two printed water tiles that butt with no visible step. Eleven library water tiles get KDL twins.</p>
 <p><strong>Shore and reeds: phase P4</strong>, with grass and the meadow. It ports the wet mask, rock order and reeds from <code>shorelab/shorelab.py</code>; nine water+grass library tiles get twins.</p>
-<p><strong>Status:</strong> not started. The level <code>water 2.6</code> exists; the look and its vocabulary do not yet. No parity contact sheet.</p>
+<p><strong>Status:</strong> built on branch <code>rust/p3</code>, waiting for Shawn's sign-off and the butted-tile print.</p>
+<p><strong>How to write it.</strong> Shape the ground, then put <code>water</code> over the whole tile: it fills wherever the ground is below its level (<code>level=water</code>, 2.6 mm), as the 29–31 Oct ruling asks. A pool bed is <code>ground in=pool level="water - 2.2"</code>, the lab's bed; a bank is any higher area, and the engine banks it down to the bed over up to 7 mm (waterlab's bank). Rocks in the water come first and the waves wrap round them. A shore line may <code>wobble</code>.</p>
+<p><strong>Parity at seeds 1 to 4</strong> (<code>cargo xtask parity water</code>, contact sheet in <code>out/parity/water/</code>): relief −1.05 to +2.14 mm, RMS 0.69 mm (lab −1.08 to +2.34, 0.72); the troughs flatten softly at −1.1 mm; the water edge misses the contract by 0.016 mm at most on the printed mesh (limit 0.05); the tile builds in 0.9 s (lab 2.4 s).</p>
+<p><strong>Port notes.</strong> The lab's geodesic distances run 1.25 times true (it weighs 0.2 mm steps as 0.25 mm); the port keeps that on purpose, so the waves are the lab's. Its final 0.06 mm blur is below the 0.2 mm grid and is dropped. Two changes: the relief fades over 1 mm of true distance from the shore instead of 0.4 mm of smoothed distance, so a crest never meets the bank as a step; and a rock standing in the water is seated on the bed (the lab sank it a fixed 1.4 mm below the water level). The edge contract is <code>water level=water</code> in <code>library/parts/edges.kdl</code>: the water level plus 0.6 sin(2π(s − 13.125)/17.5) mm along every edge. Where a shore reaches the tile edge, the edge is the ground's or the water's on either side; within about 2 mm of that point neither contract holds exactly.</p>
 </details>
 
 <h3 id="open">Open issues</h3>
 <ul>
   <li>The labs build only a 2×2 tile; other sizes are untested.</li>
-  <li>There is no KDL vocabulary for water, shore or reeds yet; it arrives in P3 and P4.</li>
+  <li>There is no KDL vocabulary for shore or reeds yet; it arrives in P4. Water's is in (P3).</li>
   <li>The Python library's water sits at 3.0 mm (<code>layers/water.py</code>), above the labs' and Rust's 2.6 mm, and uses the older look.</li>
   <li>Still open from the waterlab work: open-water riders, the printability of the collar round rocks, and a seed sweep.</li>
   <li>The water renders on this page predate the red-overhang rule. The water itself cannot overhang, but rocks and reeds in those renders were not audited.</li>

@@ -115,6 +115,45 @@ pub fn fill(walls: &Mask, seed: (usize, usize)) -> Mask {
     out
 }
 
+/// The nodes inside `polygons` (closed rings in mm, even-odd, as a slice
+/// returns them) on an `nx` by `ny` lattice of `step` mm spacing, node
+/// `(i, j)` at `(i·step, j·step)`: a solid's footprint (P3). Scanline by
+/// rows: a node is inside when an odd number of ring edges cross the row
+/// to its left.
+#[must_use]
+pub fn fill_polygons(nx: usize, ny: usize, step: f64, polygons: &[Vec<[f64; 2]>]) -> Mask {
+    let mut m = Mask::new(nx, ny, false);
+    let mut xs: Vec<f64> = Vec::new();
+    #[allow(clippy::cast_precision_loss)]
+    let last = nx.saturating_sub(1) as f64;
+    for j in 0..ny {
+        #[allow(clippy::cast_precision_loss)]
+        let y = j as f64 * step;
+        xs.clear();
+        for ring in polygons {
+            let k = ring.len();
+            for e in 0..k {
+                let (a, b) = (ring[e], ring[(e + 1) % k]);
+                // half-open in y, so a vertex on the row counts once
+                if (a[1] <= y) != (b[1] <= y) {
+                    xs.push(a[0] + (y - a[1]) / (b[1] - a[1]) * (b[0] - a[0]));
+                }
+            }
+        }
+        xs.sort_by(f64::total_cmp);
+        for pair in xs.as_chunks::<2>().0 {
+            let lo = libm::ceil(pair[0] / step).max(0.0);
+            let hi = libm::floor(pair[1] / step).min(last);
+            if hi >= lo {
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let (lo, hi) = (lo as usize, hi as usize);
+                m.bits[j * nx + lo..=j * nx + hi].fill(true);
+            }
+        }
+    }
+    m
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -143,5 +182,16 @@ mod tests {
     #[test]
     fn no_walls_fills_everything() {
         assert_eq!(fill(&Mask::new(7, 5, false), (3, 2)).count(), 35);
+    }
+
+    #[test]
+    fn polygons_fill_their_inside() {
+        // a 2 mm square with a 1 mm square hole, on a 0.25 mm lattice
+        let outer = vec![[1.0, 1.0], [3.0, 1.0], [3.0, 3.0], [1.0, 3.0]];
+        let hole = vec![[1.5, 1.5], [1.5, 2.5], [2.5, 2.5], [2.5, 1.5]];
+        let m = fill_polygons(20, 20, 0.25, &[outer, hole]);
+        assert!(m.get(5, 5) && m.get(11, 11) && m.get(4, 8));
+        assert!(!m.get(8, 8) && !m.get(3, 3) && !m.get(13, 13));
+        assert!(fill_polygons(4, 4, 1.0, &[]).count() == 0);
     }
 }

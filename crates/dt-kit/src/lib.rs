@@ -16,7 +16,7 @@
 //! | [`Scene::lift`] | the painted surface → a solid (adaptive lift, error-bounded, edge contract held) |
 //! | [`noise`] | position-keyed noise over the tile (one lattice) |
 //! | [`distance`] | distance transform with nearest nodes |
-//! | [`Field`] morphology | blur, dilate, erode, range, quantile, slope; [`smax`] |
+//! | [`Field`] morphology | blur, dilate, erode, range, quantile, slope, gradient; [`smax`] |
 //! | [`scatter`] | things by density, largest first, with spacing |
 //! | [`cap`] | carve as a half-space cap over the ground (pebbles) |
 //! | [`loft`] | a closed solid through rings |
@@ -43,19 +43,24 @@ mod render;
 mod scene;
 mod shape;
 mod stl;
+mod stone;
 
 pub use audit::{Audit, Dropped, Export, Printer, audit};
-pub use dt_geom::{Grid, Mask, Rng, Seed, TriMesh};
+pub use dt_geom::Convex;
+pub use dt_geom::{Grid, Mask, Rng, Seed, TriMesh, vec3};
 pub use field::{
-    Field, Noise, Placed, Plane, Scale, Spread, cap, distance, noise, rim, scatter, smax, smooth01,
+    Field, Noise, Placed, Plane, Scale, Spread, cap, distance, geodesic, noise, rim, scatter, smax,
+    smooth01,
 };
 pub use outline::Outline;
 pub use render::{Image, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};
 pub use scene::{
-    Frame, LIFT_TOL_MM, Material, Part, REFERENCE_SQUARE_MM, Scene, Slot, Slots, Solid, Stage, Tag,
+    BANK_MM, Frame, LIFT_TOL_MM, Material, Part, REFERENCE_SQUARE_MM, Scene, Slot, Slots, Solid,
+    Stage, Tag,
 };
-pub use shape::{area, carve, extrude, loft, signed_volume, union};
+pub use shape::{area, carve, extrude, loft, signed_volume, union, wobble};
 pub use stl::{BuildRecord, stl};
+pub use stone::{Grain, grain, hull, seat, solid};
 
 /// Why a kit operation failed.
 #[derive(Clone, Debug, PartialEq)]

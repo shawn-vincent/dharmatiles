@@ -143,7 +143,13 @@ impl Shape {
         let (up, down) = (self.up.draw(&mut rng) * s, self.down.draw(&mut rng) * s);
         let tan = libm::tan(MAX_SLOPE_DEG.to_radians());
         let ramp = RAMP_MM.max(1.5 * (level - edge).abs() / tan);
-        let mut z = rim.map(|d| edge + (level - edge) * smooth01(d / ramp));
+        // a bed below the edge level (a pool's) runs flat to the rim: the
+        // water meets the edge there, and the edge rule raises dry ground
+        let mut z = if level < edge {
+            Field::new(&frame, level)
+        } else {
+            rim.map(|d| edge + (level - edge) * smooth01(d / ramp))
+        };
         if !(self.up.is_zero() && self.down.is_zero()) {
             let h = hills(&frame, seed, &rim, up, down, self.size_mm);
             z = z.zip(&h, |a, b| a + b);

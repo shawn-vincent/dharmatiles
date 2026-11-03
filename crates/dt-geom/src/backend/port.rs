@@ -5,7 +5,7 @@
 //! size-ordered union itself, so large batches stay tractable.
 
 use manifold_rust::cross_section::CrossSection;
-use manifold_rust::linalg::{Vec2, Vec3};
+use manifold_rust::linalg::{Mat3x4, Vec2, Vec3};
 use manifold_rust::manifold::Manifold;
 use manifold_rust::types::{Box as BBox, Error, MeshGLP, OpType};
 
@@ -160,6 +160,34 @@ impl Mesh for PortSolid {
             Manifold::extrude(&cs.to_polygons(), z1 - z0, 0, 0.0, Vec2::new(1.0, 1.0))
                 .translate(Vec3::new(0.0, 0.0, z0)),
         )
+    }
+
+    fn hull(points: &[[f64; 3]]) -> Self {
+        let pts: Vec<Vec3> = points.iter().map(|p| v3(*p)).collect();
+        Self(Manifold::hull(&pts))
+    }
+
+    fn refine_to_length(&self, length: f64) -> Self {
+        Self(self.0.refine_to_length(length))
+    }
+
+    fn transform(&self, m: &[f64; 12]) -> Self {
+        let t = Mat3x4 {
+            x: Vec3::new(m[0], m[1], m[2]),
+            y: Vec3::new(m[3], m[4], m[5]),
+            z: Vec3::new(m[6], m[7], m[8]),
+            w: Vec3::new(m[9], m[10], m[11]),
+        };
+        Self(self.0.transform(&t))
+    }
+
+    fn slice(&self, z: f64) -> Vec<Vec<[f64; 2]>> {
+        self.0
+            .slice(z)
+            .to_polygons()
+            .into_iter()
+            .map(|c| c.into_iter().map(|p| [p.x, p.y]).collect())
+            .collect()
     }
 
     fn as_original(&self) -> Self {

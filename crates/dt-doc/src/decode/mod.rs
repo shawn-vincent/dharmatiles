@@ -1149,14 +1149,14 @@ impl<'k> Decoder<'k> {
         let mut rules = Vec::new();
         for c in n.iter_children() {
             let surface = spanned_name(c);
-            if surface.value != "ground" {
+            if surface.value != "ground" && surface.value != "water" {
                 self.err(
                     "dt::edges",
                     surface.span,
                     format!("the edge contract has no rule for `{}`", surface.value),
                     "unknown",
                 )
-                .help = Some("today it covers `ground`; water joins in P3".to_owned());
+                .help = Some("it covers `ground` and `water`".to_owned());
                 continue;
             }
             let level = c

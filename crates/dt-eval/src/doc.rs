@@ -38,6 +38,10 @@ use crate::source::{LIB, Source, resolve};
 /// The edge contract every tile applies at its root.
 pub const EDGES: &str = "lib:parts/edges.kdl";
 
+/// A line's wobble follows smooth noise of this sigma along it, mm at the
+/// reference square (waterlab's shore, `Scene.__init__` :300).
+const LINE_WOBBLE_SIGMA_MM: f64 = 9.0;
+
 /// The printer profile builds are checked against by default.
 pub const PRINTER: &str = "lib:printers/default.kdl";
 
@@ -78,10 +82,25 @@ pub struct Entry {
     pub id: Option<String>,
     /// The controls the look takes: written, or their defaults.
     pub controls: Vec<Setting>,
+    /// `at=`: where a thing stands, in squares from the south-west corner.
+    pub at: Option<[f64; 2]>,
+    /// A scatter's children: each thing, its controls and its weight.
+    pub children: Vec<Child>,
     /// The text it came from.
     pub src: Src,
     /// The whole node.
     pub span: SourceSpan,
+}
+
+/// A child of a scatter, as its look takes it.
+#[derive(Clone, Debug)]
+pub struct Child {
+    /// The thing's look.
+    pub what: Spanned<String>,
+    /// Its controls, written or by default.
+    pub controls: Vec<Setting>,
+    /// `weight=` (default 1).
+    pub weight: f64,
 }
 
 /// A region: lines (by name) and fill points (squares).
@@ -115,6 +134,9 @@ pub struct Tile {
     pub edges: Vec<(String, f64)>,
     /// Straight lines, by name, as points in squares.
     pub lines: BTreeMap<String, Vec<[f64; 2]>>,
+    /// The wobbled lines as drawn (points in squares) and their wobble,
+    /// mm, so [`Tile::reseed`] can wobble them again.
+    pub wobbles: BTreeMap<String, (Vec<[f64; 2]>, f64)>,
     /// Regions.
     pub regions: Vec<Region>,
     /// The entries that call built looks, definitions inlined.
@@ -126,6 +148,30 @@ pub struct Tile {
     pub src: Src,
     /// Where its name is written.
     pub span: SourceSpan,
+}
+
+impl Tile {
+    /// Replace the root seed, wobbling the wobbled lines again from it
+    /// (a `--seed` reaches the lines as well as the looks).
+    pub fn reseed(&mut self, seed: u64) {
+        self.seed = seed;
+        for (name, (pts, wobble)) in &self.wobbles {
+            self.lines
+                .insert(name.clone(), wobbled(pts, *wobble, seed, name));
+        }
+    }
+}
+
+/// A line's points (in squares) wobbled `wobble` mm, at the reference
+/// square, keyed by the tile seed and the line's name.
+fn wobbled(pts: &[[f64; 2]], wobble: f64, seed: u64, name: &str) -> Vec<[f64; 2]> {
+    let sq = dt_kit::REFERENCE_SQUARE_MM;
+    let mm: Vec<[f64; 2]> = pts.iter().map(|p| [p[0] * sq, p[1] * sq]).collect();
+    let seed = Seed::new(seed).key("line").key(name);
+    dt_kit::wobble(&mm, wobble, LINE_WOBBLE_SIGMA_MM, 0.25, seed)
+        .into_iter()
+        .map(|p| [p[0] / sq, p[1] / sq])
+        .collect()
 }
 
 /// A document as read: the file, and its tile if it has one.
@@ -172,6 +218,7 @@ pub fn read(sources: &dyn Source, path: &str) -> Result<Read, Vec<Diag>> {
         errors: Vec::new(),
         entries: 0,
         top: None,
+        size: (1, 1),
     };
     let Some(file) = r.load(path, None) else {
         return Err(r.errors);
@@ -259,6 +306,8 @@ struct Reader<'s> {
     entries: usize,
     /// The tile's own entry being inlined (where a blow-up is reported).
     top: Option<(Src, SourceSpan)>,
+    /// The tile's size in squares, for `at=` points.
+    size: (u32, u32),
 }
 
 /// The most stack entries a tile may expand to, definitions inlined.  A
@@ -396,6 +445,7 @@ impl Reader<'_> {
             edges: self.edges(&standard),
             levels,
             lines: BTreeMap::new(),
+            wobbles: BTreeMap::new(),
             regions: Vec::new(),
             stack: Vec::new(),
             pending: Vec::new(),
@@ -403,15 +453,26 @@ impl Reader<'_> {
             span: def.name.span,
         };
         let (cols, rows) = (f64::from(t.cols), f64::from(t.rows));
+        self.size = (t.cols, t.rows);
         for l in &def.lines {
-            if let Some(w) = l.width.as_ref().or(l.wobble.as_ref()) {
-                t.pending.push(not_yet(
-                    src,
-                    w.span,
-                    "a line's width and wobble are",
-                    Some(4),
-                ));
+            if let Some(w) = l.width.as_ref() {
+                t.pending
+                    .push(not_yet(src, w.span, "a line's width is", Some(4)));
             }
+            let wobble = match l.wobble.as_ref().map(|w| (w, w.value.mm(&t.levels))) {
+                None => 0.0,
+                Some((_, Ok(v))) if v.is_finite() && (0.0..=35.0).contains(&v) => v,
+                Some((w, Ok(_) | Err(_))) => {
+                    self.errors.push(Diag::at(
+                        src,
+                        w.span,
+                        "dt::value",
+                        "a line's wobble is from 0 to 35 mm",
+                        "here",
+                    ));
+                    0.0
+                }
+            };
             let mut pts = Vec::new();
             for p in &l.through {
                 match fixed_point(&p.value, cols, rows) {
@@ -421,6 +482,11 @@ impl Reader<'_> {
                             .push(not_yet(src, p.span, "a point drawn from a range is", None))
                     }
                 }
+            }
+            if wobble > 0.0 {
+                t.wobbles
+                    .insert(l.name.value.clone(), (pts.clone(), wobble));
+                pts = wobbled(&pts, wobble, t.seed, &l.name.value);
             }
             t.lines.insert(l.name.value.clone(), pts);
         }
@@ -571,10 +637,31 @@ impl Reader<'_> {
                         continue;
                     };
                     let mut ok = true;
+                    // `at=` on a built thing: a fixed point in squares
+                    let thing = matches!(look.role, dt_doc::schema::Role::Thing);
+                    let mut at = None;
+                    if thing && let Some(p) = &e.place.at {
+                        let (cols, rows) = (f64::from(self.size.0), f64::from(self.size.1));
+                        match fixed_point(&p.value, cols, rows) {
+                            Some(xy) => at = Some(xy),
+                            None => {
+                                ok = false;
+                                pending.push(not_yet(
+                                    src,
+                                    p.span,
+                                    "a thing at a point drawn from a range is",
+                                    None,
+                                ));
+                            }
+                        }
+                    }
                     for (word, span) in [
                         ("along=", e.place.along.as_ref().map(|s| s.span)),
                         ("side=", e.place.side.as_ref().map(|s| s.span)),
-                        ("at=", e.place.at.as_ref().map(|s| s.span)),
+                        (
+                            "at=",
+                            e.place.at.as_ref().filter(|_| !thing).map(|s| s.span),
+                        ),
                         ("against=", e.place.against.as_ref().map(|s| s.span)),
                     ] {
                         if let Some(span) = span {
@@ -587,14 +674,49 @@ impl Reader<'_> {
                             ));
                         }
                     }
+                    let mut children = Vec::new();
                     for c in &e.children {
-                        ok = false;
-                        pending.push(not_yet(
-                            src,
-                            c.what.span,
-                            &format!("`{}` inside `{}` is", c.what.value, look.name),
-                            phase(&c.what.value).or(Some(3)),
-                        ));
+                        let built = match &c.callee {
+                            Callee::Look(cl) if dt_looks::holds(look.name, cl.name) => {
+                                dt_looks::takes(cl.name).map(|t| (*cl, t))
+                            }
+                            _ => None,
+                        };
+                        let Some((cl, ctakes)) = built else {
+                            ok = false;
+                            pending.push(not_yet(
+                                src,
+                                c.what.span,
+                                &format!("`{}` inside `{}` is", c.what.value, look.name),
+                                phase(&c.what.value).or(Some(3)),
+                            ));
+                            continue;
+                        };
+                        for (word, span) in [
+                            ("along=", c.place.along.as_ref().map(|s| s.span)),
+                            ("side=", c.place.side.as_ref().map(|s| s.span)),
+                            ("at=", c.place.at.as_ref().map(|s| s.span)),
+                            ("against=", c.place.against.as_ref().map(|s| s.span)),
+                            ("in=", c.place.region.as_ref().map(|s| s.span)),
+                        ] {
+                            if let Some(span) = span {
+                                ok = false;
+                                pending.push(not_yet(
+                                    src,
+                                    span,
+                                    &format!("`{word}` on a scatter's `{}` is", cl.name),
+                                    None,
+                                ));
+                            }
+                        }
+                        match self.controls(c, cl, ctakes, scope, pending) {
+                            Some(controls) => children.push(Child {
+                                what: c.what.clone(),
+                                controls,
+                                weight: c.place.weight.as_ref().map_or(1.0, |w| w.value),
+                            }),
+                            None => ok = false,
+                        }
                     }
                     let controls = self.controls(e, look, takes, scope, pending);
                     if ok && let Some(controls) = controls {
@@ -604,6 +726,8 @@ impl Reader<'_> {
                             seed,
                             id,
                             controls,
+                            at,
+                            children,
                             src: Arc::clone(src),
                             span: e.span,
                         });

@@ -105,6 +105,8 @@ pub fn paint(materials: &[Material], overhang: &[bool]) -> Vec<[f32; 3]> {
                 match m {
                     Material::Earth => [0.50, 0.38, 0.25],
                     Material::Connector => [0.62, 0.62, 0.64],
+                    Material::Rock => [0.58, 0.58, 0.61],
+                    Material::Water => [0.24, 0.38, 0.56],
                 }
             }
         })

@@ -39,10 +39,13 @@ pub const CONTROLS: &[&str] = &[
     "bumps/down",
     "bump-size",
     "clods",
+    "stones",
 ];
 
 /// dirtlab's height-field resolution, true mm.
 const CELL_MM: f64 = 0.15;
+/// dirtlab STONES_2X2: bedded stones per 2×2 (`stones some`).
+const STONES_2X2: (i64, i64) = (4, 7);
 /// The texture ramps in over this rim width, true mm.
 const RIM_TEX_MM: f64 = 1.0;
 /// Below any surface: a lobe or pebble that is not there.
@@ -119,6 +122,8 @@ pub struct Dirt {
     pub shape: Shape,
     /// Clod attempts per mm² at full patch density (`clods`).
     pub clod_density: f64,
+    /// Bedded stones per 2×2 tile, drawn from this range (`stones`).
+    pub stones: (i64, i64),
 }
 
 impl Dirt {
@@ -144,9 +149,31 @@ impl Dirt {
                 }
             }
         }
+        let mut stones = STONES_2X2;
+        for c in controls {
+            #[allow(clippy::cast_possible_truncation)]
+            match (c.name.as_str(), &c.value) {
+                ("stones.min", Value::Number(v)) if (0.0..=100.0).contains(v) => {
+                    stones.0 = libm::round(*v) as i64;
+                }
+                ("stones.max", Value::Number(v)) if (0.0..=100.0).contains(v) => {
+                    stones.1 = libm::round(*v) as i64;
+                }
+                ("stones.min" | "stones.max", v) => {
+                    return Err(LookError::control(
+                        "stones",
+                        format!("stones per 2×2 must be 0 to 100, not {v}"),
+                        "write stones none, some or many".into(),
+                    ));
+                }
+                _ => {}
+            }
+        }
+        stones.1 = stones.1.max(stones.0);
         Ok(Self {
             shape: Shape::new("dirt", controls)?,
             clod_density,
+            stones,
         })
     }
 }
@@ -171,14 +198,27 @@ pub struct Counts {
     pub medium: usize,
     /// Worn (rounded) pebbles among them.
     pub rounded: usize,
+    /// Bedded stones.
+    pub stones: usize,
     /// The share of the interior meeting the printable-texture rule.
     pub texture_ok: f64,
 }
 
 /// The dirt surface over the whole tile (world mm), the pebble mask and
-/// the counts: dirtlab's `build_field` without stones.
-#[must_use]
-pub fn surface(dirt: &Dirt, scene: &Scene, seed: Seed) -> (Field, Vec<bool>, Counts) {
+/// the counts: dirtlab's `build_field`.
+///
+/// Its stones (`stones`) are rock solids added to the scene, owned by
+/// `owner`, bedded into this field in its area.
+///
+/// # Errors
+/// [`LookError`] if a stone fails to build.
+pub fn surface(
+    dirt: &Dirt,
+    scene: &mut Scene,
+    seed: Seed,
+    owner: &str,
+    area: &dt_kit::Mask,
+) -> Result<(Field, Vec<bool>, Counts), LookError> {
     let frame = *scene.frame();
     let (base, rim) = dirt.shape.surface(scene, seed.key("ground"));
     let w_tex = rim.map(|d| smooth01(d / RIM_TEX_MM));
@@ -206,10 +246,16 @@ pub fn surface(dirt: &Dirt, scene: &Scene, seed: Seed) -> (Field, Vec<bool>, Cou
             })
             .collect(),
     );
-    let (mask, mut counts) = place_pebbles(&frame, seed, &mut z, &ground);
+    let avoid = if dirt.stones.1 > 0 {
+        crate::rock::dirt_stones(scene, owner, seed, &mut z, &rim, dirt.stones, area)?
+    } else {
+        Vec::new()
+    };
+    let (mask, mut counts) = place_pebbles(&frame, seed, &mut z, &ground, &avoid);
     counts.clods = clods;
+    counts.stones = avoid.len();
     counts.texture_ok = texture_ok(&z, &rim);
-    (z, mask, counts)
+    Ok((z, mask, counts))
 }
 
 /// dirtlab's `clod_layer`: clods soft-maxed onto `base`.
@@ -538,6 +584,7 @@ fn place_pebbles(
     seed: Seed,
     z: &mut Field,
     ground: &Field,
+    avoid: &[[f64; 3]],
 ) -> (Vec<bool>, Counts) {
     let [w, h] = frame.size_mm();
     let area_sq = w * h / (SQUARE_MM * SQUARE_MM);
@@ -569,7 +616,7 @@ fn place_pebbles(
         &radii,
         &spread,
         &|x, y| c.sample(x, y),
-        &[],
+        avoid,
     );
     let seat = z.blur(PEB_SEAT_SIGMA_MM);
     let mut mask = vec![false; z.z.len()];
@@ -622,7 +669,7 @@ impl Look for Dirt {
     }
 
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
-        let (z, stone, counts) = surface(self, scene, ctx.seed);
+        let (z, stone, counts) = surface(self, scene, ctx.seed, ctx.path, ctx.area)?;
         scene.paint_field(ctx.area, &z);
         scene.mark_stone(ctx.area, &stone);
         #[allow(clippy::cast_precision_loss)]
@@ -631,6 +678,7 @@ impl Look for Dirt {
             ("pebbles_small", counts.small),
             ("pebbles_medium", counts.medium),
             ("pebbles_rounded", counts.rounded),
+            ("stones", counts.stones),
         ] {
             scene.note(k, v as f64);
         }

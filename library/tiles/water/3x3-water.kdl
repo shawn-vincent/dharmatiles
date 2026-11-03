@@ -1,0 +1,15 @@
+// The twin of src/tiles/water/3x3-water.tile.py (the Python library tile, kept).
+// Nine squares of water, waterlab's swell-chaos.
+// Port notes: the pool bed sits 2.2 mm under the water level (waterlab's
+// bed), the water is waterlab's swell-chaos at the standard water level
+// (2.6 mm; the Python pool was 3 mm), and the bank is dirtlab's dirt,
+// banked down to the bed over 7 mm.  The Python shoreline strip (soil
+// plus 40–60 shore pebbles a square) is the dirt's own pebbles here.
+
+tile water-3x3 size="3x3" seed=17 {
+    about "Nine squares of water, waterlab's swell-chaos."
+    stack {
+        ground level="water - 2.2"
+        water
+    }
+}

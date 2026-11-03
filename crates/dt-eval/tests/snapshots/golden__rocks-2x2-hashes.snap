@@ -1,0 +1,32 @@
+---
+source: crates/dt-eval/tests/golden.rs
+expression: hashes(&b)
+---
+4cb9b472f975d51a  plan
+fb49e240047ddf7d  surface
+f43b398b3841af6e  ground:tile/rocks/ground
+88b36e40f4484467  rock:tile/rocks/scatter/0
+fb9b9c1c3a1f7f78  rock:tile/rocks/scatter/0
+49027041dd2b1f07  rock:tile/rocks/scatter/0
+cd8d22f582317f9d  rock:tile/rocks/scatter/0
+3c3c9b58a725f3b0  rock:tile/rocks/scatter/0
+471f89a7ba5b3071  rock:tile/rocks/scatter/0
+d5cab055a7c9410e  rock:tile/rocks/scatter/0
+1eb1e8a517eeaa9e  rock:tile/rocks/scatter/0
+b664750f3c81ea74  rock:tile/rocks/scatter/0
+5c3badc5b3ca4567  rock:tile/rocks/scatter/0
+87eb6b9c3665cf3d  rock:tile/rocks/scatter/0
+83359b94f2e26eec  rock:tile/rocks/scatter/0
+559fe4a33d053fee  rock:tile/rocks/scatter/0
+a9dffe033b03625c  rock:tile/rocks/scatter/0
+5e8f6a1c9b170727  rock:tile/rocks/scatter/0
+c91f37174cdc8a43  rock:tile/rocks/scatter/0
+53ee5b6624495a96  rock:tile/rocks/scatter/0
+d5f994bbd33ffd1e  rock:tile/rocks/scatter/0
+5d12843d0f2e8c59  rock:tile/rocks/scatter/0
+e9d9874700297a79  rock:tile/rocks/scatter/0
+0be5c5bfb0c96df8  rock:tile/rocks/scatter/0
+2a2be3a1b0b8b314  rock:tile/rocks/scatter/0
+349265e945ab781e  connector:tile/rocks/connector
+9f365e1f074b586b  union
+6774c12b228e277d  export
