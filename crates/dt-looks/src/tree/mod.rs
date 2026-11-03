@@ -140,9 +140,8 @@ impl Default for Params {
             balance: 1.0,
             exponent: 3.0,
             min_radius: 1.0,
-            // `leaves clumps-only` (dt-doc's default): leaves on does not
-            // yet pass the gate
-            leaves: false,
+            // `leaves on` (dt-doc's default)
+            leaves: true,
             clumps_on: true,
             leaf_length: Value::Number(4.5),
             leaf_width: Value::Number(3.0),
@@ -650,14 +649,25 @@ pub(crate) fn drop_crumbs(
     Ok((out, bodies.len() - keep.len()))
 }
 
+/// Loose bodies under this, mm³, that the last union cut off the tree (a
+/// knife-edge of a bevelled clump a leaf half covers) are plugged back on.
+const ISLE_MM3: f64 = 0.01;
+
 /// `solid` with the sealed air pockets its last union closed in (where a
 /// bevelled clump meets a branch) filled: each pocket's convex hull, a
 /// tenth larger, is unioned back as a plug (it is inside the wood and the
-/// clump, so nothing shows). Returns how many were filled.
+/// clump, so nothing shows). A tiny loose body it cut off (under
+/// [`ISLE_MM3`]) is plugged the same way, so it fuses back to the tree it
+/// touches instead of being dropped. Returns how many were filled.
 fn fill_pockets(scene: &mut Scene, solid: Solid) -> Result<(Solid, usize), LookError> {
-    let plugs: Vec<TriMesh> = leaves::split_bodies(&solid.mesh())
+    let bodies = leaves::split_bodies(&solid.mesh());
+    let main = bodies.iter().map(dt_kit::signed_volume).fold(0.0, f64::max);
+    let plugs: Vec<TriMesh> = bodies
         .into_iter()
-        .filter(|b| dt_kit::signed_volume(b) < 0.0)
+        .filter(|b| {
+            let v = dt_kit::signed_volume(b);
+            v < 0.0 || (v < main && v < ISLE_MM3)
+        })
         .filter_map(|b| {
             #[allow(clippy::cast_precision_loss)]
             let n = b.positions.len() as f64;

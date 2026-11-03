@@ -109,13 +109,17 @@ const DRAPE_EMBED_MM: f64 = 0.0;
 const DRAPE_DOME_FADE_DEG: f64 = 25.0;
 /// A flattened blade's rim lies this far off the crown (inside it), mm.
 const DRAPE_RIM_MM: f64 = -0.05;
-/// A flattened blade is a slab down to this far inside the crown, mm.
-const DRAPE_ROOT_MM: f64 = 0.4;
+/// A flattened blade is a slab down to the first of these depths inside
+/// the crown, mm, that does not fold its floor.
+const DRAPE_ROOT_MM: [f64; 5] = [0.4, 0.3, 0.2, 0.15, 0.1];
 /// Each shingle step lifts a flattened blade this much more off the
 /// crown, mm: overlapping flattened blades lie on surfaces a whole step
 /// apart (near-coincident faces leave slivers in the union and break at
 /// the float32 export).
 const DRAPE_STEP_MM: f64 = 0.02;
+/// A flattened blade rises from its rim's tuck to its full lift over this
+/// height above its lowest point, mm.
+const DRAPE_RAMP_MM: f64 = 0.6;
 
 /// A flattened blade's lift off the crown for its shingle standoff.
 fn drape_embed(standoff: f64) -> f64 {
@@ -1252,7 +1256,7 @@ impl Job<'_> {
         // each ring walks out from its midrib, both ways, a lateral step
         // at a time (a lateral jump would fall off a lobe's edge)
         let mut out = vec![[0.0; 3]; surf.len()];
-        let mut inner = vec![[0.0; 3]; surf.len()];
+        let mut up = vec![0.0; surf.len()];
         let mut on = vec![[0.0; 3]; surf.len()];
         let mut nrm = vec![[0.0; 3]; surf.len()];
         let flat_below = self
@@ -1271,8 +1275,7 @@ impl Job<'_> {
             // the rim is tucked into the crown: no edge stands proud
             let rim = k == BASE || k == TIP || k.is_multiple_of(STRIDE) || k % STRIDE == N_LAT;
             let lift = if rim { DRAPE_RIM_MM } else { embed };
-            out[k] = add(hit, scale(ns, h + lift));
-            inner[k] = sub(hit, scale(ns, DRAPE_ROOT_MM));
+            up[k] = h + lift;
             on[k] = hit;
             nrm[k] = ns;
         };
@@ -1310,6 +1313,45 @@ impl Job<'_> {
             }
         }
 
+        // the blade's low end comes out of the crown gradually: within
+        // DRAPE_RAMP_MM of its lowest point it rises from the rim's tuck,
+        // so it does not start as a lip under the crown it lies on
+        let zlow = on.iter().map(|p| p[2]).fold(f64::INFINITY, f64::min);
+        for k in 0..out.len() {
+            let w = ((on[k][2] - zlow) / DRAPE_RAMP_MM).clamp(0.0, 1.0);
+            let lift = DRAPE_RIM_MM + (up[k] - DRAPE_RIM_MM) * w;
+            out[k] = add(on[k], scale(nrm[k], lift.min(up[k])));
+        }
+        // whether a sheet laid ring by ring on the crown's points folds back
+        // over itself: a face of it turned away from the crown under it
+        let folds = |sheet: &[V]| {
+            self.tris.iter().any(|t| {
+                let [a, b, c] = t.map(|i| i as usize);
+                let flat = cross(sub(surf[b], surf[a]), sub(surf[c], surf[a]));
+                let sgn = if dot(flat, n) >= 0.0 { 1.0 } else { -1.0 };
+                let crown = add(add(nrm[a], nrm[b]), nrm[c]);
+                let f = cross(sub(sheet[b], sheet[a]), sub(sheet[c], sheet[a]));
+                sgn * dot(f, crown) < 0.0
+            })
+        };
+        // across a crease between clumps the crown's points fold: the blade
+        // over them would bridge the crease in air
+        if folds(&on) {
+            return Err(Fail::Drape);
+        }
+        // the slab's floor: the crown's surface under every blade vertex,
+        // as deep in as it goes without folding (under a tight lobe a deep
+        // floor crosses itself, and the union cuts a film loose there)
+        let inner = DRAPE_ROOT_MM
+            .iter()
+            .map(|d| -> Vec<V> {
+                on.iter()
+                    .zip(&nrm)
+                    .map(|(p, m)| sub(*p, scale(*m, *d)))
+                    .collect()
+            })
+            .find(|f| !folds(f))
+            .ok_or(Fail::Drape)?;
         // the blade's lowest point must have the crown going on below it
         // (the crown carries the layers there); over a clump's bottom the
         // blade would hang under it, its lowest layer laid in air
@@ -1319,8 +1361,7 @@ impl Job<'_> {
         if !self.crown.goes_below(on[low], nrm[low], out[low][2]) {
             return Err(Fail::Drape);
         }
-        // the slab's floor: the crown's surface under every blade vertex,
-        // DRAPE_ROOT_MM in, so its walls cross the crown square
+        // the floor must lie inside the crown, so the slab's walls cross it
         let mid = inner[(RINGS / 2) * STRIDE + N_LAT / 2];
         if !self
             .crown

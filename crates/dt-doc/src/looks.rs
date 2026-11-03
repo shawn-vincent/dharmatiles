@@ -313,9 +313,7 @@ static TREE: &[Control] = &[
         "separate leaves, just clumps, or a winter tree",
     )
     .words(LEAVES)
-    // clumps-only until separate leaves pass the gate: a default tree
-    // with leaves on still fails it (2.94 mm² on a 1×1)
-    .default("clumps-only"),
+    .default("on"),
     group(
         "leaf",
         &[

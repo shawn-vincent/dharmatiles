@@ -12,7 +12,7 @@ tile tree size="1x1" seed=42 {
             crown width=24 clumps=32 shape=round branching=normal
             // Leaves off until the leaf placer's blades pass the overhang
             // gate (they add 105–170 mm² per tree): clumps only.
-            leaves clumps-only
+            leaves on
         }
     }
 }
