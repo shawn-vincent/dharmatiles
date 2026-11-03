@@ -115,6 +115,9 @@ pub struct Built {
     pub notes: Vec<(String, f64)>,
     /// The ground surface as built, for painted previews.
     pub surface: Option<(dt_kit::Grid, dt_kit::Mask)>,
+    /// The nodes a stamped solid (floor, wall, tree) covers, for painted
+    /// previews: the earth's side under them is bedding.
+    pub covered: Option<dt_kit::Mask>,
 }
 
 impl Built {
@@ -122,10 +125,13 @@ impl Built {
     /// (dirtlab's drybrush, pebbles grey), overhangs red.
     #[must_use]
     pub fn colours(&self) -> Vec<[f32; 3]> {
-        let surface = self
-            .surface
-            .as_ref()
-            .map(|(g, stone)| dt_kit::SurfacePaint::new(g, stone));
+        let surface = self.surface.as_ref().map(|(g, stone)| {
+            let p = dt_kit::SurfacePaint::new(g, stone);
+            match &self.covered {
+                Some(c) => p.covered(c),
+                None => p,
+            }
+        });
         dt_kit::paint_surface(
             &self.export.mesh,
             &self.materials,
@@ -447,6 +453,11 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
         edge_mm,
         notes: scene.notes().to_vec(),
         surface: scene.surface(),
+        covered: scene.support().map(|g| dt_kit::Mask {
+            nx: g.nx,
+            ny: g.ny,
+            bits: g.z.iter().map(|z| z.is_finite()).collect(),
+        }),
     })
 }
 

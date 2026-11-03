@@ -21,10 +21,6 @@ use crate::{Control, Ctx, Look, LookError, Plan, Read, Value, Write, only};
 /// `group/sub`).
 pub const CONTROLS: &[&str] = &["style", "texture", "slabs", "level"];
 
-/// Flagstone rows and lengths for a fieldstone floor, mm at the reference.
-const FLAG_ROW_MM: (f64, f64) = (5.0, 9.0);
-const FLAG_LEN_MM: (f64, f64) = (7.0, 14.0);
-
 /// The `floor` look.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Floor {
@@ -46,10 +42,10 @@ impl Floor {
             None => false,
         };
         let mut m = if fieldstone {
-            let mut m = Mason::new(Family::Fieldstone);
-            m.course = FLAG_ROW_MM;
-            m.bay = FLAG_LEN_MM;
-            m
+            // the fieldstone wall's own stone sizes (Shawn, walls E57:
+            // big flagstones looked weird; the floor should read like the
+            // wall's stones, laid flat)
+            Mason::new(Family::Fieldstone)
         } else {
             let mut m = Mason::new(Family::Slab);
             m.texture(wall::texture("dressed").unwrap_or_default());

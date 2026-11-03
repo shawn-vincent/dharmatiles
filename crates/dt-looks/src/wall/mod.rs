@@ -792,6 +792,7 @@ pub(crate) fn solidify(
     laid: bool,
 ) -> Result<Solid, LookError> {
     let n = u32::try_from(units.len()).map_err(LookError::build)?;
+    let edge = scene.edge();
     let slots = scene
         .slots(n + 1, Material::Masonry)
         .map_err(LookError::build)?;
@@ -832,8 +833,18 @@ pub(crate) fn solidify(
     }
     let all = union(&solids).map_err(LookError::build)?;
     // butt joins: cut flush at the tile boundary; a floor is cut flat at
-    // the datum (the connector owns z < 0)
-    let z_lo = if laid { 0.0 } else { lo[2] - 10.0 };
+    // the datum (the connector owns z < 0), or with an edge contract at
+    // the edge level: the ground never dips below it, so the cut is
+    // always buried, and the tile's side reads earth below one straight
+    // line and stone above it. Cut at the datum, the slabs' clipped sides
+    // and the earth's side shared a plane from 0 to the edge level and
+    // the union handed its faces to either material. (Standing walls
+    // stand inside the tile and never reach its side.)
+    let z_lo = if laid {
+        edge.unwrap_or(0.0)
+    } else {
+        lo[2] - 10.0
+    };
     clip(
         &all,
         slots.get(n),

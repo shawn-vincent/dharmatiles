@@ -5,7 +5,7 @@ expression: hashes(&b)
 04252fa73e78247e  plan
 b46058e9dfb1c2e4  surface
 df9c363852345a04  ground:tile/floor-stone/ground
-9a58a11e92a5bc42  floor:tile/floor-stone/floor/0
+98a128fd62392a8a  floor:tile/floor-stone/floor/0
 9fd12c9bda20b6e3  connector:tile/floor-stone/connector
-439ae40f32fbe737  union
-8abc0242d7d01701  export
+09b978686b8d3a2c  union
+1d7a117307917e06  export

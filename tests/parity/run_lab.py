@@ -273,6 +273,8 @@ def build_masonry(family: str, seed: int):
         "wall-regular-brick": (W.RegularBrickWall, {"spine": north}, "wall"),
         "wall-fieldstone": (W.FieldstoneWall, {"spine": north}, "wall"),
         "floor-stone": (W.StoneFloor, {"texture": "dressed"}, "floor"),
+        "floor-fieldstone": (W.FieldstoneWall, {"spine": [(0.0, 0.0), (1.0, 0.0)], "laid_flat": True,
+                              "height_mm": 35.0, "thickness_mm": 7.4}, "floor"),
     }[family]
     count = {"units": 0, "courses": set()}
 
@@ -401,7 +403,8 @@ def tree_metrics(mesh: trimesh.Trimesh, ground: float) -> dict:
     return {"tree_height_mm": h, "crown_width_mm": w, "tree_volume_mm3": vol}
 
 
-MASONRY = ("wall-cut-stone", "wall-brick", "wall-regular-brick", "wall-fieldstone", "floor-stone")
+MASONRY = ("wall-cut-stone", "wall-brick", "wall-regular-brick", "wall-fieldstone", "floor-stone",
+           "floor-fieldstone")
 LABS = {"dirt": build_dirt, "dirt-stones": lambda seed: build_dirt(seed, stones=True),
         "flat": build_flat, "tree": build_tree,
         **{m: (lambda seed, m=m: build_masonry(m, seed)) for m in MASONRY}}
