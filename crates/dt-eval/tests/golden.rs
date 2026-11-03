@@ -19,6 +19,9 @@ const TILES: &[&str] = &[
     "lib:tiles/test/rocks-2x2.kdl",
     "lib:tiles/test/water-2x2.kdl",
     "lib:tiles/test/dirt-stones-2x2.kdl",
+    "lib:tiles/test/grass-2x2.kdl",
+    "lib:tiles/test/meadow-2x2.kdl",
+    "lib:tiles/test/shore-2x2.kdl",
     "lib:tiles/test/tree-1x1.kdl",
     "lib:tiles/test/wall-cut-stone-corner-1x1.kdl",
     "lib:tiles/test/wall-fieldstone-1x1.kdl",
@@ -215,5 +218,45 @@ fn the_wall_and_floor_tiles_meet_the_exit_criteria() {
                 .map(|(_, v)| *v)
         };
         assert!(note("units").unwrap_or(0.0) > 0.0, "{path}: {:?}", b.notes);
+    }
+}
+
+#[test]
+fn the_grass_tiles_meet_the_exit_criteria() {
+    use dt_kit::Material;
+    for path in [
+        "lib:tiles/test/grass-2x2.kdl",
+        "lib:tiles/test/meadow-2x2.kdl",
+        "lib:tiles/test/shore-2x2.kdl",
+    ] {
+        let b = build_at(path, 4);
+        let a = &b.audit;
+        assert!(a.watertight, "{path}: watertight after the float32 reload");
+        assert_eq!(a.overhang_mm2, 0.0, "{path}");
+        assert!(a.dropped.is_empty(), "{path}: {:?}", a.dropped);
+        assert_eq!(a.holes, 0, "{path}");
+        assert!(b.materials.contains(&Material::Grass), "{path}: no grass");
+        let note = |k: &str| b.notes.iter().find(|(n, _)| n == k).map(|(_, v)| *v);
+        let blades = note("blades").unwrap_or(0.0);
+        let least = if path.contains("shore") { 500.0 } else { 1500.0 };
+        assert!(blades > least, "{path}: {blades} blades");
+        // a blade is a few hundred faces, never past the lab's 1,500
+        let grass_tris = b
+            .materials
+            .iter()
+            .filter(|m| **m == Material::Grass)
+            .count();
+        assert!(
+            (grass_tris as f64) / blades < 1500.0,
+            "{path}: {} faces a blade",
+            (grass_tris as f64) / blades
+        );
+        if path.contains("shore") {
+            assert!(
+                note("reed_stems").unwrap_or(0.0) >= 5.0,
+                "{path}: {:?}",
+                b.notes
+            );
+        }
     }
 }

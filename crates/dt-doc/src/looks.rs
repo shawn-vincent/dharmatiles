@@ -648,8 +648,7 @@ const fn thing(name: &'static str, about: &'static str, controls: &'static [Cont
     }
 }
 
-/// Every built-in look the R6 vocabulary names.  Reeds join in their
-/// phase (P4); water joined in P3, floors in P5.
+/// Every built-in look the R6 vocabulary names.
 pub static LOOKS: &[Look] = &[
     Look {
         name: "ground",
@@ -700,13 +699,37 @@ pub static LOOKS: &[Look] = &[
         needs: &[],
         holds_scatter: true,
         controls: &[
-            c("length", Axis::Mm, "blade length").default("10"),
-            c("curl", Axis::Deg, "how far a blade bends over").default("36..81"),
-            c("tufts", Axis::PerSquare, "clumps the blades gather into").default("3"),
+            c("length", Axis::Mm, "blade length along the ground").default("3.5..6.5"),
+            c("height", Axis::Mm, "how tall a blade stands over the ground").default("1.5..2"),
+            c(
+                "clearings",
+                Axis::PerSquare,
+                "patches of bare earth the grass parts round",
+            )
+            .default("1.5"),
             c("cover", Axis::Share, "share of the ground grassed over").default("100%"),
+            c(
+                "bare",
+                Axis::Share,
+                "the least share left bare: clearings are added until the bare earth, rocks included, reaches it",
+            )
+            .default("0%"),
             c("flow", Axis::Word, "how tidily the blades lean together")
                 .words(FLOW)
                 .default("wavy"),
+        ],
+    },
+    Look {
+        name: "reeds",
+        about: "clumps of tapered reeds at the waterline, leaning toward the water (shorelab)",
+        role: Role::Surface,
+        place: &[PlaceWord::In],
+        needs: &[],
+        holds_scatter: false,
+        controls: &[
+            c("clumps", Axis::Count, "how many clumps along the shore").default("3..5"),
+            c("stems", Axis::Count, "stems in a clump").default("5..9"),
+            c("height", Axis::Mm, "how tall a stem stands").default("8..13"),
         ],
     },
     Look {

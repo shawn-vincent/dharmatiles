@@ -153,14 +153,14 @@ fn grass_parts_nest() {
     let doc = decode_ok(GRASS);
     let lawn = doc.definition("lawn").unwrap();
     let params: Vec<_> = lawn.params.iter().map(|p| p.name.value.as_str()).collect();
-    assert_eq!(params, ["length", "curl", "tufts", "cover"]);
+    assert_eq!(params, ["length", "height", "clearings", "cover"]);
     // Each parameter is typed by the grass control it fills.
     for p in &lawn.params {
         assert_eq!(p.control.unwrap().name, p.name.value);
     }
     assert!(close(
         range(lawn.params[1].default.as_ref().map(|d| &d.value)),
-        (36.0, 81.0)
+        (1.5, 2.0)
     ));
     assert!(close(
         range(lawn.params[3].default.as_ref().map(|d| &d.value)),
@@ -175,10 +175,13 @@ fn grass_parts_nest() {
     let long = doc.definition("long-grass").unwrap();
     let call = entry(&long.stack, "lawn");
     assert!(matches!(&call.callee, Callee::Definition(d) if d == "lawn"));
-    // Python: SpeciesConfig(blade_length=D[8:14], blade_curl=D[0.35:0.65])
-    assert!(close(range(call.value("length")), (8.0, 14.0)));
-    assert!(close(range(call.value("curl")), (63.0, 117.0)));
-    assert_eq!(call.control("curl").unwrap().control.unwrap().name, "curl");
+    // longer, taller blades than the lawn's
+    assert!(close(range(call.value("length")), (5.0, 9.0)));
+    assert!(close(range(call.value("height")), (2.0, 3.0)));
+    assert_eq!(
+        call.control("height").unwrap().control.unwrap().name,
+        "height"
+    );
 }
 
 #[test]

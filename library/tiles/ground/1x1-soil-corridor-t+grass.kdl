@@ -1,0 +1,14 @@
+// The twin of src/tiles/ground/1x1-soil-corridor-t+grass.tile.py (the Python library tile, kept).
+
+tile soil-corridor-t+grass size="1x1" seed=104 {
+    about "A dirt path in a T, open to the west, east and north edges."
+    line south-margin wobble=3 { through "0,0.33" "1,0.33" }
+    line northwest-margin wobble=2.2 { through "0,0.67" "0.34,0.68" "0.33,1" }
+    line northeast-margin wobble=2.2 { through "0.67,1" "0.66,0.68" "1,0.67" }
+    region path { bounded-by south-margin northwest-margin northeast-margin; fill "0.5,0.5" }
+    region meadow { bounded-by south-margin northwest-margin northeast-margin; fill "0.18,0.88"; fill "0.82,0.88"; fill "0.5,0.18" }
+    stack {
+        dirt
+        grass in=meadow
+    }
+}

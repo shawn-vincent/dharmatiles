@@ -360,6 +360,14 @@ pub fn noise(frame: &Frame, seed: Seed, kind: Noise, scale: Scale) -> Field {
     out
 }
 
+/// **noise at points**: the smooth noise (unit variance, Gaussian of
+/// `sigma_mm`) at the grid `xs × ys`, in mm of the keyed space (row-major,
+/// `y` outer). For fields that reach past the tile, such as grass's flow.
+#[must_use]
+pub fn noise_at(seed: Seed, sigma_mm: f64, xs: &[f64], ys: &[f64]) -> Vec<f64> {
+    dt_geom::noise::smooth(seed.value(), sigma_mm, xs, ys)
+}
+
 /// **distance**: mm from every node to the nearest node of `mask`, and
 /// that node's index (`None` everywhere for an empty mask).
 #[must_use]

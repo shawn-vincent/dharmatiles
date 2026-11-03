@@ -1,0 +1,19 @@
+// The parity twin of meadowlab (meadowlab/meadowlab.py): rocks and grass
+// on one 2×2 tile, with bare earth, ground under the rocks included, at
+// 20%. The rocks are built first, so the grass knows their footprints:
+// no blade roots under a rock, blades stop pressed against it and stand
+// lower beside it, and the flow wraps it. Built by `cargo xtask parity
+// meadow` at seeds 1–4.
+
+tile meadow size="2x2" seed=1 {
+    about "meadowlab's rocks and grass on dirt, for the parity harness."
+    stack {
+        dirt level=edge {
+            stones none
+        }
+        scatter per-square="1.5..2.25" gap=1.5 {
+            rock                       // size="6..15", rocklab's widths
+        }
+        grass bare="20%"
+    }
+}

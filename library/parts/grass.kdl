@@ -1,20 +1,20 @@
 // Grass presets shared by tiles: `use "parts/grass" lawn long-grass`.
 
-// Short, tidy grass: Python's default SpeciesConfig.
+// Short, tidy grass: grasslab's approved blades.
 define lawn {
-    param length 10           // blade length, mm
-    param curl "36..81"       // how far a blade bends over, degrees
-    param tufts 3             // tufts per square
+    param length "3.5..6.5"   // blade length along the ground, mm
+    param height "1.5..2"     // how tall a blade stands over the ground, mm
+    param clearings 1.5       // patches of bare earth per square
     param cover "100%"        // share of the ground grassed over
 
     stack {
-        grass length=length curl=curl tufts=tufts cover=cover
+        grass length=length height=height clearings=clearings cover=cover
     }
 }
 
-// Long, curly blades: the species of 2x2-grass-tree.
+// Long, tall blades: the species of 2x2-grass-tree.
 define long-grass {
     stack {
-        lawn length="8..14" curl="63..117"
+        lawn length="5..9" height="2..3"
     }
 }

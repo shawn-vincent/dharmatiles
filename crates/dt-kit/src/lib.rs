@@ -61,8 +61,8 @@ pub use audit::{Audit, Band, Dropped, Export, Printer, audit, audit_banded};
 pub use dt_geom::Convex;
 pub use dt_geom::{Grid, Mask, Rng, Seed, TriMesh, vec3};
 pub use field::{
-    Field, Noise, Placed, Plane, Scale, Spread, cap, distance, geodesic, noise, rim, scatter, smax,
-    smooth01,
+    Field, Noise, Placed, Plane, Scale, Spread, cap, distance, geodesic, noise, noise_at, rim,
+    scatter, smax, smooth01,
 };
 pub use outline::Outline;
 pub use render::{Image, ORANGE, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};

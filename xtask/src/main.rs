@@ -10,7 +10,7 @@ commands:
            build the look's Rust tile at each seed and write the contact
            sheet to out/parity/<look>/: Python beside Rust where the look
            has a Rust tile, Python only where it does not yet
-           (looks: flat, dirt, dirt-stones, rocks, water, wall-cut-stone, wall-brick,
+           (looks: flat, dirt, dirt-stones, rocks, water, grass, wall-cut-stone, wall-brick,
            wall-regular-brick, wall-fieldstone, floor-stone, floor-fieldstone, tree)
   help     show this message";
 
@@ -21,6 +21,7 @@ const LOOKS: &[(&str, Option<&str>)] = &[
     ("dirt-stones", Some("lib:tiles/test/dirt-stones-2x2.kdl")),
     ("rocks", Some("lib:tiles/test/rocks-2x2.kdl")),
     ("water", Some("lib:tiles/test/water-2x2.kdl")),
+    ("grass", Some("lib:tiles/test/grass-2x2.kdl")),
     ("tree", Some("lib:tiles/test/tree-1x1.kdl")),
     (
         "wall-cut-stone",

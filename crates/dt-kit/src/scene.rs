@@ -120,6 +120,8 @@ pub enum Material {
     Rock = 3,
     /// Water.
     Water = 4,
+    /// Grass blades.
+    Grass = 5,
     /// Wall and floor stone (P5).
     Masonry = 10,
     /// Branches and trunks (P5).
@@ -137,6 +139,7 @@ impl Material {
             2 => Some(Self::Connector),
             3 => Some(Self::Rock),
             4 => Some(Self::Water),
+            5 => Some(Self::Grass),
             10 => Some(Self::Masonry),
             11 => Some(Self::Wood),
             12 => Some(Self::Leaf),
@@ -297,6 +300,7 @@ pub struct Scene {
     banked: bool,
     /// Nodes the water covers (lifted as water).
     wet: Mask,
+    bed: Option<Grid>,
     water_edge_mm: Option<f64>,
     /// Nodes the ground's edge rule leaves alone (water and its banks).
     no_edge: Mask,
@@ -331,6 +335,7 @@ impl Scene {
             settled: false,
             banked: false,
             wet: Mask::new(nx, ny, false),
+            bed: None,
             water_edge_mm: None,
             no_edge: Mask::new(nx, ny, false),
             stone: Mask::new(nx, ny, false),
@@ -445,6 +450,9 @@ impl Scene {
     /// meet the edge on their own contract).
     pub fn fill(&mut self, top: &crate::Field, wet: &[bool], no_edge: &[bool]) {
         self.settle();
+        if self.bed.is_none() {
+            self.bed = Some(self.field.clone());
+        }
         for k in 0..self.field.z.len() {
             #[allow(clippy::cast_possible_truncation)]
             let z = top.z[k] as f32;
@@ -463,6 +471,27 @@ impl Scene {
         let mut out = Mask::new(nx, ny, false);
         for p in self.parts.iter().filter(|p| p.tag.kind == kind) {
             let m = dt_geom::fill_polygons(nx, ny, self.frame.step_mm(), &p.solid.slice(z));
+            out.bits.iter_mut().zip(m.bits).for_each(|(o, b)| *o |= b);
+        }
+        out
+    }
+
+    /// The nodes inside any solid of the given kinds `above_mm` over its
+    /// own lowest point: where things stand (a rock's outline where it
+    /// meets the ground, a trunk, a wall's foot). Grass roots no blade
+    /// there and stops its blades against it.
+    #[must_use]
+    pub fn standing(&self, kinds: &[&str], above_mm: f64) -> Mask {
+        let (nx, ny) = self.frame.nodes();
+        let mut out = Mask::new(nx, ny, false);
+        for p in self.parts.iter().filter(|p| kinds.contains(&p.tag.kind)) {
+            let Some(b) = p.solid.bounds() else { continue };
+            let m = dt_geom::fill_polygons(
+                nx,
+                ny,
+                self.frame.step_mm(),
+                &p.solid.slice(b.0[2] + above_mm),
+            );
             out.bits.iter_mut().zip(m.bits).for_each(|(o, b)| *o |= b);
         }
         out
@@ -601,6 +630,19 @@ impl Scene {
     #[must_use]
     pub const fn water_edge(&self) -> Option<f64> {
         self.water_edge_mm
+    }
+
+    /// The ground as it was before water filled it (world mm): the bed
+    /// under the water and the bank round it; `None` without water.
+    #[must_use]
+    pub const fn bed(&self) -> Option<&Grid> {
+        self.bed.as_ref()
+    }
+
+    /// The nodes the water covers (empty without water).
+    #[must_use]
+    pub const fn wet(&self) -> &Mask {
+        &self.wet
     }
 
     /// Record a look's number for the build record (counts and the like).

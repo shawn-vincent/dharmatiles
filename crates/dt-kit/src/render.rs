@@ -110,6 +110,7 @@ pub fn paint(materials: &[Material], overhang: &[bool]) -> Vec<[f32; 3]> {
                     Material::Connector => [0.62, 0.62, 0.64],
                     Material::Rock => [0.58, 0.58, 0.61],
                     Material::Water => [0.24, 0.38, 0.56],
+                    Material::Grass => [0.36, 0.56, 0.24],
                     Material::Masonry => [0.66, 0.64, 0.60],
                     Material::Wood => [0.42, 0.29, 0.18],
                     Material::Leaf => [0.33, 0.52, 0.24],

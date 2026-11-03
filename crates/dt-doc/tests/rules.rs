@@ -106,8 +106,14 @@ fn scaling_is_recorded_per_control() {
     let crown = tree.control("crown").unwrap();
     assert_eq!(crown.sub("clumps").unwrap().scaling(), Scaling::Fixed);
     let grass = schema::look("grass").unwrap();
-    assert_eq!(grass.control("curl").unwrap().scaling(), Scaling::Fixed);
-    assert_eq!(grass.control("tufts").unwrap().scaling(), Scaling::Squares);
+    assert_eq!(
+        grass.control("height").unwrap().scaling(),
+        Scaling::Photocopy
+    );
+    assert_eq!(
+        grass.control("clearings").unwrap().scaling(),
+        Scaling::Squares
+    );
     let e = first("tile t { stack { tree { leaf length=4.5 } } }");
     let s = e.control("leaf").unwrap();
     assert_eq!(s.subs[0].control.unwrap().scaling(), Scaling::Photocopy);

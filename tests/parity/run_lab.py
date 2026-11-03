@@ -44,7 +44,7 @@ from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-for p in ("src", "dirtlab", "clifflab", "rocklab", "waterlab"):
+for p in ("src", "dirtlab", "clifflab", "rocklab", "waterlab", "grasslab"):
     sys.path.insert(0, str(ROOT / p))
 
 GRID_MM = 0.15                     # top-surface sampling (dirtlab's CELL_MM)
@@ -296,8 +296,25 @@ def water_metrics(mesh: trimesh.Trimesh, footprint, wl_mm: float = 2.6,
             "cells": int(band.sum())}
 
 
+def grass_metrics(mesh, footprint, edge_mm: float) -> dict:
+    """Grass from the STL: the top surface over the edge level (first hits
+    of vertical rays, 2 mm clear of the rim), the same on both sides."""
+    W, H = footprint
+    Z, miss = top_surface(mesh, footprint)
+    xs = np.arange(GRID_MM / 2, W, GRID_MM)
+    ys = np.arange(GRID_MM / 2, H, GRID_MM)
+    X, Y = np.meshgrid(xs, ys)
+    inner = (np.minimum.reduce([X, W - X, Y, H - Y]) >= 2.0) & ~miss
+    top = Z[inner] - edge_mm
+    return {"grass": {"mean_mm": float(top.mean()), "p05_mm": float(np.percentile(top, 5)),
+                      "p50_mm": float(np.percentile(top, 50)), "p95_mm": float(np.percentile(top, 95)),
+                      "max_mm": float(top.max())}}
+
+
 def look_metrics(look: str, mesh, footprint, edge_mm: float) -> dict:
     """The look-specific STL metrics, added to stl_metrics' dict."""
+    if look == "grass":
+        return grass_metrics(mesh, footprint, edge_mm)
     if look == "rocks":
         return {"rocks": rock_metrics(mesh, footprint, edge_mm)}
     if look == "water":
@@ -361,6 +378,7 @@ def build_flat(seed: int):
     return mesh, painted, (surf.tile_w, surf.tile_h), 5.0, {"peg_mm": peg}, dt
 
 
+GRASS_RGB = (92, 143, 61)
 ROCK_RGB = (150, 150, 155)
 WATER_RGB = (60, 95, 140)
 
@@ -393,6 +411,37 @@ def build_rocks(seed: int):
     fc[rock, :3] = ROCK_RGB
     painted.visual.face_colors = fc
     return mesh, painted, (70.0, 70.0), rl.SURFACE_MM, lab, dt
+
+
+def build_grass(seed: int):
+    """grasslab 2×2 at `seed` (its own main, without the export): the
+    approved stroke blades on hills with eye-shaped clearings."""
+    import grasslab as gl
+    t0 = time.perf_counter()
+    rng = np.random.default_rng(seed)
+    W, H = 2 * gl.SQUARE_MM, 2 * gl.SQUARE_MM
+    grid = gl.Grid(W, H, W / round(W / gl.VOX_MM))
+    ground, _ = gl.make_ground(rng, W, H, True)          # flat: the Rust ground is the tile's own
+    flow0 = gl.make_direction(rng, ground)
+    sw = gl.Swaths(rng, W, H, flow0)
+    lenses = gl.place_lenses(rng, ground, flow0, W, H)
+    flow = gl.finish_flow(rng, flow0, lenses, W, H)
+    g = gl.build_grass(rng, grid, ground, sw, lenses, flow, W, H)
+    mesh, _, _ = gl.attach_base(g.solid, 2, 2, g.solid.bounding_box()[5])
+    mesh = gl.stl_safe(mesh)
+    dt = time.perf_counter() - t0
+    gh = g.T - g.H0
+    lab = {"blades": g.n_fronds, "strands": g.n_strands, "clearings": len(lenses.centre),
+           "soil_frac": float((g.soil > 0.5).mean()), "gaps": g.gaps,
+           "grass_mean_mm": float(gh.mean()), "grass_p95_mm": float(np.percentile(gh, 95)),
+           "grass_max_mm": float(gh.max())}
+    painted = mesh.copy()
+    c = mesh.triangles_center
+    fc = np.tile([*CONNECTOR_RGB, 255], (len(mesh.faces), 1))
+    fc[c[:, 2] > 0.0, :3] = EARTH_RGB
+    fc[c[:, 2] > gl.GROUND_EDGE_MM + 0.6, :3] = GRASS_RGB
+    painted.visual.face_colors = fc
+    return mesh, painted, (W, H), gl.GROUND_EDGE_MM, lab, dt
 
 
 def build_water(seed: int):
@@ -598,10 +647,11 @@ MASONRY = ("wall-cut-stone", "wall-brick", "wall-regular-brick", "wall-fieldston
            "floor-fieldstone")
 LABS = {"dirt": build_dirt, "dirt-stones": lambda seed: build_dirt(seed, stones=True),
         "flat": build_flat, "rocks": build_rocks, "water": build_water, "tree": build_tree,
+        "grass": build_grass,
         **{m: (lambda seed, m=m: build_masonry(m, seed)) for m in MASONRY}}
 # What the Python column is, in the captions.
 LAB_NOTE = {"dirt": "dirtlab, stones off (P3)", "dirt-stones": "dirtlab with stones",
-            "flat": "flat 1×1 twin", "rocks": "rocklab",
+            "flat": "flat 1×1 twin", "rocks": "rocklab", "grass": "grasslab, flat hills",
             "water": "waterlab swell-chaos, bank-rock", "tree": "library Tree, 1×1 tile params, leaves off",
             **{m: f"walls/ {m} on a flat 5 mm slab" for m in MASONRY}}
 
@@ -640,6 +690,18 @@ PARITY_BY_LOOK = {
         *[(f"STL rocks {k}", ("rocks", "hist", k), "info", None)
           for k in (f"{lo:g}-{hi:g}mm" for lo, hi in zip(ROCK_DIAM_BINS_MM[:-1], ROCK_DIAM_BINS_MM[1:]))],
         ("STL rock top (mm over edge)", ("rocks", "top_mm"), "abs", 1.5),
+    ],
+    "grass": [
+        ("blades", ("lab", "blades"), "rel", 0.15),
+        ("strands", ("lab", "strands"), "rel", 0.2),
+        ("clearings", ("lab", "clearings"), "rel", 0.35),
+        ("bare share (soil)", ("lab", "soil_frac"), "abs", 0.05),
+        ("grass top mean (mm over edge)", ("grass", "mean_mm"), "abs", 0.5),
+        ("grass top p95 (mm over edge)", ("grass", "p95_mm"), "abs", 0.6),
+        ("grass top max (mm over edge)", ("grass", "max_mm"), "abs", 1.0),
+        ("overhang (mm2)", ("overhang_mm2",), "info", None),
+        ("faces (whole tile)", ("faces",), "info", None),
+        ("build (s)", ("build_s",), "info", None),
     ],
     "water": [
         ("relief_min", ("lab", "relief_min"), "abs", 0.15),
