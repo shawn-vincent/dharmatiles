@@ -86,29 +86,17 @@ fn a_control_not_built_yet_is_checked_but_not_built() {
 
 #[test]
 fn library_tiles_check_and_say_which_look_is_missing_when_built() {
-    for (path, missing) in [
-        (
-            "lib:tiles/ground/2x2-grass-tree.kdl",
-            "look `grass` not available yet (Phase 4)",
-        ),
-        (
-            "lib:tiles/walls/1x1-wall-fieldstone-corner.kdl",
-            "look `grass` not available yet (Phase 4)",
-        ),
-        (
-            "lib:tiles/cliffs/2x1-cliff-run.kdl",
-            "look `cliff` not available yet (Phase 7)",
-        ),
-    ] {
-        let c =
-            check(&Library, path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
-        assert!(!c.pending().is_empty(), "{path}");
-        let Err(e) = build(&Library, path, &Options::default()) else {
-            panic!("{path} built");
-        };
-        assert!(e.iter().all(|d| d.code == "dt::not-yet"), "{path}: {e:?}");
-        assert!(e.iter().any(|d| d.message == missing), "{path}: {e:?}");
-    }
+    let (path, missing) = (
+        "lib:tiles/cliffs/2x1-cliff-run.kdl",
+        "look `cliff` not available yet (Phase 7)",
+    );
+    let c = check(&Library, path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
+    assert!(!c.pending().is_empty(), "{path}");
+    let Err(e) = build(&Library, path, &Options::default()) else {
+        panic!("{path} built");
+    };
+    assert!(e.iter().all(|d| d.code == "dt::not-yet"), "{path}: {e:?}");
+    assert!(e.iter().any(|d| d.message == missing), "{path}: {e:?}");
     for path in Library::paths() {
         check(&Library, &path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
     }
@@ -386,32 +374,20 @@ fn a_seed_wobbles_the_lines_again() {
 }
 
 #[test]
-fn the_floor_tiles_build_and_the_wall_tiles_wait_only_for_grass() {
+fn the_floor_and_wall_tiles_build_with_grass() {
     for path in [
         "lib:tiles/floors/1x1-floor-stone.kdl",
         "lib:tiles/floors/1x1-floor-stone-wall.kdl",
+        "lib:tiles/walls/1x1-wall-stone.kdl",
+        "lib:tiles/walls/1x1-wall-stone-corner.kdl",
+        "lib:tiles/walls/1x1-wall-brick.kdl",
+        "lib:tiles/walls/1x1-wall-brick-corner.kdl",
+        "lib:tiles/walls/1x1-wall-fieldstone.kdl",
+        "lib:tiles/walls/1x1-wall-fieldstone-corner.kdl",
     ] {
         let b =
             build(&Library, path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
         assert_eq!(b.audit.overhang_mm2, 0.0, "{path}");
-    }
-    for name in [
-        "1x1-wall-stone",
-        "1x1-wall-stone-corner",
-        "1x1-wall-brick",
-        "1x1-wall-brick-corner",
-        "1x1-wall-fieldstone",
-        "1x1-wall-fieldstone-corner",
-    ] {
-        let path = format!("lib:tiles/walls/{name}.kdl");
-        let Err(e) = build(&Library, &path, &Options::default()) else {
-            panic!("{path} built");
-        };
-        assert!(
-            e.iter()
-                .all(|d| d.message == "look `grass` not available yet (Phase 4)"),
-            "{path}: {e:?}"
-        );
     }
 }
 

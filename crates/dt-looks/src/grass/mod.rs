@@ -263,6 +263,15 @@ impl Look for Grass {
             s,
         );
 
+        // grass near the water leans toward it
+        let flow = if wet.count() > 0 {
+            let dist = distance(&frame, &wet.bits).0;
+            let to_water = lat.like(|x, y| dist.sample(x.clamp(0.0, w), y.clamp(0.0, h)));
+            flow::steer_shore(&flow, &to_water, s)
+        } else {
+            flow
+        };
+
         // 3 what the fronds read
         let soil = Field::from_fn(&frame, |x, y| lenses.mask(x, y));
         let bare: Vec<bool> = soil.z.iter().map(|v| *v <= 0.5).collect();
@@ -348,10 +357,19 @@ impl Look for Grass {
         }
         #[allow(clippy::cast_precision_loss)]
         let soil_share = surf.soil.z.iter().filter(|&&v| v > 0.5).count() as f64 / (nx * ny) as f64;
+        // bare earth as meadowlab counts it: clearings and what stands on the
+        // ground, over the grass's own area
+        let in_area: Vec<usize> = (0..nx * ny).filter(|&k| ctx.area.bits[k]).collect();
+        let bare_share = in_area
+            .iter()
+            .filter(|&&k| surf.soil.z[k] > 0.5 || blocker.bits[k])
+            .count() as f64
+            / in_area.len().max(1) as f64;
         #[allow(clippy::cast_precision_loss)]
         for (k, v) in [
             ("blades", made as f64),
             ("soil_frac", soil_share),
+            ("bare_share", bare_share),
             ("strands", strands as f64),
             ("clearings", lenses.centre.len() as f64),
             ("grass_solids", n_classes as f64),

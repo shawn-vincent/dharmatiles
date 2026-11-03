@@ -180,8 +180,8 @@ pub const CASES: [Case; 10] = [
         slug: "side-on-edge",
         title: "side= on a tile edge",
         tile: WALL_CORNER,
-        from: "seed=14",
-        to: "seed=14 side=left",
+        from: "seed=15",
+        to: "seed=15 side=left",
     },
     Case {
         slug: "several",

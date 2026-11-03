@@ -85,7 +85,7 @@ fn grass_length_edit_touches_only_the_value() {
         "9..15",
     )
     .unwrap();
-    assert_eq!(changed(text, &new), ("8..14", "9..15"));
+    assert_eq!(changed(text, &new), ("5..9", "9..15"));
     assert_eq!(changed_lines(text, &new).len(), 1);
     let doc = redecode(name, &new);
     let call = &doc.definition("long-grass").unwrap().stack[0];
@@ -204,7 +204,7 @@ fn removal_in_either_form() {
     let path = ["tile wall-fieldstone-corner", "stack", "wall"];
     // A property on the line.
     let new = remove_control(text, &path, "seed").unwrap();
-    assert_eq!(new, text.replace(" seed=14", ""));
+    assert_eq!(new, text.replace(" seed=15", ""));
     redecode(name, &new);
     // A child line, with the comment block above the next line kept.
     let new = remove_control(text, &path, "coping").unwrap();

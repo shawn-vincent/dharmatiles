@@ -26,7 +26,7 @@
     <div><div class="k">Variants</div><div class="v">hills or flat; flow combed, wavy or wild (Rust)</div></div>
     <div><div class="k">Printing</div><div class="v">no supports; FDM at 0.2 mm × 0.45 mm, or resin</div></div>
     <div><div class="k">Bases</div><div class="v">DungeonBlocks today; OpenLOCK with the Rust port</div></div>
-    <div><div class="k">Available</div><div class="v">approved look (grasslab); in the Rust engine from phase P4</div></div>
+    <div><div class="k">Available</div><div class="v">approved look (grasslab); in the Rust engine (phase P4, waiting for Shawn&rsquo;s review)</div></div>
   </div>
   <details class="words">
     <summary>Words used on this page</summary>
@@ -61,7 +61,7 @@
 </figure>
 
 <h2 id="use">Using it in a tile</h2>
-<p>In the Rust engine grass is a surface named on one line. The library keeps two presets in <code>library/parts/grass.kdl</code> (branch <code>rust/p1</code>), and <code>library/tiles/ground/2x2-grass-tree.kdl</code> uses one under a tree:</p>
+<p>In the Rust engine grass is a look named on one line, after the ground it grows on (<code>ground</code> or <code>dirt</code>). It reads what stands on the ground: put rocks, trees and walls before it or after it, and the grass grows round them. The library keeps two presets in <code>library/parts/grass.kdl</code>, and <code>library/tiles/ground/2x2-grass-tree.kdl</code> uses one under a tree:</p>
 <pre><code>use "parts/grass" long-grass
 
 tile grass-tree size="2x2" seed=84 {
@@ -72,8 +72,9 @@ tile grass-tree size="2x2" seed=84 {
     }
 }</code></pre>
 <p>Or write the line yourself:</p>
-<pre><code>grass length=10 curl="36..81" tufts=3 cover="100%" flow=wavy</code></pre>
-<p>Change the tile's <code>seed</code> for different grass with the same character. The grass look reaches the Rust engine in phase P4 (see the <a href="../rust/plan.html">plan</a>). Until then the lab builds it:</p>
+<pre><code>grass length="3.5..6.5" height="1.5..2" clearings=1.5 cover="100%" bare="0%" flow=wavy</code></pre>
+<p>Grass in one region of a tile is <code>grass in=meadow</code>; its blades stop at the region&rsquo;s edge and at the water. For a meadow with rocks in it, ask for the bare earth you want and let the grass add clearings up to it: <code>grass bare="20%"</code> (ground under the rocks counts). Reeds at a shore are the <code>reeds</code> look, after the <code>water</code>.</p>
+<p>Change the tile's <code>seed</code> for different grass with the same character. The lab still builds it, as the design bench for the look:</p>
 <pre><code>python grasslab/grasslab.py --seed 1 --cols 2 --rows 2    # → grasslab/out/2x2-sculpted-grass-s1.stl
 python grasslab/grasslab.py --seed 1 --cols 1 --rows 1 --flat   # flat ground, for studying blades</code></pre>
 <p>The Python library's own grass (<code>ThatchGrass</code>, built by <code>dharmatiles-gen</code> from <code>src/tiles/</code>) is an older look; see the History below.</p>
@@ -84,13 +85,14 @@ python grasslab/grasslab.py --seed 1 --cols 1 --rows 1 --flat   # flat ground, f
 <div class="tbl"><table>
 <thead><tr><th>Control</th><th>Values</th><th>Default</th><th>Effect</th></tr></thead>
 <tbody>
-<tr><td><code>length</code></td><td>mm, or a range</td><td>10</td><td>Blade length.</td></tr>
-<tr><td><code>curl</code></td><td>degrees, or a range</td><td>36–81</td><td>How far a blade bends over.</td></tr>
-<tr><td><code>tufts</code></td><td>per square</td><td>3</td><td>Clumps the blades gather into.</td></tr>
+<tr><td><code>length</code></td><td>mm, or a range</td><td>3.5–6.5</td><td>Blade length along the ground (longer toward the downstream end of each swath).</td></tr>
+<tr><td><code>height</code></td><td>mm, or a range</td><td>1.5–2</td><td>How tall a blade stands over the ground.</td></tr>
+<tr><td><code>clearings</code></td><td>per square</td><td>1.5</td><td>Patches of bare earth the grass parts round.</td></tr>
 <tr><td><code>cover</code></td><td>share, %</td><td>100%</td><td>Share of the ground grassed over.</td></tr>
+<tr><td><code>bare</code></td><td>share, %</td><td>0%</td><td>The least share left bare: clearings (and aprons beside a minority of rocks) are added until the bare earth, rocks included, reaches it (meadowlab&rsquo;s rule).</td></tr>
 <tr><td><code>flow</code></td><td><code>combed</code>, <code>wavy</code>, <code>wild</code></td><td><code>wavy</code></td><td>How tidily the blades lean together. <code>wavy</code> is the approved meander (±10–30°); <code>combed</code> and <code>wild</code> are provisional.</td></tr>
 </tbody></table></div>
-<p class="muted small">The lab has no controls beyond <code>--seed</code>, <code>--cols</code>, <code>--rows</code> and <code>--flat</code>. The Rust defaults above come from the Python library and are retuned to the lab's blades in P4 (see Open issues).</p>
+<p class="muted small">The lab has no controls beyond <code>--seed</code>, <code>--cols</code>, <code>--rows</code> and <code>--flat</code>; the Rust defaults above are the lab&rsquo;s values. <code>curl</code> and <code>tufts</code>, from the Python library&rsquo;s grass, are gone: the lab&rsquo;s blades have neither.</p>
 
 <h3 id="sizes">Sizes and levels</h3>
 <ul>
@@ -268,7 +270,9 @@ python grasslab/grasslab.py --seed 1 --cols 1 --rows 1 --flat   # flat ground, f
 
 <details id="rust">
 <summary>Rust port</summary>
-<p><strong>Phase P4</strong>, “Grass, meadow, shore and reeds, the first real test of plan-then-build”. Exit gate: blades watertight at about 1,500 faces, bare earth at 20% ± 3 points (meadow), meadow builds in 15 s or less (from 85 s), Shawn's sign-off and a test print. The <code>grass</code> line exists in the vocabulary (<code>crates/dt-doc/src/looks.rs</code>) and two presets are in the library, but nothing builds grass yet. No parity contact sheet yet.</p>
+<p><strong>Phase P4</strong>, built 3 Nov 2026, waiting for Shawn&rsquo;s review of the contact sheets and a test print. What is built: the lab&rsquo;s flow (regional angle, in-phase meanders by a cosine-transform Poisson solve, downhill pull), swaths, clearings, rim rule, strands, fronds and the blade&rsquo;s layer stack, as <code>grass</code>; meadowlab&rsquo;s rule for rocks, trees and walls (no root under them, tips pressed against them, lower beside them, the flow wraps them, <code>bare=</code>); shorelab&rsquo;s reeds as <code>reeds</code>. The twins are ten ground and nine water tiles, and the wall, floor and tree tiles that had waited for grass now build.</p>
+<p>How it differs from the lab. A blade is built directly as a loft through one outline per layer (a half-width profile along the spine: a point-ended ramp that gains half a line every 0.45 mm), not as a signed-distance stack marched at 0.05 mm and decimated; it is a few hundred faces, watertight by construction, and a 2×2 tile builds in about 5 s (lab 100 s). The same look is kept: line counts per layer, the convex rise, the raked bow, the keel and the single-line ridge. Where the ground slopes more than about 7° the layers follow it only that much (a blade is printed in flat layers, and draped on a steep slope its raked layers would overhang past 55°), so on a steep bank blades stand straighter than the ground. Blades are grouped into solids of mutually clear blades, one slot each. Not ported: the lab&rsquo;s hills (the <code>ground</code> look makes them), soil dipping 0.4 mm below the ground, and meadowlab&rsquo;s raising of a rock to show above the grass (the grass instead stands lower beside rocks).</p>
+<p>Results: every one of the 19 twins, the wall, floor and tree tiles and the three test tiles passes the printability gate (0 mm&sup2; of overhang, watertight after the float32 reload, nothing dropped) at three seeds and both systems; the grass 2×2 builds in about 5 s and the shore tile in 2.4 s. The contact sheet is written by <code>cargo xtask parity grass</code> to <code>out/parity/grass/contact-sheet.png</code>.</p>
 </details>
 
 <details id="reference-photos">
@@ -279,9 +283,9 @@ python grasslab/grasslab.py --seed 1 --cols 1 --rows 1 --flat   # flat ground, f
 
 <h3 id="open">Open issues</h3>
 <ul>
-  <li>The Rust <code>grass</code> controls (length 10 mm, curl 36–81°, tufts 3 per square) come from the Python library's grass, not grasslab: lab blades are 2.8–7.2 mm long, have no curl control and do not gather in tufts. P4 must map them to the lab or change the vocabulary.</li>
+  <li>The blade is a smooth loft, not the lab&rsquo;s smoothed stroke stack: layer steps are melted a little more and the point is rounder. Shawn to judge on the contact sheet.</li>
   <li>The approved renders predate the red-overhang render rule; new renders should paint overhang faces red.</li>
-  <li>A 2×2 tile is 87 MB and about 100 s to build, roughly 30 times slower than the library grass; most of the time is meshing blades.</li>
+  <li>A 2×2 tile is about 50 MB (1 million faces) and 5 s in the Rust engine; the lab&rsquo;s was 87 MB and 100 s.</li>
   <li>Grass does not tile seamlessly: neighbouring tiles meet at the edge level, but ribbons do not continue across the seam (out of scope for the lab).</li>
   <li>No S4 test print of v3 is recorded.</li>
 </ul>

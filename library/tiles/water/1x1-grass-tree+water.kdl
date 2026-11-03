@@ -1,0 +1,28 @@
+// The twin of src/tiles/water/1x1-grass-tree+water.tile.py (the Python library tile, kept).
+// A meadow bank with one tree and a few big rocks, and a pool below it.
+// Port notes: as water+grass (the pool bed 2.2 mm under the water, the
+// shore drawn 0.1 square toward the water from the Python anchor).
+
+use "parts/grass" long-grass
+
+tile grass-tree+water size="1x1" seed=53 {
+    about "A meadow bank with a tree and rocks above a pool."
+    line shore wobble=5 { through "0,0.38" "1,0.42" }
+    region pool { bounded-by shore; fill "0.5,0.25" }
+    region bank { bounded-by shore; fill "0.5,0.75" }
+    stack {
+        dirt in=bank
+        scatter in=bank per-square=3 gap=7 {    // rocks first: grass grows round them
+            boulder size="7..9" shape=angular
+        }
+        tree in=bank height=35 {
+            trunk height=30
+            crown width=24 clumps=32 shape=round branching=normal
+            leaf length=4.5 width=3
+        }
+        long-grass in=bank                       // grows round the trunk and rocks
+        ground in=pool level="water - 2.2"
+        scatter in=pool count=3 { rock size="5..9" }
+        water
+    }
+}

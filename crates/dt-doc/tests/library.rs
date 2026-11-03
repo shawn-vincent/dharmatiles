@@ -269,7 +269,7 @@ fn wall_corner_keeps_every_control() {
     );
     assert!(wall.place.side.is_none());
     assert_eq!(word(wall.value("style")), "fieldstone");
-    assert_eq!(wall.place.seed.as_ref().unwrap().value, 14);
+    assert_eq!(wall.place.seed.as_ref().unwrap().value, 15);
     let full = wall.value("height").unwrap().word().unwrap();
     assert_eq!((full.word, full.level), ("full", Some("wall-top")));
     assert_eq!(wall.control("height").unwrap().form, Form::Child);

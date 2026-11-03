@@ -238,7 +238,11 @@ fn the_grass_tiles_meet_the_exit_criteria() {
         assert!(b.materials.contains(&Material::Grass), "{path}: no grass");
         let note = |k: &str| b.notes.iter().find(|(n, _)| n == k).map(|(_, v)| *v);
         let blades = note("blades").unwrap_or(0.0);
-        let least = if path.contains("shore") { 500.0 } else { 1500.0 };
+        let least = if path.contains("shore") {
+            500.0
+        } else {
+            1500.0
+        };
         assert!(blades > least, "{path}: {blades} blades");
         // a blade is a few hundred faces, never past the lab's 1,500
         let grass_tris = b
@@ -251,6 +255,11 @@ fn the_grass_tiles_meet_the_exit_criteria() {
             "{path}: {} faces a blade",
             (grass_tris as f64) / blades
         );
+        if path.contains("meadow") {
+            // meadowlab's bare earth, ground under the rocks included: 20% ± 3 points
+            let bare = note("bare_share").unwrap_or(0.0);
+            assert!((0.17..=0.23).contains(&bare), "{path}: bare earth {bare}");
+        }
         if path.contains("shore") {
             assert!(
                 note("reed_stems").unwrap_or(0.0) >= 5.0,

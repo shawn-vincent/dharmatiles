@@ -769,3 +769,45 @@ fn steer_rim(seed: Seed, th: &Lat, w: f64, h: f64, s: f64) -> Lat {
     let delta = th.with(delta).blur(STEER_SMOOTH_MM * s);
     th.with(th.z.iter().zip(&delta.z).map(|(a, b)| a + b).collect())
 }
+
+const SHORE_STEER_MM: f64 = 9.0;
+const SHORE_OK_DEG: f64 = 80.0;
+const SHORE_PULL: f64 = 0.3;
+const SHORE_SMOOTH_MM: f64 = 1.5;
+
+/// Grass near the water leans toward it or runs along the shore, never
+/// away (shorelab `steer_shore`). `to_water` is the distance to the water,
+/// mm, on the lattice (0 on it).
+pub fn steer_shore(flow: &Flow, to_water: &Lat, s: f64) -> Flow {
+    let like = &flow.ux;
+    let (gx, gy) = to_water.gradient();
+    let ok = SHORE_OK_DEG.to_radians();
+    let mut delta = vec![0.0; like.z.len()];
+    for k in 0..delta.len() {
+        let dw = to_water.z[k];
+        if dw <= 0.0 {
+            continue;
+        }
+        let out = libm::atan2(-gy[k], -gx[k]);
+        let th = libm::atan2(flow.uy.z[k], flow.ux.z[k]);
+        let w = s01(1.0 - dw / (SHORE_STEER_MM * s));
+        let phi = wrap(th - out);
+        let a0 = phi.abs();
+        let a = if a0 > ok {
+            ok + (a0 - ok) * (1.0 - w)
+        } else {
+            a0
+        };
+        let a = a * (1.0 - SHORE_PULL * w);
+        delta[k] = wrap(out + phi.signum() * a - th);
+    }
+    let delta = like.with(delta).blur(SHORE_SMOOTH_MM * s);
+    let th: Vec<f64> = (0..delta.z.len())
+        .map(|k| libm::atan2(flow.uy.z[k], flow.ux.z[k]) + delta.z[k])
+        .collect();
+    Flow::new(
+        &th.iter().map(|a| libm::cos(*a)).collect::<Vec<_>>(),
+        &th.iter().map(|a| libm::sin(*a)).collect::<Vec<_>>(),
+        like,
+    )
+}
