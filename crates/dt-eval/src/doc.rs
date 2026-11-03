@@ -29,7 +29,7 @@ use std::sync::Arc;
 use dt_doc::Known;
 use dt_doc::model::{self, Callee, Definition, Document, Spanned, Use, Value};
 use dt_doc::place::{Along, Edge, Point};
-use dt_doc::schema::{Control, Look};
+use dt_doc::schema::{Control, Look, PlaceWord};
 use dt_kit::Seed;
 use miette::{NamedSource, SourceSpan};
 
@@ -589,6 +589,33 @@ impl Reader<'_> {
                         continue;
                     };
                     let mut ok = true;
+                    // inside a definition the decoder leaves a required
+                    // place word to the call; it must arrive from there
+                    for need in look.needs {
+                        let has = match need {
+                            PlaceWord::Along => along.is_some(),
+                            PlaceWord::At => at.is_some(),
+                            _ => true,
+                        };
+                        if !has {
+                            ok = false;
+                            let w = need.as_str();
+                            let mut d = Diag::at(
+                                src,
+                                e.what.span,
+                                "dt::missing-control",
+                                format!(
+                                    "`{}` needs `{w}=`, and the definition call gives none",
+                                    look.name
+                                ),
+                                format!("no `{w}=` here or at the call"),
+                            );
+                            d.help = Some(format!(
+                                "write it here, or pass it at the call: `name {w}=…`"
+                            ));
+                            self.errors.push(d);
+                        }
+                    }
                     let honours = dt_looks::places(look.name);
                     // along= a path of edges and at= a point, for the looks
                     // that place by them; the rest is not built yet

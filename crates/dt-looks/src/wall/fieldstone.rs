@@ -757,7 +757,7 @@ pub(crate) fn stone(m: &Mason, run: &Run, f: &Field, c: &Cell, seed: Seed) -> Op
     let ch = (m.rounding.1 * s)
         .min(ROUND_SIZE_CAP * span[0].min(span[1]))
         .max(rr);
-    let rounded = round_corners(&poly, rr, m.joint / 2.0, below, ch);
+    let rounded = round_corners(&poly, rr, m.joint * s / 2.0, below, ch);
     if rounded.len() < 3 || signed_area(&rounded) < 0.25 * s * s {
         return None;
     }

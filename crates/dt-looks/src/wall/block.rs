@@ -127,6 +127,12 @@ impl Block {
     /// its planes, the relief, placed on `seg`.
     pub fn mesh(&self, seg: &Seg) -> Result<TriMesh, KitError> {
         let [lx, ly, lz] = self.size();
+        if lx.min(ly).min(lz) <= 0.0 {
+            return Err(KitError::Shape(
+                "a stone is no bigger than its joints: make the joints narrower or the stones bigger"
+                    .into(),
+            ));
+        }
         let planes = self.planes();
         let pitch = (lx.max(ly).max(lz) / 56.0).clamp(0.18, 0.32);
         let tau = (0.7 * self.rounding)

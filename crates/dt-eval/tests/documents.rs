@@ -328,3 +328,22 @@ fn a_wall_off_its_area_is_refused() {
     assert!(e[0].message.contains("wall"), "{e:?}");
     assert_eq!(e[0].location().unwrap().1, 6, "{e:?}");
 }
+
+#[test]
+fn a_wall_in_a_definition_needs_along_from_the_call() {
+    let def = "define ruin-corner {\n    stack {\n        wall style=cut-stone\n    }\n}\n";
+    let without = format!(
+        "{def}tile t size=\"1x1\" {{\n    stack {{\n        dirt\n        ruin-corner\n    }}\n}}\n"
+    );
+    let e = errors(&without);
+    assert!(
+        e.iter()
+            .any(|d| d.code == "dt::missing-control" && rendered(d).contains("along=")),
+        "{e:?}"
+    );
+    let with = format!(
+        "{def}tile t size=\"1x1\" {{\n    stack {{\n        dirt\n        ruin-corner along=\"north\"\n    }}\n}}\n"
+    );
+    let src = mem(&[("t.kdl", &with)]);
+    assert!(check(&src, "t.kdl", &Options::default()).is_ok());
+}

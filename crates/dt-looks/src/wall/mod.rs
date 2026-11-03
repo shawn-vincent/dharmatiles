@@ -866,7 +866,9 @@ pub(crate) fn blocks(
     seed: Seed,
 ) -> Result<(Vec<Block>, Vec<TriMesh>, usize), LookError> {
     let s = finish.scale;
-    let j2 = m.joint / 2.0;
+    // the joint scales with everything else (D2)
+    let jw = m.joint * s;
+    let j2 = jw / 2.0;
     let fr = m.face_recess * s;
     let t = run.thickness;
     // missing units: bricks (never bottom, top, quoins or ends) and slabs,
@@ -1032,7 +1034,7 @@ pub(crate) fn blocks(
         }
         // pointing: a bed joint wider than the gap is filled to within
         // MAX_PROUD_MM of the faces, so the unit above never bridges it
-        if m.joint > GAP_MM {
+        if jw > GAP_MM {
             for (b, &ci) in blocks.iter().zip(&cell_of) {
                 let c = &cells[ci];
                 if c.is_bottom {
@@ -1050,7 +1052,7 @@ pub(crate) fn blocks(
                     c.t1 + j2
                 };
                 let z = b.z[0] - run.seat;
-                let mesh = rubble::boxed([t0, g, z - m.joint - 0.02], [t1, t - g, z + 0.02])
+                let mesh = rubble::boxed([t0, g, z - jw - 0.02], [t1, t - g, z + 0.02])
                     .map_err(LookError::build)?;
                 extra.push(run.place(c.seg, mesh));
             }
