@@ -79,8 +79,10 @@ impl Printer {
     }
 }
 
-/// An inward-wound shell smaller than this, mm³, counts as a void
-/// wherever it lies (a printed bead, 0.45 × 0.45 × 0.2 mm, is 0.04).
+/// A left-out body smaller than this, mm³, is a boolean's sliver, not a
+/// part (a printed bead, 0.45 × 0.45 × 0.2 mm, is 0.04; a slicer prints
+/// nothing of it): an inward-wound one counts as a void wherever it lies,
+/// an outward one is reported in `slivers`, not as a lost part.
 const VOID_SLIVER_MM3: f64 = 1e-3;
 
 /// A body keep-largest dropped.
@@ -110,6 +112,9 @@ pub struct Audit {
     /// Sealed voids keep-largest left out (inward-wound shells, negative
     /// volume), so they print solid: a fill, not a lost part.
     pub voids: Vec<Dropped>,
+    /// Loose boolean slivers keep-largest left out: outward bodies under
+    /// a thousandth of a mm³, far below one printed bead. Not a lost part.
+    pub slivers: Vec<Dropped>,
     /// Vertices pinch separation moved.
     pub pinches_moved: usize,
     /// Triangles that collapsed in the float32 merge (dropped).
@@ -219,10 +224,11 @@ pub fn audit_banded(
         .zip(inside)
         .map(|((d, _), i)| (d, i))
         .partition(|(_, i)| *i);
-    let (voids, dropped) = (
-        voids.into_iter().map(|(d, _)| d).collect(),
-        dropped.into_iter().map(|(d, _)| d).collect(),
-    );
+    let voids = voids.into_iter().map(|(d, _)| d).collect();
+    let (slivers, dropped): (Vec<_>, Vec<_>) = dropped
+        .into_iter()
+        .map(|(d, _)| d)
+        .partition(|d| d.volume_mm3.abs() < VOID_SLIVER_MM3);
     let watertight = m.is_watertight();
     let (mut overhang, holes) = overhang_faces(&m, footprint, printer);
     let areas = face_areas(&m);
@@ -287,6 +293,7 @@ pub fn audit_banded(
         bodies,
         dropped,
         voids,
+        slivers,
         pinches_moved,
         collapsed,
         watertight,
@@ -962,6 +969,21 @@ mod tests {
         assert!(a.voids.is_empty(), "{:?}", a.voids);
         assert_eq!(a.dropped.len(), 1);
         assert!(!a.failures(&fdm()).is_empty());
+    }
+
+    #[test]
+    fn a_loose_sliver_is_not_a_lost_part() {
+        // a block and, apart from it, a 0.05 mm speck (1.25e-4 mm³)
+        let mut m = cube([0.0, 0.0, 0.0], [6.0, 6.0, 6.0]);
+        let speck = cube([8.0, 8.0, 1.0], [8.05, 8.05, 1.05]);
+        let base = u32::try_from(m.positions.len()).unwrap();
+        m.positions.extend(speck.positions);
+        m.triangles
+            .extend(speck.triangles.iter().map(|t| t.map(|i| i + base)));
+        let (_, a) = audit(&m, [10.0, 10.0], &fdm());
+        assert!(a.dropped.is_empty(), "{:?}", a.dropped);
+        assert_eq!(a.slivers.len(), 1);
+        assert!(a.failures(&fdm()).is_empty());
     }
 
     #[test]

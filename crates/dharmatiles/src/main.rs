@@ -385,6 +385,7 @@ fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
             "bodies": a.bodies,
             "dropped": a.dropped.iter().map(|d| json!({"triangles": d.triangles, "volume_mm3": d.volume_mm3, "bounds": d.bounds})).collect::<Vec<_>>(),
             "voids_filled": a.voids.len(),
+            "slivers": a.slivers.len(),
             "band_mm2": a.band_mm2,
             "band_budget_mm2": a.band_budget_mm2,
             "pinches_moved": a.pinches_moved,
