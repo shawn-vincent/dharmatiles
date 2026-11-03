@@ -15,7 +15,26 @@ use rayon::prelude::*;
 
 use crate::form::vertex_normals;
 use crate::graph::{cross, dist, sub};
+use crate::scene::Material;
 use crate::shape::signed_volume;
+
+/// A tolerance band for some materials (a look's audit setting, not the
+/// printer's): their faces past the printer's overhang but within
+/// `max_deg` are reported as band, not overhang, up to `share` of those
+/// materials' downward-facing area. Past `max_deg` they fail as any face
+/// does. Trees (Shawn, 3 Nov 2026): 55–65° in rare small patches, 65° the
+/// hard cap (a 0.2 mm layer steps 0.2·tan 65° = 0.43 mm, under a 0.45 mm
+/// line).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Band {
+    /// The materials the band covers.
+    pub materials: &'static [Material],
+    /// The hard cap, degrees from vertical.
+    pub max_deg: f64,
+    /// Band area allowed, as a share of those materials' downward-facing
+    /// area.
+    pub share: f64,
+}
 
 /// The printer profile the gate checks against: the numbers of a
 /// `printer` in library/printers/*.kdl (dt-eval decodes it with dt-doc
@@ -101,6 +120,13 @@ pub struct Audit {
     pub overhang_mm2: f64,
     /// Per written triangle: past the overhang rule (painted red).
     pub overhang: Vec<bool>,
+    /// Area of the faces in a look's tolerance band, mm² (past the
+    /// printer's overhang, within the band's cap; not in `overhang_mm2`).
+    pub band_mm2: f64,
+    /// The band area allowed, mm² (0 without a band).
+    pub band_budget_mm2: f64,
+    /// Per written triangle: in the band (painted orange).
+    pub band: Vec<bool>,
     /// Vertical rays inside the footprint that miss the mesh.
     pub holes: usize,
 }
@@ -117,6 +143,12 @@ impl Audit {
             f.push(format!(
                 "{:.2} mm² of overhang past {}° (budget {:.2} mm²)",
                 self.overhang_mm2, printer.overhang_deg, printer.overhang_budget_mm2
+            ));
+        }
+        if self.band_mm2 > self.band_budget_mm2 {
+            f.push(format!(
+                "{:.2} mm² in the overhang band (budget {:.2} mm²)",
+                self.band_mm2, self.band_budget_mm2
             ));
         }
         if self.holes > 0 {
@@ -154,6 +186,19 @@ pub struct Export {
 /// height in mm (for see-through holes).
 #[must_use]
 pub fn audit(input: &TriMesh, footprint: [f64; 2], printer: &Printer) -> (Export, Audit) {
+    audit_banded(input, footprint, printer, &[], None)
+}
+
+/// [`audit`] with a look's tolerance [`Band`]; `materials` holds each
+/// input triangle's material.
+#[must_use]
+pub fn audit_banded(
+    input: &TriMesh,
+    footprint: [f64; 2],
+    printer: &Printer,
+    materials: &[Material],
+    band: Option<&Band>,
+) -> (Export, Audit) {
     let mut m = canonical(input);
     let pinches_moved = separate_pinches(&mut m);
     let (m, source, collapsed) = quantise(&m);
@@ -179,8 +224,54 @@ pub fn audit(input: &TriMesh, footprint: [f64; 2], printer: &Printer) -> (Export
         dropped.into_iter().map(|(d, _)| d).collect(),
     );
     let watertight = m.is_watertight();
-    let (overhang, holes) = overhang_faces(&m, footprint, printer);
+    let (mut overhang, holes) = overhang_faces(&m, footprint, printer);
     let areas = face_areas(&m);
+    let mut in_band = vec![false; overhang.len()];
+    let mut band_budget_mm2 = 0.0;
+    if let Some(b) = band {
+        let tolerant: Vec<bool> = source
+            .iter()
+            .map(|&t| {
+                materials
+                    .get(t as usize)
+                    .is_some_and(|mat| b.materials.contains(mat))
+            })
+            .collect();
+        if overhang.iter().zip(&tolerant).any(|(o, t)| *o && *t) {
+            let cap = Printer {
+                overhang_deg: b.max_deg,
+                ..*printer
+            };
+            let (hard, _) = overhang_faces(&m, footprint, &cap);
+            for k in 0..overhang.len() {
+                if overhang[k] && tolerant[k] && !hard[k] {
+                    overhang[k] = false;
+                    in_band[k] = true;
+                }
+            }
+        }
+        let down: f64 = m
+            .triangles
+            .iter()
+            .zip(&tolerant)
+            .zip(&areas)
+            .filter(|((t, tol), _)| {
+                **tol && {
+                    let [a, b2, c] = t.map(|i| m.positions[i as usize]);
+                    cross(sub(b2, a), sub(c, a))[2] < 0.0
+                }
+            })
+            .map(|(_, a)| a)
+            .sum();
+        band_budget_mm2 = b.share * down;
+    }
+    let band_mm2 = 0.0
+        + in_band
+            .iter()
+            .zip(&areas)
+            .filter(|(o, _)| **o)
+            .map(|(_, a)| a)
+            .sum::<f64>();
     // (an empty f64 sum is -0.0)
     let overhang_mm2 = 0.0
         + overhang
@@ -201,6 +292,9 @@ pub fn audit(input: &TriMesh, footprint: [f64; 2], printer: &Printer) -> (Export
         watertight,
         overhang_mm2,
         overhang,
+        band_mm2,
+        band_budget_mm2,
+        band: in_band,
         holes,
     };
     (Export { mesh: m, source }, a)
@@ -911,6 +1005,41 @@ mod tests {
             [0.0, 6.0],
         ];
         prism(&prof, &[[0, 1, 2], [0, 2, 5], [2, 3, 4], [2, 4, 5]])
+    }
+
+    /// A post whose underside leans out at `deg` from vertical.
+    fn leaning(deg: f64) -> TriMesh {
+        let rise = 4.0 / deg.to_radians().tan();
+        let prof = [[0.0, 0.0], [2.0, 0.0], [6.0, rise], [6.0, 5.0], [0.0, 5.0]];
+        prism(&prof, &[[0, 1, 2], [0, 2, 3], [0, 3, 4]])
+    }
+
+    #[test]
+    fn a_band_tolerates_its_materials_up_to_its_cap() {
+        use crate::scene::Material;
+        let band = Band {
+            materials: &[Material::Leaf],
+            max_deg: 65.0,
+            share: 1.0,
+        };
+        let at = |deg: f64, mat: Material, band: Option<&Band>| {
+            let m = leaning(deg);
+            let mats = vec![mat; m.triangles.len()];
+            audit_banded(&m, [10.0, 10.0], &fdm(), &mats, band).1
+        };
+        // 60°: past 55, within 65: band for leaves, overhang for anything else
+        let a = at(60.0, Material::Leaf, Some(&band));
+        assert!(a.overhang_mm2 == 0.0 && a.band_mm2 > 1.0, "{a:?}");
+        assert!(a.failures(&fdm()).is_empty(), "{:?}", a.failures(&fdm()));
+        assert!(at(60.0, Material::Masonry, Some(&band)).overhang_mm2 > 1.0);
+        assert!(at(60.0, Material::Leaf, None).overhang_mm2 > 1.0);
+        // 70°: past the cap fails whatever the material
+        let b = at(70.0, Material::Leaf, Some(&band));
+        assert!(b.overhang_mm2 > 1.0 && b.band_mm2 == 0.0, "{b:?}");
+        // over the budget fails
+        let tight = Band { share: 0.0, ..band };
+        let c = at(60.0, Material::Leaf, Some(&tight));
+        assert!(!c.failures(&fdm()).is_empty());
     }
 
     /// A profile in x–z, extruded 2 mm in y; `fan` triangulates it.

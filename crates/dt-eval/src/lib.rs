@@ -132,12 +132,16 @@ impl Built {
                 None => p,
             }
         });
-        dt_kit::paint_surface(
+        let mut c = dt_kit::paint_surface(
             &self.export.mesh,
             &self.materials,
             &self.audit.overhang,
             surface.as_ref(),
-        )
+        );
+        for (c, _) in c.iter_mut().zip(&self.audit.band).filter(|(_, b)| **b) {
+            *c = dt_kit::ORANGE;
+        }
+        c
     }
 }
 
@@ -432,7 +436,10 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
     }
     let (mesh, mats) = scene.union().map_err(|e| fail(e.to_string()))?;
     let footprint = c.frame.size_mm();
-    let (export, audit) = dt_kit::audit(&mesh, footprint, &opts.printer);
+    // one band per tile: the first built look that declares one (trees)
+    let band = c.looks.iter().find_map(|l| l.band());
+    let (export, audit) =
+        dt_kit::audit_banded(&mesh, footprint, &opts.printer, &mats, band.as_ref());
     let materials = export.source.iter().map(|&t| mats[t as usize]).collect();
     scene.record("export", export.mesh.content_hash());
     let record = BuildRecord {

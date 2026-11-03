@@ -52,6 +52,9 @@ pub const VIEWS: [View; 4] = [
 
 /// The overhang paint.
 pub const RED: [f32; 3] = [230.0 / 255.0, 30.0 / 255.0, 30.0 / 255.0];
+/// Faces in a look's overhang band (past the printer's limit, within the
+/// look's cap: trees' 55–65°).
+pub const ORANGE: [f32; 3] = [1.0, 0.55, 0.1];
 
 /// An RGB image.
 #[derive(Clone, Debug, PartialEq, Eq)]

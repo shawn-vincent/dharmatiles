@@ -56,13 +56,13 @@ mod shape;
 mod stand;
 mod stl;
 
-pub use audit::{Audit, Dropped, Export, Printer, audit};
+pub use audit::{Audit, Band, Dropped, Export, Printer, audit, audit_banded};
 pub use dt_geom::{Grid, Mask, Rng, Seed, TriMesh};
 pub use field::{
     Field, Noise, Placed, Plane, Scale, Spread, cap, distance, noise, rim, scatter, smax, smooth01,
 };
 pub use outline::Outline;
-pub use render::{Image, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};
+pub use render::{Image, ORANGE, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};
 pub use scene::{
     Frame, LIFT_TOL_MM, Material, Part, REFERENCE_SQUARE_MM, Scene, Slot, Slots, Solid, Stage, Tag,
 };
