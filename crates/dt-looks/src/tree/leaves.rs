@@ -91,24 +91,31 @@ const SKEW_TIP_MARGIN_MM: f64 = 0.05;
 /// between the crown's normals a step apart): past it the crown has a
 /// crease between clumps, and the blade is turned to lie elsewhere.
 const DRAPE_FOLD_COS: f64 = 0.34;
+/// [`Crown::goes_below`]: how far down the crown is looked for under a
+/// flattened blade's lowest point.
+const BELOW_STEP_MM: f64 = 0.3;
+const BELOW_STEPS: usize = 3;
 /// A blade's lowest point needs the crown this close under it, mm.
 const HANG_REACH_MM: f64 = 0.3;
 /// Headings a flattened blade tries, degrees off its own, in order.
 const DRAPE_TURNS: [f64; 10] = [
     0.0, 30.0, -30.0, 60.0, -60.0, 90.0, -90.0, 135.0, -135.0, 180.0,
 ];
-/// A flattened blade's rim and ends sit this far inside the crown.
-const DRAPE_EMBED_MM: f64 = 0.02;
+/// A flattened blade's middle lies this far off the crown (plus its
+/// dome and its shingle step), mm.
+const DRAPE_EMBED_MM: f64 = 0.0;
 /// A flattened blade's dome fades out over this many degrees under the
 /// printer's limit (by the crown's slope under it).
 const DRAPE_DOME_FADE_DEG: f64 = 25.0;
+/// A flattened blade's rim lies this far off the crown (inside it), mm.
+const DRAPE_RIM_MM: f64 = -0.05;
 /// A flattened blade is a slab down to this far inside the crown, mm.
 const DRAPE_ROOT_MM: f64 = 0.4;
 /// Each shingle step lifts a flattened blade this much more off the
 /// crown, mm: overlapping flattened blades lie on surfaces a whole step
 /// apart (near-coincident faces leave slivers in the union and break at
 /// the float32 export).
-const DRAPE_STEP_MM: f64 = 0.03;
+const DRAPE_STEP_MM: f64 = 0.02;
 
 /// A flattened blade's lift off the crown for its shingle standoff.
 fn drape_embed(standoff: f64) -> f64 {
@@ -675,6 +682,17 @@ impl Crown {
         None
     }
 
+    /// Whether the crown, walked down its steepest slope from `p` (normal
+    /// `n`) for [`BELOW_STEPS`] steps of [`BELOW_STEP_MM`], gets below `z`.
+    fn goes_below(&self, p: V, n: V, z: f64) -> bool {
+        let down = sub([0.0, 0.0, -1.0], scale(n, -n[2]));
+        if norm(down) < 1e-6 {
+            return false;
+        }
+        self.walk(p, n, safe_norm(down), BELOW_STEP_MM, BELOW_STEPS)
+            .is_ok_and(|f| f.iter().any(|f| f.p[2] < z))
+    }
+
     /// Walk `steps` steps of `ds` along the crown from `p` heading `t`:
     /// each step goes `ds` along the local tangent and drops back onto the
     /// crown along the local normal.
@@ -756,36 +774,6 @@ fn find(p: &mut [usize], mut i: usize) -> usize {
         i = p[i];
     }
     i
-}
-
-/// [`split_bodies`], but joined only across shared edges: a piece that
-/// touches the rest at a single (pinch) vertex is its own body, as the
-/// gate's export separates it.
-pub(super) fn split_sheets(m: &TriMesh) -> Vec<TriMesh> {
-    let rep = weld(m);
-    let mut parent: Vec<usize> = (0..m.triangles.len()).collect();
-    let mut edge: HashMap<(usize, usize), usize> = HashMap::new();
-    for (ti, t) in m.triangles.iter().enumerate() {
-        for k in 0..3 {
-            let (a, b) = (rep[t[k] as usize], rep[t[(k + 1) % 3] as usize]);
-            let key = (a.min(b), a.max(b));
-            match edge.get(&key) {
-                Some(&o) => {
-                    let (x, y) = (find(&mut parent, o), find(&mut parent, ti));
-                    if x != y {
-                        parent[y] = x;
-                    }
-                }
-                None => {
-                    edge.insert(key, ti);
-                }
-            }
-        }
-    }
-    let groups: Vec<usize> = (0..m.triangles.len())
-        .map(|i| find(&mut parent, i))
-        .collect();
-    gather(m, &groups)
 }
 
 /// The triangles of `m` grouped by `groups[t]` (first-seen order), each
@@ -1265,6 +1253,8 @@ impl Job<'_> {
         // at a time (a lateral jump would fall off a lobe's edge)
         let mut out = vec![[0.0; 3]; surf.len()];
         let mut inner = vec![[0.0; 3]; surf.len()];
+        let mut on = vec![[0.0; 3]; surf.len()];
+        let mut nrm = vec![[0.0; 3]; surf.len()];
         let flat_below = self
             .shape
             .overhang_deg
@@ -1278,8 +1268,13 @@ impl Job<'_> {
             // printer's limit: their side slopes would tip it past
             let u = ((ns[2] - flat_below) / (full_above - flat_below)).clamp(0.0, 1.0);
             let h = dot(sub(surf[k], origin), n) * u * u * (3.0 - 2.0 * u);
-            out[k] = add(hit, scale(ns, h + embed));
+            // the rim is tucked into the crown: no edge stands proud
+            let rim = k == BASE || k == TIP || k.is_multiple_of(STRIDE) || k % STRIDE == N_LAT;
+            let lift = if rim { DRAPE_RIM_MM } else { embed };
+            out[k] = add(hit, scale(ns, h + lift));
             inner[k] = sub(hit, scale(ns, DRAPE_ROOT_MM));
+            on[k] = hit;
+            nrm[k] = ns;
         };
         for (k, st) in [(BASE, 0), (TIP, leaf::N_LONG)] {
             let f = &frames[st];
@@ -1315,6 +1310,15 @@ impl Job<'_> {
             }
         }
 
+        // the blade's lowest point must have the crown going on below it
+        // (the crown carries the layers there); over a clump's bottom the
+        // blade would hang under it, its lowest layer laid in air
+        let low = (0..out.len())
+            .min_by(|&a, &b| out[a][2].total_cmp(&out[b][2]))
+            .unwrap_or(BASE);
+        if !self.crown.goes_below(on[low], nrm[low], out[low][2]) {
+            return Err(Fail::Drape);
+        }
         // the slab's floor: the crown's surface under every blade vertex,
         // DRAPE_ROOT_MM in, so its walls cross the crown square
         let mid = inner[(RINGS / 2) * STRIDE + N_LAT / 2];

@@ -651,81 +651,38 @@ pub(crate) fn drop_crumbs(
 }
 
 /// `solid` with the sealed air pockets its last union closed in (where a
-/// bevelled clump meets a branch, where a laid-flat leaf meets a bump in
-/// the crown) filled, and its loose crumbs (slivers under [`CRUMB_MM3`]
-/// where leaves cross) carved away, so the tree is one body. Each pocket
-/// or crumb is covered by the hull of its corners, each grown by
-/// [`CRUMB_PAD_MM`] (a flat sliver's hull is not flat), and the pocket's
-/// hull a tenth larger: a plug lies inside the wood and clumps and a
-/// carve outside everything but within the pad, so nothing shows.
-/// Repeated (the plugs and carves can leave their own) until the solid is
-/// one body, at most [`CRUMB_PASSES`] times. Returns how many it mended.
+/// bevelled clump meets a branch) filled: each pocket's convex hull, a
+/// tenth larger, is unioned back as a plug (it is inside the wood and the
+/// clump, so nothing shows). Returns how many were filled.
 fn fill_pockets(scene: &mut Scene, solid: Solid) -> Result<(Solid, usize), LookError> {
-    let mut solid = solid;
-    let mut mended = 0;
-    for _ in 0..CRUMB_PASSES {
-        let bodies = leaves::split_sheets(&solid.mesh());
-        if bodies.len() <= 1 {
-            break;
-        }
-        let cover = |b: &TriMesh| {
+    let plugs: Vec<TriMesh> = leaves::split_bodies(&solid.mesh())
+        .into_iter()
+        .filter(|b| dt_kit::signed_volume(b) < 0.0)
+        .filter_map(|b| {
             #[allow(clippy::cast_precision_loss)]
             let n = b.positions.len() as f64;
             let c = [0, 1, 2].map(|k| b.positions.iter().map(|p| p[k]).sum::<f64>() / n);
-            let mut pts: Vec<[f64; 3]> = Vec::with_capacity(9 * b.positions.len());
-            for p in &b.positions {
-                pts.push(graph::add(c, graph::scale(graph::sub(*p, c), 1.1)));
-                for i in 0..8 {
-                    pts.push([0, 1, 2].map(|k| {
-                        p[k] + if i >> k & 1 == 1 {
-                            CRUMB_PAD_MM
-                        } else {
-                            -CRUMB_PAD_MM
-                        }
-                    }));
-                }
-            }
+            let pts: Vec<[f64; 3]> = b
+                .positions
+                .iter()
+                .map(|p| graph::add(c, graph::scale(graph::sub(*p, c), 1.1)))
+                .collect();
             form::hull(&pts).ok()
-        };
-        let (mut plugs, mut cuts) = (Vec::new(), Vec::new());
-        for b in &bodies {
-            let v = dt_kit::signed_volume(b);
-            if v < 0.0 {
-                plugs.extend(cover(b));
-            } else if v < CRUMB_MM3 {
-                cuts.extend(cover(b));
-            }
-        }
-        if plugs.is_empty() && cuts.is_empty() {
-            break;
-        }
-        mended += plugs.len() + cuts.len();
-        let n = u32::try_from(plugs.len() + cuts.len()).map_err(LookError::build)?;
-        let slots = scene.slots(n, Material::Leaf).map_err(LookError::build)?;
-        let mut k = 0;
-        let mut next = |m: &TriMesh| {
-            let s = form::solid(slots.get(k), m).map_err(LookError::build);
-            k += 1;
-            s
-        };
-        let plugs: Vec<Solid> = plugs.iter().map(&mut next).collect::<Result<_, _>>()?;
-        let cuts: Vec<Solid> = cuts.iter().map(&mut next).collect::<Result<_, _>>()?;
-        if !plugs.is_empty() {
-            let mut parts = vec![solid];
-            parts.extend(plugs);
-            solid = union(&parts).map_err(LookError::build)?;
-        }
-        if !cuts.is_empty() {
-            solid = dt_kit::carve(&solid, &cuts).map_err(LookError::build)?;
-        }
+        })
+        .collect();
+    if plugs.is_empty() {
+        return Ok((solid, 0));
     }
-    Ok((solid, mended))
+    let n = u32::try_from(plugs.len()).map_err(LookError::build)?;
+    let slots = scene.slots(n, Material::Leaf).map_err(LookError::build)?;
+    let mut parts = vec![solid];
+    for (k, m) in plugs.iter().enumerate() {
+        parts.push(
+            form::solid(slots.get(u32::try_from(k).unwrap_or(0)), m).map_err(LookError::build)?,
+        );
+    }
+    Ok((union(&parts).map_err(LookError::build)?, plugs.len()))
 }
-
-/// How far [`fill_pockets`] grows each corner of a pocket or crumb, mm.
-const CRUMB_PAD_MM: f64 = 0.03;
-/// At most this many [`fill_pockets`] passes.
-const CRUMB_PASSES: usize = 3;
 
 /// A box of half-width `r` round `at`, from `z0` to `z1`: the footing
 /// [`dt_kit::stand`] stands the wood on.
