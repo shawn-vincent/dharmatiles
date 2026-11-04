@@ -23,6 +23,26 @@ export const VIEWS = [
 ];
 
 const FOV = 40;
+const GRID_BELOW_MM = 0.02;
+// white lines on the sky: bold at each square, fine at a fifth of one, faded with distance
+const GRID_FRAG = `
+uniform float uSq; uniform vec2 uCentre; uniform float uR0; uniform float uR1;
+varying vec2 vXY;
+float line(float v, float px, float w) {
+  float d = abs(fract(v - 0.5) - 0.5) / px; // distance to the nearest line, in pixels
+  return 1.0 - smoothstep(w - 0.5, w + 0.5, d);
+}
+void main() {
+  vec2 g = vXY / uSq;
+  vec2 px = max(fwidth(g), vec2(1e-5));
+  float major = max(line(g.x, px.x, 1.1), line(g.y, px.y, 1.1));
+  vec2 f = g * 5.0;
+  float minor = max(line(f.x, px.x * 5.0, 0.6), line(f.y, px.y * 5.0, 0.6));
+  float fade = 1.0 - smoothstep(uR0, uR1, distance(vXY, uCentre));
+  float a = max(major * 0.95, minor * 0.28) * fade;
+  if (a < 0.01) discard;
+  gl_FragColor = vec4(1.0, 1.0, 1.0, a);
+}`;
 const NARROW_FOV = 3; // the near-orthographic end of the projection tween
 const easeInOutCubic = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
 const reduceMotion = () => {
@@ -57,8 +77,8 @@ void main() {
 export class Viewer {
   constructor(canvas) {
     this.canvas = canvas;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
-    this.renderer.setClearColor(new THREE.Color(0.85, 0.88, 0.92));
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+    this.renderer.setClearColor(0x000000, 0); // the sky is the page's gradient behind the canvas
     this.scene = new THREE.Scene();
     this.persp = new THREE.PerspectiveCamera(FOV, 1, 1, 1000);
     this.ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1000);
@@ -291,21 +311,35 @@ export class Viewer {
     return null;
   }
 
-  /** A ground plane under the tile, ruled at the square size (35 mm DungeonBlocks, 25.4 OpenLOCK). */
+  /**
+   * The ground grid, ruled at the square size (35 mm DungeonBlocks, 25.4
+   * OpenLOCK): white lines, bold at every square and fine in between, a
+   * plane at the tile's datum (z = 0, where the base meets the tile body;
+   * an STL has none, so its lowest point) that fades out toward the
+   * horizon.  It is drawn after the tile, without writing depth, a hair
+   * below the datum so it never fights the tile's flat underside.
+   */
   buildGrid() {
-    if (this.grid) { this.scene.remove(this.grid); this.grid.geometry.dispose(); this.grid = null; }
+    if (this.grid) { this.scene.remove(this.grid); this.grid.geometry.dispose(); this.grid.material.dispose(); this.grid = null; }
     const b = this.bounds();
     const sq = this.plan?.square_mm;
     if (!b || !sq) return;
-    const [cols, rows] = [this.plan.cols, this.plan.rows];
-    const z = b.lo[2];
-    const pts = [];
-    const m = 1; // squares of margin
-    for (let i = -m; i <= cols + m; i++) pts.push(i * sq, -m * sq, z, i * sq, (rows + m) * sq, z);
-    for (let j = -m; j <= rows + m; j++) pts.push(-m * sq, j * sq, z, (cols + m) * sq, j * sq, z);
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-    this.grid = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: new THREE.Color(0.55, 0.6, 0.68) }));
+    const [w, h] = this.plan.size_mm;
+    const z = (this.plan.datum_z ?? b.lo[2]) - GRID_BELOW_MM;
+    const reach = Math.max(w, h) * 6;
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uSq: { value: sq }, uCentre: { value: new THREE.Vector2(w / 2, h / 2) },
+        uR0: { value: Math.max(w, h) * 1.2 }, uR1: { value: reach * 0.5 },
+      },
+      vertexShader: 'varying vec2 vXY; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vXY = w.xy; gl_Position = projectionMatrix * viewMatrix * w; }',
+      fragmentShader: GRID_FRAG,
+      transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    });
+    this.grid = new THREE.Mesh(new THREE.PlaneGeometry(reach, reach), mat);
+    this.grid.position.set(w / 2, h / 2, z);
+    this.grid.renderOrder = 1;
+    this.grid.frustumCulled = false;
     this.grid.visible = this.showGrid;
     this.scene.add(this.grid);
   }
