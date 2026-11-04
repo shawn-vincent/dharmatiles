@@ -116,9 +116,9 @@
       "body": "rust",
       "area": "Rust P6",
       "state": "review",
-      "title": "Phase 6 cutover prepared; deletions wait for Shawn",
-      "detail": "dharmatiles build --all --system both builds the library; library sheet script; CLAUDE.md rewritten for the Rust workflow. Waiting on Shawn: the full contact sheet, approval to delete the remaining Python tile specs, dharmatiles-gen and stl/, and the 1x1-grass-flowers decision. Release (dist, Homebrew tap) not made.",
-      "updated": "2026-11-03T23:25:29Z"
+      "title": "Phase 6 cutover done; release built, publishing waits for permission",
+      "detail": "Python specs, dharmatiles-gen and stl/ deleted; python-library-final tagged and pushed; version 0.1.0; flowers ported. Release tarball and Homebrew formula ready (release/publish.sh) but gh release create was refused by the tool permission: Shawn must run it or allow it.",
+      "updated": "2026-11-04T12:08:18Z"
     },
     {
       "id": "p7",

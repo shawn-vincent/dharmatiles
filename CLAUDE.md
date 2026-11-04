@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **dharmatiles** builds procedural 3D-printable terrain tiles as STL files from short KDL documents. Each tile has a DungeonBlocks-compatible socket-peg underside (or an OpenLOCK clip base), dirt with clods and pebbles, rocks, grass blades, water, walls, floors and trees. Tiles are for tabletop gaming (35 mm square grid, DungeonBlocks standard; OpenLOCK is 25.4 mm). Every build runs through a printability gate: watertight after the float32 reload, no lost parts, no overhang past 55 degrees.
 
-The program is Rust (the `dharmatiles` binary). The Python library in `src/dharmatiles` is the labs' support library and is no longer where tiles are made; the labs (`dirtlab`, `rocklab`, `waterlab`, `grasslab`, `meadowlab`, `shorelab`, `clifflab`) are still where new looks are designed. Until Shawn approves deleting them (phase P6), `src/tiles/` still holds the Python specs of the tiles whose Rust twins are not yet signed off; those are history, not the workflow.
+The program is Rust (the `dharmatiles` binary). The Python library in `src/dharmatiles` is the labs' support library and is no longer where tiles are made; the labs (`dirtlab`, `rocklab`, `waterlab`, `grasslab`, `meadowlab`, `shorelab`, `clifflab`) are still where new looks are designed. The Python tile specs, the `dharmatiles-gen` entry point and `stl/` are gone (phase P6, 4 Nov 2026); the last commit that had them is the tag `python-library-final`.
 
 ## Commands
 
@@ -25,7 +25,7 @@ cargo fmt --check
 cargo xtask parity <look>                   # Python lab beside Rust, seeds 1-4 -> out/parity/<look>/contact-sheet.png
 ```
 
-Output goes to `out/` (git-ignored). Python tile output in `stl/` is the frozen reference: **never regenerate it, and never pass `-o` / `--output` to the old Python generator.**
+Output goes to `out/` (git-ignored). The old Python tile output (`stl/`) is retired with the generator; it lives in the history before the tag `python-library-final`.
 
 CI is off. Run the tests locally on this Mac only; do not wait on or re-enable GitHub Actions. Linux, Windows, wasm and cross-OS hashes are phase P9, a stretch goal.
 

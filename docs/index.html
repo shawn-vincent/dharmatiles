@@ -58,7 +58,7 @@
 <div class="tbl"><table>
   <thead><tr><th>To get</th><th>Run</th><th>You get</th></tr></thead>
   <tbody>
-    <tr><td>The library tiles</td><td><code>pip install -e .</code> then <code>dharmatiles-gen</code></td><td>Every tile in <code>src/tiles/</code> as STL in <code>stl/db/</code> and <code>stl/ol/</code>. One tile: <code>dharmatiles-gen --tile src/tiles/ground/2x2-grass-tree.tile.py</code>.</td></tr>
+    <tr><td>The library tiles</td><td><code>dharmatiles build --all --system both</code></td><td>Every library tile as STL in <code>out/db/</code> and <code>out/ol/</code>. One tile: <code>dharmatiles build lib:tiles/ground/2x2-grass-tree.kdl</code>.</td></tr>
     <tr><td>An approved look</td><td>the look's lab, e.g. <code>python clifflab/rockpile.py --form run --seed 1</code></td><td>A test tile of that look in the lab's <code>out/</code>, with a DungeonBlocks base. Each look page says how.</td></tr>
     <tr><td>A tile from a KDL document</td><td><code>dharmatiles build library/tiles/test/flat-1x1.kdl</code> (branch <code>rust/p1</code>)</td><td>The Rust engine. Today it builds flat ground only; more looks arrive phase by phase (<a href="rust/plan.html">plan</a>).</td></tr>
   </tbody>
@@ -84,7 +84,7 @@
     <h3>The original Python library</h3>
     <p>The <code>dharmatiles-gen</code> generator and its library of tile specs. It is the shipping code until the Rust cutover. Trees and walls are still developed here.</p>
     <dl>
-      <dt>Code</dt><dd><code>src/dharmatiles/</code>, <code>src/tiles/</code>, <code>stl/</code></dd>
+      <dt>Code</dt><dd><code>src/dharmatiles/</code> (frozen, for the labs), <code>crates/</code>, <code>library/</code></dd>
       <dt>Docs</dt><dd><a href="archive/index.html#python-library">Library design pages</a> (archived) and the History section of each look page</dd>
       <dt>Status</dt><dd><a href="#status-python">below</a></dd>
     </dl>

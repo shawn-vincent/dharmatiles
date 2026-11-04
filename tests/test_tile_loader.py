@@ -51,18 +51,3 @@ class LoadTileTests(TestCase):
             tiles = load_tile(relative_tile)
 
         self.assertEqual([t.surface.seed for t in tiles], [123, 456])
-
-    def test_all_tiles_build_region_masks(self):
-        tile_paths = sorted(Path("src/tiles").glob("*/*.tile.py"))
-
-        self.assertTrue(tile_paths)
-
-        for path in tile_paths:
-            with self.subTest(path=str(path)):
-                with warnings.catch_warnings(record=True) as caught:
-                    warnings.simplefilter("always")
-                    for tile in load_tile(path):
-                        mask = build_region_mask(tile)
-                        self.assertNotIn(-2, np.unique(mask))
-
-                self.assertEqual([str(w.message) for w in caught], [])

@@ -15,6 +15,7 @@
 pub mod connector;
 pub mod dirt;
 pub mod floor;
+pub mod flowers;
 pub mod grass;
 pub mod ground;
 pub mod openlock;
@@ -216,6 +217,7 @@ pub fn takes(name: &str) -> Option<&'static [&'static str]> {
         "tree" => Some(tree::CONTROLS),
         "grass" => Some(grass::CONTROLS),
         "reeds" => Some(reeds::CONTROLS),
+        "flowers" => Some(flowers::CONTROLS),
         _ => None,
     }
 }
@@ -267,6 +269,7 @@ pub fn look_with(
         "tree" => Ok(Box::new(tree::Tree::new(controls)?)),
         "grass" => Ok(Box::new(grass::Grass::new(controls)?)),
         "reeds" => Ok(Box::new(reeds::Reeds::new(controls)?)),
+        "flowers" => Ok(Box::new(flowers::Flowers::new(controls)?)),
         _ => Err(LookError {
             control: None,
             message: format!("unknown look `{name}`"),

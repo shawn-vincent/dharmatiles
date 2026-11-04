@@ -122,6 +122,8 @@ pub enum Material {
     Water = 4,
     /// Grass blades.
     Grass = 5,
+    /// Flowers.
+    Flower = 6,
     /// Wall and floor stone (P5).
     Masonry = 10,
     /// Branches and trunks (P5).
@@ -140,6 +142,7 @@ impl Material {
             Self::Rock => "rock",
             Self::Water => "water",
             Self::Grass => "grass",
+            Self::Flower => "flower",
             Self::Masonry => "masonry",
             Self::Wood => "wood",
             Self::Leaf => "leaf",
@@ -155,6 +158,7 @@ impl Material {
             Self::Rock,
             Self::Water,
             Self::Grass,
+            Self::Flower,
             Self::Masonry,
             Self::Wood,
             Self::Leaf,
@@ -174,6 +178,7 @@ impl Material {
             Self::Rock => [0.58, 0.58, 0.61],
             Self::Water => [0.24, 0.38, 0.56],
             Self::Grass => [0.36, 0.56, 0.24],
+            Self::Flower => [0.85, 0.45, 0.62],
             Self::Masonry => [0.66, 0.64, 0.60],
             Self::Wood => [0.42, 0.29, 0.18],
             Self::Leaf => [0.33, 0.52, 0.24],
@@ -189,6 +194,7 @@ impl Material {
             3 => Some(Self::Rock),
             4 => Some(Self::Water),
             5 => Some(Self::Grass),
+            6 => Some(Self::Flower),
             10 => Some(Self::Masonry),
             11 => Some(Self::Wood),
             12 => Some(Self::Leaf),

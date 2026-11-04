@@ -733,6 +733,23 @@ pub static LOOKS: &[Look] = &[
         ],
     },
     Look {
+        name: "flowers",
+        about: "wildflowers: a thin dome on a column, ringed by petal domes on cones (the library's Flowers)",
+        role: Role::Surface,
+        place: SURFACE_PLACE,
+        needs: &[],
+        holds_scatter: false,
+        controls: &[
+            c("per-square", Axis::PerSquare, "how many flowers a square").default("4"),
+            c("petals", Axis::Count, "petals round the centre").default("5"),
+            c("radius", Axis::Mm, "from the centre to a petal's tip").default("2.5"),
+            c("centre", Axis::Mm, "radius of the centre dome").default("1.5"),
+            c("stem", Axis::Mm, "height of the column under each dome").default("1"),
+            c("dome", Axis::Mm, "height of the centre dome").default("1"),
+            c("petal", Axis::Mm, "height of each petal dome").default("0.5"),
+        ],
+    },
+    Look {
         name: "water",
         about: "still water with waterlab's swells: fills its area up to its level",
         role: Role::Surface,

@@ -180,6 +180,7 @@ impl Look for Grass {
                 Read::IfAny("rock"),
                 Read::IfAny("tree"),
                 Read::IfAny("wall"),
+                Read::IfAny("flowers"),
             ],
             cell_mm: None,
         }
@@ -221,7 +222,14 @@ impl Look for Grass {
             !outside[j * nx + i]
         };
         // what stands on the ground: grass roots nowhere under it
-        let blocker = scene.standing(&["rock", "tree", "wall"], FOOT_MM);
+        let mut blocker = scene.standing(&["rock", "tree", "wall"], FOOT_MM);
+        // a flower's footprint at its dome, over the column
+        let fl = scene.standing(&["flowers"], 1.0);
+        blocker
+            .bits
+            .iter_mut()
+            .zip(&fl.bits)
+            .for_each(|(b, f)| *b |= *f);
         let has_blocker = blocker.bits.iter().any(|&b| b);
 
         // 2 clearings of bare earth, and the flow round them and the rocks
