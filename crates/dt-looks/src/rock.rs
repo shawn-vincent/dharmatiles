@@ -208,7 +208,7 @@ fn footprint_radius(ang: f64, a: f64, b: f64, f: Family) -> f64 {
 }
 
 /// rocklab `make_body`: the hull's points.
-fn body_points(rng: &mut Rng, d: f64, f: Family) -> Vec<[f64; 3]> {
+fn body_points(rng: &mut Rng, d: f64, f: Family, hmin: f64) -> Vec<[f64; 3]> {
     use std::f64::consts::TAU;
     let a = d / 2.0;
     let b = a / rng.uniform(ASPECT.0, ASPECT.1);
@@ -216,7 +216,7 @@ fn body_points(rng: &mut Rng, d: f64, f: Family) -> Vec<[f64; 3]> {
     if f == Family::Slab {
         h *= SLAB_HEIGHT;
     }
-    let h = h.max(HEIGHT_MIN_MM);
+    let h = h.max(hmin);
     let yaw = rng.uniform(0.0, std::f64::consts::PI);
     let wd = rng.uniform(0.0, TAU);
     let wo = if f == Family::Wedge {
@@ -308,6 +308,15 @@ fn sample_surface(rng: &mut Rng, m: &TriMesh, n: usize) -> Vec<([f64; 3], [f64; 
 /// # Errors
 /// [`LookError`] if the hull fails (it cannot for these points).
 pub fn make_stone(rng: &mut Rng, d: f64, mix: [f64; 4]) -> Result<Stone, LookError> {
+    make_stone_low(rng, d, mix, false)
+}
+
+/// [`make_stone`], with `low`: a small stone is no taller than 0.55 of its
+/// width, not at least 2.5 mm (scree and buried grit, not spikes).
+///
+/// # Errors
+/// As [`make_stone`].
+pub fn make_stone_low(rng: &mut Rng, d: f64, mix: [f64; 4], low: bool) -> Result<Stone, LookError> {
     let total: f64 = mix.iter().sum();
     let mut u = rng.random() * total;
     let mut family = Family::Wedge;
@@ -321,7 +330,19 @@ pub fn make_stone(rng: &mut Rng, d: f64, mix: [f64; 4]) -> Result<Stone, LookErr
         }
         u -= w;
     }
-    let body = hull(&body_points(rng, d, family)).map_err(LookError::build)?;
+    let body = hull(&body_points(
+        rng,
+        d,
+        family,
+        // scree is small, and a small fallen stone is not a spike (rockpile
+        // lowers the floor to 0.55 of its width)
+        if low {
+            HEIGHT_MIN_MM.min(0.55 * d)
+        } else {
+            HEIGHT_MIN_MM
+        },
+    ))
+    .map_err(LookError::build)?;
     // facets
     let scale = libm::sqrt(d / WIDTH_REF_MM);
     let (rmin, rmax) = (FACET_R_MM.0 * scale, FACET_R_MM.1 * scale);
@@ -439,8 +460,22 @@ pub struct Item {
 /// # Errors
 /// As [`make_stone`].
 pub fn make_item(rng: &mut Rng, d: f64, mix: [f64; 4], clusters: bool) -> Result<Item, LookError> {
+    make_item_low(rng, d, mix, clusters, false)
+}
+
+/// [`make_item`] with [`make_stone_low`]'s `low`.
+///
+/// # Errors
+/// As [`make_stone`].
+pub fn make_item_low(
+    rng: &mut Rng,
+    d: f64,
+    mix: [f64; 4],
+    clusters: bool,
+    low: bool,
+) -> Result<Item, LookError> {
     use std::f64::consts::TAU;
-    let main = make_stone(rng, d, mix)?;
+    let main = make_stone_low(rng, d, mix, low)?;
     if !clusters || rng.random() >= CLUSTER_PROB {
         return Ok(Item {
             stones: vec![([0.0, 0.0], main)],
@@ -454,7 +489,7 @@ pub fn make_item(rng: &mut Rng, d: f64, mix: [f64; 4], clusters: bool) -> Result
     let ang0 = rng.uniform(0.0, TAU);
     for j in 1..k {
         let dj = (d * rng.uniform(CLUSTER_SIZE.0, CLUSTER_SIZE.1)).max(MIN_STONE_MM);
-        let s = make_stone(rng, dj, mix)?;
+        let s = make_stone_low(rng, dj, mix, low)?;
         #[allow(clippy::cast_precision_loss)]
         let ang = ang0 + j as f64 * TAU / k as f64 + rng.uniform(-0.5, 0.5);
         let dist = (d / 2.0 + dj / 2.0) * rng.uniform(CLUSTER_DIST.0, CLUSTER_DIST.1);
@@ -985,7 +1020,13 @@ impl Look for Scatter {
             } else {
                 thing.mix
             };
-            let mut item = make_item(&mut r, d, mix, ctx.against.is_none())?;
+            let mut item = make_item_low(
+                &mut r,
+                d,
+                mix,
+                ctx.against.is_none(),
+                ctx.against.is_some() || thing.buried.1 > 0.0,
+            )?;
             item.bury = thing.buried;
             items.push(item);
             kinds.push(thing.kind.as_str());
