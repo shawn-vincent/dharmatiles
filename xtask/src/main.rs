@@ -10,7 +10,7 @@ commands:
            build the look's Rust tile at each seed and write the contact
            sheet to out/parity/<look>/: Python beside Rust where the look
            has a Rust tile, Python only where it does not yet
-           (looks: flat, dirt, dirt-stones, rocks, water, grass, wall-cut-stone, wall-brick,
+           (looks: cliff [--forms run corner … | all], flat, dirt, dirt-stones, rocks, water, grass, wall-cut-stone, wall-brick,
            wall-regular-brick, wall-fieldstone, floor-stone, floor-fieldstone, tree)
   help     show this message";
 
@@ -93,6 +93,9 @@ fn run(cmd: &mut Command) -> Result<(), String> {
 /// beside Rust, overhangs red.
 fn parity(args: &[String]) -> Result<(), String> {
     let look = args.first().ok_or(USAGE)?.as_str();
+    if look == "cliff" {
+        return cliff_parity(&args[1..]);
+    }
     let tile = LOOKS
         .iter()
         .find(|(l, _)| *l == look)
@@ -181,6 +184,87 @@ fn parity(args: &[String]) -> Result<(), String> {
         "parity: contact sheet {}",
         out.join("contact-sheet.png").display()
     );
+    Ok(())
+}
+
+/// Cliff parity (P7): clifflab's rockpile at round 17 beside the Rust
+/// cliff, per form and seed, on clifflab's own views and reference column
+/// (`tests/parity/cliff_sheet.py`). `--forms run corner …` (default
+/// `run`; `all` is every form), `--seeds 1 2 3 4`, `--no-python` to reuse
+/// the cached Python builds only, `--rebuild` to redo them.
+fn cliff_parity(args: &[String]) -> Result<(), String> {
+    let list = |flag: &str, default: &[&str]| -> Vec<String> {
+        match args.iter().position(|a| a == flag) {
+            Some(i) => args[i + 1..]
+                .iter()
+                .take_while(|a| !a.starts_with("--"))
+                .cloned()
+                .collect(),
+            None => default.iter().map(|s| (*s).to_owned()).collect(),
+        }
+    };
+    let mut forms = list("--forms", &["run"]);
+    if forms.first().is_some_and(|f| f == "all") {
+        forms = [
+            "run",
+            "corner",
+            "canyon",
+            "escarpment",
+            "plateau",
+            "massif",
+            "mound",
+            "spire",
+            "needles",
+        ]
+        .map(String::from)
+        .to_vec();
+    }
+    let seeds = list("--seeds", &["1", "2", "3", "4"]);
+    let root = root();
+    let out = root.join("out").join("parity").join("cliff");
+    let mut cargo = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()));
+    cargo
+        .current_dir(&root)
+        .args(["build", "--release", "-p", "dharmatiles"]);
+    run(&mut cargo)?;
+    let target =
+        std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), PathBuf::from);
+    let exe = target
+        .join("release")
+        .join(format!("dharmatiles{}", std::env::consts::EXE_SUFFIX));
+    for f in &forms {
+        for s in &seeds {
+            let dir = out.join("rust").join(f).join(format!("s{s}"));
+            let _ = std::fs::remove_dir_all(&dir);
+            let status = Command::new(&exe)
+                .arg("build")
+                .arg(format!("lib:tiles/test/cliff-{f}-1x1.kdl"))
+                .args(["--seed", s, "--out"])
+                .arg(&dir)
+                .status()
+                .map_err(|e| format!("cannot run {}: {e}", exe.display()))?;
+            if !matches!(status.code(), Some(0 | 3)) {
+                return Err(format!("build of cliff-{f} seed {s} failed ({status})"));
+            }
+        }
+    }
+    let python = std::env::var("PYTHON").unwrap_or_else(|_| "python3".into());
+    let mut py = Command::new(python);
+    py.current_dir(&root)
+        .arg(root.join("tests/parity/cliff_sheet.py"))
+        .args(["--out"])
+        .arg(&out)
+        .arg("--forms")
+        .args(&forms)
+        .arg("--seeds")
+        .args(&seeds);
+    for flag in ["--no-python", "--rebuild"] {
+        if args.iter().any(|a| a == flag) {
+            py.arg(flag);
+        }
+    }
+    run(&mut py)?;
+    println!("parity: contact sheet {}", out.join("contact-sheet.png").display());
     Ok(())
 }
 
