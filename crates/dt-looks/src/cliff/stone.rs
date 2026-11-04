@@ -877,10 +877,10 @@ pub fn rock_piece(
         if o.is_empty() { rock } else { o }
     };
     if std::env::var("DT_STAGE").is_ok_and(|v| v == ri.to_string()) { eprintln!("stage pre-relief {ri} bounds {:?} z0 {} zbase {}", rock.bounds(), r.z0, zbase); }
-    let rock = if off0.contains("relief") { rock } else { relief(rock, &c.faces, None)?.parts_over(1.0)? };
+    let rock = if off0.contains("relief") { rock } else { relief(rock, &c.faces, None)?.parts_over(1e9)? };
     let (rock, k) = top_cracks(rng, &rock, r, &c.faces, env)?;
     if std::env::var("DT_STAGE").is_ok_and(|v| v == ri.to_string()) { eprintln!("stage post {ri} bounds {:?}", rock.bounds()); }
-    let rock = rock.parts_over(1.0)?;
+    let rock = rock.parts_over(1e9)?;
     st.tops += k;
     let rock = fit_tile(rock, form, &setback);
     Ok(Some(grain(&rock, env.seed, zbase)?))
