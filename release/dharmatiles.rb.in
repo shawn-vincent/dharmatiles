@@ -1,0 +1,17 @@
+class Dharmatiles < Formula
+  desc "Build printable DungeonBlocks and OpenLOCK terrain tiles from KDL"
+  homepage "https://github.com/shawn-vincent/dharmatiles"
+  version "@VERSION@"
+  depends_on arch: :arm64
+  on_macos do
+    url "https://github.com/shawn-vincent/dharmatiles/releases/download/v@VERSION@/@NAME@.tar.gz"
+    sha256 "@SHA@"
+  end
+  def install
+    bin.install "dharmatiles"
+    pkgshare.install "palettes"
+  end
+  test do
+    assert_match "dharmatiles", shell_output("#{bin}/dharmatiles --version")
+  end
+end
