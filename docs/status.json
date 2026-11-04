@@ -46,8 +46,8 @@
       "body": "other",
       "area": "Docs",
       "state": "done",
-      "title": "Docs follow-ups done: 55° audits, live doc paths, red-painted renders",
-      "detail": "rocklab/grasslab/dirtlab audit at 55° (clifflab face report reads the constant); ~40 dead docs/ paths in code repointed; red-overhang heroes on trees, walls and composition; variants page images fixed; 0 broken links.",
+      "title": "Docs follow-ups done: 55\u00b0 audits, live doc paths, red-painted renders",
+      "detail": "rocklab/grasslab/dirtlab audit at 55\u00b0 (clifflab face report reads the constant); ~40 dead docs/ paths in code repointed; red-overhang heroes on trees, walls and composition; variants page images fixed; 0 broken links.",
       "updated": "2026-11-02T17:52:30Z"
     },
     {
@@ -57,7 +57,7 @@
       "area": "Rust P1",
       "state": "done",
       "title": "Phase 1 done: flat tile prints from Rust",
-      "detail": "Merged into main (84056d8). Flat 1×1 DB tile: watertight, 0 overhang, 0.1 s, same hashes on macOS and Linux; review findings fixed; Shawn's test print seated and the contact-sheet layout is approved.",
+      "detail": "Merged into main (84056d8). Flat 1\u00d71 DB tile: watertight, 0 overhang, 0.1 s, same hashes on macOS and Linux; review findings fixed; Shawn's test print seated and the contact-sheet layout is approved.",
       "updated": "2026-11-02T16:00:00Z"
     },
     {
@@ -67,7 +67,7 @@
       "area": "Rust P2",
       "state": "done",
       "title": "Phase 2 done: dirt signed off and merged",
-      "detail": "Shawn: “dirt is beautiful”. Rust dirt matches dirtlab at seeds 1–4 (texture 97.8%, clods/pebbles/spectrum within tolerance, 0.8 s, 0 overhang). soil-1x1.kdl replaces 1x1-soil.tile.py; flat test tile now a 3.4 mm slab.",
+      "detail": "Shawn: \u201cdirt is beautiful\u201d. Rust dirt matches dirtlab at seeds 1\u20134 (texture 97.8%, clods/pebbles/spectrum within tolerance, 0.8 s, 0 overhang). soil-1x1.kdl replaces 1x1-soil.tile.py; flat test tile now a 3.4 mm slab.",
       "updated": "2026-11-02T23:00:00Z"
     },
     {
@@ -77,7 +77,7 @@
       "area": "Rust P3",
       "state": "done",
       "title": "Phase 3 done: rocks and water signed off and merged",
-      "detail": "Shawn, 3 Nov: 'let's just keep going'. Rocks and water pass parity at seeds 1–4; eleven water twins are in library/tiles/water and their .tile.py files are deleted. Later: dirt-stones 10–40 mm spectrum 1.203 vs ±20%; rocks texture 88–93% vs the lab's 95–97%.",
+      "detail": "Shawn, 3 Nov: 'let's just keep going'. Rocks and water pass parity at seeds 1\u20134; eleven water twins are in library/tiles/water and their .tile.py files are deleted. Later: dirt-stones 10\u201340 mm spectrum 1.203 vs \u00b120%; rocks texture 88\u201393% vs the lab's 95\u201397%.",
       "updated": "2026-11-03T22:33:58Z"
     },
     {
@@ -126,9 +126,9 @@
       "body": "rust",
       "area": "Rust P7",
       "state": "active",
-      "title": "Phase 7: frozen at round 17; first slice of the cliff builds",
-      "detail": "Foot moved to 3.4 mm; cliff look (straight run: masses, tiers, end section, stacked stones, grain, core) passes the gate at 8 seeds, both systems, ~1 s; all 44 library tiles build. Not clifflab's look yet: no crack network, shattered patches, bank, scree, other forms; parity numbers not measured.",
-      "updated": "2026-11-04T12:11:48Z"
+      "title": "Phase 7: the cliff is ported (all nine forms); overhang gate nearly met",
+      "detail": "Stacking, columns, crack networks, relief, seats, chips, bank, scree, dirt on tops, all forms, both systems. 36 form/seed builds at db: overhang over 65 deg 0-2.9 mm2 (Python means 0.3-2.6), band within budget, 0 holes; 5 builds drop a hairline shard (<0.01 mm3). Left: shard cause, sheets by eye, merge.",
+      "updated": "2026-11-04T17:30:00Z"
     },
     {
       "id": "p8",
