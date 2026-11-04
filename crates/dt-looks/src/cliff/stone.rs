@@ -691,8 +691,9 @@ pub fn rock_piece(
         let o = rock.minus(&chips)?;
         if o.is_empty() { rock } else { o }
     };
-    let rock = relief(rock, &c.faces, None)?;
+    let rock = relief(rock, &c.faces, None)?.largest_part()?;
     let (rock, k) = top_cracks(rng, &rock, r, &c.faces, env)?;
+    let rock = rock.largest_part()?;
     st.tops += k;
     let rock = fit_tile(rock, form, &setback);
     Ok(Some(grain(&rock, env.seed, zbase)?))

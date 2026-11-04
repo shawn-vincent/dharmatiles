@@ -612,6 +612,11 @@ static CLIFF: &[Control] = &[
         ],
         "broken patches with more cracks and scree",
     ),
+    c("bank-height", Axis::Mm, "dirt heaped against the face: how high (a range)").default("1.5..3.5"),
+    c("bank-reach", Axis::Mm, "dirt heaped against the face: how far out (a range)").default("3..6.5"),
+    c("scree", Axis::PerSquare, "fallen stones along each square of the foot").default("55"),
+    c("boulders", Axis::PerSquare, "big fallen blocks along each square of the foot").default("2.5"),
+    c("grit", Axis::PerSquare, "small stones half-buried in the bank, per square of the foot").default("45"),
     c("top", Axis::Word, "earth lodged on the flat top")
         .words(&[
             w("bare", "bare rock", &[]),

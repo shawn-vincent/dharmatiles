@@ -8,7 +8,7 @@
 //! whatever thread works it (R2). Pieces are combined at the end with
 //! [`Piece::into_solid`] and [`crate::union`].
 
-use dt_geom::vec3::{cross, sub, unit};
+use dt_geom::vec3::{cross, dot, sub, unit};
 use dt_geom::{BoolOp, Grid, Mesh, TriMesh};
 
 use crate::KitError;
@@ -220,6 +220,55 @@ impl Piece {
         }
         let m = prism_mesh(&cs, z0, z1);
         self.plus(&m)
+    }
+
+    /// Only its largest connected part: scraps a cut left detached are not
+    /// stone (the gate would drop them as loose bodies).
+    ///
+    /// # Errors
+    /// [`KitError::Mesh`] if the surface cannot be rebuilt.
+    pub fn largest_part(&self) -> Result<Self, KitError> {
+        let (pos, tri) = welded(&self.s.to_tri_mesh());
+        if tri.is_empty() {
+            return Ok(self.clone());
+        }
+        let mut par: Vec<usize> = (0..pos.len()).collect();
+        fn find(p: &mut [usize], mut i: usize) -> usize {
+            while p[i] != i {
+                p[i] = p[p[i]];
+                i = p[i];
+            }
+            i
+        }
+        for t in &tri {
+            for k in 1..3 {
+                let (a, b) = (find(&mut par, t[0] as usize), find(&mut par, t[k] as usize));
+                par[a] = b;
+            }
+        }
+        let mut vol: std::collections::BTreeMap<usize, f64> = std::collections::BTreeMap::new();
+        let mut count: std::collections::BTreeMap<usize, usize> = std::collections::BTreeMap::new();
+        for t in &tri {
+            let r = find(&mut par, t[0] as usize);
+            let [a, b, c] = t.map(|i| pos[i as usize]);
+            let v = dot(a, cross(b, c)) / 6.0;
+            *vol.entry(r).or_default() += v;
+            *count.entry(r).or_default() += 1;
+        }
+        if vol.len() < 2 {
+            return Ok(self.clone());
+        }
+        let best = *vol
+            .iter()
+            .max_by(|x, y| x.1.abs().total_cmp(&y.1.abs()))
+            .map(|x| x.0)
+            .unwrap_or(&0);
+        let keep: Vec<[u32; 3]> = tri
+            .iter()
+            .copied()
+            .filter(|t| find(&mut par, t[0] as usize) == best)
+            .collect();
+        self.rebuilt(pos, keep)
     }
 
     /// As a solid for the scene.

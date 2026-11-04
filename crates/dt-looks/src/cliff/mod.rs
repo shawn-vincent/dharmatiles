@@ -33,6 +33,7 @@ mod chips;
 mod core;
 mod faces;
 mod finish;
+mod foot;
 mod form;
 mod lines;
 mod relief;
@@ -59,6 +60,11 @@ pub const CONTROLS: &[&str] = &[
     "ledges/height",
     "shattered/patches",
     "shattered/width",
+    "bank-height",
+    "bank-reach",
+    "scree",
+    "boulders",
+    "grit",
 ];
 
 /// The cliff look.
@@ -74,6 +80,7 @@ pub struct Cliff {
     patches: Option<f64>,
     patch_width: Option<(f64, f64)>,
     ledge_height: Option<f64>,
+    foot: foot::FootAsk,
 }
 
 const KIND_NAMES: [&str; 5] = ["columns", "blocks", "slabs", "odd", "monoliths"];
@@ -95,6 +102,7 @@ impl Cliff {
             patches: None,
             patch_width: None,
             ledge_height: None,
+            foot: foot::FootAsk::default(),
         };
         let mut w = [f64::NAN; 5];
         for k in controls {
@@ -138,6 +146,13 @@ impl Cliff {
                 ("shattered/width", Value::Number(v)) => c.patch_width = Some((*v, *v)),
                 ("shattered/width", Value::Range(a, b)) => c.patch_width = Some((*a, *b)),
                 ("ledges/height", Value::Number(v)) => c.ledge_height = Some(*v),
+                ("bank-height", Value::Number(v)) => c.foot.bank_h = (*v, *v),
+                ("bank-height", Value::Range(a, b)) => c.foot.bank_h = (*a, *b),
+                ("bank-reach", Value::Number(v)) => c.foot.bank_r = (*v, *v),
+                ("bank-reach", Value::Range(a, b)) => c.foot.bank_r = (*a, *b),
+                ("scree", Value::Number(v)) => c.foot.scree = v.max(0.0),
+                ("boulders", Value::Number(v)) => c.foot.boulders = v.max(0.0),
+                ("grit", Value::Number(v)) => c.foot.grit = v.max(0.0),
                 _ => {}
             }
         }
@@ -359,7 +374,19 @@ impl Look for Cliff {
             scene.add(Tag { kind: "cliff", owner: ctx.path.to_owned() }, solid);
         }
         scene.add(Tag { kind: "cliff", owner: ctx.path.to_owned() }, core.transformed(&m).into_solid());
-        let _ = f2.world([0.0, 0.0]);
+        let mut frng = Rng::new(ctx.seed.key("cliff-foot"));
+        let world = |p: [f64; 2]| f2.world(p);
+        foot::build(
+            scene,
+            ctx.path,
+            &mut frng,
+            &fm,
+            &st.s,
+            &zone,
+            &foot::Place { world: &world, matrix: m, ground: &ground, foot, scale: s },
+            &self.foot,
+            ctx.seed.key("cliff-scree").value(),
+        )?;
         scene.note("cliff_stones", n_stones as f64);
         scene.note("cliff_top_cracks", tops as f64);
         Ok(())
