@@ -281,7 +281,7 @@ impl Look for Cliff {
             return Ok(());
         }
         let mut cols = finish::columns(&mut rng, &placed, &fm, &st.s, &zone);
-        let nslots = placed.len() as u32 + 2;
+        let nslots = placed.len() as u32 + 3;
         let slots = scene.slots(nslots, Material::Rock).map_err(LookError::build)?;
         let plan_slot = slots.get(0);
         // columns that carry another column's stone stand where they are
@@ -368,6 +368,18 @@ impl Look for Cliff {
         let core = relief::relief(core, &all_faces, Some((fm.w, fm.h))).map_err(LookError::build)?;
         let core = stone::grain(&core, env.seed, form::FOOT).map_err(LookError::build)?;
         let m = f2.matrix(foot);
+        if self.top_dirt {
+            let mut pile = dt_kit::TriMesh::default();
+            for mesh in pieces.iter().map(|p| p.1.mesh()).chain([core.mesh()]) {
+                let off = pile.positions.len() as u32;
+                pile.positions.extend(mesh.positions);
+                pile.triangles.extend(mesh.triangles.iter().map(|t| t.map(|v| v + off)));
+            }
+            let slot = slots.get(2 + placed.len() as u32);
+            if let Some(d) = foot::dirt_top(&pile, fm.t.nx, fm.t.ny, ctx.seed.key("cliff-dirt").value(), slot)? {
+                scene.add(Tag { kind: "bank", owner: ctx.path.to_owned() }, d.transformed(&m).into_solid());
+            }
+        }
         let n_stones = pieces.len();
         for (_, p) in pieces {
             let solid = p.transformed(&m).into_solid();
