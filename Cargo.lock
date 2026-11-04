@@ -397,7 +397,7 @@ dependencies = [
 
 [[package]]
 name = "dharmatiles"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "clap",
  "dt-doc",
@@ -428,7 +428,7 @@ checksum = "117240f60069e65410b3ae1bb213295bd828f707b5bec6596a1afc8793ce0cbc"
 
 [[package]]
 name = "dt-doc"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "kdl",
  "miette",
@@ -436,7 +436,7 @@ dependencies = [
 
 [[package]]
 name = "dt-eval"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "dt-doc",
  "dt-kit",
@@ -449,7 +449,7 @@ dependencies = [
 
 [[package]]
 name = "dt-geom"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "bytemuck",
  "glam 0.34.2",
@@ -464,7 +464,7 @@ dependencies = [
 
 [[package]]
 name = "dt-kit"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "crc32fast",
  "dt-geom",
@@ -477,7 +477,7 @@ dependencies = [
 
 [[package]]
 name = "dt-looks"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "dt-kit",
  "libm",
@@ -1719,7 +1719,7 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "xtask"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "png",
 ]
