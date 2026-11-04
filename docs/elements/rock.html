@@ -15,19 +15,14 @@
 <header class="hero">
   <div class="eyebrow">Element · thing</div>
   <h1>rock</h1>
-  <p class="lede">Rocks are loose, chiselled stones scattered over the ground: a handful per square, 6–15 mm across, some alone and some in small fused clusters. Every rock is cut into flat facets of mixed sizes with crisp edges, chipped corners and a fine grain, so a drybrush picks out every edge. They print on an FDM printer with no supports.</p>
-  <p class="small">Three elements are rocks with other default sizes, each with its own page: <a href="stone.html"><code>stone</code></a>, <a href="boulder.html"><code>boulder</code></a> and <a href="pebble.html"><code>pebble</code></a>. Many rocks are a <a href="scatter.html"><code>scatter</code></a>.</p>
-  <div class="hero-shots">
-    <figure><img src="img/rocks-tile-2x2-s1.jpg" alt="Grey 2x2 tile of dirt with a dozen faceted rocks and small clusters" width="900" height="611"></figure>
-    <figure><img src="img/rocks-hero-close.jpg" alt="Close-up of one faceted rock with a small stone fused to its side" width="900" height="609"></figure>
-  </div>
-  <p class="muted small">Left: a 2×2 tile, seed 1. Right: one rock close up. Both are grey renders from 27 Oct 2026; they predate the red-overhang rule. The measured overhang on these tiles is 0.00–0.02 mm², so a red paint would show almost nothing.</p>
+  <p class="lede">One chiselled rock: a convex body cut by tilted planes into crisp facets of mixed sizes, chipped at its sharpest corners, grained, and bedded into the ground beneath it. Alone it is a landmark; scattered it is a rocky field, a stream bed or a cliff's scree.</p>
+  <p class="small">Three elements are rocks with other default sizes, each with its own page: <a href="stone.html"><code>stone</code></a> (1–6 mm), <a href="boulder.html"><code>boulder</code></a> (4.5–8 mm) and <a href="pebble.html"><code>pebble</code></a> (1–2.2 mm). Many rocks are a <a href="scatter.html"><code>scatter</code></a>.</p>
+  <figure class="shot hero-one"><img src="img/el-rock.jpg" alt="A two-square tile of dirt with faceted grey rocks scattered over it"><figcaption><code>lib:tiles/test/2x2-rocks.dtile</code>, built by the program today.</figcaption></figure>
   <div class="facts">
-    <div><div class="k">Sizes</div><div class="v">rocks 6–15 mm wide, 2.5–9 mm tall; 9–12 per 2×2 tile</div></div>
-    <div><div class="k">Shapes</div><div class="v">dome, slab, wedge, block; a quarter are clusters of 2–4</div></div>
-    <div><div class="k">Printing</div><div class="v">no supports; no face leans past 30° from vertical</div></div>
-    <div><div class="k">Bases</div><div class="v">DungeonBlocks today; OpenLOCK with the Rust port</div></div>
-    <div><div class="k">Available</div><div class="v">approved look (rocklab); in the Rust engine from phase P3</div></div>
+    <div><div class="k">Sizes</div><div class="v">2–10 mm across by default; any range with <code>size=</code></div></div>
+    <div><div class="k">Printing</div><div class="v">no supports: a flat base, nothing pointing down past 30°</div></div>
+    <div><div class="k">Bases</div><div class="v">DungeonBlocks and OpenLOCK</div></div>
+    <div><div class="k">In the library</div><div class="v">the water tiles' pools, scree at every cliff</div></div>
   </div>
   <details class="words">
     <summary>Words used on this page</summary>
@@ -68,16 +63,17 @@
 </tbody></table></div>
 
 <h2 id="use">Using it in a tile</h2>
-<p>In the Rust engine a tile is a short KDL document that names looks. Rocks are things (<code>rock</code>, <code>stone</code>, <code>boulder</code>, <code>pebble</code>: one look with different default sizes), and more than one of them is a <code>scatter</code>. A 2×2 tile of dirt with rocks at rocklab's sizes and density reads:</p>
+<p>A thing is one of itself. Place one rock with <code>at=</code> (a point in squares; a range is drawn once from the seed), or leave <code>at=</code> out to let it land anywhere in its area:</p>
+<pre><code>rock at="0.5,0.5" size="6..10"     // one rock, there
+rock in=pool                       // one rock, anywhere in the pool region</code></pre>
+<p>Many rocks are a <a href="scatter.html"><code>scatter</code></a>:</p>
 <pre><code>tile rocks size="2x2" seed=1 {
     stack {
-        dirt
-        scatter per-square=2.6 gap=1.5 {
-            rock size="6..15" mostly=small shape=angular
-        }
+        dirt level=edge { stones none }
+        scatter per-square="2.25..3" gap=1.5 { rock }
     }
 }</code></pre>
-<p>This example is written for this page against the vocabulary in <code>crates/dt-doc/src/looks.rs</code> (branch <code>rust/p1</code>); the library has no rock-only tile yet. Rocks also appear inside other looks: scree at the foot of a <a href="cliff.html">cliff</a> is stones and boulders scattered <code>against=cliff</code>. The rock look reaches the Rust engine in phase P3 (see the <a href="../rust/plan.html">plan</a>). Until then the lab builds it: <code>python rocklab/rocklab.py --seed 1 --cols 2 --rows 2</code> writes <code>rocklab/out/2x2-rocks-s1.stl</code> with a DungeonBlocks base. The language as a whole is on the <a href="../language.html">language page</a>.</p>
+<p>Scattered <code>against=cliff</code>, stones and boulders gather at the cliff's foot as scree. Every rock is seated into the ground under it, and grass grows round it wherever the grass is listed.</p>
 
 <h2 id="spec">Reference</h2>
 <!-- gen:reference rock -->
@@ -93,7 +89,7 @@
 <tr id="c-size"><td><code>size</code></td><td>mm</td><td><code>6..15</code></td><td>rock width</td></tr>
 <tr id="c-mostly"><td><code>mostly</code></td><td>word</td><td>—</td><td>skews the size range<dl class="words"><dt><code>small</code></dt><dd>skewed toward the low end (rockpile's exponent 2)</dd><dt><code>even</code></dt><dd>a uniform draw</dd><dt><code>large</code></dt><dd>leaning toward the high end</dd></dl></td></tr>
 <tr id="c-shape"><td><code>shape</code></td><td>word</td><td>—</td><td>river stones, broken rock, flat slabs<dl class="words"><dt><code>rounded</code></dt><dd>river stones</dd><dt><code>angular</code></dt><dd>broken rock</dd><dt><code>flat</code></dt><dd>flat slabs</dd></dl></td></tr>
-<tr id="c-wear"><td><code>wear</code></td><td>word</td><td>—</td><td>sharp, or chipped and rounded edges <span class="tag">not built yet</span><dl class="words"><dt><code>crisp</code></dt><dd>sharp edges</dd><dt><code>worn</code></dt><dd>chipped and rounded edges</dd></dl></td></tr>
+<tr id="c-wear"><td><code>wear</code></td><td>word</td><td>—</td><td>sharp, or chipped and rounded edges <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span><dl class="words"><dt><code>crisp</code></dt><dd>sharp edges</dd><dt><code>worn</code></dt><dd>chipped and rounded edges</dd></dl></td></tr>
 <tr id="c-buried"><td><code>buried</code></td><td>percent</td><td>—</td><td>how much of each rock is under the ground</td></tr>
 </tbody></table></div>
 <h3 id="in-the-library">In the library</h3>
@@ -157,6 +153,24 @@
 <p>The full printing rules are on the <a href="../standards/printing.html">printing</a> page.</p>
 
 <h2 id="how">How it is made</h2>
+<h3 id="steps">Step by step</h3>
+<p>A rock is a convex body cut by planes. The facets come from cutting half-spaces away, not from pushing a surface around, so the edges stay crisp and the facets come in mixed sizes. That is also why every rock is closed and prints: it is one convex solid with a flat base.</p>
+<div class="demo" id="d-rock">
+  <canvas width="480" height="360" aria-label="A rock built step by step: profile body, facet planes, chips, grain, seat"></canvas>
+  <div class="controls"><button data-play>Play</button><span class="small muted">Click a step to jump to it. A 2.5D stand-in for the 3D body.</span></div>
+  <ol class="steps"></ol>
+</div>
+<p class="small muted">The animation is a simplified stand-in for the idea, drawn in your browser; it is not the program's output. What the program does, in order:</p>
+<ol class="small">
+  <li><strong>Body</strong>: the convex hull of a profile that never widens going up (dome, slab, block or wedge), with lumps that depend only on the angle round it.</li>
+  <li><strong>Facets</strong>: blue-noise seeds of mixed sizes on the body; each seed's tangent plane, tilted up to 14°, cuts the body. No cut may leave a face pointing down past 30°.</li>
+  <li><strong>Chips</strong>: small planes at the corners and along edges sharper than 18°, 8 to 16 a rock, each refused if it would remove more than 3% of the volume.</li>
+  <li><strong>Scale and grain</strong>: the shape is scaled to the system like a photocopy, then given a fine grain in true millimetres.</li>
+  <li><strong>Seat</strong>: each rock is set into the ground under it, 0.25 mm below the lowest point of its footprint, so it never floats on a slope.</li>
+  <li><strong>Scatter</strong>: a quarter of placements are clusters of 2 to 4 stones; the largest go first, 1.5 mm apart and 1 mm inside the rim.</li>
+</ol>
+<p class="small">The code: <a href="https://github.com/shawn-vincent/dharmatiles/blob/main/crates/dt-looks/src/rock.rs"><code>crates/dt-looks/src/rock.rs</code></a>.</p>
+
 <p>The generator is <code>rocklab/rocklab.py</code>. Every rock is a convex solid cut by flat planes, so its facets come from planes rather than from bumping a surface. That is why the edges stay crisp and the facets come in mixed sizes. Five stages:</p>
 <ol>
   <li><strong>Body.</strong> <code>make_body</code> (line 146) takes the convex hull of 75–145 points on a profile that never widens going up (dome, slab, block or wedge), on an elliptical footprint, with ±8% lumps that depend only on the angle round the rock.</li>
@@ -347,5 +361,6 @@
   <div class="lb-bar"><button type="button" data-step="-1" aria-label="Previous photo">&larr;</button><span class="lb-n"></span><a class="lb-open" target="_blank" rel="noopener">Full size</a><button type="button" data-step="1" aria-label="Next photo">&rarr;</button><button type="button" class="lb-close" aria-label="Close">&times;</button></div>
 </dialog>
 <script src="../assets/gallery.js"></script>
+<script src="../assets/howto.js"></script>
 </body>
 </html>

@@ -1,0 +1,13 @@
+// The reeds page's picture: a pool, a grassy bank, and reeds at the shore.
+tile reeds size="1x1" seed=97 {
+    line shore wobble=5 { through "0,0.38" "1,0.42" }
+    region pool { bounded-by shore; fill "0.5,0.25" }
+    region bank { bounded-by shore; fill "0.5,0.75" }
+    stack {
+        dirt in=bank
+        reeds in=bank
+        grass in=bank
+        ground in=pool level="water - 2.2"
+        water
+    }
+}

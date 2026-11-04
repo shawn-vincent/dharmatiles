@@ -15,19 +15,14 @@
 <header class="hero">
   <div class="eyebrow">Element · surface</div>
   <h1>grass</h1>
-  <p class="lede">Grass is a field of separate sculpted blades on gently rolling ground, combed into ribbons that meander in S-curves and part around a few eye-shaped patches of bare earth. Every blade is built the way a printer draws it, in whole 0.2 mm layers and 0.45 mm lines, so what you see in the model is what prints, with no supports. The tips overhang open air and the dirt shows between blades, so a dark prime and a drybrush give lit crests and dark gaps.</p>
-  <p class="small">Two more elements grow on a tile: <a href="flowers.html"><code>flowers</code></a>, which grass grows round, and <a href="reeds.html"><code>reeds</code></a> at the waterline. Presets such as <code>lawn</code> come from <a href="define.html"><code>define</code></a>s in <code>parts/grass</code>.</p>
-  <div class="hero-shots">
-    <figure><img src="img/grass-v3-2x2.jpg" alt="Grey 2x2 grass tile with meandering ribbons of blades and bare patches" width="900" height="616"></figure>
-    <figure><img src="img/grass-v3-close.jpg" alt="Close view of grass blades shingled along the flow, with a bare bank" width="900" height="584"></figure>
-  </div>
-  <p class="muted small">Left: a 2×2 tile, seed 1. Right: close up, blades shingled along the flow beside a bare bank. Both renders date from 29 Oct 2026 and predate the red-overhang render rule, so overhang faces are not painted.</p>
+  <p class="lede">Grass made of separate sculpted blades, combed into meandering ribbons that part round patches of bare earth and wrap round rocks, trees and walls. Each blade is built in printer units, layer by layer, so it prints on a 0.4 mm nozzle without supports.</p>
+  <p class="small">Two more elements grow on a tile: <a href="flowers.html"><code>flowers</code></a>, which the grass grows round, and <a href="reeds.html"><code>reeds</code></a> at the waterline. The presets <code>lawn</code> and <code>long-grass</code> are <a href="define.html">definitions</a> in <code>parts/grass</code>.</p>
+  <figure class="shot hero-one"><img src="img/el-grass.jpg" alt="A one-square tile covered in combed grass blades over dirt"><figcaption><code>lib:tiles/ground/1x1-grass.dtile</code>, built by the program today.</figcaption></figure>
   <div class="facts">
-    <div><div class="k">Sizes</div><div class="v">1×1 and up; 2×2 by default; blades 2.8–7.2 mm long</div></div>
-    <div><div class="k">Variants</div><div class="v">hills or flat; flow combed, wavy or wild (Rust)</div></div>
-    <div><div class="k">Printing</div><div class="v">no supports; FDM at 0.2 mm × 0.45 mm, or resin</div></div>
-    <div><div class="k">Bases</div><div class="v">DungeonBlocks today; OpenLOCK with the Rust port</div></div>
-    <div><div class="k">Available</div><div class="v">approved look (grasslab); in the Rust engine (phase P4, waiting for Shawn&rsquo;s review)</div></div>
+    <div><div class="k">Sizes</div><div class="v">any tile size; blades 3.5–6.5 mm long by default</div></div>
+    <div><div class="k">Printing</div><div class="v">no supports; blades are whole 0.45 mm lines on 0.2 mm layers</div></div>
+    <div><div class="k">Bases</div><div class="v">DungeonBlocks and OpenLOCK</div></div>
+    <div><div class="k">In the library</div><div class="v"><code>ground/1x1-grass</code>, the meadow tiles, walls and water banks</div></div>
   </div>
   <details class="words">
     <summary>Words used on this page</summary>
@@ -62,23 +57,25 @@
 </figure>
 
 <h2 id="use">Using it in a tile</h2>
-<p>In the Rust engine grass is a look named on one line, after the ground it grows on (<code>ground</code> or <code>dirt</code>). It reads what stands on the ground: put rocks, trees and walls before it or after it, and the grass grows round them. The library keeps two presets in <code>library/parts/grass.dtile</code>, and <code>library/tiles/ground/2x2-grass-tree.dtile</code> uses one under a tree:</p>
-<pre><code>use "parts/grass" long-grass
-
-tile grass-tree size="2x2" seed=84 {
+<p>Grass grows on the surface the stack painted, so write <a href="dirt.html"><code>dirt</code></a> (or <a href="ground.html"><code>ground</code></a>) first; the dirt shows between the blades and in the clearings:</p>
+<pre><code>tile grass size="1x1" seed=1 {
     stack {
-        ground                          // flat, at the ground level (5 mm)
-        long-grass                      // grows round the trunk, wherever it is listed
-        tree height=40 { … }
+        dirt
+        grass
     }
 }</code></pre>
-<p>Or write the line yourself:</p>
+<p>Rocks, trees, walls and flowers are built before the grass wherever they are listed, so the blades always grow round them. Most library tiles use a preset:</p>
+<pre><code>use "parts/grass" lawn          // or long-grass: longer, taller blades
+
+tile meadow size="2x2" seed=4 {
+    stack {
+        dirt
+        scatter per-square=1 { rock size="4..8" }
+        lawn cover="85%"         // a definition's params are set like controls
+    }
+}</code></pre>
+<p>Every control at once, at its default:</p>
 <pre><code>grass length="3.5..6.5" height="1.5..2" clearings=1.5 cover="100%" bare="0%" flow=wavy</code></pre>
-<p>Grass in one region of a tile is <code>grass in=meadow</code>; its blades stop at the region&rsquo;s edge and at the water. For a meadow with rocks in it, ask for the bare earth you want and let the grass add clearings up to it: <code>grass bare="20%"</code> (ground under the rocks counts). Reeds at a shore are the <code>reeds</code> look, after the <code>water</code>.</p>
-<p>Change the tile's <code>seed</code> for different grass with the same character. The lab still builds it, as the design bench for the look:</p>
-<pre><code>python grasslab/grasslab.py --seed 1 --cols 2 --rows 2    # → grasslab/out/2x2-sculpted-grass-s1.stl
-python grasslab/grasslab.py --seed 1 --cols 1 --rows 1 --flat   # flat ground, for studying blades</code></pre>
-<p>The Python library's own grass (<code>ThatchGrass</code>, built by <code>dharmatiles-gen</code> from <code>src/tiles/</code>) is an older look; see the History below.</p>
 
 <h2 id="spec">Reference</h2>
 <!-- gen:reference grass -->
@@ -153,6 +150,33 @@ python grasslab/grasslab.py --seed 1 --cols 1 --rows 1 --flat   # flat ground, f
 <p>The full printing rules are on the <a href="../standards/printing.html">printing</a> page.</p>
 
 <h2 id="how">How it is made</h2>
+<h3 id="steps">Step by step</h3>
+<p>Grass reads at tabletop distance because of how it is organised at mid scale: ribbons that flow, meander and part round clearings and obstacles. The blades themselves are built in printer units, stacks of 0.2 mm layers each a whole number of 0.45 mm lines wide.</p>
+<div class="demo" id="d-grass">
+  <canvas width="520" height="520" aria-label="Plan view of grass: hills, a direction field, in-phase meander, clearings that part the flow, strands traced along the flow, and blades"></canvas>
+  <div class="controls"><button data-play>Play</button><span class="small muted">Plan view, 70 × 70 mm.</span></div>
+  <ol class="steps"></ol>
+</div>
+<p class="small muted">The animation is a simplified stand-in for the idea, drawn in your browser; it is not the program's output. What the program does, in order:</p>
+<ol class="small">
+  <li><strong>Flow</strong>: a direction field over the tile, with an in-phase meander (neighbouring streamlines wave together, like combed hair).</li>
+  <li><strong>Clearings and obstacles</strong>: patches of bare earth, and the footprints of rocks, trunks, walls and flowers (built first), part the flow; it wraps round them.</li>
+  <li><strong>Strands</strong>: streamlines traced along the flow, blades rooted along them; no blade roots under a solid, and blades stand lower beside one.</li>
+  <li><strong>Blades</strong>: each a loft through one outline per 0.2 mm layer, whole 0.45 mm lines wide, draped on the ground; where the ground slopes the layers follow it only so far that nothing overhangs past 55°.</li>
+  <li><strong>Shingling</strong>: blades overlap like shingles; they are grouped into solids of mutually clear blades and unioned.</li>
+</ol>
+<p class="small">The code: <a href="https://github.com/shawn-vincent/dharmatiles/blob/main/crates/dt-looks/src/grass/mod.rs"><code>crates/dt-looks/src/grass/</code></a>.</p>
+<figure class="diagram" style="margin:8px 0">
+  <svg viewBox="0 0 520 190" role="img" aria-label="A blade cross-section: six 0.2 mm layers of 2,3,4,4,3,1 lines, and a side view where each lower layer ends 0.2 mm short so the tip overhangs air.">
+    <g font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">
+      <g id="xsec"></g>
+      <text x="10" y="180">a blade in printer units: layers of whole lines</text>
+      <g id="side"></g>
+      <text x="300" y="180">side: lower layers 0.2 mm shorter</text>
+    </g>
+  </svg>
+  <figcaption class="small muted">A blade's cross-section is a stack of 0.2 mm layers, each a whole number of 0.45 mm extrusion lines wide, so the slicer prints exactly the blade that was designed.</figcaption>
+</figure>
 <p>The generator is <code>grasslab/grasslab.py</code> (line numbers at commit e0bcb77; the code last changed in 0616212). It builds the field first, then each blade, in seven stages:</p>
 <ol>
   <li><strong>Hills.</strong> <code>make_ground</code> (line 238) draws smooth noise, keeps about 40% of the interior flat at the edge level, lets hills rise from it, caps the slope at 34° and feathers to the 3.4 mm edge.</li>
@@ -328,7 +352,7 @@ python grasslab/grasslab.py --seed 1 --cols 1 --rows 1 --flat   # flat ground, f
 </ul>
 
 <h3 id="history">History</h3>
-<p>Grass started in May as embossed 2D textures, became 3D blades grown over a support field in June, and settled in the library as ThatchGrass on 3 Jul 2026, which <code>dharmatiles-gen</code> still uses. grasslab started again from a requirements interview on 27 Oct, went through two generations of heightfield blades in two days, and on 29 Oct rebuilt every blade in printer units: that is the approved look, also used by meadowlab and shorelab.</p>
+<p>Grass started in May as embossed 2D textures, became 3D blades grown over a support field in June, and settled in the Python library as ThatchGrass on 3 Jul 2026 (retired with that library on 4 Nov 2026). grasslab started again from a requirements interview on 27 Oct, went through two generations of heightfield blades in two days, and on 29 Oct rebuilt every blade in printer units: that is the approved look, also used by meadowlab and shorelab.</p>
 <p>The full texts are archived: grasslab's <a href="../archive/lab-logs/grasslab/requirements.html">requirements</a> and <a href="../archive/lab-logs/grasslab/design.html">design and iteration log</a>; the library pages for <a href="../archive/python-library/grass-mound-thatch.html">mound-thatch grass</a> and the <a href="../archive/python-library/grass-underlay.html">grass underlay</a>; the July <a href="../archive/history/2026-07-03-grass-greenfield-requirements.md">greenfield requirements interview</a>; the older field-simulation grass (<a href="../archive/history/floppy-grass-algorithm.md">algorithm</a>, <a href="../archive/history/grass/requirements.md">requirements</a>, <a href="../archive/history/grass/design.md">design</a>); and the Rust study's <a href="../archive/rust-study/labs.html#grasslab">lab analysis</a> and <a href="../archive/rust-study/variants.html">variants</a>.</p>
 </section>
 
@@ -339,5 +363,6 @@ python grasslab/grasslab.py --seed 1 --cols 1 --rows 1 --flat   # flat ground, f
   <div class="lb-bar"><button type="button" data-step="-1" aria-label="Previous photo">&larr;</button><span class="lb-n"></span><a class="lb-open" target="_blank" rel="noopener">Full size</a><button type="button" data-step="1" aria-label="Next photo">&rarr;</button><button type="button" class="lb-close" aria-label="Close">&times;</button></div>
 </dialog>
 <script src="../assets/gallery.js"></script>
+<script src="../assets/howto.js"></script>
 </body>
 </html>

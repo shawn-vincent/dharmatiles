@@ -15,6 +15,7 @@
   <div class="eyebrow">Element · surface</div>
   <h1>reeds</h1>
   <p class="lede">Clumps of tapered reeds standing at the waterline and leaning out over the water, from shorelab. Write them in the bank region of a shore tile.</p>
+  <figure class="shot"><img src="img/el-reeds.jpg" alt="Two clumps of reeds at the edge of a pool, leaning over the water"><figcaption>Reeds on a grassy bank: <a href="demo/reeds.dtile"><code>demo/reeds.dtile</code></a>.</figcaption></figure>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#use">Writing it</a></li>
@@ -23,7 +24,16 @@
 </ol></nav>
 <article class="doc">
 <h2 id="use">Writing it</h2>
-<pre><code>reeds in=bank clumps="3..5"</code></pre>
+<pre><code>line shore wobble=5 { through "0,0.38" "1,0.42" }
+region pool { bounded-by shore; fill "0.5,0.25" }
+region bank { bounded-by shore; fill "0.5,0.75" }
+stack {
+    dirt in=bank
+    reeds in=bank            // stand along the shore, leaning out over the pool
+    grass in=bank
+    ground in=pool level="water - 2.2"
+    water
+}</code></pre>
 <p>Reeds stand along the shore: where the region they are in meets <a href="water.html"><code>water</code></a>. Each clump is several stems, each leaning toward the water.</p>
 <h2 id="reference">Reference</h2>
 <!-- gen:reference reeds -->
@@ -45,7 +55,7 @@
 <p class="muted small">Generated from <code>dharmatiles looks reeds</code> by <code>cargo xtask docs</code>.</p>
 <!-- /gen:reference -->
 <h2 id="notes">Notes</h2>
-<p>No shipped tile has reeds yet, so there is no screenshot here. The shore and its reeds are described with <a href="water.html#shore">water</a>.</p>
+<p>No shipped library tile has reeds yet; the picture comes from the demo document. The shore and its reeds are described with <a href="water.html#shore">water</a>.</p>
 </article>
 </div>
 </body>

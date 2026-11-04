@@ -14,19 +14,14 @@
 <header class="hero">
   <div class="eyebrow">Element · surface</div>
   <h1>dirt</h1>
-  <p class="lede"><code>dirt</code> is the surface everything else stands on: bare earth with soil clods, grit and half-sunk pebbles, over gentle rises. On its own it makes a plain dirt tile; under grass, rocks, water and cliffs it is the exposed earth between them. It meets every tile edge at the same level, so any two ground tiles butt with no step, and it prints on an FDM printer with no supports.</p>
-  <p class="small">This page is the textured earth, <code>dirt</code>. The plain ground shape is its own element, <a href="ground.html"><code>ground</code></a>; pebbles written inside dirt are a <a href="scatter.html"><code>scatter</code></a> of <a href="pebble.html"><code>pebble</code></a>.</p>
-  <div class="hero-shots">
-    <figure><img src="img/ground-r2-painted-s1.jpg" alt="Painted 2x2 dirt tile with clods, pebbles and a few bedded stones" width="741" height="548"></figure>
-    <figure><img src="img/ground-r2-close-s1.jpg" alt="Close painted view of the dirt surface, 20 mm across" width="752" height="480"></figure>
-  </div>
-  <p class="muted small">Left: 2×2 dirt tile, seed 1, painted. Right: a 20 mm close-up of the same tile. dirtlab round 2. These renders predate the red-overhang rule; the build's audit measured 0.00 mm² of overhang.</p>
+  <p class="lede">Textured bare earth: soil clods, grit and half-sunk pebbles over gentle rises. Nearly every tile starts with <code>dirt</code>: on its own it makes a plain earth tile, and under grass, rocks, water and cliffs it is the earth between them. It meets every tile edge at the same level, so any two tiles butt with no step.</p>
+  <p class="small">The plain ground shape, with no texture, is its own element, <a href="ground.html"><code>ground</code></a>. Pebbles written inside dirt are a <a href="scatter.html"><code>scatter</code></a> of <a href="pebble.html"><code>pebble</code></a>.</p>
+  <figure class="shot hero-one"><img src="img/el-dirt.jpg" alt="A one-square tile of bare earth: clods, pebbles and a few bedded stones"><figcaption><code>lib:tiles/ground/1x1-soil.dtile</code>, built by the program today.</figcaption></figure>
   <div class="facts">
-    <div><div class="k">Sizes</div><div class="v">any tile size; the lab builds 2×2 (70 × 70 mm)</div></div>
-    <div><div class="k">Variants</div><div class="v">flat ground; dirt (clods, pebbles, stones); rises (bumps); optional cracks</div></div>
-    <div><div class="k">Printing</div><div class="v">no supports; one height field, so it cannot overhang</div></div>
-    <div><div class="k">Bases</div><div class="v">DungeonBlocks today; OpenLOCK with the Rust port</div></div>
-    <div><div class="k">Available</div><div class="v">flat ground, dirt and rises in the Rust engine (<code>dharmatiles build lib:tiles/ground/1x1-soil.dtile</code>)</div></div>
+    <div><div class="k">Sizes</div><div class="v">any tile size</div></div>
+    <div><div class="k">Printing</div><div class="v">no supports: one height field, so it cannot overhang</div></div>
+    <div><div class="k">Bases</div><div class="v">DungeonBlocks and OpenLOCK</div></div>
+    <div><div class="k">In the library</div><div class="v"><code>ground/1x1-soil</code>, and under most other tiles</div></div>
   </div>
   <details class="words">
     <summary>Words used on this page</summary>
@@ -68,14 +63,7 @@
 <p>The dirt texture is also the exposed ground in every other lab: grass stands on it, water's shore and banks use it, and rocks sit in it.</p>
 
 <h2 id="use">Using it in a tile</h2>
-<p>In the Rust engine a tile is a short KDL document that names looks. The flat ground is built today. This is the library's walking-skeleton tile, <code>library/tiles/test/1x1-flat.dtile</code> (branch <code>rust/p1</code>):</p>
-<pre><code>tile flat size="1x1" seed=1 {
-    about "Flat ground at 5 mm on one square: the first tile built end to end."
-    stack {
-        ground          // flat, at the ground level (5 mm)
-    }
-}</code></pre>
-<p>Dirt and rises are in the Rust engine (P2, signed off 2 Nov 2026). <code>library/tiles/ground/1x1-soil.dtile</code> replaced the Python <code>1x1-soil.tile.py</code>; <code>dharmatiles looks dirt</code> lists every control. A dirt tile reads like this:</p>
+<p>The plainest tile is dirt on its own. <code>bumps</code> lifts gentle rises, <code>bump-size</code> sets how wide they are, and <code>clods</code> sets how cloddy the soil is:</p>
 <pre><code>tile soil size="1x1" seed=13 {
     stack {
         dirt bumps=2.5 bump-size=14 {   // rises up to 2.5 mm, about 14 mm across
@@ -83,8 +71,21 @@
         }
     }
 }</code></pre>
-<p>Change <code>seed</code> for different clods and pebbles with the same character. The language as a whole is on the <a href="../language.html">language page</a>.</p>
-<p><strong>Build it.</strong> <code>dharmatiles build lib:tiles/ground/1x1-soil.dtile</code> writes <code>out/db/ground/1x1-soil-db.stl</code>; <code>dharmatiles watch</code> rebuilds on every save. The lab still builds dirt with stones: <code>python dirtlab/dirtlab.py --seed 1</code> writes <code>dirtlab/out/2x2-dirt-s1.stl</code> with a DungeonBlocks base (<code>--cols</code>/<code>--rows</code> set the size, <code>--cracks</code> adds fine cracks).</p>
+<p>Under other elements, write <code>dirt</code> first and let the rest stand on it. Restrict it to a <a href="region.html">region</a> with <code>in=</code>:</p>
+<pre><code>tile soil+grass size="1x1" seed=42 {
+    line margin wobble=5 { through "0.48,1" "0.52,0" }
+    region meadow { bounded-by margin; fill "0.25,0.5" }
+    stack {
+        dirt
+        grass in=meadow
+    }
+}</code></pre>
+<p>Against a cliff or wall, dirt can heap up in a <code>bank</code>, and a <a href="scatter.html"><code>scatter</code></a> written inside it lands on it (from <code>2x1-cliff</code>):</p>
+<pre><code>dirt level=edge {
+    bank against=cliff height="1.5..3.5" reach="3..6.5"
+    scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
+}</code></pre>
+<p><code>stones none</code> leaves out the few larger stones dirt beds in by default, for a tile that places its own rocks.</p>
 
 <h2 id="spec">Reference</h2>
 <!-- gen:reference dirt -->
@@ -193,6 +194,24 @@
 <p>The full printing rules are on the <a href="../standards/printing.html">printing</a> page.</p>
 
 <h2 id="how">How it is made</h2>
+<h3 id="steps">Step by step</h3>
+<p>Dirt is one height field built up in order of scale. The layers are combined with a smooth maximum, not added: adding read as porridge, while the smooth maximum keeps every clod and pebble a distinct object sitting on the ground, with a soft fillet at its foot.</p>
+<div class="demo" id="d-dirt">
+  <canvas width="440" height="440" aria-label="Dirt heightfield built in layers: undulation, soil roughness, clods in patches, grit, pebbles and stones"></canvas>
+  <div class="controls"><button data-play>Play</button><span class="small muted">A 35 × 35 mm patch.</span></div>
+  <ol class="steps"></ol>
+</div>
+<p class="small muted">The animation is a simplified stand-in for the idea, drawn in your browser; it is not the program's output. What the program does, in order:</p>
+<ol class="small">
+  <li><strong>Ground</strong>: the level, rises and edge ramp of <code>ground</code>, plus a low soil roughness.</li>
+  <li><strong>Clods</strong>: patchy, by a 6 mm patch field that never drops below 30%; each clod is 1–3 lumpy lobes with a flattish tilted top, partly sunk and soft-maxed onto the soil.</li>
+  <li><strong>Grit</strong>: fine noise and sparse sand grains.</li>
+  <li><strong>Pebbles</strong>: dart-thrown into loose clusters biased into low ground, largest first; each a flattened cap cut by tilted planes, sunk 25–45%.</li>
+  <li><strong>Edge</strong>: the texture ramps in over the outer 1 mm, so the rim is exactly the edge level and tiles butt flush.</li>
+  <li><strong>Printable texture</strong>: every patch keeps at least 0.2 mm of relief in any 1.5 mm window, so a drybrush finds it.</li>
+</ol>
+<p class="small">The code: <a href="https://github.com/shawn-vincent/dharmatiles/blob/main/crates/dt-looks/src/dirt.rs"><code>crates/dt-looks/src/dirt.rs</code></a>.</p>
+
 <p>The generator is <code>dirtlab/dirtlab.py</code> (line numbers at commit e0bcb77). Everything except the larger stones is one height field on a 0.15 mm grid. Each scale is its own stage, and stages are combined with a <em>smooth maximum</em>, not added: a clod or pebble is a new surface that wins where it is higher, with a soft fillet where it meets the ground. Adding bumps instead would blur them into porridge.</p>
 <ol>
   <li><strong>Rises.</strong> <code>ground_undulation</code> (line 184): two blurred noises (14 mm and 5 mm), the lowest 35% flattened to plains, peaks scaled to 2.2–3.2 mm, faded near the rim, slope capped at 24°. A fine soil roughness is added on top.</li>
@@ -352,5 +371,6 @@
 
 </article>
 </div>
+<script src="../assets/howto.js"></script>
 </body>
 </html>

@@ -15,18 +15,14 @@
 <header class="hero">
   <div class="eyebrow">Element · run</div>
   <h1>cliff</h1>
-  <p class="lede">A cliff is a band of big, broken rock along a tile edge, with dirt on top and fallen stones at its foot. It stands about one storey (35 mm) high, fits on a single 35 mm square, butts against the next cliff tile, and prints on an FDM printer with no supports. The surface is cut for an easy drybrush: dark cracks and joints, flat faces that catch the highlight.</p>
-  <div class="hero-shots">
-    <figure><img src="img/cliffs-r17-run-s4-painted.jpg" alt="Painted 1x1 cliff run from a high three-quarter view" width="497" height="640"></figure>
-    <figure><img src="img/cliffs-r17-corner-s1.jpg" alt="Grey 2x2 cliff corner, inside view" width="900" height="744"></figure>
-  </div>
-  <p class="muted small">Left: 1×1 run, seed 4, with a simulated drybrush. Right: 2×2 corner, seed 1, grey. Faces past the overhang limit are painted red; there are almost none.</p>
+  <p class="lede">A storey of stacked, broken rock: big blocks resting on each other under gravity, cleaved into columns, cracked across their joints and grained, with dirt on the top and scree at the foot. Along one tile edge it is a run, along two a corner, and the free-standing forms make plateaus, mounds, spires and needles.</p>
+  <p class="small">Scree is not part of the cliff: it is <a href="stone.html"><code>stone</code></a>s and <a href="boulder.html"><code>boulder</code></a>s in a <a href="scatter.html"><code>scatter</code></a> <code>against=cliff</code>, and the earth heaped at its foot is a <a href="dirt.html"><code>dirt</code></a> <code>bank</code>.</p>
+  <figure class="shot hero-one"><img src="img/el-scatter.jpg" alt="A two-square cliff run along the north edge, with scree and dirt at its foot"><figcaption><code>lib:tiles/cliffs/2x1-cliff.dtile</code>, built by the program today.</figcaption></figure>
   <div class="facts">
-    <div><div class="k">Sizes</div><div class="v">1×1 and up; a run is 35 mm tall and 8–20 mm deep</div></div>
+    <div><div class="k">Sizes</div><div class="v">35 mm tall by default; runs on any length of edge</div></div>
     <div><div class="k">Forms</div><div class="v">run, corner, canyon, escarpment, plateau, massif, mound, spire, needles</div></div>
-    <div><div class="k">Printing</div><div class="v">no supports; overhangs aimed within 55° of vertical, 65° the hard limit</div></div>
-    <div><div class="k">Bases</div><div class="v">DungeonBlocks today; OpenLOCK with the Rust port</div></div>
-    <div><div class="k">Available</div><div class="v">approved look (clifflab); in the Rust engine from phase P7</div></div>
+    <div><div class="k">Printing</div><div class="v">no supports: every stone is seated at the overhang limit</div></div>
+    <div><div class="k">In the library</div><div class="v"><code>tiles/cliffs/</code>: 13 tiles, every form</div></div>
   </div>
   <details class="words">
     <summary>Words used on this page</summary>
@@ -86,25 +82,28 @@
 </figure>
 
 <h2 id="use">Using it in a tile</h2>
-<p>A tile is a short KDL document. This is the library's cliff run, <code>library/tiles/cliffs/2x1-cliff.dtile</code>: a 2×1 tile with a cliff along its north edge, dirt in front, a bank against the face, and scree. Build it with <code>dharmatiles build lib:tiles/cliffs/2x1-cliff.dtile</code> (about 17 s for a 2×1, 10 s for a 1×1).</p>
-<pre><code>tile cliff-run size="2x1" seed=1 {
+<p>A cliff on a tile edge stands inside the tile, its face toward the open ground. This is the library's run, with its scree and its dirt bank:</p>
+<pre><code>tile "2x1-cliff" size="2x1" seed=1 {
     stack {
-        dirt level=edge
-        cliff along=north height=35 {
+        dirt level=edge {
+            bank against=cliff height="1.5..3.5" reach="3..6.5"
+            scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
+        }
+        cliff along=north height=35 {   // 35 mm above its foot
             rock mixed                  // or: columns, blocks, slabs
             stone-size massive          // or: rubble, broken
             top dirt                    // or: bare
             shattered patches=3 width="5..10"
-            bank-height "1.5..3.5"      // dirt heaped against the face
-            bank-reach "3..6.5"
-            scree 55                    // fallen stones per square of the foot
-            boulders 2.5                // big fallen blocks per square
-            grit 45                     // small stones half-buried in the bank
         }
+        scatter against=cliff per-square=55 reach=4 { stone size="1..6" mostly=small }
+        scatter against=cliff per-square=2.5 { boulder size="4.5..8" }
     }
 }</code></pre>
-<p>Change <code>seed</code> for a different cliff with the same character. <code>form=</code> picks the shape: <code>run</code> (one edge, the default), <code>corner</code> (two edges, <code>along="north west"</code>), <code>canyon</code> (the west and east edges), <code>escarpment</code> (a band whose height ramps along the edge) and the free-standing <code>plateau</code>, <code>massif</code>, <code>mound</code>, <code>spire</code> and <code>needles</code>, which take no <code>along</code>. A twin of each, at 1×1, is in <code>library/tiles/test/cliff-&lt;form&gt;-1x1.dtile</code>. The lab still builds the Python original: <code>python clifflab/rockpile.py --form run --seed 1 --cols 1</code>; <code>cargo xtask parity cliff --forms run corner</code> builds both and lays them side by side (<code>out/parity/cliff/contact-sheet.png</code>).</p>
-<p><b>Not yet:</b> the generic <code>bank against=cliff</code> and <code>scatter against=cliff { stone }</code> forms (<code>library/tiles/test/cliff-run-full.dtile</code> keeps them as the language fixture and does not build); the cliff owns its bank and scree controls until Shawn decides how the generic forms should map.</p>
+<p>Two edges make a corner: <code>cliff along="north west"</code>. The other forms are named with <code>form=</code>; the free-standing ones need no <code>along=</code>:</p>
+<pre><code>cliff form=canyon                  // bands on the west and east edges
+cliff along=north form=escarpment  // height ramps from 10 to 40 mm along the edge
+cliff form=spire height=50         // a tall tapering stack, standing free</code></pre>
+<p>Both ends of a run finish in the standard end section, so runs butt end to end. Write <code>dirt level=edge</code> under a cliff so the ground at its foot meets the next tile flush.</p>
 
 <h2 id="spec">Reference</h2>
 <!-- gen:reference cliff -->
@@ -121,22 +120,22 @@
 <tr id="c-height"><td><code>height</code></td><td>mm</td><td><code>35</code></td><td>height above the foot</td></tr>
 <tr id="c-depth"><td><code>depth</code></td><td>mm</td><td>—</td><td>how far the rock reaches into the tile</td></tr>
 <tr id="c-rock"><td><code>rock</code></td><td>word</td><td><code>mixed</code></td><td>what the cliff is stacked from, or weights<dl class="words"><dt><code>mixed</code></dt><dd>rockpile's run shares</dd><dt><code>columns</code></dt><dd>basalt columns (provisional)</dd><dt><code>blocks</code></dt><dd>blocky granite (provisional)</dd><dt><code>slabs</code></dt><dd>layered sandstone (provisional)</dd></dl></td></tr>
-<tr id="c-rock-columns"><td><code>rock columns</code></td><td>number</td><td>—</td><td>weight of tall upright stones <span class="tag">not built yet</span></td></tr>
-<tr id="c-rock-blocks"><td><code>rock blocks</code></td><td>number</td><td>—</td><td>weight of chunky blocks <span class="tag">not built yet</span></td></tr>
-<tr id="c-rock-slabs"><td><code>rock slabs</code></td><td>number</td><td>—</td><td>weight of thin tilted slabs <span class="tag">not built yet</span></td></tr>
-<tr id="c-rock-odd"><td><code>rock odd</code></td><td>number</td><td>—</td><td>weight of irregular lumps <span class="tag">not built yet</span></td></tr>
-<tr id="c-rock-monoliths"><td><code>rock monoliths</code></td><td>number</td><td>—</td><td>weight of ground-to-top stones <span class="tag">not built yet</span></td></tr>
+<tr id="c-rock-columns"><td><code>rock columns</code></td><td>number</td><td>—</td><td>weight of tall upright stones <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
+<tr id="c-rock-blocks"><td><code>rock blocks</code></td><td>number</td><td>—</td><td>weight of chunky blocks <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
+<tr id="c-rock-slabs"><td><code>rock slabs</code></td><td>number</td><td>—</td><td>weight of thin tilted slabs <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
+<tr id="c-rock-odd"><td><code>rock odd</code></td><td>number</td><td>—</td><td>weight of irregular lumps <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
+<tr id="c-rock-monoliths"><td><code>rock monoliths</code></td><td>number</td><td>—</td><td>weight of ground-to-top stones <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
 <tr id="c-stone-size"><td><code>stone-size</code></td><td>percent</td><td><code>rubble</code></td><td>small broken stones, or big masses<dl class="words"><dt><code>rubble</code></dt><dd>small broken stones</dd><dt><code>broken</code></dt><dd>between the two (provisional)</dd><dt><code>massive</code></dt><dd>big masses: 1.35x rubble size</dd></dl></td></tr>
 <tr id="c-ledges"><td><code>ledges</code></td><td>count, 0–2</td><td>—</td><td>shelves a miniature can stand on (P7)</td></tr>
 <tr id="c-ledges-height"><td><code>ledges height</code></td><td>percent</td><td>—</td><td>how far up, as a share of the cliff</td></tr>
 <tr id="c-shattered"><td><code>shattered</code></td><td>group</td><td>—</td><td>broken patches with more cracks and scree</td></tr>
 <tr id="c-shattered-patches"><td><code>shattered patches</code></td><td>count</td><td>—</td><td>broken patches along the run</td></tr>
 <tr id="c-shattered-width"><td><code>shattered width</code></td><td>mm</td><td>—</td><td>how wide each patch is</td></tr>
-<tr id="c-bank-height"><td><code>bank-height</code></td><td>mm</td><td><code>1.5..3.5</code></td><td>dirt heaped against the face: how high (a range) <span class="tag">not built yet</span></td></tr>
-<tr id="c-bank-reach"><td><code>bank-reach</code></td><td>mm</td><td><code>3..6.5</code></td><td>dirt heaped against the face: how far out (a range) <span class="tag">not built yet</span></td></tr>
-<tr id="c-scree"><td><code>scree</code></td><td>per square</td><td><code>55</code></td><td>fallen stones along each square of the foot <span class="tag">not built yet</span></td></tr>
-<tr id="c-boulders"><td><code>boulders</code></td><td>per square</td><td><code>2.5</code></td><td>big fallen blocks along each square of the foot <span class="tag">not built yet</span></td></tr>
-<tr id="c-grit"><td><code>grit</code></td><td>per square</td><td><code>45</code></td><td>small stones half-buried in the bank, per square of the foot <span class="tag">not built yet</span></td></tr>
+<tr id="c-bank-height"><td><code>bank-height</code></td><td>mm</td><td><code>1.5..3.5</code></td><td>dirt heaped against the face: how high (a range) <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
+<tr id="c-bank-reach"><td><code>bank-reach</code></td><td>mm</td><td><code>3..6.5</code></td><td>dirt heaped against the face: how far out (a range) <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
+<tr id="c-scree"><td><code>scree</code></td><td>per square</td><td><code>55</code></td><td>fallen stones along each square of the foot <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
+<tr id="c-boulders"><td><code>boulders</code></td><td>per square</td><td><code>2.5</code></td><td>big fallen blocks along each square of the foot <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
+<tr id="c-grit"><td><code>grit</code></td><td>per square</td><td><code>45</code></td><td>small stones half-buried in the bank, per square of the foot <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
 <tr id="c-top"><td><code>top</code></td><td>word</td><td><code>bare</code></td><td>earth lodged on the flat top<dl class="words"><dt><code>bare</code></dt><dd>bare rock</dd><dt><code>dirt</code></dt><dd>dirt lodged in the top's joints</dd></dl></td></tr>
 </tbody></table></div>
 <h3 id="in-the-library">In the library</h3>
@@ -162,7 +161,7 @@
 <ul>
   <li><strong>Tile.</strong> Any size from 1×1 squares (35 mm each). A run fits on a 1×1.</li>
   <li><strong>Height.</strong> The cliff top is 35 mm above the foot by default, and flat: the top edge is straight, with dirt on it.</li>
-  <li><strong>Foot.</strong> The ground in front sits 4.0 mm above the base today. It moves to the standard 3.4 mm edge level before P7, so cliffs meet other ground tiles flush (see <a href="../standards/tile-system.html#edges">edges</a>).</li>
+  <li><strong>Foot.</strong> The ground in front of the cliff sits at the standard 3.4 mm edge level, so cliff tiles meet other ground tiles flush (see <a href="../standards/tile-system.html#edges">edges</a>).</li>
   <li><strong>Stones.</strong> Widths vary at least four times over. Scree at the foot is 1–6 mm, with a few fallen blocks of 4.5–8 mm.</li>
 </ul>
 
@@ -184,6 +183,25 @@
 <p>The full printing rules are on the <a href="../standards/printing.html">printing</a> page.</p>
 
 <h2 id="how">How it is made</h2>
+<h3 id="steps">Step by step</h3>
+<p>A cliff is stacked, not carved. A form gives the height the cliff should reach; stones are dropped into the lowest pocket first, each resting on what is under it, until the pile fills the form. Because every stone is seated on its bed at the overhang limit, a stone that rests on rock has no flat ceiling to print.</p>
+<div class="demo" id="d-cliff">
+  <canvas width="560" height="340" aria-label="Front elevation of a cliff: target form, gravity stacking, columns, hidden core, dressing, crack network, grain and scree"></canvas>
+  <div class="controls"><button data-play>Play</button><span class="small muted">Front elevation of a 70 mm run. The stacking step animates.</span></div>
+  <ol class="steps"></ol>
+</div>
+<p class="small muted">The animation is a simplified stand-in for the idea, drawn in your browser; it is not the program's output. What the program does, in order:</p>
+<ol class="small">
+  <li><strong>Form</strong>: the form (<code>run</code>, <code>corner</code>, <code>spire</code>, …) gives a target height field: bands grown out from the tile edges, or free-standing rings.</li>
+  <li><strong>Stack</strong>: stones are placed lowest pocket first, each resting on the highest supports under it; neighbouring tops never line up, which is what makes courses read.</li>
+  <li><strong>Columns</strong>: stones that share a footprint stand in one column, cleaved by whole planes planned once on the column's hull.</li>
+  <li><strong>Cracks</strong>: each open face of the pile gets one crack network, planned once so a crack runs on across the joints between stones.</li>
+  <li><strong>Each stone</strong>: cut to its column's planes, grooved under the stone it carries, seated on its bed at the overhang limit, chipped, carved with the face relief and cracks, fitted to the tile (scaled back, never clipped) and grained.</li>
+  <li><strong>Core</strong>: a hidden core behind the stones makes every gap between them a dark recess, never a hole through the cliff.</li>
+  <li><strong>Scale</strong>: the masses scale with the square; cracks, joints, chips and grain are printability sizes and do not.</li>
+</ol>
+<p class="small">The code: <a href="https://github.com/shawn-vincent/dharmatiles/blob/main/crates/dt-looks/src/cliff/mod.rs"><code>crates/dt-looks/src/cliff/</code></a>.</p>
+
 <p>The generator is <code>clifflab/rockpile.py</code> (line numbers at commit 31f7c5d). It stacks stones under gravity, then dresses them. Four stages:</p>
 <ol>
   <li><strong>Form.</strong> <code>make_form</code> (line 413) turns the chosen form into contact planes (for a run: the back edge, both ends and the top) and a target profile the pile grows toward: stepped tiers, gullies cut back, buttresses standing out.</li>
@@ -398,5 +416,6 @@
   <div class="lb-bar"><button type="button" data-step="-1" aria-label="Previous photo">&larr;</button><span class="lb-n"></span><a class="lb-open" target="_blank" rel="noopener">Full size</a><button type="button" data-step="1" aria-label="Next photo">&rarr;</button><button type="button" class="lb-close" aria-label="Close">&times;</button></div>
 </dialog>
 <script src="../assets/gallery.js"></script>
+<script src="../assets/howto.js"></script>
 </body>
 </html>

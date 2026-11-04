@@ -192,3 +192,6 @@ ul.tiles { columns: 2 260px; padding-left: 18px; } ul.tiles li { break-inside: a
 .elements a img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 3px; display: block; margin-bottom: 8px; background: var(--rule); }
 .elements a code { font-weight: 600; } .elements a span { display: block; font-size: 13.5px; color: var(--muted); margin-top: 2px; }
 .syntax { font: 13px/1.6 var(--mono); }
+header.hero > figure.shot { margin: 18px 0 6px; }
+header.hero > figure.shot img { width: auto; max-width: min(100%, 640px); max-height: 420px; height: auto; border-radius: 4px; display: block; }
+.demo canvas { width: 100%; max-width: 560px; height: auto; border-radius: 4px; display: block; background: var(--panel); }

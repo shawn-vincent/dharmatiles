@@ -15,7 +15,7 @@
   <div class="eyebrow">Element · placement</div>
   <h1>scatter</h1>
   <p class="lede">More than one of a thing. A scatter says how many and where; its children say what. Rocks, stones, boulders, pebbles, trees and definitions whose stack is one thing can all be scattered.</p>
-  <figure class="shot"><img src="img/el-scatter.jpg" alt="lib:tiles/cliffs/2x1-cliff.dtile: stones and boulders scattered against the cliff, pebbles scattered in the dirt." loading="lazy"><figcaption><code>lib:tiles/cliffs/2x1-cliff.dtile</code>: stones and boulders scattered against the cliff, pebbles scattered in the dirt.</figcaption></figure>
+  <figure class="shot"><img src="img/el-scatter.jpg" alt="lib:tiles/cliffs/2x1-cliff.dtile: stones and boulders scattered against the cliff, pebbles scattered in the dirt."><figcaption><code>lib:tiles/cliffs/2x1-cliff.dtile</code>: stones and boulders scattered against the cliff, pebbles scattered in the dirt.</figcaption></figure>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#use">Writing it</a></li>
@@ -42,11 +42,11 @@ dirt { scatter per-square=40 { pebble } }                     // inside a surfac
 <tbody>
 <tr id="c-count"><td><code>count</code></td><td>count</td><td>—</td><td>how many, in total</td></tr>
 <tr id="c-per-square"><td><code>per-square</code></td><td>per square</td><td>—</td><td>how many per square of the area, or of length along a line</td></tr>
-<tr id="c-spread"><td><code>spread</code></td><td>mm</td><td>—</td><td>with at=: a cluster within this distance of it <span class="tag">not built yet</span></td></tr>
+<tr id="c-spread"><td><code>spread</code></td><td>mm</td><td>—</td><td>with at=: a cluster within this distance of it <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
 <tr id="c-reach"><td><code>reach</code></td><td>mm</td><td>—</td><td>with against=: how far out from the foot</td></tr>
-<tr id="c-clumps"><td><code>clumps</code></td><td>per square</td><td>—</td><td>gathers them into clumps; default spread evenly <span class="tag">not built yet</span></td></tr>
+<tr id="c-clumps"><td><code>clumps</code></td><td>per square</td><td>—</td><td>gathers them into clumps; default spread evenly <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
 <tr id="c-gap"><td><code>gap</code></td><td>mm</td><td>—</td><td>least space between neighbours</td></tr>
-<tr id="c-mostly"><td><code>mostly</code></td><td>word</td><td>—</td><td>skews every child's size range <span class="tag">not built yet</span><dl class="words"><dt><code>small</code></dt><dd>skewed toward the low end (rockpile's exponent 2)</dd><dt><code>even</code></dt><dd>a uniform draw</dd><dt><code>large</code></dt><dd>leaning toward the high end</dd></dl></td></tr>
+<tr id="c-mostly"><td><code>mostly</code></td><td>word</td><td>—</td><td>skews every child's size range <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span><dl class="words"><dt><code>small</code></dt><dd>skewed toward the low end (rockpile's exponent 2)</dd><dt><code>even</code></dt><dd>a uniform draw</dd><dt><code>large</code></dt><dd>leaning toward the high end</dd></dl></td></tr>
 </tbody></table></div>
 <h3 id="in-the-library">In the library</h3>
 <ul class="tiles">

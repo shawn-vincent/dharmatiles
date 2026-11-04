@@ -14,23 +14,14 @@
 <header class="hero">
   <div class="eyebrow">Element · thing</div>
   <h1>tree</h1>
-  <p class="lede">A tree is a single deciduous tree standing on a tile: a twisting barked trunk that forks into branches, each branch ending in a clump of foliage covered in thousands of separate, chunky leaves. The look is slightly cartoonish, in the spirit of an Animal Crossing tree. It grows on ground and grass tiles, and prints on an FDM printer with no supports.</p>
-  <div class="hero-shots">
-    <figure><img src="img/trees-1x1-grass-tree-red.jpg" alt="A 1x1 grass tile with one tree, overhang faces painted red" width="709" height="1027"></figure>
-    <figure><img src="img/trees-1x1-grass-tree-red-under.jpg" alt="The same tree from below the crown: red bands along the undersides of the foliage clumps and leaves" width="720" height="984"></figure>
-  </div>
-  <p class="muted small">Library tile <code>ground/1x1-grass-tree</code>, built in memory on 2 Nov 2026. Faces past the overhang limit (55°, audited at 58° like the labs) are painted red. Left: from above, the red barely shows. Right: from below the crown, it sits along the undersides of the foliage clumps and their leaves: about 1,230 mm² not buried in another part (2,370 mm² counting faces inside other parts).</p>
-  <div class="hero-shots">
-    <figure><img src="img/trees-1x1-grass-tree.jpg" alt="A 1x1 grass tile with one tree, painted green and brown" width="900" height="750"></figure>
-    <figure><img src="img/trees-2x2-grass-tree.jpg" alt="A 2x2 grass tile with one tree near a corner" width="900" height="750"></figure>
-  </div>
-  <p class="muted small">Library tiles <code>ground/1x1-grass-tree</code> and <code>ground/2x2-grass-tree</code>, colour preview renders. These renders predate the red-overhang rule, so faces past the limit are not marked.</p>
+  <p class="lede">One deciduous tree: a twisting barked trunk that forks into branches, each ending in a rounded clump of foliage covered in separate, chunky leaves. The look is slightly cartoonish. Every branch climbs at least 26° and every leaf on an underside lies flat, so the tree prints without supports.</p>
+  <p class="small">A ready-made tree is a <a href="define.html">definition</a>: <code>use "parts/trees" oak</code>. Several trees are a <a href="scatter.html"><code>scatter</code></a>: <code>scatter count=2 { oak }</code>.</p>
+  <figure class="shot hero-one"><img src="img/el-tree.jpg" alt="A one-square grass tile with one leafy tree"><figcaption><code>lib:tiles/ground/1x1-grass-tree.dtile</code>, built by the program today. The audit measured no face past 55°.</figcaption></figure>
   <div class="facts">
-    <div><div class="k">Sizes</div><div class="v">35–40 mm tall, crown about 24–30 mm across; one per 1×1, or more on bigger tiles</div></div>
-    <div><div class="k">Variants</div><div class="v">leafy, foliage clumps only, or bare (winter); crown shape and branching per tree</div></div>
+    <div><div class="k">Sizes</div><div class="v">40 mm tall by default (20–120); crown about 30 mm across</div></div>
+    <div><div class="k">Variants</div><div class="v">leafy, foliage clumps only, or bare (winter)</div></div>
     <div><div class="k">Printing</div><div class="v">no supports; branches at least 26° above horizontal</div></div>
-    <div><div class="k">Bases</div><div class="v">DungeonBlocks and OpenLOCK</div></div>
-    <div><div class="k">Available</div><div class="v">Python library now (<code>dharmatiles-gen</code>); Rust engine from phase P5</div></div>
+    <div><div class="k">In the library</div><div class="v"><code>ground/1x1-grass-tree</code>, <code>ground/2x2-grass-tree</code>, <code>water/1x1-water+grass-tree</code></div></div>
   </div>
   <details class="words">
     <summary>Words used on this page</summary>
@@ -70,30 +61,29 @@
 </div>
 
 <h2 id="use">Using it in a tile</h2>
-<p><strong>Today</strong>, trees are built by the Python library. A tile spec lists a <code>Tree</code> layer in a region; put it before <code>Grass</code> so the grass grows round the trunk. From <code>src/tiles/ground/2x2-grass-tree.tile.py</code>:</p>
-<pre><code>Tree(
-    placement=Uniform(count_per_square=0.25),   # one tree on a 2×2
-    n_attractors=32,                            # 32 foliage clumps
-    leaf_length_mm=4.5,
-    leaf_width_mm=3.0,
-),</code></pre>
-<p>Build it with <code>dharmatiles-gen --tile "src/tiles/ground/2x2-grass-tree.tile.py"</code>. The STLs go to <code>stl/db/</code> and <code>stl/ol/</code>.</p>
-<p><strong>In the Rust engine</strong> (from phase P5) the same tile is a short KDL document, <code>library/tiles/ground/2x2-grass-tree.dtile</code> (branch <code>rust/p1</code>):</p>
+<p>A tree goes anywhere in its area, kept a crown's radius from the tile edge, or where <code>at=</code> says. Grass grows round the trunk wherever the grass is listed:</p>
 <pre><code>use "parts/grass" long-grass
 
 tile grass-tree size="2x2" seed=84 {
     stack {
-        ground                          // flat, at the ground level (5 mm)
-        long-grass                      // grows round the trunk, wherever it is listed
-
-        tree height=40 {               // anywhere on the tile; or at="1,1"
+        ground
+        long-grass
+        tree height=40 {                // or: tree at="1,1" height=40
             trunk height=30             // bare trunk below the crown
             crown width=30 clumps=32 shape=round branching=normal
             leaf length=4.5 width=3
         }
     }
 }</code></pre>
-<p>A ready-made preset: <code>use "parts/trees" oak</code> gives a 50 mm oak with a short trunk and a wide crown (<code>library/parts/trees.dtile</code>). The language as a whole is on the <a href="../language.html">language page</a>.</p>
+<p><code>leaves clumps-only</code> leaves off the separate leaves; <code>leaves bare</code> makes a winter tree. The six branching knobs (<code>branch split=… eagerness=…</code>) are expert controls, allowed only in a parts file:</p>
+<pre><code>use "parts/trees" oak
+
+tile grove size="2x2" seed=3 {
+    stack {
+        dirt
+        scatter count=2 { oak }         // a definition whose stack is one thing is a thing
+    }
+}</code></pre>
 
 <h2 id="spec">Reference</h2>
 <!-- gen:reference tree -->
@@ -167,6 +157,20 @@ tile grass-tree size="2x2" seed=84 {
 </ul>
 
 <h2 id="how">How it is made</h2>
+<h3 id="steps">Step by step</h3>
+<p>A tree grows toward its crown: a cloud of points fills the crown's shape, and branches grow from the trunk toward them, forking only in between. Printability is built in, not checked afterwards: no branch climbs at less than 26°, every clump is cut to stand on its own branch, and leaves on an underside lie flat.</p>
+
+<p class="small muted">What the program does, in order:</p>
+<ol class="small">
+  <li><strong>Crown</strong>: the crown's envelope (round, cone, wide or tall) and its attractor points, sampled over its surface by area and grouped about 20 mm across.</li>
+  <li><strong>Skeleton</strong>: space colonisation: every attractor becomes a branch end, every branch lands on its attractor, forks happen only in between, and no edge is below 26°.</li>
+  <li><strong>Wood</strong>: a smooth tube along every branch, barked with grooves that run through the forks, the trunk flared and sunk into the ground, all one closed volume.</li>
+  <li><strong>Clumps</strong>: a rounded cone of foliage at each branch end, noised, cut so it stands on its own branch with no hanging underside.</li>
+  <li><strong>Leaves</strong>: separate leaves over the clumps, shingled; tips curl up on top and lie flat underneath, where a hanging leaf could not print.</li>
+  <li><strong>Place</strong>: at <code>at=</code>, or anywhere in its area with the trunk a crown's radius from the tile edge and clear of other solids.</li>
+</ol>
+<p class="small">The code: <a href="https://github.com/shawn-vincent/dharmatiles/blob/main/crates/dt-looks/src/tree/mod.rs"><code>crates/dt-looks/src/tree/</code></a>.</p>
+
 <p>The generator is <code>src/dharmatiles/trees/</code>. Each tree is grown on its own, in four stages.</p>
 <ol>
   <li><strong>Crown envelope.</strong> The crown is a rounded solid of revolution (<code>trees/envelope.py</code>). About 200 target points, called attractors, are scattered over its side surface, weighted by area so the top is not crowded (<code>_sample_canopy</code>, <code>trees/skeleton.py:687</code>). Attractors are grouped into clusters about 20 mm across, and each cluster is pushed outward into a dome, so the crown reads as lobes.</li>

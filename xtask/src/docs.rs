@@ -211,6 +211,22 @@ fn reference(look: &Value, tiles: &[(String, String)]) -> String {
             place.join(" ")
         }
     );
+    let needs: Vec<String> = look["needs"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(Value::as_str)
+                .map(|w| format!("<code>{w}=</code>"))
+                .collect()
+        })
+        .unwrap_or_default();
+    if !needs.is_empty() {
+        let _ = writeln!(
+            s,
+            "  <div><div class=\"k\">Must have</div><div class=\"v\">{}</div></div>",
+            needs.join(" ")
+        );
+    }
     if look["holds_scatter"].as_bool() == Some(true) {
         let _ = writeln!(
             s,
@@ -315,7 +331,10 @@ fn row(s: &mut String, c: &Value, parent: Option<&str>) {
         about.push_str(" <strong>Required.</strong>");
     }
     if c["taken"].as_bool() == Some(false) {
-        about.push_str(" <span class=\"tag\">not built yet</span>");
+        about.push_str(
+            " <span class=\"tag\">not built yet</span> <span class=\"muted small\">\
+             <code>check</code> accepts it; <code>build</code> refuses it</span>",
+        );
     }
     let words = c["words"].as_array().cloned().unwrap_or_default();
     if !words.is_empty() {

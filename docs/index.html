@@ -84,7 +84,24 @@ tile pond size="1x1" seed=97 {
     <tr><td>List the elements and their controls</td><td><code>dharmatiles looks</code>, <code>dharmatiles looks cliff</code></td></tr>
   </tbody>
 </table></div>
-<p>There are no prebuilt downloads yet: build the program from <a href="https://github.com/shawn-vincent/dharmatiles">the repository</a> with <code>cargo build --release</code>. Every tile passes a printability gate before it is written: watertight, nothing lost, no overhang past 55° (55–65° allowed in small patches, past 65° fails). See <a href="standards/printing.html">printing</a>.</p>
+<p>Every tile passes a printability gate before it is written: watertight, nothing lost, and no overhang past 55° (55–65° allowed in small patches, past 65° fails). Print it base down, with no supports; see <a href="standards/printing.html">printing</a>.</p>
+
+<h2 id="install">Install</h2>
+<p>There are no prebuilt downloads yet. You need <a href="https://rustup.rs">Rust</a> and git:</p>
+<pre><code>git clone https://github.com/shawn-vincent/dharmatiles.git
+cd dharmatiles
+cargo build --release                 # a few minutes, once
+./target/release/dharmatiles looks    # it works: lists the elements</code></pre>
+<p>Run it from inside the checkout and it finds the library (<code>lib:tiles/…</code>, <code>use "parts/grass"</code>) by itself. To run it from anywhere, put <code>target/release</code> on your <code>PATH</code> and set <code>DT_LIBRARY</code> to the checkout's <code>library</code> folder. Output goes to an <code>out/</code> folder where you run it (or <code>--out</code>): <code>out/db/</code> for DungeonBlocks, <code>out/ol/</code> for OpenLOCK.</p>
+
+<h2 id="workflow">Making your own tile</h2>
+<ol>
+  <li><strong>Start from a library tile.</strong> Copy one that is close to what you want: <code>cp library/tiles/water/1x1-water+grass.dtile my-pond.dtile</code>. The <a href="elements/index.html">elements</a> pages list which library tiles use each element.</li>
+  <li><strong>Open the preview.</strong> <code>dharmatiles preview my-pond.dtile --open</code> shows the tile in your browser, painted, with overhangs in red. It rebuilds every time you save, and shows a mistake at its line.</li>
+  <li><strong>Edit.</strong> Change a control, add an element, move a line. Each element's page lists every control it takes; the preview's stack line links each entry to its page. Change <code>seed=</code> for another version of the same tile.</li>
+  <li><strong>Build.</strong> <code>dharmatiles build my-pond.dtile</code> for DungeonBlocks, <code>--system ol</code> for OpenLOCK, <code>--3mf</code> for a painted 3MF.</li>
+  <li><strong>Print</strong> base down, no supports.</li>
+</ol>
 
 <h2 id="reference">The reference</h2>
 <ul class="doclist">
