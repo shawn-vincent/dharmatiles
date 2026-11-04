@@ -194,12 +194,6 @@ pub trait Look: Send + Sync {
     /// # Errors
     /// [`LookError`] when the build fails.
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError>;
-
-    /// The audit's tolerance band for this look's materials, if it has
-    /// one (trees); `None`: the printer's overhang is a hard limit.
-    fn band(&self) -> Option<dt_kit::Band> {
-        None
-    }
 }
 
 /// The controls a built look takes so far, or `None` for a look not built

@@ -110,7 +110,7 @@ enum Command {
         json: bool,
     },
     /// Open a live, painted 3D view of tiles in the browser (127.0.0.1
-    /// only).  Overhangs are red, a tree's 55-65 degree band orange; a tile
+    /// only).  Overhangs (over 65 degrees) are red, the 55-65 degree band orange; a tile
     /// rebuilds when you save it or a file it uses.  Ctrl-C stops.
     Preview {
         /// Tile documents: files, or `lib:tiles/…`.  None: the whole bundled
@@ -477,7 +477,7 @@ fn build_one(
     let a = &b.audit;
     if !json {
         tell!(
-            "built {p} → {}\n  {} triangles · watertight {} · overhang {:.2} mm² · band {:.2}/{:.2} mm² · {} dropped · {} voids filled · {} holes · build {:.2} s, written {:.2} s",
+            "built {p} → {}\n  {} triangles · watertight {} · overhang (over 65°) {:.2} mm² · band (55–65°) {:.2}/{:.2} mm² · {} dropped · {} voids filled · {} holes · build {:.2} s, written {:.2} s",
             files[0].display(),
             a.triangles,
             a.watertight,

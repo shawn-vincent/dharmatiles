@@ -500,10 +500,9 @@ pub fn build_with(
     let t_stage = std::time::Instant::now();
     progress.begin(progress::AUDIT, "checking printability");
     let footprint = c.frame.size_mm();
-    // one band per tile: the first built look that declares one (trees)
-    let band = c.looks.iter().find_map(|l| l.band());
-    let (export, audit) =
-        dt_kit::audit_banded(&mesh, footprint, &opts.printer, &mats, band.as_ref());
+    // the one band every look gets (55–65°; Shawn, 4 Nov 2026)
+    let band = dt_kit::Band::DEFAULT;
+    let (export, audit) = dt_kit::audit_banded(&mesh, footprint, &opts.printer, &mats, Some(&band));
     progress.end(progress::AUDIT);
     stage_secs.push((progress::AUDIT.to_owned(), t_stage.elapsed().as_secs_f64()));
     let materials = export.source.iter().map(|&t| mats[t as usize]).collect();

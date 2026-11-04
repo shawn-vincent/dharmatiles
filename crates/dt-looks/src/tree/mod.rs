@@ -58,19 +58,6 @@ pub const CONTROLS: &[&str] = &[
 ];
 
 // The Python Tree's fixed numbers (trees/layer.py), mm at the 35 mm square.
-/// The tree's overhang band (Shawn, 3 Nov 2026: "could we say 65 in rare
-/// circumstances?"): wood and leaf faces between the printer's 55° and
-/// 65° are tolerated in small patches, a share of the tree's
-/// downward-facing area; past 65° they fail. Everything still aims for
-/// 55° by construction. Share: with the leaves laid flat under the crown
-/// the band measures 0–0.36 mm² per tree (≤ 0.015% of the downward area,
-/// 1x1-tree and 2x2-tree, db and ol, seeds 1–6); 0.1% leaves a sixfold
-/// margin.
-pub const TREE_BAND: dt_kit::Band = dt_kit::Band {
-    materials: &[Material::Wood, Material::Leaf],
-    max_deg: 65.0,
-    share: 0.001,
-};
 
 const SEGMENT_MM: f64 = 1.0;
 const TARGET_FDM_DEG: f64 = 35.0;
@@ -904,10 +891,6 @@ fn ground_at(scene: &Scene, x: f64, y: f64) -> f64 {
 }
 
 impl Look for Tree {
-    fn band(&self) -> Option<dt_kit::Band> {
-        Some(TREE_BAND)
-    }
-
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid("tree"),
