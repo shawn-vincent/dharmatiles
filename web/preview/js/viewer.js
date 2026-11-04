@@ -87,6 +87,7 @@ export class Viewer {
     this.isOrtho = false;
     this.camera = this.persp;
     this.makeControls(new THREE.Vector3());
+    this.initInertia();
     this.uniforms = {
       uCam: { value: new THREE.Vector3() }, uDir: { value: new THREE.Vector3(0, 1, 0) }, uOrtho: { value: 0 }, uL1: { value: new THREE.Vector3() }, uL2: { value: new THREE.Vector3() },
     };
@@ -129,7 +130,7 @@ export class Viewer {
     this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.enableDamping = false;
     this.controls.target.copy(target);
-    this.controls.addEventListener('change', () => this.draw());
+    this.controls.addEventListener('change', () => { this.sample(); this.draw(); });
     // the user took hold (drag, wheel, touch): the tween ends and the controls own the camera
     this.controls.addEventListener('start', () => this.cancelTween(true));
     this.controls.update();
@@ -155,11 +156,94 @@ export class Viewer {
 
   /** Stop a running tween; with `finish`, run its `done` (a projection switch lands where it was going). */
   cancelTween(finish) {
+    this.stopCoast();
     const t = this.tween;
     if (!t) return;
     cancelAnimationFrame(t.raf);
     this.tween = null;
     if (finish) t.done?.();
+  }
+
+  /**
+   * Momentum, like a flung spinner.  Rotation only (pan and zoom stop when
+   * released).  The angular velocity comes from the last ~100 ms of a left
+   * drag; on release the view keeps turning at it, decaying exponentially
+   * with a time constant of 0.3 s for a gentle drag up to about 1.2 s for a
+   * hard fling, so the decay does not depend on the frame rate.  A pointer
+   * that rested before release (80 ms) leaves no momentum.  Azimuth about
+   * the vertical is unlimited; the polar angle stops just short of the poles.
+   */
+  initInertia() {
+    this.samples = [];
+    this.dragging = false;
+    this.coast = null;
+    const c = this.canvas;
+    c.addEventListener('pointerdown', (e) => {
+      this.stopCoast();
+      this.samples = [];
+      this.dragging = e.button === 0 && !e.shiftKey && !e.ctrlKey && !e.metaKey;
+    }, true);
+    const up = () => { if (this.dragging) { this.dragging = false; this.release(); } };
+    addEventListener('pointerup', up);
+    addEventListener('pointercancel', () => { this.dragging = false; this.samples = []; });
+    c.addEventListener('wheel', () => this.stopCoast(), { passive: true });
+  }
+
+  angles() {
+    const o = this.camera.position.clone().sub(this.controls.target);
+    return [Math.atan2(o.y, o.x), Math.acos(Math.max(-1, Math.min(1, o.z / (o.length() || 1)))), o.length()];
+  }
+
+  sample() {
+    if (!this.dragging) return;
+    const [az, pol] = this.angles();
+    this.samples.push({ t: performance.now(), az, pol });
+    if (this.samples.length > 40) this.samples.shift();
+  }
+
+  release() {
+    const s = this.samples;
+    this.samples = [];
+    if (reduceMotion() || s.length < 2) return;
+    const now = performance.now();
+    const last = s[s.length - 1];
+    if (now - last.t > 80) return; // it stopped before it was let go
+    const first = s.find((x) => last.t - x.t <= 100) ?? s[0];
+    const dt = (last.t - first.t) / 1000;
+    if (dt < 0.008) return;
+    let dAz = last.az - first.az;
+    dAz -= Math.round(dAz / (2 * Math.PI)) * 2 * Math.PI; // across the +-pi seam
+    const v = [dAz / dt, (last.pol - first.pol) / dt];
+    const speed = Math.hypot(v[0] * Math.sin(last.pol), v[1]);
+    if (speed < 0.15) return;
+    const tau = 0.3 + 0.9 * Math.min(1, speed / 8);
+    this.coast = { v, tau, t: now, raf: 0 };
+    const tick = (tNow) => {
+      const k = this.coast;
+      if (!k) return;
+      const dt2 = Math.min(0.05, Math.max(0, (tNow - k.t) / 1000));
+      k.t = tNow;
+      const f = Math.exp(-dt2 / k.tau);
+      const [az, pol, len] = this.angles();
+      const nAz = az + k.v[0] * dt2;
+      const nPol = Math.min(Math.PI - 0.02, Math.max(0.02, pol + k.v[1] * dt2));
+      if (nPol !== pol + k.v[1] * dt2) k.v[1] = 0; // met a pole
+      const o = new THREE.Vector3(Math.sin(nPol) * Math.cos(nAz), Math.sin(nPol) * Math.sin(nAz), Math.cos(nPol)).multiplyScalar(len);
+      this.camera.position.copy(this.controls.target).add(o);
+      this.camera.lookAt(this.controls.target);
+      this.controls.update();
+      this.draw();
+      k.v[0] *= f; k.v[1] *= f;
+      if (Math.hypot(k.v[0], k.v[1]) < 0.02) { this.coast = null; return; }
+      k.raf = requestAnimationFrame(tick);
+    };
+    this.coast.raf = requestAnimationFrame((n) => { this.coast.t = n; tick(n); });
+  }
+
+  stopCoast() {
+    if (!this.coast) return;
+    cancelAnimationFrame(this.coast.raf);
+    this.coast = null;
   }
 
   /** The camera's pose now: target, unit direction from the target, perspective-equivalent distance. */
