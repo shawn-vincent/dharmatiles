@@ -26,7 +26,7 @@ const FOV = 40;
 const GRID_BELOW_MM = 0.02;
 // white lines on the sky: bold at each square, fine at a fifth of one, faded with distance
 const GRID_FRAG = `
-uniform float uSq; uniform vec2 uCentre; uniform float uR0; uniform float uR1;
+uniform float uDim; uniform float uSq; uniform vec2 uCentre; uniform float uR0; uniform float uR1;
 varying vec2 vXY;
 float line(float v, float px, float w) {
   float d = abs(fract(v - 0.5) - 0.5) / px; // distance to the nearest line, in pixels
@@ -39,7 +39,7 @@ void main() {
   vec2 f = g * 5.0;
   float minor = max(line(f.x, px.x * 5.0, 0.6), line(f.y, px.y * 5.0, 0.6));
   float fade = 1.0 - smoothstep(uR0, uR1, distance(vXY, uCentre));
-  float a = max(major * 0.95, minor * 0.28) * fade;
+  float a = max(major * 0.95, minor * 0.28) * fade * uDim;
   if (a < 0.01) discard;
   gl_FragColor = vec4(1.0, 1.0, 1.0, a);
 }`;
@@ -420,7 +420,7 @@ export class Viewer {
     const reach = Math.max(w, h) * 6;
     const mat = new THREE.ShaderMaterial({
       uniforms: {
-        uSq: { value: sq }, uCentre: { value: new THREE.Vector2(w / 2, h / 2) },
+        uSq: { value: sq }, uDim: { value: this.gridDim ?? 1 }, uCentre: { value: new THREE.Vector2(w / 2, h / 2) },
         uR0: { value: Math.max(w, h) * 1.2 }, uR1: { value: reach * 0.5 },
       },
       vertexShader: 'varying vec2 vXY; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vXY = w.xy; gl_Position = projectionMatrix * viewMatrix * w; }',
@@ -433,6 +433,13 @@ export class Viewer {
     this.grid.frustumCulled = false;
     this.grid.visible = this.showGrid;
     this.scene.add(this.grid);
+  }
+
+  /** Dim the grid a little on the night sky (the tile's paint never changes). */
+  setGridDim(v) {
+    this.gridDim = v;
+    if (this.grid) this.grid.material.uniforms.uDim.value = v;
+    this.draw();
   }
 
   setOverhang(on) {

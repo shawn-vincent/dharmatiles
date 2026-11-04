@@ -84,7 +84,7 @@ fn a_control_not_built_yet_is_checked_but_not_built() {
 #[test]
 fn library_tiles_check_and_say_which_look_is_missing_when_built() {
     // the full cliff run (bank, scree, pebbles on the dirt) is built now
-    let path = "lib:tiles/test/cliff-run-full.kdl";
+    let path = "lib:tiles/test/2x1-cliff-full.kdl";
     let c = check(&Library, path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
     assert!(c.pending().is_empty(), "{path}: {:?}", c.pending());
     // (a palette is not a tile document)
@@ -98,7 +98,7 @@ fn library_tiles_check_and_say_which_look_is_missing_when_built() {
 
 #[test]
 fn levels_edges_and_printer_come_from_the_library() {
-    let c = check(&Library, "lib:tiles/test/flat-1x1.kdl", &Options::default()).unwrap();
+    let c = check(&Library, "lib:tiles/test/1x1-flat.kdl", &Options::default()).unwrap();
     let t = c.tile.unwrap();
     let level = |n: &str| t.levels.iter().find(|(k, _)| k == n).map(|(_, v)| *v);
     assert_eq!(level("edge"), Some(3.4));
@@ -413,4 +413,48 @@ fn a_wall_in_a_definition_needs_along_from_the_call() {
     );
     let src = mem(&[("t.kdl", &with)]);
     assert!(check(&src, "t.kdl", &Options::default()).is_ok());
+}
+
+/// The naming standard (docs/standards/tile-system.html, "File names"): a
+/// library tile is `<NxM>-<name>.kdl`, size first, lower case, and the size
+/// in the name is the size the document asks for.
+#[test]
+fn library_tile_file_names_follow_the_standard() {
+    let mut bad = Vec::new();
+    for path in dt_eval::Library::paths()
+        .into_iter()
+        .filter(|p| p.contains("tiles/"))
+    {
+        let file = path.rsplit('/').next().unwrap_or(&path);
+        let stem = file.strip_suffix(".kdl").unwrap_or("");
+        let Some((size, name)) = stem.split_once('-') else {
+            bad.push(format!("{path}: not `<NxM>-<name>.kdl`"));
+            continue;
+        };
+        let dims: Vec<&str> = size.split('x').collect();
+        let sized = dims.len() == 2
+            && dims
+                .iter()
+                .all(|d| !d.is_empty() && d.chars().all(|c| c.is_ascii_digit()));
+        let named = !name.is_empty()
+            && name
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '+' || c == '-');
+        if !(sized && named) {
+            bad.push(format!(
+                "{path}: not `<NxM>-<name>.kdl` (lower case, digits, `+`, `-`)"
+            ));
+            continue;
+        }
+        let c = check(&Library, &path, &Options::default()).unwrap();
+        if let Some(t) = &c.tile {
+            let want = format!("{}x{}", t.cols, t.rows);
+            if want != size {
+                bad.push(format!(
+                    "{path}: the name says {size}, the document says {want}"
+                ));
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
 }

@@ -111,7 +111,7 @@
 <p>The <a href="#P2">P2 detail</a> below has the full scope and exit criteria.</p>
 <ul class="now">
 <li><span class="st st-settled">done</span><span><b>Kernels and operations.</b> Position-keyed noise, distance transform, morphology, blur, spatial hash; the noise, distance, scatter, carve and adaptive-lift operations; one grid convention.</span></li>
-<li><span class="st st-settled">done</span><span><b>Looks: ground (full) and dirt</b>, ported from <code>dirtlab</code>, with <code>library/tiles/ground/soil-1x1.kdl</code>, <code>dharmatiles looks</code> and the <code>watch</code> command. At seeds 1 to 4 every parity metric is within tolerance; the printable-texture rule holds on 97.8% (dirtlab 97.7%); a 2×2 tile builds in about 0.8 s, watertight, with 0 mm² of overhang. Dirtlab's stones come in P3.</span></li>
+<li><span class="st st-settled">done</span><span><b>Looks: ground (full) and dirt</b>, ported from <code>dirtlab</code>, with <code>library/tiles/ground/1x1-soil.kdl</code>, <code>dharmatiles looks</code> and the <code>watch</code> command. At seeds 1 to 4 every parity metric is within tolerance; the printable-texture rule holds on 97.8% (dirtlab 97.7%); a 2×2 tile builds in about 0.8 s, watertight, with 0 mm² of overhang. Dirtlab's stones come in P3.</span></li>
 <li><span class="st st-settled">done</span><span><b>Shawn's sign-off.</b> Shawn signed off Rust dirt beside dirtlab over seeds 1 to 4 on 2 Nov 2026 (&ldquo;dirt is beautiful&rdquo;). The ground edge level stays 3.4 mm (Default 12), and the flat test tile now sits at it.</span></li>
 </ul>
 
@@ -131,7 +131,7 @@
 <h3 id="p4-checklist">Phase 4 checklist</h3>
 <p>The <a href="#P4">P4 detail</a> below has the full scope and exit criteria. The sheets are written by <code>cargo xtask parity grass</code> to <code>out/parity/grass/contact-sheet.png</code>.</p>
 <ul class="now">
-<li><span class="st st-settled">done</span><span><b>Grass</b>, ported from <code>grasslab</code>: flow, swaths, clearings, the rim rule, strands and fronds, and the blade's layer stack built directly as a loft (a few hundred faces, watertight by construction, grouped into solids of clear blades). A 2×2 builds in about 5 s (lab 100 s), with 0 mm&sup2; of overhang; the blade count and heights are in <code>library/tiles/test/grass-2x2.kdl</code>'s golden.</span></li>
+<li><span class="st st-settled">done</span><span><b>Grass</b>, ported from <code>grasslab</code>: flow, swaths, clearings, the rim rule, strands and fronds, and the blade's layer stack built directly as a loft (a few hundred faces, watertight by construction, grouped into solids of clear blades). A 2×2 builds in about 5 s (lab 100 s), with 0 mm&sup2; of overhang; the blade count and heights are in <code>library/tiles/test/2x2-grass.kdl</code>'s golden.</span></li>
 <li><span class="st st-settled">done</span><span><b>Meadow</b> (the rule for what stands on the ground): no root under a rock, trunk or wall, tips pressed against it, lower beside it, the flow wraps it; <code>bare=</code> adds clearings and rock aprons up to a share of bare earth.</span></li>
 <li><span class="st st-settled">done</span><span><b>Reeds</b>, ported from <code>shorelab</code>; <code>shore-2x2.kdl</code> is the shore test tile.</span></li>
 <li><span class="st st-settled">done</span><span><b>Nineteen twins</b> (ten ground, nine water+grass), and the wall, floor and tree tiles that had waited for grass now build; 114 builds (19 tiles, 3 seeds, both systems) pass the gate. The Python twins of the wall and tree tiles are deleted; the nineteen stay until Shawn has seen the sheets.</span></li>
@@ -318,12 +318,12 @@
 <li>Ports from: <code>core/region.py</code> (paint bucket), <code>bases/dungeonblocks.py</code> (the peg height depends on content max Z, :20–37), <code>core/logo.py</code>, <code>stone/solidify.py</code>, the three <code>audit_overhang</code> copies (rockpile's 55° rule wins), and <code>build_info.py</code>.</li>
 </ul></dd>
 <dt>Deliverables</dt><dd><ul>
-<li><code>library/printers/default.kdl</code>, <code>library/parts/edges.kdl</code> and <code>library/tiles/test/flat-1x1.kdl</code>.</li>
+<li><code>library/printers/default.kdl</code>, <code>library/parts/edges.kdl</code> and <code>library/tiles/test/1x1-flat.kdl</code>.</li>
 <li>The <a href="#harness">parity harness</a>. On the Python side, <code>tests/parity/</code> runs a lab at seeds 1 to 4 and writes STL, <code>metrics.json</code> and painted renders through <code>dharmatiles/render.py</code> (built early, in P0, as <code>tests/parity/run_lab.py</code> for dirtlab). On the Rust side, <code>cargo xtask parity &lt;look&gt;</code> builds the same seeds and writes a side-by-side contact sheet to <code>out/parity/&lt;look&gt;/</code>.</li>
 <li>insta summaries in <code>crates/dt-eval/tests/</code>.</li>
 </ul></dd>
 <dt>Exit criteria</dt><dd><ul>
-<li><code>dharmatiles build lib:tiles/test/flat-1x1.kdl</code> writes a watertight STL that passes float32 reload, with 0 mm² of overhang and 0 bodies dropped, in ≤ 2 s.</li>
+<li><code>dharmatiles build lib:tiles/test/1x1-flat.kdl</code> writes a watertight STL that passes float32 reload, with 0 mm² of overhang and 0 bodies dropped, in ≤ 2 s.</li>
 <li>Stage hashes are identical across two runs and at 1, 4 and 16 threads, enforced in CI. Across platforms, level B (chosen 2 Nov 2026): golden hashes shared by the macOS and Linux jobs, with Windows gated on metrics and renders.</li>
 <li>A deliberately wrong document gives a miette error with its line and a hint.</li>
 <li>The harness produces a Python-beside-Rust contact sheet, with overhangs painted red, for the flat tile, and a Python-only sheet for dirtlab at seeds 1 to 4.</li>
@@ -345,7 +345,7 @@
 <li>Looks: <code>ground</code> (full) and <code>dirt</code>.</li>
 <li>Ports from: <code>dirtlab/dirtlab.py</code> (<code>smax</code> :137, clods :205, pebbles :300/:351, <code>dirt_relief</code> :507). Stones (:395) come in P3 with rocks.</li>
 <li>The single grid convention replaces the three in <code>core/mesh.py:69</code>, <code>layers/water.py:542</code> and <code>core/grid.py</code>.</li>
-<li>Tile: <code>1x1-soil.tile.py</code> becomes <code>library/tiles/ground/soil-1x1.kdl</code>.</li>
+<li>Tile: <code>1x1-soil.tile.py</code> becomes <code>library/tiles/ground/1x1-soil.kdl</code>.</li>
 <li>Front end: <code>watch</code>.</li>
 </ul></dd>
 <dt>Deliverables</dt><dd><code>ground</code> and <code>dirt</code> with their controls listed by <code>dharmatiles looks dirt</code>. The ground edge level is fixed in <code>edges.kdl</code>. Golden summaries.</dd>

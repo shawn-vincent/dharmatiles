@@ -25,7 +25,7 @@
     <div><div class="k">Variants</div><div class="v">flat ground; dirt (clods, pebbles, stones); rises (bumps); optional cracks</div></div>
     <div><div class="k">Printing</div><div class="v">no supports; one height field, so it cannot overhang</div></div>
     <div><div class="k">Bases</div><div class="v">DungeonBlocks today; OpenLOCK with the Rust port</div></div>
-    <div><div class="k">Available</div><div class="v">flat ground, dirt and rises in the Rust engine (<code>dharmatiles build lib:tiles/ground/soil-1x1.kdl</code>)</div></div>
+    <div><div class="k">Available</div><div class="v">flat ground, dirt and rises in the Rust engine (<code>dharmatiles build lib:tiles/ground/1x1-soil.kdl</code>)</div></div>
   </div>
   <details class="words">
     <summary>Words used on this page</summary>
@@ -67,14 +67,14 @@
 <p>The dirt texture is also the exposed ground in every other lab: grass stands on it, water's shore and banks use it, and rocks sit in it.</p>
 
 <h2 id="use">Using it in a tile</h2>
-<p>In the Rust engine a tile is a short KDL document that names looks. The flat ground is built today. This is the library's walking-skeleton tile, <code>library/tiles/test/flat-1x1.kdl</code> (branch <code>rust/p1</code>):</p>
+<p>In the Rust engine a tile is a short KDL document that names looks. The flat ground is built today. This is the library's walking-skeleton tile, <code>library/tiles/test/1x1-flat.kdl</code> (branch <code>rust/p1</code>):</p>
 <pre><code>tile flat size="1x1" seed=1 {
     about "Flat ground at 5 mm on one square: the first tile built end to end."
     stack {
         ground          // flat, at the ground level (5 mm)
     }
 }</code></pre>
-<p>Dirt and rises are in the Rust engine (P2, signed off 2 Nov 2026). <code>library/tiles/ground/soil-1x1.kdl</code> replaced the Python <code>1x1-soil.tile.py</code>; <code>dharmatiles looks dirt</code> lists every control. A dirt tile reads like this:</p>
+<p>Dirt and rises are in the Rust engine (P2, signed off 2 Nov 2026). <code>library/tiles/ground/1x1-soil.kdl</code> replaced the Python <code>1x1-soil.tile.py</code>; <code>dharmatiles looks dirt</code> lists every control. A dirt tile reads like this:</p>
 <pre><code>tile soil size="1x1" seed=13 {
     stack {
         dirt bumps=2.5 bump-size=14 {   // rises up to 2.5 mm, about 14 mm across
@@ -83,7 +83,7 @@
     }
 }</code></pre>
 <p>Change <code>seed</code> for different clods and pebbles with the same character. The language as a whole is on the <a href="../rust/language.html">language page</a>.</p>
-<p><strong>Build it.</strong> <code>dharmatiles build lib:tiles/ground/soil-1x1.kdl</code> writes <code>out/db/ground/soil-1x1-db.stl</code>; <code>dharmatiles watch</code> rebuilds on every save. The lab still builds dirt with stones: <code>python dirtlab/dirtlab.py --seed 1</code> writes <code>dirtlab/out/2x2-dirt-s1.stl</code> with a DungeonBlocks base (<code>--cols</code>/<code>--rows</code> set the size, <code>--cracks</code> adds fine cracks).</p>
+<p><strong>Build it.</strong> <code>dharmatiles build lib:tiles/ground/1x1-soil.kdl</code> writes <code>out/db/ground/1x1-soil-db.stl</code>; <code>dharmatiles watch</code> rebuilds on every save. The lab still builds dirt with stones: <code>python dirtlab/dirtlab.py --seed 1</code> writes <code>dirtlab/out/2x2-dirt-s1.stl</code> with a DungeonBlocks base (<code>--cols</code>/<code>--rows</code> set the size, <code>--cracks</code> adds fine cracks).</p>
 
 <h2 id="spec">Specification</h2>
 <h3 id="controls">Controls</h3>

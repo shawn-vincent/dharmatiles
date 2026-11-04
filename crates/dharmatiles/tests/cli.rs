@@ -41,7 +41,7 @@ fn a_write_error_in_json_has_every_error_key() {
     let blocked = d.join("out");
     std::fs::write(&blocked, "a file where the out folder should be").unwrap();
     let o = Command::new(EXE)
-        .args(["build", "lib:tiles/test/flat-1x1.kdl", "--json", "--out"])
+        .args(["build", "lib:tiles/test/1x1-flat.kdl", "--json", "--out"])
         .arg(&blocked)
         .output()
         .unwrap();
@@ -239,12 +239,12 @@ fn watch_rebuilds_when_a_used_file_changes() {
 fn watch_of_a_library_tile_builds_once() {
     let d = scratch("watch-lib");
     let o = Command::new(EXE)
-        .args(["watch", "lib:tiles/test/flat-1x1.kdl", "--out"])
+        .args(["watch", "lib:tiles/test/1x1-flat.kdl", "--out"])
         .arg(&d)
         .output()
         .unwrap();
     assert_eq!(o.status.code(), Some(0));
     let err = String::from_utf8(o.stderr).unwrap();
     assert!(err.contains("nothing to watch"), "{err}");
-    assert!(d.join("db/test/flat-1x1-db.stl").exists());
+    assert!(d.join("db/test/1x1-flat-db.stl").exists());
 }

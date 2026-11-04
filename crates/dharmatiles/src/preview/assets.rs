@@ -11,6 +11,16 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
         include_bytes!("../../../../web/preview/index.html"),
     ),
     (
+        "/logo.svg",
+        "image/svg+xml",
+        include_bytes!("../../../../web/preview/logo.svg"),
+    ),
+    (
+        "/favicon.svg",
+        "image/svg+xml",
+        include_bytes!("../../../../web/preview/favicon.svg"),
+    ),
+    (
         "/style.css",
         "text/css; charset=utf-8",
         include_bytes!("../../../../web/preview/style.css"),

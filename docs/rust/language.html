@@ -44,13 +44,13 @@
 </ul>
 <p>Above the tile, a file may have <code>use</code> lines that bring in definitions from parts files. Parts files hold <code>define</code> nodes and may hold file-level <code>levels</code>. Two library files use two more top-level nodes: <code>printer</code> (the printer profile) and <code>edges</code> (the edge contract). Anything else at the top level is an error (<code>crates/dt-doc/src/decode/mod.rs:280</code>).</p>
 <p>The smallest tile in the library is the Phase 1 walking-skeleton tile:</p>
-<pre><code>// library/tiles/test/flat-1x1.kdl
+<pre><code>// library/tiles/test/1x1-flat.kdl
 tile flat size="1x1" {
     stack {
         ground                          // flat, at the ground level (5 mm)
     }
 }</code></pre>
-<p>It names no base. <code>dharmatiles build lib:tiles/test/flat-1x1.kdl</code> builds it for DungeonBlocks, the default system, and adds that base.</p>
+<p>It names no base. <code>dharmatiles build lib:tiles/test/1x1-flat.kdl</code> builds it for DungeonBlocks, the default system, and adds that base.</p>
 
 <dl class="defs">
   <dt>look</dt><dd>A built-in generator for one kind of thing or surface: <code>ground</code>, <code>dirt</code>, <code>grass</code>, <code>rock</code>, <code>stone</code>, <code>boulder</code>, <code>pebble</code>, <code>tree</code>, <code>wall</code>, <code>cliff</code>, plus <code>scatter</code>.</dd>
@@ -335,7 +335,7 @@ define oak {
 <pre><code>dt::syntax
 
   × `1..6` must be quoted
-    ╭─[library/tiles/cliffs/2x1-cliff-run.kdl:27:66]
+    ╭─[library/tiles/cliffs/2x1-cliff.kdl:27:66]
  27 │         scatter against=cliff per-square=55 reach=4 { stone size=1..6 mostly=small }
     ·                                                                  ──┬─
     ·                                                                    ╰── not a KDL number
@@ -455,7 +455,7 @@ tile wall-fieldstone-corner size="1x1" seed=64 {
 </ul>
 
 <h3 id="ex-cliff">A cliff run</h3>
-<pre><code>// library/tiles/cliffs/2x1-cliff-run.kdl
+<pre><code>// library/tiles/cliffs/2x1-cliff.kdl
 // Twin of clifflab/rockpile.py's `run` form (round 15, commit 3b56ae0).
 
 tile cliff-run size="2x1" seed=1 {
@@ -544,7 +544,7 @@ cliff along=north height=55 {
   <li>The <code>"1..6^2"</code> skew is gone entirely, with an error pointing at <code>mostly=</code>. The review had proposed keeping it as an expert form.</li>
   <li>The cliff's <code>rock</code> takes explicit weights as sub-controls: <code>rock columns=… blocks=… slabs=… odd=… monoliths=…</code>.</li>
   <li>Water, reeds and floors are not in the look table yet (P3–P5).</li>
-  <li>The 1×2 path tile is a test fixture, not a library tile; the library adds <code>tiles/test/flat-1x1.kdl</code>.</li>
+  <li>The 1×2 path tile is a test fixture, not a library tile; the library adds <code>tiles/test/1x1-flat.kdl</code>.</li>
   <li>The edit API inserts properties (<code>insert_property</code>, <code>set_control</code>) and removes controls; the R6 page said it could only replace values.</li>
 </ul>
 

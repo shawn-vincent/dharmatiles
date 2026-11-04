@@ -70,7 +70,7 @@ fn wait_for(r: &Running, what: &str, mut ok: impl FnMut(&Value) -> bool) -> Valu
     }
 }
 
-const FLAT: &str = "lib:tiles/test/flat-1x1.kdl";
+const FLAT: &str = "lib:tiles/test/1x1-flat.kdl";
 
 #[test]
 fn serves_the_viewer_and_its_vendored_three() {
@@ -88,6 +88,8 @@ fn serves_the_viewer_and_its_vendored_three() {
         "/js/payload.js",
         "/js/host.js",
         "/style.css",
+        "/logo.svg",
+        "/favicon.svg",
     ] {
         assert!(get(&r, p).0.starts_with("HTTP/1.1 200"), "{p}");
     }

@@ -1,4 +1,4 @@
-//! `cargo run --release -p dt-eval --example trace -- lib:tiles/test/tree-1x1.kdl`:
+//! `cargo run --release -p dt-eval --example trace -- lib:tiles/test/1x1-tree.kdl`:
 //! print each build stage and look sub-progress with its time, to calibrate
 //! the progress fractions inside a look.
 

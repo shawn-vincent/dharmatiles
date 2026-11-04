@@ -107,7 +107,7 @@ pub struct Built {
     /// Where it came from.
     pub record: BuildRecord,
     /// Output path below the project's `out/`, such as
-    /// `db/test/flat-1x1-db.stl`.
+    /// `db/test/1x1-flat-db.stl`.
     pub out: PathBuf,
     /// Tile width and height in mm.
     pub footprint: [f64; 2],
@@ -581,7 +581,7 @@ fn entry_paths(tile: &Tile) -> Vec<String> {
     out
 }
 
-/// `lib:tiles/test/flat-1x1.kdl` → `db/test/flat-1x1-db.stl`; a relative
+/// `lib:tiles/test/1x1-flat.kdl` → `db/test/1x1-flat-db.stl`; a relative
 /// disk path keeps its folders below `tiles/` (all of them if it has
 /// none), resolved so the result always stays inside `<system>/`: a `..`
 /// that would leave it is dropped, and an absolute path keeps none.
@@ -619,8 +619,8 @@ mod tests {
     #[test]
     fn out_paths_mirror_the_library() {
         assert_eq!(
-            out_path("lib:tiles/test/flat-1x1.kdl", "flat", "db"),
-            PathBuf::from("db/test/flat-1x1-db.stl")
+            out_path("lib:tiles/test/1x1-flat.kdl", "flat", "db"),
+            PathBuf::from("db/test/1x1-flat-db.stl")
         );
         assert_eq!(out_path("my.kdl", "x", "db"), PathBuf::from("db/my-db.stl"));
     }

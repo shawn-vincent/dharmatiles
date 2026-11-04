@@ -43,7 +43,7 @@
   <li><strong>The engine.</strong> Each look is a few hundred lines of Rust written against a shared <em>kit</em> of operations. The kit is where the old code's duplication collapses: about seventy separate mechanisms in the Python library and the labs become about twenty operations.</li>
 </ul>
 <p>Why two layers and not one: the approved looks are solvers with dozens of tuned internal constants. The meadow has fifteen rim-steering constants; the cliff has dozens of guard and seat rules. Putting those in documents would make every tile a program. Keeping them inside a look, behind a control such as <code>cover="80%"</code>, keeps documents declarative, which is what Shawn asked for: <q>a static definition file… declarative</q>.</p>
-<p>The smallest real tile, <code>library/tiles/test/flat-1x1.kdl</code>, is the one Phase 1 builds end to end:</p>
+<p>The smallest real tile, <code>library/tiles/test/1x1-flat.kdl</code>, is the one Phase 1 builds end to end:</p>
 <pre><code>tile flat size="1x1" seed=1 {
     about "Flat ground at the edge level (3.4 mm) on one square: the first tile built end to end."
     stack {
@@ -295,7 +295,7 @@ src/, src/tiles/, *lab/, stl/, pyproject.toml   the Python, untouched until cuto
 <ul>
   <li><strong>The library ships inside the program.</strong> <code>crates/dt-eval/build.rs</code> walks <code>library/</code> and embeds every <code>.kdl</code> file, so one binary carries the library and works in wasm and mobile sandboxes. Documents address it with an explicit <code>lib:</code> prefix; relative paths mean your project. Nothing is resolved by search order.</li>
   <li><strong>Project file.</strong> <code>dharmatiles.kdl</code> is optional. It marks the project root and names the output folder. Without one, <code>dharmatiles build file.kdl</code> works with defaults.</li>
-  <li><strong>Output.</strong> <code>out/</code> beside the project file, mirrored by system and path below <code>tiles/</code>: <code>lib:tiles/test/flat-1x1.kdl</code> builds to <code>out/db/test/flat-1x1-db.stl</code>. Python keeps writing <code>stl/</code>, so a side-by-side comparison is two folders.</li>
+  <li><strong>Output.</strong> <code>out/</code> beside the project file, mirrored by system and path below <code>tiles/</code>: <code>lib:tiles/test/1x1-flat.kdl</code> builds to <code>out/db/test/1x1-flat-db.stl</code>. Python keeps writing <code>stl/</code>, so a side-by-side comparison is two folders.</li>
   <li><strong>Porting the tiles.</strong> Each <code>src/tiles/**/*.tile.py</code> is rewritten by hand as <code>library/tiles/&lt;family&gt;/&lt;name&gt;.kdl</code> in the phase that ports its looks, and deleted once its KDL twin passes review. At cutover the Python is removed and kept in git history under a tag.</li>
   <li><strong>Settings.</strong> <code>[workspace.dependencies]</code> states every external version once. <code>[workspace.lints]</code> forbids <code>unsafe</code> in our code. Dependencies build at <code>opt-level = 3</code> even in debug, because geometry at opt-level 0 is too slow to judge by eye.</li>
 </ul>
@@ -341,7 +341,7 @@ src/, src/tiles/, *lab/, stl/, pyproject.toml   the Python, untouched until cuto
 </tbody></table></div>
 <p><code>dharmatiles --version</code> prints it.</p>
 <h3>The build record</h3>
-<p>Each build makes a <code>BuildRecord</code> (<code>crates/dt-kit/src/stl.rs:9</code>): the engine version, the document path (such as <code>lib:tiles/test/flat-1x1.kdl</code>), a 64-bit FNV-1a hash of the document's text, the root seed, and the system (<code>db</code> or <code>ol</code>). It goes to two places:</p>
+<p>Each build makes a <code>BuildRecord</code> (<code>crates/dt-kit/src/stl.rs:9</code>): the engine version, the document path (such as <code>lib:tiles/test/1x1-flat.kdl</code>), a 64-bit FNV-1a hash of the document's text, the root seed, and the system (<code>db</code> or <code>ol</code>). It goes to two places:</p>
 <ul>
   <li><strong>The STL header.</strong> The 80-byte header holds one line: <code>dharmatiles &lt;engine&gt; &lt;system&gt; seed=&lt;n&gt; doc=&lt;hash&gt; &lt;path&gt;</code>, padded with spaces. It never starts with <code>solid</code>, which would mark an ASCII STL (<code>stl.rs:27</code>).</li>
   <li><strong>A <code>.build.json</code> beside the STL.</strong> The full record, the audit (triangles, vertices, volume, watertight, bodies, what was dropped, pinches moved, overhang mm², holes, failures), every stage hash, and the build time in seconds.</li>

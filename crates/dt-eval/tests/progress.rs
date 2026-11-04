@@ -11,10 +11,10 @@ use dt_eval::{Built, Library, Options, Progress, build, build_with, check};
 
 /// One tile for each look that reports sub-progress.
 const TILES: &[&str] = &[
-    "lib:tiles/test/grass-2x2.kdl",
-    "lib:tiles/test/wall-cut-stone-1x1.kdl",
-    "lib:tiles/test/rocks-2x2.kdl",
-    "lib:tiles/test/tree-1x1.kdl",
+    "lib:tiles/test/2x2-grass.kdl",
+    "lib:tiles/test/1x1-wall-cut-stone.kdl",
+    "lib:tiles/test/2x2-rocks.kdl",
+    "lib:tiles/test/1x1-tree.kdl",
 ];
 
 fn tracked(path: &str, threads: usize) -> (Built, Vec<Status>) {
@@ -98,9 +98,9 @@ impl dt_kit::Reporter for Subs {
 #[test]
 fn looks_with_a_loop_report_their_counts() {
     for (path, what) in [
-        ("lib:tiles/test/wall-cut-stone-1x1.kdl", "stones"),
-        ("lib:tiles/test/grass-2x2.kdl", "blades"),
-        ("lib:tiles/test/rocks-2x2.kdl", "stones"),
+        ("lib:tiles/test/1x1-wall-cut-stone.kdl", "stones"),
+        ("lib:tiles/test/2x2-grass.kdl", "blades"),
+        ("lib:tiles/test/2x2-rocks.kdl", "stones"),
     ] {
         let subs = Arc::new(Subs::default());
         build_with(

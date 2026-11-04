@@ -19,10 +19,10 @@ pub const EDGES: (&str, &str) = lib!("parts/edges.kdl");
 pub const GRASS: (&str, &str) = lib!("parts/grass.kdl");
 pub const TREES: (&str, &str) = lib!("parts/trees.kdl");
 pub const PRINTER: (&str, &str) = lib!("printers/default.kdl");
-pub const FLAT: (&str, &str) = lib!("tiles/test/flat-1x1.kdl");
+pub const FLAT: (&str, &str) = lib!("tiles/test/1x1-flat.kdl");
 pub const GRASS_TREE: (&str, &str) = lib!("tiles/ground/2x2-grass-tree.kdl");
 pub const WALL_CORNER: (&str, &str) = lib!("tiles/walls/1x1-wall-fieldstone-corner.kdl");
-pub const CLIFF_RUN: (&str, &str) = lib!("tiles/test/cliff-run-full.kdl");
+pub const CLIFF_RUN: (&str, &str) = lib!("tiles/test/2x1-cliff-full.kdl");
 /// The R6 page's from-scratch tile: a divided tile, not a library tile.
 pub const PATH_ROCKS: (&str, &str) = (
     "tests/fixtures/1x2-grass-path-rocks.kdl",
