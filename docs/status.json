@@ -146,9 +146,9 @@
       "body": "rust",
       "area": "Rust preview",
       "state": "done",
-      "title": "dharmatiles preview: progress bar, ortho toggle, eased views, inertia, sky and grid",
-      "detail": "Build progress with ETA (timing cache) in preview and on the CLI; ortho/perspective; eased orbit; fling momentum; sky background; grid at z=0. Next: section cuts, measuring, per-entry updates.",
-      "updated": "2026-11-04T20:00:00Z"
+      "title": "dharmatiles preview: browse folders; My tiles and Library by default",
+      "detail": "Takes files and folders; no arguments opens My tiles ($DT_HOME, else ~/dharmatiles) and the Library with a switch between them. Folders follow new and deleted tiles; subfolders are groups. Also progress with ETA, ortho/perspective, eased views, sky and grid. Next: section cuts, measuring.",
+      "updated": "2026-11-04T23:45:00Z"
     },
     {
       "id": "tile-names",

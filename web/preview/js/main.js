@@ -11,7 +11,8 @@ const host = browserHost();
 const viewer = new Viewer($('canvas'));
 
 const state = {
-  tiles: [], selected: -1, overhangDeg: 55, system: 'db',
+  tiles: [], roots: [], root: -1, selected: -1, overhangDeg: 55, system: 'db',
+  lastInRoot: new Map(), // root index -> the tile last chosen there
   loaded: new Map(),   // tile index -> mesh_version shown
   cameras: new Map(),  // tile index -> saved camera
   view: 'painted', buildStart: new Map(),
@@ -95,13 +96,42 @@ function dotClass(t) {
   return `dot ${t.status}${over && t.status === 'ready' ? ' over' : ''}`;
 }
 // the file stem (`2x1-cliff`, `1x1-water+grass-tree`): the list's name for a tile, whatever the document calls it
-const stem = (t) => t.path.replace(/^lib:/, '').split('/').pop().replace(/\.(kdl|stl)$/i, '') + (/\.stl$/i.test(t.path) ? '.stl' : '');
-const groupOf = (t) => {
-  const m = t.path.match(/(?:^|[:/])tiles\/([^/]+)\//);
-  return m ? m[1] : null;
-};
-let testsOpen = false; // "Test tiles" starts collapsed
+const stem = (t) => t.path.replace(/^lib:/, '').split(/[\\/]/).pop().replace(/\.(dtile|stl)$/i, '') + (/\.stl$/i.test(t.path) ? '.stl' : '');
+const inRoot = (r) => state.tiles.filter((t) => t.root === r && !t.gone);
+const rootOf = (r) => state.roots[r] || { kind: 'files', label: 'Files', path: null };
+let testsOpen = false; // the library's "Test tiles" starts collapsed
+
+// the switcher: one button per root (the personal home, the library, each folder named)
+function renderRoots() {
+  const nav = $('roots');
+  nav.replaceChildren();
+  nav.hidden = state.roots.length < 2;
+  state.roots.forEach((r, i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'root' + (i === state.root ? ' on' : '');
+    b.setAttribute('aria-pressed', i === state.root);
+    b.title = r.path || r.label;
+    b.innerHTML = '<span></span> <span class="n"></span>';
+    b.firstChild.textContent = r.label;
+    b.lastChild.textContent = inRoot(i).length;
+    b.onclick = () => switchRoot(i);
+    nav.append(b);
+  });
+}
+
+function switchRoot(r) {
+  if (r === state.root) return;
+  state.root = r;
+  const last = state.lastInRoot.get(r);
+  const keep = last != null && state.tiles[last] && !state.tiles[last].gone;
+  const first = inRoot(r)[0];
+  if (keep) select(last);
+  else if (first) select(first.index);
+  else { select(-1); }
+}
+
 function renderList() {
+  renderRoots();
   const q = $('filter').value.trim().toLowerCase();
   const ul = $('tiles');
   ul.replaceChildren();
@@ -122,12 +152,25 @@ function renderList() {
     if (onclick) { g.classList.add('fold'); g.onclick = onclick; }
     ul.append(g);
   };
-  const shown = state.tiles.filter(matches);
-  const lib = shown.filter((t) => groupOf(t) !== 'test');
-  const tests = shown.filter((t) => groupOf(t) === 'test');
+  const root = rootOf(state.root);
+  const all = inRoot(state.root);
+  if (!all.length) {
+    const li = document.createElement('li'); li.className = 'note';
+    li.textContent = root.kind === 'dir'
+      ? `No tiles here yet. Save a .dtile in ${root.path} and it shows up.`
+      : 'No tiles.';
+    ul.append(li);
+    return;
+  }
+  const shown = all.filter(matches);
+  // test tiles fold away in the library only
+  const isTest = (t) => root.kind === 'library' && t.group === 'test';
+  const main = shown.filter((t) => !isTest(t))
+    .sort((x, y) => (x.group || '').localeCompare(y.group || '') || x.path.localeCompare(y.path));
+  const tests = shown.filter(isTest);
   let last = null;
-  for (const t of lib) {
-    const g = groupOf(t);
+  for (const t of main) {
+    const g = t.group;
     if (g && g !== last) { header(g); last = g; }
     ul.append(row(t));
   }
@@ -143,12 +186,19 @@ $('filter').oninput = renderList;
 function select(i) {
   if (state.selected >= 0 && viewer.payload) state.cameras.set(state.selected, viewer.getCamera());
   state.selected = i;
-  history.replaceState(null, '', `#tile=${i}`);
   viewer.clear();
   viewer.setPlan(null);
   state.loaded.delete(i);
   const t = state.tiles[i];
-  if (!t) return;
+  if (!t || t.gone) {
+    state.selected = -1;
+    history.replaceState(null, '', `#root=${state.root}`);
+    renderList(); renderPanel();
+    return;
+  }
+  state.root = t.root;
+  state.lastInRoot.set(t.root, i);
+  history.replaceState(null, '', `#tile=${i}`);
   if (t.plan) viewer.setPlan(t.plan);
   if (t.status === 'idle') host.build(i);
   if (t.mesh_version != null) loadMesh(i, t.mesh_version);
@@ -223,7 +273,11 @@ function renderPanel() {
   dl.replaceChildren();
   $('failures').replaceChildren();
   clearInterval(timer);
-  if (!t) return;
+  if (!t) {
+    status.hidden = true; errs.hidden = true;
+    $('tile-name').textContent = '–'; $('tile-plan').replaceChildren();
+    return;
+  }
   $('tile-name').textContent = stem(t);
   $('tile-name').title = t.name && t.name !== stem(t) ? `the document calls it “${t.name}”` : '';
   const p = t.plan;
@@ -286,13 +340,33 @@ function renderPanel() {
 host.connect({
   onState: (s) => { $('conn').textContent = s; },
   onSnapshot: (m) => {
-    state.tiles = m.tiles; state.overhangDeg = m.overhang_deg; state.system = m.system;
+    state.tiles = m.tiles; state.roots = m.roots || []; state.overhangDeg = m.overhang_deg; state.system = m.system;
     $('system').textContent = m.system;
     $('lg-orange').textContent = `orange: ${m.overhang_deg}–${m.overhang_deg + 10}°, allowed within budget`;
     $('lg-red').textContent = `red: over ${m.overhang_deg + 10}°, fails the gate`;
-    const want = Number((location.hash.match(/tile=(\d+)/) || [])[1] ?? 0);
-    if (state.selected < 0 || !state.tiles[state.selected]) select(Math.min(want, m.tiles.length - 1));
-    else { renderList(); select(state.selected); }
+    const cur = state.tiles[state.selected];
+    if (cur && !cur.gone) {
+      // a rescan or a reconnect: keep the view, catch up on a newer mesh
+      renderList(); renderPanel();
+      if (cur.plan && JSON.stringify(cur.plan) !== JSON.stringify(viewer.plan)) viewer.setPlan(cur.plan);
+      if (cur.mesh_version != null && state.loaded.get(cur.index) !== cur.mesh_version) loadMesh(cur.index, cur.mesh_version);
+      return;
+    }
+    if (state.root >= 0) {
+      // the tile shown was deleted, or none was: the first one left in this root
+      const first = inRoot(state.root)[0];
+      select(first ? first.index : -1);
+      return;
+    }
+    // the first snapshot: the tile in the address, else the first root with tiles
+    const tile = (location.hash.match(/tile=(\d+)/) || [])[1];
+    const wantRoot = (location.hash.match(/root=(\d+)/) || [])[1];
+    if (tile != null && state.tiles[tile] && !state.tiles[tile].gone) return select(Number(tile));
+    const roots = state.roots.length ? state.roots.map((_, i) => i) : [0];
+    state.root = wantRoot != null && state.roots[wantRoot] ? Number(wantRoot)
+      : (roots.find((r) => inRoot(r).length) ?? roots[0]);
+    const first = inRoot(state.root)[0];
+    select(first ? first.index : -1);
   },
   onProgress: (i, p) => {
     const t = state.tiles[i];

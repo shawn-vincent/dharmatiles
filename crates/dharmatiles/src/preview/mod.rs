@@ -11,6 +11,13 @@
 //! | `POST /api/tiles/N/build` | build a tile that has not been built yet |
 //! | `GET /api/events` | server-sent events: a snapshot, then one event per state change |
 //!
+//! The tiles come from roots: the files named on the command line (built
+//! at once), folders (every tile document under them, built when chosen)
+//! and the library.  With no paths the roots are the personal home
+//! ([`personal_home`]) and the library.  Folders and the on-disk library
+//! are rescanned every second: new tiles join the list, deleted ones leave
+//! it.
+//!
 //! A worker thread builds the tiles one at a time and, as `watch` does,
 //! polls the modification time of every file a build read, rebuilding the
 //! tile when one changes.  Each build pushes the plan pass first (the
@@ -43,11 +50,151 @@ const POLL: Duration = Duration::from_millis(150);
 pub const FIRST_PORT: u16 = 7878;
 /// The stage after the build: the mesh's colours and binary buffer.
 const ENCODE: &str = "encode";
+/// How often folders are rescanned for new and deleted tiles.
+const RESCAN: Duration = Duration::from_secs(1);
+/// Folders a scan never enters (besides hidden ones): build output.
+const SKIP_DIRS: [&str; 3] = ["out", "target", "node_modules"];
+
+/// Where the tiles come from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RootKind {
+    /// Files named on the command line: built at once, never rescanned.
+    Files,
+    /// A folder: every tile document under it.
+    Dir(std::path::PathBuf),
+    /// The library's tiles under `lib:` + this prefix (`tiles/`, or
+    /// `tiles/water/` for one group).
+    Library(String),
+}
+
+/// One place the list shows, with its name in the switcher.
+#[derive(Clone, Debug)]
+pub struct Root {
+    label: String,
+    kind: RootKind,
+}
+
+impl Root {
+    #[must_use]
+    pub fn new(label: &str, kind: RootKind) -> Self {
+        Self {
+            label: label.to_owned(),
+            kind,
+        }
+    }
+
+    fn json(&self, index: usize) -> Value {
+        let (kind, path) = match &self.kind {
+            RootKind::Files => ("files", Value::Null),
+            RootKind::Dir(d) => ("dir", json!(d.to_string_lossy())),
+            RootKind::Library(p) => ("library", json!(format!("lib:{p}"))),
+        };
+        json!({"index": index, "label": self.label, "kind": kind, "path": path})
+    }
+
+    /// The tiles in this root now, sorted; `None` for the named files.
+    fn scan(&self) -> Option<Vec<String>> {
+        match &self.kind {
+            RootKind::Files => None,
+            RootKind::Dir(d) => {
+                let mut v = Vec::new();
+                tile_files(d, 0, &mut v);
+                v.sort();
+                Some(v)
+            }
+            RootKind::Library(prefix) => {
+                let want = format!("lib:{prefix}");
+                Some(
+                    crate::all_library_tiles()
+                        .into_iter()
+                        .filter(|p| p.starts_with(&want))
+                        .collect(),
+                )
+            }
+        }
+    }
+
+    /// The group a tile is listed under: its folder below the root (the
+    /// library's `ground`, `water`, …), none at the top.
+    fn group(&self, path: &str) -> Option<String> {
+        match &self.kind {
+            RootKind::Dir(d) => {
+                let rel = std::path::Path::new(path).strip_prefix(d).ok()?;
+                let parent = rel.parent()?.to_string_lossy().replace('\\', "/");
+                (!parent.is_empty()).then_some(parent)
+            }
+            RootKind::Files | RootKind::Library(_) => lib_group(path),
+        }
+    }
+}
+
+/// `lib:tiles/water/x.dtile` → `water`.
+fn lib_group(path: &str) -> Option<String> {
+    let rest = path.strip_prefix("lib:tiles/")?;
+    let (g, _) = rest.split_once('/')?;
+    Some(g.to_owned())
+}
+
+/// Is this `.dtile` a tile (a `tile` node at the top), not a shared part,
+/// palette, printer or project file?  A file that can't be read yet counts.
+fn is_tile_document(f: &std::path::Path) -> bool {
+    std::fs::read_to_string(f).map_or(true, |t| {
+        t.lines()
+            .any(|l| l.starts_with("tile ") || l.starts_with("tile{") || l == "tile")
+    })
+}
+
+/// Every tile document (`.dtile` with a `tile` node) and `.stl` under
+/// `dir`, skipping hidden folders and build output.
+fn tile_files(dir: &std::path::Path, depth: usize, out: &mut Vec<String>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in entries.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') {
+            continue;
+        }
+        let p = e.path();
+        if p.is_dir() {
+            if depth < 8 && !SKIP_DIRS.contains(&name.as_str()) {
+                tile_files(&p, depth + 1, out);
+            }
+            continue;
+        }
+        let lower = name.to_ascii_lowercase();
+        let tile =
+            (lower.ends_with(".dtile") && lower != "dharmatiles.dtile" && is_tile_document(&p))
+                || lower.ends_with(".stl");
+        if tile {
+            out.push(p.to_string_lossy().into_owned());
+        }
+    }
+}
+
+/// The personal home: `$DT_HOME`, else `~/dharmatiles`.  It need not exist
+/// yet; the preview lists its tiles once it does.
+#[must_use]
+pub fn personal_home() -> std::path::PathBuf {
+    if let Some(d) = std::env::var_os("DT_HOME").filter(|d| !d.is_empty()) {
+        return d.into();
+    }
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .unwrap_or_default();
+    std::path::PathBuf::from(home).join("dharmatiles")
+}
 
 /// One served tile.
 pub struct Slot {
     path: String,
     name: String,
+    /// The root it is listed under, and its group there.
+    root: usize,
+    group: Option<String>,
+    /// Its file has gone from its folder: off the list, never built.  The
+    /// slot stays so every other tile keeps its index.
+    gone: bool,
     /// `idle` (not built yet), `building`, `ready` or `failed`.
     status: &'static str,
     plan: Option<Value>,
@@ -62,7 +209,12 @@ pub struct Slot {
 }
 
 impl Slot {
+    #[cfg(test)]
     fn new(path: &str) -> Self {
+        Self::in_root(path, 0, lib_group(path))
+    }
+
+    fn in_root(path: &str, root: usize, group: Option<String>) -> Self {
         let name = path
             .rsplit(['/', ':'])
             .next()
@@ -72,6 +224,9 @@ impl Slot {
         Self {
             path: path.to_owned(),
             name,
+            root,
+            group,
+            gone: false,
             status: "idle",
             plan: None,
             record: None,
@@ -88,6 +243,9 @@ impl Slot {
             "index": index,
             "path": self.path,
             "name": self.name,
+            "root": self.root,
+            "group": self.group,
+            "gone": self.gone,
             "status": self.status,
             "plan": self.plan,
             "record": self.record,
@@ -99,7 +257,7 @@ impl Slot {
     }
 
     fn changed(&self) -> bool {
-        self.status != "idle" && self.files.iter().any(|(f, t)| mtime(f) != *t)
+        !self.gone && self.status != "idle" && self.files.iter().any(|(f, t)| mtime(f) != *t)
     }
 }
 
@@ -114,9 +272,10 @@ pub struct Shared {
     cache: Option<std::path::PathBuf>,
     /// A palette document the paint is read from at each build.
     palette: Option<std::path::PathBuf>,
-    /// Showing the whole library (no paths given): new tile files join
-    /// the list as they appear.
-    library: bool,
+    /// Where the tiles come from; a slot's `root` indexes this.
+    roots: Vec<Root>,
+    /// When the folders were last rescanned.
+    scanned: Mutex<Option<Instant>>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -124,19 +283,42 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl Shared {
-    /// Serve `paths` for connector `system`.
+    /// Serve `paths` for connector `system` (the tests' server).
+    #[cfg(test)]
     #[must_use]
     pub fn new(paths: &[String], system: &str, overhang_deg: f64) -> Self {
-        Self {
+        let roots = if paths.is_empty() {
+            Vec::new()
+        } else {
+            vec![Root::new("Files", RootKind::Files)]
+        };
+        Self::with_roots(roots, paths, system, overhang_deg)
+    }
+
+    /// Serve `roots` for connector `system`: `files` (listed under the
+    /// first [`RootKind::Files`] root) and every tile in the others.
+    #[must_use]
+    pub fn with_roots(roots: Vec<Root>, files: &[String], system: &str, overhang_deg: f64) -> Self {
+        let files_root = roots.iter().position(|r| r.kind == RootKind::Files);
+        let tiles = files_root.map_or_else(Vec::new, |r| {
+            files
+                .iter()
+                .map(|p| Slot::in_root(p, r, roots[r].group(p)))
+                .collect()
+        });
+        let me = Self {
             system: system.to_owned(),
             overhang_deg,
-            tiles: Mutex::new(paths.iter().map(|p| Slot::new(p)).collect()),
+            tiles: Mutex::new(tiles),
             clients: Mutex::new(Vec::new()),
             wanted: Mutex::new(VecDeque::new()),
             cache: None,
             palette: None,
-            library: false,
-        }
+            roots,
+            scanned: Mutex::new(None),
+        };
+        me.rescan();
+        me
     }
 
     /// Read the paint from this palette document at each build, and
@@ -170,14 +352,6 @@ impl Shared {
                 dt_kit::Palette::default()
             }
         }
-    }
-
-    /// With `library`, this shows the whole library: new tile files join
-    /// the list as they appear on disk.
-    #[must_use]
-    pub fn listing_if(mut self, library: bool) -> Self {
-        self.library = library;
-        self
     }
 
     /// Keep stage timings in `file`, so the next build of a tile has an ETA.
@@ -220,26 +394,53 @@ impl Shared {
             "type": "snapshot",
             "system": self.system,
             "overhang_deg": self.overhang_deg,
+            "roots": self.roots.iter().enumerate().map(|(i, r)| r.json(i)).collect::<Vec<_>>(),
             "tiles": tiles.iter().enumerate().map(|(i, t)| t.summary(i)).collect::<Vec<_>>(),
         })
     }
 
-    /// Add the paths not yet listed (new library files), and tell every
-    /// browser the new list.
-    fn add_missing(&self, paths: &[String]) {
-        let added = {
-            let mut tiles = lock(&self.tiles);
-            let n = tiles.len();
-            for p in paths {
-                if !tiles.iter().any(|t| &t.path == p) {
-                    tiles.push(Slot::new(p));
-                }
+    /// Rescan the folders and the library once [`RESCAN`] has passed:
+    /// new tiles join the list, deleted ones leave it (and come back if
+    /// the file does).  Every browser is told the new list.
+    fn rescan_due(&self) {
+        let due = {
+            let mut last = lock(&self.scanned);
+            let due = last.is_none_or(|t| t.elapsed() >= RESCAN);
+            if due {
+                *last = Some(Instant::now());
             }
-            tiles.len() > n
+            due
         };
-        if added {
+        if due && self.rescan() {
             self.broadcast(&self.snapshot());
         }
+    }
+
+    /// Rescan every root now.  True when the list changed.
+    fn rescan(&self) -> bool {
+        let found: Vec<(usize, Vec<String>)> = self
+            .roots
+            .iter()
+            .enumerate()
+            .filter_map(|(r, root)| Some((r, root.scan()?)))
+            .collect();
+        let mut tiles = lock(&self.tiles);
+        let mut changed = false;
+        for (r, paths) in found {
+            let have: std::collections::BTreeSet<&str> = paths.iter().map(String::as_str).collect();
+            for t in tiles.iter_mut().filter(|t| t.root == r) {
+                let gone = !have.contains(t.path.as_str());
+                changed |= t.gone != gone;
+                t.gone = gone;
+            }
+            for p in &paths {
+                if !tiles.iter().any(|t| t.root == r && &t.path == p) {
+                    tiles.push(Slot::in_root(p, r, self.roots[r].group(p)));
+                    changed = true;
+                }
+            }
+        }
+        changed
     }
 
     /// Change tile `i` and tell every listening browser.
@@ -265,7 +466,10 @@ impl Shared {
 
     /// Ask for tile `i` to be built next (a no-op once it has been built).
     fn want(&self, i: usize) -> bool {
-        let idle = lock(&self.tiles).get(i).map(|t| t.status == "idle");
+        let idle = lock(&self.tiles)
+            .get(i)
+            .filter(|t| !t.gone)
+            .map(|t| t.status == "idle");
         if idle == Some(true) {
             let mut w = lock(&self.wanted);
             if !w.contains(&i) {
@@ -280,13 +484,23 @@ impl Shared {
     }
 
     /// The next tile to build: one asked for, else (when `eager`) the first
-    /// not built yet, else one whose files changed.
+    /// named file not built yet, else one whose files changed.  Folder and
+    /// library tiles are built only when asked for.
     fn pick(&self, eager: bool) -> Option<usize> {
         if let Some(i) = lock(&self.wanted).pop_front() {
             return Some(i);
         }
         let tiles = lock(&self.tiles);
-        if eager && let Some(i) = tiles.iter().position(|t| t.status == "idle") {
+        let named = |t: &Slot| {
+            self.roots
+                .get(t.root)
+                .is_none_or(|r| r.kind == RootKind::Files)
+        };
+        if eager
+            && let Some(i) = tiles
+                .iter()
+                .position(|t| t.status == "idle" && !t.gone && named(t))
+        {
             return Some(i);
         }
         tiles.iter().position(Slot::changed)
@@ -478,12 +692,8 @@ fn rebuild_stl(shared: &Shared, i: usize, opts: &Options, path: &str) {
 
 /// The worker: build what is wanted, then what changed, until `stop`.
 pub fn work(shared: &Arc<Shared>, opts: &Options, eager: bool, stop: &AtomicBool) {
-    // serving the whole library from disk: new tile files join the list
-    let rescan = shared.library && dt_eval::source::library_dir().is_some();
     while !stop.load(Ordering::Relaxed) {
-        if rescan {
-            shared.add_missing(&crate::all_library_tiles());
-        }
+        shared.rescan_due();
         match shared.pick(eager) {
             Some(i) => rebuild(shared, i, opts),
             None => std::thread::sleep(POLL),
@@ -517,6 +727,48 @@ fn bind(port: Option<u16>) -> Result<TcpListener, String> {
     }
 }
 
+/// What the command line asks for: the roots, and the files named.
+/// A folder is a root of its own; `lib:tiles/water` (no `.dtile`) is the
+/// library's water group; anything else is a file.  No paths: the personal
+/// home and the library.
+#[must_use]
+pub fn roots_for(paths: &[String]) -> (Vec<Root>, Vec<String>) {
+    let lib = Root::new("Library", RootKind::Library("tiles/".to_owned()));
+    if paths.is_empty() {
+        let home = Root::new("My tiles", RootKind::Dir(personal_home()));
+        return (vec![home, lib], Vec::new());
+    }
+    let mut roots = Vec::new();
+    let mut files = Vec::new();
+    for p in paths {
+        let lower = p.to_ascii_lowercase();
+        if let Some(rest) = p.strip_prefix("lib:")
+            && !lower.ends_with(".dtile")
+            && !lower.ends_with(".stl")
+        {
+            let prefix = format!("{}/", rest.trim_end_matches('/'));
+            let label = format!(
+                "Library: {}",
+                prefix.trim_start_matches("tiles/").trim_end_matches('/')
+            );
+            let label = if prefix == "tiles/" {
+                "Library".to_owned()
+            } else {
+                label
+            };
+            roots.push(Root::new(&label, RootKind::Library(prefix)));
+        } else if !p.starts_with("lib:") && std::path::Path::new(p).is_dir() {
+            roots.push(Root::new(p, RootKind::Dir(p.into())));
+        } else {
+            files.push(p.clone());
+        }
+    }
+    if !files.is_empty() {
+        roots.insert(0, Root::new("Files", RootKind::Files));
+    }
+    (roots, files)
+}
+
 /// `dharmatiles preview`.  Returns an exit code (it runs until Ctrl-C).
 pub fn run(
     paths: &[String],
@@ -535,22 +787,32 @@ pub fn run(
     let addr = listener
         .local_addr()
         .map_or_else(|_| "127.0.0.1".to_owned(), |a| a.to_string());
-    // no paths: offer the library, building a tile when it is chosen
-    let library = paths.is_empty();
-    let (paths, eager) = if library {
-        (crate::all_library_tiles(), false)
-    } else {
-        (paths.to_vec(), true)
-    };
+    // files named are built at once; folder and library tiles when chosen
+    let (roots, files) = roots_for(paths);
     let cache = dt_eval::discover(&std::env::current_dir().unwrap_or_default()).out;
     let shared = Arc::new(
-        Shared::new(&paths, &opts.system, opts.printer.overhang_deg)
+        Shared::with_roots(roots, &files, &opts.system, opts.printer.overhang_deg)
             .with_cache(Timings::file_in(&cache))
-            .with_palette_opt(palette)
-            .listing_if(library),
+            .with_palette_opt(palette),
     );
     let url = format!("http://{addr}/");
-    tell!("preview: {url}  ({} tile(s); Ctrl-C to stop)", paths.len());
+    tell!("preview: {url}  (Ctrl-C to stop)");
+    for (i, r) in shared.roots.iter().enumerate() {
+        let n = lock(&shared.tiles)
+            .iter()
+            .filter(|t| !t.gone && t.root == i)
+            .count();
+        match &r.kind {
+            RootKind::Dir(d) if !d.is_dir() => tell!(
+                "{}: {} (not there yet; tiles saved there will show up)",
+                r.label,
+                d.display()
+            ),
+            RootKind::Dir(d) => tell!("{}: {} ({n} tile(s))", r.label, d.display()),
+            RootKind::Files => tell!("{}: {n} file(s)", r.label),
+            RootKind::Library(_) => tell!("{}: {n} tile(s)", r.label),
+        }
+    }
     match dt_eval::source::library_dir() {
         Some(d) => tell!(
             "library: {} (read from disk; edits and new tiles show up live)",
@@ -562,7 +824,7 @@ pub fn run(
     if open {
         open_browser(&url);
     }
-    work(&shared, opts, eager, &AtomicBool::new(false));
+    work(&shared, opts, true, &AtomicBool::new(false));
     crate::OK
 }
 

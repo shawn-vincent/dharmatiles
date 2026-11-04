@@ -19,6 +19,7 @@ dharmatiles check my-tile.dtile                              # read and plan onl
 dharmatiles looks [name]                                   # the looks and their controls
 dharmatiles watch my-tile.dtile                              # rebuild on every save
 dharmatiles preview my-tile.dtile --open                     # live painted 3D view in the browser (127.0.0.1:7878); overhang red; also takes .stl
+dharmatiles preview                                         # browse My tiles ($DT_HOME, else ~/dharmatiles) and the Library; folders as args work too
 
 cargo test --release --workspace            # all tests (insta golden hashes included)
 cargo clippy --workspace --all-targets -- -D warnings

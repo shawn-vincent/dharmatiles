@@ -31,6 +31,13 @@ h2 { font-size: 16px; margin: 0; word-break: break-word; }
 h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 16px 0 6px; }
 .muted { color: var(--muted); } .small { font-size: 12px; }
 #tile-plan a { color: var(--accent); text-decoration: none; } #tile-plan a:hover { text-decoration: underline; }
+#roots { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 8px; }
+#roots[hidden] { display: none; }
+#roots .root { flex: 1 1 auto; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); cursor: pointer; font: inherit; font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#roots .root.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+#roots .root .n { color: var(--muted); font-size: 11px; }
+#tiles li.note { cursor: default; color: var(--muted); font-size: 13px; line-height: 1.4; }
+#tiles li.note:hover { background: none; }
 #filter { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
 #tiles { list-style: none; margin: 8px 0; padding: 0; }
 #tiles li { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px; cursor: pointer; }

@@ -114,8 +114,11 @@ enum Command {
     /// only).  Overhangs (over 65 degrees) are red, the 55-65 degree band orange; a tile
     /// rebuilds when you save it or a file it uses.  Ctrl-C stops.
     Preview {
-        /// Tile documents: files, or `lib:tiles/…`.  None: the whole bundled
-        /// library is listed, each tile built when you choose it.
+        /// Tile documents (`.dtile`, `.stl`, `lib:tiles/…`), built at once;
+        /// folders, listed with every tile in them (`lib:tiles/water` is a
+        /// library group), each tile built when you choose it.  Folders
+        /// follow new and deleted files.  None: your home (`$DT_HOME`, else
+        /// ~/dharmatiles) and the library, with a switch between them.
         paths: Vec<String>,
         /// Connector system: `db` or `ol`.
         #[arg(long, default_value = "db")]

@@ -279,3 +279,107 @@ fn a_build_pushes_progress_events_that_never_go_back() {
         "ends at 100%: {fractions:?}"
     );
 }
+
+#[test]
+fn the_command_line_names_files_folders_and_library_groups() {
+    let dir = std::env::temp_dir().join(format!("dt-preview-roots-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let d = dir.to_string_lossy().into_owned();
+    let (roots, files) = roots_for(&[
+        "a.dtile".to_owned(),
+        d.clone(),
+        "lib:tiles/water".to_owned(),
+        FLAT.to_owned(),
+    ]);
+    assert_eq!(files, vec!["a.dtile".to_owned(), FLAT.to_owned()]);
+    let kinds: Vec<_> = roots.iter().map(|r| r.kind.clone()).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            RootKind::Files,
+            RootKind::Dir(dir.clone()),
+            RootKind::Library("tiles/water/".to_owned())
+        ]
+    );
+    // no paths: the personal home, then the library
+    let (roots, files) = roots_for(&[]);
+    assert!(files.is_empty());
+    assert_eq!(roots[0].kind, RootKind::Dir(personal_home()));
+    assert_eq!(roots[1].kind, RootKind::Library("tiles/".to_owned()));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_folder_lists_its_tiles_and_follows_saves_and_deletes() {
+    let dir = std::env::temp_dir().join(format!("dt-preview-dir-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("ponds")).unwrap();
+    std::fs::create_dir_all(dir.join("out")).unwrap();
+    let text = dt_eval::Library.read(FLAT).unwrap();
+    std::fs::write(dir.join("a.dtile"), &text).unwrap();
+    std::fs::write(dir.join("ponds/b.dtile"), &text).unwrap();
+    std::fs::write(dir.join("out/built.stl"), b"").unwrap(); // build output: skipped
+    std::fs::write(dir.join("parts.dtile"), "grass meadow {\n}\n").unwrap(); // a part, not a tile
+    std::fs::write(dir.join("dharmatiles.dtile"), "out \"out\"\n").unwrap(); // the project file
+    let roots = vec![
+        Root::new("My tiles", RootKind::Dir(dir.clone())),
+        Root::new("Library", RootKind::Library("tiles/test/".to_owned())),
+    ];
+    let shared = Shared::with_roots(roots, &[], "db", 55.0);
+    let listed = |s: &Shared| -> Vec<(String, Value, Value)> {
+        let v = s.snapshot();
+        v["tiles"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|t| t["root"] == 0 && t["gone"] == false)
+            .map(|t| {
+                (
+                    t["name"].as_str().unwrap().to_owned(),
+                    t["group"].clone(),
+                    t["status"].clone(),
+                )
+            })
+            .collect()
+    };
+    assert_eq!(
+        listed(&shared),
+        vec![
+            ("a".to_owned(), Value::Null, "idle".into()),
+            ("b".to_owned(), "ponds".into(), "idle".into())
+        ]
+    );
+    let snap = shared.snapshot();
+    assert_eq!(snap["roots"][0]["kind"], "dir");
+    assert_eq!(snap["roots"][1]["kind"], "library");
+    assert!(
+        snap["tiles"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|t| t["root"] == 1),
+        "the library's test tiles are listed too"
+    );
+    assert_eq!(shared.pick(true), None, "folder tiles wait to be chosen");
+
+    // a new tile joins; a deleted one leaves, and its index is not reused
+    std::fs::write(dir.join("c.dtile"), &text).unwrap();
+    std::fs::remove_file(dir.join("a.dtile")).unwrap();
+    assert!(shared.rescan());
+    let names: Vec<_> = listed(&shared).into_iter().map(|t| t.0).collect();
+    assert_eq!(names, vec!["b", "c"]);
+    let a = shared.snapshot()["tiles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .position(|t| t["name"] == "a")
+        .unwrap();
+    assert!(!shared.want(a), "a deleted tile is not built");
+    assert!(!shared.rescan(), "nothing changed");
+
+    // and comes back when the file does
+    std::fs::write(dir.join("a.dtile"), &text).unwrap();
+    assert!(shared.rescan());
+    assert_eq!(listed(&shared).len(), 3);
+    let _ = std::fs::remove_dir_all(&dir);
+}
