@@ -97,7 +97,11 @@ fn library_tiles_check_and_say_which_look_is_missing_when_built() {
     };
     assert!(e.iter().all(|d| d.code == "dt::not-yet"), "{path}: {e:?}");
     assert!(e.iter().any(|d| d.message == missing), "{path}: {e:?}");
-    for path in Library::paths() {
+    // (a palette is not a tile document)
+    for path in Library::paths()
+        .into_iter()
+        .filter(|p| !p.contains("palettes/"))
+    {
         check(&Library, &path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
     }
 }
