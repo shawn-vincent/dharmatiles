@@ -128,12 +128,20 @@ pub fn relief(
         .filter(|(a, fc)| !(*a != 0.0 && fc.rim && core.is_some()))
         .collect();
     for (a, fc) in passes {
-        let g = if a != 0.0 { RELIEF_GRID_MM } else { CRACK_GRID_MM };
+        let g = if a != 0.0 {
+            RELIEF_GRID_MM
+        } else {
+            CRACK_GRID_MM
+        };
         let t = rock.mesh();
         if t.positions.is_empty() {
             continue;
         }
-        let q: Vec<[f64; 2]> = t.positions.iter().map(|p| [p[0] - fc.p0[0], p[1] - fc.p0[1]]).collect();
+        let q: Vec<[f64; 2]> = t
+            .positions
+            .iter()
+            .map(|p| [p[0] - fc.p0[0], p[1] - fc.p0[1]])
+            .collect();
         let u: Vec<f64> = q.iter().map(|q| q[0] * fc.t[0] + q[1] * fc.t[1]).collect();
         let s_: Vec<f64> = q.iter().map(|q| q[0] * fc.m[0] + q[1] * fc.m[1]).collect();
         let umax = u.iter().copied().fold(f64::NEG_INFINITY, f64::max);
@@ -141,8 +149,14 @@ pub fn relief(
         if umax.min(fc.l) - umin.max(0.0) < 2.0 {
             continue;
         }
-        let (u0, u1) = if core.is_some() { (umin.max(0.0), umax.min(fc.l)) } else { (umin, umax) };
-        let on: Vec<usize> = (0..u.len()).filter(|&k| u[k] > u0 - 1.0 && u[k] < u1 + 1.0).collect();
+        let (u0, u1) = if core.is_some() {
+            (umin.max(0.0), umax.min(fc.l))
+        } else {
+            (umin, umax)
+        };
+        let on: Vec<usize> = (0..u.len())
+            .filter(|&k| u[k] > u0 - 1.0 && u[k] < u1 + 1.0)
+            .collect();
         if on.is_empty() {
             continue;
         }
@@ -152,10 +166,17 @@ pub fn relief(
         let sm = on.iter().map(|&k| s_[k]).fold(f64::NEG_INFINITY, f64::max);
         let p0 = [fc.p0[0] + sm * m3[0], fc.p0[1] + sm * m3[1], 0.0];
         let ta = libm::tan(a);
-        let zp: Vec<f64> = on.iter().map(|&k| t.positions[k][2] + (sm - s_[k]) * ta).collect();
+        let zp: Vec<f64> = on
+            .iter()
+            .map(|&k| t.positions[k][2] + (sm - s_[k]) * ta)
+            .collect();
         let zpmin = zp.iter().copied().fold(f64::INFINITY, f64::min);
         let zpmax = zp.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-        let zall = t.positions.iter().map(|p| p[2]).fold(f64::NEG_INFINITY, f64::max);
+        let zall = t
+            .positions
+            .iter()
+            .map(|p| p[2])
+            .fold(f64::NEG_INFINITY, f64::max);
         let n_us = ((u1 + 1.0 + g - (u0 - 1.0)) / g).ceil() as usize;
         let zhi = zpmax.min(zall + 1.5) + g;
         let n_zs = ((zhi - zpmin) / g).ceil() as usize;
@@ -188,23 +209,37 @@ pub fn relief(
         for k in 0..nn {
             if let Some(h) = &hits[k] {
                 let d = dot(
-                    [h.point[0] - origins[k][0], h.point[1] - origins[k][1], h.point[2] - origins[k][2]],
+                    [
+                        h.point[0] - origins[k][0],
+                        h.point[1] - origins[k][1],
+                        h.point[2] - origins[k][2],
+                    ],
                     d3,
                 );
                 front.v[k] = d;
                 let nrm = nrm_of(h.triangle);
                 al.v[k] = dot(nrm, m3);
                 nzf.v[k] = nrm[2];
-                o2.push([h.point[0] + d3[0] * 1e-4, h.point[1] + d3[1] * 1e-4, h.point[2] + d3[2] * 1e-4]);
+                o2.push([
+                    h.point[0] + d3[0] * 1e-4,
+                    h.point[1] + d3[1] * 1e-4,
+                    h.point[2] + d3[2] * 1e-4,
+                ]);
                 idx2.push(k);
             }
         }
         let hits2 = rm.first_hits(&o2, &vec![d3; o2.len()]);
         for (h, &k) in hits2.iter().zip(&idx2) {
-            if let Some(h) = h {
-                if nrm_of(h.triangle)[2] > -0.5 {
+            if let Some(h) = h
+                && nrm_of(h.triangle)[2] > -0.5
+            {
+                {
                     let d = dot(
-                        [h.point[0] - origins[k][0], h.point[1] - origins[k][1], h.point[2] - origins[k][2]],
+                        [
+                            h.point[0] - origins[k][0],
+                            h.point[1] - origins[k][1],
+                            h.point[2] - origins[k][2],
+                        ],
                         d3,
                     );
                     back.v[k] = d;
@@ -311,7 +346,15 @@ pub fn relief(
                     .max(f64::MIN);
                 c0.v[q] = v;
             }
-            let c0 = fnear(&Field { v: c0.v.iter().enumerate().map(|(q, &v)| if hit.v[q] { v } else { f64::NAN }).collect(), ..c0 });
+            let c0 = fnear(&Field {
+                v: c0
+                    .v
+                    .iter()
+                    .enumerate()
+                    .map(|(q, &v)| if hit.v[q] { v } else { f64::NAN })
+                    .collect(),
+                ..c0
+            });
             let edge = e.map(|v| if v < 1.0 { 1.0 } else { 0.0 });
             let wide = blur(&edge, CUT_BLUR_MM.1 / g).map(|v| (2.0 * v).clamp(0.0, 1.0));
             let fine = blur(&c0, CUT_BLUR_MM.0 / g);

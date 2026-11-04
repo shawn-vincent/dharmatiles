@@ -33,10 +33,8 @@ impl Support {
     /// # Errors
     /// [`KitError::Mesh`] if a mesh is not a closed manifold.
     pub fn new(meshes: &[TriMesh]) -> Result<Self, KitError> {
-        let parts: Result<Vec<dt_geom::Solid>, _> = meshes
-            .iter()
-            .map(|m| dt_geom::Solid::from_tri_mesh(m))
-            .collect();
+        let parts: Result<Vec<dt_geom::Solid>, _> =
+            meshes.iter().map(dt_geom::Solid::from_tri_mesh).collect();
         let parts = parts.map_err(KitError::Mesh)?;
         if parts.is_empty() {
             return Ok(Self(empty()));
@@ -49,7 +47,9 @@ impl Piece {
     fn lift(&mut self, m: &TriMesh) -> Result<dt_geom::Solid, KitError> {
         let n = u32::try_from(m.triangles.len()).map_err(|_| KitError::Slots)?;
         let s = dt_geom::Solid::from_tri_mesh(m).map_err(KitError::Mesh)?;
-        let off = self.used.min(dt_geom::source::FACE_STRIDE.saturating_sub(n + 1));
+        let off = self
+            .used
+            .min(dt_geom::source::FACE_STRIDE.saturating_sub(n + 1));
         self.used = (off + n).min(dt_geom::source::FACE_STRIDE - 1);
         s.with_original_id(self.id, self.base + off)
             .map_err(KitError::Mesh)
@@ -171,10 +171,7 @@ impl Piece {
     /// from this that lies in `support`: a cut's undercut of what rests on it.
     #[must_use]
     pub fn undercut(&self, kept: &Self, support: &Support) -> f64 {
-        self.s
-            .difference(&kept.s)
-            .intersection(&support.0)
-            .volume()
+        self.s.difference(&kept.s).intersection(&support.0).volume()
     }
 
     /// Linear map and shift (row-major 3x3, then translation), as

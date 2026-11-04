@@ -5,8 +5,8 @@
 use dt_kit::{Piece, Rng, Slot, Support};
 
 use super::faces::{Column, Cut, OpenFace};
-use super::form::{FOOT, Form, GRID_MM, Zones};
-use super::stack::{Placed, SINK_MM};
+use super::form::{Form, GRID_MM, Zones};
+use super::stack::Placed;
 use super::util::{Field, P2, area, bounds, centroid, hull2, norm2};
 
 pub const COLUMN_SHARE: f64 = 0.6;
@@ -26,7 +26,9 @@ pub const SEAT_SLOPE_DEG: f64 = 90.0 - 55.0 + 3.0;
 const Z_UP: [f64; 3] = [0.0, 0.0, 1.0];
 
 pub fn top_z_poly(r: &Placed, poly: &[P2]) -> f64 {
-    poly.iter().map(|p| r.top_z(p[0], p[1])).fold(f64::NEG_INFINITY, f64::max)
+    poly.iter()
+        .map(|p| r.top_z(p[0], p[1]))
+        .fold(f64::NEG_INFINITY, f64::max)
 }
 
 /// Is each point inside the finished pile (or below the ground)?
@@ -56,11 +58,22 @@ pub fn open_faces(poly: &[P2], form: &Form, s: &Field, zlo: f64, zhi: f64) -> Ve
             continue;
         }
         let m2 = [e[1] / l, -e[0] / l];
-        let mid = [0.5 * (p0[0] + p1[0]) + 0.5 * m2[0], 0.5 * (p0[1] + p1[1]) + 0.5 * m2[1]];
+        let mid = [
+            0.5 * (p0[0] + p1[0]) + 0.5 * m2[0],
+            0.5 * (p0[1] + p1[1]) + 0.5 * m2[1],
+        ];
         let rim = !(0.0 < mid[0] && mid[0] < form.w && 0.0 < mid[1] && mid[1] < form.h);
-        let occ = zs.iter().filter(|&&z| occupied(form, s, [mid[0], mid[1], z])).count();
+        let occ = zs
+            .iter()
+            .filter(|&&z| occupied(form, s, [mid[0], mid[1], z]))
+            .count();
         if rim || occ <= 1 {
-            out.push(OpenFace { p0, p1, m: [m2[0], m2[1], 0.0], rim });
+            out.push(OpenFace {
+                p0,
+                p1,
+                m: [m2[0], m2[1], 0.0],
+                rim,
+            });
         }
     }
     out
@@ -76,7 +89,10 @@ pub fn columns(
     let n = placed.len();
     let polys: Vec<Vec<P2>> = placed.iter().map(Placed::poly).collect();
     let bb: Vec<[f64; 4]> = polys.iter().map(|p| bounds(p)).collect();
-    let a: Vec<usize> = placed.iter().map(|p| p.cells.v.iter().filter(|&&b| b).count()).collect();
+    let a: Vec<usize> = placed
+        .iter()
+        .map(|p| p.cells.v.iter().filter(|&&b| b).count())
+        .collect();
     let mut par: Vec<usize> = (0..n).collect();
     fn find(par: &mut [usize], mut i: usize) -> usize {
         while par[i] != i {
@@ -87,7 +103,11 @@ pub fn columns(
     }
     for i in 0..n {
         for j in i + 1..n {
-            if bb[i][0] < bb[j][2] && bb[j][0] < bb[i][2] && bb[i][1] < bb[j][3] && bb[j][1] < bb[i][3] {
+            if bb[i][0] < bb[j][2]
+                && bb[j][0] < bb[i][2]
+                && bb[i][1] < bb[j][3]
+                && bb[j][1] < bb[i][3]
+            {
                 let ov = (0..placed[i].cells.v.len())
                     .filter(|&q| placed[i].cells.v[q] && placed[j].cells.v[q])
                     .count();
@@ -114,13 +134,18 @@ pub fn columns(
         let best = g
             .iter()
             .copied()
-            .max_by(|&x, &y| top_z_poly(&placed[x], &polys[x]).total_cmp(&top_z_poly(&placed[y], &polys[y])))
+            .max_by(|&x, &y| {
+                top_z_poly(&placed[x], &polys[x]).total_cmp(&top_z_poly(&placed[y], &polys[y]))
+            })
             .unwrap_or(g[0]);
         let mut zhi = top_z_poly(&placed[best], &poly);
         if let Some(zt) = form.ztop {
             zhi = zhi.min(zt);
         }
-        let zlo = g.iter().map(|&i| placed[i].z0).fold(f64::INFINITY, f64::min);
+        let zlo = g
+            .iter()
+            .map(|&i| placed[i].z0)
+            .fold(f64::INFINITY, f64::min);
         let mut acc = 0.0;
         let back: Vec<(usize, f64)> = g
             .iter()
@@ -140,7 +165,11 @@ pub fn columns(
             .map(|&r| (r, rng.uniform(RIM_SETBACK_MM.0, RIM_SETBACK_MM.1)))
             .collect();
         let u = rng.random();
-        let step = if u < 0.5 { u / 0.5 * 0.6 } else { 2.5 + (u - 0.5) / 0.5 * 2.0 };
+        let step = if u < 0.5 {
+            u / 0.5 * 0.6
+        } else {
+            2.5 + (u - 0.5) / 0.5 * 2.0
+        };
         let open = open_faces(&poly, form, s, zlo, zhi);
         cols.push(Column {
             stones: g,
@@ -194,11 +223,18 @@ pub struct Cutter<'a> {
 impl<'a> Cutter<'a> {
     pub fn new(solid: Piece, support: Option<&'a [&'a Support]>) -> Self {
         let vol0 = solid.volume();
-        Self { solid, vol0, support, cuts: Vec::new() }
+        Self {
+            solid,
+            vol0,
+            support,
+            cuts: Vec::new(),
+        }
     }
 
     pub fn take(&mut self, n: [f64; 3], off: f64, d: Option<[f64; 3]>, strict: bool) -> bool {
-        let Ok(cut) = self.solid.keep(n, off) else { return false };
+        let Ok(cut) = self.solid.keep(n, off) else {
+            return false;
+        };
         if cut.is_empty() {
             return false;
         }
@@ -216,13 +252,24 @@ impl<'a> Cutter<'a> {
             }
         }
         self.solid = cut;
-        self.cuts.push(Cut { n, off, d: d.unwrap_or([0.0; 3]) });
+        self.cuts.push(Cut {
+            n,
+            off,
+            d: d.unwrap_or([0.0; 3]),
+        });
         true
     }
 
     /// The plane normal to `n` through `p`, moved out (same angle) to take
     /// no deeper than `lim + extra` from the solid's reach along `n`.
-    pub fn take_back(&mut self, n: [f64; 3], p: [f64; 3], lim: f64, extra: f64, d: Option<[f64; 3]>) -> bool {
+    pub fn take_back(
+        &mut self,
+        n: [f64; 3],
+        p: [f64; 3],
+        lim: f64,
+        extra: f64,
+        d: Option<[f64; 3]>,
+    ) -> bool {
         let reach = self
             .solid
             .mesh()
@@ -263,7 +310,8 @@ pub fn plan_column(
         .iter()
         .copied()
         .max_by(|&x, &y| {
-            top_z_poly(&placed[x], &placed[x].poly()).total_cmp(&top_z_poly(&placed[y], &placed[y].poly()))
+            top_z_poly(&placed[x], &placed[x].poly())
+                .total_cmp(&top_z_poly(&placed[y], &placed[y].poly()))
         })
         .unwrap_or(c.stones[0]);
     let hull = prism(slot, &c.poly, c.zlo, hgt + 1.0, placed[best].top, form)?;
@@ -281,8 +329,12 @@ pub fn plan_column(
     }
     let mut hull = Cutter::new(hull, None);
     let ptp = |m: [f64; 3], reach: &[[f64; 3]]| {
-        let v: Vec<f64> = reach.iter().map(|r| r[0] * m[0] + r[1] * m[1] + r[2] * m[2]).collect();
-        v.iter().copied().fold(f64::NEG_INFINITY, f64::max) - v.iter().copied().fold(f64::INFINITY, f64::min)
+        let v: Vec<f64> = reach
+            .iter()
+            .map(|r| r[0] * m[0] + r[1] * m[1] + r[2] * m[2])
+            .collect();
+        v.iter().copied().fold(f64::NEG_INFINITY, f64::max)
+            - v.iter().copied().fold(f64::INFINITY, f64::min)
     };
     for of in c.open.clone() {
         let (mut p0, mut p1, m, rim) = (of.p0, of.p1, of.m, of.rim);
@@ -293,9 +345,14 @@ pub fn plan_column(
         let sb = if form.round {
             0.0
         } else {
-            step.min(COLUMN_STEP_MAX * (ptp(m, &c.reach) - 4.0)).max(0.0)
+            step.min(COLUMN_STEP_MAX * (ptp(m, &c.reach) - 4.0))
+                .max(0.0)
         };
-        let p = [p0[0] - 10.0 * m[0], p0[1] - 10.0 * m[1], c.zlo - 10.0 * m[2]];
+        let p = [
+            p0[0] - 10.0 * m[0],
+            p0[1] - 10.0 * m[1],
+            c.zlo - 10.0 * m[2],
+        ];
         if hull.take_back(m, p, 0.0, sb, Some(m)) {
             c.step = c.step.max(sb);
         }
@@ -304,7 +361,11 @@ pub fn plan_column(
         if l < 3.0 || rng.random() > DRESS_P {
             continue;
         }
-        let (piv, far) = if rng.random() < 0.5 { (p0, p1) } else { (p1, p0) };
+        let (piv, far) = if rng.random() < 0.5 {
+            (p0, p1)
+        } else {
+            (p1, p0)
+        };
         let t = [(far[0] - piv[0]) / l, (far[1] - piv[1]) / l, 0.0];
         let psi = rng
             .uniform(DRESS_YAW_DEG.0, DRESS_YAW_DEG.1)
@@ -315,7 +376,9 @@ pub fn plan_column(
             m[1] * libm::cos(psi) + t[1] * libm::sin(psi),
             0.0,
         ];
-        let be = rng.uniform(DRESS_BATTER_DEG.0, DRESS_BATTER_DEG.1).to_radians();
+        let be = rng
+            .uniform(DRESS_BATTER_DEG.0, DRESS_BATTER_DEG.1)
+            .to_radians();
         let n = [nh[0] * libm::cos(be), nh[1] * libm::cos(be), libm::sin(be)];
         let pz = [piv[0], piv[1], c.zlo + hgt * rng.uniform(0.0, 0.3)];
         hull.take_back(n, pz, DRESS_MAX_MM, 0.0, Some(m));
@@ -373,8 +436,4 @@ pub fn support_cone(r: &Placed) -> Option<dt_kit::TriMesh> {
     let mut pts: Vec<[f64; 3]> = poly.iter().map(|p| [p[0], p[1], r.z0]).collect();
     pts.extend(inner.iter().map(|p| [p[0], p[1], r.z0 - slope * lo]));
     dt_kit::form::hull(&pts).ok()
-}
-
-pub fn sink() -> f64 {
-    SINK_MM + FOOT
 }

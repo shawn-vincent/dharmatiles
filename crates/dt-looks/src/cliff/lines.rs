@@ -33,10 +33,17 @@ impl Line {
     /// The point `s` along it (clamped).
     pub fn at(&self, s: f64) -> P2 {
         let s = s.clamp(0.0, self.length());
-        let k = self.cum.partition_point(|&c| c < s).clamp(1, self.pts.len() - 1);
+        let k = self
+            .cum
+            .partition_point(|&c| c < s)
+            .clamp(1, self.pts.len() - 1);
         let (a, b) = (self.pts[k - 1], self.pts[k]);
         let l = self.cum[k] - self.cum[k - 1];
-        let t = if l > 0.0 { (s - self.cum[k - 1]) / l } else { 0.0 };
+        let t = if l > 0.0 {
+            (s - self.cum[k - 1]) / l
+        } else {
+            0.0
+        };
         [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]
     }
     /// Arc length of the point on it nearest `p`.

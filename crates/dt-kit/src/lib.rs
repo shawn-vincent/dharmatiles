@@ -61,6 +61,7 @@ mod threemf;
 
 pub use audit::{Audit, Band, Dropped, Export, Printer, audit, audit_banded};
 pub use dt_geom::Convex;
+pub use dt_geom::{Footprint, blur as blur2, dilate as dilate2, distance_nearest, erode as erode2};
 pub use dt_geom::{Grid, Mask, Rng, Seed, TriMesh, vec3};
 pub use field::{
     Field, Noise, Placed, Plane, Scale, Spread, cap, distance, geodesic, noise, noise_at, rim,
@@ -68,7 +69,6 @@ pub use field::{
 };
 pub use outline::Outline;
 pub use piece::{Piece, Support, hung, prism_mesh, tri_normal, welded};
-pub use dt_geom::{Footprint, blur as blur2, dilate as dilate2, distance_nearest, erode as erode2};
 pub use render::{Image, ORANGE, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};
 pub use scene::{
     BANK_MM, Frame, LIFT_TOL_MM, Material, Part, REFERENCE_SQUARE_MM, Scene, Slot, Slots, Solid,

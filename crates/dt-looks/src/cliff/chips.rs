@@ -24,7 +24,11 @@ fn dot(a: V, b: V) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 fn cross(a: V, b: V) -> V {
-    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
 }
 fn norm(a: V) -> f64 {
     libm::sqrt(dot(a, a))
@@ -42,7 +46,11 @@ fn mul(a: V, k: f64) -> V {
 
 /// n tilted by U(0, max_deg) about a random tangent axis.
 pub fn tilted(rng: &mut Rng, n: V, max_deg: f64) -> V {
-    let mut t = [rng.normal(0.0, 1.0), rng.normal(0.0, 1.0), rng.normal(0.0, 1.0)];
+    let mut t = [
+        rng.normal(0.0, 1.0),
+        rng.normal(0.0, 1.0),
+        rng.normal(0.0, 1.0),
+    ];
     let d = dot(t, n);
     t = sub(t, mul(n, d));
     t = unit(t);
@@ -111,12 +119,23 @@ pub fn chip_edges(
         }
         let r2 = |x: f64| (x * 100.0).round() as i64;
         let r1 = |x: f64| (x * 10.0).round() as i64;
-        let key = [r2(n1[0]) * 1_000_003 + r2(n1[1]) * 1009 + r2(n1[2]), r2(n2[0]) * 1_000_003 + r2(n2[1]) * 1009 + r2(n2[2]), r1(dot(n1, pa)), r1(dot(n2, pa)), 0, 0];
+        let key = [
+            r2(n1[0]) * 1_000_003 + r2(n1[1]) * 1009 + r2(n1[2]),
+            r2(n2[0]) * 1_000_003 + r2(n2[1]) * 1009 + r2(n2[2]),
+            r1(dot(n1, pa)),
+            r1(dot(n2, pa)),
+            0,
+            0,
+        ];
         if let Some(k) = keys.iter().position(|q| *q == key) {
             arris[k].pts.extend([pa, pb]);
         } else {
             keys.push(key);
-            arris.push(Arris { n1, n2, pts: vec![pa, pb] });
+            arris.push(Arris {
+                n1,
+                n2,
+                pts: vec![pa, pb],
+            });
         }
     }
     let ptp = |a: &Arris| {
@@ -159,9 +178,15 @@ pub fn chip_edges(
         }
         while s < s1 {
             let (mut ln, d) = if lip {
-                (0.5 * rng.uniform(CHIP_LEN_MM.0, CHIP_LEN_MM.1), rng.uniform(CHIP_LIP_MM.0, CHIP_LIP_MM.1))
+                (
+                    0.5 * rng.uniform(CHIP_LEN_MM.0, CHIP_LEN_MM.1),
+                    rng.uniform(CHIP_LIP_MM.0, CHIP_LIP_MM.1),
+                )
             } else {
-                (rng.uniform(CHIP_LEN_MM.0, CHIP_LEN_MM.1), rng.uniform(dep_mm.0, dep_mm.1))
+                (
+                    rng.uniform(CHIP_LEN_MM.0, CHIP_LEN_MM.1),
+                    rng.uniform(dep_mm.0, dep_mm.1),
+                )
             };
             ln = (ln.max(2.0 * d + 0.5)).min(s1 - s + d);
             let nc = unit(tilted(rng, nb, 12.0));
@@ -172,8 +197,15 @@ pub fn chip_edges(
                 .fold(0.0, f64::max)
                 + 0.3;
             let c = add(o, mul(e, s + 0.5 * ln));
-            let clear = done.iter().all(|&(c2, h2)| norm(sub(c, c2)) > 0.5 * ln + h2 + 0.5);
-            if ln > 2.0 * d + 0.3 && nc[2] >= -0.3 && nc[2] - e[2].abs() >= -1.1 && tw < 4.0 && (lip || clear) {
+            let clear = done
+                .iter()
+                .all(|&(c2, h2)| norm(sub(c, c2)) > 0.5 * ln + h2 + 0.5);
+            if ln > 2.0 * d + 0.3
+                && nc[2] >= -0.3
+                && nc[2] - e[2].abs() >= -1.1
+                && tw < 4.0
+                && (lip || clear)
+            {
                 let mut pts = Vec::new();
                 for (r_, lo, hi) in [(-d, d, ln - d), (0.0, 0.0, ln), (1.0, -1.0, ln + 1.0)] {
                     for sa in [lo, hi] {
@@ -187,7 +219,11 @@ pub fn chip_edges(
                     done.push((c, 0.5 * ln));
                 }
             }
-            s += if lip { ln * rng.uniform(0.4, 0.8) } else { ln + rng.uniform(CHIP_GAP_MM.0, CHIP_GAP_MM.1) };
+            s += if lip {
+                ln * rng.uniform(0.4, 0.8)
+            } else {
+                ln + rng.uniform(CHIP_GAP_MM.0, CHIP_GAP_MM.1)
+            };
         }
     }
     chips
@@ -220,7 +256,11 @@ pub fn corner_chips(rng: &mut Rng, rock: Piece, d: f64, max_loss: f64) -> Piece 
             continue;
         }
         let n = unit(vn[vi]);
-        planes.push((p[vi], n, rng.uniform(CORNER_CHIP_MM.0, CORNER_CHIP_MM.1) * scale));
+        planes.push((
+            p[vi],
+            n,
+            rng.uniform(CORNER_CHIP_MM.0, CORNER_CHIP_MM.1) * scale,
+        ));
     }
     let cap = rng.int(8, 16);
     let order = rng.perm(planes.len());
@@ -235,7 +275,9 @@ pub fn corner_chips(rng: &mut Rng, rock: Piece, d: f64, max_loss: f64) -> Piece 
         if n2[2] < FACET_MIN_NZ {
             continue;
         }
-        let Ok(cut) = rock.keep(n2, dot(n2, p_) - dep) else { continue };
+        let Ok(cut) = rock.keep(n2, dot(n2, p_) - dep) else {
+            continue;
+        };
         if cut.is_empty() || cut.volume() < (1.0 - max_loss) * rock.volume() {
             continue;
         }

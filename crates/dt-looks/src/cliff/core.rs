@@ -17,7 +17,11 @@ const CORE_END_RIM_MM: f64 = 0.5;
 const CORE_DEEP_MM: f64 = 12.0;
 const CORE_DROP_MM: f64 = 0.5;
 
-pub fn core_mesh( s: &Field, cols: &[Column], placed: &[Placed]) -> Result<dt_kit::TriMesh, KitError> {
+pub fn core_mesh(
+    s: &Field,
+    cols: &[Column],
+    placed: &[Placed],
+) -> Result<dt_kit::TriMesh, KitError> {
     let (nx, ny) = (s.nx, s.ny);
     let r0 = CORE_SET_MM / GRID_MM;
     let mut c = erode_disc(s, r0);
@@ -42,7 +46,10 @@ pub fn core_mesh( s: &Field, cols: &[Column], placed: &[Placed]) -> Result<dt_ki
     }
     let _ = dilate_disc;
     let zb = FOOT - 1.5;
-    let depth: Vec<f64> = c.v.iter().map(|&v| (v - CORE_DROP_MM).max(zb + 0.05) - zb).collect();
+    let depth: Vec<f64> =
+        c.v.iter()
+            .map(|&v| (v - CORE_DROP_MM).max(zb + 0.05) - zb)
+            .collect();
     let mut m = hung(&depth, nx, ny, GRID_MM, 0.01)?;
     for p in &mut m.positions {
         *p = [p[0] + 0.5 * GRID_MM, p[1] + 0.5 * GRID_MM, p[2] + zb];
@@ -66,7 +73,10 @@ pub fn core_piece(slot: Slot, mesh: &dt_kit::TriMesh, f: &Form) -> Result<Piece,
         })
         .collect();
     let core = Piece::new(slot, mesh)?;
-    let bx = Convex::cuboid([rim[0], rim[1], zb - 1.0], [f.w - rim[2], f.h - rim[3], zb - 1.0 + 200.0])
-        .to_tri_mesh();
+    let bx = Convex::cuboid(
+        [rim[0], rim[1], zb - 1.0],
+        [f.w - rim[2], f.h - rim[3], zb - 1.0 + 200.0],
+    )
+    .to_tri_mesh();
     core.within(&bx)
 }

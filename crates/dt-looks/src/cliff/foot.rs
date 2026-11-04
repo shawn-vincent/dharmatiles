@@ -4,9 +4,9 @@
 //! highest against the face, falling away concave, higher and wider in
 //! the shattered zones, the same at the tile ends for every seed (S4).
 
-use dt_kit::{Grain, Material, Rng, Scene, Tag, form, grain, hung, Piece};
+use dt_kit::{Grain, Material, Piece, Rng, Scene, Tag, form, grain, hung};
 
-use super::form::{FOOT, Form, GRID_MM, SQUARE_MM, Zones, ZONE_FLOOR};
+use super::form::{FOOT, Form, GRID_MM, SQUARE_MM, ZONE_FLOOR, Zones};
 use super::util::{Draw, Field, dilate_disc, edt_out, lerp, smooth01};
 use crate::LookError;
 
@@ -40,7 +40,13 @@ pub struct FootAsk {
 
 impl Default for FootAsk {
     fn default() -> Self {
-        Self { bank_h: APRON_H_MM, bank_r: APRON_R_MM, scree: 55.0, boulders: 2.5, grit: 45.0 }
+        Self {
+            bank_h: APRON_H_MM,
+            bank_r: APRON_R_MM,
+            scree: 55.0,
+            boulders: 2.5,
+            grit: 45.0,
+        }
     }
 }
 
@@ -67,10 +73,18 @@ pub fn build(
 ) -> Result<(), LookError> {
     let (nx, ny) = (s.nx, s.ny);
     let sc = pl.scale;
-    let rock = super::util::Mask { nx, ny, v: s.v.iter().map(|&z| z > FOOT + 0.5).collect() };
+    let rock = super::util::Mask {
+        nx,
+        ny,
+        v: s.v.iter().map(|&z| z > FOOT + 0.5).collect(),
+    };
     let dist = {
         let d = edt_out(&rock);
-        Field { nx, ny, v: d.v.iter().map(|x| x * GRID_MM).collect() }
+        Field {
+            nx,
+            ny,
+            v: d.v.iter().map(|x| x * GRID_MM).collect(),
+        }
     };
     // the bank
     let near = dilate_disc(s, ask.bank_r.1 * sc / GRID_MM);
@@ -113,10 +127,15 @@ pub fn build(
         *p = [p[0] + 0.5 * GRID_MM, p[1] + 0.5 * GRID_MM, p[2] + zb];
     }
     let n_slots = 1;
-    let slots = scene.slots(n_slots, Material::Earth).map_err(LookError::build)?;
+    let slots = scene
+        .slots(n_slots, Material::Earth)
+        .map_err(LookError::build)?;
     let piece = Piece::new(slots.get(0), &bm).map_err(LookError::build)?;
     scene.add(
-        Tag { kind: "bank", owner: owner.to_owned() },
+        Tag {
+            kind: "bank",
+            owner: owner.to_owned(),
+        },
         piece.transformed(&pl.matrix_xy()).into_solid(),
     );
     // scree: ground cells touching the rock, each with its outward direction
@@ -150,11 +169,23 @@ pub fn build(
     }
     for _ in 0..(ask.boulders * per).round() as usize {
         let i = rng.pick(&wts);
-        sites.push((i, rng.uniform(SCREE_BLOCK_MM.0, SCREE_BLOCK_MM.1), rng.expo(0.3 * SCREE_REACH_MM), true, false));
+        sites.push((
+            i,
+            rng.uniform(SCREE_BLOCK_MM.0, SCREE_BLOCK_MM.1),
+            rng.expo(0.3 * SCREE_REACH_MM),
+            true,
+            false,
+        ));
     }
     for _ in 0..(ask.grit * per).round() as usize {
         let i = rng.pick(&wts);
-        sites.push((i, rng.uniform(GRIT_D_MM.0, GRIT_D_MM.1), rng.uniform(0.0, rmin), false, true));
+        sites.push((
+            i,
+            rng.uniform(GRIT_D_MM.0, GRIT_D_MM.1),
+            rng.uniform(0.0, rmin),
+            false,
+            true,
+        ));
     }
     // shuffle, then big first
     for k in (1..sites.len()).rev() {
@@ -162,26 +193,46 @@ pub fn build(
         sites.swap(k, j);
     }
     sites.sort_by(|a, b| b.1.total_cmp(&a.1));
-    let g = Grain { amp_mm: ROCK_GRAIN_MM, ..Grain::default() };
+    let g = Grain {
+        amp_mm: ROCK_GRAIN_MM,
+        ..Grain::default()
+    };
     let mut placed: Vec<(f64, f64, f64)> = Vec::new();
     let mut made: Vec<(dt_kit::TriMesh, [f64; 2], f64, f64)> = Vec::new();
     for (ci, d, rch, _block, grit_) in sites {
         let (p, o) = foot_cells[ci];
         let x = p[0] + o[0] * (d * (0.5 - SCREE_LEAN) + rch);
         let y = p[1] + o[1] * (d * (0.5 - SCREE_LEAN) + rch);
-        if !(d / 2.0 + 0.3 < x && x < fm.w - d / 2.0 - 0.3 && d / 2.0 + 0.3 < y && y < fm.h - d / 2.0 - 0.3) {
+        if !(d / 2.0 + 0.3 < x
+            && x < fm.w - d / 2.0 - 0.3
+            && d / 2.0 + 0.3 < y
+            && y < fm.h - d / 2.0 - 0.3)
+        {
             continue;
         }
-        if placed.iter().any(|&(a, b, dd)| libm::hypot(x - a, y - b) < SCREE_GAP * (d + dd)) {
+        if placed
+            .iter()
+            .any(|&(a, b, dd)| libm::hypot(x - a, y - b) < SCREE_GAP * (d + dd))
+        {
             continue;
         }
         let stone = crate::rock::make_stone(rng, d, SCREE_MIX)?.scaled(sc, 1.0);
-        let mesh = grain(&stone.convex, &g, seed ^ (placed.len() as u64).wrapping_mul(0x9E37_79B9))
-            .map_err(LookError::build)?;
+        let mesh = grain(
+            &stone.convex,
+            &g,
+            seed ^ (placed.len() as u64).wrapping_mul(0x9E37_79B9),
+        )
+        .map_err(LookError::build)?;
         // seat on the lowest ground (bank included) under it
         let r = 0.5 * d * sc;
-        let (i0, i1) = (((x - r) / GRID_MM).max(0.0) as usize, (((x + r) / GRID_MM) as usize).min(nx - 1));
-        let (j0, j1) = (((y - r) / GRID_MM).max(0.0) as usize, (((y + r) / GRID_MM) as usize).min(ny - 1));
+        let (i0, i1) = (
+            ((x - r) / GRID_MM).max(0.0) as usize,
+            (((x + r) / GRID_MM) as usize).min(nx - 1),
+        );
+        let (j0, j1) = (
+            ((y - r) / GRID_MM).max(0.0) as usize,
+            (((y + r) / GRID_MM) as usize).min(ny - 1),
+        );
         let mut zmin = f64::INFINITY;
         for j in j0..=j1 {
             for i in i0..=i1 {
@@ -196,14 +247,22 @@ pub fn build(
         made.push((mesh, [x, y], z0, yaw));
         placed.push((x, y, d));
     }
-    let stone_slots = scene.slots(made.len() as u32, Material::Rock).map_err(LookError::build)?;
+    let stone_slots = scene
+        .slots(made.len() as u32, Material::Rock)
+        .map_err(LookError::build)?;
     for (k, (mesh, at, z0, yaw)) in made.into_iter().enumerate() {
         let w = (pl.world)(at);
         let sol = form::solid(stone_slots.get(k as u32), &mesh)
             .map_err(LookError::build)?
             .turn(yaw, 1.0)
             .translate([w[0], w[1], z0]);
-        scene.add(Tag { kind: "rock", owner: owner.to_owned() }, sol);
+        scene.add(
+            Tag {
+                kind: "rock",
+                owner: owner.to_owned(),
+            },
+            sol,
+        );
     }
     Ok(())
 }
@@ -251,7 +310,10 @@ fn edges(z: &Field, step: f64) -> super::util::Mask {
                         if di == 0 && dj == 0 {
                             continue;
                         }
-                        let (a, b) = ((i as i64 + di).clamp(0, nx as i64 - 1) as usize, (j as i64 + dj).clamp(0, ny as i64 - 1) as usize);
+                        let (a, b) = (
+                            (i as i64 + di).clamp(0, nx as i64 - 1) as usize,
+                            (j as i64 + dj).clamp(0, ny as i64 - 1) as usize,
+                        );
                         if (z.at(a, b) - z.at(i, j)).abs() > step {
                             v = true;
                             break 'n;
@@ -267,18 +329,32 @@ fn edges(z: &Field, step: f64) -> super::util::Mask {
 
 fn closing(z: &Field, r_mm: f64) -> Field {
     let c = super::util::erode_disc(&dilate_disc(z, r_mm / GRID_MM), r_mm / GRID_MM);
-    Field { nx: z.nx, ny: z.ny, v: z.v.iter().zip(&c.v).map(|(a, b)| a.max(*b)).collect() }
+    Field {
+        nx: z.nx,
+        ny: z.ny,
+        v: z.v.iter().zip(&c.v).map(|(a, b)| a.max(*b)).collect(),
+    }
 }
 
 /// Dirt resting on the rock tops, from `pile` (the finished cliff in its
 /// own frame): a film over open stone, filling joints and hollows, thinning
 /// to nothing at lips and steps. `None` when nothing lies on a top.
-pub fn dirt_top(pile: &dt_kit::TriMesh, nx: usize, ny: usize, seed: u64, slot: dt_kit::Slot) -> Result<Option<Piece>, LookError> {
+pub fn dirt_top(
+    pile: &dt_kit::TriMesh,
+    nx: usize,
+    ny: usize,
+    seed: u64,
+    slot: dt_kit::Slot,
+) -> Result<Option<Piece>, LookError> {
     let rm = dt_kit::rays::RayMesh::new(pile);
     let mut org = Vec::with_capacity(nx * ny);
     for j in 0..ny {
         for i in 0..nx {
-            org.push([(i as f64 + 0.5) * GRID_MM, (j as f64 + 0.5) * GRID_MM, 1000.0]);
+            org.push([
+                (i as f64 + 0.5) * GRID_MM,
+                (j as f64 + 0.5) * GRID_MM,
+                1000.0,
+            ]);
         }
     }
     let hits = rm.first_hits(&org, &vec![[0.0, 0.0, -1.0]; org.len()]);
@@ -290,11 +366,19 @@ pub fn dirt_top(pile: &dt_kit::TriMesh, nx: usize, ny: usize, seed: u64, slot: d
     }
     let b = {
         let e = super::util::erode_disc(&z, 1.0);
-        Field { nx, ny, v: e.v.iter().map(|v| v - DIRT_SINK_MM).collect() }
+        Field {
+            nx,
+            ny,
+            v: e.v.iter().map(|v| v - DIRT_SINK_MM).collect(),
+        }
     };
     let zc = closing(&z, 0.5 * DIRT_PLUG_MM.0);
     let ed = edges(&zc, DIRT_PLUG_MM.0);
-    let not_edge = super::util::Mask { nx, ny, v: ed.v.iter().map(|&e| !e).collect() };
+    let not_edge = super::util::Mask {
+        nx,
+        ny,
+        v: ed.v.iter().map(|&e| !e).collect(),
+    };
     let inner = edt_in_mm(&not_edge);
     for q in 0..nx * ny {
         if inner.v[q] >= DIRT_PLUG_MM.0 && zc.v[q] - z.v[q] < DIRT_PLUG_MM.1 {
@@ -302,11 +386,28 @@ pub fn dirt_top(pile: &dt_kit::TriMesh, nx: usize, ny: usize, seed: u64, slot: d
         }
     }
     let blurred = super::util::blur(&z, DIRT_BLUR_MM / GRID_MM);
-    let base = Field { nx, ny, v: blurred.v.iter().zip(&z.v).map(|(a, b)| a.min(*b)).collect() };
+    let base = Field {
+        nx,
+        ny,
+        v: blurred.v.iter().zip(&z.v).map(|(a, b)| a.min(*b)).collect(),
+    };
     let zcl = closing(&z, DIRT_FILL_MM);
-    let zf = Field { nx, ny, v: zcl.v.iter().zip(&base.v).map(|(a, b)| a.min(b + DIRT_FILL_DEPTH_MM)).collect() };
+    let zf = Field {
+        nx,
+        ny,
+        v: zcl
+            .v
+            .iter()
+            .zip(&base.v)
+            .map(|(a, b)| a.min(b + DIRT_FILL_DEPTH_MM))
+            .collect(),
+    };
     let lip = edges(&zf, DIRT_STEP_MM);
-    let not_lip = super::util::Mask { nx, ny, v: lip.v.iter().map(|&e| !e).collect() };
+    let not_lip = super::util::Mask {
+        nx,
+        ny,
+        v: lip.v.iter().map(|&e| !e).collect(),
+    };
     let dl = super::util::edt_in(&not_lip);
     let mut d = Field::new(nx, ny, 0.0);
     let mut any = false;
@@ -316,9 +417,17 @@ pub fn dirt_top(pile: &dt_kit::TriMesh, nx: usize, ny: usize, seed: u64, slot: d
             let ramp = smooth01((dl.v[q] - 1.5) * GRID_MM / DIRT_RAMP_MM);
             let p = [(i as f64 + 0.5) * GRID_MM, (j as f64 + 0.5) * GRID_MM, 0.0];
             let rel = 0.5 + 0.5 * form::fbm3(p, seed, 2.0, 2);
-            let mut thick = ((zf.v[q] - base.v[q]).max(0.0) + DIRT_FILM_MM.0 + DIRT_FILM_MM.1 * rel.max(0.0)) * ramp;
+            let mut thick =
+                ((zf.v[q] - base.v[q]).max(0.0) + DIRT_FILM_MM.0 + DIRT_FILM_MM.1 * rel.max(0.0))
+                    * ramp;
             thick *= smooth01((z.v[q] - FOOT - DIRT_LOW_MM) / 3.0);
-            d.v[q] = if lip.v[q] { b.v[q] - 0.05 } else if thick > 0.02 { (base.v[q] + thick).max(z.v[q] + 0.12) } else { base.v[q] + thick };
+            d.v[q] = if lip.v[q] {
+                b.v[q] - 0.05
+            } else if thick > 0.02 {
+                (base.v[q] + thick).max(z.v[q] + 0.12)
+            } else {
+                base.v[q] + thick
+            };
             any |= d.v[q] > z.v[q];
         }
     }
@@ -326,23 +435,43 @@ pub fn dirt_top(pile: &dt_kit::TriMesh, nx: usize, ny: usize, seed: u64, slot: d
         return Ok(None);
     }
     let zb = FOOT - 2.0;
-    let up = hung(&d.v.iter().map(|&v| v.max(zb + 0.05) - zb).collect::<Vec<_>>(), nx, ny, GRID_MM, 0.04).map_err(LookError::build)?;
+    let up = hung(
+        &d.v.iter()
+            .map(|&v| v.max(zb + 0.05) - zb)
+            .collect::<Vec<_>>(),
+        nx,
+        ny,
+        GRID_MM,
+        0.04,
+    )
+    .map_err(LookError::build)?;
     // under: the rock top (padded by a cell), from zb - 1
     let (px, py) = (nx + 2, ny + 2);
     let mut under_d = vec![0.0; px * py];
     for j in 0..py {
         for i in 0..px {
-            let (a, c) = (i.saturating_sub(1).min(nx - 1), j.saturating_sub(1).min(ny - 1));
+            let (a, c) = (
+                i.saturating_sub(1).min(nx - 1),
+                j.saturating_sub(1).min(ny - 1),
+            );
             under_d[j * px + i] = b.at(a, c) - (zb - 1.0);
         }
     }
     let mut un = hung(&under_d, px, py, GRID_MM, 0.04).map_err(LookError::build)?;
     for p in &mut un.positions {
-        *p = [p[0] - 0.5 * GRID_MM + OFF.0, p[1] - 0.5 * GRID_MM + OFF.1, p[2] + zb - 1.0];
+        *p = [
+            p[0] - 0.5 * GRID_MM + OFF.0,
+            p[1] - 0.5 * GRID_MM + OFF.1,
+            p[2] + zb - 1.0,
+        ];
     }
     let mut upm = up;
     for p in &mut upm.positions {
-        *p = [p[0] + 0.5 * GRID_MM + OFF.0, p[1] + 0.5 * GRID_MM + OFF.1, p[2] + zb];
+        *p = [
+            p[0] + 0.5 * GRID_MM + OFF.0,
+            p[1] + 0.5 * GRID_MM + OFF.1,
+            p[2] + zb,
+        ];
     }
     let piece = Piece::new(slot, &upm).map_err(LookError::build)?;
     let piece = piece.minus(&[un]).map_err(LookError::build)?;
@@ -354,5 +483,9 @@ pub fn dirt_top(pile: &dt_kit::TriMesh, nx: usize, ny: usize, seed: u64, slot: d
 
 fn edt_in_mm(m: &super::util::Mask) -> Field {
     let e = super::util::edt_in(m);
-    Field { nx: e.nx, ny: e.ny, v: e.v.iter().map(|x| x * GRID_MM).collect() }
+    Field {
+        nx: e.nx,
+        ny: e.ny,
+        v: e.v.iter().map(|x| x * GRID_MM).collect(),
+    }
 }

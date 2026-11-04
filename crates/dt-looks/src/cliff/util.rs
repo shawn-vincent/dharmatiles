@@ -10,7 +10,6 @@ pub trait Draw {
     fn expo(&mut self, mean: f64) -> f64;
     fn signed(&mut self, lo_hi: (f64, f64)) -> f64;
     fn count(&mut self, lo_hi: (i64, i64)) -> i64;
-    fn flip(&mut self, p: f64) -> bool;
 }
 
 impl Draw for Rng {
@@ -42,9 +41,6 @@ impl Draw for Rng {
     }
     fn count(&mut self, lo_hi: (i64, i64)) -> i64 {
         self.int(lo_hi.0, lo_hi.1)
-    }
-    fn flip(&mut self, p: f64) -> bool {
-        self.random() < p
     }
 }
 
@@ -241,7 +237,12 @@ pub fn centroid(poly: &[P2]) -> P2 {
 }
 
 pub fn bounds(poly: &[P2]) -> [f64; 4] {
-    let mut b = [f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY];
+    let mut b = [
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    ];
     for p in poly {
         b[0] = b[0].min(p[0]);
         b[1] = b[1].min(p[1]);
@@ -300,8 +301,16 @@ pub fn min_side(pts: &[P2]) -> f64 {
         if l < 1e-9 {
             continue;
         }
-        let (u, v) = ([(b[0] - a[0]) / l, (b[1] - a[1]) / l], [-(b[1] - a[1]) / l, (b[0] - a[0]) / l]);
-        let (mut u0, mut u1, mut v0, mut v1) = (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
+        let (u, v) = (
+            [(b[0] - a[0]) / l, (b[1] - a[1]) / l],
+            [-(b[1] - a[1]) / l, (b[0] - a[0]) / l],
+        );
+        let (mut u0, mut u1, mut v0, mut v1) = (
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+        );
         for p in &h {
             let (pu, pv) = (p[0] * u[0] + p[1] * u[1], p[0] * v[0] + p[1] * v[1]);
             u0 = u0.min(pu);
@@ -380,7 +389,13 @@ pub fn trace_outline(m: &Mask, grid_mm: f64) -> Vec<P2> {
     use std::collections::HashMap;
     // directed boundary edges, interior on the left (ccw)
     let mut next: HashMap<(i64, i64), Vec<(i64, i64)>> = HashMap::new();
-    let on = |i: i64, j: i64| i >= 0 && j >= 0 && (i as usize) < m.nx && (j as usize) < m.ny && m.at(i as usize, j as usize);
+    let on = |i: i64, j: i64| {
+        i >= 0
+            && j >= 0
+            && (i as usize) < m.nx
+            && (j as usize) < m.ny
+            && m.at(i as usize, j as usize)
+    };
     for j in 0..m.ny as i64 {
         for i in 0..m.nx as i64 {
             if !on(i, j) {
@@ -405,8 +420,7 @@ pub fn trace_outline(m: &Mask, grid_mm: f64) -> Vec<P2> {
     while let Some((&start, _)) = next.iter().min_by_key(|(k, _)| **k) {
         let mut ring = vec![start];
         let mut cur = start;
-        loop {
-            let Some(outs) = next.get_mut(&cur) else { break };
+        while let Some(outs) = next.get_mut(&cur) {
             let Some(n) = outs.pop() else { break };
             if outs.is_empty() {
                 next.remove(&cur);
@@ -450,7 +464,9 @@ pub fn point_in(poly: &[P2], p: P2) -> bool {
     let mut j = n - 1;
     for i in 0..n {
         let (a, b) = (poly[i], poly[j]);
-        if (a[1] > p[1]) != (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0] {
+        if (a[1] > p[1]) != (b[1] > p[1])
+            && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0]
+        {
             c = !c;
         }
         j = i;

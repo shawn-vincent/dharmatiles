@@ -67,6 +67,8 @@ pub const CONTROLS: &[&str] = &[
     "grit",
 ];
 
+type ColResult = Result<(Vec<(usize, dt_kit::Piece)>, usize), dt_kit::KitError>;
+
 /// The cliff look.
 #[derive(Clone, Debug)]
 pub struct Cliff {
@@ -115,7 +117,9 @@ impl Cliff {
                 ("height", Value::Number(v)) if (6.0..=120.0).contains(v) => c.height = Some(*v),
                 ("height", v) => return Err(bad(format!("a cliff is 6 to 120 mm high, not {v}"))),
                 ("depth", Value::Number(v)) if (4.0..=60.0).contains(v) => c.depth = Some((*v, *v)),
-                ("depth", Value::Range(a, b)) if *a >= 4.0 && *b <= 60.0 => c.depth = Some((*a, *b)),
+                ("depth", Value::Range(a, b)) if *a >= 4.0 && *b <= 60.0 => {
+                    c.depth = Some((*a, *b))
+                }
                 ("depth", v) => {
                     return Err(bad(format!("a cliff reaches 4 to 60 mm out, not {v}")));
                 }
@@ -126,9 +130,17 @@ impl Cliff {
                         _ => 1.0,
                     };
                 }
-                ("stone-size", Value::Number(v)) => c.size = if *v >= 1.0 { *v / 1.35 } else { (1.0 + 0.35 * v.clamp(0.0, 1.0)) / 1.35 },
+                ("stone-size", Value::Number(v)) => {
+                    c.size = if *v >= 1.0 {
+                        *v / 1.35
+                    } else {
+                        (1.0 + 0.35 * v.clamp(0.0, 1.0)) / 1.35
+                    }
+                }
                 ("form", Value::Word(s)) => {
-                    c.form = Some(FormName::parse(s).ok_or_else(|| bad(format!("no cliff form `{s}`")))?);
+                    c.form = Some(
+                        FormName::parse(s).ok_or_else(|| bad(format!("no cliff form `{s}`")))?,
+                    );
                 }
                 ("rock", Value::Word(s)) => {
                     if let Some(i) = KIND_NAMES.iter().position(|n| n == s) {
@@ -210,11 +222,16 @@ impl Look for Cliff {
         let sq = frame.square_mm;
         let size = frame.size_mm();
         // which form, and where it stands
-        let form = self.form.unwrap_or_else(|| match ctx.along {
+        let default_form = match ctx.along {
             Some(a) if a.len() > 2 => FormName::Corner,
             _ => FormName::Run,
-        });
-        let f2 = if form.is_band() && matches!(form, FormName::Run | FormName::Corner | FormName::Escarpment) {
+        };
+        let form = self.form.unwrap_or(default_form);
+        let f2 = if form.is_band()
+            && matches!(
+                form,
+                FormName::Run | FormName::Corner | FormName::Escarpment
+            ) {
             let Some(along) = ctx.along else {
                 return Err(LookError {
                     control: None,
@@ -245,7 +262,13 @@ impl Look for Cliff {
                 t: [a[0] + len * d[0] + h * n[0], a[1] + len * d[1] + h * n[1]],
             }
         } else {
-            Frame2 { w: size[0], h: size[1], cx: [1.0, 0.0], cy: [0.0, 1.0], t: [0.0, 0.0] }
+            Frame2 {
+                w: size[0],
+                h: size[1],
+                cx: [1.0, 0.0],
+                cy: [0.0, 1.0],
+                t: [0.0, 0.0],
+            }
         };
         let Some((surface, _)) = scene.surface() else {
             return Err(LookError {
@@ -282,7 +305,9 @@ impl Look for Cliff {
         }
         let mut cols = finish::columns(&mut rng, &placed, &fm, &st.s, &zone);
         let nslots = placed.len() as u32 + 3;
-        let slots = scene.slots(nslots, Material::Rock).map_err(LookError::build)?;
+        let slots = scene
+            .slots(nslots, Material::Rock)
+            .map_err(LookError::build)?;
         let plan_slot = slots.get(0);
         // columns that carry another column's stone stand where they are
         for c in &mut cols {
@@ -306,12 +331,26 @@ impl Look for Cliff {
         let mut frng = Rng::new(ctx.seed.key("cliff-faces"));
         faces::plan_faces(&mut frng, &mut cols, &placed);
         // support cones of resting stones, for the cleaving guard
-        let cones: Vec<Option<dt_kit::TriMesh>> =
-            placed.iter().map(|r| if r.z0 > form::FOOT { finish::support_cone(r) } else { None }).collect();
-        let core_support = Support::new(std::slice::from_ref(&core_mesh)).map_err(LookError::build)?;
-        let env = Env { form: &fm, s: &st.s, placed: &placed, seed: ctx.seed.key("cliff-grain").value() };
+        let cones: Vec<Option<dt_kit::TriMesh>> = placed
+            .iter()
+            .map(|r| {
+                if r.z0 > form::FOOT {
+                    finish::support_cone(r)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let core_support =
+            Support::new(std::slice::from_ref(&core_mesh)).map_err(LookError::build)?;
+        let env = Env {
+            form: &fm,
+            s: &st.s,
+            placed: &placed,
+            seed: ctx.seed.key("cliff-grain").value(),
+        };
         let col_seed = ctx.seed.key("cliff-columns");
-        let results: Vec<Result<(Vec<(usize, dt_kit::Piece)>, usize), dt_kit::KitError>> = cols
+        let results: Vec<ColResult> = cols
             .par_iter()
             .enumerate()
             .map(|(ci, c)| {
@@ -327,7 +366,10 @@ impl Look for Cliff {
                             return None;
                         }
                         let pb = util::bounds(&placed[k].poly());
-                        (pb[0] < b[2] + 3.0 && pb[2] > b[0] - 3.0 && pb[1] < b[3] + 3.0 && pb[3] > b[1] - 3.0)
+                        (pb[0] < b[2] + 3.0
+                            && pb[2] > b[0] - 3.0
+                            && pb[1] < b[3] + 3.0
+                            && pb[3] > b[1] - 3.0)
                             .then(|| m.clone())
                     })
                     .collect();
@@ -337,7 +379,9 @@ impl Look for Cliff {
                 let mut out = Vec::new();
                 for &ri in c.stones.iter().rev() {
                     let slot = slots.get(2 + ri as u32);
-                    if let Some(p) = stone::rock_piece(&mut rng, &mut crng, ri, c, &mut cs, &env, &sup, slot)? {
+                    if let Some(p) =
+                        stone::rock_piece(&mut rng, &mut crng, ri, c, &mut cs, &env, &sup, slot)?
+                    {
                         out.push((ri, p));
                     }
                 }
@@ -365,7 +409,8 @@ impl Look for Cliff {
             v
         };
         let core = core::core_piece(slots.get(1), &core_mesh, &fm).map_err(LookError::build)?;
-        let core = relief::relief(core, &all_faces, Some((fm.w, fm.h))).map_err(LookError::build)?;
+        let core =
+            relief::relief(core, &all_faces, Some((fm.w, fm.h))).map_err(LookError::build)?;
         let core = stone::grain(&core, env.seed, form::FOOT).map_err(LookError::build)?;
         let m = f2.matrix(foot);
         if self.top_dirt {
@@ -373,19 +418,44 @@ impl Look for Cliff {
             for mesh in pieces.iter().map(|p| p.1.mesh()).chain([core.mesh()]) {
                 let off = pile.positions.len() as u32;
                 pile.positions.extend(mesh.positions);
-                pile.triangles.extend(mesh.triangles.iter().map(|t| t.map(|v| v + off)));
+                pile.triangles
+                    .extend(mesh.triangles.iter().map(|t| t.map(|v| v + off)));
             }
             let slot = slots.get(2 + placed.len() as u32);
-            if let Some(d) = foot::dirt_top(&pile, fm.t.nx, fm.t.ny, ctx.seed.key("cliff-dirt").value(), slot)? {
-                scene.add(Tag { kind: "bank", owner: ctx.path.to_owned() }, d.transformed(&m).into_solid());
+            if let Some(d) = foot::dirt_top(
+                &pile,
+                fm.t.nx,
+                fm.t.ny,
+                ctx.seed.key("cliff-dirt").value(),
+                slot,
+            )? {
+                scene.add(
+                    Tag {
+                        kind: "bank",
+                        owner: ctx.path.to_owned(),
+                    },
+                    d.transformed(&m).into_solid(),
+                );
             }
         }
         let n_stones = pieces.len();
         for (_, p) in pieces {
             let solid = p.transformed(&m).into_solid();
-            scene.add(Tag { kind: "cliff", owner: ctx.path.to_owned() }, solid);
+            scene.add(
+                Tag {
+                    kind: "cliff",
+                    owner: ctx.path.to_owned(),
+                },
+                solid,
+            );
         }
-        scene.add(Tag { kind: "cliff", owner: ctx.path.to_owned() }, core.transformed(&m).into_solid());
+        scene.add(
+            Tag {
+                kind: "cliff",
+                owner: ctx.path.to_owned(),
+            },
+            core.transformed(&m).into_solid(),
+        );
         let mut frng = Rng::new(ctx.seed.key("cliff-foot"));
         let world = |p: [f64; 2]| f2.world(p);
         foot::build(
@@ -395,7 +465,13 @@ impl Look for Cliff {
             &fm,
             &st.s,
             &zone,
-            &foot::Place { world: &world, matrix: m, ground: &ground, foot, scale: s },
+            &foot::Place {
+                world: &world,
+                matrix: m,
+                ground: &ground,
+                foot,
+                scale: s,
+            },
             &self.foot,
             ctx.seed.key("cliff-scree").value(),
         )?;
@@ -411,7 +487,12 @@ impl Look for Cliff {
 fn poly_overlap(a: &[util::P2], b: &[util::P2]) -> f64 {
     // sample the smaller polygon's bounds on a 0.5 mm grid
     let (ba, bb) = (util::bounds(a), util::bounds(b));
-    let (x0, y0, x1, y1) = (ba[0].max(bb[0]), ba[1].max(bb[1]), ba[2].min(bb[2]), ba[3].min(bb[3]));
+    let (x0, y0, x1, y1) = (
+        ba[0].max(bb[0]),
+        ba[1].max(bb[1]),
+        ba[2].min(bb[2]),
+        ba[3].min(bb[3]),
+    );
     if x0 >= x1 || y0 >= y1 {
         return 0.0;
     }

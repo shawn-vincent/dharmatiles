@@ -264,7 +264,10 @@ fn cliff_parity(args: &[String]) -> Result<(), String> {
         }
     }
     run(&mut py)?;
-    println!("parity: contact sheet {}", out.join("contact-sheet.png").display());
+    println!(
+        "parity: contact sheet {}",
+        out.join("contact-sheet.png").display()
+    );
     Ok(())
 }
 

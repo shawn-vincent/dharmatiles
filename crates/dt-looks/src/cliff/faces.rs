@@ -109,7 +109,10 @@ struct Net {
 
 impl Net {
     fn dist_pt(&self, p: P2) -> f64 {
-        self.lines.iter().map(|l| l.1.dist(p)).fold(f64::INFINITY, f64::min)
+        self.lines
+            .iter()
+            .map(|l| l.1.dist(p))
+            .fold(f64::INFINITY, f64::min)
     }
 }
 
@@ -132,8 +135,10 @@ fn walk(rng: &mut Rng, net: &Net, p: P2, th0: f64, up: bool) -> Walked {
     let mut th = th0;
     for _ in 0..60 {
         th = th0
-            + (th - th0 + rng.normal(0.0, CRACK_BEND_DEG).to_radians())
-                .clamp(-CRACK_WANDER_DEG.to_radians(), CRACK_WANDER_DEG.to_radians());
+            + (th - th0 + rng.normal(0.0, CRACK_BEND_DEG).to_radians()).clamp(
+                -CRACK_WANDER_DEG.to_radians(),
+                CRACK_WANDER_DEG.to_radians(),
+            );
         let last = pts[pts.len() - 1];
         let step = rng.uniform(CRACK_STEP_MM.0, CRACK_STEP_MM.1) * if up { 1.0 } else { -1.0 };
         let h = heading(th);
@@ -156,7 +161,8 @@ fn walk(rng: &mut Rng, net: &Net, p: P2, th0: f64, up: bool) -> Walked {
         let mut near: Vec<usize> = Vec::new();
         for (k, (kind, l)) in net.lines.iter().enumerate() {
             if l.dist(last) > CRACK_GAP_MM
-                && (l.dist_seg(last, q) < CRACK_GAP_MM || (*kind != Kind::Crack && along(last, q, l)))
+                && (l.dist_seg(last, q) < CRACK_GAP_MM
+                    || (*kind != Kind::Crack && along(last, q, l)))
             {
                 near.push(k);
             }
@@ -168,7 +174,10 @@ fn walk(rng: &mut Rng, net: &Net, p: P2, th0: f64, up: bool) -> Walked {
         let k = near
             .into_iter()
             .min_by(|&a, &b| {
-                net.lines[a].1.dist_seg(last, q).total_cmp(&net.lines[b].1.dist_seg(last, q))
+                net.lines[a]
+                    .1
+                    .dist_seg(last, q)
+                    .total_cmp(&net.lines[b].1.dist_seg(last, q))
             })
             .unwrap_or(0);
         let (_, a, b) = net.lines[k].1.closest(last, q);
@@ -216,7 +225,13 @@ pub fn crack_net(
     }
     for &(p, th) in starts {
         let h = heading(th);
-        let (pts, hit) = walk(rng, &net, [p[0] + 0.05 * h[0], p[1] + 0.05 * h[1]], th, true);
+        let (pts, hit) = walk(
+            rng,
+            &net,
+            [p[0] + 0.05 * h[0], p[1] + 0.05 * h[1]],
+            th,
+            true,
+        );
         if hit.is_some() {
             let mut all = vec![p];
             all.extend(pts);
@@ -224,9 +239,16 @@ pub fn crack_net(
         }
     }
     let mut bare: Vec<f64> = b.iter().map(|&p| net.dist_pt(p)).collect();
-    let tries = if want > 0.0 { 3 * (want as usize) + 60 } else { 0 };
+    let tries = if want > 0.0 {
+        3 * (want as usize) + 60
+    } else {
+        0
+    };
     for _ in 0..tries {
-        let w: Vec<f64> = bare.iter().map(|&d| if d > CRACK_GAP_MM { d.powi(4) } else { 0.0 }).collect();
+        let w: Vec<f64> = bare
+            .iter()
+            .map(|&d| if d > CRACK_GAP_MM { d.powi(4) } else { 0.0 })
+            .collect();
         if total >= want || w.iter().all(|&x| x <= 0.0) {
             break;
         }
@@ -234,11 +256,17 @@ pub fn crack_net(
         let r = rng.random();
         let th = (rng.normal(0.0, CRACK_LEAN_DEG).clamp(-15.0, 15.0)
             + if r < CRACK_LEVEL_P { 0.0 } else { 90.0 }
-            + if r > 1.0 - CRACK_DIAG_P { rng.signed(CRACK_DIAG_DEG) } else { 0.0 })
+            + if r > 1.0 - CRACK_DIAG_P {
+                rng.signed(CRACK_DIAG_DEG)
+            } else {
+                0.0
+            })
         .to_radians();
         let (dn, hit0) = walk(rng, &net, p, th, false);
         let (up, hit) = walk(rng, &net, p, th, true);
-        let (Some(h0), Some(h1)) = (hit0, hit) else { continue };
+        let (Some(h0), Some(h1)) = (hit0, hit) else {
+            continue;
+        };
         let mut pts: Vec<P2> = dn.into_iter().rev().collect();
         pts.extend(up.into_iter().skip(1));
         if pts.len() < 2 {
@@ -289,14 +317,25 @@ pub struct Spec {
     pub on: Vec<usize>,
 }
 
-fn corner_starts(rng: &mut Rng, specs: &[Spec], nets: &[Vec<Line>]) -> Vec<(usize, Vec<(P2, f64)>)> {
+fn corner_starts(
+    rng: &mut Rng,
+    specs: &[Spec],
+    nets: &[Vec<Line>],
+) -> Vec<(usize, Vec<(P2, f64)>)> {
     let mut out: Vec<(usize, Vec<(P2, f64)>)> = Vec::new();
     let e: Vec<(usize, usize, P2)> = specs
         .iter()
         .enumerate()
         .flat_map(|(i, sp)| {
             (0..2).map(move |e| {
-                (i, e, [sp.p0[0] + e as f64 * sp.l * sp.t[0], sp.p0[1] + e as f64 * sp.l * sp.t[1]])
+                (
+                    i,
+                    e,
+                    [
+                        sp.p0[0] + e as f64 * sp.l * sp.t[0],
+                        sp.p0[1] + e as f64 * sp.l * sp.t[1],
+                    ],
+                )
             })
         })
         .collect();
@@ -304,7 +343,10 @@ fn corner_starts(rng: &mut Rng, specs: &[Spec], nets: &[Vec<Line>]) -> Vec<(usiz
         for &(j, ej, q) in &e {
             let sj = &specs[j];
             let ti = specs[i].t;
-            let tj = [(1.0 - 2.0 * ej as f64) * sj.t[0], (1.0 - 2.0 * ej as f64) * sj.t[1]];
+            let tj = [
+                (1.0 - 2.0 * ej as f64) * sj.t[0],
+                (1.0 - 2.0 * ej as f64) * sj.t[1],
+            ];
             if j == i
                 || norm2([p[0] - q[0], p[1] - q[1]]) > CRACK_CORNER_MM
                 || (ti[1] * tj[0] - ti[0] * tj[1]) > -0.05
@@ -409,9 +451,18 @@ pub fn plan_faces(rng: &mut Rng, cols: &mut [Column], placed: &[Placed]) {
         let m = [m[0] / ml, m[1] / ml];
         let t = [-m[1], m[0]];
         let ends: Vec<P2> = ix.iter().flat_map(|&i| [f[i].1, f[i].2]).collect();
-        let u0 = ends.iter().map(|&p| dot(p, t)).fold(f64::INFINITY, f64::min);
-        let u1 = ends.iter().map(|&p| dot(p, t)).fold(f64::NEG_INFINITY, f64::max);
-        let mx = ends.iter().map(|&p| dot(p, m)).fold(f64::NEG_INFINITY, f64::max);
+        let u0 = ends
+            .iter()
+            .map(|&p| dot(p, t))
+            .fold(f64::INFINITY, f64::min);
+        let u1 = ends
+            .iter()
+            .map(|&p| dot(p, t))
+            .fold(f64::NEG_INFINITY, f64::max);
+        let mx = ends
+            .iter()
+            .map(|&p| dot(p, m))
+            .fold(f64::NEG_INFINITY, f64::max);
         let p0 = [t[0] * u0 + m[0] * mx, t[1] * u0 + m[1] * mx];
         let on: Vec<usize> = {
             let mut v = Vec::new();
@@ -422,8 +473,14 @@ pub fn plan_faces(rng: &mut Rng, cols: &mut [Column], placed: &[Placed]) {
             }
             v
         };
-        let z0 = on.iter().map(|&c| cols[c].zlo).fold(f64::INFINITY, f64::min);
-        let z1 = on.iter().map(|&c| cols[c].zhi).fold(f64::NEG_INFINITY, f64::max);
+        let z0 = on
+            .iter()
+            .map(|&c| cols[c].zlo)
+            .fold(f64::INFINITY, f64::min);
+        let z1 = on
+            .iter()
+            .map(|&c| cols[c].zhi)
+            .fold(f64::NEG_INFINITY, f64::max);
         let mut joints: Vec<Vec<P2>> = Vec::new();
         let mut area = 0.0;
         for &c in &on {
@@ -522,11 +579,20 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
         let j0 = (((lo[1] - m - sp.z0) / g).floor().max(0.0)) as usize;
         let j1 = (((hi[1] + m - sp.z0) / g).ceil().max(0.0) as usize).min(nz - 1);
         let freq: Vec<(f64, f64)> = (0..3)
-            .map(|_| (rng.uniform(1.0, 3.0), rng.uniform(0.0, std::f64::consts::TAU)))
+            .map(|_| {
+                (
+                    rng.uniform(1.0, 3.0),
+                    rng.uniform(0.0, std::f64::consts::TAU),
+                )
+            })
             .collect();
         let wscale = rng.uniform(CRACK_SLOT_MM.0, CRACK_SLOT_MM.1);
         let dep = rng.uniform(CRACK_DEPTH_MM.0, CRACK_DEPTH_MM.1)
-            * if cs.length() < CRACK_FINE_MM { CRACK_FINE } else { 1.0 };
+            * if cs.length() < CRACK_FINE_MM {
+                CRACK_FINE
+            } else {
+                1.0
+            };
         for j in j0..=j1 {
             for i in i0..=i1 {
                 let p = at(i, j);
@@ -540,7 +606,9 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
                         + 0.2
                             * freq
                                 .iter()
-                                .map(|&(fr, ph)| libm::sin(std::f64::consts::TAU * fr * s / 6.0 + ph))
+                                .map(|&(fr, ph)| {
+                                    libm::sin(std::f64::consts::TAU * fr * s / 6.0 + ph)
+                                })
                                 .sum::<f64>())
                     .clamp(CRACK_PINCH.0, CRACK_PINCH.1);
                     let w = 0.5 * wscale * f;
@@ -562,15 +630,16 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
         }
     }
     // the sub-faces
-    let free = G { nx: nu, ny: nz, v: cut.v.iter().map(|&c| !c).collect() };
+    let free = G {
+        nx: nu,
+        ny: nz,
+        v: cut.v.iter().map(|&c| !c).collect(),
+    };
     let (lab, nlab) = super::util::label(&free);
     let near = {
         let bg = lab.map(|x| x == 0);
-        let (_, idx) = dt_kit::distance_nearest(
-            &lab.v.iter().map(|&x| x != 0).collect::<Vec<_>>(),
-            nu,
-            nz,
-        );
+        let (_, idx) =
+            dt_kit::distance_nearest(&lab.v.iter().map(|&x| x != 0).collect::<Vec<_>>(), nu, nz);
         let _ = bg;
         idx
     };
@@ -583,7 +652,9 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
         };
     }
     let nl = nlab as usize + 1;
-    let th: Vec<f64> = (0..nl).map(|_| rng.uniform(0.0, std::f64::consts::TAU)).collect();
+    let th: Vec<f64> = (0..nl)
+        .map(|_| rng.uniform(0.0, std::f64::consts::TAU))
+        .collect();
     let mut pgrid = Field::new(nu, nz, 0.0);
     let (mut lo, mut hi) = (vec![f64::INFINITY; nl], vec![f64::NEG_INFINITY; nl]);
     for j in 0..nz {
@@ -600,7 +671,12 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
         .map(|_| rng.uniform(FACET_TILT_DEG.0, FACET_TILT_DEG.1))
         .collect();
     let k: Vec<f64> = (0..nl)
-        .map(|l| tilt[l].to_radians().tan().min(FACET_MM.2 / (hi[l] - lo[l]).max(1e-3)))
+        .map(|l| {
+            tilt[l]
+                .to_radians()
+                .tan()
+                .min(FACET_MM.2 / (hi[l] - lo[l]).max(1e-3))
+        })
         .collect();
     let mut tt = Field::new(nu, nz, 0.0);
     for q in 0..nu * nz {
@@ -675,8 +751,14 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
             }
         }
     }
-    let deep = if sp.rim { FACET_DEEP_MM.1 } else { FACET_DEEP_MM.0 };
-    let mut bset: Vec<f64> = (0..nl).map(|_| rng.uniform(FACET_MM.0, FACET_MM.1)).collect();
+    let deep = if sp.rim {
+        FACET_DEEP_MM.1
+    } else {
+        FACET_DEEP_MM.0
+    };
+    let mut bset: Vec<f64> = (0..nl)
+        .map(|_| rng.uniform(FACET_MM.0, FACET_MM.1))
+        .collect();
     for _ in 0..3 {
         for &((p, q), d) in &e {
             bset[q] = bset[q].max(bset[p] + d).min(deep);

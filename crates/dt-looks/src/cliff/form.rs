@@ -66,7 +66,10 @@ impl FormName {
         })
     }
     pub fn is_band(self) -> bool {
-        matches!(self, Self::Run | Self::Corner | Self::Canyon | Self::Escarpment)
+        matches!(
+            self,
+            Self::Run | Self::Corner | Self::Canyon | Self::Escarpment
+        )
     }
 }
 
@@ -308,10 +311,7 @@ fn band(
         None => FOOT + hgt.0,
         Some(r) => FOOT + r.0 + (r.1 - r.0) * (a / l).clamp(0.0, 1.0),
     };
-    let depth = ask
-        .depth
-        .or(sp.depth)
-        .map_or(DEPTH_MM, |d| d);
+    let depth = ask.depth.or(sp.depth).unwrap_or(DEPTH_MM);
     let depth = (depth.0 * s, depth.1 * s);
     let top_depth = sp.top_depth.unwrap_or(TOP_DEPTH_MM);
     let top_depth = (top_depth.0 * s, top_depth.1 * s);
@@ -323,7 +323,9 @@ fn band(
         Vec::new()
     };
     let n_g = (rng.poisson(GULLIES_PER_SQUARE * l / (SQUARE_MM * s)).max(1)) as usize;
-    let n_b = (rng.poisson(BUTTRESSES_PER_SQUARE * l / (SQUARE_MM * s)).max(1)) as usize;
+    let n_b = (rng
+        .poisson(BUTTRESSES_PER_SQUARE * l / (SQUARE_MM * s))
+        .max(1)) as usize;
     let gul: Vec<usize> = inner
         .iter()
         .copied()
@@ -487,7 +489,11 @@ fn rings(rng: &mut Rng, sp: &Spec, height: f64, nx: usize, ny: usize, w: f64, h:
                 1.0
             };
             for &(rr, hr) in sp.rings {
-                let r = rng.uniform(rr.0, rr.1) * sc * size * f * (1.0 + rng.uniform(-RING_JITTER, RING_JITTER));
+                let r = rng.uniform(rr.0, rr.1)
+                    * sc
+                    * size
+                    * f
+                    * (1.0 + rng.uniform(-RING_JITTER, RING_JITTER));
                 let mut z = FOOT + rng.uniform(hr.0, hr.1) * height * hgt;
                 if hr.0 < 1.0 {
                     z += rng.uniform(-RING_STEP_MM, RING_STEP_MM);
@@ -541,11 +547,22 @@ const ZONES_PER_SQUARE: f64 = 1.5;
 const ZONE_SIGMA_MM: (f64, f64) = (5.0, 10.0);
 
 impl Zones {
-    pub fn new(rng: &mut Rng, w: f64, s: f64, patches: Option<f64>, width: Option<(f64, f64)>) -> Self {
-        let k = patches.map_or(((w / (SQUARE_MM * s) * ZONES_PER_SQUARE).round() as usize).max(1), |p| p.max(0.0) as usize);
+    pub fn new(
+        rng: &mut Rng,
+        w: f64,
+        s: f64,
+        patches: Option<f64>,
+        width: Option<(f64, f64)>,
+    ) -> Self {
+        let k = patches.map_or(
+            ((w / (SQUARE_MM * s) * ZONES_PER_SQUARE).round() as usize).max(1),
+            |p| p.max(0.0) as usize,
+        );
         let sig = width.map_or(ZONE_SIGMA_MM, |(a, b)| (0.5 * a, 0.5 * b));
         let cx: Vec<f64> = (0..k).map(|_| rng.uniform(0.0, w)).collect();
-        let sg: Vec<f64> = (0..k).map(|_| rng.uniform(sig.0, sig.1.max(sig.0 + 1e-6))).collect();
+        let sg: Vec<f64> = (0..k)
+            .map(|_| rng.uniform(sig.0, sig.1.max(sig.0 + 1e-6)))
+            .collect();
         Self { cx, sg }
     }
     pub fn at(&self, x: f64) -> f64 {

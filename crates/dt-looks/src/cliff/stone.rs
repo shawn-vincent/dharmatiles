@@ -8,9 +8,11 @@ use std::collections::HashSet;
 use dt_kit::rays::RayMesh;
 use dt_kit::{KitError, Piece, Rng, Slot, Support, TriMesh, form, hung, welded};
 
-use super::chips::{chip_edges, adjacency, corner_chips, face_normals, CHIP_MM};
+use super::chips::{CHIP_MM, adjacency, chip_edges, corner_chips, face_normals};
 use super::faces::{Column, Face};
-use super::finish::{COLUMN_STEP_MAX, Cutter, SEAT_SLOPE_DEG, occupied, offset_poly, open_faces, prism, top_z_poly};
+use super::finish::{
+    COLUMN_STEP_MAX, Cutter, SEAT_SLOPE_DEG, occupied, offset_poly, open_faces, prism, top_z_poly,
+};
 use super::form::{FOOT, Form, GRID_MM};
 use super::relief::relief;
 use super::stack::{Placed, SINK_MM};
@@ -59,7 +61,9 @@ fn chamfer_corners(
     loaded: &dyn Fn(P2) -> bool,
 ) -> Result<Piece, KitError> {
     let n = poly.len();
-    let Some((lo, hi)) = rock.bounds() else { return Ok(rock) };
+    let Some((lo, hi)) = rock.bounds() else {
+        return Ok(rock);
+    };
     for k in 0..n {
         let (a, b, c) = (poly[(k + n - 1) % n], poly[k], poly[(k + 1) % n]);
         let e1 = [b[0] - a[0], b[1] - a[1]];
@@ -99,7 +103,13 @@ fn chamfer_corners(
 /// The bed a rock is seated on, every low strip narrower than SEAT_SPAN
 /// bridged (a grey closing).
 fn seat_bed(r: &Placed) -> Field {
-    let nmax = r.bed.v.iter().copied().filter(|v| !v.is_nan()).fold(f64::NEG_INFINITY, f64::max);
+    let nmax = r
+        .bed
+        .v
+        .iter()
+        .copied()
+        .filter(|v| !v.is_nan())
+        .fold(f64::NEG_INFINITY, f64::max);
     let mut filled = r.bed.clone();
     for (q, v) in filled.v.iter_mut().enumerate() {
         if !r.cells.v[q] {
@@ -110,7 +120,11 @@ fn seat_bed(r: &Placed) -> Field {
     let closed = super::util::erode_disc(&super::util::dilate_disc(&filled, rad), rad);
     let mut out = r.bed.clone();
     for q in 0..out.v.len() {
-        out.v[q] = if r.cells.v[q] { r.bed.v[q].max(closed.v[q]) } else { f64::NAN };
+        out.v[q] = if r.cells.v[q] {
+            r.bed.v[q].max(closed.v[q])
+        } else {
+            f64::NAN
+        };
     }
     out
 }
@@ -118,13 +132,10 @@ fn seat_bed(r: &Placed) -> Field {
 /// Seat a resting rock on the stones under it (its underside one surface
 /// at the overhang limit starting BEVEL up its side at the outline).
 #[allow(clippy::too_many_lines)]
-fn seat(
-    rock: Piece,
-    r: &Placed,
-    opens: &[(P2, P2)],
-    own: &[bool],
-) -> Result<Piece, KitError> {
-    let Some((lo3, hi3)) = rock.bounds() else { return Ok(rock) };
+fn seat(rock: Piece, r: &Placed, opens: &[(P2, P2)], own: &[bool]) -> Result<Piece, KitError> {
+    let Some((lo3, hi3)) = rock.bounds() else {
+        return Ok(rock);
+    };
     let (lo, hi) = (lo3[2], hi3[2]);
     let bed = seat_bed(r);
     let mut bv: Vec<f64> = bed.v.iter().copied().filter(|v| !v.is_nan()).collect();
@@ -151,11 +162,17 @@ fn seat(
         b1 = [b1[0].max(p[0]), b1[1].max(p[1])];
     }
     let res = 0.05;
-    let (nx, ny) = (((b1[0] - b0[0]) / res).ceil() as usize + 2, ((b1[1] - b0[1]) / res).ceil() as usize + 2);
+    let (nx, ny) = (
+        ((b1[0] - b0[0]) / res).ceil() as usize + 2,
+        ((b1[1] - b0[1]) / res).ceil() as usize + 2,
+    );
     let mut m = super::util::Mask::new(nx, ny, false);
     for j in 0..ny {
         for i in 0..nx {
-            let p = [b0[0] + (i as f64 + 0.5) * res, b0[1] + (j as f64 + 0.5) * res];
+            let p = [
+                b0[0] + (i as f64 + 0.5) * res,
+                b0[1] + (j as f64 + 0.5) * res,
+            ];
             if polys.iter().any(|q| point_in(q, p)) {
                 m.set(i, j, true);
             }
@@ -206,7 +223,10 @@ fn seat(
     }
     let inside: Vec<bool> = q.iter().map(|&p| point_in(&ring, p)).collect();
     let d: Vec<f64> = q.iter().map(|&p| slope * ring_dist(&ring, p)).collect();
-    let dmax = (0..q.len()).filter(|&k| inside[k]).map(|k| d[k]).fold(0.0, f64::max);
+    let dmax = (0..q.len())
+        .filter(|&k| inside[k])
+        .map(|k| d[k])
+        .fold(0.0, f64::max);
     let bev = (dmax - SINK_MM).clamp(0.2, BEVEL_MM);
     let hb: Vec<f64> = bpts.iter().map(|&p| bed_at(p) + bev).collect();
     let local: Vec<f64> = q.iter().map(|&p| bed_at(p) + bev).collect();
@@ -225,7 +245,11 @@ fn seat(
     }
     if !opens.is_empty() && own.iter().any(|&b| b) {
         // eroded own cells (disc of 0.5 mm = 2 cells)
-        let ownm = super::util::Mask { nx: bed.nx, ny: bed.ny, v: own.to_vec() };
+        let ownm = super::util::Mask {
+            nx: bed.nx,
+            ny: bed.ny,
+            v: own.to_vec(),
+        };
         let owf = ownm.map(|b| if b { 1.0 } else { 0.0 });
         let er = super::util::erode_disc(&owf, 0.5 / GRID_MM);
         for k in 0..q.len() {
@@ -254,7 +278,11 @@ fn seat(
     keep.triangles.iter_mut().for_each(|t| t.swap(1, 2)); // mirrored in z
     let umin = under.iter().copied().fold(f64::INFINITY, f64::min);
     let deep = umin - 0.1;
-    let rock2 = if deep < lo { rock.pad(lo + 0.05, deep, lo + 0.06)? } else { rock.clone() };
+    let rock2 = if deep < lo {
+        rock.pad(lo + 0.05, deep, lo + 0.06)?
+    } else {
+        rock.clone()
+    };
     let out = rock2.within(&keep)?;
     Ok(if out.is_empty() { rock } else { out })
 }
@@ -273,12 +301,24 @@ fn top_cracks(
     if t.positions.is_empty() {
         return Ok((rock.clone(), 0));
     }
-    let zmax = t.positions.iter().map(|p| p[2]).fold(f64::NEG_INFINITY, f64::max);
+    let zmax = t
+        .positions
+        .iter()
+        .map(|p| p[2])
+        .fold(f64::NEG_INFINITY, f64::max);
     let rm = RayMesh::new(&t);
     let mut cuts: Vec<TriMesh> = Vec::new();
     for fc in faces {
-        let u: Vec<f64> = t.positions.iter().map(|p| (p[0] - fc.p0[0]) * fc.t[0] + (p[1] - fc.p0[1]) * fc.t[1]).collect();
-        let sm_: Vec<f64> = t.positions.iter().map(|p| (p[0] - fc.p0[0]) * fc.m[0] + (p[1] - fc.p0[1]) * fc.m[1]).collect();
+        let u: Vec<f64> = t
+            .positions
+            .iter()
+            .map(|p| (p[0] - fc.p0[0]) * fc.t[0] + (p[1] - fc.p0[1]) * fc.t[1])
+            .collect();
+        let sm_: Vec<f64> = t
+            .positions
+            .iter()
+            .map(|p| (p[0] - fc.p0[0]) * fc.m[0] + (p[1] - fc.p0[1]) * fc.m[1])
+            .collect();
         let smax = sm_.iter().copied().fold(f64::NEG_INFINITY, f64::max);
         let (umin, umax) = (
             u.iter().copied().fold(f64::INFINITY, f64::min),
@@ -291,20 +331,38 @@ fn top_cracks(
         let us: Vec<f64> = (0..24).map(|k| ua + (ub - ua) * k as f64 / 23.0).collect();
         let edge: Vec<P2> = us
             .iter()
-            .map(|&uu| [uu, r.top_z(fc.p0[0] + fc.t[0] * uu, fc.p0[1] + fc.t[1] * uu)])
+            .map(|&uu| {
+                [
+                    uu,
+                    r.top_z(fc.p0[0] + fc.t[0] * uu, fc.p0[1] + fc.t[1] * uu),
+                ]
+            })
             .collect();
         let eline = super::lines::Line::new(edge);
         for cs in &fc.cracks {
             for q in cross_lines(cs, &eline) {
                 let th = rng.normal(0.0, 6.0).to_radians();
-                let d2 = [-fc.m[0] * libm::cos(th) + fc.t[0] * libm::sin(th), -fc.m[1] * libm::cos(th) + fc.t[1] * libm::sin(th)];
+                let d2 = [
+                    -fc.m[0] * libm::cos(th) + fc.t[0] * libm::sin(th),
+                    -fc.m[1] * libm::cos(th) + fc.t[1] * libm::sin(th),
+                ];
                 let d3 = [d2[0], d2[1], 0.0];
-                let o = [fc.p0[0] + fc.t[0] * q[0] + fc.m[0] * (smax + 0.5), fc.p0[1] + fc.t[1] * q[0] + fc.m[1] * (smax + 0.5), 0.0];
+                let o = [
+                    fc.p0[0] + fc.t[0] * q[0] + fc.m[0] * (smax + 0.5),
+                    fc.p0[1] + fc.t[1] * q[0] + fc.m[1] * (smax + 0.5),
+                    0.0,
+                ];
                 let ns = 400;
                 let ss: Vec<f64> = (0..ns).map(|k| k as f64 * 0.1).collect();
-                let org: Vec<V> = ss.iter().map(|&s| [o[0] + s * d3[0], o[1] + s * d3[1], zmax + 2.0]).collect();
+                let org: Vec<V> = ss
+                    .iter()
+                    .map(|&s| [o[0] + s * d3[0], o[1] + s * d3[1], zmax + 2.0])
+                    .collect();
                 let hits = rm.first_hits(&org, &vec![[0.0, 0.0, -1.0]; ns]);
-                let h: Vec<f64> = hits.iter().map(|h| h.map_or(f64::NAN, |h| h.point[2])).collect();
+                let h: Vec<f64> = hits
+                    .iter()
+                    .map(|h| h.map_or(f64::NAN, |h| h.point[2]))
+                    .collect();
                 let ok: Vec<bool> = (0..ns)
                     .map(|k| {
                         !h[k].is_nan()
@@ -312,7 +370,9 @@ fn top_cracks(
                             && !occupied(env.form, env.s, [org[k][0], org[k][1], h[k] + 0.4])
                     })
                     .collect();
-                let Some(i0) = ok.iter().position(|&b| b) else { continue };
+                let Some(i0) = ok.iter().position(|&b| b) else {
+                    continue;
+                };
                 let i1 = match ok[i0..].iter().position(|&b| !b) {
                     Some(k) => i0 + k - 1,
                     None => ns - 1,
@@ -338,7 +398,11 @@ fn top_cracks(
                 prof.push([xe, flmax + 3.0]);
                 prof.push([0.0, flmax + 3.0]);
                 let w = rng.uniform(CRACK_SLOT_MM.0, CRACK_SLOT_MM.1);
-                let side = [d3[1] * Z_UP[2] - d3[2] * Z_UP[1], d3[2] * Z_UP[0] - d3[0] * Z_UP[2], d3[0] * Z_UP[1] - d3[1] * Z_UP[0]];
+                let side = [
+                    d3[1] * Z_UP[2] - d3[2] * Z_UP[1],
+                    d3[2] * Z_UP[0] - d3[0] * Z_UP[2],
+                    d3[0] * Z_UP[1] - d3[1] * Z_UP[0],
+                ];
                 let mut m = dt_kit::prism_mesh(&[prof], 0.0, w);
                 for p in &mut m.positions {
                     let (x, y, z) = (p[0], p[1], p[2]);
@@ -358,7 +422,11 @@ fn top_cracks(
     }
     let n = cuts.len();
     let out = rock.minus(&cuts)?;
-    Ok(if out.is_empty() { (rock.clone(), 0) } else { (out, n) })
+    Ok(if out.is_empty() {
+        (rock.clone(), 0)
+    } else {
+        (out, n)
+    })
 }
 
 fn cross_lines(a: &super::lines::Line, b: &super::lines::Line) -> Vec<P2> {
@@ -372,11 +440,18 @@ fn cross_lines(a: &super::lines::Line, b: &super::lines::Line) -> Vec<P2> {
 /// Never cut a finished stone at the tile boundary: one that reaches past
 /// it is shrunk along that axis until its outermost point just touches it.
 fn fit_tile(rock: Piece, form: &Form, setback: &[((usize, bool), f64)]) -> Piece {
-    let Some((lo, hi)) = rock.bounds() else { return rock };
+    let Some((lo, hi)) = rock.bounds() else {
+        return rock;
+    };
     let mut m = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0];
     let mut any = false;
     for (ax, l) in [(0, form.w), (1, form.h)] {
-        let sb = |hi_side: bool| setback.iter().find(|s| s.0 == (ax, hi_side)).map_or(0.0, |s| s.1);
+        let sb = |hi_side: bool| {
+            setback
+                .iter()
+                .find(|s| s.0 == (ax, hi_side))
+                .map_or(0.0, |s| s.1)
+        };
         let a = FIT_GAP_MM + sb(false);
         let b = l - FIT_GAP_MM - sb(true);
         let (l0, h0) = (lo[ax], hi[ax]);
@@ -455,11 +530,26 @@ pub fn grain(rock: &Piece, seed: u64, z0: f64) -> Result<Piece, KitError> {
     let n: Vec<V> = n.into_iter().map(unitv).collect();
     // edge distance by cell hashing of the sharp segments
     let cell = 0.5;
-    let key = |x: f64, y: f64, z: f64| ((x / cell).floor() as i64, (y / cell).floor() as i64, (z / cell).floor() as i64);
-    let mut hash: std::collections::HashMap<(i64, i64, i64), Vec<usize>> = std::collections::HashMap::new();
+    let key = |x: f64, y: f64, z: f64| {
+        (
+            (x / cell).floor() as i64,
+            (y / cell).floor() as i64,
+            (z / cell).floor() as i64,
+        )
+    };
+    let mut hash: std::collections::HashMap<(i64, i64, i64), Vec<usize>> =
+        std::collections::HashMap::new();
     for (si, (a, b)) in segs.iter().enumerate() {
-        let lo = key(a[0].min(b[0]) - EDGE_KEEP_MM, a[1].min(b[1]) - EDGE_KEEP_MM, a[2].min(b[2]) - EDGE_KEEP_MM);
-        let hi = key(a[0].max(b[0]) + EDGE_KEEP_MM, a[1].max(b[1]) + EDGE_KEEP_MM, a[2].max(b[2]) + EDGE_KEEP_MM);
+        let lo = key(
+            a[0].min(b[0]) - EDGE_KEEP_MM,
+            a[1].min(b[1]) - EDGE_KEEP_MM,
+            a[2].min(b[2]) - EDGE_KEEP_MM,
+        );
+        let hi = key(
+            a[0].max(b[0]) + EDGE_KEEP_MM,
+            a[1].max(b[1]) + EDGE_KEEP_MM,
+            a[2].max(b[2]) + EDGE_KEEP_MM,
+        );
         for i in lo.0..=hi.0 {
             for j in lo.1..=hi.1 {
                 for k in lo.2..=hi.2 {
@@ -469,7 +559,17 @@ pub fn grain(rock: &Piece, seed: u64, z0: f64) -> Result<Piece, KitError> {
         }
     }
     let rm = RayMesh::new(&base);
-    let org: Vec<V> = p.iter().zip(&n).map(|(q, nv)| [q[0] + 0.02 * nv[0], q[1] + 0.02 * nv[1], q[2] + 0.02 * nv[2]]).collect();
+    let org: Vec<V> = p
+        .iter()
+        .zip(&n)
+        .map(|(q, nv)| {
+            [
+                q[0] + 0.02 * nv[0],
+                q[1] + 0.02 * nv[1],
+                q[2] + 0.02 * nv[2],
+            ]
+        })
+        .collect();
     let hits = rm.first_hits(&org, &n);
     let mut out = p.clone();
     for (i, q) in p.iter().enumerate() {
@@ -484,12 +584,21 @@ pub fn grain(rock: &Piece, seed: u64, z0: f64) -> Result<Piece, KitError> {
                 dmin = dmin.min(norm3(subv(*q, c)));
             }
         }
-        let we = smooth01(if dmin.is_finite() { dmin / EDGE_KEEP_MM } else { 1e9 });
-        let mut w = smooth01((q[2] - z0 - 0.15) / TEX_BASE_FADE_MM) * smooth01((n[i][2] + 0.5) / 0.4);
+        let we = smooth01(if dmin.is_finite() {
+            dmin / EDGE_KEEP_MM
+        } else {
+            1e9
+        });
+        let mut w =
+            smooth01((q[2] - z0 - 0.15) / TEX_BASE_FADE_MM) * smooth01((n[i][2] + 0.5) / 0.4);
         let gap = hits[i].map_or(f64::INFINITY, |h| norm3(subv(h.point, *q)));
         w *= smooth01((gap - 0.8) / 0.8);
         let amp = FACE_GRAIN_MM * gr * (0.5 + 0.5 * we) * w;
-        out[i] = [q[0] + amp * n[i][0], q[1] + amp * n[i][1], q[2] + amp * n[i][2]];
+        out[i] = [
+            q[0] + amp * n[i][0],
+            q[1] + amp * n[i][1],
+            q[2] + amp * n[i][2],
+        ];
     }
     let g = rock.rebuilt(out, t)?;
     Ok(if g.is_empty() { rock.clone() } else { g })
@@ -499,7 +608,11 @@ fn subv(a: V, b: V) -> V {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }
 fn crossv(a: V, b: V) -> V {
-    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
 }
 fn norm3(a: V) -> f64 {
     libm::sqrt(dot(a, a))
@@ -536,10 +649,15 @@ pub fn rock_piece(
     }
     let poly = offset_poly(&rpoly, JOINT_OVERLAP_MM);
     let bb = bounds(&poly);
-    let zhi = [[bb[0], bb[1]], [bb[2], bb[1]], [bb[2], bb[3]], [bb[0], bb[3]]]
-        .iter()
-        .map(|p| r.top_z(p[0], p[1]))
-        .fold(f64::NEG_INFINITY, f64::max)
+    let zhi = [
+        [bb[0], bb[1]],
+        [bb[2], bb[1]],
+        [bb[2], bb[3]],
+        [bb[0], bb[3]],
+    ]
+    .iter()
+    .map(|p| r.top_z(p[0], p[1]))
+    .fold(f64::NEG_INFINITY, f64::max)
         + 1.0;
     let rock = prism(slot, &poly, r.z0, zhi - r.z0, r.top, form)?;
     if rock.is_empty() {
@@ -557,9 +675,13 @@ pub fn rock_piece(
             (0..nx).map(|i| r.cells.at(i, j)).collect()
         };
         let any_n = if ax == 0 {
-            (0..ny).filter(|&j| (0..nx).any(|i| r.cells.at(i, j))).count()
+            (0..ny)
+                .filter(|&j| (0..nx).any(|i| r.cells.at(i, j)))
+                .count()
         } else {
-            (0..nx).filter(|&i| (0..ny).any(|j| r.cells.at(i, j))).count()
+            (0..nx)
+                .filter(|&i| (0..ny).any(|j| r.cells.at(i, j)))
+                .count()
         };
         let cnt = row.iter().filter(|&&b| b).count();
         if any_n > 0 && cnt as f64 >= 0.95 * any_n as f64 {
@@ -568,20 +690,35 @@ pub fn rock_piece(
     }
     let loaded_at = |q: P2| occupied(form, env.s, [q[0], q[1], r.top_z(q[0], q[1]) + 0.4]);
     let rock = chamfer_corners(rock, &rpoly_offset_unused(&poly), c.corner_mm, &loaded_at)?;
-    let Some((lo3, hi3)) = rock.bounds() else { return Ok(None) };
+    let Some((lo3, hi3)) = rock.bounds() else {
+        return Ok(None);
+    };
     let mesh_v = rock.mesh().positions;
     let (zb, ztop_r) = (lo3[2], hi3[2]);
     let faces = open_faces(&rpoly, form, env.s, zb, ztop_r);
     let opens: Vec<V> = faces.iter().map(|f| f.m).collect();
     let mut cutter = Cutter::new(rock, Some(support));
-    let reach_dot = |d: V| c.reach.iter().map(|p| dot(*p, d)).fold(f64::NEG_INFINITY, f64::max);
-    let reach_min = |d: V| c.reach.iter().map(|p| dot(*p, d)).fold(f64::INFINITY, f64::min);
+    let reach_dot = |d: V| {
+        c.reach
+            .iter()
+            .map(|p| dot(*p, d))
+            .fold(f64::NEG_INFINITY, f64::max)
+    };
+    let reach_min = |d: V| {
+        c.reach
+            .iter()
+            .map(|p| dot(*p, d))
+            .fold(f64::INFINITY, f64::min)
+    };
     for (k, cut) in c.cuts.iter().enumerate() {
         if st.refused.contains(&k) {
             continue;
         }
         if opens.iter().map(|&m| dot(cut.d, m)).fold(-1.0, f64::max) > 0.9 {
-            let vmax = mesh_v.iter().map(|p| dot(*p, cut.d)).fold(f64::NEG_INFINITY, f64::max);
+            let vmax = mesh_v
+                .iter()
+                .map(|p| dot(*p, cut.d))
+                .fold(f64::NEG_INFINITY, f64::max);
             let mut sh = cut.d.map(|x| x * (vmax - reach_dot(cut.d)).min(0.0));
             if norm3(sh) <= 0.3 {
                 sh = [0.0; 3];
@@ -607,13 +744,28 @@ pub fn rock_piece(
             let qs: Vec<P2> = (0..7)
                 .map(|k| {
                     let t = 0.05 + 0.9 * k as f64 / 6.0;
-                    [f.p0[0] + t * (f.p1[0] - f.p0[0]) - f.m[0], f.p0[1] + t * (f.p1[1] - f.p0[1]) - f.m[1]]
+                    [
+                        f.p0[0] + t * (f.p1[0] - f.p0[0]) - f.m[0],
+                        f.p0[1] + t * (f.p1[1] - f.p0[1]) - f.m[1],
+                    ]
                 })
                 .collect();
-            if qs.iter().any(|q| occupied(form, env.s, [q[0] + 2.0 * f.m[0], q[1] + 2.0 * f.m[1], r.top_z(q[0], q[1]) + 0.4])) {
+            if qs.iter().any(|q| {
+                occupied(
+                    form,
+                    env.s,
+                    [
+                        q[0] + 2.0 * f.m[0],
+                        q[1] + 2.0 * f.m[1],
+                        r.top_z(q[0], q[1]) + 0.4,
+                    ],
+                )
+            }) {
                 continue;
             }
-            let any_here = qs.iter().any(|q| occupied(form, env.s, [q[0], q[1], r.top_z(q[0], q[1]) + 0.4]));
+            let any_here = qs
+                .iter()
+                .any(|q| occupied(form, env.s, [q[0], q[1], r.top_z(q[0], q[1]) + 0.4]));
             let (n, dep, extra);
             if loaded || any_here {
                 if norm2([f.p1[0] - f.p0[0], f.p1[1] - f.p0[1]]) < JOINT_MIN_MM {
@@ -631,7 +783,11 @@ pub fn rock_piece(
                 extra = 1.0;
             }
             let q = [0.5 * (f.p0[0] + f.p1[0]), 0.5 * (f.p0[1] + f.p1[1])];
-            let p = [q[0] - n[0] * dep, q[1] - n[1] * dep, r.top_z(q[0], q[1]) - n[2] * dep];
+            let p = [
+                q[0] - n[0] * dep,
+                q[1] - n[1] * dep,
+                r.top_z(q[0], q[1]) - n[2] * dep,
+            ];
             cutter.take_back(n, p, dep, extra, None);
         }
     }
@@ -649,7 +805,8 @@ pub fn rock_piece(
                     for i in 0..nx {
                         let q = j * nx + i;
                         if o.cells.v[q] && r.cells.v[q] && !r.bed.v[q].is_nan() {
-                            let zt = o.top_z((i as f64 + 0.5) * GRID_MM, (j as f64 + 0.5) * GRID_MM);
+                            let zt =
+                                o.top_z((i as f64 + 0.5) * GRID_MM, (j as f64 + 0.5) * GRID_MM);
                             if (zt - r.bed.v[q]).abs() < 0.5 {
                                 own[q] = true;
                             }
@@ -660,11 +817,19 @@ pub fn rock_piece(
         }
         let opens2: Vec<(P2, P2)> = faces.iter().map(|f| (f.p0, f.p1)).collect();
         rock = seat(rock, r, &opens2, &own)?;
-        zbase = r.bed.v.iter().copied().filter(|v| !v.is_nan()).fold(f64::INFINITY, f64::min);
+        zbase = r
+            .bed
+            .v
+            .iter()
+            .copied()
+            .filter(|v| !v.is_nan())
+            .fold(f64::INFINITY, f64::min);
     }
     // broken corners and arrises
     let vol = rock.volume().max(1e-6);
-    let down = rock.transformed(&[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, -zbase]);
+    let down = rock.transformed(&[
+        1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, -zbase,
+    ]);
     let down = corner_chips(rng, down, r.d.max(4.0), 0.03_f64.min(CHIP_MAX_MM3 / vol));
     let rock = down.transformed(&[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, zbase]);
     let keep = |n1: V, n2: V, p: V| -> bool {
@@ -682,7 +847,9 @@ pub fn rock_piece(
         let cr = crossv(n1, n2);
         cr[2].abs() < 0.6 * norm3(cr)
             && p[2] > r.top_z(p[0], p[1]) - 1.6
-            && qs.iter().any(|q| occupied(form, env.s, [q[0], q[1], r.top_z(q[0], q[1]) + 0.4]))
+            && qs
+                .iter()
+                .any(|q| occupied(form, env.s, [q[0], q[1], r.top_z(q[0], q[1]) + 0.4]))
     };
     let chips = chip_edges(crng, &rock, CHIP_MM, &keep);
     let rock = if chips.is_empty() {

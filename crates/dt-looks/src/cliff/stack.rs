@@ -6,18 +6,58 @@
 
 use dt_kit::Rng;
 
-use super::form::{Form, FOOT, GRID_MM, MIN_H_MM, Zones, ZONE_FLOOR};
+use super::form::{FOOT, Form, GRID_MM, MIN_H_MM, ZONE_FLOOR, Zones};
 use super::util::{
     Draw, Field, G, Mask, P2, bin_dilate, blur, edt_in, label, lerp, min_side, trace_outline,
 };
 
 /// kind: (p, along, depth, height (None: ground to top), bridge, tilt deg)
 #[allow(clippy::type_complexity)]
-pub const KINDS: [(&str, f64, (f64, f64), (f64, f64), Option<(f64, f64)>, f64, f64); 5] = [
-    ("column", 0.38, (8.0, 14.0), (7.0, 12.0), Some((15.0, 24.0)), 1.2, 8.0),
-    ("block", 0.38, (10.0, 18.0), (8.0, 14.0), Some((11.0, 18.0)), 1.2, 10.0),
-    ("slab", 0.12, (14.0, 24.0), (8.0, 14.0), Some((5.0, 8.0)), 5.0, 8.0),
-    ("odd", 0.06, (6.0, 10.0), (6.0, 10.0), Some((6.0, 11.0)), 2.0, 14.0),
+pub const KINDS: [(
+    &str,
+    f64,
+    (f64, f64),
+    (f64, f64),
+    Option<(f64, f64)>,
+    f64,
+    f64,
+); 5] = [
+    (
+        "column",
+        0.38,
+        (8.0, 14.0),
+        (7.0, 12.0),
+        Some((15.0, 24.0)),
+        1.2,
+        8.0,
+    ),
+    (
+        "block",
+        0.38,
+        (10.0, 18.0),
+        (8.0, 14.0),
+        Some((11.0, 18.0)),
+        1.2,
+        10.0,
+    ),
+    (
+        "slab",
+        0.12,
+        (14.0, 24.0),
+        (8.0, 14.0),
+        Some((5.0, 8.0)),
+        5.0,
+        8.0,
+    ),
+    (
+        "odd",
+        0.06,
+        (6.0, 10.0),
+        (6.0, 10.0),
+        Some((6.0, 11.0)),
+        2.0,
+        14.0,
+    ),
     ("monolith", 0.06, (8.0, 16.0), (7.0, 12.0), None, 1.2, 3.0),
 ];
 const BLOCK_ASPECT: [(f64, f64); 5] = [(1.6, 2.4), (1.4, 2.2), (0.6, 1.0), (1.0, 1.8), (3.0, 4.0)];
@@ -79,13 +119,30 @@ pub fn footprint_polygon(cells: &Mask) -> Vec<P2> {
     let mut m = cells.clone();
     let r = (0.5 * MIN_WALL_MM / GRID_MM).round() as usize;
     if r > 0 && n > 0 {
-        let inv = G { nx: m.nx, ny: m.ny, v: m.v.iter().map(|&b| !b).collect() };
+        let inv = G {
+            nx: m.nx,
+            ny: m.ny,
+            v: m.v.iter().map(|&b| !b).collect(),
+        };
         let grown = bin_dilate_sq(&inv, r);
-        let eroded = G { nx: m.nx, ny: m.ny, v: grown.v.iter().map(|&b| !b).collect() };
+        let eroded = G {
+            nx: m.nx,
+            ny: m.ny,
+            v: grown.v.iter().map(|&b| !b).collect(),
+        };
         let opened = bin_dilate_sq(&eroded, r);
         let k = opened.v.iter().filter(|&&b| b).count();
         // the opening can only remove cells of the footprint
-        let opened = G { nx: m.nx, ny: m.ny, v: opened.v.iter().zip(&cells.v).map(|(&a, &b)| a && b).collect() };
+        let opened = G {
+            nx: m.nx,
+            ny: m.ny,
+            v: opened
+                .v
+                .iter()
+                .zip(&cells.v)
+                .map(|(&a, &b)| a && b)
+                .collect(),
+        };
         if k as f64 > 0.5 * n as f64 {
             m = opened;
         }
@@ -191,7 +248,10 @@ fn grow_turned(
             if !ok.at(i, j) {
                 continue;
             }
-            let (x, y) = ((i as f64 + 0.5) * GRID_MM - site.0, (j as f64 + 0.5) * GRID_MM - site.1);
+            let (x, y) = (
+                (i as f64 + 0.5) * GRID_MM - site.0,
+                (j as f64 + 0.5) * GRID_MM - site.1,
+            );
             let u = x * c + y * s;
             let v = -x * s + y * c;
             if u <= o + GRID_MM && u >= o - d && v.abs() <= 0.5 * w {
@@ -278,7 +338,11 @@ fn fit_plane(pts: &[(f64, f64, f64)], xm: f64, ym: f64) -> [f64; 3] {
             .unwrap_or(col);
         m.swap(col, p);
         if m[col][col].abs() < 1e-12 {
-            return [pts.iter().map(|p| p.2).sum::<f64>() / pts.len() as f64, 0.0, 0.0];
+            return [
+                pts.iter().map(|p| p.2).sum::<f64>() / pts.len() as f64,
+                0.0,
+                0.0,
+            ];
         }
         for r in 0..3 {
             if r != col {
@@ -301,13 +365,20 @@ fn merge_crumb(
 ) -> bool {
     let ring = {
         let d = bin_dilate(cells, 2);
-        G { nx: d.nx, ny: d.ny, v: d.v.iter().zip(&cells.v).map(|(&a, &b)| a && !b).collect() }
+        G {
+            nx: d.nx,
+            ny: d.ny,
+            v: d.v.iter().zip(&cells.v).map(|(&a, &b)| a && !b).collect(),
+        }
     };
     let idx: Vec<(usize, usize)> = (0..cells.ny)
         .flat_map(|j| (0..cells.nx).map(move |i| (i, j)))
         .filter(|&(i, j)| cells.at(i, j))
         .collect();
-    let smax = idx.iter().map(|&(i, j)| s.at(i, j)).fold(f64::NEG_INFINITY, f64::max);
+    let smax = idx
+        .iter()
+        .map(|&(i, j)| s.at(i, j))
+        .fold(f64::NEG_INFINITY, f64::max);
     let smean = idx.iter().map(|&(i, j)| s.at(i, j)).sum::<f64>() / idx.len().max(1) as f64;
     let mut best: Option<(usize, f64)> = None;
     for (k, r) in rocks.iter().enumerate().rev() {
@@ -332,7 +403,10 @@ fn merge_crumb(
     }
     let Some((k, _)) = best else { return false };
     let r = &mut rocks[k];
-    let svmin = idx.iter().map(|&(i, j)| s.at(i, j)).fold(f64::INFINITY, f64::min);
+    let svmin = idx
+        .iter()
+        .map(|&(i, j)| s.at(i, j))
+        .fold(f64::INFINITY, f64::min);
     for &(i, j) in &idx {
         r.cells.set(i, j, true);
         r.bed.set(i, j, s.at(i, j));
@@ -354,7 +428,11 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
     let (nx, ny) = (form.t.nx, form.t.ny);
     let t = &form.t;
     let mut s = Field::new(nx, ny, FOOT - 1.0);
-    let mut want = G { nx, ny, v: t.v.iter().map(|&z| z > FOOT).collect() };
+    let mut want = G {
+        nx,
+        ny,
+        v: t.v.iter().map(|&z| z > FOOT).collect(),
+    };
     let mut rocks: Vec<Placed> = Vec::new();
     let mut probs: Vec<f64> = (0..5)
         .map(|k| form.kind_p.map_or(KINDS[k].1, |p| p[k]))
@@ -370,7 +448,11 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
     let mut last_w = 0.0f64;
     let (edt, phi) = if form.round {
         let e = edt_in(&want);
-        let e = Field { nx, ny, v: e.v.iter().map(|x| x * GRID_MM).collect() };
+        let e = Field {
+            nx,
+            ny,
+            v: e.v.iter().map(|x| x * GRID_MM).collect(),
+        };
         let sm = blur(&e, ROUND_SMOOTH_MM / GRID_MM);
         let mut phi = Field::new(nx, ny, 0.0);
         for j in 0..ny {
@@ -411,22 +493,27 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
             kind = 0;
         }
         let (_, _, al, dp, hr, bridge, tilt) = KINDS[kind];
-        let lo = 1.0 + SIZE_LOW_GAIN * (0.5 - ((s.at(si, sj) - FOOT) / h_cliff.max(1.0)).clamp(0.0, 1.0));
+        let lo = 1.0
+            + SIZE_LOW_GAIN * (0.5 - ((s.at(si, sj) - FOOT) / h_cliff.max(1.0)).clamp(0.0, 1.0));
         let mut w = rng.uniform(al.0, al.1) * s_scale * form.mass * lo;
         let mut d = rng.uniform(dp.0, dp.1) * s_scale * form.mass * lo;
         let u = (zone.at(sp[0]) - ZONE_FLOOR) / (1.0 - ZONE_FLOOR);
         let sz = lerp(ZONE_SIZE, u);
         w *= sz;
         if (w / last_w.max(1e-6) - 1.0).abs() < WIDTH_APART {
-            w *= if rng.random() < 0.5 { 1.0 - 1.5 * WIDTH_APART } else { 1.0 + 2.0 * WIDTH_APART };
+            w *= if rng.random() < 0.5 {
+                1.0 - 1.5 * WIDTH_APART
+            } else {
+                1.0 + 2.0 * WIDTH_APART
+            };
         }
         last_w = w;
         if form.along_y.as_ref().is_some_and(|m| m.at(si, sj)) {
             std::mem::swap(&mut w, &mut d);
         }
-        let yaw = phi
-            .as_ref()
-            .map_or(0.0, |p| p.at(si, sj) + ROUND_YAW_DEG.to_radians() * rng.normal(0.0, 1.0));
+        let yaw = phi.as_ref().map_or(0.0, |p| {
+            p.at(si, sj) + ROUND_YAW_DEG.to_radians() * rng.normal(0.0, 1.0)
+        });
         let mut cells = Mask::new(nx, ny, false);
         let (mut area, mut side) = (0.0, 0.0);
         for attempt in 0..4 {
@@ -454,7 +541,11 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
         if (area < MIN_AREA_MM2 || side < MIN_SIDE_MM) && !rocks.is_empty() {
             let mut ok = merge_crumb(&mut rocks, &cells, &mut s, form.ztop, 0.5 * MIN_H_MM);
             if !ok {
-                let rmax = (0..nx * ny).filter(|&q| cells.v[q]).map(|q| retry.v[q]).max().unwrap_or(0);
+                let rmax = (0..nx * ny)
+                    .filter(|&q| cells.v[q])
+                    .map(|q| retry.v[q])
+                    .max()
+                    .unwrap_or(0);
                 if is_top && rmax < CRUMB_RETRY {
                     for q in 0..nx * ny {
                         if cells.v[q] {
@@ -481,7 +572,10 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
             }
         }
         if !form.round {
-            let cmax = (0..nx * ny).filter(|&q| cells.v[q]).map(|q| s.v[q]).fold(f64::NEG_INFINITY, f64::max);
+            let cmax = (0..nx * ny)
+                .filter(|&q| cells.v[q])
+                .map(|q| s.v[q])
+                .fold(f64::NEG_INFINITY, f64::max);
             if cmax <= FOOT && rng.random() < JUT_P {
                 cells = jut(rng, &cells, &want, &s);
             }
@@ -522,18 +616,25 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
         let finish = |rng: &mut Rng, h: f64| -> f64 {
             let mut h = h;
             if tgt - h < lim {
-                h = if is_top { tgt + 1.0 } else { tgt + rng.uniform(OVERSHOOT_MM.0, OVERSHOOT_MM.1) };
+                h = if is_top {
+                    tgt + 1.0
+                } else {
+                    tgt + rng.uniform(OVERSHOOT_MM.0, OVERSHOOT_MM.1)
+                };
             }
             h.max(MIN_H_MM)
         };
         let mut h = match hr {
             None => finish(rng, tgt + 1.0),
             Some(hr) => {
-                let v = rng.uniform(hr.0, hr.1) * s_scale * (sz * form.mass * lo).powf(ZONE_SIZE_H_EXP);
+                let v =
+                    rng.uniform(hr.0, hr.1) * s_scale * (sz * form.mass * lo).powf(ZONE_SIZE_H_EXP);
                 finish(rng, v)
             }
         };
-        let mut hc = (rng.uniform(BLOCK_ASPECT[kind].0, BLOCK_ASPECT[kind].1) * cells_min_side(&cells)).min(tgt - lim);
+        let mut hc = (rng.uniform(BLOCK_ASPECT[kind].0, BLOCK_ASPECT[kind].1)
+            * cells_min_side(&cells))
+        .min(tgt - lim);
         if kind != 4 && rng.random() > TALL_P {
             hc = hc.min(rng.uniform(STONE_H_SHARE.0, STONE_H_SHARE.1) * h_cliff);
         }
@@ -553,7 +654,15 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
             if q.len() >= 4 {
                 let zr: Vec<(usize, f64)> = q
                     .iter()
-                    .map(|&k| (k, r.top_z(super::util::cx(k % nx, GRID_MM), super::util::cx(k / nx, GRID_MM))))
+                    .map(|&k| {
+                        (
+                            k,
+                            r.top_z(
+                                super::util::cx(k % nx, GRID_MM),
+                                super::util::cx(k / nx, GRID_MM),
+                            ),
+                        )
+                    })
                     .collect();
                 let mean = zr.iter().map(|z| z.1).sum::<f64>() / zr.len() as f64;
                 if form.ztop.is_none_or(|zt| mean < zt - 0.5) {
@@ -562,17 +671,24 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
             }
         }
         let top_at = |hh: f64, k: usize| {
-            c + hh + a * (super::util::cx(k % nx, GRID_MM) - xm) + b * (super::util::cx(k / nx, GRID_MM) - ym)
+            c + hh
+                + a * (super::util::cx(k % nx, GRID_MM) - xm)
+                + b * (super::util::cx(k / nx, GRID_MM) - ym)
         };
         let level = |hh: f64| -> bool {
             if !ring.is_empty() {
-                let near_n = ring.iter().filter(|&&k| (top_at(hh, k) - s.v[k]).abs() < STAGGER_MM).count();
+                let near_n = ring
+                    .iter()
+                    .filter(|&&k| (top_at(hh, k) - s.v[k]).abs() < STAGGER_MM)
+                    .count();
                 if near_n as f64 / ring.len() as f64 > STAGGER_SHARE {
                     return true;
                 }
             }
             joints.iter().any(|zr| {
-                zr.iter().filter(|(k, z)| (top_at(hh, *k) - z).abs() < STAGGER_MM).count() as f64
+                zr.iter()
+                    .filter(|(k, z)| (top_at(hh, *k) - z).abs() < STAGGER_MM)
+                    .count() as f64
                     / zr.len() as f64
                     > 0.5
             })
