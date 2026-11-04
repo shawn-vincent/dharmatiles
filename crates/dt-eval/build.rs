@@ -1,5 +1,6 @@
-//! Embeds `library/` (the `lib:` tiles and parts) into the crate, so one
-//! binary carries the library and works in wasm and mobile sandboxes.
+//! With the `embedded-library` feature, embeds `library/` (the `lib:` tiles
+//! and parts) into the crate, for wasm and mobile sandboxes that cannot read
+//! files; otherwise the table is empty and `lib:` is read from disk.
 //! Writes `$OUT_DIR/library.rs`: a sorted table of (path, text).
 
 use std::path::{Path, PathBuf};
@@ -29,7 +30,9 @@ fn main() {
     let lib = manifest.join("../../library");
     println!("cargo::rerun-if-changed={}", lib.display());
     let mut files = Vec::new();
-    walk(&lib, &lib, &mut files);
+    if std::env::var_os("CARGO_FEATURE_EMBEDDED_LIBRARY").is_some() {
+        walk(&lib, &lib, &mut files);
+    }
     files.sort();
     let mut src = String::from(
         "/// The embedded library: (path below `library/`, text).\npub static FILES: &[(&str, &str)] = &[\n",

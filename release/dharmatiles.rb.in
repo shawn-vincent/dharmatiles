@@ -10,6 +10,7 @@ class Dharmatiles < Formula
   def install
     bin.install "dharmatiles"
     pkgshare.install "palettes"
+    pkgshare.install "library" # lib: is read from share/dharmatiles/library
   end
   test do
     assert_match "dharmatiles", shell_output("#{bin}/dharmatiles --version")

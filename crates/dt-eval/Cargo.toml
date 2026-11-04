@@ -14,6 +14,9 @@ default = ["manifold-ffi", "manifold-parallel"]
 manifold-ffi = ["dt-kit/manifold-ffi", "dt-looks/manifold-ffi"]
 manifold-rust = ["dt-kit/manifold-rust", "dt-looks/manifold-rust"]
 manifold-parallel = ["dt-kit/manifold-parallel", "dt-looks/manifold-parallel"]
+# Compile library/ into the program, for builds that cannot read files
+# (the browser, phones). The desktop program reads library/ from disk.
+embedded-library = []
 
 [dependencies]
 dt-doc.workspace = true

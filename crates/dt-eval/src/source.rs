@@ -2,12 +2,17 @@
 //! same code reads the disk, the embedded library or an in-memory map (a
 //! browser editor, tests).
 //!
-//! Paths: `lib:parts/grass.kdl` is the embedded library (explicit, never a
-//! search path); anything else is a file path. A relative `use` resolves
+//! Paths: `lib:parts/grass.kdl` is the library (explicit, never a search
+//! path); anything else is a file path. The library is a folder on disk:
+//! a checkout's `library/`, `$DT_LIBRARY`, or the copy installed beside the
+//! program. Only builds with the `embedded-library` feature (the browser,
+//! phones) carry it compiled in. A relative `use` resolves
 //! against the importing file's folder, inside the library for library
 //! files.
 
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 mod embedded {
     include!(concat!(env!("OUT_DIR"), "/library.rs"));
@@ -25,18 +30,94 @@ pub trait Source: Sync {
     fn read(&self, path: &str) -> Result<String, String>;
 }
 
-/// The library compiled into the program.
+/// The `library/` folder `lib:` paths are read from (`None`: the
+/// compiled-in copy, or no library found).
+static DISK: OnceLock<Option<PathBuf>> = OnceLock::new();
+
+/// Read `lib:` from `dir` (a checkout's `library/`) for the rest of the
+/// run. Only the first choice counts; returns whether this one did.
+pub fn use_library_dir(dir: PathBuf) -> bool {
+    DISK.set(Some(dir)).is_ok()
+}
+
+/// The `library/` folder `lib:` is read from: the one chosen with
+/// [`use_library_dir`], else `$DT_LIBRARY`, else the copy installed beside
+/// the program (`library/` next to it, or Homebrew's
+/// `../share/dharmatiles/library`), else this source tree's `library/`.
+/// `None` when the program carries the library compiled in.
+#[must_use]
+pub fn library_dir() -> Option<&'static Path> {
+    DISK.get_or_init(find_library).as_deref()
+}
+
+fn find_library() -> Option<PathBuf> {
+    if cfg!(feature = "embedded-library") {
+        return None;
+    }
+    let ok = |d: &Path| d.join("printers/default.kdl").is_file();
+    if let Some(d) = std::env::var_os("DT_LIBRARY").map(PathBuf::from) {
+        return Some(d);
+    }
+    if let Some(bin) = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(Path::to_path_buf))
+    {
+        for d in [
+            bin.join("library"),
+            bin.join("../share/dharmatiles/library"),
+        ] {
+            if ok(&d) {
+                return Some(d);
+            }
+        }
+    }
+    let tree = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../library");
+    ok(&tree).then_some(tree)
+}
+
+/// The disk file behind a `lib:` path, when the library is on disk.
+#[must_use]
+pub fn library_file(path: &str) -> Option<PathBuf> {
+    let rel = path.strip_prefix(LIB)?;
+    Some(library_dir()?.join(rel))
+}
+
+/// The library compiled into the program (or, after [`use_library_dir`],
+/// the folder on disk).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Library;
 
 impl Library {
-    /// Every embedded path, as `lib:…`.
+    /// Every library path, as `lib:…`.
     #[must_use]
     pub fn paths() -> Vec<String> {
+        if let Some(dir) = library_dir() {
+            let mut v = Vec::new();
+            kdl_files(dir, dir, &mut v);
+            v.sort();
+            return v;
+        }
         embedded::FILES
             .iter()
             .map(|(p, _)| format!("{LIB}{p}"))
             .collect()
+    }
+}
+
+/// Every `.kdl` under `dir`, as `lib:` paths relative to `root`.
+fn kdl_files(root: &Path, dir: &Path, out: &mut Vec<String>) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            kdl_files(root, &p, out);
+        } else if p.extension().is_some_and(|x| x == "kdl")
+            && let Ok(rel) = p.strip_prefix(root)
+        {
+            out.push(format!("{LIB}{}", rel.to_string_lossy().replace('\\', "/")));
+        }
     }
 }
 
@@ -47,6 +128,15 @@ impl Source for Library {
                 "`{path}` is not in the library (library paths start with `lib:`)"
             ));
         };
+        if let Some(file) = library_file(path) {
+            return std::fs::read_to_string(&file)
+                .map_err(|_| format!("the library has no `{rel}` ({})", file.display()));
+        }
+        if embedded::FILES.is_empty() {
+            return Err(format!(
+                "no library found for `{rel}`: run inside a checkout, install it beside the program, or set DT_LIBRARY"
+            ));
+        }
         embedded::FILES
             .iter()
             .find(|(p, _)| *p == rel)

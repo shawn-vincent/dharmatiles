@@ -211,6 +211,24 @@ impl Shared {
         })
     }
 
+    /// Add the paths not yet listed (new library files), and tell every
+    /// browser the new list.
+    fn add_missing(&self, paths: &[String]) {
+        let added = {
+            let mut tiles = lock(&self.tiles);
+            let n = tiles.len();
+            for p in paths {
+                if !tiles.iter().any(|t| &t.path == p) {
+                    tiles.push(Slot::new(p));
+                }
+            }
+            tiles.len() > n
+        };
+        if added {
+            self.broadcast(&self.snapshot());
+        }
+    }
+
     /// Change tile `i` and tell every listening browser.
     fn update(&self, i: usize, f: impl FnOnce(&mut Slot)) {
         let summary = {
@@ -446,7 +464,12 @@ fn rebuild_stl(shared: &Shared, i: usize, opts: &Options, path: &str) {
 
 /// The worker: build what is wanted, then what changed, until `stop`.
 pub fn work(shared: &Arc<Shared>, opts: &Options, eager: bool, stop: &AtomicBool) {
+    // serving the whole library from disk: new tile files join the list
+    let rescan = !eager && dt_eval::source::library_dir().is_some();
     while !stop.load(Ordering::Relaxed) {
+        if rescan {
+            shared.add_missing(&crate::all_library_tiles());
+        }
         match shared.pick(eager) {
             Some(i) => rebuild(shared, i, opts),
             None => std::thread::sleep(POLL),
@@ -500,7 +523,7 @@ pub fn run(
         .map_or_else(|_| "127.0.0.1".to_owned(), |a| a.to_string());
     // no paths: offer the library, building a tile when it is chosen
     let (paths, eager) = if paths.is_empty() {
-        (crate::library_tiles(), false)
+        (crate::all_library_tiles(), false)
     } else {
         (paths.to_vec(), true)
     };
@@ -512,6 +535,13 @@ pub fn run(
     );
     let url = format!("http://{addr}/");
     tell!("preview: {url}  ({} tile(s); Ctrl-C to stop)", paths.len());
+    match dt_eval::source::library_dir() {
+        Some(d) => tell!(
+            "library: {} (read from disk; edits and new tiles show up live)",
+            d.display()
+        ),
+        None => tell!("library: the copy built into this program"),
+    }
     server::spawn(listener, Arc::clone(&shared));
     if open {
         open_browser(&url);

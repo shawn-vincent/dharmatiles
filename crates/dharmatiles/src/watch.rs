@@ -21,6 +21,11 @@ const POLL: Duration = Duration::from_millis(300);
 /// A file's modification time, `None` when it cannot be read (missing,
 /// or mid-save).
 pub(crate) fn mtime(path: &str) -> Option<SystemTime> {
+    if path.starts_with(LIB) {
+        // a library file is watched only when the library is on disk
+        let file = dt_eval::source::library_file(path)?;
+        return std::fs::metadata(file).and_then(|m| m.modified()).ok();
+    }
     std::fs::metadata(path).and_then(|m| m.modified()).ok()
 }
 
@@ -36,7 +41,7 @@ impl Recording {
     /// if a build never gets to read it.
     pub(crate) fn watching(path: &str) -> Self {
         let rec = Self::default();
-        if !path.starts_with(LIB) {
+        if !path.starts_with(LIB) || dt_eval::source::library_dir().is_some() {
             rec.read
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
@@ -56,7 +61,7 @@ impl Recording {
 
 impl Source for Recording {
     fn read(&self, path: &str) -> Result<String, String> {
-        if !path.starts_with(LIB) {
+        if !path.starts_with(LIB) || dt_eval::source::library_dir().is_some() {
             self.read
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
@@ -87,7 +92,7 @@ impl Tile<'_> {
 /// Build the tile at `path`, recording what it read.
 fn build<'a>(path: &'a str, opts: &Options, out: &Path, png: bool) -> (u8, Tile<'a>) {
     let rec = Recording::default();
-    if !path.starts_with(LIB) {
+    if !path.starts_with(LIB) || dt_eval::source::library_dir().is_some() {
         // watched even if the build never got to read it
         rec.read
             .lock()

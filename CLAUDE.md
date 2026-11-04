@@ -26,6 +26,8 @@ cargo fmt --check
 cargo xtask parity <look>                   # Python lab beside Rust, seeds 1-4 -> out/parity/<look>/contact-sheet.png
 ```
 
+`lib:` paths read `library/` from disk: this checkout's when run inside it (new and edited library tiles count at once, no rebuild), else `$DT_LIBRARY`, else the copy installed beside the program. Nothing is compiled in except for browser/phone builds (dt-eval feature `embedded-library`).
+
 Output goes to `out/` (git-ignored). The old Python tile output (`stl/`) is retired with the generator; it lives in the history before the tag `python-library-final`.
 
 CI is off. Run the tests locally on this Mac only; do not wait on or re-enable GitHub Actions. Linux, Windows, wasm and cross-OS hashes are phase P9, a stretch goal.

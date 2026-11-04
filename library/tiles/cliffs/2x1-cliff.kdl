@@ -3,7 +3,7 @@
 // foot. Twin of clifflab/rockpile.py's `run` form, frozen at round 17
 // (31f7c5d); its foot is the edge level (3.4 mm, Default 12).
 
-tile cliff-run size="2x1" seed=1 {
+tile "2x1-cliff" size="2x1" seed=1 {
     about """
         Rock band against the north edge. Both ends finish in the
         standard end section, so runs butt end to end.

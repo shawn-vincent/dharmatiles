@@ -1,0 +1,22 @@
+// Rock round the north-west corner: two faces on show.
+// Built on the cliff look (clifflab rockpile, round 17), for variety in the library.
+
+tile "1x1-cliff-corner" size="1x1" seed=2 {
+    about "Rock round the north-west corner: two faces on show."
+
+    stack {
+        dirt level=edge {
+            bank against=cliff height="1.5..3.5" reach="3..6.5"
+            scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
+        }
+
+        cliff form=corner along="north west" height=35 {
+            rock mixed
+            stone-size massive
+            top dirt
+        }
+
+        scatter against=cliff per-square=55 reach=4 { stone size="1..6" mostly=small }
+        scatter against=cliff per-square=2.5 { boulder size="4.5..8" }
+    }
+}

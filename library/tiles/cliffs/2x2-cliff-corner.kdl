@@ -1,0 +1,23 @@
+// A tall corner of stacked slabs round the north-west corner.
+// Built on the cliff look (clifflab rockpile, round 17), for variety in the library.
+
+tile "2x2-cliff-corner" size="2x2" seed=1 {
+    about "A tall corner of stacked slabs round the north-west corner."
+
+    stack {
+        dirt level=edge {
+            bank against=cliff height="1.5..3.5" reach="3..6.5"
+            scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
+        }
+
+        cliff form=corner along="north west" height=45 {
+            rock slabs
+            stone-size massive
+            top dirt
+            shattered patches=3 width="5..10"
+        }
+
+        scatter against=cliff per-square=55 reach=4 { stone size="1..6" mostly=small }
+        scatter against=cliff per-square=2.5 { boulder size="4.5..8" }
+    }
+}

@@ -191,6 +191,7 @@ const AUDIT_FAILED: u8 = 3;
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    disk_library();
     let code = match cli.command {
         Command::Check { paths, json } => check(&paths, json),
         Command::Build {
@@ -277,6 +278,31 @@ fn main() -> ExitCode {
 }
 
 /// Every tile of the bundled library, as `lib:` paths, tests aside.
+/// Inside a checkout (a `dharmatiles.kdl` project whose `library/` holds the
+/// printer profile), read `lib:` from that folder, so new and edited
+/// library tiles count at once. `$DT_LIBRARY` overrides it; otherwise the
+/// copy installed beside the program is used (see `dt_eval::source`).
+fn disk_library() {
+    if std::env::var_os("DT_LIBRARY").is_some() {
+        return;
+    }
+    let root = dt_eval::discover(&std::env::current_dir().unwrap_or_default()).root;
+    let lib = root.join("library");
+    if lib.join("printers/default.kdl").is_file() {
+        dt_eval::source::use_library_dir(lib);
+    }
+}
+
+/// Every library tile, test tiles included (the preview's list).
+pub(crate) fn all_library_tiles() -> Vec<String> {
+    let mut v: Vec<String> = dt_eval::Library::paths()
+        .into_iter()
+        .filter(|p| p.contains("tiles/"))
+        .collect();
+    v.sort();
+    v
+}
+
 pub(crate) fn library_tiles() -> Vec<String> {
     let mut v: Vec<String> = dt_eval::Library::paths()
         .into_iter()
