@@ -109,6 +109,23 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Open a live, painted 3D view of tiles in the browser (127.0.0.1
+    /// only).  Overhangs are red, a tree's 55-65 degree band orange; a tile
+    /// rebuilds when you save it or a file it uses.  Ctrl-C stops.
+    Preview {
+        /// Tile documents: files, or `lib:tiles/…`.  None: the whole bundled
+        /// library is listed, each tile built when you choose it.
+        paths: Vec<String>,
+        /// Connector system: `db` or `ol`.
+        #[arg(long, default_value = "db")]
+        system: String,
+        /// Port on 127.0.0.1 (default: the first free one from 7878).
+        #[arg(long)]
+        port: Option<u16>,
+        /// Open the browser.
+        #[arg(long)]
+        open: bool,
+    },
     /// Build tiles, then rebuild each whenever it or a file it uses changes.
     /// Ctrl-C stops.
     Watch {
@@ -159,6 +176,7 @@ fn emit(w: &mut dyn Write, args: std::fmt::Arguments) {
 mod looks;
 mod lsp;
 mod mcp;
+mod preview;
 mod watch;
 
 const OK: u8 = 0;
@@ -225,6 +243,12 @@ fn main() -> ExitCode {
             height,
             json,
         } => audit_stl(&path, width, height, json),
+        Command::Preview {
+            paths,
+            system,
+            port,
+            open,
+        } => preview::run(&paths, &options(system, None), port, open),
         Command::Watch {
             paths,
             system,
@@ -475,7 +499,7 @@ fn write(
     Ok(files)
 }
 
-fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
+pub(crate) fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
     let a = &b.audit;
     json!({
         "path": b.record.document,
@@ -511,7 +535,7 @@ fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
     })
 }
 
-fn errors_json(errs: &[Diag]) -> Vec<Value> {
+pub(crate) fn errors_json(errs: &[Diag]) -> Vec<Value> {
     errs.iter()
         .map(|d| {
             let (file, line, column) = d.location().map_or(

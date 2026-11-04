@@ -1,0 +1,206 @@
+//! The server's routes and the worker, end to end on a loopback port.
+
+#![allow(clippy::unwrap_used)]
+
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpStream;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
+
+use dt_eval::{Options, Source};
+use serde_json::Value;
+
+use super::*;
+
+struct Running {
+    addr: std::net::SocketAddr,
+    shared: Arc<Shared>,
+    stop: Arc<AtomicBool>,
+}
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+    }
+}
+
+fn start(paths: &[&str], eager: bool) -> Running {
+    let paths: Vec<String> = paths.iter().map(|p| (*p).to_owned()).collect();
+    let opts = Options::default();
+    let shared = Arc::new(Shared::new(&paths, "db", opts.printer.overhang_deg));
+    let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let addr = listener.local_addr().unwrap();
+    server::spawn(listener, Arc::clone(&shared));
+    let stop = Arc::new(AtomicBool::new(false));
+    let (s, st) = (Arc::clone(&shared), Arc::clone(&stop));
+    std::thread::spawn(move || work(&s, &opts, eager, &st));
+    Running { addr, shared, stop }
+}
+
+fn request(addr: std::net::SocketAddr, method: &str, path: &str, host: &str) -> (String, Vec<u8>) {
+    let mut c = TcpStream::connect(addr).unwrap();
+    write!(c, "{method} {path} HTTP/1.1\r\nHost: {host}\r\n\r\n").unwrap();
+    let mut all = Vec::new();
+    c.read_to_end(&mut all).unwrap();
+    let split = all.windows(4).position(|w| w == b"\r\n\r\n").unwrap();
+    let head = String::from_utf8_lossy(&all[..split]).into_owned();
+    (head, all[split + 4..].to_vec())
+}
+
+fn get(r: &Running, path: &str) -> (String, Vec<u8>) {
+    request(r.addr, "GET", path, &r.addr.to_string())
+}
+
+fn tiles(r: &Running) -> Value {
+    serde_json::from_slice(&get(r, "/api/tiles").1).unwrap()
+}
+
+fn wait_for(r: &Running, what: &str, mut ok: impl FnMut(&Value) -> bool) -> Value {
+    let t0 = Instant::now();
+    loop {
+        let v = tiles(r);
+        if ok(&v["tiles"][0]) {
+            return v["tiles"][0].clone();
+        }
+        assert!(t0.elapsed() < Duration::from_secs(120), "timed out waiting for {what}: {v}");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+const FLAT: &str = "lib:tiles/test/flat-1x1.kdl";
+
+#[test]
+fn serves_the_viewer_and_its_vendored_three() {
+    let r = start(&[], false);
+    let (head, body) = get(&r, "/");
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    assert!(head.contains("text/html"));
+    assert!(String::from_utf8_lossy(&body).contains("importmap"));
+    let (head, body) = get(&r, "/vendor/three.module.min.js");
+    assert!(head.contains("text/javascript"));
+    assert!(body.len() > 100_000, "three.js is embedded");
+    for p in ["/js/main.js", "/js/viewer.js", "/js/payload.js", "/js/host.js", "/style.css"] {
+        assert!(get(&r, p).0.starts_with("HTTP/1.1 200"), "{p}");
+    }
+    assert!(get(&r, "/nope").0.starts_with("HTTP/1.1 404"));
+}
+
+#[test]
+fn refuses_a_foreign_host_header() {
+    let r = start(&[], false);
+    let (head, _) = request(r.addr, "GET", "/api/tiles", "evil.example:80");
+    assert!(head.starts_with("HTTP/1.1 403"), "{head}");
+    assert!(request(r.addr, "GET", "/", "localhost:1234").0.starts_with("HTTP/1.1 200"));
+    assert!(request(r.addr, "GET", "/", "[::1]:1234").0.starts_with("HTTP/1.1 200"));
+    assert!(!server_loopback("127.0.0.1.evil.com:80"));
+}
+
+fn server_loopback(h: &str) -> bool {
+    // via the public behaviour: a bare name is checked the same way
+    let r = start(&[], false);
+    request(r.addr, "GET", "/", h).0.starts_with("HTTP/1.1 200")
+}
+
+#[test]
+fn binds_loopback_only() {
+    let l = bind(Some(0)).unwrap();
+    assert!(l.local_addr().unwrap().ip().is_loopback());
+    assert!(!l.local_addr().unwrap().ip().is_unspecified());
+}
+
+#[test]
+fn builds_a_tile_and_serves_its_mesh() {
+    let r = start(&[FLAT], true);
+    let t = wait_for(&r, "ready", |t| t["status"] == "ready");
+    assert_eq!(t["plan"]["tile"], "flat");
+    assert_eq!(t["plan"]["cols"], 1);
+    assert!((t["plan"]["square_mm"].as_f64().unwrap() - 35.0).abs() < 1e-9);
+    assert_eq!(t["record"]["audit"]["watertight"], true);
+    assert_eq!(t["mesh_version"], 1);
+    let (head, body) = get(&r, "/api/tiles/0/mesh");
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    assert_eq!(&body[..4], payload::MAGIC);
+    let jl = u32::from_le_bytes(body[4..8].try_into().unwrap()) as usize;
+    let h: Value = serde_json::from_slice(&body[8..8 + jl]).unwrap();
+    let n = usize::try_from(h["triangles"].as_u64().unwrap()).unwrap();
+    assert_eq!(n as u64, t["record"]["audit"]["triangles"].as_u64().unwrap());
+    assert_eq!(body.len(), 8 + jl + n * (36 + 36 + 9 + 9));
+    assert_eq!(h["overhang_deg"], 55.0);
+    assert!(get(&r, "/api/tiles/7/mesh").0.starts_with("HTTP/1.1 404"));
+}
+
+#[test]
+fn sse_starts_with_a_snapshot_then_streams_changes() {
+    let r = start(&[FLAT], true);
+    let mut c = TcpStream::connect(r.addr).unwrap();
+    write!(c, "GET /api/events HTTP/1.1\r\nHost: {}\r\n\r\n", r.addr).unwrap();
+    c.set_read_timeout(Some(Duration::from_secs(120))).unwrap();
+    let mut lines = BufReader::new(c).lines();
+    let mut seen = Vec::new();
+    let mut first = true;
+    for l in lines.by_ref() {
+        let l = l.unwrap();
+        let Some(data) = l.strip_prefix("data: ") else { continue };
+        let v: Value = serde_json::from_str(data).unwrap();
+        if first {
+            assert_eq!(v["type"], "snapshot");
+            first = false;
+        } else {
+            seen.push(v["tile"]["status"].as_str().unwrap().to_owned());
+            if v["tile"]["status"] == "ready" {
+                break;
+            }
+        }
+        if v["type"] == "snapshot" && v["tiles"][0]["status"] == "ready" {
+            return; // built before we listened: the snapshot said so
+        }
+    }
+    assert_eq!(seen.last().map(String::as_str), Some("ready"), "{seen:?}");
+}
+
+#[test]
+fn a_library_tile_is_built_only_when_asked() {
+    let r = start(&[FLAT], false);
+    std::thread::sleep(Duration::from_millis(600));
+    assert_eq!(tiles(&r)["tiles"][0]["status"], "idle");
+    assert!(request(r.addr, "POST", "/api/tiles/0/build", &r.addr.to_string()).0.contains("202"));
+    assert!(request(r.addr, "POST", "/api/tiles/9/build", &r.addr.to_string()).0.contains("404"));
+    wait_for(&r, "ready", |t| t["status"] == "ready");
+}
+
+#[test]
+fn editing_the_document_rebuilds_it_and_a_mistake_shows_its_line() {
+    let dir = std::env::temp_dir().join(format!("dt-preview-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let doc = dir.join("t.kdl");
+    let text = dt_eval::Library.read(FLAT).unwrap();
+    std::fs::write(&doc, &text).unwrap();
+    let path = doc.to_string_lossy().into_owned();
+    let r = start(&[&path], true);
+    wait_for(&r, "first build", |t| t["status"] == "ready");
+
+    // a mistake on line 9: the error names the file and line, the old mesh stays
+    std::thread::sleep(Duration::from_millis(50));
+    std::fs::write(&doc, text.replace("ground level=edge", "gruond level=edge")).unwrap();
+    let t = wait_for(&r, "failure", |t| t["status"] == "failed");
+    let e = &t["errors"][0];
+    assert_eq!(e["file"], path.as_str());
+    assert!(e["line"].as_u64().is_some_and(|l| l >= 8), "{e}");
+    assert_eq!(t["mesh_version"], 1, "the last good mesh is kept");
+    assert!(get(&r, "/api/tiles/0/mesh").0.starts_with("HTTP/1.1 200"));
+
+    // fixed: rebuilt in place, a new mesh version
+    std::fs::write(&doc, text.replace("seed=1", "seed=2")).unwrap();
+    let t = wait_for(&r, "rebuild", |t| t["status"] == "ready" && t["mesh_version"] == 2);
+    assert!(t["errors"].as_array().unwrap().is_empty());
+    drop(r);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_slot_name_comes_from_the_file_until_the_plan_is_read() {
+    assert_eq!(Slot::new("lib:tiles/ground/1x1-grass.kdl").name, "1x1-grass");
+    assert_eq!(Slot::new("my/tiles/a.kdl").name, "a");
+    let _ = Shared::new(&[], "db", 55.0).snapshot();
+}
