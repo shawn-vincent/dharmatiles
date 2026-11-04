@@ -3,12 +3,12 @@ source: crates/dt-eval/tests/golden.rs
 assertion_line: 95
 expression: metrics(&b)
 ---
-triangles: 1847648
-volume_mm3: 56613.285
+triangles: 1777816
+volume_mm3: 55307.516
 watertight: true
-bodies: 160
+bodies: 209
 dropped: 0
-voids_filled: 159
-overhang_mm2: 0.354
+voids_filled: 208
+overhang_mm2: 0.000
 holes: 0
 render_red_pixels: 0

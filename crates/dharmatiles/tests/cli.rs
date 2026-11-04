@@ -219,7 +219,9 @@ fn watch_rebuilds_when_a_used_file_changes() {
             }
         }
     };
-    wait_for("watching 2 file(s)", &mut seen);
+    // the tile, its part, and the library files every tile reads (the
+    // standard levels and the edge contract, on disk)
+    wait_for("watching ", &mut seen);
     // a coarse file clock (1 s) still sees the edit
     std::thread::sleep(std::time::Duration::from_millis(1100));
     std::fs::write(&parts, "define raised { stack { ground level=7 } }\n").unwrap();
@@ -236,15 +238,42 @@ fn watch_rebuilds_when_a_used_file_changes() {
 }
 
 #[test]
-fn watch_of_a_library_tile_builds_once() {
+fn watch_of_a_library_tile_watches_its_file_on_disk() {
+    // the library is read from disk (this checkout's library/), so a
+    // `lib:` tile is watched like any other file
+    use std::io::BufRead;
     let d = scratch("watch-lib");
-    let o = Command::new(EXE)
+    let mut child = Command::new(EXE)
         .args(["watch", "lib:tiles/test/1x1-flat.dtile", "--out"])
         .arg(&d)
-        .output()
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
         .unwrap();
-    assert_eq!(o.status.code(), Some(0));
-    let err = String::from_utf8(o.stderr).unwrap();
-    assert!(err.contains("nothing to watch"), "{err}");
+    let stderr = child.stderr.take().unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in std::io::BufReader::new(stderr).lines() {
+            if tx.send(line.unwrap_or_default()).is_err() {
+                break;
+            }
+        }
+    });
+    let mut seen = Vec::new();
+    let watching = loop {
+        match rx.recv_timeout(std::time::Duration::from_secs(60)) {
+            Ok(l) => {
+                let hit = l.starts_with("watching ");
+                seen.push(l);
+                if hit {
+                    break true;
+                }
+            }
+            Err(_) => break false,
+        }
+    };
+    let _ = child.kill();
+    let _ = child.wait();
+    assert!(watching, "never started watching:\n{}", seen.join("\n"));
     assert!(d.join("db/test/1x1-flat-db.stl").exists());
 }

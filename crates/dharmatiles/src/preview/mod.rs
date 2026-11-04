@@ -114,6 +114,9 @@ pub struct Shared {
     cache: Option<std::path::PathBuf>,
     /// A palette document the paint is read from at each build.
     palette: Option<std::path::PathBuf>,
+    /// Showing the whole library (no paths given): new tile files join
+    /// the list as they appear.
+    library: bool,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -132,6 +135,7 @@ impl Shared {
             wanted: Mutex::new(VecDeque::new()),
             cache: None,
             palette: None,
+            library: false,
         }
     }
 
@@ -166,6 +170,14 @@ impl Shared {
                 dt_kit::Palette::default()
             }
         }
+    }
+
+    /// With `library`, this shows the whole library: new tile files join
+    /// the list as they appear on disk.
+    #[must_use]
+    pub fn listing_if(mut self, library: bool) -> Self {
+        self.library = library;
+        self
     }
 
     /// Keep stage timings in `file`, so the next build of a tile has an ETA.
@@ -467,7 +479,7 @@ fn rebuild_stl(shared: &Shared, i: usize, opts: &Options, path: &str) {
 /// The worker: build what is wanted, then what changed, until `stop`.
 pub fn work(shared: &Arc<Shared>, opts: &Options, eager: bool, stop: &AtomicBool) {
     // serving the whole library from disk: new tile files join the list
-    let rescan = !eager && dt_eval::source::library_dir().is_some();
+    let rescan = shared.library && dt_eval::source::library_dir().is_some();
     while !stop.load(Ordering::Relaxed) {
         if rescan {
             shared.add_missing(&crate::all_library_tiles());
@@ -524,7 +536,8 @@ pub fn run(
         .local_addr()
         .map_or_else(|_| "127.0.0.1".to_owned(), |a| a.to_string());
     // no paths: offer the library, building a tile when it is chosen
-    let (paths, eager) = if paths.is_empty() {
+    let library = paths.is_empty();
+    let (paths, eager) = if library {
         (crate::all_library_tiles(), false)
     } else {
         (paths.to_vec(), true)
@@ -533,7 +546,8 @@ pub fn run(
     let shared = Arc::new(
         Shared::new(&paths, &opts.system, opts.printer.overhang_deg)
             .with_cache(Timings::file_in(&cache))
-            .with_palette_opt(palette),
+            .with_palette_opt(palette)
+            .listing_if(library),
     );
     let url = format!("http://{addr}/");
     tell!("preview: {url}  ({} tile(s); Ctrl-C to stop)", paths.len());

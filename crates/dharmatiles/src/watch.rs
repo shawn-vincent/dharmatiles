@@ -144,7 +144,7 @@ pub fn run(
     }
     let n: usize = tiles.iter().map(|t| t.files.len()).sum();
     if n == 0 {
-        tell!("nothing to watch: `lib:` documents are built into the program");
+        tell!("nothing to watch: no document was read from a file on disk");
         return code;
     }
     tell!("watching {n} file(s); Ctrl-C to stop");
