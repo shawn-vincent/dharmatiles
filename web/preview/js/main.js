@@ -26,9 +26,9 @@ VIEWS.forEach(([name, label], i) => {
   b.onclick = () => pickView(name);
   $('views').append(b);
 });
-function pickView(name) {
+function pickView(name, animate = true) {
   state.view = name;
-  viewer.setView(name);
+  viewer.setView(name, animate);
   document.querySelectorAll('button.view').forEach((b) => b.classList.toggle('on', b.dataset.view === name));
 }
 const toggle = (id, fn) => { $(id).onchange = (e) => fn(e.target.checked); };
@@ -36,13 +36,13 @@ toggle('t-overhang', (on) => viewer.setOverhang(on));
 toggle('t-wire', (on) => viewer.setWireframe(on));
 toggle('t-grid', (on) => viewer.setGrid(on));
 // perspective or orthographic: remembered across reloads (a per-viewer convenience)
-function setProjection(ortho) {
-  viewer.setOrtho(ortho);
+function setProjection(ortho, animated = true) {
+  viewer.setOrtho(ortho, animated);
   $('b-proj').firstChild.textContent = ortho ? 'Orthographic ' : 'Perspective ';
   try { localStorage.setItem('dt-preview-ortho', ortho ? '1' : '0'); } catch { /* private mode */ }
 }
 $('b-proj').onclick = () => setProjection(!viewer.isOrtho);
-try { if (localStorage.getItem('dt-preview-ortho') === '1') setProjection(true); } catch { /* ignore */ }
+try { if (localStorage.getItem('dt-preview-ortho') === '1') setProjection(true, false); } catch { /* ignore */ }
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' && e.target.type === 'search') return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -113,7 +113,7 @@ async function loadMesh(i, version) {
     state.loaded.set(i, version);
     if (first) {
       const saved = state.cameras.get(i);
-      if (saved) viewer.setCamera(saved); else pickView(state.view);
+      if (saved) viewer.setCamera(saved); else pickView(state.view, false);
     }
     renderPanel();
   } catch (e) {

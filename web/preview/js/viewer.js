@@ -23,6 +23,11 @@ export const VIEWS = [
 ];
 
 const FOV = 40;
+const NARROW_FOV = 3; // the near-orthographic end of the projection tween
+const easeInOutCubic = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
+const reduceMotion = () => {
+  try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
+};
 const rad = (d) => (d * Math.PI) / 180;
 const dirv = (elev, azim) => new THREE.Vector3(
   Math.cos(rad(elev)) * Math.cos(rad(azim)), Math.cos(rad(elev)) * Math.sin(rad(azim)), Math.sin(rad(elev)));
@@ -105,7 +110,76 @@ export class Viewer {
     this.controls.enableDamping = false;
     this.controls.target.copy(target);
     this.controls.addEventListener('change', () => this.draw());
+    // the user took hold (drag, wheel, touch): the tween ends and the controls own the camera
+    this.controls.addEventListener('start', () => this.cancelTween(true));
     this.controls.update();
+  }
+
+  /** Run `step(eased 0..1)` over `seconds`; `done` runs once at the end (or when cut short by the user). */
+  animate(seconds, step, done) {
+    this.cancelTween(false);
+    const t0 = performance.now();
+    const tween = { done, raf: 0 };
+    this.tween = tween;
+    const tick = (now) => {
+      if (this.tween !== tween) return;
+      const u = Math.min(1, (now - t0) / (seconds * 1000));
+      step(easeInOutCubic(u));
+      this.draw();
+      if (u < 1) { tween.raf = requestAnimationFrame(tick); return; }
+      this.tween = null;
+      done?.();
+    };
+    tween.raf = requestAnimationFrame(tick);
+  }
+
+  /** Stop a running tween; with `finish`, run its `done` (a projection switch lands where it was going). */
+  cancelTween(finish) {
+    const t = this.tween;
+    if (!t) return;
+    cancelAnimationFrame(t.raf);
+    this.tween = null;
+    if (finish) t.done?.();
+  }
+
+  /** The camera's pose now: target, unit direction from the target, perspective-equivalent distance. */
+  pose() {
+    const target = this.controls.target.clone();
+    return { target, dir: this.camera.position.clone().sub(target).normalize(), dist: this.eyeDistance() };
+  }
+
+  /**
+   * Orbit to a pose: the direction turns round the target along a great
+   * circle (the object seems to turn in space), the distance and target
+   * ease separately.  Up stays +z, so the path does not roll through Top
+   * or Under.  A new call starts from wherever the last one had got to.
+   */
+  flyTo(to) {
+    const from = this.pose();
+    const q = new THREE.Quaternion().setFromUnitVectors(from.dir, to.dir);
+    if (Math.abs(q.w) < 1e-6) { // opposite ends: turn about the vertical, not any axis
+      q.setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI);
+    }
+    const angle = 2 * Math.acos(Math.min(1, Math.abs(q.w)));
+    const travel = from.target.distanceTo(to.target) / Math.max(from.dist, 1);
+    const seconds = Math.min(0.9, 0.6 + 0.2 * (angle / Math.PI) + 0.1 * Math.min(1, travel));
+    const apply = (dir, target, dist) => {
+      this.placeEquivalent(target, dir, dist);
+      this.controls.target.copy(target);
+      this.controls.update();
+    };
+    if (reduceMotion() || angle + travel + Math.abs(Math.log(to.dist / from.dist)) < 1e-4) {
+      apply(to.dir, to.target, to.dist);
+      this.draw();
+      return;
+    }
+    const id = new THREE.Quaternion();
+    this.animate(seconds, (e) => {
+      const r = id.clone().slerp(q, e);
+      apply(from.dir.clone().applyQuaternion(r).normalize(),
+        from.target.clone().lerp(to.target, e),
+        from.dist * Math.pow(to.dist / from.dist, e));
+    }, null);
   }
 
   /** The apparent size: the perspective distance that gives the same view. */
@@ -119,8 +193,9 @@ export class Viewer {
    * size.  The orthographic frustum comes from the perspective distance and
    * field of view; zooming it later changes `.zoom`, not the distance.
    */
-  setOrtho(on) {
+  setOrtho(on, animated = false) {
     if (on === this.isOrtho) return;
+    if (animated && !reduceMotion() && !this.tween) return this.projectionTween(on);
     const target = this.controls.target.clone();
     const dir = this.camera.position.clone().sub(target).normalize();
     const dist = this.eyeDistance();
@@ -130,6 +205,42 @@ export class Viewer {
     this.placeEquivalent(target, dir, dist);
     this.makeControls(target);
     this.draw();
+  }
+
+  /**
+   * A smooth switch by dolly-zoom: the perspective camera narrows its field
+   * of view while backing away, so the apparent size holds and the view
+   * flattens into the orthographic one (and the reverse).
+   */
+  projectionTween(toOrtho) {
+    const p = this.pose();
+    const hh = p.dist * Math.tan(rad(FOV / 2)); // half the view's height at the target, mm
+    const set = (fov) => {
+      const dist = hh / Math.tan(rad(fov / 2));
+      this.persp.fov = fov;
+      this.persp.position.copy(p.target).addScaledVector(p.dir, dist);
+      this.persp.near = Math.max(0.1, dist / 200);
+      this.persp.far = dist * 20;
+      this.persp.lookAt(p.target);
+      this.persp.updateProjectionMatrix();
+    };
+    const land = () => {
+      this.persp.fov = FOV;
+      this.persp.updateProjectionMatrix();
+      this.setOrtho(toOrtho);
+    };
+    if (toOrtho) {
+      this.animate(0.5, (e) => set(FOV + (NARROW_FOV - FOV) * e), () => { set(FOV); land(); });
+    } else {
+      // to the narrow end at once (it looks like the orthographic view), then widen
+      this.persp.fov = NARROW_FOV;
+      this.isOrtho = false;
+      this.camera = this.persp;
+      this.uniforms.uOrtho.value = 0;
+      set(NARROW_FOV);
+      this.makeControls(p.target);
+      this.animate(0.5, (e) => set(NARROW_FOV + (FOV - NARROW_FOV) * e), () => set(FOV));
+    }
   }
 
   /** Put the active camera on the view at perspective `dist` from `target` along `dir`. */
@@ -208,7 +319,7 @@ export class Viewer {
   setGrid(on) { this.showGrid = on; if (this.grid) this.grid.visible = on; this.draw(); }
 
   /** Put the camera on a named view, framing the tile as render.rs does. */
-  setView(name) {
+  setView(name, animate = true) {
     const v = VIEWS.find((x) => x[0] === name);
     const b = this.bounds();
     if (!v || !b) return;
@@ -220,8 +331,11 @@ export class Viewer {
       centre.z = (0.5 + b.hi[2]) / 2;
     }
     const dist = (diag / (2 * Math.tan(rad(FOV / 2)))) * 1.1;
-    this.placeEquivalent(centre, dirv(elev, azim), dist);
-    this.controls.target.copy(centre);
+    const to = { target: centre, dir: dirv(elev, azim).normalize(), dist };
+    if (animate) { this.flyTo(to); return; }
+    this.cancelTween(true);
+    this.placeEquivalent(to.target, to.dir, to.dist);
+    this.controls.target.copy(to.target);
     this.controls.update();
     this.draw();
   }
@@ -234,6 +348,7 @@ export class Viewer {
     return { p: p.toArray(), t: t.toArray() };
   }
   setCamera(c) {
+    this.cancelTween(false);
     const t = new THREE.Vector3().fromArray(c.t);
     const p = new THREE.Vector3().fromArray(c.p);
     const dist = p.distanceTo(t);
