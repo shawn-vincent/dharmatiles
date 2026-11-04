@@ -224,7 +224,8 @@ pub struct Status {
     pub label: String,
     /// The current stage's key.
     pub key: String,
-    /// What the stage is counting, if it is: `(what, done, total)`.
+    /// What the stage is counting, if it is: `(what, done, total)`; with
+    /// `total` 0, just the step it is on (`carving the core`).
     pub count: Option<(String, usize, usize)>,
     /// Seconds since the tracker started.
     pub elapsed_s: f64,
@@ -419,7 +420,8 @@ impl Reporter for Tracker {
                 {
                     let mut s = self.lock();
                     s.sub = s.sub.max(fraction.clamp(0.0, 1.0));
-                    s.count = (total > 0).then(|| (what.to_owned(), done, total));
+                    s.count =
+                        (total > 0 || !what.is_empty()).then(|| (what.to_owned(), done, total));
                 }
                 self.emit(false);
             }

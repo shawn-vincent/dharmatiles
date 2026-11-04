@@ -180,7 +180,9 @@ const secs = (s) => (s >= 60 ? `${Math.floor(s / 60)}m${String(Math.round(s % 60
 function showProgress(p) {
   const pct = Math.floor(p.fraction * 100);
   $('bar-fill').style.width = `${pct}%`;
-  const stage = p.count ? `${p.label}: ${p.count[0]} ${p.count[1]}/${p.count[2]}` : p.label;
+  const stage = !p.count ? p.label
+    : p.count[2] === 0 ? `${p.label}: ${p.count[0]}`
+    : `${p.label}: ${p.count[0]} ${p.count[1]}/${p.count[2]}`;
   $('status-text').textContent = `${pct}% · ${stage} · ${secs(p.elapsed_s)} of ~${secs(p.estimate_s)}`;
 }
 

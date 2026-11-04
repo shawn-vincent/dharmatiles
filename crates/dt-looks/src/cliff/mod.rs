@@ -356,6 +356,7 @@ impl Look for Cliff {
     }
 
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
+        let progress = scene.progress();
         let frame = *scene.frame();
         let Planned {
             f2,
@@ -380,7 +381,7 @@ impl Look for Cliff {
         };
         // the foot: the lowest ground under the tile
         let foot = ground.z.iter().copied().fold(f64::INFINITY, f64::min);
-
+        progress.fraction("planning the pile", 0.01);
         let placed = st.rocks;
         if placed.is_empty() {
             return Ok(());
@@ -410,6 +411,7 @@ impl Look for Cliff {
             finish::plan_column(&mut rng, c, &placed, &fm, plan_slot)
                 .map_err(|e| LookError::build(format!("plan column: {e}")))?;
         }
+        progress.fraction("dressing columns", 0.03);
         let core_mesh = core::core_mesh(&st.s, &cols, &placed)
             .map_err(|e| LookError::build(format!("core mesh: {e}")))?;
         let mut frng = Rng::new(ctx.seed.key("cliff-faces"));
@@ -434,7 +436,8 @@ impl Look for Cliff {
             seed: ctx.seed.key("cliff-grain").value(),
         };
         let col_seed = ctx.seed.key("cliff-columns");
-        let ticks = scene.progress().counter("stones", placed.len(), 0.0, 0.9);
+        progress.fraction("planning faces and cracks", 0.04);
+        let ticks = progress.counter("stones", placed.len(), 0.04, 0.14);
         let results: Vec<ColResult> = cols
             .par_iter()
             .enumerate()
@@ -475,6 +478,7 @@ impl Look for Cliff {
                 Ok((out, cs.tops))
             })
             .collect();
+        progress.fraction("stones finished", 0.14);
         let mut pieces: Vec<(usize, dt_kit::Piece)> = Vec::new();
         let mut tops = 0;
         for r in results {
@@ -497,10 +501,19 @@ impl Look for Cliff {
         };
         let core = core::core_piece(slots.get(1), &core_mesh, &fm)
             .map_err(|e| LookError::build(format!("core piece: {e}")))?;
-        let core =
-            relief::relief(core, &all_faces, Some((fm.w, fm.h))).map_err(LookError::build)?;
+        progress.fraction("carving the core", 0.15);
+        let core = relief::relief(
+            core,
+            &all_faces,
+            Some((fm.w, fm.h)),
+            Some((&progress, 0.15, 0.72)),
+        )
+        .map_err(LookError::build)?;
+        progress.fraction("graining the core", 0.72);
         let core = stone::grain(&core, env.seed, form::FOOT).map_err(LookError::build)?;
+        progress.fraction("cleaning up the core", 0.85);
         let core = core.parts_over(1e9).map_err(LookError::build)?;
+        progress.fraction("dirt on the tops", 0.90);
         let m = f2.matrix(foot);
         if self.top_dirt {
             let mut pile = dt_kit::TriMesh::default();
@@ -527,6 +540,7 @@ impl Look for Cliff {
                 );
             }
         }
+        progress.fraction("placing stones", 0.98);
         let n_stones = pieces.len();
         for (_, p) in pieces {
             let solid = p.transformed(&m).into_solid();

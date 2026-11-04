@@ -55,6 +55,7 @@ pub(crate) fn line(prefix: &str, name: &str, s: &Status, width: usize) -> String
     let filled = ((s.fraction * BAR as f64).floor() as usize).min(BAR);
     let bar: String = "#".repeat(filled) + &"-".repeat(BAR - filled);
     let stage = match &s.count {
+        Some((what, _, 0)) => format!("{}: {what}", s.label),
         Some((what, d, t)) => format!("{} {what} {d}/{t}", s.label),
         None => s.label.clone(),
     };

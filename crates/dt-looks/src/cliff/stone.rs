@@ -876,7 +876,7 @@ pub fn rock_piece(
             _ => rock,
         }
     };
-    let rock = relief(rock.clone(), &c.faces, None)
+    let rock = relief(rock.clone(), &c.faces, None, None)
         .and_then(|p| p.parts_over(1e9))
         .unwrap_or(rock);
     let rock = match top_cracks(rng, &rock, r, &c.faces, env) {

@@ -121,13 +121,19 @@ pub fn relief(
     mut rock: Piece,
     faces: &[Arc<Face>],
     core: Option<(f64, f64)>,
+    progress: Option<(&dt_kit::Progress, f64, f64)>,
 ) -> Result<Piece, KitError> {
     let passes: Vec<(f64, &Arc<Face>)> = [SHEAR_DEG.to_radians(), 0.0]
         .into_iter()
         .flat_map(|a| faces.iter().map(move |f| (a, f)))
         .filter(|(a, fc)| !(*a != 0.0 && fc.rim && core.is_some()))
         .collect();
+    // the core's carve is one long serial loop: say how far through it is
+    let ticks = progress.map(|(p, lo, hi)| p.counter("faces carved", passes.len(), lo, hi));
     for (a, fc) in passes {
+        if let Some(t) = &ticks {
+            t.tick();
+        }
         let g = if a != 0.0 {
             RELIEF_GRID_MM
         } else {
