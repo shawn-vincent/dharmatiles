@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/preview.html" aria-current="page">Preview</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Rust rewrite · stream C · built 4 Nov 2026</div>
+  <h1>dharmatiles preview</h1>
+  <p class="lede">A live, painted 3D view of a tile in your browser. Overhangs are red, the tree band orange, and the tile rebuilds when you save the document. Nothing to install beyond dharmatiles itself.</p>
+</header>
+<article class="doc">
+
+<h2 id="run">Run it</h2>
+<pre><code>dharmatiles preview my-tile.kdl --open            # one document, opens the browser
+dharmatiles preview a.kdl b.kdl lib:tiles/ground/1x1-grass.kdl   # several; pick one in the list
+dharmatiles preview                               # the whole bundled library, built when you click a tile
+dharmatiles preview my-tile.kdl --system ol --port 9000
+dharmatiles preview slicer-export.stl             # any binary STL, through the same gate</code></pre>
+<p>It serves <code>http://127.0.0.1:7878/</code> (the first free port from 7878, or <code>--port</code>) and only on the loopback address, never on <code>0.0.0.0</code>. A request whose <code>Host</code> header is not <code>127.0.0.1</code>, <code>localhost</code> or <code>[::1]</code> is refused. Ctrl-C stops it. The viewer is inside the program, so it works offline, including after <code>brew install</code>.</p>
+
+<h2 id="shows">What it shows</h2>
+<figure class="shot"><img src="preview-shots/overhang-red.jpg" alt="An inverted pyramid seen from below, painted red"><figcaption class="small muted">A test STL seen from below (Under view): the gate's overhang faces are red; the flat patch at the bottom is not.</figcaption></figure>
+<ul>
+<li><b>Painted like the PNG renders.</b> Each triangle has the colour <code>build --png</code> would give it: material colours, dirtlab's earth ramp, grey pebbles, the dark tile side wall, blue water, green grass. The shading is the same too (two lights placed relative to the camera, the same gamma). The colours are worked out in Rust and sent per vertex; the browser does no painting of its own.</li>
+<li><b>Red is the gate's own overhang.</b> A face is red when the printability gate (layer reach past the printer's 55&deg; limit) says so, not when a shader guesses from the angle. The viewer and <code>build</code> cannot disagree. On trees the band just past the limit is orange.</li>
+<li><b>Views</b> (keys 1&ndash;9): Iso, Top, Front, Right, Back, Left, Low (to inspect undersides), Close and Under, the contact sheet's views plus the elevations. Orbit with the left button, pan with the right button or shift, zoom with the wheel.</li>
+<li><b>Toggles:</b> overhang paint (<kbd>o</kbd>), wireframe (<kbd>w</kbd>) and the ground grid (<kbd>g</kbd>), ruled at the square size (35 mm, or 25.4 mm for OpenLOCK).</li>
+<li><b>Build record</b> beside the view: triangles, watertight, overhang mm&sup2;, band against its budget, dropped bodies, voids filled, holes, build time, seed, and any gate failure.</li>
+<li><b>Tile list</b> on the left, with a dot for each tile: grey (not built), amber (building), green (ready), red (failed). A red ring means overhang or band area.</li>
+</ul>
+<figure class="shot"><img src="preview-shots/grass-tree-2x2.jpg" alt="The 2x2 grass and tree tile in the viewer"><figcaption class="small muted">The 2&times;2 grass-and-tree library tile (1.55 million triangles).</figcaption></figure>
+<figure class="shot"><img src="preview-shots/tree.jpg" alt="A tree tile from a low view"><figcaption class="small muted">The tree test tile from the Low view, with its build record.</figcaption></figure>
+
+<h2 id="live">Live updates</h2>
+<p>Save the document, or any file it <code>use</code>s, and the tile rebuilds. The page shows <b>building&hellip;</b> at once, keeps the old mesh and your camera, and swaps the new mesh in place when it is done. If the document has a mistake, the errors appear over the view as <code>file:line:column</code> with the hint, and the last good mesh stays behind them; fix the file and the next save clears them.</p>
+<figure class="shot"><img src="preview-shots/water-error.jpg" alt="A water tile with two errors shown over it"><figcaption class="small muted">A document with two mistakes: the errors sit over the last good build.</figcaption></figure>
+<p>The server builds one tile at a time. Documents named on the command line are all built at the start, the first one first; with no document, a library tile is built when you pick it.</p>
+
+<h2 id="how">How it works</h2>
+<table class="tbl">
+<thead><tr><th>Route</th><th>What</th></tr></thead>
+<tbody>
+<tr><td><code>GET /</code> and assets</td><td>the viewer: plain HTML and JS modules, <code>web/preview/</code>, with three.js r170 vendored in <code>web/preview/vendor/</code> and embedded in the program with <code>include_bytes!</code>. No npm, no bundler.</td></tr>
+<tr><td><code>GET /api/events</code></td><td>server-sent events: a snapshot of every tile, then one event per change (building, plan pass, ready, failed).</td></tr>
+<tr><td><code>GET /api/tiles/N/mesh</code></td><td>the mesh as one binary buffer: positions and normals as f32, two sets of per-vertex RGB bytes (with and without the overhang paint). Layout in <code>crates/dharmatiles/src/preview/payload.rs</code>.</td></tr>
+<tr><td><code>POST /api/tiles/N/build</code></td><td>build a tile that has not been built.</td></tr>
+</tbody></table>
+<p>The files the build read are polled for changes every 150 ms, as <code>watch</code> does. The plan pass (<code>check</code>: the tile's name, size and stack) is sent before geometry, so the grid and the tile's size appear at once. The front end talks to the server only through <code>web/preview/js/host.js</code>; the Tauri app can supply another host and reuse <code>viewer.js</code> and <code>main.js</code> unchanged.</p>
+
+<h2 id="gaps">What v1 does not do</h2>
+<ul>
+<li>The mesh is sent whole, unindexed: about 90 bytes a triangle, 140 MB for the 1.55-million-triangle 2&times;2 grass tile. On the loopback it takes under 0.1 s and the tile appears about a second after it is built, but it is not meant for a network.</li>
+<li>The plan pass shows the grid and the stack, not a placeholder of the ground; the mesh comes only when the build ends. Nothing is pushed per stack entry, because <code>dt-eval</code> builds the whole stack in one call and does not yet rebuild single entries.</li>
+<li>A change rebuilds the whole tile. No section cuts, measuring or editing.</li>
+<li>One build at a time; <code>--system</code> is fixed per run (restart for the other connector).</li>
+<li>The library tiles are overhang-free by construction (the gate fixes or refuses them), so red shows on documents that fail the gate and on STL files.</li>
+</ul>
+
+<h2 id="later">Later</h2>
+<ul>
+<li><b>Section cuts:</b> a movable plane to see inside walls, mortar cores and tree trunks, and the layer a face prints at.</li>
+<li><b>Measuring:</b> click two points for a distance in mm; click a face for its angle and its material.</li>
+<li><b>Per-entry updates:</b> rebuild only the stack entries whose inputs changed (<code>dt-eval</code>), pushing each as it finishes.</li>
+<li><b>Smaller meshes:</b> indexed vertices and quantised positions, or a decimated level for orbiting.</li>
+<li><b>Compare:</b> two builds side by side or differenced, to see what a change did.</li>
+<li><b>Editor:</b> the Tauri app reuses this front end beside its line and region editor.</li>
+<li><b>Choose the connector in the page</b> and show the connector's base alone.</li>
+</ul>
+</article>
+</div>
+</body>
+</html>

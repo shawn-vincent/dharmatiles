@@ -586,30 +586,7 @@ fn audit_stl(path: &str, width: Option<f64>, height: Option<f64>, json: bool) ->
         tell!("error: {path} is not a binary STL");
         return ERROR;
     };
-    let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
-    for p in &mesh.positions {
-        for k in 0..2 {
-            lo[k] = lo[k].min(p[k]);
-            hi[k] = hi[k].max(p[k]);
-        }
-    }
-    // the tile's size: whole squares (DungeonBlocks 35 mm, OpenLOCK 25.4 mm)
-    // nearest the mesh's extent, which the base's flare overshoots a little
-    let tile = |extent: f64| -> f64 {
-        [35.0, 25.4]
-            .iter()
-            .filter_map(|sq| {
-                let n = libm::round(extent / sq).max(1.0);
-                let err = (extent - n * sq).abs();
-                (err < 1.5).then_some((err, n * sq))
-            })
-            .min_by(|a, b| a.0.total_cmp(&b.0))
-            .map_or(extent, |(_, v)| v)
-    };
-    let footprint = [
-        width.unwrap_or_else(|| tile(hi[0] - lo[0])),
-        height.unwrap_or_else(|| tile(hi[1] - lo[1])),
-    ];
+    let footprint = stl_footprint(&mesh, width, height);
     let printer = Options::default().printer;
     let (_, a) = dt_kit::audit(&mesh, footprint, &printer);
     let failures = a.failures(&printer);
@@ -641,9 +618,43 @@ fn audit_stl(path: &str, width: Option<f64>, height: Option<f64>, json: bool) ->
     }
 }
 
+/// The tile's size in mm for an STL: `width`/`height` when given, else the
+/// whole squares (DungeonBlocks 35 mm, OpenLOCK 25.4 mm) nearest the
+/// mesh's extent, which the base's flare overshoots a little.
+pub(crate) fn stl_footprint(
+    mesh: &dt_kit::TriMesh,
+    width: Option<f64>,
+    height: Option<f64>,
+) -> [f64; 2] {
+    let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+    for p in &mesh.positions {
+        for k in 0..2 {
+            lo[k] = lo[k].min(p[k]);
+            hi[k] = hi[k].max(p[k]);
+        }
+    }
+    // the tile's size: whole squares (DungeonBlocks 35 mm, OpenLOCK 25.4 mm)
+    // nearest the mesh's extent, which the base's flare overshoots a little
+    let tile = |extent: f64| -> f64 {
+        [35.0, 25.4]
+            .iter()
+            .filter_map(|sq| {
+                let n = libm::round(extent / sq).max(1.0);
+                let err = (extent - n * sq).abs();
+                (err < 1.5).then_some((err, n * sq))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map_or(extent, |(_, v)| v)
+    };
+    [
+        width.unwrap_or_else(|| tile(hi[0] - lo[0])),
+        height.unwrap_or_else(|| tile(hi[1] - lo[1])),
+    ]
+}
+
 /// A binary STL's triangles, vertices merged by position (as a slicer
 /// reads it).
-fn read_stl(b: &[u8]) -> Option<dt_kit::TriMesh> {
+pub(crate) fn read_stl(b: &[u8]) -> Option<dt_kit::TriMesh> {
     let n = usize::try_from(u32::from_le_bytes(b.get(80..84)?.try_into().ok()?)).ok()?;
     if b.len() < 84 + 50 * n {
         return None;

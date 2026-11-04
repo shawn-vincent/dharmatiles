@@ -66,11 +66,18 @@ fn respond(conn: &mut TcpStream, status: &str, ctype: &str, body: &[u8]) {
         "HTTP/1.1 {status}\r\nContent-Type: {ctype}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n",
         body.len()
     );
-    let _ = conn.write_all(head.as_bytes()).and_then(|()| conn.write_all(body));
+    let _ = conn
+        .write_all(head.as_bytes())
+        .and_then(|()| conn.write_all(body));
 }
 
 fn json(conn: &mut TcpStream, status: &str, body: &serde_json::Value) {
-    respond(conn, status, "application/json", body.to_string().as_bytes());
+    respond(
+        conn,
+        status,
+        "application/json",
+        body.to_string().as_bytes(),
+    );
 }
 
 /// `/api/tiles/N/rest` → `(N, rest)`.
@@ -82,7 +89,9 @@ fn tile_route(path: &str) -> Option<(usize, &str)> {
 
 fn one(mut conn: TcpStream, shared: &Shared) {
     let _ = conn.set_read_timeout(Some(Duration::from_secs(10)));
-    let Some(req) = read_request(&conn) else { return };
+    let Some(req) = read_request(&conn) else {
+        return;
+    };
     if !loopback(&req.host) {
         return respond(&mut conn, "403 Forbidden", "text/plain", b"loopback only");
     }
@@ -98,14 +107,23 @@ fn one(mut conn: TcpStream, shared: &Shared) {
         }
         ("POST", p) if tile_route(p).is_some_and(|(_, w)| w == "build") => {
             let known = tile_route(p).is_some_and(|(i, _)| shared.want(i));
-            let status = if known { "202 Accepted" } else { "404 Not Found" };
+            let status = if known {
+                "202 Accepted"
+            } else {
+                "404 Not Found"
+            };
             json(&mut conn, status, &serde_json::json!({"ok": known}));
         }
         ("GET", p) => match assets::find(p) {
             Some((ctype, body)) => respond(&mut conn, "200 OK", ctype, body),
             None => respond(&mut conn, "404 Not Found", "text/plain", b"not found"),
         },
-        _ => respond(&mut conn, "405 Method Not Allowed", "text/plain", b"GET only"),
+        _ => respond(
+            &mut conn,
+            "405 Method Not Allowed",
+            "text/plain",
+            b"GET only",
+        ),
     }
 }
 

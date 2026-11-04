@@ -60,3 +60,4 @@ dd.bad { color: var(--bad); font-weight: 600; } dd.ok { color: var(--ok); }
   #app { grid-template-columns: 1fr; grid-template-rows: auto 60vh auto; height: auto; }
   aside { border: 0; max-height: 30vh; }
 }
+[hidden] { display: none !important; }

@@ -18,6 +18,7 @@ dharmatiles build --all --system both                      # every library tile,
 dharmatiles check my-tile.kdl                              # read and plan only
 dharmatiles looks [name]                                   # the looks and their controls
 dharmatiles watch my-tile.kdl                              # rebuild on every save
+dharmatiles preview my-tile.kdl --open                     # live painted 3D view in the browser (127.0.0.1:7878); overhang red; also takes .stl
 
 cargo test --release --workspace            # all tests (insta golden hashes included)
 cargo clippy --workspace --all-targets -- -D warnings

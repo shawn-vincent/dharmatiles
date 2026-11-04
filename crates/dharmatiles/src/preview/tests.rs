@@ -15,7 +15,6 @@ use super::*;
 
 struct Running {
     addr: std::net::SocketAddr,
-    shared: Arc<Shared>,
     stop: Arc<AtomicBool>,
 }
 
@@ -35,7 +34,7 @@ fn start(paths: &[&str], eager: bool) -> Running {
     let stop = Arc::new(AtomicBool::new(false));
     let (s, st) = (Arc::clone(&shared), Arc::clone(&stop));
     std::thread::spawn(move || work(&s, &opts, eager, &st));
-    Running { addr, shared, stop }
+    Running { addr, stop }
 }
 
 fn request(addr: std::net::SocketAddr, method: &str, path: &str, host: &str) -> (String, Vec<u8>) {
@@ -63,7 +62,10 @@ fn wait_for(r: &Running, what: &str, mut ok: impl FnMut(&Value) -> bool) -> Valu
         if ok(&v["tiles"][0]) {
             return v["tiles"][0].clone();
         }
-        assert!(t0.elapsed() < Duration::from_secs(120), "timed out waiting for {what}: {v}");
+        assert!(
+            t0.elapsed() < Duration::from_secs(120),
+            "timed out waiting for {what}: {v}"
+        );
         std::thread::sleep(Duration::from_millis(100));
     }
 }
@@ -80,7 +82,13 @@ fn serves_the_viewer_and_its_vendored_three() {
     let (head, body) = get(&r, "/vendor/three.module.min.js");
     assert!(head.contains("text/javascript"));
     assert!(body.len() > 100_000, "three.js is embedded");
-    for p in ["/js/main.js", "/js/viewer.js", "/js/payload.js", "/js/host.js", "/style.css"] {
+    for p in [
+        "/js/main.js",
+        "/js/viewer.js",
+        "/js/payload.js",
+        "/js/host.js",
+        "/style.css",
+    ] {
         assert!(get(&r, p).0.starts_with("HTTP/1.1 200"), "{p}");
     }
     assert!(get(&r, "/nope").0.starts_with("HTTP/1.1 404"));
@@ -91,8 +99,16 @@ fn refuses_a_foreign_host_header() {
     let r = start(&[], false);
     let (head, _) = request(r.addr, "GET", "/api/tiles", "evil.example:80");
     assert!(head.starts_with("HTTP/1.1 403"), "{head}");
-    assert!(request(r.addr, "GET", "/", "localhost:1234").0.starts_with("HTTP/1.1 200"));
-    assert!(request(r.addr, "GET", "/", "[::1]:1234").0.starts_with("HTTP/1.1 200"));
+    assert!(
+        request(r.addr, "GET", "/", "localhost:1234")
+            .0
+            .starts_with("HTTP/1.1 200")
+    );
+    assert!(
+        request(r.addr, "GET", "/", "[::1]:1234")
+            .0
+            .starts_with("HTTP/1.1 200")
+    );
     assert!(!server_loopback("127.0.0.1.evil.com:80"));
 }
 
@@ -124,7 +140,10 @@ fn builds_a_tile_and_serves_its_mesh() {
     let jl = u32::from_le_bytes(body[4..8].try_into().unwrap()) as usize;
     let h: Value = serde_json::from_slice(&body[8..8 + jl]).unwrap();
     let n = usize::try_from(h["triangles"].as_u64().unwrap()).unwrap();
-    assert_eq!(n as u64, t["record"]["audit"]["triangles"].as_u64().unwrap());
+    assert_eq!(
+        n as u64,
+        t["record"]["audit"]["triangles"].as_u64().unwrap()
+    );
     assert_eq!(body.len(), 8 + jl + n * (36 + 36 + 9 + 9));
     assert_eq!(h["overhang_deg"], 55.0);
     assert!(get(&r, "/api/tiles/7/mesh").0.starts_with("HTTP/1.1 404"));
@@ -141,7 +160,9 @@ fn sse_starts_with_a_snapshot_then_streams_changes() {
     let mut first = true;
     for l in lines.by_ref() {
         let l = l.unwrap();
-        let Some(data) = l.strip_prefix("data: ") else { continue };
+        let Some(data) = l.strip_prefix("data: ") else {
+            continue;
+        };
         let v: Value = serde_json::from_str(data).unwrap();
         if first {
             assert_eq!(v["type"], "snapshot");
@@ -164,8 +185,16 @@ fn a_library_tile_is_built_only_when_asked() {
     let r = start(&[FLAT], false);
     std::thread::sleep(Duration::from_millis(600));
     assert_eq!(tiles(&r)["tiles"][0]["status"], "idle");
-    assert!(request(r.addr, "POST", "/api/tiles/0/build", &r.addr.to_string()).0.contains("202"));
-    assert!(request(r.addr, "POST", "/api/tiles/9/build", &r.addr.to_string()).0.contains("404"));
+    assert!(
+        request(r.addr, "POST", "/api/tiles/0/build", &r.addr.to_string())
+            .0
+            .contains("202")
+    );
+    assert!(
+        request(r.addr, "POST", "/api/tiles/9/build", &r.addr.to_string())
+            .0
+            .contains("404")
+    );
     wait_for(&r, "ready", |t| t["status"] == "ready");
 }
 
@@ -192,7 +221,9 @@ fn editing_the_document_rebuilds_it_and_a_mistake_shows_its_line() {
 
     // fixed: rebuilt in place, a new mesh version
     std::fs::write(&doc, text.replace("seed=1", "seed=2")).unwrap();
-    let t = wait_for(&r, "rebuild", |t| t["status"] == "ready" && t["mesh_version"] == 2);
+    let t = wait_for(&r, "rebuild", |t| {
+        t["status"] == "ready" && t["mesh_version"] == 2
+    });
     assert!(t["errors"].as_array().unwrap().is_empty());
     drop(r);
     let _ = std::fs::remove_dir_all(&dir);
@@ -200,7 +231,10 @@ fn editing_the_document_rebuilds_it_and_a_mistake_shows_its_line() {
 
 #[test]
 fn the_slot_name_comes_from_the_file_until_the_plan_is_read() {
-    assert_eq!(Slot::new("lib:tiles/ground/1x1-grass.kdl").name, "1x1-grass");
+    assert_eq!(
+        Slot::new("lib:tiles/ground/1x1-grass.kdl").name,
+        "1x1-grass"
+    );
     assert_eq!(Slot::new("my/tiles/a.kdl").name, "a");
     let _ = Shared::new(&[], "db", 55.0).snapshot();
 }

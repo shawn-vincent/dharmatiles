@@ -58,7 +58,7 @@ function renderList() {
   let lastGroup = null;
   for (const t of state.tiles) {
     if (q && !t.name.toLowerCase().includes(q) && !t.path.toLowerCase().includes(q)) continue;
-    const m = t.path.match(/tiles\/([^/]+)\//);
+    const m = t.path.match(/(?:^|[:/])tiles\/([^/]+)\//);
     const group = m ? m[1] : null;
     if (group && group !== lastGroup) {
       const g = document.createElement('li'); g.className = 'group'; g.textContent = group; ul.append(g);
@@ -167,11 +167,12 @@ function renderPanel() {
   row(dl, 'watertight', a.watertight ? 'yes' : 'NO', a.watertight ? 'ok' : 'bad');
   row(dl, `overhang (> ${state.overhangDeg}°)`, `${fmt(a.overhang_mm2)} mm²`, a.overhang_mm2 > 0 ? 'bad' : 'ok');
   row(dl, 'band', `${fmt(a.band_mm2)} / ${fmt(a.band_budget_mm2)} mm²`);
-  row(dl, 'dropped bodies', a.dropped.length, a.dropped.length ? 'bad' : '');
+  const dropped = Array.isArray(a.dropped) ? a.dropped.length : a.dropped;
+  row(dl, 'dropped bodies', dropped, dropped ? 'bad' : '');
   row(dl, 'voids filled', a.voids_filled);
   row(dl, 'holes', a.holes, a.holes ? 'bad' : '');
   row(dl, 'build time', `${fmt(r.build_s)} s`);
-  row(dl, 'seed', r.record.seed);
+  if (r.record.seed != null) row(dl, 'seed', r.record.seed);
   row(dl, 'system', r.record.system);
   for (const f of a.failures) {
     const d = document.createElement('div'); d.className = 'f'; d.textContent = `gate: ${f}`;
