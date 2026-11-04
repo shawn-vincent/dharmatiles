@@ -88,6 +88,8 @@ fn serves_the_viewer_and_its_vendored_three() {
         "/js/payload.js",
         "/js/host.js",
         "/style.css",
+        "/logo.svg",
+        "/favicon.svg",
     ] {
         assert!(get(&r, p).0.starts_with("HTTP/1.1 200"), "{p}");
     }

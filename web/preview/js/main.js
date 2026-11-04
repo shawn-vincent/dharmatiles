@@ -35,6 +35,29 @@ const toggle = (id, fn) => { $(id).onchange = (e) => fn(e.target.checked); };
 toggle('t-overhang', (on) => viewer.setOverhang(on));
 toggle('t-wire', (on) => viewer.setWireframe(on));
 toggle('t-grid', (on) => viewer.setGrid(on));
+// light or dark: the system's setting until the button is used; then the choice is remembered
+const dark = matchMedia('(prefers-color-scheme: dark)');
+function applyTheme() {
+  let stored = null;
+  try { stored = localStorage.getItem('dt-preview-theme'); } catch { /* ignore */ }
+  const hash = (location.hash.match(/theme=(light|dark)/) || [])[1]; // #theme=light previews a theme without saving it
+  if (hash) stored = hash;
+  if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
+  else delete document.documentElement.dataset.theme;
+  const isDark = stored ? stored === 'dark' : dark.matches;
+  $('theme').textContent = isDark ? '☀' : '☾';
+  viewer.setGridDim(Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--grid')) || 1);
+}
+function toggleTheme() {
+  const isDark = document.documentElement.dataset.theme
+    ? document.documentElement.dataset.theme === 'dark' : dark.matches;
+  try { localStorage.setItem('dt-preview-theme', isDark ? 'light' : 'dark'); } catch { /* ignore */ }
+  applyTheme();
+}
+$('theme').onclick = toggleTheme;
+dark.addEventListener('change', applyTheme);
+applyTheme();
+
 // perspective or orthographic: remembered across reloads (a per-viewer convenience)
 function setProjection(ortho, animated = true) {
   viewer.setOrtho(ortho, animated);
@@ -52,6 +75,7 @@ addEventListener('keydown', (e) => {
   if (e.key === 'o') flip('t-overhang');
   if (e.key === 'w') flip('t-wire');
   if (e.key === 'g') flip('t-grid');
+  if (e.key === 't') toggleTheme();
   if (e.key === 'p') setProjection(!viewer.isOrtho);
 });
 
@@ -60,27 +84,47 @@ function dotClass(t) {
   const over = t.record && (t.record.audit.overhang_mm2 > 0 || t.record.audit.band_mm2 > 0);
   return `dot ${t.status}${over && t.status === 'ready' ? ' over' : ''}`;
 }
+// the file stem (`2x1-cliff`, `1x1-water+grass-tree`): the list's name for a tile, whatever the document calls it
+const stem = (t) => t.path.replace(/^lib:/, '').split('/').pop().replace(/\.(kdl|stl)$/i, '') + (/\.stl$/i.test(t.path) ? '.stl' : '');
+const groupOf = (t) => {
+  const m = t.path.match(/(?:^|[:/])tiles\/([^/]+)\//);
+  return m ? m[1] : null;
+};
+let testsOpen = false; // "Test tiles" starts collapsed
 function renderList() {
   const q = $('filter').value.trim().toLowerCase();
   const ul = $('tiles');
   ul.replaceChildren();
-  let lastGroup = null;
-  for (const t of state.tiles) {
-    if (q && !t.name.toLowerCase().includes(q) && !t.path.toLowerCase().includes(q)) continue;
-    const m = t.path.match(/(?:^|[:/])tiles\/([^/]+)\//);
-    const group = m ? m[1] : null;
-    if (group && group !== lastGroup) {
-      const g = document.createElement('li'); g.className = 'group'; g.textContent = group; ul.append(g);
-      lastGroup = group;
-    }
+  const matches = (t) => !q || stem(t).toLowerCase().includes(q) || t.path.toLowerCase().includes(q);
+  const row = (t) => {
     const li = document.createElement('li');
     li.className = t.index === state.selected ? 'sel' : '';
-    li.title = t.path;
+    li.title = t.name && t.name !== stem(t) ? `${t.path}\ntile “${t.name}”` : t.path;
     li.innerHTML = '<span></span><span class="name"></span>';
     li.firstChild.className = dotClass(t);
-    li.querySelector('.name').textContent = t.name;
+    li.querySelector('.name').textContent = stem(t);
     li.onclick = () => select(t.index);
-    ul.append(li);
+    return li;
+  };
+  const header = (text, onclick, open) => {
+    const g = document.createElement('li'); g.className = 'group';
+    g.textContent = `${onclick ? (open ? '▾ ' : '▸ ') : ''}${text}`;
+    if (onclick) { g.classList.add('fold'); g.onclick = onclick; }
+    ul.append(g);
+  };
+  const shown = state.tiles.filter(matches);
+  const lib = shown.filter((t) => groupOf(t) !== 'test');
+  const tests = shown.filter((t) => groupOf(t) === 'test');
+  let last = null;
+  for (const t of lib) {
+    const g = groupOf(t);
+    if (g && g !== last) { header(g); last = g; }
+    ul.append(row(t));
+  }
+  if (tests.length) {
+    const open = testsOpen || !!q || tests.some((t) => t.index === state.selected);
+    header(`Test tiles (${tests.length})`, () => { testsOpen = !open; renderList(); }, open);
+    if (open) for (const t of tests) ul.append(row(t));
   }
 }
 $('filter').oninput = renderList;
@@ -145,7 +189,8 @@ function renderPanel() {
   $('failures').replaceChildren();
   clearInterval(timer);
   if (!t) return;
-  $('tile-name').textContent = t.name;
+  $('tile-name').textContent = stem(t);
+  $('tile-name').title = t.name && t.name !== stem(t) ? `the document calls it “${t.name}”` : '';
   const p = t.plan;
   $('tile-plan').textContent = p
     ? `${p.cols}×${p.rows} squares of ${p.square_mm} mm · ${p.stack.join(', ')}`
