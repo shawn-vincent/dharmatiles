@@ -86,9 +86,10 @@ fn a_control_not_built_yet_is_checked_but_not_built() {
 
 #[test]
 fn library_tiles_check_and_say_which_look_is_missing_when_built() {
+    // the full cliff run (bank, scree, shattered patches: not built yet)
     let (path, missing) = (
-        "lib:tiles/cliffs/2x1-cliff-run.kdl",
-        "look `cliff` not available yet (Phase 7)",
+        "lib:tiles/test/cliff-run-full.kdl",
+        "`scatter` inside `dirt` is not available yet (Phase 3)",
     );
     let c = check(&Library, path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
     assert!(!c.pending().is_empty(), "{path}");
