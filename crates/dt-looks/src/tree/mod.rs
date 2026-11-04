@@ -124,6 +124,10 @@ struct Params {
     leaf_width: Value,
 }
 
+/// Where in the tree's stage the leaves' build lies (progress fractions).
+const LEAVES_FROM: f64 = 0.4;
+const LEAVES_TO: f64 = 0.85;
+
 impl Default for Params {
     fn default() -> Self {
         Self {
@@ -474,7 +478,9 @@ impl Tree {
             .map(|(k, m)| form::solid(slots.get(u32::try_from(k).unwrap_or(0)), m))
             .collect::<Result<_, _>>()
             .map_err(LookError::build)?;
+        scene.progress().fraction("branches", 0.05);
         let wood = union(&tube_solids).map_err(LookError::build)?;
+        scene.progress().fraction("wood", 0.15);
         let (wood, slivers) = crumbs(scene, wood, Material::Wood)?;
         grown.slivers += slivers;
         // the landings dip to the strict floor inside their clumps; where a
@@ -518,6 +524,7 @@ impl Tree {
                 .collect::<Result<_, _>>()
                 .map_err(LookError::build)?;
             grown.clumps = solids.len();
+            scene.progress().fraction("clumps", 0.25);
             let blobs = union(&solids).map_err(LookError::build)?;
             let (blobs, slivers) = crumbs(scene, blobs, Material::Leaf)?;
             grown.slivers += slivers;
@@ -525,6 +532,7 @@ impl Tree {
             let (crown_solid, stood) =
                 dt_kit::stand(scene, &blobs, &wood, Material::Leaf, &stand_rule)
                     .map_err(LookError::build)?;
+            scene.progress().fraction("crown", LEAVES_FROM);
             grown.clump_cut_mm3 = stood.cut_mm3;
             let (crown_solid, slivers) = crumbs(scene, crown_solid, Material::Leaf)?;
             grown.slivers += slivers;
@@ -536,11 +544,13 @@ impl Tree {
                     ..leaves::LeafShape::default()
                 }
                 .scaled(s, LINE_MM);
-                let (placed, lstats) = leaves::place(
+                let (placed, lstats) = leaves::place_progress(
                     &crown_solid.mesh(),
                     &wood.mesh(),
                     &shape,
                     seed.key("leaves"),
+                    &scene.progress(),
+                    (LEAVES_FROM, LEAVES_TO),
                 )?;
                 grown.leaves_failed_error = lstats.failed_error;
                 let n = u32::try_from(placed.len()).map_err(LookError::build)?;
