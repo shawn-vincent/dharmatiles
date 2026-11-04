@@ -148,7 +148,7 @@ mod tests {
         assert_eq!(h["x"], 1);
         assert_eq!(h["hi"], json!([2.0, 3.0, 5.0]));
         // 2 triangles: positions 18 f32, normals 18 f32, 2 × 18 bytes of colour
-        assert_eq!(b.len(), 8 + jl + 72 + 72 + 18 * 2 * 2);
+        assert_eq!(b.len(), 8 + jl + 72 + 72 + 18 + 18);
         let f = |o: usize| f32::from_le_bytes(b[8 + jl + o..8 + jl + o + 4].try_into().unwrap());
         assert!((f(4 * 3) - 2.0).abs() < 1e-6, "second vertex x");
         // normals: first face is (2,0,0)x(0,3,1) = (0,-2,6)/|…|
