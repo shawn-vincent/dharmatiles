@@ -170,6 +170,35 @@ pub struct Ctx<'a> {
     /// to the gate's rule (a tree's [`dt_kit::stand`], its leaf cull) use
     /// its numbers.
     pub printer: dt_kit::Printer,
+    /// `against=`: the kind of thing this look gathers against (a scatter),
+    /// if written.
+    pub against: Option<&'a str>,
+    /// The planned feet of every solid that has one (a cliff's), from the
+    /// plan pass that runs before anything is built, so a bank or scatter
+    /// listed before the cliff can still lean on it.
+    pub foots: &'a [Foot],
+}
+
+/// Where a planned solid meets the ground: what a bank heaps against and
+/// a scatter gathers at (plan, then build).
+#[derive(Clone, Debug)]
+pub struct Foot {
+    /// What it is (`cliff`).
+    pub kind: &'static str,
+    /// Per ground node, row-major: distance from the solid in mm (huge
+    /// where it is nowhere near).
+    pub dist: Vec<f64>,
+    /// Per ground node: how shattered the cliff is there, 0 (quiet) to 1.
+    pub zone: Vec<f64>,
+    /// Per ground node: 0 at a tile end of the run, rising to 1 clear of it
+    /// (every seed's bank is the same at the ends).
+    pub end: Vec<f64>,
+    /// Ground cells touching the solid: position, outward direction, weight.
+    pub cells: Vec<([f64; 2], [f64; 2], f64)>,
+    /// Squares' worth of foot length.
+    pub squares: f64,
+    /// Nodes across, for indexing `dist`.
+    pub nx: usize,
 }
 
 /// A child of a scatter: the thing it scatters, its controls, and its
@@ -194,6 +223,15 @@ pub trait Look: Send + Sync {
     /// # Errors
     /// [`LookError`] when the build fails.
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError>;
+
+    /// Its planned foot, for the plan pass (a cliff plans its footprint
+    /// without building any geometry).
+    ///
+    /// # Errors
+    /// [`LookError`] when the plan fails.
+    fn foot(&self, _frame: &dt_kit::Frame, _ctx: &Ctx<'_>) -> Result<Option<Foot>, LookError> {
+        Ok(None)
+    }
 }
 
 /// The controls a built look takes so far, or `None` for a look not built
@@ -232,6 +270,7 @@ pub fn places(name: &str) -> &'static [&'static str] {
         "wall" => &["along"],
         "tree" => &["at"],
         "cliff" => &["along"],
+        "scatter" => &["against"],
         n if rock::is_thing(n) => &["at"],
         _ => &[],
     }
