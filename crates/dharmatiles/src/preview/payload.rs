@@ -18,7 +18,7 @@
 #![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
 use dt_eval::Built;
-use dt_kit::{SurfacePaint, TriMesh, paint_surface};
+use dt_kit::TriMesh;
 use serde_json::{Value, json};
 
 /// First four bytes of every payload.
@@ -103,17 +103,9 @@ pub fn encode(mesh: &TriMesh, painted: &[[f32; 3]], clean: &[[f32; 3]], meta: &V
 /// The payload for a finished build: its painted colours (the PNG
 /// renders'), its clean colours, and the gate's face counts.
 #[must_use]
-pub fn from_built(b: &Built, overhang_deg: f64) -> Vec<u8> {
-    let painted = b.colours();
-    let surface = b.surface.as_ref().map(|(g, stone)| {
-        let p = SurfacePaint::new(g, stone);
-        match &b.covered {
-            Some(c) => p.covered(c),
-            None => p,
-        }
-    });
-    let none = vec![false; b.export.mesh.triangles.len()];
-    let clean = paint_surface(&b.export.mesh, &b.materials, &none, surface.as_ref());
+pub fn from_built(b: &Built, overhang_deg: f64, palette: &dt_kit::Palette) -> Vec<u8> {
+    let painted = b.colours_with(palette, true);
+    let clean = b.colours_with(palette, false);
     let meta = json!({
         "overhang_faces": b.audit.overhang.iter().filter(|&&o| o).count(),
         "band_faces": b.audit.band.iter().filter(|&&o| o).count(),

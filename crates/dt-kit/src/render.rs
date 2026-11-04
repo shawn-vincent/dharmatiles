@@ -120,46 +120,9 @@ pub fn paint(materials: &[Material], overhang: &[bool]) -> Vec<[f32; 3]> {
         .collect()
 }
 
-/// dirtlab's paint ramps (`painted`, :577): earth by local relief, a
-/// drybrush; pebbles grey; tile walls dark.
-const EARTH: [[f32; 3]; 5] = [
-    [52.0, 36.0, 24.0],
-    [88.0, 62.0, 40.0],
-    [128.0, 96.0, 64.0],
-    [170.0, 138.0, 100.0],
-    [205.0, 180.0, 140.0],
-];
-const PEBBLE: [[f32; 3]; 3] = [
-    [96.0, 96.0, 100.0],
-    [132.0, 130.0, 128.0],
-    [168.0, 164.0, 158.0],
-];
-/// waterlab's paint (`contact_sheet.py` PAINT): a dark basecoat with the
-/// crests drybrushed, five tones faded into each other by local relief.
-const WATER: [[f32; 3]; 5] = [
-    [18.0, 38.0, 92.0],
-    [28.0, 86.0, 156.0],
-    [58.0, 160.0, 178.0],
-    [150.0, 220.0, 214.0],
-    [225.0, 245.0, 240.0],
-];
-/// Where each tone sits along the ramp (t from 0 to 1.04).
-const WATER_AT: [f32; 5] = [0.0, 0.45, 0.72, 0.9, 1.04];
-const SIDE: [f32; 3] = [42.0, 42.0, 46.0];
 /// Earth bedding under a floor or wall, seen on the tile's side: the
 /// parity harness's flat earth brown (`run_lab.py` `EARTH_RGB`).
 const BED: [f32; 3] = [128.0, 97.0, 64.0];
-
-fn ramp(t: f32, stops: &[[f32; 3]]) -> [f32; 3] {
-    #[allow(clippy::cast_precision_loss)]
-    let last = (stops.len() - 1) as f32;
-    let i = (t.clamp(0.0, 1.0) * last).min(last - 1e-6);
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let k = i as usize;
-    #[allow(clippy::cast_precision_loss)]
-    let f = i - k as f32;
-    [0, 1, 2].map(|c| (stops[k][c] * (1.0 - f) + stops[k + 1][c] * f) / 255.0)
-}
 
 /// The ground surface as built, for a painted preview: heights, local
 /// relief at two scales, and which nodes are stone.
@@ -213,8 +176,16 @@ impl SurfacePaint {
         self
     }
 
+    /// The ground's height under `c` (x, y), for grass and leaves to paint
+    /// by their height above it.
+    pub(crate) fn ground_z(&self, c: [f64; 3]) -> f64 {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let node = |v: f64, n: usize| (libm::round(v / self.step).max(0.0) as usize).min(n - 1);
+        self.z[node(c[1], self.ny) * self.nx + node(c[0], self.nx)]
+    }
+
     /// waterlab's water paint at a face centre, or `None` off the grid.
-    fn water(&self, c: [f64; 3]) -> Option<[f32; 3]> {
+    pub(crate) fn water(&self, c: [f64; 3], pal: &crate::Palette) -> Option<[f32; 3]> {
         #[allow(clippy::cast_precision_loss)]
         let (w, h) = (
             (self.nx - 1) as f64 * self.step,
@@ -229,15 +200,12 @@ impl SurfacePaint {
         #[allow(clippy::cast_possible_truncation)]
         let t = (0.5 + 0.5 * (0.65 * self.wrel[k] / 0.5 + 0.35 * self.whi[k] / 0.9)).clamp(0.0, 1.0)
             as f32;
-        // piecewise-linear through the five tones (waterlab's np.interp)
-        let i = (0..4).rev().find(|&i| t >= WATER_AT[i]).unwrap_or(0);
-        let f = ((t - WATER_AT[i]) / (WATER_AT[i + 1] - WATER_AT[i])).clamp(0.0, 1.0);
-        Some([0, 1, 2].map(|c| (WATER[i][c] * (1.0 - f) + WATER[i + 1][c] * f) / 255.0))
+        Some(pal.sample("water", t))
     }
 
     /// dirtlab's paint for one face (centre `c`, unit normal z `nz`), or
     /// `None` off the surface's footprint.
-    fn face(&self, c: [f64; 3], nz: f64) -> Option<[f32; 3]> {
+    pub(crate) fn face(&self, c: [f64; 3], nz: f64, pal: &crate::Palette) -> Option<[f32; 3]> {
         #[allow(clippy::cast_precision_loss)]
         let w = (self.nx - 1) as f64 * self.step;
         #[allow(clippy::cast_precision_loss)]
@@ -255,21 +223,21 @@ impl SurfacePaint {
             return Some(BED.map(|v| v / 255.0));
         }
         if (nz.abs() < 0.35 && c[2] < zs - 0.3) || c[2] < self.low - 0.3 {
-            return Some(SIDE.map(|v| v / 255.0));
+            return Some(pal.sample("side", 0.0));
         }
         #[allow(clippy::cast_possible_truncation)]
         if self.stone[k] || c[2] > zs + 0.06 {
             let t = (0.5 + 0.5 * nz - 0.4 + 0.6 * rel / 0.5) as f32;
-            return Some(ramp(t, &PEBBLE));
+            return Some(pal.sample("pebble", t));
         }
         #[allow(clippy::cast_possible_truncation)]
         let t = (0.5 + 0.7 * rel / 0.35 + 0.3 * self.rel2[k] / 1.0) as f32;
-        Some(ramp(t, &EARTH))
+        Some(pal.sample("earth", t))
     }
 }
 
-/// Paint per face as [`paint`], with earth faces painted from the
-/// surface (dirtlab's drybrush, pebbles grey) when there is one.
+/// [`paint_mesh`] with the default palette, no overhang paint beyond
+/// `overhang`, and stone masonry.
 #[must_use]
 pub fn paint_surface(
     mesh: &TriMesh,
@@ -277,36 +245,15 @@ pub fn paint_surface(
     overhang: &[bool],
     surface: Option<&SurfacePaint>,
 ) -> Vec<[f32; 3]> {
-    let mut out = paint(materials, overhang);
-    let Some(s) = surface else {
-        return out;
-    };
-    for (k, t) in mesh.triangles.iter().enumerate() {
-        if overhang.get(k).copied().unwrap_or(false) {
-            continue;
-        }
-        if materials.get(k) == Some(&Material::Water) {
-            let p = t.map(|i| mesh.positions[i as usize]);
-            let c = [0, 1, 2].map(|d| (p[0][d] + p[1][d] + p[2][d]) / 3.0);
-            if let Some(col) = s.water(c) {
-                out[k] = col;
-            }
-            continue;
-        }
-        if materials.get(k) != Some(&Material::Earth) {
-            continue;
-        }
-        let p = t.map(|i| mesh.positions[i as usize]);
-        let c = [0, 1, 2].map(|d| (p[0][d] + p[1][d] + p[2][d]) / 3.0);
-        let n = unit(cross(
-            [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]],
-            [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]],
-        ));
-        if let Some(col) = s.face(c, n[2]) {
-            out[k] = col;
-        }
-    }
-    out
+    crate::paint::paint_mesh(
+        mesh,
+        materials,
+        overhang,
+        &[],
+        surface,
+        &crate::Palette::default(),
+        false,
+    )
 }
 
 fn dirv(elev: f64, azim: f64) -> [f64; 3] {
@@ -318,7 +265,7 @@ fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
-fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+pub(crate) fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     [
         a[1] * b[2] - a[2] * b[1],
         a[2] * b[0] - a[0] * b[2],
@@ -326,7 +273,7 @@ fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     ]
 }
 
-fn unit(a: [f64; 3]) -> [f64; 3] {
+pub(crate) fn unit(a: [f64; 3]) -> [f64; 3] {
     let l = dot(a, a).sqrt();
     if l > 0.0 { a.map(|x| x / l) } else { a }
 }
