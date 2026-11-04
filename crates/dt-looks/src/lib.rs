@@ -12,6 +12,7 @@
 //! (waterlab's swell-chaos). P5: [`wall`], [`floor`], [`tree`] and
 //! [`openlock`] (the OpenLOCK connector).
 
+pub mod cliff;
 pub mod connector;
 pub mod dirt;
 pub mod floor;
@@ -217,6 +218,7 @@ pub fn takes(name: &str) -> Option<&'static [&'static str]> {
         "tree" => Some(tree::CONTROLS),
         "grass" => Some(grass::CONTROLS),
         "reeds" => Some(reeds::CONTROLS),
+        "cliff" => Some(cliff::CONTROLS),
         "flowers" => Some(flowers::CONTROLS),
         _ => None,
     }
@@ -235,6 +237,7 @@ pub fn places(name: &str) -> &'static [&'static str] {
     match name {
         "wall" => &["along"],
         "tree" => &["at"],
+        "cliff" => &["along"],
         n if rock::is_thing(n) => &["at"],
         _ => &[],
     }
@@ -269,6 +272,7 @@ pub fn look_with(
         "tree" => Ok(Box::new(tree::Tree::new(controls)?)),
         "grass" => Ok(Box::new(grass::Grass::new(controls)?)),
         "reeds" => Ok(Box::new(reeds::Reeds::new(controls)?)),
+        "cliff" => Ok(Box::new(cliff::Cliff::new(controls)?)),
         "flowers" => Ok(Box::new(flowers::Flowers::new(controls)?)),
         _ => Err(LookError {
             control: None,

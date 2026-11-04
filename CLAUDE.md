@@ -47,7 +47,7 @@ Six crates under `crates/`:
 |---|---|
 | `dt-geom` | Kernels: mesh backend (Manifold via `manifold-csg`), rays (obvhs), keyed seeds and noise, grids, distance transform, adaptive lift, convex hulls. No look knowledge. |
 | `dt-kit` | The vocabulary looks are written in: `Scene` of tagged solids, `Field` and its morphology, `scatter`, `loft`, `extrude`, `carve`, `union`, forms (level sets, hulls, relief), graphs (trees), `stand`, rays, the audit gate (`audit`), the STL writer with its build record, the CPU preview renderer. |
-| `dt-looks` | The built-in looks, each written only in `dt-kit`'s public operations: `ground`, `dirt`, `rock` (and `stone`, `boulder`, `pebble`, `scatter`), `water`, `grass`, `reeds`, `wall`, `floor`, `tree`, and the DungeonBlocks / OpenLOCK connectors. |
+| `dt-looks` | The built-in looks, each written only in `dt-kit`'s public operations: `ground`, `dirt`, `rock` (and `stone`, `boulder`, `pebble`, `scatter`), `water`, `grass`, `reeds`, `flowers`, `cliff`, `wall`, `floor`, `tree`, and the DungeonBlocks / OpenLOCK connectors. |
 | `dt-doc` | KDL v2 documents: decoding with spans and `miette` errors, the look schema (`looks.rs`), edits. |
 | `dt-eval` | Reads a document, plans it (`plan.rs` orders the stack by what each look reads and writes), builds it into a `Scene`, audits, exports. Library tiles are bundled from `library/`. |
 | `dharmatiles` | The CLI. |
@@ -81,7 +81,7 @@ Lines and fill points make regions; the stack paints surfaces (`ground`, `dirt`,
 
 ### Library
 
-`library/tiles/<group>/…kdl` are the shipped tiles (43; 42 build, the cliff run waits for P7), `library/tiles/test/` are the parity and golden tests' tiles, `library/parts/` are shared definitions (`grass`, `trees`, `edges`, `levels`).
+`library/tiles/<group>/…kdl` are the shipped tiles (44; all build; the cliff is a first slice of P7), `library/tiles/test/` are the parity and golden tests' tiles, `library/parts/` are shared definitions (`grass`, `trees`, `edges`, `levels`).
 
 ## Standing rules
 

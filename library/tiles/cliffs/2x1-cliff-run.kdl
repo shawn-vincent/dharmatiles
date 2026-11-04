@@ -1,6 +1,12 @@
-// A 2×1 cliff run: a band of stacked rock against the north edge,
-// with dirt on its top and scree at its foot.
-// Twin of clifflab/rockpile.py's `run` form (round 15, commit 3b56ae0).
+// A 2×1 cliff run: a band of stacked rock against the north edge.
+// Twin of clifflab/rockpile.py's `run` form, frozen at round 17 (31f7c5d)
+// with its foot at the edge level (3.4 mm, Default 12).
+//
+// Ported so far: the form (masses, tiers, the standard end section), the
+// stack (columns, blocks, slabs, odd lumps, monoliths), arris chamfers,
+// grain and the core. Not yet: the crack network, shattered patches,
+// ledges, dirt lodged on the top, the bank against the foot and the
+// scree (`scatter against=cliff`): the plan's later list.
 
 tile cliff-run size="2x1" seed=1 {
     about """
@@ -8,23 +14,12 @@ tile cliff-run size="2x1" seed=1 {
         standard end section, so runs butt end to end.
         """
 
-    levels foot=4                   // rockpile's foot; the standard edge level is 3.4
-
     stack {
-        dirt level=foot {
-            bank against=cliff height="1.5..3.5" reach="3..6.5"
-            scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
-        }
+        dirt level=edge
 
         cliff along=north height=35 {   // 35 mm above its foot
             rock mixed                  // or: columns, blocks, slabs
             stone-size massive          // or: rubble, broken
-            top dirt                    // or: bare
-            shattered patches=3 width="5..10"
         }
-
-        // scree: fallen stones gathered at the cliff's foot
-        scatter against=cliff per-square=55 reach=4 { stone size="1..6" mostly=small }
-        scatter against=cliff per-square=2.5 { boulder size="4.5..8" }
     }
 }

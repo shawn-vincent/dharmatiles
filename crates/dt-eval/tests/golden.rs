@@ -23,6 +23,7 @@ const TILES: &[&str] = &[
     "lib:tiles/test/meadow-2x2.kdl",
     "lib:tiles/test/shore-2x2.kdl",
     "lib:tiles/ground/1x1-grass-flowers.kdl",
+    "lib:tiles/cliffs/2x1-cliff-run.kdl",
     "lib:tiles/test/tree-1x1.kdl",
     "lib:tiles/test/wall-cut-stone-corner-1x1.kdl",
     "lib:tiles/test/wall-fieldstone-1x1.kdl",

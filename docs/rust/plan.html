@@ -155,6 +155,12 @@
 <li><span class="st st-active">later</span><span><b>Not started:</b> the Tauri app (2D editor and viewport; it needs a front-end toolchain and is not next in the plan), wasm, mobile.</span></li>
 </ul>
 
+<h3 id="p7-checklist">Phase 7 progress (4 Nov 2026)</h3>
+<ul class="now">
+<li><span class="st st-settled">done</span><span><b>Frozen</b> at round 17 (<code>31f7c5d</code>) with the foot moved from 4.0 to 3.4 mm in <code>clifflab/rockpile.py</code> (Shawn, 4 Nov: &ldquo;use 17&rdquo;). The cliff tile loses its <code>foot=4</code> override.</span></li>
+<li><span class="st st-active">partial</span><span><b>Cliff, first slice.</b> The <code>cliff</code> look builds a straight run along one edge: masses along the run with their own depth and tiers, the standard end section, columns, blocks, slabs, odd lumps and monoliths stacked with caps set back, arris chamfers, rocklab's grain, and a core. It passes the gate (0 mm&sup2; overhang, watertight, no holes) at 8 seeds and both systems in about 1 s, and <code>2x1-cliff-run.kdl</code> builds, so all 44 library tiles build. It is <b>not</b> clifflab's look: no crack network or carved block faces, no shattered patches, ledges or tilted slabs, no dirt on the top, no bank or scree, no corner, canyon, escarpment, plateau, massif, mound, spire or needle forms, and the Python-parity numbers (see-through holes, overhang against Python, the massif in 60 s) are not measured. The rest of P7 is the work from here.</span></li>
+</ul>
+
 <h2 id="why">Why this plan</h2>
 <p>The study behind this plan read the library (20.6k lines), the seven labs (8.6k lines), every surface variant in git history and Shawn's rulings. Its findings that still drive the plan:</p>
 <ul>
