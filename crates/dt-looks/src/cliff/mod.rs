@@ -254,7 +254,8 @@ impl Cliff {
         let fm = form::make_form(&mut rng, &ask, f2.w, f2.h, s);
         let zone = form::Zones::new(&mut rng, f2.w, s, self.patches, self.patch_width);
         let max_rocks = 400 * ((f2.w * f2.h / (sq * sq)).ceil() as usize).max(1);
-        let st = stack::stack(&mut rng, &fm, &zone, s, max_rocks);
+        let mut st = stack::stack(&mut rng, &fm, &zone, s, max_rocks);
+        stack::reconcile(&mut st.rocks, &fm, &mut st.s);
         Ok(Planned {
             form,
             f2,
@@ -431,6 +432,9 @@ impl Look for Cliff {
             seed: ctx.seed.key("cliff-grain").value(),
         };
         let col_seed = ctx.seed.key("cliff-columns");
+        if std::env::var("DT_OVERHANG_IDS").is_ok() {
+            eprintln!("cliff stone 0 id {}", slots.get(2).id());
+        }
         let ticks = scene.progress().counter("stones", placed.len(), 0.0, 0.9);
         let results: Vec<ColResult> = cols
             .par_iter()
@@ -479,6 +483,13 @@ impl Look for Cliff {
             tops += t;
         }
         pieces.sort_by_key(|p| p.0);
+        if std::env::var("DT_LIST").is_ok() {
+            for (ri, r) in placed.iter().enumerate() {
+                let b = pieces.iter().find(|p| p.0 == ri).and_then(|p| p.1.bounds());
+                let nc = r.cells.v.iter().filter(|&&c| c).count();
+                eprintln!("stone {ri} cells {nc} z0 {:.1} top {:.1} piece {:?}", r.z0, r.top.0, b.map(|(l, h)| (l.map(|v| (v * 10.0).round() / 10.0), h.map(|v| (v * 10.0).round() / 10.0))));
+            }
+        }
         // the core where it shows, carved like the faces it lies behind
         let all_faces: Vec<std::sync::Arc<faces::Face>> = {
             let mut v: Vec<std::sync::Arc<faces::Face>> = Vec::new();

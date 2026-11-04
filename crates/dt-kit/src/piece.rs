@@ -225,6 +225,16 @@ impl Piece {
     /// # Errors
     /// [`KitError::Mesh`] if the surface cannot be rebuilt.
     pub fn largest_part(&self) -> Result<Self, KitError> {
+        self.parts_over(f64::INFINITY)
+    }
+
+    /// Only its connected parts of at least `min_mm3` (and always the
+    /// largest): what a cut left that is more than a scrap may still be
+    /// holding up the stone above it.
+    ///
+    /// # Errors
+    /// [`KitError::Mesh`] if the surface cannot be rebuilt.
+    pub fn parts_over(&self, min_mm3: f64) -> Result<Self, KitError> {
         let (pos, tri) = welded(&self.s.to_tri_mesh());
         if tri.is_empty() {
             return Ok(self.clone());
@@ -260,10 +270,15 @@ impl Piece {
             .max_by(|x, y| x.1.abs().total_cmp(&y.1.abs()))
             .map(|x| x.0)
             .unwrap_or(&0);
+        let big: Vec<usize> = vol
+            .iter()
+            .filter(|(k, v)| **k == best || v.abs() >= min_mm3)
+            .map(|(k, _)| *k)
+            .collect();
         let keep: Vec<[u32; 3]> = tri
             .iter()
             .copied()
-            .filter(|t| find(&mut par, t[0] as usize) == best)
+            .filter(|t| big.contains(&find(&mut par, t[0] as usize)))
             .collect();
         self.rebuilt(pos, keep)
     }

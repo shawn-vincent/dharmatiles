@@ -73,6 +73,8 @@ const MIN_DEFICIT_MM: f64 = 1.0;
 const OVERSHOOT_MM: (f64, f64) = (0.0, 2.5);
 const TOP_TILT_DEG: f64 = 6.0;
 pub const SINK_MM: f64 = 0.8;
+/// How much lower than its plane a support is taken to be.
+const SUPPORT_MARGIN_MM: f64 = 0.3;
 const MIN_AREA_MM2: f64 = 8.0;
 const THIN_AREA_MM2: f64 = 20.0;
 const CRUMB_RETRY: i32 = 3;
@@ -729,4 +731,59 @@ pub fn stack(rng: &mut Rng, form: &Form, zone: &Zones, s_scale: f64, max_rocks: 
         });
     }
     Stacked { rocks, s }
+}
+
+/// The stack claims support over every cell it gave a stone, but a
+/// stone's finished outline (opened, simplified, largest piece only) can
+/// leave some of those cells bare: a merged crumb, a thin arm. A stone
+/// resting on such a claim would hang over air. So the support is rebuilt
+/// from the outlines themselves, in placement order: each stone's cells
+/// are what its outline covers, its bed is what is really under them, and
+/// the support grid rises by its top only there.
+pub fn reconcile(rocks: &mut [Placed], form: &Form, s: &mut Field) {
+    let (nx, ny) = (s.nx, s.ny);
+    s.v.fill(FOOT - 1.0);
+    for r in rocks.iter_mut() {
+        let poly = r.poly();
+        if poly.len() < 3 {
+            continue;
+        }
+        let b = super::util::bounds(&poly);
+        let (i0, i1) = (((b[0] / GRID_MM).floor().max(0.0)) as usize, ((b[2] / GRID_MM).ceil() as usize).min(nx));
+        let (j0, j1) = (((b[1] / GRID_MM).floor().max(0.0)) as usize, ((b[3] / GRID_MM).ceil() as usize).min(ny));
+        let mut cells = Mask::new(nx, ny, false);
+        for j in j0..j1 {
+            for i in i0..i1 {
+                if r.cells.at(i, j) && super::util::point_in(&poly, [super::util::cx(i, GRID_MM), super::util::cx(j, GRID_MM)]) {
+                    cells.set(i, j, true);
+                }
+            }
+        }
+        if !cells.v.iter().any(|&c| c) {
+            continue;
+        }
+        let mut bed = Field::new(nx, ny, f64::NAN);
+        let mut svmin = f64::INFINITY;
+        for j in j0..j1 {
+            for i in i0..i1 {
+                if !cells.at(i, j) {
+                    continue;
+                }
+                let (x, y) = (super::util::cx(i, GRID_MM), super::util::cx(j, GRID_MM));
+                let mut topz = r.top_z(x, y);
+                if let Some(zt) = form.ztop {
+                    topz = topz.min(zt);
+                }
+                // the support's real top sits a little under its plane (grain, chips): a
+                // stone must still reach into it, however narrow
+                let under = if s.at(i, j) > FOOT { s.at(i, j) - SUPPORT_MARGIN_MM } else { s.at(i, j) };
+                bed.set(i, j, under);
+                svmin = svmin.min(under);
+                s.set(i, j, s.at(i, j).max(topz));
+            }
+        }
+        r.cells = cells;
+        r.bed = bed;
+        r.z0 = sunk(svmin);
+    }
 }

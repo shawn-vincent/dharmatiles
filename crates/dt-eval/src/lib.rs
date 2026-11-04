@@ -532,6 +532,28 @@ pub fn build_with(
     let (export, audit) = dt_kit::audit_banded(&mesh, footprint, &opts.printer, &mats, Some(&band));
     progress.end(progress::AUDIT);
     stage_secs.push((progress::AUDIT.to_owned(), t_stage.elapsed().as_secs_f64()));
+    if std::env::var("DT_OVERHANG_IDS").is_ok() {
+        let ids = mesh.triangle_original_ids().unwrap_or_default();
+        let mut by: std::collections::BTreeMap<u32, f64> = std::collections::BTreeMap::new();
+        let areas: Vec<f64> = export.mesh.triangles.iter().map(|t| {
+            let [a, b, c] = t.map(|i| export.mesh.positions[i as usize]);
+            let u = [b[0]-a[0], b[1]-a[1], b[2]-a[2]]; let v = [c[0]-a[0], c[1]-a[1], c[2]-a[2]];
+            0.5 * f64::sqrt((u[1]*v[2]-u[2]*v[1]).powi(2) + (u[2]*v[0]-u[0]*v[2]).powi(2) + (u[0]*v[1]-u[1]*v[0]).powi(2))
+        }).collect();
+        for (k, &f) in audit.overhang.iter().enumerate() {
+            if f { *by.entry(ids[export.source[k] as usize]).or_default() += areas[k]; }
+        }
+        eprintln!("overhang by source id: {by:?}");
+        let mut out = String::new();
+        for (k, &f) in audit.overhang.iter().enumerate() {
+            if f {
+                let t = export.mesh.triangles[k];
+                let [a, b, c] = t.map(|i| export.mesh.positions[i as usize]);
+                out += &format!("{} {} {} {} {}\n", ids[export.source[k] as usize], (a[0]+b[0]+c[0])/3.0, (a[1]+b[1]+c[1])/3.0, (a[2]+b[2]+c[2])/3.0, areas[k]);
+            }
+        }
+        let _ = std::fs::write("/tmp/claude-501/flagged.txt", out);
+    }
     let materials = export.source.iter().map(|&t| mats[t as usize]).collect();
     scene.record("export", export.mesh.content_hash());
     let record = BuildRecord {
