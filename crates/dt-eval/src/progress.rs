@@ -203,7 +203,11 @@ impl Timings {
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        let text: String = self.map.iter().map(|(k, v)| format!("{k}\t{v:.4}\n")).collect();
+        let text: String = self
+            .map
+            .iter()
+            .map(|(k, v)| format!("{k}\t{v:.4}\n"))
+            .collect();
         let tmp = path.with_extension(format!("tmp{}", std::process::id()));
         if std::fs::write(&tmp, text).is_ok() && std::fs::rename(&tmp, path).is_err() {
             let _ = std::fs::remove_file(&tmp);
@@ -279,7 +283,9 @@ impl Tracker {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// The current status.
@@ -326,8 +332,12 @@ impl Tracker {
             s.best
         };
         // how much slower (or faster) than expected this build is running
+        // (trusted more as more of the build is behind us: early sub-progress
+        // can run ahead of the clock)
         let ratio = if done_w > 0.5 {
-            (elapsed / done_w).clamp(0.25, 8.0)
+            let r = (elapsed / done_w).clamp(0.25, 8.0);
+            let trust = (done_w / (0.4 * total)).min(1.0);
+            1.0 + (r - 1.0) * trust
         } else {
             1.0
         };
@@ -367,16 +377,20 @@ impl Reporter for Tracker {
             Event::Begin { key, label } => {
                 {
                     let mut s = self.lock();
-                    let i = s.stages.iter().position(|x| x.key == key).unwrap_or_else(|| {
-                        // a stage nobody planned: a small one
-                        s.stages.push(StageInfo {
-                            key: key.to_owned(),
-                            label: label.to_owned(),
-                            secs: 0.05,
+                    let i = s
+                        .stages
+                        .iter()
+                        .position(|x| x.key == key)
+                        .unwrap_or_else(|| {
+                            // a stage nobody planned: a small one
+                            s.stages.push(StageInfo {
+                                key: key.to_owned(),
+                                label: label.to_owned(),
+                                secs: 0.05,
+                            });
+                            s.done.push(false);
+                            s.stages.len() - 1
                         });
-                        s.done.push(false);
-                        s.stages.len() - 1
-                    });
                     s.cur = Some(i);
                     s.cur_start = Instant::now();
                     s.sub = 0.0;

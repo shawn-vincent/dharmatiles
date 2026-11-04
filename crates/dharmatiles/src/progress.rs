@@ -65,7 +65,11 @@ pub(crate) fn line(prefix: &str, name: &str, s: &Status, width: usize) -> String
     };
     let mut out = format!("{prefix}{name} [{bar}] {pct:.0}% {stage} {time}");
     if out.chars().count() > width {
-        out = out.chars().take(width.saturating_sub(1)).collect::<String>() + "…";
+        out = out
+            .chars()
+            .take(width.saturating_sub(1))
+            .collect::<String>()
+            + "…";
     }
     out
 }

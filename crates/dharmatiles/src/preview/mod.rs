@@ -279,16 +279,21 @@ fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
         .map_or_else(Timings::default, |f| Timings::load(f));
     let mut stages = plan_stages(&checked, &path, opts, &timings);
     stages.push(StageInfo::new(
-        ENCODE, "preparing the view", 0.4, &path, &opts.system, &timings,
+        ENCODE,
+        "preparing the view",
+        0.4,
+        &path,
+        &opts.system,
+        &timings,
     ));
     drop(checked);
     let tracker = (stages.len() > 1).then(|| {
         let sink = shared.sink(i);
         Arc::new(Tracker::new(stages, Box::new(move |s| sink(s))))
     });
-    let reporter = tracker
-        .as_ref()
-        .map_or_else(dt_eval::Progress::none, |t| dt_eval::Progress::new(t.clone()));
+    let reporter = tracker.as_ref().map_or_else(dt_eval::Progress::none, |t| {
+        dt_eval::Progress::new(t.clone())
+    });
     let built = std::panic::catch_unwind(AssertUnwindSafe(|| {
         dt_eval::build_with(&rec, &path, opts, &reporter)
     }))

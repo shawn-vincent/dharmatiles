@@ -40,7 +40,11 @@ pub struct Progress(Option<Arc<dyn Reporter>>);
 
 impl std::fmt::Debug for Progress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Progress({})", if self.0.is_some() { "on" } else { "off" })
+        write!(
+            f,
+            "Progress({})",
+            if self.0.is_some() { "on" } else { "off" }
+        )
     }
 }
 
@@ -166,7 +170,11 @@ mod tests {
         }
         let v = log.0.lock().unwrap();
         assert!(v.len() <= 205, "throttled by count: {}", v.len());
-        assert!(v.last().unwrap().contains("fraction: 0.5"), "{:?}", v.last());
+        assert!(
+            v.last().unwrap().contains("fraction: 0.5"),
+            "{:?}",
+            v.last()
+        );
     }
 
     #[test]

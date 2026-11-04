@@ -408,7 +408,11 @@ fn build_one(
             let prefix = extras
                 .tile_no
                 .map_or_else(String::new, |(n, t)| format!("[{n}/{t}] "));
-            let name = p.rsplit(['/', ':']).next().unwrap_or(p).trim_end_matches(".kdl");
+            let name = p
+                .rsplit(['/', ':'])
+                .next()
+                .unwrap_or(p)
+                .trim_end_matches(".kdl");
             let write = dt_eval::progress::StageInfo::new(
                 progress::WRITE,
                 "writing files",

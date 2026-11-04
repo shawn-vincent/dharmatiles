@@ -556,9 +556,10 @@ impl Tree {
                 let n = u32::try_from(placed.len()).map_err(LookError::build)?;
                 if n > 0 {
                     let lslots = scene.slots(n, Material::Leaf).map_err(LookError::build)?;
-                    let solid_ticks = scene
-                        .progress()
-                        .counter("leaf solids", placed.len(), LEAVES_TO, 0.75);
+                    let solid_ticks =
+                        scene
+                            .progress()
+                            .counter("leaf solids", placed.len(), LEAVES_TO, 0.75);
                     let ls: Vec<Solid> = placed
                         .par_iter()
                         .enumerate()

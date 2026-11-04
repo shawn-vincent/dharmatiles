@@ -32,9 +32,9 @@
 
 use std::collections::HashMap;
 
+use dt_kit::Progress;
 use dt_kit::rays::{RayHit, RayMesh};
 use dt_kit::{Rng, Seed, TriMesh};
-use dt_kit::Progress;
 use rayon::prelude::*;
 
 use super::leaf::{
