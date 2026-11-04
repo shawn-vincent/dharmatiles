@@ -16,6 +16,8 @@ body { background: var(--bg); color: var(--ink); font: 14px/1.4 system-ui, -appl
 aside { background: var(--panel); padding: 12px; overflow-y: auto; border-right: 1px solid var(--line); }
 #record-pane { border-right: 0; border-left: 1px solid var(--line); }
 h1 { font-size: 15px; margin: 0 0 8px; }
+h1 { display: flex; align-items: center; gap: 7px; }
+.logo { width: 1.5em; height: 1.5em; flex: none; background: currentColor; -webkit-mask: url(/logo.svg) center / contain no-repeat; mask: url(/logo.svg) center / contain no-repeat; }
 h1 #system { color: var(--muted); font-weight: 400; }
 h2 { font-size: 16px; margin: 0; word-break: break-word; }
 h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 16px 0 6px; }
