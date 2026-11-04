@@ -96,9 +96,9 @@
       "body": "rust",
       "area": "Rust P4",
       "state": "review",
-      "title": "Phase 4 built: grass, meadow, shore, reeds; waiting for Shawn",
-      "detail": "rust/p4 on main. Grass (grasslab's stroke blades as a direct loft), meadow rule (bare=, rocks/trees/walls), reeds; 19 twins + wall/floor/tree tiles build with grass; 114 builds pass the gate at 3 seeds, both systems. 2×2 grass builds in ~5 s (lab 100 s). Waiting on Shawn: the grass, meadow and shore contact sheets and a test print.",
-      "updated": "2026-11-03T23:25:29Z"
+      "title": "Phase 4 grass: parity passes, waiting for Shawn",
+      "detail": "Blades 3397 vs lab 3368 (+0.9%), mean top 1.27 mm vs 1.20, rounder tips; fieldstone walls stand by construction (seeds 1-16 pass at db and ol); meadow/grass/shore seeds 4-40 all pass the gate. Waiting on Shawn: sheets (out/parity/grass/contact-sheet.png) and a print.",
+      "updated": "2026-11-04T04:22:47Z"
     },
     {
       "id": "waiting",
@@ -136,9 +136,9 @@
       "body": "rust",
       "area": "Rust P8",
       "state": "active",
-      "title": "Phase 8: 3MF writer and MCP server in; app, LSP, wasm, mobile later",
-      "detail": "--3mf writes each triangle's material as a 3MF base material (Python zipfile reads it; Bambu Studio not yet tried); dharmatiles mcp serves check_document, list_looks, describe_look, list_tiles, build_tile, render_preview, audit_mesh over stdio; dharmatiles audit runs the gate on an STL. Not started: the Tauri app, procedural colour, MCP over HTTP, LSP, wasm, mobile.",
-      "updated": "2026-11-03T23:25:29Z"
+      "title": "Phase 8: 3MF + palette, MCP (stdio and HTTP), language server in",
+      "detail": "dharmatiles build --3mf --palette; mcp --http; lsp (diagnostics, hover, completion). Not started: Tauri app, wasm, mobile.",
+      "updated": "2026-11-04T04:22:47Z"
     }
   ]
 }
