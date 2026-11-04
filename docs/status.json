@@ -145,10 +145,10 @@
       "order": 66,
       "body": "rust",
       "area": "Rust preview",
-      "state": "active",
-      "title": "dharmatiles preview: painted 3D browser viewer in progress",
-      "detail": "Branch rust/preview. three.js viewer served on 127.0.0.1, painted like the PNG renders (overhang red, trees' band orange), live rebuild on save.",
-      "updated": "2026-11-04T16:00:00Z"
+      "state": "done",
+      "title": "dharmatiles preview v1 done: painted 3D browser viewer",
+      "detail": "Live three.js viewer on 127.0.0.1 (dharmatiles preview FILES|lib:…|.stl): painted like the PNG renders, overhang red from the gate (tree band orange), preset views, build record, live rebuild on save with file:line errors. Next: section cuts, measuring, per-entry updates, smaller meshes.",
+      "updated": "2026-11-04T17:30:00Z"
     }
   ]
 }
