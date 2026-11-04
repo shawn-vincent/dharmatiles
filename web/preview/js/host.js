@@ -1,13 +1,13 @@
 // The browser host: how the viewer talks to `dharmatiles preview`.
 // The Tauri app supplies another object with the same four methods.
 //
-//   connect({onSnapshot, onTile, onState})  start listening
+//   connect({onSnapshot, onTile, onProgress, onState})  start listening
 //   fetchMesh(index) -> ArrayBuffer         the tile's binary mesh
 //   build(index)                            build a tile not built yet
 
 export function browserHost() {
   return {
-    connect({ onSnapshot, onTile, onState }) {
+    connect({ onSnapshot, onTile, onProgress, onState }) {
       const es = new EventSource('/api/events');
       es.onopen = () => onState('live');
       es.onerror = () => onState('reconnecting…');
@@ -15,6 +15,7 @@ export function browserHost() {
         const m = JSON.parse(e.data);
         if (m.type === 'snapshot') onSnapshot(m);
         else if (m.type === 'tile') onTile(m.tile);
+        else if (m.type === 'progress') onProgress(m.index, m.progress);
       };
     },
     async fetchMesh(index) {

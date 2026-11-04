@@ -26,15 +26,23 @@ VIEWS.forEach(([name, label], i) => {
   b.onclick = () => pickView(name);
   $('views').append(b);
 });
-function pickView(name) {
+function pickView(name, animate = true) {
   state.view = name;
-  viewer.setView(name);
+  viewer.setView(name, animate);
   document.querySelectorAll('button.view').forEach((b) => b.classList.toggle('on', b.dataset.view === name));
 }
 const toggle = (id, fn) => { $(id).onchange = (e) => fn(e.target.checked); };
 toggle('t-overhang', (on) => viewer.setOverhang(on));
 toggle('t-wire', (on) => viewer.setWireframe(on));
 toggle('t-grid', (on) => viewer.setGrid(on));
+// perspective or orthographic: remembered across reloads (a per-viewer convenience)
+function setProjection(ortho, animated = true) {
+  viewer.setOrtho(ortho, animated);
+  $('b-proj').firstChild.textContent = ortho ? 'Orthographic ' : 'Perspective ';
+  try { localStorage.setItem('dt-preview-ortho', ortho ? '1' : '0'); } catch { /* private mode */ }
+}
+$('b-proj').onclick = () => setProjection(!viewer.isOrtho);
+try { if (localStorage.getItem('dt-preview-ortho') === '1') setProjection(true, false); } catch { /* ignore */ }
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' && e.target.type === 'search') return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -44,6 +52,7 @@ addEventListener('keydown', (e) => {
   if (e.key === 'o') flip('t-overhang');
   if (e.key === 'w') flip('t-wire');
   if (e.key === 'g') flip('t-grid');
+  if (e.key === 'p') setProjection(!viewer.isOrtho);
 });
 
 // ---- tile list -------------------------------------------------------
@@ -104,12 +113,21 @@ async function loadMesh(i, version) {
     state.loaded.set(i, version);
     if (first) {
       const saved = state.cameras.get(i);
-      if (saved) viewer.setCamera(saved); else pickView(state.view);
+      if (saved) viewer.setCamera(saved); else pickView(state.view, false);
     }
     renderPanel();
   } catch (e) {
     console.error(e);
   }
+}
+
+const secs = (s) => (s >= 60 ? `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, '0')}s` : `${s.toFixed(1)} s`);
+/** The bar: percentage, the stage (with a look's own count), elapsed against the estimate. */
+function showProgress(p) {
+  const pct = Math.floor(p.fraction * 100);
+  $('bar-fill').style.width = `${pct}%`;
+  const stage = p.count ? `${p.label}: ${p.count[0]} ${p.count[1]}/${p.count[2]}` : p.label;
+  $('status-text').textContent = `${pct}% · ${stage} · ${secs(p.elapsed_s)} of ~${secs(p.estimate_s)}`;
 }
 
 const fmt = (x, d = 2) => Number(x).toFixed(d);
@@ -135,8 +153,13 @@ function renderPanel() {
   // building…
   if (t.status === 'building' || t.status === 'idle') {
     if (!state.buildStart.has(t.index)) state.buildStart.set(t.index, performance.now());
+    // before the first progress event there is only the clock
     const tick = () => {
-      status.textContent = `building… ${((performance.now() - state.buildStart.get(t.index)) / 1000).toFixed(1)} s`;
+      if (t.progress) return showProgress(t.progress);
+      $('bar-fill').style.width = '0%';
+      $('status-text').textContent = t.status === 'idle'
+        ? 'waiting…'
+        : `building… ${((performance.now() - state.buildStart.get(t.index)) / 1000).toFixed(1)} s`;
     };
     tick(); timer = setInterval(tick, 100);
     status.hidden = false;
@@ -186,10 +209,17 @@ host.connect({
   onSnapshot: (m) => {
     state.tiles = m.tiles; state.overhangDeg = m.overhang_deg; state.system = m.system;
     $('system').textContent = m.system;
-    $('lg-red').textContent = `overhang past ${m.overhang_deg}°`;
+    $('lg-orange').textContent = `orange: ${m.overhang_deg}–${m.overhang_deg + 10}°, allowed within budget`;
+    $('lg-red').textContent = `red: over ${m.overhang_deg + 10}°, fails the gate`;
     const want = Number((location.hash.match(/tile=(\d+)/) || [])[1] ?? 0);
     if (state.selected < 0 || !state.tiles[state.selected]) select(Math.min(want, m.tiles.length - 1));
     else { renderList(); select(state.selected); }
+  },
+  onProgress: (i, p) => {
+    const t = state.tiles[i];
+    if (!t) return;
+    t.progress = p;
+    if (i === state.selected && t.status === 'building') showProgress(p);
   },
   onTile: (t) => {
     state.tiles[t.index] = t;

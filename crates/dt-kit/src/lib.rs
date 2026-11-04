@@ -49,6 +49,7 @@ mod field;
 pub mod form;
 pub mod graph;
 mod outline;
+pub mod progress;
 pub mod rays;
 mod render;
 mod scene;
@@ -66,6 +67,7 @@ pub use field::{
     scatter, smax, smooth01,
 };
 pub use outline::Outline;
+pub use progress::{Counter, Event, Progress, Reporter};
 pub use render::{Image, ORANGE, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};
 pub use scene::{
     BANK_MM, Frame, LIFT_TOL_MM, Material, Part, REFERENCE_SQUARE_MM, Scene, Slot, Slots, Solid,

@@ -812,10 +812,12 @@ pub(crate) fn solidify(
         .slots(n + 1, Material::Masonry)
         .map_err(LookError::build)?;
     type Piece = Result<(Solid, [f64; 3], [f64; 3]), LookError>;
+    let ticks = scene.progress().counter("stones", units.len(), 0.0, 0.9);
     let built: Vec<Piece> = units
         .par_iter()
         .enumerate()
         .map(|(i, u)| {
+            ticks.tick();
             let mesh = match u {
                 Unit::Block(b) => b.mesh(&run.segs[b.seg]).map_err(LookError::build)?,
                 Unit::Stone(st) => run.place(st.seg, st.mesh().map_err(LookError::build)?),

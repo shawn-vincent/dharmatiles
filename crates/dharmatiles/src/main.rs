@@ -177,6 +177,7 @@ mod looks;
 mod lsp;
 mod mcp;
 mod preview;
+mod progress;
 mod watch;
 
 const OK: u8 = 0;
@@ -225,6 +226,8 @@ fn main() -> ExitCode {
                         &options((*sys).to_owned(), seed),
                         &out,
                         Extras {
+                            progress: !json && std::io::IsTerminal::is_terminal(&std::io::stderr()),
+                            tile_no: None,
                             png,
                             threemf,
                             palette: &palette,
@@ -351,6 +354,10 @@ fn check(paths: &[String], json: bool) -> u8 {
 /// What else a build writes beside the STL.
 #[derive(Clone, Copy)]
 struct Extras<'a> {
+    /// Show a progress line on stderr (a terminal, no `--json`).
+    progress: bool,
+    /// This tile's place in a batch, shown beside the bar.
+    tile_no: Option<(usize, usize)>,
     png: bool,
     threemf: bool,
     palette: &'a dt_kit::Palette,
@@ -359,7 +366,11 @@ struct Extras<'a> {
 fn build(paths: &[String], opts: &Options, out: &Path, extras: Extras, json: bool) -> u8 {
     let mut code = OK;
     let mut reports = Vec::new();
-    for p in paths {
+    for (n, p) in paths.iter().enumerate() {
+        let extras = Extras {
+            tile_no: (paths.len() > 1).then_some((n + 1, paths.len())),
+            ..extras
+        };
         let (c, r) = build_one(&Files, p, opts, out, extras, json);
         code = worse(code, c);
         reports.push(r);
@@ -390,9 +401,45 @@ fn build_one(
     json: bool,
 ) -> (u8, Value) {
     let t0 = Instant::now();
-    let b = match dt_eval::build(sources, p, opts) {
+    let mut timings = dt_eval::progress::Timings::load(&dt_eval::progress::Timings::file_in(out));
+    let tracker = extras
+        .progress
+        .then(|| {
+            let prefix = extras
+                .tile_no
+                .map_or_else(String::new, |(n, t)| format!("[{n}/{t}] "));
+            let name = p
+                .rsplit(['/', ':'])
+                .next()
+                .unwrap_or(p)
+                .trim_end_matches(".kdl");
+            let write = dt_eval::progress::StageInfo::new(
+                progress::WRITE,
+                "writing files",
+                0.3,
+                p,
+                &opts.system,
+                &timings,
+            );
+            progress::tracker_for(
+                sources,
+                p,
+                opts,
+                &timings,
+                vec![write],
+                progress::tty_sink(prefix, name.to_owned()),
+            )
+        })
+        .flatten();
+    let reporter = tracker
+        .as_ref()
+        .map_or_else(dt_eval::Progress::none, |(_, pr)| pr.clone());
+    let b = match dt_eval::build_with(sources, p, opts, &reporter) {
         Ok(b) => b,
         Err(errs) => {
+            if tracker.is_some() {
+                progress::clear();
+            }
             if !json {
                 report(&errs);
             }
@@ -404,7 +451,15 @@ fn build_one(
     };
     let built_s = t0.elapsed().as_secs_f64();
     let failures = b.audit.failures(&opts.printer);
-    let files = match write(&b, &failures, built_s, out, extras) {
+    reporter.begin(progress::WRITE, "writing files");
+    let t_write = Instant::now();
+    let written = write(&b, &failures, built_s, out, extras);
+    reporter.end(progress::WRITE);
+    if let Some((t, _)) = &tracker {
+        t.finish();
+        progress::clear();
+    }
+    let files = match written {
         Ok(f) => f,
         Err(e) => {
             tell!("error: {p}: {e}");
@@ -415,6 +470,10 @@ fn build_one(
         }
     };
     let total_s = t0.elapsed().as_secs_f64();
+    let mut secs = b.stage_secs.clone();
+    secs.push((progress::WRITE.to_owned(), t_write.elapsed().as_secs_f64()));
+    timings.record(p, &opts.system, &secs);
+    timings.save();
     let a = &b.audit;
     if !json {
         tell!(
@@ -530,6 +589,7 @@ pub(crate) fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
         },
         "stages": b.stages.iter().map(|s| json!({"name": s.name, "hash": format!("{:016x}", s.hash)})).collect::<Vec<_>>(),
         "build_s": built_s,
+        "stage_secs": b.stage_secs.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<serde_json::Map<_, _>>(),
         "edge_mm": b.edge_mm,
         "stats": stats(&b.notes),
     })

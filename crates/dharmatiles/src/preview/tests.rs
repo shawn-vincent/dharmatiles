@@ -167,7 +167,7 @@ fn sse_starts_with_a_snapshot_then_streams_changes() {
         if first {
             assert_eq!(v["type"], "snapshot");
             first = false;
-        } else {
+        } else if v["type"] == "tile" {
             seen.push(v["tile"]["status"].as_str().unwrap().to_owned());
             if v["tile"]["status"] == "ready" {
                 break;
@@ -237,4 +237,43 @@ fn the_slot_name_comes_from_the_file_until_the_plan_is_read() {
     );
     assert_eq!(Slot::new("my/tiles/a.kdl").name, "a");
     let _ = Shared::new(&[], "db", 55.0).snapshot();
+}
+
+#[test]
+fn a_build_pushes_progress_events_that_never_go_back() {
+    let r = start(&[FLAT], false);
+    let mut c = TcpStream::connect(r.addr).unwrap();
+    write!(c, "GET /api/events HTTP/1.1\r\nHost: {}\r\n\r\n", r.addr).unwrap();
+    c.set_read_timeout(Some(Duration::from_secs(120))).unwrap();
+    assert!(
+        request(r.addr, "POST", "/api/tiles/0/build", &r.addr.to_string())
+            .0
+            .contains("202")
+    );
+    let mut fractions = Vec::new();
+    for l in BufReader::new(c).lines() {
+        let l = l.unwrap();
+        let Some(data) = l.strip_prefix("data: ") else {
+            continue;
+        };
+        let v: Value = serde_json::from_str(data).unwrap();
+        if v["type"] == "progress" {
+            let p = &v["progress"];
+            assert!(
+                p["label"].is_string() && p["eta_s"].as_f64().unwrap() >= 0.0,
+                "{p}"
+            );
+            fractions.push(p["fraction"].as_f64().unwrap());
+        }
+        if v["type"] == "tile" && v["tile"]["status"] == "ready" {
+            assert!(v["tile"]["progress"].is_null(), "cleared when done");
+            break;
+        }
+    }
+    assert!(fractions.len() >= 3, "{fractions:?}");
+    assert!(fractions.windows(2).all(|w| w[1] >= w[0]), "{fractions:?}");
+    assert!(
+        (fractions.last().unwrap() - 1.0).abs() < 1e-9,
+        "ends at 100%: {fractions:?}"
+    );
 }

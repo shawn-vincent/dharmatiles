@@ -100,6 +100,8 @@ fn build<'a>(path: &'a str, opts: &Options, out: &Path, png: bool) -> (u8, Tile<
         opts,
         out,
         crate::Extras {
+            progress: false,
+            tile_no: None,
             png,
             threemf: false,
             palette: &dt_kit::Palette::default(),

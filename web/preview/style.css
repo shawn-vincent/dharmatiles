@@ -1,7 +1,7 @@
 :root {
   --bg: #f3f4f6; --panel: #ffffff; --ink: #1d2330; --muted: #667085; --line: #d9dde5;
   --accent: #2f6fdb; --ok: #2e8b57; --warn: #d98a00; --bad: #d12d2d;
-  --canvas: #d9e0eb;
+  --sky-top: #0788ad; --sky-low: #6fd8d2;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -41,15 +41,18 @@ button.view:hover { border-color: var(--accent); }
 button.view.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 .toggle { display: inline-flex; gap: 5px; align-items: center; cursor: pointer; user-select: none; }
 kbd { font: 11px ui-monospace, monospace; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; color: var(--muted); }
-#canvas-wrap { position: relative; flex: 1; min-height: 0; background: var(--canvas); }
+#canvas-wrap { position: relative; flex: 1; min-height: 0; background: linear-gradient(to bottom, var(--sky-top), var(--sky-low)); }
 #canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #status { position: absolute; top: 10px; left: 10px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; box-shadow: 0 1px 4px #0002; }
-#status::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); margin-right: 8px; animation: pulse 1s infinite; }
+#status { display: flex; align-items: center; gap: 10px; border-radius: 10px; min-width: 260px; }
+#bar { width: 120px; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; flex: none; }
+#bar-fill { display: block; height: 100%; width: 0; background: var(--accent); transition: width .12s linear; }
+#status-text { font-variant-numeric: tabular-nums; white-space: nowrap; }
 #errors { position: absolute; left: 10px; right: 10px; bottom: 10px; max-height: 45%; overflow: auto; background: var(--panel); border: 1px solid var(--bad); border-radius: 8px; padding: 10px 12px; box-shadow: 0 2px 8px #0003; }
 #errors .e { margin: 0 0 8px; } #errors .e:last-child { margin: 0; }
 #errors .where { font: 12px ui-monospace, monospace; color: var(--bad); }
 #errors .help { color: var(--muted); font-size: 12px; }
-#empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; }
+#empty { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; text-shadow: 0 1px 3px #0006; pointer-events: none; }
 dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 10px 0 0; }
 dt { color: var(--muted); } dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 dd.bad { color: var(--bad); font-weight: 600; } dd.ok { color: var(--ok); }
