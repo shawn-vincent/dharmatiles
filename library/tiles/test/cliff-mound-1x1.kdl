@@ -1,0 +1,17 @@
+// A free-standing stepped mound.
+// Twin of clifflab/rockpile.py's `mound` form at round 17 (31f7c5d), 1x1.
+
+tile cliff-mound-1x1 size="1x1" seed=1 {
+    about """
+        A free-standing stepped mound.
+        """
+
+    stack {
+        dirt level=edge
+
+        cliff form=mound height=34 {
+            rock mixed
+            stone-size massive
+        }
+    }
+}

@@ -1,0 +1,18 @@
+// A free-standing mass with a tall core and a lower tier round it.
+// Twin of clifflab/rockpile.py's `massif` form at round 17 (31f7c5d), 1x1.
+
+tile cliff-massif-1x1 size="1x1" seed=1 {
+    about """
+        A free-standing mass with a tall core and a lower tier round it.
+        """
+
+    stack {
+        dirt level=edge
+
+        cliff form=massif height=35 {
+            rock mixed
+            stone-size massive
+            top dirt
+        }
+    }
+}

@@ -43,7 +43,7 @@ mod util;
 use dt_kit::{Material, Rng, Scene, Support, Tag};
 use rayon::prelude::*;
 
-use crate::{Control, Ctx, Look, LookError, Plan, Read, Value, Write, only};
+use crate::{Control, Ctx, Look, LookError, Plan, Value, Write, only};
 use form::{Ask, FormName};
 use stone::{ColState, Env};
 
@@ -182,7 +182,9 @@ impl Look for Cliff {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid("cliff"),
-            reads: vec![Read::Solids("ground"), Read::IfAny("rock")],
+            // the painted surface (always first), not the lifted ground: a bank
+            // heaped against the cliff is made before the lift
+            reads: vec![],
             cell_mm: None,
         }
     }

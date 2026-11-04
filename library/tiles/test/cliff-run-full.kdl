@@ -1,6 +1,6 @@
 // The cliff run as the Python lab has it, with every control the vocabulary
-// names (bank, scree, shattered patches, ledges): the language tests' fixture.
-// It does not build yet; library/tiles/cliffs/2x1-cliff-run.kdl is what does.
+// names (bank, scree, shattered patches, dirt on the top): the full twin of
+// clifflab's `run` at round 17 (31f7c5d).
 // A 2×1 cliff run: a band of stacked rock against the north edge,
 // with dirt on its top and scree at its foot.
 // Twin of clifflab/rockpile.py's `run` form (round 15, commit 3b56ae0).
@@ -11,10 +11,8 @@ tile cliff-run size="2x1" seed=1 {
         standard end section, so runs butt end to end.
         """
 
-    levels foot=4                   // rockpile's foot; the standard edge level is 3.4
-
     stack {
-        dirt level=foot {
+        dirt level=edge {
             bank against=cliff height="1.5..3.5" reach="3..6.5"
             scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
         }
