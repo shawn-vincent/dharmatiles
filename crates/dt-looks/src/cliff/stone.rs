@@ -863,7 +863,7 @@ pub fn rock_piece(
     let rock = rock.parts_over(1e9)?;
     st.tops += k;
     let rock = fit_tile(rock, form, &setback);
-    Ok(Some(grain(&rock, env.seed, zbase)?))
+    Ok(Some(grain(&rock, env.seed, zbase)?.parts_over(1e9)?))
 }
 
 fn rpoly_offset_unused(p: &[P2]) -> Vec<P2> {

@@ -83,7 +83,19 @@ def rust_side(form: str, seed: int, out: pathlib.Path):
 
 def views(mesh: trimesh.Trimesh, tmp: pathlib.Path) -> tuple[list, float]:
     pm = it.paint(mesh)
-    ov = float(mesh.area_faces[rp.overhang_faces(mesh)].sum())
+    # both colours (Shawn, 4 Nov 2026): orange 55-65°, red over 65°
+    fc = np.asarray(pm.visual.face_colors).copy()
+    soft = rp.overhang_faces(pm)
+    a55 = float(mesh.area_faces[rp.overhang_faces(mesh)].sum())
+    saved, rp.OVERHANG_DEG = rp.OVERHANG_DEG, 65.0
+    try:
+        hard = rp.overhang_faces(pm)
+        ov = float(mesh.area_faces[rp.overhang_faces(mesh)].sum())
+    finally:
+        rp.OVERHANG_DEG = saved
+    fc[soft, :3] = rl.ORANGE
+    fc[hard, :3] = rl.RED
+    pm.visual.face_colors = fc
     ims = []
     for name, el, az in it.VIEWS:
         rl.render([pm], tmp, el, az)
@@ -97,7 +109,7 @@ def views(mesh: trimesh.Trimesh, tmp: pathlib.Path) -> tuple[list, float]:
     im = Image.open(tmp).convert("RGB")
     im.thumbnail((int(H * 1.4), H))
     ims.append(("close-up", im))
-    return ims, ov
+    return ims, ov, max(a55 - ov, 0.0)
 
 
 def row(label: str, ims: list, text: str, ref: Image.Image | None) -> Image.Image:
@@ -140,12 +152,12 @@ def main() -> None:
                     mesh, info = rust_side(form, seed, out)
                     if mesh is None:
                         continue
-                ims, ov = views(mesh, tmp)
+                ims, ov, band = views(mesh, tmp)
                 g = gate(pathlib.Path(info["stl"])) if who == "rust" else gate(out / "py" / f"{form}-s{seed}.stl")
-                info.update(overhang_mm2=ov, holes=g.get("holes"), watertight=g.get("watertight"),
+                info.update(overhang_mm2=ov, band_mm2=band, holes=g.get("holes"), watertight=g.get("watertight"),
                             triangles=len(mesh.faces))
                 metrics[key][who] = info
-                text = (f"{info['triangles']:,} faces · {info.get('rocks')} stones · overhang {ov:.1f} mm² · "
+                text = (f"{info['triangles']:,} faces · {info.get('rocks')} stones · overhang(>65°) {ov:.2f} · band(55-65°) {band:.2f} mm² · "
                         f"holes {g.get('holes')} · watertight {g.get('watertight')} · "
                         f"{(info.get('s') or 0):.0f} s")
                 r = row(f"{who} · {form} seed {seed}", ims, text, ref if who == "rust" else None)

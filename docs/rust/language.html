@@ -282,11 +282,12 @@ wall along="north" seed=23          // stands on the slabs, its top still at the
 <div class="tbl"><table>
 <thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What you get</th></tr></thead>
 <tbody>
+<tr><td><code>form</code></td><td><code>run</code> / <code>corner</code> / <code>canyon</code> / <code>escarpment</code> / <code>plateau</code> / <code>massif</code> / <code>mound</code> / <code>spire</code> / <code>needles</code></td><td>from <code>along</code></td><td>The shape of the mass, as clifflab&rsquo;s rockpile has them (reference sheet A to P). One edge is a <code>run</code>, two a <code>corner</code>; <code>canyon</code> stands bands on the west and east edges; <code>escarpment</code> ramps its height along the edge; the rest stand free and need no <code>along</code>.</td></tr>
 <tr><td><code>height</code></td><td>mm</td><td>35</td><td>Height above the foot.</td></tr>
 <tr><td><code>depth</code></td><td>mm range</td><td></td><td>How far the rock reaches into the tile.</td></tr>
 <tr><td><code>rock</code></td><td><code>mixed</code> / <code>columns</code> / <code>blocks</code> / <code>slabs</code>, or weights <code>rock columns=… blocks=… slabs=… odd=… monoliths=…</code></td><td><code>mixed</code></td><td>What the cliff is stacked from. <code>mixed</code> is rockpile's run shares (38 / 38 / 12 / 6 / 6); the others are provisional.</td></tr>
 <tr><td><code>stone-size</code></td><td><code>rubble</code> / <code>broken</code> / <code>massive</code>, or %</td><td><code>rubble</code></td><td>Small broken stones, or big masses. <code>massive</code> is 1.35× rubble size; <code>broken</code> (1.15×) is provisional.</td></tr>
-<tr><td><code>ledges</code></td><td>0–2, with <code>height=</code> %</td><td></td><td>Shelves a miniature can stand on. Built in P7.</td></tr>
+<tr><td><code>ledges</code></td><td>0–2, with <code>height=</code> %</td><td></td><td>Only <code>ledges height=</code> is built: where the lower tier sits, as a share of the cliff. The count is not.</td></tr>
 <tr><td><code>shattered patches</code>, <code>width</code></td><td>count; mm</td><td></td><td>Broken patches with more cracks and scree.</td></tr>
 <tr><td><code>top</code></td><td><code>bare</code> / <code>dirt</code></td><td><code>bare</code></td><td>Earth lodged on the flat top.</td></tr>
 </tbody></table></div>
