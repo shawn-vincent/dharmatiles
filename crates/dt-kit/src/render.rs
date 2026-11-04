@@ -134,6 +134,17 @@ const PEBBLE: [[f32; 3]; 3] = [
     [132.0, 130.0, 128.0],
     [168.0, 164.0, 158.0],
 ];
+/// waterlab's paint (`contact_sheet.py` PAINT): a dark basecoat with the
+/// crests drybrushed, five tones faded into each other by local relief.
+const WATER: [[f32; 3]; 5] = [
+    [18.0, 38.0, 92.0],
+    [28.0, 86.0, 156.0],
+    [58.0, 160.0, 178.0],
+    [150.0, 220.0, 214.0],
+    [225.0, 245.0, 240.0],
+];
+/// Where each tone sits along the ramp (t from 0 to 1.04).
+const WATER_AT: [f32; 5] = [0.0, 0.45, 0.72, 0.9, 1.04];
 const SIDE: [f32; 3] = [42.0, 42.0, 46.0];
 /// Earth bedding under a floor or wall, seen on the tile's side: the
 /// parity harness's flat earth brown (`run_lab.py` `EARTH_RGB`).
@@ -160,6 +171,9 @@ pub struct SurfacePaint {
     z: Vec<f64>,
     rel: Vec<f64>,
     rel2: Vec<f64>,
+    /// Relief at 2 mm and 6 mm: what a drybrush catches on the water.
+    wrel: Vec<f64>,
+    whi: Vec<f64>,
     stone: Vec<bool>,
     covered: Vec<bool>,
     low: f64,
@@ -172,6 +186,8 @@ impl SurfacePaint {
         let z: Vec<f64> = g.z.iter().map(|&v| f64::from(v)).collect();
         let b1 = dt_geom::blur(&z, g.nx, g.ny, 0.8 / g.step);
         let b2 = dt_geom::blur(&z, g.nx, g.ny, 4.0 / g.step);
+        let w2 = dt_geom::blur(&z, g.nx, g.ny, 2.0 / g.step);
+        let w6 = dt_geom::blur(&z, g.nx, g.ny, 6.0 / g.step);
         let low = z.iter().copied().fold(f64::INFINITY, f64::min);
         Self {
             nx: g.nx,
@@ -179,6 +195,8 @@ impl SurfacePaint {
             step: g.step,
             rel: z.iter().zip(&b1).map(|(a, b)| a - b).collect(),
             rel2: z.iter().zip(&b2).map(|(a, b)| a - b).collect(),
+            wrel: z.iter().zip(&w2).map(|(a, b)| a - b).collect(),
+            whi: z.iter().zip(&w6).map(|(a, b)| a - b).collect(),
             z,
             stone: stone.bits.clone(),
             covered: Vec::new(),
@@ -193,6 +211,28 @@ impl SurfacePaint {
     pub fn covered(mut self, covered: &dt_geom::Mask) -> Self {
         self.covered.clone_from(&covered.bits);
         self
+    }
+
+    /// waterlab's water paint at a face centre, or `None` off the grid.
+    fn water(&self, c: [f64; 3]) -> Option<[f32; 3]> {
+        #[allow(clippy::cast_precision_loss)]
+        let (w, h) = (
+            (self.nx - 1) as f64 * self.step,
+            (self.ny - 1) as f64 * self.step,
+        );
+        if c[0] < -1e-6 || c[1] < -1e-6 || c[0] > w + 1e-6 || c[1] > h + 1e-6 {
+            return None;
+        }
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let node = |v: f64, n: usize| (libm::round(v / self.step).max(0.0) as usize).min(n - 1);
+        let k = node(c[1], self.ny) * self.nx + node(c[0], self.nx);
+        #[allow(clippy::cast_possible_truncation)]
+        let t = (0.5 + 0.5 * (0.65 * self.wrel[k] / 0.5 + 0.35 * self.whi[k] / 0.9)).clamp(0.0, 1.0)
+            as f32;
+        // piecewise-linear through the five tones (waterlab's np.interp)
+        let i = (0..4).rev().find(|&i| t >= WATER_AT[i]).unwrap_or(0);
+        let f = ((t - WATER_AT[i]) / (WATER_AT[i + 1] - WATER_AT[i])).clamp(0.0, 1.0);
+        Some([0, 1, 2].map(|c| (WATER[i][c] * (1.0 - f) + WATER[i + 1][c] * f) / 255.0))
     }
 
     /// dirtlab's paint for one face (centre `c`, unit normal z `nz`), or
@@ -242,7 +282,18 @@ pub fn paint_surface(
         return out;
     };
     for (k, t) in mesh.triangles.iter().enumerate() {
-        if overhang.get(k).copied().unwrap_or(false) || materials.get(k) != Some(&Material::Earth) {
+        if overhang.get(k).copied().unwrap_or(false) {
+            continue;
+        }
+        if materials.get(k) == Some(&Material::Water) {
+            let p = t.map(|i| mesh.positions[i as usize]);
+            let c = [0, 1, 2].map(|d| (p[0][d] + p[1][d] + p[2][d]) / 3.0);
+            if let Some(col) = s.water(c) {
+                out[k] = col;
+            }
+            continue;
+        }
+        if materials.get(k) != Some(&Material::Earth) {
             continue;
         }
         let p = t.map(|i| mesh.positions[i as usize]);
