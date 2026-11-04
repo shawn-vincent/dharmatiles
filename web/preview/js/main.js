@@ -209,7 +209,8 @@ host.connect({
   onSnapshot: (m) => {
     state.tiles = m.tiles; state.overhangDeg = m.overhang_deg; state.system = m.system;
     $('system').textContent = m.system;
-    $('lg-red').textContent = `overhang past ${m.overhang_deg}°`;
+    $('lg-orange').textContent = `orange: ${m.overhang_deg}–${m.overhang_deg + 10}°, allowed within budget`;
+    $('lg-red').textContent = `red: over ${m.overhang_deg + 10}°, fails the gate`;
     const want = Number((location.hash.match(/tile=(\d+)/) || [])[1] ?? 0);
     if (state.selected < 0 || !state.tiles[state.selected]) select(Math.min(want, m.tiles.length - 1));
     else { renderList(); select(state.selected); }

@@ -129,6 +129,13 @@ export class Viewer {
     if (this.controls) this.controls.dispose();
     this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.enableDamping = false;
+    // zoom toward the point under the cursor: camera and target move together
+    // (perspective dollies along the cursor ray, orthographic changes zoom and shifts)
+    this.controls.zoomToCursor = true;
+    this.controls.minDistance = 4;
+    this.controls.maxDistance = 600;
+    this.controls.minZoom = 0.2;
+    this.controls.maxZoom = 40;
     this.controls.target.copy(target);
     this.controls.addEventListener('change', () => { this.sample(); this.draw(); });
     // the user took hold (drag, wheel, touch): the tween ends and the controls own the camera
