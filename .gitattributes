@@ -1,4 +1,4 @@
-# KDL documents are compared byte for byte (dt-doc round-trip tests).
-*.kdl text eol=lf
+# .dtile documents are compared byte for byte (dt-doc round-trip tests).
+*.dtile text eol=lf
 # dt-doc's error snapshots are compared byte for byte too.
 crates/dt-doc/tests/snapshots/*.txt text eol=lf
