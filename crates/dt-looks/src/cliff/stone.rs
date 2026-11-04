@@ -659,7 +659,19 @@ pub fn rock_piece(
     .map(|p| r.top_z(p[0], p[1]))
     .fold(f64::NEG_INFINITY, f64::max)
         + 1.0;
-    let rock = prism(slot, &poly, r.z0, zhi - r.z0, r.top, form)?;
+    // the outline offset a hair can self-cross on a tiny feature: then the
+    // outline itself, then its convex hull
+    let hull = super::util::hull2(&rpoly);
+    let mut tried = [poly.clone(), rpoly.clone(), hull].into_iter();
+    let rock = loop {
+        let Some(p) = tried.next() else {
+            return Ok(None);
+        };
+        match prism(slot, &p, r.z0, zhi - r.z0, r.top, form) {
+            Ok(rock) => break rock,
+            Err(_) => continue,
+        }
+    };
     if rock.is_empty() {
         return Ok(None);
     }
@@ -816,7 +828,8 @@ pub fn rock_piece(
             }
         }
         let opens2: Vec<(P2, P2)> = faces.iter().map(|f| (f.p0, f.p1)).collect();
-        rock = seat(rock, r, &opens2, &own)?;
+        rock = seat(rock, r, &opens2, &own)
+            .map_err(|e| KitError::Shape(format!("stone {ri} seat: {e}")))?;
         zbase = r
             .bed
             .v
@@ -852,18 +865,33 @@ pub fn rock_piece(
                 .any(|q| occupied(form, env.s, [q[0], q[1], r.top_z(q[0], q[1]) + 0.4]))
     };
     let chips = chip_edges(crng, &rock, CHIP_MM, &keep);
+    // each finishing step may fail on a degenerate cut (the kernel refuses a
+    // mesh that is not a closed manifold): that step is then skipped, and
+    // the stone keeps what it had
     let rock = if chips.is_empty() {
         rock
     } else {
-        let o = rock.minus(&chips)?;
-        if o.is_empty() { rock } else { o }
+        match rock.minus(&chips) {
+            Ok(o) if !o.is_empty() => o,
+            _ => rock,
+        }
     };
-    let rock = relief(rock, &c.faces, None)?.parts_over(1e9)?;
-    let (rock, k) = top_cracks(rng, &rock, r, &c.faces, env)?;
-    let rock = rock.parts_over(1e9)?;
-    st.tops += k;
+    let rock = relief(rock.clone(), &c.faces, None)
+        .and_then(|p| p.parts_over(1e9))
+        .unwrap_or(rock);
+    let rock = match top_cracks(rng, &rock, r, &c.faces, env) {
+        Ok((p, k)) => match p.parts_over(1e9) {
+            Ok(p) => {
+                st.tops += k;
+                p
+            }
+            Err(_) => rock,
+        },
+        Err(_) => rock,
+    };
     let rock = fit_tile(rock, form, &setback);
-    Ok(Some(grain(&rock, env.seed, zbase)?.parts_over(1e9)?))
+    let grained = grain(&rock, env.seed, zbase).and_then(|p| p.parts_over(1e9));
+    Ok(Some(grained.unwrap_or(rock)))
 }
 
 fn rpoly_offset_unused(p: &[P2]) -> Vec<P2> {

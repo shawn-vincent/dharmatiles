@@ -407,9 +407,11 @@ impl Look for Cliff {
             }
         }
         for c in &mut cols {
-            finish::plan_column(&mut rng, c, &placed, &fm, plan_slot).map_err(LookError::build)?;
+            finish::plan_column(&mut rng, c, &placed, &fm, plan_slot)
+                .map_err(|e| LookError::build(format!("plan column: {e}")))?;
         }
-        let core_mesh = core::core_mesh(&st.s, &cols, &placed).map_err(LookError::build)?;
+        let core_mesh = core::core_mesh(&st.s, &cols, &placed)
+            .map_err(|e| LookError::build(format!("core mesh: {e}")))?;
         let mut frng = Rng::new(ctx.seed.key("cliff-faces"));
         faces::plan_faces(&mut frng, &mut cols, &placed);
         // support cones of resting stones, for the cleaving guard
@@ -456,7 +458,8 @@ impl Look for Cliff {
                             .then(|| m.clone())
                     })
                     .collect();
-                let cone_support = Support::new(&near)?;
+                let cone_support = Support::new(&near)
+                    .map_err(|e| dt_kit::KitError::Shape(format!("cone support: {e}")))?;
                 let sup = [&cone_support, &core_support];
                 let mut cs = ColState::default();
                 let mut out = Vec::new();
@@ -492,7 +495,8 @@ impl Look for Cliff {
             }
             v
         };
-        let core = core::core_piece(slots.get(1), &core_mesh, &fm).map_err(LookError::build)?;
+        let core = core::core_piece(slots.get(1), &core_mesh, &fm)
+            .map_err(|e| LookError::build(format!("core piece: {e}")))?;
         let core =
             relief::relief(core, &all_faces, Some((fm.w, fm.h))).map_err(LookError::build)?;
         let core = stone::grain(&core, env.seed, form::FOOT).map_err(LookError::build)?;
