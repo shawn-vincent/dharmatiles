@@ -423,6 +423,7 @@ impl Look for Cliff {
             seed: ctx.seed.key("cliff-grain").value(),
         };
         let col_seed = ctx.seed.key("cliff-columns");
+        let ticks = scene.progress().counter("stones", placed.len(), 0.0, 0.9);
         let results: Vec<ColResult> = cols
             .par_iter()
             .enumerate()
@@ -457,6 +458,7 @@ impl Look for Cliff {
                     {
                         out.push((ri, p));
                     }
+                    ticks.tick();
                 }
                 Ok((out, cs.tops))
             })
