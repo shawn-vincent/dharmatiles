@@ -1,0 +1,24 @@
+// A free-standing flat-topped mass.
+// Twin of clifflab/rockpile.py's `plateau` form at round 17 (31f7c5d), 1x1.
+
+tile "1x1-cliff-plateau" size="1x1" seed=1 {
+    about """
+        A free-standing flat-topped mass.
+        """
+
+    stack {
+        dirt level=edge {
+            bank against=cliff height="1.5..3.5" reach="3..6.5"
+            scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
+        }
+
+        cliff form=plateau height=14 {
+            rock mixed
+            stone-size massive
+            top dirt
+        }
+
+        scatter against=cliff per-square=55 reach=4 { stone size="1..6" mostly=small }
+        scatter against=cliff per-square=2.5 { boulder size="4.5..8" }
+    }
+}

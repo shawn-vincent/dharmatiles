@@ -86,25 +86,25 @@
 </figure>
 
 <h2 id="use">Using it in a tile</h2>
-<p>In the Rust engine a tile is a short KDL document that names looks. This is the library's cliff run, <code>library/tiles/cliffs/2x1-cliff.kdl</code> (branch <code>rust/p1</code>): a 2×1 tile with a cliff along its north edge, dirt in front, and scree.</p>
+<p>A tile is a short KDL document. This is the library's cliff run, <code>library/tiles/cliffs/2x1-cliff.kdl</code>: a 2×1 tile with a cliff along its north edge, dirt in front, a bank against the face, and scree. Build it with <code>dharmatiles build lib:tiles/cliffs/2x1-cliff.kdl</code> (about 17 s for a 2×1, 10 s for a 1×1).</p>
 <pre><code>tile cliff-run size="2x1" seed=1 {
-    levels foot=4
     stack {
-        dirt level=foot {
-            bank against=cliff height="1.5..3.5" reach="3..6.5"
-            scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
-        }
+        dirt level=edge
         cliff along=north height=35 {
             rock mixed                  // or: columns, blocks, slabs
             stone-size massive          // or: rubble, broken
             top dirt                    // or: bare
             shattered patches=3 width="5..10"
+            bank-height "1.5..3.5"      // dirt heaped against the face
+            bank-reach "3..6.5"
+            scree 55                    // fallen stones per square of the foot
+            boulders 2.5                // big fallen blocks per square
+            grit 45                     // small stones half-buried in the bank
         }
-        scatter against=cliff per-square=55 reach=4 { stone size="1..6" mostly=small }
-        scatter against=cliff per-square=2.5 { boulder size="4.5..8" }
     }
 }</code></pre>
-<p>Change <code>seed</code> for a different cliff with the same character. The cliff look reaches the Rust engine in phase P7 (see the <a href="../rust/plan.html">plan</a>). Until then the lab builds it: <code>python clifflab/rockpile.py --form run --seed 1 --cols 1</code> writes an STL with a DungeonBlocks base to <code>clifflab/out/</code>. The language as a whole is on the <a href="../rust/language.html">language page</a>.</p>
+<p>Change <code>seed</code> for a different cliff with the same character. <code>form=</code> picks the shape: <code>run</code> (one edge, the default), <code>corner</code> (two edges, <code>along="north west"</code>), <code>canyon</code> (the west and east edges), <code>escarpment</code> (a band whose height ramps along the edge) and the free-standing <code>plateau</code>, <code>massif</code>, <code>mound</code>, <code>spire</code> and <code>needles</code>, which take no <code>along</code>. A twin of each, at 1×1, is in <code>library/tiles/test/cliff-&lt;form&gt;-1x1.kdl</code>. The lab still builds the Python original: <code>python clifflab/rockpile.py --form run --seed 1 --cols 1</code>; <code>cargo xtask parity cliff --forms run corner</code> builds both and lays them side by side (<code>out/parity/cliff/contact-sheet.png</code>).</p>
+<p><b>Not yet:</b> the generic <code>bank against=cliff</code> and <code>scatter against=cliff { stone }</code> forms (<code>library/tiles/test/cliff-run-full.kdl</code> keeps them as the language fixture and does not build); the cliff owns its bank and scree controls until Shawn decides how the generic forms should map.</p>
 
 <h2 id="spec">Specification</h2>
 <h3 id="controls">Controls</h3>
@@ -119,7 +119,10 @@
 <tr><td><code>stone-size</code></td><td><code>rubble</code>, <code>broken</code>, <code>massive</code></td><td><code>rubble</code></td><td>Stone size: ×1.0, ×1.15, ×1.35. The library run uses <code>massive</code>.</td></tr>
 <tr><td><code>shattered</code></td><td><code>patches</code>, <code>width</code> (mm)</td><td>1.5 per square</td><td>Clusters of small stones and dense cracks between quiet faces.</td></tr>
 <tr><td><code>top</code></td><td><code>bare</code>, <code>dirt</code></td><td><code>bare</code></td><td>Whether dirt lodges on the rock tops.</td></tr>
-<tr><td><code>ledges</code></td><td>—</td><td>—</td><td>Shelves a miniature can stand on. Planned for P7.</td></tr>
+<tr><td><code>ledges</code></td><td><code>height</code> (share)</td><td>random 30–70%</td><td>With <code>ledges height=…</code> the lower tier sits at that share of the cliff.</td></tr>
+<tr><td><code>form</code></td><td>run, corner, canyon, escarpment, plateau, massif, mound, spire, needles</td><td>from <code>along</code></td><td>The shape of the mass.</td></tr>
+<tr><td><code>bank-height</code>, <code>bank-reach</code></td><td>mm, or a range</td><td>1.5–3.5, 3–6.5</td><td>The dirt bank in the angle of cliff and ground (taller and wider in shattered patches; fixed at the tile ends).</td></tr>
+<tr><td><code>scree</code>, <code>boulders</code>, <code>grit</code></td><td>per square of foot</td><td>55, 2.5, 45</td><td>Fallen stones, big fallen blocks, half-buried grit.</td></tr>
 </tbody></table></div>
 
 <h3 id="sizes">Sizes and levels</h3>

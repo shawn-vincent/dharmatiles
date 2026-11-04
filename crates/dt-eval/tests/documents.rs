@@ -68,36 +68,24 @@ fn an_unknown_control_names_the_ones_there_are() {
 
 #[test]
 fn a_control_not_built_yet_is_checked_but_not_built() {
-    let text =
-        "tile flat {\n  stack {\n    dirt {\n      bank against=cliff height=2\n    }\n  }\n}\n";
+    let text = "tile flat {\n  stack {\n    rock wear=worn\n  }\n}\n";
     let src = mem(&[("t.kdl", text)]);
     let c = check(&src, "t.kdl", &Options::default()).unwrap();
-    assert_eq!(c.pending().len(), 2); // `against` and `height`
+    assert_eq!(c.pending().len(), 1); // `wear`
     let Err(e) = build(&src, "t.kdl", &Options::default()) else {
         panic!("built a control that is not built yet");
     };
     assert_eq!(e[0].code, "dt::not-yet");
-    assert_eq!(
-        e[0].message,
-        "sub-controls of `bank` are not available yet (Phase 5)"
-    );
-    assert_eq!(e[0].location().unwrap().1, 4);
+    assert!(e[0].message.contains("`wear`"), "{}", e[0].message);
+    assert_eq!(e[0].location().unwrap().1, 3);
 }
 
 #[test]
 fn library_tiles_check_and_say_which_look_is_missing_when_built() {
-    // the full cliff run (bank, scree, shattered patches: not built yet)
-    let (path, missing) = (
-        "lib:tiles/test/2x1-cliff-full.kdl",
-        "`scatter` inside `dirt` is not available yet (Phase 3)",
-    );
+    // the full cliff run (bank, scree, pebbles on the dirt) is built now
+    let path = "lib:tiles/test/2x1-cliff-full.kdl";
     let c = check(&Library, path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
-    assert!(!c.pending().is_empty(), "{path}");
-    let Err(e) = build(&Library, path, &Options::default()) else {
-        panic!("{path} built");
-    };
-    assert!(e.iter().all(|d| d.code == "dt::not-yet"), "{path}: {e:?}");
-    assert!(e.iter().any(|d| d.message == missing), "{path}: {e:?}");
+    assert!(c.pending().is_empty(), "{path}: {:?}", c.pending());
     // (a palette is not a tile document)
     for path in Library::paths()
         .into_iter()

@@ -663,15 +663,18 @@ fn audit_stl(path: &str, width: Option<f64>, height: Option<f64>, json: bool) ->
             "{}",
             json!({"ok": failures.is_empty(), "path": path, "triangles": a.triangles,
                 "volume_mm3": a.volume_mm3, "watertight": a.watertight, "bodies": a.bodies,
-                "overhang_mm2": a.overhang_mm2, "holes": a.holes,
+                "overhang_mm2": a.overhang_mm2, "band_mm2": a.band_mm2,
+                "band_budget_mm2": a.band_budget_mm2, "holes": a.holes,
                 "dropped": a.dropped.len(), "failures": failures})
         );
     } else {
         tell!(
-            "{path}: {} triangles, watertight {}, overhang {:.2} mm², {} holes, {} loose bodies dropped",
+            "{path}: {} triangles, watertight {}, overhang (over 65°) {:.2} mm², band (55–65°) {:.2}/{:.2} mm², {} holes, {} loose bodies dropped",
             a.triangles,
             a.watertight,
             a.overhang_mm2,
+            a.band_mm2,
+            a.band_budget_mm2,
             a.holes,
             a.dropped.len()
         );

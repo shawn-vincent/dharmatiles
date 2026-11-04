@@ -551,7 +551,41 @@ static STONE_SIZE: &[Word] = &[
     ),
 ];
 
+static CLIFF_FORM: &[Word] = &[
+    w(
+        "run",
+        "a band against one edge (the default for one edge)",
+        &[],
+    ),
+    w(
+        "corner",
+        "a band round two edges (the default for two)",
+        &[],
+    ),
+    w("canyon", "bands against the west and east edges", &[]),
+    w(
+        "escarpment",
+        "a band whose height ramps along the edge (10 to 40 mm)",
+        &[],
+    ),
+    w("plateau", "a free-standing flat-topped mass", &[]),
+    w("massif", "a free-standing mass with a tall core", &[]),
+    w("mound", "a free-standing stepped mound", &[]),
+    w("spire", "a free-standing tall tapering stack", &[]),
+    w(
+        "needles",
+        "two or three tall stacks on a shared footing",
+        &[],
+    ),
+];
+
 static CLIFF: &[Control] = &[
+    c(
+        "form",
+        Axis::Word,
+        "the shape of the mass: a band on an edge, or free-standing",
+    )
+    .words(CLIFF_FORM),
     c("height", Axis::Mm, "height above the foot").default("35"),
     c("depth", Axis::Mm, "how far the rock reaches into the tile"),
     c(
@@ -594,6 +628,36 @@ static CLIFF: &[Control] = &[
         ],
         "broken patches with more cracks and scree",
     ),
+    c(
+        "bank-height",
+        Axis::Mm,
+        "dirt heaped against the face: how high (a range)",
+    )
+    .default("1.5..3.5"),
+    c(
+        "bank-reach",
+        Axis::Mm,
+        "dirt heaped against the face: how far out (a range)",
+    )
+    .default("3..6.5"),
+    c(
+        "scree",
+        Axis::PerSquare,
+        "fallen stones along each square of the foot",
+    )
+    .default("55"),
+    c(
+        "boulders",
+        Axis::PerSquare,
+        "big fallen blocks along each square of the foot",
+    )
+    .default("2.5"),
+    c(
+        "grit",
+        Axis::PerSquare,
+        "small stones half-buried in the bank, per square of the foot",
+    )
+    .default("45"),
     c("top", Axis::Word, "earth lodged on the flat top")
         .words(&[
             w("bare", "bare rock", &[]),
@@ -795,10 +859,10 @@ pub static LOOKS: &[Look] = &[
     },
     Look {
         name: "cliff",
-        about: "a cliff of stacked rock (clifflab rockpile); one edge is a run, two a corner",
+        about: "a cliff of stacked rock (clifflab rockpile); one edge is a run, two a corner; `form=` names the free-standing masses",
         role: Role::Run,
         place: RUN_PLACE,
-        needs: &[PlaceWord::Along],
+        needs: &[],
         holds_scatter: false,
         controls: CLIFF,
     },
@@ -844,10 +908,6 @@ pub static RENAMED: &[(&str, &str)] = &[
         "a cliff's mix is `rock mixed`, or `rock columns=… blocks=…`",
     ),
     ("shatter", "write `shattered patches=… width=…`"),
-    (
-        "form",
-        "the form follows from `along=`: one edge is a run, two a corner",
-    ),
     (
         "blade",
         "grass controls go on the `grass` line: `grass length=… curl=…`",

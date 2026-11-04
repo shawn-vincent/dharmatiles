@@ -40,7 +40,28 @@ pub const CONTROLS: &[&str] = &[
     "bump-size",
     "clods",
     "stones",
+    "bank/against",
+    "bank/height",
+    "bank/reach",
 ];
+
+// the bank heaped against a cliff (clifflab's apron, rockpile.py :257)
+const APRON_H_MM: (f64, f64) = (1.5, 3.5);
+const APRON_R_MM: (f64, f64) = (3.0, 6.5);
+/// (height, reach) at the tile ends, the same for every seed (S4).
+const APRON_END: (f64, f64) = (2.5, 4.5);
+const APRON_EXP: f64 = 1.6;
+
+/// `bank against=… height=… reach=…`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Bank {
+    /// The kind it leans on.
+    pub against: String,
+    /// Height at the face, mm at the reference square.
+    pub height: (f64, f64),
+    /// How far out it runs, mm at the reference square.
+    pub reach: (f64, f64),
+}
 
 /// dirtlab's height-field resolution, true mm.
 const CELL_MM: f64 = 0.15;
@@ -124,6 +145,8 @@ pub struct Dirt {
     pub clod_density: f64,
     /// Bedded stones per 2×2 tile, drawn from this range (`stones`).
     pub stones: (i64, i64),
+    /// Earth heaped against something (`bank`).
+    pub bank: Option<Bank>,
 }
 
 impl Dirt {
@@ -170,7 +193,28 @@ impl Dirt {
             }
         }
         stones.1 = stones.1.max(stones.0);
+        let range = |name: &str, d: (f64, f64)| {
+            controls
+                .iter()
+                .find(|c| c.name == name)
+                .map_or(d, |c| match c.value {
+                    Value::Number(v) => (v, v),
+                    Value::Range(a, b) => (a, b),
+                    Value::Word(_) => d,
+                })
+        };
+        let bank = controls
+            .iter()
+            .find_map(|c| match (c.name.as_str(), &c.value) {
+                ("bank/against", Value::Word(w)) => Some(Bank {
+                    against: w.clone(),
+                    height: range("bank/height", APRON_H_MM),
+                    reach: range("bank/reach", APRON_R_MM),
+                }),
+                _ => None,
+            });
         Ok(Self {
+            bank,
             shape: Shape::new("dirt", controls)?,
             clod_density,
             stones,
@@ -218,9 +262,26 @@ pub fn surface(
     seed: Seed,
     owner: &str,
     area: &dt_kit::Mask,
+    foots: &[crate::Foot],
 ) -> Result<(Field, Vec<bool>, Counts), LookError> {
     let frame = *scene.frame();
-    let (base, rim) = dirt.shape.surface(scene, seed.key("ground"));
+    let (mut base, rim) = dirt.shape.surface(scene, seed.key("ground"));
+    if let Some(b) = &dirt.bank {
+        let s = frame.scale();
+        for f in foots.iter().filter(|f| f.kind == b.against) {
+            for k in 0..base.z.len() {
+                let (d, u, e) = (f.dist[k], f.zone[k], f.end[k]);
+                let rr = APRON_END.1 * s
+                    + e * (b.reach.0 * s + (b.reach.1 - b.reach.0) * s * u - APRON_END.1 * s);
+                if d >= rr {
+                    continue;
+                }
+                let hh = APRON_END.0 * s
+                    + e * (b.height.0 * s + (b.height.1 - b.height.0) * s * u - APRON_END.0 * s);
+                base.z[k] += hh * libm::pow((1.0 - d / rr).clamp(0.0, 1.0), APRON_EXP);
+            }
+        }
+    }
     let w_tex = rim.map(|d| smooth01(d / RIM_TEX_MM));
     let mid = noise(
         &frame,
@@ -669,7 +730,7 @@ impl Look for Dirt {
     }
 
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
-        let (z, stone, counts) = surface(self, scene, ctx.seed, ctx.path, ctx.area)?;
+        let (z, stone, counts) = surface(self, scene, ctx.seed, ctx.path, ctx.area, ctx.foots)?;
         scene.paint_field(ctx.area, &z);
         scene.mark_stone(ctx.area, &stone);
         #[allow(clippy::cast_precision_loss)]
