@@ -7,7 +7,7 @@ expression: hashes(&b)
 a6ef63d579b69e10  rock:tile/wall-fieldstone/dirt/0
 2f08f401e455f741  surface
 d24bd7b722fea411  ground:tile/wall-fieldstone/ground
-048bf1234d1d09b2  wall:tile/wall-fieldstone/wall/0
+e402c94de8a88706  wall:tile/wall-fieldstone/wall/0
 9ad7b1454c0b8fad  connector:tile/wall-fieldstone/connector
-b655859d8703c5a1  union
-6ef4dd02f93959d5  export
+bbd8ffa716cd393f  union
+9704ece9aa89b13d  export
