@@ -466,10 +466,9 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
     }
     let (mesh, mats) = scene.union().map_err(|e| fail(e.to_string()))?;
     let footprint = c.frame.size_mm();
-    // one band per tile: the first built look that declares one (trees)
-    let band = c.looks.iter().find_map(|l| l.band());
-    let (export, audit) =
-        dt_kit::audit_banded(&mesh, footprint, &opts.printer, &mats, band.as_ref());
+    // the one band every look gets (55–65°; Shawn, 4 Nov 2026)
+    let band = dt_kit::Band::DEFAULT;
+    let (export, audit) = dt_kit::audit_banded(&mesh, footprint, &opts.printer, &mats, Some(&band));
     let materials = export.source.iter().map(|&t| mats[t as usize]).collect();
     scene.record("export", export.mesh.content_hash());
     let record = BuildRecord {

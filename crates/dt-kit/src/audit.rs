@@ -18,22 +18,31 @@ use crate::graph::{cross, dist, sub};
 use crate::scene::Material;
 use crate::shape::signed_volume;
 
-/// A tolerance band for some materials (a look's audit setting, not the
-/// printer's): their faces past the printer's overhang but within
-/// `max_deg` are reported as band, not overhang, up to `share` of those
-/// materials' downward-facing area. Past `max_deg` they fail as any face
-/// does. Trees (Shawn, 3 Nov 2026): 55–65° in rare small patches, 65° the
-/// hard cap (a 0.2 mm layer steps 0.2·tan 65° = 0.43 mm, under a 0.45 mm
-/// line).
+/// The tolerance band: faces past the printer's overhang (55°, the
+/// conservative target everything aims for by construction) but within
+/// `max_deg` are reported as band, not overhang, up to `share` of the
+/// downward-facing area. Past `max_deg` they are overhang and fail. Shawn,
+/// 3 Nov 2026 for trees, generalised 4 Nov 2026 to every look: 55–65° in
+/// small patches, 65° the hard cap (a 0.2 mm layer steps 0.2·tan 65° =
+/// 0.43 mm, under a 0.45 mm line). The share is the trees' measured one.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Band {
-    /// The materials the band covers.
+    /// The materials the band covers; empty: every material.
     pub materials: &'static [Material],
     /// The hard cap, degrees from vertical.
     pub max_deg: f64,
     /// Band area allowed, as a share of those materials' downward-facing
     /// area.
     pub share: f64,
+}
+
+impl Band {
+    /// The band every look gets: 55–65°, up to 0.1% of the downward area.
+    pub const DEFAULT: Self = Self {
+        materials: &[],
+        max_deg: 65.0,
+        share: 0.001,
+    };
 }
 
 /// The printer profile the gate checks against: the numbers of a
@@ -146,14 +155,19 @@ impl Audit {
         }
         if self.overhang_mm2 > printer.overhang_budget_mm2 {
             f.push(format!(
-                "{:.2} mm² of overhang past {}° (budget {:.2} mm²)",
-                self.overhang_mm2, printer.overhang_deg, printer.overhang_budget_mm2
+                "{:.2} mm² of overhang (over {}°; budget {:.2} mm²)",
+                self.overhang_mm2,
+                Band::DEFAULT.max_deg,
+                printer.overhang_budget_mm2
             ));
         }
         if self.band_mm2 > self.band_budget_mm2 {
             f.push(format!(
-                "{:.2} mm² in the overhang band (budget {:.2} mm²)",
-                self.band_mm2, self.band_budget_mm2
+                "{:.2} mm² in the band ({}–{}°; budget {:.2} mm²)",
+                self.band_mm2,
+                printer.overhang_deg,
+                Band::DEFAULT.max_deg,
+                self.band_budget_mm2
             ));
         }
         if self.holes > 0 {
@@ -191,7 +205,7 @@ pub struct Export {
 /// height in mm (for see-through holes).
 #[must_use]
 pub fn audit(input: &TriMesh, footprint: [f64; 2], printer: &Printer) -> (Export, Audit) {
-    audit_banded(input, footprint, printer, &[], None)
+    audit_banded(input, footprint, printer, &[], Some(&Band::DEFAULT))
 }
 
 /// [`audit`] with a look's tolerance [`Band`]; `materials` holds each
@@ -238,9 +252,10 @@ pub fn audit_banded(
         let tolerant: Vec<bool> = source
             .iter()
             .map(|&t| {
-                materials
-                    .get(t as usize)
-                    .is_some_and(|mat| b.materials.contains(mat))
+                b.materials.is_empty()
+                    || materials
+                        .get(t as usize)
+                        .is_some_and(|mat| b.materials.contains(mat))
             })
             .collect();
         if overhang.iter().zip(&tolerant).any(|(o, t)| *o && *t) {

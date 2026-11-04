@@ -50,6 +50,7 @@ for p in ("src", "dirtlab", "clifflab", "rocklab", "waterlab", "grasslab"):
 GRID_MM = 0.15                     # top-surface sampling (dirtlab's CELL_MM)
 OVERHANG_NORMAL_DEG = 55.0 + 3.0   # the plain normal test, beside the layer audit
 RED = (230, 30, 30)
+ORANGE = (255, 140, 26)             # the 55–65° band
 # Relief spectrum bands (wavelength, mm): grit, pebbles/clods, mounds, hills.
 BANDS_MM = ((0.3, 1.0), (1.0, 3.0), (3.0, 10.0), (10.0, 40.0))
 # Rock sizes (equivalent diameter, mm): dirtlab's small and medium pebbles, stones.
@@ -68,6 +69,19 @@ def overhang_mask(mesh: trimesh.Trimesh) -> np.ndarray:
     owner's limit), as clifflab/iterate.py paints them."""
     import rockpile
     return rockpile.overhang_faces(mesh)
+
+
+def overhang_over65(mesh: trimesh.Trimesh) -> np.ndarray:
+    """Faces past the 65° hard limit (Shawn, 4 Nov 2026): the same layer-reach
+    audit with the cone at 65°.  Between this and ``overhang_mask`` is the
+    band (painted orange)."""
+    import rockpile
+    saved = rockpile.OVERHANG_DEG
+    rockpile.OVERHANG_DEG = 65.0
+    try:
+        return rockpile.overhang_faces(mesh)
+    finally:
+        rockpile.OVERHANG_DEG = saved
 
 
 def top_surface(mesh: trimesh.Trimesh, footprint) -> tuple[np.ndarray, np.ndarray]:
@@ -850,10 +864,13 @@ def cpu_render(meshes, path, elev, azim, res=(900, 720)):
     im.save(path)
 
 
-def paint_overhang(painted: trimesh.Trimesh, ov: np.ndarray) -> trimesh.Trimesh:
+def paint_overhang(painted: trimesh.Trimesh, ov: np.ndarray, hard: np.ndarray | None = None) -> trimesh.Trimesh:
+    """Orange: past 55° (``ov``); red: past 65° (``hard``, else all of ``ov``)."""
     m = painted.copy()
     fc = np.asarray(m.visual.face_colors).copy()
-    fc[ov, :3] = RED
+    fc[ov, :3] = ORANGE if hard is not None else RED
+    if hard is not None:
+        fc[hard, :3] = RED
     m.visual.face_colors = fc
     return m
 
@@ -926,7 +943,7 @@ def run(look: str, seeds: list[int], out: pathlib.Path, beside: pathlib.Path | N
             met.update(tree_metrics(mesh, edge))
         (sd / "metrics.json").write_text(json.dumps(met, indent=2))
         summary[seed] = py_all[seed] = met
-        pm = paint_overhang(painted, ov)
+        pm = paint_overhang(painted, ov, overhang_over65(mesh))
         c0 = fp[0] / 2 - 10
         y = r * (head + cell[1] + cap)
         dr.rectangle([0, y, sheet.width, y + head - 6], fill=(225, 228, 235))
