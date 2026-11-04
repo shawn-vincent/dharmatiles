@@ -38,11 +38,12 @@ void main() {
 // The render.rs shading: 0.3 + key + 0.35 fill, *0.95, gamma 1/1.25,
 // back faces turned to face the camera.
 const FRAG = `
-uniform vec3 uCam; uniform vec3 uL1; uniform vec3 uL2;
+uniform vec3 uCam; uniform vec3 uDir; uniform float uOrtho; uniform vec3 uL1; uniform vec3 uL2;
 varying vec3 vN; varying vec3 vC; varying vec3 vP;
 void main() {
   vec3 n = normalize(vN);
-  if (dot(n, vP - uCam) > 0.0) n = -n;
+  vec3 ray = uOrtho > 0.5 ? uDir : vP - uCam;
+  if (dot(n, ray) > 0.0) n = -n;
   float shade = 0.3 + max(dot(n, uL1), 0.0) + 0.35 * max(dot(n, uL2), 0.0);
   vec3 c = pow(clamp(vC * shade * 0.95, 0.0, 1.0), vec3(1.0 / 1.25));
   gl_FragColor = vec4(c, 1.0);
@@ -54,13 +55,15 @@ export class Viewer {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
     this.renderer.setClearColor(new THREE.Color(0.85, 0.88, 0.92));
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(FOV, 1, 1, 1000);
-    this.camera.up.set(0, 0, 1); // tiles are z-up
-    this.controls = new OrbitControls(this.camera, canvas);
-    this.controls.enableDamping = false;
-    this.controls.addEventListener('change', () => this.draw());
+    this.persp = new THREE.PerspectiveCamera(FOV, 1, 1, 1000);
+    this.ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1000);
+    for (const c of [this.persp, this.ortho]) c.up.set(0, 0, 1); // tiles are z-up
+    this.orthoHalf = 1; // half the frustum's height at zoom 1, mm
+    this.isOrtho = false;
+    this.camera = this.persp;
+    this.makeControls(new THREE.Vector3());
     this.uniforms = {
-      uCam: { value: new THREE.Vector3() }, uL1: { value: new THREE.Vector3() }, uL2: { value: new THREE.Vector3() },
+      uCam: { value: new THREE.Vector3() }, uDir: { value: new THREE.Vector3(0, 1, 0) }, uOrtho: { value: 0 }, uL1: { value: new THREE.Vector3() }, uL2: { value: new THREE.Vector3() },
     };
     this.material = new THREE.ShaderMaterial({
       uniforms: this.uniforms, vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide,
@@ -80,9 +83,68 @@ export class Viewer {
     if (!w || !h) return;
     this.renderer.setPixelRatio(window.devicePixelRatio || 1);
     this.renderer.setSize(w, h, false);
-    this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
+    this.persp.aspect = w / h;
+    this.persp.updateProjectionMatrix();
+    this.fitOrtho();
     this.draw();
+  }
+
+  /** The orthographic frustum: its height from `orthoHalf`, its width from the aspect. */
+  fitOrtho() {
+    const a = this.persp.aspect;
+    const o = this.ortho;
+    o.top = this.orthoHalf; o.bottom = -this.orthoHalf;
+    o.left = -this.orthoHalf * a; o.right = this.orthoHalf * a;
+    o.updateProjectionMatrix();
+  }
+
+  /** Orbit controls on the active camera, aimed at `target`. */
+  makeControls(target) {
+    if (this.controls) this.controls.dispose();
+    this.controls = new OrbitControls(this.camera, this.canvas);
+    this.controls.enableDamping = false;
+    this.controls.target.copy(target);
+    this.controls.addEventListener('change', () => this.draw());
+    this.controls.update();
+  }
+
+  /** The apparent size: the perspective distance that gives the same view. */
+  eyeDistance() {
+    if (!this.isOrtho) return this.persp.position.distanceTo(this.controls.target);
+    return this.orthoHalf / this.ortho.zoom / Math.tan(rad(FOV / 2));
+  }
+
+  /**
+   * Switch camera, keeping the view: same target, direction and apparent
+   * size.  The orthographic frustum comes from the perspective distance and
+   * field of view; zooming it later changes `.zoom`, not the distance.
+   */
+  setOrtho(on) {
+    if (on === this.isOrtho) return;
+    const target = this.controls.target.clone();
+    const dir = this.camera.position.clone().sub(target).normalize();
+    const dist = this.eyeDistance();
+    this.isOrtho = on;
+    this.camera = on ? this.ortho : this.persp;
+    this.uniforms.uOrtho.value = on ? 1 : 0;
+    this.placeEquivalent(target, dir, dist);
+    this.makeControls(target);
+    this.draw();
+  }
+
+  /** Put the active camera on the view at perspective `dist` from `target` along `dir`. */
+  placeEquivalent(target, dir, dist) {
+    const c = this.camera;
+    c.position.copy(target).addScaledVector(dir, dist);
+    c.near = Math.max(0.1, dist / 200);
+    c.far = dist * 20;
+    if (this.isOrtho) {
+      this.orthoHalf = dist * Math.tan(rad(FOV / 2));
+      c.zoom = 1;
+      this.fitOrtho();
+    }
+    c.lookAt(target);
+    c.updateProjectionMatrix();
   }
 
   /** Swap in a parsed payload in place: the camera stays where it is. */
@@ -158,21 +220,25 @@ export class Viewer {
       centre.z = (0.5 + b.hi[2]) / 2;
     }
     const dist = (diag / (2 * Math.tan(rad(FOV / 2)))) * 1.1;
-    this.camera.near = Math.max(0.1, dist / 200);
-    this.camera.far = dist * 20;
-    this.camera.updateProjectionMatrix();
-    this.camera.position.copy(centre).addScaledVector(dirv(elev, azim), dist);
+    this.placeEquivalent(centre, dirv(elev, azim), dist);
     this.controls.target.copy(centre);
     this.controls.update();
     this.draw();
   }
 
+  /** The view as a perspective camera would have it (works in either mode). */
   getCamera() {
-    return { p: this.camera.position.toArray(), t: this.controls.target.toArray() };
+    const t = this.controls.target;
+    const dir = this.camera.position.clone().sub(t).normalize();
+    const p = t.clone().addScaledVector(dir, this.eyeDistance());
+    return { p: p.toArray(), t: t.toArray() };
   }
   setCamera(c) {
-    this.camera.position.fromArray(c.p);
-    this.controls.target.fromArray(c.t);
+    const t = new THREE.Vector3().fromArray(c.t);
+    const p = new THREE.Vector3().fromArray(c.p);
+    const dist = p.distanceTo(t);
+    this.placeEquivalent(t, p.sub(t).normalize(), dist);
+    this.controls.target.copy(t);
     this.controls.update();
     this.draw();
   }
@@ -188,6 +254,7 @@ export class Viewer {
     const azim = (Math.atan2(off.y, off.x) * 180) / Math.PI;
     const elev = (Math.asin(off.z / (off.length() || 1)) * 180) / Math.PI;
     this.uniforms.uCam.value.copy(p);
+    this.uniforms.uDir.value.copy(t).sub(p).normalize();
     this.uniforms.uL1.value.copy(dirv(18, azim - 20));
     this.uniforms.uL2.value.copy(dirv(elev - 20, azim + 110));
     this.renderer.render(this.scene, this.camera);

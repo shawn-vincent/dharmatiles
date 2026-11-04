@@ -35,6 +35,14 @@ const toggle = (id, fn) => { $(id).onchange = (e) => fn(e.target.checked); };
 toggle('t-overhang', (on) => viewer.setOverhang(on));
 toggle('t-wire', (on) => viewer.setWireframe(on));
 toggle('t-grid', (on) => viewer.setGrid(on));
+// perspective or orthographic: remembered across reloads (a per-viewer convenience)
+function setProjection(ortho) {
+  viewer.setOrtho(ortho);
+  $('b-proj').firstChild.textContent = ortho ? 'Orthographic ' : 'Perspective ';
+  try { localStorage.setItem('dt-preview-ortho', ortho ? '1' : '0'); } catch { /* private mode */ }
+}
+$('b-proj').onclick = () => setProjection(!viewer.isOrtho);
+try { if (localStorage.getItem('dt-preview-ortho') === '1') setProjection(true); } catch { /* ignore */ }
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' && e.target.type === 'search') return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -44,6 +52,7 @@ addEventListener('keydown', (e) => {
   if (e.key === 'o') flip('t-overhang');
   if (e.key === 'w') flip('t-wire');
   if (e.key === 'g') flip('t-grid');
+  if (e.key === 'p') setProjection(!viewer.isOrtho);
 });
 
 // ---- tile list -------------------------------------------------------
