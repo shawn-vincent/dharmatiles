@@ -24,7 +24,7 @@
   <div class="facts">
     <div><div class="k">Sizes</div><div class="v">1×1 and up; a run is 35 mm tall and 8–20 mm deep</div></div>
     <div><div class="k">Forms</div><div class="v">run, corner, canyon, escarpment, plateau, massif, mound, spire, needles</div></div>
-    <div><div class="k">Printing</div><div class="v">no supports; overhangs within 55° of vertical</div></div>
+    <div><div class="k">Printing</div><div class="v">no supports; overhangs aimed within 55° of vertical, 65° the hard limit</div></div>
     <div><div class="k">Bases</div><div class="v">DungeonBlocks today; OpenLOCK with the Rust port</div></div>
     <div><div class="k">Available</div><div class="v">approved look (clifflab); in the Rust engine from phase P7</div></div>
   </div>
@@ -142,7 +142,7 @@
 
 <h2 id="printing">Printing and painting</h2>
 <ul>
-  <li><strong>No supports.</strong> Print base down at 0.2 mm layers with a 0.4 mm nozzle. Every overhang is within 55° of vertical, and no layer reaches more than 0.6 mm past the one below.</li>
+  <li><strong>No supports.</strong> Print base down at 0.2 mm layers with a 0.4 mm nozzle. Every overhang is aimed within 55° of vertical (65° at most, in small orange patches), and no layer reaches more than 0.6 mm past the one below.</li>
   <li><strong>Cracks print as dark slots.</strong> They are 0.4–0.5 mm wide and cut straight in, so their tops bridge cleanly.</li>
   <li><strong>No fragile bits.</strong> Nothing is thinner than one 0.45 mm line; there are no floating islands; every stone rests on the pile.</li>
   <li><strong>Painting.</strong> Prime dark and drybrush: faces carry a fine grain (0.25 mm deep) that catches the brush, while joints and cracks stay dark. Joints read darker than cracks.</li>
@@ -204,6 +204,7 @@
 <tr><td class="d">31 Oct</td><td>Never cut a stone at the tile edge; shrink it back to touch.</td><td class="q">“Clipping is bad. Whenever we do clipping, could we scale the thing back away from the clipped barrier instead?”</td></tr>
 <tr><td class="d">31 Oct</td><td>Build resting stones with sloped bottoms that sink into the stone below, instead of adding keels.</td><td class="q">“Could we, instead, construct the rocks in the first place with 45 degree bottoms? That embed into the rock beneath them?”</td></tr>
 <tr><td class="d">31 Oct</td><td>Seams between stacked stones must read as grooves.</td><td class="q">“still lots of stones that merge without meaningful grooves.”</td></tr>
+<tr><td class="d">4 Nov</td><td>The 55° ruling is now a target with a 65° hard limit, for every look: faces between 55° and 65° are the band (orange, budgeted), over 65° fails (red).</td><td class="q">“the 65 degree exception that we had for trees, let's generalize it. Anything can be up to 65 degrees. It's useful to know. The two colors is useful, separating them is useful, because one is conservative, one is more extreme. But cliffs should be allowed to have that 65 degree overhang as well.”</td></tr>
 <tr><td class="d">31 Oct</td><td>The overhang limit is 55° from vertical, not 45°.</td><td class="q">“45 is too conservative”</td></tr>
 <tr><td class="d">1 Nov</td><td>Cracks must be thin, like the reference.</td><td class="q">“Still gaping… We need the cracks to be thin, like in the reference photos.”</td></tr>
 <tr><td class="d">1 Nov</td><td>Every crack runs its full width and depth to an edge, joint or crack.</td><td class="q">“cracks should go to the end, not stop in the middle of a stone.”</td></tr>

@@ -373,6 +373,7 @@ pub struct Scene {
     materials: Materials,
     stages: Vec<Stage>,
     support: Option<Grid>,
+    progress: crate::Progress,
 }
 
 impl Scene {
@@ -403,6 +404,7 @@ impl Scene {
             materials: Materials::default(),
             stages: Vec::new(),
             support: None,
+            progress: crate::Progress::none(),
         }
     }
 
@@ -698,6 +700,20 @@ impl Scene {
     #[must_use]
     pub const fn wet(&self) -> &Mask {
         &self.wet
+    }
+
+    /// Attach a progress channel (the evaluator does, for a front end that
+    /// wants one).  Never read by geometry: a build is the same without it.
+    pub fn set_progress(&mut self, progress: crate::Progress) {
+        self.progress = progress;
+    }
+
+    /// The progress channel, to report through (a look with a natural loop
+    /// takes `scene.progress().counter(..)` and ticks it).  Reports nothing
+    /// unless a front end attached one.
+    #[must_use]
+    pub fn progress(&self) -> crate::Progress {
+        self.progress.clone()
     }
 
     /// Record a look's number for the build record (counts and the like).

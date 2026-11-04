@@ -50,6 +50,7 @@ pub mod form;
 pub mod graph;
 mod outline;
 mod piece;
+pub mod progress;
 pub mod rays;
 mod render;
 mod scene;
@@ -69,6 +70,7 @@ pub use field::{
 };
 pub use outline::Outline;
 pub use piece::{Piece, Support, hung, prism_mesh, tri_normal, welded};
+pub use progress::{Counter, Event, Progress, Reporter};
 pub use render::{Image, ORANGE, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};
 pub use scene::{
     BANK_MM, Frame, LIFT_TOL_MM, Material, Part, REFERENCE_SQUARE_MM, Scene, Slot, Slots, Solid,

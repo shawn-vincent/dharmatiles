@@ -20,15 +20,38 @@ const POLL: Duration = Duration::from_millis(300);
 
 /// A file's modification time, `None` when it cannot be read (missing,
 /// or mid-save).
-fn mtime(path: &str) -> Option<SystemTime> {
+pub(crate) fn mtime(path: &str) -> Option<SystemTime> {
     std::fs::metadata(path).and_then(|m| m.modified()).ok()
 }
 
 /// The disk, recording every file read and its modification time just
 /// before reading, so an edit during a build is caught next poll.
 #[derive(Default)]
-struct Recording {
+pub(crate) struct Recording {
     read: Mutex<BTreeMap<String, Option<SystemTime>>>,
+}
+
+impl Recording {
+    /// Recording that already watches `path` (the document itself), even
+    /// if a build never gets to read it.
+    pub(crate) fn watching(path: &str) -> Self {
+        let rec = Self::default();
+        if !path.starts_with(LIB) {
+            rec.read
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .insert(path.to_owned(), mtime(path));
+        }
+        rec
+    }
+
+    /// The files read, with their times before reading.
+    pub(crate) fn files(&self) -> BTreeMap<String, Option<SystemTime>> {
+        self.read
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
 }
 
 impl Source for Recording {
@@ -77,6 +100,8 @@ fn build<'a>(path: &'a str, opts: &Options, out: &Path, png: bool) -> (u8, Tile<
         opts,
         out,
         crate::Extras {
+            progress: false,
+            tile_no: None,
             png,
             threemf: false,
             palette: &dt_kit::Palette::default(),

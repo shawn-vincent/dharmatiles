@@ -350,10 +350,17 @@ impl Look for Grass {
         // 5 blades, in parallel, gathered in order
         let seat_at = |x: f64, y: f64| seat.sample(x, y);
         let raw_at = |x: f64, y: f64| raw.sample(x, y);
+        let progress = scene.progress();
+        progress.fraction("fronds", 0.1);
+        let ticks = progress.counter("blades", frs.len(), 0.1, 0.85);
         let meshes: Vec<Option<TriMesh>> = frs
             .par_iter()
             .enumerate()
-            .map(|(i, f)| blade::mesh(f, &seat_at, &raw_at, hair(i)))
+            .map(|(i, f)| {
+                let m = blade::mesh(f, &seat_at, &raw_at, hair(i));
+                ticks.tick();
+                m
+            })
             .collect();
 
         // 6 solids of mutually clear blades, a slot each
@@ -368,6 +375,8 @@ impl Look for Grass {
         let owner = ctx.path.to_owned();
         let mut made = 0usize;
         for c in 0..n_classes {
+            #[allow(clippy::cast_precision_loss)]
+            progress.fraction("solids", 0.85 + 0.15 * c as f64 / n_classes as f64);
             let mut merged = TriMesh::default();
             for (m, _) in meshes
                 .iter()

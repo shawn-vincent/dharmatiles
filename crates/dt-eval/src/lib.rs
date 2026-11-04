@@ -13,6 +13,7 @@
 pub mod diag;
 pub mod doc;
 pub mod plan;
+pub mod progress;
 pub mod source;
 
 use std::path::{Path, PathBuf};
@@ -22,6 +23,7 @@ use dt_kit::{Audit, BuildRecord, Export, Frame, Mask, Material, Printer, Scene, 
 use dt_looks::{Control, Ctx, Look};
 
 pub use diag::Diag;
+pub use dt_kit::Progress;
 pub use source::{Files, LIB, Library, Memory, Source};
 
 use crate::doc::Tile;
@@ -118,6 +120,9 @@ pub struct Built {
     /// The nodes a stamped solid (floor, wall, tree) covers, for painted
     /// previews: the earth's side under them is bedding.
     pub covered: Option<dt_kit::Mask>,
+    /// How long each stage took, seconds, in build order (`3:grass`,
+    /// `union`, `audit`): the weights the next build's progress bar uses.
+    pub stage_secs: Vec<(String, f64)>,
 }
 
 impl Built {
@@ -384,6 +389,22 @@ fn fnv(h: u64, v: u64) -> u64 {
 /// Every problem found; a failed gate is not an error (see
 /// [`Audit::failures`]).
 pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, Vec<Diag>> {
+    build_with(sources, path, opts, &Progress::none())
+}
+
+/// [`build`], reporting each stage (and a look's sub-progress) to
+/// `progress`.  The report never touches geometry or seeds: the result is
+/// the same with any reporter, or none.
+///
+/// # Errors
+/// As [`build`].
+#[allow(clippy::too_many_lines)]
+pub fn build_with(
+    sources: &dyn Source,
+    path: &str,
+    opts: &Options,
+    progress: &Progress,
+) -> Result<Built, Vec<Diag>> {
     let text = sources
         .read(path)
         .map_err(|e| vec![Diag::plain("dt::source", e)])?;
@@ -400,6 +421,9 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
     let fail = |e: String| vec![Diag::plain("dt::build", e)];
     let root = Seed::new(c.seed);
     let mut scene = Scene::new(c.frame, root);
+    scene.set_progress(progress.clone());
+    let mut stage_secs: Vec<(String, f64)> = Vec::new();
+    let keys = progress::stage_keys(tile, &c.steps);
     let edge_mm = tile
         .edges
         .iter()
@@ -431,7 +455,9 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
     let writes: Vec<dt_looks::Write> = c.looks.iter().map(|l| l.plan().writes).collect();
     let fills = writes.contains(&dt_looks::Write::Fill);
     let mut painted = false;
-    for step in &c.steps {
+    for (n, step) in c.steps.iter().enumerate() {
+        let t_stage = std::time::Instant::now();
+        progress.begin(&keys[n].0, &keys[n].1);
         let surface = matches!(*step, Step::Entry(i) if writes[i] == dt_looks::Write::Surface);
         if fills && !painted && !surface {
             painted = true;
@@ -463,13 +489,22 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
                 })?;
             }
         }
+        progress.end(&keys[n].0);
+        stage_secs.push((keys[n].0.clone(), t_stage.elapsed().as_secs_f64()));
     }
+    let t_stage = std::time::Instant::now();
+    progress.begin(progress::UNION, "joining the parts");
     let (mesh, mats) = scene.union().map_err(|e| fail(e.to_string()))?;
+    progress.end(progress::UNION);
+    stage_secs.push((progress::UNION.to_owned(), t_stage.elapsed().as_secs_f64()));
+    let t_stage = std::time::Instant::now();
+    progress.begin(progress::AUDIT, "checking printability");
     let footprint = c.frame.size_mm();
-    // one band per tile: the first built look that declares one (trees)
-    let band = c.looks.iter().find_map(|l| l.band());
-    let (export, audit) =
-        dt_kit::audit_banded(&mesh, footprint, &opts.printer, &mats, band.as_ref());
+    // the one band every look gets (55–65°; Shawn, 4 Nov 2026)
+    let band = dt_kit::Band::DEFAULT;
+    let (export, audit) = dt_kit::audit_banded(&mesh, footprint, &opts.printer, &mats, Some(&band));
+    progress.end(progress::AUDIT);
+    stage_secs.push((progress::AUDIT.to_owned(), t_stage.elapsed().as_secs_f64()));
     let materials = export.source.iter().map(|&t| mats[t as usize]).collect();
     scene.record("export", export.mesh.content_hash());
     let record = BuildRecord {
@@ -495,6 +530,7 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
             ny: g.ny,
             bits: g.z.iter().map(|z| z.is_finite()).collect(),
         }),
+        stage_secs,
     })
 }
 

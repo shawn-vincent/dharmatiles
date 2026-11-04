@@ -560,6 +560,7 @@ fn add_items(
         .map_err(LookError::build)?;
     let g = Grain::default();
     let mut k = 0u32;
+    let ticks = scene.progress().counter("stones", n, 0.0, 1.0);
     for (item, at, yaw) in items {
         tally.placements += 1;
         tally.clusters += usize::from(item.stones.len() > 1);
@@ -590,6 +591,7 @@ fn add_items(
             tally.chip_loss = tally.chip_loss.max(stone.chip_loss);
             tally.widths.push(st.width);
             k += 1;
+            ticks.tick();
         }
     }
     Ok(())

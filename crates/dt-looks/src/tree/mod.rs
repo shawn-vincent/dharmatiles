@@ -58,19 +58,6 @@ pub const CONTROLS: &[&str] = &[
 ];
 
 // The Python Tree's fixed numbers (trees/layer.py), mm at the 35 mm square.
-/// The tree's overhang band (Shawn, 3 Nov 2026: "could we say 65 in rare
-/// circumstances?"): wood and leaf faces between the printer's 55° and
-/// 65° are tolerated in small patches, a share of the tree's
-/// downward-facing area; past 65° they fail. Everything still aims for
-/// 55° by construction. Share: with the leaves laid flat under the crown
-/// the band measures 0–0.36 mm² per tree (≤ 0.015% of the downward area,
-/// tree-1x1 and tree-2x2, db and ol, seeds 1–6); 0.1% leaves a sixfold
-/// margin.
-pub const TREE_BAND: dt_kit::Band = dt_kit::Band {
-    materials: &[Material::Wood, Material::Leaf],
-    max_deg: 65.0,
-    share: 0.001,
-};
 
 const SEGMENT_MM: f64 = 1.0;
 const TARGET_FDM_DEG: f64 = 35.0;
@@ -123,6 +110,10 @@ struct Params {
     leaf_length: Value,
     leaf_width: Value,
 }
+
+/// Where in the tree's stage the leaves' build lies (progress fractions).
+const LEAVES_FROM: f64 = 0.5;
+const LEAVES_TO: f64 = 0.61;
 
 impl Default for Params {
     fn default() -> Self {
@@ -474,7 +465,9 @@ impl Tree {
             .map(|(k, m)| form::solid(slots.get(u32::try_from(k).unwrap_or(0)), m))
             .collect::<Result<_, _>>()
             .map_err(LookError::build)?;
+        scene.progress().fraction("branches", 0.01);
         let wood = union(&tube_solids).map_err(LookError::build)?;
+        scene.progress().fraction("wood", 0.03);
         let (wood, slivers) = crumbs(scene, wood, Material::Wood)?;
         grown.slivers += slivers;
         // the landings dip to the strict floor inside their clumps; where a
@@ -518,6 +511,7 @@ impl Tree {
                 .collect::<Result<_, _>>()
                 .map_err(LookError::build)?;
             grown.clumps = solids.len();
+            scene.progress().fraction("clumps", 0.26);
             let blobs = union(&solids).map_err(LookError::build)?;
             let (blobs, slivers) = crumbs(scene, blobs, Material::Leaf)?;
             grown.slivers += slivers;
@@ -525,6 +519,7 @@ impl Tree {
             let (crown_solid, stood) =
                 dt_kit::stand(scene, &blobs, &wood, Material::Leaf, &stand_rule)
                     .map_err(LookError::build)?;
+            scene.progress().fraction("crown", LEAVES_FROM);
             grown.clump_cut_mm3 = stood.cut_mm3;
             let (crown_solid, slivers) = crumbs(scene, crown_solid, Material::Leaf)?;
             grown.slivers += slivers;
@@ -536,20 +531,30 @@ impl Tree {
                     ..leaves::LeafShape::default()
                 }
                 .scaled(s, LINE_MM);
-                let (placed, lstats) = leaves::place(
+                let (placed, lstats) = leaves::place_progress(
                     &crown_solid.mesh(),
                     &wood.mesh(),
                     &shape,
                     seed.key("leaves"),
+                    &scene.progress(),
+                    (LEAVES_FROM, LEAVES_TO),
                 )?;
                 grown.leaves_failed_error = lstats.failed_error;
                 let n = u32::try_from(placed.len()).map_err(LookError::build)?;
                 if n > 0 {
                     let lslots = scene.slots(n, Material::Leaf).map_err(LookError::build)?;
+                    let solid_ticks =
+                        scene
+                            .progress()
+                            .counter("leaf solids", placed.len(), LEAVES_TO, 0.75);
                     let ls: Vec<Solid> = placed
                         .par_iter()
                         .enumerate()
-                        .map(|(k, m)| form::solid(lslots.get(u32::try_from(k).unwrap_or(0)), m))
+                        .map(|(k, m)| {
+                            let s = form::solid(lslots.get(u32::try_from(k).unwrap_or(0)), m);
+                            solid_ticks.tick();
+                            s
+                        })
                         .collect::<Result<_, _>>()
                         .map_err(LookError::build)?;
                     grown.leaves_placed = placed.len();
@@ -886,10 +891,6 @@ fn ground_at(scene: &Scene, x: f64, y: f64) -> f64 {
 }
 
 impl Look for Tree {
-    fn band(&self) -> Option<dt_kit::Band> {
-        Some(TREE_BAND)
-    }
-
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid("tree"),

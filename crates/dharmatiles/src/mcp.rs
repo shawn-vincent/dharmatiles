@@ -144,7 +144,7 @@ fn tools() -> Value {
          "inputSchema": {"type": "object", "properties": {"path": path, "system": system, "seed": seed, "out": {"type": "string", "description": "Output folder (default out/)"}, "threemf": {"type": "boolean", "description": "Also write a 3MF with materials"}, "palette": {"type": "string", "description": "A palette document (material \"#rrggbb\" lines) to paint the 3MF with"}}, "required": ["path"]}},
         {"name": "render_preview", "description": "Build a tile and return its painted preview (overhang faces red).",
          "inputSchema": {"type": "object", "properties": {"path": path, "system": system, "seed": seed, "view": {"type": "string", "enum": ["painted", "top", "low", "close"], "description": "Which of the four views (default painted)"}}, "required": ["path"]}},
-        {"name": "audit_mesh", "description": "Run the printability gate on a binary STL file: watertight, bodies, overhang past 55 degrees, see-through holes.",
+        {"name": "audit_mesh", "description": "Run the printability gate on a binary STL file: watertight, bodies, overhang over 65 degrees (the 55-65 band is reported apart), see-through holes.",
          "inputSchema": {"type": "object", "properties": {"path": {"type": "string", "description": "An STL file"}, "width_mm": {"type": "number"}, "height_mm": {"type": "number"}}, "required": ["path"]}},
     ])
 }

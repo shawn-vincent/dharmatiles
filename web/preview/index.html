@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dharmatiles preview</title>
+<link rel="stylesheet" href="/style.css">
+<script type="importmap">
+{ "imports": { "three": "/vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<div id="app">
+  <aside id="tiles-pane">
+    <h1>dharmatiles <span id="system"></span></h1>
+    <input id="filter" type="search" placeholder="filter tiles" aria-label="filter tiles">
+    <ul id="tiles"></ul>
+    <p id="conn" class="muted">connecting…</p>
+  </aside>
+
+  <main id="stage">
+    <div id="toolbar">
+      <div class="group" id="views" role="group" aria-label="views"></div>
+      <div class="group">
+        <label class="toggle"><input type="checkbox" id="t-overhang" checked> overhang paint <kbd>o</kbd></label>
+        <label class="toggle"><input type="checkbox" id="t-wire"> wireframe <kbd>w</kbd></label>
+        <label class="toggle"><input type="checkbox" id="t-grid" checked> grid <kbd>g</kbd></label>
+        <button id="b-proj" class="view" type="button" title="Switch between perspective and orthographic (p)">Perspective <kbd>p</kbd></button>
+      </div>
+    </div>
+    <div id="canvas-wrap"><canvas id="canvas"></canvas>
+      <div id="status" hidden><div id="bar"><i id="bar-fill"></i></div><span id="status-text"></span></div>
+      <div id="errors" hidden></div>
+      <div id="empty">Choose a tile.</div>
+    </div>
+  </main>
+
+  <aside id="record-pane">
+    <h2 id="tile-name">–</h2>
+    <p id="tile-plan" class="muted"></p>
+    <dl id="record"></dl>
+    <div id="failures"></div>
+    <h3>Paint</h3>
+    <ul id="legend">
+      <li><i class="sw" style="background:#e61e1e"></i><span id="lg-red">over the limit: fails the gate</span></li>
+      <li><i class="sw" style="background:#ff8c1a"></i><span id="lg-orange">orange: 55–65°, allowed within budget</span></li>
+      <li><i class="sw" style="background:#2a2a2e"></i><span>tile side wall</span></li>
+    </ul>
+    <p class="muted small">Left drag orbits, right drag or shift-drag pans, wheel zooms. Keys 1–9 pick a view.</p>
+  </aside>
+</div>
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>

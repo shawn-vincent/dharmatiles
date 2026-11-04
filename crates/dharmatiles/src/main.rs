@@ -109,6 +109,23 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Open a live, painted 3D view of tiles in the browser (127.0.0.1
+    /// only).  Overhangs (over 65 degrees) are red, the 55-65 degree band orange; a tile
+    /// rebuilds when you save it or a file it uses.  Ctrl-C stops.
+    Preview {
+        /// Tile documents: files, or `lib:tiles/…`.  None: the whole bundled
+        /// library is listed, each tile built when you choose it.
+        paths: Vec<String>,
+        /// Connector system: `db` or `ol`.
+        #[arg(long, default_value = "db")]
+        system: String,
+        /// Port on 127.0.0.1 (default: the first free one from 7878).
+        #[arg(long)]
+        port: Option<u16>,
+        /// Open the browser.
+        #[arg(long)]
+        open: bool,
+    },
     /// Build tiles, then rebuild each whenever it or a file it uses changes.
     /// Ctrl-C stops.
     Watch {
@@ -159,6 +176,8 @@ fn emit(w: &mut dyn Write, args: std::fmt::Arguments) {
 mod looks;
 mod lsp;
 mod mcp;
+mod preview;
+mod progress;
 mod watch;
 
 const OK: u8 = 0;
@@ -207,6 +226,8 @@ fn main() -> ExitCode {
                         &options((*sys).to_owned(), seed),
                         &out,
                         Extras {
+                            progress: !json && std::io::IsTerminal::is_terminal(&std::io::stderr()),
+                            tile_no: None,
                             png,
                             threemf,
                             palette: &palette,
@@ -225,6 +246,12 @@ fn main() -> ExitCode {
             height,
             json,
         } => audit_stl(&path, width, height, json),
+        Command::Preview {
+            paths,
+            system,
+            port,
+            open,
+        } => preview::run(&paths, &options(system, None), port, open),
         Command::Watch {
             paths,
             system,
@@ -327,6 +354,10 @@ fn check(paths: &[String], json: bool) -> u8 {
 /// What else a build writes beside the STL.
 #[derive(Clone, Copy)]
 struct Extras<'a> {
+    /// Show a progress line on stderr (a terminal, no `--json`).
+    progress: bool,
+    /// This tile's place in a batch, shown beside the bar.
+    tile_no: Option<(usize, usize)>,
     png: bool,
     threemf: bool,
     palette: &'a dt_kit::Palette,
@@ -335,7 +366,11 @@ struct Extras<'a> {
 fn build(paths: &[String], opts: &Options, out: &Path, extras: Extras, json: bool) -> u8 {
     let mut code = OK;
     let mut reports = Vec::new();
-    for p in paths {
+    for (n, p) in paths.iter().enumerate() {
+        let extras = Extras {
+            tile_no: (paths.len() > 1).then_some((n + 1, paths.len())),
+            ..extras
+        };
         let (c, r) = build_one(&Files, p, opts, out, extras, json);
         code = worse(code, c);
         reports.push(r);
@@ -366,9 +401,45 @@ fn build_one(
     json: bool,
 ) -> (u8, Value) {
     let t0 = Instant::now();
-    let b = match dt_eval::build(sources, p, opts) {
+    let mut timings = dt_eval::progress::Timings::load(&dt_eval::progress::Timings::file_in(out));
+    let tracker = extras
+        .progress
+        .then(|| {
+            let prefix = extras
+                .tile_no
+                .map_or_else(String::new, |(n, t)| format!("[{n}/{t}] "));
+            let name = p
+                .rsplit(['/', ':'])
+                .next()
+                .unwrap_or(p)
+                .trim_end_matches(".kdl");
+            let write = dt_eval::progress::StageInfo::new(
+                progress::WRITE,
+                "writing files",
+                0.3,
+                p,
+                &opts.system,
+                &timings,
+            );
+            progress::tracker_for(
+                sources,
+                p,
+                opts,
+                &timings,
+                vec![write],
+                progress::tty_sink(prefix, name.to_owned()),
+            )
+        })
+        .flatten();
+    let reporter = tracker
+        .as_ref()
+        .map_or_else(dt_eval::Progress::none, |(_, pr)| pr.clone());
+    let b = match dt_eval::build_with(sources, p, opts, &reporter) {
         Ok(b) => b,
         Err(errs) => {
+            if tracker.is_some() {
+                progress::clear();
+            }
             if !json {
                 report(&errs);
             }
@@ -380,7 +451,15 @@ fn build_one(
     };
     let built_s = t0.elapsed().as_secs_f64();
     let failures = b.audit.failures(&opts.printer);
-    let files = match write(&b, &failures, built_s, out, extras) {
+    reporter.begin(progress::WRITE, "writing files");
+    let t_write = Instant::now();
+    let written = write(&b, &failures, built_s, out, extras);
+    reporter.end(progress::WRITE);
+    if let Some((t, _)) = &tracker {
+        t.finish();
+        progress::clear();
+    }
+    let files = match written {
         Ok(f) => f,
         Err(e) => {
             tell!("error: {p}: {e}");
@@ -391,10 +470,14 @@ fn build_one(
         }
     };
     let total_s = t0.elapsed().as_secs_f64();
+    let mut secs = b.stage_secs.clone();
+    secs.push((progress::WRITE.to_owned(), t_write.elapsed().as_secs_f64()));
+    timings.record(p, &opts.system, &secs);
+    timings.save();
     let a = &b.audit;
     if !json {
         tell!(
-            "built {p} → {}\n  {} triangles · watertight {} · overhang {:.2} mm² · band {:.2}/{:.2} mm² · {} dropped · {} voids filled · {} holes · build {:.2} s, written {:.2} s",
+            "built {p} → {}\n  {} triangles · watertight {} · overhang (over 65°) {:.2} mm² · band (55–65°) {:.2}/{:.2} mm² · {} dropped · {} voids filled · {} holes · build {:.2} s, written {:.2} s",
             files[0].display(),
             a.triangles,
             a.watertight,
@@ -475,7 +558,7 @@ fn write(
     Ok(files)
 }
 
-fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
+pub(crate) fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
     let a = &b.audit;
     json!({
         "path": b.record.document,
@@ -506,12 +589,13 @@ fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
         },
         "stages": b.stages.iter().map(|s| json!({"name": s.name, "hash": format!("{:016x}", s.hash)})).collect::<Vec<_>>(),
         "build_s": built_s,
+        "stage_secs": b.stage_secs.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<serde_json::Map<_, _>>(),
         "edge_mm": b.edge_mm,
         "stats": stats(&b.notes),
     })
 }
 
-fn errors_json(errs: &[Diag]) -> Vec<Value> {
+pub(crate) fn errors_json(errs: &[Diag]) -> Vec<Value> {
     errs.iter()
         .map(|d| {
             let (file, line, column) = d.location().map_or(
@@ -562,30 +646,7 @@ fn audit_stl(path: &str, width: Option<f64>, height: Option<f64>, json: bool) ->
         tell!("error: {path} is not a binary STL");
         return ERROR;
     };
-    let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
-    for p in &mesh.positions {
-        for k in 0..2 {
-            lo[k] = lo[k].min(p[k]);
-            hi[k] = hi[k].max(p[k]);
-        }
-    }
-    // the tile's size: whole squares (DungeonBlocks 35 mm, OpenLOCK 25.4 mm)
-    // nearest the mesh's extent, which the base's flare overshoots a little
-    let tile = |extent: f64| -> f64 {
-        [35.0, 25.4]
-            .iter()
-            .filter_map(|sq| {
-                let n = libm::round(extent / sq).max(1.0);
-                let err = (extent - n * sq).abs();
-                (err < 1.5).then_some((err, n * sq))
-            })
-            .min_by(|a, b| a.0.total_cmp(&b.0))
-            .map_or(extent, |(_, v)| v)
-    };
-    let footprint = [
-        width.unwrap_or_else(|| tile(hi[0] - lo[0])),
-        height.unwrap_or_else(|| tile(hi[1] - lo[1])),
-    ];
+    let footprint = stl_footprint(&mesh, width, height);
     let printer = Options::default().printer;
     let (_, a) = dt_kit::audit(&mesh, footprint, &printer);
     let failures = a.failures(&printer);
@@ -617,9 +678,43 @@ fn audit_stl(path: &str, width: Option<f64>, height: Option<f64>, json: bool) ->
     }
 }
 
+/// The tile's size in mm for an STL: `width`/`height` when given, else the
+/// whole squares (DungeonBlocks 35 mm, OpenLOCK 25.4 mm) nearest the
+/// mesh's extent, which the base's flare overshoots a little.
+pub(crate) fn stl_footprint(
+    mesh: &dt_kit::TriMesh,
+    width: Option<f64>,
+    height: Option<f64>,
+) -> [f64; 2] {
+    let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+    for p in &mesh.positions {
+        for k in 0..2 {
+            lo[k] = lo[k].min(p[k]);
+            hi[k] = hi[k].max(p[k]);
+        }
+    }
+    // the tile's size: whole squares (DungeonBlocks 35 mm, OpenLOCK 25.4 mm)
+    // nearest the mesh's extent, which the base's flare overshoots a little
+    let tile = |extent: f64| -> f64 {
+        [35.0, 25.4]
+            .iter()
+            .filter_map(|sq| {
+                let n = libm::round(extent / sq).max(1.0);
+                let err = (extent - n * sq).abs();
+                (err < 1.5).then_some((err, n * sq))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map_or(extent, |(_, v)| v)
+    };
+    [
+        width.unwrap_or_else(|| tile(hi[0] - lo[0])),
+        height.unwrap_or_else(|| tile(hi[1] - lo[1])),
+    ]
+}
+
 /// A binary STL's triangles, vertices merged by position (as a slicer
 /// reads it).
-fn read_stl(b: &[u8]) -> Option<dt_kit::TriMesh> {
+pub(crate) fn read_stl(b: &[u8]) -> Option<dt_kit::TriMesh> {
     let n = usize::try_from(u32::from_le_bytes(b.get(80..84)?.try_into().ok()?)).ok()?;
     if b.len() < 84 + 50 * n {
         return None;

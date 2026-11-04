@@ -32,6 +32,7 @@
 
 use std::collections::HashMap;
 
+use dt_kit::Progress;
 use dt_kit::rays::{RayHit, RayMesh};
 use dt_kit::{Rng, Seed, TriMesh};
 use rayon::prelude::*;
@@ -356,6 +357,33 @@ pub fn place_with(
     shape: &LeafShape,
     draws: &Draws,
 ) -> Result<(Vec<TriMesh>, LeafStats), LookError> {
+    place_inner(foliage, wood, shape, draws, &Progress::none(), (0.0, 1.0))
+}
+
+/// [`place`], reporting the per-leaf build (the long part) to `progress`
+/// as the part `span` (fractions of the stage) of the current stage.
+///
+/// # Errors
+/// As [`place`].
+pub fn place_progress(
+    foliage: &TriMesh,
+    wood: &TriMesh,
+    shape: &LeafShape,
+    seed: Seed,
+    progress: &Progress,
+    span: (f64, f64),
+) -> Result<(Vec<TriMesh>, LeafStats), LookError> {
+    place_inner(foliage, wood, shape, &Draws::Seed(seed), progress, span)
+}
+
+fn place_inner(
+    foliage: &TriMesh,
+    wood: &TriMesh,
+    shape: &LeafShape,
+    draws: &Draws,
+    progress: &Progress,
+    span: (f64, f64),
+) -> Result<(Vec<TriMesh>, LeafStats), LookError> {
     let ok = |x: f64| x.is_finite() && x > 0.0;
     if !(ok(shape.length_mm) && ok(shape.width_mm) && ok(shape.thickness_mm))
         || !(shape.fold_angle_deg.is_finite()
@@ -467,9 +495,11 @@ pub fn place_with(
         shape,
         tris: &tris,
     };
+    let counter = progress.counter("leaves", roots.len(), span.0, span.1);
     let outcomes: Vec<(f64, Outcome)> = (0..roots.len())
         .into_par_iter()
         .map(|i| {
+            counter.tick();
             let n = root_n[i];
             let lying = reach.lying_nz(roots[i], n, dirs[i]);
             let k = 1.0 - SIZE_JITTER * draws.h01("org-size", i);
