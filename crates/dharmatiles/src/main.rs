@@ -483,11 +483,12 @@ fn build_one(
     let a = &b.audit;
     if !json {
         tell!(
-            "built {p} → {}\n  {} triangles · watertight {} · overhang (over 65°) {:.2} mm² · band (55–65°) {:.2}/{:.2} mm² · {} dropped · {} voids filled · {} holes · build {:.2} s, written {:.2} s",
+            "built {p} → {}\n  {} triangles · watertight {} · overhang (over 65°) {:.2}/{:.2} mm² · band (55–65°) {:.2}/{:.2} mm² · {} dropped · {} voids filled · {} holes · build {:.2} s, written {:.2} s",
             files[0].display(),
             a.triangles,
             a.watertight,
             a.overhang_mm2,
+            a.overhang_budget_mm2,
             a.band_mm2,
             a.band_budget_mm2,
             a.dropped.len(),
@@ -590,6 +591,7 @@ pub(crate) fn tile_json(b: &Built, failures: &[String], built_s: f64) -> Value {
             "pinches_moved": a.pinches_moved,
             "collapsed": a.collapsed,
             "overhang_mm2": a.overhang_mm2,
+            "overhang_budget_mm2": a.overhang_budget_mm2,
             "holes": a.holes,
             "failures": failures,
         },

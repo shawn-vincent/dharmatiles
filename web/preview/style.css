@@ -65,7 +65,7 @@ kbd { font: 11px ui-monospace, monospace; border: 1px solid var(--line); border-
 #empty { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; text-shadow: 0 1px 3px #0006; pointer-events: none; }
 dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 10px 0 0; }
 dt { color: var(--muted); } dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
-dd.bad { color: var(--bad); font-weight: 600; } dd.ok { color: var(--ok); }
+dd.bad { color: var(--bad); font-weight: 600; } dd.warn { color: var(--warn); } dd.ok { color: var(--ok); }
 #failures .f { color: var(--bad); font-size: 12px; margin-top: 6px; }
 #legend { list-style: none; margin: 0; padding: 0; } #legend li { display: flex; gap: 8px; align-items: center; margin: 3px 0; }
 .sw { width: 14px; height: 14px; border-radius: 3px; border: 1px solid #0003; flex: none; }

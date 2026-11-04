@@ -429,7 +429,7 @@ fn rebuild_stl(shared: &Shared, i: usize, opts: &Options, path: &str) {
         "record": {"seed": Value::Null, "system": opts.system},
         "audit": {
             "triangles": a.triangles, "watertight": a.watertight, "overhang_mm2": a.overhang_mm2,
-            "band_mm2": a.band_mm2, "band_budget_mm2": a.band_budget_mm2, "dropped": a.dropped.len(),
+            "overhang_budget_mm2": a.overhang_budget_mm2, "band_mm2": a.band_mm2, "band_budget_mm2": a.band_budget_mm2, "dropped": a.dropped.len(),
             "voids_filled": a.voids.len(), "holes": a.holes, "failures": failures,
         },
         "build_s": t0.elapsed().as_secs_f64(),

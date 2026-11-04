@@ -243,7 +243,8 @@ function renderPanel() {
   const stale = t.status === 'failed' ? ' (last good build)' : '';
   row(dl, 'triangles', a.triangles.toLocaleString() + stale);
   row(dl, 'watertight', a.watertight ? 'yes' : 'NO', a.watertight ? 'ok' : 'bad');
-  row(dl, `overhang (> ${state.overhangDeg}°)`, `${fmt(a.overhang_mm2)} mm²`, a.overhang_mm2 > 0 ? 'bad' : 'ok');
+  row(dl, `overhang (> ${state.overhangDeg}°)`, a.overhang_budget_mm2 == null ? `${fmt(a.overhang_mm2)} mm²` : `${fmt(a.overhang_mm2)} / ${fmt(a.overhang_budget_mm2)} mm²`,
+      a.overhang_mm2 > (a.overhang_budget_mm2 ?? 0) ? 'bad' : a.overhang_mm2 > 0 ? 'warn' : 'ok');
   row(dl, 'band', `${fmt(a.band_mm2)} / ${fmt(a.band_budget_mm2)} mm²`);
   const dropped = Array.isArray(a.dropped) ? a.dropped.length : a.dropped;
   row(dl, 'dropped bodies', dropped, dropped ? 'bad' : '');

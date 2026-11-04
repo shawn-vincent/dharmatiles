@@ -25,6 +25,9 @@ use crate::shape::signed_volume;
 /// 3 Nov 2026 for trees, generalised 4 Nov 2026 to every look: 55–65° in
 /// small patches, 65° the hard cap (a 0.2 mm layer steps 0.2·tan 65° =
 /// 0.43 mm, under a 0.45 mm line). The share is the trees' measured one.
+/// Past the cap, small patches are allowed too (Shawn, 4 Nov 2026: "allow
+/// small patches over 65°, like the band"): up to `over_share` of the same
+/// downward area; more than that fails.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Band {
     /// The materials the band covers; empty: every material.
@@ -34,14 +37,18 @@ pub struct Band {
     /// Band area allowed, as a share of those materials' downward-facing
     /// area.
     pub share: f64,
+    /// Area past `max_deg` allowed, as a share of the same downward area.
+    pub over_share: f64,
 }
 
 impl Band {
-    /// The band every look gets: 55–65°, up to 0.1% of the downward area.
+    /// The band every look gets: 55–65° up to 0.1% of the downward area,
+    /// and over 65° up to another 0.1%.
     pub const DEFAULT: Self = Self {
         materials: &[],
         max_deg: 65.0,
         share: 0.001,
+        over_share: 0.001,
     };
 }
 
@@ -134,6 +141,9 @@ pub struct Audit {
     pub overhang_mm2: f64,
     /// Per written triangle: past the overhang rule (painted red).
     pub overhang: Vec<bool>,
+    /// The overhang area allowed, mm²: the printer's budget, or the band's
+    /// share past its cap, whichever is larger.
+    pub overhang_budget_mm2: f64,
     /// Area of the faces in a look's tolerance band, mm² (past the
     /// printer's overhang, within the band's cap; not in `overhang_mm2`).
     pub band_mm2: f64,
@@ -153,12 +163,12 @@ impl Audit {
         if !self.watertight {
             f.push("not watertight after the float32 reload".to_owned());
         }
-        if self.overhang_mm2 > printer.overhang_budget_mm2 {
+        if self.overhang_mm2 > self.overhang_budget_mm2.max(printer.overhang_budget_mm2) {
             f.push(format!(
                 "{:.2} mm² of overhang (over {}°; budget {:.2} mm²)",
                 self.overhang_mm2,
                 Band::DEFAULT.max_deg,
-                printer.overhang_budget_mm2
+                self.overhang_budget_mm2.max(printer.overhang_budget_mm2)
             ));
         }
         if self.band_mm2 > self.band_budget_mm2 {
@@ -248,6 +258,7 @@ pub fn audit_banded(
     let areas = face_areas(&m);
     let mut in_band = vec![false; overhang.len()];
     let mut band_budget_mm2 = 0.0;
+    let mut overhang_budget_mm2 = printer.overhang_budget_mm2;
     if let Some(b) = band {
         let tolerant: Vec<bool> = source
             .iter()
@@ -285,6 +296,7 @@ pub fn audit_banded(
             .map(|(_, a)| a)
             .sum();
         band_budget_mm2 = b.share * down;
+        overhang_budget_mm2 = overhang_budget_mm2.max(b.over_share * down);
     }
     let band_mm2 = 0.0
         + in_band
@@ -314,6 +326,7 @@ pub fn audit_banded(
         watertight,
         overhang_mm2,
         overhang,
+        overhang_budget_mm2,
         band_mm2,
         band_budget_mm2,
         band: in_band,
@@ -1058,6 +1071,7 @@ mod tests {
             materials: &[Material::Leaf],
             max_deg: 65.0,
             share: 1.0,
+            over_share: 0.0,
         };
         let at = |deg: f64, mat: Material, band: Option<&Band>| {
             let m = leaning(deg);
@@ -1073,10 +1087,22 @@ mod tests {
         // 70°: past the cap fails whatever the material
         let b = at(70.0, Material::Leaf, Some(&band));
         assert!(b.overhang_mm2 > 1.0 && b.band_mm2 == 0.0, "{b:?}");
+        assert!(!b.failures(&fdm()).is_empty());
         // over the budget fails
         let tight = Band { share: 0.0, ..band };
         let c = at(60.0, Material::Leaf, Some(&tight));
         assert!(!c.failures(&fdm()).is_empty());
+        // past the cap within `over_share` passes, red but allowed
+        let loose = Band {
+            over_share: 1.0,
+            ..band
+        };
+        let d = at(70.0, Material::Leaf, Some(&loose));
+        assert!(
+            d.overhang_mm2 > 1.0 && d.overhang_budget_mm2 >= d.overhang_mm2,
+            "{d:?}"
+        );
+        assert!(d.failures(&fdm()).is_empty(), "{:?}", d.failures(&fdm()));
     }
 
     /// A profile in x–z, extruded 2 mm in y; `fan` triangulates it.

@@ -19,7 +19,7 @@
     <div><div class="k">Nozzle</div><div class="v">0.4 mm</div></div>
     <div><div class="k">Layer height</div><div class="v">0.2 mm</div></div>
     <div><div class="k">Supports</div><div class="v">none, base down</div></div>
-    <div><div class="k">Overhangs</div><div class="v">55° target, 65° hard limit</div></div>
+    <div><div class="k">Overhangs</div><div class="v">55° target; small patches past 65°</div></div>
   </div>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
@@ -43,13 +43,13 @@
 <tr><td>Nozzle</td><td>0.4 mm</td></tr>
 <tr><td>Line width</td><td>0.45 mm</td></tr>
 <tr><td>Layer height</td><td>0.2 mm</td></tr>
-<tr><td>Overhang the tiles stay within</td><td>55° from vertical as the target; up to 65° in small patches (every look); past 65° fails</td></tr>
+<tr><td>Overhang the tiles stay within</td><td>55° from vertical as the target; up to 65° in small patches; past 65° also in small patches; more than that fails</td></tr>
 </tbody></table></div>
 <p>Shawn slices in Bambu Studio. Grass can also be printed in resin: the same blade shapes are smoothed so the layer steps melt away.</p>
 
-<h2 id="overhang">No supports: a 55° target, a 65° limit</h2>
+<h2 id="overhang">No supports: a 55° target, small patches past it</h2>
 <p>An <strong>overhang</strong> is material printed over air. A printer can lay each layer slightly wider than the one below, so a surface can lean out gradually, but past a certain lean the plastic droops. Every dharmatiles tile aims to keep every downward-facing surface within <strong>55° of vertical</strong>, and no layer reaches more than 0.6 mm past the layer below. That is why no supports are needed. Thin cracks have short ceilings that bridge cleanly.</p>
-<p><strong>Every look may lean up to 65°</strong> (Shawn, 4 Nov 2026, generalising the tree exception of 3 Nov: “the 65 degree exception that we had for trees, let's generalize it. Anything can be up to 65 degrees. It's useful to know. The two colors is useful, separating them is useful, because one is conservative, one is more extreme. But cliffs should be allowed to have that 65 degree overhang as well.”) Everything still aims for 55° by construction, and the gate reports two numbers. <em>Band</em> is the area of downward faces between 55° and 65°, the conservative target and the extreme: it is painted <strong>orange</strong> and allowed up to 0.1% of the tile's downward-facing area (the share trees measured, 0–0.015%). <em>Overhang</em> is anything over 65°: painted <strong>red</strong>, and it fails. 65° is the physical edge on the default printer: each 0.2 mm layer steps out 0.2 × tan 65° ≈ 0.43 mm, just under one 0.45 mm line.</p>
+<p><strong>Every look may lean up to 65°</strong> (Shawn, 4 Nov 2026, generalising the tree exception of 3 Nov: “the 65 degree exception that we had for trees, let's generalize it. Anything can be up to 65 degrees. It's useful to know. The two colors is useful, separating them is useful, because one is conservative, one is more extreme. But cliffs should be allowed to have that 65 degree overhang as well.”) Everything still aims for 55° by construction, and the gate reports two numbers. <em>Band</em> is the area of downward faces between 55° and 65°, the conservative target and the extreme: it is painted <strong>orange</strong> and allowed up to 0.1% of the tile's downward-facing area (the share trees measured, 0–0.015%). <em>Overhang</em> is anything over 65°: painted <strong>red</strong>, and allowed only in small patches too, up to another 0.1% of the downward-facing area; more than that fails (Shawn, 4 Nov 2026: “allow small patches over 65°, like the band”). 65° is the physical edge on the default printer: each 0.2 mm layer steps out 0.2 × tan 65° ≈ 0.43 mm, just under one 0.45 mm line.</p>
 <figure class="diagram">
 <svg viewBox="0 0 520 210" role="img" aria-label="Overhang angle: a face leaning up to 55 degrees from vertical prints; past that it droops. Each 0.2 mm layer may reach 0.6 mm past the one below.">
   <style>
