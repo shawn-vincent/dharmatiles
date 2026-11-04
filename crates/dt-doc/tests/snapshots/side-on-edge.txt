@@ -3,7 +3,7 @@ dt::place
   × `side=` is for drawn lines
     ╭─[library/tiles/walls/1x1-wall-fieldstone-corner.kdl:13:63]
  12 │         // wall always stands inside, its outer face flush with the edge.
- 13 │         wall along="north west" style=fieldstone seed=15 side=left {
+ 13 │         wall along="north west" style=fieldstone seed=14 side=left {
     ·                                                               ──┬─
     ·                                                                 ╰── along a tile edge
  14 │             height full                     // up to the wall-top level (33.1 mm)

@@ -692,7 +692,7 @@ PARITY_BY_LOOK = {
         ("STL rock top (mm over edge)", ("rocks", "top_mm"), "abs", 1.5),
     ],
     "grass": [
-        ("blades", ("lab", "blades"), "rel", 0.20),
+        ("blades", ("lab", "blades"), "rel", 0.15),
         ("strands", ("lab", "strands"), "rel", 0.2),
         ("clearings", ("lab", "clearings"), "rel", 0.35),
         ("bare share (soil)", ("lab", "soil_frac"), "abs", 0.05),

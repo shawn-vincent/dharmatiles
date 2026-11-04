@@ -779,6 +779,21 @@ pub(crate) fn run(
     // crumbs the union leaves (a sliver where a tiny closer meets the
     // core's rounding) would be dropped by the gate as lost parts
     let (solid, _) = crate::tree::drop_crumbs(scene, solid, Material::Masonry, true)?;
+    // drystone's pebbles leave cracks between their rounded tops that an
+    // upper stone's underside can roof by a hair: cut what cannot stand
+    // on what is below it (a bevel at the reach angle), as a construction
+    // and not a check
+    let solid = if m.family == Family::Fieldstone && !m.laid {
+        let at = [tile[0] / 2.0, tile[1] / 2.0, seat];
+        let r = 0.5 * tile[0].max(tile[1]) + 2.0;
+        let footing = crate::tree::ground_box(scene, at, r, seat - 40.0, seat)?;
+        let rule = dt_kit::Stand::for_printer(&ctx.printer);
+        let (stood, _) = dt_kit::stand(scene, &solid, &footing, Material::Masonry, &rule)
+            .map_err(LookError::build)?;
+        crate::tree::drop_crumbs(scene, stood, Material::Masonry, true)?.0
+    } else {
+        solid
+    };
     let top = if m.laid { thickness } else { seat + height };
     Ok((solid, counts, fp, top))
 }

@@ -699,7 +699,7 @@ fn fill_pockets(scene: &mut Scene, solid: Solid) -> Result<(Solid, usize), LookE
 
 /// A box of half-width `r` round `at`, from `z0` to `z1`: the footing
 /// [`dt_kit::stand`] stands the wood on.
-fn ground_box(
+pub(crate) fn ground_box(
     scene: &mut Scene,
     at: [f64; 3],
     r: f64,

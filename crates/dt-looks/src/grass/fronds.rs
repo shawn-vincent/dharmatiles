@@ -39,7 +39,7 @@ const BANK_H_SCALE: (f64, f64) = (0.65, 1.15);
 /// Two blades rooted closer than this are one blade to the eye, and their
 /// near-coincident surfaces are what a union cannot cleanly resolve: the
 /// later is not grown.
-const MIN_ROOT_GAP_MM: f64 = 0.4;
+const MIN_ROOT_GAP_MM: f64 = 0.1;
 
 /// `lo + (hi − lo)·u²`: a draw skewed toward `lo`.
 fn skewed(rng: &mut Rng, (lo, hi): (f64, f64)) -> f64 {
@@ -287,6 +287,14 @@ pub fn plan(
         let nl = (((blade_len / step).ceil() as usize) + 1).min(path.len());
         let mut stop = None;
         for (t, p) in path.iter().take(nl).enumerate() {
+            // a streamline that runs into a sink (where the rim rule turns
+            // the flow back on itself) stalls and folds: the blade ends
+            // where it still runs straight on
+            let folds = t >= 2 && {
+                let (a, b, c) = (path[t - 2], path[t - 1], *p);
+                let (u, v) = ([b[0] - a[0], b[1] - a[1]], [c[0] - b[0], c[1] - b[1]]);
+                u[0] * v[0] + u[1] * v[1] < 0.5 * step * step
+            };
             let rim = p[0] < inset || p[0] > w - inset || p[1] < inset || p[1] > h - inset;
             let kk = idx(*p);
             let deep = !sprig && surf.soil_depth.z[kk] > spill;
@@ -294,7 +302,7 @@ pub fn plan(
                 .blk_depth
                 .as_ref()
                 .is_some_and(|b| b.z[kk] > surf.tuck_mm);
-            if rim || deep || in_blk || surf.outside[kk] {
+            if folds || rim || deep || in_blk || surf.outside[kk] {
                 stop = Some(t as f64 * step);
                 break;
             }
