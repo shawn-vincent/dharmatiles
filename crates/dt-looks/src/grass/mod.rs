@@ -51,6 +51,11 @@ const FIELD_RES_MM: f64 = 0.25;
 const LENSES_PER_SQ: (f64, f64) = (1.3, 1.8);
 /// Seating ground is the painted ground blurred this much.
 const SEAT_BLUR_MM: f64 = 0.8;
+/// Blades seat on the ground's low envelope: grasslab's blades stand on the
+/// smooth hills under the dirt's texture, not on its crests.
+const SEAT_ERODE_MM: f64 = 1.5;
+const MUD_MAX_MM: f64 = 4.0;
+const MUD_SIGMA_MM: f64 = 9.0;
 /// Ground the flow and clearings read is blurred this much (the dirt's
 /// own texture would spike the slope).
 const FLOW_BLUR_MM: f64 = 2.0;
@@ -194,7 +199,7 @@ impl Look for Grass {
             });
         };
         let raw = as_field(&surface);
-        let seat = raw.blur(SEAT_BLUR_MM);
+        let seat = raw.erode(SEAT_ERODE_MM * s).blur(SEAT_BLUR_MM);
         let flat = raw.blur(FLOW_BLUR_MM * s);
         let seed = ctx.seed;
         let mut rng = Rng::new(seed.key("grass"));
@@ -264,8 +269,8 @@ impl Look for Grass {
         );
 
         // grass near the water leans toward it
-        let flow = if wet.count() > 0 {
-            let dist = distance(&frame, &wet.bits).0;
+        let water_dist = (wet.count() > 0).then(|| distance(&frame, &wet.bits).0);
+        let flow = if let Some(dist) = &water_dist {
             let to_water = lat.like(|x, y| dist.sample(x.clamp(0.0, w), y.clamp(0.0, h)));
             flow::steer_shore(&flow, &to_water, s)
         } else {
@@ -273,7 +278,28 @@ impl Look for Grass {
         };
 
         // 3 what the fronds read
-        let soil = Field::from_fn(&frame, |x, y| lenses.mask(x, y));
+        // a strip of wet mud along the shore, its width wandering 0 to
+        // 4 mm (shorelab's `ShoreSoil`): bare earth where the grass stops
+        let mud = water_dist.as_ref().map(|dist| {
+            let n = lat.noise(seed.key("mud"), MUD_SIGMA_MM * s);
+            Field::from_fn(&frame, |x, y| {
+                let width = MUD_MAX_MM * s * (n.sample(x, y) * 0.5).clamp(0.0, 1.0).powf(0.8);
+                let (i, j) = dist.node(x, y);
+                let d = dist.z[j * dist.nx + i];
+                if d > 0.0 && width > 0.2 * s {
+                    lat::s01(0.5 + (width - d) / flow::SOIL_EDGE_MM)
+                } else {
+                    0.0
+                }
+            })
+        });
+        let soil = Field::from_fn(&frame, |x, y| {
+            let m = mud.as_ref().map_or(0.0, |m| {
+                let (i, j) = m.node(x, y);
+                m.z[j * m.nx + i]
+            });
+            lenses.mask(x, y).max(m)
+        });
         let bare: Vec<bool> = soil.z.iter().map(|v| *v <= 0.5).collect();
         let on_soil: Vec<bool> = bare.iter().map(|b| !b).collect();
         let soil_depth = if on_soil.iter().any(|&b| b) {

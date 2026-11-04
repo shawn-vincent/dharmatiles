@@ -60,6 +60,10 @@ enum Command {
         /// water, grass, …) assigned as a 3MF base material.
         #[arg(long = "3mf")]
         threemf: bool,
+        /// A palette document (one `material "#rrggbb"` a line) to paint
+        /// the 3MF with, instead of the default colours.
+        #[arg(long)]
+        palette: Option<PathBuf>,
         /// One JSON report on stdout.
         #[arg(long)]
         json: bool,
@@ -83,7 +87,14 @@ enum Command {
     },
     /// Serve the Model Context Protocol on stdio (check, build, preview and
     /// audit tiles for an agent).
-    Mcp,
+    Mcp {
+        /// Serve Streamable HTTP on this address (e.g. 127.0.0.1:8787) instead of stdio.
+        #[arg(long)]
+        http: Option<String>,
+    },
+    /// Serve the language server protocol on stdio (diagnostics, hover,
+    /// completion for tile documents).
+    Lsp,
     /// Run the printability gate on a binary STL file.
     Audit {
         /// The STL file.
@@ -146,6 +157,7 @@ fn emit(w: &mut dyn Write, args: std::fmt::Arguments) {
 }
 
 mod looks;
+mod lsp;
 mod mcp;
 mod watch;
 
@@ -165,8 +177,21 @@ fn main() -> ExitCode {
             out,
             png,
             threemf,
+            palette,
             json,
         } => {
+            let palette = match palette.as_ref().map(|p| {
+                std::fs::read_to_string(p)
+                    .map_err(|e| format!("cannot read {}: {e}", p.display()))
+                    .and_then(|t| dt_kit::Palette::parse(&t))
+            }) {
+                None => dt_kit::Palette::default(),
+                Some(Ok(p)) => p,
+                Some(Err(e)) => {
+                    tell!("error: {e}");
+                    return ExitCode::from(ERROR);
+                }
+            };
             let paths = if all { library_tiles() } else { paths };
             let out = out_dir(out);
             let systems: Vec<&str> = if system == "both" {
@@ -181,14 +206,19 @@ fn main() -> ExitCode {
                         &paths,
                         &options((*sys).to_owned(), seed),
                         &out,
-                        Extras { png, threemf },
+                        Extras {
+                            png,
+                            threemf,
+                            palette: &palette,
+                        },
                         json,
                     ),
                 )
             })
         }
         Command::Looks { name, json } => looks::run(name.as_deref(), json),
-        Command::Mcp => mcp::run(),
+        Command::Mcp { http } => http.map_or_else(mcp::run, |a| mcp::serve_http(&a)),
+        Command::Lsp => lsp::run(),
         Command::Audit {
             path,
             width,
@@ -296,9 +326,10 @@ fn check(paths: &[String], json: bool) -> u8 {
 
 /// What else a build writes beside the STL.
 #[derive(Clone, Copy)]
-struct Extras {
+struct Extras<'a> {
     png: bool,
     threemf: bool,
+    palette: &'a dt_kit::Palette,
 }
 
 fn build(paths: &[String], opts: &Options, out: &Path, extras: Extras, json: bool) -> u8 {
@@ -424,7 +455,7 @@ fn write(
         let p = path.with_extension("3mf");
         w(
             &p,
-            &dt_kit::threemf(&b.export.mesh, &b.materials, &b.record),
+            &dt_kit::threemf(&b.export.mesh, &b.materials, &b.record, extras.palette),
         )?;
         files.push(p);
     }

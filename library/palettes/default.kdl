@@ -1,0 +1,10 @@
+// The default material-to-colour palette (the preview's paint). Copy it,
+// change the colours, and pass it as `dharmatiles build --3mf --palette my.kdl`.
+earth "#806140"
+connector "#9e9ea3"
+rock "#94949c"
+water "#3d618f"
+grass "#5c8f3d"
+masonry "#a8a399"
+wood "#6b4a2e"
+leaf "#548540"

@@ -102,8 +102,8 @@
 <li><span class="st st-active">later</span><span><b>Not yet ported from P5:</b> wall openings (doors, windows, hatches), floor crack engraving, and the mortar sheet.</span></li>
 <li><span class="st st-active">later</span><span><b>Dirt stones.</b> The 10&ndash;40 mm relief-spectrum row is a near-miss: Rust/Python is 1.203 against a limit of &plusmn;20%.</span></li>
 <li><span class="st st-active">later</span><span><b>Rocks texture.</b> The printable-texture score is 88&ndash;93% on the rocks tile against the lab's 95&ndash;97%.</span></li>
-<li><span class="st st-active">later</span><span><b>Fieldstone coping.</b> A micro overhang (0.2 mm&sup2;) under a coping stone appears in about one build in eight (seen at OpenLOCK scale, wall seed 14); the library tile uses a seed that passes at both systems. The geometry should be fixed.</span></li>
-<li><span class="st st-active">later</span><span><b>Not yet ported from shorelab and meadowlab (P4):</b> the wet-mud strip and shore-steered grass, the reeds' ripple rings, the wet rocks' 0.6 mm clearance, meadowlab's raising of a rock to show above the grass (grass stands lower beside rocks instead), and the soil dipping 0.4 mm under the grass.</span></li>
+
+<li><span class="st st-active">later</span><span><b>Not ported from shorelab and meadowlab (P4), and why:</b> the reeds&rsquo; ripple rings (the water is built before the reeds read its bed, and a look cannot yet plan a position it builds later: it needs a two-phase plan-then-build look), meadowlab&rsquo;s raising of a rock to show above the grass (grass stands lower beside rocks; only rocks under about 3 mm would need it), and the soil dipping 0.4 mm under the grass (grass is built after the lift and cannot write the surface). The wet rocks&rsquo; 0.6 mm clearance holds by size (every shallows rock is at least 6 mm). The wet-mud strip and the shore-steered grass are in.</span></li>
 <li><span class="st st-active">later</span><span><b>Open questions from Shawn that carry forward:</b> rock shape mixes, fieldstone streaks, and crown width.</span></li>
 </ul>
 <h3 id="p2-checklist">Phase 2 checklist</h3>
@@ -151,7 +151,8 @@
 <ul class="now">
 <li><span class="st st-settled">done</span><span><b>3MF writer</b>: <code>dharmatiles build --3mf</code> writes the tile as one object whose triangles carry their materials as 3MF base materials. Waiting for Shawn to open one in Bambu Studio.</span></li>
 <li><span class="st st-settled">done</span><span><b>MCP server over stdio</b> (<code>dharmatiles mcp</code>), and <code>dharmatiles audit FILE.stl</code>.</span></li>
-<li><span class="st st-active">later</span><span><b>Not started:</b> the Tauri app (2D editor, viewport), procedural colour (a user's material-to-colour step), MCP over HTTP, the language server, wasm, mobile.</span></li>
+<li><span class="st st-settled">done</span><span><b>Palette</b>: <code>--palette file.kdl</code> paints the 3MF from a material-to-colour document (<code>library/palettes/default.kdl</code>); <b>MCP over HTTP</b>: <code>dharmatiles mcp --http 127.0.0.1:8787</code>; <b>language server</b>: <code>dharmatiles lsp</code> (diagnostics from the evaluator, hover and completion from the schema).</span></li>
+<li><span class="st st-active">later</span><span><b>Not started:</b> the Tauri app (2D editor and viewport; it needs a front-end toolchain and is not next in the plan), wasm, mobile.</span></li>
 </ul>
 
 <h2 id="why">Why this plan</h2>

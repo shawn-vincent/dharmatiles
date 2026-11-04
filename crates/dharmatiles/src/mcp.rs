@@ -33,6 +33,73 @@ pub fn run() -> u8 {
     0
 }
 
+/// Serve the same tools as Streamable HTTP: `POST /mcp` with one JSON-RPC
+/// message answers with its reply as `application/json` (202 for a
+/// notification). Local use: it binds where it is told and does no
+/// authentication, so give it a loopback address.
+pub fn serve_http(addr: &str) -> u8 {
+    let listener = match std::net::TcpListener::bind(addr) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("error: cannot listen on {addr}: {e}");
+            return 1;
+        }
+    };
+    eprintln!("dharmatiles mcp: http://{addr}/mcp");
+    for conn in listener.incoming().flatten() {
+        std::thread::spawn(move || http_one(conn));
+    }
+    0
+}
+
+fn http_one(mut conn: std::net::TcpStream) {
+    use std::io::Read;
+    let Ok(clone) = conn.try_clone() else { return };
+    let mut reader = std::io::BufReader::new(clone);
+    let mut first = String::new();
+    if reader.read_line(&mut first).unwrap_or(0) == 0 {
+        return;
+    }
+    let mut len = 0usize;
+    loop {
+        let mut h = String::new();
+        if reader.read_line(&mut h).unwrap_or(0) == 0 || h.trim().is_empty() {
+            break;
+        }
+        if let Some((k, v)) = h.split_once(':')
+            && k.eq_ignore_ascii_case("content-length")
+        {
+            len = v.trim().parse().unwrap_or(0);
+        }
+    }
+    let reply = |conn: &mut std::net::TcpStream, status: &str, body: &str| {
+        let _ = write!(
+            conn,
+            "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+    };
+    if !first.starts_with("POST /mcp") {
+        reply(&mut conn, "404 Not Found", "{}");
+        return;
+    }
+    let mut body = vec![0u8; len];
+    if reader.read_exact(&mut body).is_err() {
+        return;
+    }
+    match serde_json::from_slice::<Value>(&body) {
+        Ok(msg) => match handle(&msg) {
+            Some(r) => reply(&mut conn, "200 OK", &r.to_string()),
+            None => reply(&mut conn, "202 Accepted", ""),
+        },
+        Err(e) => reply(
+            &mut conn,
+            "400 Bad Request",
+            &error(&Value::Null, -32700, &format!("parse error: {e}")).to_string(),
+        ),
+    }
+}
+
 fn error(id: &Value, code: i64, message: &str) -> Value {
     json!({"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message}})
 }
@@ -74,7 +141,7 @@ fn tools() -> Value {
         {"name": "list_tiles", "description": "The library tiles that ship with dharmatiles (`lib:tiles/…` paths).",
          "inputSchema": {"type": "object", "properties": {}}},
         {"name": "build_tile", "description": "Build a tile to STL through the printability gate; returns the audit (watertight, overhang mm², dropped parts), timings and the files written.",
-         "inputSchema": {"type": "object", "properties": {"path": path, "system": system, "seed": seed, "out": {"type": "string", "description": "Output folder (default out/)"}, "threemf": {"type": "boolean", "description": "Also write a 3MF with materials"}}, "required": ["path"]}},
+         "inputSchema": {"type": "object", "properties": {"path": path, "system": system, "seed": seed, "out": {"type": "string", "description": "Output folder (default out/)"}, "threemf": {"type": "boolean", "description": "Also write a 3MF with materials"}, "palette": {"type": "string", "description": "A palette document (material \"#rrggbb\" lines) to paint the 3MF with"}}, "required": ["path"]}},
         {"name": "render_preview", "description": "Build a tile and return its painted preview (overhang faces red).",
          "inputSchema": {"type": "object", "properties": {"path": path, "system": system, "seed": seed, "view": {"type": "string", "enum": ["painted", "top", "low", "close"], "description": "Which of the four views (default painted)"}}, "required": ["path"]}},
         {"name": "audit_mesh", "description": "Run the printability gate on a binary STL file: watertight, bodies, overhang past 55 degrees, see-through holes.",
@@ -128,6 +195,9 @@ fn call(name: &str, a: &Value) -> Value {
             }
             if a.get("threemf").and_then(Value::as_bool) == Some(true) {
                 args.push(s("--3mf"));
+            }
+            if let Some(p) = arg(a, "palette") {
+                args.extend([s("--palette"), s(p)]);
             }
             run_self(&args)
         }

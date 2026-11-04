@@ -75,7 +75,7 @@ pub use shape::{area, carve, extrude, loft, signed_volume, union, wobble};
 pub use stand::{Stand, Stood, stand};
 pub use stl::{BuildRecord, stl};
 pub use stone::{Grain, grain, hull, seat, solid};
-pub use threemf::threemf;
+pub use threemf::{Palette, threemf};
 
 /// Why a kit operation failed.
 #[derive(Clone, Debug, PartialEq)]

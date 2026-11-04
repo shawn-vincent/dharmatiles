@@ -10,10 +10,68 @@ use dt_geom::TriMesh;
 
 use crate::{BuildRecord, Material};
 
+/// Material to colour: the separate step after the build (a 3MF is
+/// painted by it; the geometry never changes). A palette document is one
+/// line a material, `rock "#8a8a90"`, `//` for comments; materials it does
+/// not name keep their default colour.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Palette(Vec<(Material, [f64; 3])>);
+
+impl Palette {
+    /// The colour of `m`.
+    #[must_use]
+    pub fn colour(&self, m: Material) -> [f64; 3] {
+        self.0
+            .iter()
+            .find(|(k, _)| *k == m)
+            .map_or_else(|| m.colour(), |(_, c)| *c)
+    }
+
+    /// Read a palette document.
+    ///
+    /// # Errors
+    /// The line and what is wrong with it.
+    pub fn parse(text: &str) -> Result<Self, String> {
+        let mut out = Vec::new();
+        for (n, line) in text.lines().enumerate() {
+            let line = line.split("//").next().unwrap_or("").trim();
+            if line.is_empty() {
+                continue;
+            }
+            let mut w = line.split_whitespace();
+            let name = w.next().unwrap_or("");
+            let hex = w
+                .next()
+                .unwrap_or("")
+                .trim_matches('"')
+                .trim_start_matches('#');
+            let m = Material::from_name(name).ok_or_else(|| {
+                format!("line {}: `{name}` is not a material (earth, connector, rock, water, grass, masonry, wood, leaf)", n + 1)
+            })?;
+            if hex.len() != 6 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err(format!(
+                    "line {}: `{name}` needs a colour like \"#8a8a90\"",
+                    n + 1
+                ));
+            }
+            let v =
+                |i: usize| f64::from(u8::from_str_radix(&hex[i..i + 2], 16).unwrap_or(0)) / 255.0;
+            out.retain(|(k, _): &(Material, [f64; 3])| *k != m);
+            out.push((m, [v(0), v(2), v(4)]));
+        }
+        Ok(Self(out))
+    }
+}
+
 /// **write_3mf**: the 3MF bytes of `mesh`, with `materials` giving each
 /// triangle's material (as many as triangles).
 #[must_use]
-pub fn threemf(mesh: &TriMesh, materials: &[Material], record: &BuildRecord) -> Vec<u8> {
+pub fn threemf(
+    mesh: &TriMesh,
+    materials: &[Material],
+    record: &BuildRecord,
+    palette: &Palette,
+) -> Vec<u8> {
     let mut used: Vec<Material> = materials.to_vec();
     used.sort();
     used.dedup();
@@ -31,7 +89,7 @@ pub fn threemf(mesh: &TriMesh, materials: &[Material], record: &BuildRecord) -> 
     );
     x.push_str(" <resources>\n  <basematerials id=\"1\">\n");
     for m in &used {
-        let [r, g, b] = m.colour().map(byte);
+        let [r, g, b] = palette.colour(*m).map(byte);
         let _ = writeln!(
             x,
             "   <base name=\"{}\" displaycolor=\"#{r:02X}{g:02X}{b:02X}\"/>",
@@ -150,6 +208,15 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_palette_names_materials_and_refuses_what_is_not_one() {
+        let p = Palette::parse("// mine\nrock \"#ff0000\"\nwater #0000ff").unwrap();
+        assert_eq!(p.colour(Material::Rock), [1.0, 0.0, 0.0]);
+        assert_eq!(p.colour(Material::Earth), Material::Earth.colour());
+        assert!(Palette::parse("lava #ff0000").is_err());
+        assert!(Palette::parse("rock red").is_err());
+    }
+
+    #[test]
     fn a_3mf_is_a_zip_with_the_model_and_its_materials() {
         let mesh = TriMesh {
             positions: vec![
@@ -174,7 +241,7 @@ mod tests {
             seed: 2,
             system: "db".into(),
         };
-        let z = threemf(&mesh, &mats, &rec);
+        let z = threemf(&mesh, &mats, &rec, &Palette::default());
         assert_eq!(&z[..4], b"PK\x03\x04");
         assert_eq!(&z[z.len() - 22..z.len() - 18], b"PK\x05\x06");
         // three entries, each named in the central directory

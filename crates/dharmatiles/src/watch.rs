@@ -79,6 +79,7 @@ fn build<'a>(path: &'a str, opts: &Options, out: &Path, png: bool) -> (u8, Tile<
         crate::Extras {
             png,
             threemf: false,
+            palette: &dt_kit::Palette::default(),
         },
         false,
     );

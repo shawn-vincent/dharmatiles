@@ -146,6 +146,23 @@ impl Material {
         }
     }
 
+    /// The material called `name`.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        [
+            Self::Earth,
+            Self::Connector,
+            Self::Rock,
+            Self::Water,
+            Self::Grass,
+            Self::Masonry,
+            Self::Wood,
+            Self::Leaf,
+        ]
+        .into_iter()
+        .find(|m| m.name() == name)
+    }
+
     /// Its default colour (sRGB, 0 to 1): the preview's paint. The
     /// material-to-colour step (a user's own palette) comes later; this is
     /// what a first 3MF is painted with.

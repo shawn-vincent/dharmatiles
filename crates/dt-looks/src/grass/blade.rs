@@ -33,12 +33,23 @@ const RISE_EXP: f64 = 2.0;
 /// Blades reach this far below the ground.
 pub const EMBED_MM: f64 = 0.3;
 /// Stations along each side of a layer's outline, tip to tip.
-const STATIONS: usize = 13;
+const STATIONS: usize = 17;
 /// A layer's end: the half-width at its first full station, and the
 /// slope of the ramp up to the plateau (a line is added every 0.45 mm of
 /// stroke, half a line per side).
-const END_HW_MM: f64 = LINE_W_MM / 2.0;
 const RAMP: f64 = 0.5;
+/// The lab closes each layer's outline by 0.3 mm and blurs it, which fills
+/// the notches between lines and rounds the ends and the shoulder where a
+/// ramp meets the plateau: the ends are rounder than one line's cap, and
+/// the minimum is soft.
+const CAP_MM: f64 = 0.3;
+const CREST_EASE_MM: f64 = 0.1;
+const SOFT_MM: f64 = 0.12;
+
+fn softmin(a: f64, b: f64) -> f64 {
+    let k = SOFT_MM;
+    -k * libm::log(libm::exp(-a / k) + libm::exp(-b / k))
+}
 
 /// Line counts per layer: a lens, 2 at the keel, 1 on top, +1 a layer at most.
 fn lines(n_layers: usize, half_w: f64) -> Vec<i64> {
@@ -99,7 +110,7 @@ const BEND_FRACTION: f64 = 0.8;
 /// side tip to tip, front tip, right side back), each with the spine
 /// position it stands at.
 fn outline_once(path: &[[f64; 2]], ub: f64, uf: f64, hw_max: f64) -> Vec<[f64; 2]> {
-    let cap = LINE_W_MM / 2.0;
+    let cap = CAP_MM;
     let len = uf - ub;
     // stations from the tail tip to the front tip, denser at the ends
     let st: Vec<f64> = (0..STATIONS)
@@ -109,17 +120,18 @@ fn outline_once(path: &[[f64; 2]], ub: f64, uf: f64, hw_max: f64) -> Vec<[f64; 2
             -cap + (len + 2.0 * cap) * t
         })
         .collect();
+    let capr = cap.min(hw_max);
     let half = |e: f64| -> f64 {
         // e from the tail end of the stroke (negative: behind it)
         let (dt, df) = (e, len - e);
         if dt < 0.0 {
             // the round cap of the shortest stroke
-            return libm::sqrt((cap * cap - dt * dt).max(0.0));
+            return capr * libm::sqrt((1.0 - dt * dt / (cap * cap)).max(0.0));
         }
         if df < 0.0 {
-            return libm::sqrt((cap * cap - df * df).max(0.0));
+            return capr * libm::sqrt((1.0 - df * df / (cap * cap)).max(0.0));
         }
-        hw_max.min(END_HW_MM + RAMP * dt).min(END_HW_MM + RAMP * df)
+        softmin(softmin(hw_max, capr + RAMP * dt), capr + RAMP * df)
     };
     let mut left = Vec::new();
     let mut right = Vec::new();
@@ -229,9 +241,13 @@ pub fn mesh(
             continue;
         }
         let hw = n[k] as f64 * LINE_W_MM / 2.0;
+        // the lab's blur (0.15 mm across layers) takes about a tenth of a
+        // millimetre off a one-line ridge: the layers close up a little
+        // toward the top
+        let ease = CREST_EASE_MM * k as f64 / (n_layers - 1) as f64;
         rings.push((
             outline(&f.path, u_back, u_front, hw),
-            (k as f64 + 0.5) * LAYER_MM,
+            (k as f64 + 0.5) * LAYER_MM - ease,
         ));
     }
     if rings.len() < 2 {
@@ -240,12 +256,15 @@ pub fn mesh(
     // the ridge closes over half a layer: the top outline, drawn in
     let top = rings.last()?.clone();
     let c = centroid(&top.0);
-    let apex: Vec<[f64; 2]> = top
-        .0
-        .iter()
-        .map(|p| [c[0] + 0.55 * (p[0] - c[0]), c[1] + 0.55 * (p[1] - c[1])])
-        .collect();
-    rings.push((apex, top.1 + LAYER_MM * 0.5));
+    let drawn = |k: f64| -> Vec<[f64; 2]> {
+        top.0
+            .iter()
+            .map(|p| [c[0] + k * (p[0] - c[0]), c[1] + k * (p[1] - c[1])])
+            .collect()
+    };
+    // the ridge closes over half a layer in two steps, rounder than one
+    rings.push((drawn(0.85), top.1 + LAYER_MM * 0.2));
+    rings.push((drawn(0.5), top.1 + LAYER_MM * 0.5));
     // the foot: the first outline, straight down
     let foot = rings[0].0.clone();
     let m = foot.len();
