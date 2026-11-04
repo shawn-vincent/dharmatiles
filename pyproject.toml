@@ -33,7 +33,6 @@ dependencies = [
 ]
 
 [project.scripts]
-dharmatiles-gen    = "dharmatiles.terrains.tile:main"
 dharmatiles-logo   = "dharmatiles.logo_render:main"
 generate-build-info = "scripts.generate_build_info:main"
 
