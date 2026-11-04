@@ -74,7 +74,7 @@ const OVERSHOOT_MM: (f64, f64) = (0.0, 2.5);
 const TOP_TILT_DEG: f64 = 6.0;
 pub const SINK_MM: f64 = 0.8;
 /// How much lower than its plane a support is taken to be.
-const SUPPORT_MARGIN_MM: f64 = 0.3;
+const SUPPORT_MARGIN_MM: f64 = 0.6;
 const MIN_AREA_MM2: f64 = 8.0;
 const THIN_AREA_MM2: f64 = 20.0;
 const CRUMB_RETRY: i32 = 3;
@@ -749,12 +749,23 @@ pub fn reconcile(rocks: &mut [Placed], form: &Form, s: &mut Field) {
             continue;
         }
         let b = super::util::bounds(&poly);
-        let (i0, i1) = (((b[0] / GRID_MM).floor().max(0.0)) as usize, ((b[2] / GRID_MM).ceil() as usize).min(nx));
-        let (j0, j1) = (((b[1] / GRID_MM).floor().max(0.0)) as usize, ((b[3] / GRID_MM).ceil() as usize).min(ny));
+        let (i0, i1) = (
+            ((b[0] / GRID_MM).floor().max(0.0)) as usize,
+            ((b[2] / GRID_MM).ceil() as usize).min(nx),
+        );
+        let (j0, j1) = (
+            ((b[1] / GRID_MM).floor().max(0.0)) as usize,
+            ((b[3] / GRID_MM).ceil() as usize).min(ny),
+        );
         let mut cells = Mask::new(nx, ny, false);
         for j in j0..j1 {
             for i in i0..i1 {
-                if r.cells.at(i, j) && super::util::point_in(&poly, [super::util::cx(i, GRID_MM), super::util::cx(j, GRID_MM)]) {
+                if r.cells.at(i, j)
+                    && super::util::point_in(
+                        &poly,
+                        [super::util::cx(i, GRID_MM), super::util::cx(j, GRID_MM)],
+                    )
+                {
                     cells.set(i, j, true);
                 }
             }
@@ -776,7 +787,11 @@ pub fn reconcile(rocks: &mut [Placed], form: &Form, s: &mut Field) {
                 }
                 // the support's real top sits a little under its plane (grain, chips): a
                 // stone must still reach into it, however narrow
-                let under = if s.at(i, j) > FOOT { s.at(i, j) - SUPPORT_MARGIN_MM } else { s.at(i, j) };
+                let under = if s.at(i, j) > FOOT {
+                    s.at(i, j) - SUPPORT_MARGIN_MM
+                } else {
+                    s.at(i, j)
+                };
                 bed.set(i, j, under);
                 svmin = svmin.min(under);
                 s.set(i, j, s.at(i, j).max(topz));

@@ -793,8 +793,7 @@ pub fn rock_piece(
     }
     let mut rock = cutter.solid;
     let mut zbase = zb;
-    let off0 = std::env::var("DT_CLIFF_OFF").unwrap_or_default();
-    if zb > FOOT && !off0.contains("seat") {
+    if zb > FOOT {
         // sits on rock: seated on the bed (not under its open faces where
         // its own column's stone carries it)
         let (nx, ny) = (r.cells.nx, r.cells.ny);
@@ -817,24 +816,7 @@ pub fn rock_piece(
             }
         }
         let opens2: Vec<(P2, P2)> = faces.iter().map(|f| (f.p0, f.p1)).collect();
-        let pre = rock.clone();
-        if std::env::var("DT_STAGE").is_ok_and(|v| v == ri.to_string()) { eprintln!("stage pre-seat {ri} bounds {:?}", rock.bounds()); }
         rock = seat(rock, r, &opens2, &own)?;
-        if std::env::var("DT_STAGE").is_ok_and(|v| v == ri.to_string()) { eprintln!("stage post-seat {ri} bounds {:?}", rock.bounds()); }
-        if std::env::var("DT_SEAT_DUMP").is_ok_and(|v| v == "all" || v.split(',').any(|x| x == ri.to_string())) {
-            let tri = |m: &dt_kit::TriMesh| {
-                let (p, t) = welded(m);
-                format!("{{\"p\":{:?},\"t\":{:?}}}", p, t)
-            };
-            let bed: Vec<String> = r.bed.v.iter().map(|v| if v.is_nan() { "null".into() } else { format!("{v}") }).collect();
-            let j = format!(
-                "{{\"pre\":{},\"post\":{},\"nx\":{},\"ny\":{},\"bed\":[{}],\"cells\":{:?},\"own\":{:?},\"opens\":{:?}}}",
-                tri(&pre.mesh()), tri(&rock.mesh()), r.bed.nx, r.bed.ny, bed.join(","),
-                r.cells.v.iter().map(|&b| u8::from(b)).collect::<Vec<_>>(),
-                own.iter().map(|&b| u8::from(b)).collect::<Vec<_>>(), opens2
-            );
-            let _ = std::fs::write(format!("/tmp/claude-501/seat-{ri}.json"), j);
-        }
         zbase = r
             .bed
             .v
@@ -876,10 +858,8 @@ pub fn rock_piece(
         let o = rock.minus(&chips)?;
         if o.is_empty() { rock } else { o }
     };
-    if std::env::var("DT_STAGE").is_ok_and(|v| v == ri.to_string()) { eprintln!("stage pre-relief {ri} bounds {:?} z0 {} zbase {}", rock.bounds(), r.z0, zbase); }
-    let rock = if off0.contains("relief") { rock } else { relief(rock, &c.faces, None)?.parts_over(1e9)? };
+    let rock = relief(rock, &c.faces, None)?.parts_over(1e9)?;
     let (rock, k) = top_cracks(rng, &rock, r, &c.faces, env)?;
-    if std::env::var("DT_STAGE").is_ok_and(|v| v == ri.to_string()) { eprintln!("stage post {ri} bounds {:?}", rock.bounds()); }
     let rock = rock.parts_over(1e9)?;
     st.tops += k;
     let rock = fit_tile(rock, form, &setback);
@@ -913,10 +893,17 @@ mod tests {
             }
         }
         let lo = beds.iter().copied().fold(f64::INFINITY, f64::min);
-        let r = Placed { cells, z0: lo - 0.8, top: (24.0, 0.0, 0.0), d: 6.0, bed };
+        let r = Placed {
+            cells,
+            z0: lo - 0.8,
+            top: (24.0, 0.0, 0.0),
+            d: 6.0,
+            bed,
+        };
         let rock = Convex::cuboid([10.0, 10.0, lo - 0.8], [22.0, 16.0, 24.0]).to_tri_mesh();
         let slot = {
-            let mut sc = dt_kit::Scene::new(dt_kit::Frame::dungeonblocks(1, 1), dt_kit::Seed::new(1));
+            let mut sc =
+                dt_kit::Scene::new(dt_kit::Frame::dungeonblocks(1, 1), dt_kit::Seed::new(1));
             sc.slots(1, dt_kit::Material::Rock).unwrap().get(0)
         };
         let piece = Piece::new(slot, &rock).unwrap();
@@ -927,8 +914,15 @@ mod tests {
             let m = Convex::cuboid([x0 - 0.05, 9.0, 0.0], [x0 + 4.05, 17.0, *b]).to_tri_mesh();
             u = u.plus(&m).unwrap();
         }
-        let (_, a) = dt_kit::audit(&u.mesh(), [35.0, 35.0], &dt_kit::Printer::new(0.45, 0.2, 55.0, 0.2));
-        eprintln!("beds {beds:?}: overhang {:.3} band {:.3}", a.overhang_mm2, a.band_mm2);
+        let (_, a) = dt_kit::audit(
+            &u.mesh(),
+            [35.0, 35.0],
+            &dt_kit::Printer::new(0.45, 0.2, 55.0, 0.2),
+        );
+        eprintln!(
+            "beds {beds:?}: overhang {:.3} band {:.3}",
+            a.overhang_mm2, a.band_mm2
+        );
         (a.overhang_mm2, a.band_mm2)
     }
 
@@ -945,10 +939,17 @@ mod tests {
                 bed.set(i, j, 5.0);
             }
         }
-        let r = Placed { cells, z0: 4.2, top: (12.0, 0.0, 0.0), d: 3.0, bed };
+        let r = Placed {
+            cells,
+            z0: 4.2,
+            top: (12.0, 0.0, 0.0),
+            d: 3.0,
+            bed,
+        };
         let rock = Convex::cuboid([10.0, 10.0, 4.2], [12.5, 12.25, 12.0]).to_tri_mesh();
         let slot = {
-            let mut sc = dt_kit::Scene::new(dt_kit::Frame::dungeonblocks(1, 1), dt_kit::Seed::new(1));
+            let mut sc =
+                dt_kit::Scene::new(dt_kit::Frame::dungeonblocks(1, 1), dt_kit::Seed::new(1));
             sc.slots(1, dt_kit::Material::Rock).unwrap().get(0)
         };
         let piece = Piece::new(slot, &rock).unwrap();
@@ -961,7 +962,13 @@ mod tests {
     /// A box stone seated on stepped supports: the union must print.
     #[test]
     fn a_seat_has_no_overhang() {
-        for beds in [[5.0, 5.0, 3.0], [5.0, 12.0, 5.0], [12.0, 5.0, 12.0], [8.0, 8.0, 8.0], [14.0, 8.0, 3.0]] {
+        for beds in [
+            [5.0, 5.0, 3.0],
+            [5.0, 12.0, 5.0],
+            [12.0, 5.0, 12.0],
+            [8.0, 8.0, 8.0],
+            [14.0, 8.0, 3.0],
+        ] {
             let (o, _) = run(beds);
             assert!(o < 0.05, "{beds:?}: {o}");
         }

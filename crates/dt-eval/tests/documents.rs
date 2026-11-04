@@ -68,8 +68,7 @@ fn an_unknown_control_names_the_ones_there_are() {
 
 #[test]
 fn a_control_not_built_yet_is_checked_but_not_built() {
-    let text =
-        "tile flat {\n  stack {\n    rock wear=worn\n  }\n}\n";
+    let text = "tile flat {\n  stack {\n    rock wear=worn\n  }\n}\n";
     let src = mem(&[("t.kdl", text)]);
     let c = check(&src, "t.kdl", &Options::default()).unwrap();
     assert_eq!(c.pending().len(), 1); // `wear`

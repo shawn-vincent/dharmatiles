@@ -272,7 +272,13 @@ impl Piece {
             .unwrap_or(&0);
         let big: Vec<usize> = vol
             .iter()
-            .filter(|(k, v)| **k == best || v.abs() >= min_mm3.min(0.05 * vol.get(&best).map_or(0.0, |b| b.abs())).max(0.0))
+            .filter(|(k, v)| {
+                **k == best
+                    || v.abs()
+                        >= min_mm3
+                            .min(0.05 * vol.get(&best).map_or(0.0, |b| b.abs()))
+                            .max(0.0)
+            })
             .map(|(k, _)| *k)
             .collect();
         let keep: Vec<[u32; 3]> = tri
