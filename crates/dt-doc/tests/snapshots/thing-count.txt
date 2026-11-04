@@ -1,7 +1,7 @@
 dt::unknown-control
 
   × `tree` has no control `count`
-    ╭─[library/tiles/ground/2x2-grass-tree.kdl:11:24]
+    ╭─[library/tiles/ground/2x2-grass-tree.dtile:11:24]
  10 │ 
  11 │         tree height=40 count=3 {               // anywhere on the tile; or at="1,1"
     ·                        ──┬──

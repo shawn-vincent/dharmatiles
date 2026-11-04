@@ -1,7 +1,7 @@
 dt::missing-control
 
   × `wall` needs `along=`
-    ╭─[library/tiles/walls/1x1-wall-fieldstone-corner.kdl:13:9]
+    ╭─[library/tiles/walls/1x1-wall-fieldstone-corner.dtile:13:9]
  12 │         // wall always stands inside, its outer face flush with the edge.
  13 │         wall style=fieldstone seed=14 {
     ·         ──┬─

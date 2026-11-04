@@ -357,7 +357,7 @@ impl<'k> Decoder<'k> {
         };
         let span = value_span(e);
         let raw = arg_str(e).unwrap_or_default();
-        let trimmed = raw.strip_suffix(".kdl").unwrap_or(raw);
+        let trimmed = raw.strip_suffix(".dtile").unwrap_or(raw);
         let source = if let Some(p) = trimmed.strip_prefix("lib:") {
             Source::Library(p.to_owned())
         } else if trimmed.starts_with("./") || trimmed.starts_with("../") {
@@ -408,7 +408,8 @@ impl<'k> Decoder<'k> {
         let Some(file) = self.known.file(&key) else {
             let keys: Vec<&str> = self.known.file_keys().collect();
             let help = hint(did_you_mean(&key, keys.iter().copied())).unwrap_or_else(|| {
-                "the path is from the library root, without `.kdl`, as in `parts/grass`".to_owned()
+                "the path is from the library root, without `.dtile`, as in `parts/grass`"
+                    .to_owned()
             });
             self.err(
                 "dt::use",

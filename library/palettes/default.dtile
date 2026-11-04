@@ -1,5 +1,5 @@
 // The default material-to-colour palette (the preview's paint). Copy it,
-// change the colours, and pass it as `dharmatiles build --3mf --palette my.kdl`.
+// change the colours, and pass it as `dharmatiles build --3mf --palette my.dtile`.
 earth "#806140"
 connector "#9e9ea3"
 rock "#94949c"
@@ -14,7 +14,7 @@ flower "#d9739e"
 // drybrushed highlights, blended smoothly by local relief (raised detail
 // takes the pale tones, hollows stay dark). A tone ends `@0.45` to put it
 // at that place from 0 to 1; otherwise they are spaced evenly. Change a
-// colour here, and pass the file as `--palette my.kdl`.
+// colour here, and pass the file as `--palette my.dtile`.
 ramp earth     "#342418" "#583e28" "#806040" "#aa8a64" "#cdb48c"
 ramp pebble    "#606064" "#848280" "#a8a49e"
 ramp water     "#12265c" "#1c569c@0.45" "#3aa0b2@0.72" "#96dcd6@0.9" "#e1f5f0@1.04"

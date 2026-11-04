@@ -13,7 +13,7 @@ fn walk(dir: &Path, base: &Path, out: &mut Vec<(String, PathBuf)>) {
         let p = e.path();
         if p.is_dir() {
             walk(&p, base, out);
-        } else if p.extension().is_some_and(|x| x == "kdl") {
+        } else if p.extension().is_some_and(|x| x == "dtile") {
             let rel = p.strip_prefix(base).unwrap_or(&p);
             let key = rel
                 .components()

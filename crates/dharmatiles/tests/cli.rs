@@ -19,7 +19,7 @@ fn scratch(name: &str) -> PathBuf {
 fn a_closed_pipe_ends_quietly_with_0() {
     // was: `check … | head -1` panicked writing to the closed pipe (101)
     let d = scratch("pipe");
-    let doc = d.join("t.kdl");
+    let doc = d.join("t.dtile");
     // ~1 MB of errors: far more than a pipe buffers, so the write fails
     let bad = "tile t { stack {\n".to_owned() + &"  gruond\n".repeat(4000) + "} }\n";
     std::fs::write(&doc, bad).unwrap();
@@ -41,7 +41,7 @@ fn a_write_error_in_json_has_every_error_key() {
     let blocked = d.join("out");
     std::fs::write(&blocked, "a file where the out folder should be").unwrap();
     let o = Command::new(EXE)
-        .args(["build", "lib:tiles/test/1x1-flat.kdl", "--json", "--out"])
+        .args(["build", "lib:tiles/test/1x1-flat.dtile", "--json", "--out"])
         .arg(&blocked)
         .output()
         .unwrap();
@@ -57,7 +57,7 @@ fn a_write_error_in_json_has_every_error_key() {
 #[test]
 fn a_missing_document_is_a_source_error() {
     let o = Command::new(EXE)
-        .args(["check", "--json", "no/such/file.kdl"])
+        .args(["check", "--json", "no/such/file.dtile"])
         .output()
         .unwrap();
     assert_eq!(o.status.code(), Some(1));
@@ -175,8 +175,8 @@ fn looks_dirt_json_has_units_limits_defaults_and_subs() {
 fn watch_rebuilds_when_a_used_file_changes() {
     use std::io::BufRead;
     let d = scratch("watch");
-    let parts = d.join("p.kdl");
-    let tile = d.join("t.kdl");
+    let parts = d.join("p.dtile");
+    let tile = d.join("t.dtile");
     std::fs::write(&parts, "define raised { stack { ground level=6 } }\n").unwrap();
     std::fs::write(
         &tile,
@@ -239,7 +239,7 @@ fn watch_rebuilds_when_a_used_file_changes() {
 fn watch_of_a_library_tile_builds_once() {
     let d = scratch("watch-lib");
     let o = Command::new(EXE)
-        .args(["watch", "lib:tiles/test/1x1-flat.kdl", "--out"])
+        .args(["watch", "lib:tiles/test/1x1-flat.dtile", "--out"])
         .arg(&d)
         .output()
         .unwrap();

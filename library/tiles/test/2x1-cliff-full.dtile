@@ -1,6 +1,6 @@
 // The cliff run as the Python lab has it, with every control the vocabulary
 // names (bank, scree, shattered patches, ledges): the language tests' fixture.
-// It does not build yet; library/tiles/cliffs/2x1-cliff.kdl is what does.
+// It does not build yet; library/tiles/cliffs/2x1-cliff.dtile is what does.
 // A 2×1 cliff run: a band of stacked rock against the north edge,
 // with dirt on its top and scree at its foot.
 // Twin of clifflab/rockpile.py's `run` form (round 15, commit 3b56ae0).

@@ -13,21 +13,21 @@ use dt_eval::{Built, Library, Options, build};
 use dt_kit::{VIEWS, render};
 
 const TILES: &[&str] = &[
-    "lib:tiles/test/1x1-flat.kdl",
-    "lib:tiles/ground/1x1-soil.kdl",
-    "lib:tiles/test/2x2-dirt.kdl",
-    "lib:tiles/test/2x2-rocks.kdl",
-    "lib:tiles/test/2x2-water.kdl",
-    "lib:tiles/test/2x2-dirt-stones.kdl",
-    "lib:tiles/test/2x2-grass.kdl",
-    "lib:tiles/test/2x2-meadow.kdl",
-    "lib:tiles/test/2x2-shore.kdl",
-    "lib:tiles/ground/1x1-grass-flowers.kdl",
-    "lib:tiles/cliffs/2x1-cliff.kdl",
-    "lib:tiles/test/1x1-tree.kdl",
-    "lib:tiles/test/1x1-wall-cut-stone-corner.kdl",
-    "lib:tiles/test/1x1-wall-fieldstone.kdl",
-    "lib:tiles/test/1x1-floor-stone.kdl",
+    "lib:tiles/test/1x1-flat.dtile",
+    "lib:tiles/ground/1x1-soil.dtile",
+    "lib:tiles/test/2x2-dirt.dtile",
+    "lib:tiles/test/2x2-rocks.dtile",
+    "lib:tiles/test/2x2-water.dtile",
+    "lib:tiles/test/2x2-dirt-stones.dtile",
+    "lib:tiles/test/2x2-grass.dtile",
+    "lib:tiles/test/2x2-meadow.dtile",
+    "lib:tiles/test/2x2-shore.dtile",
+    "lib:tiles/ground/1x1-grass-flowers.dtile",
+    "lib:tiles/cliffs/2x1-cliff.dtile",
+    "lib:tiles/test/1x1-tree.dtile",
+    "lib:tiles/test/1x1-wall-cut-stone-corner.dtile",
+    "lib:tiles/test/1x1-wall-fieldstone.dtile",
+    "lib:tiles/test/1x1-floor-stone.dtile",
 ];
 
 fn build_at(path: &str, threads: usize) -> Built {
@@ -91,7 +91,7 @@ fn stage_hashes_agree_at_1_4_and_16_threads() {
 fn golden_metrics() {
     for path in TILES {
         let b = build_at(path, 4);
-        let name = path.rsplit('/').next().unwrap().trim_end_matches(".kdl");
+        let name = path.rsplit('/').next().unwrap().trim_end_matches(".dtile");
         insta::assert_snapshot!(format!("{name}-metrics"), metrics(&b));
     }
 }
@@ -101,14 +101,14 @@ fn golden_metrics() {
 fn golden_hashes() {
     for path in TILES {
         let b = build_at(path, 4);
-        let name = path.rsplit('/').next().unwrap().trim_end_matches(".kdl");
+        let name = path.rsplit('/').next().unwrap().trim_end_matches(".dtile");
         insta::assert_snapshot!(format!("{name}-hashes"), hashes(&b));
     }
 }
 
 #[test]
 fn the_flat_tile_meets_the_exit_criteria() {
-    let b = build_at("lib:tiles/test/1x1-flat.kdl", 4);
+    let b = build_at("lib:tiles/test/1x1-flat.dtile", 4);
     let a = &b.audit;
     assert!(a.watertight, "watertight after the float32 reload");
     assert_eq!(a.overhang_mm2, 0.0);
@@ -134,8 +134,8 @@ fn the_flat_tile_meets_the_exit_criteria() {
 #[test]
 fn the_dirt_tiles_meet_the_exit_criteria() {
     for path in [
-        "lib:tiles/ground/1x1-soil.kdl",
-        "lib:tiles/test/2x2-dirt.kdl",
+        "lib:tiles/ground/1x1-soil.dtile",
+        "lib:tiles/test/2x2-dirt.dtile",
     ] {
         let b = build_at(path, 4);
         let a = &b.audit;
@@ -167,9 +167,9 @@ fn the_dirt_tiles_meet_the_exit_criteria() {
 fn the_rocks_and_water_tiles_meet_the_exit_criteria() {
     use dt_kit::Material;
     for path in [
-        "lib:tiles/test/2x2-rocks.kdl",
-        "lib:tiles/test/2x2-water.kdl",
-        "lib:tiles/test/2x2-dirt-stones.kdl",
+        "lib:tiles/test/2x2-rocks.dtile",
+        "lib:tiles/test/2x2-water.dtile",
+        "lib:tiles/test/2x2-dirt-stones.dtile",
     ] {
         let b = build_at(path, 4);
         let a = &b.audit;
@@ -204,9 +204,9 @@ fn the_rocks_and_water_tiles_meet_the_exit_criteria() {
 #[test]
 fn the_wall_and_floor_tiles_meet_the_exit_criteria() {
     for path in [
-        "lib:tiles/test/1x1-wall-cut-stone-corner.kdl",
-        "lib:tiles/test/1x1-wall-fieldstone.kdl",
-        "lib:tiles/test/1x1-floor-stone.kdl",
+        "lib:tiles/test/1x1-wall-cut-stone-corner.dtile",
+        "lib:tiles/test/1x1-wall-fieldstone.dtile",
+        "lib:tiles/test/1x1-floor-stone.dtile",
     ] {
         let b = build_at(path, 4);
         let a = &b.audit;
@@ -227,9 +227,9 @@ fn the_wall_and_floor_tiles_meet_the_exit_criteria() {
 fn the_grass_tiles_meet_the_exit_criteria() {
     use dt_kit::Material;
     for path in [
-        "lib:tiles/test/2x2-grass.kdl",
-        "lib:tiles/test/2x2-meadow.kdl",
-        "lib:tiles/test/2x2-shore.kdl",
+        "lib:tiles/test/2x2-grass.dtile",
+        "lib:tiles/test/2x2-meadow.dtile",
+        "lib:tiles/test/2x2-shore.dtile",
     ] {
         let b = build_at(path, 4);
         let a = &b.audit;

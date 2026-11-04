@@ -502,12 +502,12 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("dt-timings-{}", std::process::id()));
         let file = Timings::file_in(&dir);
         let mut t = Timings::load(&file);
-        assert!(t.get("d.kdl", "db", "union").is_none());
-        t.record("d.kdl", "db", &[("union".to_owned(), 1.25)]);
+        assert!(t.get("d.dtile", "db", "union").is_none());
+        t.record("d.dtile", "db", &[("union".to_owned(), 1.25)]);
         t.save();
         let again = Timings::load(&file);
-        assert_eq!(again.get("d.kdl", "db", "union"), Some(1.25));
-        assert!(again.get("d.kdl", "ol", "union").is_none());
+        assert_eq!(again.get("d.dtile", "db", "union"), Some(1.25));
+        assert!(again.get("d.dtile", "ol", "union").is_none());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

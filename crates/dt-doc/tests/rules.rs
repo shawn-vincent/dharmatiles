@@ -67,10 +67,10 @@ fn levels_are_named_or_mm_or_expressions() {
 #[test]
 fn standard_levels_need_no_use_line() {
     let k = dt_doc::Known::standard();
-    dt_doc::decode("t.kdl", "tile t { stack { dirt level=edge } }", &k).unwrap();
+    dt_doc::decode("t.dtile", "tile t { stack { dirt level=edge } }", &k).unwrap();
     // Without the prelude the names are unknown.
     let bare = dt_doc::Known::new();
-    assert!(dt_doc::decode("t.kdl", "tile t { stack { dirt level=edge } }", &bare).is_err());
+    assert!(dt_doc::decode("t.dtile", "tile t { stack { dirt level=edge } }", &bare).is_err());
 }
 
 #[test]
@@ -79,11 +79,11 @@ fn standard_levels_are_in_mm_and_listed_for_an_unknown_name() {
     let mm = |n: &str| k.levels().iter().find(|(k, _)| k == n).map(|(_, v)| *v);
     assert_eq!(mm("ground"), Some(5.0));
     assert_eq!(mm("wall-top"), Some(33.1));
-    let e = dt_doc::decode("t.kdl", "tile t { stack { dirt level=lava } }", &k).unwrap_err();
+    let e = dt_doc::decode("t.dtile", "tile t { stack { dirt level=lava } }", &k).unwrap_err();
     let help = e[0].help.as_deref().unwrap();
     assert!(help.contains("wall-top (33.1 mm)"), "{help}");
     // a near miss is suggested on its own
-    let e = dt_doc::decode("t.kdl", "tile t { stack { dirt level=grund } }", &k).unwrap_err();
+    let e = dt_doc::decode("t.dtile", "tile t { stack { dirt level=grund } }", &k).unwrap_err();
     assert_eq!(e[0].help.as_deref(), Some("did you mean `ground`?"));
 }
 
@@ -648,7 +648,7 @@ fn use_names_where_every_name_came_from() {
         "dt::use",
         "use \"parts/grass\" lawn long-grass",
     );
-    let u = dt_doc::uses("t.kdl", "use \"./mine\" a b\ntile t { }").unwrap();
+    let u = dt_doc::uses("t.dtile", "use \"./mine\" a b\ntile t { }").unwrap();
     assert_eq!(u[0].key(), "./mine");
     assert_eq!(u[0].names.len(), 2);
 }

@@ -14,19 +14,19 @@ macro_rules! lib {
     };
 }
 
-pub const LEVELS: (&str, &str) = lib!("parts/levels.kdl");
-pub const EDGES: (&str, &str) = lib!("parts/edges.kdl");
-pub const GRASS: (&str, &str) = lib!("parts/grass.kdl");
-pub const TREES: (&str, &str) = lib!("parts/trees.kdl");
-pub const PRINTER: (&str, &str) = lib!("printers/default.kdl");
-pub const FLAT: (&str, &str) = lib!("tiles/test/1x1-flat.kdl");
-pub const GRASS_TREE: (&str, &str) = lib!("tiles/ground/2x2-grass-tree.kdl");
-pub const WALL_CORNER: (&str, &str) = lib!("tiles/walls/1x1-wall-fieldstone-corner.kdl");
-pub const CLIFF_RUN: (&str, &str) = lib!("tiles/test/2x1-cliff-full.kdl");
+pub const LEVELS: (&str, &str) = lib!("parts/levels.dtile");
+pub const EDGES: (&str, &str) = lib!("parts/edges.dtile");
+pub const GRASS: (&str, &str) = lib!("parts/grass.dtile");
+pub const TREES: (&str, &str) = lib!("parts/trees.dtile");
+pub const PRINTER: (&str, &str) = lib!("printers/default.dtile");
+pub const FLAT: (&str, &str) = lib!("tiles/test/1x1-flat.dtile");
+pub const GRASS_TREE: (&str, &str) = lib!("tiles/ground/2x2-grass-tree.dtile");
+pub const WALL_CORNER: (&str, &str) = lib!("tiles/walls/1x1-wall-fieldstone-corner.dtile");
+pub const CLIFF_RUN: (&str, &str) = lib!("tiles/test/2x1-cliff-full.dtile");
 /// The R6 page's from-scratch tile: a divided tile, not a library tile.
 pub const PATH_ROCKS: (&str, &str) = (
-    "tests/fixtures/1x2-grass-path-rocks.kdl",
-    include_str!("../fixtures/1x2-grass-path-rocks.kdl"),
+    "tests/fixtures/1x2-grass-path-rocks.dtile",
+    include_str!("../fixtures/1x2-grass-path-rocks.dtile"),
 );
 
 /// Every file under library/, plus the R6 fixture.
@@ -61,12 +61,12 @@ pub fn decode_ok((name, text): (&str, &str)) -> Document {
 
 /// Decode a snippet; panics with the report if it fails.
 pub fn snippet(text: &str) -> Document {
-    decode("snippet.kdl", text, &known()).unwrap_or_else(|e| panic!("{text}\n{}", render(&e)))
+    decode("snippet.dtile", text, &known()).unwrap_or_else(|e| panic!("{text}\n{}", render(&e)))
 }
 
 /// Decode a snippet that must fail; returns the errors and the report.
 pub fn fails(text: &str) -> (Vec<DocError>, String) {
-    let e = decode("snippet.kdl", text, &known()).expect_err(text);
+    let e = decode("snippet.dtile", text, &known()).expect_err(text);
     let shown = render(&e);
     (e, shown)
 }

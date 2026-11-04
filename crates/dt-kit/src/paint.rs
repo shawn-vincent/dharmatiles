@@ -5,7 +5,7 @@
 //! Each face is coloured by its *local relief*: how far the surface there
 //! stands out of, or falls back into, its neighbours (the mesh's own
 //! curvature), blended smoothly through the material's ramp in the palette
-//! (`library/palettes/default.kdl`). Grass and leaves also paint by their
+//! (`library/palettes/default.dtile`). Grass and leaves also paint by their
 //! height above the ground, so roots are dark and tips light.
 //!
 //! Relief is measured on the printed mesh, so the paint shows what the

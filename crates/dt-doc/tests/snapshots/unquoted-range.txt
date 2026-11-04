@@ -1,7 +1,7 @@
 dt::syntax
 
   × `1..6` must be quoted
-    ╭─[library/tiles/test/2x1-cliff-full.kdl:30:66]
+    ╭─[library/tiles/test/2x1-cliff-full.dtile:30:66]
  29 │         // scree: fallen stones gathered at the cliff's foot
  30 │         scatter against=cliff per-square=55 reach=4 { stone size=1..6 mostly=small }
     ·                                                                  ──┬─

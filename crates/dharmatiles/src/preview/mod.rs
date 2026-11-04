@@ -67,7 +67,7 @@ impl Slot {
             .rsplit(['/', ':'])
             .next()
             .unwrap_or(path)
-            .trim_end_matches(".kdl")
+            .trim_end_matches(".dtile")
             .to_owned();
         Self {
             path: path.to_owned(),

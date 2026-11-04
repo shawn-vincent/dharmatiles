@@ -16,7 +16,7 @@ fn mem(files: &[(&str, &str)]) -> Memory {
 }
 
 fn errors(text: &str) -> Vec<Diag> {
-    match check(&mem(&[("t.kdl", text)]), "t.kdl", &Options::default()) {
+    match check(&mem(&[("t.dtile", text)]), "t.dtile", &Options::default()) {
         Ok(_) => panic!("expected an error"),
         Err(e) => e,
     }
@@ -34,7 +34,7 @@ fn rendered(d: &Diag) -> String {
 fn a_misspelt_look_points_at_its_line_with_a_hint() {
     let e = errors("tile flat size=\"1x1\" {\n    stack {\n        grond\n    }\n}\n");
     assert_eq!(e.len(), 1);
-    assert_eq!(e[0].location(), Some(("t.kdl".into(), 3, 9)));
+    assert_eq!(e[0].location(), Some(("t.dtile".into(), 3, 9)));
     assert_eq!(e[0].help.as_deref(), Some("did you mean `ground`?"));
     let r = rendered(&e[0]);
     assert!(
@@ -69,10 +69,10 @@ fn an_unknown_control_names_the_ones_there_are() {
 #[test]
 fn a_control_not_built_yet_is_checked_but_not_built() {
     let text = "tile flat {\n  stack {\n    rock wear=worn\n  }\n}\n";
-    let src = mem(&[("t.kdl", text)]);
-    let c = check(&src, "t.kdl", &Options::default()).unwrap();
+    let src = mem(&[("t.dtile", text)]);
+    let c = check(&src, "t.dtile", &Options::default()).unwrap();
     assert_eq!(c.pending().len(), 1); // `wear`
-    let Err(e) = build(&src, "t.kdl", &Options::default()) else {
+    let Err(e) = build(&src, "t.dtile", &Options::default()) else {
         panic!("built a control that is not built yet");
     };
     assert_eq!(e[0].code, "dt::not-yet");
@@ -83,7 +83,7 @@ fn a_control_not_built_yet_is_checked_but_not_built() {
 #[test]
 fn library_tiles_check_and_say_which_look_is_missing_when_built() {
     // the full cliff run (bank, scree, pebbles on the dirt) is built now
-    let path = "lib:tiles/test/2x1-cliff-full.kdl";
+    let path = "lib:tiles/test/2x1-cliff-full.dtile";
     let c = check(&Library, path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
     assert!(c.pending().is_empty(), "{path}: {:?}", c.pending());
     // (a palette is not a tile document)
@@ -97,7 +97,12 @@ fn library_tiles_check_and_say_which_look_is_missing_when_built() {
 
 #[test]
 fn levels_edges_and_printer_come_from_the_library() {
-    let c = check(&Library, "lib:tiles/test/1x1-flat.kdl", &Options::default()).unwrap();
+    let c = check(
+        &Library,
+        "lib:tiles/test/1x1-flat.dtile",
+        &Options::default(),
+    )
+    .unwrap();
     let t = c.tile.unwrap();
     let level = |n: &str| t.levels.iter().find(|(k, _)| k == n).map(|(_, v)| *v);
     assert_eq!(level("edge"), Some(3.4));
@@ -117,10 +122,10 @@ fn levels_edges_and_printer_come_from_the_library() {
 
 #[test]
 fn a_parts_file_checks_but_does_not_build() {
-    let c = check(&Library, "lib:parts/grass.kdl", &Options::default()).unwrap();
+    let c = check(&Library, "lib:parts/grass.dtile", &Options::default()).unwrap();
     assert!(c.tile.is_none());
     assert_eq!(c.file.doc.definitions.len(), 2);
-    let Err(e) = build(&Library, "lib:parts/grass.kdl", &Options::default()) else {
+    let Err(e) = build(&Library, "lib:parts/grass.dtile", &Options::default()) else {
         panic!("built a parts file");
     };
     assert_eq!(e[0].code, "dt::no-tile");
@@ -130,29 +135,29 @@ fn a_parts_file_checks_but_does_not_build() {
 fn use_paths_name_the_library_or_the_project() {
     let raised = "define raised { stack { ground level=\"ground + 2\" } }\n";
     let src = mem(&[
-        ("lib:parts/raised.kdl", raised),
-        ("proj/parts/raised.kdl", raised),
+        ("lib:parts/raised.dtile", raised),
+        ("proj/parts/raised.dtile", raised),
         (
-            "proj/tiles/a.kdl",
+            "proj/tiles/a.dtile",
             "use \"parts/raised\" raised\ntile a { stack { raised } }\n",
         ),
         (
-            "proj/tiles/b.kdl",
+            "proj/tiles/b.dtile",
             "use \"lib:parts/raised\" raised\ntile b { stack { raised } }\n",
         ),
         (
-            "proj/tiles/c.kdl",
+            "proj/tiles/c.dtile",
             "use \"../parts/raised\" raised\ntile c { stack { raised } }\n",
         ),
         (
-            "proj/tiles/d.kdl",
+            "proj/tiles/d.dtile",
             "use \"./raised\" raised\ntile d { stack { raised } }\n",
         ),
     ]);
     for (path, from) in [
-        ("proj/tiles/a.kdl", "lib:parts/raised.kdl"),
-        ("proj/tiles/b.kdl", "lib:parts/raised.kdl"),
-        ("proj/tiles/c.kdl", "proj/parts/raised.kdl"),
+        ("proj/tiles/a.dtile", "lib:parts/raised.dtile"),
+        ("proj/tiles/b.dtile", "lib:parts/raised.dtile"),
+        ("proj/tiles/c.dtile", "proj/parts/raised.dtile"),
     ] {
         let t = check(&src, path, &Options::default())
             .unwrap()
@@ -160,12 +165,12 @@ fn use_paths_name_the_library_or_the_project() {
             .unwrap();
         assert_eq!(t.stack[0].src.name(), from, "{path}");
     }
-    let e = check(&src, "proj/tiles/d.kdl", &Options::default())
+    let e = check(&src, "proj/tiles/d.dtile", &Options::default())
         .err()
         .unwrap();
     assert_eq!(e[0].location().unwrap().1, 1);
     assert!(
-        e[0].message.contains("proj/tiles/raised.kdl"),
+        e[0].message.contains("proj/tiles/raised.dtile"),
         "{}",
         e[0].message
     );
@@ -174,10 +179,10 @@ fn use_paths_name_the_library_or_the_project() {
 #[test]
 fn definition_parameters_take_arguments_and_defaults() {
     let src = mem(&[(
-        "t.kdl",
+        "t.dtile",
         "define raised {\n  param by 2\n  stack { ground level=by }\n}\ntile t {\n  stack { raised by=6 }\n}\n",
     )]);
-    let t = check(&src, "t.kdl", &Options::default())
+    let t = check(&src, "t.dtile", &Options::default())
         .unwrap()
         .tile
         .unwrap();
@@ -195,26 +200,26 @@ fn kdl_syntax_errors_carry_their_place() {
 fn a_bad_import_points_at_the_use_line() {
     let e = errors("use \"lib:parts/nothing\" lawn\ntile flat { stack { ground } }\n");
     assert_eq!(e[0].location().unwrap().1, 1);
-    assert!(e[0].message.contains("nothing.kdl"));
+    assert!(e[0].message.contains("nothing.dtile"));
 }
 
 #[test]
 fn imports_inline_definitions_and_levels_resolve() {
     let src = mem(&[
         (
-            "parts/flats.kdl",
+            "parts/flats.dtile",
             "define raised { stack { ground level=\"ground + 2\" } }\n",
         ),
         (
-            "tiles/t.kdl",
+            "tiles/t.dtile",
             "use \"../parts/flats\" raised\ntile t { levels foot=4; stack { raised } }\n",
         ),
     ]);
-    let c = check(&src, "tiles/t.kdl", &Options::default()).unwrap();
+    let c = check(&src, "tiles/t.dtile", &Options::default()).unwrap();
     let t = c.tile.unwrap();
     assert_eq!(t.stack.len(), 1);
-    assert_eq!(t.stack[0].src.name(), "parts/flats.kdl");
-    let b = build(&src, "tiles/t.kdl", &Options::default()).unwrap();
+    assert_eq!(t.stack[0].src.name(), "parts/flats.dtile");
+    let b = build(&src, "tiles/t.dtile", &Options::default()).unwrap();
     let top = b
         .export
         .mesh
@@ -228,7 +233,7 @@ fn imports_inline_definitions_and_levels_resolve() {
 #[test]
 fn a_line_and_two_regions_make_a_step() {
     let src = mem(&[(
-        "t.kdl",
+        "t.dtile",
         r#"tile step size="1x1" seed=3 {
     line across { through west east }
     region low { bounded-by across; fill "0.5,0.25" }
@@ -240,7 +245,7 @@ fn a_line_and_two_regions_make_a_step() {
 }
 "#,
     )]);
-    let b = build(&src, "t.kdl", &Options::default()).unwrap();
+    let b = build(&src, "t.dtile", &Options::default()).unwrap();
     assert!(
         b.audit.failures(&Options::default().printer).is_empty(),
         "{:?}",
@@ -275,7 +280,7 @@ fn an_unknown_region_is_refused() {
 #[test]
 fn a_later_paint_removes_the_stones_it_covers() {
     let src = mem(&[(
-        "t.kdl",
+        "t.dtile",
         r#"tile pool size="2x2" seed=2 {
     line across { through west east }
     region low { bounded-by across; fill "1,0.5" }
@@ -287,7 +292,7 @@ fn a_later_paint_removes_the_stones_it_covers() {
 }
 "#,
     )]);
-    let b = build(&src, "t.kdl", &Options::default()).unwrap();
+    let b = build(&src, "t.dtile", &Options::default()).unwrap();
     let m = &b.export.mesh;
     let rock_ys: Vec<f64> = m
         .triangles
@@ -308,7 +313,7 @@ fn a_later_paint_removes_the_stones_it_covers() {
 #[test]
 fn a_rock_placed_past_the_edge_is_refused() {
     let src = mem(&[(
-        "t.kdl",
+        "t.dtile",
         r#"tile r size="1x1" seed=1 {
     stack {
         ground
@@ -317,7 +322,7 @@ fn a_rock_placed_past_the_edge_is_refused() {
 }
 "#,
     )]);
-    let Err(e) = build(&src, "t.kdl", &Options::default()) else {
+    let Err(e) = build(&src, "t.dtile", &Options::default()) else {
         panic!("built a rock standing past the tile's edge");
     };
     assert!(
@@ -330,13 +335,13 @@ fn a_rock_placed_past_the_edge_is_refused() {
 #[test]
 fn water_alone_builds_a_tile() {
     let src = mem(&[(
-        "t.kdl",
+        "t.dtile",
         r#"tile w size="1x1" seed=1 {
     stack { water }
 }
 "#,
     )]);
-    let b = build(&src, "t.kdl", &Options::default()).unwrap();
+    let b = build(&src, "t.dtile", &Options::default()).unwrap();
     assert!(b.materials.contains(&dt_kit::Material::Water));
 }
 
@@ -352,15 +357,15 @@ fn a_seed_wobbles_the_lines_again() {
     }
 }
 "#;
-    let src = mem(&[("t.kdl", text)]);
+    let src = mem(&[("t.dtile", text)]);
     let hash = |seed| {
         let o = Options {
             seed: Some(seed),
             ..Options::default()
         };
-        build(&src, "t.kdl", &o).unwrap().stages
+        build(&src, "t.dtile", &o).unwrap().stages
     };
-    let plain = build(&src, "t.kdl", &Options::default()).unwrap().stages;
+    let plain = build(&src, "t.dtile", &Options::default()).unwrap().stages;
     // the tile's own seed again changes nothing; another moves the line
     assert_eq!(hash(3), plain);
     assert_ne!(hash(4), plain);
@@ -369,14 +374,14 @@ fn a_seed_wobbles_the_lines_again() {
 #[test]
 fn the_floor_and_wall_tiles_build_with_grass() {
     for path in [
-        "lib:tiles/floors/1x1-floor-stone.kdl",
-        "lib:tiles/floors/1x1-floor-stone-wall.kdl",
-        "lib:tiles/walls/1x1-wall-stone.kdl",
-        "lib:tiles/walls/1x1-wall-stone-corner.kdl",
-        "lib:tiles/walls/1x1-wall-brick.kdl",
-        "lib:tiles/walls/1x1-wall-brick-corner.kdl",
-        "lib:tiles/walls/1x1-wall-fieldstone.kdl",
-        "lib:tiles/walls/1x1-wall-fieldstone-corner.kdl",
+        "lib:tiles/floors/1x1-floor-stone.dtile",
+        "lib:tiles/floors/1x1-floor-stone-wall.dtile",
+        "lib:tiles/walls/1x1-wall-stone.dtile",
+        "lib:tiles/walls/1x1-wall-stone-corner.dtile",
+        "lib:tiles/walls/1x1-wall-brick.dtile",
+        "lib:tiles/walls/1x1-wall-brick-corner.dtile",
+        "lib:tiles/walls/1x1-wall-fieldstone.dtile",
+        "lib:tiles/walls/1x1-wall-fieldstone-corner.dtile",
     ] {
         let b =
             build(&Library, path, &Options::default()).unwrap_or_else(|e| panic!("{path}: {e:?}"));
@@ -387,8 +392,8 @@ fn the_floor_and_wall_tiles_build_with_grass() {
 #[test]
 fn a_wall_off_its_area_is_refused() {
     let text = "tile t size=\"1x1\" {\n  line across { through west east }\n  region south { bounded-by across; fill \"0.5,0.25\" }\n  stack {\n    dirt\n    wall in=south along=north style=cut-stone\n  }\n}\n";
-    let src = mem(&[("t.kdl", text)]);
-    let Err(e) = build(&src, "t.kdl", &Options::default()) else {
+    let src = mem(&[("t.dtile", text)]);
+    let Err(e) = build(&src, "t.dtile", &Options::default()) else {
         panic!("built a wall off its area");
     };
     assert!(e[0].message.contains("wall"), "{e:?}");
@@ -410,12 +415,12 @@ fn a_wall_in_a_definition_needs_along_from_the_call() {
     let with = format!(
         "{def}tile t size=\"1x1\" {{\n    stack {{\n        dirt\n        ruin-corner along=\"north\"\n    }}\n}}\n"
     );
-    let src = mem(&[("t.kdl", &with)]);
-    assert!(check(&src, "t.kdl", &Options::default()).is_ok());
+    let src = mem(&[("t.dtile", &with)]);
+    assert!(check(&src, "t.dtile", &Options::default()).is_ok());
 }
 
 /// The naming standard (docs/standards/tile-system.html, "File names"): a
-/// library tile is `<NxM>-<name>.kdl`, size first, lower case, and the size
+/// library tile is `<NxM>-<name>.dtile`, size first, lower case, and the size
 /// in the name is the size the document asks for.
 #[test]
 fn library_tile_file_names_follow_the_standard() {
@@ -425,9 +430,9 @@ fn library_tile_file_names_follow_the_standard() {
         .filter(|p| p.contains("tiles/"))
     {
         let file = path.rsplit('/').next().unwrap_or(&path);
-        let stem = file.strip_suffix(".kdl").unwrap_or("");
+        let stem = file.strip_suffix(".dtile").unwrap_or("");
         let Some((size, name)) = stem.split_once('-') else {
-            bad.push(format!("{path}: not `<NxM>-<name>.kdl`"));
+            bad.push(format!("{path}: not `<NxM>-<name>.dtile`"));
             continue;
         };
         let dims: Vec<&str> = size.split('x').collect();
@@ -441,7 +446,7 @@ fn library_tile_file_names_follow_the_standard() {
                 .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '+' || c == '-');
         if !(sized && named) {
             bad.push(format!(
-                "{path}: not `<NxM>-<name>.kdl` (lower case, digits, `+`, `-`)"
+                "{path}: not `<NxM>-<name>.dtile` (lower case, digits, `+`, `-`)"
             ));
             continue;
         }

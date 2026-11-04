@@ -17,19 +17,22 @@ fn mem(files: &[(&str, &str)]) -> Memory {
 #[test]
 fn a_use_from_a_file_above_the_working_folder_keeps_its_dot_dots() {
     let src = mem(&[
-        ("../u/sub/t.kdl", "use \"./p\" p\ntile t { stack { p } }\n"),
-        ("../u/sub/p.kdl", "define p { stack { ground } }\n"),
-        ("u/sub/p.kdl", "define p { stack { ground level=9 } }\n"),
+        (
+            "../u/sub/t.dtile",
+            "use \"./p\" p\ntile t { stack { p } }\n",
+        ),
+        ("../u/sub/p.dtile", "define p { stack { ground } }\n"),
+        ("u/sub/p.dtile", "define p { stack { ground level=9 } }\n"),
     ]);
-    let t = check(&src, "../u/sub/t.kdl", &Options::default())
+    let t = check(&src, "../u/sub/t.dtile", &Options::default())
         .unwrap()
         .tile
         .unwrap();
-    assert_eq!(t.stack[0].src.name(), "../u/sub/p.kdl");
+    assert_eq!(t.stack[0].src.name(), "../u/sub/p.dtile");
 }
 
 fn errors(text: &str) -> Vec<dt_eval::Diag> {
-    match check(&mem(&[("t.kdl", text)]), "t.kdl", &Options::default()) {
+    match check(&mem(&[("t.dtile", text)]), "t.dtile", &Options::default()) {
         Ok(_) => panic!("expected an error"),
         Err(e) => e,
     }
@@ -60,10 +63,10 @@ fn a_fill_point_on_its_line_is_an_empty_region() {
 #[test]
 fn a_fill_point_beside_its_line_is_not_empty() {
     let src = mem(&[(
-        "t.kdl",
+        "t.dtile",
         "tile a {\n  line split { through west east }\n  region s { bounded-by split; fill \"0.5,0.2\" }\n  stack { ground in=s }\n}\n",
     )]);
-    assert!(check(&src, "t.kdl", &Options::default()).is_ok());
+    assert!(check(&src, "t.dtile", &Options::default()).is_ok());
 }
 
 #[test]
@@ -97,14 +100,14 @@ fn definitions_that_multiply_stop_at_the_entry_cap() {
 #[test]
 fn ten_thousand_entries_are_allowed() {
     let src = mem(&[(
-        "t.kdl",
+        "t.dtile",
         &format!(
             "define d {{ stack {{ {} }} }}\ntile a {{ stack {{ {} }} }}\n",
             vec!["ground"; 100].join("; "),
             vec!["d"; 99].join("; ")
         ),
     )]);
-    let t = check(&src, "t.kdl", &Options::default())
+    let t = check(&src, "t.dtile", &Options::default())
         .unwrap()
         .tile
         .unwrap();
@@ -115,10 +118,10 @@ fn ten_thousand_entries_are_allowed() {
 fn entries_inside_an_id_or_seed_call_get_their_own_seed_paths() {
     // was: both grounds got tile/a/ground/x, and seed=5 pinned both to 5
     let src = mem(&[(
-        "t.kdl",
+        "t.dtile",
         "define two { stack { ground; ground level=6 } }\ntile a { stack { two id=x; two seed=5 } }\n",
     )]);
-    let t = check(&src, "t.kdl", &Options::default())
+    let t = check(&src, "t.dtile", &Options::default())
         .unwrap()
         .tile
         .unwrap();

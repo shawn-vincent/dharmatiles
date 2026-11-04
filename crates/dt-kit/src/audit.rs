@@ -53,7 +53,7 @@ impl Band {
 }
 
 /// The printer profile the gate checks against: the numbers of a
-/// `printer` in library/printers/*.kdl (dt-eval decodes it with dt-doc
+/// `printer` in library/printers/*.dtile (dt-eval decodes it with dt-doc
 /// and calls [`Printer::new`]), plus the gate's own tuning, which no
 /// profile sets.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -947,7 +947,7 @@ mod tests {
         }
     }
 
-    /// library/printers/default.kdl's numbers.
+    /// library/printers/default.dtile's numbers.
     fn fdm() -> Printer {
         Printer::new(0.45, 0.2, 55.0, 0.2)
     }

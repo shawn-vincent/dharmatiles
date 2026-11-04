@@ -1,7 +1,7 @@
 dt::syntax
 
   × bare `true` is KDL v1; dharmatiles documents are KDL v2
-    ╭─[library/tiles/test/2x1-cliff-full.kdl:25:17]
+    ╭─[library/tiles/test/2x1-cliff-full.dtile:25:17]
  24 │             stone-size massive          // or: rubble, broken
  25 │             top true                    // or: bare
     ·                 ──┬─

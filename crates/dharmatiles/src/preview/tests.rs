@@ -70,7 +70,7 @@ fn wait_for(r: &Running, what: &str, mut ok: impl FnMut(&Value) -> bool) -> Valu
     }
 }
 
-const FLAT: &str = "lib:tiles/test/1x1-flat.kdl";
+const FLAT: &str = "lib:tiles/test/1x1-flat.dtile";
 
 #[test]
 fn serves_the_viewer_and_its_vendored_three() {
@@ -204,7 +204,7 @@ fn a_library_tile_is_built_only_when_asked() {
 fn editing_the_document_rebuilds_it_and_a_mistake_shows_its_line() {
     let dir = std::env::temp_dir().join(format!("dt-preview-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let doc = dir.join("t.kdl");
+    let doc = dir.join("t.dtile");
     let text = dt_eval::Library.read(FLAT).unwrap();
     std::fs::write(&doc, &text).unwrap();
     let path = doc.to_string_lossy().into_owned();
@@ -234,10 +234,10 @@ fn editing_the_document_rebuilds_it_and_a_mistake_shows_its_line() {
 #[test]
 fn the_slot_name_comes_from_the_file_until_the_plan_is_read() {
     assert_eq!(
-        Slot::new("lib:tiles/ground/1x1-grass.kdl").name,
+        Slot::new("lib:tiles/ground/1x1-grass.dtile").name,
         "1x1-grass"
     );
-    assert_eq!(Slot::new("my/tiles/a.kdl").name, "a");
+    assert_eq!(Slot::new("my/tiles/a.dtile").name, "a");
     let _ = Shared::new(&[], "db", 55.0).snapshot();
 }
 

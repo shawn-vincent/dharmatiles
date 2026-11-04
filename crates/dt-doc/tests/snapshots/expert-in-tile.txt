@@ -1,7 +1,7 @@
 dt::expert
 
   × `tree branch` is an expert control
-    ╭─[library/tiles/ground/2x2-grass-tree.kdl:14:13]
+    ╭─[library/tiles/ground/2x2-grass-tree.dtile:14:13]
  13 │             crown width=30 clumps=32 shape=round branching=normal
  14 │             branch split=34
     ·             ───┬──

@@ -2,7 +2,7 @@
 //! same code reads the disk, the embedded library or an in-memory map (a
 //! browser editor, tests).
 //!
-//! Paths: `lib:parts/grass.kdl` is the library (explicit, never a search
+//! Paths: `lib:parts/grass.dtile` is the library (explicit, never a search
 //! path); anything else is a file path. The library is a folder on disk:
 //! a checkout's `library/`, `$DT_LIBRARY`, or the copy installed beside the
 //! program. Only builds with the `embedded-library` feature (the browser,
@@ -54,7 +54,7 @@ fn find_library() -> Option<PathBuf> {
     if cfg!(feature = "embedded-library") {
         return None;
     }
-    let ok = |d: &Path| d.join("printers/default.kdl").is_file();
+    let ok = |d: &Path| d.join("printers/default.dtile").is_file();
     if let Some(d) = std::env::var_os("DT_LIBRARY").map(PathBuf::from) {
         return Some(d);
     }
@@ -104,7 +104,7 @@ impl Library {
     }
 }
 
-/// Every `.kdl` under `dir`, as `lib:` paths relative to `root`.
+/// Every `.dtile` under `dir`, as `lib:` paths relative to `root`.
 fn kdl_files(root: &Path, dir: &Path, out: &mut Vec<String>) {
     let Ok(rd) = std::fs::read_dir(dir) else {
         return;
@@ -113,7 +113,7 @@ fn kdl_files(root: &Path, dir: &Path, out: &mut Vec<String>) {
         let p = e.path();
         if p.is_dir() {
             kdl_files(root, &p, out);
-        } else if p.extension().is_some_and(|x| x == "kdl")
+        } else if p.extension().is_some_and(|x| x == "dtile")
             && let Ok(rel) = p.strip_prefix(root)
         {
             out.push(format!("{LIB}{}", rel.to_string_lossy().replace('\\', "/")));
@@ -175,13 +175,13 @@ impl Source for Memory {
     }
 }
 
-/// The path a `use "target"` in `from` names, with `.kdl` added if missing.
+/// The path a `use "target"` in `from` names, with `.dtile` added if missing.
 #[must_use]
 pub fn resolve(from: &str, target: &str) -> String {
-    let target = if target.ends_with(".kdl") {
+    let target = if target.ends_with(".dtile") {
         target.to_owned()
     } else {
-        format!("{target}.kdl")
+        format!("{target}.dtile")
     };
     if target.starts_with(LIB) || target.starts_with('/') {
         return target;
@@ -230,30 +230,30 @@ mod tests {
     #[test]
     fn resolves_relative_to_the_importer() {
         assert_eq!(
-            resolve("lib:tiles/ground/x.kdl", "../../parts/grass"),
-            "lib:parts/grass.kdl"
+            resolve("lib:tiles/ground/x.dtile", "../../parts/grass"),
+            "lib:parts/grass.dtile"
         );
         assert_eq!(
-            resolve("lib:tiles/x.kdl", "lib:parts/grass"),
-            "lib:parts/grass.kdl"
+            resolve("lib:tiles/x.dtile", "lib:parts/grass"),
+            "lib:parts/grass.dtile"
         );
-        assert_eq!(resolve("tiles/a.kdl", "parts.kdl"), "tiles/parts.kdl");
-        assert_eq!(resolve("a.kdl", "b"), "b.kdl");
+        assert_eq!(resolve("tiles/a.dtile", "parts.dtile"), "tiles/parts.dtile");
+        assert_eq!(resolve("a.dtile", "b"), "b.dtile");
     }
 
     #[test]
     fn leading_dot_dots_are_kept() {
-        assert_eq!(resolve("../u/sub/t.kdl", "./p"), "../u/sub/p.kdl");
-        assert_eq!(resolve("a.kdl", "../shared/x"), "../shared/x.kdl");
-        assert_eq!(resolve("../a.kdl", "../../x"), "../../../x.kdl");
-        assert_eq!(resolve("t/a.kdl", "../../x"), "../x.kdl");
-        assert_eq!(resolve("/p/a.kdl", "../../../x"), "/x.kdl");
-        assert_eq!(resolve("lib:a.kdl", "../x"), "lib:../x.kdl");
+        assert_eq!(resolve("../u/sub/t.dtile", "./p"), "../u/sub/p.dtile");
+        assert_eq!(resolve("a.dtile", "../shared/x"), "../shared/x.dtile");
+        assert_eq!(resolve("../a.dtile", "../../x"), "../../../x.dtile");
+        assert_eq!(resolve("t/a.dtile", "../../x"), "../x.dtile");
+        assert_eq!(resolve("/p/a.dtile", "../../../x"), "/x.dtile");
+        assert_eq!(resolve("lib:a.dtile", "../x"), "lib:../x.dtile");
     }
 
     #[test]
     fn the_flat_tile_is_embedded() {
-        assert!(Library.read("lib:tiles/test/1x1-flat.kdl").is_ok());
-        assert!(Library.read("lib:nope.kdl").is_err());
+        assert!(Library.read("lib:tiles/test/1x1-flat.dtile").is_ok());
+        assert!(Library.read("lib:nope.dtile").is_err());
     }
 }

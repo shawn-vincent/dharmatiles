@@ -1,7 +1,7 @@
 dt::unknown-control
 
   × `tree crown` has no `clumsp`
-    ╭─[library/tiles/ground/2x2-grass-tree.kdl:13:28]
+    ╭─[library/tiles/ground/2x2-grass-tree.dtile:13:28]
  12 │             trunk height=30             // bare trunk below the crown
  13 │             crown width=30 clumsp=32 shape=round branching=normal
     ·                            ───┬──

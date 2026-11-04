@@ -3,7 +3,7 @@
 //!
 //! dt-eval resolves `use` paths, decodes those files first, and registers
 //! each with [`Known::add`] under [`crate::model::Use::key`].  The
-//! standard levels come from library/parts/levels.kdl and are visible to
+//! standard levels come from library/parts/levels.dtile and are visible to
 //! every file without a `use` line (R6.8); [`Known::standard`] loads them
 //! from the copy compiled into this crate.
 
@@ -12,11 +12,11 @@ use std::collections::BTreeMap;
 use crate::model::{Definition, Document};
 use crate::schema::{Control, Kind};
 
-/// The text of library/parts/levels.kdl, compiled in.
-pub const PRELUDE: &str = include_str!("../../../library/parts/levels.kdl");
+/// The text of library/parts/levels.dtile, compiled in.
+pub const PRELUDE: &str = include_str!("../../../library/parts/levels.dtile");
 
 /// The name the prelude is reported under.
-pub const PRELUDE_NAME: &str = "library/parts/levels.kdl";
+pub const PRELUDE_NAME: &str = "library/parts/levels.dtile";
 
 /// What a call needs to know about a definition in another file.
 #[derive(Debug, Clone)]

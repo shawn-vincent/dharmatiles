@@ -1,7 +1,7 @@
 dt::place
 
   × `side=` is for drawn lines
-    ╭─[library/tiles/walls/1x1-wall-fieldstone-corner.kdl:13:63]
+    ╭─[library/tiles/walls/1x1-wall-fieldstone-corner.dtile:13:63]
  12 │         // wall always stands inside, its outer face flush with the edge.
  13 │         wall along="north west" style=fieldstone seed=14 side=left {
     ·                                                               ──┬─

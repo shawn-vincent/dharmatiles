@@ -33,13 +33,13 @@ pub struct Spanned<T> {
 pub struct Document {
     /// `use "parts/grass" lawn long-grass` lines, in order.
     pub uses: Vec<Use>,
-    /// A file-level `levels` table (library/parts/levels.kdl).
+    /// A file-level `levels` table (library/parts/levels.dtile).
     pub levels: Vec<Level>,
     /// `define` and `tile` nodes, in file order.
     pub definitions: Vec<Definition>,
-    /// A `printer` profile (library/printers/*.kdl).
+    /// A `printer` profile (library/printers/*.dtile).
     pub printer: Option<Printer>,
-    /// The edge contract (library/parts/edges.kdl).
+    /// The edge contract (library/parts/edges.dtile).
     pub edges: Option<Edges>,
 }
 
@@ -63,7 +63,7 @@ impl Document {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Source {
     /// The bundled library: `"parts/grass"` or `"lib:parts/grass"`.  The
-    /// string is without `lib:` and without `.kdl`.
+    /// string is without `lib:` and without `.dtile`.
     Library(String),
     /// The author's project, relative to the using file: `"./mine"`.
     Project(String),
@@ -461,7 +461,7 @@ pub struct Printer {
 }
 
 /// The edge contract: what every tile does at its edges so neighbours
-/// butt (library/parts/edges.kdl).  The evaluator applies it at the root
+/// butt (library/parts/edges.dtile).  The evaluator applies it at the root
 /// of every tile.
 #[derive(Debug, Clone)]
 pub struct Edges {

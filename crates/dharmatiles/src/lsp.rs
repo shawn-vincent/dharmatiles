@@ -261,8 +261,8 @@ mod tests {
     fn a_bad_document_gets_a_diagnostic_at_its_mistake() {
         let text = "tile a size=\"1x1\" {\n  stack {\n    grasss\n  }\n}\n".to_owned();
         let mut docs = HashMap::new();
-        docs.insert("/tmp/a.kdl".to_owned(), text);
-        let d = diagnostics("/tmp/a.kdl", &docs);
+        docs.insert("/tmp/a.dtile".to_owned(), text);
+        let d = diagnostics("/tmp/a.dtile", &docs);
         assert!(!d.is_empty());
         assert_eq!(d[0]["range"]["start"]["line"], 2);
     }

@@ -24,7 +24,7 @@ pub type Ramp = Vec<(f32, [f32; 3])>;
 ///   place is spaced evenly unless it ends `@0.7`.
 ///
 /// What a document does not name keeps its default
-/// (`library/palettes/default.kdl`).
+/// (`library/palettes/default.dtile`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Palette {
     flat: Vec<(Material, [f64; 3])>,
@@ -48,7 +48,7 @@ pub const RAMPS: [&str; 12] = [
     "side",
 ];
 
-const DEFAULT: &str = include_str!("../../../library/palettes/default.kdl");
+const DEFAULT: &str = include_str!("../../../library/palettes/default.dtile");
 
 impl Default for Palette {
     fn default() -> Self {

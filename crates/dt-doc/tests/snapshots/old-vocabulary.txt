@@ -1,7 +1,7 @@
 dt::unknown-look
 
   × no look or definition is called `hills`
-   ╭─[library/tiles/ground/2x2-grass-tree.kdl:8:9]
+   ╭─[library/tiles/ground/2x2-grass-tree.dtile:8:9]
  7 │     stack {
  8 │         hills                           // flat, at the ground level (5 mm)
    ·         ──┬──

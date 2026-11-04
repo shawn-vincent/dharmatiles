@@ -50,7 +50,7 @@ enum Command {
         /// Replace each tile's seed.
         #[arg(long)]
         seed: Option<u64>,
-        /// Output folder (default: `out/` beside `dharmatiles.kdl`, else here).
+        /// Output folder (default: `out/` beside `dharmatiles.dtile`, else here).
         #[arg(long)]
         out: Option<PathBuf>,
         /// Also write the four preview views as PNG, overhangs red.
@@ -60,7 +60,7 @@ enum Command {
         /// water, grass, …) assigned as a 3MF base material.
         #[arg(long = "3mf")]
         threemf: bool,
-        /// A palette document (see library/palettes/default.kdl) to paint
+        /// A palette document (see library/palettes/default.dtile) to paint
         /// with: its flat colours for the 3MF, its acrylic `ramp`s for the
         /// PNG renders.
         #[arg(long)]
@@ -127,7 +127,7 @@ enum Command {
         #[arg(long)]
         open: bool,
         /// A palette document (`ramp rock "#…" "#…"`, see
-        /// library/palettes/default.kdl) to paint with; saving it repaints.
+        /// library/palettes/default.dtile) to paint with; saving it repaints.
         #[arg(long)]
         palette: Option<PathBuf>,
     },
@@ -144,7 +144,7 @@ enum Command {
         /// Replace each tile's seed.
         #[arg(long)]
         seed: Option<u64>,
-        /// Output folder (default: `out/` beside `dharmatiles.kdl`, else here).
+        /// Output folder (default: `out/` beside `dharmatiles.dtile`, else here).
         #[arg(long)]
         out: Option<PathBuf>,
         /// Also write the four preview views as PNG, overhangs red.
@@ -278,7 +278,7 @@ fn main() -> ExitCode {
 }
 
 /// Every tile of the bundled library, as `lib:` paths, tests aside.
-/// Inside a checkout (a `dharmatiles.kdl` project whose `library/` holds the
+/// Inside a checkout (a `dharmatiles.dtile` project whose `library/` holds the
 /// printer profile), read `lib:` from that folder, so new and edited
 /// library tiles count at once. `$DT_LIBRARY` overrides it; otherwise the
 /// copy installed beside the program is used (see `dt_eval::source`).
@@ -288,7 +288,7 @@ fn disk_library() {
     }
     let root = dt_eval::discover(&std::env::current_dir().unwrap_or_default()).root;
     let lib = root.join("library");
-    if lib.join("printers/default.kdl").is_file() {
+    if lib.join("printers/default.dtile").is_file() {
         dt_eval::source::use_library_dir(lib);
     }
 }
@@ -321,7 +321,7 @@ fn options(system: String, seed: Option<u64>) -> Options {
     }
 }
 
-/// `--out`, or `out/` beside `dharmatiles.kdl`, else here.
+/// `--out`, or `out/` beside `dharmatiles.dtile`, else here.
 fn out_dir(out: Option<PathBuf>) -> PathBuf {
     out.unwrap_or_else(|| {
         let cwd = std::env::current_dir().unwrap_or_default();
@@ -444,7 +444,7 @@ fn build_one(
                 .rsplit(['/', ':'])
                 .next()
                 .unwrap_or(p)
-                .trim_end_matches(".kdl");
+                .trim_end_matches(".dtile");
             let write = dt_eval::progress::StageInfo::new(
                 progress::WRITE,
                 "writing files",

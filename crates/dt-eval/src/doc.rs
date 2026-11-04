@@ -17,7 +17,7 @@
 //!   arguments or their defaults;
 //! - every control a built look takes is filled in: as written, or its
 //!   schema default ([`dt_doc::schema::Control::default_value`]);
-//! - the edge contract (library/parts/edges.kdl) is read for every tile;
+//! - the edge contract (library/parts/edges.dtile) is read for every tile;
 //! - anything that needs a look not built yet is set aside in
 //!   [`Tile::pending`]: `check` accepts it, `build` refuses it.
 //!
@@ -37,14 +37,14 @@ use crate::diag::{Diag, Src};
 use crate::source::{LIB, Source, resolve};
 
 /// The edge contract every tile applies at its root.
-pub const EDGES: &str = "lib:parts/edges.kdl";
+pub const EDGES: &str = "lib:parts/edges.dtile";
 
 /// A line's wobble follows smooth noise of this sigma along it, mm at the
 /// reference square (waterlab's shore, `Scene.__init__` :300).
 const LINE_WOBBLE_SIGMA_MM: f64 = 9.0;
 
 /// The printer profile builds are checked against by default.
-pub const PRINTER: &str = "lib:printers/default.kdl";
+pub const PRINTER: &str = "lib:printers/default.dtile";
 
 /// One decoded file and its text.
 #[derive(Debug)]
@@ -206,7 +206,7 @@ pub fn text_hash(text: &str) -> u64 {
 #[must_use]
 pub fn use_path(from: &str, u: &Use) -> String {
     match &u.source {
-        model::Source::Library(p) => format!("{LIB}{p}.kdl"),
+        model::Source::Library(p) => format!("{LIB}{p}.dtile"),
         model::Source::Project(p) => resolve(from, p),
     }
 }

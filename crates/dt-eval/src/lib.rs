@@ -29,7 +29,7 @@ pub use source::{Files, LIB, Library, Memory, Source};
 use crate::doc::Tile;
 use crate::plan::{Refusal, Step};
 
-/// A project: the folder holding `dharmatiles.kdl` (or the start folder
+/// A project: the folder holding `dharmatiles.dtile` (or the start folder
 /// when there is none) and where builds go.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Project {
@@ -41,15 +41,15 @@ pub struct Project {
 }
 
 /// **Project discovery**: walk up from `start` to the first folder with a
-/// `dharmatiles.kdl`, as Cargo finds `Cargo.toml`.
+/// `dharmatiles.dtile`, as Cargo finds `Cargo.toml`.
 #[must_use]
 pub fn discover(start: &Path) -> Project {
     let found = start
         .ancestors()
-        .find(|d| d.join("dharmatiles.kdl").is_file());
+        .find(|d| d.join("dharmatiles.dtile").is_file());
     let root = found.unwrap_or(start).to_path_buf();
     let out = found
-        .and_then(|d| std::fs::read_to_string(d.join("dharmatiles.kdl")).ok())
+        .and_then(|d| std::fs::read_to_string(d.join("dharmatiles.dtile")).ok())
         .and_then(|t| kdl::KdlDocument::parse(&t).ok())
         .and_then(|k| {
             k.get("out")
@@ -78,7 +78,7 @@ pub struct Options {
 
 impl Default for Options {
     /// DungeonBlocks, the tile's seed, and the library's default printer
-    /// (library/printers/default.kdl).
+    /// (library/printers/default.dtile).
     ///
     /// # Panics
     /// If the bundled printer profile doesn't decode (a test guards this).
@@ -611,7 +611,7 @@ fn entry_paths(tile: &Tile) -> Vec<String> {
     out
 }
 
-/// `lib:tiles/test/1x1-flat.kdl` → `db/test/1x1-flat-db.stl`; a relative
+/// `lib:tiles/test/1x1-flat.dtile` → `db/test/1x1-flat-db.stl`; a relative
 /// disk path keeps its folders below `tiles/` (all of them if it has
 /// none), resolved so the result always stays inside `<system>/`: a `..`
 /// that would leave it is dropped, and an absolute path keeps none.
@@ -649,40 +649,47 @@ mod tests {
     #[test]
     fn out_paths_mirror_the_library() {
         assert_eq!(
-            out_path("lib:tiles/test/1x1-flat.kdl", "flat", "db"),
+            out_path("lib:tiles/test/1x1-flat.dtile", "flat", "db"),
             PathBuf::from("db/test/1x1-flat-db.stl")
         );
-        assert_eq!(out_path("my.kdl", "x", "db"), PathBuf::from("db/my-db.stl"));
+        assert_eq!(
+            out_path("my.dtile", "x", "db"),
+            PathBuf::from("db/my-db.stl")
+        );
     }
 
     #[test]
     fn out_paths_stay_inside_the_system_folder() {
         // was: db/../../t/evil/f-db.stl, outside out/
         assert_eq!(
-            out_path("tiles/../../t/evil/f.kdl", "a", "db"),
+            out_path("tiles/../../t/evil/f.dtile", "a", "db"),
             PathBuf::from("db/t/evil/f-db.stl")
         );
         assert_eq!(
-            out_path("../t/evil/f.kdl", "a", "db"),
+            out_path("../t/evil/f.dtile", "a", "db"),
             PathBuf::from("db/t/evil/f-db.stl")
         );
         assert_eq!(
-            out_path("a/../../../f.kdl", "a", "db"),
+            out_path("a/../../../f.dtile", "a", "db"),
             PathBuf::from("db/f-db.stl")
         );
         assert_eq!(
-            out_path("/abs/proj/f.kdl", "a", "db"),
+            out_path("/abs/proj/f.dtile", "a", "db"),
             PathBuf::from("db/f-db.stl")
         );
         assert_eq!(
-            out_path("C:\\proj\\f.kdl", "a", "db"),
+            out_path("C:\\proj\\f.dtile", "a", "db"),
             PathBuf::from("db/f-db.stl")
         );
         assert_eq!(
             out_path("dir/", "ü/../../x", "db"),
             PathBuf::from("db/dir/ü-..-..-x-db.stl")
         );
-        for p in ["tiles/../../t/evil/f.kdl", "../../x.kdl", "/x/../../y.kdl"] {
+        for p in [
+            "tiles/../../t/evil/f.dtile",
+            "../../x.dtile",
+            "/x/../../y.dtile",
+        ] {
             let o = out_path(p, "a", "db");
             assert!(
                 o.components()
