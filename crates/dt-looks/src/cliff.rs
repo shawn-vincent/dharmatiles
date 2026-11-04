@@ -44,6 +44,7 @@ const CAP_MIN_MM: f64 = 6.0;
 const CAP_SETBACK_MM: f64 = 0.6;
 const PRESS_MM: f64 = 0.4;
 /// kind: (weight, along, depth-share of the mass, course height)
+#[allow(clippy::type_complexity)]
 const KINDS: [(&str, f64, (f64, f64), (f64, f64)); 5] = [
     ("columns", 0.38, (8.0, 14.0), (15.0, 24.0)),
     ("blocks", 0.38, (10.0, 18.0), (11.0, 18.0)),
@@ -163,7 +164,7 @@ impl Cliff {
                 END_DEPTH_MM * s
             } else {
                 self.depth
-                    .map_or_else(|| rng.uniform(DEPTH_MM.0, DEPTH_MM.1), |d| d)
+                    .unwrap_or_else(|| rng.uniform(DEPTH_MM.0, DEPTH_MM.1))
                     * s
             };
             let full = is_end || rng.random() < FULL_P;
