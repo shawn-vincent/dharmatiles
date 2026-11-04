@@ -203,14 +203,16 @@ impl Dirt {
                     Value::Word(_) => d,
                 })
         };
-        let bank = controls.iter().find_map(|c| match (c.name.as_str(), &c.value) {
-            ("bank/against", Value::Word(w)) => Some(Bank {
-                against: w.clone(),
-                height: range("bank/height", APRON_H_MM),
-                reach: range("bank/reach", APRON_R_MM),
-            }),
-            _ => None,
-        });
+        let bank = controls
+            .iter()
+            .find_map(|c| match (c.name.as_str(), &c.value) {
+                ("bank/against", Value::Word(w)) => Some(Bank {
+                    against: w.clone(),
+                    height: range("bank/height", APRON_H_MM),
+                    reach: range("bank/reach", APRON_R_MM),
+                }),
+                _ => None,
+            });
         Ok(Self {
             bank,
             shape: Shape::new("dirt", controls)?,
@@ -269,11 +271,13 @@ pub fn surface(
         for f in foots.iter().filter(|f| f.kind == b.against) {
             for k in 0..base.z.len() {
                 let (d, u, e) = (f.dist[k], f.zone[k], f.end[k]);
-                let rr = APRON_END.1 * s + e * (b.reach.0 * s + (b.reach.1 - b.reach.0) * s * u - APRON_END.1 * s);
+                let rr = APRON_END.1 * s
+                    + e * (b.reach.0 * s + (b.reach.1 - b.reach.0) * s * u - APRON_END.1 * s);
                 if d >= rr {
                     continue;
                 }
-                let hh = APRON_END.0 * s + e * (b.height.0 * s + (b.height.1 - b.height.0) * s * u - APRON_END.0 * s);
+                let hh = APRON_END.0 * s
+                    + e * (b.height.0 * s + (b.height.1 - b.height.0) * s * u - APRON_END.0 * s);
                 base.z[k] += hh * libm::pow((1.0 - d / rr).clamp(0.0, 1.0), APRON_EXP);
             }
         }

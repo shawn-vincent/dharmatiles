@@ -1001,9 +1001,8 @@ fn push_setting(
 
 /// The phase a control of a built look arrives in.
 fn phase_of_control(look: &str, control: &str) -> Option<u8> {
-    match (look, control) {
-        _ => None,
-    }
+    let _ = (look, control);
+    None
 }
 
 /// A written value for a built look: a range stays a range (the look

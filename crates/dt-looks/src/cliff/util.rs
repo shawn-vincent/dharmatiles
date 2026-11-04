@@ -7,7 +7,6 @@ use dt_kit::{Footprint, Rng, distance_nearest};
 pub trait Draw {
     fn pick(&mut self, p: &[f64]) -> usize;
     fn perm(&mut self, n: usize) -> Vec<usize>;
-    fn expo(&mut self, mean: f64) -> f64;
     fn signed(&mut self, lo_hi: (f64, f64)) -> f64;
     fn count(&mut self, lo_hi: (i64, i64)) -> i64;
 }
@@ -31,9 +30,6 @@ impl Draw for Rng {
             v.swap(i, j);
         }
         v
-    }
-    fn expo(&mut self, mean: f64) -> f64 {
-        -mean * libm::log(1.0 - self.random())
     }
     fn signed(&mut self, lo_hi: (f64, f64)) -> f64 {
         let s = if self.random() < 0.5 { -1.0 } else { 1.0 };

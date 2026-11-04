@@ -875,3 +875,54 @@ fn rpoly_offset_unused(p: &[P2]) -> Vec<P2> {
 fn _t(_: &Field) {
     let _ = top_z_poly;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dt_kit::Convex;
+
+    /// A box stone seated on a stepped support: the union must print.
+    #[test]
+    fn a_seat_has_no_overhang() {
+        use super::super::util::Mask;
+        let (nx, ny) = (200, 200);
+        let mut cells = Mask::new(nx, ny, false);
+        let mut bed = Field::new(nx, ny, f64::NAN);
+        for j in 40..64 {
+            for i in 40..80 {
+                cells.set(i, j, true);
+                bed.set(i, j, if i < 60 { 5.0 } else { 3.0 });
+            }
+        }
+        let r = Placed {
+            cells,
+            z0: 3.0 - 0.8,
+            top: (14.0, 0.0, 0.0),
+            d: 6.0,
+            bed,
+        };
+        let rock = Convex::cuboid([10.0, 10.0, 2.2], [20.0, 16.0, 14.0]).to_tri_mesh();
+        let slot = {
+            let mut sc =
+                dt_kit::Scene::new(dt_kit::Frame::dungeonblocks(1, 1), dt_kit::Seed::new(1));
+            sc.slots(1, dt_kit::Material::Rock).unwrap().get(0)
+        };
+        let piece = Piece::new(slot, &rock).unwrap();
+        let seated = seat(piece, &r, &[], &vec![false; nx * ny]).unwrap();
+        // support: left half to 5, right half to 3, from z = 0
+        let left = Convex::cuboid([9.0, 9.0, 0.0], [15.0, 17.0, 5.0]).to_tri_mesh();
+        let right = Convex::cuboid([14.9, 9.0, 0.0], [21.0, 17.0, 3.0]).to_tri_mesh();
+        let u = seated.plus(&left).unwrap().plus(&right).unwrap();
+        let m = u.mesh();
+        let (_, a) = dt_kit::audit(
+            &m,
+            [35.0, 35.0],
+            &dt_kit::Printer::new(0.45, 0.2, 55.0, 0.2),
+        );
+        eprintln!(
+            "seat test: overhang {:.3} band {:.3}",
+            a.overhang_mm2, a.band_mm2
+        );
+        assert!(a.overhang_mm2 < 0.05, "{a:?}");
+    }
+}

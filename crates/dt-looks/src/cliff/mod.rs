@@ -183,12 +183,6 @@ impl Frame2 {
             self.t[1], z_shift,
         ]
     }
-    fn world(&self, p: [f64; 2]) -> [f64; 2] {
-        [
-            self.cx[0] * p[0] + self.cy[0] * p[1] + self.t[0],
-            self.cx[1] * p[0] + self.cy[1] * p[1] + self.t[1],
-        ]
-    }
 }
 
 impl Cliff {
@@ -261,7 +255,14 @@ impl Cliff {
         let zone = form::Zones::new(&mut rng, f2.w, s, self.patches, self.patch_width);
         let max_rocks = 400 * ((f2.w * f2.h / (sq * sq)).ceil() as usize).max(1);
         let st = stack::stack(&mut rng, &fm, &zone, s, max_rocks);
-        Ok(Planned { form, f2, fm, zone, st, rng })
+        Ok(Planned {
+            form,
+            f2,
+            fm,
+            zone,
+            st,
+            rng,
+        })
     }
 }
 
@@ -286,12 +287,10 @@ impl Look for Cliff {
         }
     }
 
-    fn foot(
-        &self,
-        frame: &dt_kit::Frame,
-        ctx: &Ctx<'_>,
-    ) -> Result<Option<crate::Foot>, LookError> {
-        let Planned { f2, fm, zone, st, .. } = self.pile_plan(frame, ctx)?;
+    fn foot(&self, frame: &dt_kit::Frame, ctx: &Ctx<'_>) -> Result<Option<crate::Foot>, LookError> {
+        let Planned {
+            f2, fm, zone, st, ..
+        } = self.pile_plan(frame, ctx)?;
         let s = frame.scale();
         let (nx, ny) = frame.nodes();
         let step = frame.step_mm();
@@ -309,7 +308,10 @@ impl Look for Cliff {
         for j in 0..ny {
             for i in 0..nx {
                 let p = to_canon([i as f64 * step, j as f64 * step]);
-                let (ci, cj) = ((p[0] / form::GRID_MM).floor(), (p[1] / form::GRID_MM).floor());
+                let (ci, cj) = (
+                    (p[0] / form::GRID_MM).floor(),
+                    (p[1] / form::GRID_MM).floor(),
+                );
                 let q = j * nx + i;
                 if ci >= 0.0 && cj >= 0.0 && (ci as usize) < st.s.nx && (cj as usize) < st.s.ny {
                     rock[q] = st.s.at(ci as usize, cj as usize) > form::FOOT + 0.5;
@@ -321,11 +323,10 @@ impl Look for Cliff {
             }
         }
         let (d, _) = dt_kit::distance(frame, &rock);
-        let dist: Vec<f64> = d
-            .z
-            .iter()
-            .map(|&v| if v.is_finite() { v } else { 1e9 })
-            .collect();
+        let dist: Vec<f64> =
+            d.z.iter()
+                .map(|&v| if v.is_finite() { v } else { 1e9 })
+                .collect();
         let mut cells = Vec::new();
         for j in 1..ny - 1 {
             for i in 1..nx - 1 {
@@ -355,7 +356,14 @@ impl Look for Cliff {
 
     fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
         let frame = *scene.frame();
-        let Planned { f2, fm, zone, st, mut rng, .. } = self.pile_plan(&frame, ctx)?;
+        let Planned {
+            f2,
+            fm,
+            zone,
+            st,
+            mut rng,
+            ..
+        } = self.pile_plan(&frame, ctx)?;
         let Some((surface, _)) = scene.surface() else {
             return Err(LookError {
                 control: None,

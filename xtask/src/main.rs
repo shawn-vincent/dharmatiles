@@ -234,7 +234,11 @@ fn cliff_parity(args: &[String]) -> Result<(), String> {
         .join(format!("dharmatiles{}", std::env::consts::EXE_SUFFIX));
     for f in &forms {
         for s in &seeds {
-            let n = if f == "run" { String::new() } else { format!("-{f}") };
+            let n = if f == "run" {
+                String::new()
+            } else {
+                format!("-{f}")
+            };
             let dir = out.join("rust").join(f).join(format!("s{s}"));
             let _ = std::fs::remove_dir_all(&dir);
             let status = Command::new(&exe)

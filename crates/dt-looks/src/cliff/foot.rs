@@ -4,29 +4,13 @@
 //! highest against the face, falling away concave, higher and wider in
 //! the shattered zones, the same at the tile ends for every seed (S4).
 
-use dt_kit::{Grain, Material, Piece, Rng, Scene, Tag, form, grain, hung};
+use dt_kit::{Piece, form, hung};
 
-use super::form::{FOOT, Form, GRID_MM, SQUARE_MM, ZONE_FLOOR, Zones};
-use super::util::{Draw, Field, dilate_disc, edt_out, lerp, smooth01};
+use super::form::{FOOT, GRID_MM};
+use super::util::{Field, dilate_disc, smooth01};
 use crate::LookError;
 
-const APRON_H_MM: (f64, f64) = (1.5, 3.5);
-const APRON_R_MM: (f64, f64) = (3.0, 6.5);
-const APRON_END: (f64, f64) = (2.5, 4.5);
 pub const END_MM: f64 = 4.0;
-const APRON_EXP: f64 = 1.6;
-const APRON_SHARE: f64 = 0.25;
-const GRIT_D_MM: (f64, f64) = (1.0, 2.2);
-const GRIT_BURY: (f64, f64) = (0.2, 0.5);
-const SCREE_D_MM: (f64, f64) = (1.0, 6.0);
-const SCREE_D_EXP: f64 = 2.0;
-const SCREE_REACH_MM: f64 = 4.0;
-const SCREE_LEAN: f64 = 0.35;
-const SCREE_BLOCK_MM: (f64, f64) = (4.5, 8.0);
-const SCREE_GAP: f64 = 0.38;
-const SCREE_SINK_MM: f64 = 0.3;
-const SCREE_MIX: [f64; 4] = [0.0, 0.2, 0.45, 0.35];
-const ROCK_GRAIN_MM: f64 = 0.05;
 
 /// The dirt's lattice sits off the core's by this much, so no node of one
 /// lies on a node of the other (coincident lattices pinch on float32 reload).

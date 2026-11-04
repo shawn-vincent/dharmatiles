@@ -461,7 +461,11 @@ pub fn make_item(rng: &mut Rng, d: f64, mix: [f64; 4], clusters: bool) -> Result
         stones.push(([dist * libm::cos(ang), dist * libm::sin(ang)], s));
         r = r.max(dist + dj / 2.0);
     }
-    Ok(Item { stones, r, bury: (0.0, 0.0) })
+    Ok(Item {
+        stones,
+        r,
+        bury: (0.0, 0.0),
+    })
 }
 
 /// What one rock thing is: its kind, size range (reference mm), skew and
@@ -793,10 +797,17 @@ fn place_at_foot(
             }
             u -= c.2;
         }
-        let rch = -(if kinds[i] == "boulder" { 0.3 } else { 1.0 }) * reach * s * libm::log(1.0 - rng.random());
+        let rch = -(if kinds[i] == "boulder" { 0.3 } else { 1.0 })
+            * reach
+            * s
+            * libm::log(1.0 - rng.random());
         let off = d * (0.5 - SCREE_LEAN) + rch;
         let at = [cell.0[0] + cell.1[0] * off, cell.0[1] + cell.1[1] * off];
-        if !(r + 0.3 < at[0] && at[0] < size[0] - r - 0.3 && r + 0.3 < at[1] && at[1] < size[1] - r - 0.3) {
+        if !(r + 0.3 < at[0]
+            && at[0] < size[0] - r - 0.3
+            && r + 0.3 < at[1]
+            && at[1] < size[1] - r - 0.3)
+        {
             continue;
         }
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -935,7 +946,11 @@ impl Look for Scatter {
         let squares = ctx.area.bits.iter().filter(|&&b| b).count() as f64
             / (frame.cells_per_square as f64 * frame.cells_per_square as f64);
         let squares = match ctx.against {
-            Some(k) => ctx.foots.iter().find(|f| f.kind == k).map_or(0.0, |f| f.squares),
+            Some(k) => ctx
+                .foots
+                .iter()
+                .find(|f| f.kind == k)
+                .map_or(0.0, |f| f.squares),
             None => squares,
         };
         let n = match self.count {
@@ -965,7 +980,11 @@ impl Look for Scatter {
                 })
                 .unwrap_or(&self.things[self.things.len() - 1]);
             let d = thing.draw(&mut r);
-            let mix = if ctx.against.is_some() { SCREE_MIX } else { thing.mix };
+            let mix = if ctx.against.is_some() {
+                SCREE_MIX
+            } else {
+                thing.mix
+            };
             let mut item = make_item(&mut r, d, mix, ctx.against.is_none())?;
             item.bury = thing.buried;
             items.push(item);
