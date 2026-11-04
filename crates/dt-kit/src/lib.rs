@@ -49,6 +49,7 @@ mod field;
 pub mod form;
 pub mod graph;
 mod outline;
+mod piece;
 pub mod rays;
 mod render;
 mod scene;
@@ -66,6 +67,8 @@ pub use field::{
     scatter, smax, smooth01,
 };
 pub use outline::Outline;
+pub use piece::{Piece, Support, hung, prism_mesh, tri_normal, welded};
+pub use dt_geom::{Footprint, blur as blur2, dilate as dilate2, distance_nearest, erode as erode2};
 pub use render::{Image, ORANGE, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};
 pub use scene::{
     BANK_MM, Frame, LIFT_TOL_MM, Material, Part, REFERENCE_SQUARE_MM, Scene, Slot, Slots, Solid,
