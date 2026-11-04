@@ -8,3 +8,22 @@ grass "#5c8f3d"
 masonry "#a8a399"
 wood "#6b4a2e"
 leaf "#548540"
+flower "#d9739e"
+
+// The acrylic paint: ramp NAME tone tone ... — a dark basecoat to the
+// drybrushed highlights, blended smoothly by local relief (raised detail
+// takes the pale tones, hollows stay dark). A tone ends `@0.45` to put it
+// at that place from 0 to 1; otherwise they are spaced evenly. Change a
+// colour here, and pass the file as `--palette my.kdl`.
+ramp earth     "#342418" "#583e28" "#806040" "#aa8a64" "#cdb48c"
+ramp pebble    "#606064" "#848280" "#a8a49e"
+ramp water     "#12265c" "#1c569c@0.45" "#3aa0b2@0.72" "#96dcd6@0.9" "#e1f5f0@1.04"
+ramp grass     "#122f17" "#235c25" "#3f8630" "#7fb23f" "#c9e070"
+ramp leaf      "#0c2c15" "#18502a" "#2f7a2c" "#6aa63c" "#b9d268"
+ramp wood      "#1f120a" "#432a18" "#6c4a2c" "#957f5c" "#c4b896"
+ramp rock      "#2c2f37" "#4a4e5a" "#6f7380" "#9fa3ad" "#d9dadd"
+ramp masonry   "#332f2b" "#59544d" "#7f796f" "#aea69a" "#e2dccf"
+ramp brick     "#43211f" "#7a3a32" "#a85a48" "#d28a70" "#efd0b6"
+ramp flower    "#b02a6c" "#dc4f93" "#f27db6" "#ffb4d5" "#fff0f6"
+ramp connector "#4a4a50" "#6f6f76" "#9b9ba2" "#c1c1c6" "#e2e2e5"
+ramp side      "#2a2a2e" "#2a2a2e"

@@ -33,6 +33,15 @@ function pickView(name, animate = true) {
 }
 const toggle = (id, fn) => { $(id).onchange = (e) => fn(e.target.checked); };
 toggle('t-overhang', (on) => viewer.setOverhang(on));
+// paint on or off (grey plastic): remembered in the browser
+function setPaint(on) {
+  $('t-paint').checked = on;
+  viewer.setPaint(on);
+  try { localStorage.setItem('dt-preview-paint', on ? '1' : '0'); } catch { /* ignore */ }
+}
+$('t-paint').onchange = (e) => setPaint(e.target.checked);
+try { if (localStorage.getItem('dt-preview-paint') === '0') setPaint(false); } catch { /* ignore */ }
+if (/paint=off/.test(location.hash)) { $('t-paint').checked = false; viewer.setPaint(false); } // #paint=off previews grey without saving
 toggle('t-wire', (on) => viewer.setWireframe(on));
 toggle('t-grid', (on) => viewer.setGrid(on));
 // light or dark: the system's setting until the button is used; then the choice is remembered
@@ -72,6 +81,7 @@ addEventListener('keydown', (e) => {
   const n = Number(e.key);
   if (n >= 1 && n <= VIEWS.length) pickView(VIEWS[n - 1][0]);
   const flip = (id) => { $(id).checked = !$(id).checked; $(id).onchange({ target: $(id) }); };
+  if (e.key === 'c') setPaint(!$('t-paint').checked);
   if (e.key === 'o') flip('t-overhang');
   if (e.key === 'w') flip('t-wire');
   if (e.key === 'g') flip('t-grid');

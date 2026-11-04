@@ -49,6 +49,7 @@ mod field;
 pub mod form;
 pub mod graph;
 mod outline;
+mod paint;
 pub mod progress;
 pub mod rays;
 mod render;
@@ -67,6 +68,7 @@ pub use field::{
     scatter, smax, smooth01,
 };
 pub use outline::Outline;
+pub use paint::paint_mesh;
 pub use progress::{Counter, Event, Progress, Reporter};
 pub use render::{Image, ORANGE, RED, SurfacePaint, VIEWS, View, paint, paint_surface, render};
 pub use scene::{
@@ -77,7 +79,7 @@ pub use shape::{area, carve, extrude, loft, signed_volume, union, wobble};
 pub use stand::{Stand, Stood, stand};
 pub use stl::{BuildRecord, stl};
 pub use stone::{Grain, grain, hull, seat, solid};
-pub use threemf::{Palette, threemf};
+pub use threemf::{Palette, RAMPS, Ramp, threemf};
 
 /// Why a kit operation failed.
 #[derive(Clone, Debug, PartialEq)]

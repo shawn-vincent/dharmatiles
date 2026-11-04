@@ -60,8 +60,9 @@ enum Command {
         /// water, grass, …) assigned as a 3MF base material.
         #[arg(long = "3mf")]
         threemf: bool,
-        /// A palette document (one `material "#rrggbb"` a line) to paint
-        /// the 3MF with, instead of the default colours.
+        /// A palette document (see library/palettes/default.kdl) to paint
+        /// with: its flat colours for the 3MF, its acrylic `ramp`s for the
+        /// PNG renders.
         #[arg(long)]
         palette: Option<PathBuf>,
         /// One JSON report on stdout.
@@ -125,6 +126,10 @@ enum Command {
         /// Open the browser.
         #[arg(long)]
         open: bool,
+        /// A palette document (`ramp rock "#…" "#…"`, see
+        /// library/palettes/default.kdl) to paint with; saving it repaints.
+        #[arg(long)]
+        palette: Option<PathBuf>,
     },
     /// Build tiles, then rebuild each whenever it or a file it uses changes.
     /// Ctrl-C stops.
@@ -251,7 +256,8 @@ fn main() -> ExitCode {
             system,
             port,
             open,
-        } => preview::run(&paths, &options(system, None), port, open),
+            palette,
+        } => preview::run(&paths, &options(system, None), port, open, palette),
         Command::Watch {
             paths,
             system,
@@ -543,7 +549,7 @@ fn write(
         files.push(p);
     }
     if extras.png {
-        let colours = b.colours();
+        let colours = b.colours_with(extras.palette, true);
         let stem = path
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())

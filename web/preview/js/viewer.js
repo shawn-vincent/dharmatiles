@@ -98,6 +98,7 @@ export class Viewer {
     this.grid = null;
     this.payload = null;
     this.showOverhang = true;
+    this.showPaint = true;
     this.showGrid = true;
     this.plan = null;
     new ResizeObserver(() => this.resize()).observe(canvas);
@@ -376,7 +377,8 @@ export class Viewer {
     g.setAttribute('normal', new THREE.BufferAttribute(payload.normals, 3));
     this.painted = new THREE.BufferAttribute(payload.painted, 3, true);
     this.clean = new THREE.BufferAttribute(payload.clean, 3, true);
-    g.setAttribute('paint', this.showOverhang ? this.painted : this.clean);
+    this.grey = null;
+    g.setAttribute('paint', this.currentPaint());
     if (this.mesh) { this.scene.remove(this.mesh); this.mesh.geometry.dispose(); }
     this.mesh = new THREE.Mesh(g, this.material);
     this.mesh.frustumCulled = false;
@@ -442,11 +444,37 @@ export class Viewer {
     this.draw();
   }
 
-  setOverhang(on) {
-    this.showOverhang = on;
-    if (this.mesh) { this.mesh.geometry.setAttribute('paint', on ? this.painted : this.clean); }
+  /**
+   * The colours to show: the acrylic paint, or unpainted grey plastic (the
+   * overhang's red and orange kept when that is on, so print checks still
+   * work). Grey is made here from the same buffers.
+   */
+  currentPaint() {
+    if (this.showPaint) return this.showOverhang ? this.painted : this.clean;
+    if (!this.grey) {
+      const grey = new Uint8Array(this.clean.array.length).fill(168);
+      const flagged = new Uint8Array(this.clean.array.length);
+      const [p, c] = [this.painted.array, this.clean.array];
+      for (let i = 0; i < p.length; i += 3) {
+        if (p[i] !== c[i] || p[i + 1] !== c[i + 1] || p[i + 2] !== c[i + 2]) {
+          flagged.set(p.subarray(i, i + 3), i);
+        } else flagged.set([168, 168, 170], i);
+      }
+      this.grey = {
+        plain: new THREE.BufferAttribute(grey, 3, true),
+        flagged: new THREE.BufferAttribute(flagged, 3, true),
+      };
+    }
+    return this.showOverhang ? this.grey.flagged : this.grey.plain;
+  }
+
+  refreshPaint() {
+    if (this.mesh) this.mesh.geometry.setAttribute('paint', this.currentPaint());
     this.draw();
   }
+
+  setOverhang(on) { this.showOverhang = on; this.refreshPaint(); }
+  setPaint(on) { this.showPaint = on; this.refreshPaint(); }
   setWireframe(on) { this.material.wireframe = on; this.draw(); }
   setGrid(on) { this.showGrid = on; if (this.grid) this.grid.visible = on; this.draw(); }
 

@@ -111,6 +111,8 @@ pub struct Shared {
     wanted: Mutex<VecDeque<usize>>,
     /// Where measured stage durations are kept between builds.
     cache: Option<std::path::PathBuf>,
+    /// A palette document the paint is read from at each build.
+    palette: Option<std::path::PathBuf>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -128,6 +130,40 @@ impl Shared {
             clients: Mutex::new(Vec::new()),
             wanted: Mutex::new(VecDeque::new()),
             cache: None,
+            palette: None,
+        }
+    }
+
+    /// Read the paint from this palette document at each build, and
+    /// rebuild when it is saved.
+    #[must_use]
+    pub fn with_palette(mut self, file: std::path::PathBuf) -> Self {
+        self.palette = Some(file);
+        self
+    }
+
+    fn with_palette_opt(self, f: Option<std::path::PathBuf>) -> Self {
+        match f {
+            Some(f) => self.with_palette(f),
+            None => self,
+        }
+    }
+
+    /// The paint now: the palette document if there is a good one, else
+    /// the default.
+    fn palette(&self) -> dt_kit::Palette {
+        let Some(f) = &self.palette else {
+            return dt_kit::Palette::default();
+        };
+        match std::fs::read_to_string(f)
+            .map_err(|e| e.to_string())
+            .and_then(|t| dt_kit::Palette::parse(&t))
+        {
+            Ok(p) => p,
+            Err(e) => {
+                tell!("palette {}: {e}; using the default paint", f.display());
+                dt_kit::Palette::default()
+            }
         }
     }
 
@@ -313,7 +349,11 @@ fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
             let record = tile_json(&b, &failures, built_s);
             reporter.begin(ENCODE, "preparing the view");
             let t_encode = Instant::now();
-            let mesh = Arc::new(payload::from_built(&b, opts.printer.overhang_deg));
+            let mesh = Arc::new(payload::from_built(
+                &b,
+                opts.printer.overhang_deg,
+                &shared.palette(),
+            ));
             reporter.end(ENCODE);
             if let Some(t) = &tracker {
                 t.finish();
@@ -337,6 +377,11 @@ fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
                 t.mesh = Some(mesh);
                 t.mesh_version += 1;
                 t.files = rec.files();
+                if let Some(f) = &shared.palette {
+                    let f = f.to_string_lossy().into_owned();
+                    let m = mtime(&f);
+                    t.files.insert(f, m);
+                }
             });
         }
     }
@@ -436,7 +481,13 @@ fn bind(port: Option<u16>) -> Result<TcpListener, String> {
 }
 
 /// `dharmatiles preview`.  Returns an exit code (it runs until Ctrl-C).
-pub fn run(paths: &[String], opts: &Options, port: Option<u16>, open: bool) -> u8 {
+pub fn run(
+    paths: &[String],
+    opts: &Options,
+    port: Option<u16>,
+    open: bool,
+    palette: Option<std::path::PathBuf>,
+) -> u8 {
     let listener = match bind(port) {
         Ok(l) => l,
         Err(e) => {
@@ -456,7 +507,8 @@ pub fn run(paths: &[String], opts: &Options, port: Option<u16>, open: bool) -> u
     let cache = dt_eval::discover(&std::env::current_dir().unwrap_or_default()).out;
     let shared = Arc::new(
         Shared::new(&paths, &opts.system, opts.printer.overhang_deg)
-            .with_cache(Timings::file_in(&cache)),
+            .with_cache(Timings::file_in(&cache))
+            .with_palette_opt(palette),
     );
     let url = format!("http://{addr}/");
     tell!("preview: {url}  ({} tile(s); Ctrl-C to stop)", paths.len());

@@ -123,13 +123,23 @@ pub struct Built {
     /// How long each stage took, seconds, in build order (`3:grass`,
     /// `union`, `audit`): the weights the next build's progress bar uses.
     pub stage_secs: Vec<(String, f64)>,
+    /// The masonry is brick (a `brick` or `regular-brick` wall): painted
+    /// in reds, not stone greys.
+    pub brick: bool,
 }
 
 impl Built {
-    /// Per-face paint for previews: materials, earth from the surface
-    /// (dirtlab's drybrush, pebbles grey), overhangs red.
+    /// Per-face paint for previews and PNG renders: the acrylic ramps of
+    /// the default palette, overhangs red and the tolerance band orange.
     #[must_use]
     pub fn colours(&self) -> Vec<[f32; 3]> {
+        self.colours_with(&dt_kit::Palette::default(), true)
+    }
+
+    /// [`Built::colours`] with the ramps of `palette`; without
+    /// `overhang`, no red or orange (the viewer's overhang toggle).
+    #[must_use]
+    pub fn colours_with(&self, palette: &dt_kit::Palette, overhang: bool) -> Vec<[f32; 3]> {
         let surface = self.surface.as_ref().map(|(g, stone)| {
             let p = dt_kit::SurfacePaint::new(g, stone);
             match &self.covered {
@@ -137,16 +147,21 @@ impl Built {
                 None => p,
             }
         });
-        let mut c = dt_kit::paint_surface(
+        let none = vec![false; self.materials.len()];
+        let (over, band) = if overhang {
+            (&self.audit.overhang, &self.audit.band)
+        } else {
+            (&none, &none)
+        };
+        dt_kit::paint_mesh(
             &self.export.mesh,
             &self.materials,
-            &self.audit.overhang,
+            over,
+            band,
             surface.as_ref(),
-        );
-        for (c, _) in c.iter_mut().zip(&self.audit.band).filter(|(_, b)| **b) {
-            *c = dt_kit::ORANGE;
-        }
-        c
+            palette,
+            self.brick,
+        )
     }
 }
 
@@ -494,6 +509,20 @@ pub fn build_with(
     }
     let t_stage = std::time::Instant::now();
     progress.begin(progress::UNION, "joining the parts");
+    let styles = |is_brick: bool| {
+        tile.stack
+            .iter()
+            .filter(|e| matches!(e.what.value.as_str(), "wall" | "floor"))
+            .filter(|e| {
+                let brick = e.controls.iter().any(|c| {
+                    c.name == "style"
+                        && matches!(&c.value, dt_looks::Value::Word(w) if w.contains("brick"))
+                });
+                brick == is_brick
+            })
+            .count()
+    };
+    let brick = styles(true) > 0 && styles(false) == 0;
     let (mesh, mats) = scene.union().map_err(|e| fail(e.to_string()))?;
     progress.end(progress::UNION);
     stage_secs.push((progress::UNION.to_owned(), t_stage.elapsed().as_secs_f64()));
@@ -531,6 +560,7 @@ pub fn build_with(
             bits: g.z.iter().map(|z| z.is_finite()).collect(),
         }),
         stage_secs,
+        brick,
     })
 }
 
