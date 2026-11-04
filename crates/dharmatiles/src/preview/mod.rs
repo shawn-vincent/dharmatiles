@@ -20,6 +20,7 @@
 mod assets;
 pub mod payload;
 mod server;
+mod stack;
 
 use std::collections::{BTreeMap, VecDeque};
 use std::net::TcpListener;
@@ -317,7 +318,7 @@ fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
             "square_mm": frame.square_mm, "size_mm": [w, h],
             // the tile's zero height: where the base meets the tile body
             "datum_z": 0.0,
-            "stack": t.stack.iter().map(|e| e.what.value.clone()).collect::<Vec<_>>(),
+            "stack": stack::items(t, &opts.system),
         })
     });
     if let Some(p) = &plan {
@@ -441,7 +442,8 @@ fn rebuild_stl(shared: &Shared, i: usize, opts: &Options, path: &str) {
     let n = |v: f64| (libm::round(v / sq).max(1.0)) as u32;
     let plan = json!({
         "tile": path.rsplit('/').next().unwrap_or(path), "cols": n(footprint[0]), "rows": n(footprint[1]),
-        "square_mm": sq, "size_mm": footprint, "datum_z": Value::Null, "stack": ["stl file"],
+        "square_mm": sq, "size_mm": footprint, "datum_z": Value::Null,
+        "stack": [{"label": "stl file", "look": "stl", "href": Value::Null}],
     });
     let record = json!({
         "record": {"seed": Value::Null, "system": opts.system},

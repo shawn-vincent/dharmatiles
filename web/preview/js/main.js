@@ -192,6 +192,29 @@ function row(dl, k, v, cls = '') {
   const dd = document.createElement('dd'); dd.textContent = v; if (cls) dd.className = cls;
   dl.append(dt, dd);
 }
+// the size, then each stack entry named by what it places, linked to its
+// page on the documentation site
+function renderPlan(el, p, path) {
+  if (!p) { el.textContent = path; return; }
+  const parts = [document.createTextNode(`${p.cols}×${p.rows} squares of ${p.square_mm} mm`)];
+  for (const s of p.stack) {
+    parts.push(document.createTextNode(' · '));
+    const item = typeof s === 'string' ? { label: s } : s;
+    if (item.href) {
+      const a = document.createElement('a');
+      a.href = item.href;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = item.label;
+      a.title = `${item.look}: open its documentation`;
+      parts.push(a);
+    } else {
+      parts.push(document.createTextNode(item.label));
+    }
+  }
+  el.replaceChildren(...parts);
+}
+
 let timer = 0;
 function renderPanel() {
   const t = state.tiles[state.selected];
@@ -204,9 +227,7 @@ function renderPanel() {
   $('tile-name').textContent = stem(t);
   $('tile-name').title = t.name && t.name !== stem(t) ? `the document calls it “${t.name}”` : '';
   const p = t.plan;
-  $('tile-plan').textContent = p
-    ? `${p.cols}×${p.rows} squares of ${p.square_mm} mm · ${p.stack.join(', ')}`
-    : t.path;
+  renderPlan($('tile-plan'), p, t.path);
   // building…
   if (t.status === 'building' || t.status === 'idle') {
     if (!state.buildStart.has(t.index)) state.buildStart.set(t.index, performance.now());
