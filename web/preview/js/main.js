@@ -121,6 +121,15 @@ async function loadMesh(i, version) {
   }
 }
 
+const secs = (s) => (s >= 60 ? `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, '0')}s` : `${s.toFixed(1)} s`);
+/** The bar: percentage, the stage (with a look's own count), elapsed against the estimate. */
+function showProgress(p) {
+  const pct = Math.floor(p.fraction * 100);
+  $('bar-fill').style.width = `${pct}%`;
+  const stage = p.count ? `${p.label}: ${p.count[0]} ${p.count[1]}/${p.count[2]}` : p.label;
+  $('status-text').textContent = `${pct}% · ${stage} · ${secs(p.elapsed_s)} of ~${secs(p.estimate_s)}`;
+}
+
 const fmt = (x, d = 2) => Number(x).toFixed(d);
 function row(dl, k, v, cls = '') {
   const dt = document.createElement('dt'); dt.textContent = k;
@@ -144,8 +153,13 @@ function renderPanel() {
   // building…
   if (t.status === 'building' || t.status === 'idle') {
     if (!state.buildStart.has(t.index)) state.buildStart.set(t.index, performance.now());
+    // before the first progress event there is only the clock
     const tick = () => {
-      status.textContent = `building… ${((performance.now() - state.buildStart.get(t.index)) / 1000).toFixed(1)} s`;
+      if (t.progress) return showProgress(t.progress);
+      $('bar-fill').style.width = '0%';
+      $('status-text').textContent = t.status === 'idle'
+        ? 'waiting…'
+        : `building… ${((performance.now() - state.buildStart.get(t.index)) / 1000).toFixed(1)} s`;
     };
     tick(); timer = setInterval(tick, 100);
     status.hidden = false;
@@ -199,6 +213,12 @@ host.connect({
     const want = Number((location.hash.match(/tile=(\d+)/) || [])[1] ?? 0);
     if (state.selected < 0 || !state.tiles[state.selected]) select(Math.min(want, m.tiles.length - 1));
     else { renderList(); select(state.selected); }
+  },
+  onProgress: (i, p) => {
+    const t = state.tiles[i];
+    if (!t) return;
+    t.progress = p;
+    if (i === state.selected && t.status === 'building') showProgress(p);
   },
   onTile: (t) => {
     state.tiles[t.index] = t;

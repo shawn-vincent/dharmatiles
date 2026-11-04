@@ -125,8 +125,8 @@ struct Params {
 }
 
 /// Where in the tree's stage the leaves' build lies (progress fractions).
-const LEAVES_FROM: f64 = 0.4;
-const LEAVES_TO: f64 = 0.85;
+const LEAVES_FROM: f64 = 0.5;
+const LEAVES_TO: f64 = 0.61;
 
 impl Default for Params {
     fn default() -> Self {
@@ -478,9 +478,9 @@ impl Tree {
             .map(|(k, m)| form::solid(slots.get(u32::try_from(k).unwrap_or(0)), m))
             .collect::<Result<_, _>>()
             .map_err(LookError::build)?;
-        scene.progress().fraction("branches", 0.05);
+        scene.progress().fraction("branches", 0.01);
         let wood = union(&tube_solids).map_err(LookError::build)?;
-        scene.progress().fraction("wood", 0.15);
+        scene.progress().fraction("wood", 0.03);
         let (wood, slivers) = crumbs(scene, wood, Material::Wood)?;
         grown.slivers += slivers;
         // the landings dip to the strict floor inside their clumps; where a
@@ -524,7 +524,7 @@ impl Tree {
                 .collect::<Result<_, _>>()
                 .map_err(LookError::build)?;
             grown.clumps = solids.len();
-            scene.progress().fraction("clumps", 0.25);
+            scene.progress().fraction("clumps", 0.26);
             let blobs = union(&solids).map_err(LookError::build)?;
             let (blobs, slivers) = crumbs(scene, blobs, Material::Leaf)?;
             grown.slivers += slivers;
@@ -556,10 +556,17 @@ impl Tree {
                 let n = u32::try_from(placed.len()).map_err(LookError::build)?;
                 if n > 0 {
                     let lslots = scene.slots(n, Material::Leaf).map_err(LookError::build)?;
+                    let solid_ticks = scene
+                        .progress()
+                        .counter("leaf solids", placed.len(), LEAVES_TO, 0.75);
                     let ls: Vec<Solid> = placed
                         .par_iter()
                         .enumerate()
-                        .map(|(k, m)| form::solid(lslots.get(u32::try_from(k).unwrap_or(0)), m))
+                        .map(|(k, m)| {
+                            let s = form::solid(lslots.get(u32::try_from(k).unwrap_or(0)), m);
+                            solid_ticks.tick();
+                            s
+                        })
                         .collect::<Result<_, _>>()
                         .map_err(LookError::build)?;
                     grown.leaves_placed = placed.len();

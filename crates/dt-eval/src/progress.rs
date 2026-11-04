@@ -48,26 +48,33 @@ pub fn stage_keys(tile: &Tile, steps: &[Step]) -> Vec<(String, String)> {
         .collect()
 }
 
-/// A rough duration in seconds of a look on one square of the tile, from a
-/// quick profile of the library (release build, one Apple-silicon Mac).
-/// Only the fallback for a tile never built here; real timings replace it.
+/// A rough duration in seconds of a look on a tile of `squares` squares,
+/// from a profile of the 45 library tiles (release build, one Apple-silicon
+/// Mac): the tree's cost is the tree's whatever the tile, a grass sward's
+/// grows with its area, a wall's with its length (about one square).  Only
+/// the fallback for a tile never built here; real timings replace it.
 #[must_use]
-pub fn default_secs(look: &str) -> f64 {
+pub fn default_secs(look: &str, squares: f64) -> f64 {
     match look {
-        "grass" => 1.0,
-        "tree" => 3.0,
-        "wall" | "floor" => 1.0,
-        "cliff" => 1.5,
-        "rock" | "stone" | "boulder" | "pebble" | "scatter" => 0.3,
-        "water" => 0.2,
-        "reeds" | "flowers" => 0.3,
-        "dirt" => 0.2,
-        "connector" => 0.1,
-        "lift" => 0.1,
-        UNION => 0.4,
-        AUDIT => 0.4,
-        _ => 0.2,
+        "tree" => 6.5,
+        "grass" => 0.35 * squares,
+        "wall" => 0.7,
+        "floor" => 0.4,
+        "cliff" => 0.2,
+        "water" => 0.1 * squares,
+        "dirt" => 0.06 * squares,
+        "scatter" | "rock" | "stone" | "boulder" | "pebble" | "flowers" | "reeds" => 0.05,
+        "ground" | "connector" | "lift" => 0.01,
+        _ => 0.1,
     }
+}
+
+/// The union and the audit cost about what the looks built: from the
+/// same profile, the union half of it and the audit a third, plus a
+/// little.
+#[must_use]
+pub fn default_join_secs(looks_secs: f64) -> (f64, f64) {
+    (0.5 * looks_secs + 0.1, 0.3 * looks_secs + 0.1)
 }
 
 /// One stage of the bar.
@@ -96,14 +103,16 @@ pub fn plan_stages(c: &Checked, doc: &str, opts: &Options, timings: &Timings) ->
         .map(|(key, label)| {
             let secs = timings
                 .get(doc, &opts.system, &key)
-                .unwrap_or_else(|| default_secs(&label) * squares);
+                .unwrap_or_else(|| default_secs(&label, squares));
             StageInfo { key, label, secs }
         })
         .collect();
-    for (key, label) in [(UNION, "joining the parts"), (AUDIT, "checking printability")] {
-        let secs = timings
-            .get(doc, &opts.system, key)
-            .unwrap_or_else(|| default_secs(key) * squares);
+    let (union, audit) = default_join_secs(v.iter().map(|s| s.secs).sum());
+    for (key, label, default) in [
+        (UNION, "joining the parts", union),
+        (AUDIT, "checking printability", audit),
+    ] {
+        let secs = timings.get(doc, &opts.system, key).unwrap_or(default);
         v.push(StageInfo {
             key: key.to_owned(),
             label: label.to_owned(),

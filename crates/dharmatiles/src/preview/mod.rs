@@ -29,6 +29,7 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant, SystemTime};
 
+use dt_eval::progress::{StageInfo, Status, Timings, Tracker, plan_stages};
 use dt_eval::{Diag, Options};
 use serde_json::{Value, json};
 
@@ -39,6 +40,8 @@ use crate::{errors_json, tile_json};
 const POLL: Duration = Duration::from_millis(150);
 /// The first port tried, when `--port` is not given.
 pub const FIRST_PORT: u16 = 7878;
+/// The stage after the build: the mesh's colours and binary buffer.
+const ENCODE: &str = "encode";
 
 /// One served tile.
 pub struct Slot {
@@ -51,6 +54,8 @@ pub struct Slot {
     errors: Vec<Value>,
     mesh: Option<Arc<Vec<u8>>>,
     mesh_version: u64,
+    /// The build's progress (a `progress` event's body) while building.
+    progress: Option<Value>,
     /// Files the last build read, with their times.
     files: BTreeMap<String, Option<SystemTime>>,
 }
@@ -72,6 +77,7 @@ impl Slot {
             errors: Vec::new(),
             mesh: None,
             mesh_version: 0,
+            progress: None,
             files: BTreeMap::new(),
         }
     }
@@ -85,6 +91,7 @@ impl Slot {
             "plan": self.plan,
             "record": self.record,
             "errors": self.errors,
+            "progress": self.progress,
             "mesh_version": self.mesh.as_ref().map(|_| self.mesh_version),
             "mesh_bytes": self.mesh.as_ref().map(|m| m.len()),
         })
@@ -102,6 +109,8 @@ pub struct Shared {
     tiles: Mutex<Vec<Slot>>,
     clients: Mutex<Vec<Sender<String>>>,
     wanted: Mutex<VecDeque<usize>>,
+    /// Where measured stage durations are kept between builds.
+    cache: Option<std::path::PathBuf>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -118,7 +127,41 @@ impl Shared {
             tiles: Mutex::new(paths.iter().map(|p| Slot::new(p)).collect()),
             clients: Mutex::new(Vec::new()),
             wanted: Mutex::new(VecDeque::new()),
+            cache: None,
         }
+    }
+
+    /// Keep stage timings in `file`, so the next build of a tile has an ETA.
+    #[must_use]
+    pub fn with_cache(mut self, file: std::path::PathBuf) -> Self {
+        self.cache = Some(file);
+        self
+    }
+
+    /// Tell every listening browser `msg`.
+    fn broadcast(&self, msg: &Value) {
+        let msg = msg.to_string();
+        lock(&self.clients).retain(|tx| tx.send(msg.clone()).is_ok());
+    }
+
+    /// The callback a tracker for tile `i` reports through.
+    fn sink(self: &Arc<Self>, i: usize) -> impl Fn(&Status) + Send + Sync + use<> {
+        let me = Arc::clone(self);
+        move |s| me.progress(i, s)
+    }
+
+    /// A tile's progress: remembered for a browser that connects later,
+    /// and sent now.  The tracker calls this about ten times a second.
+    fn progress(&self, i: usize, status: &Status) {
+        let body = json!({
+            "fraction": status.fraction, "label": status.label, "key": status.key,
+            "count": status.count, "elapsed_s": status.elapsed_s,
+            "eta_s": status.eta_s, "estimate_s": status.estimate_s,
+        });
+        if let Some(slot) = lock(&self.tiles).get_mut(i) {
+            slot.progress = Some(body.clone());
+        }
+        self.broadcast(&json!({"type": "progress", "index": i, "progress": body}));
     }
 
     /// Every tile's state, as the `/api/tiles` body and the first event.
@@ -140,8 +183,7 @@ impl Shared {
             f(slot);
             slot.summary(i)
         };
-        let msg = json!({"type": "tile", "tile": summary}).to_string();
-        lock(&self.clients).retain(|tx| tx.send(msg.clone()).is_ok());
+        self.broadcast(&json!({"type": "tile", "tile": summary}));
     }
 
     /// A new listener, whose first message is the snapshot.  The clients
@@ -185,13 +227,14 @@ impl Shared {
 }
 
 /// Build tile `i`: plan pass, then geometry, pushing each result.
-fn rebuild(shared: &Shared, i: usize, opts: &Options) {
+fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
     let Some(path) = lock(&shared.tiles).get(i).map(|t| t.path.clone()) else {
         return;
     };
     shared.update(i, |t| {
         t.status = "building";
         t.errors.clear();
+        t.progress = None;
     });
     if path.to_ascii_lowercase().ends_with(".stl") {
         return rebuild_stl(shared, i, opts, &path);
@@ -202,23 +245,25 @@ fn rebuild(shared: &Shared, i: usize, opts: &Options) {
         let errors = errors_json(errs);
         shared.update(i, |t| {
             t.status = "failed";
+            t.progress = None;
             t.errors = errors;
             t.files = rec.files();
         });
     };
     // plan pass: no geometry, so under a second
-    let plan = match dt_eval::check(&rec, &path, opts) {
-        Ok(c) => c.tile.as_ref().map(|t| {
-            let frame = dt_kit::Frame::for_system(&opts.system, t.cols, t.rows);
-            let [w, h] = frame.size_mm();
-            json!({
-                "tile": t.name, "cols": t.cols, "rows": t.rows,
-                "square_mm": frame.square_mm, "size_mm": [w, h],
-                "stack": t.stack.iter().map(|e| e.what.value.clone()).collect::<Vec<_>>(),
-            })
-        }),
+    let checked = match dt_eval::check(&rec, &path, opts) {
+        Ok(c) => c,
         Err(errs) => return finish_err(rec, &errs),
     };
+    let plan = checked.tile.as_ref().map(|t| {
+        let frame = dt_kit::Frame::for_system(&opts.system, t.cols, t.rows);
+        let [w, h] = frame.size_mm();
+        json!({
+            "tile": t.name, "cols": t.cols, "rows": t.rows,
+            "square_mm": frame.square_mm, "size_mm": [w, h],
+            "stack": t.stack.iter().map(|e| e.what.value.clone()).collect::<Vec<_>>(),
+        })
+    });
     if let Some(p) = &plan {
         let name = p["tile"].as_str().unwrap_or_default().to_owned();
         shared.update(i, |t| {
@@ -226,20 +271,53 @@ fn rebuild(shared: &Shared, i: usize, opts: &Options) {
             t.name = name;
         });
     }
-    let built = std::panic::catch_unwind(AssertUnwindSafe(|| dt_eval::build(&rec, &path, opts)))
-        .unwrap_or_else(|_| {
-            Err(vec![Diag::plain(
-                "dt::panic",
-                "the build panicked (a bug in a look); see the terminal".to_owned(),
-            )])
-        });
+    // the progress bar: stages weighted by what the last build of this
+    // tile measured, else by the looks' defaults
+    let mut timings = shared
+        .cache
+        .as_ref()
+        .map_or_else(Timings::default, |f| Timings::load(f));
+    let mut stages = plan_stages(&checked, &path, opts, &timings);
+    stages.push(StageInfo::new(
+        ENCODE, "preparing the view", 0.4, &path, &opts.system, &timings,
+    ));
+    drop(checked);
+    let tracker = (stages.len() > 1).then(|| {
+        let sink = shared.sink(i);
+        Arc::new(Tracker::new(stages, Box::new(move |s| sink(s))))
+    });
+    let reporter = tracker
+        .as_ref()
+        .map_or_else(dt_eval::Progress::none, |t| dt_eval::Progress::new(t.clone()));
+    let built = std::panic::catch_unwind(AssertUnwindSafe(|| {
+        dt_eval::build_with(&rec, &path, opts, &reporter)
+    }))
+    .unwrap_or_else(|_| {
+        Err(vec![Diag::plain(
+            "dt::panic",
+            "the build panicked (a bug in a look); see the terminal".to_owned(),
+        )])
+    });
     match built {
         Err(errs) => finish_err(rec, &errs),
         Ok(b) => {
             let built_s = t0.elapsed().as_secs_f64();
             let failures = b.audit.failures(&opts.printer);
             let record = tile_json(&b, &failures, built_s);
+            reporter.begin(ENCODE, "preparing the view");
+            let t_encode = Instant::now();
             let mesh = Arc::new(payload::from_built(&b, opts.printer.overhang_deg));
+            reporter.end(ENCODE);
+            if let Some(t) = &tracker {
+                t.finish();
+            }
+            if let Some(f) = &shared.cache {
+                let mut secs = b.stage_secs.clone();
+                secs.push((ENCODE.to_owned(), t_encode.elapsed().as_secs_f64()));
+                timings.record(&path, &opts.system, &secs);
+                let _ = f;
+                timings.save();
+            }
             tell!(
                 "built {path}: {} triangles, overhang {:.2} mm², {built_s:.2} s",
                 b.audit.triangles,
@@ -247,6 +325,7 @@ fn rebuild(shared: &Shared, i: usize, opts: &Options) {
             );
             shared.update(i, |t| {
                 t.status = "ready";
+                t.progress = None;
                 t.record = Some(record);
                 t.mesh = Some(mesh);
                 t.mesh_version += 1;
@@ -314,7 +393,7 @@ fn rebuild_stl(shared: &Shared, i: usize, opts: &Options, path: &str) {
 }
 
 /// The worker: build what is wanted, then what changed, until `stop`.
-pub fn work(shared: &Shared, opts: &Options, eager: bool, stop: &AtomicBool) {
+pub fn work(shared: &Arc<Shared>, opts: &Options, eager: bool, stop: &AtomicBool) {
     while !stop.load(Ordering::Relaxed) {
         match shared.pick(eager) {
             Some(i) => rebuild(shared, i, opts),
@@ -367,7 +446,11 @@ pub fn run(paths: &[String], opts: &Options, port: Option<u16>, open: bool) -> u
     } else {
         (paths.to_vec(), true)
     };
-    let shared = Arc::new(Shared::new(&paths, &opts.system, opts.printer.overhang_deg));
+    let cache = dt_eval::discover(&std::env::current_dir().unwrap_or_default()).out;
+    let shared = Arc::new(
+        Shared::new(&paths, &opts.system, opts.printer.overhang_deg)
+            .with_cache(Timings::file_in(&cache)),
+    );
     let url = format!("http://{addr}/");
     tell!("preview: {url}  ({} tile(s); Ctrl-C to stop)", paths.len());
     server::spawn(listener, Arc::clone(&shared));
