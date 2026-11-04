@@ -139,6 +139,16 @@
       "title": "Phase 8: 3MF + palette, MCP (stdio and HTTP), language server in",
       "detail": "dharmatiles build --3mf --palette; mcp --http; lsp (diagnostics, hover, completion). Not started: Tauri app, wasm, mobile.",
       "updated": "2026-11-04T04:22:47Z"
+    },
+    {
+      "id": "preview",
+      "order": 66,
+      "body": "rust",
+      "area": "Rust preview",
+      "state": "active",
+      "title": "dharmatiles preview: painted 3D browser viewer in progress",
+      "detail": "Branch rust/preview. three.js viewer served on 127.0.0.1, painted like the PNG renders (overhang red, trees' band orange), live rebuild on save.",
+      "updated": "2026-11-04T16:00:00Z"
     }
   ]
 }
