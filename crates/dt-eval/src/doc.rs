@@ -29,7 +29,7 @@ use std::sync::Arc;
 use dt_doc::Known;
 use dt_doc::model::{self, Callee, Definition, Document, Spanned, Use, Value};
 use dt_doc::place::{Along, Edge, Point};
-use dt_doc::schema::{Control, Look, PlaceWord};
+use dt_doc::schema::{Control, Look, PlaceWord, Role};
 use dt_kit::Seed;
 use miette::{NamedSource, SourceSpan};
 
@@ -89,6 +89,8 @@ pub struct Entry {
     /// `at=`: where it may stand, `[x_lo, x_hi]` and `[y_lo, y_hi]` in
     /// squares.
     pub at: Option<[[f64; 2]; 2]>,
+    /// `against=`: the kind of thing it gathers at the foot of.
+    pub against: Option<String>,
     /// A scatter's children: each thing, its controls and its weight.
     pub children: Vec<Child>,
     /// The text it came from.
@@ -681,10 +683,15 @@ impl Reader<'_> {
                     // that place by them; the rest is not built yet
                     let mut path = None;
                     let mut point = None;
-                    let mut unplaced = vec![
-                        ("side=", e.place.side.as_ref().map(|s| s.span)),
-                        ("against=", e.place.against.as_ref().map(|s| s.span)),
-                    ];
+                    let against = if honours.contains(&"against") {
+                        e.place.against.as_ref().map(|a| a.value.clone())
+                    } else {
+                        None
+                    };
+                    let mut unplaced = vec![("side=", e.place.side.as_ref().map(|s| s.span))];
+                    if !honours.contains(&"against") {
+                        unplaced.push(("against=", e.place.against.as_ref().map(|s| s.span)));
+                    }
                     match &along {
                         Some(a) if honours.contains(&"along") => match &a.value {
                             Along::Edges(edges) => path = Some(edge_path(edges, self.dims)),
@@ -721,7 +728,16 @@ impl Reader<'_> {
                         }
                     }
                     let mut children = Vec::new();
+                    // a scatter inside a surface scatters on that surface:
+                    // its own entry, in the surface's area, built after the lift
+                    let mut hoisted: Vec<model::Entry> = Vec::new();
                     for c in &e.children {
+                        if look.role == Role::Surface
+                            && matches!(&c.callee, Callee::Look(cl) if cl.name == "scatter")
+                        {
+                            hoisted.push(c.clone());
+                            continue;
+                        }
                         let built = match &c.callee {
                             Callee::Look(cl) if dt_looks::holds(look.name, cl.name) => {
                                 dt_looks::takes(cl.name).map(|t| (*cl, t))
@@ -766,6 +782,10 @@ impl Reader<'_> {
                     }
                     let controls = self.controls(e, look, takes, scope, pending);
                     if ok && let Some(controls) = controls {
+                        let inner = Scope {
+                            area: area.clone(),
+                            ..scope.clone()
+                        };
                         out.push(Entry {
                             what: e.what.clone(),
                             area,
@@ -774,10 +794,14 @@ impl Reader<'_> {
                             controls,
                             along: path,
                             at: point,
+                            against,
                             children,
                             src: Arc::clone(src),
                             span: e.span,
                         });
+                        if !hoisted.is_empty() {
+                            self.expand(&hoisted, &inner, out, pending);
+                        }
                     }
                 }
                 Callee::Definition(name) => {
@@ -978,7 +1002,6 @@ fn push_setting(
 /// The phase a control of a built look arrives in.
 fn phase_of_control(look: &str, control: &str) -> Option<u8> {
     match (look, control) {
-        ("dirt", "bank") => Some(5),
         _ => None,
     }
 }

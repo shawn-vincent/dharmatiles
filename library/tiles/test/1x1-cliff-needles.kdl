@@ -1,7 +1,7 @@
 // Two or three tall stacks on a shared footing.
 // Twin of clifflab/rockpile.py's `needles` form at round 17 (31f7c5d), 1x1.
 
-tile cliff-needles-1x1 size="1x1" seed=1 {
+tile 1x1-cliff-needles size="1x1" seed=1 {
     about """
         Two or three tall stacks on a shared footing.
         """

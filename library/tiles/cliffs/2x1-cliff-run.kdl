@@ -1,11 +1,7 @@
 // A 2×1 cliff run: a band of stacked rock against the north edge, with
-// dirt lodged on its top, a dirt bank against its face, and scree and grit
-// at its foot. Twin of clifflab/rockpile.py's `run` form, frozen at
-// round 17 (31f7c5d); its foot is the edge level (3.4 mm, Default 12).
-//
-// The bank and the scree are the cliff's own controls for now. The
-// generic `bank against=cliff` and `scatter against=cliff { stone }`
-// (see library/tiles/test/cliff-run-full.kdl) are not built.
+// dirt lodged on its top, a dirt bank against its face, and scree at its
+// foot. Twin of clifflab/rockpile.py's `run` form, frozen at round 17
+// (31f7c5d); its foot is the edge level (3.4 mm, Default 12).
 
 tile cliff-run size="2x1" seed=1 {
     about """
@@ -14,18 +10,20 @@ tile cliff-run size="2x1" seed=1 {
         """
 
     stack {
-        dirt level=edge
+        dirt level=edge {
+            bank against=cliff height="1.5..3.5" reach="3..6.5"
+            scatter per-square=45 { pebble size="1..2.2" buried="20%..50%" }
+        }
 
         cliff along=north height=35 {   // 35 mm above its foot
             rock mixed                  // or: columns, blocks, slabs
             stone-size massive          // or: rubble, broken
             top dirt                    // or: bare
             shattered patches=3 width="5..10"
-            bank-height "1.5..3.5"      // dirt heaped against the face
-            bank-reach "3..6.5"
-            scree 55                    // fallen stones per square of the foot
-            boulders 2.5                // big fallen blocks per square
-            grit 45                     // small stones half-buried in the bank
         }
+
+        // scree: fallen stones gathered at the cliff's foot
+        scatter against=cliff per-square=55 reach=4 { stone size="1..6" mostly=small }
+        scatter against=cliff per-square=2.5 { boulder size="4.5..8" }
     }
 }

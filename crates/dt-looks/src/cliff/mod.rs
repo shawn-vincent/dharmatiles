@@ -60,11 +60,6 @@ pub const CONTROLS: &[&str] = &[
     "ledges/height",
     "shattered/patches",
     "shattered/width",
-    "bank-height",
-    "bank-reach",
-    "scree",
-    "boulders",
-    "grit",
 ];
 
 type ColResult = Result<(Vec<(usize, dt_kit::Piece)>, usize), dt_kit::KitError>;
@@ -82,7 +77,6 @@ pub struct Cliff {
     patches: Option<f64>,
     patch_width: Option<(f64, f64)>,
     ledge_height: Option<f64>,
-    foot: foot::FootAsk,
 }
 
 const KIND_NAMES: [&str; 5] = ["columns", "blocks", "slabs", "odd", "monoliths"];
@@ -104,7 +98,6 @@ impl Cliff {
             patches: None,
             patch_width: None,
             ledge_height: None,
-            foot: foot::FootAsk::default(),
         };
         let mut w = [f64::NAN; 5];
         for k in controls {
@@ -158,13 +151,6 @@ impl Cliff {
                 ("shattered/width", Value::Number(v)) => c.patch_width = Some((*v, *v)),
                 ("shattered/width", Value::Range(a, b)) => c.patch_width = Some((*a, *b)),
                 ("ledges/height", Value::Number(v)) => c.ledge_height = Some(*v),
-                ("bank-height", Value::Number(v)) => c.foot.bank_h = (*v, *v),
-                ("bank-height", Value::Range(a, b)) => c.foot.bank_h = (*a, *b),
-                ("bank-reach", Value::Number(v)) => c.foot.bank_r = (*v, *v),
-                ("bank-reach", Value::Range(a, b)) => c.foot.bank_r = (*a, *b),
-                ("scree", Value::Number(v)) => c.foot.scree = v.max(0.0),
-                ("boulders", Value::Number(v)) => c.foot.boulders = v.max(0.0),
-                ("grit", Value::Number(v)) => c.foot.grit = v.max(0.0),
                 _ => {}
             }
         }
@@ -205,19 +191,11 @@ impl Frame2 {
     }
 }
 
-impl Look for Cliff {
-    fn plan(&self) -> Plan {
-        Plan {
-            writes: Write::Solid("cliff"),
-            // the painted surface (always first), not the lifted ground: a bank
-            // heaped against the cliff is made before the lift
-            reads: vec![],
-            cell_mm: None,
-        }
-    }
-
-    fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
-        let frame = *scene.frame();
+impl Cliff {
+    /// Everything that decides where the stones stand, with no geometry:
+    /// the plan pass (a bank or scatter reads its foot) and the build both
+    /// start here, from the same seed.
+    fn pile_plan(&self, frame: &dt_kit::Frame, ctx: &Ctx<'_>) -> Result<Planned, LookError> {
         let s = frame.scale();
         let sq = frame.square_mm;
         let size = frame.size_mm();
@@ -270,6 +248,114 @@ impl Look for Cliff {
                 t: [0.0, 0.0],
             }
         };
+        let mut rng = Rng::new(ctx.seed.key("cliff"));
+        let ask = Ask {
+            form,
+            height: self.height,
+            depth: self.depth,
+            mass_gain: self.size,
+            kinds: self.weights,
+            ledge_height: self.ledge_height,
+        };
+        let fm = form::make_form(&mut rng, &ask, f2.w, f2.h, s);
+        let zone = form::Zones::new(&mut rng, f2.w, s, self.patches, self.patch_width);
+        let max_rocks = 400 * ((f2.w * f2.h / (sq * sq)).ceil() as usize).max(1);
+        let st = stack::stack(&mut rng, &fm, &zone, s, max_rocks);
+        Ok(Planned { form, f2, fm, zone, st, rng })
+    }
+}
+
+struct Planned {
+    #[allow(dead_code)]
+    form: FormName,
+    f2: Frame2,
+    fm: form::Form,
+    zone: form::Zones,
+    st: stack::Stacked,
+    rng: Rng,
+}
+
+impl Look for Cliff {
+    fn plan(&self) -> Plan {
+        Plan {
+            writes: Write::Solid("cliff"),
+            // the painted surface (always first), not the lifted ground: a bank
+            // heaped against the cliff is made before the lift
+            reads: vec![],
+            cell_mm: None,
+        }
+    }
+
+    fn foot(
+        &self,
+        frame: &dt_kit::Frame,
+        ctx: &Ctx<'_>,
+    ) -> Result<Option<crate::Foot>, LookError> {
+        let Planned { f2, fm, zone, st, .. } = self.pile_plan(frame, ctx)?;
+        let s = frame.scale();
+        let (nx, ny) = frame.nodes();
+        let step = frame.step_mm();
+        let to_canon = |w: [f64; 2]| {
+            let d = [w[0] - f2.t[0], w[1] - f2.t[1]];
+            [
+                d[0] * f2.cx[0] + d[1] * f2.cx[1],
+                d[0] * f2.cy[0] + d[1] * f2.cy[1],
+            ]
+        };
+        let mut rock = vec![false; nx * ny];
+        let mut us = vec![0.0; nx * ny];
+        let mut ends = vec![0.0; nx * ny];
+        let mut wts = vec![0.0; nx * ny];
+        for j in 0..ny {
+            for i in 0..nx {
+                let p = to_canon([i as f64 * step, j as f64 * step]);
+                let (ci, cj) = ((p[0] / form::GRID_MM).floor(), (p[1] / form::GRID_MM).floor());
+                let q = j * nx + i;
+                if ci >= 0.0 && cj >= 0.0 && (ci as usize) < st.s.nx && (cj as usize) < st.s.ny {
+                    rock[q] = st.s.at(ci as usize, cj as usize) > form::FOOT + 0.5;
+                }
+                let z = zone.at(p[0]);
+                us[q] = (z - form::ZONE_FLOOR) / (1.0 - form::ZONE_FLOOR);
+                wts[q] = 0.5 + z;
+                ends[q] = dt_kit::smooth01(p[0].min(fm.w - p[0]) / (2.0 * foot::END_MM * s));
+            }
+        }
+        let (d, _) = dt_kit::distance(frame, &rock);
+        let dist: Vec<f64> = d
+            .z
+            .iter()
+            .map(|&v| if v.is_finite() { v } else { 1e9 })
+            .collect();
+        let mut cells = Vec::new();
+        for j in 1..ny - 1 {
+            for i in 1..nx - 1 {
+                let q = j * nx + i;
+                if dist[q] > 0.0 && dist[q] <= 1.01 * step {
+                    let g = [dist[q + 1] - dist[q - 1], dist[q + nx] - dist[q - nx]];
+                    let l = libm::hypot(g[0], g[1]).max(1e-9);
+                    cells.push((
+                        [i as f64 * step, j as f64 * step],
+                        [g[0] / l, g[1] / l],
+                        wts[q],
+                    ));
+                }
+            }
+        }
+        let squares = cells.len() as f64 * step / frame.square_mm;
+        Ok(Some(crate::Foot {
+            kind: "cliff",
+            dist,
+            zone: us,
+            end: ends,
+            cells,
+            squares,
+            nx,
+        }))
+    }
+
+    fn build(&self, scene: &mut Scene, ctx: &Ctx<'_>) -> Result<(), LookError> {
+        let frame = *scene.frame();
+        let Planned { f2, fm, zone, st, mut rng, .. } = self.pile_plan(&frame, ctx)?;
         let Some((surface, _)) = scene.surface() else {
             return Err(LookError {
                 control: None,
@@ -286,19 +372,6 @@ impl Look for Cliff {
         // the foot: the lowest ground under the tile
         let foot = ground.z.iter().copied().fold(f64::INFINITY, f64::min);
 
-        let mut rng = Rng::new(ctx.seed.key("cliff"));
-        let ask = Ask {
-            form,
-            height: self.height,
-            depth: self.depth,
-            mass_gain: self.size,
-            kinds: self.weights,
-            ledge_height: self.ledge_height,
-        };
-        let fm = form::make_form(&mut rng, &ask, f2.w, f2.h, s);
-        let zone = form::Zones::new(&mut rng, f2.w, s, self.patches, self.patch_width);
-        let max_rocks = 400 * ((f2.w * f2.h / (sq * sq)).ceil() as usize).max(1);
-        let st = stack::stack(&mut rng, &fm, &zone, s, max_rocks);
         let placed = st.rocks;
         if placed.is_empty() {
             return Ok(());
@@ -456,25 +529,6 @@ impl Look for Cliff {
             },
             core.transformed(&m).into_solid(),
         );
-        let mut frng = Rng::new(ctx.seed.key("cliff-foot"));
-        let world = |p: [f64; 2]| f2.world(p);
-        foot::build(
-            scene,
-            ctx.path,
-            &mut frng,
-            &fm,
-            &st.s,
-            &zone,
-            &foot::Place {
-                world: &world,
-                matrix: m,
-                ground: &ground,
-                foot,
-                scale: s,
-            },
-            &self.foot,
-            ctx.seed.key("cliff-scree").value(),
-        )?;
         scene.note("cliff_stones", n_stones as f64);
         scene.note("cliff_top_cracks", tops as f64);
         Ok(())

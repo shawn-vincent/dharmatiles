@@ -34,10 +34,10 @@ use dt_kit::{
 
 use crate::{Control, Ctx, Look, LookError, Plan, Value, Write, only};
 
-/// The controls a rock thing takes (`wear` and `buried` come later).
-pub const CONTROLS: &[&str] = &["size", "mostly", "shape"];
+/// The controls a rock thing takes (`wear` comes later).
+pub const CONTROLS: &[&str] = &["size", "mostly", "shape", "buried"];
 /// The controls `scatter` takes so far.
-pub const SCATTER_CONTROLS: &[&str] = &["count", "per-square", "gap"];
+pub const SCATTER_CONTROLS: &[&str] = &["count", "per-square", "gap", "reach"];
 
 // body (rocklab :37)
 const HEIGHT_RATIO: (f64, f64) = (0.45, 0.85);
@@ -429,6 +429,8 @@ pub struct Item {
     pub stones: Vec<([f64; 2], Stone)>,
     /// Its radius for spacing.
     pub r: f64,
+    /// How much of its width sinks under the ground, a share range.
+    pub bury: (f64, f64),
 }
 
 /// rocklab `make_item`: one stone, or (a quarter of the time when
@@ -443,6 +445,7 @@ pub fn make_item(rng: &mut Rng, d: f64, mix: [f64; 4], clusters: bool) -> Result
         return Ok(Item {
             stones: vec![([0.0, 0.0], main)],
             r: d / 2.0,
+            bury: (0.0, 0.0),
         });
     }
     let k = rng.int(CLUSTER_STONES.0, CLUSTER_STONES.1);
@@ -458,7 +461,7 @@ pub fn make_item(rng: &mut Rng, d: f64, mix: [f64; 4], clusters: bool) -> Result
         stones.push(([dist * libm::cos(ang), dist * libm::sin(ang)], s));
         r = r.max(dist + dj / 2.0);
     }
-    Ok(Item { stones, r })
+    Ok(Item { stones, r, bury: (0.0, 0.0) })
 }
 
 /// What one rock thing is: its kind, size range (reference mm), skew and
@@ -475,6 +478,8 @@ pub struct Thing {
     pub mix: [f64; 4],
     /// Its share of a scatter's mix.
     pub weight: f64,
+    /// How much of its width sinks under the ground, a share range.
+    pub buried: (f64, f64),
 }
 
 /// The things a rock look builds, with their default size (dt-doc's
@@ -497,11 +502,20 @@ impl Thing {
             exponent: WIDTH_EXP,
             mix: FAMILIES,
             weight,
+            buried: (0.0, 0.0),
         };
         for c in controls {
             match (c.name.as_str(), &c.value) {
                 ("size", Value::Range(a, b)) => t.size = (*a, *b),
                 ("size", Value::Number(a)) => t.size = (*a, *a),
+                ("buried", v) => {
+                    let share = |x: f64| if x > 1.0 { x / 100.0 } else { x };
+                    t.buried = match v {
+                        Value::Number(a) => (share(*a), share(*a)),
+                        Value::Range(a, b) => (share(*a), share(*b)),
+                        Value::Word(_) => (0.0, 0.0),
+                    };
+                }
                 ("mostly.exponent", Value::Number(e)) => t.exponent = *e,
                 ("shape", Value::Word(w)) => {
                     t.mix = match w.as_str() {
@@ -570,9 +584,13 @@ fn add_items(
             let o = [off[0] * s, off[1] * s];
             let p = [at[0] + cs * o[0] - sn * o[1], at[1] + sn * o[0] + cs * o[1]];
             let r = st.radius();
-            let z0 = ground.as_ref().map_or(0.0, |gr| {
+            let mut z0 = ground.as_ref().map_or(0.0, |gr| {
                 seat(gr, p, r, SEAT_BELOW_MIN_MM, SEAT_BELOW_MEDIAN_MM)
             });
+            if item.bury.1 > 0.0 {
+                let mut br = Rng::new(seed.key("bury").index(u64::from(k)));
+                z0 -= br.uniform(item.bury.0, item.bury.1) * st.width;
+            }
             let mesh = grain(&st.convex, &g, seed.index(u64::from(k)).value())
                 .map_err(LookError::build)?;
             let sol = solid(slots.get(k), &mesh)
@@ -737,17 +755,94 @@ fn place(scene: &Scene, ctx: &Ctx<'_>, rng: &mut Rng, radii: &[f64], gap: f64) -
     scatter(&frame, rng, radii, &spread, &inside, &rocks_in(scene))
 }
 
+/// Scree: each item (largest first) lands near the foot of `foot`, in a
+/// ground cell chosen by weight (shattered patches get more), its centre
+/// `d (½ − lean) + exponential(reach)` out from the face, clear of every
+/// other item and rock (rockpile.py `scree`).
+fn place_at_foot(
+    scene: &Scene,
+    ctx: &Ctx<'_>,
+    rng: &mut Rng,
+    foot: &crate::Foot,
+    items: &[Item],
+    kinds: &[&str],
+    reach: f64,
+) -> Vec<Placed> {
+    let frame = *scene.frame();
+    let s = frame.scale();
+    let step = frame.step_mm();
+    let size = frame.size_mm();
+    let area = ctx.area;
+    let total: f64 = foot.cells.iter().map(|c| c.2).sum();
+    if foot.cells.is_empty() || total <= 0.0 {
+        return Vec::new();
+    }
+    let mut order: Vec<usize> = (0..items.len()).collect();
+    order.sort_by(|&a, &b| items[b].r.total_cmp(&items[a].r));
+    let mut out: Vec<Placed> = Vec::new();
+    let existing = rocks_in(scene);
+    for i in order {
+        let it = &items[i];
+        let (d, r) = (2.0 * it.r * s, it.r * s);
+        let mut u = rng.random() * total;
+        let mut cell = &foot.cells[foot.cells.len() - 1];
+        for c in &foot.cells {
+            if u < c.2 {
+                cell = c;
+                break;
+            }
+            u -= c.2;
+        }
+        let rch = -(if kinds[i] == "boulder" { 0.3 } else { 1.0 }) * reach * s * libm::log(1.0 - rng.random());
+        let off = d * (0.5 - SCREE_LEAN) + rch;
+        let at = [cell.0[0] + cell.1[0] * off, cell.0[1] + cell.1[1] * off];
+        if !(r + 0.3 < at[0] && at[0] < size[0] - r - 0.3 && r + 0.3 < at[1] && at[1] < size[1] - r - 0.3) {
+            continue;
+        }
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let (gi, gj) = (
+            (libm::round(at[0] / step).max(0.0) as usize).min(area.nx - 1),
+            (libm::round(at[1] / step).max(0.0) as usize).min(area.ny - 1),
+        );
+        if !area.bits[gj * area.nx + gi] {
+            continue;
+        }
+        if out
+            .iter()
+            .any(|p| libm::hypot(at[0] - p.at[0], at[1] - p.at[1]) < SCREE_GAP * (d + 2.0 * p.r))
+        {
+            continue;
+        }
+        if existing
+            .iter()
+            .any(|e| libm::hypot(at[0] - e[0], at[1] - e[1]) < e[2] + r)
+        {
+            continue;
+        }
+        out.push(Placed { index: i, at, r });
+    }
+    out
+}
+
 /// `scatter { rock … }`: many rock things, by count or per square.
 pub struct Scatter {
     count: Option<(f64, f64)>,
     per_square: (f64, f64),
     gap: f64,
+    /// `against=`: how far from the foot stones lie, mean mm.
+    reach: f64,
     things: Vec<Thing>,
 }
 
 /// rocklab's placements: 9 to 12 per 2×2, so 2.25 to 3 a square.
 const PER_SQUARE: (f64, f64) = (2.25, 3.0);
 const GAP_MM: f64 = 1.5;
+// scree: fallen stones at a cliff's foot (rockpile.py :266)
+const SCREE_REACH_MM: f64 = 4.0;
+const SCREE_LEAN: f64 = 0.35;
+const SCREE_GAP: f64 = 0.38;
+/// Scree takes the cliff's fragments: angular, no domes.
+const SCREE_MIX: [f64; 4] = [0.0, 0.2, 0.45, 0.35];
 
 impl Scatter {
     /// From its controls and its children (each a thing and its weight).
@@ -765,12 +860,18 @@ impl Scatter {
             count: None,
             per_square: PER_SQUARE,
             gap: GAP_MM,
+            reach: SCREE_REACH_MM,
             things: Vec::new(),
         };
         for c in controls {
             match c.name.as_str() {
                 "count" => s.count = range(&c.value),
                 "per-square" => s.per_square = range(&c.value).unwrap_or(PER_SQUARE),
+                "reach" => {
+                    if let Value::Number(r) = c.value {
+                        s.reach = r;
+                    }
+                }
                 "gap" => {
                     if let Value::Number(g) = c.value {
                         s.gap = g;
@@ -833,6 +934,10 @@ impl Look for Scatter {
         #[allow(clippy::cast_precision_loss)]
         let squares = ctx.area.bits.iter().filter(|&&b| b).count() as f64
             / (frame.cells_per_square as f64 * frame.cells_per_square as f64);
+        let squares = match ctx.against {
+            Some(k) => ctx.foots.iter().find(|f| f.kind == k).map_or(0.0, |f| f.squares),
+            None => squares,
+        };
         let n = match self.count {
             Some((a, b)) => rng.uniform(a, b.max(a + f64::EPSILON)),
             None => {
@@ -846,6 +951,7 @@ impl Look for Scatter {
         let n = libm::round(n).clamp(0.0, 10_000.0) as usize;
         let total: f64 = self.things.iter().map(|t| t.weight).sum();
         let mut items = Vec::with_capacity(n);
+        let mut kinds: Vec<&str> = Vec::with_capacity(n);
         for i in 0..n {
             let mut r = Rng::new(ctx.seed.key("item").index(i as u64));
             let mut u = r.random() * total;
@@ -859,10 +965,25 @@ impl Look for Scatter {
                 })
                 .unwrap_or(&self.things[self.things.len() - 1]);
             let d = thing.draw(&mut r);
-            items.push(make_item(&mut r, d, thing.mix, true)?);
+            let mix = if ctx.against.is_some() { SCREE_MIX } else { thing.mix };
+            let mut item = make_item(&mut r, d, mix, ctx.against.is_none())?;
+            item.bury = thing.buried;
+            items.push(item);
+            kinds.push(thing.kind.as_str());
         }
         let radii: Vec<f64> = items.iter().map(|it| it.r * s).collect();
-        let placed = place(scene, ctx, &mut rng, &radii, self.gap * s);
+        let placed = if let Some(kind) = ctx.against {
+            let Some(foot) = ctx.foots.iter().find(|f| f.kind == kind) else {
+                return Err(LookError {
+                    control: None,
+                    message: format!("nothing in this tile to gather against: no `{kind}`"),
+                    help: Some(format!("add a `{kind}` to the stack, or remove `against=`")),
+                });
+            };
+            place_at_foot(scene, ctx, &mut rng, foot, &items, &kinds, self.reach)
+        } else {
+            place(scene, ctx, &mut rng, &radii, self.gap * s)
+        };
         let posed: Vec<(&Item, [f64; 2], f64)> = placed
             .iter()
             .map(|p| (&items[p.index], p.at, rng.uniform(0.0, 360.0)))

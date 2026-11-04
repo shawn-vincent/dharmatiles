@@ -234,17 +234,18 @@ fn cliff_parity(args: &[String]) -> Result<(), String> {
         .join(format!("dharmatiles{}", std::env::consts::EXE_SUFFIX));
     for f in &forms {
         for s in &seeds {
+            let n = if f == "run" { String::new() } else { format!("-{f}") };
             let dir = out.join("rust").join(f).join(format!("s{s}"));
             let _ = std::fs::remove_dir_all(&dir);
             let status = Command::new(&exe)
                 .arg("build")
-                .arg(format!("lib:tiles/test/cliff-{f}-1x1.kdl"))
+                .arg(format!("lib:tiles/test/1x1-cliff{n}.kdl"))
                 .args(["--seed", s, "--out"])
                 .arg(&dir)
                 .status()
                 .map_err(|e| format!("cannot run {}: {e}", exe.display()))?;
             if !matches!(status.code(), Some(0 | 3)) {
-                return Err(format!("build of cliff-{f} seed {s} failed ({status})"));
+                return Err(format!("build of 1x1-cliff{n} seed {s} failed ({status})"));
             }
         }
     }

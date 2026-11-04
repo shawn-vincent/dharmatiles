@@ -1,7 +1,7 @@
 // A tall tapering stack.
 // Twin of clifflab/rockpile.py's `spire` form at round 17 (31f7c5d), 1x1.
 
-tile cliff-spire-1x1 size="1x1" seed=1 {
+tile 1x1-cliff-spire size="1x1" seed=1 {
     about """
         A tall tapering stack.
         """

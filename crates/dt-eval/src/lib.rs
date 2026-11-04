@@ -454,6 +454,31 @@ pub fn build_with(
     // surfaces are painted, before any solid reads the ground
     let writes: Vec<dt_looks::Write> = c.looks.iter().map(|l| l.plan().writes).collect();
     let fills = writes.contains(&dt_looks::Write::Fill);
+    // plan, then build: what stands on the ground says where its foot is
+    // before anything is built, so a bank or scatter listed before it
+    // (or after) can lean on it
+    let mut foots = Vec::new();
+    for (i, look) in c.looks.iter().enumerate() {
+        let ctx = Ctx {
+            area: &masks[mask_of[i]],
+            path: &paths[i],
+            seed: tile
+                .stack
+                .get(i)
+                .and_then(|e| e.seed)
+                .map_or_else(|| root.path(&paths[i]), Seed::new),
+            along: tile.stack.get(i).and_then(|e| e.along.as_deref()),
+            at: tile.stack.get(i).and_then(|e| e.at),
+            printer: opts.printer,
+            against: None,
+            foots: &[],
+        };
+        match look.foot(&c.frame, &ctx) {
+            Ok(Some(f)) => foots.push(f),
+            Ok(None) => {}
+            Err(e) => return Err(fail(format!("{}: {}", paths[i], e.message))),
+        }
+    }
     let mut painted = false;
     for (n, step) in c.steps.iter().enumerate() {
         let t_stage = std::time::Instant::now();
@@ -476,6 +501,8 @@ pub fn build_with(
                     along: tile.stack.get(i).and_then(|e| e.along.as_deref()),
                     at: tile.stack.get(i).and_then(|e| e.at),
                     printer: opts.printer,
+                    against: tile.stack.get(i).and_then(|e| e.against.as_deref()),
+                    foots: &foots,
                 };
                 c.looks[i].build(&mut scene, &ctx).map_err(|e| {
                     let msg = format!("{}: {}", paths[i], e.message);
