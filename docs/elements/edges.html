@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>edges</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Element · library file</div>
+  <h1>edges</h1>
+  <p class="lede">The edge contract: what every tile does at its edges, so that neighbouring tiles butt with no step. Every tile uses it without a <code>use</code> line.</p>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#use">Writing it</a></li>
+  <li><a href="#reference">Reference</a></li>
+  <li><a href="#notes">Notes</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="use">Writing it</h2>
+<pre><code>// library/parts/edges.dtile
+edges {
+    ground level=edge           // ground meets every tile edge at the edge level (3.4 mm)
+    water level=water           // water meets it at the water level, with a shared tide
+}</code></pre>
+<h2 id="reference">Reference</h2>
+<div class="tbl"><table>
+<thead><tr><th>Line</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><code>ground</code></td><td>Every surface meets the tile edge at the <code>edge</code> level, 3.4 mm.</td></tr>
+<tr><td><code>water</code></td><td>Water meets the tile edge at the <code>water</code> level, 2.6 mm, plus a shared tide: 0.6 sin(2π(s − 13.125)/17.5) mm along each edge, so two water tiles butt any way round.</td></tr>
+</tbody></table></div>
+<h2 id="notes">Notes</h2>
+<p>Runs on an edge (walls, cliffs) end in the standard end section, so runs butt together too. See <a href="../standards/tile-system.html#edge-contract">how tiles meet</a>.</p>
+</article>
+</div>
+</body>
+</html>

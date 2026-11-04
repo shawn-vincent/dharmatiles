@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Project Does
 
-**dharmatiles** builds procedural 3D-printable terrain tiles as STL files from short KDL documents. Each tile has a DungeonBlocks-compatible socket-peg underside (or an OpenLOCK clip base), dirt with clods and pebbles, rocks, grass blades, water, walls, floors and trees. Tiles are for tabletop gaming (35 mm square grid, DungeonBlocks standard; OpenLOCK is 25.4 mm). Every build runs through a printability gate: watertight after the float32 reload, no lost parts, no overhang past 55 degrees.
+**dharmatiles** builds procedural 3D-printable terrain tiles as STL files from short `.dtile` documents (the tile language, KDL v2 underneath). Each tile has a DungeonBlocks-compatible socket-peg underside (or an OpenLOCK clip base), dirt with clods and pebbles, rocks, grass blades, water, walls, floors and trees. Tiles are for tabletop gaming (35 mm square grid, DungeonBlocks standard; OpenLOCK is 25.4 mm). Every build runs through a printability gate: watertight after the float32 reload, no lost parts, no overhang past 55 degrees.
 
 The program is Rust (the `dharmatiles` binary). The Python library in `src/dharmatiles` is the labs' support library and is no longer where tiles are made; the labs (`dirtlab`, `rocklab`, `waterlab`, `grasslab`, `meadowlab`, `shorelab`, `clifflab`) are still where new looks are designed. The Python tile specs, the `dharmatiles-gen` entry point and `stl/` are gone (phase P6, 4 Nov 2026); the last commit that had them is the tag `python-library-final`.
 
@@ -12,18 +12,19 @@ The program is Rust (the `dharmatiles` binary). The Python library in `src/dharm
 
 ```bash
 cargo build --release                      # the dharmatiles binary: target/release/dharmatiles
-dharmatiles build lib:tiles/ground/1x1-grass.kdl          # one library tile  -> out/db/ground/1x1-grass-db.stl
-dharmatiles build my-tile.kdl --system ol --png            # a file, for OpenLOCK, with four preview PNGs (overhang red)
+dharmatiles build lib:tiles/ground/1x1-grass.dtile          # one library tile  -> out/db/ground/1x1-grass-db.stl
+dharmatiles build my-tile.dtile --system ol --png            # a file, for OpenLOCK, with four preview PNGs (overhang red)
 dharmatiles build --all --system both                      # every library tile, both systems -> out/{db,ol}/<group>/
-dharmatiles check my-tile.kdl                              # read and plan only
+dharmatiles check my-tile.dtile                              # read and plan only
 dharmatiles looks [name]                                   # the looks and their controls
-dharmatiles watch my-tile.kdl                              # rebuild on every save
-dharmatiles preview my-tile.kdl --open                     # live painted 3D view in the browser (127.0.0.1:7878); overhang red; also takes .stl
+dharmatiles watch my-tile.dtile                              # rebuild on every save
+dharmatiles preview my-tile.dtile --open                     # live painted 3D view in the browser (127.0.0.1:7878); overhang red; also takes .stl
 
 cargo test --release --workspace            # all tests (insta golden hashes included)
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --check
 cargo xtask parity <look>                   # Python lab beside Rust, seeds 1-4 -> out/parity/<look>/contact-sheet.png
+cargo xtask docs [--check]                  # fill docs/elements/ pages' controls tables from the look schema
 ```
 
 `lib:` paths read `library/` from disk: this checkout's when run inside it (new and edited library tiles count at once, no rebuild), else `$DT_LIBRARY`, else the copy installed beside the program. Nothing is compiled in except for browser/phone builds (dt-eval feature `embedded-library`).
@@ -55,7 +56,7 @@ Six crates under `crates/`:
 | `dt-eval` | Reads a document, plans it (`plan.rs` orders the stack by what each look reads and writes), builds it into a `Scene`, audits, exports. Library tiles are bundled from `library/`. |
 | `dharmatiles` | The CLI. |
 
-Also: `xtask/` (the parity harness), `library/` (KDL documents: `tiles/`, `parts/`, `printers/`), `tests/parity/` (`run_lab.py`, the Python side of the harness), `docs/` (the site, HTML).
+Also: `xtask/` (the parity harness), `library/` (`.dtile` documents: `tiles/`, `parts/`, `printers/`, `palettes/`), `tests/parity/` (`run_lab.py`, the Python side of the harness), `docs/` (the site, HTML).
 
 ### How a build runs
 
@@ -80,7 +81,7 @@ tile water+grass size="1x1" seed=97 {
 }
 ```
 
-Lines and fill points make regions; the stack paints surfaces (`ground`, `dirt`, `floor`, `water`) and stands things on them (`rock`, `scatter`, `grass`, `reeds`, `wall`, `tree`). Sizes are mm at the 35 mm square and scale with the system. Read `docs/rust/language.html` for the language and `docs/looks/` for each look.
+Lines and fill points make regions; the stack paints surfaces (`ground`, `dirt`, `floor`, `water`) and stands things on them (`rock`, `scatter`, `grass`, `reeds`, `wall`, `tree`). Sizes are mm at the 35 mm square and scale with the system. Read `docs/language.html` for the language and `docs/elements/` for each element.
 
 ### Library
 
@@ -91,6 +92,7 @@ Lines and fill points make regions; the stack paints surfaces (`ground`, `dirt`,
 - **Overhang is red.** Every render paints overhang faces red at 55 degrees. Trees only: 55-65 degrees is orange, within the tree's band budget; over 65 is red and fails. Every other look keeps 55 as a hard limit. The printability gate is a gate: never loosen a threshold or cull geometry to pass it; fix the geometry where it is made.
 - **KDL is v2 only.**
 - **Docs are HTML** under `docs/`, never `.md` copies; lead with what a tile user needs; no commercial product images. `docs/status.json` is kept current on `main`.
+- **The site is the tile language's reference.** `docs/language.html` is the guide; `docs/elements/<name>.html` is one page per element (every node a document can write; "look" is only the code's word). Each element page's controls block is generated: run `cargo xtask docs` after changing a look's schema, and add a page for any new element (the generator refuses a look without one). The preview links each stack entry to its element page.
 - **Pronouns:** use they/them for Shawn.
 - **Contact sheets:** look at each one yourself at full resolution before calling a look done.
 - **Builds are heavy.** Avoid many release tree or wall builds in parallel.

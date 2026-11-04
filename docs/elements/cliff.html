@@ -3,18 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Cliffs</title>
+<title>cliff</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
 <link rel="stylesheet" href="../assets/site.css">
 <link rel="stylesheet" href="../assets/gallery.css">
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks" aria-current="page">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
-  <div class="eyebrow">Look · rock and earth</div>
-  <h1>Cliffs</h1>
+  <div class="eyebrow">Element · run</div>
+  <h1>cliff</h1>
   <p class="lede">A cliff is a band of big, broken rock along a tile edge, with dirt on top and fallen stones at its foot. It stands about one storey (35 mm) high, fits on a single 35 mm square, butts against the next cliff tile, and prints on an FDM printer with no supports. The surface is cut for an easy drybrush: dark cracks and joints, flat faces that catch the highlight.</p>
   <div class="hero-shots">
     <figure><img src="img/cliffs-r17-run-s4-painted.jpg" alt="Painted 1x1 cliff run from a high three-quarter view" width="497" height="640"></figure>
@@ -43,7 +43,7 @@
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#look">What it looks like</a></li>
   <li><a href="#use">Using it in a tile</a></li>
-  <li><a href="#spec">Specification</a></li>
+  <li><a href="#spec">Reference</a></li>
   <li><a href="#printing">Printing and painting</a></li>
   <li><a href="#how">How it is made</a></li>
   <li><a href="#record">Design record</a></li>
@@ -86,7 +86,7 @@
 </figure>
 
 <h2 id="use">Using it in a tile</h2>
-<p>A tile is a short KDL document. This is the library's cliff run, <code>library/tiles/cliffs/2x1-cliff.kdl</code>: a 2×1 tile with a cliff along its north edge, dirt in front, a bank against the face, and scree. Build it with <code>dharmatiles build lib:tiles/cliffs/2x1-cliff.kdl</code> (about 17 s for a 2×1, 10 s for a 1×1).</p>
+<p>A tile is a short KDL document. This is the library's cliff run, <code>library/tiles/cliffs/2x1-cliff.dtile</code>: a 2×1 tile with a cliff along its north edge, dirt in front, a bank against the face, and scree. Build it with <code>dharmatiles build lib:tiles/cliffs/2x1-cliff.dtile</code> (about 17 s for a 2×1, 10 s for a 1×1).</p>
 <pre><code>tile cliff-run size="2x1" seed=1 {
     stack {
         dirt level=edge
@@ -103,27 +103,60 @@
         }
     }
 }</code></pre>
-<p>Change <code>seed</code> for a different cliff with the same character. <code>form=</code> picks the shape: <code>run</code> (one edge, the default), <code>corner</code> (two edges, <code>along="north west"</code>), <code>canyon</code> (the west and east edges), <code>escarpment</code> (a band whose height ramps along the edge) and the free-standing <code>plateau</code>, <code>massif</code>, <code>mound</code>, <code>spire</code> and <code>needles</code>, which take no <code>along</code>. A twin of each, at 1×1, is in <code>library/tiles/test/cliff-&lt;form&gt;-1x1.kdl</code>. The lab still builds the Python original: <code>python clifflab/rockpile.py --form run --seed 1 --cols 1</code>; <code>cargo xtask parity cliff --forms run corner</code> builds both and lays them side by side (<code>out/parity/cliff/contact-sheet.png</code>).</p>
-<p><b>Not yet:</b> the generic <code>bank against=cliff</code> and <code>scatter against=cliff { stone }</code> forms (<code>library/tiles/test/cliff-run-full.kdl</code> keeps them as the language fixture and does not build); the cliff owns its bank and scree controls until Shawn decides how the generic forms should map.</p>
+<p>Change <code>seed</code> for a different cliff with the same character. <code>form=</code> picks the shape: <code>run</code> (one edge, the default), <code>corner</code> (two edges, <code>along="north west"</code>), <code>canyon</code> (the west and east edges), <code>escarpment</code> (a band whose height ramps along the edge) and the free-standing <code>plateau</code>, <code>massif</code>, <code>mound</code>, <code>spire</code> and <code>needles</code>, which take no <code>along</code>. A twin of each, at 1×1, is in <code>library/tiles/test/cliff-&lt;form&gt;-1x1.dtile</code>. The lab still builds the Python original: <code>python clifflab/rockpile.py --form run --seed 1 --cols 1</code>; <code>cargo xtask parity cliff --forms run corner</code> builds both and lays them side by side (<code>out/parity/cliff/contact-sheet.png</code>).</p>
+<p><b>Not yet:</b> the generic <code>bank against=cliff</code> and <code>scatter against=cliff { stone }</code> forms (<code>library/tiles/test/cliff-run-full.dtile</code> keeps them as the language fixture and does not build); the cliff owns its bank and scree controls until Shawn decides how the generic forms should map.</p>
 
-<h2 id="spec">Specification</h2>
+<h2 id="spec">Reference</h2>
+<!-- gen:reference cliff -->
+<div class="facts">
+  <div><div class="k">Kind</div><div class="v">a run: built along a tile edge or a drawn line</div></div>
+  <div><div class="k">Place words</div><div class="v"><code>in=</code> <code>along=</code> <code>side=</code></div></div>
+  <div><div class="k">Built</div><div class="v">yes</div></div>
+</div>
 <h3 id="controls">Controls</h3>
-<p>The controls of the <code>cliff</code> entry. Everything else (the end section, gullies and buttresses, cracks, chips, grain) is fixed at the approved values.</p>
-<div class="tbl"><table>
-<thead><tr><th>Control</th><th>Values</th><th>Default</th><th>Effect</th></tr></thead>
+<div class="tbl"><table class="controls">
+<thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr><td><code>along</code></td><td><code>north</code>, <code>east</code>, <code>south</code>, <code>west</code></td><td>—</td><td>Which tile edge the cliff stands on.</td></tr>
-<tr><td><code>height</code></td><td>mm above the foot</td><td>35</td><td>How tall the cliff is. 35 mm is about one storey.</td></tr>
-<tr><td><code>depth</code></td><td>mm, or a range</td><td>8–20</td><td>How far the rock reaches into the tile from its edge.</td></tr>
-<tr><td><code>rock</code></td><td><code>mixed</code>, <code>columns</code>, <code>blocks</code>, <code>slabs</code>, or weights</td><td><code>mixed</code></td><td>The kinds of stone. <code>mixed</code> is 38% columns, 38% blocks, 12% slabs, 6% odd, 6% monoliths.</td></tr>
-<tr><td><code>stone-size</code></td><td><code>rubble</code>, <code>broken</code>, <code>massive</code></td><td><code>rubble</code></td><td>Stone size: ×1.0, ×1.15, ×1.35. The library run uses <code>massive</code>.</td></tr>
-<tr><td><code>shattered</code></td><td><code>patches</code>, <code>width</code> (mm)</td><td>1.5 per square</td><td>Clusters of small stones and dense cracks between quiet faces.</td></tr>
-<tr><td><code>top</code></td><td><code>bare</code>, <code>dirt</code></td><td><code>bare</code></td><td>Whether dirt lodges on the rock tops.</td></tr>
-<tr><td><code>ledges</code></td><td><code>height</code> (share)</td><td>random 30–70%</td><td>With <code>ledges height=…</code> the lower tier sits at that share of the cliff.</td></tr>
-<tr><td><code>form</code></td><td>run, corner, canyon, escarpment, plateau, massif, mound, spire, needles</td><td>from <code>along</code></td><td>The shape of the mass.</td></tr>
-<tr><td><code>bank-height</code>, <code>bank-reach</code></td><td>mm, or a range</td><td>1.5–3.5, 3–6.5</td><td>The dirt bank in the angle of cliff and ground (taller and wider in shattered patches; fixed at the tile ends).</td></tr>
-<tr><td><code>scree</code>, <code>boulders</code>, <code>grit</code></td><td>per square of foot</td><td>55, 2.5, 45</td><td>Fallen stones, big fallen blocks, half-buried grit.</td></tr>
+<tr id="c-form"><td><code>form</code></td><td>word</td><td>—</td><td>the shape of the mass: a band on an edge, or free-standing<dl class="words"><dt><code>run</code></dt><dd>a band against one edge (the default for one edge)</dd><dt><code>corner</code></dt><dd>a band round two edges (the default for two)</dd><dt><code>canyon</code></dt><dd>bands against the west and east edges</dd><dt><code>escarpment</code></dt><dd>a band whose height ramps along the edge (10 to 40 mm)</dd><dt><code>plateau</code></dt><dd>a free-standing flat-topped mass</dd><dt><code>massif</code></dt><dd>a free-standing mass with a tall core</dd><dt><code>mound</code></dt><dd>a free-standing stepped mound</dd><dt><code>spire</code></dt><dd>a free-standing tall tapering stack</dd><dt><code>needles</code></dt><dd>two or three tall stacks on a shared footing</dd></dl></td></tr>
+<tr id="c-height"><td><code>height</code></td><td>mm</td><td><code>35</code></td><td>height above the foot</td></tr>
+<tr id="c-depth"><td><code>depth</code></td><td>mm</td><td>—</td><td>how far the rock reaches into the tile</td></tr>
+<tr id="c-rock"><td><code>rock</code></td><td>word</td><td><code>mixed</code></td><td>what the cliff is stacked from, or weights<dl class="words"><dt><code>mixed</code></dt><dd>rockpile's run shares</dd><dt><code>columns</code></dt><dd>basalt columns (provisional)</dd><dt><code>blocks</code></dt><dd>blocky granite (provisional)</dd><dt><code>slabs</code></dt><dd>layered sandstone (provisional)</dd></dl></td></tr>
+<tr id="c-rock-columns"><td><code>rock columns</code></td><td>number</td><td>—</td><td>weight of tall upright stones <span class="tag">not built yet</span></td></tr>
+<tr id="c-rock-blocks"><td><code>rock blocks</code></td><td>number</td><td>—</td><td>weight of chunky blocks <span class="tag">not built yet</span></td></tr>
+<tr id="c-rock-slabs"><td><code>rock slabs</code></td><td>number</td><td>—</td><td>weight of thin tilted slabs <span class="tag">not built yet</span></td></tr>
+<tr id="c-rock-odd"><td><code>rock odd</code></td><td>number</td><td>—</td><td>weight of irregular lumps <span class="tag">not built yet</span></td></tr>
+<tr id="c-rock-monoliths"><td><code>rock monoliths</code></td><td>number</td><td>—</td><td>weight of ground-to-top stones <span class="tag">not built yet</span></td></tr>
+<tr id="c-stone-size"><td><code>stone-size</code></td><td>percent</td><td><code>rubble</code></td><td>small broken stones, or big masses<dl class="words"><dt><code>rubble</code></dt><dd>small broken stones</dd><dt><code>broken</code></dt><dd>between the two (provisional)</dd><dt><code>massive</code></dt><dd>big masses: 1.35x rubble size</dd></dl></td></tr>
+<tr id="c-ledges"><td><code>ledges</code></td><td>count, 0–2</td><td>—</td><td>shelves a miniature can stand on (P7)</td></tr>
+<tr id="c-ledges-height"><td><code>ledges height</code></td><td>percent</td><td>—</td><td>how far up, as a share of the cliff</td></tr>
+<tr id="c-shattered"><td><code>shattered</code></td><td>group</td><td>—</td><td>broken patches with more cracks and scree</td></tr>
+<tr id="c-shattered-patches"><td><code>shattered patches</code></td><td>count</td><td>—</td><td>broken patches along the run</td></tr>
+<tr id="c-shattered-width"><td><code>shattered width</code></td><td>mm</td><td>—</td><td>how wide each patch is</td></tr>
+<tr id="c-bank-height"><td><code>bank-height</code></td><td>mm</td><td><code>1.5..3.5</code></td><td>dirt heaped against the face: how high (a range) <span class="tag">not built yet</span></td></tr>
+<tr id="c-bank-reach"><td><code>bank-reach</code></td><td>mm</td><td><code>3..6.5</code></td><td>dirt heaped against the face: how far out (a range) <span class="tag">not built yet</span></td></tr>
+<tr id="c-scree"><td><code>scree</code></td><td>per square</td><td><code>55</code></td><td>fallen stones along each square of the foot <span class="tag">not built yet</span></td></tr>
+<tr id="c-boulders"><td><code>boulders</code></td><td>per square</td><td><code>2.5</code></td><td>big fallen blocks along each square of the foot <span class="tag">not built yet</span></td></tr>
+<tr id="c-grit"><td><code>grit</code></td><td>per square</td><td><code>45</code></td><td>small stones half-buried in the bank, per square of the foot <span class="tag">not built yet</span></td></tr>
+<tr id="c-top"><td><code>top</code></td><td>word</td><td><code>bare</code></td><td>earth lodged on the flat top<dl class="words"><dt><code>bare</code></dt><dd>bare rock</dd><dt><code>dirt</code></dt><dd>dirt lodged in the top's joints</dd></dl></td></tr>
 </tbody></table></div>
+<h3 id="in-the-library">In the library</h3>
+<ul class="tiles">
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff-corner.dtile"><code>1x1-cliff-corner.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff-mound.dtile"><code>1x1-cliff-mound.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff-mound.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff-spire.dtile"><code>1x1-cliff-spire.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff-spire.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff.dtile"><code>1x1-cliff.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-blocks.dtile"><code>2x1-cliff-blocks.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-blocks.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-escarpment.dtile"><code>2x1-cliff-escarpment.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-escarpment.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-needles.dtile"><code>2x1-cliff-needles.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-needles.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-rubble.dtile"><code>2x1-cliff-rubble.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-rubble.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff.dtile"><code>2x1-cliff.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-canyon.dtile"><code>2x2-cliff-canyon.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-canyon.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-corner.dtile"><code>2x2-cliff-corner.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-massif.dtile"><code>2x2-cliff-massif.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-massif.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-plateau.dtile"><code>2x2-cliff-plateau.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-plateau.dtile</span></li>
+</ul>
+<p class="muted small">Generated from <code>dharmatiles looks cliff</code> by <code>cargo xtask docs</code>.</p>
+<!-- /gen:reference -->
 
 <h3 id="sizes">Sizes and levels</h3>
 <ul>

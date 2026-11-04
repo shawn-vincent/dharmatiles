@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>tile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Element · the document</div>
+  <h1>tile</h1>
+  <p class="lede">Every tile document holds exactly one <code>tile</code>. It names the tile, says how many squares it covers and which seed it grows from, and holds everything else: its levels, lines, regions and stack.</p>
+  <figure class="shot"><img src="img/el-tile.jpg" alt="lib:tiles/water/1x1-water+grass.dtile, the document above, built." loading="lazy"><figcaption><code>lib:tiles/water/1x1-water+grass.dtile</code>, the document above, from above.</figcaption></figure>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#use">Writing it</a></li>
+  <li><a href="#reference">Reference</a></li>
+  <li><a href="#notes">Notes</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="use">Writing it</h2>
+<pre><code>tile water+grass size="1x1" seed=97 {
+    about "Water in the lower half, a meadow bank in the upper."
+    line shore wobble=5 { through "0,0.38" "1,0.42" }
+    region pool { bounded-by shore; fill "0.5,0.25" }
+    region bank { bounded-by shore; fill "0.5,0.75" }
+    stack {
+        dirt in=bank
+        grass in=bank
+        ground in=pool level="water - 2.2"
+        scatter in=pool count=2 { rock size="6..10" }
+        water
+    }
+}</code></pre>
+<h2 id="reference">Reference</h2>
+<div class="tbl"><table>
+<thead><tr><th>Written</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>tile NAME</code></td><td>a name</td><td>—</td><td>The tile's name, shown in the preview and the build record. <strong>Required.</strong></td></tr>
+<tr><td><code>size=</code></td><td><code>"CxR"</code></td><td><code>"1x1"</code></td><td>Squares across, then up. A square is 35 mm (DungeonBlocks) or 25.4 mm (OpenLOCK).</td></tr>
+<tr><td><code>seed=</code></td><td>a whole number</td><td>1</td><td>The root seed. Every element's randomness is keyed from it; <code>dharmatiles build --seed</code> overrides it.</td></tr>
+<tr><td><code>about</code></td><td>a string</td><td>—</td><td>Free text: what the tile is.</td></tr>
+<tr><td><a href="levels.html"><code>levels</code></a></td><td>names and mm</td><td>—</td><td>Levels this tile adds or overrides.</td></tr>
+<tr><td><a href="line.html"><code>line</code></a></td><td></td><td>—</td><td>Lines, for divided tiles.</td></tr>
+<tr><td><a href="region.html"><code>region</code></a></td><td></td><td>—</td><td>Areas bounded by lines.</td></tr>
+<tr><td><a href="stack.html"><code>stack</code></a></td><td></td><td>—</td><td>What the tile is made of. <strong>Exactly one.</strong></td></tr>
+</tbody></table></div>
+<h2 id="notes">Notes</h2>
+<p>Above the tile a file may have <a href="use.html"><code>use</code></a> lines. Anything else at the top level of a tile document is an error. Positions in the tile are in squares from the south-west corner, x east and y north. The build adds the <a href="dungeonblocks.html">DungeonBlocks</a> or <a href="openlock.html">OpenLOCK</a> base; the document never names it.</p>
+<p>File names follow the <a href="../standards/tile-system.html#naming">tile-system naming</a>: <code>1x1-water+grass.dtile</code>.</p>
+</article>
+</div>
+</body>
+</html>

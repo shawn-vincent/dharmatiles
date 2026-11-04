@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>dungeonblocks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Element · base</div>
+  <h1>dungeonblocks</h1>
+  <p class="lede">The DungeonBlocks base: one peg per 35 mm square, a column that drops into the socket of the piece below, following the published DungeonBlocks blank floor tile so dharmatiles tiles mix with commercial pieces. It is the default: <code>dharmatiles build my.dtile</code> builds for it.</p>
+  <figure class="shot"><img src="img/el-dungeonblocks.jpg" alt="The DungeonBlocks peg under 1x1-soil, seen from low." loading="lazy"><figcaption>The DungeonBlocks peg under <code>1x1-soil</code>, seen from low.</figcaption></figure>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#use">Building for it</a></li>
+  <li><a href="#reference">Reference</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="use">Building for it</h2>
+<pre><code>dharmatiles build my-tile.dtile                   # DungeonBlocks, the default
+dharmatiles build my-tile.dtile --system db
+dharmatiles build --all --system both             # every library tile, both bases</code></pre>
+<p>A document never names its base. The same document builds for either system; every size in it scales with the square.</p>
+<h2 id="reference">Reference</h2>
+<div class="tbl"><table>
+<thead><tr><th>Part</th><th>mm</th></tr></thead>
+<tbody>
+<tr><td>Square</td><td>35.0</td></tr>
+<tr><td>Flare: the square narrows to the column over</td><td>5.2</td></tr>
+<tr><td>Column cross-section</td><td>26.0</td></tr>
+<tr><td>Chamfer at the peg tip</td><td>1.5</td></tr>
+<tr><td>Short peg</td><td>5.7</td></tr>
+<tr><td>Tall peg (when anything on the tile is taller than 15 mm)</td><td>11.4</td></tr>
+</tbody></table></div>
+<p>The base is 10.9 mm deep with the short peg and 16.6 mm with the tall one. A lotus logo is inset into each peg tip. Full drawings: <a href="../standards/tile-system.html#dungeonblocks">tile system</a>.</p>
+</article>
+</div>
+</body>
+</html>

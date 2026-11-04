@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>levels</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Element · the document</div>
+  <h1>levels</h1>
+  <p class="lede">Named heights in mm above the tile base. Four standard levels are in every document without a <code>use</code> line; a tile can add its own or override them. A level can be used anywhere a level is expected, alone or in an expression.</p>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#use">Writing it</a></li>
+  <li><a href="#reference">Reference</a></li>
+  <li><a href="#notes">Notes</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="use">Writing it</h2>
+<pre><code>tile cliff-run size="2x1" {
+    levels foot=4                       // this tile's own
+    stack {
+        ground level="water - 2.2"      // an expression on a standard level
+        dirt level=edge
+    }
+}</code></pre>
+<h2 id="reference">Reference</h2>
+<div class="tbl"><table>
+<thead><tr><th>Standard level</th><th>mm</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>edge</code></td><td>3.4</td><td>Ground meets every tile edge here, so tiles butt with no step.</td></tr>
+<tr><td><code>ground</code></td><td>5</td><td>Grass and soil regions.</td></tr>
+<tr><td><code>water</code></td><td>2.6</td><td>The water level.</td></tr>
+<tr><td><code>wall-top</code></td><td>33.1</td><td>The official wall top.</td></tr>
+</tbody></table></div>
+<p>In a tile: <code>levels NAME=MM …</code> on one line. In a parts file: a block, one level per line, <code>levels { foot 4 }</code>. The standard ones come from <code>library/parts/levels.dtile</code>.</p>
+<h2 id="notes">Notes</h2>
+<p>Like every size, levels scale with the system: at OpenLOCK's 25.4 mm square the edge level is 2.47 mm. A quoted value is a small expression: <code>"water - 2.2"</code>, <code>"wall-top / 2"</code>. See <a href="../language.html#units">units, levels and scaling</a>.</p>
+</article>
+</div>
+</body>
+</html>

@@ -3,19 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Grass</title>
+<title>grass</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
 <link rel="stylesheet" href="../assets/site.css">
 <link rel="stylesheet" href="../assets/gallery.css">
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks" aria-current="page">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
-  <div class="eyebrow">Look · vegetation</div>
-  <h1>Grass</h1>
+  <div class="eyebrow">Element · surface</div>
+  <h1>grass</h1>
   <p class="lede">Grass is a field of separate sculpted blades on gently rolling ground, combed into ribbons that meander in S-curves and part around a few eye-shaped patches of bare earth. Every blade is built the way a printer draws it, in whole 0.2 mm layers and 0.45 mm lines, so what you see in the model is what prints, with no supports. The tips overhang open air and the dirt shows between blades, so a dark prime and a drybrush give lit crests and dark gaps.</p>
+  <p class="small">Two more elements grow on a tile: <a href="flowers.html"><code>flowers</code></a>, which grass grows round, and <a href="reeds.html"><code>reeds</code></a> at the waterline. Presets such as <code>lawn</code> come from <a href="define.html"><code>define</code></a>s in <code>parts/grass</code>.</p>
   <div class="hero-shots">
     <figure><img src="img/grass-v3-2x2.jpg" alt="Grey 2x2 grass tile with meandering ribbons of blades and bare patches" width="900" height="616"></figure>
     <figure><img src="img/grass-v3-close.jpg" alt="Close view of grass blades shingled along the flow, with a bare bank" width="900" height="584"></figure>
@@ -43,7 +44,7 @@
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#look">What it looks like</a></li>
   <li><a href="#use">Using it in a tile</a></li>
-  <li><a href="#spec">Specification</a></li>
+  <li><a href="#spec">Reference</a></li>
   <li><a href="#printing">Printing and painting</a></li>
   <li><a href="#how">How it is made</a></li>
   <li><a href="#record">Design record</a></li>
@@ -57,11 +58,11 @@
 
 <figure class="shot">
   <img src="img/grass-reference.jpg" alt="Painted sculpted grass tile with combed ribbons, bare patches and rocks, with close-ups" width="900" height="600" loading="lazy">
-  <figcaption>The target: the “Sculpted Grassy Terrain Tile Showcase” image Shawn supplied as the visual spec (<code>grasslab/reference/approved-reference.png</code>). The rocks in it come from the <a href="rocks.html">rocks</a> look; grass and rocks together are the <a href="composition.html">composition</a> look.</figcaption>
+  <figcaption>The target: the “Sculpted Grassy Terrain Tile Showcase” image Shawn supplied as the visual spec (<code>grasslab/reference/approved-reference.png</code>). The rocks in it come from the <a href="rock.html">rocks</a> look; grass and rocks together are the <a href="../composing.html">composition</a> look.</figcaption>
 </figure>
 
 <h2 id="use">Using it in a tile</h2>
-<p>In the Rust engine grass is a look named on one line, after the ground it grows on (<code>ground</code> or <code>dirt</code>). It reads what stands on the ground: put rocks, trees and walls before it or after it, and the grass grows round them. The library keeps two presets in <code>library/parts/grass.kdl</code>, and <code>library/tiles/ground/2x2-grass-tree.kdl</code> uses one under a tree:</p>
+<p>In the Rust engine grass is a look named on one line, after the ground it grows on (<code>ground</code> or <code>dirt</code>). It reads what stands on the ground: put rocks, trees and walls before it or after it, and the grass grows round them. The library keeps two presets in <code>library/parts/grass.dtile</code>, and <code>library/tiles/ground/2x2-grass-tree.dtile</code> uses one under a tree:</p>
 <pre><code>use "parts/grass" long-grass
 
 tile grass-tree size="2x2" seed=84 {
@@ -79,20 +80,49 @@ tile grass-tree size="2x2" seed=84 {
 python grasslab/grasslab.py --seed 1 --cols 1 --rows 1 --flat   # flat ground, for studying blades</code></pre>
 <p>The Python library's own grass (<code>ThatchGrass</code>, built by <code>dharmatiles-gen</code> from <code>src/tiles/</code>) is an older look; see the History below.</p>
 
-<h2 id="spec">Specification</h2>
+<h2 id="spec">Reference</h2>
+<!-- gen:reference grass -->
+<div class="facts">
+  <div><div class="k">Kind</div><div class="v">a surface: it paints the ground of its area</div></div>
+  <div><div class="k">Place words</div><div class="v"><code>in=</code> <code>along=</code></div></div>
+  <div><div class="k">Holds</div><div class="v">a <a href="scatter.html"><code>scatter</code></a> inside it lands on it</div></div>
+  <div><div class="k">Built</div><div class="v">yes</div></div>
+</div>
 <h3 id="controls">Controls</h3>
-<p>The controls of the <code>grass</code> line in the tile language (<code>crates/dt-doc/src/looks.rs</code>). Everything else (hills, clearings, banks, rim steering, blade cross-section) is fixed at the approved values.</p>
-<div class="tbl"><table>
-<thead><tr><th>Control</th><th>Values</th><th>Default</th><th>Effect</th></tr></thead>
+<div class="tbl"><table class="controls">
+<thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr><td><code>length</code></td><td>mm, or a range</td><td>3.5–6.5</td><td>Blade length along the ground (longer toward the downstream end of each swath).</td></tr>
-<tr><td><code>height</code></td><td>mm, or a range</td><td>1.5–2</td><td>How tall a blade stands over the ground.</td></tr>
-<tr><td><code>clearings</code></td><td>per square</td><td>1.5</td><td>Patches of bare earth the grass parts round.</td></tr>
-<tr><td><code>cover</code></td><td>share, %</td><td>100%</td><td>Share of the ground grassed over.</td></tr>
-<tr><td><code>bare</code></td><td>share, %</td><td>0%</td><td>The least share left bare: clearings (and aprons beside a minority of rocks) are added until the bare earth, rocks included, reaches it (meadowlab&rsquo;s rule).</td></tr>
-<tr><td><code>flow</code></td><td><code>combed</code>, <code>wavy</code>, <code>wild</code></td><td><code>wavy</code></td><td>How tidily the blades lean together. <code>wavy</code> is the approved meander (±10–30°); <code>combed</code> and <code>wild</code> are provisional.</td></tr>
+<tr id="c-length"><td><code>length</code></td><td>mm</td><td><code>3.5..6.5</code></td><td>blade length along the ground</td></tr>
+<tr id="c-height"><td><code>height</code></td><td>mm</td><td><code>1.5..2</code></td><td>how tall a blade stands over the ground</td></tr>
+<tr id="c-clearings"><td><code>clearings</code></td><td>per square</td><td><code>1.5</code></td><td>patches of bare earth the grass parts round</td></tr>
+<tr id="c-cover"><td><code>cover</code></td><td>percent</td><td><code>100%</code></td><td>share of the ground grassed over</td></tr>
+<tr id="c-bare"><td><code>bare</code></td><td>percent</td><td><code>0%</code></td><td>the least share left bare: clearings are added until the bare earth, rocks included, reaches it</td></tr>
+<tr id="c-flow"><td><code>flow</code></td><td>word</td><td><code>wavy</code></td><td>how tidily the blades lean together<dl class="words"><dt><code>combed</code></dt><dd>blades lean together, tidily (provisional)</dd><dt><code>wavy</code></dt><dd>grasslab's in-phase meander</dd><dt><code>wild</code></dt><dd>blades every which way (provisional)</dd></dl></td></tr>
 </tbody></table></div>
-<p class="muted small">The lab has no controls beyond <code>--seed</code>, <code>--cols</code>, <code>--rows</code> and <code>--flat</code>; the Rust defaults above are the lab&rsquo;s values. <code>curl</code> and <code>tufts</code>, from the Python library&rsquo;s grass, are gone: the lab&rsquo;s blades have neither.</p>
+<h3 id="in-the-library">In the library</h3>
+<ul class="tiles">
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-grass.dtile"><code>1x1-grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil+grass-angle.dtile"><code>1x1-soil+grass-angle.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil+grass-angle.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil+grass-corner.dtile"><code>1x1-soil+grass-corner.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil+grass-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil+grass.dtile"><code>1x1-soil+grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil-corridor+grass.dtile"><code>1x1-soil-corridor+grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil-corridor+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil-corridor-open+grass.dtile"><code>1x1-soil-corridor-open+grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil-corridor-open+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil-corridor-t+grass.dtile"><code>1x1-soil-corridor-t+grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil-corridor-t+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil-corridor-turn+grass.dtile"><code>1x1-soil-corridor-turn+grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil-corridor-turn+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil-corridor-x+grass.dtile"><code>1x1-soil-corridor-x+grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil-corridor-x+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil-u+grass.dtile"><code>1x1-soil-u+grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil-u+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-angle.dtile"><code>1x1-water+grass-angle.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-angle.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-corner.dtile"><code>1x1-water+grass-corner.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass.dtile"><code>1x1-water+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor+grass.dtile"><code>1x1-water-corridor+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-open+grass.dtile"><code>1x1-water-corridor-open+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-open+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-t+grass.dtile"><code>1x1-water-corridor-t+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-t+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-turn+grass.dtile"><code>1x1-water-corridor-turn+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-turn+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-x+grass.dtile"><code>1x1-water-corridor-x+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-x+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-u+grass.dtile"><code>1x1-water-u+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-u+grass.dtile</span></li>
+</ul>
+<p class="muted small">Generated from <code>dharmatiles looks grass</code> by <code>cargo xtask docs</code>.</p>
+<!-- /gen:reference -->
 
 <h3 id="sizes">Sizes and levels</h3>
 <ul>
@@ -131,7 +161,7 @@ python grasslab/grasslab.py --seed 1 --cols 1 --rows 1 --flat   # flat ground, f
   <li><strong>Clearings and rim.</strong> <code>place_lenses</code> (line 442) puts eye-shaped clearings in low ground; <code>finish_flow</code> (line 467) bends the flow round each one; <code>steer_rim</code> (line 527) turns the flow toward or along the tile edge, choosing one turn direction per stretch of rim so it never meets itself head-on.</li>
   <li><strong>Ribbons.</strong> <code>make_strand_roots</code> (line 645) seeds strands 2.65 mm apart and traces each 15–30 mm along the flow; blades root every half blade length along it. <code>draw_frond</code> (line 765) shortens blades at the rim, at clearings and at obstacles (never slicing), and makes shortened blades lower.</li>
   <li><strong>Blades.</strong> <code>blade_layers</code> (line 812) builds the stroke stack: line counts per layer such as 2 3 4 4 4 4 4 3 2 1, a convex rise, the raked tip and pointed ends. <code>blade_mesh</code> (line 860) lofts through the layer outlines, blurs lightly, meshes at 0.05 mm, seats the blade on the hills and reduces it to 1,500 faces.</li>
-  <li><strong>Assembly.</strong> The dirt ground (with the shared dirt texture from <a href="ground.html">ground</a>) and every blade are unioned, then <code>attach_base</code> (line 999) adds the DungeonBlocks base, keeps the largest body and exports through <code>stl_safe</code> (line 1060).</li>
+  <li><strong>Assembly.</strong> The dirt ground (with the shared dirt texture from <a href="dirt.html">ground</a>) and every blade are unioned, then <code>attach_base</code> (line 999) adds the DungeonBlocks base, keeps the largest body and exports through <code>stl_safe</code> (line 1060).</li>
 </ol>
 <details>
   <summary>Key constants</summary>

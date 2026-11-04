@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>palette</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Element · library file</div>
+  <h1>palette</h1>
+  <p class="lede">The paint: a flat colour per material, for 3MF files and the preview, and acrylic ramps from a dark basecoat to drybrushed highlights, blended by local relief. Copy it, change the colours, and pass it with <code>--palette</code>.</p>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#use">Writing it</a></li>
+  <li><a href="#reference">Reference</a></li>
+  <li><a href="#notes">Notes</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="use">Writing it</h2>
+<pre><code>// library/palettes/default.dtile
+earth "#806140"
+rock  "#94949c"
+ramp earth "#342418" "#583e28" "#806040" "#aa8a64" "#cdb48c"
+ramp water "#12265c" "#1c569c@0.45" "#3aa0b2@0.72" "#96dcd6@0.9" "#e1f5f0@1.04"</code></pre>
+<pre><code>dharmatiles build my-tile.dtile --3mf --palette my-palette.dtile
+dharmatiles preview my-tile.dtile --palette my-palette.dtile   # saving it repaints</code></pre>
+<h2 id="reference">Reference</h2>
+<div class="tbl"><table>
+<thead><tr><th>Line</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><code>MATERIAL "#rrggbb"</code></td><td>The flat colour of a material: <code>earth</code>, <code>connector</code>, <code>rock</code>, <code>water</code>, <code>grass</code>, <code>masonry</code>, <code>wood</code>, <code>leaf</code>, <code>flower</code>.</td></tr>
+<tr><td><code>ramp NAME tone tone …</code></td><td>Paint tones from dark to pale. Raised detail takes the pale tones, hollows stay dark. A tone ending <code>@0.45</code> sits at that place from 0 to 1; otherwise they are spaced evenly.</td></tr>
+</tbody></table></div>
+</article>
+</div>
+</body>
+</html>

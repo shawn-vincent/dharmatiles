@@ -44,79 +44,99 @@
 </style>
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="index.html" aria-current="page">dharmatiles</a><a href="index.html#status">Status</a><a href="index.html#looks">Looks</a><a href="rust/plan.html">Rust plan</a><a href="rust/architecture.html">Architecture</a><a href="rust/language.html">Language</a><a href="rust/spikes.html">Spikes</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="index.html" aria-current="page">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="rust/plan.html">Project</a><a href="archive/index.html">Archive</a></div></nav>
 
 <div class="wrap">
 <header class="hero">
-  <div class="eyebrow">Procedural 3D-printable terrain tiles · 35 mm DungeonBlocks squares · 25.4 mm OpenLOCK</div>
+  <div class="eyebrow">The tile language · 3D-printable terrain · 35 mm DungeonBlocks · 25.4 mm OpenLOCK</div>
   <h1>dharmatiles</h1>
-  <p class="lede">dharmatiles makes terrain tiles for tabletop games as STL files: ground, grass, rocks, cliffs, water, walls and trees, printable on a home FDM printer without supports. Each look below has a page that shows it, says how to use it in a tile, and gives its exact specification. Behind the site are three bodies of work: the original Python library, the labs where the looks are made, and a Rust rewrite.</p>
+  <p class="lede">dharmatiles turns a short text file into a 3D-printable terrain tile for tabletop games: ground, grass, rocks, cliffs, water, walls and trees, on a DungeonBlocks or OpenLOCK base, printable on a home FDM printer without supports. The file is a <code>.dtile</code> document in the tile language. This site is that language's reference.</p>
 </header>
 
-<h2 id="get">Get and use the tiles</h2>
-<p>There are no prebuilt downloads yet: you build the STLs yourself from the repository, <a href="https://github.com/shawn-vincent/dharmatiles">github.com/shawn-vincent/dharmatiles</a>. Each tile comes with a DungeonBlocks socket-peg base (35 mm squares) or an OpenLOCK clip base (25.4 mm squares); see the <a href="standards/tile-system.html">tile system</a>. Every tile prints base down with no supports; see <a href="standards/printing.html">printing</a>.</p>
+<h2 id="first">A first tile</h2>
+<div class="grid2">
+<div>
+<pre><code>// my-pond.dtile
+tile pond size="1x1" seed=97 {
+    line shore wobble=5 { through "0,0.38" "1,0.42" }
+    region pool { bounded-by shore; fill "0.5,0.25" }
+    region bank { bounded-by shore; fill "0.5,0.75" }
+    stack {
+        dirt in=bank
+        grass in=bank
+        ground in=pool level="water - 2.2"
+        scatter in=pool count=2 { rock size="6..10" }
+        water
+    }
+}</code></pre>
+</div>
+<figure class="shot"><img src="elements/img/el-tile.jpg" alt="A one-square tile: water in the lower part with two rocks, a grassy bank above a wandering shore" loading="lazy"><figcaption>That document, built: <code>lib:tiles/water/1x1-water+grass.dtile</code>.</figcaption></figure>
+</div>
+<p>A <a href="elements/line.html"><code>line</code></a> divides the tile, <a href="elements/region.html">regions</a> name its sides, and the <a href="elements/stack.html"><code>stack</code></a> says what goes where: <a href="elements/dirt.html"><code>dirt</code></a> and <a href="elements/grass.html"><code>grass</code></a> on the bank, a <a href="elements/ground.html"><code>ground</code></a> bed, two rocks and <a href="elements/water.html"><code>water</code></a> in the pool. Sizes are millimetres at the 35 mm square; the OpenLOCK build scales them for you.</p>
 <div class="tbl"><table>
-  <thead><tr><th>To get</th><th>Run</th><th>You get</th></tr></thead>
+  <thead><tr><th>To</th><th>Run</th></tr></thead>
   <tbody>
-    <tr><td>The library tiles</td><td><code>dharmatiles build --all --system both</code></td><td>Every library tile as STL in <code>out/db/</code> and <code>out/ol/</code>. One tile: <code>dharmatiles build lib:tiles/ground/2x2-grass-tree.kdl</code>.</td></tr>
-    <tr><td>An approved look</td><td>the look's lab, e.g. <code>python clifflab/rockpile.py --form run --seed 1</code></td><td>A test tile of that look in the lab's <code>out/</code>, with a DungeonBlocks base. Each look page says how.</td></tr>
-    <tr><td>A tile from a KDL document</td><td><code>dharmatiles build library/tiles/test/1x1-flat.kdl</code> (branch <code>rust/p1</code>)</td><td>The Rust engine. Today it builds flat ground only; more looks arrive phase by phase (<a href="rust/plan.html">plan</a>).</td></tr>
+    <tr><td>Build it (DungeonBlocks)</td><td><code>dharmatiles build my-pond.dtile</code> → <code>out/db/my-pond-db.stl</code></td></tr>
+    <tr><td>Build it for OpenLOCK, with preview images</td><td><code>dharmatiles build my-pond.dtile --system ol --png</code></td></tr>
+    <tr><td>Watch it in the browser as you edit</td><td><code>dharmatiles preview my-pond.dtile --open</code></td></tr>
+    <tr><td>Check it without building</td><td><code>dharmatiles check my-pond.dtile</code></td></tr>
+    <tr><td>Build every library tile</td><td><code>dharmatiles build --all --system both</code></td></tr>
+    <tr><td>List the elements and their controls</td><td><code>dharmatiles looks</code>, <code>dharmatiles looks cliff</code></td></tr>
   </tbody>
 </table></div>
+<p>There are no prebuilt downloads yet: build the program from <a href="https://github.com/shawn-vincent/dharmatiles">the repository</a> with <code>cargo build --release</code>. Every tile passes a printability gate before it is written: watertight, nothing lost, no overhang past 55° (55–65° allowed in small patches, past 65° fails). See <a href="standards/printing.html">printing</a>.</p>
 
-<h2 id="looks">Looks</h2>
-<p>A look is one kind of terrain surface. Each look page shows the look, says how to use it in a tile, and gives its exact specification and printing notes. Further down each page is its design record: Shawn's rulings, the requirements, reference photos and history.</p>
+<h2 id="reference">The reference</h2>
+<ul class="doclist">
+  <li><a href="language.html">The language</a><span class="sum">How a document is written: syntax, units and levels, edges, points, lines and regions, placement, parts, and errors.</span></li>
+  <li><a href="elements/index.html">Elements</a><span class="sum">Every element a document can write, one page each: what it makes, screenshots, an example, every control (generated from the program), how it is made, reference photos and its design record.</span></li>
+  <li><a href="composing.html">Composing a tile</a><span class="sum">How elements share a tile: rocks bedded in the ground, grass growing up to them, and tiles that meet their neighbours.</span></li>
+  <li><a href="standards/tile-system.html">Tile system</a><span class="sum">Tile, square and cell; the DungeonBlocks and OpenLOCK bases; file names; edges.</span></li>
+  <li><a href="standards/printing.html">Printing</a><span class="sum">The printer profile, the overhang limit, red overhangs in renders, and the audit every build passes.</span></li>
+</ul>
+
+<h2 id="elements">Elements</h2>
 <div class="lookgrid">
-  <a class="lookcard" href="looks/ground.html"><img src="looks/img/ground-r2-painted-s1.jpg" alt="" loading="lazy"><span class="lc-t">Ground</span><span class="lc-d">Bare earth with clods, grit and half-sunk pebbles over gentle rises. Every other look stands on it.</span><span class="lc-r">Rust port: P1 flat; P2 dirt and hills</span></a>
-  <a class="lookcard" href="looks/grass.html"><img src="looks/img/grass-v3-2x2.jpg" alt="" loading="lazy"><span class="lc-t">Grass</span><span class="lc-d">Separate sculpted blades combed into meandering ribbons, parting round patches of bare earth.</span><span class="lc-r">Rust port: P4</span></a>
-  <a class="lookcard" href="looks/rocks.html"><img src="looks/img/rocks-tile-2x2-s1.jpg" alt="" loading="lazy"><span class="lc-t">Rocks</span><span class="lc-d">Loose, chiselled stones scattered over the ground, alone or in small fused clusters.</span><span class="lc-r">Rust port: P3</span></a>
-  <a class="lookcard" href="looks/cliffs.html"><img src="looks/img/cliffs-r17-run-s4-painted.jpg" alt="" loading="lazy"><span class="lc-t">Cliffs</span><span class="lc-d">A storey-high band of big, broken rock along a tile edge, with dirt on top and scree at its foot.</span><span class="lc-r">Rust port: P7</span></a>
-  <a class="lookcard" href="looks/water.html"><img src="looks/img/water-swell-chaos-painted-s1.jpg" alt="" loading="lazy"><span class="lc-t">Water and shore</span><span class="lc-d">Sculpted fantasy water: swells off the shore, chop round rocks, and a reedy bank where meadow meets water.</span><span class="lc-r">Rust port: P3 water; P4 shore</span></a>
-  <a class="lookcard" href="looks/walls.html"><img src="looks/img/walls-fieldstone-corner.jpg" alt="" loading="lazy"><span class="lc-t">Walls and floors</span><span class="lc-d">Cut stone, fieldstone and brick walls on a tile edge, with doors, windows and hatches, and stone floors.</span><span class="lc-r">Rust port: P5</span></a>
-  <a class="lookcard" href="looks/trees.html"><img src="looks/img/trees-1x1-grass-tree.jpg" alt="" loading="lazy"><span class="lc-t">Trees</span><span class="lc-d">A single tree with a barked, forking trunk and clumps of foliage covered in separate leaves.</span><span class="lc-r">Rust port: P5</span></a>
-  <a class="lookcard" href="looks/composition.html"><img src="looks/img/water-shore-s3-overhang.jpg" alt="" loading="lazy"><span class="lc-t">Composition</span><span class="lc-d">How looks share a tile: rocks bedded in the ground, grass growing up to them, and tiles that meet their neighbours.</span><span class="lc-r">Rust port: P4</span></a>
+  <a class="lookcard" href="elements/dirt.html"><img src="elements/img/ground-r2-painted-s1.jpg" alt="" loading="lazy"><span class="lc-t">dirt · ground</span><span class="lc-d">Bare earth with clods, grit and half-sunk pebbles over gentle rises.</span></a>
+  <a class="lookcard" href="elements/grass.html"><img src="elements/img/grass-v3-2x2.jpg" alt="" loading="lazy"><span class="lc-t">grass · flowers · reeds</span><span class="lc-d">Separate sculpted blades in tufts, parting round patches of bare earth.</span></a>
+  <a class="lookcard" href="elements/rock.html"><img src="elements/img/rocks-tile-2x2-s1.jpg" alt="" loading="lazy"><span class="lc-t">rock · stone · boulder · pebble</span><span class="lc-d">Chiselled stones, alone or scattered, bedded in the ground.</span></a>
+  <a class="lookcard" href="elements/cliff.html"><img src="elements/img/cliffs-r17-run-s4-painted.jpg" alt="" loading="lazy"><span class="lc-t">cliff</span><span class="lc-d">A storey-high band or mass of broken rock, with scree at its foot.</span></a>
+  <a class="lookcard" href="elements/water.html"><img src="elements/img/water-swell-chaos-painted-s1.jpg" alt="" loading="lazy"><span class="lc-t">water</span><span class="lc-d">Sculpted water: swells off the shore and chop round rocks.</span></a>
+  <a class="lookcard" href="elements/wall.html"><img src="elements/img/walls-fieldstone-corner.jpg" alt="" loading="lazy"><span class="lc-t">wall · floor</span><span class="lc-d">Cut stone, fieldstone and brick walls on a tile edge, and stone floors.</span></a>
+  <a class="lookcard" href="elements/tree.html"><img src="elements/img/trees-1x1-grass-tree.jpg" alt="" loading="lazy"><span class="lc-t">tree</span><span class="lc-d">A barked, forking trunk and clumps of foliage covered in separate leaves.</span></a>
+  <a class="lookcard" href="elements/index.html"><img src="elements/img/el-line.jpg" alt="" loading="lazy"><span class="lc-t">All elements</span><span class="lc-d">tile, levels, line, region, stack, use, define, scatter, the bases and the library files.</span></a>
 </div>
-<p class="muted small">Thumbnails come from each look page, where every render is captioned; most predate the rule that paints overhang faces red.</p>
+<p class="muted small">Older renders on the element pages predate the rule that paints overhang faces red; each is captioned.</p>
 
-<h2 id="bodies">Three bodies of work</h2>
+<h2 id="project">The project</h2>
 <div class="bodies">
-  <section class="card b-python">
-    <h3>The original Python library</h3>
-    <p>The <code>dharmatiles-gen</code> generator and its library of tile specs. It is the shipping code until the Rust cutover. Trees and walls are still developed here.</p>
+  <section class="card b-rust">
+    <h3>The program</h3>
+    <p>The <code>dharmatiles</code> program, in Rust: it reads <code>.dtile</code> documents, builds them, audits them and writes STL and 3MF.</p>
     <dl>
-      <dt>Code</dt><dd><code>src/dharmatiles/</code> (frozen, for the labs), <code>crates/</code>, <code>library/</code></dd>
-      <dt>Docs</dt><dd><a href="archive/index.html#python-library">Library design pages</a> (archived) and the History section of each look page</dd>
-      <dt>Status</dt><dd><a href="#status-python">below</a></dd>
+      <dt>Code</dt><dd><code>crates/</code>, <code>library/</code></dd>
+      <dt>Docs</dt><dd><a href="rust/plan.html">Plan and decisions</a> · <a href="rust/architecture.html">Architecture</a> · <a href="rust/preview.html">Preview</a> · <a href="rust/spikes.html">Spikes</a></dd>
+      <dt>Status</dt><dd><a href="#status-rust">below</a></dd>
     </dl>
   </section>
   <section class="card b-labs">
     <h3>The labs</h3>
-    <p>Seven standalone experiments where the approved looks are made: grass, rocks, cliffs, water, shore, dirt and meadow. Each lab writes to its own <code>out/</code> and never changes the library.</p>
+    <p>Standalone Python experiments where new looks are designed (grass, rocks, cliffs, water, shore, dirt, meadow) before each is ported into the program.</p>
     <dl>
-      <dt>Code</dt><dd><code>*lab/</code> at the repo root</dd>
-      <dt>Docs</dt><dd>The <a href="#looks">look pages</a>; the original lab pages are in the <a href="archive/index.html#lab-logs">archive</a></dd>
+      <dt>Code</dt><dd><code>*lab/</code> at the repo root, on <code>src/dharmatiles</code></dd>
+      <dt>Docs</dt><dd>Each element page's design record; lab logs in the <a href="archive/index.html#lab-logs">archive</a></dd>
       <dt>Status</dt><dd><a href="#status-labs">below</a></dd>
     </dl>
   </section>
-  <section class="card b-rust">
-    <h3>The Rust rewrite</h3>
-    <p>The port of the labs and the library into one Rust engine. A tile is a short KDL document that names built-in looks. Phases 1 and 2 are done: the Rust engine prints a flat tile and builds dirt equal to the lab. Rocks, water, walls, floors and trees are under way.</p>
+  <section class="card b-python">
+    <h3>The Python library</h3>
+    <p>The original generator, retired on 4 Nov 2026 (tag <code>python-library-final</code>). Its support library stays, frozen, for the labs.</p>
     <dl>
-      <dt>Code</dt><dd><code>crates/</code>, <code>library/</code> (branch <code>rust/p1</code>)</dd>
-      <dt>Docs</dt><dd><a href="rust/plan.html">Plan</a> · <a href="rust/architecture.html">Architecture</a> · <a href="rust/language.html">Language</a> · <a href="rust/spikes.html">Spikes</a></dd>
-      <dt>Status</dt><dd><a href="#status-rust">below</a></dd>
+      <dt>Docs</dt><dd><a href="archive/index.html#python-library">Library design pages</a> (archived)</dd>
+      <dt>Status</dt><dd><a href="#status-python">below</a></dd>
     </dl>
   </section>
 </div>
-
-
-<h2 id="standards">Standards</h2>
-<ul class="doclist">
-  <li><a href="standards/tile-system.html">Tile system</a><span class="sum">Tile, square and cell; DungeonBlocks and OpenLOCK geometry; file names; edge coordinates.</span></li>
-  <li><a href="standards/printing.html">Printing</a><span class="sum">Printer profile, the 55° overhang limit, the printable-texture rule, red overhangs in renders, and the watertight and float32 reload audit.</span></li>
-  <li><a href="standards/commercial-sets-analysis.html">Commercial sets analysis</a><span class="sum">Measured DungeonBlocks wall and ground heights, compared with Hirst Arts, Fat Dragon Games and The Dragon's Rest. The source of the tile-system numbers.</span></li>
-</ul>
-
 
 <h2 id="status">Status</h2>
 <div class="status">

@@ -3,19 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Rocks</title>
+<title>rock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
 <link rel="stylesheet" href="../assets/site.css">
 <link rel="stylesheet" href="../assets/gallery.css">
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks" aria-current="page">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
-  <div class="eyebrow">Look · rock and earth</div>
-  <h1>Rocks</h1>
+  <div class="eyebrow">Element · thing</div>
+  <h1>rock</h1>
   <p class="lede">Rocks are loose, chiselled stones scattered over the ground: a handful per square, 6–15 mm across, some alone and some in small fused clusters. Every rock is cut into flat facets of mixed sizes with crisp edges, chipped corners and a fine grain, so a drybrush picks out every edge. They print on an FDM printer with no supports.</p>
+  <p class="small">Three elements are rocks with other default sizes, each with its own page: <a href="stone.html"><code>stone</code></a>, <a href="boulder.html"><code>boulder</code></a> and <a href="pebble.html"><code>pebble</code></a>. Many rocks are a <a href="scatter.html"><code>scatter</code></a>.</p>
   <div class="hero-shots">
     <figure><img src="img/rocks-tile-2x2-s1.jpg" alt="Grey 2x2 tile of dirt with a dozen faceted rocks and small clusters" width="900" height="611"></figure>
     <figure><img src="img/rocks-hero-close.jpg" alt="Close-up of one faceted rock with a small stone fused to its side" width="900" height="609"></figure>
@@ -42,7 +43,7 @@
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#look">What it looks like</a></li>
   <li><a href="#use">Using it in a tile</a></li>
-  <li><a href="#spec">Specification</a></li>
+  <li><a href="#spec">Reference</a></li>
   <li><a href="#printing">Printing and painting</a></li>
   <li><a href="#how">How it is made</a></li>
   <li><a href="#stone-finish">Stone finish</a></li>
@@ -76,23 +77,62 @@
         }
     }
 }</code></pre>
-<p>This example is written for this page against the vocabulary in <code>crates/dt-doc/src/looks.rs</code> (branch <code>rust/p1</code>); the library has no rock-only tile yet. Rocks also appear inside other looks: scree at the foot of a <a href="cliffs.html">cliff</a> is stones and boulders scattered <code>against=cliff</code>. The rock look reaches the Rust engine in phase P3 (see the <a href="../rust/plan.html">plan</a>). Until then the lab builds it: <code>python rocklab/rocklab.py --seed 1 --cols 2 --rows 2</code> writes <code>rocklab/out/2x2-rocks-s1.stl</code> with a DungeonBlocks base. The language as a whole is on the <a href="../rust/language.html">language page</a>.</p>
+<p>This example is written for this page against the vocabulary in <code>crates/dt-doc/src/looks.rs</code> (branch <code>rust/p1</code>); the library has no rock-only tile yet. Rocks also appear inside other looks: scree at the foot of a <a href="cliff.html">cliff</a> is stones and boulders scattered <code>against=cliff</code>. The rock look reaches the Rust engine in phase P3 (see the <a href="../rust/plan.html">plan</a>). Until then the lab builds it: <code>python rocklab/rocklab.py --seed 1 --cols 2 --rows 2</code> writes <code>rocklab/out/2x2-rocks-s1.stl</code> with a DungeonBlocks base. The language as a whole is on the <a href="../language.html">language page</a>.</p>
 
-<h2 id="spec">Specification</h2>
+<h2 id="spec">Reference</h2>
+<!-- gen:reference rock -->
+<div class="facts">
+  <div><div class="k">Kind</div><div class="v">a thing: one solid, standing on the surface</div></div>
+  <div><div class="k">Place words</div><div class="v"><code>in=</code> <code>at=</code></div></div>
+  <div><div class="k">Built</div><div class="v">yes</div></div>
+</div>
 <h3 id="controls">Controls</h3>
-<p>The controls of a <code>rock</code> (and of <code>stone</code>, <code>boulder</code> and <code>pebble</code>), and of the <code>scatter</code> that places them. Facets, chips, grain and the cluster rule are fixed at the approved values.</p>
-<div class="tbl"><table>
-<thead><tr><th>Control</th><th>Values</th><th>Default</th><th>Effect</th></tr></thead>
+<div class="tbl"><table class="controls">
+<thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr><td><code>size</code></td><td>mm range</td><td>rock <code>2..10</code>; stone <code>1..6</code>; boulder <code>4.5..8</code>; pebble <code>1..2.2</code></td><td>Rock width. rocklab's approved range is 6–15 mm.</td></tr>
-<tr><td><code>mostly</code></td><td><code>small</code>, <code>even</code>, <code>large</code></td><td><code>even</code></td><td>Skews the size range. rocklab is skewed small.</td></tr>
-<tr><td><code>shape</code></td><td><code>rounded</code>, <code>angular</code>, <code>flat</code></td><td>—</td><td>River stones, broken rock, or flat slabs.</td></tr>
-<tr><td><code>wear</code></td><td><code>crisp</code>, <code>worn</code></td><td>—</td><td>Sharp edges, or chipped and rounded edges.</td></tr>
-<tr><td><code>buried</code></td><td>%</td><td>—</td><td>How much of each rock is under the ground.</td></tr>
-<tr><td>scatter <code>count</code> / <code>per-square</code></td><td>number</td><td>—</td><td>How many: in total, or per 35 mm square. rocklab places 9–12 per 2×2 tile.</td></tr>
-<tr><td>scatter <code>gap</code></td><td>mm</td><td>—</td><td>Least space between rocks. rocklab keeps 1.5 mm.</td></tr>
-<tr><td>scatter <code>clumps</code></td><td>per square</td><td>spread evenly</td><td>Gathers rocks into clumps.</td></tr>
+<tr id="c-size"><td><code>size</code></td><td>mm</td><td><code>6..15</code></td><td>rock width</td></tr>
+<tr id="c-mostly"><td><code>mostly</code></td><td>word</td><td>—</td><td>skews the size range<dl class="words"><dt><code>small</code></dt><dd>skewed toward the low end (rockpile's exponent 2)</dd><dt><code>even</code></dt><dd>a uniform draw</dd><dt><code>large</code></dt><dd>leaning toward the high end</dd></dl></td></tr>
+<tr id="c-shape"><td><code>shape</code></td><td>word</td><td>—</td><td>river stones, broken rock, flat slabs<dl class="words"><dt><code>rounded</code></dt><dd>river stones</dd><dt><code>angular</code></dt><dd>broken rock</dd><dt><code>flat</code></dt><dd>flat slabs</dd></dl></td></tr>
+<tr id="c-wear"><td><code>wear</code></td><td>word</td><td>—</td><td>sharp, or chipped and rounded edges <span class="tag">not built yet</span><dl class="words"><dt><code>crisp</code></dt><dd>sharp edges</dd><dt><code>worn</code></dt><dd>chipped and rounded edges</dd></dl></td></tr>
+<tr id="c-buried"><td><code>buried</code></td><td>percent</td><td>—</td><td>how much of each rock is under the ground</td></tr>
 </tbody></table></div>
+<h3 id="in-the-library">In the library</h3>
+<ul class="tiles">
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff-corner.dtile"><code>1x1-cliff-corner.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff-mound.dtile"><code>1x1-cliff-mound.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff-mound.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff-spire.dtile"><code>1x1-cliff-spire.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff-spire.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff.dtile"><code>1x1-cliff.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-blocks.dtile"><code>2x1-cliff-blocks.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-blocks.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-escarpment.dtile"><code>2x1-cliff-escarpment.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-escarpment.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-needles.dtile"><code>2x1-cliff-needles.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-needles.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-rubble.dtile"><code>2x1-cliff-rubble.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-rubble.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff.dtile"><code>2x1-cliff.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-canyon.dtile"><code>2x2-cliff-canyon.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-canyon.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-corner.dtile"><code>2x2-cliff-corner.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-massif.dtile"><code>2x2-cliff-massif.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-massif.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-plateau.dtile"><code>2x2-cliff-plateau.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-plateau.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-angle.dtile"><code>1x1-water+grass-angle.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-angle.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-corner.dtile"><code>1x1-water+grass-corner.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-tree.dtile"><code>1x1-water+grass-tree.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-tree.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass.dtile"><code>1x1-water+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+soil-angle.dtile"><code>1x1-water+soil-angle.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+soil-angle.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+soil-corner.dtile"><code>1x1-water+soil-corner.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+soil-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+soil.dtile"><code>1x1-water+soil.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+soil.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor+grass.dtile"><code>1x1-water-corridor+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor+soil.dtile"><code>1x1-water-corridor+soil.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor+soil.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-open+grass.dtile"><code>1x1-water-corridor-open+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-open+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-open+soil.dtile"><code>1x1-water-corridor-open+soil.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-open+soil.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-t+grass.dtile"><code>1x1-water-corridor-t+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-t+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-t+soil.dtile"><code>1x1-water-corridor-t+soil.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-t+soil.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-turn+grass.dtile"><code>1x1-water-corridor-turn+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-turn+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-turn+soil.dtile"><code>1x1-water-corridor-turn+soil.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-turn+soil.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-x+grass.dtile"><code>1x1-water-corridor-x+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-x+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-x+soil.dtile"><code>1x1-water-corridor-x+soil.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-x+soil.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-u+grass.dtile"><code>1x1-water-u+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-u+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-u+soil.dtile"><code>1x1-water-u+soil.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-u+soil.dtile</span></li>
+</ul>
+<p class="muted small">Generated from <code>dharmatiles looks rock</code> by <code>cargo xtask docs</code>.</p>
+<!-- /gen:reference -->
 
 <h3 id="sizes">Sizes and levels</h3>
 <ul>

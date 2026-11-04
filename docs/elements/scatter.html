@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>scatter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Element · placement</div>
+  <h1>scatter</h1>
+  <p class="lede">More than one of a thing. A scatter says how many and where; its children say what. Rocks, stones, boulders, pebbles, trees and definitions whose stack is one thing can all be scattered.</p>
+  <figure class="shot"><img src="img/el-scatter.jpg" alt="lib:tiles/cliffs/2x1-cliff.dtile: stones and boulders scattered against the cliff, pebbles scattered in the dirt." loading="lazy"><figcaption><code>lib:tiles/cliffs/2x1-cliff.dtile</code>: stones and boulders scattered against the cliff, pebbles scattered in the dirt.</figcaption></figure>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#use">Writing it</a></li>
+  <li><a href="#reference">Reference</a></li>
+  <li><a href="#notes">Notes</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="use">Writing it</h2>
+<pre><code>scatter in=pool count=2 { rock size="6..10" }                 // two rocks in the pool
+scatter against=cliff per-square=55 reach=4 { stone }         // scree at the cliff's foot
+scatter per-square=3 { stone weight=3; boulder }              // a mix, three stones to a boulder
+dirt { scatter per-square=40 { pebble } }                     // inside a surface: lands on it</code></pre>
+<p>A scatter needs exactly one of <code>count</code> and <code>per-square</code>. <code>reach</code> needs <code>against=</code>; <code>spread</code> needs <code>at=</code>. With several children, each child's <code>weight=</code> is its share of the mix (default: equal). Every scattered thing keeps inside the tile and clear of other solids: it is nudged inward, never clipped.</p>
+<h2 id="reference">Reference</h2>
+<!-- gen:reference scatter -->
+<div class="facts">
+  <div><div class="k">Kind</div><div class="v">a scatter: many things, placed; its children say what</div></div>
+  <div><div class="k">Place words</div><div class="v"><code>in=</code> <code>along=</code> <code>against=</code> <code>at=</code></div></div>
+  <div><div class="k">Built</div><div class="v">yes</div></div>
+</div>
+<h3 id="controls">Controls</h3>
+<div class="tbl"><table class="controls">
+<thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
+<tbody>
+<tr id="c-count"><td><code>count</code></td><td>count</td><td>—</td><td>how many, in total</td></tr>
+<tr id="c-per-square"><td><code>per-square</code></td><td>per square</td><td>—</td><td>how many per square of the area, or of length along a line</td></tr>
+<tr id="c-spread"><td><code>spread</code></td><td>mm</td><td>—</td><td>with at=: a cluster within this distance of it <span class="tag">not built yet</span></td></tr>
+<tr id="c-reach"><td><code>reach</code></td><td>mm</td><td>—</td><td>with against=: how far out from the foot</td></tr>
+<tr id="c-clumps"><td><code>clumps</code></td><td>per square</td><td>—</td><td>gathers them into clumps; default spread evenly <span class="tag">not built yet</span></td></tr>
+<tr id="c-gap"><td><code>gap</code></td><td>mm</td><td>—</td><td>least space between neighbours</td></tr>
+<tr id="c-mostly"><td><code>mostly</code></td><td>word</td><td>—</td><td>skews every child's size range <span class="tag">not built yet</span><dl class="words"><dt><code>small</code></dt><dd>skewed toward the low end (rockpile's exponent 2)</dd><dt><code>even</code></dt><dd>a uniform draw</dd><dt><code>large</code></dt><dd>leaning toward the high end</dd></dl></td></tr>
+</tbody></table></div>
+<h3 id="in-the-library">In the library</h3>
+<ul class="tiles">
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff-corner.dtile"><code>1x1-cliff-corner.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff-mound.dtile"><code>1x1-cliff-mound.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff-mound.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff-spire.dtile"><code>1x1-cliff-spire.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff-spire.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff.dtile"><code>1x1-cliff.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-blocks.dtile"><code>2x1-cliff-blocks.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-blocks.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-escarpment.dtile"><code>2x1-cliff-escarpment.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-escarpment.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-needles.dtile"><code>2x1-cliff-needles.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-needles.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-rubble.dtile"><code>2x1-cliff-rubble.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-rubble.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff.dtile"><code>2x1-cliff.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-canyon.dtile"><code>2x2-cliff-canyon.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-canyon.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-corner.dtile"><code>2x2-cliff-corner.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-massif.dtile"><code>2x2-cliff-massif.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-massif.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-plateau.dtile"><code>2x2-cliff-plateau.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-plateau.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-grass-tree.dtile"><code>1x1-grass-tree.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-grass-tree.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-angle.dtile"><code>1x1-water+grass-angle.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-angle.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-corner.dtile"><code>1x1-water+grass-corner.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-tree.dtile"><code>1x1-water+grass-tree.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-tree.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass.dtile"><code>1x1-water+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+soil-angle.dtile"><code>1x1-water+soil-angle.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+soil-angle.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+soil-corner.dtile"><code>1x1-water+soil-corner.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+soil-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+soil.dtile"><code>1x1-water+soil.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+soil.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-u+grass.dtile"><code>1x1-water-u+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-u+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-u+soil.dtile"><code>1x1-water-u+soil.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-u+soil.dtile</span></li>
+</ul>
+<p class="muted small">Generated from <code>dharmatiles looks scatter</code> by <code>cargo xtask docs</code>.</p>
+<!-- /gen:reference -->
+<h2 id="notes">Notes</h2>
+<dl class="defs">
+  <dt>against=</dt><dd>Gathers at the foot of that kind of thing: <code>cliff</code>, <code>wall</code>, <code>rock</code> or <code>tree</code>. Scattered against a cliff, rocks take the cliff's rock: that is scree.</dd>
+  <dt>mostly=</dt><dd>Skews every child's size range as <code>lo + (hi − lo) × u<sup>k</sup></code>: <code>small</code> is k = 2, <code>even</code> k = 1, <code>large</code> k = ½.</dd>
+  <dt>inside a surface</dt><dd>A scatter written inside <code>dirt</code>, <code>ground</code> or <code>grass</code> is placed on that surface, in its area.</dd>
+</dl>
+<p>A single thing never takes a count: <code>tree count=3</code> is an error whose help says to use a scatter. See <a href="../language.html#placement">placement</a> in the language guide.</p>
+</article>
+</div>
+</body>
+</html>

@@ -66,7 +66,7 @@
 </style>
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks">Looks</a><a href="../rust/plan.html" aria-current="page">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="plan.html" aria-current="page">Project</a><a href="../archive/index.html">Archive</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
   <div class="eyebrow">Rust rewrite · plan · Phase 2 done (2 Nov 2026) · Phases 3 and 5 under way</div>
@@ -111,7 +111,7 @@
 <p>The <a href="#P2">P2 detail</a> below has the full scope and exit criteria.</p>
 <ul class="now">
 <li><span class="st st-settled">done</span><span><b>Kernels and operations.</b> Position-keyed noise, distance transform, morphology, blur, spatial hash; the noise, distance, scatter, carve and adaptive-lift operations; one grid convention.</span></li>
-<li><span class="st st-settled">done</span><span><b>Looks: ground (full) and dirt</b>, ported from <code>dirtlab</code>, with <code>library/tiles/ground/1x1-soil.kdl</code>, <code>dharmatiles looks</code> and the <code>watch</code> command. At seeds 1 to 4 every parity metric is within tolerance; the printable-texture rule holds on 97.8% (dirtlab 97.7%); a 2×2 tile builds in about 0.8 s, watertight, with 0 mm² of overhang. Dirtlab's stones come in P3.</span></li>
+<li><span class="st st-settled">done</span><span><b>Looks: ground (full) and dirt</b>, ported from <code>dirtlab</code>, with <code>library/tiles/ground/1x1-soil.dtile</code>, <code>dharmatiles looks</code> and the <code>watch</code> command. At seeds 1 to 4 every parity metric is within tolerance; the printable-texture rule holds on 97.8% (dirtlab 97.7%); a 2×2 tile builds in about 0.8 s, watertight, with 0 mm² of overhang. Dirtlab's stones come in P3.</span></li>
 <li><span class="st st-settled">done</span><span><b>Shawn's sign-off.</b> Shawn signed off Rust dirt beside dirtlab over seeds 1 to 4 on 2 Nov 2026 (&ldquo;dirt is beautiful&rdquo;). The ground edge level stays 3.4 mm (Default 12), and the flat test tile now sits at it.</span></li>
 </ul>
 
@@ -131,9 +131,9 @@
 <h3 id="p4-checklist">Phase 4 checklist</h3>
 <p>The <a href="#P4">P4 detail</a> below has the full scope and exit criteria. The sheets are written by <code>cargo xtask parity grass</code> to <code>out/parity/grass/contact-sheet.png</code>.</p>
 <ul class="now">
-<li><span class="st st-settled">done</span><span><b>Grass</b>, ported from <code>grasslab</code>: flow, swaths, clearings, the rim rule, strands and fronds, and the blade's layer stack built directly as a loft (a few hundred faces, watertight by construction, grouped into solids of clear blades). A 2×2 builds in about 5 s (lab 100 s), with 0 mm&sup2; of overhang; the blade count and heights are in <code>library/tiles/test/2x2-grass.kdl</code>'s golden.</span></li>
+<li><span class="st st-settled">done</span><span><b>Grass</b>, ported from <code>grasslab</code>: flow, swaths, clearings, the rim rule, strands and fronds, and the blade's layer stack built directly as a loft (a few hundred faces, watertight by construction, grouped into solids of clear blades). A 2×2 builds in about 5 s (lab 100 s), with 0 mm&sup2; of overhang; the blade count and heights are in <code>library/tiles/test/2x2-grass.dtile</code>'s golden.</span></li>
 <li><span class="st st-settled">done</span><span><b>Meadow</b> (the rule for what stands on the ground): no root under a rock, trunk or wall, tips pressed against it, lower beside it, the flow wraps it; <code>bare=</code> adds clearings and rock aprons up to a share of bare earth.</span></li>
-<li><span class="st st-settled">done</span><span><b>Reeds</b>, ported from <code>shorelab</code>; <code>shore-2x2.kdl</code> is the shore test tile.</span></li>
+<li><span class="st st-settled">done</span><span><b>Reeds</b>, ported from <code>shorelab</code>; <code>shore-2x2.dtile</code> is the shore test tile.</span></li>
 <li><span class="st st-settled">done</span><span><b>Nineteen twins</b> (ten ground, nine water+grass), and the wall, floor and tree tiles that had waited for grass now build; 114 builds (19 tiles, 3 seeds, both systems) pass the gate. The Python twins of the wall and tree tiles are deleted; the nineteen stay until Shawn has seen the sheets.</span></li>
 <li><span class="st st-settled">done</span><span><b>MCP server</b>: <code>dharmatiles mcp</code> over stdio with <code>check_document</code>, <code>list_looks</code>, <code>describe_look</code>, <code>list_tiles</code>, <code>build_tile</code>, <code>render_preview</code> and <code>audit_mesh</code>; <code>dharmatiles audit</code> runs the gate on an STL.</span></li>
 <li><span class="st st-active">open</span><span><b>Shawn's sign-off</b> on grass, meadow and shore, and a test print of a meadow tile.</span></li>
@@ -152,7 +152,7 @@
 <ul class="now">
 <li><span class="st st-settled">done</span><span><b>3MF writer</b>: <code>dharmatiles build --3mf</code> writes the tile as one object whose triangles carry their materials as 3MF base materials. Waiting for Shawn to open one in Bambu Studio.</span></li>
 <li><span class="st st-settled">done</span><span><b>MCP server over stdio</b> (<code>dharmatiles mcp</code>), and <code>dharmatiles audit FILE.stl</code>.</span></li>
-<li><span class="st st-settled">done</span><span><b>Palette</b>: <code>--palette file.kdl</code> paints the 3MF from a material-to-colour document (<code>library/palettes/default.kdl</code>); <b>MCP over HTTP</b>: <code>dharmatiles mcp --http 127.0.0.1:8787</code>; <b>language server</b>: <code>dharmatiles lsp</code> (diagnostics from the evaluator, hover and completion from the schema).</span></li>
+<li><span class="st st-settled">done</span><span><b>Palette</b>: <code>--palette file.dtile</code> paints the 3MF from a material-to-colour document (<code>library/palettes/default.dtile</code>); <b>MCP over HTTP</b>: <code>dharmatiles mcp --http 127.0.0.1:8787</code>; <b>language server</b>: <code>dharmatiles lsp</code> (diagnostics from the evaluator, hover and completion from the schema).</span></li>
 <li><span class="st st-active">later</span><span><b>Not started:</b> the Tauri app (2D editor and viewport; it needs a front-end toolchain and is not next in the plan), wasm, mobile.</span></li>
 </ul>
 
@@ -171,7 +171,7 @@
 <li><b>Printability is a gate, not a report.</b> Every look follows one recipe (large form, mid-scale structure, fine grain), and one audit at the end fails the build or warns loudly, with overhangs painted red.</li>
 <li><b>The speedups are in grass and cliffs, not booleans.</b> Python already runs its booleans in C++ (Manifold). Rust gains from parallel blades and adaptive heightfields.</li>
 </ul>
-<p>The design is on the <a href="architecture.html">architecture</a> page, the tile language on the <a href="language.html">language</a> page, and the Phase 0 measurements on the <a href="spikes.html">spikes</a> page.</p>
+<p>The design is on the <a href="architecture.html">architecture</a> page, the tile language on the <a href="../language.html">language</a> page, and the Phase 0 measurements on the <a href="spikes.html">spikes</a> page.</p>
 <h2 id="glance">The plan at a glance</h2>
 <p>A red dot marks a phase on the critical path. Sizes are calendar weeks for agents working with Shawn's reviews. They are not person-weeks of typing.</p>
 <div class="tbl"><table class="glance">
@@ -314,23 +314,23 @@
 <li>Creates <code>dt-eval</code>: project discovery, <code>lib:</code> imports, the plan-then-build scheduler, which rejects reads it cannot satisfy, seeds by path, and the source trait.</li>
 <li>Creates the <code>dharmatiles</code> program with <code>build</code>, <code>check</code>, <code>--json</code> and exit codes 0, 1, 2 and 3.</li>
 <li>Kernels: grid (lift), 2D (line rasterising and the paint bucket), and mesh (union with the connector). The mesh kernel follows the R1 and R2 rules from the start: solids stay inside Manifold between operations (no round trip through a plain triangle mesh, which drops face IDs), and source IDs follow the rule in <code>dt-geom::source</code>: original IDs come from a reserved block, assigned by part index; leaves are relabelled with their slot and their own face-ID range before materials are recorded; plane cuts take an ID from the block; materials live in a table keyed by (original ID, face ID), cut faces taking the material of the solid being cut; parts are combined with <code>batch_in_order</code>. <code>as_original()</code> is not used in pipelines. Seeded code uses the <code>libm</code> crate for <code>sin</code>, <code>exp</code> and <code>powf</code>.</li>
-<li><code>dt-doc</code> reworked to the decided R6 syntax and vocabulary (<a href="#r6dec">R6 decisions</a>, <a href="language.html">language</a>), and the three library tiles rewritten to match: authors write mm at the DungeonBlocks reference plus named levels (<code>ground</code>, <code>edge</code>, <code>water</code>, <code>wall-top</code>), with h = 33.1 mm kept as the engine scale and <code>(h)</code> opt-in; every written size scales with the system, with hidden printability floors; the standard heights load implicitly as a prelude from <code>library/parts/levels.kdl</code>; controls read in both forms (on the line and as child lines); the edit API gains insertion, which writes a new control on the line as a property (the P0 spike could only replace a value already written); units are not written, <code>(mm)4.5</code> stays as an optional check and the <code>"4.5mm"</code> suffix from the P0 spike is removed; the renames (hills → ground, meadow → grass, blocks → boulders, family → style, self → in, near → against); words for character controls expanding to documented numbers; the whole tile as the default area; edge names and <code>side=</code> on drawn lines; quoted point pairs; stack order free for solids.</li>
+<li><code>dt-doc</code> reworked to the decided R6 syntax and vocabulary (<a href="#r6dec">R6 decisions</a>, <a href="../language.html">language</a>), and the three library tiles rewritten to match: authors write mm at the DungeonBlocks reference plus named levels (<code>ground</code>, <code>edge</code>, <code>water</code>, <code>wall-top</code>), with h = 33.1 mm kept as the engine scale and <code>(h)</code> opt-in; every written size scales with the system, with hidden printability floors; the standard heights load implicitly as a prelude from <code>library/parts/levels.dtile</code>; controls read in both forms (on the line and as child lines); the edit API gains insertion, which writes a new control on the line as a property (the P0 spike could only replace a value already written); units are not written, <code>(mm)4.5</code> stays as an optional check and the <code>"4.5mm"</code> suffix from the P0 spike is removed; the renames (hills → ground, meadow → grass, blocks → boulders, family → style, self → in, near → against); words for character controls expanding to documented numbers; the whole tile as the default area; edge names and <code>side=</code> on drawn lines; quoted point pairs; stack order free for solids.</li>
 <li>Ports from: <code>core/region.py</code> (paint bucket), <code>bases/dungeonblocks.py</code> (the peg height depends on content max Z, :20–37), <code>core/logo.py</code>, <code>stone/solidify.py</code>, the three <code>audit_overhang</code> copies (rockpile's 55° rule wins), and <code>build_info.py</code>.</li>
 </ul></dd>
 <dt>Deliverables</dt><dd><ul>
-<li><code>library/printers/default.kdl</code>, <code>library/parts/edges.kdl</code> and <code>library/tiles/test/1x1-flat.kdl</code>.</li>
+<li><code>library/printers/default.dtile</code>, <code>library/parts/edges.dtile</code> and <code>library/tiles/test/1x1-flat.dtile</code>.</li>
 <li>The <a href="#harness">parity harness</a>. On the Python side, <code>tests/parity/</code> runs a lab at seeds 1 to 4 and writes STL, <code>metrics.json</code> and painted renders through <code>dharmatiles/render.py</code> (built early, in P0, as <code>tests/parity/run_lab.py</code> for dirtlab). On the Rust side, <code>cargo xtask parity &lt;look&gt;</code> builds the same seeds and writes a side-by-side contact sheet to <code>out/parity/&lt;look&gt;/</code>.</li>
 <li>insta summaries in <code>crates/dt-eval/tests/</code>.</li>
 </ul></dd>
 <dt>Exit criteria</dt><dd><ul>
-<li><code>dharmatiles build lib:tiles/test/1x1-flat.kdl</code> writes a watertight STL that passes float32 reload, with 0 mm² of overhang and 0 bodies dropped, in ≤ 2 s.</li>
+<li><code>dharmatiles build lib:tiles/test/1x1-flat.dtile</code> writes a watertight STL that passes float32 reload, with 0 mm² of overhang and 0 bodies dropped, in ≤ 2 s.</li>
 <li>Stage hashes are identical across two runs and at 1, 4 and 16 threads, enforced in CI. Across platforms, level B (chosen 2 Nov 2026): golden hashes shared by the macOS and Linux jobs, with Windows gated on metrics and renders.</li>
 <li>A deliberately wrong document gives a miette error with its line and a hint.</li>
 <li>The harness produces a Python-beside-Rust contact sheet, with overhangs painted red, for the flat tile, and a Python-only sheet for dirtlab at seeds 1 to 4.</li>
 <li>Shawn's test print seats in a DungeonBlocks socket.</li>
 </ul></dd>
 <dt>Risks</dt><dd>Retires R2 (the CI hash check) and R6 (a real document end to end). Covers half of R5 (the harness) and part of R8 (the scheduler rejects unsatisfiable reads).</dd>
-<dt>Depends on</dt><dd>P0. The R6 syntax and vocabulary were decided on 1 Nov 2026: Shawn answered the eight syntax questions, then took all ten recommendations of the intuitiveness review, which revised answers 1 and 5 (<a href="language.html#decisions">language decisions</a>). The <code>dt-doc</code> rework is stream A of P1.</dd>
+<dt>Depends on</dt><dd>P0. The R6 syntax and vocabulary were decided on 1 Nov 2026: Shawn answered the eight syntax questions, then took all ten recommendations of the intuitiveness review, which revised answers 1 and 5 (<a href="../language.html#decisions">language decisions</a>). The <code>dt-doc</code> rework is stream A of P1.</dd>
 <dt>Shawn does</dt><dd>One test print. Approves the layout of the contact sheet. About 2 to 3 hours.</dd>
 </dl>
 </details>
@@ -345,10 +345,10 @@
 <li>Looks: <code>ground</code> (full) and <code>dirt</code>.</li>
 <li>Ports from: <code>dirtlab/dirtlab.py</code> (<code>smax</code> :137, clods :205, pebbles :300/:351, <code>dirt_relief</code> :507). Stones (:395) come in P3 with rocks.</li>
 <li>The single grid convention replaces the three in <code>core/mesh.py:69</code>, <code>layers/water.py:542</code> and <code>core/grid.py</code>.</li>
-<li>Tile: <code>1x1-soil.tile.py</code> becomes <code>library/tiles/ground/1x1-soil.kdl</code>.</li>
+<li>Tile: <code>1x1-soil.tile.py</code> becomes <code>library/tiles/ground/1x1-soil.dtile</code>.</li>
 <li>Front end: <code>watch</code>.</li>
 </ul></dd>
-<dt>Deliverables</dt><dd><code>ground</code> and <code>dirt</code> with their controls listed by <code>dharmatiles looks dirt</code>. The ground edge level is fixed in <code>edges.kdl</code>. Golden summaries.</dd>
+<dt>Deliverables</dt><dd><code>ground</code> and <code>dirt</code> with their controls listed by <code>dharmatiles looks dirt</code>. The ground edge level is fixed in <code>edges.dtile</code>. Golden summaries.</dd>
 <dt>Exit criteria</dt><dd><ul>
 <li>Printable-texture rule: at least 0.2 mm of relief in every 1.5 mm window over at least 97% of the tile (Python reaches 98.1%).</li>
 <li>Clod count, pebble count and the relief spectrum are within tolerance over seeds 1 to 4.</li>
@@ -376,7 +376,7 @@
 <li>Tiles (11): <code>1x1-water</code>, <code>3x3-water</code>, and the nine water+soil tiles (plain, angle, corner, u, and the five corridors).</li>
 <li>Front end: <code>preview</code> in stream C, a browser view with the plan pass first and then meshes.</li>
 </ul></dd>
-<dt>Deliverables</dt><dd><code>rocks</code>, <code>water</code>, the edge contract in <code>library/parts/edges.kdl</code>, 11 tile twins, and <code>dharmatiles preview</code>.</dd>
+<dt>Deliverables</dt><dd><code>rocks</code>, <code>water</code>, the edge contract in <code>library/parts/edges.dtile</code>, 11 tile twins, and <code>dharmatiles preview</code>.</dd>
 <dt>Exit criteria</dt><dd><ul>
 <li>Rocks: count, size histogram and facets per rock (30 to 165) within tolerance. Each chip removes ≤ 3% of the volume.</li>
 <li>Water: amplitude and trough floor (softplus at −1.1 mm) within tolerance. The edge profile matches the contract within 0.05 mm on all four edges.</li>
@@ -450,7 +450,7 @@
 <dl class="defs">
 <dt>Goal</dt><dd>Every library tile builds from KDL in Rust, and the Python library is no longer used for tiles.</dd>
 <dt>Scope</dt><dd><ul>
-<li><code>dharmatiles.kdl</code> builds all 42 tiles for <code>db</code> and <code>ol</code> into <code>out/</code>.</li>
+<li><code>dharmatiles.dtile</code> builds all 42 tiles for <code>db</code> and <code>ol</code> into <code>out/</code>.</li>
 <li>The first release through dist: a GitHub release and a Homebrew tap.</li>
 <li>Delete the remaining <code>src/tiles/**/*.tile.py</code>, remove the <code>dharmatiles-gen</code> entry point, and retire <code>stl/</code>.</li>
 <li>Freeze <code>src/dharmatiles</code> as the labs' support library and tag <code>python-library-final</code>.</li>
@@ -608,7 +608,7 @@
 
 <h2 id="cutover">Cutover</h2>
 <h3>Tile conversion, phase by phase</h3>
-<p>Each <code>.tile.py</code> in <code>src/tiles/</code> is rewritten by hand as <code>library/tiles/&lt;family&gt;/&lt;name&gt;.kdl</code> in the phase that ports its looks. It is deleted when its twin passes review. There are 43 specs today.</p>
+<p>Each <code>.tile.py</code> in <code>src/tiles/</code> is rewritten by hand as <code>library/tiles/&lt;family&gt;/&lt;name&gt;.dtile</code> in the phase that ports its looks. It is deleted when its twin passes review. There are 43 specs today.</p>
 <div class="tbl"><table>
 <thead><tr><th>Phase</th><th class="num">Tiles</th><th>Which</th></tr></thead>
 <tbody>
@@ -685,11 +685,14 @@
 </tbody></table></div>
 
 <h2 id="decisions">Decisions log</h2>
-<p>One line per decision, newest first. Shawn's words are quoted exactly; "—" means the decision was relayed without a quote of its own. Where one sitting decided many things, each row carries that sitting's words. Detail for the tile-language decisions (Q1–Q8, D1–D12) is on the <a href="language.html#decisions">language</a> page.</p>
+<p>One line per decision, newest first. Shawn's words are quoted exactly; "—" means the decision was relayed without a quote of its own. Where one sitting decided many things, each row carries that sitting's words. Detail for the tile-language decisions (Q1–Q8, D1–D12) is on the <a href="../language.html#decisions">language</a> page.</p>
 <div class="tbl"><table class="dlog">
 <thead><tr><th>Date</th><th>Decision</th><th>Shawn's words</th></tr></thead>
 <tbody>
 <tr class="group"><td colspan="3">4 Nov 2026</td></tr>
+<tr><td>2026-11-04</td><td><span class="ref">Site</span>The docs site is the reference for the tile language: a language guide, and one page per <em>element</em> (every node a document can write: <code>tile</code>, <code>line</code>, <code>region</code>, <code>stack</code>, each look, <code>scatter</code>, the bases). Each element page gives what it makes, screenshots, an example, its controls (generated from the look schema), and below that how it is made, reference photos and its design record. &ldquo;Look&rdquo; stays the code&rsquo;s word for how an element is built. Supersedes the 2 Nov page-per-look layout.<span class="aff">docs</span></td><td>&ldquo;this tile definition language needs a reference, and that reference is this website. And the looks pages aren&rsquo;t looks pages. They&rsquo;re, I don&rsquo;t know, like things the tile language is defining.&rdquo;</td></tr>
+<tr><td>2026-11-04</td><td><span class="ref">Suffix</span>Documents in the tile language are <code>.dtile</code> files, not <code>.kdl</code>: tiles, parts, printers, palettes and the project file (<code>dharmatiles.dtile</code>). They are still KDL v2 underneath.<span class="aff">all</span></td><td>&ldquo;this is our own language that is built on the structure of KDL. So yes, it is KDL, and yes, it is valid KDL, but I think the file name should probably say dtile or dharmatile&rdquo;</td></tr>
+<tr><td>2026-11-04</td><td><span class="ref">Preview</span>The preview names each stack entry by what it places (<code>pebbles in dirt</code>, <code>stones at the cliff</code>, <code>DungeonBlocks base</code>) and links each to its page on the docs site.<span class="aff">preview</span></td><td>&ldquo;I&rsquo;d like each of those things to link to the public documentation about that thing on the github pages site.&rdquo;</td></tr>
 <tr><td>2026-11-04</td><td><span class="ref">Library</span>The library is files on disk, not compiled into the program: a checkout&rsquo;s <code>library/</code>, then <code>$DT_LIBRARY</code>, then the copy installed beside the program (Homebrew <code>share/dharmatiles/library</code>). Only browser and phone builds compile it in (dt-eval feature <code>embedded-library</code>). Supersedes the earlier &ldquo;library ships inside the program&rdquo; design.<span class="aff">P6, P8</span></td><td>&ldquo;I&rsquo;m not sure really why we would want to have bundled tiles in the application itself. Like, when you install the thing, there should be a library that&rsquo;s distributed along with it, but those are files on disk as well.&rdquo;</td></tr>
 <tr><td>2026-11-04</td><td><span class="ref">Overhang</span>Small patches over 65&deg; are allowed too, like the band: up to 0.1% of the downward-facing area (the band&rsquo;s share), still painted red; more than that fails. The audit reports <code>overhang_budget_mm2</code> beside <code>band_budget_mm2</code>.<span class="aff">P7, all looks</span></td><td>&ldquo;allow small patches over 65&deg;, like the band&rdquo;</td></tr>
 <tr><td>2026-11-04</td><td><span class="ref">Overhang</span>The 65&deg; band is every look&rsquo;s, not trees&rsquo; alone: 55&deg; is the conservative target, faces between 55&deg; and 65&deg; are the band (orange, up to 0.1% of the downward-facing area, the trees&rsquo; measured share), over 65&deg; is overhang (red) and fails. The audit&rsquo;s tree-only <code>Look::band()</code> is gone; the cliff may use the band.<span class="aff">P3, P5, P7</span></td><td>&ldquo;the 65 degree exception that we had for trees, let's generalize it. Anything can be up to 65 degrees. It's useful to know. The two colors is useful, separating them is useful, because one is conservative, one is more extreme. But cliffs should be allowed to have that 65 degree overhang as well.&rdquo;</td></tr>
@@ -701,7 +704,7 @@
 <tr><td>2026-11-03</td><td><span class="ref">Cutover</span><code>dharmatiles build --all --system both</code> builds the library to <code>out/</code>; <code>--3mf</code> writes a 3MF with each triangle's material as a 3MF base material. <code>1x1-grass-flowers</code> stays as a Python spec for now (Default 13), and the 19 grass twins' Python specs, the <code>dharmatiles-gen</code> entry point and <code>stl/</code> are left for Shawn's approval at the full contact sheet.<span class="aff">P6, P8</span></td><td class="none">—</td></tr>
 <tr><td>2026-11-03</td><td><span class="ref">Phases</span>P3 (rocks, water) and P5 (walls, floors, OpenLOCK, trees) are signed off and merged. Trees are accepted for now and will be improved later; the rest of the port goes on without stopping for look polish. The known tree weaknesses, the unported wall openings, floor crack engraving and mortar sheet, and the dirt-stones and rocks-texture near-misses are on the plan's later list. The Python twins of the eleven water tiles and two floor tiles are deleted.<span class="aff">P3, P5</span></td><td>&ldquo;yeah, trees suck. But they're really hard. So let's just keep going. We can fix things later. Go, finish the full Rust port!&rdquo;</td></tr>
 <tr><td>2026-11-03</td><td><span class="ref">Gate</span>Trees allow 55–65° in rare small patches, accepting some underside texture; 65° is the hard cap. A look-level tolerance band in the audit (wood and leaf faces only), reported apart from overhang and held to a share of the tree's downward-facing area; every other look keeps 55° hard. <a href="../standards/printing.html#overhang">Printing</a><span class="aff">P5</span></td><td>&ldquo;for trees, just because they so much want overhangs... could we say 65 in rare circumstances?&rdquo;</td></tr>
-<tr><td>2026-11-03</td><td><span class="ref">Trees</span>Leaves on the crown's underside are flattened until they print at 55°, by construction in the organic placer; no per-leaf cull, no threshold change. Settles the clash between leaf requirement 7 (leaves down to −0.75) and down-slope pointing at the overhang gate. <a href="../looks/trees.html#rulings">Ruling</a><span class="aff">P5</span></td><td>&ldquo;flatten the leaves under the crown&rdquo;</td></tr>
+<tr><td>2026-11-03</td><td><span class="ref">Trees</span>Leaves on the crown's underside are flattened until they print at 55°, by construction in the organic placer; no per-leaf cull, no threshold change. Settles the clash between leaf requirement 7 (leaves down to −0.75) and down-slope pointing at the overhang gate. <a href="../elements/tree.html#rulings">Ruling</a><span class="aff">P5</span></td><td>&ldquo;flatten the leaves under the crown&rdquo;</td></tr>
 <tr class="group"><td colspan="3">2 Nov 2026</td></tr>
 <tr><td>2026-11-02</td><td><span class="ref">Docs</span>The docs site is reorganised by subject: one page per look, four Rust pages, two standards pages and a frozen archive. The change log is retired in favour of this decisions log; edits live in git. The site is a workbench for Shawn and Claude for now. Cliffs is the pilot look page.</td><td class="none">—</td></tr>
 <tr><td>2026-11-02</td><td><span class="ref">Docs</span>The docs are served by GitHub Pages from <code>docs/</code> on <code>main</code>, linked by relative paths, instead of claude.ai artifacts.</td><td>&ldquo;Let's change the artifacts to be github pages for the dharmatiles repository. Easier to manage permissions.&rdquo;</td></tr>
@@ -717,7 +720,7 @@
 <tr><td>2026-11-02</td><td><span class="ref">Gates</span>The ray gate's distance clause is relaxed from 1e-4 to 1e-3 mm. The parity harness compares metrics and renders against a Python replay, never bytes.<span class="aff">P5, all look phases</span></td><td>&ldquo;We are a GO for Phase 1. Accept all remaining recommendations.&rdquo;</td></tr>
 <tr><td>2026-11-03</td><td><span class="ref">CI off</span>The GitHub <code>rust</code> workflow is disabled. Agents test locally on Shawn's Mac (<code>cargo test --workspace</code>, with same-machine thread determinism). Linux, Windows, wasm and cross-OS hashes move to P9, a stretch goal after the looks reach parity.<span class="aff">P3 onwards</span></td><td>&ldquo;stop doing anything in CI at all. I think we can just run tests locally on my machine and iterate from that.&rdquo;</td></tr>
 <tr class="group" id="r6dec"><td colspan="3">1 Nov 2026: the tile language (R6)</td></tr>
-<tr><td>2026-11-01</td><td><span class="ref">D12</span>A thing's <code>at=</code> may be a range in either coordinate, drawn once from the tile seed; with no <code>at=</code> it goes anywhere in its area, nudged inside the tile and clear of solids, never clipped. <a href="language.html#decisions">More</a><span class="aff">P1 onwards</span></td><td class="none">—</td></tr>
+<tr><td>2026-11-01</td><td><span class="ref">D12</span>A thing's <code>at=</code> may be a range in either coordinate, drawn once from the tile seed; with no <code>at=</code> it goes anywhere in its area, nudged inside the tile and clear of solids, never clipped. <a href="../language.html#decisions">More</a><span class="aff">P1 onwards</span></td><td class="none">—</td></tr>
 <tr><td>2026-11-01</td><td><span class="ref">D11</span><code>scatter</code> is its own node. A thing is one of itself, placed with <code>at=</code>; <code>scatter</code> owns count, per-square, spread, reach, clumps, gap and mostly, and mixes its children by <code>weight=</code>. Scree is stones and boulders scattered against the cliff.<span class="aff">P1 onwards</span></td><td class="none">—</td></tr>
 <tr><td>2026-11-01</td><td><span class="ref">D10</span>Cliff <code>ledges</code> is exposed in P7; gullies and buttresses stay at the form's values.<span class="aff">P7</span></td><td class="none">—</td></tr>
 <tr><td>2026-11-01</td><td><span class="ref">D9</span>Trees expose only crown branching (open, normal, dense); the six branch knobs stay expert controls in parts files.<span class="aff">P5</span></td><td class="none">—</td></tr>
@@ -729,7 +732,7 @@
 <tr><td>2026-11-01</td><td><span class="ref">D3</span>Stack order is free for solids: every solid is planned first and everything grows round it; order only decides which surface paints over which.<span class="aff">P1</span></td><td class="none">—</td></tr>
 <tr><td>2026-11-01</td><td><span class="ref">D2</span>Every size the author writes scales with the system, like a photocopy, with hidden printability floors. Revises Q5 and, for sizes written in a tile, default 1. Checked at the first OpenLOCK wall print.<span class="aff">P1, P5</span></td><td class="none">—</td></tr>
 <tr><td>2026-11-01</td><td><span class="ref">D1</span>Authors write mm at the DungeonBlocks reference plus named levels (ground, edge, water, wall-top); h = 33.1 mm stays the engine's scale, <code>(h)</code> opt-in. Revises Q1.<span class="aff">P1</span></td><td class="none">—</td></tr>
-<tr><td>2026-11-01</td><td><span class="ref">Q8</span>The standard levels are implicit, loaded as a prelude from <code>library/parts/levels.kdl</code>.<span class="aff">P1</span></td><td class="none">—</td></tr>
+<tr><td>2026-11-01</td><td><span class="ref">Q8</span>The standard levels are implicit, loaded as a prelude from <code>library/parts/levels.dtile</code>.<span class="aff">P1</span></td><td class="none">—</td></tr>
 <tr><td>2026-11-01</td><td><span class="ref">Q7</span>A ramp stays inside the escarpment form until a second look needs one.<span class="aff">P7</span></td><td class="none">—</td></tr>
 <tr><td>2026-11-01</td><td><span class="ref">Q6</span>rockpile's foot moves from 4.0 to 3.4 mm in clifflab before the P7 freeze; the tile's override line then goes. Pending clifflab task.<span class="aff">P7</span></td><td class="none">—</td></tr>
 <tr><td>2026-11-01</td><td><span class="ref">Q5</span>Wall thickness and tree size scale with the square; stones, blades and leaves keep their printed size. Revised by D2.<span class="aff">P1, P5</span></td><td class="none">—</td></tr>

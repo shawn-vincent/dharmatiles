@@ -180,3 +180,15 @@ section.record details { border: 1px solid var(--rule); border-radius: 4px; padd
 section.record details > summary { cursor: pointer; font: 600 14px/1.6 var(--display); color: var(--fg); }
 section.record details[open] > summary { margin-bottom: 6px; }
 section.record .note { font-size: 13px; }
+/* the reference: element pages' generated controls tables, the element index */
+table.controls td:first-child { white-space: nowrap; }
+table.controls dl.words { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 12px; margin: 6px 0 0; font-size: 13.5px; }
+table.controls dl.words dt { margin: 0; } table.controls dl.words dd { margin: 0; color: var(--muted); }
+.tag { display: inline-block; font: 500 11px/1.4 var(--mono); padding: 0 6px; border: 1px solid var(--rule); border-radius: 3px; color: var(--muted); }
+ul.tiles { columns: 2 260px; padding-left: 18px; } ul.tiles li { break-inside: avoid; }
+.elements { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin: 14px 0 28px; }
+.elements a { display: block; background: var(--card); border: 1px solid var(--rule); border-radius: 4px; padding: 10px 12px; color: var(--fg); text-decoration: none; min-width: 0; }
+.elements a:hover, .elements a:focus-visible { border-color: var(--accent); }
+.elements a img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 3px; display: block; margin-bottom: 8px; background: var(--rule); }
+.elements a code { font-weight: 600; } .elements a span { display: block; font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+.syntax { font: 13px/1.6 var(--mono); }

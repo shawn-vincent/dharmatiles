@@ -7,20 +7,14 @@ use serde_json::{Value, json};
 /// The documentation site (GitHub Pages, served from `docs/` on `main`).
 pub const DOCS: &str = "https://shawn-vincent.github.io/dharmatiles/";
 
-/// The page (under [`DOCS`]) that documents a look.
+/// The page (under [`DOCS`]) that documents an element: every built-in
+/// look has its own page under `elements/`.
 #[must_use]
-pub fn page(look: &str) -> &'static str {
-    match look {
-        "ground" | "dirt" => "looks/ground.html",
-        "grass" | "reeds" | "flowers" => "looks/grass.html",
-        "water" => "looks/water.html",
-        "rock" | "stone" | "boulder" | "pebble" => "looks/rocks.html",
-        "cliff" => "looks/cliffs.html",
-        "wall" => "looks/walls.html",
-        "floor" => "looks/walls.html#floor-spec",
-        "tree" => "looks/trees.html",
-        "scatter" => "rust/language.html#scatter",
-        _ => "rust/language.html#looks",
+pub fn page(look: &str) -> String {
+    if dt_doc::schema::look(look).is_some() {
+        format!("elements/{look}.html")
+    } else {
+        "elements/index.html".to_owned()
     }
 }
 
@@ -62,14 +56,14 @@ pub fn items(tile: &Tile, system: &str) -> Vec<Value> {
 /// The base the evaluator adds to every tile.
 #[must_use]
 pub fn base(system: &str) -> Value {
-    let (label, anchor) = if system == "ol" {
+    let (label, page) = if system == "ol" {
         ("OpenLOCK base", "openlock")
     } else {
         ("DungeonBlocks base", "dungeonblocks")
     };
     json!({
         "label": label, "look": "connector",
-        "href": format!("{DOCS}standards/tile-system.html#{anchor}"),
+        "href": format!("{DOCS}elements/{page}.html"),
     })
 }
 
@@ -122,7 +116,7 @@ mod tests {
     #[test]
     fn the_cliff_names_what_each_entry_places() {
         assert_eq!(
-            labels("lib:tiles/cliffs/2x1-cliff.kdl", "db"),
+            labels("lib:tiles/cliffs/2x1-cliff.dtile", "db"),
             [
                 "dirt",
                 "pebbles in dirt",
@@ -138,7 +132,7 @@ mod tests {
     fn every_link_is_on_the_docs_site() {
         let c = dt_eval::check(
             &Files,
-            "lib:tiles/cliffs/2x1-cliff.kdl",
+            "lib:tiles/cliffs/2x1-cliff.dtile",
             &Options::default(),
         )
         .unwrap();

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>stack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Element · the document</div>
+  <h1>stack</h1>
+  <p class="lede">The list of what a tile is made of: surfaces, things, runs, scatters and definitions, one per line. Order is free for solids: every solid is planned first, and everything grows round it. Order only decides which surface paints over which.</p>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#use">Writing it</a></li>
+  <li><a href="#reference">Reference</a></li>
+  <li><a href="#notes">Notes</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="use">Writing it</h2>
+<pre><code>stack {
+    dirt level=edge { scatter per-square=40 { pebble } }
+    cliff along=north height=35
+    scatter against=cliff per-square=55 reach=4 { stone }
+    grass                    // grows round the cliff and the stones, wherever it is listed
+}</code></pre>
+<h2 id="reference">Reference</h2>
+<p>Every entry in a stack takes these, whatever it is:</p>
+<div class="tbl"><table>
+<thead><tr><th>Written</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>seed=</code></td><td>a whole number</td><td>—</td><td>Pins this entry's randomness while the tile seed changes everything else.</td></tr>
+<tr><td><code>id=</code></td><td>a name</td><td>—</td><td>Names the entry among same-named siblings, for edits and diagnostics.</td></tr>
+<tr><td><code>weight=</code></td><td>a number</td><td>1</td><td>Only on a child of a <a href="scatter.html"><code>scatter</code></a>: its share of the mix.</td></tr>
+<tr><td>place words</td><td></td><td></td><td><code>in=</code>, <code>along=</code>, <code>at=</code>, <code>against=</code>, <code>side=</code>: each element page lists the ones it takes.</td></tr>
+</tbody></table></div>
+<h2 id="notes">Notes</h2>
+<p>The build plans the stack by what each element reads and writes: surfaces first, then the ground is lifted, then solids, and surfaces that grow round solids after them. A stack that asks for something nothing makes is refused with an error at the entry. The preview lists the stack under the tile's name, each entry linked to its page here.</p>
+</article>
+</div>
+</body>
+</html>

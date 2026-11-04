@@ -3,24 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Composition</title>
+<title>Composing a tile</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
-<link rel="stylesheet" href="../assets/site.css">
+<link rel="stylesheet" href="assets/site.css">
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks" aria-current="page">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html" aria-current="page">Composing</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="rust/plan.html">Project</a><a href="archive/index.html">Archive</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
-  <div class="eyebrow">Look · how looks meet</div>
-  <h1>Composition</h1>
+  <div class="eyebrow">The tile language · composing</div>
+  <h1>Composing a tile</h1>
   <p class="lede">Composition is how looks share one tile. Rocks sit bedded in the ground, grass grows right up to them and parts around them, bare earth shows between, and every tile meets its neighbour at the same edge level. The approved example is the meadow: rocks, grass and bare earth on one tile, printed as one piece with no supports.</p>
   <div class="hero-shots">
-    <figure><img src="img/composition-meadow-s1-red.jpg" alt="A 2x2 meadow tile: grass flowing around grey rocks and patches of bare earth" width="1100" height="822"></figure>
+    <figure><img src="elements/img/composition-meadow-s1-red.jpg" alt="A 2x2 meadow tile: grass flowing around grey rocks and patches of bare earth" width="1100" height="822"></figure>
   </div>
   <p class="muted small">meadowlab, 2×2, seed 1, painted, built in memory on 2 Nov 2026: rocks, grass and bare earth on one tile. Faces past the overhang limit are painted red; the audit finds 1.0 mm² over 635 tiny faces, too small to see at this size.</p>
   <div class="hero-shots">
-    <figure><img src="img/water-shore-s3-overhang.jpg" alt="Grey renders of a shore tile from an angle and from above: grass, reeds and rocks meeting water" width="900" height="359"></figure>
+    <figure><img src="elements/img/water-shore-s3-overhang.jpg" alt="Grey renders of a shore tile from an angle and from above: grass, reeds and rocks meeting water" width="900" height="359"></figure>
   </div>
   <p class="muted small">shorelab, 2×2, seed 3, grey, from an angle and from above: grass, rocks, reeds, bare earth and water on one tile. Faces past the overhang limit are painted red.</p>
   <div class="facts">
@@ -72,8 +72,8 @@ tile meadow size="2x2" seed=1 {
         lawn cover="80%"                             // grass over 80% of the ground; it grows round the rocks
     }
 }</code></pre>
-<p>This document was written for this page; the library has no meadow tile yet. The library tile <code>library/tiles/ground/2x2-grass-tree.kdl</code> (branch <code>rust/p1</code>) shows the same rule with a tree: its grass is listed before the tree and still grows round the trunk. A tile divided by a path or a shore uses a <code>line</code> and a <code>region</code>, and each look acts <code>in=</code> its region; see the <a href="../rust/language.html#ex-path">path example</a> on the language page.</p>
-<p>The meadow reaches the Rust engine in phase P4 (see the <a href="../rust/plan.html">plan</a>). Until then the lab builds it: <code>python meadowlab/meadowlab.py --seed 1</code> writes <code>meadowlab/out/2x2-meadow-s1.stl</code> with a DungeonBlocks base. In the Python library, a tile spec lists layers per region, and order matters there: put <code>Rocks</code> and <code>Tree</code> before <code>Grass</code> so the blades steer round them (see <code>CLAUDE.md</code>, "Placement Layer Ordering").</p>
+<p>This document was written for this page; the library has no meadow tile yet. The library tile <code>library/tiles/ground/2x2-grass-tree.dtile</code> (branch <code>rust/p1</code>) shows the same rule with a tree: its grass is listed before the tree and still grows round the trunk. A tile divided by a path or a shore uses a <code>line</code> and a <code>region</code>, and each look acts <code>in=</code> its region; see the <a href="language.html#ex-path">path example</a> on the language page.</p>
+<p>The meadow reaches the Rust engine in phase P4 (see the <a href="rust/plan.html">plan</a>). Until then the lab builds it: <code>python meadowlab/meadowlab.py --seed 1</code> writes <code>meadowlab/out/2x2-meadow-s1.stl</code> with a DungeonBlocks base. In the Python library, a tile spec lists layers per region, and order matters there: put <code>Rocks</code> and <code>Tree</code> before <code>Grass</code> so the blades steer round them (see <code>CLAUDE.md</code>, "Placement Layer Ordering").</p>
 
 <h2 id="spec">Specification</h2>
 <h3 id="controls">Controls</h3>
@@ -91,7 +91,7 @@ tile meadow size="2x2" seed=1 {
 <tr><td>rock <code>buried</code></td><td>percent</td><td>—</td><td>How much of each rock is under the ground.</td></tr>
 <tr><td><code>region</code></td><td><code>bounded-by</code> lines, <code>fill</code> points</td><td>—</td><td>Divides the tile, like a paint bucket: name the lines, drop fill points.</td></tr>
 </tbody></table></div>
-<p>The meadow's own rules are fixed at the approved values and have no control: rock tops stand at least max(1.5 mm, 0.45 × rock height) above the grass; grass is half height at a rock's face, back to full height 1.2 mm out; about 35% of rocks get an apron; bare earth is filled to 20% with natural-size patches. The full language is on the <a href="../rust/language.html#placement">language page</a>.</p>
+<p>The meadow's own rules are fixed at the approved values and have no control: rock tops stand at least max(1.5 mm, 0.45 × rock height) above the grass; grass is half height at a rock's face, back to full height 1.2 mm out; about 35% of rocks get an apron; bare earth is filled to 20% with natural-size patches. The full language is on the <a href="language.html#placement">language page</a>.</p>
 
 <h3 id="levels">Levels</h3>
 <div class="tbl"><table>
@@ -102,7 +102,7 @@ tile meadow size="2x2" seed=1 {
 <tr><td><code>water</code></td><td>2.6 mm</td><td>The water surface beside a shore.</td></tr>
 <tr><td><code>wall-top</code></td><td>33.1 mm</td><td>The DungeonBlocks wall top.</td></tr>
 </tbody></table></div>
-<p>Every tile gets these from <code>library/parts/levels.kdl</code> without a <code>use</code> line. A tile's own <code>levels</code> line can add or override names.</p>
+<p>Every tile gets these from <code>library/parts/levels.dtile</code> without a <code>use</code> line. A tile's own <code>levels</code> line can add or override names.</p>
 
 <h3 id="edges">Edges and joining tiles</h3>
 <p>Every tile obeys one edge contract, so any two tiles butt with no step:</p>
@@ -113,16 +113,16 @@ tile meadow size="2x2" seed=1 {
   <li><strong>Cliffs</strong> end in a standard end section; <strong>walls</strong> end in a clean vertical cut.</li>
   <li><strong>Solids</strong> never cross the tile edge: they are nudged or shrunk inward, never clipped.</li>
 </ul>
-<p>The full contract is on the <a href="../standards/tile-system.html#edge-contract">tile system</a> page. In the Rust engine it is one file, <code>library/parts/edges.kdl</code>, that every tile uses.</p>
+<p>The full contract is on the <a href="standards/tile-system.html#edge-contract">tile system</a> page. In the Rust engine it is one file, <code>library/parts/edges.dtile</code>, that every tile uses.</p>
 
 <h2 id="printing">Printing and painting</h2>
 <ul>
-  <li><strong>No supports.</strong> Grass blades, rocks and bare earth all print base down at 0.2 mm layers. Each look keeps its own printability rules; see the <a href="grass.html">grass</a> and <a href="rocks.html">rocks</a> pages.</li>
+  <li><strong>No supports.</strong> Grass blades, rocks and bare earth all print base down at 0.2 mm layers. Each look keeps its own printability rules; see the <a href="elements/grass.html">grass</a> and <a href="elements/rock.html">rocks</a> pages.</li>
   <li><strong>No floating rocks.</strong> Each rock stands on a plinth of its own section that reaches below the lowest ground under it, so there is no gap or overhang on its downhill side.</li>
   <li><strong>One piece.</strong> Grass, rocks and base are joined into one watertight body that survives a float32 STL reload.</li>
   <li><strong>Painting.</strong> Rocks stand clear of the grass, so a rock colour and a grass colour can be drybrushed separately. Bare earth sits in the low ground and takes a wash.</li>
 </ul>
-<p>The full printing rules are on the <a href="../standards/printing.html">printing</a> page.</p>
+<p>The full printing rules are on the <a href="standards/printing.html">printing</a> page.</p>
 
 <h2 id="how">How it is made</h2>
 <p>The meadow generator is <code>meadowlab/meadowlab.py</code> (266 lines). It writes almost no geometry of its own: it calls grasslab for the ground and grass and rocklab for the rocks, and owns only how they meet. The key idea is <em>plan, then build</em>: rocks claim their footprints before the grass grows, and are seated on the result after.</p>
@@ -177,7 +177,7 @@ tile meadow size="2x2" seed=1 {
 
 <details id="requirements">
 <summary>Requirements</summary>
-<p>The lab's requirement IDs (revision 3, 28 Oct 2026), with later amendments marked inline. The meadow inherits every grasslab and rocklab requirement and adds only the interactions. [S] is checked by a script or statistic, [R] by eye. The original page is in the <a href="../archive/lab-logs/meadowlab/requirements.html">archive</a>.</p>
+<p>The lab's requirement IDs (revision 3, 28 Oct 2026), with later amendments marked inline. The meadow inherits every grasslab and rocklab requirement and adds only the interactions. [S] is checked by a script or statistic, [R] by eye. The original page is in the <a href="archive/lab-logs/meadowlab/requirements.html">archive</a>.</p>
 <ul>
   <li><strong>REQ-M-1 [S]</strong> A run writes <code>meadowlab/out/&lt;cols&gt;x&lt;rows&gt;-meadow-s&lt;seed&gt;.stl</code>: one watertight DungeonBlocks tile with grasslab hills, grass and soil, and rocklab rocks. Deterministic per seed. <em>Amended 29 Oct: the grass is grasslab v3 stroke blades.</em></li>
   <li><strong>REQ-M-2 [R]</strong> Rocks are part of the ground: seated at a low quantile of the ground under them, with a plinth to just below the lowest ground. No rock floats or perches (M1).</li>
@@ -246,17 +246,17 @@ tile meadow size="2x2" seed=1 {
   <li>The meadow builds in about 85 s and writes a 79 MB STL. P4 targets 15 s.</li>
   <li>The rock-interaction numbers were measured with the retired height-field grass; only seed 1 has been measured with stroke blades.</li>
   <li>The Python library depends on layer order (<code>Rocks</code> before <code>Grass</code>); the Rust engine does not. Tile twins converted in P4 must not rely on order for solids.</li>
-  <li>Where meadow meets water is the shore, part of the <a href="water.html">water</a> look (shorelab).</li>
+  <li>Where meadow meets water is the shore, part of the <a href="elements/water.html">water</a> look (shorelab).</li>
 </ul>
 
 <h3 id="references">References</h3>
 <ul>
-  <li>The looks it combines: <a href="grass.html">grass</a> (grasslab), <a href="rocks.html">rocks</a> (rocklab) and <a href="ground.html">ground</a> (dirtlab's earth).</li>
-  <li>The rules for places, regions and stack order: the <a href="../rust/language.html#places">language page</a>. The edge contract: <a href="../standards/tile-system.html#edge-contract">tile system</a>.</li>
+  <li>The looks it combines: <a href="elements/grass.html">grass</a> (grasslab), <a href="elements/rock.html">rocks</a> (rocklab) and <a href="elements/dirt.html">ground</a> (dirtlab's earth).</li>
+  <li>The rules for places, regions and stack order: the <a href="language.html#places">language page</a>. The edge contract: <a href="standards/tile-system.html#edge-contract">tile system</a>.</li>
 </ul>
 
 <h3 id="history">History</h3>
-<p>meadowlab started on 27 Oct 2026 as the first lab to put two approved looks on one tile. It went through five versions in two days, then took grasslab's stroke blades on 29 Oct. It showed the order the Rust engine is built on: plan the solids first, grow the surfaces round them, then seat the solids. The full texts are archived: the lab's original <a href="../archive/lab-logs/meadowlab/requirements.html">requirements</a> and <a href="../archive/lab-logs/meadowlab/design.html">design and iteration log</a>, and the Rust study's <a href="../archive/rust-study/labs.html#meadowlab">lab analysis</a> and <a href="../archive/rust-study/notes.html">notes</a>.</p>
+<p>meadowlab started on 27 Oct 2026 as the first lab to put two approved looks on one tile. It went through five versions in two days, then took grasslab's stroke blades on 29 Oct. It showed the order the Rust engine is built on: plan the solids first, grow the surfaces round them, then seat the solids. The full texts are archived: the lab's original <a href="archive/lab-logs/meadowlab/requirements.html">requirements</a> and <a href="archive/lab-logs/meadowlab/design.html">design and iteration log</a>, and the Rust study's <a href="archive/rust-study/labs.html#meadowlab">lab analysis</a> and <a href="archive/rust-study/notes.html">notes</a>.</p>
 </section>
 
 </article>

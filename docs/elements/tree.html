@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Trees</title>
+<title>tree</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
 <link rel="stylesheet" href="../assets/site.css">
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks" aria-current="page">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
-  <div class="eyebrow">Look · vegetation</div>
-  <h1>Trees</h1>
+  <div class="eyebrow">Element · thing</div>
+  <h1>tree</h1>
   <p class="lede">A tree is a single deciduous tree standing on a tile: a twisting barked trunk that forks into branches, each branch ending in a clump of foliage covered in thousands of separate, chunky leaves. The look is slightly cartoonish, in the spirit of an Animal Crossing tree. It grows on ground and grass tiles, and prints on an FDM printer with no supports.</p>
   <div class="hero-shots">
     <figure><img src="img/trees-1x1-grass-tree-red.jpg" alt="A 1x1 grass tile with one tree, overhang faces painted red" width="709" height="1027"></figure>
@@ -46,7 +46,7 @@
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#look">What it looks like</a></li>
   <li><a href="#use">Using it in a tile</a></li>
-  <li><a href="#spec">Specification</a></li>
+  <li><a href="#spec">Reference</a></li>
   <li><a href="#printing">Printing and painting</a></li>
   <li><a href="#how">How it is made</a></li>
   <li><a href="#record">Design record</a></li>
@@ -78,7 +78,7 @@
     leaf_width_mm=3.0,
 ),</code></pre>
 <p>Build it with <code>dharmatiles-gen --tile "src/tiles/ground/2x2-grass-tree.tile.py"</code>. The STLs go to <code>stl/db/</code> and <code>stl/ol/</code>.</p>
-<p><strong>In the Rust engine</strong> (from phase P5) the same tile is a short KDL document, <code>library/tiles/ground/2x2-grass-tree.kdl</code> (branch <code>rust/p1</code>):</p>
+<p><strong>In the Rust engine</strong> (from phase P5) the same tile is a short KDL document, <code>library/tiles/ground/2x2-grass-tree.dtile</code> (branch <code>rust/p1</code>):</p>
 <pre><code>use "parts/grass" long-grass
 
 tile grass-tree size="2x2" seed=84 {
@@ -93,26 +93,55 @@ tile grass-tree size="2x2" seed=84 {
         }
     }
 }</code></pre>
-<p>A ready-made preset: <code>use "parts/trees" oak</code> gives a 50 mm oak with a short trunk and a wide crown (<code>library/parts/trees.kdl</code>). The language as a whole is on the <a href="../rust/language.html">language page</a>.</p>
+<p>A ready-made preset: <code>use "parts/trees" oak</code> gives a 50 mm oak with a short trunk and a wide crown (<code>library/parts/trees.dtile</code>). The language as a whole is on the <a href="../language.html">language page</a>.</p>
 
-<h2 id="spec">Specification</h2>
+<h2 id="spec">Reference</h2>
+<!-- gen:reference tree -->
+<div class="facts">
+  <div><div class="k">Kind</div><div class="v">a thing: one solid, standing on the surface</div></div>
+  <div><div class="k">Place words</div><div class="v"><code>in=</code> <code>at=</code></div></div>
+  <div><div class="k">Built</div><div class="v">yes</div></div>
+</div>
 <h3 id="controls">Controls</h3>
-<p>The controls of the <code>tree</code> entry in the tile language (<code>crates/dt-doc/src/looks.rs</code>), with the Python <code>Tree(...)</code> argument each one sets. Everything else (bark, leaf shape, shingling, the printability checks) is fixed at the approved values.</p>
-<div class="tbl"><table>
-<thead><tr><th>Control</th><th>Values</th><th>Default</th><th>Effect</th><th>Python</th></tr></thead>
+<div class="tbl"><table class="controls">
+<thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr><td><code>height</code></td><td>mm, 20–120</td><td>40</td><td>Ground to the top of the crown.</td><td><code>height_mm</code></td></tr>
-<tr><td><code>trunk height</code></td><td>mm</td><td>30</td><td>Bare trunk below the crown.</td><td><code>trunk_height_mm</code></td></tr>
-<tr><td><code>crown width</code></td><td>mm</td><td>30</td><td>Crown diameter.</td><td><code>canopy_radius_mm</code> × 2</td></tr>
-<tr><td><code>crown shape</code></td><td><code>round</code>, <code>cone</code>, <code>wide</code>, <code>tall</code></td><td><code>round</code></td><td>Silhouette. Only <code>round</code> is the approved crown; the others are provisional.</td><td><code>top_/bottom_pointiness</code>, <code>_curve</code></td></tr>
-<tr><td><code>crown clumps</code></td><td>8–200</td><td>32</td><td>Foliage clumps, one per branch end, as in the library tiles.</td><td><code>n_attractors</code></td></tr>
-<tr><td><code>crown clump-size</code></td><td>mm</td><td>5.5 radius</td><td>Size of each clump.</td><td><code>foliage_cluster_radius_mm</code></td></tr>
-<tr><td><code>crown branching</code></td><td><code>open</code>, <code>normal</code>, <code>dense</code></td><td><code>normal</code></td><td>A few long limbs, or many forks. <code>open</code> and <code>dense</code> are provisional.</td><td><code>branch_*</code></td></tr>
-<tr><td><code>leaves</code></td><td><code>on</code>, <code>clumps-only</code>, <code>bare</code></td><td><code>on</code></td><td>Separate leaves, just foliage clumps, or a winter tree.</td><td><code>leaves</code>, <code>foliage_clusters</code></td></tr>
-<tr><td><code>leaf length</code>, <code>leaf width</code></td><td>mm</td><td>4.5, 3</td><td>The largest leaf; leaves vary down to 80% of this.</td><td><code>leaf_length_mm</code>, <code>leaf_width_mm</code></td></tr>
-<tr><td><code>at</code></td><td>square, e.g. <code>"1,1"</code></td><td>anywhere</td><td>Where the tree stands. Python uses <code>placement=Uniform(count_per_square=…)</code>.</td><td><code>placement</code></td></tr>
+<tr id="c-height"><td><code>height</code></td><td>mm, 20–120</td><td><code>40</code></td><td>ground to the top of the crown</td></tr>
+<tr id="c-trunk"><td><code>trunk</code></td><td>group</td><td>—</td><td>the bare trunk</td></tr>
+<tr id="c-trunk-height"><td><code>trunk height</code></td><td>mm</td><td><code>30</code></td><td>bare trunk below the crown</td></tr>
+<tr id="c-trunk-width"><td><code>trunk width</code></td><td>mm</td><td>—</td><td>trunk thickness at the ground</td></tr>
+<tr id="c-crown"><td><code>crown</code></td><td>group</td><td>—</td><td>the crown</td></tr>
+<tr id="c-crown-width"><td><code>crown width</code></td><td>mm</td><td><code>30</code></td><td>crown width</td></tr>
+<tr id="c-crown-shape"><td><code>crown shape</code></td><td>word</td><td><code>round</code></td><td>silhouette<dl class="words"><dt><code>round</code></dt><dd>the Python tree's crown</dd><dt><code>cone</code></dt><dd>pointed at the top, like a fir (provisional)</dd><dt><code>wide</code></dt><dd>a broad, flat-bottomed spread (provisional)</dd><dt><code>tall</code></dt><dd>a narrow column (provisional)</dd></dl></td></tr>
+<tr id="c-crown-clumps"><td><code>crown clumps</code></td><td>count, 8–200</td><td><code>32</code></td><td>clumps of foliage, one per branch end</td></tr>
+<tr id="c-crown-clump-size"><td><code>crown clump-size</code></td><td>mm</td><td><code>5.5</code></td><td>size of each clump</td></tr>
+<tr id="c-crown-branching"><td><code>crown branching</code></td><td>word</td><td><code>normal</code></td><td>few long limbs, or many forks; the only branching control in a tile<dl class="words"><dt><code>open</code></dt><dd>few long limbs (provisional)</dd><dt><code>normal</code></dt><dd>the Python tree's branching</dd><dt><code>dense</code></dt><dd>many forks (provisional)</dd></dl></td></tr>
+<tr id="c-leaves"><td><code>leaves</code></td><td>word</td><td><code>on</code></td><td>separate leaves, just clumps, or a winter tree<dl class="words"><dt><code>on</code></dt><dd>separate leaves over the clumps</dd><dt><code>clumps-only</code></dt><dd>just foliage clumps</dd><dt><code>bare</code></dt><dd>a winter tree</dd></dl></td></tr>
+<tr id="c-leaf"><td><code>leaf</code></td><td>group</td><td>—</td><td>one leaf</td></tr>
+<tr id="c-leaf-length"><td><code>leaf length</code></td><td>mm</td><td><code>4.5</code></td><td>leaf length</td></tr>
+<tr id="c-leaf-width"><td><code>leaf width</code></td><td>mm</td><td><code>3</code></td><td>leaf width</td></tr>
 </tbody></table></div>
-<p class="small muted">The six branching knobs behind <code>branching</code> (split angle, eagerness, target, balance, pipe exponent, tip radius) are expert controls, allowed only in parts files such as the oak preset.</p>
+<details><summary>Expert controls (parts files only)</summary>
+<div class="tbl"><table class="controls">
+<thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
+<tbody>
+<tr id="c-branch"><td><code>branch</code></td><td>group</td><td>—</td><td>the generator's six branching knobs (expert: parts files only)</td></tr>
+<tr id="c-branch-split"><td><code>branch split</code></td><td>degrees</td><td>—</td><td>half-angle of the cone a branch keeps</td></tr>
+<tr id="c-branch-eagerness"><td><code>branch eagerness</code></td><td>number</td><td>—</td><td>1 splits early, 0 only near the tips</td></tr>
+<tr id="c-branch-target"><td><code>branch target</code></td><td>number</td><td>—</td><td>aim point in the attractor cloud, 0 low to 1 high</td></tr>
+<tr id="c-branch-balance"><td><code>branch balance</code></td><td>number</td><td>—</td><td>how evenly a fork shares its attractors, 0 to 1</td></tr>
+<tr id="c-branch-exponent"><td><code>branch exponent</code></td><td>number</td><td>—</td><td>pipe-model exponent</td></tr>
+<tr id="c-branch-min-radius"><td><code>branch min-radius</code></td><td>mm</td><td>—</td><td>branch radius at a tip</td></tr>
+</tbody></table></div>
+</details>
+<h3 id="in-the-library">In the library</h3>
+<ul class="tiles">
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-grass-tree.dtile"><code>1x1-grass-tree.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-grass-tree.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/2x2-grass-tree.dtile"><code>2x2-grass-tree.dtile</code></a> <span class="muted small">lib:tiles/ground/2x2-grass-tree.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-tree.dtile"><code>1x1-water+grass-tree.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-tree.dtile</span></li>
+</ul>
+<p class="muted small">Generated from <code>dharmatiles looks tree</code> by <code>cargo xtask docs</code>.</p>
+<!-- /gen:reference -->
 
 <h3 id="sizes">Sizes</h3>
 <ul>

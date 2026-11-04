@@ -3,19 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Walls and floors</title>
+<title>wall</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
 <link rel="stylesheet" href="../assets/site.css">
 <link rel="stylesheet" href="../assets/gallery.css">
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks" aria-current="page">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
-  <div class="eyebrow">Look · masonry</div>
-  <h1>Walls and floors</h1>
+  <div class="eyebrow">Element · run</div>
+  <h1>wall</h1>
   <p class="lede">Masonry walls that stand on a tile edge, and stone pavements that replace the ground. Walls come in four families: cut stone, drystone fieldstone, worn brick and regular brick. Every stone is modelled on all its visible sides, so the front, back, ends and top all read as masonry. Walls match the DungeonBlocks wall height and thickness, take doors, windows and swappable portcullises, and print with no supports.</p>
+  <p class="small">Stone floors are their own element, <a href="floor.html"><code>floor</code></a>; how their slabs are made is below.</p>
   <div class="hero-shots">
     <figure><img src="img/walls-fieldstone-corner-red.jpg" alt="Drystone fieldstone corner wall on a grassy 1x1 tile, overhang faces painted red" width="896" height="1084"></figure>
     <figure><img src="img/walls-fieldstone-corner-red-under.jpg" alt="The same wall from low down: red strips along the bottoms of the stones" width="902" height="1065"></figure>
@@ -49,7 +50,7 @@
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#look">What it looks like</a></li>
   <li><a href="#use">Using it in a tile</a></li>
-  <li><a href="#spec">Specification</a></li>
+  <li><a href="#spec">Reference</a></li>
   <li><a href="#printing">Printing and painting</a></li>
   <li><a href="#how">How it is made</a></li>
   <li><a href="#record">Design record</a></li>
@@ -132,7 +133,7 @@ CutStoneWall(spine=[(0, 0), (2, 0)], openings=[
 <p>A floor is a layer too: <code>StoneFloor(texture='dressed', seed=21)</code> after <code>SoilCarpet()</code> (see <code>src/tiles/floors/</code>). Put walls after the floor so they stand on the pavement.</p>
 
 <h3>The Rust engine</h3>
-<p>In the Rust engine a tile is a KDL document. This is the library's fieldstone corner, <code>library/tiles/walls/1x1-wall-fieldstone-corner.kdl</code> (branch <code>rust/p1</code>), twin of the Python tile of the same name:</p>
+<p>In the Rust engine a tile is a KDL document. This is the library's fieldstone corner, <code>library/tiles/walls/1x1-wall-fieldstone-corner.dtile</code> (branch <code>rust/p1</code>), twin of the Python tile of the same name:</p>
 <pre><code>use "parts/grass" lawn
 
 tile wall-fieldstone-corner size="1x1" seed=64 {
@@ -151,29 +152,48 @@ tile wall-fieldstone-corner size="1x1" seed=64 {
         lawn
     }
 }</code></pre>
-<p>Walls reach the Rust engine in phase P5, with floors, trees and OpenLOCK (see the <a href="../rust/plan.html">plan</a>). The language does not yet have words for openings or floors. The whole language is on the <a href="../rust/language.html">language page</a>.</p>
+<p>Walls reach the Rust engine in phase P5, with floors, trees and OpenLOCK (see the <a href="../rust/plan.html">plan</a>). The language does not yet have words for openings or floors. The whole language is on the <a href="../language.html">language page</a>.</p>
 
-<h2 id="spec">Specification</h2>
-<h3 id="controls">Wall controls</h3>
-<p>KDL names first, with the Python argument beside them. Defaults are for cut stone unless a family is named.</p>
-<div class="tbl"><table>
-<thead><tr><th>Control</th><th>Python</th><th>Values</th><th>Default</th><th>Effect</th></tr></thead>
+<h2 id="spec">Reference</h2>
+<!-- gen:reference wall -->
+<div class="facts">
+  <div><div class="k">Kind</div><div class="v">a run: built along a tile edge or a drawn line</div></div>
+  <div><div class="k">Place words</div><div class="v"><code>in=</code> <code>along=</code> <code>side=</code></div></div>
+  <div><div class="k">Built</div><div class="v">yes</div></div>
+</div>
+<h3 id="controls">Controls</h3>
+<div class="tbl"><table class="controls">
+<thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr><td><code>style</code></td><td>the class</td><td><code>cut-stone</code>, <code>fieldstone</code>, <code>brick</code>, <code>regular-brick</code></td><td><code>cut-stone</code></td><td>The family.</td></tr>
-<tr><td><code>along</code></td><td><code>spine</code></td><td>tile edges; in Python a plan polyline in squares</td><td>—</td><td>Where the wall stands. On a tile edge its outer face is flush with the edge.</td></tr>
-<tr><td><code>height</code></td><td><code>top_mm</code>, <code>height_mm</code></td><td><code>full</code>, <code>low</code>, or mm</td><td><code>full</code> (top at 33.1 mm)</td><td><code>full</code> puts the top at the official wall-top level whatever the wall stands on. <code>low</code> is half that (provisional).</td></tr>
-<tr><td><code>thickness</code></td><td><code>thickness_mm</code></td><td>mm</td><td>7</td><td>Wall thickness, the DungeonBlocks slab.</td></tr>
-<tr><td><code>stones height</code></td><td><code>course_mm</code></td><td>mm range</td><td>5.5–8.5; fieldstone 2.2–5.2; brick 2.5–3.0; regular 3.2</td><td>Course height.</td></tr>
-<tr><td><code>stones length</code></td><td><code>bay_mm</code></td><td>mm range</td><td>11–20; fieldstone 5–16; brick 5.0–6.6; regular 8.5</td><td>Stone length along the wall.</td></tr>
-<tr><td><code>joints width</code></td><td><code>joint_mm</code></td><td>mm</td><td>0.11; fieldstone 0; brick 0.125; regular 0.45</td><td>Gap between stones. Fieldstone stones touch.</td></tr>
-<tr><td><code>joints depth</code></td><td><code>reveal_mm</code></td><td>mm</td><td>1.3; brick and regular 1.0</td><td>How far the mortar sits back from the faces.</td></tr>
-<tr><td><code>edges rounding</code></td><td><code>roundover_mm</code></td><td>mm</td><td>by preset; fieldstone 1.3–2.6</td><td>How worn the stone corners are.</td></tr>
-<tr><td>—</td><td><code>texture</code></td><td><code>chipped</code>, <code>worn</code>, <code>hewn</code>, <code>dressed</code></td><td><code>chipped</code>; brick <code>worn</code>; regular <code>dressed</code></td><td>Surface preset: chip size, rounding and relief together.</td></tr>
-<tr><td><code>bond</code></td><td><code>bond</code></td><td><code>irregular</code>, <code>running</code></td><td><code>irregular</code></td><td>Random courses, or uniform courses with half-unit offsets.</td></tr>
-<tr><td><code>coping</code></td><td><code>coping</code></td><td><code>loose</code>, <code>on-edge</code></td><td><code>loose</code></td><td>Fieldstone only: perched stones, or a row of stones on edge.</td></tr>
-<tr><td><code>top</code></td><td><code>crenellated</code></td><td><code>flat</code>, <code>battlements</code></td><td><code>flat</code></td><td>Battlements: merlons 8–11 mm, crenels 5.5–7.5 mm, 11 mm deep. Every corner is a merlon.</td></tr>
-<tr><td><code>ruin</code></td><td><code>ruin</code></td><td>0 to 1</td><td>0</td><td>How much has fallen. The top breaks raggedly, rubble shows inside and lies at the foot. Arches survive.</td></tr>
+<tr id="c-style"><td><code>style</code></td><td>word</td><td><code>cut-stone</code></td><td>how stones are made and laid<dl class="words"><dt><code>fieldstone</code></dt><dd>drystone fieldstone</dd><dt><code>cut-stone</code></dt><dd>dressed ashlar</dd><dt><code>brick</code></dt><dd>irregular brick</dd><dt><code>regular-brick</code></dt><dd>uniform brick in running bond</dd></dl></td></tr>
+<tr id="c-height"><td><code>height</code></td><td>mm</td><td><code>full</code></td><td>height above what it stands on<dl class="words"><dt><code>full</code></dt><dd>up to the wall-top level</dd><dt><code>low</code></dt><dd>half the wall top (provisional)</dd></dl></td></tr>
+<tr id="c-thickness"><td><code>thickness</code></td><td>mm</td><td><code>7</code></td><td>wall thickness</td></tr>
+<tr id="c-stones"><td><code>stones</code></td><td>group</td><td>—</td><td>stone size</td></tr>
+<tr id="c-stones-height"><td><code>stones height</code></td><td>mm</td><td>—</td><td>course height</td></tr>
+<tr id="c-stones-length"><td><code>stones length</code></td><td>mm</td><td>—</td><td>stone length along the wall</td></tr>
+<tr id="c-stones-texture"><td><code>stones texture</code></td><td>word</td><td>—</td><td>surface finish of each stone<dl class="words"><dt><code>chipped</code></dt><dd>chipped cut stone (Hirst Arts m50)</dd><dt><code>worn</code></dt><dd>soft, weathered</dd><dt><code>hewn</code></dt><dd>rough-hewn all over</dd><dt><code>dressed</code></dt><dd>near-smooth ashlar, crisp edges</dd></dl></td></tr>
+<tr id="c-joints"><td><code>joints</code></td><td>group</td><td>—</td><td>the gaps between stones</td></tr>
+<tr id="c-joints-width"><td><code>joints width</code></td><td>mm</td><td>—</td><td>mortar gap</td></tr>
+<tr id="c-joints-depth"><td><code>joints depth</code></td><td>mm</td><td>—</td><td>how deep the gaps between stones look</td></tr>
+<tr id="c-edges"><td><code>edges</code></td><td>group</td><td>—</td><td>the stone corners</td></tr>
+<tr id="c-edges-rounding"><td><code>edges rounding</code></td><td>mm</td><td>—</td><td>how worn the stone corners are</td></tr>
+<tr id="c-coping"><td><code>coping</code></td><td>word</td><td>—</td><td>what tops a drystone wall<dl class="words"><dt><code>loose</code></dt><dd>loose stones perched on top</dd><dt><code>on-edge</code></dt><dd>stones set on edge</dd></dl></td></tr>
+<tr id="c-bond"><td><code>bond</code></td><td>word</td><td>—</td><td>random courses, or brick-style offsets<dl class="words"><dt><code>irregular</code></dt><dd>random courses and bays</dd><dt><code>running</code></dt><dd>uniform courses, half-unit offsets</dd></dl></td></tr>
+<tr id="c-ruin"><td><code>ruin</code></td><td>percent</td><td>—</td><td>how much has fallen</td></tr>
+<tr id="c-top"><td><code>top</code></td><td>word</td><td>—</td><td>castle crenellations<dl class="words"><dt><code>flat</code></dt><dd>a flat top</dd><dt><code>battlements</code></dt><dd>merlons and crenels</dd></dl></td></tr>
 </tbody></table></div>
+<h3 id="in-the-library">In the library</h3>
+<ul class="tiles">
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/floors/1x1-floor-stone-wall.dtile"><code>1x1-floor-stone-wall.dtile</code></a> <span class="muted small">lib:tiles/floors/1x1-floor-stone-wall.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/walls/1x1-wall-brick-corner.dtile"><code>1x1-wall-brick-corner.dtile</code></a> <span class="muted small">lib:tiles/walls/1x1-wall-brick-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/walls/1x1-wall-brick.dtile"><code>1x1-wall-brick.dtile</code></a> <span class="muted small">lib:tiles/walls/1x1-wall-brick.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/walls/1x1-wall-fieldstone-corner.dtile"><code>1x1-wall-fieldstone-corner.dtile</code></a> <span class="muted small">lib:tiles/walls/1x1-wall-fieldstone-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/walls/1x1-wall-fieldstone.dtile"><code>1x1-wall-fieldstone.dtile</code></a> <span class="muted small">lib:tiles/walls/1x1-wall-fieldstone.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/walls/1x1-wall-stone-corner.dtile"><code>1x1-wall-stone-corner.dtile</code></a> <span class="muted small">lib:tiles/walls/1x1-wall-stone-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/walls/1x1-wall-stone.dtile"><code>1x1-wall-stone.dtile</code></a> <span class="muted small">lib:tiles/walls/1x1-wall-stone.dtile</span></li>
+</ul>
+<p class="muted small">Generated from <code>dharmatiles looks wall</code> by <code>cargo xtask docs</code>.</p>
+<!-- /gen:reference -->
 
 <h3 id="opening-spec">Openings and leaves</h3>
 <div class="tbl"><table>
@@ -224,7 +244,7 @@ tile wall-fieldstone-corner size="1x1" seed=64 {
 <p>All the families share one chassis, <code>CutStoneWall</code> in <code>src/dharmatiles/walls/masonry.py</code> (line 512). A family changes the stone, not the layout.</p>
 <ol>
   <li><strong>Layout.</strong> <code>_layout</code> (line 286) splits the spine into straight segments and corner cells, samples course heights so the top lands exactly at the wall top, then cuts each course into stones, rejecting any joint that lines up with one in the course below. Corners alternate per course. Openings, battlements and ruin states edit this list of cells (<code>_apply_openings</code> line 893, <code>_crenellate</code> line 742, <code>_ruin_cells</code> line 1199).</li>
-  <li><strong>Stones.</strong> Each cell becomes one stone. Cut stone and brick are exact rounded blocks with chipped edges and the common stone relief (the same finish as the <a href="rocks.html#stone-finish">rocks</a>). Fieldstone (<code>walls/fieldstone.py</code>, line 177) works the other way round: it draws the crack network first, with each crack shared by the stones on both sides, then morphs a pebble into each region, so neighbouring stones fit like a real drystone wall.</li>
+  <li><strong>Stones.</strong> Each cell becomes one stone. Cut stone and brick are exact rounded blocks with chipped edges and the common stone relief (the same finish as the <a href="rock.html#stone-finish">rocks</a>). Fieldstone (<code>walls/fieldstone.py</code>, line 177) works the other way round: it draws the crack network first, with each crack shared by the stones on both sides, then morphs a pebble into each region, so neighbouring stones fit like a real drystone wall.</li>
   <li><strong>Core and hearting.</strong> Mortared walls have a hidden core set back from every face, which shows as the mortar. Drystone walls have no core; about a thousand small rough chips fill the inside (<code>_hearting_parts</code>, line 1246).</li>
   <li><strong>Assembly.</strong> Stones, core and surrounds are unioned into one solid. <code>separate_pinches</code> nudges apart points where two stones only just touch, so the STL stays watertight (<code>src/dharmatiles/stone/solidify.py:42</code>), and the wall is clipped to the tile (line 1564). Slots are one boolean cut out of the finished wall (<code>_cut_slots</code>, line 848). The footprint is stamped into the ground so grass steers around it.</li>
 </ol>
@@ -344,7 +364,7 @@ tile wall-fieldstone-corner size="1x1" seed=64 {
 <p>The harness measure has no printer gap, so it still counts a few sub-0.2 mm joints; the gate's audit (55°, 0.2 mm layer and gap) is 0 on block walls and floors over seeds 1–8 at both scales, and on fieldstone over seeds 1–12 with two exceptions: the fieldstone test tile at seed 8 (0.16 mm², under a stepped stone) and the fieldstone corner twin at OpenLOCK scale, default seed (0.25 mm², under a coping head joint). Corner tiles build in 1.1–2.2 s; brick corners are the slowest (about 94 units, 700k triangles). Builds are identical at 1, 4 and 16 threads.</p>
 <p><strong>Printable by construction.</strong> Python's walls overhang mostly at bed-joint lips: a stone's bottom edge standing proud of the stone below by 0.3–1.5 mm. Walls ruling R10 says the lip over a sub-millimetre joint prints, so the audit now treats a gap thinner than the printer's 0.2 mm as solid, and the Rust walls hold each block no more than 0.05 mm proud of the one it sits on (mortar wedges 0.45 mm). Head-joint tops are chipped back at most 0.25 mm. Fieldstone undersides are bevelled at 45°, inside-corner stones press into the other run, its relief moves along rays from each stone's centre (normal relief folded tight rings into 0.1 mm fins), and pinning wedges fill head joints a stone above bridges. Sealed voids the union leaves are filled, not counted as lost parts.</p>
 <p><strong>Floors stand on earth.</strong> A floor is cut flat at the ground's edge level (3.4 mm), not at the datum, so the tile's side reads earth below one straight line and stone above it (Shawn, 3 Nov: a straight band or all stone, not the ragged mix). Cut at the datum, the slabs' sides and the earth's side shared a plane and the union gave its faces to either material. A fieldstone floor uses the fieldstone wall's stone sizes (E57).</p>
-<p><strong>KDL twins</strong>: <code>library/tiles/walls/1x1-wall-{stone,stone-corner,brick,brick-corner,fieldstone,fieldstone-corner}.kdl</code> and <code>library/tiles/floors/1x1-floor-stone{,-wall}.kdl</code>. The floors build now; the walls wait for grass (P4). Each twin pins the Python wall's seed so it stays comparable.</p>
+<p><strong>KDL twins</strong>: <code>library/tiles/walls/1x1-wall-{stone,stone-corner,brick,brick-corner,fieldstone,fieldstone-corner}.dtile</code> and <code>library/tiles/floors/1x1-floor-stone{,-wall}.dtile</code>. The floors build now; the walls wait for grass (P4). Each twin pins the Python wall's seed so it stays comparable.</p>
 </details>
 
 <details id="reference-photos">
@@ -367,7 +387,7 @@ tile wall-fieldstone-corner size="1x1" seed=64 {
 <div class="note"><p>Geometric truths (all references agree):</p><ol><li><strong>A doorway = opening + SURROUND + optional leaf.</strong>  The surround is structurally distinct masonry: dressed jamb blocks (quoin-like alternating stacks) + an arch of voussoirs or a straight lintel.</li><li><strong>The wall's own bond flows AROUND the surround</strong> — courses butt into the jamb stones; nothing is "cut out" of blocks.</li><li><strong>Voussoirs are radial</strong>: wedge blocks perpendicular to the arc, springing from the jamb tops; keystone at the apex.  Fieldstone arches use thin SLABS radiating (ref-03/05); dressed arches use larger wedges, sometimes in 2–3 concentric orders (ref-05).</li><li><strong>Door leaves are planked rectangles</strong> (vertical planks, battens, studs, ring/handle), square-headed even under an arch (tympanum fills the difference, ref-02) or arched-top matching the surround (ref-01, official UD-010).</li><li>Sills/thresholds: a flat slab at the base of the opening.</li></ol></div>
 <h4>Baseline render</h4>
 <div class="gallery"><figure class="ph"><a href="ref/walls/wall-baseline-2026-07-04.png" data-cap="wall baseline 2026 07 04"><img src="ref/walls/wall-baseline-2026-07-04.png" alt="wall baseline 2026 07 04" loading="lazy"></a><figcaption><span class="cap">wall baseline 2026 07 04</span><span class="fn">wall-baseline-2026-07-04.png</span></figcaption></figure></div>
-<p class="note">Stone surface photos shared with rocks are on the <a href="rocks.html#reference-photos">rocks page</a>.</p>
+<p class="note">Stone surface photos shared with rocks are on the <a href="rock.html#reference-photos">rocks page</a>.</p>
 </details>
 
 <h3 id="open">Open issues</h3>

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>flowers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Element · surface</div>
+  <h1>flowers</h1>
+  <p class="lede">Wildflowers: each one a thin dome on a column, ringed by petal domes on cones. Flowers stand before the grass is grown, so the grass grows round them, never through them.</p>
+  <figure class="shot"><img src="img/el-flowers.jpg" alt="lib:tiles/ground/1x1-grass-flowers.dtile: four flowers in a lawn." loading="lazy"><figcaption><code>lib:tiles/ground/1x1-grass-flowers.dtile</code>: four flowers in a lawn.</figcaption></figure>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#use">Writing it</a></li>
+  <li><a href="#reference">Reference</a></li>
+  <li><a href="#notes">Notes</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="use">Writing it</h2>
+<pre><code>use "parts/grass" lawn
+
+tile grass-flowers size="1x1" seed=7 {
+    stack {
+        dirt
+        flowers per-square=4 petals=5 radius=2.5
+        lawn
+    }
+}</code></pre>
+<h2 id="reference">Reference</h2>
+<!-- gen:reference flowers -->
+<div class="facts">
+  <div><div class="k">Kind</div><div class="v">a surface: it paints the ground of its area</div></div>
+  <div><div class="k">Place words</div><div class="v"><code>in=</code> <code>along=</code></div></div>
+  <div><div class="k">Built</div><div class="v">yes</div></div>
+</div>
+<h3 id="controls">Controls</h3>
+<div class="tbl"><table class="controls">
+<thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
+<tbody>
+<tr id="c-per-square"><td><code>per-square</code></td><td>per square</td><td><code>4</code></td><td>how many flowers a square</td></tr>
+<tr id="c-petals"><td><code>petals</code></td><td>count</td><td><code>5</code></td><td>petals round the centre</td></tr>
+<tr id="c-radius"><td><code>radius</code></td><td>mm</td><td><code>2.5</code></td><td>from the centre to a petal's tip</td></tr>
+<tr id="c-centre"><td><code>centre</code></td><td>mm</td><td><code>1.5</code></td><td>radius of the centre dome</td></tr>
+<tr id="c-stem"><td><code>stem</code></td><td>mm</td><td><code>1</code></td><td>height of the column under each dome</td></tr>
+<tr id="c-dome"><td><code>dome</code></td><td>mm</td><td><code>1</code></td><td>height of the centre dome</td></tr>
+<tr id="c-petal"><td><code>petal</code></td><td>mm</td><td><code>0.5</code></td><td>height of each petal dome</td></tr>
+</tbody></table></div>
+<h3 id="in-the-library">In the library</h3>
+<ul class="tiles">
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-grass-flowers.dtile"><code>1x1-grass-flowers.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-grass-flowers.dtile</span></li>
+</ul>
+<p class="muted small">Generated from <code>dharmatiles looks flowers</code> by <code>cargo xtask docs</code>.</p>
+<!-- /gen:reference -->
+<h2 id="notes">Notes</h2>
+<p>Flowers paint in the <code>flower</code> colour of the <a href="palette.html">palette</a>. Every size is mm at the 35 mm square and scales with the system.</p>
+</article>
+</div>
+</body>
+</html>

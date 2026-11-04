@@ -25,7 +25,7 @@
 </style>
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html" aria-current="page">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="plan.html" aria-current="page">Project</a><a href="../archive/index.html">Archive</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
   <div class="eyebrow">Rust rewrite · Phase 0 results · measured 1 Nov 2026 · frozen</div>
@@ -365,7 +365,7 @@
 <li><b>Look decisions surfaced by the rewrite.</b> No grass-carpet look (3D blades instead), grass moved last in the stack, which side of a line a wall sits on, and the cliff grown from a tile edge.</li>
 <li><b>Gaps left for later phases.</b> Meadow needs the species controls the tiles set (length, curl, clearance, clumps) or a ruling that they go (P4). <code>cliff along=…</code> must either be limited to tile edges or rockpile's band forms generalised to any line (P7).</li>
 </ul>
-<p>The results above were measured on the draft vocabulary; the parts that do not depend on the words carry over. The decided vocabulary, the example tiles and every decision are on the <a href="language.html">language</a> page (<a href="language.html#decisions">decisions</a>).</p>
+<p>The results above were measured on the draft vocabulary; the parts that do not depend on the words carry over. The decided vocabulary, the example tiles and every decision are on the <a href="../language.html">language</a> page (<a href="../language.html#decisions">decisions</a>).</p>
 <h2 id="harness-py">The parity harness, Python half</h2>
 <p>Built during Phase 0 so the first look port could be judged from day one.</p>
 <p><code>tests/parity/run_lab.py</code> builds dirtlab 2×2 at seeds 1–4. For each seed it writes the STL, a <code>metrics.json</code>, and four renders (painted, top, low, 20 mm close-up) with overhang faces painted red, using clifflab's layer-reach audit at 55°. It finishes with one contact sheet. Output goes to <code>out/parity/dirt/</code>, which is gitignored. It renders through <code>dharmatiles.render</code> and falls back to a CPU Embree renderer with the same camera and lights when pyrender has no screen; this run used the fallback. A full run takes 95 s.</p>

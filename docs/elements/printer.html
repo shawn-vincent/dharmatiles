@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>printer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Element · library file</div>
+  <h1>printer</h1>
+  <p class="lede">The printer profile. Every size an author writes scales with the system; these numbers never do. They are the floors nothing is built below: blade and leaf thickness, the least branch radius, print gaps, and the overhang the printability gate allows.</p>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#use">Writing it</a></li>
+  <li><a href="#reference">Reference</a></li>
+  <li><a href="#notes">Notes</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="use">Writing it</h2>
+<pre><code>// library/printers/default.dtile
+printer default {
+    line     0.45       // one extruded line, mm: the thinnest wall that prints
+    layer    0.2        // one layer, mm
+    overhang 55         // the steepest overhang that prints, degrees from vertical
+    gap      0.2        // the narrowest gap that stays open, mm
+}</code></pre>
+<h2 id="reference">Reference</h2>
+<div class="tbl"><table>
+<thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><code>line</code></td><td>mm</td><td>0.45</td><td>One extruded line: the thinnest wall that prints.</td></tr>
+<tr><td><code>layer</code></td><td>mm</td><td>0.2</td><td>One layer.</td></tr>
+<tr><td><code>overhang</code></td><td>degrees</td><td>55</td><td>The steepest overhang that prints. 55–65° is the band (orange in renders, a small budget); past 65° is red.</td></tr>
+<tr><td><code>gap</code></td><td>mm</td><td>0.2</td><td>The narrowest gap that stays open.</td></tr>
+</tbody></table></div>
+<h2 id="notes">Notes</h2>
+<p>See <a href="../standards/printing.html">printing</a> for the gate every build passes.</p>
+</article>
+</div>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>region</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Element · the document</div>
+  <h1>region</h1>
+  <p class="lede">An area of a divided tile. Name the lines that bound it, then drop one or more fill points, like a paint bucket: the region is everything a fill point reaches without crossing a line. Elements act inside a region with <code>in=</code>.</p>
+  <figure class="shot"><img src="img/el-line.jpg" alt="The pool and bank regions of 1x1-water+grass." loading="lazy"><figcaption>The <code>pool</code> and <code>bank</code> regions of <code>1x1-water+grass</code>.</figcaption></figure>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#use">Writing it</a></li>
+  <li><a href="#reference">Reference</a></li>
+  <li><a href="#notes">Notes</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="use">Writing it</h2>
+<pre><code>line shore wobble=5 { through "0,0.38" "1,0.42" }
+region pool { bounded-by shore; fill "0.5,0.25" }
+region bank { bounded-by shore; fill "0.5,0.75" }
+stack {
+    dirt in=bank
+    water                    // fills its area up to the water level
+}</code></pre>
+<h2 id="reference">Reference</h2>
+<div class="tbl"><table>
+<thead><tr><th>Written</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>region NAME</code></td><td>a name</td><td>—</td><td>Its name, for <code>in=</code>. <strong>Required.</strong></td></tr>
+<tr><td><code>bounded-by</code></td><td>line names</td><td>—</td><td>The lines that bound it.</td></tr>
+<tr><td><code>fill</code></td><td>a point</td><td>—</td><td>A point inside it. Several fill points on different sides of a line join those areas into one region.</td></tr>
+</tbody></table></div>
+<h2 id="notes">Notes</h2>
+<p>The whole tile is the default area, so an undivided tile needs no region. There is no union, intersection or difference: several fill points do that job. A region nothing fills is an error.</p>
+</article>
+</div>
+</body>
+</html>

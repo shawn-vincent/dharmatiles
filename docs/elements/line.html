@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>line</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Element · the document</div>
+  <h1>line</h1>
+  <p class="lede">A line through points. Lines divide a tile into <a href="region.html">regions</a>, and runs and surfaces can be built <code>along=</code> one. A line can wander off its points (<code>wobble</code>) and can have a width, which makes it a strip.</p>
+  <figure class="shot"><img src="img/el-line.jpg" alt="The shore line of 1x1-water+grass, wobbled 5 mm: water on one side, a grassy bank on the other." loading="lazy"><figcaption>The <code>shore</code> line of <code>1x1-water+grass</code>, wobbled 5 mm: water on one side, a grassy bank on the other.</figcaption></figure>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#use">Writing it</a></li>
+  <li><a href="#reference">Reference</a></li>
+  <li><a href="#notes">Notes</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="use">Writing it</h2>
+<pre><code>line shore wobble=5 { through "0,0.38" "1,0.42" }
+line trail width=9 wobble=3 { through south "0.65,1" north }</code></pre>
+<h2 id="reference">Reference</h2>
+<div class="tbl"><table>
+<thead><tr><th>Written</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>line NAME</code></td><td>a name</td><td>—</td><td>Its name, for <code>bounded-by</code> and <code>along=</code>. <strong>Required.</strong></td></tr>
+<tr><td><code>width=</code></td><td>mm</td><td>—</td><td>Makes the line a strip of this width; an element <code>along=</code> it covers the strip.</td></tr>
+<tr><td><code>wobble=</code></td><td>mm</td><td>0</td><td>Lets the line wander up to this far off its points, keyed by the tile seed and the line's name.</td></tr>
+<tr><td><code>through</code></td><td>points</td><td>—</td><td>The points, in order: <code>"x,y"</code> in squares, an edge word (its middle) or a corner word. <strong>Required.</strong></td></tr>
+</tbody></table></div>
+<h2 id="notes">Notes</h2>
+<p>An element along a drawn line takes <code>side=left</code>, <code>right</code> or <code>centre</code> (the default), as you walk the line. Along a tile edge there is no side: a wall or cliff on an edge always stands inside the tile. Edges, corners and points are in <a href="../language.html#places">the language guide</a>.</p>
+</article>
+</div>
+</body>
+</html>

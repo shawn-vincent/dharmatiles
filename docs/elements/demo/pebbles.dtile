@@ -1,0 +1,7 @@
+// The pebble page's picture: pebbles scattered over plain dirt.
+tile pebbles size="1x1" seed=5 {
+    stack {
+        dirt
+        scatter per-square=60 { pebble }
+    }
+}

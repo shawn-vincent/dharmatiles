@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>define</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Element · the document</div>
+  <h1>define</h1>
+  <p class="lede">A named, reusable stack, written in a parts file and called like an element. Its <code>param</code> lines are the controls a caller can set. A definition whose stack is one thing is itself a thing: it can be placed with <code>at=</code> or scattered.</p>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#use">Writing it</a></li>
+  <li><a href="#reference">Reference</a></li>
+  <li><a href="#notes">Notes</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="use">Writing it</h2>
+<pre><code>// library/parts/grass.dtile
+define lawn {
+    param length "3.5..6.5"   // blade length along the ground, mm
+    param height "1.5..2"     // how tall a blade stands, mm
+    param clearings 1.5       // patches of bare earth per square
+    param cover "100%"        // share of the ground grassed over
+    stack {
+        grass length=length height=height clearings=clearings cover=cover
+    }
+}
+
+define long-grass {           // a definition can call another
+    stack { lawn length="5..9" height="2..3" }
+}</code></pre>
+<p>A tile then writes <code>use "parts/grass" lawn</code> and <code>lawn cover="80%"</code> in its stack.</p>
+<h2 id="reference">Reference</h2>
+<div class="tbl"><table>
+<thead><tr><th>Written</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>define NAME</code></td><td>a name</td><td>—</td><td>What callers write. <strong>Required.</strong></td></tr>
+<tr><td><code>param NAME</code></td><td>a default, or none</td><td>—</td><td>A control callers may set. Its default is checked as whatever control it fills (<code>param length 10</code> is mm). With no default, the caller must give it.</td></tr>
+<tr><td><code>stack</code></td><td></td><td>—</td><td>What it makes. <strong>Exactly one.</strong></td></tr>
+</tbody></table></div>
+<h2 id="notes">Notes</h2>
+<p>Place words given to the call (<code>in=</code>, <code>at=</code>) pass through to the elements inside. Expert controls, such as a tree's <code>branch</code> knobs, are allowed only in parts files. Definitions that call each other in a loop are an error (<code>dt::loop</code>). A tile has no params.</p>
+</article>
+</div>
+</body>
+</html>

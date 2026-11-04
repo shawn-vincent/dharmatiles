@@ -3,6 +3,8 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
+mod docs;
+
 const USAGE: &str = "usage: cargo xtask <command>
 
 commands:
@@ -12,34 +14,37 @@ commands:
            has a Rust tile, Python only where it does not yet
            (looks: cliff [--forms run corner … | all], flat, dirt, dirt-stones, rocks, water, grass, wall-cut-stone, wall-brick,
            wall-regular-brick, wall-fieldstone, floor-stone, floor-fieldstone, tree)
+  docs [--check]
+           fill each docs/elements/ page's generated reference block from
+           the look schema; --check changes nothing and fails if stale
   help     show this message";
 
 /// Each look the harness knows: its Rust tile, if it has been ported.
 const LOOKS: &[(&str, Option<&str>)] = &[
-    ("flat", Some("lib:tiles/test/1x1-flat.kdl")),
-    ("dirt", Some("lib:tiles/test/2x2-dirt.kdl")),
-    ("dirt-stones", Some("lib:tiles/test/2x2-dirt-stones.kdl")),
-    ("rocks", Some("lib:tiles/test/2x2-rocks.kdl")),
-    ("water", Some("lib:tiles/test/2x2-water.kdl")),
-    ("grass", Some("lib:tiles/test/2x2-grass.kdl")),
-    ("tree", Some("lib:tiles/test/1x1-tree.kdl")),
+    ("flat", Some("lib:tiles/test/1x1-flat.dtile")),
+    ("dirt", Some("lib:tiles/test/2x2-dirt.dtile")),
+    ("dirt-stones", Some("lib:tiles/test/2x2-dirt-stones.dtile")),
+    ("rocks", Some("lib:tiles/test/2x2-rocks.dtile")),
+    ("water", Some("lib:tiles/test/2x2-water.dtile")),
+    ("grass", Some("lib:tiles/test/2x2-grass.dtile")),
+    ("tree", Some("lib:tiles/test/1x1-tree.dtile")),
     (
         "wall-cut-stone",
-        Some("lib:tiles/test/1x1-wall-cut-stone.kdl"),
+        Some("lib:tiles/test/1x1-wall-cut-stone.dtile"),
     ),
-    ("wall-brick", Some("lib:tiles/test/1x1-wall-brick.kdl")),
+    ("wall-brick", Some("lib:tiles/test/1x1-wall-brick.dtile")),
     (
         "wall-regular-brick",
-        Some("lib:tiles/test/1x1-wall-regular-brick.kdl"),
+        Some("lib:tiles/test/1x1-wall-regular-brick.dtile"),
     ),
     (
         "wall-fieldstone",
-        Some("lib:tiles/test/1x1-wall-fieldstone.kdl"),
+        Some("lib:tiles/test/1x1-wall-fieldstone.dtile"),
     ),
-    ("floor-stone", Some("lib:tiles/test/1x1-floor-stone.kdl")),
+    ("floor-stone", Some("lib:tiles/test/1x1-floor-stone.dtile")),
     (
         "floor-fieldstone",
-        Some("lib:tiles/test/1x1-floor-fieldstone.kdl"),
+        Some("lib:tiles/test/1x1-floor-fieldstone.dtile"),
     ),
 ];
 
@@ -53,6 +58,18 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        Some("docs") => {
+            let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .unwrap_or_else(|| Path::new("."));
+            match docs::run(root, args.iter().any(|a| a == "--check")) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("docs: {e}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
         Some("help" | "-h" | "--help") => {
             println!("{USAGE}");
             ExitCode::SUCCESS
@@ -243,7 +260,7 @@ fn cliff_parity(args: &[String]) -> Result<(), String> {
             let _ = std::fs::remove_dir_all(&dir);
             let status = Command::new(&exe)
                 .arg("build")
-                .arg(format!("lib:tiles/test/1x1-cliff{n}.kdl"))
+                .arg(format!("lib:tiles/test/1x1-cliff{n}.dtile"))
                 .args(["--seed", s, "--out"])
                 .arg(&dir)
                 .status()

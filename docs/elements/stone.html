@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>stone</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Element · thing</div>
+  <h1>stone</h1>
+  <p class="lede">A <a href="rock.html"><code>rock</code></a> with stone sizes, about 1–6 mm across. It is the same element as <code>rock</code> with a different default size; everything on the rock page applies.</p>
+  <figure class="shot"><img src="img/el-stone.jpg" alt="Stones scattered on dirt" loading="lazy"><figcaption>Stones scattered on dirt: <a href="demo/stones.dtile"><code>demo/stones.dtile</code></a>.</figcaption></figure>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#use">Writing it</a></li>
+  <li><a href="#reference">Reference</a></li>
+  <li><a href="#notes">Notes</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="use">Writing it</h2>
+<pre><code>stone at="0.5,0.5"                       // one, there
+scatter against=cliff per-square=55 reach=4 { stone mostly=small }</code></pre>
+<p>A thing is one of itself. Scattered against a cliff, stones are its scree. Many of them are a <a href="scatter.html"><code>scatter</code></a>.</p>
+<h2 id="reference">Reference</h2>
+<!-- gen:reference stone -->
+<div class="facts">
+  <div><div class="k">Kind</div><div class="v">a thing: one solid, standing on the surface</div></div>
+  <div><div class="k">Place words</div><div class="v"><code>in=</code> <code>at=</code></div></div>
+  <div><div class="k">Built</div><div class="v">yes</div></div>
+</div>
+<h3 id="controls">Controls</h3>
+<div class="tbl"><table class="controls">
+<thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
+<tbody>
+<tr id="c-size"><td><code>size</code></td><td>mm</td><td><code>1..6</code></td><td>rock width</td></tr>
+<tr id="c-mostly"><td><code>mostly</code></td><td>word</td><td>—</td><td>skews the size range<dl class="words"><dt><code>small</code></dt><dd>skewed toward the low end (rockpile's exponent 2)</dd><dt><code>even</code></dt><dd>a uniform draw</dd><dt><code>large</code></dt><dd>leaning toward the high end</dd></dl></td></tr>
+<tr id="c-shape"><td><code>shape</code></td><td>word</td><td>—</td><td>river stones, broken rock, flat slabs<dl class="words"><dt><code>rounded</code></dt><dd>river stones</dd><dt><code>angular</code></dt><dd>broken rock</dd><dt><code>flat</code></dt><dd>flat slabs</dd></dl></td></tr>
+<tr id="c-wear"><td><code>wear</code></td><td>word</td><td>—</td><td>sharp, or chipped and rounded edges <span class="tag">not built yet</span><dl class="words"><dt><code>crisp</code></dt><dd>sharp edges</dd><dt><code>worn</code></dt><dd>chipped and rounded edges</dd></dl></td></tr>
+<tr id="c-buried"><td><code>buried</code></td><td>percent</td><td>—</td><td>how much of each rock is under the ground</td></tr>
+</tbody></table></div>
+<h3 id="in-the-library">In the library</h3>
+<ul class="tiles">
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff-corner.dtile"><code>1x1-cliff-corner.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff-mound.dtile"><code>1x1-cliff-mound.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff-mound.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff-spire.dtile"><code>1x1-cliff-spire.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff-spire.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff.dtile"><code>1x1-cliff.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-blocks.dtile"><code>2x1-cliff-blocks.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-blocks.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-escarpment.dtile"><code>2x1-cliff-escarpment.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-escarpment.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-needles.dtile"><code>2x1-cliff-needles.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-needles.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-rubble.dtile"><code>2x1-cliff-rubble.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-rubble.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff.dtile"><code>2x1-cliff.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-canyon.dtile"><code>2x2-cliff-canyon.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-canyon.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-corner.dtile"><code>2x2-cliff-corner.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-massif.dtile"><code>2x2-cliff-massif.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-massif.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-plateau.dtile"><code>2x2-cliff-plateau.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-plateau.dtile</span></li>
+</ul>
+<p class="muted small">Generated from <code>dharmatiles looks stone</code> by <code>cargo xtask docs</code>.</p>
+<!-- /gen:reference -->
+<h2 id="notes">Notes</h2>
+<p>How rocks are made, and how they print, is on the <a href="rock.html">rock page</a>.</p>
+</article>
+</div>
+</body>
+</html>

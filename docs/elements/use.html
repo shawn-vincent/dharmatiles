@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>use</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Element · the document</div>
+  <h1>use</h1>
+  <p class="lede">Brings named definitions in from a parts file, so a reader knows where every name came from. <code>use</code> lines go above the tile.</p>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#use">Writing it</a></li>
+  <li><a href="#reference">Reference</a></li>
+  <li><a href="#notes">Notes</a></li>
+</ol></nav>
+<article class="doc">
+<h2 id="use">Writing it</h2>
+<pre><code>use "parts/grass" lawn long-grass
+use "./my-parts" mossy-bank
+
+tile meadow size="2x2" { stack { dirt; lawn } }</code></pre>
+<h2 id="reference">Reference</h2>
+<div class="tbl"><table>
+<thead><tr><th>Path</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td><code>"parts/grass"</code></td><td>The bundled library's <code>parts/grass.dtile</code>. <code>"lib:parts/grass"</code> says so explicitly.</td></tr>
+<tr><td><code>"./mine"</code>, <code>"../shared/x"</code></td><td>A file in your own project, relative to this one.</td></tr>
+<tr><td>names after the path</td><td>The definitions to bring in. Only these can be called.</td></tr>
+</tbody></table></div>
+<p>The path is written without <code>.dtile</code>. Anything else is an error that says what to write.</p>
+<h2 id="notes">Notes</h2>
+<p>The library's parts: <code>parts/grass</code> (<code>lawn</code>, <code>long-grass</code>), <code>parts/trees</code>, and two every document sees without a <code>use</code>: <a href="levels.html"><code>parts/levels</code></a> and <a href="edges.html"><code>parts/edges</code></a>. See <a href="define.html"><code>define</code></a> for writing your own.</p>
+</article>
+</div>
+</body>
+</html>

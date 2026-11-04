@@ -3,18 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Ground</title>
+<title>dirt</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
 <link rel="stylesheet" href="../assets/site.css">
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../index.html#status">Status</a><a href="../index.html#looks" aria-current="page">Looks</a><a href="../rust/plan.html">Rust plan</a><a href="../rust/architecture.html">Architecture</a><a href="../rust/language.html">Language</a><a href="../rust/spikes.html">Spikes</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
-  <div class="eyebrow">Look · earth</div>
-  <h1>Ground</h1>
-  <p class="lede">Ground is the surface every other look stands on: bare earth with soil clods, grit and half-sunk pebbles, over gentle rises. On its own it makes a plain dirt tile; under grass, rocks, water and cliffs it is the exposed earth between them. It meets every tile edge at the same level, so any two ground tiles butt with no step, and it prints on an FDM printer with no supports.</p>
+  <div class="eyebrow">Element · surface</div>
+  <h1>dirt</h1>
+  <p class="lede"><code>dirt</code> is the surface everything else stands on: bare earth with soil clods, grit and half-sunk pebbles, over gentle rises. On its own it makes a plain dirt tile; under grass, rocks, water and cliffs it is the exposed earth between them. It meets every tile edge at the same level, so any two ground tiles butt with no step, and it prints on an FDM printer with no supports.</p>
+  <p class="small">This page is the textured earth, <code>dirt</code>. The plain ground shape is its own element, <a href="ground.html"><code>ground</code></a>; pebbles written inside dirt are a <a href="scatter.html"><code>scatter</code></a> of <a href="pebble.html"><code>pebble</code></a>.</p>
   <div class="hero-shots">
     <figure><img src="img/ground-r2-painted-s1.jpg" alt="Painted 2x2 dirt tile with clods, pebbles and a few bedded stones" width="741" height="548"></figure>
     <figure><img src="img/ground-r2-close-s1.jpg" alt="Close painted view of the dirt surface, 20 mm across" width="752" height="480"></figure>
@@ -25,7 +26,7 @@
     <div><div class="k">Variants</div><div class="v">flat ground; dirt (clods, pebbles, stones); rises (bumps); optional cracks</div></div>
     <div><div class="k">Printing</div><div class="v">no supports; one height field, so it cannot overhang</div></div>
     <div><div class="k">Bases</div><div class="v">DungeonBlocks today; OpenLOCK with the Rust port</div></div>
-    <div><div class="k">Available</div><div class="v">flat ground, dirt and rises in the Rust engine (<code>dharmatiles build lib:tiles/ground/1x1-soil.kdl</code>)</div></div>
+    <div><div class="k">Available</div><div class="v">flat ground, dirt and rises in the Rust engine (<code>dharmatiles build lib:tiles/ground/1x1-soil.dtile</code>)</div></div>
   </div>
   <details class="words">
     <summary>Words used on this page</summary>
@@ -42,7 +43,7 @@
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#look">What it looks like</a></li>
   <li><a href="#use">Using it in a tile</a></li>
-  <li><a href="#spec">Specification</a></li>
+  <li><a href="#spec">Reference</a></li>
   <li><a href="#printing">Printing and painting</a></li>
   <li><a href="#how">How it is made</a></li>
   <li><a href="#record">Design record</a></li>
@@ -67,14 +68,14 @@
 <p>The dirt texture is also the exposed ground in every other lab: grass stands on it, water's shore and banks use it, and rocks sit in it.</p>
 
 <h2 id="use">Using it in a tile</h2>
-<p>In the Rust engine a tile is a short KDL document that names looks. The flat ground is built today. This is the library's walking-skeleton tile, <code>library/tiles/test/1x1-flat.kdl</code> (branch <code>rust/p1</code>):</p>
+<p>In the Rust engine a tile is a short KDL document that names looks. The flat ground is built today. This is the library's walking-skeleton tile, <code>library/tiles/test/1x1-flat.dtile</code> (branch <code>rust/p1</code>):</p>
 <pre><code>tile flat size="1x1" seed=1 {
     about "Flat ground at 5 mm on one square: the first tile built end to end."
     stack {
         ground          // flat, at the ground level (5 mm)
     }
 }</code></pre>
-<p>Dirt and rises are in the Rust engine (P2, signed off 2 Nov 2026). <code>library/tiles/ground/1x1-soil.kdl</code> replaced the Python <code>1x1-soil.tile.py</code>; <code>dharmatiles looks dirt</code> lists every control. A dirt tile reads like this:</p>
+<p>Dirt and rises are in the Rust engine (P2, signed off 2 Nov 2026). <code>library/tiles/ground/1x1-soil.dtile</code> replaced the Python <code>1x1-soil.tile.py</code>; <code>dharmatiles looks dirt</code> lists every control. A dirt tile reads like this:</p>
 <pre><code>tile soil size="1x1" seed=13 {
     stack {
         dirt bumps=2.5 bump-size=14 {   // rises up to 2.5 mm, about 14 mm across
@@ -82,26 +83,95 @@
         }
     }
 }</code></pre>
-<p>Change <code>seed</code> for different clods and pebbles with the same character. The language as a whole is on the <a href="../rust/language.html">language page</a>.</p>
-<p><strong>Build it.</strong> <code>dharmatiles build lib:tiles/ground/1x1-soil.kdl</code> writes <code>out/db/ground/1x1-soil-db.stl</code>; <code>dharmatiles watch</code> rebuilds on every save. The lab still builds dirt with stones: <code>python dirtlab/dirtlab.py --seed 1</code> writes <code>dirtlab/out/2x2-dirt-s1.stl</code> with a DungeonBlocks base (<code>--cols</code>/<code>--rows</code> set the size, <code>--cracks</code> adds fine cracks).</p>
+<p>Change <code>seed</code> for different clods and pebbles with the same character. The language as a whole is on the <a href="../language.html">language page</a>.</p>
+<p><strong>Build it.</strong> <code>dharmatiles build lib:tiles/ground/1x1-soil.dtile</code> writes <code>out/db/ground/1x1-soil-db.stl</code>; <code>dharmatiles watch</code> rebuilds on every save. The lab still builds dirt with stones: <code>python dirtlab/dirtlab.py --seed 1</code> writes <code>dirtlab/out/2x2-dirt-s1.stl</code> with a DungeonBlocks base (<code>--cols</code>/<code>--rows</code> set the size, <code>--cracks</code> adds fine cracks).</p>
 
-<h2 id="spec">Specification</h2>
+<h2 id="spec">Reference</h2>
+<!-- gen:reference dirt -->
+<div class="facts">
+  <div><div class="k">Kind</div><div class="v">a surface: it paints the ground of its area</div></div>
+  <div><div class="k">Place words</div><div class="v"><code>in=</code> <code>along=</code></div></div>
+  <div><div class="k">Holds</div><div class="v">a <a href="scatter.html"><code>scatter</code></a> inside it lands on it</div></div>
+  <div><div class="k">Built</div><div class="v">yes</div></div>
+</div>
 <h3 id="controls">Controls</h3>
-<p><code>ground</code> is the plain surface; <code>dirt</code> is the same surface with the dirtlab texture. Both hold scatters (pebbles, stones) inside them.</p>
-<div class="tbl"><table>
-<thead><tr><th>Control</th><th>On</th><th>Values</th><th>Default</th><th>Effect</th></tr></thead>
+<div class="tbl"><table class="controls">
+<thead><tr><th>Control</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr><td><code>level</code></td><td>ground, dirt</td><td>a named level (<code>ground</code>, <code>edge</code>, <code>water</code>, <code>wall-top</code>) or mm</td><td><code>ground</code> (5 mm)</td><td>Where the surface sits above the tile base.</td></tr>
-<tr><td><code>bumps</code></td><td>ground, dirt</td><td>0–15 mm, or <code>up</code>/<code>down</code></td><td>0</td><td>How far the ground rises and falls.</td></tr>
-<tr><td><code>bump-size</code></td><td>ground, dirt</td><td>5–70 mm</td><td>—</td><td>How wide the rises are: broad and rolling, or choppy.</td></tr>
-<tr><td><code>clods</code></td><td>dirt</td><td><code>few</code>, <code>some</code>, <code>many</code></td><td><code>some</code></td><td>Lumps of earth on the surface. <code>some</code> is dirtlab's density; <code>few</code> and <code>many</code> are provisional.</td></tr>
-<tr><td><code>bank</code></td><td>dirt</td><td><code>against</code>, <code>height</code>, <code>reach</code> (mm)</td><td>—</td><td>Earth heaped against a cliff or wall.</td></tr>
+<tr id="c-level"><td><code>level</code></td><td>level</td><td><code>ground</code></td><td>where the surface sits</td></tr>
+<tr id="c-bumps"><td><code>bumps</code></td><td>mm, 0–15</td><td><code>0</code></td><td>how far it rises and falls</td></tr>
+<tr id="c-bumps-up"><td><code>bumps up</code></td><td>mm, 0–15</td><td>—</td><td>how far it rises</td></tr>
+<tr id="c-bumps-down"><td><code>bumps down</code></td><td>mm, 0–15</td><td>—</td><td>how far it falls</td></tr>
+<tr id="c-bump-size"><td><code>bump-size</code></td><td>mm, 5–70</td><td>—</td><td>how wide the hills are: broad and rolling, or choppy</td></tr>
+<tr id="c-clods"><td><code>clods</code></td><td>word</td><td><code>some</code></td><td>lumps of earth on the surface<dl class="words"><dt><code>few</code></dt><dd>a scatter of clods (provisional)</dd><dt><code>some</code></dt><dd>dirtlab's clods</dd><dt><code>many</code></dt><dd>crumbly, cloddy earth (provisional)</dd></dl></td></tr>
+<tr id="c-stones"><td><code>stones</code></td><td>word</td><td><code>some</code></td><td>a few rocklab stones bedded in the dirt<dl class="words"><dt><code>none</code></dt><dd>bare dirt, no stones</dd><dt><code>some</code></dt><dd>dirtlab's few bedded stones</dd><dt><code>many</code></dt><dd>a stony patch (provisional)</dd></dl></td></tr>
+<tr id="c-bank"><td><code>bank</code></td><td>group</td><td>—</td><td>earth heaped against a cliff or wall</td></tr>
+<tr id="c-bank-against"><td><code>bank against</code></td><td>tag</td><td>—</td><td>what the bank leans on <strong>Required.</strong></td></tr>
+<tr id="c-bank-height"><td><code>bank height</code></td><td>mm</td><td>—</td><td>height at the face</td></tr>
+<tr id="c-bank-reach"><td><code>bank reach</code></td><td>mm</td><td>—</td><td>how far out it runs</td></tr>
 </tbody></table></div>
+<h3 id="in-the-library">In the library</h3>
+<ul class="tiles">
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff-corner.dtile"><code>1x1-cliff-corner.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff-mound.dtile"><code>1x1-cliff-mound.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff-mound.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff-spire.dtile"><code>1x1-cliff-spire.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff-spire.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/1x1-cliff.dtile"><code>1x1-cliff.dtile</code></a> <span class="muted small">lib:tiles/cliffs/1x1-cliff.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-blocks.dtile"><code>2x1-cliff-blocks.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-blocks.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-escarpment.dtile"><code>2x1-cliff-escarpment.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-escarpment.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-needles.dtile"><code>2x1-cliff-needles.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-needles.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff-rubble.dtile"><code>2x1-cliff-rubble.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff-rubble.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x1-cliff.dtile"><code>2x1-cliff.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x1-cliff.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-canyon.dtile"><code>2x2-cliff-canyon.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-canyon.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-corner.dtile"><code>2x2-cliff-corner.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-massif.dtile"><code>2x2-cliff-massif.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-massif.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/cliffs/2x2-cliff-plateau.dtile"><code>2x2-cliff-plateau.dtile</code></a> <span class="muted small">lib:tiles/cliffs/2x2-cliff-plateau.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/floors/1x1-floor-stone-wall.dtile"><code>1x1-floor-stone-wall.dtile</code></a> <span class="muted small">lib:tiles/floors/1x1-floor-stone-wall.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/floors/1x1-floor-stone.dtile"><code>1x1-floor-stone.dtile</code></a> <span class="muted small">lib:tiles/floors/1x1-floor-stone.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-grass-flowers.dtile"><code>1x1-grass-flowers.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-grass-flowers.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-grass.dtile"><code>1x1-grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil+grass-angle.dtile"><code>1x1-soil+grass-angle.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil+grass-angle.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil+grass-corner.dtile"><code>1x1-soil+grass-corner.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil+grass-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil+grass.dtile"><code>1x1-soil+grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil-corridor+grass.dtile"><code>1x1-soil-corridor+grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil-corridor+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil-corridor-open+grass.dtile"><code>1x1-soil-corridor-open+grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil-corridor-open+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil-corridor-t+grass.dtile"><code>1x1-soil-corridor-t+grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil-corridor-t+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil-corridor-turn+grass.dtile"><code>1x1-soil-corridor-turn+grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil-corridor-turn+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil-corridor-x+grass.dtile"><code>1x1-soil-corridor-x+grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil-corridor-x+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil-u+grass.dtile"><code>1x1-soil-u+grass.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil-u+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/ground/1x1-soil.dtile"><code>1x1-soil.dtile</code></a> <span class="muted small">lib:tiles/ground/1x1-soil.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/walls/1x1-wall-brick-corner.dtile"><code>1x1-wall-brick-corner.dtile</code></a> <span class="muted small">lib:tiles/walls/1x1-wall-brick-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/walls/1x1-wall-brick.dtile"><code>1x1-wall-brick.dtile</code></a> <span class="muted small">lib:tiles/walls/1x1-wall-brick.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/walls/1x1-wall-fieldstone-corner.dtile"><code>1x1-wall-fieldstone-corner.dtile</code></a> <span class="muted small">lib:tiles/walls/1x1-wall-fieldstone-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/walls/1x1-wall-fieldstone.dtile"><code>1x1-wall-fieldstone.dtile</code></a> <span class="muted small">lib:tiles/walls/1x1-wall-fieldstone.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/walls/1x1-wall-stone-corner.dtile"><code>1x1-wall-stone-corner.dtile</code></a> <span class="muted small">lib:tiles/walls/1x1-wall-stone-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/walls/1x1-wall-stone.dtile"><code>1x1-wall-stone.dtile</code></a> <span class="muted small">lib:tiles/walls/1x1-wall-stone.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-angle.dtile"><code>1x1-water+grass-angle.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-angle.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-corner.dtile"><code>1x1-water+grass-corner.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass-tree.dtile"><code>1x1-water+grass-tree.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass-tree.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+grass.dtile"><code>1x1-water+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+soil-angle.dtile"><code>1x1-water+soil-angle.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+soil-angle.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+soil-corner.dtile"><code>1x1-water+soil-corner.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+soil-corner.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water+soil.dtile"><code>1x1-water+soil.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water+soil.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor+grass.dtile"><code>1x1-water-corridor+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor+soil.dtile"><code>1x1-water-corridor+soil.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor+soil.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-open+grass.dtile"><code>1x1-water-corridor-open+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-open+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-open+soil.dtile"><code>1x1-water-corridor-open+soil.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-open+soil.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-t+grass.dtile"><code>1x1-water-corridor-t+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-t+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-t+soil.dtile"><code>1x1-water-corridor-t+soil.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-t+soil.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-turn+grass.dtile"><code>1x1-water-corridor-turn+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-turn+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-turn+soil.dtile"><code>1x1-water-corridor-turn+soil.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-turn+soil.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-x+grass.dtile"><code>1x1-water-corridor-x+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-x+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-corridor-x+soil.dtile"><code>1x1-water-corridor-x+soil.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-corridor-x+soil.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-u+grass.dtile"><code>1x1-water-u+grass.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-u+grass.dtile</span></li>
+  <li><a href="https://github.com/shawn-vincent/dharmatiles/blob/main/library/tiles/water/1x1-water-u+soil.dtile"><code>1x1-water-u+soil.dtile</code></a> <span class="muted small">lib:tiles/water/1x1-water-u+soil.dtile</span></li>
+</ul>
+<p class="muted small">Generated from <code>dharmatiles looks dirt</code> by <code>cargo xtask docs</code>.</p>
+<!-- /gen:reference -->
 
 <h3 id="sizes">Sizes and levels</h3>
 <ul>
   <li><strong>Tile.</strong> Any size in 35 mm squares. The lab's default is 2×2.</li>
-  <li><strong>Edge level.</strong> Ground meets every tile edge at the edge level: 3.4 mm above the base in the Rust engine (<code>library/parts/edges.kdl</code>). dirtlab uses 4.0 mm, the DungeonBlocks dirt band; the Rust dirt look sits on 3.4 mm (Default 12).</li>
+  <li><strong>Edge level.</strong> Ground meets every tile edge at the edge level: 3.4 mm above the base in the Rust engine (<code>library/parts/edges.dtile</code>). dirtlab uses 4.0 mm, the DungeonBlocks dirt band; the Rust dirt look sits on 3.4 mm (Default 12).</li>
   <li><strong>Rises only.</strong> Inside the tile the ground only goes up from the edge level. dirtlab's ground runs from the edge level to about 7.6 mm, with a median near 4.5 mm; the rises fade out over the 9 mm next to the rim, and no slope is steeper than 24°.</li>
   <li><strong>Pebbles and stones.</strong> Per square: 45–75 small pebbles (0.5–1.5 mm) and 8–13 medium (2.2–4.5 mm). On a 2×2 tile: 4–7 larger stones (4.5–7.5 mm) in 4–7 loose clusters.</li>
   <li><strong>Flat ground.</strong> Without <code>bumps</code> the ground is flat at its level: 5 mm by default.</li>

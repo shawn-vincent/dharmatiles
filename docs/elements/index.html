@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Elements</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">The tile language · reference</div>
+  <h1>Elements</h1>
+  <p class="lede">Everything a <code>.dtile</code> document can write, one page each. Each page says what the element makes, shows it, gives an example, and lists every control it takes, generated from the program itself. Further down are how it is made, reference photos and its design record. New to the language? Start with the <a href="../language.html">guide</a>.</p>
+</header>
+<h2 id="document">The document</h2>
+<p>What a tile file is made of: the tile, its levels, its lines and regions, its stack, and parts brought in from other files.</p>
+<div class="elements">
+  <a href="tile.html"><img src="img/el-tile.jpg" alt="" loading="lazy"><code>tile</code><span>the tile itself: its name, size and seed, and everything in it</span></a>
+  <a href="levels.html"><code>levels</code><span>named heights: the standard ones, and a tile's own</span></a>
+  <a href="line.html"><img src="img/el-line.jpg" alt="" loading="lazy"><code>line</code><span>a line through points, to divide the tile or to build along</span></a>
+  <a href="region.html"><img src="img/el-line.jpg" alt="" loading="lazy"><code>region</code><span>an area bounded by lines, chosen by fill points</span></a>
+  <a href="stack.html"><code>stack</code><span>the list of what the tile is made of</span></a>
+  <a href="use.html"><code>use</code><span>brings definitions in from a parts file</span></a>
+  <a href="define.html"><code>define</code><span>a named, reusable stack, called like an element; with <code>param</code></span></a>
+</div>
+
+<h2 id="surface">Surfaces</h2>
+<p>Each paints the ground of its area. Later surfaces paint over earlier ones.</p>
+<div class="elements">
+  <a href="ground.html"><img src="img/el-ground.jpg" alt="" loading="lazy"><code>ground</code><span>the bare ground shape, flat unless told</span></a>
+  <a href="dirt.html"><img src="img/el-dirt.jpg" alt="" loading="lazy"><code>dirt</code><span>textured earth: clods, grit and half-sunk pebbles</span></a>
+  <a href="grass.html"><img src="img/grass-v3-2x2.jpg" alt="" loading="lazy"><code>grass</code><span>separate sculpted blades in tufts, parting round bare patches</span></a>
+  <a href="reeds.html"><code>reeds</code><span>clumps of tapered reeds at the waterline</span></a>
+  <a href="flowers.html"><img src="img/el-flowers.jpg" alt="" loading="lazy"><code>flowers</code><span>wildflowers: a dome on a column, ringed by petals</span></a>
+  <a href="water.html"><img src="img/water-swell-chaos-painted-s1.jpg" alt="" loading="lazy"><code>water</code><span>still water with sculpted swells, up to its level</span></a>
+  <a href="floor.html"><img src="img/el-floor.jpg" alt="" loading="lazy"><code>floor</code><span>a stone pavement that replaces the ground</span></a>
+</div>
+
+<h2 id="thing">Things</h2>
+<p>One solid each, standing on the surface. Place one with <code>at=</code>, or many with a <code>scatter</code>.</p>
+<div class="elements">
+  <a href="rock.html"><img src="img/rocks-tile-2x2-s1.jpg" alt="" loading="lazy"><code>rock</code><span>one rock, chiselled and bedded in the ground</span></a>
+  <a href="stone.html"><img src="img/el-stone.jpg" alt="" loading="lazy"><code>stone</code><span>a rock with stone sizes, about 1–6 mm</span></a>
+  <a href="boulder.html"><img src="img/el-boulder.jpg" alt="" loading="lazy"><code>boulder</code><span>a rock with boulder sizes, about 4.5–8 mm</span></a>
+  <a href="pebble.html"><img src="img/el-pebble.jpg" alt="" loading="lazy"><code>pebble</code><span>a rock with pebble sizes, about 1–2.2 mm</span></a>
+  <a href="tree.html"><img src="img/trees-1x1-grass-tree.jpg" alt="" loading="lazy"><code>tree</code><span>one tree: a forking trunk and leafy clumps</span></a>
+</div>
+
+<h2 id="run">Runs</h2>
+<p>Built along a tile edge or a drawn line. On a tile edge a run always stands inside the tile.</p>
+<div class="elements">
+  <a href="wall.html"><img src="img/walls-fieldstone-corner.jpg" alt="" loading="lazy"><code>wall</code><span>a masonry wall: cut stone, fieldstone or brick</span></a>
+  <a href="cliff.html"><img src="img/cliffs-r17-run-s4-painted.jpg" alt="" loading="lazy"><code>cliff</code><span>a storey-high band or mass of stacked rock</span></a>
+</div>
+
+<h2 id="scatter">Placement</h2>
+<p>More than one of a thing: how many, and where.</p>
+<div class="elements">
+  <a href="scatter.html"><img src="img/el-scatter.jpg" alt="" loading="lazy"><code>scatter</code><span>many things: how many and where; its children say what</span></a>
+</div>
+
+<h2 id="base">Bases</h2>
+<p>Not written in the document: the build adds one, by the system you build for.</p>
+<div class="elements">
+  <a href="dungeonblocks.html"><img src="img/el-dungeonblocks.jpg" alt="" loading="lazy"><code>dungeonblocks</code><span>the 35 mm socket-peg base (<code>--system db</code>, the default)</span></a>
+  <a href="openlock.html"><img src="img/el-openlock.jpg" alt="" loading="lazy"><code>openlock</code><span>the 25.4 mm clip base (<code>--system ol</code>)</span></a>
+</div>
+
+<h2 id="library">Library files</h2>
+<p>Documents that set up the program rather than describe a tile.</p>
+<div class="elements">
+  <a href="printer.html"><code>printer</code><span>the printer profile: the floors nothing prints below</span></a>
+  <a href="edges.html"><code>edges</code><span>the edge contract: how every tile meets its neighbours</span></a>
+  <a href="palette.html"><code>palette</code><span>the paint: a colour per material, and acrylic ramps</span></a>
+</div>
+</div>
+</body>
+</html>
