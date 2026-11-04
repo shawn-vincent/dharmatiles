@@ -126,9 +126,9 @@
       "body": "rust",
       "area": "Rust P7",
       "state": "active",
-      "title": "Phase 7: the cliff is ported (all nine forms); overhang gate nearly met",
-      "detail": "Stacking, columns, crack networks, relief, seats, chips, bank, scree, dirt on tops, all forms, both systems. 36 form/seed builds at db: overhang over 65 deg 0-2.9 mm2 (Python means 0.3-2.6), band within budget, 0 holes; 5 builds drop a hairline shard (<0.01 mm3). Left: shard cause, sheets by eye, merge.",
-      "updated": "2026-11-04T17:30:00Z"
+      "title": "Phase 7: the cliff is ported (all nine forms); branch rust/p7-cliff, not on main",
+      "detail": "Overhang over 65 deg 0-2.9 mm2 per 1x1 at db (Python means 0.05-2.6), band in budget, 0 holes; 5 of 36 builds drop a hairline shard under 0.01 mm3. Open: shards, _thinness, thin foot rubble, tidy columns. Clean 2x1 print files at out/p7/print/s2 and s3. Waits for Shawn's look and a print.",
+      "updated": "2026-11-04T19:00:00Z"
     },
     {
       "id": "p8",
