@@ -107,7 +107,7 @@
       "area": "Waiting for Shawn",
       "state": "waiting",
       "title": "Items that need Shawn's eye or permission",
-      "detail": "1. Grass/meadow/shore/flowers sheets (out/parity/grass/contact-sheet.png; flowers tile lib:tiles/ground/1x1-grass-flowers.kdl) and a meadow print. 2. The cliff slice: look at lib:tiles/cliffs/2x1-cliff-run.kdl (build --png) and say how far to take it. 3. Open a .3mf in Bambu Studio.",
+      "detail": "1. Grass/meadow/shore/flowers sheets (out/parity/grass/contact-sheet.png; flowers tile lib:tiles/ground/1x1-grass-flowers.kdl) and a meadow print. 2. The cliff slice: look at lib:tiles/cliffs/2x1-cliff.kdl (build --png) and say how far to take it. 3. Open a .3mf in Bambu Studio.",
       "updated": "2026-11-04T15:00:00Z"
     },
     {
@@ -149,6 +149,16 @@
       "title": "dharmatiles preview: progress bar, ortho toggle, eased views, inertia, sky and grid",
       "detail": "Build progress with ETA (timing cache) in preview and on the CLI; ortho/perspective; eased orbit; fling momentum; sky background; grid at z=0. Next: section cuts, measuring, per-entry updates.",
       "updated": "2026-11-04T20:00:00Z"
+    },
+    {
+      "id": "tile-names",
+      "order": 67,
+      "body": "rust",
+      "area": "Library",
+      "state": "done",
+      "title": "Library tiles renamed to the naming standard",
+      "detail": "NxM first (soil, cliff, water+grass-tree, all test tiles); a library test now enforces <NxM>-<name>.kdl and that the size matches the document. Tile names inside documents are unchanged so seeds and hashes are too.",
+      "updated": "2026-11-04T22:00:00Z"
     }
   ]
 }

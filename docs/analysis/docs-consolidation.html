@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Docs Consolidation</title>
+<style>
+:root{--bg:#fbfaf7;--fg:#1d1f21;--muted:#5d6266;--rule:#dcd9d2;--panel:#f1efe9;--accent:#2f6b4f;--alert:#a8402c;--warn:#8a6414;
+  --mono:ui-monospace,"IBM Plex Mono",Menlo,monospace;--sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+@media (prefers-color-scheme:dark){:root{--bg:#16181a;--fg:#e6e4df;--muted:#9da3a8;--rule:#33373b;--panel:#1f2225;--accent:#7fc2a0;--alert:#e2856f;--warn:#d9b26a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 var(--sans)}
+.wrap{max-width:980px;margin:0 auto;padding:32px 16px 80px}
+h1{font-size:30px;line-height:1.2;margin:4px 0 12px}
+h2{font-size:21px;margin:44px 0 10px;padding-top:12px;border-top:1px solid var(--rule)}
+h3{font-size:17px;margin:24px 0 6px}
+.eyebrow{font:500 12.5px var(--mono);color:var(--muted)}
+.lede{font-size:18px;max-width:46em}
+.muted{color:var(--muted)} .small{font-size:14px}
+code{font:13.5px var(--mono);background:var(--panel);padding:1px 4px;border-radius:3px}
+.tbl{overflow-x:auto;margin:10px 0}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;vertical-align:top;padding:7px 8px;border-bottom:1px solid var(--rule)}
+th{font-weight:600;background:var(--panel)}
+td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.callout{background:var(--panel);border-left:3px solid var(--accent);padding:12px 16px;margin:16px 0}
+.callout.warn{border-color:var(--warn)}
+pre.tree{background:var(--panel);padding:14px 16px;overflow-x:auto;font:13.5px/1.5 var(--mono)}
+.tag{display:inline-block;font:500 11.5px var(--mono);padding:1px 7px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.t-merge{color:var(--accent)} .t-arch{color:var(--muted)} .t-del{color:var(--alert)} .t-keep{color:var(--fg)}
+ol.rank>li{margin-bottom:10px}
+.bars{display:grid;grid-template-columns:150px 1fr;gap:4px 10px;align-items:center;font-size:14px;margin:12px 0}
+.bar{height:14px;background:var(--accent);border-radius:2px}
+.bar.old{background:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="eyebrow">docs/analysis · 2 Nov 2026 · local draft, not published</div>
+<h1>Pulling the docs into a tighter model</h1>
+<p class="lede">The docs site has grown to 114 text documents, about 52 of them reachable from the navigation, in 81 MB. Most of the sprawl is the same few subjects written up again by each wave of work: the Python library, then the labs, then the Rust study. I recommend <strong>one page per look, four pages for the Rust project, two for standards, and a frozen archive</strong>: about 17 maintained pages in place of 52.</p>
+
+<div class="callout"><strong>The recommendation in one line.</strong> Organise by <em>subject</em>, not by when the work happened. Each look (grass, rocks, cliffs, …) gets one page that is its spec, its rulings, how it works, and its history. That same page is what the Rust port of that look is judged against. Everything that only records how we got here goes into an archive that nobody has to maintain.</div>
+
+<h2>What is there now</h2>
+<div class="tbl"><table>
+<thead><tr><th>Section</th><th class="n">Pages</th><th class="n">Size</th><th>What it is</th><th>State</th></tr></thead>
+<tbody>
+<tr><td>Rust study <code>analysis/rust-rewrite/</code></td><td class="n">16 HTML + 1 MD</td><td class="n">9.5 MB</td><td>Analysis of today's code and labs, architecture, layout, plan, spikes, a 147-entry changelog, 381 KB of notes, a 188 KB pasted conversation</td><td>Current, but layered: revision 2's architecture, revision 3's layout and the spike results overlap</td></tr>
+<tr><td>Library design <code>design/</code></td><td class="n">15 HTML + 3 MD</td><td class="n">0.3 MB</td><td>Design notes for the Python modules (trees, stones, walls, grass, terrain)</td><td>11 of 15 carry "out of date" notes; the code they describe will be deleted at cutover</td></tr>
+<tr><td>Labs <code>labs/</code></td><td class="n">15 HTML</td><td class="n">0.3 MB</td><td>Requirements and design for each of the 7 labs, plus the heroic cliff spec</td><td>The approved looks. Long iteration logs; clifflab's design page still describes the depth map, not rockpile</td></tr>
+<tr><td>Guides <code>guides/</code></td><td class="n">3</td><td class="n">44 KB</td><td>Tile design guide, OpenLOCK spec, build provenance</td><td>Current, but short and scattered</td></tr>
+<tr><td>Reference <code>reference/</code></td><td class="n">1 HTML + 5 READMEs</td><td class="n">41 MB</td><td>Photo sets plus the commercial wall-sets analysis</td><td>Useful; 5 photos unreferenced</td></tr>
+<tr><td>History <code>meta/history/</code></td><td class="n">39 MD</td><td class="n">0.7 MB</td><td>Dated reviews and session logs, 30 May – 5 Jul</td><td>Already marked "not maintained"</td></tr>
+<tr><td>Loose files <code>docs/*.md</code>, <code>grass/</code>, <code>memory/</code>, <code>rocks/</code>, <code>walls/</code></td><td class="n">15 MD + 24 .tile.py</td><td class="n">27 MB</td><td>Old grass docs, an old copy of the project memory, experiment tile specs and renders</td><td>Orphaned; about 80 images (≈15 MB) are referenced by no page</td></tr>
+</tbody></table></div>
+
+<h3>How many places one subject is written up</h3>
+<p class="small muted">Counted from file names, titles and sections across docs/. Each count includes summary sections inside the Rust study pages.</p>
+<div class="bars">
+<span>Trees and leaves</span><div class="bar" style="width:92%" title="22"></div>
+<span>Grass</span><div class="bar" style="width:75%" title="18"></div>
+<span>Rocks and stones</span><div class="bar" style="width:42%" title="10"></div>
+<span>Walls and floors</span><div class="bar" style="width:33%" title="8"></div>
+<span>Cliffs</span><div class="bar" style="width:25%" title="6"></div>
+<span>Water and shore</span><div class="bar" style="width:25%" title="6"></div>
+<span>Dirt</span><div class="bar" style="width:17%" title="4"></div>
+</div>
+<p class="small">Grass, for example, is in: grasslab requirements and design; library mound-thatch and underlay; <code>labs.html#grasslab</code>; the variants page's grass tab; three sections of the notes; <code>docs/grass/</code> (four files, one an editor autosave); <code>floppy-grass-algorithm.md</code>; <code>grass-scene-v1.md</code>; <code>design/grass-heightmap.md</code>; three history reviews; and rows of the mechanisms page. Trees: 22 places, 14 of them leaf-placement session logs. That counts 22 for trees, 18 for grass, 10 for rocks, 8 for walls, 6 each for cliffs and water, and 4 for dirt.</p>
+
+<h2>What is wrong, ranked</h2>
+<ol class="rank">
+<li><strong>Three generations each re-describe the looks.</strong>
+  <ul>
+    <li>The Python library design pages describe code that the Rust cutover deletes.</li>
+    <li>The lab pages describe the looks that were approved.</li>
+    <li>The Rust study then summarises both again (<code>library</code>, <code>labs</code>, <code>variants</code>, <code>mechanisms</code>).</li>
+  </ul>
+  No single page answers "what is grass supposed to be, and how is it made now?"</li>
+<li><strong>History is mixed into pages that should describe the present.</strong>
+  <ul>
+    <li>13 pages carry red "out of date" notes on top of the original text.</li>
+    <li>The overview opens with revision banners 2, 3 and 4.</li>
+    <li>Lab design pages are mostly iteration logs.</li>
+    <li>The changelog has 147 entries in 118 KB, larger than any page it describes.</li>
+  </ul>
+  A reader has to filter out the past to find the present.</li>
+<li><strong>The Rust study documents a decision process, not a design.</strong>
+  <ul>
+    <li>The architecture page still shows 15 crates; the layout page replaced them with 6.</li>
+    <li>The feasibility page lists risks that the spikes have since retired.</li>
+    <li>Go/no-go, R1/R2/R9, R3 and R6 each restate parts of the plan.</li>
+    <li>The KDL vocabulary is split between R6, the intuitiveness review and decisions D1–D12.</li>
+  </ul>
+  Phase 1 has started, so most of that process is now finished history.</li>
+<li><strong>Standards are scattered.</strong> Facts that every tile must obey sit in five different places:
+  <ul>
+    <li>tile, square and cell terminology;</li>
+    <li>DungeonBlocks heights;</li>
+    <li>OpenLOCK geometry;</li>
+    <li>edge coordinates;</li>
+    <li>the 55° overhang limit and printable-texture rule.</li>
+  </ul>
+  Those places are CLAUDE.md, a guide, a reference page, a lab requirements page and memory.</li>
+<li><strong>Hygiene.</strong>
+  <ul>
+    <li>An Emacs autosave (<code>docs/grass/#grass-behavior.md#</code>) is committed; a lock-file twin of it broke the first Pages build.</li>
+    <li><code>docs/memory/</code> is a June copy of the project memory, superseded by Claude's own memory, but CLAUDE.md still points to it.</li>
+    <li>There are two stylesheets (<code>assets/docs.css</code> and <code>rust-rewrite/dt.css</code>).</li>
+    <li>About 80 experiment renders (≈15 MB) are linked from nowhere.</li>
+    <li>24 experiment <code>.tile.py</code> specs sit in <code>docs/</code> instead of <code>src/tiles/</code>.</li>
+  </ul></li>
+</ol>
+
+<h2>The proposed model</h2>
+<pre class="tree">docs/
+├─ index.html              Home: what dharmatiles is, live status for ALL work, the map
+├─ looks/                  one page per look = its spec, rulings, mechanism, history, port status
+│  ├─ ground.html          bare earth / dirt (dirtlab) + hills
+│  ├─ grass.html           stroke blades (grasslab) · library thatch as history
+│  ├─ rocks.html           faceted rocks (rocklab) · stone finish shared with walls
+│  ├─ cliffs.html          rockpile (clifflab) · heroic cliff spec
+│  ├─ water.html           swell-chaos (waterlab) + shore (shorelab)
+│  ├─ walls.html           masonry chassis, families, openings, floors (laid flat)
+│  ├─ trees.html           skeleton, wood, foliage, organic leaf placer
+│  └─ composition.html     how looks meet: obstacle roles, seats, clearings, edge contract (meadowlab)
+├─ rust/                   the rewrite as a project
+│  ├─ plan.html            phases, current phase checklist, decisions log (replaces changelog)
+│  ├─ architecture.html    crates, kernels, kit ops, determinism, risks still open
+│  ├─ language.html        the KDL tile language as decided (D1–D12), vocabulary per look
+│  └─ spikes.html          Phase 0 results in one page (frozen)
+├─ standards/
+│  ├─ tile-system.html     tile / square / cell, DungeonBlocks + OpenLOCK geometry, naming, edges
+│  └─ printing.html        printer profile, 55° limit, printable-texture rule, red-overhang render policy
+├─ reference/              photo sets + READMEs, unchanged; linked from the look pages
+├─ extras/paint-organizer.html
+└─ archive/                frozen, one index page, never edited
+   ├─ index.html           what each item was and what replaced it
+   ├─ rust-study/          changelog, notes, conversation, library/labs/variants/mechanisms analysis
+   ├─ python-library/      today's design/ pages + loose .md (until cutover they describe live code)
+   ├─ lab-logs/            the iteration logs split off the lab pages
+   └─ history/             meta/history as is</pre>
+
+<h3>The home page: three bodies of work</h3>
+<p>The root page should say first that dharmatiles is three bodies of work, each with its own status and its own entry point:</p>
+<div class="tbl"><table>
+<thead><tr><th>Body of work</th><th>What it is</th><th>Where it lives</th><th>Its docs</th></tr></thead>
+<tbody>
+<tr><td><strong>Original Python library</strong></td><td>The <code>dharmatiles-gen</code> generator and its 35 tiles; still the shipping code until cutover</td><td><code>src/dharmatiles/</code>, <code>src/tiles/</code>, <code>stl/</code></td><td><code>archive/python-library/</code> plus the "library" history on each look page; trees and walls are current here</td></tr>
+<tr><td><strong>The labs</strong></td><td>Seven standalone experiments where the approved looks are made: grass, rocks, cliffs, water, shore, dirt, meadow</td><td><code>*lab/</code> at the repo root</td><td>The look pages (<code>looks/</code>): each lab's spec, rulings and mechanism</td></tr>
+<tr><td><strong>The Rust rewrite</strong></td><td>The port of the labs and library into one Rust engine with a KDL tile language; Phase 1 now</td><td><code>crates/</code>, <code>library/</code> (branch <code>rust/p1</code>)</td><td><code>rust/</code>: plan, architecture, language, spikes</td></tr>
+</tbody></table></div>
+<p>Under the three cards: one live status list (grouped by body of work), then the look index, which is where the three meet. Each look page says which body currently owns that look and where its port stands.</p>
+
+<h3>One template for every look page</h3>
+<p>The same seven sections in the same order, so the eight look pages read as a set:</p>
+<ol>
+<li><strong>Target and rulings.</strong> The reference image, and what Shawn loved and rejected, with quotes. Today these are spread across lab requirements, labs.html and variants.html.</li>
+<li><strong>Requirements.</strong> Testable, with the named failure modes. From the lab requirements page.</li>
+<li><strong>How the approved version works.</strong> Pipeline, key tricks, parameters. From the lab design page, minus the iteration log.</li>
+<li><strong>Printability guarantees.</strong> What is true by construction, and what the audit gate checks.</li>
+<li><strong>Variant history, compact.</strong> The family tree from variants.html with one line per variant. Full logs go to the archive.</li>
+<li><strong>References and renders.</strong> Links into <code>reference/</code> and the current renders.</li>
+<li><strong>Rust port.</strong> Phase, KDL vocabulary for this look, a link to its parity contact sheet, status.</li>
+</ol>
+<div class="callout">This makes each look page the <strong>parity spec</strong> for the Rust port. The plan already judges each port against the labs over four seeds. The look page is where "what the lab does and why" lives in one place, so the port and the review read the same thing.</div>
+
+<h2>Where every current page goes</h2>
+<p class="small"><span class="tag t-merge">merge</span> content moves into the named page, current parts only · <span class="tag t-arch">archive</span> moved unchanged to <code>archive/</code> · <span class="tag t-del">delete</span> removed (git keeps it) · <span class="tag t-keep">keep</span> stays as it is</p>
+<div class="tbl"><table>
+<thead><tr><th>Now</th><th>Goes to</th><th></th></tr></thead>
+<tbody>
+<tr><th colspan="3">Rust study (16 pages → 4)</th></tr>
+<tr><td>index.html (overview)</td><td>Home (status, map) + rust/plan.html (findings worth keeping)</td><td><span class="tag t-merge">merge</span></td></tr>
+<tr><td>plan.html, spikes/go-no-go.html</td><td>rust/plan.html: plan + the decisions, each with its quote</td><td><span class="tag t-merge">merge</span></td></tr>
+<tr><td>architecture.html, layout.html, mechanisms.html, feasibility.html</td><td>rust/architecture.html, current design only: 6 crates, kit ops, kernels, open risks</td><td><span class="tag t-merge">merge</span></td></tr>
+<tr><td>spikes/r6-kdl.html, spikes/kdl-intuitiveness.html</td><td>rust/language.html: the vocabulary as decided (later the user guide)</td><td><span class="tag t-merge">merge</span></td></tr>
+<tr><td>spikes/r1-r2-r9.html, spikes/r3-rays.html, R6 results</td><td>rust/spikes.html (frozen after P0)</td><td><span class="tag t-merge">merge</span></td></tr>
+<tr><td>labs.html, variants.html</td><td>Sections 1, 3 and 5 of each look page</td><td><span class="tag t-merge">merge</span></td></tr>
+<tr><td>library.html</td><td>"What carries over" → architecture; the rest → archive</td><td><span class="tag t-arch">archive</span></td></tr>
+<tr><td>changelog.html, notes.html, input-language-design-conversation.md</td><td>archive/rust-study/ (the decisions log on the plan replaces the changelog)</td><td><span class="tag t-arch">archive</span></td></tr>
+<tr><th colspan="3">Labs (15 pages → into 8 look pages)</th></tr>
+<tr><td>labs/&lt;lab&gt;/requirements.html</td><td>Look page, sections 1–2</td><td><span class="tag t-merge">merge</span></td></tr>
+<tr><td>labs/&lt;lab&gt;/design.html</td><td>Look page, sections 3–4; iteration logs → archive/lab-logs/</td><td><span class="tag t-merge">merge</span></td></tr>
+<tr><td>labs/clifflab/heroic-cliff-spec.html</td><td>cliffs.html, section 1; the depth-map design → history</td><td><span class="tag t-merge">merge</span></td></tr>
+<tr><td>meadowlab, shorelab</td><td>composition.html and water.html</td><td><span class="tag t-merge">merge</span></td></tr>
+<tr><th colspan="3">Library design (15 pages + 3 MD)</th></tr>
+<tr><td>leaf-placement, leaf-solidification, space-colonization, bark, closed-solid-branches</td><td>trees.html (sections 3–5); trees have no lab, so the library is the approved look</td><td><span class="tag t-merge">merge</span></td></tr>
+<tr><td>walls-coursed-masonry, walls-doors</td><td>walls.html; the E1–E60 experiment log → archive</td><td><span class="tag t-merge">merge</span></td></tr>
+<tr><td>stone-surface-texture</td><td>rocks.html section "stone finish", linked from walls.html</td><td><span class="tag t-merge">merge</span></td></tr>
+<tr><td>rocks-faceted-stones, grass-mound-thatch, grass-underlay</td><td>History sections of rocks.html and grass.html; full text → archive</td><td><span class="tag t-arch">archive</span></td></tr>
+<tr><td>terrain-architecture, tile-segmentation, slope-normal, design/*.md</td><td>archive/python-library/; the regions-and-boundaries idea is already in language.html</td><td><span class="tag t-arch">archive</span></td></tr>
+<tr><td>tile-naming-convention</td><td>standards/tile-system.html</td><td><span class="tag t-merge">merge</span></td></tr>
+<tr><td>paint-organizer-magnets</td><td>extras/paint-organizer.html (not terrain)</td><td><span class="tag t-keep">keep</span></td></tr>
+<tr><th colspan="3">Guides, reference, loose files</th></tr>
+<tr><td>tile-design-guide, openlock-spec</td><td>standards/tile-system.html</td><td><span class="tag t-merge">merge</span></td></tr>
+<tr><td>build-provenance-spec</td><td>Appendix of rust/architecture.html (the Rust build record replaces it)</td><td><span class="tag t-merge">merge</span></td></tr>
+<tr><td>reference/walls/commercial-sets-analysis</td><td>DungeonBlocks measurements → tile-system; the set analysis → walls.html references</td><td><span class="tag t-merge">merge</span></td></tr>
+<tr><td>reference/ photo folders + READMEs</td><td>Unchanged, linked from look pages</td><td><span class="tag t-keep">keep</span></td></tr>
+<tr><td>meta/history/ (39), docs/*.md (5), docs/grass/*.md</td><td>archive/history/</td><td><span class="tag t-arch">archive</span></td></tr>
+<tr><td>docs/grass/#grass-behavior.md#</td><td>Editor autosave</td><td><span class="tag t-del">delete</span></td></tr>
+<tr><td>docs/memory/ (6 MD)</td><td>Superseded by Claude's memory; also fix the CLAUDE.md line that points to it</td><td><span class="tag t-del">delete</span></td></tr>
+<tr><td>docs/rocks/, docs/walls/ experiment renders (≈80 unreferenced)</td><td>Remove; keep only renders a page shows</td><td><span class="tag t-del">delete</span></td></tr>
+<tr><td>docs/rocks/*.tile.py, docs/walls/*.tile.py (24)</td><td><code>src/tiles/experiments/</code>, or delete with the Python library at cutover</td><td><span class="tag t-arch">move</span></td></tr>
+<tr><td>assets/docs.css + rust-rewrite/dt.css</td><td>One stylesheet, <code>assets/site.css</code></td><td><span class="tag t-merge">merge</span></td></tr>
+</tbody></table></div>
+
+<h2>Rules that keep it tight</h2>
+<ol>
+<li><strong>A page is about one subject and describes the present.</strong> A new doc needs a slot in the model, or it becomes a section of an existing page.</li>
+<li><strong>Stale means fix it or archive it.</strong> No more "out of date" notes on top of old text.</li>
+<li><strong>History has one place.</strong> A short "History" section at the bottom of each page, plus <code>archive/</code> and git. No revision banners at the top.</li>
+<li><strong>Retire the changelog.</strong> Keep a <em>decisions log</em> on the plan: one line per decision, Shawn's quote and the date. Edits themselves are in git.</li>
+<li><strong>Session logs and iteration logs are not docs.</strong> They go straight to the archive, or stay in the commit messages and the lab's <code>out/</code>.</li>
+<li><strong>Images live next to the page that shows them.</strong> Renders that no page shows are not committed.</li>
+<li><strong>One status for everything.</strong> <code>status.json</code> moves to the home page and covers the Rust phases and the lab rounds alike.</li>
+<li><strong>One stylesheet, one nav,</strong> and the same nav on every page.</li>
+</ol>
+
+<h2>How to get there</h2>
+<div class="tbl"><table>
+<thead><tr><th>Step</th><th>What</th><th>Size</th></tr></thead>
+<tbody>
+<tr><td>1. Hygiene</td><td>Delete the autosave, <code>docs/memory/</code> and the unreferenced renders; fix CLAUDE.md; merge the stylesheets; move the experiment specs.</td><td>small, one commit</td></tr>
+<tr><td>2. Skeleton</td><td>New home with a single nav; <code>archive/</code> with its index; move history in, unchanged. Links are rewritten by script and checked.</td><td>small</td></tr>
+<tr><td>3. Rust, 16 → 4</td><td>Plan + decisions, architecture, language, spikes. Most of the text exists; the work is cutting superseded parts.</td><td>medium</td></tr>
+<tr><td>4. Pilot look page</td><td><strong>cliffs.html</strong>: the most active look, and its pages are the most out of step (the design page still describes the depth map). You review the template on it before the other seven.</td><td>medium</td></tr>
+<tr><td>5. The other seven looks</td><td>One at a time, in Rust-port order (ground first, for P2).</td><td>large, in pieces</td></tr>
+<tr><td>6. Standards</td><td>tile-system and printing, pulled from guides, reference, CLAUDE.md and the lab requirements.</td><td>small</td></tr>
+</tbody></table></div>
+<p class="small muted">None of this touches the code or the Phase 1 work. Each step is one commit to <code>main</code>, so the site never has broken links in between.</p>
+
+<h2>Questions for you</h2>
+<ol>
+<li><strong>Python library design pages: archive now, or keep them current until cutover?</strong> I recommend archiving now. The Python library is no longer where looks are developed, and trees and walls get their current content on the look pages.</li>
+<li><strong>Delete the ≈80 unreferenced experiment renders?</strong> I recommend yes: git keeps them, and the archive keeps the logs that describe them.</li>
+<li><strong>Retire the changelog in favour of a decisions log?</strong> I recommend yes.</li>
+<li><strong>Who is the site for?</strong> Today it is a workbench for you and me. If tabletop users will read it later, the language page becomes the start of a user guide, and the looks pages get a gallery at the top.</li>
+<li><strong>Is the pilot look right?</strong> I suggest cliffs. Ground comes first if you'd rather match the port order.</li>
+</ol>
+</div>
+</body>
+</html>

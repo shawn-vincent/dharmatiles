@@ -64,7 +64,7 @@ pub const CONTROLS: &[&str] = &[
 /// downward-facing area; past 65° they fail. Everything still aims for
 /// 55° by construction. Share: with the leaves laid flat under the crown
 /// the band measures 0–0.36 mm² per tree (≤ 0.015% of the downward area,
-/// tree-1x1 and tree-2x2, db and ol, seeds 1–6); 0.1% leaves a sixfold
+/// 1x1-tree and 2x2-tree, db and ol, seeds 1–6); 0.1% leaves a sixfold
 /// margin.
 pub const TREE_BAND: dt_kit::Band = dt_kit::Band {
     materials: &[Material::Wood, Material::Leaf],

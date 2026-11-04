@@ -4,7 +4,7 @@
 // level and rises 2.2–3.2 mm in hills about 14 mm across; dirtlab's edge
 // is 4.0 mm, the engine's is the edge contract's (library/parts/edges.kdl),
 // so this tile sits at the same height above its own edge.  Its stones
-// are off, as in the P2 parity build; dirt-stones-2x2.kdl has them.
+// are off, as in the P2 parity build; 2x2-dirt-stones.kdl has them.
 
 tile dirt size="2x2" seed=1 {
     about "dirtlab's bare earth on a 2×2 tile, for the parity harness."

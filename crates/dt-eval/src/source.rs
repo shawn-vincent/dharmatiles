@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn the_flat_tile_is_embedded() {
-        assert!(Library.read("lib:tiles/test/flat-1x1.kdl").is_ok());
+        assert!(Library.read("lib:tiles/test/1x1-flat.kdl").is_ok());
         assert!(Library.read("lib:nope.kdl").is_err());
     }
 }

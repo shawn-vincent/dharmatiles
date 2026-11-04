@@ -70,7 +70,7 @@ fn wait_for(r: &Running, what: &str, mut ok: impl FnMut(&Value) -> bool) -> Valu
     }
 }
 
-const FLAT: &str = "lib:tiles/test/flat-1x1.kdl";
+const FLAT: &str = "lib:tiles/test/1x1-flat.kdl";
 
 #[test]
 fn serves_the_viewer_and_its_vendored_three() {

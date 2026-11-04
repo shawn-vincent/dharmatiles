@@ -1,7 +1,7 @@
 dt::choice
 
   × `cliff rock` can't be `mixd`
-    ╭─[library/tiles/test/cliff-run-full.kdl:23:18]
+    ╭─[library/tiles/test/2x1-cliff-full.kdl:23:18]
  22 │         cliff along=north height=35 {   // 35 mm above its foot
  23 │             rock mixd                   // or: columns, blocks, slabs
     ·                  ──┬─
@@ -12,7 +12,7 @@ dt::choice
 dt::percent
 
   × `cliff stone-size` is a share, written as a percent
-    ╭─[library/tiles/test/cliff-run-full.kdl:24:24]
+    ╭─[library/tiles/test/2x1-cliff-full.kdl:24:24]
  23 │             rock mixd                   // or: columns, blocks, slabs
  24 │             stone-size "135"          // or: rubble, broken
     ·                        ──┬──

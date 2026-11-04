@@ -16,30 +16,30 @@ commands:
 
 /// Each look the harness knows: its Rust tile, if it has been ported.
 const LOOKS: &[(&str, Option<&str>)] = &[
-    ("flat", Some("lib:tiles/test/flat-1x1.kdl")),
-    ("dirt", Some("lib:tiles/test/dirt-2x2.kdl")),
-    ("dirt-stones", Some("lib:tiles/test/dirt-stones-2x2.kdl")),
-    ("rocks", Some("lib:tiles/test/rocks-2x2.kdl")),
-    ("water", Some("lib:tiles/test/water-2x2.kdl")),
-    ("grass", Some("lib:tiles/test/grass-2x2.kdl")),
-    ("tree", Some("lib:tiles/test/tree-1x1.kdl")),
+    ("flat", Some("lib:tiles/test/1x1-flat.kdl")),
+    ("dirt", Some("lib:tiles/test/2x2-dirt.kdl")),
+    ("dirt-stones", Some("lib:tiles/test/2x2-dirt-stones.kdl")),
+    ("rocks", Some("lib:tiles/test/2x2-rocks.kdl")),
+    ("water", Some("lib:tiles/test/2x2-water.kdl")),
+    ("grass", Some("lib:tiles/test/2x2-grass.kdl")),
+    ("tree", Some("lib:tiles/test/1x1-tree.kdl")),
     (
         "wall-cut-stone",
-        Some("lib:tiles/test/wall-cut-stone-1x1.kdl"),
+        Some("lib:tiles/test/1x1-wall-cut-stone.kdl"),
     ),
-    ("wall-brick", Some("lib:tiles/test/wall-brick-1x1.kdl")),
+    ("wall-brick", Some("lib:tiles/test/1x1-wall-brick.kdl")),
     (
         "wall-regular-brick",
-        Some("lib:tiles/test/wall-regular-brick-1x1.kdl"),
+        Some("lib:tiles/test/1x1-wall-regular-brick.kdl"),
     ),
     (
         "wall-fieldstone",
-        Some("lib:tiles/test/wall-fieldstone-1x1.kdl"),
+        Some("lib:tiles/test/1x1-wall-fieldstone.kdl"),
     ),
-    ("floor-stone", Some("lib:tiles/test/floor-stone-1x1.kdl")),
+    ("floor-stone", Some("lib:tiles/test/1x1-floor-stone.kdl")),
     (
         "floor-fieldstone",
-        Some("lib:tiles/test/floor-fieldstone-1x1.kdl"),
+        Some("lib:tiles/test/1x1-floor-fieldstone.kdl"),
     ),
 ];
 

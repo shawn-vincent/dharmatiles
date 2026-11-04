@@ -349,7 +349,7 @@ CONNECTOR_RGB = (158, 158, 163)
 
 
 def build_flat(seed: int):
-    """The Python twin of lib:tiles/test/flat-1x1.kdl: a flat 5 mm ground
+    """The Python twin of lib:tiles/test/1x1-flat.kdl: a flat 5 mm ground
     slab (core/mesh.make_heightmap_solid at 128 cells per square) on the
     DungeonBlocks base (bases/dungeonblocks, peg height from the content's
     top), unioned in Manifold.  The seed changes nothing on a flat tile."""
@@ -560,7 +560,7 @@ LEAF_RGB = (84, 140, 62)
 
 
 def build_tree(seed: int):
-    """The Python twin of lib:tiles/test/tree-1x1.kdl: the 1×1 grass-tree
+    """The Python twin of lib:tiles/test/1x1-tree.kdl: the 1×1 grass-tree
     tile's Tree layer (src/tiles/ground/1x1-grass-tree.tile.py: height 35,
     canopy radius 12, base radius 11; n_attractors 32 as the Rust default)
     grown at the tile centre on a flat 5 mm slab with the DungeonBlocks
