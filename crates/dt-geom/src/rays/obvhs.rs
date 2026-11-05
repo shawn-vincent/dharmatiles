@@ -12,7 +12,8 @@ use obvhs::{
 };
 use rayon::prelude::*;
 
-use super::{FNV_OFFSET, Hit, RAYS_PER_TASK, Ray, Rays, fnv1a};
+use super::{Hit, RAYS_PER_TASK, Ray, Rays};
+use crate::Fnv;
 
 /// obvhs CWBVH plus its triangles, stored in BVH leaf order.
 pub struct ObvhsRays {
@@ -96,8 +97,10 @@ impl Rays for ObvhsRays {
     }
 
     fn structure_hash(&self) -> u64 {
-        let h = fnv1a(bytemuck::cast_slice(&self.bvh.nodes), FNV_OFFSET);
-        fnv1a(bytemuck::cast_slice(&self.bvh.primitive_indices), h)
+        let mut h = Fnv::default();
+        h.bytes(bytemuck::cast_slice(&self.bvh.nodes));
+        h.bytes(bytemuck::cast_slice(&self.bvh.primitive_indices));
+        h.finish()
     }
 }
 

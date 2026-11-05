@@ -63,7 +63,9 @@ mod threemf;
 
 pub use audit::{Audit, Band, Dropped, Export, Printer, audit, audit_banded};
 pub use dt_geom::Convex;
-pub use dt_geom::{Footprint, blur as blur2, dilate as dilate2, distance_nearest, erode as erode2};
+pub use dt_geom::{
+    Footprint, blur as blur_grid, dilate as dilate_grid, distance_nearest, erode as erode_grid,
+};
 pub use dt_geom::{Grid, Mask, Rng, Seed, TriMesh, vec3};
 pub use field::{
     Field, Noise, Placed, Plane, Scale, Spread, cap, distance, geodesic, noise, noise_at, rim,

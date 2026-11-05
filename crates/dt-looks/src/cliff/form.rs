@@ -3,7 +3,7 @@
 //! Heights are above the foot (0). Lengths that size masses scale with `s`
 //! (the system's scale, 1 on DungeonBlocks); details never do.
 
-use dt_kit::{Rng, blur2};
+use dt_kit::{Rng, blur_grid};
 
 use super::util::{Draw, Field, G, Mask, lerp};
 
@@ -426,7 +426,7 @@ fn wobble(rng: &mut Rng, nx: usize, ny: usize, sigma_mm: f64) -> Field {
     for v in &mut g.v {
         *v = rng.normal(0.0, 1.0);
     }
-    let v = blur2(&g.v, nx, ny, sigma_mm / GRID_MM);
+    let v = blur_grid(&g.v, nx, ny, sigma_mm / GRID_MM);
     let n = v.len() as f64;
     let mean = v.iter().sum::<f64>() / n;
     let sd = libm::sqrt(v.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / n);

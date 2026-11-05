@@ -117,21 +117,21 @@ pub fn dilate_disc(f: &Field, r: f64) -> Field {
     Field {
         nx: f.nx,
         ny: f.ny,
-        v: dt_kit::dilate2(&f.v, f.nx, f.ny, Footprint::Disc(r)),
+        v: dt_kit::dilate_grid(&f.v, f.nx, f.ny, Footprint::Disc(r)),
     }
 }
 pub fn erode_disc(f: &Field, r: f64) -> Field {
     Field {
         nx: f.nx,
         ny: f.ny,
-        v: dt_kit::erode2(&f.v, f.nx, f.ny, Footprint::Disc(r)),
+        v: dt_kit::erode_grid(&f.v, f.nx, f.ny, Footprint::Disc(r)),
     }
 }
 pub fn blur(f: &Field, sigma_cells: f64) -> Field {
     Field {
         nx: f.nx,
         ny: f.ny,
-        v: dt_kit::blur2(&f.v, f.nx, f.ny, sigma_cells),
+        v: dt_kit::blur_grid(&f.v, f.nx, f.ny, sigma_cells),
     }
 }
 

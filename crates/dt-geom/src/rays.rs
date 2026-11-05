@@ -1,16 +1,9 @@
-//! The ray trait and its pure-Rust backends.
-//!
-//! The R3 spike (docs/rust/spikes.html, "R3: rays without Embree") compared
-//! two backends against Embree on the leaf placer's captured ray batches:
-//! [`ObvhsRays`] (obvhs CWBVH, with Embree's triangle test) and
-//! [`ParryRays`] (parry3d `TriMesh`). Both sit behind [`Rays`], so the
-//! choice can change without touching callers (R10).
+//! The ray trait and its pure-Rust backend: [`ObvhsRays`] (obvhs CWBVH,
+//! with Embree's triangle test), behind [`Rays`].
 
 mod obvhs;
-mod parry;
 
 pub use self::obvhs::ObvhsRays;
-pub use self::parry::ParryRays;
 
 /// A ray in mm. `dir` need not be normalised; hit distances are in units of
 /// `dir`'s length.
@@ -112,18 +105,6 @@ fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
-/// FNV-1a over bytes: stable across platforms and toolchains, unlike
-/// `DefaultHasher`.
-pub(crate) fn fnv1a(bytes: &[u8], mut h: u64) -> u64 {
-    for &b in bytes {
-        h ^= u64::from(b);
-        h = h.wrapping_mul(0x0100_0000_01b3);
-    }
-    h
-}
-
-pub(crate) const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -166,10 +147,5 @@ mod tests {
     #[test]
     fn obvhs_square() {
         check::<ObvhsRays>();
-    }
-
-    #[test]
-    fn parry_square() {
-        check::<ParryRays>();
     }
 }

@@ -26,7 +26,6 @@ bytemuck.workspace = true
 glam.workspace = true
 libm.workspace = true
 obvhs.workspace = true
-parry3d.workspace = true
 rayon.workspace = true
 manifold-csg = { workspace = true, optional = true }
 manifold-rust = { workspace = true, optional = true }

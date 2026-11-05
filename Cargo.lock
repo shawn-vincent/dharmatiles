@@ -457,7 +457,6 @@ dependencies = [
  "manifold-csg",
  "manifold-rust",
  "obvhs",
- "parry3d",
  "rayon",
  "serde_json",
 ]

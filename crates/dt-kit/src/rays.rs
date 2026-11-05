@@ -2,7 +2,7 @@
 //! for looks that seat things on surfaces (the tree's leaf placer).
 //!
 //! Every ray goes through dt-geom's [`dt_geom::Rays`] trait, on the obvhs
-//! backend R3 chose (docs/rust/spikes.html, "R3: rays without Embree").
+//! backend.
 //! The queries follow trimesh's Embree wrapper's conventions:
 //!
 //! - the mesh is moved to its bounding-box minimum and scaled to a box of

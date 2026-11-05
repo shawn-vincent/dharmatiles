@@ -41,7 +41,7 @@ pub use hash::SpatialHash;
 pub use lift::lift_adaptive;
 pub use mesh::{BOX_TRIANGLES, BoolOp, Bounds, Fnv, Mesh, MeshError, TriMesh, half_space};
 pub use raster::{Mask, draw_line, fill, fill_polygons};
-pub use rays::{Hit, ObvhsRays, ParryRays, Ray, Rays};
+pub use rays::{Hit, ObvhsRays, Ray, Rays};
 pub use seed::{Rng, Seed};
 pub use source::{IdBlock, Materials, batch_in_order};
 

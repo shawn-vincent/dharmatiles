@@ -6,7 +6,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use dt_kit::{Rng, blur2};
+use dt_kit::{Rng, blur_grid};
 
 use super::lines::Line;
 use super::stack::Placed;
@@ -771,7 +771,7 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
     for q in 0..nu * nz {
         f.v[q] = -(bset[labels_near.v[q]] + tt.v[q]);
     }
-    f.v = blur2(&f.v, nu, nz, FACET_SEAM_MM / g);
+    f.v = blur_grid(&f.v, nu, nz, FACET_SEAM_MM / g);
     let _ = (edt_out, HashSet::<u8>::new);
     Face {
         p0: sp.p0,
