@@ -27,6 +27,7 @@
   <li><a href="#features">What prints, and what to expect</a></li>
   <li><a href="#texture">Texture you can paint</a></li>
   <li><a href="#painting">Painting</a></li>
+  <li><a href="#colour">Printing in colour</a></li>
   <li><a href="#red">Red in renders</a></li>
   <li><a href="#export">Every file is checked</a></li>
 </ol></nav>
@@ -101,6 +102,16 @@
 <li>Prime dark, then drybrush light. Raised texture catches the brush; cracks, joints and the gaps between blades stay dark.</li>
 <li>On rock, joints between stones are cut deeper than cracks, so they read darker.</li>
 <li>A dark wash settles in the 0.4–0.5 mm cracks without filling them.</li>
+</ul>
+
+<h2 id="colour">Printing in colour</h2>
+<p><code>dharmatiles build my-tile.dtile --3mf</code> also writes a 3MF in which every triangle is painted with its material's filament, so a multi-colour printer prints the earth, rock, water and grass in their own colours with no painting in the slicer.</p>
+<ul>
+<li><strong>Filaments</strong> are numbered by the materials the tile uses, earth first, then rock, water, grass, flowers, masonry, wood and leaves. The connector prints in earth's filament. The 3MF's description lists the order.</li>
+<li><strong>Bambu Studio:</strong> save any project from Bambu Studio, with your printer and process, as <code>~/dharmatiles/bambu.3mf</code> (or in <code>$DT_HOME</code>), or name one with <code>--bambu-template</code>. The 3MF is then a Bambu Studio project with exactly one slot per material, each coloured from the palette, standing on the middle of the bed. Every slot uses the template's first filament profile; change them in Bambu Studio.</li>
+<li><strong>Without a template</strong> the 3MF is a plain one with the same painting. Bambu Studio 2.9.1 or later and OrcaSlicer keep the painting; give the slots their colours yourself.</li>
+<li>Colours come from <code>library/palettes/default.dtile</code>, or your own with <code>--palette</code>.</li>
+<li>Bambu Studio saves a project over the file it opened. Open a new build only after closing the last one without saving, or build into another folder.</li>
 </ul>
 
 <h2 id="red">Red in renders</h2>

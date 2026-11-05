@@ -18,6 +18,9 @@ pub(crate) struct Extras<'a> {
     pub(crate) tile_no: Option<(usize, usize)>,
     pub(crate) png: bool,
     pub(crate) threemf: bool,
+    /// A Bambu Studio template's project settings: the 3MF is a Bambu
+    /// project.
+    pub(crate) template: Option<&'a str>,
     pub(crate) palette: &'a dt_kit::Palette,
 }
 
@@ -201,10 +204,13 @@ pub(crate) fn write(
     files.push(record);
     if extras.threemf {
         let p = path.with_extension("3mf");
-        w(
-            &p,
-            &dt_kit::threemf(&b.export.mesh, &b.materials, &b.record, extras.palette),
-        )?;
+        let bytes = match extras.template {
+            Some(t) => {
+                dt_kit::bambu_project(&b.export.mesh, &b.materials, &b.record, extras.palette, t)?
+            }
+            None => dt_kit::threemf(&b.export.mesh, &b.materials, &b.record, extras.palette),
+        };
+        w(&p, &bytes)?;
         files.push(p);
     }
     if extras.png {

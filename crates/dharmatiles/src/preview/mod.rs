@@ -26,7 +26,7 @@
 
 mod assets;
 pub mod payload;
-mod roots;
+pub(crate) mod roots;
 mod server;
 mod stack;
 mod worker;

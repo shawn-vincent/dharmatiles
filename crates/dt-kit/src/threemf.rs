@@ -271,7 +271,7 @@ pub fn threemf(
 
 /// The filament a material prints in: its own, but the connector's is
 /// earth's.
-const fn filament_of(m: Material) -> Material {
+pub(crate) const fn filament_of(m: Material) -> Material {
     match m {
         Material::Connector => Material::Earth,
         other => other,
@@ -279,7 +279,7 @@ const fn filament_of(m: Material) -> Material {
 }
 
 /// The filaments a tile needs, in [`Material`] order (earth first).
-fn filaments(used: &[Material]) -> Vec<Material> {
+pub(crate) fn filaments(used: &[Material]) -> Vec<Material> {
     let mut f: Vec<Material> = used.iter().map(|m| filament_of(*m)).collect();
     f.sort();
     f.dedup();
@@ -292,7 +292,7 @@ fn filaments(used: &[Material]) -> Vec<Material> {
 /// bits, then its state; states under 3 take two bits, the rest `11` and a
 /// nibble of `state - 3`, 15 per extra `1111`. Nibbles are written last
 /// first, in hex.
-fn paint_code(n: usize) -> String {
+pub(crate) fn paint_code(n: usize) -> String {
     let mut bits: Vec<bool> = vec![false, false];
     if n < 3 {
         bits.extend([n & 1 != 0, n & 2 != 0]);
@@ -318,7 +318,7 @@ fn paint_code(n: usize) -> String {
 }
 
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn byte(c: f64) -> u8 {
+pub(crate) fn byte(c: f64) -> u8 {
     (c * 255.0).round().clamp(0.0, 255.0) as u8
 }
 
@@ -329,7 +329,7 @@ fn escape(s: &str) -> String {
 }
 
 /// A zip of `files`, each deflated.
-fn zip(files: &[(&str, Vec<u8>)]) -> Vec<u8> {
+pub(crate) fn zip(files: &[(&str, Vec<u8>)]) -> Vec<u8> {
     let mut out: Vec<u8> = Vec::new();
     let mut central: Vec<u8> = Vec::new();
     let le16 = |v: &mut Vec<u8>, n: u16| v.extend_from_slice(&n.to_le_bytes());

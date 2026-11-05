@@ -42,6 +42,7 @@ fn emit(w: &mut dyn Write, args: std::fmt::Arguments) {
 }
 
 mod audit;
+mod bambu;
 mod build;
 mod check;
 mod cli;
@@ -82,9 +83,18 @@ fn main() -> ExitCode {
             out,
             png,
             threemf,
+            bambu_template,
             palette,
             json,
         } => {
+            let template = match threemf.then(|| bambu::template(bambu_template.as_deref())) {
+                Some(Err(e)) => {
+                    tell!("error: {e}");
+                    return ExitCode::from(ERROR);
+                }
+                Some(Ok(t)) => t,
+                None => None,
+            };
             let palette = match palette.as_ref().map(|p| {
                 std::fs::read_to_string(p)
                     .map_err(|e| format!("cannot read {}: {e}", p.display()))
@@ -116,6 +126,7 @@ fn main() -> ExitCode {
                             tile_no: None,
                             png,
                             threemf,
+                            template: template.as_deref(),
                             palette: &palette,
                         },
                         json,

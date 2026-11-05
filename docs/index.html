@@ -99,7 +99,7 @@ cargo build --release                 # a few minutes, once
   <li><strong>Start from a library tile.</strong> Copy one that is close to what you want: <code>cp library/tiles/water/1x1-water+grass.dtile my-pond.dtile</code>. The <a href="elements/index.html">elements</a> pages list which library tiles use each element.</li>
   <li><strong>Open the preview.</strong> <code>dharmatiles preview my-pond.dtile --open</code> shows the tile in your browser, painted, with overhangs in red. It rebuilds every time you save, and shows a mistake at its line.</li>
   <li><strong>Edit.</strong> Change a control, add an element, move a line. Each element's page lists every control it takes; the preview's stack line links each entry to its page. Change <code>seed=</code> for another version of the same tile.</li>
-  <li><strong>Build.</strong> <code>dharmatiles build my-pond.dtile</code> for DungeonBlocks, <code>--system ol</code> for OpenLOCK, <code>--3mf</code> for a painted 3MF.</li>
+  <li><strong>Build.</strong> <code>dharmatiles build my-pond.dtile</code> for DungeonBlocks, <code>--system ol</code> for OpenLOCK, <code>--3mf</code> for a 3MF painted by material, ready for a multi-colour printer (a Bambu Studio project with its filament slots when you give it a template).</li>
   <li><strong>Print</strong> base down, no supports.</li>
 </ol>
 
@@ -133,7 +133,7 @@ cargo build --release                 # a few minutes, once
 <thead><tr><th>Works</th><th>Not built yet</th></tr></thead>
 <tbody>
 <tr><td>Every element on the <a href="elements/index.html">elements</a> pages builds: ground, dirt, grass, reeds, flowers, water, rocks and scatter, trees, walls, floors and cliffs.</td><td>A line's <code>width=</code>, and building <code>along=</code> a drawn line (walls, paths, surfaces). <code>check</code> names the lines; <code>build</code> refuses them.</td></tr>
-<tr><td>DungeonBlocks and OpenLOCK bases from one document; STL, 3MF with materials, and PNG views.</td><td>Doors, windows and hatches in walls.</td></tr>
+<tr><td>DungeonBlocks and OpenLOCK bases from one document; STL, a 3MF painted by material (a Bambu Studio project with a template), and PNG views.</td><td>Doors, windows and hatches in walls.</td></tr>
 <tr><td>The <a href="preview.html">preview</a>, <code>watch</code>, and the whole library (<code>build --all --system both</code>).</td><td>Prebuilt downloads, and builds for Linux and Windows.</td></tr>
 </tbody></table></div>
 

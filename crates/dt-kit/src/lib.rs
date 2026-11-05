@@ -45,6 +45,7 @@
 //! [`Scene::union`].
 
 mod audit;
+mod bambu;
 mod field;
 pub mod form;
 pub mod graph;
@@ -62,6 +63,7 @@ mod stone;
 mod threemf;
 
 pub use audit::{Audit, Band, Dropped, Export, Printer, audit, audit_banded};
+pub use bambu::{bambu_project, project_settings};
 pub use dt_geom::Convex;
 pub use dt_geom::{
     Footprint, blur as blur_grid, dilate as dilate_grid, distance_nearest, erode as erode_grid,

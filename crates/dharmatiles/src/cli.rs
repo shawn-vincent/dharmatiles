@@ -39,10 +39,16 @@ pub(crate) enum Command {
         /// Also write the four preview views as PNG, overhangs red.
         #[arg(long)]
         png: bool,
-        /// Also write a 3MF with each triangle's material (earth, rock,
-        /// water, grass, …) assigned as a 3MF base material.
+        /// Also write a 3MF, each triangle painted with its material's
+        /// filament. With a Bambu Studio template it is a Bambu project
+        /// with one named, coloured slot per material.
         #[arg(long = "3mf")]
         threemf: bool,
+        /// A project saved in Bambu Studio whose printer, process and
+        /// filament settings the 3MF takes (default: `bambu.3mf` in
+        /// `$DT_HOME`, else `~/dharmatiles`, when it exists).
+        #[arg(long)]
+        bambu_template: Option<PathBuf>,
         /// A palette document (see library/palettes/default.dtile) to paint
         /// with: its flat colours for the 3MF, its acrylic `ramp`s for the
         /// PNG renders.

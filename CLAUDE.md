@@ -14,6 +14,7 @@ dharmatiles is a pure Rust program (the `dharmatiles` binary). The only other co
 cargo build --release                      # the dharmatiles binary: target/release/dharmatiles
 dharmatiles build lib:tiles/ground/1x1-grass.dtile          # one library tile  -> out/db/ground/1x1-grass-db.stl
 dharmatiles build my-tile.dtile --system ol --png            # a file, for OpenLOCK, with four preview PNGs (overhang red)
+dharmatiles build my-tile.dtile --3mf                        # also a 3MF painted by material; a Bambu Studio project when ~/dharmatiles/bambu.3mf (or --bambu-template) exists
 dharmatiles build --all --system both                      # every library tile, both systems -> out/{db,ol}/<group>/
 dharmatiles check my-tile.dtile                              # read and plan only
 dharmatiles looks [name]                                   # the looks and their controls
