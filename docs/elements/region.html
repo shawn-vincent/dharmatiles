@@ -11,10 +11,10 @@
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
-  <div class="eyebrow">Element · the document</div>
+  <div class="eyebrow"><i class="fam-mark fam-doc" title="the document"></i>Element · the document</div>
   <h1>region</h1>
   <p class="lede">An area of a divided tile. Name the lines that bound it, then drop one or more fill points, like a paint bucket: the region is everything a fill point reaches without crossing a line. Elements act inside a region with <code>in=</code>.</p>
-  <figure class="shot"><img src="img/el-line.jpg" alt="The pool and bank regions of 1x1-water+grass."><figcaption>The <code>pool</code> and <code>bank</code> regions of <code>1x1-water+grass</code>.</figcaption></figure>
+  <figure class="shot"><img src="img/el-region.jpg" alt="A tile divided by two lines into three regions: a stone floor at the back, a grassy bank in the middle, a pool in front." width="864" height="667"><figcaption>Two lines make three regions, each its own surface: <code>floor in=yard</code>, <code>dirt in=bank</code> with <code>grass</code>, and water over a sunken <code>ground in=pool</code>. From <code>docs/elements/demo/region.dtile</code>.</figcaption></figure>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#use">Writing it</a></li>

@@ -176,9 +176,9 @@
       "body": "other",
       "area": "Visual system",
       "state": "done",
-      "title": "One visual system for the docs site and the preview",
-      "detail": "docs/assets/theme.css: loam/paper, brass for anything pressable, red and orange for overhang only, material colours for element families; Big Shoulders Display, IBM Plex Sans, JetBrains Mono, self-hosted; tiles shown on the plate. The preview serves the same files. Reference: docs/standards/visual-system.html.",
-      "updated": "2026-11-05T00:30:00Z"
+      "title": "One visual system for the docs site and the preview; every element has a picture",
+      "detail": "docs/assets/theme.css: loam/paper, brass for anything pressable, red and orange for overhang only, material colours for element families; Big Shoulders Display, IBM Plex Sans, JetBrains Mono, self-hosted; tiles shown on the plate. The preview serves the same files. Reference: docs/standards/visual-system.html. Follow-up (4 Nov 2026): every document element has its own picture (line straight and wobbled, region, levels diagram, stack in six steps, use, define, cliff) from docs/elements/demo/pictures.py; family colours on the element cards, the element pages and the preview stack; archive pages checked one by one. Not built yet: a line's width= and along= (build refuses them; the line page says so).",
+      "updated": "2026-11-04T18:00:00Z"
     }
   ]
 }

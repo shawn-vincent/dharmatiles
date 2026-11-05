@@ -11,9 +11,10 @@
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
-  <div class="eyebrow">Element · the document</div>
+  <div class="eyebrow"><i class="fam-mark fam-doc" title="the document"></i>Element · the document</div>
   <h1>define</h1>
   <p class="lede">A named, reusable stack, written in a parts file and called like an element. Its <code>param</code> lines are the controls a caller can set. A definition whose stack is one thing is itself a thing: it can be placed with <code>at=</code> or scattered.</p>
+  <figure class="shot"><img src="img/el-define.jpg" alt="A tile in three strips of grass: a full lawn on the left, a thin patchy lawn in the middle, long tall blades on the right." width="848" height="615"><figcaption>One definition, <code>lawn</code>, called three ways, left to right: with its defaults, with <code>cover="35%" clearings=6</code>, and through <code>long-grass</code>, a definition that calls <code>lawn</code> with longer blades. From <code>docs/elements/demo/define.dtile</code>.</figcaption></figure>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#use">Writing it</a></li>

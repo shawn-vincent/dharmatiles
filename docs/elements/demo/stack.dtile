@@ -1,0 +1,16 @@
+// The stack page's picture: the home page's pond, built one stack line at
+// a time (pictures.py builds it with its first 1 to 6 lines). The plain
+// `ground` first paints the whole tile, so no step shows an unpainted area.
+tile stack size="1x1" seed=97 {
+    line shore wobble=5 { through "0,0.38" "1,0.42" }
+    region pool { bounded-by shore; fill "0.5,0.25" }
+    region bank { bounded-by shore; fill "0.5,0.75" }
+    stack {
+        ground
+        dirt in=bank
+        grass in=bank
+        ground in=pool level="water - 2.2"
+        scatter in=pool count=2 { rock size="6..10" }
+        water
+    }
+}

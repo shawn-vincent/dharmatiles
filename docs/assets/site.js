@@ -42,7 +42,7 @@
 addEventListener("DOMContentLoaded", () => {
   // an element without a picture gets its name on a plate
   for (const a of document.querySelectorAll(".elements a")) {
-    if (!a.querySelector("img")) a.dataset.name = (a.querySelector("code") || a).textContent.trim();
+    if (!a.querySelector("img, svg")) a.dataset.name = (a.querySelector("code") || a).textContent.trim();
   }
 });
 

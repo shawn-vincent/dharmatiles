@@ -11,10 +11,14 @@
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
-  <div class="eyebrow">Element · the document</div>
+  <div class="eyebrow"><i class="fam-mark fam-doc" title="the document"></i>Element · the document</div>
   <h1>line</h1>
-  <p class="lede">A line through points. Lines divide a tile into <a href="region.html">regions</a>, and runs and surfaces can be built <code>along=</code> one. A line can wander off its points (<code>wobble</code>) and can have a width, which makes it a strip.</p>
-  <figure class="shot"><img src="img/el-line.jpg" alt="The shore line of 1x1-water+grass, wobbled 5 mm: water on one side, a grassy bank on the other."><figcaption>The <code>shore</code> line of <code>1x1-water+grass</code>, wobbled 5 mm: water on one side, a grassy bank on the other.</figcaption></figure>
+  <p class="lede">A line through points. Lines divide a tile into <a href="region.html">regions</a>, and can wander off its points (<code>wobble</code>). Later, runs and surfaces will be built <code>along=</code> one, and a width will make it a strip.</p>
+  <figure class="shot pair">
+    <div><img src="img/el-line-straight.jpg" alt="From above: rough dirt above a line through three points, smooth ground below; the boundary runs straight through the marked points." width="640" height="639"><p><code>wobble=0</code></p></div>
+    <div><img src="img/el-line.jpg" alt="The same line with wobble 5: the boundary wanders a few millimetres off the straight path between the points." width="640" height="637"><p><code>wobble=5</code></p></div>
+    <figcaption>One line through three points (marked), dividing rough <code>dirt</code> from smooth <code>ground</code>, seen from above. On the right it wanders up to 5 mm off them. From <code>docs/elements/demo/line.dtile</code>.</figcaption>
+  </figure>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#use">Writing it</a></li>
@@ -25,6 +29,7 @@
 <h2 id="use">Writing it</h2>
 <pre><code>line shore wobble=5 { through "0,0.38" "1,0.42" }
 line trail width=9 wobble=3 { through south "0.65,1" north }</code></pre>
+<p class="callout">Not built yet: <code>width=</code> and <code>along=</code> are read and checked, but <code>dharmatiles build</code> refuses a tile that uses them (<code>check</code> says which lines). For now a line divides regions.</p>
 <h2 id="reference">Reference</h2>
 <div class="tbl"><table>
 <thead><tr><th>Written</th><th>Takes</th><th>Default</th><th>What it does</th></tr></thead>

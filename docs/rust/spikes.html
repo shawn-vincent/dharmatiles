@@ -9,7 +9,7 @@
 <style>
   .verdicts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-block: 8px 28px; }
   .verdicts > div { border: 1px solid var(--rule); background: var(--card); border-radius: 6px; padding: 14px 16px; min-width: 0; }
-  .verdicts b { display: block; font: 700 17px/1.2 var(--display); font-stretch: 108%; margin-block: 8px 4px; }
+  .verdicts b { display: block; font: 700 17px/1.2 var(--display); margin-block: 8px 4px; }
   .verdicts p { margin: 0; font-size: 13.5px; }
   td.h { font: 12px var(--mono); white-space: nowrap; }
   td.diff { color: var(--alert); font-weight: 600; }
@@ -19,7 +19,7 @@
   tr.pick td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
   .gate { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 18px 0; }
   .gate > div { min-width: 0; border-top: 2px solid var(--rule); padding-top: 8px; }
-  .gate b { display: block; font: 700 22px/1.2 var(--display); font-stretch: 110%; font-variant-numeric: tabular-nums; }
+  .gate b { display: block; font: 700 22px/1.2 var(--display); font-variant-numeric: tabular-nums; }
   .gate .small { color: var(--muted); }
 </style>
 </head>
@@ -350,7 +350,7 @@
 <dl class="defs">
 <dt>Question</dt><dd>Can KDL carry real tiles without losing anything, survive machine edits, and read well to Shawn?</dd>
 <dt>Method</dt><dd>Write <code>2x2-grass-tree</code>, <code>1x1-wall-fieldstone-corner</code> and a rockpile <code>2x1-cliff-run</code> in KDL v2 under <code>library/tiles/</code>, with shared parts in <code>library/parts/</code>. Decode them into a draft model in a new <code>dt-doc</code> crate. Edit one control with the <code>kdl</code> crate. Time box 3 days.</dd>
-<dt>Go when</dt><dd>Nothing in the tile is lost. Comments and layout survive the edit byte for byte outside the edited node. Shawn says he could write them.</dd>
+<dt>Go when</dt><dd>Nothing in the tile is lost. Comments and layout survive the edit byte for byte outside the edited node. Shawn says they could write them.</dd>
 <dt>Fallback</dt><dd>Change the syntax before P1. As a last resort, use TOML with toml_edit.</dd>
 <dt>Verdict</dt><dd><span class="verdict v-keep">go</span> The format holds. Shawn found the approach right but the first parameters unintuitive, so the syntax and vocabulary were decided on 1 Nov 2026 (eight syntax questions, then ten vocabulary recommendations) and <code>dt-doc</code> was reworked to them as P1 stream A.</dd>
 </dl>

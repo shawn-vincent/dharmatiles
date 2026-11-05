@@ -122,7 +122,7 @@ input[type="range"] { accent-color: var(--brass); }
 
 /* element families: the material colours */
 .fam-surface { --fam: var(--earth); } .fam-thing { --fam: var(--stone); } .fam-plant { --fam: var(--moss); }
-.fam-water { --fam: var(--water); } .fam-doc { --fam: var(--brass); } .fam-base { --fam: var(--muted); }
+.fam-water { --fam: var(--water); } .fam-doc { --fam: var(--muted); } .fam-base { --fam: var(--line-2); }
 
 /* scrollbars that belong to the page */
 * { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }

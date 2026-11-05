@@ -34,12 +34,12 @@
   @media (max-width: 560px) { .status li { grid-template-columns: 76px minmax(0, 1fr); } .status .area { grid-column: 2; grid-row: 1; } .status .what { grid-column: 1 / -1; } }
   .lookgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin: 16px 0; }
   .lookgrid > * { min-width: 0; }
-  a.lookcard { display: flex; flex-direction: column; gap: 4px; background: var(--card); border: 1px solid var(--rule); border-radius: 4px; padding: 0 0 12px; color: var(--fg); text-decoration: none; overflow: hidden; }
+  a.lookcard { display: flex; flex-direction: column; gap: 4px; background: var(--card); border: 1px solid var(--rule); border-radius: var(--r-lg); padding: 0 0 12px; color: var(--fg); text-decoration: none; overflow: hidden; }
   a.lookcard:hover, a.lookcard:focus-visible { border-color: var(--accent); }
-  a.lookcard img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: var(--panel); margin-bottom: 6px; }
-  .lookcard .lc-t { font: 700 18px/1.2 var(--display); padding: 0 12px; }
+  a.lookcard img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; display: block; background: var(--plate); margin-bottom: 8px; }
+  .lookcard .lc-t { font: 800 22px/1.1 var(--display); padding: 0 12px; }
   .lookcard .lc-d { font-size: 14px; padding: 0 12px; }
-  .lookcard .lc-r { font: 500 11.5px/1.4 var(--mono); color: var(--muted); padding: 0 12px; }
+  .lookcard .lc-r { font: 500 12.5px/1.4 var(--body); color: var(--muted); padding: 0 12px; }
   .home-hero { padding-block: 64px 8px; }
   .hero-top { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px 48px; align-items: end; margin-bottom: 36px; }
   .home-hero h1 { max-width: 10ch; font-size: clamp(56px, 9.4vw, 118px); line-height: .9; margin: 0; }
@@ -131,14 +131,14 @@ cargo build --release                 # a few minutes, once
 
 <h2 id="elements">Elements</h2>
 <div class="lookgrid">
-  <a class="lookcard" href="elements/dirt.html"><img src="elements/img/ground-r2-painted-s1.jpg" alt="" loading="lazy"><span class="lc-t">dirt · ground</span><span class="lc-d">Bare earth with clods, grit and half-sunk pebbles over gentle rises.</span></a>
-  <a class="lookcard" href="elements/grass.html"><img src="elements/img/grass-v3-2x2.jpg" alt="" loading="lazy"><span class="lc-t">grass · flowers · reeds</span><span class="lc-d">Separate sculpted blades in tufts, parting round patches of bare earth.</span></a>
-  <a class="lookcard" href="elements/rock.html"><img src="elements/img/rocks-tile-2x2-s1.jpg" alt="" loading="lazy"><span class="lc-t">rock · stone · boulder · pebble</span><span class="lc-d">Chiselled stones, alone or scattered, bedded in the ground.</span></a>
-  <a class="lookcard" href="elements/cliff.html"><img src="elements/img/cliffs-r17-run-s4-painted.jpg" alt="" loading="lazy"><span class="lc-t">cliff</span><span class="lc-d">A storey-high band or mass of broken rock, with scree at its foot.</span></a>
-  <a class="lookcard" href="elements/water.html"><img src="elements/img/water-swell-chaos-painted-s1.jpg" alt="" loading="lazy"><span class="lc-t">water</span><span class="lc-d">Sculpted water: swells off the shore and chop round rocks.</span></a>
-  <a class="lookcard" href="elements/wall.html"><img src="elements/img/walls-fieldstone-corner.jpg" alt="" loading="lazy"><span class="lc-t">wall · floor</span><span class="lc-d">Cut stone, fieldstone and brick walls on a tile edge, and stone floors.</span></a>
-  <a class="lookcard" href="elements/tree.html"><img src="elements/img/trees-1x1-grass-tree.jpg" alt="" loading="lazy"><span class="lc-t">tree</span><span class="lc-d">A barked, forking trunk and clumps of foliage covered in separate leaves.</span></a>
-  <a class="lookcard" href="elements/index.html"><img src="elements/img/el-line.jpg" alt="" loading="lazy"><span class="lc-t">All elements</span><span class="lc-d">tile, levels, line, region, stack, use, define, scatter, the bases and the library files.</span></a>
+  <a class="lookcard" href="elements/dirt.html"><img src="elements/img/el-dirt.jpg" alt="" loading="lazy"><span class="lc-t">dirt · ground</span><span class="lc-d">Bare earth with clods, grit and half-sunk pebbles over gentle rises.</span></a>
+  <a class="lookcard" href="elements/grass.html"><img src="elements/img/el-grass.jpg" alt="" loading="lazy"><span class="lc-t">grass · flowers · reeds</span><span class="lc-d">Separate sculpted blades in tufts, parting round patches of bare earth.</span></a>
+  <a class="lookcard" href="elements/rock.html"><img src="elements/img/el-rock.jpg" alt="" loading="lazy"><span class="lc-t">rock · stone · boulder · pebble</span><span class="lc-d">Chiselled stones, alone or scattered, bedded in the ground.</span></a>
+  <a class="lookcard" href="elements/cliff.html"><img src="elements/img/el-cliff.jpg" alt="" loading="lazy"><span class="lc-t">cliff</span><span class="lc-d">A storey-high band or mass of broken rock, with scree at its foot.</span></a>
+  <a class="lookcard" href="elements/water.html"><img src="elements/img/el-water.jpg" alt="" loading="lazy"><span class="lc-t">water</span><span class="lc-d">Sculpted water: swells off the shore and chop round rocks.</span></a>
+  <a class="lookcard" href="elements/wall.html"><img src="elements/img/el-wall.jpg" alt="" loading="lazy"><span class="lc-t">wall · floor</span><span class="lc-d">Cut stone, fieldstone and brick walls on a tile edge, and stone floors.</span></a>
+  <a class="lookcard" href="elements/tree.html"><img src="elements/img/el-tree.jpg" alt="" loading="lazy"><span class="lc-t">tree</span><span class="lc-d">A barked, forking trunk and clumps of foliage covered in separate leaves.</span></a>
+  <a class="lookcard" href="elements/index.html"><img src="elements/img/el-stack-6.jpg" alt="" loading="lazy"><span class="lc-t">All elements</span><span class="lc-d">tile, levels, line, region, stack, use, define, scatter, the bases and the library files.</span></a>
 </div>
 <p class="muted small">Older renders on the element pages predate the rule that paints overhang faces red; each is captioned.</p>
 

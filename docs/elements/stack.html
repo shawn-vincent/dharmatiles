@@ -11,9 +11,20 @@
 <nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
-  <div class="eyebrow">Element · the document</div>
+  <div class="eyebrow"><i class="fam-mark fam-doc" title="the document"></i>Element · the document</div>
   <h1>stack</h1>
   <p class="lede">The list of what a tile is made of: surfaces, things, runs, scatters and definitions, one per line. Order is free for solids: every solid is planned first, and everything grows round it. Order only decides which surface paints over which.</p>
+  <figure class="shot">
+  <ol class="stack-steps">
+    <li><img src="img/el-stack-1.jpg" alt="" loading="lazy" width="520" height="374"><code>ground</code></li>
+    <li><img src="img/el-stack-2.jpg" alt="" loading="lazy" width="520" height="377"><code>dirt in=bank</code></li>
+    <li><img src="img/el-stack-3.jpg" alt="" loading="lazy" width="520" height="386"><code>grass in=bank</code></li>
+    <li><img src="img/el-stack-4.jpg" alt="" loading="lazy" width="520" height="390"><code>ground in=pool level="water - 2.2"</code></li>
+    <li><img src="img/el-stack-5.jpg" alt="" loading="lazy" width="520" height="386"><code>scatter in=pool count=2 { rock size="6..10" }</code></li>
+    <li><img src="img/el-stack-6.jpg" alt="" loading="lazy" width="520" height="385"><code>water</code></li>
+  </ol>
+  <figcaption>The home page's pond, built one stack line at a time. The plain <code>ground</code> paints the whole tile; each later line paints over or stands on what is there, and <code>ground in=pool</code> lowers the pool before the water fills it. From <code>docs/elements/demo/stack.dtile</code>.</figcaption>
+  </figure>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#use">Writing it</a></li>

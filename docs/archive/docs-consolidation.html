@@ -4,41 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Docs Consolidation</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
 <style>
-:root{--bg:#fbfaf7;--fg:#1d1f21;--muted:#5d6266;--rule:#dcd9d2;--panel:#f1efe9;--accent:#2f6b4f;--alert:#a8402c;--warn:#8a6414;
-  --mono:ui-monospace,"IBM Plex Mono",Menlo,monospace;--sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
-@media (prefers-color-scheme:dark){:root{--bg:#16181a;--fg:#e6e4df;--muted:#9da3a8;--rule:#33373b;--panel:#1f2225;--accent:#7fc2a0;--alert:#e2856f;--warn:#d9b26a}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 var(--sans)}
-.wrap{max-width:980px;margin:0 auto;padding:32px 16px 80px}
-h1{font-size:30px;line-height:1.2;margin:4px 0 12px}
-h2{font-size:21px;margin:44px 0 10px;padding-top:12px;border-top:1px solid var(--rule)}
-h3{font-size:17px;margin:24px 0 6px}
-.eyebrow{font:500 12.5px var(--mono);color:var(--muted)}
-.lede{font-size:18px;max-width:46em}
-.muted{color:var(--muted)} .small{font-size:14px}
-code{font:13.5px var(--mono);background:var(--panel);padding:1px 4px;border-radius:3px}
-.tbl{overflow-x:auto;margin:10px 0}
-table{border-collapse:collapse;width:100%;font-size:14px}
-th,td{text-align:left;vertical-align:top;padding:7px 8px;border-bottom:1px solid var(--rule)}
-th{font-weight:600;background:var(--panel)}
+pre.tree{white-space:pre}
+.tag{display:inline-block;font:500 12px/1.4 var(--f-body);padding:1px 7px;border-radius:var(--r);border:1px solid currentColor;white-space:nowrap}
+.t-merge{color:var(--moss)} .t-arch{color:var(--muted)} .t-del{color:var(--err)} .t-keep{color:var(--ink)}
+.callout.warn{border-color:var(--band)}
 td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-.callout{background:var(--panel);border-left:3px solid var(--accent);padding:12px 16px;margin:16px 0}
-.callout.warn{border-color:var(--warn)}
-pre.tree{background:var(--panel);padding:14px 16px;overflow-x:auto;font:13.5px/1.5 var(--mono)}
-.tag{display:inline-block;font:500 11.5px var(--mono);padding:1px 7px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
-.t-merge{color:var(--accent)} .t-arch{color:var(--muted)} .t-del{color:var(--alert)} .t-keep{color:var(--fg)}
 ol.rank>li{margin-bottom:10px}
 .bars{display:grid;grid-template-columns:150px 1fr;gap:4px 10px;align-items:center;font-size:14px;margin:12px 0}
-.bar{height:14px;background:var(--accent);border-radius:2px}
+.bar{height:14px;background:color-mix(in srgb,var(--ink) 60%,transparent);border-radius:2px}
 .bar.old{background:var(--muted)}
 </style>
 </head>
 <body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html" aria-current="page">Archive</a></div></nav>
 <div class="wrap">
+<header class="hero">
 <div class="eyebrow">docs/analysis · 2 Nov 2026 · local draft, not published</div>
 <h1>Pulling the docs into a tighter model</h1>
 <p class="lede">The docs site has grown to 114 text documents, about 52 of them reachable from the navigation, in 81 MB. Most of the sprawl is the same few subjects written up again by each wave of work: the Python library, then the labs, then the Rust study. I recommend <strong>one page per look, four pages for the Rust project, two for standards, and a frozen archive</strong>: about 17 maintained pages in place of 52.</p>
+</header>
 
 <div class="callout"><strong>The recommendation in one line.</strong> Organise by <em>subject</em>, not by when the work happened. Each look (grass, rocks, cliffs, …) gets one page that is its spec, its rulings, how it works, and its history. That same page is what the Rust port of that look is judged against. Everything that only records how we got here goes into an archive that nobody has to maintain.</div>
 

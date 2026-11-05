@@ -10,7 +10,7 @@
   .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 0 8px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 44px); background: var(--bg); padding-block: 8px; z-index: 4; }
   .tabs button { font: 600 13px var(--body); }
   .lane { margin: 10px 0 4px; }
-  .lane-name { font: 600 11.5px var(--mono); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 6px; }
+  .lane-name { font: 600 11.5px var(--mono); color: var(--muted); margin-bottom: 6px; }
   .chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 0; }
   .chain .arrow { color: var(--muted); padding: 0 6px; font: 14px var(--mono); }
   .vnode { font: 500 12.5px var(--mono); padding: 6px 9px; border-radius: 4px; border: 1.5px solid; background: var(--card); cursor: pointer; color: var(--fg); }
@@ -29,7 +29,7 @@
   .pipe .st { font-size: 12.5px; line-height: 1.35; padding: 7px 9px; background: var(--panel); border-radius: 3px; max-width: 220px; }
   .pipe .st b { display: block; font: 600 10.5px var(--mono); color: var(--muted); margin-bottom: 2px; }
   .pipe .ar { align-self: center; padding: 0 5px; color: var(--muted); }
-  .status { display: inline-block; font: 600 11px/1 var(--mono); text-transform: uppercase; letter-spacing: .08em; padding: 4px 6px; border-radius: 3px; }
+  .status { display: inline-block; font: 600 11px/1 var(--mono); padding: 4px 6px; border-radius: 3px; }
   .st-loved { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
   .st-current { background: color-mix(in srgb, var(--water) 18%, transparent); color: var(--water); }
   .st-superseded { background: var(--panel); color: var(--muted); }
@@ -46,7 +46,7 @@
 <header class="hero">
   <div class="eyebrow">Page 4 of 11 · every surface ever generated</div>
   <h1>Surface variants, old to new</h1>
-  <p class="lede">Shawn asked: "I like the look of the last one, but I'm curious what the other ones, how they worked, and what's different about the new ones." This page answers that for each kind of surface. Each kind has a family tree, a pipeline for every variant, renders recovered from git history or rebuilt from existing STLs, a comparison table, an explanation of what changed in the version he likes, and the one parameterized definition the variants reduce to.</p>
+  <p class="lede">Shawn asked: "I like the look of the last one, but I'm curious what the other ones, how they worked, and what's different about the new ones." This page answers that for each kind of surface. Each kind has a family tree, a pipeline for every variant, renders recovered from git history or rebuilt from existing STLs, a comparison table, an explanation of what changed in the version they like, and the one parameterized definition the variants reduce to.</p>
   <p class="small muted">Click any node in a family tree to see how that variant worked. Most images are renders committed at the time and recovered with <code>git show</code>. Some were rendered for this analysis from STLs already on disk, with over-limit faces in red; their captions say so. Variants with no surviving output are marked.</p>
 </header>
 
