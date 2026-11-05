@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>dharmatiles preview</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/theme.css">
 <link rel="stylesheet" href="/style.css">
 <script type="importmap">
 { "imports": { "three": "/vendor/three.module.min.js" } }
@@ -13,43 +14,49 @@
 <body>
 <div id="app">
   <aside id="tiles-pane">
-    <h1><i class="logo" role="img" aria-label="dharmatiles lotus"></i>dharmatiles <span id="system"></span><button id="theme" type="button" title="Light or dark (t)" aria-label="Switch light or dark"></button></h1>
-    <nav id="roots" aria-label="where the tiles come from" hidden></nav>
-    <input id="filter" type="search" placeholder="filter tiles" aria-label="filter tiles">
+    <h1 class="brand"><span class="wordmark"><i class="mark" role="img" aria-label="dharmatiles lotus"></i>dharmatiles</span><button id="theme" class="btn icon" type="button" title="Light or dark (t)" aria-label="Switch light or dark"></button></h1>
+    <nav id="roots" class="seg" aria-label="Where the tiles come from" hidden></nav>
+    <input id="filter" type="search" placeholder="Filter tiles" aria-label="Filter tiles">
     <ul id="tiles"></ul>
     <p id="conn" class="muted">connecting…</p>
   </aside>
 
   <main id="stage">
     <div id="toolbar">
-      <div class="group" id="views" role="group" aria-label="views"></div>
-      <div class="group">
-        <label class="toggle"><input type="checkbox" id="t-paint" checked> paint <kbd>c</kbd></label>
-        <label class="toggle"><input type="checkbox" id="t-overhang" checked> overhang paint <kbd>o</kbd></label>
-        <label class="toggle"><input type="checkbox" id="t-wire"> wireframe <kbd>w</kbd></label>
-        <label class="toggle"><input type="checkbox" id="t-grid" checked> grid <kbd>g</kbd></label>
-        <button id="b-proj" class="view" type="button" title="Switch between perspective and orthographic (p)">Perspective <kbd>p</kbd></button>
+      <div class="seg" id="views" role="group" aria-label="Views"></div>
+      <div class="toggles">
+        <label class="switch"><input type="checkbox" id="t-paint" checked> Paint <kbd>c</kbd></label>
+        <label class="switch"><input type="checkbox" id="t-overhang" checked> Overhang <kbd>o</kbd></label>
+        <label class="switch"><input type="checkbox" id="t-wire"> Wireframe <kbd>w</kbd></label>
+        <label class="switch"><input type="checkbox" id="t-grid" checked> Grid <kbd>g</kbd></label>
+        <button id="b-proj" class="btn" type="button" title="Switch between perspective and orthographic (p)">Perspective <kbd>p</kbd></button>
       </div>
     </div>
     <div id="canvas-wrap"><canvas id="canvas"></canvas>
       <div id="status" hidden><div id="bar"><i id="bar-fill"></i></div><span id="status-text"></span></div>
       <div id="errors" hidden></div>
-      <div id="empty">Choose a tile.</div>
+      <div id="empty">Choose a tile from the list.</div>
     </div>
   </main>
 
   <aside id="record-pane">
     <h2 id="tile-name">–</h2>
     <p id="tile-plan" class="muted"></p>
-    <dl id="record"></dl>
+    <div id="verdict" hidden></div>
     <div id="failures"></div>
+    <section id="stack-sec" hidden>
+      <h3>Stack</h3>
+      <ol id="stack"></ol>
+    </section>
+    <h3>Audit</h3>
+    <dl id="record"></dl>
     <h3>Paint</h3>
     <ul id="legend">
-      <li><i class="sw" style="background:#e61e1e"></i><span id="lg-red">over the limit: fails the gate</span></li>
-      <li><i class="sw" style="background:#ff8c1a"></i><span id="lg-orange">orange: 55–65°, allowed within budget</span></li>
-      <li><i class="sw" style="background:#2a2a2e"></i><span>tile side wall</span></li>
+      <li><i class="sw" style="background:var(--over)"></i><span id="lg-red">Over the limit: fails the gate</span></li>
+      <li><i class="sw" style="background:var(--band)"></i><span id="lg-orange">55–65°: allowed within budget</span></li>
+      <li><i class="sw" style="background:#2a2a2e"></i><span>Tile side wall</span></li>
     </ul>
-    <p class="muted small">Left drag orbits, right drag or shift-drag pans, wheel zooms. Keys 1–9 pick a view.</p>
+    <p class="hint">Drag to orbit, right-drag or shift-drag to pan, scroll to zoom. Keys <kbd>1</kbd>–<kbd>9</kbd> pick a view.</p>
   </aside>
 </div>
 <script type="module" src="/js/main.js"></script>

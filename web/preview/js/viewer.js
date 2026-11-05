@@ -24,7 +24,7 @@ export const VIEWS = [
 
 const FOV = 40;
 const GRID_BELOW_MM = 0.02;
-// white lines on the sky: bold at each square, fine at a fifth of one, faded with distance
+// ink lines on the plate: bold at each square, fine at a fifth of one, faded with distance
 const GRID_FRAG = `
 uniform float uDim; uniform float uSq; uniform vec2 uCentre; uniform float uR0; uniform float uR1;
 varying vec2 vXY;
@@ -39,9 +39,9 @@ void main() {
   vec2 f = g * 5.0;
   float minor = max(line(f.x, px.x * 5.0, 0.6), line(f.y, px.y * 5.0, 0.6));
   float fade = 1.0 - smoothstep(uR0, uR1, distance(vXY, uCentre));
-  float a = max(major * 0.95, minor * 0.28) * fade * uDim;
+  float a = max(major * 0.42, minor * 0.13) * fade * uDim;
   if (a < 0.01) discard;
-  gl_FragColor = vec4(1.0, 1.0, 1.0, a);
+  gl_FragColor = vec4(0.17, 0.2, 0.25, a);
 }`;
 const NARROW_FOV = 3; // the near-orthographic end of the projection tween
 const easeInOutCubic = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
@@ -78,7 +78,7 @@ export class Viewer {
   constructor(canvas) {
     this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
-    this.renderer.setClearColor(0x000000, 0); // the sky is the page's gradient behind the canvas
+    this.renderer.setClearColor(0x000000, 0); // the plate is the page's backdrop behind the canvas
     this.scene = new THREE.Scene();
     this.persp = new THREE.PerspectiveCamera(FOV, 1, 1, 1000);
     this.ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1000);

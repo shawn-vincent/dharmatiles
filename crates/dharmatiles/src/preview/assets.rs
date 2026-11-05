@@ -1,7 +1,8 @@
 //! The viewer's files, inside the program (so `brew install` users get it
 //! offline).  They live in `web/preview/` at the repository root, a plain
 //! HTML and JS-module front end with no build step that the Tauri app can
-//! load unchanged.
+//! load unchanged.  The visual system (`theme.css`, its fonts and the
+//! lotus) is the docs site's, from `docs/assets/`, so both look alike.
 
 /// `(url path, content type, bytes)`.
 pub const FILES: &[(&str, &str, &[u8])] = &[
@@ -13,12 +14,37 @@ pub const FILES: &[(&str, &str, &[u8])] = &[
     (
         "/logo.svg",
         "image/svg+xml",
-        include_bytes!("../../../../web/preview/logo.svg"),
+        include_bytes!("../../../../docs/assets/logo.svg"),
     ),
     (
         "/favicon.svg",
         "image/svg+xml",
         include_bytes!("../../../../web/preview/favicon.svg"),
+    ),
+    (
+        "/theme.css",
+        "text/css; charset=utf-8",
+        include_bytes!("../../../../docs/assets/theme.css"),
+    ),
+    (
+        "/fonts/big-shoulders-display.woff2",
+        "font/woff2",
+        include_bytes!("../../../../docs/assets/fonts/big-shoulders-display.woff2"),
+    ),
+    (
+        "/fonts/plex-sans.woff2",
+        "font/woff2",
+        include_bytes!("../../../../docs/assets/fonts/plex-sans.woff2"),
+    ),
+    (
+        "/fonts/plex-sans-italic.woff2",
+        "font/woff2",
+        include_bytes!("../../../../docs/assets/fonts/plex-sans-italic.woff2"),
+    ),
+    (
+        "/fonts/jetbrains-mono.woff2",
+        "font/woff2",
+        include_bytes!("../../../../docs/assets/fonts/jetbrains-mono.woff2"),
     ),
     (
         "/style.css",

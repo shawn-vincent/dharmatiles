@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Visual system</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+<style>
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin: 16px 0; }
+  .swatches > div { border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; background: var(--raised); min-width: 0; }
+  .swatches i { display: block; height: 56px; background: var(--c); }
+  .swatches b { display: block; padding: 8px 10px 0; font: 750 18px/1.1 var(--f-display); }
+  .swatches span { display: block; padding: 2px 10px 10px; font-size: 13px; color: var(--muted); }
+  .specimen { display: grid; gap: 14px; margin: 16px 0; }
+  .specimen > div { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 4px 16px; align-items: baseline; border-top: 1px solid var(--line); padding-top: 10px; }
+  .specimen .k { font-size: 13px; color: var(--muted); }
+  .sp-d { font: 850 56px/1 var(--f-display); } .sp-b { font: 400 17px/1.55 var(--f-body); } .sp-c { font: 400 14px/1.5 var(--f-code); }
+  .demo-row { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; margin: 14px 0; padding: 16px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--panel); }
+  .plate-demo { height: 180px; margin: 16px 0; display: grid; place-items: center; font: 800 28px/1 var(--f-display); color: color-mix(in srgb, var(--plate-ink) 45%, var(--plate)); --sq: 35px; }
+  @media (max-width: 560px) { .specimen > div { grid-template-columns: minmax(0, 1fr); } .sp-d { font-size: 42px; } }
+</style>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="tile-system.html">Tile system</a><a href="printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">Standard for the docs site and the preview</div>
+  <h1>Visual system</h1>
+  <p class="lede">The docs site and <code>dharmatiles preview</code> share one stylesheet, <code>docs/assets/theme.css</code>, with one set of fonts and one logo. The preview serves the same files from inside the program. Anything new on either one uses these tokens and controls, never its own.</p>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#plate">The plate</a></li>
+  <li><a href="#colour">Colour</a></li>
+  <li><a href="#type">Type</a></li>
+  <li><a href="#controls">Controls</a></li>
+  <li><a href="#rules">Rules</a></li>
+</ol></nav>
+<article class="doc">
+
+<h2 id="plate">The plate</h2>
+<p>A tile is always shown the same way: on the pale light-box plate (<code>--plate</code>, #D9E0EB) that the renderer uses as its background, ruled in squares. The plate is the same colour in both themes, so a render on the site and the live view in the preview look alike. Every screenshot sits on it, element cards without a picture show their name on it, and the preview's stage is the plate with the tile's own 35 mm grid.</p>
+<div class="plate plate-demo">a tile goes here</div>
+<p>Anything laid over the plate, such as the preview's progress and error panels, uses the plate's own light colours in both themes.</p>
+
+<h2 id="colour">Colour</h2>
+<p>The page is dark loam or cool paper. Brass marks anything you can press or that is chosen. Every other colour has one meaning.</p>
+<div class="swatches">
+  <div style="--c: var(--bg)"><i></i><b>Loam / paper</b><span><code>--bg</code>, <code>--panel</code>, <code>--raised</code>: the page and its surfaces</span></div>
+  <div style="--c: var(--ink)"><i></i><b>Bone / ink</b><span><code>--ink</code>, <code>--muted</code>: text</span></div>
+  <div style="--c: var(--brass)"><i></i><b>Brass</b><span><code>--brass</code>: links, chosen buttons, focus, the mark. Nothing else.</span></div>
+  <div style="--c: var(--over)"><i></i><b>Overhang red</b><span><code>--over</code>: faces past the limit, gate failures, errors</span></div>
+  <div style="--c: var(--band)"><i></i><b>Band orange</b><span><code>--band</code>: 55–65°, allowed within budget</span></div>
+  <div style="--c: var(--earth)"><i></i><b>Earth</b><span><code>--earth</code>: surfaces (ground, dirt, floor)</span></div>
+  <div style="--c: var(--stone)"><i></i><b>Stone</b><span><code>--stone</code>: things (rock, scatter, cliff, wall)</span></div>
+  <div style="--c: var(--moss)"><i></i><b>Moss</b><span><code>--moss</code>: plants, and “passes the gate”</span></div>
+  <div style="--c: var(--water)"><i></i><b>Water</b><span><code>--water</code>: water, and properties in <code>.dtile</code> code</span></div>
+  <div style="--c: var(--plate)"><i></i><b>Plate</b><span><code>--plate</code>: where tiles are shown; the same in both themes</span></div>
+</div>
+<p>Red and orange are the printability gate's colours. Nothing decorative uses them, so red on a tile or a page always means a problem to fix.</p>
+
+<h2 id="type">Type</h2>
+<div class="specimen">
+  <div><span class="k">Big Shoulders Display<br>names and headings</span><span class="sp-d">2x1-cliff-escarpment</span></div>
+  <div><span class="k">IBM Plex Sans<br>reading and controls</span><span class="sp-b">Every tile passes a printability gate before it is written.</span></div>
+  <div><span class="k">JetBrains Mono<br>what you type</span><span class="sp-c">scatter in=pool count=2 { rock size="6..10" }</span></div>
+</div>
+<p>All three are self-hosted in <code>docs/assets/fonts/</code> (SIL Open Font License), so the preview works offline. Headings and labels are sentence case, with no all-caps labels. Monospace is only for text you would type into a <code>.dtile</code> or a terminal. Numbers in records use tabular figures.</p>
+
+<h2 id="controls">Controls</h2>
+<p>One look and one behaviour each, on the site and in the preview:</p>
+<div class="demo-row">
+  <button class="btn" type="button">Button</button>
+  <button class="btn" type="button" aria-pressed="true">Chosen</button>
+  <span class="seg" role="group" aria-label="Example views"><button type="button" aria-pressed="true">Iso</button><button type="button">Top</button><button type="button">Front</button></span>
+  <label class="switch"><input type="checkbox" checked> Paint <kbd>c</kbd></label>
+  <label class="switch"><input type="checkbox"> Wireframe <kbd>w</kbd></label>
+  <button class="btn icon" type="button" aria-label="Theme">☾</button>
+</div>
+<dl class="defs">
+  <dt>.btn</dt><dd>An action. <code>aria-pressed="true"</code> fills it with brass.</dd>
+  <dt>.seg</dt><dd>One choice from a row: the preview's views and its My tiles / Library switch.</dd>
+  <dt>.switch</dt><dd>On or off, with its keyboard key beside it when it has one.</dd>
+  <dt>☀ / ☾</dt><dd>Light or dark. It follows the system until it is used, then remembers the choice (<code>dt-theme</code> in the browser).</dd>
+  <dt>Focus</dt><dd>A 2 px brass outline on every control.</dd>
+  <dt>.dtile code</dt><dd>Coloured by <code>site.js</code>: node names brass, properties water, strings moss, numbers earth, comments muted.</dd>
+</dl>
+
+<h2 id="rules">Rules</h2>
+<ul>
+  <li>New colours, fonts or control styles go into <code>theme.css</code>, never into one page or into the preview alone.</li>
+  <li>Corners are nearly square (<code>--r</code> 3 px, <code>--r-lg</code> 6 px), because tiles are square. Status marks are small squares, not dots.</li>
+  <li>A render is shown whole (<code>object-fit: contain</code>) on the plate, never cropped.</li>
+  <li>Motion answers an action (a switch sliding, a view easing). Nothing moves by itself except a building tile's mark. Reduced motion turns all of it off.</li>
+  <li>Wherever colour shows an element's family, it uses these family colours. The preview's stack already does, so a <code>cliff</code> is stone-coloured there.</li>
+</ul>
+
+</article>
+</div>
+</body>
+</html>

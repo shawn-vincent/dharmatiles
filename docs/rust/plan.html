@@ -4,9 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Rust Plan</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
 <link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
 <style>
   /* Page-specific: phase table, timeline, phase details, risk matrix, checklist, decisions log. */
   .glance td:first-child { font: 700 13px var(--mono); color: var(--accent); white-space: nowrap; }
@@ -42,11 +41,11 @@
   .check { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 4px; }
   .check li { max-width: 86ch; display: grid; grid-template-columns: 22px 64px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 4px 0; border-bottom: 1px dashed var(--rule); }
   .check input { margin: 0; accent-color: var(--accent); }
-  .check .who { font: 600 11px/1.6 var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .check .who { font: 600 11px/1.6 var(--mono); color: var(--muted); }
   .check .who.own { color: var(--gold); }
   .check li.done span:last-child { color: var(--muted); text-decoration: line-through; }
-  .confirm { font: 600 10.5px/1 var(--mono); text-transform: uppercase; letter-spacing: .06em; padding: 3px 6px; border-radius: 3px; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); white-space: nowrap; }
-  .assume { font: 600 10.5px/1 var(--mono); text-transform: uppercase; letter-spacing: .06em; padding: 3px 6px; border-radius: 3px; background: color-mix(in srgb, var(--gold) 22%, transparent); color: var(--gold); white-space: nowrap; }
+  .confirm { font: 600 10.5px/1 var(--mono); padding: 3px 6px; border-radius: 3px; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); white-space: nowrap; }
+  .assume { font: 600 10.5px/1 var(--mono); padding: 3px 6px; border-radius: 3px; background: color-mix(in srgb, var(--gold) 22%, transparent); color: var(--gold); white-space: nowrap; }
   .gloss { columns: 2 320px; column-gap: 28px; }
   .gloss div { break-inside: avoid; margin: 0 0 10px; font-size: 14px; }
   .gloss b { font-family: var(--mono); font-size: 13px; }
@@ -61,7 +60,7 @@
   .dlog td:nth-child(3).none { font-style: normal; color: var(--muted); }
   .dlog .ref { font: 600 11.5px var(--mono); color: var(--accent); margin-right: 6px; }
   .dlog .aff { display: block; font: 500 11.5px var(--mono); color: var(--muted); margin-top: 2px; }
-  .dlog tr.group td { background: var(--panel); font: 600 12px var(--body); color: var(--fg); text-transform: uppercase; letter-spacing: .06em; font-style: normal; }
+  .dlog tr.group td { background: var(--panel); font: 600 12px var(--body); color: var(--fg); font-style: normal; }
   @media (max-width: 640px) { .now li { grid-template-columns: minmax(0, 1fr); } }
 </style>
 </head>

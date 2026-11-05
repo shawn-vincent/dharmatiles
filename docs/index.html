@@ -4,9 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>dharmatiles docs</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap">
 <link rel="stylesheet" href="assets/site.css">
+<script src="assets/site.js"></script>
 <style>
   .bodies { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px; margin: 18px 0; }
   .bodies > * { min-width: 0; }
@@ -14,7 +13,7 @@
   .bodies .card h3 { margin: 0; font-size: 20px; }
   .bodies .card p { margin: 0; font-size: 14.5px; }
   .bodies dl { margin: 4px 0 0; display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 4px 10px; font-size: 13.5px; }
-  .bodies dt { font: 600 11px/1.7 var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .bodies dt { font: 600 11px/1.7 var(--mono); color: var(--muted); }
   .bodies dd { margin: 0; }
   .b-python { --b: var(--stone); } .b-other { --b: var(--muted); } .b-labs { --b: var(--accent); } .b-rust { --b: var(--earth); }
   .status { margin: 14px 0 8px; }
@@ -24,7 +23,7 @@
   .status h3::before { content: ""; width: 10px; height: 10px; border-radius: 2px; background: var(--b); }
   .status ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
   .status li { max-width: none; display: grid; grid-template-columns: 82px 96px minmax(0, 1fr); gap: 4px 12px; align-items: baseline; padding-top: 8px; border-top: 1px solid var(--rule); }
-  .status .s { font: 600 11.5px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .status .s { font: 600 11.5px var(--mono); color: var(--muted); }
   .status .s.running { color: var(--water); } .status .s.done { color: var(--accent); }
   .status .s.waiting { color: var(--gold); } .status .s.blocked { color: var(--alert); }
   .status .area { font: 500 12px var(--mono); color: var(--muted); }
@@ -41,22 +40,36 @@
   .lookcard .lc-t { font: 700 18px/1.2 var(--display); padding: 0 12px; }
   .lookcard .lc-d { font-size: 14px; padding: 0 12px; }
   .lookcard .lc-r { font: 500 11.5px/1.4 var(--mono); color: var(--muted); padding: 0 12px; }
+  .home-hero { padding-block: 64px 8px; }
+  .hero-top { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px 48px; align-items: end; margin-bottom: 36px; }
+  .home-hero h1 { max-width: 10ch; font-size: clamp(56px, 9.4vw, 118px); line-height: .9; margin: 0; }
+  .hero-say .lede { margin: 0; font-size: 18px; }
+  .home-hero .cta { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 0; }
+  @media (max-width: 860px) { .hero-top { grid-template-columns: minmax(0, 1fr); } }
+  .home-hero .cta .btn { font-size: 14px; padding: 10px 14px; text-decoration: none; }
+  .bench { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 12px 28px; align-items: center; padding: clamp(14px, 3vw, 40px); --sq: 35px; box-shadow: var(--shadow); }
+  .bench-src { margin: 0; --brass: #E0AC4A; --moss: #9CC266; --water: #62C2D6; --earth: #D3A16C; --muted: #A99F90; --ink: #ECE5D8; background: #1A1714; color: #ECE5D8; border-color: #3A332C; box-shadow: 0 20px 40px -18px rgb(26 23 20 / .55); font-size: 13px; }
+  .bench-out { margin: 0; }
+  .bench-out img { display: block; width: 100%; height: auto; -webkit-mask: radial-gradient(closest-side, #000 86%, transparent 100%); mask: radial-gradient(closest-side, #000 86%, transparent 100%); }
+  .bench-out figcaption { color: #4A5260; font-size: 13px; text-align: center; margin: 0 auto; }
+  .bench-out figcaption code { background: rgb(255 255 255 / .5); border-color: rgb(43 51 64 / .18); color: #2B3340; }
+  @media (max-width: 760px) { .bench { grid-template-columns: minmax(0, 1fr); } .bench-out { order: -1; } }
 </style>
 </head>
 <body>
 <nav class="top"><div class="wrap"><a class="brand" href="index.html" aria-current="page">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="rust/plan.html">Project</a><a href="archive/index.html">Archive</a></div></nav>
 
 <div class="wrap">
-<header class="hero">
-  <div class="eyebrow">The tile language · 3D-printable terrain · 35 mm DungeonBlocks · 25.4 mm OpenLOCK</div>
-  <h1>dharmatiles</h1>
-  <p class="lede">dharmatiles turns a short text file into a 3D-printable terrain tile for tabletop games: ground, grass, rocks, cliffs, water, walls and trees, on a DungeonBlocks or OpenLOCK base, printable on a home FDM printer without supports. The file is a <code>.dtile</code> document in the tile language. This site is that language's reference.</p>
-</header>
-
-<h2 id="first">A first tile</h2>
-<div class="grid2">
-<div>
-<pre><code>// my-pond.dtile
+<header class="hero home-hero">
+  <div class="hero-top">
+  <h1>Write a few lines. Print the terrain.</h1>
+  <div class="hero-say">
+  <p class="lede">dharmatiles turns a short text file into a 3D-printable terrain tile for tabletop games: ground, grass, rocks, cliffs, water, walls and trees, on a 35&nbsp;mm DungeonBlocks or 25.4&nbsp;mm OpenLOCK base, printable on a home FDM printer without supports. The file is a <code>.dtile</code> document, and this site is the reference for its language.</p>
+  <p class="cta"><a class="btn on" href="#install">Install</a> <a class="btn" href="language.html">Read the language guide</a> <a class="btn" href="elements/index.html">Browse the elements</a></p>
+  </div>
+  </div>
+  <div class="bench plate">
+<pre class="bench-src"><code>// my-pond.dtile
 tile pond size="1x1" seed=97 {
     line shore wobble=5 { through "0,0.38" "1,0.42" }
     region pool { bounded-by shore; fill "0.5,0.25" }
@@ -69,9 +82,11 @@ tile pond size="1x1" seed=97 {
         water
     }
 }</code></pre>
-</div>
-<figure class="shot"><img src="elements/img/el-tile.jpg" alt="A one-square tile: water in the lower part with two rocks, a grassy bank above a wandering shore" loading="lazy"><figcaption>That document, built: <code>lib:tiles/water/1x1-water+grass.dtile</code>.</figcaption></figure>
-</div>
+    <figure class="bench-out"><img src="elements/img/el-tile.jpg" alt="The document built: a one-square tile, water in the lower part with two rocks, a grassy bank above a wandering shore" width="856" height="635"><figcaption>That document, built. It's in the library as <code>lib:tiles/water/1x1-water+grass.dtile</code>.</figcaption></figure>
+  </div>
+</header>
+
+<h2 id="first">A first tile</h2>
 <p>A <a href="elements/line.html"><code>line</code></a> divides the tile, <a href="elements/region.html">regions</a> name its sides, and the <a href="elements/stack.html"><code>stack</code></a> says what goes where: <a href="elements/dirt.html"><code>dirt</code></a> and <a href="elements/grass.html"><code>grass</code></a> on the bank, a <a href="elements/ground.html"><code>ground</code></a> bed, two rocks and <a href="elements/water.html"><code>water</code></a> in the pool. Sizes are millimetres at the 35 mm square; the OpenLOCK build scales them for you.</p>
 <div class="tbl"><table>
   <thead><tr><th>To</th><th>Run</th></tr></thead>
@@ -111,6 +126,7 @@ cargo build --release                 # a few minutes, once
   <li><a href="composing.html">Composing a tile</a><span class="sum">How elements share a tile: rocks bedded in the ground, grass growing up to them, and tiles that meet their neighbours.</span></li>
   <li><a href="standards/tile-system.html">Tile system</a><span class="sum">Tile, square and cell; the DungeonBlocks and OpenLOCK bases; file names; edges.</span></li>
   <li><a href="standards/printing.html">Printing</a><span class="sum">The printer profile, the overhang limit, red overhangs in renders, and the audit every build passes.</span></li>
+  <li><a href="standards/visual-system.html">Visual system</a><span class="sum">The colours, type, plate and controls the site and the preview share, and the rules for adding to them.</span></li>
 </ul>
 
 <h2 id="elements">Elements</h2>

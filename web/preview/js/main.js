@@ -22,7 +22,7 @@ window.dtPreview = { state, viewer }; // for tests and the console
 // ---- toolbar ---------------------------------------------------------
 VIEWS.forEach(([name, label], i) => {
   const b = document.createElement('button');
-  b.className = 'view'; b.dataset.view = name; b.textContent = label;
+  b.type = 'button'; b.className = 'view'; b.dataset.view = name; b.textContent = label;
   b.title = `${label} (${i + 1})`;
   b.onclick = () => pickView(name);
   $('views').append(b);
@@ -30,7 +30,10 @@ VIEWS.forEach(([name, label], i) => {
 function pickView(name, animate = true) {
   state.view = name;
   viewer.setView(name, animate);
-  document.querySelectorAll('button.view').forEach((b) => b.classList.toggle('on', b.dataset.view === name));
+  document.querySelectorAll('button.view').forEach((b) => {
+    b.classList.toggle('on', b.dataset.view === name);
+    b.setAttribute('aria-pressed', b.dataset.view === name);
+  });
 }
 const toggle = (id, fn) => { $(id).onchange = (e) => fn(e.target.checked); };
 toggle('t-overhang', (on) => viewer.setOverhang(on));
@@ -49,7 +52,7 @@ toggle('t-grid', (on) => viewer.setGrid(on));
 const dark = matchMedia('(prefers-color-scheme: dark)');
 function applyTheme() {
   let stored = null;
-  try { stored = localStorage.getItem('dt-preview-theme'); } catch { /* ignore */ }
+  try { stored = localStorage.getItem('dt-theme'); } catch { /* ignore */ }
   const hash = (location.hash.match(/theme=(light|dark)/) || [])[1]; // #theme=light previews a theme without saving it
   if (hash) stored = hash;
   if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
@@ -61,7 +64,7 @@ function applyTheme() {
 function toggleTheme() {
   const isDark = document.documentElement.dataset.theme
     ? document.documentElement.dataset.theme === 'dark' : dark.matches;
-  try { localStorage.setItem('dt-preview-theme', isDark ? 'light' : 'dark'); } catch { /* ignore */ }
+  try { localStorage.setItem('dt-theme', isDark ? 'light' : 'dark'); } catch { /* ignore */ }
   applyTheme();
 }
 $('theme').onclick = toggleTheme;
@@ -242,27 +245,36 @@ function row(dl, k, v, cls = '') {
   const dd = document.createElement('dd'); dd.textContent = v; if (cls) dd.className = cls;
   dl.append(dt, dd);
 }
-// the size, then each stack entry named by what it places, linked to its
-// page on the documentation site
+// each element's family, for its colour (the docs site uses the same)
+const FAMILY = {
+  ground: 'surface', dirt: 'surface', floor: 'surface', water: 'water',
+  rock: 'thing', stone: 'thing', boulder: 'thing', pebble: 'thing', scatter: 'thing', cliff: 'thing', wall: 'thing',
+  grass: 'plant', reeds: 'plant', flowers: 'plant', tree: 'plant',
+  dungeonblocks: 'base', openlock: 'base', connector: 'base', stl: 'base',
+};
+// the size line, and the stack in build order, each entry named by what it
+// places and linked to its page on the documentation site
 function renderPlan(el, p, path) {
+  const ol = $('stack');
+  ol.replaceChildren();
+  $('stack-sec').hidden = !p;
   if (!p) { el.textContent = path; return; }
-  const parts = [document.createTextNode(`${p.cols}×${p.rows} squares of ${p.square_mm} mm`)];
+  el.textContent = `${p.cols}×${p.rows} · ${p.square_mm} mm squares · ${state.system === 'ol' ? 'OpenLOCK' : 'DungeonBlocks'}`;
   for (const s of p.stack) {
-    parts.push(document.createTextNode(' · '));
     const item = typeof s === 'string' ? { label: s } : s;
+    const li = document.createElement('li');
+    li.className = `fam-${FAMILY[item.look] || 'doc'}`;
     if (item.href) {
       const a = document.createElement('a');
-      a.href = item.href;
-      a.target = '_blank';
-      a.rel = 'noopener';
+      a.href = item.href; a.target = '_blank'; a.rel = 'noopener';
       a.textContent = item.label;
-      a.title = `${item.look}: open its documentation`;
-      parts.push(a);
+      a.title = `${item.look}: open its page in the docs`;
+      li.append(a);
     } else {
-      parts.push(document.createTextNode(item.label));
+      li.textContent = item.label;
     }
+    ol.append(li);
   }
-  el.replaceChildren(...parts);
 }
 
 let timer = 0;
@@ -273,9 +285,11 @@ function renderPanel() {
   dl.replaceChildren();
   $('failures').replaceChildren();
   clearInterval(timer);
+  $('verdict').hidden = true;
   if (!t) {
     status.hidden = true; errs.hidden = true;
     $('tile-name').textContent = '–'; $('tile-plan').replaceChildren();
+    $('stack').replaceChildren(); $('stack-sec').hidden = true;
     return;
   }
   $('tile-name').textContent = stem(t);
@@ -290,8 +304,8 @@ function renderPanel() {
       if (t.progress) return showProgress(t.progress);
       $('bar-fill').style.width = '0%';
       $('status-text').textContent = t.status === 'idle'
-        ? 'waiting…'
-        : `building… ${((performance.now() - state.buildStart.get(t.index)) / 1000).toFixed(1)} s`;
+        ? 'Waiting to build…'
+        : `Building… ${((performance.now() - state.buildStart.get(t.index)) / 1000).toFixed(1)} s`;
     };
     tick(); timer = setInterval(tick, 100);
     status.hidden = false;
@@ -313,25 +327,30 @@ function renderPanel() {
   }
   const r = t.record;
   if (!r) {
-    row(dl, 'state', t.status);
+    row(dl, 'State', { idle: 'Not built yet', building: 'Building', failed: 'Failed', ready: 'Ready' }[t.status] || t.status);
     return;
   }
   const a = r.audit;
   const stale = t.status === 'failed' ? ' (last good build)' : '';
-  row(dl, 'triangles', a.triangles.toLocaleString() + stale);
-  row(dl, 'watertight', a.watertight ? 'yes' : 'NO', a.watertight ? 'ok' : 'bad');
-  row(dl, `overhang (> ${state.overhangDeg}°)`, a.overhang_budget_mm2 == null ? `${fmt(a.overhang_mm2)} mm²` : `${fmt(a.overhang_mm2)} / ${fmt(a.overhang_budget_mm2)} mm²`,
+  const v = $('verdict');
+  v.hidden = false;
+  v.className = a.failures.length ? 'fail' : 'pass';
+  v.textContent = a.failures.length
+    ? `Fails the printability gate${stale}`
+    : `Passes the printability gate${stale}`;
+  row(dl, 'Triangles', a.triangles.toLocaleString());
+  row(dl, 'Watertight', a.watertight ? 'Yes' : 'No', a.watertight ? 'ok' : 'bad');
+  row(dl, `Overhang past ${state.overhangDeg}°`, a.overhang_budget_mm2 == null ? `${fmt(a.overhang_mm2)} mm²` : `${fmt(a.overhang_mm2)} / ${fmt(a.overhang_budget_mm2)} mm²`,
       a.overhang_mm2 > (a.overhang_budget_mm2 ?? 0) ? 'bad' : a.overhang_mm2 > 0 ? 'warn' : 'ok');
-  row(dl, 'band', `${fmt(a.band_mm2)} / ${fmt(a.band_budget_mm2)} mm²`);
+  row(dl, 'Band', `${fmt(a.band_mm2)} / ${fmt(a.band_budget_mm2)} mm²`);
   const dropped = Array.isArray(a.dropped) ? a.dropped.length : a.dropped;
-  row(dl, 'dropped bodies', dropped, dropped ? 'bad' : '');
-  row(dl, 'voids filled', a.voids_filled);
-  row(dl, 'holes', a.holes, a.holes ? 'bad' : '');
-  row(dl, 'build time', `${fmt(r.build_s)} s`);
-  if (r.record.seed != null) row(dl, 'seed', r.record.seed);
-  row(dl, 'system', r.record.system);
+  row(dl, 'Dropped bodies', dropped, dropped ? 'bad' : '');
+  row(dl, 'Voids filled', a.voids_filled);
+  row(dl, 'Holes', a.holes, a.holes ? 'bad' : '');
+  row(dl, 'Build time', `${fmt(r.build_s)} s`);
+  if (r.record.seed != null) row(dl, 'Seed', r.record.seed);
   for (const f of a.failures) {
-    const d = document.createElement('div'); d.className = 'f'; d.textContent = `gate: ${f}`;
+    const d = document.createElement('div'); d.className = 'f'; d.textContent = f;
     $('failures').append(d);
   }
 }
@@ -341,9 +360,8 @@ host.connect({
   onState: (s) => { $('conn').textContent = s; },
   onSnapshot: (m) => {
     state.tiles = m.tiles; state.roots = m.roots || []; state.overhangDeg = m.overhang_deg; state.system = m.system;
-    $('system').textContent = m.system;
-    $('lg-orange').textContent = `orange: ${m.overhang_deg}–${m.overhang_deg + 10}°, allowed within budget`;
-    $('lg-red').textContent = `red: over ${m.overhang_deg + 10}°, fails the gate`;
+    $('lg-orange').textContent = `${m.overhang_deg}–${m.overhang_deg + 10}°: allowed within budget`;
+    $('lg-red').textContent = `Over ${m.overhang_deg + 10}°: fails the gate`;
     const cur = state.tiles[state.selected];
     if (cur && !cur.gone) {
       // a rescan or a reconnect: keep the view, catch up on a newer mesh

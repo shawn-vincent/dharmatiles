@@ -169,6 +169,16 @@
       "title": "The site is the tile language's reference",
       "detail": "27 element pages with current renders, examples that pass `dharmatiles check`, generated controls tables, and step-by-step 'how it is made' animations (rock, cliff, grass, water, dirt) tied to the Rust modules. Guide rewritten for tile makers; home has install and a workflow. Next: animations for tree and wall; reference photos for the short pages.",
       "updated": "2026-11-04T21:00:00Z"
+    },
+    {
+      "id": "visual-system",
+      "order": 67,
+      "body": "other",
+      "area": "Visual system",
+      "state": "done",
+      "title": "One visual system for the docs site and the preview",
+      "detail": "docs/assets/theme.css: loam/paper, brass for anything pressable, red and orange for overhang only, material colours for element families; Big Shoulders Display, IBM Plex Sans, JetBrains Mono, self-hosted; tiles shown on the plate. The preview serves the same files. Reference: docs/standards/visual-system.html.",
+      "updated": "2026-11-05T00:30:00Z"
     }
   ]
 }

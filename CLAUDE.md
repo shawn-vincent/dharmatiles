@@ -92,6 +92,7 @@ Lines and fill points make regions; the stack paints surfaces (`ground`, `dirt`,
 
 - **Overhang is red.** Every render paints overhang faces red at 55 degrees. Trees only: 55-65 degrees is orange, within the tree's band budget; over 65 is red and fails. Every other look keeps 55 as a hard limit. The printability gate is a gate: never loosen a threshold or cull geometry to pass it; fix the geometry where it is made.
 - **KDL is v2 only.**
+- **One visual system.** The docs site and the preview share `docs/assets/theme.css` (tokens, self-hosted fonts, lotus, controls); the preview serves it from inside the program. New colours, fonts or controls go there, never into one page or the preview alone. Red and orange mean overhang only; tiles are shown on the plate (#D9E0EB). See `docs/standards/visual-system.html`.
 - **Docs are HTML** under `docs/`, never `.md` copies; lead with what a tile user needs; no commercial product images. `docs/status.json` is kept current on `main`.
 - **The site is the tile language's reference.** `docs/language.html` is the guide; `docs/elements/<name>.html` is one page per element (every node a document can write; "look" is only the code's word). Each element page's controls block is generated: run `cargo xtask docs` after changing a look's schema, and add a page for any new element (the generator refuses a look without one). The preview links each stack entry to its element page.
 - **Pronouns:** use they/them for Shawn.
