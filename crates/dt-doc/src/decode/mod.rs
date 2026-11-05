@@ -1058,8 +1058,8 @@ impl<'k> Decoder<'k> {
 
     fn printer(&mut self, n: &KdlNode) -> Option<Printer> {
         let name = self.name_arg(n, "printer")?;
-        let mut vals: [Option<Spanned<f64>>; 4] = [None, None, None, None];
-        const KEYS: [&str; 4] = ["line", "layer", "overhang", "gap"];
+        let mut vals: [Option<Spanned<f64>>; 5] = [None, None, None, None, None];
+        const KEYS: [&str; 5] = ["line", "layer", "overhang", "steepest", "gap"];
         let mut set = |this: &mut Self, key: &str, kspan: SourceSpan, e: &KdlEntry| {
             let Some(i) = KEYS.iter().position(|k| *k == key) else {
                 this.err(
@@ -1078,7 +1078,11 @@ impl<'k> Decoder<'k> {
                 kdl::KdlValue::Float(f) => Some(*f),
                 _ => None,
             };
-            let max = if key == "overhang" { 90.0 } else { 5.0 };
+            let max = if matches!(key, "overhang" | "steepest") {
+                90.0
+            } else {
+                5.0
+            };
             match v {
                 Some(v) if v > 0.0 && v < max => vals[i] = Some(Spanned { value: v, span }),
                 _ => {
@@ -1121,17 +1125,57 @@ impl<'k> Decoder<'k> {
                 format!("this printer has no {}", missing.join(", ")),
                 "incomplete",
             )
-            .help = Some("a printer gives line, layer, overhang and gap".to_owned());
+            .help = Some("a printer gives line, layer, overhang, steepest and gap".to_owned());
             return None;
         }
-        let [Some(line), Some(layer), Some(overhang), Some(gap)] = vals else {
+        let [
+            Some(line),
+            Some(layer),
+            Some(overhang),
+            Some(steepest),
+            Some(gap),
+        ] = vals
+        else {
             return None;
         };
+        if steepest.value <= overhang.value {
+            self.err(
+                "dt::printer",
+                steepest.span,
+                format!(
+                    "`steepest` ({}°) must be past `overhang` ({}°)",
+                    steepest.value, overhang.value
+                ),
+                "not past it",
+            );
+            return None;
+        }
+        // past this angle a layer steps out more than one line
+        let reach = (line.value / layer.value).atan().to_degrees();
+        if steepest.value > reach {
+            self.err(
+                "dt::printer",
+                steepest.span,
+                format!(
+                    "at {}° a {} mm layer steps out {:.2} mm, more than one {} mm line, so it would not rest on the layer below",
+                    steepest.value,
+                    layer.value,
+                    layer.value * steepest.value.to_radians().tan(),
+                    line.value
+                ),
+                "too steep",
+            )
+            .help = Some(format!(
+                "with this line and layer, `steepest` is at most {reach:.1}"
+            ));
+            return None;
+        }
         Some(Printer {
             name,
             line,
             layer,
             overhang,
+            steepest,
             gap,
         })
     }

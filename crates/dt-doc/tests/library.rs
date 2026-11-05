@@ -127,9 +127,31 @@ fn printer_profile() {
     let p = doc.printer.as_ref().unwrap();
     assert_eq!(p.name.value, "default");
     assert_eq!(
-        (p.line.value, p.layer.value, p.overhang.value, p.gap.value),
-        (0.45, 0.2, 55.0, 0.2)
+        (
+            p.line.value,
+            p.layer.value,
+            p.overhang.value,
+            p.steepest.value,
+            p.gap.value
+        ),
+        (0.45, 0.2, 55.0, 65.0, 0.2)
     );
+}
+
+#[test]
+fn steepest_is_past_overhang_and_within_one_line() {
+    let profile = |steepest: f64| {
+        format!("printer p {{ line 0.45; layer 0.2; overhang 55; steepest {steepest}; gap 0.2 }}")
+    };
+    let (_, shown) = fails(&profile(50.0));
+    assert!(flat(&shown).contains("must be past `overhang`"), "{shown}");
+    // 0.2 × tan 70° = 0.55 mm, more than a 0.45 mm line
+    let (_, shown) = fails(&profile(70.0));
+    assert!(
+        flat(&shown).contains("more than one 0.45 mm line"),
+        "{shown}"
+    );
+    assert!(flat(&shown).contains("at most 66.0"), "{shown}");
 }
 
 #[test]

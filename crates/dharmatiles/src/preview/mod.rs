@@ -139,6 +139,7 @@ impl Slot {
 pub struct Shared {
     system: String,
     overhang_deg: f64,
+    steepest_deg: f64,
     tiles: Mutex<Vec<Slot>>,
     clients: Mutex<Vec<Sender<String>>>,
     wanted: Mutex<VecDeque<usize>>,
@@ -160,19 +161,25 @@ impl Shared {
     /// Serve `paths` for connector `system` (the tests' server).
     #[cfg(test)]
     #[must_use]
-    pub fn new(paths: &[String], system: &str, overhang_deg: f64) -> Self {
+    pub fn new(paths: &[String], system: &str, overhang_deg: f64, steepest_deg: f64) -> Self {
         let roots = if paths.is_empty() {
             Vec::new()
         } else {
             vec![Root::new("Files", RootKind::Files)]
         };
-        Self::with_roots(roots, paths, system, overhang_deg)
+        Self::with_roots(roots, paths, system, overhang_deg, steepest_deg)
     }
 
     /// Serve `roots` for connector `system`: `files` (listed under the
     /// first [`RootKind::Files`] root) and every tile in the others.
     #[must_use]
-    pub fn with_roots(roots: Vec<Root>, files: &[String], system: &str, overhang_deg: f64) -> Self {
+    pub fn with_roots(
+        roots: Vec<Root>,
+        files: &[String],
+        system: &str,
+        overhang_deg: f64,
+        steepest_deg: f64,
+    ) -> Self {
         let files_root = roots.iter().position(|r| r.kind == RootKind::Files);
         let tiles = files_root.map_or_else(Vec::new, |r| {
             files
@@ -183,6 +190,7 @@ impl Shared {
         let me = Self {
             system: system.to_owned(),
             overhang_deg,
+            steepest_deg,
             tiles: Mutex::new(tiles),
             clients: Mutex::new(Vec::new()),
             wanted: Mutex::new(VecDeque::new()),
@@ -268,6 +276,7 @@ impl Shared {
             "type": "snapshot",
             "system": self.system,
             "overhang_deg": self.overhang_deg,
+            "steepest_deg": self.steepest_deg,
             "roots": self.roots.iter().enumerate().map(|(i, r)| r.json(i)).collect::<Vec<_>>(),
             "tiles": tiles.iter().enumerate().map(|(i, t)| t.summary(i)).collect::<Vec<_>>(),
         })
@@ -429,9 +438,15 @@ pub fn run(
     let (roots, files) = roots_for(paths);
     let cache = dt_eval::discover(&std::env::current_dir().unwrap_or_default()).out;
     let shared = Arc::new(
-        Shared::with_roots(roots, &files, &opts.system, opts.printer.overhang_deg)
-            .with_cache(Timings::file_in(&cache))
-            .with_palette_opt(palette),
+        Shared::with_roots(
+            roots,
+            &files,
+            &opts.system,
+            opts.printer.overhang_deg,
+            opts.printer.steepest_deg,
+        )
+        .with_cache(Timings::file_in(&cache))
+        .with_palette_opt(palette),
     );
     let url = format!("http://{addr}/");
     tell!("preview: {url}  (Ctrl-C to stop)");

@@ -27,7 +27,12 @@ impl Drop for Running {
 fn start(paths: &[&str], eager: bool) -> Running {
     let paths: Vec<String> = paths.iter().map(|p| (*p).to_owned()).collect();
     let opts = Options::default();
-    let shared = Arc::new(Shared::new(&paths, "db", opts.printer.overhang_deg));
+    let shared = Arc::new(Shared::new(
+        &paths,
+        "db",
+        opts.printer.overhang_deg,
+        opts.printer.steepest_deg,
+    ));
     let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
     let addr = listener.local_addr().unwrap();
     server::spawn(listener, Arc::clone(&shared));
@@ -243,7 +248,7 @@ fn the_slot_name_comes_from_the_file_until_the_plan_is_read() {
         "1x1-grass"
     );
     assert_eq!(Slot::new("my/tiles/a.dtile").name, "a");
-    let _ = Shared::new(&[], "db", 55.0).snapshot();
+    let _ = Shared::new(&[], "db", 55.0, 65.0).snapshot();
 }
 
 #[test]
@@ -330,7 +335,7 @@ fn a_folder_lists_its_tiles_and_follows_saves_and_deletes() {
         Root::new("My tiles", RootKind::Dir(dir.clone())),
         Root::new("Library", RootKind::Library("tiles/test/".to_owned())),
     ];
-    let shared = Shared::with_roots(roots, &[], "db", 55.0);
+    let shared = Shared::with_roots(roots, &[], "db", 55.0, 65.0);
     let listed = |s: &Shared| -> Vec<(String, Value, Value)> {
         let v = s.snapshot();
         v["tiles"]

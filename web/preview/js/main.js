@@ -11,7 +11,7 @@ const host = browserHost();
 const viewer = new Viewer($('canvas'));
 
 const state = {
-  tiles: [], roots: [], root: -1, selected: -1, overhangDeg: 55, system: 'db',
+  tiles: [], roots: [], root: -1, selected: -1, overhangDeg: 55, steepestDeg: 65, system: 'db',
   lastInRoot: new Map(), // root index -> the tile last chosen there
   loaded: new Map(),   // tile index -> mesh_version shown
   cameras: new Map(),  // tile index -> saved camera
@@ -340,7 +340,7 @@ function renderPanel() {
     : `Passes the printability gate${stale}`;
   row(dl, 'Triangles', a.triangles.toLocaleString());
   row(dl, 'Watertight', a.watertight ? 'Yes' : 'No', a.watertight ? 'ok' : 'bad');
-  const lo = state.overhangDeg, hi = lo + 10;
+  const lo = state.overhangDeg, hi = state.steepestDeg;
   const used = (area, budget) => budget == null ? `${fmt(area)} mm²` : `${fmt(area)} / ${fmt(budget)} mm²`;
   row(dl, `Band ${lo}–${hi}° (orange)`, used(a.band_mm2, a.band_budget_mm2),
       a.band_mm2 > (a.band_budget_mm2 ?? 0) ? 'bad' : a.band_mm2 > 0 ? 'warn' : 'ok');
@@ -362,9 +362,9 @@ function renderPanel() {
 host.connect({
   onState: (s) => { $('conn').textContent = s; },
   onSnapshot: (m) => {
-    state.tiles = m.tiles; state.roots = m.roots || []; state.overhangDeg = m.overhang_deg; state.system = m.system;
-    $('lg-orange').textContent = `${m.overhang_deg}–${m.overhang_deg + 10}°: allowed within budget`;
-    $('lg-red').textContent = `Over ${m.overhang_deg + 10}°: fails the gate`;
+    state.tiles = m.tiles; state.roots = m.roots || []; state.overhangDeg = m.overhang_deg; state.steepestDeg = m.steepest_deg ?? m.overhang_deg + 10; state.system = m.system;
+    $('lg-orange').textContent = `${state.overhangDeg}–${state.steepestDeg}°: allowed within budget`;
+    $('lg-red').textContent = `Over ${state.steepestDeg}°: small patches allowed, more fails`;
     const cur = state.tiles[state.selected];
     if (cur && !cur.gone) {
       // a rescan or a reconnect: keep the view, catch up on a newer mesh

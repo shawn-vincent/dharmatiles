@@ -556,8 +556,11 @@ pub fn build_with(
     let t_stage = std::time::Instant::now();
     progress.begin(progress::AUDIT, "checking printability");
     let footprint = c.frame.size_mm();
-    // the one band every look gets (55–65°; Shawn, 4 Nov 2026)
-    let band = dt_kit::Band::DEFAULT;
+    // the band every element gets: the printer's overhang to its steepest
+    let band = dt_kit::Band {
+        max_deg: opts.printer.steepest_deg,
+        ..dt_kit::Band::DEFAULT
+    };
     let (export, audit) = dt_kit::audit_banded(&mesh, footprint, &opts.printer, &mats, Some(&band));
     progress.end(progress::AUDIT);
     stage_secs.push((progress::AUDIT.to_owned(), t_stage.elapsed().as_secs_f64()));

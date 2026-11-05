@@ -92,7 +92,7 @@ Lines and fill points make regions; the stack paints surfaces (`ground`, `dirt`,
 
 ## Standing rules
 
-- **Overhang is red.** 55 degrees is every look's target. 55-65 degrees is the band, painted orange, allowed up to 0.1% of the downward-facing area; over 65 is red, allowed up to another 0.1%; more fails. The printability gate is a gate: never loosen a threshold or cull geometry to pass it; fix the geometry where it is made.
+- **Overhang is red.** 55 degrees is every look's target. 55-65 degrees is the band, painted orange, allowed up to 0.1% of the downward-facing area; over 65 is red, allowed up to another 0.1%; more fails. Both angles are the printer profile's `overhang` and `steepest` (library/printers/default.dtile). The printability gate is a gate: never loosen a threshold or cull geometry to pass it; fix the geometry where it is made.
 - **KDL is v2 only.**
 - **One visual system.** The docs site and the preview share `docs/assets/theme.css` (tokens, self-hosted fonts, lotus, controls); the preview serves it from inside the program. New colours, fonts or controls go there, never into one page or the preview alone. Red and orange mean overhang only; tiles are shown on the plate (#D9E0EB). See `docs/standards/visual-system.html`.
 - **Docs are HTML** under `docs/`, never `.md` copies; lead with what a tile user needs; no commercial product images.

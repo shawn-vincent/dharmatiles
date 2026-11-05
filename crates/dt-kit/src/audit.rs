@@ -60,6 +60,9 @@ pub struct Printer {
     /// No layer may reach past this cone from vertical (the profile's
     /// `overhang`).
     pub overhang_deg: f64,
+    /// Past this, degrees from vertical, overhang is red; between
+    /// `overhang_deg` and this it is the band (the profile's `steepest`).
+    pub steepest_deg: f64,
     /// Layer height, mm (the profile's `layer`).
     pub layer_mm: f64,
     /// One extruded line, mm (the profile's `line`).
@@ -78,11 +81,13 @@ pub struct Printer {
 }
 
 impl Printer {
-    /// A printer profile's four numbers, with the gate's fixed tuning.
+    /// A printer profile's numbers, with the gate's fixed tuning;
+    /// `steepest_deg` is 65 until [`Self::steepest`] sets it.
     #[must_use]
     pub fn new(line_mm: f64, layer_mm: f64, overhang_deg: f64, gap_mm: f64) -> Self {
         Self {
             overhang_deg,
+            steepest_deg: 65.0,
             layer_mm,
             line_mm,
             gap_mm,
@@ -90,6 +95,15 @@ impl Printer {
             span_mm: 3.0,
             grid_mm: 0.1,
             overhang_budget_mm2: 0.0,
+        }
+    }
+
+    /// The same printer with the profile's `steepest`.
+    #[must_use]
+    pub const fn steepest(self, steepest_deg: f64) -> Self {
+        Self {
+            steepest_deg,
+            ..self
         }
     }
 }

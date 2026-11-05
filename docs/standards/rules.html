@@ -30,7 +30,7 @@
 <ul class="rules">
   <li><strong>Watertight</strong> after the mesh is reloaded at float32, the precision an STL stores.</li>
   <li><strong>Nothing lost:</strong> every part is joined to the tile. Sealed voids are filled and reported, not counted as lost.</li>
-  <li><strong>Overhang:</strong> 55° from vertical is the target for every element. Faces between 55° and 65° are the band: allowed in small patches, up to 0.1% of the tile's downward-facing area, and painted orange. Faces past 65° are overhang, painted red, and allowed only up to another 0.1%. More than either budget fails.</li>
+  <li><strong>Overhang:</strong> 55° from vertical is the target for every element. Faces between 55° and 65° are the band: allowed in small patches, up to 0.1% of the tile's downward-facing area, and painted orange. Faces past 65° are overhang, painted red, and allowed only up to another 0.1%. More than either budget fails. Both angles are the printer profile's (<code>overhang 55</code>, <code>steepest 65</code> in <a href="../elements/printer.html">the printer</a>); 65° is where a 0.2 mm layer steps out 0.43 mm, just under one 0.45 mm line.</li>
   <li>A gap narrower than the printer's gap (0.2 mm) counts as solid, so the lip over a fine joint is not an overhang.</li>
   <li>The gate is never loosened, and geometry is never culled to pass it. A failure is fixed where the geometry is made.</li>
   <li>Tiles print base down, with no supports. See <a href="printing.html">printing</a>.</li>

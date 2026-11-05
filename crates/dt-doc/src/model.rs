@@ -454,8 +454,11 @@ pub struct Printer {
     pub line: Spanned<f64>,
     /// One layer, mm.
     pub layer: Spanned<f64>,
-    /// The steepest printable overhang, degrees from vertical.
+    /// The overhang every element aims for, degrees from vertical.
     pub overhang: Spanned<f64>,
+    /// The steepest overhang allowed in small patches, degrees from
+    /// vertical: past it a layer no longer rests on the one below.
+    pub steepest: Spanned<f64>,
     /// The narrowest gap that stays open, mm.
     pub gap: Spanned<f64>,
 }

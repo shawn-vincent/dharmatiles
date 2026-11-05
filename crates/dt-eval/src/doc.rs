@@ -247,15 +247,13 @@ pub fn printer(sources: &dyn Source, path: &str) -> Result<dt_kit::Printer, Vec<
     let Some(p) = &r.file.doc.printer else {
         return Err(vec![
             Diag::plain("dt::printer", format!("`{path}` has no `printer`"))
-                .help("a printer file holds `printer name { line …; layer …; overhang …; gap … }`"),
+                .help("a printer file holds `printer name { line …; layer …; overhang …; steepest …; gap … }`"),
         ]);
     };
-    Ok(dt_kit::Printer::new(
-        p.line.value,
-        p.layer.value,
-        p.overhang.value,
-        p.gap.value,
-    ))
+    Ok(
+        dt_kit::Printer::new(p.line.value, p.layer.value, p.overhang.value, p.gap.value)
+            .steepest(p.steepest.value),
+    )
 }
 
 /// The phase a look not built yet arrives in (plan.html).
