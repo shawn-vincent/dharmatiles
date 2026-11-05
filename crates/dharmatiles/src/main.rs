@@ -27,11 +27,13 @@ use serde_json::{Value, json};
 #[command(
     name = "dharmatiles",
     version = env!("DT_ENGINE_VERSION"),
-    about = "Build printable terrain tiles from KDL documents"
+    about = "Build printable terrain tiles from .dtile documents",
+    after_help = "With no command, opens the preview in the browser: your tiles ($DT_HOME, else ~/dharmatiles) and the library."
 )]
 struct Cli {
+    /// None: `preview --open` on your tiles and the library.
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Subcommand)]
@@ -195,7 +197,15 @@ const AUDIT_FAILED: u8 = 3;
 fn main() -> ExitCode {
     let cli = Cli::parse();
     disk_library();
-    let code = match cli.command {
+    // no command: browse your tiles and the library in the browser
+    let command = cli.command.unwrap_or(Command::Preview {
+        paths: Vec::new(),
+        system: "db".to_owned(),
+        port: None,
+        open: true,
+        palette: None,
+    });
+    let code = match command {
         Command::Check { paths, json } => check(&paths, json),
         Command::Build {
             paths,
