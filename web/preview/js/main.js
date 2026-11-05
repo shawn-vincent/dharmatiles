@@ -340,9 +340,12 @@ function renderPanel() {
     : `Passes the printability gate${stale}`;
   row(dl, 'Triangles', a.triangles.toLocaleString());
   row(dl, 'Watertight', a.watertight ? 'Yes' : 'No', a.watertight ? 'ok' : 'bad');
-  row(dl, `Overhang past ${state.overhangDeg}°`, a.overhang_budget_mm2 == null ? `${fmt(a.overhang_mm2)} mm²` : `${fmt(a.overhang_mm2)} / ${fmt(a.overhang_budget_mm2)} mm²`,
+  const lo = state.overhangDeg, hi = lo + 10;
+  const used = (area, budget) => budget == null ? `${fmt(area)} mm²` : `${fmt(area)} / ${fmt(budget)} mm²`;
+  row(dl, `Band ${lo}–${hi}° (orange)`, used(a.band_mm2, a.band_budget_mm2),
+      a.band_mm2 > (a.band_budget_mm2 ?? 0) ? 'bad' : a.band_mm2 > 0 ? 'warn' : 'ok');
+  row(dl, `Past ${hi}° (red)`, used(a.overhang_mm2, a.overhang_budget_mm2),
       a.overhang_mm2 > (a.overhang_budget_mm2 ?? 0) ? 'bad' : a.overhang_mm2 > 0 ? 'warn' : 'ok');
-  row(dl, 'Band', `${fmt(a.band_mm2)} / ${fmt(a.band_budget_mm2)} mm²`);
   const dropped = Array.isArray(a.dropped) ? a.dropped.length : a.dropped;
   row(dl, 'Dropped bodies', dropped, dropped ? 'bad' : '');
   row(dl, 'Voids filled', a.voids_filled);
