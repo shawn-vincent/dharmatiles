@@ -93,6 +93,8 @@ export class Tools {
     this.list.items.forEach(([name, about, role], i) => {
       const li = document.createElement('div');
       li.className = `it fam-${role}${i === this.list.i ? ' on' : ''}`;
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', i === this.list.i);
       li.innerHTML = '<i class="sw"></i><b></b><span></span>';
       li.querySelector('b').textContent = name;
       li.querySelector('span').textContent = about || '';

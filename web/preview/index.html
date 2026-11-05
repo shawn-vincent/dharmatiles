@@ -25,7 +25,10 @@
 
     <div id="menu" class="menu" hidden>
       <nav id="roots" class="seg" aria-label="Where the tiles come from" hidden></nav>
-      <input id="filter" type="search" placeholder="Filter tiles" aria-label="Filter tiles">
+      <div class="menu-find">
+        <input id="filter" type="search" placeholder="Filter tiles" aria-label="Filter tiles">
+        <button id="new" class="btn" type="button">New tile</button>
+      </div>
       <ul id="tiles"></ul>
     </div>
 
@@ -48,7 +51,7 @@
   </section>
 
   <main id="view">
-    <canvas id="canvas"></canvas>
+    <canvas id="canvas" tabindex="0" aria-label="3D tile view"></canvas>
     <canvas id="over" aria-hidden="true"></canvas>
     <div id="viewbar">
       <div class="seg" id="views" role="group" aria-label="Views"></div>
@@ -71,7 +74,14 @@
       <div id="place-list" role="listbox" aria-label="What can be placed or drawn" hidden></div>
       <input id="place-in" type="text" placeholder="Place or draw: rock, tree, scatter, dirt, line, region…" aria-label="Place or draw" autocomplete="off" spellcheck="false">
     </div>
-    <div id="empty"><button id="choose" class="btn" type="button">Choose a tile</button></div>
+    <div id="empty">
+      <div class="empty-card">
+        <span class="mark" aria-hidden="true"></span>
+        <h1>Make terrain</h1>
+        <p>Start with a printable square, or make a library tile your own.</p>
+        <div class="row-btns"><button id="empty-new" class="btn on" type="button">New tile</button><button id="choose" class="btn" type="button">Choose from the library</button></div>
+      </div>
+    </div>
     <div class="card" id="mine" role="dialog" aria-label="Make it mine" hidden>
       <p><b>This is a library tile.</b> Make a copy in My tiles to change it? The library stays as it is.</p>
       <div class="row-btns"><button class="btn" id="mine-cancel" type="button">Cancel</button><button class="btn on" id="mine-ok" type="button">Make it mine</button></div>
@@ -85,6 +95,26 @@
   </aside>
 </div>
 <div id="comp" role="listbox" aria-label="What can go here" hidden></div>
+
+<dialog id="new-dialog" aria-labelledby="new-title">
+  <form method="dialog" id="new-form">
+    <div class="eyebrow">My tiles</div>
+    <h2 id="new-title">New tile</h2>
+    <label class="field">Name<input id="new-name" name="name" type="text" value="Untitled tile" maxlength="80" required autocomplete="off"></label>
+    <label class="field">Size<select id="new-size" name="size"><option>1x1</option><option>2x1</option><option>1x2</option><option>2x2</option></select></label>
+    <p class="dialog-note" id="new-note">Starts as printable flat ground. Everything about it is ordinary text you can change.</p>
+    <div class="row-btns"><button class="btn" id="new-cancel" type="button">Cancel</button><button class="btn on" id="new-ok" type="submit">Create tile</button></div>
+  </form>
+</dialog>
+
+<dialog id="leave-dialog" aria-labelledby="leave-title">
+  <form method="dialog">
+    <div class="eyebrow">Not saved</div>
+    <h2 id="leave-title">Keep editing this file?</h2>
+    <p id="leave-reason">This change has not been saved.</p>
+    <div class="row-btns"><button class="btn danger" id="leave-discard" value="discard">Discard changes</button><button class="btn on" value="cancel" autofocus>Keep editing</button></div>
+  </form>
+</dialog>
 <script type="module" src="/js/main.js"></script>
 </body>
 </html>

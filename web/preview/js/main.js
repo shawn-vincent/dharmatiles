@@ -203,17 +203,23 @@ function renderList() {
   const row = (t) => {
     const li = document.createElement('li');
     li.className = t.index === state.selected ? 'sel' : '';
+    li.tabIndex = 0; li.setAttribute('role', 'option'); li.setAttribute('aria-selected', t.index === state.selected);
     li.title = t.name && t.name !== stem(t) ? `${t.path}\ntile “${t.name}”` : t.path;
     li.innerHTML = '<span></span><span class="name"></span>';
     li.firstChild.className = dotClass(t);
     li.querySelector('.name').textContent = stem(t);
     li.onclick = () => { closePopovers(); select(t.index); };
+    li.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.click(); } };
     return li;
   };
   const header = (text, onclick, open) => {
     const g = document.createElement('li'); g.className = 'group';
     g.textContent = `${onclick ? (open ? '▾ ' : '▸ ') : ''}${text}`;
-    if (onclick) { g.classList.add('fold'); g.onclick = onclick; }
+    if (onclick) {
+      g.classList.add('fold'); g.tabIndex = 0; g.setAttribute('role', 'button'); g.setAttribute('aria-expanded', open);
+      g.onclick = onclick;
+      g.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onclick(); } };
+    }
     ul.append(g);
   };
   const root = rootOf(state.root);
@@ -251,9 +257,45 @@ $('filter').onkeydown = (e) => {
   first?.click();
 };
 
+// A first tile: valid, printable ground in My tiles, ready for the same
+// text/lens/direct edits as every other tile.
+function openNewTile() {
+  closePopovers();
+  const dlg = $('new-dialog');
+  $('new-note').textContent = 'Starts as printable flat ground. Everything about it is ordinary text you can change.';
+  dlg.showModal();
+  $('new-name').focus();
+  $('new-name').select();
+}
+$('new').onclick = openNewTile;
+$('empty-new').onclick = openNewTile;
+$('new-cancel').onclick = () => $('new-dialog').close();
+$('new-form').onsubmit = async (e) => {
+  e.preventDefault();
+  if (!(await canLeave())) return;
+  const ok = $('new-ok');
+  ok.disabled = true;
+  $('new-note').textContent = 'Making the tile…';
+  let r;
+  try {
+    r = await host.post('/api/new', { name: $('new-name').value, size: $('new-size').value });
+  } catch {
+    r = { status: 0, body: { error: 'the editor is disconnected' } };
+  }
+  ok.disabled = false;
+  if (r.status !== 200 || r.body?.index == null) {
+    $('new-note').textContent = r.body?.error || 'The tile could not be made.';
+    return;
+  }
+  $('new-dialog').close();
+  const i = r.body.index;
+  for (let k = 0; k < 40 && !state.tiles[i]; k++) await new Promise((res) => setTimeout(res, 50));
+  if (state.tiles[i]) select(i, true);
+};
+
 // ---- choosing a tile ---------------------------------------------------
-function select(i) {
-  if (dirty()) save(true); // what was typed is not lost by moving on
+async function select(i, guarded = false) {
+  if (!guarded && i !== state.selected && !(await canLeave())) return false;
   closeComp(); lens.hide();
   if (state.selected >= 0 && viewer.payload) state.cameras.set(state.selected, viewer.getCamera());
   if (i !== state.selected) { state.sel = null; state.hov = null; $('tilebtn').classList.remove('sel'); }
@@ -267,7 +309,7 @@ function select(i) {
     history.replaceState(null, '', `#root=${state.root}`);
     texts.clear(); state.textFor = null;
     renderAll();
-    return;
+    return true;
   }
   state.root = t.root;
   state.lastInRoot.set(t.root, i);
@@ -276,6 +318,7 @@ function select(i) {
   if (t.status === 'idle') host.build(i);
   if (t.mesh_version != null) loadMesh(i, t.mesh_version);
   renderAll();
+  return true;
 }
 
 function countPieces(p) {
@@ -446,10 +489,20 @@ function changed() {
 
 async function check() {
   const t = tile();
-  if (!t || texts.text == null) return;
+  if (!t || texts.text == null) return false;
   const text = texts.text, seq = ++doc.checkSeq;
-  const r = await host.post(`/api/tiles/${t.index}/check`, { text, file: texts.file === t.path ? undefined : texts.file });
-  if (seq !== doc.checkSeq || text !== texts.text || !r.body || t !== tile()) return;
+  let r;
+  try {
+    r = await host.post(`/api/tiles/${t.index}/check`, { text, file: texts.file === t.path ? undefined : texts.file });
+  } catch {
+    if (seq === doc.checkSeq && text === texts.text && t === tile()) {
+      doc.note = 'cannot check while the editor is disconnected';
+      renderTextBar();
+    }
+    return false;
+  }
+  if (seq !== doc.checkSeq || text !== texts.text || !r.body || t !== tile()) return false;
+  doc.note = null;
   doc.checked = text;
   doc.ok = !!r.body.ok;
   doc.errors = r.body.errors || [];
@@ -462,44 +515,88 @@ async function check() {
     if (i >= 0) { setSel({ entry: i, piece: null }, { from: 'view' }); }
   }
   renderStack(); markText(); renderTextBar(); renderLens(); drawOverlay();
+  return true;
 }
 
 async function save(now = false) {
-  if (!doc.writable || !dirty() || doc.saving) return;
-  if (doc.checked !== texts.text) { if (!now) doc.saveTimer = setTimeout(save, 250); return; } // after its check
-  if (!doc.ok) { renderTextBar(); return; } // a mistake: kept here until it is fixed
-  const t = tile(), text = texts.text;
+  if (!doc.writable || !dirty()) return !dirty();
+  if (doc.saving) return false;
+  if (doc.checked !== texts.text) {
+    if (now) await check();
+    else { doc.saveTimer = setTimeout(save, 250); return false; }
+  }
+  if (doc.checked !== texts.text || !doc.ok) { renderTextBar(); return false; } // a mistake: kept here until it is fixed
+  const t = tile(), text = texts.text, file = texts.file;
+  if (!t || !file) return false;
   doc.saving = true;
   renderTextBar();
-  const r = await host.post(`/api/tiles/${t.index}/save`, { text, base: doc.base, file: texts.file === t.path ? undefined : texts.file });
-  doc.saving = false;
-  doc.note = null;
-  if (r.status === 200) { doc.base = text; doc.conflict = null; }
-  else if (r.status === 409) doc.conflict = r.body?.text ?? '';
-  else doc.note = r.body?.error || `could not save (${r.status})`;
-  renderTextBar();
+  try {
+    const r = await host.post(`/api/tiles/${t.index}/save`, { text, base: doc.base, file: file === t.path ? undefined : file });
+    doc.note = null;
+    if (r.status === 200) { doc.base = text; doc.conflict = null; }
+    else if (r.status === 409) doc.conflict = r.body?.text ?? '';
+    else doc.note = r.body?.error || `could not save (${r.status})`;
+  } catch {
+    doc.note = 'cannot save while the editor is disconnected';
+  } finally {
+    doc.saving = false;
+    renderTextBar();
+  }
   if (dirty() && !doc.conflict && !doc.note) changed(); // typed while it saved
+  return !dirty();
 }
 addEventListener('beforeunload', (e) => {
-  if (dirty() && doc.writable) { save(true); e.preventDefault(); }
+  if (dirty() && doc.writable) { e.preventDefault(); e.returnValue = ''; }
 });
+
+let leaving = null;
+function confirmDiscard() {
+  if (leaving) return leaving;
+  const dlg = $('leave-dialog');
+  $('leave-reason').textContent = doc.conflict != null
+    ? 'The file changed on disk while your version was open. Choose which version to keep before leaving.'
+    : !doc.ok ? 'This edit contains a mistake, so it has not been saved.'
+      : doc.note || 'This edit has not been saved yet.';
+  dlg.showModal();
+  leaving = new Promise((resolve) => {
+    dlg.addEventListener('close', () => {
+      const discard = dlg.returnValue === 'discard';
+      if (discard && doc.base != null) {
+        texts.setText(doc.base);
+        resetHistory(doc.base);
+        doc.checked = doc.base; doc.ok = true; doc.errors = []; doc.conflict = null; doc.note = null;
+      }
+      leaving = null;
+      resolve(discard);
+    }, { once: true });
+  });
+  return leaving;
+}
+
+/** Save before leaving this file; if it cannot be saved, make discarding explicit. */
+async function canLeave() {
+  if (!dirty() || !doc.writable) return true;
+  clearTimeout(doc.checkTimer); clearTimeout(doc.saveTimer);
+  if (await save(true)) return true;
+  return confirmDiscard();
+}
 
 let textToken = 0;
 async function loadText(file) {
   const t = tile();
   if (!t || /\.stl$/i.test(t.path)) { texts.clear(); state.textFor = null; doc.base = null; renderTextBar(); return; }
   const want = file || t.path;
-  if (dirty() && texts.file !== want) await save(true);
+  if (dirty() && texts.file !== want && !(await canLeave())) return false;
   // unsaved changes to this file stay; a new build of the same file brings nothing new
-  if (dirty() && texts.file === want && doc.tile === t.index) return;
+  if (dirty() && texts.file === want && doc.tile === t.index) return true;
   const key = [t.index, want, t.mesh_version, t.status, t.errors.length];
   if (state.textFor && state.textFor.join('|') === key.join('|')) return;
   state.textFor = key;
   const token = ++textToken;
   try {
     const v = await host.text(t.index, want === t.path ? null : want);
-    if (token !== textToken || !v) { if (!v) state.textFor = null; return; }
-    if (dirty() && texts.file === v.file && doc.tile === t.index) return;
+    if (token !== textToken || !v) { if (!v) state.textFor = null; return false; }
+    if (dirty() && texts.file === v.file && doc.tile === t.index) return true;
     const fresh = doc.tile !== t.index || texts.file !== v.file;
     doc.tile = t.index;
     doc.writable = v.writable;
@@ -514,7 +611,8 @@ async function loadText(file) {
     renderTextBar();
     markText();
     renderLens();
-  } catch (e) { console.error(e); state.textFor = null; }
+    return true;
+  } catch (e) { console.error(e); state.textFor = null; return false; }
 }
 
 function renderTextBar() {
@@ -581,6 +679,7 @@ function renderComp() {
     const d = document.createElement('div');
     d.className = `it fam-${FAMILY[it.label] || (it.kind === 'definition' ? 'plant' : 'doc')}${i === comp.i ? ' on' : ''}`;
     d.setAttribute('role', 'option');
+    d.setAttribute('aria-selected', i === comp.i);
     d.innerHTML = '<i class="sw"></i><span class="nm"></span><span class="ds"></span>';
     d.querySelector('.nm').textContent = it.label;
     d.querySelector('.ds').textContent = it.about || it.kind;
@@ -649,8 +748,14 @@ function describe(w) {
   return it.label;
 }
 
-function setSel(w, { from } = {}) {
+function setSel(w, { from, guarded = false } = {}) {
   if (same(w, state.sel)) return;
+  const targetFile = isEntry(w) ? stackItems()[w.entry]?.file
+    : w && (w.tile || w.region != null || w.line != null) ? tile()?.path : null;
+  if (!guarded && targetFile && targetFile !== texts.file && dirty()) {
+    canLeave().then((ok) => { if (ok) setSel(w, { from, guarded: true }); });
+    return;
+  }
   state.sel = w;
   $('tilebtn').classList.toggle('sel', !!w?.tile);
   viewer.setHighlight(isEntry(w) ? w : null, hovForView());
@@ -866,7 +971,7 @@ async function insertNode(place, node, { select: sel } = {}) {
   const t = tile();
   if (!t) return;
   if (!doc.writable) return offerMine();
-  if (texts.file !== t.path) await loadText(null);
+  if (texts.file !== t.path && !(await loadText(null))) return;
   const r = await host.post('/api/edit', { op: 'insert', text: texts.text, place, node });
   if (r.status !== 200) { doc.note = r.body?.error || 'that could not be written'; renderTextBar(); return; }
   texts.setText(r.body.text, byteToIndex(r.body.text, r.body.at));
@@ -909,6 +1014,7 @@ function renderStack() {
     const li = document.createElement('li');
     const base = i === items.length - 1 && it.element === 'connector';
     li.className = `srow fam-${FAMILY[it.element] || 'doc'}${base ? ' base' : ''}`;
+    li.tabIndex = 0;
     li.dataset.entry = i;
     const sel = isEntry(state.sel) && state.sel.entry === i;
     li.classList.toggle('sel', !!sel);
@@ -936,6 +1042,7 @@ function renderStack() {
     }
     li.append(acts);
     li.onclick = () => setSel(same(state.sel, { entry: i, piece: null }) ? null : { entry: i, piece: null }, { from: 'stack' });
+    li.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.click(); } };
     li.ondblclick = () => { setSel({ entry: i, piece: null }, { from: 'stack' }); frameSel(); };
     li.onpointerenter = () => setHov({ entry: i, piece: null });
     li.onpointerleave = () => setHov(null);
@@ -945,6 +1052,7 @@ function renderStack() {
   for (const m of mutedEntries()) {
     const li = document.createElement('li');
     li.className = `srow muted fam-${FAMILY[m.name] || 'doc'}`;
+    li.tabIndex = 0;
     li.innerHTML = '<i class="sw"></i><div><span class="nm"></span><span class="pl"></span></div>';
     li.querySelector('.nm').textContent = m.label;
     li.querySelector('.pl').textContent = `muted · line ${m.line}`;
@@ -953,6 +1061,7 @@ function renderStack() {
     if (doc.writable) acts.append(act('◑', `Unmute ${m.name}`, () => unmute(m)));
     li.append(acts);
     li.onclick = () => texts.reveal(m.line);
+    li.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.click(); } };
     ol.insertBefore(li, ol.querySelector('.srow.base')); // above the base the system adds
   }
 }

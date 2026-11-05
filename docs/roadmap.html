@@ -50,8 +50,8 @@
 <p>The order these are best taken in. Each one is described in its section below.</p>
 <ol>
   <li><strong>Rerun the slow tests</strong> and fix the OpenLOCK failure, so everything after starts from green.</li>
-  <li><strong>Draft builds and per-entry rebuilds.</strong> The editor's live feel depends on them, and they make every element faster to iterate.</li>
-  <li><strong>The editor</strong>, in the stages its <a href="design/editor.html">design</a> sets out: select, edit, drafts, and place and draw (built), then the gate's versions, then the assistant.</li>
+  <li><strong>Per-entry rebuilds.</strong> Drafts are built, but still rebuild the whole tile. Keeping unaffected entries would make trees and control sweeps respond quickly.</li>
+  <li><strong>The editor</strong>, in the stages its <a href="design/editor.html">design</a> sets out: select, edit, drafts, place and draw (built), then hardening the editing experience and the gate's versions. The assistant is deliberately deferred.</li>
   <li><strong>Lines with <code>width=</code> and <code>along=</code></strong>, the language's biggest gap: paths, walls and streams that follow a drawn line.</li>
   <li><strong>The first public release</strong>, once the licence for the library is decided.</li>
 </ol>
@@ -64,9 +64,8 @@
   <li><span class="st st-plain">Planned</span><strong>The lens, further</strong>: a die for a new seed, words tried on hover, the tile's own controls (size, seed), and each control's line from its element page on hover.</li>
   <li><span class="st st-proposed">Designed</span><strong>The stack, further</strong>: what each entry reads and writes, drawn between rows on hover; dragging a row to move its node; definitions as rows that open. Placing, the map and muting work (see <a href="preview.html#place">the preview</a>).</li>
   <li><span class="st st-proposed">Designed</span><strong>One layout for every screen</strong>: desktop, tablet and phone, mouse and touch.</li>
-  <li><span class="st st-proposed">Designed</span><strong>An assistant.</strong> With your own API key, ask in words ("put three mossy rocks on the left bank") and a language model makes the change through the same edits, shows the difference, and can be undone like any other change.</li>
+  <li><span class="st st-proposed">Deferred</span><strong>An assistant.</strong> The design remains: with your own API key, ask in words and review the proposed edit. Editing by hand is being made excellent first.</li>
   <li><span class="st st-proposed">Designed</span><strong>Seeds and sweeps</strong>: a strip of the same tile at other seeds, or across a range of one control, picked by clicking.</li>
-  <li><span class="st st-plain">Planned</span><strong>Draft builds.</strong> A quick build at fewer cells per square, with grass, leaves and other fine detail drawn as light stand-ins, so the view answers a change in well under a second. The full build follows and replaces it.</li>
   <li><span class="st st-plain">Planned</span><strong>Per-entry rebuilds.</strong> Keep each stack entry's solids, keyed by what it read, and rebuild only the entries a change touches, then the union and the gate.</li>
   <li><span class="st st-plain">Planned</span><strong>Smaller meshes.</strong> Indexed and quantised meshes for the view (a 2×2 grass tile is 140 MB sent whole today), needed before a view on another device.</li>
   <li><span class="st st-plain">Planned</span><strong>Section cuts and measuring</strong> in the view.</li>
