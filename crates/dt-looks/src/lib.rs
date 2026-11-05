@@ -234,54 +234,157 @@ pub trait Look: Send + Sync {
     }
 }
 
+/// How a row builds its look: the name as written (a rock row serves four
+/// names), the controls and the children.
+type Builder = fn(&str, &[Control], &[Child]) -> Result<Box<dyn Look>, LookError>;
+
+/// One built look: everything the rest of the program asks about it.
+struct Row {
+    /// The name as written in a stack.
+    name: &'static str,
+    /// The controls it takes (a word's numbers, `clods.density`, come with
+    /// their control).
+    controls: &'static [&'static str],
+    /// The place words it honours (`along`, `at`, `against`).
+    places: &'static [&'static str],
+    /// Whether a `scatter` may hold it.
+    scatterable: bool,
+    /// Builds it.
+    build: Builder,
+}
+
+/// Every built look, one row each. A look not listed is not built yet.
+static LOOKS: &[Row] = &[
+    Row {
+        name: "ground",
+        controls: ground::CONTROLS,
+        places: &[],
+        scatterable: false,
+        build: |_, c, _| Ok(Box::new(ground::Ground::new(c)?)),
+    },
+    Row {
+        name: "dirt",
+        controls: dirt::CONTROLS,
+        places: &[],
+        scatterable: false,
+        build: |_, c, _| Ok(Box::new(dirt::Dirt::new(c)?)),
+    },
+    Row {
+        name: "water",
+        controls: water::CONTROLS,
+        places: &[],
+        scatterable: false,
+        build: |_, c, _| Ok(Box::new(water::Water::new(c)?)),
+    },
+    Row {
+        name: "scatter",
+        controls: rock::SCATTER_CONTROLS,
+        places: &["against"],
+        scatterable: false,
+        build: |_, c, ch| Ok(Box::new(rock::Scatter::new(c, ch)?)),
+    },
+    Row {
+        name: "rock",
+        controls: rock::CONTROLS,
+        places: &["at"],
+        scatterable: true,
+        build: |n, c, _| Ok(Box::new(rock::Single::new(n, c)?)),
+    },
+    Row {
+        name: "stone",
+        controls: rock::CONTROLS,
+        places: &["at"],
+        scatterable: true,
+        build: |n, c, _| Ok(Box::new(rock::Single::new(n, c)?)),
+    },
+    Row {
+        name: "boulder",
+        controls: rock::CONTROLS,
+        places: &["at"],
+        scatterable: true,
+        build: |n, c, _| Ok(Box::new(rock::Single::new(n, c)?)),
+    },
+    Row {
+        name: "pebble",
+        controls: rock::CONTROLS,
+        places: &["at"],
+        scatterable: true,
+        build: |n, c, _| Ok(Box::new(rock::Single::new(n, c)?)),
+    },
+    Row {
+        name: "wall",
+        controls: wall::CONTROLS,
+        places: &["along"],
+        scatterable: false,
+        build: |_, c, _| Ok(Box::new(wall::Wall::new(c)?)),
+    },
+    Row {
+        name: "floor",
+        controls: floor::CONTROLS,
+        places: &[],
+        scatterable: false,
+        build: |_, c, _| Ok(Box::new(floor::Floor::new(c)?)),
+    },
+    Row {
+        name: "tree",
+        controls: tree::CONTROLS,
+        places: &["at"],
+        scatterable: false,
+        build: |_, c, _| Ok(Box::new(tree::Tree::new(c)?)),
+    },
+    Row {
+        name: "grass",
+        controls: grass::CONTROLS,
+        places: &[],
+        scatterable: false,
+        build: |_, c, _| Ok(Box::new(grass::Grass::new(c)?)),
+    },
+    Row {
+        name: "reeds",
+        controls: reeds::CONTROLS,
+        places: &[],
+        scatterable: false,
+        build: |_, c, _| Ok(Box::new(reeds::Reeds::new(c)?)),
+    },
+    Row {
+        name: "cliff",
+        controls: cliff::CONTROLS,
+        places: &["along"],
+        scatterable: false,
+        build: |_, c, _| Ok(Box::new(cliff::Cliff::new(c)?)),
+    },
+    Row {
+        name: "flowers",
+        controls: flowers::CONTROLS,
+        places: &[],
+        scatterable: false,
+        build: |_, c, _| Ok(Box::new(flowers::Flowers::new(c)?)),
+    },
+];
+
+fn row(name: &str) -> Option<&'static Row> {
+    LOOKS.iter().find(|r| r.name == name)
+}
+
 /// The controls a built look takes so far, or `None` for a look not built
 /// yet.  The evaluator passes a look only these (written, or their
 /// defaults from dt-doc's schema).
 #[must_use]
 pub fn takes(name: &str) -> Option<&'static [&'static str]> {
-    match name {
-        "ground" => Some(ground::CONTROLS),
-        "dirt" => Some(dirt::CONTROLS),
-        "water" => Some(water::CONTROLS),
-        "scatter" => Some(rock::SCATTER_CONTROLS),
-        n if rock::is_thing(n) => Some(rock::CONTROLS),
-        "wall" => Some(wall::CONTROLS),
-        "floor" => Some(floor::CONTROLS),
-        "tree" => Some(tree::CONTROLS),
-        "grass" => Some(grass::CONTROLS),
-        "reeds" => Some(reeds::CONTROLS),
-        "cliff" => Some(cliff::CONTROLS),
-        "flowers" => Some(flowers::CONTROLS),
-        _ => None,
-    }
+    row(name).map(|r| r.controls)
 }
 
 /// Whether a look `name` can hold the child `child` yet.
 #[must_use]
 pub fn holds(name: &str, child: &str) -> bool {
-    name == "scatter" && rock::is_thing(child)
+    name == "scatter" && row(child).is_some_and(|r| r.scatterable)
 }
 
 /// The place words a built look honours (`along`, `at`); the evaluator
 /// sets every other one aside as not built yet.
 #[must_use]
 pub fn places(name: &str) -> &'static [&'static str] {
-    match name {
-        "wall" => &["along"],
-        "tree" => &["at"],
-        "cliff" => &["along"],
-        "scatter" => &["against"],
-        n if rock::is_thing(n) => &["at"],
-        _ => &[],
-    }
-}
-
-/// The look `name` with its controls.
-///
-/// # Errors
-/// [`LookError`] for an unknown look or a control it does not take.
-pub fn look(name: &str, controls: &[Control]) -> Result<Box<dyn Look>, LookError> {
-    look_with(name, controls, &[])
+    row(name).map_or(&[], |r| r.places)
 }
 
 /// The look `name` with its controls and children (a scatter's things).
@@ -294,25 +397,19 @@ pub fn look_with(
     controls: &[Control],
     children: &[Child],
 ) -> Result<Box<dyn Look>, LookError> {
-    match name {
-        "ground" => Ok(Box::new(ground::Ground::new(controls)?)),
-        "dirt" => Ok(Box::new(dirt::Dirt::new(controls)?)),
-        "water" => Ok(Box::new(water::Water::new(controls)?)),
-        "scatter" => Ok(Box::new(rock::Scatter::new(controls, children)?)),
-        n if rock::is_thing(n) => Ok(Box::new(rock::Single::new(n, controls)?)),
-        "wall" => Ok(Box::new(wall::Wall::new(controls)?)),
-        "floor" => Ok(Box::new(floor::Floor::new(controls)?)),
-        "tree" => Ok(Box::new(tree::Tree::new(controls)?)),
-        "grass" => Ok(Box::new(grass::Grass::new(controls)?)),
-        "reeds" => Ok(Box::new(reeds::Reeds::new(controls)?)),
-        "cliff" => Ok(Box::new(cliff::Cliff::new(controls)?)),
-        "flowers" => Ok(Box::new(flowers::Flowers::new(controls)?)),
-        _ => Err(LookError {
+    match row(name) {
+        Some(r) => (r.build)(name, controls, children),
+        None => Err(LookError {
             control: None,
             message: format!("unknown look `{name}`"),
             help: None,
         }),
     }
+}
+
+/// The names of every built look, in table order.
+pub fn built() -> impl Iterator<Item = &'static str> {
+    LOOKS.iter().map(|r| r.name)
 }
 
 /// The connector for a system: `db` (DungeonBlocks) or `ol` (OpenLOCK).
