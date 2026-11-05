@@ -29,7 +29,7 @@ use dt_kit::{
 };
 
 use crate::ground::Shape;
-use crate::{Control, Ctx, Look, LookError, Plan, Value, Write, only};
+use crate::{Control, Ctx, Element, LookError, Plan, Value, Write, only};
 
 /// The controls `dirt` takes (`bank` comes with walls and cliffs).
 pub const CONTROLS: &[&str] = &[
@@ -231,7 +231,7 @@ fn between(rng: &mut Rng, (lo, hi): (f64, f64)) -> f64 {
     rng.uniform(lo, hi)
 }
 
-/// What the dirt look counted, for the build record.
+/// What the dirt element counted, for the build record.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Counts {
     /// Clods placed.
@@ -720,7 +720,7 @@ fn place_pebbles(
     (mask, counts)
 }
 
-impl Look for Dirt {
+impl Element for Dirt {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Surface,
@@ -748,7 +748,7 @@ impl Look for Dirt {
     }
 }
 
-/// The printable-texture rule (docs/looks/ground.html): the share of the
+/// The printable-texture rule (docs/elements/ground.html): the share of the
 /// interior (1 mm or more from the rim) whose 1.5 mm window holds at
 /// least one 0.2 mm layer of relief. The rule is 97% or more.
 #[must_use]

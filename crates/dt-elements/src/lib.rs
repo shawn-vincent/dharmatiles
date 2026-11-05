@@ -1,9 +1,9 @@
-//! dt-looks: the built-in looks.
+//! dt-elements: the built-in elements.
 //!
-//! Each look is one module written only in dt-kit's public operations. A
-//! look says what it reads and writes in a plan ([`Look::plan`]), so the
+//! Each element is one module written only in dt-kit's public operations. A
+//! element says what it reads and writes in a plan ([`Element::plan`]), so the
 //! scheduler in dt-eval can order the stack and refuse reads nothing can
-//! satisfy; then it builds into the scene ([`Look::build`]).
+//! satisfy; then it builds into the scene ([`Element::build`]).
 //!
 //! P1: [`ground`] (then a flat surface at a level) and [`connector`]
 //! (DungeonBlocks). P2: [`ground`] in full (levels, hills, the edge
@@ -35,7 +35,7 @@ pub enum Value {
     Number(f64),
     /// A word: a choice.
     Word(String),
-    /// A range `lo..hi`, drawn by the look (once per tile, or per thing).
+    /// A range `lo..hi`, drawn by the element (once per tile, or per thing).
     Range(f64, f64),
 }
 
@@ -63,7 +63,7 @@ pub struct Control {
     pub value: Value,
 }
 
-/// A look refused its controls or failed to build.
+/// An element refused its controls or failed to build.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LookError {
     /// The control at fault, if one is.
@@ -117,7 +117,7 @@ pub enum Read {
     IfAny(&'static str),
 }
 
-/// A look's plan.
+/// An element's plan.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Plan {
     /// What it writes.
@@ -149,7 +149,7 @@ impl CellMm {
     }
 }
 
-/// Where and as what a look is built.
+/// Where and as what an element is built.
 pub struct Ctx<'a> {
     /// Its area (the whole tile unless `in=` names a region).
     pub area: &'a Mask,
@@ -165,11 +165,11 @@ pub struct Ctx<'a> {
     /// `[y_lo, y_hi]` (equal ends for a fixed point; a range is drawn
     /// from the entry's seed). `None` without `at=`.
     pub at: Option<[[f64; 2]; 2]>,
-    /// The printer the build is checked against: looks that cut or cull
+    /// The printer the build is checked against: elements that cut or cull
     /// to the gate's rule (a tree's [`dt_kit::stand`], its leaf cull) use
     /// its numbers.
     pub printer: dt_kit::Printer,
-    /// `against=`: the kind of thing this look gathers against (a scatter),
+    /// `against=`: the kind of thing this element gathers against (a scatter),
     /// if written.
     pub against: Option<&'a str>,
     /// The planned feet of every solid that has one (a cliff's), from the
@@ -204,7 +204,7 @@ pub struct Foot {
 /// share of the mix (`weight=`, default 1).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Child {
-    /// The thing's look.
+    /// The thing's element.
     pub name: String,
     /// Its controls.
     pub controls: Vec<Control>,
@@ -212,8 +212,8 @@ pub struct Child {
     pub weight: f64,
 }
 
-/// A built-in look.
-pub trait Look: Send + Sync {
+/// A built-in element.
+pub trait Element: Send + Sync {
     /// What it reads and writes.
     fn plan(&self) -> Plan;
 
@@ -233,11 +233,11 @@ pub trait Look: Send + Sync {
     }
 }
 
-/// How a row builds its look: the name as written (a rock row serves four
+/// How a row builds its element: the name as written (a rock row serves four
 /// names), the controls and the children.
-type Builder = fn(&str, &[Control], &[Child]) -> Result<Box<dyn Look>, LookError>;
+type Builder = fn(&str, &[Control], &[Child]) -> Result<Box<dyn Element>, LookError>;
 
-/// One built look: everything the rest of the program asks about it.
+/// One built element: everything the rest of the program asks about it.
 struct Row {
     /// The name as written in a stack.
     name: &'static str,
@@ -252,8 +252,8 @@ struct Row {
     build: Builder,
 }
 
-/// Every built look, one row each. A look not listed is not built yet.
-static LOOKS: &[Row] = &[
+/// Every built element, one row each. An element not listed is not built yet.
+static ELEMENTS: &[Row] = &[
     Row {
         name: "ground",
         controls: ground::CONTROLS,
@@ -362,60 +362,60 @@ static LOOKS: &[Row] = &[
 ];
 
 fn row(name: &str) -> Option<&'static Row> {
-    LOOKS.iter().find(|r| r.name == name)
+    ELEMENTS.iter().find(|r| r.name == name)
 }
 
-/// The controls a built look takes so far, or `None` for a look not built
-/// yet.  The evaluator passes a look only these (written, or their
+/// The controls a built element takes so far, or `None` for an element not built
+/// yet.  The evaluator passes an element only these (written, or their
 /// defaults from dt-doc's schema).
 #[must_use]
 pub fn takes(name: &str) -> Option<&'static [&'static str]> {
     row(name).map(|r| r.controls)
 }
 
-/// Whether a look `name` can hold the child `child` yet.
+/// Whether an element `name` can hold the child `child` yet.
 #[must_use]
 pub fn holds(name: &str, child: &str) -> bool {
     name == "scatter" && row(child).is_some_and(|r| r.scatterable)
 }
 
-/// The place words a built look honours (`along`, `at`); the evaluator
+/// The place words a built element honours (`along`, `at`); the evaluator
 /// sets every other one aside as not built yet.
 #[must_use]
 pub fn places(name: &str) -> &'static [&'static str] {
     row(name).map_or(&[], |r| r.places)
 }
 
-/// The look `name` with its controls and children (a scatter's things).
+/// The element `name` with its controls and children (a scatter's things).
 ///
 /// # Errors
-/// [`LookError`] for an unknown look, a control it does not take, or a
+/// [`LookError`] for an unknown element, a control it does not take, or a
 /// child it cannot hold.
-pub fn look_with(
+pub fn element_with(
     name: &str,
     controls: &[Control],
     children: &[Child],
-) -> Result<Box<dyn Look>, LookError> {
+) -> Result<Box<dyn Element>, LookError> {
     match row(name) {
         Some(r) => (r.build)(name, controls, children),
         None => Err(LookError {
             control: None,
-            message: format!("unknown look `{name}`"),
+            message: format!("unknown element `{name}`"),
             help: None,
         }),
     }
 }
 
-/// The names of every built look, in table order.
+/// The names of every built element, in table order.
 pub fn built() -> impl Iterator<Item = &'static str> {
-    LOOKS.iter().map(|r| r.name)
+    ELEMENTS.iter().map(|r| r.name)
 }
 
 /// The connector for a system: `db` (DungeonBlocks) or `ol` (OpenLOCK).
 ///
 /// # Errors
 /// [`LookError`] for an unknown system.
-pub fn connector(system: &str) -> Result<Box<dyn Look>, LookError> {
+pub fn connector(system: &str) -> Result<Box<dyn Element>, LookError> {
     match system {
         "db" => Ok(Box::new(connector::DungeonBlocks::default())),
         "ol" => Ok(Box::new(openlock::OpenLock::default())),
@@ -429,14 +429,14 @@ pub fn connector(system: &str) -> Result<Box<dyn Look>, LookError> {
 
 /// Refuse any control not in `known` (a word's numbers, `clods.density`,
 /// come with their control).
-fn only(look: &str, controls: &[Control], known: &[&str]) -> Result<(), LookError> {
+fn only(element: &str, controls: &[Control], known: &[&str]) -> Result<(), LookError> {
     for c in controls {
         let base = c.name.split('.').next().unwrap_or(&c.name);
         if !known.contains(&base) {
             return Err(LookError::control(
                 &c.name,
-                format!("`{look}` has no control `{}`", c.name),
-                format!("{look} takes: {}", known.join(", ")),
+                format!("`{element}` has no control `{}`", c.name),
+                format!("{element} takes: {}", known.join(", ")),
             ));
         }
     }

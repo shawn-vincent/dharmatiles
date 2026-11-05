@@ -3,8 +3,8 @@
 use kdl::{KdlEntry, KdlValue};
 
 use super::{Ctx, Decoder, sub_span, value_span};
+use crate::elements::TAGS;
 use crate::expr::{self, Expr, Unit};
-use crate::looks::TAGS;
 use crate::model::{Num, Spanned, Value};
 use crate::schema::{Axis, Control, Word, did_you_mean};
 

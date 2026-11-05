@@ -3,7 +3,7 @@
 //!
 //! A form is built as a [`TriMesh`] in its own frame (a level set of a
 //! signed distance, a convex hull), finished there ([`relief`], the
-//! common stone texture; any transform the look applies to positions),
+//! common stone texture; any transform the element applies to positions),
 //! and then becomes one leaf solid with [`solid`] under its slot. That is
 //! the one allowed round trip through a triangle mesh (`dt_geom::source`
 //! rule 2): every form is a single-source leaf before its material is

@@ -263,12 +263,12 @@ function renderPlan(el, p, path) {
   for (const s of p.stack) {
     const item = typeof s === 'string' ? { label: s } : s;
     const li = document.createElement('li');
-    li.className = `fam-${FAMILY[item.look] || 'doc'}`;
+    li.className = `fam-${FAMILY[item.element] || 'doc'}`;
     if (item.href) {
       const a = document.createElement('a');
       a.href = item.href; a.target = '_blank'; a.rel = 'noopener';
       a.textContent = item.label;
-      a.title = `${item.look}: open its page in the docs`;
+      a.title = `${item.element}: open its page in the docs`;
       li.append(a);
     } else {
       li.textContent = item.label;

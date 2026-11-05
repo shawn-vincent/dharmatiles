@@ -19,7 +19,7 @@ publish = false
 dt-geom = { path = "crates/dt-geom", default-features = false }
 dt-doc = { path = "crates/dt-doc" }
 dt-kit = { path = "crates/dt-kit", default-features = false }
-dt-looks = { path = "crates/dt-looks", default-features = false }
+dt-elements = { path = "crates/dt-elements", default-features = false }
 dt-eval = { path = "crates/dt-eval", default-features = false }
 # KDL v2 only: `kdlv1`/`v1-fallback` stay off, and serde is not needed.
 kdl = { version = "6.7.1", default-features = false, features = ["span"] }
@@ -62,5 +62,5 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package.dt-kit]
 opt-level = 3
-[profile.dev.package.dt-looks]
+[profile.dev.package.dt-elements]
 opt-level = 3

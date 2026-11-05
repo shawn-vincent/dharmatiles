@@ -1,6 +1,6 @@
 [package]
 name = "dt-kit"
-description = "dharmatiles kit: the scene of tagged solids, the operations looks are written in, the audit gate, STL export and the preview renderer"
+description = "dharmatiles kit: the scene of tagged solids, the operations elements are written in, the audit gate, STL export and the preview renderer"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

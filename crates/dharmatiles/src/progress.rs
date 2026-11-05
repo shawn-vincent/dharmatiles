@@ -2,9 +2,9 @@
 //!
 //! `build` on a TTY (no `--json`) redraws a single stderr line as the build
 //! goes: the tile's place in a batch, a bar, the percentage, the stage (with
-//! a look's own count when it has one) and the elapsed time against the
+//! an element's own count when it has one) and the elapsed time against the
 //! estimate.  Piped or `--json` output is untouched.  The bar's weights come
-//! from the last build's timings (`out/.cache/timings.tsv`) or the looks'
+//! from the last build's timings (`out/.cache/timings.tsv`) or the elements'
 //! defaults (see `dt_eval::progress`).
 
 use std::io::Write;

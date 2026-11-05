@@ -17,7 +17,7 @@
 //! solid (P1 paints surfaces before any solid exists) is refused here,
 //! before anything is built (risk R8).
 
-use dt_looks::{Plan, Read, Write};
+use dt_elements::{Plan, Read, Write};
 
 /// One step of the build.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

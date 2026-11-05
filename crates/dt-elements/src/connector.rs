@@ -13,7 +13,7 @@
 use dt_kit::{Material, Outline, Scene, Solid, Tag, carve, extrude, loft, union};
 use rayon::prelude::*;
 
-use crate::{Ctx, Look, LookError, Plan, Read, Write};
+use crate::{Ctx, Element, LookError, Plan, Read, Write};
 
 /// `BaseConfig`'s DungeonBlocks constants, mm.
 #[derive(Clone, Debug, PartialEq)]
@@ -116,7 +116,7 @@ fn logo_parts(logo: &Outline) -> (Outline, Outline) {
     (Outline { contours: groove }, Outline { contours: lotus })
 }
 
-impl Look for DungeonBlocks {
+impl Element for DungeonBlocks {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid("connector"),

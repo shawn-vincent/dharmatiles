@@ -230,7 +230,7 @@ pub fn mesh(s: &Spec) -> TriMesh {
     let peak = disp.iter().copied().fold(f64::NEG_INFINITY, f64::max);
     // no dents in an underside: a dent there is a ceiling over air (the
     // layer-reach audit flags it), so the noise fades out on faces that
-    // look down past 30° below the horizon
+    // element down past 30° below the horizon
     for (k, p) in m.positions.iter_mut().enumerate() {
         let x = ((normals[k][2] - NOISE_NONE_NZ) / (NOISE_FULL_NZ - NOISE_NONE_NZ)).clamp(0.0, 1.0);
         let w = x * x * (3.0 - 2.0 * x);

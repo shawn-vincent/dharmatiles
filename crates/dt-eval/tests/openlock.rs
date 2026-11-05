@@ -27,7 +27,7 @@ fn build_at(path: &str, opts: &Options, threads: usize) -> Built {
         .unwrap_or_else(|e| panic!("{path}: {e:?}"))
 }
 
-/// Every library tile whose looks are all built.
+/// Every library tile whose elements are all built.
 fn buildable() -> Vec<String> {
     Library::paths()
         .into_iter()

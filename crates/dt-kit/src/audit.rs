@@ -21,7 +21,7 @@ use crate::shape::signed_volume;
 /// conservative target everything aims for by construction) but within
 /// `max_deg` are reported as band, not overhang, up to `share` of the
 /// downward-facing area. Past `max_deg` they are overhang and fail. Shawn,
-/// 3 Nov 2026 for trees, generalised 4 Nov 2026 to every look: 55–65° in
+/// 3 Nov 2026 for trees, generalised 4 Nov 2026 to every element: 55–65° in
 /// small patches, 65° the hard cap (a 0.2 mm layer steps 0.2·tan 65° =
 /// 0.43 mm, under a 0.45 mm line). The share is the trees' measured one.
 /// Past the cap, small patches are allowed too (Shawn, 4 Nov 2026: "allow
@@ -41,7 +41,7 @@ pub struct Band {
 }
 
 impl Band {
-    /// The band every look gets: 55–65° up to 0.1% of the downward area,
+    /// The band every element gets: 55–65° up to 0.1% of the downward area,
     /// and over 65° up to another 0.1%.
     pub const DEFAULT: Self = Self {
         materials: &[],
@@ -121,7 +121,7 @@ pub struct Dropped {
     pub triangles: usize,
     /// Its volume, mm³.
     pub volume_mm3: f64,
-    /// Its bounding box, mm (low corner, high corner): where to look.
+    /// Its bounding box, mm (low corner, high corner): where to element.
     pub bounds: [[f64; 3]; 2],
 }
 
@@ -157,7 +157,7 @@ pub struct Audit {
     /// The overhang area allowed, mm²: the printer's budget, or the band's
     /// share past its cap, whichever is larger.
     pub overhang_budget_mm2: f64,
-    /// Area of the faces in a look's tolerance band, mm² (past the
+    /// Area of the faces in an element's tolerance band, mm² (past the
     /// printer's overhang, within the band's cap; not in `overhang_mm2`).
     pub band_mm2: f64,
     /// The band area allowed, mm² (0 without a band).
@@ -231,7 +231,7 @@ pub fn audit(input: &TriMesh, footprint: [f64; 2], printer: &Printer) -> (Export
     audit_banded(input, footprint, printer, &[], Some(&Band::DEFAULT))
 }
 
-/// [`audit`] with a look's tolerance [`Band`]; `materials` holds each
+/// [`audit`] with an element's tolerance [`Band`]; `materials` holds each
 /// input triangle's material.
 #[must_use]
 pub fn audit_banded(

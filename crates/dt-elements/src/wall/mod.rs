@@ -29,7 +29,7 @@ use dt_kit::form::{clip, solid};
 use dt_kit::{Mask, Material, Rng, Scene, Seed, Solid, Tag, TriMesh, union};
 use rayon::prelude::*;
 
-use crate::{Control, Ctx, Look, LookError, Plan, Read, Value, Write, only};
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write, only};
 use block::{Block, Finish, MAX_PROUD_MM};
 use layout::{Bond, Cell, Courses, End, Envelope, Seg};
 
@@ -227,7 +227,7 @@ impl Mason {
     }
 }
 
-/// The `wall` look.
+/// The `wall` element.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Wall {
     mason: Mason,
@@ -330,7 +330,7 @@ impl Wall {
                 }
                 "ruin" => {
                     // a share: dt-doc takes it only as a percent and the
-                    // evaluator hands it on divided by 100, so the look
+                    // evaluator hands it on divided by 100, so the element
                     // reads 0..1 and nothing else (no bare-number guess:
                     // `150%` is refused, not read as 1.5%)
                     let v = match c.value {
@@ -390,7 +390,7 @@ impl Wall {
     }
 }
 
-impl Look for Wall {
+impl Element for Wall {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid("wall"),

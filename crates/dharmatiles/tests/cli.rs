@@ -78,7 +78,7 @@ fn the_engine_version_is_the_workspace_version_and_commit() {
 }
 
 #[test]
-fn looks_lists_every_look() {
+fn elements_lists_every_element() {
     let o = Command::new(EXE).arg("elements").output().unwrap();
     assert_eq!(o.status.code(), Some(0));
     let text = String::from_utf8(o.stdout).unwrap();
@@ -98,7 +98,7 @@ fn looks_lists_every_look() {
 }
 
 #[test]
-fn looks_ground_lists_its_controls() {
+fn elements_ground_lists_its_controls() {
     let o = Command::new(EXE)
         .args(["elements", "ground"])
         .output()
@@ -140,7 +140,7 @@ fn an_unknown_look_is_an_error_with_a_hint() {
 }
 
 #[test]
-fn looks_dirt_json_has_units_limits_defaults_and_subs() {
+fn elements_dirt_json_has_units_limits_defaults_and_subs() {
     let o = Command::new(EXE)
         .args(["elements", "dirt", "--json"])
         .output()

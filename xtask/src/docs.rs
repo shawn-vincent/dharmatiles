@@ -1,5 +1,5 @@
 //! `cargo xtask docs`: fill each element page's generated reference block
-//! from the program's own look schema (`dharmatiles looks --json`), so the
+//! from the program's own element schema (`dharmatiles elements --json`), so the
 //! site's controls tables cannot drift from what the program accepts.
 //!
 //! A page opts in with a marked block:
@@ -43,13 +43,13 @@ pub fn run(root: &Path, check: bool) -> Result<(), String> {
         .iter()
         .filter_map(|l| l["name"].as_str().map(str::to_owned))
         .collect();
-    let mut looks = Vec::new();
+    let mut elements = Vec::new();
     for n in &names {
         let o = Command::new(&bin)
             .args(["elements", n, "--json"])
             .output()
             .map_err(|e| e.to_string())?;
-        looks.push(serde_json::from_slice::<Value>(&o.stdout).map_err(|e| e.to_string())?);
+        elements.push(serde_json::from_slice::<Value>(&o.stdout).map_err(|e| e.to_string())?);
     }
     let tiles = library_tiles(&root.join("library/tiles"))?;
 
@@ -75,7 +75,7 @@ pub fn run(root: &Path, check: bool) -> Result<(), String> {
     pages.sort();
     for page in pages {
         let text = std::fs::read_to_string(&page).map_err(|e| e.to_string())?;
-        let new = fill(&text, &looks, &tiles)?;
+        let new = fill(&text, &elements, &tiles)?;
         if new != text {
             if check {
                 stale.push(page.display().to_string());
@@ -129,7 +129,7 @@ fn writes(text: &str, name: &str) -> bool {
     })
 }
 
-fn fill(text: &str, looks: &[Value], tiles: &[(String, String)]) -> Result<String, String> {
+fn fill(text: &str, elements: &[Value], tiles: &[(String, String)]) -> Result<String, String> {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
     while let Some(i) = rest.find(OPEN) {
@@ -139,7 +139,7 @@ fn fill(text: &str, looks: &[Value], tiles: &[(String, String)]) -> Result<Strin
         let close = after
             .find(CLOSE)
             .ok_or_else(|| format!("gen:reference {name} has no {CLOSE}"))?;
-        let look = looks
+        let element = elements
             .iter()
             .find(|l| l["name"] == name)
             .ok_or_else(|| format!("gen:reference {name}: no such element"))?;
@@ -147,7 +147,7 @@ fn fill(text: &str, looks: &[Value], tiles: &[(String, String)]) -> Result<Strin
         out.push_str(OPEN);
         out.push_str(name);
         out.push_str(" -->\n");
-        out.push_str(&reference(look, tiles));
+        out.push_str(&reference(element, tiles));
         out.push_str(CLOSE);
         rest = &after[close + CLOSE.len()..];
     }
@@ -184,10 +184,10 @@ fn role_text(role: &str) -> &'static str {
     }
 }
 
-fn reference(look: &Value, tiles: &[(String, String)]) -> String {
-    let name = look["name"].as_str().unwrap_or_default();
+fn reference(element: &Value, tiles: &[(String, String)]) -> String {
+    let name = element["name"].as_str().unwrap_or_default();
     let mut s = String::new();
-    let place: Vec<String> = look["place"]
+    let place: Vec<String> = element["place"]
         .as_array()
         .map(|a| {
             a.iter()
@@ -200,7 +200,7 @@ fn reference(look: &Value, tiles: &[(String, String)]) -> String {
     let _ = writeln!(
         s,
         "  <div><div class=\"k\">Kind</div><div class=\"v\">{}</div></div>",
-        role_text(look["role"].as_str().unwrap_or_default())
+        role_text(element["role"].as_str().unwrap_or_default())
     );
     let _ = writeln!(
         s,
@@ -211,7 +211,7 @@ fn reference(look: &Value, tiles: &[(String, String)]) -> String {
             place.join(" ")
         }
     );
-    let needs: Vec<String> = look["needs"]
+    let needs: Vec<String> = element["needs"]
         .as_array()
         .map(|a| {
             a.iter()
@@ -227,7 +227,7 @@ fn reference(look: &Value, tiles: &[(String, String)]) -> String {
             needs.join(" ")
         );
     }
-    if look["holds_scatter"].as_bool() == Some(true) {
+    if element["holds_scatter"].as_bool() == Some(true) {
         let _ = writeln!(
             s,
             "  <div><div class=\"k\">Holds</div><div class=\"v\">a <a href=\"scatter.html\"><code>scatter</code></a> inside it lands on it</div></div>"
@@ -236,7 +236,7 @@ fn reference(look: &Value, tiles: &[(String, String)]) -> String {
     let _ = writeln!(
         s,
         "  <div><div class=\"k\">Built</div><div class=\"v\">{}</div></div>",
-        if look["built"].as_bool() == Some(true) {
+        if element["built"].as_bool() == Some(true) {
             "yes"
         } else {
             "not yet"
@@ -244,7 +244,7 @@ fn reference(look: &Value, tiles: &[(String, String)]) -> String {
     );
     let _ = writeln!(s, "</div>");
 
-    let controls = look["controls"].as_array().cloned().unwrap_or_default();
+    let controls = element["controls"].as_array().cloned().unwrap_or_default();
     let (plain, expert): (Vec<_>, Vec<_>) = controls
         .iter()
         .partition(|c| c["expert"].as_bool() != Some(true));

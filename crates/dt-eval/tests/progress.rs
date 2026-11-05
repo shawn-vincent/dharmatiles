@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use dt_eval::progress::{Status, Timings, Tracker, plan_stages};
 use dt_eval::{Built, Library, Options, Progress, build, build_with, check};
 
-/// One tile for each look that reports sub-progress.
+/// One tile for each element that reports sub-progress.
 const TILES: &[&str] = &[
     "lib:tiles/test/2x2-grass.dtile",
     "lib:tiles/test/1x1-wall-cut-stone.dtile",
@@ -96,7 +96,7 @@ impl dt_kit::Reporter for Subs {
 }
 
 #[test]
-fn looks_with_a_loop_report_their_counts() {
+fn elements_with_a_loop_report_their_counts() {
     for (path, what) in [
         ("lib:tiles/test/1x1-wall-cut-stone.dtile", "stones"),
         ("lib:tiles/test/2x2-grass.dtile", "blades"),

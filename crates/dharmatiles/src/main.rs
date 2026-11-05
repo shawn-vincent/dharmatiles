@@ -46,8 +46,8 @@ mod bambu;
 mod build;
 mod check;
 mod cli;
+mod elements;
 mod library;
-mod looks;
 mod mcp;
 mod preview;
 mod progress;
@@ -134,7 +134,7 @@ fn main() -> ExitCode {
                 )
             })
         }
-        Command::Elements { name, json } => looks::run(name.as_deref(), json),
+        Command::Elements { name, json } => elements::run(name.as_deref(), json),
         Command::Mcp { http } => http.map_or_else(mcp::run, |a| mcp::serve_http(&a)),
         Command::Audit {
             path,

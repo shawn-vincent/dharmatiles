@@ -116,7 +116,7 @@ fn flat_tile_is_one_ground() {
     // Flat at the edge level, the lowest the ground may sit.
     assert_eq!(g.controls.len(), 1, "flat: only its level is written");
     // Its documented default level is `ground`.
-    let level = g.look().unwrap().control("level").unwrap();
+    let level = g.element().unwrap().control("level").unwrap();
     assert_eq!(level.default, "ground");
     assert_eq!(level.scaling(), Scaling::Photocopy);
 }

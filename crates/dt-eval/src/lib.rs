@@ -8,7 +8,7 @@
 //!
 //! Documents are read by dt-doc, through [`doc`]: imports, levels,
 //! definitions and defaults resolved, the edge contract read, and what
-//! needs a look not built yet set aside (see its module docs).
+//! needs an element not built yet set aside (see its module docs).
 
 pub mod diag;
 pub mod doc;
@@ -19,8 +19,8 @@ pub mod source;
 use std::path::{Path, PathBuf};
 
 use dt_doc::schema::did_you_mean;
+use dt_elements::{Control, Ctx, Element};
 use dt_kit::{Audit, BuildRecord, Export, Frame, Mask, Material, Printer, Scene, Seed, Stage};
-use dt_looks::{Control, Ctx, Look};
 
 pub use diag::Diag;
 pub use dt_kit::Progress;
@@ -113,7 +113,7 @@ pub struct Built {
     pub footprint: [f64; 2],
     /// The edge level the ground meets every tile edge at, mm.
     pub edge_mm: Option<f64>,
-    /// Numbers the looks noted (counts), in build order.
+    /// Numbers the elements noted (counts), in build order.
     pub notes: Vec<(String, f64)>,
     /// The ground surface as built, for painted previews.
     pub surface: Option<(dt_kit::Grid, dt_kit::Mask)>,
@@ -174,7 +174,7 @@ pub struct Checked {
     pub tile: Option<Tile>,
     /// The tile's build order.
     pub steps: Vec<Step>,
-    looks: Vec<Box<dyn Look>>,
+    elements: Vec<Box<dyn Element>>,
     /// Each step's area: `None` for the whole tile, else a region index.
     /// Masks are only made by `build` (one per distinct area), so `check`
     /// holds no grid however long the stack.
@@ -203,7 +203,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
             file: read.file,
             tile: None,
             steps: Vec::new(),
-            looks: Vec::new(),
+            elements: Vec::new(),
             areas: Vec::new(),
             frame: Frame::dungeonblocks(1, 1),
             seed: 0,
@@ -214,7 +214,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
     }
     let frame = Frame::for_system(&opts.system, tile.cols, tile.rows);
     let mut errors = Vec::new();
-    let mut looks: Vec<Box<dyn Look>> = Vec::new();
+    let mut elements: Vec<Box<dyn Element>> = Vec::new();
     let mut areas = Vec::new();
     for e in &tile.stack {
         let as_controls = |settings: &[doc::Setting]| -> Vec<Control> {
@@ -227,17 +227,17 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
                 .collect()
         };
         let controls = as_controls(&e.controls);
-        let children: Vec<dt_looks::Child> = e
+        let children: Vec<dt_elements::Child> = e
             .children
             .iter()
-            .map(|c| dt_looks::Child {
+            .map(|c| dt_elements::Child {
                 name: c.what.value.clone(),
                 controls: as_controls(&c.controls),
                 weight: c.weight,
             })
             .collect();
-        match dt_looks::look_with(&e.what.value, &controls, &children) {
-            Ok(l) => looks.push(l),
+        match dt_elements::element_with(&e.what.value, &controls, &children) {
+            Ok(l) => elements.push(l),
             Err(le) => {
                 let at = le
                     .control
@@ -266,15 +266,15 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
         );
     }
     // the tile is built at the finest cell any entry needs
-    let frame = looks
+    let frame = elements
         .iter()
         .filter_map(|l| l.plan().cell_mm)
         .min()
         .map_or(frame, |c| frame.with_cell(c.get()));
     errors.extend(empty_regions(&tile, &frame, &areas));
-    match dt_looks::connector(&opts.system) {
+    match dt_elements::connector(&opts.system) {
         Ok(c) => {
-            looks.push(c);
+            elements.push(c);
             areas.push(None);
         }
         Err(le) => errors.push(Diag::plain("dt::system", le.message).maybe_help(le.help)),
@@ -282,7 +282,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
     if !errors.is_empty() {
         return Err(errors);
     }
-    let plans: Vec<_> = looks.iter().map(|l| l.plan()).collect();
+    let plans: Vec<_> = elements.iter().map(|l| l.plan()).collect();
     let steps = plan::schedule(&plans).map_err(|r| {
         let (msg, entry) = match &r {
             Refusal::NoWriter { entry, kind } => (
@@ -308,7 +308,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
         file: read.file,
         tile: Some(tile),
         steps,
-        looks,
+        elements,
         areas,
         frame,
         seed,
@@ -348,7 +348,7 @@ fn region_mask(tile: &Tile, frame: &Frame, r: &doc::Region) -> Mask {
     dt_kit::area(frame, &lines, &r.fills)
 }
 
-/// One error for each region a look acts in that covers no ground: its
+/// One error for each region an element acts in that covers no ground: its
 /// fill points all lie on its lines.  One mask at a time, then dropped.
 fn empty_regions(tile: &Tile, frame: &Frame, areas: &[Option<usize>]) -> Vec<Diag> {
     let used: std::collections::BTreeSet<usize> = areas.iter().flatten().copied().collect();
@@ -407,7 +407,7 @@ pub fn build(sources: &dyn Source, path: &str, opts: &Options) -> Result<Built, 
     build_with(sources, path, opts, &Progress::none())
 }
 
-/// [`build`], reporting each stage (and a look's sub-progress) to
+/// [`build`], reporting each stage (and an element's sub-progress) to
 /// `progress`.  The report never touches geometry or seeds: the result is
 /// the same with any reporter, or none.
 ///
@@ -467,13 +467,13 @@ pub fn build_with(
     let paths = entry_paths(tile);
     // with water, the ground's areas are banked down to each other once the
     // surfaces are painted, before any solid reads the ground
-    let writes: Vec<dt_looks::Write> = c.looks.iter().map(|l| l.plan().writes).collect();
-    let fills = writes.contains(&dt_looks::Write::Fill);
+    let writes: Vec<dt_elements::Write> = c.elements.iter().map(|l| l.plan().writes).collect();
+    let fills = writes.contains(&dt_elements::Write::Fill);
     // plan, then build: what stands on the ground says where its foot is
     // before anything is built, so a bank or scatter listed before it
     // (or after) can lean on it
     let mut foots = Vec::new();
-    for (i, look) in c.looks.iter().enumerate() {
+    for (i, element) in c.elements.iter().enumerate() {
         let ctx = Ctx {
             area: &masks[mask_of[i]],
             path: &paths[i],
@@ -488,7 +488,7 @@ pub fn build_with(
             against: None,
             foots: &[],
         };
-        match look.foot(&c.frame, &ctx) {
+        match element.foot(&c.frame, &ctx) {
             Ok(Some(f)) => foots.push(f),
             Ok(None) => {}
             Err(e) => return Err(fail(format!("{}: {}", paths[i], e.message))),
@@ -498,7 +498,7 @@ pub fn build_with(
     for (n, step) in c.steps.iter().enumerate() {
         let t_stage = std::time::Instant::now();
         progress.begin(&keys[n].0, &keys[n].1);
-        let surface = matches!(*step, Step::Entry(i) if writes[i] == dt_looks::Write::Surface);
+        let surface = matches!(*step, Step::Entry(i) if writes[i] == dt_elements::Write::Surface);
         if fills && !painted && !surface {
             painted = true;
             scene.bank();
@@ -519,7 +519,7 @@ pub fn build_with(
                     against: tile.stack.get(i).and_then(|e| e.against.as_deref()),
                     foots: &foots,
                 };
-                c.looks[i].build(&mut scene, &ctx).map_err(|e| {
+                c.elements[i].build(&mut scene, &ctx).map_err(|e| {
                     let msg = format!("{}: {}", paths[i], e.message);
                     match tile.stack.get(i) {
                         Some(en) => vec![
@@ -543,7 +543,7 @@ pub fn build_with(
             .filter(|e| {
                 let brick = e.controls.iter().any(|c| {
                     c.name == "style"
-                        && matches!(&c.value, dt_looks::Value::Word(w) if w.contains("brick"))
+                        && matches!(&c.value, dt_elements::Value::Word(w) if w.contains("brick"))
                 });
                 brick == is_brick
             })
@@ -594,8 +594,8 @@ pub fn build_with(
     })
 }
 
-/// Seeds by path: `tile/<name>/<look>/<k>`, `k` counting same-named
-/// entries, so adding an entry of another look changes no other seed.
+/// Seeds by path: `tile/<name>/<element>/<k>`, `k` counting same-named
+/// entries, so adding an entry of another element changes no other seed.
 fn entry_paths(tile: &Tile) -> Vec<String> {
     let mut seen: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
     let mut out: Vec<String> = tile

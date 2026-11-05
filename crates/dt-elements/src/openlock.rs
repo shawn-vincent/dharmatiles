@@ -16,7 +16,7 @@
 
 use dt_kit::{Material, Outline, Scene, Tag, carve, extrude};
 
-use crate::{Ctx, Look, LookError, Plan, Read, Write};
+use crate::{Ctx, Element, LookError, Plan, Read, Write};
 
 /// The clip constants, mm. These are the system's own sizes and do
 /// not scale: a clip is the same clip on every tile.
@@ -121,7 +121,7 @@ impl OpenLock {
     }
 }
 
-impl Look for OpenLock {
+impl Element for OpenLock {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid("connector"),

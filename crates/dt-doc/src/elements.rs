@@ -1,12 +1,12 @@
-//! The built-in looks and their controls: the R6 vocabulary tables
-//! (docs/rust/language.html, "Looks and their vocabulary"), as data.
+//! The built-in elements and their controls: the R6 vocabulary tables
+//! (docs/rust/language.html, "Elements and their vocabulary"), as data.
 //!
 //! Numbers behind words are documented here, next to the word.  Words
-//! marked *provisional* have numbers chosen for this table that the look's
-//! own phase (P2–P7) tunes against its look; the words themselves are
+//! marked *provisional* have numbers chosen for this table that the element's
+//! own phase (P2–P7) tunes against its element; the words themselves are
 //! decided.
 
-use crate::schema::{Axis, Control, Look, PlaceWord, Role, Word};
+use crate::schema::{Axis, Control, Element, PlaceWord, Role, Word};
 
 const fn c(name: &'static str, value: Axis, about: &'static str) -> Control {
     Control {
@@ -692,8 +692,8 @@ const SURFACE_PLACE: &[PlaceWord] = &[PlaceWord::In, PlaceWord::Along];
 const THING_PLACE: &[PlaceWord] = &[PlaceWord::In, PlaceWord::At];
 const RUN_PLACE: &[PlaceWord] = &[PlaceWord::In, PlaceWord::Along, PlaceWord::Side];
 
-const fn thing(name: &'static str, about: &'static str, controls: &'static [Control]) -> Look {
-    Look {
+const fn thing(name: &'static str, about: &'static str, controls: &'static [Control]) -> Element {
+    Element {
         name,
         about,
         role: Role::Thing,
@@ -704,9 +704,9 @@ const fn thing(name: &'static str, about: &'static str, controls: &'static [Cont
     }
 }
 
-/// Every built-in look the R6 vocabulary names.
-pub static LOOKS: &[Look] = &[
-    Look {
+/// Every built-in element the R6 vocabulary names.
+pub static ELEMENTS: &[Element] = &[
+    Element {
         name: "ground",
         about: "the bare ground surface; flat at the ground level unless told",
         role: Role::Surface,
@@ -715,7 +715,7 @@ pub static LOOKS: &[Look] = &[
         holds_scatter: true,
         controls: &[LEVEL, BUMPS, BUMP_SIZE],
     },
-    Look {
+    Element {
         name: "dirt",
         about: "a textured earth surface: clods, grit and pebbles over gentle rises",
         role: Role::Surface,
@@ -747,7 +747,7 @@ pub static LOOKS: &[Look] = &[
             ),
         ],
     },
-    Look {
+    Element {
         name: "grass",
         about: "separate sculpted blades in tufts",
         role: Role::Surface,
@@ -775,7 +775,7 @@ pub static LOOKS: &[Look] = &[
                 .default("wavy"),
         ],
     },
-    Look {
+    Element {
         name: "reeds",
         about: "clumps of tapered reeds at the waterline, leaning toward the water",
         role: Role::Surface,
@@ -788,7 +788,7 @@ pub static LOOKS: &[Look] = &[
             c("height", Axis::Mm, "how tall a stem stands").default("8..13"),
         ],
     },
-    Look {
+    Element {
         name: "flowers",
         about: "wildflowers: a thin dome on a column, ringed by petal domes on cones",
         role: Role::Surface,
@@ -805,7 +805,7 @@ pub static LOOKS: &[Look] = &[
             c("petal", Axis::Mm, "height of each petal dome").default("0.5"),
         ],
     },
-    Look {
+    Element {
         name: "water",
         about: "still water with swells round its shores and rocks: fills its area up to its level",
         role: Role::Surface,
@@ -831,7 +831,7 @@ pub static LOOKS: &[Look] = &[
         "a space-colonisation tree with foliage clumps and leaves",
         TREE,
     ),
-    Look {
+    Element {
         name: "wall",
         about: "a masonry wall; on a tile edge it stands inside the tile",
         role: Role::Run,
@@ -840,7 +840,7 @@ pub static LOOKS: &[Look] = &[
         holds_scatter: false,
         controls: WALL,
     },
-    Look {
+    Element {
         name: "floor",
         about: "a stone pavement that replaces the ground: a wall laid on its side",
         role: Role::Surface,
@@ -849,7 +849,7 @@ pub static LOOKS: &[Look] = &[
         holds_scatter: false,
         controls: FLOOR,
     },
-    Look {
+    Element {
         name: "cliff",
         about: "a cliff of stacked rock; one edge is a run, two a corner; `form=` names the free-standing masses",
         role: Role::Run,
@@ -858,7 +858,7 @@ pub static LOOKS: &[Look] = &[
         holds_scatter: false,
         controls: CLIFF,
     },
-    Look {
+    Element {
         name: "scatter",
         about: "more than one thing: how many and where; its children say what",
         role: Role::Scatter,
@@ -919,8 +919,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn names_are_unique_within_each_look() {
-        for l in LOOKS {
+    fn names_are_unique_within_each_element() {
+        for l in ELEMENTS {
             let mut names: Vec<_> = l.controls.iter().map(|k| k.name).collect();
             let n = names.len();
             names.sort_unstable();
@@ -938,7 +938,7 @@ mod tests {
 
     #[test]
     fn word_defaults_are_words() {
-        for l in LOOKS {
+        for l in ELEMENTS {
             for k in l
                 .controls
                 .iter()
@@ -958,7 +958,7 @@ mod tests {
 
     #[test]
     fn branching_words_cover_every_expert_knob() {
-        let tree = crate::schema::look("tree").unwrap();
+        let tree = crate::schema::element("tree").unwrap();
         let branch = tree.control("branch").unwrap();
         let crown = tree.control("crown").unwrap();
         for word in crown.sub("branching").unwrap().words {

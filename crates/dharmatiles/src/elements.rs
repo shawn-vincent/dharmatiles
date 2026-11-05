@@ -1,11 +1,11 @@
 //! `dharmatiles elements [NAME]`: the elements a stack holds and their controls, from
-//! dt-doc's schema tables, with what this build takes so far (dt-looks'
+//! dt-doc's schema tables, with what this build takes so far (dt-elements'
 //! `takes`).
 
 use std::fmt::Write as _;
 
-use dt_doc::looks::LOOKS;
-use dt_doc::schema::{self, Axis, Control, Look, Role, Word};
+use dt_doc::elements::ELEMENTS;
+use dt_doc::schema::{self, Axis, Control, Element, Role, Word};
 use dt_eval::Diag;
 use serde_json::{Map, Value, json};
 
@@ -15,15 +15,15 @@ use crate::{ERROR, OK, errors_json, report};
 pub fn run(name: Option<&str>, json: bool) -> u8 {
     let Some(name) = name else {
         if json {
-            let looks: Vec<Value> = LOOKS.iter().map(summary_json).collect();
-            say!("{}", json!({"ok": true, "elements": looks}));
+            let elements: Vec<Value> = ELEMENTS.iter().map(summary_json).collect();
+            say!("{}", json!({"ok": true, "elements": elements}));
         } else {
             list();
         }
         return OK;
     };
-    let Some(look) = schema::look(name) else {
-        let hint = schema::did_you_mean(name, LOOKS.iter().map(|l| l.name)).map_or_else(
+    let Some(element) = schema::element(name) else {
+        let hint = schema::did_you_mean(name, ELEMENTS.iter().map(|l| l.name)).map_or_else(
             || format!("the elements: {}", names().join(", ")),
             |m| format!("did you mean `{m}`?"),
         );
@@ -40,15 +40,15 @@ pub fn run(name: Option<&str>, json: bool) -> u8 {
         return ERROR;
     };
     if json {
-        say!("{}", look_json(look));
+        say!("{}", element_json(element));
     } else {
-        show(look);
+        show(element);
     }
     OK
 }
 
 fn names() -> Vec<&'static str> {
-    LOOKS.iter().map(|l| l.name).collect()
+    ELEMENTS.iter().map(|l| l.name).collect()
 }
 
 fn role(r: Role) -> &'static str {
@@ -88,17 +88,17 @@ fn taken(takes: Option<&[&str]>, path: &str, c: &Control) -> bool {
     })
 }
 
-fn summary_json(l: &Look) -> Value {
+fn summary_json(l: &Element) -> Value {
     json!({
         "name": l.name,
         "role": role(l.role),
         "about": l.about,
-        "built": dt_looks::takes(l.name).is_some(),
+        "built": dt_elements::takes(l.name).is_some(),
     })
 }
 
-fn look_json(l: &'static Look) -> Value {
-    let takes = dt_looks::takes(l.name);
+fn element_json(l: &'static Element) -> Value {
+    let takes = dt_elements::takes(l.name);
     let mut v = summary_json(l);
     v["ok"] = json!(true);
     v["place"] = json!(l.place.iter().map(|p| p.as_str()).collect::<Vec<_>>());
@@ -138,9 +138,9 @@ fn word_json(w: &Word) -> Value {
 }
 
 fn list() {
-    let wn = LOOKS.iter().map(|l| l.name.len()).max().unwrap_or(0);
-    for l in LOOKS {
-        let built = if dt_looks::takes(l.name).is_some() {
+    let wn = ELEMENTS.iter().map(|l| l.name.len()).max().unwrap_or(0);
+    for l in ELEMENTS {
+        let built = if dt_elements::takes(l.name).is_some() {
             "built"
         } else {
             "not yet"
@@ -200,8 +200,8 @@ fn rows(takes: Option<&[&str]>, path: &str, c: &'static Control, depth: usize, o
     }
 }
 
-fn show(l: &'static Look) {
-    let takes = dt_looks::takes(l.name);
+fn show(l: &'static Element) {
+    let takes = dt_elements::takes(l.name);
     say!("{}: {}", l.name, l.about);
     let mut facts = vec![role(l.role).to_owned()];
     if !l.place.is_empty() {
@@ -274,7 +274,7 @@ mod tests {
 
     #[test]
     fn a_sub_control_is_taken_by_its_path() {
-        let dirt = schema::look("dirt").expect("dirt");
+        let dirt = schema::element("dirt").expect("dirt");
         let bumps = dirt.control("bumps").expect("bumps");
         let up = bumps.sub("up").expect("up");
         let takes: &[&str] = &["level", "bumps/up"];

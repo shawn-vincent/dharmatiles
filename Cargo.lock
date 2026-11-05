@@ -360,9 +360,9 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "dt-doc",
+ "dt-elements",
  "dt-eval",
  "dt-kit",
- "dt-looks",
  "libm",
  "miette",
  "serde_json",
@@ -394,12 +394,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "dt-elements"
+version = "0.1.0"
+dependencies = [
+ "dt-kit",
+ "libm",
+ "rayon",
+]
+
+[[package]]
 name = "dt-eval"
 version = "0.1.0"
 dependencies = [
  "dt-doc",
+ "dt-elements",
  "dt-kit",
- "dt-looks",
  "insta",
  "kdl",
  "miette",
@@ -431,15 +440,6 @@ dependencies = [
  "png",
  "rayon",
  "serde_json",
-]
-
-[[package]]
-name = "dt-looks"
-version = "0.1.0"
-dependencies = [
- "dt-kit",
- "libm",
- "rayon",
 ]
 
 [[package]]

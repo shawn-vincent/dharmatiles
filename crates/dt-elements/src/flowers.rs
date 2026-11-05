@@ -22,7 +22,7 @@ use core::f64::consts::{FRAC_PI_2, PI, TAU};
 
 use dt_kit::{Field, Material, Rng, Scene, Spread, Tag, TriMesh, form, scatter, signed_volume};
 
-use crate::{Control, Ctx, Look, LookError, Plan, Read, Value, Write, only};
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write, only};
 
 /// The controls `flowers` takes.
 pub const CONTROLS: &[&str] = &[
@@ -40,7 +40,7 @@ const EL: usize = 8;
 const SINK_MM: f64 = 0.10;
 const TRIES: u32 = 300;
 
-/// The flowers look.
+/// The flowers element.
 #[derive(Clone, Debug)]
 pub struct Flowers {
     per_square: f64,
@@ -232,7 +232,7 @@ impl Flowers {
     }
 }
 
-impl Look for Flowers {
+impl Element for Flowers {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid("flowers"),

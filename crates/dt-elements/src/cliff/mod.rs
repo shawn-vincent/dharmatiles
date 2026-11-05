@@ -43,7 +43,7 @@ mod util;
 use dt_kit::{Material, Rng, Scene, Support, Tag};
 use rayon::prelude::*;
 
-use crate::{Control, Ctx, Look, LookError, Plan, Value, Write, only};
+use crate::{Control, Ctx, Element, LookError, Plan, Value, Write, only};
 use form::{Ask, FormName};
 use stone::{ColState, Env};
 
@@ -63,7 +63,7 @@ pub const CONTROLS: &[&str] = &[
 
 type ColResult = Result<(Vec<(usize, dt_kit::Piece)>, usize), dt_kit::KitError>;
 
-/// The cliff look.
+/// The cliff element.
 #[derive(Clone, Debug)]
 pub struct Cliff {
     height: Option<f64>,
@@ -276,7 +276,7 @@ struct Planned {
     rng: Rng,
 }
 
-impl Look for Cliff {
+impl Element for Cliff {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid("cliff"),

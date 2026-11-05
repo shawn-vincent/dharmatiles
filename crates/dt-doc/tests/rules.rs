@@ -96,7 +96,7 @@ fn a_tile_may_override_a_standard_level() {
 
 #[test]
 fn scaling_is_recorded_per_control() {
-    let tree = schema::look("tree").unwrap();
+    let tree = schema::element("tree").unwrap();
     assert_eq!(
         tree.control("height").unwrap().scaling(),
         Scaling::Photocopy
@@ -105,7 +105,7 @@ fn scaling_is_recorded_per_control() {
     assert_eq!(leaf.sub("length").unwrap().scaling(), Scaling::Photocopy);
     let crown = tree.control("crown").unwrap();
     assert_eq!(crown.sub("clumps").unwrap().scaling(), Scaling::Fixed);
-    let grass = schema::look("grass").unwrap();
+    let grass = schema::element("grass").unwrap();
     assert_eq!(
         grass.control("height").unwrap().scaling(),
         Scaling::Photocopy

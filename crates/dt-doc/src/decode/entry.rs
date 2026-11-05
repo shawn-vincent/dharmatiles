@@ -1,4 +1,4 @@
-//! Stack entries: looks, definition calls and scatters, with their place
+//! Stack entries: elements, definition calls and scatters, with their place
 //! words and controls in either form (on the line, or child lines).
 
 use kdl::{KdlEntry, KdlNode, KdlValue};
@@ -6,7 +6,7 @@ use miette::SourceSpan;
 
 use super::value::describe;
 use super::{Ctx, Decoder, spanned_name, sub_span, value_span};
-use crate::looks::{TAGS, renamed};
+use crate::elements::{TAGS, renamed};
 use crate::model::{Callee, Entry, Form, Place, Setting, Spanned, Value};
 use crate::place::{self, Along, Side};
 use crate::schema::{self, Control, Kind, PlaceWord, Role, did_you_mean};
@@ -97,10 +97,10 @@ impl Decoder<'_> {
         out
     }
 
-    /// True when an entry is one thing: a thing look, or a definition of one.
+    /// True when an entry is one thing: a thing element, or a definition of one.
     pub(crate) fn is_thing(&self, e: &Entry) -> bool {
         match &e.callee {
-            Callee::Look(l) => l.role == Role::Thing,
+            Callee::Element(l) => l.role == Role::Thing,
             Callee::Definition(d) => self.def_info(d).is_some_and(|i| i.thing),
         }
     }
@@ -129,10 +129,10 @@ impl Decoder<'_> {
             span: node.span(),
         };
         let owner = entry.what.value.clone();
-        let look = entry.look();
+        let element = entry.element();
 
         if parent == Parent::Scatter && !self.is_thing(&entry) {
-            let help = if look.is_some_and(|l| l.role == Role::Scatter) {
+            let help = if element.is_some_and(|l| l.role == Role::Scatter) {
                 "scatters don't nest; give the outer one several children instead".to_owned()
             } else {
                 format!(
@@ -151,7 +151,7 @@ impl Decoder<'_> {
 
         for e in node.entries() {
             let Some(key) = e.name() else {
-                let help = match (look, e.value().as_string()) {
+                let help = match (element, e.value().as_string()) {
                     (Some(l), Some(s)) => l
                         .controls
                         .iter()
@@ -185,7 +185,7 @@ impl Decoder<'_> {
             let key = spanned_name(c);
             let target = self.target(&entry, &key.value);
             let is_scatter = key.value == "scatter";
-            let holds = look.is_some_and(|l| l.holds_scatter);
+            let holds = element.is_some_and(|l| l.holds_scatter);
             if !matches!(target, Target::None) {
                 let args: Vec<&KdlEntry> =
                     c.entries().iter().filter(|e| e.name().is_none()).collect();
@@ -239,7 +239,7 @@ impl Decoder<'_> {
                         .help = Some(format!("write `{}=…` on the `{owner}` line", key.value));
                     }
                 }
-            } else if look.is_some_and(|l| l.role == Role::Scatter) {
+            } else if element.is_some_and(|l| l.role == Role::Scatter) {
                 if let Some(child) = self.entry(c, ctx, Parent::Scatter, &entry.path, step) {
                     entry.children.push(child);
                 }
@@ -247,7 +247,7 @@ impl Decoder<'_> {
                 if let Some(child) = self.entry(c, ctx, Parent::Surface, &entry.path, step) {
                     entry.children.push(child);
                 }
-            } else if schema::look(&key.value).is_some() || self.is_definition(&key.value) {
+            } else if schema::element(&key.value).is_some() || self.is_definition(&key.value) {
                 let help = if holds {
                     format!(
                         "things on a surface go in a scatter: `{owner} {{ scatter count=… {{ {} }} }}`",
@@ -272,10 +272,10 @@ impl Decoder<'_> {
         Some(entry)
     }
 
-    /// Resolve an entry's name to a look or a visible definition.
+    /// Resolve an entry's name to an element or a visible definition.
     fn callee(&mut self, what: &Spanned<String>) -> Option<Callee> {
-        if let Some(l) = schema::look(&what.value) {
-            return Some(Callee::Look(l));
+        if let Some(l) = schema::element(&what.value) {
+            return Some(Callee::Element(l));
         }
         if self.is_definition(&what.value) {
             return Some(Callee::Definition(what.value.clone()));
@@ -290,7 +290,7 @@ impl Decoder<'_> {
                 false => format!("it is in `{file}`: write `use \"{file}\" {name}` at the top"),
             }
         } else {
-            let mut names: Vec<&str> = crate::looks::LOOKS.iter().map(|l| l.name).collect();
+            let mut names: Vec<&str> = crate::elements::ELEMENTS.iter().map(|l| l.name).collect();
             names.extend(self.local_names.iter().map(String::as_str));
             names.extend(self.imported.keys().map(String::as_str));
             did_you_mean(name, names.iter().copied()).map_or_else(
@@ -310,7 +310,7 @@ impl Decoder<'_> {
 
     fn target(&self, entry: &Entry, name: &str) -> Target {
         match &entry.callee {
-            Callee::Look(l) => l.control(name).map_or(Target::None, Target::Control),
+            Callee::Element(l) => l.control(name).map_or(Target::None, Target::Control),
             Callee::Definition(d) => match self.def_info(d) {
                 Some(info) => info
                     .params
@@ -431,13 +431,13 @@ impl Decoder<'_> {
         let Some(pw) = PlaceWord::parse(word) else {
             return false;
         };
-        // The look's own controls win: a dirt bank's `against` is a sub.
-        let allowed = match entry.look() {
+        // The element's own controls win: a dirt bank's `against` is a sub.
+        let allowed = match entry.element() {
             Some(l) => l.place.contains(&pw),
             None => true,
         };
         if !allowed {
-            let l = entry.look().map_or(Role::Thing, |l| l.role);
+            let l = entry.element().map_or(Role::Thing, |l| l.role);
             let help = match (pw, l) {
                 (PlaceWord::At, Role::Run) => {
                     format!("a {owner} is built along= an edge or a line")
@@ -843,7 +843,7 @@ impl Decoder<'_> {
         let name = key.value.as_str();
         let thing = self.is_thing(entry);
         let (controls, params): (&[Control], Vec<&str>) = match &entry.callee {
-            Callee::Look(l) => (l.controls, Vec::new()),
+            Callee::Element(l) => (l.controls, Vec::new()),
             Callee::Definition(d) => (
                 &[],
                 self.def_info(d)
@@ -870,7 +870,7 @@ impl Decoder<'_> {
         } else {
             let mut names: Vec<&str> = controls.iter().map(|k| k.name).collect();
             names.extend(params.iter().copied());
-            if let Some(l) = entry.look() {
+            if let Some(l) = entry.element() {
                 names.extend(l.place.iter().map(|p| p.as_str()));
             }
             names.push("seed");
@@ -897,11 +897,11 @@ impl Decoder<'_> {
     fn check_entry(&mut self, entry: &mut Entry, ctx: &Ctx, parent: Parent) {
         let owner = entry.what.value.clone();
         let span = entry.what.span;
-        let look = entry.look();
-        if let Some(l) = look {
+        let element = entry.element();
+        if let Some(l) = element {
             // inside a definition a place word may come from the call
             // (`ruin-corner along=north`): the evaluator passes it down,
-            // and the look refuses at build if it never arrives
+            // and the element refuses at build if it never arrives
             let needs = if ctx.in_tile { l.needs } else { &[] };
             for need in needs {
                 let has = match need {
@@ -971,11 +971,11 @@ impl Decoder<'_> {
                 }
             }
         }
-        if look.is_some_and(|l| l.role == Role::Scatter) {
+        if element.is_some_and(|l| l.role == Role::Scatter) {
             self.check_scatter(entry);
         }
         let _ = (ctx, parent);
-        entry.kind = match (&entry.callee, look) {
+        entry.kind = match (&entry.callee, element) {
             (_, Some(l)) if l.role == Role::Scatter => {
                 Kind::of(entry.children.iter().map(|c| c.kind))
             }
@@ -988,7 +988,7 @@ impl Decoder<'_> {
                 }
             }
             (Callee::Definition(d), None) => self.def_info(d).map_or(Kind::Mixed, |i| i.kind),
-            (Callee::Look(l), None) => l.kind(),
+            (Callee::Element(l), None) => l.kind(),
         };
     }
 

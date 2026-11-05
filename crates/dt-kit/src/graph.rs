@@ -9,7 +9,7 @@
 //! and gets radii bottom-up; the tube half builds each closed edge solid
 //! (with the Bézier and Bishop-frame helpers).
 //!
-//! Invariants of a traced graph (docs/looks/trees.html, S1–S4), each by
+//! Invariants of a traced graph (docs/elements/trees.html, S1–S4), each by
 //! construction, not by a check after the fact:
 //!
 //! - S1: every target is an end (a node with no children), and only
@@ -993,7 +993,7 @@ fn transport(u: [f64; 3], t: [f64; 3]) -> ([f64; 3], [f64; 3]) {
     }
 }
 
-// --- small vector helpers (public: looks use them for their own frames) ---
+// --- small vector helpers (public: elements use them for their own frames) ---
 
 /// a − b.
 #[must_use]

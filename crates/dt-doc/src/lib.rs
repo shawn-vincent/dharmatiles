@@ -11,7 +11,7 @@
 //! - [`decode`] reads one file; [`uses`] reads only its `use` lines.
 //! - [`Known`] holds what a file can see: the standard levels (the
 //!   prelude, [`known::PRELUDE`]) and the files it `use`s.
-//! - [`schema`] and [`looks`] hold every look's controls and words.
+//! - [`schema`] and [`elements`] hold every element's controls and words.
 //! - [`edit`] changes, inserts and removes controls without disturbing
 //!   anything else in the file.
 //!
@@ -20,10 +20,10 @@
 
 pub mod decode;
 pub mod edit;
+pub mod elements;
 pub mod error;
 pub mod expr;
 pub mod known;
-pub mod looks;
 pub mod model;
 pub mod place;
 pub mod schema;

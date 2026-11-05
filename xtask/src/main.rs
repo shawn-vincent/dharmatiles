@@ -24,7 +24,7 @@ commands:
            stack, walls, meadow; all when none is named)
   docs [--check]
            fill each docs/elements/ page's generated reference block from
-           the look schema; --check changes nothing and fails if stale
+           the element schema; --check changes nothing and fails if stale
   help     show this message";
 
 fn main() -> ExitCode {

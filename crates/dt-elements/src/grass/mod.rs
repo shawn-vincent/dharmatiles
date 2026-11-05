@@ -37,7 +37,7 @@ pub(crate) use blade::ring_mesh;
 use dt_kit::{Field, Material, Rng, Scene, Tag, TriMesh, distance, form};
 use rayon::prelude::*;
 
-use crate::{Control, Ctx, Look, LookError, Plan, Read, Value, Write, only};
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write, only};
 use flow::Swaths;
 use fronds::Surface;
 use lat::Lat;
@@ -66,7 +66,7 @@ const SIDE_LOW: f64 = 0.5;
 const SIDE_MM: f64 = 1.2;
 const SIDE_INNER_MM: f64 = 0.8;
 
-/// The grass look.
+/// The grass element.
 #[derive(Clone, Debug)]
 pub struct Grass {
     length: (f64, f64),
@@ -171,7 +171,7 @@ fn as_field(g: &dt_kit::Grid) -> Field {
     }
 }
 
-impl Look for Grass {
+impl Element for Grass {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid("grass"),

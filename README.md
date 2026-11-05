@@ -65,7 +65,7 @@ The site under `docs/` is the reference: the [language guide](docs/language.html
 ## Layout
 
 ```text
-crates/     the program, in Rust: dt-geom, dt-kit, dt-looks, dt-doc, dt-eval, dharmatiles
+crates/     the program, in Rust: dt-geom, dt-kit, dt-elements, dt-doc, dt-eval, dharmatiles
 library/    the shipped tiles, shared parts, printers and palettes (.dtile documents)
 docs/       the site
 web/        the preview's page

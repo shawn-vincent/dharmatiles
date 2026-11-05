@@ -1,5 +1,5 @@
 //! Fields: values over the tile on the one grid convention, and the field
-//! operations looks are written in (noise, distance, morphology with the
+//! operations elements are written in (noise, distance, morphology with the
 //! smooth maximum, scatter, the half-space cap).
 //!
 //! The grid convention (the only one): a field
@@ -490,7 +490,7 @@ pub fn scatter(
 
 // ---- carve: the half-space cap ------------------------------------------------
 
-/// A plane over the ground, `z = z0 + gx·x + gy·y` in a look's local
+/// A plane over the ground, `z = z0 + gx·x + gy·y` in an element's local
 /// coordinates: a solid's top lies on or below it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Plane {

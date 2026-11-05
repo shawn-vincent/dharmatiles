@@ -1,5 +1,5 @@
 //! Fieldstone (drystone): crack network first (the
-//! approved E25/E29 look). The chassis layout gives the crack topology;
+//! approved E25/E29 element). The chassis layout gives the crack topology;
 //! every bed line has one shared wobble and every head joint one shared
 //! slanted, bowed curve, both keyed on the crack itself, so the two
 //! stones flanking a crack evaluate the same curve and fit each other by

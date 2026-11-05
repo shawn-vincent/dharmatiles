@@ -7,10 +7,10 @@
 //!
 //! 1. the durations the last build of the same document and system
 //!    measured ([`Timings`], kept in a small file under `out/.cache/`);
-//! 2. else a default per look, per square of the tile ([`default_secs`]),
+//! 2. else a default per element, per square of the tile ([`default_secs`]),
 //!    from a quick profile of the library.
 //!
-//! Inside a stage a look may report done/total of its main loop; without
+//! Inside a stage an element may report done/total of its main loop; without
 //! that, the bar creeps through the stage by its expected duration and
 //! never reaches the end of it before the stage reports it is over.
 
@@ -48,14 +48,14 @@ pub fn stage_keys(tile: &Tile, steps: &[Step]) -> Vec<(String, String)> {
         .collect()
 }
 
-/// A rough duration in seconds of a look on a tile of `squares` squares,
+/// A rough duration in seconds of an element on a tile of `squares` squares,
 /// from a profile of the 45 library tiles (release build, one Apple-silicon
 /// Mac): the tree's cost is the tree's whatever the tile, a grass sward's
 /// grows with its area, a wall's with its length (about one square).  Only
 /// the fallback for a tile never built here; real timings replace it.
 #[must_use]
-pub fn default_secs(look: &str, squares: f64) -> f64 {
-    match look {
+pub fn default_secs(element: &str, squares: f64) -> f64 {
+    match element {
         "tree" => 6.5,
         "grass" => 0.35 * squares,
         "wall" => 0.7,
@@ -69,12 +69,12 @@ pub fn default_secs(look: &str, squares: f64) -> f64 {
     }
 }
 
-/// The union and the audit cost about what the looks built: from the
+/// The union and the audit cost about what the elements built: from the
 /// same profile, the union half of it and the audit a third, plus a
 /// little.
 #[must_use]
-pub fn default_join_secs(looks_secs: f64) -> (f64, f64) {
-    (0.5 * looks_secs + 0.1, 0.3 * looks_secs + 0.1)
+pub fn default_join_secs(elements_secs: f64) -> (f64, f64) {
+    (0.5 * elements_secs + 0.1, 0.3 * elements_secs + 0.1)
 }
 
 /// One stage of the bar.

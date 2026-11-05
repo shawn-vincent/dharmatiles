@@ -17,7 +17,7 @@ use miette::SourceSpan;
 
 use crate::expr::{Expr, Unit};
 use crate::place::{Along, Point, Side};
-use crate::schema::{self, Control, Kind, Look, Word};
+use crate::schema::{self, Control, Element, Kind, Word};
 
 /// A value with the source span it came from.
 #[derive(Debug, Clone, PartialEq)]
@@ -196,7 +196,7 @@ pub struct Line {
     pub name: Spanned<String>,
     /// The points it passes through.
     pub through: Vec<Spanned<Point>>,
-    /// A width makes it a strip that a look `along=` it covers.
+    /// A width makes it a strip that an element `along=` it covers.
     pub width: Option<Spanned<Num>>,
     /// How far it wanders off its points, mm.
     pub wobble: Option<Spanned<Num>>,
@@ -221,8 +221,8 @@ pub struct Region {
 /// What a stack entry applies.
 #[derive(Debug, Clone)]
 pub enum Callee {
-    /// A built-in look (including `scatter`).
-    Look(&'static Look),
+    /// A built-in element (including `scatter`).
+    Element(&'static Element),
     /// A definition, from this file or a `use`.
     Definition(String),
 }
@@ -240,7 +240,7 @@ pub struct Place {
     pub at: Option<Spanned<Point>>,
     /// `against=`: a kind of thing.
     pub against: Option<Spanned<String>>,
-    /// `seed=`: pins this thing's look while the tile seed changes the rest.
+    /// `seed=`: pins this thing's element while the tile seed changes the rest.
     pub seed: Option<Spanned<i64>>,
     /// `id=`: a stable name among same-named siblings, for seed paths.
     pub id: Option<Spanned<String>>,
@@ -259,7 +259,7 @@ pub struct Entry {
     pub kind: Kind,
     /// Place words.
     pub place: Place,
-    /// Controls (a look's) or arguments (a definition's), in written
+    /// Controls (an element's) or arguments (a definition's), in written
     /// order, from both the line and child lines.
     pub controls: Vec<Setting>,
     /// A scatter's things, or the scatters inside a surface.
@@ -272,11 +272,11 @@ pub struct Entry {
 }
 
 impl Entry {
-    /// The built-in look, if this calls one.
+    /// The built-in element, if this calls one.
     #[must_use]
-    pub fn look(&self) -> Option<&'static Look> {
+    pub fn element(&self) -> Option<&'static Element> {
         match self.callee {
-            Callee::Look(l) => Some(l),
+            Callee::Element(l) => Some(l),
             Callee::Definition(_) => None,
         }
     }
@@ -284,7 +284,8 @@ impl Entry {
     /// True for a `scatter`.
     #[must_use]
     pub fn is_scatter(&self) -> bool {
-        self.look().is_some_and(|l| l.role == schema::Role::Scatter)
+        self.element()
+            .is_some_and(|l| l.role == schema::Role::Scatter)
     }
 
     /// A control by name.
@@ -443,7 +444,7 @@ impl Value {
 /// A printer profile: the hidden printability floors (R6.5).
 ///
 /// Every size an author writes scales with the system; these never do.
-/// Looks clamp their hidden thicknesses to them after scaling: blade and
+/// Elements clamp their hidden thicknesses to them after scaling: blade and
 /// leaf thickness to whole layers and lines, the least branch radius to a
 /// line, gaps to `gap`, faces to the `overhang` limit.
 #[derive(Debug, Clone)]

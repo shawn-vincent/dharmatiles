@@ -32,7 +32,7 @@ use dt_kit::graph::{self, Colonise, TubeStyle};
 use dt_kit::{Material, Rng, Scene, Seed, Solid, Tag, TriMesh, form, union};
 use rayon::prelude::*;
 
-use crate::{Control, Ctx, Look, LookError, Plan, Read, Value, Write, only};
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write, only};
 
 /// The controls `tree` takes (dt-doc's vocabulary, sub-controls as
 /// `group/sub`).
@@ -139,7 +139,7 @@ impl Default for Params {
     }
 }
 
-/// The `tree` look.
+/// The `tree` element.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tree {
     p: Params,
@@ -889,7 +889,7 @@ fn ground_at(scene: &Scene, x: f64, y: f64) -> f64 {
     g.max(s)
 }
 
-impl Look for Tree {
+impl Element for Tree {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid("tree"),

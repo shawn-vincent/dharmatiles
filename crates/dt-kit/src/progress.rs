@@ -1,7 +1,7 @@
 //! A progress side channel: stage and sub-progress events for a build.
 //!
 //! A front end attaches a [`Reporter`]; the evaluator announces each stage
-//! (a look, the union, the audit) and a look with a natural loop reports
+//! (an element, the union, the audit) and an element with a natural loop reports
 //! how far through it is.  The channel never touches geometry or seeds, so
 //! a build is bit-identical with or without a reporter, and with none
 //! attached every call is a test of one `Option`.
@@ -33,7 +33,7 @@ pub trait Reporter: Send + Sync {
     fn report(&self, event: &Event<'_>);
 }
 
-/// The handle looks and the evaluator report through.  Cloning is cheap;
+/// The handle elements and the evaluator report through.  Cloning is cheap;
 /// the default reports nothing.
 #[derive(Clone, Default)]
 pub struct Progress(Option<Arc<dyn Reporter>>);

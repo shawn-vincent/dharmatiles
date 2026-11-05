@@ -1,9 +1,9 @@
-//! A look's controls are declared twice: in dt-doc's schema and in the
-//! look itself. This keeps the two lists equal.
+//! An element's controls are declared twice: in dt-doc's schema and in the
+//! element itself. This keeps the two lists equal.
 
 use std::collections::BTreeSet;
 
-/// Controls the schema names that a built look does not take yet (the
+/// Controls the schema names that a built element does not take yet (the
 /// evaluator sets them aside as not built). Shrink this as they land.
 const NOT_BUILT_YET: &[(&str, &str)] = &[
     ("scatter", "clumps"),
@@ -22,11 +22,11 @@ const NOT_BUILT_YET: &[(&str, &str)] = &[
 
 #[test]
 fn every_built_look_takes_what_the_schema_names() {
-    for name in dt_looks::built() {
-        let schema = dt_doc::schema::look(name)
+    for name in dt_elements::built() {
+        let schema = dt_doc::schema::element(name)
             .unwrap_or_else(|| panic!("`{name}` is built but has no schema entry"));
         let from_schema: BTreeSet<&str> = schema.controls.iter().map(|c| c.name).collect();
-        let from_look: BTreeSet<&str> = dt_looks::takes(name)
+        let from_element: BTreeSet<&str> = dt_elements::takes(name)
             .unwrap_or_else(|| panic!("`{name}` has no takes()"))
             .iter()
             // `bumps/down` is a word's number riding on `bumps`
@@ -38,19 +38,19 @@ fn every_built_look_takes_what_the_schema_names() {
             .map(|(_, c)| *c)
             .collect();
         let expected: BTreeSet<&str> = from_schema.difference(&unbuilt).copied().collect();
-        assert_eq!(from_look, expected, "controls of `{name}` disagree");
+        assert_eq!(from_element, expected, "controls of `{name}` disagree");
     }
 }
 
 #[test]
 fn every_schema_look_is_built_or_known_unbuilt() {
-    let unbuilt: Vec<&str> = dt_doc::looks::LOOKS
+    let unbuilt: Vec<&str> = dt_doc::elements::ELEMENTS
         .iter()
         .map(|l| l.name)
-        .filter(|n| dt_looks::takes(n).is_none())
+        .filter(|n| dt_elements::takes(n).is_none())
         .collect();
     assert!(
         unbuilt.is_empty(),
-        "schema looks with no build: {unbuilt:?}"
+        "schema elements with no build: {unbuilt:?}"
     );
 }

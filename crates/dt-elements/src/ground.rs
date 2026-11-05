@@ -16,7 +16,7 @@
 
 use dt_kit::{Field, Noise, Rng, Scale, Scene, Seed, noise, rim, smax, smooth01};
 
-use crate::{Control, Ctx, Look, LookError, Plan, Value, Write, only};
+use crate::{Control, Ctx, Element, LookError, Plan, Value, Write, only};
 
 /// The controls `ground` takes.
 pub const CONTROLS: &[&str] = &["level", "bumps", "bumps/up", "bumps/down", "bump-size"];
@@ -63,11 +63,11 @@ pub struct Shape {
     pub size_mm: f64,
 }
 
-fn number(look: &str, c: &Control, lo: f64, hi: f64) -> Result<Amount, LookError> {
+fn number(element: &str, c: &Control, lo: f64, hi: f64) -> Result<Amount, LookError> {
     let bad = |what: String| {
         LookError::control(
             &c.name,
-            format!("`{look}`'s {} must be {what}", c.name),
+            format!("`{element}`'s {} must be {what}", c.name),
             format!("write mm from {lo} to {hi}, or a quoted range such as \"2..3\""),
         )
     };
@@ -85,7 +85,7 @@ impl Shape {
     ///
     /// # Errors
     /// [`LookError`] for a value out of range.
-    pub fn new(look: &str, controls: &[Control]) -> Result<Self, LookError> {
+    pub fn new(element: &str, controls: &[Control]) -> Result<Self, LookError> {
         let mut s = Self {
             level_mm: f64::NAN,
             up: Amount(0.0, 0.0),
@@ -99,20 +99,20 @@ impl Shape {
                     ref v => {
                         return Err(LookError::control(
                             "level",
-                            format!("{look} level must be a finite height above 0 mm, not {v}"),
+                            format!("{element} level must be a finite height above 0 mm, not {v}"),
                             "write a named level (ground, edge, water, wall-top) or mm, such as level=5"
                                 .into(),
                         ));
                     }
                 },
-                "bumps" | "bumps/up" => s.up = number(look, c, 0.0, 15.0)?,
-                "bumps/down" => s.down = number(look, c, 0.0, 15.0)?,
-                "bump-size" => match (&c.value, number(look, c, 5.0, 70.0)?) {
+                "bumps" | "bumps/up" => s.up = number(element, c, 0.0, 15.0)?,
+                "bumps/down" => s.down = number(element, c, 0.0, 15.0)?,
+                "bump-size" => match (&c.value, number(element, c, 5.0, 70.0)?) {
                     (Value::Number(_), Amount(a, _)) => s.size_mm = a,
                     _ => {
                         return Err(LookError::control(
                             "bump-size",
-                            format!("`{look}`'s bump-size is one width, not a range"),
+                            format!("`{element}`'s bump-size is one width, not a range"),
                             "write mm from 5 to 70, such as bump-size=14".into(),
                         ));
                     }
@@ -123,7 +123,7 @@ impl Shape {
         if s.level_mm.is_nan() {
             return Err(LookError::control(
                 "level",
-                format!("{look} needs a level"),
+                format!("{element} needs a level"),
                 "write a named level or mm, such as level=5".into(),
             ));
         }
@@ -246,7 +246,7 @@ impl Ground {
     }
 }
 
-impl Look for Ground {
+impl Element for Ground {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Surface,

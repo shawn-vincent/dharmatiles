@@ -14,13 +14,13 @@
 use dt_kit::Scene;
 
 use crate::wall::{self, Family, Height, Mason};
-use crate::{Control, Ctx, Look, LookError, Plan, Read, Value, Write, only};
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write, only};
 
 /// The controls `floor` takes (dt-doc's vocabulary, sub-controls as
 /// `group/sub`).
 pub const CONTROLS: &[&str] = &["style", "texture", "slabs", "level"];
 
-/// The `floor` look.
+/// The `floor` element.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Floor {
     mason: Mason,
@@ -99,7 +99,7 @@ impl Floor {
     }
 }
 
-impl Look for Floor {
+impl Element for Floor {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid("floor"),

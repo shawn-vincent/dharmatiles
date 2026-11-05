@@ -8,11 +8,11 @@ use serde_json::{Value, json};
 pub const DOCS: &str = "https://shawn-vincent.github.io/dharmatiles/";
 
 /// The page (under [`DOCS`]) that documents an element: every built-in
-/// look has its own page under `elements/`.
+/// element has its own page under `elements/`.
 #[must_use]
-pub fn page(look: &str) -> String {
-    if dt_doc::schema::look(look).is_some() {
-        format!("elements/{look}.html")
+pub fn page(element: &str) -> String {
+    if dt_doc::schema::element(element).is_some() {
+        format!("elements/{element}.html")
     } else {
         "elements/index.html".to_owned()
     }
@@ -34,11 +34,11 @@ fn and_list(words: &[String]) -> String {
     }
 }
 
-fn item(label: String, look: &str) -> Value {
-    json!({ "label": label, "look": look, "href": format!("{DOCS}{}", page(look)) })
+fn item(label: String, element: &str) -> Value {
+    json!({ "label": label, "element": element, "href": format!("{DOCS}{}", page(element)) })
 }
 
-/// The tile's stack as `{label, look, href}` items, in written order,
+/// The tile's stack as `{label, element, href}` items, in written order,
 /// ending with the base the system adds.
 #[must_use]
 pub fn items(tile: &Tile, system: &str) -> Vec<Value> {
@@ -62,7 +62,7 @@ pub fn base(system: &str) -> Value {
         ("DungeonBlocks base", "dungeonblocks")
     };
     json!({
-        "label": label, "look": "connector",
+        "label": label, "element": "connector",
         "href": format!("{DOCS}elements/{page}.html"),
     })
 }
@@ -76,7 +76,7 @@ fn inside(e: &Entry, outer: &Entry) -> bool {
 
 fn entry(e: &Entry, within: Option<&Entry>) -> Value {
     let what = e.what.value.as_str();
-    let (mut label, look) = if what == "scatter" && !e.children.is_empty() {
+    let (mut label, element) = if what == "scatter" && !e.children.is_empty() {
         let mut names: Vec<String> = Vec::new();
         for c in &e.children {
             let n = plural(&c.what.value);
@@ -96,7 +96,7 @@ fn entry(e: &Entry, within: Option<&Entry>) -> Value {
     } else if let Some(area) = &e.area {
         label = format!("{label} in {}", area.value);
     }
-    item(label, look)
+    item(label, element)
 }
 
 #[cfg(test)]

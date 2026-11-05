@@ -1,7 +1,7 @@
 //! `dharmatiles mcp`: the Model Context Protocol over stdio, so an agent
 //! can check, build, preview and audit tiles. Newline-delimited JSON-RPC;
 //! each tool runs this same program's own commands (`check`, `build`,
-//! `looks`, `audit` with `--json`), so what an agent sees is what a
+//! `elements`, `audit` with `--json`), so what an agent sees is what a
 //! person sees.
 
 use std::io::{BufRead, Write};

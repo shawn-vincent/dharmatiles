@@ -1,12 +1,12 @@
-//! What a document may say: the controls each built-in look accepts, the
+//! What a document may say: the controls each built-in element accepts, the
 //! words that stand for numbers, and how each kind of value scales.
 //!
 //! This is the R6 vocabulary decided on 1 Nov 2026
-//! (docs/rust/language.html, "Decisions D1–D12" and "Looks and their
-//! vocabulary").  The tables live in [`crate::looks`]; this module holds
+//! (docs/rust/language.html, "Decisions D1–D12" and "Elements and their
+//! vocabulary").  The tables live in [`crate::elements`]; this module holds
 //! their types.
 //!
-//! The tables are the single source for `dharmatiles looks <name>`, the
+//! The tables are the single source for `dharmatiles elements <name>`, the
 //! MCP `describe_element` tool and, later, the JSON Schema: dt-doc owns them
 //! so that validation never needs geometry.
 
@@ -57,7 +57,7 @@ pub enum Axis {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scaling {
     /// Multiply by the system's square / 35 mm.  Hidden printability
-    /// floors (see [`crate::model::Printer`]) are applied by the looks
+    /// floors (see [`crate::model::Printer`]) are applied by the elements
     /// after scaling, so a scaled leaf or blade never gets thinner than
     /// what prints.
     Photocopy,
@@ -121,7 +121,7 @@ pub struct Word {
     /// What it gives you, in one line.
     pub about: &'static str,
     /// The generator numbers it stands for, by name.  Empty for a plain
-    /// choice whose meaning is the look's own code path.
+    /// choice whose meaning is the element's own code path.
     pub sets: &'static [(&'static str, f64)],
     /// A named level it stands for (`height full` is the `wall-top`
     /// level), resolved through the tile's levels.
@@ -196,7 +196,7 @@ impl Control {
 }
 
 /// The place words (R6 "Place words"): one meaning each, shared by every
-/// look.  Which a look takes is in [`Look::place`].
+/// element.  Which an element takes is in [`Element::place`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlaceWord {
     /// `in=` a region; default the whole tile.
@@ -238,7 +238,7 @@ impl PlaceWord {
     }
 }
 
-/// What kind of stack entry a look is, which decides how the evaluator
+/// What kind of stack entry an element is, which decides how the evaluator
 /// plans it (R6 V1: stack order is free for solids).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
@@ -283,9 +283,9 @@ impl Kind {
     }
 }
 
-/// A built-in look.
+/// A built-in element.
 #[derive(Debug)]
-pub struct Look {
+pub struct Element {
     /// Name as written in a stack.
     pub name: &'static str,
     /// One line of help.
@@ -303,7 +303,7 @@ pub struct Look {
     pub controls: &'static [Control],
 }
 
-impl Look {
+impl Element {
     /// A control by name.
     #[must_use]
     pub fn control(&'static self, name: &str) -> Option<&'static Control> {
@@ -322,10 +322,10 @@ impl Look {
     }
 }
 
-/// Look up a built-in look by name.
+/// Element up a built-in element by name.
 #[must_use]
-pub fn look(name: &str) -> Option<&'static Look> {
-    crate::looks::LOOKS.iter().find(|l| l.name == name)
+pub fn element(name: &str) -> Option<&'static Element> {
+    crate::elements::ELEMENTS.iter().find(|l| l.name == name)
 }
 
 /// The closest candidate to `word`, if one is close enough to suggest.
@@ -383,12 +383,12 @@ mod tests {
     #[test]
     fn defaults_decode_as_values() {
         use crate::model::Value;
-        let tree = look("tree").unwrap();
+        let tree = element("tree").unwrap();
         let shape = tree.control("crown").unwrap().sub("shape").unwrap();
         assert!(matches!(shape.default_value(), Some(Value::Word(w)) if w.word == "round"));
         let height = tree.control("height").unwrap();
         assert!(matches!(height.default_value(), Some(Value::Num(_))));
-        let level = look("ground").unwrap().control("level").unwrap();
+        let level = element("ground").unwrap().control("level").unwrap();
         assert!(matches!(level.default_value(), Some(Value::Num(_))));
     }
 

@@ -32,7 +32,7 @@ use dt_kit::{
     scatter, seat, solid,
 };
 
-use crate::{Control, Ctx, Look, LookError, Plan, Value, Write, only};
+use crate::{Control, Ctx, Element, LookError, Plan, Value, Write, only};
 
 /// The controls a rock thing takes (`wear` comes later).
 pub const CONTROLS: &[&str] = &["size", "mostly", "shape", "buried"];
@@ -521,7 +521,7 @@ pub struct Thing {
     pub buried: (f64, f64),
 }
 
-/// The things a rock look builds, with their default size (dt-doc's
+/// The things a rock element builds, with their default size (dt-doc's
 /// vocabulary: `rock` is 6..15).
 #[must_use]
 pub fn is_thing(name: &str) -> bool {
@@ -711,7 +711,7 @@ impl Single {
     }
 }
 
-impl Look for Single {
+impl Element for Single {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid("rock"),
@@ -963,7 +963,7 @@ impl Scatter {
     }
 }
 
-impl Look for Scatter {
+impl Element for Scatter {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid("rock"),

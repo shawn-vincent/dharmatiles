@@ -281,7 +281,7 @@ impl<'k> Decoder<'k> {
                 "printer" => doc.printer = self.printer(n),
                 "edges" => doc.edges = self.edges(n, &file_levels),
                 other => {
-                    let help = crate::looks::renamed(other)
+                    let help = crate::elements::renamed(other)
                         .map(str::to_owned)
                         .or_else(|| {
                             hint(did_you_mean(
@@ -290,7 +290,7 @@ impl<'k> Decoder<'k> {
                             ))
                         })
                         .or_else(|| {
-                            schema::look(other)
+                            schema::element(other)
                                 .map(|_| "elements go inside a tile's `stack { … }`".to_owned())
                         });
                     self.err(
@@ -646,11 +646,11 @@ impl<'k> Decoder<'k> {
                 }
                 other => {
                     let words = ["param", "about", "levels", "line", "region", "stack"];
-                    let help = crate::looks::renamed(other)
+                    let help = crate::elements::renamed(other)
                         .map(str::to_owned)
                         .or_else(|| hint(did_you_mean(other, words)))
                         .or_else(|| {
-                            (schema::look(other).is_some() || self.is_definition(other))
+                            (schema::element(other).is_some() || self.is_definition(other))
                                 .then(|| format!("`{other}` goes inside `stack {{ … }}`"))
                         });
                     self.err(
@@ -748,7 +748,7 @@ impl<'k> Decoder<'k> {
                     }
                 },
                 other => {
-                    let help = crate::looks::renamed(other)
+                    let help = crate::elements::renamed(other)
                         .map(str::to_owned)
                         .or_else(|| hint(did_you_mean(other, ["size", "seed"])));
                     self.err(
@@ -814,7 +814,7 @@ impl<'k> Decoder<'k> {
                 "width" => &mut line.width,
                 "wobble" => &mut line.wobble,
                 other => {
-                    let help = crate::looks::renamed(other)
+                    let help = crate::elements::renamed(other)
                         .map(str::to_owned)
                         .or_else(|| hint(did_you_mean(other, ["width", "wobble", "through"])));
                     this.err(
@@ -952,7 +952,7 @@ impl<'k> Decoder<'k> {
                     }
                 }
                 other => {
-                    let help = crate::looks::renamed(other)
+                    let help = crate::elements::renamed(other)
                         .map(str::to_owned)
                         .or_else(|| hint(did_you_mean(other, ["bounded-by", "fill"])));
                     self.err(

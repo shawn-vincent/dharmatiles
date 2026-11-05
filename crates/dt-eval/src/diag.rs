@@ -12,7 +12,7 @@ pub use dt_doc::error::Src;
 /// One problem, pointing at the text that caused it.
 #[derive(Debug, Clone)]
 pub struct Diag {
-    /// Stable code, such as `dt::unknown-look`.
+    /// Stable code, such as `dt::unknown-element`.
     pub code: &'static str,
     /// The headline.
     pub message: String,

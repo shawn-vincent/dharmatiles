@@ -28,7 +28,7 @@
 
 use dt_kit::{Field, Noise, Rng, Scale, Scene, Seed, distance, geodesic, noise, rim, smooth01};
 
-use crate::{Control, Ctx, Look, LookError, Plan, Read, Value, Write, only};
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write, only};
 
 /// The controls `water` takes.
 pub const CONTROLS: &[&str] = &["level"];
@@ -82,7 +82,7 @@ const ENCLOSE_CUT: f64 = 0.75;
 const ROUND_K: f64 = 0.45;
 const ROUND_SIGMAS_MM: [f64; 4] = [2.0, 4.0, 8.0, 16.0];
 
-/// The `water` look.
+/// The `water` element.
 pub struct Water {
     level_mm: f64,
 }
@@ -334,7 +334,7 @@ pub struct Stats {
     pub wet: f64,
 }
 
-impl Look for Water {
+impl Element for Water {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Fill,

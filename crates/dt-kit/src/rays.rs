@@ -1,5 +1,5 @@
 //! Rays (P5): first hits and point containment against a closed mesh,
-//! for looks that seat things on surfaces (the tree's leaf placer).
+//! for elements that seat things on surfaces (the tree's leaf placer).
 //!
 //! Every ray goes through dt-geom's [`dt_geom::Rays`] trait, on the obvhs
 //! backend.

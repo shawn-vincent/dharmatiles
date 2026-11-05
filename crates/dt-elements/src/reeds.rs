@@ -20,7 +20,7 @@
 
 use dt_kit::{Field, Material, Rng, Scene, Tag, TriMesh, form};
 
-use crate::{Control, Ctx, Look, LookError, Plan, Read, Value, Write, only};
+use crate::{Control, Ctx, Element, LookError, Plan, Read, Value, Write, only};
 
 /// The controls `reeds` takes.
 pub const CONTROLS: &[&str] = &["clumps", "stems", "height"];
@@ -39,7 +39,7 @@ const LEAN_DEG: f64 = 8.0;
 const SINK_MM: f64 = 0.8;
 const SECTION: usize = 24;
 
-/// The reeds look.
+/// The reeds element.
 #[derive(Clone, Debug)]
 pub struct Reeds {
     clumps: (i64, i64),
@@ -158,7 +158,7 @@ impl Stem {
     }
 }
 
-impl Look for Reeds {
+impl Element for Reeds {
     fn plan(&self) -> Plan {
         Plan {
             writes: Write::Solid("reeds"),

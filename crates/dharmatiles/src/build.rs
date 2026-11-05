@@ -285,7 +285,7 @@ pub(crate) fn report(errs: &[Diag]) {
     }
 }
 
-/// The looks' notes as one JSON object. A look used twice notes the same
+/// The elements' notes as one JSON object. An element used twice notes the same
 /// names twice: the second is keyed `name#2`, the third `name#3`, so no
 /// entry's numbers overwrite another's.
 pub(crate) fn stats(notes: &[(String, f64)]) -> serde_json::Map<String, Value> {

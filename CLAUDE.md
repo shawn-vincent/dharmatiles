@@ -27,7 +27,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --check
 cargo xtask sheet <tile|name> [--seeds …]   # contact sheet: four views per seed, seeds 1-4 -> out/sheet/<tile>/contact-sheet.png
 cargo xtask pictures [group …]              # rebuild the element pages' pictures from docs/elements/demo/
-cargo xtask docs [--check]                  # fill docs/elements/ pages' controls tables from the look schema
+cargo xtask docs [--check]                  # fill docs/elements/ pages' controls tables from the element schema
 ```
 
 `lib:` paths read `library/` from disk: this checkout's when run inside it (new and edited library tiles count at once, no rebuild), else `$DT_LIBRARY`, else the copy installed beside the program. Nothing is compiled in.
@@ -52,18 +52,18 @@ Six crates under `crates/`:
 
 | Crate | Role |
 |---|---|
-| `dt-geom` | Kernels: mesh backend (Manifold via `manifold-csg`), rays (obvhs), keyed seeds and noise, grids, distance transform, adaptive lift, convex hulls. No look knowledge. |
-| `dt-kit` | The vocabulary looks are written in: `Scene` of tagged solids, `Field` and its morphology, `scatter`, `loft`, `extrude`, `carve`, `union`, forms (level sets, hulls, relief), graphs (trees), `stand`, rays, the audit gate (`audit`), the STL writer with its build record, the CPU preview renderer. |
-| `dt-looks` | The built-in looks, each written only in `dt-kit`'s public operations: `ground`, `dirt`, `rock` (and `stone`, `boulder`, `pebble`, `scatter`), `water`, `grass`, `reeds`, `flowers`, `cliff`, `wall`, `floor`, `tree`, and the DungeonBlocks / OpenLOCK connectors. |
-| `dt-doc` | KDL v2 documents: decoding with spans and `miette` errors, the look schema (`looks.rs`), edits. |
-| `dt-eval` | Reads a document, plans it (`plan.rs` orders the stack by what each look reads and writes), builds it into a `Scene`, audits, exports. Library tiles are bundled from `library/`. |
+| `dt-geom` | Kernels: mesh backend (Manifold via `manifold-csg`), rays (obvhs), keyed seeds and noise, grids, distance transform, adaptive lift, convex hulls. No element knowledge. |
+| `dt-kit` | The vocabulary elements are written in: `Scene` of tagged solids, `Field` and its morphology, `scatter`, `loft`, `extrude`, `carve`, `union`, forms (level sets, hulls, relief), graphs (trees), `stand`, rays, the audit gate (`audit`), the STL writer with its build record, the CPU preview renderer. |
+| `dt-elements` | The built-in elements, each written only in `dt-kit`'s public operations: `ground`, `dirt`, `rock` (and `stone`, `boulder`, `pebble`, `scatter`), `water`, `grass`, `reeds`, `flowers`, `cliff`, `wall`, `floor`, `tree`, and the DungeonBlocks / OpenLOCK connectors. |
+| `dt-doc` | KDL v2 documents: decoding with spans and `miette` errors, the element schema (`elements.rs`), edits. |
+| `dt-eval` | Reads a document, plans it (`plan.rs` orders the stack by what each element reads and writes), builds it into a `Scene`, audits, exports. Library tiles are bundled from `library/`. |
 | `dharmatiles` | The CLI. |
 
 Also: `xtask/` (`docs`, `pictures`, `sheet`), `library/` (`.dtile` documents: `tiles/`, `parts/`, `printers/`, `palettes/`), `web/preview/` (the preview's page), `docs/` (the site, HTML), `extras/` (Python, not part of the program).
 
 ### How a build runs
 
-`document -> dt-doc (decode, check against the look schema) -> dt-eval::check (plan: surfaces first, then lift, then solids, in the order each look's reads and writes allow) -> build each look into the Scene -> union -> audit -> STL`. A look says what it reads and writes in `Look::plan`; the scheduler orders the stack and refuses reads nothing can satisfy (a grass line listed before the rocks it must grow round is fine: the plan runs the rocks first).
+`document -> dt-doc (decode, check against the element schema) -> dt-eval::check (plan: surfaces first, then lift, then solids, in the order each element's reads and writes allow) -> build each element into the Scene -> union -> audit -> STL`. An element says what it reads and writes in `Element::plan`; the scheduler orders the stack and refuses reads nothing can satisfy (a grass line listed before the rocks it must grow round is fine: the plan runs the rocks first).
 
 Every leaf solid takes a slot reserved in sequence, so its source id (and so the material of every output triangle, and every hash) is fixed by index whatever thread builds it. Builds are identical at 1, 4 and 16 threads; the golden tests check it (`crates/dt-eval/tests/golden.rs`, insta snapshots in `crates/dt-eval/tests/snapshots/`).
 
@@ -92,13 +92,13 @@ Lines and fill points make regions; the stack paints surfaces (`ground`, `dirt`,
 
 ## Standing rules
 
-- **Overhang is red.** 55 degrees is every look's target. 55-65 degrees is the band, painted orange, allowed up to 0.1% of the downward-facing area; over 65 is red, allowed up to another 0.1%; more fails. Both angles are the printer profile's `overhang` and `steepest` (library/printers/default.dtile). The printability gate is a gate: never loosen a threshold or cull geometry to pass it; fix the geometry where it is made.
+- **Overhang is red.** 55 degrees is every element's target. 55-65 degrees is the band, painted orange, allowed up to 0.1% of the downward-facing area; over 65 is red, allowed up to another 0.1%; more fails. Both angles are the printer profile's `overhang` and `steepest` (library/printers/default.dtile). The printability gate is a gate: never loosen a threshold or cull geometry to pass it; fix the geometry where it is made.
 - **KDL is v2 only.**
 - **One visual system.** The docs site and the preview share `docs/assets/theme.css` (tokens, self-hosted fonts, lotus, controls); the preview serves it from inside the program. New colours, fonts or controls go there, never into one page or the preview alone. Red and orange mean overhang only; tiles are shown on the plate (#D9E0EB). See `docs/standards/visual-system.html`.
 - **Docs are HTML** under `docs/`, never `.md` copies; lead with what a tile user needs; no commercial product images.
 - **The site is current state only.** It says what the program is and does now: the reference, the specification and the rules. No decision logs, histories, rulings with dates, lab write-ups or reference-photo galleries; git history holds how we got here. When a rule changes, update `docs/standards/rules.html` (project-wide), the element page's Rules list, or the language guide's rules, in place. The Rust code is the reference for how things are implemented; pages link to it rather than restate it.
-- **The site is the tile language's reference.** `docs/language.html` is the guide; `docs/elements/<name>.html` is one page per element (every node a document can write). "Look" is only the code's word (the `Look` trait, `dt-looks`): nothing a user sees, from the CLI and its errors to the preview and the site, says "look". Each element page's controls block is generated: run `cargo xtask docs` after changing a look's schema, and add a page for any new element (the generator refuses a look without one). The preview links each stack entry to its element page.
+- **The site is the tile language's reference.** `docs/language.html` is the guide; `docs/elements/<name>.html` is one page per element (every node a document can write). The code uses the same word: the `Element` trait, the `dt-elements` crate, the element schema in `dt-doc/src/elements.rs`. Each element page's controls block is generated: run `cargo xtask docs` after changing an element's schema, and add a page for any new element (the generator refuses an element without one). The preview links each stack entry to its element page.
 - **Pronouns:** use they/them for Shawn.
-- **Contact sheets:** make one with `cargo xtask sheet` and look at it yourself at full resolution before calling a look done. Element pictures come from `cargo xtask pictures`; look at them too.
+- **Contact sheets:** make one with `cargo xtask sheet` and look at it yourself at full resolution before calling an element done. Element pictures come from `cargo xtask pictures`; look at them too.
 - **Builds are heavy.** Avoid many release tree or wall builds in parallel.
 - Before asking Shawn a design question, read `docs/standards/rules.html`, the element page's Rules, the language guide's rules and the other `docs/standards/` pages. Many answers are settled (for example the edge level is 3.4 mm). Older reasoning is in the tag `before-rust-only` (`docs/rust/plan.html` there has the dated decisions log).

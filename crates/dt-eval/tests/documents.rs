@@ -186,7 +186,10 @@ fn definition_parameters_take_arguments_and_defaults() {
         .unwrap()
         .tile
         .unwrap();
-    assert_eq!(t.stack[0].controls[0].value, dt_looks::Value::Number(6.0));
+    assert_eq!(
+        t.stack[0].controls[0].value,
+        dt_elements::Value::Number(6.0)
+    );
 }
 
 #[test]

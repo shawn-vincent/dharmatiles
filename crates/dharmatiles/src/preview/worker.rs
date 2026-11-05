@@ -50,7 +50,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
         });
     }
     // the progress bar: stages weighted by what the last build of this
-    // tile measured, else by the looks' defaults
+    // tile measured, else by the elements' defaults
     let mut timings = shared
         .cache
         .as_ref()
@@ -164,7 +164,7 @@ pub(super) fn rebuild_stl(shared: &Shared, i: usize, opts: &Options, path: &str)
     let plan = json!({
         "tile": path.rsplit('/').next().unwrap_or(path), "cols": n(footprint[0]), "rows": n(footprint[1]),
         "square_mm": sq, "size_mm": footprint, "datum_z": Value::Null,
-        "stack": [{"label": "stl file", "look": "stl", "href": Value::Null}],
+        "stack": [{"label": "stl file", "element": "stl", "href": Value::Null}],
     });
     let record = json!({
         "record": {"seed": Value::Null, "system": opts.system},

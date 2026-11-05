@@ -1,5 +1,5 @@
 //! The scene: the tile's frame, its ground surface (a height grid painted
-//! by area) and the tagged solids looks add, with the source-ID block and
+//! by area) and the tagged solids elements add, with the source-ID block and
 //! material table of `dt_geom::source`.
 
 use dt_geom::{BoolOp, Grid, IdBlock, Mask, Materials, Mesh, Seed, TriMesh, batch_in_order};
@@ -207,14 +207,14 @@ impl Material {
 /// that made it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Tag {
-    /// `ground`, `connector`, …: what other looks read it as.
+    /// `ground`, `connector`, …: what other elements read it as.
     pub kind: &'static str,
     /// The stack path that made it, such as `tile/flat/stack/0`.
     pub owner: String,
 }
 
 /// A solid inside the mesh kernel. It never leaves the kernel between
-/// operations (R1): looks combine solids only through kit operations.
+/// operations (R1): elements combine solids only through kit operations.
 #[derive(Clone)]
 pub struct Solid(pub(crate) dt_geom::Solid);
 
@@ -707,7 +707,7 @@ impl Scene {
         self.progress = progress;
     }
 
-    /// The progress channel, to report through (a look with a natural loop
+    /// The progress channel, to report through (an element with a natural loop
     /// takes `scene.progress().counter(..)` and ticks it).  Reports nothing
     /// unless a front end attached one.
     #[must_use]
@@ -715,12 +715,12 @@ impl Scene {
         self.progress.clone()
     }
 
-    /// Record a look's number for the build record (counts and the like).
+    /// Record an element's number for the build record (counts and the like).
     pub fn note(&mut self, name: &str, value: f64) {
         self.notes.push((name.to_owned(), value));
     }
 
-    /// The numbers looks noted, in order.
+    /// The numbers elements noted, in order.
     #[must_use]
     pub fn notes(&self) -> &[(String, f64)] {
         &self.notes
@@ -905,7 +905,7 @@ impl Scene {
         self.placed_at.retain(|_| *it.next().unwrap_or(&true));
     }
 
-    /// Add a solid a look built, and record its stage hash.
+    /// Add a solid an element built, and record its stage hash.
     pub fn add(&mut self, tag: Tag, solid: Solid) {
         let hash = solid.0.to_tri_mesh().content_hash();
         self.record(&format!("{}:{}", tag.kind, tag.owner), hash);

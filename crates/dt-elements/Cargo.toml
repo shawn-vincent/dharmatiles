@@ -1,6 +1,6 @@
 [package]
-name = "dt-looks"
-description = "dharmatiles built-in looks, written only in dt-kit's public operations"
+name = "dt-elements"
+description = "dharmatiles built-in elements, written only in dt-kit's public operations"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,7 +13,7 @@ default = ["manifold-ffi", "manifold-parallel"]
 manifold-ffi = ["dt-kit/manifold-ffi"]
 manifold-parallel = ["dt-kit/manifold-parallel"]
 
-# Only the kit: a look cannot reach into the kernels or another look.
+# Only the kit: a element cannot reach into the kernels or another element.
 [dependencies]
 dt-kit.workspace = true
 libm.workspace = true

@@ -15,10 +15,10 @@
 //!   prelude, already in mm), the file's, the tile's, a definition's;
 //! - definitions are inlined, with their parameters bound to the caller's
 //!   arguments or their defaults;
-//! - every control a built look takes is filled in: as written, or its
+//! - every control a built element takes is filled in: as written, or its
 //!   schema default ([`dt_doc::schema::Control::default_value`]);
 //! - the edge contract (library/parts/edges.dtile) is read for every tile;
-//! - anything that needs a look not built yet is set aside in
+//! - anything that needs an element not built yet is set aside in
 //!   [`Tile::pending`]: `check` accepts it, `build` refuses it.
 //!
 //! The evaluator only sees [`Tile`].
@@ -29,7 +29,7 @@ use std::sync::Arc;
 use dt_doc::Known;
 use dt_doc::model::{self, Callee, Definition, Document, Spanned, Use, Value};
 use dt_doc::place::{Along, Edge, Point};
-use dt_doc::schema::{Control, Look, PlaceWord, Role};
+use dt_doc::schema::{Control, Element, PlaceWord, Role};
 use dt_kit::Seed;
 use miette::{NamedSource, SourceSpan};
 
@@ -57,31 +57,31 @@ pub struct File {
     pub doc: Document,
 }
 
-/// A control a look is given, resolved to mm or a word.
+/// A control an element is given, resolved to mm or a word.
 #[derive(Clone, Debug)]
 pub struct Setting {
     /// The control's name.
     pub name: String,
     /// Its value.
-    pub value: dt_looks::Value,
+    pub value: dt_elements::Value,
     /// Where it was written (the entry's name for a default).
     pub span: SourceSpan,
     /// The text it was written in.
     pub src: Src,
 }
 
-/// One stack entry that calls a built look, definitions inlined.
+/// One stack entry that calls a built element, definitions inlined.
 #[derive(Clone, Debug)]
 pub struct Entry {
-    /// The look named.
+    /// The element named.
     pub what: Spanned<String>,
     /// `in=`: the region it acts in (default the whole tile).
     pub area: Option<Spanned<String>>,
-    /// `seed=`: pins its look.
+    /// `seed=`: pins its element.
     pub seed: Option<u64>,
     /// `id=`: its name among same-named siblings in seed paths.
     pub id: Option<String>,
-    /// The controls the look takes: written, or their defaults.
+    /// The controls the element takes: written, or their defaults.
     pub controls: Vec<Setting>,
     /// `along=` a path of tile edges, as the path in squares walked with
     /// the tile inside on the left (see [`edge_path`]).
@@ -99,10 +99,10 @@ pub struct Entry {
     pub span: SourceSpan,
 }
 
-/// A child of a scatter, as its look takes it.
+/// A child of a scatter, as its element takes it.
 #[derive(Clone, Debug)]
 pub struct Child {
-    /// The thing's look.
+    /// The thing's element.
     pub what: Spanned<String>,
     /// Its controls, written or by default.
     pub controls: Vec<Setting>,
@@ -146,7 +146,7 @@ pub struct Tile {
     pub wobbles: BTreeMap<String, (Vec<[f64; 2]>, f64)>,
     /// Regions.
     pub regions: Vec<Region>,
-    /// The entries that call built looks, definitions inlined.
+    /// The entries that call built elements, definitions inlined.
     pub stack: Vec<Entry>,
     /// What the document asks for that is not built yet: one error each,
     /// at its text.  `check` accepts these; `build` refuses them.
@@ -159,7 +159,7 @@ pub struct Tile {
 
 impl Tile {
     /// Replace the root seed, wobbling the wobbled lines again from it
-    /// (a `--seed` reaches the lines as well as the looks).
+    /// (a `--seed` reaches the lines as well as the elements).
     pub fn reseed(&mut self, seed: u64) {
         self.seed = seed;
         for (name, (pts, wobble)) in &self.wobbles {
@@ -256,9 +256,9 @@ pub fn printer(sources: &dyn Source, path: &str) -> Result<dt_kit::Printer, Vec<
     )
 }
 
-/// The phase a look not built yet arrives in (plan.html).
-fn phase(look: &str) -> Option<u8> {
-    Some(match look {
+/// The phase an element not built yet arrives in (plan.html).
+fn phase(element: &str) -> Option<u8> {
+    Some(match element {
         "dirt" => 2,
         "rock" | "stone" | "boulder" | "pebble" | "scatter" => 3,
         "grass" => 4,
@@ -297,7 +297,7 @@ struct Scope {
     params: BTreeMap<String, Bound>,
     levels: Vec<(String, f64)>,
     area: Option<Spanned<String>>,
-    /// Place words a definition call passes to the looks inside it.
+    /// Place words a definition call passes to the elements inside it.
     at: Option<Spanned<Point>>,
     along: Option<Spanned<Along>>,
     seed: Option<u64>,
@@ -566,7 +566,7 @@ impl Reader<'_> {
         out
     }
 
-    /// Inline `entries` into `out`: built looks become [`Entry`]s, what
+    /// Inline `entries` into `out`: built elements become [`Entry`]s, what
     /// is not built yet goes to `pending`.
     fn expand(
         &mut self,
@@ -638,20 +638,20 @@ impl Reader<'_> {
                 (None, None) => None,
             };
             match &e.callee {
-                Callee::Look(look) => {
-                    let Some(takes) = dt_looks::takes(look.name) else {
+                Callee::Element(element) => {
+                    let Some(takes) = dt_elements::takes(element.name) else {
                         pending.push(not_yet(
                             src,
                             e.what.span,
-                            &format!("element `{}`", look.name),
-                            phase(look.name),
+                            &format!("element `{}`", element.name),
+                            phase(element.name),
                         ));
                         continue;
                     };
                     let mut ok = true;
                     // inside a definition the decoder leaves a required
                     // place word to the call; it must arrive from there
-                    for need in look.needs {
+                    for need in element.needs {
                         let has = match need {
                             PlaceWord::Along => along.is_some(),
                             PlaceWord::At => at.is_some(),
@@ -666,7 +666,7 @@ impl Reader<'_> {
                                 "dt::missing-control",
                                 format!(
                                     "`{}` needs `{w}=`, and the definition call gives none",
-                                    look.name
+                                    element.name
                                 ),
                                 format!("no `{w}=` here or at the call"),
                             );
@@ -676,8 +676,8 @@ impl Reader<'_> {
                             self.errors.push(d);
                         }
                     }
-                    let honours = dt_looks::places(look.name);
-                    // along= a path of edges and at= a point, for the looks
+                    let honours = dt_elements::places(element.name);
+                    // along= a path of edges and at= a point, for the elements
                     // that place by them; the rest is not built yet
                     let mut path = None;
                     let mut point = None;
@@ -695,7 +695,7 @@ impl Reader<'_> {
                             Along::Edges(edges) => path = Some(edge_path(edges, self.dims)),
                             Along::Line(_) => unplaced.push(("along= a drawn line", Some(a.span))),
                         },
-                        // inherited from a definition call: for the looks
+                        // inherited from a definition call: for the elements
                         // that place by it only, the others ignore it
                         Some(a) if e.place.along.is_some() => {
                             unplaced.push(("along=", Some(a.span)));
@@ -720,7 +720,7 @@ impl Reader<'_> {
                             pending.push(not_yet(
                                 src,
                                 span,
-                                &format!("`{word}` on `{}` is", look.name),
+                                &format!("`{word}` on `{}` is", element.name),
                                 None,
                             ));
                         }
@@ -730,15 +730,15 @@ impl Reader<'_> {
                     // its own entry, in the surface's area, built after the lift
                     let mut hoisted: Vec<model::Entry> = Vec::new();
                     for c in &e.children {
-                        if look.role == Role::Surface
-                            && matches!(&c.callee, Callee::Look(cl) if cl.name == "scatter")
+                        if element.role == Role::Surface
+                            && matches!(&c.callee, Callee::Element(cl) if cl.name == "scatter")
                         {
                             hoisted.push(c.clone());
                             continue;
                         }
                         let built = match &c.callee {
-                            Callee::Look(cl) if dt_looks::holds(look.name, cl.name) => {
-                                dt_looks::takes(cl.name).map(|t| (*cl, t))
+                            Callee::Element(cl) if dt_elements::holds(element.name, cl.name) => {
+                                dt_elements::takes(cl.name).map(|t| (*cl, t))
                             }
                             _ => None,
                         };
@@ -747,7 +747,7 @@ impl Reader<'_> {
                             pending.push(not_yet(
                                 src,
                                 c.what.span,
-                                &format!("`{}` inside `{}` is", c.what.value, look.name),
+                                &format!("`{}` inside `{}` is", c.what.value, element.name),
                                 phase(&c.what.value).or(Some(3)),
                             ));
                             continue;
@@ -778,7 +778,7 @@ impl Reader<'_> {
                             None => ok = false,
                         }
                     }
-                    let controls = self.controls(e, look, takes, scope, pending);
+                    let controls = self.controls(e, element, takes, scope, pending);
                     if ok && let Some(controls) = controls {
                         let inner = Scope {
                             area: area.clone(),
@@ -879,12 +879,12 @@ impl Reader<'_> {
             })
     }
 
-    /// The controls a built look takes, as written or by default; `None`
+    /// The controls a built element takes, as written or by default; `None`
     /// when one cannot be given yet (it is in `pending`).
     fn controls(
         &mut self,
         e: &model::Entry,
-        look: &'static Look,
+        element: &'static Element,
         takes: &[&str],
         scope: &Scope,
         pending: &mut Vec<Diag>,
@@ -915,7 +915,7 @@ impl Reader<'_> {
                             src,
                             sub.name.span,
                             &format!("sub-controls of `{}` are", s.name.value),
-                            phase_of_control(look.name, &s.name.value),
+                            phase_of_control(element.name, &s.name.value),
                         ));
                     }
                 }
@@ -925,8 +925,8 @@ impl Reader<'_> {
                 pending.push(not_yet(
                     src,
                     s.name.span,
-                    &format!("the group `{}` on `{}` is", s.name.value, look.name),
-                    phase_of_control(look.name, &s.name.value),
+                    &format!("the group `{}` on `{}` is", s.name.value, element.name),
+                    phase_of_control(element.name, &s.name.value),
                 ));
             }
             for (name, v, span, control) in items {
@@ -947,8 +947,8 @@ impl Reader<'_> {
                         pending.push(not_yet(
                             src,
                             span,
-                            &format!("`{}`'s `{}` is", look.name, s.name.value),
-                            phase_of_control(look.name, &s.name.value),
+                            &format!("`{}`'s `{}` is", element.name, s.name.value),
+                            phase_of_control(element.name, &s.name.value),
                         ));
                     }
                     continue;
@@ -956,11 +956,11 @@ impl Reader<'_> {
                 push_setting(&mut out, &name, &b.value.value, value, b.value.span, &b.src);
             }
         }
-        for c in look.controls {
+        for c in element.controls {
             if takes.contains(&c.name)
                 && e.control(c.name).is_none()
                 && let Some(raw) = c.default_value()
-                && let Ok(value) = look_value(&raw, &scope.levels)
+                && let Ok(value) = element_value(&raw, &scope.levels)
             {
                 push_setting(&mut out, c.name, &raw, value, e.what.span, src);
             }
@@ -969,13 +969,13 @@ impl Reader<'_> {
     }
 }
 
-/// One setting for a look, and, for a word that stands for numbers
+/// One setting for an element, and, for a word that stands for numbers
 /// (`clods some`), each number as `control.name` (`clods.density`).
 fn push_setting(
     out: &mut Vec<Setting>,
     name: &str,
     raw: &Value,
-    value: dt_looks::Value,
+    value: dt_elements::Value,
     span: SourceSpan,
     src: &Src,
 ) {
@@ -983,7 +983,7 @@ fn push_setting(
         for (k, v) in w.sets {
             out.push(Setting {
                 name: format!("{name}.{k}"),
-                value: dt_looks::Value::Number(*v),
+                value: dt_elements::Value::Number(*v),
                 span,
                 src: Arc::clone(src),
             });
@@ -997,21 +997,21 @@ fn push_setting(
     });
 }
 
-/// The phase a control of a built look arrives in.
-fn phase_of_control(look: &str, control: &str) -> Option<u8> {
-    let _ = (look, control);
+/// The phase a control of a built element arrives in.
+fn phase_of_control(element: &str, control: &str) -> Option<u8> {
+    let _ = (element, control);
     None
 }
 
-/// A written value for a built look: a range stays a range (the look
+/// A written value for a built element: a range stays a range (the element
 /// draws from it).
-fn value(b: &Bound, levels: &[(String, f64)]) -> Result<dt_looks::Value, Box<Diag>> {
-    look_value(&b.value.value, levels)
+fn value(b: &Bound, levels: &[(String, f64)]) -> Result<dt_elements::Value, Box<Diag>> {
+    element_value(&b.value.value, levels)
         .map_err(|msg| Box::new(Diag::at(&b.src, b.value.span, "dt::value", msg, "here")))
 }
 
-/// A value as a built look takes it: one number in mm, or a word.
-fn look_value(v: &Value, levels: &[(String, f64)]) -> Result<dt_looks::Value, String> {
+/// A value as a built element takes it: one number in mm, or a word.
+fn element_value(v: &Value, levels: &[(String, f64)]) -> Result<dt_elements::Value, String> {
     match v {
         Value::Num(n) if n.expr.is_range() => {
             let env = |name: &str| {
@@ -1021,14 +1021,14 @@ fn look_value(v: &Value, levels: &[(String, f64)]) -> Result<dt_looks::Value, St
                     .find(|(k, _)| k == name)
                     .map(|(_, v)| *v)
             };
-            n.bounds(&env).map(|(a, b)| dt_looks::Value::Range(a, b))
+            n.bounds(&env).map(|(a, b)| dt_elements::Value::Range(a, b))
         }
-        Value::Num(n) => n.mm(levels).map(dt_looks::Value::Number),
-        Value::Word(w) => Ok(dt_looks::Value::Word(w.word.to_owned())),
-        Value::Bool(v) => Ok(dt_looks::Value::Word(
+        Value::Num(n) => n.mm(levels).map(dt_elements::Value::Number),
+        Value::Word(w) => Ok(dt_elements::Value::Word(w.word.to_owned())),
+        Value::Bool(v) => Ok(dt_elements::Value::Word(
             if *v { "#true" } else { "#false" }.to_owned(),
         )),
-        Value::Tag(t) | Value::Text(t) => Ok(dt_looks::Value::Word(t.clone())),
+        Value::Tag(t) | Value::Text(t) => Ok(dt_elements::Value::Word(t.clone())),
         Value::Param(p) => Err(format!("the parameter `{p}` has no value here")),
     }
 }
@@ -1047,9 +1047,9 @@ fn bind(v: &Spanned<Value>, src: &Src, scope: &Scope) -> Bound {
 }
 
 /// A control's schema default, resolved; `None` without one (or for a
-/// range, which no built look takes yet).
-fn default_value(c: &'static Control, levels: &[(String, f64)]) -> Option<dt_looks::Value> {
-    look_value(&c.default_value()?, levels).ok()
+/// range, which no built element takes yet).
+fn default_value(c: &'static Control, levels: &[(String, f64)]) -> Option<dt_elements::Value> {
+    element_value(&c.default_value()?, levels).ok()
 }
 
 /// A point in squares, if it is not drawn from a range.
