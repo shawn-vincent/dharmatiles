@@ -19,7 +19,7 @@ pub(crate) fn check(paths: &[String], json: bool) -> u8 {
                         }
                         Some(t) => {
                             tell!(
-                                "ok {p}: tile `{}`; {} part(s) need looks not built yet, so `build` refuses it:",
+                                "ok {p}: tile `{}`; {} part(s) need elements not built yet, so `build` refuses it:",
                                 t.name,
                                 pending.len()
                             );

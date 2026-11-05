@@ -21,7 +21,7 @@
   <li><a href="#units">3. Units, levels and scaling</a></li>
   <li><a href="#places">4. Edges, points, lines and regions</a></li>
   <li><a href="#placement">5. Placement and scatter</a></li>
-  <li><a href="#looks">6. The elements</a></li>
+  <li><a href="#elements">6. The elements</a></li>
   <li><a href="#parts">7. Parts: use, define, param</a></li>
   <li><a href="#errors">8. Errors</a></li>
   <li><a href="#examples">9. Worked examples</a></li>
@@ -36,7 +36,7 @@
   <li><code>about</code>: optional free text, one string;</li>
   <li><code>levels</code>: optional named heights this tile adds or overrides;</li>
   <li><code>line</code> and <code>region</code>: only for tiles divided into areas;</li>
-  <li><code>stack</code>: exactly one, listing the looks and definitions that make the tile.</li>
+  <li><code>stack</code>: exactly one, listing the elements and definitions that make the tile.</li>
 </ul>
 <p>Above the tile, a file may have <code>use</code> lines that bring in definitions from parts files. Parts files hold <code>define</code> nodes and may hold file-level <code>levels</code>. Two library files use two more top-level nodes: <code>printer</code> (the printer profile) and <code>edges</code> (the edge contract). Anything else at the top level is an error.</p>
 <p>The smallest tile in the library:</p>
@@ -81,10 +81,10 @@ atom   := number "%"? | name | "(" sum ")"</code></pre>
 
 <h3 id="entry">What every stack entry takes</h3>
 <ul>
-  <li><code>seed=</code>: pins this entry's look while the tile seed changes everything else.</li>
+  <li><code>seed=</code>: pins this entry's own randomness while the tile seed changes everything else.</li>
   <li><code>id=</code>: a name for the entry, for edits and diagnostics.</li>
   <li><code>weight=</code>: only on a child of a <code>scatter</code>, its share of the mix.</li>
-  <li>The place words its look accepts (<a href="#placement">section 5</a>).</li>
+  <li>The place words its element accepts (<a href="#placement">section 5</a>).</li>
 </ul>
 
 <h2 id="units">3. Units, levels and scaling</h2>
@@ -111,7 +111,7 @@ atom   := number "%"? | name | "(" sum ")"</code></pre>
     overhang 55         // the steepest overhang that prints, degrees from vertical
     gap      0.2        // the narrowest gap that stays open, mm
 }</code></pre>
-<p>Looks apply these after scaling, so a scaled blade, leaf or branch is never thinner than what prints.</p>
+<p>Elements apply these after scaling, so a scaled blade, leaf or branch is never thinner than what prints.</p>
 
 <h3 id="levels">level and height</h3>
 <p><code>level</code> is where a surface sits. <code>height</code> is how tall a thing stands above what it stands on: mm (<code>cliff height=35</code>), a word (<code>wall … height full</code>, up to the wall-top level), or a share of the thing it belongs to (<code>ledges 1 height="40%"</code>).</p>
@@ -146,14 +146,14 @@ atom   := number "%"? | name | "(" sum ")"</code></pre>
 <p>A wall or cliff on a tile edge always stands inside the tile, its outer face flush with the edge. That is the DungeonBlocks slab standard, and it means an author never has to work out which side of a line a wall is on.</p>
 
 <h3 id="lines">Lines</h3>
-<p>A drawn line runs through points. With a <code>width</code> it is a strip, and a look <code>along=</code> it covers the strip. <code>wobble</code> lets it wander up to that many mm off its points.</p>
+<p>A drawn line runs through points. With a <code>width</code> it is a strip, and an element <code>along=</code> it covers the strip. <code>wobble</code> lets it wander up to that many mm off its points.</p>
 <pre><code>line trail width=9 wobble=3 { through south "0.65,1" north }</code></pre>
-<p>A look along a drawn line takes <code>side=left</code>, <code>right</code> or <code>centre</code> (the default), as you walk the line. <code>side=</code> along a tile edge is an error, because on an edge a wall always stands inside.</p>
+<p>An element along a drawn line takes <code>side=left</code>, <code>right</code> or <code>centre</code> (the default), as you walk the line. <code>side=</code> along a tile edge is an error, because on an edge a wall always stands inside.</p>
 
 <h3 id="regions">Regions</h3>
 <p>The whole tile is the default area, so an undivided tile needs no region. A region exists only when lines divide the tile. It is the paint-bucket model from the design conversation: name the lines that bound it, then drop one or more fill points.</p>
 <pre><code>region verge { bounded-by trail; fill "0.15,1"; fill "0.85,1" }</code></pre>
-<p>Several fill points on different sides of a line join areas without union, intersection or difference. Looks act inside a region with <code>in=verge</code>.</p>
+<p>Several fill points on different sides of a line join areas without union, intersection or difference. Elements act inside a region with <code>in=verge</code>.</p>
 
 <h2 id="placement">5. Placement and scatter</h2>
 <h3 id="place-words">Place words</h3>
@@ -194,8 +194,8 @@ atom   := number "%"? | name | "(" sum ")"</code></pre>
 <h3 id="stack-order">Stack order</h3>
 <p>Order is free for solids. Every solid (rocks, trees, walls, cliffs, boulders, scattered or not) is planned before anything grows, and grass and dirt banks grow round every solid wherever they are listed. Order only decides which surface paints over which: a path's dirt listed after the whole-tile dirt paints over it. Each element is a surface, a thing, a run or a scatter, and that decides how it is planned.</p>
 
-<h2 id="looks">6. The elements</h2>
-<p>Each element has a page of its own, with what it makes, a picture, an example and every control it takes, generated from the program: <code>dharmatiles looks NAME</code> prints the same list. Each element leads with a few controls named for what you see. A word in a choice (<code>rock mixed</code>, <code>flow wild</code>) expands to documented numbers; a number is always accepted instead.</p>
+<h2 id="elements">6. The elements</h2>
+<p>Each element has a page of its own, with what it makes, a picture, an example and every control it takes, generated from the program: <code>dharmatiles elements NAME</code> prints the same list. Each element leads with a few controls named for what you see. A word in a choice (<code>rock mixed</code>, <code>flow wild</code>) expands to documented numbers; a number is always accepted instead.</p>
 <div class="tbl"><table>
 <thead><tr><th>Kind</th><th>Elements</th></tr></thead>
 <tbody>
@@ -211,7 +211,7 @@ atom   := number "%"? | name | "(" sum ")"</code></pre>
 <p>Parts files hold definitions that tiles bring in by name. A <code>use</code> line names the file and the definitions it brings in, so a reader knows where every name came from:</p>
 <pre><code>use "parts/grass" lawn long-grass</code></pre>
 <p>A bare path such as <code>"parts/grass"</code> is the bundled library, and <code>"lib:parts/grass"</code> says so explicitly. <code>"./mine"</code> or <code>"../shared/x"</code> is a file in the author's project. Anything else is an error.</p>
-<p>A <code>define</code> has <code>param</code> lines and one <code>stack</code>. It is called like a look; its params are set as properties, and place words (<code>in=</code>, <code>at=</code>) pass through to the looks inside it. A definition can call another. A definition whose stack is one thing is itself a thing, so it can be placed with <code>at=</code> or scattered: <code>scatter count=2 { oak }</code>. Definitions that call each other in a loop are an error (<code>dt::loop</code>).</p>
+<p>A <code>define</code> has <code>param</code> lines and one <code>stack</code>. It is called like an element; its params are set as properties, and place words (<code>in=</code>, <code>at=</code>) pass through to the elements inside it. A definition can call another. A definition whose stack is one thing is itself a thing, so it can be placed with <code>at=</code> or scattered: <code>scatter count=2 { oak }</code>. Definitions that call each other in a loop are an error (<code>dt::loop</code>).</p>
 <pre><code>// library/parts/grass.dtile
 define lawn {
     param length "3.5..6.5"   // blade length along the ground, mm
@@ -264,9 +264,9 @@ define oak {
     ·                          ╰── unknown control
   help: a tree is one tree; how many and how spread is a scatter's job: `scatter
         count=… { tree }`</code></pre>
-<pre><code>dt::unknown-look
+<pre><code>dt::unknown-element
 
-  × no look or definition is called `hills`
+  × no element or definition is called `hills`
    ╭─[library/tiles/ground/2x2-grass-tree.dtile:8:9]
  8 │         hills                           // flat, at the ground level (5 mm)
    ·         ──┬──

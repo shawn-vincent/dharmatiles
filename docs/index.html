@@ -81,7 +81,7 @@ tile pond size="1x1" seed=97 {
     <tr><td>Browse your tiles and the library</td><td><code>dharmatiles</code> on its own, or <code>dharmatiles preview --open</code> (your tiles live in <code>~/dharmatiles</code>, or set <code>DT_HOME</code>; name folders to browse those instead)</td></tr>
     <tr><td>Check it without building</td><td><code>dharmatiles check my-pond.dtile</code></td></tr>
     <tr><td>Build every library tile</td><td><code>dharmatiles build --all --system both</code></td></tr>
-    <tr><td>List the elements and their controls</td><td><code>dharmatiles looks</code>, <code>dharmatiles looks cliff</code></td></tr>
+    <tr><td>List the elements and their controls</td><td><code>dharmatiles elements</code>, <code>dharmatiles elements cliff</code></td></tr>
   </tbody>
 </table></div>
 <p>Every tile passes a printability gate before it is written: watertight, nothing lost, and no overhang past 55° (55–65° allowed in small patches, past 65° fails). Print it base down, with no supports; see <a href="standards/printing.html">printing</a>.</p>
@@ -91,7 +91,7 @@ tile pond size="1x1" seed=97 {
 <pre><code>git clone https://github.com/shawn-vincent/dharmatiles.git
 cd dharmatiles
 cargo build --release                 # a few minutes, once
-./target/release/dharmatiles looks    # it works: lists the elements</code></pre>
+./target/release/dharmatiles elements # it works: lists the elements</code></pre>
 <p>Run it from inside the checkout and it finds the library (<code>lib:tiles/…</code>, <code>use "parts/grass"</code>) by itself. To run it from anywhere, put <code>target/release</code> on your <code>PATH</code> and set <code>DT_LIBRARY</code> to the checkout's <code>library</code> folder. Output goes to an <code>out/</code> folder where you run it (or <code>--out</code>): <code>out/db/</code> for DungeonBlocks, <code>out/ol/</code> for OpenLOCK.</p>
 
 <h2 id="workflow">Making your own tile</h2>

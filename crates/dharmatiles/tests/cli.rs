@@ -79,7 +79,7 @@ fn the_engine_version_is_the_workspace_version_and_commit() {
 
 #[test]
 fn looks_lists_every_look() {
-    let o = Command::new(EXE).arg("looks").output().unwrap();
+    let o = Command::new(EXE).arg("elements").output().unwrap();
     assert_eq!(o.status.code(), Some(0));
     let text = String::from_utf8(o.stdout).unwrap();
     for name in [
@@ -100,7 +100,7 @@ fn looks_lists_every_look() {
 #[test]
 fn looks_ground_lists_its_controls() {
     let o = Command::new(EXE)
-        .args(["looks", "ground"])
+        .args(["elements", "ground"])
         .output()
         .unwrap();
     assert_eq!(o.status.code(), Some(0));
@@ -121,25 +121,28 @@ fn looks_ground_lists_its_controls() {
 
 #[test]
 fn an_unknown_look_is_an_error_with_a_hint() {
-    let o = Command::new(EXE).args(["looks", "grond"]).output().unwrap();
+    let o = Command::new(EXE)
+        .args(["elements", "grond"])
+        .output()
+        .unwrap();
     assert_eq!(o.status.code(), Some(1));
     let err = String::from_utf8(o.stderr).unwrap();
     assert!(err.contains("did you mean `ground`?"), "{err}");
 
     let o = Command::new(EXE)
-        .args(["looks", "nope", "--json"])
+        .args(["elements", "nope", "--json"])
         .output()
         .unwrap();
     assert_eq!(o.status.code(), Some(1));
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(v["ok"], false);
-    assert_eq!(v["errors"][0]["code"], "dt::unknown-look");
+    assert_eq!(v["errors"][0]["code"], "dt::unknown-element");
 }
 
 #[test]
 fn looks_dirt_json_has_units_limits_defaults_and_subs() {
     let o = Command::new(EXE)
-        .args(["looks", "dirt", "--json"])
+        .args(["elements", "dirt", "--json"])
         .output()
         .unwrap();
     assert_eq!(o.status.code(), Some(0));

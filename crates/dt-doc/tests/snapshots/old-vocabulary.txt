@@ -1,6 +1,6 @@
-dt::unknown-look
+dt::unknown-element
 
-  × no look or definition is called `hills`
+  × no element or definition is called `hills`
    ╭─[library/tiles/ground/2x2-grass-tree.dtile:7:9]
  6 │     stack {
  7 │         hills                           // flat, at the ground level (5 mm)

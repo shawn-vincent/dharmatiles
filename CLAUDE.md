@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **dharmatiles** builds procedural 3D-printable terrain tiles as STL files from short `.dtile` documents (the tile language, KDL v2 underneath). Each tile has a DungeonBlocks-compatible socket-peg underside (or an OpenLOCK clip base), dirt with clods and pebbles, rocks, grass blades, water, walls, floors and trees. Tiles are for tabletop gaming (35 mm square grid, DungeonBlocks standard; OpenLOCK is 25.4 mm). Every build runs through a printability gate: watertight after the float32 reload, no lost parts, overhang held to 55 degrees (small budgeted patches to 65 and past it).
 
-dharmatiles is a pure Rust program (the `dharmatiles` binary). The only other code is `extras/`: a paint organizer, its stand and two STL helpers, standalone Python scripts that are not part of the program. The Python library, the labs, the parity harness and the old design history were deleted on 4 Nov 2026; the tag `before-rust-only` holds them. New looks are designed in Rust.
+dharmatiles is a pure Rust program (the `dharmatiles` binary). The only other code is `extras/`: a paint organizer, its stand and two STL helpers, standalone Python scripts that are not part of the program. The Python library, the labs, the parity harness and the old design history were deleted on 4 Nov 2026; the tag `before-rust-only` holds them. New elements are designed in Rust.
 
 ## Commands
 
@@ -17,7 +17,7 @@ dharmatiles build my-tile.dtile --system ol --png            # a file, for OpenL
 dharmatiles build my-tile.dtile --3mf                        # also a 3MF painted by material; a Bambu Studio project when ~/dharmatiles/bambu.3mf (or --bambu-template) exists
 dharmatiles build --all --system both                      # every library tile, both systems -> out/{db,ol}/<group>/
 dharmatiles check my-tile.dtile                              # read and plan only
-dharmatiles looks [name]                                   # the looks and their controls
+dharmatiles elements [name]                                # the elements and their controls
 dharmatiles watch my-tile.dtile                              # rebuild on every save
 dharmatiles preview my-tile.dtile --open                     # live painted 3D view in the browser (127.0.0.1:7878); overhang red; also takes .stl
 dharmatiles                                                 # no command = preview --open: browse My tiles ($DT_HOME, else ~/dharmatiles) and the Library; folders as args work too
@@ -97,7 +97,7 @@ Lines and fill points make regions; the stack paints surfaces (`ground`, `dirt`,
 - **One visual system.** The docs site and the preview share `docs/assets/theme.css` (tokens, self-hosted fonts, lotus, controls); the preview serves it from inside the program. New colours, fonts or controls go there, never into one page or the preview alone. Red and orange mean overhang only; tiles are shown on the plate (#D9E0EB). See `docs/standards/visual-system.html`.
 - **Docs are HTML** under `docs/`, never `.md` copies; lead with what a tile user needs; no commercial product images.
 - **The site is current state only.** It says what the program is and does now: the reference, the specification and the rules. No decision logs, histories, rulings with dates, lab write-ups or reference-photo galleries; git history holds how we got here. When a rule changes, update `docs/standards/rules.html` (project-wide), the element page's Rules list, or the language guide's rules, in place. The Rust code is the reference for how things are implemented; pages link to it rather than restate it.
-- **The site is the tile language's reference.** `docs/language.html` is the guide; `docs/elements/<name>.html` is one page per element (every node a document can write; "look" is only the code's word). Each element page's controls block is generated: run `cargo xtask docs` after changing a look's schema, and add a page for any new element (the generator refuses a look without one). The preview links each stack entry to its element page.
+- **The site is the tile language's reference.** `docs/language.html` is the guide; `docs/elements/<name>.html` is one page per element (every node a document can write). "Look" is only the code's word (the `Look` trait, `dt-looks`): nothing a user sees, from the CLI and its errors to the preview and the site, says "look". Each element page's controls block is generated: run `cargo xtask docs` after changing a look's schema, and add a page for any new element (the generator refuses a look without one). The preview links each stack entry to its element page.
 - **Pronouns:** use they/them for Shawn.
 - **Contact sheets:** make one with `cargo xtask sheet` and look at it yourself at full resolution before calling a look done. Element pictures come from `cargo xtask pictures`; look at them too.
 - **Builds are heavy.** Avoid many release tree or wall builds in parallel.

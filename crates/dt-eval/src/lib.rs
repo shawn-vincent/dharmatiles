@@ -244,8 +244,8 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
                     .as_ref()
                     .and_then(|c| e.controls.iter().find(|s| &s.name == c));
                 let d = match at {
-                    Some(s) => Diag::at(&s.src, s.span, "dt::look", le.message, "here"),
-                    None => Diag::at(&e.src, e.what.span, "dt::look", le.message, "here"),
+                    Some(s) => Diag::at(&s.src, s.span, "dt::element", le.message, "here"),
+                    None => Diag::at(&e.src, e.what.span, "dt::element", le.message, "here"),
                 };
                 errors.push(d.maybe_help(le.help));
                 continue;
@@ -262,7 +262,7 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
                 format!("the tile `{}` has nothing in its stack", tile.name),
                 "nothing to build",
             )
-            .help("add a look to its stack, such as `stack { ground }`"),
+            .help("add an element to its stack, such as `stack { ground }`"),
         );
     }
     // the tile is built at the finest cell any entry needs
@@ -331,7 +331,7 @@ fn region_of(tile: &Tile, e: &doc::Entry, errors: &mut Vec<Diag>) -> Option<usiz
             .maybe_help(
                 did_you_mean(&name.value, tile.regions.iter().map(|r| r.name.as_str()))
                     .map(|w| format!("did you mean `{w}`?"))
-                    .or_else(|| Some("without in=, a look covers the whole tile".into())),
+                    .or_else(|| Some("without in=, an element covers the whole tile".into())),
             ),
         );
     }

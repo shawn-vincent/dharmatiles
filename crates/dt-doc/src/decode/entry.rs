@@ -299,9 +299,9 @@ impl Decoder<'_> {
             )
         };
         self.err(
-            "dt::unknown-look",
+            "dt::unknown-element",
             what.span,
-            format!("no look or definition is called `{name}`"),
+            format!("no element or definition is called `{name}`"),
             "unknown",
         )
         .help = Some(help);

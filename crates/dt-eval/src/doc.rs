@@ -643,7 +643,7 @@ impl Reader<'_> {
                         pending.push(not_yet(
                             src,
                             e.what.span,
-                            &format!("look `{}`", look.name),
+                            &format!("element `{}`", look.name),
                             phase(look.name),
                         ));
                         continue;

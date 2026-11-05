@@ -78,7 +78,7 @@ pub(super) fn rebuild(shared: &Arc<Shared>, i: usize, opts: &Options) {
     .unwrap_or_else(|_| {
         Err(vec![Diag::plain(
             "dt::panic",
-            "the build panicked (a bug in a look); see the terminal".to_owned(),
+            "the build panicked (a bug in an element); see the terminal".to_owned(),
         )])
     });
     match built {

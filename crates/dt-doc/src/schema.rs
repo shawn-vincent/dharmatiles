@@ -7,7 +7,7 @@
 //! their types.
 //!
 //! The tables are the single source for `dharmatiles looks <name>`, the
-//! MCP `describe_look` tool and, later, the JSON Schema: dt-doc owns them
+//! MCP `describe_element` tool and, later, the JSON Schema: dt-doc owns them
 //! so that validation never needs geometry.
 
 /// The DungeonBlocks reference square, mm.  Authors write every size at

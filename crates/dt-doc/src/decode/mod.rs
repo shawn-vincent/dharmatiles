@@ -291,7 +291,7 @@ impl<'k> Decoder<'k> {
                         })
                         .or_else(|| {
                             schema::look(other)
-                                .map(|_| "looks go inside a tile's `stack { … }`".to_owned())
+                                .map(|_| "elements go inside a tile's `stack { … }`".to_owned())
                         });
                     self.err(
                         "dt::unknown-node",

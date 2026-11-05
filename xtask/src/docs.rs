@@ -33,20 +33,20 @@ pub fn run(root: &Path, check: bool) -> Result<(), String> {
         return Err("cargo build failed".into());
     }
     let json = Command::new(&bin)
-        .args(["looks", "--json"])
+        .args(["elements", "--json"])
         .output()
         .map_err(|e| format!("{}: {e}", bin.display()))?;
     let all: Value = serde_json::from_slice(&json.stdout).map_err(|e| e.to_string())?;
-    let names: Vec<String> = all["looks"]
+    let names: Vec<String> = all["elements"]
         .as_array()
-        .ok_or("no looks in `dharmatiles looks --json`")?
+        .ok_or("no elements in `dharmatiles elements --json`")?
         .iter()
         .filter_map(|l| l["name"].as_str().map(str::to_owned))
         .collect();
     let mut looks = Vec::new();
     for n in &names {
         let o = Command::new(&bin)
-            .args(["looks", n, "--json"])
+            .args(["elements", n, "--json"])
             .output()
             .map_err(|e| e.to_string())?;
         looks.push(serde_json::from_slice::<Value>(&o.stdout).map_err(|e| e.to_string())?);
@@ -142,7 +142,7 @@ fn fill(text: &str, looks: &[Value], tiles: &[(String, String)]) -> Result<Strin
         let look = looks
             .iter()
             .find(|l| l["name"] == name)
-            .ok_or_else(|| format!("gen:reference {name}: no such look"))?;
+            .ok_or_else(|| format!("gen:reference {name}: no such element"))?;
         out.push_str(&rest[..i]);
         out.push_str(OPEN);
         out.push_str(name);
@@ -283,7 +283,7 @@ fn reference(look: &Value, tiles: &[(String, String)]) -> String {
     }
     let _ = writeln!(
         s,
-        "<p class=\"muted small\">Generated from <code>dharmatiles looks {name}</code> by <code>cargo xtask docs</code>.</p>"
+        "<p class=\"muted small\">Generated from <code>dharmatiles elements {name}</code> by <code>cargo xtask docs</code>.</p>"
     );
     s
 }

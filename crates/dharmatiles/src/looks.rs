@@ -1,4 +1,4 @@
-//! `dharmatiles looks [NAME]`: the built-in looks and their controls, from
+//! `dharmatiles elements [NAME]`: the elements a stack holds and their controls, from
 //! dt-doc's schema tables, with what this build takes so far (dt-looks'
 //! `takes`).
 
@@ -11,12 +11,12 @@ use serde_json::{Map, Value, json};
 
 use crate::{ERROR, OK, errors_json, report};
 
-/// List every look, or one look's controls.
+/// List every element, or one element's controls.
 pub fn run(name: Option<&str>, json: bool) -> u8 {
     let Some(name) = name else {
         if json {
             let looks: Vec<Value> = LOOKS.iter().map(summary_json).collect();
-            say!("{}", json!({"ok": true, "looks": looks}));
+            say!("{}", json!({"ok": true, "elements": looks}));
         } else {
             list();
         }
@@ -24,10 +24,14 @@ pub fn run(name: Option<&str>, json: bool) -> u8 {
     };
     let Some(look) = schema::look(name) else {
         let hint = schema::did_you_mean(name, LOOKS.iter().map(|l| l.name)).map_or_else(
-            || format!("the looks: {}", names().join(", ")),
+            || format!("the elements: {}", names().join(", ")),
             |m| format!("did you mean `{m}`?"),
         );
-        let e = Diag::plain("dt::unknown-look", format!("no look is called `{name}`")).help(hint);
+        let e = Diag::plain(
+            "dt::unknown-element",
+            format!("no element is called `{name}`"),
+        )
+        .help(hint);
         if json {
             say!("{}", json!({"ok": false, "errors": errors_json(&[e])}));
         } else {
@@ -149,7 +153,7 @@ fn list() {
             l.about
         );
     }
-    say!("\n`dharmatiles looks NAME` lists a look's controls.");
+    say!("\n`dharmatiles elements NAME` lists an element's controls.");
 }
 
 /// One row of the controls table.

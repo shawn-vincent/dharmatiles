@@ -134,7 +134,7 @@ fn main() -> ExitCode {
                 )
             })
         }
-        Command::Looks { name, json } => looks::run(name.as_deref(), json),
+        Command::Elements { name, json } => looks::run(name.as_deref(), json),
         Command::Mcp { http } => http.map_or_else(mcp::run, |a| mcp::serve_http(&a)),
         Command::Audit {
             path,

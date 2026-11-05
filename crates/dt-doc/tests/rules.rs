@@ -625,12 +625,12 @@ fn use_names_where_every_name_came_from() {
     snippet("use \"lib:parts/grass\" lawn\ntile t { stack { lawn } }");
     assert_fails(
         "tile t { stack { lawn } }",
-        "dt::unknown-look",
+        "dt::unknown-element",
         "write `use \"parts/grass\" lawn`",
     );
     assert_fails(
         "use \"parts/grass\" lawn\ntile t { stack { long-grass } }",
-        "dt::unknown-look",
+        "dt::unknown-element",
         "add it to the use line",
     );
     assert_fails(

@@ -55,7 +55,7 @@ dharmatiles build my-tile.dtile               # -> out/db/my-tile-db.stl
 dharmatiles build my-tile.dtile --system ol   # for OpenLOCK
 dharmatiles build --all --system both         # every library tile
 dharmatiles check my-tile.dtile               # read and plan only
-dharmatiles looks                             # the elements and their controls
+dharmatiles elements                          # the elements and their controls
 ```
 
 ## Documentation

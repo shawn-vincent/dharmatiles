@@ -13,7 +13,7 @@
 <header class="hero">
   <div class="eyebrow">The tile language · composing</div>
   <h1>Composing a tile</h1>
-  <p class="lede">Composition is how looks share one tile. Rocks sit bedded in the ground, grass grows right up to them and parts around them, bare earth shows between, and every tile meets its neighbour at the same edge level. The example on this page is a meadow: rocks, grass and bare earth on one tile, printed as one piece with no supports.</p>
+  <p class="lede">Composition is how elements share one tile. Rocks sit bedded in the ground, grass grows right up to them and parts around them, bare earth shows between, and every tile meets its neighbour at the same edge level. The example on this page is a meadow: rocks, grass and bare earth on one tile, printed as one piece with no supports.</p>
   <figure class="shot"><img src="elements/img/el-meadow.jpg" alt="A 2x2 meadow tile: grass flowing around grey rocks and patches of bare earth"><figcaption>The meadow below, 2×2, seed 1: <a href="elements/demo/meadow.dtile"><code>elements/demo/meadow.dtile</code></a>.</figcaption></figure>
   <div class="facts">
     <div><div class="k">Sizes</div><div class="v">any; the meadow here is 2×2</div></div>
@@ -25,7 +25,7 @@
     <summary>Words used on this page</summary>
     <dl class="defs">
       <dt>solid</dt><dd>A thing that stands on the ground: a rock, tree, wall or cliff.</dd>
-      <dt>surface</dt><dd>A look that covers ground: bare ground, dirt or grass.</dd>
+      <dt>surface</dt><dd>An element that covers ground: bare ground, dirt or grass.</dd>
       <dt>footprint</dt><dd>The outline where a solid meets the ground. Nothing grows inside it.</dd>
       <dt>bare earth</dt><dd>Ground with no grass on it, including the ground under rocks.</dd>
       <dt>apron</dt><dd>A patch of bare earth on one side of a rock, downstream (a wake) or to the side (a scour).</dd>
@@ -46,11 +46,11 @@
 <h2 id="look">What it looks like</h2>
 <p>The rocks belong to the ground. Each one is bedded into the soil on every side, so on a slope the uphill side is buried and the downhill side shows no gap. Every rock's top stands clearly above the grass around it, so no rock is swallowed.</p>
 <p>The grass treats a rock as an obstacle. Its flow parts upstream of the rock and joins again behind it, the way water runs round a stone. Most rocks have grass right up to them, pressed against the stone and a little lower at its foot. About one rock in three has a patch of bare earth on one side: usually a wake downstream, sometimes a scour to the side. No rock sits in a ring of bare ground.</p>
-<p>Bare earth covers about a fifth of the tile, counting the ground under the rocks. It comes as a few natural-size patches in the low ground, not as one big bald area. Grass stays the main look.</p>
+<p>Bare earth covers about a fifth of the tile, counting the ground under the rocks. It comes as a few natural-size patches in the low ground, not as one big bald area. Grass stays the main cover.</p>
 <p>At the tile edge the ground comes down to the standard edge level, so a meadow tile meets any other ground or grass tile with no step.</p>
 
 <h2 id="use">Using it in a tile</h2>
-<p>A tile is a short document that lists looks in a <code>stack</code>. Solids (rocks, trees, walls, cliffs) are planned before anything grows, so grass and dirt grow round every solid wherever it is listed. A meadow in the as-built vocabulary looks like this:</p>
+<p>A tile is a short document that lists elements in a <code>stack</code>. Solids (rocks, trees, walls, cliffs) are planned before anything grows, so grass and dirt grow round every solid wherever it is listed. A meadow in the as-built vocabulary looks like this:</p>
 <pre><code>use "parts/grass" lawn
 
 tile meadow size="2x2" seed=1 {
@@ -66,13 +66,13 @@ tile meadow size="2x2" seed=1 {
 
 <h2 id="spec">Specification</h2>
 <h3 id="controls">Controls</h3>
-<p>Composition has no look of its own in the tile language. It is controlled by the words every look shares. These are the ones that decide how looks meet.</p>
+<p>Composition has no look of its own in the tile language. It is controlled by the words every element shares. These are the ones that decide how elements meet.</p>
 <div class="tbl"><table>
 <thead><tr><th>Control</th><th>Values</th><th>Default</th><th>Effect</th></tr></thead>
 <tbody>
-<tr><td>stack order</td><td>the order looks are listed</td><td>—</td><td>Free for solids: they are always planned first. For surfaces, a later surface paints over an earlier one.</td></tr>
-<tr><td><code>in=</code></td><td>a region name</td><td>whole tile</td><td>The look acts only inside that region.</td></tr>
-<tr><td><code>along=</code></td><td>an edge, edge path or drawn line</td><td>—</td><td>The look is built along it (a path, a wall, a cliff).</td></tr>
+<tr><td>stack order</td><td>the order elements are listed</td><td>—</td><td>Free for solids: they are always planned first. For surfaces, a later surface paints over an earlier one.</td></tr>
+<tr><td><code>in=</code></td><td>a region name</td><td>whole tile</td><td>The element acts only inside that region.</td></tr>
+<tr><td><code>along=</code></td><td>an edge, edge path or drawn line</td><td>—</td><td>The element is built along it (a path, a wall, a cliff).</td></tr>
 <tr><td><code>at=</code></td><td>a point or range, in squares</td><td>anywhere</td><td>Where one thing stands. Footprints are kept inside the tile and clear of other solids.</td></tr>
 <tr><td><code>against=</code></td><td><code>cliff</code>, <code>wall</code>, <code>rock</code>, <code>tree</code></td><td>—</td><td>Scatters and dirt banks gather at the foot of that kind of solid.</td></tr>
 <tr><td>grass <code>cover</code></td><td>percent</td><td>100%</td><td>Share of the ground grassed over. A meadow uses about 80%.</td></tr>
@@ -114,7 +114,7 @@ tile meadow size="2x2" seed=1 {
 
 <h2 id="printing">Printing and painting</h2>
 <ul>
-  <li><strong>No supports.</strong> Grass blades, rocks and bare earth all print base down at 0.2 mm layers. Each look keeps its own printability rules; see the <a href="elements/grass.html">grass</a> and <a href="elements/rock.html">rocks</a> pages.</li>
+  <li><strong>No supports.</strong> Grass blades, rocks and bare earth all print base down at 0.2 mm layers. Each element keeps its own printability rules; see the <a href="elements/grass.html">grass</a> and <a href="elements/rock.html">rocks</a> pages.</li>
   <li><strong>No floating rocks.</strong> Each rock stands on a plinth of its own section that reaches below the lowest ground under it, so there is no gap or overhang on its downhill side.</li>
   <li><strong>One piece.</strong> Grass, rocks and base are joined into one watertight body that survives a float32 STL reload.</li>
   <li><strong>Painting.</strong> Rocks stand clear of the grass, so a rock colour and a grass colour can be drybrushed separately. Bare earth sits in the low ground and takes a wash.</li>

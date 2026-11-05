@@ -1,6 +1,6 @@
 // The default printer profile: an FDM printer with a 0.4 mm nozzle.
 //
-// Looks read this to keep what they build printable.  Every size an
+// Elements read this to keep what they build printable.  Every size an
 // author writes scales with the system like a photocopy; these numbers
 // never do.  They are the hidden printability floors: blade and leaf
 // thickness, the least branch radius and print gaps never shrink below

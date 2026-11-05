@@ -38,7 +38,7 @@ fn a_misspelt_look_points_at_its_line_with_a_hint() {
     assert_eq!(e[0].help.as_deref(), Some("did you mean `ground`?"));
     let r = rendered(&e[0]);
     assert!(
-        r.contains("no look or definition is called `grond`")
+        r.contains("no element or definition is called `grond`")
             && r.contains("3 │")
             && r.contains("did you mean"),
         "{r}"

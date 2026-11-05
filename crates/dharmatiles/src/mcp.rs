@@ -134,9 +134,9 @@ fn tools() -> Value {
     json!([
         {"name": "check_document", "description": "Read and plan a tile document without building geometry; returns its errors (with file, line and help) or its stack.",
          "inputSchema": {"type": "object", "properties": {"path": path}, "required": ["path"]}},
-        {"name": "list_looks", "description": "The built-in looks: ground, dirt, rock, scatter, water, grass, reeds, wall, floor, tree, cliff.",
+        {"name": "list_elements", "description": "The elements a stack can hold: ground, dirt, rock, scatter, water, grass, reeds, wall, floor, tree, cliff.",
          "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "describe_look", "description": "One look's controls with units, ranges and defaults, and which this build takes.",
+        {"name": "describe_element", "description": "One element's controls with units, ranges and defaults, and which this build takes.",
          "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
         {"name": "list_tiles", "description": "The library tiles that ship with dharmatiles (`lib:tiles/…` paths).",
          "inputSchema": {"type": "object", "properties": {}}},
@@ -184,8 +184,8 @@ fn call(name: &str, a: &Value) -> Value {
     }
     match (name, arg(a, "path"), arg(a, "name")) {
         ("check_document", Some(p), _) => run_self(&[s("check"), s(p), s("--json")]),
-        ("list_looks", _, _) => run_self(&[s("looks"), s("--json")]),
-        ("describe_look", _, Some(n)) => run_self(&[s("looks"), s(n), s("--json")]),
+        ("list_elements", _, _) => run_self(&[s("elements"), s("--json")]),
+        ("describe_element", _, Some(n)) => run_self(&[s("elements"), s(n), s("--json")]),
         ("list_tiles", _, _) => text(&json!({"tiles": crate::library_tiles()}).to_string(), false),
         ("build_tile", Some(p), _) => {
             let mut args = vec![s("build"), s(p), s("--json")];
@@ -309,8 +309,8 @@ mod tests {
             .collect();
         for n in [
             "check_document",
-            "list_looks",
-            "describe_look",
+            "list_elements",
+            "describe_element",
             "list_tiles",
             "build_tile",
             "render_preview",

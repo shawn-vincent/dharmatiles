@@ -67,9 +67,9 @@ pub(crate) enum Command {
         #[arg(long)]
         json: bool,
     },
-    /// List the built-in looks, or one look's controls.
-    Looks {
-        /// A look's name: list its controls with units, ranges and defaults.
+    /// List the elements a stack can hold, or one element's controls.
+    Elements {
+        /// An element's name: list its controls with units, ranges and defaults.
         name: Option<String>,
         /// One JSON object on stdout.
         #[arg(long)]
