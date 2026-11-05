@@ -363,6 +363,7 @@ dependencies = [
  "dt-elements",
  "dt-eval",
  "dt-kit",
+ "kdl",
  "libm",
  "miette",
  "serde_json",
