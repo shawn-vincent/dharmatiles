@@ -8,6 +8,8 @@
 //! f32 LE  normals    [9 n]    the face normal, once per vertex (flat shading)
 //! u8      painted    [9 n]    the PNG renders' colours: overhang red, band orange
 //! u8      clean      [9 n]    the same without the overhang paint
+//! u16 LE  entry      [n]      the stack entry each triangle came from (65535 none)
+//! u16 LE  piece      [n]      which of the entry's solids it came from
 //! ```
 //!
 //! Colours come from the same painter as `build --png`
@@ -48,6 +50,19 @@ fn byte(c: f32) -> u8 {
 /// the JSON header beside `triangles`, `lo` and `hi`.
 #[must_use]
 pub fn encode(mesh: &TriMesh, painted: &[[f32; 3]], clean: &[[f32; 3]], meta: &Value) -> Vec<u8> {
+    encode_traced(mesh, painted, clean, &[], &[], meta)
+}
+
+/// [`encode`] with each triangle's stack entry and piece.
+#[must_use]
+pub fn encode_traced(
+    mesh: &TriMesh,
+    painted: &[[f32; 3]],
+    clean: &[[f32; 3]],
+    entries: &[u16],
+    pieces: &[u16],
+    meta: &Value,
+) -> Vec<u8> {
     let n = mesh.triangles.len();
     let mut lo = [f64::INFINITY; 3];
     let mut hi = [f64::NEG_INFINITY; 3];
@@ -97,6 +112,19 @@ pub fn encode(mesh: &TriMesh, painted: &[[f32; 3]], clean: &[[f32; 3]], meta: &V
             }
         }
     }
+    for set in [entries, pieces] {
+        for f in 0..n {
+            out.extend_from_slice(
+                &set.get(f)
+                    .copied()
+                    .unwrap_or(if set.is_empty() { u16::MAX } else { 0 })
+                    .to_le_bytes(),
+            );
+        }
+    }
+    while !out.len().is_multiple_of(4) {
+        out.push(0);
+    }
     out
 }
 
@@ -112,7 +140,14 @@ pub fn from_built(b: &Built, overhang_deg: f64, palette: &dt_kit::Palette) -> Ve
         "overhang_deg": overhang_deg,
         "footprint": b.footprint,
     });
-    encode(&b.export.mesh, &painted, &clean, &meta)
+    encode_traced(
+        &b.export.mesh,
+        &painted,
+        &clean,
+        &b.entries,
+        &b.pieces,
+        &meta,
+    )
 }
 
 #[cfg(test)]
@@ -144,8 +179,9 @@ mod tests {
         assert_eq!(h["triangles"], 2);
         assert_eq!(h["x"], 1);
         assert_eq!(h["hi"], json!([2.0, 3.0, 5.0]));
-        // 2 triangles: positions 18 f32, normals 18 f32, 2 × 18 bytes of colour
-        assert_eq!(b.len(), 8 + jl + 72 + 72 + 18 + 18);
+        // 2 triangles: positions 18 f32, normals 18 f32, 2 × 18 bytes of
+        // colour, 2 × 2 u16 of entry and piece
+        assert_eq!(b.len(), 8 + jl + 72 + 72 + 18 + 18 + 8);
         let f = |o: usize| f32::from_le_bytes(b[8 + jl + o..8 + jl + o + 4].try_into().unwrap());
         assert!((f(4 * 3) - 2.0).abs() < 1e-6, "second vertex x");
         // normals: first face is (2,0,0)x(0,3,1) = (0,-2,6)/|…|
@@ -166,5 +202,9 @@ mod tests {
         let b = encode(&TriMesh::default(), &[], &[], &json!({}));
         assert_eq!(&b[..4], MAGIC);
         assert_eq!(b.len() % 4, 0);
+        assert_eq!(
+            b.len(),
+            8 + u32::from_le_bytes(b[4..8].try_into().unwrap()) as usize
+        );
     }
 }

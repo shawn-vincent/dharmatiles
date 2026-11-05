@@ -1,5 +1,7 @@
 //! The preview's stack line: each entry named by what it places, with a
-//! link to that thing's page on the documentation site.
+//! link to that thing's page on the documentation site, and where it is
+//! written (`file`, byte `span`, 1-based `lines`) so the editor can light
+//! its text when its geometry is picked.
 
 use dt_eval::doc::{Entry, Tile};
 use serde_json::{Value, json};
@@ -96,7 +98,18 @@ fn entry(e: &Entry, within: Option<&Entry>) -> Value {
     } else if let Some(area) = &e.area {
         label = format!("{label} in {}", area.value);
     }
-    item(label, element)
+    let mut v = item(label, element);
+    v["what"] = json!(what);
+    v["file"] = json!(e.src.name());
+    let (start, len) = (e.span.offset(), e.span.len());
+    let text = e.src.inner();
+    let line = |o: usize| {
+        text.get(..o.min(text.len()))
+            .map_or(1, |t| t.matches('\n').count() + 1)
+    };
+    v["span"] = json!([start, len]);
+    v["lines"] = json!([line(start), line(start + len.saturating_sub(1))]);
+    v
 }
 
 #[cfg(test)]

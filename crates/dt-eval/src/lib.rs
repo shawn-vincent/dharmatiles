@@ -126,7 +126,17 @@ pub struct Built {
     /// The masonry is brick (a `brick` or `regular-brick` wall): painted
     /// in reds, not stone greys.
     pub brick: bool,
+    /// The stack entry each written triangle came from (an index into the
+    /// tile's stack; the stack's length is the base; [`NO_ENTRY`] none).
+    /// The lifted ground goes to the surface entry that painted it.
+    pub entries: Vec<u16>,
+    /// Which of its entry's solids each written triangle came from (the
+    /// third rock of a scatter is 2), in build order.
+    pub pieces: Vec<u16>,
 }
+
+/// No stack entry made this triangle.
+pub const NO_ENTRY: u16 = u16::MAX;
 
 impl Built {
     /// Per-face paint for previews and PNG renders: the acrylic ramps of
@@ -551,6 +561,8 @@ pub fn build_with(
     };
     let brick = styles(true) > 0 && styles(false) == 0;
     let (mesh, mats) = scene.union().map_err(|e| fail(e.to_string()))?;
+    let (entry_in, piece_in) =
+        trace_entries(&scene, &mesh, &paths, tile, &c, &masks, &mask_of, &writes);
     progress.end(progress::UNION);
     stage_secs.push((progress::UNION.to_owned(), t_stage.elapsed().as_secs_f64()));
     let t_stage = std::time::Instant::now();
@@ -565,6 +577,16 @@ pub fn build_with(
     progress.end(progress::AUDIT);
     stage_secs.push((progress::AUDIT.to_owned(), t_stage.elapsed().as_secs_f64()));
     let materials = export.source.iter().map(|&t| mats[t as usize]).collect();
+    let entries = export
+        .source
+        .iter()
+        .map(|&t| entry_in.get(t as usize).copied().unwrap_or(NO_ENTRY))
+        .collect();
+    let pieces = export
+        .source
+        .iter()
+        .map(|&t| piece_in.get(t as usize).copied().unwrap_or(0))
+        .collect();
     scene.record("export", export.mesh.content_hash());
     let record = BuildRecord {
         engine: opts.engine.clone(),
@@ -591,7 +613,97 @@ pub fn build_with(
         }),
         stage_secs,
         brick,
+        entries,
+        pieces,
     })
+}
+
+/// Each triangle of the union's stack entry and piece: by its solid's
+/// owner (the entry's path), and for the lifted ground by the last
+/// surface entry whose area covers the triangle's middle.
+#[allow(clippy::too_many_arguments)]
+fn trace_entries(
+    scene: &Scene,
+    mesh: &dt_kit::TriMesh,
+    paths: &[String],
+    tile: &Tile,
+    c: &Checked,
+    masks: &[Mask],
+    mask_of: &[usize],
+    writes: &[dt_elements::Write],
+) -> (Vec<u16>, Vec<u16>) {
+    let to16 = |i: usize| u16::try_from(i).unwrap_or(NO_ENTRY);
+    let mut seen: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    let parts: Vec<(Option<u16>, u16)> = scene
+        .parts()
+        .iter()
+        .map(|p| {
+            let k = seen.entry(p.tag.owner.as_str()).or_default();
+            *k += 1;
+            (
+                paths.iter().position(|x| *x == p.tag.owner).map(to16),
+                to16(*k - 1),
+            )
+        })
+        .collect();
+    // the surfaces, in the order they painted
+    let surfaces: Vec<usize> = c
+        .steps
+        .iter()
+        .filter_map(|s| match *s {
+            Step::Entry(i)
+                if i < tile.stack.len() && writes.get(i) == Some(&dt_elements::Write::Surface) =>
+            {
+                Some(i)
+            }
+            _ => None,
+        })
+        .collect();
+    // the last entry that filled the surface with water owns the wet nodes
+    let filler = c.steps.iter().rev().find_map(|s| match *s {
+        Step::Entry(i)
+            if i < tile.stack.len() && writes.get(i) == Some(&dt_elements::Write::Fill) =>
+        {
+            Some(i)
+        }
+        _ => None,
+    });
+    let wet = scene.wet();
+    let step = c.frame.step_mm();
+    let ground = |t: usize| -> u16 {
+        let [a, b, d] = mesh.triangles[t].map(|i| mesh.positions[i as usize]);
+        let (x, y) = ((a[0] + b[0] + d[0]) / 3.0, (a[1] + b[1] + d[1]) / 3.0);
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let (i, j) = (
+            (x / step).round().max(0.0) as usize,
+            (y / step).round().max(0.0) as usize,
+        );
+        if let Some(f) = filler
+            && wet.nx > 0
+            && wet.bits[j.min(wet.ny - 1) * wet.nx + i.min(wet.nx - 1)]
+        {
+            return to16(f);
+        }
+        surfaces
+            .iter()
+            .rev()
+            .find(|&&e| {
+                let m = &masks[mask_of[e]];
+                m.bits[j.min(m.ny - 1) * m.nx + i.min(m.nx - 1)]
+            })
+            .or(surfaces.first())
+            .map_or(NO_ENTRY, |&e| to16(e))
+    };
+    let part_of = scene.trace_parts(mesh);
+    part_of
+        .iter()
+        .enumerate()
+        .map(|(t, &p)| match parts.get(p as usize) {
+            Some((Some(e), k)) => (*e, *k),
+            Some((None, _)) => (ground(t), 0),
+            None => (NO_ENTRY, 0),
+        })
+        .unzip()
 }
 
 /// Seeds by path: `tile/<name>/<element>/<k>`, `k` counting same-named

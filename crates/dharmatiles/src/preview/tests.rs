@@ -151,7 +151,11 @@ fn builds_a_tile_and_serves_its_mesh() {
         n as u64,
         t["record"]["audit"]["triangles"].as_u64().unwrap()
     );
-    assert_eq!(body.len(), 8 + jl + n * (36 + 36 + 9 + 9));
+    // positions, normals, painted, clean, entry, piece; padded to 4
+    assert_eq!(
+        body.len(),
+        (8 + jl + n * (36 + 36 + 9 + 9 + 2 + 2)).next_multiple_of(4)
+    );
     assert_eq!(h["overhang_deg"], 55.0);
     assert!(get(&r, "/api/tiles/7/mesh").0.starts_with("HTTP/1.1 404"));
 }

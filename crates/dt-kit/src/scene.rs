@@ -368,6 +368,9 @@ pub struct Scene {
     /// paint after it; a paint after that one over it removes it
     /// ([`Scene::cull_covered`]).
     placed_at: Vec<usize>,
+    /// For each part, the original IDs it carries: which part a triangle
+    /// of the union came from ([`Scene::trace_parts`]).
+    sources: Vec<Vec<u32>>,
     block: IdBlock,
     next_slot: u32,
     materials: Materials,
@@ -399,6 +402,7 @@ impl Scene {
             notes: Vec::new(),
             parts: Vec::new(),
             placed_at: Vec::new(),
+            sources: Vec::new(),
             block: IdBlock::reserve::<dt_geom::Solid>(SLOTS),
             next_slot: 0,
             materials: Materials::default(),
@@ -903,12 +907,18 @@ impl Scene {
         self.parts.retain(|_| *it.next().unwrap_or(&true));
         let mut it = keep.iter();
         self.placed_at.retain(|_| *it.next().unwrap_or(&true));
+        let mut it = keep.iter();
+        self.sources.retain(|_| *it.next().unwrap_or(&true));
     }
 
     /// Add a solid an element built, and record its stage hash.
     pub fn add(&mut self, tag: Tag, solid: Solid) {
-        let hash = solid.0.to_tri_mesh().content_hash();
-        self.record(&format!("{}:{}", tag.kind, tag.owner), hash);
+        let mesh = solid.0.to_tri_mesh();
+        self.record(&format!("{}:{}", tag.kind, tag.owner), mesh.content_hash());
+        let mut ids = mesh.run_original_id;
+        ids.sort_unstable();
+        ids.dedup();
+        self.sources.push(ids);
         self.parts.push(Part { tag, solid });
         self.placed_at.push(self.layers.len());
     }
@@ -926,6 +936,27 @@ impl Scene {
     #[must_use]
     pub fn parts(&self) -> &[Part] {
         &self.parts
+    }
+
+    /// Which part (an index into [`Scene::parts`]) each triangle of `mesh`
+    /// (the [`Scene::union`]) came from, by its original ID; `u32::MAX`
+    /// when none did.  The editor finds a triangle's stack entry this way.
+    #[must_use]
+    pub fn trace_parts(&self, mesh: &TriMesh) -> Vec<u32> {
+        let mut of = std::collections::BTreeMap::new();
+        for (p, ids) in self.sources.iter().enumerate() {
+            for &id in ids {
+                of.entry(id).or_insert(u32::try_from(p).unwrap_or(u32::MAX));
+            }
+        }
+        mesh.triangle_original_ids().map_or_else(
+            || vec![u32::MAX; mesh.triangle_count()],
+            |ids| {
+                ids.iter()
+                    .map(|id| of.get(id).copied().unwrap_or(u32::MAX))
+                    .collect()
+            },
+        )
     }
 
     /// The stage hashes so far, in order.
