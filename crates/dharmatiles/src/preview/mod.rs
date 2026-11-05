@@ -81,6 +81,10 @@ pub struct Slot {
     progress: Option<Value>,
     /// Files the last build read, with their times.
     files: BTreeMap<String, Option<SystemTime>>,
+    /// The last draft (see `edit::drafts`): its mesh, and the page's id
+    /// for the text it was built from.
+    draft: Option<Arc<Vec<u8>>>,
+    draft_id: u64,
 }
 
 impl Slot {
@@ -110,6 +114,8 @@ impl Slot {
             mesh_version: 0,
             progress: None,
             files: BTreeMap::new(),
+            draft: None,
+            draft_id: 0,
         }
     }
 
@@ -128,6 +134,7 @@ impl Slot {
             "progress": self.progress,
             "mesh_version": self.mesh.as_ref().map(|_| self.mesh_version),
             "mesh_bytes": self.mesh.as_ref().map(|m| m.len()),
+            "draft_id": self.draft.as_ref().map(|_| self.draft_id),
         })
     }
 
@@ -154,6 +161,9 @@ pub struct Shared {
     scanned: Mutex<Option<Instant>>,
     /// This run's secret: the editor's calls carry it (see `server`).
     token: String,
+    /// The draft the page asked for last, not yet built.
+    draft_req: Mutex<Option<edit::DraftRequest>>,
+    draft_cv: std::sync::Condvar,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -202,6 +212,8 @@ impl Shared {
             roots,
             scanned: Mutex::new(None),
             token: edit::token(),
+            draft_req: Mutex::new(None),
+            draft_cv: std::sync::Condvar::new(),
         };
         me.rescan();
         me
@@ -392,6 +404,10 @@ impl Shared {
         lock(&self.tiles).get(i)?.mesh.clone()
     }
 
+    fn draft_mesh(&self, i: usize) -> Option<Arc<Vec<u8>>> {
+        lock(&self.tiles).get(i)?.draft.clone()
+    }
+
     /// The next tile to build: one asked for, else (when `eager`) the first
     /// named file not built yet, else one whose files changed.  Folder and
     /// library tiles are built only when asked for.
@@ -500,6 +516,7 @@ pub fn run(
         None => tell!("library: the copy built into this program"),
     }
     server::spawn(listener, Arc::clone(&shared));
+    edit::drafts(Arc::clone(&shared), opts.clone());
     if open {
         open_browser(&url);
     }

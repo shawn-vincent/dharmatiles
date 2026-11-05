@@ -42,6 +42,50 @@ impl TriMesh {
         self.triangles.len()
     }
 
+    /// Add `other`'s triangles after this mesh's, keeping both meshes'
+    /// runs (and so every triangle's original ID).  Nothing is joined:
+    /// overlaps stay.  Per-vertex properties and face IDs are kept only
+    /// when both meshes have them alike.
+    pub fn append(&mut self, other: &TriMesh) {
+        let base_v = u32::try_from(self.positions.len()).unwrap_or(u32::MAX);
+        let base_i = u32::try_from(self.triangles.len() * 3).unwrap_or(u32::MAX);
+        let first = self.triangles.is_empty() && self.positions.is_empty();
+        if first {
+            self.num_extra = other.num_extra;
+            self.tolerance = other.tolerance;
+        }
+        if self.num_extra == other.num_extra {
+            self.extra.extend_from_slice(&other.extra);
+        } else {
+            self.extra.clear();
+            self.num_extra = 0;
+        }
+        if first || (!self.face_id.is_empty() && !other.face_id.is_empty()) {
+            self.face_id.extend_from_slice(&other.face_id);
+        } else {
+            self.face_id.clear();
+        }
+        self.tolerance = self.tolerance.max(other.tolerance);
+        self.positions.extend_from_slice(&other.positions);
+        self.triangles
+            .extend(other.triangles.iter().map(|t| t.map(|i| i + base_v)));
+        self.merge_from
+            .extend(other.merge_from.iter().map(|i| i + base_v));
+        self.merge_to
+            .extend(other.merge_to.iter().map(|i| i + base_v));
+        if !other.run_original_id.is_empty() {
+            // runs are `run_index[r] .. run_index[r + 1]`: the last bound of
+            // this mesh is the first of the next
+            if !self.run_index.is_empty() {
+                self.run_index.pop();
+            }
+            self.run_index
+                .extend(other.run_index.iter().map(|i| i + base_i));
+            self.run_original_id
+                .extend_from_slice(&other.run_original_id);
+        }
+    }
+
     /// The original ID of every triangle, from the runs (`None` without runs).
     #[must_use]
     pub fn triangle_original_ids(&self) -> Option<Vec<u32>> {

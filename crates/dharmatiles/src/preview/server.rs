@@ -212,7 +212,14 @@ fn one(mut conn: TcpStream, shared: &Shared) {
         ("GET", "/api/elements") => json(&mut conn, "200 OK", &crate::elements::all_json()),
         ("GET", "/api/tiles") => json(&mut conn, "200 OK", &shared.snapshot()),
         ("GET", p) if tile_route(p).is_some_and(|(_, w)| w == "mesh") => {
-            let mesh = tile_route(p).and_then(|(i, _)| shared.mesh(i));
+            let draft = req.param("draft").is_some();
+            let mesh = tile_route(p).and_then(|(i, _)| {
+                if draft {
+                    shared.draft_mesh(i)
+                } else {
+                    shared.mesh(i)
+                }
+            });
             match mesh {
                 Some(m) => respond(&mut conn, "200 OK", "application/octet-stream", &m),
                 None => respond(&mut conn, "404 Not Found", "text/plain", b"no mesh yet"),

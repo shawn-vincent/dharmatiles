@@ -13,6 +13,11 @@
 //!   new file and rebuilds.
 //! - `/api/tiles/N/mine`: copy a library tile into My tiles, its `use`s
 //!   pointing back at the library, and return the copy's index.
+//! - `/api/tiles/N/draft` `{text, file?, id}`: build a draft of the tile
+//!   from `text` (see `dt_eval::Options::draft`), on a thread of its own so
+//!   a full build never holds it up.  Only the latest asked for is built;
+//!   when it is ready the tile's `draft_id` says so, and
+//!   `GET /api/tiles/N/mesh?draft=1` serves it.  Nothing is written.
 
 use std::collections::BTreeMap;
 use std::hash::{BuildHasher, Hasher};
@@ -91,8 +96,72 @@ pub(super) fn post(shared: &Shared, path: &str, body: &[u8]) -> (&'static str, V
         "check" => check(shared, &tile, &file, &v),
         "save" => save(&file, &v),
         "mine" => mine(shared, &tile, &files),
+        "draft" => {
+            let (Some(text), Some(id)) = (v["text"].as_str(), v["id"].as_u64()) else {
+                return bad("give the text and an id");
+            };
+            *lock(&shared.draft_req) = Some(DraftRequest {
+                tile: i,
+                path: tile,
+                file,
+                text: text.to_owned(),
+                id,
+            });
+            shared.draft_cv.notify_one();
+            ("202 Accepted", json!({ "ok": true }))
+        }
         _ => ("404 Not Found", json!({ "error": "no such call" })),
     }
+}
+
+/// A draft the page asked for.
+pub(super) struct DraftRequest {
+    tile: usize,
+    path: String,
+    file: String,
+    text: String,
+    id: u64,
+}
+
+/// The draft thread: builds the latest draft asked for, one at a time.
+pub(super) fn drafts(shared: Arc<Shared>, opts: Options) {
+    let opts = Options {
+        draft: true,
+        ..opts
+    };
+    std::thread::spawn(move || {
+        loop {
+            let req = {
+                let mut slot = lock(&shared.draft_req);
+                while slot.is_none() {
+                    slot = shared
+                        .draft_cv
+                        .wait(slot)
+                        .unwrap_or_else(PoisonError::into_inner);
+                }
+                slot.take()
+            };
+            let Some(r) = req else { continue };
+            let src = Overlay(BTreeMap::from([(r.file.clone(), r.text.clone())]));
+            let built =
+                std::panic::catch_unwind(AssertUnwindSafe(|| dt_eval::build(&src, &r.path, &opts)));
+            // a newer request already waiting makes this one moot
+            if lock(&shared.draft_req).is_some() {
+                continue;
+            }
+            if let Ok(Ok(b)) = built {
+                let mesh = Arc::new(payload::from_built(
+                    &b,
+                    opts.printer.overhang_deg,
+                    &shared.palette(),
+                ));
+                shared.update(r.tile, |t| {
+                    t.draft = Some(mesh);
+                    t.draft_id = r.id;
+                });
+            }
+        }
+    });
 }
 
 /// A KDL value from JSON: whole numbers stay whole.

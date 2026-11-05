@@ -2,7 +2,7 @@
 // A desktop app supplies another object with the same methods.
 //
 //   connect({onSnapshot, onTile, onProgress, onState})  start listening
-//   fetchMesh(index) -> ArrayBuffer         the tile's binary mesh
+//   fetchMesh(index, draft?) -> ArrayBuffer the tile's binary mesh, or its last draft
 //   build(index)                            build a tile not built yet
 //   text(index, file?) -> {file, text, writable}
 //   elements() -> [element]                 the element schema
@@ -26,8 +26,8 @@ export function browserHost() {
         else if (m.type === 'progress') onProgress(m.index, m.progress);
       };
     },
-    async fetchMesh(index) {
-      const r = await fetch(`/api/tiles/${index}/mesh`, { cache: 'no-store' });
+    async fetchMesh(index, draft = false) {
+      const r = await fetch(`/api/tiles/${index}/mesh${draft ? '?draft=1' : ''}`, { cache: 'no-store' });
       if (!r.ok) throw new Error(`mesh: ${r.status}`);
       return r.arrayBuffer();
     },

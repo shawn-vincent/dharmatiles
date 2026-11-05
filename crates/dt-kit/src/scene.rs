@@ -980,6 +980,33 @@ impl Scene {
     /// # Errors
     /// [`KitError::Untraced`] if a triangle has no material, or the
     /// kernel's status.
+    /// Every part's mesh side by side, not joined: a draft's mesh, with
+    /// each triangle's material.  Overlaps stay overlapping; the view
+    /// hides them, a printer would not.
+    ///
+    /// # Errors
+    /// [`KitError::Untraced`] if a triangle's material is unknown.
+    pub fn soup(&mut self) -> Result<(TriMesh, Vec<Material>), KitError> {
+        use rayon::prelude::*;
+        let meshes: Vec<TriMesh> = self
+            .parts
+            .par_iter()
+            .map(|p| p.solid.0.to_tri_mesh())
+            .collect();
+        let mut mesh = TriMesh::default();
+        for m in meshes {
+            mesh.append(&m);
+        }
+        let materials = self
+            .materials
+            .trace(&mesh)
+            .into_iter()
+            .map(|m| m.and_then(Material::from_id))
+            .collect::<Option<Vec<_>>>()
+            .ok_or(KitError::Untraced)?;
+        Ok((mesh, materials))
+    }
+
     pub fn union(&mut self) -> Result<(TriMesh, Vec<Material>), KitError> {
         let solids: Vec<dt_geom::Solid> = self.parts.iter().map(|p| p.solid.0.clone()).collect();
         let all = batch_in_order(&solids, BoolOp::Union);

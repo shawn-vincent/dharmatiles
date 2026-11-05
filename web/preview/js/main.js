@@ -270,6 +270,14 @@ function select(i) {
   renderAll();
 }
 
+function countPieces(p) {
+  state.pieces = new Map();
+  for (let t = 0; t < p.triangles; t++) {
+    const e = p.entry[t];
+    if (e !== NO_ENTRY) state.pieces.set(e, Math.max(state.pieces.get(e) || 0, p.piece[t] + 1));
+  }
+}
+
 let loadToken = 0;
 async function loadMesh(i, version) {
   const token = ++loadToken;
@@ -279,11 +287,8 @@ async function loadMesh(i, version) {
     const first = !viewer.payload;
     const p = parsePayload(buf);
     viewer.setMesh(p);
-    state.pieces = new Map();
-    for (let t = 0; t < p.triangles; t++) {
-      const e = p.entry[t];
-      if (e !== NO_ENTRY) state.pieces.set(e, Math.max(state.pieces.get(e) || 0, p.piece[t] + 1));
-    }
+    countPieces(p);
+    drafts.shown = false;
     state.loaded.set(i, version);
     if (first) {
       const saved = state.cameras.get(i);
@@ -368,7 +373,35 @@ function undo(step) {
 /** The user changed the text: `kind` is type, lens, or drag (a scrub under way, kept out of the history until it ends). */
 function edited(text, kind) {
   if (kind !== 'drag') record(text, kind);
+  else askDraft();
   changed();
+}
+
+// drafts: while a value is dragged the view shows quick builds of the text
+// as it is (marked draft), one in flight at a time, always the latest text;
+// the full build follows when the hand lets go and the file is saved
+const drafts = { sent: 0, waiting: false, again: false, shown: false };
+async function askDraft() {
+  const t = tile();
+  if (!t || !texts.file) return;
+  if (drafts.waiting) { drafts.again = true; return; }
+  drafts.waiting = true; drafts.again = false;
+  drafts.sent += 1;
+  await host.post(`/api/tiles/${t.index}/draft`, { text: texts.text, file: texts.file === t.path ? undefined : texts.file, id: drafts.sent });
+  setTimeout(() => { if (drafts.waiting) { drafts.waiting = false; if (drafts.again) askDraft(); } }, 4000); // a draft that never came
+}
+async function draftArrived(t) {
+  drafts.waiting = false;
+  if (drafts.again) askDraft();
+  if (t.draft_id !== drafts.sent || t.index !== state.selected) return; // an older text
+  try {
+    const p = parsePayload(await host.fetchMesh(t.index, true));
+    if (t.index !== state.selected || t.draft_id !== drafts.sent) return;
+    viewer.setMesh(p);
+    countPieces(p);
+    drafts.shown = true;
+    renderTitle();
+  } catch (e) { console.error(e); }
 }
 function changed() {
   clearTimeout(doc.checkTimer);
@@ -850,6 +883,12 @@ function renderTitle() {
   const fails = a.failures.length > 0;
   if (!building) gate.className = fails ? 'fail' : (a.band_mm2 > 0 || a.overhang_mm2 > 0) ? 'warn' : '';
   $('gatetext').textContent = building ? 'building' : fails ? 'fails the gate' : 'passes';
+  if (drafts.shown) {
+    const tag = document.createElement('span');
+    tag.className = 'tag'; tag.textContent = 'draft';
+    tag.title = 'The view shows a quick draft; the verdict is the last full build\u2019s';
+    $('gatetext').append(' ', tag);
+  }
   const v = $('verdict');
   v.hidden = false;
   v.className = fails ? 'fail' : 'pass';
@@ -912,7 +951,9 @@ host.connect({
     if (i === state.selected && t.status === 'building') showProgress(p);
   },
   onTile: (t) => {
+    const before = state.tiles[t.index];
     state.tiles[t.index] = t;
+    if (t.draft_id != null && t.draft_id !== before?.draft_id) draftArrived(t);
     if (t.index !== state.selected) { if (!$('menu').hidden) renderList(); return; }
     if (t.plan && JSON.stringify(t.plan) !== JSON.stringify(viewer.plan)) viewer.setPlan(t.plan);
     renderAll();

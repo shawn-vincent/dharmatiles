@@ -74,7 +74,16 @@ pub struct Options {
     pub printer: Printer,
     /// Engine version for the build record.
     pub engine: String,
+    /// A draft for the editor's view while a value is dragged: coarser
+    /// cells ([`DRAFT_CELLS`] per square), the parts shown as they are
+    /// without the union, and the gate's verdict left out (each face is
+    /// flagged by its angle alone, see [`dt_kit::draft`]).  Never written.
+    pub draft: bool,
 }
+
+/// Cells per square in a draft (a full build has 128, or finer where an
+/// element asks).
+pub const DRAFT_CELLS: u32 = 48;
 
 impl Default for Options {
     /// DungeonBlocks, the tile's seed, and the library's default printer
@@ -90,6 +99,7 @@ impl Default for Options {
             seed: None,
             printer,
             engine: concat!("dt-eval-", env!("CARGO_PKG_VERSION")).to_owned(),
+            draft: false,
         }
     }
 }
@@ -275,12 +285,19 @@ pub fn check(sources: &dyn Source, path: &str, opts: &Options) -> Result<Checked
             .help("add an element to its stack, such as `stack { ground }`"),
         );
     }
-    // the tile is built at the finest cell any entry needs
-    let frame = elements
-        .iter()
-        .filter_map(|l| l.plan().cell_mm)
-        .min()
-        .map_or(frame, |c| frame.with_cell(c.get()));
+    // the tile is built at the finest cell any entry needs; a draft coarser
+    let frame = if opts.draft {
+        Frame {
+            cells_per_square: DRAFT_CELLS,
+            ..frame
+        }
+    } else {
+        elements
+            .iter()
+            .filter_map(|l| l.plan().cell_mm)
+            .min()
+            .map_or(frame, |c| frame.with_cell(c.get()))
+    };
     errors.extend(empty_regions(&tile, &frame, &areas));
     match dt_elements::connector(&opts.system) {
         Ok(c) => {
@@ -560,7 +577,12 @@ pub fn build_with(
             .count()
     };
     let brick = styles(true) > 0 && styles(false) == 0;
-    let (mesh, mats) = scene.union().map_err(|e| fail(e.to_string()))?;
+    let (mesh, mats) = if opts.draft {
+        scene.soup()
+    } else {
+        scene.union()
+    }
+    .map_err(|e| fail(e.to_string()))?;
     let (entry_in, piece_in) =
         trace_entries(&scene, &mesh, &paths, tile, &c, &masks, &mask_of, &writes);
     progress.end(progress::UNION);
@@ -573,7 +595,14 @@ pub fn build_with(
         max_deg: opts.printer.steepest_deg,
         ..dt_kit::Band::DEFAULT
     };
-    let (export, audit) = dt_kit::audit_banded(&mesh, footprint, &opts.printer, &mats, Some(&band));
+    let (export, audit) = if opts.draft {
+        // the base is the same in every draft: its sockets are not flagged
+        let base = u16::try_from(tile.stack.len()).unwrap_or(NO_ENTRY);
+        let skip: Vec<bool> = entry_in.iter().map(|&e| e == base).collect();
+        dt_kit::draft(mesh, &opts.printer, &skip)
+    } else {
+        dt_kit::audit_banded(&mesh, footprint, &opts.printer, &mats, Some(&band))
+    };
     progress.end(progress::AUDIT);
     stage_secs.push((progress::AUDIT.to_owned(), t_stage.elapsed().as_secs_f64()));
     let materials = export.source.iter().map(|&t| mats[t as usize]).collect();

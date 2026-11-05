@@ -29,6 +29,7 @@ button { font: inherit; color: inherit; }
 #gate i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
 #gate.fail { color: var(--over); } #gate.fail i { background: var(--over); }
 #gate.warn i { background: var(--band); }
+#gate .tag { font-weight: 500; color: var(--muted); border: 1px dashed var(--line-2); border-radius: var(--r); padding: 0 5px; font-size: 11px; }
 #gate.busy i { background: var(--muted); animation: pulse 1s infinite; }
 #progress { position: absolute; left: 0; bottom: -1px; height: 2px; background: var(--brass); width: 0; transition: width .12s linear; }
 @keyframes pulse { 50% { opacity: .35; } }

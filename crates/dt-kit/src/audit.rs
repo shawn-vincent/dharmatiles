@@ -348,6 +348,63 @@ pub fn audit_banded(
     (Export { mesh: m, source }, a)
 }
 
+/// A draft's stand-in for the gate (the editor's view while a value is
+/// dragged): the parts as they are, not joined, nothing dropped or
+/// measured, and each face flagged by its own angle against the printer's
+/// overhang and steepest.  Faces on the bed (the tile's underside) and
+/// those `skip` marks (the connector, which a draft does not change) are
+/// not flagged.  The gate's verdict only ever comes from [`audit_banded`].
+#[must_use]
+pub fn draft(mesh: TriMesh, printer: &Printer, skip: &[bool]) -> (Export, Audit) {
+    let lo = bounds(&mesh).map_or(0.0, |(lo, _)| lo[2]);
+    let sin = |d: f64| d.to_radians().sin();
+    let (s_over, s_steep) = (sin(printer.overhang_deg), sin(printer.steepest_deg));
+    let n = mesh.triangles.len();
+    let (mut overhang, mut band) = (vec![false; n], vec![false; n]);
+    for (k, t) in mesh.triangles.iter().enumerate() {
+        if skip.get(k).copied().unwrap_or(false) {
+            continue;
+        }
+        let [a, b, c] = t.map(|i| mesh.positions[i as usize]);
+        if a[2].max(b[2]).max(c[2]) < lo + 0.05 {
+            continue;
+        }
+        let nrm = cross(sub(b, a), sub(c, a));
+        let len = (nrm[0] * nrm[0] + nrm[1] * nrm[1] + nrm[2] * nrm[2]).sqrt();
+        if len <= 0.0 {
+            continue;
+        }
+        // how far the face leans past vertical: 90 degrees is a ceiling
+        let lean = -nrm[2] / len;
+        if lean > s_steep {
+            overhang[k] = true;
+        } else if lean > s_over {
+            band[k] = true;
+        }
+    }
+    let audit = Audit {
+        triangles: n,
+        vertices: mesh.positions.len(),
+        volume_mm3: 0.0,
+        bodies: 0,
+        dropped: Vec::new(),
+        voids: Vec::new(),
+        slivers: Vec::new(),
+        pinches_moved: 0,
+        collapsed: 0,
+        watertight: false,
+        overhang_mm2: 0.0,
+        overhang,
+        overhang_budget_mm2: 0.0,
+        band_mm2: 0.0,
+        band_budget_mm2: 0.0,
+        band,
+        holes: 0,
+    };
+    let source = (0..u32::try_from(n).unwrap_or(u32::MAX)).collect();
+    (Export { mesh, source }, audit)
+}
+
 /// Positions with split vertices merged and unused ones gone; only
 /// `positions` and `triangles` are kept.
 fn canonical(m: &TriMesh) -> TriMesh {

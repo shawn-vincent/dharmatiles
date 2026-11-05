@@ -49,3 +49,33 @@ fn every_triangle_has_its_entry() {
     }
     assert_eq!(rocks.len(), 2, "{rocks:?}");
 }
+
+#[test]
+fn a_draft_is_quick_and_still_traced() {
+    let full = Options::default();
+    let draft = Options {
+        draft: true,
+        ..Options::default()
+    };
+    for tile in [
+        "lib:tiles/water/1x1-water+grass.dtile",
+        "lib:tiles/test/2x2-meadow.dtile",
+    ] {
+        let t0 = std::time::Instant::now();
+        let f = dt_eval::build(&dt_eval::Library, tile, &full).unwrap();
+        let tf = t0.elapsed().as_secs_f64();
+        let t0 = std::time::Instant::now();
+        let d = dt_eval::build(&dt_eval::Library, tile, &draft).unwrap();
+        let td = t0.elapsed().as_secs_f64();
+        eprintln!(
+            "{tile}: full {tf:.2} s, {} triangles; draft {td:.2} s, {} triangles",
+            f.materials.len(),
+            d.materials.len()
+        );
+        assert_eq!(d.entries.len(), d.materials.len());
+        assert!(
+            !d.entries.contains(&NO_ENTRY),
+            "every draft triangle is traced"
+        );
+    }
+}

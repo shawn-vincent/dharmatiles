@@ -36,6 +36,7 @@ fn start(paths: &[&str], eager: bool) -> Running {
     let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
     let addr = listener.local_addr().unwrap();
     server::spawn(listener, Arc::clone(&shared));
+    edit::drafts(Arc::clone(&shared), opts.clone());
     let stop = Arc::new(AtomicBool::new(false));
     let (s, st) = (Arc::clone(&shared), Arc::clone(&stop));
     std::thread::spawn(move || work(&s, &opts, eager, &st));
@@ -557,4 +558,25 @@ fn serves_every_element_for_the_lens() {
             .iter()
             .any(|c| c["name"] == "size")
     );
+}
+
+#[test]
+fn builds_a_draft_from_text_without_writing_it() {
+    let r = start(&[FLAT], false);
+    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
+    let t = token["token"].as_str().unwrap().to_owned();
+    let text = dt_eval::Files.read(FLAT).unwrap();
+    let body = serde_json::json!({ "text": text, "id": 7 }).to_string();
+    let (h, _) = post(&r, "/api/tiles/0/draft", Some(&t), None, &body);
+    assert!(h.starts_with("HTTP/1.1 202"), "{h}");
+    let tile = wait_for(&r, "a draft", |t| t["draft_id"] == 7);
+    assert_eq!(
+        tile["mesh_version"],
+        Value::Null,
+        "a draft is not the tile's build"
+    );
+    let (head, body) = get(&r, "/api/tiles/0/mesh?draft=1");
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    assert_eq!(&body[..4], payload::MAGIC);
+    assert_eq!(dt_eval::Files.read(FLAT).unwrap(), text);
 }

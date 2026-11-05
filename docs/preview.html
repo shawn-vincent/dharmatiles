@@ -64,6 +64,7 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 <ul>
   <li><strong>The lens.</strong> Selecting an entry opens its controls beside it: the ones written, then the rest at their defaults, faint. Drag a number sideways to change it (<kbd>Shift</kbd> for fine steps), or click it to type. A word control is a row of its words; a switch flips; <kbd>×</kbd> takes a control out, back to its default. A scatter's lens holds its things' controls too. Only the value changes in the text: the layout and comments stay.</li>
   <li><strong>Typing.</strong> The document is checked as you type, without building: a mistake is underlined at its line and said in words under the text. Completion offers element names at the start of a node, an element's controls on its line, and after <code>name=</code> the control's words, or the document's regions and lines. <kbd>Ctrl</kbd>-<kbd>Space</kbd> asks for it.</li>
+  <li><strong>Drafts while you drag.</strong> As a value is dragged, the view shows quick drafts of the tile: fewer cells, the parts not joined, and overhang judged face by face. The verdict says <em>draft</em> beside it, since a draft is never judged by the gate. Let go and the full build follows.</li>
   <li><strong>Saved as you go.</strong> A change is written to the file half a second after it reads cleanly, and the tile rebuilds. A text with a mistake is kept in the page, unsaved, until it is fixed. If the file changes on disk under unsaved changes, you choose which to keep.</li>
   <li><strong>One undo.</strong> <kbd>⌘Z</kbd> (<kbd>Ctrl</kbd>-<kbd>Z</kbd>) undoes typing and changes made in the lens alike; <kbd>⌘⇧Z</kbd> redoes.</li>
   <li><strong>Make it mine.</strong> Library tiles are never written. Typing in one, or changing it in the lens, offers a copy in My tiles, its <code>use</code>s pointing back at the library; the copy opens, ready to change.</li>
@@ -97,7 +98,7 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 <ul>
   <li>Placing things by clicking the tile, drawing lines and regions, and the assistant are designed but not built: see <a href="design/editor.html">the editor</a>.</li>
   <li>Made for your own machine: the mesh is sent whole (about 94 bytes a triangle), fine on the loopback, not meant for a network.</li>
-  <li>A saved change rebuilds the whole tile at full quality, so a dragged value shows on the tile when the drag ends and the build finishes.</li>
+  <li>Every build, draft or full, builds the whole tile: a tile with a tree drafts in seconds, not at once.</li>
   <li>No section cuts or measuring.</li>
   <li><code>--system</code> is fixed for a run; restart for the other base.</li>
 </ul>
