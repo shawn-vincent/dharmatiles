@@ -2,11 +2,15 @@
 //!
 //! - `/api/edit` `{text, at, name, value}`: set a control on the node whose
 //!   name starts at byte `at`, in whichever form it is written, keeping
-//!   everything else byte for byte; `value: null` takes it out.  Nothing
-//!   is written to disk: the page saves the result.
+//!   everything else byte for byte; `value: null` takes it out.  With
+//!   `op: insert` `{place: stack|tile, node}` it writes a new node (at the
+//!   end of the stack, or before it) and says at which byte; with
+//!   `op: remove` it takes out the node at `at`.  Nothing is written to
+//!   disk: the page saves the result.
 //! - `/api/tiles/N/check` `{text, file?}`: read and plan the tile with
 //!   `text` in place of its document (or of `file`, one it uses): the
-//!   errors and the stack, under a second, for the text pane as you type.
+//!   errors, the stack and the map (see `map`), under a second, for the
+//!   text pane and the overlay as you type.
 //! - `/api/tiles/N/save` `{text, base, file?}`: write the document (or a
 //!   file it uses) when what is on disk is still `base`; else `409` with
 //!   what is there.  Library files are never written.  The worker sees the
@@ -178,6 +182,40 @@ fn kdl_value(v: &Value) -> Option<kdl::KdlValue> {
 }
 
 fn edit(v: &Value) -> (&'static str, Value) {
+    let Some(text) = v["text"].as_str() else {
+        return bad("give the text");
+    };
+    let at = v["at"].as_u64().and_then(|a| usize::try_from(a).ok());
+    let done = |r: Result<(String, usize), dt_doc::edit::EditError>| match r {
+        Ok((t, at)) => ("200 OK", json!({ "text": t, "at": at })),
+        Err(e) => (
+            "422 Unprocessable Entity",
+            json!({ "error": e.to_string() }),
+        ),
+    };
+    match v["op"].as_str() {
+        // a new node: {op: insert, place: stack|tile, node}
+        Some("insert") => {
+            let Some(node) = v["node"].as_str() else {
+                return bad("give the node to insert");
+            };
+            let place = if v["place"].as_str() == Some("tile") {
+                dt_doc::edit::Place::Tile
+            } else {
+                dt_doc::edit::Place::Stack
+            };
+            return done(dt_doc::edit::insert_node(text, place, node));
+        }
+        // a node out: {op: remove, at}
+        Some("remove") => {
+            let Some(at) = at else {
+                return bad("give the node's byte");
+            };
+            return done(dt_doc::edit::remove_node_at(text, at).map(|t| (t, at)));
+        }
+        Some("set") | None => {}
+        Some(op) => return bad(format!("no edit called `{op}`")),
+    }
     let (Some(text), Some(at), Some(name)) = (
         v["text"].as_str(),
         v["at"].as_u64().and_then(|a| usize::try_from(a).ok()),
@@ -214,9 +252,10 @@ fn check(shared: &Shared, tile: &str, file: &str, v: &Value) -> (&'static str, V
     match dt_eval::check(&src, tile, &opts) {
         Ok(c) => {
             let stack = c.tile.as_ref().map(|t| stack::items(t, &shared.system));
+            let own = src.read(tile).unwrap_or_default();
             (
                 "200 OK",
-                json!({ "ok": true, "errors": [], "stack": stack }),
+                json!({ "ok": true, "errors": [], "stack": stack, "map": map::json(&c, &own) }),
             )
         }
         Err(errs) => (

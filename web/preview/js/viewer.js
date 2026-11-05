@@ -92,6 +92,17 @@ void main() {
   gl_FragColor = vec4(mod(e, 256.0), floor(e / 256.0), mod(v.y, 256.0), floor(v.y / 256.0)) / 255.0;
 }`;
 
+// The point pass: each fragment writes where it is, x and y in 12 bits
+// each and z in 8, across the mesh's bounds.
+const POINT_FRAG = `
+uniform vec3 uLo; uniform vec3 uSpan;
+varying vec3 vP;
+void main() {
+  vec3 q = clamp((vP - uLo) / uSpan, 0.0, 1.0);
+  float x = floor(q.x * 4095.0 + 0.5), y = floor(q.y * 4095.0 + 0.5), z = floor(q.z * 255.0 + 0.5);
+  gl_FragColor = vec4(mod(x, 256.0), floor(x / 256.0) + 16.0 * mod(y, 16.0), floor(y / 16.0), z) / 255.0;
+}`;
+
 export class Viewer {
   constructor(canvas) {
     this.canvas = canvas;
@@ -117,6 +128,8 @@ export class Viewer {
     this.pickScene = new THREE.Scene();
     this.pickTarget = new THREE.WebGLRenderTarget(1, 1);
     this.pickBytes = new Uint8Array(4);
+    this.pointUniforms = { uLo: { value: new THREE.Vector3() }, uSpan: { value: new THREE.Vector3(1, 1, 1) } };
+    this.pointMaterial = new THREE.ShaderMaterial({ uniforms: this.pointUniforms, vertexShader: VERT, fragmentShader: POINT_FRAG, side: THREE.DoubleSide });
     this.mesh = null;
     this.grid = null;
     this.payload = null;
@@ -161,6 +174,7 @@ export class Viewer {
     this.controls.minZoom = 0.2;
     this.controls.maxZoom = 40;
     this.controls.target.copy(target);
+    this.controls.enableRotate = this.orbit !== false;
     this.controls.addEventListener('change', () => { this.sample(); this.draw(); });
     // the user took hold (drag, wheel, touch): the tween ends and the controls own the camera
     this.controls.addEventListener('start', () => this.cancelTween(true));
@@ -557,9 +571,50 @@ export class Viewer {
    * exactly what the eye sees there, whatever is in front.
    */
   pick(x, y) {
-    if (!this.pickMesh) return null;
+    if (!this.pickPixel(x, y)) return null;
+    const [a, b, c, d] = this.pickBytes;
+    const e = a + 256 * b - 1;
+    return e < 0 ? null : { entry: e, piece: c + 256 * d };
+  }
+
+  /**
+   * The point under canvas point (x, y), mm: on the tile where the eye
+   * sees it, else on the plane z = `planeZ` (the datum when not given);
+   * null when the ray misses even that.  {p: [x, y, z], onTile}.
+   */
+  pointAt(x, y, planeZ = null) {
+    if (planeZ == null && this.pickMesh && this.payload) {
+      const { lo, hi } = this.payload.meta;
+      this.pointUniforms.uLo.value.set(...lo);
+      this.pointUniforms.uSpan.value.set(Math.max(hi[0] - lo[0], 1e-3), Math.max(hi[1] - lo[1], 1e-3), Math.max(hi[2] - lo[2], 1e-3));
+      this.pickMesh.material = this.pointMaterial;
+      const hit = this.pickPixel(x, y);
+      this.pickMesh.material = this.pickMaterial;
+      const [a, b, c, d] = this.pickBytes;
+      if (hit && (a | b | c | d)) {
+        const qx = a + 256 * (b % 16), qy = Math.floor(b / 16) + 16 * c;
+        return { p: [lo[0] + (qx / 4095) * (hi[0] - lo[0]), lo[1] + (qy / 4095) * (hi[1] - lo[1]), lo[2] + (d / 255) * (hi[2] - lo[2])], onTile: true };
+      }
+    }
+    const z = planeZ ?? this.plan?.datum_z ?? this.payload?.meta.lo[2] ?? 0;
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
-    if (x < 0 || y < 0 || x >= w || y >= h) return null;
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2((x / w) * 2 - 1, 1 - (y / h) * 2), this.camera);
+    const q = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), -z), new THREE.Vector3());
+    return q ? { p: [q.x, q.y, q.z], onTile: false } : null;
+  }
+
+  /** Let a left drag orbit (true), or keep it for a tool (false). */
+  setOrbit(on) {
+    this.orbit = on;
+    this.controls.enableRotate = on;
+  }
+
+  /** Render the pick scene's one pixel under (x, y) into pickBytes. */
+  pickPixel(x, y) {
+    if (!this.pickMesh) return false;
+    const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
+    if (x < 0 || y < 0 || x >= w || y >= h) return false;
     const cam = this.camera;
     cam.setViewOffset(w, h, Math.floor(x), Math.floor(y), 1, 1);
     const r = this.renderer;
@@ -570,9 +625,7 @@ export class Viewer {
     r.readRenderTargetPixels(this.pickTarget, 0, 0, 1, 1, this.pickBytes);
     r.setRenderTarget(null);
     cam.clearViewOffset();
-    const [a, b, c, d] = this.pickBytes;
-    const e = a + 256 * b - 1;
-    return e < 0 ? null : { entry: e, piece: c + 256 * d };
+    return true;
   }
 
   /** Tint the selection and the hovered thing: each {entry, piece} (piece null: the whole entry) or null. */

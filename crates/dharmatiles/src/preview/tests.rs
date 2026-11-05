@@ -580,3 +580,49 @@ fn builds_a_draft_from_text_without_writing_it() {
     assert_eq!(&body[..4], payload::MAGIC);
     assert_eq!(dt_eval::Files.read(FLAT).unwrap(), text);
 }
+
+#[test]
+fn the_editor_places_and_takes_out_nodes_and_maps_the_tile() {
+    let dir = std::env::temp_dir().join(format!("dt-place-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("t.dtile");
+    let text = "tile t size=\"1x1\" {\n    line shore { through west \"1,0.5\" }\n    region pool { bounded-by shore; fill \"0.5,0.2\" }\n    stack {\n        dirt\n    }\n}\n";
+    std::fs::write(&file, text).unwrap();
+    let path = file.to_string_lossy().into_owned();
+    let r = start(&[&path], false);
+    let token: Value = serde_json::from_slice(&get(&r, "/api/session").1).unwrap();
+    let token = token["token"].as_str().unwrap().to_owned();
+    let call = |path: &str, body: Value| post(&r, path, Some(&token), None, &body.to_string()).1;
+    // a rock placed: the end of the stack, and where it starts
+    let v = call(
+        "/api/edit",
+        serde_json::json!({ "text": text, "op": "insert", "place": "stack", "node": "rock at=\"0.3,0.6\"" }),
+    );
+    let placed = v["text"].as_str().unwrap().to_owned();
+    let at = usize::try_from(v["at"].as_u64().unwrap()).unwrap();
+    assert!(placed[at..].starts_with("rock at="), "{v}");
+    // and taken out again
+    let v = call(
+        "/api/edit",
+        serde_json::json!({ "text": placed, "op": "remove", "at": at }),
+    );
+    assert_eq!(v["text"].as_str().unwrap(), text);
+    // the map: the line's points where they are written, the region's area
+    let v = call("/api/tiles/0/check", serde_json::json!({ "text": text }));
+    let map = &v["map"];
+    let line = &map["lines"][0];
+    assert_eq!(line["name"], "shore");
+    let p = &line["points"][1];
+    let s = usize::try_from(p["span"][0].as_u64().unwrap()).unwrap();
+    assert_eq!(&text[s..][..7], "\"1,0.5\"");
+    assert_eq!(p["at"], serde_json::json!([1.0, 0.5]));
+    assert_eq!(line["points"][0]["text"], "west");
+    let pool = &map["regions"][0];
+    let n = pool["nx"].as_u64().unwrap();
+    let bits = pool["bits"].as_str().unwrap().as_bytes();
+    assert_eq!(bits.len() as u64, n * pool["ny"].as_u64().unwrap());
+    // south of the shore is the pool, north of it is not
+    assert_eq!(bits[usize::try_from(n * 2 + n / 2).unwrap()], b'1');
+    assert_eq!(bits[usize::try_from(n * (n - 3) + n / 2).unwrap()], b'0');
+    assert_eq!(pool["fills"][0]["at"], serde_json::json!([0.5, 0.2]));
+}

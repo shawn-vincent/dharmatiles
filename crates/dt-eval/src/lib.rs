@@ -210,6 +210,24 @@ impl Checked {
     pub fn pending(&self) -> &[Diag] {
         self.tile.as_ref().map_or(&[], |t| t.pending.as_slice())
     }
+
+    /// Each of the tile's regions as the build would fill it, on a coarse
+    /// lattice of `cells` per square (nodes from the south-west corner,
+    /// row by row): for drawing a map of the tile.
+    #[must_use]
+    pub fn region_masks(&self, cells: u32) -> Vec<Mask> {
+        let Some(tile) = &self.tile else {
+            return Vec::new();
+        };
+        let frame = Frame {
+            cells_per_square: cells.max(1),
+            ..self.frame
+        };
+        tile.regions
+            .iter()
+            .map(|r| region_mask(tile, &frame, r))
+            .collect()
+    }
 }
 
 /// **check**: read `path` and plan it (no geometry).

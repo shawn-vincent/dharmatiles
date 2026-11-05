@@ -52,9 +52,9 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 <p>Every triangle of a built tile knows the stack entry that made it, so the view, the stack and the document share one selection, tinted brass.</p>
 <ul>
   <li><strong>Hover</strong> a thing on the tile and it lights up and is named beside the pointer: <q>rocks in pool · 2 of 3</q>.</li>
-  <li><strong>Click</strong> to select it. A thing a scatter placed is selected on its own; click it again to climb to the whole scatter, and again for the tile. Clicking the plate or <kbd>Esc</kbd> clears.</li>
+  <li><strong>Click</strong> to select it. A thing a scatter placed is selected on its own; click it again to climb to the whole scatter, then to the region it is <code>in=</code>, then the tile. Clicking the plate or <kbd>Esc</kbd> clears.</li>
   <li><strong>The stack and the document follow:</strong> the entry's row and its lines light up. An entry written in a file the tile uses (grass from <code>lib:parts/grass.dtile</code>) opens that file; <em>Back to the tile</em> returns.</li>
-  <li><strong>Click a line</strong> in the document, or a row in the stack, to select its entry in the view; hover one to light its geometry.</li>
+  <li><strong>Click a line</strong> in the document, or a row in the stack, to select its entry in the view; hover one to light its geometry. A <code>line</code> or <code>region</code> node selects that line or region on the map.</li>
   <li><strong>Double-click</strong>, or <kbd>f</kbd>, flies to the selection.</li>
 </ul>
 <p>Water owns the surface it fills, so clicking the pool selects the water; the ground beneath it is reached from the stack.</p>
@@ -71,6 +71,20 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 </ul>
 <p>Only a page served by this run of the program can change a file: each change carries a secret the page reads from the program, and a page from any other site is refused.</p>
 
+<h2 id="place">Placing and drawing</h2>
+<p>The bar under the view puts new things on the tile. Type an element, a definition of the document, <code>line</code> or <code>region</code> (<kbd>A</kbd> goes there), choose with the arrows and press <kbd>Enter</kbd>; anything after the name, such as <code>rock size=12</code>, is written with it. Each gesture writes one node into the text, saves it, and selects what it made. <kbd>Esc</kbd> puts the tool down.</p>
+<ul>
+  <li><strong>Things</strong> (<code>rock</code>, <code>boulder</code>, <code>tree</code>, a definition): its footprint follows the pointer with the point in squares; a click writes <code>rock at="0.64,0.42"</code> at the end of the stack, and a dragged box writes a range, <code>at="0.4..0.8,0.2..0.5"</code>. Click again to place another.</li>
+  <li><strong>Surfaces</strong> (<code>dirt</code>, <code>ground</code>, <code>floor</code>, <code>water</code>, <code>grass</code>): the region under the pointer lights up; a click writes the entry <code>in=</code> it, or for the whole tile outside every region.</li>
+  <li><strong>Scatter</strong>: click or drag in a region to write <code>scatter in=pool count=3 { rock }</code>, with its lens open on the count. <code>scatter boulder</code> scatters boulders.</li>
+  <li><strong>Walls and cliffs</strong>: click a line, or near an edge, to write <code>along=</code> it.</li>
+  <li><strong>Lines</strong>: click points on the plate; <kbd>Enter</kbd> or a double-click ends the line, <kbd>Backspace</kbd> takes back the last point. A point by the middle of an edge or a corner snaps and is written as its word (<code>north</code>, <code>south-east</code>); one close to an edge goes onto it.</li>
+  <li><strong>Regions</strong>: click inside the area the lines enclose; it writes <code>region area-1 { bounded-by …; fill "x,y" }</code> naming every line, for you to rename and trim.</li>
+  <li><strong>Handles.</strong> A selected line shows its points, a region its fill points, a placed thing its <code>at=</code>: drag one to rewrite that point.</li>
+  <li><strong>The map.</strong> Lines are drawn on the tile, dashed, and regions tinted by what is laid in them. Looking straight down (<em>Map</em>, <kbd>2</kbd>), the regions' names and fill points show too.</li>
+  <li><strong>Mute and delete.</strong> A stack row's <kbd>◐</kbd> writes <code>/-</code> before its node, so the tile builds without it and the document says so; the muted row stays in the stack to unmute. <kbd>×</kbd> takes the node out of the text.</li>
+</ul>
+
 <h2 id="keys">Moving round a tile</h2>
 <p>Orbit with the left button, pan with the right button or <kbd>Shift</kbd>, zoom with the wheel or a pinch, toward the point under the pointer. A fling keeps turning and settles. Picking a view turns the tile there rather than cutting.</p>
 <div class="tbl"><table>
@@ -84,7 +98,8 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 <tr><td><kbd>g</kbd></td><td>The grid on the plate</td></tr>
 <tr><td><kbd>t</kbd></td><td>Light or dark</td></tr>
 <tr><td><kbd>f</kbd></td><td>Fly to the selection</td></tr>
-<tr><td><kbd>Esc</kbd></td><td>Close a menu, else clear the selection</td></tr>
+<tr><td><kbd>A</kbd> or <kbd>/</kbd></td><td>The bar: place or draw</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Put a tool down, close a menu, else clear the selection</td></tr>
 </tbody></table></div>
 <p>Choices are remembered in the browser. With reduced motion set in your system, views cut and nothing coasts.</p>
 
@@ -96,7 +111,7 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 
 <h2 id="limits">Limits</h2>
 <ul>
-  <li>Placing things by clicking the tile, drawing lines and regions, and the assistant are designed but not built: see <a href="design/editor.html">the editor</a>.</li>
+  <li>The assistant, seeds and sweeps, and dragging stack rows to reorder them are designed but not built: see <a href="design/editor.html">the editor</a>. The map shows a region's area as the last good check made it; a line moved by its handle redraws when the text next checks.</li>
   <li>Made for your own machine: the mesh is sent whole (about 94 bytes a triangle), fine on the loopback, not meant for a network.</li>
   <li>Every build, draft or full, builds the whole tile: a tile with a tree drafts in seconds, not at once.</li>
   <li>No section cuts or measuring.</li>

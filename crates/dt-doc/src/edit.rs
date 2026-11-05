@@ -442,3 +442,264 @@ mod tests {
         ));
     }
 }
+
+/// Where [`insert_node`] puts a new node.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Place {
+    /// The end of the tile's `stack` (made when the tile has none).
+    Stack,
+    /// The tile's own body, before its `stack`: a `line` or a `region`.
+    Tile,
+}
+
+const INDENT: &str = "    ";
+
+/// The whitespace a line starts with, for the line holding byte `at`.
+fn indent_of(text: &str, at: usize) -> &str {
+    let ls = text[..at].rfind('\n').map_or(0, |n| n + 1);
+    let line = &text[ls..];
+    &line[..line.len() - line.trim_start_matches([' ', '\t']).len()]
+}
+
+/// `node` with every line after its first indented by `ind`.
+fn reindent(node: &str, ind: &str) -> String {
+    node.lines().collect::<Vec<_>>().join(&format!("\n{ind}"))
+}
+
+/// Write `node` as the last child of `parent` (or before its child
+/// `before`), on a line of its own at its siblings' indent.  Returns the
+/// text and the byte the new node's name starts at.
+fn add_child(
+    text: &str,
+    parent: &KdlNode,
+    before: Option<&KdlNode>,
+    node: &str,
+) -> (String, usize) {
+    let splice = |at: usize, s: &str| format!("{}{s}{}", &text[..at], &text[at..]);
+    let pspan = parent.span();
+    let pind = indent_of(text, pspan.offset());
+    let inner = format!("{pind}{INDENT}");
+    if let Some(b) = before {
+        let at = b.span().offset();
+        let ls = text[..at].rfind('\n').map_or(0, |n| n + 1);
+        if text[ls..at].trim().is_empty() {
+            let ind = &text[ls..at];
+            return (
+                splice(ls, &format!("{ind}{}\n", reindent(node, ind))),
+                ls + ind.len(),
+            );
+        }
+        return (splice(at, &format!("{node}; ")), at);
+    }
+    let end = pspan.offset() + pspan.len();
+    match parent.children() {
+        Some(kids) if !kids.nodes().is_empty() => {
+            let last = kids.nodes().last().expect("not empty").span();
+            let le = last.offset() + last.len();
+            let close = text[..end].rfind('}').unwrap_or(end);
+            if let Some(nl) = text[le..close].find('\n') {
+                let ins = le + nl + 1;
+                let ind = indent_of(text, last.offset()).to_owned();
+                (
+                    splice(ins, &format!("{ind}{}\n", reindent(node, &ind))),
+                    ins + ind.len(),
+                )
+            } else {
+                // a block on one line: `stack { rock }`
+                let s = format!("\n{inner}{}\n{pind}", reindent(node, &inner));
+                (splice(close, &s), close + 1 + inner.len())
+            }
+        }
+        Some(_) => {
+            let close = text[..end].rfind('}').unwrap_or(end);
+            let open = text[..close].rfind('{').unwrap_or(close);
+            let s = format!("\n{inner}{}\n{pind}", reindent(node, &inner));
+            (
+                format!("{}{s}{}", &text[..=open], &text[close..]),
+                open + 2 + inner.len(),
+            )
+        }
+        None => {
+            let s = format!(" {{\n{inner}{}\n{pind}}}", reindent(node, &inner));
+            (splice(end, &s), end + 3 + inner.len())
+        }
+    }
+}
+
+/// Write a new node (one or more lines of KDL, unindented) into the
+/// file's tile: at the end of its stack, or in its body before the stack.
+/// Everything else stays byte for byte.  Returns the new text and the
+/// byte the new node's name starts at, to select it.
+///
+/// # Errors
+/// If the text doesn't parse, has no `tile`, or `node` is not KDL.
+pub fn insert_node(text: &str, place: Place, node: &str) -> Result<(String, usize), EditError> {
+    let node = node.trim();
+    KdlDocument::parse(node).map_err(|e| EditError::Parse(e.to_string()))?;
+    let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+    let tile = doc
+        .nodes()
+        .iter()
+        .find(|n| n.name().value() == "tile")
+        .ok_or_else(|| EditError::NoNode("tile".into()))?;
+    let stack = tile
+        .children()
+        .and_then(|c| c.nodes().iter().find(|n| n.name().value() == "stack"));
+    Ok(match (place, stack) {
+        (Place::Stack, Some(s)) => add_child(text, s, None, node),
+        (Place::Stack, None) => {
+            let (t, at) = add_child(text, tile, None, &format!("stack {{\n{INDENT}{node}\n}}"));
+            let ind = indent_of(&t, at).len();
+            (t, at + "stack {\n".len() + ind + INDENT.len())
+        }
+        (Place::Tile, s) => add_child(text, tile, s, node),
+    })
+}
+
+/// The innermost node whose text holds byte `offset`.
+fn node_at(doc: &KdlDocument, offset: usize) -> Option<&KdlNode> {
+    let mut found = None;
+    let mut nodes = doc.nodes();
+    'down: loop {
+        for n in nodes {
+            let sp = n.span();
+            if offset >= sp.offset() && offset < sp.offset() + sp.len().max(1) {
+                found = Some(n);
+                match n.children() {
+                    Some(c) => {
+                        nodes = c.nodes();
+                        continue 'down;
+                    }
+                    None => break 'down,
+                }
+            }
+        }
+        break;
+    }
+    found
+}
+
+/// The properties written on the node at byte `offset` (see [`path_at`]):
+/// each name, its value as written, and the value's byte span.
+///
+/// # Errors
+/// If the text doesn't parse, or no node holds the offset.
+pub fn props_at(text: &str, offset: usize) -> Result<Vec<(String, String, [usize; 2])>, EditError> {
+    let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+    let node = node_at(&doc, offset).ok_or_else(|| EditError::NoNode(format!("byte {offset}")))?;
+    Ok(node
+        .entries()
+        .iter()
+        .filter_map(|e| {
+            let name = e.name()?.value().to_owned();
+            let sp = e.span();
+            let whole = &text[sp.offset()..sp.offset() + sp.len()];
+            let eq = whole.find('=')? + 1;
+            let lead = whole[eq..].len() - whole[eq..].trim_start().len();
+            let value = whole[eq + lead..].trim_end();
+            Some((
+                name,
+                value.to_owned(),
+                [sp.offset() + eq + lead, value.len()],
+            ))
+        })
+        .collect())
+}
+
+/// Take out the node at byte `offset` (see [`path_at`]) with its children,
+/// and its line when it had the line to itself.
+///
+/// # Errors
+/// If the text doesn't parse, or no node holds the offset.
+pub fn remove_node_at(text: &str, offset: usize) -> Result<String, EditError> {
+    let doc = KdlDocument::parse(text).map_err(|e| EditError::Parse(e.to_string()))?;
+    let sp = node_at(&doc, offset)
+        .ok_or_else(|| EditError::NoNode(format!("byte {offset}")))?
+        .span();
+    let (mut s, mut e) = (sp.offset(), sp.offset() + sp.len());
+    if text[e..].starts_with(';') {
+        e += 1;
+    }
+    let ls = text[..s].rfind('\n').map_or(0, |n| n + 1);
+    let le = text[e..].find('\n').map_or(text.len(), |n| e + n);
+    let rest = text[e..le].trim();
+    if text[ls..s].trim().is_empty() && (rest.is_empty() || rest.starts_with("//")) {
+        // the whole line, with any comment on it
+        s = ls;
+        e = (le + 1).min(text.len());
+    } else {
+        e += text[e..le].len() - text[e..le].trim_start().len();
+    }
+    Ok(format!("{}{}", &text[..s], &text[e..]))
+}
+
+#[cfg(test)]
+mod place_tests {
+    use super::*;
+
+    const T: &str = "tile a size=\"1x1\" {\n    line shore { through \"0,0.38\" east }\n    stack {\n        dirt in=bank // hi\n        rock at=\"0.5,0.5\"\n    }\n}\n";
+
+    #[test]
+    fn a_new_entry_goes_at_the_end_of_the_stack() {
+        let (t, at) = insert_node(T, Place::Stack, "boulder at=\"0.2,0.3\"").unwrap();
+        assert!(
+            t.contains("        rock at=\"0.5,0.5\"\n        boulder at=\"0.2,0.3\"\n    }"),
+            "{t}"
+        );
+        assert!(t[at..].starts_with("boulder"));
+        let (t, at) =
+            insert_node(T, Place::Stack, "scatter in=pool count=3 {\n    rock\n}").unwrap();
+        assert!(
+            t.contains("        scatter in=pool count=3 {\n            rock\n        }\n    }"),
+            "{t}"
+        );
+        assert!(t[at..].starts_with("scatter"));
+    }
+
+    #[test]
+    fn a_line_goes_before_the_stack() {
+        let (t, at) = insert_node(T, Place::Tile, "line path { through west east }").unwrap();
+        assert!(
+            t.contains("}\n    line path { through west east }\n    stack {"),
+            "{t}"
+        );
+        assert!(t[at..].starts_with("line path"));
+    }
+
+    #[test]
+    fn a_tile_without_a_stack_gets_one() {
+        let (t, at) = insert_node("tile b size=\"1x1\" {\n}\n", Place::Stack, "rock").unwrap();
+        assert_eq!(
+            t,
+            "tile b size=\"1x1\" {\n    stack {\n        rock\n    }\n}\n"
+        );
+        assert!(t[at..].starts_with("rock"));
+        let (t, at) = insert_node("tile b {}", Place::Stack, "rock").unwrap();
+        assert!(t[at..].starts_with("rock"), "{t} {at}");
+        KdlDocument::parse(&t).unwrap();
+    }
+
+    #[test]
+    fn a_node_comes_out_with_its_line() {
+        let at = T.find("dirt").unwrap();
+        let t = remove_node_at(T, at).unwrap();
+        assert!(t.contains("    stack {\n        rock at"), "{t}");
+        let at = T.find("line shore").unwrap();
+        let t = remove_node_at(T, at).unwrap();
+        assert!(t.starts_with("tile a size=\"1x1\" {\n    stack {"), "{t}");
+        let one = "tile c { stack { rock; tree } }";
+        assert_eq!(
+            remove_node_at(one, one.find("rock").unwrap()).unwrap(),
+            "tile c { stack { tree } }"
+        );
+    }
+
+    #[test]
+    fn a_nodes_properties_and_where_their_values_are() {
+        let at = T.find("rock").unwrap();
+        let p = props_at(T, at).unwrap();
+        assert_eq!(p[0].0, "at");
+        assert_eq!(p[0].1, "\"0.5,0.5\"");
+        assert_eq!(&T[p[0].2[0]..p[0].2[0] + p[0].2[1]], "\"0.5,0.5\"");
+    }
+}

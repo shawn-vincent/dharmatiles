@@ -26,6 +26,7 @@
 
 mod assets;
 mod edit;
+mod map;
 pub mod payload;
 pub(crate) mod roots;
 mod server;

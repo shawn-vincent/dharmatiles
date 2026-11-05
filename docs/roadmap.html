@@ -51,7 +51,7 @@
 <ol>
   <li><strong>Rerun the slow tests</strong> and fix the OpenLOCK failure, so everything after starts from green.</li>
   <li><strong>Draft builds and per-entry rebuilds.</strong> The editor's live feel depends on them, and they make every element faster to iterate.</li>
-  <li><strong>The editor</strong>, in the stages its <a href="design/editor.html">design</a> sets out: select, edit and drafts (built), then place, then the assistant.</li>
+  <li><strong>The editor</strong>, in the stages its <a href="design/editor.html">design</a> sets out: select, edit, drafts, and place and draw (built), then the gate's versions, then the assistant.</li>
   <li><strong>Lines with <code>width=</code> and <code>along=</code></strong>, the language's biggest gap: paths, walls and streams that follow a drawn line.</li>
   <li><strong>The first public release</strong>, once the licence for the library is decided.</li>
 </ol>
@@ -59,11 +59,10 @@
 <h2 id="editor">The editor</h2>
 <p>The preview becomes the editor: one view in which you see a tile, select any part of it, change it, and place new things on it, with the document's text beside it. The design is <a href="design/editor.html">The editor</a>.</p>
 <ul class="road">
-  <li><span class="st st-plain">Planned</span><strong>Select: regions and outlines.</strong> Selecting works (see <a href="preview.html#select">the preview</a>); still to come are climbing through the region a thing stands in, drawing regions and lines on the plate, and a thin outline in place of the hover tint.</li>
+  <li><span class="st st-plain">Planned</span><strong>A thin outline</strong> in place of the hover tint, so a hovered thing's own paint shows.</li>
   <li><span class="st st-proposed">Designed</span><strong>Rebuild only what changed.</strong> Drafts work (see <a href="preview.html#edit">the preview</a>) but build the whole tile, so a tile with a tree drafts in seconds. Keeping each entry's parts and rebuilding only the entries a change touches, or that read what it changed, would make every draft quick; each solid's id is reserved in order, so kept parts need their ids kept with them.</li>
-  <li><span class="st st-proposed">Designed</span><strong>Place by clicking.</strong> Pick an element and click the tile to put it there; drag a line's points and a region's fill point on the plate.</li>
   <li><span class="st st-plain">Planned</span><strong>The lens, further</strong>: a die for a new seed, words tried on hover, the tile's own controls (size, seed), and each control's line from its element page on hover.</li>
-  <li><span class="st st-proposed">Designed</span><strong>The stack and the map</strong>: the stack as the plan runs it, with what each entry reads and writes; the lines and regions drawn on the plate.</li>
+  <li><span class="st st-proposed">Designed</span><strong>The stack, further</strong>: what each entry reads and writes, drawn between rows on hover; dragging a row to move its node; definitions as rows that open. Placing, the map and muting work (see <a href="preview.html#place">the preview</a>).</li>
   <li><span class="st st-proposed">Designed</span><strong>One layout for every screen</strong>: desktop, tablet and phone, mouse and touch.</li>
   <li><span class="st st-proposed">Designed</span><strong>An assistant.</strong> With your own API key, ask in words ("put three mossy rocks on the left bank") and a language model makes the change through the same edits, shows the difference, and can be undone like any other change.</li>
   <li><span class="st st-proposed">Designed</span><strong>Seeds and sweeps</strong>: a strip of the same tile at other seeds, or across a range of one control, picked by clicking.</li>

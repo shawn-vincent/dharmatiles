@@ -110,6 +110,16 @@ fn entry(e: &Entry, within: Option<&Entry>) -> Value {
     v["span"] = json!([start, len]);
     v["lines"] = json!([line(start), line(start + len.saturating_sub(1))]);
     v["controls"] = json!(settings(&e.controls, &e.what.span, e.src.name()));
+    // where it is put (at=, in=, along=), as written, for the map's handles
+    const PLACE: [&str; 4] = ["at", "in", "along", "against"];
+    v["place"] = json!(
+        dt_doc::edit::props_at(text, e.what.span.offset())
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|(n, ..)| PLACE.contains(&n.as_str()))
+            .map(|(name, text, span)| json!({ "name": name, "text": text, "span": span }))
+            .collect::<Vec<_>>()
+    );
     // a scatter's things, each with its own controls, for the lens; a
     // node is addressed by the offset its name starts at
     v["things"] = json!(

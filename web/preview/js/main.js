@@ -4,15 +4,18 @@
 // viewer with a different host.
 //
 // The selection is a stack entry (an index into the plan's stack, the base
-// last), optionally one piece of it (rock 2 of a scatter), or the whole tile.
-// Clicking a thing selects it; clicking it again climbs: piece, entry, tile.
+// last), optionally one piece of it (rock 2 of a scatter), a region or a
+// line of the tile (by name), or the whole tile.  Clicking a thing selects
+// it; clicking it again climbs: piece, entry, the region it is in, tile.
 
 import { browserHost } from './host.js';
 import { parsePayload, NO_ENTRY } from './payload.js';
 import { TextPane, byteToIndex } from './text.js';
-import { Lens } from './lens.js';
+import { Lens, valueOf } from './lens.js';
 import { suggest } from './complete.js';
 import { Viewer, VIEWS } from './viewer.js';
+import { Overlay } from './overlay.js';
+import { Tools } from './place.js';
 
 const $ = (id) => document.getElementById(id);
 const host = browserHost();
@@ -24,19 +27,22 @@ const state = {
   loaded: new Map(),   // tile index -> mesh_version shown
   cameras: new Map(),  // tile index -> saved camera
   view: 'painted', buildStart: new Map(),
-  sel: null,           // {entry, piece} (piece null: the whole entry) | {tile: true} | null
+  sel: null,           // {entry, piece} (piece null: the whole entry) | {region} | {line} | {tile: true} | null
   hov: null,           // the same, under the pointer (view, text or stack)
   pieces: new Map(),   // entry -> how many pieces its geometry has
   textFor: null,       // [tile index, file, mesh_version] the text pane shows
 };
-window.dtPreview = { state, viewer }; // for tests and the console
+let tools = null; // the bar's tools (below)
+window.dtPreview = { state, viewer, get tools() { return tools; } }; // for tests and the console
 
 const tile = () => state.tiles[state.selected];
 // the stack of the text now: the last clean check of it while editing, else the last build's
 const stackItems = () => ((doc.stack && doc.tile === state.selected ? doc.stack : tile()?.plan?.stack) || []).map((s) => (typeof s === 'string' ? { label: s } : s));
 // only a scatter's things are picked one by one (a dirt's clods or a grass's clumps are the entry)
 const piecesOf = (e) => (stackItems()[e]?.what === 'scatter' ? state.pieces.get(e) || 0 : 0);
-const same = (a, b) => (!a && !b) || (a && b && !!a.tile === !!b.tile && a.entry === b.entry && (a.piece ?? null) === (b.piece ?? null));
+const keyOf = (w) => (!w ? '' : w.tile ? 'tile' : w.region != null ? `r:${w.region}` : w.line != null ? `l:${w.line}` : `e:${w.entry}:${w.piece ?? ''}`);
+const same = (a, b) => keyOf(a) === keyOf(b);
+const isEntry = (w) => !!w && w.entry != null;
 
 // ---- the view's controls: views and the display menu -------------------
 const SHOWN_VIEWS = ['painted', 'top', 'low', 'close'];
@@ -132,6 +138,7 @@ function setProjection(ortho, animated = true) {
 $('b-proj').onclick = () => setProjection(!viewer.isOrtho);
 try { if (localStorage.getItem('dt-preview-ortho') === '1') setProjection(true, false); } catch { /* ignore */ }
 addEventListener('keydown', (e) => {
+  if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && tools?.key(e)) { e.preventDefault(); return; }
   if (e.key === 'Escape') {
     if (!$('mine').hidden) { $('mine').hidden = true; return; }
     if (!closePopovers()) setSel(null);
@@ -155,6 +162,7 @@ addEventListener('keydown', (e) => {
   if (e.key === 't') toggleTheme();
   if (e.key === 'p') setProjection(!viewer.isOrtho);
   if (e.key === 'f' && state.sel) frameSel();
+  if (e.key === 'a' || e.key === '/') { e.preventDefault(); $('place-in').focus(); }
 });
 
 // ---- the tile menu -----------------------------------------------------
@@ -288,6 +296,7 @@ async function loadMesh(i, version) {
     const p = parsePayload(buf);
     viewer.setMesh(p);
     countPieces(p);
+    surfaceHeights(p);
     drafts.shown = false;
     state.loaded.set(i, version);
     if (first) {
@@ -295,8 +304,8 @@ async function loadMesh(i, version) {
       if (saved) viewer.setCamera(saved); else pickView(state.view, false);
     }
     // a selection the new build no longer has goes
-    if (state.sel && !state.sel.tile && state.sel.entry >= stackItems().length) state.sel = null;
-    lensBox = state.sel && !state.sel.tile ? viewer.centreOf(state.sel.entry, state.sel.piece) : null;
+    if (isEntry(state.sel) && state.sel.entry >= stackItems().length) state.sel = null;
+    lensBox = isEntry(state.sel) ? viewer.centreOf(state.sel.entry, state.sel.piece) : null;
     renderLens();
     renderAll();
   } catch (e) {
@@ -319,6 +328,7 @@ const doc = {
   history: [], at: -1, lastKind: null, lastTime: 0,
   checkTimer: 0, saveTimer: 0, checkSeq: 0, saving: false,
   checked: null, ok: true, errors: [], stack: null, note: null, conflict: null,
+  map: null, selectAt: null,
 };
 state.doc = doc;
 const dirty = () => texts.text != null && doc.base != null && texts.text !== doc.base;
@@ -337,7 +347,8 @@ const texts = new TextPane($('code'), {
 });
 
 /** The innermost entry written on line `n` of the file shown, else the tile (its own file) or nothing. */
-function entryAtLine(n) {
+function entryAtLine(line) {
+  const n = line;
   let best = null, width = Infinity;
   stackItems().forEach((it, i) => {
     if (!it.lines || it.file !== texts.file) return;
@@ -345,7 +356,28 @@ function entryAtLine(n) {
     if (n >= a && n <= b && b - a < width) { best = i; width = b - a; }
   });
   if (best != null) return { entry: best, piece: null };
-  return texts.file === tile()?.path ? { tile: true } : null;
+  if (texts.file !== tile()?.path) return null;
+  for (const [kind, list] of [['region', doc.map?.regions], ['line', doc.map?.lines]]) {
+    for (const node of list || []) {
+      const l = node.span && spanLines(node.span);
+      if (l && line >= l[0] && line <= l[1]) return { [kind]: node.name };
+    }
+  }
+  return { tile: true };
+}
+
+/** The lines [first, last] (from 1) that byte span [offset, length] of the text covers. */
+function spanLines([o, len]) {
+  const t = texts.text || '';
+  const a = byteToIndex(t, o), b = byteToIndex(t, o + Math.max(len, 1) - 1);
+  return [t.slice(0, a).split('\n').length, t.slice(0, b).split('\n').length];
+}
+/** The map's region or line a selection names. */
+function mapNode(w) {
+  if (!w || !doc.map) return null;
+  if (w.region != null) return doc.map.regions.find((r) => r.name === w.region) || null;
+  if (w.line != null) return doc.map.lines.find((l) => l.name === w.line) || null;
+  return null;
 }
 
 // one history for the file shown: typing (a pause or another kind of change
@@ -399,6 +431,7 @@ async function draftArrived(t) {
     if (t.index !== state.selected || t.draft_id !== drafts.sent) return;
     viewer.setMesh(p);
     countPieces(p);
+    surfaceHeights(p);
     drafts.shown = true;
     renderTitle();
   } catch (e) { console.error(e); }
@@ -421,7 +454,14 @@ async function check() {
   doc.ok = !!r.body.ok;
   doc.errors = r.body.errors || [];
   if (r.body.ok && r.body.stack) doc.stack = r.body.stack; // the last good stack stays while there are mistakes
-  renderStack(); markText(); renderTextBar(); renderLens();
+  if (r.body.ok && r.body.map) doc.map = r.body.map;
+  if (doc.selectAt != null && r.body.ok) {
+    // the node a gesture just wrote: select it
+    const at = doc.selectAt; doc.selectAt = null;
+    const i = (doc.stack || []).findIndex((it) => it.span && it.span[0] === at && it.file === texts.file);
+    if (i >= 0) { setSel({ entry: i, piece: null }, { from: 'view' }); }
+  }
+  renderStack(); markText(); renderTextBar(); renderLens(); drawOverlay();
 }
 
 async function save(now = false) {
@@ -469,6 +509,8 @@ async function loadText(file) {
     if (fresh) resetHistory(v.text);
     else if (doc.history[doc.at]?.text !== v.text) record(v.text, 'disk'); // changed on disk: one more step
     doc.checked = v.text; doc.ok = !t.errors.length; doc.errors = []; doc.stack = null; // the build's plan is this text's
+    if (fresh) doc.map = null;
+    if (v.file === t.path && !doc.map) check(); // its map, for the overlay
     renderTextBar();
     markText();
     renderLens();
@@ -508,6 +550,10 @@ function renderTextBar() {
 function linesOf(w) {
   if (!w) return null;
   if (w.tile) return texts.file === tile()?.path ? [1, (texts.text || '').split('\n').length] : null;
+  if (w.region != null || w.line != null) {
+    const n = mapNode(w);
+    return n?.span && texts.file === tile()?.path ? spanLines(n.span) : null;
+  }
   const it = stackItems()[w.entry];
   return it?.lines && it.file === texts.file ? it.lines : null;
 }
@@ -594,6 +640,8 @@ $('mine-ok').onclick = async () => {
 function describe(w) {
   if (!w) return '';
   if (w.tile) return `tile ${tile()?.name || ''}`.trim();
+  if (w.region != null) return `region ${w.region}`;
+  if (w.line != null) return `line ${w.line}`;
   const it = stackItems()[w.entry];
   if (!it) return '';
   const n = piecesOf(w.entry);
@@ -605,16 +653,17 @@ function setSel(w, { from } = {}) {
   if (same(w, state.sel)) return;
   state.sel = w;
   $('tilebtn').classList.toggle('sel', !!w?.tile);
-  viewer.setHighlight(w && !w.tile ? w : null, hovForView());
+  viewer.setHighlight(isEntry(w) ? w : null, hovForView());
   renderStack();
   // the text follows: the selection's own file, scrolled to it
-  if (w && !w.tile) {
+  if (isEntry(w)) {
     const it = stackItems()[w.entry];
     if (it?.file && it.file !== texts.file && from !== 'text') loadText(it.file).then(() => { revealSel(); renderLens(); });
-  } else if (w?.tile && texts.file !== tile()?.path) loadText(null);
+  } else if (w && texts.file !== tile()?.path) loadText(null); // the tile, a region, a line: the tile's own text
   markText();
+  tools?.paint();
   if (from !== 'text') revealSel();
-  lensBox = w && !w.tile ? viewer.centreOf(w.entry, w.piece) : null;
+  lensBox = isEntry(w) ? viewer.centreOf(w.entry, w.piece) : null;
   renderLens();
 }
 function revealSel() { const l = linesOf(state.sel); if (l) texts.reveal(l[0]); }
@@ -622,26 +671,30 @@ function revealSel() { const l = linesOf(state.sel); if (l) texts.reveal(l[0]); 
 function setHov(w) {
   if (same(w, state.hov)) return;
   state.hov = w;
-  viewer.setHighlight(state.sel && !state.sel.tile ? state.sel : null, hovForView());
-  document.querySelectorAll('.srow').forEach((r) => r.classList.toggle('hov', !!w && !w.tile && Number(r.dataset.entry) === w.entry));
+  viewer.setHighlight(isEntry(state.sel) ? state.sel : null, hovForView());
+  document.querySelectorAll('.srow').forEach((r) => r.classList.toggle('hov', isEntry(w) && Number(r.dataset.entry) === w.entry));
   markText();
 }
-const hovForView = () => (state.hov && !state.hov.tile && !same(state.hov, state.sel) ? state.hov : null);
+const hovForView = () => (isEntry(state.hov) && !same(state.hov, state.sel) ? state.hov : null);
 
 /** A click in the view on `hit`: select it, or climb when it is already selected. */
 function clickHit(hit) {
   if (!hit) return setSel(null);
   const s = state.sel;
   const many = piecesOf(hit.entry) > 1;
-  if (!s || s.tile || s.entry !== hit.entry) return setSel({ entry: hit.entry, piece: many ? hit.piece : null }, { from: 'view' });
+  const inOf = (e) => (stackItems()[e] ? controlText(stackItems()[e], 'in') : null);
+  if (s?.region != null && inOf(hit.entry) === s.region) return setSel({ tile: true }, { from: 'view' }); // the region -> the tile
+  if (!isEntry(s) || s.entry !== hit.entry) return setSel({ entry: hit.entry, piece: many ? hit.piece : null }, { from: 'view' });
   if (s.piece != null) return setSel({ entry: hit.entry, piece: null }, { from: 'view' }); // the piece -> its entry
+  const inr = inOf(s.entry);
+  if (inr && doc.map?.regions.some((r) => r.name === inr)) return setSel({ region: inr }, { from: 'view' }); // the entry -> its region
   return setSel({ tile: true }, { from: 'view' }); // the entry -> the tile
 }
 
 /** Fly to the selection (f). */
 function frameSel() {
   const s = state.sel;
-  if (!s || s.tile) return pickView(state.view);
+  if (!isEntry(s)) return pickView(state.view);
   const b = viewer.centreOf(s.entry, s.piece);
   if (!b) return;
   const pose = viewer.pose();
@@ -672,7 +725,7 @@ canvas.addEventListener('pointermove', (e) => {
     const many = hit && piecesOf(hit.entry) > 1;
     // hover shows what a click would select
     let w = hit && { entry: hit.entry, piece: many ? hit.piece : null };
-    if (w && state.sel && !state.sel.tile && state.sel.entry === w.entry) w = state.sel;
+    if (w && isEntry(state.sel) && state.sel.entry === w.entry) w = state.sel;
     setHov(w);
     const hint = $('hint');
     if (w) {
@@ -710,7 +763,7 @@ let lensBox = null; // the selection's bounds, for placing the lens
 /** The lens for the selection: an entry's controls (a scatter's and each of its things'). */
 function renderLens() {
   const s = state.sel;
-  const it = s && !s.tile ? stackItems()[s.entry] : null;
+  const it = isEntry(s) ? stackItems()[s.entry] : null;
   if (!it || it.element === 'connector' || !it.span || it.file !== texts.file || !elements.length) { lens.hide(); return; }
   const groups = [{ at: it.span[0], schema: elementNamed(it.what), written: it.controls || [] }];
   for (const th of it.things || []) groups.push({ heading: th.what, at: th.at, schema: elementNamed(th.what), written: th.controls || [] });
@@ -742,7 +795,103 @@ function placeLens() {
   box.style.left = `${Math.max(8, Math.min(left, view.width - w - 8))}px`;
   box.style.top = `${Math.max(52, Math.min(top, view.height - h - 8))}px`;
 }
-viewer.onRender = () => placeLens();
+viewer.onRender = () => { placeLens(); drawOverlay(); };
+
+// ---- the map, the bar and its tools ----------------------------------------
+const overlay = new Overlay($('over'), viewer);
+const SURFACES = new Set(['ground', 'dirt', 'floor', 'water']);
+const COLOUR = { water: '--water', dirt: '--earth', ground: '--earth', floor: '--stone', grass: '--moss', reeds: '--moss', flowers: '--bloom' };
+const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const controlText = (it, name) => [...(it.place || []), ...(it.controls || [])].find((c) => c.name === name)?.text.replace(new RegExp(`^${name}=`), '').replace(/"/g, '');
+
+/** The ground's heights, from the surfaces the build made. */
+function surfaceHeights(p) {
+  const items = stackItems();
+  overlay.setHeights(p, (e) => SURFACES.has(items[e]?.element), tile()?.plan?.size_mm || p.meta.footprint);
+}
+
+/** Each region's tint: the colour of the last thing laid in it. */
+function tints() {
+  const out = {};
+  for (const it of stackItems()) {
+    const r = controlText(it, 'in');
+    if (r && COLOUR[it.element]) out[r] = cssVar(COLOUR[it.element]);
+  }
+  return out;
+}
+
+/**
+ * The selection's handles: a line's points, a region's fill points, a
+ * placed thing's at=.  Each {q (squares), span (bytes of the written
+ * value), snap (edge words allowed), move(q) (the overlay follows)}.
+ */
+function handles() {
+  const s = state.sel;
+  if (!s || !doc.writable || texts.file !== tile()?.path || !doc.map) return [];
+  if (s.line != null) {
+    const l = mapNode(s);
+    return (l?.points || []).filter((p) => p.at).map((p, k) => ({
+      q: p.at, span: p.span, snap: true,
+      move(q) { if (!l.wobble && l.pts.length === l.points.length) l.pts[k] = q; },
+    }));
+  }
+  if (s.region != null) return (mapNode(s)?.fills || []).filter((f) => f.at).map((f) => ({ q: f.at, span: f.span, snap: false, move(q) { f.at = q; } }));
+  if (isEntry(s)) {
+    const it = stackItems()[s.entry];
+    const c = (it?.place || []).find((x) => x.name === 'at');
+    if (!c || it.file !== texts.file) return [];
+    const v = valueOf(c.text, 'at');
+    const m = v.text.match(/^"(-?[\d.]+),(-?[\d.]+)"$/);
+    if (!m) return [];
+    const start = c.span[0] + new TextEncoder().encode(c.text.slice(0, v.at)).length;
+    return [{ q: [Number(m[1]), Number(m[2])], span: [start, new TextEncoder().encode(v.text).length], snap: false }];
+  }
+  return [];
+}
+
+function drawOverlay() {
+  const t = tile();
+  overlay.setMap(doc.tile === state.selected ? doc.map : null, t?.plan?.square_mm);
+  const s = state.sel;
+  overlay.draw({
+    tints: tints(),
+    selRegion: s?.region ?? null,
+    selLine: s?.line ?? null,
+    ...(tools?.scene() || {}),
+  });
+}
+
+/** Write a new node from a gesture in the view, then select it. */
+async function insertNode(place, node, { select: sel } = {}) {
+  const t = tile();
+  if (!t) return;
+  if (!doc.writable) return offerMine();
+  if (texts.file !== t.path) await loadText(null);
+  const r = await host.post('/api/edit', { op: 'insert', text: texts.text, place, node });
+  if (r.status !== 200) { doc.note = r.body?.error || 'that could not be written'; renderTextBar(); return; }
+  texts.setText(r.body.text, byteToIndex(r.body.text, r.body.at));
+  if (sel) { state.sel = null; setSel(sel, { from: 'view' }); } else doc.selectAt = r.body.at;
+  edited(texts.text, 'view');
+  askDraft();
+  const l = texts.text.slice(0, byteToIndex(texts.text, r.body.at)).split('\n').length;
+  texts.reveal(l);
+}
+
+tools = new Tools(canvas, viewer, overlay, { bar: $('place'), input: $('place-in'), list: $('place-list'), chip: $('tool') }, {
+  elements: () => elements,
+  defs: () => [...(texts.text || '').matchAll(/^\s*define\s+([\w+\-.]+)/gm)].map((m) => m[1]),
+  sq: () => tile()?.plan?.square_mm || 35,
+  size: () => [tile()?.plan?.cols || 1, tile()?.plan?.rows || 1],
+  map: () => doc.map,
+  writable: () => doc.writable,
+  offerMine: () => offerMine(),
+  insert: (place, node, opts) => insertNode(place, node, opts),
+  replace: (start, len, text, end) => lens.api.replace(start, len, text, end),
+  handles,
+  redraw: () => drawOverlay(),
+  note: (text) => { const h = $('hint'); h.textContent = text; h.style.display = 'block'; h.style.left = '12px'; h.style.top = '56px'; setTimeout(() => { h.style.display = 'none'; }, 2600); },
+});
+$('tool').querySelector('button').onclick = () => tools.stop();
 
 // ---- the stack -----------------------------------------------------------
 // each element's family, for its colour (the docs site uses the same)
@@ -761,7 +910,7 @@ function renderStack() {
     const base = i === items.length - 1 && it.element === 'connector';
     li.className = `srow fam-${FAMILY[it.element] || 'doc'}${base ? ' base' : ''}`;
     li.dataset.entry = i;
-    const sel = state.sel && !state.sel.tile && state.sel.entry === i;
+    const sel = isEntry(state.sel) && state.sel.entry === i;
     li.classList.toggle('sel', !!sel);
     if (viewer.payload && !state.pieces.has(i)) li.classList.add('hidden-geo');
     const n = piecesOf(i);
@@ -770,19 +919,90 @@ function renderStack() {
     li.innerHTML = '<i class="sw"></i><div><span class="nm"></span><span class="pl"></span></div>';
     li.querySelector('.nm').textContent = it.label;
     li.querySelector('.pl').textContent = sel && state.sel.piece != null ? `${describe(state.sel)}` : sub;
+    const acts = document.createElement('div');
+    acts.className = 'acts';
+    if (!base && it.span && it.file === texts.file && doc.writable) {
+      acts.append(
+        act('◐', `Mute ${it.label}: see the tile without it (writes /- before it)`, () => muteAt(it.span[0])),
+        act('×', `Take ${it.label} out of the text`, () => removeAt(it.span[0])),
+      );
+    }
     if (it.href) {
       const a = document.createElement('a');
       a.className = 'doc'; a.href = it.href; a.target = '_blank'; a.rel = 'noopener';
       a.textContent = '?'; a.title = `${it.element}: its page in the docs`;
       a.onclick = (e) => e.stopPropagation();
-      li.append(a);
+      acts.append(a);
     }
+    li.append(acts);
     li.onclick = () => setSel(same(state.sel, { entry: i, piece: null }) ? null : { entry: i, piece: null }, { from: 'stack' });
     li.ondblclick = () => { setSel({ entry: i, piece: null }, { from: 'stack' }); frameSel(); };
     li.onpointerenter = () => setHov({ entry: i, piece: null });
     li.onpointerleave = () => setHov(null);
     ol.append(li);
   });
+  // muted entries: written with /- before them, so not in the plan
+  for (const m of mutedEntries()) {
+    const li = document.createElement('li');
+    li.className = `srow muted fam-${FAMILY[m.name] || 'doc'}`;
+    li.innerHTML = '<i class="sw"></i><div><span class="nm"></span><span class="pl"></span></div>';
+    li.querySelector('.nm').textContent = m.label;
+    li.querySelector('.pl').textContent = `muted · line ${m.line}`;
+    const acts = document.createElement('div');
+    acts.className = 'acts on';
+    if (doc.writable) acts.append(act('◑', `Unmute ${m.name}`, () => unmute(m)));
+    li.append(acts);
+    li.onclick = () => texts.reveal(m.line);
+    ol.insertBefore(li, ol.querySelector('.srow.base')); // above the base the system adds
+  }
+}
+
+function act(label, title, fn) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'act'; b.textContent = label; b.title = title; b.setAttribute('aria-label', title);
+  b.onclick = (e) => { e.stopPropagation(); fn(); };
+  return b;
+}
+
+/** The stack's muted nodes in the text shown: {name, line, index (of the /-), len (of /- and its space)}. */
+function mutedEntries() {
+  if (texts.file !== tile()?.path || texts.text == null) return [];
+  const out = [];
+  const known = new Set([...elements.map((e) => e.name), ...[...texts.text.matchAll(/^\s*define\s+([\w+\-.]+)/gm)].map((m) => m[1])]);
+  let index = 0;
+  texts.text.split('\n').forEach((line, i) => {
+    const m = line.match(/^(\s*)(\/-\s*)([A-Za-z_][\w+\-.]*)/);
+    if (m && known.has(m[3])) {
+      const label = line.slice(m[0].length - m[3].length).replace(/\s*(\{.*|\/\/.*|;.*)$/, '').trim();
+      out.push({ name: m[3], label, line: i + 1, index: index + m[1].length, len: m[2].length });
+    }
+    index += line.length + 1;
+  });
+  return out;
+}
+
+function muteAt(byte) {
+  if (!doc.writable) return offerMine();
+  const t = texts.text, i = byteToIndex(t, byte);
+  if (isEntry(state.sel)) setSel(null);
+  texts.setText(`${t.slice(0, i)}/- ${t.slice(i)}`);
+  edited(texts.text, 'view');
+  askDraft();
+}
+function unmute(m) {
+  const t = texts.text;
+  texts.setText(t.slice(0, m.index) + t.slice(m.index + m.len));
+  edited(texts.text, 'view');
+  askDraft();
+}
+async function removeAt(byte) {
+  if (!doc.writable) return offerMine();
+  const r = await host.post('/api/edit', { op: 'remove', text: texts.text, at: byte });
+  if (r.status !== 200) { doc.note = r.body?.error || 'that could not be taken out'; renderTextBar(); return; }
+  setSel(null);
+  texts.setText(r.body.text);
+  edited(texts.text, 'view');
+  askDraft();
 }
 
 // ---- the title, the gate and the record ---------------------------------------
@@ -810,7 +1030,7 @@ function renderAll() {
   renderList();
   renderTitle();
   renderStack();
-  viewer.setHighlight(state.sel && !state.sel.tile ? state.sel : null, hovForView());
+  viewer.setHighlight(isEntry(state.sel) ? state.sel : null, hovForView());
   const t = tile();
   if (t) loadText(state.textFor && state.textFor[0] === t.index && state.textFor[1] !== t.path ? state.textFor[1] : null);
   markText();
