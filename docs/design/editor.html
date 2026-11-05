@@ -42,6 +42,7 @@
   <div class="eyebrow">Design · not built yet</div>
   <h1>The editor</h1>
   <p class="lede">The preview becomes the editor. You open a tile and it is on the plate, with its document beside it. Click any stone and its line in the document lights up; drag one of its numbers and the stone changes; type <code>rock</code> and click the bank to put one there. Every change, made by hand, in the view or by an assistant, is a change to the document's text, and the text is always the tile.</p>
+  <p><a class="btn" href="editor-mockup.html">Try the mockup</a> A made-up tile in your browser to click, drag, place on and ask. Nothing behind it is built.</p>
   <div class="facts">
     <div><div class="k">One view</div><div class="v">the preview is the editor</div></div>
     <div><div class="k">Controls</div><div class="v">five, everywhere</div></div>
@@ -164,6 +165,7 @@
 <ul>
   <li><code>dharmatiles</code>, <code>dharmatiles preview my-tile.dtile</code> and picking a tile in the list all open the same view, with the tile and its document. There is no separate edit command and no edit mode: a tile you can see is a tile you can change.</li>
   <li><strong>Your own tiles</strong> (in <code>$DT_HOME</code>, else <code>~/dharmatiles</code>, or a file you named) are changed in place. Each finished gesture (a drag released, a click placed, a pause in typing) writes the file.</li>
+  <li><strong>A new tile</strong> starts blank (<em>New tile</em> in the title's list: a 1×1 tile with plain ground, size and name to change), or as a copy of any library tile.</li>
   <li><strong>Library tiles</strong> open read-only. The first change offers one choice, <em>Make it mine</em>, which copies the document (and the parts it uses stay <code>lib:</code> references) into My tiles under the same name and carries on with the change there. The library is never written by the editor.</li>
   <li><strong>Other editors.</strong> The file is still watched. A save from another editor while the page has no unsaved typing simply loads. If the page has unsaved typing, a line over the text says the file changed on disk and offers to load it or keep yours.</li>
   <li><strong>Undo</strong> is one history for every kind of change, in the view, in the text or by the assistant: <kbd>⌘Z</kbd> and <kbd>⇧⌘Z</kbd>, or the two-finger tap and three-finger tap on a touch screen. Each step is a text change, so undo is exact.</li>
@@ -289,8 +291,8 @@
   <li><strong>Asking.</strong> Anything typed in the bar that is not an element or a command is a request; the bar shows <em>Ask</em> before you send it. <kbd>⌥Enter</kbd> sends anything as a request.</li>
   <li><strong>What it sees.</strong> The document, the selection (so <em>these rocks</em> means the selected ones), the plan, the gate's verdict, and on request pictures of the current build from any view, painted with overhang as the view paints it.</li>
   <li><strong>What it can do.</strong> The tools the program's MCP server already offers (check a document, list and describe elements, build, render, audit) and the document edits: set or remove a control, add or remove a node. It can change only the open document. It can read the library and the element pages.</li>
-  <li><strong>What you see.</strong> Its answer in a small card over the bar; each change it makes lands in the text with the brass flash, and the view rebuilds as for any other change. All the changes of one request are one undo step, named after the request.</li>
-  <li><strong>Fixing what the gate refuses.</strong> After its change builds, the assistant is given the gate's verdict and may try again, up to a small number of times, before it reports what it did.</li>
+  <li><strong>What you see.</strong> Its answer in a small card over the bar, with the edits it suggests as a difference: lines to add and lines to remove, marked in the text and shown as a draft in the view. Nothing is written until you accept; <em>Accept</em> applies them all as one undo step named after the request, <em>Reject</em> drops them, and you can keep talking to change the suggestion first.</li>
+  <li><strong>Fixing what the gate refuses.</strong> The assistant builds its suggestion before showing it, is given the gate's verdict, and may revise it a small number of times; the card says whether the suggestion passes.</li>
   <li><strong>The key</strong> is entered once in settings (the title's menu), and kept by the program in your config folder (on macOS, in the Keychain once the app is native). The program, not the page, talks to the provider, so the key never sits in the browser, and nothing is sent anywhere else. The assistant shows how much each request used.</li>
   <li><strong>The model.</strong> Claude by default, with the provider and model chosen in settings.</li>
 </ul>
@@ -380,6 +382,7 @@
 </ol>
 
 <h2 id="program">What the program needs</h2>
+<p>A clickable mockup of the editor, with a made-up tile and nothing behind it, is at <a href="editor-mockup.html">editor-mockup.html</a>.</p>
 <p>Most of the editor is the page. These are the program's parts, each small, built on what exists:</p>
 <div class="tbl"><table>
 <thead><tr><th>Need</th><th>Built on</th></tr></thead>
@@ -419,10 +422,7 @@
 
 <h2 id="open-q">Open questions</h2>
 <ul>
-  <li>Whether a placed thing is written as its own entry each time (<code>rock at=…</code>, three rocks, three lines) or gathered into one <code>scatter</code> with listed points, which the language does not have yet.</li>
-  <li>Whether the editor writes the file on every finished gesture, as designed here, or keeps changes until <kbd>⌘S</kbd>.</li>
-  <li>How a new tile starts: from a copy of a library tile only, or also from a blank tile of a chosen size.</li>
-  <li>Whether the assistant's changes apply at once (as designed) or wait for you to accept them.</li>
+  <li>Whether placing several things writes each as its own entry (<code>rock at=…</code>, three rocks, three lines) or gathers them into one <code>scatter</code> with listed points, which the language does not have yet. It may depend on the case; to be worked out by trying both.</li>
 </ul>
 
 </article>
