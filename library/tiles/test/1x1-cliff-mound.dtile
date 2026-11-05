@@ -1,5 +1,4 @@
 // A free-standing stepped mound.
-// Twin of clifflab/rockpile.py's `mound` form at round 17 (31f7c5d), 1x1.
 
 tile "1x1-cliff-mound" size="1x1" seed=1 {
     about """

@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Project Does
 
-**dharmatiles** builds procedural 3D-printable terrain tiles as STL files from short `.dtile` documents (the tile language, KDL v2 underneath). Each tile has a DungeonBlocks-compatible socket-peg underside (or an OpenLOCK clip base), dirt with clods and pebbles, rocks, grass blades, water, walls, floors and trees. Tiles are for tabletop gaming (35 mm square grid, DungeonBlocks standard; OpenLOCK is 25.4 mm). Every build runs through a printability gate: watertight after the float32 reload, no lost parts, no overhang past 55 degrees.
+**dharmatiles** builds procedural 3D-printable terrain tiles as STL files from short `.dtile` documents (the tile language, KDL v2 underneath). Each tile has a DungeonBlocks-compatible socket-peg underside (or an OpenLOCK clip base), dirt with clods and pebbles, rocks, grass blades, water, walls, floors and trees. Tiles are for tabletop gaming (35 mm square grid, DungeonBlocks standard; OpenLOCK is 25.4 mm). Every build runs through a printability gate: watertight after the float32 reload, no lost parts, overhang held to 55 degrees (small budgeted patches to 65 and past it).
 
-The program is Rust (the `dharmatiles` binary). The Python library in `src/dharmatiles` is the labs' support library and is no longer where tiles are made; the labs (`dirtlab`, `rocklab`, `waterlab`, `grasslab`, `meadowlab`, `shorelab`, `clifflab`) are still where new looks are designed. The Python tile specs, the `dharmatiles-gen` entry point and `stl/` are gone (phase P6, 4 Nov 2026); the last commit that had them is the tag `python-library-final`.
+dharmatiles is a pure Rust program (the `dharmatiles` binary). The only other code is `extras/`: a paint organizer, its stand and two STL helpers, standalone Python scripts that are not part of the program. The Python library, the labs, the parity harness and the old design history were deleted on 4 Nov 2026; the tag `before-rust-only` holds them. New looks are designed in Rust.
 
 ## Commands
 
@@ -24,15 +24,16 @@ dharmatiles                                                 # no command = previ
 cargo test --release --workspace            # all tests (insta golden hashes included)
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --check
-cargo xtask parity <look>                   # Python lab beside Rust, seeds 1-4 -> out/parity/<look>/contact-sheet.png
+cargo xtask sheet <tile|name> [--seeds …]   # contact sheet: four views per seed, seeds 1-4 -> out/sheet/<tile>/contact-sheet.png
+cargo xtask pictures [group …]              # rebuild the element pages' pictures from docs/elements/demo/
 cargo xtask docs [--check]                  # fill docs/elements/ pages' controls tables from the look schema
 ```
 
 `lib:` paths read `library/` from disk: this checkout's when run inside it (new and edited library tiles count at once, no rebuild), else `$DT_LIBRARY`, else the copy installed beside the program. Nothing is compiled in except for browser/phone builds (dt-eval feature `embedded-library`).
 
-Output goes to `out/` (git-ignored). The old Python tile output (`stl/`) is retired with the generator; it lives in the history before the tag `python-library-final`.
+Output goes to `out/` (git-ignored).
 
-CI is off. Run the tests locally on this Mac only; do not wait on or re-enable GitHub Actions. Linux, Windows, wasm and cross-OS hashes are phase P9, a stretch goal.
+CI is off. Run the tests locally on this Mac only; do not wait on or re-enable GitHub Actions. Linux, Windows, wasm and cross-OS hashes are a later stretch goal.
 
 ## Spatial Terminology (canonical — do not deviate)
 
@@ -57,7 +58,7 @@ Six crates under `crates/`:
 | `dt-eval` | Reads a document, plans it (`plan.rs` orders the stack by what each look reads and writes), builds it into a `Scene`, audits, exports. Library tiles are bundled from `library/`. |
 | `dharmatiles` | The CLI. |
 
-Also: `xtask/` (the parity harness), `library/` (`.dtile` documents: `tiles/`, `parts/`, `printers/`, `palettes/`), `tests/parity/` (`run_lab.py`, the Python side of the harness), `docs/` (the site, HTML).
+Also: `xtask/` (`docs`, `pictures`, `sheet`), `library/` (`.dtile` documents: `tiles/`, `parts/`, `printers/`, `palettes/`), `web/preview/` (the preview's page), `docs/` (the site, HTML), `extras/` (Python, not part of the program).
 
 ### How a build runs
 
@@ -86,20 +87,17 @@ Lines and fill points make regions; the stack paints surfaces (`ground`, `dirt`,
 
 ### Library
 
-`library/tiles/<group>/…kdl` are the shipped tiles (44; all build; the cliff is a first slice of P7), `library/tiles/test/` are the parity and golden tests' tiles, `library/parts/` are shared definitions (`grass`, `trees`, `edges`, `levels`).
+`library/tiles/<group>/…kdl` are the shipped tiles, `library/tiles/test/` are the golden and language tests' tiles, `library/parts/` are shared definitions (`grass`, `trees`, `edges`, `levels`).
 
 ## Standing rules
 
-- **Overhang is red.** Every render paints overhang faces red at 55 degrees. Trees only: 55-65 degrees is orange, within the tree's band budget; over 65 is red and fails. Every other look keeps 55 as a hard limit. The printability gate is a gate: never loosen a threshold or cull geometry to pass it; fix the geometry where it is made.
+- **Overhang is red.** 55 degrees is every look's target. 55-65 degrees is the band, painted orange, allowed up to 0.1% of the downward-facing area; over 65 is red, allowed up to another 0.1%; more fails. The printability gate is a gate: never loosen a threshold or cull geometry to pass it; fix the geometry where it is made.
 - **KDL is v2 only.**
 - **One visual system.** The docs site and the preview share `docs/assets/theme.css` (tokens, self-hosted fonts, lotus, controls); the preview serves it from inside the program. New colours, fonts or controls go there, never into one page or the preview alone. Red and orange mean overhang only; tiles are shown on the plate (#D9E0EB). See `docs/standards/visual-system.html`.
-- **Docs are HTML** under `docs/`, never `.md` copies; lead with what a tile user needs; no commercial product images. `docs/status.json` is kept current on `main`.
+- **Docs are HTML** under `docs/`, never `.md` copies; lead with what a tile user needs; no commercial product images.
+- **The site is current state only.** It says what the program is and does now: the reference, the specification and the rules. No decision logs, histories, rulings with dates, lab write-ups or reference-photo galleries; git history holds how we got here. When a rule changes, update `docs/standards/rules.html` (project-wide), the element page's Rules list, or the language guide's rules, in place. The Rust code is the reference for how things are implemented; pages link to it rather than restate it.
 - **The site is the tile language's reference.** `docs/language.html` is the guide; `docs/elements/<name>.html` is one page per element (every node a document can write; "look" is only the code's word). Each element page's controls block is generated: run `cargo xtask docs` after changing a look's schema, and add a page for any new element (the generator refuses a look without one). The preview links each stack entry to its element page.
 - **Pronouns:** use they/them for Shawn.
-- **Contact sheets:** look at each one yourself at full resolution before calling a look done.
+- **Contact sheets:** make one with `cargo xtask sheet` and look at it yourself at full resolution before calling a look done. Element pictures come from `cargo xtask pictures`; look at them too.
 - **Builds are heavy.** Avoid many release tree or wall builds in parallel.
-- Before asking Shawn a design question, search the decisions log in `docs/rust/plan.html` and the pages in `docs/standards/`. Many answers are settled (for example the edge level is 3.4 mm, Default 12).
-
-## The labs and the Python library
-
-The labs are standalone Python experiments (`grasslab/`, `rocklab/`, ...) that import `src/dharmatiles` (`core/mesh`, `stone/*`, `bases/*`). Keep them working; do not port Rust ideas back into them. A look approved in a lab gets its own port phase using `cargo xtask parity`. The rest of `src/dharmatiles` (`layers/`, `grass/`, `scatter/`, `terrains/`) is frozen and unused by the Rust program (see `docs/rust/plan.html`, phase P6).
+- Before asking Shawn a design question, read `docs/standards/rules.html`, the element page's Rules, the language guide's rules and the other `docs/standards/` pages. Many answers are settled (for example the edge level is 3.4 mm). Older reasoning is in the tag `before-rust-only` (`docs/rust/plan.html` there has the dated decisions log).

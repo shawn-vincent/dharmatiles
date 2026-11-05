@@ -1,5 +1,3 @@
-// The twin of src/tiles/ground/1x1-soil+grass-angle.tile.py (the Python library tile, kept).
-
 tile soil+grass-angle size="1x1" seed=100 {
     about "Dirt tucked into the south-west corner of a meadow."
     line margin wobble=2.5 { through "0,0.5" "0.5,0" }

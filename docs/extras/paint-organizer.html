@@ -3,353 +3,52 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Dharmatiles Paint Organizer — Magnet Interconnect Design</title>
+<title>Extras</title>
 <link rel="stylesheet" href="../assets/site.css">
 <script src="../assets/site.js"></script>
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
-  <div class="eyebrow">Library design</div>
-  <h1>Dharmatiles Paint Organizer — Magnet Interconnect Design</h1>
-  <p class="srcnote">Converted from <code>docs/design/dharmatiles-paint-organizer-magnets.md</code> on 2026-11-01; the markdown file was removed (see git history). Relative paths in the text are relative to <code>docs/design/</code>.</p>
-  
+  <div class="eyebrow">Not terrain</div>
+  <h1>Extras</h1>
+  <p class="lede">Small Python scripts that sit beside dharmatiles and are not part of it: a paint organizer for your hobby desk, its stand, and two helpers for looking at STL files. They need Python 3 with <code>numpy</code>, <code>trimesh</code> and <code>manifold3d</code> (<code>stone_audit.py</code> also needs <code>scipy</code>, <code>stl_render.py</code> needs <code>Pillow</code>).</p>
 </header>
-<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol><li><a href="#goal">Goal</a></li><li><a href="#orientation-terminology">Orientation &amp; Terminology</a></li><li><a href="#cup-parameters-unchanged-honeycomb">Cup Parameters (unchanged honeycomb)</a></li><li><a href="#pocket-geometry-all-magnets">Pocket Geometry (all magnets)</a></li><li><a href="#magnet-catalogue-20-pockets-total">Magnet Catalogue (20 pockets total)</a></li><li><a href="#fit-checks">Fit Checks</a></li><li><a href="#module-connectivity">Module Connectivity</a></li><li><a href="#implementation-notes">Implementation Notes</a></li></ol></nav>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#organizer">Paint organizer</a></li>
+  <li><a href="#stand">Stand</a></li>
+  <li><a href="#helpers">STL helpers</a></li>
+</ol></nav>
 <article class="doc">
-<h2 id="goal">
-Goal</h2>
-<p>
-Add recessed 10 × 3 mm disc-magnet pockets so multiple copies of the organizer
-can be clipped together edge-to-edge on a desktop (and optionally stacked
-vertically). Magnets are embedded <strong>directly in the hexagon walls</strong> — no added
-frame, cap, or other structure. The cup's solid lower region (base + retaining
-ring) provides the bulk that backs each pocket.</p>
-<hr />
-<h2 id="orientation-terminology">
-Orientation &amp; Terminology</h2>
-<p>
-The geometry is built in <strong>code coordinates</strong>: pointy-top hexes whose flat faces
-face ±x and whose vertices point ±y. A code-row of <code>cols</code> cups is staggered in x;
-rows stack in y.</p>
-<p>
-The magnet spec, however, was given in the <strong>user's view</strong> — the part rotated
-<strong>+90° CCW</strong> — so that:</p>
-<ul>
-<li>
-hex points are <strong>horizontal</strong>,</li>
-<li>
-each code-row of <code>cols</code> cups reads as a <strong>vertical column</strong> (the default is
-3 cups tall), and</li>
-<li>
-adjacent columns alternate <strong>offset up / offset down</strong> (the honeycomb stagger).</li>
-</ul>
+
+<h2 id="organizer">Paint organizer</h2>
+<p>A honeycomb of open hexagonal cups for paint bottles, 4 columns of 3 by default, with the lotus on it. Disc magnets press into pockets on the outside faces, so several organizers clip together.</p>
+<pre><code>python3 extras/dharmatiles-paint-organizer.py              # → out/extras/dharmatiles-paint-organizer.stl
+python3 extras/dharmatiles-paint-organizer.py --cols 3 --rows 2 --height 50</code></pre>
 <div class="tbl"><table>
-<thead>
-<tr>
-<th>
-User-view feature</th>
-<th>
-Code equivalent</th>
-</tr>
-</thead>
+<thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
 <tbody>
-<tr>
-<td>
-Column (3 cups tall)</td>
-<td>
-one code-row, cups <code>c0…c{cols-1}</code></td>
-</tr>
-<tr>
-<td>
-Top cup of a column</td>
-<td>
-highest cx → <code>c{cols-1}</code></td>
-</tr>
-<tr>
-<td>
-Bottom cup of a column</td>
-<td>
-lowest cx → <code>c0</code></td>
-</tr>
-<tr>
-<td>
-Flat <strong>top</strong> face</td>
-<td>
-right flat, normal <strong>0° (+x)</strong></td>
-</tr>
-<tr>
-<td>
-Flat <strong>bottom</strong> face</td>
-<td>
-left flat, normal <strong>180° (−x)</strong></td>
-</tr>
-<tr>
-<td>
-Right-side diagonals (upper, lower)</td>
-<td>
-normals <strong>300°, 240°</strong></td>
-</tr>
-<tr>
-<td>
-Left-side diagonals (upper, lower)</td>
-<td>
-normals <strong>60°, 120°</strong></td>
-</tr>
-<tr>
-<td>
-<strong>High</strong> column (offset up)</td>
-<td>
-even code-row (here row 0, rightmost)</td>
-</tr>
-<tr>
-<td>
-<strong>Low</strong> column (offset down)</td>
-<td>
-odd code-row (here row 3, leftmost)</td>
-</tr>
-</tbody>
-</table></div>
-<p>
-Hex edge-normal directions (code degrees): <code>0</code> right flat, <code>60</code> upper-right,
-<code>120</code> upper-left, <code>180</code> left flat, <code>240</code> lower-left, <code>300</code> lower-right.</p>
-<hr />
-<h2 id="cup-parameters-unchanged-honeycomb">
-Cup Parameters (unchanged honeycomb)</h2>
-<aside class="stale" role="note"><span class="stale-tag">Out of date</span> <span><code>HexOrganizerSpec</code> in <code>src/extras/dharmatiles-paint-organizer.py</code> now has <code>wall</code> 1.0, <code>interior_wall</code> 2.0, <code>floor</code> 14.5, <code>base</code> 1.0, <code>cols</code> 4, <code>rows</code> 3, plus <code>magnet_clearance</code> 0.1, <code>magnet_bevel</code> 0.4 and <code>magnet_pushout</code>. Pitches come from <code>_pitches()</code>: pitch_y = bore_f2f + interior_wall, pitch_x = pitch_y · √3/2. <span class="stale-src">Checked against the code on 2026-11-01.</span></span></aside>
-<div class="tbl"><table>
-<thead>
-<tr>
-<th>
-Field</th>
-<th>
-Value</th>
-<th>
-Note</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>bore_f2f</code></td>
-<td>
-35.0 mm</td>
-<td>
-main bore flat-to-flat</td>
-</tr>
-<tr>
-<td>
-<code>retaining_f2f</code></td>
-<td>
-29.0 mm</td>
-<td>
-retaining-depression flat-to-flat</td>
-</tr>
-<tr>
-<td>
-<code>wall</code></td>
-<td>
-4.0 mm</td>
-<td>
-gives ≥1 mm backing behind a 3 mm pocket in the bore wall</td>
-</tr>
-<tr>
-<td>
-<code>height</code></td>
-<td>
-60.0 mm</td>
-<td>
-</td>
-</tr>
-<tr>
-<td>
-<code>floor</code></td>
-<td>
-10.0 mm</td>
-<td>
-bore floor above the depression</td>
-</tr>
-<tr>
-<td>
-<code>base</code></td>
-<td>
-5.0 mm</td>
-<td>
-solid base below the depression</td>
-</tr>
-<tr>
-<td>
-<code>magnet_dia</code></td>
-<td>
-10.0 mm</td>
-<td>
-N52 disc magnet diameter</td>
-</tr>
-<tr>
-<td>
-<code>magnet_depth</code></td>
-<td>
-3.0 mm</td>
-<td>
-N52 disc thickness / pocket bore depth</td>
-</tr>
-</tbody>
-</table></div>
-<p>
-Derived (3×4 default): <code>outer_f2f</code> = 43.0 mm, circumradius <code>R</code> = 24.83 mm,
-<code>col_pitch</code> = 39.0 mm (cups overlap by <code>wall</code>, merging into shared walls),
-<code>row_pitch</code> = 33.78 mm.</p>
-<hr />
-<h2 id="pocket-geometry-all-magnets">
-Pocket Geometry (all magnets)</h2>
-<aside class="stale" role="note"><span class="stale-tag">Out of date</span> <span>Pockets now get 0.1 mm radial clearance, a 0.4 mm 45° entry bevel and a push-out hole through the back wall; centre height is still <code>MAGNET_Z</code> = 6 mm and the overshoot 0.6 mm. <span class="stale-src">Checked against the code on 2026-11-01.</span></span></aside>
-<p>
-Every magnet is a <strong>horizontal cylindrical pocket</strong>, axis along the outward face
-normal, bored into the wall from the exposed outer surface:</p>
-<ul>
-<li>
-Diameter 10 mm, depth 3 mm.</li>
-<li>
-Centre height <strong>z = 6 mm</strong> — i.e. <strong>1 mm clearance</strong> below the 10 mm disc
-(disc spans z = 1 → 11 mm). This keeps the magnet in the cup's bulk lower
-region: z = 0–5 solid base, z = 5–10 retaining ring (≈7 mm of radial backing),
-with only the top ~1 mm reaching the thinner bore wall.</li>
-<li>
-The cutter starts 0.6 mm outside the face for a clean boolean break; the
-effective recess depth into the material is exactly 3 mm.</li>
-</ul>
-<p>
-Implementation: <code>_magnet_pocket(cx, cy, deg, spec, tangent_offset=…)</code> builds the
-cylinder along +z, rotates <code>+z → +x</code>, then rotates about z by <code>deg + 180</code> so the
-axis bores <strong>inward</strong> (−normal). <code>tangent_offset</code> slides it along the face for the
-paired flat-face magnets.</p>
-<hr />
-<h2 id="magnet-catalogue-20-pockets-total">
-Magnet Catalogue (20 pockets total)</h2>
-<aside class="stale" role="note"><span class="stale-tag">Out of date</span> <span>The code cuts 8 pockets, not 20: <code>_subtract_magnets()</code> places them on the honeycomb's exposed perimeter faces. <span class="stale-src">Checked against the code on 2026-11-01.</span></span></aside>
-<h3 id="flat-top-bottom-16-pockets-2-per-face">
-Flat top / bottom — 16 pockets (2 per face)</h3>
-<p>
-Magnets sit only on the <strong>first and third rows</strong> of each column (top and bottom
-cups); the middle row is skipped.</p>
-<ul>
-<li>
-<strong>Top-flat</strong> (normal 0°): 2 magnets on the +x flat of every top cup
-(<code>c{cols-1}</code> of each row) → 4 faces × 2 = <strong>8</strong>.</li>
-<li>
-<strong>Bottom-flat</strong> (normal 180°): 2 magnets on the −x flat of every bottom cup
-(<code>c0</code> of each row) → 4 faces × 2 = <strong>8</strong>.</li>
-</ul>
-<p>
-The pair straddles the face centre by <code>±R/4</code> (≈ ±6.2 mm), keeping both 10 mm
-discs within the ~24.8 mm face width. These enable vertical stacking
-(top faces of one copy mate with bottom faces of the copy above).</p>
-<h3 id="side-diagonals-4-pockets">
-Side diagonals — 4 pockets</h3>
-<p>
-Side faces are numbered <strong>0…5 top→bottom</strong> along one side of a column (each cup
-contributes two diagonal faces). Magnets go on the two perimeter columns only:</p>
-<ul>
-<li>
-<strong>High column</strong> (row 0, rightmost, offset up) → <strong>faces 1 &amp; 4</strong><ul>
-<li>
-face 1 = top cup's lower-right diagonal — normal <strong>240°</strong></li>
-<li>
-face 4 = bottom cup's upper-right diagonal — normal <strong>300°</strong></li>
-</ul>
-</li>
-<li>
-<strong>Low column</strong> (row 3, leftmost, offset down) → <strong>faces 0 &amp; 3</strong><ul>
-<li>
-face 0 = top cup's upper-left diagonal — normal <strong>60°</strong></li>
-<li>
-face 3 = middle cup's lower-left diagonal — normal <strong>120°</strong></li>
-</ul>
-</li>
-</ul>
-<p>
-This offset pairing is what lets a high column's right edge mesh with the
-neighbouring copy's low column left edge: high-side face 1 meets low-side face 0,
-and high-side face 4 meets low-side face 3, with opposing (attracting) normals.</p>
-<hr />
-<h2 id="fit-checks">
-Fit Checks</h2>
-<div class="tbl"><table>
-<thead>
-<tr>
-<th>
-Pocket location</th>
-<th>
-Bore depth</th>
-<th>
-Radial backing</th>
-<th>
-Margin</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-Flat / diagonal face at z 5–10 (retaining ring)</td>
-<td>
-3 mm</td>
-<td>
-≈7 mm</td>
-<td>
-✓</td>
-</tr>
-<tr>
-<td>
-Same face at z 10–11 (bore wall)</td>
-<td>
-3 mm</td>
-<td>
-1 mm (wall − depth)</td>
-<td>
-✓</td>
-</tr>
-<tr>
-<td>
-Below disc</td>
-<td>
-—</td>
-<td>
-1 mm to z = 0</td>
-<td>
-✓</td>
-</tr>
-</tbody>
-</table></div>
-<hr />
-<h2 id="module-connectivity">
-Module Connectivity</h2>
-<p>
-Insert a 10 × 3 mm neodymium disc into each pocket (press-fit or glue flush).
-Modules clip together along the perimeter side faces (horizontal tiling) or stack
-vertically via the top/bottom flat-face magnets.</p>
-<p>
-<strong>Polarity rule:</strong> magnets on opposing faces must attract. Because a high column
-meets a low column when tiling, verify orientation against the face-pairing above
-before gluing.</p>
-<hr />
-<h2 id="implementation-notes">
-Implementation Notes</h2>
-<ul>
-<li>
-<code>_subtract_magnets(body, spec)</code> cuts all 20 pockets after the honeycomb union;
-it is the only magnet entry point and is called at the end of
-<code>build_organizer</code>.</li>
-<li>
-The previous rectangular-frame / top-cap design (and helpers <code>_rect_box</code>,
-<code>_hex_bounds</code>) has been removed — the magnets now live in the hex walls
-themselves.</li>
-<li>
-Constants <code>MAGNET_Z</code> (6 mm) and <code>MAGNET_OVERSHOOT</code> (0.6 mm) are module-level in
-<code>src/extras/dharmatiles-paint-organizer.py</code>.
-</content>
-</invoke></li>
-</ul>
+<tr><td><code>--cols</code>, <code>--rows</code></td><td>4, 3</td><td>Cups across and down.</td></tr>
+<tr><td><code>--height</code></td><td>60 mm</td><td>Cup height.</td></tr>
+<tr><td><code>--tolerance</code></td><td>0.3 mm</td><td>Clearance added to each bore.</td></tr>
+<tr><td><code>--magnet-clearance</code></td><td>0.1 mm</td><td>Extra radius on each magnet pocket, for a press fit.</td></tr>
+<tr><td><code>--magnet-bevel</code></td><td>0.4 mm</td><td>A 45° chamfer at each pocket's mouth; 0 for none.</td></tr>
+<tr><td><code>--no-magnet-pushout</code></td><td></td><td>Leave out the 1 mm hole behind each pocket for pushing a magnet out.</td></tr>
+<tr><td><code>--side-cutout-width</code></td><td>0.8</td><td>A window in each hex face, as a share of the face; 0 for none.</td></tr>
+<tr><td><code>--quiet</code></td><td></td><td>No progress output.</td></tr>
+</tbody></table></div>
+<p>The script checks the result is watertight and prints its volume.</p>
+
+<h2 id="stand">Stand</h2>
+<p>A stand shaped to the top of the organizer, with two matching magnet pockets in its 4 mm floor. It takes the same options as the organizer; give it the same ones so the two match.</p>
+<pre><code>python3 extras/dharmatiles-paint-organizer-stand.py        # → out/extras/dharmatiles-paint-organizer-stand.stl</code></pre>
+
+<h2 id="helpers">STL helpers</h2>
+<dl class="defs">
+  <dt><code>stl_render.py</code></dt><dd>Renders any STL to a PNG without a display: <code>python3 extras/stl_render.py in.stl out.png</code>. For meshes from outside dharmatiles; for tiles, use <code>dharmatiles build --png</code> or the <a href="../preview.html">preview</a>.</dd>
+  <dt><code>stone_audit.py</code></dt><dd>Finds folded and doubled-skin faults in rock meshes that a watertight check cannot see: <code>python3 extras/stone_audit.py tile.stl</code>.</dd>
+</dl>
 
 </article>
 </div>

@@ -1,9 +1,5 @@
-// The parity twin of grasslab (grasslab/grasslab.py, approved 29 Oct 2026):
-// stroke-blade grass combed into ribbons on a 2×2 tile of dirt, with eye-shaped
-// clearings the flow parts around. Built by `cargo xtask parity grass` at seeds 1–4.
-
 tile grass size="2x2" seed=1 {
-    about "grasslab's grass on dirt, for the parity harness."
+    about "Grass on dirt: a test tile."
     stack {
         dirt level=edge {
             stones none

@@ -1,5 +1,4 @@
 // Bands against the west and east edges: a canyon between.
-// Twin of clifflab/rockpile.py's `canyon` form at round 17 (31f7c5d), 1x1.
 
 tile "1x1-cliff-canyon" size="1x1" seed=1 {
     about """

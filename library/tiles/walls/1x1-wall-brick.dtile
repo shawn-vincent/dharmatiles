@@ -1,5 +1,4 @@
 // A worn running-bond brick wall along the north edge of a grassy 1×1.
-// Twin of src/tiles/walls/1x1-wall-brick.tile.py.
 
 use "parts/grass" lawn
 

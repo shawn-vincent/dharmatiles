@@ -1,9 +1,5 @@
-// A grass-free fieldstone wall along the north edge of a dirt 1×1: the
-// parity twin of the Python wall builder (tests/parity/run_lab.py) and a
-// golden test tile.  The wall's own seed is the harness's wall seed.
-
 tile wall-fieldstone size="1x1" seed=1 {
-    about "A fieldstone wall on bare dirt, for the parity harness and golden tests."
+    about "A fieldstone wall on bare dirt: a test tile."
     stack {
         dirt
         wall along="north" style=fieldstone

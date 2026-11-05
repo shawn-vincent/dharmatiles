@@ -1,5 +1,4 @@
 // Rock on two opposite sides with a passage between.
-// Built on the cliff look (clifflab rockpile, round 17), for variety in the library.
 
 tile "2x2-cliff-canyon" size="2x2" seed=1 {
     about "Rock on two opposite sides with a passage between."

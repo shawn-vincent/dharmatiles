@@ -1,7 +1,3 @@
-// A chipped stone-slab floor with a cut-stone wall standing on it along
-// the north edge: the wall seats on the pavement.
-// Twin of src/tiles/floors/1x1-floor-stone-wall.tile.py.
-
 tile floor-stone-wall size="1x1" seed=72 {
     stack {
         dirt

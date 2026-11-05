@@ -9,13 +9,13 @@
 <link rel="stylesheet" href="../assets/gallery.css">
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
   <div class="eyebrow"><i class="fam-mark fam-thing" title="stone: a thing, a run or a scatter"></i>Element · run</div>
   <h1>wall</h1>
   <p class="lede">A masonry wall standing on a tile edge: cut stone, fieldstone, brick or regular brick, laid in courses with real joints, its top at the official wall-top level (33.1 mm). On a tile edge it always stands inside the tile, its outer face flush with the edge, so walls on neighbouring tiles line up.</p>
-  <p class="small">Stone floors are their own element, <a href="floor.html"><code>floor</code></a>; walls stand on them. Doors, windows and hatches in the pictures below are from the retired Python library and are not in the program yet.</p>
+  <p class="small">Stone floors are their own element, <a href="floor.html"><code>floor</code></a>; walls stand on them. Doors, windows and hatches are not built yet.</p>
   <figure class="shot hero-one"><img src="img/el-wall.jpg" alt="A one-square tile with a cut-stone wall turning a corner along the north and west edges, grass in front"><figcaption><code>lib:tiles/walls/1x1-wall-stone-corner.dtile</code>, built by the program today.</figcaption></figure>
   <div class="facts">
     <div><div class="k">Styles</div><div class="v">cut stone, fieldstone, brick, regular brick</div></div>
@@ -42,7 +42,6 @@
   <li><a href="#spec">Reference</a></li>
   <li><a href="#printing">Printing and painting</a></li>
   <li><a href="#how">How it is made</a></li>
-  <li><a href="#record">Design record</a></li>
 </ol></nav>
 <article class="doc">
 
@@ -61,36 +60,22 @@
 </tbody></table></div>
 <div class="grid2">
   <figure class="shot">
-    <img src="img/walls-cut-stone-1x1.jpg" alt="Cut-stone wall along one edge of a grassy 1x1 tile" width="900" height="750" loading="lazy">
-    <figcaption>Cut stone, <code>src/tiles/walls/1x1-wall-stone.tile.py</code>. Predates the red-overhang rule.</figcaption>
+    <img src="img/el-wall-cut-stone.jpg" alt="Chipped cut-stone wall along the north edge of a grassy tile" loading="lazy">
+    <figcaption>Cut stone, chipped: <code>lib:tiles/walls/1x1-wall-stone.dtile</code>.</figcaption>
   </figure>
   <figure class="shot">
-    <img src="img/walls-regular-brick-arch.jpg" alt="Regular brick wall with an arched doorway, front view" width="900" height="570" loading="lazy">
-    <figcaption>Regular brick in running bond, with an arched doorway (scene <code>walls-e17-regular-brick</code>). Predates the red-overhang rule.</figcaption>
+    <img src="img/el-wall-battlements.jpg" alt="Regular brick wall in running bond with battlements, on bare dirt" loading="lazy">
+    <figcaption>Regular brick with <code>top=battlements</code>: <a href="demo/wall-battlements.dtile"><code>demo/wall-battlements.dtile</code></a>.</figcaption>
   </figure>
   <figure class="shot">
-    <img src="img/walls-floor-drystone.jpg" alt="Drystone flagstone floor with a fieldstone wall behind it" width="699" height="700" loading="lazy">
-    <figcaption>Drystone floor with a fieldstone wall (demo <code>floor-drystone</code>). Grey material render; predates the red-overhang rule.</figcaption>
+    <img src="img/el-wall-fieldstone.jpg" alt="Drystone flagstone floor with a fieldstone wall standing on it" loading="lazy">
+    <figcaption>A fieldstone wall with <code>coping=on-edge</code> on a <code>floor style=fieldstone</code>: <a href="demo/floor-fieldstone.dtile"><code>demo/floor-fieldstone.dtile</code></a>.</figcaption>
   </figure>
   <figure class="shot">
-    <img src="img/walls-ruins.jpg" alt="Two ruined walls with ragged broken tops" width="700" height="565" loading="lazy">
-    <figcaption>Ruins: a ragged broken top with rubble showing inside (demo <code>wall-ruins</code>). Predates the red-overhang rule.</figcaption>
+    <img src="img/el-wall-ruins.jpg" alt="A low ruined cut-stone wall with rubble showing along its broken top" loading="lazy">
+    <figcaption><code>ruin="70%"</code>: a broken top with rubble showing: <a href="demo/wall-ruins.dtile"><code>demo/wall-ruins.dtile</code></a>.</figcaption>
   </figure>
 </div>
-<h3 id="openings">Doors, windows and hatches</h3>
-<p class="callout">Not in the program yet: these renders are from the retired Python library. A <code>.dtile</code> wall has no openings until the program gains words for them.</p>
-<p>In the Python library, any wall could take openings of any size and position. Each has a surround of jamb stones and an arch or a lintel in the wall's own family; the courses flow around it. A low wall can carry a full-height arch that rises above it, the walled-garden gate. On a floor, the same opening is a hatch or a round well. An opening can hold a leaf: a plank door, shutters, bars, a trapdoor, or a portcullis. A leaf can stand open at any angle, or slide into a slot so it prints as a separate, swappable piece in the same STL.</p>
-<div class="grid2">
-  <figure class="shot">
-    <img src="img/walls-openings-leaves.jpg" alt="Several wall sections with arched and square openings holding wooden doors and shutters" width="800" height="602" loading="lazy">
-    <figcaption>Openings with leaves across the families (scene <code>walls-e15-leaves</code>). Predates the red-overhang rule.</figcaption>
-  </figure>
-  <figure class="shot">
-    <img src="img/walls-slot-portcullis.jpg" alt="Cut-stone wall with an arched opening holding a portcullis in a slot" width="700" height="455" loading="lazy">
-    <figcaption>A slot-loaded portcullis: a separate piece that drops into the channel (scene <code>walls-e16-slots</code>). Predates the red-overhang rule.</figcaption>
-  </figure>
-</div>
-
 <h2 id="use">Using it in a tile</h2>
 <p>A wall must have <code>along=</code>: a tile edge, an edge path (two edges make a corner), or a drawn <a href="line.html">line</a>:</p>
 <pre><code>use "parts/grass" lawn
@@ -154,21 +139,6 @@ tile wall-stone-corner size="1x1" seed=62 {
 <p class="muted small">Generated from <code>dharmatiles looks wall</code> by <code>cargo xtask docs</code>.</p>
 <!-- /gen:reference -->
 
-<h3 id="opening-spec">Openings and leaves (not in the program yet)</h3>
-<p class="callout">Doors, windows and hatches were made by the retired Python library. The program has no words for them yet, so a <code>.dtile</code> document cannot ask for one. The table records what the Python library did, as the design the program will follow.</p>
-<div class="tbl"><table>
-<thead><tr><th>Setting</th><th>Default</th><th>Notes</th></tr></thead>
-<tbody>
-<tr><td><code>at</code></td><td>—</td><td>Centre along the spine, in squares.</td></tr>
-<tr><td><code>width_mm</code></td><td>22</td><td>Clear width. Official doorways are 19–27 mm.</td></tr>
-<tr><td><code>sill_mm</code>, <code>head_mm</code></td><td>0, 36</td><td>A sill above 0 makes a window (a typical window: sill 14, head 26, width 12). The head may rise above a low wall.</td></tr>
-<tr><td><code>head</code></td><td><code>arch</code></td><td><code>arch</code> or <code>lintel</code>, in every family. <code>rise_mm</code> makes a segmental arch.</td></tr>
-<tr><td><code>profile</code></td><td><code>auto</code></td><td><code>circle</code> makes an oculus in a wall or a well in a floor.</td></tr>
-<tr><td><code>surround</code></td><td><code>auto</code></td><td><code>jambs</code> (walls) or <code>ring</code>, a frame of small units (floor hatches).</td></tr>
-<tr><td><code>leaf</code></td><td>none</td><td><code>Leaf(kind)</code>: <code>planks</code>, <code>shutters</code>, <code>bars</code>, <code>trapdoor</code>, <code>portcullis</code>. 2.6 mm thick. <code>open_deg</code> swings it open about a <code>hinge</code> edge.</td></tr>
-<tr><td><code>slot</code></td><td>off</td><td>Cuts a straight channel through the wall and out of its top; the leaf prints as a separate piece with 0.5 mm clearance. A metal leaf needs a cut-stone or brick surround.</td></tr>
-</tbody></table></div>
-
 <h3 id="floor-spec">Floors</h3>
 <ul>
   <li><strong>The <a href="floor.html"><code>floor</code></a> element</strong> is a stone pavement: dressed slabs from the tile bottom to 7.4 mm (the official interior floor), one per square by default (<code>slabs</code> subdivides). About 4% of slabs are missing (dirt shows in the pits), 10% spalled and 20% cracked.</li>
@@ -189,6 +159,16 @@ tile wall-stone-corner size="1x1" seed=62 {
   <li>No stone is planed flat at the tile boundary: fieldstone end stones stop 0.7 mm short of it, and a safety clip trims only what pokes past.</li>
   <li>At a corner the two runs take turns passing through the corner, course by course.</li>
   <li>Tile sizes, edge names and the edge contract are on the <a href="../standards/tile-system.html">tile system</a> page.</li>
+</ul>
+
+<h3 id="rules">Rules</h3>
+<p>What this element always does. A change to one of these is a change to the element.</p>
+<ul class="rules">
+  <li>A wall is a footprint with a texture applied, DungeonBlocks-compatible by default, standing at the wall-top level (33.1 mm).</li>
+  <li>The cap is flat, textured as the tops of its stones. Wall ends are always textured. Walls butt-join at tile seams.</li>
+  <li>Straight runs and corners, on flat ground.</li>
+  <li>Fieldstone reads as stacked stones with no mortar: each stone a distinct, morphed pebble, never fused with its neighbours, with rough little rocks as hearting.</li>
+  <li>Walls and floors share one stone engine.</li>
 </ul>
 
 <h2 id="printing">Printing and painting</h2>
@@ -236,161 +216,8 @@ tile wall-stone-corner size="1x1" seed=62 {
   <p class="small muted"><code>_TEXTURES</code>, <code>walls/masonry.py:108</code>.</p>
 </details>
 
-<section class="record" id="record">
-<h2>Design record</h2>
-<p>For the people developing the look: Shawn's rulings, the requirements, audit numbers, the experiment history and open issues. Owned by the Python library (<code>src/dharmatiles/walls/</code>); walls have no lab. Approved: cut stone at round 2 (4 Jul 2026), fieldstone at E27 (5 Jul), openings rev 1 (7 Jul).</p>
-
-<details id="rulings">
-<summary>Rulings (23)</summary>
-<p>Shawn's decisions, oldest first. Each holds unless a later line replaces it. Quotes are as recorded in the design page and commit messages.</p>
-<div class="tbl"><table>
-<thead><tr><th class="d">Date</th><th>Ruling</th><th>Shawn's words</th></tr></thead>
-<tbody>
-<tr><td class="d">4 Jul</td><td>The model: a wall is a footprint region with a texture applied.</td><td class="q">“walls are a region with dimensions the footprint of the wall, then a texture applied”</td></tr>
-<tr><td class="d">4 Jul</td><td>DungeonBlocks-compatible by default, configurable; flat cap textured as the tops of the stones; butt-join at tile seams; gen-1 is straight runs and corners on flat ground.</td><td>— (answers recorded as notes, not verbatim)</td></tr>
-<tr><td class="d">4 Jul</td><td>Round 2: cut stone approved, with fixes. Wall ends are always textured.</td><td class="q">“incredible… beautiful” · “I should be able to see the ends of the bricks, and the mortar should be inset there as well.”</td></tr>
-<tr><td class="d">4 Jul</td><td>Texture presets and thinner joints accepted.</td><td class="q">“this looks great”</td></tr>
-<tr><td class="d">4 Jul</td><td>First fieldstone (hull per cell) rejected.</td><td class="q">“terrible”</td></tr>
-<tr><td class="d">4 Jul</td><td>Fieldstone must read as stacked stones, not stones in mortar; render the mortar red until it does.</td><td class="q">“not enough”</td></tr>
-<tr><td class="d">4 Jul</td><td>Stones may not overlap into a fused mass.</td><td class="q">“rocks can't overlap — fused rocks, not a carefully stacked pile; look at the reference”</td></tr>
-<tr><td class="d">5 Jul</td><td>Approach reset: distinct natural stones that fit together; collect ten references.</td><td class="q">“distinct natural stones, fitting together with tight cracks … stones fitting into all the space; find 10 reference images and look carefully”</td></tr>
-<tr><td class="d">5 Jul</td><td>Crack-network fieldstone (E12) approved; rapid rounds follow.</td><td class="q">“that's great. I love it”</td></tr>
-<tr><td class="d">5 Jul</td><td>Each stone is a morphed pebble, not a rounded block.</td><td class="q">“an isosphere morphed to fit the outline/depth of the cracked region … an irregular stone instead of a block with rounded corners”</td></tr>
-<tr><td class="d">5 Jul</td><td>Perched top stones and bed overlaps (E25).</td><td class="q">“ok awesome”</td></tr>
-<tr><td class="d">5 Jul</td><td>Fieldstone has no mortar.</td><td class="q">“for the fieldstone wall, don't put mortar in them”</td></tr>
-<tr><td class="d">5 Jul</td><td>The hearting must be rough little rocks, not smooth rubble.</td><td class="q">“smooth rubbles no good.  should be lots of little rocks --- very rough”</td></tr>
-<tr><td class="d">5 Jul</td><td>Fieldstone E27 approved.</td><td class="q">“that is a thing of beauty”</td></tr>
-<tr><td class="d">5 Jul</td><td>Stone slab floors.</td><td class="q">“floor tiles — full 35mm or whatever slabs gridding the ground”</td></tr>
-<tr><td class="d">5 Jul</td><td>The floor replaces the ground; no soil on top.</td><td class="q">“None of the floor terrain should be on top of soil.  The floor IS the terrain, replaces the soil”</td></tr>
-<tr><td class="d">5 Jul</td><td>Walls use the official visible height; floors need a drybrush texture.</td><td class="q">“fix the wall heights to match the official visible height” · “Dry brush!  Dry brush!”</td></tr>
-<tr><td class="d">6 Jul</td><td>The plane-wave floor texture rejected; build one common stone relief from references.</td><td class="q">“rethink rock texture — find some reference images, and build a new common rock texture that can be applied across all rock/block types”</td></tr>
-<tr><td class="d">6 Jul</td><td>Floors and walls share one engine.</td><td class="q">“make wall and floor generation use the same code, as the floor should just be a wall laying on its side”</td></tr>
-<tr><td class="d">7 Jul</td><td>Openings design approved: any size and position, doors and windows unified, surrounds may rise above low walls, arch and lintel in every family, leaves including slot-loaded ones. Wood material group for leaves is fine.</td><td class="q">“All of your thoughts here sound good”</td></tr>
-<tr><td class="d">8 Jul</td><td>The slot is a slice out of the finished wall, and the leaf a separate body in the same STL.</td><td class="q">“don't make this more complex than (a) build the normal geometry, (b) slice the slot out of it” · “&gt;1 object in the same STL, separated by space”</td></tr>
-<tr><td class="d">15 Jul</td><td>A regular running-bond variant on the same engine.</td><td class="q">“a wall variant where the bricks are all the same size, regular runs rather than irregular — another variant within the same engine”</td></tr>
-<tr><td class="d">31 Oct</td><td>The overhang limit for every look is 55° from vertical (a cliff ruling that applies here).</td><td class="q">“45 is too conservative”</td></tr>
-</tbody></table></div>
-</details>
-
-<details id="requirements">
-<summary>Requirements</summary>
-<p>The gen-1 requirement IDs from the design of 4 Jul 2026, with later amendments marked inline. The original is in the <a href="../archive/python-library/walls-coursed-masonry.html">archive</a>.</p>
-<ul>
-  <li><strong>R1</strong> DungeonBlocks-compatible by default, configurable: 7 mm thick, outer face flush to the tile edge, every dimension a parameter. <em>Amended 5 Jul (E35): height 29.6 mm visible. Amended 6 Jul (23d8cc9): the top is anchored at 33.1 mm above the datum whatever the wall seats on.</em></li>
-  <li><strong>R2</strong> Both faces, ends and top textured: the wall is a separate solid and every unit spans the full thickness.</li>
-  <li><strong>R3</strong> Watertight, no see-through joints: joints are reveals onto a recessed core. <em>Amended 5 Jul (E26): fieldstone has no core; rough hearting floors every gap.</em></li>
-  <li><strong>R4</strong> Each block is an individual faceted body, unique by seed. <em>Amended 6 Jul (48f2704): exact rounded blocks replace hull plus remesh.</em></li>
-  <li><strong>R5</strong> Courses horizontal; vertical joints never line up across courses.</li>
-  <li><strong>R6</strong> Flat cap textured as block tops. <em>Amended 5 Jul (E25, E29): fieldstone tops are perched stones or stones on edge.</em></li>
-  <li><strong>R7</strong> Corners interlock: the runs alternate per course.</li>
-  <li><strong>R8</strong> Butt-join at tile seams. <em>Amended 4 Jul (round 2): ends are always textured; the flush-cut end was deleted.</em></li>
-  <li><strong>R9</strong> The paint pipeline works: joints hold a wash; faces take two drybrush tones.</li>
-  <li><strong>R10</strong> Supportless FDM: each block bottom chamfered at 45° or more. <em>Amended 6 Jul (48f2704): square bottoms, like the official pieces; the lip over the sub-mm joint prints.</em></li>
-  <li><strong>R11</strong> The wall seats into the terrain with a soil skirt; grass steers around it.</li>
-  <li><strong>R12</strong> Well under a second per wall. <em>Not met: about 8 s for cut stone; fieldstone was about 5 s at E12 and slower after the hearting grew.</em></li>
-</ul>
-<p>Openings (7 Jul) add: clear width 22 mm, head 36 mm, window sill 14 / head 26 / width 12, slot clearance 0.5 mm, leaf 2.6 mm thick (<a href="../archive/python-library/walls-doors.html">openings design</a>).</p>
-</details>
-
-<details id="audit">
-<summary>Audit numbers</summary>
-<p><strong>By construction:</strong> one manifold union per wall; pinch separation keeps contacts apart past the float32 grid; stones stop short of the tile boundary instead of being planed; keystones grow outward only, so nothing hangs below an arch.</p>
-<p><strong>Checked:</strong> the red-mortar diagnostic (<code>src/extras/wall_mortar_diag.py</code>) paints the core red and measures how much shows: 0.0000% in all five views from E15 on, and trivially zero for drystone (no core). Exported STLs were checked watertight (0 open edges, 0 non-manifold) at E22–E27 and for the openings and regular-brick scenes.</p>
-<p class="note">There is no overhang audit for walls, and no wall render paints overhang faces red: all of them predate the rule.</p>
-</details>
-
-<details id="variants">
-<summary>Experiment history</summary>
-<p>One line per step, oldest first. All are in git (<code>git log -- src/dharmatiles/walls</code>).</p>
-<div class="tbl"><table>
-<thead><tr><th class="d">Date</th><th>Step</th><th>What changed, and why</th></tr></thead>
-<tbody>
-<tr><td class="d">4 Jul</td><td>Cut stone E1–E4 (ad24cd0)</td><td>Hull blocks, recessed core, reveal joints; quoins alternate.</td></tr>
-<tr><td class="d">4 Jul</td><td>Round 2, E5 (1aa7884)</td><td>Ends always textured; joint 0.45; texture presets.</td></tr>
-<tr><td class="d">4 Jul</td><td>Fieldstone E6–E11</td><td>A hull per grid cell, then flat slabs, exact fit, red-mortar diagnostic, hearting. Each round still read as stones stuck on a slab.</td></tr>
-<tr><td class="d">5 Jul</td><td>Fieldstone E12 (a7152cb)</td><td>Reset: the crack network first, shared curves between neighbours. Approved.</td></tr>
-<tr><td class="d">5 Jul</td><td>Fieldstone E13–E25</td><td>Shorter stones, hairline then zero gaps, pebble morph, flat beds, rock texture, rough outlines, pressed overlaps, perched top.</td></tr>
-<tr><td class="d">5 Jul</td><td><strong>Fieldstone E26–E27 (1f7cdd1)</strong></td><td>No mortar; rough chip hearting. “a thing of beauty”.</td></tr>
-<tr><td class="d">5 Jul</td><td>Brick E28, tops E29–E30, ruins E31</td><td>BrickWall on the chassis; vertical coping; crenellations; ruin states.</td></tr>
-<tr><td class="d">5 Jul</td><td>Floors E32–E35</td><td>Slab pavement; the floor is the ground; cracked slabs; official heights.</td></tr>
-<tr><td class="d">6 Jul</td><td>E36–E37 (9929d22, f7b4a2f)</td><td>The common stone relief, matched to measured official floors; shared with rocks.</td></tr>
-<tr><td class="d">6 Jul</td><td>Exact blocks (48f2704)</td><td>Blocks tessellated exactly instead of remeshed; same edge top and bottom.</td></tr>
-<tr><td class="d">6 Jul</td><td>E57 (55ae16d)</td><td>A floor is a wall laid on its side.</td></tr>
-<tr><td class="d">7–8 Jul</td><td>Openings O1–O6</td><td>Doors, windows, oculi, hatches, leaves, the bond fit around surrounds, slots.</td></tr>
-<tr><td class="d">15 Jul</td><td>E60 (a725978)</td><td>RegularBrickWall: uniform running bond.</td></tr>
-</tbody></table></div>
-<p class="note">The Rust study's <a href="../archive/rust-study/variants.html">variants page</a> has a render for most steps (none with red overhangs).</p>
-</details>
-
-<details id="rust">
-<summary>Rust port</summary>
-<p><strong>Phase P5</strong>, “Walls, floors, OpenLOCK and trees”, branch <code>rust/p5</code> (2 Nov 2026). Ported: the masonry chassis (courses and bays, quoins, recessed core, seat, clip), cut stone, brick, regular brick and fieldstone, ruin and battlements, and floors (a wall laid flat; <code>floor style=cut-stone|fieldstone texture=… slabs=…</code>). Not yet: openings, fit and leaf, floor crack engraving, and the mortar sheet under laid cut-stone floors.</p>
-<p><strong>Rust beside Python</strong>, seeds 1–4, on a flat 5 mm slab with the DungeonBlocks base (<code>cargo xtask parity wall-cut-stone</code> and the others; sheets in <code>out/parity/&lt;look&gt;/contact-sheet.png</code>). Every judged row passes.</p>
-<div class="tbl"><table>
-<thead><tr><th></th><th>cut stone</th><th>brick</th><th>regular brick</th><th>fieldstone</th><th>floor stone</th></tr></thead>
-<tbody>
-<tr><td>units, Python / Rust</td><td>8 / 8</td><td>56.75 / 58.5</td><td>40 / 40</td><td>24.25 / 24.75</td><td>1 / 1</td></tr>
-<tr><td>courses</td><td>4 / 4</td><td>10 / 10</td><td>9 / 9</td><td>8 / 8</td><td>1 / 1</td></tr>
-<tr><td>overhang mm², Python / Rust (harness measure)</td><td>37.5 / 4.1</td><td>9.7 / 1.25</td><td>286.9 / 0</td><td>33.0 / 0.04</td><td>0 / 0</td></tr>
-<tr><td>overhang mm², Rust, the gate's audit</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
-<tr><td>build s, Python / Rust</td><td>0.50 / 0.68</td><td>1.99 / 1.46</td><td>1.99 / 1.35</td><td>1.10 / 0.75</td><td>0.38 / 0.47</td></tr>
-</tbody></table></div>
-<p>The harness measure has no printer gap, so it still counts a few sub-0.2 mm joints; the gate's audit (55°, 0.2 mm layer and gap) is 0 on block walls and floors over seeds 1–8 at both scales, and on fieldstone over seeds 1–12 with two exceptions: the fieldstone test tile at seed 8 (0.16 mm², under a stepped stone) and the fieldstone corner twin at OpenLOCK scale, default seed (0.25 mm², under a coping head joint). Corner tiles build in 1.1–2.2 s; brick corners are the slowest (about 94 units, 700k triangles). Builds are identical at 1, 4 and 16 threads.</p>
-<p><strong>Printable by construction.</strong> Python's walls overhang mostly at bed-joint lips: a stone's bottom edge standing proud of the stone below by 0.3–1.5 mm. Walls ruling R10 says the lip over a sub-millimetre joint prints, so the audit now treats a gap thinner than the printer's 0.2 mm as solid, and the Rust walls hold each block no more than 0.05 mm proud of the one it sits on (mortar wedges 0.45 mm). Head-joint tops are chipped back at most 0.25 mm. Fieldstone undersides are bevelled at 45°, inside-corner stones press into the other run, its relief moves along rays from each stone's centre (normal relief folded tight rings into 0.1 mm fins), and pinning wedges fill head joints a stone above bridges. Sealed voids the union leaves are filled, not counted as lost parts.</p>
-<p><strong>Floors stand on earth.</strong> A floor is cut flat at the ground's edge level (3.4 mm), not at the datum, so the tile's side reads earth below one straight line and stone above it (Shawn, 3 Nov: a straight band or all stone, not the ragged mix). Cut at the datum, the slabs' sides and the earth's side shared a plane and the union gave its faces to either material. A fieldstone floor uses the fieldstone wall's stone sizes (E57).</p>
-<p><strong>KDL twins</strong>: <code>library/tiles/walls/1x1-wall-{stone,stone-corner,brick,brick-corner,fieldstone,fieldstone-corner}.dtile</code> and <code>library/tiles/floors/1x1-floor-stone{,-wall}.dtile</code>. The floors build now; the walls wait for grass (P4). Each twin pins the Python wall's seed so it stays comparable.</p>
-</details>
-
-<details id="reference-photos">
-<summary>Reference photos</summary>
-<p>The photos and target images this look is judged against. Click a photo to view it large; arrow keys step through. Wikimedia Commons photos keep their file names and licences as given on their Commons pages.</p>
-<h4>Walls</h4>
-<p class="note">Reference photos for the <strong>walls campaign</strong> (a wall = a region whose footprint is the wall's plan, with a texture family applied to its faces and top).  Source: Wikimedia Commons (public/permissive).</p>
-<p class="note"><strong>Texture references (primary)</strong></p>
-<div class="gallery"><figure class="ph"><a href="ref/walls/drystone-fieldstone-detail.jpg" data-cap="The fieldstone texture. Rough courses of varied rounded/angular stones, deep shadow joints (no mortar), size variety with occasional throughstones, small pinning stones in gaps."><img src="ref/walls/drystone-fieldstone-detail.jpg" alt="The fieldstone texture. Rough courses of varied rounded/angular stones, deep shadow joints (no mortar), size variety with occasional throughstones, small pinning stones in gaps." loading="lazy"></a><figcaption><span class="cap"><strong>The fieldstone texture.</strong> Rough courses of varied rounded/angular stones, deep shadow joints (no mortar), size variety with occasional throughstones, small pinning stones in gaps.</span><span class="fn">drystone-fieldstone-detail.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/brick-worn.jpg" data-cap="The brick texture. Running bond, eroded mortar joints (negative relief), spalled and broken bricks breaking the grid, a few missing (put-log holes) — the grid is imperfect, that&#x27;s the whole read."><img src="ref/walls/brick-worn.jpg" alt="The brick texture. Running bond, eroded mortar joints (negative relief), spalled and broken bricks breaking the grid, a few missing (put-log holes) — the grid is imperfect, that&#x27;s the whole read." loading="lazy"></a><figcaption><span class="cap"><strong>The brick texture.</strong> Running bond, eroded mortar joints (negative relief), spalled and broken bricks breaking the grid, a few missing (put-log holes) — the grid is <em>imperfect</em>, that's the whole read.</span><span class="fn">brick-worn.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/quarry-rock-face.jpg" data-cap="The rocky-cliff texture. Stratified near-vertical rock: strong horizontal bedding at multiple thicknesses, vertical joint fractures, benches with rubble. Matches the commercial cliff idiom."><img src="ref/walls/quarry-rock-face.jpg" alt="The rocky-cliff texture. Stratified near-vertical rock: strong horizontal bedding at multiple thicknesses, vertical joint fractures, benches with rubble. Matches the commercial cliff idiom." loading="lazy"></a><figcaption><span class="cap"><strong>The rocky-cliff texture.</strong> Stratified near-vertical rock: strong horizontal bedding at multiple thicknesses, vertical joint fractures, benches with rubble. Matches the commercial cliff idiom.</span><span class="fn">quarry-rock-face.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/church-coursed-stone.jpg" data-cap="Thin-stone herringbone/diagonal coursing variant; dressed quoins around openings. A stretch texture, shows coursing can carry direction."><img src="ref/walls/church-coursed-stone.jpg" alt="Thin-stone herringbone/diagonal coursing variant; dressed quoins around openings. A stretch texture, shows coursing can carry direction." loading="lazy"></a><figcaption><span class="cap">Thin-stone herringbone/diagonal coursing variant; dressed quoins around openings. A stretch texture, shows coursing can carry direction.</span><span class="fn">church-coursed-stone.jpg</span></figcaption></figure></div>
-<p class="note"><strong>Form references (wall anatomy)</strong></p>
-<div class="gallery"><figure class="ph"><a href="ref/walls/city-wall-crenellated.jpg" data-cap="The gaming-wall archetype. Crenellated rubble parapet: merlon/crenel rhythm, flat cap course on merlons, walkable top with weeds/rubble, face texture continuing through the merlons."><img src="ref/walls/city-wall-crenellated.jpg" alt="The gaming-wall archetype. Crenellated rubble parapet: merlon/crenel rhythm, flat cap course on merlons, walkable top with weeds/rubble, face texture continuing through the merlons." loading="lazy"></a><figcaption><span class="cap"><strong>The gaming-wall archetype.</strong> Crenellated rubble parapet: merlon/crenel rhythm, flat cap course on merlons, walkable top with weeds/rubble, face texture continuing through the merlons.</span><span class="fn">city-wall-crenellated.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/hadrians-coursed-rubble.jpg" data-cap="Ruined coursed wall in landscape: two dressed faces + visible rubble core where the top is broken, height ragged along its run, grass lapping the base. The ruin state target."><img src="ref/walls/hadrians-coursed-rubble.jpg" alt="Ruined coursed wall in landscape: two dressed faces + visible rubble core where the top is broken, height ragged along its run, grass lapping the base. The ruin state target." loading="lazy"></a><figcaption><span class="cap">Ruined coursed wall in landscape: two dressed faces + visible rubble core where the top is broken, height ragged along its run, grass lapping the base. The <em>ruin state</em> target.</span><span class="fn">hadrians-coursed-rubble.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/castle-cut-stone-krak.jpg" data-cap="Fortress massing: battered (sloped) wall bases, towers as wall punctuation, walls meeting at angles, long runs read as single masses. Context only."><img src="ref/walls/castle-cut-stone-krak.jpg" alt="Fortress massing: battered (sloped) wall bases, towers as wall punctuation, walls meeting at angles, long runs read as single masses. Context only." loading="lazy"></a><figcaption><span class="cap">Fortress massing: battered (sloped) wall bases, towers as wall punctuation, walls meeting at angles, long runs read as single masses. Context only.</span><span class="fn">castle-cut-stone-krak.jpg</span></figcaption></figure></div>
-<div class="note"><h5>Recurring vocabulary (for the interview)</h5><ol><li><strong>A wall is two faces, a core, and a top.</strong> Faces carry the texture; the top is its own surface (cap course, walkway, crenellations, or broken rubble core).  Texture wraps ends and corners.</li><li><strong>Courses are horizontal.</strong>  Every masonry family reads as horizontal rows first — even rough fieldstone.  The cliff face reads as bedding strata: same rule, geological scale.</li><li><strong>Joints are negative relief.</strong>  Mortar recesses / shadow gaps between stones are what paint washes need; stones bulge slightly proud, each a little different (the E10–E14 stone lessons apply per-stone).</li><li><strong>The grid must be broken to read real</strong> — spalled bricks, a missing stone, a ragged top line, size variety within courses.</li><li><strong>Walls sit into the ground</strong> — grass/soil laps the base; ruins shed rubble at the foot (ties into the scatter-stone system).</li></ol></div>
-<h4>Fieldstone</h4>
-<p class="note">Collected 2026-07-05 (Shawn round-8: "Distinct natural stones, fitting together with tight cracks between … stones fitting into all the space").  All images from Wikimedia Commons; geograph.org.uk images are CC BY-SA 2.0, others per their Commons file page.</p>
-<div class="gallery"><figure class="ph"><a href="ref/walls/fieldstone/ref-01-pennsylvania-granite-fitted.jpg" data-cap="Angular granite fieldstone, weak coursing, stones complementary-fitted, connected crack network"><img src="ref/walls/fieldstone/ref-01-pennsylvania-granite-fitted.jpg" alt="Angular granite fieldstone, weak coursing, stones complementary-fitted, connected crack network" loading="lazy"></a><figcaption><span class="cap">Angular granite fieldstone, weak coursing, stones complementary-fitted, connected crack network</span><span class="src">File:Fieldstone Wall Pennsylvania.jpg</span><span class="fn">ref-01-pennsylvania-granite-fitted.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/fieldstone/ref-02-damflask-gritstone-blocks.jpg" data-cap="Primary read: rounded-square gritstone blocks, thin dark bed joints, stones nearly touching, ~92 % stone on the face"><img src="ref/walls/fieldstone/ref-02-damflask-gritstone-blocks.jpg" alt="Primary read: rounded-square gritstone blocks, thin dark bed joints, stones nearly touching, ~92 % stone on the face" loading="lazy"></a><figcaption><span class="cap"><strong>Primary read</strong>: rounded-square gritstone blocks, thin dark bed joints, stones nearly touching, ~92 % stone on the face</span><span class="src">File:Stone Walling at its best, Damflask Reservoir… (geograph 1607845)</span><span class="fn">ref-02-damflask-gritstone-blocks.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/fieldstone/ref-03-grendon-cotswold-slabs.jpg" data-cap="Slabby limestone, wavy courses, 2× height variety within a course, long traceable shadow lines"><img src="ref/walls/fieldstone/ref-03-grendon-cotswold-slabs.jpg" alt="Slabby limestone, wavy courses, 2× height variety within a course, long traceable shadow lines" loading="lazy"></a><figcaption><span class="cap">Slabby limestone, wavy courses, 2× height variety within a course, long traceable shadow lines</span><span class="src">File:Dry Stone Wall - Blackmile Lane, Grendon…</span><span class="fn">ref-03-grendon-cotswold-slabs.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/fieldstone/ref-04-chalford-slab-closeup.jpg" data-cap="Extreme closeup: long slabs in contact, black thin gaps, one rounded pinning stone"><img src="ref/walls/fieldstone/ref-04-chalford-slab-closeup.jpg" alt="Extreme closeup: long slabs in contact, black thin gaps, one rounded pinning stone" loading="lazy"></a><figcaption><span class="cap">Extreme closeup: long slabs in contact, black thin gaps, one rounded pinning stone</span><span class="src">File:Drystone wall close up, Brantwood Road, Chalford (geograph 1020616)</span><span class="fn">ref-04-chalford-slab-closeup.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/fieldstone/ref-05-quenington-coursed-wall.jpg" data-cap="The &quot;built&quot; end of the spectrum: thin neat courses, very tight, flat coping"><img src="ref/walls/fieldstone/ref-05-quenington-coursed-wall.jpg" alt="The &quot;built&quot; end of the spectrum: thin neat courses, very tight, flat coping" loading="lazy"></a><figcaption><span class="cap">The "built" end of the spectrum: thin neat courses, very tight, flat coping</span><span class="src">File:Quenington, St. Swithuns Church… (geograph 5430190)</span><span class="fn">ref-05-quenington-coursed-wall.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/fieldstone/ref-06-albufeira-fitted-slabs.jpg" data-cap="Big angular plates; adjacent stone edges run PARALLEL for long stretches (shared crack, not independent outlines); earth joints 2–4 % of stone size"><img src="ref/walls/fieldstone/ref-06-albufeira-fitted-slabs.jpg" alt="Big angular plates; adjacent stone edges run PARALLEL for long stretches (shared crack, not independent outlines); earth joints 2–4 % of stone size" loading="lazy"></a><figcaption><span class="cap">Big angular plates; adjacent stone edges run PARALLEL for long stretches (shared crack, not independent outlines); earth joints 2–4 % of stone size</span><span class="src">File:2017-08-01 Random rubble masonary, Albufeira.JPG</span><span class="fn">ref-06-albufeira-fitted-slabs.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/fieldstone/ref-07-ladakh-schist-flakes.jpg" data-cap="Flake extreme: 100 % fill, near-zero cracks, courses emergent from stacking"><img src="ref/walls/fieldstone/ref-07-ladakh-schist-flakes.jpg" alt="Flake extreme: 100 % fill, near-zero cracks, courses emergent from stacking" loading="lazy"></a><figcaption><span class="cap">Flake extreme: 100 % fill, near-zero cracks, courses emergent from stacking</span><span class="src">File:Texture - stone wall in Ladakh 2</span><span class="fn">ref-07-ladakh-schist-flakes.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/fieldstone/ref-08-palancares-fitted-rubble-facade.jpg" data-cap="Mortared but stone-dominant: thin mortar slices, size hierarchy down to chips filling every wedge"><img src="ref/walls/fieldstone/ref-08-palancares-fitted-rubble-facade.jpg" alt="Mortared but stone-dominant: thin mortar slices, size hierarchy down to chips filling every wedge" loading="lazy"></a><figcaption><span class="cap">Mortared but stone-dominant: thin mortar slices, size hierarchy down to chips filling every wedge</span><span class="src">File:Palancares-vivienda-en-piedra-seca…</span><span class="fn">ref-08-palancares-fitted-rubble-facade.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/fieldstone/ref-09-repaired-drystone-patch.jpg" data-cap="Fresh drystone packing: small slabs, very tight"><img src="ref/walls/fieldstone/ref-09-repaired-drystone-patch.jpg" alt="Fresh drystone packing: small slabs, very tight" loading="lazy"></a><figcaption><span class="cap">Fresh drystone packing: small slabs, very tight</span><span class="src">File:Repaired dry stone wall (geograph 7006933)</span><span class="fn">ref-09-repaired-drystone-patch.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/fieldstone/ref-10-limestone-oblique-protrusion.jpg" data-cap="Oblique view: per-stone proudness is SMALL (±few % of wall height); big flat cap stones"><img src="ref/walls/fieldstone/ref-10-limestone-oblique-protrusion.jpg" alt="Oblique view: per-stone proudness is SMALL (±few % of wall height); big flat cap stones" loading="lazy"></a><figcaption><span class="cap">Oblique view: per-stone proudness is SMALL (±few % of wall height); big flat cap stones</span><span class="src">File:Dry stone wall with Chickens (geograph 6023310)</span><span class="fn">ref-10-limestone-oblique-protrusion.jpg</span></figcaption></figure></div>
-<div class="note"><p>Also <code>../drystone-fieldstone-detail.jpg</code> (the original round-6 reference): rounded boulders, tight bed contacts, gaps concentrated at head joints and corner pockets, wedge chinkers.</p><h5>Geometric truths (what every image agrees on)</h5><ol><li><strong>The crack network is primary.</strong>  Stone outlines are not independent shapes: adjacent stones share edge geometry — edges run parallel, a bulge in one stone matches a notch in its neighbour. The builder chose stones to FIT.  Generatively that means: build the joint network over the wall face first; the stones are the regions the network bounds.  Independent per-cell hulls can never produce this complementarity — this is why E6–E11 always read as separate objects arranged on a grid.</li><li><strong>Stone fills ≥ 90 % of the face.</strong>  Crack width is ~2–6 % of local stone size (≈ 0.3–0.7 mm at DB scale), roughly uniform along its run.  No mortar seas, no per-stone moats, no voids bigger than a thin wedge.</li><li><strong>Beds are long, sub-horizontal, wavy.</strong>  The eye traces continuous horizontal shadow lines the full width of the wall; head joints are short, staggered, often slanted a few degrees.  The network is connected.</li><li><strong>One shape family per wall</strong> (one lithology): consistent angularity/roundness; sizes vary 2–4×; small stones appear only as fillers in leftover wedges, not sprinkled at random.</li><li><strong>Faces are near-coplanar.</strong>  Per-stone proudness is small (±3–6 % of stone size) with a rare outlier; per-stone attitude tilt is a few degrees.  The drama comes from the dark crack network and per-stone light tone, not from deep relief.</li><li><strong>Behind every crack is more stone</strong>, never a flat backing plane (the E10 hearting guarantee stays).</li><li><strong>Corners are built from the same family, larger and squarer, packed tight.</strong></li></ol></div>
-<h4>Doors and gates</h4>
-<p class="note">For the doorway campaign (design: <code>docs/design/walls-doors.html</code>).  Sources: Wikimedia Commons (geograph.org.uk CC-BY-SA contributors) + the official DungeonBlocks pieces measured/rendered in the design doc.</p>
-<div class="gallery"><figure class="ph"><a href="ref/walls/doors/ref-01-norman-arch-door.jpg" data-cap="Gothic pointed doorway: moulded multi-order surround, planked double door leaf filling the arch, framing porch. The &quot;church door&quot; archetype."><img src="ref/walls/doors/ref-01-norman-arch-door.jpg" alt="Gothic pointed doorway: moulded multi-order surround, planked double door leaf filling the arch, framing porch. The &quot;church door&quot; archetype." loading="lazy"></a><figcaption><span class="cap">Gothic pointed doorway: moulded multi-order surround, planked double door leaf filling the arch, framing porch. The "church door" archetype.</span><span class="fn">ref-01-norman-arch-door.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/doors/ref-02-norman-voussoirs.jpg" data-cap="Norman semicircular arch: carved voussoir orders + plain tympanum, and BELOW it a square-headed door under a straight lintel — the door leaf itself is RECTANGULAR even under an arch."><img src="ref/walls/doors/ref-02-norman-voussoirs.jpg" alt="Norman semicircular arch: carved voussoir orders + plain tympanum, and BELOW it a square-headed door under a straight lintel — the door leaf itself is RECTANGULAR even under an arch." loading="lazy"></a><figcaption><span class="cap">Norman semicircular arch: carved voussoir orders + plain tympanum, and BELOW it a square-headed door under a straight lintel — the door leaf itself is RECTANGULAR even under an arch.</span><span class="fn">ref-02-norman-voussoirs.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/doors/ref-03-lintel-doorway.jpg" data-cap="Ruined coursed-rubble wall, pointed arch of thin SLAB voussoirs radiating fan-wise, jambs of larger squared blocks, coursed rubble continuing above. The drystone-compatible arch."><img src="ref/walls/doors/ref-03-lintel-doorway.jpg" alt="Ruined coursed-rubble wall, pointed arch of thin SLAB voussoirs radiating fan-wise, jambs of larger squared blocks, coursed rubble continuing above. The drystone-compatible arch." loading="lazy"></a><figcaption><span class="cap">Ruined coursed-rubble wall, pointed arch of thin SLAB voussoirs radiating fan-wise, jambs of larger squared blocks, coursed rubble continuing above. The drystone-compatible arch.</span><span class="fn">ref-03-lintel-doorway.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/doors/ref-04-gate-arch.jpg" data-cap="Fortified gate: arch in a massive wall, context piece."><img src="ref/walls/doors/ref-04-gate-arch.jpg" alt="Fortified gate: arch in a massive wall, context piece." loading="lazy"></a><figcaption><span class="cap">Fortified gate: arch in a massive wall, context piece.</span><span class="fn">ref-04-gate-arch.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/doors/ref-05-rough-stone-doorway.jpg" data-cap="The money shot for us: rubble/fieldstone wall + arched doorway whose surround is DRESSED larger blocks (block jambs, two concentric voussoir rings); the rubble coursing flows around the dressed surround. Exactly our fieldstone family + a surround."><img src="ref/walls/doors/ref-05-rough-stone-doorway.jpg" alt="The money shot for us: rubble/fieldstone wall + arched doorway whose surround is DRESSED larger blocks (block jambs, two concentric voussoir rings); the rubble coursing flows around the dressed surround. Exactly our fieldstone family + a surround." loading="lazy"></a><figcaption><span class="cap"><strong>The money shot for us</strong>: rubble/fieldstone wall + arched doorway whose surround is DRESSED larger blocks (block jambs, two concentric voussoir rings); the rubble coursing flows around the dressed surround. Exactly our fieldstone family + a surround.</span><span class="fn">ref-05-rough-stone-doorway.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/doors/ref-06-garden-wall-arch.jpg" data-cap="Walled-garden gate (Parham): dressed stone arch + quoined jamb surround set in a BRICK wall; red planked door leaf standing OPEN at an angle. Surround-in-contrasting-family + open leaf state."><img src="ref/walls/doors/ref-06-garden-wall-arch.jpg" alt="Walled-garden gate (Parham): dressed stone arch + quoined jamb surround set in a BRICK wall; red planked door leaf standing OPEN at an angle. Surround-in-contrasting-family + open leaf state." loading="lazy"></a><figcaption><span class="cap">Walled-garden gate (Parham): dressed stone arch + quoined jamb surround set in a BRICK wall; red planked door leaf standing OPEN at an angle. Surround-in-contrasting-family + open leaf state.</span><span class="fn">ref-06-garden-wall-arch.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/doors/ref-07-walled-garden-gate.jpg" data-cap="Walled-garden gateway, context."><img src="ref/walls/doors/ref-07-walled-garden-gate.jpg" alt="Walled-garden gateway, context." loading="lazy"></a><figcaption><span class="cap">Walled-garden gateway, context.</span><span class="fn">ref-07-walled-garden-gate.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/doors/ref-08-portcullis-grooves.jpg" data-cap="Slot-leaf precedent (Cahir Castle): vertical portcullis GROOVES cut into the dressed jamb blocks — a channel the leaf slides in.  Exactly the mechanism for swappable printed leaves."><img src="ref/walls/doors/ref-08-portcullis-grooves.jpg" alt="Slot-leaf precedent (Cahir Castle): vertical portcullis GROOVES cut into the dressed jamb blocks — a channel the leaf slides in.  Exactly the mechanism for swappable printed leaves." loading="lazy"></a><figcaption><span class="cap"><strong>Slot-leaf precedent</strong> (Cahir Castle): vertical portcullis GROOVES cut into the dressed jamb blocks — a channel the leaf slides in.  Exactly the mechanism for swappable printed leaves.</span><span class="fn">ref-08-portcullis-grooves.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/doors/ref-09-portcullis-slot.jpg" data-cap="Portcullis slot (Maastricht Helpoort), second angle."><img src="ref/walls/doors/ref-09-portcullis-slot.jpg" alt="Portcullis slot (Maastricht Helpoort), second angle." loading="lazy"></a><figcaption><span class="cap">Portcullis slot (Maastricht Helpoort), second angle.</span><span class="fn">ref-09-portcullis-slot.jpg</span></figcaption></figure><figure class="ph"><a href="ref/walls/doors/ref-10-brick-segmental-arch.jpg" data-cap="Brick SEGMENTAL arch: bricks on end (rowlock) radiating over an opening — the brick-family arch head."><img src="ref/walls/doors/ref-10-brick-segmental-arch.jpg" alt="Brick SEGMENTAL arch: bricks on end (rowlock) radiating over an opening — the brick-family arch head." loading="lazy"></a><figcaption><span class="cap">Brick SEGMENTAL arch: bricks on end (rowlock) radiating over an opening — the brick-family arch head.</span><span class="fn">ref-10-brick-segmental-arch.jpg</span></figcaption></figure></div>
-<div class="note"><p>Geometric truths (all references agree):</p><ol><li><strong>A doorway = opening + SURROUND + optional leaf.</strong>  The surround is structurally distinct masonry: dressed jamb blocks (quoin-like alternating stacks) + an arch of voussoirs or a straight lintel.</li><li><strong>The wall's own bond flows AROUND the surround</strong> — courses butt into the jamb stones; nothing is "cut out" of blocks.</li><li><strong>Voussoirs are radial</strong>: wedge blocks perpendicular to the arc, springing from the jamb tops; keystone at the apex.  Fieldstone arches use thin SLABS radiating (ref-03/05); dressed arches use larger wedges, sometimes in 2–3 concentric orders (ref-05).</li><li><strong>Door leaves are planked rectangles</strong> (vertical planks, battens, studs, ring/handle), square-headed even under an arch (tympanum fills the difference, ref-02) or arched-top matching the surround (ref-01, official UD-010).</li><li>Sills/thresholds: a flat slab at the base of the opening.</li></ol></div>
-<h4>Baseline render</h4>
-<div class="gallery"><figure class="ph"><a href="ref/walls/wall-baseline-2026-07-04.png" data-cap="wall baseline 2026 07 04"><img src="ref/walls/wall-baseline-2026-07-04.png" alt="wall baseline 2026 07 04" loading="lazy"></a><figcaption><span class="cap">wall baseline 2026 07 04</span><span class="fn">wall-baseline-2026-07-04.png</span></figcaption></figure></div>
-<p class="note">Stone surface photos shared with rocks are on the <a href="rock.html#reference-photos">rocks page</a>.</p>
-</details>
-
-<h3 id="open">Open issues</h3>
-<ul>
-  <li>No overhang audit runs on walls. The red-painted render (2 Nov) shows about 210 mm² of exposed stone bottoms past the face-angle limit on the fieldstone corner; whether they print is the R10 question (square bottoms bridge sub-mm joints, by the official pieces' precedent), and a layer-reach audit like clifflab's would measure it. The other wall renders predate the red-overhang rule.</li>
-  <li>Build time: about 8 s per cut-stone wall against a target well under 1 s.</li>
-  <li>Several steps are marked “pending Shawn” in the experiment log: brick (E28), coping and crenellations (E29–E30), ruins (E31), the common relief (E36), floors laid flat (E57) and regular brick (E60).</li>
-  <li>Not built: double gates, broken leaves, walls that follow a slope, custom concave opening profiles.</li>
-  <li>The KDL vocabulary lacks openings and floors; the <code>low</code> height (16.55 mm) is provisional.</li>
-  <li>Faint cap-triangulation streaks on a few fieldstone faces at grazing light.</li>
-</ul>
-
-<h3 id="references">References</h3>
-<ul>
-  <li>Reference photos and target images: the <a href="#reference-photos">gallery above</a>.</li>
-  <li><a href="../standards/commercial-sets-analysis.html">Commercial sets analysis</a>: measured DungeonBlocks wall standards, Hirst Arts, Fat Dragon and The Dragon's Rest, and the texture-family taxonomy.</li>
-  <li>Experiment scenes: <code>src/experiments/tiles/walls/</code> (e1–e17); demo renders via <code>src/extras/stone_demo_set.py</code>.</li>
-</ul>
-
-<h3 id="history">History</h3>
-<p>The walls campaign ran 4–15 July 2026 in the Python library, the fourth run of the method first used on leaves: a requirements interview, guarantees by construction, then render-judged rounds. Cut stone was approved in two rounds; fieldstone took 27, with a full reset at E12. Floors, tops, ruins and openings followed on the same chassis. The full texts are archived: the <a href="../archive/python-library/walls-coursed-masonry.html">masonry design and E1–E60 log</a>, the <a href="../archive/python-library/walls-doors.html">openings design</a>, the <a href="../archive/python-library/stone-surface-texture.html">stone surface texture</a>, the <a href="../archive/history/2026-07-04-walls-greenfield-requirements.md">greenfield interview</a> and the <a href="../archive/history/2026-07-05-walls-rocks-refactor-review.md">walls and rocks refactor review</a>.</p>
-</section>
 
 </article>
 </div>
-<dialog class="lightbox" aria-label="Photo viewer">
-  <figure><img alt=""><figcaption></figcaption></figure>
-  <div class="lb-bar"><button type="button" data-step="-1" aria-label="Previous photo">&larr;</button><span class="lb-n"></span><a class="lb-open" target="_blank" rel="noopener">Full size</a><button type="button" data-step="1" aria-label="Next photo">&rarr;</button><button type="button" class="lb-close" aria-label="Close">&times;</button></div>
-</dialog>
-<script src="../assets/gallery.js"></script>
 </body>
 </html>

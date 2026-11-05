@@ -1,12 +1,12 @@
 dt::missing-control
 
   × `wall` needs `along=`
-    ╭─[library/tiles/walls/1x1-wall-fieldstone-corner.dtile:13:9]
- 12 │         // wall always stands inside, its outer face flush with the edge.
- 13 │         wall style=fieldstone seed=14 {
+    ╭─[library/tiles/walls/1x1-wall-fieldstone-corner.dtile:11:9]
+ 10 │         // wall always stands inside, its outer face flush with the edge.
+ 11 │         wall style=fieldstone seed=14 {
     ·         ──┬─
     ·           ╰── this wall has no `along=`
- 14 │             height full                     // up to the wall-top level (33.1 mm)
+ 12 │             height full                     // up to the wall-top level (33.1 mm)
     ╰────
   help: write `wall along=north …`: an edge, an edge path such as "north west", or a
         drawn line

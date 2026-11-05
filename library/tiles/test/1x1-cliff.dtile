@@ -1,5 +1,4 @@
 // Rock band against the north edge.
-// Twin of clifflab/rockpile.py's `run` form at round 17 (31f7c5d), 1x1.
 
 tile "1x1-cliff" size="1x1" seed=1 {
     about """

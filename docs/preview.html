@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Preview</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/site.js"></script>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html" aria-current="page">Preview</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">dharmatiles preview</div>
+  <h1>Preview</h1>
+  <p class="lede">A live, painted 3D view of your tiles in the browser. It rebuilds a tile every time you save it, paints overhang the way the printability gate sees it, and shows a mistake at its line. It is part of the program and works offline.</p>
+  <figure class="shot"><img src="img/preview.jpg" alt="The preview: a list of tiles on the left, a painted tile on the plate in the middle, and its record on the right"><figcaption>Your tiles and the library on the left, the tile on the plate, its record on the right.</figcaption></figure>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#run">Run it</a></li>
+  <li><a href="#shows">What it shows</a></li>
+  <li><a href="#keys">Moving round a tile</a></li>
+  <li><a href="#live">Live updates</a></li>
+  <li><a href="#paint">Paint</a></li>
+  <li><a href="#limits">Limits</a></li>
+</ol></nav>
+<article class="doc">
+
+<h2 id="run">Run it</h2>
+<pre><code>dharmatiles                                   # your tiles and the library, in the browser
+dharmatiles preview my-tile.dtile --open      # one document
+dharmatiles preview a.dtile b.dtile walls/    # several files and folders
+dharmatiles preview lib:tiles/cliffs          # one library group
+dharmatiles preview my-tile.dtile --system ol # for OpenLOCK
+dharmatiles preview slicer-export.stl         # any binary STL, through the same gate</code></pre>
+<p>With nothing named, the list has two sources: <strong>My tiles</strong> (<code>$DT_HOME</code>, else <code>~/dharmatiles</code>) and the <strong>Library</strong>. Folders are watched: a new tile appears in the list within a second, and a deleted one leaves it.</p>
+<p>It serves <code>http://127.0.0.1:7878/</code> (the first free port from 7878, or <code>--port</code>) on the loopback address only, and refuses a request whose <code>Host</code> is not <code>127.0.0.1</code>, <code>localhost</code> or <code>[::1]</code>. <kbd>Ctrl</kbd>-<kbd>C</kbd> stops it.</p>
+
+<h2 id="shows">What it shows</h2>
+<ul>
+  <li><strong>The tile on the plate</strong>, painted like the PNG renders, with its squares ruled on the plate.</li>
+  <li><strong>Overhang from the gate itself:</strong> faces between 55° and 65° are orange, faces past 65° red. The colours come from the gate's own flags, so the view and <code>build</code> cannot disagree.</li>
+  <li><strong>The record:</strong> whether the tile passes the gate and why not, its stack (each entry linked to its element page) and the audit's numbers.</li>
+  <li><strong>Progress</strong> while a tile builds: the stage, a look's own count (grass blades, wall stones, tree leaves) and the time left, estimated from the last build of the same tile.</li>
+</ul>
+
+<h2 id="keys">Moving round a tile</h2>
+<p>Orbit with the left button, pan with the right button or <kbd>Shift</kbd>, zoom with the wheel or a pinch, toward the point under the pointer. A fling keeps turning and settles. Picking a view turns the tile there rather than cutting.</p>
+<div class="tbl"><table>
+<thead><tr><th>Key</th><th>Does</th></tr></thead>
+<tbody>
+<tr><td><kbd>1</kbd>–<kbd>9</kbd></td><td>Views: iso, top, front, right, back, left, low, close, under</td></tr>
+<tr><td><kbd>p</kbd></td><td>Perspective or orthographic, keeping the view</td></tr>
+<tr><td><kbd>c</kbd></td><td>Paint on or off (off is plain grey plastic; overhang colours stay)</td></tr>
+<tr><td><kbd>o</kbd></td><td>Overhang colours</td></tr>
+<tr><td><kbd>w</kbd></td><td>Wireframe</td></tr>
+<tr><td><kbd>g</kbd></td><td>The grid on the plate</td></tr>
+<tr><td><kbd>t</kbd></td><td>Light or dark</td></tr>
+</tbody></table></div>
+<p>Choices are remembered in the browser. With reduced motion set in your system, views cut and nothing coasts.</p>
+
+<h2 id="live">Live updates</h2>
+<p>Save the document, or any file it <code>use</code>s, and the tile rebuilds. The old tile and your camera stay until the new one is ready. A mistake shows over the view as <code>file:line:column</code> with a hint, in front of the last good build; the next good save clears it. One tile builds at a time: tiles named on the command line are built at the start, and a tile picked from a folder is built when you pick it.</p>
+
+<h2 id="paint">Paint</h2>
+<p>Every material is painted like a quick acrylic job: a dark basecoat, mid tones, and pale highlights drybrushed on whatever stands proud, so joints and cracks stay dark and edges catch the light. Each material's ramp is a line in <code>library/palettes/default.dtile</code>. Give your own copy to <code>dharmatiles preview --palette my.dtile</code>, which repaints when you save it, or to <code>build --png --palette my.dtile</code>.</p>
+
+<h2 id="limits">Limits</h2>
+<ul>
+  <li>Made for your own machine: the mesh is sent whole (about 90 bytes a triangle), fine on the loopback, not meant for a network.</li>
+  <li>A change rebuilds the whole tile.</li>
+  <li>No section cuts, measuring or editing in the view.</li>
+  <li><code>--system</code> is fixed for a run; restart for the other base.</li>
+</ul>
+
+</article>
+</div>
+</body>
+</html>

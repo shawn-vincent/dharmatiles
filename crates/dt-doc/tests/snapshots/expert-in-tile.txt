@@ -1,12 +1,12 @@
 dt::expert
 
   × `tree branch` is an expert control
-    ╭─[library/tiles/ground/2x2-grass-tree.dtile:14:13]
- 13 │             crown width=30 clumps=32 shape=round branching=normal
- 14 │             branch split=34
+    ╭─[library/tiles/ground/2x2-grass-tree.dtile:13:13]
+ 12 │             crown width=30 clumps=32 shape=round branching=normal
+ 13 │             branch split=34
     ·             ───┬──
     ·                ╰── not in a tile
- 15 │         }
+ 14 │         }
     ╰────
   help: a tile sets it with `crown branching=open|normal|dense`; `branch` is accepted
         in parts files, inside a `define`

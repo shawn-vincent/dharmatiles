@@ -1,12 +1,5 @@
-// The twin of src/tiles/water/1x1-water+grass.tile.py (the Python library tile, kept).
-// Water in the lower half, a meadow bank in the upper, with a wandering shore.
-// Port notes: the pool bed sits 2.2 mm under the water level (waterlab's
-// bed), the water is waterlab's swell-chaos at the standard water level
-// (2.6 mm; the Python pool was 3 mm), and the bank is dirtlab's dirt,
-// banked down to the bed over 7 mm.  The bank is all on the land side
-// (waterlab's), so each shore line is drawn 0.1 square (3.5 mm) toward
-// the water from the Python anchor: the waterline lands where it was.  The Python shoreline strip (soil
-// plus 40–60 shore pebbles a square) is the dirt's own pebbles here.
+// Water in the lower half, a meadow bank in the upper, with a wandering
+// shore.
 
 tile water+grass size="1x1" seed=97 {
     about "Water in the lower half, a meadow bank in the upper, with a wandering shore."

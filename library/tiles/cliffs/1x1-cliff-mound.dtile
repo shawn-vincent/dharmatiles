@@ -1,5 +1,4 @@
 // A rounded heap of rock.
-// Built on the cliff look (clifflab rockpile, round 17), for variety in the library.
 
 tile "1x1-cliff-mound" size="1x1" seed=1 {
     about "A rounded heap of rock."

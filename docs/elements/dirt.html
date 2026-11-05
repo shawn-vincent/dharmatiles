@@ -8,7 +8,7 @@
 <script src="../assets/site.js"></script>
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
   <div class="eyebrow"><i class="fam-mark fam-surface" title="earth: a surface"></i>Element · surface</div>
@@ -40,24 +40,12 @@
   <li><a href="#spec">Reference</a></li>
   <li><a href="#printing">Printing and painting</a></li>
   <li><a href="#how">How it is made</a></li>
-  <li><a href="#record">Design record</a></li>
 </ol></nav>
 <article class="doc">
 
 <h2 id="look">What it looks like</h2>
 <p>Miniature bare earth, readable at four scales at once. Broad, low rises swell up to about 3 mm from the edge level, with flat plains between. Over them lie soil clods: lumpy crumbs in patches, with smoother tamped ground between the patches. A fine grit and a few sand grains cover everything. Pebbles gather in loose clusters, mostly in the low ground, as if washed there: many small ones (0.5–1.5 mm), some medium (2.2–4.5 mm), and a few larger stones bedded in soil. There are no footprints, no tracks and, by default, no cracks.</p>
 <p>Every patch of the surface keeps at least one printed layer of relief, so a dark primer and a drybrush pick out the clod tops and pebble facets everywhere, not just in a render.</p>
-
-<div class="grid2">
-  <figure class="shot">
-    <img src="img/ground-r2-oblique-s1.jpg" alt="Grey clay render of the 2x2 dirt tile" width="741" height="548" loading="lazy">
-    <figcaption>The same tile, seed 1, in grey clay: the relief without paint. Predates the red-overhang rule (0.00 mm² measured).</figcaption>
-  </figure>
-  <figure class="shot">
-    <img src="img/ground-r2-painted-s2.jpg" alt="Painted 2x2 dirt tile, seed 2" width="741" height="548" loading="lazy">
-    <figcaption>Seed 2: different clod patches, pebble clusters and stones. Predates the red-overhang rule (0.00 mm² measured).</figcaption>
-  </figure>
-</div>
 
 <p>The dirt texture is also the exposed ground in every other lab: grass stands on it, water's shore and banks use it, and rocks sit in it.</p>
 
@@ -103,8 +91,8 @@
 <tr id="c-bumps-up"><td><code>bumps up</code></td><td>mm, 0–15</td><td>—</td><td>how far it rises</td></tr>
 <tr id="c-bumps-down"><td><code>bumps down</code></td><td>mm, 0–15</td><td>—</td><td>how far it falls</td></tr>
 <tr id="c-bump-size"><td><code>bump-size</code></td><td>mm, 5–70</td><td>—</td><td>how wide the hills are: broad and rolling, or choppy</td></tr>
-<tr id="c-clods"><td><code>clods</code></td><td>word</td><td><code>some</code></td><td>lumps of earth on the surface<dl class="words"><dt><code>few</code></dt><dd>a scatter of clods (provisional)</dd><dt><code>some</code></dt><dd>dirtlab's clods</dd><dt><code>many</code></dt><dd>crumbly, cloddy earth (provisional)</dd></dl></td></tr>
-<tr id="c-stones"><td><code>stones</code></td><td>word</td><td><code>some</code></td><td>a few rocklab stones bedded in the dirt<dl class="words"><dt><code>none</code></dt><dd>bare dirt, no stones</dd><dt><code>some</code></dt><dd>dirtlab's few bedded stones</dd><dt><code>many</code></dt><dd>a stony patch (provisional)</dd></dl></td></tr>
+<tr id="c-clods"><td><code>clods</code></td><td>word</td><td><code>some</code></td><td>lumps of earth on the surface<dl class="words"><dt><code>few</code></dt><dd>a scatter of clods (provisional)</dd><dt><code>some</code></dt><dd>clods here and there</dd><dt><code>many</code></dt><dd>crumbly, cloddy earth (provisional)</dd></dl></td></tr>
+<tr id="c-stones"><td><code>stones</code></td><td>word</td><td><code>some</code></td><td>a few stones bedded in the dirt<dl class="words"><dt><code>none</code></dt><dd>bare dirt, no stones</dd><dt><code>some</code></dt><dd>a few bedded stones</dd><dt><code>many</code></dt><dd>a stony patch (provisional)</dd></dl></td></tr>
 <tr id="c-bank"><td><code>bank</code></td><td>group</td><td>—</td><td>earth heaped against a cliff or wall</td></tr>
 <tr id="c-bank-against"><td><code>bank against</code></td><td>tag</td><td>—</td><td>what the bank leans on <strong>Required.</strong></td></tr>
 <tr id="c-bank-height"><td><code>bank height</code></td><td>mm</td><td>—</td><td>height at the face</td></tr>
@@ -170,9 +158,9 @@
 
 <h3 id="sizes">Sizes and levels</h3>
 <ul>
-  <li><strong>Tile.</strong> Any size in 35 mm squares. The lab's default is 2×2.</li>
-  <li><strong>Edge level.</strong> Ground meets every tile edge at the edge level: 3.4 mm above the base in the Rust engine (<code>library/parts/edges.dtile</code>). dirtlab uses 4.0 mm, the DungeonBlocks dirt band; the Rust dirt look sits on 3.4 mm (Default 12).</li>
-  <li><strong>Rises only.</strong> Inside the tile the ground only goes up from the edge level. dirtlab's ground runs from the edge level to about 7.6 mm, with a median near 4.5 mm; the rises fade out over the 9 mm next to the rim, and no slope is steeper than 24°.</li>
+  <li><strong>Tile.</strong> Any size in 35 mm squares.</li>
+  <li><strong>Edge level.</strong> Ground meets every tile edge at the edge level: 3.4 mm above the base (<code>library/parts/edges.dtile</code>).</li>
+  <li><strong>Rises only.</strong> Inside the tile the ground only goes up from the edge level. The ground runs from the edge level to about 7.6 mm, with a median near 4.5 mm; the rises fade out over the 9 mm next to the rim, and no slope is steeper than 24°.</li>
   <li><strong>Pebbles and stones.</strong> Per square: 45–75 small pebbles (0.5–1.5 mm) and 8–13 medium (2.2–4.5 mm). On a 2×2 tile: 4–7 larger stones (4.5–7.5 mm) in 4–7 loose clusters.</li>
   <li><strong>Flat ground.</strong> Without <code>bumps</code> the ground is flat at its level: 5 mm by default.</li>
 </ul>
@@ -183,10 +171,20 @@
   <li>Grass, water and cliff tiles meet ground at the same edge level; this is the edge contract on the <a href="../standards/tile-system.html#edge-contract">tile system</a> page.</li>
 </ul>
 
+<h3 id="rules">Rules</h3>
+<p>What this element always does. A change to one of these is a change to the element.</p>
+<ul class="rules">
+  <li>Plain earth with clods, grit and half-sunk pebbles: no footprints, no cracks.</li>
+  <li>Strong contrast between cloddy and smooth patches, and texture everywhere that shows at 0.2 mm layers.</li>
+  <li>Pebbles big enough to read at tabletop distance.</li>
+  <li>No frame or rim at the tile edge.</li>
+  <li>Exposed ground is dirt in every look; there is no separate mud texture.</li>
+</ul>
+
 <h2 id="printing">Printing and painting</h2>
 <ul>
   <li><strong>No supports.</strong> Print base down at 0.2 mm layers with a 0.4 mm nozzle. The earth, clods and pebbles are one height field, which cannot overhang. The few larger stones are sunk below the soil line, so their undersides are hidden.</li>
-  <li><strong>Texture that survives slicing.</strong> In any 1.5 mm window there is at least 0.2 mm (one layer) of relief, over at least 97% of the tile. Round 2 reaches about 98%. This is the <a href="../standards/printing.html#texture">printable-texture rule</a>, and dirt is where it was first written.</li>
+  <li><strong>Texture that survives slicing.</strong> In any 1.5 mm window there is at least 0.2 mm (one layer) of relief, over at least 97% of the tile. Dirt reaches about 98%. This is the <a href="../standards/printing.html#texture">printable-texture rule</a>.</li>
   <li><strong>Painting.</strong> Prime dark, drybrush light: clod tops and pebble facets catch the highlight, and the creases keep the base coat. Paint the pebbles grey after.</li>
   <li><strong>Checked on every build.</strong> Each STL is one watertight body that survives a float32 reload.</li>
 </ul>
@@ -211,162 +209,7 @@
 </ol>
 <p class="small">The code: <a href="https://github.com/shawn-vincent/dharmatiles/blob/main/crates/dt-looks/src/dirt.rs"><code>crates/dt-looks/src/dirt.rs</code></a>.</p>
 
-<p>The generator is <code>dirtlab/dirtlab.py</code> (line numbers at commit e0bcb77). Everything except the larger stones is one height field on a 0.15 mm grid. Each scale is its own stage, and stages are combined with a <em>smooth maximum</em>, not added: a clod or pebble is a new surface that wins where it is higher, with a soft fillet where it meets the ground. Adding bumps instead would blur them into porridge.</p>
-<ol>
-  <li><strong>Rises.</strong> <code>ground_undulation</code> (line 184): two blurred noises (14 mm and 5 mm), the lowest 35% flattened to plains, peaks scaled to 2.2–3.2 mm, faded near the rim, slope capped at 24°. A fine soil roughness is added on top.</li>
-  <li><strong>Clods.</strong> <code>clod_layer</code> (line 205): a 6 mm patch field sets where clods are dense and where the ground is tamped (never below 30% density). Each clod is 1–3 lumpy lobes with a flattish tilted top, partly sunk, soft-maxed into the soil.</li>
-  <li><strong>Grit.</strong> <code>grit</code> (line 269): fine noise at 0.45 mm and sparse sand grains.</li>
-  <li><strong>Pebbles.</strong> <code>place_pebbles</code> (line 351) and <code>pebble_shape</code> (line 300): pebbles are dart-thrown into 4–7 cluster blobs, biased toward low ground. Each is a flattened cap cut by 4–11 tilted tangent planes (75% faceted, 25% worn), with a 5–8-sided skirt so the outline is angular, then sunk 25–45% and filleted into the soil.</li>
-  <li><strong>Stones.</strong> <code>make_stones</code> (line 395) and <code>bed_stones</code> (line 417): rocklab rocks, flattened to 0.65 of their height, sunk below the lowest ground under them in a 0.3 mm soil bank.</li>
-  <li><strong>Tile.</strong> <code>assemble</code> (line 545): the height field becomes a solid, unioned with a 1 mm slab, the stones and the DungeonBlocks base, and checked by <code>stl_safe</code> (line 529).</li>
-</ol>
-<p>The texture without the rises and stones is exported as <code>dirt_relief</code> (line 507). Every other lab uses it for exposed ground.</p>
-<p>The Rust <code>ground</code> look (<code>crates/dt-looks/src/ground.rs</code> and <code>dirt.rs</code>) ports the stages above (P2); dirtlab's stones come with rocks in P3.</p>
-<details>
-  <summary>Key constants</summary>
-  <div class="tbl"><table>
-  <thead><tr><th>Constant</th><th>Line</th><th>Value</th><th>Meaning</th></tr></thead>
-  <tbody>
-  <tr><td><code>CELL_MM</code></td><td class="num">44</td><td>0.15</td><td>Height-field grid (mm).</td></tr>
-  <tr><td><code>EDGE_MM</code></td><td class="num">45</td><td>4.0</td><td>Edge level above the base (mm).</td></tr>
-  <tr><td><code>RIM_TEX_MM</code></td><td class="num">49</td><td>1.0</td><td>Texture ramps in over this rim width.</td></tr>
-  <tr><td><code>UND_SIGMA_MM</code></td><td class="num">52</td><td>14, 5</td><td>Rise scales (mm).</td></tr>
-  <tr><td><code>UND_RELIEF_MM</code></td><td class="num">55</td><td>2.2–3.2</td><td>Peak rise per tile (mm).</td></tr>
-  <tr><td><code>UND_MAX_SLOPE_DEG</code></td><td class="num">57</td><td>24</td><td>Steepest rise.</td></tr>
-  <tr><td><code>CLOD_DENS_FLOOR</code></td><td class="num">63</td><td>0.3</td><td>Tamped ground still carries some clods.</td></tr>
-  <tr><td><code>CLOD_DENSITY</code></td><td class="num">64</td><td>0.7 /mm²</td><td>Clod attempts at full patch density.</td></tr>
-  <tr><td><code>CLOD_R_MM</code></td><td class="num">65</td><td>0.45–2.4</td><td>Clod radius (mm), skewed small.</td></tr>
-  <tr><td><code>SMALL_PER_SQ</code>, <code>MED_PER_SQ</code></td><td class="num">92, 94</td><td>45–75; 8–13</td><td>Pebbles per square.</td></tr>
-  <tr><td><code>PEB_SINK</code></td><td class="num">99</td><td>0.25–0.45</td><td>Share of a pebble buried.</td></tr>
-  <tr><td><code>STONES_2X2</code></td><td class="num">115</td><td>4–7</td><td>Larger stones per 2×2.</td></tr>
-  <tr><td><code>STONE_Z_SCALE</code></td><td class="num">118</td><td>0.65</td><td>Stones flattened so they don't stand like teeth.</td></tr>
-  </tbody></table></div>
-</details>
 
-<section class="record" id="record">
-<h2>Design record</h2>
-<p>For the people developing the look: Shawn's rulings, the requirements, audit numbers, the variant history and open issues. Owned by the labs (dirtlab). Approved: round 2, 29 Oct 2026. Rust: flat ground done in P1; dirt and rises are P2, the first look to reach parity.</p>
-
-<details id="rulings">
-<summary>Rulings (5)</summary>
-<p>Shawn's decisions, oldest first. Each holds unless a later line replaces it.</p>
-<div class="tbl"><table>
-<thead><tr><th class="d">Date</th><th>Ruling</th><th>Shawn's words</th></tr></thead>
-<tbody>
-<tr><td class="d">27–28 Oct</td><td>grasslab's bare-soil patches (a dip, roughness and dome pebbles) are rejected.</td><td class="q">“bare patches are terrible”</td></tr>
-<tr><td class="d">27–28 Oct</td><td>The patches' later version still fails.</td><td class="q">“bare patches have some weird artifacts”</td></tr>
-<tr><td class="d">29 Oct</td><td>The brief for dirtlab: plain earth, pebbles, no footprints, probably no cracks.</td><td class="q">“Plain bare earth. No footprints, just dirt and pebbles. Maybe some cracks, but probably not even cracks, just texture and pebbles.”</td></tr>
-<tr><td class="d">29 Oct</td><td>After slicing v1g: more relief, no frame at the rim, pebbles that register at tabletop distance, stronger cloddy/smooth contrast, texture visible everywhere at 0.2 mm layers. Led to round 2 and the printable-texture rule.</td><td>— (his slice showed large smooth plains)</td></tr>
-<tr><td class="d">29 Oct</td><td>Exposed ground is dirt everywhere: grasslab's mud and the other soil textures are retired, and every lab uses <code>dirt_relief</code> (20c51e8).</td><td>—</td></tr>
-</tbody></table></div>
-</details>
-
-<details id="requirements">
-<summary>Requirements</summary>
-<p>The lab's requirement IDs from revision 1 (29 Oct 2026), with later amendments marked inline. [S] is checked by a script or statistic, [R] by eye. The original page is in the <a href="../archive/lab-logs/dirtlab/requirements.html">archive</a>.</p>
-<ul>
-  <li><strong>REQ-OUT-1 [S]</strong> A run writes <code>dirtlab/out/2x2-dirt-s&lt;seed&gt;.stl</code> (<code>-cracks</code> suffix with cracks).</li>
-  <li><strong>REQ-OUT-2 [S]</strong> One watertight body after a float32 STL reload; ground, slab, stones and DungeonBlocks base fused.</li>
-  <li><strong>REQ-OUT-3 [S]</strong> Deterministic per seed; build ≤ 10 s; STL ≤ 25 MB.</li>
-  <li><strong>REQ-OUT-4 [S]</strong> <code>--sheet --seeds …</code> writes a timestamped contact sheet.</li>
-  <li><strong>REQ-H-1 [S]</strong> The tile edge sits at exactly 4.0 mm all round, with a 0.4 mm flat band. <em>Amended 29 Oct (round 2): no flat band; the texture ramps in over 1 mm. The Rust edge level is 3.4 mm (default 12, 1 Nov).</em></li>
-  <li><strong>REQ-H-2 [S]</strong> Interior ground about 4.3–5.9 mm (median about 4.5). <em>Amended 29 Oct (round 2): rises up to about 7.6 mm.</em></li>
-  <li><strong>REQ-H-3 [S]</strong> Rises only: nothing dips below the edge level.</li>
-  <li><strong>REQ-E-1 [R]</strong> Multi-scale: rises, clods, grit and pebbles all read at once.</li>
-  <li><strong>REQ-E-2 [R]</strong> Clods are crumbs, not blisters.</li>
-  <li><strong>REQ-E-3 [R]</strong> Patchy, not uniform: cloddy areas and tamped areas. <em>Amended 29 Oct (round 2): stronger contrast, and tamped ground keeps at least 30% clod density.</em></li>
-  <li><strong>REQ-E-4 [S]</strong> No cracks by default; <code>--cracks</code> adds a few fine ones.</li>
-  <li><strong>REQ-P-1 [R]</strong> About 50–75 small and 5–9 medium pebbles per square; 2–4 larger stones per tile. <em>Amended 29 Oct (round 2): 8–13 medium at 2.2–4.5 mm; 4–7 stones.</em></li>
-  <li><strong>REQ-P-2 [R]</strong> Stone-like: faceted or worn, flattish; never round domes or discs.</li>
-  <li><strong>REQ-P-3 [R]</strong> Loosely clustered, biased into low ground; never on a grid.</li>
-  <li><strong>REQ-P-4 [S]</strong> Sunk 25–45% with a soil fillet; nothing floats.</li>
-  <li><strong>REQ-FDM-1 [S]</strong> No overhang past 45°. <em>Amended 31 Oct: the project limit is 55°; dirtlab audits at 55° since 2 Nov.</em></li>
-  <li><em>Added 29 Oct.</em> <strong>REQ-D-TEX [S]</strong> Within any 1.5 mm window, relief is at least 0.2 mm over at least 97% of the interior.</li>
-</ul>
-<h3>Named failure modes</h3>
-<div class="tbl"><table>
-<thead><tr><th>#</th><th>Name</th><th>Looks like</th></tr></thead>
-<tbody>
-<tr><td>D1</td><td>Porridge</td><td>Uniform noise everywhere, no structure.</td></tr>
-<tr><td>D2</td><td>Bubbles</td><td>Round domes or discs, especially in clusters.</td></tr>
-<tr><td>D3</td><td>Cells / bowls</td><td>Packed lumps in a Voronoi-like cell pattern.</td></tr>
-<tr><td>D4</td><td>Rough concrete</td><td>Fine grit only, no clods or stones.</td></tr>
-<tr><td>D5</td><td>Teeth</td><td>Tall upright stones out of scale with the earth.</td></tr>
-<tr><td>D6</td><td>Pasted pebbles</td><td>Stones sitting on the surface, no bedding.</td></tr>
-<tr><td>D7</td><td>Freckles</td><td>A regular sprinkle of identical dots.</td></tr>
-</tbody></table></div>
-<h3>Acceptance</h3>
-<ul>
-  <li>S1: seed 1 reads as miniature bare earth with none of D1–D7.</li>
-  <li>S2: seeds 1–3 differ in clod patches, pebble clusters and stones.</li>
-  <li>S3: a print, primed and drybrushed: clod tops and pebble facets catch the highlight; the creases keep the base coat.</li>
-</ul>
-</details>
-
-<details id="audit">
-<summary>Audit numbers (round 2)</summary>
-<p><strong>By construction:</strong> the earth, clods and pebbles are one height field, which cannot overhang; the ground never dips below the edge level and sits exactly at it on the rim; stones are sunk below the lowest ground under them.</p>
-<p><strong>Checked:</strong> <code>audit_overhang</code> (line 561) sums the area of faces past 58° from vertical (the 55° limit plus 3°); <code>stl_safe</code> (line 529) rounds to float32, merges vertices and refuses anything that is not one watertight body. The texture rule is measured by <code>texcheck.py</code>, which lived in a session scratchpad and is not in the repo.</p>
-<div class="tbl"><table>
-<thead><tr><th>Tile</th><th>Watertight</th><th class="num">Overhang (mm²)</th><th class="num">Ground (mm)</th><th class="num">Windows under one layer</th><th class="num">Build</th></tr></thead>
-<tbody>
-<tr><td>2×2, seed 1</td><td>yes</td><td class="num">0.00</td><td class="num">4.00–7.61</td><td class="num">1.9%</td><td class="num">3.3 s</td></tr>
-<tr><td>2×2, seed 2</td><td>yes</td><td class="num">0.00</td><td class="num">4.00–7.26</td><td class="num">about 2–2.6%</td><td class="num">3.0 s</td></tr>
-<tr><td>2×2, seed 3</td><td>yes</td><td class="num">0.01</td><td class="num">4.00–7.50</td><td class="num">about 2–2.6%</td><td class="num">3.0 s</td></tr>
-</tbody></table></div>
-<p class="note">Seed 1 has 872 clods, 260 small and 36 medium pebbles and 6 stones, in 447,632 faces. Before round 2 (v1g), 32.8% of windows were under one layer. Rust P1's flat 1×1 builds in 0.09 s, watertight, with 0 overhang.</p>
-</details>
-
-<details id="variants">
-<summary>Variant history</summary>
-<p>One line per variant, oldest first. All are in git.</p>
-<div class="tbl"><table>
-<thead><tr><th class="d">Date</th><th>Variant</th><th>What changed, and why</th></tr></thead>
-<tbody>
-<tr><td class="d">2 Jun</td><td>Library noise soil (165fc04)</td><td>Roughness at three scales baked into the terrain. Porridge.</td></tr>
-<tr><td class="d">2–3 Jun</td><td>Library <code>SoilCarpet</code> (52c2a3a → c53c1de)</td><td>Two tiers of super-Gaussian blobs, clustered, draped on slopes. An even carpet of blisters, about 20 config fields. Still the library's soil.</td></tr>
-<tr><td class="d">27–28 Oct</td><td>grasslab bare-soil “mud”</td><td>A dip, roughness and dome pebbles in the grass. “bare patches are terrible”. Retired 29 Oct.</td></tr>
-<tr><td class="d">29 Oct</td><td>dirtlab v1a</td><td>First build: round blister clods, pyramid pebbles.</td></tr>
-<tr><td class="d">29 Oct</td><td>dirtlab v1b–v1d</td><td>Smooth maximum instead of a sum; lumpy multi-lobe clods; pebbles as tangent planes of a cap.</td></tr>
-<tr><td class="d">29 Oct</td><td>dirtlab v1e–v1g (ed438c8)</td><td>58° polygonal skirt, foot mounds, stones flattened, sparser grains. Looked right in renders, but 33% of the tile sliced as flat plains.</td></tr>
-<tr><td class="d">29 Oct</td><td><strong>dirtlab round 2 (897430c), approved</strong></td><td>Bigger rises, no rim frame, a clod density floor, more and larger pebbles, and the printable-texture rule. Flat windows 32.8% → 1.9%.</td></tr>
-<tr><td class="d">29 Oct</td><td>Shared <code>dirt_relief</code> (20c51e8)</td><td>The texture becomes the exposed ground in every lab.</td></tr>
-<tr><td class="d">2 Nov</td><td>Rust <code>ground</code>, P1</td><td>Flat ground at a level, on the DungeonBlocks base; output matches Python's volume exactly.</td></tr>
-</tbody></table></div>
-<div class="grid2">
-  <figure class="shot">
-    <img src="img/ground-history-soilcarpet.jpg" alt="Library SoilCarpet on a 1x1 soil tile" width="900" height="750" loading="lazy">
-    <figcaption>The library's <code>SoilCarpet</code> on <code>1x1-soil</code>. Predates the red-overhang rule.</figcaption>
-  </figure>
-  <figure class="shot">
-    <img src="img/ground-history-v1g.jpg" alt="dirtlab v1g, painted and close views" width="900" height="379" loading="lazy">
-    <figcaption>dirtlab v1g, before round 2: right in renders, too flat when sliced. Predates the red-overhang rule.</figcaption>
-  </figure>
-</div>
-</details>
-
-<details id="rust">
-<summary>Rust port</summary>
-<p><strong>P1 (done):</strong> the <code>ground</code> look paints a flat surface at a level (<code>crates/dt-looks/src/ground.rs</code>). The flat 1×1 tile builds in 0.09 s, watertight, deterministic at 1, 4 and 16 threads, with the same volume as Python. Its test print in a DungeonBlocks socket is the last P1 exit criterion.</p>
-<p><strong>P2, “Dirt and hills: the first look at parity”:</strong> ports <code>smax</code> (line 137), clods (205), pebbles (300, 351) and <code>dirt_relief</code> (507); stones came in P3 with rocks: <code>stones some</code> (the default, dirtlab's 4 to 7 a 2×2 tile), <code>none</code> or <code>many</code> (provisional). They keep a bank's width from the edge of their area, so a lower neighbour's bank never leaves a stone's base showing. With them on, <code>cargo xtask parity dirt-stones</code> is within tolerance except the 10–40 mm relief band, 1.21 times the lab's against a ±20% tolerance. Exit gate: the printable-texture rule at 97% or more, metrics within tolerance, a build in 1 s or less, and Shawn's sign-off over 4 seeds. The parity harness already writes a Python-only dirtlab contact sheet at seeds 1–4. If dirt misses sign-off after three review rounds, the plan stops to diagnose (see <a href="../rust/plan.html">the plan</a>).</p>
-</details>
-
-<h3 id="open">Open issues</h3>
-<ul>
-  <li>Edge level: dirtlab uses 4.0 mm; the Rust edge contract and grasslab use 3.4 mm. P2 settles dirt on 3.4 mm, checked with a test print in P3.</li>
-  <li><code>texcheck.py</code>, the printable-texture measure, is not in the repo; P2's harness needs it in code.</li>
-  <li>The Python library's <code>SoilCarpet</code> is still the soil in <code>src/tiles/</code>; it is replaced at cutover (P6), not before.</li>
-  <li><code>clods few</code> and <code>clods many</code> have provisional numbers; P2 tunes them.</li>
-</ul>
-
-<h3 id="references">References</h3>
-<ul>
-  <li>DungeonBlocks ground heights: <a href="../standards/tile-system.html#heights">tile system, standard heights</a>.</li>
-</ul>
-
-<h3 id="history">History</h3>
-<p>The library's soil started as noise in June 2026 and became <code>SoilCarpet</code>'s blob carpet. In the labs, grasslab's bare patches were rejected on 27–28 Oct, and dirtlab was written on 29 Oct from Shawn's brief: seven versions in one night, then round 2 after Shawn sliced v1g and saw flat plains. Round 2's texture became the shared exposed ground the same morning. The archive keeps the lab's original <a href="../archive/lab-logs/dirtlab/requirements.html">requirements</a> and <a href="../archive/lab-logs/dirtlab/design.html">design and iteration log</a>, and the Rust study's <a href="../archive/rust-study/variants.html">variants</a> and <a href="../archive/rust-study/notes.html">notes</a>.</p>
-</section>
 
 </article>
 </div>

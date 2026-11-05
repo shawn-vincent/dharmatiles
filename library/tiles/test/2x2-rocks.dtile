@@ -1,18 +1,11 @@
-// The parity twin of rocklab (rocklab/rocklab.py, approved 4 Jul 2026):
-// 9 to 12 placements of chiselled rocks 6 to 15 mm wide on a 2×2 tile of
-// bare dirt, a quarter of them clusters of 2 to 4, 1.5 mm apart.
-// rocklab's floor is its dirt at its own 4 mm edge; here the dirt sits at
-// the edge contract's level, so the rocks stand as tall above the edge.
-// Built by `cargo xtask parity rocks` at seeds 1–4 beside the lab.
-
 tile rocks size="2x2" seed=1 {
-    about "rocklab's rocks scattered on bare dirt, for the parity harness."
+    about "Rocks scattered on bare dirt: a test tile."
     stack {
         dirt level=edge {
             stones none
         }
         scatter per-square="2.25..3" gap=1.5 {
-            rock                       // size="6..15", rocklab's widths
+            rock                       // size="6..15"
         }
     }
 }

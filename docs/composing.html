@@ -8,26 +8,18 @@
 <script src="assets/site.js"></script>
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html" aria-current="page">Composing</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="rust/plan.html">Project</a><a href="archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html" aria-current="page">Composing</a><a href="preview.html">Preview</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
   <div class="eyebrow">The tile language · composing</div>
   <h1>Composing a tile</h1>
-  <p class="lede">Composition is how looks share one tile. Rocks sit bedded in the ground, grass grows right up to them and parts around them, bare earth shows between, and every tile meets its neighbour at the same edge level. The approved example is the meadow: rocks, grass and bare earth on one tile, printed as one piece with no supports.</p>
-  <div class="hero-shots">
-    <figure><img src="elements/img/composition-meadow-s1-red.jpg" alt="A 2x2 meadow tile: grass flowing around grey rocks and patches of bare earth" width="1100" height="822"></figure>
-  </div>
-  <p class="muted small">meadowlab, 2×2, seed 1, painted, built in memory on 2 Nov 2026: rocks, grass and bare earth on one tile. Faces past the overhang limit are painted red; the audit finds 1.0 mm² over 635 tiny faces, too small to see at this size.</p>
-  <div class="hero-shots">
-    <figure><img src="elements/img/water-shore-s3-overhang.jpg" alt="Grey renders of a shore tile from an angle and from above: grass, reeds and rocks meeting water" width="900" height="359"></figure>
-  </div>
-  <p class="muted small">shorelab, 2×2, seed 3, grey, from an angle and from above: grass, rocks, reeds, bare earth and water on one tile. Faces past the overhang limit are painted red.</p>
+  <p class="lede">Composition is how looks share one tile. Rocks sit bedded in the ground, grass grows right up to them and parts around them, bare earth shows between, and every tile meets its neighbour at the same edge level. The example on this page is a meadow: rocks, grass and bare earth on one tile, printed as one piece with no supports.</p>
+  <figure class="shot"><img src="elements/img/el-meadow.jpg" alt="A 2x2 meadow tile: grass flowing around grey rocks and patches of bare earth"><figcaption>The meadow below, 2×2, seed 1: <a href="elements/demo/meadow.dtile"><code>elements/demo/meadow.dtile</code></a>.</figcaption></figure>
   <div class="facts">
-    <div><div class="k">Sizes</div><div class="v">any; the meadow is built at 2×2 by default</div></div>
+    <div><div class="k">Sizes</div><div class="v">any; the meadow here is 2×2</div></div>
     <div><div class="k">Mix</div><div class="v">about 80% grass, 20% bare earth counting ground under rocks; 6–9 rocks per 2×2</div></div>
     <div><div class="k">Printing</div><div class="v">no supports; one watertight body</div></div>
-    <div><div class="k">Bases</div><div class="v">DungeonBlocks today; OpenLOCK with the Rust port</div></div>
-    <div><div class="k">Available</div><div class="v">approved in meadowlab; in the Rust engine from phase P4</div></div>
+    <div><div class="k">Bases</div><div class="v">DungeonBlocks or OpenLOCK</div></div>
   </div>
   <details class="words">
     <summary>Words used on this page</summary>
@@ -48,7 +40,6 @@
   <li><a href="#spec">Specification</a></li>
   <li><a href="#printing">Printing and painting</a></li>
   <li><a href="#how">How it is made</a></li>
-  <li><a href="#record">Design record</a></li>
 </ol></nav>
 <article class="doc">
 
@@ -59,7 +50,7 @@
 <p>At the tile edge the ground comes down to the standard edge level, so a meadow tile meets any other ground or grass tile with no step.</p>
 
 <h2 id="use">Using it in a tile</h2>
-<p>In the Rust engine a tile is a short KDL document that lists looks in a <code>stack</code>. Solids (rocks, trees, walls, cliffs) are planned before anything grows, so grass and dirt grow round every solid wherever it is listed. A meadow in the as-built vocabulary looks like this:</p>
+<p>A tile is a short document that lists looks in a <code>stack</code>. Solids (rocks, trees, walls, cliffs) are planned before anything grows, so grass and dirt grow round every solid wherever it is listed. A meadow in the as-built vocabulary looks like this:</p>
 <pre><code>use "parts/grass" lawn
 
 tile meadow size="2x2" seed=1 {
@@ -71,8 +62,7 @@ tile meadow size="2x2" seed=1 {
         lawn cover="80%"                             // grass over 80% of the ground; it grows round the rocks
     }
 }</code></pre>
-<p>This document was written for this page; the library has no meadow tile yet. The library tile <code>library/tiles/ground/2x2-grass-tree.dtile</code> (branch <code>rust/p1</code>) shows the same rule with a tree: its grass is listed before the tree and still grows round the trunk. A tile divided by a path or a shore uses a <code>line</code> and a <code>region</code>, and each look acts <code>in=</code> its region; see the <a href="language.html#ex-path">path example</a> on the language page.</p>
-<p>The meadow reaches the Rust engine in phase P4 (see the <a href="rust/plan.html">plan</a>). Until then the lab builds it: <code>python meadowlab/meadowlab.py --seed 1</code> writes <code>meadowlab/out/2x2-meadow-s1.stl</code> with a DungeonBlocks base. In the Python library, a tile spec lists layers per region, and order matters there: put <code>Rocks</code> and <code>Tree</code> before <code>Grass</code> so the blades steer round them (see <code>CLAUDE.md</code>, "Placement Layer Ordering").</p>
+<p>This is <a href="elements/demo/meadow.dtile"><code>elements/demo/meadow.dtile</code></a>, the tile in the picture above. A tile divided by a path or a shore uses a line and a region, and each element acts <code>in=</code> its region; see the <a href="language.html#ex-path">path example</a> on the language page.</p>
 
 <h2 id="spec">Specification</h2>
 <h3 id="controls">Controls</h3>
@@ -90,7 +80,7 @@ tile meadow size="2x2" seed=1 {
 <tr><td>rock <code>buried</code></td><td>percent</td><td>—</td><td>How much of each rock is under the ground.</td></tr>
 <tr><td><code>region</code></td><td><code>bounded-by</code> lines, <code>fill</code> points</td><td>—</td><td>Divides the tile, like a paint bucket: name the lines, drop fill points.</td></tr>
 </tbody></table></div>
-<p>The meadow's own rules are fixed at the approved values and have no control: rock tops stand at least max(1.5 mm, 0.45 × rock height) above the grass; grass is half height at a rock's face, back to full height 1.2 mm out; about 35% of rocks get an apron; bare earth is filled to 20% with natural-size patches. The full language is on the <a href="language.html#placement">language page</a>.</p>
+<p>How rocks and grass meet is fixed and has no control: rock tops stand at least max(1.5 mm, 0.45 × rock height) above the grass; grass is half height at a rock's face, back to full height 1.2 mm out; about 35% of rocks get an apron; bare earth is filled to 20% with natural-size patches. The full language is on the <a href="language.html#placement">language page</a>.</p>
 
 <h3 id="levels">Levels</h3>
 <div class="tbl"><table>
@@ -107,12 +97,20 @@ tile meadow size="2x2" seed=1 {
 <p>Every tile obeys one edge contract, so any two tiles butt with no step:</p>
 <ul>
   <li><strong>Ground</strong> meets every tile edge at 3.4 mm and rises from there; nothing inside dips below it.</li>
-  <li><strong>Water</strong> meets the edge at a calm, fixed profile (from phase P3).</li>
+  <li><strong>Water</strong> meets the edge at a calm, fixed profile.</li>
   <li><strong>Lines</strong> such as paths and shores leave the tile only at fixed anchor positions.</li>
   <li><strong>Cliffs</strong> end in a standard end section; <strong>walls</strong> end in a clean vertical cut.</li>
   <li><strong>Solids</strong> never cross the tile edge: they are nudged or shrunk inward, never clipped.</li>
 </ul>
-<p>The full contract is on the <a href="standards/tile-system.html#edge-contract">tile system</a> page. In the Rust engine it is one file, <code>library/parts/edges.dtile</code>, that every tile uses.</p>
+<p>The full contract is on the <a href="standards/tile-system.html#edge-contract">tile system</a> page. It is one file, <code>library/parts/edges.dtile</code>, that every tile uses.</p>
+
+<h3 id="rules">Rules</h3>
+<p>What this element always does. A change to one of these is a change to the element.</p>
+<ul class="rules">
+  <li>Rocks are obstacles: grass presses up against them, and only some get a one-sided apron of bare earth.</li>
+  <li>Bare earth comes in natural-size patches, never scaled to fit; its share counts the ground under rocks.</li>
+  <li>No bare ring round every rock.</li>
+</ul>
 
 <h2 id="printing">Printing and painting</h2>
 <ul>
@@ -124,139 +122,14 @@ tile meadow size="2x2" seed=1 {
 <p>The full printing rules are on the <a href="standards/printing.html">printing</a> page.</p>
 
 <h2 id="how">How it is made</h2>
-<p>The meadow generator is <code>meadowlab/meadowlab.py</code> (266 lines). It writes almost no geometry of its own: it calls grasslab for the ground and grass and rocklab for the rocks, and owns only how they meet. The key idea is <em>plan, then build</em>: rocks claim their footprints before the grass grows, and are seated on the result after.</p>
+<p>The program orders the stack by what each element reads and writes, so the order a tile lists them in does not decide what grows round what.</p>
 <ol>
-  <li><strong>Two random streams.</strong> The grass uses the seed, the rocks use seed + 1,000,003, so a change to the rocks does not reshuffle the grass (<code>main</code>, line 207).</li>
-  <li><strong>Ground and flow.</strong> grasslab builds the hills and a wandering flow direction for the blades.</li>
-  <li><strong>Rocks first.</strong> rocklab scatters and poses 6–9 rocks, fixing each rock's turn and so its real footprint. <code>footprint_masks</code> (line 62) slices each rock 0.45 mm above its base and rasterises the outline onto the 0.12 mm grass grid.</li>
-  <li><strong>Bare earth.</strong> <code>apron_shapes</code> (line 86) gives 35% of rocks a one-sided lens of bare earth, downstream 60% of the time. <code>fill_bare_earth</code> (line 115) then adds grasslab's soil patches, best first and at natural size, until bare earth plus rock footprints reach 20% of the tile.</li>
-  <li><strong>Flow wraps.</strong> <code>rock_circles</code> (line 129) adds a ring 0.6 mm wider than each rock to the obstacles the flow parts around, alongside the soil patches.</li>
-  <li><strong>Grass.</strong> grasslab grows the blades with the footprints as blockers (<code>grasslab/grasslab.py:951</code>): no blade roots inside a footprint, blades heading into a rock stop 0.5 mm inside its face, and grass is halved in height at the face.</li>
-  <li><strong>Seat the rocks.</strong> <code>seat_rocks</code> (line 138) bases each rock at the 35th percentile of the ground under it, less 0.3 mm; lifts it up to 1.5 mm if its top does not clear the grass; and adds a plinth down to below the lowest ground.</li>
-  <li><strong>Join.</strong> <code>attach_base</code> (line 181) unions grass, rocks and the DungeonBlocks base and keeps the one body; <code>stl_safe</code> checks the float32 reload before export.</li>
+  <li><strong>Surfaces.</strong> Ground, dirt and floors paint the ground of their areas; a later surface paints over an earlier one.</li>
+  <li><strong>Solids.</strong> Rocks, trees, walls and cliffs claim their footprints and are bedded into the ground, kept inside the tile and clear of each other.</li>
+  <li><strong>Growth.</strong> Grass and reeds read the footprints: no blade roots inside one, blades stop just inside a rock's face, and the flow parts round each solid.</li>
+  <li><strong>Join and check.</strong> Everything is joined with the base into one body, and the printability gate checks it.</li>
 </ol>
-<p>The Python library composes differently. A tile spec divides the tile into regions by boundary curves (flood fill, <code>core/region.py</code>), blends region heights across boundaries, and runs each region's layers in list order; <code>Rocks</code> and <code>Tree</code> stamp an obstacle mask that a later <code>Grass</code> layer steers round. The Rust engine keeps the regions but drops the order rule: it plans every solid first, as meadowlab does.</p>
-<details>
-  <summary>Key constants</summary>
-  <div class="tbl"><table>
-  <thead><tr><th>Constant</th><th>Line</th><th>Value</th><th>Meaning</th></tr></thead>
-  <tbody>
-  <tr><td><code>ROCK_SEED_OFFSET</code></td><td class="num">37</td><td>1000003</td><td>Rock random stream = seed + this.</td></tr>
-  <tr><td><code>ROCK_PLACEMENTS_2X2</code></td><td class="num">38</td><td>6–9</td><td>Rock placements on a 2×2: fewer than rocklab alone.</td></tr>
-  <tr><td><code>FREE_LENS_POOL_PER_SQ</code></td><td class="num">39</td><td>8</td><td>Candidate bare patches per square.</td></tr>
-  <tr><td><code>BARE_EARTH_FRAC</code></td><td class="num">40</td><td>0.20</td><td>Bare earth, counting ground under rocks.</td></tr>
-  <tr><td><code>APRON_PROB</code>, <code>APRON_WAKE_PROB</code></td><td class="num">42</td><td>0.35, 0.6</td><td>Share of rocks with an apron; share of aprons downstream.</td></tr>
-  <tr><td><code>FOOTPRINT_Z_MM</code></td><td class="num">47</td><td>0.45</td><td>Height of the footprint slice above the rock base (mm).</td></tr>
-  <tr><td><code>TUCK_MM</code></td><td class="num">48</td><td>0.5</td><td>Blades stop this far inside a rock face (mm).</td></tr>
-  <tr><td><code>SIDE_LOW</code>, <code>SIDE_MM</code></td><td class="num">49</td><td>0.5, 1.2</td><td>Grass height factor at a rock face, and the distance back to full height (mm).</td></tr>
-  <tr><td><code>FLOW_RING_MM</code></td><td class="num">51</td><td>0.6</td><td>The flow wraps a circle this much wider than the rock (mm).</td></tr>
-  <tr><td><code>ROCK_SEAT_Q</code></td><td class="num">53</td><td>0.35</td><td>Seat height: this quantile of the ground under the rock.</td></tr>
-  <tr><td><code>ROCK_SHOW_MM</code>, <code>ROCK_SHOW_FRAC</code></td><td class="num">56</td><td>1.5, 0.45</td><td>A rock top clears the grass by at least this, or this share of its height.</td></tr>
-  <tr><td><code>ROCK_RAISE_MAX_MM</code></td><td class="num">58</td><td>1.5</td><td>Most a rock is lifted to clear the grass (mm).</td></tr>
-  </tbody></table></div>
-</details>
-
-<section class="record" id="record">
-<h2>Design record</h2>
-<p>For the people developing the look: Shawn's rulings, the requirements, audit numbers, the variant history and open issues. Owned by the labs (meadowlab). Current version: code v1e with grasslab v3 stroke blades, 29 Oct 2026.</p>
-
-<details id="rulings">
-<summary>Rulings (5)</summary>
-<p>Shawn's decisions, oldest first. Each holds unless a later line replaces it.</p>
-<div class="tbl"><table>
-<thead><tr><th class="d">Date</th><th>Ruling</th><th>Shawn's words</th></tr></thead>
-<tbody>
-<tr><td class="d">27 Oct</td><td>The lab's purpose: rocks, grass and bare earth on one tile, to see how they interact.</td><td class="q">“a tile with some rocks across it, and then grass and bare earth in amongst the rocks — see how these things interact.”</td></tr>
-<tr><td class="d">27 Oct (v1b)</td><td>Not every rock in a bare area. Rocks become obstacles that grass presses against; only some get a one-sided apron.</td><td class="q">“having each rock in a big bare area is kind of weird.”</td></tr>
-<tr><td class="d">27 Oct (v1d)</td><td>Bare earth is not fitted by scaling patches. The 20% target counts ground under rocks, and is met with natural-size patches.</td><td class="q">“stop that scaling thing; let the 20% be underneath rocks too.”</td></tr>
-<tr><td class="d">28 Oct</td><td>The grass and rocks are approved, and the labs stay standalone: no merging into the shared library yet.</td><td class="q">“spectacular job on both grass and rocks… I love your work.”</td></tr>
-<tr><td class="d">28 Oct</td><td>Rejected, not to come back: full bare rings round every rock, and size-scaled bare earth.</td><td>—</td></tr>
-</tbody></table></div>
-</details>
-
-<details id="requirements">
-<summary>Requirements</summary>
-<p>The lab's requirement IDs (revision 3, 28 Oct 2026), with later amendments marked inline. The meadow inherits every grasslab and rocklab requirement and adds only the interactions. [S] is checked by a script or statistic, [R] by eye. The original page is in the <a href="archive/lab-logs/meadowlab/requirements.html">archive</a>.</p>
-<ul>
-  <li><strong>REQ-M-1 [S]</strong> A run writes <code>meadowlab/out/&lt;cols&gt;x&lt;rows&gt;-meadow-s&lt;seed&gt;.stl</code>: one watertight DungeonBlocks tile with grasslab hills, grass and soil, and rocklab rocks. Deterministic per seed. <em>Amended 29 Oct: the grass is grasslab v3 stroke blades.</em></li>
-  <li><strong>REQ-M-2 [R]</strong> Rocks are part of the ground: seated at a low quantile of the ground under them, with a plinth to just below the lowest ground. No rock floats or perches (M1).</li>
-  <li><strong>REQ-M-3 [R]</strong> Grass flows around rocks: the flow parts upstream and rejoins behind. Grass never runs into a rock head-on (M4).</li>
-  <li><strong>REQ-M-4 [R]</strong> Most rocks have no margin. About 35% have bare earth on one side (a wake or a scour), never a ring (M2).</li>
-  <li><strong>REQ-M-5 [R]</strong> Rocks are obstacles, not soil: no grass roots under a footprint; blades stop pressed against the face, tucked 0.5 mm in; grass is lower beside a rock; rocks don't trigger soil-bank behaviours.</li>
-  <li><strong>REQ-M-6 [S]</strong> Bare earth is 20% of the tile including ground under rocks, met by adding natural-size patches, never by scaling them (M3).</li>
-  <li><strong>REQ-M-7 [S]</strong> A handful of rocks: 6–9 placements on a 2×2. Grass stays dominant.</li>
-  <li><strong>REQ-M-8 [S]</strong> The grass and rock rules still hold, and the audit reports them. <em>Amended 29 Oct: the FDM backstop of the old height-field grass is retired; the overhang audit and the float32 reload check remain.</em></li>
-  <li><strong>REQ-M-9 [R]</strong> Rocks read as rocks: every rock top stands at least max(1.5 mm, 0.45 × its height) above the grass, lifted by up to 1.5 mm if needed (M5).</li>
-</ul>
-<h3>Named failure modes</h3>
-<div class="tbl"><table>
-<thead><tr><th>ID</th><th>Name</th><th>Looks like</th></tr></thead>
-<tbody>
-<tr><td>M1</td><td>Pasted rocks</td><td>Rocks sitting on top of grass, or floating on slopes.</td></tr>
-<tr><td>M2</td><td>Moat</td><td>Bare ground around every rock, or a uniform ring.</td></tr>
-<tr><td>M3</td><td>Bald field</td><td>Aprons or one scaled-up patch merging into large bare areas.</td></tr>
-<tr><td>M4</td><td>Ploughing</td><td>Grass running straight into rock faces.</td></tr>
-<tr><td>M5</td><td>Swallowed rock</td><td>A rock showing only as holes or a sliver in the grass, or buried on its uphill side.</td></tr>
-</tbody></table></div>
-</details>
-
-<details id="audit">
-<summary>Audit numbers</summary>
-<p><strong>By construction:</strong> no grass roots inside a footprint; the plinth reaches below the lowest ground, so no rock floats; rock tops clear the grass by the REQ-M-9 margin; bare earth is filled until the 20% target is met.</p>
-<p><strong>Checked:</strong> each run reports every rock's top above the grass, its lift and the deepest plinth, the bare-earth share, and the overhang area (<code>gl.audit_overhang</code>). <code>stl_safe</code> refuses any export that is not one watertight body after a float32 reload.</p>
-<p>Seed 1 with the current stroke-blade grass: 2,905 blades, 1.58 M faces, 79 MB, about 85 s; bare earth 20.8% (15.7% visible); overhang 13.0 mm². Seeds 1–6 all export as one watertight body.</p>
-<p>Rock interaction, code v1e, 2×2 (measured with the earlier height-field grass):</p>
-<div class="tbl"><table>
-<thead><tr><th></th><th>Seed 1</th><th>Seed 2</th><th>Seed 3</th></tr></thead>
-<tbody>
-<tr><td>Rocks</td><td>6 placements, 6 stones, footprint 5.1%, 1 apron</td><td>9, 18 stones, 12.6%, 3 aprons</td><td>6, 7 stones, 4.5%, 3 aprons</td></tr>
-<tr><td>Lowest rock top above grass</td><td>2.4 mm (3.3 mm rock)</td><td>2.2 mm (4.0 mm rock)</td><td>1.5 mm (3.2 mm rock, lifted 0.6)</td></tr>
-<tr><td>Deepest plinth</td><td>1.0 mm</td><td>0.6 mm</td><td>2.0 mm</td></tr>
-<tr><td>Bare earth incl. under rocks / visible</td><td>20.8% / 15.7%</td><td>21.8% / 9.2%</td><td>21.0% / 16.5%</td></tr>
-</tbody></table></div>
-</details>
-
-<details id="variants">
-<summary>Variant history</summary>
-<p>One line per variant, oldest first. All are in git (<code>git log -- meadowlab/</code>).</p>
-<div class="tbl"><table>
-<thead><tr><th class="d">Date</th><th>Variant</th><th>What changed, and why</th></tr></thead>
-<tbody>
-<tr><td class="d">27 Oct</td><td>v1a (d169071)</td><td>First meadow: aprons round rocks plus free soil lenses. Aprons too wide and long; they merged into bald areas (32% soil).</td></tr>
-<tr><td class="d">27 Oct</td><td>v1b</td><td>Shawn: not every rock in a bare area. Rocks became footprint obstacles; one-sided aprons on 35% of rocks; visible bare earth fitted by scaling patches.</td></tr>
-<tr><td class="d">27 Oct</td><td>v1c</td><td>10.1% visible bare earth against a 10% target; 2 of 6 rocks with aprons.</td></tr>
-<tr><td class="d">27 Oct</td><td>v1d</td><td>Shawn: stop scaling. Bare earth counted at natural sizes, 20% including under rocks.</td></tr>
-<tr><td class="d">27 Oct</td><td>Refactor (6d553a5)</td><td>Rocks made deterministic; monkeypatching replaced by arguments. Output unchanged.</td></tr>
-<tr><td class="d">28 Oct</td><td>Export guarantees (7e60498)</td><td>Exact slab box under the grass and <code>stl_safe</code>: every seed reloads watertight.</td></tr>
-<tr><td class="d">28 Oct</td><td>v1e (734c9fa)</td><td>A seed sweep showed rocks swamped or buried in grass: low-quantile seat, lift to clear the grass, plinth, grass lowered beside rocks; rim seams fixed in grasslab.</td></tr>
-<tr><td class="d">29 Oct</td><td><strong>Stroke blades (0616212)</strong></td><td>The grass becomes grasslab v3: separate printable stroke blades on dirt. This is the current meadow.</td></tr>
-</tbody></table></div>
-</details>
-
-<details id="rust">
-<summary>Rust port</summary>
-<p><strong>Phase P4</strong>, “Grass, meadow, shore and reeds, the first real test of plan-then-build”. It ports <code>footprint_masks</code>, <code>apron_shapes</code>, <code>fill_bare_earth</code> and <code>seat_rocks</code>, and rocks gain footprints planned before the grass and seats built after it. Exit gate: bare earth at 20% ± 3 points, rocks above the grass top, the meadow built in 15 s or less on 8 cores (Python: 85 s), Shawn's sign-off and a test print with clean blade tips. It retires risk R8, that plan-then-build misses a case. Status: not started. The stack-order rule and the place words exist in dt-doc; the library has no meadow tile and no parity contact sheet yet.</p>
-</details>
-
-<h3 id="open">Open issues</h3>
-<ul>
-  <li>The tile language has no control for bare earth counted under rocks. <code>cover</code> is the share grassed over; whether it counts ground under rocks, as REQ-M-6 does, is still to decide in P4.</li>
-  <li>Aprons, clearings and spill appeared in the plan's P4 scope under the old look name <code>meadow</code> (renamed <code>grass</code> by decision D8). The as-built vocabulary has none of them; they stay hidden at the approved values unless P4 exposes them.</li>
-  <li>The meadow builds in about 85 s and writes a 79 MB STL. P4 targets 15 s.</li>
-  <li>The rock-interaction numbers were measured with the retired height-field grass; only seed 1 has been measured with stroke blades.</li>
-  <li>The Python library depends on layer order (<code>Rocks</code> before <code>Grass</code>); the Rust engine does not. Tile twins converted in P4 must not rely on order for solids.</li>
-  <li>Where meadow meets water is the shore, part of the <a href="elements/water.html">water</a> look (shorelab).</li>
-</ul>
-
-<h3 id="references">References</h3>
-<ul>
-  <li>The looks it combines: <a href="elements/grass.html">grass</a> (grasslab), <a href="elements/rock.html">rocks</a> (rocklab) and <a href="elements/dirt.html">ground</a> (dirtlab's earth).</li>
-  <li>The rules for places, regions and stack order: the <a href="language.html#places">language page</a>. The edge contract: <a href="standards/tile-system.html#edge-contract">tile system</a>.</li>
-</ul>
-
-<h3 id="history">History</h3>
-<p>meadowlab started on 27 Oct 2026 as the first lab to put two approved looks on one tile. It went through five versions in two days, then took grasslab's stroke blades on 29 Oct. It showed the order the Rust engine is built on: plan the solids first, grow the surfaces round them, then seat the solids. The full texts are archived: the lab's original <a href="archive/lab-logs/meadowlab/requirements.html">requirements</a> and <a href="archive/lab-logs/meadowlab/design.html">design and iteration log</a>, and the Rust study's <a href="archive/rust-study/labs.html#meadowlab">lab analysis</a> and <a href="archive/rust-study/notes.html">notes</a>.</p>
-</section>
+<p class="small">The code: <a href="https://github.com/shawn-vincent/dharmatiles/blob/main/crates/dt-eval/src/plan.rs"><code>crates/dt-eval/src/plan.rs</code></a>.</p>
 
 </article>
 </div>

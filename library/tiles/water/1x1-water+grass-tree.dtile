@@ -1,7 +1,4 @@
-// The twin of src/tiles/water/1x1-grass-tree+water.tile.py (the Python library tile, kept).
 // A meadow bank with one tree and a few big rocks, and a pool below it.
-// Port notes: as water+grass (the pool bed 2.2 mm under the water, the
-// shore drawn 0.1 square toward the water from the Python anchor).
 
 use "parts/grass" long-grass
 

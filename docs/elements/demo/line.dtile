@@ -1,6 +1,6 @@
 // The line page's picture: a line through three points, wobbled 5 mm,
 // dividing rough dirt from smooth ground at the same height.  The page
-// shows it beside the same line with wobble=0 (pictures.py makes both).
+// shows it beside the same line with wobble=0 (cargo xtask pictures makes both).
 tile line size="1x1" seed=3 {
     line border wobble=5 { through "0,0.3" "0.5,0.6" "1,0.35" }
     region smooth { bounded-by border; fill "0.5,0.1" }

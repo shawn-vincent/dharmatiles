@@ -1,5 +1,4 @@
 // A free-standing mass with a tall core and a lower tier round it.
-// Twin of clifflab/rockpile.py's `massif` form at round 17 (31f7c5d), 1x1.
 
 tile "1x1-cliff-massif" size="1x1" seed=1 {
     about """

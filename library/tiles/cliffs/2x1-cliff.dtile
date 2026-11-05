@@ -1,7 +1,5 @@
-// A 2×1 cliff run: a band of stacked rock against the north edge, with
-// dirt lodged on its top, a dirt bank against its face, and scree at its
-// foot. Twin of clifflab/rockpile.py's `run` form, frozen at round 17
-// (31f7c5d); its foot is the edge level (3.4 mm, Default 12).
+// A 2×1 cliff run: a band of stacked rock against the north edge, with dirt
+// lodged on its top, a dirt bank against its face, and scree at its foot.
 
 tile "2x1-cliff" size="2x1" seed=1 {
     about """

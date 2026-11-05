@@ -8,7 +8,7 @@
 <script src="../assets/site.js"></script>
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
   <div class="eyebrow"><i class="fam-mark fam-plant" title="moss: a plant"></i>Element · thing</div>
@@ -39,7 +39,6 @@
   <li><a href="#spec">Reference</a></li>
   <li><a href="#printing">Printing and painting</a></li>
   <li><a href="#how">How it is made</a></li>
-  <li><a href="#record">Design record</a></li>
 </ol></nav>
 <article class="doc">
 
@@ -47,17 +46,6 @@
 <p>The trunk flares at the ground and carries bark grooves that wind up it and continue through every fork. Branches divide cleanly, like an architect's sketch of a tree, never tangling or doubling back. Each branch ends in a rounded clump of foliage, and the clumps merge into one lumpy crown.</p>
 <p>The crown is covered completely in separate leaves: no bare patches, and no visible rows or rings. Leaves point down-slope with a gentle, coherent swirl, and overlap like shingles, each sitting a little higher than the leaf it covers, so every leaf reads on its own. On top of the crown the leaf tips curl up; underneath, where a hanging leaf could not print, leaves lie flat against the clump in a low arch.</p>
 <p>No two seeds grow the same tree, but every tree has the same character.</p>
-
-<div class="grid2">
-  <figure class="shot">
-    <img src="img/trees-organic-fulltree.jpg" alt="A full tree with a dense leafy crown on four trunks, no tile" width="587" height="628" loading="lazy">
-    <figcaption>A full skeleton-grown tree used to accept the leaf placer (3 Jul 2026): about 2,400 leaves. Colour preview; predates the red-overhang rule.</figcaption>
-  </figure>
-  <figure class="shot">
-    <img src="img/trees-organic-two-cluster.jpg" alt="Two merged foliage clumps covered in leaves" width="508" height="622" loading="lazy">
-    <figcaption>Two merged clumps, the test scene for seams between clumps: leaves flow across the crease. Mid-development render; predates the red-overhang rule.</figcaption>
-  </figure>
-</div>
 
 <h2 id="use">Using it in a tile</h2>
 <p>A tree goes anywhere in its area, kept a crown's radius from the tile edge, or where <code>at=</code> says. Grass grows round the trunk wherever the grass is listed:</p>
@@ -101,10 +89,10 @@ tile grove size="2x2" seed=3 {
 <tr id="c-trunk-width"><td><code>trunk width</code></td><td>mm</td><td>—</td><td>trunk thickness at the ground</td></tr>
 <tr id="c-crown"><td><code>crown</code></td><td>group</td><td>—</td><td>the crown</td></tr>
 <tr id="c-crown-width"><td><code>crown width</code></td><td>mm</td><td><code>30</code></td><td>crown width</td></tr>
-<tr id="c-crown-shape"><td><code>crown shape</code></td><td>word</td><td><code>round</code></td><td>silhouette<dl class="words"><dt><code>round</code></dt><dd>the Python tree's crown</dd><dt><code>cone</code></dt><dd>pointed at the top, like a fir (provisional)</dd><dt><code>wide</code></dt><dd>a broad, flat-bottomed spread (provisional)</dd><dt><code>tall</code></dt><dd>a narrow column (provisional)</dd></dl></td></tr>
+<tr id="c-crown-shape"><td><code>crown shape</code></td><td>word</td><td><code>round</code></td><td>silhouette<dl class="words"><dt><code>round</code></dt><dd>a round crown</dd><dt><code>cone</code></dt><dd>pointed at the top, like a fir (provisional)</dd><dt><code>wide</code></dt><dd>a broad, flat-bottomed spread (provisional)</dd><dt><code>tall</code></dt><dd>a narrow column (provisional)</dd></dl></td></tr>
 <tr id="c-crown-clumps"><td><code>crown clumps</code></td><td>count, 8–200</td><td><code>32</code></td><td>clumps of foliage, one per branch end</td></tr>
 <tr id="c-crown-clump-size"><td><code>crown clump-size</code></td><td>mm</td><td><code>5.5</code></td><td>size of each clump</td></tr>
-<tr id="c-crown-branching"><td><code>crown branching</code></td><td>word</td><td><code>normal</code></td><td>few long limbs, or many forks; the only branching control in a tile<dl class="words"><dt><code>open</code></dt><dd>few long limbs (provisional)</dd><dt><code>normal</code></dt><dd>the Python tree's branching</dd><dt><code>dense</code></dt><dd>many forks (provisional)</dd></dl></td></tr>
+<tr id="c-crown-branching"><td><code>crown branching</code></td><td>word</td><td><code>normal</code></td><td>few long limbs, or many forks; the only branching control in a tile<dl class="words"><dt><code>open</code></dt><dd>few long limbs (provisional)</dd><dt><code>normal</code></dt><dd>between the two: some long limbs, some forks</dd><dt><code>dense</code></dt><dd>many forks (provisional)</dd></dl></td></tr>
 <tr id="c-leaves"><td><code>leaves</code></td><td>word</td><td><code>on</code></td><td>separate leaves, just clumps, or a winter tree<dl class="words"><dt><code>on</code></dt><dd>separate leaves over the clumps</dd><dt><code>clumps-only</code></dt><dd>just foliage clumps</dd><dt><code>bare</code></dt><dd>a winter tree</dd></dl></td></tr>
 <tr id="c-leaf"><td><code>leaf</code></td><td>group</td><td>—</td><td>one leaf</td></tr>
 <tr id="c-leaf-length"><td><code>leaf length</code></td><td>mm</td><td><code>4.5</code></td><td>leaf length</td></tr>
@@ -146,6 +134,16 @@ tile grove size="2x2" seed=3 {
   <li>The tree does not change the tile edge; the ground around it meets other tiles as described on the <a href="../standards/tile-system.html">tile system</a> page.</li>
 </ul>
 
+<h3 id="rules">Rules</h3>
+<p>What this element always does. A change to one of these is a change to the element.</p>
+<ul class="rules">
+  <li>Leaves are visible, discrete and big enough to print (4.5 × 3 × 0.24 mm), on a blobby, slightly cartoonish crown of clumps (32 by default).</li>
+  <li>Leaves are placed organically: no visible order, complete coverage, each pointing down-slope with smooth variation. Overlapping leaves sit at different heights.</li>
+  <li>Leaves on the crown's underside are flattened until they print, never culled; the underside is an end-to-end arch.</li>
+  <li>Wood and clumps are bevelled wherever they would hang.</li>
+  <li>Only the crown's branching is a tile control (open, normal, dense); the branch details are expert controls in parts files.</li>
+</ul>
+
 <h2 id="printing">Printing and painting</h2>
 <ul>
   <li><strong>No supports.</strong> Print base down. Branches grow at least 26° above horizontal (the skeleton aims for 35°), which keeps them inside the <a href="../standards/printing.html#overhang">55°-from-vertical overhang limit</a>: 35° above horizontal is the same line as 55° from vertical.</li>
@@ -170,162 +168,7 @@ tile grove size="2x2" seed=3 {
 </ol>
 <p class="small">The code: <a href="https://github.com/shawn-vincent/dharmatiles/blob/main/crates/dt-looks/src/tree/mod.rs"><code>crates/dt-looks/src/tree/</code></a>.</p>
 
-<p>The generator is <code>src/dharmatiles/trees/</code>. Each tree is grown on its own, in four stages.</p>
-<ol>
-  <li><strong>Crown envelope.</strong> The crown is a rounded solid of revolution (<code>trees/envelope.py</code>). About 200 target points, called attractors, are scattered over its side surface, weighted by area so the top is not crowded (<code>_sample_canopy</code>, <code>trees/skeleton.py:687</code>). Attractors are grouped into clusters about 20 mm across, and each cluster is pushed outward into a dome, so the crown reads as lobes.</li>
-  <li><strong>Skeleton.</strong> <code>grow_skeleton</code> (<code>trees/skeleton.py:50</code>) grows from the root. Each branch owns a set of attractors and steps 1 mm at a time toward them. Before each step it looks ahead: attractors that would fall outside a 30° cone, or that would need a branch flatter than 35°, split off into a new branch from the current point, at most three at a time (<code>_branch_skeleton</code>, line 178). When a branch owns one attractor it lands exactly on it (<code>_grow_to_leaf</code>, line 403). So every branch end is an attractor, and forks happen only between them. Branch thickness is worked out from the tips down (<code>_compute_radii_bottom_up</code>, line 529).</li>
-  <li><strong>Wood and foliage.</strong> <code>build_branch_mesh</code> (<code>trees/mesh.py:54</code>) turns each skeleton edge into a closed, tapered, curved tube with smooth joints at forks, unions them into one wood volume, and flares the root into the ground. Bark grooves start at the root, wave and twist up every branch, and stop short of the foliage (<code>trees/bark.py</code>). The last 10.5 mm of each branch end swells into a noised rounded clump (<code>_build_foliage_cluster_mesh</code>, line 713).</li>
-  <li><strong>Leaves.</strong> <code>place_leaves_organic</code> (<code>trees/placement_organic.py:309</code>) joins all clumps into one surface, then throws leaf roots onto it until no more fit (a maximal Poisson-disk sample), which guarantees there is no bare patch. Each leaf points down-slope, turned by up to 15° by a smooth field. Leaves are built from the bottom up, each standing off 0.3 mm above any lower leaf it overlaps. Each leaf is seated, built and sealed into a solid by the shared per-leaf pipeline (<code>trees/placement_leaf.py</code>, <code>solidify_leaf</code> at <code>trees/leaf.py:852</code>). Leaves that would pierce a branch are dropped.</li>
-</ol>
-<p>Finally the trunk footprint is stamped into the tile so grass steers round it. A tile with one tree builds in about 13 seconds.</p>
-<details>
-  <summary>Key constants</summary>
-  <div class="tbl"><table>
-  <thead><tr><th>Name</th><th>Where</th><th>Value</th><th>Meaning</th></tr></thead>
-  <tbody>
-  <tr><td><code>segment_length_mm</code></td><td><code>Tree</code></td><td>1.0</td><td>Skeleton step length.</td></tr>
-  <tr><td><code>branch_split_angle_deg</code></td><td><code>Tree</code></td><td>30°</td><td>Half-angle of the cone a branch keeps.</td></tr>
-  <tr><td><code>target_fdm_angle_deg</code> / <code>strict_fdm_angle_deg</code></td><td><code>Tree</code></td><td>35° / 26°</td><td>Branch elevation the skeleton aims for / the hard floor.</td></tr>
-  <tr><td><code>branch_exponent</code></td><td><code>Tree</code></td><td>3.0</td><td>Pipe-model exponent: thicker trunk at higher values.</td></tr>
-  <tr><td><code>foliage_cluster_length_mm</code></td><td><code>Tree</code></td><td>10.5</td><td>Length of branch end that swells into a clump.</td></tr>
-  <tr><td><code>_ORGANIC_SPACING_FRAC</code></td><td><code>placement_organic.py:65</code></td><td>0.45</td><td>Root spacing as a fraction of leaf width: the overlap knob.</td></tr>
-  <tr><td><code>_ORGANIC_DIR_VAR_DEG</code></td><td><code>placement_organic.py</code></td><td>15°</td><td>Peak turn away from down-slope.</td></tr>
-  <tr><td><code>_ORGANIC_SHINGLE_STEP_MM</code>, <code>_CAP_MM</code></td><td><code>placement_organic.py</code></td><td>0.3, 1.2</td><td>Standoff per overlapped leaf, and its cap.</td></tr>
-  <tr><td><code>_ORGANIC_TIP_LIFT_MM</code>, <code>_PITCH_CURL_DEG</code></td><td><code>placement_organic.py</code></td><td>1.2, 32°</td><td>Upturned tips on top of the crown.</td></tr>
-  <tr><td><code>_ORGANIC_FLUSH_ARCH_MM</code></td><td><code>placement_organic.py</code></td><td>0.8</td><td>Arch of the flat underside leaves.</td></tr>
-  <tr><td><code>_ROOT_EMBED_MM</code>, <code>_PROTRUSION_MM</code></td><td><code>placement_leaf.py:33</code>, <code>:38</code></td><td>0.75, 0.3</td><td>How deep a leaf roots; how far its blade sits off the clump.</td></tr>
-  </tbody></table></div>
-</details>
 
-<section class="record" id="record">
-<h2>Design record</h2>
-<p>For the people developing the look: Shawn's rulings, the requirements, audit numbers, the variant history and open issues. Trees have no lab; the Python library is the approved look. Skeleton approved mid-June 2026; leaf placer accepted 3 Jul 2026.</p>
-
-<details id="rulings">
-<summary>Rulings</summary>
-<p>Shawn's decisions, oldest first. Each holds unless a later line replaces it. The 2 Jul answers come from the foliage requirements interview, recorded close to his words but not as exact quotes; quotation marks are used only where his words were recorded exactly.</p>
-<div class="tbl"><table>
-<thead><tr><th class="d">Date</th><th>Ruling</th><th>Shawn's words</th></tr></thead>
-<tbody>
-<tr><td class="d">13–18 Jun</td><td>The wiry ScaTree is replaced; the CloudTree skeleton (now <code>Tree</code>) is the approved branch structure.</td><td>—</td></tr>
-<tr><td class="d">25 Jun–2 Jul</td><td>Meridian-row leaves are rejected: they read as rows.</td><td class="q">“read as rows”</td></tr>
-<tr><td class="d">2 Jul</td><td>Meridian, greedy and shoots placers are all ugly; stop tuning and restart leaf placement from requirements.</td><td>—</td></tr>
-<tr><td class="d">2 Jul</td><td>Target: visible discrete leaves, big enough to print, slightly cartoonish, like an Animal Crossing tree.</td><td>—</td></tr>
-<tr><td class="d">2 Jul</td><td>The blobby clump silhouette and the leaf shape are fine; the arrangement is the failure. Overlap is fine if overlapping leaves sit at different heights.</td><td>—</td></tr>
-<tr><td class="d">2 Jul</td><td>Keep the clumps and branches; rebuild only leaf placement and solidification. Keep the current leaf size, 4.5 × 3 × 0.24 mm.</td><td>—</td></tr>
-<tr><td class="d">2 Jul</td><td>Organic: no visible order, but complete coverage. Tile the merged crown as one surface. Leaves point down-slope with smooth variation.</td><td>—</td></tr>
-<tr><td class="d">2 Jul</td><td>Sort leaves by height to guarantee overlap order.</td><td class="q">“you COULD do height-sorted LEAVES and guarantee overlap that way; you can increase standoff AND/OR lift”</td></tr>
-<tr><td class="d">2 Jul</td><td>Iteration 5 of the organic placer accepted.</td><td class="q">“I really like the density and surface of the leaves — the placement is really nice... wow. That's amazing!”</td></tr>
-<tr><td class="d">2 Jul</td><td>Underside leaves become a pure end-to-end arch; base-to-base nestling must not raise a leaf.</td><td>—</td></tr>
-<tr><td class="d">3 Jul</td><td>Organic is the only leaf placer; the others are deleted.</td><td class="q">“they suck, this one is good”</td></tr>
-<tr><td class="d">3 Nov</td><td>Leaves on the crown's underside are flattened until they print at 55°, rather than culled or pointed up-slope. This settles the clash between requirement 7 (leaves down to a normal of −0.75) and down-slope pointing at the 55° overhang gate: coverage and direction both hold, and the underside blades lie flush.</td><td class="q">“flatten the leaves under the crown”</td></tr>
-<tr><td class="d">4 Nov</td><td>The 55–65° band is no longer trees' alone: every look gets it, with the trees' budget.</td><td class="q">“the 65 degree exception that we had for trees, let's generalize it. Anything can be up to 65 degrees. It's useful to know. The two colors is useful, separating them is useful, because one is conservative, one is more extreme. But cliffs should be allowed to have that 65 degree overhang as well.”</td></tr>
-<tr><td class="d">3 Nov</td><td>Trees may lean between 55° and 65° in rare small patches, accepting some texture on the underside; 65° is the hard cap. Everything still aims for 55°; the patches are reported apart from overhang, held to a small share of the tree's underside, and painted orange.</td><td class="q">“for trees, just because they so much want overhangs... could we say 65 in rare circumstances? If we really want to push the envelope and are willing to deal with a little bit of surface texture issues?”</td></tr>
-</tbody></table></div>
-</details>
-
-<details id="requirements">
-<summary>Requirements</summary>
-<p>The consolidated foliage requirements of 2 Jul 2026, by their original numbers, with later changes marked. The skeleton's rules are its hard invariants. The full interview is in the <a href="../archive/history/2026-07-02-foliage-greenfield-requirements.md">archive</a>.</p>
-<h3>Skeleton invariants</h3>
-<ul>
-  <li><strong>S1</strong> Every attractor is a branch end; attractors are never fork points.</li>
-  <li><strong>S2</strong> Every branch ends exactly on an attractor.</li>
-  <li><strong>S3</strong> Forks happen only at in-between nodes.</li>
-  <li><strong>S4</strong> No branch below the strict FDM angle (26° above horizontal); the target is 35°.</li>
-</ul>
-<h3>Foliage (2 Jul 2026)</h3>
-<ul>
-  <li><strong>1 Scope.</strong> Rebuild leaf placement and solidification only.</li>
-  <li><strong>2 Coverage.</strong> Complete: no bare patch above the underside limit.</li>
-  <li><strong>3 Arrangement.</strong> Organic; no rows, rings, bands or grids.</li>
-  <li><strong>4 Overlap.</strong> Configurable, about 50% down to 15%; overlapping leaves sit at distinct heights.</li>
-  <li><strong>5 Seams.</strong> The crown is tiled as one merged surface.</li>
-  <li><strong>6 Direction.</strong> Down-slope with ±20–30° smooth variation. <em>Changed 2 Jul (iteration 2): ±15°, because divergent neighbours sliced through each other.</em></li>
-  <li><strong>7 Undersides.</strong> No hanging leaves; explore relief or a flat print-safe leaf. <em>Resolved 2 Jul (iteration 6): flat end-to-end arch leaves down to a normal of −0.75; bare below that.</em></li>
-  <li><strong>8 Print and finish.</strong> Supportless FDM, drybrush-friendly relief.</li>
-  <li><strong>9 Leaf solid.</strong> Current geometry and size, 4.5 × 3 × 0.24 mm.</li>
-  <li><strong>10 Acceptance.</strong> Eyeball pass on the two-clump scene and a full grown tree.</li>
-  <li><strong>11 Coexistence.</strong> New placer beside the old ones. <em>Superseded 3 Jul: organic is the only placer.</em></li>
-  <li><strong>12 Performance.</strong> Under 5 s of leaf placement for a full tree; no per-leaf mesh scans. <em>Measured about 6 s; accepted.</em></li>
-  <li><strong>13 Knobs.</strong> Module constants while iterating; promote to <code>Tree(...)</code> when settled. <em>Still module constants.</em></li>
-</ul>
-</details>
-
-<details id="audit">
-<summary>Audit numbers</summary>
-<p><strong>By construction:</strong> every branch end lands on an attractor, so no branch wanders; the lookahead splits off attractors that would need a branch flatter than 35°; the maximal Poisson-disk throw leaves no gap wider than two leaf spacings; height-sorted standoffs put every upper leaf over every lower leaf it overlaps; underside leaves are arches that cannot re-enter the clump; leaves that pierce a branch are culled.</p>
-<p><strong>Checked:</strong> <code>_warn_if_branch_below_strict_fdm_angle</code> (<code>trees/mesh.py:1264</code>) re-checks every branch edge at mesh time and warns below 26°. The placer counts residual uncovered test points and failed leaf builds. The library STL export does not check watertightness of the whole tile (see <a href="../standards/printing.html#export">printing</a>).</p>
-<div class="tbl"><table>
-<thead><tr><th>Scene</th><th class="num">Leaves</th><th class="num">Placement time</th><th>Notes</th></tr></thead>
-<tbody>
-<tr><td>Two-clump test (iteration 1)</td><td class="num">158</td><td class="num">0.2 s</td><td>1 uncovered test point</td></tr>
-<tr><td>Full tree (iteration 5, accepted)</td><td class="num">2,378</td><td class="num">about 6 s</td><td>about 5% failed leaf builds at fringes</td></tr>
-<tr><td>1×1 grass-tree tile</td><td>—</td><td class="num">about 13 s</td><td>whole tile, after the embree and batching work</td></tr>
-</tbody></table></div>
-</details>
-
-<details id="variants">
-<summary>Variant history</summary>
-<p>One line per variant, oldest first. Skeleton first, then foliage and leaves.</p>
-<div class="tbl"><table>
-<thead><tr><th class="d">Date</th><th>Variant</th><th>What changed, and why</th></tr></thead>
-<tbody>
-<tr><td class="d">13 Jun</td><td>ScaTree (1570e63)</td><td>Classic space colonisation in a crown ellipsoid. A wiry tangle that doubled back, with no printability guarantee. Replaced in a day.</td></tr>
-<tr><td class="d">14–15 Jun</td><td>Constructive and envelope SCA</td><td>Deterministic forks, or SCA on or inside the crown. Deleted for CloudTree.</td></tr>
-<tr><td class="d">14–18 Jun</td><td><strong>CloudTree → Tree</strong> (d7b608f)</td><td>Attractors on the crown surface; branches own attractors and land on them; lookahead splits; pipe radii; Bézier tubes. The current skeleton.</td></tr>
-<tr><td class="d">16 Jun</td><td>Radius-profile foliage (9e25ebc)</td><td>Branch ends swell into dome caps: “tan cauliflower”. Became the noised clumps used today.</td></tr>
-<tr><td class="d">17 Jun</td><td>Tiled leaf grid (7be6cee)</td><td>Leaves in rows along each branch: scaly, with spikes at the poles.</td></tr>
-<tr><td class="d">20 Jun</td><td>Branchlets (~24 commits)</td><td>Leaves on stalks. A stalk that bends down is an unprintable undercut.</td></tr>
-<tr><td class="d">24 Jun</td><td>Z-slice rows (afbe43e)</td><td>Leaves round horizontal slices; bald near the top despite six patches.</td></tr>
-<tr><td class="d">25 Jun</td><td>Meridian rows (4a866f3)</td><td>Rows spaced along the surface: neat, but “read as rows”, and two-thirds of builds were wasted.</td></tr>
-<tr><td class="d">1 Jul</td><td>Greedy accretion (1ac09ab)</td><td>One upward sweep. Pods and holes; uniform blue noise. Its per-leaf seat and skew survive.</td></tr>
-<tr><td class="d">2 Jul</td><td>Shoots (96f77d1)</td><td>Herringbone sprigs. Led to the requirements restart.</td></tr>
-<tr><td class="d">2–3 Jul</td><td><strong>Organic union surface</strong> (66d85e3 → 43a2d51)</td><td>Merged crown, maximal Poisson coverage, down-slope field, height-sorted shingling, arch undersides. Accepted.</td></tr>
-</tbody></table></div>
-<div class="grid2">
-  <figure class="shot">
-    <img src="img/trees-scatree.jpg" alt="An early wiry tree with tangled branches" width="900" height="750" loading="lazy">
-    <figcaption>ScaTree, 13 Jun: the wiry tangle that was replaced. Predates the red-overhang rule.</figcaption>
-  </figure>
-  <figure class="shot">
-    <img src="img/trees-meridian-placer.jpg" alt="A tree whose leaves sit in neat horizontal rows" width="900" height="750" loading="lazy">
-    <figcaption>Meridian rows, late June: neat, but it reads as rows. Predates the red-overhang rule.</figcaption>
-  </figure>
-</div>
-<figure class="shot narrow">
-  <img src="img/trees-shoots-two-cluster.jpg" alt="Two foliage clumps with herringbone sprigs of leaves, in debug colours" width="498" height="633" loading="lazy">
-  <figcaption>Shoots on the two-clump scene, 2 Jul, in debug colours: the last placer before the restart. Predates the red-overhang rule.</figcaption>
-</figure>
-</details>
-
-<details id="rust">
-<summary>Rust port</summary>
-<p><strong>Phase P5</strong>, branch <code>rust/p5</code> (2 Nov 2026). Ported: the crown envelope, the skeleton (space colonisation with the four invariants by construction), barked C1 wood, foliage clumps, and the organic leaf placer on the obvhs ray wrapper. Sheet: <code>cargo xtask parity tree</code> → <code>out/parity/tree/contact-sheet.png</code>.</p>
-<p><strong>Rust beside Python</strong> (the 1×1 tile's tree on flat ground, leaves off, seeds 1–4): height 46.8 / 48.6 mm, crown width 41.1 / 41.0 mm, volume 12,370 / 13,060 mm³, 32 terminals each, lowest branch 30.9–34.7° (never below 26°). Every judged row passes. A 1×1 tree tile builds in 2.9–3.8 s (DungeonBlocks) and 1.6–1.8 s (OpenLOCK); 2×2 in 5.6 and 2.6 s.</p>
-<p><strong>Leaves match Python exactly</strong> on the same inputs: on seeds 1–4 every Rust leaf sits at Python's root with Python's direction, with the same counts, failures and uncovered points. Placement takes 0.05–0.3 s per scale against Python's 2 s. Ray queries agree with Embree on 99.9997% of 315,033 rays, at 2.6–3.1× Embree's single-threaded time on a loaded machine (R3 measured 2.46× quiet).</p>
-<p><strong>Overhang.</strong> Most of the 1,230 mm² was leaves: Python's wood and clumps alone are 136–223 mm², all on clump undersides. Rust bevels whatever would hang (the <code>stand</code> op, 40° up from what holds it), so wood and clumps are 0 mm² at every seed and scale; the bevel planes show from low angles. Leaves are still the open problem: the printable leaf mode (tip tilt capped on undersides) cuts leaf overhang by about 75%, and a per-leaf audit cull then reaches 0.1–2 mm² but drops 15–17% of leaves and takes the DungeonBlocks build to 11–14 s. Until that is settled the tree test tiles run <code>leaves clumps-only</code>.</p>
-</details>
-
-<h3 id="open">Open issues</h3>
-<ul>
-  <li>The red-painted render (2 Nov) shows about 1,230 mm² of exposed faces past the limit, mostly leaves on the crown's underside. The Rust port makes wood and clumps 0 mm² by construction; leaves still overhang (see Rust port).</li>
-  <li>The organic placer's knobs are still module constants, not <code>Tree(...)</code> arguments (requirement 13).</li>
-  <li>About 5% of leaf builds fail at crown fringes and undersides.</li>
-  <li>The deep underside (below a normal of −0.75) is bare clump; a leaf-shaped relief there was proposed and not built.</li>
-  <li>The crown shapes <code>cone</code>, <code>wide</code>, <code>tall</code> and the branching words <code>open</code>, <code>dense</code> are provisional numbers in the Rust vocabulary; they need a review round before P5.</li>
-  <li>The library STL export does not verify that the whole tile is watertight.</li>
-</ul>
-
-<h3 id="references">References</h3>
-<ul>
-  <li>The visual target is the Animal Crossing: New Horizons tree (large lobed leaves densely shingling blobby clumps), as analysed in the foliage interview.</li>
-  <li>The Rust study's <a href="../archive/rust-study/variants.html">variants page</a> has every tree and leaf variant with renders.</li>
-</ul>
-
-<h3 id="history">History</h3>
-<p>The skeleton settled in a week in mid-June 2026 after four tries. Leaves took a month and nine placers; the organic placer won on 2–3 Jul after Shawn stopped tuning parameters and restarted from requirements. That method, interview then guarantees by construction then render-judged rounds, became the method for every later look. Full texts in the archive: <a href="../archive/python-library/leaf-placement.html">leaf placement</a>, <a href="../archive/python-library/leaf-solidification.html">leaf solidification</a>, <a href="../archive/python-library/space-colonization-envelope-tree.html">crown envelope</a>, <a href="../archive/python-library/cloud-tree-bark.html">bark</a>, <a href="../archive/python-library/cloud-tree-closed-solid-branches.html">closed solid branches</a>, the <a href="../archive/history/2026-07-03-leaf-placement-complete-history.md">complete leaf-placement history</a> and the <a href="../archive/history/2026-07-02-foliage-greenfield-requirements.md">foliage interview</a>.</p>
-</section>
 
 </article>
 </div>

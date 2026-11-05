@@ -1,6 +1,5 @@
-// The twin of src/tiles/ground/1x1-grass-flowers.tile.py: a 1×1 meadow with
-// scattered wildflowers. The flowers stand first, so the grass knows their
-// footprints and grows round them, never through them.
+// The flowers stand first, so the grass knows their footprints and grows
+// round them, never through them.
 
 use "parts/grass" lawn
 

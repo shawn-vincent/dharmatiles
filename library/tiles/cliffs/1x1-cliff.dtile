@@ -1,5 +1,4 @@
 // A short cliff run of tall columns against the north edge.
-// Built on the cliff look (clifflab rockpile, round 17), for variety in the library.
 
 tile "1x1-cliff" size="1x1" seed=3 {
     about "A short cliff run of tall columns against the north edge."

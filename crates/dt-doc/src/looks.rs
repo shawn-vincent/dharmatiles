@@ -112,11 +112,7 @@ static STONES: &[Word] = &[
         "bare dirt, no stones",
         &[("min", 0.0), ("max", 0.0)],
     ),
-    w(
-        "some",
-        "dirtlab's few bedded stones",
-        &[("min", 4.0), ("max", 7.0)],
-    ),
+    w("some", "a few bedded stones", &[("min", 4.0), ("max", 7.0)]),
     w(
         "many",
         "a stony patch (provisional)",
@@ -131,7 +127,7 @@ static CLODS: &[Word] = &[
         "a scatter of clods (provisional)",
         &[("density", 0.35)],
     ),
-    w("some", "dirtlab's clods", &[("density", 0.7)]),
+    w("some", "clods here and there", &[("density", 0.7)]),
     w(
         "many",
         "crumbly, cloddy earth (provisional)",
@@ -148,7 +144,7 @@ static FLOW: &[Word] = &[
     ),
     w(
         "wavy",
-        "grasslab's in-phase meander",
+        "blades meander together, in phase",
         &[("meander-min", 10.0), ("meander-max", 30.0)],
     ),
     w(
@@ -184,7 +180,7 @@ const fn rock_controls(size: &'static str) -> [Control; 5] {
     ]
 }
 
-// rocklab WIDTH_MM (6, 15): "port the labs first" (P3 alignment; was 2..10)
+// default rock widths: 6 to 15 mm
 static ROCK: [Control; 5] = rock_controls("6..15");
 static STONE: [Control; 5] = rock_controls("1..6");
 static BOULDER: [Control; 5] = rock_controls("4.5..8");
@@ -196,7 +192,7 @@ static CROWN_SHAPE: &[Word] = &[
     // `round` is the Python Tree's envelope defaults; the rest are provisional.
     w(
         "round",
-        "the Python tree's crown",
+        "a round crown",
         &[
             ("top-pointiness", 0.0),
             ("top-curve", 1.4),
@@ -252,7 +248,7 @@ static BRANCHING: &[Word] = &[
     ),
     w(
         "normal",
-        "the Python tree's branching",
+        "between the two: some long limbs, some forks",
         &[
             ("split", 30.0),
             ("eagerness", 0.8),
@@ -609,17 +605,13 @@ static CLIFF: &[Control] = &[
     )
     .words(STONE_SIZE)
     .default("rubble"),
-    c(
-        "ledges",
-        Axis::Count,
-        "shelves a miniature can stand on (P7)",
-    )
-    .limits(0.0, 2.0)
-    .subs(&[c(
-        "height",
-        Axis::Share,
-        "how far up, as a share of the cliff",
-    )]),
+    c("ledges", Axis::Count, "shelves a miniature can stand on")
+        .limits(0.0, 2.0)
+        .subs(&[c(
+            "height",
+            Axis::Share,
+            "how far up, as a share of the cliff",
+        )]),
     group(
         "shattered",
         &[
@@ -725,7 +717,7 @@ pub static LOOKS: &[Look] = &[
     },
     Look {
         name: "dirt",
-        about: "a textured earth surface: dirtlab's clods and relief",
+        about: "a textured earth surface: clods, grit and pebbles over gentle rises",
         role: Role::Surface,
         place: SURFACE_PLACE,
         needs: &[],
@@ -740,7 +732,7 @@ pub static LOOKS: &[Look] = &[
             c(
                 "stones",
                 Axis::Word,
-                "a few rocklab stones bedded in the dirt",
+                "a few stones bedded in the dirt",
             )
             .words(STONES)
             .default("some"),
@@ -757,7 +749,7 @@ pub static LOOKS: &[Look] = &[
     },
     Look {
         name: "grass",
-        about: "stroke-blade grass in tufts (grasslab v3)",
+        about: "separate sculpted blades in tufts",
         role: Role::Surface,
         place: SURFACE_PLACE,
         needs: &[],
@@ -785,7 +777,7 @@ pub static LOOKS: &[Look] = &[
     },
     Look {
         name: "reeds",
-        about: "clumps of tapered reeds at the waterline, leaning toward the water (shorelab)",
+        about: "clumps of tapered reeds at the waterline, leaning toward the water",
         role: Role::Surface,
         place: &[PlaceWord::In],
         needs: &[],
@@ -798,7 +790,7 @@ pub static LOOKS: &[Look] = &[
     },
     Look {
         name: "flowers",
-        about: "wildflowers: a thin dome on a column, ringed by petal domes on cones (the library's Flowers)",
+        about: "wildflowers: a thin dome on a column, ringed by petal domes on cones",
         role: Role::Surface,
         place: SURFACE_PLACE,
         needs: &[],
@@ -815,7 +807,7 @@ pub static LOOKS: &[Look] = &[
     },
     Look {
         name: "water",
-        about: "still water with waterlab's swells: fills its area up to its level",
+        about: "still water with swells round its shores and rocks: fills its area up to its level",
         role: Role::Surface,
         place: &[PlaceWord::In],
         needs: &[],
@@ -859,7 +851,7 @@ pub static LOOKS: &[Look] = &[
     },
     Look {
         name: "cliff",
-        about: "a cliff of stacked rock (clifflab rockpile); one edge is a run, two a corner; `form=` names the free-standing masses",
+        about: "a cliff of stacked rock; one edge is a run, two a corner; `form=` names the free-standing masses",
         role: Role::Run,
         place: RUN_PLACE,
         needs: &[],

@@ -8,7 +8,7 @@
 <script src="../assets/site.js"></script>
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
   <div class="eyebrow"><i class="fam-mark fam-surface" title="earth: a surface"></i>Element · surface</div>
@@ -54,6 +54,14 @@
 </ul>
 <p class="muted small">Generated from <code>dharmatiles looks floor</code> by <code>cargo xtask docs</code>.</p>
 <!-- /gen:reference -->
+<h3 id="rules">Rules</h3>
+<p>What this element always does. A change to one of these is a change to the element.</p>
+<ul class="rules">
+  <li>A floor replaces the ground: no soil on top of it.</li>
+  <li>Its slabs carry a texture made for drybrushing.</li>
+  <li>Floors and walls share one stone engine.</li>
+</ul>
+
 <h2 id="notes">Notes</h2>
 <p>The slabs share the wall's stone finishes; how they are made is on the <a href="wall.html#floor-spec">wall page</a>.</p>
 </article>

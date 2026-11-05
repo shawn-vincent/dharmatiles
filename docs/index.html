@@ -16,22 +16,6 @@
   .bodies dt { font: 600 11px/1.7 var(--mono); color: var(--muted); }
   .bodies dd { margin: 0; }
   .b-python { --b: var(--stone); } .b-other { --b: var(--muted); } .b-labs { --b: var(--accent); } .b-rust { --b: var(--earth); }
-  .status { margin: 14px 0 8px; }
-  .status [hidden] { display: none; }
-  .status .meta { font: 500 12px var(--mono); color: var(--muted); margin-bottom: 6px; }
-  .status h3 { margin: 22px 0 6px; font-size: 16px; display: flex; gap: 8px; align-items: center; }
-  .status h3::before { content: ""; width: 10px; height: 10px; border-radius: 2px; background: var(--b); }
-  .status ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-  .status li { max-width: none; display: grid; grid-template-columns: 82px 96px minmax(0, 1fr); gap: 4px 12px; align-items: baseline; padding-top: 8px; border-top: 1px solid var(--rule); }
-  .status .s { font: 600 11.5px var(--mono); color: var(--muted); }
-  .status .s.running { color: var(--water); } .status .s.done { color: var(--accent); }
-  .status .s.waiting { color: var(--gold); } .status .s.blocked { color: var(--alert); }
-  .status .area { font: 500 12px var(--mono); color: var(--muted); }
-  .status .what strong { font-weight: 600; } .status .what p { margin: 2px 0 0; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
-  .status .when { font: 400 11.5px var(--mono); color: var(--muted); }
-  .status .you { border: 1px solid var(--gold); border-radius: 4px; padding: 10px 14px; background: color-mix(in srgb, var(--gold) 8%, var(--bg)); }
-  .status .you li { border-top: 0; padding-top: 0; }
-  @media (max-width: 560px) { .status li { grid-template-columns: 76px minmax(0, 1fr); } .status .area { grid-column: 2; grid-row: 1; } .status .what { grid-column: 1 / -1; } }
   .lookgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin: 16px 0; }
   .lookgrid > * { min-width: 0; }
   a.lookcard { display: flex; flex-direction: column; gap: 4px; background: var(--card); border: 1px solid var(--rule); border-radius: var(--r-lg); padding: 0 0 12px; color: var(--fg); text-decoration: none; overflow: hidden; }
@@ -57,7 +41,7 @@
 </style>
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="index.html" aria-current="page">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="rust/plan.html">Project</a><a href="archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="index.html">dharmatiles</a><a href="language.html">Language</a><a href="elements/index.html">Elements</a><a href="composing.html">Composing</a><a href="preview.html">Preview</a><a href="standards/tile-system.html">Tile system</a><a href="standards/printing.html">Printing</a><a href="standards/rules.html">Rules</a></div></nav>
 
 <div class="wrap">
 <header class="hero home-hero">
@@ -122,10 +106,12 @@ cargo build --release                 # a few minutes, once
 <h2 id="reference">The reference</h2>
 <ul class="doclist">
   <li><a href="language.html">The language</a><span class="sum">How a document is written: syntax, units and levels, edges, points, lines and regions, placement, parts, and errors.</span></li>
-  <li><a href="elements/index.html">Elements</a><span class="sum">Every element a document can write, one page each: what it makes, screenshots, an example, every control (generated from the program), how it is made, reference photos and its design record.</span></li>
+  <li><a href="elements/index.html">Elements</a><span class="sum">Every element a document can write, one page each: what it makes, screenshots, an example, every control (generated from the program), its rules, and how it is made.</span></li>
   <li><a href="composing.html">Composing a tile</a><span class="sum">How elements share a tile: rocks bedded in the ground, grass growing up to them, and tiles that meet their neighbours.</span></li>
   <li><a href="standards/tile-system.html">Tile system</a><span class="sum">Tile, square and cell; the DungeonBlocks and OpenLOCK bases; file names; edges.</span></li>
   <li><a href="standards/printing.html">Printing</a><span class="sum">The printer profile, the overhang limit, red overhangs in renders, and the audit every build passes.</span></li>
+  <li><a href="preview.html">Preview</a><span class="sum">The live painted view in your browser: running it, what it shows, the keys, and live rebuilds.</span></li>
+  <li><a href="standards/rules.html">Rules</a><span class="sum">What every tile and every build keeps: the printability gate, the edge level, determinism, and where each element's own rules are.</span></li>
   <li><a href="standards/visual-system.html">Visual system</a><span class="sum">The colours, type, plate and controls the site and the preview share, and the rules for adding to them.</span></li>
 </ul>
 
@@ -140,105 +126,24 @@ cargo build --release                 # a few minutes, once
   <a class="lookcard" href="elements/tree.html"><img src="elements/img/el-tree.jpg" alt="" loading="lazy"><span class="lc-t">tree</span><span class="lc-d">A barked, forking trunk and clumps of foliage covered in separate leaves.</span></a>
   <a class="lookcard" href="elements/index.html"><img src="elements/img/el-stack-6.jpg" alt="" loading="lazy"><span class="lc-t">All elements</span><span class="lc-d">tile, levels, line, region, stack, use, define, scatter, the bases and the library files.</span></a>
 </div>
-<p class="muted small">Older renders on the element pages predate the rule that paints overhang faces red; each is captioned.</p>
-
-<h2 id="project">The project</h2>
-<div class="bodies">
-  <section class="card b-rust">
-    <h3>The program</h3>
-    <p>The <code>dharmatiles</code> program, in Rust: it reads <code>.dtile</code> documents, builds them, audits them and writes STL and 3MF.</p>
-    <dl>
-      <dt>Code</dt><dd><code>crates/</code>, <code>library/</code></dd>
-      <dt>Docs</dt><dd><a href="rust/plan.html">Plan and decisions</a> · <a href="rust/architecture.html">Architecture</a> · <a href="rust/preview.html">Preview</a> · <a href="rust/spikes.html">Spikes</a></dd>
-      <dt>Status</dt><dd><a href="#status-rust">below</a></dd>
-    </dl>
-  </section>
-  <section class="card b-labs">
-    <h3>The labs</h3>
-    <p>Standalone Python experiments where new looks are designed (grass, rocks, cliffs, water, shore, dirt, meadow) before each is ported into the program.</p>
-    <dl>
-      <dt>Code</dt><dd><code>*lab/</code> at the repo root, on <code>src/dharmatiles</code></dd>
-      <dt>Docs</dt><dd>Each element page's design record; lab logs in the <a href="archive/index.html#lab-logs">archive</a></dd>
-      <dt>Status</dt><dd><a href="#status-labs">below</a></dd>
-    </dl>
-  </section>
-  <section class="card b-python">
-    <h3>The Python library</h3>
-    <p>The original generator, retired on 4 Nov 2026 (tag <code>python-library-final</code>). Its support library stays, frozen, for the labs.</p>
-    <dl>
-      <dt>Docs</dt><dd><a href="archive/index.html#python-library">Library design pages</a> (archived)</dd>
-      <dt>Status</dt><dd><a href="#status-python">below</a></dd>
-    </dl>
-  </section>
-</div>
 
 <h2 id="status">Status</h2>
-<div class="status">
-  <div class="meta" id="status-meta">Loading status…</div>
-  <div id="status-you"></div>
-  <h3 class="b-python" id="status-python">Python library</h3><ul data-body="python"></ul>
-  <h3 class="b-labs" id="status-labs">Labs</h3><ul data-body="labs"></ul>
-  <h3 class="b-rust" id="status-rust">Rust rewrite</h3><ul data-body="rust"></ul>
-  <h3 class="b-other" id="status-other" hidden>Site and other</h3><ul data-body="other" hidden></ul>
-</div>
-<p class="muted small">Rows come from <a href="status.json">status.json</a>, which Claude commits as work moves.</p>
-
+<p>What the program does today, and what is not built yet.</p>
+<div class="tbl"><table>
+<thead><tr><th>Works</th><th>Not built yet</th></tr></thead>
+<tbody>
+<tr><td>Every element on the <a href="elements/index.html">elements</a> pages builds: ground, dirt, grass, reeds, flowers, water, rocks and scatter, trees, walls, floors and cliffs.</td><td>A line's <code>width=</code>, and building <code>along=</code> a drawn line (walls, paths, surfaces). <code>check</code> names the lines; <code>build</code> refuses them.</td></tr>
+<tr><td>DungeonBlocks and OpenLOCK bases from one document; STL, 3MF with materials, and PNG views.</td><td>Doors, windows and hatches in walls.</td></tr>
+<tr><td>The <a href="preview.html">preview</a>, <code>watch</code>, and the whole library (<code>build --all --system both</code>).</td><td>Prebuilt downloads, and builds for Linux, Windows and the browser.</td></tr>
+</tbody></table></div>
 
 <h2 id="extras">Extras</h2>
 <ul class="doclist">
-  <li><a href="extras/paint-organizer.html">Paint organizer magnets</a><span class="sum">Not terrain: disc-magnet pockets in the hex paint organizer so copies clip together.</span><span class="meta">src/extras/dharmatiles-paint-organizer.py</span></li>
+  <li><a href="extras/paint-organizer.html">Extras</a><span class="sum">Not terrain: a paint organizer and its stand, and two helpers for looking at STL files.</span><span class="meta">extras/</span></li>
 </ul>
 
 
-<h2 id="archive">Archive</h2>
-<p>Everything that records how we got here: the Python library design pages, the Rust study's change log and notes, lab iteration logs, and the dated session history. It is frozen. <a href="archive/index.html">Open the archive index</a>, which says what each item was and what replaced it.</p>
 </div>
 
-<script>
-(() => {
-  // Live status: rows in status.json, committed by Claude as work moves.
-  const meta = document.getElementById('status-meta');
-  const you = document.getElementById('status-you');
-  const ago = iso => {
-    const s = (Date.now() - Date.parse(iso)) / 1000;
-    if (!isFinite(s)) return '';
-    if (s < 90) return 'just now';
-    if (s < 5400) return Math.round(s / 60) + ' min ago';
-    if (s < 129600) return Math.round(s / 3600) + ' h ago';
-    return Math.round(s / 86400) + ' d ago';
-  };
-  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-  const row = r => {
-    const li = el('li');
-    li.append(el('span', 's ' + (r.state || 'next'), r.state || ''), el('span', 'area', r.area || ''));
-    const what = el('div', 'what');
-    what.append(el('strong', null, r.title || ''));
-    if (r.detail) what.append(el('p', null, r.detail));
-    if (r.updated) what.append(el('div', 'when', 'updated ' + ago(r.updated)));
-    li.append(what);
-    return li;
-  };
-  fetch('status.json', { cache: 'no-store' })
-    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(d => {
-      const rows = d.rows.slice().sort((a, b) => a.order - b.order);
-      let latest = '';
-      for (const r of rows) {
-        if (r.updated > latest) latest = r.updated;
-        if (r.area === 'Shawn') {
-          const box = el('div', 'you'); const ul = el('ul'); ul.append(row(r)); box.append(ul); you.append(box);
-          continue;
-        }
-        const known = ['python', 'labs', 'rust'].includes(r.body);
-        const ul = document.querySelector('.status ul[data-body="' + (known ? r.body : 'other') + '"]');
-        if (!known) { ul.hidden = false; ul.previousElementSibling.hidden = false; }
-        ul.append(row(r));
-      }
-      document.querySelectorAll('.status ul[data-body]:not([hidden])').forEach(ul => { if (!ul.children.length) ul.append(el('li', 'muted', 'No active work.')); });
-      meta.textContent = rows.length ? 'Last change ' + ago(latest) + ' · refresh to update' : 'No status yet.';
-    })
-    .catch(() => { meta.textContent = 'Status unavailable.'; });
-})();
-</script>
 </body>
 </html>

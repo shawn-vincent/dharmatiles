@@ -1,11 +1,5 @@
-// The parity twin of waterlab's bank-rock scene (waterlab/waterlab.py,
-// swell-chaos): land on the west, its shore wandering 4 mm about 17 mm in,
-// a 7 mm bank down to a bed 2.2 mm under the water, and a 15 mm rock in
-// the water at (46, 38) mm.  Built by `cargo xtask parity water` at seeds
-// 1–4 beside the lab.
-
 tile water size="2x2" seed=1 {
-    about "waterlab's swell-chaos water by a bank, with a rock, for the parity harness."
+    about "Water by a bank, with a rock in it: a test tile."
     line shore wobble=4 {
         through "0.486,0" "0.486,2"
     }

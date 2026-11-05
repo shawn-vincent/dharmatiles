@@ -1,15 +1,12 @@
-// The edge contract: what every tile does at its edges, so that
-// neighbouring tiles butt with no step.  Every tile uses it at the root
-// of its document, without a `use` line.
-//
-// P1 holds the ground's edge level; P2 confirms it against dirtlab and
-// P3 adds the water's edge profile.
+// The edge contract: what every tile does at its edges, so that neighbouring
+// tiles butt with no step. Every tile uses it at the root of its document,
+// without a `use` line.
 
 edges {
     ground level=edge           // ground meets every tile edge at the edge level (3.4 mm)
     // water meets every tile edge at the water level (2.6 mm) plus the
     // shared tide: 0.6 sin(2π(s − 13.125)/17.5) mm along each edge (s in
     // mm from the edge's start), crests at the square corners and edge
-    // centres (waterlab TIDE_EDGE_*), so two water tiles butt any way round
+    // centres, so two water tiles butt any way round
     water level=water
 }

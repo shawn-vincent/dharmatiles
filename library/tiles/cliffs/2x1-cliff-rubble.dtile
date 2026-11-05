@@ -1,5 +1,4 @@
 // A low, broken cliff run of smaller stones.
-// Built on the cliff look (clifflab rockpile, round 17), for variety in the library.
 
 tile "2x1-cliff-rubble" size="2x1" seed=4 {
     about "A low, broken cliff run of smaller stones."

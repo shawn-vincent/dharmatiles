@@ -1,8 +1,5 @@
-// A grass-free cut-stone floor on a 1×1: the parity twin of the Python
-// StoneFloor builder and a golden test tile.
-
 tile floor-stone size="1x1" seed=1 {
-    about "A dressed stone floor, for the parity harness and golden tests."
+    about "A dressed stone floor: a test tile."
     stack {
         dirt
         floor texture=dressed

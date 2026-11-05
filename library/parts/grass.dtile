@@ -1,6 +1,6 @@
 // Grass presets shared by tiles: `use "parts/grass" lawn long-grass`.
 
-// Short, tidy grass: grasslab's approved blades.
+// Short, tidy grass: the standard blades.
 define lawn {
     param length "3.5..6.5"   // blade length along the ground, mm
     param height "1.5..2"     // how tall a blade stands over the ground, mm

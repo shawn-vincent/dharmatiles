@@ -1,6 +1,4 @@
-// Bare earth on one square (seed 13).  It replaced the Python library's
-// 1x1-soil.tile.py (the older SoilCarpet texture) on 2 Nov 2026; this is
-// dirtlab's dirt, the exposed ground every look now uses (29 Oct 2026).
+// Bare earth on one square (seed 13).
 
 tile soil size="1x1" seed=13 {
     about "Bare earth: clods, grit and half-sunk pebbles over gentle rises."

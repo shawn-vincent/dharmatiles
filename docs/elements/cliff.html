@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="../assets/gallery.css">
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
   <div class="eyebrow"><i class="fam-mark fam-thing" title="stone: a thing, a run or a scatter"></i>Element · run</div>
@@ -41,7 +41,6 @@
   <li><a href="#spec">Reference</a></li>
   <li><a href="#printing">Printing and painting</a></li>
   <li><a href="#how">How it is made</a></li>
-  <li><a href="#record">Design record</a></li>
 </ol></nav>
 <article class="doc">
 
@@ -49,36 +48,21 @@
 <p>The cliff is built from broad, interlocking masses of stone of very different widths, not a pile of round boulders. Joints run mostly vertical, broken by short ledges. Columns of stone step forward and back, so the face casts deep shadows. About a third of the face is broken into clusters of smaller stones and cracks; the rest is quiet, flat rock. Edges carry a few crisp chips. Dirt lodges on the top and in hollows, and angular scree of the same stone lies at the foot.</p>
 <p>No two seeds make the same cliff, but every seed reads as the same stone.</p>
 
-<div class="grid2">
-  <figure class="shot">
-    <img src="img/cliffs-r17-massif-s1.jpg" alt="Grey 2x2 massif from above" width="900" height="834" loading="lazy">
-    <figcaption>2×2 massif, seed 1, grey, from above. Free-standing forms are dressed all round. Overhang faces red.</figcaption>
-  </figure>
-  <figure class="shot">
-    <img src="img/cliffs-r17-vs-ref-n-s4.jpg" alt="Reference N beside round 16 and round 17 renders of a 1x1 run, seed 4" width="900" height="420" loading="lazy">
-    <figcaption>The target (reference N, left) beside the approved look (right), 1×1 run, seed 4. Overhang faces red.</figcaption>
-  </figure>
-</div>
-
 <h3 id="forms">Forms</h3>
-<p>One generator makes every form on the reference sheet below. Today the run is the form that is tuned and approved; the others share its stone and finish.</p>
+<p>One generator makes every form. The run is the most refined; the others share its stone and finish.</p>
 <div class="tbl"><table>
-<thead><tr><th>Form</th><th>What it is</th><th>Reference cells</th></tr></thead>
+<thead><tr><th>Form</th><th>What it is</th></tr></thead>
 <tbody>
-<tr><td>run</td><td>A straight cliff along one tile edge, open to the front</td><td>B, H, N</td></tr>
-<tr><td>corner</td><td>A run turning round two edges</td><td>C</td></tr>
-<tr><td>canyon</td><td>Cliffs on two opposite edges</td><td>I, K</td></tr>
-<tr><td>escarpment</td><td>A long, stepped rise across the tile</td><td>D, O</td></tr>
-<tr><td>plateau</td><td>A flat-topped block standing free</td><td>A</td></tr>
-<tr><td>massif</td><td>A big rounded outcrop</td><td>M</td></tr>
-<tr><td>mound</td><td>A low heap of stone</td><td>F</td></tr>
-<tr><td>spire</td><td>A single tall pillar</td><td>E, P</td></tr>
-<tr><td>needles</td><td>A cluster of thin pillars</td><td>J</td></tr>
+<tr><td>run</td><td>A straight cliff along one tile edge, open to the front</td></tr>
+<tr><td>corner</td><td>A run turning round two edges</td></tr>
+<tr><td>canyon</td><td>Cliffs on two opposite edges</td></tr>
+<tr><td>escarpment</td><td>A long, stepped rise across the tile</td></tr>
+<tr><td>plateau</td><td>A flat-topped block standing free</td></tr>
+<tr><td>massif</td><td>A big rounded outcrop</td></tr>
+<tr><td>mound</td><td>A low heap of stone</td></tr>
+<tr><td>spire</td><td>A single tall pillar</td></tr>
+<tr><td>needles</td><td>A cluster of thin pillars</td></tr>
 </tbody></table></div>
-<figure class="shot">
-  <img src="img/cliffs-reference-sheet.jpg" alt="Sixteen painted cliff miniatures in a four by four grid, labelled A to P" width="800" height="800" loading="lazy">
-  <figcaption>The reference sheet: sixteen painted cliff miniatures, A to P. The look is judged against N.</figcaption>
-</figure>
 
 <h2 id="use">Using it in a tile</h2>
 <p>A cliff on a tile edge stands inside the tile, its face toward the open ground. This is the library's run, with its scree and its dirt bank:</p>
@@ -125,7 +109,7 @@ cliff form=spire height=50         // a tall tapering stack, standing free</code
 <tr id="c-rock-odd"><td><code>rock odd</code></td><td>number</td><td>—</td><td>weight of irregular lumps <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
 <tr id="c-rock-monoliths"><td><code>rock monoliths</code></td><td>number</td><td>—</td><td>weight of ground-to-top stones <span class="tag">not built yet</span> <span class="muted small"><code>check</code> accepts it; <code>build</code> refuses it</span></td></tr>
 <tr id="c-stone-size"><td><code>stone-size</code></td><td>percent</td><td><code>rubble</code></td><td>small broken stones, or big masses<dl class="words"><dt><code>rubble</code></dt><dd>small broken stones</dd><dt><code>broken</code></dt><dd>between the two (provisional)</dd><dt><code>massive</code></dt><dd>big masses: 1.35x rubble size</dd></dl></td></tr>
-<tr id="c-ledges"><td><code>ledges</code></td><td>count, 0–2</td><td>—</td><td>shelves a miniature can stand on (P7)</td></tr>
+<tr id="c-ledges"><td><code>ledges</code></td><td>count, 0–2</td><td>—</td><td>shelves a miniature can stand on</td></tr>
 <tr id="c-ledges-height"><td><code>ledges height</code></td><td>percent</td><td>—</td><td>how far up, as a share of the cliff</td></tr>
 <tr id="c-shattered"><td><code>shattered</code></td><td>group</td><td>—</td><td>broken patches with more cracks and scree</td></tr>
 <tr id="c-shattered-patches"><td><code>shattered patches</code></td><td>count</td><td>—</td><td>broken patches along the run</td></tr>
@@ -171,6 +155,20 @@ cliff form=spire height=50         // a tall tapering stack, standing free</code
   <li>Tile sizes, edge names and the edge contract are on the <a href="../standards/tile-system.html">tile system</a> page.</li>
 </ul>
 
+<h3 id="rules">Rules</h3>
+<p>What this element always does. A change to one of these is a change to the element.</p>
+<ul class="rules">
+  <li>A cliff fits a 1×1 tile: a thin band along the edge it stands on.</li>
+  <li>Only the rim of a face that lies on the tile boundary is low relief; the middle of the tile can have deep cuts and big stones.</li>
+  <li>Faces on the tile edge are textured right up to it, never cut flat. A stone is never clipped at the tile edge: it is shrunk back until it touches.</li>
+  <li>Edge stones touch the boundary plane; inner stones may sit back from it.</li>
+  <li>Stones fill the space between the contact planes (back, ends and top); the front is open. The top is a contact plane, with dirt on it, and its edge is straight.</li>
+  <li>No flat ceilings: a resting stone has a sloped bottom that sinks into the stone below.</li>
+  <li>Seams between stacked stones read as grooves. Cracks are thin, run their full width and depth to an edge, joint or other crack, and carry on round a convex corner onto the next face.</li>
+  <li>The fine grain is strong enough to read and to drybrush at print scale.</li>
+  <li>Run ends are a standard section, so runs meet end to end; a few millimetres of mismatch reads as one more joint.</li>
+</ul>
+
 <h2 id="printing">Printing and painting</h2>
 <ul>
   <li><strong>No supports.</strong> Print base down at 0.2 mm layers with a 0.4 mm nozzle. Every overhang is aimed within 55° of vertical (65° at most, in small orange patches), and no layer reaches more than 0.6 mm past the one below.</li>
@@ -201,220 +199,10 @@ cliff form=spire height=50         // a tall tapering stack, standing free</code
 </ol>
 <p class="small">The code: <a href="https://github.com/shawn-vincent/dharmatiles/blob/main/crates/dt-looks/src/cliff/mod.rs"><code>crates/dt-looks/src/cliff/</code></a>.</p>
 
-<p>The generator is <code>clifflab/rockpile.py</code> (line numbers at commit 31f7c5d). It stacks stones under gravity, then dresses them. Four stages:</p>
-<ol>
-  <li><strong>Form.</strong> <code>make_form</code> (line 413) turns the chosen form into contact planes (for a run: the back edge, both ends and the top) and a target profile the pile grows toward: stepped tiers, gullies cut back, buttresses standing out.</li>
-  <li><strong>Stack.</strong> <code>stack</code> (line 575) fills the lowest spot still short of the target with a stone: it picks a kind (column, block, slab, odd, monolith), grows a footprint, and rests the stone on its highest supports. Its underside fills down to what is below, so there are no gaps. Stones are bigger low down and in quiet zones, and stone tops are kept from lining up like masonry.</li>
-  <li><strong>Finish.</strong> Stones sharing a footprint are dressed as one column whose faces run across the joints (<code>_plan_column</code>, line 1035); columns stand flush or 2.5–4.5 mm back. Each resting stone gets a sloped seat instead of a flat underside (<code>_seat</code>, line 1674). A few chips are knocked off sharp edges (<code>chip_edges</code>, line 1600). Sparse straight cracks grow edge to edge and wrap round corners (<code>_crack_net</code>, line 1098), then each face is cut into slightly tilted sub-faces and the cracks are sunk in (<code>_relief</code>, line 1341).</li>
-  <li><strong>Assembly.</strong> The stones are joined with a hidden core, so a gap between stones is a dark recess, never a hole. The foot ground, dirt bank, scree and top dirt are added, and the result is fused to the base.</li>
-</ol>
-<details>
-  <summary>Key constants</summary>
-  <div class="tbl"><table>
-  <thead><tr><th>Constant</th><th>Line</th><th>Value</th><th>Meaning</th></tr></thead>
-  <tbody>
-  <tr><td><code>DEPTH_MM</code></td><td class="num">78</td><td>8–20</td><td>How far a run reaches out from the back edge (mm).</td></tr>
-  <tr><td><code>END_MM</code></td><td class="num">88</td><td>4</td><td>Length of the standard end section (mm).</td></tr>
-  <tr><td><code>KINDS</code></td><td class="num">93</td><td>38 / 38 / 12 / 6 / 6 %</td><td>Column / block / slab / odd / monolith shares.</td></tr>
-  <tr><td><code>COLUMN_STEP_MM</code></td><td class="num">126</td><td>0–0.6 or 2.5–4.5</td><td>Column setback: flush or well back.</td></tr>
-  <tr><td><code>CHIP_DEG</code>, <code>CHIP_LEN_MM</code></td><td class="num">153</td><td>60°; 3–7 mm</td><td>Which edges get chips, and how long.</td></tr>
-  <tr><td><code>FACE_GRAIN_MM</code></td><td class="num">162</td><td>0.25</td><td>Grain depth.</td></tr>
-  <tr><td><code>OVERHANG_DEG</code></td><td class="num">171</td><td>55°</td><td>Overhang limit from vertical.</td></tr>
-  <tr><td><code>REACH_MM</code></td><td class="num">173</td><td>0.6</td><td>How far one layer may reach past the one below.</td></tr>
-  <tr><td><code>ZONES_PER_SQUARE</code></td><td class="num">182</td><td>1.5</td><td>Shattered zones per square of run.</td></tr>
-  <tr><td><code>JOINT_MM</code></td><td class="num">187</td><td>0.8–1.2</td><td>Joint chamfer: joints read strongest.</td></tr>
-  <tr><td><code>CRACK_PER_MM2</code></td><td class="num">215</td><td>0.06</td><td>Crack length per mm² of face: sparse.</td></tr>
-  <tr><td><code>CRACK_SLOT_MM</code></td><td class="num">232</td><td>0.4–0.5</td><td>Crack width.</td></tr>
-  </tbody></table></div>
-</details>
 
-<section class="record" id="record">
-<h2>Design record</h2>
-<p>For the people developing the look: Shawn's rulings, the requirements, audit numbers, the round history and open issues. Owned by the labs (clifflab). Approved: round 17, accepted 2 Nov 2026.</p>
-
-<details id="rulings">
-<summary>Rulings (21)</summary>
-<p>Shawn's decisions, oldest first. Each holds unless a later line replaces it.</p>
-<div class="tbl"><table>
-<thead><tr><th class="d">Date</th><th>Ruling</th><th>Shawn's words</th></tr></thead>
-<tbody>
-<tr><td class="d">30 Oct</td><td>The design must reach every form on the sheet, not just a straight run.</td><td class="q">“I love those photos, especially the range. We should not build something that can't meet those needs.”</td></tr>
-<tr><td class="d">30 Oct</td><td>The depth-map cliffs (rev 3) set the bar for the look.</td><td class="q">“These are the best cliffs I've ever seen. I love that you already cover all of the different use cases, including spires and stuff, and outcroppings, and all of this.”</td></tr>
-<tr><td class="d">30 Oct</td><td>Cliffs must fit on a 1×1 tile: a thin band along the edge.</td><td class="q">“these cliffs should be supportable in a 1x1 tile, and the thickness of the cliff should respect that.”</td></tr>
-<tr><td class="d">30 Oct</td><td>Only the rim of a face on the tile boundary is low relief; the middle can be deep.</td><td class="q">“It's just the edge of the face that is against the tile edge that needs to be low relief… the middle of the tile can have big cuts and rocky construction in it.”</td></tr>
-<tr><td class="d">30 Oct</td><td>Faces on the tile edge are textured to the edge, not cut flat.</td><td class="q">“you're clipping adjacent edges flat. They should be regular textured surfaces whose outside limits of texture touch the edge.”</td></tr>
-<tr><td class="d">30 Oct</td><td>The depth map's stacked-block version regressed. This led to rockpile.</td><td class="q">“the aesthetics have regressed… the kind of the sense of big piled up slabs, like, it doesn't really fit.”</td></tr>
-<tr><td class="d">30 Oct</td><td>Rocks fill the space between contact planes (back, ends, top); the front is open. The top is a contact plane, with dirt on it.</td><td class="q">“I think the top is a contact plane as well. The rock should end up be to touch the top.”</td></tr>
-<tr><td class="d">30 Oct</td><td>The straight top edge is intended. Flat ceilings must be fixed by construction.</td><td class="q">“top edge is intended to be a straight line. The flat ceilings should just be fixed.”</td></tr>
-<tr><td class="d">30 Oct</td><td>End-to-end matching: a standard end section is enough. A few mm of mismatch reads as another joint.</td><td class="q">“That's perfect. It's fine.” (on the end-to-end test, after asking “I wonder if we're being too strict.”)</td></tr>
-<tr><td class="d">30 Oct</td><td>Some forms need massive blocks.</td><td class="q">“I'd like to see more massive blocks in some.”</td></tr>
-<tr><td class="d">31 Oct</td><td>After a test print: fine texture must read at print scale; the back wall is too flat. Edge stones touch the boundary plane; inner stones may sit back.</td><td class="q">“Biggest problem: the fine surface texture does not read at printing scale. The fine texture is important for easy painting.”</td></tr>
-<tr><td class="d">31 Oct</td><td>Voronoi “flake” chips on every face: rejected and reverted.</td><td class="q">“I hate it. Sorry, undo this texture.”</td></tr>
-<tr><td class="d">31 Oct</td><td>Make the existing grain stronger instead.</td><td class="q">“so there is a fine texture on this. Can we just make it stronger?”</td></tr>
-<tr><td class="d">31 Oct</td><td>Never cut a stone at the tile edge; shrink it back to touch.</td><td class="q">“Clipping is bad. Whenever we do clipping, could we scale the thing back away from the clipped barrier instead?”</td></tr>
-<tr><td class="d">31 Oct</td><td>Build resting stones with sloped bottoms that sink into the stone below, instead of adding keels.</td><td class="q">“Could we, instead, construct the rocks in the first place with 45 degree bottoms? That embed into the rock beneath them?”</td></tr>
-<tr><td class="d">31 Oct</td><td>Seams between stacked stones must read as grooves.</td><td class="q">“still lots of stones that merge without meaningful grooves.”</td></tr>
-<tr><td class="d">4 Nov</td><td>The 55° ruling is now a target with a 65° hard limit, for every look: faces between 55° and 65° are the band (orange, budgeted), over 65° fails (red).</td><td class="q">“the 65 degree exception that we had for trees, let's generalize it. Anything can be up to 65 degrees. It's useful to know. The two colors is useful, separating them is useful, because one is conservative, one is more extreme. But cliffs should be allowed to have that 65 degree overhang as well.”</td></tr>
-<tr><td class="d">31 Oct</td><td>The overhang limit is 55° from vertical, not 45°.</td><td class="q">“45 is too conservative”</td></tr>
-<tr><td class="d">1 Nov</td><td>Cracks must be thin, like the reference.</td><td class="q">“Still gaping… We need the cracks to be thin, like in the reference photos.”</td></tr>
-<tr><td class="d">1 Nov</td><td>Every crack runs its full width and depth to an edge, joint or crack.</td><td class="q">“cracks should go to the end, not stop in the middle of a stone.”</td></tr>
-<tr><td class="d">1 Nov</td><td>A crack reaching a convex corner carries on round it onto the next visible face.</td><td class="q">“cracks don't go to an end and stop if there's another visible side.”</td></tr>
-<tr><td class="d">2 Nov</td><td>Round 17 accepted.</td><td class="q">“ok. I'm good with cliff round 17.”</td></tr>
-</tbody></table></div>
-<p class="note">The target is Shawn's heroic cliff spec of 30 Oct 2026, kept in the <a href="../archive/lab-logs/clifflab/heroic-cliff-spec.html">archive</a>. Its summary line: “That is where the heroic quality lives: broad, powerful masses of stone interrupted by deep, expressive fractures, rather than simply making everything jagged and rough.”</p>
-</details>
-
-<details id="requirements">
-<summary>Requirements</summary>
-<p>The lab's requirement IDs, as written on 30 Oct 2026, with later amendments marked inline. [S] is checked by a script or statistic, [R] by eye. The original page is in the <a href="../archive/lab-logs/clifflab/requirements.html">archive</a>.</p>
-<ul>
-  <li><strong>REQ-RANGE-1 [R]</strong> The same machinery makes every form on the reference sheet.</li>
-  <li><strong>REQ-OUT-1 [S]</strong> A build writes an STL to <code>clifflab/out/</code>. <em>Amended 30 Oct (rockpile): <code>&lt;N&gt;x&lt;N&gt;-pile-&lt;form&gt;-s&lt;seed&gt;.stl</code>.</em></li>
-  <li><strong>REQ-OUT-2 [S]</strong> One watertight body that survives a float32 STL reload, fused to the DungeonBlocks base.</li>
-  <li><strong>REQ-OUT-3 [S]</strong> The foot ground sits in the DungeonBlocks dirt band, 4.0 mm above the base. A run's top is 35 mm above the foot.</li>
-  <li><strong>REQ-OUT-4 [S]</strong> Deterministic per seed.</li>
-  <li><strong>REQ-FDM-1 [S]</strong> No downward face steeper than 45° from vertical. <em>Amended 31 Oct: 55°, checked as layer reach (no layer more than 0.6 mm past the one below, no run of layers past the 55° cone).</em></li>
-  <li><strong>REQ-FDM-2 [S]</strong> No islands at 0.2 mm layers.</li>
-  <li><strong>REQ-FDM-3 [S]</strong> Fissures are wedges, never slots. <em>Amended 1 Nov: cracks are thin slots, 0.4–0.5 mm wide, cut straight in, with ceilings that bridge.</em></li>
-  <li><strong>REQ-FDM-4 [S]</strong> No feature narrower than one line (0.45 mm); no relief under about 0.15 mm.</li>
-  <li><strong>REQ-FDM-5 [S]</strong> The top and the foot are solid down to the base.</li>
-  <li><strong>REQ-EDGE-1 [S]</strong> Edge cliffs are thin bands, 8–20 mm deep, so a run works on a 1×1 tile.</li>
-  <li><strong>REQ-RUN-1 [R]</strong> The face line wanders in plan: buttresses stand out, gullies cut back.</li>
-  <li><strong>REQ-RUN-3 [R]</strong> Rock all round; faces on the tile boundary touch it and never cross it; each run ends in the standard end section. <em>Amended 31 Oct: stones that would cross the boundary are shrunk, never cut.</em></li>
-  <li><strong>REQ-RUN-4 [R]</strong> The top edge is broken and irregular. <em>Amended 30 Oct: the top edge of a run is straight; the top is a contact plane with dirt on it. Free-standing forms may have broken tops.</em></li>
-  <li><strong>REQ-ROCK-1 [R]</strong> Interlocking masses, not stacked boulders; widths vary at least 4×. <em>Amended 30 Oct: some forms use massive blocks.</em></li>
-  <li><strong>REQ-ROCK-2 [R]</strong> Mostly vertical and steep joints, broken by ledges.</li>
-  <li><strong>REQ-ROCK-3 [S]</strong> About 60% quiet, 30% fractured, 10% intensely broken, in clusters.</li>
-  <li><strong>REQ-ROCK-4 [R]</strong> Planes, not noise.</li>
-  <li><strong>REQ-ROCK-5 [R]</strong> Convex edges softened by weathering. <em>Amended 1 Nov (round 16): edges are broken by a few crisp chips instead of rounding; recesses stay sharp.</em></li>
-  <li><strong>REQ-ROCK-6 [R]</strong> Heroic depth: a little deeper than real. Columns jut and recede boldly.</li>
-  <li><strong>REQ-ROCK-7 [R]</strong> No pattern, no repetition.</li>
-  <li><strong>REQ-TOP-1 [R]</strong> Dirt on the rock tops, in joints and hollows, thinning to nothing at lips.</li>
-  <li><strong>REQ-FOOT-1 [R]</strong> Dirt with angular scree of the same stone, mixed sizes, densest at the face.</li>
-  <li><strong>REQ-FOOT-2 [R]</strong> No vegetation.</li>
-  <li><em>Added 31 Oct.</em> <strong>REQ-JOINT-1 [R]</strong> Every seam between stones reads as a groove; stones never merge.</li>
-  <li><em>Added 31 Oct.</em> <strong>REQ-GRAIN-1 [R]</strong> Grain strong enough to catch a drybrush at print scale.</li>
-  <li><em>Added 1 Nov.</em> <strong>REQ-CRACK-1 [R]</strong> Cracks are thin and sparse, run full depth edge to edge, and wrap round convex corners.</li>
-</ul>
-<h3>Named failure modes</h3>
-<div class="tbl"><table>
-<thead><tr><th>Name</th><th>Looks like</th></tr></thead>
-<tbody>
-<tr><td>Stacked boulders</td><td>Rounded lumps piled up; no structural masses.</td></tr>
-<tr><td>Organ pipes</td><td>Regular vertical columns, like basalt.</td></tr>
-<tr><td>Layer cake</td><td>Even horizontal bedding, like sandstone.</td></tr>
-<tr><td>Masonry</td><td>Blocks in courses, right angles everywhere.</td></tr>
-<tr><td>Gravel</td><td>Everything fractured; no quiet faces.</td></tr>
-<tr><td>Noise blob</td><td>A melted, lumpy surface with no planes.</td></tr>
-<tr><td>Wallpaper</td><td>A visible repeat.</td></tr>
-<tr><td>Paint-on</td><td>Relief too shallow to cast a shadow.</td></tr>
-<tr><td>Cartoon</td><td>Absurdly deep, jagged or spiky.</td></tr>
-<tr><td>Scale marker</td><td>Uniform pebbles or same-size blocks.</td></tr>
-<tr><td>Sawn end / clipped stone</td><td>A flat cut face or a stone cut off at the tile edge.</td></tr>
-<tr><td>Ceiling</td><td>A flat downward face under a resting stone.</td></tr>
-<tr><td>Merged stones</td><td>Two stones fused with no groove.</td></tr>
-<tr><td>Gaping / dead-end crack</td><td>A wide slot, or a crack that fades out mid-stone.</td></tr>
-<tr><td>Upholstery welt</td><td>A crack close beside an edge, leaving a raised rib.</td></tr>
-<tr><td>Cloth folds / crumpled faces</td><td>Grain hanging like drapery; faces that read wrinkled.</td></tr>
-<tr><td>See-through hole</td><td>Daylight through the pile between stones.</td></tr>
-</tbody></table></div>
-<h3>Acceptance scenes</h3>
-<div class="tbl"><table>
-<thead><tr><th>Scene</th><th>Content</th><th>Passes when</th></tr></thead>
-<tbody>
-<tr><td>Iteration sheet</td><td>One tile beside its reference cell (<code>clifflab/iterate.py --ref N</code>)</td><td>Shawn judges it against N, H or C.</td></tr>
-<tr><td>Seed sweep</td><td>1×1 run at seeds 1–6, plus 2×2 run, corner and massif at seed 1</td><td>All watertight; no failure mode; no two alike.</td></tr>
-<tr><td>Long run</td><td>Three tiles of different seeds end to end</td><td>Reads as one cliff.</td></tr>
-<tr><td>Print</td><td>A 1×1 run, primed and drybrushed</td><td>Cracks stay dark, faces catch the highlight, nothing needed support.</td></tr>
-</tbody></table></div>
-</details>
-
-<details id="audit">
-<summary>Audit numbers (round 17)</summary>
-<p><strong>By construction:</strong> seats slope 3° inside the 55° limit (<code>SEAT_SLOPE</code>, line 177); every stone rests on the pile; chip ends run out at 45°; cracks are at most 0.5 mm wide, inside the 0.6 mm reach; sub-face cuts shear down-and-in at 45°; the hidden core backs every joint; stones are shrunk to the tile boundary, never cut.</p>
-<p><strong>Checked:</strong> <code>overhang_faces</code> (line 2155) slices the mesh every 0.2 mm as a slicer does and flags faces past the reach limit; every render paints them red (<code>clifflab/iterate.py:70</code>). <code>stl_safe</code> (<code>grasslab/grasslab.py:1060</code>) rounds to float32, merges vertices and refuses anything that is not one watertight body.</p>
-<div class="tbl"><table>
-<thead><tr><th>Tile</th><th>Watertight</th><th class="num">Reach (mm²)</th><th class="num">Thin (mm²)</th></tr></thead>
-<tbody>
-<tr><td>1×1 run, seeds 1–6</td><td>all</td><td class="num">0, 0, 1.4, 0.7, 0, 6.6</td><td class="num">123–245</td></tr>
-<tr><td>2×2 run, seed 1</td><td>yes</td><td class="num">2.5</td><td class="num">428</td></tr>
-<tr><td>2×2 corner, seed 1</td><td>yes</td><td class="num">3.7</td><td class="num">542</td></tr>
-<tr><td>2×2 massif, seed 1</td><td>yes</td><td class="num">5.3</td><td class="num">1,028</td></tr>
-</tbody></table></div>
-<p class="note">“Thin” is wall area under the printable minimum, from a review script outside the repo; only the reach audit and the watertight check run in <code>rockpile.py</code>.</p>
-<figure class="shot narrow">
-  <img src="img/cliffs-r17-run-s6-overhang.jpg" alt="Grey render of a 1x1 cliff run with two small red overhang spots" width="477" height="640" loading="lazy">
-  <figcaption>1×1 run, seed 6, the worst of the sweep: two small red spots, 6.6 mm².</figcaption>
-</figure>
-</details>
-
-<details id="variants">
-<summary>Round history</summary>
-<p>One line per variant, oldest first. All are in git (<code>git log -- clifflab/</code>).</p>
-<div class="tbl"><table>
-<thead><tr><th class="d">Date</th><th>Variant</th><th>What changed, and why</th></tr></thead>
-<tbody>
-<tr><td class="d">30 Oct</td><td>Depth map, revs 1–5 (<code>clifflab/clifflab.py</code>)</td><td>The face is a depth map over a plan outline: Voronoi masses, V-groove fissures. Rev 3 was “the best cliffs I've ever seen”, but it could only make a crack network on a flat wall.</td></tr>
-<tr><td class="d">30 Oct</td><td>Depth map, rev 6</td><td>Stacked blocks inside the depth map. “the aesthetics have regressed”.</td></tr>
-<tr><td class="d">30 Oct</td><td>rockmass (<code>clifflab/rockmass.py</code>)</td><td>Recursive plane splits of a volume. Read as crazy paving with large overhangs. Abandoned.</td></tr>
-<tr><td class="d">30 Oct</td><td>rockpile gen-1 (58e8105, 1559f0a, 156ab80)</td><td>Gravity stacking toward a target profile; all nine forms.</td></tr>
-<tr><td class="d">31 Oct</td><td>Massive blocks (5b69555)</td><td>Stone size per form; dirt on ledges.</td></tr>
-<tr><td class="d">31 Oct</td><td>Seated stones (48af9ea, 34572d4)</td><td>Seats replace keels; 55° limit; fit, not clip; hidden core; stronger grain. Flake chips tried and reverted.</td></tr>
-<tr><td class="d">31 Oct</td><td>Rounds 3–7 (a1df7be)</td><td>Column dressing; faces split into tilted plates. About 5/10 against N.</td></tr>
-<tr><td class="d">31 Oct</td><td>Rounds 8–11 (803ba4f)</td><td>Height-field relief per face with a joined crack network. Still crumpled; cracks too open.</td></tr>
-<tr><td class="d">1 Nov</td><td>Rounds 12–14 (049038d)</td><td>Thin straight-in cracks joint to joint; the layer-reach audit.</td></tr>
-<tr><td class="d">1 Nov</td><td>Round 15 (3b56ae0)</td><td>Sparse block-splitting cracks with a step; cracks wrap corners.</td></tr>
-<tr><td class="d">1 Nov</td><td>Round 16 (ee42cb8)</td><td>Chipped edges replace rounding; heavier joints; column setbacks.</td></tr>
-<tr><td class="d">1 Nov</td><td><strong>Round 17 (31f7c5d), accepted 2 Nov</strong></td><td>Few crisp chips; bold setbacks; full-depth crack slots; core holes closed.</td></tr>
-</tbody></table></div>
-<figure class="shot">
-  <img src="img/cliffs-history-strip.jpg" alt="Four grey 1x1 cliff runs from the same camera" width="900" height="177" loading="lazy">
-  <figcaption>Depth map rev 3, depth map rev 6, rockmass, rockpile round 11. Grey, overhang faces red.</figcaption>
-</figure>
-<figure class="shot">
-  <img src="img/cliffs-forms-gen1.jpg" alt="Nine rockpile forms, each beside its reference cell" width="900" height="528" loading="lazy">
-  <figcaption>rockpile gen-1 (30 Oct): all nine forms beside their reference cells. This sheet predates the red-overhang rule and the later stone finish.</figcaption>
-</figure>
-</details>
-
-<details id="rust">
-<summary>Rust port</summary>
-<p><strong>Phase P7</strong>, “Cliff and scree, once rockpile is frozen”: the last look to port. Exit gate: zero see-through holes, overhang at or below Python's, a massif in 60 s or less, Shawn's sign-off and a test print. The vocabulary exists (<code>crates/dt-doc/src/looks.rs</code>) and the library has one cliff tile. No parity contact sheet yet.</p>
-</details>
-
-<details id="reference-photos">
-<summary>Reference photos</summary>
-<p>The photos and target images this look is judged against. Click a photo to view it large; arrow keys step through. Wikimedia Commons photos keep their file names and licences as given on their Commons pages.</p>
-<div class="gallery"><figure class="ph"><a href="img/cliffs-reference-sheet.jpg" data-cap="The approved target sheet: sixteen cliff forms, A to P. Run: B, H, N; corner C; canyon I, K; escarpment D, O; plateau A; massif M; mound F; spire E, P; needles J."><img src="img/cliffs-reference-sheet.jpg" alt="The approved target sheet: sixteen cliff forms, A to P. Run: B, H, N; corner C; canyon I, K; escarpment D, O; plateau A; massif M; mound F; spire E, P; needles J." loading="lazy"></a><figcaption><span class="cap">The approved target sheet: sixteen cliff forms, A to P. Run: B, H, N; corner C; canyon I, K; escarpment D, O; plateau A; massif M; mound F; spire E, P; needles J.</span><span class="fn">clifflab/reference/reference-sheet.png</span></figcaption></figure></div>
-<div class="gallery"><figure class="ph"><a href="ref/walls/quarry-rock-face.jpg" data-cap="Quarry rock face: broad planar masses broken by steep joints. Source: Wikimedia Commons."><img src="ref/walls/quarry-rock-face.jpg" alt="Quarry rock face: broad planar masses broken by steep joints. Source: Wikimedia Commons." loading="lazy"></a><figcaption><span class="cap">Quarry rock face: broad planar masses broken by steep joints. Source: Wikimedia Commons.</span><span class="fn">quarry-rock-face.jpg</span></figcaption></figure></div>
-</details>
-
-<h3 id="open">Open issues</h3>
-<ul>
-  <li>Thin-wall area is still about twice what it should be, mostly where cracks meet sharp edges.</li>
-  <li>The massif reports holes in its gullies (110 in the review measure); runs and corners report none.</li>
-  <li>The foot sits at 4.0 mm; it moves to the standard 3.4 mm edge level before P7.</li>
-  <li>dt-doc defaults <code>stone-size</code> to <code>rubble</code>, but rockpile's run uses <code>massive</code>.</li>
-  <li>The thin-wall and hole checks live in a review script outside the repo; P7's parity harness needs them in code.</li>
-  <li>Only the run is tuned; the other eight forms share its finish but have not been reviewed round by round.</li>
-</ul>
-
-<h3 id="references">References</h3>
-<ul>
-  <li>Reference photos and target images: the <a href="#reference-photos">gallery above</a>.</li>
-</ul>
-
-<h3 id="history">History</h3>
-<p>clifflab started on 30 Oct 2026 with Shawn's spec and reference sheet. The depth-map generator came first and stays in the repo (it still provides <code>attach_base</code>). rockpile replaced it the same evening, and 17 review rounds followed over three days; Shawn's test print of seed 4 on 31 Oct drove the grain, setback and fit changes. The full texts are archived: the original <a href="../archive/lab-logs/clifflab/requirements.html">requirements</a>, the depth-map <a href="../archive/lab-logs/clifflab/design.html">design and iteration log</a>, the <a href="../archive/lab-logs/clifflab/heroic-cliff-spec.html">heroic cliff spec</a>, and the Rust study's <a href="../archive/rust-study/variants.html">variants</a> and <a href="../archive/rust-study/notes.html">notes</a>.</p>
-</section>
 
 </article>
 </div>
-<dialog class="lightbox" aria-label="Photo viewer">
-  <figure><img alt=""><figcaption></figcaption></figure>
-  <div class="lb-bar"><button type="button" data-step="-1" aria-label="Previous photo">&larr;</button><span class="lb-n"></span><a class="lb-open" target="_blank" rel="noopener">Full size</a><button type="button" data-step="1" aria-label="Next photo">&rarr;</button><button type="button" class="lb-close" aria-label="Close">&times;</button></div>
-</dialog>
-<script src="../assets/gallery.js"></script>
 <script src="../assets/howto.js"></script>
 </body>
 </html>

@@ -1,5 +1,3 @@
-// The twin of src/tiles/ground/1x1-grass.tile.py (the Python library tile, kept).
-
 tile grass size="1x1" seed=1 {
     about "A full square of grass on dirt."
     stack {

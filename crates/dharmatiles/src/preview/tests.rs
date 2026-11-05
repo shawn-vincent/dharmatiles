@@ -211,13 +211,18 @@ fn editing_the_document_rebuilds_it_and_a_mistake_shows_its_line() {
     let r = start(&[&path], true);
     wait_for(&r, "first build", |t| t["status"] == "ready");
 
-    // a mistake on line 9: the error names the file and line, the old mesh stays
+    // a mistake: the error names the file and its line, the old mesh stays
     std::thread::sleep(Duration::from_millis(50));
+    let line = text
+        .lines()
+        .position(|l| l.contains("ground level=edge"))
+        .expect("the flat tile writes `ground level=edge`")
+        + 1;
     std::fs::write(&doc, text.replace("ground level=edge", "gruond level=edge")).unwrap();
     let t = wait_for(&r, "failure", |t| t["status"] == "failed");
     let e = &t["errors"][0];
     assert_eq!(e["file"], path.as_str());
-    assert!(e["line"].as_u64().is_some_and(|l| l >= 8), "{e}");
+    assert_eq!(e["line"].as_u64(), Some(line as u64), "{e}");
     assert_eq!(t["mesh_version"], 1, "the last good mesh is kept");
     assert!(get(&r, "/api/tiles/0/mesh").0.starts_with("HTTP/1.1 200"));
 

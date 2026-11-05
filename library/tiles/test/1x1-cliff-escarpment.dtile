@@ -1,5 +1,4 @@
 // A band whose height ramps along the edge.
-// Twin of clifflab/rockpile.py's `escarpment` form at round 17 (31f7c5d), 1x1.
 
 tile "1x1-cliff-escarpment" size="1x1" seed=1 {
     about """

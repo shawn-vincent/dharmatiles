@@ -1,34 +1,18 @@
-*.3mf
 .DS_Store
-*.scad~
 *~
 \#*\#
-__pycache__/
-*.py[cod]
-textures/
-*.ply
-
-# Generated STL/3MF outputs — too large for GitHub, generated locally.
-# README files inside stl/ ARE tracked so the directories exist for cloners.
-stl/**/*.stl
-stl/**/*.3mf
-stl/**/*.pdf
-
-stl/test/*.png
-
-# Build provenance — generated artifact, must not be committed
-src/dharmatiles/_build_info.py
-
-# grasslab experiment outputs (generated locally)
-grasslab/out/
-rocklab/out/
-meadowlab/out/
-waterlab/out/
-shorelab/out/
-dirtlab/out/
-clifflab/out/
 .#*
 
-# Rust workspace build output
+# Rust build output and generated tiles
 /target/
 /out/
+
+# extras/ (Python)
+__pycache__/
+*.py[cod]
+
+# old local output from the retired Python generator (safe to delete)
+/stl/
+/3mf/
+/.pytest_cache/
+docs/*.3mf

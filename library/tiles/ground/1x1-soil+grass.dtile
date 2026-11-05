@@ -1,5 +1,3 @@
-// The twin of src/tiles/ground/1x1-soil+grass.tile.py (the Python library tile, kept).
-
 tile soil+grass size="1x1" seed=42 {
     about "Grass on the left half, bare dirt on the right, with an organic margin."
     line margin wobble=5 { through "0.48,1" "0.52,0" }

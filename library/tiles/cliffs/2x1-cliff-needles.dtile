@@ -1,5 +1,4 @@
 // A cluster of thin pillars.
-// Built on the cliff look (clifflab rockpile, round 17), for variety in the library.
 
 tile "2x1-cliff-needles" size="2x1" seed=1 {
     about "A cluster of thin pillars."

@@ -1,5 +1,4 @@
 // A long, stepped rise across the tile.
-// Built on the cliff look (clifflab rockpile, round 17), for variety in the library.
 
 tile "2x1-cliff-escarpment" size="2x1" seed=1 {
     about "A long, stepped rise across the tile."

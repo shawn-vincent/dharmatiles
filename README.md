@@ -1,272 +1,78 @@
 <p align="center">
-  <img src="src/dharmatiles/assets/dharmatiles-logo.png" alt="dharmatiles logo" width="180"/>
+  <img src="docs/assets/logo.svg" alt="dharmatiles lotus" width="120"/>
 </p>
 
-# 🪷 dharmatiles
+# dharmatiles
 
-A procedural terrain generator for 3D printable tabletop tiles.
+3D-printable tabletop terrain tiles from a few lines of text.
 
-The basic idea is simple:
+You describe a tile in a short `.dtile` document: where the lines run, which regions they make, and what goes in each one. `dharmatiles` grows the geometry from that description (dirt with clods and pebbles, grass that parts round rocks, water that ripples off its shores, stone walls, cliffs, trees) and writes an STL that prints base down with no supports.
 
-Instead of sculpting terrain directly, you describe a world in terms of regions, boundaries, materials, and growth rules, and the geometry emerges from that.
-
-The output is a printable STL.
-
-The interesting part is how it gets there.
-
----
-
-## Renders
-
-<table>
-<tr>
-  <td align="center"><img src="png/ground/2x2-grass-tree.png" width="220"/><br/><sub>2×2 meadow with tree</sub></td>
-  <td align="center"><img src="png/water/1x1-water+grass.png" width="220"/><br/><sub>1×1 water + grass shoreline</sub></td>
-  <td align="center"><img src="png/ground/1x1-grass-flowers.png" width="220"/><br/><sub>1×1 grass with flowers</sub></td>
-</tr>
-<tr>
-  <td align="center"><img src="png/ground/1x1-grass-tree.png" width="220"/><br/><sub>1×1 grass with tree</sub></td>
-  <td align="center"><img src="png/water/3x3-water.png" width="220"/><br/><sub>3×3 open water</sub></td>
-  <td align="center"><img src="png/water/1x1-grass-tree+water.png" width="220"/><br/><sub>1×1 tree + water</sub></td>
-</tr>
-</table>
-
-Renders are produced by the built-in pyrender pipeline. All tiles have a
-DungeonBlocks or OpenLOCK compatible underside (socket-peg / T-slot).
-
----
-
-## Why?
-
-Most terrain systems work by placing objects.
-
-Put a rock here.
-
-Scatter some grass there.
-
-Drop a tree somewhere nearby.
-
-That works, but it tends to produce terrain that looks assembled.
-
-I wanted something that behaved more like a place.
-
-A rock should affect the grass around it.
-
-Water should influence nearby terrain.
-
-Boundaries should matter.
-
-Things should interact.
-
-So DharmaTiles treats terrain as a collection of systems rather than a collection of assets.
-
----
-
-## How it works
-
-At a high level:
-
-```text
-tile spec (.tile.py)
-  → regions + boundaries
-  → heightmap + masks
-  → layers applied in order (soil, grass, rocks, trees, water…)
-  → terrain solid
-  → base attached (DungeonBlocks or OpenLOCK)
-  → STL
+```kdl
+tile water+grass size="1x1" seed=97 {
+    line shore wobble=5 { through "0,0.38" "1,0.42" }
+    region pool { bounded-by shore; fill "0.5,0.25" }
+    region bank { bounded-by shore; fill "0.5,0.75" }
+    stack {
+        dirt in=bank
+        grass in=bank
+        ground in=pool level="water - 2.2"
+        scatter in=pool count=2 { rock size="6..10" }
+        water
+    }
+}
 ```
 
-A tile defines regions and boundaries.
+<p align="center">
+  <img src="docs/elements/img/el-tile.jpg" alt="The tile above: a grassy bank with rocks, above a rippling pool" width="420"/>
+</p>
 
-Layers then use those regions to generate geometry.
+Tiles fit the 35 mm DungeonBlocks grid or 25.4 mm OpenLOCK, from the same document.
 
-Grass grows segment by segment, steering around rocks and other blades.
+## Why
 
-Water reshapes the terrain floor and emits a water-volume mesh.
+Most terrain tools place objects: a rock here, grass there, a tree nearby. The result looks assembled. dharmatiles treats a tile as a place where things affect each other. Rocks are bedded into the ground, grass grows up to them and flows round them, water takes its shoreline from the land, and bare earth shows where it would. The geometry is a consequence of the description, not a list of placements.
 
-Rocks stamp their footprint so that grass steers around them.
+Every tile passes a printability gate before it is written: watertight, nothing lost, and no overhang past what a home FDM printer can bridge. Overhang shows red in every render.
 
-Trees are built via space-colonisation and stamped into the obstacle grid.
+## Install
 
-Everything contributes to a single final mesh.
-
-The goal is that geometry is mostly a consequence of rules rather than explicit placement.
-
----
-
-## Current systems
-
-### Grass
-
-Grass is generated from seed points.
-
-Each blade grows incrementally while responding to nearby obstacles and neighbouring blades.
-
-The result is not physically accurate, but it tends to produce clusters and directional behaviour that feel more natural than random scatter.
-
-### Rocks
-
-Rocks are vectorised half-ellipsoids scattered across the tile surface.
-
-They occupy space and stamp an obstacle footprint so grass steers around them.
-
-### Trees
-
-Trees are built via space-colonisation skeleton growth.
-
-Each tree is a branching tube mesh with configurable bark, foliage clusters, and leaves — all printable without supports.
-
-### Flowers
-
-Dome-on-column 3D flowers scattered using the same placement system as rocks.
-
-### Water
-
-Water is represented as a terrain layer rather than a separate object.
-
-The pool floor is reshaped, ripples are added, and a water-volume mesh is emitted.
-
-Shorelines blend into surrounding grass or soil.
-
-### Soil
-
-Soil is the quiet layer that makes everything else work.
-
-Blob-textured height variation, terrain transitions, and blending all happen here.
-
----
-
-## Design goals
-
-### Printable first
-
-The primary output is FDM printed terrain.
-
-Everything is designed with printing in mind:
-
-* minimal unsupported geometry
-* durable features
-* paintable surfaces
-* clean silhouettes at tabletop scale
-
-A terrain feature that looks great in a renderer but prints poorly is considered a bug.
-
-### Deterministic generation
-
-Given the same inputs and seed, the output is identical.
-
-Terrain generation is procedural but reproducible.
-
-### Emergence over placement
-
-Whenever possible, systems produce results from local rules rather than explicit instructions.
-
-Instead of saying:
-
-> Put grass here.
-
-the system tries to answer:
-
-> Given this terrain, where would grass end up?
-
----
-
-## Quick start
+You need [Rust](https://rustup.rs) and git:
 
 ```bash
-pip install -e .
-
-# Generate every tile in src/tiles/ → stl/{db,ol}/
-dharmatiles-gen
-
-# Generate a single tile
-dharmatiles-gen --tile src/tiles/ground/1x1-soil+grass.tile.py
-
-# Suppress progress output
-dharmatiles-gen --quiet
+git clone https://github.com/shawn-vincent/dharmatiles.git
+cd dharmatiles
+cargo build --release
+./target/release/dharmatiles          # opens the preview: your tiles and the library
 ```
 
-Then open the STL in PrusaSlicer, Bambu Studio, or your slicer of choice and print.
+## Use
 
----
-
-## Example tile spec
-
-Tile specs are plain Python files. The spec language IS the implementation — no DSL, no YAML, no parsing step.
-
-```python
-from dharmatiles.spec    import Tile, Region, Boundary
-from dharmatiles.core.config import SurfaceConfig, SpeciesConfig
-from dharmatiles.layers  import GrassCarpet, Water
-from dharmatiles.scatter import Rocks, Grass
-
-species = SpeciesConfig()
-
-tile = Tile(
-    surface=SurfaceConfig(cols=1, rows=1, seed=42),
-    areas=[
-        Region(
-            id='meadow',
-            selector=FloodFill(0.25, 0.5),
-            height_mm=5.0,
-            layers=[
-                GrassCarpet(species=species),
-                Rocks(r_min=0.8, r_max=2.2),
-                Grass(species=species),
-            ],
-        ),
-        Boundary(width_mm=4.0),
-        Region(
-            id='lake',
-            selector=FloodFill(0.75, 0.5),
-            height_mm=3.0,
-            layers=[
-                Water(embed_mm=1.5),
-            ],
-        ),
-    ],
-)
+```bash
+dharmatiles                                   # browse your tiles (~/dharmatiles) and the library in the browser
+dharmatiles preview my-tile.dtile --open      # live painted view; rebuilds on every save
+dharmatiles build my-tile.dtile               # -> out/db/my-tile-db.stl
+dharmatiles build my-tile.dtile --system ol   # for OpenLOCK
+dharmatiles build --all --system both         # every library tile
+dharmatiles check my-tile.dtile               # read and plan only
+dharmatiles looks                             # the elements and their controls
 ```
-
-Layer ordering in `Region.layers` is the state-dependency contract: `Rocks` before `Grass` so blades steer around placed rock footprints.
-
----
-
-## Project structure
-
-```text
-src/dharmatiles/
-  core/          pure primitives: heightmap, grid, region, mesh, config
-  grass/         grass growth sub-pipeline
-  scatter/       placement layers: Rocks, Grass, Flowers + distribution helpers
-  layers/        terrain-texture layers: SoilCarpet, GrassCarpet, Water
-  trees/         Tree generator (space-colonisation skeleton + tube mesh)
-  bases/         DungeonBlocks, OpenLOCK base attachment
-  terrains/      entry point: build_tile_from_spec() + CLI
-
-src/tiles/
-  ground/        ground tile specs (.tile.py)
-  water/         water tile specs (.tile.py)
-
-stl/             generated STL output (not in git — see stl/README.md)
-png/             rendered previews
-docs/            design docs (HTML, start at docs/index.html) and historic notes
-```
-
----
 
 ## Documentation
 
-Design docs, guides and lab requirements are HTML pages under `docs/`; start at [`docs/index.html`](docs/index.html).
+The site under `docs/` is the reference: the [language guide](docs/language.html), one page per [element](docs/elements/index.html), [composing a tile](docs/composing.html), the [tile system](docs/standards/tile-system.html), [printing](docs/standards/printing.html) and the [rules](docs/standards/rules.html).
 
-A Rust rewrite is under way in the Cargo workspace at the repo root (`crates/`, `xtask/`); see [`docs/analysis/rust-rewrite/plan.html`](docs/analysis/rust-rewrite/plan.html).
+## Layout
 
----
+```text
+crates/     the program, in Rust: dt-geom, dt-kit, dt-looks, dt-doc, dt-eval, dharmatiles
+library/    the shipped tiles, shared parts, printers and palettes (.dtile documents)
+docs/       the site
+web/        the preview's page
+xtask/      repo chores: cargo xtask docs | pictures | sheet
+extras/     a paint organizer and STL helpers (Python, not part of the program)
+```
 
-## Status
+## Licence
 
-Active development. The architecture is stable; the tile vocabulary is growing.
-
-Current tile library: 35+ tile variants across ground and water categories, including corridors, corners, U-shapes, T-junctions, and cross-junctions in both grass and soil variants.
-
-Output scale: 35 mm square grid (DungeonBlocks) and 25.4 mm square grid (OpenLOCK), generated in parallel from the same tile spec.
+The code is MIT OR Apache-2.0. The licence for the tile library and its renders is not decided yet.

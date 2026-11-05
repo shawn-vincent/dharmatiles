@@ -1,5 +1,4 @@
 // A 1×1 grass meadow with one tree and a few big rocks.
-// Twin of src/tiles/ground/1x1-grass-tree.tile.py.
 
 use "parts/grass" long-grass
 

@@ -1,10 +1,7 @@
-// The parity twin of shorelab (shorelab/shorelab.py): a meadow meeting
-// swell-chaos water on one 2×2 tile, with rocks on the bank and in the
-// shallows, and a few clumps of reeds at the waterline. The shoreline
-// wanders (bays, headlands) about a third of the way across.
+// The shoreline wanders (bays, headlands) about a third of the way across.
 
 tile shore size="2x2" seed=1 {
-    about "shorelab's meadow, water and reeds, for the parity harness."
+    about "A meadow meeting water, with reeds: a test tile."
     line shore wobble=11 { through "0.94,0" "0.94,2" }
     region land { bounded-by shore; fill "0.3,1" }
     region water { bounded-by shore; fill "1.6,1" }

@@ -1,5 +1,4 @@
 // A tall corner of stacked slabs round the north-west corner.
-// Built on the cliff look (clifflab rockpile, round 17), for variety in the library.
 
 tile "2x2-cliff-corner" size="2x2" seed=1 {
     about "A tall corner of stacked slabs round the north-west corner."

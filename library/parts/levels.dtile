@@ -8,6 +8,6 @@
 levels {
     edge     3.4      // ground meets the tile edge here
     ground   5        // today's grass and soil regions
-    water    2.6      // shorelab's water level
+    water    2.6      // the calm water surface
     wall-top 33.1     // the official wall top
 }

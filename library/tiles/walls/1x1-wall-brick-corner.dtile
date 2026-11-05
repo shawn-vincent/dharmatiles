@@ -1,5 +1,4 @@
 // A worn brick wall turning the north-west corner of a grassy 1×1.
-// Twin of src/tiles/walls/1x1-wall-brick-corner.tile.py.
 
 use "parts/grass" lawn
 

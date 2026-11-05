@@ -8,12 +8,12 @@
 <script src="../assets/site.js"></script>
 </head>
 <body>
-<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../rust/plan.html">Project</a><a href="../archive/index.html">Archive</a></div></nav>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html" aria-current="page">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="../standards/tile-system.html">Tile system</a><a href="../standards/printing.html">Printing</a><a href="../standards/rules.html">Rules</a></div></nav>
 <div class="wrap doc-layout">
 <header class="hero">
   <div class="eyebrow"><i class="fam-mark fam-plant" title="moss: a plant"></i>Element · surface</div>
   <h1>reeds</h1>
-  <p class="lede">Clumps of tapered reeds standing at the waterline and leaning out over the water, from shorelab. Write them in the bank region of a shore tile.</p>
+  <p class="lede">Clumps of tapered reeds standing at the waterline and leaning out over the water. Write them in the bank region of a shore tile.</p>
   <figure class="shot"><img src="img/el-reeds.jpg" alt="Two clumps of reeds at the edge of a pool, leaning over the water"><figcaption>Reeds on a grassy bank: <a href="demo/reeds.dtile"><code>demo/reeds.dtile</code></a>.</figcaption></figure>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
@@ -53,6 +53,13 @@ stack {
 <p>No shipped library tile writes <code>reeds</code> yet.</p>
 <p class="muted small">Generated from <code>dharmatiles looks reeds</code> by <code>cargo xtask docs</code>.</p>
 <!-- /gen:reference -->
+<h3 id="rules">Rules</h3>
+<p>What this element always does. A change to one of these is a change to the element.</p>
+<ul class="rules">
+  <li>Reeds are simple chunky blades that rise from one base and curve gently outward.</li>
+  <li>Tips are sharp but fairly blunt, blending smoothly into the blade. No cattails.</li>
+</ul>
+
 <h2 id="notes">Notes</h2>
 <p>No shipped library tile has reeds yet; the picture comes from the demo document. The shore and its reeds are described with <a href="water.html#shore">water</a>.</p>
 </article>

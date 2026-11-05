@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rules</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+</head>
+<body>
+<nav class="top"><div class="wrap"><a class="brand" href="../index.html">dharmatiles</a><a href="../language.html">Language</a><a href="../elements/index.html">Elements</a><a href="../composing.html">Composing</a><a href="../preview.html">Preview</a><a href="tile-system.html">Tile system</a><a href="printing.html">Printing</a><a href="rules.html" aria-current="page">Rules</a></div></nav>
+<div class="wrap doc-layout">
+<header class="hero">
+  <div class="eyebrow">What always holds</div>
+  <h1>Rules</h1>
+  <p class="lede">The rules every tile, every build and every change to dharmatiles keeps. Each element's own rules are on its page; the language's are at the end of <a href="../language.html#rules">the language guide</a>. When a rule changes, this page changes with it.</p>
+</header>
+<nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
+  <li><a href="#gate">The printability gate</a></li>
+  <li><a href="#tiles">Tiles</a></li>
+  <li><a href="#builds">Builds</a></li>
+  <li><a href="#elements">Elements</a></li>
+  <li><a href="#pictures">Pictures</a></li>
+  <li><a href="#project">The project</a></li>
+</ol></nav>
+<article class="doc">
+
+<h2 id="gate">The printability gate</h2>
+<p>Every build is checked before it is written, and a tile that fails is reported as failed (exit code 3) even though its files are still written for inspection.</p>
+<ul class="rules">
+  <li><strong>Watertight</strong> after the mesh is reloaded at float32, the precision an STL stores.</li>
+  <li><strong>Nothing lost:</strong> every part is joined to the tile. Sealed voids are filled and reported, not counted as lost.</li>
+  <li><strong>Overhang:</strong> 55° from vertical is the target for every element. Faces between 55° and 65° are the band: allowed in small patches, up to 0.1% of the tile's downward-facing area, and painted orange. Faces past 65° are overhang, painted red, and allowed only up to another 0.1%. More than either budget fails.</li>
+  <li>A gap narrower than the printer's gap (0.2 mm) counts as solid, so the lip over a fine joint is not an overhang.</li>
+  <li>The gate is never loosened, and geometry is never culled to pass it. A failure is fixed where the geometry is made.</li>
+  <li>Tiles print base down, with no supports. See <a href="printing.html">printing</a>.</li>
+</ul>
+
+<h2 id="tiles">Tiles</h2>
+<ul class="rules">
+  <li>A <strong>tile</strong> is the whole printed piece; a <strong>square</strong> is one grid unit (35 mm for DungeonBlocks, 25.4 mm for OpenLOCK); a <strong>cell</strong> is one subdivision of the heightmap. A square is never called a tile, and densities are per square.</li>
+  <li>DungeonBlocks is the default base; OpenLOCK is the other. One document builds for either, and every size it writes scales with the square.</li>
+  <li>The ground meets every tile edge at the <code>edge</code> level, 3.4 mm, so any two tiles sit side by side. The other standard levels are <code>ground</code> 5 mm, <code>water</code> 2.6 mm and <code>wall-top</code> 33.1 mm.</li>
+  <li><code>z = 0</code> is the top of the base; the base owns everything below it.</li>
+  <li>Nothing is clipped at the tile edge: a thing near the edge is moved or shrunk back until it fits inside.</li>
+  <li>File names and edges follow the <a href="tile-system.html">tile system</a>.</li>
+</ul>
+
+<h2 id="builds">Builds</h2>
+<ul class="rules">
+  <li><strong>Deterministic:</strong> the same document, seed and system give the same bytes on one machine, at any thread count, and the same look on any machine.</li>
+  <li>The library is files on disk, read from the checkout's <code>library/</code> when run inside it, else <code>$DT_LIBRARY</code>, else the copy installed beside the program. Only browser builds compile it in.</li>
+  <li>Documents are <code>.dtile</code> files, KDL v2 underneath.</li>
+</ul>
+
+<h2 id="elements">Elements</h2>
+<p>Each element page ends its reference with the rules that element always keeps:</p>
+<ul class="rules">
+  <li><a href="../elements/dirt.html#rules">dirt</a>, <a href="../elements/grass.html#rules">grass</a>, <a href="../elements/reeds.html#rules">reeds</a>, <a href="../elements/water.html#rules">water</a>, <a href="../elements/floor.html#rules">floor</a></li>
+  <li><a href="../elements/rock.html#rules">rock</a>, <a href="../elements/cliff.html#rules">cliff</a>, <a href="../elements/wall.html#rules">wall</a>, <a href="../elements/tree.html#rules">tree</a></li>
+  <li>How they share a tile: <a href="../composing.html#rules">composing</a></li>
+</ul>
+
+<h2 id="pictures">Pictures</h2>
+<ul class="rules">
+  <li>Every render paints overhang red and the band orange. Red and orange mean overhang and nothing else, anywhere: renders, the preview and this site.</li>
+  <li>Tiles are shown on the plate (#D9E0EB), whole, never cropped.</li>
+  <li>The site and the preview share one <a href="visual-system.html">visual system</a>.</li>
+</ul>
+
+<h2 id="project">The project</h2>
+<ul class="rules">
+  <li>dharmatiles is a Rust program. The only other code is the paint organizer and two STL helpers in <code>extras/</code>, which are not part of the program.</li>
+  <li>This site is the reference for the tile language: <a href="../language.html">the guide</a>, and one page per element. Each element page's controls table is generated from the program (<code>cargo xtask docs</code>), and a new element needs its page before it ships.</li>
+  <li>The site describes the program as it is. How it got here lives in git history (the tag <code>before-rust-only</code> holds the old design notes and the Python library).</li>
+  <li>Tests run locally: <code>cargo test --release --workspace</code>, with clippy and rustfmt clean.</li>
+  <li>The code is licensed MIT OR Apache-2.0. The licence for the tile library and its renders is not decided yet.</li>
+</ul>
+
+</article>
+</div>
+</body>
+</html>
