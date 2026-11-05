@@ -157,8 +157,8 @@ pub struct LeafShape {
     pub curl_deg: f64,
     /// The printer's overhang limit, degrees from vertical: underside
     /// blades are flattened so no blade face hangs past it (see
-    /// [`place`]). `None` builds Python's blades exactly (parity runs).
-    pub overhang_deg: Option<f64>,
+    /// [`place`]).
+    pub overhang_deg: f64,
 }
 
 impl Default for LeafShape {
@@ -171,7 +171,7 @@ impl Default for LeafShape {
             inner_curve: 1.5,
             outer_curve: 0.72,
             curl_deg: 40.0,
-            overhang_deg: Some(55.0),
+            overhang_deg: 55.0,
         }
     }
 }
@@ -277,55 +277,10 @@ pub struct Samples {
     pub normals: Vec<[f64; 3]>,
 }
 
-/// Where the placer's random draws come from.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Draws {
-    /// The engine's keyed seeds (what [`place`] uses).
-    Seed(Seed),
-    /// Parity with the Python library: its candidate and test samples
-    /// (numpy's stream cannot be reproduced) and its `_hash01` keyed by
-    /// the placer's integer seed.
-    Python {
-        /// The placer's `seeds[0]`.
-        seed0: u64,
-        /// `_surface_points_with_normals(union, n_cand, rng)`.
-        candidates: Samples,
-        /// The coverage test sample.
-        tests: Samples,
-    },
-}
-
-impl Draws {
-    /// A uniform in [0, 1) keyed by a tag and an index.
-    #[allow(clippy::cast_precision_loss, reason = "a 64-bit hash to [0, 1)")]
-    fn h01(&self, tag: &str, i: usize) -> f64 {
-        let h = match self {
-            Self::Seed(s) => s.key(tag).index(i as u64).value(),
-            Self::Python { seed0, .. } => py_hash(&[&seed0.to_string(), tag, &i.to_string()]),
-        };
-        h as f64 / 18_446_744_073_709_551_616.0
-    }
-}
-
-/// Python's `_hash01` before the division: FNV-1a over each part's text,
-/// a 0xFF separator, then murmur3's fmix64.
-fn py_hash(parts: &[&str]) -> u64 {
-    const P: u64 = 1_099_511_628_211;
-    let mut h: u64 = 1_469_598_103_934_665_603;
-    for part in parts {
-        for &b in part.as_bytes() {
-            h ^= u64::from(b);
-            h = h.wrapping_mul(P);
-        }
-        h ^= 0xFF;
-        h = h.wrapping_mul(P);
-    }
-    h ^= h >> 33;
-    h = h.wrapping_mul(0xFF51_AFD7_ED55_8CCD);
-    h ^= h >> 33;
-    h = h.wrapping_mul(0xC4CE_B9FE_1A85_EC53);
-    h ^= h >> 33;
-    h
+/// A uniform in [0, 1) keyed by a tag and an index.
+#[allow(clippy::cast_precision_loss, reason = "a 64-bit hash to [0, 1)")]
+fn h01(seed: Seed, tag: &str, i: usize) -> f64 {
+    seed.key(tag).index(i as u64).value() as f64 / 18_446_744_073_709_551_616.0
 }
 
 /// **leaves**: place separate leaves over a tree's crown.
@@ -344,20 +299,7 @@ pub fn place(
     shape: &LeafShape,
     seed: Seed,
 ) -> Result<(Vec<TriMesh>, LeafStats), LookError> {
-    place_with(foliage, wood, shape, &Draws::Seed(seed))
-}
-
-/// [`place`] with the draws given (parity runs replay Python's).
-///
-/// # Errors
-/// As [`place`].
-pub fn place_with(
-    foliage: &TriMesh,
-    wood: &TriMesh,
-    shape: &LeafShape,
-    draws: &Draws,
-) -> Result<(Vec<TriMesh>, LeafStats), LookError> {
-    place_inner(foliage, wood, shape, draws, &Progress::none(), (0.0, 1.0))
+    place_inner(foliage, wood, shape, seed, &Progress::none(), (0.0, 1.0))
 }
 
 /// [`place`], reporting the per-leaf build (the long part) to `progress`
@@ -373,14 +315,14 @@ pub fn place_progress(
     progress: &Progress,
     span: (f64, f64),
 ) -> Result<(Vec<TriMesh>, LeafStats), LookError> {
-    place_inner(foliage, wood, shape, &Draws::Seed(seed), progress, span)
+    place_inner(foliage, wood, shape, seed, progress, span)
 }
 
 fn place_inner(
     foliage: &TriMesh,
     wood: &TriMesh,
     shape: &LeafShape,
-    draws: &Draws,
+    seed: Seed,
     progress: &Progress,
     span: (f64, f64),
 ) -> Result<(Vec<TriMesh>, LeafStats), LookError> {
@@ -412,26 +354,22 @@ fn place_inner(
     stats.spacing_mm = spacing;
 
     // ── roots: maximal normal-aware Poisson disk ──────────────────────────
-    let cand = match draws {
-        Draws::Seed(s) => {
-            #[allow(
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                reason = "a count"
-            )]
-            let n = (CANDIDATE_FACTOR * crown.area / (spacing * spacing)).max(64.0) as usize;
-            crown.sample(n, &mut Rng::new(s.key("leaf-candidates")))
-        }
-        Draws::Python { candidates, .. } => candidates.clone(),
+    let cand = {
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a count"
+        )]
+        let n = (CANDIDATE_FACTOR * crown.area / (spacing * spacing)).max(64.0) as usize;
+        crown.sample(n, &mut Rng::new(seed.key("leaf-candidates")))
     };
     stats.candidates = cand.points.len();
     let tau = 2.0 * std::f64::consts::PI;
-    let phase = [1, 2, 3].map(|k| draws.h01("org-dir", k) * tau);
+    let phase = [1, 2, 3].map(|k| h01(seed, "org-dir", k) * tau);
     let reach = Reach {
         crown: &crown,
         phase,
         len,
-        limit_deg: shape.overhang_deg,
     };
     let ok_cand = reach.placeable(&cand);
     let mut grid = PoissonGrid::new(spacing);
@@ -453,17 +391,14 @@ fn place_inner(
     stats.times.roots = clock.lap();
 
     // ── coverage verification ──────────────────────────────────────────────
-    let tests = match draws {
-        Draws::Seed(s) => {
-            #[allow(
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                reason = "a count"
-            )]
-            let n = (crown.area / (VERIFY_RES_MM * VERIFY_RES_MM)).max(64.0) as usize;
-            crown.sample(n, &mut Rng::new(s.key("leaf-coverage")))
-        }
-        Draws::Python { tests, .. } => tests.clone(),
+    let tests = {
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a count"
+        )]
+        let n = (crown.area / (VERIFY_RES_MM * VERIFY_RES_MM)).max(64.0) as usize;
+        crown.sample(n, &mut Rng::new(seed.key("leaf-coverage")))
     };
     let ok_test = reach.placeable(&tests);
     let checked: Vec<bool> = tests
@@ -484,7 +419,7 @@ fn place_inner(
         .zip(&root_n)
         .map(|(b, n)| reach.direction(*b, *n))
         .collect();
-    let standoffs = shingle_standoffs(&roots, &dirs, len, draws);
+    let standoffs = shingle_standoffs(&roots, &dirs, len, seed);
     stats.times.layout = clock.lap();
 
     // ── per-leaf build ────────────────────────────────────────────────────
@@ -502,7 +437,7 @@ fn place_inner(
             counter.tick();
             let n = root_n[i];
             let lying = reach.lying_nz(roots[i], n, dirs[i]);
-            let k = 1.0 - SIZE_JITTER * draws.h01("org-size", i);
+            let k = 1.0 - SIZE_JITTER * h01(seed, "org-size", i);
             let o = job.leaf(roots[i], n, dirs[i], lying, standoffs[i], len * k, wid * k);
             (zone(lying), o)
         })
@@ -928,7 +863,7 @@ fn field_angle(p: V, phase: [f64; 3]) -> f64 {
 /// `_shingle_standoffs`: bottom-up, each leaf stands `STEP` above the
 /// tallest lower leaf it has a tip conflict with (capped), plus jitter.
 #[allow(clippy::cast_possible_truncation, reason = "grid cells of a crown")]
-fn shingle_standoffs(bases: &[V], dirs: &[V], len: f64, draws: &Draws) -> Vec<f64> {
+fn shingle_standoffs(bases: &[V], dirs: &[V], len: f64, seed: Seed) -> Vec<f64> {
     let n = bases.len();
     let mut out = vec![0.0; n];
     let tips: Vec<V> = (0..n)
@@ -948,7 +883,7 @@ fn shingle_standoffs(bases: &[V], dirs: &[V], len: f64, draws: &Draws) -> Vec<f6
     };
     let jitter: Vec<f64> = (0..n)
         .into_par_iter()
-        .map(|i| draws.h01("org-so", i))
+        .map(|i| h01(seed, "org-so", i))
         .collect();
     let mut order: Vec<usize> = (0..n).collect();
     order.sort_by(|&a, &b| bases[a][2].total_cmp(&bases[b][2]));
@@ -1015,7 +950,6 @@ struct Reach<'a> {
     crown: &'a Crown,
     phase: [f64; 3],
     len: f64,
-    limit_deg: Option<f64>,
 }
 
 impl Reach<'_> {
@@ -1041,9 +975,6 @@ impl Reach<'_> {
     /// whose tip reaches over the crown's underside is built for the
     /// underside.
     fn lying_nz(&self, root: V, n: V, dir: V) -> f64 {
-        if self.limit_deg.is_none() {
-            return n[2];
-        }
         match self
             .crown
             .walk(root, n, dir, self.len / leaf::N_LONG as f64, TIP_STEPS)
@@ -1121,13 +1052,11 @@ impl Job<'_> {
             curl_deg: st * self.shape.curl_deg.min(PITCH_CURL_DEG),
             lift_mm: st * TIP_LIFT_MM,
         };
-        if let Some(limit) = self.shape.overhang_deg {
-            let k = hang_scale(lying_nz, limit, &blade, arch_mm);
-            blade.arch_deg *= k;
-            blade.curl_deg *= k;
-            blade.lift_mm *= k;
-            arch_mm *= k;
-        }
+        let k = hang_scale(lying_nz, self.shape.overhang_deg, &blade, arch_mm);
+        blade.arch_deg *= k;
+        blade.curl_deg *= k;
+        blade.lift_mm *= k;
+        arch_mm *= k;
         // Centre the blade on its root: the build anchors the oval's centre,
         // which sits a quarter length down-slope of the blade's middle.
         let (anchor, anchor_n) = self
@@ -1138,7 +1067,7 @@ impl Job<'_> {
                 1.0 + 0.25 * ls + 1.0,
             )
             .unwrap_or((base, nrm));
-        let built = if flush && self.shape.overhang_deg.is_some() {
+        let built = if flush {
             self.drape_turning(base, nrm, t_leaf, &blade, drape_embed(standoff))
         } else {
             self.attempt(
@@ -1156,7 +1085,7 @@ impl Job<'_> {
         // the crown below it would start a layer in air: lay it flat
         // instead.
         let built = match built {
-            Ok((surf, _, _)) if self.shape.overhang_deg.is_some() && self.hangs(&surf) => {
+            Ok((surf, _, _)) if self.hangs(&surf) => {
                 self.drape_turning(base, nrm, t_leaf, &blade, drape_embed(standoff))
             }
             b => b,
@@ -1289,14 +1218,8 @@ impl Job<'_> {
         let mut up = vec![0.0; surf.len()];
         let mut on = vec![[0.0; 3]; surf.len()];
         let mut nrm = vec![[0.0; 3]; surf.len()];
-        let flat_below = self
-            .shape
-            .overhang_deg
-            .map_or(-1.0, |l| -libm::sin(l.to_radians()));
-        let full_above = self
-            .shape
-            .overhang_deg
-            .map_or(-1.0, |l| -libm::sin((l - DRAPE_DOME_FADE_DEG).to_radians()));
+        let flat_below = -libm::sin(self.shape.overhang_deg.to_radians());
+        let full_above = -libm::sin((self.shape.overhang_deg - DRAPE_DOME_FADE_DEG).to_radians());
         let mut lay = |hit: V, ns: V, k: usize| {
             // the dome and crease fade out where the crown is near the
             // printer's limit: their side slopes would tip it past
@@ -1658,11 +1581,72 @@ impl Clock {
 mod tests {
     use super::*;
 
-    #[test]
-    fn python_hash_matches() {
-        // _hash01(12345, "org-dir", 1) * 2**64, from Python.
-        assert_eq!(py_hash(&["12345", "org-dir", "1"]), PY_HASH_12345_ORG_DIR_1);
+    /// A closed UV sphere (outward winding), radius `r` mm, centred at
+    /// `(0, 0, r + 1)`.
+    #[allow(clippy::cast_possible_truncation, reason = "tiny indices")]
+    fn sphere(r: f64) -> TriMesh {
+        let (nu, nv) = (28_usize, 18_usize);
+        let mut positions = vec![[0.0, 0.0, r + 1.0 + r], [0.0, 0.0, 1.0]];
+        for j in 1..nv {
+            let phi = std::f64::consts::PI * j as f64 / nv as f64;
+            for i in 0..nu {
+                let th = 2.0 * std::f64::consts::PI * i as f64 / nu as f64;
+                positions.push([
+                    r * libm::sin(phi) * libm::cos(th),
+                    r * libm::sin(phi) * libm::sin(th),
+                    r + 1.0 + r * libm::cos(phi),
+                ]);
+            }
+        }
+        let ring = |j: usize, i: usize| (2 + (j - 1) * nu + i % nu) as u32;
+        let mut triangles = Vec::new();
+        for i in 0..nu {
+            triangles.push([0, ring(1, i), ring(1, i + 1)]);
+            triangles.push([1, ring(nv - 1, i + 1), ring(nv - 1, i)]);
+        }
+        for j in 1..nv - 1 {
+            for i in 0..nu {
+                let (a, b, c, d) = (
+                    ring(j, i),
+                    ring(j, i + 1),
+                    ring(j + 1, i + 1),
+                    ring(j + 1, i),
+                );
+                triangles.push([a, d, c]);
+                triangles.push([a, c, b]);
+            }
+        }
+        TriMesh {
+            positions,
+            triangles,
+            ..TriMesh::default()
+        }
     }
 
-    const PY_HASH_12345_ORG_DIR_1: u64 = 17_969_432_841_416_999_660;
+    #[test]
+    fn a_crown_gets_closed_leaves_and_full_coverage() {
+        let crown = sphere(9.0);
+        assert!(crown.is_watertight());
+        let (leaves, stats) = place(
+            &crown,
+            &TriMesh::default(),
+            &LeafShape::default(),
+            Seed::new(7),
+        )
+        .expect("places");
+        assert!(stats.placed > 100, "{stats:?}");
+        assert_eq!(leaves.len(), stats.placed);
+        for m in &leaves {
+            assert!(m.is_watertight());
+        }
+        assert!(
+            stats.uncovered * 100 <= stats.test_points.max(1),
+            "{} of {} uncovered",
+            stats.uncovered,
+            stats.test_points
+        );
+        // The printer limit lays underside blades flat: no root faces
+        // straight down.
+        assert!(stats.leaves.iter().all(|l| l.normal[2] >= -0.75));
+    }
 }

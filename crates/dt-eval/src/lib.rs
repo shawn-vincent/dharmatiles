@@ -68,7 +68,7 @@ pub fn discover(start: &Path) -> Project {
 pub struct Options {
     /// The connector system: `db`.
     pub system: String,
-    /// Replaces the tile's seed (the parity harness's seeds 1–4).
+    /// Replaces the tile's seed (the CLI's `--seed`).
     pub seed: Option<u64>,
     /// The printer the audit checks against.
     pub printer: Printer,
