@@ -25,7 +25,42 @@ pub fn spawn(listener: TcpListener, shared: Arc<Shared>) {
 struct Request {
     method: String,
     path: String,
+    /// The query string's `key=value` pairs, percent-decoded.
+    query: Vec<(String, String)>,
     host: String,
+}
+
+impl Request {
+    fn param(&self, key: &str) -> Option<&str> {
+        self.query
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+/// `%41` and `+` decoded; a bad escape is kept as written.
+fn unescape(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            b'+' => out.push(b' '),
+            b'%' if i + 2 < b.len() && s.is_char_boundary(i + 3) => {
+                match u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                    Ok(v) => {
+                        out.push(v);
+                        i += 2;
+                    }
+                    Err(_) => out.push(b'%'),
+                }
+            }
+            c => out.push(c),
+        }
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 fn read_request(conn: &TcpStream) -> Option<Request> {
@@ -35,7 +70,17 @@ fn read_request(conn: &TcpStream) -> Option<Request> {
     let mut parts = first.split_whitespace();
     let method = parts.next()?.to_owned();
     let target = parts.next()?;
-    let path = target.split(['?', '#']).next()?.to_owned();
+    let target = target.split('#').next()?;
+    let (path, q) = target.split_once('?').unwrap_or((target, ""));
+    let path = path.to_owned();
+    let query = q
+        .split('&')
+        .filter(|x| !x.is_empty())
+        .map(|kv| {
+            let (k, v) = kv.split_once('=').unwrap_or((kv, ""));
+            (unescape(k), unescape(v))
+        })
+        .collect();
     let mut host = String::new();
     for _ in 0..64 {
         let mut h = String::new();
@@ -48,7 +93,12 @@ fn read_request(conn: &TcpStream) -> Option<Request> {
             v.trim().clone_into(&mut host);
         }
     }
-    Some(Request { method, path, host })
+    Some(Request {
+        method,
+        path,
+        query,
+        host,
+    })
 }
 
 /// Is `host` (a `Host` header, with its port) the loopback address?
@@ -81,6 +131,25 @@ fn json(conn: &mut TcpStream, status: &str, body: &serde_json::Value) {
 }
 
 /// `/api/tiles/N/rest` → `(N, rest)`.
+/// With `DT_WEB` set to `web/preview`, the page's own files (only the
+/// paths the program serves) are read from there on every request, so the
+/// page can be worked on without rebuilding the program.
+fn dev_asset(path: &str) -> Option<(&'static str, Vec<u8>)> {
+    let dir = std::env::var_os("DT_WEB")?;
+    let (ctype, _) = assets::find(path)?;
+    let rel = if path == "/" {
+        "index.html"
+    } else {
+        path.trim_start_matches('/')
+    };
+    if !(rel == "index.html" || rel == "style.css" || rel.starts_with("js/")) {
+        return None;
+    }
+    std::fs::read(std::path::Path::new(&dir).join(rel))
+        .ok()
+        .map(|b| (ctype, b))
+}
+
 fn tile_route(path: &str) -> Option<(usize, &str)> {
     let rest = path.strip_prefix("/api/tiles/")?;
     let (n, what) = rest.split_once('/')?;
@@ -105,6 +174,12 @@ fn one(mut conn: TcpStream, shared: &Shared) {
                 None => respond(&mut conn, "404 Not Found", "text/plain", b"no mesh yet"),
             }
         }
+        ("GET", p) if tile_route(p).is_some_and(|(_, w)| w == "text") => {
+            match tile_route(p).and_then(|(i, _)| shared.text(i, req.param("file"))) {
+                Some(v) => json(&mut conn, "200 OK", &v),
+                None => respond(&mut conn, "404 Not Found", "text/plain", b"no such file"),
+            }
+        }
         ("POST", p) if tile_route(p).is_some_and(|(_, w)| w == "build") => {
             let known = tile_route(p).is_some_and(|(i, _)| shared.want(i));
             let status = if known {
@@ -113,6 +188,10 @@ fn one(mut conn: TcpStream, shared: &Shared) {
                 "404 Not Found"
             };
             json(&mut conn, status, &serde_json::json!({"ok": known}));
+        }
+        ("GET", p) if dev_asset(p).is_some() => {
+            let (ctype, body) = dev_asset(p).unwrap_or_default();
+            respond(&mut conn, "200 OK", ctype, &body);
         }
         ("GET", p) => match assets::find(p) {
             Some((ctype, body)) => respond(&mut conn, "200 OK", ctype, body),

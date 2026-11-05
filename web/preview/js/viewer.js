@@ -53,25 +53,43 @@ const dirv = (elev, azim) => new THREE.Vector3(
   Math.cos(rad(elev)) * Math.cos(rad(azim)), Math.cos(rad(elev)) * Math.sin(rad(azim)), Math.sin(rad(elev)));
 
 const VERT = `
-attribute vec3 paint;
-varying vec3 vN; varying vec3 vC; varying vec3 vP;
+attribute vec3 paint; attribute vec2 who;
+varying vec3 vN; varying vec3 vC; varying vec3 vP; varying vec2 vWho;
 void main() {
-  vN = normal; vC = paint; vP = position;
+  vN = normal; vC = paint; vP = position; vWho = who;
   gl_Position = projectionMatrix * viewMatrix * vec4(position, 1.0);
 }`;
 
 // The render.rs shading: 0.3 + key + 0.35 fill, *0.95, gamma 1/1.25,
 // back faces turned to face the camera.
+// The selection and the thing under the pointer are tinted brass: who =
+// (entry, piece), a piece of -1 meaning the whole entry, an entry of -1 none.
 const FRAG = `
 uniform vec3 uCam; uniform vec3 uDir; uniform float uOrtho; uniform vec3 uL1; uniform vec3 uL2;
-varying vec3 vN; varying vec3 vC; varying vec3 vP;
+uniform vec2 uSel; uniform vec2 uHov; uniform vec3 uBrass;
+varying vec3 vN; varying vec3 vC; varying vec3 vP; varying vec2 vWho;
+float is(vec2 w) {
+  vec2 v = floor(vWho + 0.5);
+  return (w.x >= 0.0 && v.x == w.x && (w.y < 0.0 || v.y == w.y)) ? 1.0 : 0.0;
+}
 void main() {
   vec3 n = normalize(vN);
   vec3 ray = uOrtho > 0.5 ? uDir : vP - uCam;
   if (dot(n, ray) > 0.0) n = -n;
   float shade = 0.3 + max(dot(n, uL1), 0.0) + 0.35 * max(dot(n, uL2), 0.0);
   vec3 c = pow(clamp(vC * shade * 0.95, 0.0, 1.0), vec3(1.0 / 1.25));
+  float k = max(is(uSel) * 0.42, is(uHov) * 0.22);
+  c = mix(c, uBrass * (0.55 + 0.45 * shade), k);
   gl_FragColor = vec4(c, 1.0);
+}`;
+
+// The pick pass: each fragment writes its (entry + 1, piece) as four bytes.
+const PICK_FRAG = `
+varying vec2 vWho;
+void main() {
+  vec2 v = floor(vWho + 0.5);
+  float e = v.x + 1.0;
+  gl_FragColor = vec4(mod(e, 256.0), floor(e / 256.0), mod(v.y, 256.0), floor(v.y / 256.0)) / 255.0;
 }`;
 
 export class Viewer {
@@ -90,10 +108,15 @@ export class Viewer {
     this.initInertia();
     this.uniforms = {
       uCam: { value: new THREE.Vector3() }, uDir: { value: new THREE.Vector3(0, 1, 0) }, uOrtho: { value: 0 }, uL1: { value: new THREE.Vector3() }, uL2: { value: new THREE.Vector3() },
+      uSel: { value: new THREE.Vector2(-1, -1) }, uHov: { value: new THREE.Vector2(-1, -1) }, uBrass: { value: new THREE.Color(0.88, 0.67, 0.29) },
     };
     this.material = new THREE.ShaderMaterial({
       uniforms: this.uniforms, vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide,
     });
+    this.pickMaterial = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: PICK_FRAG, side: THREE.DoubleSide });
+    this.pickScene = new THREE.Scene();
+    this.pickTarget = new THREE.WebGLRenderTarget(1, 1);
+    this.pickBytes = new Uint8Array(4);
     this.mesh = null;
     this.grid = null;
     this.payload = null;
@@ -379,17 +402,27 @@ export class Viewer {
     this.clean = new THREE.BufferAttribute(payload.clean, 3, true);
     this.grey = null;
     g.setAttribute('paint', this.currentPaint());
-    if (this.mesh) { this.scene.remove(this.mesh); this.mesh.geometry.dispose(); }
+    // who made each triangle, on its three corners
+    const who = new Float32Array(6 * payload.triangles);
+    for (let t = 0; t < payload.triangles; t++) {
+      const e = payload.entry[t] === 65535 ? -1 : payload.entry[t], p = payload.piece[t];
+      for (let v = 0; v < 3; v++) { who[6 * t + 2 * v] = e; who[6 * t + 2 * v + 1] = p; }
+    }
+    g.setAttribute('who', new THREE.BufferAttribute(who, 2));
+    if (this.mesh) { this.scene.remove(this.mesh); this.pickScene.remove(this.pickMesh); this.mesh.geometry.dispose(); }
     this.mesh = new THREE.Mesh(g, this.material);
     this.mesh.frustumCulled = false;
     this.scene.add(this.mesh);
+    this.pickMesh = new THREE.Mesh(g, this.pickMaterial);
+    this.pickMesh.frustumCulled = false;
+    this.pickScene.add(this.pickMesh);
     this.payload = payload;
     this.buildGrid();
     this.draw();
   }
 
   clear() {
-    if (this.mesh) { this.scene.remove(this.mesh); this.mesh.geometry.dispose(); this.mesh = null; }
+    if (this.mesh) { this.scene.remove(this.mesh); this.pickScene.remove(this.pickMesh); this.mesh.geometry.dispose(); this.mesh = null; this.pickMesh = null; }
     this.payload = null;
     this.buildGrid();
     this.draw();
@@ -516,6 +549,62 @@ export class Viewer {
     this.controls.target.copy(t);
     this.controls.update();
     this.draw();
+  }
+
+  /**
+   * What is under canvas point (x, y) in CSS pixels: {entry, piece}, or
+   * null for the plate.  One pixel rendered with the pick pass, so it is
+   * exactly what the eye sees there, whatever is in front.
+   */
+  pick(x, y) {
+    if (!this.pickMesh) return null;
+    const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
+    if (x < 0 || y < 0 || x >= w || y >= h) return null;
+    const cam = this.camera;
+    cam.setViewOffset(w, h, Math.floor(x), Math.floor(y), 1, 1);
+    const r = this.renderer;
+    r.setRenderTarget(this.pickTarget);
+    r.setClearColor(0x000000, 0);
+    r.clear();
+    r.render(this.pickScene, cam);
+    r.readRenderTargetPixels(this.pickTarget, 0, 0, 1, 1, this.pickBytes);
+    r.setRenderTarget(null);
+    cam.clearViewOffset();
+    const [a, b, c, d] = this.pickBytes;
+    const e = a + 256 * b - 1;
+    return e < 0 ? null : { entry: e, piece: c + 256 * d };
+  }
+
+  /** Tint the selection and the hovered thing: each {entry, piece} (piece null: the whole entry) or null. */
+  setHighlight(sel, hov) {
+    const put = (u, w) => u.value.set(w ? w.entry : -1, w && w.piece != null ? w.piece : -1);
+    put(this.uniforms.uSel, sel);
+    put(this.uniforms.uHov, hov);
+    this.draw();
+  }
+
+  /** The brass of the theme (`--brass`), as the tint's colour. */
+  setBrass(css) {
+    try { this.uniforms.uBrass.value.setStyle(css); } catch { /* keep the default */ }
+    this.draw();
+  }
+
+  /** The centre of what entry (and piece) made, for flying to it; null when it has no triangles. */
+  centreOf(entry, piece = null) {
+    const p = this.payload;
+    if (!p) return null;
+    const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+    let any = false;
+    for (let t = 0; t < p.triangles; t++) {
+      if (p.entry[t] !== entry || (piece != null && p.piece[t] !== piece)) continue;
+      any = true;
+      for (let k = 0; k < 9; k++) {
+        const v = p.positions[9 * t + k], a = k % 3;
+        if (v < lo[a]) lo[a] = v;
+        if (v > hi[a]) hi[a] = v;
+      }
+    }
+    return any ? { lo, hi } : null;
   }
 
   draw() {

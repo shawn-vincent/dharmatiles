@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>dharmatiles preview</title>
+<title>dharmatiles</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="/theme.css">
 <link rel="stylesheet" href="/style.css">
@@ -13,50 +13,64 @@
 </head>
 <body>
 <div id="app">
-  <aside id="tiles-pane">
-    <h1 class="brand"><span class="wordmark"><i class="mark" role="img" aria-label="dharmatiles lotus"></i>dharmatiles</span><button id="theme" class="btn icon" type="button" title="Light or dark (t)" aria-label="Switch light or dark"></button></h1>
-    <nav id="roots" class="seg" aria-label="Where the tiles come from" hidden></nav>
-    <input id="filter" type="search" placeholder="Filter tiles" aria-label="Filter tiles">
-    <ul id="tiles"></ul>
-    <p id="conn" class="muted">connecting…</p>
-  </aside>
+  <header id="title">
+    <span class="wordmark"><i class="mark" role="img" aria-label="dharmatiles lotus"></i><span class="txt">dharmatiles</span></span>
+    <button id="tilebtn" type="button" aria-haspopup="true" aria-expanded="false" title="Choose a tile"><span id="tilename">Choose a tile</span><span class="where" id="tilewhere"></span><span aria-hidden="true">▾</span></button>
+    <span id="tileplan" class="muted"></span>
+    <span class="grow"></span>
+    <span id="conn" class="muted">connecting…</span>
+    <button id="gate" type="button" hidden aria-expanded="false" title="The printability gate: click for the build record"><i></i><span class="lbl" id="gatetext"></span></button>
+    <button id="theme" class="btn icon" type="button" title="Light or dark (t)" aria-label="Switch light or dark"></button>
+    <div id="progress"></div>
 
-  <main id="stage">
-    <div id="toolbar">
+    <div id="menu" class="menu" hidden>
+      <nav id="roots" class="seg" aria-label="Where the tiles come from" hidden></nav>
+      <input id="filter" type="search" placeholder="Filter tiles" aria-label="Filter tiles">
+      <ul id="tiles"></ul>
+    </div>
+
+    <div id="record-card" class="card" hidden>
+      <div id="verdict" hidden></div>
+      <div id="failures"></div>
+      <dl id="record"></dl>
+      <ul id="legend">
+        <li><i class="sw" style="background:var(--over)"></i><span id="lg-red">Past the steepest: small patches allowed, more fails</span></li>
+        <li><i class="sw" style="background:var(--band)"></i><span id="lg-orange">55–65°: allowed within budget</span></li>
+        <li><i class="sw" style="background:#2a2a2e"></i><span>Tile side wall</span></li>
+      </ul>
+    </div>
+  </header>
+
+  <section id="text" aria-label="The document">
+    <div id="textbar"><span id="textpath"></span><span id="textstate"></span></div>
+    <div id="code" role="list"></div>
+    <div id="codehint">Click a line to select it in the view.</div>
+  </section>
+
+  <main id="view">
+    <canvas id="canvas"></canvas>
+    <div id="viewbar">
       <div class="seg" id="views" role="group" aria-label="Views"></div>
-      <div class="toggles">
+      <button id="dispbtn" class="btn icon" type="button" aria-haspopup="true" aria-expanded="false" title="Display">⋯</button>
+      <div id="display" class="menu" hidden>
         <label class="switch"><input type="checkbox" id="t-paint" checked> Paint <kbd>c</kbd></label>
         <label class="switch"><input type="checkbox" id="t-overhang" checked> Overhang <kbd>o</kbd></label>
         <label class="switch"><input type="checkbox" id="t-wire"> Wireframe <kbd>w</kbd></label>
         <label class="switch"><input type="checkbox" id="t-grid" checked> Grid <kbd>g</kbd></label>
         <button id="b-proj" class="btn" type="button" title="Switch between perspective and orthographic (p)">Perspective <kbd>p</kbd></button>
+        <div id="allviews"></div>
       </div>
     </div>
-    <div id="canvas-wrap"><canvas id="canvas"></canvas>
-      <div id="status" hidden><div id="bar"><i id="bar-fill"></i></div><span id="status-text"></span></div>
-      <div id="errors" hidden></div>
-      <div id="empty">Choose a tile from the list.</div>
-    </div>
+    <div id="status" hidden><div id="bar"><i id="bar-fill"></i></div><span id="status-text"></span></div>
+    <div id="hint" role="status"></div>
+    <div id="errors" hidden></div>
+    <div id="empty"><button id="choose" class="btn" type="button">Choose a tile</button></div>
   </main>
 
-  <aside id="record-pane">
-    <h2 id="tile-name">–</h2>
-    <p id="tile-plan" class="muted"></p>
-    <div id="verdict" hidden></div>
-    <div id="failures"></div>
-    <section id="stack-sec" hidden>
-      <h3>Stack</h3>
-      <ol id="stack"></ol>
-    </section>
-    <h3>Audit</h3>
-    <dl id="record"></dl>
-    <h3>Paint</h3>
-    <ul id="legend">
-      <li><i class="sw" style="background:var(--over)"></i><span id="lg-red">Past the steepest: small patches allowed, more fails</span></li>
-      <li><i class="sw" style="background:var(--band)"></i><span id="lg-orange">55–65°: allowed within budget</span></li>
-      <li><i class="sw" style="background:#2a2a2e"></i><span>Tile side wall</span></li>
-    </ul>
-    <p class="hint">Drag to orbit, right-drag or shift-drag to pan, scroll to zoom. Keys <kbd>1</kbd>–<kbd>9</kbd> pick a view.</p>
+  <aside id="stack-pane" aria-label="The stack">
+    <div class="cap">Stack <span class="muted">in build order</span></div>
+    <ol id="stack"></ol>
+    <p class="hint">Click a thing in the view to select it; click again to climb to what holds it. <kbd>Esc</kbd> clears. Drag to orbit, right-drag to pan, scroll to zoom, <kbd>1</kbd>–<kbd>9</kbd> for views.</p>
   </aside>
 </div>
 <script type="module" src="/js/main.js"></script>

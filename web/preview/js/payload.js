@@ -1,9 +1,15 @@
 // Reads the binary mesh payload (see crates/dharmatiles/src/preview/payload.rs).
 //
 //   "DTM1" | u32 json_len | json (space padded to 4) |
-//   f32 positions[9n] | f32 normals[9n] | u8 painted[9n] | u8 clean[9n]
+//   f32 positions[9n] | f32 normals[9n] | u8 painted[9n] | u8 clean[9n] |
+//   u16 entry[n] | u16 piece[n] | padding to 4
 //
-// Everything is a typed-array view onto the one buffer: no copies, no JSON numbers.
+// entry is the index of the stack entry that made each triangle (the base is
+// the stack's length, 65535 none); piece counts the things within it (rock 0,
+// rock 1 of a scatter).  Everything is a typed-array view onto the one
+// buffer: no copies, no JSON numbers.
+
+export const NO_ENTRY = 65535;
 
 export function parsePayload(buffer) {
   const head = new DataView(buffer);
@@ -16,6 +22,9 @@ export function parsePayload(buffer) {
   const positions = new Float32Array(buffer, o, 9 * n); o += 36 * n;
   const normals = new Float32Array(buffer, o, 9 * n); o += 36 * n;
   const painted = new Uint8Array(buffer, o, 9 * n); o += 9 * n;
-  const clean = new Uint8Array(buffer, o, 9 * n);
-  return { meta, triangles: n, positions, normals, painted, clean };
+  const clean = new Uint8Array(buffer, o, 9 * n); o += 9 * n;
+  const traced = buffer.byteLength >= o + 4 * n;
+  const entry = traced ? new Uint16Array(buffer, o, n) : new Uint16Array(n).fill(NO_ENTRY);
+  const piece = traced ? new Uint16Array(buffer, o + 2 * n, n) : new Uint16Array(n);
+  return { meta, triangles: n, positions, normals, painted, clean, entry, piece };
 }

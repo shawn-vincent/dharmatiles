@@ -92,6 +92,7 @@ fn serves_the_viewer_and_its_vendored_three() {
         "/js/viewer.js",
         "/js/payload.js",
         "/js/host.js",
+        "/js/text.js",
         "/style.css",
         "/logo.svg",
         "/favicon.svg",
@@ -396,4 +397,21 @@ fn a_folder_lists_its_tiles_and_follows_saves_and_deletes() {
     assert!(shared.rescan());
     assert_eq!(listed(&shared).len(), 3);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn serves_a_tiles_own_text_and_nothing_else() {
+    let r = start(&[FLAT], true);
+    wait_for(&r, "ready", |t| t["status"] == "ready");
+    let (head, body) = get(&r, "/api/tiles/0/text");
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    let v: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(v["file"], FLAT);
+    assert!(v["text"].as_str().unwrap().contains("tile "));
+    assert_eq!(v["writable"], false, "library files are never written");
+    // only files the tile's build read
+    let (head, _) = get(&r, "/api/tiles/0/text?file=%2Fetc%2Fpasswd");
+    assert!(head.starts_with("HTTP/1.1 404"), "{head}");
+    let (head, _) = get(&r, "/api/tiles/0/text?file=lib%3Aparts%2Fgrass.dtile");
+    assert!(head.starts_with("HTTP/1.1 404"), "{head}");
 }

@@ -51,7 +51,7 @@
 <ol>
   <li><strong>Rerun the slow tests</strong> and fix the OpenLOCK failure, so everything after starts from green.</li>
   <li><strong>Draft builds and per-entry rebuilds.</strong> The editor's live feel depends on them, and they make every element faster to iterate.</li>
-  <li><strong>The editor</strong>, in the stages its <a href="design/editor.html">design</a> sets out: select, then edit, then place, then the assistant.</li>
+  <li><strong>The editor</strong>, in the stages its <a href="design/editor.html">design</a> sets out: select (built), then edit, then place, then the assistant.</li>
   <li><strong>Lines with <code>width=</code> and <code>along=</code></strong>, the language's biggest gap: paths, walls and streams that follow a drawn line.</li>
   <li><strong>The first public release</strong>, once the licence for the library is decided.</li>
 </ol>
@@ -59,7 +59,7 @@
 <h2 id="editor">The editor</h2>
 <p>The preview becomes the editor: one view in which you see a tile, select any part of it, change it, and place new things on it, with the document's text beside it. The design is <a href="design/editor.html">The editor</a>.</p>
 <ul class="road">
-  <li><span class="st st-proposed">Designed</span><strong>Select in the view.</strong> Click a stone, a blade or a wall and the stack entry that made it, and its line in the document, light up; hover a line in the document and its geometry lights up in the view.<span class="why">Every solid already carries its stack path; the mesh needs to carry it to the page.</span></li>
+  <li><span class="st st-plain">Planned</span><strong>Select: regions and outlines.</strong> Selecting works (see <a href="preview.html#select">the preview</a>); still to come are climbing through the region a thing stands in, drawing regions and lines on the plate, and a thin outline in place of the hover tint.</li>
   <li><span class="st st-proposed">Designed</span><strong>Edit in place.</strong> A selected entry's controls appear beside it as values you drag; each change is written into the document's text, keeping its layout and comments, and the tile rebuilds.</li>
   <li><span class="st st-proposed">Designed</span><strong>Place by clicking.</strong> Pick an element and click the tile to put it there; drag a line's points and a region's fill point on the plate.</li>
   <li><span class="st st-proposed">Designed</span><strong>The document beside the view</strong>: a code editor with completion from the element schema, the checker's errors at their line as you type, and each element's page on hover.</li>

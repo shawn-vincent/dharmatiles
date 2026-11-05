@@ -13,12 +13,13 @@
 <header class="hero">
   <div class="eyebrow">dharmatiles preview</div>
   <h1>Preview</h1>
-  <p class="lede">A live, painted 3D view of your tiles in the browser. It rebuilds a tile every time you save it, paints overhang the way the printability gate sees it, and shows a mistake at its line. It is part of the program and works offline.</p>
-  <figure class="shot"><img src="img/preview.jpg" alt="The preview: a list of tiles on the left, a painted tile on the plate in the middle, and its record on the right"><figcaption>Your tiles and the library on the left, the tile on the plate, its record on the right.</figcaption></figure>
+  <p class="lede">A live, painted 3D view of your tiles in the browser, with the document beside it. Click anything on the tile to see the stack entry and the line that made it. It rebuilds a tile every time you save it, paints overhang the way the printability gate sees it, and shows a mistake at its line. It is part of the program and works offline.</p>
+  <figure class="shot"><img src="img/preview.jpg" alt="The preview: the document on the left, a painted tile on the plate in the middle with one rock selected, and the stack on the right"><figcaption>The document, the tile on the plate and its stack. A rock is selected: its scatter and its line light up with it.</figcaption></figure>
 </header>
 <nav class="toc" aria-label="On this page"><div class="eyebrow">On this page</div><ol>
   <li><a href="#run">Run it</a></li>
   <li><a href="#shows">What it shows</a></li>
+  <li><a href="#select">Selecting</a></li>
   <li><a href="#keys">Moving round a tile</a></li>
   <li><a href="#live">Live updates</a></li>
   <li><a href="#paint">Paint</a></li>
@@ -33,16 +34,29 @@ dharmatiles preview a.dtile b.dtile walls/    # several files and folders
 dharmatiles preview lib:tiles/cliffs          # one library group
 dharmatiles preview my-tile.dtile --system ol # for OpenLOCK
 dharmatiles preview slicer-export.stl         # any binary STL, through the same gate</code></pre>
-<p>With nothing named, the list has two sources: <strong>My tiles</strong> (<code>$DT_HOME</code>, else <code>~/dharmatiles</code>) and the <strong>Library</strong>. Folders are watched: a new tile appears in the list within a second, and a deleted one leaves it.</p>
+<p>The tile menu at the top left chooses the tile. With nothing named, it has two sources: <strong>My tiles</strong> (<code>$DT_HOME</code>, else <code>~/dharmatiles</code>) and the <strong>Library</strong>. Folders are watched: a new tile appears in the list within a second, and a deleted one leaves it.</p>
 <p>It serves <code>http://127.0.0.1:7878/</code> (the first free port from 7878, or <code>--port</code>) on the loopback address only, and refuses a request whose <code>Host</code> is not <code>127.0.0.1</code>, <code>localhost</code> or <code>[::1]</code>. <kbd>Ctrl</kbd>-<kbd>C</kbd> stops it.</p>
 
 <h2 id="shows">What it shows</h2>
 <ul>
-  <li><strong>The tile on the plate</strong>, painted like the PNG renders, with its squares ruled on the plate.</li>
+  <li><strong>The title bar:</strong> the tile menu, the tile's size and base, and the gate's verdict. Click the verdict for the record: why a tile fails, and the audit's numbers.</li>
+  <li><strong>The document</strong> on the left, as written, coloured by kind. Library tiles are read only.</li>
+  <li><strong>The stack</strong> on the right in build order: each entry with its element, its line, and a <kbd>?</kbd> to its element page. An entry whose geometry is all hidden under others (ground under water) says so.</li>
+  <li><strong>The tile on the plate</strong>, painted like the PNG renders, with its squares ruled on the plate. The <kbd>⋯</kbd> button holds paint, overhang, wireframe, grid, projection and all nine views.</li>
   <li><strong>Overhang from the gate itself:</strong> faces between 55° and 65° are orange, faces past 65° red. The colours come from the gate's own flags, so the view and <code>build</code> cannot disagree.</li>
-  <li><strong>The record:</strong> whether the tile passes the gate and why not, its stack (each entry linked to its element page) and the audit's numbers.</li>
   <li><strong>Progress</strong> while a tile builds: the stage, an element's own count (grass blades, wall stones, tree leaves) and the time left, estimated from the last build of the same tile.</li>
 </ul>
+
+<h2 id="select">Selecting</h2>
+<p>Every triangle of a built tile knows the stack entry that made it, so the view, the stack and the document share one selection, tinted brass.</p>
+<ul>
+  <li><strong>Hover</strong> a thing on the tile and it lights up and is named beside the pointer: <q>rocks in pool · 2 of 3</q>.</li>
+  <li><strong>Click</strong> to select it. A thing a scatter placed is selected on its own; click it again to climb to the whole scatter, and again for the tile. Clicking the plate or <kbd>Esc</kbd> clears.</li>
+  <li><strong>The stack and the document follow:</strong> the entry's row and its lines light up. An entry written in a file the tile uses (grass from <code>lib:parts/grass.dtile</code>) opens that file; <em>Back to the tile</em> returns.</li>
+  <li><strong>Click a line</strong> in the document, or a row in the stack, to select its entry in the view; hover one to light its geometry.</li>
+  <li><strong>Double-click</strong>, or <kbd>f</kbd>, flies to the selection.</li>
+</ul>
+<p>Water owns the surface it fills, so clicking the pool selects the water; the ground beneath it is reached from the stack.</p>
 
 <h2 id="keys">Moving round a tile</h2>
 <p>Orbit with the left button, pan with the right button or <kbd>Shift</kbd>, zoom with the wheel or a pinch, toward the point under the pointer. A fling keeps turning and settles. Picking a view turns the tile there rather than cutting.</p>
@@ -56,6 +70,8 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 <tr><td><kbd>w</kbd></td><td>Wireframe</td></tr>
 <tr><td><kbd>g</kbd></td><td>The grid on the plate</td></tr>
 <tr><td><kbd>t</kbd></td><td>Light or dark</td></tr>
+<tr><td><kbd>f</kbd></td><td>Fly to the selection</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Close a menu, else clear the selection</td></tr>
 </tbody></table></div>
 <p>Choices are remembered in the browser. With reduced motion set in your system, views cut and nothing coasts.</p>
 
@@ -67,8 +83,8 @@ dharmatiles preview slicer-export.stl         # any binary STL, through the same
 
 <h2 id="limits">Limits</h2>
 <ul>
-  <li>Editing in the view is designed but not built: see <a href="design/editor.html">the editor</a>.</li>
-  <li>Made for your own machine: the mesh is sent whole (about 90 bytes a triangle), fine on the loopback, not meant for a network.</li>
+  <li>Selecting works; editing is designed but not built: see <a href="design/editor.html">the editor</a>. The document is read only for now.</li>
+  <li>Made for your own machine: the mesh is sent whole (about 94 bytes a triangle), fine on the loopback, not meant for a network.</li>
   <li>A change rebuilds the whole tile.</li>
   <li>No section cuts or measuring.</li>
   <li><code>--system</code> is fixed for a run; restart for the other base.</li>

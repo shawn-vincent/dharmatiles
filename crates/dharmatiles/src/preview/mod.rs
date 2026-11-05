@@ -362,6 +362,28 @@ impl Shared {
         idle.is_some()
     }
 
+    /// A file of tile `i` for the text pane: the tile's own document, or
+    /// (`file`) one its last build read, and whether it may be written
+    /// (library files never are).  Nothing else on disk is served.
+    fn text(&self, i: usize, file: Option<&str>) -> Option<Value> {
+        let path = {
+            let tiles = lock(&self.tiles);
+            let t = tiles.get(i)?;
+            match file {
+                None => t.path.clone(),
+                Some(f) if f == t.path || t.files.contains_key(f) => f.to_owned(),
+                Some(_) => return None,
+            }
+        };
+        if !path.ends_with(".dtile") {
+            return None;
+        }
+        let text = dt_eval::Source::read(&dt_eval::Files, &path).ok()?;
+        let writable = !path.starts_with(dt_eval::LIB)
+            && std::fs::metadata(&path).is_ok_and(|m| !m.permissions().readonly());
+        Some(serde_json::json!({ "file": path, "text": text, "writable": writable }))
+    }
+
     fn mesh(&self, i: usize) -> Option<Arc<Vec<u8>>> {
         lock(&self.tiles).get(i)?.mesh.clone()
     }
