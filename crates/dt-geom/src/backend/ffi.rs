@@ -1,11 +1,11 @@
 //! Manifold's C++ kernel through `manifold-csg` (FFI).
 //!
-//! Gap found in R1: the C API's `MeshGL64` constructor takes runs, merge
+//! The C API's `MeshGL64` constructor takes runs, merge
 //! vectors and tangents but not `faceID`, run transforms or `tolerance`, so
 //! face IDs of an imported mesh are recomputed by Manifold rather than
 //! carried in, and a tolerance is applied after import with
 //! `set_tolerance`, which re-simplifies the mesh at it (a `MeshGL` import
-//! with the tolerance set, as the other backend does, does not).
+//! with the tolerance set does not).
 
 use manifold_csg::{CrossSection, FillRule, JoinType, Manifold, MeshGL64, MeshGL64Options, OpType};
 

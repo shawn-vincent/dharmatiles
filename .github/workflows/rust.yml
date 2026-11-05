@@ -48,20 +48,20 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cmake --version
       - run: cargo test --workspace --all-targets
-      # R2: print every stage hash on each OS, on both backends, so platforms
+      # R2: print every stage hash on each OS so platforms
       # can be compared (the test itself asserts 1/4/16-thread identity).
-      - run: cargo test -p dt-geom --features manifold-rust --test determinism -- --nocapture --test-threads 1
+      - run: cargo test -p dt-geom --test determinism -- --nocapture --test-threads 1
       # R2: TBB sizes its thread pool from the CPU affinity mask on Linux, so
       # re-run the test on 1, 2 and 4 CPUs. Every run's hashes must agree
-      # (one distinct line per backend once thread and run are stripped).
+      # (one distinct line once thread and run are stripped).
       - if: runner.os == 'Linux'
         shell: bash
         run: |
           for cpus in 0 0-1 0-3; do
-            taskset -c "$cpus" cargo test -p dt-geom --features manifold-rust --test determinism -- --nocapture --test-threads 1 \
+            taskset -c "$cpus" cargo test -p dt-geom --test determinism -- --nocapture --test-threads 1 \
               | grep -o 'R2 .*' | sed -E 's/ threads= *[0-9]+ run=[0-9]+//'
           done | sort | uniq -c | tee r2-tbb.txt
-          test "$(wc -l < r2-tbb.txt)" -eq 2
+          test "$(wc -l < r2-tbb.txt)" -eq 1
       # P1 hash gate, determinism level B (Shawn, 2 Nov 2026): every tile
       # in crates/dt-eval/tests/golden.rs is built twice at 1, 4 and 16
       # threads with identical stage hashes on every OS; the golden hash
@@ -103,19 +103,6 @@ jobs:
             out/parity/*/rust/**/*.build.json
           retention-days: 14
           if-no-files-found: error
-
-  wasm:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
-      # A real build (codegen), not just a check: R1 showed manifold-rust compiles for wasm32.
-      - run: cargo build -p dt-geom --target wasm32-unknown-unknown --no-default-features --features manifold-rust
-      # The document model must stay wasm-safe (no geometry, no std::fs use).
-      - run: cargo check -p dt-doc --target wasm32-unknown-unknown
-      # Everything up to the build call stays wasm-safe on the pure-Rust backend.
-      - run: cargo check -p dt-eval --target wasm32-unknown-unknown --no-default-features --features manifold-rust
 
   deny:
     runs-on: ubuntu-latest

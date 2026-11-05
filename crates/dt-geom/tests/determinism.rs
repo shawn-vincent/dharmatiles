@@ -389,9 +389,3 @@ fn check<S: Mesh>(backend: &str) {
 fn deterministic_ffi() {
     check::<dt_geom::backend::ffi::FfiSolid>("ffi");
 }
-
-#[cfg(feature = "manifold-rust")]
-#[test]
-fn deterministic_port() {
-    check::<dt_geom::backend::port::PortSolid>("port");
-}

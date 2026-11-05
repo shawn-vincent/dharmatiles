@@ -204,7 +204,7 @@ pub struct Placed {
     pub zone: f64,
 }
 
-/// Wall time of each stage, seconds (0 on wasm).
+/// Wall time of each stage, seconds.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct LeafTimes {
     /// Ray structures, normals, wood bodies.
@@ -1537,42 +1537,25 @@ impl Job<'_> {
     }
 }
 
-/// Stage timing (a no-op on wasm, which has no clock).
+/// Stage timing.
 struct Clock {
-    #[cfg(not(target_arch = "wasm32"))]
     start: std::time::Instant,
-    #[cfg(not(target_arch = "wasm32"))]
     last: std::time::Instant,
 }
 
 impl Clock {
-    #[cfg(not(target_arch = "wasm32"))]
     fn start() -> Self {
         let t = std::time::Instant::now();
         Self { start: t, last: t }
     }
-    #[cfg(not(target_arch = "wasm32"))]
     fn lap(&mut self) -> f64 {
         let t = std::time::Instant::now();
         let s = (t - self.last).as_secs_f64();
         self.last = t;
         s
     }
-    #[cfg(not(target_arch = "wasm32"))]
     fn total(&self) -> f64 {
         self.start.elapsed().as_secs_f64()
-    }
-    #[cfg(target_arch = "wasm32")]
-    fn start() -> Self {
-        Self {}
-    }
-    #[cfg(target_arch = "wasm32")]
-    fn lap(&mut self) -> f64 {
-        0.0
-    }
-    #[cfg(target_arch = "wasm32")]
-    fn total(&self) -> f64 {
-        0.0
     }
 }
 

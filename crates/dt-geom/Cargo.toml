@@ -10,16 +10,14 @@ publish.workspace = true
 
 [features]
 default = ["manifold-ffi", "manifold-parallel"]
-# Mesh backend: Manifold's C++ library (v3.5.3) through manifold-csg (native
-# only). Needs git, cmake and a C++ compiler; the first build compiles
-# Manifold (and TBB, with manifold-parallel).
+# Mesh backend: Manifold's C++ library (v3.5.3) through manifold-csg.
+# Needs git, cmake and a C++ compiler; the first build compiles Manifold
+# (and TBB, with manifold-parallel).
 manifold-ffi = ["dep:manifold-csg"]
-# Mesh backend: the pure-Rust Manifold port (wasm-capable).
-manifold-rust = ["dep:manifold-rust"]
-# Manifold's internal parallelism (TBB in C++, rayon in the port). On by
+# Manifold's internal parallelism (TBB in C++). On by
 # default: the C++ kernel is 3x slower without it, and its output is
 # identical run to run on one machine.
-manifold-parallel = ["manifold-csg?/parallel", "manifold-rust?/parallel"]
+manifold-parallel = ["manifold-csg?/parallel"]
 
 [dependencies]
 bytemuck.workspace = true
@@ -28,7 +26,6 @@ libm.workspace = true
 obvhs.workspace = true
 rayon.workspace = true
 manifold-csg = { workspace = true, optional = true }
-manifold-rust = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json.workspace = true

@@ -12,7 +12,6 @@ build = "build.rs"
 [features]
 default = ["manifold-ffi"]
 manifold-ffi = ["dt-eval/manifold-ffi", "dt-eval/manifold-parallel", "dt-kit/manifold-ffi", "dt-looks/manifold-ffi"]
-manifold-rust = ["dt-eval/manifold-rust", "dt-kit/manifold-rust", "dt-looks/manifold-rust"]
 
 [dependencies]
 clap.workspace = true

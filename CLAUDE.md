@@ -29,11 +29,11 @@ cargo xtask pictures [group …]              # rebuild the element pages' pictu
 cargo xtask docs [--check]                  # fill docs/elements/ pages' controls tables from the look schema
 ```
 
-`lib:` paths read `library/` from disk: this checkout's when run inside it (new and edited library tiles count at once, no rebuild), else `$DT_LIBRARY`, else the copy installed beside the program. Nothing is compiled in except for browser/phone builds (dt-eval feature `embedded-library`).
+`lib:` paths read `library/` from disk: this checkout's when run inside it (new and edited library tiles count at once, no rebuild), else `$DT_LIBRARY`, else the copy installed beside the program. Nothing is compiled in.
 
 Output goes to `out/` (git-ignored).
 
-CI is off. Run the tests locally on this Mac only; do not wait on or re-enable GitHub Actions. Linux, Windows, wasm and cross-OS hashes are a later stretch goal.
+CI is off. Run the tests locally on this Mac only; do not wait on or re-enable GitHub Actions. Linux, Windows and cross-OS hashes are a later stretch goal.
 
 ## Spatial Terminology (canonical — do not deviate)
 

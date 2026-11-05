@@ -11,7 +11,6 @@ publish.workspace = true
 [features]
 default = ["manifold-ffi", "manifold-parallel"]
 manifold-ffi = ["dt-kit/manifold-ffi"]
-manifold-rust = ["dt-kit/manifold-rust"]
 manifold-parallel = ["dt-kit/manifold-parallel"]
 
 # Only the kit: a look cannot reach into the kernels or another look.

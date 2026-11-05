@@ -8,8 +8,7 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
-# No geometry crate, ever: dt-doc must build in milliseconds and for
-# wasm32-unknown-unknown (docs/rust/architecture.html, "Six crates").
+# No geometry crate, ever: dt-doc must build in milliseconds.
 [dependencies]
 kdl.workspace = true
 miette.workspace = true

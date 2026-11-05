@@ -11,7 +11,6 @@ publish.workspace = true
 [features]
 default = ["manifold-ffi", "manifold-parallel"]
 manifold-ffi = ["dt-geom/manifold-ffi"]
-manifold-rust = ["dt-geom/manifold-rust"]
 manifold-parallel = ["dt-geom/manifold-parallel"]
 
 [dependencies]

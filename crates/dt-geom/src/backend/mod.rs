@@ -1,15 +1,11 @@
-//! Mesh backends behind [`crate::Mesh`]. Each is a feature; both can be
-//! built at once (the R1 replay compares them).
+//! The mesh backend behind [`crate::Mesh`]: a feature.
 
 #[cfg(feature = "manifold-ffi")]
 pub mod ffi;
-#[cfg(feature = "manifold-rust")]
-pub mod port;
 
 use crate::TriMesh;
 
 /// Interleave positions and extra properties into `MeshGL` vertex rows.
-#[allow(dead_code)]
 pub(crate) fn interleave(m: &TriMesh) -> (Vec<f64>, usize) {
     let np = 3 + m.num_extra;
     let mut props = Vec::with_capacity(m.positions.len() * np);
@@ -23,7 +19,6 @@ pub(crate) fn interleave(m: &TriMesh) -> (Vec<f64>, usize) {
 }
 
 /// Split `MeshGL` vertex rows back into positions and extra properties.
-#[allow(dead_code)]
 pub(crate) fn deinterleave(props: &[f64], np: usize) -> (Vec<[f64; 3]>, Vec<f64>) {
     let np = np.max(3);
     let n = props.len() / np;
@@ -37,7 +32,6 @@ pub(crate) fn deinterleave(props: &[f64], np: usize) -> (Vec<[f64; 3]>, Vec<f64>
 }
 
 /// Narrow an index buffer that the kernel already limits to 32 bits.
-#[allow(dead_code)]
 pub(crate) fn narrow(v: impl IntoIterator<Item = u64>) -> Vec<u32> {
     v.into_iter()
         .map(|x| u32::try_from(x).unwrap_or(u32::MAX))

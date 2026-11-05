@@ -1,22 +1,16 @@
 //! The source trait: every file the evaluator reads goes through it, so the
-//! same code reads the disk, the embedded library or an in-memory map (a
-//! browser editor, tests).
+//! same code reads the disk or an in-memory map (tests).
 //!
 //! Paths: `lib:parts/grass.dtile` is the library (explicit, never a search
 //! path); anything else is a file path. The library is a folder on disk:
 //! a checkout's `library/`, `$DT_LIBRARY`, or the copy installed beside the
-//! program. Only builds with the `embedded-library` feature (the browser,
-//! phones) carry it compiled in. A relative `use` resolves
+//! program. A relative `use` resolves
 //! against the importing file's folder, inside the library for library
 //! files.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
-
-mod embedded {
-    include!(concat!(env!("OUT_DIR"), "/library.rs"));
-}
 
 /// The bundled library's prefix.
 pub const LIB: &str = "lib:";
@@ -30,8 +24,8 @@ pub trait Source: Sync {
     fn read(&self, path: &str) -> Result<String, String>;
 }
 
-/// The `library/` folder `lib:` paths are read from (`None`: the
-/// compiled-in copy, or no library found).
+/// The `library/` folder `lib:` paths are read from (`None`: no library
+/// found).
 static DISK: OnceLock<Option<PathBuf>> = OnceLock::new();
 
 /// Read `lib:` from `dir` (a checkout's `library/`) for the rest of the
@@ -44,16 +38,13 @@ pub fn use_library_dir(dir: PathBuf) -> bool {
 /// [`use_library_dir`], else `$DT_LIBRARY`, else the copy installed beside
 /// the program (`library/` next to it, or Homebrew's
 /// `../share/dharmatiles/library`), else this source tree's `library/`.
-/// `None` when the program carries the library compiled in.
+/// `None` when no library is found.
 #[must_use]
 pub fn library_dir() -> Option<&'static Path> {
     DISK.get_or_init(find_library).as_deref()
 }
 
 fn find_library() -> Option<PathBuf> {
-    if cfg!(feature = "embedded-library") {
-        return None;
-    }
     let ok = |d: &Path| d.join("printers/default.dtile").is_file();
     if let Some(d) = std::env::var_os("DT_LIBRARY").map(PathBuf::from) {
         return Some(d);
@@ -82,8 +73,7 @@ pub fn library_file(path: &str) -> Option<PathBuf> {
     Some(library_dir()?.join(rel))
 }
 
-/// The library compiled into the program (or, after [`use_library_dir`],
-/// the folder on disk).
+/// The library folder on disk (see [`library_dir`]).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Library;
 
@@ -97,10 +87,7 @@ impl Library {
             v.sort();
             return v;
         }
-        embedded::FILES
-            .iter()
-            .map(|(p, _)| format!("{LIB}{p}"))
-            .collect()
+        Vec::new()
     }
 }
 
@@ -132,20 +119,13 @@ impl Source for Library {
             return std::fs::read_to_string(&file)
                 .map_err(|_| format!("the library has no `{rel}` ({})", file.display()));
         }
-        if embedded::FILES.is_empty() {
-            return Err(format!(
-                "no library found for `{rel}`: run inside a checkout, install it beside the program, or set DT_LIBRARY"
-            ));
-        }
-        embedded::FILES
-            .iter()
-            .find(|(p, _)| *p == rel)
-            .map(|(_, t)| (*t).to_owned())
-            .ok_or_else(|| format!("the library has no `{rel}`"))
+        Err(format!(
+            "no library found for `{rel}`: run inside a checkout, install it beside the program, or set DT_LIBRARY"
+        ))
     }
 }
 
-/// The disk, with `lib:` paths served by the embedded library.
+/// The disk, with `lib:` paths served by the library folder.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Files;
 
@@ -159,7 +139,7 @@ impl Source for Files {
 }
 
 /// An in-memory map of path → text, with `lib:` paths it does not hold
-/// served by the embedded library.
+/// served by the library folder.
 #[derive(Clone, Debug, Default)]
 pub struct Memory(pub BTreeMap<String, String>);
 
@@ -252,7 +232,7 @@ mod tests {
     }
 
     #[test]
-    fn the_flat_tile_is_embedded() {
+    fn the_flat_tile_is_in_the_library() {
         assert!(Library.read("lib:tiles/test/1x1-flat.dtile").is_ok());
         assert!(Library.read("lib:nope.dtile").is_err());
     }

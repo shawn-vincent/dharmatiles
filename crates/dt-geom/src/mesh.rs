@@ -1,5 +1,5 @@
-//! The mesh trait. Every boolean backend (manifold-csg, manifold-rust)
-//! implements it, so young crates stay swappable (risk R10).
+//! The mesh trait. The boolean backend (manifold-csg) implements it, so
+//! the kernel stays swappable.
 
 use std::collections::HashMap;
 
@@ -381,10 +381,9 @@ pub trait Mesh: Sized + Send + Sync + Clone {
     /// the mesh with a single run. Use it on a single-source leaf (a level
     /// set, an imported mesh) before any material is recorded for it, and
     /// record materials from the result. Face IDs must not repeat across
-    /// the leaves of one combine: the port (manifold-rust 0.19.2) renumbers
+    /// the leaves of one combine: a backend may renumber
     /// some face IDs in a large batch union when two sources share them.
-    /// manifold-csg's C API cannot import face IDs, so on the ffi backend
-    /// Manifold recomputes them (coplanar groups) and `face_base` is unused;
+    /// manifold-csg's C API cannot import face IDs, so Manifold recomputes them (coplanar groups) and `face_base` is unused;
     /// the C++ kernel keeps them apart by source on its own.
     ///
     /// # Errors

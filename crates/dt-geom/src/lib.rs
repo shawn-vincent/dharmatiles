@@ -14,9 +14,8 @@
 //! Phase 0: the [`mesh::Mesh`] and [`rays::Rays`] traits that every backend
 //! sits behind, and [`seed::Seed`], the deterministic path-keyed seed
 //! derivation, and [`source`], the source-ID rule that keeps booleans
-//! deterministic and materials traceable. Mesh backends are features: `manifold-ffi` (default, the C++
-//! kernel through manifold-csg) and `manifold-rust` (the pure-Rust port, for
-//! wasm). [`Solid`] is the default backend's type.
+//! deterministic and materials traceable. The mesh backend is the `manifold-ffi` feature (default, the C++
+//! kernel through manifold-csg). [`Solid`] is its solid type.
 
 pub mod backend;
 pub mod convex;
@@ -45,11 +44,6 @@ pub use rays::{Hit, ObvhsRays, Ray, Rays};
 pub use seed::{Rng, Seed};
 pub use source::{IdBlock, Materials, batch_in_order};
 
-/// The default backend's solid: the C++ kernel when `manifold-ffi` is on,
-/// otherwise the pure-Rust port.
+/// The backend's solid: the C++ kernel.
 #[cfg(feature = "manifold-ffi")]
 pub type Solid = backend::ffi::FfiSolid;
-/// The default backend's solid: the C++ kernel when `manifold-ffi` is on,
-/// otherwise the pure-Rust port.
-#[cfg(all(feature = "manifold-rust", not(feature = "manifold-ffi")))]
-pub type Solid = backend::port::PortSolid;
