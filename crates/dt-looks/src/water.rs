@@ -1,5 +1,4 @@
-//! Water: waterlab's swell-chaos (waterlab/waterlab.py `gen_swell_chaos`
-//! :877, `build` :1032), the loved water.
+//! Water: swell-chaos, the loved water.
 //!
 //! The water fills its area up to its level wherever the ground is lower,
 //! and is lifted with the ground as one surface whose top over the water
@@ -22,10 +21,9 @@
 //! edge, λ half a square, crests at square corners and edge centres, so any
 //! two water tiles butt with the same shape.
 //!
-//! Ported by re-implementation at the scene's grid (0.2 mm, the lab's
-//! mesh); two quirks of the lab are kept on purpose: its geodesic
+//! Built at the scene's grid (0.2 mm); two quirks are kept on purpose: its geodesic
 //! distances are 1.25 times true (it weighs 0.2 mm steps as 0.25 mm), and
-//! its noise is Gaussian-filtered white noise of the same sigmas. Lab's
+//! its noise is Gaussian-filtered white noise of the same sigmas. The
 //! final 0.06 mm blur is below the grid and is left out.
 
 use dt_kit::{Field, Noise, Rng, Scale, Scene, Seed, distance, geodesic, noise, rim, smooth01};
@@ -37,7 +35,7 @@ pub const CONTROLS: &[&str] = &["level"];
 
 const CELL_MM: f64 = 0.2;
 const BANK_GRID_WEIGHT: f64 = 1.25;
-/// Deviation from the lab (which thresholds the raw ground): the land
+/// Deviation from thresholding the raw ground: the land
 /// mask is taken from the ground blurred this much, so pebbles and grain
 /// on a bank near the water line don't speckle the shore with one-node
 /// islands and pools.
@@ -52,7 +50,7 @@ const TIDE_EDGE_FADE_MM: f64 = 9.0;
 const LIP_MM: f64 = 0.3;
 const LIP_D_MM: f64 = 0.6;
 /// The relief fades to calm over this much true distance from the shore.
-/// The lab fades over 0.4 mm of its smoothed distance, which is already
+/// Fading over 0.4 mm of smoothed distance, which is already
 /// about 0.6 mm at the first water cell, so a crest could meet the bank
 /// as a step; over true distance the water runs up to the bank.
 const SHORE_FADE_MM: f64 = 1.0;
@@ -274,7 +272,7 @@ fn along_edge(f: &Field, k: usize) -> f64 {
     }
 }
 
-/// Nodes within one node (4-connected, the lab's `binary_dilation`) of a `m` node.
+/// Nodes within one node of a `m` node.
 fn dilate4(m: &[bool], nx: usize, ny: usize) -> Vec<bool> {
     (0..nx * ny)
         .map(|k| {
@@ -489,7 +487,7 @@ fn emitters(
     // open corners
     let [w, h] = frame.size_mm();
     let mut corners = Vec::new();
-    let r4 = 2.0 * s; // the lab's ±20 cells at 0.1 mm
+    let r4 = 2.0 * s; // ±20 cells at 0.1 mm
     for (cx, cy) in [(0.0, 0.0), (w, 0.0), (0.0, h), (w, h)] {
         let (mut wet, mut all) = (0usize, 0usize);
         for (k, &wk) in m.water.iter().enumerate() {

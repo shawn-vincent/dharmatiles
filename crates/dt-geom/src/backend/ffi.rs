@@ -5,7 +5,7 @@
 //! face IDs of an imported mesh are recomputed by Manifold rather than
 //! carried in, and a tolerance is applied after import with
 //! `set_tolerance`, which re-simplifies the mesh at it (a `MeshGL` import
-//! with the tolerance set, as Python and the port do, does not).
+//! with the tolerance set, as the other backend does, does not).
 
 use manifold_csg::{CrossSection, FillRule, JoinType, Manifold, MeshGL64, MeshGL64Options, OpType};
 
@@ -124,7 +124,7 @@ impl Mesh for FfiSolid {
     fn extrude(contours: &[Vec<[f64; 2]>], inset: f64, z0: f64, z1: f64) -> Self {
         let mut cs = CrossSection::from_polygons_with_fill_rule(contours, FillRule::EvenOdd);
         if inset > 0.0 {
-            // Python's `CrossSection.offset(-d, JoinType.Miter)` defaults.
+            // the miter join, as `CrossSection::offset` defaults to.
             cs = cs.offset(-inset, JoinType::Miter, 2.0, 0);
         }
         Self(Manifold::extrude(&cs, z1 - z0).translate(0.0, 0.0, z0))

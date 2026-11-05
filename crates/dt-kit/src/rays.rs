@@ -3,8 +3,7 @@
 //!
 //! Every ray goes through dt-geom's [`dt_geom::Rays`] trait, on the obvhs
 //! backend R3 chose (docs/rust/spikes.html, "R3: rays without Embree").
-//! The queries follow trimesh's Embree wrapper, which the Python library
-//! calls, so a port gets the same answers:
+//! The queries follow trimesh's Embree wrapper's conventions:
 //!
 //! - the mesh is moved to its bounding-box minimum and scaled to a box of
 //!   about 100 units (`100 / diagonal`) before the f32 build, and every
@@ -18,8 +17,8 @@
 //!   `1e-6 × diagonal`, doubling the step when a ray re-hits the same
 //!   triangle), a point is inside when both counts are odd, outside when
 //!   both are even or either ray escapes cleanly, and tie-broken along a
-//!   third fixed direction when they disagree (Python draws that one at
-//!   random; here it is fixed, so the answer is deterministic).
+//!   third fixed direction when they disagree (fixed, so the answer is
+//!   deterministic).
 //!
 //! Queries are batched: one call casts many rays, in parallel inside the
 //! backend, and returns answers in input order, so results do not depend
@@ -31,7 +30,7 @@ use crate::graph::{add, cross, dot, norm, scale, sub};
 
 /// trimesh's `contains_points` default direction.
 const CONTAINS_DIR: [f64; 3] = [0.439_506_445_5, 0.617_598_629_942, 0.652_231_566_745];
-/// The tie-break direction (fixed; Python's is random).
+/// The tie-break direction.
 const CONTAINS_TIE_DIR: [f64; 3] = [
     -0.577_350_269_189_6,
     0.288_675_134_594_8,
@@ -160,7 +159,7 @@ impl<R: Rays> RayMesh<R> {
             return out;
         }
         let pts: Vec<[f64; 3]> = idx.iter().map(|&i| points[i]).collect();
-        let (fwd, back) = self.parity(&pts, CONTAINS_DIR);
+        let (fwd, back) = self.crossing_counts(&pts, CONTAINS_DIR);
         let mut broken = Vec::new();
         for (k, &i) in idx.iter().enumerate() {
             let (a, b) = (fwd[k] % 2 == 1, back[k] % 2 == 1);
@@ -172,7 +171,7 @@ impl<R: Rays> RayMesh<R> {
         }
         if !broken.is_empty() {
             let pts: Vec<[f64; 3]> = broken.iter().map(|&i| points[i]).collect();
-            let (fwd, back) = self.parity(&pts, unit(CONTAINS_TIE_DIR));
+            let (fwd, back) = self.crossing_counts(&pts, unit(CONTAINS_TIE_DIR));
             for (k, &i) in broken.iter().enumerate() {
                 out[i] = fwd[k] % 2 == 1 && back[k] % 2 == 1;
             }
@@ -181,7 +180,7 @@ impl<R: Rays> RayMesh<R> {
     }
 
     /// Hits along `dir` and `-dir` from each point, every hit counted.
-    fn parity(&self, pts: &[[f64; 3]], dir: [f64; 3]) -> (Vec<u32>, Vec<u32>) {
+    fn crossing_counts(&self, pts: &[[f64; 3]], dir: [f64; 3]) -> (Vec<u32>, Vec<u32>) {
         let n = pts.len();
         let d = unit(dir);
         let neg = d.map(|x| -x);

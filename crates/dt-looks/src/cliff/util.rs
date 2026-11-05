@@ -161,21 +161,21 @@ pub fn bin_dilate(m: &Mask, n: usize) -> Mask {
 
 /// 4-connected labels (0 = background).
 pub fn label(m: &Mask) -> (G<u32>, u32) {
-    let mut lab = G::new(m.nx, m.ny, 0u32);
+    let mut labels = G::new(m.nx, m.ny, 0u32);
     let mut n = 0;
     let mut stack = Vec::new();
     for j in 0..m.ny {
         for i in 0..m.nx {
-            if !m.at(i, j) || lab.at(i, j) != 0 {
+            if !m.at(i, j) || labels.at(i, j) != 0 {
                 continue;
             }
             n += 1;
-            lab.set(i, j, n);
+            labels.set(i, j, n);
             stack.push((i, j));
             while let Some((a, b)) = stack.pop() {
                 let mut go = |x: usize, y: usize| {
-                    if m.at(x, y) && lab.at(x, y) == 0 {
-                        lab.set(x, y, n);
+                    if m.at(x, y) && labels.at(x, y) == 0 {
+                        labels.set(x, y, n);
                         stack.push((x, y));
                     }
                 };
@@ -194,7 +194,7 @@ pub fn label(m: &Mask) -> (G<u32>, u32) {
             }
         }
     }
-    (lab, n)
+    (labels, n)
 }
 
 pub fn smooth01(t: f64) -> f64 {

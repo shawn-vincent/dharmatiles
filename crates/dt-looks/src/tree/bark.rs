@@ -1,7 +1,6 @@
 //! Bark: V grooves that start at the root, wave and twist up the trunk and
 //! carry on through every fork, tapering out where a line does not
-//! continue (`trees/bark.py`, the bark helpers of `trees/mesh.py`), with
-//! a fine roughness between them. True mm: a print-scale detail.
+//! continue, with a fine roughness between them. True mm: a print-scale detail.
 
 use dt_kit::graph::{Graph, Ring};
 

@@ -7,7 +7,7 @@ use dt_geom::TriMesh;
 /// full; the STL header carries a one-line summary.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BuildRecord {
-    /// Engine version, as `build_info.py` formats it (`v1.0.0-12-gabc1234`,
+    /// Engine version, as the build script formats it (`v1.0.0-12-gabc1234`,
     /// `gabc1234-dirty`, …).
     pub engine: String,
     /// The document's path, such as `lib:tiles/test/1x1-flat.dtile`.

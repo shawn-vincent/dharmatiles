@@ -1,15 +1,15 @@
-//! Foliage clumps (`_build_foliage_cluster_mesh`, mesh.py:713): a rounded
+//! Foliage clumps: a rounded
 //! cone swept along the last stretch of a branch end, back cap → cone →
 //! front dome, offset upward so the branch runs along its underside,
 //! roughened by inward-only noise (fine grain and a coarse 4 mm lumpiness).
 //!
-//! Printable by construction: the Python clumps' undersides hang in the
+//! Printable by construction: a naive clump's undersides hang in the
 //! air (about 150–220 mm² of a 1×1 tree's wood and clumps fail the
 //! layer-reach audit there). Here the noise never dents an underside (a
 //! dent there is a ceiling over air), and the crown is then cut with
 //! [`dt_kit::stand`] (mod.rs), which bevels whatever still hangs at 37°
 //! up from what holds it. Tops and sides, the silhouette from above and
-//! from eye level, are the Python's.
+//! from eye level, are those of the plain clump.
 
 use dt_kit::graph::{Curve, add, cross, dist, dot, norm, scale, sub, unit};
 use dt_kit::{TriMesh, form};

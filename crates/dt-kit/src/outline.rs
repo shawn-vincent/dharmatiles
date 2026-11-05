@@ -1,5 +1,5 @@
-//! Outlines: closed 2D contours, read from an SVG path. Port of the path
-//! parser in `src/dharmatiles/core/logo.py` (`_parse_svg_d`): M/L/H/V/C/Z,
+//! Outlines: closed 2D contours, read from an SVG path. A small path
+//! parser: M/L/H/V/C/Z,
 //! absolute and relative, implicit repeats, cubic Béziers halved until flat.
 
 use crate::KitError;
@@ -113,7 +113,7 @@ impl Outline {
     }
 
     /// The outline scaled from a `viewbox`-unit square (y down) to a
-    /// `size` mm square centred on `(cx, cy)` (y up), as `logo.py` places it.
+    /// `size` mm square centred on `(cx, cy)` (y up).
     #[must_use]
     pub fn placed(&self, viewbox: f64, cx: f64, cy: f64, size: f64) -> Self {
         let s = size / viewbox;

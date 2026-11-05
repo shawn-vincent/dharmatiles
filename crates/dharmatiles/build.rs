@@ -4,7 +4,7 @@
 //! `0.0.0` without git.
 //!
 //! Only the engine's inputs count (the Rust crates, the bundled library
-//! and the workspace manifests), so a Python or docs edit elsewhere in the
+//! and the workspace manifests), so a docs edit elsewhere in the
 //! repository neither marks the engine dirty nor re-runs this script.  An
 //! unrelated git tag never names the engine (`git describe` once printed
 //! `walls-fieldstone-e27-125-g…`).

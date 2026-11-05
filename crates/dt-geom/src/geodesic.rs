@@ -1,6 +1,5 @@
 //! Geodesic distance on the node lattice: multi-source shortest paths
-//! through a mask (waterlab `_geodesic` :660, which uses scipy's
-//! Dijkstra on the same 8-connected graph).
+//! through a mask (Dijkstra on an 8-connected graph).
 //!
 //! Waves from land and rocks bend round a rock because their distance is
 //! measured along paths that stay in the water.

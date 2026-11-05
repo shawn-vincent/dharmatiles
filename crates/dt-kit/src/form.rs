@@ -148,8 +148,8 @@ pub fn clip(solid: &Solid, slot: Slot, lo: [f64; 3], hi: [f64; 3]) -> Result<Sol
     Ok(Solid(out))
 }
 
-/// The common stone relief's settings (`stone/finish.py`'s
-/// `stone_relief`, the project's one stone texture: a calm plateau carved
+/// The common stone relief's settings (the
+/// project's one stone texture: a calm plateau carved
 /// down into saturating worn recesses, a gentle dish and a fine tooth).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Relief {
@@ -197,7 +197,7 @@ impl Default for Relief {
 /// along Taubin-smoothed normals, damped where the surface is curved
 /// (normal relief folds where it exceeds the local concave radius); the
 /// noise domain is rotated at random so faces do not trace the lattice.
-/// `seed` drives every draw. Port of `stone/finish.py:stone_relief`.
+/// `seed` drives every draw.
 pub fn relief(mesh: &mut TriMesh, seed: u64, r: &Relief) {
     relief_weighted(mesh, seed, r, &|_, _| 1.0);
 }
@@ -422,7 +422,7 @@ fn taubin(p: &[[f64; 3]], tris: &[[u32; 3]], iterations: usize) -> Vec<[f64; 3]>
 }
 
 /// **fbm3**: isotropic 3D value-noise fBm at `scale_mm`, about −1..1
-/// (`stone/noise.py:fbm`: smoothstep-interpolated lattice values, gain ½,
+/// (smoothstep-interpolated lattice values, gain ½,
 /// lacunarity 2). Position-keyed, so it is the same at every resolution.
 #[must_use]
 pub fn fbm3(p: [f64; 3], seed: u64, scale_mm: f64, octaves: u32) -> f64 {

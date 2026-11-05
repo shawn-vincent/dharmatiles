@@ -17,9 +17,8 @@ manifold-ffi = ["dep:manifold-csg"]
 # Mesh backend: the pure-Rust Manifold port (wasm-capable).
 manifold-rust = ["dep:manifold-rust"]
 # Manifold's internal parallelism (TBB in C++, rayon in the port). On by
-# default: R1 found the C++ kernel 3x slower without it, and Python's
-# manifold3d wheel runs with it, so it is also what matches Python. R2 found
-# its output identical run to run on one machine (docs/rust/spikes.html).
+# default: the C++ kernel is 3x slower without it, and its output is
+# identical run to run on one machine.
 manifold-parallel = ["manifold-csg?/parallel", "manifold-rust?/parallel"]
 
 [dependencies]

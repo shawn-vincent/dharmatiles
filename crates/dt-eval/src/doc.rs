@@ -40,7 +40,7 @@ use crate::source::{LIB, Source, resolve};
 pub const EDGES: &str = "lib:parts/edges.dtile";
 
 /// A line's wobble follows smooth noise of this sigma along it, mm at the
-/// reference square (waterlab's shore, `Scene.__init__` :300).
+/// reference square.
 const LINE_WOBBLE_SIGMA_MM: f64 = 9.0;
 
 /// The printer profile builds are checked against by default.
@@ -1066,7 +1066,7 @@ fn fixed_point(p: &dt_doc::place::Point, cols: f64, rows: f64) -> Option<[f64; 2
 /// A path of tile edges (each meeting the next at a corner) as one
 /// polyline in squares, walked with the tile inside on the left: the
 /// path a run's outer face follows (`north west` on a 1×1 is
-/// `(1,1) → (0,1) → (0,0)`, the Python spine of a north-west corner
+/// `(1,1) → (0,1) → (0,0)`, the spine of a north-west corner
 /// wall). A path written clockwise is walked the other way round.
 #[must_use]
 pub fn edge_path(edges: &[Edge], (cols, rows): (f64, f64)) -> Vec<[f64; 2]> {

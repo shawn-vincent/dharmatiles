@@ -11,11 +11,9 @@
 //!
 //! - [`smooth`]: the lattice's values, `h` mm apart, as white noise
 //!   convolved with a Gaussian of `sigma` mm and normalised to unit
-//!   variance. This is the position-keyed form of dirtlab's
-//!   `noise(rng, shape, sigma_px)` (a blurred normal field divided by its
-//!   standard deviation). Separable, so a grid costs two passes.
-//! - [`fbm`]: smoothstep-interpolated value noise summed over octaves, a
-//!   port of `dharmatiles.stone.noise.fbm` in 2D (z = 0).
+//!   variance. A blurred normal field divided by its
+//!   standard deviation, in position-keyed form. Separable, so a grid costs two passes.
+//! - [`fbm`]: smoothstep-interpolated value noise summed over octaves, in 2D (z = 0).
 //!
 //! Seeded maths uses `libm` (R2: platform `exp` differs by OS).
 
@@ -188,8 +186,7 @@ pub fn value3(seed: u64, scale: f64, p: [f64; 3]) -> f64 {
     lerp(lerp(x00, x10, u[1]), lerp(x01, x11, u[1]), u[2])
 }
 
-/// 3D fBm of [`value3`]: `dharmatiles.stone.noise.fbm` in object space
-/// (rocklab's grain, :283), gain 0.5, lacunarity 2, about [-1, 1].
+/// 3D fBm of [`value3`]: in object space, gain 0.5, lacunarity 2, about [-1, 1].
 #[must_use]
 pub fn fbm3(seed: u64, scale: f64, octaves: u32, p: [f64; 3]) -> f64 {
     let (mut total, mut amp, mut sc, mut norm) = (0.0, 1.0, scale, 0.0);

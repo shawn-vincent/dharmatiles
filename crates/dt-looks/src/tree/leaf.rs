@@ -1,8 +1,6 @@
 //! One leaf: the blade surface, its root oval and the closed solid
-//! between them. A port of `src/dharmatiles/trees/leaf.py`
-//! (`compute_leaf_geometry`, `build_leaf_surface`, `build_leaf_oval_offsets`,
-//! `solidify_leaf`), with the same grid (12 stations × 10 lateral sections)
-//! and vertex layout, so the placer's index arithmetic carries over.
+//! between them. The grid is 12 stations × 10 lateral sections with
+//! a fixed vertex layout, so the placer's index arithmetic is simple.
 //!
 //! The blade is an ovate teardrop (widest a third from the base) with a
 //! quartic Bézier dome across it, a tanh crease along the midrib, a

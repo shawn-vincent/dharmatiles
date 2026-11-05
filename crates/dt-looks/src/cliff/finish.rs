@@ -1,4 +1,4 @@
-//! 3 Finish, the column planning (rockpile.py :832-1080): stones sharing a
+//! 3 Finish, the column planning: stones sharing a
 //! footprint stand in one column, cleaved by whole planes planned once on
 //! its convex hull; open faces dressed off true.
 
@@ -118,16 +118,16 @@ pub fn columns(
             }
         }
     }
-    let lab: Vec<usize> = (0..n).map(|i| find(&mut par, i)).collect();
+    let labels: Vec<usize> = (0..n).map(|i| find(&mut par, i)).collect();
     let mut order: Vec<usize> = Vec::new();
-    for &l in &lab {
+    for &l in &labels {
         if !order.contains(&l) {
             order.push(l);
         }
     }
     let mut cols = Vec::new();
     for l in order {
-        let mut g: Vec<usize> = (0..n).filter(|&i| lab[i] == l).collect();
+        let mut g: Vec<usize> = (0..n).filter(|&i| labels[i] == l).collect();
         g.sort_by(|&x, &y| placed[x].z0.total_cmp(&placed[y].z0));
         let all: Vec<P2> = g.iter().flat_map(|&i| polys[i].iter().copied()).collect();
         let poly = hull2(&all);

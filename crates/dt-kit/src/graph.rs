@@ -5,10 +5,9 @@
 //! sizes it bottom-up; [`tubes`] lofts a closed, C1-continuous tube along
 //! every edge.
 //!
-//! Ports `trees/skeleton.py` (`_branch_skeleton` :178, `_grow_to_leaf`
-//! :403, `_simplify_skeleton`, `_compute_radii_bottom_up` :529,
-//! `_cluster_pca`) and the tube half of `trees/mesh.py`
-//! (`_build_closed_edge_solid`, the Bézier and Bishop-frame helpers).
+//! The skeleton grows from the root to the leaf targets, is simplified,
+//! and gets radii bottom-up; the tube half builds each closed edge solid
+//! (with the Bézier and Bishop-frame helpers).
 //!
 //! Invariants of a traced graph (docs/looks/trees.html, S1–S4), each by
 //! construction, not by a check after the fact:
@@ -347,7 +346,7 @@ fn step(t: &mut Traced, queue: &mut VecDeque<Branch>, b: Branch, c: &Colonise, f
 }
 
 /// `_grow_to_leaf`: the end edge from `tip` to target `i`, landing exactly
-/// on it (S2). Python's intermediate nodes lie on the straight line (its
+/// on it (S2). The intermediate nodes would lie on the straight line (the
 /// heading starts at the target) and simplify away, so the edge is one
 /// step. A target below the floor cone is moved onto it first (S4).
 fn land(t: &mut Traced, tip: usize, i: usize, c: &Colonise, floor: f64) {
@@ -543,7 +542,7 @@ fn principal_axis(mut a: [[f64; 3]; 3]) -> [f64; 3] {
     e
 }
 
-/// Python's `round`: halves to even.
+/// Rounds halves to even.
 #[must_use]
 pub fn round_half_even(x: f64) -> f64 {
     let r = libm::round(x);

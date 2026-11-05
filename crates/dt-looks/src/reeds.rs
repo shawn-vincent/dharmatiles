@@ -1,5 +1,5 @@
 //! Reeds: clumps of tapered stems at the waterline, leaning toward the
-//! water (shorelab/shorelab.py `make_reeds` :245).
+//! water.
 //!
 //! A clump roots where the ground (the bed, under the water) is within a
 //! hand's breadth of the water level; its stems rise from a near-common

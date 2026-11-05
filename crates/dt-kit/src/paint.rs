@@ -1,7 +1,7 @@
 //! The one painter: cheap acrylic, every material.
 //!
 //! A dark basecoat, mid tones, and pale highlights drybrushed on whatever
-//! stands proud, as dirtlab and waterlab paint the ground and the pool.
+//! stands proud, as the ground and the pool are painted.
 //! Each face is coloured by its *local relief*: how far the surface there
 //! stands out of, or falls back into, its neighbours (the mesh's own
 //! curvature), blended smoothly through the material's ramp in the palette
@@ -160,7 +160,7 @@ const fn ramp_name(m: Material, brick: bool) -> &'static str {
 }
 
 /// **paint**: each face's colour. Earth and water are painted from the
-/// ground surface when there is one (dirtlab's and waterlab's relief);
+/// ground surface when there is one;
 /// everything else from the mesh's own relief. `overhang` faces are red
 /// and `band` faces orange, over every other paint. `brick` paints
 /// masonry from the brick ramp.

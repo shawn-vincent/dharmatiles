@@ -1,4 +1,4 @@
-//! `dirt`: dirtlab's bare earth (dirtlab/dirtlab.py, round 2, approved
+//! `dirt`: bare earth (approved
 //! 29 Oct 2026) on the [`ground`](crate::ground) shape.
 //!
 //! One height field, built in scale order and combined by smooth maximum,
@@ -17,7 +17,7 @@
 //!    (the half-space cap), sunk 25–45% and filleted into the soil.
 //!
 //! The texture ramps in over the outer 1 mm, so the rim is exactly the
-//! edge level. Stones (:395) come with rocks in P3.
+//! edge level. Stones come with rocks in P3.
 //!
 //! Sizes: the ground's hills, patches and clusters follow the square
 //! (layout); clods, grit and pebbles keep their true mm (default 1), so
@@ -45,7 +45,7 @@ pub const CONTROLS: &[&str] = &[
     "bank/reach",
 ];
 
-// the bank heaped against a cliff (clifflab's apron, rockpile.py :257)
+// the bank heaped against a cliff
 const APRON_H_MM: (f64, f64) = (1.5, 3.5);
 const APRON_R_MM: (f64, f64) = (3.0, 6.5);
 /// (height, reach) at the tile ends, the same for every seed (S4).
@@ -63,9 +63,9 @@ pub struct Bank {
     pub reach: (f64, f64),
 }
 
-/// dirtlab's height-field resolution, true mm.
+/// The height-field resolution, true mm.
 const CELL_MM: f64 = 0.15;
-/// dirtlab STONES_2X2: bedded stones per 2×2 (`stones some`).
+/// Bedded stones per 2×2 (`stones some`).
 const STONES_2X2: (i64, i64) = (4, 7);
 /// The texture ramps in over this rim width, true mm.
 const RIM_TEX_MM: f64 = 1.0;
@@ -136,7 +136,7 @@ const TEXTURE_LAYER_MM: f64 = 0.2;
 /// The reference square: per-square counts are per this many mm².
 const SQUARE_MM: f64 = 35.0;
 
-/// dirtlab's earth on a ground shape.
+/// The earth on a ground shape.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Dirt {
     /// The ground under it.
@@ -231,7 +231,7 @@ fn between(rng: &mut Rng, (lo, hi): (f64, f64)) -> f64 {
     rng.uniform(lo, hi)
 }
 
-/// What the dirt look counted, for the build record and the parity harness.
+/// What the dirt look counted, for the build record.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Counts {
     /// Clods placed.
@@ -249,7 +249,7 @@ pub struct Counts {
 }
 
 /// The dirt surface over the whole tile (world mm), the pebble mask and
-/// the counts: dirtlab's `build_field`.
+/// the counts.
 ///
 /// Its stones (`stones`) are rock solids added to the scene, owned by
 /// `owner`, bedded into this field in its area.
@@ -319,7 +319,7 @@ pub fn surface(
     Ok((z, mask, counts))
 }
 
-/// dirtlab's `clod_layer`: clods soft-maxed onto `base`.
+/// Clods soft-maxed onto `base`.
 fn clod_layer(dirt: &Dirt, frame: &dt_kit::Frame, seed: Seed, base: &Field) -> (Field, usize) {
     let patch = noise(
         frame,
@@ -411,7 +411,7 @@ fn stamp_clod(out: &mut Field, base: &Field, seed: Seed, p: &Placed) {
         })
         .collect();
     // the window holds every lobe whatever its lumps (2r does not:
-    // dirtlab's own window cuts about 1 clod in 140 straight)
+    // a plain 2r window cuts about 1 clod in 140 straight)
     let reach = shapes
         .iter()
         .map(|l| libm::hypot(l.ox, l.oy) + l.reach * l.el.max(1.0))
@@ -455,7 +455,7 @@ fn stamp_clod(out: &mut Field, base: &Field, seed: Seed, p: &Placed) {
     }
 }
 
-/// dirtlab's `grit`: fine fBm plus sparse sand grains.
+/// Fine fBm plus sparse sand grains.
 fn grit(frame: &dt_kit::Frame, seed: Seed) -> Field {
     let mut g = noise(
         frame,
@@ -487,7 +487,7 @@ fn grit(frame: &dt_kit::Frame, seed: Seed) -> Field {
     g
 }
 
-/// dirtlab's `cluster_field`: where pebbles gather, in [0, 1].
+/// Where pebbles gather, in [0, 1].
 fn cluster_field(frame: &dt_kit::Frame, seed: Seed, ground: &Field) -> Field {
     let s = frame.scale();
     let [w, h] = frame.size_mm();
@@ -523,7 +523,7 @@ fn cluster_field(frame: &dt_kit::Frame, seed: Seed, ground: &Field) -> Field {
     c.map(|v| v / max.max(1e-12))
 }
 
-/// dirtlab's `pebble_shape`: the planes of one pebble (local, rotated
+/// The planes of one pebble (local, rotated
 /// and aspect-scaled coordinates), its standing height, whether it is
 /// worn, its cap exponent and half-width.
 struct Pebble {
@@ -638,7 +638,7 @@ impl Pebble {
     }
 }
 
-/// dirtlab's `place_pebbles`: clustered half-sunk pebbles stamped into
+/// Clustered half-sunk pebbles stamped into
 /// `z`. Returns the pebble mask and counts.
 fn place_pebbles(
     frame: &dt_kit::Frame,

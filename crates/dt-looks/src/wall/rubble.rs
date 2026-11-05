@@ -1,5 +1,4 @@
-//! Rough stones and plain hulls: the rubble chip (`stone/shape.py:
-//! rubble_stone`), the rounded box of the mortar cores (`rounded_box`), and
+//! Rough stones and plain hulls: the rubble chip, the rounded box of the mortar cores (`rounded_box`), and
 //! plain boxes and prisms.
 
 use dt_kit::form::hull;

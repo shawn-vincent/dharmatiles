@@ -1,7 +1,6 @@
 //! `wall`: masonry walls on a tile edge, and the masonry chassis floors
-//! share. Port of `src/dharmatiles/walls/` (`masonry.py`, `brick.py`,
-//! `fieldstone.py`; openings are not ported: there is no vocabulary for
-//! them yet).
+//! share. Openings are not built: there is no vocabulary for
+//! them yet.
 //!
 //! A wall is a spine (`along=`, the outer face, the body to its left)
 //! split into segments; courses × bays × quoin alternation make cells
@@ -86,7 +85,7 @@ const GAP_MM: f64 = 0.2;
 /// printability floor: two such ends and the joint stay bridgeable).
 const HEAD_PULL_MM: f64 = 0.25;
 
-/// The texture presets (`masonry.py:_TEXTURES`): chip, rounding, relief.
+/// The texture presets: chip, rounding, relief.
 pub(crate) fn texture(word: &str) -> Option<(f64, f64, f64)> {
     match word {
         "chipped" => Some((0.55, 0.22, 0.07)),
@@ -148,7 +147,7 @@ pub(crate) struct Mason {
 }
 
 impl Mason {
-    /// A family's defaults (the Python class defaults).
+    /// A family's defaults.
     pub fn new(family: Family) -> Self {
         let base = Self {
             family,

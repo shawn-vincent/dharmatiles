@@ -1,4 +1,4 @@
-//! A lattice of values that reaches past the tile (grasslab's `Field2D`):
+//! A lattice of values that reaches past the tile.
 //! the flow, the swaths and the clearings live on it, so streamlines can
 //! start outside the tile and run in.
 
@@ -143,8 +143,7 @@ impl Lat {
         self.with(out)
     }
 
-    /// Unit-variance, zero-mean smooth noise of `sigma_mm` (grasslab's
-    /// `_smooth_noise`), keyed by position so it does not depend on the
+    /// Unit-variance, zero-mean smooth noise of `sigma_mm` keyed by position so it does not depend on the
     /// lattice.
     pub fn noise(&self, seed: Seed, sigma_mm: f64) -> Self {
         let xs: Vec<f64> = (0..self.nx).map(|i| self.x(i)).collect();

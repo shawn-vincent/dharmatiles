@@ -1,5 +1,4 @@
-//! One blade: a print-native stack of strokes, smoothed
-//! (grasslab/grasslab.py `blade_layers` :812, `blade_mesh` :860).
+//! One blade: a print-native stack of strokes, smoothed.
 //!
 //! A blade is a stack of 0.2 mm layers, each a stroke along its spine a
 //! whole number of 0.45 mm lines wide:
@@ -11,9 +10,8 @@
 //!   0.2 mm short (the raked bow); and the stroke loses a line every
 //!   0.45 mm toward each end, so the ends are points made of line ends.
 //!
-//! The lab lofts a signed-distance stack through the layer outlines and
-//! marches cubes at 0.05 mm, then decimates to 1,500 faces. Here the same
-//! smooth loft is built directly: one ring per layer, each the outline of
+//! The blade is a smooth loft built directly, not a signed-distance
+//! stack marched into cubes and decimated: one ring per layer, each the outline of
 //! its stroke as a half-width profile along the spine, so a blade is a few
 //! hundred faces, watertight by construction, and meshing is a pure
 //! function of the frond (blades are built in parallel, gathered in order).
@@ -38,7 +36,7 @@ const STATIONS: usize = 17;
 /// slope of the ramp up to the plateau (a line is added every 0.45 mm of
 /// stroke, half a line per side).
 const RAMP: f64 = 0.5;
-/// The lab closes each layer's outline by 0.3 mm and blurs it, which fills
+/// Closing each layer's outline by 0.3 mm and blurring it fills
 /// the notches between lines and rounds the ends and the shoulder where a
 /// ramp meets the plateau: the ends are rounder than one line's cap, and
 /// the minimum is soft.
@@ -241,7 +239,7 @@ pub fn mesh(
             continue;
         }
         let hw = n[k] as f64 * LINE_W_MM / 2.0;
-        // the lab's blur (0.15 mm across layers) takes about a tenth of a
+        // the blur (0.15 mm across layers) takes about a tenth of a
         // millimetre off a one-line ridge: the layers close up a little
         // toward the top
         let ease = CREST_EASE_MM * k as f64 / (n_layers - 1) as f64;

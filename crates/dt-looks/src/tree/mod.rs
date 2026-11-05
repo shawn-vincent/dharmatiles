@@ -1,6 +1,5 @@
 //! `tree`: a space-colonisation tree with a barked trunk, foliage clumps
-//! and (from the leaf placer) separate leaves. Port of `trees/` (the
-//! approved look; trees have no lab): envelope, skeleton, wood and clumps
+//! and (from the leaf placer) separate leaves. Envelope, skeleton, wood and clumps
 //! here and in dt-kit's [`graph`](dt_kit::graph); leaves through the
 //! placer [`leaves`].
 //!
@@ -57,7 +56,7 @@ pub const CONTROLS: &[&str] = &[
     "branch/min-radius",
 ];
 
-// The Python Tree's fixed numbers (trees/layer.py), mm at the 35 mm square.
+// The tree's fixed numbers, mm at the 35 mm square.
 
 const SEGMENT_MM: f64 = 1.0;
 const TARGET_FDM_DEG: f64 = 35.0;

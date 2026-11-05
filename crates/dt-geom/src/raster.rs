@@ -1,7 +1,7 @@
 //! The 2D kernel, raster half: masks on the node lattice of
 //! [`crate::grid`], line rasterising and the paint bucket.
 //!
-//! Port of `src/dharmatiles/core/region.py`: lines are walls, and a region
+//! Lines are walls, and a region
 //! is the 4-connected set of non-wall nodes reached from a fill point.
 //! Lines are drawn 8-connected, so a 4-connected fill never leaks through
 //! a diagonal step.

@@ -2,7 +2,7 @@
 //! `nx` by `ny` node lattice, row-major (`j` outer), as `f64`.
 //!
 //! - [`blur`]: separable Gaussian, scipy's `gaussian_filter` with
-//!   `mode='reflect'` and `truncate=4`, so dirtlab's blurs port exactly;
+//!   `mode='reflect'` and `truncate=4`, so the blurs match scipy exactly;
 //! - [`blur_recursive`]: the Young–van Vliet recursive Gaussian, constant
 //!   cost per node whatever the sigma (for wide blurs);
 //! - [`dilate`] and [`erode`]: grey morphology over a disc or a square;

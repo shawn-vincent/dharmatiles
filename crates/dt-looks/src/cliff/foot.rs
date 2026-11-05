@@ -1,6 +1,6 @@
 //! The foot of the cliff: a dirt bank in the angle of cliff and ground,
 //! and the scree (fallen stones, big blocks, half-buried grit) gathered
-//! against the face (rockpile.py :1968-2060). The bank is earth heaped
+//! against the face. The bank is earth heaped
 //! highest against the face, falling away concave, higher and wider in
 //! the shattered zones, the same at the tile ends for every seed (S4).
 
@@ -16,7 +16,7 @@ pub const END_MM: f64 = 4.0;
 /// lies on a node of the other (coincident lattices pinch on float32 reload).
 const OFF: (f64, f64) = (0.0137, 0.0091);
 
-// ---- dirt lodged on the rock tops (rockpile.py :2092-2146) ---------------
+// ---- dirt lodged on the rock tops ---------------
 const DIRT_FILL_MM: f64 = 3.0;
 const DIRT_FILL_DEPTH_MM: f64 = 1.5;
 const DIRT_FILM_MM: (f64, f64) = (0.1, 0.5);

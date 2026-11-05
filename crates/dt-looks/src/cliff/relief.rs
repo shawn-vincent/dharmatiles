@@ -2,7 +2,7 @@
 //! passes: first to the sub-faces' planes along a shear (45 degrees below
 //! the face's inward normal, so a height field along it leans nowhere past
 //! the overhang limit), then the cracks sunk in straight along the normal
-//! (thin: their ceilings reach under REACH). rockpile.py :1341-1434.
+//! (thin: their ceilings reach under REACH).
 
 use std::sync::Arc;
 

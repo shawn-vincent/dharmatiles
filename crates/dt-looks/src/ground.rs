@@ -2,13 +2,13 @@
 //! and the edge contract: the surface meets every tile edge at the edge
 //! level and rises from there.
 //!
-//! The hills are dirtlab's `ground_undulation` (:184) on position-keyed
+//! The hills are on position-keyed
 //! noise: two smooth noises (`bump-size` and 5/14 of it, the second at
 //! 0.15 weight), the lowest 35% left as plains, soft-maxed onto them,
 //! scaled to the drawn height, faded over the 9 mm next to the rim and
 //! slope-capped at 24°. `bumps up=… down=…` adds hollows the same way
 //! from the noise's low end. The level ramps in from the edge level
-//! over the outer `max(1 mm, 1.5 |level − edge| / tan 24°)`: dirtlab's
+//! over the outer `max(1 mm, 1.5 |level − edge| / tan 24°)`: a
 //! 0.3 mm lift over 1 mm, never steeper than a hill.
 //!
 //! [`Shape`] is shared with [`crate::dirt`], which builds on the same
@@ -21,15 +21,15 @@ use crate::{Control, Ctx, Look, LookError, Plan, Value, Write, only};
 /// The controls `ground` takes.
 pub const CONTROLS: &[&str] = &["level", "bumps", "bumps/up", "bumps/down", "bump-size"];
 
-/// dirtlab's hill constants (mm at the reference square unless noted).
+/// The hill constants (mm at the reference square unless noted).
 const PLAIN_FRAC: f64 = 0.35;
 const MID_WEIGHT: f64 = 0.15;
 const MID_RATIO: f64 = 5.0 / 14.0;
 const FADE_MM: f64 = 9.0;
 const MAX_SLOPE_DEG: f64 = 24.0;
-/// The default `bump-size`: dirtlab's broad scale.
+/// The default `bump-size`: a broad scale.
 const SIZE_MM: f64 = 14.0;
-/// The level ramp's narrowest width, true mm (dirtlab's `RIM_TEX_MM`).
+/// The level ramp's narrowest width, true mm.
 const RAMP_MM: f64 = 1.0;
 
 /// A height an author wrote: one number, or a range drawn once per tile.
@@ -177,7 +177,7 @@ fn part(r: &Field, inside: &[bool], amount: f64) -> Field {
     shifted.map(|v| v * amount / hi.max(1e-9))
 }
 
-/// dirtlab's rises (and, mirrored, hollows), world mm, zero on the rim.
+/// The rises (and, mirrored, hollows), world mm, zero on the rim.
 fn hills(frame: &dt_kit::Frame, seed: Seed, rim: &Field, up: f64, down: f64, size: f64) -> Field {
     let s = frame.scale();
     let broad = noise(

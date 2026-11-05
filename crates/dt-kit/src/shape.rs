@@ -93,7 +93,7 @@ pub fn union(solids: &[Solid]) -> Result<Solid, KitError> {
 /// **area**: the paint bucket. `lines` are polylines in squares (x east,
 /// y north from the south-west corner) drawn as walls; the area is every
 /// node reached from any of `fills` (points in squares) without crossing
-/// one. Port of `core/region.py`'s straight paths.
+/// one, along straight paths.
 #[must_use]
 pub fn area(frame: &Frame, lines: &[Vec<[f64; 2]>], fills: &[[f64; 2]]) -> Mask {
     let (nx, ny) = frame.nodes();

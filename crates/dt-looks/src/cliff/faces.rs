@@ -1,5 +1,5 @@
 //! Block faces: one crack network per open column face, planned once for
-//! the whole pile so cracks run on across stones (rockpile.py :1098-1338).
+//! the whole pile so cracks run on across stones.
 //! Cracks are thin, straight, block-splitting; they run from an edge, a
 //! joint or another crack to one of those, never fade or dead-end.
 
@@ -430,9 +430,9 @@ pub fn plan_faces(rng: &mut Rng, cols: &mut [Column], placed: &[Placed]) {
             }
         }
     }
-    let lab: Vec<usize> = (0..n).map(|i| find(&mut par, i)).collect();
+    let labels: Vec<usize> = (0..n).map(|i| find(&mut par, i)).collect();
     let mut groups: Vec<usize> = Vec::new();
-    for &l in &lab {
+    for &l in &labels {
         if !groups.contains(&l) {
             groups.push(l);
         }
@@ -440,7 +440,7 @@ pub fn plan_faces(rng: &mut Rng, cols: &mut [Column], placed: &[Placed]) {
     groups.sort_unstable();
     let mut specs: Vec<Spec> = Vec::new();
     for g in groups {
-        let ix: Vec<usize> = (0..n).filter(|&i| lab[i] == g).collect();
+        let ix: Vec<usize> = (0..n).filter(|&i| labels[i] == g).collect();
         let mut m = [0.0, 0.0];
         for &i in &ix {
             let len = norm2([f[i].2[0] - f[i].1[0], f[i].2[1] - f[i].1[1]]);
@@ -635,23 +635,26 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
         ny: nz,
         v: cut.v.iter().map(|&c| !c).collect(),
     };
-    let (lab, nlab) = super::util::label(&free);
+    let (labels, n_labels) = super::util::label(&free);
     let near = {
-        let bg = lab.map(|x| x == 0);
-        let (_, idx) =
-            dt_kit::distance_nearest(&lab.v.iter().map(|&x| x != 0).collect::<Vec<_>>(), nu, nz);
+        let bg = labels.map(|x| x == 0);
+        let (_, idx) = dt_kit::distance_nearest(
+            &labels.v.iter().map(|&x| x != 0).collect::<Vec<_>>(),
+            nu,
+            nz,
+        );
         let _ = bg;
         idx
     };
-    let mut lab2 = G::new(nu, nz, 0usize);
+    let mut labels_near = G::new(nu, nz, 0usize);
     for q in 0..nu * nz {
-        lab2.v[q] = if lab.v[q] != 0 {
-            lab.v[q] as usize
+        labels_near.v[q] = if labels.v[q] != 0 {
+            labels.v[q] as usize
         } else {
-            near[q].map_or(0, |k| lab.v[k] as usize)
+            near[q].map_or(0, |k| labels.v[k] as usize)
         };
     }
-    let nl = nlab as usize + 1;
+    let nl = n_labels as usize + 1;
     let th: Vec<f64> = (0..nl)
         .map(|_| rng.uniform(0.0, std::f64::consts::TAU))
         .collect();
@@ -660,7 +663,7 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
     for j in 0..nz {
         for i in 0..nu {
             let q = j * nu + i;
-            let l = lab2.v[q];
+            let l = labels_near.v[q];
             let p = libm::cos(th[l]) * (i as f64 * g) + libm::sin(th[l]) * (sp.z0 + j as f64 * g);
             pgrid.v[q] = p;
             lo[l] = lo[l].min(p);
@@ -680,7 +683,7 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
         .collect();
     let mut tt = Field::new(nu, nz, 0.0);
     for q in 0..nu * nz {
-        let l = lab2.v[q];
+        let l = labels_near.v[q];
         tt.v[q] = k[l] * (pgrid.v[q] - lo[l]);
     }
     // set back FACET_MM[0:2], further across each split
@@ -725,9 +728,9 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
             let s0 = idx([x[0] - 0.35 * nrm[0], x[1] - 0.35 * nrm[1]]);
             let s1 = idx([x[0] + 0.35 * nrm[0], x[1] + 0.35 * nrm[1]]);
             let (fr, bk) = if left {
-                (lab2.at(s0.0, s0.1), lab2.at(s1.0, s1.1))
+                (labels_near.at(s0.0, s0.1), labels_near.at(s1.0, s1.1))
             } else {
-                (lab2.at(s1.0, s1.1), lab2.at(s0.0, s0.1))
+                (labels_near.at(s1.0, s1.1), labels_near.at(s0.0, s0.1))
             };
             let dt = if left {
                 tt.at(s0.0, s0.1) - tt.at(s1.0, s1.1)
@@ -766,7 +769,7 @@ fn plan_face(rng: &mut Rng, sp: &Spec, cracks: Vec<Line>) -> Face {
     }
     let mut f = Field::new(nu, nz, 0.0);
     for q in 0..nu * nz {
-        f.v[q] = -(bset[lab2.v[q]] + tt.v[q]);
+        f.v[q] = -(bset[labels_near.v[q]] + tt.v[q]);
     }
     f.v = blur2(&f.v, nu, nz, FACET_SEAM_MM / g);
     let _ = (edt_out, HashSet::<u8>::new);

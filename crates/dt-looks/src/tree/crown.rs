@@ -1,7 +1,6 @@
-//! The crown: its envelope (`trees/envelope.py`), the attractors on its
-//! side surface (`_sample_canopy`, skeleton.py:687), their Voronoi groups
-//! and the outward group bulge (`_voronoi_group_attractors`,
-//! `_apply_group_bulge`).
+//! The crown: its envelope, the attractors on its
+//! side surface, their Voronoi groups
+//! and the outward group bulge.
 
 use dt_kit::Rng;
 use dt_kit::graph::round_half_even;
@@ -15,7 +14,7 @@ pub struct Shape {
     pub bottom_curve: f64,
 }
 
-/// `round`: the Python Tree's envelope.
+/// `round`: the default envelope.
 pub const ROUND: Shape = Shape {
     top_pointiness: 0.0,
     top_curve: 1.4,

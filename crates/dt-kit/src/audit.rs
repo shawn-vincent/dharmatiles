@@ -1,7 +1,6 @@
 //! The audit gate: the mesh as a slicer sees it.
 //!
-//! Ports `stone/solidify.py` (pinch separation, the float32 reload),
-//! dirtlab's `stl_safe` (keep the largest body) and clifflab rockpile's
+//! Pinch separation, the float32 reload, keeping the largest body, and the
 //! layer-reach overhang rule (`overhang_faces`, the 55° rule that wins over
 //! the other three `audit_overhang` copies). Order, as `stl_safe`: separate
 //! pinches, quantise to float32 and merge by position, split into bodies
@@ -59,7 +58,7 @@ impl Band {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Printer {
     /// No layer may reach past this cone from vertical (the profile's
-    /// `overhang`; rockpile `OVERHANG_DEG`).
+    /// `overhang`).
     pub overhang_deg: f64,
     /// Layer height, mm (the profile's `layer`).
     pub layer_mm: f64,
@@ -68,7 +67,7 @@ pub struct Printer {
     /// The narrowest gap that stays open, mm (the profile's `gap`).
     pub gap_mm: f64,
     /// Gate tuning: one layer may reach this far out over the one below,
-    /// mm (rockpile's 0.6).
+    /// mm (0.6).
     pub reach_mm: f64,
     /// Gate tuning: how many mm of layers below are compared.
     pub span_mm: f64,
@@ -618,7 +617,7 @@ fn keep_largest(
     (kept, src, n, dropped)
 }
 
-/// Is `p` inside the closed mesh `m`? Parity of the crossings of a
+/// Is `p` inside the closed mesh `m`? The odd or even count of the crossings of a
 /// vertical ray up from `p`, nudged off the lattice by a fixed offset so
 /// it misses `p`'s own shell's edges; a crossing on a shared edge is
 /// counted once by the top-left rule. Deterministic: no sampling.
@@ -670,7 +669,7 @@ fn face_areas(m: &TriMesh) -> Vec<f64> {
         .collect()
 }
 
-/// Port of rockpile's `overhang_faces`: the mesh sliced every layer by
+/// The overhang faces: the mesh sliced every layer by
 /// vertical rays on a `grid_mm` lattice (offset off the mesh's own grids,
 /// so no ray grazes an edge); a layer's material farther than `reach +
 /// (k − 1) × layer × tan(overhang)` from layer k below it (any k within
@@ -682,7 +681,7 @@ fn face_areas(m: &TriMesh) -> Vec<f64> {
 /// a gap cannot stay open in print, the layer above lands on the one
 /// below, so its roof is not an overhang. This is what a bed joint of
 /// 0.11 mm under a wall stone is (walls R10: "the lip over the sub-mm
-/// joint prints"); rockpile's rule, written for stacked rock with real
+/// joint prints"); the plain layer-reach rule, written for stacked rock with real
 /// gaps, counted every such roof as a drooping shelf.
 fn overhang_faces(m: &TriMesh, footprint: [f64; 2], p: &Printer) -> (Vec<bool>, usize) {
     let none = (vec![false; m.triangles.len()], 0);
@@ -747,11 +746,11 @@ fn overhang_faces(m: &TriMesh, footprint: [f64; 2], p: &Printer) -> (Vec<bool>, 
     }
     // inside at layer k: an odd count of hits at layers ≤ k
     let mut inside = vec![false; nl * nx * ny];
-    let mut parity = vec![0u8; nx * ny];
+    let mut odd = vec![0u8; nx * ny];
     for k in 0..nl {
         for col in 0..nx * ny {
-            parity[col] ^= occ[k * nx * ny + col];
-            inside[k * nx * ny + col] = parity[col] == 1;
+            odd[col] ^= occ[k * nx * ny + col];
+            inside[k * nx * ny + col] = odd[col] == 1;
         }
     }
     let layer = |k: usize| &inside[k * nx * ny..(k + 1) * nx * ny];
@@ -1036,7 +1035,7 @@ mod tests {
             "{fails:?}"
         );
         let (_, b) = audit(&shelf_on_post(), [10.0, 10.0], &fdm());
-        // rockpile.audit_overhang gives 8.0 mm² on this shelf (4 × 2 mm underside)
+        // the layer-reach rule gives 8.0 mm² on this shelf (4 × 2 mm underside)
         assert!(
             (b.overhang_mm2 - 8.0).abs() < 1e-9,
             "shelf underside: {}",
@@ -1166,7 +1165,7 @@ mod tests {
         // 0.11 mm: the wall's bed joint; the layer above lands on the stone below
         let (_, a) = audit(&block_on_joint(0.11), [10.0, 10.0], &fdm());
         assert!(a.overhang_mm2 == 0.0, "{}", a.overhang_mm2);
-        // rockpile's rule as it was (every void open) flags its roof
+        // the plain rule (every void open) flags its roof
         let open = Printer {
             gap_mm: 0.0,
             ..fdm()

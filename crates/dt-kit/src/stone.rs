@@ -1,5 +1,5 @@
 //! Operations for stones: the convex hull of points, the grain pass that
-//! roughens a convex stone (rocklab `texture`, :283), the seat that beds a
+//! roughens a convex stone, the seat that beds a
 //! stone into the ground, and a solid from a stone's mesh.
 //!
 //! Facets and chips are half-space cuts of a [`dt_geom::Convex`], so a
@@ -27,7 +27,7 @@ pub fn hull(points: &[[f64; 3]]) -> Result<TriMesh, KitError> {
     Ok(m)
 }
 
-/// How [`grain`] roughens a stone (rocklab's constants as the defaults).
+/// How [`grain`] roughens a stone.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Grain {
     /// Refine to edges no longer than this, mm (`TEX_EDGE_MM`).
@@ -161,7 +161,7 @@ pub fn grain(stone: &Convex, g: &Grain, seed: u64) -> Result<TriMesh, KitError> 
 /// **seat**: the height to set a stone's base at, centred at `at` with
 /// footprint radius `r` (mm), so that it sits in `ground`: `below_min`
 /// under the lowest node within `r` (so no dip or slope exposes its flat
-/// base: dirtlab took 0.85 r, which leaves the base's rim showing on a
+/// base: 0.85 r would leave the base's rim showing on a
 /// bank), and at least `below_median` under their median (the bed).
 /// Never below 0, the tile's base.
 #[must_use]

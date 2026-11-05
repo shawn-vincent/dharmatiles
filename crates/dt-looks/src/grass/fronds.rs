@@ -1,7 +1,5 @@
 //! Where blades go and how long they are: strands traced along the flow,
-//! fronds rooted along them, each drawn and shortened to fit
-//! (grasslab/grasslab.py `trace_batch` :578, `make_strand_roots` :603,
-//! `plan_fronds` :735, `draw_frond` :765).
+//! fronds rooted along them, each drawn and shortened to fit.
 //!
 //! Blades are printed things, so their sizes are true mm and do not scale
 //! with the system's square; the strand spacing is the blade density and

@@ -1,8 +1,7 @@
 //! The CPU preview renderer: a depth-buffered rasteriser with flat shading
 //! and per-face paint (overhang faces red, the owner's policy for every
-//! render). Deterministic and wasm-safe; it gives `build --png` and the
-//! parity contact sheets. Camera and lights follow the CPU fallback in
-//! `tests/parity/run_lab.py`, so Python and Rust views line up.
+//! render). Deterministic; it gives `build --png` and the
+//! contact sheets. A fixed camera and lights, so views line up between runs.
 
 use dt_geom::TriMesh;
 use libm::{cos, sin, tan};
@@ -121,7 +120,7 @@ pub fn paint(materials: &[Material], overhang: &[bool]) -> Vec<[f32; 3]> {
 }
 
 /// Earth bedding under a floor or wall, seen on the tile's side: the
-/// parity harness's flat earth brown (`run_lab.py` `EARTH_RGB`).
+/// flat earth brown.
 const BED: [f32; 3] = [128.0, 97.0, 64.0];
 
 /// The ground surface as built, for a painted preview: heights, local
@@ -169,7 +168,7 @@ impl SurfacePaint {
 
     /// Mark the nodes a solid covers (a floor's or wall's footprint):
     /// earth under them is painted as bedding, flat brown, not as
-    /// dirtlab's drybrush or its dark tile wall.
+    /// the earth drybrush or the dark tile wall.
     #[must_use]
     pub fn covered(mut self, covered: &dt_geom::Mask) -> Self {
         self.covered.clone_from(&covered.bits);
@@ -184,7 +183,7 @@ impl SurfacePaint {
         self.z[node(c[1], self.ny) * self.nx + node(c[0], self.nx)]
     }
 
-    /// waterlab's water paint at a face centre, or `None` off the grid.
+    /// The water paint at a face centre, or `None` off the grid.
     pub(crate) fn water(&self, c: [f64; 3], pal: &crate::Palette) -> Option<[f32; 3]> {
         #[allow(clippy::cast_precision_loss)]
         let (w, h) = (
@@ -203,7 +202,7 @@ impl SurfacePaint {
         Some(pal.sample("water", t))
     }
 
-    /// dirtlab's paint for one face (centre `c`, unit normal z `nz`), or
+    /// The earth paint for one face (centre `c`, unit normal z `nz`), or
     /// `None` off the surface's footprint.
     pub(crate) fn face(&self, c: [f64; 3], nz: f64, pal: &crate::Palette) -> Option<[f32; 3]> {
         #[allow(clippy::cast_precision_loss)]

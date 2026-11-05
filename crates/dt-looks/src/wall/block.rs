@@ -1,11 +1,10 @@
-//! The block: one cut-stone, brick or slab unit. Port of
-//! `walls/masonry.py:_block_mesh` (:366): a stack of two jittered planar
+//! The block: one cut-stone, brick or slab unit. A stack of two jittered planar
 //! rings (chipped arrises) whose six bounding planes are combined by a
 //! smooth maximum (log-sum-exp) and meshed as a level set, so flat faces
 //! are exact planes and the arrises are rounded analytically; then the
 //! common stone relief.
 //!
-//! Printable by construction (walls R10, Rust port):
+//! Printable by construction (walls R10):
 //!
 //! - the ring planes carry the per-block attitude (yaw in plan, a lean of
 //!   the faces) instead of a rigid rotation, so every bed stays level and

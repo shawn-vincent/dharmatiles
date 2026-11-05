@@ -29,9 +29,9 @@ pub struct TriMesh {
     /// Per-triangle face ID (coplanar faces share one). Empty if unknown.
     pub face_id: Vec<u32>,
     /// The solid's tolerance in mm (`MeshGL::tolerance`); 0 means the
-    /// kernel's default for the mesh's size. R1 found the replay must carry
-    /// it: Python's operands were float32 imports with ~1e-7 x size, and
-    /// re-importing them at the default ~1e-12 x size changes some results.
+    /// kernel's default for the mesh's size. A float32 import
+    /// carries ~1e-7 x size, and re-importing it at the default ~1e-12 x
+    /// size changes some results, so imports keep their own.
     pub tolerance: f64,
 }
 
@@ -341,7 +341,7 @@ pub trait Mesh: Sized + Send + Sync + Clone {
     #[must_use]
     fn extrude(contours: &[Vec<[f64; 2]>], inset: f64, z0: f64, z1: f64) -> Self;
 
-    /// The convex hull of `points` (P3: rocklab's body).
+    /// The convex hull of `points`.
     #[must_use]
     fn hull(points: &[[f64; 3]]) -> Self;
 

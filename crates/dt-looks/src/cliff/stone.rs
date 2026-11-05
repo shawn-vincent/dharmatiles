@@ -1,4 +1,4 @@
-//! One stone, finished (rockpile.py :1437-1597, 1674-1797): cut to its
+//! One stone, finished: cut to its
 //! column's planes, grooved under the stone it carries, seated on its bed,
 //! chipped, carved on its faces, cracked across its top, fitted to the
 //! tile, grained.

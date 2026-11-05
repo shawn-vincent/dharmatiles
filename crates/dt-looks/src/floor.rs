@@ -1,5 +1,4 @@
-//! `floor`: a stone pavement, a wall laid on its side (`walls/floor.py`,
-//! Shawn: "the floor should just be a wall laying on its side … with
+//! `floor`: a stone pavement, a wall laid on its side (Shawn: "the floor should just be a wall laying on its side … with
 //! different sized bricks"). The masonry chassis builds it: courses are
 //! pavement rows and bays slabs, both pinned to the square grid (`slabs`
 //! per square), the wall's thickness is the pavement's depth from the

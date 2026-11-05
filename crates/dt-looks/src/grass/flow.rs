@@ -1,7 +1,6 @@
 //! The grass's field: the flow the blades lean along, the swaths that set
 //! their length, the clearings of bare earth the flow parts around, and the
-//! rim rule (grasslab/grasslab.py `make_direction` :311, `Swaths` :362,
-//! `place_lenses` :442, `finish_flow` :467, `steer_rim` :527).
+//! rim rule.
 //!
 //! Everything works on one angle per point, never on vectors, so the flow
 //! cannot form a whorl. Lengths here are mm at the reference square and
@@ -102,8 +101,7 @@ impl Flow {
 }
 
 /// `s` with `∇s ≈ (cos θ, sin θ)`: the least-squares fit by a cosine
-/// transform (the mirror-extended FFT Poisson solve of grasslab's
-/// `_along_flow_coord`). Lines of constant `s` cross the flow, so
+/// transform (the mirror-extended FFT Poisson solve). Lines of constant `s` cross the flow, so
 /// `sin(2π s / λ)` makes neighbouring streamlines wave in phase.
 fn along_flow_coord(th: &Lat) -> Lat {
     let (nx, ny, h) = (th.nx, th.ny, th.res);
@@ -421,7 +419,7 @@ impl Lenses {
     }
 
     /// Lens shapes added (the first `k` of `self`, then `shapes`), sharing
-    /// the warp (meadowlab's `combine`).
+    /// the warp.
     pub fn combine(&self, k: usize, shapes: &Shapes) -> Self {
         let mut c = self.centre[..k.min(self.centre.len())].to_vec();
         let mut ax = self.axis[..k.min(self.centre.len())].to_vec();
@@ -776,7 +774,7 @@ const SHORE_PULL: f64 = 0.3;
 const SHORE_SMOOTH_MM: f64 = 1.5;
 
 /// Grass near the water leans toward it or runs along the shore, never
-/// away (shorelab `steer_shore`). `to_water` is the distance to the water,
+/// away. `to_water` is the distance to the water,
 /// mm, on the lattice (0 on it).
 pub fn steer_shore(flow: &Flow, to_water: &Lat, s: f64) -> Flow {
     let like = &flow.ux;

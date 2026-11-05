@@ -28,7 +28,7 @@ pub const OPENLOCK_SQUARE_MM: f64 = 25.4;
 
 impl Frame {
     /// A DungeonBlocks frame at the default resolution (128 cells per
-    /// square, Python's `SurfaceConfig.cells_per_square`).
+    /// square).
     #[must_use]
     pub const fn dungeonblocks(cols: u32, rows: u32) -> Self {
         Self {
@@ -336,7 +336,7 @@ pub const LIFT_TOL_MM: f64 = 0.02;
 /// The widest leaf of the adaptive lift, in cells.
 const LIFT_MAX_CELLS: usize = 32;
 /// The widest bank between areas painted at different levels, mm at the
-/// reference square (waterlab's `BANK_W_MM`).
+/// reference square.
 pub const BANK_MM: f64 = 7.0;
 
 /// Slots per build. A leaf's face IDs come from its slot's range, so this
@@ -579,8 +579,7 @@ impl Scene {
     /// step needs (no steeper than the ground's hills, 24° from 1.5 times
     /// the step, between 1 mm and [`BANK_MM`] at the reference square),
     /// cross-fading the two surfaces with a smoothstep. The lower side is
-    /// untouched, so a pool keeps its bed and the bank is all on the land
-    /// (waterlab's bank, `Scene` :278). Fields are the full ones each
+    /// untouched, so a pool keeps its bed and the bank is all on the land. Fields are the full ones each
     /// paint was given, so texture fades across the bank.
     fn banks(&mut self) {
         let n = self.layers.len();

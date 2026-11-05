@@ -1,5 +1,4 @@
-//! Cliff: a port of clifflab's rockpile (clifflab/rockpile.py, frozen at
-//! round 17, 31f7c5d, foot 3.4 mm).
+//! Cliff: a stacked pile of rocks (foot 3.4 mm).
 //!
 //! A cliff is **stacked under gravity**: a form gives a target height
 //! field; rocks are placed lowest pocket first, each resting on the

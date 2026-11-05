@@ -7,9 +7,8 @@
 //!
 //! P1: [`ground`] (then a flat surface at a level) and [`connector`]
 //! (DungeonBlocks). P2: [`ground`] in full (levels, hills, the edge
-//! contract) and [`dirt`] (dirtlab's textured earth on it). P3: [`rock`]
-//! (rocklab's rocks, alone or scattered; dirt's stones) and [`water`]
-//! (waterlab's swell-chaos). P5: [`wall`], [`floor`], [`tree`] and
+//! contract) and [`dirt`]. P3: [`rock`]
+//! and [`water`]. P5: [`wall`], [`floor`], [`tree`] and
 //! [`openlock`] (the OpenLOCK connector).
 
 pub mod cliff;

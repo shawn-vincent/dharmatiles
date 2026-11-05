@@ -1,7 +1,6 @@
 //! The organic leaf placer: thousands of separate leaves over the merged
-//! crown. A port of `src/dharmatiles/trees/placement_organic.py`
-//! (`place_leaves_organic`) and the per-leaf pipeline of
-//! `placement_leaf.py` (`_attempt_leaf_gen`), with the same constants.
+//! crown. The placer works as a whole
+//! crown pass, then a per-leaf pipeline.
 //!
 //! 1. **One surface.** The caller's foliage is the union of the clumps; all
 //!    sampling, seating and containment run against it, so seams between
@@ -43,7 +42,7 @@ use super::leaf::{
 };
 use crate::LookError;
 
-// ── Constants (placement_organic.py / placement_leaf.py) ─────────────────────
+// ── Constants ─────────────────────
 
 /// Root spacing as a fraction of leaf width: the overlap knob.
 const SPACING_FRAC: f64 = 0.45;
@@ -198,7 +197,7 @@ pub struct Placed {
     pub root: [f64; 3],
     /// The crown's smooth normal there.
     pub normal: [f64; 3],
-    /// The blade's seated direction (Python's `base_tangents`).
+    /// The blade's seated direction.
     pub tangent: [f64; 3],
     /// The zone blend: 1 = pitched (curled, lifted) on upward faces, 0 =
     /// flush arch on undersides.
@@ -959,7 +958,7 @@ impl Reach<'_> {
         safe_norm(rotate_about(t0, n, field_angle(b, self.phase)))
     }
 
-    /// Placeable: normal z ≥ −0.75 (Python). With a printer limit the
+    /// Placeable: normal z ≥ −0.75. With a printer limit the
     /// steep band under the crown is placeable too: its blades are laid
     /// flat on the crown ([`Job::drape`]).
     fn placeable(&self, s: &Samples) -> Vec<bool> {
@@ -1335,7 +1334,7 @@ impl Job<'_> {
     #[allow(clippy::too_many_arguments, reason = "the placer's per-leaf knobs")]
     #[allow(
         clippy::too_many_lines,
-        reason = "one pipeline, kept in Python's order"
+        reason = "one pipeline, kept in pipeline order"
     )]
     fn attempt(
         &self,

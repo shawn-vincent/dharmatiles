@@ -64,7 +64,7 @@ impl ObvhsRays {
         }
         // obvhs 0.4 bug: safe_inverse(-0.0) is -1/eps but the octant test
         // reads -0.0 as positive, so the slab swaps and the ray misses every
-        // node (R3 found 53% of rockpile's horizontal relief rays lost).
+        // node (horizontal rays were lost).
         // Adding +0.0 turns -0.0 into +0.0 and changes nothing else.
         let oray = ORay::new(
             Vec3A::from_array(ray.origin),

@@ -1,6 +1,6 @@
 //! Chips: crisp planar scars on the arrises (round 17: a few chips of
 //! 3-7 mm on edges over 60 degrees, dense small ones only on underside
-//! lips) and rocklab's corner chips (rockpile.py :1600-1665).
+//! lips) and corner chips.
 
 use std::collections::BTreeMap;
 
@@ -235,7 +235,7 @@ const CHIP_MIN_Z_MM: f64 = 0.6;
 const CHIP_TILT_DEG: f64 = 25.0;
 const FACET_MIN_NZ: f64 = -0.5;
 
-/// rocklab's corner chips (edge chips off): small planar cuts at the
+/// Corner chips (edge chips off): small planar cuts at the
 /// polytope corners. `rock` has its base at z = 0.
 pub fn corner_chips(rng: &mut Rng, rock: Piece, d: f64, max_loss: f64) -> Piece {
     let (p, t) = welded(&rock.mesh());

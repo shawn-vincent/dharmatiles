@@ -1,8 +1,8 @@
-//! Rocks: rocklab's chiselled convex rocks (rocklab/rocklab.py), the
+//! Rocks: chiselled convex rocks, the
 //! things `rock`, `stone`, `boulder` and `pebble`, and the `scatter` that
 //! places many of them.
 //!
-//! A rock is made at the reference square, in rocklab's numbers:
+//! A rock is made at the reference square, in fixed numbers:
 //!
 //! 1. **body**: the convex hull of points on a non-increasing profile
 //!    (dome, slab, block or wedge), with angle-only lumpiness (`make_body`);
@@ -14,17 +14,17 @@
 //!    3% of the volume (`chip_corners_edges`);
 //!
 //! then scaled to the system (its shape is a photocopy at every scale)
-//! and given **grain** in true mm (dt-kit's `grain`: rocklab `texture`).
+//! and given **grain** in true mm.
 //! Facets and chips are half-space cuts of one convex polytope, never
 //! booleans, so every rock is closed, convex below its grain, and sits on
 //! a flat base with no face pointing down past 30° (`FACET_MIN_NZ`).
 //!
-//! Placement follows rocklab's `scatter`: a quarter of the placements are
+//! Placement: a quarter of the placements are
 //! clusters of 2 to 4 stones; placements go largest first, 1.5 mm apart
 //! (`gap`) and 1 mm inside the rim, 400 darts each. Each stone is seated
 //! into the ground below it (dt-kit's `seat`): 0.25 mm under the lowest
 //! node within 0.85 of its radius, and at least 0.55 mm under the median
-//! there (rocklab's 0.3 + 0.25 mm below its flat 4 mm floor).
+//! there (0.3 + 0.25 mm below a flat 4 mm floor).
 
 use dt_kit::vec3::{cross, dot, norm, sub};
 use dt_kit::{
@@ -39,7 +39,7 @@ pub const CONTROLS: &[&str] = &["size", "mostly", "shape", "buried"];
 /// The controls `scatter` takes so far.
 pub const SCATTER_CONTROLS: &[&str] = &["count", "per-square", "gap", "reach"];
 
-// body (rocklab :37)
+// body
 const HEIGHT_RATIO: (f64, f64) = (0.45, 0.85);
 const HEIGHT_CAP_MM: f64 = 9.0;
 const HEIGHT_MIN_MM: f64 = 2.5;
@@ -50,7 +50,7 @@ const BASE_PTS: (i64, i64) = (14, 22);
 const BODY_PTS: (i64, i64) = (60, 120);
 const TOP_PTS: (i64, i64) = (1, 3);
 const LUMP_AMP: f64 = 0.08;
-/// rocklab's family mix: dome, slab, block, wedge.
+/// The family mix: dome, slab, block, wedge.
 const FAMILIES: [f64; 4] = [0.35, 0.2, 0.2, 0.25];
 // facets (:52)
 const FACET_SAMPLES: usize = 4000;
@@ -79,7 +79,7 @@ const MIN_STONE_MM: f64 = 4.0;
 const CLUSTER_DIST: (f64, f64) = (0.35, 0.6);
 const RIM_MM: f64 = 1.0;
 const DART_TRIES: u32 = 400;
-/// rocklab's size skew when `mostly` is not written.
+/// The size skew when `mostly` is not written.
 const WIDTH_EXP: f64 = 1.4;
 // seat
 const SEAT_BELOW_MIN_MM: f64 = 0.25;
@@ -142,7 +142,7 @@ impl Stone {
     }
 }
 
-/// `a` at unit length; left alone when shorter than 1e-9 (rocklab's
+/// `a` at unit length; left alone when shorter than 1e-9 (a
 /// guard, unlike `vec3::unit`).
 fn unit(a: [f64; 3]) -> [f64; 3] {
     let l = norm(a);
@@ -207,7 +207,7 @@ fn footprint_radius(ang: f64, a: f64, b: f64, f: Family) -> f64 {
     1.0 / libm::pow(libm::pow(c / a, p) + libm::pow(s / b, p), 1.0 / p)
 }
 
-/// rocklab `make_body`: the hull's points.
+/// The hull's points.
 fn body_points(rng: &mut Rng, d: f64, f: Family, hmin: f64) -> Vec<[f64; 3]> {
     use std::f64::consts::TAU;
     let a = d / 2.0;
@@ -302,7 +302,7 @@ fn sample_surface(rng: &mut Rng, m: &TriMesh, n: usize) -> Vec<([f64; 3], [f64; 
 }
 
 /// One rock at the reference square, `d` mm wide, family drawn from
-/// `mix` (dome, slab, block, wedge weights): rocklab `make_rock` up to its
+/// `mix` (dome, slab, block, wedge weights), up to its
 /// grain.
 ///
 /// # Errors
@@ -334,8 +334,8 @@ pub fn make_stone_low(rng: &mut Rng, d: f64, mix: [f64; 4], low: bool) -> Result
         rng,
         d,
         family,
-        // scree is small, and a small fallen stone is not a spike (rockpile
-        // lowers the floor to 0.55 of its width)
+        // scree is small, and a small fallen stone is not a spike (the floor
+        // drops to 0.55 of its width)
         if low {
             HEIGHT_MIN_MM.min(0.55 * d)
         } else {
@@ -454,7 +454,7 @@ pub struct Item {
     pub bury: (f64, f64),
 }
 
-/// rocklab `make_item`: one stone, or (a quarter of the time when
+/// One stone, or (a quarter of the time when
 /// `clusters`) a cluster of 2 to 4.
 ///
 /// # Errors
@@ -522,7 +522,7 @@ pub struct Thing {
 }
 
 /// The things a rock look builds, with their default size (dt-doc's
-/// vocabulary: `rock` is rocklab's 6..15).
+/// vocabulary: `rock` is 6..15).
 #[must_use]
 pub fn is_thing(name: &str) -> bool {
     matches!(name, "rock" | "stone" | "boulder" | "pebble")
@@ -797,7 +797,7 @@ fn place(scene: &Scene, ctx: &Ctx<'_>, rng: &mut Rng, radii: &[f64], gap: f64) -
 /// Scree: each item (largest first) lands near the foot of `foot`, in a
 /// ground cell chosen by weight (shattered patches get more), its centre
 /// `d (½ − lean) + exponential(reach)` out from the face, clear of every
-/// other item and rock (rockpile.py `scree`).
+/// other item and rock.
 fn place_at_foot(
     scene: &Scene,
     ctx: &Ctx<'_>,
@@ -880,10 +880,10 @@ pub struct Scatter {
     things: Vec<Thing>,
 }
 
-/// rocklab's placements: 9 to 12 per 2×2, so 2.25 to 3 a square.
+/// Placements: 9 to 12 per 2×2, so 2.25 to 3 a square.
 const PER_SQUARE: (f64, f64) = (2.25, 3.0);
 const GAP_MM: f64 = 1.5;
-// scree: fallen stones at a cliff's foot (rockpile.py :266)
+// scree: fallen stones at a cliff's foot
 const SCREE_REACH_MM: f64 = 4.0;
 const SCREE_LEAN: f64 = 0.35;
 const SCREE_GAP: f64 = 0.38;
@@ -1055,7 +1055,7 @@ impl Look for Scatter {
     }
 }
 
-/// dirtlab's stones (`make_stones` :395, `bed_stones` :417): a few rocklab
+/// The dirt's stones: a few
 /// rocks flattened to 0.65 of their height, bedded in a soil mound into
 /// the dirt's own field. Returns their discs (x, y, r) for the pebbles to
 /// avoid; adds the solids to the scene.

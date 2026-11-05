@@ -1,7 +1,12 @@
 //! The 3MF writer: the tile as one object whose every triangle names its
-//! material (R9), so a slicer that reads 3MF base materials (Bambu Studio,
-//! PrusaSlicer) opens it with the materials already assigned. A 3MF is a
-//! zip of three small files; the zip is written here, deflated.
+//! material twice. As a 3MF base material, for any reader of the standard;
+//! and as the filament the slicers' own paint tool would give it
+//! (`paint_color` for Bambu Studio and OrcaSlicer,
+//! `slic3rpe:mmu_segmentation` for PrusaSlicer), because those ignore base
+//! materials. Filaments are numbered by the materials the tile uses, in
+//! [`Material`] order, so earth is always filament 1; the connector prints
+//! in earth's. A 3MF is a zip of three small files; the zip is written
+//! here, deflated.
 
 use std::fmt::Write as _;
 use std::io::Write as _;
@@ -182,9 +187,22 @@ pub fn threemf(
     let mut used: Vec<Material> = materials.to_vec();
     used.sort();
     used.dedup();
+    let filaments = filaments(&used);
+    let paint: Vec<String> = used
+        .iter()
+        .map(|m| {
+            paint_code(
+                filaments
+                    .iter()
+                    .position(|f| f == &filament_of(*m))
+                    .unwrap_or(0)
+                    + 1,
+            )
+        })
+        .collect();
     let mut x = String::with_capacity(64 * mesh.triangles.len() + 40 * mesh.positions.len());
     x.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-    x.push_str("<model unit=\"millimeter\" xml:lang=\"en-US\" xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\n");
+    x.push_str("<model unit=\"millimeter\" xml:lang=\"en-US\" xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\" xmlns:slic3rpe=\"http://schemas.slic3r.org/3mf/2017/06\">\n");
     let _ = writeln!(
         x,
         " <metadata name=\"Application\">dharmatiles {}</metadata>\n <metadata name=\"Title\">{}</metadata>\n <metadata name=\"Description\">system {}, seed {}, document {:016x}</metadata>",
@@ -193,6 +211,16 @@ pub fn threemf(
         escape(&record.system),
         record.seed,
         record.document_hash
+    );
+    let list: Vec<String> = filaments
+        .iter()
+        .enumerate()
+        .map(|(i, m)| format!("{} {}", i + 1, m.name()))
+        .collect();
+    let _ = writeln!(
+        x,
+        " <metadata name=\"dharmatiles:filaments\">{}</metadata>",
+        list.join(", ")
     );
     x.push_str(" <resources>\n  <basematerials id=\"1\">\n");
     for m in &used {
@@ -216,8 +244,11 @@ pub fn threemf(
         let k = used.iter().position(|u| u == m).unwrap_or(0);
         let _ = writeln!(
             x,
-            "     <triangle v1=\"{}\" v2=\"{}\" v3=\"{}\" pid=\"1\" p1=\"{k}\"/>",
-            t[0], t[1], t[2]
+            "     <triangle v1=\"{}\" v2=\"{}\" v3=\"{}\" pid=\"1\" p1=\"{k}\" paint_color=\"{c}\" slic3rpe:mmu_segmentation=\"{c}\"/>",
+            t[0],
+            t[1],
+            t[2],
+            c = paint[k]
         );
     }
     x.push_str("    </triangles>\n   </mesh>\n  </object>\n </resources>\n <build>\n  <item objectid=\"2\"/>\n </build>\n</model>\n");
@@ -236,6 +267,54 @@ pub fn threemf(
         ),
         ("3D/3dmodel.model", x.into_bytes()),
     ])
+}
+
+/// The filament a material prints in: its own, but the connector's is
+/// earth's.
+const fn filament_of(m: Material) -> Material {
+    match m {
+        Material::Connector => Material::Earth,
+        other => other,
+    }
+}
+
+/// The filaments a tile needs, in [`Material`] order (earth first).
+fn filaments(used: &[Material]) -> Vec<Material> {
+    let mut f: Vec<Material> = used.iter().map(|m| filament_of(*m)).collect();
+    f.sort();
+    f.dedup();
+    f
+}
+
+/// A whole triangle painted with filament `n` (1-based), in the paint
+/// tool's encoding (PrusaSlicer's `TriangleSelector::serialize`, which
+/// Bambu Studio and OrcaSlicer share): an unsplit triangle is two zero
+/// bits, then its state; states under 3 take two bits, the rest `11` and a
+/// nibble of `state - 3`, 15 per extra `1111`. Nibbles are written last
+/// first, in hex.
+fn paint_code(n: usize) -> String {
+    let mut bits: Vec<bool> = vec![false, false];
+    if n < 3 {
+        bits.extend([n & 1 != 0, n & 2 != 0]);
+    } else {
+        bits.extend([true, true]);
+        let mut r = n - 3;
+        while r >= 15 {
+            bits.extend([true; 4]);
+            r -= 15;
+        }
+        bits.extend((0..4).map(|i| r >> i & 1 != 0));
+    }
+    bits.chunks(4)
+        .rev()
+        .map(|c| {
+            let v = c
+                .iter()
+                .enumerate()
+                .fold(0u32, |a, (i, &b)| a | u32::from(b) << i);
+            char::from_digit(v, 16).unwrap_or('0').to_ascii_uppercase()
+        })
+        .collect()
 }
 
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -324,6 +403,21 @@ mod tests {
         );
         assert!(Palette::parse("lava #ff0000").is_err());
         assert!(Palette::parse("rock red").is_err());
+    }
+
+    #[test]
+    fn paint_codes_are_the_slicers_own() {
+        // what Bambu Studio and PrusaSlicer write for extruders 1 to 5
+        let got: Vec<String> = (1..=5).map(paint_code).collect();
+        assert_eq!(got, ["4", "8", "0C", "1C", "2C"]);
+        assert_eq!(paint_code(17), "EC");
+        assert_eq!(paint_code(18), "0FC");
+    }
+
+    #[test]
+    fn earth_is_filament_one_and_the_connector_shares_it() {
+        let used = [Material::Connector, Material::Water, Material::Earth];
+        assert_eq!(filaments(&used), [Material::Earth, Material::Water]);
     }
 
     #[test]

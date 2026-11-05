@@ -2,7 +2,7 @@
 //! face and CORE_DROP under every top, its sides on the tile boundary
 //! CORE_RIM in. Cleaving never cuts into it; it shows only where
 //! neighbours' rounded corners leave a gap, as the gap's floor, never a
-//! hole through the pile (rockpile.py :1800-1826).
+//! hole through the pile.
 
 use dt_kit::{Convex, KitError, Piece, Slot, hung};
 

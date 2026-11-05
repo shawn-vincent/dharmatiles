@@ -241,7 +241,7 @@ pub fn stand(
     Ok((carve(part, &solids)?, stood))
 }
 
-/// Inside flags of every voxel (layer-major), by the parity of vertical
+/// Inside flags of every voxel (layer-major), by the odd or even count of vertical
 /// ray hits per column at each voxel centre.
 fn voxels(
     m: &TriMesh,

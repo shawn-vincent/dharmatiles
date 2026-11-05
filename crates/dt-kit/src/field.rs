@@ -2,8 +2,7 @@
 //! operations looks are written in (noise, distance, morphology with the
 //! smooth maximum, scatter, the half-space cap).
 //!
-//! The grid convention (the only one; it replaces the Python library's
-//! three, core/mesh.py:69, layers/water.py:542 and core/grid.py): a field
+//! The grid convention (the only one): a field
 //! has a value at every node of the frame's lattice, node `(i, j)` at
 //! `(i·step, j·step)` mm from the tile's south-west corner, so the edge
 //! nodes lie exactly on the tile edge; values are row-major, `j` outer;
@@ -275,7 +274,7 @@ impl Field {
 }
 
 /// **morphology**: the polynomial smooth maximum, a soft fillet of width
-/// about `k` where `a` and `b` meet (dirtlab's `smax`, :137). `k <= 0` is
+/// about `k` where `a` and `b` meet. `k <= 0` is
 /// the plain maximum.
 #[must_use]
 pub fn smax(a: f64, b: f64, k: f64) -> f64 {
@@ -306,7 +305,7 @@ pub fn rim(frame: &Frame) -> Field {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Noise {
     /// Gaussian-filtered white noise of this sigma, unit variance
-    /// (dirtlab's `noise()`).
+    /// (the keyed noise).
     Smooth {
         /// Sigma, mm.
         sigma_mm: f64,
@@ -506,7 +505,7 @@ pub struct Plane {
 /// **carve** (the half-space cap): the height of the region under every
 /// plane at local `(x, y)`, the lowest of them (`+∞` with none). A height
 /// field cannot overhang, so any set of planes is printable; this is
-/// rocklab's one-facet-per-plane idea in 2.5D (dirtlab's pebbles).
+/// the one-facet-per-plane idea in 2.5D.
 #[must_use]
 pub fn cap(planes: &[Plane], x: f64, y: f64) -> f64 {
     planes

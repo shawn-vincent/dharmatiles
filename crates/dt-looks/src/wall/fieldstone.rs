@@ -1,4 +1,4 @@
-//! Fieldstone (drystone): crack network first (`fieldstone.py`, the
+//! Fieldstone (drystone): crack network first (the
 //! approved E25/E29 look). The chassis layout gives the crack topology;
 //! every bed line has one shared wobble and every head joint one shared
 //! slanted, bowed curve, both keyed on the crack itself, so the two
@@ -31,8 +31,7 @@ const DRIFT: f64 = 2.2;
 const BOW: f64 = 1.1;
 const BED_OVERLAP: (f64, f64) = (0.35, 0.80);
 const END_MARGIN: f64 = 0.7;
-/// The press into the seat (Python drew it from `BED_OVERLAP`, capped at
-/// 0.22 × the height).
+/// The press into the seat (drawn up to 0.22 × the height).
 const SEAT_PRESS: (f64, f64) = (0.6, 1.0);
 const SEAT_PRESS_CAP: f64 = 0.32;
 const HEAD_OVERLAP: (f64, f64) = (0.45, 0.95);
@@ -252,8 +251,8 @@ fn merge_throughstones(mut cells: Vec<Cell>, s: f64, rng: &mut Rng) -> Vec<Cell>
                 seg,
                 t0: lo,
                 t1: hi,
-                // a wall end stays a face (Python made both ends joints,
-                // so an end throughstone ran past the end margin)
+                // a wall end stays a face (making both ends joints would let
+                // an end throughstone run past the end margin)
                 end0: if (c.t0 >= lo - 1e-9 && c.end0 == End::Face)
                     || (o.t0 >= lo - 1e-9 && o.end0 == End::Face)
                 {
@@ -284,8 +283,8 @@ fn merge_throughstones(mut cells: Vec<Cell>, s: f64, rng: &mut Rng) -> Vec<Cell>
                 let left = dn.t0 < lo - 1.0 * s;
                 let right = dn.t1 > hi + 1.0 * s;
                 if left && right {
-                    // both remainders survive (Python kept only the left
-                    // and left a hole behind the right)
+                    // both remainders survive (keeping only the left
+                    // would leave a hole behind the right)
                     let mut r = dn.clone();
                     r.t0 = hi;
                     r.end0 = End::Joint;
@@ -494,8 +493,8 @@ fn outline(m: &Mason, run: &Run, c: &Cell, seed: Seed, r: &mut Rng) -> Vec<[f64;
             p[1] -= ovb * (1.0 - (p[1] - zlo) / span);
         }
     } else if !run.laid {
-        // the top course presses down too (Python exempted it; its
-        // underside then roofed an open V crack the printer cannot lay)
+        // the top course presses down too (exempting it would leave its
+        // underside roofing an open V crack the printer cannot lay)
         // but keeps its own ragged top
         let cap = 0.22 * (c.z1 - c.z0);
         let ovt = if c.is_top {

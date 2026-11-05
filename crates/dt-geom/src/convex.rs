@@ -1,4 +1,4 @@
-//! Convex polytopes cut by half-spaces: rocklab's facets and chips
+//! Convex polytopes cut by half-spaces: a rock's facets and chips
 //! (`cut_facets` :187, `chip_corners_edges` :231) without a boolean.
 //!
 //! A [`Convex`] is a closed convex solid stored as shared vertices and
@@ -271,7 +271,7 @@ impl Convex {
     }
 
     /// Each used vertex with the sum of the normals of the faces round it
-    /// (unnormalised), in index order: rocklab's corner normals.
+    /// (unnormalised), in index order: the corner normals.
     #[must_use]
     pub fn corners(&self) -> Vec<(V3, V3)> {
         let mut sum = vec![[0.0; 3]; self.vertices.len()];

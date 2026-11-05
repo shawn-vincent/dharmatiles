@@ -1,4 +1,4 @@
-//! Flowers: the Python library's `Flowers` (scatter/flowers.py): a thin
+//! Flowers: a thin
 //! dome on a support column for the centre, and one for each petal, an
 //! inverted cone under each petal so it prints standing.
 //!
@@ -7,7 +7,7 @@
 //! overlap, at the centre's edge. Flowers stand where the grass would;
 //! the grass reads them (a thing standing on the ground) and grows round.
 //!
-//! One departure from the library, for the printability gate: a petal's
+//! One design choice, for the printability gate: a petal's
 //! cone points at its own centre, not at the flower's centre. Pointing at
 //! the flower's centre put the petal tip 2.5 mm out over a 1 mm column, a
 //! 68 degree overhang; under its own centre the same petal leans 41 degrees.
@@ -337,12 +337,11 @@ impl Look for Flowers {
 mod tests {
     use super::*;
 
-    /// Python's `_build_flower_mesh` at the same settings (library defaults,
-    /// ground 3.4 mm): a centre dome of 11.4364 mm³, five petals of
+    /// The flower at its default settings (ground 3.4 mm): a centre dome of 11.4364 mm³, five petals of
     /// 1.7756 mm³ each (20.3142 in all, a cone's volume does not depend on
     /// where its apex is), from z = 3.3 to 5.3.
     #[test]
-    fn a_flower_matches_the_python_flower() {
+    fn a_flower_is_unchanged() {
         let f = Flowers::new(&[]).unwrap();
         let parts = f.meshes([10.0, 10.0], 3.4, 0.0, 1.0);
         assert_eq!(parts.len(), 6);

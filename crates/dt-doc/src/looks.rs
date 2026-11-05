@@ -3,7 +3,7 @@
 //!
 //! Numbers behind words are documented here, next to the word.  Words
 //! marked *provisional* have numbers chosen for this table that the look's
-//! own phase (P2–P7) tunes against its lab; the words themselves are
+//! own phase (P2–P7) tunes against its look; the words themselves are
 //! decided.
 
 use crate::schema::{Axis, Control, Look, PlaceWord, Role, Word};
@@ -78,7 +78,7 @@ impl Control {
 pub static MOSTLY: &[Word] = &[
     w(
         "small",
-        "skewed toward the low end (rockpile's exponent 2)",
+        "skewed toward the low end (exponent 2)",
         &[("exponent", 2.0)],
     ),
     w("even", "a uniform draw", &[("exponent", 1.0)]),
@@ -106,7 +106,7 @@ const BUMP_SIZE: Control = c(
 const LEVEL: Control = c("level", Axis::Level, "where the surface sits").default("ground");
 
 static STONES: &[Word] = &[
-    // dirtlab STONES_2X2 (4, 7) per 2×2 is `some`; `many` is provisional.
+    // (4, 7) stones per 2×2 is `some`; `many` is provisional.
     w(
         "none",
         "bare dirt, no stones",
@@ -121,7 +121,7 @@ static STONES: &[Word] = &[
 ];
 
 static CLODS: &[Word] = &[
-    // dirtlab CLOD_DENSITY 0.7 is `some`; few and many are provisional.
+    // a clod density of 0.7 is `some`; few and many are provisional.
     w(
         "few",
         "a scatter of clods (provisional)",
@@ -136,7 +136,7 @@ static CLODS: &[Word] = &[
 ];
 
 static FLOW: &[Word] = &[
-    // grasslab MEANDER_AMP_DEG (10, 30) is `wavy`; the others are provisional.
+    // a meander amplitude of (10, 30) degrees is `wavy`; the others are provisional.
     w(
         "combed",
         "blades lean together, tidily (provisional)",
@@ -189,7 +189,7 @@ static PEBBLE: [Control; 5] = rock_controls("1..2.2");
 // ---- tree ---------------------------------------------------------------
 
 static CROWN_SHAPE: &[Word] = &[
-    // `round` is the Python Tree's envelope defaults; the rest are provisional.
+    // `round` is the tree's default envelope; the rest are provisional.
     w(
         "round",
         "a round crown",
@@ -233,7 +233,7 @@ static CROWN_SHAPE: &[Word] = &[
 ];
 
 static BRANCHING: &[Word] = &[
-    // `normal` is the Python Tree's defaults; open and dense are provisional.
+    // `normal` is the tree's defaults; open and dense are provisional.
     w(
         "open",
         "few long limbs (provisional)",
@@ -387,7 +387,7 @@ static WALL_HEIGHT: &[Word] = &[
     ),
 ];
 
-/// The masonry surface presets (`walls/masonry.py:_TEXTURES`): chip size,
+/// The masonry surface presets: chip size,
 /// roundover and relief together.  Numbers in mm.
 static TEXTURE: &[Word] = &[
     w(
@@ -489,7 +489,7 @@ static FLOOR: &[Control] = &[
 static ROCK_MIX: &[Word] = &[
     w(
         "mixed",
-        "rockpile's run shares",
+        "the run shares",
         &[
             ("columns", 38.0),
             ("blocks", 38.0),

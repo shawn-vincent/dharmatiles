@@ -1,6 +1,6 @@
 //! `connector` for OpenLOCK: the clip-socket base under z = 0 (P5).
 //!
-//! Port of `src/dharmatiles/bases/openlock.py`. OpenLOCK credit: the clip
+//! OpenLOCK credit: the clip
 //! socket dimensions and placement follow OpenSCAD-OpenLock by Caitlyn
 //! Byrne (<https://github.com/caitlynb/OpenSCAD-OpenLock>); the OpenLOCK
 //! tile system is by Printable Scenery.
@@ -18,7 +18,7 @@ use dt_kit::{Material, Outline, Scene, Tag, carve, extrude};
 
 use crate::{Ctx, Look, LookError, Plan, Read, Write};
 
-/// `openlock.py`'s constants, mm. These are the system's own sizes and do
+/// The clip constants, mm. These are the system's own sizes and do
 /// not scale: a clip is the same clip on every tile.
 #[derive(Clone, Debug, PartialEq)]
 pub struct OpenLock {
@@ -217,8 +217,8 @@ mod tests {
     }
 
     #[test]
-    fn the_base_matches_the_python_library() {
-        // bases/openlock.py make_base at 25.4 mm: 3018.506 mm³ (1×1) and
+    fn the_base_volume_is_unchanged() {
+        // the base at 25.4 mm: 3018.506 mm³ (1×1) and
         // 15769.212 mm³ (2×2); the logo's curves are flattened a little
         // differently, so within 0.2%
         for (c, r, py) in [(1, 1, 3018.506), (2, 2, 15769.212)] {

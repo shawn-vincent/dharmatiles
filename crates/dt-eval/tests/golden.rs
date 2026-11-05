@@ -1,4 +1,4 @@
-//! Golden summaries per tile (plan.html, "The parity harness"): stage
+//! Golden summaries per tile: stage
 //! hashes, triangle count, volume, overhang mm² and see-through holes,
 //! as insta snapshots; `cargo insta review` shows what changed.
 //!
@@ -246,7 +246,7 @@ fn the_grass_tiles_meet_the_exit_criteria() {
             1500.0
         };
         assert!(blades > least, "{path}: {blades} blades");
-        // a blade is a few hundred faces, never past the lab's 1,500
+        // a blade is a few hundred faces, never past 1,500
         let grass_tris = b
             .materials
             .iter()
@@ -258,7 +258,7 @@ fn the_grass_tiles_meet_the_exit_criteria() {
             (grass_tris as f64) / blades
         );
         if path.contains("meadow") {
-            // meadowlab's bare earth, ground under the rocks included: 20% ± 3 points
+            // bare earth, ground under the rocks included: 20% ± 3 points
             let bare = note("bare_share").unwrap_or(0.0);
             assert!((0.17..=0.23).contains(&bare), "{path}: bare earth {bare}");
         }

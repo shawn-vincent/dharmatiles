@@ -147,7 +147,7 @@ mod tests {
                 t_max: 0.5,
                 ..Ray::new([0.5, 0.2, 1.0], [0., 0., -1.])
             },
-            // A negative-zero component (rockpile's horizontal relief rays):
+            // A negative-zero component (horizontal rays):
             // obvhs 0.4 drops these without the +0.0 fix.
             Ray::new([0.7, 0.2, 1.0], [-0.0, -0.0, -1.]),
         ];

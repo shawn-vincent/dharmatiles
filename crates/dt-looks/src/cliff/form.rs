@@ -1,5 +1,5 @@
 //! 1 Form: the contact planes the rocks are meant to touch and the target
-//! height field T(x, y) the pile grows toward (rockpile.py :339-554).
+//! height field T(x, y) the pile grows toward.
 //! Heights are above the foot (0). Lengths that size masses scale with `s`
 //! (the system's scale, 1 on DungeonBlocks); details never do.
 

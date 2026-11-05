@@ -1,6 +1,5 @@
 //! `connector`: what is under z = 0. P1: the DungeonBlocks socket peg.
 //!
-//! Port of `src/dharmatiles/bases/dungeonblocks.py` and `core/logo.py`.
 //! DungeonBlocks credit: the socket-peg geometry follows the DungeonBlocks
 //! blank/floor tile standard on MyMiniFactory
 //! (<https://www.myminifactory.com/object/3d-print-dungeonblocks-blank-floor-tile-177592>).
@@ -8,7 +7,7 @@
 //! One peg per square: the full square at z = 0 flares in to a 26 mm
 //! column over 5.2 mm, runs down the peg height, and bevels 1.5 mm in to
 //! the tip, into which the lotus logo is inset 0.8 mm. The peg height
-//! depends on the content's maximum z (`select_peg_height`, :20–37), so
+//! depends on the content's maximum z (`select_peg_height`), so
 //! the connector reads every solid and is built last.
 
 use dt_kit::{Material, Outline, Scene, Solid, Tag, carve, extrude, loft, union};

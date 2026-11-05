@@ -1,6 +1,6 @@
-//! Grass: grasslab v3's stroke blades (grasslab/grasslab.py), standing on
-//! the ground a tile has painted, with meadowlab's rule for what they
-//! meet (meadowlab/meadowlab.py): no blade roots under a rock, a trunk or
+//! Grass: stroke blades, standing on
+//! the ground a tile has painted, with a rule for what they
+//! meet: no blade roots under a rock, a trunk or
 //! a wall, blades press against them and stand lower beside them, and the
 //! flow wraps them like the clearings of bare earth.
 //!
@@ -47,11 +47,11 @@ pub const CONTROLS: &[&str] = &["length", "height", "clearings", "cover", "bare"
 
 /// Field resolution of the flow, mm.
 const FIELD_RES_MM: f64 = 0.25;
-/// Clearings per square the lab draws between (× `clearings / 1.5`).
+/// Clearings per square drawn between (× `clearings / 1.5`).
 const LENSES_PER_SQ: (f64, f64) = (1.3, 1.8);
 /// Seating ground is the painted ground blurred this much.
 const SEAT_BLUR_MM: f64 = 0.8;
-/// Blades seat on the ground's low envelope: grasslab's blades stand on the
+/// Blades seat on the ground's low envelope: blades stand on the
 /// smooth hills under the dirt's texture, not on its crests.
 const SEAT_ERODE_MM: f64 = 1.5;
 const MUD_MAX_MM: f64 = 4.0;
@@ -243,7 +243,7 @@ impl Look for Grass {
             ((per * n_sq * share).round() as usize).max(1)
         };
         let (count, pool) = if self.bare > 0.0 {
-            // meadowlab: a pool of candidate clearings, added best first
+            // a pool of candidate clearings, added best first
             // until the bare earth reaches its target
             (((POOL_PER_SQ * n_sq * share).round() as usize).max(1), true)
         } else {
@@ -287,7 +287,7 @@ impl Look for Grass {
 
         // 3 what the fronds read
         // a strip of wet mud along the shore, its width wandering 0 to
-        // 4 mm (shorelab's `ShoreSoil`): bare earth where the grass stops
+        // 4 mm: bare earth where the grass stops
         let mud = water_dist.as_ref().map(|dist| {
             let n = lat.noise(seed.key("mud"), MUD_SIGMA_MM * s);
             Field::from_fn(&frame, |x, y| {
@@ -400,7 +400,7 @@ impl Look for Grass {
         }
         #[allow(clippy::cast_precision_loss)]
         let soil_share = surf.soil.z.iter().filter(|&&v| v > 0.5).count() as f64 / (nx * ny) as f64;
-        // bare earth as meadowlab counts it: clearings and what stands on the
+        // bare earth as counted: clearings and what stands on the
         // ground, over the grass's own area
         let in_area: Vec<usize> = (0..nx * ny).filter(|&k| ctx.area.bits[k]).collect();
         let bare_share = in_area
@@ -446,8 +446,7 @@ fn raw_node(frame: &dt_kit::Frame, x: f64, y: f64) -> (usize, usize) {
     )
 }
 
-/// Each standing thing as a circle the flow wraps (meadowlab's
-/// `rock_circles`): centre, a ring a little wider than the thing.
+/// Each standing thing as a circle the flow wraps: centre, a ring a little wider than the thing.
 fn obstacle_circles(
     things: &[Thing],
     blocker: &dt_kit::Mask,
@@ -506,8 +505,7 @@ const APRON_HALF_W: (f64, f64) = (0.5, 0.9);
 const APRON_STRETCH: (f64, f64) = (1.2, 1.9);
 const APRON_OFFSET: (f64, f64) = (0.6, 1.0);
 
-/// One-sided bare-earth patches (wake or scour) for a minority of rocks
-/// (meadowlab `apron_shapes`).
+/// One-sided bare-earth patches (wake or scour) for a minority of rocks.
 fn apron_shapes(rng: &mut Rng, flow: &flow::Flow, things: &[Thing]) -> flow::Shapes {
     let mut out = flow::Shapes::default();
     for t in things.iter().filter(|t| t.kind == "rock") {
@@ -542,7 +540,7 @@ fn apron_shapes(rng: &mut Rng, flow: &flow::Flow, things: &[Thing]) -> flow::Sha
 
 /// The first `k` free lenses and the aprons, `k` the least that brings the
 /// bare earth (clearings and what stands on the ground) to `target` of the
-/// area; all of them if none does (meadowlab `fill_bare_earth`).
+/// area; all of them if none does.
 fn fill_bare_earth(
     free: &flow::Lenses,
     aprons: &flow::Shapes,

@@ -1,7 +1,6 @@
 //! The masonry layout: a spine split into straight segments, courses ×
 //! bays × quoins as cells, then battlements and ruin as edits of the cell
-//! list. Port of `walls/masonry.py` (`_segments` :216, `_layout` :286,
-//! `_crenellate` :742, `_ruin_cells` :1199).
+//! list.
 
 use dt_kit::Rng;
 

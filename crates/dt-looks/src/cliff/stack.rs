@@ -1,4 +1,4 @@
-//! 2 Stack: rocks resting on rocks (rockpile.py :557-830). A support grid
+//! 2 Stack: rocks resting on rocks. A support grid
 //! S starts as the ground. Repeatedly take the lowest spot still short of
 //! T, pick a kind, grow its footprint over the pocket there, rest it on its
 //! highest supports (tilted where they are uneven) and raise S to its top.
@@ -114,7 +114,7 @@ impl Placed {
 const FOOTPRINT_SIMPLIFY_MM: f64 = 0.45;
 const MIN_WALL_MM: f64 = 1.2;
 
-/// The footprint's outline, straightened (rockpile `footprint_polygon`).
+/// The footprint's outline, straightened.
 pub fn footprint_polygon(cells: &Mask) -> Vec<P2> {
     // open away arms narrower than a wall (they would stand as fins)
     let n = cells.v.iter().filter(|&&b| b).count();
@@ -261,12 +261,12 @@ fn grow_turned(
             }
         }
     }
-    let (lab, _) = label(&rect);
-    let l = lab.at(ij.0, ij.1);
+    let (labels, _) = label(&rect);
+    let l = labels.at(ij.0, ij.1);
     if l == 0 {
         return Mask::new(ok.nx, ok.ny, false);
     }
-    lab.map(|x| x == l)
+    labels.map(|x| x == l)
 }
 
 fn jut(rng: &mut Rng, cells: &Mask, want: &Mask, s: &Field) -> Mask {
